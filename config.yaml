@@ -1,0 +1,100 @@
+target_dir: ~/.claude
+
+model: sonnet
+effort: medium
+
+permissions:
+  allow: []
+  deny: []
+
+hooks:
+  - event: Stop
+    command: "notify-send 'Claude stopped' 2>/dev/null || true"
+
+# thinking verbs (get rid of annoying word creations)
+verbs:
+  - "🤖"
+
+env:
+  DEBUG: "false"
+
+keybindings:
+  - key: "ctrl+y"
+    action: acceptSuggestion
+  - key: "ctrl+n"
+    action: rejectSuggestion
+
+mcp_servers: []
+
+commands:
+  - name: review
+    description: "Review current branch against main"
+    content: |
+      Review the diff vs main. Check for: correctness, security, tests, docs.
+  - name: standup
+    description: "Summarize today's git activity"
+    content: |
+      Run `git log --since=midnight --oneline` and summarize what was done.
+
+agents_md:
+  # config for local md file
+  global:
+    target: ~/.claude/CLAUDE.md
+    symlink: ~/AGENTS.md
+    sections:
+      - name: Instructions Hierarchy
+        content: |
+          - This is the global CLAUDE.md.
+          - There must be a local one that defines rules for the project.
+            Each project must have a local CLAUDE.md.
+            If a local file is missing, report this to the user.
+          - If local CLAUDE.md does not define language rules, report it to the user.
+          - Local rules may refer to global docs in ~/.claude/docs.
+            Resolve local @docs or @rules refs to ./docs or ./rules first
+            and then to ~/.claude/docs or ~/.claude/rules.
+          - Always use absolute file paths for global instructions.
+            Always use relative file paths for local instructions.
+      - name: Minimal Global Docs
+        content: |
+          Make sure that the global CLAUDE.md does not contain anyting not relevant
+          for the project. It must apply to all projects and be used as glue between
+          local and global docs only.
+          The purpose of the global doc is to steer the agentic setup.
+
+  # config for local md file
+  local:
+    target: AGENTS.md
+    symlink: CLAUDE.md
+
+    # the following will be added to the local CLAUDE.md
+    sections:
+      - name: Language Conventions
+        content: |
+          Adhere to the following conventions.
+
+          - Go/Golang @docs/Go.md, 
+            Modern Go, avoid deps but use Cobra, add tests
+          - Bash/Shell @docs/Bash.md,
+            No ";", break before then/else/docs
+            No "if [[]]", No "if []", Use "if test"
+            smart indent!
+
+  # claudeconfig supports the following languages
+  # use --lang <name> when applying
+  languages:
+    # the following language docs are copied/synched to .claude/docs
+    # and are referenced in the local project CLAUDE.md
+    golang:
+      # how the doc is referenced
+      ref: "@docs/Go.md"
+      # source path in claudeconfig
+      source: docs/Go.md
+      # where to copy it
+      target: ~/.claude/docs/Go.md
+      # how to make discoverable in project
+      symlink: ./docs/Go.md
+    bash:
+      ref: "@docs/Bash.md"
+      source: docs/Bash.md
+      target: ~/.claude/docs/Bash.md
+      symlink: ./docs/Bash.md
