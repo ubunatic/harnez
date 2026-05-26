@@ -177,27 +177,27 @@ Checks MCP server dependencies (node/npx, python/uv, go), reports missing packag
 - [x] `apply`, `diff`, `clean` commands in `main.go`
 - [x] `Makefile` with `help`, `build`, `install`, `apply`, `diff`, `clean`, `status`, `test`
 
-### Phase 2 — Keybindings + agents_md
+### Phase 2 — Keybindings + agents_md ✓
 
-- [ ] Generate `keybindings.json` from `keybindings` list
-- [ ] `applySectionMD()` variant with HTML comment markers for Markdown files
-- [ ] Generate `~/.claude/CLAUDE.md` from `agents_md.global.sections`
-- [ ] Generate `AGENTS.md` + `CLAUDE.md` symlink from `agents_md.local`
-- [ ] `status` command (`status.go`) — port from vimconfig
+- [x] Generate `keybindings.json` from `keybindings` list
+- [x] `applySectionMD()` variant with HTML comment markers for Markdown files
+- [x] Generate `~/.claude/CLAUDE.md` from `agents_md.global.sections`
+- [x] Generate `AGENTS.md` + `CLAUDE.md` symlink from `agents_md.local`
+- [x] `status` command (`status.go`) — port from vimconfig
 
-### Phase 3 — Custom commands + MCP servers + language docs
+### Phase 3 — Custom commands + MCP servers + language docs ✓
 
-- [ ] Generate `commands/<name>.md` files
-- [ ] Add MCP server block to `settings.json` generator
-- [ ] Copy language docs (`source` → `target`) and create project symlinks
-- [ ] `--lang <name>` flag to apply only specific language docs
-- [ ] Env var interpolation (`$VAR` passed through as-is)
+- [x] Generate `commands/<name>.md` files
+- [x] Add MCP server block to `settings.json` generator
+- [x] Copy language docs (`source` → `target`) and create project symlinks
+- [x] `--lang <name>` flag to apply only specific language docs
+- [x] Env var interpolation (`$VAR` passed through as-is)
 
-### Phase 4 — Model/effort resolution
+### Phase 4 — Model/effort resolution ✓
 
-- [ ] Short alias map: `sonnet` → `claude-sonnet-4-6`, `opus` → `claude-opus-4-7`, etc.
-- [ ] Effort alias map: `low` / `medium` / `high` → `effortLevel` values
-- [ ] Emit `model` and `effortLevel` keys in `settings.json`
+- [x] Short alias map: `sonnet` → `claude-sonnet-4-6`, `opus` → `claude-opus-4-7`, etc.
+- [x] Effort alias map: `low` / `medium` / `high` → `effortLevel` values
+- [x] Emit `model` and `effortLevel` keys in `settings.json`
 
 ### Phase 5 — deps command
 

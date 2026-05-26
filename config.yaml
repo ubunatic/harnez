@@ -18,12 +18,6 @@ verbs:
 env:
   DEBUG: "false"
 
-keybindings:
-  - key: "ctrl+y"
-    action: acceptSuggestion
-  - key: "ctrl+n"
-    action: rejectSuggestion
-
 mcp_servers: []
 
 commands:
@@ -31,10 +25,15 @@ commands:
     description: "Review current branch against main"
     content: |
       Review the diff vs main. Check for: correctness, security, tests, docs.
+
   - name: standup
     description: "Summarize today's git activity"
     content: |
       Run `git log --since=midnight --oneline` and summarize what was done.
+
+  - name: update-context
+    description: "Create or update CONTEXT.md with project knowledge"
+    file: commands/update-context.md
 
 agents_md:
   # config for local md file

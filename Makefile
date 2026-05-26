@@ -2,6 +2,7 @@
 BINARY  := claudeconfig
 CONFIG  := config.yaml
 TARGET  := $(HOME)/.claude
+PROJECT := .
 PREFIX  ?= /usr/local
 
 help: ⚙  ## show this help
@@ -11,11 +12,11 @@ help: ⚙  ## show this help
 build: ⚙  ## build the binary
 	go build -o $(BINARY) .
 
-install: ⚙ build  ## install the binary to PREFIX/bin
+install: ⚙ build  ## install the binary to PREFIX/bin (default: /usr/local/bin)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
 
 apply: ⚙ build  ## apply config.yaml to the Claude Code config directory
-	./$(BINARY) apply -c $(CONFIG) -t $(TARGET)
+	./$(BINARY) apply -c $(CONFIG) -t $(TARGET) -p $(PROJECT)
 
 diff: ⚙ build  ## show what apply would change in managed blocks
 	./$(BINARY) diff -c $(CONFIG) -t $(TARGET)

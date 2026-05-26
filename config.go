@@ -1,12 +1,20 @@
 package main
 
 import (
+	"embed"
+	"io/fs"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
 
+//go:embed config.yaml commands
+var defaultFS embed.FS
+
 type Config struct {
+	Dir         string            `yaml:"-"`
+	FS          fs.FS             `yaml:"-"`
 	TargetDir   string            `yaml:"target_dir"`
 	Model       string            `yaml:"model"`
 	Effort      string            `yaml:"effort"`
@@ -14,7 +22,6 @@ type Config struct {
 	Permissions Permissions       `yaml:"permissions"`
 	Hooks       []Hook            `yaml:"hooks"`
 	Env         map[string]string `yaml:"env"`
-	Keybindings []Keybinding      `yaml:"keybindings"`
 	MCPServers  []MCPServer       `yaml:"mcp_servers"`
 	Commands    []Command         `yaml:"commands"`
 	AgentsMD    AgentsMD          `yaml:"agents_md"`
@@ -31,11 +38,6 @@ type Hook struct {
 	Command string `yaml:"command"`
 }
 
-type Keybinding struct {
-	Key    string `yaml:"key"`
-	Action string `yaml:"action"`
-}
-
 type MCPServer struct {
 	Name    string            `yaml:"name"`
 	Command string            `yaml:"command"`
@@ -47,6 +49,7 @@ type Command struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
 	Content     string `yaml:"content"`
+	File        string `yaml:"file"` // path relative to config dir; overrides content if set
 }
 
 type AgentsMD struct {
@@ -79,7 +82,26 @@ func loadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 	var cfg Config
-	return &cfg, yaml.Unmarshal(data, &cfg)
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	cfg.Dir = filepath.Dir(path)
+	cfg.FS = os.DirFS(cfg.Dir)
+	return &cfg, nil
+}
+
+func loadConfigEmbedded() (*Config, error) {
+	data, err := defaultFS.ReadFile("config.yaml")
+	if err != nil {
+		return nil, err
+	}
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	cfg.Dir = "."
+	cfg.FS = defaultFS
+	return &cfg, nil
 }
 
 func defaultTarget() string {
