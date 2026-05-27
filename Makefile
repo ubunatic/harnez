@@ -13,7 +13,8 @@ build: ⚙  ## build the binary
 	go build -o $(BINARY) .
 
 install: ⚙ build  ## install the binary to PREFIX/bin (default: /usr/local/bin)
-	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
+	go install .
+	@sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY) && echo "✅ Installed for all users" || echo "⚠️ System istall failed"
 
 apply: ⚙ build  ## apply config.yaml to the Claude Code config directory
 	./$(BINARY) apply -c $(CONFIG) -t $(TARGET) -p $(PROJECT)

@@ -4,7 +4,56 @@ model: sonnet
 effort: medium
 
 permissions:
-  allow: []
+  allow:
+    # system diagnostics
+    - "Bash(journalctl *)"
+    - "Bash(sudo smartctl *)"
+    - "Bash(lsblk *)"
+    - "Bash(sudo lsblk *)"
+    - "Bash(dmesg *)"
+    - "Bash(vcgencmd *)"
+    - "Bash(ip link *)"
+    - "Bash(tune2fs -l *)"
+    - "Bash(sudo tune2fs -l *)"
+    - "Bash(getent *)"
+    # network config (moderate risk: can set interface params)
+    - "Bash(ifconfig *)"
+    - "Bash(iwconfig *)"
+    - "Bash(iw *)"
+    # package management (read-only)
+    - "Bash(dpkg *)"
+    - "Bash(apt-cache *)"
+    # service management
+    - "Bash(systemctl *)"
+    # dev tools
+    - "Bash(git *)"
+    - "Bash(make *)"
+    - "Bash(go *)"
+    # shell basics
+    - "Bash(ls *)"
+    - "Bash(cd *)"
+    - "Bash(ps *)"
+    - "Bash(ssh -V)"
+    - "Bash(uname *)"
+    - "Bash(crontab *)"
+    - "Bash(tree *)"
+    - "Bash(pgrep *)"
+    # home directory reads (safe paths; excludes .ssh, .gnupg, .aws, .config)
+    - "Read(~/.claude/**)"
+    - "Read(~/.bashrc)"
+    - "Read(~/.zshrc)"
+    - "Read(~/.userrc)"
+    - "Read(~/.local/**)"
+    - "Read(~/projects/**)"
+    - "Read(~/git/**)"
+    - "Read(~/Pictures/Screenshots/**)"
+    # system directory reads
+    - "Read(//etc/**)"
+    - "Read(//proc/**)"
+    - "Read(//sys/**)"
+    - "Read(//run/**)"
+    - "Read(//var/**)"
+    - "Read(//usr/**)"
   deny: []
 
 hooks:

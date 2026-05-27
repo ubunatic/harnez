@@ -4,13 +4,21 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
+
+// ── Apply result ──────────────────────────────────────────────────────────────
+
+// applyResult is returned by every apply-level operation.
+// Callers own printing; nothing inside prints directly.
+type applyResult struct {
+	changed bool
+	notes   []string // detail lines printed indented beneath the action line
+}
 
 // ── Markdown managed blocks ───────────────────────────────────────────────────
 
@@ -36,30 +44,44 @@ func sectionBounds(existing, begin, end string) (lineStart, lineEnd int, found b
 	return ls, le, true
 }
 
-func applySectionMD(path, section, content string) error {
+func applySectionMD(path, section, content string) (applyResult, error) {
 	begin := mdMarkers.begin(section)
 	end := mdMarkers.end(section)
 	block := begin + "\n" + strings.TrimRight(content, "\n") + "\n" + end + "\n"
 
-	existing := ""
+	existingContent := ""
 	if data, err := os.ReadFile(path); err == nil {
-		existing = string(data)
+		existingContent = string(data)
 	}
 
-	var result string
-	if ls, le, ok := sectionBounds(existing, begin, end); ok {
-		result = existing[:ls] + block + existing[le:]
+	var newContent string
+	_, _, existed := sectionBounds(existingContent, begin, end)
+	if ls, le, ok := sectionBounds(existingContent, begin, end); ok {
+		newContent = existingContent[:ls] + block + existingContent[le:]
 	} else {
-		if existing != "" && !strings.HasSuffix(existing, "\n") {
-			existing += "\n"
+		tail := existingContent
+		if tail != "" && !strings.HasSuffix(tail, "\n") {
+			tail += "\n"
 		}
-		result = existing + block
+		newContent = tail + block
+	}
+
+	if newContent == existingContent {
+		return applyResult{changed: false}, nil
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
+		return applyResult{}, err
 	}
-	return os.WriteFile(path, []byte(result), 0644)
+	if err := os.WriteFile(path, []byte(newContent), 0644); err != nil {
+		return applyResult{}, err
+	}
+
+	verb := "added"
+	if existed {
+		verb = "updated"
+	}
+	return applyResult{changed: true, notes: []string{section + ": " + verb}}, nil
 }
 
 func diffSectionMD(path, section, content string) (bool, error) {
@@ -134,6 +156,75 @@ func cleanSectionMD(path, section string) error {
 	}
 	fmt.Printf("  cleaned %s\n", path)
 	return os.WriteFile(path, []byte(result), 0644)
+}
+
+// ── Permissions merge helpers ─────────────────────────────────────────────────
+
+// toStrings converts a []any (from JSON unmarshal) or []string to []string.
+func toStrings(v any) []string {
+	switch val := v.(type) {
+	case []string:
+		return val
+	case []any:
+		ss := make([]string, 0, len(val))
+		for _, item := range val {
+			if s, ok := item.(string); ok {
+				ss = append(ss, s)
+			}
+		}
+		return ss
+	}
+	return nil
+}
+
+// unionStrings returns a∪b, preserving order (a first, then new items from b).
+func unionStrings(a, b []string) []string {
+	seen := make(map[string]struct{}, len(a))
+	result := make([]string, 0, len(a)+len(b))
+	for _, s := range a {
+		seen[s] = struct{}{}
+		result = append(result, s)
+	}
+	for _, s := range b {
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// mergePermissions unions the allow/deny arrays of existing and incoming.
+func mergePermissions(existing, incoming map[string]any) map[string]any {
+	result := make(map[string]any, len(existing))
+	for k, v := range existing {
+		result[k] = v
+	}
+	for _, field := range []string{"allow", "deny"} {
+		result[field] = unionStrings(toStrings(existing[field]), toStrings(incoming[field]))
+	}
+	return result
+}
+
+// applyMerge merges doc into a copy of existing. The permissions.allow and
+// permissions.deny arrays are union-merged; all other top-level keys replace.
+func applyMerge(existing, doc map[string]any) map[string]any {
+	out := make(map[string]any, len(existing)+len(doc))
+	for k, v := range existing {
+		out[k] = v
+	}
+	for k, v := range doc {
+		if k == "permissions" {
+			if ep, ok := out[k].(map[string]any); ok {
+				if ip, ok := v.(map[string]any); ok {
+					out[k] = mergePermissions(ep, ip)
+					continue
+				}
+			}
+		}
+		out[k] = v
+	}
+	return out
 }
 
 // ── JSON file helpers ─────────────────────────────────────────────────────────
@@ -279,32 +370,81 @@ func validateJSON(data []byte) error {
 	return nil
 }
 
-func applySettingsJSON(path string, doc map[string]any) error {
+// settingsStats returns human-readable change notes comparing existing → merged
+// for the managed keys (permissions arrays counted, other keys flagged as changed/added).
+func settingsStats(existing, merged map[string]any) []string {
+	var notes []string
+
+	// permissions: report per-array delta
+	ep, _ := existing["permissions"].(map[string]any)
+	mp, _ := merged["permissions"].(map[string]any)
+	if mp != nil {
+		for _, field := range []string{"allow", "deny"} {
+			oldN := len(toStrings(ep[field]))
+			newN := len(toStrings(mp[field]))
+			if newN != oldN {
+				notes = append(notes, fmt.Sprintf("permissions.%s: %+d entries (%d → %d)", field, newN-oldN, oldN, newN))
+			}
+		}
+	}
+
+	// other managed keys
+	for _, k := range managedSettingsKeys {
+		if k == "permissions" {
+			continue
+		}
+		if !bytes.Equal(marshalPretty(existing[k]), marshalPretty(merged[k])) {
+			if existing[k] == nil {
+				notes = append(notes, k+": added")
+			} else {
+				notes = append(notes, k+": changed")
+			}
+		}
+	}
+	return notes
+}
+
+func applySettingsJSON(path string, doc map[string]any) (applyResult, error) {
 	existing := readJSONC(path)
-	for k, v := range doc {
-		existing[k] = v
-	}
-	data := append(marshalPretty(existing), '\n')
+	merged := applyMerge(existing, doc)
+	data := append(marshalPretty(merged), '\n')
 	if err := validateJSON(data); err != nil {
-		return fmt.Errorf("%s: %w", path, err)
+		return applyResult{}, fmt.Errorf("%s: %w", path, err)
 	}
+
+	oldData, _ := os.ReadFile(path)
+	if bytes.Equal(oldData, data) {
+		return applyResult{changed: false}, nil
+	}
+
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
+		return applyResult{}, err
 	}
-	return os.WriteFile(path, data, 0644)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return applyResult{}, err
+	}
+	return applyResult{changed: true, notes: settingsStats(existing, merged)}, nil
 }
 
 func diffSettingsJSON(path string, doc map[string]any) (bool, error) {
 	existing := readJSONC(path)
+	merged := applyMerge(existing, doc)
+
 	currentManaged := map[string]any{}
 	for k := range doc {
 		if v, ok := existing[k]; ok {
 			currentManaged[k] = v
 		}
 	}
+	newManaged := map[string]any{}
+	for k := range doc {
+		if v, ok := merged[k]; ok {
+			newManaged[k] = v
+		}
+	}
 
 	oldData := marshalPretty(currentManaged)
-	newData := marshalPretty(doc)
+	newData := marshalPretty(newManaged)
 	if bytes.Equal(oldData, newData) {
 		return false, nil
 	}
@@ -365,37 +505,39 @@ func expandHome(path string) string {
 	return path
 }
 
-func ensureSymlink(linkPath, target string) error {
+func ensureSymlink(linkPath, target string) (applyResult, error) {
 	if err := os.MkdirAll(filepath.Dir(linkPath), 0755); err != nil {
-		return err
+		return applyResult{}, err
 	}
 	if rel, err := filepath.Rel(filepath.Dir(linkPath), target); err == nil {
 		target = rel
 	}
 	existing, err := os.Readlink(linkPath)
 	if err == nil && existing == target {
-		return nil
+		return applyResult{changed: false}, nil
 	}
 	os.Remove(linkPath) //nolint:errcheck
-	return os.Symlink(target, linkPath)
+	if err := os.Symlink(target, linkPath); err != nil {
+		return applyResult{}, err
+	}
+	return applyResult{changed: true}, nil
 }
 
-func copyFile(src, dst string) error {
+func copyFile(src, dst string) (applyResult, error) {
+	srcData, err := os.ReadFile(src)
+	if err != nil {
+		return applyResult{}, err
+	}
+	if dstData, err := os.ReadFile(dst); err == nil && bytes.Equal(srcData, dstData) {
+		return applyResult{changed: false}, nil
+	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return err
+		return applyResult{}, err
 	}
-	in, err := os.Open(src)
-	if err != nil {
-		return err
+	if err := os.WriteFile(dst, srcData, 0644); err != nil {
+		return applyResult{}, err
 	}
-	defer in.Close()
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, in)
-	return err
+	return applyResult{changed: true}, nil
 }
 
 // ── Command file generation ───────────────────────────────────────────────────
@@ -429,47 +571,96 @@ func localPath(projectDir, rel string) string {
 	return filepath.Join(projectDir, rel)
 }
 
+// printResult prints the action line and any notes for a changed item.
+// Silent for unchanged items — the summary line covers those.
+func printResult(action, path string, r applyResult) {
+	if !r.changed {
+		return
+	}
+	fmt.Printf("  %s %s\n", action, path)
+	for _, n := range r.notes {
+		fmt.Printf("    %s\n", n)
+	}
+}
+
 func applyAll(target, projectDir string, cfg *Config, langs []string) error {
+	changes := 0
+	record := func(r applyResult) {
+		if r.changed {
+			changes++
+		}
+	}
+
+	// settings.json
 	settingsPath := filepath.Join(target, "settings.json")
-	if err := applySettingsJSON(settingsPath, buildSettingsDoc(cfg)); err != nil {
+	sr, err := applySettingsJSON(settingsPath, buildSettingsDoc(cfg))
+	if err != nil {
 		return fmt.Errorf("settings: %w", err)
 	}
-	fmt.Printf("  wrote %s\n", settingsPath)
+	record(sr)
+	printResult("wrote", settingsPath, sr)
 
+	// global CLAUDE.md / AGENTS.md — aggregate all sections into one file result
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
 		gTarget := expandHome(g.Target)
+		gr := applyResult{}
 		for _, s := range g.Sections {
-			if err := applySectionMD(gTarget, s.Name, s.Content); err != nil {
+			r, err := applySectionMD(gTarget, s.Name, s.Content)
+			if err != nil {
 				return fmt.Errorf("agents_md.global [%s]: %w", s.Name, err)
 			}
+			if r.changed {
+				gr.changed = true
+				gr.notes = append(gr.notes, r.notes...)
+			}
 		}
-		fmt.Printf("  wrote %s\n", gTarget)
+		record(gr)
+		printResult("wrote", gTarget, gr)
+
 		if g.Symlink != "" {
 			link := expandHome(g.Symlink)
-			if err := ensureSymlink(link, gTarget); err != nil {
+			lr, err := ensureSymlink(link, gTarget)
+			if err != nil {
 				return fmt.Errorf("agents_md.global symlink: %w", err)
 			}
-			fmt.Printf("  symlink %s → %s\n", link, gTarget)
+			record(lr)
+			if lr.changed {
+				fmt.Printf("  symlink %s → %s\n", link, gTarget)
+			}
 		}
 	}
 
+	// local AGENTS.md / CLAUDE.md — same aggregation
 	if l := cfg.AgentsMD.Local; len(l.Sections) > 0 {
 		lTarget := localPath(projectDir, l.Target)
+		lr := applyResult{}
 		for _, s := range l.Sections {
-			if err := applySectionMD(lTarget, s.Name, s.Content); err != nil {
+			r, err := applySectionMD(lTarget, s.Name, s.Content)
+			if err != nil {
 				return fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
 			}
+			if r.changed {
+				lr.changed = true
+				lr.notes = append(lr.notes, r.notes...)
+			}
 		}
-		fmt.Printf("  wrote %s\n", lTarget)
+		record(lr)
+		printResult("wrote", lTarget, lr)
+
 		if l.Symlink != "" {
 			lSymlink := localPath(projectDir, l.Symlink)
-			if err := ensureSymlink(lSymlink, lTarget); err != nil {
+			sr, err := ensureSymlink(lSymlink, lTarget)
+			if err != nil {
 				return fmt.Errorf("agents_md.local symlink: %w", err)
 			}
-			fmt.Printf("  symlink %s → %s\n", lSymlink, lTarget)
+			record(sr)
+			if sr.changed {
+				fmt.Printf("  symlink %s → %s\n", lSymlink, lTarget)
+			}
 		}
 	}
 
+	// command files
 	if len(cfg.Commands) > 0 {
 		cmdDir := filepath.Join(target, "commands")
 		if err := os.MkdirAll(cmdDir, 0755); err != nil {
@@ -481,13 +672,19 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 				return err
 			}
 			path := filepath.Join(cmdDir, cmd.Name+".md")
-			if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-				return fmt.Errorf("command %s: %w", cmd.Name, err)
+			oldContent, _ := os.ReadFile(path)
+			cr := applyResult{changed: string(oldContent) != content}
+			if cr.changed {
+				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+					return fmt.Errorf("command %s: %w", cmd.Name, err)
+				}
 			}
-			fmt.Printf("  wrote %s\n", path)
+			record(cr)
+			printResult("wrote", path, cr)
 		}
 	}
 
+	// language files
 	for _, name := range langs {
 		lang, ok := cfg.AgentsMD.Languages[name]
 		if !ok {
@@ -495,18 +692,36 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 		}
 		src := filepath.Join(cfg.Dir, lang.Source)
 		dst := expandHome(lang.Target)
-		if err := copyFile(src, dst); err != nil {
+		fr, err := copyFile(src, dst)
+		if err != nil {
 			return fmt.Errorf("language %s: copy: %w", name, err)
 		}
-		fmt.Printf("  copied %s → %s\n", src, dst)
+		record(fr)
+		if fr.changed {
+			fmt.Printf("  copied %s → %s\n", src, dst)
+		}
 		if lang.Symlink != "" {
-			if err := ensureSymlink(lang.Symlink, dst); err != nil {
+			slr, err := ensureSymlink(lang.Symlink, dst)
+			if err != nil {
 				return fmt.Errorf("language %s: symlink: %w", name, err)
 			}
-			fmt.Printf("  symlink %s → %s\n", lang.Symlink, dst)
+			record(slr)
+			if slr.changed {
+				fmt.Printf("  symlink %s → %s\n", lang.Symlink, dst)
+			}
 		}
 	}
 
+	// summary
+	if changes == 0 {
+		fmt.Println("No changes.")
+	} else {
+		fmt.Printf("%d change", changes)
+		if changes != 1 {
+			fmt.Print("s")
+		}
+		fmt.Println(".")
+	}
 	return nil
 }
 

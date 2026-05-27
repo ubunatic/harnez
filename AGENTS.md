@@ -1,3 +1,5 @@
+<!-- Keep this file token-efficient: use bullet lists, not tables; no redundant prose. -->
+
 <!-- claudeconfig:begin Language Conventions -->
 Adhere to the following conventions.
 
@@ -8,3 +10,10 @@ Adhere to the following conventions.
   No "if [[]]", No "if []", Use "if test"
   smart indent!
 <!-- claudeconfig:end Language Conventions -->
+
+## Development Scripts
+
+Run from project root.
+
+- `scripts/smoke-test.sh` — build, apply, verify idempotency, simulate drift and confirm repair
+- `scripts/drop-perm.sh PATTERN` — remove permissions matching PATTERN from `~/.claude/settings.json` for drift simulation
