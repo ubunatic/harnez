@@ -505,6 +505,17 @@ func expandHome(path string) string {
 	return path
 }
 
+func contractHome(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	if strings.HasPrefix(path, home+"/") {
+		return "~/" + path[len(home)+1:]
+	}
+	return path
+}
+
 func ensureSymlink(linkPath, target string) (applyResult, error) {
 	if err := os.MkdirAll(filepath.Dir(linkPath), 0755); err != nil {
 		return applyResult{}, err
@@ -585,25 +596,55 @@ func printResult(action, path string, r applyResult) {
 
 func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 	changes := 0
-	record := func(r applyResult) {
-		if r.changed {
-			changes++
+
+	// pStat records what was already present, shown in the summary.
+	type pStat struct{ label, detail string }
+	var pStats []pStat
+
+	addStat := func(label, detail string) {
+		if detail != "" {
+			pStats = append(pStats, pStat{label, detail})
 		}
 	}
 
 	// settings.json
 	settingsPath := filepath.Join(target, "settings.json")
-	sr, err := applySettingsJSON(settingsPath, buildSettingsDoc(cfg))
+	settingsDoc := buildSettingsDoc(cfg)
+	sr, err := applySettingsJSON(settingsPath, settingsDoc)
 	if err != nil {
 		return fmt.Errorf("settings: %w", err)
 	}
-	record(sr)
+	if sr.changed {
+		changes++
+	} else {
+		existing := readJSONC(settingsPath)
+		// permissions: individual entry counts
+		if p, _ := existing["permissions"].(map[string]any); p != nil {
+			allow := toStrings(p["allow"])
+			deny := toStrings(p["deny"])
+			addStat("permissions", fmt.Sprintf("%d allow, %d deny", len(allow), len(deny)))
+		}
+		// other managed keys present in both doc and file
+		var keys []string
+		for _, k := range managedSettingsKeys {
+			if k == "permissions" {
+				continue
+			}
+			if _, inDoc := settingsDoc[k]; inDoc {
+				if _, inFile := existing[k]; inFile {
+					keys = append(keys, k)
+				}
+			}
+		}
+		addStat("settings", strings.Join(keys, ", "))
+	}
 	printResult("wrote", settingsPath, sr)
 
 	// global CLAUDE.md / AGENTS.md — aggregate all sections into one file result
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
 		gTarget := expandHome(g.Target)
 		gr := applyResult{}
+		var presentNames []string
 		for _, s := range g.Sections {
 			r, err := applySectionMD(gTarget, s.Name, s.Content)
 			if err != nil {
@@ -612,10 +653,15 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 			if r.changed {
 				gr.changed = true
 				gr.notes = append(gr.notes, r.notes...)
+			} else {
+				presentNames = append(presentNames, s.Name)
 			}
 		}
-		record(gr)
+		if gr.changed {
+			changes++
+		}
 		printResult("wrote", gTarget, gr)
+		addStat(filepath.Base(gTarget), strings.Join(presentNames, ", "))
 
 		if g.Symlink != "" {
 			link := expandHome(g.Symlink)
@@ -623,8 +669,8 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 			if err != nil {
 				return fmt.Errorf("agents_md.global symlink: %w", err)
 			}
-			record(lr)
 			if lr.changed {
+				changes++
 				fmt.Printf("  symlink %s → %s\n", link, gTarget)
 			}
 		}
@@ -634,6 +680,7 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 	if l := cfg.AgentsMD.Local; len(l.Sections) > 0 {
 		lTarget := localPath(projectDir, l.Target)
 		lr := applyResult{}
+		var presentNames []string
 		for _, s := range l.Sections {
 			r, err := applySectionMD(lTarget, s.Name, s.Content)
 			if err != nil {
@@ -642,19 +689,24 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 			if r.changed {
 				lr.changed = true
 				lr.notes = append(lr.notes, r.notes...)
+			} else {
+				presentNames = append(presentNames, s.Name)
 			}
 		}
-		record(lr)
+		if lr.changed {
+			changes++
+		}
 		printResult("wrote", lTarget, lr)
+		addStat(filepath.Base(lTarget), strings.Join(presentNames, ", "))
 
 		if l.Symlink != "" {
 			lSymlink := localPath(projectDir, l.Symlink)
-			sr, err := ensureSymlink(lSymlink, lTarget)
+			slr, err := ensureSymlink(lSymlink, lTarget)
 			if err != nil {
 				return fmt.Errorf("agents_md.local symlink: %w", err)
 			}
-			record(sr)
-			if sr.changed {
+			if slr.changed {
+				changes++
 				fmt.Printf("  symlink %s → %s\n", lSymlink, lTarget)
 			}
 		}
@@ -666,6 +718,7 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 		if err := os.MkdirAll(cmdDir, 0755); err != nil {
 			return fmt.Errorf("commands dir: %w", err)
 		}
+		var presentCmds []string
 		for _, cmd := range cfg.Commands {
 			content, err := genCommandContent(cmd, cfg.FS)
 			if err != nil {
@@ -678,10 +731,13 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 					return fmt.Errorf("command %s: %w", cmd.Name, err)
 				}
+				changes++
+			} else {
+				presentCmds = append(presentCmds, cmd.Name)
 			}
-			record(cr)
 			printResult("wrote", path, cr)
 		}
+		addStat("commands", strings.Join(presentCmds, ", "))
 	}
 
 	// language files
@@ -696,8 +752,10 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 		if err != nil {
 			return fmt.Errorf("language %s: copy: %w", name, err)
 		}
-		record(fr)
+		langChanged := false
 		if fr.changed {
+			changes++
+			langChanged = true
 			fmt.Printf("  copied %s → %s\n", src, dst)
 		}
 		if lang.Symlink != "" {
@@ -705,22 +763,31 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 			if err != nil {
 				return fmt.Errorf("language %s: symlink: %w", name, err)
 			}
-			record(slr)
 			if slr.changed {
+				changes++
+				langChanged = true
 				fmt.Printf("  symlink %s → %s\n", lang.Symlink, dst)
 			}
+		}
+		if !langChanged {
+			detail := contractHome(dst)
+			if lang.Symlink != "" {
+				detail += " → " + lang.Symlink
+			}
+			addStat(name, detail)
 		}
 	}
 
 	// summary
 	if changes == 0 {
 		fmt.Println("No changes.")
+	} else if changes == 1 {
+		fmt.Println("1 change.")
 	} else {
-		fmt.Printf("%d change", changes)
-		if changes != 1 {
-			fmt.Print("s")
-		}
-		fmt.Println(".")
+		fmt.Printf("%d changes.\n", changes)
+	}
+	for _, s := range pStats {
+		fmt.Printf("  %-14s %s\n", s.label+":", s.detail)
 	}
 	return nil
 }

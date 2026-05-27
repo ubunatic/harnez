@@ -8,6 +8,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// mergeLangs returns the union of config-declared langs and CLI --lang flags,
+// preserving order (config first, then any extras from the flag).
+func mergeLangs(fromConfig, fromFlag []string) []string {
+	seen := make(map[string]struct{}, len(fromConfig)+len(fromFlag))
+	result := make([]string, 0, len(fromConfig)+len(fromFlag))
+	for _, l := range fromConfig {
+		seen[l] = struct{}{}
+		result = append(result, l)
+	}
+	for _, l := range fromFlag {
+		if _, ok := seen[l]; !ok {
+			result = append(result, l)
+		}
+	}
+	return result
+}
+
 func expandTarget(flag, cfgTarget string) string {
 	if flag != "" {
 		return flag
@@ -52,7 +69,7 @@ func main() {
 			}
 			t := expandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
-			return applyAll(t, project, cfg, langs)
+			return applyAll(t, project, cfg, mergeLangs(cfg.Langs, langs))
 		},
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")

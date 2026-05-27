@@ -16,6 +16,7 @@ type Config struct {
 	Dir         string            `yaml:"-"`
 	FS          fs.FS             `yaml:"-"`
 	TargetDir   string            `yaml:"target_dir"`
+	Langs       []string          `yaml:"langs"`
 	Model       string            `yaml:"model"`
 	Effort      string            `yaml:"effort"`
 	Verbs       []string          `yaml:"verbs"`
