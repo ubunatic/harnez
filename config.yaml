@@ -1,5 +1,10 @@
 target_dir: ~/.claude
 
+langs:
+  - golang
+  - bash
+  - make
+
 model: sonnet
 effort: medium
 
@@ -38,6 +43,7 @@ permissions:
     - "Bash(crontab *)"
     - "Bash(tree *)"
     - "Bash(pgrep *)"
+    - "Bash(findmnt *)"
     # home directory reads (safe paths; excludes .ssh, .gnupg, .aws, .config)
     - "Read(~/.claude/**)"
     - "Read(~/.bashrc)"
@@ -126,6 +132,8 @@ agents_md:
             No ";", break before then/else/docs
             No "if [[]]", No "if []", Use "if test"
             smart indent!
+          - Make/Makefile @docs/Make.md,
+            ⚙ phony sentinel, self-doc help, build dependency pattern
 
   # claudeconfig supports the following languages
   # use --lang <name> when applying
@@ -146,3 +154,8 @@ agents_md:
       source: docs/Bash.md
       target: ~/.claude/docs/Bash.md
       symlink: ./docs/Bash.md
+    make:
+      ref: "@docs/Make.md"
+      source: docs/Make.md
+      target: ~/.claude/docs/Make.md
+      symlink: ./docs/Make.md
