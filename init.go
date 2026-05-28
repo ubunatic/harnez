@@ -9,6 +9,9 @@ import (
 
 const agentsMDTemplate = `Adhere to the following conventions.
 
+<!-- claudeconfig:begin Project Summary -->
+<!-- claudeconfig:end Project Summary -->
+
 ## Development Scripts
 
 Run from project root.
@@ -32,11 +35,21 @@ func fetchSummary(dir string) (string, error) {
 	return string(out), nil
 }
 
-func runInit(dir string, withSummary bool) error {
+func runInit(dir string, withSummary, update, replace bool) error {
 	agentsPath := filepath.Join(dir, "AGENTS.md")
 	claudePath := filepath.Join(dir, "CLAUDE.md")
 
+	if update {
+		withSummary = true
+	}
+
 	changes := 0
+
+	if replace {
+		if err := os.Remove(agentsPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove %s: %w", agentsPath, err)
+		}
+	}
 
 	if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
 		if err := os.WriteFile(agentsPath, []byte(agentsMDTemplate), 0o644); err != nil {
