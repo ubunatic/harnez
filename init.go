@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const agentsMDTemplate = `Adhere to the following conventions.
@@ -24,8 +25,17 @@ const summaryPrompt = `Summarize this project for a coding agent in plain markdo
 Cover: what it does, the main components and their roles, key conventions, and anything
 important to know before making changes. No preamble, no trailing commentary — just the summary.`
 
-func fetchSummary(dir string) (string, error) {
-	cmd := exec.Command("claude", "-p", summaryPrompt)
+const reviewPrompt = `Review the following project summary for an AI coding agent (AGENTS.md).
+Produce a refined version that is:
+- Precise and actionable — an agent can act on it directly
+- Grounded in the code — no assumptions beyond what is shown
+- Concise — no redundancy, no padding
+- Well-structured — key conventions and entry points front and centre
+
+Output only the refined summary in plain markdown. No preamble, no trailing commentary.`
+
+func claudeP(dir, prompt string) (string, error) {
+	cmd := exec.Command("claude", "-p", prompt)
 	cmd.Dir = dir
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()
@@ -33,6 +43,24 @@ func fetchSummary(dir string) (string, error) {
 		return "", fmt.Errorf("claude -p: %w", err)
 	}
 	return string(out), nil
+}
+
+func fetchSummary(dir string) (string, error) {
+	return claudeP(dir, summaryPrompt)
+}
+
+func reviewSummary(dir, agentsPath, draft string) (string, error) {
+	diffCmd := exec.Command("git", "diff", "--", agentsPath)
+	diffCmd.Dir = dir
+	diffOut, _ := diffCmd.Output()
+
+	var context string
+	if strings.TrimSpace(string(diffOut)) != "" {
+		context = "```diff\n" + string(diffOut) + "\n```"
+	} else {
+		context = "```markdown\n" + draft + "\n```"
+	}
+	return claudeP(dir, reviewPrompt+"\n\n"+context)
 }
 
 func runInit(dir string, withSummary, update, replace bool) error {
@@ -74,13 +102,22 @@ func runInit(dir string, withSummary, update, replace bool) error {
 
 	if withSummary {
 		fmt.Println("  running claude -p to summarise project...")
-		summary, err := fetchSummary(dir)
+		draft, err := fetchSummary(dir)
 		if err != nil {
 			return err
 		}
-		r, err := applySectionMD(agentsPath, summarySection, summary)
+		if _, err := applySectionMD(agentsPath, summarySection, draft); err != nil {
+			return fmt.Errorf("summary section (draft): %w", err)
+		}
+
+		fmt.Println("  running claude -p to review and refine summary...")
+		refined, err := reviewSummary(dir, agentsPath, draft)
 		if err != nil {
-			return fmt.Errorf("summary section: %w", err)
+			return err
+		}
+		r, err := applySectionMD(agentsPath, summarySection, refined)
+		if err != nil {
+			return fmt.Errorf("summary section (refined): %w", err)
 		}
 		if r.changed {
 			fmt.Printf("  wrote   %s [%s]\n", agentsPath, summarySection)
