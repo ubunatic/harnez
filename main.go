@@ -124,6 +124,18 @@ func main() {
 	status.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	status.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 
-	root.AddCommand(apply, diff, clean, status)
+	var initDir string
+	var initSummary bool
+	initCmd := &cobra.Command{
+		Use:   "init",
+		Short: "Create AGENTS.md and CLAUDE.md symlink in a project directory",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInit(initDir, initSummary)
+		},
+	}
+	initCmd.Flags().StringVarP(&initDir, "dir", "d", ".", "project directory to initialise (default: current directory)")
+	initCmd.Flags().BoolVar(&initSummary, "summary", false, "run claude -p to generate a project summary and add it to AGENTS.md")
+
+	root.AddCommand(apply, diff, clean, status, initCmd)
 	root.Execute()
 }
