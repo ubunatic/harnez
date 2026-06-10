@@ -551,6 +551,43 @@ func copyFile(src, dst string) (applyResult, error) {
 	return applyResult{changed: true}, nil
 }
 
+// installDoc copies src from fsys to dst. When force is false it skips if dst exists.
+func installDoc(fsys fs.FS, src, dst string, force bool) (applyResult, error) {
+	if !force {
+		if _, err := os.Stat(dst); err == nil {
+			return applyResult{changed: false}, nil
+		}
+	}
+	srcData, err := fs.ReadFile(fsys, src)
+	if err != nil {
+		return applyResult{}, err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return applyResult{}, err
+	}
+	if err := os.WriteFile(dst, srcData, 0644); err != nil {
+		return applyResult{}, err
+	}
+	return applyResult{changed: true}, nil
+}
+
+// langDocState reports whether the installed doc matches the bundled source.
+// Returns "not installed", "bundled", or "custom".
+func langDocState(fsys fs.FS, src, dst string) string {
+	installed, err := os.ReadFile(dst)
+	if err != nil {
+		return "not installed"
+	}
+	bundled, err := fs.ReadFile(fsys, src)
+	if err != nil {
+		return "installed"
+	}
+	if bytes.Equal(installed, bundled) {
+		return "bundled"
+	}
+	return "custom"
+}
+
 // ── Command file generation ───────────────────────────────────────────────────
 
 func genCommandContent(cmd Command, fsys fs.FS) (string, error) {
@@ -594,7 +631,7 @@ func printResult(action, path string, r applyResult) {
 	}
 }
 
-func applyAll(target, projectDir string, cfg *Config, langs []string) error {
+func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs bool) error {
 	changes := 0
 
 	// pStat records what was already present, shown in the summary.
@@ -746,17 +783,16 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 		if !ok {
 			return fmt.Errorf("unknown language: %s", name)
 		}
-		src := filepath.Join(cfg.Dir, lang.Source)
 		dst := expandHome(lang.Target)
-		fr, err := copyFile(src, dst)
+		fr, err := installDoc(cfg.FS, lang.Source, dst, forceDocs)
 		if err != nil {
-			return fmt.Errorf("language %s: copy: %w", name, err)
+			return fmt.Errorf("language %s: install: %w", name, err)
 		}
 		langChanged := false
 		if fr.changed {
 			changes++
 			langChanged = true
-			fmt.Printf("  copied %s → %s\n", src, dst)
+			fmt.Printf("  installed %s\n", dst)
 		}
 		if lang.Symlink != "" {
 			slr, err := ensureSymlink(lang.Symlink, dst)
@@ -770,7 +806,8 @@ func applyAll(target, projectDir string, cfg *Config, langs []string) error {
 			}
 		}
 		if !langChanged {
-			detail := contractHome(dst)
+			state := langDocState(cfg.FS, lang.Source, dst)
+			detail := contractHome(dst) + " [" + state + "]"
 			if lang.Symlink != "" {
 				detail += " → " + lang.Symlink
 			}

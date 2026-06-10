@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed config.yaml commands
+//go:embed config.yaml commands docs/src
 var defaultFS embed.FS
 
 type Config struct {

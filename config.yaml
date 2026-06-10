@@ -133,7 +133,7 @@ agents_md:
             No "if [[]]", No "if []", Use "if test"
             smart indent!
           - Make/Makefile @docs/Make.md,
-            ⚙ phony sentinel, self-doc help, build dependency pattern
+            ⚙️ phony sentinel, self-doc help, build dependency pattern
 
   # claudeconfig supports the following languages
   # use --lang <name> when applying
@@ -143,19 +143,19 @@ agents_md:
     golang:
       # how the doc is referenced
       ref: "@docs/Go.md"
-      # source path in claudeconfig
-      source: docs/Go.md
-      # where to copy it
+      # bundled source in claudeconfig
+      source: docs/src/Go.md
+      # where to install (if absent)
       target: ~/.claude/docs/Go.md
       # how to make discoverable in project
       symlink: ./docs/Go.md
     bash:
       ref: "@docs/Bash.md"
-      source: docs/Bash.md
+      source: docs/src/Bash.md
       target: ~/.claude/docs/Bash.md
       symlink: ./docs/Bash.md
     make:
       ref: "@docs/Make.md"
-      source: docs/Make.md
+      source: docs/src/Make.md
       target: ~/.claude/docs/Make.md
       symlink: ./docs/Make.md

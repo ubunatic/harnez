@@ -1,3 +1,4 @@
+<!-- claudeconfig:bundled -->
 # Bash conventions
 
 ## Header

@@ -1,3 +1,4 @@
+<!-- claudeconfig:bundled -->
 # Make conventions
 
 Default language assumed: Go.

@@ -87,5 +87,19 @@ func runStatus(configPath string, cfg *Config, target string) error {
 		fmt.Printf("  %-48s %s\n", e.label, state)
 	}
 
+	if len(cfg.AgentsMD.Languages) > 0 {
+		fmt.Println()
+		fmt.Println("Language docs:")
+		for _, name := range cfg.Langs {
+			lang, ok := cfg.AgentsMD.Languages[name]
+			if !ok {
+				continue
+			}
+			dst := expandHome(lang.Target)
+			state := langDocState(cfg.FS, lang.Source, dst)
+			fmt.Printf("  %-14s %s [%s]\n", name+":", contractHome(dst), state)
+		}
+	}
+
 	return nil
 }

@@ -1,3 +1,4 @@
+<!-- claudeconfig:bundled -->
 # Go Conventions
 
 ## Language & Deps

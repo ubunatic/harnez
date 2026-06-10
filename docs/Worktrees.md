@@ -39,10 +39,10 @@ packages.  The current Makefile has no `deps` target and no documentation of whi
 
 **Action:** Add to Makefile:
 ```makefile
-deps-gtk: ⚙  ## install system deps for instamoji-gtk (Debian/Ubuntu)
+deps-gtk: ⚙️  ## install system deps for instamoji-gtk (Debian/Ubuntu)
 	sudo apt-get install -y libgtk-4-dev libgirepository1.0-dev
 
-deps-gio: ⚙  ## install system deps for instamoji-gio (Debian/Ubuntu)
+deps-gio: ⚙️  ## install system deps for instamoji-gio (Debian/Ubuntu)
 	sudo apt-get install -y libvulkan-dev libwayland-dev libxkbcommon-dev libgl-dev
 ```
 
