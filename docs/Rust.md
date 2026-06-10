@@ -1,1 +1,0 @@
-/home/uwe/.claude/docs/Rust.md
