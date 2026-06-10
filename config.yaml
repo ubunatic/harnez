@@ -6,6 +6,7 @@ langs:
   - make
   - rust
   - cpp
+  - markdown
 
 model: sonnet
 effort: medium
@@ -164,3 +165,10 @@ agents_md:
       source: docs/src/Cpp.md
       target: ~/.claude/docs/Cpp.md
       local: ./docs/Cpp.md
+    markdown:
+      name: "Markdown"
+      ref: "@docs/Markdown.md"
+      hint: "PascalCase for evergreens, kebab-case for ephemeral docs"
+      source: docs/src/Markdown.md
+      target: ~/.claude/docs/Markdown.md
+      local: ./docs/Markdown.md
