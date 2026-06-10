@@ -4,6 +4,8 @@ langs:
   - golang
   - bash
   - make
+  - rust
+  - cpp
 
 model: sonnet
 effort: medium
@@ -119,43 +121,46 @@ agents_md:
   local:
     target: AGENTS.md
     symlink: CLAUDE.md
+    # Language Conventions section is generated dynamically from -l flags
 
-    # the following will be added to the local CLAUDE.md
-    sections:
-      - name: Language Conventions
-        content: |
-          Adhere to the following conventions.
-
-          - Go/Golang @docs/Go.md, 
-            Modern Go, avoid deps but use Cobra, add tests
-          - Bash/Shell @docs/Bash.md,
-            No ";", break before then/else/docs
-            No "if [[]]", No "if []", Use "if test"
-            smart indent!
-          - Make/Makefile @docs/Make.md,
-            ⚙️ phony sentinel, self-doc help, build dependency pattern
-
-  # claudeconfig supports the following languages
-  # use --lang <name> when applying
+  # available language docs — always installed to ~/.claude/docs/ on apply
+  # use -l <name> -p <dir> to copy into a project and update its AGENTS.md
   languages:
-    # the following language docs are copied/synched to .claude/docs
-    # and are referenced in the local project CLAUDE.md
     golang:
-      # how the doc is referenced
+      name: "Go/Golang"
       ref: "@docs/Go.md"
-      # bundled source in claudeconfig
+      hint: "Modern Go, avoid deps but use Cobra, add tests"
       source: docs/src/Go.md
-      # where to install (if absent)
       target: ~/.claude/docs/Go.md
-      # how to make discoverable in project
-      symlink: ./docs/Go.md
+      local: ./docs/Go.md
     bash:
+      name: "Bash/Shell"
       ref: "@docs/Bash.md"
+      hint: |
+        No ";", break before then/else/docs
+        No "if [[]]", No "if []", Use "if test"
+        smart indent!
       source: docs/src/Bash.md
       target: ~/.claude/docs/Bash.md
-      symlink: ./docs/Bash.md
+      local: ./docs/Bash.md
     make:
+      name: "Make/Makefile"
       ref: "@docs/Make.md"
+      hint: "⚙️ phony sentinel, self-doc help, build dependency pattern"
       source: docs/src/Make.md
       target: ~/.claude/docs/Make.md
-      symlink: ./docs/Make.md
+      local: ./docs/Make.md
+    rust:
+      name: "Rust"
+      ref: "@docs/Rust.md"
+      hint: "cargo fmt + clippy; safe Rust; avoid .unwrap() in library code"
+      source: docs/src/Rust.md
+      target: ~/.claude/docs/Rust.md
+      local: ./docs/Rust.md
+    cpp:
+      name: "C/C++"
+      ref: "@docs/Cpp.md"
+      hint: "Use ccache for CGO builds, prefer modern C++17"
+      source: docs/src/Cpp.md
+      target: ~/.claude/docs/Cpp.md
+      local: ./docs/Cpp.md

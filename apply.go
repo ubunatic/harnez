@@ -534,21 +534,31 @@ func ensureSymlink(linkPath, target string) (applyResult, error) {
 	return applyResult{changed: true}, nil
 }
 
-func copyFile(src, dst string) (applyResult, error) {
-	srcData, err := os.ReadFile(src)
-	if err != nil {
-		return applyResult{}, err
-	}
-	if dstData, err := os.ReadFile(dst); err == nil && bytes.Equal(srcData, dstData) {
-		return applyResult{changed: false}, nil
+// writeFileIfChanged writes data to dst only if the content differs.
+// Replaces symlinks with real files unconditionally.
+func writeFileIfChanged(dst string, data []byte) (applyResult, error) {
+	if fi, err := os.Lstat(dst); err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 {
+			os.Remove(dst) //nolint:errcheck
+		} else if existing, err := os.ReadFile(dst); err == nil && bytes.Equal(existing, data) {
+			return applyResult{changed: false}, nil
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return applyResult{}, err
 	}
-	if err := os.WriteFile(dst, srcData, 0644); err != nil {
+	if err := os.WriteFile(dst, data, 0644); err != nil {
 		return applyResult{}, err
 	}
 	return applyResult{changed: true}, nil
+}
+
+func copyFile(src, dst string) (applyResult, error) {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return applyResult{}, err
+	}
+	return writeFileIfChanged(dst, data)
 }
 
 // installDoc copies src from fsys to dst. When force is false it skips if dst exists.
@@ -558,17 +568,40 @@ func installDoc(fsys fs.FS, src, dst string, force bool) (applyResult, error) {
 			return applyResult{changed: false}, nil
 		}
 	}
-	srcData, err := fs.ReadFile(fsys, src)
+	data, err := fs.ReadFile(fsys, src)
 	if err != nil {
 		return applyResult{}, err
 	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return applyResult{}, err
+	return writeFileIfChanged(dst, data)
+}
+
+// buildLangConventions generates the Language Conventions AGENTS.md section
+// content from the given language names.
+func buildLangConventions(names []string, cfg *Config) string {
+	var sb strings.Builder
+	sb.WriteString("Adhere to the following conventions.\n\n")
+	for _, name := range names {
+		lang, ok := cfg.AgentsMD.Languages[name]
+		if !ok || lang.Ref == "" {
+			continue
+		}
+		displayName := lang.Name
+		if displayName == "" {
+			displayName = name
+		}
+		sb.WriteString("- " + displayName + " " + lang.Ref)
+		if lang.Hint != "" {
+			hint := strings.TrimRight(lang.Hint, "\n")
+			lines := strings.Split(hint, "\n")
+			sb.WriteString(",\n")
+			for _, line := range lines {
+				sb.WriteString("  " + line + "\n")
+			}
+		} else {
+			sb.WriteString("\n")
+		}
 	}
-	if err := os.WriteFile(dst, srcData, 0644); err != nil {
-		return applyResult{}, err
-	}
-	return applyResult{changed: true}, nil
+	return sb.String()
 }
 
 // langDocState reports whether the installed doc matches the bundled source.
@@ -713,28 +746,38 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 		}
 	}
 
-	// local AGENTS.md / CLAUDE.md — same aggregation
-	if l := cfg.AgentsMD.Local; len(l.Sections) > 0 {
+	// local AGENTS.md / CLAUDE.md
+	if l := cfg.AgentsMD.Local; l.Target != "" && projectDir != "" {
 		lTarget := localPath(projectDir, l.Target)
-		lr := applyResult{}
-		var presentNames []string
-		for _, s := range l.Sections {
-			r, err := applySectionMD(lTarget, s.Name, s.Content)
-			if err != nil {
-				return fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
-			}
-			if r.changed {
-				lr.changed = true
-				lr.notes = append(lr.notes, r.notes...)
-			} else {
-				presentNames = append(presentNames, s.Name)
-			}
+		// static sections from config + dynamic Language Conventions if -l was used
+		sections := append([]MDSection(nil), l.Sections...)
+		if len(langs) > 0 {
+			sections = append(sections, MDSection{
+				Name:    "Language Conventions",
+				Content: buildLangConventions(langs, cfg),
+			})
 		}
-		if lr.changed {
-			changes++
+		if len(sections) > 0 {
+			lr := applyResult{}
+			var presentNames []string
+			for _, s := range sections {
+				r, err := applySectionMD(lTarget, s.Name, s.Content)
+				if err != nil {
+					return fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
+				}
+				if r.changed {
+					lr.changed = true
+					lr.notes = append(lr.notes, r.notes...)
+				} else {
+					presentNames = append(presentNames, s.Name)
+				}
+			}
+			if lr.changed {
+				changes++
+			}
+			printResult("wrote", lTarget, lr)
+			addStat(filepath.Base(lTarget), strings.Join(presentNames, ", "))
 		}
-		printResult("wrote", lTarget, lr)
-		addStat(filepath.Base(lTarget), strings.Join(presentNames, ", "))
 
 		if l.Symlink != "" {
 			lSymlink := localPath(projectDir, l.Symlink)
@@ -777,8 +820,9 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 		addStat("commands", strings.Join(presentCmds, ", "))
 	}
 
-	// language files
-	for _, name := range langs {
+	// language docs: global install to ~/.claude/docs/ for all configured + CLI langs
+	globalLangs := mergeLangs(cfg.Langs, langs)
+	for _, name := range globalLangs {
 		lang, ok := cfg.AgentsMD.Languages[name]
 		if !ok {
 			return fmt.Errorf("unknown language: %s", name)
@@ -788,30 +832,36 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 		if err != nil {
 			return fmt.Errorf("language %s: install: %w", name, err)
 		}
-		langChanged := false
 		if fr.changed {
 			changes++
-			langChanged = true
 			fmt.Printf("  installed %s\n", dst)
-		}
-		if lang.Symlink != "" {
-			slr, err := ensureSymlink(lang.Symlink, dst)
-			if err != nil {
-				return fmt.Errorf("language %s: symlink: %w", name, err)
-			}
-			if slr.changed {
-				changes++
-				langChanged = true
-				fmt.Printf("  symlink %s → %s\n", lang.Symlink, dst)
-			}
-		}
-		if !langChanged {
+		} else {
 			state := langDocState(cfg.FS, lang.Source, dst)
-			detail := contractHome(dst) + " [" + state + "]"
-			if lang.Symlink != "" {
-				detail += " → " + lang.Symlink
+			addStat(name, contractHome(dst)+" ["+state+"]")
+		}
+	}
+
+	// language docs: project copy — only for -l langs when -p is given
+	// copies directly from embedded FS so project docs are authoritative
+	if projectDir != "" {
+		for _, name := range langs {
+			lang, ok := cfg.AgentsMD.Languages[name]
+			if !ok || lang.Local == "" {
+				continue
 			}
-			addStat(name, detail)
+			data, err := fs.ReadFile(cfg.FS, lang.Source)
+			if err != nil {
+				return fmt.Errorf("language %s: read source: %w", name, err)
+			}
+			localDoc := localPath(projectDir, lang.Local)
+			cr, err := writeFileIfChanged(localDoc, data)
+			if err != nil {
+				return fmt.Errorf("language %s: copy: %w", name, err)
+			}
+			if cr.changed {
+				changes++
+				fmt.Printf("  copied %s → %s\n", lang.Source, localDoc)
+			}
 		}
 	}
 
@@ -878,8 +928,10 @@ func cleanAll(target string, cfg *Config) error {
 			}
 		}
 	}
-	if l := cfg.AgentsMD.Local; len(l.Sections) > 0 {
-		for _, s := range l.Sections {
+	if l := cfg.AgentsMD.Local; l.Target != "" {
+		sections := append([]MDSection(nil), l.Sections...)
+		sections = append(sections, MDSection{Name: "Language Conventions"})
+		for _, s := range sections {
 			if err := cleanSectionMD(l.Target, s.Name); err != nil {
 				return fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
 			}

@@ -1,3 +1,4 @@
+<!-- claudeconfig:bundled -->
 # C/C++ conventions
 
 ## Build acceleration

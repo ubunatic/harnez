@@ -71,10 +71,12 @@ type MDSection struct {
 }
 
 type Language struct {
-	Ref     string `yaml:"ref"`
-	Source  string `yaml:"source"`
-	Target  string `yaml:"target"`
-	Symlink string `yaml:"symlink"`
+	Name   string `yaml:"name"`
+	Ref    string `yaml:"ref"`
+	Hint   string `yaml:"hint"`
+	Source string `yaml:"source"`
+	Target string `yaml:"target"`
+	Local  string `yaml:"local"`
 }
 
 func loadConfig(path string) (*Config, error) {

@@ -70,12 +70,12 @@ func main() {
 			}
 			t := expandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
-			return applyAll(t, project, cfg, mergeLangs(cfg.Langs, langs), forceDocs)
+			return applyAll(t, project, cfg, langs, forceDocs)
 		},
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	apply.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
-	apply.Flags().StringVarP(&project, "project", "p", ".", "project directory for local agents_md targets")
+	apply.Flags().StringVarP(&project, "project", "p", "", "project directory for local AGENTS.md and doc copies")
 	apply.Flags().StringArrayVarP(&langs, "lang", "l", nil, "language doc(s) to install (e.g. golang, bash)")
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing language docs with bundled versions")
 
