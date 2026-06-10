@@ -81,7 +81,7 @@ permissions:
 # Lifecycle hooks
 hooks:
   - event: Stop
-    command: "notify-send 'Claude stopped' 2>/dev/null || true"
+    command: "ffplay -nodisp -autoexit /usr/share/sounds/freedesktop/stereo/window-attention.oga 2>/dev/null || true"
 
 # Spinner verbs shown while Claude thinks
 verbs:

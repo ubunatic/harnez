@@ -64,7 +64,7 @@ permissions:
 
 hooks:
   - event: Stop
-    command: "notify-send 'Claude stopped' 2>/dev/null || true"
+    command: "ffplay -nodisp -autoexit /usr/share/sounds/freedesktop/stereo/window-attention.oga 2>/dev/null || true"
 
 # thinking verbs (get rid of annoying word creations)
 verbs:

@@ -76,7 +76,7 @@ permissions:
 
 hooks:
   - event: Stop              # PostToolUse | Stop | PreToolUse | Notification
-    command: "notify-send 'Claude stopped'"
+    command: "ffplay -nodisp -autoexit /usr/share/sounds/freedesktop/stereo/window-attention.oga 2>/dev/null || true"
   - event: PostToolUse
     matcher: "Bash"
     command: "echo 'ran bash' >> ~/.claude/audit.log"
