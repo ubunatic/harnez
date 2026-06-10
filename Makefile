@@ -13,12 +13,17 @@ help: ⚙️  ## show this help
 build: ⚙️  ## build the binary
 	go build -o $(BINARY) .
 
-install: ⚙️ build  ## install the binary to PREFIX/bin (default: /usr/local/bin)
+install: ⚙️ build  ## install binary to ~/go/bin (user)
 	go install .
-	@sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY) && echo "✅ Installed for all users" || echo "⚠️ System istall failed"
 
-apply: ⚙️ build  ## apply config.yaml to the Claude Code config directory
+install-system: ⚙️ build  ## install binary to PREFIX/bin via sudo (system-wide)
+	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
+
+apply: ⚙️ build  ## apply config to ~/.claude + this project (golang bash make)
 	./$(BINARY) apply -c $(CONFIG) -t $(TARGET) -p $(PROJECT) $(addprefix -l ,$(LANGS))
+
+apply-system: ⚙️ build  ## apply config to ~/.claude only (no project, all langs)
+	./$(BINARY) apply -t $(TARGET)
 
 diff: ⚙️ build  ## show what apply would change in managed blocks
 	./$(BINARY) diff -c $(CONFIG) -t $(TARGET)
