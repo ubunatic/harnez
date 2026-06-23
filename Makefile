@@ -34,6 +34,9 @@ clean: ⚙️ build  ## remove managed blocks from the Claude Code config direct
 status: ⚙️ build  ## show config summary and applied state
 	./$(BINARY) status -c $(CONFIG) -t $(TARGET)
 
+lint: ⚙️  ## check commands/*.md files are all registered in config.yaml
+	bash scripts/lint.sh
+
 test: ⚙️  ## run linter and tests
 	go vet ./...
 	go test ./...
