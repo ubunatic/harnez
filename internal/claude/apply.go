@@ -665,6 +665,21 @@ func ApplyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 				changes++
 				fmt.Printf("  copied %s → %s\n", lang.Source, localDoc)
 			}
+
+			if lang.Template != "" {
+				dest := localPath(projectDir, filepath.Base(lang.Template))
+				if _, err := os.Stat(dest); os.IsNotExist(err) {
+					data, err := fs.ReadFile(cfg.FS, lang.Template)
+					if err != nil {
+						return fmt.Errorf("language %s: read template: %w", name, err)
+					}
+					if err := os.WriteFile(dest, data, 0644); err != nil {
+						return fmt.Errorf("language %s: scaffold template: %w", name, err)
+					}
+					changes++
+					fmt.Printf("  scaffolded %s\n", dest)
+				}
+			}
 		}
 	}
 

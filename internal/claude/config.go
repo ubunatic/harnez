@@ -70,12 +70,13 @@ type MDSection struct {
 }
 
 type Language struct {
-	Name   string `yaml:"name"`
-	Ref    string `yaml:"ref"`
-	Hint   string `yaml:"hint"`
-	Source string `yaml:"source"`
-	Target string `yaml:"target"`
-	Local  string `yaml:"local"`
+	Name     string `yaml:"name"`
+	Ref      string `yaml:"ref"`
+	Hint     string `yaml:"hint"`
+	Source   string `yaml:"source"`
+	Target   string `yaml:"target"`
+	Local    string `yaml:"local"`
+	Template string `yaml:"template"` // scaffold file written once to project if absent
 }
 
 func LoadConfig(path string) (*Config, error) {
