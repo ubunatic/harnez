@@ -163,6 +163,7 @@ agents_md:
       target: ~/.claude/docs/Make.md
       local: ./docs/Make.md
       template: docs/templates/Makefile
+      targets: docs/templates/MakeTargets.mk
     rust:
       name: "Rust"
       ref: "@docs/Rust.md"

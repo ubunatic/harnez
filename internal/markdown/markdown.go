@@ -8,15 +8,25 @@ import (
 	"strings"
 )
 
-var mdMarkers = struct {
-	begin func(string) string
-	end   func(string) string
-}{
-	begin: func(s string) string { return "<!-- claudeconfig:begin " + s + " -->" },
-	end:   func(s string) string { return "<!-- claudeconfig:end " + s + " -->" },
+// Markers defines the begin/end comment style for managed sections.
+type Markers struct {
+	Begin func(string) string
+	End   func(string) string
 }
 
-// SectionBounds finds the line range of a managed block.
+// MDMarkers uses HTML comments — suitable for Markdown files.
+var MDMarkers = Markers{
+	Begin: func(s string) string { return "<!-- claudeconfig:begin " + s + " -->" },
+	End:   func(s string) string { return "<!-- claudeconfig:end " + s + " -->" },
+}
+
+// MKMarkers uses shell comments — suitable for Makefiles.
+var MKMarkers = Markers{
+	Begin: func(s string) string { return "# claudeconfig:begin " + s },
+	End:   func(s string) string { return "# claudeconfig:end " + s },
+}
+
+// SectionBounds finds the byte range of a managed block defined by begin/end markers.
 func SectionBounds(existing, begin, end string) (lineStart, lineEnd int, found bool) {
 	bi := strings.Index(existing, begin)
 	ei := strings.Index(existing, end)
@@ -31,12 +41,9 @@ func SectionBounds(existing, begin, end string) (lineStart, lineEnd int, found b
 	return ls, le, true
 }
 
-// Apply updates or inserts a managed section inside a markdown file.
-// Returns changed = true if the file was modified, existed = true if the section
-// was already present in the file before this call.
-func Apply(path, section, content string) (changed bool, existed bool, err error) {
-	begin := mdMarkers.begin(section)
-	end := mdMarkers.end(section)
+func applySection(path, section, content string, m Markers) (changed bool, existed bool, err error) {
+	begin := m.Begin(section)
+	end := m.End(section)
 	block := begin + "\n" + strings.TrimRight(content, "\n") + "\n" + end + "\n"
 
 	existingContent := ""
@@ -70,11 +77,9 @@ func Apply(path, section, content string) (changed bool, existed bool, err error
 	return true, existed, nil
 }
 
-// Diff shows unified diff between current section content in the file and the proposed content.
-// Returns true if there is a diff.
-func Diff(path, section, content string) (bool, error) {
-	begin := mdMarkers.begin(section)
-	end := mdMarkers.end(section)
+func diffSection(path, section, content string, m Markers) (bool, error) {
+	begin := m.Begin(section)
+	end := m.End(section)
 	newBlock := begin + "\n" + strings.TrimRight(content, "\n") + "\n" + end + "\n"
 
 	oldBlock := ""
@@ -119,12 +124,9 @@ func Diff(path, section, content string) (bool, error) {
 	return true, nil
 }
 
-// Clean removes a managed block from the markdown file.
-// If the file becomes empty/only whitespace, it is removed and removed is returned as true.
-// Otherwise, cleaned is returned as true if the block was found and removed.
-func Clean(path, section string) (removed bool, cleaned bool, err error) {
-	begin := mdMarkers.begin(section)
-	end := mdMarkers.end(section)
+func cleanSection(path, section string, m Markers) (removed bool, cleaned bool, err error) {
+	begin := m.Begin(section)
+	end := m.End(section)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -149,11 +151,50 @@ func Clean(path, section string) (removed bool, cleaned bool, err error) {
 	return false, true, err
 }
 
-// ContainsSection checks if a file contains the begin marker of a section.
+// Apply updates or inserts a managed section inside a Markdown file.
+func Apply(path, section, content string) (changed bool, existed bool, err error) {
+	return applySection(path, section, content, MDMarkers)
+}
+
+// Diff shows a unified diff for a managed section in a Markdown file.
+func Diff(path, section, content string) (bool, error) {
+	return diffSection(path, section, content, MDMarkers)
+}
+
+// Clean removes a managed section from a Markdown file.
+func Clean(path, section string) (removed bool, cleaned bool, err error) {
+	return cleanSection(path, section, MDMarkers)
+}
+
+// ContainsSection checks if a Markdown file contains the begin marker of a section.
 func ContainsSection(path, section string) bool {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false
 	}
-	return strings.Contains(string(data), "<!-- claudeconfig:begin "+section+" -->")
+	return strings.Contains(string(data), MDMarkers.Begin(section))
+}
+
+// ApplyMK updates or inserts a managed section inside a Makefile.
+func ApplyMK(path, section, content string) (changed bool, existed bool, err error) {
+	return applySection(path, section, content, MKMarkers)
+}
+
+// DiffMK shows a unified diff for a managed section in a Makefile.
+func DiffMK(path, section, content string) (bool, error) {
+	return diffSection(path, section, content, MKMarkers)
+}
+
+// CleanMK removes a managed section from a Makefile.
+func CleanMK(path, section string) (removed bool, cleaned bool, err error) {
+	return cleanSection(path, section, MKMarkers)
+}
+
+// ContainsSectionMK checks if a Makefile contains the begin marker of a section.
+func ContainsSectionMK(path, section string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), MKMarkers.Begin(section))
 }

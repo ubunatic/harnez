@@ -77,6 +77,7 @@ type Language struct {
 	Target   string `yaml:"target"`
 	Local    string `yaml:"local"`
 	Template string `yaml:"template"` // scaffold file written once to project if absent
+	Targets  string `yaml:"targets"`  // managed section injected into existing template file
 }
 
 func LoadConfig(path string) (*Config, error) {
