@@ -32,6 +32,7 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 	fmt.Printf("  %-14s %d\n", "hooks:", len(cfg.Hooks))
 	fmt.Printf("  %-14s %d\n", "mcp_servers:", len(cfg.MCPServers))
 	fmt.Printf("  %-14s %d\n", "commands:", len(cfg.Commands))
+	fmt.Printf("  %-14s %d\n", "skills:", len(cfg.Skills))
 	fmt.Printf("  %-14s %d global, %d local\n", "agents_md:",
 		len(cfg.AgentsMD.Global.Sections), len(cfg.AgentsMD.Local.Sections))
 
@@ -73,6 +74,21 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 			label: path,
 			check: func() bool { _, err := os.Stat(path); return err == nil },
 		})
+	}
+	if len(cfg.Skills) > 0 {
+		skillsRoot := fsutil.ExpandHome(cfg.SkillsTarget)
+		if skillsRoot == "" {
+			home, _ := os.UserHomeDir()
+			skillsRoot = filepath.Join(home, ".gemini", "skills")
+		}
+		for _, skill := range cfg.Skills {
+			skill := skill
+			path := filepath.Join(skillsRoot, skill.Name, "SKILL.md")
+			checks = append(checks, entry{
+				label: path,
+				check: func() bool { _, err := os.Stat(path); return err == nil },
+			})
+		}
 	}
 
 	for _, e := range checks {

@@ -392,6 +392,27 @@ func genCommandContent(cmd Command, fsys fs.FS) (string, error) {
 	return sb.String(), nil
 }
 
+func genSkillContent(cmd Command, fsys fs.FS) (string, error) {
+	body := cmd.Content
+	if cmd.File != "" {
+		data, err := fs.ReadFile(fsys, cmd.File)
+		if err != nil {
+			return "", fmt.Errorf("skill %s: %w", cmd.Name, err)
+		}
+		body = string(data)
+	}
+	var sb strings.Builder
+	sb.WriteString("---\n")
+	fmt.Fprintf(&sb, "name: %q\n", cmd.Name)
+	if cmd.Description != "" {
+		fmt.Fprintf(&sb, "description: %q\n", cmd.Description)
+	}
+	sb.WriteString("---\n")
+	sb.WriteString(strings.TrimRight(body, "\n"))
+	sb.WriteString("\n")
+	return sb.String(), nil
+}
+
 func localPath(projectDir, rel string) string {
 	if filepath.IsAbs(rel) || projectDir == "" || projectDir == "." {
 		return rel
@@ -572,6 +593,37 @@ func ApplyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 			printResult("wrote", path, cr)
 		}
 		addStat("commands", strings.Join(cmdNames, ", "))
+	}
+
+	if len(cfg.Skills) > 0 {
+		skillsRoot := fsutil.ExpandHome(cfg.SkillsTarget)
+		if skillsRoot == "" {
+			home, _ := os.UserHomeDir()
+			skillsRoot = filepath.Join(home, ".gemini", "skills")
+		}
+		var skillNames []string
+		for _, skill := range cfg.Skills {
+			content, err := genSkillContent(skill, cfg.FS)
+			if err != nil {
+				return err
+			}
+			skillDir := filepath.Join(skillsRoot, skill.Name)
+			if err := os.MkdirAll(skillDir, 0755); err != nil {
+				return fmt.Errorf("skill %s dir: %w", skill.Name, err)
+			}
+			path := filepath.Join(skillDir, "SKILL.md")
+			oldContent, _ := os.ReadFile(path)
+			cr := applyResult{changed: string(oldContent) != content}
+			if cr.changed {
+				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+					return fmt.Errorf("skill %s: %w", skill.Name, err)
+				}
+				changes++
+			}
+			skillNames = append(skillNames, skill.Name)
+			printResult("wrote", path, cr)
+		}
+		addStat("skills", strings.Join(skillNames, ", "))
 	}
 
 	globalLangs := mergeLangs(cfg.Langs, langs)

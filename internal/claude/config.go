@@ -21,8 +21,10 @@ type Config struct {
 	Hooks       []Hook            `yaml:"hooks"`
 	Env         map[string]string `yaml:"env"`
 	MCPServers  []MCPServer       `yaml:"mcp_servers"`
-	Commands    []Command         `yaml:"commands"`
-	AgentsMD    AgentsMD          `yaml:"agents_md"`
+	Commands     []Command         `yaml:"commands"`
+	Skills       []Command         `yaml:"skills"`
+	SkillsTarget string            `yaml:"skills_target"`
+	AgentsMD     AgentsMD          `yaml:"agents_md"`
 }
 
 type Permissions struct {
