@@ -5,7 +5,7 @@ Not needed for routine coding; reach for these during investigations or design w
 
 | File | Topic |
 |------|-------|
-| [CommandsPipeline.md](CommandsPipeline.md) | How slash commands flow from config.yaml → ~/.claude/commands/ |
+| [CommandsPipeline.md](CommandsPipeline.md) | Claude commands (config.yaml → ~/.claude/commands/) and Antigravity skills (→ ~/.gemini/skills/) |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat |
 | [Worktrees.md](Worktrees.md) | Parallel worktree agents: what worked, go.mod races, Haiku API staleness |
 | [Go.md](Go.md) | Go conventions (generated from docs/src/Go.md) |
