@@ -553,7 +553,7 @@ func ApplyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 		if err := os.MkdirAll(cmdDir, 0755); err != nil {
 			return fmt.Errorf("commands dir: %w", err)
 		}
-		var presentCmds []string
+		var cmdNames []string
 		for _, cmd := range cfg.Commands {
 			content, err := genCommandContent(cmd, cfg.FS)
 			if err != nil {
@@ -567,12 +567,11 @@ func ApplyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 					return fmt.Errorf("command %s: %w", cmd.Name, err)
 				}
 				changes++
-			} else {
-				presentCmds = append(presentCmds, cmd.Name)
 			}
+			cmdNames = append(cmdNames, cmd.Name)
 			printResult("wrote", path, cr)
 		}
-		addStat("commands", strings.Join(presentCmds, ", "))
+		addStat("commands", strings.Join(cmdNames, ", "))
 	}
 
 	globalLangs := mergeLangs(cfg.Langs, langs)

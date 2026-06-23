@@ -93,6 +93,10 @@ commands:
     description: "Create or update CONTEXT.md with project knowledge"
     file: commands/update-context.md
 
+  - name: evergreen
+    description: "Create/update evergreen docs and issue files for the current session"
+    file: commands/evergreen.md
+
 agents_md:
   # config for local md file
   global:
