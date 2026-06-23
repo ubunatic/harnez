@@ -1,27 +1,23 @@
-package main
+package claude
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"ubunatic.com/claudeconfig/internal/fsutil"
+	"ubunatic.com/claudeconfig/internal/jsonc"
+	"ubunatic.com/claudeconfig/internal/markdown"
 )
 
 func hasSettingsKey(path, key string) bool {
-	m := readJSONC(path)
+	m := jsonc.Read(path)
 	_, ok := m[key]
 	return ok
 }
 
-func hasSectionMD(path, section string) bool {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	return strings.Contains(string(data), "<!-- claudeconfig:begin "+section+" -->")
-}
-
-func runStatus(configPath string, cfg *Config, target string) error {
+// RunStatus prints the current applied status of configuration parameters.
+func RunStatus(configPath string, cfg *Config, target string) error {
 	fmt.Println("Config:")
 	fmt.Printf("  %-14s %s\n", "file:", configPath)
 	fmt.Printf("  %-14s %s\n", "target:", target)
@@ -56,10 +52,10 @@ func runStatus(configPath string, cfg *Config, target string) error {
 	}
 	for _, s := range cfg.AgentsMD.Global.Sections {
 		s := s
-		gTarget := expandHome(cfg.AgentsMD.Global.Target)
+		gTarget := fsutil.ExpandHome(cfg.AgentsMD.Global.Target)
 		checks = append(checks, entry{
 			label: gTarget + " [" + s.Name + "]",
-			check: func() bool { return hasSectionMD(gTarget, s.Name) },
+			check: func() bool { return markdown.ContainsSection(gTarget, s.Name) },
 		})
 	}
 	for _, s := range cfg.AgentsMD.Local.Sections {
@@ -67,7 +63,7 @@ func runStatus(configPath string, cfg *Config, target string) error {
 		lTarget := cfg.AgentsMD.Local.Target
 		checks = append(checks, entry{
 			label: lTarget + " [" + s.Name + "]",
-			check: func() bool { return hasSectionMD(lTarget, s.Name) },
+			check: func() bool { return markdown.ContainsSection(lTarget, s.Name) },
 		})
 	}
 	for _, cmd := range cfg.Commands {
@@ -95,9 +91,9 @@ func runStatus(configPath string, cfg *Config, target string) error {
 			if !ok {
 				continue
 			}
-			dst := expandHome(lang.Target)
+			dst := fsutil.ExpandHome(lang.Target)
 			state := langDocState(cfg.FS, lang.Source, dst)
-			fmt.Printf("  %-14s %s [%s]\n", name+":", contractHome(dst), state)
+			fmt.Printf("  %-14s %s [%s]\n", name+":", fsutil.ContractHome(dst), state)
 		}
 	}
 

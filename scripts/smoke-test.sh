@@ -6,9 +6,18 @@ set -euo pipefail
 
 bin="./claudeconfig"
 
-pass() { echo "  PASS: $*"; }
-fail() { echo "  FAIL: $*" >&2; exit 1; }
+pass() {
+	echo "  PASS: $*"
+}
+fail() {
+	echo "  FAIL: $*" >&2
+	exit 1
+}
 
+echo "=== test ==="
+make test
+
+echo ""
 echo "=== build ==="
 make build
 

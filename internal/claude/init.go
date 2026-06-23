@@ -1,4 +1,4 @@
-package main
+package claude
 
 import (
 	"encoding/json"
@@ -7,6 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"ubunatic.com/claudeconfig/internal/fsutil"
+	"ubunatic.com/claudeconfig/internal/markdown"
 )
 
 const agentsMDTemplate = `Adhere to the following conventions.
@@ -37,9 +40,7 @@ Produce a refined version that is:
 Start your response with the first line of the summary. No preamble, no analysis, no trailing commentary.
 Do not include HTML comment markers (<!-- ... -->) in your output.`
 
-// sanitizeContent strips artifacts that LLMs sometimes inject: outer code fences
-// wrapping the entire response, and claudeconfig section markers (which corrupt the
-// file structure if embedded in content).
+// sanitizeContent strips artifacts that LLMs sometimes inject.
 func sanitizeContent(s string) string {
 	s = strings.TrimSpace(s)
 	if strings.HasPrefix(s, "```") {
@@ -60,12 +61,7 @@ func sanitizeContent(s string) string {
 	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
-// stripMetaCommentary removes meta-commentary separated from the actual content by
-// a "---" rule. Handles two patterns:
-//   - preamble before "---", content after  → keep after
-//   - content before "---", appendix after  → keep before
-//
-// Only acts when one side is substantially longer than the other (≥4 lines vs <4).
+// stripMetaCommentary removes meta-commentary separated from the actual content by a "---" rule.
 func stripMetaCommentary(s string) string {
 	const sep = "\n---\n"
 	idx := strings.LastIndex(s, sep)
@@ -129,7 +125,8 @@ func reviewSummary(dir, draft string) (string, error) {
 	return claudeP(dir, reviewPrompt+"\n\n"+context)
 }
 
-func runInit(dir string, withSummary, update, replace bool) error {
+// RunInit creates AGENTS.md and CLAUDE.md symlink in a project directory.
+func RunInit(dir string, withSummary, update, replace bool) error {
 	agentsPath := filepath.Join(dir, "AGENTS.md")
 	claudePath := filepath.Join(dir, "CLAUDE.md")
 
@@ -155,11 +152,11 @@ func runInit(dir string, withSummary, update, replace bool) error {
 		fmt.Printf("  exists  %s (unchanged)\n", agentsPath)
 	}
 
-	r, err := ensureSymlink(claudePath, agentsPath)
+	symlinkChanged, err := fsutil.EnsureSymlink(claudePath, agentsPath)
 	if err != nil {
 		return fmt.Errorf("symlink %s: %w", claudePath, err)
 	}
-	if r.changed {
+	if symlinkChanged {
 		fmt.Printf("  symlink %s → %s\n", claudePath, agentsPath)
 		changes++
 	} else {
@@ -173,7 +170,7 @@ func runInit(dir string, withSummary, update, replace bool) error {
 			return err
 		}
 		draft = sanitizeContent(stripMetaCommentary(draft))
-		if _, err := applySectionMD(agentsPath, summarySection, draft); err != nil {
+		if _, _, err := markdown.Apply(agentsPath, summarySection, draft); err != nil {
 			return fmt.Errorf("summary section (draft): %w", err)
 		}
 
@@ -183,11 +180,11 @@ func runInit(dir string, withSummary, update, replace bool) error {
 			return err
 		}
 		refined = sanitizeContent(stripMetaCommentary(refined))
-		r, err := applySectionMD(agentsPath, summarySection, refined)
+		summaryChanged, _, err := markdown.Apply(agentsPath, summarySection, refined)
 		if err != nil {
 			return fmt.Errorf("summary section (refined): %w", err)
 		}
-		if r.changed {
+		if summaryChanged {
 			fmt.Printf("  wrote   %s [%s]\n", agentsPath, summarySection)
 			changes++
 		} else {

@@ -2,51 +2,10 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/claudeconfig/internal/claude"
 )
-
-// mergeLangs returns the union of config-declared langs and CLI --lang flags,
-// preserving order (config first, then any extras from the flag).
-func mergeLangs(fromConfig, fromFlag []string) []string {
-	seen := make(map[string]struct{}, len(fromConfig)+len(fromFlag))
-	result := make([]string, 0, len(fromConfig)+len(fromFlag))
-	for _, l := range fromConfig {
-		seen[l] = struct{}{}
-		result = append(result, l)
-	}
-	for _, l := range fromFlag {
-		if _, ok := seen[l]; !ok {
-			result = append(result, l)
-		}
-	}
-	return result
-}
-
-func expandTarget(flag, cfgTarget string) string {
-	if flag != "" {
-		return flag
-	}
-	if cfgTarget != "" {
-		if len(cfgTarget) >= 2 && cfgTarget[:2] == "~/" {
-			home, _ := os.UserHomeDir()
-			return filepath.Join(home, cfgTarget[2:])
-		}
-		return cfgTarget
-	}
-	return defaultTarget()
-}
-
-func openConfig(configPath string) (*Config, string, error) {
-	if configPath == "" {
-		cfg, err := loadConfigEmbedded()
-		return cfg, "(embedded)", err
-	}
-	cfg, err := loadConfig(configPath)
-	return cfg, configPath, err
-}
 
 func main() {
 	var configPath string
@@ -64,13 +23,13 @@ func main() {
 		Use:   "apply",
 		Short: "Apply config.yaml to the Claude Code config directory",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, name, err := openConfig(configPath)
+			cfg, name, err := claude.OpenConfig(configPath)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
-			t := expandTarget(target, cfg.TargetDir)
+			t := claude.ExpandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
-			return applyAll(t, project, cfg, langs, forceDocs)
+			return claude.ApplyAll(t, project, cfg, langs, forceDocs)
 		},
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
@@ -83,12 +42,12 @@ func main() {
 		Use:   "diff",
 		Short: "Show what apply would change in managed blocks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, _, err := openConfig(configPath)
+			cfg, _, err := claude.OpenConfig(configPath)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
-			t := expandTarget(target, cfg.TargetDir)
-			return diffAll(t, cfg)
+			t := claude.ExpandTarget(target, cfg.TargetDir)
+			return claude.DiffAll(t, cfg)
 		},
 	}
 	diff.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
@@ -98,13 +57,13 @@ func main() {
 		Use:   "clean",
 		Short: "Remove managed blocks written by apply",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, name, err := openConfig(configPath)
+			cfg, name, err := claude.OpenConfig(configPath)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
-			t := expandTarget(target, cfg.TargetDir)
+			t := claude.ExpandTarget(target, cfg.TargetDir)
 			fmt.Printf("Cleaning %s\n", name)
-			return cleanAll(t, cfg)
+			return claude.CleanAll(t, cfg)
 		},
 	}
 	clean.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
@@ -115,12 +74,12 @@ func main() {
 		Short:        "Show config summary and applied state",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, name, err := openConfig(configPath)
+			cfg, name, err := claude.OpenConfig(configPath)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
-			t := expandTarget(target, cfg.TargetDir)
-			return runStatus(name, cfg, t)
+			t := claude.ExpandTarget(target, cfg.TargetDir)
+			return claude.RunStatus(name, cfg, t)
 		},
 	}
 	status.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
@@ -132,7 +91,7 @@ func main() {
 		Use:   "init",
 		Short: "Create AGENTS.md and CLAUDE.md symlink in a project directory",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInit(initDir, initSummary, initUpdate, initReplace)
+			return claude.RunInit(initDir, initSummary, initUpdate, initReplace)
 		},
 	}
 	initCmd.Flags().StringVarP(&initDir, "dir", "d", ".", "project directory to initialise (default: current directory)")

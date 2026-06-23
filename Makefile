@@ -11,10 +11,10 @@ help: ⚙️  ## show this help
 	awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
 
 build: ⚙️  ## build the binary
-	go build -o $(BINARY) .
+	go build -o $(BINARY) ./cmd/claudeconfig
 
 install: ⚙️ build  ## install binary to ~/go/bin (user)
-	go install .
+	go install ./cmd/claudeconfig
 
 install-system: ⚙️ build  ## install binary to PREFIX/bin via sudo (system-wide)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)

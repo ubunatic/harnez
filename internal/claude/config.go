@@ -1,16 +1,13 @@
-package main
+package claude
 
 import (
-	"embed"
 	"io/fs"
 	"os"
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+	"ubunatic.com/claudeconfig"
 )
-
-//go:embed config.yaml commands docs/src
-var defaultFS embed.FS
 
 type Config struct {
 	Dir         string            `yaml:"-"`
@@ -79,7 +76,7 @@ type Language struct {
 	Local  string `yaml:"local"`
 }
 
-func loadConfig(path string) (*Config, error) {
+func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -93,8 +90,8 @@ func loadConfig(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-func loadConfigEmbedded() (*Config, error) {
-	data, err := defaultFS.ReadFile("config.yaml")
+func LoadConfigEmbedded() (*Config, error) {
+	data, err := claudeconfig.DefaultFS.ReadFile("config.yaml")
 	if err != nil {
 		return nil, err
 	}
@@ -103,11 +100,11 @@ func loadConfigEmbedded() (*Config, error) {
 		return nil, err
 	}
 	cfg.Dir = "."
-	cfg.FS = defaultFS
+	cfg.FS = claudeconfig.DefaultFS
 	return &cfg, nil
 }
 
-func defaultTarget() string {
+func DefaultTarget() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""

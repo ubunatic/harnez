@@ -1,17 +1,18 @@
-package main
+package claude
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-)
 
-// ── Apply result ──────────────────────────────────────────────────────────────
+	"ubunatic.com/claudeconfig/internal/fsutil"
+	"ubunatic.com/claudeconfig/internal/jsonc"
+	"ubunatic.com/claudeconfig/internal/markdown"
+)
 
 // applyResult is returned by every apply-level operation.
 // Callers own printing; nothing inside prints directly.
@@ -20,178 +21,40 @@ type applyResult struct {
 	notes   []string // detail lines printed indented beneath the action line
 }
 
-// ── Markdown managed blocks ───────────────────────────────────────────────────
-
-var mdMarkers = struct {
-	begin func(string) string
-	end   func(string) string
-}{
-	begin: func(s string) string { return "<!-- claudeconfig:begin " + s + " -->" },
-	end:   func(s string) string { return "<!-- claudeconfig:end " + s + " -->" },
-}
-
-func sectionBounds(existing, begin, end string) (lineStart, lineEnd int, found bool) {
-	bi := strings.Index(existing, begin)
-	ei := strings.Index(existing, end)
-	if bi < 0 || ei < 0 || ei <= bi {
-		return 0, 0, false
-	}
-	ls := strings.LastIndex(existing[:bi], "\n") + 1
-	le := ei + len(end)
-	if le < len(existing) && existing[le] == '\n' {
-		le++
-	}
-	return ls, le, true
-}
-
+// applySectionMD updates or inserts a managed section inside a markdown file.
 func applySectionMD(path, section, content string) (applyResult, error) {
-	begin := mdMarkers.begin(section)
-	end := mdMarkers.end(section)
-	block := begin + "\n" + strings.TrimRight(content, "\n") + "\n" + end + "\n"
-
-	existingContent := ""
-	if data, err := os.ReadFile(path); err == nil {
-		existingContent = string(data)
+	changed, existed, err := markdown.Apply(path, section, content)
+	if err != nil {
+		return applyResult{}, err
 	}
-
-	var newContent string
-	_, _, existed := sectionBounds(existingContent, begin, end)
-	if ls, le, ok := sectionBounds(existingContent, begin, end); ok {
-		newContent = existingContent[:ls] + block + existingContent[le:]
-	} else {
-		tail := existingContent
-		if tail != "" && !strings.HasSuffix(tail, "\n") {
-			tail += "\n"
+	var notes []string
+	if changed {
+		verb := "added"
+		if existed {
+			verb = "updated"
 		}
-		newContent = tail + block
+		notes = append(notes, section+": "+verb)
 	}
-
-	if newContent == existingContent {
-		return applyResult{changed: false}, nil
-	}
-
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return applyResult{}, err
-	}
-	if err := os.WriteFile(path, []byte(newContent), 0644); err != nil {
-		return applyResult{}, err
-	}
-
-	verb := "added"
-	if existed {
-		verb = "updated"
-	}
-	return applyResult{changed: true, notes: []string{section + ": " + verb}}, nil
+	return applyResult{changed: changed, notes: notes}, nil
 }
 
+// diffSectionMD prints unified diff of a managed markdown section.
 func diffSectionMD(path, section, content string) (bool, error) {
-	begin := mdMarkers.begin(section)
-	end := mdMarkers.end(section)
-	newBlock := begin + "\n" + strings.TrimRight(content, "\n") + "\n" + end + "\n"
-
-	oldBlock := ""
-	if data, err := os.ReadFile(path); err == nil {
-		existing := string(data)
-		if ls, le, ok := sectionBounds(existing, begin, end); ok {
-			oldBlock = existing[ls:le]
-		}
-	}
-
-	if oldBlock == newBlock {
-		return false, nil
-	}
-
-	writeTemp := func(s string) (string, error) {
-		f, err := os.CreateTemp("", "claudeconfig-diff-*")
-		if err != nil {
-			return "", err
-		}
-		_, err = f.WriteString(s)
-		f.Close()
-		return f.Name(), err
-	}
-
-	oldFile, err := writeTemp(oldBlock)
-	if err != nil {
-		return true, err
-	}
-	defer os.Remove(oldFile)
-
-	newFile, err := writeTemp(newBlock)
-	if err != nil {
-		return true, err
-	}
-	defer os.Remove(newFile)
-
-	label := fmt.Sprintf("%s [%s]", path, section)
-	cmd := exec.Command("diff", "-u", "--label", label, "--label", label, oldFile, newFile)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Run()
-	return true, nil
+	return markdown.Diff(path, section, content)
 }
 
+// cleanSectionMD cleans/removes a managed section and prints status.
 func cleanSectionMD(path, section string) error {
-	begin := mdMarkers.begin(section)
-	end := mdMarkers.end(section)
-
-	data, err := os.ReadFile(path)
+	removed, cleaned, err := markdown.Clean(path, section)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
 		return err
 	}
-	existing := string(data)
-
-	ls, le, ok := sectionBounds(existing, begin, end)
-	if !ok {
-		return nil
-	}
-	result := existing[:ls] + existing[le:]
-
-	if strings.TrimSpace(result) == "" {
+	if removed {
 		fmt.Printf("  removed %s\n", path)
-		return os.Remove(path)
-	}
-	fmt.Printf("  cleaned %s\n", path)
-	return os.WriteFile(path, []byte(result), 0644)
-}
-
-// ── Permissions merge helpers ─────────────────────────────────────────────────
-
-// toStrings converts a []any (from JSON unmarshal) or []string to []string.
-func toStrings(v any) []string {
-	switch val := v.(type) {
-	case []string:
-		return val
-	case []any:
-		ss := make([]string, 0, len(val))
-		for _, item := range val {
-			if s, ok := item.(string); ok {
-				ss = append(ss, s)
-			}
-		}
-		return ss
+	} else if cleaned {
+		fmt.Printf("  cleaned %s\n", path)
 	}
 	return nil
-}
-
-// unionStrings returns a∪b, preserving order (a first, then new items from b).
-func unionStrings(a, b []string) []string {
-	seen := make(map[string]struct{}, len(a))
-	result := make([]string, 0, len(a)+len(b))
-	for _, s := range a {
-		seen[s] = struct{}{}
-		result = append(result, s)
-	}
-	for _, s := range b {
-		if _, ok := seen[s]; !ok {
-			seen[s] = struct{}{}
-			result = append(result, s)
-		}
-	}
-	return result
 }
 
 // mergePermissions unions the allow/deny arrays of existing and incoming.
@@ -201,7 +64,7 @@ func mergePermissions(existing, incoming map[string]any) map[string]any {
 		result[k] = v
 	}
 	for _, field := range []string{"allow", "deny"} {
-		result[field] = unionStrings(toStrings(existing[field]), toStrings(incoming[field]))
+		result[field] = jsonc.UnionStrings(jsonc.ToStrings(existing[field]), jsonc.ToStrings(incoming[field]))
 	}
 	return result
 }
@@ -227,69 +90,12 @@ func applyMerge(existing, doc map[string]any) map[string]any {
 	return out
 }
 
-// ── JSON file helpers ─────────────────────────────────────────────────────────
-
-// stripComments removes // line comments from JSONC for parsing.
-func stripComments(data []byte) []byte {
-	var result []byte
-	inString := false
-	for i := 0; i < len(data); i++ {
-		b := data[i]
-		if inString {
-			result = append(result, b)
-			if b == '\\' && i+1 < len(data) {
-				i++
-				result = append(result, data[i])
-			} else if b == '"' {
-				inString = false
-			}
-			continue
-		}
-		if b == '"' {
-			inString = true
-			result = append(result, b)
-		} else if b == '/' && i+1 < len(data) && data[i+1] == '/' {
-			for i < len(data) && data[i] != '\n' {
-				i++
-			}
-			if i < len(data) {
-				result = append(result, '\n')
-			}
-		} else {
-			result = append(result, b)
-		}
-	}
-	return result
-}
-
-func readJSONC(path string) map[string]any {
-	m := map[string]any{}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return m
-	}
-	// Use Decoder so trailing content after the first JSON value is ignored.
-	dec := json.NewDecoder(bytes.NewReader(stripComments(data)))
-	dec.Decode(&m) //nolint:errcheck
-	return m
-}
-
-func marshalPretty(v any) []byte {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	enc.Encode(v)
-	return bytes.TrimRight(buf.Bytes(), "\n")
-}
-
 // managedSettingsKeys are the top-level keys claudeconfig writes to settings.json.
 var managedSettingsKeys = []string{
 	"model", "effortLevel", "permissions", "hooks", "env", "spinnerVerbs", "mcpServers",
 }
 
-// ── Model / effort resolution ─────────────────────────────────────────────────
-
+// Model alias mappings.
 var modelAliases = map[string]string{
 	"sonnet": "claude-sonnet-4-6",
 	"opus":   "claude-opus-4-7",
@@ -303,8 +109,7 @@ func resolveModel(s string) string {
 	return s
 }
 
-// ── settings.json ─────────────────────────────────────────────────────────────
-
+// buildSettingsDoc creates the settings JSON document from the YAML config.
 func buildSettingsDoc(cfg *Config) map[string]any {
 	// Use map[string]any throughout so json.Marshal always sorts keys alphabetically,
 	// matching what json.Unmarshal produces on read-back (round-trip stable).
@@ -363,13 +168,6 @@ func buildSettingsDoc(cfg *Config) map[string]any {
 	return doc
 }
 
-func validateJSON(data []byte) error {
-	if !json.Valid(data) {
-		return fmt.Errorf("generated invalid JSON")
-	}
-	return nil
-}
-
 // settingsStats returns human-readable change notes comparing existing → merged
 // for the managed keys (permissions arrays counted, other keys flagged as changed/added).
 func settingsStats(existing, merged map[string]any) []string {
@@ -380,8 +178,8 @@ func settingsStats(existing, merged map[string]any) []string {
 	mp, _ := merged["permissions"].(map[string]any)
 	if mp != nil {
 		for _, field := range []string{"allow", "deny"} {
-			oldN := len(toStrings(ep[field]))
-			newN := len(toStrings(mp[field]))
+			oldN := len(jsonc.ToStrings(ep[field]))
+			newN := len(jsonc.ToStrings(mp[field]))
 			if newN != oldN {
 				notes = append(notes, fmt.Sprintf("permissions.%s: %+d entries (%d → %d)", field, newN-oldN, oldN, newN))
 			}
@@ -393,7 +191,7 @@ func settingsStats(existing, merged map[string]any) []string {
 		if k == "permissions" {
 			continue
 		}
-		if !bytes.Equal(marshalPretty(existing[k]), marshalPretty(merged[k])) {
+		if !bytes.Equal(jsonc.MarshalPretty(existing[k]), jsonc.MarshalPretty(merged[k])) {
 			if existing[k] == nil {
 				notes = append(notes, k+": added")
 			} else {
@@ -405,10 +203,10 @@ func settingsStats(existing, merged map[string]any) []string {
 }
 
 func applySettingsJSON(path string, doc map[string]any) (applyResult, error) {
-	existing := readJSONC(path)
+	existing := jsonc.Read(path)
 	merged := applyMerge(existing, doc)
-	data := append(marshalPretty(merged), '\n')
-	if err := validateJSON(data); err != nil {
+	data := append(jsonc.MarshalPretty(merged), '\n')
+	if err := jsonc.Validate(data); err != nil {
 		return applyResult{}, fmt.Errorf("%s: %w", path, err)
 	}
 
@@ -427,7 +225,7 @@ func applySettingsJSON(path string, doc map[string]any) (applyResult, error) {
 }
 
 func diffSettingsJSON(path string, doc map[string]any) (bool, error) {
-	existing := readJSONC(path)
+	existing := jsonc.Read(path)
 	merged := applyMerge(existing, doc)
 
 	currentManaged := map[string]any{}
@@ -443,8 +241,8 @@ func diffSettingsJSON(path string, doc map[string]any) (bool, error) {
 		}
 	}
 
-	oldData := marshalPretty(currentManaged)
-	newData := marshalPretty(newManaged)
+	oldData := jsonc.MarshalPretty(currentManaged)
+	newData := jsonc.MarshalPretty(newManaged)
 	if bytes.Equal(oldData, newData) {
 		return false, nil
 	}
@@ -480,7 +278,7 @@ func diffSettingsJSON(path string, doc map[string]any) (bool, error) {
 }
 
 func cleanSettingsJSON(path string) error {
-	existing := readJSONC(path)
+	existing := jsonc.Read(path)
 	if len(existing) == 0 {
 		return nil
 	}
@@ -492,76 +290,33 @@ func cleanSettingsJSON(path string) error {
 		return os.Remove(path)
 	}
 	fmt.Printf("  cleaned %s\n", path)
-	return os.WriteFile(path, append(marshalPretty(existing), '\n'), 0644)
-}
-
-// ── File helpers ──────────────────────────────────────────────────────────────
-
-func expandHome(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, path[2:])
-	}
-	return path
-}
-
-func contractHome(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-	if strings.HasPrefix(path, home+"/") {
-		return "~/" + path[len(home)+1:]
-	}
-	return path
+	return os.WriteFile(path, append(jsonc.MarshalPretty(existing), '\n'), 0644)
 }
 
 func ensureSymlink(linkPath, target string) (applyResult, error) {
-	if err := os.MkdirAll(filepath.Dir(linkPath), 0755); err != nil {
-		return applyResult{}, err
-	}
-	if rel, err := filepath.Rel(filepath.Dir(linkPath), target); err == nil {
-		target = rel
-	}
-	existing, err := os.Readlink(linkPath)
-	if err == nil && existing == target {
-		return applyResult{changed: false}, nil
-	}
-	os.Remove(linkPath) //nolint:errcheck
-	if err := os.Symlink(target, linkPath); err != nil {
-		return applyResult{}, err
-	}
-	return applyResult{changed: true}, nil
-}
-
-// writeFileIfChanged writes data to dst only if the content differs.
-// Replaces symlinks with real files unconditionally.
-func writeFileIfChanged(dst string, data []byte) (applyResult, error) {
-	if fi, err := os.Lstat(dst); err == nil {
-		if fi.Mode()&os.ModeSymlink != 0 {
-			os.Remove(dst) //nolint:errcheck
-		} else if existing, err := os.ReadFile(dst); err == nil && bytes.Equal(existing, data) {
-			return applyResult{changed: false}, nil
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return applyResult{}, err
-	}
-	if err := os.WriteFile(dst, data, 0644); err != nil {
-		return applyResult{}, err
-	}
-	return applyResult{changed: true}, nil
-}
-
-func copyFile(src, dst string) (applyResult, error) {
-	data, err := os.ReadFile(src)
+	changed, err := fsutil.EnsureSymlink(linkPath, target)
 	if err != nil {
 		return applyResult{}, err
 	}
-	return writeFileIfChanged(dst, data)
+	return applyResult{changed: changed}, nil
 }
 
-// installDoc copies src from fsys to dst. When force is false it skips if dst exists.
+func writeFileIfChanged(dst string, data []byte) (applyResult, error) {
+	changed, err := fsutil.WriteIfChanged(dst, data)
+	if err != nil {
+		return applyResult{}, err
+	}
+	return applyResult{changed: changed}, nil
+}
+
+func copyFile(src, dst string) (applyResult, error) {
+	changed, err := fsutil.Copy(src, dst)
+	if err != nil {
+		return applyResult{}, err
+	}
+	return applyResult{changed: changed}, nil
+}
+
 func installDoc(fsys fs.FS, src, dst string, force bool) (applyResult, error) {
 	if !force {
 		if _, err := os.Stat(dst); err == nil {
@@ -575,8 +330,6 @@ func installDoc(fsys fs.FS, src, dst string, force bool) (applyResult, error) {
 	return writeFileIfChanged(dst, data)
 }
 
-// buildLangConventions generates the Language Conventions AGENTS.md section
-// content from the given language names.
 func buildLangConventions(names []string, cfg *Config) string {
 	var sb strings.Builder
 	sb.WriteString("Adhere to the following conventions.\n\n")
@@ -604,8 +357,6 @@ func buildLangConventions(names []string, cfg *Config) string {
 	return sb.String()
 }
 
-// langDocState reports whether the installed doc matches the bundled source.
-// Returns "not installed", "bundled", or "custom".
 func langDocState(fsys fs.FS, src, dst string) string {
 	installed, err := os.ReadFile(dst)
 	if err != nil {
@@ -620,8 +371,6 @@ func langDocState(fsys fs.FS, src, dst string) string {
 	}
 	return "custom"
 }
-
-// ── Command file generation ───────────────────────────────────────────────────
 
 func genCommandContent(cmd Command, fsys fs.FS) (string, error) {
 	body := cmd.Content
@@ -643,8 +392,6 @@ func genCommandContent(cmd Command, fsys fs.FS) (string, error) {
 	return sb.String(), nil
 }
 
-// ── Orchestrators ─────────────────────────────────────────────────────────────
-
 func localPath(projectDir, rel string) string {
 	if filepath.IsAbs(rel) || projectDir == "" || projectDir == "." {
 		return rel
@@ -652,8 +399,6 @@ func localPath(projectDir, rel string) string {
 	return filepath.Join(projectDir, rel)
 }
 
-// printResult prints the action line and any notes for a changed item.
-// Silent for unchanged items — the summary line covers those.
 func printResult(action, path string, r applyResult) {
 	if !r.changed {
 		return
@@ -664,10 +409,27 @@ func printResult(action, path string, r applyResult) {
 	}
 }
 
-func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs bool) error {
+// mergeLangs returns the union of config-declared langs and CLI --lang flags,
+// preserving order (config first, then any extras from the flag).
+func mergeLangs(fromConfig, fromFlag []string) []string {
+	seen := make(map[string]struct{}, len(fromConfig)+len(fromFlag))
+	result := make([]string, 0, len(fromConfig)+len(fromFlag))
+	for _, l := range fromConfig {
+		seen[l] = struct{}{}
+		result = append(result, l)
+	}
+	for _, l := range fromFlag {
+		if _, ok := seen[l]; !ok {
+			result = append(result, l)
+		}
+	}
+	return result
+}
+
+// ApplyAll applies configuration.
+func ApplyAll(target, projectDir string, cfg *Config, langs []string, forceDocs bool) error {
 	changes := 0
 
-	// pStat records what was already present, shown in the summary.
 	type pStat struct{ label, detail string }
 	var pStats []pStat
 
@@ -677,7 +439,6 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 		}
 	}
 
-	// settings.json
 	settingsPath := filepath.Join(target, "settings.json")
 	settingsDoc := buildSettingsDoc(cfg)
 	sr, err := applySettingsJSON(settingsPath, settingsDoc)
@@ -687,14 +448,12 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 	if sr.changed {
 		changes++
 	} else {
-		existing := readJSONC(settingsPath)
-		// permissions: individual entry counts
+		existing := jsonc.Read(settingsPath)
 		if p, _ := existing["permissions"].(map[string]any); p != nil {
-			allow := toStrings(p["allow"])
-			deny := toStrings(p["deny"])
+			allow := jsonc.ToStrings(p["allow"])
+			deny := jsonc.ToStrings(p["deny"])
 			addStat("permissions", fmt.Sprintf("%d allow, %d deny", len(allow), len(deny)))
 		}
-		// other managed keys present in both doc and file
 		var keys []string
 		for _, k := range managedSettingsKeys {
 			if k == "permissions" {
@@ -710,9 +469,8 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 	}
 	printResult("wrote", settingsPath, sr)
 
-	// global CLAUDE.md / AGENTS.md — aggregate all sections into one file result
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
-		gTarget := expandHome(g.Target)
+		gTarget := fsutil.ExpandHome(g.Target)
 		gr := applyResult{}
 		var presentNames []string
 		for _, s := range g.Sections {
@@ -734,7 +492,7 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 		addStat(filepath.Base(gTarget), strings.Join(presentNames, ", "))
 
 		if g.Symlink != "" {
-			link := expandHome(g.Symlink)
+			link := fsutil.ExpandHome(g.Symlink)
 			lr, err := ensureSymlink(link, gTarget)
 			if err != nil {
 				return fmt.Errorf("agents_md.global symlink: %w", err)
@@ -746,10 +504,8 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 		}
 	}
 
-	// local AGENTS.md / CLAUDE.md
 	if l := cfg.AgentsMD.Local; l.Target != "" && projectDir != "" {
 		lTarget := localPath(projectDir, l.Target)
-		// static sections from config + dynamic Language Conventions if -l was used
 		sections := append([]MDSection(nil), l.Sections...)
 		if len(langs) > 0 {
 			sections = append(sections, MDSection{
@@ -792,7 +548,6 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 		}
 	}
 
-	// command files
 	if len(cfg.Commands) > 0 {
 		cmdDir := filepath.Join(target, "commands")
 		if err := os.MkdirAll(cmdDir, 0755); err != nil {
@@ -820,14 +575,13 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 		addStat("commands", strings.Join(presentCmds, ", "))
 	}
 
-	// language docs: global install to ~/.claude/docs/ for all configured + CLI langs
 	globalLangs := mergeLangs(cfg.Langs, langs)
 	for _, name := range globalLangs {
 		lang, ok := cfg.AgentsMD.Languages[name]
 		if !ok {
 			return fmt.Errorf("unknown language: %s", name)
 		}
-		dst := expandHome(lang.Target)
+		dst := fsutil.ExpandHome(lang.Target)
 		fr, err := installDoc(cfg.FS, lang.Source, dst, forceDocs)
 		if err != nil {
 			return fmt.Errorf("language %s: install: %w", name, err)
@@ -837,12 +591,10 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 			fmt.Printf("  installed %s\n", dst)
 		} else {
 			state := langDocState(cfg.FS, lang.Source, dst)
-			addStat(name, contractHome(dst)+" ["+state+"]")
+			addStat(name, fsutil.ContractHome(dst)+" ["+state+"]")
 		}
 	}
 
-	// language docs: project copy — only for -l langs when -p is given
-	// copies directly from embedded FS so project docs are authoritative
 	if projectDir != "" {
 		for _, name := range langs {
 			lang, ok := cfg.AgentsMD.Languages[name]
@@ -865,7 +617,6 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 		}
 	}
 
-	// summary
 	if changes == 0 {
 		fmt.Println("No changes.")
 	} else if changes == 1 {
@@ -879,7 +630,8 @@ func applyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 	return nil
 }
 
-func diffAll(target string, cfg *Config) error {
+// DiffAll diffs the config.
+func DiffAll(target string, cfg *Config) error {
 	anyChanged := false
 	report := func(changed bool, err error) error {
 		if err != nil {
@@ -895,7 +647,7 @@ func diffAll(target string, cfg *Config) error {
 		return fmt.Errorf("settings: %w", err)
 	}
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
-		gTarget := expandHome(g.Target)
+		gTarget := fsutil.ExpandHome(g.Target)
 		for _, s := range g.Sections {
 			if err := report(diffSectionMD(gTarget, s.Name, s.Content)); err != nil {
 				return fmt.Errorf("agents_md.global [%s]: %w", s.Name, err)
@@ -916,12 +668,13 @@ func diffAll(target string, cfg *Config) error {
 	return nil
 }
 
-func cleanAll(target string, cfg *Config) error {
+// CleanAll cleans the config.
+func CleanAll(target string, cfg *Config) error {
 	if err := cleanSettingsJSON(filepath.Join(target, "settings.json")); err != nil {
 		return fmt.Errorf("settings: %w", err)
 	}
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
-		gTarget := expandHome(g.Target)
+		gTarget := fsutil.ExpandHome(g.Target)
 		for _, s := range g.Sections {
 			if err := cleanSectionMD(gTarget, s.Name); err != nil {
 				return fmt.Errorf("agents_md.global [%s]: %w", s.Name, err)
@@ -938,4 +691,25 @@ func cleanAll(target string, cfg *Config) error {
 		}
 	}
 	return nil
+}
+
+// ExpandTarget expands targets.
+func ExpandTarget(flag, cfgTarget string) string {
+	if flag != "" {
+		return flag
+	}
+	if cfgTarget != "" {
+		return fsutil.ExpandHome(cfgTarget)
+	}
+	return DefaultTarget()
+}
+
+// OpenConfig opens target configuration.
+func OpenConfig(configPath string) (*Config, string, error) {
+	if configPath == "" {
+		cfg, err := LoadConfigEmbedded()
+		return cfg, "(embedded)", err
+	}
+	cfg, err := LoadConfig(configPath)
+	return cfg, configPath, err
 }
