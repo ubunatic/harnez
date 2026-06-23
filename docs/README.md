@@ -6,6 +6,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | File | Topic |
 |------|-------|
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands (config.yaml → ~/.claude/commands/) and Antigravity skills (→ ~/.gemini/skills/) |
+| [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat |
 | [Worktrees.md](Worktrees.md) | Parallel worktree agents: what worked, go.mod races, Haiku API staleness |
 | [Go.md](Go.md) | Go conventions (generated from docs/src/Go.md) |

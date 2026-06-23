@@ -12,3 +12,4 @@ Concrete bugs, design issues, and feature gaps. Each file has a status line.
 | 006 | [006-status-checks-only-model.md](006-status-checks-only-model.md) | status checks only the model key — 6 of 7 managed settings invisible | Open |
 | 007 | [007-no-tests.md](007-no-tests.md) | no test coverage | Open |
 | 008 | [008-commands-summary-excludes-new.md](008-commands-summary-excludes-new.md) | apply summary omits newly written commands | Fixed 2026-06-23 |
+| 009 | [009-diff-clean-no-makefile-targets.md](009-diff-clean-no-makefile-targets.md) | diff and clean don't cover Makefile targets section | Open |
