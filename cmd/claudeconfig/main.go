@@ -19,6 +19,7 @@ func main() {
 	var langs []string
 	var project string
 	var forceDocs bool
+	var setup bool
 	apply := &cobra.Command{
 		Use:   "apply",
 		Short: "Apply config.yaml to the Claude Code config directory",
@@ -29,7 +30,7 @@ func main() {
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
-			return claude.ApplyAll(t, project, cfg, langs, forceDocs)
+			return claude.ApplyAll(t, project, cfg, langs, forceDocs, setup)
 		},
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
@@ -37,6 +38,7 @@ func main() {
 	apply.Flags().StringVarP(&project, "project", "p", "", "project directory for local AGENTS.md and doc copies")
 	apply.Flags().StringArrayVarP(&langs, "lang", "l", nil, "language doc(s) to install (e.g. golang, bash)")
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing language docs with bundled versions")
+	apply.Flags().BoolVar(&setup, "setup", false, "inject language standard targets into existing project Makefiles")
 
 	diff := &cobra.Command{
 		Use:   "diff",

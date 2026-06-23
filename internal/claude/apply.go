@@ -448,7 +448,7 @@ func mergeLangs(fromConfig, fromFlag []string) []string {
 }
 
 // ApplyAll applies configuration.
-func ApplyAll(target, projectDir string, cfg *Config, langs []string, forceDocs bool) error {
+func ApplyAll(target, projectDir string, cfg *Config, langs []string, forceDocs, setup bool) error {
 	changes := 0
 
 	type pStat struct{ label, detail string }
@@ -666,40 +666,42 @@ func ApplyAll(target, projectDir string, cfg *Config, langs []string, forceDocs 
 				fmt.Printf("  copied %s → %s\n", lang.Source, localDoc)
 			}
 
-			justScaffolded := false
-			if lang.Template != "" {
-				dest := localPath(projectDir, filepath.Base(lang.Template))
-				if _, err := os.Stat(dest); os.IsNotExist(err) {
-					data, err := fs.ReadFile(cfg.FS, lang.Template)
-					if err != nil {
-						return fmt.Errorf("language %s: read template: %w", name, err)
-					}
-					if err := os.WriteFile(dest, data, 0644); err != nil {
-						return fmt.Errorf("language %s: scaffold template: %w", name, err)
-					}
-					changes++
-					justScaffolded = true
-					fmt.Printf("  scaffolded %s\n", dest)
-				}
-			}
-
-			if lang.Targets != "" && !justScaffolded {
-				dest := localPath(projectDir, filepath.Base(lang.Template))
-				if lang.Template == "" {
-					dest = localPath(projectDir, "Makefile")
-				}
-				if _, err := os.Stat(dest); err == nil {
-					data, err := fs.ReadFile(cfg.FS, lang.Targets)
-					if err != nil {
-						return fmt.Errorf("language %s: read targets: %w", name, err)
-					}
-					tr, _, err := markdown.ApplyMK(dest, "targets", string(data))
-					if err != nil {
-						return fmt.Errorf("language %s: inject targets: %w", name, err)
-					}
-					printResult("patched", dest, applyResult{changed: tr})
-					if tr {
+			if setup {
+				justScaffolded := false
+				if lang.Template != "" {
+					dest := localPath(projectDir, filepath.Base(lang.Template))
+					if _, err := os.Stat(dest); os.IsNotExist(err) {
+						data, err := fs.ReadFile(cfg.FS, lang.Template)
+						if err != nil {
+							return fmt.Errorf("language %s: read template: %w", name, err)
+						}
+						if err := os.WriteFile(dest, data, 0644); err != nil {
+							return fmt.Errorf("language %s: scaffold template: %w", name, err)
+						}
 						changes++
+						justScaffolded = true
+						fmt.Printf("  scaffolded %s\n", dest)
+					}
+				}
+
+				if lang.Targets != "" && !justScaffolded {
+					dest := localPath(projectDir, filepath.Base(lang.Template))
+					if lang.Template == "" {
+						dest = localPath(projectDir, "Makefile")
+					}
+					if _, err := os.Stat(dest); err == nil {
+						data, err := fs.ReadFile(cfg.FS, lang.Targets)
+						if err != nil {
+							return fmt.Errorf("language %s: read targets: %w", name, err)
+						}
+						tr, _, err := markdown.ApplyMK(dest, "targets", string(data))
+						if err != nil {
+							return fmt.Errorf("language %s: inject targets: %w", name, err)
+						}
+						printResult("patched", dest, applyResult{changed: tr})
+						if tr {
+							changes++
+						}
 					}
 				}
 			}

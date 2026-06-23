@@ -24,7 +24,7 @@ you like; user-managed keys and unmanaged sections are never touched.
 ## Installation
 
 ```sh
-git clone https://github.com/you/claudeconfig
+git clone https://codeberg.org/ubunatic/claudeconfig
 cd claudeconfig
 make install          # builds and installs to /usr/local/bin
 ```
@@ -182,7 +182,7 @@ without duplicating the file.
 
 | Command | Flags | What it does |
 |---|---|---|
-| `apply` | `-c` `-t` `-p` `-l` | Write all managed items; merge settings; create symlinks |
+| `apply` | `-c` `-t` `-p` `-l` `--setup` | Write all managed items; merge settings; create symlinks |
 | `diff` | `-c` `-t` | Preview changes without writing (uses `diff -u`) |
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
 | `status` | `-c` `-t` | Print config summary and check which items are present on disk |
@@ -196,6 +196,19 @@ All commands accept:
 
 - `-p <dir>` — project directory for local `agents_md` targets (default: `.`)
 - `-l <lang>` — install extra language doc (repeatable; merged with `langs:`)
+- `--setup` — inject language standard Makefile targets into an existing project Makefile
+
+### Project setup
+
+`--setup` is an explicit opt-in for the "set up this project for a language" step.
+It scaffolds a Makefile from the bundled template (if none exists) or injects the
+language's standard targets into an existing one.  Safe to omit on routine `apply`
+runs — the flag is only needed once per project per language.
+
+```sh
+claudeconfig apply -p . -l make --setup   # inject standard Make targets
+claudeconfig apply -p . -l golang --setup # scaffold Makefile + Go targets
+```
 
 ## Drift repair
 
