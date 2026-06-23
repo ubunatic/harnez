@@ -16,13 +16,11 @@ func main() {
 		Short: "Manage Claude Code configuration declaratively from a YAML definition",
 	}
 
-	var langs []string
-	var project string
+	var applyLangs []string
 	var forceDocs bool
-	var setup bool
 	apply := &cobra.Command{
 		Use:   "apply",
-		Short: "Apply config.yaml to the Claude Code config directory",
+		Short: "Apply config.yaml to the Claude Code config directory (~/.claude)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, name, err := claude.OpenConfig(configPath)
 			if err != nil {
@@ -30,15 +28,13 @@ func main() {
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
-			return claude.ApplyAll(t, project, cfg, langs, forceDocs, setup)
+			return claude.ApplyAll(t, cfg, applyLangs, forceDocs)
 		},
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	apply.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
-	apply.Flags().StringVarP(&project, "project", "p", "", "project directory for local AGENTS.md and doc copies")
-	apply.Flags().StringArrayVarP(&langs, "lang", "l", nil, "language doc(s) to install (e.g. golang, bash)")
+	apply.Flags().StringArrayVarP(&applyLangs, "lang", "l", nil, "extra language doc(s) to install globally (e.g. golang, bash)")
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing language docs with bundled versions")
-	apply.Flags().BoolVar(&setup, "setup", false, "inject language standard targets into existing project Makefiles")
 
 	diff := &cobra.Command{
 		Use:   "diff",
@@ -88,15 +84,23 @@ func main() {
 	status.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 
 	var initDir string
+	var initLangs []string
+	var initConfigPath string
 	var initSummary, initUpdate, initReplace bool
 	initCmd := &cobra.Command{
 		Use:   "init",
-		Short: "Create AGENTS.md and CLAUDE.md symlink in a project directory",
+		Short: "Set up a project directory with AGENTS.md, language docs, and Makefile targets",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return claude.RunInit(initDir, initSummary, initUpdate, initReplace)
+			cfg, _, err := claude.OpenConfig(initConfigPath)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+			return claude.RunInit(initDir, cfg, initLangs, initSummary, initUpdate, initReplace)
 		},
 	}
+	initCmd.Flags().StringVarP(&initConfigPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	initCmd.Flags().StringVarP(&initDir, "dir", "d", ".", "project directory to initialise (default: current directory)")
+	initCmd.Flags().StringArrayVarP(&initLangs, "lang", "l", nil, "language(s) to set up in the project (e.g. golang, make)")
 	initCmd.Flags().BoolVar(&initSummary, "summary", false, "run claude -p to generate a project summary and add it to AGENTS.md")
 	initCmd.Flags().BoolVar(&initUpdate, "update", false, "re-fetch and refresh the project summary (implies --summary)")
 	initCmd.Flags().BoolVar(&initReplace, "replace", false, "delete existing AGENTS.md and recreate from template before init")

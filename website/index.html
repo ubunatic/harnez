@@ -389,7 +389,7 @@
       </div>
       <div class="feature">
         <h3>Project setup</h3>
-        <p>Use <code>--setup</code> with <code>-l &lt;lang&gt;</code> to inject standard Makefile targets once, per project.</p>
+        <p><code>init -l &lt;lang&gt;</code> creates AGENTS.md, copies lang docs locally, and injects standard Makefile targets — one command, per project.</p>
       </div>
     </div>
   </div>
@@ -400,17 +400,17 @@
   <div class="container">
     <h2>Quick start</h2>
     <div class="codeblock">
-      <pre><span class="p"># apply embedded config to ~/.claude (idempotent)</span>
+      <pre><span class="p"># sync global ~/.claude config (idempotent)</span>
 <span class="p">$</span> claudeconfig apply
 
 <span class="p"># preview changes without writing</span>
 <span class="p">$</span> claudeconfig diff
 
-<span class="p"># apply to a project directory, installing language docs</span>
-<span class="p">$</span> claudeconfig apply -p . -l golang -l make
+<span class="p"># set up a project directory with language docs and Makefile targets</span>
+<span class="p">$</span> claudeconfig init -l golang -l make
 
-<span class="p"># set up project Makefile targets for the first time</span>
-<span class="p">$</span> claudeconfig apply -p . -l make --setup
+<span class="p"># set up + generate an AI project summary in AGENTS.md</span>
+<span class="p">$</span> claudeconfig init -l golang --summary
 
 <span class="p"># use a custom config file</span>
 <span class="p">$</span> claudeconfig apply -c myconfig.yaml -t ~/.claude</pre>
@@ -433,8 +433,13 @@
       <tbody>
         <tr>
           <td><code>apply</code></td>
-          <td><code class="flag">-c</code> <code class="flag">-t</code> <code class="flag">-p</code> <code class="flag">-l</code> <code class="flag">--setup</code></td>
-          <td>Write all managed items; merge settings; create symlinks</td>
+          <td><code class="flag">-c</code> <code class="flag">-t</code> <code class="flag">-l</code> <code class="flag">--force-docs</code></td>
+          <td>Sync global <code>~/.claude</code>: settings, hooks, commands, lang docs</td>
+        </tr>
+        <tr>
+          <td><code>init</code></td>
+          <td><code class="flag">-c</code> <code class="flag">-d</code> <code class="flag">-l</code> <code class="flag">--summary</code></td>
+          <td>Set up a project: AGENTS.md, lang doc copies, Makefile targets</td>
         </tr>
         <tr>
           <td><code>diff</code></td>

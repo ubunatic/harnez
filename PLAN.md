@@ -137,15 +137,23 @@ agents_md:
 
 ## Commands
 
-### `claudeconfig apply [-c config.yaml] [-t ~/.claude]`
+### `claudeconfig apply [-c config.yaml] [-t ~/.claude] [-l lang]`
 
-Generates and writes:
+Global sync only — writes to `~/.claude`:
 1. `settings.json` — permissions, hooks, env, spinnerVerbs, MCP servers, model, effortLevel
 2. `keybindings.json` — key bindings
 3. `~/.claude/CLAUDE.md` — global managed sections (`agents_md.global`)
-4. `AGENTS.md` + `CLAUDE.md` symlink — local managed sections (`agents_md.local`)
-5. `~/.claude/docs/<lang>.md` — language docs copied from `source`, symlinked into project
-6. `commands/<name>.md` — one file per custom command
+4. `~/.claude/docs/<lang>.md` — language docs installed globally
+5. `commands/<name>.md` — one file per custom command
+
+### `claudeconfig init [-c config.yaml] [-d .] [-l lang]`
+
+Project setup — writes to the project directory:
+1. `AGENTS.md` — created from template if not present
+2. `CLAUDE.md` symlink → `AGENTS.md`
+3. Local managed sections from `agents_md.local` (e.g. Language Conventions)
+4. `docs/<lang>.md` — language doc copied locally for `@docs/` refs
+5. `Makefile` — scaffolded from template if absent, or targets injected into existing
 
 ### `claudeconfig diff [-c config.yaml] [-t ~/.claude]`
 

@@ -14,6 +14,16 @@ Adhere to the following conventions.
   ⚙️ phony sentinel, self-doc help, build dependency pattern
 <!-- claudeconfig:end Language Conventions -->
 
+## CLI command scope
+
+`apply` and `init` are intentionally separate — do not merge their concerns.
+
+- `apply` — global `~/.claude` only: settings, hooks, commands, lang docs; flags: `-c`, `-t`, `-l`
+- `init`  — project dir only: AGENTS.md, local sections, lang doc copies, Makefile; flags: `-c`, `-d`, `-l`
+
+Before changing any command's flags or adding project-local behaviour to `apply`, read
+`docs/CLIDesign.md` — the separation is load-bearing and the footgun it prevents is real.
+
 ## Development Scripts
 
 Run from project root.

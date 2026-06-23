@@ -8,7 +8,7 @@
 
 | File | Responsibility |
 |---|---|
-| `main.go` | Cobra command wiring; `--lang`, `--project` flags on `apply` |
+| `main.go` | Cobra command wiring; `apply`, `init`, `diff`, `clean`, `status` subcommands |
 | `config.go` | YAML structs; `loadConfig()` sets `cfg.Dir` and `cfg.FS`; `loadConfigEmbedded()` uses `//go:embed` |
 | `apply.go` | All generators, JSON helpers, MD block logic, and orchestrators |
 | `status.go` | `runStatus`, `hasSettingsKey`, `hasSectionMD` |
@@ -21,8 +21,9 @@ Source command files live in `commands/` (e.g. `commands/update-context.md`) and
 
 | Command | What it does |
 |---|---|
-| `apply` | Merges managed keys into `settings.json`; writes CLAUDE.md/AGENTS.md sections, command files, symlinks. `-l <name>` (repeatable) also copies language docs. `-p <dir>` sets the project directory for local `agents_md` targets (default `.`). |
-| `diff` | Shows what `apply` would change, without writing. Uses `diff -u` on temp files. No `--project` flag; local MD diff uses the target path directly from config. |
+| `apply` | Global sync: merges managed keys into `settings.json`; writes CLAUDE.md sections, command files, lang docs to `~/.claude/docs/`. `-l <name>` installs extra lang docs globally. No project-local work. |
+| `init` | Project setup: creates AGENTS.md + CLAUDE.md symlink, applies config local sections, copies lang docs locally, scaffolds/injects Makefile targets. `-l <lang>` (repeatable). Defaults to cwd (`-d .`). |
+| `diff` | Shows what `apply` would change, without writing. Uses `diff -u` on temp files. |
 | `clean` | Removes managed keys from `settings.json`; strips MD sections. |
 | `status` | Prints config summary and checks which managed items are present on disk. |
 
@@ -101,4 +102,4 @@ Typed structs would marshal in field declaration order, creating a permanent dif
 
 - `deps` — check/install MCP server runtimes (node, python, go) via apt
 - Schema validation — fetch official settings schema, validate permission rules and hook event names before writing
-- `init` — reverse-generate `config.yaml` from existing `~/.claude/settings.json`
+- `diff`/`clean` for Makefile targets — `DiffAll`/`CleanAll` don't yet cover the `# claudeconfig:begin targets` block (issue #009)

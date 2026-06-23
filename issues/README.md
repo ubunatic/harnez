@@ -4,7 +4,7 @@ Concrete bugs, design issues, and feature gaps. Each file has a status line.
 
 | # | File | Title | Status |
 |---|------|-------|--------|
-| 001 | [001-diff-clean-wrong-path.md](001-diff-clean-wrong-path.md) | diff and clean operate on wrong file when --project is set | Open |
+| 001 | [001-diff-clean-wrong-path.md](001-diff-clean-wrong-path.md) | diff and clean operate on wrong file when --project is set | Resolved 2026-06-23 |
 | 002 | [002-lang-symlink-no-expandhome.md](002-lang-symlink-no-expandhome.md) | lang symlink doesn't expand ~ in target | Open |
 | 003 | [003-mergelangs-dedup-bug.md](003-mergelangs-dedup-bug.md) | mergeLangs dedup bug | Open |
 | 004 | [004-diff-exit-code-swallowed.md](004-diff-exit-code-swallowed.md) | diff exit code swallowed | Open |

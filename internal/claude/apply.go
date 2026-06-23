@@ -448,7 +448,7 @@ func mergeLangs(fromConfig, fromFlag []string) []string {
 }
 
 // ApplyAll applies configuration.
-func ApplyAll(target, projectDir string, cfg *Config, langs []string, forceDocs, setup bool) error {
+func ApplyAll(target string, cfg *Config, langs []string, forceDocs bool) error {
 	changes := 0
 
 	type pStat struct{ label, detail string }
@@ -521,50 +521,6 @@ func ApplyAll(target, projectDir string, cfg *Config, langs []string, forceDocs,
 			if lr.changed {
 				changes++
 				fmt.Printf("  symlink %s → %s\n", link, gTarget)
-			}
-		}
-	}
-
-	if l := cfg.AgentsMD.Local; l.Target != "" && projectDir != "" {
-		lTarget := localPath(projectDir, l.Target)
-		sections := append([]MDSection(nil), l.Sections...)
-		if len(langs) > 0 {
-			sections = append(sections, MDSection{
-				Name:    "Language Conventions",
-				Content: buildLangConventions(langs, cfg),
-			})
-		}
-		if len(sections) > 0 {
-			lr := applyResult{}
-			var presentNames []string
-			for _, s := range sections {
-				r, err := applySectionMD(lTarget, s.Name, s.Content)
-				if err != nil {
-					return fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
-				}
-				if r.changed {
-					lr.changed = true
-					lr.notes = append(lr.notes, r.notes...)
-				} else {
-					presentNames = append(presentNames, s.Name)
-				}
-			}
-			if lr.changed {
-				changes++
-			}
-			printResult("wrote", lTarget, lr)
-			addStat(filepath.Base(lTarget), strings.Join(presentNames, ", "))
-		}
-
-		if l.Symlink != "" {
-			lSymlink := localPath(projectDir, l.Symlink)
-			slr, err := ensureSymlink(lSymlink, lTarget)
-			if err != nil {
-				return fmt.Errorf("agents_md.local symlink: %w", err)
-			}
-			if slr.changed {
-				changes++
-				fmt.Printf("  symlink %s → %s\n", lSymlink, lTarget)
 			}
 		}
 	}
@@ -643,68 +599,6 @@ func ApplyAll(target, projectDir string, cfg *Config, langs []string, forceDocs,
 		} else {
 			state := langDocState(cfg.FS, lang.Source, dst)
 			addStat(name, fsutil.ContractHome(dst)+" ["+state+"]")
-		}
-	}
-
-	if projectDir != "" {
-		for _, name := range langs {
-			lang, ok := cfg.AgentsMD.Languages[name]
-			if !ok || lang.Local == "" {
-				continue
-			}
-			data, err := fs.ReadFile(cfg.FS, lang.Source)
-			if err != nil {
-				return fmt.Errorf("language %s: read source: %w", name, err)
-			}
-			localDoc := localPath(projectDir, lang.Local)
-			cr, err := writeFileIfChanged(localDoc, data)
-			if err != nil {
-				return fmt.Errorf("language %s: copy: %w", name, err)
-			}
-			if cr.changed {
-				changes++
-				fmt.Printf("  copied %s → %s\n", lang.Source, localDoc)
-			}
-
-			if setup {
-				justScaffolded := false
-				if lang.Template != "" {
-					dest := localPath(projectDir, filepath.Base(lang.Template))
-					if _, err := os.Stat(dest); os.IsNotExist(err) {
-						data, err := fs.ReadFile(cfg.FS, lang.Template)
-						if err != nil {
-							return fmt.Errorf("language %s: read template: %w", name, err)
-						}
-						if err := os.WriteFile(dest, data, 0644); err != nil {
-							return fmt.Errorf("language %s: scaffold template: %w", name, err)
-						}
-						changes++
-						justScaffolded = true
-						fmt.Printf("  scaffolded %s\n", dest)
-					}
-				}
-
-				if lang.Targets != "" && !justScaffolded {
-					dest := localPath(projectDir, filepath.Base(lang.Template))
-					if lang.Template == "" {
-						dest = localPath(projectDir, "Makefile")
-					}
-					if _, err := os.Stat(dest); err == nil {
-						data, err := fs.ReadFile(cfg.FS, lang.Targets)
-						if err != nil {
-							return fmt.Errorf("language %s: read targets: %w", name, err)
-						}
-						tr, _, err := markdown.ApplyMK(dest, "targets", string(data))
-						if err != nil {
-							return fmt.Errorf("language %s: inject targets: %w", name, err)
-						}
-						printResult("patched", dest, applyResult{changed: tr})
-						if tr {
-							changes++
-						}
-					}
-				}
-			}
 		}
 	}
 

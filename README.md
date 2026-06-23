@@ -182,32 +182,37 @@ without duplicating the file.
 
 | Command | Flags | What it does |
 |---|---|---|
-| `apply` | `-c` `-t` `-p` `-l` `--setup` | Write all managed items; merge settings; create symlinks |
+| `apply` | `-c` `-t` `-l` `--force-docs` | Sync global `~/.claude` config: settings, hooks, commands, lang docs |
+| `init` | `-c` `-d` `-l` `--summary` | Set up a project: AGENTS.md, lang doc copies, Makefile targets |
 | `diff` | `-c` `-t` | Preview changes without writing (uses `diff -u`) |
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
 | `status` | `-c` `-t` | Print config summary and check which items are present on disk |
 
-All commands accept:
-
-- `-c <path>` — config file (default: embedded)
-- `-t <dir>` — Claude config directory (default: `~/.claude`)
+All commands accept `-c <path>` (config file, default: embedded).
 
 `apply` also accepts:
 
-- `-p <dir>` — project directory for local `agents_md` targets (default: `.`)
-- `-l <lang>` — install extra language doc (repeatable; merged with `langs:`)
-- `--setup` — inject language standard Makefile targets into an existing project Makefile
+- `-t <dir>` — Claude config directory (default: `~/.claude`)
+- `-l <lang>` — extra language doc to install globally (repeatable)
+- `--force-docs` — overwrite existing language docs with bundled versions
+
+`init` also accepts:
+
+- `-d <dir>` — project directory (default: `.`)
+- `-l <lang>` — language(s) to set up in the project (repeatable)
+- `--summary` — run `claude -p` to generate an AI project summary in AGENTS.md
+- `--replace` — delete existing AGENTS.md and recreate from template before init
 
 ### Project setup
 
-`--setup` is an explicit opt-in for the "set up this project for a language" step.
-It scaffolds a Makefile from the bundled template (if none exists) or injects the
-language's standard targets into an existing one.  Safe to omit on routine `apply`
-runs — the flag is only needed once per project per language.
+`init` is the one command for setting up a project directory.  It creates `AGENTS.md`
+and the `CLAUDE.md` symlink, applies config-defined local sections (language conventions),
+copies language docs locally, and injects standard Makefile targets — all in one step.
 
 ```sh
-claudeconfig apply -p . -l make --setup   # inject standard Make targets
-claudeconfig apply -p . -l golang --setup # scaffold Makefile + Go targets
+claudeconfig init                        # AGENTS.md + CLAUDE.md symlink only
+claudeconfig init -l golang -l make     # + lang docs + Makefile targets
+claudeconfig init -l golang --summary   # + AI-generated project summary
 ```
 
 ## Drift repair

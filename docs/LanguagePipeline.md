@@ -1,18 +1,18 @@
 # Language Pipeline
 
-How `-l <lang>` flows from `config.yaml` into a project when `apply -p <dir>` is run.
+How `-l <lang>` flows from `config.yaml` into a project via `apply` (global) and `init` (project-local).
 
 ## Four outputs per language
 
-| Field | Destination | Behaviour |
-|-------|-------------|-----------|
-| `source` | `~/.claude/docs/<name>.md` | Always written/updated (global) |
-| `local` | `<project>/docs/<name>.md` | Written/updated on every apply |
-| `template` | `<project>/Makefile` (basename of path) | Written **once** — skipped if file exists |
-| `targets` | `<project>/Makefile` (managed section) | Injected/updated — skipped if template was just scaffolded |
+| Field | Command | Destination | Behaviour |
+|-------|---------|-------------|-----------|
+| `source` | `apply` | `~/.claude/docs/<name>.md` | Always written/updated (global) |
+| `local` | `init` | `<project>/docs/<name>.md` | Written/updated on every init |
+| `template` | `init` | `<project>/Makefile` (basename of path) | Written **once** — skipped if file exists |
+| `targets` | `init` | `<project>/Makefile` (managed section) | Injected/updated — skipped if template was just scaffolded |
 
-`source` and `local` are always overwritten to keep docs in sync.
-`template` and `targets` are project-setup concerns with different write semantics.
+`source` (global install) is driven by `apply -l <lang>`.
+`local`, `template`, and `targets` (project-local) are driven by `init -l <lang>`.
 
 ## Template vs targets
 

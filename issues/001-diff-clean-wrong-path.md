@@ -1,6 +1,8 @@
 # diff and clean operate on wrong file when --project is set
 
-**Severity:** High — silent wrong-file operations
+**Status:** Resolved — `-p`/`--project` removed from `apply`/`diff`/`clean` (2026-06-23); project work moved to `init`
+
+**Severity:** High — silent wrong-file operations (was)
 
 ## Problem
 
