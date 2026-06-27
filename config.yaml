@@ -98,6 +98,7 @@ commands:
     file: commands/evergreen.md
 
 skills_target: ~/.gemini/skills
+codex_skills_target: ~/.codex/skills
 
 skills:
   - name: evergreen

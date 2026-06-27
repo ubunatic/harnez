@@ -56,11 +56,11 @@ what is currently installed.
 
 ---
 
-## Antigravity Skills (`skills:`)
+## Agent Skills (`skills:`)
 
-Google Antigravity CLI uses the **Agent Skills Standard**: each skill is a directory
-containing a `SKILL.md` file. claudeconfig installs these to `~/.gemini/skills/<name>/SKILL.md`
-(configurable via `skills_target:`).
+Each skill is a directory containing a `SKILL.md` file. claudeconfig installs these to
+`~/.gemini/skills/<name>/SKILL.md` and, when configured, to
+`~/.codex/skills/<name>/SKILL.md`.
 
 ### Frontmatter difference
 
@@ -69,6 +69,7 @@ only. `genSkillContent` handles this — do not use `genCommandContent` for skil
 
 ```yaml
 skills_target: ~/.gemini/skills   # default; override to ~/.gemini/antigravity-cli/skills for agy-only
+codex_skills_target: ~/.codex/skills
 
 skills:
   - name: evergreen
@@ -82,19 +83,22 @@ skills:
 |-------|------|
 | Shared (all agents) | `~/.gemini/skills/<name>/SKILL.md` |
 | Antigravity CLI only | `~/.gemini/antigravity-cli/skills/<name>/SKILL.md` |
+| Codex | `~/.codex/skills/<name>/SKILL.md` |
 | Project | `<project>/.agents/skills/<name>/SKILL.md` |
 
-`skills_target` controls which scope claudeconfig writes to. Default is shared.
+`skills_target` controls the Gemini/Antigravity target. `codex_skills_target` controls the
+Codex target. Leave a target empty to skip that install.
 
 ### Adding a new skill
 
 1. Write or reuse `commands/<name>.md` as the body.
 2. Add an entry to `config.yaml` → `skills:`.
 3. Run `make apply`.
-4. Verify: the `skills:` summary line and `make status` should show the name.
+4. Verify: the `skills:` summary line and `make status` should show the name in every
+   configured skill target.
 
 ### Source reuse
 
 A single `commands/<name>.md` file can back both a Claude command (`commands:` entry) and
-an Antigravity skill (`skills:` entry). The frontmatter is generated differently by
-`genCommandContent` vs `genSkillContent`; the body is identical.
+an Antigravity or Codex skill (`skills:` entry). The frontmatter is generated
+differently by `genCommandContent` vs `genSkillContent`; the body is identical.

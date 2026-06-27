@@ -41,6 +41,10 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfigEmbedded failed: %v", err)
 	}
+	geminiSkillsDir := filepath.Join(t.TempDir(), "gemini-skills")
+	codexSkillsDir := filepath.Join(t.TempDir(), "codex-skills")
+	cfg.SkillsTarget = geminiSkillsDir
+	cfg.CodexSkillsTarget = codexSkillsDir
 
 	// 3. First apply: should write files and show changes
 	out, err := captureStdout(func() error {
@@ -51,6 +55,12 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 	if !strings.Contains(out, "wrote") {
 		t.Errorf("Expected 'wrote' status in output, got:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(geminiSkillsDir, "evergreen", "SKILL.md")); err != nil {
+		t.Fatalf("Expected Gemini skill to be written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(codexSkillsDir, "evergreen", "SKILL.md")); err != nil {
+		t.Fatalf("Expected Codex skill to be written: %v", err)
 	}
 
 	// 4. Second apply: must be idempotent and report "No changes."
@@ -123,6 +133,12 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 	if !strings.Contains(out, "settings.json [model]") || !strings.Contains(out, "ok") {
 		t.Errorf("Expected RunStatus to list settings state as ok, got:\n%s", out)
+	}
+	if !strings.Contains(out, filepath.Join(geminiSkillsDir, "evergreen", "SKILL.md")) {
+		t.Errorf("Expected RunStatus to list Gemini skill target, got:\n%s", out)
+	}
+	if !strings.Contains(out, filepath.Join(codexSkillsDir, "evergreen", "SKILL.md")) {
+		t.Errorf("Expected RunStatus to list Codex skill target, got:\n%s", out)
 	}
 
 	// 10. Run project init (without CLI summary)

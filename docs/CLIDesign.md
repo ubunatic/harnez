@@ -69,6 +69,7 @@ claudeconfig apply [-t <dir>] [-l <lang>...] [--force-docs]
         ├── create ~/AGENTS.md symlink → ~/.claude/CLAUDE.md
         ├── write ~/.claude/commands/<name>.md for each command
         ├── write ~/.gemini/skills/<name>/SKILL.md for each skill
+        ├── write ~/.codex/skills/<name>/SKILL.md for each skill when configured
         └── install ~/.claude/docs/<lang>.md for each lang
 ```
 

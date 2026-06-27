@@ -10,21 +10,22 @@ import (
 )
 
 type Config struct {
-	Dir         string            `yaml:"-"`
-	FS          fs.FS             `yaml:"-"`
-	TargetDir   string            `yaml:"target_dir"`
-	Langs       []string          `yaml:"langs"`
-	Model       string            `yaml:"model"`
-	Effort      string            `yaml:"effort"`
-	Verbs       []string          `yaml:"verbs"`
-	Permissions Permissions       `yaml:"permissions"`
-	Hooks       []Hook            `yaml:"hooks"`
-	Env         map[string]string `yaml:"env"`
-	MCPServers  []MCPServer       `yaml:"mcp_servers"`
-	Commands     []Command         `yaml:"commands"`
-	Skills       []Command         `yaml:"skills"`
-	SkillsTarget string            `yaml:"skills_target"`
-	AgentsMD     AgentsMD          `yaml:"agents_md"`
+	Dir               string            `yaml:"-"`
+	FS                fs.FS             `yaml:"-"`
+	TargetDir         string            `yaml:"target_dir"`
+	Langs             []string          `yaml:"langs"`
+	Model             string            `yaml:"model"`
+	Effort            string            `yaml:"effort"`
+	Verbs             []string          `yaml:"verbs"`
+	Permissions       Permissions       `yaml:"permissions"`
+	Hooks             []Hook            `yaml:"hooks"`
+	Env               map[string]string `yaml:"env"`
+	MCPServers        []MCPServer       `yaml:"mcp_servers"`
+	Commands          []Command         `yaml:"commands"`
+	Skills            []Command         `yaml:"skills"`
+	SkillsTarget      string            `yaml:"skills_target"`
+	CodexSkillsTarget string            `yaml:"codex_skills_target"`
+	AgentsMD          AgentsMD          `yaml:"agents_md"`
 }
 
 type Permissions struct {

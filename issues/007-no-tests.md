@@ -2,11 +2,26 @@
 
 **Severity:** Low for now, blocks confidence for wider adoption
 
+## Progress update
+
+The repo now has real tests:
+
+- `internal/claude/integration_test.go` covers apply, diff, status, init, and clean
+- the evergreen/skill path is now covered by a temp-dir install check for both
+  `~/.gemini/skills/` and `~/.codex/skills/`
+- `go test ./...`, `go vet ./...`, and `make install` are part of the verified path
+
+Remaining gaps still matter:
+
+- pure helper coverage is thin
+- malformed marker / parser edge cases are not exercised directly
+- error-path coverage is still limited
+
 ## Problem
 
-`go test ./...` reports `[no test files]`. The smoke test (`scripts/smoke-test.sh`) covers
-the happy path (apply → idempotency → drift → repair) against the live `~/.claude` directory
-but does not cover:
+`go test ./...` used to report `[no test files]`. The smoke test
+(`scripts/smoke-test.sh`) covers the happy path (apply → idempotency → drift → repair)
+against the live `~/.claude` directory but does not cover:
 
 - Edge cases in `sectionBounds` (malformed markers, overlapping sections)
 - `stripComments` JSONC parsing (especially with `/* */` block comments, which are not handled)

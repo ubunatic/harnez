@@ -413,6 +413,31 @@ func genSkillContent(cmd Command, fsys fs.FS) (string, error) {
 	return sb.String(), nil
 }
 
+func skillTargets(cfg *Config) []string {
+	var targets []string
+
+	if root := fsutil.ExpandHome(cfg.SkillsTarget); root != "" {
+		targets = append(targets, root)
+	} else if home, err := os.UserHomeDir(); err == nil {
+		targets = append(targets, filepath.Join(home, ".gemini", "skills"))
+	}
+
+	if root := fsutil.ExpandHome(cfg.CodexSkillsTarget); root != "" {
+		dup := false
+		for _, existing := range targets {
+			if existing == root {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			targets = append(targets, root)
+		}
+	}
+
+	return targets
+}
+
 func localPath(projectDir, rel string) string {
 	if filepath.IsAbs(rel) || projectDir == "" || projectDir == "." {
 		return rel
@@ -552,32 +577,30 @@ func ApplyAll(target string, cfg *Config, langs []string, forceDocs bool) error 
 	}
 
 	if len(cfg.Skills) > 0 {
-		skillsRoot := fsutil.ExpandHome(cfg.SkillsTarget)
-		if skillsRoot == "" {
-			home, _ := os.UserHomeDir()
-			skillsRoot = filepath.Join(home, ".gemini", "skills")
-		}
+		targets := skillTargets(cfg)
 		var skillNames []string
 		for _, skill := range cfg.Skills {
 			content, err := genSkillContent(skill, cfg.FS)
 			if err != nil {
 				return err
 			}
-			skillDir := filepath.Join(skillsRoot, skill.Name)
-			if err := os.MkdirAll(skillDir, 0755); err != nil {
-				return fmt.Errorf("skill %s dir: %w", skill.Name, err)
-			}
-			path := filepath.Join(skillDir, "SKILL.md")
-			oldContent, _ := os.ReadFile(path)
-			cr := applyResult{changed: string(oldContent) != content}
-			if cr.changed {
-				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-					return fmt.Errorf("skill %s: %w", skill.Name, err)
+			for _, skillsRoot := range targets {
+				skillDir := filepath.Join(skillsRoot, skill.Name)
+				if err := os.MkdirAll(skillDir, 0755); err != nil {
+					return fmt.Errorf("skill %s dir: %w", skill.Name, err)
 				}
-				changes++
+				path := filepath.Join(skillDir, "SKILL.md")
+				oldContent, _ := os.ReadFile(path)
+				cr := applyResult{changed: string(oldContent) != content}
+				if cr.changed {
+					if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+						return fmt.Errorf("skill %s: %w", skill.Name, err)
+					}
+					changes++
+				}
+				printResult("wrote", path, cr)
 			}
 			skillNames = append(skillNames, skill.Name)
-			printResult("wrote", path, cr)
 		}
 		addStat("skills", strings.Join(skillNames, ", "))
 	}

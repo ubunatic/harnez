@@ -76,18 +76,16 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 		})
 	}
 	if len(cfg.Skills) > 0 {
-		skillsRoot := fsutil.ExpandHome(cfg.SkillsTarget)
-		if skillsRoot == "" {
-			home, _ := os.UserHomeDir()
-			skillsRoot = filepath.Join(home, ".gemini", "skills")
-		}
+		targets := skillTargets(cfg)
 		for _, skill := range cfg.Skills {
 			skill := skill
-			path := filepath.Join(skillsRoot, skill.Name, "SKILL.md")
-			checks = append(checks, entry{
-				label: path,
-				check: func() bool { _, err := os.Stat(path); return err == nil },
-			})
+			for _, skillsRoot := range targets {
+				path := filepath.Join(skillsRoot, skill.Name, "SKILL.md")
+				checks = append(checks, entry{
+					label: path,
+					check: func() bool { _, err := os.Stat(path); return err == nil },
+				})
+			}
 		}
 	}
 
