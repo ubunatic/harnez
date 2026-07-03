@@ -12,6 +12,8 @@ Adhere to the following conventions.
   smart indent!
 - Make/Makefile @docs/Make.md,
   ⚙️ phony sentinel, self-doc help, build dependency pattern
+- Git @docs/Git.md,
+  conventional commits, work on the default branch, don't push unless asked
 <!-- claudeconfig:end Language Conventions -->
 
 ## CLI command scope
@@ -30,3 +32,8 @@ Run from project root.
 
 - `scripts/smoke-test.sh` — build, apply, verify idempotency, simulate drift and confirm repair
 - `scripts/drop-perm.sh PATTERN` — remove permissions matching PATTERN from `~/.claude/settings.json` for drift simulation
+<!-- claudeconfig:begin Repo Setup -->
+## Repo Setup
+- Solo/hobby repo — single default branch, no PR workflow.
+- codeberg.org is primary; github.com (if present) is a synced mirror only.
+<!-- claudeconfig:end Repo Setup -->

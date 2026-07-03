@@ -7,9 +7,16 @@ langs:
   - rust
   - cpp
   - markdown
+  - git
 
 model: sonnet
 effort: medium
+
+# how `init` reconciles its own Makefile targets (e.g. `help`) into an
+# existing project Makefile — see docs/src/Make.md
+make:
+  phony_fix: ours   # ours|all|none — how to handle existing .PHONY lines
+  phony_sentinel: "" # override the ⚙️ token; empty = auto-detect or default
 
 permissions:
   allow:
@@ -186,3 +193,36 @@ agents_md:
       source: docs/src/Markdown.md
       target: ~/.claude/docs/Markdown.md
       local: ./docs/Markdown.md
+    git:
+      name: "Git"
+      ref: "@docs/Git.md"
+      hint: "conventional commits, work on the default branch, don't push unless asked"
+      source: docs/src/Git.md
+      target: ~/.claude/docs/Git.md
+      local: ./docs/Git.md
+
+  # repo git setups — pick one with `init --repo-mode/-m` to add a short
+  # "Repo Setup" section to a project's AGENTS.md (see docs/src/Git.md for the
+  # general rules these builds on)
+  repo_modes:
+    solo:
+      name: "Solo / hobby"
+      content: |
+        ## Repo Setup
+        - Solo/hobby repo — single default branch, no PR workflow.
+        - codeberg.org is primary; github.com (if present) is a synced mirror only.
+    fork:
+      name: "Fork"
+      content: |
+        ## Repo Setup
+        - This repo is a fork.
+        - Keep the default branch in sync with upstream; never force-push over upstream history.
+        - Open PRs against upstream from feature branches, not from the default branch.
+        - codeberg.org is primary; github.com may carry contributor branches for upstream PRs.
+    team:
+      name: "Team / protected branches"
+      content: |
+        ## Repo Setup
+        - Team repo with protected branches.
+        - Never push directly to the default branch — open a PR and get it reviewed.
+        - Update/rebase your branch before merging; follow this repo's CI and review requirements.

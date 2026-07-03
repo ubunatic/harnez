@@ -26,6 +26,29 @@ type Config struct {
 	SkillsTarget      string            `yaml:"skills_target"`
 	CodexSkillsTarget string            `yaml:"codex_skills_target"`
 	AgentsMD          AgentsMD          `yaml:"agents_md"`
+	Make              MakeConfig        `yaml:"make"`
+}
+
+// MakeConfig steers how claudeconfig reconciles its own targets (e.g. `help`)
+// and the ⚙️ phony sentinel into a project's existing Makefile.
+type MakeConfig struct {
+	// PhonyFix controls how existing .PHONY declarations are handled:
+	//   "ours" (default) — only ensure our own sentinel .PHONY line exists
+	//   "all"             — also collapse other explicit .PHONY target lists
+	//                       into the sentinel convention
+	//   "none"            — never touch .PHONY lines
+	PhonyFix string `yaml:"phony_fix"`
+	// PhonySentinel overrides the sentinel token (default "⚙️"). If unset,
+	// claudeconfig auto-detects an existing sentinel variant in the file
+	// (e.g. "⚙︎", the text-presentation form) before falling back to the default.
+	PhonySentinel string `yaml:"phony_sentinel"`
+}
+
+func (m MakeConfig) phonyFixOrDefault() string {
+	if m.PhonyFix == "" {
+		return "ours"
+	}
+	return m.PhonyFix
 }
 
 type Permissions struct {
@@ -57,6 +80,7 @@ type AgentsMD struct {
 	Global    AgentsMDTarget      `yaml:"global"`
 	Local     AgentsMDTarget      `yaml:"local"`
 	Languages map[string]Language `yaml:"languages"`
+	RepoModes map[string]RepoMode `yaml:"repo_modes"`
 }
 
 type AgentsMDTarget struct {
@@ -66,6 +90,13 @@ type AgentsMDTarget struct {
 }
 
 type MDSection struct {
+	Name    string `yaml:"name"`
+	Content string `yaml:"content"`
+}
+
+// RepoMode describes a repo's git setup (solo/fork/team) as a short
+// "Repo Setup" section injected into a project's AGENTS.md via `init --repo-mode`.
+type RepoMode struct {
 	Name    string `yaml:"name"`
 	Content string `yaml:"content"`
 }

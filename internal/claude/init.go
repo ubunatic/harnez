@@ -128,7 +128,7 @@ func reviewSummary(dir, draft string) (string, error) {
 
 // RunInit creates AGENTS.md and CLAUDE.md symlink in a project directory,
 // applies config-defined local sections, and sets up language docs and Makefile targets.
-func RunInit(dir string, cfg *Config, langs []string, withSummary, update, replace bool) error {
+func RunInit(dir string, cfg *Config, langs []string, repoMode string, assumeYes, withSummary, update, replace bool) error {
 	agentsPath := filepath.Join(dir, "AGENTS.md")
 	claudePath := filepath.Join(dir, "CLAUDE.md")
 
@@ -173,6 +173,16 @@ func RunInit(dir string, cfg *Config, langs []string, withSummary, update, repla
 				sections = append(sections, MDSection{
 					Name:    "Language Conventions",
 					Content: buildLangConventions(langs, cfg),
+				})
+			}
+			if repoMode != "" {
+				mode, ok := cfg.AgentsMD.RepoModes[repoMode]
+				if !ok {
+					return fmt.Errorf("unknown repo mode %q", repoMode)
+				}
+				sections = append(sections, MDSection{
+					Name:    "Repo Setup",
+					Content: mode.Content,
 				})
 			}
 			lr := applyResult{}
@@ -243,13 +253,15 @@ func RunInit(dir string, cfg *Config, langs []string, withSummary, update, repla
 					if err != nil {
 						return fmt.Errorf("language %s: read targets: %w", name, err)
 					}
-					tr, _, err := markdown.ApplyMK(dest, "targets", string(data))
+					tr, err := ReconcileMakeTargets(dest, string(data), cfg.Make, assumeYes, nil)
 					if err != nil {
-						return fmt.Errorf("language %s: inject targets: %w", name, err)
+						return fmt.Errorf("language %s: reconcile targets: %w", name, err)
 					}
-					printResult("patched", dest, applyResult{changed: tr})
 					if tr {
 						changes++
+						fmt.Printf("  reconciled %s\n", dest)
+					} else {
+						fmt.Printf("  exists  %s (targets unchanged)\n", dest)
 					}
 				}
 			}

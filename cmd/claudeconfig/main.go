@@ -86,7 +86,8 @@ func main() {
 	var initDir string
 	var initLangs []string
 	var initConfigPath string
-	var initSummary, initUpdate, initReplace bool
+	var initRepoMode string
+	var initSummary, initUpdate, initReplace, initYes bool
 	initCmd := &cobra.Command{
 		Use:   "init",
 		Short: "Set up a project directory with AGENTS.md, language docs, and Makefile targets",
@@ -95,12 +96,14 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
-			return claude.RunInit(initDir, cfg, initLangs, initSummary, initUpdate, initReplace)
+			return claude.RunInit(initDir, cfg, initLangs, initRepoMode, initYes, initSummary, initUpdate, initReplace)
 		},
 	}
 	initCmd.Flags().StringVarP(&initConfigPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	initCmd.Flags().StringVarP(&initDir, "dir", "d", ".", "project directory to initialise (default: current directory)")
 	initCmd.Flags().StringArrayVarP(&initLangs, "lang", "l", nil, "language(s) to set up in the project (e.g. golang, make)")
+	initCmd.Flags().StringVarP(&initRepoMode, "repo-mode", "m", "", "repo git setup to note in AGENTS.md (solo, fork, team)")
+	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "assume yes when reconciling Makefile targets (no prompt)")
 	initCmd.Flags().BoolVar(&initSummary, "summary", false, "run claude -p to generate a project summary and add it to AGENTS.md")
 	initCmd.Flags().BoolVar(&initUpdate, "update", false, "re-fetch and refresh the project summary (implies --summary)")
 	initCmd.Flags().BoolVar(&initReplace, "replace", false, "delete existing AGENTS.md and recreate from template before init")

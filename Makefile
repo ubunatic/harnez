@@ -3,7 +3,7 @@ BINARY  := claudeconfig
 CONFIG  := config.yaml
 TARGET  := $(HOME)/.claude
 PROJECT := .
-LANGS   := golang bash make
+LANGS   := golang bash make git
 PREFIX  ?= /usr/local
 
 help: ⚙️  ## show this help

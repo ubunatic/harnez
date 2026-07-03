@@ -1,4 +1,4 @@
-# diff and clean don't cover Makefile targets section
+# diff and clean don't cover Makefile targets
 
 **Status:** Open
 
@@ -7,22 +7,32 @@
 ## Problem
 
 `DiffAll` and `CleanAll` handle AGENTS.md managed sections but have no knowledge of
-the `Language.Targets` field. Two consequences:
+`Language.Targets` reconciliation (`internal/claude/maketargets.go`, `ReconcileMakeTargets`).
 
-1. `claudeconfig diff` never shows changes to the `# claudeconfig:begin targets` block
-   in a project Makefile, even if the source (`MakeTargets.mk`) changed.
+Since 2026-07-03, target injection is marker-less: it structurally detects "our" targets
+(and the ⚙️ `.PHONY` sentinel) instead of relying on a `# claudeconfig:begin targets` HTML/shell
+comment block, so users' own Makefile content around it is never clobbered. This makes the
+original fix proposal here (`markdown.DiffMK`/`CleanMK` on a "targets" section) obsolete —
+there is no single managed block to diff or delete anymore.
 
-2. `claudeconfig clean` does not remove the managed targets block from the Makefile.
-   Users must edit the Makefile manually to undo the injection.
+Two consequences remain:
+
+1. `claudeconfig diff` never previews what `ReconcileMakeTargets` would do to a project
+   Makefile (which targets would be added/updated/prompted/skipped).
+
+2. `claudeconfig clean` cannot undo the injection — a target added by `init` (e.g. `help`)
+   stays in the Makefile until removed by hand. Since it's a normal, human-editable target
+   with no wrapping markers, this is arguably fine, but is inconsistent with how `clean`
+   handles AGENTS.md sections.
 
 **Affected:** `internal/claude/apply.go` — `DiffAll` (~line 700), `CleanAll` (~line 730)
 
-## Fix
+## Possible fix
 
-In `DiffAll`: for each language with `Targets != ""`, call `markdown.DiffMK(dest, "targets", content)`.
+`DiffAll`: for each language with `Targets != ""`, run `ReconcileMakeTargets` in a dry-run
+mode (no writes) and print what would change per target.
 
-In `CleanAll`: for each language with `Targets != ""`, call `markdown.CleanMK(dest, "targets")`.
-
-Both functions already exist (`MKMarkers` added 2026-06-23). Only callers are missing.
-
-`status` should also gain a check: `markdown.ContainsSectionMK(makefilePath, "targets")`.
+`CleanAll`: decide intentionally whether Makefile targets should be cleanable at all — if
+yes, remove only targets whose header still carries the sentinel (i.e. still ours,
+unmodified by the user); leave sentinel-less (user-edited) targets alone, same rule used to
+decide whether to prompt on `init`.

@@ -24,6 +24,12 @@ you like; user-managed keys and unmanaged sections are never touched.
 ## Installation
 
 ```sh
+go install ubunatic.com/claudeconfig@latest
+```
+
+Or from source:
+
+```sh
 git clone https://codeberg.org/ubunatic/claudeconfig
 cd claudeconfig
 make install          # builds and installs to /usr/local/bin

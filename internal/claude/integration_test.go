@@ -143,7 +143,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 
 	// 10. Run project init (without CLI summary)
 	projDir := t.TempDir()
-	err = claude.RunInit(projDir, nil, nil, false, false, false)
+	err = claude.RunInit(projDir, nil, nil, "", false, false, false, false)
 	if err != nil {
 		t.Fatalf("RunInit failed: %v", err)
 	}
