@@ -13,7 +13,7 @@ type Config struct {
 	Dir               string            `yaml:"-"`
 	FS                fs.FS             `yaml:"-"`
 	TargetDir         string            `yaml:"target_dir"`
-	Langs             []string          `yaml:"langs"`
+	Docs              []string          `yaml:"docs"`
 	Model             string            `yaml:"model"`
 	Effort            string            `yaml:"effort"`
 	Verbs             []string          `yaml:"verbs"`
@@ -110,6 +110,9 @@ type Language struct {
 	Local    string `yaml:"local"`
 	Template string `yaml:"template"` // scaffold file written once to project if absent
 	Targets  string `yaml:"targets"`  // managed section injected into existing template file
+	// Default controls whether init copies this doc without an explicit --doc flag.
+	// "true" = always copy, "false" = only if explicitly requested, "auto" = detect from project.
+	Default string `yaml:"default"`
 }
 
 func LoadConfig(path string) (*Config, error) {

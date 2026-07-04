@@ -99,8 +99,8 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 
 	if len(cfg.AgentsMD.Languages) > 0 {
 		fmt.Println()
-		fmt.Println("Language docs:")
-		for _, name := range cfg.Langs {
+		fmt.Println("Docs:")
+		for _, name := range cfg.Docs {
 			lang, ok := cfg.AgentsMD.Languages[name]
 			if !ok {
 				continue

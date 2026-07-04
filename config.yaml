@@ -1,6 +1,6 @@
 target_dir: ~/.claude
 
-langs:
+docs:
   - golang
   - bash
   - make
@@ -8,6 +8,8 @@ langs:
   - cpp
   - markdown
   - git
+  - gtk4
+  - canary
 
 model: sonnet
 effort: medium
@@ -112,9 +114,9 @@ commands:
     description: "Grilling session that also sharpens the domain model and updates CONTEXT.md/ADRs inline"
     file: commands/grill-with-docs.md
 
-  - name: to-prd
-    description: "Turn the current conversation into a PRD and publish it to issues/"
-    file: commands/to-prd.md
+  - name: make-spec
+    description: "Turn the current conversation into a spec and publish it to issues/"
+    file: commands/make-spec.md
 
   - name: sync-mattpocock-skills
     description: "Diff our adapted mattpocock/skills commands against upstream and report drift"
@@ -164,15 +166,17 @@ agents_md:
     # Language Conventions section is generated dynamically from -l flags
 
   # available language docs — always installed to ~/.claude/docs/ on apply
-  # use -l <name> -p <dir> to copy into a project and update its AGENTS.md
+  # use --doc <name> to copy into a project and update its AGENTS.md
+  # default: true=always copy on init, false=only if explicitly requested, auto=detect from project
   languages:
     golang:
       name: "Go/Golang"
       ref: "@docs/Go.md"
       hint: "Modern Go, avoid deps but use Cobra, add tests"
-      source: docs/src/Go.md
+      source: docs/lang/Go.md
       target: ~/.claude/docs/Go.md
       local: ./docs/Go.md
+      default: auto   # go.mod
     bash:
       name: "Bash/Shell"
       ref: "@docs/Bash.md"
@@ -180,49 +184,71 @@ agents_md:
         No ";", break before then/else/docs
         No "if [[]]", No "if []", Use "if test"
         smart indent!
-      source: docs/src/Bash.md
+      source: docs/lang/Bash.md
       target: ~/.claude/docs/Bash.md
       local: ./docs/Bash.md
+      default: auto   # *.sh files
     make:
       name: "Make/Makefile"
       ref: "@docs/Make.md"
       hint: "⚙️ phony sentinel, self-doc help, build dependency pattern"
-      source: docs/src/Make.md
+      source: docs/lang/Make.md
       target: ~/.claude/docs/Make.md
       local: ./docs/Make.md
       template: docs/templates/Makefile
       targets: docs/templates/MakeTargets.mk
+      default: auto   # Makefile
     rust:
       name: "Rust"
       ref: "@docs/Rust.md"
       hint: "cargo fmt + clippy; safe Rust; avoid .unwrap() in library code"
-      source: docs/src/Rust.md
+      source: docs/lang/Rust.md
       target: ~/.claude/docs/Rust.md
       local: ./docs/Rust.md
+      default: auto   # Cargo.toml
     cpp:
       name: "C/C++"
       ref: "@docs/Cpp.md"
       hint: "Use ccache for CGO builds, prefer modern C++17"
-      source: docs/src/Cpp.md
+      source: docs/lang/Cpp.md
       target: ~/.claude/docs/Cpp.md
       local: ./docs/Cpp.md
+      default: auto   # *.cpp, *.cc, *.h, CMakeLists.txt
     markdown:
       name: "Markdown"
       ref: "@docs/Markdown.md"
       hint: "PascalCase for evergreens, kebab-case for ephemeral docs"
-      source: docs/src/Markdown.md
+      source: docs/lang/Markdown.md
       target: ~/.claude/docs/Markdown.md
       local: ./docs/Markdown.md
+      default: true   # every project has markdown
     git:
       name: "Git"
       ref: "@docs/Git.md"
       hint: "conventional commits, work on the default branch, don't push unless asked"
-      source: docs/src/Git.md
+      source: docs/lang/Git.md
       target: ~/.claude/docs/Git.md
       local: ./docs/Git.md
+      default: true   # every project uses git
+    gtk4:
+      name: "GTK4/PyGObject"
+      ref: "@docs/GTK4.md"
+      hint: "GTK4 + PyGObject; prefer GObject signals over polling"
+      source: docs/lang/GTK4.md
+      target: ~/.claude/docs/GTK4.md
+      local: ./docs/GTK4.md
+      default: false
+    canary:
+      name: "Canary-first development"
+      ref: "@docs/Canary.md"
+      hint: "probe external mechanisms before building features on them"
+      source: docs/other/Canary.md
+      target: ~/.claude/docs/Canary.md
+      local: ./docs/Canary.md
+      default: true
 
   # repo git setups — pick one with `init --repo-mode/-m` to add a short
-  # "Repo Setup" section to a project's AGENTS.md (see docs/src/Git.md for the
+  # "Repo Setup" section to a project's AGENTS.md (see docs/lang/Git.md for the
   # general rules these builds on)
   repo_modes:
     solo:

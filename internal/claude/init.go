@@ -126,9 +126,61 @@ func reviewSummary(dir, draft string) (string, error) {
 	return claudeP(dir, reviewPrompt+"\n\n"+context)
 }
 
+// autoDetectDocs returns doc names from cfg whose Default is "true" or "auto"
+// (with a positive signal in dir), excluding any already in explicit.
+func autoDetectDocs(dir string, cfg *Config, explicit []string) []string {
+	inExplicit := make(map[string]struct{}, len(explicit))
+	for _, name := range explicit {
+		inExplicit[name] = struct{}{}
+	}
+	var detected []string
+	for name, lang := range cfg.AgentsMD.Languages {
+		if _, ok := inExplicit[name]; ok {
+			continue
+		}
+		switch lang.Default {
+		case "true":
+			detected = append(detected, name)
+		case "auto":
+			if detectDoc(dir, name) {
+				detected = append(detected, name)
+			}
+		}
+	}
+	return detected
+}
+
+// detectDoc returns true if project dir contains signals for the named doc.
+func detectDoc(dir, name string) bool {
+	switch name {
+	case "golang":
+		return fileExists(filepath.Join(dir, "go.mod"))
+	case "bash":
+		return globExists(dir, "*.sh") || globExists(filepath.Join(dir, "scripts"), "*.sh")
+	case "make":
+		return fileExists(filepath.Join(dir, "Makefile"))
+	case "rust":
+		return fileExists(filepath.Join(dir, "Cargo.toml"))
+	case "cpp":
+		return globExists(dir, "*.cpp") || globExists(dir, "*.cc") ||
+			globExists(dir, "*.h") || fileExists(filepath.Join(dir, "CMakeLists.txt"))
+	}
+	return false
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func globExists(dir, pattern string) bool {
+	matches, err := filepath.Glob(filepath.Join(dir, pattern))
+	return err == nil && len(matches) > 0
+}
+
 // RunInit creates AGENTS.md and CLAUDE.md symlink in a project directory,
 // applies config-defined local sections, and sets up language docs and Makefile targets.
-func RunInit(dir string, cfg *Config, langs []string, repoMode string, assumeYes, withSummary, update, replace bool) error {
+func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool) error {
 	agentsPath := filepath.Join(dir, "AGENTS.md")
 	claudePath := filepath.Join(dir, "CLAUDE.md")
 
@@ -166,13 +218,15 @@ func RunInit(dir string, cfg *Config, langs []string, repoMode string, assumeYes
 	}
 
 	if cfg != nil {
+		docs = append(docs, autoDetectDocs(dir, cfg, docs)...)
+
 		// Apply config-defined local AGENTS.md sections (e.g. Language Conventions).
 		if l := cfg.AgentsMD.Local; l.Target != "" {
 			sections := append([]MDSection(nil), l.Sections...)
-			if len(langs) > 0 {
+			if len(docs) > 0 {
 				sections = append(sections, MDSection{
 					Name:    "Language Conventions",
-					Content: buildLangConventions(langs, cfg),
+					Content: buildLangConventions(docs, cfg),
 				})
 			}
 			if repoMode != "" {
@@ -207,7 +261,7 @@ func RunInit(dir string, cfg *Config, langs []string, repoMode string, assumeYes
 		}
 
 		// Copy language docs locally and inject Makefile targets.
-		for _, name := range langs {
+		for _, name := range docs {
 			lang, ok := cfg.AgentsMD.Languages[name]
 			if !ok || lang.Local == "" {
 				continue

@@ -1,6 +1,6 @@
 # Docs — Evergreen Project Docs
 
-In-depth references for decisions, architecture, and pitfalls.
+In-depth references for decisions, architecture, and pitfalls specific to this codebase.
 Not needed for routine coding; reach for these during investigations or design work.
 
 | File | Topic |
@@ -10,10 +10,10 @@ Not needed for routine coding; reach for these during investigations or design w
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat |
 | [Worktrees.md](Worktrees.md) | Parallel worktree agents: what worked, go.mod races, Haiku API staleness |
-| [Go.md](Go.md) | Go conventions (generated from docs/src/Go.md) |
-| [Bash.md](Bash.md) | Bash conventions (generated from docs/src/Bash.md) |
-| [Make.md](Make.md) | Makefile conventions (generated from docs/src/Make.md) |
-| [Git.md](Git.md) | Git conventions (generated from docs/src/Git.md) |
 
-Language docs (`Go.md`, `Bash.md`, `Make.md`, `Git.md`) are installed to `~/.claude/docs/` on apply
-and also copied into project repos via `-l` flags. Edit their sources in `docs/src/`.
+Copyable docs (installed to `~/.claude/docs/` on `apply`, copied to projects via `--doc`) live in subdirs:
+- `docs/lang/` — language/SDK/framework docs (Go, Bash, Make, Git, Rust, Cpp, Markdown, GTK4)
+- `docs/other/` — practice docs not yet forming a category (Canary)
+- `docs/proposed/` — staging area for candidate copyable docs
+
+Generated copies of those docs (`Go.md`, `Bash.md`, etc.) land here after `apply`.

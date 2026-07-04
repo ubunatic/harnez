@@ -16,7 +16,7 @@ func main() {
 		Short: "Manage Claude Code configuration declaratively from a YAML definition",
 	}
 
-	var applyLangs []string
+	var applyDocs []string
 	var forceDocs bool
 	apply := &cobra.Command{
 		Use:   "apply",
@@ -28,13 +28,13 @@ func main() {
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
-			return claude.ApplyAll(t, cfg, applyLangs, forceDocs)
+			return claude.ApplyAll(t, cfg, applyDocs, forceDocs)
 		},
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	apply.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
-	apply.Flags().StringArrayVarP(&applyLangs, "lang", "l", nil, "extra language doc(s) to install globally (e.g. golang, bash)")
-	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing language docs with bundled versions")
+	apply.Flags().StringArrayVarP(&applyDocs, "doc", "d", nil, "extra doc(s) to install globally (e.g. golang, canary)")
+	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing docs with bundled versions")
 
 	diff := &cobra.Command{
 		Use:   "diff",
@@ -84,7 +84,7 @@ func main() {
 	status.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 
 	var initDir string
-	var initLangs []string
+	var initDocs []string
 	var initConfigPath string
 	var initRepoMode string
 	var initSummary, initUpdate, initReplace, initYes bool
@@ -96,12 +96,12 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
-			return claude.RunInit(initDir, cfg, initLangs, initRepoMode, initYes, initSummary, initUpdate, initReplace)
+			return claude.RunInit(initDir, cfg, initDocs, initRepoMode, initYes, initSummary, initUpdate, initReplace)
 		},
 	}
 	initCmd.Flags().StringVarP(&initConfigPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	initCmd.Flags().StringVarP(&initDir, "dir", "d", ".", "project directory to initialise (default: current directory)")
-	initCmd.Flags().StringArrayVarP(&initLangs, "lang", "l", nil, "language(s) to set up in the project (e.g. golang, make)")
+	initCmd.Flags().StringArrayVar(&initDocs, "doc", nil, "doc(s) to set up in the project (e.g. golang, canary)")
 	initCmd.Flags().StringVarP(&initRepoMode, "repo-mode", "m", "", "repo git setup to note in AGENTS.md (solo, fork, team)")
 	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "assume yes when reconciling Makefile targets (no prompt)")
 	initCmd.Flags().BoolVar(&initSummary, "summary", false, "run claude -p to generate a project summary and add it to AGENTS.md")

@@ -101,6 +101,33 @@ func StdinPrompt(question string) bool {
 // we assume the user rolled their own and leave it alone.
 const smallDiffThreshold = 4
 
+// legacyTargetsBegin / legacyTargetsEnd are the shell-comment markers used by
+// the old claudeconfig marker-based injection (pre-2026-07-03). Any block
+// bounded by them is a migration artifact and should be removed before the
+// structural reconciliation runs.
+const legacyTargetsBegin = "# claudeconfig:begin targets"
+const legacyTargetsEnd = "# claudeconfig:end targets"
+
+// stripLegacyTargetsBlock removes a legacy # claudeconfig:begin/end targets
+// block from content, returning the cleaned string and whether anything changed.
+func stripLegacyTargetsBlock(content string) (string, bool) {
+	bi := strings.Index(content, legacyTargetsBegin)
+	ei := strings.Index(content, legacyTargetsEnd)
+	if bi < 0 || ei < 0 || ei <= bi {
+		return content, false
+	}
+	end := ei + len(legacyTargetsEnd)
+	if end < len(content) && content[end] == '\n' {
+		end++
+	}
+	// eat a preceding blank line so we don't leave a double blank
+	start := bi
+	if start >= 2 && content[start-1] == '\n' && content[start-2] == '\n' {
+		start--
+	}
+	return content[:start] + content[end:], true
+}
+
 // ReconcileMakeTargets merges the target(s) defined in oursContent (typically
 // docs/templates/MakeTargets.mk) into the Makefile at dest, using structural
 // detection of "our" targets (via the ⚙️ sentinel) instead of HTML/shell
@@ -111,6 +138,7 @@ const smallDiffThreshold = 4
 //   - present, foreign, big diff   → leave alone, tell the user how to adopt ours
 //
 // It also ensures the sentinel .PHONY line exists, per cfg.Make.PhonyFix.
+// Legacy # claudeconfig:begin/end targets blocks are removed automatically.
 func ReconcileMakeTargets(dest, oursContent string, cfg MakeConfig, assumeYes bool, prompt PromptFunc) (changed bool, err error) {
 	if prompt == nil {
 		prompt = StdinPrompt
@@ -120,6 +148,13 @@ func ReconcileMakeTargets(dest, oursContent string, cfg MakeConfig, assumeYes bo
 		return false, err
 	}
 	content := string(data)
+
+	// Migration: remove old marker-based block if present.
+	if stripped, ok := stripLegacyTargetsBlock(content); ok {
+		content = stripped
+		changed = true
+		fmt.Printf("  removed legacy targets block from %s\n", dest)
+	}
 	sentinel := detectSentinel(content, cfg.PhonySentinel)
 
 	oursTargets := extractTargetBlocks(oursContent)

@@ -10,21 +10,39 @@ Adhere to the following conventions.
   No ";", break before then/else/docs
   No "if [[]]", No "if []", Use "if test"
   smart indent!
-- Make/Makefile @docs/Make.md,
-  ⚙️ phony sentinel, self-doc help, build dependency pattern
+- Markdown @docs/Markdown.md,
+  PascalCase for evergreens, kebab-case for ephemeral docs
 - Git @docs/Git.md,
   conventional commits, work on the default branch, don't push unless asked
+- Make/Makefile @docs/Make.md,
+  ⚙️ phony sentinel, self-doc help, build dependency pattern
 <!-- claudeconfig:end Language Conventions -->
 
 ## CLI command scope
 
 `apply` and `init` are intentionally separate — do not merge their concerns.
 
-- `apply` — global `~/.claude` only: settings, hooks, commands, lang docs; flags: `-c`, `-t`, `-l`
-- `init`  — project dir only: AGENTS.md, local sections, lang doc copies, Makefile; flags: `-c`, `-d`, `-l`
+- `apply` — global `~/.claude` only: settings, hooks, commands, docs; flags: `-c`, `-t`, `-d`
+- `init`  — project dir only: AGENTS.md, local sections, doc copies, Makefile; flags: `-c`, `-d`, `--doc`
 
 Before changing any command's flags or adding project-local behaviour to `apply`, read
 `docs/CLIDesign.md` — the separation is load-bearing and the footgun it prevents is real.
+
+## Docs Layout
+
+`docs/*.md` — this project's evergreen docs (architecture, decisions, pitfalls). Not copyable.
+
+`docs/lang/` — copyable language/SDK/framework docs (Go, Bash, Make, Git, Rust, Cpp, Markdown, GTK4).
+Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --doc <name>`.
+
+`docs/other/` — copyable docs that don't form a category yet (Canary). Same install mechanics as `docs/lang/`.
+
+`docs/proposed/` — staging area for new docs that may become copyable. No install mechanics yet.
+
+`docs/templates/` — Makefile scaffolding used by `init`; not docs.
+
+Rule: if a doc applies to many projects → `docs/lang/` or `docs/other/`. If it describes this codebase → `docs/` root.
+A category dir (e.g. `docs/practices/`) forms once 3+ docs share a theme.
 
 ## Development Scripts
 

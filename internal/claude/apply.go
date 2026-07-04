@@ -455,9 +455,9 @@ func printResult(action, path string, r applyResult) {
 	}
 }
 
-// mergeLangs returns the union of config-declared langs and CLI --lang flags,
+// mergeDocs returns the union of config-declared docs and CLI --doc flags,
 // preserving order (config first, then any extras from the flag).
-func mergeLangs(fromConfig, fromFlag []string) []string {
+func mergeDocs(fromConfig, fromFlag []string) []string {
 	seen := make(map[string]struct{}, len(fromConfig)+len(fromFlag))
 	result := make([]string, 0, len(fromConfig)+len(fromFlag))
 	for _, l := range fromConfig {
@@ -473,7 +473,7 @@ func mergeLangs(fromConfig, fromFlag []string) []string {
 }
 
 // ApplyAll applies configuration.
-func ApplyAll(target string, cfg *Config, langs []string, forceDocs bool) error {
+func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool) error {
 	changes := 0
 
 	type pStat struct{ label, detail string }
@@ -605,11 +605,11 @@ func ApplyAll(target string, cfg *Config, langs []string, forceDocs bool) error 
 		addStat("skills", strings.Join(skillNames, ", "))
 	}
 
-	globalLangs := mergeLangs(cfg.Langs, langs)
-	for _, name := range globalLangs {
+	globalDocs := mergeDocs(cfg.Docs, docs)
+	for _, name := range globalDocs {
 		lang, ok := cfg.AgentsMD.Languages[name]
 		if !ok {
-			return fmt.Errorf("unknown language: %s", name)
+			return fmt.Errorf("unknown doc: %s", name)
 		}
 		dst := fsutil.ExpandHome(lang.Target)
 		fr, err := installDoc(cfg.FS, lang.Source, dst, forceDocs)
