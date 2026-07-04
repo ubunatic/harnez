@@ -1,26 +1,17 @@
 # Language symlink path not expandHome'd — literal ~ directory created
 
-**Severity:** High — silently writes to wrong location
+**Status:** Closed — invalid (2026-07-04)
 
-## Problem
+**Severity:** N/A
 
-Global symlinks correctly call `expandHome(g.Symlink)` before passing to `ensureSymlink`,
-but language symlinks pass `lang.Symlink` raw:
+## Why closed
 
-```go
-// global — correct:
-link := expandHome(g.Symlink)
-lr, err := ensureSymlink(link, gTarget)
+The `Language` struct has no `Symlink` field. The `lang.Symlink` code path described here
+does not exist in the current codebase — `Language` only has `Name`, `Ref`, `Hint`,
+`Source`, `Target`, `Local`, `Template`, and `Targets`.
 
-// language — bug:
-slr, err := ensureSymlink(lang.Symlink, dst)
-```
+The `Symlink` field exists only on `AgentsMDTarget` (global/local), and the global case
+already calls `fsutil.ExpandHome(g.Symlink)` correctly. The local symlink (`CLAUDE.md`) is
+a relative path that does not require home expansion.
 
-If `lang.Symlink` is `"~/projects/foo/docs/Go.md"`, `ensureSymlink` calls
-`os.MkdirAll("~", 0755)` which creates a literal `~` directory in the working directory.
-
-**Affected:** `apply.go` ~line 762
-
-## Fix
-
-Wrap the lang symlink path: `ensureSymlink(expandHome(lang.Symlink), dst)`
+No action needed.
