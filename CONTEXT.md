@@ -15,7 +15,7 @@
 
 `config.go` embeds `config.yaml` and the `commands/` directory at compile time (`//go:embed config.yaml commands`). When invoked without `-c`, the binary runs on its own embedded config. `cfg.FS` is either the OS filesystem (for `-c` path) or the embedded FS — command `file:` references read from whichever is active.
 
-Source command files live in `commands/` (e.g. `commands/update-context.md`) and are referenced via `file:` in `config.yaml`.
+Source command files live in `commands/` (e.g. `commands/domain-modeling.md`) and are referenced via `file:` in `config.yaml`.
 
 ## Commands
 

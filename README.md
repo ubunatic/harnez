@@ -107,9 +107,9 @@ commands:
     content: |
       Review the diff vs main. Check for: correctness, security, tests, docs.
 
-  - name: update-context
-    description: "Create or update CONTEXT.md with project knowledge"
-    file: commands/update-context.md   # body read from this file
+  - name: domain-modeling
+    description: "Actively build and sharpen the project's domain model, glossary, and ADRs"
+    file: commands/domain-modeling.md   # body read from this file
 
 # CLAUDE.md / AGENTS.md sections
 agents_md:

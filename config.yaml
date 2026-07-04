@@ -96,13 +96,29 @@ commands:
     content: |
       Run `git log --since=midnight --oneline` and summarize what was done.
 
-  - name: update-context
-    description: "Create or update CONTEXT.md with project knowledge"
-    file: commands/update-context.md
-
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
     file: commands/evergreen.md
+
+  - name: domain-modeling
+    description: "Actively build and sharpen the project's domain model, glossary, and ADRs"
+    file: commands/domain-modeling.md
+
+  - name: grilling
+    description: "Interview relentlessly about a plan or design until every branch is resolved"
+    file: commands/grilling.md
+
+  - name: grill-with-docs
+    description: "Grilling session that also sharpens the domain model and updates CONTEXT.md/ADRs inline"
+    file: commands/grill-with-docs.md
+
+  - name: to-prd
+    description: "Turn the current conversation into a PRD and publish it to issues/"
+    file: commands/to-prd.md
+
+  - name: sync-mattpocock-skills
+    description: "Diff our adapted mattpocock/skills commands against upstream and report drift"
+    file: commands/sync-mattpocock-skills.md
 
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
@@ -111,6 +127,10 @@ skills:
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
     file: commands/evergreen.md
+
+  - name: domain-modeling
+    description: "Actively build and sharpen the project's domain model, glossary, and ADRs"
+    file: commands/domain-modeling.md
 
 agents_md:
   # config for local md file
