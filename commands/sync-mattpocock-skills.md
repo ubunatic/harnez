@@ -16,7 +16,7 @@ asks you to after seeing the diff.
 
 These map to our commands as: the first three → `commands/domain-modeling.md`, `grilling`
 → `commands/grilling.md`, `grill-with-docs` → `commands/grill-with-docs.md`, `to-prd` →
-`commands/to-prd.md`.
+`commands/make-spec.md`.
 
 ## Process
 

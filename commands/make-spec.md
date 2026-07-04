@@ -1,13 +1,17 @@
-# To PRD
+---
+description: "Turn the current conversation into a spec and publish it to issues/"
+upstream: "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/to-prd/SKILL.md"
+---
+# Make Spec
 
-Turn the current conversation into a PRD and publish it to `issues/` — no interview, just
+Turn the current conversation into a spec and publish it to `issues/` — no interview, just
 synthesis of what has already been discussed. Do NOT interview the user; just synthesize
 what you already know.
 
 ## Process
 
 1. Explore the repo to understand the current state of the codebase, if you haven't already.
-   Use the project's domain glossary vocabulary throughout the PRD (see `/domain-modeling`),
+   Use the project's domain glossary vocabulary throughout the spec (see `/domain-modeling`),
    and respect any ADRs in the area being touched.
 
 2. Sketch out the seams at which the feature will be tested. Prefer existing seams to new
@@ -15,13 +19,13 @@ what you already know.
    is ideal. If new seams are needed, propose them at the highest point possible. Check with
    the user that these seams match their expectations before moving on.
 
-3. Write the PRD using the template below, then publish it as a new file under `issues/`
+3. Write the spec using the template below, then publish it as a new file under `issues/`
    (e.g. `issues/<slug>.md`), following this repo's existing issue convention: a status field
    showing what's done vs. open, and cross-references to relevant Evergreen docs (`docs/`).
    Update `issues/README.md` or `issues/index.md` if either exists, the same way `/evergreen`
    does when it creates new issues.
 
-<prd-template>
+<spec-template>
 
 ## Problem Statement
 
@@ -74,7 +78,7 @@ A list of testing decisions that were made. Include:
 
 ## Out of Scope
 
-A description of the things that are out of scope for this PRD.
+A description of the things that are out of scope for this spec.
 
 ## Further Notes
 
@@ -84,4 +88,4 @@ Any further notes about the feature.
 
 Open — not yet started.
 
-</prd-template>
+</spec-template>

@@ -13,3 +13,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 006 | [006-status-checks-only-model.md](006-status-checks-only-model.md) | status settings.json check covers only model key | Open — partially fixed |
 | 007 | [007-no-tests.md](007-no-tests.md) | thin test coverage — gaps remaining | Open — partially addressed |
 | 009 | [009-diff-clean-no-makefile-targets.md](009-diff-clean-no-makefile-targets.md) | diff and clean don't cover Makefile targets section | Open |
+| 010 | [010-smoke-test-agent-visibility.md](010-smoke-test-agent-visibility.md) | smoke-test that agents can see installed skills and commands | Open — blocked on wayreel#11 |
