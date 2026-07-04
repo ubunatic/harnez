@@ -6,6 +6,8 @@ permissions, model settings, hooks, CLAUDE.md instructions, custom slash
 commands, and language doc symlinks.  Apply is idempotent — run it as often as
 you like; user-managed keys and unmanaged sections are never touched.
 
+**Website:** <https://ubunatic.com/claudeconfig> · **Repo:** <https://codeberg.org/ubunatic/claudeconfig>
+
 ## What it manages
 
 | Thing | Where |
@@ -178,18 +180,18 @@ YAML frontmatter `description:` line and the prompt body.  Body can be inline
 
 ### Language docs
 
-Entries under `languages:` define a source doc (e.g. `docs/Go.md`), a global
-install path (`~/.claude/docs/Go.md`), and an optional project symlink
-(`./docs/Go.md`).  Languages listed in `langs:` (or passed via `--lang`) are
-installed on `apply`.  The project symlink lets `@docs/Go.md` resolve locally
-without duplicating the file.
+Entries under `languages:` define a source doc (e.g. `docs/lang/Go.md`), a
+global install path (`~/.claude/docs/Go.md`), and an optional project symlink
+(`./docs/Go.md`).  Docs listed in the top-level `docs:` list (or passed via
+`--doc`) are installed on `apply`.  The project symlink lets `@docs/Go.md`
+resolve locally without duplicating the file.
 
 ## Commands reference
 
 | Command | Flags | What it does |
 |---|---|---|
-| `apply` | `-c` `-t` `-l` `--force-docs` | Sync global `~/.claude` config: settings, hooks, commands, lang docs |
-| `init` | `-c` `-d` `-l` `--summary` | Set up a project: AGENTS.md, lang doc copies, Makefile targets |
+| `apply` | `-c` `-t` `-d` `--force-docs` | Sync global `~/.claude` config: settings, hooks, commands, docs |
+| `init` | `-c` `-d` `--doc` `--summary` | Set up a project: AGENTS.md, doc copies, Makefile targets |
 | `diff` | `-c` `-t` | Preview changes without writing (uses `diff -u`) |
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
 | `status` | `-c` `-t` | Print config summary and check which items are present on disk |
@@ -199,15 +201,18 @@ All commands accept `-c <path>` (config file, default: embedded).
 `apply` also accepts:
 
 - `-t <dir>` — Claude config directory (default: `~/.claude`)
-- `-l <lang>` — extra language doc to install globally (repeatable)
-- `--force-docs` — overwrite existing language docs with bundled versions
+- `-d, --doc <name>` — extra doc to install globally (repeatable)
+- `--force-docs` — overwrite existing docs with bundled versions
 
 `init` also accepts:
 
 - `-d <dir>` — project directory (default: `.`)
-- `-l <lang>` — language(s) to set up in the project (repeatable)
+- `--doc <name>` — doc(s) to set up in the project (repeatable)
+- `-m, --repo-mode <mode>` — repo git setup to note in AGENTS.md (`solo`, `fork`, `team`)
 - `--summary` — run `claude -p` to generate an AI project summary in AGENTS.md
+- `--update` — re-fetch and refresh the project summary (implies `--summary`)
 - `--replace` — delete existing AGENTS.md and recreate from template before init
+- `-y` — assume yes when reconciling Makefile targets (no prompt)
 
 ### Project setup
 
@@ -216,9 +221,9 @@ and the `CLAUDE.md` symlink, applies config-defined local sections (language con
 copies language docs locally, and injects standard Makefile targets — all in one step.
 
 ```sh
-claudeconfig init                        # AGENTS.md + CLAUDE.md symlink only
-claudeconfig init -l golang -l make     # + lang docs + Makefile targets
-claudeconfig init -l golang --summary   # + AI-generated project summary
+claudeconfig init                              # AGENTS.md + CLAUDE.md symlink only
+claudeconfig init --doc golang --doc make     # + docs + Makefile targets
+claudeconfig init --doc golang --summary      # + AI-generated project summary
 ```
 
 ## Drift repair
