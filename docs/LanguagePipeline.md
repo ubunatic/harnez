@@ -1,3 +1,8 @@
+---
+title: Language Doc Pipeline
+weight: 40
+---
+
 # Language Pipeline
 
 How `--docs <name>` flows from `config.yaml` into a project via `apply` (global) and `init` (project-local).

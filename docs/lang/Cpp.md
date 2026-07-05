@@ -1,3 +1,8 @@
+---
+title: C++ Conventions
+weight: 66
+---
+
 <!-- claudeconfig:bundled -->
 # C/C++ conventions
 

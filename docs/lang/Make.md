@@ -1,3 +1,8 @@
+---
+title: Make Conventions
+weight: 62
+---
+
 <!-- claudeconfig:bundled -->
 # Make conventions
 

@@ -1,3 +1,8 @@
+---
+title: Git Conventions
+weight: 63
+---
+
 <!-- claudeconfig:bundled -->
 # Git conventions
 

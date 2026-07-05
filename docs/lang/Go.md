@@ -1,3 +1,8 @@
+---
+title: Go Conventions
+weight: 60
+---
+
 <!-- claudeconfig:bundled -->
 # Go Conventions
 

@@ -1,3 +1,8 @@
+---
+title: Markdown Conventions
+weight: 64
+---
+
 <!-- claudeconfig:bundled -->
 # Markdown Conventions
 

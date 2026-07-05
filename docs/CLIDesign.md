@@ -1,3 +1,8 @@
+---
+title: CLI Design: apply vs init
+weight: 30
+---
+
 # CLI Design — apply vs init separation
 
 Documents the command structure, the design decision behind it, and the pitfalls it avoids.
