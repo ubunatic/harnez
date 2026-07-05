@@ -2,6 +2,8 @@ REEL main
   mode = tui
   title = "smoke: agy sees installed skills"
   pause = 1s
+  app_width = 800
+  app_height = 600
 
   $ agy desc="start antigravity"
   P 5s desc="await login"
