@@ -194,8 +194,9 @@ func ReconcileMakeTargets(dest, oursContent string, cfg MakeConfig, assumeYes bo
 		}
 
 		if isManual {
-			// Upgrade path: if diff is small (drift or migration), upgrade from ⚙️ to 🤖
-			if diff <= smallDiffThreshold {
+			// Upgrade path: if diff is small (drift or migration), or if it is the legacy help target, upgrade from ⚙️ to 🤖
+			isLegacyHelp := t.name == "help" && strings.Contains(existing, "%-10s") && strings.Contains(existing, "$$1, $$2")
+			if diff <= smallDiffThreshold || isLegacyHelp {
 				content = content[:loc[0]] + t.block + content[loc[1]:]
 				changed = true
 				fmt.Printf("  upgraded target to managed: %s\n", t.name)
