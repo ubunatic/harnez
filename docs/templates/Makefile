@@ -1,20 +1,44 @@
-.PHONY: ⚙️  # make all commands phony
+.PHONY: ⚙️ 🤖  # ⚙️ = manual/once, 🤖 = managed
+
+_prim := \033[36m
+_rst  := \033[0m
+
 BINARY  := myapp
 PREFIX  ?= /usr/local
 
-help: ⚙️  ## show this help
-	@grep -E '^[a-zA-Z_-]+:.*⚙.*#+' $(MAKEFILE_LIST) | \
-	awk 'BEGIN {FS = ":.*#+ "}; {printf "  %-10s %s\n", $$1, $$2}'
+help: 🤖  # show this help
+	@grep -E '^[a-zA-Z_-]+:.*[⚙🤖].*#+' $(MAKEFILE_LIST) | \
+	awk 'BEGIN {FS = ":.*#+ "}; {printf "    $(_prim)%-15s$(_rst) %s\n", $$1, $$2}'
 
-build: ⚙️  ## build the binary
+preflight: ⚙️  # check toolchains and dependencies
+	@command -v go >/dev/null || (echo "❌ go is not installed" && exit 1)
+
+build: ⚙️  # build the binary
 	go build -o $(BINARY) .
 
-install: ⚙️ build  ## install to ~/go/bin (user)
+run: ⚙️ build  # run the application locally
+	./$(BINARY)
+
+install: ⚙️ build  # install to ~/go/bin (user)
 	go install .
 
-test: ⚙️  ## run linter and tests
-	go vet ./...
+uninstall: ⚙️  # remove installed binary from system and user paths
+	rm -f $(shell which $(BINARY) 2>/dev/null) $(PREFIX)/bin/$(BINARY)
+
+test: ⚙️  # run tests
 	go test ./...
 
-clean: ⚙️  ## remove build artifacts
+lint: ⚙️  # run static analysis
+	go vet ./...
+
+format: ⚙️  # format source code
+	go fmt ./...
+
+release: ⚙️  # release the project (run once, then update to run 'uman release' directly)
+	@echo "To release this project using 'uman':"
+	@echo "  1. Ensure you have 'uman', 'goreleaser', 'minisign', and 'fj' installed."
+	@echo "  2. Run 'uman release' to release interactively."
+	@echo "  3. Once verified, update this target to run 'uman release' directly."
+
+clean: ⚙️  # remove build artifacts
 	rm -f $(BINARY)

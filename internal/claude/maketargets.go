@@ -182,19 +182,25 @@ func ReconcileMakeTargets(dest, oursContent string, cfg MakeConfig, assumeYes bo
 		existingHeader := firstTargetHeaderLine(existing)
 		diff := lineDiffCount(existing, t.block)
 
-		if headerHasSentinel(existingHeader, sentinel) {
-			// Sentinel present, so this target is nominally "ours" — but the
-			// user may have customized its body while keeping the header
-			// (e.g. hand-edited an old claudeconfig-generated target). Only
-			// auto-sync small diffs (regen drift); a big diff means real
-			// customization, so leave it alone rather than clobber it.
+		isManaged := headerHasSentinel(existingHeader, "🤖")
+		isManual := headerHasSentinel(existingHeader, sentinel) && !isManaged
+
+		if isManaged {
+			// Fully managed: update silently without confirmation
+			content = content[:loc[0]] + t.block + content[loc[1]:]
+			changed = true
+			fmt.Printf("  updated target: %s (managed)\n", t.name)
+			continue
+		}
+
+		if isManual {
+			// Upgrade path: if diff is small (drift or migration), upgrade from ⚙️ to 🤖
 			if diff <= smallDiffThreshold {
 				content = content[:loc[0]] + t.block + content[loc[1]:]
 				changed = true
-				fmt.Printf("  updated target: %s\n", t.name)
+				fmt.Printf("  upgraded target to managed: %s\n", t.name)
 			} else {
-				fmt.Printf("  skip target: %s (carries the sentinel but differs significantly from claudeconfig's version — looks hand-customized)\n", t.name)
-				fmt.Printf("    delete it from %s and re-run init to adopt ours, or drop the %s marker if you want to manage it yourself\n", dest, sentinel)
+				fmt.Printf("  skip target: %s (manually defined/customized)\n", t.name)
 			}
 			continue
 		}
@@ -223,6 +229,10 @@ func ReconcileMakeTargets(dest, oursContent string, cfg MakeConfig, assumeYes bo
 	phonyChanged := false
 	content, phonyChanged = ensurePhonySentinel(content, sentinel, cfg.phonyFixOrDefault())
 	changed = changed || phonyChanged
+
+	colorVarsChanged := false
+	content, colorVarsChanged = ensureColorVariables(content, sentinel)
+	changed = changed || colorVarsChanged
 
 	if changed {
 		if err := os.WriteFile(dest, []byte(content), 0644); err != nil {
@@ -267,7 +277,7 @@ func ensurePhonySentinel(content, sentinel, phonyFix string) (string, bool) {
 	phonyLines := phonyLineRe.FindAllString(content, -1)
 	hasSentinelLine := false
 	for _, l := range phonyLines {
-		if strings.Contains(l, sentinel) {
+		if strings.Contains(l, sentinel) && strings.Contains(l, "🤖") {
 			hasSentinelLine = true
 			break
 		}
@@ -278,7 +288,7 @@ func ensurePhonySentinel(content, sentinel, phonyFix string) (string, bool) {
 	if phonyFix == "all" {
 		var others []string
 		for _, l := range phonyLines {
-			if strings.Contains(l, sentinel) {
+			if strings.Contains(l, sentinel) || strings.Contains(l, "🤖") {
 				continue
 			}
 			others = append(others, l)
@@ -291,7 +301,7 @@ func ensurePhonySentinel(content, sentinel, phonyFix string) (string, bool) {
 					continue
 				}
 				header := firstTargetHeaderLine(content[loc[0]:loc[1]])
-				if strings.Contains(header, sentinel) {
+				if strings.Contains(header, sentinel) || strings.Contains(header, "🤖") {
 					continue
 				}
 				newHeader := name + ": " + sentinel + strings.TrimPrefix(header, name+":")
@@ -304,12 +314,42 @@ func ensurePhonySentinel(content, sentinel, phonyFix string) (string, bool) {
 	}
 
 	if !hasSentinelLine {
-		sentinelLine := ".PHONY: " + sentinel + "  # make all commands phony\n"
-		content = sentinelLine + content
-		changed = true
+		var oldLine string
+		for _, l := range phonyLines {
+			if strings.Contains(l, sentinel) || strings.Contains(l, "🤖") {
+				oldLine = l
+				break
+			}
+		}
+
+		newSentinelLine := fmt.Sprintf(".PHONY: %s 🤖  # ⚙️ = manual/once, 🤖 = managed\n", sentinel)
+		if oldLine != "" {
+			content = strings.Replace(content, oldLine, newSentinelLine, 1)
+			changed = true
+		} else {
+			content = newSentinelLine + content
+			changed = true
+		}
 	}
 
 	return content, changed
+}
+
+// ensureColorVariables ensures the color helper variables (_prim and _rst) are defined in the file.
+func ensureColorVariables(content, sentinel string) (string, bool) {
+	if strings.Contains(content, "_prim :=") {
+		return content, false
+	}
+	colorVars := "\n_prim := \\033[36m\n_rst  := \\033[0m\n"
+
+	lines := strings.Split(content, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, ".PHONY:") && (strings.Contains(l, sentinel) || strings.Contains(l, "🤖")) {
+			newLines := append(lines[:i+1], append([]string{"_prim := \\033[36m", "_rst  := \\033[0m", ""}, lines[i+1:]...)...)
+			return strings.Join(newLines, "\n"), true
+		}
+	}
+	return colorVars + content, true
 }
 
 func indentBlock(s string) string {
