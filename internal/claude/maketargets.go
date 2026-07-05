@@ -42,9 +42,6 @@ func detectSentinel(content, configured string) string {
 	return defaultPhonySentinel
 }
 
-// headerHasSentinel reports whether a target's header line already carries
-// the sentinel — our signal that the target is claudeconfig-managed,
-// regardless of surrounding deps/comment style.
 func headerHasSentinel(headerLine, sentinel string) bool {
 	return strings.Contains(headerLine, sentinel)
 }
@@ -183,7 +180,18 @@ func ReconcileMakeTargets(dest, oursContent string, cfg MakeConfig, assumeYes bo
 		diff := lineDiffCount(existing, t.block)
 
 		isManaged := headerHasSentinel(existingHeader, "🤖")
-		isManual := headerHasSentinel(existingHeader, sentinel) && !isManaged
+		isManual := false
+		if !isManaged {
+			isManual = headerHasSentinel(existingHeader, sentinel)
+			if !isManual {
+				for _, v := range sentinelVariants {
+					if headerHasSentinel(existingHeader, v) {
+						isManual = true
+						break
+					}
+				}
+			}
+		}
 
 		if isManaged {
 			// Fully managed: update silently without confirmation
@@ -195,7 +203,11 @@ func ReconcileMakeTargets(dest, oursContent string, cfg MakeConfig, assumeYes bo
 
 		if isManual {
 			// Upgrade path: if diff is small (drift or migration), or if it is the legacy help target, upgrade from ⚙️ to 🤖
-			isLegacyHelp := t.name == "help" && strings.Contains(existing, "%-10s") && strings.Contains(existing, "$$1, $$2")
+			isLegacyHelp := t.name == "help" && 
+				strings.Contains(existing, "grep") && 
+				strings.Contains(existing, "awk") && 
+				strings.Contains(existing, "$$1") && 
+				strings.Contains(existing, "$$2")
 			if diff <= smallDiffThreshold || isLegacyHelp {
 				content = content[:loc[0]] + t.block + content[loc[1]:]
 				changed = true
