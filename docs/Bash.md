@@ -1,3 +1,8 @@
+---
+title: Bash Conventions
+weight: 61
+---
+
 <!-- claudeconfig:bundled -->
 # Bash conventions
 

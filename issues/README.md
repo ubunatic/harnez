@@ -17,3 +17,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 011 | [011-autodetect-nondeterministic-order.md](011-autodetect-nondeterministic-order.md) | autoDetectDocs non-deterministic order causes spurious AGENTS.md diffs | Open |
 | 012 | [012-website-feature-demo-video.md](012-website-feature-demo-video.md) | website: feature the TUI demo video + favicon | Open |
 | 013 | [013-promote-command.md](013-promote-command.md) | promote command — push improved project docs back to source | Open |
+| 014 | [014-zig-language-doc.md](014-zig-language-doc.md) | bundle a Zig language doc (emojig, books need it) | Open |
