@@ -3,8 +3,8 @@ BINARY  := myapp
 PREFIX  ?= /usr/local
 
 help: ⚙️  ## show this help
-	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
-	awk 'BEGIN {FS = ":.*## "}; {printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*⚙.*#+' $(MAKEFILE_LIST) | \
+	awk 'BEGIN {FS = ":.*#+ "}; {printf "  %-10s %s\n", $$1, $$2}'
 
 build: ⚙️  ## build the binary
 	go build -o $(BINARY) .

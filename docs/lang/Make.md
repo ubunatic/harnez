@@ -42,7 +42,7 @@ character is never a real file, so the rule fires unconditionally.
 
 ```makefile
 help: ⚙️  ## show this help
-	@grep -E '^[a-zA-Z_-]+:.*#+' $(MAKEFILE_LIST) | \
+	@grep -E '^[a-zA-Z_-]+:.*⚙.*#+' $(MAKEFILE_LIST) | \
 	awk 'BEGIN {FS = ":.*#+ "}; {printf "  %-10s %s\n", $$1, $$2}'
 ```
 
