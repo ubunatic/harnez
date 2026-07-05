@@ -1,0 +1,14 @@
+REEL main
+  mode = tui
+  title = "smoke: codex sees installed skills"
+  pause = 1s
+
+  $ codex desc="start codex"
+  P 5s desc="await startup"
+  $ /skills
+  P 3s desc="await skills list"
+  V contains="evergreen"
+  V contains="domain-modeling"
+  T <esc>
+  P 1s
+  X desc="exit codex"

@@ -1,0 +1,16 @@
+REEL main
+  mode = tui
+  title = "smoke: claude code sees installed commands"
+  pause = 1s
+
+  # Claude Code shows installed commands as slash completions.
+  # /usage lists configuration state including installed commands.
+  $ claude desc="start claude code"
+  P 5s desc="await startup"
+  $ /usage desc="open usage/config view"
+  P 3s desc="await config view"
+  V contains="evergreen"
+  V contains="domain-modeling"
+  K <esc> desc="close view"
+  P 1s
+  X desc="exit claude code"

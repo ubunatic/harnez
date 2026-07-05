@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/claudeconfig/internal/claude"
@@ -33,7 +34,7 @@ func main() {
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	apply.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
-	apply.Flags().StringArrayVarP(&applyDocs, "doc", "d", nil, "extra doc(s) to install globally (e.g. golang, canary)")
+	apply.Flags().StringSliceVarP(&applyDocs, "docs", "d", nil, "doc(s) to install globally, comma-separated or repeated (e.g. golang,canary)")
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing docs with bundled versions")
 
 	diff := &cobra.Command{
@@ -101,7 +102,7 @@ func main() {
 	}
 	initCmd.Flags().StringVarP(&initConfigPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	initCmd.Flags().StringVarP(&initDir, "dir", "d", ".", "project directory to initialise (default: current directory)")
-	initCmd.Flags().StringArrayVar(&initDocs, "doc", nil, "doc(s) to set up in the project (e.g. golang, canary)")
+	initCmd.Flags().StringSliceVar(&initDocs, "docs", nil, "docs to set up in the project, comma-separated or repeated (e.g. golang,canary)")
 	initCmd.Flags().StringVarP(&initRepoMode, "repo-mode", "m", "", "repo git setup to note in AGENTS.md (solo, fork, team)")
 	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "assume yes when reconciling Makefile targets (no prompt)")
 	initCmd.Flags().BoolVar(&initSummary, "summary", false, "run claude -p to generate a project summary and add it to AGENTS.md")
@@ -109,5 +110,7 @@ func main() {
 	initCmd.Flags().BoolVar(&initReplace, "replace", false, "delete existing AGENTS.md and recreate from template before init")
 
 	root.AddCommand(apply, diff, clean, status, initCmd)
-	root.Execute()
+	if err := root.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

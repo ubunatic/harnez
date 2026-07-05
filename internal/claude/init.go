@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"ubunatic.com/claudeconfig/internal/fsutil"
@@ -128,16 +129,19 @@ func reviewSummary(dir, draft string) (string, error) {
 
 // autoDetectDocs returns doc names from cfg whose Default is "true" or "auto"
 // (with a positive signal in dir), excluding any already in explicit.
+// Names are returned in the config's docs: list order (issue 011: map
+// iteration made the Language Conventions section non-deterministic).
 func autoDetectDocs(dir string, cfg *Config, explicit []string) []string {
 	inExplicit := make(map[string]struct{}, len(explicit))
 	for _, name := range explicit {
 		inExplicit[name] = struct{}{}
 	}
 	var detected []string
-	for name, lang := range cfg.AgentsMD.Languages {
+	for _, name := range docNamesInOrder(cfg) {
 		if _, ok := inExplicit[name]; ok {
 			continue
 		}
+		lang := cfg.AgentsMD.Languages[name]
 		switch lang.Default {
 		case "true":
 			detected = append(detected, name)
@@ -148,6 +152,43 @@ func autoDetectDocs(dir string, cfg *Config, explicit []string) []string {
 		}
 	}
 	return detected
+}
+
+// docNamesInOrder returns all language doc names, following the top-level
+// docs: list order first, then any remaining names sorted.
+func docNamesInOrder(cfg *Config) []string {
+	seen := make(map[string]struct{}, len(cfg.Docs))
+	var names []string
+	for _, name := range cfg.Docs {
+		if _, ok := cfg.AgentsMD.Languages[name]; ok {
+			seen[name] = struct{}{}
+			names = append(names, name)
+		}
+	}
+	var rest []string
+	for name := range cfg.AgentsMD.Languages {
+		if _, ok := seen[name]; !ok {
+			rest = append(rest, name)
+		}
+	}
+	sort.Strings(rest)
+	return append(names, rest...)
+}
+
+// validateDocNames returns an error naming any requested doc that is not
+// defined in the config, so typos fail loudly instead of being skipped.
+func validateDocNames(cfg *Config, names []string) error {
+	var unknown []string
+	for _, name := range names {
+		if _, ok := cfg.AgentsMD.Languages[name]; !ok {
+			unknown = append(unknown, name)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	return fmt.Errorf("unknown doc(s) %s — available: %s",
+		strings.Join(unknown, ", "), strings.Join(docNamesInOrder(cfg), ", "))
 }
 
 // detectDoc returns true if project dir contains signals for the named doc.
@@ -218,6 +259,9 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 	}
 
 	if cfg != nil {
+		if err := validateDocNames(cfg, docs); err != nil {
+			return err
+		}
 		docs = append(docs, autoDetectDocs(dir, cfg, docs)...)
 
 		// Apply config-defined local AGENTS.md sections (e.g. Language Conventions).

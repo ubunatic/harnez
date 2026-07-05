@@ -1,0 +1,14 @@
+REEL main
+  mode = tui
+  title = "smoke: agy sees installed skills"
+  pause = 1s
+
+  $ agy desc="start antigravity"
+  P 5s desc="await login"
+  $ /skills
+  P 3s desc="await skills list"
+  V contains="evergreen"
+  V contains="domain-modeling"
+  T <esc>
+  P 1s
+  $ /exit desc="exit antigravity"

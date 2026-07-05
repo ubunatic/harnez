@@ -389,7 +389,7 @@
       </div>
       <div class="feature">
         <h3>Project setup</h3>
-        <p><code>init --doc &lt;name&gt;</code> creates AGENTS.md, copies docs locally, and injects standard Makefile targets — one command, per project.</p>
+        <p><code>init --docs &lt;name,name&gt;</code> creates AGENTS.md, copies docs locally, and injects standard Makefile targets — one command, per project.</p>
       </div>
     </div>
   </div>
@@ -407,10 +407,10 @@
 <span class="p">$</span> claudeconfig diff
 
 <span class="p"># set up a project directory with language docs and Makefile targets</span>
-<span class="p">$</span> claudeconfig init --doc golang --doc make
+<span class="p">$</span> claudeconfig init --docs golang,make
 
 <span class="p"># set up + generate an AI project summary in AGENTS.md</span>
-<span class="p">$</span> claudeconfig init --doc golang --summary
+<span class="p">$</span> claudeconfig init --docs golang --summary
 
 <span class="p"># use a custom config file</span>
 <span class="p">$</span> claudeconfig apply -c myconfig.yaml -t ~/.claude</pre>
@@ -438,7 +438,7 @@
         </tr>
         <tr>
           <td><code>init</code></td>
-          <td><code class="flag">-c</code> <code class="flag">-d</code> <code class="flag">--doc</code> <code class="flag">--summary</code></td>
+          <td><code class="flag">-c</code> <code class="flag">-d</code> <code class="flag">--docs</code> <code class="flag">--summary</code></td>
           <td>Set up a project: AGENTS.md, doc copies, Makefile targets</td>
         </tr>
         <tr>

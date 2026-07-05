@@ -11,9 +11,27 @@ Not needed for routine coding; reach for these during investigations or design w
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat |
 | [Worktrees.md](Worktrees.md) | Parallel worktree agents: what worked, go.mod races, Haiku API staleness |
 
-Copyable docs (installed to `~/.claude/docs/` on `apply`, copied to projects via `--doc`) live in subdirs:
-- `docs/lang/` — language/SDK/framework docs (Go, Bash, Make, Git, Rust, Cpp, Markdown, GTK4)
-- `docs/other/` — practice docs not yet forming a category (Canary)
-- `docs/proposed/` — staging area for candidate copyable docs
+Copyable docs (installed to `~/.claude/docs/` on `apply`, copied to projects via `--docs`) live in subdirs.
+Generated copies land here (root) after `apply`.
 
-Generated copies of those docs (`Go.md`, `Bash.md`, etc.) land here after `apply`.
+**`docs/lang/`** — language/SDK/framework docs
+
+| File | Topic |
+|------|-------|
+| [lang/Go.md](lang/Go.md) | Go conventions |
+| [lang/Bash.md](lang/Bash.md) | Bash/Shell conventions |
+| [lang/Make.md](lang/Make.md) | Makefile conventions |
+| [lang/Git.md](lang/Git.md) | Git conventions |
+| [lang/Rust.md](lang/Rust.md) | Rust conventions |
+| [lang/Cpp.md](lang/Cpp.md) | C/C++ conventions |
+| [lang/Markdown.md](lang/Markdown.md) | Markdown conventions |
+| [lang/GTK4.md](lang/GTK4.md) | GTK4/PyGObject conventions |
+
+**`docs/other/`** — practice docs (no category yet)
+
+| File | Topic |
+|------|-------|
+| [other/Canary.md](other/Canary.md) | Canary-first development: probe external mechanisms before building |
+| [other/Spec.md](other/Spec.md) | Spec-driven architecture: YAML spec files as single source of truth |
+
+**`docs/proposed/`** — staging area for docs that may become copyable (no install mechanics yet).

@@ -6,8 +6,8 @@ Documents the command structure, the design decision behind it, and the pitfalls
 
 | Command | Scope | What it touches |
 |---------|-------|-----------------|
-| `apply` | Global (`~/.claude`) | `settings.json`, `CLAUDE.md`, `commands/`, `docs/<lang>.md` |
-| `init`  | Project (cwd / `-d`) | `AGENTS.md`, `CLAUDE.md` symlink, `docs/<lang>.md` copy, `Makefile` |
+| `apply` | Global (`~/.claude`) | `settings.json`, `CLAUDE.md`, `commands/`, `docs/<name>.md` |
+| `init`  | Project (cwd / `-d`) | `AGENTS.md`, `CLAUDE.md` symlink, `docs/<name>.md` copy, `Makefile` |
 | `diff`  | Global | Preview of what `apply` would change |
 | `clean` | Global | Remove managed keys / strip MD sections |
 | `status`| Global | Config summary + applied-state checks |
@@ -46,23 +46,24 @@ by-product: there is no `--project` flag anymore.
 ## init flow
 
 ```
-claudeconfig init [-d <dir>] [-l <lang>...]
+claudeconfig init [-d <dir>] [--docs <name>...]
         │
         ├── create AGENTS.md (template) if absent
         ├── create CLAUDE.md symlink → AGENTS.md
+        ├── auto-detect docs (default:auto/true entries in config.yaml)
         ├── apply cfg.AgentsMD.Local sections (Language Conventions, etc.)
-        └── for each -l <lang>:
-                ├── copy docs/<lang>.md locally  (for @docs/ refs)
+        └── for each --docs <name> (explicit + auto-detected):
+                ├── copy docs/<name>.md locally  (for @docs/ refs)
                 ├── scaffold Makefile from template  (if no Makefile)
                 └── inject targets block into existing Makefile
 ```
 
-All steps are idempotent. Running `init -l golang` twice is safe.
+All steps are idempotent. Running `init --docs golang` twice is safe.
 
 ## apply flow
 
 ```
-claudeconfig apply [-t <dir>] [-l <lang>...] [--force-docs]
+claudeconfig apply [-t <dir>] [-d <name>...] [--force-docs]
         │
         ├── merge managed keys into settings.json
         ├── write ~/.claude/CLAUDE.md managed sections
@@ -70,8 +71,14 @@ claudeconfig apply [-t <dir>] [-l <lang>...] [--force-docs]
         ├── write ~/.claude/commands/<name>.md for each command
         ├── write ~/.gemini/skills/<name>/SKILL.md for each skill
         ├── write ~/.codex/skills/<name>/SKILL.md for each skill when configured
-        └── install ~/.claude/docs/<lang>.md for each lang
+        └── install ~/.claude/docs/<name>.md for each doc
 ```
+
+## Flag shorthands
+
+`apply --docs` has shorthand `-d`. `init --docs` does **not** — `-d` is already taken by
+`--dir`. When adding new flags to either command, check for shorthand conflicts before
+committing to a letter.
 
 ## Known gaps
 

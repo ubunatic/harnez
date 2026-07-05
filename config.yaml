@@ -10,6 +10,7 @@ docs:
   - git
   - gtk4
   - canary
+  - spec
 
 model: sonnet
 effort: medium
@@ -166,7 +167,7 @@ agents_md:
     # Language Conventions section is generated dynamically from -l flags
 
   # available language docs — always installed to ~/.claude/docs/ on apply
-  # use --doc <name> to copy into a project and update its AGENTS.md
+  # use --docs <name>,<name> to copy into a project and update its AGENTS.md
   # default: true=always copy on init, false=only if explicitly requested, auto=detect from project
   languages:
     golang:
@@ -245,6 +246,14 @@ agents_md:
       source: docs/other/Canary.md
       target: ~/.claude/docs/Canary.md
       local: ./docs/Canary.md
+      default: true
+    spec:
+      name: "Spec system"
+      ref: "@docs/Spec.md"
+      hint: "YAML spec files as single source of truth; Go code must not duplicate spec values"
+      source: docs/other/Spec.md
+      target: ~/.claude/docs/Spec.md
+      local: ./docs/Spec.md
       default: true
 
   # repo git setups — pick one with `init --repo-mode/-m` to add a short

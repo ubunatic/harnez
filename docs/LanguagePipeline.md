@@ -1,8 +1,8 @@
 # Language Pipeline
 
-How `-l <lang>` flows from `config.yaml` into a project via `apply` (global) and `init` (project-local).
+How `--docs <name>` flows from `config.yaml` into a project via `apply` (global) and `init` (project-local).
 
-## Four outputs per language
+## Four outputs per doc
 
 | Field | Command | Destination | Behaviour |
 |-------|---------|-------------|-----------|
@@ -11,8 +11,25 @@ How `-l <lang>` flows from `config.yaml` into a project via `apply` (global) and
 | `template` | `init` | `<project>/Makefile` (basename of path) | Written **once** — skipped if file exists |
 | `targets` | `init` | `<project>/Makefile` (managed section) | Injected/updated — skipped if template was just scaffolded |
 
-`source` (global install) is driven by `apply -l <lang>`.
-`local`, `template`, and `targets` (project-local) are driven by `init -l <lang>`.
+`source` (global install) is driven by `apply --docs <name>` or the top-level `docs:` list in `config.yaml`.
+`local`, `template`, and `targets` (project-local) are driven by `init --docs <name>` or auto-detection.
+
+## Auto-detection (`default:` field)
+
+Each doc entry in `config.yaml` has a `default:` field controlling whether `init` copies it without an explicit `--docs` flag:
+
+| Value | Behaviour |
+|-------|-----------|
+| `true` | Always copied on `init` (e.g. git, markdown, canary) |
+| `false` | Only if explicitly requested via `--docs` (e.g. gtk4) |
+| `auto` | Copied when a project signal is detected (e.g. `go.mod` → golang, `Makefile` → make) |
+
+Detection heuristics (`detectDoc` in `init.go`):
+- `golang` — `go.mod` exists
+- `bash` — `*.sh` files in project root or `scripts/`
+- `make` — `Makefile` exists
+- `rust` — `Cargo.toml` exists
+- `cpp` — `*.cpp`, `*.cc`, `*.h`, or `CMakeLists.txt`
 
 ## Template vs targets
 
@@ -29,6 +46,11 @@ How `-l <lang>` flows from `config.yaml` into a project via `apply` (global) and
 
 This lets users adopt conventions gradually: projects with no Makefile get the full
 scaffold; projects with an existing Makefile get just the key targets injected.
+
+**Legacy block migration:** projects that were set up before 2026-07-03 may have a
+`# claudeconfig:begin targets` / `# claudeconfig:end targets` marker block from the old
+injection style. `ReconcileMakeTargets` detects and strips this block automatically before
+structural reconciliation runs, so old projects self-migrate on the next `init`.
 
 ## Markers abstraction
 

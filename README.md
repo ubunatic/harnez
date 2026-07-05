@@ -69,8 +69,8 @@ make status
 ```yaml
 target_dir: ~/.claude        # where Claude Code stores its config
 
-# Language docs to install on every apply
-langs:
+# Docs to install on every apply
+docs:
   - golang
   - bash
   - make
@@ -183,7 +183,7 @@ YAML frontmatter `description:` line and the prompt body.  Body can be inline
 Entries under `languages:` define a source doc (e.g. `docs/lang/Go.md`), a
 global install path (`~/.claude/docs/Go.md`), and an optional project symlink
 (`./docs/Go.md`).  Docs listed in the top-level `docs:` list (or passed via
-`--doc`) are installed on `apply`.  The project symlink lets `@docs/Go.md`
+`--docs`) are installed on `apply`.  The project symlink lets `@docs/Go.md`
 resolve locally without duplicating the file.
 
 ## Commands reference
@@ -191,7 +191,7 @@ resolve locally without duplicating the file.
 | Command | Flags | What it does |
 |---|---|---|
 | `apply` | `-c` `-t` `-d` `--force-docs` | Sync global `~/.claude` config: settings, hooks, commands, docs |
-| `init` | `-c` `-d` `--doc` `--summary` | Set up a project: AGENTS.md, doc copies, Makefile targets |
+| `init` | `-c` `-d` `--docs` `--summary` | Set up a project: AGENTS.md, doc copies, Makefile targets |
 | `diff` | `-c` `-t` | Preview changes without writing (uses `diff -u`) |
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
 | `status` | `-c` `-t` | Print config summary and check which items are present on disk |
@@ -201,13 +201,13 @@ All commands accept `-c <path>` (config file, default: embedded).
 `apply` also accepts:
 
 - `-t <dir>` — Claude config directory (default: `~/.claude`)
-- `-d, --doc <name>` — extra doc to install globally (repeatable)
+- `-d, --docs <name>[,<name>…]` — extra doc(s) to install globally (comma-separated or repeated)
 - `--force-docs` — overwrite existing docs with bundled versions
 
 `init` also accepts:
 
 - `-d <dir>` — project directory (default: `.`)
-- `--doc <name>` — doc(s) to set up in the project (repeatable)
+- `--docs <name>[,<name>…]` — doc(s) to set up in the project (comma-separated or repeated)
 - `-m, --repo-mode <mode>` — repo git setup to note in AGENTS.md (`solo`, `fork`, `team`)
 - `--summary` — run `claude -p` to generate an AI project summary in AGENTS.md
 - `--update` — re-fetch and refresh the project summary (implies `--summary`)
@@ -222,8 +222,8 @@ copies language docs locally, and injects standard Makefile targets — all in o
 
 ```sh
 claudeconfig init                              # AGENTS.md + CLAUDE.md symlink only
-claudeconfig init --doc golang --doc make     # + docs + Makefile targets
-claudeconfig init --doc golang --summary      # + AI-generated project summary
+claudeconfig init --docs golang,make          # + docs + Makefile targets
+claudeconfig init --docs golang --summary     # + AI-generated project summary
 ```
 
 ## Drift repair

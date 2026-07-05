@@ -333,6 +333,7 @@ func installDoc(fsys fs.FS, src, dst string, force bool) (applyResult, error) {
 func buildLangConventions(names []string, cfg *Config) string {
 	var sb strings.Builder
 	sb.WriteString("Adhere to the following conventions.\n\n")
+	sb.WriteString("Docs in `./docs/` are managed by claudeconfig. <!-- claudeconfig:bundled -->\n\n")
 	for _, name := range names {
 		lang, ok := cfg.AgentsMD.Languages[name]
 		if !ok || lang.Ref == "" {
@@ -474,6 +475,9 @@ func mergeDocs(fromConfig, fromFlag []string) []string {
 
 // ApplyAll applies configuration.
 func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool) error {
+	if err := validateDocNames(cfg, docs); err != nil {
+		return err
+	}
 	changes := 0
 
 	type pStat struct{ label, detail string }
