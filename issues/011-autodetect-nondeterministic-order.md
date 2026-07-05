@@ -26,4 +26,4 @@ list already has a user-defined order) and iterate that list instead of the map.
 
 ## Status
 
-Open — not yet started.
+Fixed (2026-07-05) — autoDetectDocs now follows the config docs: list order (docNamesInOrder); unknown doc names are rejected. See TestDocNamesInOrder.
