@@ -1,0 +1,102 @@
+---
+title: Zig Conventions
+weight: 63
+---
+
+<!-- claudeconfig:bundled -->
+# Zig Conventions
+
+> ⚠️ **Version banner: Zig 0.16.0, verified 2026-07. These APIs move.**
+> The conventions in the first section are stable house rules. The API shapes in
+> the second section (`pipe2`, `StdIo.file` flags, `Permissions.fromMode`,
+> peer-type resolution) are notes from a moving target — they were true against
+> 0.16.0 and the compiler, not this page, is the authority. If your compiler
+> disagrees, your compiler is right.
+
+> **Who this is for** — anyone writing Zig in these repositories. Reference material: grep it, don't read it.
+>
+> **Read this if** — you hit a 0.16.0 API that does not look like the docs.
+>
+> **Takeaways**
+> 1. Allocations are always explicit; hot paths allocate nothing.
+> 2. Utility binaries ship `-O ReleaseSmall`, under 1 MB, under 5 MB RSS.
+> 3. Treat every pinned API shape below as dated evidence, not as doctrine.
+
+---
+
+## Language & Allocation Conventions
+- **Explicit Allocation**: Never hide allocations. Pass an `Allocator` explicitly to functions that need to allocate memory.
+- **Zero-Allocation Cores**: For hot paths (such as fuzzy search engines or rendering loops), design a zero-allocation core. Prefetch data or use stack-allocated buffers.
+- **ReleaseSmall Optimization**: For utility binaries, optimize using `-O ReleaseSmall`. A typical statically linked binary should be under 1 MB and use less than 5 MB of RSS RAM.
+- **Clean Namespace Separation**: Avoid monolithic root files. Move helper logic to dedicated files and use `std.testing.refAllDecls(@This())` in your main test blocks to run tests in separated modules.
+
+---
+
+## Zig 0.16.0 API Pitfalls & Patterns
+
+### 1. Pipes — Use `std.os.linux.pipe2` on Linux
+In Zig 0.16.0, `std.posix` does not expose `pipe2`. Use the Linux-specific syscall wrapper for non-blocking execution:
+```zig
+var fds: [2]std.posix.fd_t = undefined;
+const flags = std.os.linux.O{ .NONBLOCK = true, .CLOEXEC = true };
+const rc = std.os.linux.pipe2(&fds, flags);
+switch (std.posix.errno(rc)) {
+    .SUCCESS => {},
+    else => return error.SystemResources,
+}
+```
+
+### 2. Spawning Subprocesses with Stdout Redirection
+When redirecting standard I/O to a file descriptor using `StdIo.file`, Zig 0.16.0 requires providing a `flags` field:
+```zig
+var child = try std.process.spawn(io, .{
+    .argv  = &argv,
+    .stdin = .ignore,
+    .stdout = .{ .file = .{
+        .handle = pipe_fds[1],
+        .flags  = .{ .nonblocking = false },
+    }},
+    .stderr = .ignore,
+});
+```
+*Note: Close the write end of the pipe in the parent process immediately after spawning, or the read end will block forever on EOF.*
+
+### 3. `close` and `read` — Use `std.posix.system.*`
+`std.posix.close` and `std.posix.read` do not exist directly in Zig 0.16. Use `system` sub-namespace for raw syscall wrappers:
+```zig
+_ = std.posix.system.close(fd);
+```
+
+### 4. File Permissions via Permissions Enum
+Do not use raw numeric modes (e.g. `0o600`) when creating or modifying files in Zig 0.16.0. Use the `std.fs` types wrapper:
+```zig
+const file = try std.fs.createFileAbsolute(io, path, .{
+    .permissions = std.fs.File.Permissions.fromMode(0o600),
+});
+```
+
+### 5. Slice vs. Array Pointer Peer-Type Resolution
+Constant string literals (e.g., `""`) are of type `*const [0:0]u8`. Standard library formatting tools (like `std.fmt.bufPrint`) return mutable slices (`[]u8`). Peer-type resolution will fail if both are evaluated in a simple `catch` expression:
+```zig
+// ❌ Compile error: incompatible types
+const s = std.fmt.bufPrint(&buf, "{s}", .{val}) catch "";
+
+// ✓ Fix: Use an if-expression to yield identical types
+const s = if (std.fmt.bufPrint(&buf, "{s}", .{val})) |res| res else |_| buf[0..0];
+```
+
+### 6. `std.mem.trim` Const/Mutable Safety
+`std.mem.trim` always returns `[]const u8`. If you are trimming a mutable buffer and require a mutable slice as a result, wrap the returned slice in `@constCast`:
+```zig
+const trimmed = std.mem.trim(u8, buf[0..len], " \t\n\r");
+return @constCast(trimmed); // Safe: the underlying buffer is mutable
+```
+
+### 7. `gsettings` Floating-Point Output Precision
+`gsettings get org.gnome.desktop.interface text-scaling-factor` returns full IEEE 754 noise (`1.0999999999999999` instead of `1.1`). Parse first two decimal digits and round to nearest tenth:
+```zig
+const d1: usize = if (d + 1 < s.len) (s[d + 1] - '0') else 0;
+const d2: usize = if (d + 2 < s.len) (s[d + 2] - '0') else 0;
+const frac = if (d2 >= 5) d1 + 1 else d1;
+const scale10 = int_part * 10 + frac; // e.g. 11 for 1.1
+```

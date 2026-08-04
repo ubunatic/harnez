@@ -38,7 +38,7 @@ Before changing any command's flags or adding project-local behaviour to `apply`
 
 `docs/*.md` — this project's evergreen docs (architecture, decisions, pitfalls). Not copyable.
 
-`docs/lang/` — copyable language/SDK/framework docs (Go, Bash, Make, Git, Rust, Cpp, Markdown, GTK4).
+`docs/lang/` — copyable language/SDK/framework docs (Go, Bash, Make, Git, Rust, Cpp, Markdown, GTK4, Zig).
 Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --doc <name>`.
 
 `docs/other/` — copyable docs that don't form a category yet (Canary). Same install mechanics as `docs/lang/`.
