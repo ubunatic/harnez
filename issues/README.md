@@ -20,3 +20,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 014 | [014-zig-language-doc.md](014-zig-language-doc.md) | bundle a Zig language doc (emojig, books need it) | Open |
 | 015 | [015-agents-md-uman-workspace-awareness.md](015-agents-md-uman-workspace-awareness.md) | AGENTS.md must teach agents about uman (workspace glue) | Open |
 | 016 | [016-make-smoke-convention.md](016-make-smoke-convention.md) | `make smoke` convention: live-run targets in Make.md | Open |
+| 017 | [017-spec-md-is-cati-specific-not-generic.md](017-spec-md-is-cati-specific-not-generic.md) | `docs/Spec.md` (bundled, default: true) is Cati-specific, not a generic guide | Open |
