@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ubunatic.com/claudeconfig/internal/fsutil"
-	"ubunatic.com/claudeconfig/internal/jsonc"
-	"ubunatic.com/claudeconfig/internal/markdown"
+	"ubunatic.com/harnez/internal/fsutil"
+	"ubunatic.com/harnez/internal/jsonc"
+	"ubunatic.com/harnez/internal/markdown"
 )
 
 // applyResult is returned by every apply-level operation.
@@ -90,7 +90,7 @@ func applyMerge(existing, doc map[string]any) map[string]any {
 	return out
 }
 
-// managedSettingsKeys are the top-level keys claudeconfig writes to settings.json.
+// managedSettingsKeys are the top-level keys harnez writes to settings.json.
 var managedSettingsKeys = []string{
 	"model", "effortLevel", "permissions", "hooks", "env", "spinnerVerbs", "mcpServers",
 }
@@ -248,7 +248,7 @@ func diffSettingsJSON(path string, doc map[string]any) (bool, error) {
 	}
 
 	writeTemp := func(data []byte) (string, error) {
-		f, err := os.CreateTemp("", "claudeconfig-diff-*")
+		f, err := os.CreateTemp("", "harnez-diff-*")
 		if err != nil {
 			return "", err
 		}
@@ -333,7 +333,7 @@ func installDoc(fsys fs.FS, src, dst string, force bool) (applyResult, error) {
 func buildLangConventions(names []string, cfg *Config) string {
 	var sb strings.Builder
 	sb.WriteString("Adhere to the following conventions.\n\n")
-	sb.WriteString("Docs in `./docs/` are managed by claudeconfig. <!-- claudeconfig:bundled -->\n\n")
+	sb.WriteString("Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->\n\n")
 	for _, name := range names {
 		lang, ok := cfg.AgentsMD.Languages[name]
 		if !ok || lang.Ref == "" {

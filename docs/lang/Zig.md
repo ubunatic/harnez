@@ -3,7 +3,7 @@ title: Zig Conventions
 weight: 63
 ---
 
-<!-- claudeconfig:bundled -->
+<!-- harnez:bundled -->
 # Zig Conventions
 
 > ⚠️ **Version banner: Zig 0.16.0, verified 2026-07. These APIs move.**
@@ -100,3 +100,12 @@ const d2: usize = if (d + 2 < s.len) (s[d + 2] - '0') else 0;
 const frac = if (d2 >= 5) d1 + 1 else d1;
 const scale10 = int_part * 10 + frac; // e.g. 11 for 1.1
 ```
+
+### 8. Calling libc `unsetenv()` desyncs `std.process.spawn`'s own `environ` cache
+`std.Io.Threaded` (default `Io`) caches its view of `environ`. Calling libc's `unsetenv()` directly mutates libc's table while Zig's cache goes stale, causing subsequent `std.process.spawn` calls to segfault.
+- Avoid calling `unsetenv()` after `std.process.spawn`. Perform all initial spawns first, then treat `unsetenv()` as one-way.
+- Call a warm-up `std.debug.print("", .{})` prior to `unsetenv()` to avoid a lazy debug-info scan deadlock.
+
+### 9. dlopen'd C Libraries with Struct Fields
+- When writing `extern struct` bindings for dynamic libraries (e.g. font shaping), if the API exposes public struct fields (e.g. `.cols`, `.advance.x`), transcribe the exact layout from the real C header rather than treating handles as `?*anyopaque`.
+- For opaque-pointer C APIs, `?*anyopaque` is safe and eliminates header dependencies.

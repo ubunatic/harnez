@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"ubunatic.com/claudeconfig/internal/fsutil"
-	"ubunatic.com/claudeconfig/internal/jsonc"
-	"ubunatic.com/claudeconfig/internal/markdown"
+	"ubunatic.com/harnez/internal/fsutil"
+	"ubunatic.com/harnez/internal/jsonc"
+	"ubunatic.com/harnez/internal/markdown"
 )
 
 func hasSettingsKey(path, key string) bool {

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
-	"ubunatic.com/claudeconfig"
+	"ubunatic.com/harnez"
 )
 
 type Config struct {
@@ -130,7 +130,7 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 func LoadConfigEmbedded() (*Config, error) {
-	data, err := claudeconfig.DefaultFS.ReadFile("config.yaml")
+	data, err := harnez.DefaultFS.ReadFile("config.yaml")
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func LoadConfigEmbedded() (*Config, error) {
 		return nil, err
 	}
 	cfg.Dir = "."
-	cfg.FS = claudeconfig.DefaultFS
+	cfg.FS = harnez.DefaultFS
 	return &cfg, nil
 }
 

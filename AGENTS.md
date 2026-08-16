@@ -1,10 +1,10 @@
 <!-- Keep this file token-efficient: use bullet lists, not tables; no redundant prose. -->
 <!-- AGENTS.md is the canonical source; CLAUDE.md is a symlink to it. Edit AGENTS.md only. -->
 
-<!-- claudeconfig:begin Language Conventions -->
+<!-- harnez:begin Language Conventions -->
 Adhere to the following conventions.
 
-Docs in `./docs/` are managed by claudeconfig. <!-- claudeconfig:bundled -->
+Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
 - Go/Golang @docs/Go.md,
   Modern Go, avoid deps but use Cobra, add tests
@@ -22,7 +22,7 @@ Docs in `./docs/` are managed by claudeconfig. <!-- claudeconfig:bundled -->
   probe external mechanisms before building features on them
 - Spec system @docs/Spec.md,
   YAML spec files as single source of truth; Go code must not duplicate spec values
-<!-- claudeconfig:end Language Conventions -->
+<!-- harnez:end Language Conventions -->
 
 ## CLI command scope
 
@@ -58,8 +58,8 @@ Run from project root.
 
 - `scripts/smoke-test.sh` — build, apply, verify idempotency, simulate drift and confirm repair
 - `scripts/drop-perm.sh PATTERN` — remove permissions matching PATTERN from `~/.claude/settings.json` for drift simulation
-<!-- claudeconfig:begin Repo Setup -->
+<!-- harnez:begin Repo Setup -->
 ## Repo Setup
 - Solo/hobby repo — single default branch, no PR workflow.
 - codeberg.org is primary; github.com (if present) is a synced mirror only.
-<!-- claudeconfig:end Repo Setup -->
+<!-- harnez:end Repo Setup -->

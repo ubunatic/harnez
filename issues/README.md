@@ -22,3 +22,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 016 | [016-make-smoke-convention.md](016-make-smoke-convention.md) | `make smoke` convention: live-run targets in Make.md | Open |
 | 017 | [017-spec-md-is-cati-specific-not-generic.md](017-spec-md-is-cati-specific-not-generic.md) | `docs/Spec.md` (bundled, default: true) is Cati-specific, not a generic guide | Closed |
 | 018 | [018-mark-bundled-docs-in-frontmatter.md](018-mark-bundled-docs-in-frontmatter.md) | Bundled docs don't self-identify as claudeconfig-managed | Open |
+| 019 | [019-rename-to-harnez.md](019-rename-to-harnez.md) | Rename project from claudeconfig to harnez | Closed |

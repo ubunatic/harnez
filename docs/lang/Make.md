@@ -3,7 +3,7 @@ title: Make Conventions
 weight: 62
 ---
 
-<!-- claudeconfig:bundled -->
+<!-- harnez:bundled -->
 # Make Conventions
 
 > **Who this is for** — anyone adding a target to a project Makefile. Reference material: grep it, don't read it.
@@ -31,7 +31,7 @@ Apply to other languages accordingly.
 Example:
 
 ```makefile
-BINARY  := claudeconfig        # output binary name
+BINARY  := harnez              # output binary name
 CONFIG  := config.yaml         # default config file
 TARGET  := $(HOME)/.claude     # installation target dir
 PROJECT := .                   # project root (passed to tool as -p)
@@ -52,8 +52,8 @@ export MYAPP_SOME_FEATURE=1
 
 Adding one of the sentinels as a prerequisite on every target (e.g. `build: ⚙️  # ...` or `help: 🤖  # ...`) causes Make to treat all targets as phony without listing each name twice.
 
-- `🤖` represents targets actively **managed** (reconciled/updated) by `claudeconfig` (like `help`).
-- `⚙️` represents targets **manually** defined or generated once (like `build`, `test`, `release`), which `claudeconfig` will not automatically overwrite.
+- `🤖` represents targets actively **managed** (reconciled/updated) by `harnez` (like `help`).
+- `⚙️` represents targets **manually** defined or generated once (like `build`, `test`, `release`), which `harnez` will not automatically overwrite.
 
 ## Self-documenting help target
 

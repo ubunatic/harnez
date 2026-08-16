@@ -51,7 +51,7 @@ by-product: there is no `--project` flag anymore.
 ## init flow
 
 ```
-claudeconfig init [-d <dir>] [--docs <name>...]
+harnez init [-d <dir>] [--docs <name>...]
         │
         ├── create AGENTS.md (template) if absent
         ├── create CLAUDE.md symlink → AGENTS.md
@@ -68,7 +68,7 @@ All steps are idempotent. Running `init --docs golang` twice is safe.
 ## apply flow
 
 ```
-claudeconfig apply [-t <dir>] [-d <name>...] [--force-docs]
+harnez apply [-t <dir>] [-d <name>...] [--force-docs]
         │
         ├── merge managed keys into settings.json
         ├── write ~/.claude/CLAUDE.md managed sections

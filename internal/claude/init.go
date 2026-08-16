@@ -10,14 +10,14 @@ import (
 	"sort"
 	"strings"
 
-	"ubunatic.com/claudeconfig/internal/fsutil"
-	"ubunatic.com/claudeconfig/internal/markdown"
+	"ubunatic.com/harnez/internal/fsutil"
+	"ubunatic.com/harnez/internal/markdown"
 )
 
 const agentsMDTemplate = `Adhere to the following conventions.
 
-<!-- claudeconfig:begin Project Summary -->
-<!-- claudeconfig:end Project Summary -->
+<!-- harnez:begin Project Summary -->
+<!-- harnez:end Project Summary -->
 
 ## Development Scripts
 
@@ -55,7 +55,8 @@ func sanitizeContent(s string) string {
 	lines := strings.Split(s, "\n")
 	out := make([]string, 0, len(lines))
 	for _, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "<!-- claudeconfig:") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "<!-- harnez:") || strings.HasPrefix(trimmed, "<!-- claudeconfig:") {
 			continue
 		}
 		out = append(out, line)
@@ -242,13 +243,28 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 	}
 
 	if _, err := os.Stat(agentsPath); os.IsNotExist(err) {
-		if err := os.WriteFile(agentsPath, []byte(agentsMDTemplate), 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", agentsPath, err)
+		if fi, err := os.Lstat(claudePath); err == nil && fi.Mode().IsRegular() {
+			if err := os.Rename(claudePath, agentsPath); err != nil {
+				return fmt.Errorf("migrate %s → %s: %w", claudePath, agentsPath, err)
+			}
+			fmt.Printf("  migrated %s → %s\n", claudePath, agentsPath)
+			changes++
+		} else {
+			if err := os.WriteFile(agentsPath, []byte(agentsMDTemplate), 0o644); err != nil {
+				return fmt.Errorf("write %s: %w", agentsPath, err)
+			}
+			fmt.Printf("  created %s\n", agentsPath)
+			changes++
 		}
-		fmt.Printf("  created %s\n", agentsPath)
-		changes++
 	} else {
-		fmt.Printf("  exists  %s (unchanged)\n", agentsPath)
+		if migrated, err := migrateLegacyMarkers(agentsPath); err != nil {
+			return fmt.Errorf("migrate markers %s: %w", agentsPath, err)
+		} else if migrated {
+			fmt.Printf("  upgraded markers %s\n", agentsPath)
+			changes++
+		} else {
+			fmt.Printf("  exists  %s (unchanged)\n", agentsPath)
+		}
 	}
 
 	symlinkChanged, err := fsutil.EnsureSymlink(claudePath, agentsPath)
@@ -406,3 +422,22 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 	}
 	return nil
 }
+
+func migrateLegacyMarkers(path string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	content := string(data)
+	if !strings.Contains(content, "<!-- claudeconfig:") && !strings.Contains(content, "# claudeconfig:") && !strings.Contains(content, "managed by claudeconfig") {
+		return false, nil
+	}
+	newContent := strings.ReplaceAll(content, "<!-- claudeconfig:", "<!-- harnez:")
+	newContent = strings.ReplaceAll(newContent, "# claudeconfig:", "# harnez:")
+	newContent = strings.ReplaceAll(newContent, "managed by claudeconfig", "managed by harnez")
+	if newContent == content {
+		return false, nil
+	}
+	return true, os.WriteFile(path, []byte(newContent), 0o644)
+}
+

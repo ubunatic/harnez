@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-bin="./claudeconfig"
+bin="./harnez"
 
 pass() {
 	echo "  PASS: $*"

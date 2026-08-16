@@ -1,8 +1,8 @@
-# claudeconfig — project context
+# harnez — project context
 
 ## What it is
 
-`claudeconfig` is a Go CLI tool that manages Claude Code configuration declaratively from a single `config.yaml`. One source of truth drives all outputs: `settings.json`, `CLAUDE.md`/`AGENTS.md`, custom slash commands, and language doc symlinks. Apply is idempotent; user-managed keys in JSON files are preserved on every run.
+`harnez` is a Go CLI tool that manages Claude Code and coding agent configuration declaratively from a single `config.yaml`. One source of truth drives all outputs: `settings.json`, `CLAUDE.md`/`AGENTS.md`, custom slash commands, skills (`~/.gemini/skills/`, `~/.codex/skills/`), and language doc copies. Apply is idempotent; user-managed keys in JSON files are preserved on every run.
 
 ## Architecture
 
@@ -21,8 +21,8 @@ Source command files live in `commands/` (e.g. `commands/domain-modeling.md`) an
 
 | Command | What it does |
 |---|---|
-| `apply` | Global sync: merges managed keys into `settings.json`; writes CLAUDE.md sections, command files, lang docs to `~/.claude/docs/`. `-l <name>` installs extra lang docs globally. No project-local work. |
-| `init` | Project setup: creates AGENTS.md + CLAUDE.md symlink, applies config local sections, copies lang docs locally, scaffolds/injects Makefile targets. `-l <lang>` (repeatable). Defaults to cwd (`-d .`). |
+| `apply` | Global sync: merges managed keys into `settings.json`; writes CLAUDE.md sections, command files, skills, lang docs. No project-local work. |
+| `init` | Project setup: creates AGENTS.md + CLAUDE.md symlink, applies config local sections, copies lang docs locally, scaffolds/injects Makefile targets. Defaults to cwd (`-d .`). |
 | `diff` | Shows what `apply` would change, without writing. Uses `diff -u` on temp files. |
 | `clean` | Removes managed keys from `settings.json`; strips MD sections. |
 | `status` | Prints config summary and checks which managed items are present on disk. |
@@ -39,17 +39,19 @@ All subcommands accept `-c <config>` (default: embedded) and `-t <target>` (defa
 | `~/.claude/CLAUDE.md` | HTML-comment managed blocks, one per `agents_md.global.sections` entry |
 | `AGENTS.md` | HTML-comment managed blocks, one per `agents_md.local.sections` entry |
 | `~/.claude/commands/<name>.md` | Whole file. Frontmatter `description:` from config; body from inline `content:` or `file:` |
-| `~/.claude/docs/<lang>.md` | File copy from `source` (relative to config dir). Only with `--lang`. |
+| `~/.gemini/skills/<name>/SKILL.md` | Skill definition directory + markdown file for Gemini / Antigravity |
+| `~/.codex/skills/<name>/SKILL.md` | Skill definition directory + markdown file for Codex |
+| `~/.claude/docs/<lang>.md` | File copy from `source` (relative to config dir). |
 
 ## Managed block format
 
 Markdown files use HTML comment markers:
 ```
-<!-- claudeconfig:begin Section Name -->
+<!-- harnez:begin Section Name -->
 ...content...
-<!-- claudeconfig:end Section Name -->
+<!-- harnez:end Section Name -->
 ```
-`applySectionMD` / `diffSectionMD` / `cleanSectionMD` in `apply.go` handle find-replace-or-append. Identical logic to vimconfig's `applySection`, different delimiters.
+`applySectionMD` / `diffSectionMD` / `cleanSectionMD` in `apply.go` handle find-replace-or-append. Backward compatibility supports legacy `<!-- claudeconfig:begin ... -->` markers transparently.
 
 JSON files use **no markers** — keys are merged directly.
 
@@ -79,17 +81,17 @@ Typed structs would marshal in field declaration order, creating a permanent dif
 
 **`file:` for command bodies** — Inline `content:` in YAML is awkward for multi-line prompts. Commands support `file: commands/foo.md` to read the body from a repo file; `description:` still comes from config. The body is read via `cfg.FS`, so it works from the embedded FS when no `-c` flag is given.
 
-**Embedded binary** — `config.yaml` and `commands/` are embedded at compile time. The binary is self-contained: running `claudeconfig apply` (no `-c`) applies the built-in config. This lets the tool install itself idempotently after `make install`.
+**Embedded binary** — `config.yaml` and `commands/` are embedded at compile time. The binary is self-contained: running `harnez apply` (no `-c`) applies the built-in config. This lets the tool install itself idempotently after `make install`.
 
 ## Gotchas and learnings
 
-**PATH shadowing** — The old Makefile installed to `~/.local/bin`; the new one installs to `/usr/local/bin` via `sudo install`. If `~/.local/bin` appears earlier in `$PATH`, the stale binary shadows the new one. Remove with `rm ~/.local/bin/claudeconfig`.
+**PATH shadowing** — The old Makefile installed to `~/.local/bin`; the new one installs to `/usr/local/bin` via `sudo install`. If `~/.local/bin` appears earlier in `$PATH`, the stale binary shadows the new one. Remove with `rm ~/.local/bin/harnez`.
 
 **Claude Code overwrites settings.json** — Claude Code monitors `~/.claude/settings.json` and may restore a cached version immediately after a write during an active session. Apply from outside a running Claude Code session for settings changes to persist, or restart Claude Code after applying.
 
 **Model alias resolution** — `model: sonnet` in config resolves to `claude-sonnet-4-6` before writing. Unrecognised values pass through unchanged. Current aliases: `sonnet→claude-sonnet-4-6`, `opus→claude-opus-4-7`, `haiku→claude-haiku-4-5-20251001`.
 
-**`cfg.Dir` for relative paths** — `loadConfig` sets `cfg.Dir = filepath.Dir(configPath)`. Language `source:` paths and command `file:` paths are resolved relative to this, not to cwd. Running `claudeconfig apply` from a different directory works as long as `-c` points to the config file.
+**`cfg.Dir` for relative paths** — `loadConfig` sets `cfg.Dir = filepath.Dir(configPath)`. Language `source:` paths and command `file:` paths are resolved relative to this, not to cwd. Running `harnez apply` from a different directory works as long as `-c` points to the config file.
 
 ## Symlink convention
 
@@ -97,9 +99,3 @@ Typed structs would marshal in field declaration order, creating a permanent dif
 - Local: `./CLAUDE.md` → `./AGENTS.md`
 
 `ensureSymlink(linkPath, target)` is a no-op if the link already points correctly; otherwise removes and recreates.
-
-## Not yet implemented
-
-- `deps` — check/install MCP server runtimes (node, python, go) via apt
-- Schema validation — fetch official settings schema, validate permission rules and hook event names before writing
-- `diff`/`clean` for Makefile targets — `DiffAll`/`CleanAll` don't yet cover the `# claudeconfig:begin targets` block (issue #009)

@@ -3,7 +3,7 @@ title: C++ Conventions
 weight: 66
 ---
 
-<!-- claudeconfig:bundled -->
+<!-- harnez:bundled -->
 # C/C++ conventions
 
 ## Build acceleration

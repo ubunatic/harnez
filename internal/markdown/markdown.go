@@ -16,12 +16,24 @@ type Markers struct {
 
 // MDMarkers uses HTML comments — suitable for Markdown files.
 var MDMarkers = Markers{
-	Begin: func(s string) string { return "<!-- claudeconfig:begin " + s + " -->" },
-	End:   func(s string) string { return "<!-- claudeconfig:end " + s + " -->" },
+	Begin: func(s string) string { return "<!-- harnez:begin " + s + " -->" },
+	End:   func(s string) string { return "<!-- harnez:end " + s + " -->" },
 }
 
 // MKMarkers uses shell comments — suitable for Makefiles.
 var MKMarkers = Markers{
+	Begin: func(s string) string { return "# harnez:begin " + s },
+	End:   func(s string) string { return "# harnez:end " + s },
+}
+
+// LegacyMDMarkers matches the previous claudeconfig HTML comment markers for backward compatibility.
+var LegacyMDMarkers = Markers{
+	Begin: func(s string) string { return "<!-- claudeconfig:begin " + s + " -->" },
+	End:   func(s string) string { return "<!-- claudeconfig:end " + s + " -->" },
+}
+
+// LegacyMKMarkers matches the previous claudeconfig Makefile comment markers for backward compatibility.
+var LegacyMKMarkers = Markers{
 	Begin: func(s string) string { return "# claudeconfig:begin " + s },
 	End:   func(s string) string { return "# claudeconfig:end " + s },
 }
@@ -41,6 +53,20 @@ func SectionBounds(existing, begin, end string) (lineStart, lineEnd int, found b
 	return ls, le, true
 }
 
+func locateSection(existingContent, section string, m Markers) (lineStart, lineEnd int, found bool) {
+	if ls, le, ok := SectionBounds(existingContent, m.Begin(section), m.End(section)); ok {
+		return ls, le, true
+	}
+	// Fallback to legacy markers for backward compatibility
+	sample := m.Begin("x")
+	if strings.Contains(sample, "<!--") {
+		return SectionBounds(existingContent, LegacyMDMarkers.Begin(section), LegacyMDMarkers.End(section))
+	} else if strings.HasPrefix(sample, "#") {
+		return SectionBounds(existingContent, LegacyMKMarkers.Begin(section), LegacyMKMarkers.End(section))
+	}
+	return 0, 0, false
+}
+
 func applySection(path, section, content string, m Markers) (changed bool, existed bool, err error) {
 	begin := m.Begin(section)
 	end := m.End(section)
@@ -52,8 +78,9 @@ func applySection(path, section, content string, m Markers) (changed bool, exist
 	}
 
 	var newContent string
-	_, _, existed = SectionBounds(existingContent, begin, end)
-	if ls, le, ok := SectionBounds(existingContent, begin, end); ok {
+	ls, le, ok := locateSection(existingContent, section, m)
+	existed = ok
+	if ok {
 		newContent = existingContent[:ls] + block + existingContent[le:]
 	} else {
 		tail := existingContent
@@ -85,7 +112,7 @@ func diffSection(path, section, content string, m Markers) (bool, error) {
 	oldBlock := ""
 	if data, err := os.ReadFile(path); err == nil {
 		existing := string(data)
-		if ls, le, ok := SectionBounds(existing, begin, end); ok {
+		if ls, le, ok := locateSection(existing, section, m); ok {
 			oldBlock = existing[ls:le]
 		}
 	}
@@ -95,7 +122,7 @@ func diffSection(path, section, content string, m Markers) (bool, error) {
 	}
 
 	writeTemp := func(s string) (string, error) {
-		f, err := os.CreateTemp("", "claudeconfig-diff-*")
+		f, err := os.CreateTemp("", "harnez-diff-*")
 		if err != nil {
 			return "", err
 		}
@@ -125,9 +152,6 @@ func diffSection(path, section, content string, m Markers) (bool, error) {
 }
 
 func cleanSection(path, section string, m Markers) (removed bool, cleaned bool, err error) {
-	begin := m.Begin(section)
-	end := m.End(section)
-
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -137,7 +161,7 @@ func cleanSection(path, section string, m Markers) (removed bool, cleaned bool, 
 	}
 	existing := string(data)
 
-	ls, le, ok := SectionBounds(existing, begin, end)
+	ls, le, ok := locateSection(existing, section, m)
 	if !ok {
 		return false, false, nil
 	}
@@ -172,7 +196,8 @@ func ContainsSection(path, section string) bool {
 	if err != nil {
 		return false
 	}
-	return strings.Contains(string(data), MDMarkers.Begin(section))
+	content := string(data)
+	return strings.Contains(content, MDMarkers.Begin(section)) || strings.Contains(content, LegacyMDMarkers.Begin(section))
 }
 
 // ApplyMK updates or inserts a managed section inside a Makefile.
@@ -196,5 +221,6 @@ func ContainsSectionMK(path, section string) bool {
 	if err != nil {
 		return false
 	}
-	return strings.Contains(string(data), MKMarkers.Begin(section))
+	content := string(data)
+	return strings.Contains(content, MKMarkers.Begin(section)) || strings.Contains(content, LegacyMKMarkers.Begin(section))
 }

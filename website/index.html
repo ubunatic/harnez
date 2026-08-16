@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>claudeconfig — declarative Claude Code configuration</title>
+  <title>harnez — declarative agent and Claude Code harness</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -303,12 +303,12 @@
           <path d="M7 10l4 4-4 4" stroke="#e05c00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           <line x1="14" y1="18" x2="21" y2="18" stroke="#6b6762" stroke-width="2" stroke-linecap="round"/>
         </svg>
-        claude<span>config</span>
+        harnez
       </a>
       <nav class="header-links">
         <a class="nav-link" href="#install">Install</a>
         <a class="nav-link" href="#commands">Commands</a>
-        <a class="berg-link" href="https://codeberg.org/ubunatic/claudeconfig" target="_blank" rel="noopener">
+        <a class="berg-link" href="https://codeberg.org/ubunatic/harnez" target="_blank" rel="noopener">
           <!-- Codeberg berg/mountain icon -->
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Codeberg">
             <path d="m8 3 4 8 5-5 5 15H2L8 3z"/>
@@ -339,8 +339,8 @@
     <div class="install" id="install">
       <div class="label">Quick install</div>
       <code>
-        <span class="prompt">$ </span><span class="cmd">git clone</span> <span class="arg">https://codeberg.org/ubunatic/claudeconfig</span><br>
-        <span class="prompt">$ </span><span class="cmd">cd</span> <span class="arg">claudeconfig</span><br>
+        <span class="prompt">$ </span><span class="cmd">git clone</span> <span class="arg">https://codeberg.org/ubunatic/harnez</span><br>
+        <span class="prompt">$ </span><span class="cmd">cd</span> <span class="arg">harnez</span><br>
         <span class="prompt">$ </span><span class="cmd">make install</span>  <span class="cmt"># builds and installs to /usr/local/bin</span>
       </code>
     </div>
@@ -362,7 +362,7 @@
       </div>
       <div class="feature">
         <h3>Lifecycle hooks</h3>
-        <p>Declare <code>Stop</code>, <code>PreToolUse</code>, and other hooks in YAML; claudeconfig writes the right JSON shape.</p>
+        <p>Declare <code>Stop</code>, <code>PreToolUse</code>, and other hooks in YAML; harnez writes the right JSON shape.</p>
       </div>
       <div class="feature">
         <h3>CLAUDE.md / AGENTS.md</h3>
@@ -374,11 +374,11 @@
       </div>
       <div class="feature">
         <h3>Language docs</h3>
-        <p>Coding-style docs installed to <code>~/.claude/docs/</code> with project symlinks so <code>@docs/Go.md</code> resolves locally.</p>
+        <p>Coding-style docs installed to <code>~/.claude/docs/</code> with project copies so <code>@docs/Go.md</code> resolves locally.</p>
       </div>
       <div class="feature">
         <h3>MCP servers</h3>
-        <p>Declare MCP server definitions in <code>mcp_servers:</code>; claudeconfig writes them into <code>settings.json</code>.</p>
+        <p>Declare MCP server definitions in <code>mcp_servers:</code>; harnez writes them into <code>settings.json</code>.</p>
       </div>
       <div class="feature">
         <h3>Project setup</h3>
@@ -394,19 +394,19 @@
     <h2>Quick start</h2>
     <div class="codeblock">
       <pre><span class="p"># sync global ~/.claude config (idempotent)</span>
-<span class="p">$</span> claudeconfig apply
+<span class="p">$</span> harnez apply
 
 <span class="p"># preview changes without writing</span>
-<span class="p">$</span> claudeconfig diff
+<span class="p">$</span> harnez diff
 
 <span class="p"># set up a project directory with language docs and Makefile targets</span>
-<span class="p">$</span> claudeconfig init --docs golang,make
+<span class="p">$</span> harnez init --docs golang,make
 
 <span class="p"># set up + generate an AI project summary in AGENTS.md</span>
-<span class="p">$</span> claudeconfig init --docs golang --summary
+<span class="p">$</span> harnez init --docs golang --summary
 
 <span class="p"># use a custom config file</span>
-<span class="p">$</span> claudeconfig apply -c myconfig.yaml -t ~/.claude</pre>
+<span class="p">$</span> harnez apply -c myconfig.yaml -t ~/.claude</pre>
     </div>
   </div>
 </section>
@@ -467,7 +467,7 @@
         <div class="how-num">1</div>
         <div>
           <h3>Key merge, not replace</h3>
-          <p>claudeconfig only writes the keys it owns (<code>model</code>, <code>effortLevel</code>, <code>permissions</code>, <code>hooks</code>, …). Every other key in <code>settings.json</code> — theme, plugins, auth — is preserved.</p>
+          <p>harnez only writes the keys it owns (<code>model</code>, <code>effortLevel</code>, <code>permissions</code>, <code>hooks</code>, …). Every other key in <code>settings.json</code> — theme, plugins, auth — is preserved.</p>
         </div>
       </div>
       <div class="how-item">
@@ -488,7 +488,7 @@
         <div class="how-num">4</div>
         <div>
           <h3>Idempotent by design</h3>
-          <p>Run <code>claudeconfig apply</code> as often as you like. If settings drift, re-running restores the managed keys while leaving everything else alone.</p>
+          <p>Run <code>harnez apply</code> as often as you like. If settings drift, re-running restores the managed keys while leaving everything else alone.</p>
         </div>
       </div>
     </div>
@@ -532,12 +532,12 @@
 <!-- ── FOOTER ────────────────────────────────────────────────────── -->
 <footer>
   <div class="container">
-    <div>claudeconfig — MIT licence</div>
+    <div>harnez — MIT licence</div>
     <div class="footer-berg">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="m8 3 4 8 5-5 5 15H2L8 3z"/>
       </svg>
-      <a href="https://codeberg.org/ubunatic/claudeconfig" target="_blank" rel="noopener">codeberg.org/ubunatic/claudeconfig</a>
+      <a href="https://codeberg.org/ubunatic/harnez" target="_blank" rel="noopener">codeberg.org/ubunatic/harnez</a>
     </div>
   </div>
 </footer>

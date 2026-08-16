@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"ubunatic.com/claudeconfig/internal/claude"
-	"ubunatic.com/claudeconfig/internal/jsonc"
+	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/jsonc"
 )
 
 // captureStdout executes f and returns whatever was written to stdout, alongside the returned error.
@@ -154,6 +154,13 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 	if _, err := os.Stat(claudePath); err != nil {
 		t.Errorf("Expected CLAUDE.md symlink to exist: %v", err)
+	}
+	agentsContent, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatalf("Failed to read generated AGENTS.md: %v", err)
+	}
+	if !strings.Contains(string(agentsContent), "<!-- harnez:begin Project Summary -->") {
+		t.Errorf("Expected AGENTS.md to contain harnez marker, got:\n%s", string(agentsContent))
 	}
 
 	// 11. Clean command: must delete all managed configurations

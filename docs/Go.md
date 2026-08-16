@@ -3,7 +3,7 @@ title: Go Conventions
 weight: 60
 ---
 
-<!-- claudeconfig:bundled -->
+<!-- harnez:bundled -->
 # Go Conventions
 
 > **Who this is for** — anyone writing or reviewing Go in these repositories. Reference material: grep it, don't read it.

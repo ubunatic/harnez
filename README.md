@@ -1,12 +1,12 @@
-# claudeconfig
+# harnez
 
-Manage your [Claude Code](https://claude.ai/code) setup declaratively from a
-single `config.yaml`.  One source of truth drives everything Claude Code reads:
-permissions, model settings, hooks, CLAUDE.md instructions, custom slash
-commands, and language doc symlinks.  Apply is idempotent — run it as often as
+Manage your agent harnesses and [Claude Code](https://claude.ai/code) setup declaratively from a
+single `config.yaml`. One source of truth drives everything Claude Code and coding agents read:
+permissions, model settings, hooks, AGENTS.md instructions, custom slash
+commands, skills, and language doc copies. Apply is idempotent — run it as often as
 you like; user-managed keys and unmanaged sections are never touched.
 
-**Website:** <https://ubunatic.com/claudeconfig> · **Repo:** <https://codeberg.org/ubunatic/claudeconfig>
+**Website:** <https://ubunatic.com/harnez> · **Repo:** <https://codeberg.org/ubunatic/harnez>
 
 ## What it manages
 
@@ -21,38 +21,39 @@ you like; user-managed keys and unmanaged sections are never touched.
 | Global agent instructions | `~/.claude/CLAUDE.md` (managed sections) |
 | Per-project instructions | `./AGENTS.md` (managed sections, `CLAUDE.md` symlink) |
 | Custom slash commands | `~/.claude/commands/<name>.md` |
-| Language coding-style docs | `~/.claude/docs/<lang>.md` + project symlinks |
+| Agent skills (Gemini, Codex) | `~/.gemini/skills/<name>/SKILL.md`, `~/.codex/skills/<name>/SKILL.md` |
+| Language coding-style docs | `~/.claude/docs/<lang>.md` + project copies |
 
 ## Installation
 
 ```sh
-go install ubunatic.com/claudeconfig@latest
+go install ubunatic.com/harnez@latest
 ```
 
 Or from source:
 
 ```sh
-git clone https://codeberg.org/ubunatic/claudeconfig
-cd claudeconfig
+git clone https://codeberg.org/ubunatic/harnez
+cd harnez
 make install          # builds and installs to /usr/local/bin
 ```
 
 After install the binary is self-contained: it embeds its own `config.yaml` and
-command files, so `claudeconfig apply` (no flags) applies the built-in config.
+command files, so `harnez apply` (no flags) applies the built-in config.
 
 ## Quick start
 
 ```sh
-claudeconfig apply           # apply embedded config to ~/.claude
-claudeconfig status          # show what is and isn't applied
-claudeconfig diff            # preview changes without writing
-claudeconfig clean           # remove all managed blocks/keys
+harnez apply           # apply embedded config to ~/.claude, ~/.gemini, ~/.codex
+harnez status          # show what is and isn't applied
+harnez diff            # preview changes without writing
+harnez clean           # remove all managed blocks/keys
 ```
 
 With a custom config file:
 
 ```sh
-claudeconfig apply -c myconfig.yaml -t ~/.claude -p /path/to/project
+harnez apply -c myconfig.yaml -t ~/.claude
 ```
 
 Or via Make (builds first, then runs):
@@ -151,7 +152,7 @@ agents_md:
 ### `settings.json` — key merge, not replace
 
 Claude Code writes `settings.json` itself (theme, plugins, auth).
-`claudeconfig` only touches the keys it owns (`model`, `effortLevel`,
+`harnez` only touches the keys it owns (`model`, `effortLevel`,
 `permissions`, `hooks`, `env`, `spinnerVerbs`, `mcpServers`).  All other keys
 are preserved on every apply.
 
@@ -160,37 +161,35 @@ are preserved on every apply.
 Instructions are written inside HTML-comment markers:
 
 ```
-<!-- claudeconfig:begin Section Name -->
-...content managed by claudeconfig...
-<!-- claudeconfig:end Section Name -->
+<!-- harnez:begin Section Name -->
+...content managed by harnez...
+<!-- harnez:end Section Name -->
 ```
 
-Sections outside these markers are never modified.  Multiple sections can
+Sections outside these markers are never modified. Multiple sections can
 coexist in the same file, each independently updated or removed.
 
 **Symlink convention** — `AGENTS.md` is the canonical file (readable by any
-agent); `CLAUDE.md` is a symlink so Claude Code finds it too.  Same pattern
+agent); `CLAUDE.md` is a symlink so Claude Code finds it too. Same pattern
 globally: `~/.claude/CLAUDE.md` is real; `~/AGENTS.md` links to it.
 
-### Slash commands
+### Slash commands and Skills
 
-Each entry under `commands:` produces `~/.claude/commands/<name>.md` with a
-YAML frontmatter `description:` line and the prompt body.  Body can be inline
-(`content:`) or read from a file (`file:`).
+Each entry under `commands:` produces `~/.claude/commands/<name>.md`.
+Each entry under `skills:` produces `~/.gemini/skills/<name>/SKILL.md` (and `~/.codex/skills/<name>/SKILL.md` if configured).
 
 ### Language docs
 
 Entries under `languages:` define a source doc (e.g. `docs/lang/Go.md`), a
-global install path (`~/.claude/docs/Go.md`), and an optional project symlink
-(`./docs/Go.md`).  Docs listed in the top-level `docs:` list (or passed via
-`--docs`) are installed on `apply`.  The project symlink lets `@docs/Go.md`
-resolve locally without duplicating the file.
+global install path (`~/.claude/docs/Go.md`), and a project copy
+(`docs/Go.md`). Docs listed in the top-level `docs:` list (or passed via
+`--docs`) are installed on `apply`.
 
 ## Commands reference
 
 | Command | Flags | What it does |
 |---|---|---|
-| `apply` | `-c` `-t` `-d` `--force-docs` | Sync global `~/.claude` config: settings, hooks, commands, docs |
+| `apply` | `-c` `-t` `-d` `--force-docs` | Sync global `~/.claude`, skills, hooks, commands, docs |
 | `init` | `-c` `-d` `--docs` `--summary` | Set up a project: AGENTS.md, doc copies, Makefile targets |
 | `diff` | `-c` `-t` | Preview changes without writing (uses `diff -u`) |
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
@@ -216,26 +215,26 @@ All commands accept `-c <path>` (config file, default: embedded).
 
 ### Project setup
 
-`init` is the one command for setting up a project directory.  It creates `AGENTS.md`
+`init` is the one command for setting up a project directory. It creates `AGENTS.md`
 and the `CLAUDE.md` symlink, applies config-defined local sections (language conventions),
 copies language docs locally, and injects standard Makefile targets — all in one step.
 
 ```sh
-claudeconfig init                              # AGENTS.md + CLAUDE.md symlink only
-claudeconfig init --docs golang,make          # + docs + Makefile targets
-claudeconfig init --docs golang --summary     # + AI-generated project summary
+harnez init                              # AGENTS.md + CLAUDE.md symlink only
+harnez init --docs golang,make          # + docs + Makefile targets
+harnez init --docs golang --summary     # + AI-generated project summary
 ```
 
 ## Drift repair
 
-If permissions or settings drift (Claude Code adds/removes something),
+If permissions or settings drift,
 re-running `make apply` restores the managed keys while leaving everything else
-alone.  Use `make diff` first to see exactly what would change.
+alone. Use `make diff` first to see exactly what would change.
 
 ## Development
 
 ```sh
-make build    # compile ./claudeconfig
+make build    # compile ./harnez
 make test     # go vet + go test
 make apply    # build then apply repo config.yaml to ~/.claude
 make diff     # build then preview changes

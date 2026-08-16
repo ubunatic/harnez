@@ -44,7 +44,7 @@ Detection heuristics (`detectDoc` in `init.go`):
 - Contains everything: phony sentinel, help, build, install, test, clean
 
 **Targets** (`docs/templates/MakeTargets.mk`) — managed section for existing projects:
-- Injected as a `# claudeconfig:begin targets` … `# claudeconfig:end targets` block
+- Injected as a `# harnez:begin targets` … `# harnez:end targets` block
 - Appended if the block is absent; updated in-place if present (idempotent)
 - Skipped when the template was just scaffolded in the same run (avoids duplication)
 - Contains only the universal targets: ⚙️ phony sentinel + self-documenting `help`
@@ -52,19 +52,19 @@ Detection heuristics (`detectDoc` in `init.go`):
 This lets users adopt conventions gradually: projects with no Makefile get the full
 scaffold; projects with an existing Makefile get just the key targets injected.
 
-**Legacy block migration:** projects that were set up before 2026-07-03 may have a
-`# claudeconfig:begin targets` / `# claudeconfig:end targets` marker block from the old
+**Legacy block migration:** projects that were set up before the migration may have a
+`# claudeconfig:begin targets` / `# claudeconfig:end targets` (or `# harnez:begin targets`) marker block from the old
 injection style. `ReconcileMakeTargets` detects and strips this block automatically before
 structural reconciliation runs, so old projects self-migrate on the next `init`.
 
 ## Markers abstraction
 
-The managed-section mechanism (`internal/markdown`) is now parameterised by a `Markers`
+The managed-section mechanism (`internal/markdown`) is parameterised by a `Markers`
 struct so the same apply/diff/clean logic works for different comment styles:
 
 ```go
-MDMarkers  // <!-- claudeconfig:begin NAME --> — Markdown / AGENTS.md
-MKMarkers  // # claudeconfig:begin NAME       — Makefiles
+MDMarkers  // <!-- harnez:begin NAME --> — Markdown / AGENTS.md
+MKMarkers  // # harnez:begin NAME       — Makefiles
 ```
 
 Functions: `Apply`/`Diff`/`Clean`/`ContainsSection` (MD) and

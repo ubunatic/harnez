@@ -1,4 +1,4 @@
-package claudeconfig
+package harnez
 
 import "embed"
 

@@ -1,4 +1,4 @@
-module ubunatic.com/claudeconfig
+module ubunatic.com/harnez
 
 go 1.24.4
 

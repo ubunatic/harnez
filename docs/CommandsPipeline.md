@@ -58,7 +58,7 @@ what is currently installed.
 
 ## Agent Skills (`skills:`)
 
-Each skill is a directory containing a `SKILL.md` file. claudeconfig installs these to
+Each skill is a directory containing a `SKILL.md` file. harnez installs these to
 `~/.gemini/skills/<name>/SKILL.md` and, when configured, to
 `~/.codex/skills/<name>/SKILL.md`.
 

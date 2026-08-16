@@ -3,7 +3,7 @@ title: Bash Conventions
 weight: 61
 ---
 
-<!-- claudeconfig:bundled -->
+<!-- harnez:bundled -->
 # Bash Conventions
 
 > **Who this is for** — anyone writing a canary, a build script, or any glue in these repositories. Reference material: grep it, don't read it.

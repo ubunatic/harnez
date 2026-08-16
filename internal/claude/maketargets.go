@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// defaultPhonySentinel is the sentinel token claudeconfig uses to mark its
+// defaultPhonySentinel is the sentinel token harnez uses to mark its
 // own targets as always-phony without listing each one in a .PHONY list.
 const defaultPhonySentinel = "⚙️"
 
@@ -98,31 +98,35 @@ func StdinPrompt(question string) bool {
 // we assume the user rolled their own and leave it alone.
 const smallDiffThreshold = 4
 
-// legacyTargetsBegin / legacyTargetsEnd are the shell-comment markers used by
-// the old claudeconfig marker-based injection (pre-2026-07-03). Any block
+// legacyTargetsMarkers are the shell-comment markers used by
+// the old marker-based injection (pre-2026-07-03). Any block
 // bounded by them is a migration artifact and should be removed before the
 // structural reconciliation runs.
-const legacyTargetsBegin = "# claudeconfig:begin targets"
-const legacyTargetsEnd = "# claudeconfig:end targets"
+var legacyTargetsMarkers = [][2]string{
+	{"# harnez:begin targets", "# harnez:end targets"},
+	{"# claudeconfig:begin targets", "# claudeconfig:end targets"},
+}
 
-// stripLegacyTargetsBlock removes a legacy # claudeconfig:begin/end targets
-// block from content, returning the cleaned string and whether anything changed.
+// stripLegacyTargetsBlock removes a legacy # harnez:begin/end targets or
+// # claudeconfig:begin/end targets block from content, returning the cleaned string and whether anything changed.
 func stripLegacyTargetsBlock(content string) (string, bool) {
-	bi := strings.Index(content, legacyTargetsBegin)
-	ei := strings.Index(content, legacyTargetsEnd)
-	if bi < 0 || ei < 0 || ei <= bi {
-		return content, false
+	for _, m := range legacyTargetsMarkers {
+		bi := strings.Index(content, m[0])
+		ei := strings.Index(content, m[1])
+		if bi >= 0 && ei >= 0 && ei > bi {
+			end := ei + len(m[1])
+			if end < len(content) && content[end] == '\n' {
+				end++
+			}
+			// eat a preceding blank line so we don't leave a double blank
+			start := bi
+			if start >= 2 && content[start-1] == '\n' && content[start-2] == '\n' {
+				start--
+			}
+			return content[:start] + content[end:], true
+		}
 	}
-	end := ei + len(legacyTargetsEnd)
-	if end < len(content) && content[end] == '\n' {
-		end++
-	}
-	// eat a preceding blank line so we don't leave a double blank
-	start := bi
-	if start >= 2 && content[start-1] == '\n' && content[start-2] == '\n' {
-		start--
-	}
-	return content[:start] + content[end:], true
+	return content, false
 }
 
 // ReconcileMakeTargets merges the target(s) defined in oursContent (typically
@@ -135,7 +139,7 @@ func stripLegacyTargetsBlock(content string) (string, bool) {
 //   - present, foreign, big diff   → leave alone, tell the user how to adopt ours
 //
 // It also ensures the sentinel .PHONY line exists, per cfg.Make.PhonyFix.
-// Legacy # claudeconfig:begin/end targets blocks are removed automatically.
+// Legacy targets blocks are removed automatically.
 func ReconcileMakeTargets(dest, oursContent string, cfg MakeConfig, assumeYes bool, prompt PromptFunc) (changed bool, err error) {
 	if prompt == nil {
 		prompt = StdinPrompt
@@ -219,16 +223,16 @@ func ReconcileMakeTargets(dest, oursContent string, cfg MakeConfig, assumeYes bo
 		}
 
 		if diff > smallDiffThreshold {
-			fmt.Printf("  skip target: %s (differs significantly from claudeconfig's version)\n", t.name)
+			fmt.Printf("  skip target: %s (differs significantly from harnez's version)\n", t.name)
 			fmt.Printf("    delete it from %s and re-run init to adopt ours\n", dest)
 			continue
 		}
 
-		fmt.Printf("  target %q in %s differs from claudeconfig's version:\n", t.name, dest)
-		fmt.Printf("--- existing\n%s+++ claudeconfig\n%s", indentBlock(existing), indentBlock(t.block))
+		fmt.Printf("  target %q in %s differs from harnez's version:\n", t.name, dest)
+		fmt.Printf("--- existing\n%s+++ harnez\n%s", indentBlock(existing), indentBlock(t.block))
 		replace := assumeYes
 		if !assumeYes {
-			replace = prompt(fmt.Sprintf("  replace target %q with claudeconfig's version?", t.name))
+			replace = prompt(fmt.Sprintf("  replace target %q with harnez's version?", t.name))
 		}
 		if replace {
 			content = content[:loc[0]] + t.block + content[loc[1]:]

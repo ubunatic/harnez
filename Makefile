@@ -3,7 +3,7 @@
 _prim := \033[36m
 _rst  := \033[0m
 
-BINARY  := claudeconfig
+BINARY  ?= harnez
 CONFIG  := config.yaml
 TARGET  := $(HOME)/.claude
 PROJECT := .
@@ -18,13 +18,13 @@ preflight: ⚙️  # check toolchains and dependencies
 	@command -v go >/dev/null || (echo "❌ go is not installed" && exit 1)
 
 build: ⚙️  # build the binary
-	go build -o $(BINARY) ./cmd/claudeconfig
+	go build -o $(BINARY) ./cmd/harnez
 
 run: ⚙️ build  # run the application locally
 	./$(BINARY)
 
 install: ⚙️ build  # install binary to ~/go/bin (user)
-	go install ./cmd/claudeconfig
+	go install ./cmd/harnez
 
 install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wide)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
@@ -32,11 +32,21 @@ install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wi
 uninstall: ⚙️  # remove installed binary from system and user paths
 	rm -f $(shell which $(BINARY) 2>/dev/null) $(PREFIX)/bin/$(BINARY)
 
-apply: ⚙️ build  # apply config to ~/.claude + this project (golang bash make)
-	./$(BINARY) apply -c $(CONFIG) -t $(TARGET) -p $(PROJECT) $(addprefix -l ,$(LANGS))
+apply: ⚙️ build  # apply config to ~/.claude globally
+	./$(BINARY) apply -c $(CONFIG) -t $(TARGET)
 
-apply-system: ⚙️ build  # apply config to ~/.claude only (no project, all langs)
-	./$(BINARY) apply -t $(TARGET)
+init: ⚙️ build  # initialize or update this project
+	./$(BINARY) init -c $(CONFIG) -d $(PROJECT) -y
+
+init-siblings: ⚙️ build  # run harnez init across all sibling projects
+	@for dir in $$(find .. -maxdepth 1 -mindepth 1 -type d | sort); do \
+		if test -d "$$dir/.git" || test -f "$$dir/AGENTS.md" || test -f "$$dir/CLAUDE.md"; then \
+			if test "$$dir" != "../claudeconfig" && test "$$dir" != "../archive" && test "$$dir" != "../videos"; then \
+				echo "=== Updating $$dir ==="; \
+				./$(BINARY) init -d "$$dir" -y || true; \
+			fi; \
+		fi; \
+	done
 
 diff: ⚙️ build  # show what apply would change in managed blocks
 	./$(BINARY) diff -c $(CONFIG) -t $(TARGET)

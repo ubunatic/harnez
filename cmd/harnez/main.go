@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"ubunatic.com/claudeconfig/internal/claude"
+	"ubunatic.com/harnez/internal/claude"
 )
 
 func main() {
@@ -13,8 +13,8 @@ func main() {
 	var target string
 
 	root := &cobra.Command{
-		Use:   "claudeconfig",
-		Short: "Manage Claude Code configuration declaratively from a YAML definition",
+		Use:   "harnez",
+		Short: "Manage Claude Code configuration and agent harnesses declaratively from a YAML definition",
 	}
 
 	var applyDocs []string
