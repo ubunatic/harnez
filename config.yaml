@@ -104,6 +104,10 @@ commands:
     description: "Create/update evergreen docs and issue files for the current session"
     file: commands/evergreen.md
 
+  - name: story
+    description: "Write a candid engineering retrospective and case study in docs/studies/"
+    file: commands/story.md
+
   - name: domain-modeling
     description: "Actively build and sharpen the project's domain model, glossary, and ADRs"
     file: commands/domain-modeling.md
@@ -131,6 +135,10 @@ skills:
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
     file: commands/evergreen.md
+
+  - name: story
+    description: "Write a candid engineering retrospective and case study in docs/studies/"
+    file: commands/story.md
 
   - name: domain-modeling
     description: "Actively build and sharpen the project's domain model, glossary, and ADRs"
