@@ -34,6 +34,7 @@ Detection heuristics (`detectDoc` in `init.go`):
 - `bash` — `*.sh` files in project root or `scripts/`
 - `make` — `Makefile` exists
 - `rust` — `Cargo.toml` exists
+- `zig` — `build.zig`, `build.zig.zon`, or `*.zig` exists
 - `cpp` — `*.cpp`, `*.cc`, `*.h`, or `CMakeLists.txt`
 
 ## Template vs targets
@@ -52,10 +53,9 @@ Detection heuristics (`detectDoc` in `init.go`):
 This lets users adopt conventions gradually: projects with no Makefile get the full
 scaffold; projects with an existing Makefile get just the key targets injected.
 
-**Legacy block migration:** projects that were set up before the migration may have a
-`# claudeconfig:begin targets` / `# claudeconfig:end targets` (or `# harnez:begin targets`) marker block from the old
-injection style. `ReconcileMakeTargets` detects and strips this block automatically before
-structural reconciliation runs, so old projects self-migrate on the next `init`.
+**Legacy block migration & CLAUDE.md adoption:**
+- Projects with legacy `# claudeconfig:begin ...` or `<!-- claudeconfig:begin ... -->` markers are automatically upgraded to `harnez:` on `init`.
+- If a project contains a regular `CLAUDE.md` without an `AGENTS.md`, `init` safely renames `CLAUDE.md` → `AGENTS.md` before establishing the `CLAUDE.md -> AGENTS.md` symlink, preserving all custom project rules.
 
 ## Markers abstraction
 
