@@ -41,7 +41,7 @@ init: ⚙️ build  # initialize or update this project
 init-siblings: ⚙️ build  # run harnez init across all sibling projects
 	@for dir in $$(find .. -maxdepth 1 -mindepth 1 -type d | sort); do \
 		if test -d "$$dir/.git" || test -f "$$dir/AGENTS.md" || test -f "$$dir/CLAUDE.md"; then \
-			if test "$$dir" != "../claudeconfig" && test "$$dir" != "../archive" && test "$$dir" != "../videos"; then \
+			if test "$$dir" != "../archive" && test "$$dir" != "../videos"; then \
 				echo "=== Updating $$dir ==="; \
 				./$(BINARY) init -d "$$dir" -y || true; \
 			fi; \

@@ -29,7 +29,7 @@ type Config struct {
 	Make              MakeConfig        `yaml:"make"`
 }
 
-// MakeConfig steers how claudeconfig reconciles its own targets (e.g. `help`)
+// MakeConfig steers how harnez reconciles its own targets (e.g. `help`)
 // and the ⚙️ phony sentinel into a project's existing Makefile.
 type MakeConfig struct {
 	// PhonyFix controls how existing .PHONY declarations are handled:
@@ -39,7 +39,7 @@ type MakeConfig struct {
 	//   "none"            — never touch .PHONY lines
 	PhonyFix string `yaml:"phony_fix"`
 	// PhonySentinel overrides the sentinel token (default "⚙️"). If unset,
-	// claudeconfig auto-detects an existing sentinel variant in the file
+	// harnez auto-detects an existing sentinel variant in the file
 	// (e.g. "⚙︎", the text-presentation form) before falling back to the default.
 	PhonySentinel string `yaml:"phony_sentinel"`
 }

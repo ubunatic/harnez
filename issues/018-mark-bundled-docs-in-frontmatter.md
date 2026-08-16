@@ -1,4 +1,4 @@
-# 018 — Bundled docs don't self-identify as claudeconfig-managed
+# 018 — Bundled docs don't self-identify as harnez-managed
 
 **Status:** Open
 
@@ -7,11 +7,11 @@
 Found 2026-08-16 doing an `/evergreen` pass across `uman`, `books`, and
 `ubunatic.com` after a working session. Deciding which `docs/*.md` were
 safe to hand-edit (project-local architecture/decision notes) versus which
-would be silently overwritten on the next `apply` (claudeconfig-bundled)
+would be silently overwritten on the next `apply` (harnez-bundled)
 required finding this line in each project's `AGENTS.md`/`CLAUDE.md`:
 
 ```
-Docs in `./docs/` are managed by claudeconfig. <!-- claudeconfig:bundled -->
+Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 ```
 
 (`internal/claude/apply.go:336`, `buildLangConventions`). That marker lives
@@ -20,7 +20,7 @@ bundled doc files themselves (`docs/Canary.md`, `docs/Compliance.md`,
 `docs/Make.md`, `docs/Markdown.md`, `docs/Git.md`, `docs/Spec.md`, per-language
 docs, …) carry a `title:`/`weight:` front-matter block (see
 `installDoc`/`langDocState` in `apply.go`) but nothing that says "this file
-is centrally managed, edit the claudeconfig source instead."
+is centrally managed, edit the harnez source instead."
 
 Opening `ubunatic.com/docs/Canary.md` directly — the normal way an agent or
 a human reads a doc — gives no signal that it differs from
@@ -36,19 +36,19 @@ itself at all.
 ## Proposal
 
 Add a front-matter key to every doc installed via `installDoc` that marks
-it as claudeconfig-managed, e.g.:
+it as harnez-managed, e.g.:
 
 ```yaml
 ---
 title: Canary-First Development
 weight: 20
-managed-by: claudeconfig
+managed-by: harnez
 ---
 ```
 
 Concretely:
 
-1. Add `managed-by: claudeconfig` (or reuse `claudeconfig:bundled` as an
+1. Add `managed-by: harnez` (or reuse `harnez:bundled` as an
    HTML-comment convention, matching what `AGENTS.md` already uses) to the
    source docs under `docs/` and `docs/lang/` in this repo.
 2. `installDoc` already copies bytes verbatim, so no code change is needed
@@ -56,7 +56,7 @@ Concretely:
 3. Optionally, have `langDocState`'s existing "bundled"/"custom"/"not
    installed" classification surface *why* — right now that logic already
    knows the answer (byte comparison against the bundled source) but only
-   exposes it via `claudeconfig status`, not by looking at the file.
+   exposes it via `harnez status`, not by looking at the file.
 4. Downstream `docs/README.md` index files could reflect the marker
    automatically instead of every project hand-annotating which rows are
    bundled (`ubunatic.com/docs/README.md` currently doesn't distinguish at
@@ -71,5 +71,5 @@ classification for exactly this). This is purely about a doc announcing its
 own provenance to anyone who opens it directly, the same way `weight:`
 already announces its place in the sidebar. Checked while filing this:
 `ubunatic.com/docs/Canary.md` is currently byte-identical to the
-claudeconfig source (`diff` returns clean), so today it's purely a
+harnez source (`diff` returns clean), so today it's purely a
 provenance-signaling gap, not yet a drift-tracking one.
