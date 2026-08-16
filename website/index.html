@@ -324,14 +324,15 @@
 <main>
 <div class="hero">
   <div class="container">
-    <h1>Declarative <em>Claude Code</em><br>configuration</h1>
-    <p>One <code style="font-family:var(--mono);font-size:0.95em;background:var(--surface);border:1px solid var(--border);padding:0.1em 0.4em;border-radius:4px">config.yaml</code> drives everything Claude Code reads — permissions, model settings, hooks, instructions, slash commands, and language docs. Apply is idempotent.</p>
+    <h1>Declarative <em>developer &amp; agent</em><br>harness</h1>
+    <p>One <code style="font-family:var(--mono);font-size:0.95em;background:var(--surface);border:1px solid var(--border);padding:0.1em 0.4em;border-radius:4px">config.yaml</code> drives everything Claude Code and AI agents read — permissions, model settings, hooks, instructions, cross-agent skills, and engineering conventions. Apply is idempotent.</p>
 
     <div class="pill-row">
       <span class="pill">settings.json</span>
       <span class="pill">CLAUDE.md</span>
       <span class="pill">AGENTS.md</span>
       <span class="pill">commands/</span>
+      <span class="pill">skills/</span>
       <span class="pill">docs/</span>
       <span class="pill">hooks</span>
     </div>
@@ -341,7 +342,7 @@
       <code>
         <span class="prompt">$ </span><span class="cmd">git clone</span> <span class="arg">https://codeberg.org/ubunatic/harnez</span><br>
         <span class="prompt">$ </span><span class="cmd">cd</span> <span class="arg">harnez</span><br>
-        <span class="prompt">$ </span><span class="cmd">make install</span>  <span class="cmt"># builds and installs to /usr/local/bin</span>
+        <span class="prompt">$ </span><span class="cmd">make install</span>  <span class="cmt"># builds and installs to ~/go/bin</span>
       </code>
     </div>
   </div>
@@ -366,23 +367,23 @@
       </div>
       <div class="feature">
         <h3>CLAUDE.md / AGENTS.md</h3>
-        <p>Managed sections live inside HTML-comment markers. Unmanaged content is never touched.</p>
+        <p>Managed sections live inside HTML-comment markers. Unmanaged project rules are never overwritten.</p>
       </div>
       <div class="feature">
-        <h3>Slash commands</h3>
-        <p>Each <code>commands:</code> entry produces <code>~/.claude/commands/&lt;name&gt;.md</code> with frontmatter and body.</p>
+        <h3>Multi-agent skills</h3>
+        <p>Distributes slash commands &amp; skills across Claude (<code>~/.claude/commands/</code>), Gemini (<code>~/.gemini/skills/</code>), and Codex.</p>
       </div>
       <div class="feature">
-        <h3>Language docs</h3>
-        <p>Coding-style docs installed to <code>~/.claude/docs/</code> with project copies so <code>@docs/Go.md</code> resolves locally.</p>
+        <h3>Language &amp; practice docs</h3>
+        <p>Bundles conventions for Go, Bash, Make, Rust, Zig, C++, GTK4, Git, Markdown, Canary-first probes, and Spec-driven architecture.</p>
       </div>
       <div class="feature">
         <h3>MCP servers</h3>
         <p>Declare MCP server definitions in <code>mcp_servers:</code>; harnez writes them into <code>settings.json</code>.</p>
       </div>
       <div class="feature">
-        <h3>Project setup</h3>
-        <p><code>init --docs &lt;name,name&gt;</code> creates AGENTS.md, copies docs locally, and injects standard Makefile targets — one command, per project.</p>
+        <h3>Project setup &amp; upgrade</h3>
+        <p><code>init</code> sets up <code>AGENTS.md</code>, symlinks <code>CLAUDE.md</code>, copies local docs, and reconciles Makefile targets.</p>
       </div>
     </div>
   </div>
@@ -393,20 +394,20 @@
   <div class="container">
     <h2>Quick start</h2>
     <div class="codeblock">
-      <pre><span class="p"># sync global ~/.claude config (idempotent)</span>
-<span class="p">$</span> harnez apply
+      <pre><span class="p"># sync global ~/.claude config and shared skills (idempotent)</span>
+<span class="p">$</span> harnez apply --force-docs
 
 <span class="p"># preview changes without writing</span>
 <span class="p">$</span> harnez diff
 
-<span class="p"># set up a project directory with language docs and Makefile targets</span>
-<span class="p">$</span> harnez init --docs golang,make
+<span class="p"># check configuration and installed doc status</span>
+<span class="p">$</span> harnez status
 
-<span class="p"># set up + generate an AI project summary in AGENTS.md</span>
-<span class="p">$</span> harnez init --docs golang --summary
+<span class="p"># set up or upgrade a project directory with language docs</span>
+<span class="p">$</span> harnez init -d /path/to/project -y
 
-<span class="p"># use a custom config file</span>
-<span class="p">$</span> harnez apply -c myconfig.yaml -t ~/.claude</pre>
+<span class="p"># upgrade all sibling repositories in workspace</span>
+<span class="p">$</span> make init-siblings</pre>
     </div>
   </div>
 </section>
