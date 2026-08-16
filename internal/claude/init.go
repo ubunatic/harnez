@@ -202,6 +202,10 @@ func detectDoc(dir, name string) bool {
 		return fileExists(filepath.Join(dir, "Makefile"))
 	case "rust":
 		return fileExists(filepath.Join(dir, "Cargo.toml"))
+	case "zig":
+		return fileExists(filepath.Join(dir, "build.zig")) ||
+			fileExists(filepath.Join(dir, "build.zig.zon")) ||
+			globExists(dir, "*.zig")
 	case "cpp":
 		return globExists(dir, "*.cpp") || globExists(dir, "*.cc") ||
 			globExists(dir, "*.h") || fileExists(filepath.Join(dir, "CMakeLists.txt"))

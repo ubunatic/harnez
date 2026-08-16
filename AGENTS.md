@@ -41,7 +41,9 @@ Before changing any command's flags or adding project-local behaviour to `apply`
 `docs/lang/` — copyable language/SDK/framework docs (Go, Bash, Make, Git, Rust, Cpp, Markdown, GTK4, Zig).
 Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --doc <name>`.
 
-`docs/other/` — copyable docs that don't form a category yet (Canary). Same install mechanics as `docs/lang/`.
+`docs/other/` — copyable docs that don't form a category yet (Canary, Spec). Same install mechanics as `docs/lang/`.
+
+`docs/studies/` — case studies and background reports (reference material for future generic docs).
 
 `docs/proposed/` — staging area for new docs that may become copyable. No install mechanics yet.
 

@@ -1,6 +1,6 @@
 # 017 — `docs/Spec.md` (bundled, `default: true`) is Cati-specific, not a generic guide
 
-**Status:** Open
+**Status:** Closed
 
 ## Context
 

@@ -1,6 +1,6 @@
 # 014 — Bundle a Zig language doc
 
-**Status:** Open
+**Status:** Closed
 
 ## Context
 

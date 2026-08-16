@@ -9,10 +9,9 @@ Not needed for routine coding; reach for these during investigations or design w
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands (config.yaml → ~/.claude/commands/) and shared skills (→ ~/.gemini/skills/, ~/.codex/skills/) |
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat |
-| [Worktrees.md](Worktrees.md) | Parallel worktree agents: what worked, go.mod races, Haiku API staleness |
 
 Copyable docs (installed to `~/.claude/docs/` on `apply`, copied to projects via `--docs`) live in subdirs.
-Generated copies land here (root) after `apply`.
+Generated copies land here (root) after `apply` / `init`.
 
 **`docs/lang/`** — language/SDK/framework docs
 
@@ -23,6 +22,7 @@ Generated copies land here (root) after `apply`.
 | [lang/Make.md](lang/Make.md) | Makefile conventions |
 | [lang/Git.md](lang/Git.md) | Git conventions |
 | [lang/Rust.md](lang/Rust.md) | Rust conventions |
+| [lang/Zig.md](lang/Zig.md) | Zig conventions |
 | [lang/Cpp.md](lang/Cpp.md) | C/C++ conventions |
 | [lang/Markdown.md](lang/Markdown.md) | Markdown conventions |
 | [lang/GTK4.md](lang/GTK4.md) | GTK4/PyGObject conventions |
@@ -33,5 +33,12 @@ Generated copies land here (root) after `apply`.
 |------|-------|
 | [other/Canary.md](other/Canary.md) | Canary-first development: probe external mechanisms before building |
 | [other/Spec.md](other/Spec.md) | Spec-driven architecture: YAML spec files as single source of truth |
+
+**`docs/studies/`** — case studies & background reports (reference material for future generic docs)
+
+| File | Topic |
+|------|-------|
+| [studies/GoRelease.md](studies/GoRelease.md) | Release pipeline case study (goreleaser consolidation) |
+| [studies/Worktrees.md](studies/Worktrees.md) | Parallel worktrees case study (go.mod races, dependencies) |
 
 **`docs/proposed/`** — staging area for docs that may become copyable (no install mechanics yet).

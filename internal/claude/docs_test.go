@@ -4,6 +4,7 @@
 package claude
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -58,3 +59,23 @@ func TestValidateDocNames(t *testing.T) {
 		t.Errorf("error should name the unknown doc: %v", err)
 	}
 }
+
+func TestDetectDoc(t *testing.T) {
+	dir := t.TempDir()
+	if detectDoc(dir, "zig") {
+		t.Error("detectDoc(empty, zig) should be false")
+	}
+	// test zig detection via build.zig
+	zigFile := dir + "/build.zig"
+	if err := testingWriteFile(zigFile, "const std = @import(\"std\");\n"); err != nil {
+		t.Fatal(err)
+	}
+	if !detectDoc(dir, "zig") {
+		t.Error("detectDoc(dir with build.zig, zig) should be true")
+	}
+}
+
+func testingWriteFile(path, content string) error {
+	return os.WriteFile(path, []byte(content), 0o600)
+}
+

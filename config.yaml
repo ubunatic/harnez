@@ -5,6 +5,7 @@ docs:
   - bash
   - make
   - rust
+  - zig
   - cpp
   - markdown
   - git
@@ -207,6 +208,14 @@ agents_md:
       target: ~/.claude/docs/Rust.md
       local: ./docs/Rust.md
       default: auto   # Cargo.toml
+    zig:
+      name: "Zig"
+      ref: "@docs/Zig.md"
+      hint: "Explicit allocation, ReleaseSmall for CLI/utilities, Zig 0.16.0 conventions"
+      source: docs/lang/Zig.md
+      target: ~/.claude/docs/Zig.md
+      local: ./docs/Zig.md
+      default: auto   # build.zig, build.zig.zon, *.zig
     cpp:
       name: "C/C++"
       ref: "@docs/Cpp.md"

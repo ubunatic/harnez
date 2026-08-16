@@ -8,14 +8,14 @@ weight: 67
 
 # GTK4 and PyGObject Development Guidelines
 
-This document details development guidelines, architectural patterns, and resolved pitfalls for PyGObject and GTK4 UI programming in Sprite View.
+This document details development guidelines, architectural patterns, and resolved pitfalls for PyGObject and GTK4 UI programming.
 
 ---
 
 ## 1. Application Uniqueness
 
 * **Standard**: Always use `Gio.ApplicationFlags.NON_UNIQUE` application flags.
-* **Context**: When Sprite View is spawned from Nautilus or a command-line script, a unique application instance flag would cause subsequent spawns to silently send files to the background daemon instead of opening a new CLI window. Using non-unique flags ensures each invocation gets its own independent process and window context.
+* **Context**: When an application is spawned from a file manager (like Nautilus) or a command-line script, a unique application instance flag would cause subsequent spawns to silently send files to the background daemon instead of opening a new CLI/GUI window. Using non-unique flags ensures each invocation gets its own independent process and window context.
 
 ---
 
