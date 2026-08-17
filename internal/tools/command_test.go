@@ -182,6 +182,29 @@ func TestVoiceInputHistoryCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("list format json output", func(t *testing.T) {
+		var out bytes.Buffer
+		d := testDeps(&out)
+		d.Getenv = func(k string) string {
+			if k == "HOME" {
+				return homeDir
+			}
+			return ""
+		}
+
+		cmd, err := NewCommand(fsys, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd.SetArgs([]string{"voice-input", "history", "list", "--format", "json"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("history list json failed: %v", err)
+		}
+		if !strings.Contains(out.String(), `"text": "dictated text to record"`) {
+			t.Fatalf("expected json output to contain entry text, got: %s", out.String())
+		}
+	})
+
 	t.Run("copy copies entry text via wl-copy", func(t *testing.T) {
 		entries, err := ListHistory(HistoryPath(homeDir))
 		if err != nil || len(entries) == 0 {

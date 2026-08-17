@@ -35,6 +35,10 @@ harnez tools install voice-input --scope system   # explicit privilege; recipe p
 harnez tools voice-input mode                     # show the active mode (batch/streaming/neither/inconsistent)
 harnez tools voice-input mode streaming           # switch to opt-in local streaming (issue 021)
 harnez tools voice-input mode batch               # switch back to the default batch flow
+harnez tools voice-input record status            # show active dictation status (idle or recording)
+harnez tools voice-input record toggle            # toggle active voice recording on or off
+harnez tools voice-input record start             # start active voice recording
+harnez tools voice-input record stop              # stop active voice recording
 harnez tools voice-input history list             # list recent dictations (most recent first, sensitive)
 harnez tools voice-input history copy <ID>        # copy transcript to clipboard via wl-copy
 harnez tools voice-input history retype <ID>      # re-type transcript at cursor via dotool

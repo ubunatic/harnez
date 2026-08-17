@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -89,8 +90,41 @@ func newVoiceInputCommand(d Dependencies) *cobra.Command {
 			}
 			return SwitchVoiceInputMode(ctx, d, target)
 		}}
-	voiceInput.AddCommand(mode, newVoiceInputHistoryCommand(d), newVoiceInputConfigCommand(d))
+	voiceInput.AddCommand(mode, newVoiceInputRecordCommand(d), newVoiceInputHistoryCommand(d), newVoiceInputConfigCommand(d))
 	return voiceInput
+}
+
+// newVoiceInputRecordCommand controls active audio dictation recording (start, stop, toggle, status).
+func newVoiceInputRecordCommand(d Dependencies) *cobra.Command {
+	record := &cobra.Command{Use: "record", Short: "Start, stop, or toggle active voice dictation recording"}
+
+	toggle := &cobra.Command{Use: "toggle", Short: "Toggle dictation recording on or off", Args: cobra.NoArgs, SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return ControlRecording(cmd.Context(), d, RecordActionToggle)
+		}}
+
+	start := &cobra.Command{Use: "start", Short: "Start dictation recording", Args: cobra.NoArgs, SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return ControlRecording(cmd.Context(), d, RecordActionStart)
+		}}
+
+	stop := &cobra.Command{Use: "stop", Short: "Stop dictation recording", Args: cobra.NoArgs, SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return ControlRecording(cmd.Context(), d, RecordActionStop)
+		}}
+
+	status := &cobra.Command{Use: "status", Short: "Print recording status (idle or recording)", Args: cobra.NoArgs, SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			stat, err := GetRecordingStatus(cmd.Context(), d)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(d.Stdout, stat)
+			return nil
+		}}
+
+	record.AddCommand(toggle, start, stop, status)
+	return record
 }
 
 // newVoiceInputHistoryCommand exposes the local, sensitive dictation
@@ -103,6 +137,7 @@ func newVoiceInputHistoryCommand(d Dependencies) *cobra.Command {
 	history := &cobra.Command{Use: "history", Short: "Recent dictation history (local-only, treat as sensitive)"}
 
 	var limit int
+	var format string
 	list := &cobra.Command{Use: "list", Short: "List recent transcripts, most recent first", Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			entries, err := ListHistory(historyPath())
@@ -112,12 +147,21 @@ func newVoiceInputHistoryCommand(d Dependencies) *cobra.Command {
 			if limit > 0 && len(entries) > limit {
 				entries = entries[:limit]
 			}
+			if format == "json" {
+				if entries == nil {
+					entries = []HistoryEntry{}
+				}
+				enc := json.NewEncoder(d.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(entries)
+			}
 			for _, e := range entries {
 				fmt.Fprintf(d.Stdout, "%s\t%s\t%s\n", e.ID, e.Time.Format("2006-01-02T15:04:05"), e.Text)
 			}
 			return nil
 		}}
 	list.Flags().IntVar(&limit, "limit", 0, "show at most N entries (default: all)")
+	list.Flags().StringVar(&format, "format", "text", "output format (text or json)")
 
 	clear := &cobra.Command{Use: "clear", Short: "Delete all recorded history", Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error { return ClearHistory(historyPath()) }}

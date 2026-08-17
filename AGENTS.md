@@ -56,6 +56,7 @@ A category dir (e.g. `docs/practices/`) forms once 3+ docs share a theme.
 
 Run from project root.
 
+- Always run `make install` after modifying Go code to update the local binary in `~/go/bin`.
 - `scripts/smoke-test.sh` — build, apply, verify idempotency, simulate drift and confirm repair
 - `scripts/drop-perm.sh PATTERN` — remove permissions matching PATTERN from `~/.claude/settings.json` for drift simulation
 <!-- harnez:begin Repo Setup -->

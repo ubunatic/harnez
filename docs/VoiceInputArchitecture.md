@@ -97,6 +97,16 @@ Voxtype's built-in `voxtype config set` CLI only supports changing the `engine` 
 - Harnez implements a targeted regex line editor (`SetTypeDelayMs` in `internal/tools/voice_config.go`) that edits only `type_delay_ms` in-place, preserving comments and formatting.
 - Changes are written atomically via temp-file creation and rename (`writeConfigAtomic`).
 
+### 4.4. Development & Testing Workflow (GNOME 45–50 Devkit / Nested Sessions)
+Developing and testing GNOME Shell extensions without logging out:
+
+- **Canary Tooling** (`scripts/canary_nested/main.go` & `scripts/canary_ext/main.go`):
+  - Validates headless Wayland display socket creation (`dbus-run-session gnome-shell --devkit --wayland`), child process-group termination, and `dotoold` keystroke injection (`Ctrl+S` saving / `Ctrl+Q` exit).
+- **GNOME 50 Finding**:
+  - In GNOME 50 (Wayland-only), `--nested` is superseded by `--devkit`.
+  - On platforms where the separate `mutter-devkit` helper (`/usr/libexec/mutter-devkit`) is not yet packaged, `gnome-shell --devkit` runs headlessly without rendering a graphical window or initializing the extension manager for user extensions.
+  - On GNOME 45–48 with full nested support or GNOME 50 with `mutter-devkit`, symlinking the extension into `~/.local/share/gnome-shell/extensions/<uuid>` enables live testing without host session restarts.
+
 ---
 
 ## 5. Security & Privacy Considerations
@@ -104,3 +114,4 @@ Voxtype's built-in `voxtype config set` CLI only supports changing the `engine` 
 1. **Local-Only Sensitive Data**: Voice dictations may contain sensitive tokens, passwords, or personal communications. History is stored strictly in `~/.local/share/harnez/voice-input/history.jsonl` with `0600` permissions. No network sync or background indexing is performed.
 2. **Instant History Erasure**: `harnez tools voice-input history clear` allows immediate one-click deletion of stored transcripts.
 3. **No Added Privileges**: Input injection uses the existing user-session `/dev/uinput` access (`uaccess` tag). No root escalation or `input` group membership is requested or required.
+

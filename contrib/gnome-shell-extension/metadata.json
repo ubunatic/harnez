@@ -1,0 +1,7 @@
+{
+  "uuid": "voice-input@harnez.ubunatic.com",
+  "name": "Harnez Voice Input",
+  "description": "Desktop companion for Harnez voice input dictation, history, retype, and settings",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 1
+}

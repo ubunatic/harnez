@@ -1,0 +1,7 @@
+{
+  "uuid": "canary-dummy@harnez.ubunatic.com",
+  "name": "Harnez Canary Dummy Extension",
+  "description": "Probe extension for testing GNOME Shell nested lifecycle",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 1
+}

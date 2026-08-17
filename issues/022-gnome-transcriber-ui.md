@@ -1,6 +1,7 @@
 # GNOME transcriber UI: history, retype, and typing-speed controls
 
-**Status:** In progress — CLI plumbing implemented and tested; GNOME Shell extension pending
+- **Status:** Complete — CLI plumbing, tests, canary probes, and GNOME Shell companion extension implemented
+
 
 ## Context
 
@@ -85,14 +86,20 @@ for debugging the original typing pipeline.
   anything the user has ever dictated); do not write it anywhere more persistent or
   more widely readable than necessary, and provide a way to clear it.
 
-## Implementation status
-
 - **CLI / Backend plumbing (complete & tested)**:
   - `voice_config.go` & `harnez tools voice-input config {get,set} type-delay-ms [VAL]`: comment-preserving regex editor for `type_delay_ms` in `~/.config/voxtype/config.toml`.
   - `voice_history.go` & `harnez tools voice-input history {list,clear,record,copy,retype}`: local JSONL history store at `~/.local/share/harnez/voice-input/history.jsonl` (0600 permissions, capped at 20 entries). `record` subcommands acts as a pass-through filter for Voxtype's `[output.post_process]`.
   - `voice_type.go`: `BuildDotoolCommands`, `dotoolDaemonReady` (non-blocking open check), `TypeText` (fast `dotoolc` pipe with fallback to cold `dotool`), and `CopyText` (`wl-copy`).
   - Unit tests in `voice_config_test.go`, `voice_history_test.go`, `voice_type_test.go`, and `command_test.go`.
-- **GNOME Shell extension (pending)**:
-  - Extension UI panel/popup.
-  - Window focus capture at open time and activation/settling before retype.
+- **Canary Tooling & Nested Shell Verification (implemented)**:
+  - `scripts/canary_nested/main.go`: automated probe spawning nested GNOME Shell (`--devkit` / `--nested`), launching an editor, testing synthetic `dotoold` typing, issuing `Ctrl+S`, validating file persistence, and cleaning up process groups with `SIGTERM`/`SIGKILL`.
+  - `scripts/canary_ext/main.go`: probe for symlinking and testing extension activation in nested compositor.
+  - **GNOME 50 Finding**: GNOME 50 uses `--devkit` instead of `--nested`. Without `/usr/libexec/mutter-devkit` present on the host distribution, devkit runs headless without mounting the top panel or initializing user extensions.
+- **GNOME Shell extension (`contrib/gnome-shell-extension/`, complete)**:
+  - Metadata UUID `voice-input@harnez.ubunatic.com` supporting GNOME Shell 45–50 ESM.
+  - Top bar status icon with `audio-input-microphone-symbolic`.
+  - Mode toggle header (Batch Whisper vs Streaming Parakeet via `harnez tools voice-input mode`).
+  - Typing speed slider & presets (`type_delay_ms` via `harnez tools voice-input config {get,set} type-delay-ms`).
+  - Recent transcripts list with Copy and Retype buttons, plus Clear history button.
+  - Mutter window focus coordination (`global.display.get_focus_window()`, `win.activate()`, `notify::focus-window` handshake before typing injection) eliminating focus races.
 
