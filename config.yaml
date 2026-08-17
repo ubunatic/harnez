@@ -130,6 +130,7 @@ commands:
 
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
+prime_agent_target: ~/.prime/agent
 
 skills:
   - name: evergreen
@@ -152,14 +153,14 @@ agents_md:
     sections:
       - name: Instructions Hierarchy
         content: |
-          - This is the global CLAUDE.md.
-          - There must be a local one that defines rules for the project.
-            Each project must have a local CLAUDE.md.
-            If a local file is missing, report this to the user.
-          - If local CLAUDE.md does not define language rules, report it to the user.
-          - Local rules may refer to global docs in ~/.claude/docs.
-            Resolve local @docs or @rules refs to ./docs or ./rules first
-            and then to ~/.claude/docs or ~/.claude/rules.
+          - This is the global agent instructions file.
+          - Every project must have a local AGENTS.md that defines its rules.
+            Claude Code also discovers it through a local CLAUDE.md symlink.
+            If the local instructions file is missing, report this to the user.
+          - If local AGENTS.md does not define language rules, report it to the user.
+          - Local rules may refer to global docs managed by harnez.
+            Resolve local @docs or @rules refs to ./docs or ./rules first,
+            then to the active harness directory (~/.claude or ~/.prime/agent).
           - Always use absolute file paths for global instructions.
             Always use relative file paths for local instructions.
       - name: Minimal Global Docs

@@ -28,7 +28,7 @@ or OS filesystem). It overrides `content` if both are set.
 
 ## Apply flow
 
-1. `ApplyAll` creates `~/.claude/commands/` if absent.
+1. `ApplyAll` creates `~/.claude/commands/` and, when configured, `~/.prime/agent/prompts/`.
 2. For each entry: generate content → compare with existing file → write if changed.
 3. Front-matter (`description:`) is prepended as YAML if `cmd.Description != ""`:
    ```
@@ -58,9 +58,8 @@ what is currently installed.
 
 ## Agent Skills (`skills:`)
 
-Each skill is a directory containing a `SKILL.md` file. harnez installs these to
-`~/.gemini/skills/<name>/SKILL.md` and, when configured, to
-`~/.codex/skills/<name>/SKILL.md`.
+Each skill is a directory containing a `SKILL.md` file. harnez installs these to the
+configured Gemini, Codex, and Prime Agent skill roots.
 
 ### Frontmatter difference
 
@@ -70,6 +69,7 @@ only. `genSkillContent` handles this — do not use `genCommandContent` for skil
 ```yaml
 skills_target: ~/.gemini/skills   # default; override to ~/.gemini/antigravity-cli/skills for agy-only
 codex_skills_target: ~/.codex/skills
+prime_agent_target: ~/.prime/agent  # prompts/, skills/, AGENTS.md, and docs/
 
 skills:
   - name: evergreen
@@ -84,10 +84,13 @@ skills:
 | Shared (all agents) | `~/.gemini/skills/<name>/SKILL.md` |
 | Antigravity CLI only | `~/.gemini/antigravity-cli/skills/<name>/SKILL.md` |
 | Codex | `~/.codex/skills/<name>/SKILL.md` |
+| Prime Agent | `~/.prime/agent/skills/<name>/SKILL.md` |
 | Project | `<project>/.agents/skills/<name>/SKILL.md` |
 
 `skills_target` controls the Gemini/Antigravity target. `codex_skills_target` controls the
-Codex target. Leave a target empty to skip that install.
+Codex target. `prime_agent_target` is the Prime Agent root; leave it empty to disable all
+Prime Agent outputs. Prime prompt templates reuse command format unchanged because both
+formats accept `description` frontmatter.
 
 ### Adding a new skill
 
@@ -100,5 +103,5 @@ Codex target. Leave a target empty to skip that install.
 ### Source reuse
 
 A single `commands/<name>.md` file can back both a Claude command (`commands:` entry) and
-an Antigravity or Codex skill (`skills:` entry). The frontmatter is generated
+an Antigravity, Codex, or Prime Agent skill (`skills:` entry). The frontmatter is generated
 differently by `genCommandContent` vs `genSkillContent`; the body is identical.

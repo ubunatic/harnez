@@ -7,16 +7,16 @@ weight: 40
 
 How `--docs <name>` flows from `config.yaml` into a project via `apply` (global) and `init` (project-local).
 
-## Four outputs per doc
+## Harness and project outputs per doc
 
 | Field | Command | Destination | Behaviour |
 |-------|---------|-------------|-----------|
-| `source` | `apply` | `~/.claude/docs/<name>.md` | Always written/updated (global) |
+| `source` | `apply` | `~/.claude/docs/<name>.md`, `~/.prime/agent/docs/<name>.md` | Installed globally unless an existing custom doc is preserved |
 | `local` | `init` | `<project>/docs/<name>.md` | Written/updated on every init |
 | `template` | `init` | `<project>/Makefile` (basename of path) | Written **once** — skipped if file exists |
 | `targets` | `init` | `<project>/Makefile` (managed section) | Injected/updated — skipped if template was just scaffolded |
 
-`source` (global install) is driven by `apply --docs <name>` or the top-level `docs:` list in `config.yaml`.
+`source` (global install) is driven by `apply --docs <name>` or the top-level `docs:` list in `config.yaml`. Prime copies are enabled by `prime_agent_target`.
 `local`, `template`, and `targets` (project-local) are driven by `init --docs <name>` or auto-detection.
 
 ## Auto-detection (`default:` field)

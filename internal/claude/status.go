@@ -21,6 +21,9 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 	fmt.Println("Config:")
 	fmt.Printf("  %-14s %s\n", "file:", configPath)
 	fmt.Printf("  %-14s %s\n", "target:", target)
+	if root := primeAgentRoot(cfg); root != "" {
+		fmt.Printf("  %-14s %s\n", "prime_agent:", root)
+	}
 	if cfg.Model != "" {
 		fmt.Printf("  %-14s %s → %s\n", "model:", cfg.Model, resolveModel(cfg.Model))
 	}
@@ -51,13 +54,19 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 			check: func() bool { return hasSettingsKey(settingsPath, "model") },
 		},
 	}
-	for _, s := range cfg.AgentsMD.Global.Sections {
-		s := s
-		gTarget := fsutil.ExpandHome(cfg.AgentsMD.Global.Target)
-		checks = append(checks, entry{
-			label: gTarget + " [" + s.Name + "]",
-			check: func() bool { return markdown.ContainsSection(gTarget, s.Name) },
-		})
+	ruleTargets := []string{fsutil.ExpandHome(cfg.AgentsMD.Global.Target)}
+	if root := primeAgentRoot(cfg); root != "" {
+		ruleTargets = appendUniquePath(ruleTargets, filepath.Join(root, "AGENTS.md"))
+	}
+	for _, ruleTarget := range ruleTargets {
+		ruleTarget := ruleTarget
+		for _, s := range cfg.AgentsMD.Global.Sections {
+			s := s
+			checks = append(checks, entry{
+				label: ruleTarget + " [" + s.Name + "]",
+				check: func() bool { return markdown.ContainsSection(ruleTarget, s.Name) },
+			})
+		}
 	}
 	for _, s := range cfg.AgentsMD.Local.Sections {
 		s := s
@@ -69,11 +78,13 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 	}
 	for _, cmd := range cfg.Commands {
 		cmd := cmd
-		path := filepath.Join(target, "commands", cmd.Name+".md")
-		checks = append(checks, entry{
-			label: path,
-			check: func() bool { _, err := os.Stat(path); return err == nil },
-		})
+		for _, cmdDir := range commandTargets(target, cfg) {
+			path := filepath.Join(cmdDir, cmd.Name+".md")
+			checks = append(checks, entry{
+				label: path,
+				check: func() bool { _, err := os.Stat(path); return err == nil },
+			})
+		}
 	}
 	if len(cfg.Skills) > 0 {
 		targets := skillTargets(cfg)
@@ -105,9 +116,14 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 			if !ok {
 				continue
 			}
-			dst := fsutil.ExpandHome(lang.Target)
-			state := langDocState(cfg.FS, lang.Source, dst)
-			fmt.Printf("  %-14s %s [%s]\n", name+":", fsutil.ContractHome(dst), state)
+			docTargets := []string{fsutil.ExpandHome(lang.Target)}
+			if root := primeAgentRoot(cfg); root != "" {
+				docTargets = appendUniquePath(docTargets, filepath.Join(root, "docs", filepath.Base(lang.Target)))
+			}
+			for _, dst := range docTargets {
+				state := langDocState(cfg.FS, lang.Source, dst)
+				fmt.Printf("  %-14s %s [%s]\n", name+":", fsutil.ContractHome(dst), state)
+			}
 		}
 	}
 

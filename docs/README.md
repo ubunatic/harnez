@@ -6,11 +6,11 @@ Not needed for routine coding; reach for these during investigations or design w
 | File | Topic |
 |------|-------|
 | [CLIDesign.md](CLIDesign.md) | apply vs init separation: scope, rationale, footgun avoided, design evolution |
-| [CommandsPipeline.md](CommandsPipeline.md) | Claude commands (config.yaml → ~/.claude/commands/) and shared skills (→ ~/.gemini/skills/, ~/.codex/skills/) |
+| [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent |
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat |
 
-Copyable docs (installed to `~/.claude/docs/` on `apply`, copied to projects via `--docs`) live in subdirs.
+Copyable docs (installed to Claude and Prime Agent global dirs on `apply`, copied to projects via `--docs`) live in subdirs.
 Generated copies land here (root) after `apply` / `init`.
 
 **`docs/lang/`** — language/SDK/framework docs

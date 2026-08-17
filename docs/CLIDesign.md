@@ -11,7 +11,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 
 | Command | Scope | What it touches |
 |---------|-------|-----------------|
-| `apply` | Global (`~/.claude`) | `settings.json`, `CLAUDE.md`, `commands/`, `docs/<name>.md` |
+| `apply` | Global harnesses | Claude settings/rules/commands plus Prime Agent rules/prompts/skills/docs |
 | `init`  | Project (cwd / `-d`) | `AGENTS.md`, `CLAUDE.md` symlink, `docs/<name>.md` copy, `Makefile` |
 | `diff`  | Global | Preview of what `apply` would change |
 | `clean` | Global | Remove managed keys / strip MD sections |
@@ -76,7 +76,9 @@ harnez apply [-t <dir>] [-d <name>...] [--force-docs]
         ├── write ~/.claude/commands/<name>.md for each command
         ├── write ~/.gemini/skills/<name>/SKILL.md for each skill
         ├── write ~/.codex/skills/<name>/SKILL.md for each skill when configured
-        └── install ~/.claude/docs/<name>.md for each doc
+        ├── write ~/.prime/agent/AGENTS.md managed sections
+        ├── write ~/.prime/agent/prompts/<name>.md and skills/<name>/SKILL.md
+        └── install docs to ~/.claude/docs/ and ~/.prime/agent/docs/
 ```
 
 ## Flag shorthands

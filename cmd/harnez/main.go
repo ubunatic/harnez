@@ -14,14 +14,14 @@ func main() {
 
 	root := &cobra.Command{
 		Use:   "harnez",
-		Short: "Manage Claude Code configuration and agent harnesses declaratively from a YAML definition",
+		Short: "Manage Claude Code, Prime Agent, and other agent harnesses from a YAML definition",
 	}
 
 	var applyDocs []string
 	var forceDocs bool
 	apply := &cobra.Command{
 		Use:   "apply",
-		Short: "Apply config.yaml to the Claude Code config directory (~/.claude)",
+		Short: "Apply config.yaml to global Claude Code and agent harness directories",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, name, err := claude.OpenConfig(configPath)
 			if err != nil {

@@ -414,28 +414,44 @@ func genSkillContent(cmd Command, fsys fs.FS) (string, error) {
 	return sb.String(), nil
 }
 
+func primeAgentRoot(cfg *Config) string {
+	return fsutil.ExpandHome(cfg.PrimeAgentTarget)
+}
+
+func appendUniquePath(paths []string, path string) []string {
+	if path == "" {
+		return paths
+	}
+	for _, existing := range paths {
+		if existing == path {
+			return paths
+		}
+	}
+	return append(paths, path)
+}
+
 func skillTargets(cfg *Config) []string {
 	var targets []string
 
 	if root := fsutil.ExpandHome(cfg.SkillsTarget); root != "" {
-		targets = append(targets, root)
+		targets = appendUniquePath(targets, root)
 	} else if home, err := os.UserHomeDir(); err == nil {
-		targets = append(targets, filepath.Join(home, ".gemini", "skills"))
+		targets = appendUniquePath(targets, filepath.Join(home, ".gemini", "skills"))
 	}
 
-	if root := fsutil.ExpandHome(cfg.CodexSkillsTarget); root != "" {
-		dup := false
-		for _, existing := range targets {
-			if existing == root {
-				dup = true
-				break
-			}
-		}
-		if !dup {
-			targets = append(targets, root)
-		}
+	targets = appendUniquePath(targets, fsutil.ExpandHome(cfg.CodexSkillsTarget))
+	if root := primeAgentRoot(cfg); root != "" {
+		targets = appendUniquePath(targets, filepath.Join(root, "skills"))
 	}
 
+	return targets
+}
+
+func commandTargets(target string, cfg *Config) []string {
+	targets := []string{filepath.Join(target, "commands")}
+	if root := primeAgentRoot(cfg); root != "" {
+		targets = appendUniquePath(targets, filepath.Join(root, "prompts"))
+	}
 	return targets
 }
 
@@ -521,25 +537,31 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool) error {
 
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
 		gTarget := fsutil.ExpandHome(g.Target)
-		gr := applyResult{}
-		var presentNames []string
-		for _, s := range g.Sections {
-			r, err := applySectionMD(gTarget, s.Name, s.Content)
-			if err != nil {
-				return fmt.Errorf("agents_md.global [%s]: %w", s.Name, err)
-			}
-			if r.changed {
-				gr.changed = true
-				gr.notes = append(gr.notes, r.notes...)
-			} else {
-				presentNames = append(presentNames, s.Name)
-			}
+		ruleTargets := []string{gTarget}
+		if root := primeAgentRoot(cfg); root != "" {
+			ruleTargets = appendUniquePath(ruleTargets, filepath.Join(root, "AGENTS.md"))
 		}
-		if gr.changed {
-			changes++
+		for _, ruleTarget := range ruleTargets {
+			gr := applyResult{}
+			var presentNames []string
+			for _, s := range g.Sections {
+				r, err := applySectionMD(ruleTarget, s.Name, s.Content)
+				if err != nil {
+					return fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
+				}
+				if r.changed {
+					gr.changed = true
+					gr.notes = append(gr.notes, r.notes...)
+				} else {
+					presentNames = append(presentNames, s.Name)
+				}
+			}
+			if gr.changed {
+				changes++
+			}
+			printResult("wrote", ruleTarget, gr)
+			addStat(fsutil.ContractHome(ruleTarget), strings.Join(presentNames, ", "))
 		}
-		printResult("wrote", gTarget, gr)
-		addStat(filepath.Base(gTarget), strings.Join(presentNames, ", "))
 
 		if g.Symlink != "" {
 			link := fsutil.ExpandHome(g.Symlink)
@@ -555,9 +577,11 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool) error {
 	}
 
 	if len(cfg.Commands) > 0 {
-		cmdDir := filepath.Join(target, "commands")
-		if err := os.MkdirAll(cmdDir, 0755); err != nil {
-			return fmt.Errorf("commands dir: %w", err)
+		cmdDirs := commandTargets(target, cfg)
+		for _, cmdDir := range cmdDirs {
+			if err := os.MkdirAll(cmdDir, 0755); err != nil {
+				return fmt.Errorf("commands dir %s: %w", cmdDir, err)
+			}
 		}
 		var cmdNames []string
 		for _, cmd := range cfg.Commands {
@@ -565,17 +589,18 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool) error {
 			if err != nil {
 				return err
 			}
-			path := filepath.Join(cmdDir, cmd.Name+".md")
-			oldContent, _ := os.ReadFile(path)
-			cr := applyResult{changed: string(oldContent) != content}
-			if cr.changed {
-				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			for _, cmdDir := range cmdDirs {
+				path := filepath.Join(cmdDir, cmd.Name+".md")
+				cr, err := writeFileIfChanged(path, []byte(content))
+				if err != nil {
 					return fmt.Errorf("command %s: %w", cmd.Name, err)
 				}
-				changes++
+				if cr.changed {
+					changes++
+				}
+				printResult("wrote", path, cr)
 			}
 			cmdNames = append(cmdNames, cmd.Name)
-			printResult("wrote", path, cr)
 		}
 		addStat("commands", strings.Join(cmdNames, ", "))
 	}
@@ -615,17 +640,22 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool) error {
 		if !ok {
 			return fmt.Errorf("unknown doc: %s", name)
 		}
-		dst := fsutil.ExpandHome(lang.Target)
-		fr, err := installDoc(cfg.FS, lang.Source, dst, forceDocs)
-		if err != nil {
-			return fmt.Errorf("language %s: install: %w", name, err)
+		docTargets := []string{fsutil.ExpandHome(lang.Target)}
+		if root := primeAgentRoot(cfg); root != "" {
+			docTargets = appendUniquePath(docTargets, filepath.Join(root, "docs", filepath.Base(lang.Target)))
 		}
-		if fr.changed {
-			changes++
-			fmt.Printf("  installed %s\n", dst)
-		} else {
-			state := langDocState(cfg.FS, lang.Source, dst)
-			addStat(name, fsutil.ContractHome(dst)+" ["+state+"]")
+		for _, dst := range docTargets {
+			fr, err := installDoc(cfg.FS, lang.Source, dst, forceDocs)
+			if err != nil {
+				return fmt.Errorf("language %s: install %s: %w", name, dst, err)
+			}
+			if fr.changed {
+				changes++
+				fmt.Printf("  installed %s\n", dst)
+			} else {
+				state := langDocState(cfg.FS, lang.Source, dst)
+				addStat(name, fsutil.ContractHome(dst)+" ["+state+"]")
+			}
 		}
 	}
 
@@ -659,10 +689,15 @@ func DiffAll(target string, cfg *Config) error {
 		return fmt.Errorf("settings: %w", err)
 	}
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
-		gTarget := fsutil.ExpandHome(g.Target)
-		for _, s := range g.Sections {
-			if err := report(diffSectionMD(gTarget, s.Name, s.Content)); err != nil {
-				return fmt.Errorf("agents_md.global [%s]: %w", s.Name, err)
+		ruleTargets := []string{fsutil.ExpandHome(g.Target)}
+		if root := primeAgentRoot(cfg); root != "" {
+			ruleTargets = appendUniquePath(ruleTargets, filepath.Join(root, "AGENTS.md"))
+		}
+		for _, ruleTarget := range ruleTargets {
+			for _, s := range g.Sections {
+				if err := report(diffSectionMD(ruleTarget, s.Name, s.Content)); err != nil {
+					return fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
+				}
 			}
 		}
 	}
@@ -686,10 +721,15 @@ func CleanAll(target string, cfg *Config) error {
 		return fmt.Errorf("settings: %w", err)
 	}
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
-		gTarget := fsutil.ExpandHome(g.Target)
-		for _, s := range g.Sections {
-			if err := cleanSectionMD(gTarget, s.Name); err != nil {
-				return fmt.Errorf("agents_md.global [%s]: %w", s.Name, err)
+		ruleTargets := []string{fsutil.ExpandHome(g.Target)}
+		if root := primeAgentRoot(cfg); root != "" {
+			ruleTargets = appendUniquePath(ruleTargets, filepath.Join(root, "AGENTS.md"))
+		}
+		for _, ruleTarget := range ruleTargets {
+			for _, s := range g.Sections {
+				if err := cleanSectionMD(ruleTarget, s.Name); err != nil {
+					return fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
+				}
 			}
 		}
 	}

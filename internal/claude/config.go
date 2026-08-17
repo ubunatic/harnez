@@ -25,6 +25,7 @@ type Config struct {
 	Skills            []Command         `yaml:"skills"`
 	SkillsTarget      string            `yaml:"skills_target"`
 	CodexSkillsTarget string            `yaml:"codex_skills_target"`
+	PrimeAgentTarget  string            `yaml:"prime_agent_target"`
 	AgentsMD          AgentsMD          `yaml:"agents_md"`
 	Make              MakeConfig        `yaml:"make"`
 }

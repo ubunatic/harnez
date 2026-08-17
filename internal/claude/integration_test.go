@@ -43,8 +43,10 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 	geminiSkillsDir := filepath.Join(t.TempDir(), "gemini-skills")
 	codexSkillsDir := filepath.Join(t.TempDir(), "codex-skills")
+	primeAgentDir := filepath.Join(t.TempDir(), "prime-agent")
 	cfg.SkillsTarget = geminiSkillsDir
 	cfg.CodexSkillsTarget = codexSkillsDir
+	cfg.PrimeAgentTarget = primeAgentDir
 
 	// 3. First apply: should write files and show changes
 	out, err := captureStdout(func() error {
@@ -61,6 +63,23 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(codexSkillsDir, "evergreen", "SKILL.md")); err != nil {
 		t.Fatalf("Expected Codex skill to be written: %v", err)
+	}
+	primeSkillPath := filepath.Join(primeAgentDir, "skills", "evergreen", "SKILL.md")
+	primeSkill, err := os.ReadFile(primeSkillPath)
+	if err != nil {
+		t.Fatalf("Expected Prime Agent skill to be written: %v", err)
+	}
+	if !strings.HasPrefix(string(primeSkill), "---\nname: \"evergreen\"\ndescription:") {
+		t.Errorf("Expected Agent Skills frontmatter in %s, got:\n%s", primeSkillPath, primeSkill)
+	}
+	if _, err := os.Stat(filepath.Join(primeAgentDir, "prompts", "evergreen.md")); err != nil {
+		t.Fatalf("Expected Prime Agent prompt to be written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(primeAgentDir, "AGENTS.md")); err != nil {
+		t.Fatalf("Expected Prime Agent rules to be written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(primeAgentDir, "docs", "Go.md")); err != nil {
+		t.Fatalf("Expected Prime Agent doc to be written: %v", err)
 	}
 
 	// 4. Second apply: must be idempotent and report "No changes."
@@ -139,6 +158,18 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 	if !strings.Contains(out, filepath.Join(codexSkillsDir, "evergreen", "SKILL.md")) {
 		t.Errorf("Expected RunStatus to list Codex skill target, got:\n%s", out)
+	}
+	if !strings.Contains(out, filepath.Join(primeAgentDir, "skills", "evergreen", "SKILL.md")) {
+		t.Errorf("Expected RunStatus to list Prime Agent skill target, got:\n%s", out)
+	}
+	if !strings.Contains(out, filepath.Join(primeAgentDir, "prompts", "evergreen.md")) {
+		t.Errorf("Expected RunStatus to list Prime Agent prompt target, got:\n%s", out)
+	}
+	if !strings.Contains(out, filepath.Join(primeAgentDir, "AGENTS.md")) {
+		t.Errorf("Expected RunStatus to list Prime Agent rules target, got:\n%s", out)
+	}
+	if !strings.Contains(out, filepath.Join(primeAgentDir, "docs", "Go.md")) {
+		t.Errorf("Expected RunStatus to list Prime Agent docs target, got:\n%s", out)
 	}
 
 	// 10. Run project init (without CLI summary)

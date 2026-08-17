@@ -1,6 +1,6 @@
 # harnez
 
-Manage your agent harnesses and [Claude Code](https://claude.ai/code) setup declaratively from a
+Manage your [Claude Code](https://claude.ai/code) and Prime Agent harnesses declaratively from a
 single `config.yaml`. One source of truth drives everything Claude Code and coding agents read:
 permissions, model settings, hooks, AGENTS.md instructions, custom slash
 commands, skills, and language doc copies. Apply is idempotent — run it as often as
@@ -18,11 +18,11 @@ you like; user-managed keys and unmanaged sections are never touched.
 | Environment variables | `~/.claude/settings.json` |
 | Spinner verbs | `~/.claude/settings.json` |
 | MCP server definitions | `~/.claude/settings.json` |
-| Global agent instructions | `~/.claude/CLAUDE.md` (managed sections) |
+| Global agent instructions | `~/.claude/CLAUDE.md`, `~/.prime/agent/AGENTS.md` (managed sections) |
 | Per-project instructions | `./AGENTS.md` (managed sections, `CLAUDE.md` symlink) |
-| Custom slash commands | `~/.claude/commands/<name>.md` |
-| Agent skills (Gemini, Codex) | `~/.gemini/skills/<name>/SKILL.md`, `~/.codex/skills/<name>/SKILL.md` |
-| Language coding-style docs | `~/.claude/docs/<lang>.md` + project copies |
+| Custom slash commands/prompts | `~/.claude/commands/<name>.md`, `~/.prime/agent/prompts/<name>.md` |
+| Agent skills | `~/.gemini/skills/`, `~/.codex/skills/`, `~/.prime/agent/skills/` |
+| Language coding-style docs | `~/.claude/docs/`, `~/.prime/agent/docs/` + project copies |
 
 ## Installation
 
@@ -44,7 +44,7 @@ command files, so `harnez apply` (no flags) applies the built-in config.
 ## Quick start
 
 ```sh
-harnez apply           # apply embedded config to ~/.claude, ~/.gemini, ~/.codex
+harnez apply           # apply embedded config to Claude, Gemini, Codex, and Prime Agent
 harnez status          # show what is and isn't applied
 harnez diff            # preview changes without writing
 harnez clean           # remove all managed blocks/keys
@@ -69,6 +69,7 @@ make status
 
 ```yaml
 target_dir: ~/.claude        # where Claude Code stores its config
+prime_agent_target: ~/.prime/agent  # Prime rules, prompts, skills, and docs
 
 # Docs to install on every apply
 docs:
@@ -170,18 +171,20 @@ Sections outside these markers are never modified. Multiple sections can
 coexist in the same file, each independently updated or removed.
 
 **Symlink convention** — `AGENTS.md` is the canonical file (readable by any
-agent); `CLAUDE.md` is a symlink so Claude Code finds it too. Same pattern
-globally: `~/.claude/CLAUDE.md` is real; `~/AGENTS.md` links to it.
+agent); `CLAUDE.md` is a symlink so Claude Code finds it too. Globally,
+`~/.claude/CLAUDE.md` is real and `~/AGENTS.md` links to it; the same managed
+sections are also written to Prime Agent's canonical `~/.prime/agent/AGENTS.md`.
 
 ### Slash commands and Skills
 
-Each entry under `commands:` produces `~/.claude/commands/<name>.md`.
-Each entry under `skills:` produces `~/.gemini/skills/<name>/SKILL.md` (and `~/.codex/skills/<name>/SKILL.md` if configured).
+Each entry under `commands:` produces both a Claude command and a Prime Agent prompt template.
+Each entry under `skills:` produces Agent Skills-compatible `SKILL.md` files for every configured
+Gemini, Codex, and Prime Agent skill target.
 
 ### Language docs
 
-Entries under `languages:` define a source doc (e.g. `docs/lang/Go.md`), a
-global install path (`~/.claude/docs/Go.md`), and a project copy
+Entries under `languages:` define a source doc (e.g. `docs/lang/Go.md`), global
+installs for Claude and Prime Agent, and a project copy
 (`docs/Go.md`). Docs listed in the top-level `docs:` list (or passed via
 `--docs`) are installed on `apply`.
 
@@ -189,7 +192,7 @@ global install path (`~/.claude/docs/Go.md`), and a project copy
 
 | Command | Flags | What it does |
 |---|---|---|
-| `apply` | `-c` `-t` `-d` `--force-docs` | Sync global `~/.claude`, skills, hooks, commands, docs |
+| `apply` | `-c` `-t` `-d` `--force-docs` | Sync global Claude and Prime Agent rules, prompts, skills, and docs |
 | `init` | `-c` `-d` `--docs` `--summary` | Set up a project: AGENTS.md, doc copies, Makefile targets |
 | `diff` | `-c` `-t` | Preview changes without writing (uses `diff -u`) |
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
