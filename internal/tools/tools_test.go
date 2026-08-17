@@ -40,6 +40,7 @@ func testDeps(out *bytes.Buffer) Dependencies {
 		Stat:     func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
 		LookPath: func(string) (string, error) { return "", errors.New("missing") },
 		Run:      func(context.Context, string, ...string) error { return errors.New("inactive") },
+		RunStdin: func(context.Context, string, string, ...string) error { return errors.New("not run in tests") },
 		Sleep:    func(time.Duration) {}, Stdin: strings.NewReader("n\n"), Stdout: out}
 }
 

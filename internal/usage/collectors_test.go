@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -104,9 +105,6 @@ model_reasoning_effort = "low"
 		t.Fatalf("write config.toml: %v", err)
 	}
 
-	// Simulated JWT payload: {"https://api.openai.com/profile":{"email":"test@example.com"},"https://api.openai.com/auth":{"chatgpt_plan_type":"plus"}}
-	// Base64 header: eyJhbGciOiJIUzI1NiJ9
-	// Base64 payload: eydodHRwczovL2FwaS5vcGVuYWkuY29tL3Byb2ZpbGUnOnsnZW1haWwnOid0ZXN0QGV4YW1wbGUuY29tJ30sJ2h0dHBzOi8vYXBpLm9wZW5haS5jb20vYXV0aCc6eydjaGF0Z3B0X3BsYW5fdHlwZSc6J3BsdXMnfX0
 	rawPayload := `{"https://api.openai.com/profile":{"email":"test@example.com"},"https://api.openai.com/auth":{"chatgpt_plan_type":"plus"},"exp":2500000000}`
 	b64Payload := "eyJodHRwczovL2FwaS5vcGVuYWkuY29tL3Byb2ZpbGUiOnsiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIn0sImh0dHBzOi8vYXBpLm9wZW5haS5jb20vYXV0aCI6eyJjaGF0Z3B0X3BsYW5fdHlwZSI6InBsdXMifSwiZXhwIjoyNTAwMDAwMDAwfQ"
 	jwtToken := "eyJhbGciOiJIUzI1NiJ9." + b64Payload + ".signature"
@@ -115,7 +113,9 @@ model_reasoning_effort = "low"
 	authJSON := `{
 		"auth_mode": "chatgpt",
 		"tokens": {
-			"id_token": "` + jwtToken + `"
+			"id_token": "` + jwtToken + `",
+			"access_token": "mock-access-token",
+			"account_id": "mock-account-id"
 		}
 	}`
 	if err := os.WriteFile(filepath.Join(tempDir, "auth.json"), []byte(authJSON), 0600); err != nil {
@@ -123,7 +123,7 @@ model_reasoning_effort = "low"
 	}
 
 	ctx := context.Background()
-	usage := CollectCodex(ctx, tempDir)
+	usage := CollectCodex(ctx, tempDir, nil)
 
 	if !usage.Installed {
 		t.Errorf("expected Installed = true")
@@ -165,7 +165,7 @@ func TestCollectAGY(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	usage := CollectAGY(ctx, tempDir)
+	usage := CollectAGY(ctx, tempDir, nil)
 
 	if !usage.Installed {
 		t.Errorf("expected Installed = true")
@@ -181,5 +181,76 @@ func TestCollectAGY(t *testing.T) {
 	}
 	if usage.Account != "d***v@example.org" {
 		t.Errorf("expected Account = d***v@example.org, got %q", usage.Account)
+	}
+}
+
+func TestQueryAGYLocalQuota(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"response": {
+				"groups": [
+					{
+						"displayName": "Gemini Models",
+						"description": "Gemini Flash, Gemini Pro",
+						"buckets": [
+							{
+								"bucketId": "gemini-weekly",
+								"displayName": "Weekly Limit Remaining",
+								"remainingFraction": 0.95,
+								"resetTime": "2026-08-24T16:00:00Z"
+							},
+							{
+								"bucketId": "gemini-5h",
+								"displayName": "Five Hour Limit Remaining",
+								"remainingFraction": 0.80,
+								"resetTime": "2026-08-18T04:00:00Z"
+							}
+						]
+					},
+					{
+						"displayName": "Claude and GPT models",
+						"description": "Claude Opus, Claude Sonnet",
+						"buckets": [
+							{
+								"bucketId": "3p-weekly",
+								"displayName": "Weekly Limit Remaining",
+								"remainingFraction": 1.0,
+								"resetTime": "2026-08-24T20:00:00Z"
+							}
+						]
+					}
+				]
+			}
+		}`))
+	}))
+	defer mockServer.Close()
+
+	client := mockServer.Client()
+	// Parse port from mockServer.URL
+	var port int
+	fmt.Sscanf(mockServer.URL, "http://127.0.0.1:%d", &port)
+	if port == 0 {
+		fmt.Sscanf(mockServer.URL, "http://[::1]:%d", &port)
+	}
+
+	ctx := context.Background()
+	resp, err := QueryAGYLocalQuota(ctx, port, client)
+	if err != nil {
+		t.Fatalf("QueryAGYLocalQuota failed: %v", err)
+	}
+
+	if len(resp.Response.Groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(resp.Response.Groups))
+	}
+	if resp.Response.Groups[0].DisplayName != "Gemini Models" {
+		t.Errorf("expected group 'Gemini Models', got %q", resp.Response.Groups[0].DisplayName)
+	}
+	if len(resp.Response.Groups[0].Buckets) != 2 {
+		t.Errorf("expected 2 buckets for Gemini Models, got %d", len(resp.Response.Groups[0].Buckets))
 	}
 }

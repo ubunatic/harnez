@@ -13,7 +13,7 @@ docs:
   - canary
   - spec
 
-model: sonnet
+# model: sonnet  # unmanaged by default, let user or client choose
 effort: medium
 
 # how `init` reconciles its own Makefile targets (e.g. `help`) into an

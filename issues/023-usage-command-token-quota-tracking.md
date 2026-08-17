@@ -135,11 +135,17 @@ CLAUDE AND GPT MODELS
   - `https://api.openai.com/profile.email`: account identity (automatically masked for privacy).
   - Expiration timestamp `exp`.
 - **Config & Model State**: `~/.codex/config.toml` specifies active `model` (e.g. `gpt-5.6-sol`) and `model_reasoning_effort`.
+- **Live Rate Limit Endpoint**:
+  - `GET https://chatgpt.com/backend-api/wham/usage` with headers `Authorization: Bearer <access_token>`, `ChatGPT-Account-ID: <account_id>`, `User-Agent: codex`.
+  - Returns live `rate_limit` containing `primary_window` (`used_percent`, `limit_window_seconds`, `reset_after_seconds`, `reset_at`), plan type, and credits balance.
 - **Session & Thread Databases**: `~/.codex/state_5.sqlite` and `logs_2.sqlite` track local session threads and tokens used.
 
 ### 3. Antigravity / AGY (`~/.gemini/antigravity-cli/`)
 - **Settings & Model**: `~/.gemini/antigravity-cli/settings.json` stores active model configuration (e.g. `Gemini 3.7 Flash (Low)`).
 - **Auth & Token**: `~/.gemini/antigravity-cli/antigravity-oauth-token` contains oauth bearer token object and `auth_method` ("consumer").
+- **Live Quota RPC**:
+  - Running AGY processes host a Connect RPC server on loopback.
+  - Calling `POST /exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary` returns full model pool groups ("Gemini Models" and "Claude and GPT Models") with their 5-hour and weekly quota buckets (`remainingFraction`, `resetTime`).
 - **Session State & Telemetry**: `~/.gemini/antigravity-cli/conversations/*.db` contains local conversation SQLite trajectory databases, while logs under `~/.gemini/antigravity-cli/log/` record account email and session activity.
 
 ---
@@ -147,11 +153,11 @@ CLAUDE AND GPT MODELS
 ## Implementation Summary
 
 - **Package `internal/usage/`**:
-  - `types.go`: Normalized schemas (`AgentUsage`, `QuotaWindow`, `TokenBreakdown`, `UsageSummary`).
+  - `types.go`: Normalized schemas (`AgentUsage`, `ModelGroup`, `QuotaWindow`, `TokenBreakdown`, `UsageSummary`).
   - `util.go`: Privacy-first email masking (`MaskAccount`), ANSI/Unicode progress bar renderer (`RenderProgressBar`), duration and integer formatting.
   - `claude.go`: Claude Code collector (local credentials, stats-cache, and live OAuth usage endpoint).
-  - `codex.go`: Codex CLI collector (JWT claim extraction, auth mode, config parsing).
-  - `agy.go`: Antigravity collector (settings, token, and conversation counts).
+  - `codex.go`: Codex CLI collector (JWT claim extraction, auth mode, config parsing, and live `wham/usage` rate limit queries).
+  - `agy.go`: Antigravity collector (settings, token, conversation counts, and local LanguageServer Connect RPC quota extraction for Gemini and Claude/GPT model pools).
   - `usage.go`: Multi-agent collection coordinator and renderers (`RenderText`, `RenderJSON`).
   - `collectors_test.go`, `util_test.go`, `usage_test.go`: 100% passing unit tests.
 - **CLI Commands & Flags**:
@@ -166,6 +172,6 @@ CLAUDE AND GPT MODELS
 
 ## Next Steps / Future Enhancements
 
-1. Add live gRPC / cloud prediction quota polling for AGY when upstream endpoints are documented.
-2. Integrate status bar snippets (e.g., tmux or Waybar modules) consuming `harnez usage --json`.
-3. Support API pay-per-token spending caps (OpenAI / Anthropic developer API keys) in addition to subscription tiers.
+1. Integrate status bar snippets (e.g., tmux or Waybar modules) consuming `harnez usage --json`.
+2. Support API pay-per-token spending caps (OpenAI / Anthropic developer API keys) in addition to subscription tiers.
+

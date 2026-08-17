@@ -3,7 +3,10 @@ package tools
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
+	"strconv"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -86,6 +89,125 @@ func newVoiceInputCommand(d Dependencies) *cobra.Command {
 			}
 			return SwitchVoiceInputMode(ctx, d, target)
 		}}
-	voiceInput.AddCommand(mode)
+	voiceInput.AddCommand(mode, newVoiceInputHistoryCommand(d), newVoiceInputConfigCommand(d))
 	return voiceInput
+}
+
+// newVoiceInputHistoryCommand exposes the local, sensitive dictation
+// history: list/clear/copy/retype, plus the `record` pass-through hook
+// meant to be wired as Voxtype's [output.post_process] command so history
+// capture needs no changes to Voxtype itself.
+func newVoiceInputHistoryCommand(d Dependencies) *cobra.Command {
+	historyPath := func() string { return HistoryPath(d.Getenv("HOME")) }
+
+	history := &cobra.Command{Use: "history", Short: "Recent dictation history (local-only, treat as sensitive)"}
+
+	var limit int
+	list := &cobra.Command{Use: "list", Short: "List recent transcripts, most recent first", Args: cobra.NoArgs, SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			entries, err := ListHistory(historyPath())
+			if err != nil {
+				return err
+			}
+			if limit > 0 && len(entries) > limit {
+				entries = entries[:limit]
+			}
+			for _, e := range entries {
+				fmt.Fprintf(d.Stdout, "%s\t%s\t%s\n", e.ID, e.Time.Format("2006-01-02T15:04:05"), e.Text)
+			}
+			return nil
+		}}
+	list.Flags().IntVar(&limit, "limit", 0, "show at most N entries (default: all)")
+
+	clear := &cobra.Command{Use: "clear", Short: "Delete all recorded history", Args: cobra.NoArgs, SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error { return ClearHistory(historyPath()) }}
+
+	record := &cobra.Command{Use: "record", Short: "Internal: record stdin as a history entry and echo it back unchanged", Args: cobra.NoArgs, SilenceUsage: true,
+		Long: "Reads a transcription from stdin, appends it to local history, and writes it back to stdout unchanged.\n" +
+			"Wire this as Voxtype's [output.post_process] command so history capture needs no changes to Voxtype itself:\n\n" +
+			"  [output.post_process]\n  command = \"harnez tools voice-input history record\"\n",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			data, err := io.ReadAll(d.Stdin)
+			if err != nil {
+				return fmt.Errorf("read stdin: %w", err)
+			}
+			text := string(data)
+			if _, err := AppendHistory(historyPath(), text, DefaultHistoryLimit, time.Now()); err != nil {
+				return err
+			}
+			_, err = fmt.Fprint(d.Stdout, text)
+			return err
+		}}
+
+	copyCmd := &cobra.Command{Use: "copy ID", Short: "Copy a history entry's text to the clipboard", Args: cobra.ExactArgs(1), SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			entry, err := FindHistoryEntry(historyPath(), args[0])
+			if err != nil {
+				return err
+			}
+			return CopyText(cmd.Context(), d, entry.Text)
+		}}
+
+	retype := &cobra.Command{Use: "retype ID", Short: "Type a history entry's text into the currently focused window", Args: cobra.ExactArgs(1), SilenceUsage: true,
+		Long: "Types the entry's exact text via the dotool/dotoold primitive into whatever window currently has\n" +
+			"focus. This performs NO focus capture or restoration -- make sure the right window is focused\n" +
+			"first (a future GNOME Shell extension is responsible for that; see issue 022).\n",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			entry, err := FindHistoryEntry(historyPath(), args[0])
+			if err != nil {
+				return err
+			}
+			return TypeText(cmd.Context(), d, entry.Text)
+		}}
+
+	history.AddCommand(list, clear, record, copyCmd, retype)
+	return history
+}
+
+// newVoiceInputConfigCommand exposes voxtype config.toml fields the UI can
+// safely edit without a full TOML round-trip, starting with type_delay_ms.
+func newVoiceInputConfigCommand(d Dependencies) *cobra.Command {
+	configPath := func() string { return voxtypeConfigPath(d.Getenv("HOME")) }
+
+	config := &cobra.Command{Use: "config", Short: "Read or change select voxtype config.toml fields"}
+
+	get := &cobra.Command{Use: "get type-delay-ms", Short: "Print the current type_delay_ms value", Args: cobra.ExactArgs(1), SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if args[0] != "type-delay-ms" {
+				return fmt.Errorf("unknown config key %q (want type-delay-ms)", args[0])
+			}
+			ms, ok, err := ReadTypeDelayMs(configPath())
+			if err != nil {
+				return err
+			}
+			if !ok {
+				fmt.Fprintln(d.Stdout, "0 (default; key not present in config.toml)")
+				return nil
+			}
+			fmt.Fprintln(d.Stdout, ms)
+			return nil
+		}}
+
+	set := &cobra.Command{Use: "set type-delay-ms MS", Short: "Set type_delay_ms, preserving comments and other settings", Args: cobra.ExactArgs(2), SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if args[0] != "type-delay-ms" {
+				return fmt.Errorf("unknown config key %q (want type-delay-ms)", args[0])
+			}
+			ms, err := strconv.Atoi(args[1])
+			if err != nil {
+				return fmt.Errorf("invalid milliseconds %q: %w", args[1], err)
+			}
+			if err := SetTypeDelayMs(configPath(), ms); err != nil {
+				return err
+			}
+			fmt.Fprintf(d.Stdout, "type_delay_ms set to %d in %s.\n"+
+				"This does not take effect until voxtype's daemon restarts (not a live change):\n"+
+				"  systemctl --user restart voxtype.service            # batch mode\n"+
+				"  systemctl --user restart voxtype-streaming.service   # streaming mode (see 'harnez tools voice-input mode')\n",
+				ms, configPath())
+			return nil
+		}}
+
+	config.AddCommand(get, set)
+	return config
 }

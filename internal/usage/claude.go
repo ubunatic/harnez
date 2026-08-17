@@ -91,6 +91,7 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 	// 1. Read settings.json for active configuration / model
 	settingsPath := filepath.Join(claudeDir, "settings.json")
 	if data, err := os.ReadFile(settingsPath); err == nil {
+		usage.Sources = append(usage.Sources, "~/.claude/settings.json")
 		var s map[string]any
 		if err := json.Unmarshal(data, &s); err == nil {
 			if m, ok := s["model"].(string); ok && m != "" {
@@ -102,6 +103,7 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 	// 2. Read stats-cache.json for local token tracking
 	statsPath := filepath.Join(claudeDir, "stats-cache.json")
 	if data, err := os.ReadFile(statsPath); err == nil {
+		usage.Sources = append(usage.Sources, "~/.claude/stats-cache.json")
 		var stats ClaudeStatsCache
 		if err := json.Unmarshal(data, &stats); err == nil {
 			tb := &TokenBreakdown{}
@@ -130,6 +132,7 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 		usage.Authenticated = false
 		return usage
 	}
+	usage.Sources = append(usage.Sources, "~/.claude/.credentials.json")
 
 	var creds ClaudeCredentials
 	if err := json.Unmarshal(data, &creds); err != nil {
@@ -168,6 +171,7 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 				if resp.StatusCode == http.StatusOK {
 					var oauthUsage ClaudeOauthUsageResponse
 					if err := json.NewDecoder(resp.Body).Decode(&oauthUsage); err == nil {
+						usage.Sources = append(usage.Sources, "api.anthropic.com/api/oauth/usage")
 						now := time.Now()
 						if oauthUsage.FiveHour != nil {
 							qw := QuotaWindow{

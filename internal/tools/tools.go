@@ -82,6 +82,7 @@ type Dependencies struct {
 	Stat     func(string) (os.FileInfo, error)
 	LookPath func(string) (string, error)
 	Run      func(context.Context, string, ...string) error
+	RunStdin func(ctx context.Context, stdin string, name string, args ...string) error
 	Sleep    func(time.Duration)
 	Stdin    io.Reader
 	Stdout   io.Writer
@@ -92,6 +93,10 @@ func DefaultDependencies(in io.Reader, out io.Writer) Dependencies {
 	return Dependencies{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Getenv: os.Getenv, ReadFile: os.ReadFile,
 		Stat: os.Stat, LookPath: exec.LookPath, Run: func(ctx context.Context, name string, args ...string) error {
 			return exec.CommandContext(ctx, name, args...).Run()
+		}, RunStdin: func(ctx context.Context, stdin string, name string, args ...string) error {
+			cmd := exec.CommandContext(ctx, name, args...)
+			cmd.Stdin = strings.NewReader(stdin)
+			return cmd.Run()
 		}, Sleep: time.Sleep, Stdin: in, Stdout: out}
 }
 
