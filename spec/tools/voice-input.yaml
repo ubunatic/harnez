@@ -15,7 +15,12 @@ platforms:
     desktop: GNOME
     session: wayland
     canary_verified: true
-    canary_note: Verified on Fedora 44 GNOME Wayland with eitype and a GNOME toggle shortcut.
+    canary_note: >-
+      Microphone, local transcription, global toggle, and text injection all verified on
+      Fedora 44 GNOME Wayland. GNOME text injection requires a user-level dotool+dotoold
+      daemon (XKB-aware, unlike ydotool) with language_to_layout = {} in voxtype's config
+      to avoid per-utterance layout auto-override; eitype (portal dialogs) and ydotool
+      (no XKB support, wrong chars on non-US layouts) were both rejected.
 artifacts:
   user:
     filename: voxtype-0.7.5-linux-x86_64-avx2

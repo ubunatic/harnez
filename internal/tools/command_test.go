@@ -15,7 +15,9 @@ func TestStatusExitCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fsys := fstest.MapFS{"spec/tools/voice-input.yaml": {Data: spec}}
+	pendingSpec := []byte(strings.Replace(string(spec), "canary_verified: true", "canary_verified: false", 1))
+	verifiedSpec := []byte(strings.Replace(string(spec), "canary_verified: false", "canary_verified: true", 1))
+	fsys := fstest.MapFS{"spec/tools/voice-input.yaml": {Data: pendingSpec}}
 
 	t.Run("bare listing succeeds when not ready", func(t *testing.T) {
 		var out bytes.Buffer
@@ -39,13 +41,13 @@ func TestStatusExitCode(t *testing.T) {
 		if err := cmd.Execute(); err == nil {
 			t.Fatal("expected nonzero not-ready status")
 		}
-		if !strings.Contains(out.String(), "missing") {
+		if !strings.Contains(out.String(), "unsupported") {
 			t.Fatal(out.String())
 		}
 	})
 
 	t.Run("specific ready status succeeds", func(t *testing.T) {
-		readyFS := fstest.MapFS{"spec/tools/voice-input.yaml": {Data: spec}}
+		readyFS := fstest.MapFS{"spec/tools/voice-input.yaml": {Data: verifiedSpec}}
 		var out bytes.Buffer
 		d := testDeps(&out)
 		d.LookPath = func(string) (string, error) { return "/bin/tool", nil }

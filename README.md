@@ -240,7 +240,9 @@ harnez tools install voice-input --dry-run # exact plan, no network or changes
 ```
 
 Voice input defaults to user-local, offline, no-sudo setup. The Fedora 44 GNOME Wayland
-command is currently a plan-and-safety-gate, not an installer; it fails closed pending its hardware canary; see
+hardware canary has fully passed (mic capture, transcription, toggle shortcut, and direct
+text injection all verified); the `install` command itself is still a plan-and-safety-gate
+pending a converging installer implementation of the verified manual setup; see
 [`docs/VoiceInput.md`](docs/VoiceInput.md).
 
 ## Drift repair

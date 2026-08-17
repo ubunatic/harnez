@@ -17,10 +17,10 @@ services.
 - A checksum verifier is implemented for the future user-local recipe. It installs atomically
   only when the destination is absent, returns no-change for identical bytes, and refuses to
   overwrite any other existing file. The gated command does not invoke it yet.
-- The Fedora 44 GNOME Wayland hardware canary passed with the default PipeWire
-  microphone, local `base.en`, Unicode injection through `eitype`, and a global GNOME
-  toggle shortcut. The command still stops before installation because the converging
-  recipe has not been implemented yet.
+- The Fedora 44 GNOME Wayland canary fully passed: microphone capture, local `base.en`
+  transcription, the global GNOME toggle shortcut, and direct text injection at the
+  focused cursor (correct on a German QWERTZ layout) via a user-level `dotool`+`dotoold`
+  daemon — not `eitype` (portal-dialog authorization) or `ydotool` (no XKB awareness).
 
 ## Commands
 
@@ -38,7 +38,10 @@ files from user-owned files.
 
 ## Hardware canary
 
-The canary passed on Fedora 44 GNOME Wayland on 2026-08-17. The verified setup uses a
-GNOME `Super+Ctrl+X` toggle shortcut with Voxtype's evdev hotkey disabled, avoiding
-`input`-group membership. `scripts/canary-voice-input.sh` can repeat the guided manual
-test; it does not itself install or change settings. Ordinary `go test` never runs it.
+The Fedora 44 GNOME Wayland canary fully passed as of 2026-08-17. Microphone capture,
+local transcription, the `Super+Ctrl+X` toggle, and direct text injection (verified in
+a terminal and in Prime Agent's own input field) all work. GNOME text injection needed
+a user systemd `dotoold` daemon (`DOTOOL_XKB_LAYOUT=de`) for the fast, reliable
+`dotoolc` path, plus `language_to_layout = {}` in Voxtype's config to stop it
+auto-forcing `layout=us` for English speech regardless of the physical keyboard layout.
+The script can repeat the guided manual test; ordinary `go test` never runs it.

@@ -1,6 +1,6 @@
 # 020 — `harnez tools`: guided OS-level tool installation
 
-**Status:** Open — GNOME voice-input canary passed; installer implementation pending
+**Status:** Open — canary fully passed; converging installer implementation pending
 
 ## Context
 
@@ -57,17 +57,31 @@ an RPM transaction and `input`-group membership. Escalate only if a required run
 missing or the user explicitly selects a system package install. Fingerprint-authorized
 `sudo` is acceptable for those disclosed steps, but it is not the default route.
 
-The live Fedora 44 GNOME Wayland canary passed on 2026-08-17:
+The live Fedora 44 GNOME Wayland canary fully passed as of 2026-08-17:
 
-- Voxtype captured the default PipeWire microphone,
-- local `base.en` transcription completed successfully,
-- `eitype` injected Unicode text into the focused application,
-- a GNOME `Super+Ctrl+X` shortcut toggled recording globally.
+- Voxtype captures the default PipeWire microphone,
+- local `base.en` transcription completes successfully,
+- a GNOME `Super+Ctrl+X` shortcut toggles recording globally,
+- transcribed text is injected directly at the focused cursor, verified across apps
+  including a terminal (Tilix) and Prime Agent's own input field, with correct German
+  (QWERTZ, umlauts) characters.
 
-The working route uses Voxtype's built-in evdev hotkey disabled, so it does not require
+GNOME text injection required abandoning both of Voxtype's usual Wayland drivers:
+`eitype` needs a one-time-per-session XDG RemoteDesktop portal authorization dialog the
+user explicitly did not want, and `ydotool` sends hardcoded US keycodes with no XKB
+awareness (swapped z/y, missing umlauts on German layout). The working combination is
+`dotool` (XKB-aware uinput typing) run as a persistent user systemd daemon (`dotoold`,
+`Environment=DOTOOL_XKB_LAYOUT=de`) so every call uses the fast `dotoolc` client path
+against an already-registered virtual keyboard, plus `language_to_layout = {}` in
+Voxtype's config to stop it auto-overriding the XKB layout per detected speech language
+(which forced `layout=us` for English speech and both mismatched the physical German
+keyboard and forced the slow, less reliable cold-start direct-`dotool` path every call).
+
+The current route uses Voxtype's built-in evdev hotkey disabled, so it does not require
 `input`-group membership. GNOME custom shortcuts provide press-only activation, hence
 toggle mode rather than push-to-talk. Push-to-talk remains possible through Voxtype's
-built-in evdev hotkey, but requires `input`-group access and logout/login.
+built-in evdev hotkey, but requires `input`-group access and logout/login — deferred,
+not yet implemented.
 
 ## Proposed command
 
