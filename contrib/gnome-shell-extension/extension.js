@@ -3,11 +3,14 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Slider from 'resource:///org/gnome/shell/ui/slider.js';
+import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Meta from 'gi://Meta';
+
+
 
 async function runCommand(programName, args, cancellable = null) {
     let program = GLib.find_program_in_path(programName);
@@ -36,7 +39,7 @@ async function runCommand(programName, args, cancellable = null) {
             flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
         });
         const proc = launcher.spawnv([program, ...args]);
-        const [stdoutBytes, stderrBytes] = await new Promise((resolve, reject) => {
+        const [ok, stdoutStr, stderrStr] = await new Promise((resolve, reject) => {
             proc.communicate_utf8_async(null, cancellable, (obj, res) => {
                 try {
                     const result = obj.communicate_utf8_finish(res);
@@ -47,10 +50,10 @@ async function runCommand(programName, args, cancellable = null) {
             });
         });
         const res = {
-            success: proc.get_successful(),
+            success: proc.get_successful() && ok,
             exitCode: proc.get_exit_status(),
-            stdout: stdoutBytes ? stdoutBytes.trim() : '',
-            stderr: stderrBytes ? stderrBytes.trim() : '',
+            stdout: stdoutStr ? stdoutStr.trim() : '',
+            stderr: stderrStr ? stderrStr.trim() : '',
         };
         console.log(`[HARNEZ_VOICE_INPUT_EXT] Subprocess ran: ${program} ${args.join(' ')} -> success=${res.success} stdout="${res.stdout}" stderr="${res.stderr}"`);
         return res;
@@ -85,19 +88,16 @@ export default class VoiceInputExtension extends Extension {
         });
         this._indicator.add_child(this._icon);
 
-        // Intercept click on the top-bar indicator:
-        // - If recording: Left-click immediately stops recording (no menu open). Right-click opens menu.
-        // - If idle: Left/right click opens menu normally.
-        this._indicator.connect('button-press-event', (actor, event) => {
-            const button = event.get_button();
-            if (this._isRecording && button === 1) {
-                // Primary left click during active recording -> Instant Stop
+        // Intercept menu.toggle: if recording, left-click triggers 1-click stop instead of opening menu
+        const origToggle = this._indicator.menu.toggle.bind(this._indicator.menu);
+        this._indicator.menu.toggle = () => {
+            if (this._isRecording) {
+                console.log('[HARNEZ_VOICE_INPUT_EXT] 1-click stop intercepted in menu.toggle()');
                 this._stopRecordingDirectly();
-                return Clutter.EVENT_STOP;
+                return;
             }
-            // Allow menu to toggle for right click or when idle
-            return Clutter.EVENT_PROPAGATE;
-        });
+            origToggle();
+        };
 
         // 2. Build Menu Layout
         this._buildMenu();

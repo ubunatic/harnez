@@ -308,6 +308,31 @@ exec gnome-shell %s --wayland
 		close(inputLines)
 	}()
 
+	// Stream nested shell log in realtime to detect JS errors / warnings live
+	go func() {
+		var lastOffset int64 = 0
+		for {
+			if file, err := os.Open(logPath); err == nil {
+				if fi, err := file.Stat(); err == nil && fi.Size() > lastOffset {
+					buf := make([]byte, fi.Size()-lastOffset)
+					_, _ = file.ReadAt(buf, lastOffset)
+					lastOffset = fi.Size()
+					text := string(buf)
+					for _, line := range strings.Split(text, "\n") {
+						if strings.Contains(line, "HARNEZ_VOICE_INPUT_EXT") ||
+							strings.Contains(line, "JS ERROR") ||
+							strings.Contains(line, "GNOME Shell-CRITICAL") ||
+							strings.Contains(line, "Virtual function") {
+							fmt.Printf("   [SHELL LOG] %s\n", line)
+						}
+					}
+				}
+				file.Close()
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+	}()
+
 	fmt.Println("\n>>> [Interactive Mode] Press Enter to send another notification, close the window or Ctrl+C to exit <<<")
 	count := 2
 	for {
