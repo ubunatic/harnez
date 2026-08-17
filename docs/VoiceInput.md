@@ -2,7 +2,9 @@
 
 `harnez tools` is an explicit boundary for optional operating-system capabilities. It is
 separate from global harness `apply` and project `init`; neither installs packages or
-services.
+services. For the multi-tier desktop companion, Mutter focus coordination, and Wayland
+input architecture, see [VoiceInputArchitecture.md](VoiceInputArchitecture.md).
+
 
 ## Current MVP
 

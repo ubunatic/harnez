@@ -14,7 +14,8 @@ This depends on issue 020's typing primitive (`dotool`/`dotoold`, see
 `docs/VoiceInput.md`) and should reuse it rather than build a second injection path. It
 is unrelated to issue 021's streaming-typing work except that both want a reusable
 "type this text now" primitive; check issue 021's implementation before duplicating one
-here.
+here. For the overall multi-tier design, see the ADR in [docs/VoiceInputArchitecture.md](../docs/VoiceInputArchitecture.md).
+
 
 ## Features
 
