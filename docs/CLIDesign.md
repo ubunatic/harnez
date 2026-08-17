@@ -16,6 +16,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `diff`  | Global | Preview of what `apply` would change |
 | `clean` | Global | Remove managed keys / strip MD sections |
 | `status`| Global | Config summary + applied-state checks |
+| `usage` | Multi-Agent (read-only) | Zero-cost token counters & live quota tracking for Claude, AGY, Codex |
 
 `apply` and `init` operate on disjoint flag surfaces by design. `apply` takes `-t`
 (Claude config dir); `init` takes `-d` (project dir). They cannot be confused.

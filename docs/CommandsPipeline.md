@@ -105,3 +105,14 @@ formats accept `description` frontmatter.
 A single `commands/<name>.md` file can back both a Claude command (`commands:` entry) and
 an Antigravity, Codex, or Prime Agent skill (`skills:` entry). The frontmatter is generated
 differently by `genCommandContent` vs `genSkillContent`; the body is identical.
+
+---
+
+## Model Configuration & Unmanaged Defaults
+
+`config.yaml` supports `model:` to write an explicit model setting to `settings.json`.
+
+**Convention**: Leave `model` omitted or commented out in `config.yaml` by default.
+- Modern AI coding assistants rapidly advance model generations (e.g. Sonnet 3.5 → 3.7 → 4.6 → 5).
+- Hardcoding aliases in repo config causes `harnez apply` to pin older model strings, overriding user or upstream default selections.
+- When `model` is omitted from `config.yaml`, `harnez` leaves `settings.json`'s model property unmanaged.
