@@ -197,6 +197,7 @@ installs for Claude and Prime Agent, and a project copy
 | `diff` | `-c` `-t` | Preview changes without writing (uses `diff -u`) |
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
 | `status` | `-c` `-t` | Print config summary and check which items are present on disk |
+| `tools` | `status`, `install voice-input` | Read-only capability status or explicit, planned OS-tool setup |
 
 All commands accept `-c <path>` (config file, default: embedded).
 
@@ -227,6 +228,20 @@ harnez init                              # AGENTS.md + CLAUDE.md symlink only
 harnez init --docs golang,make          # + docs + Makefile targets
 harnez init --docs golang --summary     # + AI-generated project summary
 ```
+
+## Optional workstation tools
+
+OS-level capabilities are deliberately separate from `apply` and `init`:
+
+```sh
+harnez tools                              # read-only catalog and status
+harnez tools status voice-input           # read-only readiness probes
+harnez tools install voice-input --dry-run # exact plan, no network or changes
+```
+
+Voice input defaults to user-local, offline, no-sudo setup. The Fedora 44 GNOME Wayland
+command is currently a plan-and-safety-gate, not an installer; it fails closed pending its hardware canary; see
+[`docs/VoiceInput.md`](docs/VoiceInput.md).
 
 ## Drift repair
 
