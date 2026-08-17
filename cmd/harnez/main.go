@@ -2,12 +2,16 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/claude"
 	toolcmd "ubunatic.com/harnez/internal/tools"
+	"ubunatic.com/harnez/internal/usage"
 )
 
 func main() {
@@ -18,6 +22,47 @@ func main() {
 		Use:   "harnez",
 		Short: "Manage Claude Code, Prime Agent, and other agent harnesses from a YAML definition",
 	}
+
+	var usageJSON bool
+	var usageAgent string
+	var usageOffline bool
+	usageCmd := &cobra.Command{
+		Use:     "usage",
+		Aliases: []string{"quota", "tokens", "stats"},
+		Short:   "Show unified token, session, and quota status across AI coding agents",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			var client *http.Client
+			if !usageOffline {
+				client = &http.Client{Timeout: 5 * time.Second}
+			}
+			summary := usage.CollectAll(ctx, "", client)
+			if usageAgent != "" {
+				var filtered []usage.AgentUsage
+				for _, a := range summary.Agents {
+					if strings.EqualFold(a.AgentID, usageAgent) {
+						filtered = append(filtered, a)
+					}
+				}
+				summary.Agents = filtered
+			}
+
+			if usageJSON {
+				out, err := usage.RenderJSON(summary)
+				if err != nil {
+					return err
+				}
+				fmt.Println(out)
+				return nil
+			}
+
+			fmt.Print(usage.RenderText(summary))
+			return nil
+		},
+	}
+	usageCmd.Flags().BoolVar(&usageJSON, "json", false, "output usage in JSON format")
+	usageCmd.Flags().StringVar(&usageAgent, "agent", "", "filter to a specific agent (claude, agy, codex)")
+	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
 
 	var applyDocs []string
 	var forceDocs bool
@@ -116,7 +161,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "load tool catalog: %v\n", err)
 		os.Exit(1)
 	}
-	root.AddCommand(apply, diff, clean, status, initCmd, toolsCmd)
+	root.AddCommand(apply, diff, clean, status, usageCmd, initCmd, toolsCmd)
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}
