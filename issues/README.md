@@ -24,3 +24,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 018 | [018-mark-bundled-docs-in-frontmatter.md](018-mark-bundled-docs-in-frontmatter.md) | Bundled docs don't self-identify as claudeconfig-managed | Open |
 | 019 | [019-rename-to-harnez.md](019-rename-to-harnez.md) | Rename project from claudeconfig to harnez | Closed |
 | 020 | [020-tools-command-os-tools.md](020-tools-command-os-tools.md) | `harnez tools`: guided OS-level tool installation | Open — canary passed; installer pending |
+| 021 | [021-fluent-streaming-typing.md](021-fluent-streaming-typing.md) | Fluent, streaming voice-input typing with enter-to-stop | Open — research needed |
+| 022 | [022-gnome-transcriber-ui.md](022-gnome-transcriber-ui.md) | GNOME transcriber UI: history, retype, and typing-speed controls | Open — not yet started |
