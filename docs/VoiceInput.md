@@ -66,3 +66,18 @@ a user systemd `dotoold` daemon (`DOTOOL_XKB_LAYOUT=de`) for the fast, reliable
 `dotoolc` path, plus `language_to_layout = {}` in Voxtype's config to stop it
 auto-forcing `layout=us` for English speech regardless of the physical keyboard layout.
 The script can repeat the guided manual test; ordinary `go test` never runs it.
+
+## Streaming (opt-in, research spike — see issue 021)
+
+Local streaming partial-typing (Parakeet via ONNX Runtime, no GPU required) was proven
+working on this same workstation as of 2026-08-17: words appear incrementally during
+dictation via the existing `dotoolc` fast path, still fully offline. It is **not** the
+default and is **not** wired into `harnez tools` — it requires a separate
+~2.7GB one-time download, a second config file
+(`~/.config/voxtype/config-streaming.toml`) that is never auto-loaded, and manually
+stopping `voxtype.service` before starting the streaming daemon (both bind the same
+runtime socket). See `scripts/canary-voice-streaming.sh` and issue 021's Findings
+section for the full setup, the footguns hit along the way (a `voxtype setup
+--download` side effect that silently switches the live engine, an undocumented
+streaming-timing constraint, and a PATH gap in ad hoc systemd units), and what's still
+open (Enter-to-stop, longer-form backtracking behavior).
