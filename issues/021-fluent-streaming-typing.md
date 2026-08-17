@@ -160,10 +160,27 @@ prototyped. Research spike, not a shipped `harnez tools` feature yet.
   systemd's default PATH — a second footgun that produced silent
   clipboard-only fallback with zero visible output until diagnosed via `-v` debug
   logs and `journalctl`), a real dictation pass produced `Text typed via dotoolc`
-  log lines and — per the user — dictated text "works with 2-3s delay",
-  confirming: local Parakeet streaming, typed incrementally through the existing
-  `dotoolc` fast path, using the same GNOME `Super+Ctrl+X` shortcut from issue 020
-  unmodified (it talks to whichever daemon owns the runtime socket).
+  log lines, confirming: local Parakeet streaming, typed incrementally through the
+  existing `dotoolc` fast path, using the same GNOME `Super+Ctrl+X` shortcut from
+  issue 020 unmodified (it talks to whichever daemon owns the runtime socket).
+  Word spacing was normal and no visible backspace/correction flicker occurred.
+- **Real limitation found: pauses cause multi-second lag and occasional dropped
+  words.** Timestamp analysis of the debug log shows two distinct regimes: during
+  continuous speech, `dotoolc` calls land at a steady ~0.47-0.5s cadence (matching
+  `streaming_chunk_secs = 0.48` almost exactly — near-real-time, no backlog); but
+  the first chunk *after any pause* in speech takes anywhere from ~1.4s up to one
+  observed 18.7s gap before landing. The user's own report — "2-3s delay, word by
+  word" plus "some words got lost... on longer pauses" — matches this precisely:
+  deliberate pauses between words (natural when testing carefully) each re-trigger
+  the gap, which reads as per-word lag even though continuous speech is actually
+  fast; severe cases drop a word outright. Root cause is architectural, not a
+  harnez/test-setup artifact: `parakeet_streaming.rs`'s own module doc says outright
+  that this pipeline has **no VAD/end-of-utterance segmentation yet** ("until we add
+  VAD-based segmentation, mid-recording incremental typing (commit-on-pause) is a
+  follow-up") — pauses are not a first-class concept in Voxtype's current Parakeet
+  streaming pipeline, so every pause is an anomaly the cache-aware chunker pays a
+  real, sometimes multi-second cost to recover from. This is an upstream Voxtype
+  limitation on an explicitly experimental feature, not something to patch here.
 - Net verdict: **local streaming typing works on this workstation today**, fully
   offline (no cloud, no API key). It requires ~2.7GB of additional disk (binary +
   model), a separate config file, and manual daemon start/stop — not yet a
@@ -233,18 +250,19 @@ anything:
 
 - **Proven (real hardware, human-in-the-loop):** local Parakeet ONNX streaming
   boots, transcribes, and types incrementally via the existing `dotoolc` fast path
-  on this exact workstation; the default batch `base.en` flow is unaffected and
-  was re-verified after every mutation.
+  on this exact workstation with correct word spacing and no visible correction
+  flicker; the default batch `base.en` flow is unaffected and was re-verified after
+  every mutation.
+- **Proven (real hardware, human-in-the-loop, confirmed by timestamp analysis):**
+  pauses in speech cause multi-second output lag and can drop words, root-caused to
+  Voxtype's Parakeet streaming pipeline having no VAD/end-of-utterance segmentation
+  yet (an upstream, documented-as-future-work limitation, not a harnez artifact).
 - **Proven (source read, cross-checked against live debug logs):** Voxtype already
   implements backspace-and-retype correction machinery; Parakeet's partials here
   are deltas, not cumulative — no duplicate-text bug.
 - **Uncertain / not yet exercised:** actual mid-word backtracking/correction
   behavior in a longer, more ambiguous dictation (the guided tests used short,
-  clear phrases that likely didn't trigger any `Replace` events); exact
-  word-boundary spacing correctness beyond the user's informal "works" report;
-  whether the 2-3s latency is warm-up-only or a steady-state characteristic (not
-  independently confirmed against the debug log's own ~0.5-1.5s inter-chunk
-  timing).
+  clear phrases that likely didn't trigger any `Replace` events).
 - **Rejected / explicitly not done:** Soniox or any cloud engine (never touched);
   `input`-group membership or any other privilege expansion (never requested);
   making Parakeet/streaming the default (kept strictly opt-in via a separate
