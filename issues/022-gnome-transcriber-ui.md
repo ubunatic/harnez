@@ -1,6 +1,6 @@
 # GNOME transcriber UI: history, retype, and typing-speed controls
 
-**Status:** Open — not yet started
+**Status:** In progress — CLI plumbing implemented and tested; GNOME Shell extension pending
 
 ## Context
 
@@ -83,3 +83,15 @@ for debugging the original typing pipeline.
 - History storage is local-only and should be treated as sensitive (it may contain
   anything the user has ever dictated); do not write it anywhere more persistent or
   more widely readable than necessary, and provide a way to clear it.
+
+## Implementation status
+
+- **CLI / Backend plumbing (complete & tested)**:
+  - `voice_config.go` & `harnez tools voice-input config {get,set} type-delay-ms [VAL]`: comment-preserving regex editor for `type_delay_ms` in `~/.config/voxtype/config.toml`.
+  - `voice_history.go` & `harnez tools voice-input history {list,clear,record,copy,retype}`: local JSONL history store at `~/.local/share/harnez/voice-input/history.jsonl` (0600 permissions, capped at 20 entries). `record` subcommands acts as a pass-through filter for Voxtype's `[output.post_process]`.
+  - `voice_type.go`: `BuildDotoolCommands`, `dotoolDaemonReady` (non-blocking open check), `TypeText` (fast `dotoolc` pipe with fallback to cold `dotool`), and `CopyText` (`wl-copy`).
+  - Unit tests in `voice_config_test.go`, `voice_history_test.go`, `voice_type_test.go`, and `command_test.go`.
+- **GNOME Shell extension (pending)**:
+  - Extension UI panel/popup.
+  - Window focus capture at open time and activation/settling before retype.
+
