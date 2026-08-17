@@ -33,6 +33,13 @@ harnez tools install voice-input --scope system   # explicit privilege; recipe p
 harnez tools voice-input mode                     # show the active mode (batch/streaming/neither/inconsistent)
 harnez tools voice-input mode streaming           # switch to opt-in local streaming (issue 021)
 harnez tools voice-input mode batch               # switch back to the default batch flow
+harnez tools voice-input history list             # list recent dictations (most recent first, sensitive)
+harnez tools voice-input history copy <ID>        # copy transcript to clipboard via wl-copy
+harnez tools voice-input history retype <ID>      # re-type transcript at cursor via dotool
+harnez tools voice-input history clear            # wipe local history file
+harnez tools voice-input history record           # stdin/stdout pass-through hook for Voxtype
+harnez tools voice-input config get type-delay-ms # read type_delay_ms from ~/.config/voxtype/config.toml
+harnez tools voice-input config set type-delay-ms <MS> # edit type_delay_ms preserving comments
 ```
 
 The command never uses cloud transcription or requests membership in the `input` group.
@@ -106,3 +113,30 @@ Known upstream limitation (Voxtype 0.7.5, not a harnez bug): pauses in speech ca
 multi-second output lag and occasionally drop words, because this streaming pipeline has
 no VAD/end-of-utterance segmentation yet. See issue 021 for the debug-log analysis.
 Enter-to-stop and deeper backtracking behavior remain open, see issue 021.
+
+## History & Config Design Decisions (Issue 022)
+
+### 1. Pass-Through History Capture (`history record`)
+Voxtype's `[output.post_process]` configuration hook executes an external command with the
+transcribed text on `stdin` and reads the replacement text from `stdout` before passing it to
+the typing driver.
+
+Rather than patching Voxtype upstream or running an intrusive background daemon, `harnez tools
+voice-input history record` acts as a pass-through filter (a recording `cat`):
+- Reads the transcript from `stdin`.
+- Computes an 8-char SHA-256 ID, timestamps the entry, and appends it to
+  `~/.local/share/harnez/voice-input/history.jsonl` (mode `0600`, capped at 20 entries).
+- Writes the exact text back to `stdout` unchanged.
+
+Wiring into `~/.config/voxtype/config.toml`:
+```toml
+[output.post_process]
+command = "harnez tools voice-input history record"
+```
+
+### 2. Comment-Preserving In-Place Config Editing (`config set`)
+Voxtype's own `voxtype config set` subcommand only supports the `engine` key and omits
+`type_delay_ms`. To avoid destructive TOML round-trips that would strip user comments or
+reformat spacing in `config.toml`, `harnez tools voice-input config set type-delay-ms <MS>`
+uses an atomic, line-targeted regex replacement that modifies only the numeric delay in place.
+
