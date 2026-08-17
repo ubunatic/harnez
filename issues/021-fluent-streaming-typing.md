@@ -280,9 +280,11 @@ anything:
 
 ### Follow-ups if this becomes a real feature
 
-1. Decide whether `harnez tools` should manage the streaming opt-in (a second
-   systemd unit + config, mutually exclusive with the batch one since both bind
-   the same runtime socket) or leave it a manual/documented procedure.
+1. ~~Decide whether `harnez tools` should manage the streaming opt-in~~ — **done**:
+   `harnez tools voice-input mode [streaming|batch]` (see "CLI command" below) toggles
+   between two mutually exclusive systemd user services. The one-time setup (binary
+   swap, model download, config file, unit file) is still manual/documented, not yet
+   wired into `harnez tools install`.
 2. File upstream findings against Voxtype: the `--download`/config-mutation side
    effect, the undocumented mel-frame-divisible-by-8 constraint on streaming
    timing knobs, and the stale delta-vs-cumulative doc comment in
@@ -291,3 +293,43 @@ anything:
    `input`-group membership.
 4. Re-test backtracking specifically with ambiguous/homophone-heavy speech to
    observe a real `StreamingEvent::Replace`.
+5. Consider wiring the one-time setup (onnx binary swap, model download, unit file
+   creation) into `harnez tools install voice-input --streaming` or similar, now that
+   the day-to-day toggle exists.
+
+### CLI command: `harnez tools voice-input mode`
+
+Added after the research spike above, at the user's explicit request once they'd tried
+the manual two-terminal switch and wanted a one-command toggle:
+
+```text
+harnez tools voice-input mode              # show current mode (batch/streaming/neither/inconsistent)
+harnez tools voice-input mode streaming    # switch to streaming
+harnez tools voice-input mode batch        # switch back to batch
+```
+
+Implementation (`internal/tools/voice_mode.go`, tested with the existing injected-
+`Dependencies` pattern, no real `systemctl` in `go test`):
+
+- `voxtype.service` (batch) and a new `voxtype-streaming.service` unit (created on this
+  host, analogous to `voxtype.service` but `ExecStart` pointed at
+  `config-streaming.toml`, not enabled for auto-start) share one voxtype runtime
+  lock/socket and cannot run concurrently.
+- **Design correction made during testing:** the first implementation tried to start the
+  target service *before* stopping the other, to avoid ever leaving both stopped. This
+  is wrong for this specific pair — the target's `voxtype` process fails immediately
+  with "another voxtype instance is already running" while the other still holds the
+  lock, is caught by `Restart=on-failure`, and only succeeds several seconds later on
+  retry (confirmed via `journalctl`: a real "Failed to acquire lock" then a successful
+  restart 5s later). The correct order, verified working in both directions on this
+  workstation, is: stop the other service, start the target, poll `is-active` for up to
+  10s (Parakeet's streaming model load takes ~3.5s), and if the target never becomes
+  active, restart the other as a fallback and report the failure — so a broken switch
+  never leaves voice input fully stopped, but the "never see a stopped gap" goal isn't
+  achievable given the shared-lock constraint.
+- `mode streaming` validates `~/.config/voxtype/config-streaming.toml` and the
+  downloaded model directory exist before attempting anything, with an actionable error
+  (no silent failure).
+- Tested for real on this workstation, both directions (`batch → streaming`,
+  `streaming → batch`), confirming via `journalctl` a clean single start each time (no
+  crash-loop) and that `voxtype.service` still reloads `base.en` cleanly afterward.

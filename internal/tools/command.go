@@ -59,6 +59,33 @@ func NewCommand(specFS fs.FS, d Dependencies) (*cobra.Command, error) {
 	install.Flags().StringVar(&options.Scope, "scope", "user", "installation scope (user or system)")
 	install.Flags().BoolVar(&options.DryRun, "dry-run", false, "print the plan without network access or changes")
 	install.Flags().BoolVarP(&options.Yes, "yes", "y", false, "approve the printed plan noninteractively")
-	cmd.AddCommand(status, install)
+	cmd.AddCommand(status, install, newVoiceInputCommand(d))
 	return cmd, nil
+}
+
+// newVoiceInputCommand groups voice-input host-state commands that are
+// independent of the install/status catalog flow, starting with the
+// streaming/batch mode toggle from issue 021.
+func newVoiceInputCommand(d Dependencies) *cobra.Command {
+	voiceInput := &cobra.Command{Use: "voice-input", Short: "Manage the local voice-input daemon's runtime mode"}
+	mode := &cobra.Command{Use: "mode [streaming|batch]", Short: "Show or switch the active voice-input mode", Args: cobra.MaximumNArgs(1), SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			if len(args) == 0 {
+				fmt.Fprintln(d.Stdout, DescribeVoiceInputMode(CurrentVoiceInputMode(ctx, d)))
+				return nil
+			}
+			var target VoiceInputMode
+			switch args[0] {
+			case "streaming":
+				target = ModeStreaming
+			case "batch":
+				target = ModeBatch
+			default:
+				return fmt.Errorf("invalid mode %q (want streaming or batch)", args[0])
+			}
+			return SwitchVoiceInputMode(ctx, d, target)
+		}}
+	voiceInput.AddCommand(mode)
+	return voiceInput
 }

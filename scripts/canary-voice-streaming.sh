@@ -7,6 +7,7 @@ fail() {
 }
 
 command -v voxtype >/dev/null || fail "voxtype is required; this canary does not install it"
+command -v harnez >/dev/null || fail "harnez is required; this canary does not install it"
 test "${XDG_SESSION_TYPE:-}" = "wayland" || fail "a Wayland session is required"
 
 config="${HOME}/.config/voxtype/config-streaming.toml"
@@ -18,22 +19,25 @@ test -d "${model_dir}" \
 
 printf '%s\n' \
        "This is a guided manual canary for OPT-IN local streaming (Parakeet)." \
-       "It does NOT touch your default batch base.en config or voxtype.service." \
+       "It does NOT touch your default batch base.en config by default." \
        "" \
-       "1. Stop the batch daemon so the streaming daemon can bind the runtime socket:" \
-       "     systemctl --user stop voxtype.service" \
-       "2. Start the streaming daemon in this terminal (Ctrl-C to stop it later):" \
-       "     voxtype -v -c ${config} daemon" \
-       "   (PATH must include ~/.local/bin for the dotoolc fast path -- see" \
-       "   ~/.config/systemd/user/voxtype.service's Environment=PATH= line if unsure.)" \
-       "3. In another terminal, focus a disposable text editor, then run:" \
-       "     voxtype record toggle" \
-       "   speak, then run 'voxtype record toggle' again to stop." \
-       "4. Confirm words appear incrementally (not all at once at the end) and that" \
-       "   'Text typed via dotoolc' (not 'Text copied to clipboard') shows in the" \
-       "   daemon's -v log for each partial." \
-       "5. When done: Ctrl-C the streaming daemon, then:" \
-       "     systemctl --user start voxtype.service" \
-       "   to restore the default batch flow, and confirm it still works." \
+       "Normal way to switch (see 'harnez tools voice-input mode --help'):" \
+       "     harnez tools voice-input mode streaming   # switch to streaming" \
+       "     harnez tools voice-input mode             # show the active mode" \
+       "     harnez tools voice-input mode batch        # switch back" \
+       "This stops/starts the voxtype.service / voxtype-streaming.service systemd" \
+       "user units for you; it never leaves both stopped, and refuses to switch into" \
+       "streaming mode if the config or model above are missing." \
        "" \
-       "No package, service, or desktop setting is changed by this script."
+       "To exercise it end to end:" \
+       "1. harnez tools voice-input mode streaming" \
+       "2. Focus a disposable text editor, then use the configured GNOME shortcut" \
+       "   (Super+Ctrl+X) to dictate. Confirm words appear incrementally (not all" \
+       "   at once at the end)." \
+       "3. journalctl --user -u voxtype-streaming.service -f shows 'Text typed via" \
+       "   dotoolc' (not 'Text copied to clipboard') for each partial." \
+       "4. harnez tools voice-input mode batch, then confirm the batch flow still" \
+       "   works too." \
+       "" \
+       "This script itself only reads state; the mutations above come from the" \
+       "harnez commands you choose to run."

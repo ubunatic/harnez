@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -78,8 +79,10 @@ type Dependencies struct {
 	GOARCH   string
 	Getenv   func(string) string
 	ReadFile func(string) ([]byte, error)
+	Stat     func(string) (os.FileInfo, error)
 	LookPath func(string) (string, error)
 	Run      func(context.Context, string, ...string) error
+	Sleep    func(time.Duration)
 	Stdin    io.Reader
 	Stdout   io.Writer
 }
@@ -87,9 +90,9 @@ type Dependencies struct {
 // DefaultDependencies performs only read-only probes until an approved installer exists.
 func DefaultDependencies(in io.Reader, out io.Writer) Dependencies {
 	return Dependencies{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Getenv: os.Getenv, ReadFile: os.ReadFile,
-		LookPath: exec.LookPath, Run: func(ctx context.Context, name string, args ...string) error {
+		Stat: os.Stat, LookPath: exec.LookPath, Run: func(ctx context.Context, name string, args ...string) error {
 			return exec.CommandContext(ctx, name, args...).Run()
-		}, Stdin: in, Stdout: out}
+		}, Sleep: time.Sleep, Stdin: in, Stdout: out}
 }
 
 // LoadCatalog parses all embedded tool specs.

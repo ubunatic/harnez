@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"ubunatic.com/harnez"
 )
@@ -30,10 +31,16 @@ func testDeps(out *bytes.Buffer) Dependencies {
 		if k == "XDG_CURRENT_DESKTOP" {
 			return "GNOME"
 		}
+		if k == "HOME" {
+			return "/home/test"
+		}
 		return "wayland"
 	},
-		ReadFile: func(string) ([]byte, error) { return []byte("ID=fedora\nVERSION_ID=44\n"), nil }, LookPath: func(string) (string, error) { return "", errors.New("missing") },
-		Run: func(context.Context, string, ...string) error { return errors.New("inactive") }, Stdin: strings.NewReader("n\n"), Stdout: out}
+		ReadFile: func(string) ([]byte, error) { return []byte("ID=fedora\nVERSION_ID=44\n"), nil },
+		Stat:     func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
+		LookPath: func(string) (string, error) { return "", errors.New("missing") },
+		Run:      func(context.Context, string, ...string) error { return errors.New("inactive") },
+		Sleep:    func(time.Duration) {}, Stdin: strings.NewReader("n\n"), Stdout: out}
 }
 
 func TestProbeStates(t *testing.T) {
