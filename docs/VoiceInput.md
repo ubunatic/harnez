@@ -146,3 +146,29 @@ Voxtype's own `voxtype config set` subcommand only supports the `engine` key and
 reformat spacing in `config.toml`, `harnez tools voice-input config set type-delay-ms <MS>`
 uses an atomic, line-targeted regex replacement that modifies only the numeric delay in place.
 
+## Debug & Tuning Harness (Build Tag: `debug`)
+
+Experimental diagnostics and prototyping tools are gated behind Go's `//go:build debug` tag to keep standard release binaries clean. Build with `make build-debug` or `make install-debug`:
+
+```text
+harnez tools voice-input canary     # real-time streaming token observer & parameter tuner
+harnez tools voice-input vad-probe  # prototype VAD-segmented sentence-by-sentence dictation
+```
+
+### 1. Streaming Canary (`canary`)
+- Spawns an isolated Voxtype daemon with configurable chunk/context parameters.
+- Intercepts streaming keystrokes via a virtual `dotool` pipe, measuring per-chunk delta timing and highlighting inter-word pause gaps.
+- Empirically verified the upstream Parakeet streaming pause bug: natural 1–5s pauses saturate the context cache with silence, producing a 4–11s lag and dropping the initial post-pause word ("One").
+
+### 2. VAD Sentence Dictation Probe (`vad-probe`)
+- Continuously buffers 16kHz audio with a 250ms circular pre-roll buffer (eliminating initial consonant loss).
+- Segments utterances on 600ms silence and transcribes completed sentences with Whisper in <300ms.
+
+## Continuous Eager Sentence Streaming (Issue 026)
+
+To bridge the gap between high-accuracy batch Whisper and low-latency streaming without suffering Parakeet's pause-loss bug, issue 026 defines Continuous Eager Sentence Streaming:
+- Microphone capture remains open continuously.
+- Rolling Whisper worker processes audio on 2–3s boundaries or detected pauses.
+- Finalized sentences with punctuation are typed immediately via `dotoolc`, while trailing uncommitted audio is retained as acoustic context for the next turn.
+
+
