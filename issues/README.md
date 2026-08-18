@@ -28,6 +28,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 022 | [022-gnome-transcriber-ui.md](022-gnome-transcriber-ui.md) | GNOME transcriber UI: history, retype, and typing-speed controls | Complete — extension, CLI & canaries tested |
 | 023 | [023-usage-command-token-quota-tracking.md](023-usage-command-token-quota-tracking.md) | `harnez usage`: unified token, session & quota status command | Implemented — prototype verified |
 | 024 | [024-gnome-typing-feedback-icon.md](024-gnome-typing-feedback-icon.md) | GNOME transcriber UI: Visual typing feedback indicator (keyboard icon during synthesis) | Open |
-| 025 | [025-voice-input-volume-animation.md](025-voice-input-volume-animation.md) | Voice Input: Real-time audio input volume / VU meter animation in recording indicator | Open |
 | 026 | [026-continuous-eager-sentence-streaming.md](026-continuous-eager-sentence-streaming.md) | Continuous Eager Sentence Streaming Dictation | Proposed / Research & Design |
+| 027 | [027-continuous-listening-wake-word-turn-taking.md](027-continuous-listening-wake-word-turn-taking.md) | Continuous Listening, Wake-Word Activation & Verbal Turn-Taking | Proposed / Research & Planning |
+
 
