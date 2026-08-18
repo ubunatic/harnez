@@ -3,12 +3,9 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -174,7 +171,7 @@ func RunVADProbe(ctx context.Context, d Dependencies, opts VADProbeOptions) erro
 		frameIndex++
 		if frameIndex%10 == 0 && !isSpeaking {
 			// Print subtle live level meter every 200ms when idle
-			meter := renderLevelMeter(rms, opts.ThresholdRMS)
+			meter := RenderAudioLevelMeter(rms, opts.ThresholdRMS)
 			fmt.Fprintf(d.Stdout, "\r  Level: %s RMS: %4d   ", meter, rms)
 		}
 
@@ -263,96 +260,19 @@ func RunVADProbe(ctx context.Context, d Dependencies, opts VADProbeOptions) erro
 	return nil
 }
 
-// computeRMS calculates Root Mean Square amplitude of 16-bit PCM audio frame.
+// computeRMS delegates to ComputeAudioRMS.
 func computeRMS(frame []byte) int {
-	var sumSquares int64
-	numSamples := len(frame) / 2
-	if numSamples == 0 {
-		return 0
-	}
-
-	for i := 0; i < len(frame); i += 2 {
-		sample := int16(binary.LittleEndian.Uint16(frame[i : i+2]))
-		sumSquares += int64(sample) * int64(sample)
-	}
-
-	meanSquare := sumSquares / int64(numSamples)
-	return int(math.Sqrt(float64(meanSquare)))
-}
-
-func renderLevelMeter(rms int, threshold int) string {
-	bars := 10
-	level := (rms * bars) / (threshold * 2)
-	if level > bars {
-		level = bars
-	}
-	var sb strings.Builder
-	for i := 0; i < bars; i++ {
-		if i < level {
-			sb.WriteString("■")
-		} else {
-			sb.WriteString("·")
-		}
-	}
-	return sb.String()
+	return ComputeAudioRMS(frame)
 }
 
 func flattenFrames(frames [][]byte) []byte {
-	totalLen := 0
-	for _, f := range frames {
-		totalLen += len(f)
-	}
-	res := make([]byte, 0, totalLen)
-	for _, f := range frames {
-		res = append(res, f...)
-	}
-	return res
+	return FlattenAudioFrames(frames)
 }
 
 func writeWAVFile(path string, pcmData []byte, sampleRate int) error {
-	var buf bytes.Buffer
-
-	// RIFF header
-	buf.WriteString("RIFF")
-	totalSize := uint32(36 + len(pcmData))
-	_ = binary.Write(&buf, binary.LittleEndian, totalSize)
-	buf.WriteString("WAVE")
-
-	// fmt chunk
-	buf.WriteString("fmt ")
-	_ = binary.Write(&buf, binary.LittleEndian, uint32(16)) // subchunk1 size
-	_ = binary.Write(&buf, binary.LittleEndian, uint16(1))  // PCM
-	_ = binary.Write(&buf, binary.LittleEndian, uint16(1))  // 1 channel (mono)
-	_ = binary.Write(&buf, binary.LittleEndian, uint32(sampleRate))
-	byteRate := uint32(sampleRate * 1 * 2)
-	_ = binary.Write(&buf, binary.LittleEndian, byteRate)
-	_ = binary.Write(&buf, binary.LittleEndian, uint16(2))  // block align
-	_ = binary.Write(&buf, binary.LittleEndian, uint16(16)) // bits per sample
-
-	// data chunk
-	buf.WriteString("data")
-	_ = binary.Write(&buf, binary.LittleEndian, uint32(len(pcmData)))
-	buf.Write(pcmData)
-
-	return os.WriteFile(path, buf.Bytes(), 0600)
+	return WriteWAVAudio(path, pcmData, sampleRate)
 }
 
 func extractTranscribeOutput(output string) string {
-	lines := strings.Split(output, "\n")
-	var resultLines []string
-	for _, l := range lines {
-		trimmed := strings.TrimSpace(l)
-		if trimmed == "" || strings.HasPrefix(trimmed, "Loading audio file:") ||
-			strings.HasPrefix(trimmed, "Audio format:") ||
-			strings.HasPrefix(trimmed, "Processing ") ||
-			strings.HasPrefix(trimmed, "whisper_") ||
-			strings.Contains(trimmed, "INFO Model loaded") ||
-			strings.Contains(trimmed, "INFO Using local whisper") ||
-			strings.Contains(trimmed, "INFO Loading whisper model") ||
-			strings.Contains(trimmed, "INFO Transcription completed") {
-			continue
-		}
-		resultLines = append(resultLines, trimmed)
-	}
-	return strings.Join(resultLines, " ")
+	return CleanWhisperTranscript(output)
 }

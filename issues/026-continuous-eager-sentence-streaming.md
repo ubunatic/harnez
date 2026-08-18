@@ -1,6 +1,6 @@
 # Continuous Eager Sentence Streaming Dictation
 
-- **Status:** Proposed / Research & Design
+- **Status:** Implemented (Go Harnez Pipeline)
 - **Related Issues:** 020 (Voice Input), 021 (Fluent Streaming), 022 (Transcriber UI)
 
 ## Context & Problem Statement
@@ -70,8 +70,9 @@ Harnez implements a lightweight orchestrator daemon:
 
 ## Acceptance Criteria
 
-- [ ] Audio capture remains continuously active without stopping between conversational pauses.
-- [ ] Spoken sentences are transcribed and typed into the focused application within 0.5–1.5s of completing each phrase/sentence.
-- [ ] Zero dropped words after natural conversational pauses (e.g. *"The quick brown fox... [pause]... jumps over the yellow cat"* captures all words).
-- [ ] No duplicate text or typing stutter across chunk boundaries.
-- [ ] Validated with canary benchmarks measuring inter-sentence latency and token completeness.
+- [x] Audio capture remains continuously active without stopping between conversational pauses.
+- [x] Spoken sentences are transcribed and typed into the focused application within 0.5–1.5s of completing each phrase/sentence.
+- [x] Zero dropped words after natural conversational pauses (e.g. *"The quick brown fox... [pause]... jumps over the yellow cat"* captures all words).
+- [x] No duplicate text or typing stutter across chunk boundaries.
+- [x] Validated with canary benchmarks measuring inter-sentence latency and token completeness.
+
