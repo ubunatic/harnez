@@ -8,9 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/claude"
-	toolcmd "ubunatic.com/harnez/internal/tools"
 	"ubunatic.com/harnez/internal/usage"
 )
 
@@ -156,12 +154,7 @@ func main() {
 	initCmd.Flags().BoolVar(&initUpdate, "update", false, "re-fetch and refresh the project summary (implies --summary)")
 	initCmd.Flags().BoolVar(&initReplace, "replace", false, "delete existing AGENTS.md and recreate from template before init")
 
-	toolsCmd, err := toolcmd.NewCommand(harnez.DefaultFS, toolcmd.DefaultDependencies(os.Stdin, os.Stdout))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "load tool catalog: %v\n", err)
-		os.Exit(1)
-	}
-	root.AddCommand(apply, diff, clean, status, usageCmd, initCmd, toolsCmd)
+	root.AddCommand(apply, diff, clean, status, usageCmd, initCmd)
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}

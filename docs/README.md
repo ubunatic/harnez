@@ -9,8 +9,6 @@ Not needed for routine coding; reach for these during investigations or design w
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent |
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat |
-| [VoiceInput.md](VoiceInput.md) | Voice input CLI commands, streaming mode toggle, dotool injection & security model |
-| [VoiceInputArchitecture.md](VoiceInputArchitecture.md) | ADR: Voice input desktop companion, Mutter focus coordination & Wayland architecture |
 
 
 Copyable docs (installed to Claude and Prime Agent global dirs on `apply`, copied to projects via `--docs`) live in subdirs.
