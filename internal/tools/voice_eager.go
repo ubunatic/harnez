@@ -46,7 +46,7 @@ func DefaultEagerOptions() EagerOptions {
 		TypeOutput:    true,
 		RecordHistory: true,
 		Daemon:        false,
-		Model:         "base.en",
+		Model:         "small.en",
 	}
 }
 
