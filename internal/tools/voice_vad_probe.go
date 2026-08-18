@@ -30,10 +30,10 @@ type VADProbeOptions struct {
 // DefaultVADProbeOptions returns standard defaults for VAD segmentation.
 func DefaultVADProbeOptions() VADProbeOptions {
 	return VADProbeOptions{
-		ThresholdRMS: 500,
-		SilenceMs:    600,
-		PreRollMs:    250,
-		MinSpeechMs:  300,
+		ThresholdRMS: 250,
+		SilenceMs:    700,
+		PreRollMs:    300,
+		MinSpeechMs:  250,
 		TypeOutput:   false,
 	}
 }
@@ -46,7 +46,7 @@ func NewVoiceInputVADProbeCommand(d Dependencies) *cobra.Command {
 		Use:   "vad-probe",
 		Short: "Prototype VAD-segmented sentence-by-sentence dictation with audio pre-roll buffer",
 		Long: "Listens to the microphone with a circular pre-roll buffer. When you speak, it buffers audio\n" +
-			"with zero dropped initial consonants. When you pause (silence > 600ms), it transcribes that sentence\n" +
+			"with zero dropped initial consonants. When you pause (silence > 700ms), it transcribes that sentence\n" +
 			"immediately with Whisper and outputs/types it in near real-time.",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,

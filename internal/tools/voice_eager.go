@@ -33,10 +33,10 @@ type EagerOptions struct {
 // DefaultEagerOptions returns standard defaults for eager sentence streaming dictation.
 func DefaultEagerOptions() EagerOptions {
 	return EagerOptions{
-		ThresholdRMS:  500,
-		SilenceMs:     600,
-		PreRollMs:     250,
-		MinSpeechMs:   300,
+		ThresholdRMS:  250,
+		SilenceMs:     700,
+		PreRollMs:     300,
+		MinSpeechMs:   250,
 		MaxWindowMs:   8000,
 		TypeOutput:    true,
 		RecordHistory: true,
@@ -51,7 +51,7 @@ func NewVoiceInputEagerCommand(d Dependencies) *cobra.Command {
 		Use:   "eager",
 		Short: "Continuous eager sentence streaming dictation into focused window",
 		Long: "Continuously captures audio from the microphone with a circular pre-roll buffer.\n" +
-			"Segments speech on natural conversational pauses (silence > 600ms) or rolling windows,\n" +
+			"Segments speech on natural conversational pauses (silence > 700ms) or rolling windows,\n" +
 			"transcribes completed phrases immediately with local Whisper, and types finalized sentences\n" +
 			"directly into the active application via dotool with zero dropped words across pauses.",
 		Args:         cobra.NoArgs,
