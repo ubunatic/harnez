@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -352,27 +353,35 @@ func formatRecordState(status string) string {
 	}
 }
 
-// RunWatchResources refreshes the resource monitor live in terminal until cancelled.
+// RunWatchResources refreshes the resource monitor live in terminal without flickering.
 func RunWatchResources(ctx context.Context, d Dependencies, interval time.Duration) error {
 	sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Hide cursor on start, restore on exit
+	fmt.Print("\033[?25l\033[2J")
+	defer fmt.Print("\033[?25h\n")
+
+	renderFrame := func() {
+		report := CollectVoiceResources(sigCtx, d)
+		var buf bytes.Buffer
+		buf.WriteString("\033[H") // Move cursor to top-left without clearing buffer
+		PrintVoiceResourceReport(&buf, report)
+		buf.WriteString("\033[J") // Erase any trailing lines below output if list shrank
+		_, _ = d.Stdout.Write(buf.Bytes())
+	}
+
+	renderFrame()
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-
-	// Initial render
-	fmt.Print("\033[H\033[2J") // Clear screen
-	report := CollectVoiceResources(sigCtx, d)
-	PrintVoiceResourceReport(d.Stdout, report)
 
 	for {
 		select {
 		case <-sigCtx.Done():
 			return nil
 		case <-ticker.C:
-			fmt.Print("\033[H\033[2J")
-			report := CollectVoiceResources(sigCtx, d)
-			PrintVoiceResourceReport(d.Stdout, report)
+			renderFrame()
 		}
 	}
 }
