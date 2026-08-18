@@ -556,14 +556,15 @@ func getAMDGPUUsage() (busyPercent float64, vramUsed int64, vramTotal int64, err
 
 // PrintVoiceResourceReport writes a formatted terminal report of voice resources respecting active btop sections.
 func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport, sec ResourceSections) {
-	// Render btop-style header with section badges
+	// Render btop-style top bar with section badges
 	fmt.Fprintf(w, "── Voice Monitor ── %s ── %s ── %s ── %s ──\n",
-		formatSectionBadge("1:Speed", sec.Speed),
-		formatSectionBadge("2:Hardware", sec.Hardware),
-		formatSectionBadge("3:Transcript", sec.Transcript),
-		formatSectionBadge("4:Daemons", sec.Daemons))
+		formatSectionBadge("1:speed", sec.Speed),
+		formatSectionBadge("2:hardware", sec.Hardware),
+		formatSectionBadge("3:transcript", sec.Transcript),
+		formatSectionBadge("4:daemons", sec.Daemons))
 
 	if sec.Speed {
+		fmt.Fprintln(w, "── [ speed (1) ] ─────────────────────────────────────────────────")
 		fmt.Fprintf(w, "  Mode:              \x1b[1m%s\x1b[0m (continuous sentence streaming)\n", r.Mode)
 		fmt.Fprintf(w, "  Recording:         %s\n", formatRecordState(r.RecordStatus))
 		fmt.Fprintf(w, "  Engine:            \x1b[32m%s\x1b[0m [%s]\n", r.GPUAccel, r.ActiveModel)
@@ -590,7 +591,7 @@ func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport, sec ResourceSe
 		if sec.Speed {
 			fmt.Fprintln(w, "")
 		}
-		fmt.Fprintln(w, "── Hardware & System Load ────────────────────────────────────────")
+		fmt.Fprintln(w, "── [ hardware (2) ] ──────────────────────────────────────────────")
 		if r.ActiveService != "" {
 			uptimeStr := "0s"
 			if r.ServiceUptime > 0 {
@@ -628,7 +629,7 @@ func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport, sec ResourceSe
 		}
 		if r.EagerMetrics != nil && len(r.EagerMetrics.Recent) > 0 {
 			m := r.EagerMetrics
-			fmt.Fprintln(w, "── Recent Spoken Sentences ───────────────────────────────────────")
+			fmt.Fprintln(w, "── [ transcript (3) ] ────────────────────────────────────────────")
 			limit := 4
 			if len(m.Recent) < limit {
 				limit = len(m.Recent)
@@ -650,7 +651,7 @@ func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport, sec ResourceSe
 		if sec.Speed || sec.Hardware || sec.Transcript {
 			fmt.Fprintln(w, "")
 		}
-		fmt.Fprintln(w, "── Active Voice Daemons ──────────────────────────────────────────")
+		fmt.Fprintln(w, "── [ daemons (4) ] ───────────────────────────────────────────────")
 		if len(r.Processes) == 0 {
 			fmt.Fprintln(w, "  No active voice processes running.")
 		} else {
@@ -667,7 +668,7 @@ func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport, sec ResourceSe
 	if len(r.ZombieWarnings) > 0 {
 		healthStatus = fmt.Sprintf("\x1b[31;1m⚠️ %s\x1b[0m", r.ZombieWarnings[0])
 	}
-	fmt.Fprintf(w, "── Keys: 1..4 (toggle) · a (all) · q (quit) ── %s ──\n", healthStatus)
+	fmt.Fprintf(w, "── [1..4] toggle · [a]ll · [q]uit ── %s ──\n", healthStatus)
 }
 
 func formatSectionBadge(name string, active bool) string {
