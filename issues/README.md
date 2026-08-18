@@ -30,5 +30,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 024 | [024-gnome-typing-feedback-icon.md](024-gnome-typing-feedback-icon.md) | GNOME transcriber UI: Visual typing feedback indicator (keyboard icon during synthesis) | Open |
 | 026 | [026-continuous-eager-sentence-streaming.md](026-continuous-eager-sentence-streaming.md) | Continuous Eager Sentence Streaming Dictation | Proposed / Research & Design |
 | 027 | [027-continuous-listening-wake-word-turn-taking.md](027-continuous-listening-wake-word-turn-taking.md) | Continuous Listening, Wake-Word Activation & Verbal Turn-Taking | Proposed / Research & Planning |
+| 028 | [028-post-process-local-llm-cleanup.md](028-post-process-local-llm-cleanup.md) | Local LLM Post-Process Hook for Dictation Cleanup & Voice Commands | Proposed / Research & Design |
 
 

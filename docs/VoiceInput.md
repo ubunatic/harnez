@@ -164,9 +164,44 @@ harnez tools voice-input vad-probe  # prototype VAD-segmented sentence-by-senten
 
 ## Continuous Eager Sentence Streaming (Issue 026)
 
-To bridge the gap between high-accuracy batch Whisper and low-latency streaming without suffering Parakeet's pause-loss bug, issue 026 defines Continuous Eager Sentence Streaming:
-- Microphone capture remains open continuously.
-- Rolling Whisper worker processes audio on 2–3s boundaries or detected pauses.
-- Finalized sentences with punctuation are typed immediately via `dotoolc`, while trailing uncommitted audio is retained as acoustic context for the next turn.
+To bridge the gap between high-accuracy batch Whisper and low-latency streaming without suffering Parakeet's pause-loss bug, Issue 026 implements **Continuous Eager Sentence Streaming** in native Go orchestration (`harnez tools voice-input eager --daemon`):
+- **Continuous Rolling VAD Capture**: Captures 16kHz PCM audio via `pw-record` with a `500ms` circular pre-roll buffer and `350ms` post-roll audio padding, preserving leading unstressed words (*"The"*, *"A"*) and trailing unvoiced consonants (*"cat"*, *"six"*).
+- **GPU Hardware Acceleration**: Runs official release `voxtype-0.7.5-linux-x86_64-vulkan` leveraging local AMD Radeon Cezanne iGPU via Mesa RADV compute shaders (`/dev/dri/renderD128`). Reduces transcription latency from $>2.5\text{s}$ CPU compute to $<250\text{ms}$ GPU compute ($10\text{--}15\times$ faster than realtime).
+- **Session Barrier & Kill Watcher**: Active context watcher terminates recording child processes in $<10\text{ms}$ on cancel; `sync.WaitGroup` session barriers prevent zombie processes and orphaned recording leaks.
+- **Hallucination & Bias Rejection**: Sanitizes prompt biases (e.g. ESL subtitle triggers) and strips URLs or YouTube subscription markers from transcribed text before typing.
+
+## Resource Monitor TUI (`resources --watch`)
+
+`harnez tools voice-input resources --watch` provides an interactive, btop-styled terminal dashboard tracking voice subsystem health, performance, and hardware load with zero flicker:
+
+```text
+╭─ [s] voice & speed ─────────────────╮ ╭─ [h] hardware load ──────────────────╮
+│ status:  ○ idle (eager / base.en)   │ │ cpu:   1.4%  [ ▂  ▅ ▂   ]  avg 4.5%  │
+│ engine:  AMD Radeon Vulkan 1.4      │ │ gpu:  12.0%  [  ▂ █ ▂   ]  sys 0.74% │
+│ speed:   10.5x realtime [████████]  │ │ mem:   6.1 MB daemon   1.3/8.0G VRAM │
+│ lag:     0.22s · 8m 8s audio (118)  │ │ up:   55m 6s (PID 723612)            │
+╰─────────────────────────────────────╯ ╰──────────────────────────────────────╯
+╭─ [t] transcript feed ────────────────────────────────────────────────────────╮
+│ 11:42:08  [0.22s]  "repeating that"                                          │
+│ 11:42:06  [0.25s]  "I will make a little pause between each step..."          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ [d] active daemons & health ────────────────────────────────────────────────╮
+│ dotoold (PID 498151, 3.3 MB)  ·  harnez (PID 723612, 13.0 MB)  ·  ✓ clean     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ [s]peed ●  [h]ardware ●  [t]ranscript ●  [d]aemons ●  │  [a]ll  [q]uit
+```
+
+### Interactive Letter Hotkeys:
+- **`s`**: Toggle **`[s]peed`** & status panel.
+- **`h`**: Toggle **`[h]ardware`** load panel (live CPU & GPU load sparklines, VRAM usage, and uptime).
+- **`t`**: Toggle **`[t]ranscript`** live sentence feed.
+- **`d`**: Toggle **`[d]aemons`** process list & health checks.
+- **`a`**: Enable **`[a]ll`** panels.
+- **`q`** / **`Esc`**: **`[q]uit`** monitor immediately.
+
+### Anti-Overflow Guarantee:
+- Dynamically queries terminal columns (`stty size` / `getTerminalWidth()`) and scales 2-column top boxes to match the terminal window.
+- Clamps every line with ANSI-aware truncation (`TruncateLineANSI`) ensuring 100% pixel-perfect vertical border alignment (`│`) without text wrapping.
+
 
 
