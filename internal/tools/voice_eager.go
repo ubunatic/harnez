@@ -32,6 +32,7 @@ type EagerOptions struct {
 	TypeOutput    bool
 	RecordHistory bool
 	Daemon        bool
+	Model         string
 }
 
 // DefaultEagerOptions returns standard defaults for eager sentence streaming dictation.
@@ -45,6 +46,7 @@ func DefaultEagerOptions() EagerOptions {
 		TypeOutput:    true,
 		RecordHistory: true,
 		Daemon:        false,
+		Model:         "base.en",
 	}
 }
 
@@ -74,6 +76,7 @@ func NewVoiceInputEagerCommand(d Dependencies) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.TypeOutput, "type", opts.TypeOutput, "type transcribed sentences directly into the focused window via dotool")
 	cmd.Flags().BoolVar(&opts.RecordHistory, "history", opts.RecordHistory, "record transcribed utterances into local dictation history")
 	cmd.Flags().BoolVar(&opts.Daemon, "daemon", opts.Daemon, "run as background systemd daemon listening for toggle control")
+	cmd.Flags().StringVar(&opts.Model, "model", opts.Model, "Whisper model name (default: base.en, or small.en)")
 
 	return cmd
 }
@@ -348,6 +351,10 @@ func StripTrailingHallucinations(text string) string {
 		`(?i)\s*thanks for watching[.!]*`,
 		`(?i)\s*please subscribe[.!]*`,
 		`(?i)\s*mcrun[.!]*`,
+		`(?i)\s*in the video[.!]*`,
+		`(?i)\s*in this video[.!]*`,
+		`(?i)\s*in today's video[.!]*`,
+		`(?i)\s*spoken \w+ times in the video[.!]*`,
 	}
 	for _, p := range patterns {
 		re := regexp.MustCompile(p)
@@ -509,7 +516,17 @@ func runEagerCaptureSession(ctx context.Context, d Dependencies, opts EagerOptio
 			}
 
 			writeVoxtypeState("transcribing")
-			cmd := exec.CommandContext(context.Background(), voxtypePath, "-q", "transcribe", wavPath)
+			modelName := opts.Model
+			if modelName == "" {
+				modelName = "base.en"
+			}
+			cmdArgs := []string{
+				"--model", modelName,
+				"--threads", "6",
+				"--initial-prompt", "Clean standard English dictation.",
+				"-q", "transcribe", wavPath,
+			}
+			cmd := exec.CommandContext(context.Background(), voxtypePath, cmdArgs...)
 			cmd.Env = append(os.Environ(), "NO_COLOR=1", "RUST_LOG=error")
 			var outBuf bytes.Buffer
 			cmd.Stdout = &outBuf
