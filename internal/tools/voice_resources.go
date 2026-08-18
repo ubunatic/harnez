@@ -554,6 +554,61 @@ func getAMDGPUUsage() (busyPercent float64, vramUsed int64, vramTotal int64, err
 	return 0, 0, 0, fmt.Errorf("no AMD GPU sysfs found")
 }
 
+// TruncateLineANSI truncates a line to maxVisWidth visible characters while preserving ANSI escape sequences.
+func TruncateLineANSI(s string, maxVisWidth int) string {
+	if maxVisWidth <= 3 {
+		return "..."
+	}
+	clean := StripANSI(s)
+	if len([]rune(clean)) <= maxVisWidth {
+		return s
+	}
+
+	var sb strings.Builder
+	visCount := 0
+	inEscape := false
+	runes := []rune(s)
+	targetVis := maxVisWidth - 3
+
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if r == '\x1b' {
+			inEscape = true
+			sb.WriteRune(r)
+			continue
+		}
+		if inEscape {
+			sb.WriteRune(r)
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEscape = false
+			}
+			continue
+		}
+
+		if visCount < targetVis {
+			sb.WriteRune(r)
+			visCount++
+		} else {
+			break
+		}
+	}
+	sb.WriteString("...\x1b[0m")
+	return sb.String()
+}
+
+func getTerminalWidth() int {
+	cmd := exec.Command("stty", "-F", "/dev/tty", "size")
+	if out, err := cmd.Output(); err == nil {
+		parts := strings.Fields(string(out))
+		if len(parts) >= 2 {
+			if cols, err := strconv.Atoi(parts[1]); err == nil && cols >= 60 {
+				return cols
+			}
+		}
+	}
+	return 90 // Default comfortable fallback width
+}
+
 // BoxSpec defines a rendered bordered panel.
 type BoxSpec struct {
 	Title string
@@ -561,7 +616,7 @@ type BoxSpec struct {
 	Width int
 }
 
-// RenderBoxLines renders a bordered box with rounded corners (╭─╮, │, ╰─╯).
+// RenderBoxLines renders a bordered box with rounded corners (╭─╮, │, ╰─╯), guaranteeing zero overflow.
 func RenderBoxLines(b BoxSpec) []string {
 	var res []string
 
@@ -579,13 +634,22 @@ func RenderBoxLines(b BoxSpec) []string {
 	top.WriteString("╮")
 	res = append(res, top.String())
 
-	// Body lines
+	// Body lines with strict anti-overflow clamping
+	maxContentWidth := b.Width - 4
+	if maxContentWidth < 10 {
+		maxContentWidth = 10
+	}
+
 	for _, l := range b.Lines {
 		var body strings.Builder
 		body.WriteString("│ ")
-		body.WriteString(l)
 		visLen := len([]rune(StripANSI(l)))
-		pad := b.Width - 4 - visLen
+		if visLen > maxContentWidth {
+			l = TruncateLineANSI(l, maxContentWidth)
+			visLen = len([]rune(StripANSI(l)))
+		}
+		body.WriteString(l)
+		pad := maxContentWidth - visLen
 		if pad < 0 {
 			pad = 0
 		}
@@ -627,9 +691,16 @@ func CombineSideBySide(leftLines, rightLines []string) []string {
 
 // PrintVoiceResourceReport writes a formatted terminal report of voice resources using Option A (True Btop Grid).
 func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport, sec ResourceSections) {
-	const totalWidth = 90
-	const colWidthLeft = 44
-	const colWidthRight = 45
+	totalWidth := getTerminalWidth()
+	if totalWidth > 110 {
+		totalWidth = 110
+	}
+	if totalWidth < 76 {
+		totalWidth = 76
+	}
+
+	colWidthLeft := (totalWidth - 1) / 2
+	colWidthRight := totalWidth - 1 - colWidthLeft
 
 	// Prepare [s]peed lines
 	speedLines := []string{

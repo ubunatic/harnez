@@ -60,6 +60,44 @@ func TestRenderSpeedGauge(t *testing.T) {
 	}
 }
 
+func TestTruncateLineANSI(t *testing.T) {
+	cases := []struct {
+		input  string
+		maxVis int
+		want   string
+	}{
+		{"Short", 10, "Short"},
+		{"Hello World!", 8, "Hello..."},
+		{"\x1b[32mColored Text\x1b[0m", 8, "\x1b[32mColor...\x1b[0m"},
+	}
+	for _, tc := range cases {
+		got := TruncateLineANSI(tc.input, tc.maxVis)
+		cleanGot := StripANSI(got)
+		if len([]rune(cleanGot)) > tc.maxVis {
+			t.Errorf("TruncateLineANSI(%q, %d) produced len %d > %d", tc.input, tc.maxVis, len([]rune(cleanGot)), tc.maxVis)
+		}
+	}
+}
+
+func TestRenderBoxLinesNoOverflow(t *testing.T) {
+	box := BoxSpec{
+		Title: "Test Box",
+		Lines: []string{
+			"Short line",
+			"This is an extraordinarily long line that would normally overflow the box width and break the right border!",
+			"\x1b[32mColored extraordinarily long line that contains ANSI escape codes\x1b[0m",
+		},
+		Width: 50,
+	}
+	lines := RenderBoxLines(box)
+	for i, line := range lines {
+		visLen := len([]rune(StripANSI(line)))
+		if visLen != box.Width {
+			t.Errorf("line %d visible width = %d, want exact %d: %q", i, visLen, box.Width, line)
+		}
+	}
+}
+
 func TestParseProcStatus(t *testing.T) {
 	content := `Name:	harnez
 Umask:	0022
