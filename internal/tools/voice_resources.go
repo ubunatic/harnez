@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -391,7 +392,7 @@ func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport) {
 			fmt.Fprintf(w, "  \x1b[31;1m⚠️  %s\x1b[0m\n", wMsg)
 		}
 	}
-	fmt.Fprintln(w, "──────────────────────────────────────────────────────────────────")
+	fmt.Fprintln(w, "── Press 'q' or Ctrl+C to exit ───────────────────────────────────")
 }
 
 func formatRecordState(status string) string {
@@ -411,6 +412,30 @@ func formatRecordState(status string) string {
 func RunWatchResources(ctx context.Context, d Dependencies, interval time.Duration) error {
 	sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Put terminal in cbreak mode to capture 'q' keypresses without requiring Enter
+	oldState, err := exec.Command("stty", "-g").Output()
+	if err == nil {
+		_ = exec.Command("stty", "cbreak", "-echo").Run()
+		defer func() {
+			_ = exec.Command("stty", string(bytes.TrimSpace(oldState))).Run()
+		}()
+	}
+
+	// Listen for 'q', 'Q', Ctrl-C, or Esc on standard input
+	go func() {
+		inputBuf := make([]byte, 1)
+		for {
+			n, err := os.Stdin.Read(inputBuf)
+			if err != nil || n == 0 {
+				return
+			}
+			if inputBuf[0] == 'q' || inputBuf[0] == 'Q' || inputBuf[0] == 3 || inputBuf[0] == 27 {
+				stop()
+				return
+			}
+		}
+	}()
 
 	// Hide cursor on start, restore on exit
 	fmt.Print("\033[?25l\033[2J")
