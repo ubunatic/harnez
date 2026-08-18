@@ -20,32 +20,17 @@ preflight: ⚙️  # check toolchains and dependencies
 build: ⚙️  # build the binary
 	go build -o $(BINARY) ./cmd/harnez
 
-build-debug: ⚙️  # build binary with debug/canary commands
-	go build -tags debug -o $(BINARY) ./cmd/harnez
-
 run: ⚙️ build  # run the application locally
 	./$(BINARY)
 
 install: ⚙️ build  # install binary to ~/go/bin (user)
 	go install ./cmd/harnez
 
-install-debug: ⚙️ build-debug  # install debug binary with canary/VAD probe tools to ~/go/bin
-	go install -tags debug ./cmd/harnez
-
 install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wide)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
 
-build-modifierd: ⚙️  # build the modifier daemon binary
-	go build -o harnez-modifierd ./cmd/harnez-modifierd
-
-install-modifierd: ⚙️ build-modifierd  # install harnez-modifierd and enable system service via sudo
-	sudo install -m 0755 harnez-modifierd $(PREFIX)/bin/harnez-modifierd
-	sudo cp systemd/harnez-modifierd.service /etc/systemd/system/
-	sudo systemctl daemon-reload
-	sudo systemctl enable --now harnez-modifierd.service
-
 uninstall: ⚙️  # remove installed binary from system and user paths
-	rm -f $(shell which $(BINARY) 2>/dev/null) $(PREFIX)/bin/$(BINARY) $(PREFIX)/bin/harnez-modifierd
+	rm -f $(shell which $(BINARY) 2>/dev/null) $(PREFIX)/bin/$(BINARY)
 
 apply: ⚙️ build  # apply config to ~/.claude globally
 	./$(BINARY) apply -c $(CONFIG) -t $(TARGET)
@@ -78,10 +63,6 @@ lint: ⚙️  # check commands/*.md files are all registered in config.yaml
 test: ⚙️  # run linter and tests
 	go vet ./...
 	go test ./...
-
-test-debug: ⚙️  # run linter and tests with debug build tag
-	go vet -tags debug ./...
-	go test -tags debug ./...
 
 format: ⚙️  # format source code
 	go fmt ./...
