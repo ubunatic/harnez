@@ -45,13 +45,17 @@ type AGYQuotaResponse struct {
 	} `json:"response"`
 }
 
-// findActiveAGYPort locates the active LanguageServer port of a running agy process.
-func findActiveAGYPort() int {
+// findAGYPorts locates the listening LanguageServer ports of running agy processes.
+// A single agy process can listen on more than one port (e.g. a TLS-only port
+// alongside the plain-HTTP RPC port), so all candidates are returned and the
+// caller must try each until the actual RPC call succeeds.
+func findAGYPorts() []int {
 	procDirs, err := os.ReadDir("/proc")
 	if err != nil {
-		return 0
+		return nil
 	}
 
+	var ports []int
 	for _, p := range procDirs {
 		if !p.IsDir() {
 			continue
@@ -110,9 +114,8 @@ func findActiveAGYPort() int {
 								if len(parts) == 2 {
 									if port64, err := strconv.ParseInt(parts[1], 16, 32); err == nil {
 										port := int(port64)
-										// Test if this port serves LanguageServer RPC
 										if probeAGYPort(port) {
-											return port
+											ports = append(ports, port)
 										}
 									}
 								}
@@ -123,10 +126,13 @@ func findActiveAGYPort() int {
 			}
 		}
 	}
-	return 0
+	return ports
 }
 
-// probeAGYPort verifies if a port is responsive to the AGY RetrieveUserQuotaSummary endpoint.
+// probeAGYPort verifies a port is at least accepting TCP connections. It is a
+// cheap pre-filter only — a port can accept TCP and still not serve the plain
+// HTTP RPC (e.g. a TLS-only listener), so callers must still confirm with a
+// real RetrieveUserQuotaSummary request.
 func probeAGYPort(port int) bool {
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 200*time.Millisecond)
 	if err != nil {
@@ -262,46 +268,50 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 		}
 	}
 
-	// 5. Query live quota pools if online / client provided
+	// 5. Query live quota pools if online / client provided. A process can
+	// listen on more than one port (e.g. a TLS-only port alongside the plain
+	// HTTP RPC port), so try each candidate until one actually answers.
 	if client != nil {
-		port := findActiveAGYPort()
-		if port > 0 {
-			if quotaResp, err := QueryAGYLocalQuota(ctx, port, client); err == nil && quotaResp != nil {
-				usage.Sources = append(usage.Sources, "127.0.0.1 (LanguageServer RPC)")
-				now := time.Now()
-				for _, g := range quotaResp.Response.Groups {
-					mg := ModelGroup{
-						Name:        g.DisplayName,
-						Description: g.Description,
+		for _, port := range findAGYPorts() {
+			quotaResp, err := QueryAGYLocalQuota(ctx, port, client)
+			if err != nil || quotaResp == nil {
+				continue
+			}
+			usage.Sources = append(usage.Sources, "127.0.0.1 (LanguageServer RPC)")
+			now := time.Now()
+			for _, g := range quotaResp.Response.Groups {
+				mg := ModelGroup{
+					Name:        g.DisplayName,
+					Description: g.Description,
+				}
+				for _, b := range g.Buckets {
+					remPct := b.RemainingFraction * 100.0
+					usedPct := 100.0 - remPct
+					if usedPct < 0 {
+						usedPct = 0
 					}
-					for _, b := range g.Buckets {
-						remPct := b.RemainingFraction * 100.0
-						usedPct := 100.0 - remPct
-						if usedPct < 0 {
-							usedPct = 0
-						}
-						if remPct < 0 {
-							remPct = 0
-						}
+					if remPct < 0 {
+						remPct = 0
+					}
 
-						qw := QuotaWindow{
-							Name:             b.DisplayName,
-							UsedPercent:      usedPct,
-							RemainingPercent: remPct,
-						}
-						if b.ResetTime != "" {
-							if t, err := time.Parse(time.RFC3339Nano, b.ResetTime); err == nil {
-								qw.ResetAt = &t
-								if t.After(now) {
-									qw.DurationLeft = t.Sub(now)
-								}
+					qw := QuotaWindow{
+						Name:             b.DisplayName,
+						UsedPercent:      usedPct,
+						RemainingPercent: remPct,
+					}
+					if b.ResetTime != "" {
+						if t, err := time.Parse(time.RFC3339Nano, b.ResetTime); err == nil {
+							qw.ResetAt = &t
+							if t.After(now) {
+								qw.DurationLeft = t.Sub(now)
 							}
 						}
-						mg.Windows = append(mg.Windows, qw)
 					}
-					usage.ModelGroups = append(usage.ModelGroups, mg)
+					mg.Windows = append(mg.Windows, qw)
 				}
+				usage.ModelGroups = append(usage.ModelGroups, mg)
 			}
+			break
 		}
 	}
 

@@ -1,0 +1,746 @@
+package usage
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"os/signal"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+	"unicode/utf8"
+	"unsafe"
+)
+
+// DefaultWatchInterval is the default refresh cadence for `harnez usage --watch`.
+const DefaultWatchInterval = 60 * time.Second
+
+// MinWatchInterval is the fastest refresh cadence allowed via --interval. It
+// exists to stop `--watch` from hammering live quota APIs (Anthropic, AGY,
+// Codex) with requests far more often than the data actually changes.
+const MinWatchInterval = 30 * time.Second
+
+var sparkRunes = []rune{' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
+
+const rateHistoryLen = 12
+const minBoxWidth = 34
+const maxTotalWidth = 100
+
+// boxGap is the number of blank columns combineRow puts between side-by-side
+// panels. Layout math must account for it: forgetting the gutter is what made
+// a 2-column row 101 cells wide in a 100-column terminal, wrapping every single
+// box line onto a second physical row.
+const boxGap = 1
+
+// safetyMargin is the number of columns we refuse to use at the right edge.
+// Writing into the terminal's very last cell leaves VTE-style terminals in the
+// "deferred wrap" state, and any single miscounted glyph (the box-drawing runes,
+// `·` and `…` all have East-Asian *Ambiguous* width and may render two cells
+// wide) then pushes the line onto the next row. Staying one column short makes
+// the layout robust against both.
+const safetyMargin = 1
+
+type agentRate struct {
+	PerMinute float64
+	Spark     string
+}
+
+// rateTracker keeps a short in-memory history of token totals per agent so the
+// watch view can show a tokens/min trend without persisting anything to disk.
+type rateTracker struct {
+	mu      sync.Mutex
+	lastAt  time.Time
+	lastTot map[string]int64
+	history map[string][]float64
+}
+
+func newRateTracker() *rateTracker {
+	return &rateTracker{
+		lastTot: make(map[string]int64),
+		history: make(map[string][]float64),
+	}
+}
+
+func (t *rateTracker) update(summary UsageSummary) map[string]agentRate {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	result := make(map[string]agentRate)
+	now := summary.Timestamp
+	elapsedMin := 0.0
+	if !t.lastAt.IsZero() {
+		elapsedMin = now.Sub(t.lastAt).Minutes()
+	}
+
+	for _, agent := range summary.Agents {
+		if agent.Tokens == nil {
+			continue
+		}
+		total := agent.Tokens.TotalTokens
+		rate := 0.0
+		havePrev := false
+		if prev, ok := t.lastTot[agent.AgentID]; ok && elapsedMin > 0 && total >= prev {
+			rate = float64(total-prev) / elapsedMin
+			havePrev = true
+		}
+		t.lastTot[agent.AgentID] = total
+
+		hist := t.history[agent.AgentID]
+		if havePrev {
+			hist = append(hist, rate)
+			if len(hist) > rateHistoryLen {
+				hist = hist[len(hist)-rateHistoryLen:]
+			}
+			t.history[agent.AgentID] = hist
+		}
+
+		result[agent.AgentID] = agentRate{PerMinute: rate, Spark: renderSparkline(hist)}
+	}
+
+	t.lastAt = now
+	return result
+}
+
+func renderSparkline(values []float64) string {
+	if len(values) == 0 {
+		return ""
+	}
+	maxVal := 0.0
+	for _, v := range values {
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+	if maxVal <= 0 {
+		maxVal = 1
+	}
+
+	var sb strings.Builder
+	for _, v := range values {
+		if v <= 0 {
+			sb.WriteRune(sparkRunes[0])
+			continue
+		}
+		idx := int((v / maxVal) * float64(len(sparkRunes)-1))
+		if idx < 1 {
+			idx = 1
+		}
+		if idx >= len(sparkRunes) {
+			idx = len(sparkRunes) - 1
+		}
+		sb.WriteRune(sparkRunes[idx])
+	}
+	return sb.String()
+}
+
+// stripANSI removes ANSI escape sequences so visible width can be measured.
+func stripANSI(s string) string {
+	var sb strings.Builder
+	inEsc := false
+	for _, r := range s {
+		if r == '\x1b' {
+			inEsc = true
+			continue
+		}
+		if inEsc {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEsc = false
+			}
+			continue
+		}
+		sb.WriteRune(r)
+	}
+	return sb.String()
+}
+
+func visLen(s string) int {
+	return utf8.RuneCountInString(stripANSI(s))
+}
+
+func truncateVisible(s string, maxWidth int) string {
+	if maxWidth <= 3 {
+		return "..."
+	}
+	if visLen(s) <= maxWidth {
+		return s
+	}
+	var sb strings.Builder
+	inEsc := false
+	count := 0
+	target := maxWidth - 3
+	for _, r := range s {
+		if r == '\x1b' {
+			inEsc = true
+			sb.WriteRune(r)
+			continue
+		}
+		if inEsc {
+			sb.WriteRune(r)
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+				inEsc = false
+			}
+			continue
+		}
+		if count >= target {
+			break
+		}
+		sb.WriteRune(r)
+		count++
+	}
+	sb.WriteString("...\x1b[0m")
+	return sb.String()
+}
+
+// wbox is a single bordered panel in the compact btop-style watch grid.
+type wbox struct {
+	title string
+	lines []string
+	width int
+}
+
+func renderWBox(b wbox) []string {
+	var res []string
+
+	titleVis := visLen(b.title) + 4
+	rem := b.width - titleVis - 1
+	if rem < 1 {
+		rem = 1
+	}
+	res = append(res, "┌─ "+b.title+" "+strings.Repeat("─", rem)+"┐")
+
+	contentW := b.width - 4
+	if contentW < 10 {
+		contentW = 10
+	}
+	for _, l := range b.lines {
+		if visLen(l) > contentW {
+			l = truncateVisible(l, contentW)
+		}
+		pad := contentW - visLen(l)
+		if pad < 0 {
+			pad = 0
+		}
+		res = append(res, "│ "+l+strings.Repeat(" ", pad)+" │")
+	}
+
+	res = append(res, "└"+strings.Repeat("─", b.width-2)+"┘")
+	return res
+}
+
+// combineRow lays rendered boxes out side by side, padding shorter boxes to
+// the tallest one in the row.
+func combineRow(cols [][]string) []string {
+	maxLines := 0
+	widths := make([]int, len(cols))
+	for i, c := range cols {
+		if len(c) > maxLines {
+			maxLines = len(c)
+		}
+		if len(c) > 0 {
+			widths[i] = visLen(c[0])
+		}
+	}
+	res := make([]string, maxLines)
+	for i := 0; i < maxLines; i++ {
+		var parts []string
+		for ci, c := range cols {
+			if i < len(c) {
+				parts = append(parts, c[i])
+			} else {
+				parts = append(parts, strings.Repeat(" ", widths[ci]))
+			}
+		}
+		res[i] = strings.Join(parts, strings.Repeat(" ", boxGap))
+	}
+	return res
+}
+
+// Floors on the geometry we lay panels out for. Below these, box borders and
+// truncated content stop being legible, so we clamp rather than trust a
+// nonsensical reading.
+const minTerminalWidth = 30
+const minTerminalHeight = 6
+
+// Fallbacks used only when every real size probe fails (no tty at all).
+const defaultTerminalWidth = 90
+const defaultTerminalHeight = 24
+
+// ttySize queries f's window size directly via TIOCGWINSZ. This is more
+// reliable than shelling out to `stty -F /dev/tty size`: it reads the actual
+// fd we're writing to instead of a separate /dev/tty open, which can report a
+// stale or unrelated size (or fail outright) under some pty wrappers.
+func ttySize(f *os.File) (cols, rows int, ok bool) {
+	var ws struct{ Row, Col, Xpixel, Ypixel uint16 }
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), syscall.TIOCGWINSZ, uintptr(unsafe.Pointer(&ws)))
+	if errno != 0 || ws.Col == 0 || ws.Row == 0 {
+		return 0, 0, false
+	}
+	return int(ws.Col), int(ws.Row), true
+}
+
+// terminalSize resolves the usable geometry for the watch grid, trying out's
+// own fd first (most reliable), then os.Stdout, then a /dev/tty stty query,
+// then $COLUMNS/$LINES, before giving up on fixed defaults.
+//
+// Rows matter as much as columns: the redraw loop must know how tall the
+// viewport is so a frame can never overflow it. An overflowing frame scrolls
+// the terminal, and once it has scrolled, the `\x1b[H` that starts the next
+// redraw no longer points at the row the program thinks it does.
+func terminalSize(out io.Writer) (cols, rows int) {
+	clamp := func(c, r int) (int, int) {
+		if c < minTerminalWidth {
+			c = minTerminalWidth
+		}
+		if r < minTerminalHeight {
+			r = minTerminalHeight
+		}
+		return c, r
+	}
+
+	if f, ok := out.(*os.File); ok {
+		if c, r, ok := ttySize(f); ok {
+			return clamp(c, r)
+		}
+	}
+	if c, r, ok := ttySize(os.Stdout); ok {
+		return clamp(c, r)
+	}
+
+	if raw, err := exec.Command("stty", "-F", "/dev/tty", "size").Output(); err == nil {
+		parts := strings.Fields(string(raw))
+		if len(parts) >= 2 {
+			r, errR := strconv.Atoi(parts[0])
+			c, errC := strconv.Atoi(parts[1])
+			if errR == nil && errC == nil && c > 0 && r > 0 {
+				return clamp(c, r)
+			}
+		}
+	}
+
+	cols, rows = defaultTerminalWidth, defaultTerminalHeight
+	if v, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && v > 0 {
+		cols = v
+	}
+	if v, err := strconv.Atoi(os.Getenv("LINES")); err == nil && v > 0 {
+		rows = v
+	}
+	return clamp(cols, rows)
+}
+
+// screenFrame is one fully laid-out frame: lines already truncated to the
+// terminal's width and count already capped to its height. Because it can
+// never exceed the viewport, painting it is position-independent and cannot
+// scroll the terminal.
+type screenFrame struct {
+	lines []string
+	cols  int
+	rows  int
+}
+
+// paint writes the frame at the top-left of the (alternate) screen.
+//
+// Every line is followed by an explicit erase-to-end-of-line. That is the part
+// the previous implementation missed: `\x1b[H` + content + `\x1b[J` only clears
+// *below* the new content, so any line shorter than the one it replaced kept
+// the old line's tail, and blank lines (a bare "\n") cleared nothing at all.
+// Shrinking the frame — e.g. toggling three panels down to one — therefore left
+// debris from the larger frame interleaved with the new box.
+//
+// No newline is emitted after the final line, so even a frame exactly as tall
+// as the terminal cannot push the viewport down by one row.
+func (f screenFrame) paint(out io.Writer) {
+	var buf bytes.Buffer
+	buf.WriteString("\x1b[H")
+	for i, line := range f.lines {
+		if i > 0 {
+			buf.WriteString("\r\n")
+		}
+		buf.WriteString(line)
+		buf.WriteString("\x1b[0m\x1b[K")
+	}
+	buf.WriteString("\x1b[J")
+	_, _ = out.Write(buf.Bytes())
+}
+
+// fit truncates lines to cols and caps them at rows, so the frame provably fits.
+func fit(lines []string, cols, rows int) screenFrame {
+	if len(lines) > rows {
+		lines = lines[:rows]
+	}
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		if visLen(l) > cols {
+			l = truncateVisible(l, cols)
+		}
+		out[i] = l
+	}
+	return screenFrame{lines: out, cols: cols, rows: rows}
+}
+
+type namedWindow struct {
+	label string
+	w     QuotaWindow
+}
+
+// watchSections controls which panels the `--watch` grid currently shows.
+// Toggled interactively via keypress; see RunWatch. The key for each panel
+// (shown in its own title bar, btop-style) is fixed here.
+type watchSections struct {
+	Claude bool
+	AGY    bool
+	Codex  bool
+	Tokens bool
+}
+
+func defaultWatchSections() watchSections {
+	return watchSections{Claude: true, AGY: true, Codex: true, Tokens: true}
+}
+
+// agentVisible reports whether the panel for agentID should currently be drawn.
+func (s watchSections) agentVisible(agentID string) bool {
+	switch agentID {
+	case "claude":
+		return s.Claude
+	case "agy":
+		return s.AGY
+	case "codex":
+		return s.Codex
+	default:
+		return true
+	}
+}
+
+// agentKey returns the toggle key shown in an agent panel's own title bar.
+func agentKey(agentID string) string {
+	switch agentID {
+	case "claude":
+		return "C"
+	case "agy":
+		return "G"
+	case "codex":
+		return "O"
+	default:
+		return "?"
+	}
+}
+
+// buildAgentBox renders one agent's status as a compact bordered panel: the
+// account/model, at most the two most urgent quota windows, and a token-rate
+// sparkline (when showTokens is set). The panel's own toggle key is embedded
+// in its title, btop-style, instead of a separate legend. Deliberately terse
+// compared to the full `harnez usage` report.
+func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens bool) wbox {
+	title := fmt.Sprintf("\x1b[1m[%s]\x1b[0m %s", agentKey(agent.AgentID), agent.Name)
+
+	if !agent.Installed {
+		return wbox{title: title, lines: []string{"\x1b[90mnot installed\x1b[0m"}, width: width}
+	}
+	if !agent.Authenticated {
+		return wbox{title: title, lines: []string{"\x1b[90minstalled, not logged in\x1b[0m"}, width: width}
+	}
+
+	var lines []string
+
+	acct := agent.Account
+	if acct == "" {
+		acct = "active session"
+	}
+	if agent.PlanTier != "" {
+		acct += " · " + agent.PlanTier
+	}
+	lines = append(lines, acct)
+
+	if agent.ActiveModel != "" {
+		lines = append(lines, "model: "+agent.ActiveModel)
+	}
+
+	var windows []namedWindow
+	if agent.Session != nil {
+		windows = append(windows, namedWindow{agent.Session.Name, *agent.Session})
+	}
+	if agent.Weekly != nil {
+		windows = append(windows, namedWindow{agent.Weekly.Name, *agent.Weekly})
+	}
+	for _, mg := range agent.ModelGroups {
+		for _, w := range mg.Windows {
+			windows = append(windows, namedWindow{mg.Name + " " + w.Name, w})
+		}
+	}
+	sort.Slice(windows, func(i, j int) bool { return windows[i].w.UsedPercent > windows[j].w.UsedPercent })
+
+	maxShow := 2
+	if len(windows) < maxShow {
+		maxShow = len(windows)
+	}
+	for i := 0; i < maxShow; i++ {
+		w := windows[i].w
+		bar := RenderProgressBar(w.UsedPercent, 12)
+		resetStr := ""
+		if w.DurationLeft > 0 {
+			resetStr = " · " + FormatDuration(w.DurationLeft)
+		}
+		label := windows[i].label
+		if utf8.RuneCountInString(label) > 16 {
+			label = string([]rune(label)[:15]) + "…"
+		}
+		lines = append(lines, fmt.Sprintf("%-16s %s %4.1f%%%s", label, bar, w.UsedPercent, resetStr))
+	}
+
+	if showTokens && agent.Tokens != nil {
+		spark := rate.Spark
+		if spark == "" {
+			spark = "warming up"
+		}
+		lines = append(lines, fmt.Sprintf("\x1b[1m[T]\x1b[0m tok: %s total · %.0f/min [%s]",
+			FormatNumber(agent.Tokens.TotalTokens), rate.PerMinute, spark))
+	}
+
+	return wbox{title: title, lines: lines, width: width}
+}
+
+// gridColumns picks how many panels fit side by side in usable columns, and the
+// width each panel gets. The (columns-1) gutters between panels are subtracted
+// before dividing, so `columns*boxWidth + gutters` is always <= usable.
+func gridColumns(usable, panels int) (columns, boxWidth int) {
+	columns = (usable + boxGap) / (minBoxWidth + boxGap)
+	if columns < 1 {
+		columns = 1
+	}
+	if columns > panels {
+		columns = panels
+	}
+	boxWidth = (usable - (columns-1)*boxGap) / columns
+	if boxWidth < minBoxWidth {
+		boxWidth = minBoxWidth
+	}
+	return columns, boxWidth
+}
+
+// buildWatchFrame lays out one compact, btop-style grid frame: agent panels
+// side by side where the terminal is wide enough, filtered by sec, plus a
+// footer of toggle badges for each panel and the token line.
+//
+// The frame is built as discrete lines and budgeted against the terminal's
+// height: panel rows are added only while they fit, and a note replaces the
+// ones that don't. Overflowing the viewport is what scrolls the terminal and
+// desynchronises every later `\x1b[H`, so the layout must never rely on the
+// terminal to clip for it.
+func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int) screenFrame {
+	var visible []AgentUsage
+	for _, agent := range summary.Agents {
+		if sec.agentVisible(agent.AgentID) {
+			visible = append(visible, agent)
+		}
+	}
+
+	usable := cols - safetyMargin
+	if usable > maxTotalWidth {
+		usable = maxTotalWidth
+	}
+	if usable < minTerminalWidth {
+		usable = minTerminalWidth
+	}
+
+	var hidden []string
+	for _, agent := range summary.Agents {
+		if !sec.agentVisible(agent.AgentID) {
+			hidden = append(hidden, fmt.Sprintf("[%s]", agentKey(agent.AgentID)))
+		}
+	}
+	hiddenHint := ""
+	if len(hidden) > 0 {
+		hiddenHint = fmt.Sprintf("   \x1b[90mhidden: %s\x1b[0m", strings.Join(hidden, " "))
+	}
+
+	header := []string{
+		fmt.Sprintf("\x1b[1mAgentic usage\x1b[0m  %s%s",
+			summary.Timestamp.Format("15:04:05 MST"), hiddenHint),
+		"",
+	}
+	footer := []string{
+		"",
+		fmt.Sprintf("refresh every %s   \x1b[90m[a]ll  [q]uit\x1b[0m", interval),
+	}
+
+	// Budget for the body: everything the header and footer already claim,
+	// plus one spare line for the "panels dropped" note.
+	budget := rows - len(header) - len(footer)
+	if budget < 1 {
+		budget = 1
+	}
+
+	var body []string
+	if len(visible) == 0 {
+		body = append(body, "\x1b[90m(all panels hidden)\x1b[0m")
+	} else {
+		columns, boxWidth := gridColumns(usable, len(visible))
+
+		dropped := 0
+		var pending [][]string
+		flushRow := func() {
+			if len(pending) == 0 {
+				return
+			}
+			lines := combineRow(pending)
+			if len(body)+len(lines) <= budget {
+				body = append(body, lines...)
+			} else {
+				dropped += len(pending)
+			}
+			pending = nil
+		}
+
+		for _, agent := range visible {
+			box := buildAgentBox(agent, rates[agent.AgentID], boxWidth, sec.Tokens)
+			pending = append(pending, renderWBox(box))
+			if len(pending) == columns {
+				flushRow()
+			}
+		}
+		flushRow()
+
+		if dropped > 0 {
+			note := fmt.Sprintf("\x1b[90m… %d panel(s) hidden — terminal too short\x1b[0m", dropped)
+			if len(body) < budget {
+				body = append(body, note)
+			} else if len(body) > 0 {
+				body[len(body)-1] = note
+			}
+		}
+	}
+
+	lines := append(append(header, body...), footer...)
+	return fit(lines, usable, rows)
+}
+
+// RunWatch redraws a compact, btop-style usage dashboard in place on a fixed
+// interval, instead of the full `harnez usage` report which is too chatty to
+// redraw every tick. It polls at most once per interval; interval is clamped
+// to MinWatchInterval so `--watch` cannot be used to accidentally hammer live
+// quota APIs.
+func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration) error {
+	if interval < MinWatchInterval {
+		interval = MinWatchInterval
+	}
+
+	sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	oldState, err := exec.Command("stty", "-F", "/dev/tty", "-g").Output()
+	if err == nil {
+		_ = exec.Command("stty", "-F", "/dev/tty", "cbreak", "-echo").Run()
+		defer func() {
+			_ = exec.Command("stty", "-F", "/dev/tty", string(bytes.TrimSpace(oldState))).Run()
+		}()
+	}
+
+	var secLock sync.Mutex
+	sec := defaultWatchSections()
+
+	redrawChan := make(chan struct{}, 1)
+	requestRedraw := func() {
+		select {
+		case redrawChan <- struct{}{}:
+		default:
+		}
+	}
+
+	tty, ttyErr := os.Open("/dev/tty")
+	if ttyErr == nil {
+		defer tty.Close()
+		go func() {
+			buf := make([]byte, 1)
+			for {
+				n, err := tty.Read(buf)
+				if err != nil || n == 0 {
+					return
+				}
+				secLock.Lock()
+				switch buf[0] {
+				case 'c', 'C', '1':
+					sec.Claude = !sec.Claude
+					requestRedraw()
+				case 'g', 'G', '2':
+					sec.AGY = !sec.AGY
+					requestRedraw()
+				case 'o', 'O', '3':
+					sec.Codex = !sec.Codex
+					requestRedraw()
+				case 't', 'T', '4':
+					sec.Tokens = !sec.Tokens
+					requestRedraw()
+				case 'a', 'A':
+					sec = defaultWatchSections()
+					requestRedraw()
+				case 'q', 'Q', 3, 27:
+					secLock.Unlock()
+					stop()
+					return
+				}
+				secLock.Unlock()
+			}
+		}()
+	}
+
+	// Re-lay-out on terminal resize: the frame is budgeted against a concrete
+	// width and height, so a stale geometry would either waste space or (worse)
+	// overflow the new, smaller viewport.
+	winch := make(chan os.Signal, 1)
+	signal.Notify(winch, syscall.SIGWINCH)
+	defer signal.Stop(winch)
+	go func() {
+		for range winch {
+			requestRedraw()
+		}
+	}()
+
+	tracker := newRateTracker()
+
+	var lastSummary UsageSummary
+	var lastRates map[string]agentRate
+
+	// Enter the alternate screen buffer, as vim/htop/less do. It gives the
+	// redraw loop a viewport with no scrollback of its own, so `\x1b[H` always
+	// means the top-left cell the user is looking at, and it restores the
+	// user's shell output untouched on exit.
+	fmt.Fprint(out, "\033[?1049h\033[?25l\033[2J\033[H")
+	defer fmt.Fprint(out, "\033[?25h\033[?1049l")
+
+	draw := func() {
+		secLock.Lock()
+		activeSec := sec
+		secLock.Unlock()
+
+		cols, rows := terminalSize(out)
+		buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows).paint(out)
+	}
+
+	renderFrame := func() {
+		lastSummary = CollectAll(sigCtx, homeDir, client)
+		lastRates = tracker.update(lastSummary)
+		draw()
+	}
+
+	renderFrame()
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-sigCtx.Done():
+			return nil
+		case <-redrawChan:
+			draw()
+		case <-ticker.C:
+			renderFrame()
+		}
+	}
+}

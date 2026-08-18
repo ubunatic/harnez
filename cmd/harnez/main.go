@@ -24,6 +24,8 @@ func main() {
 	var usageJSON bool
 	var usageAgent string
 	var usageOffline bool
+	var usageWatch bool
+	var usageInterval time.Duration
 	usageCmd := &cobra.Command{
 		Use:     "usage",
 		Aliases: []string{"quota", "tokens", "stats"},
@@ -34,6 +36,14 @@ func main() {
 			if !usageOffline {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
+
+			if usageWatch {
+				if usageJSON {
+					return fmt.Errorf("--watch and --json cannot be combined")
+				}
+				return usage.RunWatch(ctx, "", client, cmd.OutOrStdout(), usageInterval)
+			}
+
 			summary := usage.CollectAll(ctx, "", client)
 			if usageAgent != "" {
 				var filtered []usage.AgentUsage
@@ -61,6 +71,9 @@ func main() {
 	usageCmd.Flags().BoolVar(&usageJSON, "json", false, "output usage in JSON format")
 	usageCmd.Flags().StringVar(&usageAgent, "agent", "", "filter to a specific agent (claude, agy, codex)")
 	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
+	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the dashboard in place with a tokens/min trend")
+	usageCmd.Flags().DurationVar(&usageInterval, "interval", usage.DefaultWatchInterval,
+		fmt.Sprintf("refresh interval for --watch (minimum %s, to avoid hammering live quota APIs)", usage.MinWatchInterval))
 
 	var applyDocs []string
 	var forceDocs bool

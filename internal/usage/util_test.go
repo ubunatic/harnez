@@ -37,7 +37,9 @@ func TestFormatDuration(t *testing.T) {
 		{-5 * time.Minute, "0m"},
 		{45 * time.Minute, "45m"},
 		{4*time.Hour + 52*time.Minute, "4h 52m"},
-		{165*time.Hour + 5*time.Minute, "165h 5m"},
+		{47*time.Hour + 59*time.Minute, "47h 59m"},
+		{48 * time.Hour, "2d 0h"},
+		{165*time.Hour + 5*time.Minute, "6d 21h"},
 	}
 
 	for _, tt := range tests {

@@ -27,10 +27,17 @@ func MaskAccount(account string) string {
 	return account[:2] + "***" + account[len(account)-2:]
 }
 
-// FormatDuration formats a time.Duration into human readable string like "4h 52m" or "32m".
+// FormatDuration formats a time.Duration into human readable string like
+// "4h 52m" or "32m". Durations of 48h or more switch to "<days>d <hours>h"
+// since minute precision stops being useful that far out.
 func FormatDuration(d time.Duration) string {
 	if d <= 0 {
 		return "0m"
+	}
+	if d >= 48*time.Hour {
+		days := int(d.Hours()) / 24
+		hours := int(d.Hours()) % 24
+		return fmt.Sprintf("%dd %dh", days, hours)
 	}
 	hours := int(d.Hours())
 	mins := int(d.Minutes()) % 60
