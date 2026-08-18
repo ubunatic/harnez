@@ -308,6 +308,7 @@
       <nav class="header-links">
         <a class="nav-link" href="#install">Install</a>
         <a class="nav-link" href="#commands">Commands</a>
+        <a class="nav-link" href="#usage">Usage monitor</a>
         <a class="berg-link" href="https://codeberg.org/ubunatic/harnez" target="_blank" rel="noopener">
           <!-- Codeberg berg/mountain icon -->
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Codeberg">
@@ -382,6 +383,10 @@
         <p>Declare MCP server definitions in <code>mcp_servers:</code>; harnez writes them into <code>settings.json</code>.</p>
       </div>
       <div class="feature">
+        <h3>Token &amp; quota monitor</h3>
+        <p><code>usage</code> reads tokens, plans, and live quota windows from Claude Code, Antigravity, and Codex — as a report, a one-shot grid, or a live <code>--watch</code> dashboard.</p>
+      </div>
+      <div class="feature">
         <h3>Project setup &amp; upgrade</h3>
         <p><code>init</code> sets up <code>AGENTS.md</code>, symlinks <code>CLAUDE.md</code>, copies local docs, and reconciles Makefile targets.</p>
       </div>
@@ -450,11 +455,97 @@
           <td><code class="flag">-c</code> <code class="flag">-t</code></td>
           <td>Print config summary and check which items are present on disk</td>
         </tr>
+        <tr>
+          <td><code>usage</code></td>
+          <td><code class="flag">-w</code> <code class="flag">-s</code> <code class="flag">--json</code> <code class="flag">--agent</code> <code class="flag">--offline</code></td>
+          <td>Show tokens, plans, and quota windows across agents — <a href="#usage">see below</a></td>
+        </tr>
       </tbody>
     </table>
     <p style="margin-top:0.85rem;font-size:0.85rem;color:var(--muted)">
       All commands accept <code>-c &lt;path&gt;</code> (config file) and <code>-t &lt;dir&gt;</code> (Claude config directory).
       The binary is self-contained — no flags needed for the common case.
+    </p>
+  </div>
+</section>
+
+<!-- ── USAGE MONITOR ─────────────────────────────────────────────── -->
+<section id="usage">
+  <div class="container">
+    <h2>Token &amp; quota monitor</h2>
+    <p style="font-size:0.9rem;color:var(--muted);margin-bottom:1.25rem">
+      <code>harnez usage</code> (aliases: <code>quota</code>, <code>tokens</code>, <code>stats</code>)
+      pulls token totals, plan tier, active model, and live quota windows from Claude Code,
+      Antigravity&nbsp;(AGY), and OpenAI Codex into one view. Three ways to read it: the full
+      report, a compact one-shot grid, or a live dashboard.
+    </p>
+
+    <div class="codeblock" style="margin-bottom:1.25rem">
+      <pre><span class="c"># full detailed report — every quota window, token breakdown, and data source</span>
+<span class="p">$</span> harnez usage
+
+<span class="c"># compact one-shot grid, printed once and exited — for a quick glance or scripts</span>
+<span class="p">$</span> harnez usage --summary        <span class="c"># -s</span>
+
+<span class="c"># live btop-style dashboard, refreshed in place with a tokens/min sparkline</span>
+<span class="p">$</span> harnez usage --watch          <span class="c"># -w</span>
+
+<span class="c"># machine-readable, or narrowed to one agent, or strictly local (no network)</span>
+<span class="p">$</span> harnez usage --json
+<span class="p">$</span> harnez usage --agent claude   <span class="c"># claude | agy | codex</span>
+<span class="p">$</span> harnez usage --offline</pre>
+    </div>
+
+    <div class="codeblock" style="margin-bottom:1.25rem">
+      <pre>Agentic usage  21:58:34 CEST
+
+┌─ [C] Claude Code ──────────────────────────────┐ ┌─ [G] Antigravity (AGY) ────────────────────────┐
+│ alice@example.com · Max                        │ │ alice@example.com · Consumer                   │
+│ 5-hour           [████░░░░░░░░] 41.0% · 2h13m  │ │ model: Gemini 3 Pro                            │
+│ weekly           [███████░░░░░] 62.0% · 3d04h  │ │ Gemini Models…   [██░░░░░░░░░░] 18.0% · 4h02m  │
+│ [T] tok: 8,420,155 total · 1,204/min [▂▃▅▇▆▄▃] │ │ Claude and GPT…  [████████░░░░] 73.0% · 1h47m  │
+└────────────────────────────────────────────────┘ └────────────────────────────────────────────────┘
+┌─ [O] OpenAI Codex ─────────────────────────────┐
+│ alice@example.com · Plus                       │
+│ model: gpt-5.6-codex                           │
+│ 5-hour           [█░░░░░░░░░░░] 12.0% · 4h31m  │
+│ [T] tok: 633,891 total · 0/min [▁▁▂▁▁▁▁]       │
+└────────────────────────────────────────────────┘
+
+refresh every 1m0s   [a]ll  [q]uit</pre>
+    </div>
+
+    <div class="features">
+      <div class="feature">
+        <h3>Live dashboard</h3>
+        <p><code>--watch</code> redraws in place and tracks a tokens/min trend. Toggle panels
+        from the keyboard: <code>c</code> Claude, <code>g</code> AGY, <code>o</code> Codex,
+        <code>t</code> tokens, <code>a</code> all, <code>q</code> quit. The refresh cadence is
+        <code>--interval</code> (default 1m, floor 30s).</p>
+      </div>
+      <div class="feature">
+        <h3>Failures stay visible</h3>
+        <p>A failed live quota call is reported as <code>quota: unavailable (HTTP 429)</code>
+        instead of silently leaving the window blank — so &ldquo;fetch failed&rdquo; never looks
+        like &ldquo;this plan has no such limit&rdquo;.</p>
+      </div>
+      <div class="feature">
+        <h3>Stale beats blank</h3>
+        <p>On a transient failure <code>--watch</code> keeps the last known-good reading, marked
+        <code>(stale)</code>, rather than blanking a panel. A successful refresh always wins.</p>
+      </div>
+      <div class="feature">
+        <h3>Shared quota cache</h3>
+        <p>Live quota readings are cached in <code>~/.claude/harnez-quota-cache.json</code> and
+        coordinated with a file lock, so several concurrent <code>harnez</code> processes share
+        one reading instead of each hammering the API into a rate limit.</p>
+      </div>
+    </div>
+
+    <p style="margin-top:0.85rem;font-size:0.85rem;color:var(--muted)">
+      Everything is read-only: local agent state under <code>~/.claude</code>,
+      <code>~/.gemini</code>, and <code>~/.codex</code>, plus each vendor's own quota endpoint.
+      <code>--offline</code> skips the network entirely and reports from local caches.
     </p>
   </div>
 </section>
