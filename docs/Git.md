@@ -14,6 +14,8 @@ Applies unless overridden by a project's own AGENTS.md.
 - Commit proactively:
   - after intermediate steps once tests are clean
   - after finished features
+  - between iteration attempts on a stuck bug — each attempted fix is a checkpoint you may
+    need to roll back to; don't let several "should be fixed now" rounds pile up uncommitted
 - Do not push unless asked.
 - Do not create remote branches or PRs unless asked.
 
