@@ -310,7 +310,8 @@ var (
 	ansiEscapeRe   = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 	rfc3339TimeRe  = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}`)
 	quoteExtractRe  = regexp.MustCompile(`Transcription completed in [^:]+:\s*"([^"]*)"`)
-	hallucinationRe = regexp.MustCompile(`(?i)^\s*(thank you for watching|thanks for watching|thank you\.|thanks for listening|please subscribe|subscribe to my channel|see you next time|see you in the next video|subtitles by.*|translated by.*|like and subscribe|mcrun|mbc)\s*[.!]?\s*$`)
+	urlPatternRe    = regexp.MustCompile(`(?i)\b(https?://|www\.)[a-z0-9-]+\.[a-z]+`)
+	hallucinationRe = regexp.MustCompile(`(?i)^\s*(thank you for watching|thanks for watching|thank you\.|thanks for listening|please subscribe|subscribe to my channel|see you next time|see you in the next video|subtitles by.*|translated by.*|like and subscribe|mcrun|mbc|learn english for free.*|.*engvid\.com.*)\s*[.!]?\s*$`)
 )
 
 // StripANSI removes all ANSI escape sequences from s.
@@ -318,7 +319,7 @@ func StripANSI(s string) string {
 	return ansiEscapeRe.ReplaceAllString(s, "")
 }
 
-// IsSafeToType validates that a text string contains genuine speech and no diagnostic log leakage or hallucination.
+// IsSafeToType validates that a text string contains genuine speech and no diagnostic log leakage, URLs, or hallucinations.
 func IsSafeToType(text string) bool {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
@@ -334,6 +335,10 @@ func IsSafeToType(text string) bool {
 	}
 	if strings.HasPrefix(trimmed, "Loading audio file:") || strings.HasPrefix(trimmed, "Audio format:") ||
 		strings.HasPrefix(trimmed, "Processing ") || strings.HasPrefix(trimmed, "Model loaded in") {
+		return false
+	}
+	// Reject URLs and web domains (common Whisper video hallucinations)
+	if urlPatternRe.MatchString(trimmed) {
 		return false
 	}
 	// Reject known Whisper silence hallucinations
@@ -354,6 +359,9 @@ func StripTrailingHallucinations(text string) string {
 		`(?i)\s*in the video[.!]*`,
 		`(?i)\s*in this video[.!]*`,
 		`(?i)\s*in today's video[.!]*`,
+		`(?i)\s*learn english for free[.!]*`,
+		`(?i)\s*www\.[a-z0-9-]+\.[a-z]+[.!]*`,
+		`(?i)\s*and like\.\s*thank you[.!]*`,
 	}
 	for _, p := range patterns {
 		re := regexp.MustCompile(p)
@@ -570,6 +578,20 @@ func runEagerCaptureSession(ctx context.Context, d Dependencies, opts EagerOptio
 	if err := recCmd.Start(); err != nil {
 		return fmt.Errorf("start audio capture: %w", err)
 	}
+
+	// Active kill watcher to unblock ReadFull immediately when context is cancelled
+	killDone := make(chan struct{})
+	defer close(killDone)
+	go func() {
+		select {
+		case <-ctx.Done():
+			if recCmd.Process != nil {
+				_ = recCmd.Process.Kill()
+			}
+		case <-killDone:
+		}
+	}()
+
 	defer func() {
 		if recCmd.Process != nil {
 			_ = recCmd.Process.Kill()
@@ -693,29 +715,33 @@ func runEagerDaemon(ctx context.Context, d Dependencies, opts EagerOptions) erro
 
 	var mu sync.Mutex
 	var activeCancel context.CancelFunc
+	var sessWg sync.WaitGroup
 	isRecording := false
 
 	stopCurrent := func() {
 		mu.Lock()
-		defer mu.Unlock()
 		if activeCancel != nil {
 			activeCancel()
 			activeCancel = nil
 		}
 		isRecording = false
+		mu.Unlock()
+		sessWg.Wait()
 		writeVoxtypeState("idle")
 	}
 
 	startRecording := func() {
+		stopCurrent()
+
 		mu.Lock()
-		defer mu.Unlock()
-		if activeCancel != nil {
-			activeCancel()
-		}
 		sessCtx, cancel := context.WithCancel(ctx)
 		activeCancel = cancel
 		isRecording = true
+		sessWg.Add(1)
+		mu.Unlock()
+
 		go func() {
+			defer sessWg.Done()
 			_ = runEagerCaptureSession(sessCtx, d, opts, tmpDir, voxtypePath, recCmdName, recArgs, true)
 			mu.Lock()
 			if activeCancel != nil {

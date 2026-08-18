@@ -73,6 +73,7 @@ func TestIsSafeToType(t *testing.T) {
 		{"hallucination thank you for watching", "Thank you for watching.", false},
 		{"hallucination please subscribe", "Please subscribe", false},
 		{"hallucination mcrun", "mcrun", false},
+		{"hallucination url www.engvid.com", "Learn English for free www.engvid.com", false},
 	}
 
 	for _, tt := range tests {
@@ -97,6 +98,13 @@ func TestStripTrailingHallucinations(t *testing.T) {
 	expected2 := "spoken three times"
 	if cleaned2 != expected2 {
 		t.Errorf("StripTrailingHallucinations = %q, want %q", cleaned2, expected2)
+	}
+
+	input3 := "hello world learn english for free www.engvid.com and like. Thank you."
+	cleaned3 := StripTrailingHallucinations(input3)
+	expected3 := "hello world"
+	if cleaned3 != expected3 {
+		t.Errorf("StripTrailingHallucinations = %q, want %q", cleaned3, expected3)
 	}
 }
 
