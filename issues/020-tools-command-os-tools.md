@@ -1,6 +1,6 @@
 # 020 — `harnez tools`: guided OS-level tool installation
 
-**Status:** Open — canary fully passed; converging installer implementation pending
+**Status:** Closed — extracted into standalone project [`voxi`](https://github.com/ubunatic/voxi) (see issue 029)
 
 ## Context
 

@@ -43,7 +43,5 @@ Generated copies land here (root) after `apply` / `init`.
 | [studies/Worktrees.md](studies/Worktrees.md) | Parallel worktrees case study (go.mod races, dependencies) |
 | [studies/2026-08-16-harnez-migration-and-workspace-unification.md](studies/2026-08-16-harnez-migration-and-workspace-unification.md) | Harnez migration, Spec generalization & workspace diagnostics case study |
 | [studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md](studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md) | Multi-agent token, session & quota monitoring case study (Claude Code, AGY, Codex) |
-| [studies/2026-08-18-gnome-shell-companion-and-devkit-testing.md](studies/2026-08-18-gnome-shell-companion-and-devkit-testing.md) | GNOME Shell companion extension & devkit testing harness case study |
-| [studies/2026-08-18-modifier-key-gating-and-system-daemon.md](studies/2026-08-18-modifier-key-gating-and-system-daemon.md) | Physical modifier key gating, dedicated daemon architecture & synthetic input safety |
 
 **`docs/proposed/`** — staging area for docs that may become copyable (no install mechanics yet).

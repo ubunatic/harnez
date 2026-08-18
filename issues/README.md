@@ -23,12 +23,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 017 | [017-spec-md-is-cati-specific-not-generic.md](017-spec-md-is-cati-specific-not-generic.md) | `docs/Spec.md` (bundled, default: true) is Cati-specific, not a generic guide | Closed |
 | 018 | [018-mark-bundled-docs-in-frontmatter.md](018-mark-bundled-docs-in-frontmatter.md) | Bundled docs don't self-identify as claudeconfig-managed | Open |
 | 019 | [019-rename-to-harnez.md](019-rename-to-harnez.md) | Rename project from claudeconfig to harnez | Closed |
-| 020 | [020-tools-command-os-tools.md](020-tools-command-os-tools.md) | `harnez tools`: guided OS-level tool installation | Open — canary passed; installer pending |
-| 021 | [021-fluent-streaming-typing.md](021-fluent-streaming-typing.md) | Fluent, streaming voice-input typing with enter-to-stop | Open — research needed |
-| 022 | [022-gnome-transcriber-ui.md](022-gnome-transcriber-ui.md) | GNOME transcriber UI: history, retype, and typing-speed controls | Complete — extension, CLI & canaries tested |
+| 020 | [020-tools-command-os-tools.md](020-tools-command-os-tools.md) | `harnez tools`: guided OS-level tool installation | Closed — extracted to `voxi` |
 | 023 | [023-usage-command-token-quota-tracking.md](023-usage-command-token-quota-tracking.md) | `harnez usage`: unified token, session & quota status command | Implemented — prototype verified |
-| 024 | [024-gnome-typing-feedback-icon.md](024-gnome-typing-feedback-icon.md) | GNOME transcriber UI: Visual typing feedback indicator (keyboard icon during synthesis) | Open |
-| 026 | [026-continuous-eager-sentence-streaming.md](026-continuous-eager-sentence-streaming.md) | Continuous Eager Sentence Streaming Dictation | Proposed / Research & Design |
-| 027 | [027-continuous-listening-wake-word-turn-taking.md](027-continuous-listening-wake-word-turn-taking.md) | Continuous Listening, Wake-Word Activation & Verbal Turn-Taking | Proposed / Research & Planning |
-| 028 | [028-post-process-local-llm-cleanup.md](028-post-process-local-llm-cleanup.md) | Local LLM Post-Process Hook for Dictation Cleanup & Voice Commands | Proposed / Research & Design |
-| 029 | [029-extract-ubunatic-voxi-standalone.md](029-extract-ubunatic-voxi-standalone.md) | Extract standalone voice input engine (`ubunatic/voxi`) | Proposed / Extraction Plan |
+| 029 | [029-extract-ubunatic-voxi-standalone.md](029-extract-ubunatic-voxi-standalone.md) | Extract standalone voice input engine (`ubunatic/voxi`) | Complete — extracted to standalone repo |
