@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -37,6 +38,7 @@ type VoiceResourceReport struct {
 	GPUAccel       string
 	ActiveModel    string
 	Processes      []ProcessResource
+	EagerMetrics   *EagerMetrics
 	ZombieWarnings []string
 }
 
@@ -95,6 +97,19 @@ func CollectVoiceResources(ctx context.Context, d Dependencies) VoiceResourceRep
 	report.ActiveService = activeUnit
 	if activeUnit != "" {
 		collectServiceMetrics(ctx, d, activeUnit, &report)
+	}
+
+	// Load live streaming transcription speed metrics
+	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+	if runtimeDir == "" {
+		runtimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
+	}
+	metricsPath := filepath.Join(runtimeDir, "harnez", "eager-metrics.json")
+	if data, err := os.ReadFile(metricsPath); err == nil {
+		var metrics EagerMetrics
+		if err := json.Unmarshal(data, &metrics); err == nil {
+			report.EagerMetrics = &metrics
+		}
 	}
 
 	report.Processes = collectVoiceProcesses()
@@ -309,6 +324,45 @@ func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport) {
 		}
 		if r.ServiceCPU > 0 {
 			fmt.Fprintf(w, "  Total CPU Time:    %s\n", r.ServiceCPU.Round(time.Millisecond))
+		}
+	}
+
+	if r.EagerMetrics != nil && r.EagerMetrics.TotalChunks > 0 {
+		m := r.EagerMetrics
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "── Transcription Speed & Latency (Whisper GPU) ───────────────────")
+		if m.LastUtterance != nil {
+			speedMultiplier := 0.0
+			if m.LastUtterance.RTF > 0 {
+				speedMultiplier = 1.0 / m.LastUtterance.RTF
+			}
+			fmt.Fprintf(w, "  Last Utterance:    Audio: \x1b[1m%.1fs\x1b[0m | Compute: \x1b[32;1m%.2fs\x1b[0m (RTF \x1b[1m%.2fx\x1b[0m, \x1b[32m%.1fx\x1b[0m realtime)\n",
+				m.LastUtterance.AudioSecs, m.LastUtterance.TranscribeSecs, m.LastUtterance.RTF, speedMultiplier)
+		}
+		avgMult := 0.0
+		if m.AvgRTF > 0 {
+			avgMult = 1.0 / m.AvgRTF
+		}
+		fmt.Fprintf(w, "  Aggregated Speed:  Avg RTF: \x1b[32;1m%.2fx\x1b[0m (\x1b[32m%.1fx\x1b[0m realtime) across %d chunk(s) [%.1fs audio in %.2fs GPU compute]\n",
+			m.AvgRTF, avgMult, m.TotalChunks, m.TotalAudioSecs, m.TotalTranscribeSecs)
+
+		if len(m.Recent) > 0 {
+			fmt.Fprintln(w, "")
+			fmt.Fprintln(w, "── Recent Spoken Sentences ───────────────────────────────────────")
+			limit := 4
+			if len(m.Recent) < limit {
+				limit = len(m.Recent)
+			}
+			for i := 0; i < limit; i++ {
+				u := m.Recent[i]
+				timeStr := u.Timestamp.Format("15:04:05")
+				shortText := u.Text
+				if len(shortText) > 42 {
+					shortText = shortText[:39] + "..."
+				}
+				fmt.Fprintf(w, "  [%s] #%-2d (Audio: %4.1fs, GPU: %4.2fs, RTF: %4.2fx) %q\n",
+					timeStr, u.Index, u.AudioSecs, u.TranscribeSecs, u.RTF, shortText)
+			}
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -419,6 +420,59 @@ func CleanWhisperTranscript(output string) string {
 	return strings.Join(resultLines, " ")
 }
 
+// UtteranceStat records timing, speed, and text for one transcribed phrase.
+type UtteranceStat struct {
+	Index          int       `json:"index"`
+	AudioSecs      float64   `json:"audio_secs"`
+	TranscribeSecs float64   `json:"transcribe_secs"`
+	RTF            float64   `json:"rtf"`
+	Text           string    `json:"text"`
+	Timestamp      time.Time `json:"timestamp"`
+}
+
+// EagerMetrics holds aggregated throughput and recent sentence history.
+type EagerMetrics struct {
+	TotalChunks         int             `json:"total_chunks"`
+	TotalAudioSecs      float64         `json:"total_audio_secs"`
+	TotalTranscribeSecs float64         `json:"total_transcribe_secs"`
+	AvgRTF              float64         `json:"avg_rtf"`
+	LastUtterance       *UtteranceStat  `json:"last_utterance,omitempty"`
+	Recent              []UtteranceStat `json:"recent"`
+}
+
+var (
+	eagerMetricsLock sync.Mutex
+	eagerMetrics     EagerMetrics
+)
+
+func recordEagerStat(stat UtteranceStat) {
+	eagerMetricsLock.Lock()
+	defer eagerMetricsLock.Unlock()
+
+	eagerMetrics.TotalChunks++
+	eagerMetrics.TotalAudioSecs += stat.AudioSecs
+	eagerMetrics.TotalTranscribeSecs += stat.TranscribeSecs
+	if eagerMetrics.TotalAudioSecs > 0 {
+		eagerMetrics.AvgRTF = eagerMetrics.TotalTranscribeSecs / eagerMetrics.TotalAudioSecs
+	}
+	eagerMetrics.LastUtterance = &stat
+	eagerMetrics.Recent = append([]UtteranceStat{stat}, eagerMetrics.Recent...)
+	if len(eagerMetrics.Recent) > 10 {
+		eagerMetrics.Recent = eagerMetrics.Recent[:10]
+	}
+
+	data, err := json.MarshalIndent(eagerMetrics, "", "  ")
+	if err == nil {
+		runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+		if runtimeDir == "" {
+			runtimeDir = fmt.Sprintf("/run/user/%d", os.Getuid())
+		}
+		hDir := filepath.Join(runtimeDir, "harnez")
+		_ = os.MkdirAll(hDir, 0755)
+		_ = os.WriteFile(filepath.Join(hDir, "eager-metrics.json"), data, 0644)
+	}
+}
+
 func writeVoxtypeState(state string) {
 	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if runtimeDir == "" {
@@ -564,6 +618,19 @@ func runEagerCaptureSession(ctx context.Context, d Dependencies, opts EagerOptio
 				if historyPath != "" {
 					_, _ = AppendHistory(historyPath, text, DefaultHistoryLimit, time.Now())
 				}
+
+				rtf := 0.0
+				if job.Duration > 0 {
+					rtf = transDuration / job.Duration
+				}
+				recordEagerStat(UtteranceStat{
+					Index:          job.Index,
+					AudioSecs:      job.Duration,
+					TranscribeSecs: transDuration,
+					RTF:            rtf,
+					Text:           text,
+					Timestamp:      time.Now(),
+				})
 			}
 		}
 	}()
