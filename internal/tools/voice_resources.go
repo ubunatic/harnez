@@ -19,6 +19,50 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ResourceSections defines which btop-style monitoring boxes are currently displayed.
+type ResourceSections struct {
+	Speed      bool
+	Hardware   bool
+	Transcript bool
+	Daemons    bool
+}
+
+// DefaultResourceSections returns all sections enabled.
+func DefaultResourceSections() ResourceSections {
+	return ResourceSections{
+		Speed:      true,
+		Hardware:   true,
+		Transcript: true,
+		Daemons:    true,
+	}
+}
+
+// ParseSections parses a comma-separated list of section names or numbers.
+func ParseSections(s string) ResourceSections {
+	trimmed := strings.TrimSpace(strings.ToLower(s))
+	if trimmed == "" || trimmed == "all" {
+		return DefaultResourceSections()
+	}
+	sec := ResourceSections{}
+	for _, p := range strings.Split(trimmed, ",") {
+		p = strings.TrimSpace(p)
+		switch p {
+		case "1", "speed", "status", "s":
+			sec.Speed = true
+		case "2", "hardware", "cpu", "gpu", "hw", "c", "g", "h":
+			sec.Hardware = true
+		case "3", "transcript", "sentences", "feed", "t":
+			sec.Transcript = true
+		case "4", "daemons", "procs", "health", "d", "p":
+			sec.Daemons = true
+		}
+	}
+	if !sec.Speed && !sec.Hardware && !sec.Transcript && !sec.Daemons {
+		return DefaultResourceSections()
+	}
+	return sec
+}
+
 // ProcessResource represents runtime memory and thread information for one process.
 type ProcessResource struct {
 	PID      int
@@ -95,7 +139,6 @@ func RenderSpeedGauge(rtf float64) string {
 		return "\x1b[32m[██████████]\x1b[0m"
 	}
 	bars := 10
-	// 0.05x RTF (20x realtime) -> 10 bars; 0.5x RTF (2x realtime) -> 5 bars; 1.0x RTF -> 1 bar
 	filled := int((1.0 - (rtf * 0.8)) * float64(bars))
 	if filled < 1 {
 		filled = 1
@@ -121,28 +164,38 @@ func RenderSpeedGauge(rtf float64) string {
 func NewVoiceInputResourcesCommand(d Dependencies) *cobra.Command {
 	var watch bool
 	var intervalSec int
+	var sectionsStr string
 
 	cmd := &cobra.Command{
 		Use:     "resources",
 		Aliases: []string{"top", "stats", "status-full"},
 		Short:   "Monitor voice input daemon, GPU acceleration, memory, and subprocess resources",
 		Long: "Inspects CPU and memory consumption, active systemd user units, GPU Vulkan acceleration,\n" +
-			"model memory footprint, and checks for orphan/zombie recording processes.",
+			"model memory footprint, and checks for orphan/zombie recording processes.\n\n" +
+			"Interactive controls (in --watch mode):\n" +
+			"  1 / s - toggle Speed & Status panel\n" +
+			"  2 / c - toggle CPU & GPU Hardware panel\n" +
+			"  3 / t - toggle Recent Sentences feed\n" +
+			"  4 / d - toggle Active Daemons panel\n" +
+			"  a     - enable all panels\n" +
+			"  q     - quit",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			sections := ParseSections(sectionsStr)
 			if watch {
-				return RunWatchResources(ctx, d, time.Duration(intervalSec)*time.Second)
+				return RunWatchResources(ctx, d, time.Duration(intervalSec)*time.Second, sections)
 			}
 			report := CollectVoiceResources(ctx, d)
-			PrintVoiceResourceReport(d.Stdout, report)
+			PrintVoiceResourceReport(d.Stdout, report, sections)
 			return nil
 		},
 	}
 
 	cmd.Flags().BoolVarP(&watch, "watch", "w", false, "continuously refresh resource metrics")
 	cmd.Flags().IntVarP(&intervalSec, "interval", "i", 1, "refresh interval in seconds for --watch")
+	cmd.Flags().StringVarP(&sectionsStr, "sections", "s", "all", "comma-separated sections: 1(speed), 2(hardware), 3(transcript), 4(daemons)")
 
 	return cmd
 }
@@ -269,7 +322,6 @@ func collectServiceMetrics(ctx context.Context, d Dependencies, service string, 
 		}
 	}
 
-	// Compute uptime from /proc/[pid]/stat or ActiveEnterTimestampMonotonic
 	if report.ServicePID > 0 {
 		if uptime, err := getProcessUptime(report.ServicePID); err == nil && uptime > 0 {
 			report.ServiceUptime = uptime
@@ -358,7 +410,6 @@ func detectActiveModel(d Dependencies) string {
 
 func collectVoiceProcesses() []ProcessResource {
 	var procs []ProcessResource
-	// Explicit target daemons, excluding ydotoold
 	targets := []string{"harnez", "voxtype", "pw-record", "arecord", "dotoold"}
 
 	entries, err := os.ReadDir("/proc")
@@ -503,107 +554,127 @@ func getAMDGPUUsage() (busyPercent float64, vramUsed int64, vramTotal int64, err
 	return 0, 0, 0, fmt.Errorf("no AMD GPU sysfs found")
 }
 
-// PrintVoiceResourceReport writes a formatted terminal report of voice resources.
-func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport) {
-	fmt.Fprintln(w, "── Voice Input Status ────────────────────────────────────────────")
-	fmt.Fprintf(w, "  Mode:              \x1b[1m%s\x1b[0m (continuous sentence streaming)\n", r.Mode)
-	fmt.Fprintf(w, "  Recording:         %s\n", formatRecordState(r.RecordStatus))
-	fmt.Fprintf(w, "  Engine:            \x1b[32m%s\x1b[0m [%s]\n", r.GPUAccel, r.ActiveModel)
+// PrintVoiceResourceReport writes a formatted terminal report of voice resources respecting active btop sections.
+func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport, sec ResourceSections) {
+	// Render btop-style header with section badges
+	fmt.Fprintf(w, "── Voice Monitor ── %s ── %s ── %s ── %s ──\n",
+		formatSectionBadge("1:Speed", sec.Speed),
+		formatSectionBadge("2:Hardware", sec.Hardware),
+		formatSectionBadge("3:Transcript", sec.Transcript),
+		formatSectionBadge("4:Daemons", sec.Daemons))
 
-	if r.EagerMetrics != nil && r.EagerMetrics.TotalChunks > 0 {
-		m := r.EagerMetrics
-		fmt.Fprintln(w, "")
-		fmt.Fprintln(w, "── Performance & Latency ─────────────────────────────────────────")
-		if m.LastUtterance != nil {
-			speedMultiplier := 0.0
-			if m.LastUtterance.RTF > 0 {
-				speedMultiplier = 1.0 / m.LastUtterance.RTF
+	if sec.Speed {
+		fmt.Fprintf(w, "  Mode:              \x1b[1m%s\x1b[0m (continuous sentence streaming)\n", r.Mode)
+		fmt.Fprintf(w, "  Recording:         %s\n", formatRecordState(r.RecordStatus))
+		fmt.Fprintf(w, "  Engine:            \x1b[32m%s\x1b[0m [%s]\n", r.GPUAccel, r.ActiveModel)
+
+		if r.EagerMetrics != nil && r.EagerMetrics.TotalChunks > 0 {
+			m := r.EagerMetrics
+			if m.LastUtterance != nil {
+				speedMultiplier := 0.0
+				if m.LastUtterance.RTF > 0 {
+					speedMultiplier = 1.0 / m.LastUtterance.RTF
+				}
+				gauge := RenderSpeedGauge(m.LastUtterance.RTF)
+				fmt.Fprintf(w, "  Typing Speed:      \x1b[32;1m%.1fx faster than speech\x1b[0m  %s  (\x1b[1m%.2fs\x1b[0m lag after voice stops)\n",
+					speedMultiplier, gauge, m.LastUtterance.TranscribeSecs)
 			}
-			gauge := RenderSpeedGauge(m.LastUtterance.RTF)
-			fmt.Fprintf(w, "  Typing Speed:      \x1b[32;1m%.1fx faster than speech\x1b[0m  %s  (\x1b[1m%.2fs\x1b[0m lag after voice stops)\n",
-				speedMultiplier, gauge, m.LastUtterance.TranscribeSecs)
+			fmt.Fprintf(w, "  Total Dictation:   \x1b[1m%s\x1b[0m voice processed in \x1b[32m%.1fs\x1b[0m GPU compute (%d sentence chunks)\n",
+				FormatDuration(time.Duration(m.TotalAudioSecs*float64(time.Second))),
+				m.TotalTranscribeSecs,
+				m.TotalChunks)
 		}
-		fmt.Fprintf(w, "  Total Dictation:   \x1b[1m%s\x1b[0m voice processed in \x1b[32m%.1fs\x1b[0m GPU compute (%d sentence chunks)\n",
-			FormatDuration(time.Duration(m.TotalAudioSecs*float64(time.Second))),
-			m.TotalTranscribeSecs,
-			m.TotalChunks)
 	}
 
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "── System Load & Resources ───────────────────────────────────────")
-	if r.ActiveService != "" {
-		uptimeStr := "0s"
-		if r.ServiceUptime > 0 {
-			uptimeStr = FormatDuration(r.ServiceUptime)
+	if sec.Hardware {
+		if sec.Speed {
+			fmt.Fprintln(w, "")
 		}
-		fmt.Fprintf(w, "  Service Uptime:    %s (%s, PID %d)\n", uptimeStr, r.ActiveService, r.ServicePID)
-	}
-
-	// Live and average CPU load
-	sysLoad := r.AvgCPULoad / 6.0 // 6 CPU cores
-	sparkline := r.CPUSparkline
-	if sparkline == "" {
-		sparkline = "            "
-	}
-	fmt.Fprintf(w, "  CPU Usage:         \x1b[1m%4.1f%%\x1b[0m live  \x1b[36m[%s]\x1b[0m  (avg \x1b[1m%.1f%%\x1b[0m of 1 core / \x1b[32m%.2f%%\x1b[0m total system load)\n",
-		r.LiveCPULoad, sparkline, r.AvgCPULoad, sysLoad)
-
-	// Live GPU load & VRAM
-	gpuSpark := r.GPUSparkline
-	if gpuSpark == "" {
-		gpuSpark = "            "
-	}
-	fmt.Fprintf(w, "  GPU Usage:         \x1b[1m%4.1f%%\x1b[0m live  \x1b[35m[%s]\x1b[0m  (%s)\n",
-		r.LiveGPULoad, gpuSpark, r.GPUAccel)
-
-	memStr := FormatBytes(r.ServiceMemory)
-	vramStr := "487 MB (Whisper)"
-	if r.VRAMUsedBytes > 0 && r.VRAMTotalBytes > 0 {
-		vramStr = fmt.Sprintf("%s / %s", FormatBytes(r.VRAMUsedBytes), FormatBytes(r.VRAMTotalBytes))
-	}
-	fmt.Fprintf(w, "  Memory:            %s daemon RAM  ·  %s GPU VRAM\n", memStr, vramStr)
-
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "── Active Voice Daemons ──────────────────────────────────────────")
-	if len(r.Processes) == 0 {
-		fmt.Fprintln(w, "  No active voice processes running.")
-	} else {
-		var procSummaries []string
-		for _, p := range r.Processes {
-			procSummaries = append(procSummaries, fmt.Sprintf("\x1b[1m%s\x1b[0m (PID %d, %s)", p.Name, p.PID, FormatBytes(p.RSSBytes)))
-		}
-		fmt.Fprintf(w, "  %s\n", strings.Join(procSummaries, "  ·  "))
-	}
-
-	if r.EagerMetrics != nil && len(r.EagerMetrics.Recent) > 0 {
-		m := r.EagerMetrics
-		fmt.Fprintln(w, "")
-		fmt.Fprintln(w, "── Recent Spoken Sentences ───────────────────────────────────────")
-		limit := 4
-		if len(m.Recent) < limit {
-			limit = len(m.Recent)
-		}
-		for i := 0; i < limit; i++ {
-			u := m.Recent[i]
-			timeStr := u.Timestamp.Format("15:04:05")
-			shortText := u.Text
-			if len(shortText) > 52 {
-				shortText = shortText[:49] + "..."
+		fmt.Fprintln(w, "── Hardware & System Load ────────────────────────────────────────")
+		if r.ActiveService != "" {
+			uptimeStr := "0s"
+			if r.ServiceUptime > 0 {
+				uptimeStr = FormatDuration(r.ServiceUptime)
 			}
-			fmt.Fprintf(w, "  \x1b[36m%s\x1b[0m  \x1b[32m[%4.2fs lag]\x1b[0m  %q\n",
-				timeStr, u.TranscribeSecs, shortText)
+			fmt.Fprintf(w, "  Service Uptime:    %s (%s, PID %d)\n", uptimeStr, r.ActiveService, r.ServicePID)
+		}
+
+		sysLoad := r.AvgCPULoad / 6.0 // 6 CPU cores
+		sparkline := r.CPUSparkline
+		if sparkline == "" {
+			sparkline = "            "
+		}
+		fmt.Fprintf(w, "  CPU Usage:         \x1b[1m%4.1f%%\x1b[0m live  \x1b[36m[%s]\x1b[0m  (avg \x1b[1m%.1f%%\x1b[0m of 1 core / \x1b[32m%.2f%%\x1b[0m total system load)\n",
+			r.LiveCPULoad, sparkline, r.AvgCPULoad, sysLoad)
+
+		gpuSpark := r.GPUSparkline
+		if gpuSpark == "" {
+			gpuSpark = "            "
+		}
+		fmt.Fprintf(w, "  GPU Usage:         \x1b[1m%4.1f%%\x1b[0m live  \x1b[35m[%s]\x1b[0m  (%s)\n",
+			r.LiveGPULoad, gpuSpark, r.GPUAccel)
+
+		memStr := FormatBytes(r.ServiceMemory)
+		vramStr := "487 MB (Whisper)"
+		if r.VRAMUsedBytes > 0 && r.VRAMTotalBytes > 0 {
+			vramStr = fmt.Sprintf("%s / %s", FormatBytes(r.VRAMUsedBytes), FormatBytes(r.VRAMTotalBytes))
+		}
+		fmt.Fprintf(w, "  Memory:            %s daemon RAM  ·  %s GPU VRAM\n", memStr, vramStr)
+	}
+
+	if sec.Transcript {
+		if (sec.Speed || sec.Hardware) && r.EagerMetrics != nil && len(r.EagerMetrics.Recent) > 0 {
+			fmt.Fprintln(w, "")
+		}
+		if r.EagerMetrics != nil && len(r.EagerMetrics.Recent) > 0 {
+			m := r.EagerMetrics
+			fmt.Fprintln(w, "── Recent Spoken Sentences ───────────────────────────────────────")
+			limit := 4
+			if len(m.Recent) < limit {
+				limit = len(m.Recent)
+			}
+			for i := 0; i < limit; i++ {
+				u := m.Recent[i]
+				timeStr := u.Timestamp.Format("15:04:05")
+				shortText := u.Text
+				if len(shortText) > 52 {
+					shortText = shortText[:49] + "..."
+				}
+				fmt.Fprintf(w, "  \x1b[36m%s\x1b[0m  \x1b[32m[%4.2fs lag]\x1b[0m  %q\n",
+					timeStr, u.TranscribeSecs, shortText)
+			}
+		}
+	}
+
+	if sec.Daemons {
+		if sec.Speed || sec.Hardware || sec.Transcript {
+			fmt.Fprintln(w, "")
+		}
+		fmt.Fprintln(w, "── Active Voice Daemons ──────────────────────────────────────────")
+		if len(r.Processes) == 0 {
+			fmt.Fprintln(w, "  No active voice processes running.")
+		} else {
+			var procSummaries []string
+			for _, p := range r.Processes {
+				procSummaries = append(procSummaries, fmt.Sprintf("\x1b[1m%s\x1b[0m (PID %d, %s)", p.Name, p.PID, FormatBytes(p.RSSBytes)))
+			}
+			fmt.Fprintf(w, "  %s\n", strings.Join(procSummaries, "  ·  "))
 		}
 	}
 
 	fmt.Fprintln(w, "")
-	if len(r.ZombieWarnings) == 0 {
-		fmt.Fprintln(w, "── Health: \x1b[32m✓ 0 orphan processes (clean)\x1b[0m ── Press 'q' or Ctrl+C to exit ──")
-	} else {
-		for _, wMsg := range r.ZombieWarnings {
-			fmt.Fprintf(w, "  \x1b[31;1m⚠️  %s\x1b[0m\n", wMsg)
-		}
-		fmt.Fprintln(w, "────────────────────────── Press 'q' or Ctrl+C to exit ───────────")
+	healthStatus := "\x1b[32m✓ 0 orphan processes (clean)\x1b[0m"
+	if len(r.ZombieWarnings) > 0 {
+		healthStatus = fmt.Sprintf("\x1b[31;1m⚠️ %s\x1b[0m", r.ZombieWarnings[0])
 	}
+	fmt.Fprintf(w, "── Keys: 1..4 (toggle) · a (all) · q (quit) ── %s ──\n", healthStatus)
+}
+
+func formatSectionBadge(name string, active bool) string {
+	if active {
+		return fmt.Sprintf("\x1b[32;1m[%s ●]\x1b[0m", name)
+	}
+	return fmt.Sprintf("\x1b[90m[%s ○]\x1b[0m", name)
 }
 
 func formatRecordState(status string) string {
@@ -620,11 +691,11 @@ func formatRecordState(status string) string {
 }
 
 // RunWatchResources refreshes the resource monitor live in terminal without flickering.
-func RunWatchResources(ctx context.Context, d Dependencies, interval time.Duration) error {
+func RunWatchResources(ctx context.Context, d Dependencies, interval time.Duration, initialSec ResourceSections) error {
 	sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Put terminal in cbreak mode to capture 'q' keypresses without requiring Enter
+	// Put terminal in cbreak mode to capture keypresses without requiring Enter
 	oldState, err := exec.Command("stty", "-F", "/dev/tty", "-g").Output()
 	if err == nil {
 		_ = exec.Command("stty", "-F", "/dev/tty", "cbreak", "-echo").Run()
@@ -633,7 +704,18 @@ func RunWatchResources(ctx context.Context, d Dependencies, interval time.Durati
 		}()
 	}
 
-	// Listen for 'q', 'Q', Ctrl-C, or Esc on controlling terminal
+	var secLock sync.Mutex
+	sec := initialSec
+
+	redrawChan := make(chan struct{}, 1)
+	requestRedraw := func() {
+		select {
+		case redrawChan <- struct{}{}:
+		default:
+		}
+	}
+
+	// Listen for interactive btop keys (1..4, a, q, Esc, etc.)
 	tty, ttyErr := os.Open("/dev/tty")
 	if ttyErr == nil {
 		defer tty.Close()
@@ -644,10 +726,30 @@ func RunWatchResources(ctx context.Context, d Dependencies, interval time.Durati
 				if err != nil || n == 0 {
 					return
 				}
-				if inputBuf[0] == 'q' || inputBuf[0] == 'Q' || inputBuf[0] == 3 || inputBuf[0] == 27 {
+				b := inputBuf[0]
+				secLock.Lock()
+				switch b {
+				case '1', 's', 'S':
+					sec.Speed = !sec.Speed
+					requestRedraw()
+				case '2', 'c', 'C', 'g', 'G', 'h', 'H':
+					sec.Hardware = !sec.Hardware
+					requestRedraw()
+				case '3', 't', 'T':
+					sec.Transcript = !sec.Transcript
+					requestRedraw()
+				case '4', 'd', 'D', 'p', 'P':
+					sec.Daemons = !sec.Daemons
+					requestRedraw()
+				case 'a', 'A':
+					sec = DefaultResourceSections()
+					requestRedraw()
+				case 'q', 'Q', 3, 27:
+					secLock.Unlock()
 					stop()
 					return
 				}
+				secLock.Unlock()
 			}
 		}()
 	}
@@ -658,9 +760,13 @@ func RunWatchResources(ctx context.Context, d Dependencies, interval time.Durati
 
 	renderFrame := func() {
 		report := CollectVoiceResources(sigCtx, d)
+		secLock.Lock()
+		activeSec := sec
+		secLock.Unlock()
+
 		var buf bytes.Buffer
 		buf.WriteString("\033[H") // Move cursor to top-left without clearing buffer
-		PrintVoiceResourceReport(&buf, report)
+		PrintVoiceResourceReport(&buf, report, activeSec)
 		buf.WriteString("\033[J") // Erase any trailing lines below output if list shrank
 		_, _ = d.Stdout.Write(buf.Bytes())
 	}
@@ -674,6 +780,8 @@ func RunWatchResources(ctx context.Context, d Dependencies, interval time.Durati
 		select {
 		case <-sigCtx.Done():
 			return nil
+		case <-redrawChan:
+			renderFrame()
 		case <-ticker.C:
 			renderFrame()
 		}

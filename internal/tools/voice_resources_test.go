@@ -109,6 +109,23 @@ CPUUsageNSec=7935075000
 	}
 }
 
+func TestParseSections(t *testing.T) {
+	all := ParseSections("all")
+	if !all.Speed || !all.Hardware || !all.Transcript || !all.Daemons {
+		t.Errorf("expected all sections enabled, got %+v", all)
+	}
+
+	custom := ParseSections("1,3")
+	if !custom.Speed || custom.Hardware || !custom.Transcript || custom.Daemons {
+		t.Errorf("expected only 1 and 3 enabled, got %+v", custom)
+	}
+
+	named := ParseSections("hardware,daemons")
+	if named.Speed || !named.Hardware || named.Transcript || !named.Daemons {
+		t.Errorf("expected only hardware and daemons enabled, got %+v", named)
+	}
+}
+
 func TestPrintVoiceResourceReport(t *testing.T) {
 	report := VoiceResourceReport{
 		Mode:          ModeEager,
@@ -148,7 +165,7 @@ func TestPrintVoiceResourceReport(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	PrintVoiceResourceReport(&buf, report)
+	PrintVoiceResourceReport(&buf, report, DefaultResourceSections())
 	out := buf.String()
 
 	if !strings.Contains(out, "Mode:") || !strings.Contains(out, "eager") {
