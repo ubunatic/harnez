@@ -3,18 +3,18 @@ package tools
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 )
 
-// Voice-input streaming/batch modes run as two mutually exclusive systemd
-// user services (they share the same runtime socket, so only one can hold
-// it at a time). BatchService is installed by issue 020; StreamingService
-// is an opt-in unit pointed at the streaming config, documented in
-// docs/VoiceInput.md and issue 021.
+// Voice-input streaming/batch/eager modes run as mutually exclusive systemd
+// user services. BatchService and StreamingService run Voxtype; EagerService
+// runs Harnez's continuous eager sentence streaming orchestrator.
 const (
 	BatchService     = "voxtype.service"
 	StreamingService = "voxtype-streaming.service"
+	EagerService     = "harnez-voice-eager.service"
 
 	streamingConfigRelPath = ".config/voxtype/config-streaming.toml"
 	streamingModelRelPath  = ".local/share/voxtype/models/parakeet-unified-en-0.6b"
@@ -26,11 +26,15 @@ type VoiceInputMode string
 const (
 	ModeBatch        VoiceInputMode = "batch"
 	ModeStreaming    VoiceInputMode = "streaming"
+	ModeEager        VoiceInputMode = "eager"
 	ModeNeither      VoiceInputMode = "neither"
 	ModeInconsistent VoiceInputMode = "inconsistent"
 )
 
 func serviceActive(ctx context.Context, d Dependencies, service string) bool {
+	if d.Run == nil {
+		return false
+	}
 	return d.Run(ctx, "systemctl", "--user", "is-active", "--quiet", service) == nil
 }
 
@@ -39,13 +43,24 @@ func serviceActive(ctx context.Context, d Dependencies, service string) bool {
 func CurrentVoiceInputMode(ctx context.Context, d Dependencies) VoiceInputMode {
 	batch := serviceActive(ctx, d, BatchService)
 	streaming := serviceActive(ctx, d, StreamingService)
-	switch {
-	case batch && streaming:
+	eager := serviceActive(ctx, d, EagerService)
+
+	activeCount := 0
+	for _, b := range []bool{batch, streaming, eager} {
+		if b {
+			activeCount++
+		}
+	}
+	if activeCount > 1 {
 		return ModeInconsistent
+	}
+	switch {
 	case batch:
 		return ModeBatch
 	case streaming:
 		return ModeStreaming
+	case eager:
+		return ModeEager
 	default:
 		return ModeNeither
 	}
@@ -58,19 +73,19 @@ func DescribeVoiceInputMode(m VoiceInputMode) string {
 		return "batch (voxtype.service active, base.en whisper, typed at end of utterance)"
 	case ModeStreaming:
 		return "streaming (voxtype-streaming.service active, local Parakeet, typed incrementally)"
+	case ModeEager:
+		return "eager (harnez-voice-eager.service active, continuous sentence streaming via local whisper)"
 	case ModeNeither:
-		return "neither (both services stopped)"
+		return "neither (all services stopped)"
 	case ModeInconsistent:
-		return "inconsistent (both voxtype.service and voxtype-streaming.service are active; stop one manually)"
+		return "inconsistent (multiple voice-input services active; stop others manually)"
 	default:
 		return string(m)
 	}
 }
 
 // checkStreamingPreconditions validates that the opt-in streaming config and
-// model are present before attempting to switch into streaming mode, so a
-// failed switch gives an actionable error instead of a service that fails to
-// start.
+// model are present before attempting to switch into streaming mode.
 func checkStreamingPreconditions(d Dependencies) error {
 	home := d.Getenv("HOME")
 	if home == "" {
@@ -91,9 +106,44 @@ func checkStreamingPreconditions(d Dependencies) error {
 	return nil
 }
 
-// waitActive polls is-active for up to ~10s (Parakeet's streaming model load
-// takes a few seconds; base.en whisper loads in well under a second), so a
-// slow-but-successful start isn't mistaken for a failure.
+// ensureEagerServiceUnit writes ~/.config/systemd/user/harnez-voice-eager.service if absent.
+func ensureEagerServiceUnit(ctx context.Context, d Dependencies) error {
+	home := d.Getenv("HOME")
+	if home == "" {
+		return fmt.Errorf("cannot resolve $HOME")
+	}
+	unitDir := filepath.Join(home, ".config/systemd/user")
+	unitPath := filepath.Join(unitDir, EagerService)
+
+	unitContent := `[Unit]
+Description=Harnez Continuous Eager Sentence Streaming Dictation
+Documentation=https://github.com/ubunatic/harnez
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/go/bin/harnez tools voice-input eager --daemon
+Restart=on-failure
+RestartSec=3
+
+Environment=XDG_RUNTIME_DIR=%t
+Environment=PATH=%h/go/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=graphical-session.target
+`
+	if _, err := d.Stat(unitPath); err != nil {
+		_ = os.MkdirAll(unitDir, 0755)
+		if err := os.WriteFile(unitPath, []byte(unitContent), 0644); err != nil {
+			return fmt.Errorf("create %s: %w", unitPath, err)
+		}
+		_ = d.Run(ctx, "systemctl", "--user", "daemon-reload")
+	}
+	return nil
+}
+
+// waitActive polls is-active for up to ~10s.
 func waitActive(ctx context.Context, d Dependencies, service string) bool {
 	const attempts = 20
 	for i := 0; i < attempts; i++ {
@@ -105,60 +155,70 @@ func waitActive(ctx context.Context, d Dependencies, service string) bool {
 	return false
 }
 
-// SwitchVoiceInputMode switches between the batch and streaming voice-input
-// services. The two share a single voxtype runtime lock/socket and cannot
-// run concurrently, so the only safe order is stop-other, start-wanted,
-// verify: starting the wanted service first (to avoid a stopped gap) doesn't
-// work here because it would immediately fail to acquire the lock while the
-// other service still holds it. If the wanted service fails to become
-// active, this restarts the other service as a fallback so voice input isn't
-// left fully stopped, and reports the failure clearly either way.
+// SwitchVoiceInputMode switches between batch, streaming, and eager voice-input services.
 func SwitchVoiceInputMode(ctx context.Context, d Dependencies, target VoiceInputMode) error {
-	var wanted, other string
+	var wanted string
+	var others []string
+
 	switch target {
 	case ModeStreaming:
 		if err := checkStreamingPreconditions(d); err != nil {
 			return err
 		}
-		wanted, other = StreamingService, BatchService
+		wanted = StreamingService
+		others = []string{BatchService, EagerService}
 	case ModeBatch:
-		wanted, other = BatchService, StreamingService
+		wanted = BatchService
+		others = []string{StreamingService, EagerService}
+	case ModeEager:
+		if err := ensureEagerServiceUnit(ctx, d); err != nil {
+			return err
+		}
+		wanted = EagerService
+		others = []string{BatchService, StreamingService}
 	default:
-		return fmt.Errorf("invalid voice-input mode %q (want streaming or batch)", target)
+		return fmt.Errorf("invalid voice-input mode %q (want batch, streaming, or eager)", target)
 	}
 
 	if serviceActive(ctx, d, wanted) {
 		fmt.Fprintf(d.Stdout, "%s already active; nothing to do\n", wanted)
-		if serviceActive(ctx, d, other) {
-			return fmt.Errorf("%s is also active; stop it manually (systemctl --user stop %s)", other, other)
+		for _, other := range others {
+			if serviceActive(ctx, d, other) {
+				return fmt.Errorf("%s is also active; stop it manually (systemctl --user stop %s)", other, other)
+			}
 		}
 		return nil
 	}
 
-	otherWasActive := serviceActive(ctx, d, other)
-	if otherWasActive {
-		if err := d.Run(ctx, "systemctl", "--user", "stop", other); err != nil {
-			return fmt.Errorf("stop %s: %w", other, err)
+	var activeOthers []string
+	for _, other := range others {
+		if serviceActive(ctx, d, other) {
+			activeOthers = append(activeOthers, other)
+			if err := d.Run(ctx, "systemctl", "--user", "stop", other); err != nil {
+				return fmt.Errorf("stop %s: %w", other, err)
+			}
 		}
 	}
 
 	if err := d.Run(ctx, "systemctl", "--user", "start", wanted); err != nil {
-		if otherWasActive {
+		for _, other := range activeOthers {
 			_ = d.Run(ctx, "systemctl", "--user", "start", other)
 		}
-		return fmt.Errorf("start %s: %w (restored %s if it was running)", wanted, err, other)
+		return fmt.Errorf("start %s: %w (restored %v)", wanted, err, activeOthers)
 	}
+
 	if !waitActive(ctx, d, wanted) {
 		restoreErr := ""
-		if otherWasActive {
+		for _, other := range activeOthers {
 			if err := d.Run(ctx, "systemctl", "--user", "start", other); err != nil {
-				restoreErr = fmt.Sprintf("; failed to restore %s too: %v -- voice input is fully stopped, run: systemctl --user start %s", other, err, other)
+				restoreErr = fmt.Sprintf("; failed to restore %s: %v", other, err)
 			} else {
 				restoreErr = fmt.Sprintf("; restored %s as a fallback", other)
 			}
 		}
 		return fmt.Errorf("%s did not become active within 10s%s", wanted, restoreErr)
 	}
-	fmt.Fprintf(d.Stdout, "switched voice input to %s (%s active, %s stopped)\n", target, wanted, other)
+
+	fmt.Fprintf(d.Stdout, "switched voice input to %s (%s active)\n", target, wanted)
 	return nil
 }

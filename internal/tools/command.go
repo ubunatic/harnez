@@ -72,7 +72,7 @@ func NewCommand(specFS fs.FS, d Dependencies) (*cobra.Command, error) {
 // streaming/batch mode toggle from issue 021.
 func newVoiceInputCommand(d Dependencies) *cobra.Command {
 	voiceInput := &cobra.Command{Use: "voice-input", Short: "Manage the local voice-input daemon's runtime mode"}
-	mode := &cobra.Command{Use: "mode [streaming|batch]", Short: "Show or switch the active voice-input mode", Args: cobra.MaximumNArgs(1), SilenceUsage: true,
+	mode := &cobra.Command{Use: "mode [batch|streaming|eager]", Short: "Show or switch the active voice-input mode", Args: cobra.MaximumNArgs(1), SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			if len(args) == 0 {
@@ -85,8 +85,10 @@ func newVoiceInputCommand(d Dependencies) *cobra.Command {
 				target = ModeStreaming
 			case "batch":
 				target = ModeBatch
+			case "eager":
+				target = ModeEager
 			default:
-				return fmt.Errorf("invalid mode %q (want streaming or batch)", args[0])
+				return fmt.Errorf("invalid mode %q (want batch, streaming, or eager)", args[0])
 			}
 			return SwitchVoiceInputMode(ctx, d, target)
 		}}

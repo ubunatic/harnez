@@ -15,8 +15,13 @@ const (
 	RecordActionStop   RecordAction = "stop"
 )
 
-// ControlRecording sends a recording control action to the speech engine (Voxtype).
+// ControlRecording sends a recording control action to the active speech engine.
 func ControlRecording(ctx context.Context, d Dependencies, action RecordAction) error {
+	mode := CurrentVoiceInputMode(ctx, d)
+	if mode == ModeEager {
+		return ControlEagerDaemon(ctx, d, action)
+	}
+
 	if _, err := d.LookPath("voxtype"); err != nil {
 		return fmt.Errorf("voxtype not found on PATH: %w", err)
 	}
@@ -42,6 +47,11 @@ func ControlRecording(ctx context.Context, d Dependencies, action RecordAction) 
 
 // GetRecordingStatus queries the current recording/idle status of the speech engine.
 func GetRecordingStatus(ctx context.Context, d Dependencies) (string, error) {
+	mode := CurrentVoiceInputMode(ctx, d)
+	if mode == ModeEager {
+		return GetEagerRecordingStatus(ctx, d)
+	}
+
 	if _, err := d.LookPath("voxtype"); err != nil {
 		return "inactive", fmt.Errorf("voxtype not found on PATH: %w", err)
 	}

@@ -32,19 +32,20 @@ harnez tools status voice-input
 harnez tools install voice-input --dry-run
 harnez tools install voice-input --scope user     # default; recipe pending
 harnez tools install voice-input --scope system   # explicit privilege; recipe pending
-harnez tools voice-input mode                     # show the active mode (batch/streaming/neither/inconsistent)
-harnez tools voice-input mode streaming           # switch to opt-in local streaming (issue 021)
-harnez tools voice-input mode batch               # switch back to the default batch flow
-harnez tools voice-input record status            # show active dictation status (idle or recording)
-harnez tools voice-input record toggle            # toggle active voice recording on or off
-harnez tools voice-input record start             # start active voice recording
-harnez tools voice-input record stop              # stop active voice recording
-harnez tools voice-input history list             # list recent dictations (most recent first, sensitive)
-harnez tools voice-input history copy <ID>        # copy transcript to clipboard via wl-copy
-harnez tools voice-input history retype <ID>      # re-type transcript at cursor via dotool
-harnez tools voice-input history clear            # wipe local history file
-harnez tools voice-input history record           # stdin/stdout pass-through hook for Voxtype
-harnez tools voice-input config get type-delay-ms # read type_delay_ms from ~/.config/voxtype/config.toml
+harnez tools voice-input mode                     # show the active mode (batch/streaming/eager/neither/inconsistent)
+harnez tools voice-input mode eager                   # switch to continuous eager sentence streaming (issue 026)
+harnez tools voice-input mode streaming               # switch to opt-in local streaming (issue 021)
+harnez tools voice-input mode batch                   # switch back to default batch flow
+harnez tools voice-input record status                # show active dictation status (idle or recording)
+harnez tools voice-input record toggle                # universal toggle across active mode (batch/streaming/eager)
+harnez tools voice-input record start                 # start active voice recording
+harnez tools voice-input record stop                  # stop active voice recording
+harnez tools voice-input history list                 # list recent dictations (most recent first, sensitive)
+harnez tools voice-input history copy <ID>            # copy transcript to clipboard via wl-copy
+harnez tools voice-input history retype <ID>          # re-type transcript at cursor via dotool
+harnez tools voice-input history clear                # wipe local history file
+harnez tools voice-input history record               # stdin/stdout pass-through hook for Voxtype
+harnez tools voice-input config get type-delay-ms     # read type_delay_ms from ~/.config/voxtype/config.toml
 harnez tools voice-input config set type-delay-ms <MS> # edit type_delay_ms preserving comments
 ```
 
@@ -52,17 +53,12 @@ The command never uses cloud transcription or requests membership in the `input`
 There is no uninstall command until ownership records can distinguish harnez-managed
 files from user-owned files.
 
-`voice-input mode` toggles between two mutually exclusive systemd user services
-(`voxtype.service` for batch, `voxtype-streaming.service` for the opt-in streaming setup
-from issue 021 — they share one voxtype runtime socket, so only one can hold it). It
-refuses to switch into streaming mode if `~/.config/voxtype/config-streaming.toml` or the
-downloaded Parakeet streaming model are missing, with an actionable error. Because the two
-services cannot run concurrently, a switch always stops the current one before starting the
-target one; if the target fails to become active within 10s, it restarts the other as a
-fallback so voice input is never left fully stopped, and reports the failure. Neither
-service is auto-started at login by this command — whichever was already running (or
-enabled) keeps that status; `mode` only starts/stops on an explicit switch. `mode` with no
-argument is read-only.
+`voice-input mode` toggles between three mutually exclusive systemd user services:
+- `voxtype.service` for batch mode (`base.en` Whisper, typed at end of utterance)
+- `voxtype-streaming.service` for opt-in streaming (Parakeet ONNX, typed incrementally)
+- `harnez-voice-eager.service` for continuous eager sentence streaming (rolling Whisper inference, 0 pause drops)
+
+`harnez tools voice-input record toggle` acts as a universal toggle for all 3 modes, allowing a single global shortcut (`Super+Ctrl+X`) to control whichever mode is currently active.
 
 ## Security note: uinput access is not gated by voice input
 

@@ -63,6 +63,7 @@ func TestCurrentVoiceInputMode(t *testing.T) {
 		{"neither", map[string]bool{}, ModeNeither},
 		{"batch", map[string]bool{BatchService: true}, ModeBatch},
 		{"streaming", map[string]bool{StreamingService: true}, ModeStreaming},
+		{"eager", map[string]bool{EagerService: true}, ModeEager},
 		{"inconsistent", map[string]bool{BatchService: true, StreamingService: true}, ModeInconsistent},
 	}
 	for _, tc := range cases {
@@ -84,6 +85,18 @@ func TestSwitchVoiceInputMode(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !active[StreamingService] || active[BatchService] {
+			t.Fatalf("unexpected state: %+v", active)
+		}
+	})
+
+	t.Run("batch to eager stops batch then starts eager", func(t *testing.T) {
+		active := map[string]bool{BatchService: true}
+		var out bytes.Buffer
+		d := serviceDeps(&out, active)
+		if err := SwitchVoiceInputMode(context.Background(), d, ModeEager); err != nil {
+			t.Fatal(err)
+		}
+		if !active[EagerService] || active[BatchService] {
 			t.Fatalf("unexpected state: %+v", active)
 		}
 	})
