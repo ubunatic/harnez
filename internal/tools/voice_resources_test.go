@@ -25,6 +25,41 @@ func TestFormatBytes(t *testing.T) {
 	}
 }
 
+func TestFormatDuration(t *testing.T) {
+	cases := []struct {
+		d    time.Duration
+		want string
+	}{
+		{0, "0s"},
+		{45 * time.Second, "45s"},
+		{2*time.Minute + 15*time.Second, "2m 15s"},
+		{1*time.Hour + 5*time.Minute + 3*time.Second, "1h 5m 3s"},
+	}
+	for _, tc := range cases {
+		if got := FormatDuration(tc.d); got != tc.want {
+			t.Errorf("FormatDuration(%v) = %q, want %q", tc.d, got, tc.want)
+		}
+	}
+}
+
+func TestRenderSparkline(t *testing.T) {
+	values := []float64{0, 2.5, 5.0, 7.5, 10.0}
+	spark := RenderSparkline(values, 10.0)
+	if len(spark) == 0 {
+		t.Fatalf("expected non-empty sparkline")
+	}
+	if !strings.ContainsRune(spark, ' ') || !strings.ContainsRune(spark, '█') {
+		t.Errorf("expected sparkline to scale from min to max: %q", spark)
+	}
+}
+
+func TestRenderSpeedGauge(t *testing.T) {
+	gaugeFast := RenderSpeedGauge(0.08)
+	if !strings.Contains(gaugeFast, "█") {
+		t.Errorf("expected filled speed gauge for fast RTF: %q", gaugeFast)
+	}
+}
+
 func TestParseProcStatus(t *testing.T) {
 	content := `Name:	harnez
 Umask:	0022
@@ -83,10 +118,31 @@ func TestPrintVoiceResourceReport(t *testing.T) {
 		ServicePID:    714116,
 		ServiceMemory: 8 * 1024 * 1024,
 		ServiceCPU:    5 * time.Second,
+		ServiceUptime: 100 * time.Second,
+		AvgCPULoad:    5.0,
+		LiveCPULoad:   1.2,
+		CPUSparkline:  " ▂▃▅",
 		GPUAccel:      "AMD Radeon Graphics (Vulkan 1.4 GPU)",
 		ActiveModel:   "small.en",
 		Processes: []ProcessResource{
 			{PID: 714116, Name: "harnez", Cmdline: "harnez tools voice-input eager --daemon", RSSBytes: 8 * 1024 * 1024, Threads: 12},
+		},
+		EagerMetrics: &EagerMetrics{
+			TotalChunks:         2,
+			TotalAudioSecs:      5.0,
+			TotalTranscribeSecs: 0.5,
+			AvgRTF:              0.10,
+			LastUtterance: &UtteranceStat{
+				Index:          2,
+				AudioSecs:      2.5,
+				TranscribeSecs: 0.25,
+				RTF:            0.10,
+				Text:           "Test speech",
+				Timestamp:      time.Now(),
+			},
+			Recent: []UtteranceStat{
+				{Index: 2, AudioSecs: 2.5, TranscribeSecs: 0.25, RTF: 0.10, Text: "Test speech", Timestamp: time.Now()},
+			},
 		},
 		ZombieWarnings: nil,
 	}
@@ -95,10 +151,13 @@ func TestPrintVoiceResourceReport(t *testing.T) {
 	PrintVoiceResourceReport(&buf, report)
 	out := buf.String()
 
-	if !strings.Contains(out, "Active Mode:") || !strings.Contains(out, "eager") {
+	if !strings.Contains(out, "Mode:") || !strings.Contains(out, "eager") {
 		t.Errorf("Report missing active mode: %s", out)
 	}
-	if !strings.Contains(out, "0 orphan/zombie processes (clean)") {
+	if !strings.Contains(out, "0 orphan processes (clean)") {
 		t.Errorf("Report missing health status: %s", out)
+	}
+	if !strings.Contains(out, "Typing Speed:") {
+		t.Errorf("Report missing typing speed: %s", out)
 	}
 }

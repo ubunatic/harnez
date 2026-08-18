@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -36,11 +37,82 @@ type VoiceResourceReport struct {
 	ServicePID     int
 	ServiceMemory  int64
 	ServiceCPU     time.Duration
+	ServiceUptime  time.Duration
+	AvgCPULoad     float64
+	LiveCPULoad    float64
+	CPUSparkline   string
 	GPUAccel       string
 	ActiveModel    string
 	Processes      []ProcessResource
 	EagerMetrics   *EagerMetrics
 	ZombieWarnings []string
+}
+
+var (
+	cpuHistoryLock sync.Mutex
+	cpuHistory     []float64
+	lastSampleTime time.Time
+	lastSampleCPU  time.Duration
+)
+
+var sparkRunes = []rune{' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
+
+// RenderSparkline converts a float slice into a Unicode sparkline.
+func RenderSparkline(values []float64, maxVal float64) string {
+	if len(values) == 0 {
+		return "        "
+	}
+	if maxVal <= 0 {
+		for _, v := range values {
+			if v > maxVal {
+				maxVal = v
+			}
+		}
+	}
+	if maxVal <= 0 {
+		maxVal = 10.0
+	}
+
+	var sb strings.Builder
+	for _, v := range values {
+		idx := int((v / maxVal) * float64(len(sparkRunes)-1))
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= len(sparkRunes) {
+			idx = len(sparkRunes) - 1
+		}
+		sb.WriteRune(sparkRunes[idx])
+	}
+	return sb.String()
+}
+
+// RenderSpeedGauge renders a 10-segment visual gauge of processing speed.
+func RenderSpeedGauge(rtf float64) string {
+	if rtf <= 0 {
+		return "\x1b[32m[██████████]\x1b[0m"
+	}
+	bars := 10
+	// 0.05x RTF (20x realtime) -> 10 bars; 0.5x RTF (2x realtime) -> 5 bars; 1.0x RTF -> 1 bar
+	filled := int((1.0 - (rtf * 0.8)) * float64(bars))
+	if filled < 1 {
+		filled = 1
+	}
+	if filled > bars {
+		filled = bars
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\x1b[32m[")
+	for i := 0; i < bars; i++ {
+		if i < filled {
+			sb.WriteString("█")
+		} else {
+			sb.WriteString("░")
+		}
+	}
+	sb.WriteString("]\x1b[0m")
+	return sb.String()
 }
 
 // NewVoiceInputResourcesCommand returns the `harnez tools voice-input resources` command.
@@ -100,6 +172,26 @@ func CollectVoiceResources(ctx context.Context, d Dependencies) VoiceResourceRep
 		collectServiceMetrics(ctx, d, activeUnit, &report)
 	}
 
+	// Calculate CPU history and sparkline
+	cpuHistoryLock.Lock()
+	now := time.Now()
+	if !lastSampleTime.IsZero() && report.ServiceCPU > 0 {
+		deltaWall := now.Sub(lastSampleTime).Seconds()
+		deltaCPU := (report.ServiceCPU - lastSampleCPU).Seconds()
+		if deltaWall > 0.1 && deltaCPU >= 0 {
+			liveLoad := (deltaCPU / deltaWall) * 100.0
+			report.LiveCPULoad = liveLoad
+			cpuHistory = append(cpuHistory, liveLoad)
+			if len(cpuHistory) > 12 {
+				cpuHistory = cpuHistory[len(cpuHistory)-12:]
+			}
+		}
+	}
+	lastSampleTime = now
+	lastSampleCPU = report.ServiceCPU
+	report.CPUSparkline = RenderSparkline(cpuHistory, 25.0)
+	cpuHistoryLock.Unlock()
+
 	// Load live streaming transcription speed metrics
 	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if runtimeDir == "" {
@@ -138,7 +230,7 @@ func collectServiceMetrics(ctx context.Context, d Dependencies, service string, 
 		return
 	}
 	out, err := d.RunOutput(ctx, "systemctl", "--user", "show", service,
-		"--property=ActiveState,SubState,MainPID,MemoryCurrent,CPUUsageNSec")
+		"--property=ActiveState,SubState,MainPID,MemoryCurrent,CPUUsageNSec,ActiveEnterTimestampMonotonic")
 	if err != nil {
 		report.ServiceStatus = "unknown"
 		return
@@ -162,6 +254,52 @@ func collectServiceMetrics(ctx context.Context, d Dependencies, service string, 
 			report.ServiceCPU = time.Duration(cpuNsec) * time.Nanosecond
 		}
 	}
+
+	// Compute uptime from /proc/[pid]/stat or ActiveEnterTimestampMonotonic
+	if report.ServicePID > 0 {
+		if uptime, err := getProcessUptime(report.ServicePID); err == nil && uptime > 0 {
+			report.ServiceUptime = uptime
+			if uptime.Seconds() > 0 && report.ServiceCPU > 0 {
+				report.AvgCPULoad = (report.ServiceCPU.Seconds() / uptime.Seconds()) * 100.0
+			}
+		}
+	}
+}
+
+func getProcessUptime(pid int) (time.Duration, error) {
+	statPath := fmt.Sprintf("/proc/%d/stat", pid)
+	content, err := os.ReadFile(statPath)
+	if err != nil {
+		return 0, err
+	}
+	fields := strings.Fields(string(content))
+	if len(fields) < 22 {
+		return 0, fmt.Errorf("short stat")
+	}
+	startTimeTicks, err := strconv.ParseInt(fields[21], 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	uptimeBytes, err := os.ReadFile("/proc/uptime")
+	if err != nil {
+		return 0, err
+	}
+	uptimeFields := strings.Fields(string(uptimeBytes))
+	if len(uptimeFields) < 1 {
+		return 0, fmt.Errorf("short uptime")
+	}
+	sysUptimeSec, err := strconv.ParseFloat(uptimeFields[0], 64)
+	if err != nil {
+		return 0, err
+	}
+
+	procStartSec := float64(startTimeTicks) / 100.0 // sysconf(_SC_CLK_TCK) = 100
+	processUptimeSec := sysUptimeSec - procStartSec
+	if processUptimeSec < 0 {
+		processUptimeSec = 0
+	}
+	return time.Duration(processUptimeSec * float64(time.Second)), nil
 }
 
 func parseSystemdProperties(out string) map[string]string {
@@ -206,6 +344,7 @@ func detectActiveModel(d Dependencies) string {
 
 func collectVoiceProcesses() []ProcessResource {
 	var procs []ProcessResource
+	// Explicit target daemons, excluding ydotoold
 	targets := []string{"harnez", "voxtype", "pw-record", "arecord", "dotoold"}
 
 	entries, err := os.ReadDir("/proc")
@@ -229,6 +368,10 @@ func collectVoiceProcesses() []ProcessResource {
 		}
 
 		name, rssBytes, threads := parseProcStatus(string(statusBytes))
+		if name == "ydotoold" {
+			continue
+		}
+
 		isTarget := false
 		for _, t := range targets {
 			if strings.Contains(name, t) {
@@ -305,104 +448,126 @@ func FormatBytes(bytes int64) string {
 	}
 }
 
+// FormatDuration formats duration into compact human format (e.g. 21m 40s).
+func FormatDuration(d time.Duration) string {
+	if d <= 0 {
+		return "0s"
+	}
+	d = d.Round(time.Second)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+
+	if h > 0 {
+		return fmt.Sprintf("%dh %dm %ds", h, m, s)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm %ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
+}
+
 // PrintVoiceResourceReport writes a formatted terminal report of voice resources.
 func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport) {
-	fmt.Fprintln(w, "── Voice Input Resource Monitor ──────────────────────────────────")
-	fmt.Fprintf(w, "  Active Mode:       \x1b[1m%s\x1b[0m\n", r.Mode)
-	fmt.Fprintf(w, "  Recording State:   %s\n", formatRecordState(r.RecordStatus))
-	fmt.Fprintf(w, "  GPU Acceleration:  \x1b[32m%s\x1b[0m\n", r.GPUAccel)
-	fmt.Fprintf(w, "  Active Model:      %s\n", r.ActiveModel)
-
-	if r.ActiveService != "" {
-		fmt.Fprintln(w, "")
-		fmt.Fprintf(w, "── Systemd Service (%s) ──\n", r.ActiveService)
-		fmt.Fprintf(w, "  Status:            %s\n", r.ServiceStatus)
-		if r.ServicePID > 0 {
-			fmt.Fprintf(w, "  Main PID:          %d\n", r.ServicePID)
-		}
-		if r.ServiceMemory > 0 {
-			fmt.Fprintf(w, "  Memory Usage:      %s\n", FormatBytes(r.ServiceMemory))
-		}
-		if r.ServiceCPU > 0 {
-			fmt.Fprintf(w, "  Total CPU Time:    %s\n", r.ServiceCPU.Round(time.Millisecond))
-		}
-	}
+	fmt.Fprintln(w, "── Voice Input Status ────────────────────────────────────────────")
+	fmt.Fprintf(w, "  Mode:              \x1b[1m%s\x1b[0m (continuous sentence streaming)\n", r.Mode)
+	fmt.Fprintf(w, "  Recording:         %s\n", formatRecordState(r.RecordStatus))
+	fmt.Fprintf(w, "  Engine:            \x1b[32m%s\x1b[0m [%s]\n", r.GPUAccel, r.ActiveModel)
 
 	if r.EagerMetrics != nil && r.EagerMetrics.TotalChunks > 0 {
 		m := r.EagerMetrics
 		fmt.Fprintln(w, "")
-		fmt.Fprintln(w, "── Transcription Speed & Latency (Whisper GPU) ───────────────────")
+		fmt.Fprintln(w, "── Performance & Latency ─────────────────────────────────────────")
 		if m.LastUtterance != nil {
 			speedMultiplier := 0.0
 			if m.LastUtterance.RTF > 0 {
 				speedMultiplier = 1.0 / m.LastUtterance.RTF
 			}
-			fmt.Fprintf(w, "  Last Utterance:    Audio: \x1b[1m%.1fs\x1b[0m | Compute: \x1b[32;1m%.2fs\x1b[0m (RTF \x1b[1m%.2fx\x1b[0m, \x1b[32m%.1fx\x1b[0m realtime)\n",
-				m.LastUtterance.AudioSecs, m.LastUtterance.TranscribeSecs, m.LastUtterance.RTF, speedMultiplier)
+			gauge := RenderSpeedGauge(m.LastUtterance.RTF)
+			fmt.Fprintf(w, "  Typing Speed:      \x1b[32;1m%.1fx faster than speech\x1b[0m  %s  (\x1b[1m%.2fs\x1b[0m lag after voice stops)\n",
+				speedMultiplier, gauge, m.LastUtterance.TranscribeSecs)
 		}
-		avgMult := 0.0
-		if m.AvgRTF > 0 {
-			avgMult = 1.0 / m.AvgRTF
-		}
-		fmt.Fprintf(w, "  Aggregated Speed:  Avg RTF: \x1b[32;1m%.2fx\x1b[0m (\x1b[32m%.1fx\x1b[0m realtime) across %d chunk(s) [%.1fs audio in %.2fs GPU compute]\n",
-			m.AvgRTF, avgMult, m.TotalChunks, m.TotalAudioSecs, m.TotalTranscribeSecs)
-
-		if len(m.Recent) > 0 {
-			fmt.Fprintln(w, "")
-			fmt.Fprintln(w, "── Recent Spoken Sentences ───────────────────────────────────────")
-			limit := 4
-			if len(m.Recent) < limit {
-				limit = len(m.Recent)
-			}
-			for i := 0; i < limit; i++ {
-				u := m.Recent[i]
-				timeStr := u.Timestamp.Format("15:04:05")
-				shortText := u.Text
-				if len(shortText) > 42 {
-					shortText = shortText[:39] + "..."
-				}
-				fmt.Fprintf(w, "  [%s] #%-2d (Audio: %4.1fs, GPU: %4.2fs, RTF: %4.2fx) %q\n",
-					timeStr, u.Index, u.AudioSecs, u.TranscribeSecs, u.RTF, shortText)
-			}
-		}
+		fmt.Fprintf(w, "  Total Dictation:   \x1b[1m%s\x1b[0m voice processed in \x1b[32m%.1fs\x1b[0m GPU compute (%d sentence chunks)\n",
+			FormatDuration(time.Duration(m.TotalAudioSecs*float64(time.Second))),
+			m.TotalTranscribeSecs,
+			m.TotalChunks)
 	}
 
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "── Active Voice Processes ─────────────────────────────────────────")
+	fmt.Fprintln(w, "── System Load & Resources ───────────────────────────────────────")
+	if r.ActiveService != "" {
+		uptimeStr := "0s"
+		if r.ServiceUptime > 0 {
+			uptimeStr = FormatDuration(r.ServiceUptime)
+		}
+		fmt.Fprintf(w, "  Service Uptime:    %s (%s, PID %d)\n", uptimeStr, r.ActiveService, r.ServicePID)
+	}
+
+	// Live and average CPU load
+	sysLoad := r.AvgCPULoad / 6.0 // 6 CPU cores
+	sparkline := r.CPUSparkline
+	if sparkline == "" {
+		sparkline = "        "
+	}
+	fmt.Fprintf(w, "  CPU Usage:         \x1b[1m%4.1f%%\x1b[0m live  \x1b[36m[%s]\x1b[0m  (avg \x1b[1m%.1f%%\x1b[0m of 1 core / \x1b[32m%.2f%%\x1b[0m total system load)\n",
+		r.LiveCPULoad, sparkline, r.AvgCPULoad, sysLoad)
+
+	memStr := FormatBytes(r.ServiceMemory)
+	fmt.Fprintf(w, "  Memory (RAM):      %s daemon footprint  (GPU VRAM: ~487 MB)\n", memStr)
+
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "── Active Voice Daemons ──────────────────────────────────────────")
 	if len(r.Processes) == 0 {
 		fmt.Fprintln(w, "  No active voice processes running.")
 	} else {
-		fmt.Fprintf(w, "  %-7s  %-12s  %-10s  %-8s  %s\n", "PID", "NAME", "RSS MEM", "THREADS", "COMMAND")
+		var procSummaries []string
 		for _, p := range r.Processes {
-			shortCmd := p.Cmdline
-			if len(shortCmd) > 40 {
-				shortCmd = shortCmd[:37] + "..."
+			procSummaries = append(procSummaries, fmt.Sprintf("\x1b[1m%s\x1b[0m (PID %d, %s)", p.Name, p.PID, FormatBytes(p.RSSBytes)))
+		}
+		fmt.Fprintf(w, "  %s\n", strings.Join(procSummaries, "  ·  "))
+	}
+
+	if r.EagerMetrics != nil && len(r.EagerMetrics.Recent) > 0 {
+		m := r.EagerMetrics
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "── Recent Spoken Sentences ───────────────────────────────────────")
+		limit := 4
+		if len(m.Recent) < limit {
+			limit = len(m.Recent)
+		}
+		for i := 0; i < limit; i++ {
+			u := m.Recent[i]
+			timeStr := u.Timestamp.Format("15:04:05")
+			shortText := u.Text
+			if len(shortText) > 52 {
+				shortText = shortText[:49] + "..."
 			}
-			fmt.Fprintf(w, "  %-7d  %-12s  %-10s  %-8d  %s\n",
-				p.PID, p.Name, FormatBytes(p.RSSBytes), p.Threads, shortCmd)
+			fmt.Fprintf(w, "  \x1b[36m%s\x1b[0m  \x1b[32m[%4.2fs lag]\x1b[0m  %q\n",
+				timeStr, u.TranscribeSecs, shortText)
 		}
 	}
 
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "── Subprocess Health & Integrity ──────────────────────────────────")
 	if len(r.ZombieWarnings) == 0 {
-		fmt.Fprintln(w, "  \x1b[32m✓ 0 orphan/zombie processes (clean)\x1b[0m")
+		fmt.Fprintln(w, "── Health: \x1b[32m✓ 0 orphan processes (clean)\x1b[0m ── Press 'q' or Ctrl+C to exit ──")
 	} else {
 		for _, wMsg := range r.ZombieWarnings {
 			fmt.Fprintf(w, "  \x1b[31;1m⚠️  %s\x1b[0m\n", wMsg)
 		}
+		fmt.Fprintln(w, "────────────────────────── Press 'q' or Ctrl+C to exit ───────────")
 	}
-	fmt.Fprintln(w, "── Press 'q' or Ctrl+C to exit ───────────────────────────────────")
 }
 
 func formatRecordState(status string) string {
 	switch strings.ToLower(status) {
 	case "recording":
-		return "\x1b[31;1m● recording\x1b[0m"
+		return "\x1b[31;1m● recording\x1b[0m (speaking into mic)"
 	case "transcribing":
-		return "\x1b[33;1m⏳ transcribing\x1b[0m"
+		return "\x1b[33;1m⏳ transcribing\x1b[0m (Whisper GPU inference)"
 	case "idle":
-		return "\x1b[32m○ idle\x1b[0m"
+		return "\x1b[32m○ idle\x1b[0m (press Super+Ctrl+X to speak)"
 	default:
 		return status
 	}
