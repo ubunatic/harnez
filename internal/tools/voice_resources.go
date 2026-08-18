@@ -41,6 +41,10 @@ type VoiceResourceReport struct {
 	AvgCPULoad     float64
 	LiveCPULoad    float64
 	CPUSparkline   string
+	LiveGPULoad    float64
+	GPUSparkline   string
+	VRAMUsedBytes  int64
+	VRAMTotalBytes int64
 	GPUAccel       string
 	ActiveModel    string
 	Processes      []ProcessResource
@@ -49,35 +53,33 @@ type VoiceResourceReport struct {
 }
 
 var (
-	cpuHistoryLock sync.Mutex
-	cpuHistory     []float64
-	lastSampleTime time.Time
-	lastSampleCPU  time.Duration
+	loadHistoryLock sync.Mutex
+	cpuHistory      []float64
+	gpuHistory      []float64
+	lastSampleTime  time.Time
+	lastSampleCPU   time.Duration
 )
 
 var sparkRunes = []rune{' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 
-// RenderSparkline converts a float slice into a Unicode sparkline.
+// RenderSparkline converts a float slice into a smoothed Unicode sparkline.
 func RenderSparkline(values []float64, maxVal float64) string {
 	if len(values) == 0 {
-		return "        "
+		return "            "
 	}
 	if maxVal <= 0 {
-		for _, v := range values {
-			if v > maxVal {
-				maxVal = v
-			}
-		}
-	}
-	if maxVal <= 0 {
-		maxVal = 10.0
+		maxVal = 100.0
 	}
 
 	var sb strings.Builder
 	for _, v := range values {
+		if v <= 0 {
+			sb.WriteString(" ")
+			continue
+		}
 		idx := int((v / maxVal) * float64(len(sparkRunes)-1))
-		if idx < 0 {
-			idx = 0
+		if idx < 1 {
+			idx = 1
 		}
 		if idx >= len(sparkRunes) {
 			idx = len(sparkRunes) - 1
@@ -172,8 +174,8 @@ func CollectVoiceResources(ctx context.Context, d Dependencies) VoiceResourceRep
 		collectServiceMetrics(ctx, d, activeUnit, &report)
 	}
 
-	// Calculate CPU history and sparkline
-	cpuHistoryLock.Lock()
+	// Calculate CPU & GPU load history and sparklines
+	loadHistoryLock.Lock()
 	now := time.Now()
 	if !lastSampleTime.IsZero() && report.ServiceCPU > 0 {
 		deltaWall := now.Sub(lastSampleTime).Seconds()
@@ -189,8 +191,20 @@ func CollectVoiceResources(ctx context.Context, d Dependencies) VoiceResourceRep
 	}
 	lastSampleTime = now
 	lastSampleCPU = report.ServiceCPU
-	report.CPUSparkline = RenderSparkline(cpuHistory, 25.0)
-	cpuHistoryLock.Unlock()
+	report.CPUSparkline = RenderSparkline(cpuHistory, 50.0)
+
+	// Query AMD GPU load & VRAM
+	if gpuLoad, vramUsed, vramTotal, err := getAMDGPUUsage(); err == nil {
+		report.LiveGPULoad = gpuLoad
+		report.VRAMUsedBytes = vramUsed
+		report.VRAMTotalBytes = vramTotal
+		gpuHistory = append(gpuHistory, gpuLoad)
+		if len(gpuHistory) > 12 {
+			gpuHistory = gpuHistory[len(gpuHistory)-12:]
+		}
+		report.GPUSparkline = RenderSparkline(gpuHistory, 100.0)
+	}
+	loadHistoryLock.Unlock()
 
 	// Load live streaming transcription speed metrics
 	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
@@ -469,6 +483,26 @@ func FormatDuration(d time.Duration) string {
 	return fmt.Sprintf("%ds", s)
 }
 
+func getAMDGPUUsage() (busyPercent float64, vramUsed int64, vramTotal int64, err error) {
+	cards, _ := filepath.Glob("/sys/class/drm/card*/device/gpu_busy_percent")
+	for _, cardPath := range cards {
+		if content, err := os.ReadFile(cardPath); err == nil {
+			if val, err := strconv.ParseFloat(strings.TrimSpace(string(content)), 64); err == nil {
+				busyPercent = val
+				dir := filepath.Dir(cardPath)
+				if usedB, err := os.ReadFile(filepath.Join(dir, "mem_info_vram_used")); err == nil {
+					vramUsed, _ = strconv.ParseInt(strings.TrimSpace(string(usedB)), 10, 64)
+				}
+				if totalB, err := os.ReadFile(filepath.Join(dir, "mem_info_vram_total")); err == nil {
+					vramTotal, _ = strconv.ParseInt(strings.TrimSpace(string(totalB)), 10, 64)
+				}
+				return busyPercent, vramUsed, vramTotal, nil
+			}
+		}
+	}
+	return 0, 0, 0, fmt.Errorf("no AMD GPU sysfs found")
+}
+
 // PrintVoiceResourceReport writes a formatted terminal report of voice resources.
 func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport) {
 	fmt.Fprintln(w, "── Voice Input Status ────────────────────────────────────────────")
@@ -509,13 +543,25 @@ func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport) {
 	sysLoad := r.AvgCPULoad / 6.0 // 6 CPU cores
 	sparkline := r.CPUSparkline
 	if sparkline == "" {
-		sparkline = "        "
+		sparkline = "            "
 	}
 	fmt.Fprintf(w, "  CPU Usage:         \x1b[1m%4.1f%%\x1b[0m live  \x1b[36m[%s]\x1b[0m  (avg \x1b[1m%.1f%%\x1b[0m of 1 core / \x1b[32m%.2f%%\x1b[0m total system load)\n",
 		r.LiveCPULoad, sparkline, r.AvgCPULoad, sysLoad)
 
+	// Live GPU load & VRAM
+	gpuSpark := r.GPUSparkline
+	if gpuSpark == "" {
+		gpuSpark = "            "
+	}
+	fmt.Fprintf(w, "  GPU Usage:         \x1b[1m%4.1f%%\x1b[0m live  \x1b[35m[%s]\x1b[0m  (%s)\n",
+		r.LiveGPULoad, gpuSpark, r.GPUAccel)
+
 	memStr := FormatBytes(r.ServiceMemory)
-	fmt.Fprintf(w, "  Memory (RAM):      %s daemon footprint  (GPU VRAM: ~487 MB)\n", memStr)
+	vramStr := "487 MB (Whisper)"
+	if r.VRAMUsedBytes > 0 && r.VRAMTotalBytes > 0 {
+		vramStr = fmt.Sprintf("%s / %s", FormatBytes(r.VRAMUsedBytes), FormatBytes(r.VRAMTotalBytes))
+	}
+	fmt.Fprintf(w, "  Memory:            %s daemon RAM  ·  %s GPU VRAM\n", memStr, vramStr)
 
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "── Active Voice Daemons ──────────────────────────────────────────")
