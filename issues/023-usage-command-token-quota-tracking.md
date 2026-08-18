@@ -1,6 +1,6 @@
 # 023 — `harnez usage`: Unified Token, Session & Quota Status Command
 
-**Status**: Prototype implemented & verified  
+**Status**: Implemented & verified; `--watch` live view added 2026-08-18 (uncommitted, see update below)  
 **Category**: Feature / CLI Tooling  
 **Command**: `harnez usage` (aliases/related: `quota`, `tokens`, `stats`)  
 
@@ -174,4 +174,24 @@ CLAUDE AND GPT MODELS
 
 1. Integrate status bar snippets (e.g., tmux or Waybar modules) consuming `harnez usage --json`.
 2. Support API pay-per-token spending caps (OpenAI / Anthropic developer API keys) in addition to subscription tiers.
+
+## Update 2026-08-18: `--watch` live view added
+
+Added `harnez usage --watch` (`internal/usage/watch.go`): a live-refreshing, btop-style grid of
+per-agent panels with per-panel toggle keys (embedded in each panel's own title bar), a tokens/min
+sparkline, and a `--interval` flag (default 60s, floored at 30s) so the live view can't be pointed
+at live quota APIs faster than the data changes. Also fixed a real bug in the AGY collector
+(`internal/usage/agy.go`): the Antigravity CLI listens on two loopback ports and the original
+port-discovery only TCP-probed before picking one, silently dropping quota data about half the
+time — now tries every candidate port until the RPC actually answers.
+
+Full writeup, including a three-theory debugging saga on a terminal-rendering bug in the watch
+view (stale-content bleed + gutter off-by-one, not the glyph-width issues initially suspected):
+[docs/studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md](../docs/studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md).
+
+Discovered along the way and tracked separately: AGY and Codex have no local token-count source
+to populate the watch view's token toggle from — see
+[Issue 030](030-agy-codex-missing-local-token-counts.md).
+
+**This work is uncommitted as of this update** — see the study doc §6.
 

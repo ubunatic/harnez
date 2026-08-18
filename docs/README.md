@@ -43,6 +43,7 @@ Generated copies land here (root) after `apply` / `init`.
 | [studies/Worktrees.md](studies/Worktrees.md) | Parallel worktrees case study (go.mod races, dependencies) |
 | [studies/2026-08-16-harnez-migration-and-workspace-unification.md](studies/2026-08-16-harnez-migration-and-workspace-unification.md) | Harnez migration, Spec generalization & workspace diagnostics case study |
 | [studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md](studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md) | Multi-agent token, session & quota monitoring case study (Claude Code, AGY, Codex) |
+| [studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md](studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md) | `harnez usage --watch` TUI build + a three-theory terminal-rendering bug postmortem (stale redraw, gutter math, when to escalate to real pty/VT100 testing) |
 
 **`docs/feedback/`** — agentic retrospectives & harness feedback reports
 
