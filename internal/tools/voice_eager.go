@@ -311,7 +311,7 @@ var (
 	rfc3339TimeRe  = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}`)
 	quoteExtractRe  = regexp.MustCompile(`Transcription completed in [^:]+:\s*"([^"]*)"`)
 	urlPatternRe    = regexp.MustCompile(`(?i)\b(https?://|www\.)[a-z0-9-]+\.[a-z]+`)
-	hallucinationRe = regexp.MustCompile(`(?i)^\s*(thank you for watching|thanks for watching|thank you\.|thanks for listening|please subscribe|subscribe to my channel|see you next time|see you in the next video|subtitles by.*|translated by.*|like and subscribe|mcrun|mbc|learn english for free.*|.*engvid\.com.*)\s*[.!]?\s*$`)
+	hallucinationRe = regexp.MustCompile(`(?i)^\s*(thank you for watching|thanks for watching|thank you\.|thanks for listening|please subscribe|subscribe to my channel|see you next time|see you in the next video|subtitles by.*|translated by.*|like and subscribe|mcrun|mbc|learn english.*|.*engvid\.com.*)\s*[.!]?\s*$`)
 )
 
 // StripANSI removes all ANSI escape sequences from s.
@@ -359,7 +359,8 @@ func StripTrailingHallucinations(text string) string {
 		`(?i)\s*in the video[.!]*`,
 		`(?i)\s*in this video[.!]*`,
 		`(?i)\s*in today's video[.!]*`,
-		`(?i)\s*learn english for free[.!]*`,
+		`(?i)\s*learn english.*[.!]*`,
+		`(?i)\s*free-to-use tip[.!]*`,
 		`(?i)\s*www\.[a-z0-9-]+\.[a-z]+[.!]*`,
 		`(?i)\s*and like\.\s*thank you[.!]*`,
 	}
@@ -530,7 +531,6 @@ func runEagerCaptureSession(ctx context.Context, d Dependencies, opts EagerOptio
 			cmdArgs := []string{
 				"--model", modelName,
 				"--threads", "6",
-				"--initial-prompt", "Clean standard English dictation.",
 				"-q", "transcribe", wavPath,
 			}
 			cmd := exec.CommandContext(context.Background(), voxtypePath, cmdArgs...)
