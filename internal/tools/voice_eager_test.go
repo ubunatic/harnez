@@ -70,6 +70,9 @@ func TestIsSafeToType(t *testing.T) {
 		{"contains whisper_ prefix", "whisper_init_state: compute buffer", false},
 		{"contains audio format prefix", "Audio format: 16000 Hz", false},
 		{"contains ggml model path", "Loading /home/uwe/ggml-base.en.bin", false},
+		{"hallucination thank you for watching", "Thank you for watching.", false},
+		{"hallucination please subscribe", "Please subscribe", false},
+		{"hallucination mcrun", "mcrun", false},
 	}
 
 	for _, tt := range tests {
@@ -78,6 +81,15 @@ func TestIsSafeToType(t *testing.T) {
 				t.Errorf("IsSafeToType(%q) = %v, want %v", tt.text, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestStripTrailingHallucinations(t *testing.T) {
+	input := "Let's see if all the sentences are completed at MCRUN. Thank you for watching."
+	cleaned := StripTrailingHallucinations(input)
+	expected := "Let's see if all the sentences are completed at"
+	if cleaned != expected {
+		t.Errorf("StripTrailingHallucinations = %q, want %q", cleaned, expected)
 	}
 }
 
@@ -95,6 +107,16 @@ The quick brown fox
 		text := CleanWhisperTranscript(rawOutput)
 		if text != "The quick brown fox" {
 			t.Errorf("CleanWhisperTranscript = %q, want %q", text, "The quick brown fox")
+		}
+	})
+
+	t.Run("with trailing hallucination", func(t *testing.T) {
+		rawOutput := `Transcription completed in 0.89s: "Hello world. Thank you for watching."
+Hello world. Thank you for watching.
+`
+		text := CleanWhisperTranscript(rawOutput)
+		if text != "Hello world." {
+			t.Errorf("CleanWhisperTranscript(trailing hallucination) = %q, want %q", text, "Hello world.")
 		}
 	})
 
