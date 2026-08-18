@@ -91,6 +91,7 @@ type VoiceResourceReport struct {
 	VRAMTotalBytes int64
 	GPUAccel       string
 	ActiveModel    string
+	ModifierStatus string
 	Processes      []ProcessResource
 	EagerMetrics   *EagerMetrics
 	ZombieWarnings []string
@@ -210,6 +211,23 @@ func CollectVoiceResources(ctx context.Context, d Dependencies) VoiceResourceRep
 		RecordStatus: recStatus,
 		GPUAccel:     detectGPUStatus(),
 		ActiveModel:  detectActiveModel(d),
+	}
+
+	// Query modifier daemon state from /run/harnez/modifiers (or user fallback)
+	modReader := NewModifierReader("")
+	if mask, err := modReader.ReadMask(); err == nil {
+		if _, statErr := os.Stat(modReader.path); statErr == nil {
+			if mask.AnyActive() {
+				names := mask.ShortNames()
+				report.ModifierStatus = fmt.Sprintf("\x1b[33;1m[%s]\x1b[0m", strings.Join(names, "+"))
+			} else {
+				report.ModifierStatus = "\x1b[32mneutral\x1b[0m"
+			}
+		} else {
+			report.ModifierStatus = "\x1b[90moff\x1b[0m"
+		}
+	} else {
+		report.ModifierStatus = "\x1b[90moff\x1b[0m"
 	}
 
 	activeUnit := ""
@@ -410,7 +428,7 @@ func detectActiveModel(d Dependencies) string {
 
 func collectVoiceProcesses() []ProcessResource {
 	var procs []ProcessResource
-	targets := []string{"harnez", "voxtype", "pw-record", "arecord", "dotoold"}
+	targets := []string{"harnez", "voxtype", "pw-record", "arecord", "dotoold", "harnez-modifierd"}
 
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
@@ -554,13 +572,93 @@ func getAMDGPUUsage() (busyPercent float64, vramUsed int64, vramTotal int64, err
 	return 0, 0, 0, fmt.Errorf("no AMD GPU sysfs found")
 }
 
-// TruncateLineANSI truncates a line to maxVisWidth visible characters while preserving ANSI escape sequences.
+// RuneDisplayWidth returns the visual column width of a single rune in terminal cells (0, 1, or 2).
+func RuneDisplayWidth(r rune) int {
+	if r < 32 || (r >= 0x7f && r < 0xa0) {
+		return 0
+	}
+	// Combining characters
+	if r >= 0x0300 && r <= 0x036F {
+		return 0
+	}
+	// East Asian Wide, Fullwidth, and Emoji ranges
+	if (r >= 0x1100 && r <= 0x115F) ||
+		(r >= 0x231A && r <= 0x231B) ||
+		(r >= 0x23E9 && r <= 0x23EC) ||
+		(r >= 0x23F0 && r <= 0x23F3) ||
+		(r >= 0x25FD && r <= 0x25FE) ||
+		(r >= 0x2614 && r <= 0x2615) ||
+		(r >= 0x2648 && r <= 0x2653) ||
+		(r >= 0x267F && r <= 0x267F) ||
+		(r >= 0x2693 && r <= 0x2693) ||
+		(r >= 0x26A0 && r <= 0x26A1) ||
+		(r >= 0x26AA && r <= 0x26AB) ||
+		(r >= 0x26BD && r <= 0x26BE) ||
+		(r >= 0x26C4 && r <= 0x26C5) ||
+		(r >= 0x26CE && r <= 0x26CF) ||
+		(r >= 0x26D4 && r <= 0x26D4) ||
+		(r >= 0x26EA && r <= 0x26EA) ||
+		(r >= 0x26F2 && r <= 0x26F3) ||
+		(r >= 0x26F5 && r <= 0x26F5) ||
+		(r >= 0x26FA && r <= 0x26FA) ||
+		(r >= 0x26FD && r <= 0x26FD) ||
+		(r >= 0x2702 && r <= 0x2702) ||
+		(r >= 0x2705 && r <= 0x2705) ||
+		(r >= 0x2708 && r <= 0x270D) ||
+		(r >= 0x270F && r <= 0x270F) ||
+		(r >= 0x2712 && r <= 0x2712) ||
+		(r >= 0x2714 && r <= 0x2714) ||
+		(r >= 0x2716 && r <= 0x2716) ||
+		(r >= 0x271D && r <= 0x271D) ||
+		(r >= 0x2721 && r <= 0x2721) ||
+		(r >= 0x2728 && r <= 0x2728) ||
+		(r >= 0x2733 && r <= 0x2734) ||
+		(r >= 0x2744 && r <= 0x2744) ||
+		(r >= 0x2747 && r <= 0x2747) ||
+		(r >= 0x274C && r <= 0x274C) ||
+		(r >= 0x274E && r <= 0x274E) ||
+		(r >= 0x2753 && r <= 0x2755) ||
+		(r >= 0x2757 && r <= 0x2757) ||
+		(r >= 0x2763 && r <= 0x2764) ||
+		(r >= 0x2795 && r <= 0x2797) ||
+		(r >= 0x27A1 && r <= 0x27A1) ||
+		(r >= 0x27B0 && r <= 0x27B0) ||
+		(r >= 0x27BF && r <= 0x27BF) ||
+		(r >= 0x2934 && r <= 0x2935) ||
+		(r >= 0x2B05 && r <= 0x2B07) ||
+		(r >= 0x2B1B && r <= 0x2B1C) ||
+		(r >= 0x2B50 && r <= 0x2B50) ||
+		(r >= 0x2B55 && r <= 0x2B55) ||
+		(r >= 0x2E80 && r <= 0x9FFF) ||
+		(r >= 0xAC00 && r <= 0xD7AF) ||
+		(r >= 0xF900 && r <= 0xFAFF) ||
+		(r >= 0xFE10 && r <= 0xFE19) ||
+		(r >= 0xFE30 && r <= 0xFE6F) ||
+		(r >= 0xFF01 && r <= 0xFF60) ||
+		(r >= 0xFFE0 && r <= 0xFFE6) ||
+		(r >= 0x1F000 && r <= 0x1F9FF) ||
+		(r >= 0x1FA00 && r <= 0x1FAFF) {
+		return 2
+	}
+	return 1
+}
+
+// StringDisplayWidth returns the visual column width of a string ignoring ANSI color codes.
+func StringDisplayWidth(s string) int {
+	clean := StripANSI(s)
+	width := 0
+	for _, r := range clean {
+		width += RuneDisplayWidth(r)
+	}
+	return width
+}
+
+// TruncateLineANSI truncates a line to maxVisWidth visible columns while preserving ANSI escape sequences.
 func TruncateLineANSI(s string, maxVisWidth int) string {
 	if maxVisWidth <= 3 {
 		return "..."
 	}
-	clean := StripANSI(s)
-	if len([]rune(clean)) <= maxVisWidth {
+	if StringDisplayWidth(s) <= maxVisWidth {
 		return s
 	}
 
@@ -585,9 +683,10 @@ func TruncateLineANSI(s string, maxVisWidth int) string {
 			continue
 		}
 
-		if visCount < targetVis {
+		w := RuneDisplayWidth(r)
+		if visCount+w <= targetVis {
 			sb.WriteRune(r)
-			visCount++
+			visCount += w
 		} else {
 			break
 		}
@@ -625,7 +724,7 @@ func RenderBoxLines(b BoxSpec) []string {
 	top.WriteString("╭─ ")
 	top.WriteString(b.Title)
 	top.WriteString(" ")
-	visTitleLen := len([]rune(StripANSI(b.Title))) + 4
+	visTitleLen := StringDisplayWidth(b.Title) + 4
 	rem := b.Width - visTitleLen - 1
 	if rem < 1 {
 		rem = 1
@@ -643,10 +742,10 @@ func RenderBoxLines(b BoxSpec) []string {
 	for _, l := range b.Lines {
 		var body strings.Builder
 		body.WriteString("│ ")
-		visLen := len([]rune(StripANSI(l)))
+		visLen := StringDisplayWidth(l)
 		if visLen > maxContentWidth {
 			l = TruncateLineANSI(l, maxContentWidth)
-			visLen = len([]rune(StripANSI(l)))
+			visLen = StringDisplayWidth(l)
 		}
 		body.WriteString(l)
 		pad := maxContentWidth - visLen
@@ -703,9 +802,13 @@ func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport, sec ResourceSe
 	colWidthRight := totalWidth - 1 - colWidthLeft
 
 	// Prepare [s]peed lines
+	modStr := r.ModifierStatus
+	if modStr == "" {
+		modStr = "\x1b[90moff\x1b[0m"
+	}
 	speedLines := []string{
 		fmt.Sprintf("status:  %s (%s / %s)", formatRecordState(r.RecordStatus), r.Mode, r.ActiveModel),
-		fmt.Sprintf("engine:  \x1b[32m%s\x1b[0m", r.GPUAccel),
+		fmt.Sprintf("engine:  \x1b[32m%s\x1b[0m  ·  mods: %s", r.GPUAccel, modStr),
 	}
 	if r.EagerMetrics != nil && r.EagerMetrics.TotalChunks > 0 {
 		m := r.EagerMetrics
@@ -802,7 +905,7 @@ func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport, sec ResourceSe
 					fmt.Sprintf("\x1b[36m%s\x1b[0m  \x1b[32m[%4.2fs]\x1b[0m  %q", timeStr, u.TranscribeSecs, shortText))
 			}
 		} else {
-			transLines = append(transLines, "\x1b[90m(no transcriptions yet - speak with Super+Ctrl+X to dictate)\x1b[0m")
+			transLines = append(transLines, "\x1b[90m(no transcriptions yet - speak with Super+X to dictate)\x1b[0m")
 		}
 		boxTrans := BoxSpec{Title: "\x1b[1m[t] transcript feed\x1b[0m", Lines: transLines, Width: totalWidth}
 		for _, line := range RenderBoxLines(boxTrans) {

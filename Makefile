@@ -35,8 +35,17 @@ install-debug: ⚙️ build-debug  # install debug binary with canary/VAD probe 
 install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wide)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
 
+build-modifierd: ⚙️  # build the modifier daemon binary
+	go build -o harnez-modifierd ./cmd/harnez-modifierd
+
+install-modifierd: ⚙️ build-modifierd  # install harnez-modifierd and enable system service via sudo
+	sudo install -m 0755 harnez-modifierd $(PREFIX)/bin/harnez-modifierd
+	sudo cp systemd/harnez-modifierd.service /etc/systemd/system/
+	sudo systemctl daemon-reload
+	sudo systemctl enable --now harnez-modifierd.service
+
 uninstall: ⚙️  # remove installed binary from system and user paths
-	rm -f $(shell which $(BINARY) 2>/dev/null) $(PREFIX)/bin/$(BINARY)
+	rm -f $(shell which $(BINARY) 2>/dev/null) $(PREFIX)/bin/$(BINARY) $(PREFIX)/bin/harnez-modifierd
 
 apply: ⚙️ build  # apply config to ~/.claude globally
 	./$(BINARY) apply -c $(CONFIG) -t $(TARGET)

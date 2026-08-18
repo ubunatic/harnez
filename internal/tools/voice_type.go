@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // BuildDotoolCommands renders the dotool script-language command stream for
@@ -72,6 +73,12 @@ func dotoolDaemonReady(path string) bool {
 func TypeText(ctx context.Context, d Dependencies, text string) error {
 	if text == "" {
 		return nil
+	}
+
+	// Gate on active physical modifier keys: wait up to 5s for user to release modifiers (e.g. Ctrl, Alt, Super)
+	// before injecting keystrokes to prevent unintentional hotkey collisions.
+	if reader := NewModifierReader(""); reader != nil {
+		_ = reader.WaitModifiersReleased(ctx, 5*time.Second)
 	}
 	typeDelayMs := 0
 	if home := d.Getenv("HOME"); home != "" {

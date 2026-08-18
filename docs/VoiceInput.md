@@ -60,7 +60,7 @@ files from user-owned files.
 - `voxtype-streaming.service` for opt-in streaming (Parakeet ONNX, typed incrementally)
 - `harnez-voice-eager.service` for continuous eager sentence streaming (rolling Whisper inference, 0 pause drops)
 
-`harnez tools voice-input record toggle` acts as a universal toggle for all 3 modes, allowing a single global shortcut (`Super+Ctrl+X`) to control whichever mode is currently active.
+`harnez tools voice-input record toggle` acts as a universal toggle for all 3 modes, allowing a single global shortcut (`Super+X`) to control whichever mode is currently active.
 
 ## Security note: uinput access is not gated by voice input
 
@@ -86,7 +86,7 @@ carefully.
 ## Hardware canary
 
 The Fedora 44 GNOME Wayland canary fully passed as of 2026-08-17. Microphone capture,
-local transcription, the `Super+Ctrl+X` toggle, and direct text injection (verified in
+local transcription, the `Super+X` toggle, and direct text injection (verified in
 a terminal and in Prime Agent's own input field) all work. GNOME text injection needed
 a user systemd `dotoold` daemon (`DOTOOL_XKB_LAYOUT=de`) for the fast, reliable
 `dotoolc` path, plus `language_to_layout = {}` in Voxtype's config to stop it
@@ -203,5 +203,19 @@ To bridge the gap between high-accuracy batch Whisper and low-latency streaming 
 - Dynamically queries terminal columns (`stty size` / `getTerminalWidth()`) and scales 2-column top boxes to match the terminal window.
 - Clamps every line with ANSI-aware truncation (`TruncateLineANSI`) ensuring 100% pixel-perfect vertical border alignment (`│`) without text wrapping.
 
+## Dedicated Modifier Daemon (`harnez-modifierd`)
 
-
+To prevent synthetic keystrokes from clashing with held modifier keys (e.g. typing while the user is pressing `Ctrl`, `Alt`, `Super`, or `Shift`), `harnez` provides a dedicated physical modifier daemon:
+- **Daemon (`harnez-modifierd` / `harnez tools daemon modifier-service`)**:
+  - Discovers all physical keyboard devices via `/dev/input/event*` using `evdev` `EVIOCGBIT` ioctl.
+  - Monitors physical modifier keys (`Left/Right Ctrl`, `Left/Right Alt`, `Left/Right Super`, `Left/Right Shift`).
+  - Exports instantaneous modifier state as a 1-byte bitmask to `/run/harnez/modifiers` (`0644`).
+  - **Zero Keylogging Guarantee**: Non-modifier keys are never inspected, recorded, or exported.
+- **Client Reader (`ModifierReader`)**:
+  - Single-byte file read (<10ns latency, zero IPC overhead).
+  - Automatically gates `TypeText` in `internal/tools/voice_type.go` and `voice_eager.go`, pausing keystroke emission until all physical modifiers are released.
+- **System Installation**:
+  ```bash
+  sudo make install-modifierd
+  ```
+  Installs `/usr/local/bin/harnez-modifierd` and enables the systemd service `/etc/systemd/system/harnez-modifierd.service` (`DeviceAllow=char-input r`, `SupplementaryGroups=input`).

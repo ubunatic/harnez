@@ -63,8 +63,18 @@ func NewCommand(specFS fs.FS, d Dependencies) (*cobra.Command, error) {
 	install.Flags().StringVar(&options.Scope, "scope", "user", "installation scope (user or system)")
 	install.Flags().BoolVar(&options.DryRun, "dry-run", false, "print the plan without network access or changes")
 	install.Flags().BoolVarP(&options.Yes, "yes", "y", false, "approve the printed plan noninteractively")
-	cmd.AddCommand(status, install, newVoiceInputCommand(d))
+	cmd.AddCommand(status, install, newVoiceInputCommand(d), newDaemonCommand(d))
 	return cmd, nil
+}
+
+// newDaemonCommand groups background service daemons managed by harnez (e.g. modifier-service).
+func newDaemonCommand(d Dependencies) *cobra.Command {
+	daemon := &cobra.Command{
+		Use:   "daemon",
+		Short: "Run background daemons managed by harnez",
+	}
+	daemon.AddCommand(NewModifierDaemonCommand(d))
+	return daemon
 }
 
 // newVoiceInputCommand groups voice-input host-state commands that are

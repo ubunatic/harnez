@@ -86,12 +86,13 @@ func TestRenderBoxLinesNoOverflow(t *testing.T) {
 			"Short line",
 			"This is an extraordinarily long line that would normally overflow the box width and break the right border!",
 			"\x1b[32mColored extraordinarily long line that contains ANSI escape codes\x1b[0m",
+			"Line with emoji ⛔ and warning ⚠️ and check ✓",
 		},
 		Width: 50,
 	}
 	lines := RenderBoxLines(box)
 	for i, line := range lines {
-		visLen := len([]rune(StripANSI(line)))
+		visLen := StringDisplayWidth(line)
 		if visLen != box.Width {
 			t.Errorf("line %d visible width = %d, want exact %d: %q", i, visLen, box.Width, line)
 		}
