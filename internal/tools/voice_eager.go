@@ -354,7 +354,6 @@ func StripTrailingHallucinations(text string) string {
 		`(?i)\s*in the video[.!]*`,
 		`(?i)\s*in this video[.!]*`,
 		`(?i)\s*in today's video[.!]*`,
-		`(?i)\s*spoken \w+ times in the video[.!]*`,
 	}
 	for _, p := range patterns {
 		re := regexp.MustCompile(p)

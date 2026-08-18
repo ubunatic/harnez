@@ -91,6 +91,13 @@ func TestStripTrailingHallucinations(t *testing.T) {
 	if cleaned != expected {
 		t.Errorf("StripTrailingHallucinations = %q, want %q", cleaned, expected)
 	}
+
+	input2 := "spoken three times in the video."
+	cleaned2 := StripTrailingHallucinations(input2)
+	expected2 := "spoken three times"
+	if cleaned2 != expected2 {
+		t.Errorf("StripTrailingHallucinations = %q, want %q", cleaned2, expected2)
+	}
 }
 
 func TestCleanWhisperTranscript(t *testing.T) {
