@@ -115,9 +115,9 @@ func TestParseSections(t *testing.T) {
 		t.Errorf("expected all sections enabled, got %+v", all)
 	}
 
-	custom := ParseSections("1,3")
+	custom := ParseSections("s,t")
 	if !custom.Speed || custom.Hardware || !custom.Transcript || custom.Daemons {
-		t.Errorf("expected only 1 and 3 enabled, got %+v", custom)
+		t.Errorf("expected only s and t enabled, got %+v", custom)
 	}
 
 	named := ParseSections("hardware,daemons")
@@ -139,7 +139,7 @@ func TestPrintVoiceResourceReport(t *testing.T) {
 		AvgCPULoad:    5.0,
 		LiveCPULoad:   1.2,
 		CPUSparkline:  " ▂▃▅",
-		GPUAccel:      "AMD Radeon Graphics (Vulkan 1.4 GPU)",
+		GPUAccel:      "AMD Radeon Vulkan 1.4",
 		ActiveModel:   "small.en",
 		Processes: []ProcessResource{
 			{PID: 714116, Name: "harnez", Cmdline: "harnez tools voice-input eager --daemon", RSSBytes: 8 * 1024 * 1024, Threads: 12},
@@ -166,15 +166,15 @@ func TestPrintVoiceResourceReport(t *testing.T) {
 
 	var buf bytes.Buffer
 	PrintVoiceResourceReport(&buf, report, DefaultResourceSections())
-	out := buf.String()
+	out := StripANSI(buf.String())
 
-	if !strings.Contains(out, "Mode:") || !strings.Contains(out, "eager") {
+	if !strings.Contains(out, "status:") || !strings.Contains(out, "eager") {
 		t.Errorf("Report missing active mode: %s", out)
 	}
-	if !strings.Contains(out, "0 orphan processes (clean)") {
-		t.Errorf("Report missing health status: %s", out)
+	if !strings.Contains(out, "[s]peed") || !strings.Contains(out, "[h]ardware") {
+		t.Errorf("Report missing footer buttons: %s", out)
 	}
-	if !strings.Contains(out, "Typing Speed:") {
-		t.Errorf("Report missing typing speed: %s", out)
+	if !strings.Contains(out, "speed:") {
+		t.Errorf("Report missing speed line: %s", out)
 	}
 }

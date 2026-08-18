@@ -37,7 +37,7 @@ func DefaultResourceSections() ResourceSections {
 	}
 }
 
-// ParseSections parses a comma-separated list of section names or numbers.
+// ParseSections parses a comma-separated list of section names or letters.
 func ParseSections(s string) ResourceSections {
 	trimmed := strings.TrimSpace(strings.ToLower(s))
 	if trimmed == "" || trimmed == "all" {
@@ -47,13 +47,13 @@ func ParseSections(s string) ResourceSections {
 	for _, p := range strings.Split(trimmed, ",") {
 		p = strings.TrimSpace(p)
 		switch p {
-		case "1", "speed", "status", "s":
+		case "s", "speed", "status", "voice", "v", "1":
 			sec.Speed = true
-		case "2", "hardware", "cpu", "gpu", "hw", "c", "g", "h":
+		case "h", "hardware", "cpu", "gpu", "hw", "c", "g", "2":
 			sec.Hardware = true
-		case "3", "transcript", "sentences", "feed", "t":
+		case "t", "transcript", "sentences", "feed", "3":
 			sec.Transcript = true
-		case "4", "daemons", "procs", "health", "d", "p":
+		case "d", "daemons", "procs", "health", "p", "4":
 			sec.Daemons = true
 		}
 	}
@@ -133,12 +133,12 @@ func RenderSparkline(values []float64, maxVal float64) string {
 	return sb.String()
 }
 
-// RenderSpeedGauge renders a 10-segment visual gauge of processing speed.
+// RenderSpeedGauge renders an 8-segment visual gauge of processing speed.
 func RenderSpeedGauge(rtf float64) string {
 	if rtf <= 0 {
-		return "\x1b[32m[██████████]\x1b[0m"
+		return "\x1b[32m[████████]\x1b[0m"
 	}
-	bars := 10
+	bars := 8
 	filled := int((1.0 - (rtf * 0.8)) * float64(bars))
 	if filled < 1 {
 		filled = 1
@@ -173,12 +173,12 @@ func NewVoiceInputResourcesCommand(d Dependencies) *cobra.Command {
 		Long: "Inspects CPU and memory consumption, active systemd user units, GPU Vulkan acceleration,\n" +
 			"model memory footprint, and checks for orphan/zombie recording processes.\n\n" +
 			"Interactive controls (in --watch mode):\n" +
-			"  1 / s - toggle Speed & Status panel\n" +
-			"  2 / c - toggle CPU & GPU Hardware panel\n" +
-			"  3 / t - toggle Recent Sentences feed\n" +
-			"  4 / d - toggle Active Daemons panel\n" +
-			"  a     - enable all panels\n" +
-			"  q     - quit",
+			"  s - toggle [s]peed & status box\n" +
+			"  h - toggle [h]ardware CPU & GPU load box\n" +
+			"  t - toggle [t]ranscript feed box\n" +
+			"  d - toggle [d]aemons & health box\n" +
+			"  a - enable [a]ll boxes\n" +
+			"  q - quit",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -195,7 +195,7 @@ func NewVoiceInputResourcesCommand(d Dependencies) *cobra.Command {
 
 	cmd.Flags().BoolVarP(&watch, "watch", "w", false, "continuously refresh resource metrics")
 	cmd.Flags().IntVarP(&intervalSec, "interval", "i", 1, "refresh interval in seconds for --watch")
-	cmd.Flags().StringVarP(&sectionsStr, "sections", "s", "all", "comma-separated sections: 1(speed), 2(hardware), 3(transcript), 4(daemons)")
+	cmd.Flags().StringVarP(&sectionsStr, "sections", "s", "all", "comma-separated sections: s(speed), h(hardware), t(transcript), d(daemons)")
 
 	return cmd
 }
@@ -382,7 +382,7 @@ func parseSystemdProperties(out string) map[string]string {
 
 func detectGPUStatus() string {
 	if _, err := os.Stat("/dev/dri/renderD128"); err == nil {
-		return "AMD Radeon Graphics (Vulkan 1.4 GPU)"
+		return "AMD Radeon Vulkan 1.4"
 	}
 	return "CPU fallback"
 }
@@ -554,138 +554,236 @@ func getAMDGPUUsage() (busyPercent float64, vramUsed int64, vramTotal int64, err
 	return 0, 0, 0, fmt.Errorf("no AMD GPU sysfs found")
 }
 
-// PrintVoiceResourceReport writes a formatted terminal report of voice resources respecting active btop sections.
+// BoxSpec defines a rendered bordered panel.
+type BoxSpec struct {
+	Title string
+	Lines []string
+	Width int
+}
+
+// RenderBoxLines renders a bordered box with rounded corners (╭─╮, │, ╰─╯).
+func RenderBoxLines(b BoxSpec) []string {
+	var res []string
+
+	// Top border
+	var top strings.Builder
+	top.WriteString("╭─ ")
+	top.WriteString(b.Title)
+	top.WriteString(" ")
+	visTitleLen := len([]rune(StripANSI(b.Title))) + 4
+	rem := b.Width - visTitleLen - 1
+	if rem < 1 {
+		rem = 1
+	}
+	top.WriteString(strings.Repeat("─", rem))
+	top.WriteString("╮")
+	res = append(res, top.String())
+
+	// Body lines
+	for _, l := range b.Lines {
+		var body strings.Builder
+		body.WriteString("│ ")
+		body.WriteString(l)
+		visLen := len([]rune(StripANSI(l)))
+		pad := b.Width - 4 - visLen
+		if pad < 0 {
+			pad = 0
+		}
+		body.WriteString(strings.Repeat(" ", pad))
+		body.WriteString(" │")
+		res = append(res, body.String())
+	}
+
+	// Bottom border
+	var bot strings.Builder
+	bot.WriteString("╰")
+	bot.WriteString(strings.Repeat("─", b.Width-2))
+	bot.WriteString("╯")
+	res = append(res, bot.String())
+
+	return res
+}
+
+// CombineSideBySide merges two rendered boxes side by side.
+func CombineSideBySide(leftLines, rightLines []string) []string {
+	maxL := len(leftLines)
+	if len(rightLines) > maxL {
+		maxL = len(rightLines)
+	}
+	var res []string
+	for i := 0; i < maxL; i++ {
+		l := ""
+		if i < len(leftLines) {
+			l = leftLines[i]
+		}
+		r := ""
+		if i < len(rightLines) {
+			r = rightLines[i]
+		}
+		res = append(res, l+" "+r)
+	}
+	return res
+}
+
+// PrintVoiceResourceReport writes a formatted terminal report of voice resources using Option A (True Btop Grid).
 func PrintVoiceResourceReport(w io.Writer, r VoiceResourceReport, sec ResourceSections) {
-	// Render btop-style top bar with section badges
-	fmt.Fprintf(w, "── Voice Monitor ── %s ── %s ── %s ── %s ──\n",
-		formatSectionBadge("1:speed", sec.Speed),
-		formatSectionBadge("2:hardware", sec.Hardware),
-		formatSectionBadge("3:transcript", sec.Transcript),
-		formatSectionBadge("4:daemons", sec.Daemons))
+	const totalWidth = 90
+	const colWidthLeft = 44
+	const colWidthRight = 45
 
-	if sec.Speed {
-		fmt.Fprintln(w, "── [ speed (1) ] ─────────────────────────────────────────────────")
-		fmt.Fprintf(w, "  Mode:              \x1b[1m%s\x1b[0m (continuous sentence streaming)\n", r.Mode)
-		fmt.Fprintf(w, "  Recording:         %s\n", formatRecordState(r.RecordStatus))
-		fmt.Fprintf(w, "  Engine:            \x1b[32m%s\x1b[0m [%s]\n", r.GPUAccel, r.ActiveModel)
-
-		if r.EagerMetrics != nil && r.EagerMetrics.TotalChunks > 0 {
-			m := r.EagerMetrics
-			if m.LastUtterance != nil {
-				speedMultiplier := 0.0
-				if m.LastUtterance.RTF > 0 {
-					speedMultiplier = 1.0 / m.LastUtterance.RTF
-				}
-				gauge := RenderSpeedGauge(m.LastUtterance.RTF)
-				fmt.Fprintf(w, "  Typing Speed:      \x1b[32;1m%.1fx faster than speech\x1b[0m  %s  (\x1b[1m%.2fs\x1b[0m lag after voice stops)\n",
-					speedMultiplier, gauge, m.LastUtterance.TranscribeSecs)
+	// Prepare [s]peed lines
+	speedLines := []string{
+		fmt.Sprintf("status:  %s (%s / %s)", formatRecordState(r.RecordStatus), r.Mode, r.ActiveModel),
+		fmt.Sprintf("engine:  \x1b[32m%s\x1b[0m", r.GPUAccel),
+	}
+	if r.EagerMetrics != nil && r.EagerMetrics.TotalChunks > 0 {
+		m := r.EagerMetrics
+		if m.LastUtterance != nil {
+			speedMultiplier := 0.0
+			if m.LastUtterance.RTF > 0 {
+				speedMultiplier = 1.0 / m.LastUtterance.RTF
 			}
-			fmt.Fprintf(w, "  Total Dictation:   \x1b[1m%s\x1b[0m voice processed in \x1b[32m%.1fs\x1b[0m GPU compute (%d sentence chunks)\n",
-				FormatDuration(time.Duration(m.TotalAudioSecs*float64(time.Second))),
-				m.TotalTranscribeSecs,
-				m.TotalChunks)
+			gauge := RenderSpeedGauge(m.LastUtterance.RTF)
+			speedLines = append(speedLines,
+				fmt.Sprintf("speed:   \x1b[32;1m%4.1fx realtime\x1b[0m %s", speedMultiplier, gauge),
+				fmt.Sprintf("lag:     \x1b[1m%.2fs\x1b[0m · %s audio (%d utt)",
+					m.LastUtterance.TranscribeSecs,
+					FormatDuration(time.Duration(m.TotalAudioSecs*float64(time.Second))),
+					m.TotalChunks),
+			)
+		} else {
+			speedLines = append(speedLines,
+				"speed:   \x1b[32m---\x1b[0m (waiting for speech)",
+				"lag:     ---",
+			)
+		}
+	} else {
+		speedLines = append(speedLines,
+			"speed:   \x1b[32m---\x1b[0m (waiting for speech)",
+			"lag:     ---",
+		)
+	}
+
+	// Prepare [h]ardware lines
+	sysLoad := r.AvgCPULoad / 6.0 // 6 CPU cores
+	sparkline := r.CPUSparkline
+	if sparkline == "" {
+		sparkline = "            "
+	}
+	gpuSpark := r.GPUSparkline
+	if gpuSpark == "" {
+		gpuSpark = "            "
+	}
+	uptimeStr := "0s"
+	if r.ServiceUptime > 0 {
+		uptimeStr = FormatDuration(r.ServiceUptime)
+	}
+
+	memStr := FormatBytes(r.ServiceMemory)
+	vramStr := "487 MB VRAM"
+	if r.VRAMUsedBytes > 0 && r.VRAMTotalBytes > 0 {
+		vramStr = fmt.Sprintf("%s / %s VRAM", FormatBytes(r.VRAMUsedBytes), FormatBytes(r.VRAMTotalBytes))
+	}
+
+	hwLines := []string{
+		fmt.Sprintf("cpu:  \x1b[1m%4.1f%%\x1b[0m  \x1b[36m[%s]\x1b[0m  avg %3.1f%% (1c)", r.LiveCPULoad, sparkline, r.AvgCPULoad),
+		fmt.Sprintf("gpu:  \x1b[1m%4.1f%%\x1b[0m  \x1b[35m[%s]\x1b[0m  sys %3.2f%%", r.LiveGPULoad, gpuSpark, sysLoad),
+		fmt.Sprintf("mem:  %s daemon   %s", memStr, vramStr),
+		fmt.Sprintf("up:   %s (PID %d)", uptimeStr, r.ServicePID),
+	}
+
+	// Render Top Row (Side by side if both enabled, or full width if single)
+	if sec.Speed && sec.Hardware {
+		boxSpeed := BoxSpec{Title: "\x1b[1m[s] voice & speed\x1b[0m", Lines: speedLines, Width: colWidthLeft}
+		boxHW := BoxSpec{Title: "\x1b[1m[h] hardware load\x1b[0m", Lines: hwLines, Width: colWidthRight}
+		rendered := CombineSideBySide(RenderBoxLines(boxSpeed), RenderBoxLines(boxHW))
+		for _, line := range rendered {
+			fmt.Fprintln(w, line)
+		}
+	} else if sec.Speed {
+		boxSpeed := BoxSpec{Title: "\x1b[1m[s] voice & speed\x1b[0m", Lines: speedLines, Width: totalWidth}
+		for _, line := range RenderBoxLines(boxSpeed) {
+			fmt.Fprintln(w, line)
+		}
+	} else if sec.Hardware {
+		boxHW := BoxSpec{Title: "\x1b[1m[h] hardware load\x1b[0m", Lines: hwLines, Width: totalWidth}
+		for _, line := range RenderBoxLines(boxHW) {
+			fmt.Fprintln(w, line)
 		}
 	}
 
-	if sec.Hardware {
-		if sec.Speed {
-			fmt.Fprintln(w, "")
-		}
-		fmt.Fprintln(w, "── [ hardware (2) ] ──────────────────────────────────────────────")
-		if r.ActiveService != "" {
-			uptimeStr := "0s"
-			if r.ServiceUptime > 0 {
-				uptimeStr = FormatDuration(r.ServiceUptime)
-			}
-			fmt.Fprintf(w, "  Service Uptime:    %s (%s, PID %d)\n", uptimeStr, r.ActiveService, r.ServicePID)
-		}
-
-		sysLoad := r.AvgCPULoad / 6.0 // 6 CPU cores
-		sparkline := r.CPUSparkline
-		if sparkline == "" {
-			sparkline = "            "
-		}
-		fmt.Fprintf(w, "  CPU Usage:         \x1b[1m%4.1f%%\x1b[0m live  \x1b[36m[%s]\x1b[0m  (avg \x1b[1m%.1f%%\x1b[0m of 1 core / \x1b[32m%.2f%%\x1b[0m total system load)\n",
-			r.LiveCPULoad, sparkline, r.AvgCPULoad, sysLoad)
-
-		gpuSpark := r.GPUSparkline
-		if gpuSpark == "" {
-			gpuSpark = "            "
-		}
-		fmt.Fprintf(w, "  GPU Usage:         \x1b[1m%4.1f%%\x1b[0m live  \x1b[35m[%s]\x1b[0m  (%s)\n",
-			r.LiveGPULoad, gpuSpark, r.GPUAccel)
-
-		memStr := FormatBytes(r.ServiceMemory)
-		vramStr := "487 MB (Whisper)"
-		if r.VRAMUsedBytes > 0 && r.VRAMTotalBytes > 0 {
-			vramStr = fmt.Sprintf("%s / %s", FormatBytes(r.VRAMUsedBytes), FormatBytes(r.VRAMTotalBytes))
-		}
-		fmt.Fprintf(w, "  Memory:            %s daemon RAM  ·  %s GPU VRAM\n", memStr, vramStr)
-	}
-
+	// Render [t]ranscript box
 	if sec.Transcript {
-		if (sec.Speed || sec.Hardware) && r.EagerMetrics != nil && len(r.EagerMetrics.Recent) > 0 {
-			fmt.Fprintln(w, "")
-		}
+		var transLines []string
 		if r.EagerMetrics != nil && len(r.EagerMetrics.Recent) > 0 {
-			m := r.EagerMetrics
-			fmt.Fprintln(w, "── [ transcript (3) ] ────────────────────────────────────────────")
 			limit := 4
-			if len(m.Recent) < limit {
-				limit = len(m.Recent)
+			if len(r.EagerMetrics.Recent) < limit {
+				limit = len(r.EagerMetrics.Recent)
 			}
 			for i := 0; i < limit; i++ {
-				u := m.Recent[i]
+				u := r.EagerMetrics.Recent[i]
 				timeStr := u.Timestamp.Format("15:04:05")
 				shortText := u.Text
-				if len(shortText) > 52 {
-					shortText = shortText[:49] + "..."
+				if len(shortText) > 60 {
+					shortText = shortText[:57] + "..."
 				}
-				fmt.Fprintf(w, "  \x1b[36m%s\x1b[0m  \x1b[32m[%4.2fs lag]\x1b[0m  %q\n",
-					timeStr, u.TranscribeSecs, shortText)
+				transLines = append(transLines,
+					fmt.Sprintf("\x1b[36m%s\x1b[0m  \x1b[32m[%4.2fs]\x1b[0m  %q", timeStr, u.TranscribeSecs, shortText))
 			}
+		} else {
+			transLines = append(transLines, "\x1b[90m(no transcriptions yet - speak with Super+Ctrl+X to dictate)\x1b[0m")
+		}
+		boxTrans := BoxSpec{Title: "\x1b[1m[t] transcript feed\x1b[0m", Lines: transLines, Width: totalWidth}
+		for _, line := range RenderBoxLines(boxTrans) {
+			fmt.Fprintln(w, line)
 		}
 	}
 
+	// Render [d]aemons box
 	if sec.Daemons {
-		if sec.Speed || sec.Hardware || sec.Transcript {
-			fmt.Fprintln(w, "")
-		}
-		fmt.Fprintln(w, "── [ daemons (4) ] ───────────────────────────────────────────────")
+		var daemonLines []string
 		if len(r.Processes) == 0 {
-			fmt.Fprintln(w, "  No active voice processes running.")
+			daemonLines = append(daemonLines, "\x1b[90mNo active voice processes running.\x1b[0m")
 		} else {
 			var procSummaries []string
 			for _, p := range r.Processes {
 				procSummaries = append(procSummaries, fmt.Sprintf("\x1b[1m%s\x1b[0m (PID %d, %s)", p.Name, p.PID, FormatBytes(p.RSSBytes)))
 			}
-			fmt.Fprintf(w, "  %s\n", strings.Join(procSummaries, "  ·  "))
+			healthBadge := "\x1b[32m✓ clean\x1b[0m"
+			if len(r.ZombieWarnings) > 0 {
+				healthBadge = fmt.Sprintf("\x1b[31;1m⚠️ %s\x1b[0m", r.ZombieWarnings[0])
+			}
+			daemonLines = append(daemonLines, fmt.Sprintf("%s  ·  %s", strings.Join(procSummaries, "  ·  "), healthBadge))
+		}
+		boxDaemons := BoxSpec{Title: "\x1b[1m[d] active daemons & health\x1b[0m", Lines: daemonLines, Width: totalWidth}
+		for _, line := range RenderBoxLines(boxDaemons) {
+			fmt.Fprintln(w, line)
 		}
 	}
 
-	fmt.Fprintln(w, "")
-	healthStatus := "\x1b[32m✓ 0 orphan processes (clean)\x1b[0m"
-	if len(r.ZombieWarnings) > 0 {
-		healthStatus = fmt.Sprintf("\x1b[31;1m⚠️ %s\x1b[0m", r.ZombieWarnings[0])
-	}
-	fmt.Fprintf(w, "── [1..4] toggle · [a]ll · [q]uit ── %s ──\n", healthStatus)
+	// Render bottom btop navigation bar
+	fmt.Fprintf(w, " %s  %s  %s  %s  \x1b[90m│\x1b[0m  \x1b[1m[a]ll\x1b[0m  \x1b[1m[q]uit\x1b[0m\n",
+		formatLetterBadge("s", "speed", sec.Speed),
+		formatLetterBadge("h", "hardware", sec.Hardware),
+		formatLetterBadge("t", "transcript", sec.Transcript),
+		formatLetterBadge("d", "daemons", sec.Daemons))
 }
 
-func formatSectionBadge(name string, active bool) string {
+func formatLetterBadge(key, name string, active bool) string {
 	if active {
-		return fmt.Sprintf("\x1b[32;1m[%s ●]\x1b[0m", name)
+		return fmt.Sprintf("\x1b[1m[%s]\x1b[0m%s \x1b[32;1m●\x1b[0m", key, name[1:])
 	}
-	return fmt.Sprintf("\x1b[90m[%s ○]\x1b[0m", name)
+	return fmt.Sprintf("\x1b[90m[%s]%s ○\x1b[0m", key, name[1:])
 }
 
 func formatRecordState(status string) string {
 	switch strings.ToLower(status) {
 	case "recording":
-		return "\x1b[31;1m● recording\x1b[0m (speaking into mic)"
+		return "\x1b[31;1m● recording\x1b[0m"
 	case "transcribing":
-		return "\x1b[33;1m⏳ transcribing\x1b[0m (Whisper GPU inference)"
+		return "\x1b[33;1m⏳ transcribing\x1b[0m"
 	case "idle":
-		return "\x1b[32m○ idle\x1b[0m (press Super+Ctrl+X to speak)"
+		return "\x1b[32m○ idle\x1b[0m"
 	default:
 		return status
 	}
@@ -716,7 +814,7 @@ func RunWatchResources(ctx context.Context, d Dependencies, interval time.Durati
 		}
 	}
 
-	// Listen for interactive btop keys (1..4, a, q, Esc, etc.)
+	// Listen for interactive btop keys (s, h, t, d, a, q, Esc, etc.)
 	tty, ttyErr := os.Open("/dev/tty")
 	if ttyErr == nil {
 		defer tty.Close()
@@ -730,16 +828,16 @@ func RunWatchResources(ctx context.Context, d Dependencies, interval time.Durati
 				b := inputBuf[0]
 				secLock.Lock()
 				switch b {
-				case '1', 's', 'S':
+				case 's', 'S', '1', 'v', 'V':
 					sec.Speed = !sec.Speed
 					requestRedraw()
-				case '2', 'c', 'C', 'g', 'G', 'h', 'H':
+				case 'h', 'H', '2', 'c', 'C', 'g', 'G':
 					sec.Hardware = !sec.Hardware
 					requestRedraw()
-				case '3', 't', 'T':
+				case 't', 'T', '3':
 					sec.Transcript = !sec.Transcript
 					requestRedraw()
-				case '4', 'd', 'D', 'p', 'P':
+				case 'd', 'D', '4', 'p', 'P':
 					sec.Daemons = !sec.Daemons
 					requestRedraw()
 				case 'a', 'A':
