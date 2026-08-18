@@ -186,11 +186,15 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 			req.Header.Set("Accept", "application/json")
 
 			resp, err := client.Do(req)
-			if err == nil {
+			if err != nil {
+				usage.QuotaFetchError = err.Error()
+			} else {
 				defer resp.Body.Close()
 				if resp.StatusCode == http.StatusOK {
 					var whamUsage CodexWhamUsageResponse
-					if err := json.NewDecoder(resp.Body).Decode(&whamUsage); err == nil {
+					if err := json.NewDecoder(resp.Body).Decode(&whamUsage); err != nil {
+						usage.QuotaFetchError = fmt.Sprintf("decode error: %v", err)
+					} else {
 						usage.Sources = append(usage.Sources, "chatgpt.com/backend-api/wham/usage")
 						now := time.Now()
 						if whamUsage.RateLimit != nil && whamUsage.RateLimit.PrimaryWindow != nil {
@@ -233,6 +237,8 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 							usage.Details["credits_balance"] = whamUsage.Credits.Balance
 						}
 					}
+				} else {
+					usage.QuotaFetchError = fmt.Sprintf("HTTP %d", resp.StatusCode)
 				}
 			}
 		}

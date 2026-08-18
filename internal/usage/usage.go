@@ -111,6 +111,14 @@ func RenderText(summary UsageSummary) string {
 				lines = append(lines, fmt.Sprintf("  %s %5.1f%% used%s", bar, agent.Weekly.UsedPercent, resetInfo))
 			}
 
+			// Live quota fetch failed: surface it explicitly rather than
+			// leaving Session/Weekly silently absent (indistinguishable from
+			// "this plan has no such window").
+			if agent.QuotaFetchError != "" {
+				lines = append(lines, "")
+				lines = append(lines, fmt.Sprintf("quota: unavailable (%s)", agent.QuotaFetchError))
+			}
+
 			// Model Groups / Multi-Pool Quotas (e.g. Gemini Models vs Claude/GPT Models in AGY)
 			for _, mg := range agent.ModelGroups {
 				lines = append(lines, "")

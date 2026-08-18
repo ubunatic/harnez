@@ -1,0 +1,216 @@
+package usage
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"syscall"
+	"testing"
+	"time"
+)
+
+// TestQuotaCacheReadWriteRoundTrip checks the atomic write-then-rename helper
+// produces a file readQuotaCache can parse back unchanged.
+func TestQuotaCacheReadWriteRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := quotaCachePath(dir)
+
+	want := quotaCache{
+		FetchedAt: time.Now().Truncate(time.Second),
+		Session:   &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 42},
+		Weekly:    &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 7},
+	}
+	if err := writeQuotaCache(path, want); err != nil {
+		t.Fatalf("writeQuotaCache: %v", err)
+	}
+
+	// No leftover .tmp file after the rename.
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Errorf("expected no leftover .tmp file, stat err = %v", err)
+	}
+
+	got := readQuotaCache(path)
+	if got == nil {
+		t.Fatalf("readQuotaCache returned nil")
+	}
+	if !got.FetchedAt.Equal(want.FetchedAt) {
+		t.Errorf("FetchedAt = %v, want %v", got.FetchedAt, want.FetchedAt)
+	}
+	if got.Session == nil || got.Session.UsedPercent != 42 {
+		t.Errorf("Session = %+v, want UsedPercent 42", got.Session)
+	}
+	if got.Weekly == nil || got.Weekly.UsedPercent != 7 {
+		t.Errorf("Weekly = %+v, want UsedPercent 7", got.Weekly)
+	}
+}
+
+// TestReadQuotaCacheMissing checks a missing cache file is a nil result, not
+// an error the caller has to unwrap.
+func TestReadQuotaCacheMissing(t *testing.T) {
+	dir := t.TempDir()
+	if got := readQuotaCache(quotaCachePath(dir)); got != nil {
+		t.Errorf("expected nil for missing cache file, got %+v", got)
+	}
+}
+
+// TestLockQuotaCacheBoundedRetry ensures a writer that can't acquire the
+// advisory flock gives up within its retry budget instead of blocking
+// indefinitely (issue 033's core requirement: flock doesn't detect a hung
+// holder, so a waiter must bound its own wait).
+func TestLockQuotaCacheBoundedRetry(t *testing.T) {
+	dir := t.TempDir()
+	path := quotaCachePath(dir)
+
+	// Hold the lock ourselves, simulating a concurrent harnez process mid-write.
+	holder, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatalf("open lock file: %v", err)
+	}
+	defer holder.Close()
+	if err := syscall.Flock(int(holder.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatalf("flock: %v", err)
+	}
+
+	start := time.Now()
+	f, ok := lockQuotaCache(path)
+	elapsed := time.Since(start)
+
+	if ok {
+		t.Errorf("expected lock acquisition to fail while held by another fd")
+		unlockQuotaCache(f)
+	}
+	maxWait := quotaCacheLockDelay*time.Duration(quotaCacheLockRetries) + 2*time.Second
+	if elapsed > maxWait {
+		t.Errorf("lockQuotaCache took %v, want bounded well under %v", elapsed, maxWait)
+	}
+}
+
+// TestLockQuotaCacheSucceedsWhenFree checks the happy path: an uncontended
+// lock file is acquired immediately and can be released and re-acquired.
+func TestLockQuotaCacheSucceedsWhenFree(t *testing.T) {
+	dir := t.TempDir()
+	path := quotaCachePath(dir)
+
+	f, ok := lockQuotaCache(path)
+	if !ok {
+		t.Fatalf("expected to acquire uncontended lock")
+	}
+	unlockQuotaCache(f)
+
+	f2, ok := lockQuotaCache(path)
+	if !ok {
+		t.Fatalf("expected to re-acquire lock after release")
+	}
+	unlockQuotaCache(f2)
+}
+
+// claudeFixtureDir writes the minimal settings/stats/credentials files
+// CollectClaude needs to reach the live-quota step, and returns the dir.
+func claudeFixtureDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{
+		"claudeAiOauth": {"accessToken": "mock-token", "subscriptionType": "max"}
+	}`), 0600); err != nil {
+		t.Fatalf("write credentials: %v", err)
+	}
+	return dir
+}
+
+// TestCollectClaudeUsesWarmDiskCache checks the core mechanism of issue 033:
+// a fresh cache file (within MinWatchInterval) is used directly and the live
+// HTTP endpoint is never hit — this is what stops concurrent harnez
+// processes from double-polling.
+func TestCollectClaudeUsesWarmDiskCache(t *testing.T) {
+	dir := claudeFixtureDir(t)
+
+	called := false
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		http.Error(w, "should not be called", http.StatusTeapot)
+	}))
+	defer mockServer.Close()
+
+	cache := quotaCache{
+		FetchedAt: time.Now(),
+		Session:   &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 55},
+		Weekly:    &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 11},
+	}
+	if err := writeQuotaCache(quotaCachePath(dir), cache); err != nil {
+		t.Fatalf("seed cache: %v", err)
+	}
+
+	usage := CollectClaude(context.Background(), dir, mockServer.Client())
+
+	if called {
+		t.Errorf("expected live endpoint not to be called when disk cache is warm")
+	}
+	if usage.Session == nil || usage.Session.UsedPercent != 55 {
+		t.Errorf("Session = %+v, want UsedPercent 55 from cache", usage.Session)
+	}
+	if usage.Weekly == nil || usage.Weekly.UsedPercent != 11 {
+		t.Errorf("Weekly = %+v, want UsedPercent 11 from cache", usage.Weekly)
+	}
+}
+
+// TestCollectClaudeFallsBackToStaleCacheOnFetchFailure checks that a live
+// fetch failure falls back to the disk cache regardless of its age, with
+// windows labeled "(stale)" per issue 032's convention.
+func TestCollectClaudeFallsBackToStaleCacheOnFetchFailure(t *testing.T) {
+	dir := claudeFixtureDir(t)
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "rate limited", http.StatusTooManyRequests)
+	}))
+	defer mockServer.Close()
+
+	oldCache := quotaCache{
+		FetchedAt: time.Now().Add(-time.Hour), // well outside MinWatchInterval
+		Session:   &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 33},
+		Weekly:    &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 9},
+	}
+	if err := writeQuotaCache(quotaCachePath(dir), oldCache); err != nil {
+		t.Fatalf("seed cache: %v", err)
+	}
+
+	usage := collectClaudeAgainstURL(t, dir, mockServer)
+
+	if usage.QuotaFetchError == "" {
+		t.Errorf("expected QuotaFetchError to be set on HTTP 429")
+	}
+	if usage.Session == nil || usage.Session.UsedPercent != 33 {
+		t.Fatalf("Session = %+v, want stale UsedPercent 33 from cache", usage.Session)
+	}
+	if usage.Session.Name != "Session (5-hour) (stale)" {
+		t.Errorf("Session.Name = %q, want stale-labeled", usage.Session.Name)
+	}
+	if usage.Weekly == nil || usage.Weekly.Name != "Weekly (7-day) (stale)" {
+		t.Errorf("Weekly = %+v, want stale-labeled", usage.Weekly)
+	}
+}
+
+// collectClaudeAgainstURL calls CollectClaude with a client whose requests
+// are redirected to mockServer, since CollectClaude hardcodes the live
+// endpoint host rather than taking it as a parameter.
+func collectClaudeAgainstURL(t *testing.T, claudeDir string, mockServer *httptest.Server) AgentUsage {
+	t.Helper()
+	client := mockServer.Client()
+	client.Transport = redirectTransport{target: mockServer.URL}
+	return CollectClaude(context.Background(), claudeDir, client)
+}
+
+type redirectTransport struct{ target string }
+
+func (rt redirectTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	u := *req.URL
+	targetURL, err := u.Parse(rt.target)
+	if err != nil {
+		return nil, err
+	}
+	req = req.Clone(req.Context())
+	req.URL.Scheme = targetURL.Scheme
+	req.URL.Host = targetURL.Host
+	return http.DefaultTransport.RoundTrip(req)
+}

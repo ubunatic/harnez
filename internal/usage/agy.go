@@ -272,11 +272,18 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 	// listen on more than one port (e.g. a TLS-only port alongside the plain
 	// HTTP RPC port), so try each candidate until one actually answers.
 	if client != nil {
-		for _, port := range findAGYPorts() {
+		ports := findAGYPorts()
+		var lastErr error
+		fetched := false
+		for _, port := range ports {
 			quotaResp, err := QueryAGYLocalQuota(ctx, port, client)
 			if err != nil || quotaResp == nil {
+				if err != nil {
+					lastErr = err
+				}
 				continue
 			}
+			fetched = true
 			usage.Sources = append(usage.Sources, "127.0.0.1 (LanguageServer RPC)")
 			now := time.Now()
 			for _, g := range quotaResp.Response.Groups {
@@ -312,6 +319,9 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 				usage.ModelGroups = append(usage.ModelGroups, mg)
 			}
 			break
+		}
+		if !fetched && len(ports) > 0 && lastErr != nil {
+			usage.QuotaFetchError = lastErr.Error()
 		}
 	}
 

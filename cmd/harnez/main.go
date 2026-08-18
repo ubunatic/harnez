@@ -25,6 +25,7 @@ func main() {
 	var usageAgent string
 	var usageOffline bool
 	var usageWatch bool
+	var usageSummary bool
 	var usageInterval time.Duration
 	usageCmd := &cobra.Command{
 		Use:     "usage",
@@ -37,11 +38,23 @@ func main() {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 
+			if usageWatch && usageSummary {
+				return fmt.Errorf("--watch and --summary cannot be combined")
+			}
+
 			if usageWatch {
 				if usageJSON {
 					return fmt.Errorf("--watch and --json cannot be combined")
 				}
 				return usage.RunWatch(ctx, "", client, cmd.OutOrStdout(), usageInterval)
+			}
+
+			if usageSummary {
+				if usageJSON {
+					return fmt.Errorf("--summary and --json cannot be combined")
+				}
+				usage.RenderSummary(ctx, "", client, cmd.OutOrStdout())
+				return nil
 			}
 
 			summary := usage.CollectAll(ctx, "", client)
@@ -72,6 +85,7 @@ func main() {
 	usageCmd.Flags().StringVar(&usageAgent, "agent", "", "filter to a specific agent (claude, agy, codex)")
 	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
 	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the dashboard in place with a tokens/min trend")
+	usageCmd.Flags().BoolVarP(&usageSummary, "summary", "s", false, "print the compact --watch-style dashboard once and exit")
 	usageCmd.Flags().DurationVar(&usageInterval, "interval", usage.DefaultWatchInterval,
 		fmt.Sprintf("refresh interval for --watch (minimum %s, to avoid hammering live quota APIs)", usage.MinWatchInterval))
 

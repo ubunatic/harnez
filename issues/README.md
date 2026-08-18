@@ -27,3 +27,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 023 | [023-usage-command-token-quota-tracking.md](023-usage-command-token-quota-tracking.md) | `harnez usage`: unified token, session & quota status command | Implemented — `--watch` added 2026-08-18, uncommitted |
 | 029 | [archive/029-extract-ubunatic-voxi-standalone.md](archive/029-extract-ubunatic-voxi-standalone.md) | Extract standalone voice input engine (`ubunatic/voxi`) | Complete — extracted to standalone repo |
 | 030 | [030-agy-codex-missing-local-token-counts.md](030-agy-codex-missing-local-token-counts.md) | AGY and Codex have no local token-count source | Open |
+| 031 | [031-usage-quota-fetch-errors-silent.md](031-usage-quota-fetch-errors-silent.md) | Live quota fetch failures are silent in `harnez usage` | Closed |
+| 032 | [032-usage-watch-no-stale-fallback-on-fetch-failure.md](032-usage-watch-no-stale-fallback-on-fetch-failure.md) | `--watch` blanks quota panels instead of keeping last-known-good data on a transient fetch failure | Closed |
+| 033 | [033-usage-shared-quota-cache.md](033-usage-shared-quota-cache.md) | Shared disk-backed quota cache to stop concurrent `harnez` instances from double-polling | Closed |

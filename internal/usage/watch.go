@@ -431,12 +431,76 @@ func agentKey(agentID string) string {
 	}
 }
 
+// applyStaleQuota fills in a fresh collect result's missing quota windows
+// from the previous frame when the fresh fetch failed (issue 032): a single
+// transient failure would otherwise blank windows that are very likely still
+// accurate a few seconds later. Only fires per-agent when QuotaFetchError is
+// set (issue 031) and the corresponding window came back nil/empty; a
+// successful fetch always overwrites, so stale data can't accumulate past
+// one real refresh. Used only by RunWatch's live loop — one-shot renders
+// have no previous frame to fall back to and show the fetch error instead.
+func applyStaleQuota(fresh UsageSummary, previous UsageSummary) UsageSummary {
+	prevByID := make(map[string]AgentUsage, len(previous.Agents))
+	for _, a := range previous.Agents {
+		prevByID[a.AgentID] = a
+	}
+	for i := range fresh.Agents {
+		agent := &fresh.Agents[i]
+		if agent.QuotaFetchError == "" {
+			continue
+		}
+		prev, ok := prevByID[agent.AgentID]
+		if !ok {
+			continue
+		}
+		if agent.Session == nil && prev.Session != nil {
+			agent.Session = staleQuotaWindow(prev.Session)
+		}
+		if agent.Weekly == nil && prev.Weekly != nil {
+			agent.Weekly = staleQuotaWindow(prev.Weekly)
+		}
+		if len(agent.ModelGroups) == 0 && len(prev.ModelGroups) > 0 {
+			agent.ModelGroups = staleModelGroups(prev.ModelGroups)
+		}
+	}
+	return fresh
+}
+
+// staleQuotaWindow copies a quota window and marks its label stale, so a
+// carried-forward panel still reads distinctly from a freshly-refreshed one.
+func staleQuotaWindow(w *QuotaWindow) *QuotaWindow {
+	cp := *w
+	cp.Name = staleLabel(cp.Name)
+	return &cp
+}
+
+func staleModelGroups(groups []ModelGroup) []ModelGroup {
+	out := make([]ModelGroup, len(groups))
+	for i, g := range groups {
+		ng := g
+		ng.Windows = make([]QuotaWindow, len(g.Windows))
+		for j, w := range g.Windows {
+			w.Name = staleLabel(w.Name)
+			ng.Windows[j] = w
+		}
+		out[i] = ng
+	}
+	return out
+}
+
+func staleLabel(name string) string {
+	if strings.HasSuffix(name, " (stale)") {
+		return name
+	}
+	return name + " (stale)"
+}
+
 // buildAgentBox renders one agent's status as a compact bordered panel: the
 // account/model, at most the two most urgent quota windows, and a token-rate
 // sparkline (when showTokens is set). The panel's own toggle key is embedded
 // in its title, btop-style, instead of a separate legend. Deliberately terse
 // compared to the full `harnez usage` report.
-func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens bool) wbox {
+func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live bool) wbox {
 	title := fmt.Sprintf("\x1b[1m[%s]\x1b[0m %s", agentKey(agent.AgentID), agent.Name)
 
 	if !agent.Installed {
@@ -493,13 +557,25 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens bool)
 		lines = append(lines, fmt.Sprintf("%-16s %s %4.1f%%%s", label, bar, w.UsedPercent, resetStr))
 	}
 
+	// A fetch error is only worth a line when it actually explains missing
+	// quota windows — an agent with model-group windows already showing has
+	// nothing to apologize for.
+	if agent.QuotaFetchError != "" && len(windows) == 0 {
+		lines = append(lines, fmt.Sprintf("\x1b[90mquota: unavailable (%s)\x1b[0m", agent.QuotaFetchError))
+	}
+
 	if showTokens && agent.Tokens != nil {
-		spark := rate.Spark
-		if spark == "" {
-			spark = "warming up"
+		if live {
+			spark := rate.Spark
+			if spark == "" {
+				spark = "warming up"
+			}
+			lines = append(lines, fmt.Sprintf("\x1b[1m[T]\x1b[0m tok: %s total · %.0f/min [%s]",
+				FormatNumber(agent.Tokens.TotalTokens), rate.PerMinute, spark))
+		} else {
+			lines = append(lines, fmt.Sprintf("\x1b[1m[T]\x1b[0m tok: %s total",
+				FormatNumber(agent.Tokens.TotalTokens)))
 		}
-		lines = append(lines, fmt.Sprintf("\x1b[1m[T]\x1b[0m tok: %s total · %.0f/min [%s]",
-			FormatNumber(agent.Tokens.TotalTokens), rate.PerMinute, spark))
 	}
 
 	return wbox{title: title, lines: lines, width: width}
@@ -532,7 +608,7 @@ func gridColumns(usable, panels int) (columns, boxWidth int) {
 // ones that don't. Overflowing the viewport is what scrolls the terminal and
 // desynchronises every later `\x1b[H`, so the layout must never rely on the
 // terminal to clip for it.
-func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int) screenFrame {
+func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int, live bool) screenFrame {
 	var visible []AgentUsage
 	for _, agent := range summary.Agents {
 		if sec.agentVisible(agent.AgentID) {
@@ -564,9 +640,12 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 			summary.Timestamp.Format("15:04:05 MST"), hiddenHint),
 		"",
 	}
-	footer := []string{
-		"",
-		fmt.Sprintf("refresh every %s   \x1b[90m[a]ll  [q]uit\x1b[0m", interval),
+	var footer []string
+	if live {
+		footer = []string{
+			"",
+			fmt.Sprintf("refresh every %s   \x1b[90m[a]ll  [q]uit\x1b[0m", interval),
+		}
 	}
 
 	// Budget for the body: everything the header and footer already claim,
@@ -598,7 +677,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		}
 
 		for _, agent := range visible {
-			box := buildAgentBox(agent, rates[agent.AgentID], boxWidth, sec.Tokens)
+			box := buildAgentBox(agent, rates[agent.AgentID], boxWidth, sec.Tokens, live)
 			pending = append(pending, renderWBox(box))
 			if len(pending) == columns {
 				flushRow()
@@ -618,6 +697,20 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 
 	lines := append(append(header, body...), footer...)
 	return fit(lines, usable, rows)
+}
+
+// RenderSummary prints one static frame of the same compact, btop-style grid
+// used by `--watch`, then returns — no alternate screen, no polling loop, no
+// keyboard handling. It exists for `harnez usage --summary`: same at-a-glance
+// layout as `--watch`, but a plain one-shot print for scripting or a quick
+// glance, versus the full `harnez usage` report's per-window detail.
+func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out io.Writer) {
+	summary := CollectAll(ctx, homeDir, client)
+	cols, rows := terminalSize(out)
+	frame := buildWatchFrame(summary, nil, 0, defaultWatchSections(), cols, rows, false)
+	for _, l := range frame.lines {
+		fmt.Fprintln(out, l+"\x1b[0m")
+	}
 }
 
 // RunWatch redraws a compact, btop-style usage dashboard in place on a fixed
@@ -719,11 +812,12 @@ func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.W
 		secLock.Unlock()
 
 		cols, rows := terminalSize(out)
-		buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows).paint(out)
+		buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true).paint(out)
 	}
 
 	renderFrame := func() {
-		lastSummary = CollectAll(sigCtx, homeDir, client)
+		fresh := CollectAll(sigCtx, homeDir, client)
+		lastSummary = applyStaleQuota(fresh, lastSummary)
 		lastRates = tracker.update(lastSummary)
 		draw()
 	}
