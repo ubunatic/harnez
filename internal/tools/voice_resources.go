@@ -414,28 +414,32 @@ func RunWatchResources(ctx context.Context, d Dependencies, interval time.Durati
 	defer stop()
 
 	// Put terminal in cbreak mode to capture 'q' keypresses without requiring Enter
-	oldState, err := exec.Command("stty", "-g").Output()
+	oldState, err := exec.Command("stty", "-F", "/dev/tty", "-g").Output()
 	if err == nil {
-		_ = exec.Command("stty", "cbreak", "-echo").Run()
+		_ = exec.Command("stty", "-F", "/dev/tty", "cbreak", "-echo").Run()
 		defer func() {
-			_ = exec.Command("stty", string(bytes.TrimSpace(oldState))).Run()
+			_ = exec.Command("stty", "-F", "/dev/tty", string(bytes.TrimSpace(oldState))).Run()
 		}()
 	}
 
-	// Listen for 'q', 'Q', Ctrl-C, or Esc on standard input
-	go func() {
-		inputBuf := make([]byte, 1)
-		for {
-			n, err := os.Stdin.Read(inputBuf)
-			if err != nil || n == 0 {
-				return
+	// Listen for 'q', 'Q', Ctrl-C, or Esc on controlling terminal
+	tty, ttyErr := os.Open("/dev/tty")
+	if ttyErr == nil {
+		defer tty.Close()
+		go func() {
+			inputBuf := make([]byte, 1)
+			for {
+				n, err := tty.Read(inputBuf)
+				if err != nil || n == 0 {
+					return
+				}
+				if inputBuf[0] == 'q' || inputBuf[0] == 'Q' || inputBuf[0] == 3 || inputBuf[0] == 27 {
+					stop()
+					return
+				}
 			}
-			if inputBuf[0] == 'q' || inputBuf[0] == 'Q' || inputBuf[0] == 3 || inputBuf[0] == 27 {
-				stop()
-				return
-			}
-		}
-	}()
+		}()
+	}
 
 	// Hide cursor on start, restore on exit
 	fmt.Print("\033[?25l\033[2J")
