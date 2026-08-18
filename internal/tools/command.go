@@ -92,7 +92,7 @@ func newVoiceInputCommand(d Dependencies) *cobra.Command {
 			}
 			return SwitchVoiceInputMode(ctx, d, target)
 		}}
-	voiceInput.AddCommand(mode, newVoiceInputRecordCommand(d), NewVoiceInputEagerCommand(d), newVoiceInputHistoryCommand(d), newVoiceInputConfigCommand(d))
+	voiceInput.AddCommand(mode, newVoiceInputRecordCommand(d), NewVoiceInputEagerCommand(d), NewVoiceInputResourcesCommand(d), newVoiceInputHistoryCommand(d), newVoiceInputConfigCommand(d))
 	addDebugVoiceCommands(voiceInput, d)
 	return voiceInput
 }

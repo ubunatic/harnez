@@ -40,6 +40,8 @@ harnez tools voice-input record status                # show active dictation st
 harnez tools voice-input record toggle                # universal toggle across active mode (batch/streaming/eager)
 harnez tools voice-input record start                 # start active voice recording
 harnez tools voice-input record stop                  # stop active voice recording
+harnez tools voice-input resources                 # monitor daemon health, memory, GPU Vulkan accel, and processes
+harnez tools voice-input resources --watch         # live updating resource monitor
 harnez tools voice-input history list                 # list recent dictations (most recent first, sensitive)
 harnez tools voice-input history copy <ID>            # copy transcript to clipboard via wl-copy
 harnez tools voice-input history retype <ID>          # re-type transcript at cursor via dotool
