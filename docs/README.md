@@ -44,4 +44,10 @@ Generated copies land here (root) after `apply` / `init`.
 | [studies/2026-08-16-harnez-migration-and-workspace-unification.md](studies/2026-08-16-harnez-migration-and-workspace-unification.md) | Harnez migration, Spec generalization & workspace diagnostics case study |
 | [studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md](studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md) | Multi-agent token, session & quota monitoring case study (Claude Code, AGY, Codex) |
 
+**`docs/feedback/`** — agentic retrospectives & harness feedback reports
+
+| File | Topic |
+|------|-------|
+| [feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md](feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md) | Subagent domain extraction blindspots, wrapper traps, and proposed harnez features |
+
 **`docs/proposed/`** — staging area for docs that may become copyable (no install mechanics yet).
