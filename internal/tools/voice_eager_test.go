@@ -206,10 +206,10 @@ func TestAudioSegmenter(t *testing.T) {
 		t.Fatalf("expected non-empty speech segment on pause threshold")
 	}
 
-	// Length should include pre-roll (2 frames = 1280 bytes) + 4 speech frames (2560 bytes) = 3840 bytes
-	expectedBytes := (2 + 4) * 640
+	// Length should include pre-roll (2 frames) + 4 speech frames + 1 post-roll frame = 7 frames (4480 bytes)
+	expectedBytes := (2 + 4 + 1) * 640
 	if len(seg) != expectedBytes {
-		t.Errorf("segment length = %d bytes, want %d bytes (pre-roll + speech)", len(seg), expectedBytes)
+		t.Errorf("segment length = %d bytes, want %d bytes (pre-roll + speech + post-roll)", len(seg), expectedBytes)
 	}
 }
 

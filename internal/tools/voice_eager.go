@@ -37,10 +37,10 @@ type EagerOptions struct {
 // DefaultEagerOptions returns standard defaults for eager sentence streaming dictation.
 func DefaultEagerOptions() EagerOptions {
 	return EagerOptions{
-		ThresholdRMS:  250,
-		SilenceMs:     700,
-		PreRollMs:     300,
-		MinSpeechMs:   250,
+		ThresholdRMS:  150,
+		SilenceMs:     800,
+		PreRollMs:     500,
+		MinSpeechMs:   200,
 		MaxWindowMs:   8000,
 		TypeOutput:    true,
 		RecordHistory: true,
@@ -56,7 +56,7 @@ func NewVoiceInputEagerCommand(d Dependencies) *cobra.Command {
 		Use:   "eager",
 		Short: "Continuous eager sentence streaming dictation into focused window",
 		Long: "Continuously captures audio from the microphone with a circular pre-roll buffer.\n" +
-			"Segments speech on natural conversational pauses (silence > 700ms) or rolling windows,\n" +
+			"Segments speech on natural conversational pauses (silence > 800ms) or rolling windows,\n" +
 			"transcribes completed phrases immediately with local Whisper, and types finalized sentences\n" +
 			"directly into the active application via dotool with zero dropped words across pauses.",
 		Args:         cobra.NoArgs,
@@ -66,10 +66,10 @@ func NewVoiceInputEagerCommand(d Dependencies) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().IntVar(&opts.ThresholdRMS, "threshold", opts.ThresholdRMS, "audio RMS energy threshold to trigger speech detection (default: 250)")
-	cmd.Flags().IntVar(&opts.SilenceMs, "silence", opts.SilenceMs, "silence duration in ms to finalize an utterance chunk (default: 700)")
-	cmd.Flags().IntVar(&opts.PreRollMs, "pre-roll", opts.PreRollMs, "pre-speech circular buffer duration in ms to preserve starting phonemes (default: 300)")
-	cmd.Flags().IntVar(&opts.MinSpeechMs, "min-speech", opts.MinSpeechMs, "minimum speech duration in ms to ignore noise (default: 250)")
+	cmd.Flags().IntVar(&opts.ThresholdRMS, "threshold", opts.ThresholdRMS, "audio RMS energy threshold to trigger speech detection (default: 150)")
+	cmd.Flags().IntVar(&opts.SilenceMs, "silence", opts.SilenceMs, "silence duration in ms to finalize an utterance chunk (default: 800)")
+	cmd.Flags().IntVar(&opts.PreRollMs, "pre-roll", opts.PreRollMs, "pre-speech circular buffer duration in ms to preserve starting phonemes (default: 500)")
+	cmd.Flags().IntVar(&opts.MinSpeechMs, "min-speech", opts.MinSpeechMs, "minimum speech duration in ms to ignore noise (default: 200)")
 	cmd.Flags().IntVar(&opts.MaxWindowMs, "max-window", opts.MaxWindowMs, "maximum window length in ms before forcing a phrase chunk (default: 8000)")
 	cmd.Flags().BoolVar(&opts.TypeOutput, "type", opts.TypeOutput, "type transcribed sentences directly into the focused window via dotool")
 	cmd.Flags().BoolVar(&opts.RecordHistory, "history", opts.RecordHistory, "record transcribed utterances into local dictation history")
@@ -83,6 +83,7 @@ type AudioSegmenter struct {
 	opts                EagerOptions
 	frameBytes          int
 	preRollFrames       int
+	postRollFrames      int
 	silenceFramesNeeded int
 	minSpeechFrames     int
 	maxWindowFrames     int
@@ -111,6 +112,12 @@ func NewAudioSegmenter(opts EagerOptions) *AudioSegmenter {
 		silenceFramesNeeded = 1
 	}
 
+	// Keep up to 350ms of trailing post-roll audio padding to preserve quiet trailing consonants ("cat", "six")
+	postRollFrames := (350 + frameMs - 1) / frameMs
+	if postRollFrames >= silenceFramesNeeded {
+		postRollFrames = silenceFramesNeeded / 2
+	}
+
 	minSpeechFrames := (opts.MinSpeechMs + frameMs - 1) / frameMs
 	if minSpeechFrames < 1 {
 		minSpeechFrames = 1
@@ -122,6 +129,7 @@ func NewAudioSegmenter(opts EagerOptions) *AudioSegmenter {
 		opts:                opts,
 		frameBytes:          frameBytes,
 		preRollFrames:       preRollFrames,
+		postRollFrames:      postRollFrames,
 		silenceFramesNeeded: silenceFramesNeeded,
 		minSpeechFrames:     minSpeechFrames,
 		maxWindowFrames:     maxWindowFrames,
@@ -166,7 +174,13 @@ func (s *AudioSegmenter) ProcessFrame(frame []byte) (speechSegment []byte, speec
 				// Completed utterance on silence pause
 				s.isSpeaking = false
 				s.consecutiveSilence = 0
-				actualSpeechLen := len(s.speechFrames) - s.silenceFramesNeeded
+
+				// Trim only the excess silence beyond postRollFrames to keep trailing unvoiced consonants
+				trimFrames := s.silenceFramesNeeded - s.postRollFrames
+				if trimFrames < 0 {
+					trimFrames = 0
+				}
+				actualSpeechLen := len(s.speechFrames) - trimFrames
 
 				if actualSpeechLen >= s.minSpeechFrames {
 					trimmedFrames := s.speechFrames[:actualSpeechLen]
