@@ -22,6 +22,8 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   probe external mechanisms before building features on them
 - Spec system @docs/Spec.md,
   YAML spec files as single source of truth; Go code must not duplicate spec values
+- Synthetic Input Safety @docs/VoiceInput.md,
+  sanitize/validate all ASR text before injection; never leak ANSI escapes or logs into dotool
 <!-- harnez:end Language Conventions -->
 
 ## CLI command scope

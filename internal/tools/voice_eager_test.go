@@ -45,8 +45,45 @@ func TestWriteWAVAudio(t *testing.T) {
 	}
 }
 
+func TestStripANSI(t *testing.T) {
+	colored := "\x1b[2m2026-08-18T06:45:43.303459Z\x1b[0m \x1b[32mINFO\x1b[0m Model loaded"
+	clean := StripANSI(colored)
+	expected := "2026-08-18T06:45:43.303459Z INFO Model loaded"
+	if clean != expected {
+		t.Errorf("StripANSI = %q, want %q", clean, expected)
+	}
+}
+
+func TestIsSafeToType(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want bool
+	}{
+		{"valid clean speech", "the quick brown fox jumps over the yellow cat", true},
+		{"valid short phrase", "One, two, three", true},
+		{"empty string", "", false},
+		{"whitespace only", "   \t\n", false},
+		{"timestamp log line", "2026-08-18T06:45:43.303459Z Model loaded", false},
+		{"contains INFO log", "INFO Using local whisper", false},
+		{"contains DEBUG log", "DEBUG Processing audio chunk", false},
+		{"contains whisper_ prefix", "whisper_init_state: compute buffer", false},
+		{"contains audio format prefix", "Audio format: 16000 Hz", false},
+		{"contains ggml model path", "Loading /home/uwe/ggml-base.en.bin", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsSafeToType(tt.text); got != tt.want {
+				t.Errorf("IsSafeToType(%q) = %v, want %v", tt.text, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCleanWhisperTranscript(t *testing.T) {
-	rawOutput := `Loading audio file: "/tmp/foo.wav"
+	t.Run("with standard diagnostic logs", func(t *testing.T) {
+		rawOutput := `Loading audio file: "/tmp/foo.wav"
 Audio format: 16000 Hz, 1 channel(s), Int
 Processing 32000 samples (2.00s)...
 2026-08-18T00:10:40.508521Z  INFO Using local whisper transcription mode
@@ -55,10 +92,37 @@ Processing 32000 samples (2.00s)...
 2026-08-18T00:10:41.952335Z  INFO Transcription completed in 0.29s: "The quick brown fox"
 The quick brown fox
 `
-	text := CleanWhisperTranscript(rawOutput)
-	if text != "The quick brown fox" {
-		t.Errorf("CleanWhisperTranscript = %q, want %q", text, "The quick brown fox")
-	}
+		text := CleanWhisperTranscript(rawOutput)
+		if text != "The quick brown fox" {
+			t.Errorf("CleanWhisperTranscript = %q, want %q", text, "The quick brown fox")
+		}
+	})
+
+	t.Run("with ANSI escape sequences and mixed logs", func(t *testing.T) {
+		dirtyOutput := "\x1b[2m2026-08-18T06:45:43.303459Z\x1b[0m \x1b[32mINFO\x1b[0m Using local whisper transcription mode\n" +
+			"\x1b[2m2026-08-18T06:45:43.303492Z\x1b[0m \x1b[32mINFO\x1b[0m Loading whisper model from \"/home/uwe/.local/share/voxtype/models/ggml-base.en.bin\"\n" +
+			"\x1b[2m2026-08-18T06:45:43.420324Z\x1b[0m \x1b[32mINFO\x1b[0m Model loaded in 0.12s\n" +
+			"\x1b[2m2026-08-18T06:45:44.673038Z\x1b[0m \x1b[32mINFO\x1b[0m Transcription completed in 1.25s: \"the quick brown fox jumps over the yellow\"\n" +
+			"the quick brown fox jumps over the yellow\n"
+
+		text := CleanWhisperTranscript(dirtyOutput)
+		if text != "the quick brown fox jumps over the yellow" {
+			t.Errorf("CleanWhisperTranscript(dirtyOutput) = %q, want %q", text, "the quick brown fox jumps over the yellow")
+		}
+	})
+
+	t.Run("empty transcript with only logs", func(t *testing.T) {
+		onlyLogs := `Loading audio file: "/tmp/empty.wav"
+Audio format: 16000 Hz, 1 channel(s), Int
+Processing 16000 samples (1.00s)...
+2026-08-18T06:48:03.493611Z  INFO Using local whisper transcription mode
+2026-08-18T06:48:05.183630Z  INFO Transcription completed in 1.54s: ""
+`
+		text := CleanWhisperTranscript(onlyLogs)
+		if text != "" {
+			t.Errorf("CleanWhisperTranscript(onlyLogs) = %q, want empty string", text)
+		}
+	})
 }
 
 func TestAudioSegmenter(t *testing.T) {

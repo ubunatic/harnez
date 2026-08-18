@@ -57,8 +57,8 @@ Processing 32000 samples (2.00s)...
 2026-08-18T00:10:41.952335Z  INFO Transcription completed in 0.29s: "The quick brown fox"
 The quick brown fox
 `
-	text := extractTranscribeOutput(rawOutput)
+	text := CleanWhisperTranscript(rawOutput)
 	if text != "The quick brown fox" {
-		t.Errorf("extractTranscribeOutput = %q, want %q", text, "The quick brown fox")
+		t.Errorf("CleanWhisperTranscript = %q, want %q", text, "The quick brown fox")
 	}
 }

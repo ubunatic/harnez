@@ -3,6 +3,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -218,12 +219,16 @@ func RunVADProbe(ctx context.Context, d Dependencies, opts VADProbeOptions) erro
 							defer os.Remove(wavPath)
 
 							// Transcribe via voxtype
-							cmd := exec.CommandContext(context.Background(), voxtypePath, "transcribe", wavPath)
-							outBytes, err := cmd.CombinedOutput()
+							cmd := exec.CommandContext(context.Background(), voxtypePath, "-q", "transcribe", wavPath)
+							cmd.Env = append(os.Environ(), "NO_COLOR=1", "RUST_LOG=error")
+							var outBuf bytes.Buffer
+							cmd.Stdout = &outBuf
+							cmd.Stderr = io.Discard
+							err := cmd.Run()
 							transDuration := time.Since(transStart).Seconds()
 
-							text := extractTranscribeOutput(string(outBytes))
-							if err == nil && text != "" {
+							text := CleanWhisperTranscript(outBuf.String())
+							if err == nil && text != "" && IsSafeToType(text) {
 								transLock.Lock()
 								if fullTranscript.Len() > 0 {
 									fullTranscript.WriteString(" ")

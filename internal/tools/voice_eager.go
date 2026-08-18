@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -280,24 +281,80 @@ func WriteWAVAudio(path string, pcmData []byte, sampleRate int) error {
 	return os.WriteFile(path, buf.Bytes(), 0600)
 }
 
-// CleanWhisperTranscript filters out diagnostic logs from Voxtype transcribe output.
+var (
+	ansiEscapeRe   = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	rfc3339TimeRe  = regexp.MustCompile(`\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}`)
+	quoteExtractRe = regexp.MustCompile(`Transcription completed in [^:]+:\s*"([^"]*)"`)
+)
+
+// StripANSI removes all ANSI escape sequences from s.
+func StripANSI(s string) string {
+	return ansiEscapeRe.ReplaceAllString(s, "")
+}
+
+// IsSafeToType validates that a text string contains genuine speech and no diagnostic log leakage.
+func IsSafeToType(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return false
+	}
+	if rfc3339TimeRe.MatchString(trimmed) {
+		return false
+	}
+	if strings.Contains(trimmed, "INFO ") || strings.Contains(trimmed, "DEBUG ") ||
+		strings.Contains(trimmed, "WARN ") || strings.Contains(trimmed, "ERROR ") ||
+		strings.Contains(trimmed, "whisper_") || strings.Contains(trimmed, "ggml-") {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "Loading audio file:") || strings.HasPrefix(trimmed, "Audio format:") ||
+		strings.HasPrefix(trimmed, "Processing ") || strings.HasPrefix(trimmed, "Model loaded in") {
+		return false
+	}
+	return true
+}
+
+// CleanWhisperTranscript extracts only valid human speech from Voxtype transcribe output,
+// discarding ANSI escape codes, diagnostic logs, timestamps, and model loading metadata.
 func CleanWhisperTranscript(output string) string {
-	lines := strings.Split(output, "\n")
+	clean := StripANSI(output)
+
+	// Strategy 1: Look for Voxtype's explicit canonical summary line:
+	// 'Transcription completed in 1.25s: "the quick brown fox"'
+	if m := quoteExtractRe.FindStringSubmatch(clean); len(m) > 1 {
+		candidate := strings.TrimSpace(m[1])
+		if IsSafeToType(candidate) {
+			return candidate
+		}
+	}
+
+	// Strategy 2: Line-by-line filtering of trailing text
+	lines := strings.Split(clean, "\n")
 	var resultLines []string
 	for _, l := range lines {
 		trimmed := strings.TrimSpace(l)
-		if trimmed == "" ||
-			strings.HasPrefix(trimmed, "Loading audio file:") ||
+		if trimmed == "" {
+			continue
+		}
+		// Discard known log lines and metadata
+		if strings.HasPrefix(trimmed, "Loading audio file:") ||
 			strings.HasPrefix(trimmed, "Audio format:") ||
 			strings.HasPrefix(trimmed, "Processing ") ||
 			strings.HasPrefix(trimmed, "whisper_") ||
-			strings.Contains(trimmed, "INFO Model loaded") ||
-			strings.Contains(trimmed, "INFO Using local whisper") ||
-			strings.Contains(trimmed, "INFO Loading whisper model") ||
-			strings.Contains(trimmed, "INFO Transcription completed") {
+			strings.Contains(trimmed, "INFO ") ||
+			strings.Contains(trimmed, "DEBUG ") ||
+			strings.Contains(trimmed, "WARN ") ||
+			strings.Contains(trimmed, "ERROR ") ||
+			strings.Contains(trimmed, "TRACE ") ||
+			strings.Contains(trimmed, "Model loaded in ") ||
+			strings.Contains(trimmed, "Using local whisper") ||
+			strings.Contains(trimmed, "Loading whisper model") ||
+			strings.Contains(trimmed, "Transcription completed in ") ||
+			rfc3339TimeRe.MatchString(trimmed) {
 			continue
 		}
-		resultLines = append(resultLines, trimmed)
+		if IsSafeToType(trimmed) {
+			resultLines = append(resultLines, trimmed)
+		}
 	}
 	return strings.Join(resultLines, " ")
 }
@@ -403,13 +460,17 @@ func RunEagerDictation(ctx context.Context, d Dependencies, opts EagerOptions) e
 				continue
 			}
 
-			cmd := exec.CommandContext(context.Background(), voxtypePath, "transcribe", wavPath)
-			outBytes, err := cmd.CombinedOutput()
+			cmd := exec.CommandContext(context.Background(), voxtypePath, "-q", "transcribe", wavPath)
+			cmd.Env = append(os.Environ(), "NO_COLOR=1", "RUST_LOG=error")
+			var outBuf bytes.Buffer
+			cmd.Stdout = &outBuf
+			cmd.Stderr = io.Discard
+			err := cmd.Run()
 			_ = os.Remove(wavPath)
 			transDuration := time.Since(transStart).Seconds()
 
-			text := CleanWhisperTranscript(string(outBytes))
-			if err == nil && text != "" {
+			text := CleanWhisperTranscript(outBuf.String())
+			if err == nil && text != "" && IsSafeToType(text) {
 				transLock.Lock()
 				if fullTranscript.Len() > 0 {
 					fullTranscript.WriteString(" ")
