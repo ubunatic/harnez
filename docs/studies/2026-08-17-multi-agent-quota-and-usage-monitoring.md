@@ -39,7 +39,8 @@ Each tool enforces distinct rate-limiting windows (rolling 4h/5h session caps vs
    - Initial scaffolding and data schema normalization was delegated to a subagent that researched local storage formats across `~/.claude/`, `~/.codex/`, and `~/.gemini/antigravity-cli/`.
    - A subsequent subagent cracked the live extraction mechanisms for AGY (local Connect RPC over Unix loopback sockets) and Codex (`wham/usage` with JWT session headers).
 2. **Offline-First Resilience**:
-   - Every collector gracefully falls back to local SQLite/JSON caches when offline or encountering rate limits (HTTP 429/401), ensuring `harnez usage --offline` always produces deterministic results.
+   - Every collector gracefully falls back to local SQLite/JSON caches when offline (`--offline`), ensuring deterministic results with no network dependency.
+   - **Correction (2026-08-18)**: this "graceful" framing overstated what actually happened on a *live* rate limit (HTTP 429) — a real one hit during multi-instance `--watch` testing and turned out to be silently dropped, not gracefully handled: `Session`/`Weekly` just went `nil` with nothing shown. See [Issue 031](../../issues/031-usage-quota-fetch-errors-silent.md), [032](../../issues/032-usage-watch-no-stale-fallback-on-fetch-failure.md), [033](../../issues/033-usage-shared-quota-cache.md) and [the follow-up study](2026-08-18-usage-quota-fetch-robustness-and-shared-cache.md) for the actual fix.
 3. **Comprehensive Unit Tests**:
    - Built isolated table-driven tests for time duration formatting, number grouping, Unicode progress bar rendering, account email masking, and mock API response collectors.
 

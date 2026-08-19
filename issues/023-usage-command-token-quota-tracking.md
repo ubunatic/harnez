@@ -1,6 +1,6 @@
 # 023 — `harnez usage`: Unified Token, Session & Quota Status Command
 
-**Status**: Implemented & verified; `--watch` live view added 2026-08-18 (uncommitted, see update below)  
+**Status**: Implemented & verified; `--watch` live view (2026-08-18, `48a2585`), `--summary` one-shot view and quota-fetch robustness fixes (2026-08-18, `6c82176`) all committed  
 **Category**: Feature / CLI Tooling  
 **Command**: `harnez usage` (aliases/related: `quota`, `tokens`, `stats`)  
 
@@ -194,4 +194,22 @@ to populate the watch view's token toggle from — see
 [Issue 030](030-agy-codex-missing-local-token-counts.md).
 
 **This work is uncommitted as of this update** — see the study doc §6.
+
+## Update 2026-08-18 (continued): `--summary` one-shot view + quota-fetch robustness
+
+Added `harnez usage --summary` (`-s`): prints the same compact `--watch`-style grid as a single
+frame and exits — for scripting or a quick glance, so the command now has three reporting modes
+(full detail, live `--watch`, one-shot `--summary`).
+
+While testing `--summary` against a live `--watch` session, hit a real `HTTP 429` from
+`api.anthropic.com/api/oauth/usage` — caused by two concurrent `harnez` processes (a leftover
+`go run` from testing plus a real `--watch`) independently polling the same account. That surfaced
+three latent robustness gaps, tracked and closed as [Issue 031](031-usage-quota-fetch-errors-silent.md)
+(fetch failures were completely silent), [Issue 032](032-usage-watch-no-stale-fallback-on-fetch-failure.md)
+(`--watch` blanked a panel on a transient failure instead of keeping the last good value), and
+[Issue 033](033-usage-shared-quota-cache.md) (no cross-process coordination, so concurrent instances
+multiplied the request rate). Design discussion and the flock-based fix are written up in
+[docs/studies/2026-08-18-usage-quota-fetch-robustness-and-shared-cache.md](../docs/studies/2026-08-18-usage-quota-fetch-robustness-and-shared-cache.md).
+
+Committed as `6c82176` (code) and `fc74910` (website docs).
 

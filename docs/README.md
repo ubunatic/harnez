@@ -34,6 +34,7 @@ Generated copies land here (root) after `apply` / `init`.
 |------|-------|
 | [other/Canary.md](other/Canary.md) | Canary-first development: probe external mechanisms before building |
 | [other/Spec.md](other/Spec.md) | Spec-driven architecture: YAML spec files as single source of truth |
+| [other/SharedDiskCache.md](other/SharedDiskCache.md) | Shared disk cache for local processes: TTL cache-aside + flock-guarded write, and why a hand-rolled check-fetch-check-write protocol is the wrong tool |
 
 **`docs/studies/`** — case studies & background reports (reference material for future generic docs)
 
@@ -44,6 +45,8 @@ Generated copies land here (root) after `apply` / `init`.
 | [studies/2026-08-16-harnez-migration-and-workspace-unification.md](studies/2026-08-16-harnez-migration-and-workspace-unification.md) | Harnez migration, Spec generalization & workspace diagnostics case study |
 | [studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md](studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md) | Multi-agent token, session & quota monitoring case study (Claude Code, AGY, Codex) |
 | [studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md](studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md) | `harnez usage --watch` TUI build + a three-theory terminal-rendering bug postmortem (stale redraw, gutter math, when to escalate to real pty/VT100 testing) |
+| [studies/2026-08-18-usage-quota-fetch-robustness-and-shared-cache.md](studies/2026-08-18-usage-quota-fetch-robustness-and-shared-cache.md) | `harnez usage --summary`, silent quota-fetch failures, `--watch` stale fallback, and a flock-coordinated shared cache — including the design conversation that rejected a hand-rolled optimistic-check protocol in favor of `flock` |
+| [studies/2026-08-19-agent-telemetry-hooks-proxies-and-log-extraction.md](studies/2026-08-19-agent-telemetry-hooks-proxies-and-log-extraction.md) | AI agent telemetry methods: lifecycle hooks vs. transcript seeking vs. transparent HTTP proxy sidecars across Claude, AGY, and Codex |
 
 **`docs/feedback/`** — agentic retrospectives & harness feedback reports
 

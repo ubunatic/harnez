@@ -24,9 +24,11 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 018 | [018-mark-bundled-docs-in-frontmatter.md](018-mark-bundled-docs-in-frontmatter.md) | Bundled docs don't self-identify as claudeconfig-managed | Open |
 | 019 | [019-rename-to-harnez.md](019-rename-to-harnez.md) | Rename project from claudeconfig to harnez | Closed |
 | 020 | [archive/020-tools-command-os-tools.md](archive/020-tools-command-os-tools.md) | `harnez tools`: guided OS-level tool installation | Closed — extracted to `voxi` |
-| 023 | [023-usage-command-token-quota-tracking.md](023-usage-command-token-quota-tracking.md) | `harnez usage`: unified token, session & quota status command | Implemented — `--watch` added 2026-08-18, uncommitted |
+| 023 | [023-usage-command-token-quota-tracking.md](023-usage-command-token-quota-tracking.md) | `harnez usage`: unified token, session & quota status command | Implemented — `--watch`, `--summary`, robustness fixes committed 2026-08-18 |
 | 029 | [archive/029-extract-ubunatic-voxi-standalone.md](archive/029-extract-ubunatic-voxi-standalone.md) | Extract standalone voice input engine (`ubunatic/voxi`) | Complete — extracted to standalone repo |
 | 030 | [030-agy-codex-missing-local-token-counts.md](030-agy-codex-missing-local-token-counts.md) | AGY and Codex have no local token-count source | Open |
 | 031 | [031-usage-quota-fetch-errors-silent.md](031-usage-quota-fetch-errors-silent.md) | Live quota fetch failures are silent in `harnez usage` | Closed |
 | 032 | [032-usage-watch-no-stale-fallback-on-fetch-failure.md](032-usage-watch-no-stale-fallback-on-fetch-failure.md) | `--watch` blanks quota panels instead of keeping last-known-good data on a transient fetch failure | Closed |
 | 033 | [033-usage-shared-quota-cache.md](033-usage-shared-quota-cache.md) | Shared disk-backed quota cache to stop concurrent `harnez` instances from double-polling | Closed |
+| 034 | [034-hook-triggered-token-extraction.md](034-hook-triggered-token-extraction.md) | Hook-triggered file seek for local token extraction (AGY & Claude) | Open |
+| 035 | [035-transparent-proxy-quota-and-token-sidecar.md](035-transparent-proxy-quota-and-token-sidecar.md) | Transparent local HTTP_PROXY sidecar for zero-wrap rate limit & quota interception | Open |
