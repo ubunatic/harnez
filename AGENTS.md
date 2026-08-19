@@ -22,6 +22,8 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   probe external mechanisms before building features on them
 - Spec system @docs/Spec.md,
   YAML spec files as single source of truth; Go code must not duplicate spec values
+- Agentic Loop Practices @docs/AgenticLoop.md,
+  5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
 - Synthetic Input Safety @docs/VoiceInput.md,
   sanitize/validate all ASR text before injection; never leak ANSI escapes or logs into dotool
 <!-- harnez:end Language Conventions -->
@@ -43,6 +45,8 @@ Before changing any command's flags or adding project-local behaviour to `apply`
 `docs/lang/` — copyable language/SDK/framework docs (Go, Bash, Make, Git, Rust, Cpp, Markdown, GTK4, Zig).
 Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --doc <name>`.
 
+`docs/practices/` — copyable workflow and practice docs (AgenticLoop). Same install mechanics as `docs/lang/`.
+
 `docs/other/` — copyable docs that don't form a category yet (Canary, Spec). Same install mechanics as `docs/lang/`.
 
 `docs/studies/` — case studies and background reports (reference material for future generic docs).
@@ -51,16 +55,43 @@ Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --doc
 
 `docs/templates/` — Makefile scaffolding used by `init`; not docs.
 
-Rule: if a doc applies to many projects → `docs/lang/` or `docs/other/`. If it describes this codebase → `docs/` root.
-A category dir (e.g. `docs/practices/`) forms once 3+ docs share a theme.
+Rule: if a doc applies to many projects → `docs/lang/`, `docs/practices/`, or `docs/other/`. If it describes this codebase → `docs/` root.
+A category dir forms once 3+ docs share a theme.
 
-## Development Scripts
+## Development & Review Workflow
 
 Run from project root.
 
+- Follow the 5-phase sprint workflow (`@docs/AgenticLoop.md` / `/sprint`):
+  1. Parallel Advisory Discovery (read-only audits)
+  2. Sequential Development & TDD
+  3. Pre-Commit Review Gate (independent reviewer subagent)
+  4. Process & Subagent Hygiene (drain/kill background tasks and timers)
+  5. Flow Quality Retrospective (`docs/feedback/` or `docs/studies/`)
 - Always run `make install` after modifying Go code to update the local binary in `~/go/bin`.
 - `scripts/smoke-test.sh` — build, apply, verify idempotency, simulate drift and confirm repair
 - `scripts/drop-perm.sh PATTERN` — remove permissions matching PATTERN from `~/.claude/settings.json` for drift simulation
+- Small fixes: direct commit is permitted once all tests pass and existing test assertions remain intact.
+- Larger changes & features: require a review pass before commit (orchestrated across subagents or by spawning a fresh reviewer subagent if acting as main agent) to verify test rigor, doc/ticket sync, and code clarity for future agents.
+
+## Troubleshooting & Log Exploration
+- Do not get trapped exhaustively browsing transcript/system logs.
+- If a root cause is not apparent after 1–2 targeted grep/tail inspections, stop reading logs, reason from first principles, or ask for guidance.
+- Never ingest large raw logs or whole transcript files into context.
+
+## Background Tasks & Process Hygiene
+- Regularly inspect spawned background tasks and explicitly terminate idle, completed, or zombie tasks.
+- Clean up watch commands, poll loops, schedule timers, and background test subprocesses before finishing a task.
+- Never abandon orphan processes or lingering watch tasks in the background.
+
+## Context Discipline & Token Efficiency
+- Do not execute whole-file read tools on `AGENTS.md`, `CLAUDE.md`, or rules already in the active system prompt.
+- Prefer `grep_search` or range-bounded reads (`StartLine`/`EndLine`) over ingesting entire reference docs.
+- Consult index annotations in `docs/README.md` to determine whether a bundled doc requires a full read or if its rule summary is sufficient.
+
+## Voice & Transcription Input Awareness
+- The user often uses voice-to-text / speech transcription (ASR).
+- Be alert for phonetic homophones and transcription artifacts (e.g. "Southern Exploration" → "start an exploration agent", "harness" → "harnez"). Reason about user intent from phonetic similarity and conversation context before asking for clarification.
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup
 - Solo/hobby repo — single default branch, no PR workflow.

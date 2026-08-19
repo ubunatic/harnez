@@ -208,8 +208,8 @@ func detectDoc(dir, name string) bool {
 			fileExists(filepath.Join(dir, "build.zig.zon")) ||
 			globExists(dir, "*.zig")
 	case "cpp":
-		return globExists(dir, "*.cpp") || globExists(dir, "*.cc") ||
-			globExists(dir, "*.h") || fileExists(filepath.Join(dir, "CMakeLists.txt"))
+		return globExists(dir, "*.c") || globExists(dir, "*.cpp") || globExists(dir, "*.cc") ||
+			globExists(dir, "*.h") || globExists(dir, "*.hpp") || fileExists(filepath.Join(dir, "CMakeLists.txt"))
 	}
 	return false
 }

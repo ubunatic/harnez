@@ -3,38 +3,47 @@
 In-depth references for decisions, architecture, and pitfalls specific to this codebase.
 Not needed for routine coding; reach for these during investigations or design work.
 
-| File | Topic |
-|------|-------|
-| [CLIDesign.md](CLIDesign.md) | apply vs init separation: scope, rationale, footgun avoided, design evolution |
-| [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent |
+> [!TIP]
+> **Context Discipline**: If a rule or convention summary is already present in your active system prompt (`AGENTS.md`), do not ingest the full doc file unless you need deep reference material, templates, or obscure syntax patterns. Use `grep_search` or range-bounded reads (`StartLine`/`EndLine`).
+
+| File | Topic & Consultation Trigger |
+|------|------------------------------|
+| [CLIDesign.md](CLIDesign.md) | apply vs init separation: scope, rationale, footgun avoided, design evolution (consult before modifying CLI command flags) |
+| [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent (consult when changing command pipelines) |
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
-| [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat |
+| [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat (consult when updating permission schemas) |
 
 
 Copyable docs (installed to Claude and Prime Agent global dirs on `apply`, copied to projects via `--docs`) live in subdirs.
 Generated copies land here (root) after `apply` / `init`.
 
-**`docs/lang/`** — language/SDK/framework docs
+**`docs/lang/`** — language/SDK/framework docs *(High-level rule summaries are already bundled in AGENTS.md; read files only for detailed templates or syntax nuances)*
 
-| File | Topic |
-|------|-------|
-| [lang/Go.md](lang/Go.md) | Go conventions |
-| [lang/Bash.md](lang/Bash.md) | Bash/Shell conventions |
-| [lang/Make.md](lang/Make.md) | Makefile conventions |
-| [lang/Git.md](lang/Git.md) | Git conventions |
-| [lang/Rust.md](lang/Rust.md) | Rust conventions |
-| [lang/Zig.md](lang/Zig.md) | Zig conventions |
-| [lang/Cpp.md](lang/Cpp.md) | C/C++ conventions |
-| [lang/Markdown.md](lang/Markdown.md) | Markdown conventions |
-| [lang/GTK4.md](lang/GTK4.md) | GTK4/PyGObject conventions |
+| File | Topic | Read Trigger / Scope |
+|------|-------|----------------------|
+| [lang/Go.md](lang/Go.md) | Go conventions | Bounded read only for Cobra flag idioms, error wrapping conventions, or test templates |
+| [lang/Bash.md](lang/Bash.md) | Bash/Shell conventions | Read for exact `if test` construct syntax or formatting rules |
+| [lang/Make.md](lang/Make.md) | Makefile conventions | Read for ⚙️ sentinel phony mechanics and help-target recipes |
+| [lang/Git.md](lang/Git.md) | Git conventions | Read for commit message format and worktree workflows |
+| [lang/Rust.md](lang/Rust.md) | Rust conventions | Read for safe Rust conventions and clippy guidelines |
+| [lang/Zig.md](lang/Zig.md) | Zig conventions | Read for Zig 0.16.0 allocator idioms and build.zig patterns |
+| [lang/Cpp.md](lang/Cpp.md) | C/C++ conventions | Read for ccache setup and modern C++17 conventions |
+| [lang/Markdown.md](lang/Markdown.md) | Markdown conventions | Read for naming guidelines (PascalCase evergreen vs kebab-case ephemeral) |
+| [lang/GTK4.md](lang/GTK4.md) | GTK4/PyGObject conventions | Read for PyGObject signal handling and UI patterns |
+
+**`docs/practices/`** — copyable practice and engineering workflow docs
+
+| File | Topic | Read Trigger / Scope |
+|------|-------|----------------------|
+| [practices/AgenticLoop.md](practices/AgenticLoop.md) | Agentic Loop Practices: 5-phase sprint workflow (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee | Summary active in AGENTS.md. Read for phase invariants, review checklists, and anti-patterns |
 
 **`docs/other/`** — practice docs (no category yet)
 
-| File | Topic |
-|------|-------|
-| [other/Canary.md](other/Canary.md) | Canary-first development: probe external mechanisms before building |
-| [other/Spec.md](other/Spec.md) | Spec-driven architecture: YAML spec files as single source of truth |
-| [other/SharedDiskCache.md](other/SharedDiskCache.md) | Shared disk cache for local processes: TTL cache-aside + flock-guarded write, and why a hand-rolled check-fetch-check-write protocol is the wrong tool |
+| File | Topic | Read Trigger / Scope |
+|------|-------|----------------------|
+| [other/Canary.md](other/Canary.md) | Canary-first development: probe external mechanisms before building | Read when designing external CLI or tool probing canaries |
+| [other/Spec.md](other/Spec.md) | Spec-driven architecture: YAML spec files as single source of truth | Read when modifying YAML specs or generator pipelines |
+| [other/SharedDiskCache.md](other/SharedDiskCache.md) | Shared disk cache for local processes: TTL cache-aside + flock-guarded write | Read when implementing cross-process caching or file locks |
 
 **`docs/studies/`** — case studies & background reports (reference material for future generic docs)
 
@@ -47,11 +56,14 @@ Generated copies land here (root) after `apply` / `init`.
 | [studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md](studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md) | `harnez usage --watch` TUI build + a three-theory terminal-rendering bug postmortem (stale redraw, gutter math, when to escalate to real pty/VT100 testing) |
 | [studies/2026-08-18-usage-quota-fetch-robustness-and-shared-cache.md](studies/2026-08-18-usage-quota-fetch-robustness-and-shared-cache.md) | `harnez usage --summary`, silent quota-fetch failures, `--watch` stale fallback, and a flock-coordinated shared cache — including the design conversation that rejected a hand-rolled optimistic-check protocol in favor of `flock` |
 | [studies/2026-08-19-agent-telemetry-hooks-proxies-and-log-extraction.md](studies/2026-08-19-agent-telemetry-hooks-proxies-and-log-extraction.md) | AI agent telemetry methods: lifecycle hooks vs. transcript seeking vs. transparent HTTP proxy sidecars across Claude, AGY, and Codex |
+| [studies/2026-08-19-subagent-lifecycle-management-and-teardown-friction.md](studies/2026-08-19-subagent-lifecycle-management-and-teardown-friction.md) | Multi-agent lifecycle management: zombie accumulation vs. premature teardown, entity archetypes, pre-kill workspace patch preservation, and lease heartbeats |
+| [studies/2026-08-19-the-5-phase-agentic-sprint-and-independent-review-loop.md](studies/2026-08-19-the-5-phase-agentic-sprint-and-independent-review-loop.md) | The 5-Phase Agentic Sprint Loop & The Independent Review Gate (Candidate chapter for *Agentic Software Development: The Ubunatic Way*) |
 
 **`docs/feedback/`** — agentic retrospectives & harness feedback reports
 
 | File | Topic |
 |------|-------|
 | [feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md](feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md) | Subagent domain extraction blindspots, wrapper traps, and proposed harnez features |
+| [feedback/2026-08-19-orchestrated-subagents-process-hygiene-and-review-loops.md](feedback/2026-08-19-orchestrated-subagents-process-hygiene-and-review-loops.md) | Parallel advisors, sequential dev orchestration, background zombie hygiene, and pre-commit review gates |
 
 **`docs/proposed/`** — staging area for docs that may become copyable (no install mechanics yet).

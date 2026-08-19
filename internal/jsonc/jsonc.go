@@ -26,11 +26,13 @@ func ToStrings(v any) []string {
 
 // UnionStrings returns a∪b, preserving order (a first, then new items from b).
 func UnionStrings(a, b []string) []string {
-	seen := make(map[string]struct{}, len(a))
+	seen := make(map[string]struct{}, len(a)+len(b))
 	result := make([]string, 0, len(a)+len(b))
 	for _, s := range a {
-		seen[s] = struct{}{}
-		result = append(result, s)
+		if _, ok := seen[s]; !ok {
+			seen[s] = struct{}{}
+			result = append(result, s)
+		}
 	}
 	for _, s := range b {
 		if _, ok := seen[s]; !ok {

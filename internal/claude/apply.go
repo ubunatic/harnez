@@ -2,6 +2,7 @@ package claude
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -259,13 +260,13 @@ func diffSettingsJSON(path string, doc map[string]any) (bool, error) {
 
 	oldFile, err := writeTemp(oldData)
 	if err != nil {
-		return true, err
+		return false, err
 	}
 	defer os.Remove(oldFile)
 
 	newFile, err := writeTemp(newData)
 	if err != nil {
-		return true, err
+		return false, err
 	}
 	defer os.Remove(newFile)
 
@@ -273,7 +274,13 @@ func diffSettingsJSON(path string, doc map[string]any) (bool, error) {
 	cmd := exec.Command("diff", "-u", "--label", label, "--label", label, oldFile, newFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Run()
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return true, nil
+		}
+		return false, fmt.Errorf("diff %s: %w", label, err)
+	}
 	return true, nil
 }
 
@@ -475,18 +482,7 @@ func printResult(action, path string, r applyResult) {
 // mergeDocs returns the union of config-declared docs and CLI --doc flags,
 // preserving order (config first, then any extras from the flag).
 func mergeDocs(fromConfig, fromFlag []string) []string {
-	seen := make(map[string]struct{}, len(fromConfig)+len(fromFlag))
-	result := make([]string, 0, len(fromConfig)+len(fromFlag))
-	for _, l := range fromConfig {
-		seen[l] = struct{}{}
-		result = append(result, l)
-	}
-	for _, l := range fromFlag {
-		if _, ok := seen[l]; !ok {
-			result = append(result, l)
-		}
-	}
-	return result
+	return jsonc.UnionStrings(fromConfig, fromFlag)
 }
 
 // ApplyAll applies configuration.
@@ -672,8 +668,8 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool) error {
 	return nil
 }
 
-// DiffAll diffs the config.
-func DiffAll(target string, cfg *Config) error {
+// DiffAll diffs the config and reports whether changes/drift were detected.
+func DiffAll(target string, cfg *Config) (bool, error) {
 	anyChanged := false
 	report := func(changed bool, err error) error {
 		if err != nil {
@@ -686,7 +682,7 @@ func DiffAll(target string, cfg *Config) error {
 	}
 
 	if err := report(diffSettingsJSON(filepath.Join(target, "settings.json"), buildSettingsDoc(cfg))); err != nil {
-		return fmt.Errorf("settings: %w", err)
+		return false, fmt.Errorf("settings: %w", err)
 	}
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
 		ruleTargets := []string{fsutil.ExpandHome(g.Target)}
@@ -696,7 +692,7 @@ func DiffAll(target string, cfg *Config) error {
 		for _, ruleTarget := range ruleTargets {
 			for _, s := range g.Sections {
 				if err := report(diffSectionMD(ruleTarget, s.Name, s.Content)); err != nil {
-					return fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
+					return false, fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
 				}
 			}
 		}
@@ -704,7 +700,7 @@ func DiffAll(target string, cfg *Config) error {
 	if l := cfg.AgentsMD.Local; len(l.Sections) > 0 {
 		for _, s := range l.Sections {
 			if err := report(diffSectionMD(l.Target, s.Name, s.Content)); err != nil {
-				return fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
+				return false, fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
 			}
 		}
 	}
@@ -712,7 +708,7 @@ func DiffAll(target string, cfg *Config) error {
 	if !anyChanged {
 		fmt.Println("No changes.")
 	}
-	return nil
+	return anyChanged, nil
 }
 
 // CleanAll cleans the config.

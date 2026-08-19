@@ -61,8 +61,14 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(geminiSkillsDir, "evergreen", "SKILL.md")); err != nil {
 		t.Fatalf("Expected Gemini skill to be written: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(geminiSkillsDir, "sprint", "SKILL.md")); err != nil {
+		t.Fatalf("Expected Gemini sprint skill to be written: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(codexSkillsDir, "evergreen", "SKILL.md")); err != nil {
 		t.Fatalf("Expected Codex skill to be written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(codexSkillsDir, "sprint", "SKILL.md")); err != nil {
+		t.Fatalf("Expected Codex sprint skill to be written: %v", err)
 	}
 	primeSkillPath := filepath.Join(primeAgentDir, "skills", "evergreen", "SKILL.md")
 	primeSkill, err := os.ReadFile(primeSkillPath)
@@ -72,14 +78,26 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if !strings.HasPrefix(string(primeSkill), "---\nname: \"evergreen\"\ndescription:") {
 		t.Errorf("Expected Agent Skills frontmatter in %s, got:\n%s", primeSkillPath, primeSkill)
 	}
+	if _, err := os.Stat(filepath.Join(primeAgentDir, "skills", "sprint", "SKILL.md")); err != nil {
+		t.Fatalf("Expected Prime Agent sprint skill to be written: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(primeAgentDir, "prompts", "evergreen.md")); err != nil {
 		t.Fatalf("Expected Prime Agent prompt to be written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(primeAgentDir, "prompts", "sprint.md")); err != nil {
+		t.Fatalf("Expected Prime Agent sprint prompt to be written: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(primeAgentDir, "AGENTS.md")); err != nil {
 		t.Fatalf("Expected Prime Agent rules to be written: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(primeAgentDir, "docs", "Go.md")); err != nil {
 		t.Fatalf("Expected Prime Agent doc to be written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(primeAgentDir, "docs", "AgenticLoop.md")); err != nil {
+		t.Fatalf("Expected Prime Agent AgenticLoop doc to be written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(targetDir, "commands", "sprint.md")); err != nil {
+		t.Fatalf("Expected Claude sprint command to be written: %v", err)
 	}
 
 	// 4. Second apply: must be idempotent and report "No changes."
@@ -93,12 +111,18 @@ func TestIntegrationWorkflow(t *testing.T) {
 		t.Errorf("Expected second ApplyAll to report no changes, got:\n%s", out)
 	}
 
-	// 5. Diff when aligned: must report "No changes."
+	// 5. Diff when aligned: must report "No changes." and changed == false
+	var diffChanged bool
 	out, err = captureStdout(func() error {
-		return claude.DiffAll(targetDir, cfg)
+		var dErr error
+		diffChanged, dErr = claude.DiffAll(targetDir, cfg)
+		return dErr
 	})
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
+	}
+	if diffChanged {
+		t.Errorf("Expected DiffAll changed to be false when aligned, got true")
 	}
 	if !strings.Contains(out, "No changes.") {
 		t.Errorf("Expected DiffAll to report no changes when aligned, got:\n%s", out)
@@ -121,12 +145,17 @@ func TestIntegrationWorkflow(t *testing.T) {
 		t.Fatalf("Failed to write drifted settings.json: %v", err)
 	}
 
-	// 7. Diff under drift: must output changes
+	// 7. Diff under drift: must output changes and changed == true
 	out, err = captureStdout(func() error {
-		return claude.DiffAll(targetDir, cfg)
+		var dErr error
+		diffChanged, dErr = claude.DiffAll(targetDir, cfg)
+		return dErr
 	})
 	if err != nil {
 		t.Fatalf("DiffAll under drift failed: %v", err)
+	}
+	if !diffChanged {
+		t.Errorf("Expected DiffAll changed to be true under drift, got false")
 	}
 	if !strings.Contains(out, "Bash(journalctl *)") {
 		t.Errorf("Expected DiffAll to report differences under drift, got:\n%s", out)
@@ -208,3 +237,105 @@ func TestIntegrationWorkflow(t *testing.T) {
 		t.Errorf("Expected settings.json to be deleted after CleanAll, but it exists")
 	}
 }
+
+func TestDiffAll_ExecError(t *testing.T) {
+	targetDir := t.TempDir()
+	settingsPath := filepath.Join(targetDir, "settings.json")
+	if err := os.WriteFile(settingsPath, []byte("{}"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	// Set PATH to empty temp dir so 'diff' binary is not found
+	t.Setenv("PATH", t.TempDir())
+
+	_, err = claude.DiffAll(targetDir, cfg)
+	if err == nil {
+		t.Fatalf("Expected DiffAll to return error when diff binary is missing, got nil")
+	}
+}
+
+func TestBatchProjectInitialization_HeterogeneousWorkspace(t *testing.T) {
+	workspaceDir := t.TempDir()
+
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	// Create 4 distinct mock projects modeling actual sibling repositories:
+	// 1. go-service (Go + Makefile)
+	goProj := filepath.Join(workspaceDir, "go-service")
+	_ = os.MkdirAll(goProj, 0o755)
+	_ = os.WriteFile(filepath.Join(goProj, "go.mod"), []byte("module example.com/gosvc\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(goProj, "Makefile"), []byte("all:\n\t@echo ok\n"), 0o644)
+
+	// 2. zig-cli (pure Zig, no Makefile, like zterm)
+	zigProj := filepath.Join(workspaceDir, "zig-cli")
+	_ = os.MkdirAll(zigProj, 0o755)
+	_ = os.WriteFile(filepath.Join(zigProj, "build.zig"), []byte("const std = @import(\"std\");\n"), 0o644)
+
+	// 3. custom-notes (unmanaged repo with custom AGENTS.md, like homeserver)
+	customProj := filepath.Join(workspaceDir, "custom-notes")
+	_ = os.MkdirAll(customProj, 0o755)
+	customProse := "# Custom Admin Guidelines\nStrictly manual setup.\n"
+	_ = os.WriteFile(filepath.Join(customProj, "AGENTS.md"), []byte(customProse), 0o644)
+
+	// 4. bare-dir (non-project folder with just random notes, like mindstore/rocmctl)
+	bareDir := filepath.Join(workspaceDir, "bare-dir")
+	_ = os.MkdirAll(bareDir, 0o755)
+	_ = os.WriteFile(filepath.Join(bareDir, "README.txt"), []byte("bare notes\n"), 0o644)
+
+	projects := []string{goProj, zigProj, customProj}
+
+	// 1. Run Init across all projects
+	for _, p := range projects {
+		if err := claude.RunInit(p, cfg, nil, "", true, false, false, false); err != nil {
+			t.Fatalf("RunInit on %s failed: %v", filepath.Base(p), err)
+		}
+	}
+
+	// Assertions for go-service:
+	if _, err := os.Stat(filepath.Join(goProj, "docs", "Go.md")); err != nil {
+		t.Errorf("Expected go-service to have docs/Go.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(goProj, "docs", "AgenticLoop.md")); err != nil {
+		t.Errorf("Expected go-service to have docs/AgenticLoop.md: %v", err)
+	}
+	goAgents, _ := os.ReadFile(filepath.Join(goProj, "AGENTS.md"))
+	if !strings.Contains(string(goAgents), "Go/Golang") || !strings.Contains(string(goAgents), "Agentic Loop Practices") {
+		t.Errorf("go-service AGENTS.md missing expected conventions:\n%s", string(goAgents))
+	}
+
+	// Assertions for zig-cli:
+	if _, err := os.Stat(filepath.Join(zigProj, "docs", "Zig.md")); err != nil {
+		t.Errorf("Expected zig-cli to have docs/Zig.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(zigProj, "Makefile")); !os.IsNotExist(err) {
+		t.Errorf("zig-cli should NOT have Makefile created")
+	}
+
+	// Assertions for custom-notes:
+	customAgents, _ := os.ReadFile(filepath.Join(customProj, "AGENTS.md"))
+	if !strings.Contains(string(customAgents), "Custom Admin Guidelines") {
+		t.Errorf("custom-notes AGENTS.md corrupted custom prose:\n%s", string(customAgents))
+	}
+
+	// Assertions for bare-dir (was untouched):
+	if _, err := os.Stat(filepath.Join(bareDir, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Errorf("bare-dir should remain untouched")
+	}
+
+	// Idempotency: second batch run should succeed cleanly
+	for _, p := range projects {
+		if err := claude.RunInit(p, cfg, nil, "", true, false, false, false); err != nil {
+			t.Fatalf("Second RunInit on %s failed: %v", filepath.Base(p), err)
+		}
+	}
+}
+
+

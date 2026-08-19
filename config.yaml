@@ -12,6 +12,7 @@ docs:
   - gtk4
   - canary
   - spec
+  - agentic-loop
 
 # model: sonnet  # unmanaged by default, let user or client choose
 effort: medium
@@ -128,6 +129,10 @@ commands:
     description: "Diff our adapted mattpocock/skills commands against upstream and report drift"
     file: commands/sync-mattpocock-skills.md
 
+  - name: sprint
+    description: "Orchestrate a 5-phase agentic sprint loop (Advisors -> Dev -> Review -> Hygiene -> Retro)"
+    file: commands/sprint.md
+
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
 prime_agent_target: ~/.prime/agent
@@ -145,6 +150,10 @@ skills:
     description: "Actively build and sharpen the project's domain model, glossary, and ADRs"
     file: commands/domain-modeling.md
 
+  - name: sprint
+    description: "Orchestrate a 5-phase agentic sprint loop (Advisors -> Dev -> Review -> Hygiene -> Retro)"
+    file: commands/sprint.md
+
 agents_md:
   # config for local md file
   global:
@@ -161,6 +170,8 @@ agents_md:
           - Local rules may refer to global docs managed by harnez.
             Resolve local @docs or @rules refs to ./docs or ./rules first,
             then to the active harness directory (~/.claude or ~/.prime/agent).
+          - Context Discipline: do not execute whole-file reads on AGENTS.md or active system prompt files; use grep or range-bounded reads.
+          - Voice Input: the user may use speech-to-text (ASR); interpret phonetic homophones and transcription anomalies with context awareness.
           - Always use absolute file paths for global instructions.
             Always use relative file paths for local instructions.
       - name: Minimal Global Docs
@@ -232,7 +243,7 @@ agents_md:
       source: docs/lang/Cpp.md
       target: ~/.claude/docs/Cpp.md
       local: ./docs/Cpp.md
-      default: auto   # *.cpp, *.cc, *.h, CMakeLists.txt
+      default: auto   # *.c, *.cpp, *.cc, *.h, *.hpp, CMakeLists.txt
     markdown:
       name: "Markdown"
       ref: "@docs/Markdown.md"
@@ -272,6 +283,14 @@ agents_md:
       source: docs/other/Spec.md
       target: ~/.claude/docs/Spec.md
       local: ./docs/Spec.md
+      default: true
+    agentic-loop:
+      name: "Agentic Loop Practices"
+      ref: "@docs/AgenticLoop.md"
+      hint: "5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee"
+      source: docs/practices/AgenticLoop.md
+      target: ~/.claude/docs/AgenticLoop.md
+      local: ./docs/AgenticLoop.md
       default: true
 
   # repo git setups — pick one with `init --repo-mode/-m` to add a short

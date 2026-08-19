@@ -1,5 +1,6 @@
 # promote command — push improved project docs back to source
 
+**Status:** Open  
 **Severity:** Feature — workflow gap
 
 ## Problem

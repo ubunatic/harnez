@@ -1,5 +1,6 @@
 # Permissions are grow-only — revoked entries never removed
 
+**Status:** Open  
 **Severity:** Medium — declarative config doesn't fully control permission state
 
 ## Problem

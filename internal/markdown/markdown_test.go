@@ -80,3 +80,62 @@ func TestMarkdownMarkers_HarnezAndLegacy(t *testing.T) {
 		t.Errorf("Makefile should not contain legacy targets after clean, got: %s", string(mkRemaining))
 	}
 }
+
+func TestMarkdownDiff_Identical(t *testing.T) {
+	tmpDir := t.TempDir()
+	mdFile := filepath.Join(tmpDir, "AGENTS.md")
+	content := "Line 1\nLine 2\n"
+
+	_, _, err := markdown.Apply(mdFile, "Section", content)
+	if err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	diffed, err := markdown.Diff(mdFile, "Section", content)
+	if err != nil {
+		t.Fatalf("Diff failed: %v", err)
+	}
+	if diffed {
+		t.Errorf("Expected diffed=false for identical content, got true")
+	}
+}
+
+func TestMarkdownDiff_Different(t *testing.T) {
+	tmpDir := t.TempDir()
+	mdFile := filepath.Join(tmpDir, "AGENTS.md")
+
+	_, _, err := markdown.Apply(mdFile, "Section", "Old content\n")
+	if err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	diffed, err := markdown.Diff(mdFile, "Section", "New content\n")
+	if err != nil {
+		t.Fatalf("Diff failed: %v", err)
+	}
+	if !diffed {
+		t.Errorf("Expected diffed=true for differing content, got false")
+	}
+}
+
+func TestMarkdownDiff_ExecError(t *testing.T) {
+	tmpDir := t.TempDir()
+	mdFile := filepath.Join(tmpDir, "AGENTS.md")
+
+	_, _, err := markdown.Apply(mdFile, "Section", "Old content\n")
+	if err != nil {
+		t.Fatalf("Apply failed: %v", err)
+	}
+
+	// Set PATH to empty temp dir so 'diff' binary is not found
+	t.Setenv("PATH", t.TempDir())
+
+	diffed, err := markdown.Diff(mdFile, "Section", "New content\n")
+	if err == nil {
+		t.Fatalf("Expected error when diff binary is missing, got nil (diffed=%v)", diffed)
+	}
+	if diffed {
+		t.Errorf("Expected diffed=false on execution failure, got true")
+	}
+}
+

@@ -109,6 +109,7 @@ func main() {
 	apply.Flags().StringSliceVarP(&applyDocs, "docs", "d", nil, "doc(s) to install globally, comma-separated or repeated (e.g. golang,canary)")
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing docs with bundled versions")
 
+	var diffExitCode bool
 	diff := &cobra.Command{
 		Use:   "diff",
 		Short: "Show what apply would change in managed blocks",
@@ -118,11 +119,19 @@ func main() {
 				return fmt.Errorf("load config: %w", err)
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
-			return claude.DiffAll(t, cfg)
+			changed, err := claude.DiffAll(t, cfg)
+			if err != nil {
+				return err
+			}
+			if diffExitCode && changed {
+				os.Exit(1)
+			}
+			return nil
 		},
 	}
 	diff.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	diff.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
+	diff.Flags().BoolVarP(&diffExitCode, "exit-code", "e", false, "exit with status 1 if drift/changes are found")
 
 	clean := &cobra.Command{
 		Use:   "clean",

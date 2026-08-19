@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"ubunatic.com/harnez/internal/fsutil"
+	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/jsonc"
 	"ubunatic.com/harnez/internal/markdown"
 )
@@ -127,5 +128,30 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 		}
 	}
 
+	issuesTrackerPath := "issues/README.md"
+	if _, err := os.Stat(issuesTrackerPath); err == nil {
+		fmt.Println()
+		fmt.Println("Issues:")
+		report, err := issues.Lint("issues")
+		if err != nil {
+			fmt.Printf("  %-14s %s [error: %v]\n", "tracker:", issuesTrackerPath, err)
+		} else {
+			driftCount := len(report.Diagnostics)
+			okCount := report.TotalFiles - driftCount
+			if okCount < 0 {
+				okCount = 0
+			}
+			if driftCount == 0 {
+				fmt.Printf("  %-14s %s [%d tickets: all ok]\n", "tracker:", issuesTrackerPath, report.TotalFiles)
+			} else {
+				fmt.Printf("  %-14s %s [%d tickets: %d ok, %d drift]\n", "tracker:", issuesTrackerPath, report.TotalFiles, okCount, driftCount)
+				for _, d := range report.Diagnostics {
+					fmt.Printf("    ! %s\n", d.Message)
+				}
+			}
+		}
+	}
+
 	return nil
 }
+

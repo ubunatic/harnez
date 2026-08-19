@@ -87,7 +87,7 @@ And mention it in AGENTS.md so agents see it in every project.
 ### TODO: Verify worktree write-back behaviour before spawning parallel agents
 
 In this run, both agents appeared to write directly to
-`/home/uwe/projects/instamoji/...` (the main working tree path) rather than
+`~/projects/instamoji/...` (the main working tree path) rather than
 to separate worktree paths.  This suggests either:
 a) The harness applies isolation differently than expected, OR
 b) Worktree isolation was nominal — the isolation path overlapped with the main tree.

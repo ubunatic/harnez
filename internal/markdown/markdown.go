@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -133,13 +134,13 @@ func diffSection(path, section, content string, m Markers) (bool, error) {
 
 	oldFile, err := writeTemp(oldBlock)
 	if err != nil {
-		return true, err
+		return false, err
 	}
 	defer os.Remove(oldFile)
 
 	newFile, err := writeTemp(newBlock)
 	if err != nil {
-		return true, err
+		return false, err
 	}
 	defer os.Remove(newFile)
 
@@ -147,7 +148,13 @@ func diffSection(path, section, content string, m Markers) (bool, error) {
 	cmd := exec.Command("diff", "-u", "--label", label, "--label", label, oldFile, newFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Run()
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return true, nil
+		}
+		return false, fmt.Errorf("diff %s: %w", label, err)
+	}
 	return true, nil
 }
 
