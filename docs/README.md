@@ -36,6 +36,7 @@ Generated copies land here (root) after `apply` / `init`.
 | File | Topic | Read Trigger / Scope |
 |------|-------|----------------------|
 | [practices/AgenticLoop.md](practices/AgenticLoop.md) | Agentic Loop Practices: 5-phase sprint workflow (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee | Summary active in AGENTS.md. Read for phase invariants, review checklists, and anti-patterns |
+| [practices/IssueTracking.md](practices/IssueTracking.md) | Issue Tracking Practices: Standardized issue priority schema (P0–P3), metadata headers, and tracker lifecycle | Summary active in AGENTS.md. Read for priority definitions, severity vs priority distinctions, and ticket schemas |
 
 **`docs/other/`** — practice docs (no category yet)
 
