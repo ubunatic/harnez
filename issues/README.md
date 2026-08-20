@@ -17,7 +17,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 009 | [009-diff-clean-no-makefile-targets.md](009-diff-clean-no-makefile-targets.md) | diff and clean don't cover Makefile targets section | Open |
 | 010 | [010-smoke-test-agent-visibility.md](010-smoke-test-agent-visibility.md) | smoke-test that agents can see installed skills and commands | Open — blocked on wayreel#11 |
 | 011 | [011-autodetect-nondeterministic-order.md](011-autodetect-nondeterministic-order.md) | autoDetectDocs non-deterministic order causes spurious AGENTS.md diffs | Closed |
-| 012 | [012-website-feature-demo-video.md](012-website-feature-demo-video.md) | website: feature the TUI demo video + favicon | Open |
+| 012 | [012-website-feature-demo-video.md](012-website-feature-demo-video.md) | website: feature the TUI demo video + favicon | Open — blocked on clean recording & user verification |
 | 013 | [013-promote-command.md](013-promote-command.md) | promote command — push improved project docs back to source | Open |
 | 014 | [014-zig-language-doc.md](014-zig-language-doc.md) | bundle a Zig language doc (emojig, books need it) | Closed |
 | 015 | [015-agents-md-uman-workspace-awareness.md](015-agents-md-uman-workspace-awareness.md) | AGENTS.md must teach agents about uman (workspace glue) | Open |
@@ -40,3 +40,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 039 | [039-agentic-loop-practices-and-sprint-command.md](039-agentic-loop-practices-and-sprint-command.md) | `docs/practices/AgenticLoop.md` and `/sprint` command scaffolding | Closed |
 | 040 | [040-agent-context-duplication-and-file-read-discipline.md](040-agent-context-duplication-and-file-read-discipline.md) | Agent Context Ingestion Duplication & File Read Discipline | Closed |
 | 041 | [041-sibling-projects-real-world-shape-and-test-suite-extensions.md](041-sibling-projects-real-world-shape-and-test-suite-extensions.md) | Sibling Projects Audit: Real-World Shapes, Drift Causes & Test Suite Extensions | Closed |
+| 042 | [042-agentic-loop-repro-before-fix-and-single-status-field.md](042-agentic-loop-repro-before-fix-and-single-status-field.md) | `docs/practices/AgenticLoop.md` is missing "repro before fix" and "one Status field per ticket" guidance | Open |
