@@ -1,0 +1,41 @@
+REEL main
+  mode = tui
+  title = "harnez: one-command project onboarding"
+  pause = 1s
+  app_width = 800
+  app_height = 500
+  scene_width = 800
+  scene_height = 500
+  font_size = 10
+  no_border = true
+  shell_init = ["source ./reels/demo-init.sh"]
+
+  $ "harnez usage" desc="inspect multi-agent token quotas"
+  P 2s
+
+  $ "mkdir my-project"
+  $ "cd my-project"
+  $ "git init"
+
+  $ "harnez init --docs golang,make -y" desc="bootstrap AGENTS.md, docs, symlinks & Makefile"
+  P 3s
+
+  $ "git status -s" desc="inspect created project harness files"
+  P 2s
+  $ "clear"
+
+  $ "make help" desc="inspect self-documenting developer targets"
+  P 2s
+  $ "clear"
+
+  $ "head -n 14 AGENTS.md" desc="preview structured agent instructions"
+  P 4s
+  $ "clear"
+
+  $ "harnez usage" desc="inspect multi-agent token quotas"
+  P 2s
+
+  $ "harnez init" desc="re-run init process"
+  P 6s
+
+  X desc="exit"
