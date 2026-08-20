@@ -24,8 +24,8 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   YAML spec files as single source of truth; Go code must not duplicate spec values
 - Agentic Loop Practices @docs/AgenticLoop.md,
   5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
-- Synthetic Input Safety @docs/VoiceInput.md,
-  sanitize/validate all ASR text before injection; never leak ANSI escapes or logs into dotool
+- Issue Tracking Practices @docs/IssueTracking.md,
+  P0-P3 priorities (P0/Critical, P1/High, P2/Medium, P3/Low), metadata: Status, Priority, Severity, Category
 <!-- harnez:end Language Conventions -->
 
 ## CLI command scope
@@ -45,7 +45,7 @@ Before changing any command's flags or adding project-local behaviour to `apply`
 `docs/lang/` — copyable language/SDK/framework docs (Go, Bash, Make, Git, Rust, Cpp, Markdown, GTK4, Zig).
 Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --doc <name>`.
 
-`docs/practices/` — copyable workflow and practice docs (AgenticLoop). Same install mechanics as `docs/lang/`.
+`docs/practices/` — copyable workflow and practice docs (AgenticLoop, IssueTracking). Same install mechanics as `docs/lang/`.
 
 `docs/other/` — copyable docs that don't form a category yet (Canary, Spec). Same install mechanics as `docs/lang/`.
 
@@ -57,6 +57,30 @@ Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --doc
 
 Rule: if a doc applies to many projects → `docs/lang/`, `docs/practices/`, or `docs/other/`. If it describes this codebase → `docs/` root.
 A category dir forms once 3+ docs share a theme.
+
+## Issue Tracking & Priority Standards
+
+Adhere to `@docs/IssueTracking.md` for issue tracking across `issues/*.md`:
+
+- **Issue Priority Schema (Scheduling Urgency)**:
+  - **P0 / Critical**: Blocker, data loss, security vulnerability, broken build, or critical regression violating core invariants. Halts regular development ("stop the line").
+  - **P1 / High**: Core functionality broken, major workflow impediment, key API regression, or high-urgency milestone deliverable. Addressed in current sprint.
+  - **P2 / Medium**: Normal feature, standard bug fix, performance optimization, UX polish, or refactoring without active blockage. Scheduled in normal backlog.
+  - **P3 / Low**: Minor cosmetic glitch, typo, nice-to-have suggestion, speculative idea, or non-urgent documentation improvement. Opportunistic.
+- **Priority vs. Severity**:
+  - *Severity* = technical impact/damage (Critical, Major, Moderate, Minor).
+  - *Priority* = scheduling urgency (P0, P1, P2, P3).
+- **Ticket Metadata Format**: Every issue file under `issues/NNN-*.md` begins with:
+  ```markdown
+  # NNN — Title of Issue
+
+  **Status**: Open | In Progress | Blocked — <reason> | Closed — resolved in <commit> | Draft
+  **Priority**: P0 (Critical) | P1 (High) | P2 (Medium) | P3 (Low)
+  **Severity**: Critical | Major | Moderate | Minor
+  **Category**: Bug | Feature | Architecture | Documentation | Performance | Refactor | Agentic Ergonomics
+  **Related**: [Doc / Ticket / Commit references]
+  ```
+- **Tracker Synchronization**: Keep `issues/README.md` table in sync with ticket files (`harnez status` verifies consistency). Archive closed tickets to `issues/archive/`.
 
 ## Development & Review Workflow
 
@@ -92,6 +116,10 @@ Run from project root.
 ## Voice & Transcription Input Awareness
 - The user often uses voice-to-text / speech transcription (ASR).
 - Be alert for phonetic homophones and transcription artifacts (e.g. "Southern Exploration" → "start an exploration agent", "harness" → "harnez"). Reason about user intent from phonetic similarity and conversation context before asking for clarification.
+
+## Demo Recordings & Media Verification
+- When creating, editing, or adding media assets (e.g. reels, WebM demos, screenshots) intended for documentation or websites, **always ask the user for explicit confirmation** that the recorded visual output matches their exact expectations before publishing or embedding it.
+
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup
 - Solo/hobby repo — single default branch, no PR workflow.

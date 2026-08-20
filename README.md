@@ -2,7 +2,7 @@
 
 Manage your [Claude Code](https://claude.ai/code) and Prime Agent harnesses declaratively from a
 single `config.yaml`. One source of truth drives everything Claude Code and coding agents read:
-permissions, model settings, hooks, AGENTS.md instructions, custom slash
+permissions, effort levels, optional model overrides, hooks, AGENTS.md instructions, custom slash
 commands, skills, and language doc copies. Apply is idempotent — run it as often as
 you like; user-managed keys and unmanaged sections are never touched.
 
@@ -12,7 +12,7 @@ you like; user-managed keys and unmanaged sections are never touched.
 
 | Thing | Where |
 |---|---|
-| Model & effort level | `~/.claude/settings.json` |
+| Effort level & optional model | `~/.claude/settings.json` |
 | Permission allow/deny lists | `~/.claude/settings.json` |
 | Lifecycle hooks (Stop, etc.) | `~/.claude/settings.json` |
 | Environment variables | `~/.claude/settings.json` |
@@ -35,7 +35,13 @@ Or from source:
 ```sh
 git clone https://codeberg.org/ubunatic/harnez
 cd harnez
-make install          # builds and installs to /usr/local/bin
+make install          # builds and installs to ~/go/bin
+```
+
+System-wide:
+
+```sh
+make install-system   # installs to /usr/local/bin via sudo
 ```
 
 After install the binary is self-contained: it embeds its own `config.yaml` and
@@ -47,6 +53,8 @@ command files, so `harnez apply` (no flags) applies the built-in config.
 harnez apply           # apply embedded config to Claude, Gemini, Codex, and Prime Agent
 harnez status          # show what is and isn't applied
 harnez diff            # preview changes without writing
+harnez usage           # show unified token, session, and quota status across agents
+harnez usage --watch   # live TUI dashboard with real-time token velocity
 harnez clean           # remove all managed blocks/keys
 ```
 
@@ -68,16 +76,19 @@ make status
 ## config.yaml overview
 
 ```yaml
-target_dir: ~/.claude        # where Claude Code stores its config
+target_dir: ~/.claude               # where Claude Code stores its config
+skills_target: ~/.gemini/skills     # Gemini skills target
+codex_skills_target: ~/.codex/skills # Codex skills target
 prime_agent_target: ~/.prime/agent  # Prime rules, prompts, skills, and docs
 
-# Docs to install on every apply
+# Docs to install globally on every apply
 docs:
   - golang
   - bash
   - make
+  - agentic-loop
 
-model: sonnet                # model alias (sonnet / opus / haiku)
+# model: sonnet              # optional override; unmanaged by default so user/client chooses
 effort: medium               # effortLevel written to settings.json
 
 # Merged into settings.json permissions (user keys preserved)
@@ -104,7 +115,7 @@ env:
 # MCP server definitions (empty = none)
 mcp_servers: []
 
-# Custom slash commands written to ~/.claude/commands/
+# Custom slash commands written to ~/.claude/commands/ and ~/.prime/agent/prompts/
 commands:
   - name: review
     description: "Review current branch against main"
@@ -114,6 +125,12 @@ commands:
   - name: domain-modeling
     description: "Actively build and sharpen the project's domain model, glossary, and ADRs"
     file: commands/domain-modeling.md   # body read from this file
+
+# Skills written to ~/.gemini/skills/, ~/.codex/skills/, and ~/.prime/agent/skills/
+skills:
+  - name: sprint
+    description: "Orchestrate a 5-phase agentic sprint loop"
+    file: commands/sprint.md
 
 # CLAUDE.md / AGENTS.md sections
 agents_md:
@@ -138,14 +155,14 @@ agents_md:
   languages:
     golang:
       ref: "@docs/Go.md"
-      source: docs/Go.md
+      source: docs/lang/Go.md
       target: ~/.claude/docs/Go.md
-      symlink: ./docs/Go.md
+      local: ./docs/Go.md
     bash:
       ref: "@docs/Bash.md"
-      source: docs/Bash.md
+      source: docs/lang/Bash.md
       target: ~/.claude/docs/Bash.md
-      symlink: ./docs/Bash.md
+      local: ./docs/Bash.md
 ```
 
 ## How each piece works
@@ -153,9 +170,10 @@ agents_md:
 ### `settings.json` — key merge, not replace
 
 Claude Code writes `settings.json` itself (theme, plugins, auth).
-`harnez` only touches the keys it owns (`model`, `effortLevel`,
-`permissions`, `hooks`, `env`, `spinnerVerbs`, `mcpServers`).  All other keys
-are preserved on every apply.
+`harnez` only touches the keys it owns (`effortLevel`, `permissions`, `hooks`,
+`env`, `spinnerVerbs`, `mcpServers`, and `model` if explicitly set). If `model`
+is omitted from `config.yaml`, user or client selection in `settings.json` is
+left unmanaged. All other unmanaged keys are preserved on every apply.
 
 ### CLAUDE.md / AGENTS.md — managed sections
 
@@ -181,23 +199,58 @@ Each entry under `commands:` produces both a Claude command and a Prime Agent pr
 Each entry under `skills:` produces Agent Skills-compatible `SKILL.md` files for every configured
 Gemini, Codex, and Prime Agent skill target.
 
-### Language docs
+### Language & practice docs
 
-Entries under `languages:` define a source doc (e.g. `docs/lang/Go.md`), global
-installs for Claude and Prime Agent, and a project copy
-(`docs/Go.md`). Docs listed in the top-level `docs:` list (or passed via
+Entries under `languages:` define source docs (e.g. `docs/lang/Go.md`, `docs/practices/IssueTracking.md`), global
+installs for Claude and Prime Agent, and project copies
+(`docs/Go.md`, `docs/IssueTracking.md`). Docs listed in the top-level `docs:` list (or passed via
 `--docs`) are installed on `apply`.
+
+## Issue Tracking & Priority Standards
+
+`harnez` establishes a standardized, in-repository issue tracking convention across all managed projects (`issues/NNN-*.md`):
+
+### Issue Priority Schema
+
+Priorities define **scheduling urgency**:
+
+| Priority | Level | Description | Target SLA / Lifecycle |
+|---|---|---|---|
+| **P0** | **Critical** | Blocker, data loss, security vulnerability, broken build, or invariant violation. Halts regular dev. | Immediate resolution ("stop the line"). |
+| **P1** | **High** | Core functionality broken, major workflow impediment, high-urgency milestone deliverable. | Current sprint / next immediate release. |
+| **P2** | **Medium** | Standard bug, normal feature, performance improvement, UX polish, non-blocking refactor. | Normal backlog prioritization. |
+| **P3** | **Low** | Minor cosmetic polish, typo, nice-to-have suggestion, speculative idea, non-urgent doc fix. | Opportunistic. |
+
+> **Priority vs. Severity**: *Severity* measures technical impact and damage (Critical, Major, Moderate, Minor). *Priority* measures scheduling urgency (P0, P1, P2, P3).
+
+### Standard Ticket Metadata Header
+
+Every ticket in `issues/NNN-kebab-case.md` begins with standard metadata headers:
+
+```markdown
+# NNN — Title of Issue
+
+**Status**: Open | In Progress | Blocked — <reason> | Closed — resolved in <commit> | Draft
+**Priority**: P0 (Critical) | P1 (High) | P2 (Medium) | P3 (Low)
+**Severity**: Critical | Major | Moderate | Minor
+**Category**: Bug | Feature | Architecture | Documentation | Performance | Refactor | Agentic Ergonomics
+**Related**: [Doc / Ticket / Commit references]
+```
+
+- **Tracker Index**: `issues/README.md` indexes all active and archived tickets.
+- **Tracker Linter**: `harnez status` validates table links, checks for status drift, and detects unindexed tickets.
+- **Archiving**: Resolved tickets are moved to `issues/archive/` to keep active issue queues focused.
 
 ## Commands reference
 
 | Command | Flags | What it does |
 |---|---|---|
-| `apply` | `-c` `-t` `-d` `--force-docs` | Sync global Claude and Prime Agent rules, prompts, skills, and docs |
-| `init` | `-c` `-d` `--docs` `--summary` | Set up a project: AGENTS.md, doc copies, Makefile targets |
-| `diff` | `-c` `-t` | Preview changes without writing (uses `diff -u`) |
+| `apply` | `-c` `-t` `-d` `--force-docs` | Sync global Claude, Gemini, Codex, and Prime Agent rules, prompts, skills, and docs |
+| `init` | `-c` `-d` `--docs` `-m` `--summary` `--update` `--replace` `-y` | Set up a project: AGENTS.md, doc copies, Makefile targets |
+| `diff` | `-c` `-t` `-e` | Preview changes without writing (`-e, --exit-code` exits with 1 on drift) |
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
 | `status` | `-c` `-t` | Print config summary and check which items are present on disk |
-| `usage` | `--json` `--agent` `--offline` | Show unified token, session, and quota status across AI coding agents |
+| `usage` | `--json` `--agent` `--offline` `-w` `-s` `--interval` | Show unified token, session, and quota status across AI coding agents (aliases: `quota`, `tokens`, `stats`) |
 
 All commands accept `-c <path>` (config file, default: embedded).
 
@@ -206,6 +259,20 @@ All commands accept `-c <path>` (config file, default: embedded).
 - `-t <dir>` — Claude config directory (default: `~/.claude`)
 - `-d, --docs <name>[,<name>…]` — extra doc(s) to install globally (comma-separated or repeated)
 - `--force-docs` — overwrite existing docs with bundled versions
+
+`diff` also accepts:
+
+- `-t <dir>` — Claude config directory (default: `~/.claude`)
+- `-e, --exit-code` — exit with status 1 if drift or changes are detected (useful for CI/pre-commit checks)
+
+`usage` also accepts:
+
+- `--json` — output usage metrics in JSON format
+- `--agent <name>` — filter to a specific agent (`claude`, `agy`, `codex`)
+- `--offline` — disable live network queries and use local caches only
+- `-w, --watch` — live-refresh the dashboard in place with a tokens/min velocity trend
+- `-s, --summary` — print the compact dashboard once and exit
+- `--interval <duration>` — refresh interval for `--watch` (default `15s`, minimum `10s`)
 
 `init` also accepts:
 
@@ -242,7 +309,7 @@ make build    # compile ./harnez
 make test     # go vet + go test
 make apply    # build then apply repo config.yaml to ~/.claude
 make diff     # build then preview changes
-make install  # build then install to /usr/local/bin
+make install  # build then install to ~/go/bin
 ```
 
 Smoke-test (build → apply → idempotency check → drift simulation → repair):
