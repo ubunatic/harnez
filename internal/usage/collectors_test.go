@@ -184,6 +184,64 @@ func TestCollectAGY(t *testing.T) {
 	}
 }
 
+func TestCollectAGY_NoTokenFile_LogAuth(t *testing.T) {
+	tempDir := t.TempDir()
+
+	settingsJSON := `{"model": "Gemini 3.7 Flash (Low)"}`
+	if err := os.WriteFile(filepath.Join(tempDir, "settings.json"), []byte(settingsJSON), 0600); err != nil {
+		t.Fatalf("write settings.json: %v", err)
+	}
+
+	logDir := filepath.Join(tempDir, "log")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		t.Fatalf("mkdir log: %v", err)
+	}
+	logContent := "2026-08-20 server_oauth.go: applyAuthResult: email=user@domain.com, authMethod=consumer, quotaProject=\n"
+	if err := os.WriteFile(filepath.Join(logDir, "cli-456.log"), []byte(logContent), 0600); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	ctx := context.Background()
+	usage := CollectAGY(ctx, tempDir, nil)
+
+	if !usage.Installed {
+		t.Errorf("expected Installed = true")
+	}
+	if !usage.Authenticated {
+		t.Errorf("expected Authenticated = true")
+	}
+	if usage.PlanTier != "Consumer" {
+		t.Errorf("expected PlanTier = Consumer, got %q", usage.PlanTier)
+	}
+	if usage.ActiveModel != "Gemini 3.7 Flash (Low)" {
+		t.Errorf("expected ActiveModel = Gemini 3.7 Flash (Low), got %q", usage.ActiveModel)
+	}
+	if usage.Account != "u***r@domain.com" {
+		t.Errorf("expected Account = u***r@domain.com, got %q", usage.Account)
+	}
+}
+
+func TestCollectAGY_SettingsOnlyIsNotAuthenticated(t *testing.T) {
+	tempDir := t.TempDir()
+
+	settingsJSON := `{"model": "Gemini 3.7 Flash (Low)"}`
+	if err := os.WriteFile(filepath.Join(tempDir, "settings.json"), []byte(settingsJSON), 0600); err != nil {
+		t.Fatalf("write settings.json: %v", err)
+	}
+
+	usage := CollectAGY(context.Background(), tempDir, nil)
+
+	if usage.Authenticated {
+		t.Errorf("expected settings-only installation to remain unauthenticated")
+	}
+	if usage.PlanTier != "" {
+		t.Errorf("expected empty PlanTier, got %q", usage.PlanTier)
+	}
+	if usage.ActiveModel != "Gemini 3.7 Flash (Low)" {
+		t.Errorf("expected ActiveModel = Gemini 3.7 Flash (Low), got %q", usage.ActiveModel)
+	}
+}
+
 func TestQueryAGYLocalQuota(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary" {

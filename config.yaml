@@ -13,6 +13,7 @@ docs:
   - canary
   - spec
   - agentic-loop
+  - issue-tracking
 
 # model: sonnet  # unmanaged by default, let user or client choose
 effort: medium
@@ -291,6 +292,14 @@ agents_md:
       source: docs/practices/AgenticLoop.md
       target: ~/.claude/docs/AgenticLoop.md
       local: ./docs/AgenticLoop.md
+      default: true
+    issue-tracking:
+      name: "Issue Tracking Practices"
+      ref: "@docs/IssueTracking.md"
+      hint: "P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync"
+      source: docs/practices/IssueTracking.md
+      target: ~/.claude/docs/IssueTracking.md
+      local: ./docs/IssueTracking.md
       default: true
 
   # repo git setups — pick one with `init --repo-mode/-m` to add a short

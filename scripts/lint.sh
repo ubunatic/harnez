@@ -39,8 +39,8 @@ do
     fi
 done
 
-# Check GNOME extension metadata and package validity
-if command -v gnome-extensions >/dev/null 2>&1
+# Check GNOME extension metadata and package validity if directory exists
+if command -v gnome-extensions >/dev/null 2>&1 && test -d contrib/gnome-shell-extension
 then
     if ! gnome-extensions pack --force --out-dir=/tmp contrib/gnome-shell-extension >/dev/null 2>&1
     then

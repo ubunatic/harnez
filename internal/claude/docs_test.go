@@ -159,7 +159,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: nil,
 			wantOrder: []string{
-				"golang", "bash", "make", "zig", "cpp", "markdown", "git", "canary", "spec", "agentic-loop",
+				"golang", "bash", "make", "zig", "cpp", "markdown", "git", "canary", "spec", "agentic-loop", "issue-tracking",
 			},
 		},
 		{
@@ -170,7 +170,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: nil,
 			wantOrder: []string{
-				"rust", "zig", "markdown", "git", "canary", "spec", "agentic-loop",
+				"rust", "zig", "markdown", "git", "canary", "spec", "agentic-loop", "issue-tracking",
 			},
 		},
 		{
@@ -181,7 +181,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: nil,
 			wantOrder: []string{
-				"zig", "markdown", "git", "canary", "spec", "agentic-loop",
+				"zig", "markdown", "git", "canary", "spec", "agentic-loop", "issue-tracking",
 			},
 		},
 		{
@@ -192,7 +192,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: nil,
 			wantOrder: []string{
-				"markdown", "git", "canary", "spec", "agentic-loop",
+				"markdown", "git", "canary", "spec", "agentic-loop", "issue-tracking",
 			},
 		},
 		{
@@ -203,7 +203,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: []string{"golang", "canary"},
 			wantOrder: []string{
-				"make", "markdown", "git", "spec", "agentic-loop",
+				"make", "markdown", "git", "spec", "agentic-loop", "issue-tracking",
 			},
 		},
 	}

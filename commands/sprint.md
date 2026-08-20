@@ -41,6 +41,7 @@ Follow these 5 phases sequentially:
    - **Test Assertion Rigor**: Are assertions meaningful, robust, and verifying real behaviors?
    - **Documentation & Tracker Sync**: Are `issues/*.md` statuses, `issues/README.md`, `docs/README.md`, and `AGENTS.md` updated?
    - **Invariants & CLI Design**: Are command boundaries (`apply` vs `init`) and architectural rules respected?
+   - **Media & Demo Verification**: If reels, WebM files, or UI screenshots were produced, has explicit user confirmation been obtained before publishing?
    - **Code Cleanliness**: Is the code token-efficient, idiomatic, and minimal?
 3. Address any review findings before proceeding to commit.
 

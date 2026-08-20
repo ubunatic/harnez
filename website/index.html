@@ -284,6 +284,45 @@
       margin-top: 0.5rem;
     }
 
+    /* ── story section ───────────────────────────────────────── */
+    .story-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin-top: 0.5rem;
+    }
+    .story-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+    }
+    .story-tag {
+      align-self: flex-start;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+    .story-tag.problem  { background: #fee2e2; color: #b91c1c; }
+    .story-tag.approach { background: #e0f2fe; color: #0369a1; }
+    .story-tag.result   { background: #dcfce7; color: #15803d; }
+    .story-card h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+      color: var(--text);
+    }
+    .story-card p {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
     @media (max-width: 600px) {
       .header-links .nav-link { display: none; }
       .hero { padding: 2rem 0; }
@@ -306,6 +345,7 @@
         harnez
       </a>
       <nav class="header-links">
+        <a class="nav-link" href="#story">Story</a>
         <a class="nav-link" href="#install">Install</a>
         <a class="nav-link" href="#commands">Commands</a>
         <a class="nav-link" href="#usage">Usage monitor</a>
@@ -326,7 +366,7 @@
 <div class="hero">
   <div class="container">
     <h1>Declarative <em>developer &amp; agent</em><br>harness</h1>
-    <p>One <code style="font-family:var(--mono);font-size:0.95em;background:var(--surface);border:1px solid var(--border);padding:0.1em 0.4em;border-radius:4px">config.yaml</code> drives everything Claude Code and AI agents read — permissions, model settings, hooks, instructions, cross-agent skills, and engineering conventions. Apply is idempotent.</p>
+    <p>One <code style="font-family:var(--mono);font-size:0.95em;background:var(--surface);border:1px solid var(--border);padding:0.1em 0.4em;border-radius:4px">config.yaml</code> drives everything Claude Code and AI agents read — permissions, model effort, hooks, instructions, cross-agent skills, and engineering conventions. Apply is idempotent.</p>
 
     <div class="pill-row">
       <span class="pill">settings.json</span>
@@ -336,6 +376,7 @@
       <span class="pill">skills/</span>
       <span class="pill">docs/</span>
       <span class="pill">hooks</span>
+      <span class="pill">usage --watch</span>
     </div>
 
     <div class="install" id="install">
@@ -349,14 +390,38 @@
   </div>
 </div>
 
+<!-- ── STORY: PROBLEM → APPROACH → RESULT ────────────────────────── -->
+<section id="story">
+  <div class="container">
+    <h2>Why harnez?</h2>
+    <div class="story-grid">
+      <div class="story-card">
+        <div class="story-tag problem">Problem</div>
+        <h3>Configuration Drift &amp; Fragmented Agents</h3>
+        <p>AI coding agent configurations drift rapidly across machines and tools. Permissions wipe on updates, prompt rules diverge across repositories, slash commands and skills need separate target directories for Claude Code, Gemini, and Codex, while quota limits cause silent failures.</p>
+      </div>
+      <div class="story-card">
+        <div class="story-tag approach">Approach</div>
+        <h3>Single Declarative Source of Truth</h3>
+        <p>A central <code>config.yaml</code> idempotently manages global configs, local project scaffolding, and universal skills. Non-destructive key merging and HTML-comment boundaries preserve user customization, while a unified usage monitor and 5-phase sprint workflow enforce operational discipline.</p>
+      </div>
+      <div class="story-card">
+        <div class="story-tag result">Result</div>
+        <h3>Deterministic, Zero-Drift Engineering</h3>
+        <p>Zero drift across all agent harnesses, one-command project onboarding via <code>harnez init</code>, live cross-provider quota tracking with rate-limit protection, and structured, zero-zombie agentic sprint execution.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── FEATURES ─────────────────────────────────────────────────── -->
 <section>
   <div class="container">
     <h2>What it manages</h2>
     <div class="features">
       <div class="feature">
-        <h3>Model &amp; effort</h3>
-        <p>Set <code>model</code> and <code>effort</code> once; every apply keeps <code>settings.json</code> in sync.</p>
+        <h3>Effort &amp; optional model</h3>
+        <p>Set <code>effort</code> centrally; <code>model</code> is unmanaged by default so user and client choices in <code>settings.json</code> are preserved.</p>
       </div>
       <div class="feature">
         <h3>Permissions</h3>
@@ -372,23 +437,23 @@
       </div>
       <div class="feature">
         <h3>Multi-agent skills</h3>
-        <p>Distributes slash commands &amp; skills across Claude (<code>~/.claude/commands/</code>), Gemini (<code>~/.gemini/skills/</code>), and Codex.</p>
+        <p>Distributes slash commands &amp; Agent Skills across Claude (<code>~/.claude/commands/</code>), Gemini (<code>~/.gemini/skills/</code>), Codex (<code>~/.codex/skills/</code>), and Prime Agent (<code>~/.prime/agent/</code>).</p>
       </div>
       <div class="feature">
         <h3>Language &amp; practice docs</h3>
-        <p>Bundles conventions for Go, Bash, Make, Rust, Zig, C++, GTK4, Git, Markdown, Canary-first probes, and Spec-driven architecture.</p>
+        <p>Bundles conventions for Go, Bash, Make, Rust, Zig, C++, GTK4, Git, Markdown, Canary-first probes, Spec-driven architecture, and Agentic Loops.</p>
       </div>
       <div class="feature">
-        <h3>MCP servers</h3>
-        <p>Declare MCP server definitions in <code>mcp_servers:</code>; harnez writes them into <code>settings.json</code>.</p>
+        <h3>5-phase agentic sprints</h3>
+        <p>Orchestrate structured <code>/sprint</code> workflows: Parallel Advisory Discovery &rarr; TDD Dev &rarr; Pre-Commit Review Gate &rarr; Process Hygiene &rarr; Retrospective.</p>
       </div>
       <div class="feature">
         <h3>Token &amp; quota monitor</h3>
-        <p><code>usage</code> reads tokens, plans, and live quota windows from Claude Code, Antigravity, and Codex — as a report, a one-shot grid, or a live <code>--watch</code> dashboard.</p>
+        <p><code>usage</code> reads tokens, plans, and live quota windows across Claude Code, Antigravity, and Codex — as a report, a one-shot grid, or a live <code>--watch</code> dashboard.</p>
       </div>
       <div class="feature">
         <h3>Project setup &amp; upgrade</h3>
-        <p><code>init</code> sets up <code>AGENTS.md</code>, symlinks <code>CLAUDE.md</code>, copies local docs, and reconciles Makefile targets.</p>
+        <p><code>init</code> sets up <code>AGENTS.md</code>, symlinks <code>CLAUDE.md</code>, copies local docs, notes repo git mode (<code>solo|fork|team</code>), and reconciles Makefile targets.</p>
       </div>
     </div>
   </div>
@@ -399,17 +464,20 @@
   <div class="container">
     <h2>Quick start</h2>
     <div class="codeblock">
-      <pre><span class="p"># sync global ~/.claude config and shared skills (idempotent)</span>
+      <pre><span class="p"># sync global Claude, Gemini, Codex, and Prime harnesses (idempotent)</span>
 <span class="p">$</span> harnez apply --force-docs
 
-<span class="p"># preview changes without writing</span>
-<span class="p">$</span> harnez diff
+<span class="p"># preview changes without writing (exit code 1 if drift detected)</span>
+<span class="p">$</span> harnez diff --exit-code
 
 <span class="p"># check configuration and installed doc status</span>
 <span class="p">$</span> harnez status
 
+<span class="p"># inspect live cross-agent quota and token velocity</span>
+<span class="p">$</span> harnez usage --watch
+
 <span class="p"># set up or upgrade a project directory with language docs</span>
-<span class="p">$</span> harnez init -d /path/to/project -y
+<span class="p">$</span> harnez init -d /path/to/project --docs golang,make -y
 
 <span class="p"># upgrade all sibling repositories in workspace</span>
 <span class="p">$</span> make init-siblings</pre>
@@ -433,17 +501,17 @@
         <tr>
           <td><code>apply</code></td>
           <td><code class="flag">-c</code> <code class="flag">-t</code> <code class="flag">-d</code> <code class="flag">--force-docs</code></td>
-          <td>Sync global <code>~/.claude</code>: settings, hooks, commands, docs</td>
+          <td>Sync global Claude, Gemini, Codex, and Prime Agent rules, prompts, skills, and docs</td>
         </tr>
         <tr>
           <td><code>init</code></td>
-          <td><code class="flag">-c</code> <code class="flag">-d</code> <code class="flag">--docs</code> <code class="flag">--summary</code></td>
-          <td>Set up a project: AGENTS.md, doc copies, Makefile targets</td>
+          <td><code class="flag">-c</code> <code class="flag">-d</code> <code class="flag">--docs</code> <code class="flag">-m</code> <code class="flag">--summary</code> <code class="flag">--update</code> <code class="flag">--replace</code> <code class="flag">-y</code></td>
+          <td>Set up a project: AGENTS.md, doc copies, repo mode, Makefile targets</td>
         </tr>
         <tr>
           <td><code>diff</code></td>
-          <td><code class="flag">-c</code> <code class="flag">-t</code></td>
-          <td>Preview changes without writing (uses <code>diff -u</code>)</td>
+          <td><code class="flag">-c</code> <code class="flag">-t</code> <code class="flag">-e</code></td>
+          <td>Preview changes without writing (<code class="flag">-e, --exit-code</code> exits with 1 on drift)</td>
         </tr>
         <tr>
           <td><code>clean</code></td>
@@ -457,8 +525,8 @@
         </tr>
         <tr>
           <td><code>usage</code></td>
-          <td><code class="flag">-w</code> <code class="flag">-s</code> <code class="flag">--json</code> <code class="flag">--agent</code> <code class="flag">--offline</code></td>
-          <td>Show tokens, plans, and quota windows across agents — <a href="#usage">see below</a></td>
+          <td><code class="flag">-w</code> <code class="flag">-s</code> <code class="flag">--interval</code> <code class="flag">--json</code> <code class="flag">--agent</code> <code class="flag">--offline</code></td>
+          <td>Show tokens, plans, and quota windows across agents (aliases: <code>quota</code>, <code>tokens</code>, <code>stats</code>) — <a href="#usage">see below</a></td>
         </tr>
       </tbody>
     </table>
@@ -521,7 +589,7 @@ refresh every 1m0s   [a]ll  [q]uit</pre>
         <p><code>--watch</code> redraws in place and tracks a tokens/min trend. Toggle panels
         from the keyboard: <code>c</code> Claude, <code>g</code> AGY, <code>o</code> Codex,
         <code>t</code> tokens, <code>a</code> all, <code>q</code> quit. The refresh cadence is
-        <code>--interval</code> (default 1m, floor 30s).</p>
+        <code>--interval</code> (default 15s, floor 10s).</p>
       </div>
       <div class="feature">
         <h3>Failures stay visible</h3>
@@ -559,7 +627,7 @@ refresh every 1m0s   [a]ll  [q]uit</pre>
         <div class="how-num">1</div>
         <div>
           <h3>Key merge, not replace</h3>
-          <p>harnez only writes the keys it owns (<code>model</code>, <code>effortLevel</code>, <code>permissions</code>, <code>hooks</code>, …). Every other key in <code>settings.json</code> — theme, plugins, auth — is preserved.</p>
+          <p>harnez only writes the keys it owns (<code>effortLevel</code>, <code>permissions</code>, <code>hooks</code>, <code>env</code>, <code>spinnerVerbs</code>, <code>mcpServers</code>, and <code>model</code> if explicitly configured). Every other key in <code>settings.json</code> — theme, plugins, auth — is preserved.</p>
         </div>
       </div>
       <div class="how-item">
@@ -593,13 +661,17 @@ refresh every 1m0s   [a]ll  [q]uit</pre>
     <h2>config.yaml at a glance</h2>
     <div class="codeblock">
       <pre><span class="k">target_dir:</span> <span class="s">~/.claude</span>
+<span class="k">skills_target:</span> <span class="s">~/.gemini/skills</span>
+<span class="k">codex_skills_target:</span> <span class="s">~/.codex/skills</span>
+<span class="k">prime_agent_target:</span> <span class="s">~/.prime/agent</span>
 
-<span class="k">langs:</span>
+<span class="k">docs:</span>
   <span class="s">- golang</span>
   <span class="s">- bash</span>
   <span class="s">- make</span>
+  <span class="s">- agentic-loop</span>
 
-<span class="k">model:</span>   <span class="s">sonnet</span>
+<span class="c"># model: sonnet  # optional override; unmanaged by default</span>
 <span class="k">effort:</span>  <span class="s">medium</span>
 
 <span class="k">permissions:</span>
@@ -615,7 +687,12 @@ refresh every 1m0s   [a]ll  [q]uit</pre>
 <span class="k">commands:</span>
   <span class="s">- name: review</span>
     <span class="s">description: "Review current branch against main"</span>
-    <span class="s">file: commands/review.md</span></pre>
+    <span class="s">file: commands/review.md</span>
+
+<span class="k">skills:</span>
+  <span class="s">- name: sprint</span>
+    <span class="s">description: "Orchestrate 5-phase agentic sprint loop"</span>
+    <span class="s">file: commands/sprint.md</span></pre>
     </div>
   </div>
 </section>

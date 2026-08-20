@@ -93,29 +93,32 @@ func findAGYPorts() []int {
 				continue
 			}
 
-			// Look up ports in /proc/net/tcp
-			tcpData, err := os.ReadFile("/proc/net/tcp")
-			if err != nil {
-				continue
-			}
+			// Look up ports in /proc/net/tcp and /proc/net/tcp6
+			for _, tcpFile := range []string{"/proc/net/tcp", "/proc/net/tcp6"} {
+				tcpData, err := os.ReadFile(tcpFile)
+				if err != nil {
+					continue
+				}
 
-			lines := strings.Split(string(tcpData), "\n")
-			for _, line := range lines {
-				fields := strings.Fields(line)
-				if len(fields) > 9 {
-					inode := fields[9]
-					state := fields[3]
-					// State 0A = TCP_LISTEN
-					if state == "0A" {
-						for _, sinode := range socketInodes {
-							if inode == sinode {
-								local := fields[1]
-								parts := strings.Split(local, ":")
-								if len(parts) == 2 {
-									if port64, err := strconv.ParseInt(parts[1], 16, 32); err == nil {
-										port := int(port64)
-										if probeAGYPort(port) {
-											ports = append(ports, port)
+				lines := strings.Split(string(tcpData), "\n")
+				for _, line := range lines {
+					fields := strings.Fields(line)
+					if len(fields) > 9 {
+						inode := fields[9]
+						state := fields[3]
+						// State 0A = TCP_LISTEN
+						if state == "0A" {
+							for _, sinode := range socketInodes {
+								if inode == sinode {
+									local := fields[1]
+									parts := strings.Split(local, ":")
+									if len(parts) >= 2 {
+										portHex := parts[len(parts)-1]
+										if port64, err := strconv.ParseInt(portHex, 16, 32); err == nil {
+											port := int(port64)
+											if probeAGYPort(port) {
+												ports = append(ports, port)
+											}
 										}
 									}
 								}
@@ -222,12 +225,12 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 		}
 	}
 
-	// 3. Inspect recent log for masked account if available
+	// 3. Inspect recent logs for masked account and auth method if available
 	logDir := filepath.Join(geminiDir, "log")
 	if entries, err := os.ReadDir(logDir); err == nil && len(entries) > 0 {
 		usage.Sources = append(usage.Sources, "~/.gemini/antigravity-cli/log/")
-		// Read the latest log file backwards / forwards looking for applyAuthResult email
-		for i := len(entries) - 1; i >= 0 && usage.Account == ""; i-- {
+		// Read recent log files backwards looking for applyAuthResult or OAuth email
+		for i := len(entries) - 1; i >= 0 && (usage.Account == "" || usage.PlanTier == ""); i-- {
 			if !strings.HasSuffix(entries[i].Name(), ".log") {
 				continue
 			}
@@ -238,14 +241,32 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 			scanner := bufio.NewScanner(f)
 			for scanner.Scan() {
 				line := scanner.Text()
-				if idx := strings.Index(line, "email="); idx != -1 {
+				if idx := strings.Index(line, "email="); idx != -1 && usage.Account == "" {
 					sub := line[idx+len("email="):]
 					if commaIdx := strings.Index(sub, ","); commaIdx != -1 {
 						email := strings.TrimSpace(sub[:commaIdx])
 						if email != "" && strings.Contains(email, "@") {
 							usage.Account = MaskAccount(email)
-							break
+							usage.Authenticated = true
 						}
+					}
+				}
+				if idx := strings.Index(line, "authMethod="); idx != -1 && usage.PlanTier == "" {
+					sub := line[idx+len("authMethod="):]
+					if commaIdx := strings.Index(sub, ","); commaIdx != -1 {
+						sub = sub[:commaIdx]
+					}
+					sub = strings.TrimSpace(sub)
+					if sub != "" {
+						usage.PlanTier = strings.ToUpper(sub[:1]) + sub[1:]
+						usage.Authenticated = true
+					}
+				}
+				if idx := strings.Index(line, "authenticated successfully as "); idx != -1 && usage.Account == "" {
+					sub := strings.TrimSpace(line[idx+len("authenticated successfully as "):])
+					if sub != "" && strings.Contains(sub, "@") {
+						usage.Account = MaskAccount(sub)
+						usage.Authenticated = true
 					}
 				}
 			}
@@ -284,6 +305,7 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 				continue
 			}
 			fetched = true
+			usage.Authenticated = true
 			usage.Sources = append(usage.Sources, "127.0.0.1 (LanguageServer RPC)")
 			now := time.Now()
 			for _, g := range quotaResp.Response.Groups {
@@ -323,6 +345,13 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 		if !fetched && len(ports) > 0 && lastErr != nil {
 			usage.QuotaFetchError = lastErr.Error()
 		}
+	}
+
+	if len(usage.ModelGroups) > 0 {
+		usage.Authenticated = true
+	}
+	if usage.Authenticated && usage.PlanTier == "" {
+		usage.PlanTier = "Consumer"
 	}
 
 	return usage
