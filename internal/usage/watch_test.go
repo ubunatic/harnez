@@ -3,6 +3,7 @@ package usage
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestGridColumnsFitsWithGutters guards the layout bug that broke `--watch`:
@@ -84,5 +85,66 @@ func TestPaintClearsEachLine(t *testing.T) {
 	// A trailing newline after the final line would scroll a full-height frame.
 	if strings.HasSuffix(strings.TrimSuffix(out, "\x1b[J"), "\n") {
 		t.Errorf("frame must not end with a newline: %q", out)
+	}
+}
+
+// testTime is a fixed timestamp used by watch_test helpers.
+var testTime = time.Date(2026, 8, 17, 22, 0, 0, 0, time.UTC)
+
+// TestBuildAgentBoxBarFitsContentW verifies that the adaptive progress bar
+// never causes a quota line to exceed the box's content width (width-4),
+// and that the duration string is preserved when the box is wide enough.
+func TestBuildAgentBoxBarFitsContentW(t *testing.T) {
+	// 3 days + 5 hours → FormatDuration → "3d 5h"; resetStr = " · 3d 5h" (visLen=9)
+	dur := 3*24*time.Hour + 5*time.Hour
+	resetAt := testTime.Add(dur)
+	agent := AgentUsage{
+		AgentID:       "claude",
+		Name:          "Claude Code",
+		Installed:     true,
+		Authenticated: true,
+		Account:       "u***@example.com",
+		Session: &QuotaWindow{
+			Name:         "Session",
+			UsedPercent:  75.0,
+			ResetAt:      &resetAt,
+			DurationLeft: dur,
+		},
+	}
+
+	// Compute the threshold above which duration must appear.
+	// Layout: 16(label) + 1(sp) + (barW+2)(bar) + 1(sp) + 6(percent) + visLen(resetStr)
+	// = 26 + barW + visLen(resetStr)
+	// Duration fits when barW >= 1: contentW >= 26 + 1 + visLen(resetStr)
+	resetStr := " · " + FormatDuration(dur)
+	durationThreshold := 26 + 1 + visLen(resetStr) // contentW at which duration must appear
+
+	for boxWidth := minBoxWidth; boxWidth <= 80; boxWidth++ {
+		box := buildAgentBox(agent, agentRate{}, boxWidth, false, false)
+		contentW := boxWidth - 4
+
+		for _, l := range box.lines {
+			lw := visLen(l)
+			if lw > contentW {
+				t.Errorf("boxWidth=%d: line visible width %d exceeds contentW %d: %q",
+					boxWidth, lw, contentW, stripANSI(l))
+			}
+		}
+
+		// When contentW >= durationThreshold, there is room for a 1-char bar + duration.
+		// The duration string must appear in one of the quota lines.
+		if contentW >= durationThreshold {
+			found := false
+			for _, l := range box.lines {
+				if strings.Contains(l, "3d") {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("boxWidth=%d (contentW=%d, threshold=%d): expected duration %q in quota line, lines=%v",
+					boxWidth, contentW, durationThreshold, resetStr, box.lines)
+			}
+		}
 	}
 }

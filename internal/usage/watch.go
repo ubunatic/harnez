@@ -539,13 +539,19 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 	}
 	sort.Slice(windows, func(i, j int) bool { return windows[i].w.UsedPercent > windows[j].w.UsedPercent })
 
+	// contentW: usable characters inside the box borders and padding.
+	// renderWBox reserves 4 chars (│·space + space·│), so content = width - 4.
+	contentW := width - 4
+	if contentW < 10 {
+		contentW = 10
+	}
+
 	maxShow := 2
 	if len(windows) < maxShow {
 		maxShow = len(windows)
 	}
 	for i := 0; i < maxShow; i++ {
 		w := windows[i].w
-		bar := RenderProgressBar(w.UsedPercent, 12)
 		resetStr := ""
 		if w.DurationLeft > 0 {
 			resetStr = " · " + FormatDuration(w.DurationLeft)
@@ -554,6 +560,23 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 		if utf8.RuneCountInString(label) > 16 {
 			label = string([]rune(label)[:15]) + "…"
 		}
+		// Layout: label(16) + " "(1) + bar(barW+2) + " "(1) + percent(6) + resetStr
+		// = 26 + barW + visLen(resetStr)
+		// Shrink the bar so that resetStr always fits, down to a minimum of 1.
+		// Use visLen (not len) so multi-byte runes like · count as 1 column.
+		barW := contentW - 26 - visLen(resetStr)
+		if barW < 1 {
+			// Not enough room for bar + duration: drop duration, keep a stub bar.
+			resetStr = ""
+			barW = contentW - 26
+		}
+		if barW < 1 {
+			barW = 1
+		}
+		if barW > 12 {
+			barW = 12
+		}
+		bar := RenderProgressBar(w.UsedPercent, barW)
 		lines = append(lines, fmt.Sprintf("%-16s %s %4.1f%%%s", label, bar, w.UsedPercent, resetStr))
 	}
 
