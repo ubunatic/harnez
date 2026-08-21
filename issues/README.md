@@ -41,3 +41,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 040 | [040-agent-context-duplication-and-file-read-discipline.md](040-agent-context-duplication-and-file-read-discipline.md) | Agent Context Ingestion Duplication & File Read Discipline | Closed |
 | 041 | [041-sibling-projects-real-world-shape-and-test-suite-extensions.md](041-sibling-projects-real-world-shape-and-test-suite-extensions.md) | Sibling Projects Audit: Real-World Shapes, Drift Causes & Test Suite Extensions | Closed |
 | 042 | [042-agentic-loop-repro-before-fix-and-single-status-field.md](042-agentic-loop-repro-before-fix-and-single-status-field.md) | `docs/practices/AgenticLoop.md` is missing "repro before fix" and "one Status field per ticket" guidance | Open |
+| 043 | [043-never-blindly-revert-commit-stale-work-first.md](043-never-blindly-revert-commit-stale-work-first.md) | Never blindly `git revert`/`checkout --`/`stash drop` unsuccessful work; commit stale/failed code first | Open |
