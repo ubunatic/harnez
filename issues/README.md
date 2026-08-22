@@ -42,3 +42,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 041 | [041-sibling-projects-real-world-shape-and-test-suite-extensions.md](041-sibling-projects-real-world-shape-and-test-suite-extensions.md) | Sibling Projects Audit: Real-World Shapes, Drift Causes & Test Suite Extensions | Closed |
 | 042 | [042-agentic-loop-repro-before-fix-and-single-status-field.md](042-agentic-loop-repro-before-fix-and-single-status-field.md) | `docs/practices/AgenticLoop.md` is missing "repro before fix" and "one Status field per ticket" guidance | Open |
 | 043 | [043-never-blindly-revert-commit-stale-work-first.md](043-never-blindly-revert-commit-stale-work-first.md) | Never blindly `git revert`/`checkout --`/`stash drop` unsuccessful work; commit stale/failed code first | Open |
+| 044 | [044-git-md-proactive-commit-vs-harness-ask-first.md](044-git-md-proactive-commit-vs-harness-ask-first.md) | `docs/Git.md`'s "commit proactively" conflicts with harness ask-first defaults | Open |
+| 045 | [045-review-loops-harden-symptoms-not-root-cause.md](045-review-loops-harden-symptoms-not-root-cause.md) | Multi-round review loops harden the symptom, not the root cause | Open |
+| 046 | [046-commit-checkpoint-recurred-after-044-filed.md](046-commit-checkpoint-recurred-after-044-filed.md) | The exact gap from 044 recurred in the same session that filed it | Open |
