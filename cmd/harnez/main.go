@@ -27,6 +27,8 @@ func main() {
 	var usageWatch bool
 	var usageSummary bool
 	var usageInterval time.Duration
+	var usageHistory bool
+	var usageTimeline bool
 	usageCmd := &cobra.Command{
 		Use:     "usage",
 		Aliases: []string{"quota", "tokens", "stats"},
@@ -38,15 +40,40 @@ func main() {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 
+			if usageTimeline {
+				if usageWatch || usageSummary {
+					return fmt.Errorf("--timeline cannot be combined with --watch or --summary")
+				}
+				entries, err := usage.ReadHistory(usage.HistoryDir(""))
+				if err != nil {
+					return err
+				}
+				if usageJSON {
+					out, err := usage.RenderTimelineJSON(entries)
+					if err != nil {
+						return err
+					}
+					fmt.Println(out)
+					return nil
+				}
+				fmt.Print(usage.RenderTimelineText(entries))
+				return nil
+			}
+
 			if usageWatch && usageSummary {
 				return fmt.Errorf("--watch and --summary cannot be combined")
+			}
+
+			var historyDir string
+			if usageHistory {
+				historyDir = usage.HistoryDir("")
 			}
 
 			if usageWatch {
 				if usageJSON {
 					return fmt.Errorf("--watch and --json cannot be combined")
 				}
-				return usage.RunWatch(ctx, "", client, cmd.OutOrStdout(), usageInterval)
+				return usage.RunWatch(ctx, "", client, cmd.OutOrStdout(), usageInterval, historyDir)
 			}
 
 			if usageSummary {
@@ -58,6 +85,11 @@ func main() {
 			}
 
 			summary := usage.CollectAll(ctx, "", client)
+			if historyDir != "" {
+				if err := usage.AppendHistory(historyDir, summary); err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not record usage history: %v\n", err)
+				}
+			}
 			if usageAgent != "" {
 				var filtered []usage.AgentUsage
 				for _, a := range summary.Agents {
@@ -88,6 +120,10 @@ func main() {
 	usageCmd.Flags().BoolVarP(&usageSummary, "summary", "s", false, "print the compact --watch-style dashboard once and exit")
 	usageCmd.Flags().DurationVar(&usageInterval, "interval", usage.DefaultWatchInterval,
 		fmt.Sprintf("refresh interval for --watch (minimum %s, to avoid hammering live quota APIs)", usage.MinWatchInterval))
+	usageCmd.Flags().BoolVar(&usageHistory, "history", false,
+		"append each snapshot to this machine's usage history log (~/.claude/harnez/usage-history/), for --timeline")
+	usageCmd.Flags().BoolVar(&usageTimeline, "timeline", false,
+		"print the merged usage history timeline from all recorded/copied-in machine logs and exit")
 
 	var applyDocs []string
 	var forceDocs bool

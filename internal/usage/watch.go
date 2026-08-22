@@ -741,7 +741,11 @@ func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out
 // redraw every tick. It polls at most once per interval; interval is clamped
 // to MinWatchInterval so `--watch` cannot be used to accidentally hammer live
 // quota APIs.
-func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration) error {
+//
+// When historyDir is non-empty, every fetched frame is also appended to that
+// machine's history log (see AppendHistory) so a `--watch` session builds a
+// timeline as it runs, not just at exit.
+func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string) error {
 	if interval < MinWatchInterval {
 		interval = MinWatchInterval
 	}
@@ -840,6 +844,10 @@ func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.W
 
 	renderFrame := func() {
 		fresh := CollectAll(sigCtx, homeDir, client)
+		if historyDir != "" {
+			// Best-effort: a missed append shouldn't interrupt the dashboard.
+			_ = AppendHistory(historyDir, fresh)
+		}
 		lastSummary = applyStaleQuota(fresh, lastSummary)
 		lastRates = tracker.update(lastSummary)
 		draw()
