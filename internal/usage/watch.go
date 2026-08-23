@@ -365,15 +365,16 @@ type namedWindow struct {
 // Toggled interactively via keypress; see RunWatch. The key for each panel
 // (shown in its own title bar, btop-style) is fixed here.
 type watchSections struct {
-	Claude  bool
-	AGY     bool
-	Codex   bool
-	History bool
-	Tokens  bool
+	Claude    bool
+	AGY       bool
+	Codex     bool
+	History   bool
+	Processes bool
+	Tokens    bool
 }
 
 func defaultWatchSections() watchSections {
-	return watchSections{Claude: true, AGY: true, Codex: true, History: true, Tokens: true}
+	return watchSections{Claude: true, AGY: true, Codex: true, History: true, Processes: false, Tokens: true}
 }
 
 // agentVisible reports whether the panel for agentID should currently be drawn.
@@ -387,6 +388,8 @@ func (s watchSections) agentVisible(agentID string) bool {
 		return s.Codex
 	case "history":
 		return s.History
+	case "processes":
+		return s.Processes
 	default:
 		return true
 	}
@@ -403,9 +406,30 @@ func agentKey(agentID string) string {
 		return "O"
 	case "history":
 		return "H"
+	case "processes":
+		return "P"
 	default:
 		return "?"
 	}
+}
+
+// buildProcessesBox renders a panel showing active agent processes on the system or remote host.
+func buildProcessesBox(width int, counts *AgentProcessCount) wbox {
+	title := "\x1b[1m[P]\x1b[0m Processes"
+	if counts == nil {
+		c := CountRunningAgentProcesses()
+		counts = &c
+	}
+
+	var lines []string
+	procWord := "processes"
+	if counts.Total() == 1 {
+		procWord = "process"
+	}
+	lines = append(lines, fmt.Sprintf("%d active %s", counts.Total(), procWord))
+	lines = append(lines, fmt.Sprintf("claude: %d  agy: %d  codex: %d", counts.Claude, counts.AGY, counts.Codex))
+
+	return wbox{title: title, lines: lines, width: width}
 }
 
 // buildHistoryBox renders a compact 4th panel showing recorded usage history stats.
@@ -640,6 +664,12 @@ func gridColumns(usable, panels int) (columns, boxWidth int) {
 	return columns, boxWidth
 }
 
+// WatchOptions bundles optional customization for watch frame rendering.
+type WatchOptions struct {
+	Host       string
+	ProcCounts *AgentProcessCount
+}
+
 // buildWatchFrame lays out one compact, btop-style grid frame: agent panels
 // side by side where the terminal is wide enough, filtered by sec, plus a
 // footer of toggle badges for each panel and the token line.
@@ -649,7 +679,12 @@ func gridColumns(usable, panels int) (columns, boxWidth int) {
 // ones that don't. Overflowing the viewport is what scrolls the terminal and
 // desynchronises every later `\x1b[H`, so the layout must never rely on the
 // terminal to clip for it.
-func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int, live bool, homeDir, historyDir string) screenFrame {
+func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int, live bool, homeDir, historyDir string, opts ...WatchOptions) screenFrame {
+	var opt WatchOptions
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
 	targetHistoryDir := historyDir
 	if targetHistoryDir == "" {
 		targetHistoryDir = HistoryDir(homeDir)
@@ -685,21 +720,29 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	if !sec.History {
 		hidden = append(hidden, "[H]")
 	}
+	if !sec.Processes {
+		hidden = append(hidden, "[P]")
+	}
 	hiddenHint := ""
 	if len(hidden) > 0 {
 		hiddenHint = fmt.Sprintf("   \x1b[90mhidden: %s\x1b[0m", strings.Join(hidden, " "))
 	}
 
+	titlePrefix := "Agentic usage"
+	if opt.Host != "" {
+		titlePrefix = fmt.Sprintf("Agentic usage (@%s)", opt.Host)
+	}
+
 	header := []string{
-		fmt.Sprintf("\x1b[1mAgentic usage\x1b[0m  %s%s%s",
-			summary.Timestamp.Format("15:04:05 MST"), historyStatStr, hiddenHint),
+		fmt.Sprintf("\x1b[1m%s\x1b[0m  %s%s%s",
+			titlePrefix, summary.Timestamp.Format("15:04:05 MST"), historyStatStr, hiddenHint),
 		"",
 	}
 	var footer []string
 	if live {
 		footer = []string{
 			"",
-			fmt.Sprintf("refresh every %s   \x1b[90m[a]ll  [q]uit\x1b[0m", interval),
+			fmt.Sprintf("refresh every %s   \x1b[90m[a]ll  [r]emote  [q]uit\x1b[0m", interval),
 		}
 	}
 
@@ -712,6 +755,9 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 
 	totalPanels := len(visible)
 	if sec.History {
+		totalPanels++
+	}
+	if sec.Processes {
 		totalPanels++
 	}
 
@@ -750,6 +796,13 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 				flushRow()
 			}
 		}
+		if sec.Processes {
+			pBox := buildProcessesBox(boxWidth, opt.ProcCounts)
+			pending = append(pending, renderWBox(pBox))
+			if len(pending) == columns {
+				flushRow()
+			}
+		}
 		flushRow()
 
 		if dropped > 0 {
@@ -771,10 +824,32 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 // keyboard handling. It exists for `harnez usage --summary`: same at-a-glance
 // layout as `--watch`, but a plain one-shot print for scripting or a quick
 // glance, versus the full `harnez usage` report's per-window detail.
-func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out io.Writer) {
+func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out io.Writer, showProcesses ...bool) {
 	summary := CollectAll(ctx, homeDir, client)
 	cols, rows := terminalSize(out)
-	frame := buildWatchFrame(summary, nil, 0, defaultWatchSections(), cols, rows, false, homeDir, "")
+	sec := defaultWatchSections()
+	if len(showProcesses) > 0 && showProcesses[0] {
+		sec.Processes = true
+	}
+	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, homeDir, "")
+	for _, l := range frame.lines {
+		fmt.Fprintln(out, l+"\x1b[0m")
+	}
+}
+
+// RenderSummaryRemote prints one static frame of the compact grid using remote host collection.
+func RenderSummaryRemote(ctx context.Context, host string, out io.Writer, showProcesses ...bool) {
+	includeProcs := len(showProcesses) > 0 && showProcesses[0]
+	summary, procs, _ := CollectRemote(ctx, host, includeProcs)
+	cols, rows := terminalSize(out)
+	sec := defaultWatchSections()
+	if includeProcs {
+		sec.Processes = true
+	}
+	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, "", "", WatchOptions{
+		Host:       host,
+		ProcCounts: procs,
+	})
 	for _, l := range frame.lines {
 		fmt.Fprintln(out, l+"\x1b[0m")
 	}
@@ -789,7 +864,12 @@ func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out
 // When historyDir is non-empty, every fetched frame is also appended to that
 // machine's history log (see AppendHistory) so a `--watch` session builds a
 // timeline as it runs, not just at exit.
-func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string) error {
+func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string, showProcesses ...bool) error {
+	return RunWatchWithHost(ctx, homeDir, client, out, interval, historyDir, "", showProcesses...)
+}
+
+// RunWatchWithHost redraws a compact usage dashboard with optional remote host support and [r] toggle.
+func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string, initialHost string, showProcesses ...bool) error {
 	if interval < MinWatchInterval {
 		interval = MinWatchInterval
 	}
@@ -807,6 +887,20 @@ func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.W
 
 	var secLock sync.Mutex
 	sec := defaultWatchSections()
+	if len(showProcesses) > 0 && showProcesses[0] {
+		sec.Processes = true
+	}
+
+	configuredHost := strings.TrimSpace(initialHost)
+	activeHost := configuredHost
+
+	fetchChan := make(chan struct{}, 1)
+	requestFetch := func() {
+		select {
+		case fetchChan <- struct{}{}:
+		default:
+		}
+	}
 
 	redrawChan := make(chan struct{}, 1)
 	requestRedraw := func() {
@@ -843,6 +937,18 @@ func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.W
 				case 't', 'T', '5':
 					sec.Tokens = !sec.Tokens
 					requestRedraw()
+				case 'p', 'P', '6':
+					sec.Processes = !sec.Processes
+					requestRedraw()
+				case 'r', 'R':
+					if configuredHost != "" {
+						if activeHost == "" {
+							activeHost = configuredHost
+						} else {
+							activeHost = ""
+						}
+						requestFetch()
+					}
 				case 'a', 'A':
 					sec = defaultWatchSections()
 					requestRedraw()
@@ -872,6 +978,8 @@ func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.W
 
 	var lastSummary UsageSummary
 	var lastRates map[string]agentRate
+	var lastProcs *AgentProcessCount
+	var currentHost string
 
 	// Enter the alternate screen buffer, as vim/htop/less do. It gives the
 	// redraw loop a viewport with no scrollback of its own, so `\x1b[H` always
@@ -886,15 +994,33 @@ func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.W
 		secLock.Unlock()
 
 		cols, rows := terminalSize(out)
-		buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir).paint(out)
+		buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir, WatchOptions{
+			Host:       currentHost,
+			ProcCounts: lastProcs,
+		}).paint(out)
 	}
 
 	renderFrame := func() {
-		fresh := CollectAll(sigCtx, homeDir, client)
-		if historyDir != "" {
-			// Best-effort: a missed append shouldn't interrupt the dashboard.
-			_ = AppendHistory(historyDir, fresh)
+		secLock.Lock()
+		targetHost := activeHost
+		procRequested := sec.Processes
+		secLock.Unlock()
+
+		currentHost = targetHost
+		var fresh UsageSummary
+		if targetHost != "" {
+			var procRes *AgentProcessCount
+			fresh, procRes, _ = CollectRemote(sigCtx, targetHost, procRequested)
+			lastProcs = procRes
+		} else {
+			fresh = CollectAll(sigCtx, homeDir, client)
+			lastProcs = nil
+			if historyDir != "" {
+				// Best-effort: a missed append shouldn't interrupt the dashboard.
+				_ = AppendHistory(historyDir, fresh)
+			}
 		}
+
 		lastSummary = applyStaleQuota(fresh, lastSummary)
 		lastRates = tracker.update(lastSummary)
 		draw()
@@ -909,6 +1035,8 @@ func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.W
 		select {
 		case <-sigCtx.Done():
 			return nil
+		case <-fetchChan:
+			renderFrame()
 		case <-redrawChan:
 			draw()
 		case <-ticker.C:
@@ -916,3 +1044,4 @@ func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.W
 		}
 	}
 }
+

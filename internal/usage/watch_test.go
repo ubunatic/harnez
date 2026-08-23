@@ -245,7 +245,94 @@ func TestBuildWatchFrame_HistoryHeaderAnd4Boxes(t *testing.T) {
 	if strings.Contains(frameHiddenText, "+0 used") || strings.Contains(frameHiddenText, "used ·") {
 		t.Errorf("expected history box content to be hidden when sec.History is false")
 	}
-	if !strings.Contains(frameHiddenText, "hidden: [H]") {
-		t.Errorf("expected header to show hidden: [H], got:\n%s", frameHiddenText)
+	if !strings.Contains(frameHiddenText, "hidden:") || !strings.Contains(frameHiddenText, "[H]") || !strings.Contains(frameHiddenText, "[P]") {
+		t.Errorf("expected header to show hidden with [H] and [P], got:\n%s", frameHiddenText)
 	}
 }
+
+func TestBuildProcessesBox(t *testing.T) {
+	box := buildProcessesBox(40, nil)
+	if !strings.Contains(box.title, "[P]") || !strings.Contains(box.title, "Processes") {
+		t.Errorf("expected box title to contain [P] and Processes, got %q", box.title)
+	}
+	if len(box.lines) != 2 {
+		t.Fatalf("expected 2 lines in processes box, got %d: %v", len(box.lines), box.lines)
+	}
+	if !strings.Contains(box.lines[0], "active process") {
+		t.Errorf("expected line 0 to contain 'active process', got %q", box.lines[0])
+	}
+	if !strings.Contains(box.lines[1], "claude:") || !strings.Contains(box.lines[1], "agy:") || !strings.Contains(box.lines[1], "codex:") {
+		t.Errorf("expected line 1 to contain per-agent breakdown, got %q", box.lines[1])
+	}
+
+	// With explicit counts
+	customCounts := &AgentProcessCount{Claude: 3, AGY: 2, Codex: 1}
+	boxCustom := buildProcessesBox(40, customCounts)
+	if !strings.Contains(boxCustom.lines[0], "6 active processes") {
+		t.Errorf("expected 6 active processes, got %q", boxCustom.lines[0])
+	}
+	if !strings.Contains(boxCustom.lines[1], "claude: 3  agy: 2  codex: 1") {
+		t.Errorf("expected custom counts line, got %q", boxCustom.lines[1])
+	}
+}
+
+func TestBuildWatchFrame_ProcessesBox(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true},
+		},
+	}
+
+	// Hidden by default
+	sec := defaultWatchSections()
+	if sec.Processes {
+		t.Errorf("expected sec.Processes to be false by default")
+	}
+	frameDefault := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frameDefaultText := strings.Join(frameDefault.lines, "\n")
+	if !strings.Contains(frameDefaultText, "hidden: [P]") {
+		t.Errorf("expected hidden [P] in header, got:\n%s", frameDefaultText)
+	}
+	if strings.Contains(frameDefaultText, "Processes") {
+		t.Errorf("expected Processes box to be hidden by default")
+	}
+
+	// Toggled visible
+	sec.Processes = true
+	frameVisible := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frameVisibleText := strings.Join(frameVisible.lines, "\n")
+	if strings.Contains(frameVisibleText, "hidden: [P]") {
+		t.Errorf("expected [P] to not be in hidden hint when sec.Processes is true, got:\n%s", frameVisibleText)
+	}
+	if !strings.Contains(frameVisibleText, "[P]") || !strings.Contains(frameVisibleText, "Processes") {
+		t.Errorf("expected Processes box to be visible when sec.Processes is true, got:\n%s", frameVisibleText)
+	}
+	if !strings.Contains(frameVisibleText, "claude:") {
+		t.Errorf("expected Processes box content in frame, got:\n%s", frameVisibleText)
+	}
+}
+
+func TestBuildWatchFrame_RemoteHost(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true},
+		},
+	}
+
+	sec := defaultWatchSections()
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, true, "", "", WatchOptions{
+		Host: "remote-worker-1",
+	})
+	frameText := strings.Join(frame.lines, "\n")
+
+	if !strings.Contains(frameText, "Agentic usage (@remote-worker-1)") {
+		t.Errorf("expected remote host in header, got:\n%s", frameText)
+	}
+	if !strings.Contains(frameText, "[r]emote") {
+		t.Errorf("expected [r]emote in footer, got:\n%s", frameText)
+	}
+}
+
+

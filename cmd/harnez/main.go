@@ -26,13 +26,12 @@ func main() {
 	var usageOffline bool
 	var usageWatch bool
 	var usageSummary bool
+	var usageProcesses bool
 	var usageInterval time.Duration
-	var usageHistory bool
-	var usageTimeline bool
-	var usageFetch string
+	var usageHost string
 	usageCmd := &cobra.Command{
 		Use:     "usage",
-		Aliases: []string{"quota", "tokens", "stats"},
+		Aliases: []string{"quota", "tokens"},
 		Short:   "Show unified token, session, and quota status across AI coding agents",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -41,63 +40,38 @@ func main() {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 
-			if usageFetch != "" {
-				historyDir := usage.HistoryDir("")
-				if _, err := usage.FetchRemoteHistory(ctx, usageFetch, historyDir, nil); err != nil {
-					return fmt.Errorf("fetch remote history: %w", err)
-				}
-				fmt.Fprintf(cmd.ErrOrStderr(), "fetched remote history from %s\n", usageFetch)
-			}
-
-			if usageTimeline {
-				if usageWatch || usageSummary {
-					return fmt.Errorf("--timeline cannot be combined with --watch or --summary")
-				}
-				entries, err := usage.ReadHistory(usage.HistoryDir(""))
-				if err != nil {
-					return err
-				}
-				if usageJSON {
-					out, err := usage.RenderTimelineJSON(entries)
-					if err != nil {
-						return err
-					}
-					fmt.Println(out)
-					return nil
-				}
-				fmt.Print(usage.RenderTimelineText(entries))
-				return nil
-			}
-
 			if usageWatch && usageSummary {
 				return fmt.Errorf("--watch and --summary cannot be combined")
-			}
-
-			var historyDir string
-			if usageHistory {
-				historyDir = usage.HistoryDir("")
 			}
 
 			if usageWatch {
 				if usageJSON {
 					return fmt.Errorf("--watch and --json cannot be combined")
 				}
-				return usage.RunWatch(ctx, "", client, cmd.OutOrStdout(), usageInterval, historyDir)
+				return usage.RunWatchWithHost(ctx, "", client, cmd.OutOrStdout(), usageInterval, "", usageHost, usageProcesses)
 			}
 
 			if usageSummary {
 				if usageJSON {
 					return fmt.Errorf("--summary and --json cannot be combined")
 				}
-				usage.RenderSummary(ctx, "", client, cmd.OutOrStdout())
+				if usageHost != "" {
+					usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses)
+				} else {
+					usage.RenderSummary(ctx, "", client, cmd.OutOrStdout(), usageProcesses)
+				}
 				return nil
 			}
 
-			summary := usage.CollectAll(ctx, "", client)
-			if historyDir != "" {
-				if err := usage.AppendHistory(historyDir, summary); err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not record usage history: %v\n", err)
+			var summary usage.UsageSummary
+			if usageHost != "" {
+				s, _, err := usage.CollectRemote(ctx, usageHost, usageProcesses)
+				if err != nil && !usageJSON {
+					return err
 				}
+				summary = s
+			} else {
+				summary = usage.CollectAll(ctx, "", client)
 			}
 			if usageAgent != "" {
 				var filtered []usage.AgentUsage
@@ -124,17 +98,118 @@ func main() {
 	}
 	usageCmd.Flags().BoolVar(&usageJSON, "json", false, "output usage in JSON format")
 	usageCmd.Flags().StringVar(&usageAgent, "agent", "", "filter to a specific agent (claude, agy, codex)")
+	usageCmd.Flags().StringVar(&usageHost, "host", "", "query usage from a remote host via SSH")
 	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
 	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the dashboard in place with a tokens/min trend")
 	usageCmd.Flags().BoolVarP(&usageSummary, "summary", "s", false, "print the compact --watch-style dashboard once and exit")
+	usageCmd.Flags().BoolVarP(&usageProcesses, "proc", "p", false, "show running agent processes panel in --watch / --summary")
+	usageCmd.Flags().BoolVar(&usageProcesses, "processes", false, "show running agent processes panel in --watch / --summary")
 	usageCmd.Flags().DurationVar(&usageInterval, "interval", usage.DefaultWatchInterval,
 		fmt.Sprintf("refresh interval for --watch (minimum %s, to avoid hammering live quota APIs)", usage.MinWatchInterval))
-	usageCmd.Flags().BoolVar(&usageHistory, "history", false,
-		"append each snapshot to this machine's usage history log (~/.claude/harnez/usage-history/), for --timeline")
-	usageCmd.Flags().BoolVar(&usageTimeline, "timeline", false,
-		"print the merged usage history timeline from all recorded/copied-in machine logs and exit")
-	usageCmd.Flags().StringVar(&usageFetch, "fetch", "",
-		"fetch remote usage history files from an SSH host into local ~/.claude/harnez/usage-history/")
+
+	var historyJSON bool
+	historyCmd := &cobra.Command{
+		Use:     "history",
+		Aliases: []string{"timeline"},
+		Short:   "Inspect and manage recorded usage history and timelines",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			entries, err := usage.ReadHistory(usage.HistoryDir(""))
+			if err != nil {
+				return err
+			}
+			if historyJSON {
+				out, err := usage.RenderTimelineJSON(entries)
+				if err != nil {
+					return err
+				}
+				fmt.Println(out)
+				return nil
+			}
+			fmt.Print(usage.RenderTimelineText(entries))
+			return nil
+		},
+	}
+	historyCmd.PersistentFlags().BoolVar(&historyJSON, "json", false, "output history in JSON format")
+
+	historyTimelineCmd := &cobra.Command{
+		Use:   "timeline",
+		Short: "Display the merged usage history timeline across all recorded machine logs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			entries, err := usage.ReadHistory(usage.HistoryDir(""))
+			if err != nil {
+				return err
+			}
+			if historyJSON {
+				out, err := usage.RenderTimelineJSON(entries)
+				if err != nil {
+					return err
+				}
+				fmt.Println(out)
+				return nil
+			}
+			fmt.Print(usage.RenderTimelineText(entries))
+			return nil
+		},
+	}
+
+	historyFetchCmd := &cobra.Command{
+		Use:   "fetch <host>",
+		Short: "Fetch remote usage history files from an SSH host into local history dir",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			host := args[0]
+			historyDir := usage.HistoryDir("")
+			if _, err := usage.FetchRemoteHistory(cmd.Context(), host, historyDir, cmd.OutOrStdout()); err != nil {
+				return fmt.Errorf("fetch remote history: %w", err)
+			}
+			return nil
+		},
+	}
+
+	historyRecordCmd := &cobra.Command{
+		Use:     "record",
+		Aliases: []string{"append"},
+		Short:   "Collect and record a usage snapshot to the local machine history log",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			var client *http.Client
+			if !usageOffline {
+				client = &http.Client{Timeout: 5 * time.Second}
+			}
+			summary := usage.CollectAll(ctx, "", client)
+			historyDir := usage.HistoryDir("")
+			if err := usage.AppendHistory(historyDir, summary); err != nil {
+				return fmt.Errorf("record usage history: %w", err)
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "recorded usage history snapshot to %s\n", historyDir)
+			return nil
+		},
+	}
+
+	historyStatsCmd := &cobra.Command{
+		Use:   "stats",
+		Short: "Display aggregate statistics across recorded usage history",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			historyDir := usage.HistoryDir("")
+			stats, err := usage.HistorySummaryStats(historyDir)
+			if err != nil {
+				return fmt.Errorf("history stats: %w", err)
+			}
+			if historyJSON {
+				out, err := usage.RenderHistoryStatsJSON(stats)
+				if err != nil {
+					return err
+				}
+				fmt.Println(out)
+				return nil
+			}
+			fmt.Print(usage.RenderHistoryStatsText(stats, historyDir))
+			return nil
+		},
+	}
+
+	historyCmd.AddCommand(historyTimelineCmd, historyFetchCmd, historyRecordCmd, historyStatsCmd)
+	usageCmd.AddCommand(historyCmd)
 
 	var applyDocs []string
 	var forceDocs bool

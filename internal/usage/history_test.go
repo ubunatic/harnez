@@ -289,6 +289,28 @@ func TestHistorySummaryStats(t *testing.T) {
 	if stats.Sparkline == "" {
 		t.Errorf("expected non-empty sparkline")
 	}
+
+	text := RenderHistoryStatsText(stats, tempDir)
+	if !strings.Contains(text, "Usage History Statistics") {
+		t.Errorf("expected text output to contain title, got:\n%s", text)
+	}
+	if !strings.Contains(text, "Burn Rate:") {
+		t.Errorf("expected text output to contain burn rate, got:\n%s", text)
+	}
+	if !strings.Contains(text, "Trajectory:") {
+		t.Errorf("expected text output to contain trajectory, got:\n%s", text)
+	}
+
+	jsonOut, err := RenderHistoryStatsJSON(stats)
+	if err != nil {
+		t.Fatalf("RenderHistoryStatsJSON: %v", err)
+	}
+	if !strings.Contains(jsonOut, `"rate_per_hour": 6000`) {
+		t.Errorf("expected JSON to contain rate_per_hour, got:\n%s", jsonOut)
+	}
+	if !strings.Contains(jsonOut, `"total_used": 3000`) {
+		t.Errorf("expected JSON to contain total_used, got:\n%s", jsonOut)
+	}
 }
 
 func TestFetchRemoteHistory_Validation(t *testing.T) {

@@ -46,3 +46,8 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 045 | [045-review-loops-harden-symptoms-not-root-cause.md](045-review-loops-harden-symptoms-not-root-cause.md) | Multi-round review loops harden the symptom, not the root cause | Open |
 | 046 | [046-commit-checkpoint-recurred-after-044-filed.md](046-commit-checkpoint-recurred-after-044-filed.md) | The exact gap from 044 recurred in the same session that filed it | Open |
 | 047 | [047-sparkline-vis-model-usage-over-time.md](047-sparkline-vis-model-usage-over-time.md) | Add sparkline visualization to show model usage over time | Closed — resolved |
+| 048 | [048-usage-history-subcommands-refactor.md](048-usage-history-subcommands-refactor.md) | Refactor usage history flags into subcommands | Closed — resolved |
+| 049 | [049-running-agent-processes-watch-panel.md](049-running-agent-processes-watch-panel.md) | Add running agent processes status box in usage watch/summary | Closed — resolved |
+| 050 | [050-remote-host-flag-and-watch-hotkey.md](050-remote-host-flag-and-watch-hotkey.md) | Support remote host query via `--host` flag and `[r]` hotkey in watch | Closed — resolved |
+| 051 | [051-multi-host-remote-monitoring-and-dashboard-navigation.md](051-multi-host-remote-monitoring-and-dashboard-navigation.md) | Multi-host remote usage monitoring & interactive host navigation | Open |
+

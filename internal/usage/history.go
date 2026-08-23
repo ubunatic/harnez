@@ -41,16 +41,16 @@ func HistoryDir(homeDir string) string {
 
 // HistorySummaryData holds aggregated usage metrics across recorded history files.
 type HistorySummaryData struct {
-	FileCount    int
-	TotalBytes   int64
-	TotalEntries int
-	StartTokens  int64
-	EndTokens    int64
-	TotalUsed    int64
-	Duration     time.Duration
-	RatePerHour  int64
-	RatePerDay   int64
-	Sparkline    string
+	FileCount    int           `json:"file_count"`
+	TotalBytes   int64         `json:"total_bytes"`
+	TotalEntries int           `json:"total_entries"`
+	StartTokens  int64         `json:"start_tokens"`
+	EndTokens    int64         `json:"end_tokens"`
+	TotalUsed    int64         `json:"total_used"`
+	Duration     time.Duration `json:"duration"`
+	RatePerHour  int64         `json:"rate_per_hour"`
+	RatePerDay   int64         `json:"rate_per_day"`
+	Sparkline    string        `json:"sparkline,omitempty"`
 }
 
 // HistorySummaryStats inspects *.jsonl files in dir, loads and merges history entries,
@@ -120,6 +120,47 @@ func HistorySummaryStats(dir string) (HistorySummaryData, error) {
 func HistoryStats(dir string) (fileCount int, totalBytes int64, totalEntries int) {
 	stats, _ := HistorySummaryStats(dir)
 	return stats.FileCount, stats.TotalBytes, stats.TotalEntries
+}
+
+// RenderHistoryStatsText formats aggregate history metrics into human-readable text.
+func RenderHistoryStatsText(stats HistorySummaryData, dir string) string {
+	var sb strings.Builder
+	sb.WriteString("Usage History Statistics\n")
+	if dir != "" {
+		displayDir := dir
+		if home, err := os.UserHomeDir(); err == nil && home != "" && strings.HasPrefix(displayDir, home) {
+			displayDir = "~" + strings.TrimPrefix(displayDir, home)
+		}
+		sb.WriteString(fmt.Sprintf("Directory:     %s\n", displayDir))
+	}
+	fileWord := "files"
+	if stats.FileCount == 1 {
+		fileWord = "file"
+	}
+	sb.WriteString(fmt.Sprintf("Files:         %d %s (%s)\n", stats.FileCount, fileWord, FormatBytes(stats.TotalBytes)))
+	sb.WriteString(fmt.Sprintf("Snapshots:     %d\n", stats.TotalEntries))
+	if stats.TotalEntries > 0 {
+		sb.WriteString(fmt.Sprintf("Timespan:      %s\n", FormatDuration(stats.Duration)))
+		sb.WriteString(fmt.Sprintf("Tokens Start:  %s\n", FormatNumber(stats.StartTokens)))
+		sb.WriteString(fmt.Sprintf("Tokens End:    %s\n", FormatNumber(stats.EndTokens)))
+		sb.WriteString(fmt.Sprintf("Tokens Used:   +%s\n", FormatNumber(stats.TotalUsed)))
+		if stats.Duration >= time.Minute {
+			sb.WriteString(fmt.Sprintf("Burn Rate:     %s /hr · %s /day\n", FormatNumber(stats.RatePerHour), FormatNumber(stats.RatePerDay)))
+		}
+		if stats.Sparkline != "" {
+			sb.WriteString(fmt.Sprintf("Trajectory:    [%s]\n", stats.Sparkline))
+		}
+	}
+	return sb.String()
+}
+
+// RenderHistoryStatsJSON formats aggregate history metrics as JSON.
+func RenderHistoryStatsJSON(stats HistorySummaryData) (string, error) {
+	data, err := json.MarshalIndent(stats, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal history stats: %w", err)
+	}
+	return string(data), nil
 }
 
 // sanitizeHostname keeps the on-disk filename portable across the systems a
@@ -255,7 +296,7 @@ func ReadHistory(dir string) ([]HistoryEntry, error) {
 // sparkline trends when history is available.
 func RenderTimelineText(entries []HistoryEntry) string {
 	if len(entries) == 0 {
-		return "No usage history recorded yet. Run `harnez usage --history` (or `--watch --history`) to start recording.\n"
+		return "No usage history recorded yet. Run `harnez usage history record` (or `--watch`) to start recording.\n"
 	}
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("%-20s %-16s %-8s %9s %9s %14s\n", "TIME", "HOST", "AGENT", "SESSION%", "WEEKLY%", "TOKENS"))
@@ -479,7 +520,7 @@ func FetchRemoteHistory(ctx context.Context, sshHost string, localDir string, ou
 
 	// 1. Proactively attempt to trigger a fresh remote snapshot over SSH.
 	// We run non-blocking snapshot collection ignoring errors (remote may not have harnez in PATH or installed).
-	remoteCmd := `PATH="$PATH:$HOME/go/bin:$HOME/bin" harnez usage --history 2>/dev/null || true`
+	remoteCmd := `PATH="$PATH:$HOME/go/bin:$HOME/bin" harnez usage history record 2>/dev/null || true`
 	cmdSnapshot := exec.CommandContext(ctx, "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", sshHost, remoteCmd)
 	_ = cmdSnapshot.Run()
 
