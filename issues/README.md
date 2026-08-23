@@ -51,4 +51,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 050 | [050-remote-host-flag-and-watch-hotkey.md](050-remote-host-flag-and-watch-hotkey.md) | Support remote host query via `--host` flag and `[r]` hotkey in watch | Closed — resolved |
 | 051 | [051-multi-host-remote-monitoring-and-dashboard-navigation.md](051-multi-host-remote-monitoring-and-dashboard-navigation.md) | Multi-host remote usage monitoring & interactive host navigation | Open |
 | 052 | [052-headless-agent-cli-probes-for-idle-telemetry-refresh.md](052-headless-agent-cli-probes-for-idle-telemetry-refresh.md) | Research: Headless CLI status probes to refresh telemetry when agents are idle | Open |
+| 053 | [053-stale-lsp-diagnostics-noise-detect-and-toggle.md](053-stale-lsp-diagnostics-noise-detect-and-toggle.md) | Background LSP diagnostics post stale/wrong findings; harness should detect and offer to disable per-agent | Open |
+| 054 | [054-commit-filed-issues-immediately.md](054-commit-filed-issues-immediately.md) | Filed issue-tracker files should be committed immediately, not batched | Open |
 
