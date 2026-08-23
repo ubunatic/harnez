@@ -59,6 +59,7 @@ Generated copies land here (root) after `apply` / `init`.
 | [studies/2026-08-19-agent-telemetry-hooks-proxies-and-log-extraction.md](studies/2026-08-19-agent-telemetry-hooks-proxies-and-log-extraction.md) | AI agent telemetry methods: lifecycle hooks vs. transcript seeking vs. transparent HTTP proxy sidecars across Claude, AGY, and Codex |
 | [studies/2026-08-19-subagent-lifecycle-management-and-teardown-friction.md](studies/2026-08-19-subagent-lifecycle-management-and-teardown-friction.md) | Multi-agent lifecycle management: zombie accumulation vs. premature teardown, entity archetypes, pre-kill workspace patch preservation, and lease heartbeats |
 | [studies/2026-08-19-the-5-phase-agentic-sprint-and-independent-review-loop.md](studies/2026-08-19-the-5-phase-agentic-sprint-and-independent-review-loop.md) | The 5-Phase Agentic Sprint Loop & The Independent Review Gate (Candidate chapter for *Agentic Software Development: The Ubunatic Way*) |
+| [studies/2026-08-23-usage-history-subcommands-process-panel-and-remote-monitoring.md](studies/2026-08-23-usage-history-subcommands-process-panel-and-remote-monitoring.md) | Usage history subcommand decomposition, process telemetry panel (`/proc`), SSH remote monitoring (`--host` / `[r]`), and multi-host `make sync` |
 
 **`docs/feedback/`** — agentic retrospectives & harness feedback reports
 

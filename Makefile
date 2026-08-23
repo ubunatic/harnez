@@ -3,12 +3,14 @@
 _prim := \033[36m
 _rst  := \033[0m
 
-BINARY  ?= harnez
-CONFIG  := config.yaml
-TARGET  := $(HOME)/.claude
-PROJECT := .
-LANGS   := golang bash make git
-PREFIX  ?= /usr/local
+BINARY   ?= harnez
+CONFIG   := config.yaml
+TARGET   := $(HOME)/.claude
+PROJECT  := .
+LANGS    := golang bash make git
+PREFIX   ?= /usr/local
+HOST     ?= um760
+HOST_DIR ?= projects/harnez
 
 help: 🤖  # show this help
 	@grep -E '^[a-zA-Z_-]+:.*[⚙🤖].*#+' $(MAKEFILE_LIST) | \
@@ -72,3 +74,7 @@ release: ⚙️  # release the project (run once, then update to run 'uman relea
 	@echo "  1. Ensure you have 'uman', 'goreleaser', 'minisign', and 'fj' installed."
 	@echo "  2. Run 'uman release' to release interactively."
 	@echo "  3. Once verified, update this target to run 'uman release' directly."
+
+sync: ⚙️  # push here, pull there, build there, verify
+	git push
+	ssh $(HOST) "cd $(HOST_DIR) && git pull && make install && make status"
