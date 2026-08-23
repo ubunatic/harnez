@@ -195,7 +195,10 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 		var stats ClaudeStatsCache
 		if err := json.Unmarshal(data, &stats); err == nil {
 			tb := &TokenBreakdown{}
-			for _, m := range stats.ModelUsage {
+			modelToks := make(map[string]int64)
+			for modelName, m := range stats.ModelUsage {
+				modelTotal := m.InputTokens + m.OutputTokens + m.CacheReadInputTokens + m.CacheCreationInputTokens
+				modelToks[modelName] = modelTotal
 				tb.InputTokens += m.InputTokens
 				tb.OutputTokens += m.OutputTokens
 				tb.CacheReadTokens += m.CacheReadInputTokens
@@ -204,6 +207,9 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 			}
 			tb.TotalTokens = tb.InputTokens + tb.OutputTokens + tb.CacheReadTokens + tb.CacheWriteTokens
 			usage.Tokens = tb
+			if len(modelToks) > 0 {
+				usage.ModelTokens = modelToks
+			}
 			if stats.TotalSessions > 0 {
 				usage.Details["total_sessions"] = fmt.Sprintf("%d", stats.TotalSessions)
 			}

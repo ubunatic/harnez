@@ -2,6 +2,7 @@ package usage
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"time"
 )
@@ -88,3 +89,117 @@ func FormatNumber(n int64) string {
 	}
 	return strings.Join(res, ",")
 }
+
+// TerminalWidth returns the detected terminal column width for out, or 90 if undetermined.
+func TerminalWidth(out io.Writer) int {
+	cols, _ := terminalSize(out)
+	return cols
+}
+
+// SparkRunes are Unicode block runes (' ' through '█') for rendering sparklines.
+var SparkRunes = []rune{' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
+
+// resampleValues downsamples a slice of float64 to target width using max aggregation in each bucket.
+func resampleValues(values []float64, width int) []float64 {
+	n := len(values)
+	if width <= 0 || n <= width {
+		return values
+	}
+	res := make([]float64, width)
+	for i := 0; i < width; i++ {
+		start := i * n / width
+		end := (i + 1) * n / width
+		if end <= start {
+			end = start + 1
+		}
+		if end > n {
+			end = n
+		}
+		maxV := values[start]
+		for j := start + 1; j < end; j++ {
+			if values[j] > maxV {
+				maxV = values[j]
+			}
+		}
+		res[i] = maxV
+	}
+	return res
+}
+
+// RenderSparklineWidth formats a slice of float64 time-series data into a Unicode sparkline.
+// If width > 0 and len(values) > width, values are downsampled to width runes.
+// Baseline is relative to the initial value (v0 = values[0]) so trajectory deltas are visible.
+func RenderSparklineWidth(values []float64, width int) string {
+	if len(values) == 0 {
+		return ""
+	}
+	if width > 0 && len(values) > width {
+		values = resampleValues(values, width)
+	}
+
+	minVal := values[0]
+	maxVal := values[0]
+	for _, v := range values {
+		if v < minVal {
+			minVal = v
+		}
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+
+	var sb strings.Builder
+	span := maxVal - minVal
+	if span <= 0 {
+		// All values identical:
+		// If positive, render full block '█' (or baseline ' ' if 0 or negative)
+		runeChar := SparkRunes[0]
+		if maxVal > 0 {
+			runeChar = SparkRunes[len(SparkRunes)-1]
+		}
+		for range values {
+			sb.WriteRune(runeChar)
+		}
+		return sb.String()
+	}
+
+	for _, v := range values {
+		delta := v - minVal
+		if delta <= 0 {
+			sb.WriteRune(SparkRunes[0])
+			continue
+		}
+		idx := int((delta / span) * float64(len(SparkRunes)-1))
+		if idx < 1 {
+			idx = 1
+		}
+		if idx >= len(SparkRunes) {
+			idx = len(SparkRunes) - 1
+		}
+		sb.WriteRune(SparkRunes[idx])
+	}
+	return sb.String()
+}
+
+// RenderSparkline formats a slice of float64 time-series data into an unconstrained Unicode sparkline.
+func RenderSparkline(values []float64) string {
+	return RenderSparklineWidth(values, 0)
+}
+
+// RenderSparklineInt64Width formats a slice of int64 time-series data into a Unicode sparkline of limited width.
+func RenderSparklineInt64Width(values []int64, width int) string {
+	if len(values) == 0 {
+		return ""
+	}
+	f := make([]float64, len(values))
+	for i, v := range values {
+		f[i] = float64(v)
+	}
+	return RenderSparklineWidth(f, width)
+}
+
+// RenderSparklineInt64 formats a slice of int64 time-series data into a Unicode sparkline.
+func RenderSparklineInt64(values []int64) string {
+	return RenderSparklineInt64Width(values, 0)
+}
+

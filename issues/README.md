@@ -45,3 +45,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 044 | [044-git-md-proactive-commit-vs-harness-ask-first.md](044-git-md-proactive-commit-vs-harness-ask-first.md) | `docs/Git.md`'s "commit proactively" conflicts with harness ask-first defaults | Open |
 | 045 | [045-review-loops-harden-symptoms-not-root-cause.md](045-review-loops-harden-symptoms-not-root-cause.md) | Multi-round review loops harden the symptom, not the root cause | Open |
 | 046 | [046-commit-checkpoint-recurred-after-044-filed.md](046-commit-checkpoint-recurred-after-044-filed.md) | The exact gap from 044 recurred in the same session that filed it | Open |
+| 047 | [047-sparkline-vis-model-usage-over-time.md](047-sparkline-vis-model-usage-over-time.md) | Add sparkline visualization to show model usage over time | Closed — resolved |

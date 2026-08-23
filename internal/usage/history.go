@@ -164,8 +164,8 @@ func ReadHistory(dir string) ([]HistoryEntry, error) {
 }
 
 // RenderTimelineText formats merged history entries as a flat, chronological
-// table — one row per (snapshot, agent) pair — so a timeline spanning several
-// machines reads as a single ordered log.
+// table — one row per (snapshot, agent) pair — and includes per-agent and per-model
+// sparkline trends when history is available.
 func RenderTimelineText(entries []HistoryEntry) string {
 	if len(entries) == 0 {
 		return "No usage history recorded yet. Run `harnez usage --history` (or `--watch --history`) to start recording.\n"
@@ -191,6 +191,176 @@ func RenderTimelineText(entries []HistoryEntry) string {
 			sb.WriteString(fmt.Sprintf("%-20s %-16s %-8s %9s %9s %14s\n", ts, e.Hostname, a.AgentID, sess, week, tok))
 		}
 	}
+
+	sparklines := RenderTimelineSparklines(entries)
+	if sparklines != "" {
+		sb.WriteString("\n")
+		sb.WriteString(sparklines)
+	}
+
+	return sb.String()
+}
+
+// RenderTimelineSparklines aggregates token consumption across history entries
+// and renders overall agent and per-model sparkline trajectories over time,
+// including start/end tokens, total tokens used, and consumption rates per hour and day.
+// It detects terminal width from os.Stdout automatically.
+func RenderTimelineSparklines(entries []HistoryEntry) string {
+	cols, _ := terminalSize(os.Stdout)
+	return RenderTimelineSparklinesWidth(entries, cols)
+}
+
+// RenderTimelineSparklinesWidth renders timeline sparklines constrained to fit within termWidth columns.
+func RenderTimelineSparklinesWidth(entries []HistoryEntry, termWidth int) string {
+	if len(entries) == 0 {
+		return ""
+	}
+
+	// Sort entries chronologically
+	sorted := make([]HistoryEntry, len(entries))
+	copy(sorted, entries)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Timestamp.Before(sorted[j].Timestamp) })
+
+	// Discover all agents and their models in history
+	agentIDs := make(map[string]bool)
+	agentNames := make(map[string]string)
+	agentTokens := make(map[string][]int64)
+	agentTimestamps := make(map[string][]time.Time)
+	agentModelTokens := make(map[string]map[string][]int64)
+	agentModelTimestamps := make(map[string]map[string][]time.Time)
+
+	for _, e := range sorted {
+		// Collect for each agent in this entry
+		for _, a := range e.Agents {
+			if !a.Installed || !a.Authenticated {
+				continue
+			}
+			agentIDs[a.AgentID] = true
+			if agentNames[a.AgentID] == "" {
+				agentNames[a.AgentID] = a.Name
+			}
+
+			var totalTok int64
+			if a.Tokens != nil {
+				totalTok = a.Tokens.TotalTokens
+			}
+			agentTokens[a.AgentID] = append(agentTokens[a.AgentID], totalTok)
+			agentTimestamps[a.AgentID] = append(agentTimestamps[a.AgentID], e.Timestamp)
+
+			if len(a.ModelTokens) > 0 {
+				if agentModelTokens[a.AgentID] == nil {
+					agentModelTokens[a.AgentID] = make(map[string][]int64)
+					agentModelTimestamps[a.AgentID] = make(map[string][]time.Time)
+				}
+				for model, tok := range a.ModelTokens {
+					agentModelTokens[a.AgentID][model] = append(agentModelTokens[a.AgentID][model], tok)
+					agentModelTimestamps[a.AgentID][model] = append(agentModelTimestamps[a.AgentID][model], e.Timestamp)
+				}
+			}
+		}
+	}
+
+	if len(agentIDs) == 0 {
+		return ""
+	}
+
+	var sortedAgents []string
+	for aid := range agentIDs {
+		sortedAgents = append(sortedAgents, aid)
+	}
+	sort.Strings(sortedAgents)
+
+	var sb strings.Builder
+	sb.WriteString("Usage Trajectory Over Time:\n")
+
+	formatStats := func(toks []int64, times []time.Time) string {
+		if len(toks) == 0 {
+			return "0 → 0 (+0 used) | - /hr | - /day"
+		}
+		startTok := toks[0]
+		endTok := toks[len(toks)-1]
+		used := endTok - startTok
+		if used < 0 {
+			used = 0
+		}
+
+		usedStr := fmt.Sprintf("+%s used", FormatNumber(used))
+		if used == 0 {
+			usedStr = "+0 used"
+		}
+
+		rateStr := "- /hr | - /day"
+		if len(times) >= 2 {
+			duration := times[len(times)-1].Sub(times[0])
+			if duration >= time.Minute && used > 0 {
+				hours := duration.Hours()
+				perHour := int64(float64(used) / hours)
+				perDay := int64(float64(used) / (hours / 24.0))
+				rateStr = fmt.Sprintf("%s /hr | %s /day", FormatNumber(perHour), FormatNumber(perDay))
+			} else if duration >= time.Minute && used == 0 {
+				rateStr = "0 /hr | 0 /day"
+			}
+		}
+
+		return fmt.Sprintf("%10s → %10s (%s) | %s", FormatNumber(startTok), FormatNumber(endTok), usedStr, rateStr)
+	}
+
+	// Calculate maximum sparkline width available to fit lines within termWidth columns.
+	// Line structure:
+	//   Agent: "  %-20s [%s]   %s" -> indent(2) + name(20) + " ["(2) + spark + "]   "(4) + stats
+	//   Model: "    ↳ %-16s [%s]   %s" -> indent(4) + arrow(2) + name(16) + " ["(2) + spark + "]   "(4) + stats
+	// Total non-spark width is approx 28 chars (prefix) + 5 chars (brackets & space) + stats (~60 chars) = ~93 chars.
+	//
+	// We dynamically compute stats max width to determine available spark width:
+	// sparkW = termWidth - prefixLen - bracketsPadding(5) - statsLen
+	calcSparkW := func(prefixLen, statsLen int) int {
+		if termWidth <= 0 {
+			return 12
+		}
+		// prefix + "[" + spark + "]   " + stats
+		// safety margin of 1 column
+		avail := termWidth - prefixLen - 5 - statsLen - safetyMargin
+		if avail < 5 {
+			avail = 5
+		}
+		if avail > 40 {
+			avail = 40
+		}
+		return avail
+	}
+
+	for _, aid := range sortedAgents {
+		name := agentNames[aid]
+		if name == "" {
+			name = aid
+		}
+		toks := agentTokens[aid]
+		times := agentTimestamps[aid]
+		stats := formatStats(toks, times)
+		// Prefix: "  %-20s" -> 22 chars
+		sparkW := calcSparkW(22, visLen(stats))
+		spark := RenderSparklineInt64Width(toks, sparkW)
+		sb.WriteString(fmt.Sprintf("  %-20s [%s]   %s\n", name, spark, stats))
+
+		models := agentModelTokens[aid]
+		if len(models) > 0 {
+			var modelList []string
+			for m := range models {
+				modelList = append(modelList, m)
+			}
+			sort.Strings(modelList)
+			for _, m := range modelList {
+				mToks := models[m]
+				mTimes := agentModelTimestamps[aid][m]
+				mStats := formatStats(mToks, mTimes)
+				// Prefix: "    ↳ %-16s" -> 4 + 2 (↳ + space) + 16 = 22 chars
+				mSparkW := calcSparkW(22, visLen(mStats))
+				mSpark := RenderSparklineInt64Width(mToks, mSparkW)
+				sb.WriteString(fmt.Sprintf("    ↳ %-16s [%s]   %s\n", m, mSpark, mStats))
+			}
+		}
+	}
+
 	return sb.String()
 }
 

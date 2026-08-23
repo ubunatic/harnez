@@ -109,35 +109,7 @@ func (t *rateTracker) update(summary UsageSummary) map[string]agentRate {
 }
 
 func renderSparkline(values []float64) string {
-	if len(values) == 0 {
-		return ""
-	}
-	maxVal := 0.0
-	for _, v := range values {
-		if v > maxVal {
-			maxVal = v
-		}
-	}
-	if maxVal <= 0 {
-		maxVal = 1
-	}
-
-	var sb strings.Builder
-	for _, v := range values {
-		if v <= 0 {
-			sb.WriteRune(sparkRunes[0])
-			continue
-		}
-		idx := int((v / maxVal) * float64(len(sparkRunes)-1))
-		if idx < 1 {
-			idx = 1
-		}
-		if idx >= len(sparkRunes) {
-			idx = len(sparkRunes) - 1
-		}
-		sb.WriteRune(sparkRunes[idx])
-	}
-	return sb.String()
+	return RenderSparkline(values)
 }
 
 // stripANSI removes ANSI escape sequences so visible width can be measured.

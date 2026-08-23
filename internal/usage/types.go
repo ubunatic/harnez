@@ -42,6 +42,7 @@ type AgentUsage struct {
 	PlanTier      string                 `json:"plan_tier,omitempty"`
 	ActiveModel   string                 `json:"active_model,omitempty"`
 	Tokens        *TokenBreakdown        `json:"tokens,omitempty"`
+	ModelTokens   map[string]int64       `json:"model_tokens,omitempty"`
 	Session       *QuotaWindow           `json:"session,omitempty"`
 	Weekly        *QuotaWindow           `json:"weekly,omitempty"`
 	ModelGroups   []ModelGroup           `json:"model_groups,omitempty"`
