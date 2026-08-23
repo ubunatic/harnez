@@ -365,14 +365,15 @@ type namedWindow struct {
 // Toggled interactively via keypress; see RunWatch. The key for each panel
 // (shown in its own title bar, btop-style) is fixed here.
 type watchSections struct {
-	Claude bool
-	AGY    bool
-	Codex  bool
-	Tokens bool
+	Claude  bool
+	AGY     bool
+	Codex   bool
+	History bool
+	Tokens  bool
 }
 
 func defaultWatchSections() watchSections {
-	return watchSections{Claude: true, AGY: true, Codex: true, Tokens: true}
+	return watchSections{Claude: true, AGY: true, Codex: true, History: true, Tokens: true}
 }
 
 // agentVisible reports whether the panel for agentID should currently be drawn.
@@ -384,6 +385,8 @@ func (s watchSections) agentVisible(agentID string) bool {
 		return s.AGY
 	case "codex":
 		return s.Codex
+	case "history":
+		return s.History
 	default:
 		return true
 	}
@@ -398,9 +401,52 @@ func agentKey(agentID string) string {
 		return "G"
 	case "codex":
 		return "O"
+	case "history":
+		return "H"
 	default:
 		return "?"
 	}
+}
+
+// buildHistoryBox renders a compact 4th panel showing recorded usage history stats.
+func buildHistoryBox(homeDir, historyDir string, width int) wbox {
+	title := "\x1b[1m[H]\x1b[0m History"
+	targetDir := historyDir
+	if targetDir == "" {
+		targetDir = HistoryDir(homeDir)
+	}
+
+	stats, _ := HistorySummaryStats(targetDir)
+
+	var lines []string
+	fileWord := "files"
+	if stats.FileCount == 1 {
+		fileWord = "file"
+	}
+	lines = append(lines, fmt.Sprintf("%d %s · %s", stats.FileCount, fileWord, FormatBytes(stats.TotalBytes)))
+
+	// Display directory path shortened with ~ if in user home
+	displayDir := targetDir
+	if home, err := os.UserHomeDir(); err == nil && home != "" && strings.HasPrefix(displayDir, home) {
+		displayDir = "~" + strings.TrimPrefix(displayDir, home)
+	}
+	lines = append(lines, displayDir)
+
+	if stats.TotalEntries > 0 {
+		var metricParts []string
+		if stats.Sparkline != "" {
+			metricParts = append(metricParts, "["+stats.Sparkline+"]")
+		}
+		metricParts = append(metricParts, fmt.Sprintf("+%s used", FormatNumber(stats.TotalUsed)))
+		if stats.Duration >= time.Minute {
+			metricParts = append(metricParts, fmt.Sprintf("%s/hr", FormatNumber(stats.RatePerHour)))
+		}
+		lines = append(lines, strings.Join(metricParts, " · "))
+	} else {
+		lines = append(lines, "\x1b[90mno history recorded yet\x1b[0m")
+	}
+
+	return wbox{title: title, lines: lines, width: width}
 }
 
 // applyStaleQuota fills in a fresh collect result's missing quota windows
@@ -603,7 +649,18 @@ func gridColumns(usable, panels int) (columns, boxWidth int) {
 // ones that don't. Overflowing the viewport is what scrolls the terminal and
 // desynchronises every later `\x1b[H`, so the layout must never rely on the
 // terminal to clip for it.
-func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int, live bool) screenFrame {
+func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int, live bool, homeDir, historyDir string) screenFrame {
+	targetHistoryDir := historyDir
+	if targetHistoryDir == "" {
+		targetHistoryDir = HistoryDir(homeDir)
+	}
+	fileCount, totalBytes, _ := HistoryStats(targetHistoryDir)
+	fileWord := "files"
+	if fileCount == 1 {
+		fileWord = "file"
+	}
+	historyStatStr := fmt.Sprintf("   \x1b[90mhistory: %d %s (%s)\x1b[0m", fileCount, fileWord, FormatBytes(totalBytes))
+
 	var visible []AgentUsage
 	for _, agent := range summary.Agents {
 		if sec.agentVisible(agent.AgentID) {
@@ -625,14 +682,17 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 			hidden = append(hidden, fmt.Sprintf("[%s]", agentKey(agent.AgentID)))
 		}
 	}
+	if !sec.History {
+		hidden = append(hidden, "[H]")
+	}
 	hiddenHint := ""
 	if len(hidden) > 0 {
 		hiddenHint = fmt.Sprintf("   \x1b[90mhidden: %s\x1b[0m", strings.Join(hidden, " "))
 	}
 
 	header := []string{
-		fmt.Sprintf("\x1b[1mAgentic usage\x1b[0m  %s%s",
-			summary.Timestamp.Format("15:04:05 MST"), hiddenHint),
+		fmt.Sprintf("\x1b[1mAgentic usage\x1b[0m  %s%s%s",
+			summary.Timestamp.Format("15:04:05 MST"), historyStatStr, hiddenHint),
 		"",
 	}
 	var footer []string
@@ -650,11 +710,16 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		budget = 1
 	}
 
+	totalPanels := len(visible)
+	if sec.History {
+		totalPanels++
+	}
+
 	var body []string
-	if len(visible) == 0 {
+	if totalPanels == 0 {
 		body = append(body, "\x1b[90m(all panels hidden)\x1b[0m")
 	} else {
-		columns, boxWidth := gridColumns(usable, len(visible))
+		columns, boxWidth := gridColumns(usable, totalPanels)
 
 		dropped := 0
 		var pending [][]string
@@ -674,6 +739,13 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		for _, agent := range visible {
 			box := buildAgentBox(agent, rates[agent.AgentID], boxWidth, sec.Tokens, live)
 			pending = append(pending, renderWBox(box))
+			if len(pending) == columns {
+				flushRow()
+			}
+		}
+		if sec.History {
+			hBox := buildHistoryBox(homeDir, historyDir, boxWidth)
+			pending = append(pending, renderWBox(hBox))
 			if len(pending) == columns {
 				flushRow()
 			}
@@ -702,7 +774,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out io.Writer) {
 	summary := CollectAll(ctx, homeDir, client)
 	cols, rows := terminalSize(out)
-	frame := buildWatchFrame(summary, nil, 0, defaultWatchSections(), cols, rows, false)
+	frame := buildWatchFrame(summary, nil, 0, defaultWatchSections(), cols, rows, false, homeDir, "")
 	for _, l := range frame.lines {
 		fmt.Fprintln(out, l+"\x1b[0m")
 	}
@@ -765,7 +837,10 @@ func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.W
 				case 'o', 'O', '3':
 					sec.Codex = !sec.Codex
 					requestRedraw()
-				case 't', 'T', '4':
+				case 'h', 'H', '4':
+					sec.History = !sec.History
+					requestRedraw()
+				case 't', 'T', '5':
 					sec.Tokens = !sec.Tokens
 					requestRedraw()
 				case 'a', 'A':
@@ -811,7 +886,7 @@ func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.W
 		secLock.Unlock()
 
 		cols, rows := terminalSize(out)
-		buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true).paint(out)
+		buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir).paint(out)
 	}
 
 	renderFrame := func() {

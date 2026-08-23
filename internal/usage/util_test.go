@@ -96,3 +96,30 @@ func TestFormatNumber(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatBytes(t *testing.T) {
+	tests := []struct {
+		b    int64
+		want string
+	}{
+		{0, "0 B"},
+		{512, "512 B"},
+		{1023, "1023 B"},
+		{1024, "1.0 KB"},
+		{1434, "1.4 KB"},
+		{1048576, "1.0 MB"},
+		{13421772, "12.8 MB"},
+		{1073741824, "1.0 GB"},
+		{1503238553, "1.4 GB"},
+		{-1024, "-1.0 KB"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			got := FormatBytes(tt.b)
+			if got != tt.want {
+				t.Errorf("FormatBytes(%d) = %q, want %q", tt.b, got, tt.want)
+			}
+		})
+	}
+}

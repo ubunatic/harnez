@@ -70,6 +70,33 @@ func RenderProgressBar(usedPercent float64, width int) string {
 	return "[" + filled + empty + "]"
 }
 
+// FormatBytes formats a byte count into a human-readable string (e.g. "0 B", "512 B", "1.4 KB", "12.8 MB", "1.2 GB").
+func FormatBytes(b int64) string {
+	if b < 0 {
+		return "-" + FormatBytes(-b)
+	}
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	units := []string{"KB", "MB", "GB", "TB", "PB"}
+	if exp >= len(units) {
+		exp = len(units) - 1
+	}
+	val := float64(b) / float64(div)
+	if val >= 100 {
+		return fmt.Sprintf("%.0f %s", val, units[exp])
+	} else if val >= 10 {
+		return fmt.Sprintf("%.1f %s", val, units[exp])
+	}
+	return fmt.Sprintf("%.1f %s", val, units[exp])
+}
+
 // FormatNumber formats an integer with thousand commas.
 func FormatNumber(n int64) string {
 	if n < 0 {

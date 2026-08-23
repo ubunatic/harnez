@@ -2,10 +2,14 @@ package usage
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"syscall"
@@ -33,6 +37,89 @@ func HistoryDir(homeDir string) string {
 		homeDir, _ = os.UserHomeDir()
 	}
 	return filepath.Join(homeDir, ".claude", "harnez", historyDirName)
+}
+
+// HistorySummaryData holds aggregated usage metrics across recorded history files.
+type HistorySummaryData struct {
+	FileCount    int
+	TotalBytes   int64
+	TotalEntries int
+	StartTokens  int64
+	EndTokens    int64
+	TotalUsed    int64
+	Duration     time.Duration
+	RatePerHour  int64
+	RatePerDay   int64
+	Sparkline    string
+}
+
+// HistorySummaryStats inspects *.jsonl files in dir, loads and merges history entries,
+// and computes overall file stats, total tokens consumed across the recorded timespan,
+// time duration, consumption rates, and an overall sparkline.
+func HistorySummaryStats(dir string) (HistorySummaryData, error) {
+	var data HistorySummaryData
+
+	matches, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	if err != nil || len(matches) == 0 {
+		return data, nil
+	}
+
+	for _, path := range matches {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		data.FileCount++
+		data.TotalBytes += info.Size()
+	}
+
+	entries, err := ReadHistory(dir)
+	if err != nil {
+		return data, err
+	}
+	data.TotalEntries = len(entries)
+	if len(entries) == 0 {
+		return data, nil
+	}
+
+	// Calculate per-entry total tokens across all agents
+	var totalTokSeries []int64
+	for _, e := range entries {
+		var entryTotal int64
+		for _, a := range e.Agents {
+			if a.Installed && a.Authenticated && a.Tokens != nil {
+				entryTotal += a.Tokens.TotalTokens
+			}
+		}
+		totalTokSeries = append(totalTokSeries, entryTotal)
+	}
+
+	if len(totalTokSeries) > 0 {
+		data.StartTokens = totalTokSeries[0]
+		data.EndTokens = totalTokSeries[len(totalTokSeries)-1]
+		used := data.EndTokens - data.StartTokens
+		if used < 0 {
+			used = 0
+		}
+		data.TotalUsed = used
+		data.Duration = entries[len(entries)-1].Timestamp.Sub(entries[0].Timestamp)
+
+		if data.Duration >= time.Minute && data.TotalUsed > 0 {
+			hours := data.Duration.Hours()
+			data.RatePerHour = int64(float64(data.TotalUsed) / hours)
+			data.RatePerDay = int64(float64(data.TotalUsed) / (hours / 24.0))
+		}
+		data.Sparkline = RenderSparklineInt64Width(totalTokSeries, 6)
+	}
+
+	return data, nil
+}
+
+// HistoryStats inspects *.jsonl files in dir and returns the file count, total size in bytes,
+// and total number of snapshot entries recorded across all files.
+func HistoryStats(dir string) (fileCount int, totalBytes int64, totalEntries int) {
+	stats, _ := HistorySummaryStats(dir)
+	return stats.FileCount, stats.TotalBytes, stats.TotalEntries
 }
 
 // sanitizeHostname keeps the on-disk filename portable across the systems a
@@ -372,3 +459,51 @@ func RenderTimelineJSON(entries []HistoryEntry) (string, error) {
 	}
 	return string(data), nil
 }
+
+var validSSHHostRe = regexp.MustCompile(`^[a-zA-Z0-9_.\-@:]+$`)
+
+// FetchRemoteHistory fetches remote usage history *.jsonl files from an SSH host into localDir.
+// It triggers a fresh remote snapshot over SSH beforehand so the fetched files are up-to-date.
+func FetchRemoteHistory(ctx context.Context, sshHost string, localDir string, out io.Writer) ([]string, error) {
+	sshHost = strings.TrimSpace(sshHost)
+	if sshHost == "" {
+		return nil, fmt.Errorf("ssh host cannot be empty")
+	}
+	if !validSSHHostRe.MatchString(sshHost) || strings.HasPrefix(sshHost, "-") {
+		return nil, fmt.Errorf("invalid ssh host %q", sshHost)
+	}
+
+	if err := os.MkdirAll(localDir, 0700); err != nil {
+		return nil, fmt.Errorf("create local history dir: %w", err)
+	}
+
+	// 1. Proactively attempt to trigger a fresh remote snapshot over SSH.
+	// We run non-blocking snapshot collection ignoring errors (remote may not have harnez in PATH or installed).
+	remoteCmd := `PATH="$PATH:$HOME/go/bin:$HOME/bin" harnez usage --history 2>/dev/null || true`
+	cmdSnapshot := exec.CommandContext(ctx, "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", sshHost, remoteCmd)
+	_ = cmdSnapshot.Run()
+
+	// 2. Copy remote *.jsonl files into localDir via scp
+	remoteSrc := fmt.Sprintf("%s:~/.claude/harnez/usage-history/*.jsonl", sshHost)
+	cmdScp := exec.CommandContext(ctx, "scp", "-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", remoteSrc, localDir+"/")
+	var errBuf strings.Builder
+	cmdScp.Stderr = &errBuf
+	if err := cmdScp.Run(); err != nil {
+		return nil, fmt.Errorf("scp failed from %s: %w (%s)", sshHost, err, strings.TrimSpace(errBuf.String()))
+	}
+
+	// Discover matching files in localDir
+	matches, _ := filepath.Glob(filepath.Join(localDir, "*.jsonl"))
+	var fetched []string
+	for _, m := range matches {
+		fetched = append(fetched, filepath.Base(m))
+	}
+	sort.Strings(fetched)
+
+	if out != nil && len(fetched) > 0 {
+		fmt.Fprintf(out, "fetched %d history file(s) from %s: %s\n", len(fetched), sshHost, strings.Join(fetched, ", "))
+	}
+
+	return fetched, nil
+}
+

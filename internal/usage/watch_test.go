@@ -148,3 +148,104 @@ func TestBuildAgentBoxBarFitsContentW(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildHistoryBox(t *testing.T) {
+	tempDir := t.TempDir()
+	_ = AppendHistory(tempDir, UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{
+				AgentID:       "claude",
+				Name:          "Claude Code",
+				Installed:     true,
+				Authenticated: true,
+				Tokens: &TokenBreakdown{
+					TotalTokens: 1000,
+				},
+			},
+		},
+	})
+	_ = AppendHistory(tempDir, UsageSummary{
+		Timestamp: testTime.Add(10 * time.Minute),
+		Agents: []AgentUsage{
+			{
+				AgentID:       "claude",
+				Name:          "Claude Code",
+				Installed:     true,
+				Authenticated: true,
+				Tokens: &TokenBreakdown{
+					TotalTokens: 2500,
+				},
+			},
+		},
+	})
+
+	box := buildHistoryBox("", tempDir, 40)
+	if !strings.Contains(box.title, "[H]") || !strings.Contains(box.title, "History") {
+		t.Errorf("expected box title to contain [H] and History, got %q", box.title)
+	}
+
+	rendered := strings.Join(box.lines, "\n")
+	if !strings.Contains(rendered, "1 file") {
+		t.Errorf("expected box to contain '1 file', got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "+1,500 used") {
+		t.Errorf("expected box to contain '+1,500 used', got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "9,000/hr") {
+		t.Errorf("expected box to contain '9,000/hr', got:\n%s", rendered)
+	}
+}
+
+func TestBuildWatchFrame_HistoryHeaderAnd4Boxes(t *testing.T) {
+	tempDir := t.TempDir()
+	_ = AppendHistory(tempDir, UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true},
+		},
+	})
+
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true},
+			{AgentID: "agy", Name: "Antigravity", Installed: true, Authenticated: true},
+			{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true},
+		},
+	}
+
+	sec := defaultWatchSections()
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", tempDir)
+	frameText := strings.Join(frame.lines, "\n")
+
+	// Verify header contains history counter
+	if !strings.Contains(frameText, "history: 1 file") {
+		t.Errorf("expected header to contain 'history: 1 file', got:\n%s", frameText)
+	}
+
+	// Verify all 4 boxes exist: Claude, AGY, Codex, and History
+	if !strings.Contains(frameText, "[C]") || !strings.Contains(frameText, "Claude Code") {
+		t.Errorf("expected frame to contain Claude box")
+	}
+	if !strings.Contains(frameText, "[G]") || !strings.Contains(frameText, "Antigravity") {
+		t.Errorf("expected frame to contain AGY box")
+	}
+	if !strings.Contains(frameText, "[O]") || !strings.Contains(frameText, "OpenAI Codex") {
+		t.Errorf("expected frame to contain Codex box")
+	}
+	if !strings.Contains(frameText, "[H]") || !strings.Contains(frameText, "History") {
+		t.Errorf("expected frame to contain History box")
+	}
+
+	// Verify hiding history works
+	sec.History = false
+	frameHidden := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", tempDir)
+	frameHiddenText := strings.Join(frameHidden.lines, "\n")
+	if strings.Contains(frameHiddenText, "+0 used") || strings.Contains(frameHiddenText, "used ·") {
+		t.Errorf("expected history box content to be hidden when sec.History is false")
+	}
+	if !strings.Contains(frameHiddenText, "hidden: [H]") {
+		t.Errorf("expected header to show hidden: [H], got:\n%s", frameHiddenText)
+	}
+}

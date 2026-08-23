@@ -29,6 +29,7 @@ func main() {
 	var usageInterval time.Duration
 	var usageHistory bool
 	var usageTimeline bool
+	var usageFetch string
 	usageCmd := &cobra.Command{
 		Use:     "usage",
 		Aliases: []string{"quota", "tokens", "stats"},
@@ -38,6 +39,14 @@ func main() {
 			var client *http.Client
 			if !usageOffline {
 				client = &http.Client{Timeout: 5 * time.Second}
+			}
+
+			if usageFetch != "" {
+				historyDir := usage.HistoryDir("")
+				if _, err := usage.FetchRemoteHistory(ctx, usageFetch, historyDir, nil); err != nil {
+					return fmt.Errorf("fetch remote history: %w", err)
+				}
+				fmt.Fprintf(cmd.ErrOrStderr(), "fetched remote history from %s\n", usageFetch)
 			}
 
 			if usageTimeline {
@@ -124,6 +133,8 @@ func main() {
 		"append each snapshot to this machine's usage history log (~/.claude/harnez/usage-history/), for --timeline")
 	usageCmd.Flags().BoolVar(&usageTimeline, "timeline", false,
 		"print the merged usage history timeline from all recorded/copied-in machine logs and exit")
+	usageCmd.Flags().StringVar(&usageFetch, "fetch", "",
+		"fetch remote usage history files from an SSH host into local ~/.claude/harnez/usage-history/")
 
 	var applyDocs []string
 	var forceDocs bool
