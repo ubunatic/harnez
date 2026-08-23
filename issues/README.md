@@ -50,4 +50,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 049 | [049-running-agent-processes-watch-panel.md](049-running-agent-processes-watch-panel.md) | Add running agent processes status box in usage watch/summary | Closed — resolved |
 | 050 | [050-remote-host-flag-and-watch-hotkey.md](050-remote-host-flag-and-watch-hotkey.md) | Support remote host query via `--host` flag and `[r]` hotkey in watch | Closed — resolved |
 | 051 | [051-multi-host-remote-monitoring-and-dashboard-navigation.md](051-multi-host-remote-monitoring-and-dashboard-navigation.md) | Multi-host remote usage monitoring & interactive host navigation | Open |
+| 052 | [052-headless-agent-cli-probes-for-idle-telemetry-refresh.md](052-headless-agent-cli-probes-for-idle-telemetry-refresh.md) | Research: Headless CLI status probes to refresh telemetry when agents are idle | Open |
 
