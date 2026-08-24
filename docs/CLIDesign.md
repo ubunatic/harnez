@@ -18,6 +18,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `status`| Global | Config summary + applied-state checks |
 | `usage` | Multi-Agent (local/remote) | Zero-cost token counters, live quota tracking, procs (`-p`), remote host (`--host`) |
 | `usage history` | Analytical / Logs | Timeline, remote fetch, stats & sparklines across `~/.claude/harnez/usage-history/` |
+| `assess`| Local / Repo | Fast code/doc metrics, token estimation, and feasibility report (`--json`) |
 
 `apply` and `init` operate on disjoint flag surfaces by design. `apply` takes `-t`
 (Claude config dir); `init` takes `-d` (project dir). They cannot be confused.

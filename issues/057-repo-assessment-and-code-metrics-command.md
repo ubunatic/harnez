@@ -1,6 +1,6 @@
 # 057 — `harnez assess`: Fast Code/Doc Metrics & Repo Feasibility Report
 
-**Status**: Open
+**Status**: Closed — resolved in implementation of `harnez assess`
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature

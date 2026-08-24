@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/assess"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/usage"
 )
@@ -312,7 +313,35 @@ func main() {
 	initCmd.Flags().BoolVar(&initUpdate, "update", false, "re-fetch and refresh the project summary (implies --summary)")
 	initCmd.Flags().BoolVar(&initReplace, "replace", false, "delete existing AGENTS.md and recreate from template before init")
 
-	root.AddCommand(apply, diff, clean, status, usageCmd, initCmd)
+	var assessJSON bool
+	assessCmd := &cobra.Command{
+		Use:   "assess [path]",
+		Short: "Fast code/doc metrics, token estimation, and repository feasibility report",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetPath := "."
+			if len(args) > 0 {
+				targetPath = args[0]
+			}
+			report, err := assess.AssessPath(targetPath)
+			if err != nil {
+				return fmt.Errorf("assess %s: %w", targetPath, err)
+			}
+			if assessJSON {
+				out, err := assess.RenderJSON(report)
+				if err != nil {
+					return err
+				}
+				fmt.Println(out)
+				return nil
+			}
+			fmt.Print(assess.RenderText(report))
+			return nil
+		},
+	}
+	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
+
+	root.AddCommand(apply, diff, clean, status, usageCmd, initCmd, assessCmd)
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}
