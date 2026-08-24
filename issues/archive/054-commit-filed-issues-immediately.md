@@ -1,17 +1,19 @@
 # 054 — Filed issue-tracker files should be committed immediately, not batched
 
-**Status**: Open
-**Category**: Agentic Ergonomics / Harness Behavior
-**Related**: [043](043-never-blindly-revert-commit-stale-work-first.md), [044](044-git-md-proactive-commit-vs-harness-ask-first.md), [046](046-commit-checkpoint-recurred-after-044-filed.md)
+**Status**: Closed — resolved in a86ef7d
+**Priority**: P2 (Medium)
+**Severity**: Moderate
+**Category**: Agentic Ergonomics
+**Related**: [043](../043-never-blindly-revert-commit-stale-work-first.md), [044](../044-git-md-proactive-commit-vs-harness-ask-first.md), [046](../046-commit-checkpoint-recurred-after-044-filed.md), [docs/Git.md](../../docs/Git.md), [docs/practices/IssueTracking.md](../../docs/practices/IssueTracking.md), `a86ef7d`
 
 ---
 
 ## 1. Problem & Motivation
 
-[044](044-git-md-proactive-commit-vs-harness-ask-first.md) already
+[044](../044-git-md-proactive-commit-vs-harness-ask-first.md) already
 documents the broader tension between `docs/Git.md`'s "commit
 proactively" guidance and a harness's ask-first default for general code/
-feature work. [046](046-commit-checkpoint-recurred-after-044-filed.md)
+feature work. [046](../046-commit-checkpoint-recurred-after-044-filed.md)
 found the exact same gap recurring in the same session that filed 044.
 
 This ticket is narrower and specifically about **issue-tracker files**
@@ -27,7 +29,7 @@ This ticket is narrower and specifically about **issue-tracker files**
   changes are usually visible in `git status`/`git diff` and get noticed;
   a lost issue file is invisible unless someone remembers it existed).
 - **Self-referential proof this matters**: this very ticket and
-  [053](053-stale-lsp-diagnostics-noise-detect-and-toggle.md) were both
+  [053](../053-stale-lsp-diagnostics-noise-detect-and-toggle.md) were both
   filed in the same session, sitting uncommitted in `harnez`'s own working
   tree, until the user explicitly asked for them to be committed — the
   harness's general ask-first default applied to them exactly as it would
@@ -66,3 +68,17 @@ requires it — just that the *ask* should happen right after filing, every
 time, rather than being deferred to whenever a broader commit
 conversation happens to occur (which is what let 046's recurrence, and
 this ticket's own filing, both happen).
+
+## 4. Resolution
+
+Resolved in `a86ef7d` by adding immediate issue-tracker commits to:
+
+- `docs/Git.md`
+- `docs/lang/Git.md`
+- `docs/practices/IssueTracking.md`
+- `docs/IssueTracking.md`
+
+Verification:
+
+- `make check` attempted, but this repository has no `check` target.
+- `make test` passed.
