@@ -54,3 +54,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 053 | [053-stale-lsp-diagnostics-noise-detect-and-toggle.md](053-stale-lsp-diagnostics-noise-detect-and-toggle.md) | Background LSP diagnostics post stale/wrong findings; harness should detect and offer to disable per-agent | Open |
 | 054 | [archive/054-commit-filed-issues-immediately.md](archive/054-commit-filed-issues-immediately.md) | Filed issue-tracker files should be committed immediately, not batched | Closed — resolved in a86ef7d |
 | 055 | [055-no-long-sleep-use-scheduled-wakeups.md](055-no-long-sleep-use-scheduled-wakeups.md) | Agents must not use long `sleep` to wait; schedule a wakeup/BG task instead | Open |
+| 056 | [056-agenticloop-buffered-long-running-output-antipattern.md](056-agenticloop-buffered-long-running-output-antipattern.md) | AgenticLoop.md anti-patterns: add "piping long-running output through a buffering filter" | Open |
