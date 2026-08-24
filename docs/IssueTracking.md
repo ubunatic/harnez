@@ -108,4 +108,5 @@ When an issue is closed and verified, move it to `issues/archive/NNN-kebab-case.
 
 1. **Test Verification Before Closure**: Never mark a ticket `Closed` without executing the test suite (`go test ./...`, `make check`) and confirming assertion rigor.
 2. **Atomic Index Synchronization**: Whenever ticket status changes in the file, immediately update `issues/README.md`.
-3. **Traceability**: Link relevant study notes (`docs/studies/`), retrospectives (`docs/feedback/`), ADRs, and commits in the `**Related**:` header.
+3. **Immediate Tracker Commit**: After creating or updating issue-tracker files, commit the ticket file and synchronized index immediately in their own small commit. Do not batch tracker metadata with unrelated code or defer it to a later feature-work checkpoint.
+4. **Traceability**: Link relevant study notes (`docs/studies/`), retrospectives (`docs/feedback/`), ADRs, and commits in the `**Related**:` header.
