@@ -67,5 +67,6 @@ Generated copies land here (root) after `apply` / `init`.
 |------|-------|
 | [feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md](feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md) | Subagent domain extraction blindspots, wrapper traps, and proposed harnez features |
 | [feedback/2026-08-19-orchestrated-subagents-process-hygiene-and-review-loops.md](feedback/2026-08-19-orchestrated-subagents-process-hygiene-and-review-loops.md) | Parallel advisors, sequential dev orchestration, background zombie hygiene, and pre-commit review gates |
+| [feedback/2026-08-24-repo-assessment-and-managed-docs-effectiveness.md](feedback/2026-08-24-repo-assessment-and-managed-docs-effectiveness.md) | `harnez assess` delivery, token heuristics, managed docs effectiveness, and self-assessment findings |
 
 **`docs/proposed/`** — staging area for docs that may become copyable (no install mechanics yet).
