@@ -96,6 +96,71 @@ func TestCaptureDocsDriftDefaultRequiresInbox(t *testing.T) {
 	}
 }
 
+func TestCaptureDocsDriftEmbeddedConfigUsesSiblingHarnezRepo(t *testing.T) {
+	projectsDir := t.TempDir()
+	sourceDir := filepath.Join(projectsDir, "harnez")
+	repoDir := filepath.Join(projectsDir, "app")
+	writeCaptureFile(t, sourceDir, "go.mod", "module ubunatic.com/harnez\n")
+	writeCaptureFile(t, sourceDir, "config.yaml", "target_dir: ~/.claude\n")
+	if err := os.MkdirAll(filepath.Join(sourceDir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeCaptureFile(t, sourceDir, "docs/Go.md", "source go\n")
+	writeCaptureFile(t, repoDir, "docs/Go.md", "local go\n")
+
+	cfg := &Config{
+		Dir: ".",
+		FS:  os.DirFS(sourceDir),
+		Docs: []string{
+			"go",
+		},
+		AgentsMD: AgentsMD{Languages: map[string]Language{
+			"go": {Source: "docs/Go.md", Local: "docs/Go.md"},
+		}},
+	}
+	path, _, err := CaptureDocsDrift(repoDir, "", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPrefix := filepath.Join(sourceDir, "issues", "inbox", "managed-docs-drift-")
+	if !strings.HasPrefix(path, wantPrefix) {
+		t.Fatalf("default report path = %q, want prefix %q", path, wantPrefix)
+	}
+	report, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(report), "source_repo: '"+sourceDir+"'") {
+		t.Fatalf("report did not use sibling harnez repo as source:\n%s", string(report))
+	}
+}
+
+func TestCaptureDocsDriftEmbeddedConfigFallsBackToLabel(t *testing.T) {
+	sourceDir := t.TempDir()
+	repoDir := t.TempDir()
+	writeCaptureFile(t, sourceDir, "docs/Go.md", "same\n")
+	writeCaptureFile(t, repoDir, "docs/Go.md", "same\n")
+	cfg := &Config{
+		Dir:  ".",
+		FS:   os.DirFS(sourceDir),
+		Docs: []string{"go"},
+		AgentsMD: AgentsMD{Languages: map[string]Language{
+			"go": {Source: "docs/Go.md", Local: "docs/Go.md"},
+		}},
+	}
+	out := filepath.Join(repoDir, "report.md")
+	if _, _, err := CaptureDocsDrift(repoDir, out, cfg); err != nil {
+		t.Fatal(err)
+	}
+	report, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(report), "source_repo: 'embedded harnez config'") {
+		t.Fatalf("report did not use embedded fallback label:\n%s", string(report))
+	}
+}
+
 func writeCaptureFile(t *testing.T, root, name, content string) {
 	t.Helper()
 	path := filepath.Join(root, filepath.FromSlash(name))

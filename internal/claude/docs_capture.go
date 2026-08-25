@@ -33,8 +33,9 @@ func CaptureDocsDrift(repoDir, outputPath string, cfg *Config) (string, bool, er
 	if err != nil {
 		return "", false, fmt.Errorf("resolve repository path: %w", err)
 	}
+	sourceRepo := docsDriftSourceRepo(repoDir, cfg)
 	if outputPath == "" {
-		outputPath, err = defaultDocsDriftPath(repoDir, cfg)
+		outputPath, err = defaultDocsDriftPath(repoDir, sourceRepo)
 		if err != nil {
 			return "", false, err
 		}
@@ -53,10 +54,6 @@ func CaptureDocsDrift(repoDir, outputPath string, cfg *Config) (string, bool, er
 		}
 	}
 
-	sourceRepo := cfg.Dir
-	if sourceRepo, err = filepath.Abs(sourceRepo); err != nil {
-		return "", false, fmt.Errorf("resolve source repository path: %w", err)
-	}
 	report := renderDocsDriftReport(sourceRepo, repoDir, files)
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		return "", false, fmt.Errorf("create report directory: %w", err)
@@ -67,12 +64,10 @@ func CaptureDocsDrift(repoDir, outputPath string, cfg *Config) (string, bool, er
 	return outputPath, changed, nil
 }
 
-func defaultDocsDriftPath(repoDir string, cfg *Config) (string, error) {
+func defaultDocsDriftPath(repoDir, sourceRepo string) (string, error) {
 	candidates := []string{repoDir}
-	if cfg.Dir != "" {
-		if sourceRepo, err := filepath.Abs(cfg.Dir); err == nil && sourceRepo != repoDir {
-			candidates = append([]string{sourceRepo}, candidates...)
-		}
+	if sourceRepo != "" && sourceRepo != "embedded harnez config" && sourceRepo != repoDir {
+		candidates = append([]string{sourceRepo}, candidates...)
 	}
 	var inbox string
 	for _, candidate := range candidates {
@@ -93,6 +88,67 @@ func defaultDocsDriftPath(repoDir string, cfg *Config) (string, error) {
 		}
 		path = filepath.Join(inbox, fmt.Sprintf("managed-docs-drift-%s-%d.md", time.Now().Format("20060102-150405"), n))
 	}
+}
+
+func docsDriftSourceRepo(repoDir string, cfg *Config) string {
+	if cfg.Dir != "" && cfg.Dir != "." {
+		if sourceRepo, err := filepath.Abs(cfg.Dir); err == nil {
+			return sourceRepo
+		}
+	}
+	if sourceRepo := findHarnezRepo(repoDir); sourceRepo != "" {
+		return sourceRepo
+	}
+	return "embedded harnez config"
+}
+
+func findHarnezRepo(repoDir string) string {
+	var candidates []string
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Dir(exe))
+	}
+	candidates = append(candidates, filepath.Join(filepath.Dir(repoDir), "harnez"), repoDir)
+	seen := make(map[string]bool)
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		dir, err := filepath.Abs(candidate)
+		if err != nil {
+			continue
+		}
+		for {
+			if !seen[dir] {
+				seen[dir] = true
+				if isHarnezRepo(dir) {
+					return dir
+				}
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	return ""
+}
+
+func isHarnezRepo(dir string) bool {
+	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	if err != nil {
+		return false
+	}
+	if !strings.Contains(string(data), "module ubunatic.com/harnez\n") {
+		return false
+	}
+	if info, err := os.Stat(filepath.Join(dir, "config.yaml")); err != nil || info.IsDir() {
+		return false
+	}
+	if info, err := os.Stat(filepath.Join(dir, "issues")); err != nil || !info.IsDir() {
+		return false
+	}
+	return true
 }
 
 func compareConfiguredDocs(repoDir string, cfg *Config) ([]docsDriftFile, error) {
