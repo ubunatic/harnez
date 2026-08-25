@@ -59,3 +59,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 058 | [058-deployment-transparency-and-concise-pairing-mode.md](058-deployment-transparency-and-concise-pairing-mode.md) | Deployment Transparency, Live State Grounding, and Concise Pairing Mode | Open — proposed from webman pairing retro |
 | 059 | [059-capture-managed-docs-drift-to-inbox.md](059-capture-managed-docs-drift-to-inbox.md) | Capture Managed Docs Drift to Inbox Markdown | Open |
 | 060 | [060-triage-sibling-managed-docs-drift.md](060-triage-sibling-managed-docs-drift.md) | Triage Sibling Managed Docs Drift Captured from Inbox Sweep | Open |
+| 061 | [061-containerfile-guidelines-for-fast-incremental-builds.md](061-containerfile-guidelines-for-fast-incremental-builds.md) | Containerfile.md: Guidelines for Fast, Cached, and Incremental Container Builds | Open |
+
