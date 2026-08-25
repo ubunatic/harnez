@@ -204,6 +204,7 @@ agents_md:
       name: "Bash/Shell"
       ref: "@docs/Bash.md"
       hint: |
+        Read before multi-line shell: Make recipes, embedded scripts
         No ";", break before then/else/docs
         No "if [[]]", No "if []", Use "if test"
         smart indent!
