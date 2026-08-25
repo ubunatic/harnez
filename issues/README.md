@@ -56,3 +56,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 055 | [055-no-long-sleep-use-scheduled-wakeups.md](055-no-long-sleep-use-scheduled-wakeups.md) | Agents must not use long `sleep` to wait; schedule a wakeup/BG task instead | Open |
 | 056 | [056-agenticloop-buffered-long-running-output-antipattern.md](056-agenticloop-buffered-long-running-output-antipattern.md) | AgenticLoop.md anti-patterns: add "piping long-running output through a buffering filter" | Open |
 | 057 | [057-repo-assessment-and-code-metrics-command.md](057-repo-assessment-and-code-metrics-command.md) | `harnez assess`: Fast Code/Doc Metrics & Repo Feasibility Report | Closed — resolved |
+| 058 | [058-deployment-transparency-and-concise-pairing-mode.md](058-deployment-transparency-and-concise-pairing-mode.md) | Deployment Transparency, Live State Grounding, and Concise Pairing Mode | Open — proposed from webman pairing retro |
+| 059 | [059-capture-managed-docs-drift-to-inbox.md](059-capture-managed-docs-drift-to-inbox.md) | Capture Managed Docs Drift to Inbox Markdown | Open |
