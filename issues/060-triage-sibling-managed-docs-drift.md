@@ -84,7 +84,20 @@ Suggested semantics:
 
 Do **not** apply this marker scheme to `AGENTS.md` managed sections. `AGENTS.md` is likely managed by multiple harness-like tools and already uses explicit begin/end markers for sections. The stop-marker convention is specifically for harnez-owned docs under `docs/`.
 
-## 4. Proposed Work
+## 4. Consolidate and Port-Back Pilot
+
+The ticket should also prove the full loop for one controlled sibling repo:
+
+1. Detect a useful repo-local change in a harnez-owned copied doc.
+2. Consolidate and embed the accepted change into the harnez source doc.
+3. Reapply/port the updated managed content back to the project where the drift was found, when that project is under our control.
+4. Verify that the repo no longer reports that accepted pre-marker drift while any post-marker customization remains preserved.
+
+Pilot project: `/home/uwe/projects/webman`.
+
+Running this workflow across all sibling projects is explicitly out of scope for this ticket. `webman` is the single pilot for proving the mechanism and clarifying the operator flow.
+
+## 5. Proposed Work
 
 Triage the sibling repos in batches with applicability as the first question. For each repo and doc, decide whether to:
 
@@ -94,10 +107,11 @@ Triage the sibling repos in batches with applicability as the first question. Fo
 - promote useful local changes back to harnez source docs,
 - add repo-mode, doc-selection, or auto-detection metadata so intentionally smaller repos do not keep appearing as noisy drift.
 - add the harnez-owned doc stop marker and teach capture/reconciliation to ignore post-marker customization for copied docs.
+- add a port-back path so accepted/consolidated pre-marker changes can be reapplied to the controlled source project where the drift was found.
 
 The all-missing repos should be checked first to determine whether they are unmanaged projects, intentionally minimal projects, or repositories where docs capture should be explicitly skipped.
 
-## 5. Acceptance Criteria
+## 6. Acceptance Criteria
 
 - [ ] Review the 30-repo drift summary and group repos into applicable backfill, intentional divergence, intentionally not applicable, and skip categories.
 - [ ] Backfill missing managed docs only for repos where the technology or workflow applies.
@@ -107,5 +121,8 @@ The all-missing repos should be checked first to determine whether they are unma
 - [ ] Keep `AGENTS.md` on its existing begin/end managed-section model; do not apply the copied-doc stop-marker scheme there.
 - [ ] Preserve intentional project-local deviations with clear AGENTS.md notes or future config metadata.
 - [ ] Promote any genuinely better repo-local guidance back into harnez source docs.
+- [ ] Use `/home/uwe/projects/webman` as the single pilot to prove consolidate/embed/port-back behavior.
+- [ ] After accepting a pre-marker change from `webman`, embed it in harnez and reapply it back to `webman` without touching unrelated sibling repos.
+- [ ] Verify post-marker `webman` customization remains preserved and ignored by normal drift capture.
 - [ ] Re-run `harnez diff --capture-docs` across sibling repos and verify the remaining drift is intentional and substantially lower-noise.
 - [ ] Consider improving capture report filenames to include the source repo basename for easier inbox triage.
