@@ -1,6 +1,6 @@
 # 063 — Document Fast-Capable Subagent Model Selection
 
-**Status**: Open
+**Status**: Closed — resolved in docs
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -26,7 +26,7 @@ Keep the wording short because these docs feed agent prompts.
 
 ## 3. Acceptance Criteria
 
-- [ ] Add compact subagent model-selection guidance to `docs/practices/AgenticLoop.md`.
-- [ ] Mirror the change into the root bundled copy if required by the docs layout.
-- [ ] Avoid naming vendor-specific models unless the local docs already use them.
-- [ ] Keep the added prompt footprint minimal.
+- [x] Add compact subagent model-selection guidance to `docs/practices/AgenticLoop.md`.
+- [x] Mirror the change into the root bundled copy if required by the docs layout.
+- [x] Avoid naming vendor-specific models unless the local docs already use them.
+- [x] Keep the added prompt footprint minimal.

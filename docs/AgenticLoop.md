@@ -79,6 +79,8 @@ Agentic software engineering scales effectively when concurrency is structured a
   - Validate intermediate milestones with fast test suites (`go test ./...`).
   - Keep the workspace in a compilable, passing state at every step.
 
+**Model selection:** Use a fast capable model for clear, bounded, testable subagent tasks. Use a more capable model for ambiguity, architecture, security, deep debugging, broad changes, or final review. Escalate on uncertainty, failed checks, or scope growth; never trade away verification for speed.
+
 ### Phase 3: Pre-Commit Review Gate (Independent Reviewer)
 - **Goal**: Enforce quality standards and catch regressions before changes are committed.
 - **Mechanics**:
