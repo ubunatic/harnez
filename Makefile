@@ -66,6 +66,9 @@ check: ⚙️  # run static analysis and tests
 	go vet ./...
 	go test ./...
 
+check-fast: ⚙️  # fast local feedback loop
+	go test ./...
+
 test: ⚙️ check  # alias for check
 
 format: ⚙️  # format source code

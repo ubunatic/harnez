@@ -105,10 +105,13 @@ check: ⚙️  # run static analysis and tests
 	go vet ./...
 	go test ./...
 
+check-fast: ⚙️  # fast local feedback loop
+	go test ./...
+
 test: ⚙️ check  # alias for check
 ```
 
 `make check` is the standard verification target used by development-flow docs.
 Always run `go vet` before `go test`; vet catches issues tests may not exercise.
 Keep `make test` as a compatibility alias when a repo already exposes it.
-
+Add `make check-fast` when full checks are slow; it should keep broad coverage but use cheap settings. Example: `trafficsim` runs one focused model via `MODEL=...`.
