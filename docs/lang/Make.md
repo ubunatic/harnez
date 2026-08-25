@@ -98,14 +98,17 @@ Install approach is usually: do local + try global
 - `sudo install -m 0755` copies to `$(PREFIX)/bin` for system-wide availability
 - `|| echo …` degrades gracefully when `sudo` is unavailable
 
-## Test target
+## Check target
 
 ```makefile
-test: ⚙️  # run linter and tests
+check: ⚙️  # run static analysis and tests
 	go vet ./...
 	go test ./...
+
+test: ⚙️ check  # alias for check
 ```
 
+`make check` is the standard verification target used by development-flow docs.
 Always run `go vet` before `go test`; vet catches issues tests may not exercise.
-
+Keep `make test` as a compatibility alias when a repo already exposes it.
 

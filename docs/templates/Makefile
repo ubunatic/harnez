@@ -25,9 +25,11 @@ install: ⚙️ build  # install to ~/go/bin (user)
 uninstall: ⚙️  # remove installed binary from system and user paths
 	rm -f $(shell which $(BINARY) 2>/dev/null) $(PREFIX)/bin/$(BINARY)
 
-test: ⚙️  # run static analysis and tests
+check: ⚙️  # run static analysis and tests
 	go vet ./...
 	go test ./...
+
+test: ⚙️ check  # alias for check
 
 format: ⚙️  # format source code
 	go fmt ./...

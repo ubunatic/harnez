@@ -62,9 +62,11 @@ status: ⚙️ build  # show config summary and applied state
 lint: ⚙️  # check commands/*.md files are all registered in config.yaml
 	bash scripts/lint.sh
 
-test: ⚙️  # run linter and tests
+check: ⚙️  # run static analysis and tests
 	go vet ./...
 	go test ./...
+
+test: ⚙️ check  # alias for check
 
 format: ⚙️  # format source code
 	go fmt ./...
