@@ -58,3 +58,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 057 | [057-repo-assessment-and-code-metrics-command.md](057-repo-assessment-and-code-metrics-command.md) | `harnez assess`: Fast Code/Doc Metrics & Repo Feasibility Report | Closed — resolved |
 | 058 | [058-deployment-transparency-and-concise-pairing-mode.md](058-deployment-transparency-and-concise-pairing-mode.md) | Deployment Transparency, Live State Grounding, and Concise Pairing Mode | Open — proposed from webman pairing retro |
 | 059 | [059-capture-managed-docs-drift-to-inbox.md](059-capture-managed-docs-drift-to-inbox.md) | Capture Managed Docs Drift to Inbox Markdown | Open |
+| 060 | [060-triage-sibling-managed-docs-drift.md](060-triage-sibling-managed-docs-drift.md) | Triage Sibling Managed Docs Drift Captured from Inbox Sweep | Open |
