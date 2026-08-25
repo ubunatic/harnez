@@ -1,0 +1,287 @@
+package claude
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"ubunatic.com/harnez/internal/markdown"
+)
+
+type docsDriftFile struct {
+	name   string
+	path   string
+	status string
+	diff   string
+}
+
+// CaptureDocsDrift compares configured source docs with their project-local copies
+// and writes a lightweight Markdown report. It does not modify either source or
+// project docs.
+func CaptureDocsDrift(repoDir, outputPath string, cfg *Config) (string, bool, error) {
+	if repoDir == "" {
+		return "", false, errors.New("current repository path is empty")
+	}
+	repoDir, err := filepath.Abs(repoDir)
+	if err != nil {
+		return "", false, fmt.Errorf("resolve repository path: %w", err)
+	}
+	if outputPath == "" {
+		outputPath, err = defaultDocsDriftPath(repoDir, cfg)
+		if err != nil {
+			return "", false, err
+		}
+	} else if !filepath.IsAbs(outputPath) {
+		outputPath = filepath.Join(repoDir, outputPath)
+	}
+
+	files, err := compareConfiguredDocs(repoDir, cfg)
+	if err != nil {
+		return "", false, err
+	}
+	changed := false
+	for _, file := range files {
+		if file.status != "identical" {
+			changed = true
+		}
+	}
+
+	sourceRepo := cfg.Dir
+	if sourceRepo, err = filepath.Abs(sourceRepo); err != nil {
+		return "", false, fmt.Errorf("resolve source repository path: %w", err)
+	}
+	report := renderDocsDriftReport(sourceRepo, repoDir, files)
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return "", false, fmt.Errorf("create report directory: %w", err)
+	}
+	if err := os.WriteFile(outputPath, []byte(report), 0o644); err != nil {
+		return "", false, fmt.Errorf("write docs drift report: %w", err)
+	}
+	return outputPath, changed, nil
+}
+
+func defaultDocsDriftPath(repoDir string, cfg *Config) (string, error) {
+	candidates := []string{repoDir}
+	if cfg.Dir != "" {
+		if sourceRepo, err := filepath.Abs(cfg.Dir); err == nil && sourceRepo != repoDir {
+			candidates = append([]string{sourceRepo}, candidates...)
+		}
+	}
+	var inbox string
+	for _, candidate := range candidates {
+		candidateInbox := filepath.Join(candidate, "issues", "inbox")
+		if info, err := os.Stat(filepath.Dir(candidateInbox)); err == nil && info.IsDir() {
+			inbox = candidateInbox
+			break
+		}
+	}
+	if inbox == "" {
+		return "", fmt.Errorf("cannot find harnez inbox in %s; use --out to choose a report path", strings.Join(candidates, ", "))
+	}
+	base := filepath.Join(inbox, "managed-docs-drift-"+time.Now().Format("20060102-150405")+".md")
+	path := base
+	for n := 2; ; n++ {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return path, nil
+		}
+		path = filepath.Join(inbox, fmt.Sprintf("managed-docs-drift-%s-%d.md", time.Now().Format("20060102-150405"), n))
+	}
+}
+
+func compareConfiguredDocs(repoDir string, cfg *Config) ([]docsDriftFile, error) {
+	var files []docsDriftFile
+	known := make(map[string]bool)
+	for _, name := range docNamesInOrder(cfg) {
+		lang := cfg.AgentsMD.Languages[name]
+		if lang.Source == "" || lang.Local == "" {
+			continue
+		}
+		localPath := localPath(repoDir, lang.Local)
+		known[filepath.Clean(localPath)] = true
+		sourcePath := filepath.Join(cfg.Dir, filepath.FromSlash(lang.Source))
+		if absSource, absErr := filepath.Abs(sourcePath); absErr == nil {
+			known[filepath.Clean(absSource)] = true
+		}
+		source, err := fs.ReadFile(cfg.FS, filepath.ToSlash(lang.Source))
+		if err != nil {
+			return nil, fmt.Errorf("read configured source %s: %w", sourcePath, err)
+		}
+		current, readErr := os.ReadFile(localPath)
+		if readErr != nil && !os.IsNotExist(readErr) {
+			return nil, fmt.Errorf("read project doc %s: %w", localPath, readErr)
+		}
+		status := "identical"
+		if readErr != nil {
+			status = "missing"
+		} else if !bytes.Equal(source, current) {
+			status = "changed"
+		}
+		diff, err := unifiedDocDiff(sourcePath, localPath, source, current)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, docsDriftFile{name: filepath.ToSlash(filepath.Clean(lang.Local)), path: filepath.Clean(localPath), status: status, diff: diff})
+	}
+	files, err := compareLocalAgentsSections(repoDir, cfg, files)
+	if err != nil {
+		return nil, err
+	}
+
+	// A marker-tagged local doc that is not in the configured set is useful drift
+	// evidence; ordinary handwritten docs are intentionally left alone.
+	var extras []string
+	err = filepath.WalkDir(filepath.Join(repoDir, "docs"), func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") || known[filepath.Clean(path)] {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		if strings.Contains(string(data), "<!-- harnez:bundled -->") {
+			extras = append(extras, path)
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("scan project docs: %w", err)
+	}
+	sort.Strings(extras)
+	for _, path := range extras {
+		current, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		diff, err := unifiedDocDiff("configured source (missing)", path, nil, current)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, docsDriftFile{name: filepath.ToSlash(filepath.Join("docs", strings.TrimPrefix(path, filepath.Join(repoDir, "docs")+string(filepath.Separator)))), path: filepath.Clean(path), status: "extra", diff: diff})
+	}
+	return files, nil
+}
+
+func compareLocalAgentsSections(repoDir string, cfg *Config, files []docsDriftFile) ([]docsDriftFile, error) {
+	local := cfg.AgentsMD.Local
+	if local.Target == "" {
+		return files, nil
+	}
+	sections := append([]MDSection(nil), local.Sections...)
+	if len(cfg.Docs) > 0 {
+		sections = append(sections, MDSection{Name: "Language Conventions", Content: buildLangConventions(docNamesInOrder(cfg), cfg)})
+	}
+	if len(sections) == 0 {
+		return files, nil
+	}
+	agentsPath := localPath(repoDir, local.Target)
+	current, err := os.ReadFile(agentsPath)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("read project AGENTS.md %s: %w", agentsPath, err)
+	}
+	for _, section := range sections {
+		expected := strings.TrimRight(markdown.MDMarkers.Begin(section.Name)+"\n"+strings.TrimRight(section.Content, "\n")+"\n"+markdown.MDMarkers.End(section.Name)+"\n", "\n") + "\n"
+		actual := ""
+		if start, end, found := markdown.SectionBounds(string(current), markdown.MDMarkers.Begin(section.Name), markdown.MDMarkers.End(section.Name)); found {
+			actual = string(current[start:end])
+		}
+		status := "identical"
+		if actual == "" {
+			status = "missing"
+		} else if expected != actual {
+			status = "changed"
+		}
+		diff, err := unifiedDocDiff("configured AGENTS.md#"+section.Name, agentsPath, []byte(expected), []byte(actual))
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, docsDriftFile{name: "AGENTS.md#" + section.Name, path: agentsPath, status: status, diff: diff})
+	}
+	return files, nil
+}
+
+func unifiedDocDiff(sourcePath, localPath string, source, current []byte) (string, error) {
+	writeTemp := func(data []byte) (string, error) {
+		file, err := os.CreateTemp("", "harnez-doc-drift-*")
+		if err != nil {
+			return "", err
+		}
+		if _, err := file.Write(data); err != nil {
+			file.Close()
+			os.Remove(file.Name())
+			return "", err
+		}
+		if err := file.Close(); err != nil {
+			os.Remove(file.Name())
+			return "", err
+		}
+		return file.Name(), nil
+	}
+	oldFile, err := writeTemp(source)
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(oldFile)
+	newFile, err := writeTemp(current)
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(newFile)
+	cmd := exec.Command("diff", "-u", "--label", sourcePath, "--label", localPath, oldFile, newFile)
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return output.String(), nil
+		}
+		return "", fmt.Errorf("diff %s and %s: %w", sourcePath, localPath, err)
+	}
+	return "", nil
+}
+
+func renderDocsDriftReport(sourceRepo, repoDir string, files []docsDriftFile) string {
+	var b strings.Builder
+	b.WriteString("---\nsource_repo: ")
+	b.WriteString(yamlScalar(sourceRepo))
+	b.WriteString("\nfiles:\n")
+	for _, file := range files {
+		b.WriteString("  - ")
+		b.WriteString(yamlScalar(file.name))
+		b.WriteByte('\n')
+	}
+	b.WriteString("---\n\n# Managed Docs Drift\n\n")
+	counts := map[string]int{}
+	for _, file := range files {
+		counts[file.status]++
+	}
+	fmt.Fprintf(&b, "Compared %d configured docs from `%s` against `%s`. Summary: %d changed, %d missing, %d extra, %d identical.\n\n", len(files), sourceRepo, repoDir, counts["changed"], counts["missing"], counts["extra"], counts["identical"])
+	for _, file := range files {
+		fmt.Fprintf(&b, "## `%s` (%s)\n\n", file.name, file.status)
+		if file.diff == "" {
+			b.WriteString("No differences.\n\n")
+			continue
+		}
+		b.WriteString("```diff\n")
+		b.WriteString(file.diff)
+		if !strings.HasSuffix(file.diff, "\n") {
+			b.WriteByte('\n')
+		}
+		b.WriteString("```\n\n")
+	}
+	return b.String()
+}
+
+func yamlScalar(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}

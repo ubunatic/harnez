@@ -233,6 +233,8 @@ func main() {
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing docs with bundled versions")
 
 	var diffExitCode bool
+	var captureDocs bool
+	var captureOutput string
 	diff := &cobra.Command{
 		Use:   "diff",
 		Short: "Show what apply would change in managed blocks",
@@ -240,6 +242,24 @@ func main() {
 			cfg, _, err := claude.OpenConfig(configPath)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
+			}
+			if captureOutput != "" && !captureDocs {
+				return fmt.Errorf("--out requires --capture-docs")
+			}
+			if captureDocs {
+				repoDir, err := os.Getwd()
+				if err != nil {
+					return fmt.Errorf("resolve current repository: %w", err)
+				}
+				path, changed, err := claude.CaptureDocsDrift(repoDir, captureOutput, cfg)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("Captured managed docs drift in %s\n", path)
+				if diffExitCode && changed {
+					os.Exit(1)
+				}
+				return nil
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			changed, err := claude.DiffAll(t, cfg)
@@ -255,6 +275,8 @@ func main() {
 	diff.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	diff.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 	diff.Flags().BoolVarP(&diffExitCode, "exit-code", "e", false, "exit with status 1 if drift/changes are found")
+	diff.Flags().BoolVar(&captureDocs, "capture-docs", false, "write configured project-doc drift to an inbox Markdown report")
+	diff.Flags().StringVar(&captureOutput, "out", "", "output path for --capture-docs (default: issues/inbox/managed-docs-drift-<timestamp>.md)")
 
 	clean := &cobra.Command{
 		Use:   "clean",
