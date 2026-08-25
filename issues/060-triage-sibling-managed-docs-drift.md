@@ -86,12 +86,20 @@ Do **not** apply this marker scheme to `AGENTS.md` managed sections. `AGENTS.md`
 
 ## 4. Consolidate and Port-Back Pilot
 
-The ticket should also prove the full loop for one controlled sibling repo:
+The ticket should also prove the full loop for one controlled sibling repo. Promotion and reapply are two sides of the same workflow:
 
 1. Detect a useful repo-local change in a harnez-owned copied doc.
 2. Consolidate and embed the accepted change into the harnez source doc.
 3. Reapply/port the updated managed content back to the project where the drift was found, when that project is under our control.
 4. Verify that the repo no longer reports that accepted pre-marker drift while any post-marker customization remains preserved.
+
+Promotion/reapply scope:
+
+- Copied docs under `docs/` can be promoted/reapplied.
+- Root `AGENTS.md` managed sections can also be reapplied, using the existing begin/end marker model.
+- Default reapply should update all managed documents/sections that are already present in the target repo.
+- Missing docs are skipped by default; reapply should not install every possible doc just because it exists in harnez.
+- Add an option to reapply only one named document/section, e.g. a single `docs/Git.md` or `AGENTS.md`.
 
 Pilot project: `/home/uwe/projects/webman`.
 
@@ -108,6 +116,7 @@ Triage the sibling repos in batches with applicability as the first question. Fo
 - add repo-mode, doc-selection, or auto-detection metadata so intentionally smaller repos do not keep appearing as noisy drift.
 - add the harnez-owned doc stop marker and teach capture/reconciliation to ignore post-marker customization for copied docs.
 - add a port-back path so accepted/consolidated pre-marker changes can be reapplied to the controlled source project where the drift was found.
+- add a default reapply mode for present docs/sections and a focused reapply mode for one named doc/section.
 
 The all-missing repos should be checked first to determine whether they are unmanaged projects, intentionally minimal projects, or repositories where docs capture should be explicitly skipped.
 
@@ -122,6 +131,9 @@ The all-missing repos should be checked first to determine whether they are unma
 - [ ] Preserve intentional project-local deviations with clear AGENTS.md notes or future config metadata.
 - [ ] Promote any genuinely better repo-local guidance back into harnez source docs.
 - [ ] Use `/home/uwe/projects/webman` as the single pilot to prove consolidate/embed/port-back behavior.
+- [ ] Reapply `AGENTS.md` managed sections in `/home/uwe/projects/webman` as part of the pilot.
+- [ ] Default reapply updates present managed docs/sections only and skips missing docs.
+- [ ] Add an option to reapply one specific document/section.
 - [ ] After accepting a pre-marker change from `webman`, embed it in harnez and reapply it back to `webman` without touching unrelated sibling repos.
 - [ ] Verify post-marker `webman` customization remains preserved and ignored by normal drift capture.
 - [ ] Re-run `harnez diff --capture-docs` across sibling repos and verify the remaining drift is intentional and substantially lower-noise.
