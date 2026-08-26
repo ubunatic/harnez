@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/distill"
@@ -52,7 +54,74 @@ the wrapped command's exit code:
 	cmd.Flags().IntVar(&maxLines, "max-lines", 300, "truncate output beyond this many lines (0 disables)")
 	cmd.Flags().BoolVar(&noDedup, "no-dedup", false, "skip collapsing repeated lines")
 
+	cmd.AddCommand(newDistillHookCmd())
 	return cmd
+}
+
+// distillAutopipeEnv opts a user into the PreToolUse Bash auto-pipe hook.
+// Off by default: the hook is safe to install globally via `harnez apply`
+// and stays a no-op until a user explicitly sets this.
+const distillAutopipeEnv = "HARNEZ_DISTILL_AUTOPIPE"
+
+type hookInput struct {
+	ToolName  string `json:"tool_name"`
+	ToolInput struct {
+		Command string `json:"command"`
+	} `json:"tool_input"`
+}
+
+type hookOutput struct {
+	HookSpecificOutput hookSpecificOutput `json:"hookSpecificOutput"`
+}
+
+type hookSpecificOutput struct {
+	HookEventName string            `json:"hookEventName"`
+	UpdatedInput  map[string]string `json:"updatedInput"`
+}
+
+func newDistillHookCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "hook",
+		Short: "PreToolUse hook: auto-pipe noisy Bash commands through distill",
+		Long: `hook implements a Claude Code PreToolUse hook for the Bash matcher.
+
+It is a no-op unless ` + distillAutopipeEnv + ` is set to "1" or "true": harnez apply
+can install this hook globally without it changing anything until a user
+opts in. When enabled, it rewrites known-noisy commands (go test/build/vet,
+cargo test/build, pytest, npm test, make test/build/check, git status/diff/log)
+to pipe their combined output through 'harnez distill', preserving the
+original command's exit code via 'set -o pipefail'.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDistillHook(os.Stdin, os.Stdout)
+		},
+	}
+}
+
+func runDistillHook(in io.Reader, out io.Writer) error {
+	enabled := os.Getenv(distillAutopipeEnv)
+	if enabled != "1" && !strings.EqualFold(enabled, "true") {
+		return nil
+	}
+
+	var payload hookInput
+	if err := json.NewDecoder(in).Decode(&payload); err != nil {
+		return fmt.Errorf("decode hook payload: %w", err)
+	}
+	if payload.ToolName != "Bash" {
+		return nil
+	}
+
+	rewritten, ok := distill.RewriteBashCommand(payload.ToolInput.Command)
+	if !ok {
+		return nil
+	}
+
+	return json.NewEncoder(out).Encode(hookOutput{
+		HookSpecificOutput: hookSpecificOutput{
+			HookEventName: "PreToolUse",
+			UpdatedInput:  map[string]string{"command": rewritten},
+		},
+	})
 }
 
 func runDistillWrapper(args []string, opts distill.Options) error {

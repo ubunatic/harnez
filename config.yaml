@@ -82,6 +82,10 @@ permissions:
 hooks:
   - event: Stop
     command: "ffplay -nodisp -autoexit /usr/share/sounds/freedesktop/stereo/window-attention.oga 2>/dev/null || true"
+  # opt-in via HARNEZ_DISTILL_AUTOPIPE=true; no-op otherwise (see issue 069)
+  - event: PreToolUse
+    matcher: Bash
+    command: "harnez distill hook"
 
 # thinking verbs (get rid of annoying word creations)
 verbs:
@@ -89,6 +93,7 @@ verbs:
 
 env:
   DEBUG: "false"
+  HARNEZ_DISTILL_AUTOPIPE: "false"
 
 mcp_servers: []
 
