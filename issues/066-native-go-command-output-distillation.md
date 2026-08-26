@@ -1,6 +1,6 @@
 # 066 — Native Go Command Output Distillation (`harnez distill`) Architecture
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Observability & Token Efficiency
