@@ -22,13 +22,23 @@ To maximize agent throughput, we need:
 
 ## 2. Technical Specification
 
-### 2.1 ConciseMode Evergreen Doc & Template Ingestion
+### 2.1 ConciseMode Evergreen Doc & Template Ingestion (3 Graded Levels)
 
-- Create `docs/practices/ConciseMode.md` (managed by harnez).
-- Update `harnez init` template to inject terse output conventions into `AGENTS.md` / `CLAUDE.md`:
-  - Zero filler/pleasantries (*"I will now...", "Certainly!"*).
-  - Telegraphic status: `Action -> Finding -> Patch`.
-  - Full code, diff, and command syntax preserved verbatim.
+Create `docs/practices/ConciseMode.md` (managed by harnez) defining 3 distinct, selectable tiers of terseness:
+
+1. **Level 1 — Concise Lite (Professional Terse)**:
+   - Eliminates conversational pleasantries, opening fluff (*"Certainly!", "I'll be happy to help..."*), and speculative concluding remarks.
+   - Retains full standard English grammar and complete sentence explanations.
+   - Ideal for interactive user pairing.
+2. **Level 2 — Concise Standard (Telegraphic / Core Caveman)**:
+   - Strips grammatical filler, articles, and unnecessary connective phrases.
+   - Uses structured high-density bullet fragments: `Action -> Finding -> Patch`.
+   - Ideal for autonomous subagents and fast canary benchmark sweeps.
+3. **Level 3 — Concise Ultra (Extreme Shorthand / Zero-Fluff)**:
+   - Output strictly confined to essential diffs, command invocations, and single-line status confirmations (e.g. `PASS: 14 tests, built bin/app`).
+   - Zero narrative text. Maximizes token efficiency on resource-constrained or low-TPS local hardware.
+
+**Core Invariant Across All Levels**: Full code, diffs, tool parameters, and command syntax are preserved 100% verbatim.
 
 ### 2.2 Command Output Distillation (`harnez distill`)
 
