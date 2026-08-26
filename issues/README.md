@@ -64,5 +64,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 063 | [archive/063-subagent-model-selection-guidance.md](archive/063-subagent-model-selection-guidance.md) | Document Fast-Capable Subagent Model Selection | Closed — resolved in docs |
 | 064 | [archive/064-fresh-handoff-workflow-skill-and-friction-reporting.md](archive/064-fresh-handoff-workflow-skill-and-friction-reporting.md) | Lean Fresh-Handoff Workflow Skill and Calibrated Friction Reporting | Closed — resolved |
 | 065 | [065-concisemode-caveman-skill-and-output-distillation.md](065-concisemode-caveman-skill-and-output-distillation.md) | ConciseMode (Caveman Skill) & Command Output Distillation Hook (`harnez distill`) | Open |
+| 066 | [066-native-go-command-output-distillation.md](066-native-go-command-output-distillation.md) | Native Go Command Output Distillation (`harnez distill`) Architecture | Open |
+
 
 
