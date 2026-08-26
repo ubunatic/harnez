@@ -62,3 +62,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 061 | [061-containerfile-guidelines-for-fast-incremental-builds.md](061-containerfile-guidelines-for-fast-incremental-builds.md) | Containerfile.md: Guidelines for Fast, Cached, and Incremental Container Builds | Open |
 | 062 | [062-scan-docs-across-agent-projects.md](062-scan-docs-across-agent-projects.md) | `harnez scan-docs`: Combined Managed-Docs Scan Across Agent Projects | Open |
 | 063 | [archive/063-subagent-model-selection-guidance.md](archive/063-subagent-model-selection-guidance.md) | Document Fast-Capable Subagent Model Selection | Closed — resolved in docs |
+| 064 | [064-fresh-handoff-workflow-skill-and-friction-reporting.md](064-fresh-handoff-workflow-skill-and-friction-reporting.md) | Lean Fresh-Handoff Workflow Skill and Calibrated Friction Reporting | Open |
+
