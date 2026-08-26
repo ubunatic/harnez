@@ -109,7 +109,63 @@ Agentic software engineering scales effectively when concurrency is structured a
 
 ---
 
-## 3. Role Taxonomy & Constraints
+## 3. The Lean Fresh-Handoff Pattern (`/fresh-sprint`)
+
+```
+   Host Orchestrator
+          |
+   (1) Clean Goal Handoff (problem, tickets, verification targets)
+          |
+          v
+     [Fresh Dev Subagent]
+          |
+   (2) Autonomous Dev & Self-Verification (TDD, go test, make check)
+          |
+          v
+   (3) Confidence-Gated Inline Review
+       ├── High Confidence / Passing Tests ──> Return directly to Host (Inline Diff Check)
+       └── High Ambiguity / Regressions    ──> Escalate to Independent Reviewer Subagent
+          |
+          v
+   (4) Fast Hygiene & Teardown (kill child agents, zero zombies)
+```
+
+For focused, day-to-day tickets, running the full 5-phase ceremony with separate advisor and reviewer subagents introduces unnecessary latency and token overhead. The **Lean Fresh-Handoff** pattern provides a lightweight, fast-path alternative:
+
+1. **Clean Goal Handoff**:
+   - The Orchestrator dispatches a fresh subagent with a single, clear objective: problem statement, target tickets/specs, and explicit verification criteria.
+   - **Trust the Base Framework**: Avoid micromanaging standard workspace rules, tool descriptions, or language conventions already provided by the base system prompt.
+2. **Autonomous Execution & Self-Verification**:
+   - The dev subagent implements changes and validates them using repo-native verification commands (`go test ./...`, `make check`, canary probes).
+3. **Confidence-Gated Inline Review**:
+   - If automated tests pass cleanly and confidence is high, skip dispatching an independent reviewer subagent.
+   - The primary orchestrator performs a rapid inline diff review before finalizing.
+   - Escalate to a formal reviewer agent only if there is cross-subsystem blast radius, missing automated test coverage, or unexpected complexity.
+4. **Fast Hygiene**:
+   - Immediately terminate child subagents (`manage_subagents kill`) and clear background tasks.
+
+### Workflow Selection Matrix
+
+| Dimension | Formal 5-Phase Loop (`/sprint`) | Lean Fresh-Handoff (`/fresh-sprint`) |
+|---|---|---|
+| **Scope** | Multi-ticket sprints, major features, broad refactors | Single focused ticket, bug fix, localized feature |
+| **Discovery** | Parallel read-only advisor subagents | Targeted orchestrator/dev grep & range-bounded reads |
+| **Review Gate** | Independent reviewer subagent mandatory | Confidence-gated inline review (escalate on risk) |
+| **Overhead** | Higher compute/tokens, maximum verification depth | Minimal compute/latency, rapid turnaround |
+
+---
+
+## 4. Calibrated Friction Reporting Standard
+
+Agentic retrospectives and tooling feedback are vital for evolving harnesses, but must remain calibrated to avoid feedback fatigue:
+
+1. **Substantive Sessions Only**: Capture authentic tool, environment, or sandbox friction **only** after non-trivial sessions where real hurdles occurred.
+2. **Zero Repetitive Noise**: Do not emit repetitive boilerplate or complain about known, trivial environment quirks on routine, fast iterations.
+3. **Actionable Root Causes**: When reporting friction in `docs/feedback/` or tickets, state the concrete blocker, failure mode, attempted workaround, and a recommended harness or tooling fix.
+
+---
+
+## 5. Role Taxonomy & Constraints
 
 | Role | Permitted Tools & Capabilities | Primary Responsibilities | Lifecycle |
 |---|---|---|---|
@@ -120,7 +176,7 @@ Agentic software engineering scales effectively when concurrency is structured a
 
 ---
 
-## 4. Practical Recipes & Anti-Patterns
+## 6. Practical Recipes & Anti-Patterns
 
 ### Anti-Patterns to Avoid
 - ❌ **Parallel Writing**: Spawning multiple subagents with write permissions on the same workspace simultaneously.
@@ -130,3 +186,6 @@ Agentic software engineering scales effectively when concurrency is structured a
 - ❌ **Rubber-Stamp Reviews**: Running a review pass that does not inspect actual test assertions or file diffs.
 - ❌ **Unbounded Doc Ingestion**: Executing whole-file read tools on `AGENTS.md` or bundled reference docs whose summaries are already in the active system prompt.
 - ❌ **Unverified Media Publishing**: Publishing or embedding demo reels, WebM files, or UI screenshots on websites or documentation without explicit user confirmation of the visual output.
+- ❌ **Prompt Micromanagement**: Overburdening subagent dispatches with redundant base rules, tool definitions, or style guides already present in the harness system prompt.
+- ❌ **Friction Noise Over-Reporting**: Emitting repetitive, low-signal friction reports on fast, routine tasks.
+

@@ -134,6 +134,10 @@ commands:
     description: "Orchestrate a 5-phase agentic sprint loop (Advisors -> Dev -> Review -> Hygiene -> Retro)"
     file: commands/sprint.md
 
+  - name: fresh-sprint
+    description: "Execute a lean fresh-handoff sprint (Goal Handoff -> Autonomous Dev -> Inline Review -> Hygiene)"
+    file: commands/fresh-sprint.md
+
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
 prime_agent_target: ~/.prime/agent
@@ -154,6 +158,10 @@ skills:
   - name: sprint
     description: "Orchestrate a 5-phase agentic sprint loop (Advisors -> Dev -> Review -> Hygiene -> Retro)"
     file: commands/sprint.md
+
+  - name: fresh-sprint
+    description: "Execute a lean fresh-handoff sprint (Goal Handoff -> Autonomous Dev -> Inline Review -> Hygiene)"
+    file: commands/fresh-sprint.md
 
 agents_md:
   # config for local md file
