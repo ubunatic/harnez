@@ -1,6 +1,6 @@
 # 062 — `harnez scan-docs`: Combined Managed-Docs Scan Across Agent Projects
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -42,12 +42,12 @@ Drift:
 
 ## 3. Acceptance Criteria
 
-- [ ] Add `harnez scan-docs <dir>`.
-- [ ] Scan only immediate children by default.
-- [ ] Require `AGENTS.md` or `CLAUDE.md` for child eligibility.
-- [ ] Ignore `.git`-only directories.
-- [ ] Generate one combined report for directory scans.
-- [ ] Generate a more detailed report when the target is a single eligible repo.
-- [ ] Suppress missing-doc counts and missing-doc sections by default.
-- [ ] Include clean repo basenames in one compact line.
-- [ ] Add focused tests for eligibility, symlink acceptance, skipped dirs, clean summary, and missing-doc suppression.
+- [x] Add `harnez scan-docs <dir>`.
+- [x] Scan only immediate children by default.
+- [x] Require `AGENTS.md` or `CLAUDE.md` for child eligibility.
+- [x] Ignore `.git`-only directories.
+- [x] Generate one combined report for directory scans.
+- [x] Generate a more detailed report when the target is a single eligible repo.
+- [x] Suppress missing-doc counts and missing-doc sections by default.
+- [x] Include clean repo basenames in one compact line.
+- [x] Add focused tests for eligibility, symlink acceptance, skipped dirs, clean summary, and missing-doc suppression.

@@ -60,7 +60,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 059 | [059-capture-managed-docs-drift-to-inbox.md](059-capture-managed-docs-drift-to-inbox.md) | Capture Managed Docs Drift to Inbox Markdown | Open |
 | 060 | [060-triage-sibling-managed-docs-drift.md](060-triage-sibling-managed-docs-drift.md) | Triage Sibling Managed Docs Drift Captured from Inbox Sweep | Open |
 | 061 | [061-containerfile-guidelines-for-fast-incremental-builds.md](061-containerfile-guidelines-for-fast-incremental-builds.md) | Containerfile.md: Guidelines for Fast, Cached, and Incremental Container Builds | Open |
-| 062 | [062-scan-docs-across-agent-projects.md](062-scan-docs-across-agent-projects.md) | `harnez scan-docs`: Combined Managed-Docs Scan Across Agent Projects | Open |
+| 062 | [archive/062-scan-docs-across-agent-projects.md](archive/062-scan-docs-across-agent-projects.md) | `harnez scan-docs`: Combined Managed-Docs Scan Across Agent Projects | Closed — resolved |
 | 063 | [archive/063-subagent-model-selection-guidance.md](archive/063-subagent-model-selection-guidance.md) | Document Fast-Capable Subagent Model Selection | Closed — resolved in docs |
 | 064 | [064-fresh-handoff-workflow-skill-and-friction-reporting.md](064-fresh-handoff-workflow-skill-and-friction-reporting.md) | Lean Fresh-Handoff Workflow Skill and Calibrated Friction Reporting | Open |
 
