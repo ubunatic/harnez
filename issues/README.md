@@ -74,6 +74,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 073 | [073-agent-canary-cloud-credentialed-claude-agy-codex.md](073-agent-canary-cloud-credentialed-claude-agy-codex.md) | Agent Canary Container: Claude/AGY/Codex With Mounted Credentials (Deferred) | Open — deferred |
 | 074 | [074-distill-hook-bypassed-by-shell-wrapper-prefixes.md](074-distill-hook-bypassed-by-shell-wrapper-prefixes.md) | `harnez distill hook`'s Command Match Is Bypassed by Shell-Wrapper Prefixes | Closed — won't fix |
 | 075 | [075-concisemode-promote-doc-to-real-skill.md](075-concisemode-promote-doc-to-real-skill.md) | ConciseMode: Dynamic Runtime Switch & AGENTS.md Synchronization (`harnez mode`) | Closed — resolved |
+| 076 | [076-agents-local-overlay-for-runtime-mode-switching.md](076-agents-local-overlay-for-runtime-mode-switching.md) | `AGENTS.local.md` Overlay & Ephemeral Runtime Mode Switching | Open |
 
 
 
