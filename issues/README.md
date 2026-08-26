@@ -69,6 +69,9 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 068 | [068-harnez-sync-autonomous-doc-reconciliation-command.md](068-harnez-sync-autonomous-doc-reconciliation-command.md) | `/harnez-sync`: Autonomous Multi-Repo Managed-Docs Discovery & Auto-Reconciliation | Open |
 | 069 | [069-pretooluse-hook-optional-autopipe-bash-through-distill.md](069-pretooluse-hook-optional-autopipe-bash-through-distill.md) | PreToolUse Hook: Optional Auto-Pipe of Noisy Bash Commands Through `harnez distill` | Closed — resolved |
 | 070 | [070-cross-agent-distill-autopipe-hook-agy-codex-pi-opencode.md](070-cross-agent-distill-autopipe-hook-agy-codex-pi-opencode.md) | Cross-Agent `distill` Auto-Pipe Hook: AGY, Codex, Pi, OpenCode | Open |
+| 071 | [071-agent-canary-container-for-hook-testing.md](071-agent-canary-container-for-hook-testing.md) | Agent Canary Architecture: Separate `harnez` Container, `lmcoder` Hosts Server+Proxy Only | Open — architecture decided |
+| 072 | [072-agent-canary-local-llm-pi-opencode.md](072-agent-canary-local-llm-pi-opencode.md) | Agent Canary Container: Pi + OpenCode Against Local `lmcoder` Backend | Open |
+| 073 | [073-agent-canary-cloud-credentialed-claude-agy-codex.md](073-agent-canary-cloud-credentialed-claude-agy-codex.md) | Agent Canary Container: Claude/AGY/Codex With Mounted Credentials (Deferred) | Open — deferred |
 
 
 
