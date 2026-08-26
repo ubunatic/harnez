@@ -39,6 +39,22 @@ preserved 100% verbatim. ConciseMode trims narration, never content.
 
 ---
 
+## Enforcing a Default Tier
+
+Naming the tiers is not enough — an agent only *runs* under one when something pins it there.
+The doc reference alone (`@docs/practices/ConciseMode.md`) is descriptive, not a directive.
+
+- **CLAUDE.md directive (recommended default)**: add an explicit line naming the tier, e.g.
+  `Operate at Concise Lite (@docs/practices/ConciseMode.md) unless told otherwise.` This loads
+  into every session's system context automatically and is scoped per project, but stays advisory
+  — a long session can still drift from it.
+- **Output style** (`settings.json` `outputStyle`): bakes the tier into the harness-level system
+  prompt instead of a doc reference. Stronger and harder to drift from, but global to the
+  session/install rather than toggleable per task.
+
+Pick the CLAUDE.md directive first; reach for an output style only if drift is observed in
+practice.
+
 ## Pairing with Output Distillation
 
 ConciseMode governs what the agent *writes*; `harnez distill` (see issue 066) governs what the
