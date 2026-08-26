@@ -6,6 +6,8 @@ Adhere to the following conventions.
 
 Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
+- ConciseMode Practices @docs/ConciseMode.md,
+  3 graded terseness tiers (Lite, Standard, Ultra); code/diffs/commands always verbatim
 - Go/Golang @docs/Go.md,
   Modern Go, avoid deps but use Cobra, add tests
 - Bash/Shell @docs/Bash.md,
