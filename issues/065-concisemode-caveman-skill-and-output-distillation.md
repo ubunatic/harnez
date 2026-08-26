@@ -1,6 +1,6 @@
 # 065 — ConciseMode (Caveman Skill) & Command Output Distillation Hook (`harnez distill`)
 
-**Status**: Open
+**Status**: Closed — resolved (2.2 shipped as [[066-native-go-command-output-distillation]]; 2.1 shipped here)
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Observability & Token Efficiency

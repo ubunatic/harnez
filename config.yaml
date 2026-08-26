@@ -14,6 +14,7 @@ docs:
   - spec
   - agentic-loop
   - issue-tracking
+  - concise-mode
 
 # model: sonnet  # unmanaged by default, let user or client choose
 effort: medium
@@ -310,6 +311,14 @@ agents_md:
       target: ~/.claude/docs/IssueTracking.md
       local: ./docs/IssueTracking.md
       default: true
+    concise-mode:
+      name: "ConciseMode Practices"
+      ref: "@docs/ConciseMode.md"
+      hint: "3 graded terseness tiers (Lite, Standard, Ultra); code/diffs/commands always verbatim"
+      source: docs/practices/ConciseMode.md
+      target: ~/.claude/docs/ConciseMode.md
+      local: ./docs/ConciseMode.md
+      default: false
 
   # repo git setups — pick one with `init --repo-mode/-m` to add a short
   # "Repo Setup" section to a project's AGENTS.md (see docs/lang/Git.md for the

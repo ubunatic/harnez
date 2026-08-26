@@ -37,6 +37,7 @@ Generated copies land here (root) after `apply` / `init`.
 |------|-------|----------------------|
 | [practices/AgenticLoop.md](practices/AgenticLoop.md) | Agentic Loop Practices: 5-phase sprint workflow (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee | Summary active in AGENTS.md. Read for phase invariants, review checklists, and anti-patterns |
 | [practices/IssueTracking.md](practices/IssueTracking.md) | Issue Tracking Practices: Standardized issue priority schema (P0–P3), metadata headers, and tracker lifecycle | Summary active in AGENTS.md. Read for priority definitions, severity vs priority distinctions, and ticket schemas |
+| [practices/ConciseMode.md](practices/ConciseMode.md) | ConciseMode: 3 graded output-terseness tiers (Lite, Standard, Ultra) for slow/local-inference pairing | Opt-in (`init --docs concise-mode`). Read when tuning agent verbosity for low-TPS hardware |
 
 **`docs/other/`** — practice docs (no category yet)
 
