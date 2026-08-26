@@ -30,15 +30,15 @@ const (
 	LegacyDocEndMarker  = "<!-- claudeconfig:end -->"
 )
 
-// ExtractManagedDocContent returns the content up to the first stop marker if present.
-// If no stop marker is found, the entire content is returned unchanged.
+// ExtractManagedDocContent returns the content up to the first stop marker if present,
+// with trailing newlines normalized.
 func ExtractManagedDocContent(content string) string {
 	for _, marker := range []string{DocStopMarker, DocEndMarker, LegacyDocStopMarker, LegacyDocEndMarker} {
 		if idx := strings.Index(content, marker); idx >= 0 {
-			return content[:idx]
+			return strings.TrimRight(content[:idx], "\r\n") + "\n"
 		}
 	}
-	return content
+	return strings.TrimRight(content, "\r\n") + "\n"
 }
 
 // MKMarkers uses shell comments — suitable for Makefiles.
