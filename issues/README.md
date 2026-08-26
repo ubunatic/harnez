@@ -68,6 +68,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 067 | [067-no-mermaid-in-plain-chat-use-ascii-box-art.md](067-no-mermaid-in-plain-chat-use-ascii-box-art.md) | Do Not Render Mermaid in Plain Chat; Use ASCII Box/Arrow Art (Mermaid Reserved for Docs Only) | Closed — resolved |
 | 068 | [068-harnez-sync-autonomous-doc-reconciliation-command.md](068-harnez-sync-autonomous-doc-reconciliation-command.md) | `/harnez-sync`: Autonomous Multi-Repo Managed-Docs Discovery & Auto-Reconciliation | Open |
 | 069 | [069-pretooluse-hook-optional-autopipe-bash-through-distill.md](069-pretooluse-hook-optional-autopipe-bash-through-distill.md) | PreToolUse Hook: Optional Auto-Pipe of Noisy Bash Commands Through `harnez distill` | Closed — resolved |
+| 070 | [070-cross-agent-distill-autopipe-hook-agy-codex-pi-opencode.md](070-cross-agent-distill-autopipe-hook-agy-codex-pi-opencode.md) | Cross-Agent `distill` Auto-Pipe Hook: AGY, Codex, Pi, OpenCode | Open |
 
 
 
