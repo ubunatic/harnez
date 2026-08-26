@@ -69,6 +69,9 @@ Agentic software engineering scales effectively when concurrency is structured a
   - The Host Orchestrator spawns concurrent read-only advisor subagents (e.g. one per ticket or feature area).
   - Advisors perform deep grep/read searches, evaluate whether requirements are already partially or fully met, and identify exact line ranges for changes.
   - Advisors return concise findings and structured implementation plans to the Host.
+- **Kickoff & Commit Policy**:
+  - Establish commit authority upfront. If operating under an ask-first harness, ask the user during kickoff for permission to commit local verified checkpoints proactively so the user can walk away without returning to uncommitted progress.
+  - Clarify whether subagents will commit directly or return diffs for the orchestrator to commit on their behalf.
 - **Constraints**: Advisors must never write files, run mutating commands, or spawn untracked side effects.
 
 ### Phase 2: Sequential Development & Test Verification (Single-Threaded)
@@ -78,6 +81,7 @@ Agentic software engineering scales effectively when concurrency is structured a
   - Test-Driven Verification: Write or adapt unit tests alongside or prior to code changes.
   - Validate intermediate milestones with fast test suites (`go test ./...`).
   - Keep the workspace in a compilable, passing state at every step.
+  - **Commit stale/failed work before discarding it**: When an implementation attempt is abandoned — because it regressed a gate, because a cleaner strategy was found, or because it was simply wrong — do not `git checkout --`/`git reset --hard`/`git stash drop` it away as the first move. Commit it first, on the current branch or a throwaway one (e.g. `git commit -m "wip: attempt N, reverted — see issue NNN" --no-verify` only if hooks block a WIP commit, otherwise a normal commit), *then* revert the working tree with `git revert` or by checking out the prior commit. This keeps the failed attempt in `git log`/`git reflog` as a real, diffable artifact instead of only as prose in a ticket. A short-lived local branch (`git branch attempt-2-endpoint-cone`) pointing at the WIP commit is even better when more than one attempt is worth preserving side-by-side. Only skip this for genuinely trivial, single-line experiments where the narrative description *is* the diff (e.g. "tried threshold=50, tried threshold=25, both failed" needs no commit) — the bar is "would a future reader want to `git diff` this," not "is this attempt tidy."
 
 **Model selection:** Use a fast capable model for clear, bounded, testable subagent tasks. Use a more capable model for ambiguity, architecture, security, deep debugging, broad changes, or final review. Escalate on uncertainty, failed checks, or scope growth; never trade away verification for speed.
 
@@ -181,6 +185,7 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 ### Anti-Patterns to Avoid
 - ❌ **Parallel Writing**: Spawning multiple subagents with write permissions on the same workspace simultaneously.
 - ❌ **Silent Verification**: Assuming a fix works without running test commands or canary scripts.
+- ❌ **Blind Revert of Failed Work**: Running `git checkout --`, `git reset --hard`, or `git stash drop` on a failed implementation attempt without first committing it somewhere recoverable. A prose summary of what was tried is not a substitute for the actual diff — it cannot be `git diff`ed, re-applied, or independently re-verified against the gate it was tested against.
 - ❌ **Orphaned Background Tasks**: Leaving background `tail -f`, watch loops, or timers running after work is completed.
 - ❌ **Lost Context / Ephemeral-Only Retrospectives**: Discussing important harness friction or bugs in chat without writing them down to `docs/feedback/` or `issues/`.
 - ❌ **Rubber-Stamp Reviews**: Running a review pass that does not inspect actual test assertions or file diffs.

@@ -1,6 +1,6 @@
 # 043 — Never blindly `git revert`/`checkout --`/`stash drop` unsuccessful work; commit stale/failed code first
 
-**Status**: Open
+**Status**: Closed
 **Category**: Documentation / Agentic Orchestration — `docs/practices/AgenticLoop.md`
 **Related**: [039 — AgenticLoop practices and /sprint command](039-agentic-loop-practices-and-sprint-command.md), [042 — repro before fix and single-status field](042-agentic-loop-repro-before-fix-and-single-status-field.md)
 

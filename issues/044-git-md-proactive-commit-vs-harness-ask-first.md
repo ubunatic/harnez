@@ -1,7 +1,7 @@
 # 044 — `docs/Git.md`'s "commit proactively" conflicts with harness ask-first defaults
 
-**Status**: Open
-**Category**: Documentation / Agentic Ergonomics
+**Status**: Closed — resolved in docs
+**Priority**: P2 (Medium)
 **Related**: [docs/Git.md](../docs/Git.md), [039 — Agentic Loop Practices](039-agentic-loop-practices-and-sprint-command.md)
 
 ---
