@@ -278,6 +278,26 @@ func main() {
 	diff.Flags().BoolVar(&captureDocs, "capture-docs", false, "write configured project-doc drift to an inbox Markdown report")
 	diff.Flags().StringVar(&captureOutput, "out", "", "output path for --capture-docs (default: issues/inbox/managed-docs-drift-<timestamp>.md)")
 
+	scanDocs := &cobra.Command{
+		Use:          "scan-docs <dir>",
+		Short:        "Scan immediate child agent projects for managed-docs drift",
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, _, err := claude.OpenConfig(configPath)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+			report, err := claude.ScanDocs(args[0], cfg)
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprint(cmd.OutOrStdout(), report)
+			return err
+		},
+	}
+	scanDocs.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
+
 	clean := &cobra.Command{
 		Use:   "clean",
 		Short: "Remove managed blocks written by apply",
@@ -363,7 +383,7 @@ func main() {
 	}
 	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
 
-	root.AddCommand(apply, diff, clean, status, usageCmd, initCmd, assessCmd)
+	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, initCmd, assessCmd)
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}

@@ -22,6 +22,127 @@ type docsDriftFile struct {
 	diff   string
 }
 
+type docsScanRepo struct {
+	name  string
+	files []docsDriftFile
+}
+
+// ScanDocs compares managed docs in one eligible repository or its immediate
+// child repositories and returns a read-only report.
+func ScanDocs(target string, cfg *Config) (string, error) {
+	if target == "" {
+		return "", errors.New("scan directory is empty")
+	}
+	target, err := filepath.Abs(target)
+	if err != nil {
+		return "", fmt.Errorf("resolve scan target: %w", err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		return "", fmt.Errorf("stat scan target: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("scan target %s is not a directory", target)
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		return "", fmt.Errorf("read scan directory: %w", err)
+	}
+	var repos []docsScanRepo
+	skipped := 0
+	for _, entry := range entries {
+		child := filepath.Join(target, entry.Name())
+		childInfo, statErr := os.Stat(child)
+		if statErr != nil || !childInfo.IsDir() || !hasAgentDoc(child) {
+			skipped++
+			continue
+		}
+		files, compareErr := compareConfiguredDocs(child, cfg)
+		if compareErr != nil {
+			return "", fmt.Errorf("scan %s: %w", child, compareErr)
+		}
+		repos = append(repos, docsScanRepo{name: entry.Name(), files: files})
+	}
+	if len(repos) > 0 {
+		sort.Slice(repos, func(i, j int) bool { return repos[i].name < repos[j].name })
+		return renderDocsScanSummary(repos, skipped), nil
+	}
+	if hasAgentDoc(target) {
+		files, err := compareConfiguredDocs(target, cfg)
+		if err != nil {
+			return "", err
+		}
+		return renderDocsScanRepo(target, files, cfg), nil
+	}
+	return renderDocsScanSummary(nil, skipped), nil
+}
+
+func hasAgentDoc(dir string) bool {
+	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err == nil && !info.IsDir() {
+			return true
+		}
+	}
+	return false
+}
+
+func docsDriftReportFiles(files []docsDriftFile) []docsDriftFile {
+	filtered := make([]docsDriftFile, 0, len(files))
+	for _, file := range files {
+		if file.status != "missing" {
+			filtered = append(filtered, file)
+		}
+	}
+	return filtered
+}
+
+func docsDriftChanged(files []docsDriftFile) bool {
+	for _, file := range docsDriftReportFiles(files) {
+		if file.status != "identical" {
+			return true
+		}
+	}
+	return false
+}
+
+func renderDocsScanRepo(repoDir string, files []docsDriftFile, cfg *Config) string {
+	return renderDocsDriftReportOptions(docsDriftSourceRepo(repoDir, cfg), repoDir, docsDriftReportFiles(files), false)
+}
+
+func renderDocsScanSummary(repos []docsScanRepo, skipped int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Scanned: %d eligible, %d skipped\n", len(repos), skipped)
+	var clean []string
+	for _, repo := range repos {
+		if !docsDriftChanged(repo.files) {
+			clean = append(clean, repo.name)
+		}
+	}
+	if len(clean) > 0 {
+		fmt.Fprintf(&b, "Clean: %s\n", strings.Join(clean, ", "))
+	}
+	var drift []docsScanRepo
+	for _, repo := range repos {
+		if docsDriftChanged(repo.files) {
+			drift = append(drift, repo)
+		}
+	}
+	if len(drift) > 0 {
+		b.WriteString("Drift:\n")
+		for _, repo := range drift {
+			var names []string
+			for _, file := range docsDriftReportFiles(repo.files) {
+				if file.status != "identical" {
+					names = append(names, fmt.Sprintf("%s (%s)", file.name, file.status))
+				}
+			}
+			fmt.Fprintf(&b, "  %s  %s\n", repo.name, strings.Join(names, ", "))
+		}
+	}
+	return b.String()
+}
+
 // CaptureDocsDrift compares configured source docs with their project-local copies
 // and writes a lightweight Markdown report. It does not modify either source or
 // project docs.
@@ -307,6 +428,10 @@ func unifiedDocDiff(sourcePath, localPath string, source, current []byte) (strin
 }
 
 func renderDocsDriftReport(sourceRepo, repoDir string, files []docsDriftFile) string {
+	return renderDocsDriftReportOptions(sourceRepo, repoDir, files, true)
+}
+
+func renderDocsDriftReportOptions(sourceRepo, repoDir string, files []docsDriftFile, includeMissing bool) string {
 	var b strings.Builder
 	b.WriteString("---\nsource_repo: ")
 	b.WriteString(yamlScalar(sourceRepo))
@@ -321,7 +446,11 @@ func renderDocsDriftReport(sourceRepo, repoDir string, files []docsDriftFile) st
 	for _, file := range files {
 		counts[file.status]++
 	}
-	fmt.Fprintf(&b, "Compared %d configured docs from `%s` against `%s`. Summary: %d changed, %d missing, %d extra, %d identical.\n\n", len(files), sourceRepo, repoDir, counts["changed"], counts["missing"], counts["extra"], counts["identical"])
+	if includeMissing {
+		fmt.Fprintf(&b, "Compared %d configured docs from `%s` against `%s`. Summary: %d changed, %d missing, %d extra, %d identical.\n\n", len(files), sourceRepo, repoDir, counts["changed"], counts["missing"], counts["extra"], counts["identical"])
+	} else {
+		fmt.Fprintf(&b, "Compared %d present configured docs from `%s` against `%s`. Summary: %d changed, %d extra, %d identical.\n\n", len(files), sourceRepo, repoDir, counts["changed"], counts["extra"], counts["identical"])
+	}
 	for _, file := range files {
 		fmt.Fprintf(&b, "## `%s` (%s)\n\n", file.name, file.status)
 		if file.diff == "" {
