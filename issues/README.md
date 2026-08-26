@@ -72,6 +72,8 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 071 | [071-agent-canary-container-for-hook-testing.md](071-agent-canary-container-for-hook-testing.md) | Agent Canary Architecture: Separate `harnez` Container, `lmcoder` Hosts Server+Proxy Only | Open — architecture decided |
 | 072 | [072-agent-canary-local-llm-pi-opencode.md](072-agent-canary-local-llm-pi-opencode.md) | Agent Canary Container: Pi + OpenCode Against Local `lmcoder` Backend | Open |
 | 073 | [073-agent-canary-cloud-credentialed-claude-agy-codex.md](073-agent-canary-cloud-credentialed-claude-agy-codex.md) | Agent Canary Container: Claude/AGY/Codex With Mounted Credentials (Deferred) | Open — deferred |
+| 074 | [074-distill-hook-bypassed-by-shell-wrapper-prefixes.md](074-distill-hook-bypassed-by-shell-wrapper-prefixes.md) | `harnez distill hook`'s Command Match Is Bypassed by Shell-Wrapper Prefixes | Open |
+| 075 | [075-concisemode-promote-doc-to-real-skill.md](075-concisemode-promote-doc-to-real-skill.md) | ConciseMode: Promote From Passive Doc to a Real, Invocable Skill | Open |
 
 
 

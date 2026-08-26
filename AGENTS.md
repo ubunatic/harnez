@@ -36,7 +36,7 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 `apply` and `init` are intentionally separate — do not merge their concerns.
 
 - `apply` — global `~/.claude` only: settings, hooks, commands, docs; flags: `-c`, `-t`, `-d`
-- `init`  — project dir only: AGENTS.md, local sections, doc copies, Makefile; flags: `-c`, `-d`, `--doc`
+- `init`  — project dir only: AGENTS.md, local sections, doc copies, Makefile; flags: `-c`, `-d`, `--docs`
 
 Before changing any command's flags or adding project-local behaviour to `apply`, read
 `docs/CLIDesign.md` — the separation is load-bearing and the footgun it prevents is real.
@@ -46,7 +46,7 @@ Before changing any command's flags or adding project-local behaviour to `apply`
 `docs/*.md` — this project's evergreen docs (architecture, decisions, pitfalls). Not copyable.
 
 `docs/lang/` — copyable language/SDK/framework docs (Go, Bash, Make, Git, Rust, Cpp, Markdown, GTK4, Zig).
-Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --doc <name>`.
+Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --docs <name>`.
 
 `docs/practices/` — copyable workflow and practice docs (AgenticLoop, IssueTracking). Same install mechanics as `docs/lang/`.
 
