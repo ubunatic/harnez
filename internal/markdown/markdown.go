@@ -21,6 +21,26 @@ var MDMarkers = Markers{
 	End:   func(s string) string { return "<!-- harnez:end " + s + " -->" },
 }
 
+// DocStopMarker and LegacyDocStopMarker define stop markers for harnez-managed docs in docs/.
+// Content before the stop marker is harnez-managed upstream content; content after is repo-local customization.
+const (
+	DocStopMarker       = "<!-- harnez:stop -->"
+	DocEndMarker        = "<!-- harnez:end -->"
+	LegacyDocStopMarker = "<!-- claudeconfig:stop -->"
+	LegacyDocEndMarker  = "<!-- claudeconfig:end -->"
+)
+
+// ExtractManagedDocContent returns the content up to the first stop marker if present.
+// If no stop marker is found, the entire content is returned unchanged.
+func ExtractManagedDocContent(content string) string {
+	for _, marker := range []string{DocStopMarker, DocEndMarker, LegacyDocStopMarker, LegacyDocEndMarker} {
+		if idx := strings.Index(content, marker); idx >= 0 {
+			return content[:idx]
+		}
+	}
+	return content
+}
+
 // MKMarkers uses shell comments — suitable for Makefiles.
 var MKMarkers = Markers{
 	Begin: func(s string) string { return "# harnez:begin " + s },

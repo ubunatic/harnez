@@ -79,6 +79,104 @@ func TestCaptureDocsDriftIdenticalReturnsFalse(t *testing.T) {
 	}
 }
 
+func TestCaptureDocsDriftStopMarkerIgnoresLocalPostMarkerCustomization(t *testing.T) {
+	sourceDir := t.TempDir()
+	repoDir := t.TempDir()
+	writeCaptureFile(t, sourceDir, "docs/Go.md", "# Go Guidelines\n\n- Write unit tests\n")
+	writeCaptureFile(t, repoDir, "docs/Go.md", "# Go Guidelines\n\n- Write unit tests\n<!-- harnez:stop -->\n## Local Customization\n- Extra project specific note\n")
+	cfg := &Config{
+		Dir:  sourceDir,
+		FS:   os.DirFS(sourceDir),
+		Docs: []string{"go"},
+		AgentsMD: AgentsMD{Languages: map[string]Language{
+			"go": {Source: "docs/Go.md", Local: "docs/Go.md"},
+		}},
+	}
+	out := filepath.Join(repoDir, "report.md")
+	_, changed, err := CaptureDocsDrift(repoDir, out, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("pre-marker identical doc with post-marker additions was reported as changed")
+	}
+	report, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(report), "## `docs/Go.md` (identical)") {
+		t.Fatalf("expected identical status for stop-marker separated doc, got:\n%s", string(report))
+	}
+}
+
+func TestCaptureDocsDriftStopMarkerReportsPreMarkerDifferences(t *testing.T) {
+	sourceDir := t.TempDir()
+	repoDir := t.TempDir()
+	writeCaptureFile(t, sourceDir, "docs/Go.md", "# Go Guidelines\n\n- Write unit tests\n")
+	writeCaptureFile(t, repoDir, "docs/Go.md", "# Go Guidelines\n\n- Write integration tests instead\n<!-- harnez:stop -->\n## Local Customization\n- Extra project specific note\n")
+	cfg := &Config{
+		Dir:  sourceDir,
+		FS:   os.DirFS(sourceDir),
+		Docs: []string{"go"},
+		AgentsMD: AgentsMD{Languages: map[string]Language{
+			"go": {Source: "docs/Go.md", Local: "docs/Go.md"},
+		}},
+	}
+	out := filepath.Join(repoDir, "report.md")
+	_, changed, err := CaptureDocsDrift(repoDir, out, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("pre-marker differences were not reported as changed")
+	}
+	report, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(report)
+	if !strings.Contains(text, "## `docs/Go.md` (changed)") {
+		t.Fatalf("expected changed status for pre-marker drift, got:\n%s", text)
+	}
+	if !strings.Contains(text, "- Write unit tests") || !strings.Contains(text, "+- Write integration tests instead") {
+		t.Fatalf("expected diff to reflect pre-marker changes, got:\n%s", text)
+	}
+	if strings.Contains(text, "Local Customization") {
+		t.Fatalf("diff leaked post-marker content into upstream drift report:\n%s", text)
+	}
+}
+
+func TestCaptureDocsDriftMissingStopMarkerFallsBackToWholeFile(t *testing.T) {
+	sourceDir := t.TempDir()
+	repoDir := t.TempDir()
+	writeCaptureFile(t, sourceDir, "docs/Go.md", "# Go Guidelines\n\n- Write unit tests\n")
+	writeCaptureFile(t, repoDir, "docs/Go.md", "# Go Guidelines\n\n- Write unit tests\n\n## Unmarked additions\n")
+	cfg := &Config{
+		Dir:  sourceDir,
+		FS:   os.DirFS(sourceDir),
+		Docs: []string{"go"},
+		AgentsMD: AgentsMD{Languages: map[string]Language{
+			"go": {Source: "docs/Go.md", Local: "docs/Go.md"},
+		}},
+	}
+	out := filepath.Join(repoDir, "report.md")
+	_, changed, err := CaptureDocsDrift(repoDir, out, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("unmarked local addition was not reported as changed")
+	}
+	report, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(report)
+	if !strings.Contains(text, "## `docs/Go.md` (changed)") || !strings.Contains(text, "+## Unmarked additions") {
+		t.Fatalf("expected whole-file diff for doc missing stop marker, got:\n%s", text)
+	}
+}
+
 func TestCaptureDocsDriftDefaultRequiresInbox(t *testing.T) {
 	sourceDir := t.TempDir()
 	repoDir := t.TempDir()

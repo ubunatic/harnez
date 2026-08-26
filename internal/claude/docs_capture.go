@@ -294,13 +294,15 @@ func compareConfiguredDocs(repoDir string, cfg *Config) ([]docsDriftFile, error)
 		if readErr != nil && !os.IsNotExist(readErr) {
 			return nil, fmt.Errorf("read project doc %s: %w", localPath, readErr)
 		}
+		managedSource := []byte(markdown.ExtractManagedDocContent(string(source)))
+		managedCurrent := []byte(markdown.ExtractManagedDocContent(string(current)))
 		status := "identical"
 		if readErr != nil {
 			status = "missing"
-		} else if !bytes.Equal(source, current) {
+		} else if !bytes.Equal(managedSource, managedCurrent) {
 			status = "changed"
 		}
-		diff, err := unifiedDocDiff(sourcePath, localPath, source, current)
+		diff, err := unifiedDocDiff(sourcePath, localPath, managedSource, managedCurrent)
 		if err != nil {
 			return nil, err
 		}
