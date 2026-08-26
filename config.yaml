@@ -257,7 +257,7 @@ agents_md:
     markdown:
       name: "Markdown"
       ref: "@docs/Markdown.md"
-      hint: "PascalCase for evergreens, kebab-case for ephemeral docs"
+      hint: "PascalCase for evergreens, kebab-case for ephemeral docs; ASCII art in chat, Mermaid only in docs/"
       source: docs/lang/Markdown.md
       target: ~/.claude/docs/Markdown.md
       local: ./docs/Markdown.md

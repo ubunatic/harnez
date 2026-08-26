@@ -1,6 +1,6 @@
 # 067 — Do Not Render Mermaid in Plain Chat; Use ASCII Box/Arrow Art (Mermaid Reserved for Docs Only)
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics & UI Standards

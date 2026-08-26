@@ -16,7 +16,7 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 - Make/Makefile @docs/Make.md,
   ⚙️ phony sentinel, self-doc help, build dependency pattern
 - Markdown @docs/Markdown.md,
-  PascalCase for evergreens, kebab-case for ephemeral docs
+  PascalCase for evergreens, kebab-case for ephemeral docs; ASCII art in chat, Mermaid only in docs/
 - Git @docs/Git.md,
   conventional commits, work on the default branch, don't push unless asked
 - Canary-first development @docs/Canary.md,
@@ -26,7 +26,7 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 - Agentic Loop Practices @docs/AgenticLoop.md,
   5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
 - Issue Tracking Practices @docs/IssueTracking.md,
-  P0-P3 priorities (P0/Critical, P1/High, P2/Medium, P3/Low), metadata: Status, Priority, Severity, Category
+  P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
 <!-- harnez:end Language Conventions -->
 
 ## CLI command scope
