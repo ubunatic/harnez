@@ -15,6 +15,7 @@ docs:
   - agentic-loop
   - issue-tracking
   - concise-mode
+  - website
 
 # model: sonnet  # unmanaged by default, let user or client choose
 effort: medium
@@ -148,6 +149,10 @@ commands:
     description: "Switch ConciseMode terseness level (lite, std, ultra, off) and sync AGENTS.md"
     file: commands/mode.md
 
+  - name: website
+    description: "Build or update a project website — reads docs/Website.md rules (hosting, branding, static/no-CDN, subpage links) before generating any content"
+    file: commands/website.md
+
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
 prime_agent_target: ~/.prime/agent
@@ -176,6 +181,10 @@ skills:
   - name: mode
     description: "Switch ConciseMode terseness level (lite, std, ultra, off) and sync AGENTS.md"
     file: commands/mode.md
+
+  - name: website
+    description: "Build or update a project website — reads docs/Website.md rules (hosting, branding, static/no-CDN, subpage links) before generating any content"
+    file: commands/website.md
 
 agents_md:
   # config for local md file
@@ -334,6 +343,16 @@ agents_md:
       target: ~/.claude/docs/ConciseMode.md
       local: ./docs/ConciseMode.md
       default: false
+    website:
+      name: "Website Building Rules"
+      ref: "@docs/Website.md"
+      hint: |
+        no GitHub assumptions/octocats, match sibling website/ dirs or ask, honest/proven claims only,
+        Why section required, relative links (subpage-hosted), static/no-CDN, opt-in JS demos only
+      source: docs/other/Website.md
+      target: ~/.claude/docs/Website.md
+      local: ./docs/Website.md
+      default: true
 
   # repo git setups — pick one with `init --repo-mode/-m` to add a short
   # "Repo Setup" section to a project's AGENTS.md (see docs/lang/Git.md for the

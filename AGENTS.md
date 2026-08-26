@@ -10,8 +10,9 @@ Adhere to the following conventions.
 
 Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
-- ConciseMode Practices @docs/ConciseMode.md,
-  3 graded terseness tiers (Lite, Standard, Ultra); code/diffs/commands always verbatim
+- Website Building Rules @docs/Website.md,
+  no GitHub assumptions/octocats, match sibling website/ dirs or ask, honest/proven claims only,
+  Why section required, relative links (subpage-hosted), static/no-CDN, opt-in JS demos only
 - Go/Golang @docs/Go.md,
   Modern Go, avoid deps but use Cobra, add tests
 - Bash/Shell @docs/Bash.md,
