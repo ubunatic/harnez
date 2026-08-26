@@ -1,6 +1,6 @@
 # 059 — Capture Managed Docs Drift to Inbox Markdown
 
-**Status**: Open
+**Status**: Closed — resolved in 32218cb
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -70,10 +70,10 @@ Front matter must remain optional so other reporters can drop plain markdown int
 
 ## 4. Acceptance Criteria
 
-- [ ] Add a docs-drift capture workflow that compares configured docs against the current repository docs.
-- [ ] Write the sum of diffs to a new markdown file.
-- [ ] Default to `<harnez-repo-if-accessible>/issues/inbox/<simple-file>.md`.
-- [ ] Allow an explicit output path override.
-- [ ] Include source repo and compared file list in optional YAML front matter.
-- [ ] Keep `issues/inbox/*.md` exempt from the formal issue front matter and tracker index requirements.
-- [ ] Add tests covering changed, missing, extra, and identical managed docs.
+- [x] Add a docs-drift capture workflow that compares configured docs against the current repository docs.
+- [x] Write the sum of diffs to a new markdown file.
+- [x] Default to `<harnez-repo-if-accessible>/issues/inbox/<simple-file>.md`.
+- [x] Allow an explicit output path override.
+- [x] Include source repo and compared file list in optional YAML front matter.
+- [x] Keep `issues/inbox/*.md` exempt from the formal issue front matter and tracker index requirements.
+- [x] Add tests covering changed, missing, extra, and identical managed docs.

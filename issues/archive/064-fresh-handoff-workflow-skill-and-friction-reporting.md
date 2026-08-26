@@ -1,6 +1,6 @@
 # 064 — Lean Fresh-Handoff Workflow Skill and Calibrated Friction Reporting
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics & Workflow Skills
