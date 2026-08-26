@@ -35,15 +35,16 @@ Use **kebab-case** with an optional numeric or date prefix for ordering.
 
 ## Diagrams: chat vs. docs
 
-- **In chat / pairing conversations**: never emit ` ```mermaid ` blocks — many terminals and
-  chat UIs render them as raw unrendered markup. Use compact ASCII box-and-arrow diagrams inside
-  a ` ```text ` fence instead:
+### In chat / pairing conversations:
+- Do not emit ` ```mermaid ` blocks unless asked; terminals and chat UIs may render them as raw markup
+- For simple flows, use `1. 2. 3. if X goto 2.; 4. ...` and skip the diagram completely
+- Use compact ASCII box-and-arrow diagrams inside a ` ```text ` fence instead:
 
   ```text
-  ┌─────────────┐        ┌─────────────┐
-  │   Input     │ ─────> │   Process   │
-  └─────────────┘        └─────────────┘
+  ┌─────┐     ┌─────┐
+  │ Foo │ ──> │ Bar │
+  └─────┘     └─────┘
   ```
 
-- **In evergreen docs (`docs/`)**: ` ```mermaid ` diagrams remain allowed and encouraged for
-  formal architecture/sequence flows.
+### In MD Files/Evergreen `docs/`
+ ` ```mermaid ` diagrams remain allowed and encouraged for formal architecture/sequence flows.
