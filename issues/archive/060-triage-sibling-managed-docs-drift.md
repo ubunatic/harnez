@@ -1,6 +1,6 @@
 # 060 — Triage Sibling Managed Docs Drift Captured from Inbox Sweep
 
-**Status**: Open
+**Status**: Closed — resolved in pilot and stop-marker implementation
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Documentation
@@ -122,19 +122,19 @@ The all-missing repos should be checked first to determine whether they are unma
 
 ## 6. Acceptance Criteria
 
-- [ ] Review the 30-repo drift summary and group repos into applicable backfill, intentional divergence, intentionally not applicable, and skip categories.
-- [ ] Backfill missing managed docs only for repos where the technology or workflow applies.
-- [ ] Add or design metadata for docs that are intentionally not applicable to a repo.
-- [ ] Define a stop marker for harnez-owned copied docs under `docs/`.
-- [ ] Update docs capture/reconciliation so pre-marker changes are reported as upstream drift and post-marker changes are preserved/ignored as local customization.
-- [ ] Keep `AGENTS.md` on its existing begin/end managed-section model; do not apply the copied-doc stop-marker scheme there.
-- [ ] Preserve intentional project-local deviations with clear AGENTS.md notes or future config metadata.
-- [ ] Promote any genuinely better repo-local guidance back into harnez source docs.
-- [ ] Use `/home/uwe/projects/webman` as the single pilot to prove consolidate/embed/port-back behavior.
-- [ ] Reapply `AGENTS.md` managed sections in `/home/uwe/projects/webman` as part of the pilot.
-- [ ] Default reapply updates present managed docs/sections only and skips missing docs.
-- [ ] Add an option to reapply one specific document/section.
-- [ ] After accepting a pre-marker change from `webman`, embed it in harnez and reapply it back to `webman` without touching unrelated sibling repos.
-- [ ] Verify post-marker `webman` customization remains preserved and ignored by normal drift capture.
-- [ ] Re-run `harnez diff --capture-docs` across sibling repos and verify the remaining drift is intentional and substantially lower-noise.
-- [ ] Consider improving capture report filenames to include the source repo basename for easier inbox triage.
+- [x] Review the 30-repo drift summary and group repos into applicable backfill, intentional divergence, intentionally not applicable, and skip categories.
+- [x] Backfill missing managed docs only for repos where the technology or workflow applies.
+- [x] Add or design metadata for docs that are intentionally not applicable to a repo.
+- [x] Define a stop marker for harnez-owned copied docs under `docs/`.
+- [x] Update docs capture/reconciliation so pre-marker changes are reported as upstream drift and post-marker changes are preserved/ignored as local customization.
+- [x] Keep `AGENTS.md` on its existing begin/end managed-section model; do not apply the copied-doc stop-marker scheme there.
+- [x] Preserve intentional project-local deviations with clear AGENTS.md notes or future config metadata.
+- [x] Promote any genuinely better repo-local guidance back into harnez source docs.
+- [x] Use `/home/uwe/projects/webman` as the single pilot to prove consolidate/embed/port-back behavior.
+- [x] Reapply `AGENTS.md` managed sections in `/home/uwe/projects/webman` as part of the pilot.
+- [x] Default reapply updates present managed docs/sections only and skips missing docs.
+- [x] Add an option to reapply one specific document/section.
+- [x] After accepting a pre-marker change from `webman`, embed it in harnez and reapply it back to `webman` without touching unrelated sibling repos.
+- [x] Verify post-marker `webman` customization remains preserved and ignored by normal drift capture.
+- [x] Re-run `harnez diff --capture-docs` across sibling repos and verify the remaining drift is intentional and substantially lower-noise.
+- [x] Consider improving capture report filenames to include the source repo basename for easier inbox triage.
