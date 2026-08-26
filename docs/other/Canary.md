@@ -56,22 +56,27 @@ mechanism alone → observe output → assert manually → then build
 
 ## Forms a canary can take
 
+Wayreel is a separate terminal-scenario project used in the historical examples
+below. Its `.reel` files are a declarative scenario format for driving and
+checking terminal sessions; the paths and assertion names shown here are
+project-local rather than Harnez conventions.
+
 | Form | Good for |
 |---|---|
 | Shell script (`scripts/check-*.sh`) | External CLI tools, environment probes |
-| Minimal reel (`reels/minimal/*.reel`) | Wayreel-specific mechanisms (shell capture, key injection) |
+| Minimal Wayreel scenario (`reels/minimal/*.reel`) | Terminal shell capture and key injection |
 | Standalone Go program (`scripts/<name>/main.go`) | Library behaviour, I/O pipelines |
 | Single test function tagged `//go:build canary` | Language-level but environment-dependent |
 | Throwaway file read back immediately | One-off format or encoding checks |
 
 ---
 
-## Example — stdout tee capture (wayreel)
+## Historical example — stdout tee capture in Wayreel
 
 **Mechanism:** inject `exec > >(tee -a /tmp/log) 2>&1` into a zsh session
 and read the log from Go.
 
-**Canary:** `reels/minimal/tee-check.reel`
+**Canary:** the project-local file `reels/minimal/tee-check.reel`
 
 ```reel
 REEL main
@@ -89,17 +94,19 @@ wayreel` appears in the log.
 
 **Finding:** the tee captures shell-level stdout. TUI apps that switch the
 terminal to raw mode write directly to the PTY and bypass the tee entirely
-— so `V contains=` cannot see `/skills` output rendered by bubbletea.
-This finding drove the addition of `V ocr=` as a second assertion mode.
+— so Wayreel's `V contains=` text assertion cannot see `/skills` output rendered
+by Bubble Tea, the Go terminal-UI framework used by that project. This finding
+drove the addition of Wayreel's `V ocr=` image-text assertion mode.
 
 ---
 
-## Example — Tesseract OCR quality (wayreel)
+## Historical example — Tesseract OCR quality in Wayreel
 
 **Mechanism:** ImageMagick renders a plain-text TUI simulation to PNG;
 Tesseract reads it back.
 
-**Canary:** `scripts/ocr_verify/main.go` + `scripts/testdata/tui/*.txt`
+**Canary:** the project-local files `scripts/ocr_verify/main.go` and
+`scripts/testdata/tui/*.txt`
 
 Run: `go run ./scripts/ocr_verify`
 
@@ -111,7 +118,8 @@ Run: `go run ./scripts/ocr_verify`
   problem for substring matches.
 - Unicode bullets (`•`) are silently dropped — assert on text, not symbols.
 
-These findings shaped the OCR implementation in `script.go:verifyOcrContains`.
+These findings shaped that project's OCR implementation in the
+`script.go:verifyOcrContains` function.
 
 ---
 

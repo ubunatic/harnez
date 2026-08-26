@@ -41,6 +41,38 @@ func ExtractManagedDocContent(content string) string {
 	return strings.TrimRight(content, "\r\n") + "\n"
 }
 
+// stopMarkerIndex returns the byte offset of the first stop marker in content,
+// or -1 if none is present.
+func stopMarkerIndex(content string) int {
+	idx := -1
+	for _, marker := range []string{DocStopMarker, DocEndMarker, LegacyDocStopMarker, LegacyDocEndMarker} {
+		if i := strings.Index(content, marker); i >= 0 && (idx < 0 || i < idx) {
+			idx = i
+		}
+	}
+	return idx
+}
+
+// MergeManagedDoc combines freshly bundled managed content with any repo-local
+// customization already present at dst. If dst exists and contains a stop
+// marker, everything from the marker onward is preserved verbatim and the
+// bundled content replaces only the managed portion above it. If dst does
+// not exist or has no stop marker, the bundled content is returned as-is —
+// there is no repo-local tail to preserve.
+func MergeManagedDoc(dst string, bundled []byte) []byte {
+	existing, err := os.ReadFile(dst)
+	if err != nil {
+		return bundled
+	}
+	idx := stopMarkerIndex(string(existing))
+	if idx < 0 {
+		return bundled
+	}
+	managed := strings.TrimRight(string(bundled), "\r\n")
+	local := string(existing)[idx:]
+	return []byte(managed + "\n\n" + local)
+}
+
 // MKMarkers uses shell comments — suitable for Makefiles.
 var MKMarkers = Markers{
 	Begin: func(s string) string { return "# harnez:begin " + s },

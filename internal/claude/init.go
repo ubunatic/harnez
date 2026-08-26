@@ -355,7 +355,7 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 				return fmt.Errorf("language %s: read source: %w", name, err)
 			}
 			localDoc := localPath(dir, lang.Local)
-			cr, err := writeFileIfChanged(localDoc, data)
+			cr, err := writeFileIfChanged(localDoc, markdown.MergeManagedDoc(localDoc, data))
 			if err != nil {
 				return fmt.Errorf("language %s: copy: %w", name, err)
 			}

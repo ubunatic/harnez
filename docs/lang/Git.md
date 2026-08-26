@@ -6,7 +6,8 @@ weight: 63
 <!-- harnez:bundled -->
 # Git conventions
 
-Applies unless overridden by a project's own AGENTS.md.
+Applies unless overridden by project-local instructions for coding agents,
+commonly stored in an `AGENTS.md` file at the repository root.
 
 ## Workflow
 - Work local, work on the repo's default branch (usually `main`, sometimes `master`) —
