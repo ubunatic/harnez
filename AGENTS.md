@@ -1,13 +1,9 @@
 <!-- Keep this file token-efficient: use bullet lists, not tables; no redundant prose. -->
 <!-- AGENTS.md is the canonical source; CLAUDE.md is a symlink to it. Edit AGENTS.md only. -->
 
-<!-- harnez:begin Concise Mode -->
-## Operational Mode: Concise Ultra (Level 3)
-- STRICT: Output confined to essential diffs, command invocations, and single-line status confirmations.
-- ZERO narrative prose, conversational text, explanations, or filler.
-- Core invariant: preserve all code, diffs, tool parameters, and command syntax 100% verbatim.
-- Reference: @docs/practices/ConciseMode.md
-<!-- harnez:end Concise Mode -->
+<!-- harnez:begin Local Overlays -->
+- Local ephemeral overrides: @AGENTS.local.md
+<!-- harnez:end Local Overlays -->
 
 <!-- harnez:begin Language Conventions -->
 Adhere to the following conventions.
@@ -136,3 +132,4 @@ Run from project root.
 - Solo/hobby repo — single default branch, no PR workflow.
 - codeberg.org is primary; github.com (if present) is a synced mirror only.
 <!-- harnez:end Repo Setup -->
+

@@ -77,3 +77,78 @@ func Copy(src, dst string) (changed bool, err error) {
 	}
 	return WriteIfChanged(dst, data)
 }
+
+// FindGitDir searches upwards from startDir for the .git directory or file.
+// Returns the path to the actual git directory and true if found.
+func FindGitDir(startDir string) (string, bool) {
+	dir, err := filepath.Abs(startDir)
+	if err != nil {
+		dir = startDir
+	}
+	for {
+		gitPath := filepath.Join(dir, ".git")
+		fi, err := os.Stat(gitPath)
+		if err == nil {
+			if fi.IsDir() {
+				return gitPath, true
+			}
+			data, err := os.ReadFile(gitPath)
+			if err == nil {
+				content := strings.TrimSpace(string(data))
+				if strings.HasPrefix(content, "gitdir:") {
+					target := strings.TrimSpace(strings.TrimPrefix(content, "gitdir:"))
+					if !filepath.IsAbs(target) {
+						target = filepath.Join(dir, target)
+					}
+					return filepath.Clean(target), true
+				}
+			}
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return "", false
+}
+
+// EnsureGitExclude ensures that pattern is present in .git/info/exclude of the repository containing startDir.
+// Returns changed=true if pattern was added. If not in a git repo, returns (false, nil).
+func EnsureGitExclude(startDir string, pattern string) (bool, error) {
+	gitDir, ok := FindGitDir(startDir)
+	if !ok {
+		return false, nil
+	}
+
+	excludePath := filepath.Join(gitDir, "info", "exclude")
+	var existingContent string
+	if data, err := os.ReadFile(excludePath); err == nil {
+		existingContent = string(data)
+		for _, line := range strings.Split(existingContent, "\n") {
+			line = strings.TrimSpace(line)
+			if line == pattern {
+				return false, nil
+			}
+		}
+	} else if !os.IsNotExist(err) {
+		return false, err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(excludePath), 0755); err != nil {
+		return false, err
+	}
+
+	newContent := existingContent
+	if newContent != "" && !strings.HasSuffix(newContent, "\n") {
+		newContent += "\n"
+	}
+	newContent += pattern + "\n"
+
+	if err := os.WriteFile(excludePath, []byte(newContent), 0644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+

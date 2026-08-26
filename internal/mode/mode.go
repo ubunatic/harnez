@@ -3,8 +3,10 @@ package mode
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/markdown"
 )
 
@@ -91,9 +93,11 @@ func GetTierInfo(t Tier) TierInfo {
 
 // Options configure the SetMode execution.
 type Options struct {
-	FilePath string
-	Quiet    bool
-	DryRun   bool
+	FilePath  string
+	Persist   bool
+	Ephemeral bool
+	Quiet     bool
+	DryRun    bool
 }
 
 // Result describes the outcome of SetMode.
@@ -104,7 +108,7 @@ type Result struct {
 	Changed    bool
 }
 
-// SetMode applies the chosen tier: generating the runtime directive and synchronizing AGENTS.md.
+// SetMode applies the chosen tier: generating the runtime directive and synchronizing AGENTS.local.md or AGENTS.md.
 func SetMode(tier Tier, opts Options) (Result, error) {
 	info := GetTierInfo(tier)
 	res := Result{
@@ -112,9 +116,17 @@ func SetMode(tier Tier, opts Options) (Result, error) {
 		Directive: info.Directive,
 	}
 
+	if opts.Ephemeral {
+		return res, nil
+	}
+
 	targetFile := opts.FilePath
 	if targetFile == "" {
-		targetFile = "./AGENTS.md"
+		if opts.Persist {
+			targetFile = "./AGENTS.md"
+		} else {
+			targetFile = "./AGENTS.local.md"
+		}
 	}
 
 	if opts.DryRun {
@@ -143,6 +155,14 @@ func SetMode(tier Tier, opts Options) (Result, error) {
 		return res, nil
 	}
 
+	if filepath.Base(targetFile) == "AGENTS.local.md" {
+		dir := filepath.Dir(targetFile)
+		if dir == "" {
+			dir = "."
+		}
+		_, _ = fsutil.EnsureGitExclude(dir, "AGENTS.local.md")
+	}
+
 	changed, existed, err := markdown.Apply(targetFile, ConciseModeSection, info.AgentsLine+"\n")
 	if err != nil {
 		return res, fmt.Errorf("apply %s in %s: %w", ConciseModeSection, targetFile, err)
@@ -160,3 +180,4 @@ func SetMode(tier Tier, opts Options) (Result, error) {
 
 	return res, nil
 }
+

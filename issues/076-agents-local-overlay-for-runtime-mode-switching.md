@@ -1,6 +1,6 @@
 # 076 — `AGENTS.local.md` Overlay & Ephemeral Runtime Mode Switching
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics & Architecture
@@ -41,9 +41,10 @@ While effective, modifying `./AGENTS.md` leaves a dirty working tree (`git statu
 
 ## 3. Acceptance Criteria
 
-- [ ] Update `internal/mode` to target `./AGENTS.local.md` by default while reading/updating managed sections.
-- [ ] Add `--ephemeral` (`-e` / `--no-file`) and `--persist` (`--main`) flags to `harnez mode`.
-- [ ] Ensure `harnez init` / `harnez apply` includes the `@AGENTS.local.md` pointer convention and auto-ignores `AGENTS.local.md` in `.git/info/exclude`.
-- [ ] Update unit and CLI tests in `internal/mode/` and `cmd/harnez/`.
-- [ ] Verify `git status` stays clean when toggling `harnez mode <lite|std|ultra|off>`.
-- [ ] Pass `go test ./...`, `harnez apply`, and `harnez status`.
+- [x] Update `internal/mode` to target `./AGENTS.local.md` by default while reading/updating managed sections.
+- [x] Add `--ephemeral` (`-e` / `--no-file`) and `--persist` (`--main`) flags to `harnez mode`.
+- [x] Ensure `harnez init` / `harnez apply` includes the `@AGENTS.local.md` pointer convention and auto-ignores `AGENTS.local.md` in `.git/info/exclude`.
+- [x] Update unit and CLI tests in `internal/mode/` and `cmd/harnez/`.
+- [x] Verify `git status` stays clean when toggling `harnez mode <lite|std|ultra|off>`.
+- [x] Pass `go test ./...`, `harnez apply`, and `harnez status`.
+

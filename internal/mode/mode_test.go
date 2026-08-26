@@ -139,3 +139,125 @@ func TestSetMode_Lifecycle(t *testing.T) {
 		t.Errorf("Base content in AGENTS.md was corrupted:\n%s", string(content))
 	}
 }
+
+func TestSetMode_LocalOverlayAndGitExclude(t *testing.T) {
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = os.Chdir(origWd)
+	}()
+
+	// Initialize dummy .git folder
+	gitDir := filepath.Join(tmpDir, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Default should write to AGENTS.local.md and add exclude
+	res, err := mode.SetMode(mode.TierUltra, mode.Options{})
+	if err != nil {
+		t.Fatalf("SetMode(TierUltra) default failed: %v", err)
+	}
+	if !res.Changed {
+		t.Errorf("Expected Changed=true on default local overlay creation")
+	}
+
+	localFile := filepath.Join(tmpDir, "AGENTS.local.md")
+	content, err := os.ReadFile(localFile)
+	if err != nil {
+		t.Fatalf("Failed to read AGENTS.local.md: %v", err)
+	}
+	if !strings.Contains(string(content), "Concise Ultra (Level 3)") {
+		t.Errorf("AGENTS.local.md missing ultra content: %s", string(content))
+	}
+
+	// Verify .git/info/exclude
+	excludeContent, err := os.ReadFile(filepath.Join(gitDir, "info", "exclude"))
+	if err != nil {
+		t.Fatalf("Failed to read .git/info/exclude: %v", err)
+	}
+	if !strings.Contains(string(excludeContent), "AGENTS.local.md") {
+		t.Errorf(".git/info/exclude missing AGENTS.local.md: %s", string(excludeContent))
+	}
+
+	// 2. Setting mode off removes AGENTS.local.md entirely if empty
+	res, err = mode.SetMode(mode.TierOff, mode.Options{})
+	if err != nil {
+		t.Fatalf("SetMode(TierOff) failed: %v", err)
+	}
+	if !res.Changed {
+		t.Errorf("Expected Changed=true when removing AGENTS.local.md")
+	}
+	if _, err := os.Stat(localFile); !os.IsNotExist(err) {
+		t.Errorf("AGENTS.local.md should have been deleted when empty, but still exists")
+	}
+}
+
+func TestSetMode_Ephemeral(t *testing.T) {
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = os.Chdir(origWd)
+	}()
+
+	res, err := mode.SetMode(mode.TierStandard, mode.Options{Ephemeral: true})
+	if err != nil {
+		t.Fatalf("SetMode Ephemeral failed: %v", err)
+	}
+	if !strings.Contains(res.Directive, "Concise Standard (Level 2)") {
+		t.Errorf("Ephemeral directive missing Level 2: %s", res.Directive)
+	}
+	if res.FileUpdate != "" {
+		t.Errorf("Ephemeral should have no FileUpdate, got: %s", res.FileUpdate)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "AGENTS.local.md")); !os.IsNotExist(err) {
+		t.Errorf("Ephemeral should not create any files")
+	}
+}
+
+func TestSetMode_Persist(t *testing.T) {
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = os.Chdir(origWd)
+	}()
+
+	res, err := mode.SetMode(mode.TierLite, mode.Options{Persist: true})
+	if err != nil {
+		t.Fatalf("SetMode Persist failed: %v", err)
+	}
+	if !res.Changed {
+		t.Errorf("Expected Changed=true for Persist")
+	}
+
+	mainFile := filepath.Join(tmpDir, "AGENTS.md")
+	content, err := os.ReadFile(mainFile)
+	if err != nil {
+		t.Fatalf("Failed to read AGENTS.md: %v", err)
+	}
+	if !strings.Contains(string(content), "Concise Lite (Level 1)") {
+		t.Errorf("AGENTS.md missing Lite content: %s", string(content))
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "AGENTS.local.md")); !os.IsNotExist(err) {
+		t.Errorf("Persist mode should not touch AGENTS.local.md")
+	}
+}
+

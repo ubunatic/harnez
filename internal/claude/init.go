@@ -16,6 +16,10 @@ import (
 
 const agentsMDTemplate = `Adhere to the following conventions.
 
+<!-- harnez:begin Local Overlays -->
+- Local ephemeral overrides: @AGENTS.local.md
+<!-- harnez:end Local Overlays -->
+
 <!-- harnez:begin Project Summary -->
 <!-- harnez:end Project Summary -->
 
@@ -291,6 +295,8 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 	} else {
 		fmt.Printf("  exists  %s (unchanged)\n", claudePath)
 	}
+
+	_, _ = fsutil.EnsureGitExclude(dir, "AGENTS.local.md")
 
 	if cfg != nil {
 		if err := validateDocNames(cfg, docs); err != nil {
