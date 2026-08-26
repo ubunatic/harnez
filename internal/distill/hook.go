@@ -7,6 +7,13 @@ import "regexp"
 // allowlist, not a denylist of "interactive" commands — missing an
 // interactive case in a denylist silently mangles a session, whereas a
 // missing case here just leaves a command unfiltered.
+//
+// Deliberately does not see through shell-wrapper prefixes (bash -c, sh -c,
+// zsh -c, time, env FOO=bar, ...): a command author reaching for one of
+// those gets exactly what they wrote, unfiltered, treated as an explicit
+// opt-out rather than a gap to unwrap. See issue 074 and
+// docs/studies/RTKShellWrapperHandling.md for the prior-art research behind
+// this call (RTK has the same blind spot, unaddressed there too).
 var noisyCommandRE = regexp.MustCompile(
 	`(?:^|[;&|]\s*)(?:` +
 		`go\s+(?:test|build|vet)\b` +
