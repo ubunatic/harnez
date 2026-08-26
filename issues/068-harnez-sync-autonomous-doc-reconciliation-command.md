@@ -51,7 +51,13 @@ When triggered (e.g. `/harnez-sync` or `/harnez-sync <path>`), the command spawn
 - **Custom Section Preservation**: Preserve custom sections in `AGENTS.md` (e.g. project-specific rules outside the `<!-- harnez:begin ... -->` block).
 - **Zero Operator Prompting**: Run the entire batch without stopping for interactive prompts per repo.
 
-### 2.3 Required CLI Adjustments
+### 2.3 Conservative Upstream Promotion Guardrails
+Upstream promotion must be treated with high skepticism to prevent polluting generic base docs with specialized paradigms:
+- **Avoid False Generalization**: Patterns that feel effective in one repo (or a pair of siblings) are often paradigm-specific (e.g. CLI vs. backend daemon vs. GUI in Go, kernel vs. userland in C/Rust) rather than universally applicable.
+- **Capable Advisor Gate**: Unless a proposed promotion is overwhelmingly obvious and truly universal, the automation subagent must consult a highly capable advisor model (`pro`) before modifying canonical docs in `harnez/docs/`.
+- **Default to Local Retention**: When in doubt, protect specialized patterns locally (via `<!-- harnez:stop -->` or project-specific evergreen docs) rather than promoting them upstream.
+
+### 2.4 Required CLI Adjustments
 Assess and implement any required `harnez` CLI enhancements to support this workflow cleanly:
 - Potential `harnez init --all <parent-dir>` or `harnez init --sync-present` mode to synchronize all eligible children in one shot natively.
 - Non-interactive batch flag options if needed.
@@ -63,6 +69,7 @@ Assess and implement any required `harnez` CLI enhancements to support this work
 - [ ] Define and register `/harnez-sync` command in `commands/harnez-sync.md` and `config.yaml` (commands & skills).
 - [ ] Implement multi-repo discovery logic with safety guard against scanning `$HOME` directly.
 - [ ] Automate the scan -> triage -> stop-marker protection -> `harnez init` -> verification loop in a single subagent flow.
+- [ ] Incorporate conservative upstream promotion guardrails with capable advisor consultation (`pro`) for non-obvious promotions.
 - [ ] Build any necessary `harnez` CLI extensions supporting streamlined multi-project reconciliation.
 - [ ] Verify execution across sibling repositories with a single command invocation.
 - [ ] Pass `go test ./...`, `harnez apply`, and `harnez status`.
