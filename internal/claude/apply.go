@@ -630,6 +630,20 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool) error {
 		addStat("skills", strings.Join(skillNames, ", "))
 	}
 
+	if adapters := distillAdapters(cfg); len(adapters) > 0 {
+		for _, adapter := range adapters {
+			ar, err := writeFileIfChanged(adapter.path, []byte(adapter.content))
+			if err != nil {
+				return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+			}
+			if ar.changed {
+				changes++
+			}
+			printResult("wrote", adapter.path, ar)
+		}
+		addStat("distill", distillAdapterSummary(cfg))
+	}
+
 	globalDocs := mergeDocs(cfg.Docs, docs)
 	for _, name := range globalDocs {
 		lang, ok := cfg.AgentsMD.Languages[name]

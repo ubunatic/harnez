@@ -23,6 +23,7 @@ type Config struct {
 	MCPServers        []MCPServer       `yaml:"mcp_servers"`
 	Commands          []Command         `yaml:"commands"`
 	Skills            []Command         `yaml:"skills"`
+	DistillAutopipe   DistillAutopipe   `yaml:"distill_autopipe"`
 	SkillsTarget      string            `yaml:"skills_target"`
 	CodexSkillsTarget string            `yaml:"codex_skills_target"`
 	PrimeAgentTarget  string            `yaml:"prime_agent_target"`
@@ -68,6 +69,11 @@ type MCPServer struct {
 	Command string            `yaml:"command"`
 	Args    []string          `yaml:"args"`
 	Env     map[string]string `yaml:"env"`
+}
+
+type DistillAutopipe struct {
+	PiExtensionTarget    string `yaml:"pi_extension_target"`
+	OpenCodePluginTarget string `yaml:"opencode_plugin_target"`
 }
 
 type Command struct {

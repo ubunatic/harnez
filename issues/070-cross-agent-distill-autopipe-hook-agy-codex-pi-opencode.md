@@ -1,6 +1,6 @@
 # 070 — Cross-Agent `distill` Auto-Pipe Hook: AGY, Codex, Pi, OpenCode
 
-**Status**: Open
+**Status**: Open — Pi/OpenCode adapters implemented; live CLI canary pending [[072-agent-canary-local-llm-pi-opencode]]
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Observability & Token Efficiency
@@ -118,3 +118,20 @@ actually does.
    installing an extension/plugin must never change behavior until a user explicitly enables it.
 5. Verify each with a live smoke test against the real installed CLI (not just unit tests of the
    adapter logic), plus `harnez status`.
+
+## 5. Implementation Notes
+
+First buildable phase implemented:
+
+- `config.yaml` now declares `distill_autopipe.pi_extension_target` and
+  `distill_autopipe.opencode_plugin_target`.
+- `harnez apply` writes managed Pi/OpenCode TypeScript adapters to those targets.
+- Both adapters are thin shims that call `harnez distill hook` and consume its
+  `hookSpecificOutput.updatedInput.command`; rewrite policy remains in
+  `internal/distill.RewriteBashCommand`.
+- No AGY or Codex enforced hook was added.
+- Unit/integration coverage verifies target expansion, adapter content, apply idempotency, and
+  `harnez status` visibility.
+
+Live Pi/OpenCode CLI hook firing was not verified in this phase; issue 072 owns that containerized
+canary run.

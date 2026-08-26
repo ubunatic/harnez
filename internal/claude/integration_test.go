@@ -47,6 +47,12 @@ func TestIntegrationWorkflow(t *testing.T) {
 	cfg.SkillsTarget = geminiSkillsDir
 	cfg.CodexSkillsTarget = codexSkillsDir
 	cfg.PrimeAgentTarget = primeAgentDir
+	cfg.AgentsMD.Global.Target = filepath.Join(t.TempDir(), "CLAUDE.md")
+	cfg.AgentsMD.Global.Symlink = ""
+	piExtensionPath := filepath.Join(t.TempDir(), "pi", "harnez-distill.ts")
+	openCodePluginPath := filepath.Join(t.TempDir(), "opencode", "harnez-distill.ts")
+	cfg.DistillAutopipe.PiExtensionTarget = piExtensionPath
+	cfg.DistillAutopipe.OpenCodePluginTarget = openCodePluginPath
 
 	// 3. First apply: should write files and show changes
 	out, err := captureStdout(func() error {
@@ -98,6 +104,16 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(targetDir, "commands", "sprint.md")); err != nil {
 		t.Fatalf("Expected Claude sprint command to be written: %v", err)
+	}
+	if data, err := os.ReadFile(piExtensionPath); err != nil {
+		t.Fatalf("Expected Pi distill adapter to be written: %v", err)
+	} else if !strings.Contains(string(data), `pi.on("tool_call"`) {
+		t.Fatalf("Expected Pi distill adapter content, got:\n%s", string(data))
+	}
+	if data, err := os.ReadFile(openCodePluginPath); err != nil {
+		t.Fatalf("Expected OpenCode distill adapter to be written: %v", err)
+	} else if !strings.Contains(string(data), `"tool.execute.before"`) {
+		t.Fatalf("Expected OpenCode distill adapter content, got:\n%s", string(data))
 	}
 
 	// 4. Second apply: must be idempotent and report "No changes."
@@ -199,6 +215,12 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 	if !strings.Contains(out, filepath.Join(primeAgentDir, "docs", "Go.md")) {
 		t.Errorf("Expected RunStatus to list Prime Agent docs target, got:\n%s", out)
+	}
+	if !strings.Contains(out, piExtensionPath) {
+		t.Errorf("Expected RunStatus to list Pi distill adapter, got:\n%s", out)
+	}
+	if !strings.Contains(out, openCodePluginPath) {
+		t.Errorf("Expected RunStatus to list OpenCode distill adapter, got:\n%s", out)
 	}
 
 	// 10. Run project init (without CLI summary)
@@ -337,5 +359,3 @@ func TestBatchProjectInitialization_HeterogeneousWorkspace(t *testing.T) {
 		}
 	}
 }
-
-

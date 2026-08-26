@@ -96,6 +96,10 @@ env:
   DEBUG: "false"
   HARNEZ_DISTILL_AUTOPIPE: "false"
 
+distill_autopipe:
+  pi_extension_target: ~/.pi/agent/extensions/harnez-distill.ts
+  opencode_plugin_target: ~/.config/opencode/plugins/harnez-distill.ts
+
 mcp_servers: []
 
 commands:

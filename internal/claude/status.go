@@ -37,6 +37,7 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 	fmt.Printf("  %-14s %d\n", "mcp_servers:", len(cfg.MCPServers))
 	fmt.Printf("  %-14s %d\n", "commands:", len(cfg.Commands))
 	fmt.Printf("  %-14s %d\n", "skills:", len(cfg.Skills))
+	fmt.Printf("  %-14s %d\n", "distill:", len(distillAdapters(cfg)))
 	fmt.Printf("  %-14s %d global, %d local\n", "agents_md:",
 		len(cfg.AgentsMD.Global.Sections), len(cfg.AgentsMD.Local.Sections))
 
@@ -100,6 +101,13 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 			}
 		}
 	}
+	for _, adapter := range distillAdapters(cfg) {
+		adapter := adapter
+		checks = append(checks, entry{
+			label: adapter.path,
+			check: func() bool { _, err := os.Stat(adapter.path); return err == nil },
+		})
+	}
 
 	for _, e := range checks {
 		state := "missing"
@@ -154,4 +162,3 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 
 	return nil
 }
-
