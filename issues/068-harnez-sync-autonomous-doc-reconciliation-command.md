@@ -55,7 +55,7 @@ When triggered (e.g. `/harnez-sync` or `/harnez-sync <path>`), the command spawn
 Upstream promotion must be treated with high skepticism to prevent polluting generic base docs with specialized paradigms:
 - **Avoid False Generalization**: Patterns that feel effective in one repo (or a pair of siblings) are often paradigm-specific (e.g. CLI vs. backend daemon vs. GUI in Go, kernel vs. userland in C/Rust) rather than universally applicable.
 - **Capable Advisor Gate**: Unless a proposed promotion is overwhelmingly obvious and truly universal, the automation subagent must consult a highly capable advisor model (`pro`) before modifying canonical docs in `harnez/docs/`.
-- **Default to Local Retention**: When in doubt, protect specialized patterns locally (via `<!-- harnez:stop -->` or project-specific evergreen docs) rather than promoting them upstream.
+- **Default to Local Retention**: When in doubt, or if the executing subagent cannot spawn an advisor subagent, **strictly default to local retention** (protect local additions via `<!-- harnez:stop -->` or project evergreen docs) rather than promoting upstream.
 
 ### 2.4 Required CLI Adjustments
 Assess and implement any required `harnez` CLI enhancements to support this workflow cleanly:
