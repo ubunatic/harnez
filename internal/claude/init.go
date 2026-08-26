@@ -224,6 +224,20 @@ func globExists(dir, pattern string) bool {
 	return err == nil && len(matches) > 0
 }
 
+func initialAgentsMD(cfg *Config) string {
+	if cfg != nil {
+		if cfg.AgentsMD.Local.Template != "" && cfg.FS != nil {
+			if data, err := fs.ReadFile(cfg.FS, cfg.AgentsMD.Local.Template); err == nil {
+				return string(data)
+			}
+		}
+		if cfg.AgentsMD.Local.Content != "" {
+			return cfg.AgentsMD.Local.Content
+		}
+	}
+	return agentsMDTemplate
+}
+
 // RunInit creates AGENTS.md and CLAUDE.md symlink in a project directory,
 // applies config-defined local sections, and sets up language docs and Makefile targets.
 func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool) error {
@@ -250,7 +264,7 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 			fmt.Printf("  migrated %s → %s\n", claudePath, agentsPath)
 			changes++
 		} else {
-			if err := os.WriteFile(agentsPath, []byte(agentsMDTemplate), 0o644); err != nil {
+			if err := os.WriteFile(agentsPath, []byte(initialAgentsMD(cfg)), 0o644); err != nil {
 				return fmt.Errorf("write %s: %w", agentsPath, err)
 			}
 			fmt.Printf("  created %s\n", agentsPath)

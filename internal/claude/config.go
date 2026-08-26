@@ -87,6 +87,8 @@ type AgentsMD struct {
 type AgentsMDTarget struct {
 	Target   string      `yaml:"target"`
 	Symlink  string      `yaml:"symlink"`
+	Template string      `yaml:"template"`
+	Content  string      `yaml:"content"`
 	Sections []MDSection `yaml:"sections"`
 }
 

@@ -165,3 +165,29 @@ It is completely managed manually by the administrator.
 		t.Errorf("Unmanaged custom AGENTS.md content was corrupted:\n%s", string(readBack))
 	}
 }
+
+func TestRunInit_CustomTemplate(t *testing.T) {
+	dir := t.TempDir()
+
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		t.Fatalf("RunInit failed: %v", err)
+	}
+
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	data, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "<!-- harnez:begin Project Summary -->") ||
+		!strings.Contains(content, "## Development Scripts") {
+		t.Errorf("AGENTS.md does not contain expected template structure:\n%s", content)
+	}
+}
+

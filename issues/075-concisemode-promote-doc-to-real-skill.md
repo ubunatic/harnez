@@ -1,44 +1,78 @@
-# 075 — ConciseMode: Promote From Passive Doc to a Real, Invocable Skill
+# 075 — ConciseMode: Dynamic Runtime Switch & AGENTS.md Synchronization (`harnez mode`)
 
-**Status**: Open
-**Priority**: P3 (Low)
-**Severity**: Minor
+**Status**: Closed — resolved
+**Priority**: P1 (High)
+**Severity**: Major
 **Category**: Agentic Ergonomics & UI Standards
-**Related**: [[065-concisemode-caveman-skill-and-output-distillation]], `config.yaml` (`skills:` section), `docs/practices/ConciseMode.md`
+**Related**: [[065-concisemode-caveman-skill-and-output-distillation]], `config.yaml`, `docs/practices/ConciseMode.md`, `internal/markdown`
 
 ---
 
-## 1. Problem
+## 1. Problem & Architectural Context
 
-Ticket 065's title calls this the "Caveman **Skill**," and it's closed. What actually shipped is
-`docs/practices/ConciseMode.md` — a passive reference doc, registered the same way as `Go.md` or
-`Git.md`, surfaced only as a one-line hint in `AGENTS.md`/`CLAUDE.md`'s bundled conventions block
-when a project opts in via `harnez init --docs concise-mode`.
+`docs/practices/ConciseMode.md` defines 3 tiers of output terseness (Lite, Standard, Ultra), but operates purely as a passive reference doc. In active agent sessions, two distinct execution scopes exist:
 
-This is **not** a real Skill in the sense `config.yaml`'s actual `skills:` mechanism produces (see
-e.g. `evergreen`, `story`, `grilling` — each gets a generated `SKILL.md` installed to
-`~/.claude/skills/<name>/`, invocable as `/name`). There is no `/concise-mode` command, no
-selectable tier, no enforcement — just a hint an agent may or may not act on, identical in
-mechanism to every other convention doc already in this repo.
+1. **Active LLM Session (In-Flight Context)**:
+   Agent harnesses (Claude Code, Antigravity, etc.) load `AGENTS.md` / system prompts only at session startup. Modifying disk files alone does NOT steer an already-running parent session because the LLM context is not refreshed mid-flight.
+2. **Descendant Subagents & Future Sessions (Disk State)**:
+   Spawned subagents (researchers, reviewers, workers) and subsequent sessions read `AGENTS.md` directly from disk on initialization.
 
-This gap was flagged mid-session when the user asked whether restarting a session with the doc
-newly wired in would make the agent "adhere to" ConciseMode — the honest answer was no, not
-reliably, because nothing about the mechanism enforces it. That answer is not recorded anywhere
-except this ticket.
+To switch operational tiers seamlessly mid-session (e.g. typing `!harnez mode std` or invoking `/mode std`), the harness must satisfy **both** scopes simultaneously.
 
-## 2. What "Real" Would Look Like
+---
 
-- Register under `config.yaml`'s `skills:` list with a generated `SKILL.md`, invocable via
-  `/concise-mode <lite|standard|ultra>` (or similar), so a user/agent can explicitly select a tier
-  for a session rather than hoping a hint gets noticed.
-- Decide whether tier selection should persist per-session, or be a one-shot instruction — open
-  design question, not resolved here.
+## 2. Dual-Mechanism Architecture
 
-## 3. Implementation & Verification Plan
+When `harnez mode <tier>` (or `harnez concise <tier>`) is executed:
 
-1. Design the skill invocation shape (flags/args for tier selection) — needs a decision, not
-   assumed here.
-2. Add a `skills:` entry in `config.yaml` plus the generated `SKILL.md` content (reuse
-   `docs/practices/ConciseMode.md`'s tier definitions as the source of truth, don't duplicate them).
-3. Verify via `harnez apply` + a real session restart that `/concise-mode` actually appears and
-   measurably changes response style — not just that the file was written.
+### A. Immediate In-Flight Context Directive (Stdout)
+Because shell escapes and tool commands inject their stdout directly into the ongoing conversation turn, the command prints an unambiguous, high-priority directive block to stdout:
+```
+[HARNEZ DIRECTIVE: Operational mode switched to Concise Standard (Level 2).
+- Strip conversational filler, pleasantries, and connective narrative.
+- Use dense telegraphic fragments: Action -> Finding -> Patch.
+- Core invariant: preserve all code, diffs, tool parameters, and command syntax 100% verbatim.]
+```
+The active model reads this tool output in its immediate context window and shifts tone for the next turn.
+
+### B. Persistent AGENTS.md Section Injection (Disk)
+The command uses `internal/markdown.Apply()` to update a managed section in `./AGENTS.md`:
+```markdown
+<!-- harnez:begin Concise Mode -->
+Operate at Concise Standard (Level 2) (@docs/practices/ConciseMode.md).
+<!-- harnez:end Concise Mode -->
+```
+If tier is `off` or `default`, the section is removed or set to default. All newly spawned subagents (`research`, `self`, `reviewer`) read `AGENTS.md` upon spawning and inherit the tier automatically.
+
+---
+
+## 3. Command Specification
+
+- **Command Syntax**: `harnez mode <tier>` or `harnez concise <tier>`
+- **Tier Options**:
+  - `lite` / `1` — Level 1: Concise Lite (Professional Terse, no fluff, complete sentences)
+  - `std` / `standard` / `2` — Level 2: Concise Standard (Telegraphic fragments, zero filler)
+  - `ultra` / `3` — Level 3: Concise Ultra (Diffs/status only, zero narrative)
+  - `off` / `reset` / `default` — Remove the concise mode directive section from `AGENTS.md`
+- **Flags**:
+  - `--quiet` / `-q`: Suppress stdout directive (file update only)
+  - `--file` / `-f`: Path to AGENTS.md (default: `./AGENTS.md`)
+  - `--dry-run`: Display what would be printed and changed without writing disk
+
+---
+
+## 4. Implementation & Verification Plan
+
+1. **Internal Logic (`internal/mode` or `internal/claude`)**:
+   - Implement tier resolution and directive mapping.
+   - Wire `markdown.Apply` to inject/update `<!-- harnez:begin Concise Mode -->` in `AGENTS.md`.
+2. **CLI Registration (`cmd/harnez/main.go`)**:
+   - Add `modeCmd` and `conciseCmd` with subcommands / arguments for `lite`, `std`, `ultra`, `off`.
+3. **Skill & Slash Command Registration**:
+   - Add `/mode` and `/concise-mode` in `commands/` and `config.yaml` (`skills:`).
+4. **Unit & Integration Tests**:
+   - Test CLI argument parsing and error handling for unknown tiers.
+   - Test `AGENTS.md` section addition, replacement across tiers, and clean removal on `off`.
+   - Test stdout output formatting for LLM steering.
+5. **End-to-End Verification**:
+   - Run `make install` and verify in an active terminal session.

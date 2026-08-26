@@ -383,7 +383,7 @@ func main() {
 	}
 	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
 
-	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, initCmd, assessCmd, newDistillCmd())
+	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, initCmd, assessCmd, newDistillCmd(), newModeCmd())
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}

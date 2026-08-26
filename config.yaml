@@ -144,6 +144,10 @@ commands:
     description: "Execute a lean fresh-handoff sprint (Goal Handoff -> Autonomous Dev -> Inline Review -> Hygiene)"
     file: commands/fresh-sprint.md
 
+  - name: mode
+    description: "Switch ConciseMode terseness level (lite, std, ultra, off) and sync AGENTS.md"
+    file: commands/mode.md
+
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
 prime_agent_target: ~/.prime/agent
@@ -168,6 +172,10 @@ skills:
   - name: fresh-sprint
     description: "Execute a lean fresh-handoff sprint (Goal Handoff -> Autonomous Dev -> Inline Review -> Hygiene)"
     file: commands/fresh-sprint.md
+
+  - name: mode
+    description: "Switch ConciseMode terseness level (lite, std, ultra, off) and sync AGENTS.md"
+    file: commands/mode.md
 
 agents_md:
   # config for local md file
@@ -200,6 +208,7 @@ agents_md:
   local:
     target: AGENTS.md
     symlink: CLAUDE.md
+    template: docs/templates/AGENTS.md
     # Language Conventions section is generated dynamically from -l flags
 
   # available language docs — always installed to ~/.claude/docs/ on apply
@@ -319,7 +328,8 @@ agents_md:
     concise-mode:
       name: "ConciseMode Practices"
       ref: "@docs/ConciseMode.md"
-      hint: "3 graded terseness tiers (Lite, Standard, Ultra); code/diffs/commands always verbatim"
+      hint: |
+        3 graded terseness tiers (Lite, Standard, Ultra); code/diffs/commands always verbatim
       source: docs/practices/ConciseMode.md
       target: ~/.claude/docs/ConciseMode.md
       local: ./docs/ConciseMode.md
