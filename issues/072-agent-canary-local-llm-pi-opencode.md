@@ -1,6 +1,6 @@
 # 072 — Agent Canary Container: Pi + OpenCode Against Local `lmcoder` Backend
 
-**Status**: Open — shared container and deterministic static canary implemented; live local proxy run pending
+**Status**: Closed — live local Pi/OpenCode liveness verified; hook-fire probe inconclusive, tracked by [[070-cross-agent-distill-autopipe-hook-agy-codex-pi-opencode]]
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics & UI Standards
@@ -73,3 +73,38 @@ lmcoder proxy --insecure --backend-host 127.0.0.1 --backend-port 8737 --listen-p
 scripts/agent-canary/run.sh pi
 scripts/agent-canary/run.sh opencode
 ```
+
+Live local verification completed 2026-08-27:
+
+- Initial port/process check found only the pre-existing `lmcoder proxy --insecure --listen-port
+  8735` on PID 711859. Ports 8736 and 8737 were free and used for this canary.
+- `make vendor-llama` was required in `../lmcoder` because the pinned `llama-server` binary was
+  missing. This downloaded `llama-b10590-bin-ubuntu-vulkan-x64.tar.gz` and installed
+  `../lmcoder/.vendor/llama.cpp/b10590/llama-server`.
+- `qwen2.5-0.5b-instruct-q4` was not cached. `lmcoder start` downloaded only that configured tiny
+  GGUF to `~/.cache/llama-canary/models/qwen2.5-0.5b-instruct-q4_k_m.gguf`.
+- Backend start from the `harnez` working directory needed an explicit absolute `--server
+  /home/uwe/projects/lmcoder/.vendor/llama.cpp/b10590/llama-server`; otherwise `lmcoder start`
+  looked for `llama-server` relative to the current project.
+- Dedicated local backend: `lmcoder serve` PID 1115792 and `llama-server` PID 1115799 on port 8737,
+  using `--ctx-size 16384`.
+- Dedicated local proxy: `lmcoder proxy` PID 1113790 on port 8736, forwarding to
+  `127.0.0.1:8737`. The existing 8735 proxy was not touched.
+- `curl http://127.0.0.1:8736/v1/models` returned the local
+  `qwen2.5-0.5b-instruct-q4_k_m.gguf` model through the dedicated proxy.
+- `scripts/agent-canary/run.sh pi` returned `PONG`.
+- `scripts/agent-canary/run.sh opencode` initially looped on
+  `request (91xx-92xx tokens) exceeds the available context size (8192 tokens)`. The canary
+  container had to be stopped with `podman stop`, which escalated to SIGKILL after SIGTERM did not
+  stop it within 10 seconds.
+- Restarting the same tiny model with `--ctx-size 16384` fixed OpenCode liveness; `timeout 120s
+  scripts/agent-canary/run.sh opencode` returned `PONG`.
+- `scripts/agent-canary/run.sh static` passed after rebuilding the image. This proves `harnez
+  apply` installs both adapters in the container and that `HARNEZ_DISTILL_AUTOPIPE=true harnez
+  distill hook` rewrites a representative Bash command.
+- Live hook firing was not conclusively observed. A bounded OpenCode probe with
+  `HARNEZ_DISTILL_AUTOPIPE=true`, `--auto`, `--print-logs`, and a `git status` prompt loaded the
+  canary config and reached the model, but the 0.5B model emitted a `task` JSON blob rather than
+  executing a shell tool. A bounded Pi probe with only `bash` enabled returned `DONE` without a
+  visible tool transcript. Treat liveness as verified here; keep issue 070 open for a stronger
+  tool-call canary or a more capable local model when desired.

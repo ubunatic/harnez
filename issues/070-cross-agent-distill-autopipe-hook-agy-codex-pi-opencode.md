@@ -1,6 +1,6 @@
 # 070 — Cross-Agent `distill` Auto-Pipe Hook: AGY, Codex, Pi, OpenCode
 
-**Status**: Open — Pi/OpenCode adapters implemented; live CLI canary pending [[072-agent-canary-local-llm-pi-opencode]]
+**Status**: Open — Pi/OpenCode adapters implemented; live liveness verified in [[072-agent-canary-local-llm-pi-opencode]], hook firing still needs a stronger tool-call canary
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Observability & Token Efficiency
@@ -133,5 +133,9 @@ First buildable phase implemented:
 - Unit/integration coverage verifies target expansion, adapter content, apply idempotency, and
   `harnez status` visibility.
 
-Live Pi/OpenCode CLI hook firing was not verified in this phase; issue 072 owns that containerized
-canary run.
+Live local Pi/OpenCode liveness was verified in issue 072 against `qwen2.5-0.5b-instruct-q4` through
+a dedicated local `lmcoder` proxy. That run did not conclusively prove hook firing: OpenCode loaded
+the canary config but the tiny model emitted a non-shell `task` JSON blob for a `git status` prompt,
+and Pi returned without an observable tool transcript. A future pass should use a deterministic
+tool-call fixture or a more capable small local model to prove the `tool_call` /
+`tool.execute.before` rewrite path end-to-end.
