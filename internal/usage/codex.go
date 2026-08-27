@@ -45,24 +45,25 @@ func decodeJWTPayload(token string) (map[string]any, error) {
 	return claims, nil
 }
 
+// CodexRateWindow models one rate-limit window (primary or secondary) in the
+// wham/usage response. Codex reports a short session window (typically
+// 5-hour) as primary and a rolling weekly window as secondary, but the
+// mapping is done by LimitWindowSeconds rather than assumed from position.
+type CodexRateWindow struct {
+	UsedPercent        float64 `json:"used_percent"`
+	LimitWindowSeconds int64   `json:"limit_window_seconds"`
+	ResetAfterSeconds  int64   `json:"reset_after_seconds"`
+	ResetAt            int64   `json:"reset_at"`
+}
+
 // CodexWhamUsageResponse models GET https://chatgpt.com/backend-api/wham/usage
 type CodexWhamUsageResponse struct {
 	PlanType  string `json:"plan_type"`
 	RateLimit *struct {
-		Allowed       bool `json:"allowed"`
-		LimitReached  bool `json:"limit_reached"`
-		PrimaryWindow *struct {
-			UsedPercent        float64 `json:"used_percent"`
-			LimitWindowSeconds int64   `json:"limit_window_seconds"`
-			ResetAfterSeconds  int64   `json:"reset_after_seconds"`
-			ResetAt            int64   `json:"reset_at"`
-		} `json:"primary_window"`
-		SecondaryWindow *struct {
-			UsedPercent        float64 `json:"used_percent"`
-			LimitWindowSeconds int64   `json:"limit_window_seconds"`
-			ResetAfterSeconds  int64   `json:"reset_after_seconds"`
-			ResetAt            int64   `json:"reset_at"`
-		} `json:"secondary_window"`
+		Allowed         bool             `json:"allowed"`
+		LimitReached    bool             `json:"limit_reached"`
+		PrimaryWindow   *CodexRateWindow `json:"primary_window"`
+		SecondaryWindow *CodexRateWindow `json:"secondary_window"`
 	} `json:"rate_limit"`
 	Credits *struct {
 		HasCredits          bool   `json:"has_credits"`
@@ -70,6 +71,39 @@ type CodexWhamUsageResponse struct {
 		OverageLimitReached bool   `json:"overage_limit_reached"`
 		Balance             string `json:"balance"`
 	} `json:"credits"`
+}
+
+// buildCodexQuotaWindow converts one wham rate-limit window into a QuotaWindow,
+// naming it "Weekly" for windows of a day or longer and "N-Hour" otherwise.
+func buildCodexQuotaWindow(pw *CodexRateWindow, now time.Time) QuotaWindow {
+	usedPct := pw.UsedPercent
+	remPct := 100.0 - usedPct
+	if remPct < 0 {
+		remPct = 0
+	}
+
+	windowName := "Weekly"
+	if pw.LimitWindowSeconds > 0 && pw.LimitWindowSeconds < 86400 {
+		windowName = fmt.Sprintf("%d-Hour", pw.LimitWindowSeconds/3600)
+	}
+
+	qw := QuotaWindow{
+		Name:             windowName,
+		UsedPercent:      usedPct,
+		RemainingPercent: remPct,
+	}
+	if pw.ResetAt > 0 {
+		t := time.Unix(pw.ResetAt, 0)
+		qw.ResetAt = &t
+		if t.After(now) {
+			qw.DurationLeft = t.Sub(now)
+		}
+	} else if pw.ResetAfterSeconds > 0 {
+		t := now.Add(time.Duration(pw.ResetAfterSeconds) * time.Second)
+		qw.ResetAt = &t
+		qw.DurationLeft = time.Duration(pw.ResetAfterSeconds) * time.Second
+	}
+	return qw
 }
 
 // CollectCodex inspects ~/.codex for auth status, plan tier, active model config, and queries live rate limits when online.
@@ -197,36 +231,18 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 					} else {
 						usage.Sources = append(usage.Sources, "chatgpt.com/backend-api/wham/usage")
 						now := time.Now()
-						if whamUsage.RateLimit != nil && whamUsage.RateLimit.PrimaryWindow != nil {
-							pw := whamUsage.RateLimit.PrimaryWindow
-							usedPct := pw.UsedPercent
-							remPct := 100.0 - usedPct
-							if remPct < 0 {
-								remPct = 0
-							}
-
-							windowName := "Weekly"
-							if pw.LimitWindowSeconds > 0 && pw.LimitWindowSeconds < 86400 {
-								windowName = fmt.Sprintf("%d-Hour", pw.LimitWindowSeconds/3600)
-							}
-
-							qw := QuotaWindow{
-								Name:             windowName,
-								UsedPercent:      usedPct,
-								RemainingPercent: remPct,
-							}
-							if pw.ResetAt > 0 {
-								t := time.Unix(pw.ResetAt, 0)
-								qw.ResetAt = &t
-								if t.After(now) {
-									qw.DurationLeft = t.Sub(now)
+						if whamUsage.RateLimit != nil {
+							for _, pw := range []*CodexRateWindow{whamUsage.RateLimit.PrimaryWindow, whamUsage.RateLimit.SecondaryWindow} {
+								if pw == nil {
+									continue
 								}
-							} else if pw.ResetAfterSeconds > 0 {
-								t := now.Add(time.Duration(pw.ResetAfterSeconds) * time.Second)
-								qw.ResetAt = &t
-								qw.DurationLeft = time.Duration(pw.ResetAfterSeconds) * time.Second
+								qw := buildCodexQuotaWindow(pw, now)
+								if qw.Name == "Weekly" {
+									usage.Weekly = &qw
+								} else if usage.Session == nil {
+									usage.Session = &qw
+								}
 							}
-							usage.Weekly = &qw
 						}
 
 						if whamUsage.PlanType != "" {
