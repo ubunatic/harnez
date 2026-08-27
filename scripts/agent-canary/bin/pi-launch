@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+proxy_port="${HARNEZ_AGENT_CANARY_PROXY_PORT:-8736}"
+base_url="${HARNEZ_AGENT_CANARY_BASE_URL:-http://host.containers.internal:${proxy_port}/v1}"
+context_window="${HARNEZ_AGENT_CANARY_CONTEXT_WINDOW:-8192}"
+
+export PI_CODING_AGENT_DIR="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
+export PI_CODING_AGENT_SESSION_DIR="${PI_CODING_AGENT_SESSION_DIR:-${HOME}/.pi/sessions}"
+
+mkdir -p "${PI_CODING_AGENT_DIR}" "${PI_CODING_AGENT_SESSION_DIR}"
+sed "s#__BASE_URL__#${base_url}#g; s#__CONTEXT_WINDOW__#${context_window}#g" /etc/harnez-agent-canary/pi-models.json.template > "${PI_CODING_AGENT_DIR}/models.json"
+
+exec pi "$@"

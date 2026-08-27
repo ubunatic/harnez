@@ -1,0 +1,16 @@
+{
+  "providers": {
+    "llamacpp": {
+      "baseUrl": "__BASE_URL__",
+      "api": "openai-completions",
+      "apiKey": "canary",
+      "models": [
+        {
+          "id": "local-model",
+          "contextWindow": __CONTEXT_WINDOW__,
+          "input": ["text"]
+        }
+      ]
+    }
+  }
+}

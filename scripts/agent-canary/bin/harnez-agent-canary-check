@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+mkdir -p "${HOME}" /tmp/harnez-target
+
+harnez apply -c /work/config.yaml -t /tmp/harnez-target
+harnez status -c /work/config.yaml -t /tmp/harnez-target
+
+printf '%s\n' '{"tool_name":"Bash","tool_input":{"command":"go test ./... -v"}}' |
+  HARNEZ_DISTILL_AUTOPIPE=true harnez distill hook
+
+test -f "${HOME}/.pi/agent/extensions/harnez-distill.ts"
+test -f "${HOME}/.config/opencode/plugins/harnez-distill.ts"
+
+opencode-launch --help >/dev/null
+pi-launch --help >/dev/null
+
+printf '%s\n' "harnez agent-canary static check passed"

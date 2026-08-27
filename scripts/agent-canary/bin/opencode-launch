@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+proxy_port="${HARNEZ_AGENT_CANARY_PROXY_PORT:-8736}"
+base_url="${HARNEZ_AGENT_CANARY_BASE_URL:-http://host.containers.internal:${proxy_port}/v1}"
+config_home="${XDG_CONFIG_HOME:-${HOME}/.config}"
+config_dir="${config_home}/opencode"
+
+mkdir -p "${config_dir}" "${XDG_DATA_HOME:-${HOME}/.local/share}" "${XDG_CACHE_HOME:-${HOME}/.cache}" "${XDG_STATE_HOME:-${HOME}/.local/state}"
+sed "s#__BASE_URL__#${base_url}#g" /etc/harnez-agent-canary/opencode.json.template > "${config_dir}/opencode.json"
+
+exec opencode "$@"

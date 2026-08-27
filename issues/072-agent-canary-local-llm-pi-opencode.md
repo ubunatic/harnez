@@ -1,6 +1,6 @@
 # 072 — Agent Canary Container: Pi + OpenCode Against Local `lmcoder` Backend
 
-**Status**: Open
+**Status**: Open — shared container and deterministic static canary implemented; live local proxy run pending
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics & UI Standards
@@ -42,3 +42,34 @@ No credentials needed — both tools point at the local backend, not a real clou
 5. File any `lmcoder start`/`lmcoder proxy` friction discovered along the way as `lmcoder` issues,
    not local workarounds (per issue 071 §3).
 6. Verify with a live run against the real installed-in-container CLIs, plus `harnez status`.
+
+## 3. Implementation Notes
+
+First buildable phase implemented:
+
+- `scripts/agent-canary/Containerfile` is one shared `node:22-slim` image for Pi and OpenCode.
+- The image installs `git`, `git-lfs`, `ca-certificates`, `opencode-ai`, and
+  `@earendil-works/pi-coding-agent` in cache-friendly layers; Pi uses `--ignore-scripts`, matching
+  `lmcoder` prior art.
+- The current `harnez` binary is built in a Go builder stage and copied into the runtime image.
+- Runtime launchers generate Pi/OpenCode configs from templates so the canary can point at a
+  dedicated local `lmcoder proxy` port without rebuilding the image.
+- Default live canary model is `qwen2.5-0.5b-instruct-q4`, selected from `../lmcoder/spec/models.yaml`
+  as the tiny default smoke-test model suitable for the user's 8 GB VRAM constraint.
+- Default local backend/proxy ports are `8737`/`8736`; do not use the default `8735` proxy or any
+  `um760`-backed proxy for this ticket.
+
+Deterministic verification implemented:
+
+- `make agent-canary-static` builds the image and runs `harnez apply`, `harnez status`,
+  `harnez distill hook`, Pi/OpenCode adapter file existence checks, and Pi/OpenCode CLI help checks
+  fully inside the container.
+
+Live verification still requires a local-only backend/proxy pair:
+
+```bash
+lmcoder start --model qwen2.5-0.5b-instruct-q4 --port 8737 --log-file /tmp/harnez-agent-canary-lmcoder.log
+lmcoder proxy --insecure --backend-host 127.0.0.1 --backend-port 8737 --listen-port 8736
+scripts/agent-canary/run.sh pi
+scripts/agent-canary/run.sh opencode
+```
