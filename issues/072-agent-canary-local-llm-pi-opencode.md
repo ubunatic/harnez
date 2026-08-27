@@ -108,3 +108,24 @@ Live local verification completed 2026-08-27:
   executing a shell tool. A bounded Pi probe with only `bash` enabled returned `DONE` without a
   visible tool transcript. Treat liveness as verified here; keep issue 070 open for a stronger
   tool-call canary or a more capable local model when desired.
+
+Additional local model verification completed 2026-08-27:
+
+- Target model `qwen3-4b-instruct-2507-q4` was initially present in `../lmcoder/spec/models.yaml`
+  but not cached.
+- `lmcoder start --model qwen3-4b-instruct-2507-q4 --ctx-size 16384 --port 8737` downloaded
+  `Qwen3-4B-Instruct-2507-Q4_K_M.gguf` to `~/.cache/llama-canary/models/` and loaded it
+  successfully through the vendored `llama-server`.
+- Dedicated local backend was `lmcoder serve` PID 1142586 with `llama-server` PID 1146133 on port
+  8737. Dedicated local proxy was `lmcoder proxy` PID 1146416 on port 8736, forwarding to
+  `127.0.0.1:8737`. The existing proxy on port 8735 was not touched.
+- Loaded idle memory observed through `lmcoder status`: about 6.5GiB / 8.0GiB VRAM and 436-450MiB /
+  11.6GiB GTT. During Pi/OpenCode generation the GPU reached 99% busy while VRAM stayed around
+  6.5GiB and GTT stayed below 0.5GiB.
+- `HARNEZ_AGENT_CANARY_MODEL=qwen3-4b-instruct-2507-q4 scripts/agent-canary/run.sh pi` returned
+  `PONG`.
+- `HARNEZ_AGENT_CANARY_MODEL=qwen3-4b-instruct-2507-q4 scripts/agent-canary/run.sh opencode`
+  returned `PONG`.
+- Live hook firing was still not observed by this pass because the canaries were liveness-only
+  `PONG` prompts and did not force a shell tool call. Keep issue 070 open for a deterministic
+  Pi/OpenCode tool-call fixture.

@@ -139,3 +139,8 @@ the canary config but the tiny model emitted a non-shell `task` JSON blob for a 
 and Pi returned without an observable tool transcript. A future pass should use a deterministic
 tool-call fixture or a more capable small local model to prove the `tool_call` /
 `tool.execute.before` rewrite path end-to-end.
+
+A later 2026-08-27 local-only liveness pass with the newly added
+`qwen3-4b-instruct-2507-q4` model also returned `PONG` from both Pi and OpenCode via dedicated
+ports 8737/8736. That proves the 4B model can serve these canaries on the 8GB VRAM AMD APU, but
+it still does not prove hook firing because the canary prompts did not force shell tool execution.
