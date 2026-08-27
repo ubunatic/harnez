@@ -10,9 +10,6 @@ Adhere to the following conventions.
 
 Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
-- Website Building Rules @docs/Website.md,
-  no GitHub assumptions/octocats, match sibling website/ dirs or ask, honest/proven claims only,
-  Why section required, relative links (subpage-hosted), static/no-CDN, opt-in JS demos only
 - Go/Golang @docs/Go.md,
   Modern Go, avoid deps but use Cobra, add tests
 - Bash/Shell @docs/Bash.md,
@@ -34,6 +31,9 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
 - Issue Tracking Practices @docs/IssueTracking.md,
   P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
+- Website Building Rules @docs/Website.md,
+  no GitHub assumptions/octocats, match sibling website/ dirs or ask, honest/proven claims only,
+  Why section required, relative links (subpage-hosted), static/no-CDN, opt-in JS demos only
 <!-- harnez:end Language Conventions -->
 
 ## CLI command scope

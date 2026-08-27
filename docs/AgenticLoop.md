@@ -7,6 +7,11 @@ weight: 40
 
 This document establishes the canonical practice for orchestrating multi-agent development loops. It defines the lifecycle, synchronization invariants, role archetypes, and quality gates required to conduct rapid, collision-free agentic sprints.
 
+Capability names vary by agent harness. In the examples below, repository search
+means tools such as `grep_search`, bounded reads mean line-range reads,
+background-task inspection means commands such as `manage_task list`, and
+subagent lifecycle control means commands such as `manage_subagents kill`.
+
 ---
 
 ## 1. Core Philosophy & Invariants
@@ -56,7 +61,7 @@ Agentic software engineering scales effectively when concurrency is structured a
                           |
                           v
        Phase 4: Process & Subagent Hygiene
-         (manage_task list/kill, drain)
+         (inspect, drain, and terminate tasks)
                           |
                           v
        Phase 5: Flow Quality Retrospective
@@ -67,7 +72,7 @@ Agentic software engineering scales effectively when concurrency is structured a
 - **Goal**: Rapidly audit requirements, discover existing implementations, identify affected files, and evaluate technical feasibility without code collisions.
 - **Mechanics**:
   - The Host Orchestrator spawns concurrent read-only advisor subagents (e.g. one per ticket or feature area).
-  - Advisors perform deep grep/read searches, evaluate whether requirements are already partially or fully met, and identify exact line ranges for changes.
+  - Advisors perform focused repository searches and bounded reads, evaluate whether requirements are already partially or fully met, and identify exact line ranges for changes.
   - Advisors return concise findings and structured implementation plans to the Host.
 - **Kickoff & Commit Policy**:
   - Establish commit authority upfront. If operating under an ask-first harness, ask the user during kickoff for permission to commit local verified checkpoints proactively so the user can walk away without returning to uncommitted progress.
@@ -99,9 +104,9 @@ Agentic software engineering scales effectively when concurrency is structured a
 ### Phase 4: Process & Subagent Hygiene (Teardown & Drain)
 - **Goal**: Prevent zombie accumulation, orphan processes, and stuck background tasks.
 - **Mechanics**:
-  - Inspect running background tasks (`manage_task list`).
+  - Inspect running background tasks with the harness's task-management capability.
   - Explicitly kill or drain completed, idle, or lingering background jobs, schedule timers, and watch subprocesses.
-  - Terminate child subagents (`manage_subagents kill / kill_all`) that have finished their tasks.
+  - Terminate child subagents with the harness's subagent lifecycle controls after they finish.
   - Ensure the host and system state is pristine.
 
 ### Phase 5: Agentic Flow Quality Retrospective (Learning Capture)
@@ -174,7 +179,7 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 | Role | Permitted Tools & Capabilities | Primary Responsibilities | Lifecycle |
 |---|---|---|---|
 | **Host Orchestrator** | Full Toolset (Subagents, Read, Write, Exec, Tasks) | Coordinates overall plan, sequences dev work, manages subagents, interacts with user | Persistent (lives throughout session) |
-| **Ephemeral Advisor** | Read-Only Tools (grep, find, read, url) | Audits tickets, performs feasibility research, identifies code paths | Ephemeral (terminated after Phase 1) |
+| **Ephemeral Advisor** | Read-only repository search and retrieval | Audits tickets, performs feasibility research, identifies code paths | Ephemeral (terminated after Phase 1) |
 | **Dev Worker** | Write Tools, Compiler, Test Runner | Implements concrete changes, writes unit tests, ensures compilation | Single-threaded per workspace |
 | **Independent Reviewer** | Read-Only Tools, Diff Inspection | Audits git diff against acceptance criteria, verifies test rigor | Ephemeral (spawned in Phase 3) |
 
