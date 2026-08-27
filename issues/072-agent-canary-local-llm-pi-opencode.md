@@ -129,3 +129,11 @@ Additional local model verification completed 2026-08-27:
 - Live hook firing was still not observed by this pass because the canaries were liveness-only
   `PONG` prompts and did not force a shell tool call. Keep issue 070 open for a deterministic
   Pi/OpenCode tool-call fixture.
+
+Postscript 2026-08-27:
+
+- Issue 070 now includes deterministic Pi/OpenCode hook canaries:
+  `scripts/agent-canary/run.sh pi-hook` and `scripts/agent-canary/run.sh opencode-hook`.
+- Those canaries prove the generated adapter hook callbacks fire and mutate
+  `go test ./... -v` to `set -o pipefail; ( go test ./... -v ) 2>&1 | harnez distill`, with
+  opt-in JSONL evidence via `HARNEZ_DISTILL_CANARY_LOG`.

@@ -38,11 +38,13 @@ COPY scripts/agent-canary/configs/pi-models.json.template /etc/harnez-agent-cana
 COPY scripts/agent-canary/bin/opencode-launch /usr/local/bin/opencode-launch
 COPY scripts/agent-canary/bin/pi-launch /usr/local/bin/pi-launch
 COPY scripts/agent-canary/bin/harnez-agent-canary-check /usr/local/bin/harnez-agent-canary-check
+COPY scripts/agent-canary/bin/harnez-agent-canary-hook-check /usr/local/bin/harnez-agent-canary-hook-check
 
 RUN chmod 755 /usr/local/bin/harnez \
       /usr/local/bin/opencode-launch \
       /usr/local/bin/pi-launch \
       /usr/local/bin/harnez-agent-canary-check \
+      /usr/local/bin/harnez-agent-canary-hook-check \
     && chmod 755 /etc/harnez-agent-canary \
     && chmod 644 /etc/harnez-agent-canary/*.template
 

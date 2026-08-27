@@ -1,6 +1,6 @@
 # 070 — Cross-Agent `distill` Auto-Pipe Hook: AGY, Codex, Pi, OpenCode
 
-**Status**: Open — Pi/OpenCode adapters implemented; live liveness verified in [[072-agent-canary-local-llm-pi-opencode]], hook firing still needs a stronger tool-call canary
+**Status**: Closed — resolved with deterministic Pi/OpenCode hook canaries and local-model liveness evidence
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Observability & Token Efficiency
@@ -144,3 +144,27 @@ A later 2026-08-27 local-only liveness pass with the newly added
 `qwen3-4b-instruct-2507-q4` model also returned `PONG` from both Pi and OpenCode via dedicated
 ports 8737/8736. That proves the 4B model can serve these canaries on the 8GB VRAM AMD APU, but
 it still does not prove hook firing because the canary prompts did not force shell tool execution.
+
+Final 2026-08-27 deterministic hook proof implemented:
+
+- Pi/OpenCode adapters now support canary-scoped proof logging through
+  `HARNEZ_DISTILL_CANARY_LOG`. The variable is opt-in; normal users get no log writes or output.
+- `scripts/agent-canary/run.sh pi-hook` installs the managed Pi adapter in the canary container,
+  imports the generated TypeScript extension, fires its registered `tool_call` callback with
+  `toolName: "bash"` and `command: "go test ./... -v"`, and asserts the command mutates to
+  `set -o pipefail; ( go test ./... -v ) 2>&1 | harnez distill`.
+- `scripts/agent-canary/run.sh opencode-hook` installs the managed OpenCode adapter in the canary
+  container, imports the generated TypeScript plugin, fires its `tool.execute.before` callback with
+  `tool: "bash"` and the same command, and asserts the same mutation.
+- Both hook canaries also assert a single JSONL proof record with `agent`, `original`, `updated`,
+  and `autopipe` fields. Passing proof output:
+  - Pi: `proof agent=pi`, `proof original=go test ./... -v`,
+    `proof updated=set -o pipefail; ( go test ./... -v ) 2>&1 | harnez distill`
+  - OpenCode: `proof agent=opencode`, `proof original=go test ./... -v`,
+    `proof updated=set -o pipefail; ( go test ./... -v ) 2>&1 | harnez distill`
+- Verification passed with `go test ./...`, `make install`, `scripts/agent-canary/run.sh static`,
+  `scripts/agent-canary/run.sh pi-hook`, and `scripts/agent-canary/run.sh opencode-hook`.
+
+This proves the live generated Pi and OpenCode adapter hook callbacks fire and rewrite a Bash tool
+command through `harnez distill hook`. It deliberately avoids treating model-driven `PONG` prompts
+as hook evidence.

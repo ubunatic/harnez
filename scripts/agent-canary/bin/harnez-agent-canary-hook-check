@@ -1,0 +1,95 @@
+#!/bin/sh
+set -eu
+
+target="${HARNEZ_AGENT_CANARY_HOOK_TARGET:-}"
+case "${target}" in
+  pi|opencode) ;;
+  *)
+    printf '%s\n' "ERROR: HARNEZ_AGENT_CANARY_HOOK_TARGET must be pi or opencode" >&2
+    exit 2
+    ;;
+esac
+
+mkdir -p "${HOME}" /tmp/harnez-target
+harnez apply -c /work/config.yaml -t /tmp/harnez-target >/dev/null
+
+log_path="/tmp/harnez-distill-${target}-hook-proof.jsonl"
+rm -f "${log_path}"
+export HARNEZ_DISTILL_AUTOPIPE=true
+export HARNEZ_DISTILL_CANARY_LOG="${log_path}"
+export HARNEZ_AGENT_CANARY_HOOK_TARGET="${target}"
+
+node --input-type=module <<'NODE'
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const target = process.env.HARNEZ_AGENT_CANARY_HOOK_TARGET;
+const home = process.env.HOME;
+const logPath = process.env.HARNEZ_DISTILL_CANARY_LOG;
+const original = "go test ./... -v";
+const expected = `set -o pipefail; ( ${original} ) 2>&1 | harnez distill`;
+
+function fail(message) {
+  console.error(message);
+  process.exit(1);
+}
+
+function assertEqual(label, got, want) {
+  if (got !== want) {
+    fail(`${label}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  }
+}
+
+async function runPi() {
+  const adapterPath = join(home, ".pi", "agent", "extensions", "harnez-distill.ts");
+  const adapter = await import(pathToFileURL(adapterPath).href);
+  let handler;
+  await adapter.default({
+    on(name, candidate) {
+      if (name === "tool_call") handler = candidate;
+    },
+  });
+  if (typeof handler !== "function") fail("Pi adapter did not register tool_call handler");
+
+  const event = { toolName: "bash", input: { command: original } };
+  await handler(event, {});
+  assertEqual("Pi rewritten command", event.input.command, expected);
+}
+
+async function runOpenCode() {
+  const adapterPath = join(home, ".config", "opencode", "plugins", "harnez-distill.ts");
+  const adapter = await import(pathToFileURL(adapterPath).href);
+  const plugin = await adapter.HarnezDistillPlugin();
+  const handler = plugin?.["tool.execute.before"];
+  if (typeof handler !== "function") fail("OpenCode adapter did not register tool.execute.before handler");
+
+  const input = { tool: "bash" };
+  const output = { args: { command: original } };
+  await handler(input, output);
+  assertEqual("OpenCode rewritten command", output.args.command, expected);
+}
+
+if (target === "pi") {
+  await runPi();
+} else if (target === "opencode") {
+  await runOpenCode();
+} else {
+  fail(`unknown hook target ${target}`);
+}
+
+if (!existsSync(logPath)) fail(`canary log was not written: ${logPath}`);
+const lines = readFileSync(logPath, "utf8").trim().split("\n").filter(Boolean);
+if (lines.length !== 1) fail(`canary log line count: got ${lines.length}, want 1`);
+
+const proof = JSON.parse(lines[0]);
+assertEqual("proof agent", proof.agent, target);
+assertEqual("proof original", proof.original, original);
+assertEqual("proof updated", proof.updated, expected);
+assertEqual("proof autopipe", proof.autopipe, "true");
+
+console.log(`harnez ${target} hook canary passed`);
+console.log(`proof agent=${proof.agent}`);
+console.log(`proof original=${proof.original}`);
+console.log(`proof updated=${proof.updated}`);
+NODE

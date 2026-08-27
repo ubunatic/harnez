@@ -40,13 +40,16 @@ func TestDistillAdaptersCanBeDisabled(t *testing.T) {
 func TestPiDistillAdapterContent(t *testing.T) {
 	required := []string{
 		`import { spawnSync } from "node:child_process";`,
+		`import { appendFileSync } from "node:fs";`,
 		`import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";`,
 		`HARNEZ_DISTILL_AUTOPIPE`,
+		`HARNEZ_DISTILL_CANARY_LOG`,
 		`spawnSync("harnez", ["distill", "hook"]`,
+		`recordCanaryRewrite(agent, command, updated);`,
 		`tool_name: "Bash"`,
 		`pi.on("tool_call"`,
 		`event.toolName !== "bash"`,
-		`event.input.command = rewriteWithHarnez(event.input.command);`,
+		`event.input.command = rewriteWithHarnez("pi", event.input.command);`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(piDistillAdapter, needle) {
@@ -63,13 +66,16 @@ func TestPiDistillAdapterContent(t *testing.T) {
 func TestOpenCodeDistillAdapterContent(t *testing.T) {
 	required := []string{
 		`import { spawnSync } from "node:child_process";`,
+		`import { appendFileSync } from "node:fs";`,
 		`import type { Plugin } from "@opencode-ai/plugin";`,
 		`HARNEZ_DISTILL_AUTOPIPE`,
+		`HARNEZ_DISTILL_CANARY_LOG`,
 		`spawnSync("harnez", ["distill", "hook"]`,
+		`recordCanaryRewrite(agent, command, updated);`,
 		`tool_name: "Bash"`,
 		`"tool.execute.before"`,
 		`input.tool !== "bash"`,
-		`output.args.command = rewriteWithHarnez(output.args.command);`,
+		`output.args.command = rewriteWithHarnez("opencode", output.args.command);`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(openCodeDistillAdapter, needle) {

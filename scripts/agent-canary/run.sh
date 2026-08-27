@@ -10,7 +10,7 @@ backend_port="${HARNEZ_AGENT_CANARY_BACKEND_PORT:-8737}"
 model="${HARNEZ_AGENT_CANARY_MODEL:-qwen2.5-0.5b-instruct-q4}"
 
 usage() {
-   printf '%s\n' "Usage: scripts/agent-canary/run.sh <build|static|pi|opencode>"
+   printf '%s\n' "Usage: scripts/agent-canary/run.sh <build|static|pi|opencode|pi-hook|opencode-hook>"
    printf '%s\n' ""
    printf '%s\n' "Environment:"
    printf '%s\n' "  HARNEZ_AGENT_CANARY_IMAGE=${image}"
@@ -75,6 +75,15 @@ run_static() {
    podman run "${args[@]}" --entrypoint harnez-agent-canary-check "${image}"
 }
 
+run_hook() {
+   require_podman
+   mapfile -t args < <(container_common_args)
+   podman run "${args[@]}" \
+      -e "HARNEZ_AGENT_CANARY_HOOK_TARGET=${1}" \
+      --entrypoint harnez-agent-canary-hook-check \
+      "${image}"
+}
+
 run_pi() {
    require_podman
    mapfile -t args < <(container_common_args)
@@ -107,6 +116,12 @@ case "${cmd}" in
       ;;
    opencode)
       run_opencode
+      ;;
+   pi-hook)
+      run_hook pi
+      ;;
+   opencode-hook)
+      run_hook opencode
       ;;
    -h|--help|help|"")
       usage
