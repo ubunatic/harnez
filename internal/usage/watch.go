@@ -370,11 +370,12 @@ type watchSections struct {
 	Codex     bool
 	History   bool
 	Processes bool
+	Load      bool
 	Tokens    bool
 }
 
 func defaultWatchSections() watchSections {
-	return watchSections{Claude: true, AGY: true, Codex: true, History: true, Processes: false, Tokens: true}
+	return watchSections{Claude: true, AGY: true, Codex: true, History: true, Processes: false, Load: true, Tokens: true}
 }
 
 // agentVisible reports whether the panel for agentID should currently be drawn.
@@ -429,6 +430,32 @@ func buildProcessesBox(width int, counts *AgentProcessCount) wbox {
 	lines = append(lines, fmt.Sprintf("%d active %s", counts.Total(), procWord))
 	lines = append(lines, fmt.Sprintf("claude: %d  agy: %d  codex: %d", counts.Claude, counts.AGY, counts.Codex))
 
+	return wbox{title: title, lines: lines, width: width}
+}
+
+// buildLoadBox renders a compact panel showing the system CPU load averages.
+func buildLoadBox(width int) wbox {
+	title := "\x1b[1m[L]\x1b[0m Load"
+	load := CurrentCPULoad()
+	if !load.Ok {
+		return wbox{title: title, lines: []string{"\x1b[90mload average unavailable\x1b[0m"}, width: width}
+	}
+
+	lazyPct := "n/a"
+	if load.NumCPU > 0 {
+		lazyPct = fmt.Sprintf("%.0f%%", load.Load1/float64(load.NumCPU)*100)
+	}
+	realPct := "n/a"
+	if load.CPUPercentOk {
+		realPct = fmt.Sprintf("%.0f%%", load.CPUPercent)
+	}
+
+	var lines []string
+	lines = append(lines, fmt.Sprintf("lazy %s · real %s", lazyPct, realPct))
+	lines = append(lines, fmt.Sprintf("avg %.2f  %.2f  %.2f", load.Load1, load.Load5, load.Load15))
+	if load.NumCPU > 0 {
+		lines = append(lines, fmt.Sprintf("%d cores", load.NumCPU))
+	}
 	return wbox{title: title, lines: lines, width: width}
 }
 
@@ -723,6 +750,9 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	if !sec.Processes {
 		hidden = append(hidden, "[P]")
 	}
+	if !sec.Load {
+		hidden = append(hidden, "[L]")
+	}
 	hiddenHint := ""
 	if len(hidden) > 0 {
 		hiddenHint = fmt.Sprintf("   \x1b[90mhidden: %s\x1b[0m", strings.Join(hidden, " "))
@@ -758,6 +788,9 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		totalPanels++
 	}
 	if sec.Processes {
+		totalPanels++
+	}
+	if sec.Load {
 		totalPanels++
 	}
 
@@ -799,6 +832,13 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		if sec.Processes {
 			pBox := buildProcessesBox(boxWidth, opt.ProcCounts)
 			pending = append(pending, renderWBox(pBox))
+			if len(pending) == columns {
+				flushRow()
+			}
+		}
+		if sec.Load {
+			lBox := buildLoadBox(boxWidth)
+			pending = append(pending, renderWBox(lBox))
 			if len(pending) == columns {
 				flushRow()
 			}
@@ -940,6 +980,9 @@ func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, 
 				case 'p', 'P', '6':
 					sec.Processes = !sec.Processes
 					requestRedraw()
+				case 'l', 'L', '7':
+					sec.Load = !sec.Load
+					requestRedraw()
 				case 'r', 'R':
 					if configuredHost != "" {
 						if activeHost == "" {
@@ -1044,4 +1087,3 @@ func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, 
 		}
 	}
 }
-

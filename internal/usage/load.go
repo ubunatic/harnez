@@ -1,0 +1,198 @@
+package usage
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+// CPULoad holds the system load averages, the instantaneous CPU usage, and
+// the core count needed to render the watch grid's Load panel.
+type CPULoad struct {
+	Load1  float64
+	Load5  float64
+	Load15 float64
+	NumCPU int
+	Ok     bool
+
+	// CPUPercent is the fraction of CPU time spent busy (0-100) since the
+	// previous sample, as opposed to Load1/5/15's kernel-smoothed averages.
+	// It is only meaningful once a prior sample exists (see cpuStatCache);
+	// CPUPercentOk reports whether that happened.
+	CPUPercent   float64
+	CPUPercentOk bool
+}
+
+// CurrentCPULoad reads the system load averages and the instantaneous CPU
+// usage. Load averages come from /proc/loadavg, falling back to the
+// `uptime` command where /proc is unavailable (e.g. macOS, containers
+// without procfs). CPU usage is delta-based off /proc/stat and has no
+// non-Linux fallback: CPUPercentOk is false where /proc/stat is missing.
+func CurrentCPULoad() CPULoad {
+	load, err := readLoadavgFromProc("/proc/loadavg")
+	if err != nil {
+		load, err = readLoadavgFromUptime()
+	}
+	if err != nil {
+		load = CPULoad{}
+	} else {
+		load.Ok = true
+	}
+	load.NumCPU = runtime.NumCPU()
+	load.CPUPercent, load.CPUPercentOk = currentCPUPercent()
+	return load
+}
+
+// cpuStatSample is one reading of the aggregate "cpu" line in /proc/stat:
+// cumulative jiffies since boot, split into idle and total.
+type cpuStatSample struct {
+	idle  uint64
+	total uint64
+}
+
+var (
+	cpuStatMu   sync.Mutex
+	lastCPUStat cpuStatSample
+	haveCPUStat bool
+)
+
+// currentCPUPercent reports CPU busy% since the last call, computed from the
+// delta between two /proc/stat samples (btop-style "real" CPU, distinct from
+// the kernel's minute-scale load averages). The first call in a process has
+// no prior sample to diff against, so it takes a second sample after a short
+// sleep to still return an immediate reading; every later call in the same
+// `--watch` process reuses the previous frame's sample instead.
+func currentCPUPercent() (float64, bool) {
+	cur, err := readCPUStatFromProc("/proc/stat")
+	if err != nil {
+		return 0, false
+	}
+
+	cpuStatMu.Lock()
+	prev := lastCPUStat
+	had := haveCPUStat
+	lastCPUStat = cur
+	haveCPUStat = true
+	cpuStatMu.Unlock()
+
+	if !had {
+		time.Sleep(150 * time.Millisecond)
+		cur2, err := readCPUStatFromProc("/proc/stat")
+		if err != nil {
+			return 0, false
+		}
+		cpuStatMu.Lock()
+		lastCPUStat = cur2
+		cpuStatMu.Unlock()
+		return cpuPercentFromSamples(cur, cur2)
+	}
+	return cpuPercentFromSamples(prev, cur)
+}
+
+func cpuPercentFromSamples(prev, cur cpuStatSample) (float64, bool) {
+	totalDelta := cur.total - prev.total
+	if totalDelta == 0 {
+		return 0, false
+	}
+	idleDelta := cur.idle - prev.idle
+	busy := totalDelta - idleDelta
+	return float64(busy) / float64(totalDelta) * 100, true
+}
+
+// readCPUStatFromProc parses the aggregate "cpu  user nice system idle
+// iowait irq softirq steal guest guest_nice" line at the top of
+// /proc/stat. idle covers idle+iowait per the usual convention (e.g. htop).
+func readCPUStatFromProc(path string) (cpuStatSample, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return cpuStatSample{}, err
+	}
+	firstLine := string(data)
+	if idx := strings.IndexByte(firstLine, '\n'); idx >= 0 {
+		firstLine = firstLine[:idx]
+	}
+	fields := strings.Fields(firstLine)
+	if len(fields) < 5 || fields[0] != "cpu" {
+		return cpuStatSample{}, fmt.Errorf("unexpected /proc/stat format: %q", firstLine)
+	}
+
+	var sample cpuStatSample
+	for i, f := range fields[1:] {
+		v, err := strconv.ParseUint(f, 10, 64)
+		if err != nil {
+			return cpuStatSample{}, err
+		}
+		sample.total += v
+		if i == 3 || i == 4 { // idle, iowait
+			sample.idle += v
+		}
+	}
+	return sample, nil
+}
+
+func readLoadavgFromProc(path string) (CPULoad, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return CPULoad{}, err
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) < 3 {
+		return CPULoad{}, fmt.Errorf("unexpected /proc/loadavg format: %q", string(data))
+	}
+	l1, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return CPULoad{}, err
+	}
+	l5, err := strconv.ParseFloat(fields[1], 64)
+	if err != nil {
+		return CPULoad{}, err
+	}
+	l15, err := strconv.ParseFloat(fields[2], 64)
+	if err != nil {
+		return CPULoad{}, err
+	}
+	return CPULoad{Load1: l1, Load5: l5, Load15: l15}, nil
+}
+
+// readLoadavgFromUptime parses the trailing "load averages: 1.23 1.45 1.67"
+// (or "load average:") segment of `uptime` output.
+func readLoadavgFromUptime() (CPULoad, error) {
+	out, err := exec.Command("uptime").Output()
+	if err != nil {
+		return CPULoad{}, err
+	}
+	text := string(out)
+	idx := strings.LastIndex(text, "load average")
+	if idx < 0 {
+		return CPULoad{}, fmt.Errorf("unexpected uptime format: %q", text)
+	}
+	rest := text[idx:]
+	colon := strings.IndexByte(rest, ':')
+	if colon < 0 {
+		return CPULoad{}, fmt.Errorf("unexpected uptime format: %q", text)
+	}
+	fields := strings.FieldsFunc(rest[colon+1:], func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\n' || r == '\t'
+	})
+	if len(fields) < 3 {
+		return CPULoad{}, fmt.Errorf("unexpected uptime format: %q", text)
+	}
+	l1, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return CPULoad{}, err
+	}
+	l5, err := strconv.ParseFloat(fields[1], 64)
+	if err != nil {
+		return CPULoad{}, err
+	}
+	l15, err := strconv.ParseFloat(fields[2], 64)
+	if err != nil {
+		return CPULoad{}, err
+	}
+	return CPULoad{Load1: l1, Load5: l5, Load15: l15}, nil
+}
