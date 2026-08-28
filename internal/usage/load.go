@@ -1,7 +1,6 @@
 package usage
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -332,10 +331,8 @@ type GPU struct {
 	HaveTemp    bool
 
 	// UtilHistory is a short rolling window of recent UtilPercent samples,
-	// oldest first, populated only by the fast AMD sysfs path (cheap enough
-	// to poll every redraw). The rocm-smi fallback leaves this nil since
-	// it's throttled to ~1/s and doesn't have the sample density for a
-	// meaningful history sparkline.
+	// oldest first, populated by the AMD sysfs path (cheap enough to poll
+	// every redraw).
 	UtilHistory []float64
 }
 
@@ -425,65 +422,20 @@ func burstSeedGPUHistory(key, busyPath string) []float64 {
 	return hist
 }
 
-// gpuSubprocessThrottle is the minimum interval between calls to a
-// subprocess-based GPU reader (the rocm-smi fallback). Those cost ~100ms+
-// per call, so a fast redraw tick (e.g. the watch TUI's 1s Load refresh)
-// must not re-exec them every frame; sysfs-based reads are cheap enough
-// (~1-2ms) to need no throttling of their own.
-const gpuSubprocessThrottle = time.Second
-
-// gpuSubprocessCache memoizes one subprocess-based GPU reader's last
-// successful result for gpuSubprocessThrottle, so callers polling faster
-// than that get the cached reading instead of forking again. A failure is
-// never cached: a missing binary fails fast (exec.LookPath, no fork), so
-// there's no cost to retrying it every call.
-type gpuSubprocessCache struct {
-	mu   sync.Mutex
-	gpus []GPU
-	at   time.Time
-}
-
-func (c *gpuSubprocessCache) get(read func() ([]GPU, error)) ([]GPU, error) {
-	c.mu.Lock()
-	if !c.at.IsZero() && time.Since(c.at) < gpuSubprocessThrottle {
-		gpus := c.gpus
-		c.mu.Unlock()
-		return gpus, nil
-	}
-	c.mu.Unlock()
-
-	gpus, err := read()
-	if err != nil {
-		return nil, err
-	}
-	c.mu.Lock()
-	c.gpus, c.at = gpus, time.Now()
-	c.mu.Unlock()
-	return gpus, nil
-}
-
-var rocmSMICache gpuSubprocessCache
-
 // CurrentGPUs probes for AMD GPUs and returns whatever readings are
-// available. AMD is read directly from sysfs (kernel-cached counters, a
-// plain read() per file) rather than shelling out to `rocm-smi`, which
-// forks a subprocess and takes ~100ms+ per call; rocm-smi remains a
-// fallback for AMD systems where sysfs lacks the expected attributes,
-// throttled via gpuSubprocessCache so a fast caller doesn't re-exec it
-// every frame.
-//
-// NVIDIA is deliberately not supported: see
-// docs/studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md.
-// NVIDIA's proprietary driver exposes nothing through the kernel (procfs/
-// sysfs) — the only way to read it is nvidia-smi/NVML, a closed vendor
-// tool, which this project doesn't call. Returns nil if nothing is present
-// or everything fails (e.g. no GPU, an NVIDIA-only system, or an
-// integrated-only system with no sysfs attributes).
+// available, reading directly from sysfs (kernel-cached counters, a plain
+// read() per file) — no subprocess/vendor-tool fallback of any kind. See
+// docs/studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md: this
+// project calls no vendor CLI/SDK for device telemetry (that policy
+// initially removed nvidia-smi but kept rocm-smi as a fallback; rocm-smi
+// was removed in the same pass shortly after, once it was clear the policy
+// should apply uniformly rather than only to NVIDIA). NVIDIA's proprietary
+// driver exposes nothing through procfs/sysfs at all, so there's no
+// kernel-standard path for it. Returns nil if nothing is present or
+// everything fails (e.g. no GPU, an NVIDIA-only system, or an AMD system
+// whose driver doesn't populate the expected sysfs attributes).
 func CurrentGPUs() []GPU {
 	if gpus, err := readAMDSysfs(); err == nil {
-		return gpus
-	}
-	if gpus, err := rocmSMICache.get(readROCmSMI); err == nil {
 		return gpus
 	}
 	return nil
@@ -571,9 +523,9 @@ func readAMDCodenameFromLspci() (string, error) {
 }
 
 // readAMDSysfs reads AMD GPU utilization, VRAM, and temperature straight
-// from the kernel's amdgpu sysfs attributes, avoiding a rocm-smi
-// subprocess. Card enumeration (cardN) and hwmon enumeration (hwmonN) are
-// both driver-assigned at runtime, so both are globbed rather than assumed.
+// from the kernel's amdgpu sysfs attributes, with no subprocess involved.
+// Card enumeration (cardN) and hwmon enumeration (hwmonN) are both
+// driver-assigned at runtime, so both are globbed rather than assumed.
 func readAMDSysfs() ([]GPU, error) {
 	matches, err := filepath.Glob("/sys/class/drm/card*/device/gpu_busy_percent")
 	if err != nil {
@@ -639,50 +591,6 @@ func readSysfsUint(path string) (uint64, error) {
 		return 0, err
 	}
 	return strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
-}
-
-// readROCmSMI shells out to `rocm-smi` (AMD) for JSON utilization/VRAM%/temp readings.
-func readROCmSMI() ([]GPU, error) {
-	out, err := exec.Command("rocm-smi", "--showuse", "--showmemuse", "--showtemp", "--json").Output()
-	if err != nil {
-		return nil, err
-	}
-
-	var raw map[string]map[string]string
-	if err := json.Unmarshal(out, &raw); err != nil {
-		return nil, err
-	}
-
-	var gpus []GPU
-	for card, fields := range raw {
-		if !strings.HasPrefix(card, "card") {
-			continue
-		}
-		g := GPU{Name: card}
-		for key, val := range fields {
-			switch {
-			case strings.Contains(key, "GPU use"):
-				if v, err := strconv.ParseFloat(val, 64); err == nil {
-					g.UtilPercent = v
-				}
-			case strings.Contains(key, "Memory Allocated"):
-				if v, err := strconv.ParseFloat(val, 64); err == nil {
-					g.MemPercent = v
-					g.HaveMem = true
-				}
-			case strings.Contains(key, "Temperature"):
-				if v, err := strconv.ParseFloat(val, 64); err == nil {
-					g.TempC = v
-					g.HaveTemp = true
-				}
-			}
-		}
-		gpus = append(gpus, g)
-	}
-	if len(gpus) == 0 {
-		return nil, fmt.Errorf("rocm-smi returned no GPUs")
-	}
-	return gpus, nil
 }
 
 func readLoadavgFromUptime() (CPULoad, error) {

@@ -528,9 +528,8 @@ func formatCPULine(load CPULoad) string {
 }
 
 // formatGPULine renders the "gpu (name) [spark] avg% (temp)" line. The
-// sparkline shows recent history for the fast AMD sysfs path (UtilHistory)
-// or degenerates to a single current-value glyph for the rocm-smi fallback,
-// which is throttled too coarsely for a meaningful history.
+// sparkline shows recent history (UtilHistory), or degenerates to a single
+// current-value glyph if no history has been collected yet.
 func formatGPULine(g GPU) string {
 	series := g.UtilHistory
 	if len(series) == 0 {
@@ -1160,11 +1159,11 @@ func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, 
 	defer ticker.Stop()
 
 	// The Load panel's CPU/GPU numbers come from local /proc and sysfs
-	// reads (or a throttled subprocess cache, see gpuSubprocessCache), not
-	// the network-backed quota fetch that `interval` paces, so it redraws
-	// on its own faster cadence via the existing draw()/redrawChan path
-	// rather than triggering a full renderFrame(). 1s keeps the sparkline
-	// visibly live without the flicker/noise of a sub-second cadence.
+	// reads only (no subprocess involved at all), not the network-backed
+	// quota fetch that `interval` paces, so it redraws on its own faster
+	// cadence via the existing draw()/redrawChan path rather than
+	// triggering a full renderFrame(). 1s keeps the sparkline visibly live
+	// without the flicker/noise of a sub-second cadence.
 	loadTicker := time.NewTicker(time.Second)
 	defer loadTicker.Stop()
 

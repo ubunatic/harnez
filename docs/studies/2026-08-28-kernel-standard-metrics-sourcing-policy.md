@@ -11,11 +11,12 @@
 Device telemetry (CPU, GPU, and any future device class — disk, network, battery, other
 accelerators) is read only through interfaces the Linux kernel itself publishes: procfs
 (`/proc/stat`, `/proc/loadavg`) and sysfs (`/sys/class/hwmon`, `/sys/class/drm`,
-`/sys/class/power_supply`, `/sys/class/net`, `/sys/block`, ...). A vendor's proprietary/closed
-userspace tool or library (e.g. NVIDIA's NVML, wrapped by `nvidia-smi`) is not used at all —
-not as a fallback, not as a degraded path. If a vendor hides a device's telemetry behind a
-closed CLI/SDK with nothing exposed to the kernel, that device isn't supported. We don't call
-their tool to get a lesser version of the data; we skip it.
+`/sys/class/power_supply`, `/sys/class/net`, `/sys/block`, ...). No vendor CLI or SDK is called
+for telemetry — not `nvidia-smi`, not `rocm-smi`, not any future equivalent — regardless of
+whether it's proprietary or open-source. If a device's utilization/memory/temperature isn't
+exposed through procfs/sysfs, that device's telemetry isn't collected. We don't call a tool to
+get a lesser version of the data; we skip it. The fewer external tools this project shells out
+to, the fewer things can silently change format, go missing, or add latency underneath it.
 
 We don't design around what a vendor is willing to show us. We design around what the kernel
 guarantees.
@@ -41,26 +42,34 @@ guarantees.
 
 ## Consequences
 
-- **NVIDIA GPUs are not supported at all.** `nvidia-smi` calling was removed entirely
-  (`readNvidiaSMI`, `nvidiaCodename`, `nvidiaSMICache`) rather than kept as a fallback — NVIDIA's
-  proprietary driver publishes nothing to sysfs, so there is no kernel-standard path for it. The
-  Load box shows `gpu n/a` on an NVIDIA-only system. This is a deliberate gap, not an oversight:
-  if NVIDIA later exposes real kernel telemetry (or the open `nouveau`/`nova` driver's sysfs
-  surface becomes adequate), that's the path back in — not calling their CLI.
-- **AMD GPU is the (only) GPU implementation**: reads directly from
+- **No subprocess-based GPU reader remains at all.** Both `nvidia-smi` calling
+  (`readNvidiaSMI`, `nvidiaCodename`, `nvidiaSMICache`) and the `rocm-smi` fallback
+  (`readROCmSMI`, `rocmSMICache`) were removed, along with the throttle/cache machinery
+  (`gpuSubprocessCache`, `gpuSubprocessThrottle`) that existed solely to make those subprocess
+  calls tolerable at redraw speed — once there's nothing left calling a subprocess, that
+  machinery is dead weight too. NVIDIA GPUs get no telemetry at all (`gpu n/a`); an AMD GPU
+  whose driver doesn't populate the expected sysfs attributes also gets none, rather than
+  falling back to `rocm-smi` for a degraded read. This was a two-step removal in the same
+  session: NVIDIA first (explicitly named), then `rocm-smi` once it was clear the policy should
+  apply uniformly rather than carve out an exception for AMD's own tool.
+- **AMD GPU is the only GPU path, and it's sysfs-only**: reads directly from
   `/sys/class/drm/cardN/device/*` (the `amdgpu` driver's sysfs attributes) — utilization, VRAM,
-  temperature. `rocm-smi` (subprocess) remains as a fallback for AMD systems where those sysfs
-  attributes aren't present — it wasn't in scope for this round's removal since it's used only
-  when the kernel-standard path is unavailable, but it's the same category of vendor CLI and a
-  candidate for the same treatment if that asymmetry turns out to matter.
+  temperature. If that path fails, the GPU is simply not reported.
 - **CPU is fully standard** (`/proc/stat`, `/proc/loadavg`, `/sys/class/hwmon` for temperature)
-  with no vendor-tool fallback at all — this is the shape every collector should aim for.
+  with no vendor-tool fallback at all — this was already the shape every collector should aim
+  for, and is now the shape GPU collection has too.
+- `lspci` (used only for the AMD GPU's codename label, e.g. "Cezanne") was kept: it's not a
+  vendor-specific gatekept API — it's a generic, open `pciutils` tool reading the kernel's own
+  PCI ID data, works for any PCI vendor, and isn't in the telemetry path at all (cached once per
+  process, used for a cosmetic label). Flagged here in case that distinction doesn't hold up on
+  reflection and it should go too.
 - **Future device classes** (disk, network, battery, other accelerators) should follow the same
-  pattern: kernel-exposed counters only, and a device class with no kernel-exposed telemetry at
-  all is out of scope until one exists, rather than reaching for a vendor SDK to fill the gap.
+  pattern: kernel-exposed counters only, no subprocess fallback of any kind, and a device class
+  with no kernel-exposed telemetry at all is out of scope until one exists.
 
 ## Related
 
 - `internal/usage/load.go`: `CurrentCPULoad`, `CurrentGPUs`, `readAMDSysfs`,
-  `readCPUTempFromSysfs`, `gpuSubprocessCache`
+  `readCPUTempFromSysfs`
 - Commit `ae3a9f4` — `perf(usage): read AMD GPU stats from sysfs instead of rocm-smi`
+- Commit `8b25059` — `docs+refactor(usage): kernel-standard-only metrics ADR, drop nvidia-smi`
