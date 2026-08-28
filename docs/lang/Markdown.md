@@ -33,6 +33,17 @@ Use **kebab-case** with an optional numeric or date prefix for ordering.
 - Prefer bullet lists over tables for sparse data
 - Keep files token-efficient: no redundant prose, no section headers that restate the bullet below them
 
+## Terminal hyperlinks (OSC 8): label text by context
+
+Always prefer an OSC 8 hyperlink over a raw path. The *visible label* rule depends on context:
+
+- **In tables**: use a short/truncated label as the visible text; put the full path in the OSC 8
+  target. A long filename as the label blows up column width and breaks alignment.
+- **In flowing prose**: show the **full path** as the visible text, with the OSC 8 hyperlink
+  layered on for click-to-open. The user needs to visually scan and drag-select/copy the path
+  directly — a shortened label defeats that. Truncate only if the full path is genuinely too long
+  for inline prose.
+
 ## Diagrams: chat vs. docs
 
 ### In chat / pairing conversations:

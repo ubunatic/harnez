@@ -79,3 +79,10 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 078 | [078-rograph-library-shared-bar-sparkline-renderer.md](078-rograph-library-shared-bar-sparkline-renderer.md) | `rograph`: Shared Read-Only Graph Library for Usage Bars & Sparklines | Closed — resolved in aa06ad7 |
 | 079 | [079-consistent-10-char-shrink-to-fit-graphs.md](079-consistent-10-char-shrink-to-fit-graphs.md) | Apply Consistent Max-10-Char Shrink-to-Fit Width to All Usage Graphs | Closed — resolved in 9914010 |
 | 080 | [080-agent-box-layout-extraction.md](080-agent-box-layout-extraction.md) | Extract Agent-Box Content Layout Into a Small Layout Library | Closed — resolved in 788e1bd |
+| 081 | [081-table-hyperlink-label-width-vs-flowing-text-full-paths.md](081-table-hyperlink-label-width-vs-flowing-text-full-paths.md) | Table Hyperlink Labels Break Layout; Flowing Text Should Keep Full Paths | Closed — resolved in `docs/lang/Markdown.md` |
+| 082 | [082-agent-usage-collector-daemon.md](082-agent-usage-collector-daemon.md) | Background Usage-Collector Daemon (systemd user service) | Closed — resolved |
+| 083 | [083-usage-tui-self-hiding-auto-discovery.md](083-usage-tui-self-hiding-auto-discovery.md) | Self-Hiding, Auto-Discovery Agent Display in Usage TUI | Closed — resolved (uncommitted, pending transplant) |
+| 084 | [084-aggregate-quota-window-box-assessment.md](084-aggregate-quota-window-box-assessment.md) | Aggregate Quota-Window Box: UX & Feasibility Assessment | Open — deferred, needs assessment before implementation |
+| 085 | [085-watch-tui-show-collector-daemon-status.md](085-watch-tui-show-collector-daemon-status.md) | Briefly Show Agent-Collector Daemon Status in `harnez usage --watch` | Open |
+| 086 | [086-offline-degraded-cache-snapshot-masks-live-data.md](086-offline-degraded-cache-snapshot-masks-live-data.md) | Offline/Degraded Collector Snapshot Is Cached and Served as Fresh, Masking Richer Live Data | Open |
+| 087 | [087-generalize-flock-freshness-gate-to-codex-agy.md](087-generalize-flock-freshness-gate-to-codex-agy.md) | Generalize Claude's flock+Freshness Live-Fetch Gate to Codex and AGY | Open |
