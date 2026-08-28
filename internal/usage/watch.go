@@ -17,6 +17,8 @@ import (
 	"time"
 	"unicode/utf8"
 	"unsafe"
+
+	"ubunatic.com/harnez/internal/rograph"
 )
 
 // DefaultWatchInterval is the default refresh cadence for `harnez usage --watch`.
@@ -461,33 +463,6 @@ func buildLoadBox(width int) wbox {
 	return wbox{title: title, lines: lines, width: width}
 }
 
-// percentSparkChars are the 8 sparkline glyphs used for a 0-100% value's
-// height, low to high (▁ = idle/0%, █ = 100%). Unlike RenderSparklineWidth
-// (relative to the series' own min/max), this is an absolute scale: a flat
-// history at 5% should look idle, not maxed out.
-var percentSparkChars = []rune("▁▂▃▄▅▆▇█")
-
-// percentSparkline renders one glyph per value in pcts (each 0-100), one
-// glyph per recent sample in a rolling timeline. A single-element slice
-// degenerates to one glyph (the current value, no history yet). The glyphs
-// keep normal foreground color but sit on a muted grey background (ANSI
-// 100, "bright black") so the graph reads as its own panel instead of
-// full-brightness "█" blocks fighting the terminal's own background.
-func percentSparkline(pcts []float64) string {
-	spark := make([]rune, len(pcts))
-	for i, p := range pcts {
-		idx := int(p / 100 * float64(len(percentSparkChars)))
-		if idx >= len(percentSparkChars) {
-			idx = len(percentSparkChars) - 1
-		}
-		if idx < 0 {
-			idx = 0
-		}
-		spark[i] = percentSparkChars[idx]
-	}
-	return "\x1b[100m" + string(spark) + "\x1b[0m"
-}
-
 // loadLabelWidth is the fixed column width of the "cpu (...)"/"gpu (...)"
 // label in the Load box, so every line's "[spark]" starts at the same
 // column regardless of core count or GPU name length.
@@ -524,7 +499,7 @@ func formatCPULine(load CPULoad) string {
 		tempPart = fmt.Sprintf(" (%.0f°C)", load.TempC)
 	}
 	label := padLoadLabel(fmt.Sprintf("cpu (%d cores)", load.NumCPU))
-	return fmt.Sprintf("%s [%s] %s%s", label, percentSparkline(series), avgPart, tempPart)
+	return fmt.Sprintf("%s [%s] %s%s", label, rograph.PercentSparkline(series, len(series)), avgPart, tempPart)
 }
 
 // formatGPULine renders the "gpu (name) [spark] avg% (temp)" line. The
@@ -540,7 +515,7 @@ func formatGPULine(g GPU) string {
 	if g.HaveTemp {
 		tempPart = fmt.Sprintf(" (%.0f°C)", g.TempC)
 	}
-	return fmt.Sprintf("%s [%s] %.0f%%%s", label, percentSparkline(series), g.UtilPercent, tempPart)
+	return fmt.Sprintf("%s [%s] %.0f%%%s", label, rograph.PercentSparkline(series, len(series)), g.UtilPercent, tempPart)
 }
 
 // buildHistoryBox renders a compact 4th panel showing recorded usage history stats.
@@ -729,7 +704,7 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 		if barW > 12 {
 			barW = 12
 		}
-		bar := RenderProgressBar(w.UsedPercent, barW)
+		bar := rograph.RenderProgressBar(w.UsedPercent, barW)
 		lines = append(lines, fmt.Sprintf("%-16s %s %4.1f%%%s", label, bar, w.UsedPercent, resetStr))
 	}
 

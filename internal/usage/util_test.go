@@ -52,29 +52,6 @@ func TestFormatDuration(t *testing.T) {
 	}
 }
 
-func TestRenderProgressBar(t *testing.T) {
-	tests := []struct {
-		pct   float64
-		width int
-		want  string
-	}{
-		{0, 10, "[░░░░░░░░░░]"},
-		{50, 10, "[█████░░░░░]"},
-		{100, 10, "[██████████]"},
-		{120, 10, "[██████████]"},
-		{-10, 10, "[░░░░░░░░░░]"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
-			got := RenderProgressBar(tt.pct, tt.width)
-			if got != tt.want {
-				t.Errorf("RenderProgressBar(%v, %d) = %q, want %q", tt.pct, tt.width, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestFormatNumber(t *testing.T) {
 	tests := []struct {
 		n    int64

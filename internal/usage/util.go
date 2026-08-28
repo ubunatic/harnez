@@ -48,28 +48,6 @@ func FormatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm", mins)
 }
 
-// RenderProgressBar generates an ANSI/Unicode progress bar of the given character width.
-func RenderProgressBar(usedPercent float64, width int) string {
-	if width <= 0 {
-		width = 20
-	}
-	if usedPercent < 0 {
-		usedPercent = 0
-	}
-	if usedPercent > 100 {
-		usedPercent = 100
-	}
-	filledCount := int(float64(width) * (usedPercent / 100.0))
-	if filledCount > width {
-		filledCount = width
-	}
-	emptyCount := width - filledCount
-
-	filled := strings.Repeat("█", filledCount)
-	empty := strings.Repeat("░", emptyCount)
-	return "[" + filled + empty + "]"
-}
-
 // FormatBytes formats a byte count into a human-readable string (e.g. "0 B", "512 B", "1.4 KB", "12.8 MB", "1.2 GB").
 func FormatBytes(b int64) string {
 	if b < 0 {
