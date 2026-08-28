@@ -87,3 +87,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 086 | [086-offline-degraded-cache-snapshot-masks-live-data.md](086-offline-degraded-cache-snapshot-masks-live-data.md) | Offline/Degraded Collector Snapshot Is Cached and Served as Fresh, Masking Richer Live Data | Open |
 | 087 | [087-generalize-flock-freshness-gate-to-codex-agy.md](087-generalize-flock-freshness-gate-to-codex-agy.md) | Generalize Claude's flock+Freshness Live-Fetch Gate to Codex and AGY | Open |
 | 088 | [088-load-panel-ram-vram-gtt-memory.md](088-load-panel-ram-vram-gtt-memory.md) | Load Panel: RAM, VRAM, and GTT Memory | Closed — resolved in implementation commit |
+| 089 | [089-load-panel-combine-gpu-vram-gtt-row.md](089-load-panel-combine-gpu-vram-gtt-row.md) | Load Panel: Combine GPU VRAM/GTT Row | Open |
