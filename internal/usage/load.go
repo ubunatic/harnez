@@ -333,9 +333,9 @@ type GPU struct {
 
 	// UtilHistory is a short rolling window of recent UtilPercent samples,
 	// oldest first, populated only by the fast AMD sysfs path (cheap enough
-	// to poll every redraw). Subprocess-based readers (nvidia-smi, rocm-smi
-	// fallback) leave this nil since they're throttled to ~1/s and don't
-	// have the sample density for a meaningful history sparkline.
+	// to poll every redraw). The rocm-smi fallback leaves this nil since
+	// it's throttled to ~1/s and doesn't have the sample density for a
+	// meaningful history sparkline.
 	UtilHistory []float64
 }
 
@@ -426,10 +426,10 @@ func burstSeedGPUHistory(key, busyPath string) []float64 {
 }
 
 // gpuSubprocessThrottle is the minimum interval between calls to a
-// subprocess-based GPU reader (nvidia-smi, rocm-smi fallback). Those cost
-// ~100ms+ per call, so a fast redraw tick (e.g. the watch TUI's 100ms
-// sparkline refresh) must not re-exec them every frame; sysfs-based reads
-// are cheap enough (~1-2ms) to need no throttling of their own.
+// subprocess-based GPU reader (the rocm-smi fallback). Those cost ~100ms+
+// per call, so a fast redraw tick (e.g. the watch TUI's 1s Load refresh)
+// must not re-exec them every frame; sysfs-based reads are cheap enough
+// (~1-2ms) to need no throttling of their own.
 const gpuSubprocessThrottle = time.Second
 
 // gpuSubprocessCache memoizes one subprocess-based GPU reader's last
@@ -462,24 +462,24 @@ func (c *gpuSubprocessCache) get(read func() ([]GPU, error)) ([]GPU, error) {
 	return gpus, nil
 }
 
-var (
-	nvidiaSMICache gpuSubprocessCache
-	rocmSMICache   gpuSubprocessCache
-)
+var rocmSMICache gpuSubprocessCache
 
-// CurrentGPUs probes for NVIDIA (nvidia-smi) or AMD GPUs and returns
-// whatever readings are available. AMD is read directly from sysfs
-// (kernel-cached counters, a plain read() per file) rather than shelling
-// out to `rocm-smi`, which forks a subprocess and takes ~100ms+ per call;
-// rocm-smi remains a fallback for AMD systems where sysfs lacks the
-// expected attributes. Both subprocess-based readers are throttled via
-// gpuSubprocessCache so a fast caller (e.g. the watch TUI's 100ms redraw
-// tick) doesn't re-exec them every frame. Returns nil if nothing is
-// present or everything fails (e.g. no GPU, or an integrated-only system).
+// CurrentGPUs probes for AMD GPUs and returns whatever readings are
+// available. AMD is read directly from sysfs (kernel-cached counters, a
+// plain read() per file) rather than shelling out to `rocm-smi`, which
+// forks a subprocess and takes ~100ms+ per call; rocm-smi remains a
+// fallback for AMD systems where sysfs lacks the expected attributes,
+// throttled via gpuSubprocessCache so a fast caller doesn't re-exec it
+// every frame.
+//
+// NVIDIA is deliberately not supported: see
+// docs/studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md.
+// NVIDIA's proprietary driver exposes nothing through the kernel (procfs/
+// sysfs) — the only way to read it is nvidia-smi/NVML, a closed vendor
+// tool, which this project doesn't call. Returns nil if nothing is present
+// or everything fails (e.g. no GPU, an NVIDIA-only system, or an
+// integrated-only system with no sysfs attributes).
 func CurrentGPUs() []GPU {
-	if gpus, err := nvidiaSMICache.get(readNvidiaSMI); err == nil {
-		return gpus
-	}
 	if gpus, err := readAMDSysfs(); err == nil {
 		return gpus
 	}
@@ -487,78 +487,6 @@ func CurrentGPUs() []GPU {
 		return gpus
 	}
 	return nil
-}
-
-// nvidiaArchByProductSubstring maps a substring of nvidia-smi's product name
-// to its GPU architecture codename, most recent first. nvidia-smi already
-// reports the full marketing name (e.g. "NVIDIA GeForce RTX 4090"), so this
-// isn't a fallback lookup — it just shortens what the system already gave
-// us to the compact architecture name the Load box has room for.
-var nvidiaArchByProductSubstring = []struct{ substr, arch string }{
-	{"GB10", "Blackwell"}, {"GB200", "Blackwell"}, {"B100", "Blackwell"}, {"B200", "Blackwell"}, {"RTX 50", "Blackwell"},
-	{"H100", "Hopper"}, {"H200", "Hopper"},
-	{"RTX 40", "Ada"}, {"L40", "Ada"}, {"L4", "Ada"},
-	{"A100", "Ampere"}, {"A6000", "Ampere"}, {"RTX 30", "Ampere"},
-	{"RTX 20", "Turing"}, {"GTX 16", "Turing"},
-	{"GTX 10", "Pascal"},
-}
-
-// nvidiaCodename shortens an nvidia-smi product name to its architecture
-// codename (e.g. "NVIDIA GeForce RTX 4090" -> "Ada"). Falls back to the
-// full product name, trimmed, when no known family matches.
-func nvidiaCodename(productName string) string {
-	upper := strings.ToUpper(productName)
-	for _, m := range nvidiaArchByProductSubstring {
-		if strings.Contains(upper, strings.ToUpper(m.substr)) {
-			return m.arch
-		}
-	}
-	return strings.TrimSpace(productName)
-}
-
-// readNvidiaSMI shells out to `nvidia-smi` for CSV utilization/memory/temp readings.
-func readNvidiaSMI() ([]GPU, error) {
-	out, err := exec.Command("nvidia-smi",
-		"--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
-		"--format=csv,noheader,nounits").Output()
-	if err != nil {
-		return nil, err
-	}
-
-	var gpus []GPU
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line == "" {
-			continue
-		}
-		fields := strings.Split(line, ",")
-		if len(fields) < 5 {
-			continue
-		}
-		for i := range fields {
-			fields[i] = strings.TrimSpace(fields[i])
-		}
-		g := GPU{Name: nvidiaCodename(fields[0])}
-		if v, err := strconv.ParseFloat(fields[1], 64); err == nil {
-			g.UtilPercent = v
-		}
-		memUsed, errUsed := strconv.ParseFloat(fields[2], 64)
-		memTotal, errTotal := strconv.ParseFloat(fields[3], 64)
-		if errUsed == nil && errTotal == nil && memTotal > 0 {
-			g.MemUsedMiB = memUsed
-			g.MemTotalMiB = memTotal
-			g.MemPercent = memUsed / memTotal * 100
-			g.HaveMem = true
-		}
-		if v, err := strconv.ParseFloat(fields[4], 64); err == nil {
-			g.TempC = v
-			g.HaveTemp = true
-		}
-		gpus = append(gpus, g)
-	}
-	if len(gpus) == 0 {
-		return nil, fmt.Errorf("nvidia-smi returned no GPUs")
-	}
-	return gpus, nil
 }
 
 // amdCodenameByDeviceID is a best-effort fallback table mapping a PCI

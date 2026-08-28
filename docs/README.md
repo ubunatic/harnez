@@ -62,6 +62,7 @@ Generated copies land here (root) after `apply` / `init`.
 | [studies/2026-08-19-subagent-lifecycle-management-and-teardown-friction.md](studies/2026-08-19-subagent-lifecycle-management-and-teardown-friction.md) | Multi-agent lifecycle management: zombie accumulation vs. premature teardown, entity archetypes, pre-kill workspace patch preservation, and lease heartbeats |
 | [studies/2026-08-19-the-5-phase-agentic-sprint-and-independent-review-loop.md](studies/2026-08-19-the-5-phase-agentic-sprint-and-independent-review-loop.md) | The 5-Phase Agentic Sprint Loop & The Independent Review Gate (Candidate chapter for *Agentic Software Development: The Ubunatic Way*) |
 | [studies/2026-08-23-usage-history-subcommands-process-panel-and-remote-monitoring.md](studies/2026-08-23-usage-history-subcommands-process-panel-and-remote-monitoring.md) | Usage history subcommand decomposition, process telemetry panel (`/proc`), SSH remote monitoring (`--host` / `[r]`), and multi-host `make sync` |
+| [studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md](studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md) | ADR: device telemetry (Load box CPU/GPU) is read only via kernel-standard procfs/sysfs, never a vendor's proprietary CLI/SDK — `nvidia-smi` calling was removed entirely rather than kept as a fallback |
 
 **`docs/feedback/`** — agentic retrospectives & harness feedback reports
 

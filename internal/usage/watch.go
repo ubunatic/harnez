@@ -529,9 +529,8 @@ func formatCPULine(load CPULoad) string {
 
 // formatGPULine renders the "gpu (name) [spark] avg% (temp)" line. The
 // sparkline shows recent history for the fast AMD sysfs path (UtilHistory)
-// or degenerates to a single current-value glyph for subprocess-based
-// readers (nvidia-smi, rocm-smi fallback), which are throttled too coarsely
-// for a meaningful history.
+// or degenerates to a single current-value glyph for the rocm-smi fallback,
+// which is throttled too coarsely for a meaningful history.
 func formatGPULine(g GPU) string {
 	series := g.UtilHistory
 	if len(series) == 0 {
