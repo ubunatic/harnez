@@ -64,9 +64,7 @@ func CurrentCPULoad() CPULoad {
 	}
 	load.NumCPU = runtime.NumCPU()
 	load.CPUPercent, load.CPUPercentOk, load.PerCorePercent, load.PerCoreOk = currentCPUPercents()
-	if load.CPUPercentOk {
-		load.PercentHistory = cpuHistory.append(load.CPUPercent)
-	}
+	load.PercentHistory = cpuHistory.snapshot()
 	load.TempC, load.TempOk = readCPUTempFromSysfs()
 	return load
 }
@@ -361,6 +359,15 @@ func (h *sampleHistory) append(pct float64) []float64 {
 	if len(h.samples) > loadHistoryLen {
 		h.samples = h.samples[len(h.samples)-loadHistoryLen:]
 	}
+	out := make([]float64, len(h.samples))
+	copy(out, h.samples)
+	return out
+}
+
+// snapshot returns a copy of the current window without appending to it.
+func (h *sampleHistory) snapshot() []float64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	out := make([]float64, len(h.samples))
 	copy(out, h.samples)
 	return out

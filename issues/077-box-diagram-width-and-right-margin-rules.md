@@ -1,6 +1,6 @@
 # 077 — Box Diagram Width Limits & Right-Side Padding Rules (Prevent Terminal Line Wrap Collapse)
 
-**Status**: Open
+**Status**: Closed — resolved in `docs/lang/Markdown.md`
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics & UI Standards
