@@ -28,6 +28,11 @@ type CPULoad struct {
 	// CPUPercentOk reports whether that happened.
 	CPUPercent   float64
 	CPUPercentOk bool
+
+	// PerCorePercent is CPUPercent broken out per core (cpu0, cpu1, ...),
+	// same delta technique, same freshness caveat as CPUPercentOk.
+	PerCorePercent []float64
+	PerCoreOk      bool
 }
 
 // CurrentCPULoad reads the system load averages and the instantaneous CPU
@@ -46,54 +51,81 @@ func CurrentCPULoad() CPULoad {
 		load.Ok = true
 	}
 	load.NumCPU = runtime.NumCPU()
-	load.CPUPercent, load.CPUPercentOk = currentCPUPercent()
+	load.CPUPercent, load.CPUPercentOk, load.PerCorePercent, load.PerCoreOk = currentCPUPercents()
 	return load
 }
 
-// cpuStatSample is one reading of the aggregate "cpu" line in /proc/stat:
+// cpuStatSample is one reading of a "cpu"/"cpuN" line in /proc/stat:
 // cumulative jiffies since boot, split into idle and total.
 type cpuStatSample struct {
 	idle  uint64
 	total uint64
 }
 
+// cpuStatFrame is one full /proc/stat sample: the aggregate "cpu" line plus
+// the per-core "cpuN" lines beneath it, read together so aggregate and
+// per-core percentages always come from the same two points in time.
+type cpuStatFrame struct {
+	aggregate cpuStatSample
+	perCore   []cpuStatSample
+}
+
 var (
-	cpuStatMu   sync.Mutex
-	lastCPUStat cpuStatSample
-	haveCPUStat bool
+	cpuFrameMu   sync.Mutex
+	lastCPUFrame cpuStatFrame
+	haveCPUFrame bool
 )
 
-// currentCPUPercent reports CPU busy% since the last call, computed from the
-// delta between two /proc/stat samples (btop-style "real" CPU, distinct from
-// the kernel's minute-scale load averages). The first call in a process has
-// no prior sample to diff against, so it takes a second sample after a short
-// sleep to still return an immediate reading; every later call in the same
-// `--watch` process reuses the previous frame's sample instead.
-func currentCPUPercent() (float64, bool) {
-	cur, err := readCPUStatFromProc("/proc/stat")
+// currentCPUPercents reports aggregate and per-core CPU busy% since the last
+// call, computed from the delta between two /proc/stat frames (btop-style
+// "real" CPU, distinct from the kernel's minute-scale load averages). The
+// first call in a process has no prior sample to diff against, so it takes
+// a second sample after a short sleep to still return an immediate reading;
+// every later call in the same `--watch` process reuses the previous
+// frame's sample instead.
+func currentCPUPercents() (float64, bool, []float64, bool) {
+	cur, err := readCPUStatFrame("/proc/stat")
 	if err != nil {
-		return 0, false
+		return 0, false, nil, false
 	}
 
-	cpuStatMu.Lock()
-	prev := lastCPUStat
-	had := haveCPUStat
-	lastCPUStat = cur
-	haveCPUStat = true
-	cpuStatMu.Unlock()
+	cpuFrameMu.Lock()
+	prev := lastCPUFrame
+	had := haveCPUFrame
+	lastCPUFrame = cur
+	haveCPUFrame = true
+	cpuFrameMu.Unlock()
 
 	if !had {
 		time.Sleep(150 * time.Millisecond)
-		cur2, err := readCPUStatFromProc("/proc/stat")
+		cur2, err := readCPUStatFrame("/proc/stat")
 		if err != nil {
-			return 0, false
+			return 0, false, nil, false
 		}
-		cpuStatMu.Lock()
-		lastCPUStat = cur2
-		cpuStatMu.Unlock()
-		return cpuPercentFromSamples(cur, cur2)
+		cpuFrameMu.Lock()
+		lastCPUFrame = cur2
+		cpuFrameMu.Unlock()
+		return cpuFramePercents(cur, cur2)
 	}
-	return cpuPercentFromSamples(prev, cur)
+	return cpuFramePercents(prev, cur)
+}
+
+func cpuFramePercents(prev, cur cpuStatFrame) (float64, bool, []float64, bool) {
+	aggPct, aggOk := cpuPercentFromSamples(prev.aggregate, cur.aggregate)
+
+	n := len(cur.perCore)
+	if len(prev.perCore) < n {
+		n = len(prev.perCore)
+	}
+	if n == 0 {
+		return aggPct, aggOk, nil, false
+	}
+	perCore := make([]float64, n)
+	for i := 0; i < n; i++ {
+		pct, _ := cpuPercentFromSamples(prev.perCore[i], cur.perCore[i])
+		perCore[i] = pct
+	}
+	return aggPct, aggOk, perCore, true
 }
 
 func cpuPercentFromSamples(prev, cur cpuStatSample) (float64, bool) {
@@ -106,25 +138,46 @@ func cpuPercentFromSamples(prev, cur cpuStatSample) (float64, bool) {
 	return float64(busy) / float64(totalDelta) * 100, true
 }
 
-// readCPUStatFromProc parses the aggregate "cpu  user nice system idle
-// iowait irq softirq steal guest guest_nice" line at the top of
-// /proc/stat. idle covers idle+iowait per the usual convention (e.g. htop).
-func readCPUStatFromProc(path string) (cpuStatSample, error) {
+// readCPUStatFrame parses the aggregate "cpu  user nice system idle iowait
+// irq softirq steal guest guest_nice" line and the per-core "cpuN ..." lines
+// beneath it at the top of /proc/stat. idle covers idle+iowait per the usual
+// convention (e.g. htop).
+func readCPUStatFrame(path string) (cpuStatFrame, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return cpuStatSample{}, err
-	}
-	firstLine := string(data)
-	if idx := strings.IndexByte(firstLine, '\n'); idx >= 0 {
-		firstLine = firstLine[:idx]
-	}
-	fields := strings.Fields(firstLine)
-	if len(fields) < 5 || fields[0] != "cpu" {
-		return cpuStatSample{}, fmt.Errorf("unexpected /proc/stat format: %q", firstLine)
+		return cpuStatFrame{}, err
 	}
 
+	var frame cpuStatFrame
+	sawAggregate := false
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 5 || !strings.HasPrefix(fields[0], "cpu") {
+			if sawAggregate {
+				break // per-core lines are contiguous right after "cpu"
+			}
+			continue
+		}
+		sample, err := parseCPUStatFields(fields[1:])
+		if err != nil {
+			return cpuStatFrame{}, err
+		}
+		if fields[0] == "cpu" {
+			frame.aggregate = sample
+			sawAggregate = true
+		} else {
+			frame.perCore = append(frame.perCore, sample)
+		}
+	}
+	if !sawAggregate {
+		return cpuStatFrame{}, fmt.Errorf("unexpected /proc/stat format: no aggregate cpu line")
+	}
+	return frame, nil
+}
+
+func parseCPUStatFields(fields []string) (cpuStatSample, error) {
 	var sample cpuStatSample
-	for i, f := range fields[1:] {
+	for i, f := range fields {
 		v, err := strconv.ParseUint(f, 10, 64)
 		if err != nil {
 			return cpuStatSample{}, err

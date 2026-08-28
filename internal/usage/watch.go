@@ -457,6 +457,9 @@ func buildLoadBox(width int) wbox {
 	} else {
 		lines = append(lines, fmt.Sprintf("avg %.2f %.2f %.2f", load.Load1, load.Load5, load.Load15))
 	}
+	if load.PerCoreOk {
+		lines = append(lines, formatCoreSparkline(load.PerCorePercent))
+	}
 
 	gpus := CurrentGPUs()
 	if len(gpus) == 0 {
@@ -470,6 +473,39 @@ func buildLoadBox(width int) wbox {
 		}
 	}
 	return wbox{title: title, lines: lines, width: width}
+}
+
+// coreSparkChars are the 8 sparkline glyphs used for a busy core's height,
+// low to high (▁ = just over the idle threshold, █ = 100%).
+var coreSparkChars = []rune("▁▂▃▄▅▆▇█")
+
+// formatCoreSparkline renders one glyph per core whose real-time usage is
+// above 1%, sized to its usage level; cores at or below 1% are rolled up
+// into a trailing "+N idle" count instead of being shown individually.
+func formatCoreSparkline(pcts []float64) string {
+	var spark []rune
+	idle := 0
+	for _, p := range pcts {
+		if p <= 1 {
+			idle++
+			continue
+		}
+		idx := int(p / 100 * float64(len(coreSparkChars)))
+		if idx >= len(coreSparkChars) {
+			idx = len(coreSparkChars) - 1
+		}
+		if idx < 0 {
+			idx = 0
+		}
+		spark = append(spark, coreSparkChars[idx])
+	}
+	if len(spark) == 0 {
+		return fmt.Sprintf("%d idle", idle)
+	}
+	if idle > 0 {
+		return fmt.Sprintf("%s +%d idle", string(spark), idle)
+	}
+	return string(spark)
 }
 
 // formatGPULine renders one GPU's utilization, VRAM, and temperature as a
