@@ -39,11 +39,14 @@ Use **kebab-case** with an optional numeric or date prefix for ordering.
 - Do not emit ` ```mermaid ` blocks unless asked; terminals and chat UIs may render them as raw markup
 - For simple flows, use `1. 2. 3. if X goto 2.; 4. ...` and skip the diagram completely
 - Use compact ASCII box-and-arrow diagrams inside a ` ```text ` fence instead:
+  - **Width limit**: Keep diagrams under **65–70 columns** max.
+  - **Right margin safety**: Always leave a buffer on the right so narrow terminals or chat sidebars never auto-wrap and collapse box lines.
+  - **Vertical stacking**: Stack boxes vertically rather than spreading wide horizontally.
 
   ```text
-  ┌─────┐     ┌─────┐
-  │ Foo │ ──> │ Bar │
-  └─────┘     └─────┘
+  ┌─────────────┐       ┌─────────────┐
+  │     Foo     │ ────> │     Bar     │
+  └─────────────┘       └─────────────┘
   ```
 
 ### In MD Files/Evergreen `docs/`
