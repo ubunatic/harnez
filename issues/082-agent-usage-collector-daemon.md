@@ -1,6 +1,6 @@
 # 082 — Background Usage-Collector Daemon (systemd user service)
 
-**Status**: Closed — resolved in `harnez agent-collector` + XDG state cache + cache-first `CollectAll` (unreleased, staged for review)
+**Status**: Closed — resolved in d5d7566
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature

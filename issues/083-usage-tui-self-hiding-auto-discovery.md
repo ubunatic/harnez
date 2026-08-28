@@ -1,6 +1,6 @@
 # 083 — Self-Hiding, Auto-Discovery Agent Display in Usage TUI
 
-**Status**: Closed — resolved in HasUsageData self-hiding filter (uncommitted, pending transplant onto main)
+**Status**: Closed — resolved in d5d7566
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: UX / Agentic Ergonomics
