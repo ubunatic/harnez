@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -174,11 +175,18 @@ type GPU struct {
 	HaveTemp    bool
 }
 
-// CurrentGPUs probes for NVIDIA (nvidia-smi) or AMD (rocm-smi) GPUs and
-// returns whatever readings are available. Returns nil if neither tool is
-// present or both fail (e.g. no GPU, or an integrated-only system).
+// CurrentGPUs probes for NVIDIA (nvidia-smi) or AMD GPUs and returns
+// whatever readings are available. AMD is read directly from sysfs
+// (kernel-cached counters, a plain read() per file) rather than shelling
+// out to `rocm-smi`, which forks a subprocess and takes ~100ms+ per call;
+// rocm-smi remains a fallback for AMD systems where sysfs lacks the
+// expected attributes. Returns nil if nothing is present or everything
+// fails (e.g. no GPU, or an integrated-only system).
 func CurrentGPUs() []GPU {
 	if gpus, err := readNvidiaSMI(); err == nil {
+		return gpus
+	}
+	if gpus, err := readAMDSysfs(); err == nil {
 		return gpus
 	}
 	if gpus, err := readROCmSMI(); err == nil {
@@ -230,6 +238,64 @@ func readNvidiaSMI() ([]GPU, error) {
 		return nil, fmt.Errorf("nvidia-smi returned no GPUs")
 	}
 	return gpus, nil
+}
+
+// readAMDSysfs reads AMD GPU utilization, VRAM, and temperature straight
+// from the kernel's amdgpu sysfs attributes, avoiding a rocm-smi
+// subprocess. Card enumeration (cardN) and hwmon enumeration (hwmonN) are
+// both driver-assigned at runtime, so both are globbed rather than assumed.
+func readAMDSysfs() ([]GPU, error) {
+	matches, err := filepath.Glob("/sys/class/drm/card*/device/gpu_busy_percent")
+	if err != nil {
+		return nil, err
+	}
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no amdgpu sysfs busy-percent attributes found")
+	}
+
+	var gpus []GPU
+	for _, busyPath := range matches {
+		deviceDir := filepath.Dir(busyPath)
+		cardName := filepath.Base(filepath.Dir(deviceDir))
+		g := GPU{Name: cardName}
+
+		if v, err := readSysfsUint(busyPath); err == nil {
+			g.UtilPercent = float64(v)
+		} else {
+			continue // not a real GPU device (or unreadable): skip rather than report zeros
+		}
+
+		used, errUsed := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_used"))
+		total, errTotal := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_total"))
+		if errUsed == nil && errTotal == nil && total > 0 {
+			g.MemUsedMiB = float64(used) / (1024 * 1024)
+			g.MemTotalMiB = float64(total) / (1024 * 1024)
+			g.MemPercent = float64(used) / float64(total) * 100
+			g.HaveMem = true
+		}
+
+		if hwmonMatches, err := filepath.Glob(filepath.Join(deviceDir, "hwmon", "hwmon*", "temp1_input")); err == nil && len(hwmonMatches) > 0 {
+			if milliC, err := readSysfsUint(hwmonMatches[0]); err == nil {
+				g.TempC = float64(milliC) / 1000
+				g.HaveTemp = true
+			}
+		}
+
+		gpus = append(gpus, g)
+	}
+	if len(gpus) == 0 {
+		return nil, fmt.Errorf("amdgpu sysfs attributes present but unreadable")
+	}
+	return gpus, nil
+}
+
+// readSysfsUint reads a sysfs file holding a single unsigned integer value.
+func readSysfsUint(path string) (uint64, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
 }
 
 // readROCmSMI shells out to `rocm-smi` (AMD) for JSON utilization/VRAM%/temp readings.
