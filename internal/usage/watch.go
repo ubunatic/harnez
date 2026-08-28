@@ -475,21 +475,17 @@ func buildLoadBox(width int) wbox {
 	return wbox{title: title, lines: lines, width: width}
 }
 
-// coreSparkChars are the 8 sparkline glyphs used for a busy core's height,
-// low to high (▁ = just over the idle threshold, █ = 100%).
+// coreSparkChars are the 8 sparkline glyphs used for a core's height, low
+// to high (▁ = idle, █ = 100%).
 var coreSparkChars = []rune("▁▂▃▄▅▆▇█")
 
-// formatCoreSparkline renders one glyph per core whose real-time usage is
-// above 1%, sized to its usage level; cores at or below 1% are rolled up
-// into a trailing "+N idle" count instead of being shown individually.
+// formatCoreSparkline renders one glyph per core, sized to its usage level.
+// Always one glyph per core (fixed width) so the line's length never
+// changes between redraws — an idle-count cutoff made the string grow and
+// shrink as cores crossed the threshold, which read as noise.
 func formatCoreSparkline(pcts []float64) string {
-	var spark []rune
-	idle := 0
-	for _, p := range pcts {
-		if p <= 1 {
-			idle++
-			continue
-		}
+	spark := make([]rune, len(pcts))
+	for i, p := range pcts {
 		idx := int(p / 100 * float64(len(coreSparkChars)))
 		if idx >= len(coreSparkChars) {
 			idx = len(coreSparkChars) - 1
@@ -497,13 +493,7 @@ func formatCoreSparkline(pcts []float64) string {
 		if idx < 0 {
 			idx = 0
 		}
-		spark = append(spark, coreSparkChars[idx])
-	}
-	if len(spark) == 0 {
-		return fmt.Sprintf("%d idle", idle)
-	}
-	if idle > 0 {
-		return fmt.Sprintf("%s +%d idle", string(spark), idle)
+		spark[i] = coreSparkChars[idx]
 	}
 	return string(spark)
 }
@@ -1139,9 +1129,10 @@ func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, 
 	// The Load panel's CPU/GPU numbers come from local /proc and sysfs
 	// reads (or a throttled subprocess cache, see gpuSubprocessCache), not
 	// the network-backed quota fetch that `interval` paces, so it redraws
-	// on its own much faster cadence via the existing draw()/redrawChan
-	// path rather than triggering a full renderFrame().
-	loadTicker := time.NewTicker(100 * time.Millisecond)
+	// on its own faster cadence via the existing draw()/redrawChan path
+	// rather than triggering a full renderFrame(). 1s keeps the sparkline
+	// visibly live without the flicker/noise of a sub-second cadence.
+	loadTicker := time.NewTicker(time.Second)
 	defer loadTicker.Stop()
 
 	for {
