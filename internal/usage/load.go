@@ -228,21 +228,65 @@ type GPU struct {
 	HaveTemp    bool
 }
 
+// gpuSubprocessThrottle is the minimum interval between calls to a
+// subprocess-based GPU reader (nvidia-smi, rocm-smi fallback). Those cost
+// ~100ms+ per call, so a fast redraw tick (e.g. the watch TUI's 100ms
+// sparkline refresh) must not re-exec them every frame; sysfs-based reads
+// are cheap enough (~1-2ms) to need no throttling of their own.
+const gpuSubprocessThrottle = time.Second
+
+// gpuSubprocessCache memoizes one subprocess-based GPU reader's last
+// successful result for gpuSubprocessThrottle, so callers polling faster
+// than that get the cached reading instead of forking again. A failure is
+// never cached: a missing binary fails fast (exec.LookPath, no fork), so
+// there's no cost to retrying it every call.
+type gpuSubprocessCache struct {
+	mu   sync.Mutex
+	gpus []GPU
+	at   time.Time
+}
+
+func (c *gpuSubprocessCache) get(read func() ([]GPU, error)) ([]GPU, error) {
+	c.mu.Lock()
+	if !c.at.IsZero() && time.Since(c.at) < gpuSubprocessThrottle {
+		gpus := c.gpus
+		c.mu.Unlock()
+		return gpus, nil
+	}
+	c.mu.Unlock()
+
+	gpus, err := read()
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	c.gpus, c.at = gpus, time.Now()
+	c.mu.Unlock()
+	return gpus, nil
+}
+
+var (
+	nvidiaSMICache gpuSubprocessCache
+	rocmSMICache   gpuSubprocessCache
+)
+
 // CurrentGPUs probes for NVIDIA (nvidia-smi) or AMD GPUs and returns
 // whatever readings are available. AMD is read directly from sysfs
 // (kernel-cached counters, a plain read() per file) rather than shelling
 // out to `rocm-smi`, which forks a subprocess and takes ~100ms+ per call;
 // rocm-smi remains a fallback for AMD systems where sysfs lacks the
-// expected attributes. Returns nil if nothing is present or everything
-// fails (e.g. no GPU, or an integrated-only system).
+// expected attributes. Both subprocess-based readers are throttled via
+// gpuSubprocessCache so a fast caller (e.g. the watch TUI's 100ms redraw
+// tick) doesn't re-exec them every frame. Returns nil if nothing is
+// present or everything fails (e.g. no GPU, or an integrated-only system).
 func CurrentGPUs() []GPU {
-	if gpus, err := readNvidiaSMI(); err == nil {
+	if gpus, err := nvidiaSMICache.get(readNvidiaSMI); err == nil {
 		return gpus
 	}
 	if gpus, err := readAMDSysfs(); err == nil {
 		return gpus
 	}
-	if gpus, err := readROCmSMI(); err == nil {
+	if gpus, err := rocmSMICache.get(readROCmSMI); err == nil {
 		return gpus
 	}
 	return nil

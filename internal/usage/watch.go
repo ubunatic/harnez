@@ -1136,6 +1136,14 @@ func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// The Load panel's CPU/GPU numbers come from local /proc and sysfs
+	// reads (or a throttled subprocess cache, see gpuSubprocessCache), not
+	// the network-backed quota fetch that `interval` paces, so it redraws
+	// on its own much faster cadence via the existing draw()/redrawChan
+	// path rather than triggering a full renderFrame().
+	loadTicker := time.NewTicker(100 * time.Millisecond)
+	defer loadTicker.Stop()
+
 	for {
 		select {
 		case <-sigCtx.Done():
@@ -1143,6 +1151,8 @@ func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, 
 		case <-fetchChan:
 			renderFrame()
 		case <-redrawChan:
+			draw()
+		case <-loadTicker.C:
 			draw()
 		case <-ticker.C:
 			renderFrame()
