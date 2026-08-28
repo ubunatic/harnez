@@ -48,6 +48,31 @@ func FormatDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm", mins)
 }
 
+// FormatCompactDuration formats a time.Duration into a space-free compact string like
+// "3d1h", "4h52m", "51m", "0m". Durations of 48h or more show "<days>d<hours>h".
+func FormatCompactDuration(d time.Duration) string {
+	if d <= 0 {
+		return "0m"
+	}
+	if d >= 48*time.Hour {
+		days := int(d.Hours()) / 24
+		hours := int(d.Hours()) % 24
+		if hours > 0 {
+			return fmt.Sprintf("%dd%dh", days, hours)
+		}
+		return fmt.Sprintf("%dd", days)
+	}
+	hours := int(d.Hours())
+	mins := int(d.Minutes()) % 60
+	if hours > 0 {
+		if mins > 0 {
+			return fmt.Sprintf("%dh%dm", hours, mins)
+		}
+		return fmt.Sprintf("%dh", hours)
+	}
+	return fmt.Sprintf("%dm", mins)
+}
+
 // FormatBytes formats a byte count into a human-readable string (e.g. "0 B", "512 B", "1.4 KB", "12.8 MB", "1.2 GB").
 func FormatBytes(b int64) string {
 	if b < 0 {

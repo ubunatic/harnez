@@ -180,12 +180,9 @@ func TestBuildAgentBoxBarFitsContentW(t *testing.T) {
 		},
 	}
 
-	// Compute the threshold above which duration must appear.
-	// Layout: 16(label) + 1(sp) + (barW+2)(bar) + 1(sp) + 6(percent) + visLen(resetStr)
-	// = 26 + barW + visLen(resetStr)
-	// Duration fits when barW >= 1: contentW >= 26 + 1 + visLen(resetStr)
-	resetStr := " · " + FormatDuration(dur)
-	durationThreshold := 26 + 1 + visLen(resetStr) // contentW at which duration must appear
+	// In compact layout: 16(label) + 1(sp) + 6(bar) + 1(sp) + 4(percent) + 5(duration) = 33
+	// Duration fits when contentW >= 33.
+	durationThreshold := 33
 
 	for boxWidth := minBoxWidth; boxWidth <= 80; boxWidth++ {
 		box := buildAgentBox(agent, agentRate{}, boxWidth, false, false)
@@ -199,8 +196,7 @@ func TestBuildAgentBoxBarFitsContentW(t *testing.T) {
 			}
 		}
 
-		// When contentW >= durationThreshold, there is room for a 1-char bar + duration.
-		// The duration string must appear in one of the quota lines.
+		// When contentW >= durationThreshold, the compact duration string must appear.
 		if contentW >= durationThreshold {
 			found := false
 			for _, l := range box.lines {
@@ -211,7 +207,7 @@ func TestBuildAgentBoxBarFitsContentW(t *testing.T) {
 			}
 			if !found {
 				t.Errorf("boxWidth=%d (contentW=%d, threshold=%d): expected duration %q in quota line, lines=%v",
-					boxWidth, contentW, durationThreshold, resetStr, box.lines)
+					boxWidth, contentW, durationThreshold, "3d5h", box.lines)
 			}
 		}
 	}

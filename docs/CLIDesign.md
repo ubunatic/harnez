@@ -13,7 +13,8 @@ Documents the command structure, the design decision behind it, and the pitfalls
 |---------|-------|-----------------|
 | `apply` | Global harnesses | Claude settings/rules/commands plus Prime Agent rules/prompts/skills/docs |
 | `init`  | Project (cwd / `-d`) | `AGENTS.md`, `CLAUDE.md` symlink, `docs/<name>.md` copy, `Makefile` |
-| `diff`  | Global | Preview of what `apply` would change |
+| `diff`  | Global / Project | Preview of what `apply` would change; `--capture-docs` writes project drift to inbox |
+| `scan-docs` | Workspace | Read-only scan of child projects for managed doc drift |
 | `clean` | Global | Remove managed keys / strip MD sections |
 | `status`| Global | Config summary + applied-state checks |
 | `usage` | Multi-Agent (local/remote) | Zero-cost token counters, live quota tracking, procs (`-p`), remote host (`--host`) |

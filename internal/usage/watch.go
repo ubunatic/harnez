@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -691,20 +690,6 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 		lines = append(lines, "model: "+agent.ActiveModel)
 	}
 
-	var windows []namedWindow
-	if agent.Session != nil {
-		windows = append(windows, namedWindow{agent.Session.Name, *agent.Session})
-	}
-	if agent.Weekly != nil {
-		windows = append(windows, namedWindow{agent.Weekly.Name, *agent.Weekly})
-	}
-	for _, mg := range agent.ModelGroups {
-		for _, w := range mg.Windows {
-			windows = append(windows, namedWindow{mg.Name + " " + w.Name, w})
-		}
-	}
-	sort.Slice(windows, func(i, j int) bool { return windows[i].w.UsedPercent > windows[j].w.UsedPercent })
-
 	// contentW: usable characters inside the box borders and padding.
 	// renderWBox reserves 4 chars (│·space + space·│), so content = width - 4.
 	contentW := width - 4
@@ -712,32 +697,43 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 		contentW = 10
 	}
 
-	maxShow := 2
-	if len(windows) < maxShow {
-		maxShow = len(windows)
-	}
-	for i := 0; i < maxShow; i++ {
-		w := windows[i].w
-		resetStr := ""
-		if w.DurationLeft > 0 {
-			resetStr = " · " + FormatDuration(w.DurationLeft)
+	// Render quota lines. If the agent has ModelGroups (e.g. AGY), render each group
+	// as a compact twin-quota line: Label [Bar1] [Bar2] Pct1 Dt1 Pct2 Dt2.
+	// Otherwise, if the agent has Session and/or Weekly, render them compactly together or individually.
+	if len(agent.ModelGroups) > 0 {
+		for _, mg := range agent.ModelGroups {
+			label := mg.Name
+			if strings.EqualFold(label, "Gemini Models") {
+				label = "Gemini"
+			} else if strings.EqualFold(label, "Claude and GPT models") || strings.EqualFold(label, "Claude and GPT") {
+				label = "Claude/GPT"
+			}
+			line := formatCompactGroupLine(label, mg.Windows, contentW)
+			lines = append(lines, line)
 		}
-		label := rograph.PadLabel(windows[i].label, 16)
-		// Layout: label(16) + " "(1) + bar(barW+2) + " "(1) + percent(6) + resetStr.
-		// Shrink the bar so that resetStr always fits, down to a minimum of 1;
-		// drop resetStr first if there isn't room for both.
-		barW, keepReset := rograph.RowLayout(contentW, 16, 6, rograph.MaxWidth, visLen(resetStr))
-		if !keepReset {
-			resetStr = ""
+	} else if agent.Session != nil || agent.Weekly != nil {
+		var wins []QuotaWindow
+		// Order: Weekly first, then Session (or vice-versa, matching weekly/5h)
+		if agent.Weekly != nil {
+			wins = append(wins, *agent.Weekly)
 		}
-		bar := rograph.RenderProgressBar(w.UsedPercent, barW)
-		lines = append(lines, fmt.Sprintf("%s %s %4.1f%%%s", label, bar, w.UsedPercent, resetStr))
+		if agent.Session != nil {
+			wins = append(wins, *agent.Session)
+		}
+		if len(wins) == 2 {
+			label := "Wk / 5h"
+			line := formatCompactGroupLine(label, wins, contentW)
+			lines = append(lines, line)
+		} else if len(wins) == 1 {
+			line := formatCompactGroupLine(wins[0].Name, wins, contentW)
+			lines = append(lines, line)
+		}
 	}
 
 	// A fetch error is only worth a line when it actually explains missing
 	// quota windows — an agent with model-group windows already showing has
 	// nothing to apologize for.
-	if agent.QuotaFetchError != "" && len(windows) == 0 {
+	if agent.QuotaFetchError != "" && len(agent.ModelGroups) == 0 && agent.Session == nil && agent.Weekly == nil {
 		lines = append(lines, fmt.Sprintf("\x1b[90mquota: unavailable (%s)\x1b[0m", agent.QuotaFetchError))
 	}
 
@@ -756,6 +752,91 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 	}
 
 	return wbox{title: title, lines: lines, width: width}
+}
+
+// formatCompactGroupLine formats a model group (or weekly+5h pair) into a single compact line:
+// e.g. "Gemini Models    [████] [░░░░]  90% 3d1h   3% 2h17m"
+func formatCompactGroupLine(label string, windows []QuotaWindow, contentW int) string {
+	if len(windows) == 0 {
+		return rograph.PadLabel(label, 16)
+	}
+	if len(windows) == 1 {
+		w := windows[0]
+		resetStr := ""
+		if w.DurationLeft > 0 {
+			resetStr = " " + FormatCompactDuration(w.DurationLeft)
+		}
+		lbl := rograph.PadLabel(label, 16)
+		bar := rograph.RenderProgressBar(w.UsedPercent, 4)
+		line := fmt.Sprintf("%s %s %3.0f%%%s", lbl, bar, w.UsedPercent, resetStr)
+		if visLen(line) > contentW {
+			line = fmt.Sprintf("%s %s %3.0f%%", lbl, bar, w.UsedPercent)
+		}
+		return line
+	}
+
+	// 2 or more windows: sort/pick Weekly and Short-term (5-Hour) or first 2
+	var w1, w2 QuotaWindow
+	// Find weekly and 5h windows if possible
+	foundWeekly, found5h := false, false
+	for _, w := range windows {
+		nameLow := strings.ToLower(w.Name)
+		if !foundWeekly && (strings.Contains(nameLow, "week") || strings.Contains(nameLow, "7-day")) {
+			w1 = w
+			foundWeekly = true
+		} else if !found5h && (strings.Contains(nameLow, "5-hour") || strings.Contains(nameLow, "five hour") || strings.Contains(nameLow, "session")) {
+			w2 = w
+			found5h = true
+		}
+	}
+	if !foundWeekly || !found5h {
+		w1 = windows[0]
+		w2 = windows[1]
+	}
+
+	d1 := ""
+	if w1.DurationLeft > 0 {
+		d1 = " " + FormatCompactDuration(w1.DurationLeft)
+	}
+	d2 := ""
+	if w2.DurationLeft > 0 {
+		d2 = " " + FormatCompactDuration(w2.DurationLeft)
+	}
+
+	labelWidth := 10
+	lbl := rograph.PadLabel(label, labelWidth)
+	b1 := rograph.RenderProgressBar(w1.UsedPercent, 4)
+	b2 := rograph.RenderProgressBar(w2.UsedPercent, 4)
+
+	// Format: Label [b1] pct1 d1 [b2] pct2 d2 (e.g. Gemini [███░] 91% 2h [░░░░] 0% 3d)
+	line := fmt.Sprintf("%s %s %.0f%%%s %s %.0f%%%s", lbl, b1, w1.UsedPercent, d1, b2, w2.UsedPercent, d2)
+	if visLen(line) <= contentW {
+		return line
+	}
+
+	// Drop d2 if too long
+	line = fmt.Sprintf("%s %s %.0f%%%s %s %.0f%%", lbl, b1, w1.UsedPercent, d1, b2, w2.UsedPercent)
+	if visLen(line) <= contentW {
+		return line
+	}
+
+	// Drop d1 as well
+	line = fmt.Sprintf("%s %s %.0f%% %s %.0f%%", lbl, b1, w1.UsedPercent, b2, w2.UsedPercent)
+	if visLen(line) <= contentW {
+		return line
+	}
+
+	// If still too long in very narrow box, shrink label
+	for lw := labelWidth - 1; lw >= 6; lw-- {
+		lblShrunk := rograph.PadLabel(label, lw)
+		line = fmt.Sprintf("%s %s %.0f%% %s %.0f%%", lblShrunk, b1, w1.UsedPercent, b2, w2.UsedPercent)
+		if visLen(line) <= contentW {
+			return line
+		}
+	}
+
+	// If still too long, shrink label to fit
+	return line
 }
 
 // gridColumns picks how many panels fit side by side in usable columns, and the

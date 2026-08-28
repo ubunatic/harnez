@@ -10,24 +10,10 @@ import (
 	"sort"
 	"strings"
 
+	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/markdown"
 )
-
-const agentsMDTemplate = `Adhere to the following conventions.
-
-<!-- harnez:begin Local Overlays -->
-- Local ephemeral overrides: @AGENTS.local.md
-<!-- harnez:end Local Overlays -->
-
-<!-- harnez:begin Project Summary -->
-<!-- harnez:end Project Summary -->
-
-## Development Scripts
-
-Run from project root.
-
-`
 
 const summarySection = "Project Summary"
 
@@ -239,7 +225,10 @@ func initialAgentsMD(cfg *Config) string {
 			return cfg.AgentsMD.Local.Content
 		}
 	}
-	return agentsMDTemplate
+	if data, err := harnez.DefaultFS.ReadFile("docs/templates/AGENTS.md"); err == nil {
+		return string(data)
+	}
+	return "Adhere to the following conventions.\n"
 }
 
 // RunInit creates AGENTS.md and CLAUDE.md symlink in a project directory,

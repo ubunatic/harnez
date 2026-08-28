@@ -247,9 +247,11 @@ Every ticket in `issues/NNN-kebab-case.md` begins with standard metadata headers
 |---|---|---|
 | `apply` | `-c` `-t` `-d` `--force-docs` | Sync global Claude, Gemini, Codex, and Prime Agent rules, prompts, skills, and docs |
 | `init` | `-c` `-d` `--docs` `-m` `--summary` `--update` `--replace` `-y` | Set up a project: AGENTS.md, doc copies, Makefile targets |
-| `diff` | `-c` `-t` `-e` | Preview changes without writing (`-e, --exit-code` exits with 1 on drift) |
+| `diff` | `-c` `-t` `-e` `--capture-docs` `--out` | Preview changes without writing (`-e, --exit-code` exits with 1 on drift; `--capture-docs` writes report to inbox) |
+| `scan-docs` | `-c <dir>` | Read-only scan of child projects for managed doc drift |
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
 | `status` | `-c` `-t` | Print config summary and check which items are present on disk |
+| `assess` | `[path]` `--json` | Fast code/doc metrics, token estimation, and repo feasibility report |
 | `usage` | `--json` `--agent` `--offline` `-w` `-s` `--interval` | Show unified token, session, and quota status across AI coding agents (aliases: `quota`, `tokens`, `stats`) |
 
 All commands accept `-c <path>` (config file, default: embedded).
