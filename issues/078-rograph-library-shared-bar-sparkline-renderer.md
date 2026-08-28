@@ -1,6 +1,6 @@
 # 078 — `rograph`: Shared Read-Only Graph Library for Usage Bars & Sparklines
 
-**Status**: Open
+**Status**: Closed — resolved in aa06ad7
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Refactor

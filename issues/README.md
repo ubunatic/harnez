@@ -76,6 +76,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 075 | [075-concisemode-promote-doc-to-real-skill.md](075-concisemode-promote-doc-to-real-skill.md) | ConciseMode: Dynamic Runtime Switch & AGENTS.md Synchronization (`harnez mode`) | Closed — resolved |
 | 076 | [076-agents-local-overlay-for-runtime-mode-switching.md](076-agents-local-overlay-for-runtime-mode-switching.md) | `AGENTS.local.md` Overlay & Ephemeral Runtime Mode Switching | Closed — resolved |
 | 077 | [077-box-diagram-width-and-right-margin-rules.md](077-box-diagram-width-and-right-margin-rules.md) | Box Diagram Width Limits & Right-Side Padding Rules (Prevent Terminal Line Wrap Collapse) | Closed — resolved in `docs/lang/Markdown.md` |
-| 078 | [078-rograph-library-shared-bar-sparkline-renderer.md](078-rograph-library-shared-bar-sparkline-renderer.md) | `rograph`: Shared Read-Only Graph Library for Usage Bars & Sparklines | Open |
+| 078 | [078-rograph-library-shared-bar-sparkline-renderer.md](078-rograph-library-shared-bar-sparkline-renderer.md) | `rograph`: Shared Read-Only Graph Library for Usage Bars & Sparklines | Closed — resolved in aa06ad7 |
 | 079 | [079-consistent-10-char-shrink-to-fit-graphs.md](079-consistent-10-char-shrink-to-fit-graphs.md) | Apply Consistent Max-10-Char Shrink-to-Fit Width to All Usage Graphs | Open |
 | 080 | [080-agent-box-layout-extraction.md](080-agent-box-layout-extraction.md) | Extract Agent-Box Content Layout Into a Small Layout Library | Open |
