@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -212,8 +214,46 @@ func main() {
 	historyCmd.AddCommand(historyTimelineCmd, historyFetchCmd, historyRecordCmd, historyStatsCmd)
 	usageCmd.AddCommand(historyCmd)
 
+	var collectorInterval time.Duration
+	var collectorOnce bool
+	var collectorOffline bool
+	collectorCmd := &cobra.Command{
+		Use:   "agent-collector",
+		Short: "Run the background usage-collector daemon (see systemd/harnez-agent-collector.service)",
+		Long: "Runs the Claude/Codex/AGY usage collectors on a timer and atomically writes one JSON\n" +
+			"snapshot per agent to the shared harnez state directory (see `harnez usage --json` for the\n" +
+			"schema of each snapshot's \"usage\" field). `harnez usage` and the --watch TUI read this\n" +
+			"cache first, falling back to a live collect if it's missing or stale. Intended to run as\n" +
+			"a systemd --user service; install the unit with `harnez apply` (see docs/CLIDesign.md).",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var client *http.Client
+			if !collectorOffline {
+				client = &http.Client{Timeout: 5 * time.Second}
+			}
+			if collectorOnce {
+				summary := usage.CollectAllLive(cmd.Context(), "", client)
+				stateDir := usage.StateDir("")
+				for _, agent := range summary.Agents {
+					if err := usage.WriteAgentSnapshot(stateDir, agent.AgentID, agent); err != nil {
+						return fmt.Errorf("write %s snapshot: %w", agent.AgentID, err)
+					}
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "wrote agent usage snapshots to %s\n", stateDir)
+				return nil
+			}
+			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			return usage.RunCollector(ctx, "", client, collectorInterval, cmd.OutOrStdout())
+		},
+	}
+	collectorCmd.Flags().DurationVar(&collectorInterval, "interval", usage.DefaultCollectorInterval,
+		"snapshot collection interval")
+	collectorCmd.Flags().BoolVar(&collectorOnce, "once", false, "collect and write snapshots once, then exit (no timer loop)")
+	collectorCmd.Flags().BoolVar(&collectorOffline, "offline", false, "disable live network queries and use local caches only")
+
 	var applyDocs []string
 	var forceDocs bool
+	var applySystemd bool
 	apply := &cobra.Command{
 		Use:   "apply",
 		Short: "Apply config.yaml to global Claude Code and agent harness directories",
@@ -224,13 +264,15 @@ func main() {
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
-			return claude.ApplyAll(t, cfg, applyDocs, forceDocs)
+			return claude.ApplyAll(t, cfg, applyDocs, forceDocs, applySystemd)
 		},
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	apply.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 	apply.Flags().StringSliceVarP(&applyDocs, "docs", "d", nil, "doc(s) to install globally, comma-separated or repeated (e.g. golang,canary)")
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing docs with bundled versions")
+	apply.Flags().BoolVar(&applySystemd, "systemd", false,
+		"install the harnez-agent-collector systemd --user unit to ~/.config/systemd/user (issue 082)")
 
 	var diffExitCode bool
 	var captureDocs bool
@@ -383,7 +425,7 @@ func main() {
 	}
 	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
 
-	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, initCmd, assessCmd, newDistillCmd(), newModeCmd())
+	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, initCmd, assessCmd, collectorCmd, newDistillCmd(), newModeCmd())
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}

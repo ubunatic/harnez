@@ -324,6 +324,55 @@ func copyFile(src, dst string) (applyResult, error) {
 	return applyResult{changed: changed}, nil
 }
 
+// systemdUnitSource/systemdUnitName locate the bundled harnez-agent-collector
+// unit template (issue 082) within cfg.FS, and name it on disk.
+const systemdUnitSource = "systemd/harnez-agent-collector.service"
+const systemdUnitName = "harnez-agent-collector.service"
+
+// systemdUnitExecPlaceholder is substituted in the bundled unit template
+// with the absolute path to the currently running harnez binary.
+const systemdUnitExecPlaceholder = "{{HARNEZ_BIN}}"
+
+// systemdUserUnitDir resolves the standard systemd --user unit directory:
+// ~/.config/systemd/user/.
+func systemdUserUnitDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home dir: %w", err)
+	}
+	return filepath.Join(home, ".config", "systemd", "user"), nil
+}
+
+// installSystemdUnit writes (or refreshes) the harnez-agent-collector
+// systemd --user unit file (issue 082). It substitutes the unit's
+// ExecStart with the absolute path to the currently running harnez binary
+// (os.Executable()) rather than a bare `harnez` command name, because a
+// systemd --user session does not reliably inherit the interactive shell's
+// PATH — a bare command name would silently fail to start regardless of
+// whether harnez was installed via `go install` (~/go/bin) or
+// `make install-system` (/usr/local/bin).
+func installSystemdUnit(fsys fs.FS) (string, applyResult, error) {
+	unitDir, err := systemdUserUnitDir()
+	if err != nil {
+		return "", applyResult{}, err
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return "", applyResult{}, fmt.Errorf("resolve harnez binary path: %w", err)
+	}
+	tmpl, err := fs.ReadFile(fsys, systemdUnitSource)
+	if err != nil {
+		return "", applyResult{}, fmt.Errorf("read %s: %w", systemdUnitSource, err)
+	}
+	content := strings.ReplaceAll(string(tmpl), systemdUnitExecPlaceholder, exe)
+	dst := filepath.Join(unitDir, systemdUnitName)
+	if err := os.MkdirAll(unitDir, 0755); err != nil {
+		return "", applyResult{}, fmt.Errorf("create %s: %w", unitDir, err)
+	}
+	r, err := writeFileIfChanged(dst, []byte(content))
+	return dst, r, err
+}
+
 func installDoc(fsys fs.FS, src, dst string, force bool) (applyResult, error) {
 	if !force {
 		if _, err := os.Stat(dst); err == nil {
@@ -485,8 +534,13 @@ func mergeDocs(fromConfig, fromFlag []string) []string {
 	return jsonc.UnionStrings(fromConfig, fromFlag)
 }
 
-// ApplyAll applies configuration.
-func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool) error {
+// ApplyAll applies configuration. installSystemd additionally installs the
+// harnez-agent-collector systemd --user unit (issue 082) to
+// ~/.config/systemd/user/ — a real machine-level, home-relative location
+// outside `target`, so it defaults to off to keep plain `harnez apply` (and
+// this package's own tests, which sandbox `target` but not $HOME) free of
+// side effects on the real user home directory unless explicitly requested.
+func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool) error {
 	if err := validateDocNames(cfg, docs); err != nil {
 		return err
 	}
@@ -666,6 +720,20 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool) error {
 				state := langDocState(cfg.FS, lang.Source, dst)
 				addStat(name, fsutil.ContractHome(dst)+" ["+state+"]")
 			}
+		}
+	}
+
+	if installSystemd {
+		unitPath, ur, err := installSystemdUnit(cfg.FS)
+		if err != nil {
+			return fmt.Errorf("systemd unit: %w", err)
+		}
+		if ur.changed {
+			changes++
+		}
+		printResult("wrote", unitPath, ur)
+		if ur.changed {
+			fmt.Println("  enable with: systemctl --user enable --now harnez-agent-collector.service")
 		}
 	}
 

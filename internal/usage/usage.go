@@ -14,8 +14,27 @@ import (
 	"ubunatic.com/harnez/internal/rograph"
 )
 
-// CollectAll gathers usage, quotas, and state from all supported agents.
+// CollectAll gathers usage, quotas, and state from all supported agents. It
+// reads each agent's snapshot from the shared collector-daemon cache first
+// (see StateDir) and only falls back to a live collect for agents whose
+// cached snapshot is missing or older than DefaultCacheStaleness — e.g. the
+// daemon (`harnez agent-collector`, issue 082) has never run on this
+// machine, or hasn't ticked recently. This keeps existing behavior intact
+// when the daemon has never run: every read simply falls back to live
+// collection exactly as before issue 082.
 func CollectAll(ctx context.Context, homeDir string, client *http.Client) UsageSummary {
+	return collectAll(ctx, homeDir, client, true)
+}
+
+// CollectAllLive always runs the live collectors, ignoring any cached
+// snapshot. This is what `harnez agent-collector` uses on each tick, so the
+// daemon never just reads back its own (possibly still-fresh) cache instead
+// of actually refreshing it.
+func CollectAllLive(ctx context.Context, homeDir string, client *http.Client) UsageSummary {
+	return collectAll(ctx, homeDir, client, false)
+}
+
+func collectAll(ctx context.Context, homeDir string, client *http.Client, useCache bool) UsageSummary {
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
@@ -24,9 +43,21 @@ func CollectAll(ctx context.Context, homeDir string, client *http.Client) UsageS
 	agyDir := filepath.Join(homeDir, ".gemini", "antigravity-cli")
 	codexDir := filepath.Join(homeDir, ".codex")
 
-	claudeUsage := CollectClaude(ctx, claudeDir, client)
-	agyUsage := CollectAGY(ctx, agyDir, client)
-	codexUsage := CollectCodex(ctx, codexDir, client)
+	collectClaude := func() AgentUsage { return CollectClaude(ctx, claudeDir, client) }
+	collectAGY := func() AgentUsage { return CollectAGY(ctx, agyDir, client) }
+	collectCodex := func() AgentUsage { return CollectCodex(ctx, codexDir, client) }
+
+	var claudeUsage, agyUsage, codexUsage AgentUsage
+	if useCache {
+		stateDir := StateDir(homeDir)
+		claudeUsage = cacheOrLive(stateDir, "claude", DefaultCacheStaleness, collectClaude)
+		agyUsage = cacheOrLive(stateDir, "agy", DefaultCacheStaleness, collectAGY)
+		codexUsage = cacheOrLive(stateDir, "codex", DefaultCacheStaleness, collectCodex)
+	} else {
+		claudeUsage = collectClaude()
+		agyUsage = collectAGY()
+		codexUsage = collectCodex()
+	}
 
 	return UsageSummary{
 		Timestamp: time.Now(),
@@ -54,7 +85,12 @@ func RenderText(summary UsageSummary) string {
 	sb.WriteString("Agentic Coding Usage & Quota Monitor\n")
 	sb.WriteString(fmt.Sprintf("Snapshot taken at: %s\n\n", summary.Timestamp.Format("2006-01-02 15:04:05 MST")))
 
+	shown := 0
 	for _, agent := range summary.Agents {
+		if !agent.HasUsageData() {
+			continue
+		}
+		shown++
 		var lines []string
 
 		if !agent.Installed {
@@ -242,6 +278,12 @@ func RenderText(summary UsageSummary) string {
 			}
 		}
 		sb.WriteString("\n")
+	}
+
+	if shown == 0 {
+		sb.WriteString("No supported agent (Claude Code, Codex, AGY) has recorded usage on this\n")
+		sb.WriteString("machine yet. Install/configure one and run it, or run `harnez agent-collector\n")
+		sb.WriteString("--once` to collect a fresh snapshot, then re-run `harnez usage`.\n")
 	}
 
 	return sb.String()

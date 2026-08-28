@@ -769,8 +769,20 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 	historyStatStr := fmt.Sprintf("   \x1b[90mhistory: %d %s (%s)\x1b[0m", fileCount, fileWord, FormatBytes(totalBytes))
 
-	var visible []AgentUsage
+	// discovered is every agent the collector actually found real local/
+	// remote state for (issue 083: self-hiding, auto-discovery display) — an
+	// agent that isn't installed or configured on this machine never enters
+	// the toggle/visibility machinery below at all, so it can't show up as
+	// an empty box or a "hidden: [x]" toggle hint either.
+	var discovered []AgentUsage
 	for _, agent := range summary.Agents {
+		if agent.HasUsageData() {
+			discovered = append(discovered, agent)
+		}
+	}
+
+	var visible []AgentUsage
+	for _, agent := range discovered {
 		if sec.agentVisible(agent.AgentID) {
 			visible = append(visible, agent)
 		}
@@ -785,7 +797,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 
 	var hidden []string
-	for _, agent := range summary.Agents {
+	for _, agent := range discovered {
 		if !sec.agentVisible(agent.AgentID) {
 			hidden = append(hidden, fmt.Sprintf("[%s]", agentKey(agent.AgentID)))
 		}
@@ -841,6 +853,16 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 
 	var body []string
+	// No agent had any real recorded usage found on this machine — say so
+	// explicitly rather than silently rendering a screen with no agent
+	// boxes at all (issue 083).
+	if len(discovered) == 0 && len(summary.Agents) > 0 {
+		body = append(body,
+			"\x1b[90mno agent usage detected — install/configure Claude Code, Codex, or AGY\x1b[0m",
+			"\x1b[90mor run `harnez agent-collector --once` to collect a fresh snapshot\x1b[0m",
+			"",
+		)
+	}
 	if totalPanels == 0 {
 		body = append(body, "\x1b[90m(all panels hidden)\x1b[0m")
 	} else {

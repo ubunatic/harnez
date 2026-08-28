@@ -56,7 +56,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 
 	// 3. First apply: should write files and show changes
 	out, err := captureStdout(func() error {
-		return claude.ApplyAll(targetDir, cfg, nil, false)
+		return claude.ApplyAll(targetDir, cfg, nil, false, false)
 	})
 	if err != nil {
 		t.Fatalf("First ApplyAll failed: %v", err)
@@ -118,7 +118,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 
 	// 4. Second apply: must be idempotent and report "No changes."
 	out, err = captureStdout(func() error {
-		return claude.ApplyAll(targetDir, cfg, nil, false)
+		return claude.ApplyAll(targetDir, cfg, nil, false, false)
 	})
 	if err != nil {
 		t.Fatalf("Second ApplyAll failed: %v", err)
@@ -179,7 +179,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 
 	// 8. Apply after drift: must restore the dropped permission
 	out, err = captureStdout(func() error {
-		return claude.ApplyAll(targetDir, cfg, nil, false)
+		return claude.ApplyAll(targetDir, cfg, nil, false, false)
 	})
 	if err != nil {
 		t.Fatalf("ApplyAll to repair drift failed: %v", err)

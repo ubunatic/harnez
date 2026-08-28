@@ -250,6 +250,69 @@ func TestBuildWatchFrame_HistoryHeaderAnd4Boxes(t *testing.T) {
 	}
 }
 
+// TestBuildWatchFrame_SelfHidesAgentsWithoutUsageData covers issue 083: an
+// agent with real recorded usage renders its box, an agent with no usage
+// data (Installed: false) is filtered out entirely — no empty box, and no
+// "hidden: [x]" toggle hint either, since the user never hid it.
+func TestBuildWatchFrame_SelfHidesAgentsWithoutUsageData(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true},
+			{AgentID: "agy", Name: "Antigravity", Installed: false},
+			{AgentID: "codex", Name: "OpenAI Codex", Installed: false},
+		},
+	}
+
+	sec := defaultWatchSections()
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frameText := strings.Join(frame.lines, "\n")
+
+	if !strings.Contains(frameText, "Claude Code") {
+		t.Errorf("expected frame to contain the Claude box (has usage data), got:\n%s", frameText)
+	}
+	if strings.Contains(frameText, "Antigravity") {
+		t.Errorf("expected frame to omit the AGY box (no usage data), got:\n%s", frameText)
+	}
+	if strings.Contains(frameText, "OpenAI Codex") {
+		t.Errorf("expected frame to omit the Codex box (no usage data), got:\n%s", frameText)
+	}
+	if strings.Contains(frameText, "[G]") || strings.Contains(frameText, "[O]") {
+		t.Errorf("expected no 'hidden: [G]'/'[O]' toggle hints for agents with no usage data, got:\n%s", frameText)
+	}
+}
+
+// TestBuildWatchFrame_AllAgentsAbsent covers issue 083's "don't render a
+// silently empty screen" requirement for the --watch TUI: when no agent has
+// any real recorded usage, the frame must say so explicitly.
+func TestBuildWatchFrame_AllAgentsAbsent(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: false},
+			{AgentID: "agy", Name: "Antigravity", Installed: false},
+			{AgentID: "codex", Name: "OpenAI Codex", Installed: false},
+		},
+	}
+
+	sec := defaultWatchSections()
+	sec.Processes = false
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frameText := strings.Join(frame.lines, "\n")
+
+	// Box titles render as "[X] <Name>"; check for that rather than the bare
+	// name, since the explanatory fallback message legitimately mentions the
+	// agent names in prose.
+	for _, name := range []string{"Claude Code", "Antigravity", "OpenAI Codex"} {
+		if strings.Contains(frameText, "] "+name) {
+			t.Errorf("expected frame to omit %s box (no usage data anywhere), got:\n%s", name, frameText)
+		}
+	}
+	if !strings.Contains(frameText, "no agent usage detected") {
+		t.Errorf("expected frame to explain that no agent has recorded usage, got:\n%s", frameText)
+	}
+}
+
 func TestBuildProcessesBox(t *testing.T) {
 	box := buildProcessesBox(40, nil)
 	if !strings.Contains(box.title, "[P]") || !strings.Contains(box.title, "Processes") {

@@ -1,0 +1,20 @@
+[Unit]
+Description=harnez agent usage-collector daemon (issue 082)
+Documentation=https://codeberg.org/ubunatic/harnez
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart={{HARNEZ_BIN}} agent-collector
+Restart=on-failure
+RestartSec=5s
+
+# Writes only to $XDG_STATE_HOME/harnez/agents/usage (default
+# ~/.local/state/harnez/agents/usage) — no other filesystem access needed.
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%S/harnez
+
+[Install]
+WantedBy=default.target
