@@ -138,3 +138,45 @@ Before spawning parallel worktree agents for Go:
 - [ ] Add `make deps-<target>` targets for system packages.
 - [ ] Add "no package-level mutable state" to Go.md and AGENTS.md.
 - [ ] Verify worktree isolation model on this machine.
+
+---
+
+## 2026-08-28 update (harnez, sequential single-agent worktrees)
+
+Confirms and closes the "Verify worktree write-back behaviour" TODO above, plus a second,
+previously undocumented failure mode. Observed twice in one session while orchestrating
+consecutive (not parallel) dev agents for issues 082 and 083, each spawned with
+`isolation: "worktree"`.
+
+### Confirmed: `isolation: "worktree"` can branch from a stale base, not current HEAD
+
+Both spawned worktrees had a branch HEAD several commits behind the main repo's HEAD at spawn
+time (missing already-committed doc/issue-tracker commits). This is a harness-level bug, not
+something the calling agent can prevent — `git merge-base --is-ancestor <worktree-HEAD>
+<main-HEAD>` confirmed strict ancestry, i.e. genuinely stale, not just a different branch.
+Reported upstream via `SendFeedback`. Workaround used: commit the worktree's changes on its own
+branch, `git rebase <main-HEAD>`, resolve conflicts, re-verify build/tests, then diff the rebased
+branch against main and transplant it back as uncommitted working-tree changes (since the
+project's convention is not to auto-commit larger features without a review pass).
+
+### New finding: a worktree cannot see the main checkout's *uncommitted* changes
+
+A worktree only shares the repo's committed object database with the main checkout — it does not
+share working-tree state. When ticket B's agent needed ticket A's still-uncommitted implementation
+as a prerequisite (both by design, per this project's ask-before-commit convention for larger
+features), the fresh worktree simply didn't have those files, even after rebasing onto the
+correct commit. The agent correctly detected this (missing symbols/files) and stopped rather than
+guessing, which was the right call — but resolving it required the orchestrator to manually copy
+the relevant uncommitted files from the main checkout into the second worktree before the agent
+could proceed.
+
+### Resolution: default to no worktree isolation for sequential ticket work
+
+Both problems disappear if consecutive dev agents just operate directly on the checked-out
+branch instead of an isolated worktree — there is no separate branch to go stale, and no
+uncommitted-state visibility gap, since there's only one working tree. This is now the documented
+default: see `AGENTS.md` §Background Tasks & Process Hygiene ("Do not spawn subagents with git
+worktree isolation unless the user explicitly requests it") and the same rule mirrored into
+`docs/templates/AGENTS.md` for new projects. Worktree isolation remains appropriate for genuinely
+parallel, potentially-conflicting work (see the 2026-05 instamoji case above) — just not as a
+default for "do ticket A, then ticket B."

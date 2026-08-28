@@ -115,6 +115,11 @@ Run from project root.
 - Regularly inspect spawned background tasks and explicitly terminate idle, completed, or zombie tasks.
 - Clean up watch commands, poll loops, schedule timers, and background test subprocesses before finishing a task.
 - Never abandon orphan processes or lingering watch tasks in the background.
+- Do not spawn subagents with git worktree isolation unless the user explicitly requests it.
+  Sequential/consecutive ticket work should run directly on the currently checked-out branch —
+  worktrees have their own failure modes (e.g. branching from a stale base, or being unable to
+  see a prior step's still-uncommitted changes) and add reconciliation overhead that isn't needed
+  for normal one-after-another dev work.
 
 ## Context Discipline & Token Efficiency
 - Do not execute whole-file read tools on `AGENTS.md`, `CLAUDE.md`, or rules already in the active system prompt.

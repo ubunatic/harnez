@@ -53,7 +53,7 @@ Generated copies land here (root) after `apply` / `init`.
 | File | Topic |
 |------|-------|
 | [studies/GoRelease.md](studies/GoRelease.md) | Release pipeline case study (goreleaser consolidation) |
-| [studies/Worktrees.md](studies/Worktrees.md) | Parallel worktrees case study (go.mod races, dependencies) |
+| [studies/Worktrees.md](studies/Worktrees.md) | Worktrees case study (go.mod races, dependencies; stale-base-branch and uncommitted-state-invisibility bugs found 2026-08-28) |
 | [studies/2026-08-16-harnez-migration-and-workspace-unification.md](studies/2026-08-16-harnez-migration-and-workspace-unification.md) | Harnez migration, Spec generalization & workspace diagnostics case study |
 | [studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md](studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md) | Multi-agent token, session & quota monitoring case study (Claude Code, AGY, Codex) |
 | [studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md](studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md) | `harnez usage --watch` TUI build + a three-theory terminal-rendering bug postmortem (stale redraw, gutter math, when to escalate to real pty/VT100 testing) |
@@ -64,6 +64,7 @@ Generated copies land here (root) after `apply` / `init`.
 | [studies/2026-08-23-usage-history-subcommands-process-panel-and-remote-monitoring.md](studies/2026-08-23-usage-history-subcommands-process-panel-and-remote-monitoring.md) | Usage history subcommand decomposition, process telemetry panel (`/proc`), SSH remote monitoring (`--host` / `[r]`), and multi-host `make sync` |
 | [studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md](studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md) | ADR: device telemetry (Load box CPU/GPU) is read only via kernel-standard procfs/sysfs, never a vendor's proprietary CLI/SDK — `nvidia-smi` calling was removed entirely rather than kept as a fallback |
 | [studies/2026-08-28-load-box-cpu-gpu-kernel-metrics.md](studies/2026-08-28-load-box-cpu-gpu-kernel-metrics.md) | The `[L] Load` panel's kernel data sources (`/proc/stat` per-core parsing, hwmon CPU temp discovery, amdgpu sysfs attributes) and reusable patterns (burst-seeded history, decoupled redraw ticker, absolute-scale sparklines, fixed-width label columns) |
+| [studies/2026-08-28-usage-collector-daemon-architecture.md](studies/2026-08-28-usage-collector-daemon-architecture.md) | Background usage-collector daemon design (issues 082–087): Omarchy Quickshell Agents widget comparison, the two-layer cache split, SQLite/DuckDB considered-and-rejected in favor of a generalized flock gate, and an offline-cache-masks-live-data bug postmortem |
 
 **`docs/feedback/`** — agentic retrospectives & harness feedback reports
 
