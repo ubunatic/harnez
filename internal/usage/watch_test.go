@@ -45,6 +45,74 @@ func TestRenderWBoxWidth(t *testing.T) {
 	}
 }
 
+func TestFormatMemoryLines(t *testing.T) {
+	ram := formatSystemMemoryLine(SystemMemory{
+		UsedMiB:  8 * 1024,
+		TotalMiB: 32 * 1024,
+		Ok:       true,
+	})
+	if got, want := stripANSI(ram), "ram              8.0/32.0G 25%"; got != want {
+		t.Errorf("formatSystemMemoryLine = %q, want %q", got, want)
+	}
+
+	gpu := formatGPUMemoryLines(GPU{
+		MemUsedMiB:   6 * 1024,
+		MemTotalMiB:  20 * 1024,
+		MemPercent:   30,
+		VRAMUsedMiB:  5 * 1024,
+		VRAMTotalMiB: 8 * 1024,
+		GTTUsedMiB:   1 * 1024,
+		GTTTotalMiB:  12 * 1024,
+		HaveMem:      true,
+		HaveVRAM:     true,
+		HaveGTT:      true,
+	})
+	want := []string{
+		"gpu mem          6.0/20.0G 30%",
+		"vram/gtt         v5.0/8.0 g1.0/12.0",
+	}
+	if len(gpu) != len(want) {
+		t.Fatalf("formatGPUMemoryLines returned %d lines, want %d: %v", len(gpu), len(want), gpu)
+	}
+	for i := range want {
+		if got := stripANSI(gpu[i]); got != want[i] {
+			t.Errorf("formatGPUMemoryLines[%d] = %q, want %q", i, got, want[i])
+		}
+	}
+}
+
+func TestLoadBoxMemoryLineClipsToWidth(t *testing.T) {
+	b := wbox{
+		title: "\x1b[1m[L]\x1b[0m Load",
+		lines: formatGPUMemoryLines(GPU{
+			MemUsedMiB:   6 * 1024,
+			MemTotalMiB:  20 * 1024,
+			MemPercent:   30,
+			VRAMUsedMiB:  5 * 1024,
+			VRAMTotalMiB: 8 * 1024,
+			GTTUsedMiB:   1 * 1024,
+			GTTTotalMiB:  12 * 1024,
+			HaveMem:      true,
+			HaveVRAM:     true,
+			HaveGTT:      true,
+		}),
+		width: minBoxWidth,
+	}
+
+	for i, line := range renderWBox(b) {
+		if got := visLen(line); got != minBoxWidth {
+			t.Errorf("line %d visible width = %d, want %d: %q", i, got, minBoxWidth, stripANSI(line))
+		}
+	}
+	rendered := renderWBox(b)
+	if got := stripANSI(rendered[1]); !strings.Contains(got, "gpu mem") {
+		t.Errorf("expected total memory line, got %q", got)
+	}
+	if got := stripANSI(rendered[2]); !strings.Contains(got, "vram/gtt") {
+		t.Errorf("expected split memory line, got %q", got)
+	}
+}
+
 // TestFitClipsToViewport ensures a frame can never exceed the terminal box.
 // An overflowing frame scrolls the terminal, after which the `\x1b[H` starting
 // each redraw no longer addresses the row the program assumes.
@@ -397,5 +465,3 @@ func TestBuildWatchFrame_RemoteHost(t *testing.T) {
 		t.Errorf("expected [r]emote in footer, got:\n%s", frameText)
 	}
 }
-
-

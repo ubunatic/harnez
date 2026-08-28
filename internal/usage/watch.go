@@ -445,6 +445,9 @@ func buildLoadBox(width int) wbox {
 	if load.NumCPU > 0 {
 		lines = append(lines, formatCPULine(load))
 	}
+	if load.Memory.Ok {
+		lines = append(lines, formatSystemMemoryLine(load.Memory))
+	}
 
 	gpus := CurrentGPUs()
 	if len(gpus) == 0 {
@@ -455,6 +458,9 @@ func buildLoadBox(width int) wbox {
 				break
 			}
 			lines = append(lines, formatGPULine(g))
+			if g.HaveMem {
+				lines = append(lines, formatGPUMemoryLines(g)...)
+			}
 		}
 	}
 	if len(lines) == 0 {
@@ -501,6 +507,11 @@ func formatCPULine(load CPULoad) string {
 	return fmt.Sprintf("%s [%s] %s%s", label, rograph.PercentSparkline(series, min(rograph.MaxWidth, len(series))), avgPart, tempPart)
 }
 
+func formatSystemMemoryLine(mem SystemMemory) string {
+	label := padLoadLabel("ram")
+	return fmt.Sprintf("%s %s/%sG %.0f%%", label, formatGiB(mem.UsedMiB), formatGiB(mem.TotalMiB), percent(mem.UsedMiB, mem.TotalMiB))
+}
+
 // formatGPULine renders the "gpu (name) [spark] avg% (temp)" line. The
 // sparkline shows recent history (UtilHistory), or degenerates to a single
 // current-value glyph if no history has been collected yet.
@@ -515,6 +526,34 @@ func formatGPULine(g GPU) string {
 		tempPart = fmt.Sprintf(" (%.0f°C)", g.TempC)
 	}
 	return fmt.Sprintf("%s [%s] %.0f%%%s", label, rograph.PercentSparkline(series, min(rograph.MaxWidth, len(series))), g.UtilPercent, tempPart)
+}
+
+func formatGPUMemoryLines(g GPU) []string {
+	label := padLoadLabel("gpu mem")
+	lines := []string{fmt.Sprintf("%s %s/%sG %.0f%%", label, formatGiB(g.MemUsedMiB), formatGiB(g.MemTotalMiB), g.MemPercent)}
+
+	parts := []string{}
+	if g.HaveVRAM {
+		parts = append(parts, fmt.Sprintf("v%s/%s", formatGiB(g.VRAMUsedMiB), formatGiB(g.VRAMTotalMiB)))
+	}
+	if g.HaveGTT {
+		parts = append(parts, fmt.Sprintf("g%s/%s", formatGiB(g.GTTUsedMiB), formatGiB(g.GTTTotalMiB)))
+	}
+	if len(parts) > 0 {
+		lines = append(lines, fmt.Sprintf("%s %s", padLoadLabel("vram/gtt"), strings.Join(parts, " ")))
+	}
+	return lines
+}
+
+func formatGiB(mib float64) string {
+	return fmt.Sprintf("%.1f", mib/1024)
+}
+
+func percent(used, total float64) float64 {
+	if total <= 0 {
+		return 0
+	}
+	return used / total * 100
 }
 
 // buildHistoryBox renders a compact 4th panel showing recorded usage history stats.

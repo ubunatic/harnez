@@ -44,6 +44,16 @@ type CPULoad struct {
 	// false where none of those drivers is present.
 	TempC  float64
 	TempOk bool
+
+	Memory SystemMemory
+}
+
+// SystemMemory holds RAM usage parsed from /proc/meminfo.
+type SystemMemory struct {
+	UsedMiB      float64
+	TotalMiB     float64
+	AvailableMiB float64
+	Ok           bool
 }
 
 // CurrentCPULoad reads the system load averages and the instantaneous CPU
@@ -65,7 +75,17 @@ func CurrentCPULoad() CPULoad {
 	load.CPUPercent, load.CPUPercentOk, load.PerCorePercent, load.PerCoreOk = currentCPUPercents()
 	load.PercentHistory = cpuHistory.snapshot()
 	load.TempC, load.TempOk = readCPUTempFromSysfs()
+	load.Memory = CurrentSystemMemory()
 	return load
+}
+
+// CurrentSystemMemory reads Linux memory pressure from /proc/meminfo.
+func CurrentSystemMemory() SystemMemory {
+	mem, err := readMeminfo("/proc/meminfo")
+	if err != nil {
+		return SystemMemory{}
+	}
+	return mem
 }
 
 // cpuTempHwmonDrivers are the hwmon driver names known to report a CPU
@@ -317,18 +337,74 @@ func readLoadavgFromProc(path string) (CPULoad, error) {
 	return CPULoad{Load1: l1, Load5: l5, Load15: l15}, nil
 }
 
+func readMeminfo(path string) (SystemMemory, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return SystemMemory{}, err
+	}
+	return parseMeminfo(string(data))
+}
+
+func parseMeminfo(text string) (SystemMemory, error) {
+	values := map[string]uint64{}
+	for _, line := range strings.Split(text, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		key := strings.TrimSuffix(fields[0], ":")
+		valueKiB, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			return SystemMemory{}, err
+		}
+		values[key] = valueKiB
+	}
+
+	total, ok := values["MemTotal"]
+	if !ok || total == 0 {
+		return SystemMemory{}, fmt.Errorf("unexpected /proc/meminfo format: missing MemTotal")
+	}
+	available, ok := values["MemAvailable"]
+	if !ok {
+		free := values["MemFree"]
+		buffers := values["Buffers"]
+		cached := values["Cached"]
+		reclaimable := values["SReclaimable"]
+		shmem := values["Shmem"]
+		available = free + buffers + cached + reclaimable
+		if available >= shmem {
+			available -= shmem
+		}
+	}
+	if available > total {
+		available = total
+	}
+	return SystemMemory{
+		UsedMiB:      float64(total-available) / 1024,
+		TotalMiB:     float64(total) / 1024,
+		AvailableMiB: float64(available) / 1024,
+		Ok:           true,
+	}, nil
+}
+
 // readLoadavgFromUptime parses the trailing "load averages: 1.23 1.45 1.67"
 // (or "load average:") segment of `uptime` output.
 // GPU holds one GPU's utilization, VRAM usage, and temperature.
 type GPU struct {
-	Name        string
-	UtilPercent float64
-	MemUsedMiB  float64
-	MemTotalMiB float64
-	MemPercent  float64
-	TempC       float64
-	HaveMem     bool
-	HaveTemp    bool
+	Name         string
+	UtilPercent  float64
+	MemUsedMiB   float64
+	MemTotalMiB  float64
+	MemPercent   float64
+	VRAMUsedMiB  float64
+	VRAMTotalMiB float64
+	GTTUsedMiB   float64
+	GTTTotalMiB  float64
+	TempC        float64
+	HaveMem      bool
+	HaveVRAM     bool
+	HaveGTT      bool
+	HaveTemp     bool
 
 	// UtilHistory is a short rolling window of recent UtilPercent samples,
 	// oldest first, populated by the AMD sysfs path (cheap enough to poll
@@ -522,12 +598,16 @@ func readAMDCodenameFromLspci() (string, error) {
 	return "", fmt.Errorf("no AMD VGA/3D/display device found in lspci output")
 }
 
-// readAMDSysfs reads AMD GPU utilization, VRAM, and temperature straight
+// readAMDSysfs reads AMD GPU utilization, VRAM/GTT, and temperature straight
 // from the kernel's amdgpu sysfs attributes, with no subprocess involved.
 // Card enumeration (cardN) and hwmon enumeration (hwmonN) are both
 // driver-assigned at runtime, so both are globbed rather than assumed.
 func readAMDSysfs() ([]GPU, error) {
-	matches, err := filepath.Glob("/sys/class/drm/card*/device/gpu_busy_percent")
+	return readAMDSysfsFromGlob("/sys/class/drm/card*/device/gpu_busy_percent")
+}
+
+func readAMDSysfsFromGlob(pattern string) ([]GPU, error) {
+	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, err
 	}
@@ -560,14 +640,7 @@ func readAMDSysfs() ([]GPU, error) {
 			g.UtilPercent = hist[len(hist)-1]
 		}
 
-		used, errUsed := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_used"))
-		total, errTotal := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_total"))
-		if errUsed == nil && errTotal == nil && total > 0 {
-			g.MemUsedMiB = float64(used) / (1024 * 1024)
-			g.MemTotalMiB = float64(total) / (1024 * 1024)
-			g.MemPercent = float64(used) / float64(total) * 100
-			g.HaveMem = true
-		}
+		readAMDGPUMemory(deviceDir, &g)
 
 		if hwmonMatches, err := filepath.Glob(filepath.Join(deviceDir, "hwmon", "hwmon*", "temp1_input")); err == nil && len(hwmonMatches) > 0 {
 			if milliC, err := readSysfsUint(hwmonMatches[0]); err == nil {
@@ -582,6 +655,33 @@ func readAMDSysfs() ([]GPU, error) {
 		return nil, fmt.Errorf("amdgpu sysfs attributes present but unreadable")
 	}
 	return gpus, nil
+}
+
+func readAMDGPUMemory(deviceDir string, g *GPU) {
+	vramUsed, errVRAMUsed := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_used"))
+	vramTotal, errVRAMTotal := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_total"))
+	if errVRAMUsed == nil && errVRAMTotal == nil && vramTotal > 0 {
+		g.VRAMUsedMiB = float64(vramUsed) / (1024 * 1024)
+		g.VRAMTotalMiB = float64(vramTotal) / (1024 * 1024)
+		g.MemUsedMiB += g.VRAMUsedMiB
+		g.MemTotalMiB += g.VRAMTotalMiB
+		g.HaveVRAM = true
+	}
+
+	gttUsed, errGTTUsed := readSysfsUint(filepath.Join(deviceDir, "mem_info_gtt_used"))
+	gttTotal, errGTTTotal := readSysfsUint(filepath.Join(deviceDir, "mem_info_gtt_total"))
+	if errGTTUsed == nil && errGTTTotal == nil && gttTotal > 0 {
+		g.GTTUsedMiB = float64(gttUsed) / (1024 * 1024)
+		g.GTTTotalMiB = float64(gttTotal) / (1024 * 1024)
+		g.MemUsedMiB += g.GTTUsedMiB
+		g.MemTotalMiB += g.GTTTotalMiB
+		g.HaveGTT = true
+	}
+
+	if g.MemTotalMiB > 0 {
+		g.MemPercent = g.MemUsedMiB / g.MemTotalMiB * 100
+		g.HaveMem = true
+	}
 }
 
 // readSysfsUint reads a sysfs file holding a single unsigned integer value.
