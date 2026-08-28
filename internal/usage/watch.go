@@ -467,10 +467,9 @@ func buildLoadBox(width int) wbox {
 // history at 5% should look idle, not maxed out.
 var percentSparkChars = []rune("▁▂▃▄▅▆▇█")
 
-// percentSparkline renders one glyph per value in pcts (each 0-100), fixed
-// width so the line's length never changes between redraws. Used both
-// spatially (one glyph per CPU core) and temporally (one glyph per recent
-// GPU utilization sample); a single-element slice degenerates to one glyph.
+// percentSparkline renders one glyph per value in pcts (each 0-100), one
+// glyph per recent sample in a rolling timeline. A single-element slice
+// degenerates to one glyph (the current value, no history yet).
 func percentSparkline(pcts []float64) string {
 	spark := make([]rune, len(pcts))
 	for i, p := range pcts {
@@ -486,13 +485,32 @@ func percentSparkline(pcts []float64) string {
 	return string(spark)
 }
 
-// formatCPULine renders the "cpu (N cores) [spark] avg% (temp)" line: one
-// sparkline glyph per core (real-time %, not the load average), the
-// aggregate real-time % as avg, and package temperature when available.
+// loadLabelWidth is the fixed column width of the "cpu (...)"/"gpu (...)"
+// label in the Load box, so every line's "[spark]" starts at the same
+// column regardless of core count or GPU name length.
+const loadLabelWidth = 16
+
+// padLoadLabel truncates label to loadLabelWidth (with a trailing "…") if
+// it's too long, then pads it to exactly that width.
+func padLoadLabel(label string) string {
+	if utf8.RuneCountInString(label) > loadLabelWidth {
+		label = string([]rune(label)[:loadLabelWidth-1]) + "…"
+	}
+	return fmt.Sprintf("%-*s", loadLabelWidth, label)
+}
+
+// formatCPULine renders the "cpu (N cores) [spark] avg% (temp)" line. The
+// spark is a timeline of recent aggregate real-time % samples, not a
+// per-core snapshot — a spatial snapshot barely changes frame to frame,
+// while a trend over the last ~10 samples actually shows something moving.
 func formatCPULine(load CPULoad) string {
-	spark := percentSparkline(load.PerCorePercent)
-	if !load.PerCoreOk {
-		spark = strings.Repeat(string(percentSparkChars[0]), load.NumCPU)
+	series := load.PercentHistory
+	if len(series) == 0 {
+		val := 0.0
+		if load.CPUPercentOk {
+			val = load.CPUPercent
+		}
+		series = []float64{val}
 	}
 	avgPart := "n/a"
 	if load.CPUPercentOk {
@@ -502,7 +520,8 @@ func formatCPULine(load CPULoad) string {
 	if load.TempOk {
 		tempPart = fmt.Sprintf(" (%.0f°C)", load.TempC)
 	}
-	return fmt.Sprintf("cpu (%d cores) [%s] %s%s", load.NumCPU, spark, avgPart, tempPart)
+	label := padLoadLabel(fmt.Sprintf("cpu (%d cores)", load.NumCPU))
+	return fmt.Sprintf("%s [%s] %s%s", label, percentSparkline(series), avgPart, tempPart)
 }
 
 // formatGPULine renders the "gpu (name) [spark] avg% (temp)" line. The
@@ -515,11 +534,12 @@ func formatGPULine(g GPU) string {
 	if len(series) == 0 {
 		series = []float64{g.UtilPercent}
 	}
+	label := padLoadLabel(fmt.Sprintf("gpu (%s)", g.Name))
 	tempPart := ""
 	if g.HaveTemp {
 		tempPart = fmt.Sprintf(" (%.0f°C)", g.TempC)
 	}
-	return fmt.Sprintf("gpu (%s) [%s] %.0f%%%s", g.Name, percentSparkline(series), g.UtilPercent, tempPart)
+	return fmt.Sprintf("%s [%s] %.0f%%%s", label, percentSparkline(series), g.UtilPercent, tempPart)
 }
 
 // buildHistoryBox renders a compact 4th panel showing recorded usage history stats.

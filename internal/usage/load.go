@@ -34,6 +34,12 @@ type CPULoad struct {
 	PerCorePercent []float64
 	PerCoreOk      bool
 
+	// PercentHistory is a short rolling window of recent CPUPercent
+	// samples, oldest first, for the Load box's timeline sparkline. A
+	// spatial per-core snapshot barely moves frame to frame; a trend over
+	// the last ~10 samples is more informative.
+	PercentHistory []float64
+
 	// TempC is the CPU package temperature, read from the first recognized
 	// hwmon driver (k10temp/zenpower on AMD, coretemp on Intel). TempOk is
 	// false where none of those drivers is present.
@@ -58,6 +64,9 @@ func CurrentCPULoad() CPULoad {
 	}
 	load.NumCPU = runtime.NumCPU()
 	load.CPUPercent, load.CPUPercentOk, load.PerCorePercent, load.PerCoreOk = currentCPUPercents()
+	if load.CPUPercentOk {
+		load.PercentHistory = cpuHistory.append(load.CPUPercent)
+	}
 	load.TempC, load.TempOk = readCPUTempFromSysfs()
 	return load
 }
@@ -296,28 +305,52 @@ type GPU struct {
 	UtilHistory []float64
 }
 
-// gpuHistoryLen is how many recent utilization samples are kept per GPU for
-// the sysfs path's history sparkline.
-const gpuHistoryLen = 10
+// loadHistoryLen is how many recent samples are kept for a Load box
+// timeline sparkline (CPU aggregate %, or one per GPU's utilization %).
+const loadHistoryLen = 10
 
+// sampleHistory is a small mutex-protected rolling window of recent 0-100%
+// samples, used to render a Load box timeline sparkline.
+type sampleHistory struct {
+	mu      sync.Mutex
+	samples []float64
+}
+
+// append records pct as the latest sample and returns a copy of the
+// trailing loadHistoryLen-sample window (oldest first).
+func (h *sampleHistory) append(pct float64) []float64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.samples = append(h.samples, pct)
+	if len(h.samples) > loadHistoryLen {
+		h.samples = h.samples[len(h.samples)-loadHistoryLen:]
+	}
+	out := make([]float64, len(h.samples))
+	copy(out, h.samples)
+	return out
+}
+
+// cpuHistory is the single rolling window for CurrentCPULoad's aggregate %.
+var cpuHistory sampleHistory
+
+// gpuHistoryMu guards gpuHistory, a per-GPU (keyed by sysfs card name)
+// rolling window, since a system can have more than one GPU.
 var (
 	gpuHistoryMu sync.Mutex
-	gpuHistory   = map[string][]float64{}
+	gpuHistory   = map[string]*sampleHistory{}
 )
 
 // appendGPUHistory records pct as the latest sample for the GPU identified
-// by key (its sysfs card name) and returns a copy of the trailing window.
+// by key (its sysfs card name) and returns a copy of its trailing window.
 func appendGPUHistory(key string, pct float64) []float64 {
 	gpuHistoryMu.Lock()
-	defer gpuHistoryMu.Unlock()
-	h := append(gpuHistory[key], pct)
-	if len(h) > gpuHistoryLen {
-		h = h[len(h)-gpuHistoryLen:]
+	h, ok := gpuHistory[key]
+	if !ok {
+		h = &sampleHistory{}
+		gpuHistory[key] = h
 	}
-	gpuHistory[key] = h
-	out := make([]float64, len(h))
-	copy(out, h)
-	return out
+	gpuHistoryMu.Unlock()
+	return h.append(pct)
 }
 
 // gpuSubprocessThrottle is the minimum interval between calls to a
