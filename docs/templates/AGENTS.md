@@ -11,6 +11,11 @@ Adhere to the following conventions.
 
 Run from project root.
 
+## Issue Tracking
+
+- Commit documentation changes and `issues/*.md` changes immediately, don't batch them behind
+  pending code work.
+
 ## Background Tasks & Process Hygiene
 
 - Do not spawn subagents with git worktree isolation unless the user explicitly requests it.

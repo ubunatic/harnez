@@ -89,6 +89,7 @@ Adhere to `@docs/IssueTracking.md` for issue tracking across `issues/*.md`:
   **Related**: [Doc / Ticket / Commit references]
   ```
 - **Tracker Synchronization**: Keep `issues/README.md` table in sync with ticket files (`harnez status` verifies consistency). Archive closed tickets to `issues/archive/`.
+- Commit documentation changes and `issues/*.md` changes immediately, don't batch them behind pending code work.
 
 ## Development & Review Workflow
 
