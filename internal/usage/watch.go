@@ -499,7 +499,7 @@ func formatCPULine(load CPULoad) string {
 		tempPart = fmt.Sprintf(" (%.0f°C)", load.TempC)
 	}
 	label := padLoadLabel(fmt.Sprintf("cpu (%d cores)", load.NumCPU))
-	return fmt.Sprintf("%s [%s] %s%s", label, rograph.PercentSparkline(series, len(series)), avgPart, tempPart)
+	return fmt.Sprintf("%s [%s] %s%s", label, rograph.PercentSparkline(series, min(rograph.MaxWidth, len(series))), avgPart, tempPart)
 }
 
 // formatGPULine renders the "gpu (name) [spark] avg% (temp)" line. The
@@ -515,7 +515,7 @@ func formatGPULine(g GPU) string {
 	if g.HaveTemp {
 		tempPart = fmt.Sprintf(" (%.0f°C)", g.TempC)
 	}
-	return fmt.Sprintf("%s [%s] %.0f%%%s", label, rograph.PercentSparkline(series, len(series)), g.UtilPercent, tempPart)
+	return fmt.Sprintf("%s [%s] %.0f%%%s", label, rograph.PercentSparkline(series, min(rograph.MaxWidth, len(series))), g.UtilPercent, tempPart)
 }
 
 // buildHistoryBox renders a compact 4th panel showing recorded usage history stats.
@@ -701,8 +701,8 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 		if barW < 1 {
 			barW = 1
 		}
-		if barW > 12 {
-			barW = 12
+		if barW > rograph.MaxWidth {
+			barW = rograph.MaxWidth
 		}
 		bar := rograph.RenderProgressBar(w.UsedPercent, barW)
 		lines = append(lines, fmt.Sprintf("%-16s %s %4.1f%%%s", label, bar, w.UsedPercent, resetStr))

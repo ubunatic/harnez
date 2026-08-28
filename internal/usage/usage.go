@@ -82,7 +82,7 @@ func RenderText(summary UsageSummary) string {
 			if agent.Session != nil {
 				lines = append(lines, "")
 				lines = append(lines, fmt.Sprintf("%s Limit:", agent.Session.Name))
-				bar := rograph.RenderProgressBar(agent.Session.UsedPercent, 24)
+				bar := rograph.RenderProgressBar(agent.Session.UsedPercent, rograph.MaxWidth)
 				resetInfo := ""
 				if agent.Session.ResetAt != nil {
 					localTime := agent.Session.ResetAt.Local().Format("15:04 (MST)")
@@ -100,7 +100,7 @@ func RenderText(summary UsageSummary) string {
 					lines = append(lines, "")
 				}
 				lines = append(lines, fmt.Sprintf("%s Limit:", agent.Weekly.Name))
-				bar := rograph.RenderProgressBar(agent.Weekly.UsedPercent, 24)
+				bar := rograph.RenderProgressBar(agent.Weekly.UsedPercent, rograph.MaxWidth)
 				resetInfo := ""
 				if agent.Weekly.ResetAt != nil {
 					localTime := agent.Weekly.ResetAt.Local().Format("Jan 02, 15:04 (MST)")
@@ -129,7 +129,7 @@ func RenderText(summary UsageSummary) string {
 					lines = append(lines, fmt.Sprintf("  %s", mg.Description))
 				}
 				for _, w := range mg.Windows {
-					bar := rograph.RenderProgressBar(w.UsedPercent, 24)
+					bar := rograph.RenderProgressBar(w.UsedPercent, rograph.MaxWidth)
 					resetInfo := ""
 					if w.ResetAt != nil {
 						localTime := w.ResetAt.Local().Format("Jan 02, 15:04 (MST)")

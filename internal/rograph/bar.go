@@ -8,6 +8,12 @@ package rograph
 
 import "strings"
 
+// MaxWidth is the shared maximum render width, in characters/glyphs, for
+// every single-row rograph graph (bars and sparklines alike). Call sites
+// should request min(MaxWidth, availableWidth) rather than inventing their
+// own clamp.
+const MaxWidth = 10
+
 // RenderProgressBar generates an ANSI/Unicode progress bar of the given
 // character width: a "[filled empty]" bar using █ for the filled portion
 // and ░ for the empty portion, scaled to usedPercent (clamped to [0, 100]).

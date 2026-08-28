@@ -33,6 +33,34 @@ func TestRenderProgressBar(t *testing.T) {
 	}
 }
 
+func TestMaxWidthCapsOutput(t *testing.T) {
+	if MaxWidth != 10 {
+		t.Fatalf("MaxWidth = %d, want 10", MaxWidth)
+	}
+
+	// The primitives themselves render exactly the width they're asked
+	// for (that's the shrink-to-fit contract); callers are responsible
+	// for requesting min(MaxWidth, availableWidth). Assert that
+	// requesting MaxWidth produces output within the documented bracket
+	// budget, i.e. that MaxWidth is a sane, honored request size.
+	bar := RenderProgressBar(50, MaxWidth)
+	if got := len([]rune(bar)); got != MaxWidth+2 {
+		t.Errorf("RenderProgressBar(50, MaxWidth) produced %d runes, want %d", got, MaxWidth+2)
+	}
+
+	// Sparkline output is at most MaxWidth glyphs (no brackets) when a
+	// longer history is capped at MaxWidth by the caller, as every call
+	// site in internal/usage now does via min(rograph.MaxWidth, ...).
+	series := make([]float64, 50)
+	for i := range series {
+		series[i] = float64(i)
+	}
+	spark := stripAnsi(PercentSparkline(series, MaxWidth))
+	if got := len([]rune(spark)); got != MaxWidth {
+		t.Errorf("PercentSparkline(series, MaxWidth) produced %d glyphs, want %d", got, MaxWidth)
+	}
+}
+
 func TestRenderProgressBarNeverPanics(t *testing.T) {
 	for _, w := range []int{-100, -1, 0, 1, 2, 100} {
 		for _, pct := range []float64{-1000, -1, 0, 50, 100, 1000} {
