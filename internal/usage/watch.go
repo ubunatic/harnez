@@ -433,32 +433,15 @@ func buildProcessesBox(width int, counts *AgentProcessCount) wbox {
 	return wbox{title: title, lines: lines, width: width}
 }
 
-// buildLoadBox renders a compact panel showing the system CPU load averages.
+// buildLoadBox renders a compact panel showing CPU and GPU load, styled
+// like the agent quota lines: "label (detail) [spark] avg% (temp)".
 func buildLoadBox(width int) wbox {
 	title := "\x1b[1m[L]\x1b[0m Load"
 	load := CurrentCPULoad()
-	if !load.Ok {
-		return wbox{title: title, lines: []string{"\x1b[90mload average unavailable\x1b[0m"}, width: width}
-	}
-
-	lazyPct := "n/a"
-	if load.NumCPU > 0 {
-		lazyPct = fmt.Sprintf("%.0f%%", load.Load1/float64(load.NumCPU)*100)
-	}
-	realPct := "n/a"
-	if load.CPUPercentOk {
-		realPct = fmt.Sprintf("%.0f%%", load.CPUPercent)
-	}
 
 	var lines []string
-	lines = append(lines, fmt.Sprintf("lazy %s · real %s", lazyPct, realPct))
 	if load.NumCPU > 0 {
-		lines = append(lines, fmt.Sprintf("avg %.2f %.2f %.2f · %d cores", load.Load1, load.Load5, load.Load15, load.NumCPU))
-	} else {
-		lines = append(lines, fmt.Sprintf("avg %.2f %.2f %.2f", load.Load1, load.Load5, load.Load15))
-	}
-	if load.PerCoreOk {
-		lines = append(lines, formatCoreSparkline(load.PerCorePercent))
+		lines = append(lines, formatCPULine(load))
 	}
 
 	gpus := CurrentGPUs()
@@ -472,43 +455,71 @@ func buildLoadBox(width int) wbox {
 			lines = append(lines, formatGPULine(g))
 		}
 	}
+	if len(lines) == 0 {
+		lines = []string{"\x1b[90mload data unavailable\x1b[0m"}
+	}
 	return wbox{title: title, lines: lines, width: width}
 }
 
-// coreSparkChars are the 8 sparkline glyphs used for a core's height, low
-// to high (▁ = idle, █ = 100%).
-var coreSparkChars = []rune("▁▂▃▄▅▆▇█")
+// percentSparkChars are the 8 sparkline glyphs used for a 0-100% value's
+// height, low to high (▁ = idle/0%, █ = 100%). Unlike RenderSparklineWidth
+// (relative to the series' own min/max), this is an absolute scale: a flat
+// history at 5% should look idle, not maxed out.
+var percentSparkChars = []rune("▁▂▃▄▅▆▇█")
 
-// formatCoreSparkline renders one glyph per core, sized to its usage level.
-// Always one glyph per core (fixed width) so the line's length never
-// changes between redraws — an idle-count cutoff made the string grow and
-// shrink as cores crossed the threshold, which read as noise.
-func formatCoreSparkline(pcts []float64) string {
+// percentSparkline renders one glyph per value in pcts (each 0-100), fixed
+// width so the line's length never changes between redraws. Used both
+// spatially (one glyph per CPU core) and temporally (one glyph per recent
+// GPU utilization sample); a single-element slice degenerates to one glyph.
+func percentSparkline(pcts []float64) string {
 	spark := make([]rune, len(pcts))
 	for i, p := range pcts {
-		idx := int(p / 100 * float64(len(coreSparkChars)))
-		if idx >= len(coreSparkChars) {
-			idx = len(coreSparkChars) - 1
+		idx := int(p / 100 * float64(len(percentSparkChars)))
+		if idx >= len(percentSparkChars) {
+			idx = len(percentSparkChars) - 1
 		}
 		if idx < 0 {
 			idx = 0
 		}
-		spark[i] = coreSparkChars[idx]
+		spark[i] = percentSparkChars[idx]
 	}
 	return string(spark)
 }
 
-// formatGPULine renders one GPU's utilization, VRAM, and temperature as a
-// single compact line, omitting fields the collector couldn't read.
+// formatCPULine renders the "cpu (N cores) [spark] avg% (temp)" line: one
+// sparkline glyph per core (real-time %, not the load average), the
+// aggregate real-time % as avg, and package temperature when available.
+func formatCPULine(load CPULoad) string {
+	spark := percentSparkline(load.PerCorePercent)
+	if !load.PerCoreOk {
+		spark = strings.Repeat(string(percentSparkChars[0]), load.NumCPU)
+	}
+	avgPart := "n/a"
+	if load.CPUPercentOk {
+		avgPart = fmt.Sprintf("%.0f%%", load.CPUPercent)
+	}
+	tempPart := ""
+	if load.TempOk {
+		tempPart = fmt.Sprintf(" (%.0f°C)", load.TempC)
+	}
+	return fmt.Sprintf("cpu (%d cores) [%s] %s%s", load.NumCPU, spark, avgPart, tempPart)
+}
+
+// formatGPULine renders the "gpu (name) [spark] avg% (temp)" line. The
+// sparkline shows recent history for the fast AMD sysfs path (UtilHistory)
+// or degenerates to a single current-value glyph for subprocess-based
+// readers (nvidia-smi, rocm-smi fallback), which are throttled too coarsely
+// for a meaningful history.
 func formatGPULine(g GPU) string {
-	parts := []string{fmt.Sprintf("gpu %.0f%%", g.UtilPercent)}
-	if g.HaveMem {
-		parts = append(parts, fmt.Sprintf("vram %.0f%%", g.MemPercent))
+	series := g.UtilHistory
+	if len(series) == 0 {
+		series = []float64{g.UtilPercent}
 	}
+	tempPart := ""
 	if g.HaveTemp {
-		parts = append(parts, fmt.Sprintf("%.0f°C", g.TempC))
+		tempPart = fmt.Sprintf(" (%.0f°C)", g.TempC)
 	}
-	return strings.Join(parts, " · ")
+	return fmt.Sprintf("gpu (%s) [%s] %.0f%%%s", g.Name, percentSparkline(series), g.UtilPercent, tempPart)
 }
 
 // buildHistoryBox renders a compact 4th panel showing recorded usage history stats.

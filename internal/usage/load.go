@@ -33,6 +33,12 @@ type CPULoad struct {
 	// same delta technique, same freshness caveat as CPUPercentOk.
 	PerCorePercent []float64
 	PerCoreOk      bool
+
+	// TempC is the CPU package temperature, read from the first recognized
+	// hwmon driver (k10temp/zenpower on AMD, coretemp on Intel). TempOk is
+	// false where none of those drivers is present.
+	TempC  float64
+	TempOk bool
 }
 
 // CurrentCPULoad reads the system load averages and the instantaneous CPU
@@ -52,7 +58,62 @@ func CurrentCPULoad() CPULoad {
 	}
 	load.NumCPU = runtime.NumCPU()
 	load.CPUPercent, load.CPUPercentOk, load.PerCorePercent, load.PerCoreOk = currentCPUPercents()
+	load.TempC, load.TempOk = readCPUTempFromSysfs()
 	return load
+}
+
+// cpuTempHwmonDrivers are the hwmon driver names known to report a CPU
+// package/die temperature (as opposed to battery, NVMe, Wi-Fi, etc. hwmons
+// that also live under /sys/class/hwmon).
+var cpuTempHwmonDrivers = map[string]bool{
+	"k10temp":     true, // AMD (Zen 1-5)
+	"zenpower":    true, // AMD (Zen, community driver)
+	"coretemp":    true, // Intel
+	"cpu_thermal": true, // ARM SoCs
+}
+
+// cpuTempPreferredLabels are the sensor labels, in priority order, that
+// best represent "the" CPU temperature within a multi-sensor hwmon device
+// (e.g. coretemp exposes one temp per core plus a package sensor).
+var cpuTempPreferredLabels = []string{"Tctl", "Tdie", "Package id 0", "CPU"}
+
+// readCPUTempFromSysfs finds the first recognized CPU hwmon driver under
+// /sys/class/hwmon and reads its package temperature, preferring a sensor
+// labeled Tctl/Tdie/"Package id 0"/CPU over an arbitrary temp1_input.
+func readCPUTempFromSysfs() (float64, bool) {
+	nameFiles, err := filepath.Glob("/sys/class/hwmon/hwmon*/name")
+	if err != nil {
+		return 0, false
+	}
+	for _, nameFile := range nameFiles {
+		data, err := os.ReadFile(nameFile)
+		if err != nil || !cpuTempHwmonDrivers[strings.TrimSpace(string(data))] {
+			continue
+		}
+		dir := filepath.Dir(nameFile)
+
+		labelFiles, _ := filepath.Glob(filepath.Join(dir, "temp*_label"))
+		for _, want := range cpuTempPreferredLabels {
+			for _, labelFile := range labelFiles {
+				label, err := os.ReadFile(labelFile)
+				if err != nil || strings.TrimSpace(string(label)) != want {
+					continue
+				}
+				inputFile := strings.TrimSuffix(labelFile, "_label") + "_input"
+				if milliC, err := readSysfsUint(inputFile); err == nil {
+					return float64(milliC) / 1000, true
+				}
+			}
+		}
+
+		inputFiles, _ := filepath.Glob(filepath.Join(dir, "temp*_input"))
+		for _, inputFile := range inputFiles {
+			if milliC, err := readSysfsUint(inputFile); err == nil {
+				return float64(milliC) / 1000, true
+			}
+		}
+	}
+	return 0, false
 }
 
 // cpuStatSample is one reading of a "cpu"/"cpuN" line in /proc/stat:
@@ -226,6 +287,37 @@ type GPU struct {
 	TempC       float64
 	HaveMem     bool
 	HaveTemp    bool
+
+	// UtilHistory is a short rolling window of recent UtilPercent samples,
+	// oldest first, populated only by the fast AMD sysfs path (cheap enough
+	// to poll every redraw). Subprocess-based readers (nvidia-smi, rocm-smi
+	// fallback) leave this nil since they're throttled to ~1/s and don't
+	// have the sample density for a meaningful history sparkline.
+	UtilHistory []float64
+}
+
+// gpuHistoryLen is how many recent utilization samples are kept per GPU for
+// the sysfs path's history sparkline.
+const gpuHistoryLen = 10
+
+var (
+	gpuHistoryMu sync.Mutex
+	gpuHistory   = map[string][]float64{}
+)
+
+// appendGPUHistory records pct as the latest sample for the GPU identified
+// by key (its sysfs card name) and returns a copy of the trailing window.
+func appendGPUHistory(key string, pct float64) []float64 {
+	gpuHistoryMu.Lock()
+	defer gpuHistoryMu.Unlock()
+	h := append(gpuHistory[key], pct)
+	if len(h) > gpuHistoryLen {
+		h = h[len(h)-gpuHistoryLen:]
+	}
+	gpuHistory[key] = h
+	out := make([]float64, len(h))
+	copy(out, h)
+	return out
 }
 
 // gpuSubprocessThrottle is the minimum interval between calls to a
@@ -292,6 +384,33 @@ func CurrentGPUs() []GPU {
 	return nil
 }
 
+// nvidiaArchByProductSubstring maps a substring of nvidia-smi's product name
+// to its GPU architecture codename, most recent first. nvidia-smi already
+// reports the full marketing name (e.g. "NVIDIA GeForce RTX 4090"), so this
+// isn't a fallback lookup — it just shortens what the system already gave
+// us to the compact architecture name the Load box has room for.
+var nvidiaArchByProductSubstring = []struct{ substr, arch string }{
+	{"GB10", "Blackwell"}, {"GB200", "Blackwell"}, {"B100", "Blackwell"}, {"B200", "Blackwell"}, {"RTX 50", "Blackwell"},
+	{"H100", "Hopper"}, {"H200", "Hopper"},
+	{"RTX 40", "Ada"}, {"L40", "Ada"}, {"L4", "Ada"},
+	{"A100", "Ampere"}, {"A6000", "Ampere"}, {"RTX 30", "Ampere"},
+	{"RTX 20", "Turing"}, {"GTX 16", "Turing"},
+	{"GTX 10", "Pascal"},
+}
+
+// nvidiaCodename shortens an nvidia-smi product name to its architecture
+// codename (e.g. "NVIDIA GeForce RTX 4090" -> "Ada"). Falls back to the
+// full product name, trimmed, when no known family matches.
+func nvidiaCodename(productName string) string {
+	upper := strings.ToUpper(productName)
+	for _, m := range nvidiaArchByProductSubstring {
+		if strings.Contains(upper, strings.ToUpper(m.substr)) {
+			return m.arch
+		}
+	}
+	return strings.TrimSpace(productName)
+}
+
 // readNvidiaSMI shells out to `nvidia-smi` for CSV utilization/memory/temp readings.
 func readNvidiaSMI() ([]GPU, error) {
 	out, err := exec.Command("nvidia-smi",
@@ -313,7 +432,7 @@ func readNvidiaSMI() ([]GPU, error) {
 		for i := range fields {
 			fields[i] = strings.TrimSpace(fields[i])
 		}
-		g := GPU{Name: fields[0]}
+		g := GPU{Name: nvidiaCodename(fields[0])}
 		if v, err := strconv.ParseFloat(fields[1], 64); err == nil {
 			g.UtilPercent = v
 		}
@@ -337,6 +456,87 @@ func readNvidiaSMI() ([]GPU, error) {
 	return gpus, nil
 }
 
+// amdCodenameByDeviceID is a best-effort fallback table mapping a PCI
+// device ID (as read from /sys/.../device, lowercase hex with "0x" prefix)
+// to its AMD GPU/APU codename, for systems without `lspci` available. Only
+// entries verified against real hardware are included — extend as more are
+// confirmed rather than guessing IDs, since a wrong entry silently mislabels
+// the box while a missing one just falls through to a generic "AMD GPU".
+var amdCodenameByDeviceID = map[string]string{
+	"0x1638": "Cezanne", // Ryzen 5000 (Zen3) APU, e.g. Ryzen 7 5800U
+}
+
+// amdCodenameCache memoizes the local AMD GPU's codename for the process
+// lifetime: the lspci probe it may run is a subprocess, and the hardware
+// it's describing can't change mid-session.
+var (
+	amdCodenameMu    sync.Mutex
+	amdCodenameValue string
+	amdCodenameKnown bool
+)
+
+// amdGPUCodename resolves deviceDir's (a /sys/class/drm/cardN/device path)
+// AMD codename, preferring the live system (`lspci`'s device string, e.g.
+// "Cezanne") over the built-in fallback table, since the table is
+// necessarily incomplete.
+func amdGPUCodename(deviceDir string) string {
+	amdCodenameMu.Lock()
+	if amdCodenameKnown {
+		v := amdCodenameValue
+		amdCodenameMu.Unlock()
+		return v
+	}
+	amdCodenameMu.Unlock()
+
+	name := ""
+	if lspciName, err := readAMDCodenameFromLspci(); err == nil && lspciName != "" {
+		name = lspciName
+	} else if deviceID, err := os.ReadFile(filepath.Join(deviceDir, "device")); err == nil {
+		if v, ok := amdCodenameByDeviceID[strings.TrimSpace(string(deviceID))]; ok {
+			name = v
+		}
+	}
+	if name == "" {
+		name = "AMD GPU"
+	}
+
+	amdCodenameMu.Lock()
+	amdCodenameValue, amdCodenameKnown = name, true
+	amdCodenameMu.Unlock()
+	return name
+}
+
+// readAMDCodenameFromLspci shells out to `lspci -d 1002: -mm` (machine-
+// readable, quoted fields) and extracts the device string's codename
+// (e.g. "Cezanne" from "Cezanne [Radeon Vega Series / ...]") for the first
+// VGA/3D/display-class AMD function. Called at most once per process via
+// amdGPUCodename's cache.
+func readAMDCodenameFromLspci() (string, error) {
+	out, err := exec.Command("lspci", "-d", "1002:", "-mm").Output()
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		// lspci -mm quotes each field: Slot "Class" "Vendor" "Device" ...
+		fields := strings.Split(line, `"`)
+		if len(fields) < 6 {
+			continue
+		}
+		class := fields[1]
+		if !strings.Contains(class, "VGA") && !strings.Contains(class, "3D controller") && !strings.Contains(class, "Display controller") {
+			continue
+		}
+		device := fields[5]
+		if idx := strings.Index(device, " ["); idx >= 0 {
+			device = device[:idx]
+		}
+		if device = strings.TrimSpace(device); device != "" {
+			return device, nil
+		}
+	}
+	return "", fmt.Errorf("no AMD VGA/3D/display device found in lspci output")
+}
+
 // readAMDSysfs reads AMD GPU utilization, VRAM, and temperature straight
 // from the kernel's amdgpu sysfs attributes, avoiding a rocm-smi
 // subprocess. Card enumeration (cardN) and hwmon enumeration (hwmonN) are
@@ -354,13 +554,14 @@ func readAMDSysfs() ([]GPU, error) {
 	for _, busyPath := range matches {
 		deviceDir := filepath.Dir(busyPath)
 		cardName := filepath.Base(filepath.Dir(deviceDir))
-		g := GPU{Name: cardName}
+		g := GPU{Name: amdGPUCodename(deviceDir)}
 
 		if v, err := readSysfsUint(busyPath); err == nil {
 			g.UtilPercent = float64(v)
 		} else {
 			continue // not a real GPU device (or unreadable): skip rather than report zeros
 		}
+		g.UtilHistory = appendGPUHistory(cardName, g.UtilPercent)
 
 		used, errUsed := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_used"))
 		total, errTotal := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_total"))
