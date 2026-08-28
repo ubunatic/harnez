@@ -452,11 +452,37 @@ func buildLoadBox(width int) wbox {
 
 	var lines []string
 	lines = append(lines, fmt.Sprintf("lazy %s · real %s", lazyPct, realPct))
-	lines = append(lines, fmt.Sprintf("avg %.2f  %.2f  %.2f", load.Load1, load.Load5, load.Load15))
 	if load.NumCPU > 0 {
-		lines = append(lines, fmt.Sprintf("%d cores", load.NumCPU))
+		lines = append(lines, fmt.Sprintf("avg %.2f %.2f %.2f · %d cores", load.Load1, load.Load5, load.Load15, load.NumCPU))
+	} else {
+		lines = append(lines, fmt.Sprintf("avg %.2f %.2f %.2f", load.Load1, load.Load5, load.Load15))
+	}
+
+	gpus := CurrentGPUs()
+	if len(gpus) == 0 {
+		lines = append(lines, "\x1b[90mgpu n/a\x1b[0m")
+	} else {
+		for i, g := range gpus {
+			if i >= 2 {
+				break
+			}
+			lines = append(lines, formatGPULine(g))
+		}
 	}
 	return wbox{title: title, lines: lines, width: width}
+}
+
+// formatGPULine renders one GPU's utilization, VRAM, and temperature as a
+// single compact line, omitting fields the collector couldn't read.
+func formatGPULine(g GPU) string {
+	parts := []string{fmt.Sprintf("gpu %.0f%%", g.UtilPercent)}
+	if g.HaveMem {
+		parts = append(parts, fmt.Sprintf("vram %.0f%%", g.MemPercent))
+	}
+	if g.HaveTemp {
+		parts = append(parts, fmt.Sprintf("%.0f°C", g.TempC))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // buildHistoryBox renders a compact 4th panel showing recorded usage history stats.

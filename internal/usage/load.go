@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -161,6 +162,120 @@ func readLoadavgFromProc(path string) (CPULoad, error) {
 
 // readLoadavgFromUptime parses the trailing "load averages: 1.23 1.45 1.67"
 // (or "load average:") segment of `uptime` output.
+// GPU holds one GPU's utilization, VRAM usage, and temperature.
+type GPU struct {
+	Name        string
+	UtilPercent float64
+	MemUsedMiB  float64
+	MemTotalMiB float64
+	MemPercent  float64
+	TempC       float64
+	HaveMem     bool
+	HaveTemp    bool
+}
+
+// CurrentGPUs probes for NVIDIA (nvidia-smi) or AMD (rocm-smi) GPUs and
+// returns whatever readings are available. Returns nil if neither tool is
+// present or both fail (e.g. no GPU, or an integrated-only system).
+func CurrentGPUs() []GPU {
+	if gpus, err := readNvidiaSMI(); err == nil {
+		return gpus
+	}
+	if gpus, err := readROCmSMI(); err == nil {
+		return gpus
+	}
+	return nil
+}
+
+// readNvidiaSMI shells out to `nvidia-smi` for CSV utilization/memory/temp readings.
+func readNvidiaSMI() ([]GPU, error) {
+	out, err := exec.Command("nvidia-smi",
+		"--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+		"--format=csv,noheader,nounits").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var gpus []GPU
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		fields := strings.Split(line, ",")
+		if len(fields) < 5 {
+			continue
+		}
+		for i := range fields {
+			fields[i] = strings.TrimSpace(fields[i])
+		}
+		g := GPU{Name: fields[0]}
+		if v, err := strconv.ParseFloat(fields[1], 64); err == nil {
+			g.UtilPercent = v
+		}
+		memUsed, errUsed := strconv.ParseFloat(fields[2], 64)
+		memTotal, errTotal := strconv.ParseFloat(fields[3], 64)
+		if errUsed == nil && errTotal == nil && memTotal > 0 {
+			g.MemUsedMiB = memUsed
+			g.MemTotalMiB = memTotal
+			g.MemPercent = memUsed / memTotal * 100
+			g.HaveMem = true
+		}
+		if v, err := strconv.ParseFloat(fields[4], 64); err == nil {
+			g.TempC = v
+			g.HaveTemp = true
+		}
+		gpus = append(gpus, g)
+	}
+	if len(gpus) == 0 {
+		return nil, fmt.Errorf("nvidia-smi returned no GPUs")
+	}
+	return gpus, nil
+}
+
+// readROCmSMI shells out to `rocm-smi` (AMD) for JSON utilization/VRAM%/temp readings.
+func readROCmSMI() ([]GPU, error) {
+	out, err := exec.Command("rocm-smi", "--showuse", "--showmemuse", "--showtemp", "--json").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var raw map[string]map[string]string
+	if err := json.Unmarshal(out, &raw); err != nil {
+		return nil, err
+	}
+
+	var gpus []GPU
+	for card, fields := range raw {
+		if !strings.HasPrefix(card, "card") {
+			continue
+		}
+		g := GPU{Name: card}
+		for key, val := range fields {
+			switch {
+			case strings.Contains(key, "GPU use"):
+				if v, err := strconv.ParseFloat(val, 64); err == nil {
+					g.UtilPercent = v
+				}
+			case strings.Contains(key, "Memory Allocated"):
+				if v, err := strconv.ParseFloat(val, 64); err == nil {
+					g.MemPercent = v
+					g.HaveMem = true
+				}
+			case strings.Contains(key, "Temperature"):
+				if v, err := strconv.ParseFloat(val, 64); err == nil {
+					g.TempC = v
+					g.HaveTemp = true
+				}
+			}
+		}
+		gpus = append(gpus, g)
+	}
+	if len(gpus) == 0 {
+		return nil, fmt.Errorf("rocm-smi returned no GPUs")
+	}
+	return gpus, nil
+}
+
 func readLoadavgFromUptime() (CPULoad, error) {
 	out, err := exec.Command("uptime").Output()
 	if err != nil {
