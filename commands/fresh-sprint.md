@@ -23,6 +23,7 @@ For focused, well-defined tasks, bypass the full 5-phase ceremony in favor of a 
   - Concise problem statement & target ticket/spec references.
   - Concrete target files/packages and acceptance/verification criteria.
 - **Trust the Base Framework**: Do not duplicate or micromanage standard workspace rules, tool descriptions, or formatting conventions already present in the base system prompt.
+- **Stay Responsive**: Dispatching the subagent must not block the main chat. Report the handoff and return control to the user, or continue only with non-overlapping local work. Do not wait for the subagent unless the user explicitly asks or integration is immediately blocked on its result.
 
 ### 2. Autonomous Execution & Self-Verification
 - The subagent executes the implementation autonomously.

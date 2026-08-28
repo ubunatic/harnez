@@ -31,15 +31,21 @@ Agentic software engineering scales effectively when concurrency is structured a
    - Every spawned background process, schedule timer, or subagent must be tracked, accounted for, and explicitly terminated before concluding a session.
    - Orphaned processes, lingering watch commands, and abandoned poll loops degrade system resources and corrupt future test runs.
 
-4. **In-Repository Single Source of Truth**:
+4. **Responsive Host Orchestrator**:
+   - The host remains the user's always-available coordination surface while child agents work.
+   - A user request to "hand this to a subagent" means delegate and keep the main chat responsive; it does not imply permission to block on `wait_agent`, `manage_subagents wait`, or equivalent.
+   - Wait for a child only when the user explicitly asks to wait, or when the next user-visible integration step truly cannot proceed without that result.
+   - After dispatch, report the handoff and continue with non-overlapping local work or return control to the user instead of occupying the host turn with an idle wait.
+
+5. **In-Repository Single Source of Truth**:
    - Tickets (`issues/*.md`), architectural decisions, retrospectives (`docs/feedback/`, `docs/studies/`), and specifications (`spec/`) live in the git tree.
    - Session context, learnings, and friction logs must be committed to the repository rather than abandoned in ephemeral agent chat contexts.
 
-5. **Context Discipline & Range-Bounded Ingestion**:
+6. **Context Discipline & Range-Bounded Ingestion**:
    - Never execute whole-file reads on files already present in the active system prompt (`AGENTS.md`, `CLAUDE.md`, system rules).
    - Prefer index consultation, `grep_search`, and range-bounded reads (`StartLine`/`EndLine`) over bulk document ingestion. In-file warning banners are ineffective once returned into message history.
 
-6. **Media & Demo Verification Gate**:
+7. **Media & Demo Verification Gate**:
    - When creating, updating, or adding media assets (e.g. reels, WebM demos, terminal recordings, screenshots) intended for documentation or websites, **always ask the user for explicit confirmation** that the recorded visual output matches their exact expectations before publishing or embedding it.
    - Never automatically publish or embed unverified recordings (guarding against invisible typing, missing UI frames, or unexpected rendering artifacts).
 
@@ -144,6 +150,7 @@ For focused, day-to-day tickets, running the full 5-phase ceremony with separate
 1. **Clean Goal Handoff**:
    - The Orchestrator dispatches a fresh subagent with a single, clear objective: problem statement, target tickets/specs, and explicit verification criteria.
    - **Trust the Base Framework**: Avoid micromanaging standard workspace rules, tool descriptions, or language conventions already provided by the base system prompt.
+   - **Stay Responsive**: After dispatch, the Orchestrator returns control to the main chat or continues only with non-overlapping local work. Do not block on the dev subagent by default.
 2. **Autonomous Execution & Self-Verification**:
    - The dev subagent implements changes and validates them using repo-native verification commands (`go test ./...`, `make check`, canary probes).
 3. **Confidence-Gated Inline Review**:
@@ -161,6 +168,7 @@ For focused, day-to-day tickets, running the full 5-phase ceremony with separate
 | **Discovery** | Parallel read-only advisor subagents | Targeted orchestrator/dev grep & range-bounded reads |
 | **Review Gate** | Independent reviewer subagent mandatory | Confidence-gated inline review (escalate on risk) |
 | **Overhead** | Higher compute/tokens, maximum verification depth | Minimal compute/latency, rapid turnaround |
+| **Host Responsiveness** | Host may coordinate multiple workers but remains user-responsive | Host dispatches and returns control; no default blocking wait |
 
 ---
 
@@ -189,6 +197,7 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 
 ### Anti-Patterns to Avoid
 - ❌ **Parallel Writing**: Spawning multiple subagents with write permissions on the same workspace simultaneously.
+- ❌ **Blocking Handoff Waits**: Treating "hand this to a subagent" as permission to block the main chat while waiting for the child. The host is always the responsive orchestrator.
 - ❌ **Silent Verification**: Assuming a fix works without running test commands or canary scripts.
 - ❌ **Blind Revert of Failed Work**: Running `git checkout --`, `git reset --hard`, or `git stash drop` on a failed implementation attempt without first committing it somewhere recoverable. A prose summary of what was tried is not a substitute for the actual diff — it cannot be `git diff`ed, re-applied, or independently re-verified against the gate it was tested against.
 - ❌ **Orphaned Background Tasks**: Leaving background `tail -f`, watch loops, or timers running after work is completed.
@@ -198,4 +207,3 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 - ❌ **Unverified Media Publishing**: Publishing or embedding demo reels, WebM files, or UI screenshots on websites or documentation without explicit user confirmation of the visual output.
 - ❌ **Prompt Micromanagement**: Overburdening subagent dispatches with redundant base rules, tool definitions, or style guides already present in the harness system prompt.
 - ❌ **Friction Noise Over-Reporting**: Emitting repetitive, low-signal friction reports on fast, routine tasks.
-

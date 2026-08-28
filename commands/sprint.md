@@ -27,6 +27,7 @@ Follow these 5 phases sequentially:
    - Formulate a clean, step-by-step implementation plan.
 4. Collect and synthesize advisor findings into a unified, conflict-free sprint plan.
 5. Present the synthesized plan and task sequence to the user.
+6. Keep the host orchestrator responsive throughout delegation. Do not block the main chat on subagent waits unless the user explicitly asked to wait or the next integration step is blocked on a child result.
 
 ### Phase 2: Sequential Development & Test Verification (Single-Threaded)
 1. Process tasks one by one in sequence (avoid concurrent edits to the same codebase/worktree).

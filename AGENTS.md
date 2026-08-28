@@ -116,6 +116,10 @@ Run from project root.
 - Regularly inspect spawned background tasks and explicitly terminate idle, completed, or zombie tasks.
 - Clean up watch commands, poll loops, schedule timers, and background test subprocesses before finishing a task.
 - Never abandon orphan processes or lingering watch tasks in the background.
+- Subagent handoff must not block the main chat. When the user asks to hand work to a subagent,
+  spawn/delegate the task and remain responsive as the host orchestrator; do not immediately wait
+  on the child agent unless the user explicitly asks you to wait or the next user-visible
+  integration step truly cannot proceed without the result.
 - Do not spawn subagents with git worktree isolation unless the user explicitly requests it.
   Sequential/consecutive ticket work should run directly on the currently checked-out branch —
   worktrees have their own failure modes (e.g. branching from a stale base, or being unable to
@@ -139,4 +143,3 @@ Run from project root.
 - Solo/hobby repo — single default branch, no PR workflow.
 - codeberg.org is primary; github.com (if present) is a synced mirror only.
 <!-- harnez:end Repo Setup -->
-
