@@ -469,10 +469,10 @@ var percentSparkChars = []rune("▁▂▃▄▅▆▇█")
 
 // percentSparkline renders one glyph per value in pcts (each 0-100), one
 // glyph per recent sample in a rolling timeline. A single-element slice
-// degenerates to one glyph (the current value, no history yet). Dimmed
-// (ANSI 90) so the block glyphs don't fight the terminal background at
-// full brightness — full-intensity "█" blocks read as high-contrast noise
-// next to the box's plain text.
+// degenerates to one glyph (the current value, no history yet). The glyphs
+// keep normal foreground color but sit on a muted grey background (ANSI
+// 100, "bright black") so the graph reads as its own panel instead of
+// full-brightness "█" blocks fighting the terminal's own background.
 func percentSparkline(pcts []float64) string {
 	spark := make([]rune, len(pcts))
 	for i, p := range pcts {
@@ -485,7 +485,7 @@ func percentSparkline(pcts []float64) string {
 		}
 		spark[i] = percentSparkChars[idx]
 	}
-	return "\x1b[90m" + string(spark) + "\x1b[0m"
+	return "\x1b[100m" + string(spark) + "\x1b[0m"
 }
 
 // loadLabelWidth is the fixed column width of the "cpu (...)"/"gpu (...)"
