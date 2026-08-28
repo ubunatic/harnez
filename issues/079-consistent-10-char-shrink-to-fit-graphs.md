@@ -1,6 +1,6 @@
 # 079 — Apply Consistent Max-10-Char Shrink-to-Fit Width to All Usage Graphs
 
-**Status**: Closed — resolved in PENDING_SHA
+**Status**: Closed — resolved in 9914010
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
