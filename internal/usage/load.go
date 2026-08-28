@@ -396,6 +396,35 @@ func appendGPUHistory(key string, pct float64) []float64 {
 	return h.append(pct)
 }
 
+// gpuHistorySeeded reports whether the GPU identified by key already has a
+// history window, i.e. whether it's been through burstSeedGPUHistory.
+func gpuHistorySeeded(key string) bool {
+	gpuHistoryMu.Lock()
+	defer gpuHistoryMu.Unlock()
+	_, ok := gpuHistory[key]
+	return ok
+}
+
+// burstSeedGPUHistory takes loadHistoryLen rapid samples of busyPath
+// (historyBurstInterval apart), appending each to the GPU's history window,
+// so its timeline starts already filled. sysfs reads are cheap (~microsecond
+// scale), so the cost here is entirely the intentional pacing, same
+// approach as burstSeedCPUHistory.
+func burstSeedGPUHistory(key, busyPath string) []float64 {
+	var hist []float64
+	for i := 0; i < loadHistoryLen; i++ {
+		v, err := readSysfsUint(busyPath)
+		if err != nil {
+			break
+		}
+		hist = appendGPUHistory(key, float64(v))
+		if i < loadHistoryLen-1 {
+			time.Sleep(historyBurstInterval)
+		}
+	}
+	return hist
+}
+
 // gpuSubprocessThrottle is the minimum interval between calls to a
 // subprocess-based GPU reader (nvidia-smi, rocm-smi fallback). Those cost
 // ~100ms+ per call, so a fast redraw tick (e.g. the watch TUI's 100ms
@@ -632,12 +661,24 @@ func readAMDSysfs() ([]GPU, error) {
 		cardName := filepath.Base(filepath.Dir(deviceDir))
 		g := GPU{Name: amdGPUCodename(deviceDir)}
 
-		if v, err := readSysfsUint(busyPath); err == nil {
+		if gpuHistorySeeded(cardName) {
+			v, err := readSysfsUint(busyPath)
+			if err != nil {
+				continue // not a real GPU device (or unreadable): skip rather than report zeros
+			}
 			g.UtilPercent = float64(v)
+			g.UtilHistory = appendGPUHistory(cardName, g.UtilPercent)
 		} else {
-			continue // not a real GPU device (or unreadable): skip rather than report zeros
+			// First time seeing this card: burst-sample so its timeline
+			// starts already filled instead of growing one glyph per
+			// redraw (see historyBurstInterval).
+			hist := burstSeedGPUHistory(cardName, busyPath)
+			if len(hist) == 0 {
+				continue
+			}
+			g.UtilHistory = hist
+			g.UtilPercent = hist[len(hist)-1]
 		}
-		g.UtilHistory = appendGPUHistory(cardName, g.UtilPercent)
 
 		used, errUsed := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_used"))
 		total, errTotal := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_total"))
