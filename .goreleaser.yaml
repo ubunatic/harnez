@@ -1,0 +1,59 @@
+version: 2
+
+project_name: harnez
+
+builds:
+  - id: harnez-linux
+    main: ./cmd/harnez
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    binary: harnez
+    ldflags:
+      - -s -w -X ubunatic.com/harnez.Version={{.Version}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    name_template: "harnez-{{ .Version }}-{{ if eq .Arch \"amd64\" }}x86_64{{ else if eq .Arch \"arm64\" }}aarch64{{ else }}{{ .Arch }}{{ end }}-linux"
+    files:
+      - README.md
+      - config.yaml
+
+  - id: binary
+    formats:
+      - binary
+    name_template: "harnez-{{ if eq .Arch \"amd64\" }}x86_64{{ else if eq .Arch \"arm64\" }}aarch64{{ else }}{{ .Arch }}{{ end }}-linux"
+
+checksum:
+  name_template: SHA256SUMS
+  algorithm: sha256
+
+signs:
+  - cmd: sh
+    args:
+      - -c
+      - >-
+        if [ -n "${MINISIGN_PASSWORD}" ]; then
+          echo "${MINISIGN_PASSWORD}" | minisign -S -s "${MINISIGN_KEY_FILE:-$HOME/.minisign/harnez.key}" -m "${artifact}" -t "harnez {{ .Version }}";
+        else
+          minisign -S -s "${MINISIGN_KEY_FILE:-$HOME/.minisign/harnez.key}" -m "${artifact}" -t "harnez {{ .Version }}";
+        fi
+    artifacts: checksum
+    signature: "${artifact}.minisig"
+    env:
+      - MINISIGN_KEY_FILE
+      - MINISIGN_PASSWORD
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

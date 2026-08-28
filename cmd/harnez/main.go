@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/assess"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/usage"
@@ -20,8 +21,9 @@ func main() {
 	var target string
 
 	root := &cobra.Command{
-		Use:   "harnez",
-		Short: "Manage Claude Code, Prime Agent, and other agent harnesses from a YAML definition",
+		Use:     "harnez",
+		Short:   "Manage Claude Code, Prime Agent, and other agent harnesses from a YAML definition",
+		Version: harnez.Version,
 	}
 
 	var usageJSON bool
