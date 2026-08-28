@@ -63,6 +63,7 @@ Generated copies land here (root) after `apply` / `init`.
 | [studies/2026-08-19-the-5-phase-agentic-sprint-and-independent-review-loop.md](studies/2026-08-19-the-5-phase-agentic-sprint-and-independent-review-loop.md) | The 5-Phase Agentic Sprint Loop & The Independent Review Gate (Candidate chapter for *Agentic Software Development: The Ubunatic Way*) |
 | [studies/2026-08-23-usage-history-subcommands-process-panel-and-remote-monitoring.md](studies/2026-08-23-usage-history-subcommands-process-panel-and-remote-monitoring.md) | Usage history subcommand decomposition, process telemetry panel (`/proc`), SSH remote monitoring (`--host` / `[r]`), and multi-host `make sync` |
 | [studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md](studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md) | ADR: device telemetry (Load box CPU/GPU) is read only via kernel-standard procfs/sysfs, never a vendor's proprietary CLI/SDK — `nvidia-smi` calling was removed entirely rather than kept as a fallback |
+| [studies/2026-08-28-load-box-cpu-gpu-kernel-metrics.md](studies/2026-08-28-load-box-cpu-gpu-kernel-metrics.md) | The `[L] Load` panel's kernel data sources (`/proc/stat` per-core parsing, hwmon CPU temp discovery, amdgpu sysfs attributes) and reusable patterns (burst-seeded history, decoupled redraw ticker, absolute-scale sparklines, fixed-width label columns) |
 
 **`docs/feedback/`** — agentic retrospectives & harness feedback reports
 
@@ -71,5 +72,6 @@ Generated copies land here (root) after `apply` / `init`.
 | [feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md](feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md) | Subagent domain extraction blindspots, wrapper traps, and proposed harnez features |
 | [feedback/2026-08-19-orchestrated-subagents-process-hygiene-and-review-loops.md](feedback/2026-08-19-orchestrated-subagents-process-hygiene-and-review-loops.md) | Parallel advisors, sequential dev orchestration, background zombie hygiene, and pre-commit review gates |
 | [feedback/2026-08-24-repo-assessment-and-managed-docs-effectiveness.md](feedback/2026-08-24-repo-assessment-and-managed-docs-effectiveness.md) | `harnez assess` delivery, token heuristics, managed docs effectiveness, and self-assessment findings |
+| [feedback/2026-08-28-iterative-tui-tuning-and-empirical-verification.md](feedback/2026-08-28-iterative-tui-tuning-and-empirical-verification.md) | Iterative visual-tuning retrospective: empirical verification over guessing (taskset core-pinning test, subprocess timing), refusing to fabricate PCI ID data, reflecting back ambiguous scope, live-capturing `--watch` frames instead of trusting a build pass |
 
 **`docs/proposed/`** — staging area for docs that may become copyable (no install mechanics yet).
