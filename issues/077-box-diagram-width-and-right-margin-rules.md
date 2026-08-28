@@ -21,31 +21,14 @@ When a single border line wraps onto the next line:
 
 ## 2. Technical Specification & Markdown Convention
 
-### 2.1 Max Width & Right Margin Invariant
-- **Max Width**: ASCII box diagrams in chat MUST not exceed **65–70 characters** in total line length.
-- **Right Margin Safety**: Always leave a buffer of at least **10–15 columns** on the right so terminals, split panes, and IDE chat sidebars have room without triggering auto-wrap.
-- **Stacking over Widening**: If multiple boxes or columns are needed, stack components vertically instead of chaining them horizontally across the full terminal width.
+### 2.1 Dynamic Width & 5% Safety Buffer Invariant
+- **Dynamic Terminal Sizing**: Size box diagrams to fit the current terminal or chat pane width $W$.
+- **5% Right Margin Safety Buffer**: Always leave at least a **5% buffer** on the right side (e.g., width $\le 0.95 \times W$) so terminals with slight margin differences, scrollbars, or split panes never trigger line-wrapping.
+- **Hard Maximum Ceiling of 120 Columns**: Even on ultra-wide displays ($W > 120$), cap the diagram width at **120 columns** for readability and clean terminal rendering.
+- **Narrow Terminal Adaptation**: On standard 80-column terminals, keep diagrams to $\le 76$ columns ($80 - 5\%$).
 
-### 2.2 Formatting Example
-
-**Avoid (Too wide, spans > 80 cols, will collapse on wrap):**
-```text
-┌───────────────────────────────────────┬───────────────────────────────────────┐
-│              Long Box A               │              Long Box B               │
-└───────────────────────────────────────┴───────────────────────────────────────┘
-```
-
-**Prefer (Compact width <= 65 cols, safe right margin):**
-```text
-┌─────────────────────────┐
-│         Step 1          │
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│         Step 2          │
-└─────────────────────────┘
-```
+### 2.2 Formatting Rule
+- If the diagram would naturally exceed the safe width ($0.95 \times W$ or $120$ cols), stack components vertically rather than spreading wide horizontally.
 
 ---
 

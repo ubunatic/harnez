@@ -39,9 +39,10 @@ Use **kebab-case** with an optional numeric or date prefix for ordering.
 - Do not emit ` ```mermaid ` blocks unless asked; terminals and chat UIs may render them as raw markup
 - For simple flows, use `1. 2. 3. if X goto 2.; 4. ...` and skip the diagram completely
 - Use compact ASCII box-and-arrow diagrams inside a ` ```text ` fence instead:
-  - **Width limit**: Keep diagrams under **65–70 columns** max.
-  - **Right margin safety**: Always leave a buffer on the right so narrow terminals or chat sidebars never auto-wrap and collapse box lines.
-  - **Vertical stacking**: Stack boxes vertically rather than spreading wide horizontally.
+  - **Dynamic terminal sizing**: Adapt diagram width to the terminal/pane width $W$.
+  - **5% Right margin buffer**: Always leave at least a **5% buffer** on the right side ($\text{width} \le 0.95 \times W$) so terminals never auto-wrap and break rectangular borders.
+  - **Max width ceiling (120 cols)**: Cap diagram width at **120 columns** max, even on ultra-wide terminals.
+  - **Vertical stacking**: If a flow exceeds the safe width, stack boxes vertically rather than spreading wide horizontally.
 
   ```text
   ┌─────────────┐       ┌─────────────┐

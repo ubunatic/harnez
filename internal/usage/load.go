@@ -146,13 +146,24 @@ var (
 	haveCPUFrame bool
 )
 
+// historyBurstInterval is the spacing between samples when seeding a
+// timeline's history at startup (see burstSeedCPUHistory,
+// burstSeedGPUHistory). loadHistoryLen samples at this interval take
+// ~loadHistoryLen*historyBurstInterval of real wall-clock time — there's no
+// way to read the past from a kernel counter that only tracks a
+// cumulative total, so filling the chart immediately still costs real time,
+// just compressed from the ~10s it'd otherwise take at the 1s redraw
+// cadence down to about 1s.
+const historyBurstInterval = 100 * time.Millisecond
+
 // currentCPUPercents reports aggregate and per-core CPU busy% since the last
 // call, computed from the delta between two /proc/stat frames (btop-style
 // "real" CPU, distinct from the kernel's minute-scale load averages). The
-// first call in a process has no prior sample to diff against, so it takes
-// a second sample after a short sleep to still return an immediate reading;
-// every later call in the same `--watch` process reuses the previous
-// frame's sample instead.
+// first call in a process has no prior sample to diff against, so it burst-
+// samples (see historyBurstInterval) to both get an immediate reading and
+// seed cpuHistory with a full timeline instead of growing one glyph per
+// redraw; every later call in the same `--watch` process reuses the
+// previous frame's sample instead.
 func currentCPUPercents() (float64, bool, []float64, bool) {
 	cur, err := readCPUStatFrame("/proc/stat")
 	if err != nil {
@@ -167,17 +178,42 @@ func currentCPUPercents() (float64, bool, []float64, bool) {
 	cpuFrameMu.Unlock()
 
 	if !had {
-		time.Sleep(150 * time.Millisecond)
-		cur2, err := readCPUStatFrame("/proc/stat")
+		return burstSeedCPUHistory(cur)
+	}
+	aggPct, aggOk, perCore, perCoreOk := cpuFramePercents(prev, cur)
+	if aggOk {
+		cpuHistory.append(aggPct)
+	}
+	return aggPct, aggOk, perCore, perCoreOk
+}
+
+// burstSeedCPUHistory takes loadHistoryLen rapid /proc/stat samples,
+// historyBurstInterval apart, appending each delta's aggregate % to
+// cpuHistory so the Load box's CPU timeline starts already filled. Returns
+// the final sample's aggregate and per-core percentages, same shape as
+// currentCPUPercents' normal path.
+func burstSeedCPUHistory(first cpuStatFrame) (float64, bool, []float64, bool) {
+	prev := first
+	var aggPct float64
+	var aggOk bool
+	var perCore []float64
+	var perCoreOk bool
+	for i := 0; i < loadHistoryLen; i++ {
+		time.Sleep(historyBurstInterval)
+		cur, err := readCPUStatFrame("/proc/stat")
 		if err != nil {
-			return 0, false, nil, false
+			break
+		}
+		aggPct, aggOk, perCore, perCoreOk = cpuFramePercents(prev, cur)
+		if aggOk {
+			cpuHistory.append(aggPct)
 		}
 		cpuFrameMu.Lock()
-		lastCPUFrame = cur2
+		lastCPUFrame = cur
 		cpuFrameMu.Unlock()
-		return cpuFramePercents(cur, cur2)
+		prev = cur
 	}
-	return cpuFramePercents(prev, cur)
+	return aggPct, aggOk, perCore, perCoreOk
 }
 
 func cpuFramePercents(prev, cur cpuStatFrame) (float64, bool, []float64, bool) {
