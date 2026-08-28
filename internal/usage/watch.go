@@ -469,12 +469,11 @@ func buildLoadBox(width int) wbox {
 const loadLabelWidth = 16
 
 // padLoadLabel truncates label to loadLabelWidth (with a trailing "…") if
-// it's too long, then pads it to exactly that width.
+// it's too long, then pads it to exactly that width. Thin wrapper around
+// the shared rograph.PadLabel helper, which also backs buildAgentBox's
+// window-label formatting.
 func padLoadLabel(label string) string {
-	if utf8.RuneCountInString(label) > loadLabelWidth {
-		label = string([]rune(label)[:loadLabelWidth-1]) + "…"
-	}
-	return fmt.Sprintf("%-*s", loadLabelWidth, label)
+	return rograph.PadLabel(label, loadLabelWidth)
 }
 
 // formatCPULine renders the "cpu (N cores) [spark] avg% (temp)" line. The
@@ -684,28 +683,16 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 		if w.DurationLeft > 0 {
 			resetStr = " · " + FormatDuration(w.DurationLeft)
 		}
-		label := windows[i].label
-		if utf8.RuneCountInString(label) > 16 {
-			label = string([]rune(label)[:15]) + "…"
-		}
-		// Layout: label(16) + " "(1) + bar(barW+2) + " "(1) + percent(6) + resetStr
-		// = 26 + barW + visLen(resetStr)
-		// Shrink the bar so that resetStr always fits, down to a minimum of 1.
-		// Use visLen (not len) so multi-byte runes like · count as 1 column.
-		barW := contentW - 26 - visLen(resetStr)
-		if barW < 1 {
-			// Not enough room for bar + duration: drop duration, keep a stub bar.
+		label := rograph.PadLabel(windows[i].label, 16)
+		// Layout: label(16) + " "(1) + bar(barW+2) + " "(1) + percent(6) + resetStr.
+		// Shrink the bar so that resetStr always fits, down to a minimum of 1;
+		// drop resetStr first if there isn't room for both.
+		barW, keepReset := rograph.RowLayout(contentW, 16, 6, rograph.MaxWidth, visLen(resetStr))
+		if !keepReset {
 			resetStr = ""
-			barW = contentW - 26
-		}
-		if barW < 1 {
-			barW = 1
-		}
-		if barW > rograph.MaxWidth {
-			barW = rograph.MaxWidth
 		}
 		bar := rograph.RenderProgressBar(w.UsedPercent, barW)
-		lines = append(lines, fmt.Sprintf("%-16s %s %4.1f%%%s", label, bar, w.UsedPercent, resetStr))
+		lines = append(lines, fmt.Sprintf("%s %s %4.1f%%%s", label, bar, w.UsedPercent, resetStr))
 	}
 
 	// A fetch error is only worth a line when it actually explains missing
