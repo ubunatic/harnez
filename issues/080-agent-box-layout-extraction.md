@@ -1,6 +1,6 @@
 # 080 — Extract Agent-Box Content Layout (Label / Graph / Trailing Info Sizing) Into a Small Layout Library
 
-**Status**: Open
+**Status**: Closed — resolved in 788e1bd
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Refactor
