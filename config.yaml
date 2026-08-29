@@ -359,9 +359,9 @@ agents_md:
       local: ./docs/Website.md
       default: true
     gorelease:
-      name: "Go Release Pipeline"
+      name: "Release Pipeline"
       ref: "@docs/GoRelease.md"
-      hint: "harnez release, version.yaml spec, GoReleaser v2, non-interactive minisign (-W), Forgejo has_releases"
+      hint: "harnez release, version.yaml spec, GoReleaser v2, non-interactive minisign (-W), Forgejo has_releases, language-agnostic (Go/Python/Zig/Rust/scripted)"
       source: docs/practices/GoRelease.md
       target: ~/.claude/docs/GoRelease.md
       local: ./docs/GoRelease.md
