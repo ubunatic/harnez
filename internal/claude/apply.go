@@ -93,7 +93,7 @@ func applyMerge(existing, doc map[string]any) map[string]any {
 
 // managedSettingsKeys are the top-level keys harnez writes to settings.json.
 var managedSettingsKeys = []string{
-	"model", "effortLevel", "permissions", "hooks", "env", "spinnerVerbs", "mcpServers",
+	"model", "effortLevel", "permissions", "hooks", "env", "spinnerVerbs", "mcpServers", "statusLine",
 }
 
 // Model alias mappings.
@@ -165,6 +165,14 @@ func buildSettingsDoc(cfg *Config) map[string]any {
 			servers[s.Name] = srv
 		}
 		doc["mcpServers"] = servers
+	}
+	if cfg.StatusLine {
+		// cwd-only MVP; Claude Code renders this on its own row above the
+		// built-in footer badges, it cannot share that row (see issue 095).
+		doc["statusLine"] = map[string]any{
+			"type":    "command",
+			"command": "harnez statusline",
+		}
 	}
 	return doc
 }

@@ -103,6 +103,11 @@ distill_autopipe:
 
 mcp_servers: []
 
+# MVP: cwd only. Renders on its own row above Claude Code's built-in footer
+# badges (esc-to-interrupt / ? for shortcuts) — it cannot share that row.
+# See issues/095.
+status_line: true
+
 commands:
   - name: review
     description: "Review current branch against main"

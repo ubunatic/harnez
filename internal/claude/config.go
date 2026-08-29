@@ -21,6 +21,7 @@ type Config struct {
 	Hooks             []Hook            `yaml:"hooks"`
 	Env               map[string]string `yaml:"env"`
 	MCPServers        []MCPServer       `yaml:"mcp_servers"`
+	StatusLine        bool              `yaml:"status_line"`
 	Commands          []Command         `yaml:"commands"`
 	Skills            []Command         `yaml:"skills"`
 	DistillAutopipe   DistillAutopipe   `yaml:"distill_autopipe"`
