@@ -163,6 +163,10 @@ commands:
     description: "Build or update a project website — reads docs/Website.md rules (hosting, branding, static/no-CDN, subpage links) before generating any content"
     file: commands/website.md
 
+  - name: harnez-sync
+    description: "Autonomously sweep sibling agent projects for managed-docs drift and reconcile it (scan -> triage -> stop-marker protect -> init -> verify)"
+    file: commands/harnez-sync.md
+
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
 prime_agent_target: ~/.prime/agent
@@ -195,6 +199,10 @@ skills:
   - name: website
     description: "Build or update a project website — reads docs/Website.md rules (hosting, branding, static/no-CDN, subpage links) before generating any content"
     file: commands/website.md
+
+  - name: harnez-sync
+    description: "Autonomously sweep sibling agent projects for managed-docs drift and reconcile it (scan -> triage -> stop-marker protect -> init -> verify)"
+    file: commands/harnez-sync.md
 
 agents_md:
   # config for local md file

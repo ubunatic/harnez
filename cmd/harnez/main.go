@@ -387,7 +387,7 @@ func main() {
 	var initDocs []string
 	var initConfigPath string
 	var initRepoMode string
-	var initSummary, initUpdate, initReplace, initYes bool
+	var initSummary, initUpdate, initReplace, initYes, initAll bool
 	initCmd := &cobra.Command{
 		Use:   "init",
 		Short: "Set up a project directory with AGENTS.md, language docs, and Makefile targets",
@@ -396,11 +396,16 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
+			if initAll {
+				return claude.RunInitAll(initDir, cfg, initDocs, initRepoMode, initSummary, initUpdate, initReplace)
+			}
 			return claude.RunInit(initDir, cfg, initDocs, initRepoMode, initYes, initSummary, initUpdate, initReplace)
 		},
 	}
 	initCmd.Flags().StringVarP(&initConfigPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	initCmd.Flags().StringVarP(&initDir, "dir", "d", ".", "project directory to initialise (default: current directory)")
+	initCmd.Flags().BoolVar(&initAll, "all", false,
+		"treat --dir as a workspace directory and non-interactively init every eligible child (has AGENTS.md/CLAUDE.md); refuses $HOME (see issue 068)")
 	initCmd.Flags().StringSliceVar(&initDocs, "docs", nil, "docs to set up in the project, comma-separated or repeated (e.g. golang,canary)")
 	initCmd.Flags().StringVarP(&initRepoMode, "repo-mode", "m", "", "repo git setup to note in AGENTS.md (solo, fork, team)")
 	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "assume yes when reconciling Makefile targets (no prompt)")

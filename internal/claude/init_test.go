@@ -191,3 +191,76 @@ func TestRunInit_CustomTemplate(t *testing.T) {
 	}
 }
 
+func TestRunInitAll_InitializesOnlyEligibleChildren(t *testing.T) {
+	workspace := t.TempDir()
+
+	eligible := filepath.Join(workspace, "repo-a")
+	other := filepath.Join(workspace, "repo-b")
+	bareDir := filepath.Join(workspace, "not-a-project")
+	for _, dir := range []string{eligible, other, bareDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(eligible, "AGENTS.md"), []byte("# repo-a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(other, "CLAUDE.md"), []byte("# repo-b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// bareDir has neither AGENTS.md nor CLAUDE.md and must be skipped.
+
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	if err := claude.RunInitAll(workspace, cfg, nil, "", false, false, false); err != nil {
+		t.Fatalf("RunInitAll failed: %v", err)
+	}
+
+	// repo-a already had AGENTS.md; RunInit should reconcile it, not clobber
+	// its identity, and it must gain a CLAUDE.md symlink from the batch run.
+	if _, err := os.Lstat(filepath.Join(eligible, "CLAUDE.md")); err != nil {
+		t.Errorf("expected repo-a to gain a CLAUDE.md symlink from batch init: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(other, "AGENTS.md")); err != nil {
+		t.Errorf("expected repo-b (CLAUDE.md-only) to gain a migrated AGENTS.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(bareDir, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Errorf("expected bare directory without AGENTS.md/CLAUDE.md to be skipped, got err=%v", err)
+	}
+}
+
+func TestRunInitAll_RefusesHomeDirectory(t *testing.T) {
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("cannot resolve home directory: %v", err)
+	}
+	err = claude.RunInitAll(home, cfg, nil, "", false, false, false)
+	if err == nil {
+		t.Fatal("expected RunInitAll to refuse the home directory, got nil error")
+	}
+	if !strings.Contains(err.Error(), "home directory") {
+		t.Errorf("expected home-directory safety-guard error, got: %v", err)
+	}
+}
+
+func TestRunInitAll_NoEligibleChildrenIsNotAnError(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workspace, "just-a-dir"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+	if err := claude.RunInitAll(workspace, cfg, nil, "", false, false, false); err != nil {
+		t.Fatalf("expected no error scanning a workspace with no eligible children, got: %v", err)
+	}
+}
+

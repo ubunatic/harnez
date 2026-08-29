@@ -432,6 +432,58 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 	return nil
 }
 
+// RunInitAll discovers eligible child project directories under parentDir
+// (directories containing AGENTS.md or CLAUDE.md — the same eligibility rule
+// ScanDocs uses) and runs RunInit non-interactively against each one in turn.
+// It refuses to operate directly on the user's home directory so a bare
+// `harnez init --all ..` from a project one level under $HOME can never treat
+// $HOME itself as a project container (see issue 068).
+func RunInitAll(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool) error {
+	if parentDir == "" {
+		return fmt.Errorf("parent directory is empty")
+	}
+	abs, err := filepath.Abs(parentDir)
+	if err != nil {
+		return fmt.Errorf("resolve parent directory: %w", err)
+	}
+	if home, herr := os.UserHomeDir(); herr == nil {
+		if homeAbs, aerr := filepath.Abs(home); aerr == nil && abs == homeAbs {
+			return fmt.Errorf("refusing to run init --all directly on the home directory %s; pass a project workspace directory instead", abs)
+		}
+	}
+	entries, err := os.ReadDir(abs)
+	if err != nil {
+		return fmt.Errorf("read parent directory: %w", err)
+	}
+	var children []string
+	for _, entry := range entries {
+		child := filepath.Join(abs, entry.Name())
+		info, statErr := os.Stat(child)
+		if statErr != nil || !info.IsDir() || !hasAgentDoc(child) {
+			continue
+		}
+		children = append(children, child)
+	}
+	sort.Strings(children)
+	if len(children) == 0 {
+		fmt.Printf("No eligible project directories found under %s\n", abs)
+		return nil
+	}
+	var errs []string
+	for _, child := range children {
+		fmt.Printf("== %s ==\n", filepath.Base(child))
+		if err := RunInit(child, cfg, docs, repoMode, true, withSummary, update, replace); err != nil {
+			fmt.Printf("  error: %v\n", err)
+			errs = append(errs, fmt.Sprintf("%s: %v", child, err))
+			continue
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("init --all encountered %d error(s):\n%s", len(errs), strings.Join(errs, "\n"))
+	}
+	return nil
+}
+
 func migrateLegacyMarkers(path string) (bool, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
