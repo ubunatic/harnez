@@ -240,6 +240,13 @@ func runPreflight(opt Options) error {
 			return fmt.Errorf("required tool %q not found in PATH", bin)
 		}
 	}
+
+	if !opt.SkipPush || !opt.SkipPublish {
+		if _, err := DetectForgeInfo(opt.Dir); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

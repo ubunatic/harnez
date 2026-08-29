@@ -22,36 +22,42 @@ type ForgeInfo struct {
 }
 
 var (
-	sshRemoteRegex   = regexp.MustCompile(`^(?:ssh://)?(?:[^@]+@)?([^:/]+)[:/]([^/]+)/([^/]+?)(?:\.git)?$`)
-	httpsRemoteRegex = regexp.MustCompile(`^https?://([^/]+)/([^/]+)/([^/]+?)(?:\.git)?$`)
+	sshRemoteRegex   = regexp.MustCompile(`(?i)^(?:ssh://)?(?:[^@]+@)?([^:/]+)[:/]([^/]+)/([^/]+?)(?:\.git)?$`)
+	httpsRemoteRegex = regexp.MustCompile(`(?i)^https?://([^/]+)/([^/]+)/([^/]+?)(?:\.git)?$`)
 )
 
-// DetectForgeInfo extracts host, owner, and repo from the git origin remote.
+// IsSupportedForge checks if the given host is an authorized forge (codeberg.org or github.com).
+func IsSupportedForge(host string) bool {
+	h := strings.ToLower(strings.TrimSpace(host))
+	return h == "codeberg.org" || h == "github.com"
+}
+
+// DetectForgeInfo extracts host, owner, and repo from the git origin remote and validates that the host is supported.
 func DetectForgeInfo(dir string) (*ForgeInfo, error) {
 	cmd := exec.Command("git", "remote", "get-url", "origin")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("git remote get-url origin: %w", err)
+		return nil, fmt.Errorf("unsupported or missing forge remote host %q for origin (must be on codeberg.org or github.com to publish releases)", "")
 	}
 
 	raw := strings.TrimSpace(string(out))
+	var host, owner, repo string
 	if m := sshRemoteRegex.FindStringSubmatch(raw); m != nil {
-		return &ForgeInfo{
-			Host:  m[1],
-			Owner: m[2],
-			Repo:  m[3],
-		}, nil
-	}
-	if m := httpsRemoteRegex.FindStringSubmatch(raw); m != nil {
-		return &ForgeInfo{
-			Host:  m[1],
-			Owner: m[2],
-			Repo:  m[3],
-		}, nil
+		host, owner, repo = m[1], m[2], m[3]
+	} else if m := httpsRemoteRegex.FindStringSubmatch(raw); m != nil {
+		host, owner, repo = m[1], m[2], m[3]
 	}
 
-	return nil, fmt.Errorf("unable to parse git remote origin URL %q", raw)
+	if !IsSupportedForge(host) {
+		return nil, fmt.Errorf("unsupported or missing forge remote host %q for origin (must be on codeberg.org or github.com to publish releases)", host)
+	}
+
+	return &ForgeInfo{
+		Host:  host,
+		Owner: owner,
+		Repo:  repo,
+	}, nil
 }
 
 // GetForgeToken retrieves an API token from environment variables or ~/.local/share/forgejo-cli/keys.json.

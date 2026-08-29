@@ -3,6 +3,7 @@ package release
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -256,4 +257,179 @@ func TestSemverFormatting(t *testing.T) {
 		t.Errorf("sv.TagName() = %q, want v1.2.3-alpha.1+20260829", sv.TagName())
 	}
 }
+
+func setupTestGitRepo(t *testing.T, remoteURL string) string {
+	t.Helper()
+	dir := t.TempDir()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v (%s)", err, string(out))
+	}
+	if remoteURL != "" {
+		cmd = exec.Command("git", "remote", "add", "origin", remoteURL)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git remote add origin failed: %v (%s)", err, string(out))
+		}
+	}
+	return dir
+}
+
+func TestDetectForgeInfo(t *testing.T) {
+	tests := []struct {
+		name      string
+		remoteURL string
+		wantHost  string
+		wantOwner string
+		wantRepo  string
+		wantErr   string
+	}{
+		{
+			name:      "Valid Codeberg SSH",
+			remoteURL: "git@codeberg.org:myuser/myproject.git",
+			wantHost:  "codeberg.org",
+			wantOwner: "myuser",
+			wantRepo:  "myproject",
+		},
+		{
+			name:      "Valid Codeberg HTTPS",
+			remoteURL: "https://codeberg.org/myuser/myproject.git",
+			wantHost:  "codeberg.org",
+			wantOwner: "myuser",
+			wantRepo:  "myproject",
+		},
+		{
+			name:      "Valid GitHub SSH",
+			remoteURL: "git@github.com:myorg/myproject.git",
+			wantHost:  "github.com",
+			wantOwner: "myorg",
+			wantRepo:  "myproject",
+		},
+		{
+			name:      "Valid GitHub HTTPS",
+			remoteURL: "https://github.com/myorg/myproject",
+			wantHost:  "github.com",
+			wantOwner: "myorg",
+			wantRepo:  "myproject",
+		},
+		{
+			name:      "Valid Codeberg uppercase case-insensitive",
+			remoteURL: "https://CodeBerg.Org/MyUser/MyProject.git",
+			wantHost:  "CodeBerg.Org",
+			wantOwner: "MyUser",
+			wantRepo:  "MyProject",
+		},
+		{
+			name:      "Valid GitHub uppercase case-insensitive",
+			remoteURL: "git@GITHUB.COM:MyOrg/MyProject.git",
+			wantHost:  "GITHUB.COM",
+			wantOwner: "MyOrg",
+			wantRepo:  "MyProject",
+		},
+		{
+			name:      "Unsupported host GitLab SSH",
+			remoteURL: "git@gitlab.com:myuser/myproject.git",
+			wantErr:   `unsupported or missing forge remote host "gitlab.com" for origin (must be on codeberg.org or github.com to publish releases)`,
+		},
+		{
+			name:      "Unsupported host custom HTTPS",
+			remoteURL: "https://forge.internal.lan/myuser/myproject.git",
+			wantErr:   `unsupported or missing forge remote host "forge.internal.lan" for origin (must be on codeberg.org or github.com to publish releases)`,
+		},
+		{
+			name:      "Local directory path",
+			remoteURL: "/tmp/local-mirror",
+			wantErr:   `unsupported or missing forge remote host "" for origin (must be on codeberg.org or github.com to publish releases)`,
+		},
+		{
+			name:      "Local file URI",
+			remoteURL: "file:///tmp/local-mirror",
+			wantErr:   `unsupported or missing forge remote host "" for origin (must be on codeberg.org or github.com to publish releases)`,
+		},
+		{
+			name:      "Missing remote origin",
+			remoteURL: "",
+			wantErr:   `unsupported or missing forge remote host "" for origin (must be on codeberg.org or github.com to publish releases)`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := setupTestGitRepo(t, tc.remoteURL)
+			info, err := DetectForgeInfo(dir)
+			if tc.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+				}
+				if !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if info == nil {
+				t.Fatal("expected non-nil ForgeInfo")
+			}
+			if info.Host != tc.wantHost {
+				t.Errorf("Host = %q, want %q", info.Host, tc.wantHost)
+			}
+			if info.Owner != tc.wantOwner {
+				t.Errorf("Owner = %q, want %q", info.Owner, tc.wantOwner)
+			}
+			if info.Repo != tc.wantRepo {
+				t.Errorf("Repo = %q, want %q", info.Repo, tc.wantRepo)
+			}
+		})
+	}
+}
+
+func TestPreflightForgeValidation(t *testing.T) {
+	// Missing remote origin
+	dir := setupTestGitRepo(t, "")
+	keyFile := filepath.Join(dir, ".minisign.key")
+	_ = os.WriteFile(keyFile, []byte("dummy-key"), 0600)
+	_ = os.WriteFile(filepath.Join(dir, "version.go"), []byte("package main\n\nvar Version = \"0.1.0\"\n"), 0644)
+
+	var buf bytes.Buffer
+	opt := Options{
+		Dir:         dir,
+		Bump:        "patch",
+		DryRun:      true,
+		SignKey:     keyFile,
+		SkipBuild:   true,
+		SkipPublish: false,
+		SkipPush:    false,
+		Out:         &buf,
+	}
+
+	err := Run(opt)
+	if err == nil {
+		t.Fatal("expected Run() to fail when remote origin is missing")
+	}
+	expectedErr := `unsupported or missing forge remote host "" for origin (must be on codeberg.org or github.com to publish releases)`
+	if !strings.Contains(err.Error(), expectedErr) {
+		t.Errorf("expected error %q, got %q", expectedErr, err.Error())
+	}
+
+	// Unsupported remote host
+	dirUnsupported := setupTestGitRepo(t, "https://gitlab.com/owner/repo.git")
+	keyFileUnsupported := filepath.Join(dirUnsupported, ".minisign.key")
+	_ = os.WriteFile(keyFileUnsupported, []byte("dummy-key"), 0600)
+	_ = os.WriteFile(filepath.Join(dirUnsupported, "version.go"), []byte("package main\n\nvar Version = \"0.1.0\"\n"), 0644)
+
+	opt.Dir = dirUnsupported
+	opt.SignKey = keyFileUnsupported
+	err = Run(opt)
+	if err == nil {
+		t.Fatal("expected Run() to fail when remote origin is on an unsupported host")
+	}
+	expectedErrHost := `unsupported or missing forge remote host "gitlab.com" for origin (must be on codeberg.org or github.com to publish releases)`
+	if !strings.Contains(err.Error(), expectedErrHost) {
+		t.Errorf("expected error %q, got %q", expectedErrHost, err.Error())
+	}
+}
+
 
