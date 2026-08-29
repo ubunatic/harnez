@@ -95,3 +95,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 094 | [094-usage-watch-controls-overlay-and-presets.md](094-usage-watch-controls-overlay-and-presets.md) | Usage Watch Controls Overlay and Presets | Open |
 | 095 | [095-restore-cwd-after-shell-tool-use-and-statusline-cwd-display.md](095-restore-cwd-after-shell-tool-use-and-statusline-cwd-display.md) | Restore CWD After Shell Tool Use; Surface CWD in Status Line | Open — partially resolved (statusLine shipped) |
 | 096 | [096-release-forge-token-401-warning-lacks-fix-hint.md](096-release-forge-token-401-warning-lacks-fix-hint.md) | `harnez release`'s `has_releases` 401 warning doesn't name the fix | Open |
+| 097 | [097-release-skip-when-no-diff-since-prev-tag.md](097-release-skip-when-no-diff-since-prev-tag.md) | `harnez release` should skip when there's no diff since the previous tag | Open |
