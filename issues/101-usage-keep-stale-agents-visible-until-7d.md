@@ -1,6 +1,6 @@
 # 101 — `harnez usage` hides/blanks agents too soon when not recently active (e.g. AGY)
 
-**Status**: Resolved
+**Status**: Resolved (read-side fix + write-side follow-up, both 2026-08-29)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: UX / Agentic Ergonomics
@@ -142,3 +142,82 @@ minutes, observe `harnez usage --watch` against a real machine) was not
 performed — matching this ticket's own stated epistemic caution about that
 being impractical to run as part of this change. The fix is exercised only
 via the code-level simulation described above.
+
+## Live-Repro Follow-Up (2026-08-29) — real write-path bug found and fixed
+
+User report, live: "I cannot see stale AGY usage yet," despite the above fix
+being merged. Investigated for real this time (no AGY process running,
+`harnez usage`, `harnez usage --summary`, and `harnez agent-collector --once`
+all run live against this machine's actual state) instead of re-reading the
+code that already claimed success.
+
+**What was actually true on this machine**: AGY's box *does* render every
+time (`HasUsageData()`/`IsStale` gating is correct, `Updated: ... ago` line
+renders correctly) — it was never being hidden. But it renders with no
+quota bars (no `Session`/`Weekly`), only the static account/model/activity
+fields. `~/.claude/harnez/usage-history/*.jsonl` shows AGY *did* have real
+`ModelGroups` quota data as recently as 2026-08-23/24 (AGY was running and
+answering the local RPC then). The on-disk collector-daemon snapshot
+(`~/.local/state/harnez/agents/usage/agy.json`), however, was last written
+2026-08-28 11:35 with **no** quota fields at all — that snapshot is what
+every subsequent `harnez usage` reads as "the last known state," and it was
+already lossy by the time this ticket's read-side fix shipped.
+
+**Root cause**: the original fix only patched the *read* path
+(`cacheOrLive` in `statecache.go`) to stop discarding a cached snapshot's
+quota signal in favor of an emptier live recollect *at read time*. It did
+not touch the *write* path. Both places that persist collector output —
+`collectTick` (the `harnez agent-collector` ticking loop) and the
+`agent-collector --once` `RunE` in `cmd/harnez/main.go` — called
+`WriteAgentSnapshot` directly and unconditionally on every pass. So the very
+first collector tick where AGY wasn't running (which is most ticks, since
+AGY isn't left running continuously) would overwrite the on-disk snapshot
+with a result that had lost `Session`/`Weekly`/`ModelGroups`/`Tokens` —
+permanently discarding the last known real quota numbers from disk. From
+that point on, `cacheOrLive`'s read-side "don't blank on a lossy live
+recollect" guard had nothing richer left to fall back to: the cache itself
+was already the lossy version. This is exactly the failure mode issue 101
+set out to fix, just one hop earlier in the pipeline than the original fix
+looked — a genuine gap, not a "no data yet" case (AGY *did* produce real
+quota data on this machine, it was just subsequently clobbered).
+
+### What changed
+
+- `internal/usage/statecache.go`: added `PersistAgentSnapshot(stateDir,
+  agent)` — reads the existing on-disk snapshot first, and skips the write
+  entirely (leaving the richer snapshot and its `FetchedAt` untouched) when
+  the existing snapshot has quota signal (`hasQuotaSignal()`) that the new
+  live result lacks. A genuinely richer or equal live result still
+  overwrites normally.
+- `internal/usage/collector.go`: `collectTick` now calls
+  `PersistAgentSnapshot` instead of `WriteAgentSnapshot` directly.
+- `cmd/harnez/main.go`: the `agent-collector --once` `RunE` now calls
+  `usage.PersistAgentSnapshot` instead of `usage.WriteAgentSnapshot`
+  directly.
+
+### Tests
+
+- `internal/usage/statecache_test.go`:
+  `TestPersistAgentSnapshotKeepsRicherCacheOnLossyOverwrite` — seeds a rich
+  cached snapshot (with `Session`), persists a lossy live result (no quota
+  fields) and confirms the on-disk snapshot and its `FetchedAt` are
+  unchanged; then persists a genuinely richer live result and confirms it
+  does overwrite.
+
+Verified live on this machine: `go build ./...`, `go vet ./...`,
+`go test ./...` (full suite green), `make install`, then re-ran `harnez
+usage`, `harnez usage --summary`, and `harnez agent-collector --once` for
+real. AGY's box continues to render correctly (it was never hidden).
+
+**Known limitation, disclosed to the user**: this fix prevents *future*
+quota data from being clobbered — it cannot resurrect the specific
+2026-08-23/24 AGY quota numbers already lost from `agy.json` before this
+fix landed (that data survives only in `usage-history/*.jsonl`, which
+`harnez usage`'s live box does not currently read from). AGY's quota bars
+will reappear in `harnez usage` once AGY is running again during a
+collector tick or a direct `harnez usage` invocation; until then, showing
+account/model/activity with no quota bars is correct, not a bug.
+
+**Status**: Reopened → Resolved again with this write-path fix. The
+original read-side fix (2026-08-29 first Progress/Resolution section above)
+was real and correct but incomplete; this follow-up closes the gap.

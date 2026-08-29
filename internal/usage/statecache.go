@@ -119,6 +119,31 @@ func WriteAgentSnapshot(stateDir, agentID string, usage AgentUsage) error {
 	return nil
 }
 
+// PersistAgentSnapshot writes agent's freshly-collected usage to stateDir via
+// WriteAgentSnapshot, unless doing so would durably discard quota/token
+// signal a previously persisted snapshot already captured — e.g. AGY isn't
+// currently running this collector tick, so this live result has no
+// Session/Weekly/ModelGroups/Tokens even though the on-disk snapshot does.
+//
+// cacheOrLive's "don't blank a stale-but-real snapshot on a lossy live
+// recollect" guard (issue 101) only helps a reader if a richer snapshot is
+// still on disk to fall back to. Both write paths that persist collector
+// output (`harnez agent-collector`'s ticking loop and its `--once` mode)
+// used to call WriteAgentSnapshot directly and unconditionally, so a single
+// collection pass while AGY (or any agent) wasn't running would permanently
+// clobber the last known real quota numbers on disk — defeating the read
+// side's protection entirely, since there was nothing richer left to serve.
+// Callers that persist collector output should use this instead of calling
+// WriteAgentSnapshot directly.
+func PersistAgentSnapshot(stateDir string, agent AgentUsage) error {
+	if existing, err := ReadAgentSnapshot(stateDir, agent.AgentID); err == nil && existing != nil {
+		if existing.Usage.hasQuotaSignal() && !agent.hasQuotaSignal() {
+			return nil
+		}
+	}
+	return WriteAgentSnapshot(stateDir, agent.AgentID, agent)
+}
+
 // ReadAgentSnapshot reads and parses one agent's snapshot file from
 // stateDir. A missing file is reported as (nil, nil) — the daemon not
 // having run yet, or not having collected this agent yet, is not an error

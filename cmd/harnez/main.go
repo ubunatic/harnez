@@ -245,7 +245,7 @@ func main() {
 				summary := usage.CollectAllLive(cmd.Context(), "", client)
 				stateDir := usage.StateDir("")
 				for _, agent := range summary.Agents {
-					if err := usage.WriteAgentSnapshot(stateDir, agent.AgentID, agent); err != nil {
+					if err := usage.PersistAgentSnapshot(stateDir, agent); err != nil {
 						return fmt.Errorf("write %s snapshot: %w", agent.AgentID, err)
 					}
 				}

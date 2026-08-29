@@ -48,7 +48,7 @@ func RunCollector(ctx context.Context, homeDir string, client *http.Client, inte
 func collectTick(ctx context.Context, homeDir string, client *http.Client, stateDir string, out io.Writer) {
 	summary := CollectAllLive(ctx, homeDir, client)
 	for _, agent := range summary.Agents {
-		if err := WriteAgentSnapshot(stateDir, agent.AgentID, agent); err != nil {
+		if err := PersistAgentSnapshot(stateDir, agent); err != nil {
 			fmt.Fprintf(out, "harnez agent-collector: write %s snapshot: %v\n", agent.AgentID, err)
 		}
 	}

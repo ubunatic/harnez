@@ -45,6 +45,71 @@ func TestWriteReadAgentSnapshotRoundTrip(t *testing.T) {
 	}
 }
 
+// TestPersistAgentSnapshotKeepsRicherCacheOnLossyOverwrite is the write-side
+// counterpart to TestCacheOrLivePreservesQuotaOnLossyRecollect: a collector
+// tick's live result with no quota signal (e.g. AGY isn't running this tick)
+// must not clobber an already-persisted snapshot that does carry quota, or
+// cacheOrLive's read-side guard (issue 101) has nothing richer left on disk
+// to fall back to on the next read.
+func TestPersistAgentSnapshotKeepsRicherCacheOnLossyOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	rich := AgentUsage{
+		AgentID:       "agy",
+		Name:          "Antigravity (AGY)",
+		Installed:     true,
+		Authenticated: true,
+		Session:       &QuotaWindow{Name: "Session", UsedPercent: 42},
+	}
+	if err := WriteAgentSnapshot(dir, "agy", rich); err != nil {
+		t.Fatalf("WriteAgentSnapshot: %v", err)
+	}
+	richSnap, err := ReadAgentSnapshot(dir, "agy")
+	if err != nil || richSnap == nil {
+		t.Fatalf("ReadAgentSnapshot after seeding: %v / %+v", err, richSnap)
+	}
+
+	lossy := AgentUsage{
+		AgentID:       "agy",
+		Name:          "Antigravity (AGY)",
+		Installed:     true,
+		Authenticated: true,
+		// No Session/Weekly/Tokens/ModelGroups: agy process not running.
+	}
+	if err := PersistAgentSnapshot(dir, lossy); err != nil {
+		t.Fatalf("PersistAgentSnapshot: %v", err)
+	}
+
+	got, err := ReadAgentSnapshot(dir, "agy")
+	if err != nil || got == nil {
+		t.Fatalf("ReadAgentSnapshot after lossy persist: %v / %+v", err, got)
+	}
+	if got.Usage.Session == nil {
+		t.Fatal("lossy PersistAgentSnapshot clobbered the richer cached snapshot's quota data")
+	}
+	if !got.FetchedAt.Equal(richSnap.FetchedAt) {
+		t.Errorf("FetchedAt changed on a skipped write: got %v, want unchanged %v", got.FetchedAt, richSnap.FetchedAt)
+	}
+
+	// A genuinely richer (or equal) live result must still win.
+	richer := AgentUsage{
+		AgentID:       "agy",
+		Name:          "Antigravity (AGY)",
+		Installed:     true,
+		Authenticated: true,
+		Session:       &QuotaWindow{Name: "Session", UsedPercent: 77},
+	}
+	if err := PersistAgentSnapshot(dir, richer); err != nil {
+		t.Fatalf("PersistAgentSnapshot (richer): %v", err)
+	}
+	got2, err := ReadAgentSnapshot(dir, "agy")
+	if err != nil || got2 == nil {
+		t.Fatalf("ReadAgentSnapshot after richer persist: %v / %+v", err, got2)
+	}
+	if got2.Usage.Session == nil || got2.Usage.Session.UsedPercent != 77 {
+		t.Errorf("richer live result should have overwritten the cache, got Session = %+v", got2.Usage.Session)
+	}
+}
+
 // TestReadAgentSnapshotMissing checks a missing snapshot file is reported as
 // a nil result, not an error the caller has to unwrap.
 func TestReadAgentSnapshotMissing(t *testing.T) {
