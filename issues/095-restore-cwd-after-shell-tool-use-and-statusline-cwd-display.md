@@ -68,6 +68,23 @@ Bundle this via the existing `harnez apply` mechanism
 `AGENTS.md`/`CLAUDE.md`, the same way other bundled sections (Bash
 conventions, Git conventions, etc.) already do.
 
+**Sharpened motivation (2026-08-29, same session as the statusLine fix
+above):** this isn't only about tidiness. Claude Code asks once, at
+session start, whether it's okay to work in a given project directory —
+that prompt is the trust boundary for the whole session. But nothing
+re-checks or re-confirms once the Bash tool is approved: a `cd` inside any
+approved Bash call can take the shell anywhere the OS user can reach, with
+no further gate. The one-time directory prompt implies "I'm scoped to this
+folder"; the actual capability is "any Bash call can navigate anywhere."
+A documented convention (this section) is a **mitigation an agent can
+choose to follow**, not an **enforcement mechanism** — it doesn't close
+that gap, it just makes a well-behaved agent less likely to fall into it.
+Actually closing the gap (re-confirming or hard-scoping directory access
+after the initial prompt) is outside what `harnez apply` can deliver — it
+would require a Claude Code product-level permission change, not a
+project-doc convention. Filed as product feedback separately; this ticket
+stays scoped to the advisory-convention mitigation.
+
 ### 2. Show `cwd` in the Claude Code status line — RESOLVED
 
 Implemented: `internal/statusline/statusline.go` reads the Claude Code
