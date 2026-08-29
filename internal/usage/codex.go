@@ -73,6 +73,13 @@ type CodexWhamUsageResponse struct {
 	} `json:"credits"`
 }
 
+// codexQuotaPayload is Codex's live-fetch cache payload shape (see the
+// shared liveFetchCache gate in livefetchcache.go, issue 033/087).
+type codexQuotaPayload struct {
+	Session *QuotaWindow `json:"session,omitempty"`
+	Weekly  *QuotaWindow `json:"weekly,omitempty"`
+}
+
 // buildCodexQuotaWindow converts one wham rate-limit window into a QuotaWindow,
 // naming it "Weekly" for windows of a day or longer and "N-Hour" otherwise.
 func buildCodexQuotaWindow(pw *CodexRateWindow, now time.Time) QuotaWindow {
@@ -208,8 +215,35 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 		}
 	}
 
-	// 3. Query live quota endpoint if client and access_token are provided
+	// 3. Query live quota endpoint if client and access_token are provided,
+	// but check the shared on-disk cache first so a warm reading from a
+	// sibling `harnez` process (or this process's own last tick)
+	// short-circuits the network call entirely (issue 033, generalized to
+	// Codex in issue 087).
 	if client != nil && accessToken != "" {
+		cachePath := liveFetchCachePath(codexDir)
+		defer lockLiveFetchInProcess(cachePath)()
+		cache := readLiveFetchCache[codexQuotaPayload](cachePath)
+
+		if cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval {
+			usage.Session = cache.Payload.Session
+			usage.Weekly = cache.Payload.Weekly
+			usage.Sources = append(usage.Sources, "~/.codex/harnez-quota-cache.json")
+			return usage
+		}
+
+		// Cache is stale or missing: fetch live. Take the advisory lock
+		// first (bounded retry, never blocks indefinitely) so only one
+		// process at a time writes the refreshed reading to disk; if the
+		// lock can't be acquired quickly, still perform the fetch and use
+		// its result in-memory for this call, just skip persisting it (a
+		// sibling process is presumably writing its own fresh reading right
+		// now anyway).
+		lockFile, locked := lockLiveFetchCache(cachePath)
+		if locked {
+			defer unlockLiveFetchCache(lockFile)
+		}
+
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://chatgpt.com/backend-api/wham/usage", nil)
 		if err == nil {
 			req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -257,6 +291,30 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 					usage.QuotaFetchError = fmt.Sprintf("HTTP %d", resp.StatusCode)
 				}
 			}
+		} else {
+			usage.QuotaFetchError = fmt.Sprintf("request build error: %v", err)
+		}
+
+		if usage.QuotaFetchError == "" {
+			// Live fetch succeeded: persist it for sibling processes/next
+			// tick, but only if we actually hold the lock.
+			if locked {
+				_ = writeLiveFetchCache(cachePath, liveFetchCache[codexQuotaPayload]{
+					FetchedAt: time.Now(),
+					Payload:   codexQuotaPayload{Session: usage.Session, Weekly: usage.Weekly},
+				})
+			}
+		} else if cache != nil {
+			// Live fetch failed: fall back to the disk cache regardless of
+			// its age, labeled stale (issue 032's " (stale)" convention),
+			// mirroring Claude's behavior.
+			if cache.Payload.Session != nil {
+				usage.Session = staleQuotaWindow(cache.Payload.Session)
+			}
+			if cache.Payload.Weekly != nil {
+				usage.Weekly = staleQuotaWindow(cache.Payload.Weekly)
+			}
+			usage.Sources = append(usage.Sources, "~/.codex/harnez-quota-cache.json (stale)")
 		}
 	}
 

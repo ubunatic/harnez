@@ -45,6 +45,20 @@ type AGYQuotaResponse struct {
 	} `json:"response"`
 }
 
+// agyQuotaPayload is AGY's live-fetch cache payload shape (see the shared
+// liveFetchCache gate in livefetchcache.go, issue 033/087). Unlike
+// Claude/Codex's Session/Weekly windows, AGY reports quota as a set of named
+// model groups, each with its own buckets/windows.
+type agyQuotaPayload struct {
+	ModelGroups []ModelGroup `json:"model_groups,omitempty"`
+}
+
+// findAGYPortsFn is findAGYPorts behind a package-level variable so tests can
+// stub port discovery (which otherwise depends on real /proc entries for a
+// running agy process) and point CollectAGY's live-fetch gate at a mock RPC
+// server instead.
+var findAGYPortsFn = findAGYPorts
+
 // findAGYPorts locates the listening LanguageServer ports of running agy processes.
 // A single agy process can listen on more than one port (e.g. a TLS-only port
 // alongside the plain-HTTP RPC port), so all candidates are returned and the
@@ -289,61 +303,115 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 		}
 	}
 
-	// 5. Query live quota pools if online / client provided. A process can
-	// listen on more than one port (e.g. a TLS-only port alongside the plain
-	// HTTP RPC port), so try each candidate until one actually answers.
+	// 5. Query live quota pools if online / client provided, but check the
+	// shared on-disk cache first so a warm reading from a sibling `harnez`
+	// process (or this process's own last tick) short-circuits the RPC call
+	// entirely (issue 033, generalized to AGY in issue 087).
 	if client != nil {
-		ports := findAGYPorts()
-		var lastErr error
-		fetched := false
-		for _, port := range ports {
-			quotaResp, err := QueryAGYLocalQuota(ctx, port, client)
-			if err != nil || quotaResp == nil {
-				if err != nil {
-					lastErr = err
-				}
-				continue
-			}
-			fetched = true
-			usage.Authenticated = true
-			usage.Sources = append(usage.Sources, "127.0.0.1 (LanguageServer RPC)")
-			now := time.Now()
-			for _, g := range quotaResp.Response.Groups {
-				mg := ModelGroup{
-					Name:        g.DisplayName,
-					Description: g.Description,
-				}
-				for _, b := range g.Buckets {
-					remPct := b.RemainingFraction * 100.0
-					usedPct := 100.0 - remPct
-					if usedPct < 0 {
-						usedPct = 0
-					}
-					if remPct < 0 {
-						remPct = 0
-					}
+		cachePath := liveFetchCachePath(geminiDir)
+		defer lockLiveFetchInProcess(cachePath)()
+		cache := readLiveFetchCache[agyQuotaPayload](cachePath)
 
-					qw := QuotaWindow{
-						Name:             b.DisplayName,
-						UsedPercent:      usedPct,
-						RemainingPercent: remPct,
+		if cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval {
+			usage.ModelGroups = cache.Payload.ModelGroups
+			usage.Sources = append(usage.Sources, "~/.gemini/antigravity-cli/harnez-quota-cache.json")
+		} else {
+			// Cache is stale or missing: fetch live. Take the advisory lock
+			// first (bounded retry, never blocks indefinitely) so only one
+			// process at a time writes the refreshed reading to disk; if the
+			// lock can't be acquired quickly, still perform the fetch and use
+			// its result in-memory for this call, just skip persisting it (a
+			// sibling process is presumably writing its own fresh reading
+			// right now anyway).
+			lockFile, locked := lockLiveFetchCache(cachePath)
+			if locked {
+				defer unlockLiveFetchCache(lockFile)
+			}
+
+			// A process can listen on more than one port (e.g. a TLS-only
+			// port alongside the plain HTTP RPC port), so try each candidate
+			// until one actually answers.
+			ports := findAGYPortsFn()
+			var lastErr error
+			fetched := false
+			for _, port := range ports {
+				quotaResp, err := QueryAGYLocalQuota(ctx, port, client)
+				if err != nil || quotaResp == nil {
+					if err != nil {
+						lastErr = err
 					}
-					if b.ResetTime != "" {
-						if t, err := time.Parse(time.RFC3339Nano, b.ResetTime); err == nil {
-							qw.ResetAt = &t
-							if t.After(now) {
-								qw.DurationLeft = t.Sub(now)
+					continue
+				}
+				fetched = true
+				usage.Authenticated = true
+				usage.Sources = append(usage.Sources, "127.0.0.1 (LanguageServer RPC)")
+				now := time.Now()
+				for _, g := range quotaResp.Response.Groups {
+					mg := ModelGroup{
+						Name:        g.DisplayName,
+						Description: g.Description,
+					}
+					for _, b := range g.Buckets {
+						remPct := b.RemainingFraction * 100.0
+						usedPct := 100.0 - remPct
+						if usedPct < 0 {
+							usedPct = 0
+						}
+						if remPct < 0 {
+							remPct = 0
+						}
+
+						qw := QuotaWindow{
+							Name:             b.DisplayName,
+							UsedPercent:      usedPct,
+							RemainingPercent: remPct,
+						}
+						if b.ResetTime != "" {
+							if t, err := time.Parse(time.RFC3339Nano, b.ResetTime); err == nil {
+								qw.ResetAt = &t
+								if t.After(now) {
+									qw.DurationLeft = t.Sub(now)
+								}
 							}
 						}
+						mg.Windows = append(mg.Windows, qw)
 					}
-					mg.Windows = append(mg.Windows, qw)
+					usage.ModelGroups = append(usage.ModelGroups, mg)
 				}
-				usage.ModelGroups = append(usage.ModelGroups, mg)
+				break
 			}
-			break
-		}
-		if !fetched && len(ports) > 0 && lastErr != nil {
-			usage.QuotaFetchError = lastErr.Error()
+			if !fetched && len(ports) > 0 && lastErr != nil {
+				usage.QuotaFetchError = lastErr.Error()
+			}
+
+			if fetched {
+				// Live fetch succeeded: persist it for sibling
+				// processes/next tick, but only if we actually hold the
+				// lock.
+				if locked {
+					_ = writeLiveFetchCache(cachePath, liveFetchCache[agyQuotaPayload]{
+						FetchedAt: time.Now(),
+						Payload:   agyQuotaPayload{ModelGroups: usage.ModelGroups},
+					})
+				}
+			} else if cache != nil {
+				// Live fetch failed (or found no listening ports): fall back
+				// to the disk cache regardless of its age, labeled stale
+				// (issue 032's " (stale)" convention), mirroring Claude's
+				// behavior.
+				groups := make([]ModelGroup, len(cache.Payload.ModelGroups))
+				for i, g := range cache.Payload.ModelGroups {
+					ng := g
+					ng.Windows = make([]QuotaWindow, len(g.Windows))
+					for j, w := range g.Windows {
+						w := w
+						ng.Windows[j] = *staleQuotaWindow(&w)
+					}
+					groups[i] = ng
+				}
+				usage.ModelGroups = groups
+				usage.Sources = append(usage.Sources, "~/.gemini/antigravity-cli/harnez-quota-cache.json (stale)")
+			}
 		}
 	}
 

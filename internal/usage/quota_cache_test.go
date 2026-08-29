@@ -6,24 +6,27 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
 )
 
 // TestQuotaCacheReadWriteRoundTrip checks the atomic write-then-rename helper
-// produces a file readQuotaCache can parse back unchanged.
+// produces a file readLiveFetchCache can parse back unchanged.
 func TestQuotaCacheReadWriteRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	path := quotaCachePath(dir)
+	path := liveFetchCachePath(dir)
 
-	want := quotaCache{
+	want := liveFetchCache[claudeQuotaPayload]{
 		FetchedAt: time.Now().Truncate(time.Second),
-		Session:   &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 42},
-		Weekly:    &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 7},
+		Payload: claudeQuotaPayload{
+			Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 42},
+			Weekly:  &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 7},
+		},
 	}
-	if err := writeQuotaCache(path, want); err != nil {
-		t.Fatalf("writeQuotaCache: %v", err)
+	if err := writeLiveFetchCache(path, want); err != nil {
+		t.Fatalf("writeLiveFetchCache: %v", err)
 	}
 
 	// No leftover .tmp file after the rename.
@@ -31,18 +34,18 @@ func TestQuotaCacheReadWriteRoundTrip(t *testing.T) {
 		t.Errorf("expected no leftover .tmp file, stat err = %v", err)
 	}
 
-	got := readQuotaCache(path)
+	got := readLiveFetchCache[claudeQuotaPayload](path)
 	if got == nil {
-		t.Fatalf("readQuotaCache returned nil")
+		t.Fatalf("readLiveFetchCache returned nil")
 	}
 	if !got.FetchedAt.Equal(want.FetchedAt) {
 		t.Errorf("FetchedAt = %v, want %v", got.FetchedAt, want.FetchedAt)
 	}
-	if got.Session == nil || got.Session.UsedPercent != 42 {
-		t.Errorf("Session = %+v, want UsedPercent 42", got.Session)
+	if got.Payload.Session == nil || got.Payload.Session.UsedPercent != 42 {
+		t.Errorf("Session = %+v, want UsedPercent 42", got.Payload.Session)
 	}
-	if got.Weekly == nil || got.Weekly.UsedPercent != 7 {
-		t.Errorf("Weekly = %+v, want UsedPercent 7", got.Weekly)
+	if got.Payload.Weekly == nil || got.Payload.Weekly.UsedPercent != 7 {
+		t.Errorf("Weekly = %+v, want UsedPercent 7", got.Payload.Weekly)
 	}
 }
 
@@ -50,7 +53,7 @@ func TestQuotaCacheReadWriteRoundTrip(t *testing.T) {
 // an error the caller has to unwrap.
 func TestReadQuotaCacheMissing(t *testing.T) {
 	dir := t.TempDir()
-	if got := readQuotaCache(quotaCachePath(dir)); got != nil {
+	if got := readLiveFetchCache[claudeQuotaPayload](liveFetchCachePath(dir)); got != nil {
 		t.Errorf("expected nil for missing cache file, got %+v", got)
 	}
 }
@@ -61,7 +64,7 @@ func TestReadQuotaCacheMissing(t *testing.T) {
 // holder, so a waiter must bound its own wait).
 func TestLockQuotaCacheBoundedRetry(t *testing.T) {
 	dir := t.TempDir()
-	path := quotaCachePath(dir)
+	path := liveFetchCachePath(dir)
 
 	// Hold the lock ourselves, simulating a concurrent harnez process mid-write.
 	holder, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0600)
@@ -74,16 +77,16 @@ func TestLockQuotaCacheBoundedRetry(t *testing.T) {
 	}
 
 	start := time.Now()
-	f, ok := lockQuotaCache(path)
+	f, ok := lockLiveFetchCache(path)
 	elapsed := time.Since(start)
 
 	if ok {
 		t.Errorf("expected lock acquisition to fail while held by another fd")
-		unlockQuotaCache(f)
+		unlockLiveFetchCache(f)
 	}
-	maxWait := quotaCacheLockDelay*time.Duration(quotaCacheLockRetries) + 2*time.Second
+	maxWait := liveFetchLockDelay*time.Duration(liveFetchLockRetries) + 2*time.Second
 	if elapsed > maxWait {
-		t.Errorf("lockQuotaCache took %v, want bounded well under %v", elapsed, maxWait)
+		t.Errorf("lockLiveFetchCache took %v, want bounded well under %v", elapsed, maxWait)
 	}
 }
 
@@ -91,19 +94,19 @@ func TestLockQuotaCacheBoundedRetry(t *testing.T) {
 // lock file is acquired immediately and can be released and re-acquired.
 func TestLockQuotaCacheSucceedsWhenFree(t *testing.T) {
 	dir := t.TempDir()
-	path := quotaCachePath(dir)
+	path := liveFetchCachePath(dir)
 
-	f, ok := lockQuotaCache(path)
+	f, ok := lockLiveFetchCache(path)
 	if !ok {
 		t.Fatalf("expected to acquire uncontended lock")
 	}
-	unlockQuotaCache(f)
+	unlockLiveFetchCache(f)
 
-	f2, ok := lockQuotaCache(path)
+	f2, ok := lockLiveFetchCache(path)
 	if !ok {
 		t.Fatalf("expected to re-acquire lock after release")
 	}
-	unlockQuotaCache(f2)
+	unlockLiveFetchCache(f2)
 }
 
 // claudeFixtureDir writes the minimal settings/stats/credentials files
@@ -133,12 +136,14 @@ func TestCollectClaudeUsesWarmDiskCache(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	cache := quotaCache{
+	cache := liveFetchCache[claudeQuotaPayload]{
 		FetchedAt: time.Now(),
-		Session:   &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 55},
-		Weekly:    &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 11},
+		Payload: claudeQuotaPayload{
+			Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 55},
+			Weekly:  &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 11},
+		},
 	}
-	if err := writeQuotaCache(quotaCachePath(dir), cache); err != nil {
+	if err := writeLiveFetchCache(liveFetchCachePath(dir), cache); err != nil {
 		t.Fatalf("seed cache: %v", err)
 	}
 
@@ -166,12 +171,14 @@ func TestCollectClaudeFallsBackToStaleCacheOnFetchFailure(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	oldCache := quotaCache{
+	oldCache := liveFetchCache[claudeQuotaPayload]{
 		FetchedAt: time.Now().Add(-time.Hour), // well outside MinWatchInterval
-		Session:   &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 33},
-		Weekly:    &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 9},
+		Payload: claudeQuotaPayload{
+			Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 33},
+			Weekly:  &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 9},
+		},
 	}
-	if err := writeQuotaCache(quotaCachePath(dir), oldCache); err != nil {
+	if err := writeLiveFetchCache(liveFetchCachePath(dir), oldCache); err != nil {
 		t.Fatalf("seed cache: %v", err)
 	}
 
@@ -191,13 +198,54 @@ func TestCollectClaudeFallsBackToStaleCacheOnFetchFailure(t *testing.T) {
 	}
 }
 
+// TestCollectClaudeConcurrentCallsDoNotDoubleFetch checks that concurrent
+// goroutines calling CollectClaude against a cold cache collapse into
+// exactly one live HTTP call via lockLiveFetchInProcess (issue 087's
+// in-process serialization added on top of issue 033's cross-process flock).
+func TestCollectClaudeConcurrentCallsDoNotDoubleFetch(t *testing.T) {
+	dir := claudeFixtureDir(t)
+
+	var mu sync.Mutex
+	calls := 0
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"five_hour":{"utilization":25},"seven_day":{"utilization":10}}`))
+	}))
+	defer mockServer.Close()
+
+	const n = 8
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			collectClaudeAgainstURL(t, dir, mockServer)
+		}()
+	}
+	wg.Wait()
+
+	mu.Lock()
+	got := calls
+	mu.Unlock()
+	if got != 1 {
+		t.Errorf("expected exactly one live HTTP call across %d concurrent goroutines, got %d", n, got)
+	}
+}
+
 // collectClaudeAgainstURL calls CollectClaude with a client whose requests
 // are redirected to mockServer, since CollectClaude hardcodes the live
 // endpoint host rather than taking it as a parameter.
 func collectClaudeAgainstURL(t *testing.T, claudeDir string, mockServer *httptest.Server) AgentUsage {
 	t.Helper()
-	client := mockServer.Client()
-	client.Transport = redirectTransport{target: mockServer.URL}
+	// A fresh *http.Client per call rather than mockServer.Client() (which
+	// lazily initializes and caches a shared client on the server) — tests
+	// call this concurrently, and mutating a shared client's Transport
+	// field from multiple goroutines is itself a data race independent of
+	// anything under test.
+	client := &http.Client{Transport: redirectTransport{target: mockServer.URL}}
 	return CollectClaude(context.Background(), claudeDir, client)
 }
 
