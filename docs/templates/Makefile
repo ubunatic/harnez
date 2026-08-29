@@ -37,11 +37,8 @@ test: ⚙️ check  # alias for check
 format: ⚙️  # format source code
 	go fmt ./...
 
-release: ⚙️  # release the project (run once, then update to run 'uman release' directly)
-	@echo "To release this project using 'uman':"
-	@echo "  1. Ensure you have 'uman', 'goreleaser', 'minisign', and 'fj' installed."
-	@echo "  2. Run 'uman release' to release interactively."
-	@echo "  3. Once verified, update this target to run 'uman release' directly."
+release: check ⚙️  # release the project using harnez
+	harnez release
 
 clean: ⚙️  # remove build artifacts
 	rm -f $(BINARY)

@@ -80,8 +80,8 @@ test: ⚙️ check  # alias for check
 format: ⚙️  # format source code
 	go fmt ./...
 
-release: check ⚙️  # release the project using uman
-	uman release harnez
+release: check ⚙️  # release the project using harnez
+	./$(BINARY) release
 
 sync: ⚙️  # push here, pull there, build there, verify
 	git push

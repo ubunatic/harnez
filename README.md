@@ -252,6 +252,9 @@ Every ticket in `issues/NNN-kebab-case.md` begins with standard metadata headers
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
 | `status` | `-c` `-t` | Print config summary and check which items are present on disk |
 | `assess` | `[path]` `--json` | Fast code/doc metrics, token estimation, and repo feasibility report |
+| `mode` | `[level]` `--status` `--clear` | Switch ConciseMode terseness level and sync AGENTS.local.md overlay |
+| `distill` | `[hook\|filter]` | Distill verbose command outputs for agent context conservation |
+| `release` | `--bump` `--continue` `--dry-run` `-s` | Language-agnostic version bump, build, minisign signing, and forge publishing |
 | `usage` | `--json` `--agent` `--offline` `-w` `-s` `--interval` | Show unified token, session, and quota status across AI coding agents (aliases: `quota`, `tokens`, `stats`) |
 
 All commands accept `-c <path>` (config file, default: embedded).

@@ -5,7 +5,7 @@ weight: 50
 
 # Go Release Pipeline & Non-Interactive Signing
 
-This document establishes the canonical standard for releasing Go CLI applications across the workspace using `uman release`, `goreleaser`, `minisign`, and Forgejo (`fj`).
+This document establishes the canonical standard for releasing Go CLI applications and sibling projects across the workspace using `harnez release`, `goreleaser`, `minisign`, and Forgejo (`fj`).
 
 ---
 
@@ -17,22 +17,29 @@ Ensure the following tools are installed and present in `$PATH`:
 - `goreleaser` (`go install github.com/goreleaser/goreleaser/v2@latest`)
 - `minisign`
 - `fj` (`forgejo-cli` / authenticated to Codeberg)
-- `uman` (`ubunatic/uman`)
+- `harnez` (`ubunatic.com/harnez`)
 
 ---
 
 ## 2. Project Setup Checklist
 
-To enable clean, automated releases in any Go repository:
+To enable clean, automated releases in any repository:
 
-### 1. `version.go`
-Place a `version.go` file at the root or main package:
-```go
-package main
-
-var Version = "0.1.0"
+### 1. `version.yaml` (Single Source of Truth)
+Place a `version.yaml` specification at the repository root:
+```yaml
+# yaml-language-server: $schema=spec/schemas/version.schema.json
+version: 0.1.0
 ```
-*In `cmd/<binary>/main.go`*, wire the Cobra root command version:
+
+`harnez release` reads and bumps `version.yaml`, then automatically updates language-native version files:
+- **Go**: `version.go` (`var Version = "0.1.0"`)
+- **Python**: `__version__.py` / `version.py` / `pyproject.toml`
+- **Zig**: `build.zig.zon` / `version.zig`
+- **Rust**: `Cargo.toml`
+
+### 2. Cobra Root Command Wiring (Go)
+In `cmd/<binary>/main.go`, wire the Cobra root command version:
 ```go
 root := &cobra.Command{
     Use:     "mytool",
@@ -41,18 +48,14 @@ root := &cobra.Command{
 }
 ```
 
-### 2. Passwordless Minisign Key
+### 3. Passwordless Minisign Key
 Generate a dedicated, non-interactive signing key pair:
 ```bash
 minisign -G -W -f -p ~/.minisign/<project>.pub -s ~/.minisign/<project>.key
 ```
-Add the key mapping to root `.uman.toml`:
-```toml
-[release.projects.<project>]
-minisign_key = "~/.minisign/<project>.key"
-```
+`harnez release` auto-detects `~/.minisign/<project>.key` by project directory name. Alternatively, supply `--sign-key <path>` or `-s <path>`.
 
-### 3. `.goreleaser.yaml`
+### 4. `.goreleaser.yaml`
 Scaffold standard GoReleaser v2 configuration:
 ```yaml
 version: 2
@@ -107,11 +110,11 @@ signs:
       - MINISIGN_PASSWORD
 ```
 
-### 4. `Makefile` Target
-Add the standard release recipe:
+### 5. `Makefile` Target
+Add the standard thin release recipe:
 ```makefile
-release: check ⚙️  # release the project using uman
-	uman release <project>
+release: check ⚙️  # release the project using harnez
+	harnez release
 ```
 
 ---
@@ -120,7 +123,9 @@ release: check ⚙️  # release the project using uman
 
 Forgejo returns a `404 Not Found` to `fj release` if the repository's Releases feature is toggled off.
 
-Verify or enable it via API:
+`harnez release` automatically queries `GET /api/v1/repos/<owner>/<repo>` using `$CODEBERG_TOKEN` / `$FORGEJO_TOKEN` and auto-enables `has_releases` via API if needed.
+
+You can also manually verify or enable it via API:
 ```bash
 curl -X PATCH -H "Authorization: token $CODEBERG_TOKEN" \
      -H "Content-Type: application/json" \
@@ -132,20 +137,25 @@ curl -X PATCH -H "Authorization: token $CODEBERG_TOKEN" \
 
 ## 4. Releasing & Recovery
 
-### Interactive Release
+### Standard Release (Bumps Patch by default)
 ```bash
 make release
 # or
-uman release <project>
+harnez release
 ```
 
 ### Automated / Pre-Specified Bump
 ```bash
-uman release <project> --bump patch # or minor / major / 1.0.0
+harnez release --bump patch   # or minor / major / 1.0.0
+```
+
+### Dry Run (Preview Execution)
+```bash
+harnez release --dry-run
 ```
 
 ### Resuming Failed / Interrupted Uploads
 If GoReleaser succeeds or tags are pushed but publishing encounters a network/forge error, **do not delete or move tags**. Resume safely:
 ```bash
-uman release <project> --continue
+harnez release --continue
 ```

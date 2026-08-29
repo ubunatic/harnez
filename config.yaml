@@ -361,10 +361,11 @@ agents_md:
     gorelease:
       name: "Go Release Pipeline"
       ref: "@docs/GoRelease.md"
-      hint: "uman release, GoReleaser v2, non-interactive minisign (-W), Forgejo has_releases"
+      hint: "harnez release, version.yaml spec, GoReleaser v2, non-interactive minisign (-W), Forgejo has_releases"
       source: docs/practices/GoRelease.md
       target: ~/.claude/docs/GoRelease.md
       local: ./docs/GoRelease.md
+      template: docs/templates/version.yaml
       default: auto   # go.mod (opt-in / auto for Go projects)
 
   # repo git setups — pick one with `init --repo-mode/-m` to add a short
