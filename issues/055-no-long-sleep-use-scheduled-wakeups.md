@@ -1,6 +1,6 @@
 # 055 — Agents must not use long `sleep` to wait; schedule a wakeup/BG task instead
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -53,3 +53,23 @@ Not proposing to forbid all `sleep` usage — short sleeps inside scripts,
 tests, or retry/backoff logic with strict bounds are fine. This is
 specifically about agents using `sleep` as a substitute for a proper
 wait/notify or scheduled-wakeup mechanism when one is available.
+
+## 4. Progress
+
+**2026-08-29**: Added a new "❌ Blocking `sleep` Waits" bullet to the
+"Anti-Patterns to Avoid" list (section 6) in `docs/practices/AgenticLoop.md`,
+covering: blocking sleeps/sleep-loops waste turn and context budget and
+leave no record of the wait if interrupted; prefer harness-tracked
+background-work notification over polling at all; when polling is
+unavoidable, use the harness's scheduled-wakeup or interval-loop mechanism
+(e.g. `/loop`, background-task notifications) instead of blocking `sleep`,
+sized to the actual rate of change of the watched state; never chain long
+leading sleeps to route around a harness restriction on blocking sleep.
+Mirrored the same addition into the project's own installed copy,
+`docs/AgenticLoop.md`, to keep the two in sync (no existing "ScheduleWakeup"
+or background-task doc reference was found to cross-link instead — this is
+the first place that mechanism is documented as a `sleep` alternative).
+Did not touch issue 056 (buffered-output anti-pattern) or resync the
+global `~/.claude`/`~/.prime` installed copies — that install step is out
+of scope for this doc-only ticket and is normally triggered separately via
+`harnez apply`.
