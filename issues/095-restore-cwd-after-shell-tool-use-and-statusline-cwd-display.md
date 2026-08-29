@@ -1,10 +1,10 @@
 # 095 — Advise agentic workers to restore the original working directory; surface `cwd` in the Claude Code status line
 
-**Status**: Open
+**Status**: Open — partially resolved (part 2 shipped, part 1 still open)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: `internal/claude/apply.go`, `docs/Bash.md`
+**Related**: `internal/claude/apply.go`, `internal/statusline/statusline.go`, `cmd/harnez/statusline.go`, `docs/Bash.md`
 
 ## Problem
 
@@ -68,30 +68,50 @@ Bundle this via the existing `harnez apply` mechanism
 `AGENTS.md`/`CLAUDE.md`, the same way other bundled sections (Bash
 conventions, Git conventions, etc.) already do.
 
-### 2. Show `cwd` in the Claude Code status line
+### 2. Show `cwd` in the Claude Code status line — RESOLVED
 
-Even with the convention above, directory drift can still happen (a tool
-crashes mid-`cd`, a convention gets missed, a different agent/tool doesn't
-follow it). Make it visible rather than silent: extend `harnez apply` to
-install/update a Claude Code `statusLine` command
-(`.claude/settings.json` → `"statusLine": {"type": "command", "command":
-"..."}`) that renders the current working directory the status line script
-receives (Claude Code's status line payload already includes
-`workspace.current_dir` in the JSON piped to the command — no new Claude
-Code capability needed, this is purely a `harnez`-side config/script
-addition).
+Implemented: `internal/statusline/statusline.go` reads the Claude Code
+statusLine JSON payload from stdin (`cwd` / `workspace.current_dir`) and
+prints it, tilde-collapsed relative to `$HOME`. Wired up as `harnez
+statusline` (`cmd/harnez/statusline.go`) and installed into the **global**
+`~/.claude/settings.json` by `harnez apply` (`internal/claude/apply.go`,
+gated by a new `status_line: true` `config.yaml` key, added to
+`managedSettingsKeys` so `diff`/`clean` pick it up like every other managed
+setting). MVP scope, as specified: cwd only, no git branch, model, cost,
+or session info.
+
+**Researched constraint, not a design choice**: per the current official
+docs (code.claude.com/docs/en/statusline, checked 2026-08-29), "the status
+line renders in its own row above the built-in footer badges and does not
+replace them" — a custom `statusLine` **cannot** share a line with Claude
+Code's built-in hint footer (`esc to interrupt`, `? for shortcuts`, `hold
+space to speak`). Configuring a `statusLine` does suppress most of those
+footer hints, but the two remain architecturally separate rows in the
+current tool. A second line is therefore unavoidable today — this is not
+something `harnez` can design around, only something to note in case a
+future Claude Code release changes the contract (re-check the docs above
+before revisiting). `cwd`/`workspace.current_dir` are both present verbatim
+in the stdin JSON, so no shell-out to `pwd` was needed.
+
+Idempotency verified live against the real `~/.claude/settings.json`:
+`harnez apply` → `harnez diff` shows the new key once, a second `apply`
+run reports "No changes."
 
 This turns "the shell silently isn't where you think it is" into
 something visible at a glance in the prompt, instead of a confusing
-downstream `make`/`git`/`cd` error several commands later.
+downstream `make`/`git`/`cd` error several commands later — though it does
+not by itself fix part 1 below; a human still has to notice the line
+changed.
 
 ## Non-goals
 
 - Not a fix for the specific `ubunatic.com` incident (already resolved
   live in that session by `cd`-ing back).
-- Not implementing either the convention doc or the status line change
-  here — this ticket is the proposal only.
+- Not implementing part 1 (the documented convention) here — still open.
 - Not proposing that the agent's shell tool become fully sandboxed/private
   per call — that's a harness-level design decision with much broader
   scope than this ticket; the status line is the mitigation for whatever
   sharing model is actually in effect.
+- Not adding git branch, model name, cost, or any field beyond `cwd` to
+  the status line — explicitly out of scope for this MVP; a richer status
+  line is a separate future ticket if wanted.
