@@ -30,6 +30,27 @@ archives:
       - binary
     name_template: "harnez-{{ if eq .Arch \"amd64\" }}x86_64{{ else if eq .Arch \"arm64\" }}aarch64{{ else }}{{ .Arch }}{{ end }}-linux"
 
+nfpms:
+  - id: packages
+    package_name: harnez
+    file_name_template: "harnez-{{ .Version }}-{{ if eq .Arch \"amd64\" }}x86_64{{ else if eq .Arch \"arm64\" }}aarch64{{ else }}{{ .Arch }}{{ end }}-linux"
+    vendor: ubunatic.com
+    homepage: https://codeberg.org/ubunatic/harnez
+    maintainer: Uwe Jugel <uwe.jugel@gmail.com>
+    description: >-
+      Manage Claude Code and Prime Agent harnesses declaratively from a
+      single config.yaml: permissions, hooks, AGENTS.md, slash commands,
+      skills, and language docs.
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: README.md
+        dst: /usr/share/doc/harnez/README.md
+      - src: config.yaml
+        dst: /usr/share/doc/harnez/config.yaml
+
 checksum:
   name_template: SHA256SUMS
   algorithm: sha256

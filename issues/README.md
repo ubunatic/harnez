@@ -96,7 +96,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 095 | [095-restore-cwd-after-shell-tool-use-and-statusline-cwd-display.md](095-restore-cwd-after-shell-tool-use-and-statusline-cwd-display.md) | Restore CWD After Shell Tool Use; Surface CWD in Status Line | Open — partially resolved (statusLine shipped) |
 | 096 | [096-release-forge-token-401-warning-lacks-fix-hint.md](096-release-forge-token-401-warning-lacks-fix-hint.md) | `harnez release`'s `has_releases` 401 warning doesn't name the fix | Open |
 | 097 | [097-release-skip-when-no-diff-since-prev-tag.md](097-release-skip-when-no-diff-since-prev-tag.md) | `harnez release` should skip when there's no diff since the previous tag | Open |
-| 098 | [098-deb-rpm-packaging.md](098-deb-rpm-packaging.md) | Add DEB and RPM packaging to `harnez release` | Open |
+| 098 | [098-deb-rpm-packaging.md](098-deb-rpm-packaging.md) | Add DEB and RPM packaging to `harnez release` | Resolved |
 | 099 | [099-appimage-packaging.md](099-appimage-packaging.md) | Add AppImage packaging to `harnez release` | Open |
 | 100 | [100-container-install-verify-canary.md](100-container-install-verify-canary.md) | Container canary: install `latest` Codeberg release and verify `--version` | Resolved — `scripts/install-canary.sh`, `make install-canary` |
 | 101 | [101-usage-keep-stale-agents-visible-until-7d.md](101-usage-keep-stale-agents-visible-until-7d.md) | `harnez usage` hides/blanks agents too soon when not recently active (e.g. AGY) | Resolved — 2026-08-29 |

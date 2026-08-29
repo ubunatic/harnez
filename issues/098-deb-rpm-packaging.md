@@ -1,6 +1,6 @@
 # 098 — Add DEB and RPM packaging to `harnez release`
 
-**Status**: Open
+**Status**: Resolved — 2026-08-29
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
@@ -45,3 +45,45 @@ separate toolchain needed):
 - Scope this to `harnez` itself first (dogfooding), then decide whether/how
   it becomes a template other projects' `.goreleaser.yaml` configs adopt —
   don't build a generic cross-project mechanism speculatively.
+
+## Progress — 2026-08-29
+
+Added an `nfpms:` section to `.goreleaser.yaml` (goreleaser's key is
+plural `nfpms:`, not `nfpm:` as in the ticket title — confirmed via
+`goreleaser jsonschema`).
+
+- `package_name: harnez`, formats `[deb, rpm]`, same
+  `{{ .Version }}-{{ arch: x86_64|aarch64 }}-linux` name template already
+  used by the `default`/`binary` archives.
+- `bindir: /usr/bin` — checked against `Makefile`: `make install` runs
+  `go install ./cmd/harnez` (`~/go/bin`, no toolchain-free path), and
+  `make install-system` uses `/usr/local/bin` via `sudo install`. Neither
+  is the FHS-standard destination for a distro package manager install;
+  `/usr/bin` is what Debian/Fedora `.deb`/`.rpm` packages conventionally
+  use, distinct from both existing manual-install targets.
+- `contents:` bundles `README.md` and `config.yaml` into
+  `/usr/share/doc/harnez/`, matching what the `default` archive's
+  `files:` list already bundles. No `LICENSE` file exists anywhere in
+  this repo (checked `find`/`grep` for `LICENSE`/`REUSE.toml`/"license"
+  mentions — none found), so the `license` nfpm field and a license doc
+  were left out rather than fabricated; the ticket's "license" bullet
+  doesn't apply until a LICENSE file is added to the repo (separate
+  concern, not blocking this ticket).
+- Signing: no changes needed. `signs:` already signs the `checksum:`
+  artifact (`SHA256SUMS`), and goreleaser adds `.deb`/`.rpm` outputs to
+  that checksum file automatically like every other artifact — verified
+  by inspecting `dist/SHA256SUMS` after a snapshot build, which listed
+  both new package files alongside the existing archives/binaries.
+  nfpm's own per-format signing (`deb.signature`/`rpm.signature`) was not
+  needed since the existing minisign-over-checksum scheme already covers
+  package integrity consistently with every other artifact.
+
+**Verification**: `goreleaser check` passed. Ran
+`goreleaser release --snapshot --clean --skip=sign,publish` (no tag/push,
+no real release) — produced `harnez-<ver>-{x86_64,aarch64}-linux.{deb,rpm}`
+in `dist/`. Inspected with `dpkg -c`/`dpkg -I` and `rpm -qlp`/`rpm -qip`:
+both formats install `/usr/bin/harnez` (correct mode, root-owned) plus
+`/usr/share/doc/harnez/{README.md,config.yaml}`; package metadata
+(name, version, arch, maintainer, homepage, description) all populated
+correctly; both `x86_64`/`aarch64` variants built for both formats.
+`dist/` was removed after verification (gitignored, not committed).
