@@ -56,6 +56,7 @@ Generated copies land here (root) after `apply` / `init`.
 | File | Topic |
 |------|-------|
 | [studies/GoRelease.md](studies/GoRelease.md) | Release pipeline case study (goreleaser consolidation) |
+| [studies/2026-08-29-a-day-of-fresh-sprints.md](studies/2026-08-29-a-day-of-fresh-sprints.md) | Retrospective: a full-day `/fresh-sprint` run — 13 tickets moved, a 3-pass AGY quota bug, and what it showed about parallel-vs-sequential subagent dispatch and scope boundaries |
 | [studies/2026-08-29-harnez-go-release-and-signing.md](studies/2026-08-29-harnez-go-release-and-signing.md) | Harnez Go release pipeline & non-interactive signing case study (passwordless minisign, Codeberg API `has_releases`, `--continue` recovery) |
 | [studies/Worktrees.md](studies/Worktrees.md) | Worktrees case study (go.mod races, dependencies; stale-base-branch and uncommitted-state-invisibility bugs found 2026-08-28) |
 | [studies/2026-08-16-harnez-migration-and-workspace-unification.md](studies/2026-08-16-harnez-migration-and-workspace-unification.md) | Harnez migration, Spec generalization & workspace diagnostics case study |
