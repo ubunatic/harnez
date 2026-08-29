@@ -10,6 +10,8 @@ Adhere to the following conventions.
 
 Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
+- Containerfile build efficiency @docs/Containerfile.md,
+  order layers static-first/dynamic-last; git+git-lfs mandatory in agent-facing images
 - Go/Golang @docs/Go.md,
   Modern Go, avoid deps but use Cobra, add tests
 - Bash/Shell @docs/Bash.md,
@@ -55,7 +57,7 @@ Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --doc
 
 `docs/practices/` — copyable workflow and practice docs (AgenticLoop, IssueTracking). Same install mechanics as `docs/lang/`.
 
-`docs/other/` — copyable docs that don't form a category yet (Canary, Spec). Same install mechanics as `docs/lang/`.
+`docs/other/` — copyable docs that don't form a category yet (Canary, Spec, Containerfile). Same install mechanics as `docs/lang/`.
 
 `docs/studies/` — case studies and background reports (reference material for future generic docs).
 

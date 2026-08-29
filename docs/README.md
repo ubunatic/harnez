@@ -48,6 +48,7 @@ Generated copies land here (root) after `apply` / `init`.
 | [other/Spec.md](other/Spec.md) | Spec-driven architecture: YAML spec files as single source of truth | Read when modifying YAML specs or generator pipelines |
 | [other/SharedDiskCache.md](other/SharedDiskCache.md) | Shared disk cache for local processes: TTL cache-aside + flock-guarded write | Read when implementing cross-process caching or file locks |
 | [other/Website.md](other/Website.md) | Website Building Rules: hosting/branding, sibling-project inspiration, content honesty, subpage/relative-links, static/no-CDN, opt-in JS demos | Summary active in AGENTS.md. Read in full before building or updating any project `website/` (triggered via `/website`) |
+| [other/Containerfile.md](other/Containerfile.md) | Containerfile build efficiency: static-first/dynamic-last layer ordering, mandatory git/git-lfs for agent-facing images, worked example from `scripts/agent-canary/Containerfile` | Summary active in AGENTS.md. Read in full when writing or reviewing a Containerfile/Dockerfile |
 
 **`docs/studies/`** — case studies & background reports (reference material for future generic docs)
 

@@ -1,6 +1,6 @@
 # 061 — Containerfile.md: Guidelines for Fast, Cached, and Incremental Container Builds
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Documentation
@@ -118,8 +118,31 @@ WORKDIR /work
 
 ## 4. Acceptance Criteria
 
-- [ ] Create `docs/Containerfile.md` (or `docs/Docker.md`) documenting container build efficiency and layer ordering rules.
-- [ ] Bundle `Containerfile.md` into harnez default docs distribution and register it in `AGENTS.md` language/pipeline conventions.
-- [ ] Document the requirement to include `git` and `git-lfs` for any interactive / agent-facing container image.
-- [ ] Provide clear before/after examples demonstrating proper layer caching.
-- [ ] Add a linter or test checking container conventions where applicable.
+- [x] Create `docs/Containerfile.md` (or `docs/Docker.md`) documenting container build efficiency and layer ordering rules.
+- [x] Bundle `Containerfile.md` into harnez default docs distribution and register it in `AGENTS.md` language/pipeline conventions.
+- [x] Document the requirement to include `git` and `git-lfs` for any interactive / agent-facing container image.
+- [x] Provide clear before/after examples demonstrating proper layer caching.
+- [ ] Add a linter or test checking container conventions where applicable. — deferred, out of scope for this doc-only ticket (no existing lint pipeline for Containerfiles in this repo to hook into); tracked as a possible follow-up, not filed as a separate issue.
+
+---
+
+## Progress — 2026-08-29
+
+Implemented as a copyable doc rather than a project-root-only doc, matching the existing
+`docs/other/` pattern (Canary, Spec) since the guidance applies to any project, not just this
+repo:
+
+- Wrote `docs/other/Containerfile.md`: static-first/dynamic-last layer-ordering rule, a worked
+  example built from this repo's own `scripts/agent-canary/Containerfile` (multi-stage build,
+  `go.mod`/`go.sum` copied before source, per-package-group `RUN npm install` layers, mandatory
+  `git`/`git-lfs`, configs/launchers copied late, `ENV`/`WORKDIR` last), plus base-image pinning,
+  `.dockerignore`, and a new-Containerfile checklist.
+- Registered it in `config.yaml` (`containerfile` doc entry, `default: false` — opt-in like
+  `spec`/`canary`) and in `AGENTS.md`'s Language Conventions block and Docs Layout list, and
+  added a row to `docs/README.md`.
+- Generated the root copy via `harnez init --docs containerfile -y`, matching how
+  `docs/Canary.md`/`docs/Spec.md` are self-hosted in this repo.
+- Did not add a linter/test for Containerfile conventions — no existing lint pipeline in this
+  repo targets Containerfiles, and the ticket's other acceptance criteria (doc + registration +
+  git/git-lfs rule + before/after example) are the core deliverable. Left as a possible future
+  follow-up rather than scope-creeping this ticket.

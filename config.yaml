@@ -328,6 +328,14 @@ agents_md:
       target: ~/.claude/docs/Spec.md
       local: ./docs/Spec.md
       default: true
+    containerfile:
+      name: "Containerfile build efficiency"
+      ref: "@docs/Containerfile.md"
+      hint: "order layers static-first/dynamic-last; git+git-lfs mandatory in agent-facing images"
+      source: docs/other/Containerfile.md
+      target: ~/.claude/docs/Containerfile.md
+      local: ./docs/Containerfile.md
+      default: false
     agentic-loop:
       name: "Agentic Loop Practices"
       ref: "@docs/AgenticLoop.md"
