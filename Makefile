@@ -68,6 +68,9 @@ agent-canary-build: ⚙️ build  # build the shared Pi/OpenCode canary containe
 agent-canary-static: ⚙️ build  # run deterministic in-container canary checks
 	bash scripts/agent-canary/run.sh static
 
+install-canary: ⚙️  # verify the latest Codeberg release installs and reports its version
+	bash scripts/install-canary.sh
+
 check: ⚙️  # run static analysis and tests
 	go vet ./...
 	go test ./...

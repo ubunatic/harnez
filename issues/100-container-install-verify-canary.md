@@ -1,6 +1,6 @@
 # 100 — Container canary: install `latest` Codeberg release and verify `--version`
 
-**Status**: Open
+**Status**: Resolved — `scripts/install-canary.sh`, `make install-canary`
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -63,3 +63,42 @@ primitive, but confirm that's actually wanted before generalizing beyond
   former catches breakage immediately but adds container-spin-up latency
   to every release; the latter is opt-in but can't accidentally block a
   release on it.
+
+## Progress (2026-08-29)
+
+Implemented as a standalone shell canary (`scripts/install-canary.sh`,
+`make install-canary`), not a `harnez` subcommand — this stayed scoped to
+`harnez` only, per the "confirm before generalizing" note above; no
+cross-project mechanism was built.
+
+What it does:
+1. Queries `https://codeberg.org/api/v1/repos/ubunatic/harnez/releases/latest`
+   for the current tag (no assumptions, no mocking — the real API).
+2. Spins up a clean `debian:bookworm-slim` container via Podman (no Go
+   toolchain, matching a real end user's machine).
+3. Inside it, installs only `curl`/`ca-certificates`, downloads the
+   matching `harnez-<version>-x86_64-linux.tar.gz` archive asset, extracts
+   it, and runs `./harnez --version`.
+4. Asserts the reported version string contains the fetched tag's version;
+   fails loudly (`FAIL: expected version ..., got: ...`) on mismatch, or an
+   early `curl -f` failure on a 404/network error.
+
+Verified against the real, currently-published `v0.1.5` release:
+```
+Verifying harnez v0.1.5 (x86_64) installs and reports its version...
+reported: harnez version 0.1.5
+PASS: harnez --version reports 0.1.5
+```
+
+Scope decision: today's only documented install paths are `go install` and
+`git clone && make install` (README's Installation section) — the tar.gz
+archive isn't actually linked from the README yet (that's issue 092's
+job). This canary exercises the tar.gz archive path directly since that's
+the artifact `.goreleaser.yaml` actually produces and is what 098/099 will
+sit alongside; once 092 lands a documented `curl | sh` or package-manager
+path, extend this canary to cover those too rather than assuming one now.
+
+Left as a follow-up, not decided here: whether this becomes a blocking
+step in `harnez release` or stays a separate, deliberately-triggered
+`make install-canary` — kept as the latter (unblocked, opt-in) since nothing
+in this session called for changing the release flow itself.
