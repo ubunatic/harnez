@@ -143,8 +143,49 @@ The renderer can then plan rows/columns once, allocate spare width deliberately,
 - Toggled states with only `Load`, or with `All Usage` plus several agent boxes, keep boxes near useful widths instead of stretching them across arbitrary screen space.
 - Layout tests or golden frame checks cover at least 80x18, 80x24, 100x24, and 120x18 with `--summary`, `--summary --proc`, `--watch --compact`, and `--watch --compact --proc`.
 
-## 6. Verification Notes
+## 6. Prototype Layout Library
 
-This is a review-only ticket. No Go code was changed.
+`internal/uix` now provides a standalone, non-integrated layout prototype for future usage/watch work. It supports enabled/disabled boxes, min/preferred/max useful widths, stretchable boxes, stable priority/order sorting, greedy left-to-right row packing, wrapping, and plain ASCII rendering for tests and demos.
 
-The assessment used bounded watch runs with `timeout` and an interactive PTY session exited with `q`; no watch process was left running.
+Load-only stays compact in a 100-column terminal because the box is not stretchable:
+
+```text
++ [L] Load ----------------------+
+| cpu (12 cores)   [    ] 5%     |
+| ram              4.8/23.3G 21% |
+| gpu mem          1.2/19.6G 6%  |
++--------------------------------+
+```
+
+All Usage and Load share one row when their useful widths fit:
+
+```text
++ [a] All Usage -------------------------------+ + [L] Load ----------------------+
+| Claude Code   [    ] 86% 7h10m               | | cpu (12 cores)   [    ] 5%     |
+| Gemini        [    ] 97% 2d6h                | | ram              4.8/23.3G 21% |
+| OpenAI Codex  [    ] 49% 5d7h                | +--------------------------------+
++----------------------------------------------+
+```
+
+All Usage plus three agent boxes avoids a full-terminal All Usage stretch and wraps predictably into one useful-width All Usage row plus a compact three-agent row:
+
+```text
++ [a] All Usage -------------------------------------------------------------------+
+| Claude Code   [    ] 86% 7h10m [    ] 24%                                        |
+| Gemini        [    ] 97% 2d6h  [    ] 28%                                        |
+| OpenAI Codex  [    ] 49% 5d7h  [    ] 62%                                        |
++----------------------------------------------------------------------------------+
+
++ [C] Claude Code -----------------+ + [G] Antigravity -------------------+ + [O] OpenAI Codex ----------------+
+| active session - Pro             | | u***l@gmail.com - Consumer         | | u***l@gmail.com - Plus           |
+| Wk / 5h    [    ] 86% [    ] 24% | | Gemini     [    ] 97% [    ] 28%   | | Wk / 5h    [   ] 49% [   ] 62%   |
++----------------------------------+ +------------------------------------+ +----------------------------------+
+```
+
+## 7. Verification Notes
+
+Earlier review-only assessment used bounded watch runs with `timeout` and an interactive PTY session exited with `q`; no watch process was left running.
+
+Prototype library verification:
+
+- `go test ./internal/uix`
