@@ -438,6 +438,17 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 	if !strings.Contains(frameText, "[L]") || !strings.Contains(frameText, "Load") {
 		t.Fatalf("expected compact frame to show load box, got:\n%s", frameText)
 	}
+	foundSharedTitleRow := false
+	for _, line := range frame.lines {
+		stripped := stripANSI(line)
+		if strings.Contains(stripped, "[a] All Usage") && strings.Contains(stripped, "[L] Load") {
+			foundSharedTitleRow = true
+			break
+		}
+	}
+	if !foundSharedTitleRow {
+		t.Fatalf("expected compact all-usage and load boxes to share one row, got:\n%s", frameText)
+	}
 	if strings.Contains(frameText, "] Claude Code") {
 		t.Fatalf("expected compact frame to hide individual Claude box, got:\n%s", frameText)
 	}

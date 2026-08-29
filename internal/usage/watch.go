@@ -33,6 +33,7 @@ var sparkRunes = []rune{' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 const rateHistoryLen = 12
 const minBoxWidth = 34
 const maxTotalWidth = 120
+const preferredAllUsageWidth = 55
 
 // boxGap is the number of blank columns combineRow puts between side-by-side
 // panels. Layout math must account for it: forgetting the gutter is what made
@@ -1154,7 +1155,27 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		)
 	}
 	dropped := 0
-	if sec.AllUsage {
+	renderedCompactPair := false
+	if onlyAllUsageAndLoad(sec, visible) && usable >= preferredAllUsageWidth+boxGap+minBoxWidth {
+		allWidth := preferredAllUsageWidth
+		loadWidth := usable - allWidth - boxGap
+		if loadWidth < minBoxWidth {
+			loadWidth = minBoxWidth
+			allWidth = usable - loadWidth - boxGap
+		}
+		lines := combineRow([][]string{
+			renderWBox(buildAllUsageBox(summary, allWidth)),
+			renderWBox(buildLoadBox(loadWidth)),
+		})
+		if len(body)+len(lines) <= budget {
+			body = append(body, lines...)
+		} else {
+			dropped += 2
+		}
+		renderedCompactPair = true
+		totalPanels = 0
+	}
+	if !renderedCompactPair && sec.AllUsage {
 		lines := renderWBox(buildAllUsageBox(summary, usable))
 		if len(body)+len(lines) <= budget {
 			body = append(body, lines...)
@@ -1163,7 +1184,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		}
 	}
 	if totalPanels == 0 {
-		if !sec.AllUsage {
+		if !sec.AllUsage && !renderedCompactPair {
 			body = append(body, "\x1b[90m(all panels hidden)\x1b[0m")
 		}
 	} else {
@@ -1225,6 +1246,10 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 
 	lines := append(append(header, body...), footer...)
 	return fit(lines, usable, rows)
+}
+
+func onlyAllUsageAndLoad(sec watchSections, visible []AgentUsage) bool {
+	return sec.AllUsage && sec.Load && len(visible) == 0 && !sec.History && !sec.Processes
 }
 
 // RenderSummary prints one static frame of the same compact, btop-style grid
