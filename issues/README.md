@@ -99,3 +99,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 098 | [098-deb-rpm-packaging.md](098-deb-rpm-packaging.md) | Add DEB and RPM packaging to `harnez release` | Open |
 | 099 | [099-appimage-packaging.md](099-appimage-packaging.md) | Add AppImage packaging to `harnez release` | Open |
 | 100 | [100-container-install-verify-canary.md](100-container-install-verify-canary.md) | Container canary: install `latest` Codeberg release and verify `--version` | Open |
+| 101 | [101-usage-keep-stale-agents-visible-until-7d.md](101-usage-keep-stale-agents-visible-until-7d.md) | `harnez usage` hides/blanks agents too soon when not recently active (e.g. AGY) | Open |
