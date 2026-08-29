@@ -1,6 +1,6 @@
 # 099 — Add AppImage packaging to `harnez release`
 
-**Status**: Open
+**Status**: Closed — evaluated, not pursued
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
@@ -43,3 +43,56 @@ existing `curl | sh` static-binary install than to native packaging.
   deciding it here.
 - Scope this to `harnez` itself first (dogfooding), then decide whether/how
   it becomes a template other projects adopt.
+
+## Progress / Decision (2026-08-29)
+
+Evaluated per the ticket's own "decide before implementing" gate. Decision:
+**do not pursue** AppImage packaging for `harnez`. `.goreleaser.yaml` was
+not touched.
+
+Rationale:
+
+- **No native goreleaser support.** Confirmed via `goreleaser jsonschema`
+  (goreleaser v2, current installed version) — there is no `appimage` key
+  anywhere in the schema, matching the ticket's own assumption. Getting an
+  AppImage out of the release flow would mean a standalone build step
+  (`linuxdeploy`/`appimagetool`) wired in via a goreleaser hook/publisher,
+  entirely outside goreleaser's artifact/checksum/sign pipeline that 098
+  already gets "for free" for `.deb`/`.rpm`.
+- **Tooling isn't present and adds a real CI dependency.** Neither
+  `appimagetool` nor `linuxdeploy` is installed locally or accounted for
+  anywhere in this repo's build environment. Standing up AppImage output
+  means vendoring/installing an external, non-Go, non-goreleaser binary
+  tool in CI just to produce this one artifact — real added complexity for
+  a P3/Low ticket.
+- **The value proposition is already met.** AppImage's differentiator per
+  the ticket is "no root, no package manager, just chmod +x and run."
+  `harnez` already ships exactly that today via the `binary` archive id in
+  `.goreleaser.yaml` (`archives: - id: binary`, `formats: [binary]`) — a
+  single static Go binary (`CGO_ENABLED=0`), no runtime assets, no
+  `.desktop`/icon bundling needed or wanted for a CLI tool. An AppImage
+  here would just be that same binary re-wrapped in a squashfs image plus
+  an `AppRun` shim.
+- **AppImage would arguably be a downgrade for this tool.** Running an
+  AppImage typically requires `libfuse2`/FUSE support on the host (or
+  `--appimage-extract` as a workaround) — a dependency the existing raw
+  binary and `.deb`/`.rpm` artifacts don't have. For a CLI-only static
+  binary, that's added friction, not less.
+
+Net: AppImage's main differentiator is redundant with the existing
+`binary` archive artifact, and the packaging story it would add is more
+complex (external tooling, no goreleaser pipe integration, FUSE runtime
+dependency) for no concrete benefit to `harnez` users. Closing without
+implementation. No `.goreleaser.yaml` changes were made.
+
+If a concrete future need appears (e.g. a user request, or `harnez`
+growing GUI-adjacent assets that actually benefit from AppImage's desktop
+integration), reopen this ticket rather than resurrecting it from
+scratch — the research above (schema check, tooling absence, `binary`
+archive comparison) still applies.
+
+Per the ticket's own note: the install-snippet question from issue 092
+("how should projects declare which package types appear in their install
+snippet?") should fold back into 092 covering `.deb`/`.rpm` only (from
+098) — AppImage is not part of that matrix now that this ticket is
+closed.
