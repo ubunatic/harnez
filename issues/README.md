@@ -91,3 +91,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 090 | [090-remote-load-panel-uses-local-metrics.md](090-remote-load-panel-uses-local-metrics.md) | Remote Usage Load Panel Uses Local Metrics | Open |
 | 091 | [091-language-agnostic-release-spec-and-thin-make-release.md](091-language-agnostic-release-spec-and-thin-make-release.md) | Language-agnostic release spec — replace per-project release Make target sprawl | Closed — resolved |
 | 092 | [092-latest-release-links-and-readme-install-section-consolidation.md](092-latest-release-links-and-readme-install-section-consolidation.md) | Latest release links & README/website install section consolidation | Open — proposed assessment |
+| 093 | [093-usage-tui-layout-planner.md](093-usage-tui-layout-planner.md) | Usage TUI layout planner and sizing policy | Open |
