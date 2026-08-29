@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -53,7 +54,7 @@ func DetectForgeInfo(dir string) (*ForgeInfo, error) {
 	return nil, fmt.Errorf("unable to parse git remote origin URL %q", raw)
 }
 
-// GetForgeToken retrieves an API token from environment variables.
+// GetForgeToken retrieves an API token from environment variables or ~/.local/share/forgejo-cli/keys.json.
 func GetForgeToken(host string) string {
 	switch strings.ToLower(host) {
 	case "codeberg.org":
@@ -66,8 +67,31 @@ func GetForgeToken(host string) string {
 			return t
 		}
 	}
+
+	// Fallback: check fj configuration (~/.local/share/forgejo-cli/keys.json)
+	home, err := os.UserHomeDir()
+	if err == nil {
+		keysFile := filepath.Join(home, ".local", "share", "forgejo-cli", "keys.json")
+		if data, err := os.ReadFile(keysFile); err == nil {
+			var parsed struct {
+				Hosts map[string]struct {
+					Token string `json:"token"`
+				} `json:"hosts"`
+			}
+			if err := json.Unmarshal(data, &parsed); err == nil {
+				if hostEntry, ok := parsed.Hosts[host]; ok && hostEntry.Token != "" {
+					return hostEntry.Token
+				}
+				if hostEntry, ok := parsed.Hosts[strings.ToLower(host)]; ok && hostEntry.Token != "" {
+					return hostEntry.Token
+				}
+			}
+		}
+	}
+
 	return ""
 }
+
 
 type repoAPIResponse struct {
 	HasReleases bool   `json:"has_releases"`
