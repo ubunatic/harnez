@@ -317,10 +317,10 @@ func TestBuildAllUsageBox(t *testing.T) {
 	}
 
 	want := []string{
-		"Gemini        [███░] 93% 2d8h  [░░░░] 4h58m 3%",
-		"Claude/GPT    [█░░░] 35% 6d2h  [░░░░] 4h58m 0%",
-		"Claude Code   [███░] 85% 8h51m [░░░░] 4h51m 9%",
-		"OpenAI Codex  [█░░░] 39% 5d9h  [░░░░] 4h59m 0%",
+		"Gemini        [███░] 93% 2d8h  [░░░░] 3% 4h58m",
+		"Claude/GPT    [█░░░] 35% 6d2h  [░░░░] 0% 4h58m",
+		"Claude Code   [███░] 85% 8h51m [░░░░] 9% 4h51m",
+		"OpenAI Codex  [█░░░] 39% 5d9h  [░░░░] 0% 4h59m",
 	}
 	for i := range want {
 		if got := stripANSI(box.lines[i]); got != want[i] {
@@ -366,7 +366,7 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 		}
 		switch {
 		case strings.Contains(stripped, "Claude Code"):
-			if !strings.Contains(stripped, "Claude Code   [███░] 85% 8h39m [░░░░] 4h44m 11%") {
+			if !strings.Contains(stripped, "Claude Code   [███░] 85% 8h39m [░░░░] 11% 4h44m") {
 				t.Fatalf("expected Claude second bar and percent to remain visible in narrow row: %q", stripped)
 			}
 		case strings.Contains(stripped, "OpenAI Codex"):
@@ -440,6 +440,9 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 	}
 	if strings.Contains(frameText, "] Claude Code") {
 		t.Fatalf("expected compact frame to hide individual Claude box, got:\n%s", frameText)
+	}
+	if !strings.Contains(frameText, "Claude Code  [███░] 85% 8h51m [░░░░] 9% 4h51m") {
+		t.Fatalf("expected compact all-usage row to keep short-window time at 100 columns, got:\n%s", frameText)
 	}
 	if !strings.Contains(frameText, "[a]usage") || !strings.Contains(frameText, "[⇧a]ll") {
 		t.Fatalf("expected footer to expose [a]usage and shifted [⇧a]ll, got:\n%s", frameText)

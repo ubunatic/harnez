@@ -32,7 +32,7 @@ var sparkRunes = []rune{' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 
 const rateHistoryLen = 12
 const minBoxWidth = 34
-const maxTotalWidth = 100
+const maxTotalWidth = 120
 
 // boxGap is the number of blank columns combineRow puts between side-by-side
 // panels. Layout math must account for it: forgetting the gutter is what made
@@ -563,7 +563,7 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
 
 	if d1 != "" && d2 != "" {
-		line := prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), rograph.PadLabel(d1, 5), b2, d2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
+		line := prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), rograph.PadLabel(d1, 5), b2, fmt.Sprintf("%.0f%%", w2.UsedPercent), d2}, " ")
 		if visLen(line) <= contentW {
 			return line
 		}
@@ -1132,9 +1132,6 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 
 	totalPanels := len(visible)
-	if sec.AllUsage {
-		totalPanels++
-	}
 	if sec.History {
 		totalPanels++
 	}
@@ -1156,12 +1153,22 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 			"",
 		)
 	}
+	dropped := 0
+	if sec.AllUsage {
+		lines := renderWBox(buildAllUsageBox(summary, usable))
+		if len(body)+len(lines) <= budget {
+			body = append(body, lines...)
+		} else {
+			dropped++
+		}
+	}
 	if totalPanels == 0 {
-		body = append(body, "\x1b[90m(all panels hidden)\x1b[0m")
+		if !sec.AllUsage {
+			body = append(body, "\x1b[90m(all panels hidden)\x1b[0m")
+		}
 	} else {
 		columns, boxWidth := gridColumns(usable, totalPanels)
 
-		dropped := 0
 		var pending [][]string
 		flushRow := func() {
 			if len(pending) == 0 {
@@ -1176,13 +1183,6 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 			pending = nil
 		}
 
-		if sec.AllUsage {
-			aBox := buildAllUsageBox(summary, boxWidth)
-			pending = append(pending, renderWBox(aBox))
-			if len(pending) == columns {
-				flushRow()
-			}
-		}
 		for _, agent := range visible {
 			box := buildAgentBox(agent, rates[agent.AgentID], boxWidth, sec.Tokens, live)
 			pending = append(pending, renderWBox(box))
@@ -1212,14 +1212,14 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 			}
 		}
 		flushRow()
+	}
 
-		if dropped > 0 {
-			note := fmt.Sprintf("\x1b[90m… %d panel(s) hidden — terminal too short\x1b[0m", dropped)
-			if len(body) < budget {
-				body = append(body, note)
-			} else if len(body) > 0 {
-				body[len(body)-1] = note
-			}
+	if dropped > 0 {
+		note := fmt.Sprintf("\x1b[90m… %d panel(s) hidden — terminal too short\x1b[0m", dropped)
+		if len(body) < budget {
+			body = append(body, note)
+		} else if len(body) > 0 {
+			body[len(body)-1] = note
 		}
 	}
 
