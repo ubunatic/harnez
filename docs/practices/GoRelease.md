@@ -129,7 +129,13 @@ should be deleted when adopting this convention. Keep only generic helpers such 
 
 Forgejo returns a `404 Not Found` to `fj release` if the repository's Releases feature is toggled off.
 
-`harnez release` automatically queries `GET /api/v1/repos/<owner>/<repo>` using `$CODEBERG_TOKEN` / `$FORGEJO_TOKEN` and auto-enables `has_releases` via API if needed.
+`harnez release` automatically queries `GET /api/v1/repos/<owner>/<repo>` and auto-enables
+`has_releases` via API if needed. The token for this check (`GetForgeToken` in
+`internal/release/forge.go`) comes from, in order: `$CODEBERG_TOKEN`, then
+`$FORGEJO_TOKEN`/`$CODEBERG_TOKEN`/`$FJ_TOKEN`/`$GITEA_TOKEN`, then a **fallback read of
+`fj`'s own credential store**, `~/.local/share/forgejo-cli/keys.json`. In the common case
+(no env vars set), this check is entirely riding on whatever token `fj auth login` /
+`fj auth add-token` last wrote there — it is not a separate credential to manage.
 
 You can also manually verify or enable it via API:
 ```bash
@@ -138,6 +144,20 @@ curl -X PATCH -H "Authorization: token $CODEBERG_TOKEN" \
      -d '{"has_releases": true}' \
      https://codeberg.org/api/v1/repos/<owner>/<repo>
 ```
+
+**Pitfall — expired token surfaces as a non-fatal 401, easy to mistake for a broken
+release.** A stale `keys.json` token produces `[forge] Warning: failed to check
+'has_releases' unit: ... status 401 ... token is expired` mid-run, but the release
+continues and typically still succeeds: the actual tag push is plain `git push` (SSH, own
+credentials) and the actual publish goes through `fj release` (its own separate call into
+the same `fj` credential store, which — confusingly — can still be valid even when the
+token this particular preflight check picked up has expired, since Forgejo/Codeberg
+tokens issued at different times expire independently). Confirmed 2026-08-29: a run with an
+expired token completed the full release (build, sign, tag, push, publish) with only the
+warning line; running `fj auth login` and re-running `harnez release` removed the warning
+on the next release. Treat the warning as informational unless the run also fails outright
+— check for `Release vX.Y.Z completed successfully!` at the end before assuming anything
+is broken.
 
 ---
 
