@@ -73,6 +73,20 @@ func FormatCompactDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm", mins)
 }
 
+// FormatAgo formats a past timestamp as a compact relative "ago" string,
+// e.g. "3h ago", "12m ago", "2d1h ago". A zero timestamp (unknown) or one
+// less than a minute old returns "just now".
+func FormatAgo(t time.Time) string {
+	if t.IsZero() {
+		return "just now"
+	}
+	d := time.Since(t)
+	if d < time.Minute {
+		return "just now"
+	}
+	return FormatCompactDuration(d) + " ago"
+}
+
 // FormatBytes formats a byte count into a human-readable string (e.g. "0 B", "512 B", "1.4 KB", "12.8 MB", "1.2 GB").
 func FormatBytes(b int64) string {
 	if b < 0 {

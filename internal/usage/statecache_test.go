@@ -128,6 +128,88 @@ func TestStateDirXDGResolution(t *testing.T) {
 	}
 }
 
+// TestCacheOrLivePreservesQuotaOnLossyRecollect checks issue 101's core fix:
+// when a stale-for-live-recollect cached snapshot has quota/token data but a
+// fresh live collect comes back without any (e.g. AGY's process isn't
+// currently running, so only static fields repopulate), cacheOrLive keeps
+// serving the last known snapshot — tagged with its true FetchedAt time via
+// LastRefreshed — instead of blanking the quota numbers. This is a
+// code-level simulation of the scenario described in issue 101 (AGY stops
+// answering on its local port after being idle a while); a real 30+ minute
+// wait-based repro against a live agy process was judged impractical, so
+// this test ages a cache file directly instead of sleeping.
+func TestCacheOrLivePreservesQuotaOnLossyRecollect(t *testing.T) {
+	dir := t.TempDir()
+	fetchedAt := time.Now().Add(-2 * DefaultCacheStaleness) // stale for live-recollect, but well within DefaultDisplayStaleness
+	richCached := AgentUsage{
+		AgentID:       "agy",
+		Installed:     true,
+		Authenticated: true,
+		Session:       &QuotaWindow{Name: "5h", UsedPercent: 42},
+	}
+	snap := AgentSnapshot{FetchedAt: fetchedAt, Usage: richCached}
+	data, err := json.MarshalIndent(snap, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	if err := os.WriteFile(snapshotPath(dir, "agy"), data, 0600); err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+
+	// Simulates a live recollect that finds the agy process not currently
+	// running: static fields still populate, but Session/Weekly do not.
+	lossyLive := func() AgentUsage {
+		return AgentUsage{AgentID: "agy", Installed: true, Authenticated: true}
+	}
+
+	got := cacheOrLive(dir, "agy", DefaultCacheStaleness, lossyLive)
+
+	if got.Session == nil || got.Session.UsedPercent != 42 {
+		t.Errorf("expected the last known Session quota to be preserved, got %+v", got.Session)
+	}
+	if !got.LastRefreshed.Equal(fetchedAt) {
+		t.Errorf("LastRefreshed = %v, want the cached snapshot's FetchedAt %v", got.LastRefreshed, fetchedAt)
+	}
+	if got.IsStale(DefaultDisplayStaleness) {
+		t.Error("2x DefaultCacheStaleness old should not be stale by the 7-day display threshold")
+	}
+
+	// A live recollect that actually finds richer/equal data (the process IS
+	// running again) must win over the cache.
+	richerLive := func() AgentUsage {
+		return AgentUsage{AgentID: "agy", Installed: true, Authenticated: true, Session: &QuotaWindow{Name: "5h", UsedPercent: 7}}
+	}
+	got2 := cacheOrLive(dir, "agy", DefaultCacheStaleness, richerLive)
+	if got2.Session == nil || got2.Session.UsedPercent != 7 {
+		t.Errorf("expected a live recollect with real quota data to win over the cache, got %+v", got2.Session)
+	}
+}
+
+// TestAgentUsageIsStale table-drives the 7-day display-hide threshold
+// (issue 101), including the "zero LastRefreshed is never stale" backstop
+// for callers (tests, older code paths) that build an AgentUsage directly.
+func TestAgentUsageIsStale(t *testing.T) {
+	cases := []struct {
+		name   string
+		agent  AgentUsage
+		maxAge time.Duration
+		want   bool
+	}{
+		{"zero LastRefreshed", AgentUsage{}, DefaultDisplayStaleness, false},
+		{"just refreshed", AgentUsage{LastRefreshed: time.Now()}, DefaultDisplayStaleness, false},
+		{"31 minutes old, well within 7d", AgentUsage{LastRefreshed: time.Now().Add(-31 * time.Minute)}, DefaultDisplayStaleness, false},
+		{"6 days old", AgentUsage{LastRefreshed: time.Now().Add(-6 * 24 * time.Hour)}, DefaultDisplayStaleness, false},
+		{"8 days old", AgentUsage{LastRefreshed: time.Now().Add(-8 * 24 * time.Hour)}, DefaultDisplayStaleness, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.agent.IsStale(tc.maxAge); got != tc.want {
+				t.Errorf("IsStale(%s) = %v, want %v", tc.maxAge, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestCollectAllCacheFirst checks CollectAll's cache-first behavior end to
 // end: with no daemon-written snapshot, it falls back to a live collect
 // (matching pre-082 behavior exactly, so existing callers see no change

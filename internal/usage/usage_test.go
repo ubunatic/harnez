@@ -73,6 +73,77 @@ func TestRenderSummary(t *testing.T) {
 	}
 }
 
+// TestRenderText_StaleWithinSevenDaysStillShown covers issue 101's core
+// requirement: an agent whose last known data is older than the 30-minute
+// live-recollect window but still well within the 7-day display-hide
+// threshold keeps showing its last-known snapshot, annotated with a "last
+// updated" timestamp, rather than vanishing or blanking.
+func TestRenderText_StaleWithinSevenDaysStillShown(t *testing.T) {
+	// IsStale/FormatAgo compare LastRefreshed against actual wall-clock time
+	// (not the summary's own Timestamp), so both must be anchored to
+	// time.Now() rather than a fixed historical date.
+	now := time.Now()
+	lastRefreshed := now.Add(-3 * time.Hour) // >> 30min live-recollect window, << 7d display window
+
+	summary := UsageSummary{
+		Timestamp: now,
+		Agents: []AgentUsage{
+			{
+				AgentID:       "agy",
+				Name:          "Antigravity (AGY)",
+				Installed:     true,
+				Authenticated: true,
+				Session:       &QuotaWindow{Name: "5h", UsedPercent: 42},
+				LastRefreshed: lastRefreshed,
+			},
+		},
+	}
+
+	textStr := RenderText(summary)
+
+	if !strings.Contains(textStr, "Antigravity (AGY)") {
+		t.Errorf("expected Text to still show the stale-but-within-7d agent box, got:\n%s", textStr)
+	}
+	if !strings.Contains(textStr, "42.0% used") {
+		t.Errorf("expected Text to still show the last-known quota data, got:\n%s", textStr)
+	}
+	if !strings.Contains(textStr, "Updated:") || !strings.Contains(textStr, "3h") {
+		t.Errorf("expected Text to annotate the box with a 'last updated ~3h ago' line, got:\n%s", textStr)
+	}
+}
+
+// TestRenderText_SevenDayStaleAgentHidden covers issue 101's auto-hide gate:
+// once an agent's last known data is 7+ days stale, RenderText hides it even
+// though HasUsageData() would still report true (a genuinely
+// abandoned/uninstalled agent, not one that's merely not running right now).
+func TestRenderText_SevenDayStaleAgentHidden(t *testing.T) {
+	now := time.Now()
+	lastRefreshed := now.Add(-8 * 24 * time.Hour)
+
+	summary := UsageSummary{
+		Timestamp: now,
+		Agents: []AgentUsage{
+			{
+				AgentID:       "agy",
+				Name:          "Antigravity (AGY)",
+				Installed:     true,
+				Authenticated: true,
+				Session:       &QuotaWindow{Name: "5h", UsedPercent: 42},
+				LastRefreshed: lastRefreshed,
+			},
+		},
+	}
+
+	textStr := RenderText(summary)
+
+	if strings.Contains(textStr, "── Antigravity (AGY) ") {
+		t.Errorf("expected Text to hide an agent 8 days stale, got:\n%s", textStr)
+	}
+	if !strings.Contains(textStr, "No supported agent") {
+		t.Errorf("expected the all-agents-absent fallback message, got:\n%s", textStr)
+	}
+}
+
 // TestRenderText_AllAgentsAbsent covers issue 083's "don't render a silently
 // empty screen" requirement: when no supported agent has any real recorded
 // usage, RenderText must say so explicitly instead of printing nothing but

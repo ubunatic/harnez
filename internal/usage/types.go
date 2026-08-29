@@ -54,6 +54,35 @@ type AgentUsage struct {
 	// attempted but failed (transport error, non-2xx, decode error), so
 	// renderers can distinguish "fetch failed" from "no quota windows apply."
 	QuotaFetchError string `json:"quota_fetch_error,omitempty"`
+	// LastRefreshed is when this AgentUsage's data was actually last known to
+	// be current — the collector-daemon cache snapshot's FetchedAt time when
+	// served from cache, or "now" when freshly live-collected. It is the
+	// basis for both the renderers' "last updated" annotation and the
+	// 7-day auto-hide gate (issue 101). Left zero by callers that construct
+	// an AgentUsage directly (e.g. tests) rather than through CollectAll/
+	// cacheOrLive; a zero value is treated as "unknown" rather than "stale"
+	// by IsStale.
+	LastRefreshed time.Time `json:"last_refreshed,omitempty"`
+}
+
+// hasQuotaSignal reports whether this AgentUsage carries any quota/token
+// data — the fields a live recollect can lose when an agent's process isn't
+// currently running, even though static fields (Authenticated, Sources, ...)
+// still populate from on-disk state regardless (issue 101).
+func (a AgentUsage) hasQuotaSignal() bool {
+	return a.Session != nil || a.Weekly != nil || a.Tokens != nil || len(a.ModelGroups) > 0
+}
+
+// IsStale reports whether this agent's LastRefreshed timestamp is older than
+// maxAge. A zero LastRefreshed — not yet threaded through by the caller that
+// built this AgentUsage — is never considered stale here; such callers rely
+// on HasUsageData() alone for visibility (issue 101's 7-day auto-hide gate
+// is additive to, not a replacement for, issue 083's check).
+func (a AgentUsage) IsStale(maxAge time.Duration) bool {
+	if a.LastRefreshed.IsZero() {
+		return false
+	}
+	return time.Since(a.LastRefreshed) > maxAge
 }
 
 // HasUsageData reports whether a collector actually found real local or

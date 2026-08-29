@@ -576,6 +576,69 @@ func TestBuildWatchFrame_AllAgentsAbsent(t *testing.T) {
 	}
 }
 
+// TestBuildWatchFrame_StaleWithinSevenDaysStillShown mirrors
+// TestRenderText_StaleWithinSevenDaysStillShown for the --watch TUI path
+// (issue 101): an agent refreshed hours ago (past the 30-minute live-
+// recollect window, well short of the 7-day display-hide gate) still gets a
+// panel, annotated with an "updated ... ago" line.
+func TestBuildWatchFrame_StaleWithinSevenDaysStillShown(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{
+				AgentID:       "agy",
+				Name:          "Antigravity",
+				Installed:     true,
+				Authenticated: true,
+				Session:       &QuotaWindow{Name: "5h", UsedPercent: 42},
+				LastRefreshed: time.Now().Add(-3 * time.Hour),
+			},
+		},
+	}
+
+	sec := defaultWatchSections()
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frameText := strings.Join(frame.lines, "\n")
+
+	if !strings.Contains(frameText, "Antigravity") {
+		t.Errorf("expected frame to still show the stale-but-within-7d agent box, got:\n%s", frameText)
+	}
+	if !strings.Contains(frameText, "updated") || !strings.Contains(frameText, "3h") {
+		t.Errorf("expected frame to annotate the box with 'updated ~3h ago', got:\n%s", frameText)
+	}
+}
+
+// TestBuildWatchFrame_SevenDayStaleAgentHidden mirrors
+// TestRenderText_SevenDayStaleAgentHidden for the --watch TUI path (issue
+// 101): a 7+ day stale agent auto-hides even though HasUsageData() is true.
+func TestBuildWatchFrame_SevenDayStaleAgentHidden(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{
+				AgentID:       "agy",
+				Name:          "Antigravity",
+				Installed:     true,
+				Authenticated: true,
+				Session:       &QuotaWindow{Name: "5h", UsedPercent: 42},
+				LastRefreshed: time.Now().Add(-8 * 24 * time.Hour),
+			},
+		},
+	}
+
+	sec := defaultWatchSections()
+	sec.Processes = false
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frameText := strings.Join(frame.lines, "\n")
+
+	if strings.Contains(frameText, "] Antigravity") {
+		t.Errorf("expected frame to hide an agent 8 days stale, got:\n%s", frameText)
+	}
+	if !strings.Contains(frameText, "no agent usage detected") {
+		t.Errorf("expected the no-agent-usage-detected fallback message, got:\n%s", frameText)
+	}
+}
+
 func TestBuildProcessesBox(t *testing.T) {
 	box := buildProcessesBox(40, nil)
 	if !strings.Contains(box.title, "[P]") || !strings.Contains(box.title, "Processes") {

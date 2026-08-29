@@ -903,6 +903,10 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 		}
 	}
 
+	if !agent.LastRefreshed.IsZero() {
+		lines = append(lines, fmt.Sprintf("\x1b[90mupdated %s\x1b[0m", FormatAgo(agent.LastRefreshed)))
+	}
+
 	return wbox{title: title, lines: lines, width: width}
 }
 
@@ -1064,7 +1068,10 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	// an empty box or a "hidden: [x]" toggle hint either.
 	var discovered []AgentUsage
 	for _, agent := range summary.Agents {
-		if agent.HasUsageData() {
+		// 7+ day stale agents auto-hide (issue 101), same gate as RenderText:
+		// HasUsageData() alone can't tell "genuinely abandoned" apart from
+		// "just refreshed a while ago."
+		if agent.HasUsageData() && !agent.IsStale(DefaultDisplayStaleness) {
 			discovered = append(discovered, agent)
 		}
 	}

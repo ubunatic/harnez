@@ -58,6 +58,16 @@ func collectAll(ctx context.Context, homeDir string, client *http.Client, useCac
 		agyUsage = collectAGY()
 		codexUsage = collectCodex()
 	}
+	now := time.Now()
+	if claudeUsage.LastRefreshed.IsZero() {
+		claudeUsage.LastRefreshed = now
+	}
+	if agyUsage.LastRefreshed.IsZero() {
+		agyUsage.LastRefreshed = now
+	}
+	if codexUsage.LastRefreshed.IsZero() {
+		codexUsage.LastRefreshed = now
+	}
 
 	return UsageSummary{
 		Timestamp: time.Now(),
@@ -88,6 +98,13 @@ func RenderText(summary UsageSummary) string {
 	shown := 0
 	for _, agent := range summary.Agents {
 		if !agent.HasUsageData() {
+			continue
+		}
+		// 7+ day stale agents auto-hide (issue 101) — issue 083's
+		// HasUsageData() check alone can't distinguish "genuinely abandoned"
+		// from "just refreshed a while ago," since it only looks at whether
+		// any field is populated at all, not how old that data is.
+		if agent.IsStale(DefaultDisplayStaleness) {
 			continue
 		}
 		shown++
@@ -209,6 +226,13 @@ func RenderText(summary UsageSummary) string {
 					lines = append(lines, fmt.Sprintf("Activity:     %s", strings.Join(details, " · ")))
 				}
 			}
+		}
+
+		// "Last updated" annotation (issue 101): staleness should be visible
+		// rather than silently implied, especially once cacheOrLive is
+		// serving a last-known snapshot well past the live-recollect window.
+		if !agent.LastRefreshed.IsZero() {
+			lines = append(lines, fmt.Sprintf("Updated:      %s", FormatAgo(agent.LastRefreshed)))
 		}
 
 		// Calculate content width: max visible rune length among lines and title

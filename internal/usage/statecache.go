@@ -26,11 +26,27 @@ var stateAgentsUsageSubdir = filepath.Join("agents", "usage")
 const DefaultCollectorInterval = 900 * time.Second
 
 // DefaultCacheStaleness is how old a cached snapshot may be before
-// CollectAll treats it as stale and falls back to a live collect for that
-// agent. Twice the default collector interval gives slack for one missed
-// tick (a slow network fetch, a momentarily unreachable RPC) without
+// CollectAll attempts a live recollect for that agent instead of serving the
+// cache as-is. Twice the default collector interval gives slack for one
+// missed tick (a slow network fetch, a momentarily unreachable RPC) without
 // immediately reverting every reader to live collection.
+//
+// This threshold governs *when a live recollect is attempted only* — it is
+// deliberately not the threshold for when a display stops trusting/showing
+// an agent's last known snapshot (see DefaultDisplayStaleness). Conflating
+// the two meant a live process outage (e.g. AGY not currently running)
+// could blank out real quota numbers that were only 31 minutes old (issue
+// 101).
 const DefaultCacheStaleness = 2 * DefaultCollectorInterval
+
+// DefaultDisplayStaleness is how old an agent's last known snapshot may be
+// before renderers (RenderText, buildWatchFrame) auto-hide it entirely
+// (issue 083's self-hiding behavior). Once an agent has ever produced real
+// usage data, its most recently known state stays visible — with a "last
+// updated" annotation — until it crosses this much longer window, since a
+// merely-not-running agent process is not the same as an abandoned/
+// uninstalled one (issue 101).
+const DefaultDisplayStaleness = 7 * 24 * time.Hour
 
 // AgentSnapshot is the on-disk shape of <state-dir>/<agent-id>.json: one
 // file per agent, so a reader can check freshness and availability
@@ -124,15 +140,39 @@ func ReadAgentSnapshot(stateDir, agentID string) (*AgentSnapshot, error) {
 
 // cacheOrLive returns the agent's cached snapshot from stateDir if present
 // and fresher than maxAge, tagging its Sources so renderers/JSON output can
-// tell a cached reading from a live one; otherwise it runs collect and
-// returns that live result. It never writes back to the cache — only the
-// collector daemon (RunCollector) does that.
+// tell a cached reading from a live one, and stamping LastRefreshed with the
+// snapshot's FetchedAt time; otherwise it runs collect and returns that live
+// result (LastRefreshed stamped to now). It never writes back to the cache —
+// only the collector daemon (RunCollector) does that.
+//
+// A live recollect can legitimately come back with *less* quota/token data
+// than the cache already had — e.g. AGY's Session/Weekly windows only
+// populate when a running agy process answers on a local port (agy.go); a
+// stopped process still leaves Authenticated/Sources/etc. populated, but
+// loses the quota signal. In that case the emptier live result is discarded
+// in favor of the last known snapshot (still tagged with its true
+// LastRefreshed time) so a live process outage doesn't blank numbers that
+// were real minutes or hours ago (issue 101).
 func cacheOrLive(stateDir, agentID string, maxAge time.Duration, collect func() AgentUsage) AgentUsage {
 	snap, err := ReadAgentSnapshot(stateDir, agentID)
-	if err == nil && snap.IsFresh(maxAge) {
+	hasCache := err == nil && snap != nil
+
+	if hasCache && snap.IsFresh(maxAge) {
 		u := snap.Usage
+		u.LastRefreshed = snap.FetchedAt
 		u.Sources = append(u.Sources, fmt.Sprintf("%s (cached)", snapshotPath(stateDir, agentID)))
 		return u
 	}
-	return collect()
+
+	live := collect()
+	live.LastRefreshed = time.Now()
+
+	if hasCache && snap.Usage.hasQuotaSignal() && !live.hasQuotaSignal() {
+		u := snap.Usage
+		u.LastRefreshed = snap.FetchedAt
+		u.Sources = append(u.Sources, fmt.Sprintf("%s (cached, stale)", snapshotPath(stateDir, agentID)))
+		return u
+	}
+
+	return live
 }
