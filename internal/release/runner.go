@@ -1,6 +1,7 @@
 package release
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,7 @@ type Options struct {
 	Bump        string
 	Continue    bool
 	DryRun      bool
+	Force       bool
 	SignKey     string
 	BuildCmd    string
 	SkipBuild   bool
@@ -101,6 +103,24 @@ func Run(opt Options) error {
 				return fmt.Errorf("detect current version: %w", err)
 			}
 			currentVersion = detected
+		}
+
+		if !opt.Force {
+			prevTag := "v" + strings.TrimPrefix(currentVersion, "v")
+			exists, err := tagExists(opt.Dir, prevTag)
+			if err != nil {
+				return fmt.Errorf("check previous tag %s: %w", prevTag, err)
+			}
+			if exists {
+				hasDiff, err := hasDiffSinceTag(opt.Dir, prevTag)
+				if err != nil {
+					return fmt.Errorf("check diff since %s: %w", prevTag, err)
+				}
+				if !hasDiff {
+					fmt.Fprintf(opt.Out, "  [diff]      No changes since %s — nothing to release. Use --force to re-release the current code as a new version.\n", prevTag)
+					return nil
+				}
+			}
 		}
 
 		bumped, err := BumpVersion(currentVersion, opt.Bump)
@@ -262,6 +282,38 @@ func isGitClean(dir string) (bool, error) {
 		return false, err
 	}
 	return len(strings.TrimSpace(string(out))) == 0, nil
+}
+
+// tagExists reports whether tag exists in the repo at dir. Any failure to
+// resolve it (missing tag, or dir not being a git repo at all — e.g. a
+// brand-new project with no prior release) is treated as "does not exist"
+// rather than a hard error, so first-ever releases proceed unimpeded.
+func tagExists(dir, tag string) (bool, error) {
+	cmd := exec.Command("git", "rev-parse", "--verify", "--quiet", "refs/tags/"+tag)
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// hasDiffSinceTag reports whether HEAD differs from tag's tree.
+func hasDiffSinceTag(dir, tag string) (bool, error) {
+	cmd := exec.Command("git", "diff", "--quiet", tag, "HEAD")
+	cmd.Dir = dir
+	err := cmd.Run()
+	if err == nil {
+		return false, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return true, nil
+	}
+	return false, err
 }
 
 func getGitCurrentBranch(dir string) (string, error) {

@@ -1,6 +1,6 @@
 # 097 — `harnez release` should skip when there's no diff since the previous tag
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -47,3 +47,48 @@ should normally agree, but could diverge if a tag was created outside
 `harnez release` — prefer whichever this function already treats as the
 source of truth for "current version" to avoid a second, possibly
 inconsistent notion of "current".
+
+## Progress (2026-08-29)
+
+Implemented in `internal/release/runner.go`:
+
+- Added `Options.Force` field and a `--force` flag in `cmd/harnez/release.go`
+  (no name collision with existing flags).
+- In the non-`--continue` branch of `Run`, right before `BumpVersion` is
+  called, resolve `prevTag := "v" + strings.TrimPrefix(currentVersion, "v")`
+  — i.e. the tag matching the currently recorded version (`spec.Version` or
+  `AutoDetectCurrentVersion`), the same source of truth already used for
+  version determination a few lines below, per the Notes above.
+- New helpers `tagExists(dir, tag)` and `hasDiffSinceTag(dir, tag)`
+  (`git rev-parse --verify --quiet refs/tags/<tag>` and
+  `git diff --quiet <tag> HEAD` respectively). Any failure to resolve the tag
+  (missing tag, or `dir` not being a git repo at all — a brand-new project
+  with no prior release) is treated as "no previous tag", so first-ever
+  releases proceed unimpeded — this also covers the "no first release yet"
+  edge case without a special-cased branch.
+- If the tag exists and there's no diff to `HEAD`, and `--force` was not
+  passed: print `No changes since <prev-tag> — nothing to release. Use
+  --force to re-release the current code as a new version.` and return `nil`
+  (exit 0) before any bump/commit/tag/build/publish step runs.
+- `--continue` skips this check entirely (it lives only in the fresh-release
+  branch), matching the ticket's proposed semantics — `--continue` resumes a
+  specific in-progress release rather than starting a fresh one.
+- The check runs even under `--dry-run` (harmless — read-only git calls) so
+  a dry-run preview also reports "nothing to release" accurately.
+
+Tests added to `internal/release/release_test.go`:
+
+- `TestTagExistsAndHasDiffSinceTag` — direct unit coverage of the two new
+  helpers against a real temp git repo fixture (tag exists / doesn't exist;
+  no diff before a new commit / diff present after one).
+- `TestReleaseSkipWhenNoDiffSincePrevTag` — table test driving `Run()`
+  end-to-end via a temp git repo fixture (`setupGitRepoWithVersion` /
+  `runGitCmd` helpers, new — no existing repo-with-commits fixture existed
+  in this file), covering all four required cases:
+  - `no diff skips release`
+  - `diff present proceeds`
+  - `force flag overrides no-diff skip`
+  - `no prior tag proceeds`
+
+Verified: `go build ./...`, `go vet ./...`, `make check` (`go test ./...`,
+full suite including the new tests), and `make install` — all pass.

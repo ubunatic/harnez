@@ -32,6 +32,7 @@ func newReleaseCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&opt.Bump, "bump", "b", "patch", "version bump type ('patch', 'minor', 'major', or explicit semver 'x.y.z')")
 	cmd.Flags().BoolVar(&opt.Continue, "continue", false, "resume a previous release safely without bumping or re-tagging")
 	cmd.Flags().BoolVarP(&opt.DryRun, "dry-run", "n", false, "simulate execution without modifying files, git, or remote forge")
+	cmd.Flags().BoolVar(&opt.Force, "force", false, "re-release the current code as a new version even if nothing changed since the previous tag")
 	cmd.Flags().StringVarP(&opt.SignKey, "sign-key", "s", "", "path to secret minisign key (defaults to ~/.minisign/<project>.key)")
 	cmd.Flags().StringVarP(&opt.Dir, "dir", "d", ".", "target project directory")
 	cmd.Flags().StringVar(&opt.BuildCmd, "build-cmd", "", "custom build command (defaults to goreleaser or make dist)")

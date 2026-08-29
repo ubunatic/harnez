@@ -50,7 +50,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 049 | [049-running-agent-processes-watch-panel.md](049-running-agent-processes-watch-panel.md) | Add running agent processes status box in usage watch/summary | Closed — resolved |
 | 050 | [050-remote-host-flag-and-watch-hotkey.md](050-remote-host-flag-and-watch-hotkey.md) | Support remote host query via `--host` flag and `[r]` hotkey in watch | Closed — resolved |
 | 051 | [051-multi-host-remote-monitoring-and-dashboard-navigation.md](051-multi-host-remote-monitoring-and-dashboard-navigation.md) | Multi-host remote usage monitoring & interactive host navigation | Open |
-| 052 | [052-headless-agent-cli-probes-for-idle-telemetry-refresh.md](052-headless-agent-cli-probes-for-idle-telemetry-refresh.md) | Research: Headless CLI status probes to refresh telemetry when agents are idle | Open |
+| 052 | [052-headless-agent-cli-probes-for-idle-telemetry-refresh.md](052-headless-agent-cli-probes-for-idle-telemetry-refresh.md) | Research: Headless CLI status probes to refresh telemetry when agents are idle | Closed — research complete |
 | 053 | [053-stale-lsp-diagnostics-noise-detect-and-toggle.md](053-stale-lsp-diagnostics-noise-detect-and-toggle.md) | Background LSP diagnostics post stale/wrong findings; harness should detect and offer to disable per-agent | Open |
 | 054 | [archive/054-commit-filed-issues-immediately.md](archive/054-commit-filed-issues-immediately.md) | Filed issue-tracker files should be committed immediately, not batched | Closed — resolved in a86ef7d |
 | 055 | [055-no-long-sleep-use-scheduled-wakeups.md](055-no-long-sleep-use-scheduled-wakeups.md) | Agents must not use long `sleep` to wait; schedule a wakeup/BG task instead | Closed — resolved |
@@ -59,7 +59,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 058 | [058-deployment-transparency-and-concise-pairing-mode.md](058-deployment-transparency-and-concise-pairing-mode.md) | Deployment Transparency, Live State Grounding, and Concise Pairing Mode | Open — proposed from webman pairing retro |
 | 059 | [archive/059-capture-managed-docs-drift-to-inbox.md](archive/059-capture-managed-docs-drift-to-inbox.md) | Capture Managed Docs Drift to Inbox Markdown | Closed — resolved in 32218cb |
 | 060 | [archive/060-triage-sibling-managed-docs-drift.md](archive/060-triage-sibling-managed-docs-drift.md) | Triage Sibling Managed Docs Drift Captured from Inbox Sweep | Closed — resolved |
-| 061 | [061-containerfile-guidelines-for-fast-incremental-builds.md](061-containerfile-guidelines-for-fast-incremental-builds.md) | Containerfile.md: Guidelines for Fast, Cached, and Incremental Container Builds | Open |
+| 061 | [061-containerfile-guidelines-for-fast-incremental-builds.md](061-containerfile-guidelines-for-fast-incremental-builds.md) | Containerfile.md: Guidelines for Fast, Cached, and Incremental Container Builds | Closed — resolved |
 | 062 | [archive/062-scan-docs-across-agent-projects.md](archive/062-scan-docs-across-agent-projects.md) | `harnez scan-docs`: Combined Managed-Docs Scan Across Agent Projects | Closed — resolved |
 | 063 | [archive/063-subagent-model-selection-guidance.md](archive/063-subagent-model-selection-guidance.md) | Document Fast-Capable Subagent Model Selection | Closed — resolved in docs |
 | 064 | [archive/064-fresh-handoff-workflow-skill-and-friction-reporting.md](archive/064-fresh-handoff-workflow-skill-and-friction-reporting.md) | Lean Fresh-Handoff Workflow Skill and Calibrated Friction Reporting | Closed — resolved |
@@ -95,7 +95,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 094 | [094-usage-watch-controls-overlay-and-presets.md](094-usage-watch-controls-overlay-and-presets.md) | Usage Watch Controls Overlay and Presets | Open |
 | 095 | [095-restore-cwd-after-shell-tool-use-and-statusline-cwd-display.md](095-restore-cwd-after-shell-tool-use-and-statusline-cwd-display.md) | Restore CWD After Shell Tool Use; Surface CWD in Status Line | Open — partially resolved (statusLine shipped) |
 | 096 | [096-release-forge-token-401-warning-lacks-fix-hint.md](096-release-forge-token-401-warning-lacks-fix-hint.md) | `harnez release`'s `has_releases` 401 warning doesn't name the fix | Open |
-| 097 | [097-release-skip-when-no-diff-since-prev-tag.md](097-release-skip-when-no-diff-since-prev-tag.md) | `harnez release` should skip when there's no diff since the previous tag | Open |
+| 097 | [097-release-skip-when-no-diff-since-prev-tag.md](097-release-skip-when-no-diff-since-prev-tag.md) | `harnez release` should skip when there's no diff since the previous tag | Closed — resolved |
 | 098 | [098-deb-rpm-packaging.md](098-deb-rpm-packaging.md) | Add DEB and RPM packaging to `harnez release` | Resolved |
 | 099 | [099-appimage-packaging.md](099-appimage-packaging.md) | Add AppImage packaging to `harnez release` | Closed — evaluated, not pursued |
 | 100 | [100-container-install-verify-canary.md](100-container-install-verify-canary.md) | Container canary: install `latest` Codeberg release and verify `--version` | Resolved — `scripts/install-canary.sh`, `make install-canary` |

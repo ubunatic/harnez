@@ -258,6 +258,116 @@ func TestSemverFormatting(t *testing.T) {
 	}
 }
 
+func runGitCmd(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com",
+		"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.com",
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v failed: %v (%s)", args, err, string(out))
+	}
+}
+
+// setupGitRepoWithVersion creates a temp git repo with a committed
+// version.yaml at the given version, optionally tagged v<version>.
+func setupGitRepoWithVersion(t *testing.T, version string, skipTag bool) string {
+	t.Helper()
+	dir := t.TempDir()
+	runGitCmd(t, dir, "init")
+	runGitCmd(t, dir, "config", "user.email", "test@example.com")
+	runGitCmd(t, dir, "config", "user.name", "test")
+	_ = os.WriteFile(filepath.Join(dir, "version.yaml"), []byte("version: "+version+"\n"), 0644)
+	runGitCmd(t, dir, "add", "version.yaml")
+	runGitCmd(t, dir, "commit", "-m", "init")
+	if !skipTag {
+		runGitCmd(t, dir, "tag", "-a", "v"+version, "-m", "v"+version)
+	}
+	return dir
+}
+
+func TestTagExistsAndHasDiffSinceTag(t *testing.T) {
+	dir := setupGitRepoWithVersion(t, "1.0.0", false)
+
+	exists, err := tagExists(dir, "v1.0.0")
+	if err != nil || !exists {
+		t.Fatalf("tagExists(v1.0.0) = %v, %v; want true, nil", exists, err)
+	}
+
+	exists, err = tagExists(dir, "v9.9.9")
+	if err != nil || exists {
+		t.Fatalf("tagExists(v9.9.9) = %v, %v; want false, nil", exists, err)
+	}
+
+	hasDiff, err := hasDiffSinceTag(dir, "v1.0.0")
+	if err != nil || hasDiff {
+		t.Fatalf("hasDiffSinceTag before new commit = %v, %v; want false, nil", hasDiff, err)
+	}
+
+	_ = os.WriteFile(filepath.Join(dir, "CHANGES.txt"), []byte("more work\n"), 0644)
+	runGitCmd(t, dir, "add", "CHANGES.txt")
+	runGitCmd(t, dir, "commit", "-m", "more work")
+
+	hasDiff, err = hasDiffSinceTag(dir, "v1.0.0")
+	if err != nil || !hasDiff {
+		t.Fatalf("hasDiffSinceTag after new commit = %v, %v; want true, nil", hasDiff, err)
+	}
+}
+
+func TestReleaseSkipWhenNoDiffSincePrevTag(t *testing.T) {
+	tests := []struct {
+		name           string
+		addExtraCommit bool
+		skipTag        bool
+		force          bool
+		wantSkip       bool
+	}{
+		{name: "no diff skips release", wantSkip: true},
+		{name: "diff present proceeds", addExtraCommit: true, wantSkip: false},
+		{name: "force flag overrides no-diff skip", force: true, wantSkip: false},
+		{name: "no prior tag proceeds", skipTag: true, wantSkip: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := setupGitRepoWithVersion(t, "1.0.0", tc.skipTag)
+			if tc.addExtraCommit {
+				_ = os.WriteFile(filepath.Join(dir, "CHANGES.txt"), []byte("more work\n"), 0644)
+				runGitCmd(t, dir, "add", "CHANGES.txt")
+				runGitCmd(t, dir, "commit", "-m", "more work")
+			}
+
+			var buf bytes.Buffer
+			opt := Options{
+				Dir:         dir,
+				Bump:        "patch",
+				DryRun:      true,
+				Force:       tc.force,
+				SkipBuild:   true,
+				SkipSign:    true,
+				SkipPublish: true,
+				SkipPush:    true,
+				Out:         &buf,
+			}
+
+			if err := Run(opt); err != nil {
+				t.Fatalf("Run error: %v", err)
+			}
+
+			out := buf.String()
+			skipped := strings.Contains(out, "nothing to release")
+			if skipped != tc.wantSkip {
+				t.Errorf("skipped = %v, want %v; output=%s", skipped, tc.wantSkip, out)
+			}
+			if !skipped && !strings.Contains(out, "1.0.0 -> 1.0.1") {
+				t.Errorf("expected bump output when not skipped, got: %s", out)
+			}
+		})
+	}
+}
+
 type testRemote struct {
 	name string
 	url  string
