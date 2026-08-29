@@ -147,8 +147,8 @@ func PublishForgejoRelease(dir string, tagName string, title string, attachments
 		return nil
 	}
 
-	// First attempt standard fj release create
-	args := []string{"release", "create", title, "--tag", tagName}
+	// 1. Attempt fj release create with title, tag, and body
+	args := []string{"release", "create", title, "--tag", tagName, "-b", title}
 	for _, a := range attachments {
 		args = append(args, "-a", a)
 	}
@@ -163,24 +163,41 @@ func PublishForgejoRelease(dir string, tagName string, title string, attachments
 	}
 
 	outStr := string(out)
-	// If the release already exists (common with --continue), attach missing assets individually
-	if isContinue || strings.Contains(outStr, "already exists") || strings.Contains(outStr, "release exists") {
-		var attachErr error
-		for _, a := range attachments {
-			attachCmd := exec.Command("fj", "release", "asset", "create", tagName, a)
-			attachCmd.Dir = dir
-			attachCmd.Env = os.Environ()
-			if aOut, aErr := attachCmd.CombinedOutput(); aErr != nil {
-				// Don't fail if asset already exists
-				if !strings.Contains(string(aOut), "already exists") {
-					attachErr = fmt.Errorf("attach %s to %s: %w (%s)", a, tagName, aErr, strings.TrimSpace(string(aOut)))
+
+	// If create failed (e.g. 500 on multi-attachment or release already exists), try creating bare release if needed
+	if !isContinue && !strings.Contains(outStr, "already exists") && !strings.Contains(outStr, "release exists") {
+		bareCmd := exec.Command("fj", "release", "create", title, "--tag", tagName, "-b", title)
+		bareCmd.Dir = dir
+		bareCmd.Env = os.Environ()
+		_, _ = bareCmd.CombinedOutput()
+	}
+
+	// Attach assets individually via fj release asset create
+	var attachErr error
+	for _, a := range attachments {
+		// Try release title first, then tagName
+		attachCmd := exec.Command("fj", "release", "asset", "create", title, a)
+		attachCmd.Dir = dir
+		attachCmd.Env = os.Environ()
+		if aOut, aErr := attachCmd.CombinedOutput(); aErr != nil {
+			if strings.Contains(string(aOut), "already exists") {
+				continue
+			}
+			// Fallback with tagName
+			fallbackCmd := exec.Command("fj", "release", "asset", "create", tagName, a)
+			fallbackCmd.Dir = dir
+			fallbackCmd.Env = os.Environ()
+			if fbOut, fbErr := fallbackCmd.CombinedOutput(); fbErr != nil {
+				if !strings.Contains(string(fbOut), "already exists") {
+					attachErr = fmt.Errorf("attach %s to %s: %w (%s)", a, title, aErr, strings.TrimSpace(string(aOut)))
 				}
 			}
 		}
-		if attachErr == nil {
-			return nil
-		}
 	}
 
-	return fmt.Errorf("fj release create failed: %w\nOutput: %s", err, outStr)
+	if attachErr == nil {
+		return nil
+	}
+
+	return fmt.Errorf("fj release publish failed: %w\nOutput: %s", err, outStr)
 }
