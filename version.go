@@ -1,3 +1,3 @@
 package harnez
 
-var Version = "0.1.4"
+var Version = "0.1.5"
