@@ -98,3 +98,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 097 | [097-release-skip-when-no-diff-since-prev-tag.md](097-release-skip-when-no-diff-since-prev-tag.md) | `harnez release` should skip when there's no diff since the previous tag | Open |
 | 098 | [098-deb-rpm-packaging.md](098-deb-rpm-packaging.md) | Add DEB and RPM packaging to `harnez release` | Open |
 | 099 | [099-appimage-packaging.md](099-appimage-packaging.md) | Add AppImage packaging to `harnez release` | Open |
+| 100 | [100-container-install-verify-canary.md](100-container-install-verify-canary.md) | Container canary: install `latest` Codeberg release and verify `--version` | Open |
