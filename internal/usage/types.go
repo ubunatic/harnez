@@ -73,6 +73,22 @@ func (a AgentUsage) hasQuotaSignal() bool {
 	return a.Session != nil || a.Weekly != nil || a.Tokens != nil || len(a.ModelGroups) > 0
 }
 
+// hasQuotaWindowSignal reports whether this AgentUsage carries any actual
+// quota/rate-limit *window* data (Session, Weekly, or a model group's
+// window) — deliberately narrower than hasQuotaSignal, which also counts
+// Tokens. An `--offline` collect can produce real local token totals
+// (Tokens) while having skipped the live quota API entirely, so it lacks
+// Session/Weekly/ModelGroups but still satisfies hasQuotaSignal(). That
+// combination is exactly the degraded snapshot issue 086 describes: a
+// smoke-test `agent-collector --once --offline` run wrote a snapshot with
+// token totals but no quota bars, which was then served as if it were a
+// complete reading. PersistAgentSnapshot's offline guard uses this
+// narrower predicate so such a snapshot is recognized as incomplete even
+// though it has Tokens.
+func (a AgentUsage) hasQuotaWindowSignal() bool {
+	return a.Session != nil || a.Weekly != nil || len(a.ModelGroups) > 0
+}
+
 // IsStale reports whether this agent's LastRefreshed timestamp is older than
 // maxAge. A zero LastRefreshed — not yet threaded through by the caller that
 // built this AgentUsage — is never considered stale here; such callers rely

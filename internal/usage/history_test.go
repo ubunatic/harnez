@@ -342,6 +342,89 @@ func TestFetchRemoteHistory_Validation(t *testing.T) {
 	}
 }
 
+// TestFillFromHistoryIfNoQuotaWindowsUsesStaleHistoricalQuota is issue 086's
+// live-repro follow-up regression test (2026-08-29): the current
+// collector-daemon snapshot for an agent (e.g. AGY) can have no quota
+// windows at all — not because 7c50f12's write-side guard failed, but
+// because the snapshot on disk was *already* empty for its quota fields
+// before that guard existed, so there's nothing richer left there to
+// protect. usage-history/*.jsonl is a separate store and can still have
+// real quota data recorded from the last time the agent actually answered.
+// fillFromHistoryIfNoQuotaWindows must fall back to that recorded entry,
+// carrying over its own timestamp (not "now") so staleness stays honest.
+func TestFillFromHistoryIfNoQuotaWindowsUsesStaleHistoricalQuota(t *testing.T) {
+	dir := t.TempDir()
+
+	sixDaysAgo := time.Now().Add(-6 * 24 * time.Hour)
+	richHistorical := UsageSummary{
+		Timestamp: sixDaysAgo,
+		Agents: []AgentUsage{{
+			AgentID:       "agy",
+			Name:          "Antigravity (AGY)",
+			Installed:     true,
+			Authenticated: true,
+			ModelGroups: []ModelGroup{{
+				Name:    "Gemini Models",
+				Windows: []QuotaWindow{{Name: "Weekly", UsedPercent: 61}},
+			}},
+		}},
+	}
+	if err := AppendHistory(dir, richHistorical); err != nil {
+		t.Fatalf("AppendHistory: %v", err)
+	}
+
+	// The current reading (e.g. from a fresh-but-empty collector-daemon
+	// snapshot): no quota windows, LastRefreshed "just now".
+	current := AgentUsage{
+		AgentID:       "agy",
+		Name:          "Antigravity (AGY)",
+		Installed:     true,
+		Authenticated: true,
+		LastRefreshed: time.Now(),
+	}
+
+	got := fillFromHistoryIfNoQuotaWindows(dir, current)
+	if len(got.ModelGroups) != 1 || len(got.ModelGroups[0].Windows) != 1 || got.ModelGroups[0].Windows[0].UsedPercent != 61 {
+		t.Fatalf("expected the 6-day-old historical ModelGroups quota to be filled in, got %+v", got.ModelGroups)
+	}
+	if !got.LastRefreshed.Equal(sixDaysAgo) {
+		t.Errorf("LastRefreshed = %v, want the historical entry's own timestamp %v (so staleness stays honest)", got.LastRefreshed, sixDaysAgo)
+	}
+	if got.IsStale(DefaultDisplayStaleness) {
+		t.Error("6 days old should still be within the 7-day display-hide window (issue 101)")
+	}
+
+	// A current reading that already has quota-window data must be left
+	// untouched -- history must never override a genuinely fresh reading.
+	alreadyRich := AgentUsage{
+		AgentID: "agy", Installed: true, Authenticated: true,
+		Session: &QuotaWindow{Name: "5h", UsedPercent: 5},
+	}
+	got2 := fillFromHistoryIfNoQuotaWindows(dir, alreadyRich)
+	if got2.Session == nil || got2.Session.UsedPercent != 5 {
+		t.Errorf("expected an already-rich reading to be left untouched, got %+v", got2.Session)
+	}
+
+	// Historical data older than the 7-day display window must not be used
+	// -- it would be hidden by the renderer anyway (issue 101), so applying
+	// it would only mislabel an empty reading as recently updated.
+	oldDir := t.TempDir()
+	tooOld := UsageSummary{
+		Timestamp: time.Now().Add(-8 * 24 * time.Hour),
+		Agents: []AgentUsage{{
+			AgentID: "agy", Installed: true, Authenticated: true,
+			Session: &QuotaWindow{Name: "5h", UsedPercent: 99},
+		}},
+	}
+	if err := AppendHistory(oldDir, tooOld); err != nil {
+		t.Fatalf("AppendHistory: %v", err)
+	}
+	got3 := fillFromHistoryIfNoQuotaWindows(oldDir, current)
+	if got3.Session != nil || len(got3.ModelGroups) != 0 {
+		t.Errorf("expected no fallback from history older than the 7-day display window, got %+v / %+v", got3.Session, got3.ModelGroups)
+	}
+}
+
 func TestFetchRemoteHistory_NonExistentHost(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

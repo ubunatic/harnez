@@ -15,7 +15,7 @@ func TestRunCollectorWritesSnapshotsOnce(t *testing.T) {
 	home := t.TempDir()
 	stateDir := StateDir(home)
 
-	collectTick(context.Background(), home, nil, stateDir, io.Discard)
+	collectTick(context.Background(), home, nil, stateDir, io.Discard, false)
 
 	for _, agentID := range []string{"claude", "agy", "codex"} {
 		snap, err := ReadAgentSnapshot(stateDir, agentID)
@@ -40,7 +40,7 @@ func TestRunCollectorStopsOnContextCancel(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- RunCollector(ctx, home, nil, time.Hour, io.Discard)
+		done <- RunCollector(ctx, home, nil, time.Hour, io.Discard, false)
 	}()
 
 	cancel()

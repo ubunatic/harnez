@@ -291,6 +291,63 @@ func ReadHistory(dir string) ([]HistoryEntry, error) {
 	return entries, nil
 }
 
+// latestHistoryQuotaWindow scans dir's recorded history entries (see
+// ReadHistory) for the most recent entry for agentID that carries actual
+// quota-window data (Session/Weekly/ModelGroups — see hasQuotaWindowSignal;
+// Tokens alone doesn't count, matching PersistAgentSnapshot's offline
+// guard). ok is false when there is no history, or no entry for this agent
+// ever had quota-window data. ReadHistory returns entries sorted oldest
+// first, so this walks backwards to find the most recent qualifying one.
+func latestHistoryQuotaWindow(dir, agentID string) (usage AgentUsage, at time.Time, ok bool) {
+	entries, err := ReadHistory(dir)
+	if err != nil {
+		return AgentUsage{}, time.Time{}, false
+	}
+	for i := len(entries) - 1; i >= 0; i-- {
+		for _, a := range entries[i].Agents {
+			if a.AgentID == agentID && a.hasQuotaWindowSignal() {
+				return a, entries[i].Timestamp, true
+			}
+		}
+	}
+	return AgentUsage{}, time.Time{}, false
+}
+
+// fillFromHistoryIfNoQuotaWindows returns u unchanged if it already carries
+// quota-window data, or if no historical fallback is available or fresh
+// enough (within DefaultDisplayStaleness — issue 101's 7-day auto-hide
+// window) to be worth showing. Otherwise it fills in Session/Weekly/
+// ModelGroups from the most recent usage-history entry that had them, and
+// stamps LastRefreshed to that entry's own recorded time so the "last
+// updated" display and the 7-day auto-hide gate both stay honest about how
+// old that quota data actually is.
+//
+// This closes a gap found live on this machine (issue 086's live-repro
+// follow-up, 2026-08-29): the persisted collector-daemon snapshot for an
+// intermittently-running agent (AGY) can go stale/empty for its quota
+// windows specifically — every collector tick while AGY wasn't running
+// wrote a snapshot with no Session/Weekly, and once the *original* snapshot
+// (before any of this session's fixes) was already empty, there was nothing
+// richer left on disk for PersistAgentSnapshot's or cacheOrLive's guards to
+// protect. usage-history/*.jsonl (AppendHistory/ReadHistory) is a *separate*
+// store from the collector-daemon cache and still had real quota data from
+// the last time AGY actually answered — but nothing read it as a fallback.
+func fillFromHistoryIfNoQuotaWindows(historyDir string, u AgentUsage) AgentUsage {
+	if u.hasQuotaWindowSignal() {
+		return u
+	}
+	hist, at, ok := latestHistoryQuotaWindow(historyDir, u.AgentID)
+	if !ok || time.Since(at) > DefaultDisplayStaleness {
+		return u
+	}
+	u.Session = hist.Session
+	u.Weekly = hist.Weekly
+	u.ModelGroups = hist.ModelGroups
+	u.LastRefreshed = at
+	u.Sources = append(u.Sources, fmt.Sprintf("%s (usage-history, stale)", historyDir))
+	return u
+}
+
 // RenderTimelineText formats merged history entries as a flat, chronological
 // table — one row per (snapshot, agent) pair — and includes per-agent and per-model
 // sparkline trends when history is available.

@@ -245,7 +245,7 @@ func main() {
 				summary := usage.CollectAllLive(cmd.Context(), "", client)
 				stateDir := usage.StateDir("")
 				for _, agent := range summary.Agents {
-					if err := usage.PersistAgentSnapshot(stateDir, agent); err != nil {
+					if err := usage.PersistAgentSnapshot(stateDir, agent, collectorOffline); err != nil {
 						return fmt.Errorf("write %s snapshot: %w", agent.AgentID, err)
 					}
 				}
@@ -254,7 +254,7 @@ func main() {
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return usage.RunCollector(ctx, "", client, collectorInterval, cmd.OutOrStdout())
+			return usage.RunCollector(ctx, "", client, collectorInterval, cmd.OutOrStdout(), collectorOffline)
 		},
 	}
 	collectorCmd.Flags().DurationVar(&collectorInterval, "interval", usage.DefaultCollectorInterval,

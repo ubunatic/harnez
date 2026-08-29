@@ -135,7 +135,21 @@ func WriteAgentSnapshot(stateDir, agentID string, usage AgentUsage) error {
 // side's protection entirely, since there was nothing richer left to serve.
 // Callers that persist collector output should use this instead of calling
 // WriteAgentSnapshot directly.
-func PersistAgentSnapshot(stateDir string, agent AgentUsage) error {
+//
+// offline must be true only when the caller explicitly ran in `--offline`
+// mode (skipping the live quota API on purpose), not merely whenever the
+// live collect happens to come back without quota windows. In that case, if
+// agent has no quota *window* data (hasQuotaWindowSignal — Tokens alone
+// doesn't count, see its doc comment), the write is skipped entirely rather
+// than persisted: a fresh cache is trusted as-is by cacheOrLive without ever
+// attempting a live recollect (that's the point of the cache), so a
+// deliberately-offline, partial snapshot would otherwise get served as a
+// complete reading for the rest of the cache-staleness window, masking
+// whatever a real live collect would have shown (issue 086).
+func PersistAgentSnapshot(stateDir string, agent AgentUsage, offline bool) error {
+	if offline && !agent.hasQuotaWindowSignal() {
+		return nil
+	}
 	if existing, err := ReadAgentSnapshot(stateDir, agent.AgentID); err == nil && existing != nil {
 		if existing.Usage.hasQuotaSignal() && !agent.hasQuotaSignal() {
 			return nil
@@ -163,12 +177,13 @@ func ReadAgentSnapshot(stateDir, agentID string) (*AgentSnapshot, error) {
 	return &snap, nil
 }
 
-// cacheOrLive returns the agent's cached snapshot from stateDir if present
-// and fresher than maxAge, tagging its Sources so renderers/JSON output can
-// tell a cached reading from a live one, and stamping LastRefreshed with the
-// snapshot's FetchedAt time; otherwise it runs collect and returns that live
-// result (LastRefreshed stamped to now). It never writes back to the cache —
-// only the collector daemon (RunCollector) does that.
+// cacheOrLive returns the agent's cached snapshot from stateDir if present,
+// fresher than maxAge, *and* carries real quota/token signal — tagging its
+// Sources so renderers/JSON output can tell a cached reading from a live
+// one, and stamping LastRefreshed with the snapshot's FetchedAt time;
+// otherwise it runs collect and returns that live result (LastRefreshed
+// stamped to now). It never writes back to the cache — only the collector
+// daemon (RunCollector) does that.
 //
 // A live recollect can legitimately come back with *less* quota/token data
 // than the cache already had — e.g. AGY's Session/Weekly windows only
@@ -178,6 +193,15 @@ func ReadAgentSnapshot(stateDir, agentID string) (*AgentSnapshot, error) {
 // in favor of the last known snapshot (still tagged with its true
 // LastRefreshed time) so a live process outage doesn't blank numbers that
 // were real minutes or hours ago (issue 101).
+//
+// A fresh cache is always trusted as-is without even attempting collect() —
+// that's the whole point of the cache, and plenty of legitimately fresh
+// snapshots have no quota signal by nature (e.g. AGY simply isn't running
+// right now) without that meaning anything is wrong. Issue 086 (a snapshot
+// written by a genuinely degraded/offline collect, e.g. `agent-collector
+// --once --offline`) is addressed by preventing that snapshot from ever
+// reaching the cache in the first place — see PersistAgentSnapshot's
+// offline guard — rather than by second-guessing every fresh cache read.
 func cacheOrLive(stateDir, agentID string, maxAge time.Duration, collect func() AgentUsage) AgentUsage {
 	snap, err := ReadAgentSnapshot(stateDir, agentID)
 	hasCache := err == nil && snap != nil

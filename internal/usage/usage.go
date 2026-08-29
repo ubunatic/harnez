@@ -53,6 +53,19 @@ func collectAll(ctx context.Context, homeDir string, client *http.Client, useCac
 		claudeUsage = cacheOrLive(stateDir, "claude", DefaultCacheStaleness, collectClaude)
 		agyUsage = cacheOrLive(stateDir, "agy", DefaultCacheStaleness, collectAGY)
 		codexUsage = cacheOrLive(stateDir, "codex", DefaultCacheStaleness, collectCodex)
+
+		// The daemon snapshot / live recollect above can still come back
+		// with no quota-window data at all (e.g. an intermittently-running
+		// agent like AGY hasn't answered in a while, so even its cached
+		// snapshot's quota fields were already empty) even though the
+		// separately-recorded usage-history log has more recent real
+		// quota data from the last time it did answer. Fall back to that
+		// as a last resort, purely for display — this never touches the
+		// collector-daemon cache itself (issue 086's live-repro follow-up).
+		historyDir := HistoryDir(homeDir)
+		claudeUsage = fillFromHistoryIfNoQuotaWindows(historyDir, claudeUsage)
+		agyUsage = fillFromHistoryIfNoQuotaWindows(historyDir, agyUsage)
+		codexUsage = fillFromHistoryIfNoQuotaWindows(historyDir, codexUsage)
 	} else {
 		claudeUsage = collectClaude()
 		agyUsage = collectAGY()

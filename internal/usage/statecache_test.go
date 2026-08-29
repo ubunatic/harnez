@@ -75,7 +75,7 @@ func TestPersistAgentSnapshotKeepsRicherCacheOnLossyOverwrite(t *testing.T) {
 		Authenticated: true,
 		// No Session/Weekly/Tokens/ModelGroups: agy process not running.
 	}
-	if err := PersistAgentSnapshot(dir, lossy); err != nil {
+	if err := PersistAgentSnapshot(dir, lossy, false); err != nil {
 		t.Fatalf("PersistAgentSnapshot: %v", err)
 	}
 
@@ -98,7 +98,7 @@ func TestPersistAgentSnapshotKeepsRicherCacheOnLossyOverwrite(t *testing.T) {
 		Authenticated: true,
 		Session:       &QuotaWindow{Name: "Session", UsedPercent: 77},
 	}
-	if err := PersistAgentSnapshot(dir, richer); err != nil {
+	if err := PersistAgentSnapshot(dir, richer, false); err != nil {
 		t.Fatalf("PersistAgentSnapshot (richer): %v", err)
 	}
 	got2, err := ReadAgentSnapshot(dir, "agy")
@@ -247,6 +247,68 @@ func TestCacheOrLivePreservesQuotaOnLossyRecollect(t *testing.T) {
 	got2 := cacheOrLive(dir, "agy", DefaultCacheStaleness, richerLive)
 	if got2.Session == nil || got2.Session.UsedPercent != 7 {
 		t.Errorf("expected a live recollect with real quota data to win over the cache, got %+v", got2.Session)
+	}
+}
+
+// TestPersistAgentSnapshotSkipsOfflineWriteWithoutQuotaWindows is issue
+// 086's regression test: `agent-collector --once --offline` (or a tick of
+// the daemon started with --offline) skips the live quota API on purpose,
+// so its result can have real local Tokens data but no Session/Weekly/
+// ModelGroups. Because cacheOrLive trusts a fresh cache without ever
+// attempting a live recollect, persisting that snapshot anyway would serve
+// it as a complete reading for the rest of the cache-staleness window,
+// masking whatever a real (online) live collect would have shown. offline=
+// true with no quota window data must skip the write entirely, leaving
+// CollectAll to fall through to a live collect (or an older, richer
+// snapshot) instead.
+func TestPersistAgentSnapshotSkipsOfflineWriteWithoutQuotaWindows(t *testing.T) {
+	dir := t.TempDir()
+
+	// The exact repro from the issue: an --offline collect with real token
+	// totals (hasQuotaSignal() is true) but no quota windows.
+	offlineSmokeTest := AgentUsage{
+		AgentID:       "claude",
+		Installed:     true,
+		Authenticated: true,
+		Tokens:        &TokenBreakdown{TotalTokens: 12345},
+	}
+	if err := PersistAgentSnapshot(dir, offlineSmokeTest, true); err != nil {
+		t.Fatalf("PersistAgentSnapshot: %v", err)
+	}
+	if snap, err := ReadAgentSnapshot(dir, "claude"); err != nil || snap != nil {
+		t.Fatalf("expected no snapshot to be written for an offline collect without quota windows, got %+v (err %v)", snap, err)
+	}
+
+	// The same offline flag must not block a collect that genuinely does
+	// have quota window data (e.g. served from Claude's local quotaCache
+	// fallback even without a live network client).
+	offlineWithWindows := AgentUsage{
+		AgentID:       "claude",
+		Installed:     true,
+		Authenticated: true,
+		Session:       &QuotaWindow{Name: "5h", UsedPercent: 10},
+	}
+	if err := PersistAgentSnapshot(dir, offlineWithWindows, true); err != nil {
+		t.Fatalf("PersistAgentSnapshot: %v", err)
+	}
+	snap, err := ReadAgentSnapshot(dir, "claude")
+	if err != nil || snap == nil {
+		t.Fatalf("expected an offline collect with quota windows to be persisted: %v / %+v", err, snap)
+	}
+	if snap.Usage.Session == nil || snap.Usage.Session.UsedPercent != 10 {
+		t.Errorf("got Session = %+v, want the persisted offline-with-windows snapshot", snap.Usage.Session)
+	}
+
+	// A non-offline (online) collect without quota windows is a normal,
+	// legitimate reading (e.g. AGY simply isn't running) and must still be
+	// persisted as before (offline=false bypasses this guard entirely).
+	dir2 := t.TempDir()
+	onlineNoWindows := AgentUsage{AgentID: "agy", Installed: true, Authenticated: true}
+	if err := PersistAgentSnapshot(dir2, onlineNoWindows, false); err != nil {
+		t.Fatalf("PersistAgentSnapshot: %v", err)
+	}
+	if snap, err := ReadAgentSnapshot(dir2, "agy"); err != nil || snap == nil {
+		t.Fatalf("expected a non-offline collect without quota windows to be persisted normally: %v / %+v", err, snap)
 	}
 }
 

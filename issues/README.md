@@ -84,7 +84,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 083 | [083-usage-tui-self-hiding-auto-discovery.md](083-usage-tui-self-hiding-auto-discovery.md) | Self-Hiding, Auto-Discovery Agent Display in Usage TUI | Closed — resolved (uncommitted, pending transplant) |
 | 084 | [084-aggregate-quota-window-box-assessment.md](084-aggregate-quota-window-box-assessment.md) | Aggregate Quota-Window Box: UX & Feasibility Assessment | Open — deferred, needs assessment before implementation |
 | 085 | [085-watch-tui-show-collector-daemon-status.md](085-watch-tui-show-collector-daemon-status.md) | Briefly Show Agent-Collector Daemon Status in `harnez usage --watch` | Open |
-| 086 | [086-offline-degraded-cache-snapshot-masks-live-data.md](086-offline-degraded-cache-snapshot-masks-live-data.md) | Offline/Degraded Collector Snapshot Is Cached and Served as Fresh, Masking Richer Live Data | Open |
+| 086 | [086-offline-degraded-cache-snapshot-masks-live-data.md](086-offline-degraded-cache-snapshot-masks-live-data.md) | Offline/Degraded Collector Snapshot Is Cached and Served as Fresh, Masking Richer Live Data | Resolved — 2026-08-29 |
 | 087 | [087-generalize-flock-freshness-gate-to-codex-agy.md](087-generalize-flock-freshness-gate-to-codex-agy.md) | Generalize Claude's flock+Freshness Live-Fetch Gate to Codex and AGY | Open |
 | 088 | [088-load-panel-ram-vram-gtt-memory.md](088-load-panel-ram-vram-gtt-memory.md) | Load Panel: RAM, VRAM, and GTT Memory | Closed — resolved in implementation commit |
 | 089 | [089-load-panel-combine-gpu-vram-gtt-row.md](089-load-panel-combine-gpu-vram-gtt-row.md) | Load Panel: Combine GPU VRAM/GTT Row | Open |
