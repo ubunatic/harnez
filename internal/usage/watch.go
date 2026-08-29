@@ -507,7 +507,73 @@ func allUsageLines(summary UsageSummary, contentW int) []string {
 }
 
 func formatAllUsageLine(label string, windows []QuotaWindow, contentW int) string {
-	return formatCompactGroupLineWithLabelWidth(label, windows, contentW, 13)
+	return formatAllUsageTableLine(label, windows, contentW, 13)
+}
+
+func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labelWidth int) string {
+	if len(windows) < 2 {
+		return formatCompactGroupLineWithLabelWidth(label, windows, contentW, labelWidth)
+	}
+
+	var w1, w2 QuotaWindow
+	foundWeekly, found5h := false, false
+	for _, w := range windows {
+		nameLow := strings.ToLower(w.Name)
+		if !foundWeekly && (strings.Contains(nameLow, "week") || strings.Contains(nameLow, "7-day")) {
+			w1 = w
+			foundWeekly = true
+		} else if !found5h && (strings.Contains(nameLow, "5-hour") || strings.Contains(nameLow, "five hour") || strings.Contains(nameLow, "session")) {
+			w2 = w
+			found5h = true
+		}
+	}
+	if !foundWeekly || !found5h {
+		w1 = windows[0]
+		w2 = windows[1]
+	}
+
+	d1 := compactDurationText(w1)
+	d2 := compactDurationText(w2)
+	if len(d1) > 5 {
+		d1 = ""
+	}
+	if len(d2) > 5 {
+		d2 = ""
+	}
+
+	b1 := rograph.RenderProgressBar(w1.UsedPercent, 4)
+	b2 := rograph.RenderProgressBar(w2.UsedPercent, 4)
+
+	for lw := labelWidth; lw >= 6; lw-- {
+		lbl := rograph.PadLabel(label, lw)
+
+		if d1 != "" && d2 != "" {
+			line := fmt.Sprintf("%s %s %3.0f%% %-5s %s %3.0f%% %s", lbl, b1, w1.UsedPercent, d1, b2, w2.UsedPercent, d2)
+			if visLen(line) <= contentW {
+				return line
+			}
+		}
+		if d1 != "" {
+			line := fmt.Sprintf("%s %s %3.0f%% %-5s %s %3.0f%%", lbl, b1, w1.UsedPercent, d1, b2, w2.UsedPercent)
+			if visLen(line) <= contentW {
+				return line
+			}
+		}
+		line := fmt.Sprintf("%s %s %3.0f%% %s %3.0f%%", lbl, b1, w1.UsedPercent, b2, w2.UsedPercent)
+		if visLen(line) <= contentW {
+			return line
+		}
+	}
+
+	lbl := rograph.PadLabel(label, 6)
+	return fmt.Sprintf("%s %s %3.0f%% %s %3.0f%%", lbl, b1, w1.UsedPercent, b2, w2.UsedPercent)
+}
+
+func compactDurationText(w QuotaWindow) string {
+	if w.DurationLeft <= 0 {
+		return ""
+	}
+	return FormatCompactDuration(w.DurationLeft)
 }
 
 // buildLoadBox renders a compact panel showing CPU and GPU load, styled

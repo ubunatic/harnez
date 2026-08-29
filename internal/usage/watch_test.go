@@ -322,11 +322,76 @@ func TestBuildAllUsageBox(t *testing.T) {
 			t.Errorf("expected rendered all-usage box to contain %q, got:\n%s", want, rendered)
 		}
 	}
-	if !strings.Contains(rendered, "[███░] 93% 2d8h [░░░░] 3% 4h58m") {
+	if !strings.Contains(rendered, "Gemini") ||
+		!strings.Contains(rendered, "[███░]  93% 2d8h") ||
+		!strings.Contains(rendered, "[░░░░]   3% 4h58m") {
 		t.Errorf("expected compact Gemini quota pair, got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "[███░] 85% 8h51m [░░░░] 9% 4h51m") {
+	if !strings.Contains(rendered, "Claude Code") ||
+		!strings.Contains(rendered, "[███░]  85% 8h51m") ||
+		!strings.Contains(rendered, "[░░░░]   9% 4h51m") {
 		t.Errorf("expected compact Claude quota pair, got:\n%s", rendered)
+	}
+}
+
+func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{
+				AgentID:       "claude",
+				Name:          "Claude Code",
+				Installed:     true,
+				Authenticated: true,
+				Weekly:        &QuotaWindow{Name: "Weekly", UsedPercent: 85, DurationLeft: 8*time.Hour + 39*time.Minute},
+				Session:       &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 11, DurationLeft: 4*time.Hour + 44*time.Minute},
+			},
+			{
+				AgentID:       "codex",
+				Name:          "OpenAI Codex",
+				Installed:     true,
+				Authenticated: true,
+				Weekly:        &QuotaWindow{Name: "Weekly", UsedPercent: 41, DurationLeft: 5*24*time.Hour + 8*time.Hour},
+				Session:       &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 13},
+			},
+		},
+	}
+
+	box := buildAllUsageBox(summary, 51)
+	contentW := box.width - 4
+	if len(box.lines) != 2 {
+		t.Fatalf("expected 2 all-usage rows, got %d: %v", len(box.lines), box.lines)
+	}
+
+	secondBarCol := -1
+	for _, line := range box.lines {
+		stripped := stripANSI(line)
+		if got := visLen(line); got > contentW {
+			t.Fatalf("line visible width %d exceeds contentW %d: %q", got, contentW, stripped)
+		}
+		switch {
+		case strings.Contains(stripped, "Claude Code"):
+			if !strings.Contains(stripped, "[░░░░]  11%") {
+				t.Fatalf("expected Claude second bar and percent to remain visible in narrow row: %q", stripped)
+			}
+		case strings.Contains(stripped, "OpenAI Codex"):
+			if !strings.Contains(stripped, "[░░░░]  13%") {
+				t.Fatalf("expected Codex second bar and percent to remain visible in narrow row: %q", stripped)
+			}
+		default:
+			t.Fatalf("unexpected all-usage row: %q", stripped)
+		}
+		col := strings.LastIndex(stripped, "[")
+		if col < 0 {
+			t.Fatalf("expected second bar in row: %q", stripped)
+		}
+		if secondBarCol < 0 {
+			secondBarCol = col
+			continue
+		}
+		if col != secondBarCol {
+			t.Fatalf("expected second bar column %d, got %d in row %q", secondBarCol, col, stripped)
+		}
 	}
 }
 
