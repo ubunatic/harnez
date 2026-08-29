@@ -93,3 +93,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 092 | [092-latest-release-links-and-readme-install-section-consolidation.md](092-latest-release-links-and-readme-install-section-consolidation.md) | Latest release links & README/website install section consolidation | Open — proposed assessment |
 | 093 | [093-usage-tui-layout-planner.md](093-usage-tui-layout-planner.md) | Usage TUI layout planner and sizing policy | Open |
 | 094 | [094-usage-watch-controls-overlay-and-presets.md](094-usage-watch-controls-overlay-and-presets.md) | Usage Watch Controls Overlay and Presets | Open |
+| 095 | [095-restore-cwd-after-shell-tool-use-and-statusline-cwd-display.md](095-restore-cwd-after-shell-tool-use-and-statusline-cwd-display.md) | Restore CWD After Shell Tool Use; Surface CWD in Status Line | Open |

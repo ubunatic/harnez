@@ -89,7 +89,7 @@ Agentic usage  11:43:31 CEST   history: 2 files (1.6 MB)   hidden: [a]
 Interactive watch toggle example: enter compact mode, press `A`, then hide usage so only Load remains. The Load panel stretches far beyond the content it needs:
 
 ```text
-┌─ [L] Load ────────────────────────────────────────────────────────────────────────────────────────────────┐
+┌─ [L] Load ───────────────────────────────────────────────────────────────────────────────────────────────┐
 │ cpu (12 cores)   [          ] 5% (55°C)                                                                  │
 │ ram              4.8/23.3G 21%                                                                           │
 │ gpu (Cezanne)    [          ] 0% (46°C)                                                                  │
@@ -101,18 +101,18 @@ Interactive watch toggle example: enter compact mode, press `A`, then hide usage
 Interactive watch toggle example with `All Usage` plus individual agent panels. `All Usage` stretches across the row while the agent boxes below are compact:
 
 ```text
-┌─ [a] All Usage ───────────────────────────────────────────────────────────────────────────────────────────┐
+┌─ [a] All Usage ─────────────────────────────────────────────────────────────────────────────────────────┐
 │ Claude Code   [    ] 86% 7h10m [    ] 24% 3h10m                                                         │
 │ Gemini        [    ] 97% 2d6h  [    ] 28% 3h15m                                                         │
 │ Claude/GPT    [    ] 35% 6d    [    ] 0% 4h57m                                                          │
 │ OpenAI Codex  [    ] 49% 5d7h  [    ] 62% 3h24m                                                         │
-└──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 ┌─ [C] Claude Code ─────────────────┐ ┌─ [G] Antigravity (AGY) ─────────┐ ┌─ [O] OpenAI Codex ────────────┐
 │ active session · Pro              │ │ u***l@gmail.com · Consumer      │ │ u***l@gmail.com · Plus        │
 │ Wk / 5h    [    ] 86% [    ] 24%  │ │ model: Gemini 3.7 Flash (Low)   │ │ model: gpt-5.5                │
-│ [T] tok: 2,591,837,184 total ·... │ │ Gemini     [    ] 97% [    ] 28%│ │ Wk / 5h    [    ] 49% [    ] 62%│
-└───────────────────────────────────┘ │ Claude/GPT [    ] 35% 6d [    ] 0%│ └───────────────────────────────┘
+│ [T] tok: 2,591,837,184 total ·... │ │ Gemini     [    ] 97% [    ] 28%│ │ Wk / 5h    [   ] 49% [   ] 62%│
+└───────────────────────────────────┘ │ Claude/GPT [   ] 35% 6d [   ] 0%│ └───────────────────────────────┘
                                       └─────────────────────────────────┘
 ```
 
