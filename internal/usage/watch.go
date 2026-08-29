@@ -474,7 +474,13 @@ func buildAllUsageBox(summary UsageSummary, width int) wbox {
 }
 
 func allUsageLines(summary UsageSummary, contentW int) []string {
-	var lines []string
+	type allUsageRow struct {
+		label   string
+		windows []QuotaWindow
+	}
+
+	var rows []allUsageRow
+	labelWidth := 0
 	for _, agent := range summary.Agents {
 		if !agent.HasUsageData() {
 			continue
@@ -487,7 +493,10 @@ func allUsageLines(summary UsageSummary, contentW int) []string {
 				} else if strings.EqualFold(label, "Claude and GPT models") || strings.EqualFold(label, "Claude and GPT") {
 					label = "Claude/GPT"
 				}
-				lines = append(lines, formatAllUsageLine(label, mg.Windows, contentW))
+				rows = append(rows, allUsageRow{label: label, windows: mg.Windows})
+				if n := visLen(label); n > labelWidth {
+					labelWidth = n
+				}
 			}
 			continue
 		}
@@ -500,19 +509,27 @@ func allUsageLines(summary UsageSummary, contentW int) []string {
 			wins = append(wins, *agent.Session)
 		}
 		if len(wins) > 0 {
-			lines = append(lines, formatAllUsageLine(agent.Name, wins, contentW))
+			rows = append(rows, allUsageRow{label: agent.Name, windows: wins})
+			if n := visLen(agent.Name); n > labelWidth {
+				labelWidth = n
+			}
 		}
+	}
+
+	var lines []string
+	for _, row := range rows {
+		lines = append(lines, formatAllUsageLine(row.label, row.windows, contentW, labelWidth))
 	}
 	return lines
 }
 
-func formatAllUsageLine(label string, windows []QuotaWindow, contentW int) string {
-	return formatAllUsageTableLine(label, windows, contentW)
+func formatAllUsageLine(label string, windows []QuotaWindow, contentW, labelWidth int) string {
+	return formatAllUsageTableLine(label, windows, contentW, labelWidth)
 }
 
-func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW int) string {
+func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labelWidth int) string {
 	if len(windows) < 2 {
-		return formatCompactGroupLineWithLabelWidth(label, windows, contentW, len(label))
+		return formatCompactGroupLineWithLabelWidth(label, windows, contentW, labelWidth)
 	}
 
 	var w1, w2 QuotaWindow
@@ -543,16 +560,16 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW int) 
 
 	b1 := rograph.RenderProgressBar(w1.UsedPercent, 4)
 	b2 := rograph.RenderProgressBar(w2.UsedPercent, 4)
-	prefix := label + "  "
+	prefix := rograph.PadLabel(label, labelWidth) + "  "
 
 	if d1 != "" && d2 != "" {
-		line := prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), d1, b2, d2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
+		line := prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), rograph.PadLabel(d1, 5), b2, d2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
 		if visLen(line) <= contentW {
 			return line
 		}
 	}
 	if d1 != "" {
-		line := prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), d1, b2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
+		line := prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), rograph.PadLabel(d1, 5), b2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
 		if visLen(line) <= contentW {
 			return line
 		}

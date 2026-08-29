@@ -317,10 +317,10 @@ func TestBuildAllUsageBox(t *testing.T) {
 	}
 
 	want := []string{
-		"Gemini  [███░] 93% 2d8h [░░░░] 4h58m 3%",
-		"Claude/GPT  [█░░░] 35% 6d2h [░░░░] 4h58m 0%",
-		"Claude Code  [███░] 85% 8h51m [░░░░] 4h51m 9%",
-		"OpenAI Codex  [█░░░] 39% 5d9h [░░░░] 4h59m 0%",
+		"Gemini        [███░] 93% 2d8h  [░░░░] 4h58m 3%",
+		"Claude/GPT    [█░░░] 35% 6d2h  [░░░░] 4h58m 0%",
+		"Claude Code   [███░] 85% 8h51m [░░░░] 4h51m 9%",
+		"OpenAI Codex  [█░░░] 39% 5d9h  [░░░░] 4h59m 0%",
 	}
 	for i := range want {
 		if got := stripANSI(box.lines[i]); got != want[i] {
@@ -358,6 +358,7 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 		t.Fatalf("expected 2 all-usage rows, got %d: %v", len(box.lines), box.lines)
 	}
 
+	secondBarCol := -1
 	for _, line := range box.lines {
 		stripped := stripANSI(line)
 		if got := visLen(line); got > contentW {
@@ -365,7 +366,7 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 		}
 		switch {
 		case strings.Contains(stripped, "Claude Code"):
-			if !strings.Contains(stripped, "Claude Code  [███░] 85% 8h39m [░░░░] 4h44m 11%") {
+			if !strings.Contains(stripped, "Claude Code   [███░] 85% 8h39m [░░░░] 4h44m 11%") {
 				t.Fatalf("expected Claude second bar and percent to remain visible in narrow row: %q", stripped)
 			}
 		case strings.Contains(stripped, "OpenAI Codex"):
@@ -375,8 +376,16 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 		default:
 			t.Fatalf("unexpected all-usage row: %q", stripped)
 		}
-		if strings.LastIndex(stripped, "[") < 0 {
+		col := strings.LastIndex(stripped, "[")
+		if col < 0 {
 			t.Fatalf("expected second bar in row: %q", stripped)
+		}
+		if secondBarCol < 0 {
+			secondBarCol = col
+			continue
+		}
+		if col != secondBarCol {
+			t.Fatalf("expected second bar column %d, got %d in row %q", secondBarCol, col, stripped)
 		}
 	}
 }
