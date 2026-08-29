@@ -258,7 +258,12 @@ func TestSemverFormatting(t *testing.T) {
 	}
 }
 
-func setupTestGitRepo(t *testing.T, remoteURL string) string {
+type testRemote struct {
+	name string
+	url  string
+}
+
+func setupTestGitRepoWithRemotes(t *testing.T, remotes []testRemote) string {
 	t.Helper()
 	dir := t.TempDir()
 	cmd := exec.Command("git", "init")
@@ -266,97 +271,166 @@ func setupTestGitRepo(t *testing.T, remoteURL string) string {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git init failed: %v (%s)", err, string(out))
 	}
-	if remoteURL != "" {
-		cmd = exec.Command("git", "remote", "add", "origin", remoteURL)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git remote add origin failed: %v (%s)", err, string(out))
+	for _, r := range remotes {
+		if r.url != "" {
+			cmd = exec.Command("git", "remote", "add", r.name, r.url)
+			cmd.Dir = dir
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git remote add %s failed: %v (%s)", r.name, err, string(out))
+			}
 		}
 	}
 	return dir
 }
 
+func setupTestGitRepo(t *testing.T, remoteURL string) string {
+	return setupTestGitRepoWithRemotes(t, []testRemote{{"origin", remoteURL}})
+}
+
 func TestDetectForgeInfo(t *testing.T) {
 	tests := []struct {
-		name      string
-		remoteURL string
-		wantHost  string
-		wantOwner string
-		wantRepo  string
-		wantErr   string
+		name       string
+		remotes    []testRemote
+		wantRemote string
+		wantHost   string
+		wantOwner  string
+		wantRepo   string
+		wantErr    string
 	}{
 		{
-			name:      "Valid Codeberg SSH",
-			remoteURL: "git@codeberg.org:myuser/myproject.git",
-			wantHost:  "codeberg.org",
-			wantOwner: "myuser",
-			wantRepo:  "myproject",
+			name:       "Valid Codeberg SSH origin",
+			remotes:    []testRemote{{"origin", "git@codeberg.org:myuser/myproject.git"}},
+			wantRemote: "origin",
+			wantHost:   "codeberg.org",
+			wantOwner:  "myuser",
+			wantRepo:   "myproject",
 		},
 		{
-			name:      "Valid Codeberg HTTPS",
-			remoteURL: "https://codeberg.org/myuser/myproject.git",
-			wantHost:  "codeberg.org",
-			wantOwner: "myuser",
-			wantRepo:  "myproject",
+			name:       "Valid Codeberg HTTPS origin",
+			remotes:    []testRemote{{"origin", "https://codeberg.org/myuser/myproject.git"}},
+			wantRemote: "origin",
+			wantHost:   "codeberg.org",
+			wantOwner:  "myuser",
+			wantRepo:   "myproject",
 		},
 		{
-			name:      "Valid GitHub SSH",
-			remoteURL: "git@github.com:myorg/myproject.git",
-			wantHost:  "github.com",
-			wantOwner: "myorg",
-			wantRepo:  "myproject",
+			name:       "Valid GitHub SSH origin",
+			remotes:    []testRemote{{"origin", "git@github.com:myorg/myproject.git"}},
+			wantRemote: "origin",
+			wantHost:   "github.com",
+			wantOwner:  "myorg",
+			wantRepo:   "myproject",
 		},
 		{
-			name:      "Valid GitHub HTTPS",
-			remoteURL: "https://github.com/myorg/myproject",
-			wantHost:  "github.com",
-			wantOwner: "myorg",
-			wantRepo:  "myproject",
+			name:       "Valid GitHub HTTPS origin",
+			remotes:    []testRemote{{"origin", "https://github.com/myorg/myproject"}},
+			wantRemote: "origin",
+			wantHost:   "github.com",
+			wantOwner:  "myorg",
+			wantRepo:   "myproject",
 		},
 		{
-			name:      "Valid Codeberg uppercase case-insensitive",
-			remoteURL: "https://CodeBerg.Org/MyUser/MyProject.git",
-			wantHost:  "CodeBerg.Org",
-			wantOwner: "MyUser",
-			wantRepo:  "MyProject",
+			name:       "Valid Codeberg uppercase case-insensitive",
+			remotes:    []testRemote{{"origin", "https://CodeBerg.Org/MyUser/MyProject.git"}},
+			wantRemote: "origin",
+			wantHost:   "CodeBerg.Org",
+			wantOwner:  "MyUser",
+			wantRepo:   "MyProject",
 		},
 		{
-			name:      "Valid GitHub uppercase case-insensitive",
-			remoteURL: "git@GITHUB.COM:MyOrg/MyProject.git",
-			wantHost:  "GITHUB.COM",
-			wantOwner: "MyOrg",
-			wantRepo:  "MyProject",
+			name:       "Valid GitHub uppercase case-insensitive",
+			remotes:    []testRemote{{"origin", "git@GITHUB.COM:MyOrg/MyProject.git"}},
+			wantRemote: "origin",
+			wantHost:   "GITHUB.COM",
+			wantOwner:  "MyOrg",
+			wantRepo:   "MyProject",
 		},
 		{
-			name:      "Unsupported host GitLab SSH",
-			remoteURL: "git@gitlab.com:myuser/myproject.git",
-			wantErr:   `unsupported or missing forge remote host "gitlab.com" for origin (must be on codeberg.org or github.com to publish releases)`,
+			name: "Local origin with secondary codeberg remote",
+			remotes: []testRemote{
+				{"origin", "/tmp/local-mirror"},
+				{"codeberg", "git@codeberg.org:myuser/myproject.git"},
+			},
+			wantRemote: "codeberg",
+			wantHost:   "codeberg.org",
+			wantOwner:  "myuser",
+			wantRepo:   "myproject",
 		},
 		{
-			name:      "Unsupported host custom HTTPS",
-			remoteURL: "https://forge.internal.lan/myuser/myproject.git",
-			wantErr:   `unsupported or missing forge remote host "forge.internal.lan" for origin (must be on codeberg.org or github.com to publish releases)`,
+			name: "Local origin with secondary github remote",
+			remotes: []testRemote{
+				{"origin", "/tmp/local-mirror"},
+				{"github", "https://github.com/myorg/myproject.git"},
+			},
+			wantRemote: "github",
+			wantHost:   "github.com",
+			wantOwner:  "myorg",
+			wantRepo:   "myproject",
 		},
 		{
-			name:      "Local directory path",
-			remoteURL: "/tmp/local-mirror",
-			wantErr:   `unsupported or missing forge remote host "" for origin (must be on codeberg.org or github.com to publish releases)`,
+			name: "Local origin with both github and codeberg remotes (picks codeberg per Priority 2)",
+			remotes: []testRemote{
+				{"origin", "/tmp/local-mirror"},
+				{"github", "https://github.com/myorg/myproject.git"},
+				{"codeberg", "git@codeberg.org:myuser/myproject.git"},
+			},
+			wantRemote: "codeberg",
+			wantHost:   "codeberg.org",
+			wantOwner:  "myuser",
+			wantRepo:   "myproject",
 		},
 		{
-			name:      "Local file URI",
-			remoteURL: "file:///tmp/local-mirror",
-			wantErr:   `unsupported or missing forge remote host "" for origin (must be on codeberg.org or github.com to publish releases)`,
+			name: "Priority 1 origin github over secondary codeberg remote",
+			remotes: []testRemote{
+				{"origin", "git@github.com:myorg/myproject.git"},
+				{"codeberg", "git@codeberg.org:myuser/myproject.git"},
+			},
+			wantRemote: "origin",
+			wantHost:   "github.com",
+			wantOwner:  "myorg",
+			wantRepo:   "myproject",
 		},
 		{
-			name:      "Missing remote origin",
-			remoteURL: "",
-			wantErr:   `unsupported or missing forge remote host "" for origin (must be on codeberg.org or github.com to publish releases)`,
+			name: "Custom named remote forgejo on codeberg",
+			remotes: []testRemote{
+				{"upstream", "/var/git/local-repo"},
+				{"forgejo", "https://codeberg.org/customuser/customrepo.git"},
+			},
+			wantRemote: "forgejo",
+			wantHost:   "codeberg.org",
+			wantOwner:  "customuser",
+			wantRepo:   "customrepo",
+		},
+		{
+			name:    "Unsupported host GitLab SSH",
+			remotes: []testRemote{{"origin", "git@gitlab.com:myuser/myproject.git"}},
+			wantErr: `no supported forge remote found (must have at least one remote on codeberg.org or github.com to publish releases)`,
+		},
+		{
+			name:    "Unsupported host custom HTTPS",
+			remotes: []testRemote{{"origin", "https://forge.internal.lan/myuser/myproject.git"}},
+			wantErr: `no supported forge remote found (must have at least one remote on codeberg.org or github.com to publish releases)`,
+		},
+		{
+			name:    "Local directory path",
+			remotes: []testRemote{{"origin", "/tmp/local-mirror"}},
+			wantErr: `no supported forge remote found (must have at least one remote on codeberg.org or github.com to publish releases)`,
+		},
+		{
+			name:    "Local file URI",
+			remotes: []testRemote{{"origin", "file:///tmp/local-mirror"}},
+			wantErr: `no supported forge remote found (must have at least one remote on codeberg.org or github.com to publish releases)`,
+		},
+		{
+			name:    "Missing remotes",
+			remotes: nil,
+			wantErr: `no supported forge remote found (must have at least one remote on codeberg.org or github.com to publish releases)`,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := setupTestGitRepo(t, tc.remoteURL)
+			dir := setupTestGitRepoWithRemotes(t, tc.remotes)
 			info, err := DetectForgeInfo(dir)
 			if tc.wantErr != "" {
 				if err == nil {
@@ -372,6 +446,9 @@ func TestDetectForgeInfo(t *testing.T) {
 			}
 			if info == nil {
 				t.Fatal("expected non-nil ForgeInfo")
+			}
+			if info.RemoteName != tc.wantRemote {
+				t.Errorf("RemoteName = %q, want %q", info.RemoteName, tc.wantRemote)
 			}
 			if info.Host != tc.wantHost {
 				t.Errorf("Host = %q, want %q", info.Host, tc.wantHost)
@@ -409,7 +486,7 @@ func TestPreflightForgeValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Run() to fail when remote origin is missing")
 	}
-	expectedErr := `unsupported or missing forge remote host "" for origin (must be on codeberg.org or github.com to publish releases)`
+	expectedErr := `no supported forge remote found (must have at least one remote on codeberg.org or github.com to publish releases)`
 	if !strings.Contains(err.Error(), expectedErr) {
 		t.Errorf("expected error %q, got %q", expectedErr, err.Error())
 	}
@@ -426,9 +503,29 @@ func TestPreflightForgeValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Run() to fail when remote origin is on an unsupported host")
 	}
-	expectedErrHost := `unsupported or missing forge remote host "gitlab.com" for origin (must be on codeberg.org or github.com to publish releases)`
-	if !strings.Contains(err.Error(), expectedErrHost) {
-		t.Errorf("expected error %q, got %q", expectedErrHost, err.Error())
+	if !strings.Contains(err.Error(), expectedErr) {
+		t.Errorf("expected error %q, got %q", expectedErr, err.Error())
+	}
+
+	// Secondary codeberg remote with local origin passes preflight
+	dirSecondary := setupTestGitRepoWithRemotes(t, []testRemote{
+		{"origin", "/tmp/local-mirror"},
+		{"codeberg", "git@codeberg.org:owner/repo.git"},
+	})
+	keyFileSecondary := filepath.Join(dirSecondary, ".minisign.key")
+	_ = os.WriteFile(keyFileSecondary, []byte("dummy-key"), 0600)
+	_ = os.WriteFile(filepath.Join(dirSecondary, "version.go"), []byte("package main\n\nvar Version = \"0.1.0\"\n"), 0644)
+
+	opt.Dir = dirSecondary
+	opt.SignKey = keyFileSecondary
+	opt.SkipPublish = true
+	buf.Reset()
+	err = Run(opt)
+	if err != nil {
+		t.Fatalf("expected Run() to succeed with secondary codeberg remote in dry-run, got: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Would push branch and tag v0.1.1 to codeberg") {
+		t.Errorf("expected dry-run push to codeberg, got %s", buf.String())
 	}
 }
 

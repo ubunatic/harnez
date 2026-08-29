@@ -193,26 +193,30 @@ func Run(opt Options) error {
 
 	// 8. Remote Git Push
 	if !opt.SkipPush {
+		remoteName := "origin"
+		if forge != nil && forge.RemoteName != "" {
+			remoteName = forge.RemoteName
+		}
 		if !opt.DryRun {
 			branch, err := getGitCurrentBranch(opt.Dir)
 			if err != nil {
 				return fmt.Errorf("get current branch: %w", err)
 			}
-			fmt.Fprintf(opt.Out, "  [git]       Pushing branch %s and tag %s to origin...\n", branch, tagName)
-			if err := runCmd(opt.Dir, "git", "push", "origin", branch); err != nil {
-				return fmt.Errorf("git push branch %s: %w", branch, err)
+			fmt.Fprintf(opt.Out, "  [git]       Pushing branch %s and tag %s to %s...\n", branch, tagName, remoteName)
+			if err := runCmd(opt.Dir, "git", "push", remoteName, branch); err != nil {
+				return fmt.Errorf("git push branch %s to %s: %w", branch, remoteName, err)
 			}
-			if err := runCmd(opt.Dir, "git", "push", "origin", tagName); err != nil {
-				return fmt.Errorf("git push tag %s: %w", tagName, err)
+			if err := runCmd(opt.Dir, "git", "push", remoteName, tagName); err != nil {
+				return fmt.Errorf("git push tag %s to %s: %w", tagName, remoteName, err)
 			}
 		} else {
-			fmt.Fprintf(opt.Out, "  [dry-run]   Would push branch and tag %s to origin\n", tagName)
+			fmt.Fprintf(opt.Out, "  [dry-run]   Would push branch and tag %s to %s\n", tagName, remoteName)
 		}
 	}
 
 	// 9. Forge Publishing
 	if !opt.SkipPublish {
-		if err := runPublishStep(opt, projectName, tagName); err != nil {
+		if err := runPublishStep(opt, projectName, tagName, forge); err != nil {
 			return err
 		}
 	}
@@ -336,7 +340,7 @@ func runSigningStep(opt Options, projectName, version, keyPath string) error {
 	return nil
 }
 
-func runPublishStep(opt Options, projectName, tagName string) error {
+func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) error {
 	distDir := filepath.Join(opt.Dir, "dist")
 	if !fileExists(distDir) {
 		return fmt.Errorf("dist directory %s does not exist; cannot publish", distDir)
@@ -373,7 +377,11 @@ func runPublishStep(opt Options, projectName, tagName string) error {
 	}
 
 	if !opt.DryRun {
-		if err := PublishForgejoRelease(opt.Dir, tagName, title, attachments, opt.DryRun, opt.Continue); err != nil {
+		remoteName := ""
+		if forge != nil {
+			remoteName = forge.RemoteName
+		}
+		if err := PublishForgejoRelease(opt.Dir, tagName, title, attachments, remoteName, opt.DryRun, opt.Continue); err != nil {
 			return err
 		}
 	}
