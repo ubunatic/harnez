@@ -32,6 +32,7 @@ func main() {
 	var usageWatch bool
 	var usageSummary bool
 	var usageProcesses bool
+	var usageCompact bool
 	var usageInterval time.Duration
 	var usageHost string
 	usageCmd := &cobra.Command{
@@ -48,12 +49,19 @@ func main() {
 			if usageWatch && usageSummary {
 				return fmt.Errorf("--watch and --summary cannot be combined")
 			}
+			if usageCompact && !usageWatch {
+				return fmt.Errorf("--compact requires --watch")
+			}
 
 			if usageWatch {
 				if usageJSON {
 					return fmt.Errorf("--watch and --json cannot be combined")
 				}
-				return usage.RunWatchWithHost(ctx, "", client, cmd.OutOrStdout(), usageInterval, "", usageHost, usageProcesses)
+				return usage.RunWatchWithOptions(ctx, "", client, cmd.OutOrStdout(), usageInterval, "", usage.WatchOptions{
+					Host:          usageHost,
+					Compact:       usageCompact,
+					ShowProcesses: usageProcesses,
+				})
 			}
 
 			if usageSummary {
@@ -106,6 +114,7 @@ func main() {
 	usageCmd.Flags().StringVar(&usageHost, "host", "", "query usage from a remote host via SSH")
 	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
 	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the dashboard in place with a tokens/min trend")
+	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "start --watch with only all-usage and load panels visible")
 	usageCmd.Flags().BoolVarP(&usageSummary, "summary", "s", false, "print the compact --watch-style dashboard once and exit")
 	usageCmd.Flags().BoolVarP(&usageProcesses, "proc", "p", false, "show running agent processes panel in --watch / --summary")
 	usageCmd.Flags().BoolVar(&usageProcesses, "processes", false, "show running agent processes panel in --watch / --summary")

@@ -261,6 +261,131 @@ func TestBuildHistoryBox(t *testing.T) {
 	}
 }
 
+func TestBuildAllUsageBox(t *testing.T) {
+	weeklyReset := testTime.Add(2*24*time.Hour + 8*time.Hour)
+	sessionReset := testTime.Add(4*time.Hour + 58*time.Minute)
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{
+				AgentID:       "agy",
+				Name:          "Antigravity",
+				Installed:     true,
+				Authenticated: true,
+				ModelGroups: []ModelGroup{
+					{
+						Name: "Gemini Models",
+						Windows: []QuotaWindow{
+							{Name: "Weekly", UsedPercent: 93, ResetAt: &weeklyReset, DurationLeft: 2*24*time.Hour + 8*time.Hour},
+							{Name: "Session (5-hour)", UsedPercent: 3, ResetAt: &sessionReset, DurationLeft: 4*time.Hour + 58*time.Minute},
+						},
+					},
+					{
+						Name: "Claude and GPT models",
+						Windows: []QuotaWindow{
+							{Name: "Weekly", UsedPercent: 35, ResetAt: &weeklyReset, DurationLeft: 6*24*time.Hour + 2*time.Hour},
+							{Name: "Session (5-hour)", UsedPercent: 0, ResetAt: &sessionReset, DurationLeft: 4*time.Hour + 58*time.Minute},
+						},
+					},
+				},
+			},
+			{
+				AgentID:       "claude",
+				Name:          "Claude Code",
+				Installed:     true,
+				Authenticated: true,
+				Weekly:        &QuotaWindow{Name: "Weekly", UsedPercent: 85, DurationLeft: 8*time.Hour + 51*time.Minute},
+				Session:       &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 9, DurationLeft: 4*time.Hour + 51*time.Minute},
+			},
+			{
+				AgentID:       "codex",
+				Name:          "OpenAI Codex",
+				Installed:     true,
+				Authenticated: true,
+				Weekly:        &QuotaWindow{Name: "Weekly", UsedPercent: 39, DurationLeft: 5*24*time.Hour + 9*time.Hour},
+				Session:       &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 0, DurationLeft: 4*time.Hour + 59*time.Minute},
+			},
+		},
+	}
+
+	box := buildAllUsageBox(summary, 74)
+	if !strings.Contains(box.title, "[a]") || !strings.Contains(box.title, "All Usage") {
+		t.Fatalf("expected all-usage title, got %q", box.title)
+	}
+	if len(box.lines) != 4 {
+		t.Fatalf("expected 4 all-usage rows, got %d: %v", len(box.lines), box.lines)
+	}
+
+	rendered := strings.Join(box.lines, "\n")
+	for _, want := range []string{"Gemini", "Claude/GPT", "Claude Code", "OpenAI Codex"} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("expected rendered all-usage box to contain %q, got:\n%s", want, rendered)
+		}
+	}
+	if !strings.Contains(rendered, "[███░] 93% 2d8h [░░░░] 3% 4h58m") {
+		t.Errorf("expected compact Gemini quota pair, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "[███░] 85% 8h51m [░░░░] 9% 4h51m") {
+		t.Errorf("expected compact Claude quota pair, got:\n%s", rendered)
+	}
+}
+
+func TestCompactWatchSectionsAndAllUsageToggle(t *testing.T) {
+	sec := initialWatchSections(WatchOptions{Compact: true, ShowProcesses: true})
+	if !sec.AllUsage || !sec.Load {
+		t.Fatalf("compact initial sections should show all-usage and load: %+v", sec)
+	}
+	if sec.Claude || sec.AGY || sec.Codex || sec.History || sec.Processes {
+		t.Fatalf("compact initial sections should hide all other panels: %+v", sec)
+	}
+
+	if !applyWatchSectionKey(&sec, 'a') || sec.AllUsage {
+		t.Fatalf("lowercase a should hide all-usage: %+v", sec)
+	}
+	if !applyWatchSectionKey(&sec, 'a') || !sec.AllUsage {
+		t.Fatalf("lowercase a should show all-usage: %+v", sec)
+	}
+	if !applyWatchSectionKey(&sec, 'A') {
+		t.Fatalf("uppercase A should be handled")
+	}
+	want := defaultWatchSections()
+	if sec != want {
+		t.Fatalf("uppercase A reset = %+v, want %+v", sec, want)
+	}
+}
+
+func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{
+				AgentID:       "claude",
+				Name:          "Claude Code",
+				Installed:     true,
+				Authenticated: true,
+				Weekly:        &QuotaWindow{Name: "Weekly", UsedPercent: 85, DurationLeft: 8*time.Hour + 51*time.Minute},
+				Session:       &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 9, DurationLeft: 4*time.Hour + 51*time.Minute},
+			},
+		},
+	}
+
+	frame := buildWatchFrame(summary, nil, 60*time.Second, compactWatchSections(), 100, 30, true, "", "")
+	frameText := strings.Join(frame.lines, "\n")
+
+	if !strings.Contains(frameText, "[a]") || !strings.Contains(frameText, "All Usage") {
+		t.Fatalf("expected compact frame to show all-usage box, got:\n%s", frameText)
+	}
+	if !strings.Contains(frameText, "[L]") || !strings.Contains(frameText, "Load") {
+		t.Fatalf("expected compact frame to show load box, got:\n%s", frameText)
+	}
+	if strings.Contains(frameText, "] Claude Code") {
+		t.Fatalf("expected compact frame to hide individual Claude box, got:\n%s", frameText)
+	}
+	if !strings.Contains(frameText, "[a]usage") || !strings.Contains(frameText, "[⇧a]ll") {
+		t.Fatalf("expected footer to expose [a]usage and shifted [⇧a]ll, got:\n%s", frameText)
+	}
+}
+
 func TestBuildWatchFrame_HistoryHeaderAnd4Boxes(t *testing.T) {
 	tempDir := t.TempDir()
 	_ = AppendHistory(tempDir, UsageSummary{

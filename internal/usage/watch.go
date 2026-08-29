@@ -366,6 +366,7 @@ type namedWindow struct {
 // Toggled interactively via keypress; see RunWatch. The key for each panel
 // (shown in its own title bar, btop-style) is fixed here.
 type watchSections struct {
+	AllUsage  bool
 	Claude    bool
 	AGY       bool
 	Codex     bool
@@ -377,6 +378,36 @@ type watchSections struct {
 
 func defaultWatchSections() watchSections {
 	return watchSections{Claude: true, AGY: true, Codex: true, History: true, Processes: false, Load: true, Tokens: true}
+}
+
+func compactWatchSections() watchSections {
+	return watchSections{AllUsage: true, Load: true, Tokens: true}
+}
+
+func applyWatchSectionKey(sec *watchSections, key byte) bool {
+	switch key {
+	case 'c', 'C', '1':
+		sec.Claude = !sec.Claude
+	case 'g', 'G', '2':
+		sec.AGY = !sec.AGY
+	case 'o', 'O', '3':
+		sec.Codex = !sec.Codex
+	case 'h', 'H', '4':
+		sec.History = !sec.History
+	case 't', 'T', '5':
+		sec.Tokens = !sec.Tokens
+	case 'p', 'P', '6':
+		sec.Processes = !sec.Processes
+	case 'l', 'L', '7':
+		sec.Load = !sec.Load
+	case 'a':
+		sec.AllUsage = !sec.AllUsage
+	case 'A':
+		*sec = defaultWatchSections()
+	default:
+		return false
+	}
+	return true
 }
 
 // agentVisible reports whether the panel for agentID should currently be drawn.
@@ -432,6 +463,51 @@ func buildProcessesBox(width int, counts *AgentProcessCount) wbox {
 	lines = append(lines, fmt.Sprintf("claude: %d  agy: %d  codex: %d", counts.Claude, counts.AGY, counts.Codex))
 
 	return wbox{title: title, lines: lines, width: width}
+}
+
+func buildAllUsageBox(summary UsageSummary, width int) wbox {
+	lines := allUsageLines(summary, width-4)
+	if len(lines) == 0 {
+		lines = []string{"\x1b[90mno quota windows available\x1b[0m"}
+	}
+	return wbox{title: "\x1b[1m[a]\x1b[0m All Usage", lines: lines, width: width}
+}
+
+func allUsageLines(summary UsageSummary, contentW int) []string {
+	var lines []string
+	for _, agent := range summary.Agents {
+		if !agent.HasUsageData() {
+			continue
+		}
+		if len(agent.ModelGroups) > 0 {
+			for _, mg := range agent.ModelGroups {
+				label := mg.Name
+				if strings.EqualFold(label, "Gemini Models") {
+					label = "Gemini"
+				} else if strings.EqualFold(label, "Claude and GPT models") || strings.EqualFold(label, "Claude and GPT") {
+					label = "Claude/GPT"
+				}
+				lines = append(lines, formatAllUsageLine(label, mg.Windows, contentW))
+			}
+			continue
+		}
+
+		var wins []QuotaWindow
+		if agent.Weekly != nil {
+			wins = append(wins, *agent.Weekly)
+		}
+		if agent.Session != nil {
+			wins = append(wins, *agent.Session)
+		}
+		if len(wins) > 0 {
+			lines = append(lines, formatAllUsageLine(agent.Name, wins, contentW))
+		}
+	}
+	return lines
+}
+
+func formatAllUsageLine(label string, windows []QuotaWindow, contentW int) string {
+	return formatCompactGroupLineWithLabelWidth(label, windows, contentW, 13)
 }
 
 // buildLoadBox renders a compact panel showing CPU and GPU load, styled
@@ -757,8 +833,12 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 // formatCompactGroupLine formats a model group (or weekly+5h pair) into a single compact line:
 // e.g. "Gemini Models    [████] [░░░░]  90% 3d1h   3% 2h17m"
 func formatCompactGroupLine(label string, windows []QuotaWindow, contentW int) string {
+	return formatCompactGroupLineWithLabelWidth(label, windows, contentW, 10)
+}
+
+func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, contentW, labelWidth int) string {
 	if len(windows) == 0 {
-		return rograph.PadLabel(label, 16)
+		return rograph.PadLabel(label, labelWidth)
 	}
 	if len(windows) == 1 {
 		w := windows[0]
@@ -766,7 +846,7 @@ func formatCompactGroupLine(label string, windows []QuotaWindow, contentW int) s
 		if w.DurationLeft > 0 {
 			resetStr = " " + FormatCompactDuration(w.DurationLeft)
 		}
-		lbl := rograph.PadLabel(label, 16)
+		lbl := rograph.PadLabel(label, labelWidth)
 		bar := rograph.RenderProgressBar(w.UsedPercent, 4)
 		line := fmt.Sprintf("%s %s %3.0f%%%s", lbl, bar, w.UsedPercent, resetStr)
 		if visLen(line) > contentW {
@@ -803,7 +883,6 @@ func formatCompactGroupLine(label string, windows []QuotaWindow, contentW int) s
 		d2 = " " + FormatCompactDuration(w2.DurationLeft)
 	}
 
-	labelWidth := 10
 	lbl := rograph.PadLabel(label, labelWidth)
 	b1 := rograph.RenderProgressBar(w1.UsedPercent, 4)
 	b2 := rograph.RenderProgressBar(w2.UsedPercent, 4)
@@ -859,8 +938,21 @@ func gridColumns(usable, panels int) (columns, boxWidth int) {
 
 // WatchOptions bundles optional customization for watch frame rendering.
 type WatchOptions struct {
-	Host       string
-	ProcCounts *AgentProcessCount
+	Host          string
+	ProcCounts    *AgentProcessCount
+	Compact       bool
+	ShowProcesses bool
+}
+
+func initialWatchSections(opts WatchOptions) watchSections {
+	if opts.Compact {
+		return compactWatchSections()
+	}
+	sec := defaultWatchSections()
+	if opts.ShowProcesses {
+		sec.Processes = true
+	}
+	return sec
 }
 
 // buildWatchFrame lays out one compact, btop-style grid frame: agent panels
@@ -931,6 +1023,9 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	if !sec.Load {
 		hidden = append(hidden, "[L]")
 	}
+	if !sec.AllUsage {
+		hidden = append(hidden, "[a]")
+	}
 	hiddenHint := ""
 	if len(hidden) > 0 {
 		hiddenHint = fmt.Sprintf("   \x1b[90mhidden: %s\x1b[0m", strings.Join(hidden, " "))
@@ -950,7 +1045,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	if live {
 		footer = []string{
 			"",
-			fmt.Sprintf("refresh every %s   \x1b[90m[a]ll  [r]emote  [q]uit\x1b[0m", interval),
+			fmt.Sprintf("refresh every %s   \x1b[90m[a]usage  [⇧a]ll  [r]emote  [q]uit\x1b[0m", interval),
 		}
 	}
 
@@ -962,6 +1057,9 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 
 	totalPanels := len(visible)
+	if sec.AllUsage {
+		totalPanels++
+	}
 	if sec.History {
 		totalPanels++
 	}
@@ -1003,6 +1101,13 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 			pending = nil
 		}
 
+		if sec.AllUsage {
+			aBox := buildAllUsageBox(summary, boxWidth)
+			pending = append(pending, renderWBox(aBox))
+			if len(pending) == columns {
+				flushRow()
+			}
+		}
 		for _, agent := range visible {
 			box := buildAgentBox(agent, rates[agent.AgentID], boxWidth, sec.Tokens, live)
 			pending = append(pending, renderWBox(box))
@@ -1098,6 +1203,14 @@ func RunWatch(ctx context.Context, homeDir string, client *http.Client, out io.W
 
 // RunWatchWithHost redraws a compact usage dashboard with optional remote host support and [r] toggle.
 func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string, initialHost string, showProcesses ...bool) error {
+	opts := WatchOptions{Host: initialHost}
+	if len(showProcesses) > 0 && showProcesses[0] {
+		opts.ShowProcesses = true
+	}
+	return RunWatchWithOptions(ctx, homeDir, client, out, interval, historyDir, opts)
+}
+
+func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string, opts WatchOptions) error {
 	if interval < MinWatchInterval {
 		interval = MinWatchInterval
 	}
@@ -1114,12 +1227,9 @@ func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, 
 	}
 
 	var secLock sync.Mutex
-	sec := defaultWatchSections()
-	if len(showProcesses) > 0 && showProcesses[0] {
-		sec.Processes = true
-	}
+	sec := initialWatchSections(opts)
 
-	configuredHost := strings.TrimSpace(initialHost)
+	configuredHost := strings.TrimSpace(opts.Host)
 	activeHost := configuredHost
 
 	fetchChan := make(chan struct{}, 1)
@@ -1149,44 +1259,24 @@ func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, 
 					return
 				}
 				secLock.Lock()
-				switch buf[0] {
-				case 'c', 'C', '1':
-					sec.Claude = !sec.Claude
+				if applyWatchSectionKey(&sec, buf[0]) {
 					requestRedraw()
-				case 'g', 'G', '2':
-					sec.AGY = !sec.AGY
-					requestRedraw()
-				case 'o', 'O', '3':
-					sec.Codex = !sec.Codex
-					requestRedraw()
-				case 'h', 'H', '4':
-					sec.History = !sec.History
-					requestRedraw()
-				case 't', 'T', '5':
-					sec.Tokens = !sec.Tokens
-					requestRedraw()
-				case 'p', 'P', '6':
-					sec.Processes = !sec.Processes
-					requestRedraw()
-				case 'l', 'L', '7':
-					sec.Load = !sec.Load
-					requestRedraw()
-				case 'r', 'R':
-					if configuredHost != "" {
-						if activeHost == "" {
-							activeHost = configuredHost
-						} else {
-							activeHost = ""
+				} else {
+					switch buf[0] {
+					case 'r', 'R':
+						if configuredHost != "" {
+							if activeHost == "" {
+								activeHost = configuredHost
+							} else {
+								activeHost = ""
+							}
+							requestFetch()
 						}
-						requestFetch()
+					case 'q', 'Q', 3, 27:
+						secLock.Unlock()
+						stop()
+						return
 					}
-				case 'a', 'A':
-					sec = defaultWatchSections()
-					requestRedraw()
-				case 'q', 'Q', 3, 27:
-					secLock.Unlock()
-					stop()
-					return
 				}
 				secLock.Unlock()
 			}
