@@ -89,3 +89,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 088 | [088-load-panel-ram-vram-gtt-memory.md](088-load-panel-ram-vram-gtt-memory.md) | Load Panel: RAM, VRAM, and GTT Memory | Closed — resolved in implementation commit |
 | 089 | [089-load-panel-combine-gpu-vram-gtt-row.md](089-load-panel-combine-gpu-vram-gtt-row.md) | Load Panel: Combine GPU VRAM/GTT Row | Open |
 | 090 | [090-remote-load-panel-uses-local-metrics.md](090-remote-load-panel-uses-local-metrics.md) | Remote Usage Load Panel Uses Local Metrics | Open |
+| 091 | [091-language-agnostic-release-spec-and-thin-make-release.md](091-language-agnostic-release-spec-and-thin-make-release.md) | Language-agnostic release spec — replace per-project release Make target sprawl | Open — proposed vision |
