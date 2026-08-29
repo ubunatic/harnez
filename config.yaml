@@ -16,6 +16,7 @@ docs:
   - issue-tracking
   - concise-mode
   - website
+  - gorelease
 
 # model: sonnet  # unmanaged by default, let user or client choose
 effort: medium
@@ -357,6 +358,14 @@ agents_md:
       target: ~/.claude/docs/Website.md
       local: ./docs/Website.md
       default: true
+    gorelease:
+      name: "Go Release Pipeline"
+      ref: "@docs/GoRelease.md"
+      hint: "uman release, GoReleaser v2, non-interactive minisign (-W), Forgejo has_releases"
+      source: docs/practices/GoRelease.md
+      target: ~/.claude/docs/GoRelease.md
+      local: ./docs/GoRelease.md
+      default: auto   # go.mod (opt-in / auto for Go projects)
 
   # repo git setups — pick one with `init --repo-mode/-m` to add a short
   # "Repo Setup" section to a project's AGENTS.md (see docs/lang/Git.md for the

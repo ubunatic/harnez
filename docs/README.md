@@ -38,6 +38,7 @@ Generated copies land here (root) after `apply` / `init`.
 | [practices/AgenticLoop.md](practices/AgenticLoop.md) | Agentic Loop Practices: 5-phase sprint workflow (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee | Summary active in AGENTS.md. Read for phase invariants, review checklists, and anti-patterns |
 | [practices/IssueTracking.md](practices/IssueTracking.md) | Issue Tracking Practices: Standardized issue priority schema (P0–P3), metadata headers, and tracker lifecycle | Summary active in AGENTS.md. Read for priority definitions, severity vs priority distinctions, and ticket schemas |
 | [practices/ConciseMode.md](practices/ConciseMode.md) | ConciseMode: 3 graded output-terseness tiers (Lite, Standard, Ultra) for slow/local-inference pairing | Opt-in (`init --docs concise-mode`). Read when tuning agent verbosity for low-TPS hardware |
+| [practices/GoRelease.md](practices/GoRelease.md) | Go Release Pipeline: `uman release`, GoReleaser v2, non-interactive minisign (-W), Forgejo `has_releases` | Copyable doc (`init --docs gorelease`). Read when setting up or troubleshooting Go release automation |
 
 **`docs/other/`** — practice docs (no category yet)
 
@@ -53,6 +54,7 @@ Generated copies land here (root) after `apply` / `init`.
 | File | Topic |
 |------|-------|
 | [studies/GoRelease.md](studies/GoRelease.md) | Release pipeline case study (goreleaser consolidation) |
+| [studies/2026-08-29-harnez-go-release-and-signing.md](studies/2026-08-29-harnez-go-release-and-signing.md) | Harnez Go release pipeline & non-interactive signing case study (passwordless minisign, Codeberg API `has_releases`, `--continue` recovery) |
 | [studies/Worktrees.md](studies/Worktrees.md) | Worktrees case study (go.mod races, dependencies; stale-base-branch and uncommitted-state-invisibility bugs found 2026-08-28) |
 | [studies/2026-08-16-harnez-migration-and-workspace-unification.md](studies/2026-08-16-harnez-migration-and-workspace-unification.md) | Harnez migration, Spec generalization & workspace diagnostics case study |
 | [studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md](studies/2026-08-17-multi-agent-quota-and-usage-monitoring.md) | Multi-agent token, session & quota monitoring case study (Claude Code, AGY, Codex) |
