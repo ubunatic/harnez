@@ -507,12 +507,12 @@ func allUsageLines(summary UsageSummary, contentW int) []string {
 }
 
 func formatAllUsageLine(label string, windows []QuotaWindow, contentW int) string {
-	return formatAllUsageTableLine(label, windows, contentW, 13)
+	return formatAllUsageTableLine(label, windows, contentW)
 }
 
-func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labelWidth int) string {
+func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW int) string {
 	if len(windows) < 2 {
-		return formatCompactGroupLineWithLabelWidth(label, windows, contentW, labelWidth)
+		return formatCompactGroupLineWithLabelWidth(label, windows, contentW, len(label))
 	}
 
 	var w1, w2 QuotaWindow
@@ -543,30 +543,22 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 
 	b1 := rograph.RenderProgressBar(w1.UsedPercent, 4)
 	b2 := rograph.RenderProgressBar(w2.UsedPercent, 4)
+	prefix := label + "  "
 
-	for lw := labelWidth; lw >= 6; lw-- {
-		lbl := rograph.PadLabel(label, lw)
-
-		if d1 != "" && d2 != "" {
-			line := fmt.Sprintf("%s %s %3.0f%% %-5s %s %3.0f%% %s", lbl, b1, w1.UsedPercent, d1, b2, w2.UsedPercent, d2)
-			if visLen(line) <= contentW {
-				return line
-			}
+	if d1 != "" && d2 != "" {
+		line := prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), d1, b2, d2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
+		if visLen(line) <= contentW {
+			return line
 		}
-		if d1 != "" {
-			line := fmt.Sprintf("%s %s %3.0f%% %-5s %s %3.0f%%", lbl, b1, w1.UsedPercent, d1, b2, w2.UsedPercent)
-			if visLen(line) <= contentW {
-				return line
-			}
-		}
-		line := fmt.Sprintf("%s %s %3.0f%% %s %3.0f%%", lbl, b1, w1.UsedPercent, b2, w2.UsedPercent)
+	}
+	if d1 != "" {
+		line := prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), d1, b2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
 		if visLen(line) <= contentW {
 			return line
 		}
 	}
 
-	lbl := rograph.PadLabel(label, 6)
-	return fmt.Sprintf("%s %s %3.0f%% %s %3.0f%%", lbl, b1, w1.UsedPercent, b2, w2.UsedPercent)
+	return prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), b2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
 }
 
 func compactDurationText(w QuotaWindow) string {
