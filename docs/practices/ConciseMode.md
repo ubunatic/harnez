@@ -55,6 +55,31 @@ The doc reference alone (`@docs/practices/ConciseMode.md`) is descriptive, not a
 Pick the CLAUDE.md directive first; reach for an output style only if drift is observed in
 practice.
 
+## Operational Pairing Format (Deployment / Live-Host Sessions)
+
+Live deployment and infrastructure-provisioning pairing sessions (SSH sessions, remote debugging,
+"is it actually deployed" checks) have a reporting need distinct from the three narrative tiers
+above: not just less prose, but a fixed structure so an operator can scan the response for the one
+fact that matters — usually a gap. This emerged from a `webman` pairing retro (see
+[issues/058](../../issues/058-deployment-transparency-and-concise-pairing-mode.md)): switching to a
+strict bullet structure measurably improved operator alignment and cycle speed over both normal
+prose and the generic terse tiers above.
+
+When operating in this mode, structure each response as **3–7 one-line bullets**, in this order,
+omitting any category with nothing to report:
+
+- **Fact / Command** — the exact command or check run.
+- **Status** — exit code or direct observation (not an interpretation).
+- **Gaps / Discrepancies** — anything that doesn't match what local state predicted (this is the
+  category most narrative styles bury under reassurance — see
+  [DeploymentTransparency.md](DeploymentTransparency.md)).
+- **Next action** — the single recommended next step.
+
+This format composes with the tiers above rather than replacing them: use it specifically while
+probing or reporting on remote/deployed state; drop back to Level 1–3 narrative for everything
+else in the same session. Invoke via `/mode` (see `commands/mode.md`) or by naming it directly in
+a pairing-session directive, e.g. "use operational pairing format for the rest of this deploy."
+
 ## Pairing with Output Distillation
 
 ConciseMode governs what the agent *writes*; `harnez distill` (see issue 066) governs what the

@@ -49,6 +49,17 @@ Agentic software engineering scales effectively when concurrency is structured a
    - When creating, updating, or adding media assets (e.g. reels, WebM demos, terminal recordings, screenshots) intended for documentation or websites, **always ask the user for explicit confirmation** that the recorded visual output matches their exact expectations before publishing or embedding it.
    - Never automatically publish or embed unverified recordings (guarding against invisible typing, missing UI frames, or unexpected rendering artifacts).
 
+8. **Deployment Transparency — 3-State Grounding**:
+   - Remote deployment status has three independent states that must never be conflated:
+     **Local State** (checkout, configs, unit tests), **Deployed Artifact State** (remote
+     filesystem binaries, permissions, config overlays), and **Active Daemon State** (remote
+     process table, systemd units, active crontab entries).
+   - Agents must never declare remote deployment status without probing the live host over SSH
+     (`crontab -l`, `ls -la`, `file`, `head`). A clean local build or passing local test is
+     evidence about Local State only. See
+     [docs/practices/DeploymentTransparency.md](DeploymentTransparency.md) for the full
+     invariant, minimum probes, and anti-patterns.
+
 ---
 
 ## 2. The 5-Phase Agentic Sprint Loop
@@ -199,6 +210,7 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 - ❌ **Parallel Writing**: Spawning multiple subagents with write permissions on the same workspace simultaneously.
 - ❌ **Blocking Handoff Waits**: Treating "hand this to a subagent" as permission to block the main chat while waiting for the child. The host is always the responsive orchestrator.
 - ❌ **Silent Verification**: Assuming a fix works without running test commands or canary scripts.
+- ❌ **Deployment State Conflation**: Declaring a remote binary "deployed" or a job "scheduled" based on local build/test success or a clean `scp`/push exit code, without probing the live host (see [DeploymentTransparency.md](DeploymentTransparency.md)).
 - ❌ **Blind Revert of Failed Work**: Running `git checkout --`, `git reset --hard`, or `git stash drop` on a failed implementation attempt without first committing it somewhere recoverable. A prose summary of what was tried is not a substitute for the actual diff — it cannot be `git diff`ed, re-applied, or independently re-verified against the gate it was tested against.
 - ❌ **Orphaned Background Tasks**: Leaving background `tail -f`, watch loops, or timers running after work is completed.
 - ❌ **Lost Context / Ephemeral-Only Retrospectives**: Discussing important harness friction or bugs in chat without writing them down to `docs/feedback/` or `issues/`.

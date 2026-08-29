@@ -39,6 +39,7 @@ Generated copies land here (root) after `apply` / `init`.
 | [practices/IssueTracking.md](practices/IssueTracking.md) | Issue Tracking Practices: Standardized issue priority schema (P0–P3), metadata headers, and tracker lifecycle | Summary active in AGENTS.md. Read for priority definitions, severity vs priority distinctions, and ticket schemas |
 | [practices/ConciseMode.md](practices/ConciseMode.md) | ConciseMode: 3 graded output-terseness tiers (Lite, Standard, Ultra) for slow/local-inference pairing | Opt-in (`init --docs concise-mode`). Read when tuning agent verbosity for low-TPS hardware |
 | [practices/GoRelease.md](practices/GoRelease.md) | Release Pipeline (language-agnostic): `harnez release`, `version.yaml`, GoReleaser v2, non-interactive minisign (-W), Forgejo `has_releases` | Copyable doc (`init --docs gorelease`). Read when setting up or troubleshooting release automation, Go or not |
+| [practices/DeploymentTransparency.md](practices/DeploymentTransparency.md) | Deployment Transparency: 3-state grounding rule (Local / Deployed Artifact / Active Daemon state) for remote deployment pairing | Copyable doc. Read before declaring remote deployment/scheduling status, or when pairing on live infra provisioning |
 
 **`docs/other/`** — practice docs (no category yet)
 
