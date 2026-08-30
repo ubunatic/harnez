@@ -1,7 +1,7 @@
 # 103 — Antigravity missing from All Usage aggregate despite recent historical data
 
 **Status**: Open
-**Priority**: P2 (Medium)
+**Priority**: P1 (High) — bumped from P2; part of the collector-story investigation the user flagged as high priority on 2026-08-30
 **Severity**: Moderate
 **Category**: Bug
 **Related**: [[086-offline-degraded-cache-snapshot-masks-live-data]], [[101-usage-keep-stale-agents-visible-until-7d]], [[093-usage-tui-layout-planner]], [[094-usage-watch-controls-overlay-and-presets]], commit 7c50f12 (write-path clobber fix), `docs/studies/2026-08-29-a-day-of-fresh-sprints.md`
