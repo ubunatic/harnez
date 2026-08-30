@@ -18,6 +18,7 @@ import (
 	"unsafe"
 
 	"ubunatic.com/harnez/internal/rograph"
+	"ubunatic.com/harnez/internal/uix"
 )
 
 // DefaultWatchInterval is the default refresh cadence for `harnez usage --watch`.
@@ -33,7 +34,21 @@ var sparkRunes = []rune{' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 const rateHistoryLen = 12
 const minBoxWidth = 34
 const maxTotalWidth = 120
-const preferredAllUsageWidth = 55
+
+// maxPanelContentWidth caps every panel's *declared* preferred width, so
+// truncation is a single deliberate policy applied consistently across all
+// panel types (Claude/AGY/Codex, All Usage, History, Processes, Load)
+// instead of a per-panel special case (issue 093). A panel whose natural
+// content is wider than this gets truncated by renderWBox's ellipsis, the
+// same way every other panel does.
+const maxPanelContentWidth = 80
+
+// measureWidth is the generous width used to measure a panel's *natural*
+// content width before layout: wide enough that no build*Box function's
+// internal graceful-degradation logic (e.g. dropping a duration label) ever
+// triggers, so the measured width reflects the panel's actual full-detail
+// content, not an accidental truncation artifact.
+const measureWidth = 200
 
 // boxGap is the number of blank columns combineRow puts between side-by-side
 // panels. Layout math must account for it: forgetting the gutter is what made
@@ -1023,24 +1038,6 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 	return line
 }
 
-// gridColumns picks how many panels fit side by side in usable columns, and the
-// width each panel gets. The (columns-1) gutters between panels are subtracted
-// before dividing, so `columns*boxWidth + gutters` is always <= usable.
-func gridColumns(usable, panels int) (columns, boxWidth int) {
-	columns = (usable + boxGap) / (minBoxWidth + boxGap)
-	if columns < 1 {
-		columns = 1
-	}
-	if columns > panels {
-		columns = panels
-	}
-	boxWidth = (usable - (columns-1)*boxGap) / columns
-	if boxWidth < minBoxWidth {
-		boxWidth = minBoxWidth
-	}
-	return columns, boxWidth
-}
-
 // WatchOptions bundles optional customization for watch frame rendering.
 type WatchOptions struct {
 	Host          string
@@ -1050,10 +1047,17 @@ type WatchOptions struct {
 }
 
 func initialWatchSections(opts WatchOptions) watchSections {
+	var sec watchSections
 	if opts.Compact {
-		return compactWatchSections()
+		sec = compactWatchSections()
+	} else {
+		sec = defaultWatchSections()
 	}
-	sec := defaultWatchSections()
+	// --proc is an explicit request for the Processes panel and must win
+	// regardless of --compact: without this, "--watch --compact --proc"
+	// silently dropped the panel because compactWatchSections() never sets
+	// Processes, and the early return above skipped the ShowProcesses check
+	// entirely (issue 093).
 	if opts.ShowProcesses {
 		sec.Processes = true
 	}
@@ -1164,17 +1168,6 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		budget = 1
 	}
 
-	totalPanels := len(visible)
-	if sec.History {
-		totalPanels++
-	}
-	if sec.Processes {
-		totalPanels++
-	}
-	if sec.Load {
-		totalPanels++
-	}
-
 	var body []string
 	// No agent had any real recorded usage found on this machine — say so
 	// explicitly rather than silently rendering a screen with no agent
@@ -1186,89 +1179,121 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 			"",
 		)
 	}
+
+	// Resolve data that a panel's build func needs but that must only be
+	// fetched once per frame, even though each panel gets built twice below
+	// (once to measure its natural content width, once at its final planned
+	// width): a live CPU/GPU probe or a process scan must not run twice per
+	// redraw just because the layout planner asked twice.
+	var loadSnapshot *LoadSnapshot
+	if sec.Load {
+		switch {
+		case summary.Load != nil:
+			loadSnapshot = summary.Load
+		case opt.Host == "":
+			snap := LoadSnapshot{CPU: CurrentCPULoad(), GPUs: CurrentGPUs()}
+			loadSnapshot = &snap
+		}
+	}
+	var procCounts *AgentProcessCount
+	if sec.Processes {
+		procCounts = opt.ProcCounts
+		if procCounts == nil {
+			c := CountRunningAgentProcesses()
+			procCounts = &c
+		}
+	}
+
+	// panels lists every currently-enabled box in display order. Each
+	// build func renders that panel's content at a given width — reused
+	// both to measure the panel's natural (untruncated) content width and,
+	// once uix.Layout has planned rows/widths, to render its final content
+	// with that width's own graceful degradation (e.g. dropping a duration
+	// label before falling back to renderWBox's ellipsis truncation).
+	type panel struct {
+		key   string
+		build func(width int) wbox
+	}
+	var panels []panel
+	if sec.AllUsage {
+		panels = append(panels, panel{"a", func(w int) wbox { return buildAllUsageBox(summary, w) }})
+	}
+	for _, agent := range visible {
+		agent := agent
+		panels = append(panels, panel{agentKey(agent.AgentID), func(w int) wbox {
+			return buildAgentBox(agent, rates[agent.AgentID], w, sec.Tokens, live)
+		}})
+	}
+	if sec.History {
+		panels = append(panels, panel{"H", func(w int) wbox { return buildHistoryBox(homeDir, historyDir, w) }})
+	}
+	if sec.Processes {
+		panels = append(panels, panel{"P", func(w int) wbox { return buildProcessesBox(w, procCounts) }})
+	}
+	if sec.Load {
+		panels = append(panels, panel{"L", func(w int) wbox { return buildLoadBox(w, opt.Host, loadSnapshot) }})
+	}
+
+	if len(panels) == 0 {
+		body = append(body, "\x1b[90m(all panels hidden)\x1b[0m")
+		lines := append(append(header, body...), footer...)
+		return fit(lines, usable, rows)
+	}
+
+	// Plan rows/widths once from each panel's measured natural content
+	// width (issue 093): a box sized to its own content never stretches
+	// across arbitrary screen space, and a wide panel like All Usage packs
+	// only as many columns as it actually needs, leaving the rest of the
+	// row for panels like Load instead of starving them.
+	boxes := make([]uix.Box, len(panels))
+	for i, p := range panels {
+		measured := p.build(measureWidth)
+		natural := visLen(measured.title) + 6
+		for _, l := range measured.lines {
+			if n := visLen(l) + 4; n > natural {
+				natural = n
+			}
+		}
+		pref := natural
+		if pref < minBoxWidth {
+			pref = minBoxWidth
+		}
+		if pref > maxPanelContentWidth {
+			pref = maxPanelContentWidth
+		}
+		boxes[i] = uix.Box{
+			ID:        p.key,
+			Title:     measured.title,
+			MinWidth:  minBoxWidth,
+			PrefWidth: pref,
+			MaxWidth:  maxPanelContentWidth,
+			Order:     i,
+			Enabled:   true,
+		}
+	}
+	plan := uix.Layout(boxes, uix.Options{Width: usable, Gap: boxGap})
+
 	dropped := 0
-	renderedCompactPair := false
-	if onlyAllUsageAndLoad(sec, visible) && usable >= preferredAllUsageWidth+boxGap+minBoxWidth {
-		allWidth := preferredAllUsageWidth
-		loadWidth := usable - allWidth - boxGap
-		if loadWidth < minBoxWidth {
-			loadWidth = minBoxWidth
-			allWidth = usable - loadWidth - boxGap
+	var droppedKeys []string
+	for _, row := range plan.Rows {
+		var cols [][]string
+		var keys []string
+		for _, pb := range row.Boxes {
+			p := panels[pb.Order]
+			cols = append(cols, renderWBox(p.build(pb.Width)))
+			keys = append(keys, "["+pb.ID+"]")
 		}
-		lines := combineRow([][]string{
-			renderWBox(buildAllUsageBox(summary, allWidth)),
-			renderWBox(buildLoadBox(loadWidth, opt.Host, summary.Load)),
-		})
+		lines := combineRow(cols)
 		if len(body)+len(lines) <= budget {
 			body = append(body, lines...)
 		} else {
-			dropped += 2
+			dropped += len(row.Boxes)
+			droppedKeys = append(droppedKeys, keys...)
 		}
-		renderedCompactPair = true
-		totalPanels = 0
-	}
-	if !renderedCompactPair && sec.AllUsage {
-		lines := renderWBox(buildAllUsageBox(summary, usable))
-		if len(body)+len(lines) <= budget {
-			body = append(body, lines...)
-		} else {
-			dropped++
-		}
-	}
-	if totalPanels == 0 {
-		if !sec.AllUsage && !renderedCompactPair {
-			body = append(body, "\x1b[90m(all panels hidden)\x1b[0m")
-		}
-	} else {
-		columns, boxWidth := gridColumns(usable, totalPanels)
-
-		var pending [][]string
-		flushRow := func() {
-			if len(pending) == 0 {
-				return
-			}
-			lines := combineRow(pending)
-			if len(body)+len(lines) <= budget {
-				body = append(body, lines...)
-			} else {
-				dropped += len(pending)
-			}
-			pending = nil
-		}
-
-		for _, agent := range visible {
-			box := buildAgentBox(agent, rates[agent.AgentID], boxWidth, sec.Tokens, live)
-			pending = append(pending, renderWBox(box))
-			if len(pending) == columns {
-				flushRow()
-			}
-		}
-		if sec.History {
-			hBox := buildHistoryBox(homeDir, historyDir, boxWidth)
-			pending = append(pending, renderWBox(hBox))
-			if len(pending) == columns {
-				flushRow()
-			}
-		}
-		if sec.Processes {
-			pBox := buildProcessesBox(boxWidth, opt.ProcCounts)
-			pending = append(pending, renderWBox(pBox))
-			if len(pending) == columns {
-				flushRow()
-			}
-		}
-		if sec.Load {
-			lBox := buildLoadBox(boxWidth, opt.Host, summary.Load)
-			pending = append(pending, renderWBox(lBox))
-			if len(pending) == columns {
-				flushRow()
-			}
-		}
-		flushRow()
 	}
 
 	if dropped > 0 {
-		note := fmt.Sprintf("\x1b[90m… %d panel(s) hidden — terminal too short\x1b[0m", dropped)
+		note := fmt.Sprintf("\x1b[90m… %s hidden — terminal too short\x1b[0m", strings.Join(droppedKeys, " "))
 		if len(body) < budget {
 			body = append(body, note)
 		} else if len(body) > 0 {
@@ -1278,10 +1303,6 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 
 	lines := append(append(header, body...), footer...)
 	return fit(lines, usable, rows)
-}
-
-func onlyAllUsageAndLoad(sec watchSections, visible []AgentUsage) bool {
-	return sec.AllUsage && sec.Load && len(visible) == 0 && !sec.History && !sec.Processes
 }
 
 // RenderSummary prints one static frame of the same compact, btop-style grid

@@ -1,30 +1,47 @@
 package usage
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
 
-// TestGridColumnsFitsWithGutters guards the layout bug that broke `--watch`:
-// boxWidth was computed as total/columns, ignoring the boxGap columns that
-// combineRow inserts between panels. At 100 columns that produced two 50-wide
-// boxes plus a gutter = 101 cells, wrapping every box line onto a second
-// physical row and corrupting the whole frame.
-func TestGridColumnsFitsWithGutters(t *testing.T) {
-	for usable := minTerminalWidth; usable <= 200; usable++ {
-		for panels := 1; panels <= 6; panels++ {
-			columns, boxWidth := gridColumns(usable, panels)
-			if columns < 1 || columns > panels {
-				t.Fatalf("usable=%d panels=%d: columns=%d out of range", usable, panels, columns)
-			}
-			if columns == 1 {
-				continue
-			}
-			total := columns*boxWidth + (columns-1)*boxGap
-			if total > usable {
-				t.Errorf("usable=%d panels=%d: row width %d exceeds usable (columns=%d boxWidth=%d)",
-					usable, panels, total, columns, boxWidth)
+// TestBuildWatchFrameRowsFitWidth guards the layout bug that broke `--watch`:
+// a row's boxes plus their gutters must never exceed the terminal's usable
+// width, or the last box on the row gets silently mangled by fit()'s
+// truncateVisible instead of wrapping to its own row. Since issue 093, row
+// packing comes from internal/uix.Layout rather than a bespoke grid
+// computation, but the invariant still has to hold end to end through
+// buildWatchFrame, at every terminal size the panel toggles are exercised
+// at (issue 093 acceptance: 80x18, 80x24, 100x24, 120x18).
+func TestBuildWatchFrameRowsFitWidth(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+				Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 85, DurationLeft: 8 * time.Hour},
+				Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 9, DurationLeft: 4 * time.Hour}},
+			{AgentID: "agy", Name: "Antigravity", Installed: true, Authenticated: true},
+			{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true},
+		},
+	}
+
+	sizes := [][2]int{{80, 18}, {80, 24}, {100, 24}, {120, 18}}
+	sectionSets := []watchSections{
+		defaultWatchSections(),
+		compactWatchSections(),
+	}
+	for _, size := range sizes {
+		cols, rows := size[0], size[1]
+		for _, sec := range sectionSets {
+			frame := buildWatchFrame(summary, nil, 60*time.Second, sec, cols, rows, false, "", "")
+			for i, l := range frame.lines {
+				if got := visLen(l); got > frame.cols {
+					t.Errorf("size=%dx%d: line %d visible width %d exceeds usable %d: %q",
+						cols, rows, i, got, frame.cols, stripANSI(l))
+				}
 			}
 		}
 	}
@@ -390,13 +407,25 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 	}
 }
 
+// TestCompactWatchSectionsAndAllUsageToggle also covers issue 093's flag
+// interaction bug: `--watch --compact --proc` must show the Processes panel
+// even though compactWatchSections() itself never enables it — --proc is an
+// explicit request and has to win over the compact default.
 func TestCompactWatchSectionsAndAllUsageToggle(t *testing.T) {
 	sec := initialWatchSections(WatchOptions{Compact: true, ShowProcesses: true})
 	if !sec.AllUsage || !sec.Load {
 		t.Fatalf("compact initial sections should show all-usage and load: %+v", sec)
 	}
-	if sec.Claude || sec.AGY || sec.Codex || sec.History || sec.Processes {
-		t.Fatalf("compact initial sections should hide all other panels: %+v", sec)
+	if !sec.Processes {
+		t.Fatalf("--proc must show the Processes panel even under --compact: %+v", sec)
+	}
+	if sec.Claude || sec.AGY || sec.Codex || sec.History {
+		t.Fatalf("compact initial sections should hide the other non-requested panels: %+v", sec)
+	}
+
+	sec = initialWatchSections(WatchOptions{Compact: true})
+	if sec.Processes {
+		t.Fatalf("compact initial sections should hide Processes when --proc was not requested: %+v", sec)
 	}
 
 	if !applyWatchSectionKey(&sec, 'a') || sec.AllUsage {
@@ -764,4 +793,195 @@ func TestBuildWatchFrame_RemoteHost(t *testing.T) {
 	if !strings.Contains(frameText, "[r]emote") {
 		t.Errorf("expected [r]emote in footer, got:\n%s", frameText)
 	}
+}
+
+// TestBuildWatchFrameLayoutMatrix is the issue 093 acceptance-criteria
+// layout matrix: every combination of --summary / --summary --proc /
+// --watch --compact / --watch --compact --proc at 80x18, 80x24, 100x24,
+// and 120x18 must
+//   - never emit a line wider than the terminal (uix.Layout's row-packing
+//     invariant, checked end to end through buildWatchFrame),
+//   - show the Processes panel body whenever --proc is requested, even
+//     under --compact (the flag-interaction bug this issue fixes), and
+//   - identify any height-dropped panels by bracketed key (e.g. "[P] [O]
+//     hidden"), never only a bare count.
+func TestBuildWatchFrameLayoutMatrix(t *testing.T) {
+	tempDir := t.TempDir()
+	_ = AppendHistory(tempDir, UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true},
+		},
+	})
+
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+				Account: "active session", PlanTier: "Pro",
+				Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 86, DurationLeft: 7*time.Hour + 16*time.Minute},
+				Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 24, DurationLeft: 3*time.Hour + 10*time.Minute}},
+			{AgentID: "agy", Name: "Antigravity (AGY)", Installed: true, Authenticated: true,
+				Account: "u***l@gmail.com", PlanTier: "Consumer", ActiveModel: "Gemini 3.7 Flash (Low)",
+				ModelGroups: []ModelGroup{{Name: "Gemini Models", Windows: []QuotaWindow{
+					{Name: "Weekly", UsedPercent: 97, DurationLeft: 2*24*time.Hour + 6*time.Hour},
+					{Name: "Session (5-hour)", UsedPercent: 27, DurationLeft: time.Hour},
+				}}}},
+			{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true,
+				Account: "u***l@gmail.com", PlanTier: "Plus", ActiveModel: "gpt-5.5",
+				Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 49, DurationLeft: 5*24*time.Hour + 7*time.Hour},
+				Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 59, DurationLeft: 3*time.Hour + 24*time.Minute}},
+		},
+	}
+
+	type mode struct {
+		name string
+		sec  watchSections
+	}
+	modes := []mode{
+		{"summary", func() watchSections { s := defaultWatchSections(); return s }()},
+		{"summary-proc", func() watchSections { s := defaultWatchSections(); s.Processes = true; return s }()},
+		{"watch-compact", initialWatchSections(WatchOptions{Compact: true})},
+		{"watch-compact-proc", initialWatchSections(WatchOptions{Compact: true, ShowProcesses: true})},
+	}
+
+	sizes := [][2]int{{80, 18}, {80, 24}, {100, 24}, {120, 18}}
+
+	hiddenNoteRE := regexp.MustCompile(`… ((\[[A-Za-z]\] ?)+)hidden`)
+	bareCountRE := regexp.MustCompile(`\d+ panel\(s\) hidden`)
+
+	for _, sz := range sizes {
+		cols, rows := sz[0], sz[1]
+		for _, m := range modes {
+			t.Run(fmt.Sprintf("%dx%d/%s", cols, rows, m.name), func(t *testing.T) {
+				frame := buildWatchFrame(summary, nil, 60*time.Second, m.sec, cols, rows, false, "", tempDir)
+
+				for i, l := range frame.lines {
+					if got := visLen(l); got > frame.cols {
+						t.Errorf("line %d visible width %d exceeds usable %d: %q", i, got, frame.cols, stripANSI(l))
+					}
+				}
+
+				frameText := strings.Join(frame.lines, "\n")
+				plain := stripANSI(frameText)
+
+				if strings.Contains(m.name, "proc") {
+					// --proc must win the "is this panel requested" decision
+					// (issue 093's flag-interaction bug: --compact used to
+					// silently ignore ShowProcesses). It may still lose the
+					// "does it fit" decision to a short terminal, so this
+					// only asserts Processes never shows up in the toggle
+					// "hidden: [x]" hint (a *requested* panel is never
+					// toggled off) — a height-overflow drop is a separate,
+					// legitimate outcome checked below via droppedKeys.
+					if idx := strings.Index(plain, "hidden: "); idx >= 0 {
+						hintLine := plain[idx:]
+						if nl := strings.IndexByte(hintLine, '\n'); nl >= 0 {
+							hintLine = hintLine[:nl]
+						}
+						if strings.Contains(hintLine, "[P]") {
+							t.Errorf("--proc requested but Processes shows up in the toggled-off hidden hint: %q", hintLine)
+						}
+					}
+				}
+
+				if bareCountRE.MatchString(plain) {
+					t.Errorf("height-overflow hint used a bare count instead of panel keys, got:\n%s", plain)
+				}
+				if idx := strings.Index(plain, "hidden — terminal too short"); idx >= 0 {
+					if !hiddenNoteRE.MatchString(plain) {
+						t.Errorf("height-overflow hint did not list bracketed panel keys, got:\n%s", plain)
+					}
+				}
+			})
+		}
+	}
+}
+
+// boxTopBorderWidths measures each box's rendered width on a top-border
+// line ("┌─ [X] Title ──…──┐" segments side by side), by pairing each "┌"
+// with its "┐". Used to check a box's actual width against its useful
+// content width instead of the full terminal width.
+func boxTopBorderWidths(line string) []int {
+	runes := []rune(stripANSI(line))
+	var widths []int
+	start := -1
+	for i, r := range runes {
+		switch r {
+		case '┌':
+			start = i
+		case '┐':
+			if start >= 0 {
+				widths = append(widths, i-start+1)
+				start = -1
+			}
+		}
+	}
+	return widths
+}
+
+// TestBuildWatchFrameLoadOnlyDoesNotStretch covers issue 093's Findings #4:
+// toggling compact mode down to just Load must not leave the box stretched
+// across most of a wide terminal — it should stay near its own useful
+// width since it does not benefit from stretch.
+func TestBuildWatchFrameLoadOnlyDoesNotStretch(t *testing.T) {
+	sec := compactWatchSections()
+	sec.AllUsage = false // only Load left visible, as in the issue's toggle repro
+
+	summary := UsageSummary{Timestamp: testTime}
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 24, false, "", "")
+
+	found := false
+	for _, l := range frame.lines {
+		if !strings.Contains(stripANSI(l), "[L] Load") {
+			continue
+		}
+		found = true
+		widths := boxTopBorderWidths(l)
+		if len(widths) != 1 {
+			t.Fatalf("expected exactly one box on the Load-only row, got %v in %q", widths, stripANSI(l))
+		}
+		if widths[0] > minBoxWidth+20 {
+			t.Errorf("Load-only box width %d stretched far past its useful width (min %d), line: %q",
+				widths[0], minBoxWidth, stripANSI(l))
+		}
+	}
+	if !found {
+		t.Fatalf("expected a Load box in the frame:\n%s", strings.Join(frame.lines, "\n"))
+	}
+}
+
+// TestBuildWatchFrameCompactAllUsageDoesNotStarveLoad covers issue 093's
+// Findings #5: in compact mode with both All Usage and Load visible, All
+// Usage must not claim the whole row and squeeze Load down; each box
+// should size to its own useful content width and share the row.
+func TestBuildWatchFrameCompactAllUsageDoesNotStarveLoad(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+				Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 86, DurationLeft: 7*time.Hour + 16*time.Minute},
+				Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 24, DurationLeft: 3*time.Hour + 10*time.Minute}},
+		},
+	}
+
+	frame := buildWatchFrame(summary, nil, 60*time.Second, compactWatchSections(), 100, 24, false, "", "")
+
+	for _, l := range frame.lines {
+		stripped := stripANSI(l)
+		if !strings.Contains(stripped, "[a] All Usage") || !strings.Contains(stripped, "[L] Load") {
+			continue
+		}
+		widths := boxTopBorderWidths(l)
+		if len(widths) != 2 {
+			t.Fatalf("expected All Usage and Load as two boxes on one row, got %v in %q", widths, stripped)
+		}
+		loadWidth := widths[1]
+		if loadWidth < minBoxWidth {
+			t.Errorf("Load box starved to width %d (min useful %d) by All Usage sharing the row: %q",
+				loadWidth, minBoxWidth, stripped)
+		}
+		return
+	}
+	t.Fatalf("expected All Usage and Load to share one row at 100 columns:\n%s", strings.Join(frame.lines, "\n"))
 }

@@ -1,6 +1,6 @@
 # 093 — Usage TUI layout planner and sizing policy
 
-**Status**: Open
+**Status**: Closed — resolved in internal/usage/watch.go integration of internal/uix (see commits below)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
@@ -189,3 +189,59 @@ Earlier review-only assessment used bounded watch runs with `timeout` and an int
 Prototype library verification:
 
 - `go test ./internal/uix`
+
+## 8. Integration (resolved)
+
+`internal/uix` is now wired into `internal/usage/watch.go`'s `buildWatchFrame`, replacing the
+ad-hoc `gridColumns`/`onlyAllUsageAndLoad` special-case packing:
+
+- **Flag bug fixed**: `initialWatchSections` no longer returns early for `--compact` before
+  checking `ShowProcesses`; `--watch --compact --proc` now shows the Processes panel. Verified
+  via `TestCompactWatchSectionsAndAllUsageToggle` and a bounded PTY run at all four required
+  terminal sizes.
+- **Deliberate, consistent truncation**: every panel's box first measures its own natural
+  (untruncated) content width at a generous width, then is capped at `maxPanelContentWidth`
+  (80 columns) as a single shared policy — the same truncation path (`renderWBox`'s
+  ellipsis-on-overflow) now applies uniformly to Claude/AGY/Codex, All Usage, History, Processes,
+  and Load, instead of Load/All-Usage having their own bespoke logic.
+- **Height-overflow hints identify panel keys**: `buildWatchFrame` now tracks which specific
+  panels (by their `[X]` key) got dropped for lack of vertical room, e.g.
+  `… [P] [O] hidden — terminal too short`, replacing the old `N panel(s) hidden` count-only note.
+- **All Usage no longer starves Load**: both are sized to their own measured preferred width and
+  packed left-to-right by `uix.Layout`, so in compact mode they naturally share one row without
+  All Usage claiming the whole terminal width.
+- **No more arbitrary stretch**: Load-only and All-Usage-plus-agent-boxes toggle states stay near
+  their useful widths (no box in the current panel set declares `Stretch: true`); All Usage width
+  is now driven by its own measured content (e.g. 84 columns when showing 2 quota windows per
+  agent) rather than a hardcoded 55-column constant or a full-width special case.
+
+Tests added/changed in `internal/usage/watch_test.go`:
+
+- `TestBuildWatchFrameRowsFitWidth` — replaces the old `TestGridColumnsFitsWithGutters` (which
+  tested the removed `gridColumns` function directly); asserts no rendered line exceeds the
+  terminal's usable width at 80x18, 80x24, 100x24, 120x18 for both default and compact sections.
+- `TestBuildWatchFrameLayoutMatrix` — the acceptance-criteria matrix: all four terminal sizes
+  crossed with `--summary`, `--summary --proc`, `--watch --compact`, `--watch --compact --proc`
+  (16 cases), asserting the row-fits-width invariant, that `--proc` never shows up in the
+  toggled-off `hidden:` hint, and that any height-overflow note lists bracketed panel keys, never
+  a bare count.
+- `TestBuildWatchFrameLoadOnlyDoesNotStretch` and `TestBuildWatchFrameCompactAllUsageDoesNotStarveLoad`
+  — direct regressions for Findings #4 and #5.
+- `TestCompactWatchSectionsAndAllUsageToggle` updated to assert the fixed `--proc` + `--compact`
+  interaction instead of the old (buggy) expectation.
+
+Full verification run:
+
+- `go build ./...`, `go vet ./...`, `go test ./...` — all pass.
+- `make check` — passes.
+- `make install` — rebuilt `~/go/bin/harnez`.
+- Manual renders at `COLUMNS=80/100/120 LINES=18/24 harnez usage --summary[--proc]` — confirmed
+  deliberate packing and keyed hidden-panel hints (e.g. `… [O] [H] [L] hidden — terminal too
+  short`).
+- Bounded PTY runs (Python `pty.fork`, explicit `TIOCSWINSZ`, `q` sent to exit, process confirmed
+  reaped via `pgrep`) of `--watch --compact --proc` at all four required sizes, plus an
+  interactive toggle sequence (`A`,`p`,`l`,`a`) reproducing the ticket's Findings #5 scenario
+  (All Usage + individual agent boxes) — All Usage renders at its natural content width, agent
+  boxes pack in a compact grid below, no stretch. No watch process left running after any check.
+
+No deferred work: acceptance criteria in section 5 are fully met by this integration.
