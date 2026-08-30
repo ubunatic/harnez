@@ -103,3 +103,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 102 | [102-usage-summary-compact-should-be-allowed.md](102-usage-summary-compact-should-be-allowed.md) | `harnez usage --summary --compact` should be allowed | Closed — resolved in 1d98fb6 |
 | 103 | [103-agy-missing-from-all-usage-aggregate.md](103-agy-missing-from-all-usage-aggregate.md) | Antigravity missing from All Usage aggregate despite recent historical data | Open |
 | 104 | [104-agy-quota-collector-requires-live-process-poll-coincidence.md](104-agy-quota-collector-requires-live-process-poll-coincidence.md) | AGY quota collector only records data when a live process poll coincides with a running AGY instance | Open |
+| 105 | [105-surface-per-collector-fetch-status-in-usage-ui.md](105-surface-per-collector-fetch-status-in-usage-ui.md) | Surface per-collector fetch status in usage UI, including compact view | Open |
