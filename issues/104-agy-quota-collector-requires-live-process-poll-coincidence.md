@@ -1,10 +1,42 @@
 # 104 — AGY quota collector only ever records data when a live process poll coincides with a running AGY instance
 
-**Status**: Open
+**Status**: Closed — resolved in 783cfcc; `CollectAGY` now shells out to `agy -p "/usage"` instead of scanning `/proc` for a live LanguageServer process
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
 **Related**: [[103-agy-missing-from-all-usage-aggregate]], `internal/usage/agy.go`, issue 087 (flock+freshness gate generalized to Codex/AGY), issue 033 (original live-fetch cache mechanism)
+
+## Resolution
+
+`CollectAGY` (`internal/usage/agy.go`) no longer scans `/proc` for a running
+AGY `LanguageServer` process or calls its Connect-RPC endpoint. It shells
+out to `agy -p "/usage"` (canary-verified in this ticket's addendum below
+to not itself consume model quota, even against an exhausted account) and
+parses the plain-text quota table into `ModelGroups`. This removes the
+live-process-poll coincidence entirely: a fresh `agy` invocation is
+spawned on demand rather than requiring one to already be listening.
+
+The existing on-disk `harnez-quota-cache.json` freshness gate and
+cross-process flock (issue 033/087) are unchanged — only the fetch
+mechanism underneath them changed. A failed or empty fetch still falls
+back to the cached reading (labeled stale) and never overwrites the
+on-disk cache with empty data, addressing this ticket's acceptance
+criteria 1 and 2 (`QuotaFetchError` is now always set on a failed/empty
+attempt, addressing criterion 3).
+
+Verified live against the real `~/.gemini/antigravity-cli`: `harnez usage
+--summary` and `--summary --compact`'s `[a] All Usage` both now show
+fresh AGY quota bars (also resolving issue 103's symptom), addressing
+criterion 4. `go test ./...`/`make check` pass, including new regression
+tests `TestCollectAGYFailedFetchPreservesDiskCache` and
+`TestCollectAGYEmptyFetchPreservesDiskCache`. See
+`docs/studies/2026-08-28-usage-collector-daemon-architecture.md` §6 for
+the broader per-agent quota-source architecture note (why this pattern
+applies to AGY but not Claude/Codex).
+
+`findAGYPorts()`'s flagged efficiency/robustness concerns (see Notes
+below) are moot now that the function is deleted along with the rest of
+the RPC/proc-scan path.
 
 ## Problem
 
