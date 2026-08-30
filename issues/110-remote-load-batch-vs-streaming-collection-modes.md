@@ -93,6 +93,19 @@ with `remote.go`/`watch.go`/`history.go`'s existing pattern.
 Options B/C/D below are kept for context on why A was chosen, not as live
 alternatives pending further work.
 
+**Deployment dependency**: `harnez load-stream` is a new subcommand, so
+streaming only works once the remote's installed `harnez` is rebuilt from a
+source tree that has it. `Makefile:92`'s existing `sync` target already
+covers this — `git push` locally, then over SSH: `git pull && make install
+&& make status` on the remote — no new deploy mechanism is needed, `make
+sync` before testing against a host is sufficient. This has a convenient
+side effect for acceptance criterion 4 (transparent fallback): a remote
+running a `harnez` predating `load-stream` simply fails that exec with
+"unknown command," which is indistinguishable from any other
+stream-unavailable case (network blip, disconnected host, etc.) and is
+already covered by the generic "stream attempt failed → use batch" fallback
+path — no special-casing an out-of-date remote is required.
+
 ### Option A — OpenSSH `ControlMaster` connection multiplexing
 
 Open one master connection (`ssh -M -S <control-path> -fN host`), then reuse
