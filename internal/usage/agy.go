@@ -6,10 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -26,25 +27,6 @@ type AGYSettings struct {
 	Model string `json:"model"`
 }
 
-// AGYQuotaResponse models Connect RPC response from RetrieveUserQuotaSummary
-type AGYQuotaResponse struct {
-	Response struct {
-		Groups []struct {
-			DisplayName string `json:"displayName"`
-			Description string `json:"description"`
-			Buckets     []struct {
-				BucketID          string  `json:"bucketId"`
-				DisplayName       string  `json:"displayName"`
-				Description       string  `json:"description"`
-				Window            string  `json:"window"`
-				RemainingFraction float64 `json:"remainingFraction"`
-				ResetTime         string  `json:"resetTime"`
-			} `json:"buckets"`
-		} `json:"groups"`
-		Description string `json:"description"`
-	} `json:"response"`
-}
-
 // agyQuotaPayload is AGY's live-fetch cache payload shape (see the shared
 // liveFetchCache gate in livefetchcache.go, issue 033/087). Unlike
 // Claude/Codex's Session/Weekly windows, AGY reports quota as a set of named
@@ -53,140 +35,116 @@ type agyQuotaPayload struct {
 	ModelGroups []ModelGroup `json:"model_groups,omitempty"`
 }
 
-// findAGYPortsFn is findAGYPorts behind a package-level variable so tests can
-// stub port discovery (which otherwise depends on real /proc entries for a
-// running agy process) and point CollectAGY's live-fetch gate at a mock RPC
-// server instead.
-var findAGYPortsFn = findAGYPorts
+// agyUsageCmdTimeout bounds how long CollectAGY waits for `agy -p "/usage"`
+// to answer. `/usage` is a local slash command — canary-verified in issue
+// 104 to not itself consume model quota, even when the account's real
+// model quota is exhausted — so it should return quickly, but the exec
+// must never be allowed to block a harnez poll indefinitely if the agy CLI
+// hangs (e.g. on an unexpected prompt or a cold start).
+const agyUsageCmdTimeout = 15 * time.Second
 
-// findAGYPorts locates the listening LanguageServer ports of running agy processes.
-// A single agy process can listen on more than one port (e.g. a TLS-only port
-// alongside the plain-HTTP RPC port), so all candidates are returned and the
-// caller must try each until the actual RPC call succeeds.
-func findAGYPorts() []int {
-	procDirs, err := os.ReadDir("/proc")
-	if err != nil {
-		return nil
-	}
+// runAGYUsageCmdFn is runAGYUsageCmd behind a package-level variable so
+// tests can stub the exec call without a real `agy` binary on PATH.
+var runAGYUsageCmdFn = runAGYUsageCmd
 
-	var ports []int
-	for _, p := range procDirs {
-		if !p.IsDir() {
+// runAGYUsageCmd shells out to `agy -p "/usage"` and returns its raw stdout.
+// This replaces the earlier live-process RPC/`/proc`-scan mechanism (issue
+// 104): `/usage` is answered by a fresh, self-contained `agy` invocation,
+// so it does not depend on an AGY process already happening to be running
+// and listening on a port at the exact moment harnez polls.
+func runAGYUsageCmd(ctx context.Context) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, agyUsageCmdTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "agy", "-p", "/usage")
+	return cmd.Output()
+}
+
+// agyUsageFieldSplit matches runs of 2+ spaces, used as a fallback column
+// splitter when `agy -p "/usage"`'s output isn't tab-delimited (e.g. it
+// column-pads with spaces instead of tabs when attached to a terminal
+// rather than piped, as harnez invokes it).
+var agyUsageFieldSplit = regexp.MustCompile(`\s{2,}`)
+
+// parseAGYUsageOutput parses `agy -p "/usage"`'s quota table, e.g.:
+//
+//	Gemini Models          Weekly Limit Remaining     1%   2026-08-31T16:27:56Z
+//	Gemini Models          Five Hour Limit Remaining  91%  2026-08-30T19:33:52Z
+//	Claude and GPT models  Weekly Limit Remaining     31%  2026-09-04T10:25:29Z
+//
+// into ModelGroups, grouping windows by their leading group-name column and
+// preserving first-seen order. A line that doesn't split into the expected
+// 4 columns, or whose percentage isn't a number, is skipped rather than
+// failing the whole parse — this is scraping CLI text output, not a
+// versioned API, so a partial reading is still more useful than none.
+func parseAGYUsageOutput(out []byte) []ModelGroup {
+	var order []string
+	byName := make(map[string]*ModelGroup)
+	now := time.Now()
+
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := strings.TrimRight(scanner.Text(), "\r")
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || trimmed == "Quota:" {
 			continue
 		}
-		pid := p.Name()
-		if _, err := strconv.Atoi(pid); err != nil {
+
+		fields := strings.Split(line, "\t")
+		if len(fields) < 4 {
+			fields = agyUsageFieldSplit.Split(trimmed, -1)
+		}
+		if len(fields) < 4 {
 			continue
 		}
 
-		cmdlinePath := filepath.Join("/proc", pid, "cmdline")
-		cmdBytes, err := os.ReadFile(cmdlinePath)
+		groupName := strings.TrimSpace(fields[0])
+		windowName := strings.TrimSpace(fields[1])
+		pctStr := strings.TrimSuffix(strings.TrimSpace(fields[2]), "%")
+		resetStr := strings.TrimSpace(fields[3])
+		if groupName == "" || windowName == "" {
+			continue
+		}
+
+		remPct, err := strconv.ParseFloat(pctStr, 64)
 		if err != nil {
 			continue
 		}
+		usedPct := 100 - remPct
+		if usedPct < 0 {
+			usedPct = 0
+		}
+		if remPct < 0 {
+			remPct = 0
+		}
 
-		cmd := string(cmdBytes)
-		if strings.Contains(cmd, "agy") || strings.Contains(cmd, "antigravity") {
-			// Find socket inodes for this process
-			fdDir := filepath.Join("/proc", pid, "fd")
-			fds, err := os.ReadDir(fdDir)
-			if err != nil {
-				continue
-			}
-
-			var socketInodes []string
-			for _, fd := range fds {
-				target, err := os.Readlink(filepath.Join(fdDir, fd.Name()))
-				if err == nil && strings.HasPrefix(target, "socket:[") {
-					inode := strings.TrimSuffix(strings.TrimPrefix(target, "socket:["), "]")
-					socketInodes = append(socketInodes, inode)
-				}
-			}
-
-			if len(socketInodes) == 0 {
-				continue
-			}
-
-			// Look up ports in /proc/net/tcp and /proc/net/tcp6
-			for _, tcpFile := range []string{"/proc/net/tcp", "/proc/net/tcp6"} {
-				tcpData, err := os.ReadFile(tcpFile)
-				if err != nil {
-					continue
-				}
-
-				lines := strings.Split(string(tcpData), "\n")
-				for _, line := range lines {
-					fields := strings.Fields(line)
-					if len(fields) > 9 {
-						inode := fields[9]
-						state := fields[3]
-						// State 0A = TCP_LISTEN
-						if state == "0A" {
-							for _, sinode := range socketInodes {
-								if inode == sinode {
-									local := fields[1]
-									parts := strings.Split(local, ":")
-									if len(parts) >= 2 {
-										portHex := parts[len(parts)-1]
-										if port64, err := strconv.ParseInt(portHex, 16, 32); err == nil {
-											port := int(port64)
-											if probeAGYPort(port) {
-												ports = append(ports, port)
-											}
-										}
-									}
-								}
-							}
-						}
-					}
+		qw := QuotaWindow{
+			Name:             windowName,
+			UsedPercent:      usedPct,
+			RemainingPercent: remPct,
+		}
+		if resetStr != "" {
+			if t, err := time.Parse(time.RFC3339, resetStr); err == nil {
+				qw.ResetAt = &t
+				if t.After(now) {
+					qw.DurationLeft = t.Sub(now)
 				}
 			}
 		}
-	}
-	return ports
-}
 
-// probeAGYPort verifies a port is at least accepting TCP connections. It is a
-// cheap pre-filter only — a port can accept TCP and still not serve the plain
-// HTTP RPC (e.g. a TLS-only listener), so callers must still confirm with a
-// real RetrieveUserQuotaSummary request.
-func probeAGYPort(port int) bool {
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 200*time.Millisecond)
-	if err != nil {
-		return false
-	}
-	conn.Close()
-	return true
-}
-
-// QueryAGYLocalQuota calls the local LanguageServer Connect RPC to fetch live model group quotas.
-func QueryAGYLocalQuota(ctx context.Context, port int, client *http.Client) (*AGYQuotaResponse, error) {
-	if client == nil {
-		client = &http.Client{Timeout: 2 * time.Second}
+		g, ok := byName[groupName]
+		if !ok {
+			g = &ModelGroup{Name: groupName}
+			byName[groupName] = g
+			order = append(order, groupName)
+		}
+		g.Windows = append(g.Windows, qw)
 	}
 
-	url := fmt.Sprintf("http://127.0.0.1:%d/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary", port)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBufferString("{}"))
-	if err != nil {
-		return nil, err
+	groups := make([]ModelGroup, 0, len(order))
+	for _, name := range order {
+		groups = append(groups, *byName[name])
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
-
-	var quotaResp AGYQuotaResponse
-	if err := json.NewDecoder(resp.Body).Decode(&quotaResp); err != nil {
-		return nil, err
-	}
-	return &quotaResp, nil
+	return groups
 }
 
 // CollectAGY inspects ~/.gemini/antigravity-cli for token, model settings, and session logs, and queries live quota pools.
@@ -303,10 +261,10 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 		}
 	}
 
-	// 5. Query live quota pools if online / client provided, but check the
-	// shared on-disk cache first so a warm reading from a sibling `harnez`
-	// process (or this process's own last tick) short-circuits the RPC call
-	// entirely (issue 033, generalized to AGY in issue 087).
+	// 5. Query live quota via `agy -p "/usage"`, but check the shared
+	// on-disk cache first so a warm reading from a sibling `harnez`
+	// process (or this process's own last tick) short-circuits the exec
+	// call entirely (issue 033, generalized to AGY in issue 087).
 	if client != nil {
 		cachePath := liveFetchCachePath(geminiDir)
 		defer lockLiveFetchInProcess(cachePath)()
@@ -328,89 +286,58 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 				defer unlockLiveFetchCache(lockFile)
 			}
 
-			// A process can listen on more than one port (e.g. a TLS-only
-			// port alongside the plain HTTP RPC port), so try each candidate
-			// until one actually answers.
-			ports := findAGYPortsFn()
-			var lastErr error
-			fetched := false
-			for _, port := range ports {
-				quotaResp, err := QueryAGYLocalQuota(ctx, port, client)
-				if err != nil || quotaResp == nil {
-					if err != nil {
-						lastErr = err
-					}
-					continue
-				}
-				fetched = true
-				usage.Authenticated = true
-				usage.Sources = append(usage.Sources, "127.0.0.1 (LanguageServer RPC)")
-				now := time.Now()
-				for _, g := range quotaResp.Response.Groups {
-					mg := ModelGroup{
-						Name:        g.DisplayName,
-						Description: g.Description,
-					}
-					for _, b := range g.Buckets {
-						remPct := b.RemainingFraction * 100.0
-						usedPct := 100.0 - remPct
-						if usedPct < 0 {
-							usedPct = 0
-						}
-						if remPct < 0 {
-							remPct = 0
-						}
-
-						qw := QuotaWindow{
-							Name:             b.DisplayName,
-							UsedPercent:      usedPct,
-							RemainingPercent: remPct,
-						}
-						if b.ResetTime != "" {
-							if t, err := time.Parse(time.RFC3339Nano, b.ResetTime); err == nil {
-								qw.ResetAt = &t
-								if t.After(now) {
-									qw.DurationLeft = t.Sub(now)
-								}
-							}
-						}
-						mg.Windows = append(mg.Windows, qw)
-					}
-					usage.ModelGroups = append(usage.ModelGroups, mg)
-				}
-				break
+			out, err := runAGYUsageCmdFn(ctx)
+			var groups []ModelGroup
+			if err == nil {
+				groups = parseAGYUsageOutput(out)
 			}
-			if !fetched && len(ports) > 0 && lastErr != nil {
-				usage.QuotaFetchError = lastErr.Error()
-			}
+			fetched := err == nil && len(groups) > 0
 
 			if fetched {
+				usage.Authenticated = true
+				usage.Sources = append(usage.Sources, `agy -p "/usage"`)
+				usage.ModelGroups = groups
+
 				// Live fetch succeeded: persist it for sibling
 				// processes/next tick, but only if we actually hold the
 				// lock.
 				if locked {
 					_ = writeLiveFetchCache(cachePath, liveFetchCache[agyQuotaPayload]{
 						FetchedAt: time.Now(),
-						Payload:   agyQuotaPayload{ModelGroups: usage.ModelGroups},
+						Payload:   agyQuotaPayload{ModelGroups: groups},
 					})
 				}
-			} else if cache != nil {
-				// Live fetch failed (or found no listening ports): fall back
-				// to the disk cache regardless of its age, labeled stale
-				// (issue 032's " (stale)" convention), mirroring Claude's
-				// behavior.
-				groups := make([]ModelGroup, len(cache.Payload.ModelGroups))
-				for i, g := range cache.Payload.ModelGroups {
-					ng := g
-					ng.Windows = make([]QuotaWindow, len(g.Windows))
-					for j, w := range g.Windows {
-						w := w
-						ng.Windows[j] = *staleQuotaWindow(&w)
-					}
-					groups[i] = ng
+			} else {
+				// The exec call failed, timed out, or came back with no
+				// parseable quota lines. Never let an empty/failed result
+				// overwrite the on-disk cache or blank out real data:
+				// surface it as a fetch error for diagnostics, and fall
+				// back to whatever is on disk regardless of its age,
+				// labeled stale (issue 032's " (stale)" convention),
+				// mirroring Claude's behavior. This is the same guarantee
+				// the earlier RPC-based fetch gave when no AGY process was
+				// listening — a failed/empty live attempt here must never
+				// be the thing that makes prior quota data disappear.
+				if err != nil {
+					usage.QuotaFetchError = err.Error()
+				} else {
+					usage.QuotaFetchError = `agy -p "/usage" returned no parseable quota lines`
 				}
-				usage.ModelGroups = groups
-				usage.Sources = append(usage.Sources, "~/.gemini/antigravity-cli/harnez-quota-cache.json (stale)")
+
+				if cache != nil {
+					staleGroups := make([]ModelGroup, len(cache.Payload.ModelGroups))
+					for i, g := range cache.Payload.ModelGroups {
+						ng := g
+						ng.Windows = make([]QuotaWindow, len(g.Windows))
+						for j, w := range g.Windows {
+							w := w
+							ng.Windows[j] = *staleQuotaWindow(&w)
+						}
+						staleGroups[i] = ng
+					}
+					usage.ModelGroups = staleGroups
+					usage.Sources = append(usage.Sources, "~/.gemini/antigravity-cli/harnez-quota-cache.json (stale)")
+				}
 			}
 		}
 	}

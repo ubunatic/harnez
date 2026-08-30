@@ -2,7 +2,6 @@ package usage
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -239,76 +238,5 @@ func TestCollectAGY_SettingsOnlyIsNotAuthenticated(t *testing.T) {
 	}
 	if usage.ActiveModel != "Gemini 3.7 Flash (Low)" {
 		t.Errorf("expected ActiveModel = Gemini 3.7 Flash (Low), got %q", usage.ActiveModel)
-	}
-}
-
-func TestQueryAGYLocalQuota(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{
-			"response": {
-				"groups": [
-					{
-						"displayName": "Gemini Models",
-						"description": "Gemini Flash, Gemini Pro",
-						"buckets": [
-							{
-								"bucketId": "gemini-weekly",
-								"displayName": "Weekly Limit Remaining",
-								"remainingFraction": 0.95,
-								"resetTime": "2026-08-24T16:00:00Z"
-							},
-							{
-								"bucketId": "gemini-5h",
-								"displayName": "Five Hour Limit Remaining",
-								"remainingFraction": 0.80,
-								"resetTime": "2026-08-18T04:00:00Z"
-							}
-						]
-					},
-					{
-						"displayName": "Claude and GPT models",
-						"description": "Claude Opus, Claude Sonnet",
-						"buckets": [
-							{
-								"bucketId": "3p-weekly",
-								"displayName": "Weekly Limit Remaining",
-								"remainingFraction": 1.0,
-								"resetTime": "2026-08-24T20:00:00Z"
-							}
-						]
-					}
-				]
-			}
-		}`))
-	}))
-	defer mockServer.Close()
-
-	client := mockServer.Client()
-	// Parse port from mockServer.URL
-	var port int
-	fmt.Sscanf(mockServer.URL, "http://127.0.0.1:%d", &port)
-	if port == 0 {
-		fmt.Sscanf(mockServer.URL, "http://[::1]:%d", &port)
-	}
-
-	ctx := context.Background()
-	resp, err := QueryAGYLocalQuota(ctx, port, client)
-	if err != nil {
-		t.Fatalf("QueryAGYLocalQuota failed: %v", err)
-	}
-
-	if len(resp.Response.Groups) != 2 {
-		t.Fatalf("expected 2 groups, got %d", len(resp.Response.Groups))
-	}
-	if resp.Response.Groups[0].DisplayName != "Gemini Models" {
-		t.Errorf("expected group 'Gemini Models', got %q", resp.Response.Groups[0].DisplayName)
-	}
-	if len(resp.Response.Groups[0].Buckets) != 2 {
-		t.Errorf("expected 2 buckets for Gemini Models, got %d", len(resp.Response.Groups[0].Buckets))
 	}
 }
