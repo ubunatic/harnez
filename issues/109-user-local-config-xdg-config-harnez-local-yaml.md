@@ -1,6 +1,6 @@
 # 109 — User-local config: `~/.config/harnez/local.yaml`
 
-**Status**: Open
+**Status**: Closed — resolved in 984fc99
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
