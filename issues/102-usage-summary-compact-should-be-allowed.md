@@ -1,6 +1,6 @@
 # 102 — `harnez usage --summary --compact` should be allowed
 
-**Status**: Open
+**Status**: Closed — resolved in 1d98fb6
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
