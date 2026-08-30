@@ -1,10 +1,11 @@
-# 106 — Indicate data staleness via dimming/marker in usage UI (compact + full views)
+# 107 — Indicate data staleness via dimming/marker in usage UI (compact + full views)
 
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
-**Related**: [[103-agy-missing-from-all-usage-aggregate]],
+**Related**: [[106-verify-offline-derivability-of-quota-state]] (follow-up to this audit),
+[[103-agy-missing-from-all-usage-aggregate]],
 [[104-agy-quota-collector-requires-live-process-poll-coincidence]],
 [[105-surface-per-collector-fetch-status-in-usage-ui]],
 [[093-usage-tui-layout-planner]], [[094-usage-watch-controls-overlay-and-presets]],
