@@ -146,3 +146,55 @@ being hours-old, not days-old.
   concerns worth a look while in this code (iterating all of `/proc`,
   re-reading `/proc/net/tcp{,6}` per candidate process) but that's
   out of scope here — flagged for visibility only.
+
+## Addendum (2026-08-30) — `agy -p "/usage"` as an alternate collection path
+
+Inbox note (`issues/inbox/simple-agy-usage-fetch.txt`) proposed shelling
+out to the `agy` CLI's own `/usage` slash command instead of the
+live-RPC/`/proc`-scan path. Output is plain, fixed-column text, one quota
+window per line:
+
+```
+$ agy -p "/usage"
+Gemini Models          Weekly Limit Remaining     1%   2026-08-31T16:27:56Z
+Gemini Models          Five Hour Limit Remaining  91%  2026-08-30T19:33:52Z
+Claude and GPT models  Weekly Limit Remaining     31%  2026-09-04T10:25:29Z
+Claude and GPT models  Five Hour Limit Remaining  0%   2026-08-30T19:47:02Z
+```
+
+This sidesteps the coincidence problem entirely: instead of requiring an
+AGY process to already be listening on a port at poll time, harnez would
+spawn its own short-lived `agy` invocation and read the answer from
+stdout — the same `exec.Command`/`exec.CommandContext` shell-out pattern
+already used for `ssh`, `stty`, `ps`, and `lspci` elsewhere in
+`internal/usage` (`remote.go`, `watch.go`, `load.go`). No `/proc`
+scanning, no socket-inode correlation, no Connect-RPC payload shape, and
+no dependency on the live-fetch cache/lock (issue 033/087) as a
+coincidence-mitigation layer.
+
+**Canary probe run this session** (per `docs/Canary.md`, probe before
+building): the biggest open risk — whether polling `/usage` would itself
+consume model quota, which would make periodic `--watch` polling
+self-defeating — is resolved. With the account's Five-Hour quota for
+"Claude and GPT models" already at 0%, `agy -p "say hi"` (a real model
+turn) failed immediately: `Error: Individual quota reached... Resets in
+1h54m48s.` Run back-to-back, `agy -p "/usage"` still succeeded and
+returned fresh data. `/usage` is answered locally/out-of-band from the
+model-quota-metered path, so polling it does not self-consume.
+
+**Still unverified before adopting this as the fix**:
+- Cold-start latency of spawning a full `agy` process per poll (relevant
+  for `--watch`'s polling cadence; default `--print-timeout` is 5m,
+  suggesting startup isn't instant, though `/usage` itself answered
+  quickly in the ad-hoc test above — not yet measured precisely).
+- Output format stability across `agy` versions/locales — this is text
+  scraping, not a versioned API, same fragility class as the existing
+  `Account`/`PlanTier` log-scraping at `agy.go:242-289`.
+- Whether `agy` needs to be on `PATH` in every context harnez's collector
+  runs in, including a future background collector daemon (issue 082).
+
+Recommendation: prototype `CollectAGY` against this path behind the
+existing `findAGYPortsFn`-style test seam (a package-level func var) so
+tests can stub the exec call, and time a handful of real polls before
+committing — but this looks like the strongest candidate fix for this
+ticket's acceptance criteria 1 and 2.
