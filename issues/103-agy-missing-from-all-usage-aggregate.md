@@ -4,7 +4,7 @@
 **Priority**: P1 (High) — bumped from P2; part of the collector-story investigation the user flagged as high priority on 2026-08-30
 **Severity**: Moderate
 **Category**: Bug
-**Related**: [[086-offline-degraded-cache-snapshot-masks-live-data]], [[101-usage-keep-stale-agents-visible-until-7d]], [[093-usage-tui-layout-planner]], [[094-usage-watch-controls-overlay-and-presets]], commit 7c50f12 (write-path clobber fix), `docs/studies/2026-08-29-a-day-of-fresh-sprints.md`
+**Related**: [[086-offline-degraded-cache-snapshot-masks-live-data]], [[101-usage-keep-stale-agents-visible-until-7d]], [[093-usage-tui-layout-planner]], [[094-usage-watch-controls-overlay-and-presets]], [[104-agy-quota-collector-requires-live-process-poll-coincidence]], commit 7c50f12 (write-path clobber fix), `docs/studies/2026-08-29-a-day-of-fresh-sprints.md`
 
 ## Problem
 
@@ -139,6 +139,28 @@ and once real data ages past 7 days, both go blank simultaneously — this
 ticket's gap is that "past 7 days" is being treated as "discard/never
 show" rather than "still show, but label as stale historical data," per
 the desired behavior below.
+
+## Addendum (2026-08-30) — upstream collection gap found, tracked as issue 104
+
+Follow-up investigation prompted by the user showing real AGY activity as
+recent as 1-2 days ago (Antigravity's own "Resume" conversation list: 92
+conversations, most recent 1 day ago). That directly contradicts the
+"data exists but crossed a 7-day display cutoff" framing above — AGY
+usage never actually stopped, but harnez's `usage-history/*.jsonl` still
+has nothing past 2026-08-23.
+
+Root cause of *that* gap is upstream of this ticket's staleness-gate
+fix and is now tracked separately as
+[[104-agy-quota-collector-requires-live-process-poll-coincidence]]:
+`CollectAGY` (`internal/usage/agy.go`) only ever obtains `ModelGroups`
+via a live Connect-RPC call to a currently-running AGY process
+(discovered via `/proc` scanning in `findAGYPorts`). If no AGY process
+happens to be listening at the moment harnez's collector polls, and no
+`harnez-quota-cache.json` exists yet to fall back to, the fetch silently
+no-ops — regardless of how current AGY's own on-disk conversation/session
+state is. This ticket's 7-day display/fallback gate is a real, separate
+bug, but fixing it alone would not restore fresh AGY data going forward;
+issue 104 is the fix for the collection side.
 
 ## Acceptance Criteria
 
