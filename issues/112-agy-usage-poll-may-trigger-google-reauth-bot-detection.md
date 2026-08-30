@@ -1,6 +1,6 @@
 # 112 — Investigate whether `agy -p "/usage"` polling triggers Google reauth / bot-detection dialogs
 
-**Status**: Open
+**Status**: Closed — inconclusive on causation; mitigation shipped (auth-detection + backoff in `internal/usage/agy.go`, see "Local investigation" below)
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -90,6 +90,86 @@ any interactive-login/401 output from `agy -p "/usage"` as a signal to
 back off polling rather than retry" is a low-cost, evidence-backed
 mitigation worth applying regardless, alongside issue 111's per-agent
 cadence work.
+
+## Local investigation (2026-08-30)
+
+1. **No collector daemon was running.** `systemctl --user list-timers` /
+   `list-units 'harnez*'` show no installed/active
+   `harnez-agent-collector.service` or timer on this machine, and `ps aux`
+   found no `harnez agent-collector` process. The only live harnez process
+   at investigation time was a single foreground `harnez usage -w --compact`
+   (`--watch`), started 22:45. So the "aggregate poll rate from daemon +
+   watch running concurrently" scenario item 3 asked about was not actually
+   in effect right now — there was exactly one poller.
+2. **Actual `agy` exec cadence is capped well below the raw collector
+   interval regardless.** `CollectAGY` (`internal/usage/agy.go`) gates the
+   real `agy -p "/usage"` exec behind the shared `harnez-quota-cache.json`
+   (issue 033/087): any harnez process reusing a reading fetched within
+   `MinWatchInterval` (30s) short-circuits the exec entirely, and this gate
+   is cross-process (flock-backed), so a daemon and a `--watch` session
+   running at the same time do not double the real invocation rate against
+   `agy` — they share one fetch per window. In practice, with only one
+   `--watch` process running, the actual exec rate was far below even the
+   30s floor.
+3. **No auth-failure signal found in `agy`'s own logs.** Scanned all 160
+   files under `~/.gemini/antigravity-cli/log/cli-*.log` (spanning
+   2026-08-24 through 2026-08-30, i.e. covering the period the user
+   reported seeing dialogs) for `interactive login`, `Further action`,
+   `401`, `Unauthenticated`, `reauth`, `please (log|sign)`, "browser to
+   (login|authenticate)" — no matches. The most recent log
+   (`cli-20260830_225211.log`) shows a completely normal cycle: `keyring.go:
+   loaded token, expiry=... expired=false` → `Auth succeeded, refreshing
+   features and managers` → `authenticated via keyring` →
+   `authenticated successfully as uwe.jugel@gmail.com`. The short-lived
+   (~26s) token expiry visible there is a normal access-token TTL refreshed
+   via the cached OAuth session on every invocation, not evidence of
+   expiry-related failure.
+4. **`CollectAGY` did not previously distinguish an auth-required
+   response from any other error.** Before this change, a failed/empty
+   `agy -p "/usage"` result (bad exit code, timeout, or unparseable output —
+   which is exactly what a stuck reauth prompt or a 401 would look like)
+   was folded into the same generic `QuotaFetchError` path as a missing
+   binary or a context-deadline timeout, with no way to tell the two apart
+   from harnez's own state. This confirms the ticket's item 3 question
+   directly: no, it did not distinguish that case before this ticket.
+
+**Conclusion**: no timestamp correlation or auth-failure signal was found
+on this machine tying `agy -p "/usage"` polling to the observed Google
+login dialogs — inconclusive, matching the ticket's item 6 fallback (no
+correlation found → document and close). The web research already on file
+establishes this is a plausible, independently-documented failure class
+for unattended OAuth-polling CLIs regardless of local proof, so per that
+section's reframing of item 5, the low-cost mitigation was implemented
+anyway rather than closing with no action:
+
+- `internal/usage/agy.go` now has `isAGYAuthRequired(out, err)`, a
+  heuristic that checks `agy -p "/usage"`'s stdout and (via
+  `errors.As(err, *exec.ExitError)`) captured stderr against a list of
+  auth/login-required phrasings (`login required`, `please log in`,
+  `further action is required`, `interactive login`, `reauthenticate`,
+  `unauthenticated`, `token has expired`, etc.), deliberately excluding
+  agy's own normal "not authenticated, trying silent auth" transient log
+  line confirmed harmless in step 3 above.
+- When detected, `CollectAGY` writes a shared on-disk backoff marker
+  (`~/.gemini/antigravity-cli/harnez-agy-auth-backoff.json`, same
+  write-tmp-then-rename pattern as `harnez-quota-cache.json`) with a
+  30-minute cooldown (`agyAuthBackoffCooldown`), and reports a
+  reauthentication-specific `QuotaFetchError` instead of a generic one.
+  The stale on-disk quota cache is preserved and returned, unchanged from
+  the existing failed-fetch behavior.
+- While the backoff marker is active, **any** harnez process (collector
+  daemon or `--watch`) skips the `agy` exec entirely on its next poll and
+  falls straight to the stale-cache fallback — this is the concrete
+  "stop hammering agy while the user is stuck in a reauth loop" mitigation
+  the ticket asked for, scoped to detection + backoff only (no change to
+  the `agy -p "/usage"` fetch mechanism itself, no per-agent-cadence
+  refactor — that stays issue 111's separate scope).
+- Tests: `TestIsAGYAuthRequired` (heuristic true/false cases, including the
+  excluded normal-transient-log false positive) and
+  `TestCollectAGYDetectsAuthRequiredAndBacksOff` (end-to-end: first call
+  detects and backs off while preserving cache; a second call inside the
+  cooldown window makes zero additional `agy` execs) in
+  `internal/usage/agy_test.go`.
 
 ## Acceptance Criteria
 

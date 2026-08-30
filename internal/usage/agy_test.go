@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -222,6 +223,95 @@ func TestCollectAGYFailedFetchNoCacheStillReportsError(t *testing.T) {
 	}
 	if len(usage.ModelGroups) != 0 {
 		t.Errorf("expected no ModelGroups with neither a live fetch nor a cache, got %+v", usage.ModelGroups)
+	}
+}
+
+// TestIsAGYAuthRequired checks the auth/login-required heuristic
+// (issue 112) fires on documented reauth-loop phrasing but not on generic
+// errors or agy's own normal "trying silent auth" transient log line.
+func TestIsAGYAuthRequired(t *testing.T) {
+	cases := []struct {
+		name string
+		out  []byte
+		err  error
+		want bool
+	}{
+		{"plain quota table", []byte(agyOKOutput), nil, false},
+		{"generic exec error", nil, errors.New("exec: \"agy\": executable file not found in $PATH"), false},
+		{"timeout error", nil, context.DeadlineExceeded, false},
+		{"unparseable quota line", []byte("Error: Individual quota reached. Resets in 1h54m48s.\n"), nil, false},
+		{"login required stdout", []byte("Please log in to continue using Antigravity.\n"), nil, true},
+		{"further action required stdout", []byte("Further action is required: please re-authenticate.\n"), nil, true},
+		{"interactive login stdout", []byte("Interactive login required — no cached session found.\n"), nil, true},
+		{"unauthenticated stdout", []byte("Error: Unauthenticated: token has expired\n"), nil, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := isAGYAuthRequired(c.out, c.err); got != c.want {
+				t.Errorf("isAGYAuthRequired(%q, %v) = %v, want %v", c.out, c.err, got, c.want)
+			}
+		})
+	}
+}
+
+// TestCollectAGYDetectsAuthRequiredAndBacksOff checks that when
+// `agy -p "/usage"` returns auth/login-required output, CollectAGY (a) does
+// not treat it as parseable quota data, (b) surfaces a
+// reauthentication-specific QuotaFetchError rather than a generic one, (c)
+// falls back to the stale on-disk cache like any other failed fetch, and
+// (d) persists a backoff marker so a subsequent call within the cooldown
+// window skips the `agy` exec entirely (issue 112's mitigation).
+func TestCollectAGYDetectsAuthRequiredAndBacksOff(t *testing.T) {
+	calls, cleanup := agyStubUsageCmd(t, []byte("Please log in to continue using Antigravity.\n"), nil)
+	defer cleanup()
+
+	dir := t.TempDir()
+	cachePath := liveFetchCachePath(dir)
+	seeded := liveFetchCache[agyQuotaPayload]{
+		FetchedAt: time.Now().Add(-time.Hour),
+		Payload: agyQuotaPayload{
+			ModelGroups: []ModelGroup{{Name: "Gemini Models", Windows: []QuotaWindow{{Name: "Weekly Limit Remaining", UsedPercent: 30, RemainingPercent: 70}}}},
+		},
+	}
+	if err := writeLiveFetchCache(cachePath, seeded); err != nil {
+		t.Fatalf("seed cache: %v", err)
+	}
+
+	usage := CollectAGY(context.Background(), dir, http.DefaultClient)
+
+	if atomic.LoadInt32(calls) != 1 {
+		t.Fatalf("expected exactly one agy exec call on first detection, got %d", *calls)
+	}
+	if !strings.Contains(usage.QuotaFetchError, "reauthentication") {
+		t.Errorf("expected QuotaFetchError to mention reauthentication, got %q", usage.QuotaFetchError)
+	}
+	if len(usage.ModelGroups) != 1 || usage.ModelGroups[0].Name != "Gemini Models" {
+		t.Fatalf("expected prior cached ModelGroups to survive, got %+v", usage.ModelGroups)
+	}
+
+	// The on-disk quota cache itself must not have been clobbered.
+	onDisk := readLiveFetchCache[agyQuotaPayload](cachePath)
+	if onDisk == nil || !onDisk.FetchedAt.Equal(seeded.FetchedAt) {
+		t.Errorf("expected quota cache to remain untouched, got %+v", onDisk)
+	}
+
+	// A backoff marker should now be on disk.
+	backoff := readAGYAuthBackoff(agyAuthBackoffPath(dir))
+	if backoff == nil || !time.Now().Before(backoff.Until) {
+		t.Fatalf("expected an active backoff marker to be written, got %+v", backoff)
+	}
+
+	// A second call within the cooldown window must not exec `agy` again,
+	// even though the quota cache is still stale.
+	usage2 := CollectAGY(context.Background(), dir, http.DefaultClient)
+	if atomic.LoadInt32(calls) != 1 {
+		t.Errorf("expected no additional agy exec call while backoff is active, got %d total calls", *calls)
+	}
+	if !strings.Contains(usage2.QuotaFetchError, "backing off") {
+		t.Errorf("expected QuotaFetchError to mention the backoff, got %q", usage2.QuotaFetchError)
+	}
+	if len(usage2.ModelGroups) != 1 || usage2.ModelGroups[0].Name != "Gemini Models" {
+		t.Errorf("expected cached ModelGroups to still be reported during backoff, got %+v", usage2.ModelGroups)
 	}
 }
 

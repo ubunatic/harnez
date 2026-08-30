@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -57,6 +58,115 @@ func runAGYUsageCmd(ctx context.Context) ([]byte, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "agy", "-p", "/usage")
 	return cmd.Output()
+}
+
+// agyAuthRequiredPatterns are lowercase substrings that flag `agy -p
+// "/usage"`'s stdout/stderr as describing an auth/login-required state (a
+// stuck reauth prompt, an expired OAuth token, or a 401 from Google's
+// backend) rather than a generic fetch error or timeout (issue 112).
+//
+// This is a best-effort heuristic, not a stable machine-readable signal:
+// `/usage` is a slash command scraped from CLI text, not a versioned API
+// with structured error codes, so there is nothing more precise to key
+// off. Patterns are drawn from issue 112's "Web research" section
+// (documented Antigravity/Gemini CLI 401-during-unattended-run reports).
+// Deliberately excludes agy's own internal "not authenticated, trying
+// silent auth" log phrasing — that is a normal transient state on the way
+// to a successful silent refresh (confirmed in this repo's own
+// ~/.gemini/antigravity-cli/log/*.log during issue 112's investigation),
+// not a failure.
+var agyAuthRequiredPatterns = []string{
+	"login required",
+	"log in required",
+	"please log in",
+	"please sign in",
+	"further action is required",
+	"interactive login",
+	"reauthenticate",
+	"re-authenticate",
+	"reauthentication",
+	"re-authentication",
+	"unauthenticated",
+	"401 unauthorized",
+	"token has expired",
+	"session has expired",
+	"credentials have expired",
+}
+
+// isAGYAuthRequired reports whether out (stdout) or err (whose *exec.ExitError,
+// if any, carries agy's captured stderr) matches one of
+// agyAuthRequiredPatterns, meaning this attempt hit an auth/login-required
+// state rather than a generic error/timeout.
+func isAGYAuthRequired(out []byte, err error) bool {
+	text := strings.ToLower(string(out))
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		text += "\n" + strings.ToLower(string(exitErr.Stderr))
+	}
+	for _, p := range agyAuthRequiredPatterns {
+		if strings.Contains(text, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// agyAuthBackoffCooldown is how long CollectAGY skips live-fetching AGY
+// (falling back to cache/history instead) after detecting an
+// auth/login-required response, before trying `agy -p "/usage"` live
+// again. Chosen as a low-cost mitigation (issue 112): once agy needs
+// interactive reauth, retrying on the normal ~15min collector /
+// ~30s-minimum --watch cadence just re-hits the same stuck prompt or
+// abuse-detection surface without making progress, so back off rather
+// than hammer it while the user is (or isn't yet) dealing with the
+// reauth dialog.
+const agyAuthBackoffCooldown = 30 * time.Minute
+
+// agyAuthBackoffFilename is the on-disk marker (sidecar to the shared
+// harnez-quota-cache.json) that records an active auth backoff, shared
+// across every harnez process (collector daemon, --watch, one-shot
+// `usage`) the same way liveFetchCache is — so one process detecting the
+// reauth state stops *all* of them from independently retrying against
+// the same stuck account.
+const agyAuthBackoffFilename = "harnez-agy-auth-backoff.json"
+
+// agyAuthBackoff is the on-disk shape of an active auth backoff window.
+type agyAuthBackoff struct {
+	Until      time.Time `json:"until"`
+	DetectedAt time.Time `json:"detected_at"`
+}
+
+func agyAuthBackoffPath(geminiDir string) string {
+	return filepath.Join(geminiDir, agyAuthBackoffFilename)
+}
+
+// readAGYAuthBackoff reads the backoff marker, returning nil if absent or
+// unparsable (treated the same as "no active backoff").
+func readAGYAuthBackoff(path string) *agyAuthBackoff {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var b agyAuthBackoff
+	if err := json.Unmarshal(data, &b); err != nil {
+		return nil
+	}
+	return &b
+}
+
+// writeAGYAuthBackoff persists the backoff marker via write-tmp-then-rename
+// so a concurrent reader never observes a torn write, mirroring
+// writeLiveFetchCache's approach.
+func writeAGYAuthBackoff(path string, b agyAuthBackoff) error {
+	data, err := json.Marshal(b)
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // agyUsageFieldSplit matches runs of 2+ spaces, used as a fallback column
@@ -286,7 +396,27 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 				defer unlockLiveFetchCache(lockFile)
 			}
 
-			out, err := runAGYUsageCmdFn(ctx)
+			backoffPath := agyAuthBackoffPath(geminiDir)
+			var out []byte
+			var err error
+			if backoff := readAGYAuthBackoff(backoffPath); backoff != nil && time.Now().Before(backoff.Until) {
+				// A prior poll (this process or a sibling one, since the
+				// marker is shared on disk) already detected agy needs
+				// interactive reauth. Skip the exec entirely rather than
+				// retrying on the normal cadence — issue 112's mitigation
+				// for not hammering agy while the user is stuck in a
+				// reauth loop — and fall back to cache/history below like
+				// any other failed fetch.
+				err = fmt.Errorf(`agy -p "/usage" requires reauthentication (login required); backing off live polling until %s`, backoff.Until.Format(time.RFC3339))
+			} else {
+				out, err = runAGYUsageCmdFn(ctx)
+				if isAGYAuthRequired(out, err) {
+					until := time.Now().Add(agyAuthBackoffCooldown)
+					_ = writeAGYAuthBackoff(backoffPath, agyAuthBackoff{Until: until, DetectedAt: time.Now()})
+					err = fmt.Errorf(`agy -p "/usage" requires reauthentication (login required); backing off live polling until %s`, until.Format(time.RFC3339))
+					out = nil
+				}
+			}
 			var groups []ModelGroup
 			if err == nil {
 				groups = parseAGYUsageOutput(out)
