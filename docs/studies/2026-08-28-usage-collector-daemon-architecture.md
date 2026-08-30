@@ -105,9 +105,51 @@ fix direction is to either not persist offline/partial collects to the shared ca
 snapshots with an `offline`/`partial` flag so the freshness gate can treat them differently from a
 full collect.
 
+## 6. Per-agent quota source: durable local files vs. CLI exec (`-p "/usage"`)
+
+Added 2026-08-30 while implementing [[104]]. `CollectClaude`/`CollectCodex`/`CollectAGY` (all in
+`internal/usage`) do not all read quota from the same *kind* of source, and that's a deliberate,
+per-agent choice rather than an inconsistency to clean up:
+
+| Agent | Quota source | Why |
+|---|---|---|
+| Claude Code | Local files (`~/.claude/stats-cache.json` etc.), no process needed | Durably persists session/weekly windows and reset times to disk regardless of whether `claude` is running (confirmed in the [[106]] audit) |
+| Codex | Local files (`~/.codex/...`), no process needed | Same durability story as Claude, confirmed in the same audit |
+| AGY | `exec.Command("agy", "-p", "/usage")`, parsing plain text output | AGY has **no** durable on-disk quota state at all ([[106]]) — its own files never carry quota/reset fields, so a live source is the only option |
+
+AGY's collector originally used a live Connect-RPC call to a currently-running AGY
+`LanguageServer` process, discovered by scanning `/proc` ([[104]]'s root cause: that RPC/proc-scan
+mechanism required a running process to coincide with harnez's poll, which per real usage logs
+hadn't happened once in 7 days of near-daily AGY use). Replaced with shelling out to `agy -p
+"/usage"` — AGY's own CLI answering its own `/usage` slash command as plain text — which spawns
+its own process on demand instead of gambling on one already listening on a port.
+
+**Why this isn't also applied to Claude/Codex**: it was tested — `claude -p "/usage"` and
+(untested but architecturally identical) `codex`'s equivalent also work as a CLI-exec source — but
+would be a strict downgrade for those two: `CollectClaude`/`CollectCodex` already read durable
+local files directly, which is cheaper (no process spawn per poll) and more robust (a stable file
+format vs. scraping CLI prose that could change between versions) than shelling out. The `-p
+"/usage"` pattern earns its keep specifically where no durable on-disk source exists — that was
+AGY's unique gap, not a general technique to roll out everywhere.
+
+**Token-cost concern, checked for both agents**: polling a live source on every `harnez` tick would
+be self-defeating if the poll itself consumed the quota it's trying to report. Canary-tested for
+AGY ([[104]]'s addendum): with the account's real model quota fully exhausted, `agy -p "say hi"`
+(an actual model turn) failed immediately with the quota-exceeded error, while `agy -p "/usage"`
+still succeeded right after — `/usage` is answered locally/out-of-band from the model-metered path.
+Reasoned but not independently canary-tested for `claude -p "/usage"`: since `CollectClaude` already
+reads Claude Code's quota from local files with no live call, `/usage` almost certainly renders
+from that same local state rather than invoking the model — consistent with AGY's confirmed
+behavior — but this wasn't run against an exhausted-quota session to verify directly, since doing
+so would have cost real remaining quota on a session already low. Moot for harnez's own collection
+either way, since Claude already has a better (file-based) source than exec.
+
 ## Related issues
 
 [[082-agent-usage-collector-daemon]], [[083-usage-tui-self-hiding-auto-discovery]],
 [[084-aggregate-quota-window-box-assessment]], [[085-watch-tui-show-collector-daemon-status]],
 [[086-offline-degraded-cache-snapshot-masks-live-data]],
-[[087-generalize-flock-freshness-gate-to-codex-agy]]
+[[087-generalize-flock-freshness-gate-to-codex-agy]],
+[[103-agy-missing-from-all-usage-aggregate]],
+[[104-agy-quota-collector-requires-live-process-poll-coincidence]],
+[[106-verify-offline-derivability-of-quota-state]]
