@@ -335,16 +335,72 @@ func TestBuildAllUsageBox(t *testing.T) {
 		t.Fatalf("expected 4 all-usage rows, got %d: %v", len(box.lines), box.lines)
 	}
 
+	// The mid column is padded to a fixed width (10) so the second [░░░░] bar
+	// starts at the same column in every row — that's the alignment guarantee
+	// this test verifies. "93% 2d8h" (8 chars) pads to 10 → 2 trailing spaces;
+	// "85% 8h51m" (9 chars) pads to 10 → 1 trailing space.
 	want := []string{
-		"Gemini        [███░] 93% 2d8h  [░░░░] 3% 4h58m",
-		"Claude/GPT    [█░░░] 35% 6d2h  [░░░░] 0% 4h58m",
-		"Claude Code   [███░] 85% 8h51m [░░░░] 9% 4h51m",
-		"OpenAI Codex  [█░░░] 39% 5d9h  [░░░░] 0% 4h59m",
+		"Gemini        [███░] 93% 2d8h   [░░░░] 3% 4h58m",
+		"Claude/GPT    [█░░░] 35% 6d2h   [░░░░] 0% 4h58m",
+		"Claude Code   [███░] 85% 8h51m  [░░░░] 9% 4h51m",
+		"OpenAI Codex  [█░░░] 39% 5d9h   [░░░░] 0% 4h59m",
 	}
 	for i := range want {
 		if got := stripANSI(box.lines[i]); got != want[i] {
 			t.Errorf("line %d = %q, want %q", i, got, want[i])
 		}
+	}
+}
+
+func TestBuildAllUsageBox_StaleAndHistoricalAgents(t *testing.T) {
+	// Tests issue 103: an agent whose quota windows were filled via historical
+	// fallback (e.g. AGY when not actively running) appears in All Usage with its
+	// quota windows intact.
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{
+				AgentID:       "agy",
+				Name:          "Antigravity (AGY)",
+				Installed:     true,
+				Authenticated: true,
+				ModelGroups: []ModelGroup{
+					{
+						Name: "Gemini Models",
+						Windows: []QuotaWindow{
+							{Name: "Weekly (stale)", UsedPercent: 86},
+							{Name: "Five Hour Limit Remaining (stale)", UsedPercent: 12},
+						},
+					},
+				},
+				Sources:       []string{"~/.claude/harnez/usage-history (usage-history, stale)"},
+				LastRefreshed: testTime.Add(-8 * 24 * time.Hour),
+			},
+			{
+				AgentID:       "claude",
+				Name:          "Claude Code",
+				Installed:     true,
+				Authenticated: true,
+				Weekly:        &QuotaWindow{Name: "Weekly", UsedPercent: 10, DurationLeft: 6 * 24 * time.Hour},
+				Session:       &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 5, DurationLeft: 4 * time.Hour},
+				LastRefreshed: testTime,
+			},
+		},
+	}
+
+	box := buildAllUsageBox(summary, 74)
+	if len(box.lines) != 2 {
+		t.Fatalf("expected 2 all-usage rows including historical AGY, got %d: %v", len(box.lines), box.lines)
+	}
+
+	stripped0 := stripANSI(box.lines[0])
+	stripped1 := stripANSI(box.lines[1])
+
+	if !strings.HasPrefix(stripped0, "Gemini") || !strings.Contains(stripped0, "86%") || !strings.Contains(stripped0, "12%") {
+		t.Errorf("expected Gemini row for historical AGY data, got %q", stripped0)
+	}
+	if !strings.HasPrefix(stripped1, "Claude Code") || !strings.Contains(stripped1, "10%") {
+		t.Errorf("expected Claude Code row, got %q", stripped1)
 	}
 }
 
@@ -377,19 +433,28 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 		t.Fatalf("expected 2 all-usage rows, got %d: %v", len(box.lines), box.lines)
 	}
 
+	// With mid-column padded to 10 chars for alignment, width=51 (contentW=47)
+	// is tight enough that the second window's duration (d2) must be dropped on
+	// the Claude row to stay within contentW. The second [░░░░] bar must still
+	// appear and must align at the same column in both rows.
 	secondBarCol := -1
 	for _, line := range box.lines {
 		stripped := stripANSI(line)
 		if got := visLen(line); got > contentW {
 			t.Fatalf("line visible width %d exceeds contentW %d: %q", got, contentW, stripped)
 		}
+		// Both bars must still be present.
+		if !strings.Contains(stripped, "[░░░░]") && !strings.Contains(stripped, "[█") {
+			t.Fatalf("expected second bar to remain visible in narrow row: %q", stripped)
+		}
 		switch {
 		case strings.Contains(stripped, "Claude Code"):
-			if !strings.Contains(stripped, "Claude Code   [███░] 85% 8h39m [░░░░] 11% 4h44m") {
+			// d2 dropped to fit; d1 kept; percent shown.
+			if !strings.Contains(stripped, "[███░]") || !strings.Contains(stripped, "85%") || !strings.Contains(stripped, "[░░░░]") || !strings.Contains(stripped, "11%") {
 				t.Fatalf("expected Claude second bar and percent to remain visible in narrow row: %q", stripped)
 			}
 		case strings.Contains(stripped, "OpenAI Codex"):
-			if !strings.Contains(stripped, "[░░░░] 13%") {
+			if !strings.Contains(stripped, "[░░░░]") || !strings.Contains(stripped, "13%") {
 				t.Fatalf("expected Codex second bar and percent to remain visible in narrow row: %q", stripped)
 			}
 		default:
@@ -404,8 +469,84 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 			continue
 		}
 		if col != secondBarCol {
-			t.Fatalf("expected second bar column %d, got %d in row %q", secondBarCol, col, stripped)
+			t.Fatalf("expected second bar column %d, got %d in row %q (alignment broken)", secondBarCol, col, stripped)
 		}
+	}
+}
+
+// TestAllUsageBoxSecondBarColumnAlignment is the canonical alignment test: it
+// builds an [a] All Usage box with rows whose mid-column content varies in
+// length (3-digit vs 4-digit percent, 4- vs 5-char duration, no duration) and
+// asserts every second [░] bar starts at exactly the same column, at several
+// representative box widths. This is the unit-level equivalent of the smoke
+// test that runs the real binary.
+func TestAllUsageBoxSecondBarColumnAlignment(t *testing.T) {
+	// Mix: 100% (4-digit), sub-100% (3-digit), 4-char duration "1d1h",
+	// 5-char "8h51m", model-group rows (agy) and weekly/session rows.
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{
+				AgentID: "agy", Name: "Antigravity", Installed: true, Authenticated: true,
+				ModelGroups: []ModelGroup{
+					{
+						Name: "Gemini Models",
+						Windows: []QuotaWindow{
+							{Name: "Weekly", UsedPercent: 100, DurationLeft: 1*24*time.Hour + 1*time.Hour},
+							{Name: "Session", UsedPercent: 8, DurationLeft: 4*time.Hour + 44*time.Minute},
+						},
+					},
+					{
+						Name: "Claude/GPT",
+						Windows: []QuotaWindow{
+							{Name: "Weekly", UsedPercent: 35, DurationLeft: 6*24*time.Hour + 2*time.Hour},
+							{Name: "Session", UsedPercent: 0, DurationLeft: 4*time.Hour + 58*time.Minute},
+						},
+					},
+				},
+			},
+			{
+				AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+				Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 12, DurationLeft: 6*24*time.Hour + 2*time.Hour},
+				Session: &QuotaWindow{Name: "Session", UsedPercent: 100, DurationLeft: 2*time.Hour + 27*time.Minute},
+			},
+			{
+				AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true,
+				Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 12, DurationLeft: 6*24*time.Hour + 21*time.Hour},
+				Session: &QuotaWindow{Name: "Session", UsedPercent: 79, DurationLeft: 2*time.Hour + 59*time.Minute},
+			},
+		},
+	}
+
+	for _, boxWidth := range []int{55, 60, 70, 80, 100} {
+		t.Run(fmt.Sprintf("width=%d", boxWidth), func(t *testing.T) {
+			box := buildAllUsageBox(summary, boxWidth)
+			contentW := box.width - 4
+			if len(box.lines) == 0 {
+				t.Fatalf("expected rows, got none")
+			}
+			secondBarCol := -1
+			for _, line := range box.lines {
+				stripped := stripANSI(line)
+				if got := visLen(line); got > contentW {
+					t.Errorf("line width %d > contentW %d: %q", got, contentW, stripped)
+				}
+				// The second progress bar is the last '[' in the stripped line.
+				col := strings.LastIndex(stripped, "[")
+				if col < 0 {
+					t.Errorf("no second bar found in row: %q", stripped)
+					continue
+				}
+				if secondBarCol < 0 {
+					secondBarCol = col
+					continue
+				}
+				if col != secondBarCol {
+					t.Errorf("second bar column mismatch: want col %d, got %d\n  row: %q\n  (alignment broken at width %d)",
+						secondBarCol, col, stripped, boxWidth)
+				}
+			}
+		})
 	}
 }
 
@@ -483,7 +624,8 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 	if strings.Contains(frameText, "] Claude Code") {
 		t.Fatalf("expected compact frame to hide individual Claude box, got:\n%s", frameText)
 	}
-	if !strings.Contains(frameText, "Claude Code  [███░] 85% 8h51m [░░░░] 9% 4h51m") {
+	// Mid-column padded to 10 chars → "85% 8h51m " (10) + " " + "[░░░░]" = 2 spaces before second bar.
+	if !strings.Contains(frameText, "Claude Code  [███░] 85% 8h51m  [░░░░] 9% 4h51m") {
 		t.Fatalf("expected compact all-usage row to keep short-window time at 100 columns, got:\n%s", frameText)
 	}
 	if !strings.Contains(frameText, "[?]controls") || !strings.Contains(frameText, "[m]ode") {

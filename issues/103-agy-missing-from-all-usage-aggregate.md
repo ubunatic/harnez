@@ -1,6 +1,6 @@
 # 103 — Antigravity missing from All Usage aggregate despite recent historical data
 
-**Status**: Open
+**Status**: Closed — resolved; historical quota fallback now preserves last known quota windows with stale markers, honestly reporting LastRefreshed
 **Priority**: P1 (High) — bumped from P2; part of the collector-story investigation the user flagged as high priority on 2026-08-30
 **Severity**: Moderate
 **Category**: Bug

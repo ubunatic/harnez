@@ -78,6 +78,9 @@ check: ⚙️  # run static analysis and tests
 check-fast: ⚙️  # fast local feedback loop
 	go test ./...
 
+smoke: ⚙️ build  # live smoke: apply/diff/repair + usage bar-alignment against real binary
+	bash scripts/smoke-test.sh
+
 test: ⚙️ check  # alias for check
 
 format: ⚙️  # format source code

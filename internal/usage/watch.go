@@ -675,28 +675,32 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 
 	d1 := compactDurationText(w1)
 	d2 := compactDurationText(w2)
-	if len(d1) > 5 {
-		d1 = ""
-	}
-	if len(d2) > 5 {
-		d2 = ""
-	}
 
 	b1 := rograph.RenderProgressBar(w1.UsedPercent, 4)
 	b2 := rograph.RenderProgressBar(w2.UsedPercent, 4)
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
 
-	if d1 != "" && d2 != "" {
-		line := prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), rograph.PadLabel(d1, 5), b2, fmt.Sprintf("%.0f%%", w2.UsedPercent), d2}, " ")
-		if visLen(line) <= contentW {
-			return line
-		}
+	midBlock := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w1.UsedPercent, d1))
+	midStr := rograph.PadLabel(midBlock, 10)
+	endStr := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w2.UsedPercent, d2))
+
+	line := prefix + b1 + " " + midStr + " " + b2 + " " + endStr
+	if visLen(line) <= contentW {
+		return line
 	}
-	if d1 != "" {
-		line := prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), rograph.PadLabel(d1, 5), b2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
-		if visLen(line) <= contentW {
-			return line
-		}
+
+	// Drop d2 if too long
+	endStrNoD2 := fmt.Sprintf("%.0f%%", w2.UsedPercent)
+	line = prefix + b1 + " " + midStr + " " + b2 + " " + endStrNoD2
+	if visLen(line) <= contentW {
+		return line
+	}
+
+	// Drop d1 as well
+	midStrNoD1 := rograph.PadLabel(fmt.Sprintf("%.0f%%", w1.UsedPercent), 5)
+	line = prefix + b1 + " " + midStrNoD1 + " " + b2 + " " + endStrNoD2
+	if visLen(line) <= contentW {
+		return line
 	}
 
 	return prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), b2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
@@ -705,6 +709,14 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 func compactDurationText(w QuotaWindow) string {
 	if w.DurationLeft <= 0 {
 		return ""
+	}
+	if w.DurationLeft >= 24*time.Hour && w.DurationLeft < 48*time.Hour {
+		days := int(w.DurationLeft.Hours()) / 24
+		hours := int(w.DurationLeft.Hours()) % 24
+		if hours > 0 {
+			return fmt.Sprintf("%dd%dh", days, hours)
+		}
+		return fmt.Sprintf("%dd", days)
 	}
 	return FormatCompactDuration(w.DurationLeft)
 }
@@ -1102,33 +1114,33 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 		w2 = windows[1]
 	}
 
-	d1 := ""
-	if w1.DurationLeft > 0 {
-		d1 = " " + FormatCompactDuration(w1.DurationLeft)
-	}
-	d2 := ""
-	if w2.DurationLeft > 0 {
-		d2 = " " + FormatCompactDuration(w2.DurationLeft)
-	}
+	d1 := compactDurationText(w1)
+	d2 := compactDurationText(w2)
 
 	lbl := rograph.PadLabel(label, labelWidth)
 	b1 := rograph.RenderProgressBar(w1.UsedPercent, 4)
 	b2 := rograph.RenderProgressBar(w2.UsedPercent, 4)
 
+	midBlock := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w1.UsedPercent, d1))
+	midStr := rograph.PadLabel(midBlock, 10)
+	endStr := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w2.UsedPercent, d2))
+
 	// Format: Label [b1] pct1 d1 [b2] pct2 d2 (e.g. Gemini [███░] 91% 2h [░░░░] 0% 3d)
-	line := fmt.Sprintf("%s %s %.0f%%%s %s %.0f%%%s", lbl, b1, w1.UsedPercent, d1, b2, w2.UsedPercent, d2)
+	line := fmt.Sprintf("%s %s %s %s %s", lbl, b1, midStr, b2, endStr)
 	if visLen(line) <= contentW {
 		return line
 	}
 
 	// Drop d2 if too long
-	line = fmt.Sprintf("%s %s %.0f%%%s %s %.0f%%", lbl, b1, w1.UsedPercent, d1, b2, w2.UsedPercent)
+	endStrNoD2 := fmt.Sprintf("%.0f%%", w2.UsedPercent)
+	line = fmt.Sprintf("%s %s %s %s %s", lbl, b1, midStr, b2, endStrNoD2)
 	if visLen(line) <= contentW {
 		return line
 	}
 
 	// Drop d1 as well
-	line = fmt.Sprintf("%s %s %.0f%% %s %.0f%%", lbl, b1, w1.UsedPercent, b2, w2.UsedPercent)
+	midStrNoD1 := rograph.PadLabel(fmt.Sprintf("%.0f%%", w1.UsedPercent), 5)
+	line = fmt.Sprintf("%s %s %s %s %s", lbl, b1, midStrNoD1, b2, endStrNoD2)
 	if visLen(line) <= contentW {
 		return line
 	}

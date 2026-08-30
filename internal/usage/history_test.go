@@ -405,12 +405,13 @@ func TestFillFromHistoryIfNoQuotaWindowsUsesStaleHistoricalQuota(t *testing.T) {
 		t.Errorf("expected an already-rich reading to be left untouched, got %+v", got2.Session)
 	}
 
-	// Historical data older than the 7-day display window must not be used
-	// -- it would be hidden by the renderer anyway (issue 101), so applying
-	// it would only mislabel an empty reading as recently updated.
+	// Historical data older than 7 days is still filled in (issue 103)
+	// so it can feed the aggregate / usage displays with honest staleness
+	// and "(stale)" labels.
 	oldDir := t.TempDir()
+	eightDaysAgo := time.Now().Add(-8 * 24 * time.Hour)
 	tooOld := UsageSummary{
-		Timestamp: time.Now().Add(-8 * 24 * time.Hour),
+		Timestamp: eightDaysAgo,
 		Agents: []AgentUsage{{
 			AgentID: "agy", Installed: true, Authenticated: true,
 			Session: &QuotaWindow{Name: "5h", UsedPercent: 99},
@@ -420,8 +421,14 @@ func TestFillFromHistoryIfNoQuotaWindowsUsesStaleHistoricalQuota(t *testing.T) {
 		t.Fatalf("AppendHistory: %v", err)
 	}
 	got3 := fillFromHistoryIfNoQuotaWindows(oldDir, current)
-	if got3.Session != nil || len(got3.ModelGroups) != 0 {
-		t.Errorf("expected no fallback from history older than the 7-day display window, got %+v / %+v", got3.Session, got3.ModelGroups)
+	if got3.Session == nil || got3.Session.UsedPercent != 99 {
+		t.Fatalf("expected fallback from history older than 7 days to still be populated (issue 103), got %+v", got3.Session)
+	}
+	if got3.Session.Name != "5h (stale)" {
+		t.Errorf("expected session window name to be marked '(stale)', got %q", got3.Session.Name)
+	}
+	if !got3.LastRefreshed.Equal(eightDaysAgo) {
+		t.Errorf("LastRefreshed = %v, want historical timestamp %v", got3.LastRefreshed, eightDaysAgo)
 	}
 }
 

@@ -205,7 +205,7 @@ func RenderText(summary UsageSummary) string {
 							resetInfo = fmt.Sprintf(" · Resets %s", localTime)
 						}
 					}
-					lines = append(lines, fmt.Sprintf("  %-24s %s %5.1f%% used%s", w.Name+":", bar, w.UsedPercent, resetInfo))
+					lines = append(lines, fmt.Sprintf("  %-28s %s %5.1f%% used%s", w.Name+":", bar, w.UsedPercent, resetInfo))
 				}
 			}
 

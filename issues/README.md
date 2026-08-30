@@ -101,7 +101,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 100 | [100-container-install-verify-canary.md](100-container-install-verify-canary.md) | Container canary: install `latest` Codeberg release and verify `--version` | Resolved — `scripts/install-canary.sh`, `make install-canary` |
 | 101 | [101-usage-keep-stale-agents-visible-until-7d.md](101-usage-keep-stale-agents-visible-until-7d.md) | `harnez usage` hides/blanks agents too soon when not recently active (e.g. AGY) | Resolved — 2026-08-29 |
 | 102 | [102-usage-summary-compact-should-be-allowed.md](102-usage-summary-compact-should-be-allowed.md) | `harnez usage --summary --compact` should be allowed | Closed — resolved in 1d98fb6 |
-| 103 | [103-agy-missing-from-all-usage-aggregate.md](103-agy-missing-from-all-usage-aggregate.md) | Antigravity missing from All Usage aggregate despite recent historical data | Open |
+| 103 | [103-agy-missing-from-all-usage-aggregate.md](103-agy-missing-from-all-usage-aggregate.md) | Antigravity missing from All Usage aggregate despite recent historical data | Closed — resolved |
 | 104 | [104-agy-quota-collector-requires-live-process-poll-coincidence.md](104-agy-quota-collector-requires-live-process-poll-coincidence.md) | AGY quota collector only records data when a live process poll coincides with a running AGY instance | Open |
 | 105 | [105-surface-per-collector-fetch-status-in-usage-ui.md](105-surface-per-collector-fetch-status-in-usage-ui.md) | Surface per-collector fetch status in usage UI, including compact view | Open |
 | 106 | [106-verify-offline-derivability-of-quota-state.md](106-verify-offline-derivability-of-quota-state.md) | Verify offline-derivability of quota/limit/reset-time state from current storage model | Closed — audit complete |
