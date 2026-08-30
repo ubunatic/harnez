@@ -101,8 +101,17 @@ func RenderJSON(summary UsageSummary) (string, error) {
 	return string(data), nil
 }
 
-// RenderText formats the UsageSummary into a clean, human-readable terminal dashboard.
-func RenderText(summary UsageSummary) string {
+// RenderText formats the UsageSummary into a clean, human-readable terminal
+// dashboard.
+//
+// opts is optional; when its RemoteLoadHost is set (issue 110's
+// load.watch_host), a separate remote Load box (same box style the --watch
+// grid uses) is appended after the agent boxes, using RemoteLoadSnapshot as
+// its data — plain one-shot output has no polling loop of its own, so the
+// caller must have already fetched that snapshot via one batch CollectRemote
+// call (Decision §2).
+func RenderText(summary UsageSummary, opts ...WatchOptions) string {
+	opt := firstOpt(opts)
 	var sb strings.Builder
 
 	sb.WriteString("Agentic Coding Usage & Quota Monitor\n")
@@ -323,5 +332,19 @@ func RenderText(summary UsageSummary) string {
 		sb.WriteString("--once` to collect a fresh snapshot, then re-run `harnez usage`.\n")
 	}
 
+	if opt.RemoteLoadHost != "" {
+		box := buildRemoteLoadBox(remoteLoadBoxWidth, opt.RemoteLoadHost, opt.RemoteLoadSnapshot)
+		for _, l := range renderWBox(box) {
+			sb.WriteString(l + "\n")
+		}
+		sb.WriteString("\n")
+	}
+
 	return sb.String()
 }
+
+// remoteLoadBoxWidth is the fixed panel width RenderText's plain one-shot
+// output uses for the remote Load box — plain mode has no live terminal
+// column budget to plan against the way the --watch grid does, so this
+// picks a width wide enough for the CPU/GPU rows buildLoadBoxLines renders.
+const remoteLoadBoxWidth = 48

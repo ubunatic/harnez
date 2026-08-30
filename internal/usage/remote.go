@@ -59,6 +59,26 @@ func CollectRemote(ctx context.Context, host string, includeProcs bool) (UsageSu
 	return summary, procCounts, nil
 }
 
+// CollectRemoteLoadSnapshot fetches just the CPU/GPU load reading for host
+// via one plain batch SSH call (issue 110 Decision §2: every mode other
+// than `--watch` always uses a single stateless `ssh host "harnez usage
+// --json"`-style call, no ControlMaster, no persistence). It's the
+// --summary/plain-mode counterpart of StartRemoteLoadStream's --watch-only
+// streaming path — both ultimately feed the same "[R] Remote Load" panel
+// (buildRemoteLoadBox), just via different collection mechanisms.
+//
+// A nil snapshot (with the underlying error, for callers that want it) is
+// returned on any failure — the panel already renders an explicit "remote
+// load unavailable" placeholder for a nil snapshot, matching how a stale/
+// failed --host fetch is already handled.
+func CollectRemoteLoadSnapshot(ctx context.Context, host string) (*LoadSnapshot, error) {
+	summary, _, err := CollectRemote(ctx, host, false)
+	if err != nil {
+		return nil, err
+	}
+	return summary.Load, nil
+}
+
 // parseRemoteJSON parses raw JSON output from `harnez usage --json [--proc]`.
 func parseRemoteJSON(data []byte) (UsageSummary, *AgentProcessCount, error) {
 	// First try unmarshaling into remoteUsagePayload (which supports both UsageSummary and Processes)

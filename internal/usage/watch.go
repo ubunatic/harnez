@@ -738,9 +738,35 @@ func buildLoadBox(width int, remoteHost string, snapshot *LoadSnapshot) wbox {
 	if remoteHost != "" {
 		title = fmt.Sprintf("\x1b[1m[L]\x1b[0m Load \x1b[90m(@%s)\x1b[0m", remoteHost)
 	}
+	return wbox{title: title, lines: buildLoadBoxLines(remoteHost, snapshot), width: width}
+}
 
+// buildRemoteLoadBox renders issue 110's independent remote Load box: the
+// CPU/GPU load of load.watch_host, a separate panel from the existing local
+// (or --host-retitled) [L] Load box above — not merged into it (Decision
+// §5). Shares buildLoadBox's row-rendering via buildLoadBoxLines; only the
+// title/panel key differ. host must be non-empty — callers only build this
+// panel at all when load.watch_host is configured (Acceptance Criterion 1).
+func buildRemoteLoadBox(width int, host string, snapshot *LoadSnapshot) wbox {
+	title := fmt.Sprintf("\x1b[1m[R]\x1b[0m Remote Load \x1b[90m(@%s)\x1b[0m", host)
+	return wbox{title: title, lines: buildLoadBoxLines(host, snapshot), width: width}
+}
+
+// buildLoadBoxLines renders the shared CPU/GPU row content for both
+// buildLoadBox and buildRemoteLoadBox.
+//
+// remoteHost and snapshot together select the data source (issue 090): with
+// remoteHost == "", this is local mode and CurrentCPULoad()/CurrentGPUs()
+// are called directly, giving the 1Hz-redraw live behavior local mode has
+// always had. With remoteHost != "", this is remote mode: the panel renders
+// exclusively from snapshot (last fetched at the remote collection
+// interval, not the 1Hz redraw cadence — no local /proc or /sys read is
+// substituted, and no SSH call happens here). A nil snapshot in remote mode
+// renders an explicit "remote load unavailable" placeholder rather than
+// silently falling back to local telemetry.
+func buildLoadBoxLines(remoteHost string, snapshot *LoadSnapshot) []string {
 	if remoteHost != "" && snapshot == nil {
-		return wbox{title: title, lines: []string{"\x1b[90mremote load unavailable\x1b[0m"}, width: width}
+		return []string{"\x1b[90mremote load unavailable\x1b[0m"}
 	}
 
 	var load CPULoad
@@ -777,7 +803,7 @@ func buildLoadBox(width int, remoteHost string, snapshot *LoadSnapshot) wbox {
 	if len(lines) == 0 {
 		lines = []string{"\x1b[90mload data unavailable\x1b[0m"}
 	}
-	return wbox{title: title, lines: lines, width: width}
+	return lines
 }
 
 // loadLabelWidth is the fixed column width of the "cpu (...)"/"gpu (...)"
@@ -1167,6 +1193,18 @@ type WatchOptions struct {
 	// ShowControls draws the [?]-triggered Controls overlay (issue 094)
 	// instead of the normal panel grid for this frame.
 	ShowControls bool
+
+	// RemoteLoadHost is load.watch_host (issue 110), independent of Host —
+	// when non-empty, a separate "[R] Remote Load (@RemoteLoadHost)" panel
+	// is shown alongside the existing local [L] Load box. Empty means no
+	// such panel at all (today's behavior, unchanged).
+	RemoteLoadHost string
+	// RemoteLoadSnapshot is the last known CPU/GPU reading for
+	// RemoteLoadHost — from the streaming channel in --watch, or one plain
+	// CollectRemote batch call in --summary/plain mode (Decision §2). Nil
+	// renders the same "remote load unavailable" placeholder buildLoadBox
+	// already uses for a stale/missing --host snapshot.
+	RemoteLoadSnapshot *LoadSnapshot
 }
 
 // controlsOverlayLines renders the full in-TUI Controls reference for
@@ -1401,6 +1439,10 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 	if sec.Load {
 		panels = append(panels, panel{"L", func(w int) wbox { return buildLoadBox(w, opt.Host, loadSnapshot) }})
+	}
+	if opt.RemoteLoadHost != "" {
+		remoteHost, remoteSnap := opt.RemoteLoadHost, opt.RemoteLoadSnapshot
+		panels = append(panels, panel{"R", func(w int) wbox { return buildRemoteLoadBox(w, remoteHost, remoteSnap) }})
 	}
 
 	if len(panels) == 0 {

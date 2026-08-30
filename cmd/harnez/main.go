@@ -83,23 +83,36 @@ func main() {
 				return err
 			}
 
+			// The local config file is optional and this is a convenience
+			// default, not a required config — a load error (malformed
+			// YAML, unreadable file) must not abort the command (issue
+			// 109). Loaded unconditionally (not just when usageHost==""):
+			// load.watch_host (issue 110) is independent of usage.host and
+			// needed regardless of how usageHost was set.
+			localCfg, _, _ := usage.LoadLocalConfig("")
 			if usageHost == "" {
-				// The local config file is optional and this is a
-				// convenience default, not a required config — a load
-				// error (malformed YAML, unreadable file) must not abort
-				// the command (issue 109).
-				localCfg, _, _ := usage.LoadLocalConfig("")
 				usageHost = resolveUsageHost(usageHost, localCfg)
+			}
+			loadWatchHost := ""
+			if localCfg != nil {
+				loadWatchHost = strings.TrimSpace(localCfg.Load.WatchHost)
 			}
 
 			if usageWatch {
 				if usageJSON {
 					return fmt.Errorf("--watch and --json cannot be combined")
 				}
+				// RemoteLoadSnapshot is intentionally left nil here:
+				// RunWatchWithOptions owns fetching it itself (streaming
+				// when possible, batch-polling fallback otherwise — issue
+				// 110 Decision §2/§3), the same way it owns fetching
+				// summary/rates/procs internally rather than the caller
+				// pre-fetching a single snapshot up front.
 				return usage.RunWatchWithOptions(ctx, "", client, cmd.OutOrStdout(), usageInterval, "", usage.WatchOptions{
-					Host:          usageHost,
-					Compact:       usageCompact,
-					ShowProcesses: usageProcesses,
+					Host:           usageHost,
+					Compact:        usageCompact,
+					ShowProcesses:  usageProcesses,
+					RemoteLoadHost: loadWatchHost,
 				})
 			}
 
@@ -107,10 +120,17 @@ func main() {
 				if usageJSON {
 					return fmt.Errorf("--summary and --json cannot be combined")
 				}
+				var remoteLoadSnap *usage.LoadSnapshot
+				if loadWatchHost != "" {
+					// --summary is a one-shot print (Decision §2): always a
+					// single plain batch SSH call, independent of usageHost.
+					remoteLoadSnap, _ = usage.CollectRemoteLoadSnapshot(ctx, loadWatchHost)
+				}
+				loadOpt := usage.WatchOptions{Compact: usageCompact, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}
 				if usageHost != "" {
-					usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, usage.WatchOptions{Compact: usageCompact})
+					usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
 				} else {
-					usage.RenderSummary(ctx, "", client, cmd.OutOrStdout(), usageProcesses, usage.WatchOptions{Compact: usageCompact})
+					usage.RenderSummary(ctx, "", client, cmd.OutOrStdout(), usageProcesses, loadOpt)
 				}
 				return nil
 			}
@@ -154,7 +174,11 @@ func main() {
 				return nil
 			}
 
-			fmt.Print(usage.RenderText(summary))
+			var remoteLoadSnap *usage.LoadSnapshot
+			if loadWatchHost != "" {
+				remoteLoadSnap, _ = usage.CollectRemoteLoadSnapshot(ctx, loadWatchHost)
+			}
+			fmt.Print(usage.RenderText(summary, usage.WatchOptions{RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}))
 			return nil
 		},
 	}
