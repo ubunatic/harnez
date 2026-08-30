@@ -1,6 +1,6 @@
 # 110 — Remote Load: batch-default with an opt-in streaming channel, graceful fallback
 
-**Status**: Open
+**Status**: Open — design decided (Option A, ControlMaster) and canary-verified against a real host; implementation not yet started
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
@@ -57,13 +57,41 @@ remote usage collection.
   to re-establish/upgrade to streaming once the remote is reachable again —
   no manual restart required from the user.
 
-## Open design question: how do we implement the streaming channel?
+## Decision (2026-08-30): Option A — OpenSSH `ControlMaster` multiplexing
 
-This needs a decision before implementation — options below, none yet
-chosen. Per `docs/Canary.md` (probe external mechanisms before building
-features on them), whichever option is picked should get a canary probe of
-the actual mechanism (e.g. a real `ssh -M`/`ControlMaster` round trip against
-a real host) before code is built around it.
+Chosen. Canary-verified against the real remote host (`um760`) before any
+feature code — see `scripts/canary-remote-load-stream.sh` (kept per
+`docs/Canary.md`'s "keep the canary" rule; run it directly with
+`scripts/canary-remote-load-stream.sh <host>`).
+
+**Findings**:
+- A cold `ssh` call (fresh handshake, no multiplexing) took ~0.5s.
+- A call reusing an already-open `ControlMaster` took ~20-220ms across
+  repeated runs — consistently and substantially faster, confirming the
+  handshake is the dominant cost, matching issue 090's original assumption.
+- A long-lived "stream" child (`ssh -S <ctl> host "for i in 1 2 3; do echo
+  sample-$i; sleep 0.2; done"`) and a concurrent "batch" call
+  (`ssh -S <ctl> host "echo concurrent-batch-call"`) both ran correctly over
+  the same master at once — output interleaved cleanly, neither blocked the
+  other. This directly validates the "pipe the batch fetch through the same
+  connection while a stream session is open" requirement.
+- After `ssh -S <ctl> -O exit host` tears the master down, a plain `ssh`
+  call to the same host still succeeds immediately via a normal
+  (non-multiplexed) connection — the batch-fallback-on-disconnect behavior
+  this ticket requires comes for free from `ssh`'s own semantics; harnez
+  does not need to implement its own reconnect/fallback logic, only detect
+  that the control socket is gone (or a call over it fails) and route
+  through a plain `ssh` call instead, same as today's `CollectRemote`.
+
+**Implication for implementation**: harnez needs a small `ControlMaster`
+lifecycle wrapper (start/check/exit against a per-host control socket path)
+plus a new remote `harnez load-stream` subcommand emitting NDJSON samples,
+but no custom multiplexing protocol (Option B) and no new dependency
+(Option D). Local orchestration stays `exec.Command("ssh", ...)`, consistent
+with `remote.go`/`watch.go`/`history.go`'s existing pattern.
+
+Options B/C/D below are kept for context on why A was chosen, not as live
+alternatives pending further work.
 
 ### Option A — OpenSSH `ControlMaster` connection multiplexing
 
@@ -124,13 +152,10 @@ against `docs/lang/Go.md`'s avoid-deps bias, and duplicates transport/auth
 plumbing SSH already provides for free. Not seriously considered further
 unless A and B both prove unworkable in canary testing.
 
-**Leaning**: Option A (ControlMaster) as the pragmatic default — smallest new
-surface, reuses proven patterns, real fallback behavior for free. Option B
-stays on the table if "batch truly interleaved with the live sample stream"
-turns out to matter in practice (e.g. sample loss/jitter from spawning a
-separate `ssh` child while the control master is busy). Not decided —
-flagging both for the canary/scoping pass this ticket is asking for, not
-picking one unilaterally.
+Option B stays documented in case "batch truly interleaved with the live
+sample stream" turns out to matter in practice later (e.g. sample loss/
+jitter from spawning a separate `ssh` child while the control master is
+busy) — not observed in the canary above, so not a reason to revisit A now.
 
 ## Acceptance Criteria (draft — refine during scoping)
 
@@ -146,9 +171,10 @@ picking one unilaterally.
 4. Streaming failure is transparent: on stream death, Load data continues
    arriving via batch polling at a reasonable interval; streaming
    re-establishment is attempted automatically without user action.
-5. Whichever streaming mechanism is chosen gets a canary probe (real SSH
+5. ~~Whichever streaming mechanism is chosen gets a canary probe (real SSH
    round trip against a real host, not just unit tests against a mock)
-   before the full implementation is built, per `docs/Canary.md`.
+   before the full implementation is built, per `docs/Canary.md`.~~ Done —
+   see the Decision section above and `scripts/canary-remote-load-stream.sh`.
 6. No vendor CLI/SDK telemetry source introduced on either side — same
    kernel-standard-only policy as local collection.
 
