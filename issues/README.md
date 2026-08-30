@@ -111,3 +111,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 110 | [110-remote-load-batch-vs-streaming-collection-modes.md](110-remote-load-batch-vs-streaming-collection-modes.md) | Remote Load: batch-default with an opt-in streaming channel, graceful fallback | Closed — resolved in 1df4e0a |
 | 111 | [111-per-agent-collector-pipelines-independent-cadence-and-timeout.md](111-per-agent-collector-pipelines-independent-cadence-and-timeout.md) | Per-agent collector pipelines: independent cadence, stricter timeout, and cancellation | Open |
 | 112 | [112-agy-usage-poll-may-trigger-google-reauth-bot-detection.md](112-agy-usage-poll-may-trigger-google-reauth-bot-detection.md) | Investigate whether `agy -p "/usage"` polling triggers Google reauth / bot-detection dialogs | Open |
+| 113 | [113-record-collector-roundtrip-times-usage-meta.md](113-record-collector-roundtrip-times-usage-meta.md) | Record per-collector roundtrip times; expose via `harnez usage --meta` | Open |
