@@ -1,10 +1,13 @@
 # 089 — Load Panel: Combine GPU VRAM/GTT Row
 
 **Status**: Open
-**Priority**: P3 (Low)
+**Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: UX
-**Related**: [[088-load-panel-ram-vram-gtt-memory]], [[078-rograph-library-shared-bar-sparkline-renderer]]
+**Related**: [[088-load-panel-ram-vram-gtt-memory]], [[078-rograph-library-shared-bar-sparkline-renderer]], [[110-remote-load-batch-vs-streaming-collection-modes]]
+
+Priority bumped from P3 to P2: user intends to pick this up once the
+in-progress remote GPU/CPU load-collection work (ticket 110) lands.
 
 ## Problem
 
