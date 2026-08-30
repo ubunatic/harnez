@@ -170,6 +170,17 @@ func main() {
 	usageCmd.Flags().DurationVar(&usageInterval, "interval", usage.DefaultWatchInterval,
 		fmt.Sprintf("refresh interval for --watch (minimum %s, to avoid hammering live quota APIs)", usage.MinWatchInterval))
 
+	loadStreamCmd := &cobra.Command{
+		Use:    "load-stream",
+		Short:  "Stream local CPU/GPU load samples as NDJSON (internal: driven remotely by usage --watch, issue 110)",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			return usage.RunLoadStream(ctx, cmd.OutOrStdout(), cmd.InOrStdin())
+		},
+	}
+
 	var historyJSON bool
 	historyCmd := &cobra.Command{
 		Use:     "history",
@@ -490,7 +501,7 @@ func main() {
 	}
 	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
 
-	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, initCmd, assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd())
+	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, loadStreamCmd, initCmd, assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd())
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}
