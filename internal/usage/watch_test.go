@@ -1,6 +1,8 @@
 package usage
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -1159,5 +1161,32 @@ func TestDispatchWatchKeyModeCyclesAndKeepsShowProcesses(t *testing.T) {
 	st, _ = dispatchWatchKey(st, 'm', true)
 	if !st.sec.Claude || !st.sec.AGY || !st.sec.Codex || !st.sec.Processes {
 		t.Fatalf("expected agents preset with Processes forced on: %+v", st.sec)
+	}
+}
+
+// TestRenderSummary_CompactSelectsReducedSections is issue 102's acceptance
+// criterion: `harnez usage --summary --compact` must render the same reduced
+// panel set as `--watch --compact` (compactWatchSections), not just be
+// accepted by the flag guard. RenderSummary previously had no way to reach
+// compactWatchSections() at all, regardless of what the CLI guard allowed.
+func TestRenderSummary_CompactSelectsReducedSections(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+
+	var full bytes.Buffer
+	RenderSummary(ctx, home, nil, &full, false)
+	fullText := stripANSI(full.String())
+	if !strings.Contains(fullText, "[H] History") {
+		t.Fatalf("expected default --summary output to include the History box (defaultWatchSections), got:\n%s", fullText)
+	}
+
+	var compact bytes.Buffer
+	RenderSummary(ctx, home, nil, &compact, false, WatchOptions{Compact: true})
+	compactText := stripANSI(compact.String())
+	if strings.Contains(compactText, "[H] History") {
+		t.Fatalf("expected --summary --compact to drop the History box (compactWatchSections has no History), got:\n%s", compactText)
+	}
+	if !strings.Contains(compactText, "[L] Load") {
+		t.Fatalf("expected --summary --compact to keep the Load box, got:\n%s", compactText)
 	}
 }

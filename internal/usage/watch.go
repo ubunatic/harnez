@@ -1467,35 +1467,43 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 // keyboard handling. It exists for `harnez usage --summary`: same at-a-glance
 // layout as `--watch`, but a plain one-shot print for scripting or a quick
 // glance, versus the full `harnez usage` report's per-window detail.
-func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out io.Writer, showProcesses ...bool) {
+//
+// opts is optional; when given, its Compact field selects the same reduced
+// panel set --watch --compact uses (issue 102), and ShowProcesses forces the
+// Processes panel on regardless of Compact, matching initialWatchSections.
+func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out io.Writer, showProcesses bool, opts ...WatchOptions) {
 	summary := CollectAll(ctx, homeDir, client)
 	cols, rows := terminalSize(out)
-	sec := defaultWatchSections()
-	if len(showProcesses) > 0 && showProcesses[0] {
-		sec.Processes = true
-	}
-	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, homeDir, "")
+	opt := firstOpt(opts)
+	opt.ShowProcesses = opt.ShowProcesses || showProcesses
+	sec := initialWatchSections(opt)
+	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, homeDir, "", opt)
 	for _, l := range frame.lines {
 		fmt.Fprintln(out, l+"\x1b[0m")
 	}
 }
 
 // RenderSummaryRemote prints one static frame of the compact grid using remote host collection.
-func RenderSummaryRemote(ctx context.Context, host string, out io.Writer, showProcesses ...bool) {
-	includeProcs := len(showProcesses) > 0 && showProcesses[0]
-	summary, procs, _ := CollectRemote(ctx, host, includeProcs)
+func RenderSummaryRemote(ctx context.Context, host string, out io.Writer, showProcesses bool, opts ...WatchOptions) {
+	opt := firstOpt(opts)
+	opt.ShowProcesses = opt.ShowProcesses || showProcesses
+	summary, procs, _ := CollectRemote(ctx, host, opt.ShowProcesses)
 	cols, rows := terminalSize(out)
-	sec := defaultWatchSections()
-	if includeProcs {
-		sec.Processes = true
-	}
-	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, "", "", WatchOptions{
-		Host:       host,
-		ProcCounts: procs,
-	})
+	opt.Host = host
+	opt.ProcCounts = procs
+	sec := initialWatchSections(opt)
+	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, "", "", opt)
 	for _, l := range frame.lines {
 		fmt.Fprintln(out, l+"\x1b[0m")
 	}
+}
+
+// firstOpt returns the first WatchOptions in opts, or the zero value.
+func firstOpt(opts []WatchOptions) WatchOptions {
+	if len(opts) > 0 {
+		return opts[0]
+	}
+	return WatchOptions{}
 }
 
 // RunWatch redraws a compact, btop-style usage dashboard in place on a fixed

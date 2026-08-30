@@ -16,6 +16,23 @@ import (
 	"ubunatic.com/harnez/internal/usage"
 )
 
+// validateUsageFlags rejects `harnez usage` flag combinations that don't
+// make sense together, ahead of any collection or rendering work.
+//
+// --compact requires --watch or --summary because both share the same
+// compact, btop-style renderer (buildWatchFrame / compactWatchSections) that
+// --compact toggles; the flat `harnez usage` report (neither flag set) has
+// no compact mode to toggle at all (issue 102).
+func validateUsageFlags(usageWatch, usageSummary, usageCompact bool) error {
+	if usageWatch && usageSummary {
+		return fmt.Errorf("--watch and --summary cannot be combined")
+	}
+	if usageCompact && !usageWatch && !usageSummary {
+		return fmt.Errorf("--compact requires --watch or --summary")
+	}
+	return nil
+}
+
 func main() {
 	var configPath string
 	var target string
@@ -46,11 +63,8 @@ func main() {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 
-			if usageWatch && usageSummary {
-				return fmt.Errorf("--watch and --summary cannot be combined")
-			}
-			if usageCompact && !usageWatch {
-				return fmt.Errorf("--compact requires --watch")
+			if err := validateUsageFlags(usageWatch, usageSummary, usageCompact); err != nil {
+				return err
 			}
 
 			if usageWatch {
@@ -69,9 +83,9 @@ func main() {
 					return fmt.Errorf("--summary and --json cannot be combined")
 				}
 				if usageHost != "" {
-					usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses)
+					usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, usage.WatchOptions{Compact: usageCompact})
 				} else {
-					usage.RenderSummary(ctx, "", client, cmd.OutOrStdout(), usageProcesses)
+					usage.RenderSummary(ctx, "", client, cmd.OutOrStdout(), usageProcesses, usage.WatchOptions{Compact: usageCompact})
 				}
 				return nil
 			}
