@@ -75,6 +75,58 @@ func TestLoadLocalConfig_Valid(t *testing.T) {
 	}
 }
 
+func TestLoadLocalConfig_WithLoadWatchHost(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+	dir := filepath.Join(tmp, "harnez")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	content := "usage:\n  default_host: um760\nload:\n  watch_host: llm-box\n"
+	if err := os.WriteFile(filepath.Join(dir, "local.yaml"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := LoadLocalConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("expected non-nil cfg")
+	}
+	if cfg.Usage.DefaultHost != "um760" {
+		t.Fatalf("DefaultHost = %q, want %q", cfg.Usage.DefaultHost, "um760")
+	}
+	if cfg.Load.WatchHost != "llm-box" {
+		t.Fatalf("Load.WatchHost = %q, want %q", cfg.Load.WatchHost, "llm-box")
+	}
+}
+
+func TestLoadLocalConfig_LoadSectionOnly(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+	dir := filepath.Join(tmp, "harnez")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	content := "load:\n  watch_host: llm-box\n"
+	if err := os.WriteFile(filepath.Join(dir, "local.yaml"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := LoadLocalConfig("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("expected non-nil cfg")
+	}
+	if cfg.Usage.DefaultHost != "" {
+		t.Fatalf("DefaultHost = %q, want empty", cfg.Usage.DefaultHost)
+	}
+	if cfg.Load.WatchHost != "llm-box" {
+		t.Fatalf("Load.WatchHost = %q, want %q", cfg.Load.WatchHost, "llm-box")
+	}
+}
+
 func TestLoadLocalConfig_Malformed(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmp)

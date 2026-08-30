@@ -54,12 +54,23 @@ type LocalUsageConfig struct {
 	DefaultHost string `yaml:"default_host"`
 }
 
+// LoadWatchConfig is the `load:` section of local.yaml (issue 110).
+type LoadWatchConfig struct {
+	// WatchHost is the SSH host whose CPU/GPU load is shown in a separate
+	// remote Load box across `harnez usage --watch`/`--summary`/plain
+	// output. Independent of usage.DefaultHost — it need not be the same
+	// machine as the occasional ad-hoc `--host` usage target. Empty means
+	// no remote Load box is shown (today's local-only behavior).
+	WatchHost string `yaml:"watch_host"`
+}
+
 // LocalConfig is the parsed shape of ~/.config/harnez/local.yaml (issue
 // 109). It is a minimal, user-local overlay on top of the committed
 // config.yaml — machine-specific values that would otherwise cause drift in
 // the shared, managed config.
 type LocalConfig struct {
 	Usage LocalUsageConfig `yaml:"usage"`
+	Load  LoadWatchConfig  `yaml:"load"`
 }
 
 // LoadLocalConfig resolves and loads the user-local harnez config file. It
