@@ -9,6 +9,7 @@ import (
 	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/jsonc"
 	"ubunatic.com/harnez/internal/markdown"
+	"ubunatic.com/harnez/internal/usage"
 )
 
 func hasSettingsKey(path, key string) bool {
@@ -40,6 +41,16 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 	fmt.Printf("  %-14s %d\n", "distill:", len(distillAdapters(cfg)))
 	fmt.Printf("  %-14s %d global, %d local\n", "agents_md:",
 		len(cfg.AgentsMD.Global.Sections), len(cfg.AgentsMD.Local.Sections))
+
+	localCfg, localCfgPath, localCfgErr := usage.LoadLocalConfig("")
+	localCfgState := "absent"
+	switch {
+	case localCfgErr != nil:
+		localCfgState = fmt.Sprintf("error: %v", localCfgErr)
+	case localCfg != nil:
+		localCfgState = "present"
+	}
+	fmt.Printf("  %-14s %s [%s]\n", "local config:", fsutil.ContractHome(localCfgPath), localCfgState)
 
 	fmt.Println()
 	fmt.Println("Applied:")

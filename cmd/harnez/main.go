@@ -16,6 +16,22 @@ import (
 	"ubunatic.com/harnez/internal/usage"
 )
 
+// resolveUsageHost decides the effective --host value for `harnez usage`:
+// the explicit flag always wins (issue 109 acceptance criterion 3); when the
+// flag is omitted and cfg (loaded from ~/.config/harnez/local.yaml) carries
+// a non-empty usage.default_host, that value is used as a convenience
+// default. cfg may be nil (file absent or failed to load), in which case the
+// flag value (possibly empty) is returned unchanged.
+func resolveUsageHost(flagHost string, cfg *usage.LocalConfig) string {
+	if flagHost != "" {
+		return flagHost
+	}
+	if cfg == nil {
+		return flagHost
+	}
+	return cfg.Usage.DefaultHost
+}
+
 // validateUsageFlags rejects `harnez usage` flag combinations that don't
 // make sense together, ahead of any collection or rendering work.
 //
@@ -65,6 +81,15 @@ func main() {
 
 			if err := validateUsageFlags(usageWatch, usageSummary, usageCompact); err != nil {
 				return err
+			}
+
+			if usageHost == "" {
+				// The local config file is optional and this is a
+				// convenience default, not a required config — a load
+				// error (malformed YAML, unreadable file) must not abort
+				// the command (issue 109).
+				localCfg, _, _ := usage.LoadLocalConfig("")
+				usageHost = resolveUsageHost(usageHost, localCfg)
 			}
 
 			if usageWatch {

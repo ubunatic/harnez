@@ -1,6 +1,44 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"ubunatic.com/harnez/internal/usage"
+)
+
+// TestResolveUsageHost_FlagWinsOverLocalConfig is issue 109's acceptance
+// criterion 3: an explicit --host always overrides usage.default_host from
+// ~/.config/harnez/local.yaml.
+func TestResolveUsageHost_FlagWinsOverLocalConfig(t *testing.T) {
+	cfg := &usage.LocalConfig{Usage: usage.LocalUsageConfig{DefaultHost: "fromlocal"}}
+	got := resolveUsageHost("fromflag", cfg)
+	if got != "fromflag" {
+		t.Fatalf("resolveUsageHost() = %q, want %q", got, "fromflag")
+	}
+}
+
+func TestResolveUsageHost_FallsBackToLocalConfig(t *testing.T) {
+	cfg := &usage.LocalConfig{Usage: usage.LocalUsageConfig{DefaultHost: "fromlocal"}}
+	got := resolveUsageHost("", cfg)
+	if got != "fromlocal" {
+		t.Fatalf("resolveUsageHost() = %q, want %q", got, "fromlocal")
+	}
+}
+
+func TestResolveUsageHost_NilConfigNoFlag(t *testing.T) {
+	got := resolveUsageHost("", nil)
+	if got != "" {
+		t.Fatalf("resolveUsageHost() = %q, want empty", got)
+	}
+}
+
+func TestResolveUsageHost_EmptyLocalDefault(t *testing.T) {
+	cfg := &usage.LocalConfig{}
+	got := resolveUsageHost("", cfg)
+	if got != "" {
+		t.Fatalf("resolveUsageHost() = %q, want empty", got)
+	}
+}
 
 // TestValidateUsageFlags_CompactAllowedWithSummary is issue 102's core
 // acceptance criterion: `harnez usage --summary --compact` must no longer be
