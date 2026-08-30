@@ -100,3 +100,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 099 | [099-appimage-packaging.md](099-appimage-packaging.md) | Add AppImage packaging to `harnez release` | Closed — evaluated, not pursued |
 | 100 | [100-container-install-verify-canary.md](100-container-install-verify-canary.md) | Container canary: install `latest` Codeberg release and verify `--version` | Resolved — `scripts/install-canary.sh`, `make install-canary` |
 | 101 | [101-usage-keep-stale-agents-visible-until-7d.md](101-usage-keep-stale-agents-visible-until-7d.md) | `harnez usage` hides/blanks agents too soon when not recently active (e.g. AGY) | Resolved — 2026-08-29 |
+| 102 | [102-usage-summary-compact-should-be-allowed.md](102-usage-summary-compact-should-be-allowed.md) | `harnez usage --summary --compact` should be allowed | Open |
