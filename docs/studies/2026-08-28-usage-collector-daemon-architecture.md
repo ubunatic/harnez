@@ -144,6 +144,49 @@ behavior — but this wasn't run against an exhausted-quota session to verify di
 so would have cost real remaining quota on a session already low. Moot for harnez's own collection
 either way, since Claude already has a better (file-based) source than exec.
 
+## 7. Remote transport overhead: SSH exec vs. a hypothetical HTTP server
+
+Raised as a question during [[110]]'s design session: would a small Go HTTP
+server on the remote host, polled or streamed to over the network, have
+meaningfully lower overhead than repeatedly spawning `ssh` subprocesses?
+Measured ad hoc rather than via a committed canary (the finding didn't change
+the [[110]] decision, so it wasn't formalized until now):
+
+- Cold `ssh` handshake (fresh TCP+crypto negotiation, no multiplexing): ~0.5s.
+- Warm `ssh -S <ControlMaster>` exec, reusing an already-open connection:
+  ~10-220ms per call, still spawning a new local `ssh` client process and
+  negotiating a new logical channel each time.
+- An HTTP request over an already-open SSH port-forward (so still SSH-backed,
+  not a bare exposed port), one fresh local TCP connection per request
+  because the test server (Python's stock `http.server`) doesn't do HTTP/1.1
+  keep-alive: ~4-10ms steady-state.
+
+**The comparison was initially apples-to-oranges**: the first pass spawned a
+fresh `curl` process per HTTP call and a fresh `ssh` process per exec call,
+measuring process-fork cost twice rather than isolating protocol overhead.
+Once isolated, the real difference wasn't "HTTP is a lighter protocol than
+SSH" — it was **process-spawn cost per call**, something a persistent
+long-lived process on either side avoids entirely. [[110]]'s actual
+`load-stream` design already avoids this the same way a persistent HTTP
+server would: the remote child is spawned once per `--watch` session and
+loops internally, pushing samples over its own already-open stdout, not
+spawning a process per sample. So the raw millisecond-level transport
+difference measured here doesn't apply to the chosen design — the streaming
+child's cost profile is already "persistent process, no per-sample spawn"
+either way.
+
+**Where a standalone HTTP daemon would still lose**, independent of latency:
+it's a detached background process on the remote with its own lifecycle to
+manage — start, health-check, and critically, cleanup if the local
+`--watch` process dies uncleanly. `docs/practices/AgenticLoop.md`'s
+zero-zombie-guarantee principle applies directly: a command spawned *inside*
+an SSH session dies for free when that session/channel closes (confirmed by
+[[110]]'s canary and live zombie-check verification); a listening daemon
+does not, and would need its own orphan-prevention story built from scratch.
+This, not the latency numbers, was the deciding factor for staying with
+Option A (SSH `ControlMaster` + a piped child) over any HTTP-based
+alternative.
+
 ## Related issues
 
 [[082-agent-usage-collector-daemon]], [[083-usage-tui-self-hiding-auto-discovery]],
@@ -152,4 +195,6 @@ either way, since Claude already has a better (file-based) source than exec.
 [[087-generalize-flock-freshness-gate-to-codex-agy]],
 [[103-agy-missing-from-all-usage-aggregate]],
 [[104-agy-quota-collector-requires-live-process-poll-coincidence]],
-[[106-verify-offline-derivability-of-quota-state]]
+[[106-verify-offline-derivability-of-quota-state]],
+[[110-remote-load-batch-vs-streaming-collection-modes]],
+[[114-remote-load-stream-drops-to-batch-stdin-eof-false-trigger]]

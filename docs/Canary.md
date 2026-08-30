@@ -123,6 +123,28 @@ These findings shaped that project's OCR implementation in the
 
 ---
 
+## Historical example — driving a TTY-dependent TUI from a non-interactive shell
+
+**Mechanism:** `harnez usage --watch` reads `/dev/tty` directly for keypresses
+and runs `stty` against it, so a plain pipe/redirect from a script leaves it
+unable to detect a terminal at all — there's nothing to observe.
+
+**Canary:** `scripts/canary-watch-pty.sh SECONDS` — uses util-linux's `script`
+to allocate a real pseudo-terminal (the same mechanism an interactive
+terminal emulator provides), records a fixed duration of `--watch`'s live
+redraw output, then greps the capture for panel titles and (for issue 114)
+counts how often the `[R]` Remote Load box's `streaming`/`batch` label
+occurs, to detect flapping between the two.
+
+**Finding:** confirmed issue 114 live — 20s of capture against a real
+streaming session showed 15 `batch` redraws vs. only 4 `streaming`, direct
+evidence the stream was connecting and dropping almost immediately rather
+than holding. Also surfaced an environment gotcha: `script`'s absence from
+a `which script` check turned out to be a stale shell PATH hash in that
+session, not a real absence — worth an unconditional `hash -r` (or a fresh
+shell) before trusting a negative `which` result for a binary that should
+exist.
+
 ## Canary Scope vs Integration Tests
 
 Canaries are intentionally distinct from full integration test suites:

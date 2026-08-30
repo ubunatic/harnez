@@ -14,6 +14,14 @@ shows `streaming` briefly, then drops to `batch` — the fallback-and-retry path
 (`runRemoteLoadManager`, `watch.go`) is triggering almost immediately after a
 stream connects, not because of a real network/host problem.
 
+Reproduced with `scripts/canary-watch-pty.sh` (new, added alongside this
+ticket — records `harnez usage --watch` under a real pty via `script` and
+counts `[R]` box label occurrences, since `--watch` needs a real terminal and
+can't just be piped): 20s against `um760` showed 15 `batch` redraws vs. only
+4 `streaming` — confirming the stream repeatedly connects and drops almost
+immediately rather than holding, consistent with the stdin-EOF false-trigger
+below.
+
 ## Root cause (file:line)
 
 `StartRemoteLoadStream` (`internal/usage/loadstream.go:188-244`) builds the local
