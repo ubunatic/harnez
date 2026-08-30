@@ -97,6 +97,16 @@ func main() {
 			}
 
 			if usageJSON {
+				// Only attach a load snapshot when this invocation is itself
+				// the local collection (usageHost == ""), which is also the
+				// case when this process is the one CollectRemote runs over
+				// SSH on the remote host. A local `--json --host` combo
+				// already carries whatever load snapshot the remote side
+				// attached, via summary from CollectRemote above.
+				if usageHost == "" && summary.Load == nil {
+					snap := usage.CollectLoadSnapshot()
+					summary.Load = &snap
+				}
 				out, err := usage.RenderJSON(summary)
 				if err != nil {
 					return err

@@ -1,10 +1,36 @@
 # 090 — Remote Usage Load Panel Uses Local Metrics
 
-**Status**: Open
+**Status**: Closed — resolved in commit (hash to follow in next doc commit)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
 **Related**: [[050-remote-host-flag-and-watch-hotkey]], [[088-load-panel-ram-vram-gtt-memory]], [[089-load-panel-combine-gpu-vram-gtt-row]], [docs/studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md](../docs/studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md)
+
+## Resolution
+
+`UsageSummary` now carries an optional `Load *LoadSnapshot` field
+(`internal/usage/types.go`), populated with `CollectLoadSnapshot()`
+(`internal/usage/load.go`) whenever a local `harnez usage --json` process
+runs — including the process CollectRemote invokes over SSH on the remote
+host (`cmd/harnez/main.go`). `buildLoadBox` (`internal/usage/watch.go`) now
+takes the active remote host and that snapshot: in local mode it still
+calls `CurrentCPULoad()`/`CurrentGPUs()` live at the 1Hz redraw cadence
+(unchanged); in remote mode it renders exclusively from the snapshot last
+fetched at the existing remote collection interval (no SSH call in the
+redraw path), and shows an explicit "remote load unavailable" placeholder
+rather than silently substituting local telemetry when no snapshot has
+arrived yet. The Load panel title also tags the active host
+(`Load (@host)`) in remote mode. No vendor CLI/SDK telemetry source was
+added on either side — same kernel-standard-only policy as local.
+
+Verified with `go vet ./...`, `go test ./...` (all packages, including new
+tests `TestParseRemoteJSON_WithLoad`,
+`TestUsageSummary_LoadRoundTripsThroughJSON`,
+`TestBuildLoadBox_RemoteUsesSnapshot`,
+`TestBuildLoadBox_RemoteWithoutSnapshotDoesNotFallBackLocally`), and a real
+build (`harnez usage --json` on the built binary now includes a `load`
+object with `cpu`/`gpus` keys). No SSH loopback host was available in this
+environment to exercise the live `--host` path end-to-end.
 
 ## Problem
 

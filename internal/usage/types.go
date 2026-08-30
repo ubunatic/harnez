@@ -124,8 +124,20 @@ func (a AgentUsage) HasUsageData() bool {
 		a.QuotaFetchError != ""
 }
 
+// LoadSnapshot is a compact CPU/GPU load reading carried alongside
+// UsageSummary so the `[L] Load` panel can be rendered from remote data
+// without a second SSH round trip (issue 090). It's populated on the host
+// that runs `harnez usage --json` (including when that command runs on a
+// remote host via CollectRemote's SSH invocation) and simply reuses the
+// same CPULoad/GPU structs the local Load panel already renders from.
+type LoadSnapshot struct {
+	CPU  CPULoad `json:"cpu"`
+	GPUs []GPU   `json:"gpus,omitempty"`
+}
+
 // UsageSummary is the top-level container for multi-agent usage queries.
 type UsageSummary struct {
-	Timestamp time.Time    `json:"timestamp"`
-	Agents    []AgentUsage `json:"agents"`
+	Timestamp time.Time     `json:"timestamp"`
+	Agents    []AgentUsage  `json:"agents"`
+	Load      *LoadSnapshot `json:"load,omitempty"`
 }

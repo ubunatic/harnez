@@ -702,6 +702,48 @@ func TestBuildWatchFrame_ProcessesBox(t *testing.T) {
 	}
 }
 
+// TestBuildLoadBox_RemoteUsesSnapshot guards issue 090: in remote mode the
+// Load panel must render from the supplied snapshot, never from a local
+// CurrentCPULoad()/CurrentGPUs() call, so it can't silently show the wrong
+// machine's load.
+func TestBuildLoadBox_RemoteUsesSnapshot(t *testing.T) {
+	snap := &LoadSnapshot{
+		CPU: CPULoad{
+			NumCPU:       4,
+			Ok:           true,
+			CPUPercent:   42,
+			CPUPercentOk: true,
+			Memory:       SystemMemory{UsedMiB: 4096, TotalMiB: 8192, Ok: true},
+		},
+		GPUs: []GPU{{Name: "Remote GPU", UtilPercent: 7}},
+	}
+
+	box := buildLoadBox(minBoxWidth, "remote-worker-1", snap)
+	text := strings.Join(box.lines, "\n")
+
+	if !strings.Contains(text, "42%") {
+		t.Errorf("expected remote CPU percent 42%% in load box, got:\n%s", stripANSI(text))
+	}
+	if !strings.Contains(text, "Remote GPU") {
+		t.Errorf("expected remote GPU name in load box, got:\n%s", stripANSI(text))
+	}
+	if !strings.Contains(stripANSI(box.title), "@remote-worker-1") {
+		t.Errorf("expected remote host in load box title, got %q", stripANSI(box.title))
+	}
+}
+
+// TestBuildLoadBox_RemoteWithoutSnapshotDoesNotFallBackLocally guards the
+// specific failure this issue is about: a remote session with no snapshot
+// yet (fresh fallback summary, SSH hiccup) must show an explicit
+// unavailable placeholder, not silently substitute local /proc /sys data.
+func TestBuildLoadBox_RemoteWithoutSnapshotDoesNotFallBackLocally(t *testing.T) {
+	box := buildLoadBox(minBoxWidth, "remote-worker-1", nil)
+	text := stripANSI(strings.Join(box.lines, "\n"))
+	if !strings.Contains(text, "remote load unavailable") {
+		t.Errorf("expected explicit remote-unavailable placeholder, got:\n%s", text)
+	}
+}
+
 func TestBuildWatchFrame_RemoteHost(t *testing.T) {
 	summary := UsageSummary{
 		Timestamp: testTime,

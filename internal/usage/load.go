@@ -79,6 +79,18 @@ func CurrentCPULoad() CPULoad {
 	return load
 }
 
+// CollectLoadSnapshot gathers the same CPU/GPU readings CurrentCPULoad and
+// CurrentGPUs already produce, packaged as a LoadSnapshot for JSON transport
+// (issue 090: carrying Load panel data through the remote `usage --json`
+// payload so `--host` mode never has to open a second SSH connection at the
+// Load panel's redraw cadence).
+func CollectLoadSnapshot() LoadSnapshot {
+	return LoadSnapshot{
+		CPU:  CurrentCPULoad(),
+		GPUs: CurrentGPUs(),
+	}
+}
+
 // CurrentSystemMemory reads Linux memory pressure from /proc/meminfo.
 func CurrentSystemMemory() SystemMemory {
 	mem, err := readMeminfo("/proc/meminfo")

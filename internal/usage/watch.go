@@ -588,9 +588,35 @@ func compactDurationText(w QuotaWindow) string {
 
 // buildLoadBox renders a compact panel showing CPU and GPU load, styled
 // like the agent quota lines: "label (detail) [spark] avg% (temp)".
-func buildLoadBox(width int) wbox {
+//
+// remoteHost and snapshot together select the data source (issue 090): with
+// remoteHost == "", this is local mode and CurrentCPULoad()/CurrentGPUs()
+// are called directly, giving the 1Hz-redraw live behavior local mode has
+// always had. With remoteHost != "", this is remote mode: the panel renders
+// exclusively from snapshot (last fetched at the remote collection
+// interval, not the 1Hz redraw cadence — no local /proc or /sys read is
+// substituted, and no SSH call happens here). A nil snapshot in remote mode
+// renders an explicit "remote load unavailable" placeholder rather than
+// silently falling back to local telemetry.
+func buildLoadBox(width int, remoteHost string, snapshot *LoadSnapshot) wbox {
 	title := "\x1b[1m[L]\x1b[0m Load"
-	load := CurrentCPULoad()
+	if remoteHost != "" {
+		title = fmt.Sprintf("\x1b[1m[L]\x1b[0m Load \x1b[90m(@%s)\x1b[0m", remoteHost)
+	}
+
+	if remoteHost != "" && snapshot == nil {
+		return wbox{title: title, lines: []string{"\x1b[90mremote load unavailable\x1b[0m"}, width: width}
+	}
+
+	var load CPULoad
+	var gpus []GPU
+	if snapshot != nil {
+		load = snapshot.CPU
+		gpus = snapshot.GPUs
+	} else {
+		load = CurrentCPULoad()
+		gpus = CurrentGPUs()
+	}
 
 	var lines []string
 	if load.NumCPU > 0 {
@@ -600,7 +626,6 @@ func buildLoadBox(width int) wbox {
 		lines = append(lines, formatSystemMemoryLine(load.Memory))
 	}
 
-	gpus := CurrentGPUs()
 	if len(gpus) == 0 {
 		lines = append(lines, "\x1b[90mgpu n/a\x1b[0m")
 	} else {
@@ -1172,7 +1197,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		}
 		lines := combineRow([][]string{
 			renderWBox(buildAllUsageBox(summary, allWidth)),
-			renderWBox(buildLoadBox(loadWidth)),
+			renderWBox(buildLoadBox(loadWidth, opt.Host, summary.Load)),
 		})
 		if len(body)+len(lines) <= budget {
 			body = append(body, lines...)
@@ -1233,7 +1258,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 			}
 		}
 		if sec.Load {
-			lBox := buildLoadBox(boxWidth)
+			lBox := buildLoadBox(boxWidth, opt.Host, summary.Load)
 			pending = append(pending, renderWBox(lBox))
 			if len(pending) == columns {
 				flushRow()

@@ -81,6 +81,81 @@ func TestParseRemoteJSON_WithProcesses(t *testing.T) {
 	}
 }
 
+// TestParseRemoteJSON_WithLoad covers issue 090: the remote `usage --json`
+// payload can carry a compact Load snapshot (CPU + GPUs) alongside
+// UsageSummary, which parseRemoteJSON must decode without a second SSH
+// round trip.
+func TestParseRemoteJSON_WithLoad(t *testing.T) {
+	jsonData := `{
+		"timestamp": "2026-08-23T10:00:00Z",
+		"agents": [],
+		"load": {
+			"cpu": {
+				"Load1": 1.5,
+				"NumCPU": 8,
+				"Ok": true,
+				"CPUPercent": 33.5,
+				"CPUPercentOk": true,
+				"Memory": {"UsedMiB": 2048, "TotalMiB": 16384, "Ok": true}
+			},
+			"gpus": [
+				{"Name": "Remote GPU", "UtilPercent": 12.5}
+			]
+		}
+	}`
+
+	summary, _, err := parseRemoteJSON([]byte(jsonData))
+	if err != nil {
+		t.Fatalf("parseRemoteJSON: %v", err)
+	}
+	if summary.Load == nil {
+		t.Fatalf("expected non-nil Load snapshot")
+	}
+	if !summary.Load.CPU.Ok || summary.Load.CPU.NumCPU != 8 {
+		t.Errorf("unexpected CPU snapshot: %+v", summary.Load.CPU)
+	}
+	if summary.Load.CPU.CPUPercent != 33.5 {
+		t.Errorf("expected CPUPercent 33.5, got %v", summary.Load.CPU.CPUPercent)
+	}
+	if len(summary.Load.GPUs) != 1 || summary.Load.GPUs[0].Name != "Remote GPU" {
+		t.Errorf("unexpected GPUs: %+v", summary.Load.GPUs)
+	}
+}
+
+// TestUsageSummary_LoadRoundTripsThroughJSON marshals a UsageSummary with a
+// Load snapshot and re-parses it through parseRemoteJSON, guarding the full
+// wire path CollectRemote depends on (marshal on the remote host's `usage
+// --json`, unmarshal on the local watcher).
+func TestUsageSummary_LoadRoundTripsThroughJSON(t *testing.T) {
+	orig := UsageSummary{
+		Timestamp: time.Now().UTC(),
+		Agents:    []AgentUsage{{AgentID: "claude", Name: "Claude Code", Installed: true}},
+		Load: &LoadSnapshot{
+			CPU:  CPULoad{NumCPU: 4, Ok: true, CPUPercent: 55, CPUPercentOk: true},
+			GPUs: []GPU{{Name: "GPU0", UtilPercent: 20}},
+		},
+	}
+
+	data, err := RenderJSON(orig)
+	if err != nil {
+		t.Fatalf("RenderJSON: %v", err)
+	}
+
+	got, _, err := parseRemoteJSON([]byte(data))
+	if err != nil {
+		t.Fatalf("parseRemoteJSON: %v", err)
+	}
+	if got.Load == nil {
+		t.Fatalf("expected Load to survive round trip")
+	}
+	if got.Load.CPU.NumCPU != 4 || got.Load.CPU.CPUPercent != 55 {
+		t.Errorf("CPU snapshot mismatch after round trip: %+v", got.Load.CPU)
+	}
+	if len(got.Load.GPUs) != 1 || got.Load.GPUs[0].Name != "GPU0" {
+		t.Errorf("GPU snapshot mismatch after round trip: %+v", got.Load.GPUs)
+	}
+}
+
 func TestParseRemoteJSON_InvalidJSON(t *testing.T) {
 	_, _, err := parseRemoteJSON([]byte("not-json"))
 	if err == nil {
