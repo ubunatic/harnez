@@ -22,6 +22,7 @@ Agentic software engineering scales effectively when concurrency is structured a
    - Multiple subagents may concurrently explore, read, grep, and analyze the codebase.
    - Only **one** agent may modify files, write code, or execute build mutations in a shared workspace at any given time.
    - Concurrent writes produce race conditions, broken intermediate states, git conflicts, and corrupt dependencies.
+   - **Sequential dispatch is the default for every task type, not just file-overlapping code edits.** Two subagents each doing "read-only" investigation or ticket-filing work can still race on a shared, sequentially-allocated resource they both read and then write independently — e.g. two agents each scanning `issues/README.md` for "the next free issue number" and landing on the same one, because each read a snapshot that was already stale by the time it wrote (see `docs/studies/2026-08-30-usage-panel-integration-and-the-agy-collector-cliff.md`). File-level non-overlap is not sufficient evidence that parallel dispatch is safe. Dispatch one subagent at a time unless the user explicitly requests parallel execution for a specific task — and even then, verify the run actually was concurrent and check for this class of race afterward.
 
 2. **Canary & Test-Driven Verification**:
    - Every task must be verified with real test executions (`go test ./...`, `make smoke`, canary probes) before declaring completion.

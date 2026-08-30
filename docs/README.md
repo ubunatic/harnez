@@ -57,6 +57,7 @@ Generated copies land here (root) after `apply` / `init`.
 |------|-------|
 | [studies/GoRelease.md](studies/GoRelease.md) | Release pipeline case study (goreleaser consolidation) |
 | [studies/2026-08-29-a-day-of-fresh-sprints.md](studies/2026-08-29-a-day-of-fresh-sprints.md) | Retrospective: a full-day `/fresh-sprint` run — 13 tickets moved, a 3-pass AGY quota bug, and what it showed about parallel-vs-sequential subagent dispatch and scope boundaries |
+| [studies/2026-08-30-usage-panel-integration-and-the-agy-collector-cliff.md](studies/2026-08-30-usage-panel-integration-and-the-agy-collector-cliff.md) | Retrospective: `internal/uix` layout integration + watch controls overlay shipped, the AGY quota collector's live-process-only design traced through 3 stacked layers (103/104/106), and a ticket-number race that made subagent dispatch strictly sequential by default for every task type |
 | [studies/2026-08-29-harnez-go-release-and-signing.md](studies/2026-08-29-harnez-go-release-and-signing.md) | Harnez Go release pipeline & non-interactive signing case study (passwordless minisign, Codeberg API `has_releases`, `--continue` recovery) |
 | [studies/Worktrees.md](studies/Worktrees.md) | Worktrees case study (go.mod races, dependencies; stale-base-branch and uncommitted-state-invisibility bugs found 2026-08-28) |
 | [studies/2026-08-16-harnez-migration-and-workspace-unification.md](studies/2026-08-16-harnez-migration-and-workspace-unification.md) | Harnez migration, Spec generalization & workspace diagnostics case study |
