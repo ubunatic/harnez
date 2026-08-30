@@ -106,3 +106,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 105 | [105-surface-per-collector-fetch-status-in-usage-ui.md](105-surface-per-collector-fetch-status-in-usage-ui.md) | Surface per-collector fetch status in usage UI, including compact view | Open |
 | 106 | [106-verify-offline-derivability-of-quota-state.md](106-verify-offline-derivability-of-quota-state.md) | Verify offline-derivability of quota/limit/reset-time state from current storage model | Closed — audit complete |
 | 107 | [107-indicate-data-staleness-via-dimming-marker-in-usage-ui.md](107-indicate-data-staleness-via-dimming-marker-in-usage-ui.md) | Indicate data staleness via dimming/marker in usage UI (compact + full views) | Open |
+| 108 | [108-subagent-dispatch-sequential-default-and-issue-number-race-guard.md](108-subagent-dispatch-sequential-default-and-issue-number-race-guard.md) | Subagent dispatch needs a hard sequential-by-default rule + issue-number allocation race guard | Open |
