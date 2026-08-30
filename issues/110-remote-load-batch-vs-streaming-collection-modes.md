@@ -1,6 +1,6 @@
 # 110 — Remote Load: batch-default with an opt-in streaming channel, graceful fallback
 
-**Status**: Open — design fully decided (mechanism, config, lifecycle, v1 rendering) and canary-verified against a real host; implementation not yet started
+**Status**: Closed — resolved in 1df4e0a (implementation), live-verified against um760 (streaming, batch fallback, and zombie-free Ctrl-C teardown all confirmed)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
