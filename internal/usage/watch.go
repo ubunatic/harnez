@@ -400,6 +400,114 @@ func compactWatchSections() watchSections {
 	return watchSections{AllUsage: true, Load: true, Tokens: true}
 }
 
+// agentsOnlyWatchSections shows only the discovered per-agent boxes plus
+// token detail, with History/Load/Processes/AllUsage all off — the
+// "Agents-only" preset from issue 094's proposal section 4.
+func agentsOnlyWatchSections() watchSections {
+	return watchSections{Claude: true, AGY: true, Codex: true, Tokens: true}
+}
+
+// watchPresetOrder and watchPresetNames define the fixed cycle order for the
+// [m] mode/preset shortcut (issue 094): default -> compact -> agents ->
+// default. Cycling is keyed off an explicit index rather than sniffing sec's
+// current field values, since sec can drift away from any named preset via
+// individual panel toggles ([C]/[a]/etc.) between presses.
+var watchPresetOrder = []watchSections{
+	defaultWatchSections(),
+	compactWatchSections(),
+	agentsOnlyWatchSections(),
+}
+
+var watchPresetNames = []string{"default", "compact", "agents"}
+
+// nextWatchPreset returns the section set, name, and new index for the
+// preset that follows idx in watchPresetOrder, wrapping around.
+func nextWatchPreset(idx int) (watchSections, string, int) {
+	n := (idx + 1) % len(watchPresetOrder)
+	return watchPresetOrder[n], watchPresetNames[n], n
+}
+
+// watchKeyState is the mutable interactive state a single keypress can
+// change in RunWatchWithOptions's tty-reading goroutine. Threading it
+// through a pure function (dispatchWatchKey) keeps that goroutine a thin
+// shell around testable logic instead of embedding the overlay/preset
+// dispatch rules inline where only a real PTY could exercise them.
+type watchKeyState struct {
+	sec            watchSections
+	overlayOpen    bool
+	presetIdx      int
+	configuredHost string
+	activeHost     string
+}
+
+// watchKeyEffect reports what the caller should do in response to one
+// keypress: redraw the current frame, kick off a fresh data fetch, or quit.
+type watchKeyEffect struct {
+	redraw bool
+	fetch  bool
+	quit   bool
+}
+
+// dispatchWatchKey applies one keypress to st and returns the updated state
+// plus the side effect the caller owes (issue 094). Key semantics, in
+// priority order:
+//
+//  1. [?] always toggles the Controls overlay open/closed, regardless of
+//     any other state.
+//  2. While the overlay is open, every key is swallowed except its
+//     documented dismiss keys (Esc, q/Q, Ctrl-C, Enter) — a stray
+//     panel-toggle press must not silently change state behind the overlay.
+//  3. [m]/[M] cycles the default -> compact -> agents-only -> default
+//     preset, re-applying showProcesses so an explicit --proc request keeps
+//     winning across preset changes the same way initialWatchSections
+//     already makes it win at startup.
+//  4. Existing single-key panel toggles (applyWatchSectionKey) keep working
+//     unchanged, for backward compatibility.
+//  5. [r]/[R] flips remote/local when a host was configured; [q]/[Q]/
+//     Ctrl-C/Esc quits.
+func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyState, watchKeyEffect) {
+	switch {
+	case key == '?':
+		st.overlayOpen = !st.overlayOpen
+		return st, watchKeyEffect{redraw: true}
+
+	case st.overlayOpen:
+		switch key {
+		case 'q', 'Q', 3, 27, '\r', '\n':
+			st.overlayOpen = false
+			return st, watchKeyEffect{redraw: true}
+		}
+		return st, watchKeyEffect{}
+
+	case key == 'm' || key == 'M':
+		sec, _, idx := nextWatchPreset(st.presetIdx)
+		if showProcesses {
+			sec.Processes = true
+		}
+		st.sec, st.presetIdx = sec, idx
+		return st, watchKeyEffect{redraw: true}
+
+	case applyWatchSectionKey(&st.sec, key):
+		return st, watchKeyEffect{redraw: true}
+
+	default:
+		switch key {
+		case 'r', 'R':
+			if st.configuredHost != "" {
+				if st.activeHost == "" {
+					st.activeHost = st.configuredHost
+				} else {
+					st.activeHost = ""
+				}
+				return st, watchKeyEffect{fetch: true}
+			}
+		case 'q', 'Q', 3, 27:
+			return st, watchKeyEffect{quit: true}
+		}
+	}
+	return st, watchKeyEffect{}
+}
+
 func applyWatchSectionKey(sec *watchSections, key byte) bool {
 	switch key {
 	case 'c', 'C', '1':
@@ -1044,6 +1152,44 @@ type WatchOptions struct {
 	ProcCounts    *AgentProcessCount
 	Compact       bool
 	ShowProcesses bool
+	// ShowControls draws the [?]-triggered Controls overlay (issue 094)
+	// instead of the normal panel grid for this frame.
+	ShowControls bool
+}
+
+// controlsOverlayLines renders the full in-TUI Controls reference for
+// `harnez usage --watch` (issue 094): every active keyboard command, grouped
+// by purpose, so users don't have to reverse-engineer hidden box-title
+// badges to discover what a key does. Direct panel toggles keep working
+// (backward compat) and are documented here as secondary controls rather
+// than promoted to the footer.
+func controlsOverlayLines() []string {
+	bold := func(s string) string { return "\x1b[1m" + s + "\x1b[0m" }
+	dim := func(s string) string { return "\x1b[90m" + s + "\x1b[0m" }
+
+	var l []string
+	l = append(l, bold("Controls")+"  "+dim("(press ?, Esc, q, or Enter to close)"))
+	l = append(l, "")
+	l = append(l, bold("View modes / presets"))
+	l = append(l, "  [m]  cycle mode: default -> compact -> agents-only -> default")
+	l = append(l, "  [A]  reset panels to the default set")
+	l = append(l, "")
+	l = append(l, bold("Panels (direct toggles, secondary)"))
+	l = append(l, "  [C] / [1]  Claude          [G] / [2]  AGY")
+	l = append(l, "  [O] / [3]  Codex           [H] / [4]  History")
+	l = append(l, "  [P] / [6]  Processes       [L] / [7]  Load")
+	l = append(l, "  [a]        All Usage (aggregate box)")
+	l = append(l, "")
+	l = append(l, bold("Data rows"))
+	l = append(l, "  [T] / [5]  token velocity / details on agent panels")
+	l = append(l, "")
+	l = append(l, bold("Session"))
+	l = append(l, "  [r]              toggle remote/local host (when a host is configured)")
+	l = append(l, "  [q] / Ctrl-C / Esc   quit")
+	l = append(l, "")
+	l = append(l, dim("Direct panel toggles above keep working; the footer only shows the"))
+	l = append(l, dim("most common controls — this overlay is the full reference."))
+	return l
 }
 
 func initialWatchSections(opts WatchOptions) watchSections {
@@ -1077,6 +1223,17 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	var opt WatchOptions
 	if len(opts) > 0 {
 		opt = opts[0]
+	}
+
+	if opt.ShowControls {
+		ocols := cols - safetyMargin
+		if ocols > maxTotalWidth {
+			ocols = maxTotalWidth
+		}
+		if ocols < minTerminalWidth {
+			ocols = minTerminalWidth
+		}
+		return fit(controlsOverlayLines(), ocols, rows)
 	}
 
 	targetHistoryDir := historyDir
@@ -1140,7 +1297,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 	hiddenHint := ""
 	if len(hidden) > 0 {
-		hiddenHint = fmt.Sprintf("   \x1b[90mhidden: %s\x1b[0m", strings.Join(hidden, " "))
+		hiddenHint = fmt.Sprintf("   \x1b[90mhidden: %s (press ? for controls)\x1b[0m", strings.Join(hidden, " "))
 	}
 
 	titlePrefix := "Agentic usage"
@@ -1157,7 +1314,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	if live {
 		footer = []string{
 			"",
-			fmt.Sprintf("refresh every %s   \x1b[90m[a]usage  [⇧a]ll  [r]emote  [q]uit\x1b[0m", interval),
+			fmt.Sprintf("refresh every %s   \x1b[90m[?]controls  [m]ode  [r]emote  [q]uit\x1b[0m", interval),
 		}
 	}
 
@@ -1381,6 +1538,11 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 
 	var secLock sync.Mutex
 	sec := initialWatchSections(opts)
+	overlayOpen := false
+	presetIdx := 0
+	if opts.Compact {
+		presetIdx = 1
+	}
 
 	configuredHost := strings.TrimSpace(opts.Host)
 	activeHost := configuredHost
@@ -1412,24 +1574,26 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 					return
 				}
 				secLock.Lock()
-				if applyWatchSectionKey(&sec, buf[0]) {
+				st := watchKeyState{
+					sec:            sec,
+					overlayOpen:    overlayOpen,
+					presetIdx:      presetIdx,
+					configuredHost: configuredHost,
+					activeHost:     activeHost,
+				}
+				newSt, eff := dispatchWatchKey(st, buf[0], opts.ShowProcesses)
+				sec, overlayOpen, presetIdx, activeHost = newSt.sec, newSt.overlayOpen, newSt.presetIdx, newSt.activeHost
+
+				if eff.quit {
+					secLock.Unlock()
+					stop()
+					return
+				}
+				if eff.redraw {
 					requestRedraw()
-				} else {
-					switch buf[0] {
-					case 'r', 'R':
-						if configuredHost != "" {
-							if activeHost == "" {
-								activeHost = configuredHost
-							} else {
-								activeHost = ""
-							}
-							requestFetch()
-						}
-					case 'q', 'Q', 3, 27:
-						secLock.Unlock()
-						stop()
-						return
-					}
+				}
+				if eff.fetch {
+					requestFetch()
 				}
 				secLock.Unlock()
 			}
@@ -1465,12 +1629,14 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	draw := func() {
 		secLock.Lock()
 		activeSec := sec
+		showControls := overlayOpen
 		secLock.Unlock()
 
 		cols, rows := terminalSize(out)
 		buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir, WatchOptions{
-			Host:       currentHost,
-			ProcCounts: lastProcs,
+			Host:         currentHost,
+			ProcCounts:   lastProcs,
+			ShowControls: showControls,
 		}).paint(out)
 	}
 

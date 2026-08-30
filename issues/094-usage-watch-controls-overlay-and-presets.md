@@ -1,6 +1,6 @@
 # 094 — Usage Watch Controls Overlay and Presets
 
-**Status**: Open
+**Status**: Closed — resolved in `internal/usage/watch.go`, `internal/usage/watch_test.go` (2026-08-30)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -61,6 +61,19 @@ Add a lightweight controls/help overlay for `harnez usage --watch`, plus a small
 - Existing panel toggles continue to work unless a deliberate compatibility note and migration path are documented.
 - Tests cover overlay rendering and key dispatch for the overlay open/close path plus at least one preset/mode transition.
 - The implementation stays within `harnez usage --watch`; no broad TUI framework migration is required.
+
+## Resolution
+
+Implemented directly in `internal/usage/watch.go` (built on issue 093's `internal/uix` layout planner integration, commit e9c09cb):
+
+- `?` opens/closes an in-alternate-screen "Controls" overlay (`controlsOverlayLines`), grouped by View modes/presets, Panels, Data rows, Session — documents every active key, including the pre-existing direct panel toggles as secondary controls. Dismissed via `?`, Esc, `q`, Ctrl-C, or Enter; while open, all other keys are swallowed rather than mutating panel state behind it.
+- Footer reduced to `[?]controls  [m]ode  [r]emote  [q]uit` (was a longer list of individual badges).
+- `[m]` cycles three presets in a fixed order: default -> compact -> agents-only -> default (`nextWatchPreset`, `agentsOnlyWatchSections`). `--proc` keeps winning across preset changes, matching issue 093's existing `initialWatchSections` guarantee.
+- All existing direct toggles (`C`/`G`/`O`/`1`/`2`/`3`, `H`/`4`, `T`/`5`, `P`/`6`, `L`/`7`, `a`, `A`, `r`, `q`) keep working unchanged via the existing `applyWatchSectionKey`.
+- Cheap hidden-state wording improvement: the header's "hidden: [x]" hint now appends "(press ? for controls)" so users are pointed at the overlay instead of having to reverse-engineer the badges. Full hidden-reason categorization (mode/user vs not-discovered vs dropped-too-short) was not built out further — the existing distinction between the header's user/mode-hidden hint and the body's "hidden — terminal too short" drop note was judged sufficient for this ticket's "where cheap" scope, per issue 093 not being blocked on.
+- Key dispatch (`dispatchWatchKey`) was extracted into a pure, unit-testable function so overlay open/close and preset cycling don't require a live PTY to test.
+
+Verified: `go test ./...`, `make check` (go vet + tests), and a PTY-driven manual run of `harnez usage --watch` sending `?`/`?`/`m`/`q` confirmed the overlay renders and dismisses, the preset cycle changes the hidden panel set, and the process exits cleanly on `q` with no lingering process.
 
 ## Sources Consulted
 

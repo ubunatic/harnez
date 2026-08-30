@@ -484,8 +484,8 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 	if !strings.Contains(frameText, "Claude Code  [███░] 85% 8h51m [░░░░] 9% 4h51m") {
 		t.Fatalf("expected compact all-usage row to keep short-window time at 100 columns, got:\n%s", frameText)
 	}
-	if !strings.Contains(frameText, "[a]usage") || !strings.Contains(frameText, "[⇧a]ll") {
-		t.Fatalf("expected footer to expose [a]usage and shifted [⇧a]ll, got:\n%s", frameText)
+	if !strings.Contains(frameText, "[?]controls") || !strings.Contains(frameText, "[m]ode") {
+		t.Fatalf("expected reduced footer to expose [?]controls and [m]ode, got:\n%s", frameText)
 	}
 }
 
@@ -984,4 +984,180 @@ func TestBuildWatchFrameCompactAllUsageDoesNotStarveLoad(t *testing.T) {
 		return
 	}
 	t.Fatalf("expected All Usage and Load to share one row at 100 columns:\n%s", strings.Join(frame.lines, "\n"))
+}
+
+// TestControlsOverlayListsAllActiveCommandsGroupedByPurpose is issue 094's
+// core acceptance criterion: the [?] overlay must list every active
+// keyboard command, grouped by purpose (view modes, panels, data rows,
+// session), not just a subset.
+func TestControlsOverlayListsAllActiveCommandsGroupedByPurpose(t *testing.T) {
+	lines := controlsOverlayLines()
+	text := strings.Join(lines, "\n")
+	plain := stripANSI(text)
+
+	if !strings.Contains(plain, "Controls") {
+		t.Fatalf("expected overlay to be titled Controls, got:\n%s", plain)
+	}
+
+	for _, group := range []string{"View modes", "Panels", "Data rows", "Session"} {
+		if !strings.Contains(plain, group) {
+			t.Errorf("expected overlay to group controls under %q, got:\n%s", group, plain)
+		}
+	}
+
+	// Every currently-live key from applyWatchSectionKey, plus the new [m]
+	// mode cycle, [?] itself, and [r]/[q] session keys, must be documented
+	// somewhere in the overlay so it stays the single source of truth.
+	for _, key := range []string{
+		"[C]", "[G]", "[O]", "[H]", "[P]", "[L]", "[a]", "[A]",
+		"[1]", "[2]", "[3]", "[4]", "[5]", "[6]", "[7]", "[T]",
+		"[m]", "[r]", "[q]",
+	} {
+		if !strings.Contains(plain, key) {
+			t.Errorf("expected overlay to document key %s, got:\n%s", key, plain)
+		}
+	}
+
+	if !strings.Contains(plain, "?") {
+		t.Errorf("expected overlay dismiss instructions to mention ?, got:\n%s", plain)
+	}
+}
+
+// TestBuildWatchFrameShowControlsRendersOverlayInstead verifies the overlay
+// is drawn in the existing alternate-screen frame (via WatchOptions), not a
+// separate rendering path, and that it replaces the normal panel grid.
+func TestBuildWatchFrameShowControlsRendersOverlayInstead(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true},
+		},
+	}
+
+	frame := buildWatchFrame(summary, nil, 60*time.Second, defaultWatchSections(), 100, 30, true, "", "",
+		WatchOptions{ShowControls: true})
+	text := stripANSI(strings.Join(frame.lines, "\n"))
+
+	if !strings.Contains(text, "Controls") {
+		t.Fatalf("expected ShowControls frame to render the Controls overlay, got:\n%s", text)
+	}
+	if strings.Contains(text, "] Claude Code") {
+		t.Fatalf("expected ShowControls frame to replace the panel grid, not show agent boxes, got:\n%s", text)
+	}
+	for _, l := range frame.lines {
+		if got := visLen(l); got > frame.cols {
+			t.Errorf("overlay line exceeds usable width %d: %q", frame.cols, stripANSI(l))
+		}
+	}
+}
+
+// TestNextWatchPresetCyclesThroughDefaultCompactAgents covers the [m] mode
+// shortcut's transition logic (issue 094 acceptance: at least one
+// preset/mode transition under test).
+func TestNextWatchPresetCyclesThroughDefaultCompactAgents(t *testing.T) {
+	sec, name, idx := nextWatchPreset(0)
+	if name != "compact" || sec != compactWatchSections() {
+		t.Fatalf("preset after default (idx 0) = %q %+v, want compact %+v", name, sec, compactWatchSections())
+	}
+	if idx != 1 {
+		t.Fatalf("expected idx 1 after first cycle, got %d", idx)
+	}
+
+	sec, name, idx = nextWatchPreset(idx)
+	if name != "agents" {
+		t.Fatalf("preset after compact = %q, want agents", name)
+	}
+	want := agentsOnlyWatchSections()
+	if sec != want {
+		t.Fatalf("agents preset = %+v, want %+v", sec, want)
+	}
+	if !sec.Claude || !sec.AGY || !sec.Codex || !sec.Tokens {
+		t.Fatalf("agents preset should show discovered agent boxes plus tokens: %+v", sec)
+	}
+	if sec.History || sec.Load || sec.Processes || sec.AllUsage {
+		t.Fatalf("agents preset should hide History/Load/Processes/AllUsage: %+v", sec)
+	}
+
+	sec, name, idx = nextWatchPreset(idx)
+	if name != "default" || sec != defaultWatchSections() {
+		t.Fatalf("preset after agents should wrap to default, got %q %+v", name, sec)
+	}
+	if idx != 0 {
+		t.Fatalf("expected idx to wrap to 0, got %d", idx)
+	}
+}
+
+// TestDispatchWatchKeyOverlayOpenClose is issue 094's key-dispatch
+// acceptance criterion: [?] opens the overlay, panel-toggle keys are
+// swallowed while it's open (rather than silently mutating sec behind it),
+// and each of the documented dismiss keys (Esc, q, Ctrl-C, Enter) closes it
+// and hands back a redraw.
+func TestDispatchWatchKeyOverlayOpenClose(t *testing.T) {
+	base := watchKeyState{sec: defaultWatchSections()}
+
+	opened, eff := dispatchWatchKey(base, '?', false)
+	if !opened.overlayOpen {
+		t.Fatalf("expected ? to open the overlay")
+	}
+	if !eff.redraw {
+		t.Fatalf("expected opening the overlay to request a redraw")
+	}
+
+	// A panel toggle while the overlay is open must not mutate sec.
+	swallowed, eff := dispatchWatchKey(opened, 'C', false)
+	if swallowed.sec != opened.sec {
+		t.Fatalf("expected panel toggle to be swallowed while overlay open: got sec %+v, want unchanged %+v", swallowed.sec, opened.sec)
+	}
+	if !swallowed.overlayOpen {
+		t.Fatalf("expected overlay to remain open after a swallowed key")
+	}
+	if eff.redraw || eff.fetch || eff.quit {
+		t.Fatalf("expected a swallowed key to produce no effect, got %+v", eff)
+	}
+
+	for _, dismiss := range []byte{27, 'q', 'Q', 3, '\r', '\n'} {
+		closed, eff := dispatchWatchKey(opened, dismiss, false)
+		if closed.overlayOpen {
+			t.Errorf("expected key %v to close the overlay", dismiss)
+		}
+		if !eff.redraw {
+			t.Errorf("expected closing the overlay via key %v to request a redraw", dismiss)
+		}
+		if eff.quit {
+			t.Errorf("expected key %v to close the overlay, not quit the app, while it was open", dismiss)
+		}
+	}
+
+	// ? toggles closed again too.
+	reclosed, _ := dispatchWatchKey(opened, '?', false)
+	if reclosed.overlayOpen {
+		t.Fatalf("expected second ? press to close the overlay")
+	}
+
+	// Once closed, q quits rather than being swallowed.
+	final, eff := dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, 'q', false)
+	if !eff.quit {
+		t.Fatalf("expected q to quit once the overlay is closed, got %+v (state %+v)", eff, final)
+	}
+}
+
+// TestDispatchWatchKeyModeCyclesAndKeepsShowProcesses covers the [m] preset
+// shortcut through the same dispatch path RunWatch uses, including the
+// showProcesses carry-through that initialWatchSections already guarantees
+// at startup (issue 093's flag-interaction fix must keep holding here too).
+func TestDispatchWatchKeyModeCyclesAndKeepsShowProcesses(t *testing.T) {
+	st := watchKeyState{sec: defaultWatchSections()}
+
+	st, eff := dispatchWatchKey(st, 'm', true)
+	if !eff.redraw {
+		t.Fatalf("expected m to request a redraw")
+	}
+	if st.sec != func() watchSections { s := compactWatchSections(); s.Processes = true; return s }() {
+		t.Fatalf("expected m to move to compact preset with Processes forced on: %+v", st.sec)
+	}
+
+	st, _ = dispatchWatchKey(st, 'm', true)
+	if !st.sec.Claude || !st.sec.AGY || !st.sec.Codex || !st.sec.Processes {
+		t.Fatalf("expected agents preset with Processes forced on: %+v", st.sec)
+	}
 }
