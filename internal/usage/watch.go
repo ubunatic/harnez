@@ -747,8 +747,17 @@ func buildLoadBox(width int, remoteHost string, snapshot *LoadSnapshot) wbox {
 // §5). Shares buildLoadBox's row-rendering via buildLoadBoxLines; only the
 // title/panel key differ. host must be non-empty — callers only build this
 // panel at all when load.watch_host is configured (Acceptance Criterion 1).
-func buildRemoteLoadBox(width int, host string, snapshot *LoadSnapshot) wbox {
-	title := fmt.Sprintf("\x1b[1m[R]\x1b[0m Remote Load \x1b[90m(@%s)\x1b[0m", host)
+//
+// The title also carries a "streaming"/"batch" label so it's always visible
+// whether the current data arrived over the persistent --watch-only stream
+// or a one-shot poll (issue 110's follow-up UI request) — never hidden
+// state the user has to infer from update cadence.
+func buildRemoteLoadBox(width int, host string, snapshot *LoadSnapshot, streaming bool) wbox {
+	mode := "batch"
+	if streaming {
+		mode = "streaming"
+	}
+	title := fmt.Sprintf("\x1b[1m[R]\x1b[0m Remote Load \x1b[90m(@%s · %s)\x1b[0m", host, mode)
 	return wbox{title: title, lines: buildLoadBoxLines(host, snapshot), width: width}
 }
 
@@ -1205,6 +1214,13 @@ type WatchOptions struct {
 	// renders the same "remote load unavailable" placeholder buildLoadBox
 	// already uses for a stale/missing --host snapshot.
 	RemoteLoadSnapshot *LoadSnapshot
+	// RemoteLoadStreaming reports whether RemoteLoadSnapshot is currently
+	// arriving over the --watch-only streaming channel (issue 110 §2) as
+	// opposed to a plain batch poll — either the fallback path while
+	// streaming is down, or the only path --summary/plain ever use. Always
+	// false outside --watch. Purely a UI label; it never changes how the
+	// data itself is fetched.
+	RemoteLoadStreaming bool
 }
 
 // controlsOverlayLines renders the full in-TUI Controls reference for
@@ -1441,8 +1457,8 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		panels = append(panels, panel{"L", func(w int) wbox { return buildLoadBox(w, opt.Host, loadSnapshot) }})
 	}
 	if opt.RemoteLoadHost != "" {
-		remoteHost, remoteSnap := opt.RemoteLoadHost, opt.RemoteLoadSnapshot
-		panels = append(panels, panel{"R", func(w int) wbox { return buildRemoteLoadBox(w, remoteHost, remoteSnap) }})
+		remoteHost, remoteSnap, remoteStreaming := opt.RemoteLoadHost, opt.RemoteLoadSnapshot, opt.RemoteLoadStreaming
+		panels = append(panels, panel{"R", func(w int) wbox { return buildRemoteLoadBox(w, remoteHost, remoteSnap, remoteStreaming) }})
 	}
 
 	if len(panels) == 0 {
@@ -1639,12 +1655,19 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	remoteLoadHost := strings.TrimSpace(opts.RemoteLoadHost)
 	var remoteLoadMu sync.Mutex
 	var lastRemoteLoad *LoadSnapshot
+	var remoteLoadStreaming bool
 	var remoteStreamStop func()
 	if remoteLoadHost != "" {
 		setRemoteStreamStop := func(f func()) {
 			remoteLoadMu.Lock()
 			remoteStreamStop = f
 			remoteLoadMu.Unlock()
+		}
+		setRemoteLoadStreaming := func(streaming bool) {
+			remoteLoadMu.Lock()
+			remoteLoadStreaming = streaming
+			remoteLoadMu.Unlock()
+			requestRedraw()
 		}
 		defer func() {
 			remoteLoadMu.Lock()
@@ -1654,7 +1677,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				stopFn()
 			}
 		}()
-		go runRemoteLoadManager(sigCtx, remoteLoadHost, &remoteLoadMu, &lastRemoteLoad, requestRedraw, setRemoteStreamStop)
+		go runRemoteLoadManager(sigCtx, remoteLoadHost, &remoteLoadMu, &lastRemoteLoad, requestRedraw, setRemoteStreamStop, setRemoteLoadStreaming)
 	}
 
 	tty, ttyErr := os.Open("/dev/tty")
@@ -1727,19 +1750,22 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		secLock.Unlock()
 
 		var remoteSnap *LoadSnapshot
+		var remoteStreaming bool
 		if remoteLoadHost != "" {
 			remoteLoadMu.Lock()
 			remoteSnap = lastRemoteLoad
+			remoteStreaming = remoteLoadStreaming
 			remoteLoadMu.Unlock()
 		}
 
 		cols, rows := terminalSize(out)
 		buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir, WatchOptions{
-			Host:               currentHost,
-			ProcCounts:         lastProcs,
-			ShowControls:       showControls,
-			RemoteLoadHost:     remoteLoadHost,
-			RemoteLoadSnapshot: remoteSnap,
+			Host:                currentHost,
+			ProcCounts:          lastProcs,
+			ShowControls:        showControls,
+			RemoteLoadHost:      remoteLoadHost,
+			RemoteLoadSnapshot:  remoteSnap,
+			RemoteLoadStreaming: remoteStreaming,
 		}).paint(out)
 	}
 
@@ -1820,7 +1846,12 @@ var remoteLoadRetryInterval = 10 * time.Second
 // than trusting this goroutine to get there first (see the "no zombie"
 // requirement in issue 110 — the caller, not just this manager, must be
 // able to guarantee cleanup on every exit path).
-func runRemoteLoadManager(ctx context.Context, host string, mu *sync.Mutex, last **LoadSnapshot, redraw func(), setStop func(func())) {
+//
+// setStreaming reports the current data-source mode so the UI can show
+// whether the box is populated live over the stream or via a batch-poll
+// fallback (issue 110 follow-up) — it is purely a display signal and never
+// influences the fetch logic itself.
+func runRemoteLoadManager(ctx context.Context, host string, mu *sync.Mutex, last **LoadSnapshot, redraw func(), setStop func(func()), setStreaming func(bool)) {
 	setLast := func(snap *LoadSnapshot) {
 		mu.Lock()
 		*last = snap
@@ -1835,15 +1866,18 @@ func runRemoteLoadManager(ctx context.Context, host string, mu *sync.Mutex, last
 			// predating `load-stream`, network blip, etc.) — fall back to
 			// one batch poll now and retry establishing the stream after
 			// remoteLoadRetryInterval.
+			setStreaming(false)
 			pollOnce(ctx, host, setLast)
 			waitOrDone(ctx, remoteLoadRetryInterval)
 			continue
 		}
 
 		setStop(stop)
+		setStreaming(true)
 		drainRemoteLoadStream(ctx, ch, setLast)
 		stop()
 		setStop(nil)
+		setStreaming(false)
 
 		if ctx.Err() != nil {
 			return

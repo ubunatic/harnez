@@ -46,7 +46,7 @@ func TestRunRemoteLoadManager_InvalidHostFallsBackWithoutLeakingStop(t *testing.
 			mu.Lock()
 			stopCalls = append(stopCalls, f)
 			mu.Unlock()
-		})
+		}, func(bool) {})
 	}()
 
 	time.Sleep(40 * time.Millisecond)
@@ -112,6 +112,7 @@ func TestRunRemoteLoadManager_StreamSamplesDeliveredThenFallback(t *testing.T) {
 	var last *LoadSnapshot
 	gotSample := make(chan struct{}, 1)
 	var stopSeen, nilStopSeen bool
+	var streamingTrueSeen, streamingFalseAfterTrueSeen bool
 
 	managerDone := make(chan struct{})
 	go func() {
@@ -131,6 +132,14 @@ func TestRunRemoteLoadManager_StreamSamplesDeliveredThenFallback(t *testing.T) {
 				stopSeen = true
 			} else if stopSeen {
 				nilStopSeen = true
+			}
+			mu.Unlock()
+		}, func(streaming bool) {
+			mu.Lock()
+			if streaming {
+				streamingTrueSeen = true
+			} else if streamingTrueSeen {
+				streamingFalseAfterTrueSeen = true
 			}
 			mu.Unlock()
 		})
@@ -178,5 +187,14 @@ func TestRunRemoteLoadManager_StreamSamplesDeliveredThenFallback(t *testing.T) {
 	exitMu.Unlock()
 	if got != 1 {
 		t.Fatalf("expected exactly 1 ssh -O exit invocation, got %d", got)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !streamingTrueSeen {
+		t.Error("expected setStreaming(true) to be called while the stream was live")
+	}
+	if !streamingFalseAfterTrueSeen {
+		t.Error("expected setStreaming(false) to be called once the stream ended (fallback mode)")
 	}
 }
