@@ -1,6 +1,6 @@
 # 090 — Remote Usage Load Panel Uses Local Metrics
 
-**Status**: Closed — resolved in commit (hash to follow in next doc commit)
+**Status**: Closed — resolved in 6522a05
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
