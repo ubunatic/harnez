@@ -48,6 +48,49 @@ investigated before it's treated as a real causal effect.
    alternative) if Google's backend penalizes active CLI polling.
 6. If no correlation is found, document that explicitly here and close.
 
+## Web research (2026-08-30)
+
+External evidence gathered, not local instrumentation — this narrows the
+hypothesis but does not confirm or rule it out for this machine.
+
+- `agy`/Antigravity authenticates via interactive Google OAuth only,
+  tokens cached in the OS keyring; there's no service-account/API-key
+  path for the CLI (only the SDK has one; see
+  `google-antigravity/antigravity-cli` issue #78, a still-open feature
+  request for headless-environment auth).
+- **Confirmed, documented failure mode independent of any bot-detection
+  system**: OAuth tokens expire after days–weeks; reusing an interactive
+  session for unattended/scheduled runs works until expiry, then the CLI
+  hangs or throws a re-login / "Further action is required" dialog. See
+  antigravitylab.net, "When the Antigravity CLI Stalls on a 401 During
+  Unattended Runs," and multiple Google AI Developer Forum threads
+  describing the same login-loop symptom.
+- Google does run bot/abuse detection on this OAuth surface: the sibling
+  Gemini CLI's own GitHub discussion ("Service update: mitigating abuse
+  and prioritizing traffic," google-gemini/gemini-cli#22970) confirms an
+  active abuse-detection rollout, with users reporting accounts
+  incorrectly throttled as a side effect (gemini-cli#24059). The exact
+  triggering heuristic (frequency, non-interactive pattern, etc.) is not
+  publicly documented.
+- **No public source ties polling cadence specifically (e.g. once every
+  15 minutes) to triggering reauth or bot detection.** The link is
+  plausible — a scheduled, unattended, periodic invocation on a
+  consumer OAuth token is exactly the shape abuse heuristics look for,
+  and token-expiry-during-unattended-run reproduces the same *symptom*
+  (a login dialog appearing) regardless of any detection system — but
+  it is not proven as *this* machine's cause.
+- Community mitigation pattern for unattended OAuth-based CLI use:
+  redirect stdin so a stuck reauth prompt fails fast instead of hanging;
+  treat a 401/interactive-login response as a hard signal to back off
+  polling rather than retry; avoid reusing one long-lived token across
+  many scheduled invocations if an alternative exists.
+
+This reframes item 5 above: even without a confirmed causal link, "treat
+any interactive-login/401 output from `agy -p "/usage"` as a signal to
+back off polling rather than retry" is a low-cost, evidence-backed
+mitigation worth applying regardless, alongside issue 111's per-agent
+cadence work.
+
 ## Acceptance Criteria
 
 - A clear determination (with timestamp evidence, not speculation)
