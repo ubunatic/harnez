@@ -118,6 +118,14 @@ Agentic software engineering scales effectively when concurrency is structured a
     - **Docs & Ticket Sync**: Are all issue status tags, README indices, and docs updated in sync with code?
     - **Backward Compatibility & Invariants**: Does the change uphold project invariants and CLI design boundaries?
     - **Token Efficiency & Code Clarity**: Is the code concise, readable, and free of redundant abstractions?
+    - **Live/Real-Environment Verification for hooks & env-resolution features**: for any change that installs a live
+      agent hook, writes global config (`apply`), or resolves state from the ambient environment (branch name,
+      session env vars, cwd), passing `go test ./...` is not sufficient evidence it works — test fixtures routinely
+      supply explicit args or isolated temp dirs that mask exactly the resolution failures real usage hits (e.g. a
+      branch-name heuristic that assumes per-ticket branches when the user never creates them; two independently
+      unit-tested hooks that only collide once both are installed together). Require one real, live end-to-end
+      check after a genuine restart/re-apply against the actual environment before the ticket is done — see the
+      2026-08-31 `harnez-tool-observability` case study for the concrete failure this caught (docs/studies/).
 
 ### Phase 4: Process & Subagent Hygiene (Teardown & Drain)
 - **Goal**: Prevent zombie accumulation, orphan processes, and stuck background tasks.
@@ -211,6 +219,15 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 - ❌ **Parallel Writing**: Spawning multiple subagents with write permissions on the same workspace simultaneously.
 - ❌ **Blocking Handoff Waits**: Treating "hand this to a subagent" as permission to block the main chat while waiting for the child. The host is always the responsive orchestrator.
 - ❌ **Silent Verification**: Assuming a fix works without running test commands or canary scripts.
+- ❌ **Unit-Test-Only Confidence for Hook/Environment Features**: Treating a green `go test ./...` as proof a
+  hook-installing or environment-resolution-dependent feature actually works in production. Eight tickets shipped
+  with passing, well-written unit tests on 2026-08-31 (`harnez-tool-observability`) while automatic capture was
+  completely non-functional in real usage. Manual code review (not tests) caught two cross-ticket integration bugs
+  (two independently-tested `PreToolUse` hooks racing once both were installed; a rewrite that broke on shell
+  metacharacters an outer shell re-interpreted). But a branch-name-shaped-ticket heuristic that could never match
+  this user's actual workflow, and a schema-version guard that trusted a pre-existing file, both passed every unit
+  test *and* code review — they were only found by restarting a real session, adding debug logging, and checking
+  real output against the real DB.
 - ❌ **Deployment State Conflation**: Declaring a remote binary "deployed" or a job "scheduled" based on local build/test success or a clean `scp`/push exit code, without probing the live host (see [DeploymentTransparency.md](DeploymentTransparency.md)).
 - ❌ **Blind Revert of Failed Work**: Running `git checkout --`, `git reset --hard`, or `git stash drop` on a failed implementation attempt without first committing it somewhere recoverable. A prose summary of what was tried is not a substitute for the actual diff — it cannot be `git diff`ed, re-applied, or independently re-verified against the gate it was tested against.
 - ❌ **Orphaned Background Tasks**: Leaving background `tail -f`, watch loops, or timers running after work is completed.

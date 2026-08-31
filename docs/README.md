@@ -10,7 +10,7 @@ Not needed for routine coding; reach for these during investigations or design w
 |------|------------------------------|
 | [CLIDesign.md](CLIDesign.md) | apply vs init separation: scope, rationale, footgun avoided, design evolution (consult before modifying CLI command flags) |
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent (consult when changing command pipelines) |
-| [HookRewritePattern.md](HookRewritePattern.md) | Two-stage PreToolUse hook pattern (rewrite now, capture later): `<feature> hook` vs. `<feature>` wrapper, `harnez distill hook` as reference implementation (consult before adding any new agent-hook-driven feature) |
+| [HookRewritePattern.md](HookRewritePattern.md) | Two-stage PreToolUse hook pattern (rewrite now, capture later): `<feature> hook` vs. `<feature>` wrapper, `harnez distill hook` as reference implementation, plus two hard-won constraints — hooks on the same matcher don't compose (last-to-finish wins) and a rewritten command must stay one shell token (consult before adding any new agent-hook-driven feature) |
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat (consult when updating permission schemas) |
 
@@ -72,6 +72,7 @@ Generated copies land here (root) after `apply` / `init`.
 | [studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md](studies/2026-08-28-kernel-standard-metrics-sourcing-policy.md) | ADR: device telemetry (Load box CPU/GPU) is read only via kernel-standard procfs/sysfs, never a vendor's proprietary CLI/SDK — `nvidia-smi` calling was removed entirely rather than kept as a fallback |
 | [studies/2026-08-28-load-box-cpu-gpu-kernel-metrics.md](studies/2026-08-28-load-box-cpu-gpu-kernel-metrics.md) | The `[L] Load` panel's kernel data sources (`/proc/stat` per-core parsing, hwmon CPU temp discovery, amdgpu sysfs attributes) and reusable patterns (burst-seeded history, decoupled redraw ticker, absolute-scale sparklines, fixed-width label columns) |
 | [studies/2026-08-28-usage-collector-daemon-architecture.md](studies/2026-08-28-usage-collector-daemon-architecture.md) | Background usage-collector daemon design (issues 082–087): Omarchy Quickshell Agents widget comparison, the two-layer cache split, SQLite/DuckDB considered-and-rejected in favor of a generalized flock gate, and an offline-cache-masks-live-data bug postmortem |
+| [studies/2026-08-31-harnez-tool-observability-and-the-real-environment-verification-gap.md](studies/2026-08-31-harnez-tool-observability-and-the-real-environment-verification-gap.md) | `harnez-tool-observability` (issues 115–124): eight tickets shipped with green tests while automatic capture was completely non-functional in real usage — four bugs (two found by review, two only by live-restarting a real session), and why the tests didn't catch the live-only two |
 
 **`docs/feedback/`** — agentic retrospectives & harness feedback reports
 
