@@ -139,3 +139,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 138 | [138-bar-empty-glyph-flat-background-under-ansi-wrap.md](138-bar-empty-glyph-flat-background-under-ansi-wrap.md) | Bar empty cells use a flat space under the ANSI background, not `░` | Closed — resolved in `b6f0cbf` |
 | 139 | [139-codex-usage-window-rollover-stale-limit.md](139-codex-usage-window-rollover-stale-limit.md) | Codex Usage Window Rollover Keeps Stale Limit State | Open |
 | 140 | [140-debug-overlay-does-not-work.md](140-debug-overlay-does-not-work.md) | `!` debug overlay does not work in `harnez usage --watch` | Open |
+| 141 | [141-codex-status-bar-agent-count.md](141-codex-status-bar-agent-count.md) | Show the running-agent count in the Codex status bar | Open |
