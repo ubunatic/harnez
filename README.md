@@ -79,6 +79,7 @@ make status
 target_dir: ~/.claude               # where Claude Code stores its config
 skills_target: ~/.gemini/skills     # Gemini skills target
 codex_skills_target: ~/.codex/skills # Codex skills target
+claude_skills_target: ~/.claude/skills # Claude Code's own Agent Skills dir (auto-loaded)
 prime_agent_target: ~/.prime/agent  # Prime rules, prompts, skills, and docs
 
 # Docs to install globally on every apply
@@ -197,7 +198,10 @@ sections are also written to Prime Agent's canonical `~/.prime/agent/AGENTS.md`.
 
 Each entry under `commands:` produces both a Claude command and a Prime Agent prompt template.
 Each entry under `skills:` produces Agent Skills-compatible `SKILL.md` files for every configured
-Gemini, Codex, and Prime Agent skill target.
+Gemini, Codex, Claude Code, and Prime Agent skill target. The Claude Code target
+(`claude_skills_target`, default `~/.claude/skills`) is a real, description-matched Agent Skill —
+distinct from the always-manually-invoked `~/.claude/commands/<name>.md` slash command the same
+entry also produces.
 
 ### Language & practice docs
 

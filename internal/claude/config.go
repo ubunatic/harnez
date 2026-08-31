@@ -10,26 +10,27 @@ import (
 )
 
 type Config struct {
-	Dir               string            `yaml:"-"`
-	FS                fs.FS             `yaml:"-"`
-	TargetDir         string            `yaml:"target_dir"`
-	Docs              []string          `yaml:"docs"`
-	Model             string            `yaml:"model"`
-	Effort            string            `yaml:"effort"`
-	Verbs             []string          `yaml:"verbs"`
-	Permissions       Permissions       `yaml:"permissions"`
-	Hooks             []Hook            `yaml:"hooks"`
-	Env               map[string]string `yaml:"env"`
-	MCPServers        []MCPServer       `yaml:"mcp_servers"`
-	StatusLine        bool              `yaml:"status_line"`
-	Commands          []Command         `yaml:"commands"`
-	Skills            []Command         `yaml:"skills"`
-	DistillAutopipe   DistillAutopipe   `yaml:"distill_autopipe"`
-	SkillsTarget      string            `yaml:"skills_target"`
-	CodexSkillsTarget string            `yaml:"codex_skills_target"`
-	PrimeAgentTarget  string            `yaml:"prime_agent_target"`
-	AgentsMD          AgentsMD          `yaml:"agents_md"`
-	Make              MakeConfig        `yaml:"make"`
+	Dir                string            `yaml:"-"`
+	FS                 fs.FS             `yaml:"-"`
+	TargetDir          string            `yaml:"target_dir"`
+	Docs               []string          `yaml:"docs"`
+	Model              string            `yaml:"model"`
+	Effort             string            `yaml:"effort"`
+	Verbs              []string          `yaml:"verbs"`
+	Permissions        Permissions       `yaml:"permissions"`
+	Hooks              []Hook            `yaml:"hooks"`
+	Env                map[string]string `yaml:"env"`
+	MCPServers         []MCPServer       `yaml:"mcp_servers"`
+	StatusLine         bool              `yaml:"status_line"`
+	Commands           []Command         `yaml:"commands"`
+	Skills             []Command         `yaml:"skills"`
+	DistillAutopipe    DistillAutopipe   `yaml:"distill_autopipe"`
+	SkillsTarget       string            `yaml:"skills_target"`
+	CodexSkillsTarget  string            `yaml:"codex_skills_target"`
+	ClaudeSkillsTarget string            `yaml:"claude_skills_target"`
+	PrimeAgentTarget   string            `yaml:"prime_agent_target"`
+	AgentsMD           AgentsMD          `yaml:"agents_md"`
+	Make               MakeConfig        `yaml:"make"`
 }
 
 // MakeConfig steers how harnez reconciles its own targets (e.g. `help`)

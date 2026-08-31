@@ -10,14 +10,16 @@ func TestPrimeAgentTargets(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cfg := &Config{
-		SkillsTarget:      "~/.gemini/skills",
-		CodexSkillsTarget: "~/.codex/skills",
-		PrimeAgentTarget:  "~/.prime/agent",
+		SkillsTarget:       "~/.gemini/skills",
+		CodexSkillsTarget:  "~/.codex/skills",
+		ClaudeSkillsTarget: "~/.claude/skills",
+		PrimeAgentTarget:   "~/.prime/agent",
 	}
 
 	wantSkills := []string{
 		filepath.Join(home, ".gemini", "skills"),
 		filepath.Join(home, ".codex", "skills"),
+		filepath.Join(home, ".claude", "skills"),
 		filepath.Join(home, ".prime", "agent", "skills"),
 	}
 	if got := skillTargets(cfg); !reflect.DeepEqual(got, wantSkills) {
@@ -35,9 +37,9 @@ func TestPrimeAgentTargets(t *testing.T) {
 }
 
 func TestPrimeAgentTargetCanBeDisabled(t *testing.T) {
-	cfg := &Config{SkillsTarget: "/skills", PrimeAgentTarget: ""}
-	if got := skillTargets(cfg); !reflect.DeepEqual(got, []string{"/skills"}) {
-		t.Fatalf("skillTargets() = %#v, want only configured skills target", got)
+	cfg := &Config{SkillsTarget: "/skills", ClaudeSkillsTarget: "/claude-skills", PrimeAgentTarget: ""}
+	if got := skillTargets(cfg); !reflect.DeepEqual(got, []string{"/skills", "/claude-skills"}) {
+		t.Fatalf("skillTargets() = %#v, want only configured skills targets", got)
 	}
 	if got := commandTargets("/claude", cfg); !reflect.DeepEqual(got, []string{"/claude/commands"}) {
 		t.Fatalf("commandTargets() = %#v, want only Claude command target", got)
@@ -46,9 +48,10 @@ func TestPrimeAgentTargetCanBeDisabled(t *testing.T) {
 
 func TestTargetPathsAreDeduplicated(t *testing.T) {
 	cfg := &Config{
-		SkillsTarget:      "/shared",
-		CodexSkillsTarget: "/shared",
-		PrimeAgentTarget:  "/prime",
+		SkillsTarget:       "/shared",
+		CodexSkillsTarget:  "/shared",
+		ClaudeSkillsTarget: "/shared",
+		PrimeAgentTarget:   "/prime",
 	}
 	want := []string{"/shared", "/prime/skills"}
 	if got := skillTargets(cfg); !reflect.DeepEqual(got, want) {

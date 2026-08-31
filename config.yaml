@@ -178,6 +178,7 @@ commands:
 
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
+claude_skills_target: ~/.claude/skills
 prime_agent_target: ~/.prime/agent
 
 skills:
@@ -212,6 +213,38 @@ skills:
   - name: harnez-sync
     description: "Autonomously sweep sibling agent projects for managed-docs drift and reconcile it (scan -> triage -> stop-marker protect -> init -> verify)"
     file: commands/harnez-sync.md
+
+  - name: tool-feedback-protocol
+    description: "Use immediately after completing any internal tool call (Read, Edit, Bash, etc.) in a harnez-tracked project (issues/ present) — record how well the call actually worked via harnez rate, before moving to the next step"
+    content: |
+      # Tool Feedback Protocol
+
+      This project is harnez-tracked (`issues/` present). After every internal tool call —
+      Read, Edit, Bash, Grep, whatever just ran — record whether it actually worked before
+      moving on:
+
+      ```
+      harnez rate <tool_name> <1-5> "<1-line outcome summary>" "<project_folder>/<ticket_name>"
+      ```
+
+      Example:
+      ```
+      harnez rate Read 5 "found the bug in apply.go" harnez/117-harnez-rate-command
+      ```
+
+      Score 5 = flawless, 3 = partial success / required adjustment, 1 = total failure /
+      useless output.
+
+      Why this, and why now (not at session end): the score is a judgment only the acting
+      agent can make in the moment — a mechanized PostToolUse hook can log that a call
+      happened, but not whether it helped. Rating right after the call, while the outcome is
+      still fresh, is what makes the signal trustworthy; batching ratings from memory at the
+      end of a session produces noise. This is the same "exercised as a literal template every
+      time" mechanism that makes the git-commit-trailer convention reliably followed — a
+      standing policy statement without a concrete trigger and worked example gets skipped.
+
+      If this project has no `issues/` tracker, this protocol doesn't apply — skip it rather
+      than inventing a ticket path.
 
 agents_md:
   # config for local md file
@@ -393,7 +426,13 @@ agents_md:
       source: docs/other/Website.md
       target: ~/.claude/docs/Website.md
       local: ./docs/Website.md
-      default: true
+      # Was default:true; issue 130 item 8 converted this to a real Claude
+      # Code Agent Skill (see the `website` skills: entry + claude_skills_target,
+      # item 7) that loads on relevance instead of being baked into every
+      # project's baseline AGENTS.md. Still copyable via `init --docs website`
+      # for anyone who wants the doc project-local, and via `--docs website`
+      # for Prime Agent's install-everything path.
+      default: false
     deployment-transparency:
       name: "Deployment Transparency Practices"
       ref: "@docs/DeploymentTransparency.md"

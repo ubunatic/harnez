@@ -59,7 +59,7 @@ what is currently installed.
 ## Agent Skills (`skills:`)
 
 Each skill is a directory containing a `SKILL.md` file. harnez installs these to the
-configured Gemini, Codex, and Prime Agent skill roots.
+configured Gemini, Codex, Claude Code, and Prime Agent skill roots.
 
 ### Frontmatter difference
 
@@ -69,6 +69,7 @@ only. `genSkillContent` handles this — do not use `genCommandContent` for skil
 ```yaml
 skills_target: ~/.gemini/skills   # default; override to ~/.gemini/antigravity-cli/skills for agy-only
 codex_skills_target: ~/.codex/skills
+claude_skills_target: ~/.claude/skills  # real Agent Skills dir — description-matched, auto-loaded
 prime_agent_target: ~/.prime/agent  # prompts/, skills/, AGENTS.md, and docs/
 
 skills:
@@ -84,13 +85,17 @@ skills:
 | Shared (all agents) | `~/.gemini/skills/<name>/SKILL.md` |
 | Antigravity CLI only | `~/.gemini/antigravity-cli/skills/<name>/SKILL.md` |
 | Codex | `~/.codex/skills/<name>/SKILL.md` |
+| Claude Code | `~/.claude/skills/<name>/SKILL.md` |
 | Prime Agent | `~/.prime/agent/skills/<name>/SKILL.md` |
 | Project | `<project>/.agents/skills/<name>/SKILL.md` |
 
 `skills_target` controls the Gemini/Antigravity target. `codex_skills_target` controls the
-Codex target. `prime_agent_target` is the Prime Agent root; leave it empty to disable all
-Prime Agent outputs. Prime prompt templates reuse command format unchanged because both
-formats accept `description` frontmatter.
+Codex target. `claude_skills_target` controls Claude Code's own personal Agent Skills dir
+(`~/.claude/skills/<name>/SKILL.md`, distinct from `~/.claude/commands/` — Skills are
+description-matched and auto-loaded on relevance; commands stay manually invoked via `/name`).
+`prime_agent_target` is the Prime Agent root; leave it empty to disable all Prime Agent
+outputs. Prime prompt templates reuse command format unchanged because both formats accept
+`description` frontmatter.
 
 ### Adding a new skill
 

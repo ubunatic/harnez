@@ -81,6 +81,7 @@ func TestApplyInstallsTelemetryHook(t *testing.T) {
 	// only exercises settings.json.
 	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
 	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
+	cfg.ClaudeSkillsTarget = filepath.Join(t.TempDir(), "claude-skills")
 	cfg.PrimeAgentTarget = filepath.Join(t.TempDir(), "prime-agent")
 	cfg.AgentsMD.Global.Target = filepath.Join(t.TempDir(), "CLAUDE.md")
 	cfg.AgentsMD.Global.Symlink = ""

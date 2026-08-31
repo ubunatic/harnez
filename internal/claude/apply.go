@@ -504,6 +504,13 @@ func skillTargets(cfg *Config) []string {
 	}
 
 	targets = appendUniquePath(targets, fsutil.ExpandHome(cfg.CodexSkillsTarget))
+
+	if root := fsutil.ExpandHome(cfg.ClaudeSkillsTarget); root != "" {
+		targets = appendUniquePath(targets, root)
+	} else if home, err := os.UserHomeDir(); err == nil {
+		targets = appendUniquePath(targets, filepath.Join(home, ".claude", "skills"))
+	}
+
 	if root := primeAgentRoot(cfg); root != "" {
 		targets = appendUniquePath(targets, filepath.Join(root, "skills"))
 	}
@@ -794,6 +801,28 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 			}
 		}
 	}
+	if len(cfg.Skills) > 0 {
+		for _, skill := range cfg.Skills {
+			content, err := genSkillContent(skill, cfg.FS)
+			if err != nil {
+				return false, err
+			}
+			for _, skillsRoot := range skillTargets(cfg) {
+				path := filepath.Join(skillsRoot, skill.Name, "SKILL.md")
+				existing, readErr := os.ReadFile(path)
+				if readErr != nil {
+					if os.IsNotExist(readErr) {
+						anyChanged = true
+						continue
+					}
+					return false, fmt.Errorf("skill %s [%s]: %w", skill.Name, path, readErr)
+				}
+				if string(existing) != content {
+					anyChanged = true
+				}
+			}
+		}
+	}
 
 	if !anyChanged {
 		fmt.Println("No changes.")
@@ -825,6 +854,21 @@ func CleanAll(target string, cfg *Config) error {
 		for _, s := range sections {
 			if err := cleanSectionMD(l.Target, s.Name); err != nil {
 				return fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
+			}
+		}
+	}
+	if len(cfg.Skills) > 0 {
+		for _, skill := range cfg.Skills {
+			for _, skillsRoot := range skillTargets(cfg) {
+				skillDir := filepath.Join(skillsRoot, skill.Name)
+				path := filepath.Join(skillDir, "SKILL.md")
+				if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+					return fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
+				}
+				// Best-effort: drop the now-empty per-skill directory. Ignore
+				// errors (e.g. directory holds other files) — never clean
+				// content harnez didn't write.
+				_ = os.Remove(skillDir)
 			}
 		}
 	}

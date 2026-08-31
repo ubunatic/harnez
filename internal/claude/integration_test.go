@@ -43,9 +43,11 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 	geminiSkillsDir := filepath.Join(t.TempDir(), "gemini-skills")
 	codexSkillsDir := filepath.Join(t.TempDir(), "codex-skills")
+	claudeSkillsDir := filepath.Join(t.TempDir(), "claude-skills")
 	primeAgentDir := filepath.Join(t.TempDir(), "prime-agent")
 	cfg.SkillsTarget = geminiSkillsDir
 	cfg.CodexSkillsTarget = codexSkillsDir
+	cfg.ClaudeSkillsTarget = claudeSkillsDir
 	cfg.PrimeAgentTarget = primeAgentDir
 	cfg.AgentsMD.Global.Target = filepath.Join(t.TempDir(), "CLAUDE.md")
 	cfg.AgentsMD.Global.Symlink = ""
@@ -75,6 +77,17 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(codexSkillsDir, "sprint", "SKILL.md")); err != nil {
 		t.Fatalf("Expected Codex sprint skill to be written: %v", err)
+	}
+	claudeSkillPath := filepath.Join(claudeSkillsDir, "evergreen", "SKILL.md")
+	claudeSkill, err := os.ReadFile(claudeSkillPath)
+	if err != nil {
+		t.Fatalf("Expected Claude Code skill to be written: %v", err)
+	}
+	if !strings.HasPrefix(string(claudeSkill), "---\nname: \"evergreen\"\ndescription:") {
+		t.Errorf("Expected Agent Skills frontmatter in %s, got:\n%s", claudeSkillPath, claudeSkill)
+	}
+	if _, err := os.Stat(filepath.Join(claudeSkillsDir, "sprint", "SKILL.md")); err != nil {
+		t.Fatalf("Expected Claude Code sprint skill to be written: %v", err)
 	}
 	primeSkillPath := filepath.Join(primeAgentDir, "skills", "evergreen", "SKILL.md")
 	primeSkill, err := os.ReadFile(primeSkillPath)
@@ -204,6 +217,9 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if !strings.Contains(out, filepath.Join(codexSkillsDir, "evergreen", "SKILL.md")) {
 		t.Errorf("Expected RunStatus to list Codex skill target, got:\n%s", out)
 	}
+	if !strings.Contains(out, filepath.Join(claudeSkillsDir, "evergreen", "SKILL.md")) {
+		t.Errorf("Expected RunStatus to list Claude Code skill target, got:\n%s", out)
+	}
 	if !strings.Contains(out, filepath.Join(primeAgentDir, "skills", "evergreen", "SKILL.md")) {
 		t.Errorf("Expected RunStatus to list Prime Agent skill target, got:\n%s", out)
 	}
@@ -257,6 +273,9 @@ func TestIntegrationWorkflow(t *testing.T) {
 	}
 	if _, err := os.Stat(settingsPath); err == nil || !os.IsNotExist(err) {
 		t.Errorf("Expected settings.json to be deleted after CleanAll, but it exists")
+	}
+	if _, err := os.Stat(claudeSkillPath); err == nil || !os.IsNotExist(err) {
+		t.Errorf("Expected Claude Code skill %s to be removed by CleanAll, but it exists", claudeSkillPath)
 	}
 }
 

@@ -2,7 +2,7 @@
 
 ## What it is
 
-`harnez` is a Go CLI tool that manages Claude Code and coding agent configuration declaratively from a single `config.yaml`. One source of truth drives all outputs: `settings.json`, `CLAUDE.md`/`AGENTS.md`, custom slash commands, skills (`~/.gemini/skills/`, `~/.codex/skills/`), and language doc copies. Apply is idempotent; user-managed keys in JSON files are preserved on every run.
+`harnez` is a Go CLI tool that manages Claude Code and coding agent configuration declaratively from a single `config.yaml`. One source of truth drives all outputs: `settings.json`, `CLAUDE.md`/`AGENTS.md`, custom slash commands, skills (`~/.gemini/skills/`, `~/.codex/skills/`, `~/.claude/skills/`), and language doc copies. Apply is idempotent; user-managed keys in JSON files are preserved on every run.
 
 ## Architecture
 
@@ -41,6 +41,7 @@ All subcommands accept `-c <config>` (default: embedded) and `-t <target>` (defa
 | `~/.claude/commands/<name>.md` | Whole file. Frontmatter `description:` from config; body from inline `content:` or `file:` |
 | `~/.gemini/skills/<name>/SKILL.md` | Skill definition directory + markdown file for Gemini / Antigravity |
 | `~/.codex/skills/<name>/SKILL.md` | Skill definition directory + markdown file for Codex |
+| `~/.claude/skills/<name>/SKILL.md` | Real Claude Code Agent Skill — description-matched, auto-loaded on relevance (distinct from the always-present `~/.claude/commands/<name>.md` slash command) |
 | `~/.claude/docs/<lang>.md` | File copy from `source` (relative to config dir). |
 
 ## Managed block format

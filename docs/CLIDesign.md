@@ -83,6 +83,7 @@ harnez apply [-t <dir>] [-d <name>...] [--force-docs]
         ├── write ~/.claude/commands/<name>.md for each command
         ├── write ~/.gemini/skills/<name>/SKILL.md for each skill
         ├── write ~/.codex/skills/<name>/SKILL.md for each skill when configured
+        ├── write ~/.claude/skills/<name>/SKILL.md for each skill (real Agent Skills, auto-loaded)
         ├── write ~/.prime/agent/AGENTS.md managed sections
         ├── write ~/.prime/agent/prompts/<name>.md and skills/<name>/SKILL.md
         └── install docs to ~/.claude/docs/ and ~/.prime/agent/docs/
