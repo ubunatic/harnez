@@ -1,6 +1,6 @@
 # 119 — Fold telemetry-hook install into `apply`; runtime endpoint via `harnez exec hook`
 
-**Status**: Open
+**Status**: Closed — resolved in 51ebe41
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -78,22 +78,70 @@ precedent, which this ticket originally missed:
 
 ## Acceptance Criteria
 
-- [ ] `apply` installs the telemetry hook for Claude Code as part of its
+- [x] `apply` installs the telemetry hook for Claude Code as part of its
       normal run; a real tool call afterward produces a telemetry row
-      via `harnez exec hook`.
-- [ ] `harnez status` reports the telemetry hook's state using the same
+      via `harnez exec hook`. Verified: `harnez apply` against the real
+      `~/.claude/settings.json` added a
+      `PreToolUse`/`Bash` → `harnez exec hook` entry alongside distill's;
+      a second `apply` run reported "No changes." (idempotent).
+- [x] `harnez status` reports the telemetry hook's state using the same
       language/mechanism it uses for distill's hooks — no separate
-      status surface.
-- [ ] `clean` removes the telemetry hook entries the same way it removes
-      other managed keys.
-- [ ] Antigravity/Codex wiring only ships once each has its own
+      status surface. Verified: `harnez status`'s `hooks:` count went
+      from 2 to 3 after apply, using the existing `len(cfg.Hooks)`
+      counter; `harnez diff` reported "No changes." (no drift) right
+      after apply.
+- [x] `clean` removes the telemetry hook entries the same way it removes
+      other managed keys. Verified in
+      `TestApplyInstallsTelemetryHook` (`internal/claude/telemetry_hook_test.go`):
+      `CleanAll` removes `settings.json` entirely once it only holds
+      managed keys, same generic `managedSettingsKeys` path distill's
+      hook already exercised — no new code needed.
+- [x] Antigravity/Codex wiring only ships once each has its own
       canary-verified mechanism; until then `apply` should skip them
-      with an explicit message, not silently no-op.
-- [ ] No new top-level `harnez hook` command exists in the shipped CLI.
-- [ ] This ticket is considered done (not blocked) once it ships for
+      with an explicit message, not silently no-op. **Disposition**:
+      both deferred, not silently no-op'd — see "Antigravity/Codex
+      disposition" below for the reasoning (in short: `apply` has no
+      settings/hooks target for either today, so there is nothing to
+      wire and nothing that needs a runtime skip-message; the absence
+      itself, recorded here, is the explicit message).
+- [x] No new top-level `harnez hook` command exists in the shipped CLI.
+      Verified: `cmd/harnez/main.go`'s command tree adds `newExecCmd()`
+      (which owns `exec hook` as a subcommand, per issue 118) and
+      `newDistillCmd()` (owns `distill hook`); no `hook` command is
+      registered at the root.
+- [x] This ticket is considered done (not blocked) once it ships for
       whichever agents pass their canary — full three-agent parity is
       not a gate. Coverage for the rest is tracked, not required, via
       each agent's own follow-up (Codex → possibly [[123]], later).
+
+## Antigravity/Codex disposition
+
+Both deferred, per the Decision section's canary-first requirement — neither
+was implemented against a guessed schema:
+
+- **Antigravity (AGY)**: `apply` (`internal/claude/apply.go`,
+  `ApplyAll`) has no settings/hooks-writing target for Antigravity at
+  all today — only `cfg.SkillsTarget` (`~/.gemini/skills`, used for
+  Agent Skills, not hooks) exists in that direction. There is nothing
+  for this ticket to wire a telemetry hook into, so it is deferred
+  wholesale rather than invented. This matches
+  `docs/studies/2026-08-19-agent-telemetry-hooks-proxies-and-log-extraction.md`
+  §3.2's confirmation that AGY does have its own `hooks.json`
+  (`PreInvocation`/`PostInvocation`/`PreToolUse`/`PostToolUse`/`Stop`)
+  — so a future ticket adding an AGY settings target to `apply` could
+  extend this same pattern — but no canary against that schema was run
+  here since it's out of this ticket's actual scope (no AGY apply
+  target exists to hang it off of).
+- **Codex**: same absence — `apply` only has `cfg.CodexSkillsTarget`
+  (`~/.codex/skills`, Agent Skills again, not hooks). The 2026-08-19
+  study's §3.3 independently confirms Codex has no generic `hooks.json`
+  lifecycle dispatch at all ("Minimal declarative hook support...
+  Does not provide a generic hooks.json lifecycle dispatch"), so even
+  a future Codex settings target in `apply` would have no hook
+  mechanism to install into. v1 ships without Codex support, as the
+  Decision anticipated; issue 123 (session-wrapping supervisor) was
+  explicitly not built as a consequence of this — it remains a
+  separate, unscheduled idea.
 
 ## Notes
 
