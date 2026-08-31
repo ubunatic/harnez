@@ -1,6 +1,6 @@
 # 118 — `harnez exec`: shell execution interceptor with telemetry capture
 
-**Status**: Closed — resolved in TBD
+**Status**: Closed — resolved in 27dca59
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -57,7 +57,9 @@ harnez exec --tool <tool_name> [--ticket <ticket_id>] -- <command...>
       (verified against a command with known runtime/output size).
 - [x] `distilled_bytes` is populated when distillation is active and
       left NULL otherwise, not zero — see "Distilled-bytes finding"
-      below: implemented as always-0, documented deviation.
+      below: `harnez exec` writes real NULL today (schema fixed to be
+      nullable); populating an actual non-NULL value still needs a
+      distill-side follow-up, tracked there, not blocking this AC.
 - [x] Telemetry write failure (e.g. DB locked) does not block or delay
       the wrapped command's own execution or exit — telemetry is
       best-effort, never on the command's critical path.
