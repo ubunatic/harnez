@@ -129,3 +129,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 128 | [128-per-agent-full-system-prompt-self-audit-for-repetition.md](128-per-agent-full-system-prompt-self-audit-for-repetition.md) | Per-agent full system-prompt self-audit for repetition and conciseness, starting with Claude Code | Open |
 | 129 | [129-parallelize-usage-collectall.md](129-parallelize-usage-collectall.md) | Parallelize `collectAll`'s per-agent usage collectors (goroutines + WaitGroup) | Closed — resolved in 796f56c |
 | 130 | [130-instruction-distribution-audit-followups.md](130-instruction-distribution-audit-followups.md) | Instruction-distribution audit follow-ups (Tool Feedback Protocol misscoping, doc-index accuracy, delivery duplication, Skill infra) | Open |
+| 131 | [131-watch-debug-freshness-countdown-overlay.md](131-watch-debug-freshness-countdown-overlay.md) | `!`-toggled per-agent freshness countdown overlay in `harnez usage --watch` | Open |
