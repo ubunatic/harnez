@@ -1,6 +1,6 @@
 # 117 — `harnez rate`: positional internal-tool rating command
 
-**Status**: Open
+**Status**: Closed — resolved in a3a67ba
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -38,20 +38,55 @@ harnez rate <tool_name> <score> "<description>" [<ticket_id>]
 
 ## Acceptance Criteria
 
-- [ ] Parses positional args per the signature above; rejects score
+- [x] Parses positional args per the signature above; rejects score
       outside 1–5 with a non-zero exit and message naming the valid
       range.
-- [ ] `--agent`/`--session` overrides work and are covered by tests.
-- [ ] Omitted `ticket_id` resolves via [[121]]'s resolution chain rather
+- [x] `--agent`/`--session` overrides work and are covered by tests.
+- [x] Omitted `ticket_id` resolves via [[121]]'s resolution chain rather
       than silently writing NULL.
-- [ ] End-to-end latency benchmark (cold and warm DB) documented and
+- [x] End-to-end latency benchmark (cold and warm DB) documented and
       under 20ms on the dev machine, or the constraint is explicitly
       renegotiated here if the storage engine chosen in 115/116 can't
       hit it.
-- [ ] `harnez rate --help` documents the command per this repo's
+- [x] `harnez rate --help` documents the command per this repo's
       self-documenting CLI convention.
 
 ## Notes
 
 Do not start before [[116]] lands — this command is a thin CLI wrapper
 around that storage layer, not a second place to open the DB.
+
+## Implementation
+
+`cmd/harnez/rate.go` implements `harnez rate <tool_name> <score>
+"<description>" [<ticket_id>]` as a thin Cobra command wrapping
+`internal/telemetry.DB.Insert` and `internal/resolve.Session`/`Ticket`.
+
+- Score is parsed client-side (`strconv.Atoi`) only to build the `*int`
+  Insert needs — the 1-5 *range* is not re-validated in Go; the DB's own
+  CHECK constraint (schema.go) is the single enforcement point, per
+  docs/other/Spec.md. A CHECK-constraint failure mentioning "score" is
+  caught and re-wrapped with a message naming the 1-5 range, so the UX
+  requirement is met without a second hardcoded range.
+- `--agent` > `$HARNEZ_AGENT` > env-var agent auto-detect (mirrors
+  `internal/resolve`'s `SessionEnvVars` signals: `CLAUDE_CODE_SESSION_ID`
+  etc.) > `"unknown"`. No prior "current agent" auto-detection existed
+  elsewhere in the repo (`internal/usage`'s `isAgentName` only classifies
+  *other* running processes, not this process's own identity).
+- `--session` overrides `resolve.Session()`; omitted `ticket_id` resolves
+  via `resolve.Ticket()` (git-repo-root + ticket-shaped branch name, or
+  last-used-ticket-for-session fallback) rather than writing NULL/"".
+- Latency measured via `cmd/harnez/rate_test.go`'s
+  `TestRunRate_LatencyBudget` and `BenchmarkRunRate` (mirrors
+  `internal/telemetry`'s `BenchmarkInsert`/`TestInsertLatencyBudget`
+  pattern): cold end-to-end (arg parse → resolve → Open incl. schema
+  create → Insert) **1.36ms**, warm max **0.78ms** over 50 calls — both
+  well under the 20ms budget, on this dev machine.
+- Manually verified `harnez rate --help` output and one real
+  `harnez rate test-tool 4 "smoke test" smoketest/117-rate --session
+  smoke-session-cleanup-me` run against the real
+  `~/.harnez/tool_catalog.sqlite` (no `--db-path` flag exists/was
+  requested); the row was verified then deleted, and no lock-file/ticket
+  state was left behind (the run used `--session`/explicit ticket_id, so
+  `resolve`'s lock-file and last-ticket-history paths were never
+  exercised).
