@@ -1,6 +1,6 @@
 # 131 — `!`-toggled per-agent freshness countdown overlay in `harnez usage --watch`
 
-**Status**: Open
+**Status**: Closed — resolved in `d8a3abe`, `7514ecf`
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
@@ -74,19 +74,19 @@ schedule, rather than watching total request latency alone.
 
 ## Acceptance Criteria
 
-- [ ] Pressing `!` in `harnez usage --watch` toggles the debug overlay on/off
+- [x] Pressing `!` in `harnez usage --watch` toggles the debug overlay on/off
       for the current session; pressing it again reverts to normal labels.
-- [ ] Each agent row's label loses exactly 3 characters of its own text
+- [x] Each agent row's label loses exactly 3 characters of its own text
       (not padding) to the countdown gauge — total row width/box layout is
       unchanged from non-overlay mode.
-- [ ] Gauge visibly resets to "full" when an agent's `LastRefreshed`
+- [x] Gauge visibly resets to "full" when an agent's `LastRefreshed`
       timestamp updates (e.g. after a live fetch or a background-collector
       tick lands), and visibly drains as `remaining` shrinks.
-- [ ] Gauge rendering reuses `rograph`'s shared bar/sparkline primitives
+- [x] Gauge rendering reuses `rograph`'s shared bar/sparkline primitives
       rather than a new one-off implementation.
-- [ ] Unit test(s) covering the elapsed/remaining-to-gauge-glyph mapping
+- [x] Unit test(s) covering the elapsed/remaining-to-gauge-glyph mapping
       (pure function, no TUI rendering needed) at a few sample fractions
       (e.g. ~100%, ~50%, ~0%, and negative/overdue remaining clamped to
       empty rather than wrapping/erroring).
-- [ ] `go test -race ./internal/usage/...` passes clean.
-- [ ] `harnez status` shows the tracker still in sync after filing/closing.
+- [x] `go test -race ./internal/usage/...` passes clean.
+- [x] `harnez status` shows the tracker still in sync after filing/closing.
