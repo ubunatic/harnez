@@ -144,3 +144,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 143 | [143-show-git-status-in-all-agent-status-bars.md](143-show-git-status-in-all-agent-status-bars.md) | Show Git status in all agent status bars | Open |
 | 144 | [144-codex-subagent-model-selection-policy.md](144-codex-subagent-model-selection-policy.md) | Ensure Codex uses the correct model for subagents | Open |
 | 145 | [145-orchestrator-session-skill-and-command.md](145-orchestrator-session-skill-and-command.md) | Add an orchestrator-session skill and command | Open |
+| 146 | [146-recent-subagent-activity-watch-box.md](146-recent-subagent-activity-watch-box.md) | Assess recent subagent activity in compact usage watch | Open |
