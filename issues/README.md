@@ -134,3 +134,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 133 | [133-progress-bar-eighth-block-subcharacter-precision.md](133-progress-bar-eighth-block-subcharacter-precision.md) | Sub-character precision for narrow progress bars using eighth-block glyphs | Closed — resolved in `5fd2efb`, `c7c5fdf`, `0666758` |
 | 134 | [134-conversemode-to-skill-conversion.md](134-conversemode-to-skill-conversion.md) | Convert `ConciseMode.md` from AGENTS.md-mutation to a Claude-Code Skill (split from 130 item 8) | Open |
 | 135 | [135-claude-code-tool-feedback-protocol-dual-delivery.md](135-claude-code-tool-feedback-protocol-dual-delivery.md) | Claude Code gets Tool Feedback Protocol content twice (global section + Skill) | Open |
+| 136 | [136-bar-ansi-background-bracket-leak-and-color-spec.md](136-bar-ansi-background-bracket-leak-and-color-spec.md) | Bar ANSI background leaks onto brackets; consolidate colors into spec/ | Open |
