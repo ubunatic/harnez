@@ -62,7 +62,12 @@ precedent, which this ticket originally missed:
   before writing against assumed shape (per `docs/other/Canary.md`).
 - **OpenAI Codex**: same canary caveat. `internal/usage`'s `CollectCodex`
   integration (issue 111) may document what's already known about
-  Codex's environment.
+  Codex's environment. Per `docs/studies/2026-08-19-agent-telemetry-hooks-proxies-and-log-extraction.md`
+  §3.3, Codex has no generic `hooks.json` lifecycle dispatch — if this
+  canary confirms no usable hook-rewrite point exists, do not force the
+  independent-tool model here; fall back to [[123]]'s session-wrapping
+  supervisor track for Codex instead of shipping a degraded/partial
+  hook integration.
 - `status`/`diff` should surface the telemetry hook's installed/current/
   drifted state the same way they already do for distill's hooks —
   extend those, don't add a parallel status command.
