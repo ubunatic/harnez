@@ -61,13 +61,13 @@ func TestParseWatchColorsYAMLValidatesRequiredFields(t *testing.T) {
 // TestPanelBackgroundSGRResolvesFromSpec proves the value actually comes
 // from spec/colors.yaml rather than a hardcoded fallback: issue 136's fix
 // changes the "100" default in rograph from a Go literal to a spec-sourced
-// value, and mustWatchColors/panelBackgroundSGR is the only path there.
+// value, and mustWatchColors/colorSGR is the only path there.
 func TestPanelBackgroundSGRResolvesFromSpec(t *testing.T) {
-	got := panelBackgroundSGR("panel-bg")
+	got := colorSGR("panel-bg")
 	spec := mustWatchColors()
 	want := spec.Colors["panel-bg"].SGR
 	if got != want {
-		t.Errorf("panelBackgroundSGR(\"panel-bg\") = %q, want %q (from embedded spec)", got, want)
+		t.Errorf("colorSGR(\"panel-bg\") = %q, want %q (from embedded spec)", got, want)
 	}
 	if got == "" {
 		t.Errorf("expected a non-empty SGR code for panel-bg")
@@ -80,10 +80,10 @@ func TestPanelBackgroundSGRResolvesFromSpec(t *testing.T) {
 func TestPanelBackgroundSGRMissingColorPanics(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
-			t.Fatalf("expected panelBackgroundSGR to panic for an unknown color name")
+			t.Fatalf("expected colorSGR to panic for an unknown color name")
 		}
 	}()
-	panelBackgroundSGR("not-a-real-color")
+	colorSGR("not-a-real-color")
 }
 
 // TestInitWiresRographDefaultFromSpec is the layering-decision proof: usage
@@ -92,7 +92,7 @@ func TestPanelBackgroundSGRMissingColorPanics(t *testing.T) {
 // package (or the binary) runs, since rograph itself has no way to read the
 // spec.
 func TestInitWiresRographDefaultFromSpec(t *testing.T) {
-	want := panelBackgroundSGR("panel-bg")
+	want := colorSGR("panel-bg")
 	if rograph.DefaultBackgroundANSI != want {
 		t.Errorf("rograph.DefaultBackgroundANSI = %q, want %q (spec/colors.yaml panel-bg)", rograph.DefaultBackgroundANSI, want)
 	}

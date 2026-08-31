@@ -17,3 +17,28 @@ colors:
       full-brightness glyphs fighting the terminal's own background. Used by
       both the Load box's CPU/GPU sparklines and the All Usage box's bars.
     sgr: "100"
+  bold:
+    title: "Bold"
+    description: >-
+      SGR 1, the "bold/increased intensity" attribute. Used for box titles,
+      the [T]/[R] hotkey markers, and headings in the controls overlay.
+    sgr: "1"
+  dim-grey:
+    title: "Dim (grey foreground)"
+    description: >-
+      SGR 90, "bright black" -- a grey foreground color, not a rendering
+      attribute. Used throughout `harnez usage --watch` for hint text,
+      placeholder lines ("no data", "n/a"), footer controls, and secondary
+      labels. Distinct from dim-faint (SGR 2): this recolors the text grey,
+      it does not change the terminal's intensity/faint rendering.
+    sgr: "90"
+  dim-faint:
+    title: "Dim (faint attribute)"
+    description: >-
+      SGR 2, the "faint/decreased intensity" attribute. Used for the agent
+      sources list in `harnez usage`'s non-watch output. Distinct from
+      dim-grey (SGR 90): this is a rendering attribute applied to the
+      terminal's existing foreground color, not a color substitution -- some
+      terminals render it visually similarly to dim-grey, but the two are
+      not interchangeable SGR mechanisms.
+    sgr: "2"

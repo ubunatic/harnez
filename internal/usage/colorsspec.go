@@ -76,10 +76,13 @@ func mustWatchColors() watchColorsSpec {
 	return spec
 }
 
-// panelBackgroundSGR returns the named color's SGR code from the embedded
+// colorSGR returns the named color's SGR code from the embedded
 // spec/colors.yaml, panicking if name is undefined (same "broken build, not
-// a runtime condition" reasoning as mustWatchColors).
-func panelBackgroundSGR(name string) string {
+// a runtime condition" reasoning as mustWatchColors). It is the single
+// lookup used by every named-color call site in this package (issue 137) --
+// callers that need a full escape sequence use ansiOpen/ansiWrap below
+// rather than reconstructing "\x1b[" + code + "m" themselves.
+func colorSGR(name string) string {
 	spec := mustWatchColors()
 	c, ok := spec.Colors[name]
 	if !ok {
@@ -87,6 +90,31 @@ func panelBackgroundSGR(name string) string {
 	}
 	return c.SGR
 }
+
+// ansiOpen returns the SGR "open" escape sequence ("\x1b[<code>m") for a
+// named spec/colors.yaml entry. The matching "\x1b[0m" reset is left as a
+// raw literal at call sites rather than a named spec entry -- it is the
+// universal closer for any SGR sequence, not a color/style choice, mirroring
+// how issue 136 already left RenderBar/RenderSparkline's reset as a literal.
+func ansiOpen(name string) string {
+	return "\x1b[" + colorSGR(name) + "m"
+}
+
+// ansiWrap wraps s in the named color's open sequence and a plain "\x1b[0m"
+// reset.
+func ansiWrap(name, s string) string {
+	return ansiOpen(name) + s + "\x1b[0m"
+}
+
+// Named ANSI open-sequence vars for the watch TUI's most common call sites
+// (issue 137's color/style audit). These resolve spec/colors.yaml once, at
+// package init, so watch.go/usage.go call sites can concatenate them into
+// format strings without a lookup per render.
+var (
+	ansiBold     = ansiOpen("bold")
+	ansiDimGrey  = ansiOpen("dim-grey")
+	ansiDimFaint = ansiOpen("dim-faint")
+)
 
 // init wires rograph's ANSI background default to the "panel-bg" color
 // spec/colors.yaml defines. internal/rograph is a separate, dependency-free
@@ -98,5 +126,5 @@ func panelBackgroundSGR(name string) string {
 // layering violation (rograph would need to know about spec/ and yaml
 // parsing).
 func init() {
-	rograph.DefaultBackgroundANSI = panelBackgroundSGR("panel-bg")
+	rograph.DefaultBackgroundANSI = colorSGR("panel-bg")
 }
