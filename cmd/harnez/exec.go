@@ -62,7 +62,7 @@ The telemetry write is best-effort and bounded: it never delays the
 wrapped command's own execution, and gives up waiting on a slow/hung DB
 write after a short bound rather than hanging the caller.
 
-distilled_bytes is currently always left at 0/unset: nothing in
+distilled_bytes is currently always left NULL: nothing in
 'harnez distill' today exposes a byte-count signal this wrapper could
 read back (see issues/118's Notes) — that needs a minimal follow-up in
 distill itself, out of this ticket's scope.
@@ -253,10 +253,10 @@ func recordExecTelemetry(opts execOptions, call execCall) {
 			ExitCode:    &exitCode,
 			DurationMs:  call.DurationMs,
 			RawBytes:    call.RawBytes,
-			// DistilledBytes intentionally always 0: see this file's
-			// top-of-file doc comment and issues/118's Notes — nothing in
-			// internal/distill exposes a byte-count signal today, and this
-			// ticket does not add one.
+			// DistilledBytes intentionally left nil (SQL NULL): see this
+			// file's top-of-file doc comment and issues/118's Notes —
+			// nothing in internal/distill exposes a byte-count signal
+			// today, and this ticket does not add one.
 		}
 
 		dbPath := opts.DBPath

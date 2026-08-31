@@ -124,8 +124,8 @@ func TestRunExecWrapper_RecordsDurationAndRawBytes(t *testing.T) {
 	if row.RawBytes != int64(len("twelve bytes!")) {
 		t.Errorf("raw_bytes = %d, want %d", row.RawBytes, len("twelve bytes!"))
 	}
-	if row.DistilledBytes != 0 {
-		t.Errorf("distilled_bytes = %d, want 0 (no distill byte-count signal exists yet, see issues/118 Notes)", row.DistilledBytes)
+	if row.DistilledBytes != nil {
+		t.Errorf("distilled_bytes = %v, want nil/NULL (no distill byte-count signal exists yet, see issues/118 Notes)", *row.DistilledBytes)
 	}
 	if row.ExitCode == nil || *row.ExitCode != 0 {
 		t.Errorf("exit_code = %v, want 0", row.ExitCode)

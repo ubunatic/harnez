@@ -1,6 +1,6 @@
 # 118 — `harnez exec`: shell execution interceptor with telemetry capture
 
-**Status**: Closed — resolved in 3b1e6a1
+**Status**: Closed — resolved in TBD
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -106,18 +106,24 @@ causal visibility into whether its own output was piped through
 | harnez distill`) — that pipe stage runs in a separate process after
 `exec` has already exited, with no channel back.
 
-Additionally, `internal/telemetry.ToolCall.DistilledBytes` (issue 116)
-is a non-pointer `int64` backed by a `NOT NULL DEFAULT 0` schema column
-— there is no way to write SQL `NULL` into it with the current type/
-schema, only `0`. So even setting aside the missing distill signal,
-this ticket's "left NULL otherwise, not zero" AC text is unimplementable
-against the schema issue 116 already shipped.
+**Update (post-review, same day)**: `internal/telemetry.ToolCall.DistilledBytes`
+was found to be a non-pointer `int64` backed by a `NOT NULL DEFAULT 0`
+schema column, making the AC's "left NULL otherwise, not zero" wording
+unimplementable as shipped. Since this is a shared-package schema
+change, not `harnez exec`-specific or `internal/distill`-internals work,
+it was fixed directly rather than deferred: `internal/telemetry`'s
+`distilled_bytes` column is now nullable (`INTEGER CHECK (distilled_bytes
+IS NULL OR distilled_bytes >= 0)`, no `NOT NULL DEFAULT 0`), and
+`ToolCall.DistilledBytes` is now `*int64`. `Aggregate`'s `SUM`/`COALESCE`
+needed no change (SQL `SUM` already ignores `NULL`s). `harnez exec` now
+writes a genuine `nil`/SQL-`NULL` (not `0`) when no distill signal exists,
+which is now representable. AC item above is satisfied for the
+"left NULL, not zero" half.
 
-Decision: `harnez exec` always writes `DistilledBytes: 0` and documents
-this deviation rather than reopening telemetry's schema or reaching into
-distill internals (explicitly out of scope per this ticket's Scope
-section — "does not change `harnez distill` itself"). Minimal follow-up
-needed in a future ticket: (1) have `distill.Distill`/the wrapper report
-its output length somehow, and (2) decide whether `distilled_bytes`
-should become a nullable `*int64` in `internal/telemetry` to distinguish
-"not distilled" from "distilled down to 0 bytes".
+What's still open, and correctly out of this ticket's scope: `harnez
+exec` still cannot populate a real distilled_bytes *value* — that needs
+`distill.Distill`/`runDistillWrapper` to report an output length, which
+requires changing `internal/distill` itself (explicitly excluded by this
+ticket's Scope: "does not change `harnez distill` itself"). Track that
+as a small follow-up when a command that pipes through `harnez distill`
+after `harnez exec` (or wires them together) is actually built.

@@ -20,5 +20,5 @@ type ToolCall struct {
 	ExitCode       *int // optional; nil for call types without a process exit code
 	DurationMs     int64
 	RawBytes       int64
-	DistilledBytes int64
+	DistilledBytes *int64 // populated only when distillation ran; nil (SQL NULL) otherwise
 }

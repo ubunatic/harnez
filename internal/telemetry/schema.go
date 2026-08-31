@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS tool_calls (
 	exit_code       INTEGER,
 	duration_ms     INTEGER NOT NULL DEFAULT 0 CHECK (duration_ms >= 0),
 	raw_bytes       INTEGER NOT NULL DEFAULT 0 CHECK (raw_bytes >= 0),
-	distilled_bytes INTEGER NOT NULL DEFAULT 0 CHECK (distilled_bytes >= 0)
+	distilled_bytes INTEGER CHECK (distilled_bytes IS NULL OR distilled_bytes >= 0)
 );
 
 CREATE INDEX IF NOT EXISTS idx_tool_calls_session_id  ON tool_calls (session_id);

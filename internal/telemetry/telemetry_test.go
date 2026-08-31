@@ -20,7 +20,8 @@ func openTestDB(t *testing.T) *DB {
 	return db
 }
 
-func intPtr(v int) *int { return &v }
+func intPtr(v int) *int       { return &v }
+func int64Ptr(v int64) *int64 { return &v }
 
 func sampleCall(session, tool string, score, exitCode int) ToolCall {
 	return ToolCall{
@@ -37,7 +38,7 @@ func sampleCall(session, tool string, score, exitCode int) ToolCall {
 		ExitCode:       intPtr(exitCode),
 		DurationMs:     5,
 		RawBytes:       1000,
-		DistilledBytes: 100,
+		DistilledBytes: int64Ptr(100),
 	}
 }
 
