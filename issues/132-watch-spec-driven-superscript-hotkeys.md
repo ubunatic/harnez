@@ -1,6 +1,6 @@
 # 132 — Spec-driven btop-style superscript hotkeys and single hidden-count hint for `harnez usage --watch`
 
-**Status**: Open
+**Status**: Closed — resolved in `b23ae32`, `aee953a`
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -89,3 +89,52 @@ than an ad hoc mnemonic letter soup.
       spec-driven map, and the hidden-count rendering at 0/1/N hidden boxes.
 - [ ] `go test -race ./internal/usage/...` passes clean.
 - [ ] `harnez status` confirms tracker sync after filing/closing.
+
+## Resolution
+
+Implemented directly in `spec/actions.yaml` + `spec/schemas/actions.schema.json`
+(new `spec/` directory, first use in this project) and
+`internal/usage/actionsspec.go` + `internal/usage/watch.go`:
+
+- `spec/actions.yaml` is the single source of truth for every `--watch`
+  hotkey: key(s), action name, display symbol, category (`box`/`data`/
+  `mode`/`session`), and — for box-toggle actions — the `watchSections`
+  field it controls. Embedded via `//go:embed` (`embed.go`) and parsed/
+  validated at load time by `internal/usage/actionsspec.go`
+  (`parseWatchActionsYAML`), which returns a clear error rather than
+  panicking on malformed or schema-violating input (unit-tested in
+  `actionsspec_test.go`).
+- `watch.go`'s `dispatchWatchKey`/`applyWatchSectionKey` now look up each
+  keypress's action name via the spec-backed `mustWatchActions()` and only
+  keep the toggle/dispatch *logic* in Go, per `docs/Spec.md`. Box titles
+  (`buildAgentBox`, `buildHistoryBox`, `buildProcessesBox`, `buildLoadBox`,
+  `buildAllUsageBox`) render a superscript digit via `watchBoxSymbol`
+  instead of a bracketed `[X]` badge.
+- **Key collision decision**: the old mixed letter+digit scheme
+  (`C`/`G`/`O`/`1`/`2`/`3`, `H`/`4`, `T`/`5`, `P`/`6`, `L`/`7`) is replaced by
+  one numbered scheme: `1` All Usage, `2` Claude, `3` AGY, `4` Codex,
+  `5` History, `6` Processes, `7` Load. Digit meanings shift for every box
+  except this ticket kept none of the old digit assignments stable — this
+  was deliberate: box numbering now follows the boxes' on-screen order
+  (All Usage first, then agents, then History/Processes/Load) rather than
+  preserving arbitrary legacy digits. The `C`/`G`/`O`/`H`/`P`/`L` letter
+  aliases are dropped entirely (superseded by the numbered scheme, per the
+  ticket's "consolidate mixed letter+digit toggles" scope item). `[a]` is
+  kept working as a documented compat alias for All Usage (acceptance
+  criteria explicitly required `a`/`A` to keep working), alongside `[A]`
+  reset, `[T]` token-row toggle (letter-only — it's a data row, not a box,
+  so it never got a digit), `[m]` preset cycle, `[r]` remote, `[q]` quit,
+  and `[?]` controls, all unchanged. The overlay's own dismiss-only Enter
+  key stays a hardcoded local behavior, not spec'd (it has no visible
+  symbol anywhere to source from spec).
+- The header's per-hidden-box badge list (`hidden: [H] [P] ...`) is
+  replaced by a single `N hidden (press ? for controls)` count. The
+  separate "… hidden — terminal too short" height-overflow drop note
+  (a different mechanism — boxes present but not fitting vertically) is
+  unchanged, per the ticket's scope.
+
+Verified: `go build ./...`, `go vet ./...`, `go test -race ./internal/usage/...`
+(all pass, including new `actionsspec_test.go` spec-loading/validation/
+dispatch coverage and `TestBuildWatchFrame_HiddenCountAtZeroOneAndN`), and a
+manual `harnez usage --summary` run confirming the superscript titles and
+hidden-count hint render correctly against the real binary.

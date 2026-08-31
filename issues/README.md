@@ -130,6 +130,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 129 | [129-parallelize-usage-collectall.md](129-parallelize-usage-collectall.md) | Parallelize `collectAll`'s per-agent usage collectors (goroutines + WaitGroup) | Closed — resolved in 796f56c |
 | 130 | [130-instruction-distribution-audit-followups.md](130-instruction-distribution-audit-followups.md) | Instruction-distribution audit follow-ups (Tool Feedback Protocol misscoping, doc-index accuracy, delivery duplication, Skill infra) | Open |
 | 131 | [131-watch-debug-freshness-countdown-overlay.md](131-watch-debug-freshness-countdown-overlay.md) | `!`-toggled per-agent freshness countdown overlay in `harnez usage --watch` | Open |
-| 132 | [132-watch-spec-driven-superscript-hotkeys.md](132-watch-spec-driven-superscript-hotkeys.md) | Spec-driven btop-style superscript hotkeys and single hidden-count hint for `harnez usage --watch` | Open |
+| 132 | [132-watch-spec-driven-superscript-hotkeys.md](132-watch-spec-driven-superscript-hotkeys.md) | Spec-driven btop-style superscript hotkeys and single hidden-count hint for `harnez usage --watch` | Closed — resolved in `b23ae32`, `aee953a` |
 | 133 | [133-progress-bar-eighth-block-subcharacter-precision.md](133-progress-bar-eighth-block-subcharacter-precision.md) | Sub-character precision for narrow progress bars using eighth-block glyphs | Open |
 | 134 | [134-conversemode-to-skill-conversion.md](134-conversemode-to-skill-conversion.md) | Convert `ConciseMode.md` from AGENTS.md-mutation to a Claude-Code Skill (split from 130 item 8) | Open |
