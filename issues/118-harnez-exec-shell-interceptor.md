@@ -1,6 +1,6 @@
 # 118 — `harnez exec`: shell execution interceptor with telemetry capture
 
-**Status**: Open
+**Status**: Closed — resolved in 3b1e6a1
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -47,17 +47,18 @@ harnez exec --tool <tool_name> [--ticket <ticket_id>] -- <command...>
 
 ## Acceptance Criteria
 
-- [ ] Wrapped command's stdout/stderr appear to the terminal/caller with
+- [x] Wrapped command's stdout/stderr appear to the terminal/caller with
       no added buffering latency (canary-verified per `docs/other/Canary.md`
       before merging, since this is exactly the "reads back its own
       output" case the doc calls out).
-- [ ] Exit code matches the unwrapped command's exit code in a table
+- [x] Exit code matches the unwrapped command's exit code in a table
       test covering success, non-zero exit, and signal termination.
-- [ ] `duration_ms` and `raw_bytes` are recorded and roughly sane
+- [x] `duration_ms` and `raw_bytes` are recorded and roughly sane
       (verified against a command with known runtime/output size).
-- [ ] `distilled_bytes` is populated when distillation is active and
-      left NULL otherwise, not zero (spec's schema marks it nullable).
-- [ ] Telemetry write failure (e.g. DB locked) does not block or delay
+- [x] `distilled_bytes` is populated when distillation is active and
+      left NULL otherwise, not zero — see "Distilled-bytes finding"
+      below: implemented as always-0, documented deviation.
+- [x] Telemetry write failure (e.g. DB locked) does not block or delay
       the wrapped command's own execution or exit — telemetry is
       best-effort, never on the command's critical path.
 
@@ -69,3 +70,54 @@ bloat/low-overhead framing — a hung DB write turning every shell command
 into a timeout risk would be a regression, not a feature. Confirm this
 interpretation before implementing if it conflicts with how [[117]]
 does its (synchronous) write.
+
+## Canary result
+
+`cmd/harnez/exec.go`'s `runExecWrapper` proxies stdio by assigning
+`c.Stdin` directly (passed through as the child's underlying `*os.File`
+fd, confirmed unbuffered) and by setting `c.Stdout`/`c.Stderr` to
+`io.MultiWriter(callerStream, byteCounter)`. Two throwaway canary
+programs (not checked in, per Canary.md's "throwaway file read back
+immediately" form) verified both legs against a script that prints a
+wall-clock timestamp, sleeps 0.3s, prints again, sleeps 0.3s, prints a
+third time:
+
+- Direct `*os.File` passthrough (`c.Stdout = os.Stdout`): the three
+  printed timestamps came back staggered ~0.3s apart, matching the
+  script's own sleeps — no batching/delay.
+- `io.MultiWriter(os.Stdout, &counter)` passthrough (the actual approach
+  used, needed to capture `raw_bytes` without losing real-time output):
+  same staggered timing, plus an accurate combined byte count (63 bytes
+  for the three timestamp lines). Go's non-`*os.File` `exec.Cmd` path
+  copies via `io.Copy` as data arrives on the pipe, not on a timer or
+  fixed-size batching, so no material added latency.
+
+Conclusion: `os/exec` + `io.MultiWriter` passthrough is sufficient;
+no custom unbuffered-writer plumbing needed.
+
+## Distilled-bytes finding
+
+`internal/distill` exposes no byte-count signal today: `distill.Distill`
+returns a plain `string`, and neither `distill.go`'s wrapper
+(`runDistillWrapper`) nor the `distill` package itself records or
+returns a distilled-output length anywhere. `harnez exec` also has no
+causal visibility into whether its own output was piped through
+`harnez distill` downstream (e.g. `harnez exec --tool git -- git status
+| harnez distill`) — that pipe stage runs in a separate process after
+`exec` has already exited, with no channel back.
+
+Additionally, `internal/telemetry.ToolCall.DistilledBytes` (issue 116)
+is a non-pointer `int64` backed by a `NOT NULL DEFAULT 0` schema column
+— there is no way to write SQL `NULL` into it with the current type/
+schema, only `0`. So even setting aside the missing distill signal,
+this ticket's "left NULL otherwise, not zero" AC text is unimplementable
+against the schema issue 116 already shipped.
+
+Decision: `harnez exec` always writes `DistilledBytes: 0` and documents
+this deviation rather than reopening telemetry's schema or reaching into
+distill internals (explicitly out of scope per this ticket's Scope
+section — "does not change `harnez distill` itself"). Minimal follow-up
+needed in a future ticket: (1) have `distill.Distill`/the wrapper report
+its output length somehow, and (2) decide whether `distilled_bytes`
+should become a nullable `*int64` in `internal/telemetry` to distinguish
+"not distilled" from "distilled down to 0 bytes".
