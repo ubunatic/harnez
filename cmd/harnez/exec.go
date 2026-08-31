@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/distill"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/telemetry"
 )
@@ -331,6 +332,29 @@ func alreadyRoutedThroughExec(command string) bool {
 // non-empty Bash command not already wrapped, writes the rewrite envelope
 // to out. It is side-effect-free: no subprocess is spawned and no
 // telemetry row is written here (see docs/HookRewritePattern.md).
+//
+// The rewritten command routes through 'bash -c <quoted original>' rather
+// than splicing the original command's tokens directly after "--": Claude
+// Code re-executes the rewritten string via its own outer 'bash -c', so
+// any shell metacharacters in the original command (pipes, &&, ;, quoting)
+// would otherwise be re-interpreted by that outer shell instead of reaching
+// harnez exec as a single argument — silently breaking telemetry capture
+// and, for '&&'/';', silently running part of the command outside harnez
+// exec's wrapping entirely. Wrapping in a quoted 'bash -c' argument keeps
+// the original command intact as one shell string, exactly as distill's
+// own hook rewrite already does (see internal/distill/hook.go).
+//
+// This hook also applies distill's PreToolUse rewrite (HARNEZ_DISTILL_AUTOPIPE)
+// itself, composing it into the one rewrite this hook emits, rather than
+// relying on Claude Code to run two separate PreToolUse hooks on the same
+// Bash matcher: per Claude Code's hooks-guide ("Limitations" — when
+// multiple PreToolUse hooks return updatedInput for the same tool, hooks
+// run in parallel and the last one to finish wins, non-deterministically),
+// two independently-rewriting hooks on the same matcher is a real bug, not
+// a hypothetical — see docs/HookRewritePattern.md. apply only installs
+// this one PreToolUse/Bash hook; distill's own hook command still exists
+// and works standalone, it's just not separately wired into apply's
+// managed hooks anymore (see config.yaml).
 func runExecHook(in io.Reader, out io.Writer) error {
 	var payload hookInput
 	if err := json.NewDecoder(in).Decode(&payload); err != nil {
@@ -344,11 +368,34 @@ func runExecHook(in io.Reader, out io.Writer) error {
 		return nil
 	}
 
-	rewritten := fmt.Sprintf("harnez exec --tool %s -- %s", payload.ToolName, command)
+	effective := command
+	if rewritten, ok := distillAutopipeRewrite(command); ok {
+		effective = rewritten
+	}
+
+	rewritten := fmt.Sprintf("harnez exec --tool %s -- bash -c %s", payload.ToolName, shellQuote(effective))
 	return json.NewEncoder(out).Encode(hookOutput{
 		HookSpecificOutput: hookSpecificOutput{
 			HookEventName: "PreToolUse",
 			UpdatedInput:  map[string]string{"command": rewritten},
 		},
 	})
+}
+
+// distillAutopipeRewrite applies distill's own noisy-command rewrite
+// (internal/distill.RewriteBashCommand) when HARNEZ_DISTILL_AUTOPIPE is
+// enabled, mirroring runDistillHook's (cmd/harnez/distill.go) opt-in gate
+// exactly so behavior is unchanged for users who already set that env var.
+func distillAutopipeRewrite(command string) (string, bool) {
+	enabled := os.Getenv(distillAutopipeEnv)
+	if enabled != "1" && !strings.EqualFold(enabled, "true") {
+		return command, false
+	}
+	return distill.RewriteBashCommand(command)
+}
+
+// shellQuote wraps s in single quotes for safe embedding as one argument
+// in a shell command line, escaping any embedded single quotes.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

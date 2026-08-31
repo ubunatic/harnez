@@ -129,3 +129,20 @@ requires changing `internal/distill` itself (explicitly excluded by this
 ticket's Scope: "does not change `harnez distill` itself"). Track that
 as a small follow-up when a command that pipes through `harnez distill`
 after `harnez exec` (or wires them together) is actually built.
+
+## Post-review correction (during [[119]]'s review, same day)
+
+`runExecHook`'s original rewrite spliced the raw original command
+directly after `harnez exec --tool <tool> -- `. Since Claude Code
+re-executes the rewritten string through its own outer `bash -c`, any
+shell metacharacter in the original command (`|`, `&&`, `;`, etc.) got
+re-interpreted by that outer shell instead of ever reaching `harnez
+exec`'s own argv — silently mis-capturing telemetry for piped commands,
+and silently running part of an `&&`/`;`-chained command entirely
+outside `harnez exec`'s wrapping. Fixed: the rewrite now wraps the
+original command as one quoted argument, `bash -c '<original>'`,
+matching how distill's own hook rewrite (`internal/distill/hook.go`)
+already keeps the original command intact inside one shell string.
+Regression test: `TestRunExecHook_PreservesShellMetacharacters` in
+`cmd/harnez/exec_test.go`. See `docs/HookRewritePattern.md` for the
+general rule this is now documented under.

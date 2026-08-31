@@ -4,13 +4,32 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"ubunatic.com/harnez/internal/telemetry"
 )
+
+func strconvQuote(s string) string { return strconv.Quote(s) }
+
+// shlexSplitForTest tokenizes rewritten exactly as a real outer 'bash -c
+// <rewritten>' would (the same re-execution TestRunExecHook_* is guarding
+// against), by shadowing the 'harnez' command with a shell function that
+// just reports its argv instead of running the real binary — no real
+// subprocess side effects, just bash's own word-splitting/quoting rules.
+func shlexSplitForTest(rewritten string) ([]string, error) {
+	const sep = "\x1f"
+	script := "harnez() { for a in \"$@\"; do printf '%s" + sep + "' \"$a\"; done; }\n" + rewritten
+	out, err := exec.Command("bash", "-c", script).Output()
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(strings.TrimSuffix(string(out), sep), sep), nil
+}
 
 // testExecOptions returns execOptions isolated from the caller's real
 // environment/DB: a throwaway state dir and DB path, explicit ticket so
@@ -205,12 +224,78 @@ func TestRunExecHook_RewritesBashCommand(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("output not valid JSON: %v\n%s", err, out.String())
 	}
-	want := "harnez exec --tool Bash -- git status"
+	want := "harnez exec --tool Bash -- bash -c 'git status'"
 	if got.HookSpecificOutput.UpdatedInput["command"] != want {
 		t.Errorf("updatedInput.command = %q, want %q", got.HookSpecificOutput.UpdatedInput["command"], want)
 	}
 	if got.HookSpecificOutput.HookEventName != "PreToolUse" {
 		t.Errorf("hookEventName = %q, want PreToolUse", got.HookSpecificOutput.HookEventName)
+	}
+}
+
+// TestRunExecHook_PreservesShellMetacharacters is the regression check for
+// the bug found reviewing issue 119: Claude Code re-executes the rewritten
+// command via its own outer 'bash -c', so a naive
+// "harnez exec --tool Bash -- <command>" splice lets that outer shell
+// re-interpret pipes/&&/; in <command> instead of harnez exec ever seeing
+// them as part of one wrapped command. Wrapping in a quoted 'bash -c'
+// argument must keep the whole original command intact.
+func TestRunExecHook_PreservesShellMetacharacters(t *testing.T) {
+	original := `make build && make test | grep -v ok; echo "done"`
+	in := strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":` + strconvQuote(original) + `}}`)
+	var out bytes.Buffer
+	if err := runExecHook(in, &out); err != nil {
+		t.Fatalf("runExecHook() error = %v", err)
+	}
+	var got hookOutput
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("output not valid JSON: %v\n%s", err, out.String())
+	}
+	rewritten := got.HookSpecificOutput.UpdatedInput["command"]
+
+	// Simulate Claude Code's own outer 'bash -c <rewritten>' re-execution:
+	// the original command's metacharacters must survive intact as a
+	// single argument to the inner 'bash -c', not be re-split by the
+	// outer shell.
+	outerArgs, err := shlexSplitForTest(rewritten)
+	if err != nil {
+		t.Fatalf("outer shell failed to parse rewritten command %q: %v", rewritten, err)
+	}
+	// "$@" inside the shadowing function excludes the command name itself.
+	want := []string{"exec", "--tool", "Bash", "--", "bash", "-c", original}
+	if len(outerArgs) != len(want) {
+		t.Fatalf("outer-shell tokenization of %q = %v, want %v", rewritten, outerArgs, want)
+	}
+	for i := range want {
+		if outerArgs[i] != want[i] {
+			t.Errorf("outer-shell token[%d] = %q, want %q (full: %v)", i, outerArgs[i], want[i], outerArgs)
+		}
+	}
+}
+
+// TestRunExecHook_ComposesDistillAutopipe is the regression check for the
+// dual-hook race found reviewing issue 119: with HARNEZ_DISTILL_AUTOPIPE
+// set, this single hook must apply distill's own noisy-command rewrite
+// itself rather than relying on a second, separately-installed
+// PreToolUse/Bash hook (Claude Code does not compose two hooks'
+// updatedInput rewrites on the same matcher).
+func TestRunExecHook_ComposesDistillAutopipe(t *testing.T) {
+	t.Setenv("HARNEZ_DISTILL_AUTOPIPE", "true")
+	in := strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"go test ./..."}}`)
+	var out bytes.Buffer
+	if err := runExecHook(in, &out); err != nil {
+		t.Fatalf("runExecHook() error = %v", err)
+	}
+	var got hookOutput
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("output not valid JSON: %v\n%s", err, out.String())
+	}
+	rewritten := got.HookSpecificOutput.UpdatedInput["command"]
+	if !strings.Contains(rewritten, "harnez distill") {
+		t.Errorf("updatedInput.command = %q, want it to route through harnez distill (autopipe enabled)", rewritten)
+	}
+	if !strings.HasPrefix(rewritten, "harnez exec --tool Bash -- bash -c ") {
+		t.Errorf("updatedInput.command = %q, want it still wrapped by harnez exec", rewritten)
 	}
 }
 

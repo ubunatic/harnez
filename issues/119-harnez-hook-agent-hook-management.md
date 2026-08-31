@@ -143,6 +143,31 @@ was implemented against a guessed schema:
   explicitly not built as a consequence of this — it remains a
   separate, unscheduled idea.
 
+## Post-review correction (same day)
+
+Review caught a real bug in the initial implementation (commit `51ebe41`):
+`config.yaml` installed **two** independent `PreToolUse`/`Bash` hooks —
+distill's existing one and this ticket's new telemetry one. Per Claude
+Code's own hooks-guide ("Limitations"), when multiple `PreToolUse` hooks
+on the same matcher each return `updatedInput`, they run in parallel and
+**the last one to finish wins, non-deterministically** — rewrites do not
+chain. With `HARNEZ_DISTILL_AUTOPIPE` enabled, this would have silently
+dropped one of the two rewrites on every Bash call, non-deterministically.
+
+Fixed by composing distill's rewrite *into* `harnez exec hook` itself
+(`cmd/harnez/exec.go`'s `distillAutopipeRewrite`, gated on the same
+`HARNEZ_DISTILL_AUTOPIPE` env var `harnez distill hook` already used) and
+removing the separate `harnez distill hook` entry from `config.yaml` —
+`apply` now installs exactly one `PreToolUse`/`Bash` hook. `harnez distill
+hook` the command still exists and works standalone; it's just not
+separately wired into `apply`'s managed hooks anymore. While fixing this,
+also found and fixed a related pre-existing bug in [[118]]'s hook rewrite
+(splicing the original command's raw tokens after `--`, which an outer
+`bash -c` re-interpreted, breaking on any command containing `|`, `&&`,
+`;`, etc.) — now wrapped as `bash -c '<original, quoted>'`. Both findings
+are documented in `docs/HookRewritePattern.md`. See commit(s) following
+`51ebe41` for the fix.
+
 ## Notes
 
 This ticket was filed against the source spec's assumed command shape

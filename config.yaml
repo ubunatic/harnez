@@ -84,14 +84,16 @@ permissions:
 hooks:
   - event: Stop
     command: "ffplay -nodisp -autoexit /usr/share/sounds/freedesktop/stereo/window-attention.oga 2>/dev/null || true"
-  # opt-in via HARNEZ_DISTILL_AUTOPIPE=true; no-op otherwise (see issue 069)
-  - event: PreToolUse
-    matcher: Bash
-    command: "harnez distill hook"
-  # telemetry: routes Bash calls through `harnez exec` for tool_calls
-  # recording (issue 116); always-on, not opt-in (see issue 118's
-  # newExecHookCmd) — installed by apply per issue 119's decision to
-  # extend this existing hooks-merge rather than add a new command
+  # telemetry (always-on) + distill autopipe (opt-in via
+  # HARNEZ_DISTILL_AUTOPIPE=true, see issue 069) in ONE PreToolUse/Bash
+  # hook: `harnez exec hook` composes distill's own rewrite internally
+  # before wrapping the result for tool_calls recording (issue 116/118).
+  # This is intentionally the ONLY PreToolUse/Bash hook apply installs —
+  # Claude Code does not compose two hooks' updatedInput rewrites on the
+  # same matcher (last one to finish wins, non-deterministically, per its
+  # hooks-guide "Limitations" section), so `harnez distill hook` is no
+  # longer separately wired in here even though the command still exists
+  # standalone. See docs/HookRewritePattern.md.
   - event: PreToolUse
     matcher: Bash
     command: "harnez exec hook"

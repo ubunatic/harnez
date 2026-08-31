@@ -21,6 +21,31 @@ This means a hook has no access to the eventual exit code, duration, or output b
 those only exist after Claude Code runs the (possibly rewritten) command, by which point
 the hook process has already exited.
 
+**Rewrites from multiple hooks on the same matcher do not compose.** Per Claude Code's
+hooks-guide ("Limitations"): when more than one `PreToolUse` hook matches the same tool
+and each returns `updatedInput`, the hooks run in parallel and **the last one to finish
+wins, non-deterministically** — there is no chaining, and no ordering guarantee from
+array order in `settings.json`. Found the hard way in
+[issues/119](../issues/119-harnez-hook-agent-hook-management.md): installing a second,
+independent `PreToolUse`/`Bash` hook alongside distill's existing one meant either
+rewrite could silently clobber the other depending on which process happened to exit
+last. **If a new feature needs to rewrite the same matcher an existing hook already
+covers, compose the rewrite logic into one hook command — do not add a second hook entry
+for the same event/matcher.** (`harnez exec hook` does this: it calls
+`internal/distill.RewriteBashCommand` itself, gated on the same `HARNEZ_DISTILL_AUTOPIPE`
+env var `harnez distill hook` uses, rather than relying on Claude Code to run both hooks.)
+
+**A rewritten command must stay one shell token if the original command isn't.** Claude
+Code re-executes the rewritten string via its own outer `bash -c`. Splicing the original
+command directly after `<feature> -- <command>` only works if `<command>` has no shell
+metacharacters — a pipe, `&&`, `;`, or unbalanced quoting in the original command gets
+re-interpreted by that *outer* shell instead of ever reaching the feature's own argv,
+silently breaking capture (or, for `&&`/`;`, silently running part of the command outside
+the wrapper entirely). Wrap the original command as one quoted argument to an inner shell
+instead: `<feature> -- bash -c '<original, single-quote-escaped>'` (see
+`cmd/harnez/exec.go`'s `shellQuote`, or distill's own approach of embedding the original
+command inline inside one larger shell string, `internal/distill/hook.go`).
+
 ## The pattern: rewrite now, capture later
 
 Split the feature into two stages, each a separate CLI entry point with its own stdin
@@ -52,10 +77,15 @@ and `docs/CLIDesign.md`'s apply/init split).
   the exit code.
 
 The hook entry itself is declarative config, not code: `apply` writes it into
-`~/.claude/settings.json` from `config.yaml:90` (`command: "harnez distill hook"`).
-Installing the hook is `apply`'s job (its existing managed-`"hooks"`-key merge in
-`internal/claude/apply.go`); the hook only becomes active per-project/per-user once
-the opt-in env var is set — `apply` can ship it globally as a no-op.
+`~/.claude/settings.json` from `config.yaml`'s `hooks:` list. Installing the hook is
+`apply`'s job (its existing managed-`"hooks"`-key merge in `internal/claude/apply.go`).
+
+**Since issue 119, `apply` installs only one `PreToolUse`/`Bash` hook: `harnez exec
+hook`** (see `cmd/harnez/exec.go`). It composes distill's rewrite internally (calling
+`internal/distill.RewriteBashCommand` when `HARNEZ_DISTILL_AUTOPIPE` is set) before
+wrapping the result for `harnez exec`'s telemetry capture — per the composability
+constraint above, `harnez distill hook` is no longer separately installed by `apply`,
+even though the command still exists and works standalone for direct/manual use.
 
 ## Applying it to a new feature
 
