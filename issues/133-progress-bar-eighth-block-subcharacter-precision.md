@@ -1,6 +1,6 @@
 # 133 — Sub-character precision for narrow progress bars using eighth-block glyphs
 
-**Status**: Open
+**Status**: Closed — resolved in `5fd2efb`, `c7c5fdf`, `0666758`
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
@@ -58,23 +58,41 @@ leaning on glyph dimness.
 
 ## Acceptance Criteria
 
-- [ ] `RenderProgressBar` renders a partial-eighth glyph at the fill
+- [x] `RenderProgressBar` renders a partial-eighth glyph at the fill
       boundary instead of always snapping to a whole block.
-- [ ] Fully-filled and fully-empty characters away from the boundary are
+- [x] Fully-filled and fully-empty characters away from the boundary are
       unchanged (still `█` / empty glyph) — only the boundary character
       gains precision.
-- [ ] Bar width and existing `[...]` wrapping contract unchanged; existing
+- [x] Bar width and existing `[...]` wrapping contract unchanged; existing
       callers in `usage.go` and `watch.go` need no changes unless they
       opt into the new background option.
-- [ ] `RenderBar`/`RenderProgressBar` gain an ANSI-background option
+- [x] `RenderBar`/`RenderProgressBar` gain an ANSI-background option
       matching `RenderSparkline`'s `\x1b[100m`-style wrap (same default
       SGR code, same opt-in `ANSI`/`BackgroundANSI` shape) rather than
       relying on the empty glyph's visual dimness for contrast.
-- [ ] The 4-char All Usage bars in `watch.go` opt into the new background
+- [x] The 4-char All Usage bars in `watch.go` opt into the new background
       option so they visually match the sparklines' existing panel
       background.
-- [ ] Unit tests cover boundary rounding at multiple percentages per bar
+- [x] Unit tests cover boundary rounding at multiple percentages per bar
       width (e.g. width=4 at 0%, 12.5%, 24%, 26%, 49%, 51%, 100%) asserting
       the correct eighth-block glyph appears at the boundary character.
-- [ ] `go test -race ./internal/rograph/... ./internal/usage/...` passes
+- [x] `go test -race ./internal/rograph/... ./internal/usage/...` passes
       clean.
+
+## Resolution
+
+Consolidated `RenderProgressBar` (`internal/rograph/bar.go`) to delegate
+to `RenderBar`'s options-based path (`internal/rograph/options.go`),
+adding two new `BarOptions` fields: `SubChar` (eighth-block boundary
+precision, applied only when using the default `█`/`░` glyphs) and
+`ANSI`/`BackgroundANSI` (background wrap matching `RenderSparkline`'s
+convention, default SGR `"100"`). `RenderProgressBar` always passes
+`SubChar: true` (that's the ticket's core behavior change to its default
+output); the ANSI background stays fully opt-in via `BarOptions`, so
+`RenderProgressBar`'s signature and existing callers who don't switch to
+`RenderBar` are unaffected. The four 4-char All Usage bar call sites in
+`internal/usage/watch.go` were switched from `RenderProgressBar` to
+`RenderBar(..., rograph.BarOptions{Width: 4, SubChar: true, ANSI: true})`.
+Commits: `5fd2efb` (eighth-block precision), `c7c5fdf` (watch bar test
+updates for the new precision), `0666758` (ANSI background wiring in
+watch.go).
