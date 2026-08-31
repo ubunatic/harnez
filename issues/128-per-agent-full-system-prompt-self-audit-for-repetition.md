@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [[040-agent-context-duplication-and-file-read-discipline]], [[122-agent-instruction-tool-feedback-protocol]], [[075-concisemode-promote-doc-to-real-skill]], [docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md](../docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md)
+**Related**: [[040-agent-context-duplication-and-file-read-discipline]], [[122-agent-instruction-tool-feedback-protocol]], [[075-concisemode-promote-doc-to-real-skill]], [docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md](../docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md), [docs/studies/2026-08-31-agy-clean-session-system-prompt-audit.md](../docs/studies/2026-08-31-agy-clean-session-system-prompt-audit.md)
 
 ## Problem
 
@@ -43,7 +43,10 @@ We have no per-agent visibility into:
 - Start with Claude Code (this harness); expand to other supported agent
   environments (e.g. Prime Agent / `~/.prime/agent`, others in
   `docs/README.md`'s agent list) only after the Claude Code pass validates
-  the method.
+  the method. **Done for agy (Antigravity)** — see the agy study linked
+  above; `harnez rate` enforcement is explicitly out of scope for agy since
+  it isn't wired up there yet (122 only covers Claude Code), so that pass
+  only checked repetition/prunability, not directive-following.
 - Ask the agent to report:
   1. Approximate token/line count per layer (harness-native, global
      harnez-managed, project-managed, per-doc).
@@ -80,19 +83,23 @@ We have no per-agent visibility into:
       generic/model-native content flagged as removable, and a list of
       harness-native content flagged as non-removable-but-overridable.
       **Partial**: the clean-baseline pass (harness-native layer only, no
-      project docs loaded) is done — see the study, §2-3. The with-project-
-      docs pass (this repo's full `CLAUDE.md`/`AGENTS.local.md`/bundled-docs
-      stack) is still open.
+      project docs loaded) is done for both Claude Code and agy — see the
+      two linked studies. The with-project-docs pass (this repo's full doc
+      stack, as each harness would actually load it) is still open for
+      both agents.
 - [x] Findings are written up in `docs/studies/` (per `docs/Markdown.md`'s
       evergreen/ephemeral split) rather than left only in chat, since this
       is background/reference material for later trimming work. See
       [docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md](../docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md).
 - [ ] Follow-up tickets are filed for each concrete trim/consolidation
-      opportunity found (do not attempt the trims inside this ticket). Three
-      candidates identified in the study's §5 (drop Write-tool's inline
+      opportunity found (do not attempt the trims inside this ticket).
+      Candidates so far: Claude Code study §5 (drop Write-tool's inline
       emoji restatement; consider merging "Tone and style" and "Text
       output"; require example+trigger for future global side-effecting
-      directives) — not yet filed as separate tickets.
+      directives); agy study §4-5 (collapse the anti-polling / "stop
+      calling tools" pair into `<messaging>`, pull the copy embedded in the
+      `schedule` tool's JSON schema out into that same prose section) —
+      none yet filed as separate tickets.
 
 ## Notes
 
