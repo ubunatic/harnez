@@ -46,6 +46,16 @@ type BarOptions struct {
 	BackgroundANSI string
 }
 
+// DefaultBackgroundANSI is the SGR background code RenderBar and
+// RenderSparkline fall back to when ANSI is true and the caller leaves
+// BackgroundANSI empty. It starts at "100" (bright-black) but is meant to
+// be overridden once, at process start, by a caller that resolves the
+// actual value from a color spec -- see internal/usage/colorsspec.go's
+// init(), which sets this from spec/colors.yaml's "panel-bg" entry.
+// rograph stays dependency-free (package doc, bar.go) by only exposing a
+// plain string var here rather than any spec-loading machinery of its own.
+var DefaultBackgroundANSI = "100"
+
 // eighthBlockGlyphs are the horizontal eighth-block glyphs used for a
 // sub-character fill boundary, 1/8 through 8/8 width.
 var eighthBlockGlyphs = []rune("▏▎▍▌▋▊▉█")
@@ -139,24 +149,25 @@ func RenderBar(value float64, opts BarOptions) string {
 		glyphs = strings.Repeat(string(fill), filledCount) + strings.Repeat(string(empty), width-filledCount)
 	}
 
+	glyphOut := glyphs
+	if opts.ANSI {
+		code := opts.BackgroundANSI
+		if code == "" {
+			code = DefaultBackgroundANSI
+		}
+		glyphOut = "\x1b[" + code + "m" + glyphs + "\x1b[0m"
+	}
+
 	var b strings.Builder
 	b.WriteString(left)
-	b.WriteString(glyphs)
+	b.WriteString(glyphOut)
 	b.WriteString(right)
 	if opts.IncludePercent {
 		b.WriteByte(' ')
 		b.WriteString(FormatPercent(pct, opts.PercentPrecision))
 	}
 
-	out := b.String()
-	if opts.ANSI {
-		code := opts.BackgroundANSI
-		if code == "" {
-			code = "100"
-		}
-		out = "\x1b[" + code + "m" + out + "\x1b[0m"
-	}
-	return out
+	return b.String()
 }
 
 // RenderSparkline renders the most recent values as one terminal glyph per
@@ -183,7 +194,7 @@ func RenderSparkline(values []float64, opts SparklineOptions) string {
 	}
 	code := opts.BackgroundANSI
 	if code == "" {
-		code = "100"
+		code = DefaultBackgroundANSI
 	}
 	return "\x1b[" + code + "m" + out + "\x1b[0m"
 }

@@ -112,17 +112,34 @@ func TestRenderBarSubCharIgnoresCustomGlyphs(t *testing.T) {
 	}
 }
 
+// TestRenderBarANSIBackground guards issue 136's bracket-leak fix: the ANSI
+// background wraps only the glyph portion, so "[" and "]" (and, in a
+// separate test below, any IncludePercent label) stay outside the escape
+// sequence -- matching RenderSparkline/PercentSparkline's existing
+// glyph-only wrap convention rather than coloring the whole "[glyphs]"
+// string.
 func TestRenderBarANSIBackground(t *testing.T) {
 	got := RenderBar(50, BarOptions{Width: 4, ANSI: true})
-	want := "\x1b[100m[██░░]\x1b[0m"
+	want := "[" + "\x1b[100m" + "██░░" + "\x1b[0m" + "]"
 	if got != want {
 		t.Errorf("RenderBar ANSI default = %q, want %q", got, want)
 	}
 
 	got = RenderBar(50, BarOptions{Width: 4, ANSI: true, BackgroundANSI: "44"})
-	want = "\x1b[44m[██░░]\x1b[0m"
+	want = "[" + "\x1b[44m" + "██░░" + "\x1b[0m" + "]"
 	if got != want {
 		t.Errorf("RenderBar ANSI custom code = %q, want %q", got, want)
+	}
+}
+
+// TestRenderBarANSIKeepsPercentLabelOutsideWrap covers the IncludePercent
+// case explicitly called out in issue 136's acceptance criteria: the label
+// renders after the closing bracket, outside the ANSI escape.
+func TestRenderBarANSIKeepsPercentLabelOutsideWrap(t *testing.T) {
+	got := RenderBar(50, BarOptions{Width: 4, ANSI: true, IncludePercent: true})
+	want := "[" + "\x1b[100m" + "██░░" + "\x1b[0m" + "]" + " 50%"
+	if got != want {
+		t.Errorf("RenderBar ANSI with percent label = %q, want %q", got, want)
 	}
 }
 
