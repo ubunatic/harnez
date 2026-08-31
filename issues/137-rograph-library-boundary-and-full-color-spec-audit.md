@@ -1,6 +1,6 @@
 # 137 — Harden `rograph` as a standalone library; move every ANSI color/style code into spec/
 
-**Status**: Open
+**Status**: Closed — resolved in 6c05b52 (code); docs closed in this commit (best guess, per issue 126)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Refactor
@@ -64,19 +64,67 @@ Two related gaps, found while fixing issue 136:
 
 ## Acceptance Criteria
 
-- [ ] `internal/rograph` has a written package-boundary rule: no spec/
+- [x] `internal/rograph` has a written package-boundary rule: no spec/
       embedding, no `internal/usage` imports, stays a generic,
       dependency-free rendering library.
-- [ ] Every SGR color/style literal in `internal/usage/watch.go` and
+- [x] Every SGR color/style literal in `internal/usage/watch.go` and
       `internal/usage/usage.go` is replaced with a named lookup against
       `spec/colors.yaml`, with no behavior change to the actual rendered
       colors (a refactor, not a redesign) unless a specific difference is
       deliberately called out.
-- [ ] `maketargets.go`'s cyan is either included in the spec or explicitly
+- [x] `maketargets.go`'s cyan is either included in the spec or explicitly
       exempted with a documented reason.
-- [ ] Terminal control sequences are unaffected — confirm none were
+- [x] Terminal control sequences are unaffected — confirm none were
       accidentally swept into the color spec.
-- [ ] `go build ./...`, `go vet ./...` clean.
-- [ ] `go test -race ./internal/rograph/... ./internal/usage/... ./internal/claude/...`
+- [x] `go build ./...`, `go vet ./...` clean.
+- [x] `go test -race ./internal/rograph/... ./internal/usage/... ./internal/claude/...`
       passes clean.
-- [ ] `harnez status` confirms tracker sync after filing/closing.
+- [x] `harnez status` confirms tracker sync after filing/closing.
+
+## Resolution
+
+Landed in three commits: `8868937` (rograph package-boundary doc),
+`675daf7` (spec/colors.yaml + colorsspec.go extension), `6c05b52`
+(call-site sweep + maketargets.go decision).
+
+**Named spec/colors.yaml entries** (final set): `panel-bg` (SGR 100,
+from issue 136), `bold` (SGR 1), `dim-grey` (SGR 90, "bright black"
+foreground), `dim-faint` (SGR 2, the faint/decreased-intensity
+attribute). `\x1b[0m` reset stays a raw literal at call sites, per
+issue 136's existing convention — it's the universal SGR closer, not a
+color/style choice, so it doesn't get a spec entry.
+
+**`dim`/`2` vs `90` naming decision**: kept as two distinct spec
+entries rather than one. SGR 90 ("bright black") is a foreground
+*color* substitution; SGR 2 ("faint") is a rendering *attribute*
+applied on top of whatever foreground color is already active. They
+can look similar in some terminals but are mechanically different and
+not always interchangeable (e.g. a terminal that ignores faint
+entirely still renders SGR 90's grey). `dim-grey` (90) is used
+throughout the watch TUI (hint lines, placeholders, footer text);
+`dim-faint` (2) is used only for the agent-sources list in
+`harnez usage`'s non-watch output — genuinely distinct call sites in
+distinct rendering contexts, so distinct names.
+
+**`maketargets.go`'s cyan decision**: left as a raw `\033[36m` literal,
+not folded into `spec/colors.yaml`, with the reasoning recorded inline
+at `ensureColorVariables`. It's Make variable *content* generated for
+other projects' `make help`-style output — a different subsystem,
+audience, and color language than harnez's own `usage --watch` TUI.
+Coupling an external Makefile's help-text color convention to harnez's
+internal TUI palette would be a layering mistake for no real benefit,
+so it stays a documented, deliberate exception rather than a silent
+gap.
+
+**Other fix along the way**: `internal/rograph/sparkline.go`'s
+`PercentSparkline` independently hardcoded `"\x1b[100m"` instead of
+using `DefaultBackgroundANSI` — the same duplication issue 136 fixed
+in `RenderBar`. Fixed in the same sweep since it's the exact bug
+pattern this ticket exists to close out, and it stays fully inside
+`internal/rograph`'s own boundary (uses the package's own exported var,
+no spec-loading machinery added).
+
+Verification: `go build ./...`, `go vet ./...` clean; full `go test
+./...` and targeted `go test -race ./internal/rograph/...
+./internal/usage/... ./internal/claude/...` both pass. `make install`
+run after the code changes.
