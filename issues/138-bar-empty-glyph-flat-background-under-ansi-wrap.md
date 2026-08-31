@@ -1,6 +1,6 @@
 # 138 — Bar empty cells use a flat space under the ANSI background, not `░`
 
-**Status**: Closed — resolved in `<pending>` (this commit)
+**Status**: Closed — resolved in `b6f0cbf`
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
