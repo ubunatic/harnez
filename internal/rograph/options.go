@@ -60,11 +60,20 @@ var DefaultBackgroundANSI = "100"
 // sub-character fill boundary, 1/8 through 8/8 width.
 var eighthBlockGlyphs = []rune("▏▎▍▌▋▊▉█")
 
-// eighthBlockFill renders width default-glyph characters ('█'/'░') with the
-// single boundary character rendered at eighth-block precision rather than
-// snapped to fully filled or fully empty. pct must already be clamped to
-// [0, 100].
-func eighthBlockFill(pct float64, width int) string {
+// eighthBlockFill renders width default-glyph characters with the single
+// boundary character rendered at eighth-block precision rather than snapped
+// to fully filled or fully empty. pct must already be clamped to [0, 100].
+//
+// emptyRune is the character used for cells past the boundary that are
+// fully empty. Callers with an ANSI background wrap (RenderBar's ANSI
+// option) should pass a plain space: with the background already covering
+// the whole glyph run, a space reads as flat panel-bg with no ink, whereas
+// '░' draws its own low-density stipple in the foreground color on top of
+// that background — a third, unintended visual tone distinct from both the
+// solid '█' fill and the flat background. Callers rendering without a
+// background wrap should keep '░' so the bar's empty region stays visible
+// on a plain terminal with no color support.
+func eighthBlockFill(pct float64, width int, emptyRune rune) string {
 	totalEighths := int(float64(width*8) * (pct / 100))
 	if totalEighths < 0 {
 		totalEighths = 0
@@ -85,11 +94,11 @@ func eighthBlockFill(pct float64, width int) string {
 	b.WriteString(strings.Repeat("█", fullChars))
 	if fullChars < width {
 		if remainder == 0 {
-			b.WriteRune('░')
+			b.WriteRune(emptyRune)
 		} else {
 			b.WriteRune(eighthBlockGlyphs[remainder-1])
 		}
-		b.WriteString(strings.Repeat("░", width-fullChars-1))
+		b.WriteString(strings.Repeat(string(emptyRune), width-fullChars-1))
 	}
 	return b.String()
 }
@@ -137,7 +146,15 @@ func RenderBar(value float64, opts BarOptions) string {
 
 	var glyphs string
 	if opts.SubChar && fill == '█' && empty == '░' {
-		glyphs = eighthBlockFill(pct, width)
+		emptyRune := empty
+		if opts.ANSI {
+			// The background wrap below already covers the whole glyph
+			// run, so a flat space (no ink) reads as pure panel-bg here
+			// instead of '░''s own stipple pattern layering a third tone
+			// on top of it. See eighthBlockFill's doc comment.
+			emptyRune = ' '
+		}
+		glyphs = eighthBlockFill(pct, width, emptyRune)
 	} else {
 		filledCount := int(float64(width) * (pct / 100))
 		if filledCount < 0 {

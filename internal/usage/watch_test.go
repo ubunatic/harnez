@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // TestBuildWatchFrameRowsFitWidth guards the layout bug that broke `--watch`:
@@ -335,15 +336,18 @@ func TestBuildAllUsageBox(t *testing.T) {
 		t.Fatalf("expected 4 all-usage rows, got %d: %v", len(box.lines), box.lines)
 	}
 
-	// The mid column is padded to a fixed width (10) so the second [░░░░] bar
+	// The mid column is padded to a fixed width (10) so the second [    ] bar
 	// starts at the same column in every row — that's the alignment guarantee
 	// this test verifies. "93% 2d8h" (8 chars) pads to 10 → 2 trailing spaces;
-	// "85% 8h51m" (9 chars) pads to 10 → 1 trailing space.
+	// "85% 8h51m" (9 chars) pads to 10 → 1 trailing space. Empty bar cells
+	// render as a plain space, not '░', under the ANSI background wrap (issue
+	// 136 follow-up — see eighthBlockFill's doc comment in
+	// internal/rograph/options.go).
 	want := []string{
-		"Gemini        [███▋] 93% 2d8h   [░░░░] 3% 4h58m",
-		"Claude/GPT    [█▍░░] 35% 6d2h   [░░░░] 0% 4h58m",
-		"Claude Code   [███▍] 85% 8h51m  [▎░░░] 9% 4h51m",
-		"OpenAI Codex  [█▌░░] 39% 5d9h   [░░░░] 0% 4h59m",
+		"Gemini        [███▋] 93% 2d8h   [    ] 3% 4h58m",
+		"Claude/GPT    [█▍  ] 35% 6d2h   [    ] 0% 4h58m",
+		"Claude Code   [███▍] 85% 8h51m  [▎   ] 9% 4h51m",
+		"OpenAI Codex  [█▌  ] 39% 5d9h   [    ] 0% 4h59m",
 	}
 	for i := range want {
 		if got := stripANSI(box.lines[i]); got != want[i] {
@@ -435,8 +439,10 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 
 	// With mid-column padded to 10 chars for alignment, width=51 (contentW=47)
 	// is tight enough that the second window's duration (d2) must be dropped on
-	// the Claude row to stay within contentW. The second [░░░░] bar must still
-	// appear and must align at the same column in both rows.
+	// the Claude row to stay within contentW. The second [    ] bar must still
+	// appear and must align at the same column in both rows. Empty cells render
+	// as a plain space (not '░') under the ANSI background wrap — see
+	// eighthBlockFill's doc comment in internal/rograph/options.go.
 	secondBarCol := -1
 	for _, line := range box.lines {
 		stripped := stripANSI(line)
@@ -444,26 +450,30 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 			t.Fatalf("line visible width %d exceeds contentW %d: %q", got, contentW, stripped)
 		}
 		// Both bars must still be present.
-		if !strings.Contains(stripped, "[░░░░]") && !strings.Contains(stripped, "[█") {
+		if !strings.Contains(stripped, "[    ]") && !strings.Contains(stripped, "[█") {
 			t.Fatalf("expected second bar to remain visible in narrow row: %q", stripped)
 		}
 		switch {
 		case strings.Contains(stripped, "Claude Code"):
 			// d2 dropped to fit; d1 kept; percent shown.
-			if !strings.Contains(stripped, "[███▍]") || !strings.Contains(stripped, "85%") || !strings.Contains(stripped, "[▍░░░]") || !strings.Contains(stripped, "11%") {
+			if !strings.Contains(stripped, "[███▍]") || !strings.Contains(stripped, "85%") || !strings.Contains(stripped, "[▍   ]") || !strings.Contains(stripped, "11%") {
 				t.Fatalf("expected Claude second bar and percent to remain visible in narrow row: %q", stripped)
 			}
 		case strings.Contains(stripped, "OpenAI Codex"):
-			if !strings.Contains(stripped, "[▌░░░]") || !strings.Contains(stripped, "13%") {
+			if !strings.Contains(stripped, "[▌   ]") || !strings.Contains(stripped, "13%") {
 				t.Fatalf("expected Codex second bar and percent to remain visible in narrow row: %q", stripped)
 			}
 		default:
 			t.Fatalf("unexpected all-usage row: %q", stripped)
 		}
-		col := strings.LastIndex(stripped, "[")
-		if col < 0 {
+		// Rune-count column, not byte offset: the bar glyphs mix 1-byte
+		// spaces and 3-byte UTF-8 block characters, so a raw byte index
+		// no longer corresponds to a visual column.
+		byteIdx := strings.LastIndex(stripped, "[")
+		if byteIdx < 0 {
 			t.Fatalf("expected second bar in row: %q", stripped)
 		}
+		col := utf8.RuneCountInString(stripped[:byteIdx])
 		if secondBarCol < 0 {
 			secondBarCol = col
 			continue
@@ -532,11 +542,14 @@ func TestAllUsageBoxSecondBarColumnAlignment(t *testing.T) {
 					t.Errorf("line width %d > contentW %d: %q", got, contentW, stripped)
 				}
 				// The second progress bar is the last '[' in the stripped line.
-				col := strings.LastIndex(stripped, "[")
-				if col < 0 {
+				// Rune-count column, not byte offset: bar glyphs mix 1-byte
+				// spaces and 3-byte UTF-8 block characters.
+				byteIdx := strings.LastIndex(stripped, "[")
+				if byteIdx < 0 {
 					t.Errorf("no second bar found in row: %q", stripped)
 					continue
 				}
+				col := utf8.RuneCountInString(stripped[:byteIdx])
 				if secondBarCol < 0 {
 					secondBarCol = col
 					continue
@@ -624,9 +637,12 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 	if strings.Contains(frameText, "² Claude Code") {
 		t.Fatalf("expected compact frame to hide individual Claude box, got:\n%s", frameText)
 	}
-	// Mid-column padded to 10 chars → "85% 8h51m " (10) + " " + "[░░░░]" = 2 spaces before second bar.
-	// Bars carry an ANSI background wrap (issue 133), so strip escapes before matching.
-	if !strings.Contains(stripANSI(frameText), "Claude Code  [███▍] 85% 8h51m  [▎░░░] 9% 4h51m") {
+	// Mid-column padded to 10 chars → "85% 8h51m " (10) + " " + "[    ]" = 2 spaces before second bar.
+	// Bars carry an ANSI background wrap (issue 133); empty cells render as a
+	// plain space under that wrap rather than '░' (issue 136 follow-up — see
+	// eighthBlockFill's doc comment in internal/rograph/options.go), so strip
+	// escapes before matching.
+	if !strings.Contains(stripANSI(frameText), "Claude Code  [███▍] 85% 8h51m  [▎   ] 9% 4h51m") {
 		t.Fatalf("expected compact all-usage row to keep short-window time at 100 columns, got:\n%s", frameText)
 	}
 	if !strings.Contains(frameText, "[?]controls") || !strings.Contains(frameText, "[m]ode") {
