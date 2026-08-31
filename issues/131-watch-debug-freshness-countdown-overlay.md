@@ -44,10 +44,13 @@ schedule, rather than watching total request latency alone.
 
 ## Scope
 
-- Add a new hotkey, `!`, to the key-handling switch in `watch.go` (alongside
-  the existing `q`/`r`/`c`/`g`/`o`/`h`/`t`/`p`/`l`/`a` cases around
-  `watch.go:476-529`) that toggles a "debug overlay" mode on the current
-  watch session (in-process state, not persisted).
+- Issue 132 has landed (spec-driven hotkey registry, `spec/actions.yaml` +
+  `internal/usage/actionsspec.go`, numbered box toggles `1`-`7`, letter
+  aliases `C`/`G`/`O`/`H`/`P`/`L` dropped). Add `!` to `spec/actions.yaml`
+  as a new action (not a hardcoded Go `switch` case) that toggles a "debug
+  overlay" mode on the current watch session (in-process state, not
+  persisted), following the pattern 132 established for wiring spec-driven
+  keys into `applyWatchSectionKey`/`dispatchWatchKey`.
 - While debug overlay mode is on, each agent row's label has its **last 3
   characters replaced** (not appended — no width/box resize) with a 3-char
   countdown gauge, e.g. `[▁]`/`[▄]`/`[█]`-style glyphs from the existing
