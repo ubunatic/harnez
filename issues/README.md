@@ -122,3 +122,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 121 | [121-multi-repo-session-and-ticket-id-resolution.md](121-multi-repo-session-and-ticket-id-resolution.md) | Multi-repo session & ticket ID resolution strategy | Closed — resolved |
 | 122 | [122-agent-instruction-tool-feedback-protocol.md](122-agent-instruction-tool-feedback-protocol.md) | Agent instruction template: Tool Feedback Protocol injection | Closed — resolved in f158a98 |
 | 123 | [123-session-wrapping-supervisor-for-agents-without-hook-rewrite.md](123-session-wrapping-supervisor-for-agents-without-hook-rewrite.md) | `harnez run <agent>`: session-wrapping supervisor for agents without hook-rewrite support | Open — not scheduled |
+| 124 | [124-posttooluse-internal-tool-call-auto-capture.md](124-posttooluse-internal-tool-call-auto-capture.md) | `PostToolUse` hook: auto-capture internal-tool call counts without a score | Open |
