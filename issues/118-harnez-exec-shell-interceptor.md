@@ -34,6 +34,13 @@ harnez exec --tool <tool_name> [--ticket <ticket_id>] -- <command...>
   whatever byte-count signal distill already exposes or can be made to
   expose with a minimal addition.
 - Writes one row via [[116]] with `call_type = 'shell'`.
+- Also add `harnez exec hook` (mirroring `harnez distill hook`,
+  `cmd/harnez/distill.go`'s `newDistillHookCmd`/`runDistillHook`): a
+  stdin-driven endpoint that reads an agent's tool-use hook payload and
+  writes the equivalent telemetry row. This is the target [[119]]'s
+  `apply`-managed hook entries actually invoke — the direct
+  `harnez exec --tool ... -- <command>` form above is for manual/scripted
+  use, not what the installed hook calls.
 
 ## Acceptance Criteria
 

@@ -24,11 +24,13 @@ every internal tool use.
   - Score 3: Partial success / required adjustment.
   - Score 1: Total failure / useless output.
   ```
-- Wire injection into [[119]]'s `harnez hook install` flow (or `harnez
-  init`'s doc-copy mechanism, per this repo's existing `apply`/`init`
-  split — see `docs/CLIDesign.md`) rather than a third, separate
-  mechanism. Decide which at implementation time based on where other
-  per-agent instruction snippets currently live.
+- Per [[119]]'s 2026-08-31 decision (no standalone `harnez hook`
+  command), wire injection into `apply`'s existing per-agent config
+  writes — the same managed-sections mechanism `apply` already uses to
+  write `~/.claude/CLAUDE.md`, `~/.prime/agent/AGENTS.md`, etc. (see
+  `docs/CLIDesign.md`'s `apply flow`) — rather than `init`'s doc-copy
+  mechanism, since this snippet targets *other projects'* agent
+  configs globally, not this repo's own `init`-scaffolded project docs.
 - Must not duplicate or conflict with this project's own
   `AGENTS.md`/`CLAUDE.md` generation conventions (`docs/Markdown.md`,
   the `apply`/`init` CLI split) — this is agent-facing instruction
@@ -37,9 +39,11 @@ every internal tool use.
 
 ## Acceptance Criteria
 
-- [ ] Snippet is injected idempotently (repeated `hook install` doesn't
-      duplicate the block).
-- [ ] Snippet removal is covered by `harnez hook uninstall` (119).
+- [ ] Snippet is injected idempotently (repeated `apply` runs don't
+      duplicate the block), matching `apply`'s existing managed-section
+      idempotency.
+- [ ] Snippet removal is covered by `harnez clean` (119), matching how
+      other managed sections are stripped.
 - [ ] Token count of the injected block roughly matches the spec's
       ~25-token estimate (sanity check, not a hard gate).
 
