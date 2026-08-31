@@ -625,7 +625,8 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 		t.Fatalf("expected compact frame to hide individual Claude box, got:\n%s", frameText)
 	}
 	// Mid-column padded to 10 chars → "85% 8h51m " (10) + " " + "[░░░░]" = 2 spaces before second bar.
-	if !strings.Contains(frameText, "Claude Code  [███▍] 85% 8h51m  [▎░░░] 9% 4h51m") {
+	// Bars carry an ANSI background wrap (issue 133), so strip escapes before matching.
+	if !strings.Contains(stripANSI(frameText), "Claude Code  [███▍] 85% 8h51m  [▎░░░] 9% 4h51m") {
 		t.Fatalf("expected compact all-usage row to keep short-window time at 100 columns, got:\n%s", frameText)
 	}
 	if !strings.Contains(frameText, "[?]controls") || !strings.Contains(frameText, "[m]ode") {

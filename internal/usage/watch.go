@@ -708,8 +708,8 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 	d1 := compactDurationText(w1)
 	d2 := compactDurationText(w2)
 
-	b1 := rograph.RenderProgressBar(w1.UsedPercent, 4)
-	b2 := rograph.RenderProgressBar(w2.UsedPercent, 4)
+	b1 := rograph.RenderBar(w1.UsedPercent, rograph.BarOptions{Width: 4, SubChar: true, ANSI: true})
+	b2 := rograph.RenderBar(w2.UsedPercent, rograph.BarOptions{Width: 4, SubChar: true, ANSI: true})
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
 
 	midBlock := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w1.UsedPercent, d1))
@@ -1165,7 +1165,7 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 			resetStr = " " + FormatCompactDuration(w.DurationLeft)
 		}
 		lbl := rograph.PadLabel(label, labelWidth)
-		bar := rograph.RenderProgressBar(w.UsedPercent, 4)
+		bar := rograph.RenderBar(w.UsedPercent, rograph.BarOptions{Width: 4, SubChar: true, ANSI: true})
 		line := fmt.Sprintf("%s %s %3.0f%%%s", lbl, bar, w.UsedPercent, resetStr)
 		if visLen(line) > contentW {
 			line = fmt.Sprintf("%s %s %3.0f%%", lbl, bar, w.UsedPercent)
@@ -1196,8 +1196,8 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 	d2 := compactDurationText(w2)
 
 	lbl := rograph.PadLabel(label, labelWidth)
-	b1 := rograph.RenderProgressBar(w1.UsedPercent, 4)
-	b2 := rograph.RenderProgressBar(w2.UsedPercent, 4)
+	b1 := rograph.RenderBar(w1.UsedPercent, rograph.BarOptions{Width: 4, SubChar: true, ANSI: true})
+	b2 := rograph.RenderBar(w2.UsedPercent, rograph.BarOptions{Width: 4, SubChar: true, ANSI: true})
 
 	midBlock := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w1.UsedPercent, d1))
 	midStr := rograph.PadLabel(midBlock, 10)
