@@ -114,7 +114,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 113 | [113-record-collector-roundtrip-times-usage-meta.md](113-record-collector-roundtrip-times-usage-meta.md) | Record per-collector roundtrip times; expose via `harnez usage --meta` | Open |
 | 114 | [114-remote-load-stream-drops-to-batch-stdin-eof-false-trigger.md](114-remote-load-stream-drops-to-batch-stdin-eof-false-trigger.md) | Remote Load stream drops to batch shortly after connecting: stdin-EOF false-triggers shutdown | Open |
 | 115 | [115-canary-duckdb-go-embedding-for-tool-telemetry.md](115-canary-duckdb-go-embedding-for-tool-telemetry.md) | Canary: evaluate DuckDB Go embedding for tool-call telemetry storage | Closed — no-go, alternative named |
-| 116 | [116-tool-telemetry-schema-and-storage-layer.md](116-tool-telemetry-schema-and-storage-layer.md) | Tool telemetry schema & storage layer (`tool_calls` table) | Closed — resolved in PENDING_COMMIT |
+| 116 | [116-tool-telemetry-schema-and-storage-layer.md](116-tool-telemetry-schema-and-storage-layer.md) | Tool telemetry schema & storage layer (`tool_calls` table) | Closed — resolved in 6cd33b0 |
 | 117 | [117-harnez-rate-command.md](117-harnez-rate-command.md) | `harnez rate`: positional internal-tool rating command | Open |
 | 118 | [118-harnez-exec-shell-interceptor.md](118-harnez-exec-shell-interceptor.md) | `harnez exec`: shell execution interceptor with telemetry capture | Open |
 | 119 | [119-harnez-hook-agent-hook-management.md](119-harnez-hook-agent-hook-management.md) | Fold telemetry-hook install into `apply`; runtime endpoint via `harnez exec hook` | Open |

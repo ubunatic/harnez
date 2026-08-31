@@ -1,6 +1,6 @@
 # 116 — Tool telemetry schema & storage layer (`tool_calls` table)
 
-**Status**: Closed — resolved in PENDING_COMMIT
+**Status**: Closed — resolved in 6cd33b0
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
