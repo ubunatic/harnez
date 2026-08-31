@@ -4,7 +4,28 @@
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
-**Related**: `internal/usage/watch.go`, `internal/usage/statecache.go` (`DefaultCollectorInterval`), `rograph` (shared bar/sparkline renderer, [[078-rograph-library-shared-bar-sparkline-renderer]]), [[082-agent-usage-collector-daemon]] (background collector tick), [[129-parallelize-usage-collectall]] (per-agent collector parallelization this overlay would help observe)
+**Related**: `internal/usage/watch.go`, `internal/usage/statecache.go` (`DefaultCollectorInterval`), `rograph` (shared bar/sparkline renderer, [[078-rograph-library-shared-bar-sparkline-renderer]]), [[082-agent-usage-collector-daemon]] (background collector tick), [[129-parallelize-usage-collectall]] (per-agent collector parallelization this overlay would help observe), [[132-watch-spec-driven-superscript-hotkeys]] (sibling label-rendering rework — see Scope Boundary note below; implement 132 first)
+
+## Scope Boundary vs. Issue 132
+
+Both this ticket and 132 "steal" characters from existing text to embed a
+glyph, but at different render targets — they do not compete for the same
+characters and neither ticket's acceptance criteria conflicts with the
+other's:
+
+- **This ticket (131)**: modifies **per-agent row labels** inside a box's
+  body (e.g. the Claude/AGY/Codex rows in the All Usage table), and only
+  while the `!` debug overlay is toggled on — normal-mode rendering is
+  unaffected.
+- **132**: modifies **box titles** (the header line of each top-level
+  box: Claude box, AGY box, Codex box, History, Load, etc.) to show a
+  superscript toggle digit, and is always-on (not a debug-only overlay).
+
+Implement 132 first — it's the more foundational rework (introduces the
+`spec/actions.yaml` registry and reworks `watch.go`'s key/label dispatch
+plumbing this ticket's `!` key would otherwise have to bolt onto
+separately). This ticket's `!` toggle should be added to `spec/actions.yaml`
+once 132 lands, rather than as a one-off hardcoded key.
 
 ## Problem
 

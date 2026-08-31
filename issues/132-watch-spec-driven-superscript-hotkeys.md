@@ -4,7 +4,16 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [[094-usage-watch-controls-overlay-and-presets]] (built the `?` controls overlay + presets but explicitly kept the old per-key badges and direct toggles as "secondary controls" — this ticket revisits that display layer), [[093-usage-tui-layout-planner]], [[049-running-agent-processes-watch-panel]], [[050-remote-host-flag-and-watch-hotkey]], `docs/Spec.md` (spec-driven architecture convention), `internal/usage/watch.go`
+**Related**: [[094-usage-watch-controls-overlay-and-presets]] (built the `?` controls overlay + presets but explicitly kept the old per-key badges and direct toggles as "secondary controls" — this ticket revisits that display layer), [[093-usage-tui-layout-planner]], [[049-running-agent-processes-watch-panel]], [[050-remote-host-flag-and-watch-hotkey]], `docs/Spec.md` (spec-driven architecture convention), `internal/usage/watch.go`, [[131-watch-debug-freshness-countdown-overlay]] (sibling label-rendering ticket — see its Scope Boundary note; implement this ticket first)
+
+## Sequencing Note
+
+Implement before 131. 131's `!` debug overlay depends on this ticket's
+`spec/actions.yaml` key registry existing (so `!` gets added there rather
+than as another hardcoded `switch` case), and 131 touches per-agent row
+labels while this ticket touches box titles — different render targets, so
+there is no acceptance-criteria conflict between the two, only an ordering
+dependency.
 
 ## Problem
 
