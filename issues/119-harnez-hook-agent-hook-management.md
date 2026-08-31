@@ -88,4 +88,7 @@ This ticket was filed against the source spec's assumed command shape
 before checking it against `docs/CLIDesign.md` and the existing
 `apply`/`distill hook` precedent — see conversation on 2026-08-31. Read
 `docs/CLIDesign.md` in full before touching `apply.go`; the
-apply/init separation is called out there as load-bearing.
+apply/init separation is called out there as load-bearing. The
+rewrite-now/capture-later hook shape itself is now documented in
+`docs/HookRewritePattern.md` — read that before implementing
+`harnez exec hook`.

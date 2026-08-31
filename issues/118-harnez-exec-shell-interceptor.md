@@ -37,10 +37,13 @@ harnez exec --tool <tool_name> [--ticket <ticket_id>] -- <command...>
 - Also add `harnez exec hook` (mirroring `harnez distill hook`,
   `cmd/harnez/distill.go`'s `newDistillHookCmd`/`runDistillHook`): a
   stdin-driven endpoint that reads an agent's tool-use hook payload and
-  writes the equivalent telemetry row. This is the target [[119]]'s
-  `apply`-managed hook entries actually invoke — the direct
-  `harnez exec --tool ... -- <command>` form above is for manual/scripted
-  use, not what the installed hook calls.
+  rewrites it to route through `harnez exec --tool ... -- <command>`.
+  This is the target [[119]]'s `apply`-managed hook entries actually
+  invoke — the direct `harnez exec --tool ... -- <command>` form above
+  is what the *rewritten* command runs as (and what manual/scripted use
+  calls directly); the `hook` verb itself never runs the child process
+  or writes telemetry. See `docs/HookRewritePattern.md` for the general
+  shape and why the two stages can't be merged into one command.
 
 ## Acceptance Criteria
 
