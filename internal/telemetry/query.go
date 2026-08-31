@@ -107,6 +107,93 @@ type Stats struct {
 	AvgDurationMs  float64
 }
 
+// GroupStats is one group's row in a grouped aggregate (AggregateByTool /
+// AggregateByAgent) — call frequency, average score, and failure rate for
+// one tool_name or agent_id value, the shape issue 120's `harnez stats`
+// needs. It deliberately does not embed/reuse Stats: FailureCount here is
+// issue 120's own definition (exit_code != 0 OR score <= 2), broader than
+// Stats.FailureCount's exit_code-only definition used by the pre-existing
+// ungrouped Aggregate, so the two are kept as distinct types rather than
+// risking the same field name silently meaning two different things.
+type GroupStats struct {
+	Key            string
+	Count          int64
+	AvgScore       float64 // 0 if no scored rows
+	ScoredCount    int64   // rows with a non-NULL score, denominator for AvgScore
+	FailureCount   int64   // rows with exit_code != 0 OR score <= 2
+	TotalRawBytes  int64
+	TotalDistilled int64
+	AvgDurationMs  float64
+}
+
+// aggregateGroupedBy summarizes tool_calls rows matching f, one row per
+// distinct value of the given column, ordered by call count descending
+// (busiest group first) then by key for determinism. column is always an
+// internal literal (not caller input) — see AggregateByTool/AggregateByAgent,
+// the only callers — so it's safe to splice directly into the query.
+func (d *DB) aggregateGroupedBy(column string, f Filter) ([]GroupStats, error) {
+	where, args := f.whereClause()
+	ctx, cancel := defaultContext()
+	defer cancel()
+
+	rows, err := d.sql.QueryContext(ctx, `
+		SELECT
+			`+column+`,
+			COUNT(*),
+			AVG(score),
+			COUNT(score),
+			COUNT(CASE WHEN (exit_code IS NOT NULL AND exit_code != 0)
+			           OR (score IS NOT NULL AND score <= 2) THEN 1 END),
+			COALESCE(SUM(raw_bytes), 0),
+			COALESCE(SUM(distilled_bytes), 0),
+			AVG(duration_ms)
+		FROM tool_calls`+where+`
+		GROUP BY `+column+`
+		ORDER BY COUNT(*) DESC, `+column+` ASC`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("telemetry: aggregate grouped by %s: %w", column, err)
+	}
+	defer rows.Close()
+
+	var out []GroupStats
+	for rows.Next() {
+		var g GroupStats
+		var avgScore, avgDuration *float64
+		if err := rows.Scan(
+			&g.Key, &g.Count, &avgScore, &g.ScoredCount, &g.FailureCount,
+			&g.TotalRawBytes, &g.TotalDistilled, &avgDuration,
+		); err != nil {
+			return nil, fmt.Errorf("telemetry: scan grouped row: %w", err)
+		}
+		if avgScore != nil {
+			g.AvgScore = *avgScore
+		}
+		if avgDuration != nil {
+			g.AvgDurationMs = *avgDuration
+		}
+		out = append(out, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("telemetry: aggregate grouped rows: %w", err)
+	}
+	return out, nil
+}
+
+// AggregateByTool summarizes tool_calls rows matching f, one GroupStats
+// row per distinct tool_name — the per-tool breakdown issue 120's
+// `harnez stats` needs (call frequency, average score, failure rate,
+// byte savings, all scoped to one tool).
+func (d *DB) AggregateByTool(f Filter) ([]GroupStats, error) {
+	return d.aggregateGroupedBy("tool_name", f)
+}
+
+// AggregateByAgent summarizes tool_calls rows matching f, one GroupStats
+// row per distinct agent_id — the per-agent breakdown issue 120's
+// `harnez stats` needs.
+func (d *DB) AggregateByAgent(f Filter) ([]GroupStats, error) {
+	return d.aggregateGroupedBy("agent_id", f)
+}
+
 // Aggregate summarizes the tool_calls rows matching f.
 func (d *DB) Aggregate(f Filter) (Stats, error) {
 	where, args := f.whereClause()
@@ -139,4 +226,45 @@ func (d *DB) Aggregate(f Filter) (Stats, error) {
 		s.AvgDurationMs = *avgDuration
 	}
 	return s, nil
+}
+
+// DistillationSavings summarizes distillation byte savings over tool_calls
+// rows matching f, restricted to rows where distilled_bytes IS NOT NULL
+// (rows distillation never ran on don't belong in the ratio — see issue
+// 120's Scope). RawBytes/DistilledBytes are the raw sums (over that same
+// restricted row set, so they're directly comparable); Ratio is
+// 1 - (DistilledBytes / RawBytes), or 0 when Count is 0 or RawBytes is 0
+// (nothing to divide by — the caller, cmd/harnez/stats.go, is expected to
+// check Count before treating Ratio as meaningful).
+type DistillationSavings struct {
+	Count          int64
+	RawBytes       int64
+	DistilledBytes int64
+	Ratio          float64
+}
+
+// DistillationSavings computes the byte-savings aggregate matching f.
+func (d *DB) DistillationSavings(f Filter) (DistillationSavings, error) {
+	where, args := f.whereClause()
+	restrict := " WHERE distilled_bytes IS NOT NULL"
+	if where != "" {
+		restrict = where + " AND distilled_bytes IS NOT NULL"
+	}
+	ctx, cancel := defaultContext()
+	defer cancel()
+
+	var ds DistillationSavings
+	row := d.sql.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(raw_bytes), 0),
+			COALESCE(SUM(distilled_bytes), 0)
+		FROM tool_calls`+restrict, args...)
+	if err := row.Scan(&ds.Count, &ds.RawBytes, &ds.DistilledBytes); err != nil {
+		return DistillationSavings{}, fmt.Errorf("telemetry: distillation savings: %w", err)
+	}
+	if ds.Count > 0 && ds.RawBytes > 0 {
+		ds.Ratio = 1 - (float64(ds.DistilledBytes) / float64(ds.RawBytes))
+	}
+	return ds, nil
 }

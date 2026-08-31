@@ -143,6 +143,150 @@ func TestAggregate(t *testing.T) {
 	}
 }
 
+func TestAggregateByTool(t *testing.T) {
+	db := openTestDB(t)
+
+	calls := []ToolCall{
+		sampleCall("sess-1", "Read", 5, 0),
+		sampleCall("sess-1", "Read", 3, 1),
+		sampleCall("sess-1", "Edit", 4, 0),
+	}
+	for _, c := range calls {
+		if err := db.Insert(c); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+	}
+
+	groups, err := db.AggregateByTool(Filter{})
+	if err != nil {
+		t.Fatalf("AggregateByTool: %v", err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("len(groups) = %d, want 2", len(groups))
+	}
+	// ORDER BY COUNT(*) DESC, key ASC: Read (2 calls) before Edit (1 call).
+	if groups[0].Key != "Read" || groups[0].Count != 2 {
+		t.Errorf("groups[0] = %+v, want Key=Read Count=2", groups[0])
+	}
+	wantAvg := (5.0 + 3.0) / 2.0
+	if diff := groups[0].AvgScore - wantAvg; diff < -0.0001 || diff > 0.0001 {
+		t.Errorf("groups[0].AvgScore = %v, want %v", groups[0].AvgScore, wantAvg)
+	}
+	if groups[0].FailureCount != 1 {
+		t.Errorf("groups[0].FailureCount = %d, want 1", groups[0].FailureCount)
+	}
+	if groups[1].Key != "Edit" || groups[1].Count != 1 {
+		t.Errorf("groups[1] = %+v, want Key=Edit Count=1", groups[1])
+	}
+}
+
+func TestAggregateByAgent(t *testing.T) {
+	db := openTestDB(t)
+
+	c1 := sampleCall("sess-1", "Read", 5, 0)
+	c1.AgentID = "claude"
+	c2 := sampleCall("sess-2", "Read", 2, 1)
+	c2.AgentID = "codex"
+	for _, c := range []ToolCall{c1, c2} {
+		if err := db.Insert(c); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+	}
+
+	groups, err := db.AggregateByAgent(Filter{})
+	if err != nil {
+		t.Fatalf("AggregateByAgent: %v", err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("len(groups) = %d, want 2", len(groups))
+	}
+	byKey := map[string]GroupStats{}
+	for _, g := range groups {
+		byKey[g.Key] = g
+	}
+	if byKey["claude"].Count != 1 || byKey["codex"].Count != 1 {
+		t.Errorf("byKey = %+v, want 1 call each", byKey)
+	}
+}
+
+func TestAggregateByToolExcludesNullDistilledBytes(t *testing.T) {
+	db := openTestDB(t)
+
+	withDistill := sampleCall("sess-1", "Read", 5, 0)
+	withDistill.RawBytes = 1000
+	withDistill.DistilledBytes = int64Ptr(200)
+	noDistill := sampleCall("sess-1", "Read", 4, 0)
+	noDistill.RawBytes = 500
+	noDistill.DistilledBytes = nil
+	for _, c := range []ToolCall{withDistill, noDistill} {
+		if err := db.Insert(c); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+	}
+
+	groups, err := db.AggregateByTool(Filter{})
+	if err != nil {
+		t.Fatalf("AggregateByTool: %v", err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("len(groups) = %d, want 1", len(groups))
+	}
+	// TotalDistilled sums only non-NULL distilled_bytes rows (SQL SUM
+	// ignores NULLs); TotalRawBytes sums all rows regardless of whether
+	// distillation ran. The global byte-savings ratio issue 120 needs is
+	// computed by DistillationSavings instead (see TestDistillationSavings),
+	// which restricts both sums to distilled_bytes IS NOT NULL rows so
+	// they're directly comparable.
+	if groups[0].TotalDistilled != 200 {
+		t.Errorf("TotalDistilled = %d, want 200", groups[0].TotalDistilled)
+	}
+}
+
+func TestDistillationSavings(t *testing.T) {
+	db := openTestDB(t)
+
+	withDistill := sampleCall("sess-1", "Bash", 5, 0)
+	withDistill.RawBytes = 1000
+	withDistill.DistilledBytes = int64Ptr(200) // 80% saved
+	noDistill := sampleCall("sess-1", "Bash", 4, 0)
+	noDistill.RawBytes = 999999 // must be excluded entirely, not counted as 0 saved
+	noDistill.DistilledBytes = nil
+	for _, c := range []ToolCall{withDistill, noDistill} {
+		if err := db.Insert(c); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+	}
+
+	ds, err := db.DistillationSavings(Filter{})
+	if err != nil {
+		t.Fatalf("DistillationSavings: %v", err)
+	}
+	if ds.Count != 1 {
+		t.Fatalf("Count = %d, want 1 (only the distilled row)", ds.Count)
+	}
+	if ds.RawBytes != 1000 {
+		t.Errorf("RawBytes = %d, want 1000", ds.RawBytes)
+	}
+	if ds.DistilledBytes != 200 {
+		t.Errorf("DistilledBytes = %d, want 200", ds.DistilledBytes)
+	}
+	wantRatio := 1 - (200.0 / 1000.0)
+	if diff := ds.Ratio - wantRatio; diff < -0.0001 || diff > 0.0001 {
+		t.Errorf("Ratio = %v, want %v", ds.Ratio, wantRatio)
+	}
+}
+
+func TestDistillationSavingsNoRows(t *testing.T) {
+	db := openTestDB(t)
+	ds, err := db.DistillationSavings(Filter{})
+	if err != nil {
+		t.Fatalf("DistillationSavings: %v", err)
+	}
+	if ds.Count != 0 || ds.Ratio != 0 {
+		t.Errorf("ds = %+v, want zero value", ds)
+	}
+}
+
 // TestScoreConstraint confirms Insert does not hardcode a parallel "1-5"
 // check in Go — it's the DB's own CHECK constraint (schema.go) that
 // rejects an out-of-range score, and Insert just surfaces that error.

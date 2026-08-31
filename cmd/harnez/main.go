@@ -525,7 +525,7 @@ func main() {
 	}
 	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
 
-	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, loadStreamCmd, initCmd, assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd())
+	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, loadStreamCmd, initCmd, assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd())
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}
