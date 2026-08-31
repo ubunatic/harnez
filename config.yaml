@@ -239,6 +239,14 @@ agents_md:
           for the project. It must apply to all projects and be used as glue between
           local and global docs only.
           The purpose of the global doc is to steer the agentic setup.
+      - name: Tool Feedback Protocol
+        content: |
+          ### Tool Feedback Protocol
+          After executing any internal tool (e.g., reading files, editing, semantic scanning), immediately record the action:
+          `harnez rate <tool_name> <1-5> "<1-line outcome summary>" "<project_folder>/<ticket_name>"`
+          - Score 5: Flawless result.
+          - Score 3: Partial success / required adjustment.
+          - Score 1: Total failure / useless output.
 
   # config for local md file
   local:
