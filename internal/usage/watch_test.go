@@ -340,10 +340,10 @@ func TestBuildAllUsageBox(t *testing.T) {
 	// this test verifies. "93% 2d8h" (8 chars) pads to 10 → 2 trailing spaces;
 	// "85% 8h51m" (9 chars) pads to 10 → 1 trailing space.
 	want := []string{
-		"Gemini        [███░] 93% 2d8h   [░░░░] 3% 4h58m",
-		"Claude/GPT    [█░░░] 35% 6d2h   [░░░░] 0% 4h58m",
-		"Claude Code   [███░] 85% 8h51m  [░░░░] 9% 4h51m",
-		"OpenAI Codex  [█░░░] 39% 5d9h   [░░░░] 0% 4h59m",
+		"Gemini        [███▋] 93% 2d8h   [░░░░] 3% 4h58m",
+		"Claude/GPT    [█▍░░] 35% 6d2h   [░░░░] 0% 4h58m",
+		"Claude Code   [███▍] 85% 8h51m  [▎░░░] 9% 4h51m",
+		"OpenAI Codex  [█▌░░] 39% 5d9h   [░░░░] 0% 4h59m",
 	}
 	for i := range want {
 		if got := stripANSI(box.lines[i]); got != want[i] {
@@ -450,11 +450,11 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 		switch {
 		case strings.Contains(stripped, "Claude Code"):
 			// d2 dropped to fit; d1 kept; percent shown.
-			if !strings.Contains(stripped, "[███░]") || !strings.Contains(stripped, "85%") || !strings.Contains(stripped, "[░░░░]") || !strings.Contains(stripped, "11%") {
+			if !strings.Contains(stripped, "[███▍]") || !strings.Contains(stripped, "85%") || !strings.Contains(stripped, "[▍░░░]") || !strings.Contains(stripped, "11%") {
 				t.Fatalf("expected Claude second bar and percent to remain visible in narrow row: %q", stripped)
 			}
 		case strings.Contains(stripped, "OpenAI Codex"):
-			if !strings.Contains(stripped, "[░░░░]") || !strings.Contains(stripped, "13%") {
+			if !strings.Contains(stripped, "[▌░░░]") || !strings.Contains(stripped, "13%") {
 				t.Fatalf("expected Codex second bar and percent to remain visible in narrow row: %q", stripped)
 			}
 		default:
@@ -625,7 +625,7 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 		t.Fatalf("expected compact frame to hide individual Claude box, got:\n%s", frameText)
 	}
 	// Mid-column padded to 10 chars → "85% 8h51m " (10) + " " + "[░░░░]" = 2 spaces before second bar.
-	if !strings.Contains(frameText, "Claude Code  [███░] 85% 8h51m  [░░░░] 9% 4h51m") {
+	if !strings.Contains(frameText, "Claude Code  [███▍] 85% 8h51m  [▎░░░] 9% 4h51m") {
 		t.Fatalf("expected compact all-usage row to keep short-window time at 100 columns, got:\n%s", frameText)
 	}
 	if !strings.Contains(frameText, "[?]controls") || !strings.Contains(frameText, "[m]ode") {
