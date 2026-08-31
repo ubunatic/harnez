@@ -1,6 +1,6 @@
 # 136 — Bar ANSI background leaks onto brackets; consolidate colors into spec/
 
-**Status**: Open
+**Status**: Closed — resolved in `5fd639b`, `27ae0c8`
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
@@ -61,19 +61,19 @@ bug above) and to move color values out of hardcoded Go strings into
 
 ## Acceptance Criteria
 
-- [ ] `RenderBar`'s ANSI background wraps only the glyph portion; brackets
+- [x] `RenderBar`'s ANSI background wraps only the glyph portion; brackets
       and any percent label render outside the escape sequence, matching
       `RenderSparkline`/`PercentSparkline`'s existing behavior.
-- [ ] `spec/colors.yaml` + `spec/schemas/colors.schema.json` exist, and the
+- [x] `spec/colors.yaml` + `spec/schemas/colors.schema.json` exist, and the
       `"100"` SGR default used by both `RenderSparkline` and `RenderBar`
       is sourced from this spec, not a hardcoded Go string literal in two
       places.
-- [ ] Visual/unit test confirms the escape-sequence boundaries: e.g. a
+- [x] Visual/unit test confirms the escape-sequence boundaries: e.g. a
       rendered bar string with `ANSI: true` matches
       `"[" + "\x1b[100m" + <glyphs> + "\x1b[0m" + "]"`, not
       `"\x1b[100m" + "[" + <glyphs> + "]" + "\x1b[0m"`.
-- [ ] All existing callers (All Usage bars, Load box sparklines) keep
+- [x] All existing callers (All Usage bars, Load box sparklines) keep
       working with no behavior change beyond the bracket fix.
-- [ ] `go test -race ./internal/rograph/... ./internal/usage/...` passes
+- [x] `go test -race ./internal/rograph/... ./internal/usage/...` passes
       clean.
-- [ ] `harnez status` confirms tracker sync after filing/closing.
+- [x] `harnez status` confirms tracker sync after filing/closing.
