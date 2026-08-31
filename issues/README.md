@@ -113,7 +113,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 112 | [112-agy-usage-poll-may-trigger-google-reauth-bot-detection.md](112-agy-usage-poll-may-trigger-google-reauth-bot-detection.md) | Investigate whether `agy -p "/usage"` polling triggers Google reauth / bot-detection dialogs | Closed — inconclusive on causation, mitigation shipped |
 | 113 | [113-record-collector-roundtrip-times-usage-meta.md](113-record-collector-roundtrip-times-usage-meta.md) | Record per-collector roundtrip times; expose via `harnez usage --meta` | Open |
 | 114 | [114-remote-load-stream-drops-to-batch-stdin-eof-false-trigger.md](114-remote-load-stream-drops-to-batch-stdin-eof-false-trigger.md) | Remote Load stream drops to batch shortly after connecting: stdin-EOF false-triggers shutdown | Open |
-| 115 | [115-canary-duckdb-go-embedding-for-tool-telemetry.md](115-canary-duckdb-go-embedding-for-tool-telemetry.md) | Canary: evaluate DuckDB Go embedding for tool-call telemetry storage | Open |
+| 115 | [115-canary-duckdb-go-embedding-for-tool-telemetry.md](115-canary-duckdb-go-embedding-for-tool-telemetry.md) | Canary: evaluate DuckDB Go embedding for tool-call telemetry storage | Closed — no-go, alternative named |
 | 116 | [116-tool-telemetry-schema-and-storage-layer.md](116-tool-telemetry-schema-and-storage-layer.md) | Tool telemetry schema & storage layer (`tool_calls` table) | Open |
 | 117 | [117-harnez-rate-command.md](117-harnez-rate-command.md) | `harnez rate`: positional internal-tool rating command | Open |
 | 118 | [118-harnez-exec-shell-interceptor.md](118-harnez-exec-shell-interceptor.md) | `harnez exec`: shell execution interceptor with telemetry capture | Open |
