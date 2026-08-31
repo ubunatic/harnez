@@ -56,7 +56,11 @@ type DB struct {
 // are set so concurrent writers from separate harnez processes queue
 // rather than fail. Schema creation is idempotent (CREATE TABLE IF NOT
 // EXISTS + indexes) and safe to run on every Open — no migration
-// framework, per this repo's "just change the code" bias.
+// framework, per this repo's "just change the code" bias. If the file
+// already exists with an older schemaVersion (CREATE ... IF NOT EXISTS
+// can't apply a shape change to it), Open fails with a clear message
+// rather than an inserting caller hitting a confusing constraint error
+// later — see schema.go's schemaVersion doc comment.
 func Open(path string) (*DB, error) {
 	if dir := filepath.Dir(path); dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -74,12 +78,42 @@ func Open(path string) (*DB, error) {
 		} else if _, err := sqlDB.Exec(schemaDDL); err != nil {
 			sqlDB.Close()
 			lastErr = fmt.Errorf("telemetry: create schema: %w", err)
+		} else if err := checkAndStampSchemaVersion(sqlDB, path); err != nil {
+			sqlDB.Close()
+			return nil, err
 		} else {
 			return &DB{sql: sqlDB}, nil
 		}
 		time.Sleep(openRetryDelay)
 	}
 	return nil, fmt.Errorf("telemetry: open %s: %w", path, lastErr)
+}
+
+// checkAndStampSchemaVersion reads SQLite's built-in PRAGMA user_version.
+// 0 means a brand-new database (CREATE TABLE IF NOT EXISTS just made the
+// current-shape table), so it's stamped with schemaVersion. A non-zero
+// value older than schemaVersion means this file predates a shape change
+// that IF NOT EXISTS couldn't apply — fail loudly and tell the caller to
+// delete it, rather than let a later Insert/Query hit a raw constraint or
+// scan error against a stale column shape.
+func checkAndStampSchemaVersion(sqlDB *sql.DB, path string) error {
+	var current int
+	if err := sqlDB.QueryRow("PRAGMA user_version").Scan(&current); err != nil {
+		return fmt.Errorf("telemetry: read schema version: %w", err)
+	}
+	if current == 0 {
+		if _, err := sqlDB.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
+			return fmt.Errorf("telemetry: stamp schema version: %w", err)
+		}
+		return nil
+	}
+	if current < schemaVersion {
+		return fmt.Errorf(
+			"telemetry: %s has schema version %d, need %d, and this package has no migration framework — "+
+				"delete the file (it's a local telemetry cache, safe to lose) and it will be recreated on next use",
+			path, current, schemaVersion)
+	}
+	return nil
 }
 
 // Close closes the underlying database connection.

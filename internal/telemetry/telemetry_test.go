@@ -1,10 +1,13 @@
 package telemetry
 
 import (
+	"database/sql"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -59,6 +62,46 @@ func TestOpenIsIdempotent(t *testing.T) {
 		t.Fatalf("second Open: %v", err)
 	}
 	db2.Close()
+}
+
+// TestOpenRejectsStaleSchemaVersion is the regression check for the gap
+// found reviewing issue 120: CREATE TABLE IF NOT EXISTS silently leaves an
+// existing file's older column shape untouched (this bit issue 118's
+// distilled_bytes NOT NULL -> nullable change against a real pre-existing
+// db). Open must fail with a clear, actionable message instead of letting
+// a later Insert/Query hit a raw constraint or scan error.
+func TestOpenRejectsStaleSchemaVersion(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tool_catalog.sqlite")
+
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, err := db.sql.Exec("PRAGMA user_version = 0"); err != nil {
+		t.Fatalf("reset user_version: %v", err)
+	}
+	db.Close()
+
+	// Directly stamp a stale version, simulating a file created before a
+	// schema-shape change: this must not go through Open again first,
+	// since Open would just re-stamp a fresh 0 version to current.
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	if _, err := raw.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion-1)); err != nil {
+		t.Fatalf("stamp stale version: %v", err)
+	}
+	raw.Close()
+
+	_, err = Open(path)
+	if err == nil {
+		t.Fatal("Open against a stale-schema-version file should have failed")
+	}
+	if !strings.Contains(err.Error(), "no migration framework") {
+		t.Errorf("error = %v, want it to explain there's no migration framework and to delete the file", err)
+	}
 }
 
 func TestInsertAndQuery(t *testing.T) {

@@ -138,3 +138,19 @@ race.
 Storage/schema itself is agent-agnostic — the per-agent scope decision
 (v1 ships for whichever of Claude/AGY/Codex the hook model actually
 works for, no three-agent-parity gate) lives in [[119]], not here.
+
+## Post-review addition (during [[120]]'s review, same day)
+
+[[118]]'s `distilled_bytes` nullability fix silently didn't apply to a
+real pre-existing `~/.harnez/tool_catalog.sqlite` — `CREATE TABLE IF NOT
+EXISTS` doesn't retroactively alter an already-existing file's column
+shape, so the file had to be manually deleted before `harnez rate`/
+`harnez exec` would work against the new schema again. Rather than
+building a migration framework (still explicitly out of scope — "just
+change the code" bias holds), added a cheap schema-version guard: `Open`
+stamps SQLite's built-in `PRAGMA user_version` (`schemaVersion` const in
+`schema.go`, now `2`) on a fresh file, and fails with a clear "delete the
+file, it's a local telemetry cache" message if it finds an older version
+on an existing one — turning a confusing constraint/scan error into one
+actionable message. See `internal/telemetry/telemetry.go`'s
+`checkAndStampSchemaVersion` and `TestOpenRejectsStaleSchemaVersion`.

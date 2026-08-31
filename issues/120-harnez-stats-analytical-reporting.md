@@ -69,16 +69,18 @@ throwaway `~/.harnez/tool_catalog.sqlite` (backed up and restored)
 confirmed sane table and JSON output for both a populated and an
 empty/filtered result.
 
-Environment note (out of this ticket's scope, reported not fixed): the
-pre-existing local `~/.harnez/tool_catalog.sqlite` still had the old
-`distilled_bytes NOT NULL` schema from before issue 118's follow-up
-nullability fix — `harnez rate`/`harnez exec` failed against it with a
-NOT NULL constraint error until the file was deleted and recreated.
-`schemaDDL`'s `CREATE TABLE IF NOT EXISTS` does not retroactively alter
-an existing table's column constraints, so any already-initialized DB
-predating that fix needs a manual `rm ~/.harnez/tool_catalog.sqlite` (or
-a real migration) to pick it up — this repo has no migration framework
-(see schema.go's doc comment).
+Environment note, fixed during review (see [[116]]'s "Post-review
+addition"): the pre-existing local `~/.harnez/tool_catalog.sqlite` still
+had the old `distilled_bytes NOT NULL` schema from before issue 118's
+follow-up nullability fix — `harnez rate`/`harnez exec` failed against it
+with a NOT NULL constraint error until the file was deleted and
+recreated. `schemaDDL`'s `CREATE TABLE IF NOT EXISTS` does not
+retroactively alter an existing table's column constraints. Rather than
+leaving this as a recurring manual-delete footgun for any future schema
+change, [[116]] now stamps a `PRAGMA user_version` schema-version guard
+on `Open` that fails with a clear, actionable message (not a raw
+constraint/scan error) when it finds a stale file — still no migration
+framework, just a loud failure instead of a silent or confusing one.
 
 ## Notes
 
