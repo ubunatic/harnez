@@ -79,6 +79,13 @@ dedicated behavioral section.
 
 ## 5. Comparing the two agents' patterns
 
+**Caveat**: agy (Antigravity) currently runs on Claude models underneath, same as the Claude Code
+pass. So the comparisons below are a **harness/prompt-engineering** comparison, not a
+cross-model-quality one — both audits reflect roughly the same underlying model's judgment, applied
+to two differently-authored system prompts. Any future pass against an agent on a genuinely
+different model family should call this out explicitly, since it would no longer be an
+apples-to-apples harness comparison.
+
 - Both agents independently converged on the same shape of judgment: repetition of the *same
   fact/directive in the same context* is a genuine cut candidate; repetition that carries
   *different worked examples or different contexts* (Claude Code's destructive-op caution; agy's
