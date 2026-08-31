@@ -4,7 +4,7 @@
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation
-**Related**: [[117-harnez-rate-command]], [[119-harnez-hook-agent-hook-management]]
+**Related**: [[117-harnez-rate-command]], [[119-harnez-hook-agent-hook-management]], [[128-per-agent-full-system-prompt-self-audit-for-repetition]]
 
 ## Problem
 
@@ -72,3 +72,15 @@ Low priority relative to 116–121: the instruction text is only useful
 once `harnez rate` (117) actually exists and does something with the
 calls it prompts for. This is the last ticket in the 115-122
 tool-observability story — all eight are now closed.
+
+**2026-08-31 follow-up**: despite the snippet being correctly injected
+and live in `~/.claude/CLAUDE.md`, a real session still skipped it on
+its first tool call — the injection working is not the same as the
+directive being followed. Prompted [[128]] and a clean-session
+self-audit (see
+[docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md](../docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md))
+which diagnosed why: the snippet reads as standing background policy
+with no example invocation and no stated consequence for skipping,
+unlike the git-commit-trailer rule which is exercised as a literal
+template every commit. Worth revisiting the snippet's phrasing along
+those lines if misses recur.

@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [[040-agent-context-duplication-and-file-read-discipline]], [[122-agent-instruction-tool-feedback-protocol]], [[075-concisemode-promote-doc-to-real-skill]]
+**Related**: [[040-agent-context-duplication-and-file-read-discipline]], [[122-agent-instruction-tool-feedback-protocol]], [[075-concisemode-promote-doc-to-real-skill]], [docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md](../docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md)
 
 ## Problem
 
@@ -69,19 +69,30 @@ We have no per-agent visibility into:
 
 ## Acceptance Criteria
 
-- [ ] A repeatable audit procedure exists (a prompt/script or a documented
+- [x] A repeatable audit procedure exists (a prompt/script or a documented
       manual steps list) for asking an agent to self-report on its own
       system prompt in a clean session, without polluting a real working
-      session's context.
+      session's context. Done via a two-turn `claude -p` / `claude -c -p`
+      pair run from an empty scratch directory — documented in the study's
+      §1 Method.
 - [ ] At least one completed audit report for Claude Code, covering: total
       size by layer, concrete repetition examples (quoted), a list of
       generic/model-native content flagged as removable, and a list of
       harness-native content flagged as non-removable-but-overridable.
-- [ ] Findings are written up in `docs/studies/` (per `docs/Markdown.md`'s
+      **Partial**: the clean-baseline pass (harness-native layer only, no
+      project docs loaded) is done — see the study, §2-3. The with-project-
+      docs pass (this repo's full `CLAUDE.md`/`AGENTS.local.md`/bundled-docs
+      stack) is still open.
+- [x] Findings are written up in `docs/studies/` (per `docs/Markdown.md`'s
       evergreen/ephemeral split) rather than left only in chat, since this
-      is background/reference material for later trimming work.
+      is background/reference material for later trimming work. See
+      [docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md](../docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md).
 - [ ] Follow-up tickets are filed for each concrete trim/consolidation
-      opportunity found (do not attempt the trims inside this ticket).
+      opportunity found (do not attempt the trims inside this ticket). Three
+      candidates identified in the study's §5 (drop Write-tool's inline
+      emoji restatement; consider merging "Tone and style" and "Text
+      output"; require example+trigger for future global side-effecting
+      directives) — not yet filed as separate tickets.
 
 ## Notes
 
