@@ -1,6 +1,6 @@
 # 120 — `harnez stats`: analytical reporting over tool_calls
 
-**Status**: Closed — resolved in TBD-commit-hash
+**Status**: Closed — resolved in 41dd27f
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
