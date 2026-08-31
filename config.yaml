@@ -88,6 +88,13 @@ hooks:
   - event: PreToolUse
     matcher: Bash
     command: "harnez distill hook"
+  # telemetry: routes Bash calls through `harnez exec` for tool_calls
+  # recording (issue 116); always-on, not opt-in (see issue 118's
+  # newExecHookCmd) — installed by apply per issue 119's decision to
+  # extend this existing hooks-merge rather than add a new command
+  - event: PreToolUse
+    matcher: Bash
+    command: "harnez exec hook"
 
 # thinking verbs (get rid of annoying word creations)
 verbs:
