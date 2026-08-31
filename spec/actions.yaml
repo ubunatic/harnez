@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=schemas/actions.schema.json
+#
+# Hotkey registry for `harnez usage --watch` (issue 132). This is the single
+# source of truth for every interactive key that TUI recognizes: which
+# byte(s) trigger it, what it's called internally, and how it's shown to the
+# user (a superscript digit next to a box's title for the numbered box
+# toggles, or a literal key character for everything else). watch.go's
+# dispatch *logic* (what each action actually does) stays Go code — only
+# this key -> action -> symbol mapping lives here. See docs/Spec.md.
+#
+# Key tokens: a single literal character ("q", "1", "?"), or one of the
+# bracketed control tokens below for non-printable keys:
+#   <c-c>  - Ctrl-C (byte 3)
+#   <esc>  - Escape (byte 27)
+#
+# category:
+#   box     - toggles one top-level panel's visibility (superscript digit
+#             symbol, "box" names the watchSections field it controls)
+#   data    - toggles a data row shown inside other boxes, not a box itself
+#   mode    - preset/reset controls that change several box toggles at once
+#   session - global session controls (remote/local, quit, controls overlay)
+actions:
+  toggle_all_usage:
+    title: "All Usage"
+    description: "Toggle the aggregate All Usage box"
+    keys: ["1", "a"]
+    symbol: "¹"
+    category: box
+    box: all_usage
+  toggle_claude:
+    title: "Claude"
+    description: "Toggle the Claude Code agent box"
+    keys: ["2"]
+    symbol: "²"
+    category: box
+    box: claude
+  toggle_agy:
+    title: "AGY"
+    description: "Toggle the Antigravity (AGY) agent box"
+    keys: ["3"]
+    symbol: "³"
+    category: box
+    box: agy
+  toggle_codex:
+    title: "Codex"
+    description: "Toggle the OpenAI Codex agent box"
+    keys: ["4"]
+    symbol: "⁴"
+    category: box
+    box: codex
+  toggle_history:
+    title: "History"
+    description: "Toggle the recorded-usage History box"
+    keys: ["5"]
+    symbol: "⁵"
+    category: box
+    box: history
+  toggle_processes:
+    title: "Processes"
+    description: "Toggle the running agent Processes box"
+    keys: ["6"]
+    symbol: "⁶"
+    category: box
+    box: processes
+  toggle_load:
+    title: "Load"
+    description: "Toggle the CPU/GPU Load box"
+    keys: ["7"]
+    symbol: "⁷"
+    category: box
+    box: load
+  toggle_tokens:
+    title: "Token velocity / details"
+    description: "Toggle the token velocity/detail row on agent panels"
+    keys: ["t", "T"]
+    symbol: "T"
+    category: data
+  reset_default:
+    title: "Reset panels"
+    description: "Reset panels to the default set"
+    keys: ["A"]
+    symbol: "A"
+    category: mode
+  cycle_preset:
+    title: "Cycle mode"
+    description: "Cycle view mode: default -> compact -> agents-only -> default"
+    keys: ["m", "M"]
+    symbol: "m"
+    category: mode
+  toggle_remote:
+    title: "Remote/local"
+    description: "Toggle remote/local host (when a host is configured)"
+    keys: ["r", "R"]
+    symbol: "r"
+    category: session
+  quit:
+    title: "Quit"
+    description: "Quit harnez usage --watch"
+    keys: ["q", "Q", "<c-c>", "<esc>"]
+    symbol: "q"
+    category: session
+  toggle_controls:
+    title: "Controls"
+    description: "Open/close the full Controls reference overlay"
+    keys: ["?"]
+    symbol: "?"
+    category: session
