@@ -1,6 +1,6 @@
 # 129 — Parallelize collectAll's per-agent usage collectors
 
-**Status**: In Progress
+**Status**: Closed — resolved in 796f56c
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Performance

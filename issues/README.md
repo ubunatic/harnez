@@ -127,4 +127,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 126 | [126-document-closed-resolved-in-commit-self-reference-convention.md](126-document-closed-resolved-in-commit-self-reference-convention.md) | Document the `Closed — resolved in <commit>` self-reference convention | Open |
 | 127 | [127-move-telemetry-sql-statements-to-spec.md](127-move-telemetry-sql-statements-to-spec.md) | Move `internal/telemetry` SQL statements into `spec/` | Open |
 | 128 | [128-per-agent-full-system-prompt-self-audit-for-repetition.md](128-per-agent-full-system-prompt-self-audit-for-repetition.md) | Per-agent full system-prompt self-audit for repetition and conciseness, starting with Claude Code | Open |
-| 129 | [129-parallelize-usage-collectall.md](129-parallelize-usage-collectall.md) | Parallelize `collectAll`'s per-agent usage collectors (goroutines + WaitGroup) | In Progress |
+| 129 | [129-parallelize-usage-collectall.md](129-parallelize-usage-collectall.md) | Parallelize `collectAll`'s per-agent usage collectors (goroutines + WaitGroup) | Closed — resolved in 796f56c |
