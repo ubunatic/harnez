@@ -4,7 +4,7 @@
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
-**Related**: `internal/rograph/bar.go` (`RenderProgressBar`), [[078-rograph-library-shared-bar-sparkline-renderer]], `internal/usage/watch.go` (4-char bars in the All Usage compact rows, e.g. `watch.go:679-680`, `:1125`, `:1156-1157`)
+**Related**: `internal/rograph/bar.go` (`RenderProgressBar`), `internal/rograph/sparkline.go` and `internal/rograph/options.go` (`RenderSparkline`'s existing `\x1b[100m` ANSI-background convention this ticket must match), [[078-rograph-library-shared-bar-sparkline-renderer]], `internal/usage/watch.go` (4-char bars in the All Usage compact rows, e.g. `watch.go:679-680`, `:1125`, `:1156-1157`)
 
 ## Problem
 
@@ -40,6 +40,22 @@ liked/kept feature) but lose a lot of resolution at this width.
   (vertical eighths, already multi-level) — this ticket is specifically
   about `RenderProgressBar`'s horizontal fill precision.
 
+## Background Color Requirement
+
+The bar's empty portion must **not** rely on a dim/shaded foreground glyph
+for visual distinction (e.g. a muted-looking `░` character choice) — that
+approach doesn't compose with real terminal themes and is the thing this
+requirement replaces. Instead, wrap the whole bar in the **same ANSI
+background sequence already used for sparklines**: `RenderSparkline`
+(`internal/rograph/options.go:114-121`) wraps output in
+`"\x1b[" + BackgroundANSI + "m" + out + "\x1b[0m"`, defaulting
+`BackgroundANSI` to `"100"` (bright-black) when `ANSI` is true — this is
+the "CPU/GPU graph" panel background referenced above. `RenderBar`/
+`RenderProgressBar` currently have no equivalent option at all. Add the
+same `ANSI`/`BackgroundANSI` fields (or reuse `BarOptions` to add them) so
+bars get a real background color, consistent with sparklines, instead of
+leaning on glyph dimness.
+
 ## Acceptance Criteria
 
 - [ ] `RenderProgressBar` renders a partial-eighth glyph at the fill
@@ -48,7 +64,15 @@ liked/kept feature) but lose a lot of resolution at this width.
       unchanged (still `█` / empty glyph) — only the boundary character
       gains precision.
 - [ ] Bar width and existing `[...]` wrapping contract unchanged; existing
-      callers in `usage.go` and `watch.go` need no changes.
+      callers in `usage.go` and `watch.go` need no changes unless they
+      opt into the new background option.
+- [ ] `RenderBar`/`RenderProgressBar` gain an ANSI-background option
+      matching `RenderSparkline`'s `\x1b[100m`-style wrap (same default
+      SGR code, same opt-in `ANSI`/`BackgroundANSI` shape) rather than
+      relying on the empty glyph's visual dimness for contrast.
+- [ ] The 4-char All Usage bars in `watch.go` opt into the new background
+      option so they visually match the sparklines' existing panel
+      background.
 - [ ] Unit tests cover boundary rounding at multiple percentages per bar
       width (e.g. width=4 at 0%, 12.5%, 24%, 26%, 49%, 51%, 100%) asserting
       the correct eighth-block glyph appears at the boundary character.
