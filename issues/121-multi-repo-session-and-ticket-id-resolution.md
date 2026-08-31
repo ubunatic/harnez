@@ -1,6 +1,6 @@
 # 121 — Multi-repo session & ticket ID resolution strategy
 
-**Status**: Closed — resolved in 32a43c7
+**Status**: Closed — resolved in ce1c720
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture

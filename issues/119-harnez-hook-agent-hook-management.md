@@ -50,8 +50,9 @@ precedent, which this ticket originally missed:
 - Extend `internal/claude/apply.go`'s hooks-merge logic to add the
   telemetry pre/post-tool-use hook entries (Claude Code first — see
   canary caveats below for Antigravity/Codex), pointing at
-  `harnez exec hook` and propagating `CLAUDE_SESSION_ID` into the child
-  environment.
+  `harnez exec hook` and propagating `CLAUDE_CODE_SESSION_ID` into the
+  child environment ([[121]] confirmed this is the real Claude Code
+  env var — the spec's guessed `CLAUDE_SESSION_ID` is not set).
 - Add `harnez exec hook` per the `harnez distill hook` precedent:
   stdin-driven, writes one telemetry row via [[116]], exits fast.
 - **Google Antigravity**: hook wiring goes into whatever `apply`
