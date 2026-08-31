@@ -113,3 +113,11 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 112 | [112-agy-usage-poll-may-trigger-google-reauth-bot-detection.md](112-agy-usage-poll-may-trigger-google-reauth-bot-detection.md) | Investigate whether `agy -p "/usage"` polling triggers Google reauth / bot-detection dialogs | Closed — inconclusive on causation, mitigation shipped |
 | 113 | [113-record-collector-roundtrip-times-usage-meta.md](113-record-collector-roundtrip-times-usage-meta.md) | Record per-collector roundtrip times; expose via `harnez usage --meta` | Open |
 | 114 | [114-remote-load-stream-drops-to-batch-stdin-eof-false-trigger.md](114-remote-load-stream-drops-to-batch-stdin-eof-false-trigger.md) | Remote Load stream drops to batch shortly after connecting: stdin-EOF false-triggers shutdown | Open |
+| 115 | [115-canary-duckdb-go-embedding-for-tool-telemetry.md](115-canary-duckdb-go-embedding-for-tool-telemetry.md) | Canary: evaluate DuckDB Go embedding for tool-call telemetry storage | Open |
+| 116 | [116-tool-telemetry-schema-and-storage-layer.md](116-tool-telemetry-schema-and-storage-layer.md) | Tool telemetry schema & storage layer (`tool_calls` table) | Open |
+| 117 | [117-harnez-rate-command.md](117-harnez-rate-command.md) | `harnez rate`: positional internal-tool rating command | Open |
+| 118 | [118-harnez-exec-shell-interceptor.md](118-harnez-exec-shell-interceptor.md) | `harnez exec`: shell execution interceptor with telemetry capture | Open |
+| 119 | [119-harnez-hook-agent-hook-management.md](119-harnez-hook-agent-hook-management.md) | `harnez hook`: agent hook install/uninstall/status (Claude, Antigravity, Codex) | Open |
+| 120 | [120-harnez-stats-analytical-reporting.md](120-harnez-stats-analytical-reporting.md) | `harnez stats`: analytical reporting over tool_calls | Open |
+| 121 | [121-multi-repo-session-and-ticket-id-resolution.md](121-multi-repo-session-and-ticket-id-resolution.md) | Multi-repo session & ticket ID resolution strategy | Open |
+| 122 | [122-agent-instruction-tool-feedback-protocol.md](122-agent-instruction-tool-feedback-protocol.md) | Agent instruction template: Tool Feedback Protocol injection | Open |
