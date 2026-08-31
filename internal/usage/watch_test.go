@@ -264,8 +264,8 @@ func TestBuildHistoryBox(t *testing.T) {
 	})
 
 	box := buildHistoryBox("", tempDir, 40)
-	if !strings.Contains(box.title, "[H]") || !strings.Contains(box.title, "History") {
-		t.Errorf("expected box title to contain [H] and History, got %q", box.title)
+	if !strings.Contains(box.title, "⁵") || !strings.Contains(box.title, "History") {
+		t.Errorf("expected box title to contain superscript 5 and History, got %q", box.title)
 	}
 
 	rendered := strings.Join(box.lines, "\n")
@@ -328,7 +328,7 @@ func TestBuildAllUsageBox(t *testing.T) {
 	}
 
 	box := buildAllUsageBox(summary, 74)
-	if !strings.Contains(box.title, "[a]") || !strings.Contains(box.title, "All Usage") {
+	if !strings.Contains(box.title, "¹") || !strings.Contains(box.title, "All Usage") {
 		t.Fatalf("expected all-usage title, got %q", box.title)
 	}
 	if len(box.lines) != 4 {
@@ -604,16 +604,16 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 	frame := buildWatchFrame(summary, nil, 60*time.Second, compactWatchSections(), 100, 30, true, "", "")
 	frameText := strings.Join(frame.lines, "\n")
 
-	if !strings.Contains(frameText, "[a]") || !strings.Contains(frameText, "All Usage") {
+	if !strings.Contains(frameText, "¹") || !strings.Contains(frameText, "All Usage") {
 		t.Fatalf("expected compact frame to show all-usage box, got:\n%s", frameText)
 	}
-	if !strings.Contains(frameText, "[L]") || !strings.Contains(frameText, "Load") {
+	if !strings.Contains(frameText, "⁷") || !strings.Contains(frameText, "Load") {
 		t.Fatalf("expected compact frame to show load box, got:\n%s", frameText)
 	}
 	foundSharedTitleRow := false
 	for _, line := range frame.lines {
 		stripped := stripANSI(line)
-		if strings.Contains(stripped, "[a] All Usage") && strings.Contains(stripped, "[L] Load") {
+		if strings.Contains(stripped, "¹ All Usage") && strings.Contains(stripped, "⁷ Load") {
 			foundSharedTitleRow = true
 			break
 		}
@@ -621,7 +621,7 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 	if !foundSharedTitleRow {
 		t.Fatalf("expected compact all-usage and load boxes to share one row, got:\n%s", frameText)
 	}
-	if strings.Contains(frameText, "] Claude Code") {
+	if strings.Contains(frameText, "² Claude Code") {
 		t.Fatalf("expected compact frame to hide individual Claude box, got:\n%s", frameText)
 	}
 	// Mid-column padded to 10 chars → "85% 8h51m " (10) + " " + "[░░░░]" = 2 spaces before second bar.
@@ -661,16 +661,16 @@ func TestBuildWatchFrame_HistoryHeaderAnd4Boxes(t *testing.T) {
 	}
 
 	// Verify all 4 boxes exist: Claude, AGY, Codex, and History
-	if !strings.Contains(frameText, "[C]") || !strings.Contains(frameText, "Claude Code") {
+	if !strings.Contains(frameText, "²") || !strings.Contains(frameText, "Claude Code") {
 		t.Errorf("expected frame to contain Claude box")
 	}
-	if !strings.Contains(frameText, "[G]") || !strings.Contains(frameText, "Antigravity") {
+	if !strings.Contains(frameText, "³") || !strings.Contains(frameText, "Antigravity") {
 		t.Errorf("expected frame to contain AGY box")
 	}
-	if !strings.Contains(frameText, "[O]") || !strings.Contains(frameText, "OpenAI Codex") {
+	if !strings.Contains(frameText, "⁴") || !strings.Contains(frameText, "OpenAI Codex") {
 		t.Errorf("expected frame to contain Codex box")
 	}
-	if !strings.Contains(frameText, "[H]") || !strings.Contains(frameText, "History") {
+	if !strings.Contains(frameText, "⁵") || !strings.Contains(frameText, "History") {
 		t.Errorf("expected frame to contain History box")
 	}
 
@@ -681,8 +681,11 @@ func TestBuildWatchFrame_HistoryHeaderAnd4Boxes(t *testing.T) {
 	if strings.Contains(frameHiddenText, "+0 used") || strings.Contains(frameHiddenText, "used ·") {
 		t.Errorf("expected history box content to be hidden when sec.History is false")
 	}
-	if !strings.Contains(frameHiddenText, "hidden:") || !strings.Contains(frameHiddenText, "[H]") || !strings.Contains(frameHiddenText, "[P]") {
-		t.Errorf("expected header to show hidden with [H] and [P], got:\n%s", frameHiddenText)
+	// AllUsage (default off) + Processes (default off) + History (just
+	// toggled off) = 3 hidden — issue 132's single hidden-count summary
+	// replaces the old per-box "[H] [P]" badge list.
+	if !strings.Contains(frameHiddenText, "3 hidden") {
+		t.Errorf("expected header to show a single '3 hidden' summary, got:\n%s", frameHiddenText)
 	}
 }
 
@@ -713,8 +716,12 @@ func TestBuildWatchFrame_SelfHidesAgentsWithoutUsageData(t *testing.T) {
 	if strings.Contains(frameText, "OpenAI Codex") {
 		t.Errorf("expected frame to omit the Codex box (no usage data), got:\n%s", frameText)
 	}
-	if strings.Contains(frameText, "[G]") || strings.Contains(frameText, "[O]") {
-		t.Errorf("expected no 'hidden: [G]'/'[O]' toggle hints for agents with no usage data, got:\n%s", frameText)
+	// Undiscovered agents (agy/codex, Installed: false) never enter the
+	// hidden-count either — only AllUsage and Processes are toggled off by
+	// default here, so the single-count summary must read "2 hidden", not
+	// inflated by agents that were never discovered in the first place.
+	if !strings.Contains(frameText, "2 hidden") {
+		t.Errorf("expected hidden-count hint to read '2 hidden' (AllUsage+Processes only), got:\n%s", frameText)
 	}
 }
 
@@ -736,11 +743,16 @@ func TestBuildWatchFrame_AllAgentsAbsent(t *testing.T) {
 	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
 	frameText := strings.Join(frame.lines, "\n")
 
-	// Box titles render as "[X] <Name>"; check for that rather than the bare
-	// name, since the explanatory fallback message legitimately mentions the
-	// agent names in prose.
+	// Box titles render as "<symbol> <Name>"; check for that rather than the
+	// bare name, since the explanatory fallback message legitimately
+	// mentions the agent names in prose.
+	boxSymbolForName := map[string]string{
+		"Claude Code":  "²",
+		"Antigravity":  "³",
+		"OpenAI Codex": "⁴",
+	}
 	for _, name := range []string{"Claude Code", "Antigravity", "OpenAI Codex"} {
-		if strings.Contains(frameText, "] "+name) {
+		if strings.Contains(frameText, boxSymbolForName[name]+" "+name) {
 			t.Errorf("expected frame to omit %s box (no usage data anywhere), got:\n%s", name, frameText)
 		}
 	}
@@ -804,7 +816,7 @@ func TestBuildWatchFrame_SevenDayStaleAgentHidden(t *testing.T) {
 	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
 	frameText := strings.Join(frame.lines, "\n")
 
-	if strings.Contains(frameText, "] Antigravity") {
+	if strings.Contains(frameText, "³ Antigravity") {
 		t.Errorf("expected frame to hide an agent 8 days stale, got:\n%s", frameText)
 	}
 	if !strings.Contains(frameText, "no agent usage detected") {
@@ -814,8 +826,8 @@ func TestBuildWatchFrame_SevenDayStaleAgentHidden(t *testing.T) {
 
 func TestBuildProcessesBox(t *testing.T) {
 	box := buildProcessesBox(40, nil)
-	if !strings.Contains(box.title, "[P]") || !strings.Contains(box.title, "Processes") {
-		t.Errorf("expected box title to contain [P] and Processes, got %q", box.title)
+	if !strings.Contains(box.title, "⁶") || !strings.Contains(box.title, "Processes") {
+		t.Errorf("expected box title to contain superscript 6 and Processes, got %q", box.title)
 	}
 	if len(box.lines) != 2 {
 		t.Fatalf("expected 2 lines in processes box, got %d: %v", len(box.lines), box.lines)
@@ -853,8 +865,9 @@ func TestBuildWatchFrame_ProcessesBox(t *testing.T) {
 	}
 	frameDefault := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
 	frameDefaultText := strings.Join(frameDefault.lines, "\n")
-	if !strings.Contains(frameDefaultText, "hidden: [P]") {
-		t.Errorf("expected hidden [P] in header, got:\n%s", frameDefaultText)
+	// AllUsage (default off) + Processes (default off) = 2 hidden.
+	if !strings.Contains(frameDefaultText, "2 hidden") {
+		t.Errorf("expected '2 hidden' in header, got:\n%s", frameDefaultText)
 	}
 	if strings.Contains(frameDefaultText, "Processes") {
 		t.Errorf("expected Processes box to be hidden by default")
@@ -864,14 +877,65 @@ func TestBuildWatchFrame_ProcessesBox(t *testing.T) {
 	sec.Processes = true
 	frameVisible := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
 	frameVisibleText := strings.Join(frameVisible.lines, "\n")
-	if strings.Contains(frameVisibleText, "hidden: [P]") {
-		t.Errorf("expected [P] to not be in hidden hint when sec.Processes is true, got:\n%s", frameVisibleText)
+	// Only AllUsage remains hidden now.
+	if !strings.Contains(frameVisibleText, "1 hidden") {
+		t.Errorf("expected '1 hidden' once sec.Processes is true, got:\n%s", frameVisibleText)
 	}
-	if !strings.Contains(frameVisibleText, "[P]") || !strings.Contains(frameVisibleText, "Processes") {
+	if !strings.Contains(frameVisibleText, "⁶") || !strings.Contains(frameVisibleText, "Processes") {
 		t.Errorf("expected Processes box to be visible when sec.Processes is true, got:\n%s", frameVisibleText)
 	}
 	if !strings.Contains(frameVisibleText, "claude:") {
 		t.Errorf("expected Processes box content in frame, got:\n%s", frameVisibleText)
+	}
+}
+
+// TestBuildWatchFrame_HiddenCountAtZeroOneAndN is issue 132's acceptance
+// criterion for the single hidden-count hint: it must be absent at 0 hidden
+// boxes, read "1 hidden" at exactly one, and "N hidden" (never a per-box
+// badge list) at several.
+func TestBuildWatchFrame_HiddenCountAtZeroOneAndN(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true},
+		},
+	}
+
+	// 0 hidden: everything defaultWatchSections tracks is on except
+	// AllUsage/Processes, so force those on too for a true zero-hidden case.
+	allOn := defaultWatchSections()
+	allOn.AllUsage = true
+	allOn.Processes = true
+	frameZero := buildWatchFrame(summary, nil, 60*time.Second, allOn, 100, 30, false, "", "")
+	zeroText := strings.Join(frameZero.lines, "\n")
+	if strings.Contains(zeroText, "hidden") {
+		t.Errorf("expected no hidden-count hint at 0 hidden boxes, got:\n%s", zeroText)
+	}
+
+	// 1 hidden: only Processes off.
+	oneHidden := allOn
+	oneHidden.Processes = false
+	frameOne := buildWatchFrame(summary, nil, 60*time.Second, oneHidden, 100, 30, false, "", "")
+	oneText := strings.Join(frameOne.lines, "\n")
+	if !strings.Contains(oneText, "1 hidden") {
+		t.Errorf("expected '1 hidden' with exactly one box toggled off, got:\n%s", oneText)
+	}
+
+	// N hidden: AllUsage, Processes, History, Load all off (4).
+	nHidden := allOn
+	nHidden.AllUsage = false
+	nHidden.Processes = false
+	nHidden.History = false
+	nHidden.Load = false
+	frameN := buildWatchFrame(summary, nil, 60*time.Second, nHidden, 100, 30, false, "", "")
+	nText := strings.Join(frameN.lines, "\n")
+	if !strings.Contains(nText, "4 hidden") {
+		t.Errorf("expected '4 hidden' with four boxes toggled off, got:\n%s", nText)
+	}
+	// Never a per-box badge list for the toggle-hidden hint (that mechanism
+	// is reserved for the separate "terminal too short" drop note).
+	if strings.Contains(nText, "hidden: [") {
+		t.Errorf("expected the toggle-hidden hint to be a single count, not per-box badges, got:\n%s", nText)
 	}
 }
 
@@ -1077,7 +1141,7 @@ func TestBuildWatchFrameLoadOnlyDoesNotStretch(t *testing.T) {
 
 	found := false
 	for _, l := range frame.lines {
-		if !strings.Contains(stripANSI(l), "[L] Load") {
+		if !strings.Contains(stripANSI(l), "⁷ Load") {
 			continue
 		}
 		found = true
@@ -1113,7 +1177,7 @@ func TestBuildWatchFrameCompactAllUsageDoesNotStarveLoad(t *testing.T) {
 
 	for _, l := range frame.lines {
 		stripped := stripANSI(l)
-		if !strings.Contains(stripped, "[a] All Usage") || !strings.Contains(stripped, "[L] Load") {
+		if !strings.Contains(stripped, "¹ All Usage") || !strings.Contains(stripped, "⁷ Load") {
 			continue
 		}
 		widths := boxTopBorderWidths(l)
@@ -1149,17 +1213,23 @@ func TestControlsOverlayListsAllActiveCommandsGroupedByPurpose(t *testing.T) {
 		}
 	}
 
-	// Every currently-live key from applyWatchSectionKey, plus the new [m]
-	// mode cycle, [?] itself, and [r]/[q] session keys, must be documented
-	// somewhere in the overlay so it stays the single source of truth.
+	// Every currently-live action's spec-sourced symbol must be documented
+	// somewhere in the overlay (issue 132: superscript digits for the
+	// numbered box toggles, literal keys for everything else) so it stays
+	// the single source of truth. The old C/G/O/H/P/L letter toggles were
+	// dropped in favor of the numbered scheme (see collision note below).
 	for _, key := range []string{
-		"[C]", "[G]", "[O]", "[H]", "[P]", "[L]", "[a]", "[A]",
-		"[1]", "[2]", "[3]", "[4]", "[5]", "[6]", "[7]", "[T]",
-		"[m]", "[r]", "[q]",
+		"[¹]", "[²]", "[³]", "[⁴]", "[⁵]", "[⁶]", "[⁷]", "[A]",
+		"[T]", "[m]", "[r]", "[q]",
 	} {
 		if !strings.Contains(plain, key) {
 			t.Errorf("expected overlay to document key %s, got:\n%s", key, plain)
 		}
+	}
+	// [a] is documented as a compat alias in the trailing note, not as a
+	// bracketed key of its own.
+	if !strings.Contains(plain, "[a]") {
+		t.Errorf("expected overlay to document the [a] compat alias, got:\n%s", plain)
 	}
 
 	if !strings.Contains(plain, "?") {
@@ -1318,17 +1388,17 @@ func TestRenderSummary_CompactSelectsReducedSections(t *testing.T) {
 	var full bytes.Buffer
 	RenderSummary(ctx, home, nil, &full, false)
 	fullText := stripANSI(full.String())
-	if !strings.Contains(fullText, "[H] History") {
+	if !strings.Contains(fullText, "⁵ History") {
 		t.Fatalf("expected default --summary output to include the History box (defaultWatchSections), got:\n%s", fullText)
 	}
 
 	var compact bytes.Buffer
 	RenderSummary(ctx, home, nil, &compact, false, WatchOptions{Compact: true})
 	compactText := stripANSI(compact.String())
-	if strings.Contains(compactText, "[H] History") {
+	if strings.Contains(compactText, "⁵ History") {
 		t.Fatalf("expected --summary --compact to drop the History box (compactWatchSections has no History), got:\n%s", compactText)
 	}
-	if !strings.Contains(compactText, "[L] Load") {
+	if !strings.Contains(compactText, "⁷ Load") {
 		t.Fatalf("expected --summary --compact to keep the Load box, got:\n%s", compactText)
 	}
 }

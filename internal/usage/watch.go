@@ -466,12 +466,18 @@ type watchKeyEffect struct {
 //  5. [r]/[R] flips remote/local when a host was configured; [q]/[Q]/
 //     Ctrl-C/Esc quits.
 func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyState, watchKeyEffect) {
+	action := mustWatchActions().actionForKey(key)
+
 	switch {
-	case key == '?':
+	case action == "toggle_controls":
 		st.overlayOpen = !st.overlayOpen
 		return st, watchKeyEffect{redraw: true}
 
 	case st.overlayOpen:
+		// Dismiss keys are deliberately not spec-driven: Enter closes the
+		// overlay but isn't a top-level hotkey shown anywhere else (title,
+		// footer, or overlay body), so it has no display symbol to source
+		// from spec/actions.yaml.
 		switch key {
 		case 'q', 'Q', 3, 27, '\r', '\n':
 			st.overlayOpen = false
@@ -479,7 +485,7 @@ func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyS
 		}
 		return st, watchKeyEffect{}
 
-	case key == 'm' || key == 'M':
+	case action == "cycle_preset":
 		sec, _, idx := nextWatchPreset(st.presetIdx)
 		if showProcesses {
 			sec.Processes = true
@@ -491,8 +497,8 @@ func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyS
 		return st, watchKeyEffect{redraw: true}
 
 	default:
-		switch key {
-		case 'r', 'R':
+		switch action {
+		case "toggle_remote":
 			if st.configuredHost != "" {
 				if st.activeHost == "" {
 					st.activeHost = st.configuredHost
@@ -501,32 +507,36 @@ func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyS
 				}
 				return st, watchKeyEffect{fetch: true}
 			}
-		case 'q', 'Q', 3, 27:
+		case "quit":
 			return st, watchKeyEffect{quit: true}
 		}
 	}
 	return st, watchKeyEffect{}
 }
 
+// applyWatchSectionKey applies key to sec if it maps (via spec/actions.yaml)
+// to a box toggle or the panel-reset action, and reports whether it did.
+// The key->action *mapping* comes from the embedded spec; which
+// watchSections field each action flips is dispatch logic and stays here.
 func applyWatchSectionKey(sec *watchSections, key byte) bool {
-	switch key {
-	case 'c', 'C', '1':
-		sec.Claude = !sec.Claude
-	case 'g', 'G', '2':
-		sec.AGY = !sec.AGY
-	case 'o', 'O', '3':
-		sec.Codex = !sec.Codex
-	case 'h', 'H', '4':
-		sec.History = !sec.History
-	case 't', 'T', '5':
-		sec.Tokens = !sec.Tokens
-	case 'p', 'P', '6':
-		sec.Processes = !sec.Processes
-	case 'l', 'L', '7':
-		sec.Load = !sec.Load
-	case 'a':
+	switch mustWatchActions().actionForKey(key) {
+	case "toggle_all_usage":
 		sec.AllUsage = !sec.AllUsage
-	case 'A':
+	case "toggle_claude":
+		sec.Claude = !sec.Claude
+	case "toggle_agy":
+		sec.AGY = !sec.AGY
+	case "toggle_codex":
+		sec.Codex = !sec.Codex
+	case "toggle_history":
+		sec.History = !sec.History
+	case "toggle_processes":
+		sec.Processes = !sec.Processes
+	case "toggle_load":
+		sec.Load = !sec.Load
+	case "toggle_tokens":
+		sec.Tokens = !sec.Tokens
+	case "reset_default":
 		*sec = defaultWatchSections()
 	default:
 		return false
@@ -552,7 +562,12 @@ func (s watchSections) agentVisible(agentID string) bool {
 	}
 }
 
-// agentKey returns the toggle key shown in an agent panel's own title bar.
+// agentKey returns a short internal box-ID abbreviation used only for the
+// "hidden — terminal too short" drop note (buildWatchFrame) and uix.Box
+// identity. It is not a keyboard hotkey and not spec-driven: the actual
+// toggle keys and their display symbols for these boxes live in
+// spec/actions.yaml and are looked up via watchBoxSymbol for title
+// rendering instead.
 func agentKey(agentID string) string {
 	switch agentID {
 	case "claude":
@@ -570,9 +585,16 @@ func agentKey(agentID string) string {
 	}
 }
 
+// watchBoxSymbol returns the bold display symbol (a superscript digit for
+// every box in the numbered scheme) shown next to boxID's title, sourced
+// from spec/actions.yaml (issue 132) rather than a hardcoded per-box string.
+func watchBoxSymbol(boxID string) string {
+	return "\x1b[1m" + mustWatchActions().boxTitleSymbol(boxID) + "\x1b[0m"
+}
+
 // buildProcessesBox renders a panel showing active agent processes on the system or remote host.
 func buildProcessesBox(width int, counts *AgentProcessCount) wbox {
-	title := "\x1b[1m[P]\x1b[0m Processes"
+	title := watchBoxSymbol("processes") + " Processes"
 	if counts == nil {
 		c := CountRunningAgentProcesses()
 		counts = &c
@@ -594,7 +616,7 @@ func buildAllUsageBox(summary UsageSummary, width int) wbox {
 	if len(lines) == 0 {
 		lines = []string{"\x1b[90mno quota windows available\x1b[0m"}
 	}
-	return wbox{title: "\x1b[1m[a]\x1b[0m All Usage", lines: lines, width: width}
+	return wbox{title: watchBoxSymbol("all_usage") + " All Usage", lines: lines, width: width}
 }
 
 func allUsageLines(summary UsageSummary, contentW int) []string {
@@ -734,9 +756,9 @@ func compactDurationText(w QuotaWindow) string {
 // renders an explicit "remote load unavailable" placeholder rather than
 // silently falling back to local telemetry.
 func buildLoadBox(width int, remoteHost string, snapshot *LoadSnapshot) wbox {
-	title := "\x1b[1m[L]\x1b[0m Load"
+	title := watchBoxSymbol("load") + " Load"
 	if remoteHost != "" {
-		title = fmt.Sprintf("\x1b[1m[L]\x1b[0m Load \x1b[90m(@%s)\x1b[0m", remoteHost)
+		title = fmt.Sprintf("%s Load \x1b[90m(@%s)\x1b[0m", watchBoxSymbol("load"), remoteHost)
 	}
 	return wbox{title: title, lines: buildLoadBoxLines(remoteHost, snapshot), width: width}
 }
@@ -904,7 +926,7 @@ func percent(used, total float64) float64 {
 
 // buildHistoryBox renders a compact 4th panel showing recorded usage history stats.
 func buildHistoryBox(homeDir, historyDir string, width int) wbox {
-	title := "\x1b[1m[H]\x1b[0m History"
+	title := watchBoxSymbol("history") + " History"
 	targetDir := historyDir
 	if targetDir == "" {
 		targetDir = HistoryDir(homeDir)
@@ -1013,7 +1035,7 @@ func staleLabel(name string) string {
 // in its title, btop-style, instead of a separate legend. Deliberately terse
 // compared to the full `harnez usage` report.
 func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live bool) wbox {
-	title := fmt.Sprintf("\x1b[1m[%s]\x1b[0m %s", agentKey(agent.AgentID), agent.Name)
+	title := fmt.Sprintf("%s %s", watchBoxSymbol(agent.AgentID), agent.Name)
 
 	if !agent.Installed {
 		return wbox{title: title, lines: []string{"\x1b[90mnot installed\x1b[0m"}, width: width}
@@ -1232,29 +1254,33 @@ type WatchOptions struct {
 func controlsOverlayLines() []string {
 	bold := func(s string) string { return "\x1b[1m" + s + "\x1b[0m" }
 	dim := func(s string) string { return "\x1b[90m" + s + "\x1b[0m" }
+	wa := mustWatchActions()
+	sym := wa.symbol
 
 	var l []string
 	l = append(l, bold("Controls")+"  "+dim("(press ?, Esc, q, or Enter to close)"))
 	l = append(l, "")
 	l = append(l, bold("View modes / presets"))
-	l = append(l, "  [m]  cycle mode: default -> compact -> agents-only -> default")
-	l = append(l, "  [A]  reset panels to the default set")
+	l = append(l, fmt.Sprintf("  [%s]  cycle mode: default -> compact -> agents-only -> default", sym("cycle_preset")))
+	l = append(l, fmt.Sprintf("  [%s]  reset panels to the default set", sym("reset_default")))
 	l = append(l, "")
-	l = append(l, bold("Panels (direct toggles, secondary)"))
-	l = append(l, "  [C] / [1]  Claude          [G] / [2]  AGY")
-	l = append(l, "  [O] / [3]  Codex           [H] / [4]  History")
-	l = append(l, "  [P] / [6]  Processes       [L] / [7]  Load")
-	l = append(l, "  [a]        All Usage (aggregate box)")
+	l = append(l, bold("Panels (numbered toggles, btop-style)"))
+	l = append(l, fmt.Sprintf("  [%s]  All Usage       [%s]  Claude", sym("toggle_all_usage"), sym("toggle_claude")))
+	l = append(l, fmt.Sprintf("  [%s]  AGY             [%s]  Codex", sym("toggle_agy"), sym("toggle_codex")))
+	l = append(l, fmt.Sprintf("  [%s]  History         [%s]  Processes", sym("toggle_history"), sym("toggle_processes")))
+	l = append(l, fmt.Sprintf("  [%s]  Load", sym("toggle_load")))
 	l = append(l, "")
 	l = append(l, bold("Data rows"))
-	l = append(l, "  [T] / [5]  token velocity / details on agent panels")
+	l = append(l, fmt.Sprintf("  [%s]  token velocity / details on agent panels", sym("toggle_tokens")))
 	l = append(l, "")
 	l = append(l, bold("Session"))
-	l = append(l, "  [r]              toggle remote/local host (when a host is configured)")
-	l = append(l, "  [q] / Ctrl-C / Esc   quit")
+	l = append(l, fmt.Sprintf("  [%s]              toggle remote/local host (when a host is configured)", sym("toggle_remote")))
+	l = append(l, fmt.Sprintf("  [%s] / Ctrl-C / Esc   quit", sym("quit")))
 	l = append(l, "")
-	l = append(l, dim("Direct panel toggles above keep working; the footer only shows the"))
-	l = append(l, dim("most common controls — this overlay is the full reference."))
+	l = append(l, dim("Numbered box toggles replaced the old C/G/O/H/P/L letter keys (issue"))
+	l = append(l, dim("132); [a] keeps working as a compat alias for All Usage's [1]. The"))
+	l = append(l, dim("footer only shows the most common controls — this overlay is the"))
+	l = append(l, dim("full reference, sourced from spec/actions.yaml."))
 	return l
 }
 
@@ -1343,27 +1369,32 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		usable = minTerminalWidth
 	}
 
-	var hidden []string
+	// hiddenCount is a single summary of how many top-level boxes the user
+	// (or the current mode/preset) has toggled off, replacing the old
+	// per-box "[C] [H] [P]" badge list (issue 132): the controls overlay
+	// (issue 094, opened via [?]) remains the place to see exactly which
+	// boxes are hidden and why.
+	hiddenCount := 0
 	for _, agent := range discovered {
 		if !sec.agentVisible(agent.AgentID) {
-			hidden = append(hidden, fmt.Sprintf("[%s]", agentKey(agent.AgentID)))
+			hiddenCount++
 		}
 	}
 	if !sec.History {
-		hidden = append(hidden, "[H]")
+		hiddenCount++
 	}
 	if !sec.Processes {
-		hidden = append(hidden, "[P]")
+		hiddenCount++
 	}
 	if !sec.Load {
-		hidden = append(hidden, "[L]")
+		hiddenCount++
 	}
 	if !sec.AllUsage {
-		hidden = append(hidden, "[a]")
+		hiddenCount++
 	}
 	hiddenHint := ""
-	if len(hidden) > 0 {
-		hiddenHint = fmt.Sprintf("   \x1b[90mhidden: %s (press ? for controls)\x1b[0m", strings.Join(hidden, " "))
+	if hiddenCount > 0 {
+		hiddenHint = fmt.Sprintf("   \x1b[90m%d hidden (press ? for controls)\x1b[0m", hiddenCount)
 	}
 
 	titlePrefix := "Agentic usage"
@@ -1378,9 +1409,11 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 	var footer []string
 	if live {
+		wa := mustWatchActions()
 		footer = []string{
 			"",
-			fmt.Sprintf("refresh every %s   \x1b[90m[?]controls  [m]ode  [r]emote  [q]uit\x1b[0m", interval),
+			fmt.Sprintf("refresh every %s   \x1b[90m[%s]controls  [%s]ode  [%s]emote  [%s]uit\x1b[0m",
+				interval, wa.symbol("toggle_controls"), wa.symbol("cycle_preset"), wa.symbol("toggle_remote"), wa.symbol("quit")),
 		}
 	}
 
