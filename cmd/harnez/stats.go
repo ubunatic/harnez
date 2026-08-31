@@ -17,6 +17,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -24,10 +25,11 @@ func newStatsCmd() *cobra.Command {
 	var toolFlag string
 	var agentFlag string
 	var ticketFlag string
+	var autoFlag bool
 	var jsonOut bool
 
 	cmd := &cobra.Command{
-		Use:   "stats [--tool <name>] [--agent <name>] [--ticket <ticket_id>]",
+		Use:   "stats [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--auto]",
 		Short: "Report call frequency, average score, failure rate, and byte savings from tool_calls telemetry",
 		Long: `stats renders an analytical report over the tool_calls telemetry table
 (internal/telemetry, issue 116, populated by 'harnez rate' and 'harnez exec'):
@@ -41,6 +43,11 @@ func newStatsCmd() *cobra.Command {
   harnez stats
   harnez stats --tool Read --agent claude
   harnez stats --ticket harnez/120-harnez-stats-analytical-reporting --json
+  harnez stats --auto
+
+--auto resolves session_id from the current environment (internal/resolve,
+same resolution harnez rate/harnez exec use) and filters to just this
+session's calls, instead of the all-time/all-session default.
 
 Filters combine with AND when more than one is given. Default output is a
 formatted terminal table; --json emits the same numbers unformatted for
@@ -51,6 +58,7 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 				Tool:   toolFlag,
 				Agent:  agentFlag,
 				Ticket: ticketFlag,
+				Auto:   autoFlag,
 				JSON:   jsonOut,
 			})
 		},
@@ -58,20 +66,25 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 	cmd.Flags().StringVar(&toolFlag, "tool", "", "filter to one tool_name")
 	cmd.Flags().StringVar(&agentFlag, "agent", "", "filter to one agent_id")
 	cmd.Flags().StringVar(&ticketFlag, "ticket", "", "filter to one ticket_id")
+	cmd.Flags().BoolVar(&autoFlag, "auto", false, "filter to the current session, resolved from the environment (like harnez rate/exec)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output the report as JSON instead of a formatted table")
 	return cmd
 }
 
 // statsOptions bundles runStats's inputs. The zero value plus explicit
 // filter fields matches production behavior (default DB path); tests
-// override DBPath to isolate from the user's real telemetry DB.
+// override DBPath/Getenv/StateDir to isolate from the user's real
+// telemetry DB and environment.
 type statsOptions struct {
 	Tool   string
 	Agent  string
 	Ticket string
+	Auto   bool
 	JSON   bool
 
-	DBPath string // telemetry DB path override; empty means telemetry.DefaultDBPath()
+	DBPath   string              // telemetry DB path override; empty means telemetry.DefaultDBPath()
+	Getenv   func(string) string // nil means os.Getenv; only consulted when Auto is set
+	StateDir string              // resolve.Session state/lock dir override; only consulted when Auto is set
 }
 
 // statsReport is the full shape rendered by both the table and JSON
@@ -107,6 +120,17 @@ func runStats(w io.Writer, opts statsOptions) error {
 		ToolName: opts.Tool,
 		AgentID:  opts.Agent,
 		TicketID: opts.Ticket,
+	}
+
+	if opts.Auto {
+		sessionID, err := resolve.Session(resolve.SessionOptions{
+			Getenv:  opts.Getenv,
+			LockDir: opts.StateDir,
+		})
+		if err != nil {
+			return fmt.Errorf("stats: resolve current session: %w", err)
+		}
+		f.SessionID = sessionID
 	}
 
 	report, err := buildStatsReport(db, f)

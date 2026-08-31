@@ -161,6 +161,40 @@ func TestRunStatsFilters_ToolAgentTicket(t *testing.T) {
 	}
 }
 
+// TestRunStatsAuto_FiltersToResolvedCurrentSession confirms --auto resolves
+// session_id the same way harnez rate/harnez exec do (internal/resolve)
+// and filters the report to just that session's rows, excluding the
+// fixture's other session entirely.
+func TestRunStatsAuto_FiltersToResolvedCurrentSession(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	seedStatsFixture(t, dbPath)
+
+	var buf bytes.Buffer
+	err := runStats(&buf, statsOptions{
+		DBPath: dbPath,
+		Auto:   true,
+		Getenv: func(k string) string {
+			if k == "CLAUDE_CODE_SESSION_ID" {
+				return "sess-1"
+			}
+			return ""
+		},
+	})
+	if err != nil {
+		t.Fatalf("runStats: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Read") {
+		t.Errorf("--auto for sess-1 output missing Read; got:\n%s", out)
+	}
+	if strings.Contains(out, "Edit") {
+		t.Errorf("--auto for sess-1 output should not mention Edit (belongs to sess-2); got:\n%s", out)
+	}
+	if strings.Contains(out, "codex") {
+		t.Errorf("--auto for sess-1 output should not mention codex (belongs to sess-2); got:\n%s", out)
+	}
+}
+
 func TestRunStatsEmptyResult_TableAndJSON(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
 	seedStatsFixture(t, dbPath)
