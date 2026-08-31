@@ -1,6 +1,6 @@
 # 115 — Canary: evaluate DuckDB Go embedding for tool-call telemetry storage
 
-**Status**: Closed — resolved in <commit-hash>
+**Status**: Closed — resolved in 857ff99
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
