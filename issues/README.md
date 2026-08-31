@@ -123,3 +123,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 122 | [122-agent-instruction-tool-feedback-protocol.md](122-agent-instruction-tool-feedback-protocol.md) | Agent instruction template: Tool Feedback Protocol injection | Closed — resolved in f158a98 |
 | 123 | [123-session-wrapping-supervisor-for-agents-without-hook-rewrite.md](123-session-wrapping-supervisor-for-agents-without-hook-rewrite.md) | `harnez run <agent>`: session-wrapping supervisor for agents without hook-rewrite support | Open — not scheduled |
 | 124 | [124-posttooluse-internal-tool-call-auto-capture.md](124-posttooluse-internal-tool-call-auto-capture.md) | `PostToolUse` hook: auto-capture internal-tool call counts without a score | Open |
+| 125 | [125-long-running-agent-runs-should-use-async-feedback.md](125-long-running-agent-runs-should-use-async-feedback.md) | Long-running agent runs should use async feedback instead of chat polling | Open |
