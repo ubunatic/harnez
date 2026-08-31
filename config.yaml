@@ -242,11 +242,11 @@ agents_md:
       - name: Tool Feedback Protocol
         content: |
           ### Tool Feedback Protocol
-          After executing any internal tool (e.g., reading files, editing, semantic scanning), immediately record the action:
+          Harnez-tracked projects only (`issues/` present); omit ticket or skip otherwise.
+          After any internal tool call, record it:
           `harnez rate <tool_name> <1-5> "<1-line outcome summary>" "<project_folder>/<ticket_name>"`
-          - Score 5: Flawless result.
-          - Score 3: Partial success / required adjustment.
-          - Score 1: Total failure / useless output.
+          Example: `harnez rate Read 5 "found the bug in apply.go" harnez/117-harnez-rate-command`
+          Score 5 flawless, 3 partial, 1 useless.
 
   # config for local md file
   local:
@@ -396,6 +396,14 @@ agents_md:
       target: ~/.claude/docs/Website.md
       local: ./docs/Website.md
       default: true
+    deployment-transparency:
+      name: "Deployment Transparency Practices"
+      ref: "@docs/DeploymentTransparency.md"
+      hint: "3-state grounding rule (Local / Deployed Artifact / Active Daemon state) for remote deployment pairing"
+      source: docs/practices/DeploymentTransparency.md
+      target: ~/.claude/docs/DeploymentTransparency.md
+      local: ./docs/DeploymentTransparency.md
+      default: false
     gorelease:
       name: "Release Pipeline"
       ref: "@docs/GoRelease.md"

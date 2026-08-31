@@ -20,14 +20,14 @@ This ticket scopes the concrete fixes; the study itself makes no changes.
 
 Eight findings, prioritized (see study §7 for full detail):
 
-1. **P1 — Rescope Tool Feedback Protocol out of `agents_md.global`.**
+1. [x] **P1 — Rescope Tool Feedback Protocol out of `agents_md.global`.**
    `config.yaml:242-249`'s invocation template presumes the target project
    uses harnez's ticket convention (`issues/NNN-*.md`), which is itself only
    project-scoped and opt-in — injecting it unconditionally into every
    global target contradicts the adjacent "Minimal Global Docs" section in
    the same file. Move to `agents_md.local`/opt-in-by-`init`, or add an
    explicit graceful-degradation statement for ticket-tracker-less projects.
-2. **P1 — Improve Tool Feedback Protocol's prose.** Add a worked example
+2. [x] **P1 — Improve Tool Feedback Protocol's prose.** Add a worked example
    invocation (a real `harnez rate Read 5 "..." harnez/117-...` line) and
    an explicit trigger/consequence, mirroring why the git-commit-trailer
    convention is reliably followed (exercised as a literal template every
@@ -35,7 +35,7 @@ Eight findings, prioritized (see study §7 for full detail):
    Confirmed independently that a `PostToolUse` hook (124) **cannot**
    substitute — 124's own scope excludes score, which only the agent can
    judge.
-3. **P1 — Fix `docs/README.md`'s false "Copyable doc" claim for
+3. [x] **P1 — Fix `docs/README.md`'s false "Copyable doc" claim for
    `DeploymentTransparency.md`.** No `config.yaml` `languages:` entry backs
    it; either add the missing source/target/local entry or drop the
    copyable claim from the index row.
@@ -65,12 +65,20 @@ Eight findings, prioritized (see study §7 for full detail):
 
 ## Acceptance Criteria
 
-- [ ] Items 1-3 (P1) resolved.
+- [x] Items 1-3 (P1) resolved.
 - [ ] Items 4-5 (P2) resolved.
 - [ ] Items 6-8 (P3) scheduled or explicitly deferred with a reason (item 8
       is blocked on item 7 by design).
 - [ ] `harnez diff`/`harnez status` still report clean after any
       `config.yaml` section changes (idempotency preserved).
+
+## Progress
+
+Items 1-3 (P1) resolved: `config.yaml`'s Tool Feedback Protocol section now carries an explicit
+harnez-tracker-only scoping clause plus a worked `harnez rate` example, and a `deployment-transparency`
+`languages:` entry was added so `docs/README.md`'s "Copyable doc" claim for
+`DeploymentTransparency.md` is now backed by a real install mechanism. `harnez apply`/`harnez diff`
+confirmed idempotent after the change. Items 4-8 remain open; ticket stays Open overall.
 
 ## Notes
 
