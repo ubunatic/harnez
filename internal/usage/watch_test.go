@@ -328,7 +328,7 @@ func TestBuildAllUsageBox(t *testing.T) {
 		},
 	}
 
-	box := buildAllUsageBox(summary, 74)
+	box := buildAllUsageBox(summary, 74, false)
 	if !strings.Contains(box.title, "¹") || !strings.Contains(box.title, "All Usage") {
 		t.Fatalf("expected all-usage title, got %q", box.title)
 	}
@@ -392,7 +392,7 @@ func TestBuildAllUsageBox_StaleAndHistoricalAgents(t *testing.T) {
 		},
 	}
 
-	box := buildAllUsageBox(summary, 74)
+	box := buildAllUsageBox(summary, 74, false)
 	if len(box.lines) != 2 {
 		t.Fatalf("expected 2 all-usage rows including historical AGY, got %d: %v", len(box.lines), box.lines)
 	}
@@ -431,7 +431,7 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 		},
 	}
 
-	box := buildAllUsageBox(summary, 51)
+	box := buildAllUsageBox(summary, 51, false)
 	contentW := box.width - 4
 	if len(box.lines) != 2 {
 		t.Fatalf("expected 2 all-usage rows, got %d: %v", len(box.lines), box.lines)
@@ -530,7 +530,7 @@ func TestAllUsageBoxSecondBarColumnAlignment(t *testing.T) {
 
 	for _, boxWidth := range []int{55, 60, 70, 80, 100} {
 		t.Run(fmt.Sprintf("width=%d", boxWidth), func(t *testing.T) {
-			box := buildAllUsageBox(summary, boxWidth)
+			box := buildAllUsageBox(summary, boxWidth, false)
 			contentW := box.width - 4
 			if len(box.lines) == 0 {
 				t.Fatalf("expected rows, got none")
@@ -1369,6 +1369,78 @@ func TestDispatchWatchKeyOverlayOpenClose(t *testing.T) {
 	final, eff := dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, 'q', false)
 	if !eff.quit {
 		t.Fatalf("expected q to quit once the overlay is closed, got %+v (state %+v)", eff, final)
+	}
+}
+
+// TestDispatchWatchKeyDebugOverlayRendersAndRestoresFrame covers issue 140
+// through the production dispatch and frame-rendering paths. In particular,
+// compact mode relies on the aggregate All Usage panel, so its per-agent rows
+// must visibly reflect the toggled state without changing frame geometry.
+func TestDispatchWatchKeyDebugOverlayRendersAndRestoresFrame(t *testing.T) {
+	lastRefreshed := time.Now().Add(time.Hour)
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{
+				AgentID:       "claude",
+				Name:          "Claude Code",
+				Installed:     true,
+				Authenticated: true,
+				LastRefreshed: lastRefreshed,
+				Weekly:        &QuotaWindow{Name: "Weekly", UsedPercent: 25},
+				Session:       &QuotaWindow{Name: "5-hour", UsedPercent: 50},
+			},
+		},
+	}
+	sec := watchSections{AllUsage: true}
+	state := watchKeyState{sec: sec}
+	historyDir := t.TempDir()
+
+	render := func(debugOverlay bool) screenFrame {
+		return buildWatchFrame(summary, nil, time.Minute, sec, 90, 24, true, t.TempDir(), historyDir, WatchOptions{
+			DebugOverlay: debugOverlay,
+		})
+	}
+
+	normal := render(state.debugOverlay)
+	normalText := stripANSI(strings.Join(normal.lines, "\n"))
+	if !strings.Contains(normalText, "Claude Code") {
+		t.Fatalf("normal frame lost the aggregate agent label:\n%s", normalText)
+	}
+	if strings.Contains(normalText, "[█]") {
+		t.Fatalf("normal frame unexpectedly contains the freshness gauge:\n%s", normalText)
+	}
+
+	toggled, eff := dispatchWatchKey(state, '!', false)
+	if !toggled.debugOverlay || !eff.redraw || eff.fetch || eff.quit {
+		t.Fatalf("! dispatch did not enable debug overlay with redraw only: state=%+v effect=%+v", toggled, eff)
+	}
+	if toggled.sec != state.sec || toggled.overlayOpen != state.overlayOpen {
+		t.Fatalf("! dispatch changed unrelated watch state: got %+v, want sections/controls from %+v", toggled, state)
+	}
+
+	debug := render(toggled.debugOverlay)
+	debugText := stripANSI(strings.Join(debug.lines, "\n"))
+	if !strings.Contains(debugText, "Claude C[█]") {
+		t.Fatalf("debug frame does not show the aggregate per-agent freshness gauge:\n%s", debugText)
+	}
+	if debug.cols != normal.cols || debug.rows != normal.rows || len(debug.lines) != len(normal.lines) {
+		t.Fatalf("debug overlay changed frame geometry: normal=%dx%d/%d lines debug=%dx%d/%d lines",
+			normal.cols, normal.rows, len(normal.lines), debug.cols, debug.rows, len(debug.lines))
+	}
+	for i := range normal.lines {
+		if visLen(debug.lines[i]) != visLen(normal.lines[i]) {
+			t.Errorf("debug overlay changed visible width on line %d: normal=%d debug=%d", i, visLen(normal.lines[i]), visLen(debug.lines[i]))
+		}
+	}
+
+	restored, eff := dispatchWatchKey(toggled, '!', false)
+	if restored.debugOverlay || !eff.redraw {
+		t.Fatalf("second ! dispatch did not disable debug overlay with redraw: state=%+v effect=%+v", restored, eff)
+	}
+	restoredFrame := render(restored.debugOverlay)
+	if got, want := strings.Join(restoredFrame.lines, "\n"), strings.Join(normal.lines, "\n"); got != want {
+		t.Fatalf("second ! did not restore the exact normal frame:\n--- got ---\n%s\n--- want ---\n%s", stripANSI(got), stripANSI(want))
 	}
 }
 

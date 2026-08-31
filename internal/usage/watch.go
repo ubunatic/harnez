@@ -621,20 +621,22 @@ func buildProcessesBox(width int, counts *AgentProcessCount) wbox {
 	return wbox{title: title, lines: lines, width: width}
 }
 
-func buildAllUsageBox(summary UsageSummary, width int) wbox {
-	lines := allUsageLines(summary, width-4)
+func buildAllUsageBox(summary UsageSummary, width int, debugOverlay bool) wbox {
+	lines := allUsageLines(summary, width-4, debugOverlay)
 	if len(lines) == 0 {
 		lines = []string{ansiDimGrey + "no quota windows available\x1b[0m"}
 	}
 	return wbox{title: watchBoxSymbol("all_usage") + " All Usage", lines: lines, width: width}
 }
 
-func allUsageLines(summary UsageSummary, contentW int) []string {
+func allUsageLines(summary UsageSummary, contentW int, debugOverlay bool) []string {
 	type allUsageRow struct {
-		label   string
-		windows []QuotaWindow
+		label         string
+		windows       []QuotaWindow
+		lastRefreshed time.Time
 	}
 
+	now := time.Now()
 	var rows []allUsageRow
 	labelWidth := 0
 	for _, agent := range summary.Agents {
@@ -649,7 +651,7 @@ func allUsageLines(summary UsageSummary, contentW int) []string {
 				} else if strings.EqualFold(label, "Claude and GPT models") || strings.EqualFold(label, "Claude and GPT") {
 					label = "Claude/GPT"
 				}
-				rows = append(rows, allUsageRow{label: label, windows: mg.Windows})
+				rows = append(rows, allUsageRow{label: label, windows: mg.Windows, lastRefreshed: agent.LastRefreshed})
 				if n := visLen(label); n > labelWidth {
 					labelWidth = n
 				}
@@ -665,7 +667,7 @@ func allUsageLines(summary UsageSummary, contentW int) []string {
 			wins = append(wins, *agent.Session)
 		}
 		if len(wins) > 0 {
-			rows = append(rows, allUsageRow{label: agent.Name, windows: wins})
+			rows = append(rows, allUsageRow{label: agent.Name, windows: wins, lastRefreshed: agent.LastRefreshed})
 			if n := visLen(agent.Name); n > labelWidth {
 				labelWidth = n
 			}
@@ -674,7 +676,11 @@ func allUsageLines(summary UsageSummary, contentW int) []string {
 
 	var lines []string
 	for _, row := range rows {
-		lines = append(lines, formatAllUsageLine(row.label, row.windows, contentW, labelWidth))
+		label := row.label
+		if debugOverlay {
+			label = freshnessOverlayLabel(label, row.lastRefreshed, now)
+		}
+		lines = append(lines, formatAllUsageLine(label, row.windows, contentW, labelWidth))
 	}
 	return lines
 }
@@ -1500,7 +1506,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 	var panels []panel
 	if sec.AllUsage {
-		panels = append(panels, panel{"a", func(w int) wbox { return buildAllUsageBox(summary, w) }})
+		panels = append(panels, panel{"a", func(w int) wbox { return buildAllUsageBox(summary, w, opt.DebugOverlay) }})
 	}
 	for _, agent := range visible {
 		agent := agent
