@@ -1,6 +1,6 @@
 # 117 — `harnez rate`: positional internal-tool rating command
 
-**Status**: Closed — resolved in a3a67ba
+**Status**: Closed — resolved in 03753f4
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
