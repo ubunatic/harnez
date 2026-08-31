@@ -142,3 +142,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 141 | [141-codex-status-bar-agent-count.md](141-codex-status-bar-agent-count.md) | Show the running-agent count in the Codex status bar | Open |
 | 142 | [142-disable-rate-feedback-and-measure-overhead.md](142-disable-rate-feedback-and-measure-overhead.md) | Allow disabling `harnez rate` feedback and measure its token overhead | Open |
 | 143 | [143-show-git-status-in-all-agent-status-bars.md](143-show-git-status-in-all-agent-status-bars.md) | Show Git status in all agent status bars | Open |
+| 144 | [144-codex-subagent-model-selection-policy.md](144-codex-subagent-model-selection-policy.md) | Ensure Codex uses the correct model for subagents | Open |
