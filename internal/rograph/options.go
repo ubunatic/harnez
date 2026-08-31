@@ -29,6 +29,59 @@ type BarOptions struct {
 	// PercentPrecision controls the optional percent label. Negative values
 	// clamp to 0.
 	PercentPrecision int
+	// SubChar renders the single boundary character (where fill transitions
+	// from filled to empty) using a horizontal eighth-block glyph
+	// (▏▎▍▌▋▊▉█) instead of snapping it to fully filled or fully empty.
+	// Only applies when Fill and Empty are left at their defaults ('█' and
+	// '░'); custom glyphs fall back to whole-character snapping since
+	// eighth-block glyphs only exist for the default block characters.
+	SubChar bool
+	// ANSI wraps the rendered bar (including any percent label) in a
+	// background ANSI sequence, matching RenderSparkline's convention.
+	// Plain output is the default so callers can opt in only for terminal
+	// contexts.
+	ANSI bool
+	// BackgroundANSI is the SGR code used when ANSI is true. Empty uses
+	// "100" (bright-black), the same default as RenderSparkline.
+	BackgroundANSI string
+}
+
+// eighthBlockGlyphs are the horizontal eighth-block glyphs used for a
+// sub-character fill boundary, 1/8 through 8/8 width.
+var eighthBlockGlyphs = []rune("▏▎▍▌▋▊▉█")
+
+// eighthBlockFill renders width default-glyph characters ('█'/'░') with the
+// single boundary character rendered at eighth-block precision rather than
+// snapped to fully filled or fully empty. pct must already be clamped to
+// [0, 100].
+func eighthBlockFill(pct float64, width int) string {
+	totalEighths := int(float64(width*8) * (pct / 100))
+	if totalEighths < 0 {
+		totalEighths = 0
+	}
+	maxEighths := width * 8
+	if totalEighths > maxEighths {
+		totalEighths = maxEighths
+	}
+
+	fullChars := totalEighths / 8
+	remainder := totalEighths % 8
+	if fullChars >= width {
+		fullChars = width
+		remainder = 0
+	}
+
+	var b strings.Builder
+	b.WriteString(strings.Repeat("█", fullChars))
+	if fullChars < width {
+		if remainder == 0 {
+			b.WriteRune('░')
+		} else {
+			b.WriteRune(eighthBlockGlyphs[remainder-1])
+		}
+		b.WriteString(strings.Repeat("░", width-fullChars-1))
+	}
+	return b.String()
 }
 
 // SparklineOptions configures RenderSparkline. The zero value renders a
@@ -72,24 +125,38 @@ func RenderBar(value float64, opts BarOptions) string {
 		right = "]"
 	}
 
-	filledCount := int(float64(width) * (pct / 100))
-	if filledCount < 0 {
-		filledCount = 0
-	}
-	if filledCount > width {
-		filledCount = width
+	var glyphs string
+	if opts.SubChar && fill == '█' && empty == '░' {
+		glyphs = eighthBlockFill(pct, width)
+	} else {
+		filledCount := int(float64(width) * (pct / 100))
+		if filledCount < 0 {
+			filledCount = 0
+		}
+		if filledCount > width {
+			filledCount = width
+		}
+		glyphs = strings.Repeat(string(fill), filledCount) + strings.Repeat(string(empty), width-filledCount)
 	}
 
 	var b strings.Builder
 	b.WriteString(left)
-	b.WriteString(strings.Repeat(string(fill), filledCount))
-	b.WriteString(strings.Repeat(string(empty), width-filledCount))
+	b.WriteString(glyphs)
 	b.WriteString(right)
 	if opts.IncludePercent {
 		b.WriteByte(' ')
 		b.WriteString(FormatPercent(pct, opts.PercentPrecision))
 	}
-	return b.String()
+
+	out := b.String()
+	if opts.ANSI {
+		code := opts.BackgroundANSI
+		if code == "" {
+			code = "100"
+		}
+		out = "\x1b[" + code + "m" + out + "\x1b[0m"
+	}
+	return out
 }
 
 // RenderSparkline renders the most recent values as one terminal glyph per
