@@ -39,19 +39,29 @@ Eight findings, prioritized (see study §7 for full detail):
    `DeploymentTransparency.md`.** No `config.yaml` `languages:` entry backs
    it; either add the missing source/target/local entry or drop the
    copyable claim from the index row.
-4. **P2 — Collapse the 4-way "Context Discipline" restatement**
+4. [x] **P2 — Collapse the 4-way "Context Discipline" restatement**
    (`config.yaml:232`, `docs/README.md:7`, `AgenticLoop.md:45` Invariant #5,
    this repo's own `AGENTS.md:131-134`) into one canonical statement (likely
    `AgenticLoop.md`'s Invariant #5) with the other three as `@docs/...`
-   pointers instead of independently-worded restatements.
-5. **P2 — Replace harnez's own root `CLAUDE.md`'s full P0-P3 schema
+   pointers instead of independently-worded restatements. Resolved: kept
+   `docs/practices/AgenticLoop.md` Invariant 6 (Context Discipline &
+   Range-Bounded Ingestion) as canonical; `config.yaml`'s Instructions
+   Hierarchy bullet, `docs/README.md`'s tip box, and this repo's own
+   `AGENTS.md` section now all point to it instead of restating it.
+5. [x] **P2 — Replace harnez's own root `CLAUDE.md`'s full P0-P3 schema
    transcription with `@docs/IssueTracking.md`.** The project already has
    the doc installed locally via its own `init --docs issue-tracking`; the
    full hand-copy is duplication with no copy-mechanism excuse and violates
-   the project's own documented summary-vs-full-doc discipline.
-6. **P3 — Merge "Minimal Global Docs" into "Instructions Hierarchy"** as
+   the project's own documented summary-vs-full-doc discipline. Resolved:
+   `AGENTS.md`/`CLAUDE.md` (a symlink to it) now carries a short pointer
+   instead of the full schema/metadata-template transcription.
+6. [x] **P3 — Merge "Minimal Global Docs" into "Instructions Hierarchy"** as
    one additional bullet rather than a separate marked section (removes one
-   marker pair, no content loss).
+   marker pair, no content loss). Resolved in `config.yaml`; verified the
+   stale `Minimal Global Docs` marker block no longer exists in either real
+   target file (`~/.claude/CLAUDE.md`, `~/.prime/agent/AGENTS.md`) after
+   apply — `ApplyAll`/`CleanAll` do not auto-remove sections dropped from
+   config, so the orphaned block had to be stripped manually once.
 7. **P3 — Add a `claude_skills_target` write path** (`apply.go`/
    `config.yaml`) so harnez-authored skills can become genuinely
    auto-triggered for Claude Code (description-matched, loaded on
@@ -66,9 +76,9 @@ Eight findings, prioritized (see study §7 for full detail):
 ## Acceptance Criteria
 
 - [x] Items 1-3 (P1) resolved.
-- [ ] Items 4-5 (P2) resolved.
+- [x] Items 4-5 (P2) resolved.
 - [ ] Items 6-8 (P3) scheduled or explicitly deferred with a reason (item 8
-      is blocked on item 7 by design).
+      is blocked on item 7 by design). Item 6 done; items 7-8 remain open.
 - [ ] `harnez diff`/`harnez status` still report clean after any
       `config.yaml` section changes (idempotency preserved).
 
@@ -78,7 +88,18 @@ Items 1-3 (P1) resolved: `config.yaml`'s Tool Feedback Protocol section now carr
 harnez-tracker-only scoping clause plus a worked `harnez rate` example, and a `deployment-transparency`
 `languages:` entry was added so `docs/README.md`'s "Copyable doc" claim for
 `DeploymentTransparency.md` is now backed by a real install mechanism. `harnez apply`/`harnez diff`
-confirmed idempotent after the change. Items 4-8 remain open; ticket stays Open overall.
+confirmed idempotent after the change.
+
+Items 4-6 resolved: `docs/practices/AgenticLoop.md` Invariant 6 kept as the canonical
+Context Discipline statement, with `config.yaml`, `docs/README.md`, and this repo's own
+`AGENTS.md` collapsed to pointers at it; this repo's root `CLAUDE.md` (symlinked to
+`AGENTS.md`) no longer hand-transcribes the P0-P3 Issue Priority Schema, pointing to
+`@docs/IssueTracking.md` instead; and `config.yaml`'s "Minimal Global Docs" section was
+folded into "Instructions Hierarchy" as one bullet, with the orphaned marker block
+manually stripped from both real target files (`ApplyAll`/`CleanAll` don't auto-remove
+sections dropped from config). `harnez apply`/`harnez diff`/`harnez status` confirmed
+clean afterward. Items 7-8 remain open (P3, item 8 blocked on item 7); ticket stays Open
+overall.
 
 ## Notes
 

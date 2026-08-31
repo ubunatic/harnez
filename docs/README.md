@@ -4,7 +4,7 @@ In-depth references for decisions, architecture, and pitfalls specific to this c
 Not needed for routine coding; reach for these during investigations or design work.
 
 > [!TIP]
-> **Context Discipline**: If a rule or convention summary is already present in your active system prompt (`AGENTS.md`), do not ingest the full doc file unless you need deep reference material, templates, or obscure syntax patterns. Use `grep_search` or range-bounded reads (`StartLine`/`EndLine`).
+> **Context Discipline**: see `docs/practices/AgenticLoop.md` Invariant 6 (Context Discipline & Range-Bounded Ingestion) for the canonical rule.
 
 | File | Topic & Consultation Trigger |
 |------|------------------------------|

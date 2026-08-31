@@ -11,8 +11,8 @@ import (
 // Tool Feedback Protocol instruction snippet (telling agents to call
 // `harnez rate`, see issue 117) is a declarative agents_md.global.sections
 // entry in config.yaml, consumed by the same managed-section mechanism
-// apply.go already uses for the "Instructions Hierarchy" / "Minimal Global
-// Docs" sections — not a new code path.
+// apply.go already uses for the "Instructions Hierarchy" section — not a
+// new code path.
 func TestToolFeedbackProtocolConfigEntry(t *testing.T) {
 	cfg, err := LoadConfigEmbedded()
 	if err != nil {

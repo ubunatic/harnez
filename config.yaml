@@ -229,16 +229,14 @@ agents_md:
           - Local rules may refer to global docs managed by harnez.
             Resolve local @docs or @rules refs to ./docs or ./rules first,
             then to the active harness directory (~/.claude or ~/.prime/agent).
-          - Context Discipline: do not execute whole-file reads on AGENTS.md or active system prompt files; use grep or range-bounded reads.
+          - Context Discipline: avoid whole-file reads on active system-prompt files (AGENTS.md,
+            CLAUDE.md); use grep or range-bounded reads — see @docs/AgenticLoop.md Invariant 6.
           - Voice Input: the user may use speech-to-text (ASR); interpret phonetic homophones and transcription anomalies with context awareness.
           - Always use absolute file paths for global instructions.
             Always use relative file paths for local instructions.
-      - name: Minimal Global Docs
-        content: |
-          Make sure that the global CLAUDE.md does not contain anyting not relevant
-          for the project. It must apply to all projects and be used as glue between
-          local and global docs only.
-          The purpose of the global doc is to steer the agentic setup.
+          - Minimal Global Docs: keep this global file free of anything not relevant to every
+            project — it applies everywhere and is glue between local and global docs only,
+            steering the agentic setup rather than carrying project-specific content.
       - name: Tool Feedback Protocol
         content: |
           ### Tool Feedback Protocol

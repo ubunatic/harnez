@@ -70,28 +70,10 @@ A category dir forms once 3+ docs share a theme.
 
 ## Issue Tracking & Priority Standards
 
-Adhere to `@docs/IssueTracking.md` for issue tracking across `issues/*.md`:
-
-- **Issue Priority Schema (Scheduling Urgency)**:
-  - **P0 / Critical**: Blocker, data loss, security vulnerability, broken build, or critical regression violating core invariants. Halts regular development ("stop the line").
-  - **P1 / High**: Core functionality broken, major workflow impediment, key API regression, or high-urgency milestone deliverable. Addressed in current sprint.
-  - **P2 / Medium**: Normal feature, standard bug fix, performance optimization, UX polish, or refactoring without active blockage. Scheduled in normal backlog.
-  - **P3 / Low**: Minor cosmetic glitch, typo, nice-to-have suggestion, speculative idea, or non-urgent documentation improvement. Opportunistic.
-- **Priority vs. Severity**:
-  - *Severity* = technical impact/damage (Critical, Major, Moderate, Minor).
-  - *Priority* = scheduling urgency (P0, P1, P2, P3).
-- **Ticket Metadata Format**: Every issue file under `issues/NNN-*.md` begins with:
-  ```markdown
-  # NNN — Title of Issue
-
-  **Status**: Open | In Progress | Blocked — <reason> | Closed — resolved in <commit> | Draft
-  **Priority**: P0 (Critical) | P1 (High) | P2 (Medium) | P3 (Low)
-  **Severity**: Critical | Major | Moderate | Minor
-  **Category**: Bug | Feature | Architecture | Documentation | Performance | Refactor | Agentic Ergonomics
-  **Related**: [Doc / Ticket / Commit references]
-  ```
-- **Tracker Synchronization**: Keep `issues/README.md` table in sync with ticket files (`harnez status` verifies consistency). Archive closed tickets to `issues/archive/`.
-- Commit documentation changes and `issues/*.md` changes immediately, don't batch them behind pending code work.
+Adhere to `@docs/IssueTracking.md` for issue tracking conventions across `issues/*.md`
+(P0-P3 priority schema, severity/priority distinction, ticket metadata header format,
+tracker synchronization). Commit documentation changes and `issues/*.md` changes
+immediately, don't batch them behind pending code work.
 
 ## Development & Review Workflow
 
@@ -129,9 +111,9 @@ Run from project root.
   for normal one-after-another dev work.
 
 ## Context Discipline & Token Efficiency
-- Do not execute whole-file read tools on `AGENTS.md`, `CLAUDE.md`, or rules already in the active system prompt.
-- Prefer `grep_search` or range-bounded reads (`StartLine`/`EndLine`) over ingesting entire reference docs.
-- Consult index annotations in `docs/README.md` to determine whether a bundled doc requires a full read or if its rule summary is sufficient.
+
+See `@docs/AgenticLoop.md` Invariant 6 (Context Discipline & Range-Bounded Ingestion)
+for the canonical statement of this rule.
 
 ## Voice & Transcription Input Awareness
 - The user often uses voice-to-text / speech transcription (ASR).
