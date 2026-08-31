@@ -1,6 +1,6 @@
 # 100 — Container canary: install `latest` Codeberg release and verify `--version`
 
-**Status**: Resolved — `scripts/install-canary.sh`, `make install-canary`
+**Status**: Closed — resolved in `7c76ec5` (`scripts/install-canary.sh`, `make install-canary`)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature

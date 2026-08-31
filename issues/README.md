@@ -26,7 +26,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 018 | [018-mark-bundled-docs-in-frontmatter.md](018-mark-bundled-docs-in-frontmatter.md) | Bundled docs don't self-identify as claudeconfig-managed | Open |
 | 019 | [019-rename-to-harnez.md](019-rename-to-harnez.md) | Rename project from claudeconfig to harnez | Closed |
 | 020 | [archive/020-tools-command-os-tools.md](archive/020-tools-command-os-tools.md) | `harnez tools`: guided OS-level tool installation | Closed — extracted to `voxi` |
-| 023 | [023-usage-command-token-quota-tracking.md](023-usage-command-token-quota-tracking.md) | `harnez usage`: unified token, session & quota status command | Implemented — `--watch`, `--summary`, robustness fixes committed 2026-08-18 |
+| 023 | [archive/023-usage-command-token-quota-tracking.md](archive/023-usage-command-token-quota-tracking.md) | `harnez usage`: unified token, session & quota status command | Closed — resolved in `48a2585`, `6c82176` |
 | 029 | [archive/029-extract-ubunatic-voxi-standalone.md](archive/029-extract-ubunatic-voxi-standalone.md) | Extract standalone voice input engine (`ubunatic/voxi`) | Complete — extracted to standalone repo |
 | 030 | [030-agy-codex-missing-local-token-counts.md](030-agy-codex-missing-local-token-counts.md) | AGY and Codex have no local token-count source | Open |
 | 031 | [031-usage-quota-fetch-errors-silent.md](031-usage-quota-fetch-errors-silent.md) | Live quota fetch failures are silent in `harnez usage` | Closed |
@@ -84,8 +84,8 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 083 | [083-usage-tui-self-hiding-auto-discovery.md](083-usage-tui-self-hiding-auto-discovery.md) | Self-Hiding, Auto-Discovery Agent Display in Usage TUI | Closed — resolved (uncommitted, pending transplant) |
 | 084 | [084-aggregate-quota-window-box-assessment.md](084-aggregate-quota-window-box-assessment.md) | Aggregate Quota-Window Box: UX & Feasibility Assessment | Open — deferred, needs assessment before implementation |
 | 085 | [085-watch-tui-show-collector-daemon-status.md](085-watch-tui-show-collector-daemon-status.md) | Briefly Show Agent-Collector Daemon Status in `harnez usage --watch` | Open |
-| 086 | [086-offline-degraded-cache-snapshot-masks-live-data.md](086-offline-degraded-cache-snapshot-masks-live-data.md) | Offline/Degraded Collector Snapshot Is Cached and Served as Fresh, Masking Richer Live Data | Resolved — 2026-08-29 |
-| 087 | [087-generalize-flock-freshness-gate-to-codex-agy.md](087-generalize-flock-freshness-gate-to-codex-agy.md) | Generalize Claude's flock+Freshness Live-Fetch Gate to Codex and AGY | Resolved — 2026-08-29 |
+| 086 | [archive/086-offline-degraded-cache-snapshot-masks-live-data.md](archive/086-offline-degraded-cache-snapshot-masks-live-data.md) | Offline/Degraded Collector Snapshot Is Cached and Served as Fresh, Masking Richer Live Data | Closed — resolved in `4a4b9ab` |
+| 087 | [archive/087-generalize-flock-freshness-gate-to-codex-agy.md](archive/087-generalize-flock-freshness-gate-to-codex-agy.md) | Generalize Claude's flock+Freshness Live-Fetch Gate to Codex and AGY | Closed — resolved in `558dd45` |
 | 088 | [088-load-panel-ram-vram-gtt-memory.md](088-load-panel-ram-vram-gtt-memory.md) | Load Panel: RAM, VRAM, and GTT Memory | Closed — resolved in implementation commit |
 | 089 | [089-load-panel-combine-gpu-vram-gtt-row.md](089-load-panel-combine-gpu-vram-gtt-row.md) | Load Panel: Combine GPU VRAM/GTT Row | Open |
 | 090 | [090-remote-load-panel-uses-local-metrics.md](090-remote-load-panel-uses-local-metrics.md) | Remote Usage Load Panel Uses Local Metrics | Closed — resolved in 6522a05 |
@@ -96,10 +96,10 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 095 | [095-restore-cwd-after-shell-tool-use-and-statusline-cwd-display.md](095-restore-cwd-after-shell-tool-use-and-statusline-cwd-display.md) | Restore CWD After Shell Tool Use; Surface CWD in Status Line | Open — partially resolved (statusLine shipped) |
 | 096 | [096-release-forge-token-401-warning-lacks-fix-hint.md](096-release-forge-token-401-warning-lacks-fix-hint.md) | `harnez release`'s `has_releases` 401 warning doesn't name the fix | Open |
 | 097 | [097-release-skip-when-no-diff-since-prev-tag.md](097-release-skip-when-no-diff-since-prev-tag.md) | `harnez release` should skip when there's no diff since the previous tag | Closed — resolved |
-| 098 | [098-deb-rpm-packaging.md](098-deb-rpm-packaging.md) | Add DEB and RPM packaging to `harnez release` | Resolved |
+| 098 | [archive/098-deb-rpm-packaging.md](archive/098-deb-rpm-packaging.md) | Add DEB and RPM packaging to `harnez release` | Closed — resolved in `4f3817e` |
 | 099 | [099-appimage-packaging.md](099-appimage-packaging.md) | Add AppImage packaging to `harnez release` | Closed — evaluated, not pursued |
-| 100 | [100-container-install-verify-canary.md](100-container-install-verify-canary.md) | Container canary: install `latest` Codeberg release and verify `--version` | Resolved — `scripts/install-canary.sh`, `make install-canary` |
-| 101 | [101-usage-keep-stale-agents-visible-until-7d.md](101-usage-keep-stale-agents-visible-until-7d.md) | `harnez usage` hides/blanks agents too soon when not recently active (e.g. AGY) | Resolved — 2026-08-29 |
+| 100 | [archive/100-container-install-verify-canary.md](archive/100-container-install-verify-canary.md) | Container canary: install `latest` Codeberg release and verify `--version` | Closed — resolved in `7c76ec5` |
+| 101 | [archive/101-usage-keep-stale-agents-visible-until-7d.md](archive/101-usage-keep-stale-agents-visible-until-7d.md) | `harnez usage` hides/blanks agents too soon when not recently active (e.g. AGY) | Closed — resolved in `74c6052`, `7c50f12` |
 | 102 | [102-usage-summary-compact-should-be-allowed.md](102-usage-summary-compact-should-be-allowed.md) | `harnez usage --summary --compact` should be allowed | Closed — resolved in 1d98fb6 |
 | 103 | [103-agy-missing-from-all-usage-aggregate.md](103-agy-missing-from-all-usage-aggregate.md) | Antigravity missing from All Usage aggregate despite recent historical data | Closed — resolved |
 | 104 | [104-agy-quota-collector-requires-live-process-poll-coincidence.md](104-agy-quota-collector-requires-live-process-poll-coincidence.md) | AGY quota collector only records data when a live process poll coincides with a running AGY instance | Closed — resolved in 783cfcc |

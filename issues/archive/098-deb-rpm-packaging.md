@@ -1,6 +1,6 @@
 # 098 — Add DEB and RPM packaging to `harnez release`
 
-**Status**: Resolved — 2026-08-29
+**Status**: Closed — resolved in `4f3817e`, 2026-08-29
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature

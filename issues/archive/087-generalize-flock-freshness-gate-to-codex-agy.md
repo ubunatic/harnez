@@ -1,6 +1,6 @@
 # 087 — Generalize Claude's flock+Freshness Live-Fetch Gate to Codex and AGY
 
-**Status**: Resolved — 2026-08-29
+**Status**: Closed — resolved in `558dd45`, 2026-08-29
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Refactor

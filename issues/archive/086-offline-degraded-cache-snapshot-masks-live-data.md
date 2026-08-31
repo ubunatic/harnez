@@ -1,6 +1,6 @@
 # 086 — Offline/Degraded Collector Snapshot Is Cached and Served as Fresh, Masking Richer Live Data
 
-**Status**: Resolved — 2026-08-29
+**Status**: Closed — resolved in `4a4b9ab`, 2026-08-29
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug

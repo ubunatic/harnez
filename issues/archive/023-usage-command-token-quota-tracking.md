@@ -1,6 +1,6 @@
 # 023 — `harnez usage`: Unified Token, Session & Quota Status Command
 
-**Status**: Implemented & verified; `--watch` live view (2026-08-18, `48a2585`), `--summary` one-shot view and quota-fetch robustness fixes (2026-08-18, `6c82176`) all committed  
+**Status**: Closed — resolved in `48a2585` (`--watch` live view) and `6c82176` (`--summary` view, quota-fetch robustness), 2026-08-18  
 **Category**: Feature / CLI Tooling  
 **Command**: `harnez usage` (aliases/related: `quota`, `tokens`, `stats`)  
 

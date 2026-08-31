@@ -1,6 +1,6 @@
 # 101 — `harnez usage` hides/blanks agents too soon when not recently active (e.g. AGY)
 
-**Status**: Resolved (read-side fix + write-side follow-up, both 2026-08-29)
+**Status**: Closed — resolved in `74c6052` (read-side fix) and `7c50f12` (write-side follow-up), 2026-08-29
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: UX / Agentic Ergonomics
