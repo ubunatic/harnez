@@ -438,6 +438,10 @@ type watchKeyState struct {
 	presetIdx      int
 	configuredHost string
 	activeHost     string
+	// debugOverlay is issue 131's `!`-toggled per-agent freshness countdown
+	// overlay: in-process only, never persisted, independent of overlayOpen
+	// (the [?] Controls reference overlay).
+	debugOverlay bool
 }
 
 // watchKeyEffect reports what the caller should do in response to one
@@ -461,9 +465,11 @@ type watchKeyEffect struct {
 //     preset, re-applying showProcesses so an explicit --proc request keeps
 //     winning across preset changes the same way initialWatchSections
 //     already makes it win at startup.
-//  4. Existing single-key panel toggles (applyWatchSectionKey) keep working
+//  4. [!] toggles the debug overlay (issue 131's per-agent freshness
+//     countdown gauge) — in-process only, never persisted.
+//  5. Existing single-key panel toggles (applyWatchSectionKey) keep working
 //     unchanged, for backward compatibility.
-//  5. [r]/[R] flips remote/local when a host was configured; [q]/[Q]/
+//  6. [r]/[R] flips remote/local when a host was configured; [q]/[Q]/
 //     Ctrl-C/Esc quits.
 func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyState, watchKeyEffect) {
 	action := mustWatchActions().actionForKey(key)
@@ -491,6 +497,10 @@ func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyS
 			sec.Processes = true
 		}
 		st.sec, st.presetIdx = sec, idx
+		return st, watchKeyEffect{redraw: true}
+
+	case action == "toggle_debug_overlay":
+		st.debugOverlay = !st.debugOverlay
 		return st, watchKeyEffect{redraw: true}
 
 	case applyWatchSectionKey(&st.sec, key):
@@ -1034,7 +1044,7 @@ func staleLabel(name string) string {
 // sparkline (when showTokens is set). The panel's own toggle key is embedded
 // in its title, btop-style, instead of a separate legend. Deliberately terse
 // compared to the full `harnez usage` report.
-func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live bool) wbox {
+func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live, debugOverlay bool) wbox {
 	title := fmt.Sprintf("%s %s", watchBoxSymbol(agent.AgentID), agent.Name)
 
 	if !agent.Installed {
@@ -1066,6 +1076,17 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 		contentW = 10
 	}
 
+	// overlayLabel applies issue 131's debug-overlay countdown gauge to a
+	// row label when debugOverlay is on, otherwise returns label unchanged.
+	// It's a no-op when debugOverlay is false so normal-mode rendering is
+	// byte-for-byte unaffected.
+	overlayLabel := func(label string) string {
+		if !debugOverlay {
+			return label
+		}
+		return freshnessOverlayLabel(label, agent.LastRefreshed, time.Now())
+	}
+
 	// Render quota lines. If the agent has ModelGroups (e.g. AGY), render each group
 	// as a compact twin-quota line: Label [Bar1] [Bar2] Pct1 Dt1 Pct2 Dt2.
 	// Otherwise, if the agent has Session and/or Weekly, render them compactly together or individually.
@@ -1077,7 +1098,7 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 			} else if strings.EqualFold(label, "Claude and GPT models") || strings.EqualFold(label, "Claude and GPT") {
 				label = "Claude/GPT"
 			}
-			line := formatCompactGroupLine(label, mg.Windows, contentW)
+			line := formatCompactGroupLine(overlayLabel(label), mg.Windows, contentW)
 			lines = append(lines, line)
 		}
 	} else if agent.Session != nil || agent.Weekly != nil {
@@ -1091,10 +1112,10 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 		}
 		if len(wins) == 2 {
 			label := "Wk / 5h"
-			line := formatCompactGroupLine(label, wins, contentW)
+			line := formatCompactGroupLine(overlayLabel(label), wins, contentW)
 			lines = append(lines, line)
 		} else if len(wins) == 1 {
-			line := formatCompactGroupLine(wins[0].Name, wins, contentW)
+			line := formatCompactGroupLine(overlayLabel(wins[0].Name), wins, contentW)
 			lines = append(lines, line)
 		}
 	}
@@ -1243,6 +1264,12 @@ type WatchOptions struct {
 	// false outside --watch. Purely a UI label; it never changes how the
 	// data itself is fetched.
 	RemoteLoadStreaming bool
+
+	// DebugOverlay is issue 131's `!`-toggled per-agent freshness countdown
+	// overlay: when true, each agent box's row label has its last 3
+	// characters replaced with a countdown gauge instead of its normal
+	// text. Display-only, in-process, never persisted.
+	DebugOverlay bool
 }
 
 // controlsOverlayLines renders the full in-TUI Controls reference for
@@ -1275,6 +1302,7 @@ func controlsOverlayLines() []string {
 	l = append(l, "")
 	l = append(l, bold("Session"))
 	l = append(l, fmt.Sprintf("  [%s]              toggle remote/local host (when a host is configured)", sym("toggle_remote")))
+	l = append(l, fmt.Sprintf("  [%s]              toggle per-agent freshness countdown gauge (debug overlay)", sym("toggle_debug_overlay")))
 	l = append(l, fmt.Sprintf("  [%s] / Ctrl-C / Esc   quit", sym("quit")))
 	l = append(l, "")
 	l = append(l, dim("Numbered box toggles replaced the old C/G/O/H/P/L letter keys (issue"))
@@ -1477,7 +1505,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	for _, agent := range visible {
 		agent := agent
 		panels = append(panels, panel{agentKey(agent.AgentID), func(w int) wbox {
-			return buildAgentBox(agent, rates[agent.AgentID], w, sec.Tokens, live)
+			return buildAgentBox(agent, rates[agent.AgentID], w, sec.Tokens, live, opt.DebugOverlay)
 		}})
 	}
 	if sec.History {
@@ -1651,6 +1679,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	sec := initialWatchSections(opts)
 	overlayOpen := false
 	presetIdx := 0
+	debugOverlay := false
 	if opts.Compact {
 		presetIdx = 1
 	}
@@ -1730,9 +1759,10 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 					presetIdx:      presetIdx,
 					configuredHost: configuredHost,
 					activeHost:     activeHost,
+					debugOverlay:   debugOverlay,
 				}
 				newSt, eff := dispatchWatchKey(st, buf[0], opts.ShowProcesses)
-				sec, overlayOpen, presetIdx, activeHost = newSt.sec, newSt.overlayOpen, newSt.presetIdx, newSt.activeHost
+				sec, overlayOpen, presetIdx, activeHost, debugOverlay = newSt.sec, newSt.overlayOpen, newSt.presetIdx, newSt.activeHost, newSt.debugOverlay
 
 				if eff.quit {
 					secLock.Unlock()
@@ -1780,6 +1810,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		secLock.Lock()
 		activeSec := sec
 		showControls := overlayOpen
+		activeDebugOverlay := debugOverlay
 		secLock.Unlock()
 
 		var remoteSnap *LoadSnapshot
@@ -1799,6 +1830,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			RemoteLoadHost:      remoteLoadHost,
 			RemoteLoadSnapshot:  remoteSnap,
 			RemoteLoadStreaming: remoteStreaming,
+			DebugOverlay:        activeDebugOverlay,
 		}).paint(out)
 	}
 

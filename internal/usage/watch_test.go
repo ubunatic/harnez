@@ -204,7 +204,7 @@ func TestBuildAgentBoxBarFitsContentW(t *testing.T) {
 	durationThreshold := 33
 
 	for boxWidth := minBoxWidth; boxWidth <= 80; boxWidth++ {
-		box := buildAgentBox(agent, agentRate{}, boxWidth, false, false)
+		box := buildAgentBox(agent, agentRate{}, boxWidth, false, false, false)
 		contentW := boxWidth - 4
 
 		for _, l := range box.lines {
