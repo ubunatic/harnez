@@ -105,3 +105,9 @@ actions:
     keys: ["?"]
     symbol: "?"
     category: session
+  toggle_debug_overlay:
+    title: "Debug overlay"
+    description: "Toggle the per-agent freshness countdown gauge overlay (in-process, not persisted)"
+    keys: ["!"]
+    symbol: "!"
+    category: session
