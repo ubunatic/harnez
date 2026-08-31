@@ -4,7 +4,7 @@
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation
-**Related**: [[117-harnez-rate-command]], [[119-harnez-hook-agent-hook-management]], [[128-per-agent-full-system-prompt-self-audit-for-repetition]]
+**Related**: [[117-harnez-rate-command]], [[119-harnez-hook-agent-hook-management]], [[128-per-agent-full-system-prompt-self-audit-for-repetition]], [[130-instruction-distribution-audit-followups]]
 
 ## Problem
 

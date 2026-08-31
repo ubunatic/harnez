@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [[040-agent-context-duplication-and-file-read-discipline]], [[122-agent-instruction-tool-feedback-protocol]], [[075-concisemode-promote-doc-to-real-skill]], [docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md](../docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md), [docs/studies/2026-08-31-agy-clean-session-system-prompt-audit.md](../docs/studies/2026-08-31-agy-clean-session-system-prompt-audit.md)
+**Related**: [[040-agent-context-duplication-and-file-read-discipline]], [[122-agent-instruction-tool-feedback-protocol]], [[075-concisemode-promote-doc-to-real-skill]], [[130-instruction-distribution-audit-followups]], [docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md](../docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md), [docs/studies/2026-08-31-agy-clean-session-system-prompt-audit.md](../docs/studies/2026-08-31-agy-clean-session-system-prompt-audit.md), [docs/studies/2026-08-31-instruction-distribution-audit-synthesis.md](../docs/studies/2026-08-31-instruction-distribution-audit-synthesis.md)
 
 ## Problem
 
