@@ -64,10 +64,13 @@ precedent, which this ticket originally missed:
   integration (issue 111) may document what's already known about
   Codex's environment. Per `docs/studies/2026-08-19-agent-telemetry-hooks-proxies-and-log-extraction.md`
   §3.3, Codex has no generic `hooks.json` lifecycle dispatch — if this
-  canary confirms no usable hook-rewrite point exists, do not force the
-  independent-tool model here; fall back to [[123]]'s session-wrapping
-  supervisor track for Codex instead of shipping a degraded/partial
-  hook integration.
+  canary confirms no usable hook-rewrite point exists, **v1 simply ships
+  without Codex support**: `apply` skips it with an explicit message
+  (see Acceptance Criteria) and this ticket closes as done for whichever
+  agents did work. [[123]] is a separate, unscheduled idea, not a
+  required or implied follow-on of this ticket — do not treat a Codex
+  canary failure as "now go build 123." That only gets picked up later,
+  and only if reached for deliberately.
 - `status`/`diff` should surface the telemetry hook's installed/current/
   drifted state the same way they already do for distill's hooks —
   extend those, don't add a parallel status command.
@@ -86,6 +89,10 @@ precedent, which this ticket originally missed:
       canary-verified mechanism; until then `apply` should skip them
       with an explicit message, not silently no-op.
 - [ ] No new top-level `harnez hook` command exists in the shipped CLI.
+- [ ] This ticket is considered done (not blocked) once it ships for
+      whichever agents pass their canary — full three-agent parity is
+      not a gate. Coverage for the rest is tracked, not required, via
+      each agent's own follow-up (Codex → possibly [[123]], later).
 
 ## Notes
 

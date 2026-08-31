@@ -70,7 +70,12 @@ track, explicitly out of scope until:
 
 ## Notes
 
-Not scheduled — this ticket exists so the "session-wrapping" idea
-raised during the 2026-08-31 architecture discussion isn't lost, and so
-115–122 aren't blocked re-litigating it. Revisit once [[119]]'s
-Antigravity/Codex canaries land.
+Not scheduled, and explicitly **not** an implied follow-on of [[119]]:
+per the 2026-08-31 decision, v1 of the tool-observability feature ships
+for whichever agents the independent-tool model works for (expected:
+Claude, possibly AGY) and simply omits an agent it doesn't work for
+(expected: Codex) rather than triggering this ticket automatically.
+This exists purely so the "session-wrapping" idea raised during the
+architecture discussion isn't lost, and so 115–122 aren't blocked
+re-litigating it. Pick it up later only as a deliberate, separately
+prioritized decision — not as a default continuation of 119.

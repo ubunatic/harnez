@@ -59,3 +59,7 @@ Blocked on [[115]]'s go/no-go decision on the storage engine.
 Depends on [[115]]'s canary outcome for which engine this actually
 targets — do not start implementation before that ticket closes with a
 go/no-go decision.
+
+Storage/schema itself is agent-agnostic — the per-agent scope decision
+(v1 ships for whichever of Claude/AGY/Codex the hook model actually
+works for, no three-agent-parity gate) lives in [[119]], not here.
