@@ -34,5 +34,5 @@ func PercentSparkline(pcts []float64, maxWidth int) string {
 		}
 		spark[i] = percentSparkChars[idx]
 	}
-	return "\x1b[100m" + string(spark) + "\x1b[0m"
+	return "\x1b[" + DefaultBackgroundANSI + "m" + string(spark) + "\x1b[0m"
 }

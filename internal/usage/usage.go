@@ -346,7 +346,7 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 			}
 
 			for _, sl := range sourceLines {
-				sb.WriteString(fmt.Sprintf("\033[2m%s\033[0m\n", sl))
+				sb.WriteString(fmt.Sprintf("%s%s\033[0m\n", ansiDimFaint, sl))
 			}
 		}
 		sb.WriteString("\n")

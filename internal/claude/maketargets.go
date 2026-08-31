@@ -353,6 +353,17 @@ func ensurePhonySentinel(content, sentinel, phonyFix string) (string, bool) {
 }
 
 // ensureColorVariables ensures the color helper variables (_prim and _rst) are defined in the file.
+//
+// The "\033[36m"/"\033[0m" literals below are deliberately NOT sourced from
+// spec/colors.yaml (issue 137's audit). They are Make variable *content*
+// written into a generated Makefile for other projects' `make help`-style
+// output -- a different subsystem, audience, and domain than the harnez
+// `usage --watch` TUI spec/colors.yaml governs: the cyan here is Make's own
+// help-target color convention, consumed by whatever project's Makefile this
+// is, not by harnez's own terminal rendering. Folding it into
+// spec/colors.yaml would couple two unrelated color languages (harnez's TUI
+// palette vs. an external Makefile's help-text color) for no benefit, so
+// it's left as a plain literal here on purpose.
 func ensureColorVariables(content, sentinel string) (string, bool) {
 	if strings.Contains(content, "_prim :=") {
 		return content, false

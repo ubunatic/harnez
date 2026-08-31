@@ -599,7 +599,7 @@ func agentKey(agentID string) string {
 // every box in the numbered scheme) shown next to boxID's title, sourced
 // from spec/actions.yaml (issue 132) rather than a hardcoded per-box string.
 func watchBoxSymbol(boxID string) string {
-	return "\x1b[1m" + mustWatchActions().boxTitleSymbol(boxID) + "\x1b[0m"
+	return ansiBold + mustWatchActions().boxTitleSymbol(boxID) + "\x1b[0m"
 }
 
 // buildProcessesBox renders a panel showing active agent processes on the system or remote host.
@@ -624,7 +624,7 @@ func buildProcessesBox(width int, counts *AgentProcessCount) wbox {
 func buildAllUsageBox(summary UsageSummary, width int) wbox {
 	lines := allUsageLines(summary, width-4)
 	if len(lines) == 0 {
-		lines = []string{"\x1b[90mno quota windows available\x1b[0m"}
+		lines = []string{ansiDimGrey + "no quota windows available\x1b[0m"}
 	}
 	return wbox{title: watchBoxSymbol("all_usage") + " All Usage", lines: lines, width: width}
 }
@@ -768,7 +768,7 @@ func compactDurationText(w QuotaWindow) string {
 func buildLoadBox(width int, remoteHost string, snapshot *LoadSnapshot) wbox {
 	title := watchBoxSymbol("load") + " Load"
 	if remoteHost != "" {
-		title = fmt.Sprintf("%s Load \x1b[90m(@%s)\x1b[0m", watchBoxSymbol("load"), remoteHost)
+		title = fmt.Sprintf("%s Load %s(@%s)\x1b[0m", watchBoxSymbol("load"), ansiDimGrey, remoteHost)
 	}
 	return wbox{title: title, lines: buildLoadBoxLines(remoteHost, snapshot), width: width}
 }
@@ -789,7 +789,7 @@ func buildRemoteLoadBox(width int, host string, snapshot *LoadSnapshot, streamin
 	if streaming {
 		mode = "streaming"
 	}
-	title := fmt.Sprintf("\x1b[1m[R]\x1b[0m Remote Load \x1b[90m(@%s · %s)\x1b[0m", host, mode)
+	title := fmt.Sprintf("%s[R]\x1b[0m Remote Load %s(@%s · %s)\x1b[0m", ansiBold, ansiDimGrey, host, mode)
 	return wbox{title: title, lines: buildLoadBoxLines(host, snapshot), width: width}
 }
 
@@ -807,7 +807,7 @@ func buildRemoteLoadBox(width int, host string, snapshot *LoadSnapshot, streamin
 // silently falling back to local telemetry.
 func buildLoadBoxLines(remoteHost string, snapshot *LoadSnapshot) []string {
 	if remoteHost != "" && snapshot == nil {
-		return []string{"\x1b[90mremote load unavailable\x1b[0m"}
+		return []string{ansiDimGrey + "remote load unavailable\x1b[0m"}
 	}
 
 	var load CPULoad
@@ -829,7 +829,7 @@ func buildLoadBoxLines(remoteHost string, snapshot *LoadSnapshot) []string {
 	}
 
 	if len(gpus) == 0 {
-		lines = append(lines, "\x1b[90mgpu n/a\x1b[0m")
+		lines = append(lines, ansiDimGrey+"gpu n/a\x1b[0m")
 	} else {
 		for i, g := range gpus {
 			if i >= 2 {
@@ -842,7 +842,7 @@ func buildLoadBoxLines(remoteHost string, snapshot *LoadSnapshot) []string {
 		}
 	}
 	if len(lines) == 0 {
-		lines = []string{"\x1b[90mload data unavailable\x1b[0m"}
+		lines = []string{ansiDimGrey + "load data unavailable\x1b[0m"}
 	}
 	return lines
 }
@@ -969,7 +969,7 @@ func buildHistoryBox(homeDir, historyDir string, width int) wbox {
 		}
 		lines = append(lines, strings.Join(metricParts, " · "))
 	} else {
-		lines = append(lines, "\x1b[90mno history recorded yet\x1b[0m")
+		lines = append(lines, ansiDimGrey+"no history recorded yet\x1b[0m")
 	}
 
 	return wbox{title: title, lines: lines, width: width}
@@ -1048,10 +1048,10 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 	title := fmt.Sprintf("%s %s", watchBoxSymbol(agent.AgentID), agent.Name)
 
 	if !agent.Installed {
-		return wbox{title: title, lines: []string{"\x1b[90mnot installed\x1b[0m"}, width: width}
+		return wbox{title: title, lines: []string{ansiDimGrey + "not installed\x1b[0m"}, width: width}
 	}
 	if !agent.Authenticated {
-		return wbox{title: title, lines: []string{"\x1b[90minstalled, not logged in\x1b[0m"}, width: width}
+		return wbox{title: title, lines: []string{ansiDimGrey + "installed, not logged in\x1b[0m"}, width: width}
 	}
 
 	var lines []string
@@ -1124,7 +1124,7 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 	// quota windows — an agent with model-group windows already showing has
 	// nothing to apologize for.
 	if agent.QuotaFetchError != "" && len(agent.ModelGroups) == 0 && agent.Session == nil && agent.Weekly == nil {
-		lines = append(lines, fmt.Sprintf("\x1b[90mquota: unavailable (%s)\x1b[0m", agent.QuotaFetchError))
+		lines = append(lines, fmt.Sprintf("%squota: unavailable (%s)\x1b[0m", ansiDimGrey, agent.QuotaFetchError))
 	}
 
 	if showTokens && agent.Tokens != nil {
@@ -1133,16 +1133,16 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 			if spark == "" {
 				spark = "warming up"
 			}
-			lines = append(lines, fmt.Sprintf("\x1b[1m[T]\x1b[0m tok: %s total · %.0f/min [%s]",
-				FormatNumber(agent.Tokens.TotalTokens), rate.PerMinute, spark))
+			lines = append(lines, fmt.Sprintf("%s[T]\x1b[0m tok: %s total · %.0f/min [%s]",
+				ansiBold, FormatNumber(agent.Tokens.TotalTokens), rate.PerMinute, spark))
 		} else {
-			lines = append(lines, fmt.Sprintf("\x1b[1m[T]\x1b[0m tok: %s total",
-				FormatNumber(agent.Tokens.TotalTokens)))
+			lines = append(lines, fmt.Sprintf("%s[T]\x1b[0m tok: %s total",
+				ansiBold, FormatNumber(agent.Tokens.TotalTokens)))
 		}
 	}
 
 	if !agent.LastRefreshed.IsZero() {
-		lines = append(lines, fmt.Sprintf("\x1b[90mupdated %s\x1b[0m", FormatAgo(agent.LastRefreshed)))
+		lines = append(lines, fmt.Sprintf("%supdated %s\x1b[0m", ansiDimGrey, FormatAgo(agent.LastRefreshed)))
 	}
 
 	return wbox{title: title, lines: lines, width: width}
@@ -1279,8 +1279,8 @@ type WatchOptions struct {
 // (backward compat) and are documented here as secondary controls rather
 // than promoted to the footer.
 func controlsOverlayLines() []string {
-	bold := func(s string) string { return "\x1b[1m" + s + "\x1b[0m" }
-	dim := func(s string) string { return "\x1b[90m" + s + "\x1b[0m" }
+	bold := func(s string) string { return ansiWrap("bold", s) }
+	dim := func(s string) string { return ansiWrap("dim-grey", s) }
 	wa := mustWatchActions()
 	sym := wa.symbol
 
@@ -1365,7 +1365,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	if fileCount == 1 {
 		fileWord = "file"
 	}
-	historyStatStr := fmt.Sprintf("   \x1b[90mhistory: %d %s (%s)\x1b[0m", fileCount, fileWord, FormatBytes(totalBytes))
+	historyStatStr := fmt.Sprintf("   %shistory: %d %s (%s)\x1b[0m", ansiDimGrey, fileCount, fileWord, FormatBytes(totalBytes))
 
 	// discovered is every agent the collector actually found real local/
 	// remote state for (issue 083: self-hiding, auto-discovery display) — an
@@ -1422,7 +1422,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 	hiddenHint := ""
 	if hiddenCount > 0 {
-		hiddenHint = fmt.Sprintf("   \x1b[90m%d hidden (press ? for controls)\x1b[0m", hiddenCount)
+		hiddenHint = fmt.Sprintf("   %s%d hidden (press ? for controls)\x1b[0m", ansiDimGrey, hiddenCount)
 	}
 
 	titlePrefix := "Agentic usage"
@@ -1431,8 +1431,8 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 
 	header := []string{
-		fmt.Sprintf("\x1b[1m%s\x1b[0m  %s%s%s",
-			titlePrefix, summary.Timestamp.Format("15:04:05 MST"), historyStatStr, hiddenHint),
+		fmt.Sprintf("%s%s\x1b[0m  %s%s%s",
+			ansiBold, titlePrefix, summary.Timestamp.Format("15:04:05 MST"), historyStatStr, hiddenHint),
 		"",
 	}
 	var footer []string
@@ -1440,8 +1440,8 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 		wa := mustWatchActions()
 		footer = []string{
 			"",
-			fmt.Sprintf("refresh every %s   \x1b[90m[%s]controls  [%s]ode  [%s]emote  [%s]uit\x1b[0m",
-				interval, wa.symbol("toggle_controls"), wa.symbol("cycle_preset"), wa.symbol("toggle_remote"), wa.symbol("quit")),
+			fmt.Sprintf("refresh every %s   %s[%s]controls  [%s]ode  [%s]emote  [%s]uit\x1b[0m",
+				interval, ansiDimGrey, wa.symbol("toggle_controls"), wa.symbol("cycle_preset"), wa.symbol("toggle_remote"), wa.symbol("quit")),
 		}
 	}
 
@@ -1458,8 +1458,8 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	// boxes at all (issue 083).
 	if len(discovered) == 0 && len(summary.Agents) > 0 {
 		body = append(body,
-			"\x1b[90mno agent usage detected — install/configure Claude Code, Codex, or AGY\x1b[0m",
-			"\x1b[90mor run `harnez agent-collector --once` to collect a fresh snapshot\x1b[0m",
+			ansiDimGrey+"no agent usage detected — install/configure Claude Code, Codex, or AGY\x1b[0m",
+			ansiDimGrey+"or run `harnez agent-collector --once` to collect a fresh snapshot\x1b[0m",
 			"",
 		)
 	}
@@ -1523,7 +1523,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 
 	if len(panels) == 0 {
-		body = append(body, "\x1b[90m(all panels hidden)\x1b[0m")
+		body = append(body, ansiDimGrey+"(all panels hidden)\x1b[0m")
 		lines := append(append(header, body...), footer...)
 		return fit(lines, usable, rows)
 	}
@@ -1581,7 +1581,7 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 
 	if dropped > 0 {
-		note := fmt.Sprintf("\x1b[90m… %s hidden — terminal too short\x1b[0m", strings.Join(droppedKeys, " "))
+		note := fmt.Sprintf("%s… %s hidden — terminal too short\x1b[0m", ansiDimGrey, strings.Join(droppedKeys, " "))
 		if len(body) < budget {
 			body = append(body, note)
 		} else if len(body) > 0 {
