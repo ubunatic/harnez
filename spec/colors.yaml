@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=schemas/colors.schema.json
+#
+# Named ANSI SGR color codes for `harnez usage --watch` (issue 136). This is
+# the single source of truth for terminal color values rograph's
+# background-highlighted bars and sparklines use (RenderBar/RenderSparkline's
+# ANSI option) -- Go code must resolve these values from here rather than
+# hardcoding SGR literals that duplicate them. See docs/Spec.md.
+#
+# sgr is one or more semicolon-separated SGR parameter codes, applied as
+# "\x1b[<sgr>m...\x1b[0m".
+colors:
+  panel-bg:
+    title: "Panel background"
+    description: >-
+      Muted grey background (SGR 100, bright-black) rendered behind bar and
+      sparkline glyphs so a graph reads as its own panel instead of
+      full-brightness glyphs fighting the terminal's own background. Used by
+      both the Load box's CPU/GPU sparklines and the All Usage box's bars.
+    sgr: "100"
