@@ -4,7 +4,7 @@
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics & UI Standards
-**Related**: [[065-concisemode-caveman-skill-and-output-distillation]], `config.yaml`, `docs/practices/ConciseMode.md`, `internal/markdown`
+**Related**: [[065-concisemode-caveman-skill-and-output-distillation]], [[134-conversemode-to-skill-conversion]], `config.yaml`, `docs/practices/ConciseMode.md`, `internal/markdown`
 
 ---
 

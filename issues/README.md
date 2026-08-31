@@ -132,3 +132,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 131 | [131-watch-debug-freshness-countdown-overlay.md](131-watch-debug-freshness-countdown-overlay.md) | `!`-toggled per-agent freshness countdown overlay in `harnez usage --watch` | Open |
 | 132 | [132-watch-spec-driven-superscript-hotkeys.md](132-watch-spec-driven-superscript-hotkeys.md) | Spec-driven btop-style superscript hotkeys and single hidden-count hint for `harnez usage --watch` | Open |
 | 133 | [133-progress-bar-eighth-block-subcharacter-precision.md](133-progress-bar-eighth-block-subcharacter-precision.md) | Sub-character precision for narrow progress bars using eighth-block glyphs | Open |
+| 134 | [134-conversemode-to-skill-conversion.md](134-conversemode-to-skill-conversion.md) | Convert `ConciseMode.md` from AGENTS.md-mutation to a Claude-Code Skill (split from 130 item 8) | Open |

@@ -4,7 +4,7 @@
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [[128-per-agent-full-system-prompt-self-audit-for-repetition]], [[122-agent-instruction-tool-feedback-protocol]], [[124-posttooluse-internal-tool-call-auto-capture]], [[040-agent-context-duplication-and-file-read-discipline]], [[075-concisemode-promote-doc-to-real-skill]], [docs/studies/2026-08-31-instruction-distribution-audit-synthesis.md](../docs/studies/2026-08-31-instruction-distribution-audit-synthesis.md)
+**Related**: [[128-per-agent-full-system-prompt-self-audit-for-repetition]], [[122-agent-instruction-tool-feedback-protocol]], [[124-posttooluse-internal-tool-call-auto-capture]], [[040-agent-context-duplication-and-file-read-discipline]], [[075-concisemode-promote-doc-to-real-skill]], [[134-conversemode-to-skill-conversion]], [docs/studies/2026-08-31-instruction-distribution-audit-synthesis.md](../docs/studies/2026-08-31-instruction-distribution-audit-synthesis.md)
 
 ## Problem
 
@@ -67,11 +67,13 @@ Eight findings, prioritized (see study §7 for full detail):
    auto-triggered for Claude Code (description-matched, loaded on
    relevance) instead of reaching it only as manually-invoked slash
    commands. Prerequisite for #8.
-8. **P3, blocked on #7 — Convert `Website.md` (then `ConciseMode.md`, then
-   Tool Feedback Protocol itself) from always-summarized doc + manual slash
-   command into an auto-triggered Skill.** Removes their footprint from
-   every project's default `AGENTS.md` injection for projects that never
-   touch that concern.
+8. **P3, blocked on #7 — Convert `Website.md` (then Tool Feedback Protocol
+   itself) from always-summarized doc + manual slash command into an
+   auto-triggered Skill.** Removes their footprint from every project's
+   default `AGENTS.md` injection for projects that never touch that
+   concern. (`ConciseMode.md`'s conversion split out to [[134]] — it's a
+   more involved case since `harnez mode` currently persists state via
+   `AGENTS.md`-section rewrite, not just always-on prose.)
 
 ## Acceptance Criteria
 
