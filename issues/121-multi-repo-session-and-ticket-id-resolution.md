@@ -116,3 +116,46 @@ All options structs accept injectable `Getenv`/`PPID`/`Now`/dir overrides
 for deterministic testing (see `internal/resolve/resolve_test.go`).
 `harnez rate` ([[117]]) and `harnez exec` ([[118]]) should call these two
 functions rather than re-implementing resolution.
+
+## Post-review correction (2026-08-31): branch-name ticket heuristic removed
+
+The implementation above shipped with a real-world usage mismatch, caught
+by direct user feedback the same day: the "branch-shape" tier of `Ticket()`
+assumed agents work on per-ticket-named git branches (e.g.
+`117-harnez-rate-command`). In practice this repo's actual workflow (and
+the user's stated general practice) never branches per ticket — work
+happens directly on the default branch — and a session may also start
+outside any git repository at all (e.g. a parent `projects/` directory)
+before `cd`-ing into one. The branch-shape tier could essentially never
+fire for real usage, and the original design compounded this by treating
+full non-resolution as a **hard error**.
+
+That hard-error behavior turned a merely-unhelpful heuristic into an
+active bug: [[118]]'s `harnez exec` hook fired correctly on every real
+Bash call (confirmed via new debug logging, see `cmd/harnez/exec.go`'s
+`debugLog`), but every single telemetry row was silently dropped, because
+`recordExecTelemetry` treated `resolve.Ticket`'s "could not determine
+ticket_id" error as fatal for the whole insert — not just the ticket
+field. This meant automatic tool-call capture had never actually worked
+in normal usage on this very repo, only in tests (which always supplied
+an explicit ticket or a ticket-shaped branch fixture).
+
+**Fixed**: `Ticket()` no longer infers anything from git branch names —
+`findRepoRoot`/`readBranch`/`isTicketShaped` are removed entirely. The
+resolution chain is now: explicit override (which is also recorded as
+the session's most-recently-used ticket) → most-recently-used ticket_id
+for the resolved `session_id` → `""`. **An unresolved ticket_id is now
+the expected, normal case, not an error** — `Ticket()` returns `("", nil)`
+instead of failing. This matches the user's own framing: "the one stable
+thing we have" is the working directory (already captured independently
+via `ToolCall.ProjectName`/`WorkingDir` on every row, regardless of
+`ticket_id`) plus the session ID — not a guessed ticket number, which
+only the agent's own conversational context actually knows.
+`TicketOptions.Dir` (and `execOptions.TicketDir`/`rateOptions.TicketDir`
+in its callers) is removed as now-unused API surface.
+
+See `cmd/harnez/exec.go` and `cmd/harnez/rate.go`'s updated
+`resolve.Ticket` call sites, and `internal/resolve/resolve_test.go`'s
+`TestTicket_UnresolvedIsEmptyNotError`,
+`TestTicket_ExplicitPersistsAndIsInheritedBySession`, and
+`TestTicket_DifferentSessionDoesNotInherit` for the corrected behavior.

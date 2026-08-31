@@ -9,49 +9,27 @@ import (
 	"ubunatic.com/harnez/internal/resolve"
 )
 
-// initRepo creates a bare-bones git repo layout (just enough for
-// findRepoRoot/readBranch: a .git dir with a HEAD file) rooted at dir/name,
-// checked out to branch. Returns the repo root and a nested subdirectory
-// inside it.
-func initRepo(t *testing.T, parent, name, branch string) (root, nested string) {
-	t.Helper()
-	root = filepath.Join(parent, name)
-	gitDir := filepath.Join(root, ".git")
-	if err := os.MkdirAll(gitDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	head := "ref: refs/heads/" + branch + "\n"
-	if err := os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte(head), 0644); err != nil {
-		t.Fatal(err)
-	}
-	nested = filepath.Join(root, "a", "b", "c")
-	if err := os.MkdirAll(nested, 0755); err != nil {
-		t.Fatal(err)
-	}
-	return root, nested
-}
-
-func TestTicket_RepoRootFromNestedSubdir(t *testing.T) {
+// TestTicket_UnresolvedIsEmptyNotError is the regression check for the
+// 2026-08-31 simplification: no explicit ticket and no session history
+// must resolve to ("", nil), never an error. The prior branch-name-based
+// heuristic (removed) meant this exact case previously errored for any
+// repo working directly on its default branch — this repo's own usage
+// pattern — silently dropping every harnez exec telemetry row.
+func TestTicket_UnresolvedIsEmptyNotError(t *testing.T) {
 	tmp := t.TempDir()
-	root, nested := initRepo(t, tmp, "myproject", "121-ticket-resolution")
-
-	id, err := resolve.Ticket(resolve.TicketOptions{Dir: nested, StateDir: filepath.Join(tmp, "state")})
+	id, err := resolve.Ticket(resolve.TicketOptions{StateDir: filepath.Join(tmp, "state")})
 	if err != nil {
-		t.Fatalf("Ticket() error = %v", err)
+		t.Fatalf("Ticket() error = %v, want nil (unresolved is not an error)", err)
 	}
-	want := filepath.Base(root) + "/121-ticket-resolution"
-	if id != want {
-		t.Errorf("Ticket() = %q, want %q", id, want)
+	if id != "" {
+		t.Errorf("Ticket() = %q, want empty string", id)
 	}
 }
 
 func TestTicket_ExplicitOverrideWins(t *testing.T) {
 	tmp := t.TempDir()
-	_, nested := initRepo(t, tmp, "myproject", "121-ticket-resolution")
-
 	id, err := resolve.Ticket(resolve.TicketOptions{
 		Explicit: "other-project/999-explicit",
-		Dir:      nested,
 		StateDir: filepath.Join(tmp, "state"),
 	})
 	if err != nil {
@@ -62,30 +40,51 @@ func TestTicket_ExplicitOverrideWins(t *testing.T) {
 	}
 }
 
-func TestTicket_NonTicketShapedBranchInheritsFromSession(t *testing.T) {
+// TestTicket_ExplicitPersistsAndIsInheritedBySession confirms the only
+// remaining implicit-resolution path: an explicit ticket recorded once for
+// a session is inherited by later calls in the same session that don't
+// pass one, e.g. harnez rate setting a ticket explicitly once, then
+// harnez exec's automatic per-Bash-call capture inheriting it for the
+// rest of the session without needing it repeated.
+func TestTicket_ExplicitPersistsAndIsInheritedBySession(t *testing.T) {
 	tmp := t.TempDir()
 	stateDir := filepath.Join(tmp, "state")
 	sessionID := "sess-abc"
 
-	// First: a ticket-shaped branch records a ticket for the session.
-	_, nestedA := initRepo(t, tmp, "projA", "042-do-the-thing")
-	first, err := resolve.Ticket(resolve.TicketOptions{Dir: nestedA, SessionID: sessionID, StateDir: stateDir})
+	first, err := resolve.Ticket(resolve.TicketOptions{
+		Explicit: "harnez/124-post-tool-use", SessionID: sessionID, StateDir: stateDir,
+	})
 	if err != nil {
 		t.Fatalf("Ticket() first call error = %v", err)
 	}
-	if first != "projA/042-do-the-thing" {
-		t.Fatalf("Ticket() first call = %q", first)
-	}
 
-	// Second: a repo on a non-ticket-shaped branch (e.g. "main") should
-	// inherit the most recently used ticket_id from the session.
-	_, nestedB := initRepo(t, tmp, "projB", "main")
-	second, err := resolve.Ticket(resolve.TicketOptions{Dir: nestedB, SessionID: sessionID, StateDir: stateDir})
+	second, err := resolve.Ticket(resolve.TicketOptions{SessionID: sessionID, StateDir: stateDir})
 	if err != nil {
 		t.Fatalf("Ticket() second call error = %v", err)
 	}
 	if second != first {
 		t.Errorf("Ticket() second call = %q, want inherited %q", second, first)
+	}
+}
+
+// TestTicket_DifferentSessionDoesNotInherit confirms inheritance is scoped
+// per session_id, not global.
+func TestTicket_DifferentSessionDoesNotInherit(t *testing.T) {
+	tmp := t.TempDir()
+	stateDir := filepath.Join(tmp, "state")
+
+	if _, err := resolve.Ticket(resolve.TicketOptions{
+		Explicit: "harnez/124-post-tool-use", SessionID: "sess-A", StateDir: stateDir,
+	}); err != nil {
+		t.Fatalf("Ticket() sess-A call error = %v", err)
+	}
+
+	id, err := resolve.Ticket(resolve.TicketOptions{SessionID: "sess-B", StateDir: stateDir})
+	if err != nil {
+		t.Fatalf("Ticket() sess-B call error = %v", err)
+	}
+	if id != "" {
+		t.Errorf("Ticket() for an unrelated session = %q, want empty (no cross-session leak)", id)
 	}
 }
 

@@ -100,7 +100,6 @@ type execOptions struct {
 	Ticket string
 
 	Getenv        func(string) string // nil means os.Getenv
-	TicketDir     string              // resolve.TicketOptions.Dir override
 	StateDir      string              // resolve.Session/Ticket state/lock dir override
 	DBPath        string              // telemetry DB path override; empty means telemetry.DefaultDBPath()
 	InsertTimeout time.Duration       // bound on waiting for the telemetry write; <=0 means defaultExecInsertTimeout
@@ -138,6 +137,7 @@ func (c *byteCounter) total() int64 {
 // — a slow or hung DB write can delay the wrapper's own return by at most
 // that bound, but never by the writer's actual (possibly unbounded) delay.
 func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut io.Writer) (int, error) {
+	debugLog("exec wrapper: invoked, tool=%q ticket=%q args=%v", opts.Tool, opts.Ticket, args)
 	if len(args) == 0 {
 		return 0, fmt.Errorf("exec: no command given (usage: harnez exec --tool <tool_name> -- <command...>)")
 	}
@@ -225,16 +225,22 @@ func recordExecTelemetry(opts execOptions, call execCall) {
 			LockDir: opts.StateDir,
 		})
 		if err != nil {
+			debugLog("exec wrapper: resolve.Session failed, dropping telemetry row: %v", err)
 			return
 		}
+		// An unresolved ticket_id is expected, not fatal (see resolve.Ticket's
+		// doc comment): this repo's own usage never branches per ticket, and
+		// a session may start outside any git repo entirely. A resolve.Ticket
+		// error here is now only the rare writeLastTicket I/O failure case,
+		// and even that must not cost the row — ticket_id degrades to "".
 		ticketID, err := resolve.Ticket(resolve.TicketOptions{
 			Explicit:  opts.Ticket,
-			Dir:       opts.TicketDir,
 			SessionID: sessionID,
 			StateDir:  opts.StateDir,
 		})
 		if err != nil {
-			return
+			debugLog("exec wrapper: resolve.Ticket failed, using empty ticket_id: %v", err)
+			ticketID = ""
 		}
 
 		wd, err := os.Getwd()
@@ -264,6 +270,7 @@ func recordExecTelemetry(opts execOptions, call execCall) {
 		if dbPath == "" {
 			p, err := telemetry.DefaultDBPath()
 			if err != nil {
+				debugLog("exec wrapper: DefaultDBPath failed, dropping telemetry row: %v", err)
 				return
 			}
 			dbPath = p
@@ -273,12 +280,17 @@ func recordExecTelemetry(opts execOptions, call execCall) {
 		if insert == nil {
 			insert = defaultInsertExecRow
 		}
-		_ = insert(dbPath, tc)
+		if err := insert(dbPath, tc); err != nil {
+			debugLog("exec wrapper: insert failed at %s: %v", dbPath, err)
+		} else {
+			debugLog("exec wrapper: inserted row tool=%q session=%q ticket=%q", tc.ToolName, tc.SessionID, tc.TicketID)
+		}
 	}()
 
 	select {
 	case <-done:
 	case <-time.After(timeout):
+		debugLog("exec wrapper: telemetry write exceeded %s timeout, returning without waiting", timeout)
 	}
 }
 
@@ -356,15 +368,23 @@ func alreadyRoutedThroughExec(command string) bool {
 // and works standalone, it's just not separately wired into apply's
 // managed hooks anymore (see config.yaml).
 func runExecHook(in io.Reader, out io.Writer) error {
+	raw, err := io.ReadAll(in)
+	if err != nil {
+		return fmt.Errorf("decode hook payload: %w", err)
+	}
+	debugLog("exec hook: invoked, payload=%s", string(raw))
+
 	var payload hookInput
-	if err := json.NewDecoder(in).Decode(&payload); err != nil {
+	if err := json.Unmarshal(raw, &payload); err != nil {
 		return fmt.Errorf("decode hook payload: %w", err)
 	}
 	if payload.ToolName != "Bash" {
+		debugLog("exec hook: skip, tool_name=%q != Bash", payload.ToolName)
 		return nil
 	}
 	command := payload.ToolInput.Command
 	if command == "" || alreadyRoutedThroughExec(command) {
+		debugLog("exec hook: skip, command empty or already routed: %q", command)
 		return nil
 	}
 
@@ -374,12 +394,38 @@ func runExecHook(in io.Reader, out io.Writer) error {
 	}
 
 	rewritten := fmt.Sprintf("harnez exec --tool %s -- bash -c %s", payload.ToolName, shellQuote(effective))
+	debugLog("exec hook: rewriting %q -> %q", command, rewritten)
 	return json.NewEncoder(out).Encode(hookOutput{
 		HookSpecificOutput: hookSpecificOutput{
 			HookEventName: "PreToolUse",
 			UpdatedInput:  map[string]string{"command": rewritten},
 		},
 	})
+}
+
+// debugLog appends a timestamped line to ~/.harnez/debug.log when the
+// DEBUG env var apply already installs (config.yaml, currently otherwise
+// unused by harnez's own code) is "1" or "true". Best-effort: never
+// returns an error, never blocks/breaks the caller if home dir or file
+// open fails. Added while diagnosing why the PreToolUse hook appeared
+// registered (per `/hooks`) but wasn't producing tool_calls rows —
+// harnez had no log files at all until this, a real gap for a tool
+// meant to observe tool calls.
+func debugLog(format string, args ...any) {
+	enabled := os.Getenv("DEBUG")
+	if enabled != "1" && !strings.EqualFold(enabled, "true") {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	f, err := os.OpenFile(filepath.Join(home, ".harnez", "debug.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "[%s] "+format+"\n", append([]any{time.Now().UTC().Format(time.RFC3339Nano)}, args...)...)
 }
 
 // distillAutopipeRewrite applies distill's own noisy-command rewrite

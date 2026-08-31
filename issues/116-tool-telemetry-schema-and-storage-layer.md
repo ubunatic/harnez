@@ -154,3 +154,32 @@ file, it's a local telemetry cache" message if it finds an older version
 on an existing one — turning a confusing constraint/scan error into one
 actionable message. See `internal/telemetry/telemetry.go`'s
 `checkAndStampSchemaVersion` and `TestOpenRejectsStaleSchemaVersion`.
+
+## Post-review correction (2026-08-31): version guard's own bootstrapping bug
+
+The guard above had a real bug of its own, caught the same day via new
+debug logging (`cmd/harnez/exec.go`'s `debugLog`) after `harnez exec hook`
+was confirmed firing correctly end-to-end but the wrapped command's
+telemetry write still failed with a raw `NOT NULL constraint failed:
+tool_calls.distilled_bytes` error — the exact case the guard was supposed
+to prevent.
+
+Root cause: `PRAGMA user_version == 0` is not a reliable signal for
+"brand-new file." It's also what a file created **before this
+version-tracking mechanism existed** reads — the exact real
+`~/.harnez/tool_catalog.sqlite` on this machine, created earlier the same
+day while testing [[117]]/[[118]], before the schema-version guard was
+added. `Open` saw `user_version == 0`, assumed "fresh," and silently
+stamped it to the current version — despite the table still having the
+old `NOT NULL` `distilled_bytes` column. The guard's own bootstrap case
+was exactly the failure mode it existed to catch.
+
+**Fixed**: `Open` now checks whether the `tool_calls` table already
+existed (via `sqlite_master`) *before* running `schemaDDL`'s `CREATE
+TABLE IF NOT EXISTS`. Only a table this specific `Open` call just created
+is trusted to match the current shape and gets unconditionally stamped;
+a table that already existed with `user_version == 0` is now treated the
+same as any other stale version — a clear error, not a silent stamp. See
+`tableExists` and the revised `checkAndStampSchemaVersion` in
+`internal/telemetry/telemetry.go`, and
+`TestOpenRejectsPreexistingTableWithUnstampedVersion`.

@@ -104,6 +104,63 @@ func TestOpenRejectsStaleSchemaVersion(t *testing.T) {
 	}
 }
 
+// TestOpenRejectsPreexistingTableWithUnstampedVersion is the regression
+// check for a real production bug (2026-08-31): a file whose tool_calls
+// table was created before this version-tracking guard existed has
+// PRAGMA user_version == 0 — the exact same value a genuinely brand-new
+// file has. The original guard treated any 0 as "fresh, safe to stamp,"
+// so it silently accepted this repo's own real pre-existing
+// ~/.harnez/tool_catalog.sqlite (still carrying the old NOT NULL
+// distilled_bytes column) and stamped it as current, deferring the
+// failure to a much less clear raw constraint error on the next Insert.
+// Open must instead distinguish "this call's own CREATE TABLE just made
+// the table" from "the table already existed" (see tableExists) and
+// refuse to trust an unstamped-but-preexisting table.
+func TestOpenRejectsPreexistingTableWithUnstampedVersion(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tool_catalog.sqlite")
+
+	// Simulate a file created by a pre-guard version of this package:
+	// the old-shape table exists, but PRAGMA user_version was never
+	// touched (still its SQLite default, 0) — do NOT go through this
+	// package's own Open, which would correctly stamp a truly-fresh file.
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	// Mirrors issue 116's original (pre-118) DDL: every column schemaDDL's
+	// own CREATE INDEX statements expect, just with the old NOT NULL
+	// distilled_bytes this whole guard exists to catch.
+	if _, err := raw.Exec(`CREATE TABLE tool_calls (
+		id              INTEGER PRIMARY KEY AUTOINCREMENT,
+		created_at      TEXT    NOT NULL,
+		session_id      TEXT    NOT NULL,
+		ticket_id       TEXT    NOT NULL DEFAULT '',
+		project_name    TEXT    NOT NULL DEFAULT '',
+		working_dir     TEXT    NOT NULL DEFAULT '',
+		agent_id        TEXT    NOT NULL,
+		tool_name       TEXT    NOT NULL,
+		call_type       TEXT    NOT NULL,
+		score           INTEGER,
+		note            TEXT    NOT NULL DEFAULT '',
+		exit_code       INTEGER,
+		duration_ms     INTEGER NOT NULL DEFAULT 0,
+		raw_bytes       INTEGER NOT NULL DEFAULT 0,
+		distilled_bytes INTEGER NOT NULL DEFAULT 0
+	)`); err != nil {
+		t.Fatalf("create legacy-shape table: %v", err)
+	}
+	raw.Close()
+
+	_, err = Open(path)
+	if err == nil {
+		t.Fatal("Open against a preexisting table with unstamped (0) version should have failed, not silently trusted it")
+	}
+	if !strings.Contains(err.Error(), "no migration framework") {
+		t.Errorf("error = %v, want it to explain there's no migration framework and to delete the file", err)
+	}
+}
+
 func TestInsertAndQuery(t *testing.T) {
 	db := openTestDB(t)
 

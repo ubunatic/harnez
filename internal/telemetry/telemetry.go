@@ -75,10 +75,13 @@ func Open(path string) (*DB, error) {
 		sqlDB, err := sql.Open("sqlite", dsn)
 		if err != nil {
 			lastErr = err
+		} else if tableExisted, err := tableExists(sqlDB, "tool_calls"); err != nil {
+			sqlDB.Close()
+			lastErr = fmt.Errorf("telemetry: check existing schema: %w", err)
 		} else if _, err := sqlDB.Exec(schemaDDL); err != nil {
 			sqlDB.Close()
 			lastErr = fmt.Errorf("telemetry: create schema: %w", err)
-		} else if err := checkAndStampSchemaVersion(sqlDB, path); err != nil {
+		} else if err := checkAndStampSchemaVersion(sqlDB, path, tableExisted); err != nil {
 			sqlDB.Close()
 			return nil, err
 		} else {
@@ -89,19 +92,49 @@ func Open(path string) (*DB, error) {
 	return nil, fmt.Errorf("telemetry: open %s: %w", path, lastErr)
 }
 
-// checkAndStampSchemaVersion reads SQLite's built-in PRAGMA user_version.
-// 0 means a brand-new database (CREATE TABLE IF NOT EXISTS just made the
-// current-shape table), so it's stamped with schemaVersion. A non-zero
-// value older than schemaVersion means this file predates a shape change
-// that IF NOT EXISTS couldn't apply — fail loudly and tell the caller to
-// delete it, rather than let a later Insert/Query hit a raw constraint or
-// scan error against a stale column shape.
-func checkAndStampSchemaVersion(sqlDB *sql.DB, path string) error {
+// tableExists reports whether name already exists in the database, checked
+// BEFORE running schemaDDL's CREATE TABLE IF NOT EXISTS — this is what lets
+// checkAndStampSchemaVersion tell "genuinely brand-new file, this Open call
+// just created the table with the current shape" apart from "a table that
+// already existed, for any reason, before this call."
+func tableExists(sqlDB *sql.DB, name string) (bool, error) {
+	var n int
+	err := sqlDB.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// checkAndStampSchemaVersion reads SQLite's built-in PRAGMA user_version
+// and decides whether this file's schema can be trusted to match the
+// current schemaDDL shape.
+//
+// preexisting is whether the tool_calls table already existed before this
+// Open call ran schemaDDL (see tableExists). This distinction matters
+// because PRAGMA user_version reads 0 for two very different cases that
+// look identical from the version number alone: (a) a genuinely brand-new
+// file, where THIS call's CREATE TABLE just made the table with the
+// current shape — safe to stamp; (b) a file that already existed before
+// this package's version-tracking mechanism itself was added (or before
+// any Open call happened to reach this code) — its column shape may be
+// arbitrarily stale, and CREATE TABLE IF NOT EXISTS is a no-op against it,
+// so treating a case-(b) 0 as "fresh" and stamping it would silently
+// paper over a real stale schema instead of catching it. This is not
+// hypothetical: it's exactly what happened to this repo's own real
+// ~/.harnez/tool_catalog.sqlite on 2026-08-31 — a file created before this
+// guard existed got auto-stamped to the current version despite still
+// having the old NOT NULL distilled_bytes column, and Insert failed with
+// a raw constraint error instead of Open failing with a clear one.
+func checkAndStampSchemaVersion(sqlDB *sql.DB, path string, preexisting bool) error {
 	var current int
 	if err := sqlDB.QueryRow("PRAGMA user_version").Scan(&current); err != nil {
 		return fmt.Errorf("telemetry: read schema version: %w", err)
 	}
-	if current == 0 {
+	if !preexisting {
+		// This Open call itself just created the table via schemaDDL, so
+		// it's unconditionally current-shape — stamp regardless of
+		// whatever user_version happened to read (normally 0).
 		if _, err := sqlDB.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
 			return fmt.Errorf("telemetry: stamp schema version: %w", err)
 		}

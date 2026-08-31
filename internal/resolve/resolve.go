@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -132,13 +131,9 @@ type TicketOptions struct {
 	// Explicit is a caller-supplied ticket_id override. If non-empty it
 	// always wins and no implicit resolution happens.
 	Explicit string
-	// Dir is the directory to resolve the repo root/branch from
-	// (default: os.Getwd()). Optional.
-	Dir string
 	// SessionID is the already-resolved session_id (see Session), used to
-	// look up and record the most-recently-used ticket_id when the current
-	// branch isn't ticket-shaped. Optional; if empty, inheritance is
-	// skipped.
+	// look up and record the most-recently-used ticket_id. Optional; if
+	// empty, inheritance is skipped.
 	SessionID string
 	// StateDir overrides where per-session ticket history is stored
 	// (default: DefaultStateDir()). Optional.
@@ -146,51 +141,49 @@ type TicketOptions struct {
 }
 
 // Ticket resolves harnez's ticket_id ("<project_folder>/<ticket_name>"):
-// explicit override, then the nearest git repo root's directory name as
-// project_folder with the active branch name as ticket_name if the branch
-// looks ticket-shaped, else the most-recently-used ticket_id recorded for
-// SessionID.
+// explicit override (which, if SessionID is set, is also remembered as
+// that session's most-recently-used ticket), else the most-recently-used
+// ticket_id recorded for SessionID, else "" — an unresolved ticket_id is
+// the normal, expected case, not an error.
+//
+// Earlier versions of this function also tried to infer a ticket from the
+// current git repo's branch name (only if it "looked ticket-shaped") and
+// treated a fully-unresolved ticket as a hard error. Removed per real-world
+// usage feedback (2026-08-31, see issues/121's "Post-review correction"):
+// this repo (and its user) never branches per ticket — every session works
+// directly on the default branch — so the branch-name heuristic could
+// never fire here and was dead weight elsewhere too; a session may also
+// start outside any git repo at all (e.g. the parent projects/ directory)
+// before `cd`-ing into one. The only signals resilient enough to assume
+// are the working directory (already captured independently as
+// ToolCall.ProjectName/WorkingDir on every row, regardless of ticket_id)
+// and the session_id. Guessing a ticket_id from branch shape added
+// fragility without a corresponding benefit, and hard-failing when nothing
+// was inferable silently dropped entire tool_calls rows in `harnez exec`
+// (issue 118's automatic capture) — see internal/telemetry callers, which
+// must never lose a row over an unresolved ticket_id.
 func Ticket(opts TicketOptions) (string, error) {
-	if opts.Explicit != "" {
-		return opts.Explicit, nil
-	}
-
-	dir := opts.Dir
-	if dir == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return "", fmt.Errorf("resolve: getting working directory: %w", err)
-		}
-		dir = wd
-	}
 	stateDir := opts.StateDir
 	if stateDir == "" {
 		stateDir = DefaultStateDir()
 	}
 
-	var ticketID string
-	if root, gitDir, ok := findRepoRoot(dir); ok {
-		if branch, ok := readBranch(gitDir); ok && isTicketShaped(branch) {
-			ticketID = filepath.Base(root) + "/" + branch
+	if opts.Explicit != "" {
+		if opts.SessionID != "" {
+			if err := writeLastTicket(stateDir, opts.SessionID, opts.Explicit); err != nil {
+				return "", fmt.Errorf("resolve: recording last ticket for session: %w", err)
+			}
 		}
-	}
-
-	if ticketID == "" && opts.SessionID != "" {
-		if last, ok := readLastTicket(stateDir, opts.SessionID); ok {
-			ticketID = last
-		}
-	}
-
-	if ticketID == "" {
-		return "", fmt.Errorf("resolve: could not determine ticket_id: %s is not on a ticket-shaped branch and no prior ticket was recorded for this session", dir)
+		return opts.Explicit, nil
 	}
 
 	if opts.SessionID != "" {
-		if err := writeLastTicket(stateDir, opts.SessionID, ticketID); err != nil {
-			return "", fmt.Errorf("resolve: recording last ticket for session: %w", err)
+		if last, ok := readLastTicket(stateDir, opts.SessionID); ok {
+			return last, nil
 		}
 	}
-	return ticketID, nil
+
+	return "", nil
 }
 
 // DefaultStateDir returns ~/.harnez/sessions, where session lock files and
@@ -201,66 +194,6 @@ func DefaultStateDir() string {
 		home = "."
 	}
 	return filepath.Join(home, ".harnez", "sessions")
-}
-
-// ticketShapedRe matches branch names that look like a ticket ID: an
-// optional single-segment prefix (e.g. "issue/", "feature/") followed by a
-// leading number and a slug, mirroring this repo's own issues/NNN-slug.md
-// convention.
-var ticketShapedRe = regexp.MustCompile(`^(?:[a-zA-Z][a-zA-Z0-9_.-]*/)?[0-9]+[-_][a-zA-Z0-9-]+$`)
-
-func isTicketShaped(branch string) bool {
-	return branch != "" && ticketShapedRe.MatchString(branch)
-}
-
-// findRepoRoot searches upward from startDir for a .git entry (directory
-// or worktree/submodule gitdir file). It returns the directory containing
-// that entry as root, and the actual git directory (resolved through a
-// "gitdir:" indirection file, if present) as gitDir.
-func findRepoRoot(startDir string) (root, gitDir string, ok bool) {
-	dir, err := filepath.Abs(startDir)
-	if err != nil {
-		dir = startDir
-	}
-	for {
-		gitPath := filepath.Join(dir, ".git")
-		if fi, statErr := os.Stat(gitPath); statErr == nil {
-			if fi.IsDir() {
-				return dir, gitPath, true
-			}
-			if data, readErr := os.ReadFile(gitPath); readErr == nil {
-				content := strings.TrimSpace(string(data))
-				if target, cut := strings.CutPrefix(content, "gitdir:"); cut {
-					target = strings.TrimSpace(target)
-					if !filepath.IsAbs(target) {
-						target = filepath.Join(dir, target)
-					}
-					return dir, filepath.Clean(target), true
-				}
-			}
-			return dir, gitPath, true
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return "", "", false
-}
-
-// readBranch reads the active branch name from gitDir/HEAD. It returns
-// ok=false for a detached HEAD (no branch).
-func readBranch(gitDir string) (string, bool) {
-	data, err := os.ReadFile(filepath.Join(gitDir, "HEAD"))
-	if err != nil {
-		return "", false
-	}
-	content := strings.TrimSpace(string(data))
-	if name, ok := strings.CutPrefix(content, "ref: refs/heads/"); ok {
-		return name, true
-	}
-	return "", false
 }
 
 func shortHash(s string) string {

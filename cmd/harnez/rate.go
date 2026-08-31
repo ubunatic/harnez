@@ -90,13 +90,12 @@ Sub-20ms end-to-end target: this fires many times per agent turn.`,
 
 // rateOptions bundles runRate's inputs. The zero value matches production
 // behavior (real env, real cwd, default DB path); tests override the
-// Getenv/TicketDir/StateDir/DBPath fields to isolate from the caller's
-// real environment and the user's real telemetry DB.
+// Getenv/StateDir/DBPath fields to isolate from the caller's real
+// environment and the user's real telemetry DB.
 type rateOptions struct {
 	AgentFlag   string
 	SessionFlag string
 	Getenv      func(string) string // nil means os.Getenv
-	TicketDir   string              // resolve.TicketOptions.Dir override
 	StateDir    string              // resolve.Session/Ticket state/lock dir override
 	DBPath      string              // telemetry DB path override; empty means telemetry.DefaultDBPath()
 }
@@ -127,9 +126,13 @@ func runRate(args []string, opts rateOptions) error {
 		return fmt.Errorf("rate: resolve session: %w", err)
 	}
 
+	// An unresolved ticket_id (no explicit arg, nothing recorded yet for
+	// this session) is expected, not an error — see resolve.Ticket's doc
+	// comment: this repo's own usage never branches per ticket, so nothing
+	// beyond an explicit arg or session history can determine one. resolve.Ticket
+	// only still returns an error for the rare state-dir I/O failure case.
 	ticketID, err := resolve.Ticket(resolve.TicketOptions{
 		Explicit:  explicitTicket,
-		Dir:       opts.TicketDir,
 		SessionID: sessionID,
 		StateDir:  opts.StateDir,
 	})

@@ -32,20 +32,18 @@ func shlexSplitForTest(rewritten string) ([]string, error) {
 }
 
 // testExecOptions returns execOptions isolated from the caller's real
-// environment/DB: a throwaway state dir and DB path, explicit ticket so
-// resolve.Ticket never has to walk this repo's own git history, and a
-// tight-but-real Getenv so no ambient CLAUDE_CODE_SESSION_ID etc. leaks
+// environment/DB: a throwaway state dir and DB path, explicit ticket, and
+// a tight-but-real Getenv so no ambient CLAUDE_CODE_SESSION_ID etc. leaks
 // in from the actual test-runner environment.
 func testExecOptions(t *testing.T) execOptions {
 	t.Helper()
 	dir := t.TempDir()
 	return execOptions{
-		Tool:      "test-tool",
-		Ticket:    "harnez/118-test-ticket",
-		Getenv:    func(string) string { return "" },
-		StateDir:  filepath.Join(dir, "state"),
-		DBPath:    filepath.Join(dir, "tool_catalog.sqlite"),
-		TicketDir: dir,
+		Tool:     "test-tool",
+		Ticket:   "harnez/118-test-ticket",
+		Getenv:   func(string) string { return "" },
+		StateDir: filepath.Join(dir, "state"),
+		DBPath:   filepath.Join(dir, "tool_catalog.sqlite"),
 	}
 }
 

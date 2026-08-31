@@ -146,3 +146,23 @@ already keeps the original command intact inside one shell string.
 Regression test: `TestRunExecHook_PreservesShellMetacharacters` in
 `cmd/harnez/exec_test.go`. See `docs/HookRewritePattern.md` for the
 general rule this is now documented under.
+
+## Post-review correction (2026-08-31): real end-to-end verification found two more bugs
+
+Live testing after restarting a Claude Code session (with `/hooks`
+confirming the hook was registered, and new debug logging added to trace
+the actual invocation — see `cmd/harnez/exec.go`'s `debugLog`) found the
+hook and wrapper both firing and running correctly, but **every**
+telemetry row was still silently missing from `~/.harnez/tool_catalog.sqlite`.
+Root cause was not in this file: `recordExecTelemetry` treated any
+`resolve.Ticket` error as fatal and dropped the whole row, and
+`resolve.Ticket` hard-errored whenever nothing was resolvable — the
+normal case for a repo that (like this one) never branches per ticket.
+Fixed at the source in [[121]] (`resolve.Ticket` no longer errors on an
+unresolved ticket) plus here (`recordExecTelemetry` now degrades to an
+empty ticket_id on any `resolve.Ticket` error rather than dropping the
+row, for the rare remaining error case). A second, independent bug in
+[[116]]'s schema-version guard (real `NOT NULL` constraint failure on
+`distilled_bytes`, from a stale pre-existing DB file the guard
+incorrectly trusted) was found and fixed in the same pass — see [[116]]'s
+"Post-review correction."

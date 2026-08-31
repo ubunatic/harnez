@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,23 +8,6 @@ import (
 
 	"ubunatic.com/harnez/internal/telemetry"
 )
-
-// initRateTestRepo creates a bare-bones git repo (.git/HEAD only, enough
-// for internal/resolve.Ticket's findRepoRoot/readBranch) checked out to
-// branch, mirroring internal/resolve/resolve_test.go's initRepo helper.
-func initRateTestRepo(t *testing.T, parent, name, branch string) string {
-	t.Helper()
-	root := filepath.Join(parent, name)
-	gitDir := filepath.Join(root, ".git")
-	if err := os.MkdirAll(gitDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	head := "ref: refs/heads/" + branch + "\n"
-	if err := os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte(head), 0644); err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
 
 // lastRow opens dbPath and returns the newest row.
 func lastRow(t *testing.T, dbPath string) telemetry.ToolCall {
@@ -199,50 +181,55 @@ func TestRunRate_SessionFlagOverride(t *testing.T) {
 
 // TestRunRate_OmittedTicketResolvesViaResolve is the acceptance-criteria
 // test for "omitted ticket_id resolves via internal/resolve rather than
-// silently writing NULL": no positional ticket_id is passed, but TicketDir
-// points at a repo checked out to a ticket-shaped branch, so the resolved
-// ticket_id must show up in the written row (never "" / NULL).
+// silently writing NULL": a first call passes an explicit ticket_id, and
+// a second call in the same session omits it — the second call's row must
+// inherit the first's ticket_id (internal/resolve's only remaining
+// implicit-resolution path since the 2026-08-31 simplification: this repo
+// never branches per ticket, so branch-name inference was removed).
 func TestRunRate_OmittedTicketResolvesViaResolve(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "tool_catalog.sqlite")
-	repoRoot := initRateTestRepo(t, tmp, "myproject", "117-harnez-rate-command")
-
-	err := runRate([]string{"Read", "5", "desc"}, rateOptions{ // no ticket_id positional
+	opts := rateOptions{
 		SessionFlag: "sess-1",
 		DBPath:      dbPath,
 		StateDir:    filepath.Join(tmp, "state"),
-		TicketDir:   repoRoot,
 		Getenv:      func(string) string { return "" },
-	})
-	if err != nil {
-		t.Fatalf("runRate() error = %v", err)
+	}
+
+	if err := runRate([]string{"Edit", "5", "desc", "myproject/117-harnez-rate-command"}, opts); err != nil {
+		t.Fatalf("first runRate() error = %v", err)
+	}
+	if err := runRate([]string{"Read", "5", "desc"}, opts); err != nil { // no ticket_id positional
+		t.Fatalf("second runRate() error = %v", err)
 	}
 
 	want := "myproject/117-harnez-rate-command"
 	if row := lastRow(t, dbPath); row.TicketID != want {
-		t.Errorf("TicketID = %q, want %q (resolved, not NULL/empty)", row.TicketID, want)
+		t.Errorf("TicketID = %q, want %q (inherited, not NULL/empty)", row.TicketID, want)
 	}
 }
 
-func TestRunRate_OmittedTicketErrorsWhenUnresolvable(t *testing.T) {
+// TestRunRate_OmittedTicketWithNoHistoryWritesEmpty is the regression check
+// for the 2026-08-31 fix: an unresolvable ticket_id (no explicit arg, no
+// prior session history — the normal case for this repo, which always
+// works on its default branch) must NOT error and must NOT drop the row.
+// It previously did both, via internal/resolve.Ticket's now-removed
+// branch-name-heuristic-or-error behavior.
+func TestRunRate_OmittedTicketWithNoHistoryWritesEmpty(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "tool_catalog.sqlite")
-	// TicketDir is a plain, non-git directory: resolve.Ticket has nothing
-	// to resolve from and no prior session ticket history.
-	plainDir := filepath.Join(tmp, "not-a-repo")
-	if err := os.MkdirAll(plainDir, 0755); err != nil {
-		t.Fatal(err)
-	}
 
 	err := runRate([]string{"Read", "5", "desc"}, rateOptions{
 		SessionFlag: "sess-never-used-before",
 		DBPath:      dbPath,
 		StateDir:    filepath.Join(tmp, "state"),
-		TicketDir:   plainDir,
 		Getenv:      func(string) string { return "" },
 	})
-	if err == nil {
-		t.Fatal("runRate() error = nil, want an error since ticket_id cannot be resolved")
+	if err != nil {
+		t.Fatalf("runRate() error = %v, want nil (unresolved ticket_id is not an error)", err)
+	}
+	if row := lastRow(t, dbPath); row.TicketID != "" {
+		t.Errorf("TicketID = %q, want empty (no history to inherit)", row.TicketID)
 	}
 }
 
