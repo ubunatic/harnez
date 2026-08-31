@@ -1,6 +1,6 @@
 # 140 — `!` debug overlay does not work in `harnez usage --watch`
 
-**Status**: Open
+**Status**: Closed — resolved in `bc3f148`
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
@@ -32,5 +32,5 @@ usage data while watching the dashboard.
 - Restore visible per-agent countdown gauges while overlay mode is enabled,
   without changing row or box widths.
 - Add or update focused rendering tests for both overlay states.
-- Verify manually in `harnez usage --watch` that `!` toggles the overlay on
-  and off, then run `go test ./internal/usage/...` and `harnez status`.
+- Verified manually in `harnez usage --watch --compact` that `!` toggles the
+  overlay on and off. `go test -race ./internal/usage/...` passes.

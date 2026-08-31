@@ -138,7 +138,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 137 | [137-rograph-library-boundary-and-full-color-spec-audit.md](137-rograph-library-boundary-and-full-color-spec-audit.md) | Harden `rograph` as a standalone library; move every ANSI color/style code into spec/ | Closed — resolved in `6c05b52` |
 | 138 | [138-bar-empty-glyph-flat-background-under-ansi-wrap.md](138-bar-empty-glyph-flat-background-under-ansi-wrap.md) | Bar empty cells use a flat space under the ANSI background, not `░` | Closed — resolved in `b6f0cbf` |
 | 139 | [139-codex-usage-window-rollover-stale-limit.md](139-codex-usage-window-rollover-stale-limit.md) | Codex Usage Window Rollover Keeps Stale Limit State | Open |
-| 140 | [140-debug-overlay-does-not-work.md](140-debug-overlay-does-not-work.md) | `!` debug overlay does not work in `harnez usage --watch` | Open |
+| 140 | [140-debug-overlay-does-not-work.md](140-debug-overlay-does-not-work.md) | `!` debug overlay does not work in `harnez usage --watch` | Closed — resolved in `bc3f148` |
 | 141 | [141-codex-status-bar-agent-count.md](141-codex-status-bar-agent-count.md) | Show the running-agent count in the Codex status bar | Open |
 | 142 | [142-disable-rate-feedback-and-measure-overhead.md](142-disable-rate-feedback-and-measure-overhead.md) | Allow disabling `harnez rate` feedback and measure its token overhead | Open |
 | 143 | [143-show-git-status-in-all-agent-status-bars.md](143-show-git-status-in-all-agent-status-bars.md) | Show Git status in all agent status bars | Open |
