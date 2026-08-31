@@ -137,3 +137,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 136 | [136-bar-ansi-background-bracket-leak-and-color-spec.md](136-bar-ansi-background-bracket-leak-and-color-spec.md) | Bar ANSI background leaks onto brackets; consolidate colors into spec/ | Closed — resolved in `5fd639b`, `27ae0c8` |
 | 137 | [137-rograph-library-boundary-and-full-color-spec-audit.md](137-rograph-library-boundary-and-full-color-spec-audit.md) | Harden `rograph` as a standalone library; move every ANSI color/style code into spec/ | Closed — resolved in `6c05b52` |
 | 138 | [138-bar-empty-glyph-flat-background-under-ansi-wrap.md](138-bar-empty-glyph-flat-background-under-ansi-wrap.md) | Bar empty cells use a flat space under the ANSI background, not `░` | Closed — resolved in `b6f0cbf` |
+| 139 | [139-codex-usage-window-rollover-stale-limit.md](139-codex-usage-window-rollover-stale-limit.md) | Codex Usage Window Rollover Keeps Stale Limit State | Open |
