@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -50,9 +51,22 @@ func collectAll(ctx context.Context, homeDir string, client *http.Client, useCac
 	var claudeUsage, agyUsage, codexUsage AgentUsage
 	if useCache {
 		stateDir := StateDir(homeDir)
-		claudeUsage = cacheOrLive(stateDir, "claude", DefaultCacheStaleness, collectClaude)
-		agyUsage = cacheOrLive(stateDir, "agy", DefaultCacheStaleness, collectAGY)
-		codexUsage = cacheOrLive(stateDir, "codex", DefaultCacheStaleness, collectCodex)
+
+		var wg sync.WaitGroup
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			claudeUsage = cacheOrLive(stateDir, "claude", DefaultCacheStaleness, collectClaude)
+		}()
+		go func() {
+			defer wg.Done()
+			agyUsage = cacheOrLive(stateDir, "agy", DefaultCacheStaleness, collectAGY)
+		}()
+		go func() {
+			defer wg.Done()
+			codexUsage = cacheOrLive(stateDir, "codex", DefaultCacheStaleness, collectCodex)
+		}()
+		wg.Wait()
 
 		// The daemon snapshot / live recollect above can still come back
 		// with no quota-window data at all (e.g. an intermittently-running
@@ -67,9 +81,21 @@ func collectAll(ctx context.Context, homeDir string, client *http.Client, useCac
 		agyUsage = fillFromHistoryIfNoQuotaWindows(historyDir, agyUsage)
 		codexUsage = fillFromHistoryIfNoQuotaWindows(historyDir, codexUsage)
 	} else {
-		claudeUsage = collectClaude()
-		agyUsage = collectAGY()
-		codexUsage = collectCodex()
+		var wg sync.WaitGroup
+		wg.Add(3)
+		go func() {
+			defer wg.Done()
+			claudeUsage = collectClaude()
+		}()
+		go func() {
+			defer wg.Done()
+			agyUsage = collectAGY()
+		}()
+		go func() {
+			defer wg.Done()
+			codexUsage = collectCodex()
+		}()
+		wg.Wait()
 	}
 	now := time.Now()
 	if claudeUsage.LastRefreshed.IsZero() {

@@ -1,6 +1,11 @@
 package usage
 
 import (
+	"context"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -170,5 +175,87 @@ func TestRenderText_AllAgentsAbsent(t *testing.T) {
 	}
 	if !strings.Contains(textStr, "No supported agent") {
 		t.Errorf("expected Text to explain that no agent has recorded usage, got:\n%s", textStr)
+	}
+}
+
+// sleepyRoundTripper is an http.RoundTripper that sleeps a fixed delay
+// before returning a trivial 200 response, regardless of the request. It
+// stands in for the real Claude/Codex quota endpoints in
+// TestCollectAllRunsCollectorsConcurrently below, so that a real
+// client.Do call (issue 129) takes an observable, controlled amount of
+// wall time.
+type sleepyRoundTripper struct {
+	delay time.Duration
+}
+
+func (rt *sleepyRoundTripper) RoundTrip(_ *http.Request) (*http.Response, error) {
+	time.Sleep(rt.delay)
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("{}")),
+		Header:     make(http.Header),
+	}, nil
+}
+
+// TestCollectAllRunsCollectorsConcurrently is issue 129's verification that
+// collectAll's three per-agent collectors (claude, agy, codex) run
+// concurrently rather than sequentially. It wires up real credentials/auth
+// files for all three agents so each collector actually reaches its live
+// fetch path, then makes each of those live fetches artificially slow
+// (~50ms): Claude and Codex via a sleepy http.RoundTripper standing in for
+// their HTTP quota endpoints, and AGY via a stubbed runAGYUsageCmdFn
+// standing in for its `agy -p "/usage"` subprocess call. If the three
+// collectors ran sequentially, three ~50ms calls would sum to ~150ms; run
+// concurrently, total wall time should stay close to a single ~50ms call.
+//
+// Before this change (sequential collectClaude/collectAGY/collectCodex
+// calls in collectAll), an equivalent live cold-cache `harnez usage` run
+// measured roughly 10-12s wall time (three real subprocess/HTTP calls of
+// ~3-4s each in series); after switching to goroutines + sync.WaitGroup,
+// the equivalent run drops to roughly the slowest single collector's time
+// (~3-4s), matching the ~50ms-vs-150ms ratio this test asserts at a much
+// smaller, CI-friendly scale.
+func TestCollectAllRunsCollectorsConcurrently(t *testing.T) {
+	const delay = 50 * time.Millisecond
+
+	homeDir := t.TempDir()
+	claudeDir := filepath.Join(homeDir, ".claude")
+	agyDir := filepath.Join(homeDir, ".gemini", "antigravity-cli")
+	codexDir := filepath.Join(homeDir, ".codex")
+	for _, d := range []string{claudeDir, agyDir, codexDir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatalf("MkdirAll(%s): %v", d, err)
+		}
+	}
+
+	claudeCreds := `{"claudeAiOauth":{"accessToken":"tok","subscriptionType":"pro"}}`
+	if err := os.WriteFile(filepath.Join(claudeDir, ".credentials.json"), []byte(claudeCreds), 0o600); err != nil {
+		t.Fatalf("write claude credentials: %v", err)
+	}
+
+	codexAuth := `{"auth_mode":"chatgpt","tokens":{"access_token":"tok","id_token":"tok"}}`
+	if err := os.WriteFile(filepath.Join(codexDir, "auth.json"), []byte(codexAuth), 0o600); err != nil {
+		t.Fatalf("write codex auth: %v", err)
+	}
+
+	prevAGYFn := runAGYUsageCmdFn
+	runAGYUsageCmdFn = func(ctx context.Context) ([]byte, error) {
+		time.Sleep(delay)
+		return []byte(agyOKOutput), nil
+	}
+	defer func() { runAGYUsageCmdFn = prevAGYFn }()
+
+	client := &http.Client{Transport: &sleepyRoundTripper{delay: delay}}
+
+	start := time.Now()
+	collectAll(context.Background(), homeDir, client, false)
+	elapsed := time.Since(start)
+
+	// Generous upper bound: well under the ~150ms a sequential run of
+	// three ~50ms collectors would take, but comfortably above a single
+	// ~50ms collector plus scheduling/test overhead.
+	const maxElapsed = 120 * time.Millisecond
+	if elapsed >= maxElapsed {
+		t.Errorf("expected collectAll to run its 3 collectors concurrently (~%s total), took %s (>= %s, looks sequential)", delay, elapsed, maxElapsed)
 	}
 }
