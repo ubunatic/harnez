@@ -1,6 +1,6 @@
 # 158 — Add a `harnez find <entity> <query>` query command
 
-**Status**: Open
+**Status**: Closed — resolved in 6924a6b
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -157,26 +157,26 @@ contract is stable. It must not be selected or implemented as part of v1.
 
 ## 3. Implementation & Verification Plan
 
-- [ ] Add a top-level Cobra `find` command, accepting an entity, `-d/--dir`,
+- [x] Add a top-level Cobra `find` command, accepting an entity, `-d/--dir`,
       and a non-empty query; document grammar, shell quoting, fuzzy behavior,
       ranking, output, and examples in its long help and README command
       reference.
-- [ ] Reuse or extend `internal/issues` scanning/parsing rather than scraping
+- [x] Reuse or extend `internal/issues` scanning/parsing rather than scraping
       `issues/README.md`. Extend its issue representation or add a focused
       search document type so the post-metadata body is available. Cover both
       active and archived files and exclude metadata from bare-text matching.
-- [ ] Implement parsing/evaluation as a small independently tested package,
+- [x] Implement parsing/evaluation as a small independently tested package,
       not inline Cobra argument handling. Test aliases, normalization, fuzzy
       thresholds and transposition, short-token protection, whitespace AND,
       `|` OR, precedence, ranking, field-plus-text combinations, exact status
       lifecycle behavior, suffixes, and every malformed-query error.
-- [ ] Test a temporary tracker fixture with open, closed, archived, and
+- [x] Test a temporary tracker fixture with open, closed, archived, and
       suffix-status tickets. Include hits found only in body text and code,
       text appearing only in metadata that must not match, title/body ranking,
       stable ties, exact tab-separated output, silent zero-match exit 0, and
       non-zero usage errors.
-- [ ] Confirm no default Boolean relaxation occurs for a no-result AND query.
-- [ ] Run `go test ./...`, `make install`, `harnez status`, and update the
+- [x] Confirm no default Boolean relaxation occurs for a no-result AND query.
+- [x] Run `go test ./...`, `make install`, `harnez status`, and update the
       README command reference plus this ticket/index before closure.
 
 ## 4. Likely Impacted Files
@@ -185,6 +185,27 @@ contract is stable. It must not be selected or implemented as part of v1.
 - A new `internal/find` (or similarly narrow) parser/evaluator package and
   tests, using `internal/issues` records.
 - `README.md` command reference and `issues/README.md`.
+
+## Scope Note (added at close)
+
+Two judgment calls where the spec text didn't fully pin down real-repo edge behavior:
+
+- **Body extraction when no metadata-closing rule exists.** The spec defines the body as
+  "everything after the first metadata-closing horizontal rule," but only ~58 of this repo's
+  137 tickets actually use a `---` line after the header (newer tickets, including this one,
+  do; many older ones go straight from `**Related:**` to the first `## ` heading with just a
+  blank line). `internal/issues.ParseBody` implements the rule literally: if no thematic break
+  (`---`/`***`/`___`) appears after the H1 title, `Body` is `""` and the ticket is searchable by
+  title only, not an error. This degrades search reach on older tickets without ever risking a
+  metadata leak, and needs no migration to keep working correctly going forward.
+- **What counts as "malformed ticket data."** Section 2 lists "malformed ticket data" alongside
+  "missing/unreadable tracker" as a non-zero-exit case. A ticket file simply missing its
+  `**Status:**` tag or H1 (already tolerated elsewhere, e.g. `harnez status`'s
+  `missing_status_tag` diagnostic) is common and not treated as fatal here — it degrades to an
+  empty/unfiltered status field rather than aborting the whole search. "Malformed/unreadable"
+  is implemented as it already was in `internal/issues.Scan`: a missing/unreadable `issues/`
+  directory or an unreadable individual file returns an error; a loosely formatted ticket does
+  not.
 
 ## 5. Out of Scope
 
