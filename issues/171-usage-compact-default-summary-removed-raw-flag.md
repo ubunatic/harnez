@@ -1,6 +1,6 @@
 # 171 — `harnez usage`: Compact Dashboard Is Now the Default, `--summary` Removed, `--raw` Added
 
-**Status**: Closed — resolved in 5c8b5f6 (see commit for exact hash after this file is committed)
+**Status**: Closed — resolved in d77fd22
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
