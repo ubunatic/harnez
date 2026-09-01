@@ -152,3 +152,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 151 | [151-on-demand-doc-lookup-vs-materialized-instructions-research.md](151-on-demand-doc-lookup-vs-materialized-instructions-research.md) | Research: on-demand doc lookup vs. materialized instructions, and temporary per-repo agent profiles | Open |
 | 152 | [152-move-agent-collector-under-usage-command.md](152-move-agent-collector-under-usage-command.md) | Move `agent-collector` under `usage` instead of top-level | Open |
 | 153 | [153-command-tree-placement-spec-assessment.md](153-command-tree-placement-spec-assessment.md) | Assess whether command-tree placement should be spec-driven | Open |
+| 154 | [154-brief-git-repo-status-command.md](154-brief-git-repo-status-command.md) | `harnez repo-status`: brief, quiet-by-default git repo state summary | Open |
