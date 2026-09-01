@@ -1,6 +1,6 @@
 # 168 — Splash: Determinate Left-to-Right Progress Bar Driven by a Fetch-Duration Estimate
 
-**Status**: Open
+**Status**: Closed — resolved in b67a7ee
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
