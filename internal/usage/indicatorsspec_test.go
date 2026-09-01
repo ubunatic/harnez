@@ -1,6 +1,11 @@
 package usage
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"ubunatic.com/harnez/internal/rograph"
+)
 
 func TestEmbeddedIndicatorsSpecIsValidAndExact(t *testing.T) {
 	spec, err := loadIndicators()
@@ -46,6 +51,66 @@ func TestWatchChartRenderersUseDeclaredGlyphs(t *testing.T) {
 	want := spec.LoadSparkline.Frames[0] + spec.LoadSparkline.Frames[len(spec.LoadSparkline.Frames)-1]
 	if got != want {
 		t.Fatalf("load sparkline = %q, want spec endpoints %q", got, want)
+	}
+}
+
+// TestWatchBarWrapperDefaultsToBracketsOn covers issue 159's acceptance
+// criterion that default behavior (brackets on, "["/"]") is unchanged unless
+// spec/indicators.yaml is edited. It asserts the resolved BarOptions
+// directly and the rendered bar text.
+func TestWatchBarWrapperDefaultsToBracketsOn(t *testing.T) {
+	spec := mustIndicators().UsageBar
+	if !spec.Wrapper.Enabled {
+		t.Fatalf("embedded spec/indicators.yaml usage-bar wrapper.enabled = false, want true (default must stay on)")
+	}
+	opts := watchBarOptions()
+	if opts.NoWrapper {
+		t.Fatalf("watchBarOptions().NoWrapper = true, want false for the default spec")
+	}
+	if opts.Left != "[" || opts.Right != "]" {
+		t.Fatalf("watchBarOptions() Left/Right = %q/%q, want \"[\"/\"]\"", opts.Left, opts.Right)
+	}
+	rendered := stripANSI(rograph.RenderBar(50, opts))
+	if !strings.HasPrefix(rendered, "[") || !strings.HasSuffix(rendered, "]") {
+		t.Fatalf("RenderBar with default wrapper = %q, want it wrapped in [ ]", rendered)
+	}
+}
+
+// TestWatchBarWrapperDisabledBySpec covers a brackets-disabled spec value:
+// parsing a usage-bar spec with wrapper.enabled: false must resolve to
+// rograph.BarOptions.NoWrapper and drop any leftover Left/Right glyphs, so a
+// spec author cannot accidentally leak brackets back in by leaving
+// left/right set alongside enabled: false.
+func TestWatchBarWrapperDisabledBySpec(t *testing.T) {
+	data := []byte(`
+timeout-snake:
+  title: "Time gauge braille snake"
+  frames: ["⠿", "⠷", "⠧", "⠇", "⠃", "⠁", "⠀"]
+usage-bar:
+  filled: "█"
+  empty: "░"
+  sub-character: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+  wrapper:
+    enabled: false
+    left: "["
+    right: "]"
+load-sparkline:
+  frames: ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+`)
+	spec, err := parseIndicatorsYAML(data)
+	if err != nil {
+		t.Fatalf("parseIndicatorsYAML: %v", err)
+	}
+	opts := barOptionsFromSpec(spec.UsageBar)
+	if !opts.NoWrapper {
+		t.Fatalf("barOptionsFromSpec().NoWrapper = false, want true for wrapper.enabled: false")
+	}
+	if opts.Left != "" || opts.Right != "" {
+		t.Fatalf("barOptionsFromSpec() Left/Right = %q/%q, want empty when wrapper is disabled", opts.Left, opts.Right)
+	}
+	rendered := stripANSI(rograph.RenderBar(50, opts))
+	if strings.Contains(rendered, "[") || strings.Contains(rendered, "]") {
+		t.Fatalf("RenderBar with disabled wrapper = %q, want no brackets", rendered)
 	}
 }
 

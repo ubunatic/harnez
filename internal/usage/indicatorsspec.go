@@ -24,9 +24,19 @@ type indicatorsSpec struct {
 }
 
 type usageBarSpec struct {
-	Filled       string   `yaml:"filled"`
-	Empty        string   `yaml:"empty"`
-	SubCharacter []string `yaml:"sub-character"`
+	Filled       string         `yaml:"filled"`
+	Empty        string         `yaml:"empty"`
+	SubCharacter []string       `yaml:"sub-character"`
+	Wrapper      barWrapperSpec `yaml:"wrapper"`
+}
+
+// barWrapperSpec (issue 159) controls the `[`/`]` brackets drawn around a
+// usage bar. Enabled false maps to rograph.BarOptions.NoWrapper; Left/Right
+// map to BarOptions.Left/Right and are only consulted when Enabled is true.
+type barWrapperSpec struct {
+	Enabled bool   `yaml:"enabled"`
+	Left    string `yaml:"left"`
+	Right   string `yaml:"right"`
 }
 
 type glyphSequence struct {
@@ -76,6 +86,12 @@ func parseIndicatorsYAML(data []byte) (indicatorsSpec, error) {
 		if err := validateOneRune(fmt.Sprintf("usage-bar sub-character frame %d", i), frame); err != nil {
 			return indicatorsSpec{}, err
 		}
+	}
+	if spec.UsageBar.Wrapper.Enabled && spec.UsageBar.Wrapper.Left == "" && spec.UsageBar.Wrapper.Right != "" {
+		return indicatorsSpec{}, fmt.Errorf("indicators spec: usage-bar wrapper: left is empty but right is set")
+	}
+	if spec.UsageBar.Wrapper.Enabled && spec.UsageBar.Wrapper.Right == "" && spec.UsageBar.Wrapper.Left != "" {
+		return indicatorsSpec{}, fmt.Errorf("indicators spec: usage-bar wrapper: right is empty but left is set")
 	}
 	if len(spec.LoadSparkline.Frames) < 2 {
 		return indicatorsSpec{}, fmt.Errorf("indicators spec: load-sparkline: need at least two frames")
@@ -130,12 +146,35 @@ func timeoutSnakeGlyph(fraction float64) string {
 }
 
 func watchBarOptions() rograph.BarOptions {
-	spec := mustIndicators().UsageBar
+	return barOptionsFromSpec(mustIndicators().UsageBar)
+}
+
+// barOptionsFromSpec converts a parsed usage-bar spec into rograph.BarOptions.
+// Split out from watchBarOptions so tests can exercise the
+// wrapper-enabled/disabled resolution directly against parsed YAML rather
+// than only the embedded default.
+func barOptionsFromSpec(spec usageBarSpec) rograph.BarOptions {
 	partial := make([]rune, len(spec.SubCharacter))
 	for i, glyph := range spec.SubCharacter {
 		partial[i] = []rune(glyph)[0]
 	}
-	return rograph.BarOptions{Fill: []rune(spec.Filled)[0], Empty: []rune(spec.Empty)[0], SubChar: true, SubCharacterGlyphs: partial, ANSI: true}
+	opts := rograph.BarOptions{
+		Fill:               []rune(spec.Filled)[0],
+		Empty:              []rune(spec.Empty)[0],
+		SubChar:            true,
+		SubCharacterGlyphs: partial,
+		ANSI:               true,
+		NoWrapper:          !spec.Wrapper.Enabled,
+	}
+	// Left/Right only apply when the wrapper is enabled -- rograph.RenderBar
+	// writes whatever Left/Right hold regardless of NoWrapper, so leaving
+	// them at the spec's configured glyphs while NoWrapper is true would let
+	// the brackets leak back in even though the spec turned them off.
+	if spec.Wrapper.Enabled {
+		opts.Left = spec.Wrapper.Left
+		opts.Right = spec.Wrapper.Right
+	}
+	return opts
 }
 
 func watchPercentSparkline(values []float64, width int) string {

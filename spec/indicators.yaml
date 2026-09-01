@@ -15,10 +15,20 @@ timeout-snake:
 
 # Every glyph that draws a quota bar in `usage --watch`. `sub-character`
 # progresses from one eighth to seven eighths; `filled` completes a cell.
+#
+# wrapper (issue 159) controls the `[`/`]` brackets drawn around each bar.
+# enabled: false renders the bar glyphs alone (rograph.BarOptions.NoWrapper);
+# left/right override the bracket glyphs themselves and are ignored when
+# enabled is false. This ships with brackets on so default behavior is
+# unchanged unless this file is edited.
 usage-bar:
   filled: "█"
   empty: "░"
   sub-character: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+  wrapper:
+    enabled: true
+    left: "["
+    right: "]"
 
 # CPU and GPU load timelines map 0% through 100% in this declared order.
 load-sparkline:
