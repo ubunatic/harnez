@@ -18,15 +18,25 @@ import (
 // This is issue 131's pure elapsed/remaining -> fraction mapping, kept
 // separate from freshnessGauge so it's testable without any rendering.
 func freshnessFraction(lastRefreshed, now time.Time) float64 {
+	return freshnessFractionForInterval(lastRefreshed, now, DefaultCollectorInterval)
+}
+
+// freshnessFractionForInterval is freshnessFraction for a particular refresh
+// schedule. The watch view fetches on its configured interval, which is
+// normally much shorter than the collector's cadence.
+func freshnessFractionForInterval(lastRefreshed, now time.Time, interval time.Duration) float64 {
 	if lastRefreshed.IsZero() {
 		return 0
 	}
+	if interval <= 0 {
+		return 0
+	}
 	elapsed := now.Sub(lastRefreshed)
-	remaining := DefaultCollectorInterval - elapsed
+	remaining := interval - elapsed
 	if remaining <= 0 {
 		return 0
 	}
-	frac := float64(remaining) / float64(DefaultCollectorInterval)
+	frac := float64(remaining) / float64(interval)
 	if frac > 1 {
 		frac = 1
 	}
@@ -57,7 +67,13 @@ func freshnessGauge(fraction float64) string {
 // visible width is unchanged from non-overlay rendering. Labels with 3 or
 // fewer runes are replaced in full, since there is nothing left to keep.
 func freshnessOverlayLabel(label string, lastRefreshed, now time.Time) string {
-	gauge := freshnessGauge(freshnessFraction(lastRefreshed, now))
+	return freshnessOverlayLabelForInterval(label, lastRefreshed, now, DefaultCollectorInterval)
+}
+
+// freshnessOverlayLabelForInterval renders the watch debug gauge against the
+// watch's next scheduled fetch rather than the unrelated collector schedule.
+func freshnessOverlayLabelForInterval(label string, lastRefreshed, now time.Time, interval time.Duration) string {
+	gauge := freshnessGauge(freshnessFractionForInterval(lastRefreshed, now, interval))
 	r := []rune(label)
 	if len(r) <= 3 {
 		return gauge

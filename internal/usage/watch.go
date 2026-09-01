@@ -622,14 +622,14 @@ func buildProcessesBox(width int, counts *AgentProcessCount) wbox {
 }
 
 func buildAllUsageBox(summary UsageSummary, width int, debugOverlay bool) wbox {
-	return buildAllUsageBoxAt(summary, width, debugOverlay, time.Now())
+	return buildAllUsageBoxAt(summary, width, debugOverlay, time.Now(), DefaultWatchInterval)
 }
 
 // buildAllUsageBoxAt renders the aggregate usage panel using one timestamp for
 // every row. The watch redraw captures this timestamp once so each agent's
 // gauge advances together on every frame rather than retaining prior output.
-func buildAllUsageBoxAt(summary UsageSummary, width int, debugOverlay bool, now time.Time) wbox {
-	lines := allUsageLinesAt(summary, width-4, debugOverlay, now)
+func buildAllUsageBoxAt(summary UsageSummary, width int, debugOverlay bool, now time.Time, refreshInterval time.Duration) wbox {
+	lines := allUsageLinesAt(summary, width-4, debugOverlay, now, refreshInterval)
 	if len(lines) == 0 {
 		lines = []string{ansiDimGrey + "no quota windows available\x1b[0m"}
 	}
@@ -637,10 +637,10 @@ func buildAllUsageBoxAt(summary UsageSummary, width int, debugOverlay bool, now 
 }
 
 func allUsageLines(summary UsageSummary, contentW int, debugOverlay bool) []string {
-	return allUsageLinesAt(summary, contentW, debugOverlay, time.Now())
+	return allUsageLinesAt(summary, contentW, debugOverlay, time.Now(), DefaultWatchInterval)
 }
 
-func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now time.Time) []string {
+func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now time.Time, refreshInterval time.Duration) []string {
 	type allUsageRow struct {
 		label         string
 		windows       []QuotaWindow
@@ -688,7 +688,7 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 	for _, row := range rows {
 		label := row.label
 		if debugOverlay {
-			label = freshnessOverlayLabel(label, row.lastRefreshed, now)
+			label = freshnessOverlayLabelForInterval(label, row.lastRefreshed, now, refreshInterval)
 		}
 		lines = append(lines, formatAllUsageLine(label, row.windows, contentW, labelWidth))
 	}
@@ -1061,12 +1061,12 @@ func staleLabel(name string) string {
 // in its title, btop-style, instead of a separate legend. Deliberately terse
 // compared to the full `harnez usage` report.
 func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live, debugOverlay bool) wbox {
-	return buildAgentBoxAt(agent, rate, width, showTokens, live, debugOverlay, time.Now())
+	return buildAgentBoxAt(agent, rate, width, showTokens, live, debugOverlay, time.Now(), DefaultWatchInterval)
 }
 
 // buildAgentBoxAt is buildAgentBox with the redraw timestamp supplied by the
 // caller, keeping all freshness gauges in a watch frame consistent.
-func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, live, debugOverlay bool, now time.Time) wbox {
+func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, live, debugOverlay bool, now time.Time, refreshInterval time.Duration) wbox {
 	title := fmt.Sprintf("%s %s", watchBoxSymbol(agent.AgentID), agent.Name)
 
 	if !agent.Installed {
@@ -1106,7 +1106,7 @@ func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, li
 		if !debugOverlay {
 			return label
 		}
-		return freshnessOverlayLabel(label, agent.LastRefreshed, now)
+		return freshnessOverlayLabelForInterval(label, agent.LastRefreshed, now, refreshInterval)
 	}
 
 	// Render quota lines. If the agent has ModelGroups (e.g. AGY), render each group
@@ -1362,13 +1362,19 @@ func initialWatchSections(opts WatchOptions) watchSections {
 // desynchronises every later `\x1b[H`, so the layout must never rely on the
 // terminal to clip for it.
 func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int, live bool, homeDir, historyDir string, opts ...WatchOptions) screenFrame {
+	return buildWatchFrameAt(summary, rates, interval, sec, cols, rows, live, homeDir, historyDir, time.Now(), opts...)
+}
+
+// buildWatchFrameAt is buildWatchFrame with an explicit redraw timestamp. It
+// keeps production wall-clock behavior while allowing the real watch frame
+// path to be tested at exact points in its fetch countdown.
+func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int, live bool, homeDir, historyDir string, now time.Time, opts ...WatchOptions) screenFrame {
 	var opt WatchOptions
 	if len(opts) > 0 {
 		opt = opts[0]
 	}
 	// A frame's freshness gauges all use this redraw time. draw() builds a new
 	// frame every second, so the values are recalculated without a usage fetch.
-	now := time.Now()
 
 	if opt.ShowControls {
 		ocols := cols - safetyMargin
@@ -1525,12 +1531,12 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 	var panels []panel
 	if sec.AllUsage {
-		panels = append(panels, panel{"a", func(w int) wbox { return buildAllUsageBoxAt(summary, w, opt.DebugOverlay, now) }})
+		panels = append(panels, panel{"a", func(w int) wbox { return buildAllUsageBoxAt(summary, w, opt.DebugOverlay, now, interval) }})
 	}
 	for _, agent := range visible {
 		agent := agent
 		panels = append(panels, panel{agentKey(agent.AgentID), func(w int) wbox {
-			return buildAgentBoxAt(agent, rates[agent.AgentID], w, sec.Tokens, live, opt.DebugOverlay, now)
+			return buildAgentBoxAt(agent, rates[agent.AgentID], w, sec.Tokens, live, opt.DebugOverlay, now, interval)
 		}})
 	}
 	if sec.History {

@@ -1463,17 +1463,36 @@ func TestAllUsageLinesAtDebugOverlayCountsDown(t *testing.T) {
 
 	assertGauge := func(now time.Time, want string) {
 		t.Helper()
-		lines := stripANSI(strings.Join(allUsageLinesAt(summary, 72, true, now), "\n"))
+		lines := stripANSI(strings.Join(allUsageLinesAt(summary, 72, true, now, DefaultWatchInterval), "\n"))
 		if !strings.Contains(lines, "Claude C"+want) {
 			t.Fatalf("gauge at %s = %q, want Claude C%s", now, lines, want)
 		}
 	}
 
 	assertGauge(refreshed, "[█]")
-	assertGauge(refreshed.Add(DefaultCollectorInterval/2), "[▄]")
-	assertGauge(refreshed.Add(DefaultCollectorInterval), "[▁]")
+	assertGauge(refreshed.Add(DefaultWatchInterval/2), "[▄]")
+	assertGauge(refreshed.Add(DefaultWatchInterval), "[▁]")
 	assertGauge(refreshed.Add(-time.Second), "[█]")
-	assertGauge(refreshed.Add(2*DefaultCollectorInterval), "[▁]")
+	assertGauge(refreshed.Add(2*DefaultWatchInterval), "[▁]")
+}
+
+// TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval exercises the
+// compact frame path that RunWatch redraws. At the default 60-second watch
+// cadence, the halfway glyph must appear 30 seconds after the last fetch,
+// independent of the collector's 15-minute cadence (issue 147).
+func TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval(t *testing.T) {
+	refreshed := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	summary := UsageSummary{Agents: []AgentUsage{{
+		AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+		LastRefreshed: refreshed, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 25},
+	}}}
+
+	frame := buildWatchFrameAt(summary, nil, DefaultWatchInterval, compactWatchSections(), 90, 24, true,
+		t.TempDir(), t.TempDir(), refreshed.Add(DefaultWatchInterval/2), WatchOptions{Compact: true, DebugOverlay: true})
+	text := stripANSI(strings.Join(frame.lines, "\n"))
+	if !strings.Contains(text, "Claude C[▄]") {
+		t.Fatalf("watch frame at half its fetch interval did not render half gauge:\n%s", text)
+	}
 }
 
 // TestDispatchWatchKeyModeCyclesAndKeepsShowProcesses covers the [m] preset
