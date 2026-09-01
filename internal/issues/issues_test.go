@@ -95,9 +95,9 @@ func TestParseBody(t *testing.T) {
 			want: "\nBody paragraph one.\n\nBody paragraph two.\n",
 		},
 		{
-			name:    "no thematic break present",
+			name:    "no thematic break present, falls back to ## heading",
 			content: "# 154 — repo-status\n\n**Status**: Closed\n\n## Problem\n\nSome text.\n",
-			want:    "",
+			want:    "\nSome text.\n",
 		},
 		{
 			name:    "star-style thematic break",
@@ -108,6 +108,11 @@ func TestParseBody(t *testing.T) {
 			name:    "no title at all",
 			content: "no heading here\n\n---\n\nunreached body\n",
 			want:    "",
+		},
+		{
+			name:    "no thematic break and no ## heading, falls back to whole document after title",
+			content: "# 000 — init\n\n**Status**: Open\n\nFlat free-text ticket body.\n\nMore free-text.\n",
+			want:    "\n**Status**: Open\n\nFlat free-text ticket body.\n\nMore free-text.\n",
 		},
 	}
 	for _, tt := range tests {

@@ -178,28 +178,43 @@ func ParseIssueFile(content string) (title string, rawStatus string, hasStatus b
 // optionally space-separated) on its own line, per CommonMark.
 var thematicBreakRegex = regexp.MustCompile(`^(-[ \t]*-[ \t]*-[ \t]*(?:-[ \t]*)*|\*[ \t]*\*[ \t]*\*[ \t]*(?:\*[ \t]*)*|_[ \t]*_[ \t]*_[ \t]*(?:_[ \t]*)*)$`)
 
-// ParseBody extracts the ticket body searched by `harnez find` (issue 158):
-// everything after the first metadata-closing horizontal rule that appears
-// on its own line after the H1 title. Returns "" if the title or the rule is
-// never found, which leaves older tickets that predate the "---" metadata
-// separator convention searchable by title only (see the ticket's Scope
-// Note).
+// ParseBody extracts the ticket body searched by `harnez find` (issue 158,
+// extended by issue 162) using a three-tier fallback, in order:
+//
+//  1. Everything after the first metadata-closing thematic break ("---",
+//     "***", or "___" on its own line) that appears after the H1 title.
+//  2. Else, everything after the first "## " heading that appears after the
+//     H1 title.
+//  3. Else, everything after the H1 title itself — the whole remaining
+//     document becomes the body.
+//
+// Returns "" only if no H1 title is found at all.
 func ParseBody(content string) string {
 	lines := strings.Split(content, "\n")
-	sawTitle := false
+	titleIdx := -1
+	headingIdx := -1
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if !sawTitle {
+		if titleIdx == -1 {
 			if strings.HasPrefix(trimmed, "# ") {
-				sawTitle = true
+				titleIdx = i
 			}
 			continue
 		}
 		if thematicBreakRegex.MatchString(trimmed) {
 			return strings.Join(lines[i+1:], "\n")
 		}
+		if headingIdx == -1 && strings.HasPrefix(trimmed, "## ") {
+			headingIdx = i
+		}
 	}
-	return ""
+	if titleIdx == -1 {
+		return ""
+	}
+	if headingIdx != -1 {
+		return strings.Join(lines[headingIdx+1:], "\n")
+	}
+	return strings.Join(lines[titleIdx+1:], "\n")
 }
 
 // ticketNumberPrefixRegex strips the leading "NNN <sep>" portion of a parsed
