@@ -79,9 +79,17 @@ func freshnessOverlayLabelForInterval(label string, lastRefreshed, now time.Time
 // its independently specified graph colors after the label has been padded.
 // Styling earlier would make rograph.PadLabel count invisible ANSI runes.
 func styleTimeGaugeGlyph(line string) string {
+	return styleTimeGaugeGlyphWithSGR(line, colorSGR("time-gauge-fg"), colorSGR("time-gauge-bg"))
+}
+
+func styleTimeGaugeGlyphWithSGR(line, foreground, background string) string {
 	r := []rune(line)
 	if len(r) == 0 {
 		return line
 	}
-	return ansiOpen("time-gauge-fg") + ansiOpen("time-gauge-bg") + string(r[0]) + "\x1b[0m" + string(r[1:])
+	styled := "\x1b[" + foreground + "m"
+	if background != "" {
+		styled += "\x1b[" + background + "m"
+	}
+	return styled + string(r[0]) + "\x1b[0m" + string(r[1:])
 }

@@ -46,7 +46,7 @@ func parseWatchColorsYAML(data []byte) (watchColorsSpec, error) {
 		if strings.TrimSpace(c.Title) == "" {
 			return watchColorsSpec{}, fmt.Errorf("colors spec: color %q: missing title", name)
 		}
-		if name != "panel-bg" && strings.TrimSpace(c.SGR) == "" {
+		if name != "panel-bg" && name != "time-gauge-bg" && strings.TrimSpace(c.SGR) == "" {
 			return watchColorsSpec{}, fmt.Errorf("colors spec: color %q: missing sgr", name)
 		}
 	}

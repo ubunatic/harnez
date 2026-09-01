@@ -42,9 +42,6 @@ func TestTimeGaugeColorsResolveIndependentlyFromSpec(t *testing.T) {
 			t.Errorf("colorSGR(%q) = %q, want %q (from embedded spec)", name, got, want)
 		}
 	}
-	if got, want := colorSGR("time-gauge-bg"), colorSGR("panel-bg"); got != want {
-		t.Errorf("time-gauge-bg = %q, want graph-matching panel-bg value %q", got, want)
-	}
 }
 
 // TestParseWatchColorsYAMLMalformedFailsClearly mirrors issue 132's "fail
@@ -65,8 +62,11 @@ func TestParseWatchColorsYAMLValidatesRequiredFields(t *testing.T) {
 		{"no colors", "colors: {}\n", false},
 		{"missing title", "colors:\n  panel-bg:\n    sgr: \"100\"\n", false},
 		{"missing sgr", "colors:\n  accent:\n    title: Accent\n", false},
+		{"missing time gauge background", "colors:\n  time-gauge-bg:\n    title: Time gauge background\n", true},
 		{"empty panel background", "colors:\n  panel-bg:\n    title: Panel background\n    sgr: \"\"\n", true},
 		{"null panel background", "colors:\n  panel-bg:\n    title: Panel background\n    sgr: null\n", true},
+		{"empty time gauge background", "colors:\n  time-gauge-bg:\n    title: Time gauge background\n    sgr: \"\"\n", true},
+		{"null time gauge background", "colors:\n  time-gauge-bg:\n    title: Time gauge background\n    sgr: null\n", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

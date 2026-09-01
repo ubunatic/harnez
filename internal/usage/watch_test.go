@@ -1495,12 +1495,16 @@ func TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval(t *testing.T) {
 		t.Fatalf("watch frame at half its fetch interval did not render half gauge:\n%s", text)
 	}
 	raw := strings.Join(frame.lines, "\n")
-	wantGauge := ansiOpen("time-gauge-fg") + ansiOpen("time-gauge-bg") + halfGauge + "\x1b[0m Claude C…"
+	wantGauge := "\x1b[" + colorSGR("time-gauge-fg") + "m"
+	if bg := colorSGR("time-gauge-bg"); bg != "" {
+		wantGauge += "\x1b[" + bg + "m"
+	}
+	wantGauge += halfGauge + "\x1b[0m Claude C…"
 	if !strings.Contains(raw, wantGauge) {
 		t.Fatalf("watch frame does not render the compact time gauge with its independent colors: %q", raw)
 	}
-	if got := strings.Count(raw, ansiOpen("time-gauge-fg")+ansiOpen("time-gauge-bg")); got != 1 {
-		t.Fatalf("time-gauge color pair appears %d times, want only the compact gauge: %q", got, raw)
+	if got := strings.Count(raw, wantGauge); got != 1 {
+		t.Fatalf("time-gauge styled glyph appears %d times, want only the compact gauge: %q", got, raw)
 	}
 	if !strings.Contains(raw, "["+ansiOpen("panel-bg")) {
 		t.Fatalf("watch frame lost an existing graph's panel background: %q", raw)

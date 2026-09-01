@@ -10,7 +10,7 @@
       "minProperties": 1,
       "additionalProperties": {
         "type": "object",
-        "required": ["title", "sgr"],
+        "required": ["title"],
         "properties": {
           "title": {
             "type": ["string", "null"],

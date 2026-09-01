@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -127,7 +128,11 @@ func TestFreshnessOverlayLabel(t *testing.T) {
 
 func TestStyleTimeGaugeGlyphUsesIndependentColors(t *testing.T) {
 	got := styleTimeGaugeGlyph("█ Gem…")
-	want := ansiOpen("time-gauge-fg") + ansiOpen("time-gauge-bg") + "█\x1b[0m Gem…"
+	want := "\x1b[" + colorSGR("time-gauge-fg") + "m"
+	if bg := colorSGR("time-gauge-bg"); bg != "" {
+		want += "\x1b[" + bg + "m"
+	}
+	want += "█\x1b[0m Gem…"
 	if got != want {
 		t.Errorf("styleTimeGaugeGlyph() = %q, want %q", got, want)
 	}
@@ -136,5 +141,22 @@ func TestStyleTimeGaugeGlyphUsesIndependentColors(t *testing.T) {
 	}
 	if gotWidth, wantWidth := visLen(got), visLen("Gemini"); gotWidth != wantWidth {
 		t.Errorf("styleTimeGaugeGlyph() visible width = %d, want %d", gotWidth, wantWidth)
+	}
+}
+
+func TestStyleTimeGaugeGlyphAllowsAbsentBackground(t *testing.T) {
+	for _, background := range []string{"", "100"} {
+		got := styleTimeGaugeGlyphWithSGR("⠿ Gem…", "40", background)
+		want := "\x1b[40m"
+		if background != "" {
+			want += "\x1b[100m"
+		}
+		want += "⠿\x1b[0m Gem…"
+		if got != want {
+			t.Errorf("background %q: got %q, want %q", background, got, want)
+		}
+		if strings.Contains(got, "\x1b[m") {
+			t.Errorf("background %q produced malformed empty SGR: %q", background, got)
+		}
 	}
 }
