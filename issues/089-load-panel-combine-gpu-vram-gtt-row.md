@@ -1,6 +1,6 @@
 # 089 — Load Panel: Combine GPU VRAM/GTT Row
 
-**Status**: Open
+**Status**: Closed — resolved in 6be83d2
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: UX
