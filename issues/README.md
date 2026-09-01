@@ -156,3 +156,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 155 | [155-braille-snake-timeout-indicator-spec.md](155-braille-snake-timeout-indicator-spec.md) | Define a spec-driven braille snake timeout indicator for the time gauge | Closed — resolved in 2286b1e |
 | 156 | [156-document-codex-agents-view-spawn-agent-effect.md](156-document-codex-agents-view-spawn-agent-effect.md) | Document how `collaboration.spawn_agent` appears in Codex Agents | Open |
 | 157 | [157-spec-driven-usage-watch-chart-glyphs.md](157-spec-driven-usage-watch-chart-glyphs.md) | Specify every `usage --watch` chart glyph | Closed — resolved in 2787da7; absent chart backgrounds in 7da5720/9649600 |
+| 158 | [158-find-entity-query-command.md](158-find-entity-query-command.md) | Add a `harnez find <entity> <query>` query command | Open |
