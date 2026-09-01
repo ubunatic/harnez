@@ -175,3 +175,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 174 | [174-shell-execution-quality-scoring-and-error-pattern-detection.md](174-shell-execution-quality-scoring-and-error-pattern-detection.md) | Shell Execution Quality Scoring and Language Error Pattern Detection | Open |
 | 175 | [175-promote-structured-patching-over-fragile-edits.md](175-promote-structured-patching-over-fragile-edits.md) | Agent Instruction & Practice: Promote Structured Patching Over Fragile Edits | Open |
 | 176 | [176-structured-capped-subagent-completion-report-contract.md](176-structured-capped-subagent-completion-report-contract.md) | Structured, Capped Subagent Completion-Report Contract | Open |
+| 177 | [177-lean-post-edit-build-check-for-control-flow-edits.md](177-lean-post-edit-build-check-for-control-flow-edits.md) | Lean, Scoped Post-Edit Build Check for Control-Flow-Reshaping Edits | Open |
