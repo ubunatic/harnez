@@ -1,6 +1,6 @@
 # 148 — `harnez index`: auto-update issues/README.md, docs/README.md, docs/studies index
 
-**Status**: Closed — resolved in `pending` (self-ref hash fixed up in a follow-up commit, see [[126]])
+**Status**: Closed — resolved in `fce2b4a`
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Tooling
