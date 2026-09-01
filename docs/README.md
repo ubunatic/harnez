@@ -13,6 +13,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [HookRewritePattern.md](HookRewritePattern.md) | Two-stage PreToolUse hook pattern (rewrite now, capture later): `<feature> hook` vs. `<feature>` wrapper, `harnez distill hook` as reference implementation, plus two hard-won constraints — hooks on the same matcher don't compose (last-to-finish wins) and a rewritten command must stay one shell token (consult before adding any new agent-hook-driven feature) |
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat (consult when updating permission schemas) |
+| [TUIDesign.md](TUIDesign.md) | Single-cell time-indicator semantics, safe Unicode presets, and display-width/font pitfalls (consult when changing gauges, bars, sparks, or spinners) |
 
 
 Copyable docs (installed to Claude and Prime Agent global dirs on `apply`, copied to projects via `--docs`) live in subdirs.
