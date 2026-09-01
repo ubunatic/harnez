@@ -30,6 +30,40 @@ rather than assuming YAML.
 
 ## Prep Task — frontmatter investigation (do before Scope below)
 
+**Conclusion (recorded 2026-09-01): keep the bold-label block, do not move to YAML
+frontmatter.**
+
+Reasoning:
+- `internal/issues/issues.go` already has a battle-tested bold-label parser
+  (`ParseIssueFile`, `statusLineRegex`) backing `harnez status`'s tracker linter.
+  A run of `harnez status` against this repo's 143 currently-indexed tickets found
+  zero status-parsing failures — the format isn't drifting or breaking in practice.
+- YAML frontmatter's claimed resilience gain is diluted to near-zero here: other
+  harnez-managed repos' `issues/*.md` won't be migrated in lockstep (per the ticket's
+  own framing), so the parser would have to keep reading bold-label-only tickets
+  forever regardless of what this repo does — meaning "switch to YAML" only adds a
+  second format to support, a migration command, and dual-parse tests, without ever
+  letting the bold-label path be dropped.
+- `docs/studies/*.md` already shows what happens when two metadata conventions
+  coexist in one repo: 2 of ~24 study files picked up `---`-delimited YAML frontmatter
+  (`title`/`weight`, for the unrelated docs-copy ordering pipeline) while the other 22
+  use a `**Date**:`/`**Scope**:` bold-label-ish header, and a few have neither. That's
+  the drift risk (hand-edits landing in whichever format the last editor used) playing
+  out for real, on a much smaller surface than `issues/*.md` would be.
+- Concrete YAML-specific failure modes are real and worse than the bold-label
+  equivalents: a missing/malformed closing `---` corrupts parsing of the *whole* file,
+  not just one field; a merge conflict landing inside a frontmatter block breaks its
+  structure outright, whereas a bad bold-label line just fails one regex match and
+  leaves the rest of the block/body readable.
+- This is a P3/Low, solo-repo ticket — the proportional call is to reuse the existing,
+  working, already-tested parser rather than add a dual-format parser + migration
+  command for a resilience gain that mostly doesn't materialize (see point 2).
+
+Proceeding straight to the Scope below, parsing the bold-label block only (as the
+ticket originally scoped before this investigation was added). No `docs/studies/`
+entry filed — the investigation didn't turn up anything substantial enough to warrant
+one beyond this note.
+
 Before building the parser, investigate whether issue metadata should move
 from the bold-label block to real YAML frontmatter (`---`-delimited), since
 that choice determines what the parser in Scope actually needs to read:
