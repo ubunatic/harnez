@@ -82,6 +82,17 @@ A follow-up implementation ticket, once the message-boundary question above is s
 - Rebuilding/restarting the server does not kill the viewer; the viewer shows a reconnecting
   state and resumes automatically once the server is back.
 
+## Architecture Decision (2026-09-01)
+
+Considered folding the frame-building "server" (and issue 110's remote-Load `ControlMaster`,
+currently owned by the `--watch` process) into `agent-collector` (082) to avoid running a third
+long-lived process. **Decided against it** — keep collection (082), remote streaming (110), and
+the new watch-server concerns separate rather than converging them into one daemon. 082 was
+deliberately scoped as collection-only, not display; keeping the split preserves that boundary
+instead of growing the collector into a presentation-adjacent process. A follow-up implementation
+ticket for the viewer/server split should treat the watch-server as its own process, not an
+extension of `agent-collector`.
+
 ## Acceptance Criteria (for this feasibility ticket)
 
 - [x] Confirm whether a clean viewer/server seam exists in the current code (yes — `screenFrame`).
