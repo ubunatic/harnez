@@ -169,5 +169,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 168 | [168-splash-determinate-progress-bar-fetch-duration-estimate.md](168-splash-determinate-progress-bar-fetch-duration-estimate.md) | Splash: Determinate Left-to-Right Progress Bar Driven by a Fetch-Duration Estimate | Closed — resolved in b67a7ee |
 | 169 | [169-splash-status-log-line-per-fetch-stage.md](169-splash-status-log-line-per-fetch-stage.md) | Splash: Single-Line Status/Mini-Log of In-Flight Fetch Stages | Closed — resolved in d4a65e5 |
 | 170 | [170-modularize-cmd-harnez-main-go.md](170-modularize-cmd-harnez-main-go.md) | Modularize `cmd/harnez/main.go` Command Definitions | Open |
-| 171 | [171-usage-compact-default-summary-removed-raw-flag.md](171-usage-compact-default-summary-removed-raw-flag.md) | `harnez usage`: Compact Dashboard Is Now the Default, `--summary` Removed, `--raw` Added | Closed |
+| 171 | [171-usage-compact-default-summary-removed-raw-flag.md](171-usage-compact-default-summary-removed-raw-flag.md) | `harnez usage`: Compact Dashboard Is Now the Default, `--summary` Removed, `--raw` Added | Closed — resolved in d77fd22 |
 | 172 | [172-agy-claude-gpt-single-window-row-breaks-all-usage-alignment.md](172-agy-claude-gpt-single-window-row-breaks-all-usage-alignment.md) | AGY "Claude/GPT" Row Drops Its Second Window at 100%, Breaking All Usage Grid Alignment | Open |
