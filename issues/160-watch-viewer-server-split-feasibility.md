@@ -86,12 +86,14 @@ A follow-up implementation ticket, once the message-boundary question above is s
 
 Considered folding the frame-building "server" (and issue 110's remote-Load `ControlMaster`,
 currently owned by the `--watch` process) into `agent-collector` (082) to avoid running a third
-long-lived process. **Decided against it** — keep collection (082), remote streaming (110), and
-the new watch-server concerns separate rather than converging them into one daemon. 082 was
-deliberately scoped as collection-only, not display; keeping the split preserves that boundary
-instead of growing the collector into a presentation-adjacent process. A follow-up implementation
-ticket for the viewer/server split should treat the watch-server as its own process, not an
-extension of `agent-collector`.
+long-lived process. **Decided against it for the frame-building/display piece** — this ticket
+(160) stays scoped to the viewer/frame-painting split only, kept separate from `agent-collector`,
+which stays collection-only, not display.
+
+The remote-Load `ControlMaster` piece was reconsidered separately and **is** being merged into
+`agent-collector`, since it's data-gathering, not display — tracked in
+[[161-collector-remote-control-host-and-prometheus-exposition]], split out from this ticket so 160
+doesn't mix frame-painting concerns with collector-architecture changes.
 
 ## Acceptance Criteria (for this feasibility ticket)
 

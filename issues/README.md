@@ -159,3 +159,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 158 | [158-find-entity-query-command.md](158-find-entity-query-command.md) | Add a `harnez find <entity> <query>` query command | Open |
 | 159 | [159-spec-driven-bar-bracket-toggle.md](159-spec-driven-bar-bracket-toggle.md) | Spec-driven enable/disable of bar/graph `[]` brackets | Closed — resolved in aff9b98 |
 | 160 | [160-watch-viewer-server-split-feasibility.md](160-watch-viewer-server-split-feasibility.md) | Feasibility: split `usage --watch` viewer from app-logic server | Open — assessment complete, feasible |
+| 161 | [161-collector-remote-control-host-and-prometheus-exposition.md](161-collector-remote-control-host-and-prometheus-exposition.md) | Collector: absorb remote-load control host + opt-in Prometheus exposition | Open |
