@@ -1,6 +1,6 @@
 # 157 — Specify every `usage --watch` chart glyph
 
-**Status**: In Progress
+**Status**: Closed — resolved in 2787da7
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
