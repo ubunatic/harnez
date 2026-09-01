@@ -25,6 +25,14 @@ var noisyCommandRE = regexp.MustCompile(
 		`)`,
 )
 
+// MatchesNoisy reports whether a command matches the noisy command allowlist.
+func MatchesNoisy(command string) bool {
+	if command == "" || distillInvocationRE.MatchString(command) {
+		return false
+	}
+	return noisyCommandRE.MatchString(command)
+}
+
 // RewriteBashCommand decides whether a Bash tool command should be piped
 // through `harnez distill` before it runs. It returns the rewritten command
 // and true when a rewrite applies; otherwise the original command and false.

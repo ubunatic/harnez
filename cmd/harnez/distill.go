@@ -8,9 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/distill"
+	"ubunatic.com/harnez/internal/telemetry"
 )
 
 func newDistillCmd() *cobra.Command {
@@ -129,11 +131,33 @@ func runDistillWrapper(args []string, opts distill.Options) error {
 		opts.Mode = distill.DetectModeFromArgs(args)
 	}
 
+	start := time.Now()
 	c := exec.Command(args[0], args[1:]...)
 	c.Stdin = os.Stdin
 	out, runErr := c.CombinedOutput()
+	duration := time.Since(start)
 
-	fmt.Println(distill.Distill(string(out), opts))
+	distilled, rawBytes, distilledBytes := distill.DistillWithMetrics(string(out), opts)
+	fmt.Println(distilled)
+
+	exitCode := exitCodeFromError(runErr)
+
+	var distBytesPtr *int64
+	if opts.Mode != distill.ModeRaw {
+		distBytesPtr = &distilledBytes
+	}
+
+	score, note := telemetry.ScoreShell(string(out), exitCode)
+
+	recordExecTelemetry(execOptions{Tool: "distill"}, execCall{
+		Tool:           "distill",
+		ExitCode:       exitCode,
+		DurationMs:     duration.Milliseconds(),
+		RawBytes:       rawBytes,
+		DistilledBytes: distBytesPtr,
+		Score:          &score,
+		Note:           note,
+	})
 
 	var exitErr *exec.ExitError
 	if runErr != nil {

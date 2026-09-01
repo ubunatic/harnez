@@ -83,6 +83,11 @@ Run from project root.
 See `@docs/AgenticLoop.md` Invariant 6 (Context Discipline & Range-Bounded Ingestion)
 for the canonical statement of this rule.
 
+## Editing Discipline
+
+- Prefer structured patch tools (`apply_patch`) or whole-block replacements over narrow string substitution edits.
+- When making multi-line edits, ensure sufficient surrounding context lines to avoid ambiguous pattern matches.
+
 ## Voice & Transcription Input Awareness
 - The user often uses voice-to-text / speech transcription (ASR).
 - Be alert for phonetic homophones and transcription artifacts (e.g. "Southern Exploration" → "start an exploration agent", "harness" → "harnez"). Reason about user intent from phonetic similarity and conversation context before asking for clarification.

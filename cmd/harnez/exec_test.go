@@ -142,7 +142,10 @@ func TestRunExecWrapper_RecordsDurationAndRawBytes(t *testing.T) {
 		t.Errorf("raw_bytes = %d, want %d", row.RawBytes, len("twelve bytes!"))
 	}
 	if row.DistilledBytes != nil {
-		t.Errorf("distilled_bytes = %v, want nil/NULL (no distill byte-count signal exists yet, see issues/118 Notes)", *row.DistilledBytes)
+		t.Errorf("distilled_bytes = %v, want nil/NULL when distillation not requested", *row.DistilledBytes)
+	}
+	if row.Score == nil || *row.Score != 5 {
+		t.Errorf("score = %v, want 5 (clean success)", row.Score)
 	}
 	if row.ExitCode == nil || *row.ExitCode != 0 {
 		t.Errorf("exit_code = %v, want 0", row.ExitCode)
@@ -152,6 +155,92 @@ func TestRunExecWrapper_RecordsDurationAndRawBytes(t *testing.T) {
 	}
 	if row.ToolName != "test-tool" {
 		t.Errorf("tool_name = %q, want test-tool", row.ToolName)
+	}
+}
+
+func TestRunExecWrapper_RecordsDistilledBytes(t *testing.T) {
+	opts := testExecOptions(t)
+	opts.Distill = "gotest"
+	opts.InsertTimeout = 2 * time.Second
+
+	var out, errOut bytes.Buffer
+	testOutput := "=== RUN   TestFoo\n--- PASS: TestFoo (0.01s)\n=== RUN   TestBar\n--- PASS: TestBar (0.01s)\nPASS\nok  example.com/foo 0.02s\n"
+	code, err := runExecWrapper(
+		[]string{"sh", "-c", "printf '%b' " + strconvQuote(testOutput)},
+		opts, strings.NewReader(""), &out, &errOut,
+	)
+	if err != nil {
+		t.Fatalf("runExecWrapper() error = %v", err)
+	}
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	db, err := telemetry.Open(opts.DBPath)
+	if err != nil {
+		t.Fatalf("Open telemetry db: %v", err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{CallType: "shell"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 shell row, got %d", len(rows))
+	}
+	row := rows[0]
+
+	if row.RawBytes != int64(len(testOutput)) {
+		t.Errorf("raw_bytes = %d, want %d", row.RawBytes, len(testOutput))
+	}
+	if row.DistilledBytes == nil {
+		t.Fatalf("distilled_bytes is nil, want non-nil")
+	}
+	if *row.DistilledBytes >= row.RawBytes {
+		t.Errorf("distilled_bytes = %d, want < raw_bytes (%d)", *row.DistilledBytes, row.RawBytes)
+	}
+	if row.Score == nil || *row.Score != 5 {
+		t.Errorf("score = %v, want 5", row.Score)
+	}
+}
+
+func TestRunExecWrapper_RecordsSyntheticQualityScores(t *testing.T) {
+	cases := []struct {
+		name      string
+		script    string
+		wantScore int
+	}{
+		{"panic", "echo 'panic: runtime error: index out of range'; exit 2", 1},
+		{"syntax error", "echo './main.go:10:2: syntax error: unexpected semicolon'; exit 2", 2},
+		{"test failure", "echo '--- FAIL: TestFoo (0.00s)'; exit 1", 3},
+		{"clean success", "echo 'all good'; exit 0", 5},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := testExecOptions(t)
+			opts.InsertTimeout = 2 * time.Second
+
+			var out, errOut bytes.Buffer
+			_, err := runExecWrapper([]string{"sh", "-c", tc.script}, opts, strings.NewReader(""), &out, &errOut)
+			if err != nil {
+				t.Fatalf("runExecWrapper: %v", err)
+			}
+
+			db, err := telemetry.Open(opts.DBPath)
+			if err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			defer db.Close()
+
+			rows, err := db.Query(telemetry.Filter{CallType: "shell"})
+			if err != nil || len(rows) != 1 {
+				t.Fatalf("Query rows = %v, err = %v", rows, err)
+			}
+			if rows[0].Score == nil || *rows[0].Score != tc.wantScore {
+				t.Errorf("row score = %v, want %d", rows[0].Score, tc.wantScore)
+			}
+		})
 	}
 }
 
@@ -289,10 +378,10 @@ func TestRunExecHook_ComposesDistillAutopipe(t *testing.T) {
 		t.Fatalf("output not valid JSON: %v\n%s", err, out.String())
 	}
 	rewritten := got.HookSpecificOutput.UpdatedInput["command"]
-	if !strings.Contains(rewritten, "harnez distill") {
-		t.Errorf("updatedInput.command = %q, want it to route through harnez distill (autopipe enabled)", rewritten)
+	if !strings.Contains(rewritten, "--distill") && !strings.Contains(rewritten, "harnez distill") {
+		t.Errorf("updatedInput.command = %q, want it to route through distill (autopipe enabled)", rewritten)
 	}
-	if !strings.HasPrefix(rewritten, "harnez exec --tool Bash -- bash -c ") {
+	if !strings.HasPrefix(rewritten, "harnez exec --tool Bash") {
 		t.Errorf("updatedInput.command = %q, want it still wrapped by harnez exec", rewritten)
 	}
 }

@@ -264,6 +264,7 @@ agents_md:
             then to the active harness directory (~/.claude or ~/.prime/agent).
           - Context Discipline: avoid whole-file reads on active system-prompt files (AGENTS.md,
             CLAUDE.md); use grep or range-bounded reads — see @docs/AgenticLoop.md Invariant 6.
+          - Editing Discipline: prefer structured patch tools (apply_patch) or whole-block replacements over narrow string substitution edits. When making multi-line edits, ensure sufficient surrounding context lines to avoid ambiguous pattern matches.
           - Voice Input: the user may use speech-to-text (ASR); interpret phonetic homophones and transcription anomalies with context awareness.
           - Always use absolute file paths for global instructions.
             Always use relative file paths for local instructions.

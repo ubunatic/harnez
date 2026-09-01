@@ -205,6 +205,15 @@ func Distill(input string, opts Options) string {
 	return s
 }
 
+// DistillWithMetrics runs the full pipeline and returns the distilled output
+// alongside raw and distilled byte counts.
+func DistillWithMetrics(input string, opts Options) (string, int64, int64) {
+	rawBytes := int64(len(input))
+	distilled := Distill(input, opts)
+	distilledBytes := int64(len(distilled))
+	return distilled, rawBytes, distilledBytes
+}
+
 // DetectModeFromArgs guesses the structured filter from a wrapped command's
 // argv, e.g. []string{"go", "test", "./..."} -> ModeGoTest.
 func DetectModeFromArgs(args []string) Mode {

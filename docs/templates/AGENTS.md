@@ -16,6 +16,11 @@ Run from project root.
 - Commit documentation changes and `issues/*.md` changes immediately, don't batch them behind
   pending code work.
 
+## Editing Discipline
+
+- Prefer structured patch tools (`apply_patch`) or whole-block replacements over narrow string substitution edits.
+- When making multi-line edits, ensure sufficient surrounding context lines to avoid ambiguous pattern matches.
+
 ## Background Tasks & Process Hygiene
 
 - Subagent handoff must not block the main chat. When the user asks to hand work to a subagent,

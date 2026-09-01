@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,34 +46,31 @@ const defaultExecInsertTimeout = 200 * time.Millisecond
 func newExecCmd() *cobra.Command {
 	var toolFlag string
 	var ticketFlag string
+	var distillFlag string
 
 	cmd := &cobra.Command{
-		Use:   "exec --tool <tool_name> [--ticket <ticket_id>] -- <command...>",
+		Use:   "exec --tool <tool_name> [--ticket <ticket_id>] [--distill[=<mode>]] -- <command...>",
 		Short: "Run a command, proxy its stdio unbuffered, and record shell-call telemetry",
 		Long: `exec wraps an arbitrary command: it spawns <command...> as a subprocess,
 proxies its stdin/stdout/stderr to the caller with no added buffering
 latency, preserves and re-exits with the child's exact exit code
 (including signal-terminated cases), and writes one call_type='shell'
-tool_calls row recording duration_ms and raw_bytes (stdout+stderr byte
-count).
+tool_calls row recording duration_ms, raw_bytes, distilled_bytes (when
+distillation is active), and synthetic quality score (1-5).
 
   harnez exec --tool git -- git status
   harnez exec --tool npm --ticket harnez/118-harnez-exec-shell-interceptor -- npm test
+  harnez exec --tool Bash --distill -- go test ./...
 
 The telemetry write is best-effort and bounded: it never delays the
 wrapped command's own execution, and gives up waiting on a slow/hung DB
 write after a short bound rather than hanging the caller.
 
-distilled_bytes is currently always left NULL: nothing in
-'harnez distill' today exposes a byte-count signal this wrapper could
-read back (see issues/118's Notes) — that needs a minimal follow-up in
-distill itself, out of this ticket's scope.
-
 See 'harnez exec hook' for the separate PreToolUse rewrite stage that
 points an agent's Bash tool calls at this command.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			exitCode, err := runExecWrapper(args, execOptions{Tool: toolFlag, Ticket: ticketFlag},
+			exitCode, err := runExecWrapper(args, execOptions{Tool: toolFlag, Ticket: ticketFlag, Distill: distillFlag},
 				cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
 			if err != nil {
 				return err
@@ -85,6 +83,8 @@ points an agent's Bash tool calls at this command.`,
 	}
 	cmd.Flags().StringVar(&toolFlag, "tool", "", "tool identifier the wrapped command belongs to, e.g. git, npm, Bash (required)")
 	cmd.Flags().StringVar(&ticketFlag, "ticket", "", "ticket_id override (default: resolve.Ticket())")
+	cmd.Flags().StringVar(&distillFlag, "distill", "", "distillation filter mode (auto, gotest, git, raw)")
+	cmd.Flags().Lookup("distill").NoOptDefVal = "auto"
 
 	cmd.AddCommand(newExecHookCmd())
 	return cmd
@@ -96,8 +96,9 @@ points an agent's Bash tool calls at this command.`,
 // from the caller's real environment/DB and to inject slow/failing
 // writers for the non-blocking-telemetry acceptance criterion.
 type execOptions struct {
-	Tool   string
-	Ticket string
+	Tool    string
+	Ticket  string
+	Distill string
 
 	Getenv        func(string) string // nil means os.Getenv
 	StateDir      string              // resolve.Session/Ticket state/lock dir override
@@ -137,7 +138,7 @@ func (c *byteCounter) total() int64 {
 // — a slow or hung DB write can delay the wrapper's own return by at most
 // that bound, but never by the writer's actual (possibly unbounded) delay.
 func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut io.Writer) (int, error) {
-	debugLog("exec wrapper: invoked, tool=%q ticket=%q args=%v", opts.Tool, opts.Ticket, args)
+	debugLog("exec wrapper: invoked, tool=%q ticket=%q distill=%q args=%v", opts.Tool, opts.Ticket, opts.Distill, args)
 	if len(args) == 0 {
 		return 0, fmt.Errorf("exec: no command given (usage: harnez exec --tool <tool_name> -- <command...>)")
 	}
@@ -146,10 +147,25 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 
 	counter := &byteCounter{}
+	var capturedOutput bytes.Buffer
+
 	c := exec.Command(args[0], args[1:]...)
 	c.Stdin = in
-	c.Stdout = io.MultiWriter(out, counter)
-	c.Stderr = io.MultiWriter(errOut, counter)
+
+	var distOpts distill.Options
+	distillActive := opts.Distill != ""
+	if distillActive {
+		mode := distill.Mode(opts.Distill)
+		if mode == "true" || mode == "1" || mode == distill.ModeAuto {
+			mode = distill.DetectModeFromArgs(args)
+		}
+		distOpts = distill.Options{Mode: mode, MaxLines: 300}
+		c.Stdout = io.MultiWriter(&capturedOutput, counter)
+		c.Stderr = io.MultiWriter(&capturedOutput, counter)
+	} else {
+		c.Stdout = io.MultiWriter(out, counter, &capturedOutput)
+		c.Stderr = io.MultiWriter(errOut, counter, &capturedOutput)
+	}
 
 	start := time.Now()
 	runErr := c.Run()
@@ -164,11 +180,29 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 	exitCode := exitCodeFromError(runErr)
 
+	rawBytes := counter.total()
+	var distilledBytesPtr *int64
+
+	if distillActive {
+		rawStr := capturedOutput.String()
+		distilled, rBytes, dBytes := distill.DistillWithMetrics(rawStr, distOpts)
+		fmt.Fprintln(out, distilled)
+		rawBytes = rBytes
+		if distOpts.Mode != distill.ModeRaw {
+			distilledBytesPtr = &dBytes
+		}
+	}
+
+	score, note := telemetry.ScoreShell(capturedOutput.String(), exitCode)
+
 	recordExecTelemetry(opts, execCall{
-		Tool:       opts.Tool,
-		ExitCode:   exitCode,
-		DurationMs: duration.Milliseconds(),
-		RawBytes:   counter.total(),
+		Tool:           opts.Tool,
+		ExitCode:       exitCode,
+		DurationMs:     duration.Milliseconds(),
+		RawBytes:       rawBytes,
+		DistilledBytes: distilledBytesPtr,
+		Score:          &score,
+		Note:           note,
 	})
 
 	return exitCode, nil
@@ -198,10 +232,13 @@ func exitCodeFromError(err error) int {
 // file doesn't need to know about columns (session/ticket/agent/project)
 // it resolves itself.
 type execCall struct {
-	Tool       string
-	ExitCode   int
-	DurationMs int64
-	RawBytes   int64
+	Tool           string
+	ExitCode       int
+	DurationMs     int64
+	RawBytes       int64
+	DistilledBytes *int64
+	Score          *int
+	Note           string
 }
 
 // recordExecTelemetry makes the single best-effort, bounded attempt at
@@ -250,20 +287,19 @@ func recordExecTelemetry(opts execOptions, call execCall) {
 
 		exitCode := call.ExitCode
 		tc := telemetry.ToolCall{
-			SessionID:   sessionID,
-			TicketID:    ticketID,
-			ProjectName: filepath.Base(wd),
-			WorkingDir:  wd,
-			AgentID:     detectAgent("", opts.Getenv),
-			ToolName:    call.Tool,
-			CallType:    "shell",
-			ExitCode:    &exitCode,
-			DurationMs:  call.DurationMs,
-			RawBytes:    call.RawBytes,
-			// DistilledBytes intentionally left nil (SQL NULL): see this
-			// file's top-of-file doc comment and issues/118's Notes —
-			// nothing in internal/distill exposes a byte-count signal
-			// today, and this ticket does not add one.
+			SessionID:      sessionID,
+			TicketID:       ticketID,
+			ProjectName:    filepath.Base(wd),
+			WorkingDir:     wd,
+			AgentID:        detectAgent("", opts.Getenv),
+			ToolName:       call.Tool,
+			CallType:       "shell",
+			Score:          call.Score,
+			Note:           call.Note,
+			ExitCode:       &exitCode,
+			DurationMs:     call.DurationMs,
+			RawBytes:       call.RawBytes,
+			DistilledBytes: call.DistilledBytes,
 		}
 
 		dbPath := opts.DBPath
@@ -389,11 +425,12 @@ func runExecHook(in io.Reader, out io.Writer) error {
 	}
 
 	effective := command
-	if rewritten, ok := distillAutopipeRewrite(command); ok {
-		effective = rewritten
+	distillFlag := ""
+	if isDistillAutopipeEnabled() && distill.MatchesNoisy(command) {
+		distillFlag = " --distill"
 	}
 
-	rewritten := fmt.Sprintf("harnez exec --tool %s -- bash -c %s", payload.ToolName, shellQuote(effective))
+	rewritten := fmt.Sprintf("harnez exec --tool %s%s -- bash -c %s", payload.ToolName, distillFlag, shellQuote(effective))
 	debugLog("exec hook: rewriting %q -> %q", command, rewritten)
 	return json.NewEncoder(out).Encode(hookOutput{
 		HookSpecificOutput: hookSpecificOutput{
@@ -401,6 +438,11 @@ func runExecHook(in io.Reader, out io.Writer) error {
 			UpdatedInput:  map[string]string{"command": rewritten},
 		},
 	})
+}
+
+func isDistillAutopipeEnabled() bool {
+	enabled := os.Getenv(distillAutopipeEnv)
+	return enabled == "1" || strings.EqualFold(enabled, "true")
 }
 
 // debugLog appends a timestamped line to ~/.harnez/debug.log when the
