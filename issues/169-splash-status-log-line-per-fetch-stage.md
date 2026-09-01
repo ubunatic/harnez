@@ -1,6 +1,6 @@
 # 169 — Splash: Single-Line Status/Mini-Log of In-Flight Fetch Stages
 
-**Status**: Open
+**Status**: Closed — resolved in d4a65e5
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
