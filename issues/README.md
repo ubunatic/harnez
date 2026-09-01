@@ -166,3 +166,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 165 | [165-two-phase-architect-patch-harness-for-small-local-models.md](165-two-phase-architect-patch-harness-for-small-local-models.md) | Two-Phase Architect/Patch Execution Harness for Small Local Models | Open |
 | 166 | [166-compact-local-llm-doc-profile-and-go-rune-width-invariants.md](166-compact-local-llm-doc-profile-and-go-rune-width-invariants.md) | Compact Local-LLM Doc Profile with Explicit Do/Don't Rules (+ Go Rune/Width Invariants) | Open |
 | 167 | [167-local-llm-runtime-target-support-and-telemetry.md](167-local-llm-runtime-target-support-and-telemetry.md) | Local LLM Runtime Target Support & Telemetry (Ollama, llama.cpp, SGLang/vLLM) | Open |
+| 168 | [168-splash-determinate-progress-bar-fetch-duration-estimate.md](168-splash-determinate-progress-bar-fetch-duration-estimate.md) | Splash: Determinate Left-to-Right Progress Bar Driven by a Fetch-Duration Estimate | Open |
