@@ -148,3 +148,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 147 | [147-debug-overlay-gauge-does-not-count-down.md](147-debug-overlay-gauge-does-not-count-down.md) | Debug overlay gauge does not count down to the next usage fetch | Closed — resolved in `e1d370d` |
 | 148 | [148-harnez-index-command-for-issues-docs-studies.md](148-harnez-index-command-for-issues-docs-studies.md) | `harnez index`: auto-update issues/README.md, docs/README.md, docs/studies index | Open |
 | 149 | [149-agent-specific-profiles-codex-async-wait-instruction.md](149-agent-specific-profiles-codex-async-wait-instruction.md) | Agent-specific instruction profiles, first use case: Codex async-wait guidance | Open |
+| 150 | [150-time-gauge-color-parity-and-spec.md](150-time-gauge-color-parity-and-spec.md) | Give the debug time gauge graph-color parity and an independent color spec | Open |
