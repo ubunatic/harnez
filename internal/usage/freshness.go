@@ -46,10 +46,8 @@ func freshnessFractionForInterval(lastRefreshed, now time.Time, interval time.Du
 // freshnessGauge renders fraction (0.0-1.0) as a 3-character countdown
 // gauge, e.g. "[█]" (full/just refreshed) draining to "[▁]" (overdue/empty).
 // It reuses rograph's shared percent-sparkline glyph set (issue 078) rather
-// than a one-off bar implementation — RenderPercentSparkline with ANSI left
-// off (the default) so no invisible escape bytes throw off
-// rograph.PadLabel's rune-counted width math downstream, keeping the result
-// at exactly 3 visible runes: two literal brackets plus one glyph.
+// than a one-off bar implementation. It remains plain so callers outside the
+// debug overlay retain its exactly 3-rune output.
 func freshnessGauge(fraction float64) string {
 	if fraction < 0 {
 		fraction = 0
@@ -80,4 +78,15 @@ func freshnessOverlayLabelForInterval(label string, lastRefreshed, now time.Time
 		return glyph
 	}
 	return glyph + " " + string(r[:len(r)-3]) + "…"
+}
+
+// styleTimeGaugeGlyph gives the compact debug overlay's first (gauge) glyph
+// its independently specified graph colors after the label has been padded.
+// Styling earlier would make rograph.PadLabel count invisible ANSI runes.
+func styleTimeGaugeGlyph(line string) string {
+	r := []rune(line)
+	if len(r) == 0 {
+		return line
+	}
+	return ansiOpen("time-gauge-fg") + ansiOpen("time-gauge-bg") + string(r[0]) + "\x1b[0m" + string(r[1:])
 }

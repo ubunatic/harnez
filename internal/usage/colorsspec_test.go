@@ -21,6 +21,11 @@ func TestEmbeddedColorsSpecIsValid(t *testing.T) {
 	if _, ok := spec.Colors["panel-bg"]; !ok {
 		t.Fatalf("expected embedded spec to define \"panel-bg\"")
 	}
+	for _, name := range []string{"time-gauge-fg", "time-gauge-bg"} {
+		if _, ok := spec.Colors[name]; !ok {
+			t.Fatalf("expected embedded spec to define %q", name)
+		}
+	}
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -28,6 +33,18 @@ func TestEmbeddedColorsSpecIsValid(t *testing.T) {
 		}
 	}()
 	mustWatchColors()
+}
+
+func TestTimeGaugeColorsResolveIndependentlyFromSpec(t *testing.T) {
+	spec := mustWatchColors()
+	for _, name := range []string{"time-gauge-fg", "time-gauge-bg"} {
+		if got, want := colorSGR(name), spec.Colors[name].SGR; got != want {
+			t.Errorf("colorSGR(%q) = %q, want %q (from embedded spec)", name, got, want)
+		}
+	}
+	if got, want := colorSGR("time-gauge-bg"), colorSGR("panel-bg"); got != want {
+		t.Errorf("time-gauge-bg = %q, want graph-matching panel-bg value %q", got, want)
+	}
 }
 
 // TestParseWatchColorsYAMLMalformedFailsClearly mirrors issue 132's "fail

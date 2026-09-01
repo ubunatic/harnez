@@ -124,3 +124,17 @@ func TestFreshnessOverlayLabel(t *testing.T) {
 		}
 	})
 }
+
+func TestStyleTimeGaugeGlyphUsesIndependentColors(t *testing.T) {
+	got := styleTimeGaugeGlyph("█ Gem…")
+	want := ansiOpen("time-gauge-fg") + ansiOpen("time-gauge-bg") + "█\x1b[0m Gem…"
+	if got != want {
+		t.Errorf("styleTimeGaugeGlyph() = %q, want %q", got, want)
+	}
+	if gotText, wantText := stripANSI(got), "█ Gem…"; gotText != wantText {
+		t.Errorf("stripANSI(styleTimeGaugeGlyph()) = %q, want %q", gotText, wantText)
+	}
+	if gotWidth, wantWidth := visLen(got), visLen("Gemini"); gotWidth != wantWidth {
+		t.Errorf("styleTimeGaugeGlyph() visible width = %d, want %d", gotWidth, wantWidth)
+	}
+}

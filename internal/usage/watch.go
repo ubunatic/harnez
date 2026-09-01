@@ -690,7 +690,11 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		if debugOverlay {
 			label = freshnessOverlayLabelForInterval(label, row.lastRefreshed, now, refreshInterval)
 		}
-		lines = append(lines, formatAllUsageLine(label, row.windows, contentW, labelWidth))
+		line := formatAllUsageLine(label, row.windows, contentW, labelWidth)
+		if debugOverlay {
+			line = styleTimeGaugeGlyph(line)
+		}
+		lines = append(lines, line)
 	}
 	return lines
 }
