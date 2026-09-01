@@ -15,25 +15,22 @@ The configured sequence is the contract: do not infer its length, its first or
 last frame, or a required full/empty glyph. This permits compact patterns such
 as a 2x3 Braille snake as well as 8-step block depletion.
 
+Named sequences live once in `spec/indicators.yaml`; consumers select them by
+`sequence` name and never repeat frame lists inline. Each registry entry has a
+semantic kind. Resolve and validate that kind in the application layer before
+passing plain glyph options to `internal/rograph`. Sequence aliases are not
+part of the model.
+
 ## Safe one-cell presets
 
-```yaml
-# Determinate countdowns (full to empty)
-block-deplete-8: ["█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", " "]
-block-deplete-vertical-8: ["█", "▇", "▆", "▅", "▄", "▃", "▂", "▁", " "]
-shade-deplete-5: ["█", "▓", "▒", "░", " "]
+The canonical titles and exact frames are in the spec registry:
 
-# Indeterminate work
-quadrant-rotate-4: ["▘", "▝", "▗", "▖"]
-half-block-rotate-4: ["▄", "▌", "▀", "▐"]
-box-line-rotate-4: ["╷", "╴", "╵", "╶"]
-braille-orbit-8: ["⡀", "⠄", "⠂", "⠁", "⠈", "⠐", "⠠", "⢀"]
-braille-classic-10: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-
-# Pulse / attention, not a measure of progress
-shade-pulse-5: ["█", "▓", "▒", "░", " "]
-dot-pulse-5: ["·", "•", "●", "•", "·"]
-```
+- Countdown: `block-deplete-8`, `block-deplete-vertical-8`,
+  `shade-deplete-5`, `braille-snake-2x3`.
+- Indeterminate: `quadrant-rotate-4`, `half-block-rotate-4`,
+  `box-line-rotate-4`, `braille-orbit-8`, `braille-classic-10`.
+- Renderer scales: `horizontal-eighths-7` for partial bars and
+  `vertical-block-scale-8` for sparklines.
 
 Reverse a determinate sequence for growth. A Braille snake is also a valid
 countdown when its explicit frames clear dots in a meaningful path; it need
@@ -41,9 +38,10 @@ not start at `⣿` or finish at a particular blank glyph.
 
 ## Terminal constraints
 
-- Every frame in a fixed gauge slot must occupy **one terminal column**. Test
-  display width, not byte length or rune count, and test the whole styled
-  output after stripping ANSI escapes.
+- Every frame in a fixed gauge slot must be one Unicode rune occupying **one
+  terminal column**. Validate display width in addition to rune count; byte
+  length is irrelevant. Test the whole styled output after stripping ANSI
+  escapes.
 - Avoid emoji clocks (`🕛…🕚`) and moon phases (`🌑…🌘`) in fixed-width layouts:
   their presentation and width vary by terminal and font, often to two cells.
 - U+2800 (`⠀`, Braille blank) is a real Braille pattern, not a space. Prefer a

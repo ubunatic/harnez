@@ -1,10 +1,10 @@
 # 163 — Add named Unicode indicator sequences to the spec
 
-**Status**: Open
+**Status**: Closed — resolved in 1af1fde
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
-**Related**: [155](155-braille-snake-timeout-indicator-spec.md), [157](157-spec-driven-usage-watch-chart-glyphs.md), [TUI design guidance](../docs/TUIDesign.md), `spec/indicators.yaml`, `spec/schemas/indicators.schema.json`
+**Related**: [155](../155-braille-snake-timeout-indicator-spec.md), [157](../157-spec-driven-usage-watch-chart-glyphs.md), [TUI design guidance](../../docs/TUIDesign.md), `spec/indicators.yaml`, `spec/schemas/indicators.schema.json`
 
 ---
 
@@ -75,14 +75,23 @@ library because fixed-cell width or font coverage is unreliable.
 
 ## 3. Implementation & Verification Plan
 
-- [ ] Define the registry/reference schema and migrate `spec/indicators.yaml`
+- [x] Define the registry/reference schema and migrate `spec/indicators.yaml`
   from commented alternatives to named presets.
-- [ ] Update the strict embedded loader and resolved indicator options without
+- [x] Update the strict embedded loader and resolved indicator options without
   leaking spec loading into `internal/rograph`.
-- [ ] Add table-driven tests for each preset's exact ordering, name resolution,
+- [x] Add table-driven tests for each preset's exact ordering, name resolution,
   unknown/duplicate/invalid sequence errors, variable valid lengths, and the
   time gauge's finite countdown behavior.
-- [ ] Test one-visible-cell geometry and ANSI-stripped alignment for every
+- [x] Test one-visible-cell geometry and ANSI-stripped alignment for every
   selected gauge/bar/spark output; include literal-space and U+2800 endpoints.
-- [ ] Run focused usage/spec tests, `go test ./...`, `make install`, and
+- [x] Run focused usage/spec tests, `go test ./...`, `make install`, and
   `harnez status`.
+
+## 4. Resolution
+
+Implemented in `1af1fde`. Named sequences carry an explicit renderer semantic
+(`countdown`, `spinner`, `bar-partial`, or `sparkline`); the strict usage
+loader validates one-rune/one-cell geometry and resolves references to copied
+frame slices before passing plain options into `internal/rograph`. Sequence
+aliases are intentionally unsupported, so alias cycles cannot enter the
+model. The shipped timeout selection remains `braille-snake-2x3`.

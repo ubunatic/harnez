@@ -100,3 +100,15 @@ Typed structs would marshal in field declaration order, creating a permanent dif
 - Local: `./CLAUDE.md` → `./AGENTS.md`
 
 `ensureSymlink(linkPath, target)` is a no-op if the link already points correctly; otherwise removes and recreates.
+
+## Indicator language
+
+**Named indicator sequence**:
+A discoverable, semantically classified, ordered set of one-cell Unicode
+frames whose declared order and endpoints are part of the visual contract.
+_Avoid_: Inline frames, animation preset
+
+**Indicator reference**:
+A consumer's selection of one named indicator sequence with a compatible
+semantic kind.
+_Avoid_: Frame copy, sequence alias
