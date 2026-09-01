@@ -160,3 +160,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 159 | [159-spec-driven-bar-bracket-toggle.md](159-spec-driven-bar-bracket-toggle.md) | Spec-Driven Enable/Disable of Bar/Graph `[]` Brackets | Closed — resolved in aff9b98 (bar bracket wrapper only; see scope note below) |
 | 160 | [160-watch-viewer-server-split-feasibility.md](160-watch-viewer-server-split-feasibility.md) | Feasibility: Extract `usage --watch` Layout/UI/Keyboard Into a Renderer-Agnostic Module | Open — feasibility assessment, no implementation decision yet |
 | 161 | [161-collector-remote-control-host-and-prometheus-exposition.md](161-collector-remote-control-host-and-prometheus-exposition.md) | Collector: Absorb Remote-Load Control Host + Opt-In Prometheus Exposition | Open |
+| 162 | [162-find-body-extraction-three-tier-fallback.md](162-find-body-extraction-three-tier-fallback.md) | `internal/issues.ParseBody`: Three-Tier Fallback for Body Extraction | Closed — resolved in c11465f |

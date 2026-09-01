@@ -194,10 +194,12 @@ Two judgment calls where the spec text didn't fully pin down real-repo edge beha
   "everything after the first metadata-closing horizontal rule," but only ~58 of this repo's
   137 tickets actually use a `---` line after the header (newer tickets, including this one,
   do; many older ones go straight from `**Related:**` to the first `## ` heading with just a
-  blank line). `internal/issues.ParseBody` implements the rule literally: if no thematic break
-  (`---`/`***`/`___`) appears after the H1 title, `Body` is `""` and the ticket is searchable by
-  title only, not an error. This degrades search reach on older tickets without ever risking a
-  metadata leak, and needs no migration to keep working correctly going forward.
+  blank line). At the time this ticket closed, `internal/issues.ParseBody` implemented the rule
+  literally: if no thematic break (`---`/`***`/`___`) appeared after the H1 title, `Body` was `""`
+  and the ticket was searchable by title only. **This limitation is resolved by
+  [[162-find-body-extraction-three-tier-fallback]]**, which extended `ParseBody` to a three-tier
+  fallback (`---`/`***`/`___` → first `## ` heading → whole document after the H1 title), removing
+  the empty-body/title-only-search case for every ticket that has an H1 title.
 - **What counts as "malformed ticket data."** Section 2 lists "malformed ticket data" alongside
   "missing/unreadable tracker" as a non-zero-exit case. A ticket file simply missing its
   `**Status:**` tag or H1 (already tolerated elsewhere, e.g. `harnez status`'s
