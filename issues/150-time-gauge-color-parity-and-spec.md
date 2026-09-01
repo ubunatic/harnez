@@ -1,6 +1,6 @@
 # 150 — Give the debug time gauge graph-color parity and an independent color spec
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
