@@ -162,4 +162,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 161 | [161-collector-remote-control-host-and-prometheus-exposition.md](161-collector-remote-control-host-and-prometheus-exposition.md) | Collector: Absorb Remote-Load Control Host + Opt-In Prometheus Exposition | Open |
 | 162 | [162-find-body-extraction-three-tier-fallback.md](162-find-body-extraction-three-tier-fallback.md) | `internal/issues.ParseBody`: Three-Tier Fallback for Body Extraction | Closed — resolved in c11465f |
 | 163 | [archive/163-named-unicode-indicator-sequences.md](archive/163-named-unicode-indicator-sequences.md) | Add named Unicode indicator sequences to the spec | Closed — resolved in 1af1fde |
-| 164 | [164-fast-startup-usage-watch-splash-or-stale-data.md](164-fast-startup-usage-watch-splash-or-stale-data.md) | Fast Startup for `usage --watch`: Show Stale Data or a Splash Screen Immediately | Open |
+| 164 | [164-fast-startup-usage-watch-splash-or-stale-data.md](164-fast-startup-usage-watch-splash-or-stale-data.md) | Fast Startup for `usage --watch`: Abortable Progress-Bar Splash by Default | Open |
