@@ -1,6 +1,6 @@
 # 157 — Specify every `usage --watch` chart glyph
 
-**Status**: Closed — resolved in 2787da7
+**Status**: Closed — resolved in 2787da7; absent chart backgrounds supported in 7da5720
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -28,3 +28,9 @@ declared frames, including six-dot variants.
 - Remove usage-watch chart-glyph literals/fallback shadows and pass resolved glyphs to renderers.
 - Test exact spec consumption, variable valid gauge lengths/endpoints, ANSI and geometry.
 - Run focused tests, `go test ./...`, spec validation, `make install`, and `harnez status`.
+
+## 4. Follow-up
+
+`panel-bg.sgr` now accepts `null` or an empty string. In either case usage-watch
+bars and CPU/GPU sparklines emit their declared foreground glyphs without an ANSI
+background wrapper.
