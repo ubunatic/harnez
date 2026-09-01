@@ -1,6 +1,6 @@
 # 150 — Give the debug time gauge graph-color parity and an independent color spec
 
-**Status**: In Progress
+**Status**: Closed — resolved in aab06fa
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
@@ -30,10 +30,10 @@ ordinary label text.
 
 ## 3. Implementation & Verification Plan
 
-- [ ] Extend the color specification and its validation with separate
+- [x] Extend the color specification and its validation with separate
   time-gauge foreground/background entries.
-- [ ] Apply both configured colors to the compact debug time gauge without
+- [x] Apply both configured colors to the compact debug time gauge without
   changing label width, ANSI-stripped output, or countdown timing.
-- [ ] Add rendering tests that assert the time gauge's foreground and
+- [x] Add rendering tests that assert the time gauge's foreground and
   background SGR sequences independently from other graph styling.
-- [ ] Verify focused usage/spec tests and `go test ./...`.
+- [x] Verify focused usage/spec tests and `go test ./...`.

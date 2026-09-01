@@ -148,7 +148,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 147 | [147-debug-overlay-gauge-does-not-count-down.md](147-debug-overlay-gauge-does-not-count-down.md) | Debug overlay gauge does not count down to the next usage fetch | Closed — resolved in `e1d370d` |
 | 148 | [148-harnez-index-command-for-issues-docs-studies.md](148-harnez-index-command-for-issues-docs-studies.md) | `harnez index`: auto-update issues/README.md, docs/README.md, docs/studies index | Closed — resolved in `fce2b4a` |
 | 149 | [149-agent-specific-profiles-codex-async-wait-instruction.md](149-agent-specific-profiles-codex-async-wait-instruction.md) | Agent-specific instruction profiles, first use case: Codex async-wait guidance | Open |
-| 150 | [150-time-gauge-color-parity-and-spec.md](150-time-gauge-color-parity-and-spec.md) | Give the debug time gauge graph-color parity and an independent color spec | In Progress |
+| 150 | [150-time-gauge-color-parity-and-spec.md](150-time-gauge-color-parity-and-spec.md) | Give the debug time gauge graph-color parity and an independent color spec | Closed — resolved in aab06fa |
 | 151 | [151-on-demand-doc-lookup-vs-materialized-instructions-research.md](151-on-demand-doc-lookup-vs-materialized-instructions-research.md) | Research: on-demand doc lookup vs. materialized instructions, and temporary per-repo agent profiles | Open |
 | 152 | [152-move-agent-collector-under-usage-command.md](152-move-agent-collector-under-usage-command.md) | Move `agent-collector` under `usage` instead of top-level | Open |
 | 153 | [153-command-tree-placement-spec-assessment.md](153-command-tree-placement-spec-assessment.md) | Assess whether command-tree placement should be spec-driven | Open |
