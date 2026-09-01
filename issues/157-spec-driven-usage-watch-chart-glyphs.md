@@ -1,6 +1,6 @@
 # 157 — Specify every `usage --watch` chart glyph
 
-**Status**: Closed — resolved in 2787da7; absent chart backgrounds supported in 7da5720
+**Status**: Closed — resolved in 2787da7; absent chart backgrounds supported in 7da5720 and 9649600
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -34,3 +34,7 @@ declared frames, including six-dot variants.
 `panel-bg.sgr` now accepts `null` or an empty string. In either case usage-watch
 bars and CPU/GPU sparklines emit their declared foreground glyphs without an ANSI
 background wrapper.
+
+The same optional-background rule applies to `time-gauge-bg`: its configured
+foreground remains required, while an absent/null/empty background emits only the
+foreground SGR and never an empty `\x1b[m` sequence.
