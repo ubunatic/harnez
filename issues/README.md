@@ -167,3 +167,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 166 | [166-compact-local-llm-doc-profile-and-go-rune-width-invariants.md](166-compact-local-llm-doc-profile-and-go-rune-width-invariants.md) | Compact Local-LLM Doc Profile with Explicit Do/Don't Rules (+ Go Rune/Width Invariants) | Open |
 | 167 | [167-local-llm-runtime-target-support-and-telemetry.md](167-local-llm-runtime-target-support-and-telemetry.md) | Local LLM Runtime Target Support & Telemetry (Ollama, llama.cpp, SGLang/vLLM) | Open |
 | 168 | [168-splash-determinate-progress-bar-fetch-duration-estimate.md](168-splash-determinate-progress-bar-fetch-duration-estimate.md) | Splash: Determinate Left-to-Right Progress Bar Driven by a Fetch-Duration Estimate | Open |
+| 169 | [169-splash-status-log-line-per-fetch-stage.md](169-splash-status-log-line-per-fetch-stage.md) | Splash: Single-Line Status/Mini-Log of In-Flight Fetch Stages | Open |
