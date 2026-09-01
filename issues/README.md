@@ -145,4 +145,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 144 | [144-codex-subagent-model-selection-policy.md](144-codex-subagent-model-selection-policy.md) | Ensure Codex uses the correct model for subagents | Open |
 | 145 | [145-orchestrator-session-skill-and-command.md](145-orchestrator-session-skill-and-command.md) | Add an orchestrator-session skill and command | Open |
 | 146 | [146-recent-subagent-activity-watch-box.md](146-recent-subagent-activity-watch-box.md) | Assess recent subagent activity in compact usage watch | Open |
-| 147 | [147-debug-overlay-gauge-does-not-count-down.md](147-debug-overlay-gauge-does-not-count-down.md) | Debug overlay gauge does not count down to the next usage fetch | Closed — resolved in `6ea8eb2` |
+| 147 | [147-debug-overlay-gauge-does-not-count-down.md](147-debug-overlay-gauge-does-not-count-down.md) | Debug overlay gauge does not count down to the next usage fetch | In Progress — reopened after live watch regression report |

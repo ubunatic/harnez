@@ -1,6 +1,6 @@
 # 147 — Debug overlay gauge does not count down to the next usage fetch
 
-**Status**: Closed — resolved in `6ea8eb2`
+**Status**: In Progress — reopened after live watch regression report
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
@@ -34,3 +34,5 @@ serving its diagnostic purpose.
 - [x] Add deterministic time-controlled compact-overlay coverage for full,
   halfway, empty, future, and overdue timestamps.
 - [x] Verify with focused usage tests and `go test ./...`.
+- [ ] Reproduce and fix the live compact-watch redraw path so its visible
+  gauge advances between collector fetches.
