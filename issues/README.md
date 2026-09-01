@@ -153,4 +153,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 152 | [152-move-agent-collector-under-usage-command.md](152-move-agent-collector-under-usage-command.md) | Move `agent-collector` under `usage` instead of top-level | Open |
 | 153 | [153-command-tree-placement-spec-assessment.md](153-command-tree-placement-spec-assessment.md) | Assess whether command-tree placement should be spec-driven | Closed |
 | 154 | [154-brief-git-repo-status-command.md](154-brief-git-repo-status-command.md) | `harnez repo-status`: brief, quiet-by-default git repo state summary | Closed — resolved in 9f16839 |
-| 155 | [155-braille-snake-timeout-indicator-spec.md](155-braille-snake-timeout-indicator-spec.md) | Define a spec-driven braille snake timeout indicator for the time gauge | Open |
+| 155 | [155-braille-snake-timeout-indicator-spec.md](155-braille-snake-timeout-indicator-spec.md) | Define a spec-driven braille snake timeout indicator for the time gauge | Closed — resolved in 2286b1e |

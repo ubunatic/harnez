@@ -1,6 +1,6 @@
 # 155 — Define a spec-driven braille snake timeout indicator for the time gauge
 
-**Status**: In Progress
+**Status**: Closed — resolved in 2286b1e
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
