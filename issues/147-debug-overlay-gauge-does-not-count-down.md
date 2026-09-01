@@ -1,6 +1,6 @@
 # 147 — Debug overlay gauge does not count down to the next usage fetch
 
-**Status**: In Progress — reopened after live watch regression report
+**Status**: Closed — resolved in `e1d370d`
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
@@ -18,9 +18,13 @@ serving its diagnostic purpose.
 
 ## 2. Technical Specification / Findings
 
-- The gauge must derive its remaining fraction from each agent's
-  `LastRefreshed` timestamp and `DefaultCollectorInterval` on every watch
-  redraw, not only when fresh usage data arrives.
+- The prior fix recalculated on redraw but incorrectly scaled its fraction to
+  `DefaultCollectorInterval` (15 minutes), while `usage --watch` refetches on
+  its configured watch interval (60 seconds by default). Consequently the
+  glyph changed only about every 2 minutes and appeared static in normal use.
+- The gauge now derives its remaining fraction from each agent's
+  `LastRefreshed` timestamp and the configured watch interval on every redraw,
+  not only when fresh usage data arrives.
 - Confirm the watch refresh/redraw cadence is sufficient for a visible
   countdown and that time-dependent gauge rendering is not cached with the
   prior frame.
@@ -34,5 +38,5 @@ serving its diagnostic purpose.
 - [x] Add deterministic time-controlled compact-overlay coverage for full,
   halfway, empty, future, and overdue timestamps.
 - [x] Verify with focused usage tests and `go test ./...`.
-- [ ] Reproduce and fix the live compact-watch redraw path so its visible
-  gauge advances between collector fetches.
+- [x] Exercise and fix the compact-watch redraw path so its visible gauge
+  advances within the configured watch fetch window.
