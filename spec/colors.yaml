@@ -20,10 +20,10 @@ colors:
   time-gauge-fg:
     title: "Debug time gauge foreground"
     description: >-
-      Bright white foreground (SGR 97) for the compact debug overlay's
+      Light grey foreground (SGR 37) for the compact debug overlay's
       freshness countdown glyph. Kept separate from other graph colors so
       the time gauge can be tuned independently.
-    sgr: "97"
+    sgr: "37"
   time-gauge-bg:
     title: "Debug time gauge background"
     description: >-
