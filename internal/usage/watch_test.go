@@ -1532,6 +1532,119 @@ func TestDispatchWatchKeyModeCyclesAndKeepsShowProcesses(t *testing.T) {
 	}
 }
 
+// TestDispatchSplashKeyEscSkipsNotQuits is issue 164's core dispatch
+// contract: Esc during the startup splash must abort only the splash wait,
+// never quit -- a deliberate deviation from dispatchWatchKey, where Esc is
+// one of the quit keys once the splash has ended (see
+// TestDispatchWatchKeyEscQuitsOnMainDashboard below for that unchanged
+// behavior).
+func TestDispatchSplashKeyEscSkipsNotQuits(t *testing.T) {
+	eff := dispatchSplashKey(27)
+	if !eff.skip {
+		t.Fatalf("expected Esc during splash to skip the wait, got %+v", eff)
+	}
+	if eff.quit {
+		t.Fatalf("expected Esc during splash to NOT quit the app, got %+v", eff)
+	}
+}
+
+// TestDispatchSplashKeyCtrlCQuits: Ctrl-C is the universal interrupt and
+// must still quit even while the splash is showing.
+func TestDispatchSplashKeyCtrlCQuits(t *testing.T) {
+	eff := dispatchSplashKey(3)
+	if !eff.quit {
+		t.Fatalf("expected Ctrl-C during splash to quit, got %+v", eff)
+	}
+	if eff.skip {
+		t.Fatalf("expected Ctrl-C to report quit, not skip: got %+v", eff)
+	}
+}
+
+// TestDispatchSplashKeyOtherKeysAreNoOps: the dashboard isn't initialized
+// yet during splash, so every key besides Esc/Ctrl-C is ignored rather than
+// dispatched anywhere.
+func TestDispatchSplashKeyOtherKeysAreNoOps(t *testing.T) {
+	for _, key := range []byte{'q', 'Q', 'm', '?', ' ', '\r', 0} {
+		if eff := dispatchSplashKey(key); eff.skip || eff.quit {
+			t.Errorf("expected key %v to be a no-op during splash, got %+v", key, eff)
+		}
+	}
+}
+
+// TestDispatchWatchKeyEscQuitsOnMainDashboard pins down that this ticket's
+// splash-only Esc deviation does not leak into the main dashboard: once
+// splash has ended, dispatchWatchKey's existing Esc/quit mapping (watch.go
+// dispatchWatchKey) must be unchanged.
+func TestDispatchWatchKeyEscQuitsOnMainDashboard(t *testing.T) {
+	st := watchKeyState{sec: defaultWatchSections()}
+	_, eff := dispatchWatchKey(st, 27, false)
+	if !eff.quit {
+		t.Fatalf("expected Esc on the main dashboard to still quit, got %+v", eff)
+	}
+}
+
+// TestSplashSpinnerGlyphCyclesThroughNamedSequence checks that the splash
+// spinner advances through spec/indicators.yaml's braille-classic-10 frames
+// (rather than a hardcoded glyph set) and wraps around.
+func TestSplashSpinnerGlyphCyclesThroughNamedSequence(t *testing.T) {
+	frames := namedSequenceFrames(splashSpinnerSequenceName, "spinner")
+	if len(frames) == 0 {
+		t.Fatalf("expected braille-classic-10 to resolve at least one frame")
+	}
+	if got := splashSpinnerGlyph(0); got != frames[0] {
+		t.Fatalf("expected elapsed=0 to render frame 0 (%q), got %q", frames[0], got)
+	}
+	wrapped := splashSpinnerGlyph(time.Duration(len(frames)) * splashFrameInterval)
+	if wrapped != frames[0] {
+		t.Fatalf("expected the spinner to wrap back to frame 0 after a full cycle, got %q", wrapped)
+	}
+}
+
+// TestSplashBarPercentSweepsAndReturnsToZero checks the indeterminate bar's
+// triangle wave stays within [0,100] and returns to 0 once per period,
+// rather than climbing monotonically like a real progress percentage would
+// (there is no known total to measure the pending fetch against).
+func TestSplashBarPercentSweepsAndReturnsToZero(t *testing.T) {
+	if got := splashBarPercent(0); got != 0 {
+		t.Fatalf("expected splashBarPercent(0) == 0, got %v", got)
+	}
+	if got := splashBarPercent(splashBarSweepPeriod); got != 0 {
+		t.Fatalf("expected splashBarPercent to return to 0 after a full period, got %v", got)
+	}
+	mid := splashBarPercent(splashBarSweepPeriod / 4)
+	if mid <= 0 || mid >= 100 {
+		t.Fatalf("expected a quarter-period sample strictly between 0 and 100, got %v", mid)
+	}
+}
+
+// TestBuildSplashFrameAnimateVsFrozen checks that buildSplashFrame's frozen
+// (animate=false) variant -- used once Esc has skipped the wait -- renders
+// distinct, static content instead of continuing to animate, and that both
+// variants fit within the requested terminal geometry.
+func TestBuildSplashFrameAnimateVsFrozen(t *testing.T) {
+	cols, rows := 80, 24
+	animated := buildSplashFrame(cols, rows, 3*splashFrameInterval, true)
+	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false)
+
+	if len(animated.lines) > rows || len(frozen.lines) > rows {
+		t.Fatalf("expected splash frames to fit within %d rows, got %d/%d", rows, len(animated.lines), len(frozen.lines))
+	}
+	for _, line := range append(append([]string{}, animated.lines...), frozen.lines...) {
+		if visLen(line) > cols {
+			t.Fatalf("expected splash frame lines to fit within %d cols, got %q (%d)", cols, line, visLen(line))
+		}
+	}
+
+	animatedText := strings.Join(animated.lines, "\n")
+	frozenText := strings.Join(frozen.lines, "\n")
+	if !strings.Contains(stripANSI(animatedText), "Esc to skip") {
+		t.Fatalf("expected the animating splash to hint Esc to skip, got:\n%s", stripANSI(animatedText))
+	}
+	if strings.Contains(stripANSI(frozenText), "Esc to skip") {
+		t.Fatalf("expected the frozen (post-skip) splash to drop the Esc hint, got:\n%s", stripANSI(frozenText))
+	}
+}
+
 // TestRenderSummary_CompactSelectsReducedSections is issue 102's acceptance
 // criterion: `harnez usage --summary --compact` must render the same reduced
 // panel set as `--watch --compact` (compactWatchSections), not just be

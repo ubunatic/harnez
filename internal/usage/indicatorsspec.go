@@ -212,6 +212,23 @@ func finiteSequenceGlyph(frames []string, fraction float64) string {
 	return frames[idx]
 }
 
+// namedSequenceFrames returns the frames for a registered spec/indicators.yaml
+// sequence by name, validating its kind matches wantKind. It panics on a
+// missing name or kind mismatch -- same "broken build, not a runtime
+// condition" contract as mustIndicators() itself, since callers only ever
+// pass Go-side constants, never user input.
+func namedSequenceFrames(name, wantKind string) []string {
+	spec := mustIndicators()
+	seq, ok := spec.Sequences[name]
+	if !ok {
+		panic(fmt.Sprintf("harnez usage: embedded %s missing sequence %q", indicatorsSpecPath, name))
+	}
+	if seq.Kind != wantKind {
+		panic(fmt.Sprintf("harnez usage: embedded %s: sequence %q has kind %q, want %q", indicatorsSpecPath, name, seq.Kind, wantKind))
+	}
+	return seq.Frames
+}
+
 func watchBarOptions() rograph.BarOptions {
 	return barOptionsFromSpec(mustIndicators().UsageBar)
 }

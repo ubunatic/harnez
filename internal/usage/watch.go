@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -522,6 +523,32 @@ func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyS
 		}
 	}
 	return st, watchKeyEffect{}
+}
+
+// splashKeyEffect reports what the caller should do in response to one
+// keypress received while the startup splash (issue 164) is showing.
+type splashKeyEffect struct {
+	skip bool // abort only the splash wait; must NOT quit
+	quit bool // Ctrl-C is the universal interrupt, even during splash
+}
+
+// dispatchSplashKey applies one keypress received while the startup splash
+// is active. It is deliberately narrower than, and separate from,
+// dispatchWatchKey: byte 27 (Esc) here only skips the splash wait -- it must
+// NOT quit, which is a deliberate deviation from Esc's meaning on the main
+// dashboard once the splash has ended (dispatchWatchKey still owns that
+// unchanged). Ctrl-C (byte 3) quits either way, since it is the universal
+// interrupt. Every other key is ignored during splash -- the dashboard
+// (sec/overlayOpen/etc.) is not showing yet, so panel toggles have nothing
+// to act on.
+func dispatchSplashKey(key byte) splashKeyEffect {
+	switch key {
+	case 3:
+		return splashKeyEffect{quit: true}
+	case 27:
+		return splashKeyEffect{skip: true}
+	}
+	return splashKeyEffect{}
 }
 
 // applyWatchSectionKey applies key to sec if it maps (via spec/actions.yaml)
@@ -1693,6 +1720,100 @@ func firstOpt(opts []WatchOptions) WatchOptions {
 	return WatchOptions{}
 }
 
+// Startup splash tuning (issue 164). splashSpinnerSequenceName reuses
+// spec/indicators.yaml's existing "braille-classic-10" spinner rather than
+// adding a new one -- it already fits a one-off "work in progress" glyph.
+const (
+	splashSpinnerSequenceName = "braille-classic-10"
+	splashFrameInterval       = 90 * time.Millisecond
+	splashBarSweepPeriod      = 1200 * time.Millisecond
+	splashBarWidth            = 24
+)
+
+// splashSpinnerGlyph returns the animated spinner glyph for the startup
+// splash, cycling through spec/indicators.yaml's "braille-classic-10"
+// sequence on splashFrameInterval ticks.
+func splashSpinnerGlyph(elapsed time.Duration) string {
+	frames := namedSequenceFrames(splashSpinnerSequenceName, "spinner")
+	idx := int(elapsed/splashFrameInterval) % len(frames)
+	return frames[idx]
+}
+
+// splashBarPercent sweeps 0-100-0 over splashBarSweepPeriod so the splash
+// bar reads as "indeterminate work in progress" rather than a real quota
+// percentage -- there is no known total to measure the pending fetch
+// against.
+func splashBarPercent(elapsed time.Duration) float64 {
+	phase := elapsed % splashBarSweepPeriod
+	half := splashBarSweepPeriod / 2
+	if phase < half {
+		return 100 * float64(phase) / float64(half)
+	}
+	return 100 - 100*float64(phase-half)/float64(half)
+}
+
+// centerLine pads s with leading spaces so its visible content centers
+// within width columns. Trailing padding is left to fit/paint's per-line
+// erase-to-end-of-line.
+func centerLine(s string, width int) string {
+	if s == "" {
+		return ""
+	}
+	pad := (width - visLen(s)) / 2
+	if pad <= 0 {
+		return s
+	}
+	return strings.Repeat(" ", pad) + s
+}
+
+// buildSplashFrame paints the startup splash (issue 164): a spinner, an
+// indeterminate progress bar (rendered via internal/rograph, the same bar
+// renderer the rest of the dashboard uses), and a short hint line, centered
+// in the terminal. RunWatchWithOptions shows this immediately after entering
+// the alt-screen instead of leaving it blank while the first live fetch
+// (CollectAll/CollectRemote) is in flight.
+//
+// animate controls the spinner/bar motion: true while the splash is timing
+// out waiting for the fetch, false once Esc has skipped the wait. At that
+// point the frame freezes -- it deliberately does not read lastSummary/
+// lastProcs/currentHost, which the still-running background fetch goroutine
+// owns exclusively until it finishes and calls draw() itself; painting the
+// live dashboard from two goroutines at once would race on those vars.
+func buildSplashFrame(cols, rows int, elapsed time.Duration, animate bool) screenFrame {
+	spinner := splashSpinnerGlyph(elapsed)
+	hint := "Esc to skip"
+	if !animate {
+		spinner = splashSpinnerGlyph(0)
+		hint = "waiting for first update..."
+	}
+
+	barOpts := watchBarOptions()
+	barOpts.Width = splashBarWidth
+	pct := splashBarPercent(elapsed)
+	if !animate {
+		pct = 0
+	}
+	bar := rograph.RenderBar(pct, barOpts)
+
+	title := ansiWrap("bold", spinner+"  harnez usage")
+	hintLine := ansiWrap("dim-grey", hint)
+
+	content := []string{title, "", bar, "", hintLine}
+	top := (rows - len(content)) / 2
+	if top < 0 {
+		top = 0
+	}
+
+	lines := make([]string, 0, rows)
+	for i := 0; i < top; i++ {
+		lines = append(lines, "")
+	}
+	for _, line := range content {
+		lines = append(lines, centerLine(line, cols))
+	}
+	return fit(lines, cols, rows)
+}
+
 // RunWatch redraws a compact, btop-style usage dashboard in place on a fixed
 // interval, instead of the full `harnez usage` report which is too chatty to
 // redraw every tick. It polls at most once per interval; interval is clamped
@@ -1798,6 +1919,17 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		go runRemoteLoadManager(sigCtx, remoteLoadHost, &remoteLoadMu, &lastRemoteLoad, requestRedraw, setRemoteStreamStop, setRemoteLoadStreaming)
 	}
 
+	// splashActive/splashSkip (issue 164) gate the tty-reader goroutine below
+	// while the startup splash is up: Esc must only abort the splash wait,
+	// not quit the app, which is a deliberate deviation from Esc's normal
+	// dispatchWatchKey meaning. splashActive starts true and flips false
+	// (RunWatchWithOptions, below) once the splash phase ends, permanently,
+	// for the rest of this run -- from then on every key goes through the
+	// unchanged dispatchWatchKey path exactly as before this ticket.
+	var splashActive atomic.Bool
+	splashActive.Store(true)
+	splashSkip := make(chan struct{}, 1)
+
 	tty, ttyErr := os.Open("/dev/tty")
 	if ttyErr == nil {
 		defer tty.Close()
@@ -1807,6 +1939,20 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				n, err := tty.Read(buf)
 				if err != nil || n == 0 {
 					return
+				}
+				if splashActive.Load() {
+					eff := dispatchSplashKey(buf[0])
+					if eff.quit {
+						stop()
+						return
+					}
+					if eff.skip {
+						select {
+						case splashSkip <- struct{}{}:
+						default:
+						}
+					}
+					continue
 				}
 				secLock.Lock()
 				st := watchKeyState{
@@ -1850,6 +1996,14 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 
 	tracker := newRateTracker()
 
+	// outMu (issue 164) serializes writes to out during the startup splash,
+	// the one window where two goroutines can legitimately want to paint at
+	// once: the splash animation loop (this goroutine) and the background
+	// renderFrame()'s own draw() call once the first fetch completes. Every
+	// other draw() call for the rest of the run happens on this goroutine
+	// alone, same as before this ticket, so the lock is uncontended there.
+	var outMu sync.Mutex
+
 	var lastSummary UsageSummary
 	var lastRates map[string]agentRate
 	var lastProcs *AgentProcessCount
@@ -1879,7 +2033,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		}
 
 		cols, rows := terminalSize(out)
-		buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir, WatchOptions{
+		frame := buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir, WatchOptions{
 			Host:                currentHost,
 			ProcCounts:          lastProcs,
 			ShowControls:        showControls,
@@ -1887,7 +2041,10 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			RemoteLoadSnapshot:  remoteSnap,
 			RemoteLoadStreaming: remoteStreaming,
 			DebugOverlay:        activeDebugOverlay,
-		}).paint(out)
+		})
+		outMu.Lock()
+		frame.paint(out)
+		outMu.Unlock()
 	}
 
 	renderFrame := func() {
@@ -1916,7 +2073,63 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		draw()
 	}
 
-	renderFrame()
+	// Startup splash (issue 164): renderFrame()'s first call blocks on a live
+	// network fetch (CollectAll/CollectRemote), which used to leave the
+	// alt-screen blank for the whole fetch. Run that first call in the
+	// background and paint an animated splash in its place until it
+	// finishes, so the terminal never sits empty. Esc aborts only this wait
+	// (splashSkip, handled by the tty-reader goroutine above via
+	// dispatchSplashKey) -- it freezes the splash rather than quitting, and
+	// the fetch keeps running in its goroutine regardless. Only one of this
+	// goroutine and the splash loop below ever touches lastSummary/
+	// lastProcs/currentHost/draw() at a time: the goroutine owns them
+	// exclusively until firstFrameDone closes, then this goroutine resumes
+	// exclusive ownership for the rest of the run.
+	firstFrameDone := make(chan struct{})
+	go func() {
+		defer close(firstFrameDone)
+		renderFrame()
+	}()
+
+	paintSplash := func(elapsed time.Duration, animate bool) {
+		cols, rows := terminalSize(out)
+		frame := buildSplashFrame(cols, rows, elapsed, animate)
+		outMu.Lock()
+		frame.paint(out)
+		outMu.Unlock()
+	}
+
+	splashStart := time.Now()
+	splashTicker := time.NewTicker(splashFrameInterval)
+	paintSplash(0, true)
+splashLoop:
+	for {
+		select {
+		case <-sigCtx.Done():
+			splashTicker.Stop()
+			return nil
+		case <-firstFrameDone:
+			splashTicker.Stop()
+			splashActive.Store(false)
+			break splashLoop
+		case <-splashSkip:
+			splashTicker.Stop()
+			splashActive.Store(false)
+			paintSplash(time.Since(splashStart), false)
+			// The fetch is already running in the goroutine above; wait for
+			// it (or a quit) without repainting, since lastSummary et al.
+			// are its exclusively-owned state until it finishes and calls
+			// draw() itself.
+			select {
+			case <-firstFrameDone:
+			case <-sigCtx.Done():
+				return nil
+			}
+			break splashLoop
+		case <-splashTicker.C:
+			paintSplash(time.Since(splashStart), true)
+		}
+	}
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
