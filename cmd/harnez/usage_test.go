@@ -40,36 +40,56 @@ func TestResolveUsageHost_EmptyLocalDefault(t *testing.T) {
 	}
 }
 
-// TestValidateUsageFlags_CompactAllowedWithSummary is issue 102's core
-// acceptance criterion: `harnez usage --summary --compact` must no longer be
-// rejected, since RenderSummary/RenderSummaryRemote share the same compact
-// renderer --watch --compact uses.
-func TestValidateUsageFlags_CompactAllowedWithSummary(t *testing.T) {
-	if err := validateUsageFlags(false, true, true); err != nil {
-		t.Fatalf("--summary --compact should be allowed, got error: %v", err)
+// TestValidateUsageFlags_NoFlagsOK: a bare `harnez usage` (the compact
+// one-shot dashboard, formerly gated behind a since-removed --summary flag)
+// must not be rejected.
+func TestValidateUsageFlags_NoFlagsOK(t *testing.T) {
+	if err := validateUsageFlags(false, false, false, false); err != nil {
+		t.Fatalf("expected no flags to be valid, got error: %v", err)
+	}
+}
+
+// TestValidateUsageFlags_CompactAloneOK: `--compact` alone selects the
+// reduced panel set on the now-default compact dashboard; it is not an error
+// on its own the way it used to require --watch or --summary.
+func TestValidateUsageFlags_CompactAloneOK(t *testing.T) {
+	if err := validateUsageFlags(false, false, false, true); err != nil {
+		t.Fatalf("--compact alone should be allowed, got error: %v", err)
 	}
 }
 
 func TestValidateUsageFlags_CompactAllowedWithWatch(t *testing.T) {
-	if err := validateUsageFlags(true, false, true); err != nil {
+	if err := validateUsageFlags(true, false, false, true); err != nil {
 		t.Fatalf("--watch --compact should be allowed, got error: %v", err)
 	}
 }
 
-func TestValidateUsageFlags_CompactRejectedWithoutWatchOrSummary(t *testing.T) {
-	if err := validateUsageFlags(false, false, true); err == nil {
-		t.Fatalf("expected --compact alone (no --watch or --summary) to be rejected")
+func TestValidateUsageFlags_WatchAndJSONRejected(t *testing.T) {
+	if err := validateUsageFlags(true, false, true, false); err == nil {
+		t.Fatalf("expected --watch and --json together to be rejected")
 	}
 }
 
-func TestValidateUsageFlags_WatchAndSummaryRejected(t *testing.T) {
-	if err := validateUsageFlags(true, true, false); err == nil {
-		t.Fatalf("expected --watch and --summary together to be rejected")
+func TestValidateUsageFlags_WatchAndRawRejected(t *testing.T) {
+	if err := validateUsageFlags(true, true, false, false); err == nil {
+		t.Fatalf("expected --watch and --raw together to be rejected")
 	}
 }
 
-func TestValidateUsageFlags_NoFlagsOK(t *testing.T) {
-	if err := validateUsageFlags(false, false, false); err != nil {
-		t.Fatalf("expected no flags to be valid, got error: %v", err)
+func TestValidateUsageFlags_RawAndJSONRejected(t *testing.T) {
+	if err := validateUsageFlags(false, true, true, false); err == nil {
+		t.Fatalf("expected --raw and --json together to be rejected")
+	}
+}
+
+func TestValidateUsageFlags_CompactWithRawRejected(t *testing.T) {
+	if err := validateUsageFlags(false, true, false, true); err == nil {
+		t.Fatalf("expected --compact and --raw together to be rejected (--raw has no panel concept)")
+	}
+}
+
+func TestValidateUsageFlags_RawAlone_OK(t *testing.T) {
+	if err := validateUsageFlags(false, true, false, false); err != nil {
+		t.Fatalf("--raw alone should be allowed, got error: %v", err)
 	}
 }

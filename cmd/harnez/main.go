@@ -35,16 +35,25 @@ func resolveUsageHost(flagHost string, cfg *usage.LocalConfig) string {
 // validateUsageFlags rejects `harnez usage` flag combinations that don't
 // make sense together, ahead of any collection or rendering work.
 //
-// --compact requires --watch or --summary because both share the same
-// compact, btop-style renderer (buildWatchFrame / compactWatchSections) that
-// --compact toggles; the flat `harnez usage` report (neither flag set) has
-// no compact mode to toggle at all (issue 102).
-func validateUsageFlags(usageWatch, usageSummary, usageCompact bool) error {
-	if usageWatch && usageSummary {
-		return fmt.Errorf("--watch and --summary cannot be combined")
+// The compact one-shot dashboard (formerly gated behind a now-removed
+// --summary flag) is the default rendering for a bare `harnez usage`; --raw
+// opts into the detailed per-field text report instead, and --json opts
+// into machine-readable output. All three are mutually exclusive render
+// targets, so --watch/--raw/--json pairwise conflicts are rejected here, and
+// --compact (a panel-selection toggle, not a render target) is rejected
+// alongside --raw since --raw has no panel concept to toggle.
+func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact bool) error {
+	if usageWatch && usageJSON {
+		return fmt.Errorf("--watch and --json cannot be combined")
 	}
-	if usageCompact && !usageWatch && !usageSummary {
-		return fmt.Errorf("--compact requires --watch or --summary")
+	if usageWatch && usageRaw {
+		return fmt.Errorf("--watch and --raw cannot be combined")
+	}
+	if usageRaw && usageJSON {
+		return fmt.Errorf("--raw and --json cannot be combined")
+	}
+	if usageCompact && usageRaw {
+		return fmt.Errorf("--compact has no effect with --raw")
 	}
 	return nil
 }
@@ -63,7 +72,7 @@ func main() {
 	var usageAgent string
 	var usageOffline bool
 	var usageWatch bool
-	var usageSummary bool
+	var usageRaw bool
 	var usageProcesses bool
 	var usageCompact bool
 	var usageInterval time.Duration
@@ -79,7 +88,7 @@ func main() {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 
-			if err := validateUsageFlags(usageWatch, usageSummary, usageCompact); err != nil {
+			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact); err != nil {
 				return err
 			}
 
@@ -99,9 +108,6 @@ func main() {
 			}
 
 			if usageWatch {
-				if usageJSON {
-					return fmt.Errorf("--watch and --json cannot be combined")
-				}
 				// RemoteLoadSnapshot is intentionally left nil here:
 				// RunWatchWithOptions owns fetching it itself (streaming
 				// when possible, batch-polling fallback otherwise — issue
@@ -116,69 +122,73 @@ func main() {
 				})
 			}
 
-			if usageSummary {
-				if usageJSON {
-					return fmt.Errorf("--summary and --json cannot be combined")
+			if usageJSON || usageRaw {
+				var summary usage.UsageSummary
+				if usageHost != "" {
+					s, _, err := usage.CollectRemote(ctx, usageHost, usageProcesses)
+					if err != nil && !usageJSON {
+						return err
+					}
+					summary = s
+				} else {
+					summary = usage.CollectAll(ctx, "", client)
 				}
+				if usageAgent != "" {
+					var filtered []usage.AgentUsage
+					for _, a := range summary.Agents {
+						if strings.EqualFold(a.AgentID, usageAgent) {
+							filtered = append(filtered, a)
+						}
+					}
+					summary.Agents = filtered
+				}
+
+				if usageJSON {
+					// Only attach a load snapshot when this invocation is
+					// itself the local collection (usageHost == ""), which
+					// is also the case when this process is the one
+					// CollectRemote runs over SSH on the remote host. A
+					// local `--json --host` combo already carries whatever
+					// load snapshot the remote side attached, via summary
+					// from CollectRemote above.
+					if usageHost == "" && summary.Load == nil {
+						snap := usage.CollectLoadSnapshot()
+						summary.Load = &snap
+					}
+					out, err := usage.RenderJSON(summary)
+					if err != nil {
+						return err
+					}
+					fmt.Println(out)
+					return nil
+				}
+
+				// usageRaw: the detailed per-field text report that used to
+				// be `harnez usage`'s only output before the compact
+				// dashboard (formerly --summary) became the default.
 				var remoteLoadSnap *usage.LoadSnapshot
 				if loadWatchHost != "" {
-					// --summary is a one-shot print (Decision §2): always a
-					// single plain batch SSH call, independent of usageHost.
 					remoteLoadSnap, _ = usage.CollectRemoteLoadSnapshot(ctx, loadWatchHost)
 				}
-				loadOpt := usage.WatchOptions{Compact: usageCompact, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}
-				if usageHost != "" {
-					usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
-				} else {
-					usage.RenderSummary(ctx, "", client, cmd.OutOrStdout(), usageProcesses, loadOpt)
-				}
+				fmt.Print(usage.RenderText(summary, usage.WatchOptions{RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}))
 				return nil
 			}
 
-			var summary usage.UsageSummary
-			if usageHost != "" {
-				s, _, err := usage.CollectRemote(ctx, usageHost, usageProcesses)
-				if err != nil && !usageJSON {
-					return err
-				}
-				summary = s
-			} else {
-				summary = usage.CollectAll(ctx, "", client)
-			}
-			if usageAgent != "" {
-				var filtered []usage.AgentUsage
-				for _, a := range summary.Agents {
-					if strings.EqualFold(a.AgentID, usageAgent) {
-						filtered = append(filtered, a)
-					}
-				}
-				summary.Agents = filtered
-			}
-
-			if usageJSON {
-				// Only attach a load snapshot when this invocation is itself
-				// the local collection (usageHost == ""), which is also the
-				// case when this process is the one CollectRemote runs over
-				// SSH on the remote host. A local `--json --host` combo
-				// already carries whatever load snapshot the remote side
-				// attached, via summary from CollectRemote above.
-				if usageHost == "" && summary.Load == nil {
-					snap := usage.CollectLoadSnapshot()
-					summary.Load = &snap
-				}
-				out, err := usage.RenderJSON(summary)
-				if err != nil {
-					return err
-				}
-				fmt.Println(out)
-				return nil
-			}
-
+			// Default: the compact one-shot dashboard, formerly gated
+			// behind --summary. --summary was removed (issue 171) once this
+			// became the unconditional default for a bare `harnez usage`.
 			var remoteLoadSnap *usage.LoadSnapshot
 			if loadWatchHost != "" {
+				// This is a one-shot print (Decision §2 of issue 110): always
+				// a single plain batch SSH call, independent of usageHost.
 				remoteLoadSnap, _ = usage.CollectRemoteLoadSnapshot(ctx, loadWatchHost)
 			}
-			fmt.Print(usage.RenderText(summary, usage.WatchOptions{RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}))
+			loadOpt := usage.WatchOptions{Compact: usageCompact, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}
+			if usageHost != "" {
+				usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
+			} else {
+				usage.RenderSummary(ctx, "", client, cmd.OutOrStdout(), usageProcesses, loadOpt)
+			}
 			return nil
 		},
 	}
@@ -187,10 +197,10 @@ func main() {
 	usageCmd.Flags().StringVar(&usageHost, "host", "", "query usage from a remote host via SSH")
 	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
 	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the dashboard in place with a tokens/min trend")
-	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "start --watch with only all-usage and load panels visible")
-	usageCmd.Flags().BoolVarP(&usageSummary, "summary", "s", false, "print the compact --watch-style dashboard once and exit")
-	usageCmd.Flags().BoolVarP(&usageProcesses, "proc", "p", false, "show running agent processes panel in --watch / --summary")
-	usageCmd.Flags().BoolVar(&usageProcesses, "processes", false, "show running agent processes panel in --watch / --summary")
+	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "show only the all-usage and load panels (default view and --watch)")
+	usageCmd.Flags().BoolVarP(&usageRaw, "raw", "r", false, "print the detailed per-field usage report instead of the compact dashboard")
+	usageCmd.Flags().BoolVarP(&usageProcesses, "proc", "p", false, "show running agent processes panel in the default view / --watch")
+	usageCmd.Flags().BoolVar(&usageProcesses, "processes", false, "show running agent processes panel in the default view / --watch")
 	usageCmd.Flags().DurationVar(&usageInterval, "interval", usage.DefaultWatchInterval,
 		fmt.Sprintf("refresh interval for --watch (minimum %s, to avoid hammering live quota APIs)", usage.MinWatchInterval))
 
