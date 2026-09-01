@@ -1,6 +1,54 @@
 # yaml-language-server: $schema=schemas/indicators.schema.json
 #
-# One-rune status indicators used by `harnez usage --watch`.
+# One-cell status indicators used by `harnez usage --watch`. Consumers refer
+# to this registry by name; the usage loader resolves frames before rendering.
+# `kind` prevents a finite gauge from silently selecting a cyclic spinner (or
+# a graph-specific scale from being used by an incompatible renderer).
+sequences:
+  block-deplete-8:
+    title: "Eighth-block countdown"
+    kind: countdown
+    frames: ["█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", " "]
+  block-deplete-vertical-8:
+    title: "Vertical-block countdown"
+    kind: countdown
+    frames: ["█", "▇", "▆", "▅", "▄", "▃", "▂", "▁", " "]
+  shade-deplete-5:
+    title: "Shade countdown"
+    kind: countdown
+    frames: ["█", "▓", "▒", "░", " "]
+  quadrant-rotate-4:
+    title: "Quadrant spinner"
+    kind: spinner
+    frames: ["▘", "▝", "▗", "▖"]
+  half-block-rotate-4:
+    title: "Half-block spinner"
+    kind: spinner
+    frames: ["▄", "▌", "▀", "▐"]
+  box-line-rotate-4:
+    title: "Box-line spinner"
+    kind: spinner
+    frames: ["╷", "╴", "╵", "╶"]
+  braille-orbit-8:
+    title: "Braille orbit"
+    kind: spinner
+    frames: ["⡀", "⠄", "⠂", "⠁", "⠈", "⠐", "⠠", "⢀"]
+  braille-classic-10:
+    title: "Classic Braille spinner"
+    kind: spinner
+    frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+  braille-snake-2x3:
+    title: "2×3 Braille timeout snake"
+    kind: countdown
+    frames: ["⠿", "⠷", "⠧", "⠇", "⠃", "⠁", "⠀"]
+  horizontal-eighths-7:
+    title: "Horizontal eighth-block partial fill"
+    kind: bar-partial
+    frames: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+  vertical-block-scale-8:
+    title: "Vertical block scale"
+    kind: sparkline
+    frames: ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
 #
 # timeout-snake is a finite, time-derived depletion: it begins as a full
 # braille cell when a refresh arrives and drains in the declared order to an
@@ -8,10 +56,7 @@
 # timeout; the empty final frame truthfully represents no time remaining.
 timeout-snake:
   title: "Time gauge braille snake"
-  # frames: ["⣿", "⣾", "⣶", "⣴", "⣤", "⣠", "⣀", "⢀", "⠀"] # eat top-to-bottom, left-to-right
-  # frames: ["⣿", "⣾", "⣼", "⣸", "⢸", "⢰", "⢠", "⢀", "⠀"] # eat down the left side, then down the right
-  # frames: ["⣿", "⡿", "⠿", "⠻", "⠹", "⠸", "⠰", "⠠", "⠀"]
-  frames: ["⠿", "⠷", "⠧", "⠇", "⠃", "⠁", "⠀"] # 2×3: top-right, down right, then up left
+  sequence: braille-snake-2x3
 
 # Every glyph that draws a quota bar in `usage --watch`. `sub-character`
 # progresses from one eighth to seven eighths; `filled` completes a cell.
@@ -24,7 +69,7 @@ timeout-snake:
 usage-bar:
   filled: "█"
   empty: "░"
-  sub-character: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+  sub-character-sequence: horizontal-eighths-7
   wrapper:
     enabled: true
     left: "["
@@ -32,4 +77,4 @@ usage-bar:
 
 # CPU and GPU load timelines map 0% through 100% in this declared order.
 load-sparkline:
-  frames: ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+  sequence: vertical-block-scale-8

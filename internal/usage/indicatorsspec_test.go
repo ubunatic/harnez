@@ -1,9 +1,11 @@
 package usage
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/mattn/go-runewidth"
 	"ubunatic.com/harnez/internal/rograph"
 )
 
@@ -12,9 +14,39 @@ func TestEmbeddedIndicatorsSpecIsValidAndExact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("embedded %s failed to load: %v", indicatorsSpecPath, err)
 	}
-	for i, frame := range spec.TimeoutSnake.Frames {
-		if n := len([]rune(frame)); n != 1 {
-			t.Errorf("frame %d = %q has %d runes, want 1", i, frame, n)
+	want := map[string]namedIndicatorSequence{
+		"block-deplete-8":          {Title: "Eighth-block countdown", Kind: "countdown", Frames: []string{"█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", " "}},
+		"block-deplete-vertical-8": {Title: "Vertical-block countdown", Kind: "countdown", Frames: []string{"█", "▇", "▆", "▅", "▄", "▃", "▂", "▁", " "}},
+		"shade-deplete-5":          {Title: "Shade countdown", Kind: "countdown", Frames: []string{"█", "▓", "▒", "░", " "}},
+		"quadrant-rotate-4":        {Title: "Quadrant spinner", Kind: "spinner", Frames: []string{"▘", "▝", "▗", "▖"}},
+		"half-block-rotate-4":      {Title: "Half-block spinner", Kind: "spinner", Frames: []string{"▄", "▌", "▀", "▐"}},
+		"box-line-rotate-4":        {Title: "Box-line spinner", Kind: "spinner", Frames: []string{"╷", "╴", "╵", "╶"}},
+		"braille-orbit-8":          {Title: "Braille orbit", Kind: "spinner", Frames: []string{"⡀", "⠄", "⠂", "⠁", "⠈", "⠐", "⠠", "⢀"}},
+		"braille-classic-10":       {Title: "Classic Braille spinner", Kind: "spinner", Frames: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}},
+		"braille-snake-2x3":        {Title: "2×3 Braille timeout snake", Kind: "countdown", Frames: []string{"⠿", "⠷", "⠧", "⠇", "⠃", "⠁", "⠀"}},
+		"horizontal-eighths-7":     {Title: "Horizontal eighth-block partial fill", Kind: "bar-partial", Frames: []string{"▏", "▎", "▍", "▌", "▋", "▊", "▉"}},
+		"vertical-block-scale-8":   {Title: "Vertical block scale", Kind: "sparkline", Frames: []string{"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"}},
+	}
+	if !reflect.DeepEqual(spec.Sequences, want) {
+		t.Fatalf("embedded sequence registry mismatch\n got: %#v\nwant: %#v", spec.Sequences, want)
+	}
+	if got, wantName := spec.TimeoutSnake.Sequence, "braille-snake-2x3"; got != wantName {
+		t.Errorf("timeout-snake sequence = %q, want %q", got, wantName)
+	}
+	if !reflect.DeepEqual(spec.TimeoutSnake.Frames, want[spec.TimeoutSnake.Sequence].Frames) {
+		t.Errorf("timeout-snake resolved frames = %#v, want named sequence %#v", spec.TimeoutSnake.Frames, want[spec.TimeoutSnake.Sequence].Frames)
+	}
+	if got, wantName := spec.UsageBar.SubCharacterSequence, "horizontal-eighths-7"; got != wantName {
+		t.Errorf("usage-bar sub-character sequence = %q, want %q", got, wantName)
+	}
+	if got, wantName := spec.LoadSparkline.Sequence, "vertical-block-scale-8"; got != wantName {
+		t.Errorf("load-sparkline sequence = %q, want %q", got, wantName)
+	}
+	for name, sequence := range spec.Sequences {
+		for i, frame := range sequence.Frames {
+			if width := runewidth.StringWidth(frame); width != 1 {
+				t.Errorf("sequence %q frame %d = %q has display width %d, want 1", name, i, frame, width)
+			}
 		}
 	}
 }
@@ -83,19 +115,23 @@ func TestWatchBarWrapperDefaultsToBracketsOn(t *testing.T) {
 // left/right set alongside enabled: false.
 func TestWatchBarWrapperDisabledBySpec(t *testing.T) {
 	data := []byte(`
+sequences:
+  countdown: {title: countdown, kind: countdown, frames: ["⠿", "⠷", "⠀"]}
+  partial: {title: partial, kind: bar-partial, frames: ["▏", "▌", "▉"]}
+  spark: {title: spark, kind: sparkline, frames: ["▁", "▄", "█"]}
 timeout-snake:
   title: "Time gauge braille snake"
-  frames: ["⠿", "⠷", "⠧", "⠇", "⠃", "⠁", "⠀"]
+  sequence: countdown
 usage-bar:
   filled: "█"
   empty: "░"
-  sub-character: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+  sub-character-sequence: partial
   wrapper:
     enabled: false
     left: "["
     right: "]"
 load-sparkline:
-  frames: ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+  sequence: spark
 `)
 	spec, err := parseIndicatorsYAML(data)
 	if err != nil {
@@ -114,14 +150,123 @@ load-sparkline:
 	}
 }
 
-func TestParseIndicatorsYAMLRejectsInvalidFrames(t *testing.T) {
-	cases := []string{
-		"timeout-snake: {title: snake, frames: [\"⣿\", \"x\", \"⠀\"]}",
-		"timeout-snake: {title: snake, frames: [\"⠋⠙\", \"⠀\"]}",
+const validIndicatorsFixture = `
+sequences:
+  countdown: {title: countdown, kind: countdown, frames: ["█", " "]}
+  spinner: {title: spinner, kind: spinner, frames: ["▘", "▝"]}
+  partial: {title: partial, kind: bar-partial, frames: ["▏", "▉"]}
+  spark: {title: spark, kind: sparkline, frames: ["▁", "█"]}
+timeout-snake: {title: timer, sequence: countdown}
+usage-bar:
+  filled: "█"
+  empty: "░"
+  sub-character-sequence: partial
+  wrapper: {enabled: true, left: "[", right: "]"}
+load-sparkline: {sequence: spark}
+`
+
+func TestParseIndicatorsYAMLRejectsInvalidRegistryAndReferences(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want string
+	}{
+		{"missing registry", strings.Replace(validIndicatorsFixture, "sequences:", "sequence-library:", 1), "field sequence-library not found"},
+		{"empty name", strings.Replace(validIndicatorsFixture, "  countdown:", "  \"\":", 1), "sequences: empty name"},
+		{"duplicate name", strings.Replace(validIndicatorsFixture, "  spinner:", "  countdown:", 1), "already defined"},
+		{"missing title", strings.Replace(validIndicatorsFixture, "title: countdown", "title: \"\"", 1), "sequence \"countdown\": missing title"},
+		{"unknown kind", strings.Replace(validIndicatorsFixture, "kind: countdown", "kind: pulse", 1), "unknown kind \"pulse\""},
+		{"empty sequence", strings.Replace(validIndicatorsFixture, "frames: [\"█\", \" \"]", "frames: []", 1), "sequence \"countdown\": need at least one frame"},
+		{"wide frame", strings.Replace(validIndicatorsFixture, "frames: [\"█\", \" \"]", "frames: [\"界\", \" \"]", 1), "display width 2, want one terminal cell"},
+		{"zero-width frame", strings.Replace(validIndicatorsFixture, "frames: [\"█\", \" \"]", "frames: [\"\\u0301\", \" \"]", 1), "display width 0, want one terminal cell"},
+		{"missing reference", strings.Replace(validIndicatorsFixture, "sequence: countdown", "sequence: \"\"", 1), "timeout-snake: missing sequence reference"},
+		{"unknown reference", strings.Replace(validIndicatorsFixture, "sequence: countdown", "sequence: absent", 1), "timeout-snake: unknown sequence \"absent\""},
+		{"semantic mismatch", strings.Replace(validIndicatorsFixture, "sequence: countdown", "sequence: spinner", 1), "has kind \"spinner\", want \"countdown\""},
+		{"bar semantic mismatch", strings.Replace(validIndicatorsFixture, "sub-character-sequence: partial", "sub-character-sequence: spinner", 1), "has kind \"spinner\", want \"bar-partial\""},
+		{"sparkline semantic mismatch", strings.Replace(validIndicatorsFixture, "load-sparkline: {sequence: spark}", "load-sparkline: {sequence: spinner}", 1), "has kind \"spinner\", want \"sparkline\""},
+		{"inline frames rejected", strings.Replace(validIndicatorsFixture, "timeout-snake: {title: timer, sequence: countdown}", "timeout-snake: {title: timer, sequence: countdown, frames: [\"█\", \" \"]}", 1), "field frames not found"},
+		{"multi-rune cell", strings.Replace(validIndicatorsFixture, "frames: [\"▏\", \"▉\"]", "frames: [\"e\\u0301\", \"▉\"]", 1), "sequence \"partial\" frame 0: want one rune"},
 	}
-	for _, data := range cases {
-		if _, err := parseIndicatorsYAML([]byte(data)); err == nil {
-			t.Errorf("parseIndicatorsYAML(%q) succeeded, want validation error", data)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseIndicatorsYAML([]byte(tt.data))
+			if err == nil {
+				t.Fatal("parseIndicatorsYAML succeeded, want validation error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("parseIndicatorsYAML error = %q, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolvedCountdownSupportsVariableLengthsAndEndpoints(t *testing.T) {
+	tests := []struct {
+		name   string
+		frames string
+		want   []string
+	}{
+		{"two frames ending literal space", `["x", " "]`, []string{"x", " "}},
+		{"four frames with accented rune and braille blank", `["A", "é", "⠀", "·"]`, []string{"A", "é", "⠀", "·"}},
+		{"nine frames with nonstandard endpoints", `["9", "8", "7", "6", "5", "4", "3", "2", "1"]`, []string{"9", "8", "7", "6", "5", "4", "3", "2", "1"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := strings.Replace(validIndicatorsFixture, `["█", " "]`, tt.frames, 1)
+			spec, err := parseIndicatorsYAML([]byte(data))
+			if err != nil {
+				t.Fatalf("parseIndicatorsYAML: %v", err)
+			}
+			if !reflect.DeepEqual(spec.TimeoutSnake.Frames, tt.want) {
+				t.Fatalf("resolved frames = %#v, want %#v", spec.TimeoutSnake.Frames, tt.want)
+			}
+			for i, want := range tt.want {
+				fraction := 1 - float64(i)/float64(len(tt.want)-1)
+				if got := finiteSequenceGlyph(spec.TimeoutSnake.Frames, fraction); got != want {
+					t.Errorf("finiteSequenceGlyph(%v) = %q, want frame %d %q", fraction, got, i, want)
+				}
+			}
+			if got := finiteSequenceGlyph(spec.TimeoutSnake.Frames, -100); got != tt.want[len(tt.want)-1] {
+				t.Errorf("overdue glyph = %q, want terminal endpoint %q", got, tt.want[len(tt.want)-1])
+			}
+			if got := finiteSequenceGlyph(spec.TimeoutSnake.Frames, 100); got != tt.want[0] {
+				t.Errorf("fresh glyph = %q, want initial endpoint %q", got, tt.want[0])
+			}
+		})
+	}
+}
+
+func TestResolvedFramesAreCopiedFromRegistry(t *testing.T) {
+	spec, err := parseIndicatorsYAML([]byte(validIndicatorsFixture))
+	if err != nil {
+		t.Fatalf("parseIndicatorsYAML: %v", err)
+	}
+	spec.TimeoutSnake.Frames[0] = "x"
+	if got := spec.Sequences[spec.TimeoutSnake.Sequence].Frames[0]; got != "█" {
+		t.Fatalf("mutating resolved frames changed registry frame to %q", got)
+	}
+}
+
+func TestSelectedIndicatorOutputsHaveStableANSIVisibleGeometry(t *testing.T) {
+	spec := mustIndicators()
+	for _, frame := range []string{
+		spec.Sequences["block-deplete-8"].Frames[8],
+		spec.Sequences["braille-snake-2x3"].Frames[6],
+	} {
+		for _, background := range []string{"", "100"} {
+			styled := styleTimeGaugeGlyphWithSGR(frame, "38;5;229", background)
+			if width := runewidth.StringWidth(stripANSI(styled)); width != 1 {
+				t.Errorf("styled gauge endpoint %q with background %q has width %d, want 1", frame, background, width)
+			}
 		}
+	}
+
+	bar := stripANSI(rograph.RenderBar(50, watchBarOptions()))
+	if width := runewidth.StringWidth(bar); width != rograph.MaxWidth+2 {
+		t.Errorf("selected ANSI bar %q has width %d, want %d", bar, width, rograph.MaxWidth+2)
+	}
+	spark := stripANSI(watchPercentSparkline([]float64{0, 25, 50, 100}, 4))
+	if width := runewidth.StringWidth(spark); width != 4 {
+		t.Errorf("selected ANSI sparkline %q has width %d, want 4", spark, width)
 	}
 }
