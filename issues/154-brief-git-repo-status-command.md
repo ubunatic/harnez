@@ -1,6 +1,6 @@
-# 154 — `harnez repo-status` (or similar): brief, quiet-by-default git repo state summary
+# 154 — `harnez repo-status`: brief, quiet-by-default git repo state summary
 
-**Status**: Open
+**Status**: Closed — resolved in 9f16839
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Tooling
@@ -65,22 +65,66 @@ diffstat or file list is actually worth surfacing.
 
 ## Acceptance Criteria
 
-- [ ] Command name and placement decided (new command vs. flag on an
+- [x] Command name and placement decided (new command vs. flag on an
       existing one), with the alternatives above considered and the
       decision recorded.
-- [ ] Clean-repo case: output is one short line, no full status dump.
-- [ ] Dirty/pending/broken case: output includes enough specifics to act on
+
+      **Decision**: new top-level command `harnez repo-status`
+      (`cmd/harnez/repostatus.go`), not a flag on an existing command.
+      `harnez status` (`cmd/harnez/main.go`) already has an established,
+      unrelated meaning — config/managed-doc apply state, not git working-
+      tree state — so overloading it would be confusing. `harnez distill --
+      git status` (`cmd/harnez/distill.go`) strips generic output noise but
+      has no git-specific semantics (it can't tell "clean, 3 ahead" apart
+      from a genuinely noteworthy diff, or classify quiet vs. verbose).
+      Neither existing command is a natural home, so `repo-status` is its
+      own subcommand. Ticket 153 (command-tree placement assessment) was
+      explicitly kept out of scope for this change, per its own deferred
+      status — this decision only concerns 154's own command, not a
+      broader tree reorganization.
+- [x] Clean-repo case: output is one short line, no full status dump.
+- [x] Dirty/pending/broken case: output includes enough specifics to act on
       (what's staged/unstaged/untracked, conflicts, divergence) without
       requiring a follow-up `git status` call.
-- [ ] "Ahead of origin by N" alone (no other changes) is treated as quiet,
+- [x] "Ahead of origin by N" alone (no other changes) is treated as quiet,
       not verbose.
-- [ ] `go test ./...` passes; a test exists for both the quiet and verbose
+- [x] `go test ./...` passes; a test exists for both the quiet and verbose
       paths using a real temp git repo (not just parsed-string fixtures),
       matching this project's convention of exercising real state where
       practical.
 
+## Implementation Notes
+
+- `internal/gitstatus` parses `git status --porcelain=v2 --branch` into a
+  `Status` struct (branch, upstream, ahead/behind, staged/unstaged/
+  untracked/conflict file lists) and exposes `Status.Quiet()`.
+- **Quiet/verbose threshold (concrete, per AC)**: `Quiet()` is true iff
+  ALL of: no staged files, no unstaged files, no untracked files, no
+  conflicted files, HEAD not detached, AND behind-count is 0. Ahead-count
+  is excluded from the check entirely — being ahead of the upstream by any
+  N, with nothing else pending, is quiet. Being behind by any amount
+  (including a full ahead-and-behind divergence) is verbose: local history
+  not being a superset of upstream's is worth surfacing, unlike the
+  expected-normal "unpushed local commits" state in this solo/no-PR-
+  workflow repo.
+- Quiet path prints one line, e.g. `clean, main, up to date with
+  origin/main` or `clean, main, 3 ahead of origin/main`.
+- Verbose path prints branch/divergence, a `staged=N unstaged=N
+  untracked=N conflicts=N` count line, and per-category file lists (sorted,
+  capped at 10 paths with a "+N more" suffix) — structured, not a raw
+  `git status` dump.
+- Tests: `internal/gitstatus/gitstatus_test.go` (parser unit tests plus
+  real-temp-git-repo tests, including a bare-remote ahead/behind scenario)
+  and `cmd/harnez/repostatus_test.go` (command-level tests against real
+  temp repos for the quiet, verbose, and ahead-only-is-quiet cases).
+- Manually verified against this repo (quiet before starting; verbose
+  while mid-change) and a scratch temp repo (clean → quiet; edited file →
+  verbose) — see session transcript.
+- `make install` run; `go build ./...` and `go test ./...` pass repo-wide.
+
 ## Notes
 
 Low priority — this is a token/ergonomics convenience, not a correctness
-issue. Good candidate to bundle with [[153]]'s command-tree placement
-assessment rather than implementing in isolation.
+issue. Ticket 153's command-tree placement assessment was intentionally
+NOT bundled into this change; only the placement decision needed for 154
+itself (above) was made here.
