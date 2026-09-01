@@ -26,6 +26,11 @@ $ harnez find issues "status:open vram|gtt"
 # exact interpretation: status:open AND (vram OR gtt)
 ```
 
+The intended product feel is a short, intuitive query language with
+Google/Gmail-like fuzzy text discovery: people should normally be able to
+type the words they remember, while compact filters and `|` refine results
+without requiring a formal search grammar.
+
 ## 2. Product Decisions and Query Contract
 
 ### Entity scope and command shape
@@ -45,10 +50,12 @@ $ harnez find issues "status:open vram|gtt"
 
 ### Version-one issue-query grammar
 
-- A bare term is a case-insensitive substring search over each issue's title
-  and body, excluding metadata labels only if the implementation can do so
-  without divergent results. State the final searchable fields in `--help`
-  and tests.
+- Bare terms use forgiving, case-insensitive fuzzy text matching over each
+  issue's title and body. Define a deliberately small, deterministic v1
+  matcher (for example normalized substring and/or token-prefix matching),
+  document its searchable fields and normalization in `--help`, and cover it
+  with tests. Do not require users to learn regexes, exact phrases, or a
+  formal Boolean language for ordinary discovery.
 - Whitespace between terms is AND: `vram gtt` means issues containing both
   terms.
 - `|` separates OR alternatives within one term: `vram|gtt` means either;
@@ -124,7 +131,7 @@ implement this mode until its UX is designed and tested.
 
 ## 5. Out of Scope
 
-- Full Boolean expressions, parentheses, negation, regex/fuzzy search, and
-  arbitrary filesystem search.
+- Full Boolean expressions, parentheses, negation, regexes, and arbitrary
+  filesystem search.
 - Searching entities other than `issues` in v1.
 - Any implicit query relaxation that changes exact search semantics.
