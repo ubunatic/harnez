@@ -28,6 +28,41 @@ frontmatter, despite that being the initial assumption for this ticket).
 The command described below should parse that bold-label block directly
 rather than assuming YAML.
 
+## Prep Task — frontmatter investigation (do before Scope below)
+
+Before building the parser, investigate whether issue metadata should move
+from the bold-label block to real YAML frontmatter (`---`-delimited), since
+that choice determines what the parser in Scope actually needs to read:
+
+- Investigate whether real YAML frontmatter would make `harnez index` (and
+  the docs/issues index generally) meaningfully more resilient than parsing
+  the bold-label block, or whether YAML frontmatter is itself likely to
+  drift/break often in practice (e.g. hand-edits producing invalid YAML,
+  merge conflicts inside a frontmatter block, agents forgetting closing
+  `---`). Write the conclusion down (a short note in this ticket or a
+  `docs/studies/` entry if it's substantial) before proceeding.
+- **If the conclusion is "yes, use YAML"**:
+  - The parser must read *both* formats — real YAML frontmatter and the
+    existing bold-label block — since old tickets in this repo and tickets
+    in other harnez-managed repos will still be bold-label-only for a long
+    time (no forced mass-migration).
+  - Add a migration command (e.g. `harnez migrate-frontmatter` or a mode of
+    `harnez index`) that rewrites a bold-label ticket to YAML frontmatter,
+    non-destructively and idempotently.
+  - Consider a hybrid split: YAML frontmatter carries only the
+    index-relevant fields (Status/Priority/Severity/Category/Related — the
+    fields `harnez index` actually needs), while richer prose-adjacent
+    metadata stays in the body. Whatever the split, **the parser must keep
+    reading bold-label-only tickets correctly** — this is a hard backward-
+    compatibility requirement, not a nice-to-have, since other
+    harnez-managed repos' `issues/*.md` files won't be migrated in lockstep
+    with this repo.
+- **Once a conclusion and the resulting command(s) are settled**, update
+  `docs/practices/IssueTracking.md` (the canonical metadata-header spec)
+  and this repo's own `AGENTS.md`/`CLAUDE.md` references to match — don't
+  ship a format change or new command without updating the doc that defines
+  the convention.
+
 ## Scope
 
 - Add a `harnez index` (or similar) subcommand that:
@@ -54,6 +89,14 @@ rather than assuming YAML.
 
 ## Acceptance Criteria
 
+- [ ] Frontmatter investigation done, conclusion recorded (YAML vs.
+      bold-label-only), before Scope work starts.
+- [ ] If YAML was chosen: parser reads both bold-label and YAML tickets;
+      a migration command exists; backward compatibility with unmigrated
+      tickets (this repo and others) is verified, not just assumed.
+- [ ] `docs/practices/IssueTracking.md` (and any other doc defining the
+      metadata-header convention) updated to match whatever was decided and
+      shipped.
 - [ ] `harnez index` regenerates `issues/README.md` from `issues/*.md` +
       `issues/archive/*.md` metadata, matching current hand-written rows for
       the existing ticket set (no spurious diff on a clean run).
