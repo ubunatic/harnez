@@ -87,17 +87,20 @@ func TestFormatMemoryLines(t *testing.T) {
 		HaveVRAM:     true,
 		HaveGTT:      true,
 	})
-	want := []string{
-		"gpu mem          6.0/20.0G 30%",
-		"vram/gtt         v5.0/8.0 g1.0/12.0",
+	if len(gpu) != 1 {
+		t.Fatalf("formatGPUMemoryLines returned %d lines, want 1: %v", len(gpu), gpu)
 	}
-	if len(gpu) != len(want) {
-		t.Fatalf("formatGPUMemoryLines returned %d lines, want %d: %v", len(gpu), len(want), gpu)
+	got := stripANSI(gpu[0])
+	if !strings.HasPrefix(got, "gpu vram/gtt") {
+		t.Errorf("formatGPUMemoryLines[0] = %q, want prefix %q", got, "gpu vram/gtt")
 	}
-	for i := range want {
-		if got := stripANSI(gpu[i]); got != want[i] {
-			t.Errorf("formatGPUMemoryLines[%d] = %q, want %q", i, got, want[i])
-		}
+	if !strings.Contains(got, "6.0/20.0G 30%") {
+		t.Errorf("formatGPUMemoryLines[0] = %q, want combined %q", got, "6.0/20.0G 30%")
+	}
+	// Two adjacent bracketed bars (VRAM then GTT), no bar-renderer other
+	// than rograph.RenderBar is expected to appear here.
+	if strings.Count(got, "[") != 2 || strings.Count(got, "]") != 2 {
+		t.Errorf("formatGPUMemoryLines[0] = %q, want two adjacent [..][..] bars", got)
 	}
 }
 
@@ -125,11 +128,8 @@ func TestLoadBoxMemoryLineClipsToWidth(t *testing.T) {
 		}
 	}
 	rendered := renderWBox(b)
-	if got := stripANSI(rendered[1]); !strings.Contains(got, "gpu mem") {
-		t.Errorf("expected total memory line, got %q", got)
-	}
-	if got := stripANSI(rendered[2]); !strings.Contains(got, "vram/gtt") {
-		t.Errorf("expected split memory line, got %q", got)
+	if got := stripANSI(rendered[1]); !strings.Contains(got, "gpu vram/gtt") {
+		t.Errorf("expected combined vram/gtt memory line, got %q", got)
 	}
 }
 

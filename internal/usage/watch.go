@@ -930,21 +930,32 @@ func formatGPULine(g GPU) string {
 	return fmt.Sprintf("%s [%s] %.0f%%%s", label, watchPercentSparkline(series, min(rograph.MaxWidth, len(series))), g.UtilPercent, tempPart)
 }
 
+// formatGPUMemoryLines renders GPU memory as a single "gpu vram/gtt" row
+// combining VRAM and GTT into adjacent compact bars (issue 089), replacing
+// the earlier two plain-text rows (gpu mem / vram/gtt). It mirrors
+// formatAllUsageTableLine's adjacent-dual-bar pattern (two rograph.RenderBar
+// calls side by side) rather than hand-rolling a new bar renderer.
+//
+// g.MemUsedMiB/MemTotalMiB/MemPercent already hold the VRAM+GTT combined
+// totals (see readAMDGPUMemory in load.go, which accumulates into them from
+// whichever of HaveVRAM/HaveGTT is set), so they're used directly here for
+// the combined used/total and percentage rather than re-summing.
 func formatGPUMemoryLines(g GPU) []string {
-	label := padLoadLabel("gpu mem")
-	lines := []string{fmt.Sprintf("%s %s/%sG %.0f%%", label, formatGiB(g.MemUsedMiB), formatGiB(g.MemTotalMiB), g.MemPercent)}
+	label := padLoadLabel("gpu vram/gtt")
 
-	parts := []string{}
+	barOpts := watchBarOptions()
+	barOpts.Width = 4
+
+	var bars strings.Builder
 	if g.HaveVRAM {
-		parts = append(parts, fmt.Sprintf("v%s/%s", formatGiB(g.VRAMUsedMiB), formatGiB(g.VRAMTotalMiB)))
+		bars.WriteString(rograph.RenderBar(percent(g.VRAMUsedMiB, g.VRAMTotalMiB), barOpts))
 	}
 	if g.HaveGTT {
-		parts = append(parts, fmt.Sprintf("g%s/%s", formatGiB(g.GTTUsedMiB), formatGiB(g.GTTTotalMiB)))
+		bars.WriteString(rograph.RenderBar(percent(g.GTTUsedMiB, g.GTTTotalMiB), barOpts))
 	}
-	if len(parts) > 0 {
-		lines = append(lines, fmt.Sprintf("%s %s", padLoadLabel("vram/gtt"), strings.Join(parts, " ")))
-	}
-	return lines
+
+	line := fmt.Sprintf("%s %s %s/%sG %.0f%%", label, bars.String(), formatGiB(g.MemUsedMiB), formatGiB(g.MemTotalMiB), g.MemPercent)
+	return []string{line}
 }
 
 func formatGiB(mib float64) string {
