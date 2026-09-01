@@ -1,0 +1,130 @@
+// find implements `harnez find <entity> [options] <query...>`, a deliberate
+// query command over repository-data entities. The only entity in v1 is
+// "issues" (issues/*.md and issues/archive/*.md); see
+// issues/158-find-entity-query-command.md for the full query grammar,
+// ranking, and output contract.
+package main
+
+import (
+	"fmt"
+	"io"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/find"
+	"ubunatic.com/harnez/internal/issues"
+)
+
+func newFindCmd() *cobra.Command {
+	var dir string
+
+	cmd := &cobra.Command{
+		Use:   "find <entity> [options] <query...>",
+		Short: "Query repository-data entities with a short fuzzy-text/filter grammar",
+		Long: `find searches a repository-data entity with a short query language that
+mixes Google/Gmail-style fuzzy text discovery with compact filters, instead
+of a formal Boolean/regex grammar.
+
+Entities:
+  issues   searches issues/*.md and issues/archive/*.md (excludes
+           issues/README.md and every other file/directory). Both active and
+           archived tickets are in scope by default; use a status filter to
+           narrow lifecycle state.
+
+Query grammar:
+  whitespace         AND: 'vram gtt' requires both terms.
+  a|b                OR within one compact term: 'vram|gtt' means either.
+                     Precedence is fixed: filters and AND bind outside OR,
+                     so 'status:open vram|gtt' means
+                     'status:open AND (vram OR gtt)'.
+  status:VALUE       filter (alias 'is:VALUE'), ANDed with other terms.
+                     Accepted values: open, in-progress, blocked, closed,
+                     draft. 'open'/'is:open' match every unresolved issue
+                     whose leading raw status is Open, In Progress, or
+                     Blocked; 'in-progress'/'blocked' narrow to just that
+                     raw lifecycle stage; 'closed'/'draft' match their
+                     canonical category. Matching ignores case and
+                     explanatory status suffixes (e.g. "Blocked — waiting
+                     for upstream").
+
+An unquoted '|' is a shell pipeline operator, so an OR query needs shell
+quoting:
+
+  harnez find issues status:open vram gtt
+  harnez find issues "status:open vram|gtt"
+
+Not supported (usage error, not a guessed interpretation): parentheses,
+literal quote characters, negation, an empty filter, unknown fields, an
+unsupported status value, or a standalone/leading/trailing/doubled '|'.
+Regex-looking punctuation in ordinary text is normalized away, never
+executed.
+
+Matching: the H1 title (its leading ticket number stripped) and the ticket
+body (everything after the first metadata-closing horizontal rule) are
+searched; the metadata header itself is not. Both the searchable text and
+every query alternative are normalized by Unicode-lowercasing, replacing
+Markdown syntax/non-letter/non-number characters with spaces, and
+collapsing whitespace -- so punctuation-separated identifiers like
+"time-gauge" become adjacent searchable tokens. A bare alternative matches a
+field when its full normalized text is a substring of that field, or when
+every one of its normalized tokens matches a field token by prefix or
+bounded typo distance (Damerau-Levenshtein, transpositions counted as one
+edit): terms of 4 characters or fewer get no typo tolerance, 5-8 characters
+allow 1 edit, 9+ characters allow 2 edits -- this protects short
+identifiers like "gtt"/"vram" from noisy fuzzy expansion.
+
+Ranking: matches are classed, best to worst -- (1) exact title substring,
+(2) title token-prefix, (3) title fuzzy, (4) exact body substring, (5) body
+token-prefix, (6) body fuzzy -- and ranked by worst group class, then the
+sum of all group classes, then ticket number, then path. This never
+silently relaxes an AND query to OR on zero results.
+
+Output is deterministic, tab-separated, one result per line, no header, no
+ANSI:
+
+  NUMBER<TAB>RAW_STATUS<TAB>PLAIN_TITLE<TAB>PATH
+
+Zero matches exits 0 and prints nothing. An invalid entity, an invalid
+query, or unreadable/malformed tracker data exits non-zero with an
+actionable stderr message.`,
+		Args:         cobra.MinimumNArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runFind(cmd.OutOrStdout(), dir, args)
+		},
+	}
+	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
+	return cmd
+}
+
+func runFind(w io.Writer, dir string, args []string) error {
+	entity := args[0]
+	if entity != "issues" {
+		return fmt.Errorf("find: unsupported entity %q (only \"issues\" is supported)", entity)
+	}
+
+	query := strings.TrimSpace(strings.Join(args[1:], " "))
+	if query == "" {
+		return fmt.Errorf("find: query must not be empty")
+	}
+
+	q, err := find.ParseQuery(query)
+	if err != nil {
+		return err
+	}
+
+	issuesDir := filepath.Join(dir, "issues")
+	files, err := issues.Scan(issuesDir)
+	if err != nil {
+		return fmt.Errorf("find: %w", err)
+	}
+	for i := range files {
+		files[i].RelPath = filepath.ToSlash(filepath.Join("issues", files[i].RelPath))
+	}
+
+	for _, r := range find.Search(files, q) {
+		fmt.Fprintln(w, find.FormatTSV(r))
+	}
+	return nil
+}

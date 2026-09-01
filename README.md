@@ -260,6 +260,7 @@ Every ticket in `issues/NNN-kebab-case.md` begins with standard metadata headers
 | `distill` | `[hook\|filter]` | Distill verbose command outputs for agent context conservation |
 | `release` | `--bump` `--continue` `--dry-run` `-s` | Language-agnostic version bump, build, minisign signing, and forge publishing |
 | `usage` | `--json` `--agent` `--offline` `-w` `-s` `--interval` | Show unified token, session, and quota status across AI coding agents (aliases: `quota`, `tokens`, `stats`) |
+| `find <entity> <query…>` | `-d` | Fuzzy-text/filter query over repository-data entities (`issues` only in v1) |
 
 All commands accept `-c <path>` (config file, default: embedded).
 
@@ -292,6 +293,29 @@ All commands accept `-c <path>` (config file, default: embedded).
 - `--update` — re-fetch and refresh the project summary (implies `--summary`)
 - `--replace` — delete existing AGENTS.md and recreate from template before init
 - `-y` — assume yes when reconciling Makefile targets (no prompt)
+
+`find` also accepts:
+
+- `-d <dir>` — repo root containing `issues/` (default: `.`)
+
+`find issues` searches `issues/*.md` and `issues/archive/*.md` (excluding `issues/README.md`)
+with a short query language: whitespace between terms is AND, `vram|gtt` within one term is
+OR, and `status:<value>`/`is:<value>` (alias) filters on lifecycle — accepted values `open`,
+`in-progress`, `blocked`, `closed`, `draft`. Filters and AND bind outside OR, so
+`status:open vram|gtt` means `status:open AND (vram OR gtt)`. An unquoted `|` is a shell
+pipeline operator, so quote OR queries:
+
+```sh
+harnez find issues status:open vram gtt
+harnez find issues "status:open vram|gtt"
+```
+
+Matching is fuzzy (typo-tolerant via Damerau-Levenshtein, prefix-aware, deterministic) over
+the title and body text, never a regex or full Boolean grammar; run `harnez find --help` for
+the full normalization/ranking contract. Output is tab-separated
+(`NUMBER\tRAW_STATUS\tPLAIN_TITLE\tPATH`), one match per line, with no header — zero matches
+exits 0 silently, and an invalid entity/query exits non-zero with an actionable message. An
+AND query is never silently relaxed to OR when it finds nothing.
 
 ### Project setup
 

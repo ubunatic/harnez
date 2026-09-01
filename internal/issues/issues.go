@@ -20,6 +20,7 @@ type IssueFile struct {
 	RawStatus    string         // exact string after "**Status:**", e.g. "Closed — fixed in 444c29f"
 	Canonical    StatusCategory // Open, Closed, Draft, Unknown
 	HasStatusTag bool
+	Body         string // ticket content after the first metadata-closing horizontal rule following the title; empty if none is found (see 158)
 }
 
 // TableRow represents a row parsed from issues/README.md.
@@ -72,6 +73,29 @@ var (
 	tableRowRegex    = regexp.MustCompile(`^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$`)
 	markdownLinkRegx = regexp.MustCompile(`^\[([^\]]+)\]\(([^)]+)\)$`)
 )
+
+// LeadingLifecycle extracts the leading raw lifecycle token from a free-form
+// status string, e.g. "Blocked — waiting for upstream" -> "blocked", "In
+// Progress" -> "in progress". It strips common Markdown emphasis characters,
+// lowercases, and truncates at the first explanatory-suffix separator, the
+// same way CanonicalizeStatus locates its "lead" substring. Used by
+// `harnez find status:`/`is:` filters (issue 158), which distinguish between
+// raw lifecycle stages that CanonicalizeStatus otherwise collapses into one
+// category (Open, In Progress, and Blocked are all StatusOpen).
+func LeadingLifecycle(status string) string {
+	s := strings.ToLower(status)
+	s = strings.ReplaceAll(s, "*", "")
+	s = strings.ReplaceAll(s, "`", "")
+	s = strings.ReplaceAll(s, "_", "")
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if idx := strings.IndexAny(s, "—–-:,"); idx != -1 {
+		s = strings.TrimSpace(s[:idx])
+	}
+	return s
+}
 
 // CanonicalizeStatus normalizes free-form status strings into core categories.
 func CanonicalizeStatus(status string) StatusCategory {
@@ -148,6 +172,58 @@ func ParseIssueFile(content string) (title string, rawStatus string, hasStatus b
 		}
 	}
 	return title, rawStatus, hasStatus
+}
+
+// thematicBreakRegex matches a Markdown thematic break ("---", "***", "___",
+// optionally space-separated) on its own line, per CommonMark.
+var thematicBreakRegex = regexp.MustCompile(`^(-[ \t]*-[ \t]*-[ \t]*(?:-[ \t]*)*|\*[ \t]*\*[ \t]*\*[ \t]*(?:\*[ \t]*)*|_[ \t]*_[ \t]*_[ \t]*(?:_[ \t]*)*)$`)
+
+// ParseBody extracts the ticket body searched by `harnez find` (issue 158):
+// everything after the first metadata-closing horizontal rule that appears
+// on its own line after the H1 title. Returns "" if the title or the rule is
+// never found, which leaves older tickets that predate the "---" metadata
+// separator convention searchable by title only (see the ticket's Scope
+// Note).
+func ParseBody(content string) string {
+	lines := strings.Split(content, "\n")
+	sawTitle := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !sawTitle {
+			if strings.HasPrefix(trimmed, "# ") {
+				sawTitle = true
+			}
+			continue
+		}
+		if thematicBreakRegex.MatchString(trimmed) {
+			return strings.Join(lines[i+1:], "\n")
+		}
+	}
+	return ""
+}
+
+// ticketNumberPrefixRegex strips the leading "NNN <sep>" portion of a parsed
+// issue title, e.g. "158 — Add a `harnez find` command" -> "Add a `harnez
+// find` command".
+var ticketNumberPrefixRegex = regexp.MustCompile(`^\d+\s*[—–:-]\s*`)
+
+// StripTicketNumber removes the leading ticket-number portion of a raw H1
+// title, if present.
+func StripTicketNumber(title string) string {
+	return ticketNumberPrefixRegex.ReplaceAllString(title, "")
+}
+
+// mdFormattingReplacer strips common inline Markdown formatting delimiters
+// from displayed/searched text without touching the text they wrap.
+var mdFormattingReplacer = strings.NewReplacer("`", "", "*", "", "_", "", "#", "")
+
+// PlainTitle renders a raw H1 title (with its leading ticket number) as
+// display/search text: the ticket number is removed, Markdown formatting
+// delimiters are stripped, and embedded whitespace is collapsed.
+func PlainTitle(rawTitle string) string {
+	t := StripTicketNumber(rawTitle)
+	t = mdFormattingReplacer.Replace(t)
+	return strings.Join(strings.Fields(t), " ")
 }
 
 // ParseTrackerTable extracts table entries from issues/README.md.
@@ -256,6 +332,7 @@ func ScanFS(sysFS fs.FS, root string) ([]IssueFile, error) {
 				RawStatus:    rawStatus,
 				Canonical:    CanonicalizeStatus(rawStatus),
 				HasStatusTag: hasStatus,
+				Body:         ParseBody(string(content)),
 			})
 		}
 		return nil

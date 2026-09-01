@@ -83,6 +83,83 @@ func TestParseIssueFile(t *testing.T) {
 	}
 }
 
+func TestParseBody(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name: "standard metadata rule",
+			content: "# 158 — Add find\n\n**Status**: Open\n**Related**: x\n\n---\n\nBody paragraph one.\n\nBody paragraph two.\n",
+			want: "\nBody paragraph one.\n\nBody paragraph two.\n",
+		},
+		{
+			name:    "no thematic break present",
+			content: "# 154 — repo-status\n\n**Status**: Closed\n\n## Problem\n\nSome text.\n",
+			want:    "",
+		},
+		{
+			name:    "star-style thematic break",
+			content: "# 001 — Title\n\n**Status**: Open\n\n***\n\nStarred body.\n",
+			want:    "\nStarred body.\n",
+		},
+		{
+			name:    "no title at all",
+			content: "no heading here\n\n---\n\nunreached body\n",
+			want:    "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ParseBody(tt.content); got != tt.want {
+				t.Errorf("ParseBody() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStripTicketNumber(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"158 — Add a `harnez find` command", "Add a `harnez find` command"},
+		{"036 - Issues Tracker Status Linter", "Issues Tracker Status Linter"},
+		{"No leading number", "No leading number"},
+	}
+	for _, tt := range tests {
+		if got := StripTicketNumber(tt.in); got != tt.want {
+			t.Errorf("StripTicketNumber(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestPlainTitle(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"158 — Add a `harnez find` command", "Add a harnez find command"},
+		{"036 — `harnez status` Issues Tracker  Status   Linter", "harnez status Issues Tracker Status Linter"},
+		{"099 — **Bold** and _italic_ title", "Bold and italic title"},
+	}
+	for _, tt := range tests {
+		if got := PlainTitle(tt.in); got != tt.want {
+			t.Errorf("PlainTitle(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestLeadingLifecycle(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"Open", "open"},
+		{"In Progress", "in progress"},
+		{"Blocked — waiting for upstream", "blocked"},
+		{"Closed — resolved in abc123", "closed"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := LeadingLifecycle(tt.in); got != tt.want {
+			t.Errorf("LeadingLifecycle(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestCanonicalizeStatus(t *testing.T) {
 	tests := []struct {
 		input string
