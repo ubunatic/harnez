@@ -1740,6 +1740,93 @@ func TestBuildSplashFrameStatusLine(t *testing.T) {
 	}
 }
 
+// TestSplashStatusAdvancePacesEachQueuedEvent checks the bug this fixed:
+// three events queued back-to-back (as claude/agy/codex's Started/Done
+// events routinely are, since each sub-fetch can finish in well under one
+// splashFrameInterval tick) must each get a turn as st.current, not just
+// have the last one win because it was latest when the queue was read.
+func TestSplashStatusAdvancePacesEachQueuedEvent(t *testing.T) {
+	minDisplay := 300 * time.Millisecond
+	t0 := time.Unix(0, 0)
+	st := splashStatusState{queue: []splashStatusEvent{
+		{source: "claude", stage: FetchStarted},
+		{source: "claude", stage: FetchDone},
+		{source: "agy", stage: FetchStarted},
+	}}
+
+	st = splashStatusAdvance(st, t0, minDisplay)
+	if !st.have || st.current.source != "claude" || st.current.stage != FetchStarted {
+		t.Fatalf("expected the first queued event to show immediately, got %+v", st.current)
+	}
+	if len(st.queue) != 2 {
+		t.Fatalf("expected 2 events still queued, got %d", len(st.queue))
+	}
+
+	// Too soon: minDisplay hasn't elapsed, so the next call must not advance.
+	st = splashStatusAdvance(st, t0.Add(minDisplay/2), minDisplay)
+	if st.current.source != "claude" || st.current.stage != FetchStarted {
+		t.Fatalf("expected the event to still be showing before minDisplay elapses, got %+v", st.current)
+	}
+	if len(st.queue) != 2 {
+		t.Fatalf("expected the queue to be untouched before minDisplay elapses, got %d", len(st.queue))
+	}
+
+	// minDisplay elapsed: the next queued event should now show.
+	st = splashStatusAdvance(st, t0.Add(minDisplay), minDisplay)
+	if st.current.source != "claude" || st.current.stage != FetchDone {
+		t.Fatalf("expected the second queued event to show, got %+v", st.current)
+	}
+	if len(st.queue) != 1 {
+		t.Fatalf("expected 1 event still queued, got %d", len(st.queue))
+	}
+
+	st = splashStatusAdvance(st, t0.Add(2*minDisplay), minDisplay)
+	if st.current.source != "agy" || st.current.stage != FetchStarted {
+		t.Fatalf("expected the third queued event to show, got %+v", st.current)
+	}
+	if len(st.queue) != 0 {
+		t.Fatalf("expected the queue to be empty, got %d", len(st.queue))
+	}
+
+	// Nothing left to advance to: current stays put.
+	before := st.current
+	st = splashStatusAdvance(st, t0.Add(3*minDisplay), minDisplay)
+	if st.current != before {
+		t.Fatalf("expected current to stay %+v with an empty queue, got %+v", before, st.current)
+	}
+}
+
+// TestSplashStatusDrained checks the exit-gating predicate the splash loop
+// uses to decide when it's safe to stop waiting once the fetch has finished:
+// not drained while events remain queued or the current one hasn't shown
+// long enough yet, drained once the queue is empty and minDisplay has
+// elapsed (or immediately, for a fetch that produced no events at all).
+func TestSplashStatusDrained(t *testing.T) {
+	minDisplay := 300 * time.Millisecond
+	t0 := time.Unix(0, 0)
+
+	if !splashStatusDrained(splashStatusState{}, t0, minDisplay) {
+		t.Fatal("expected a fetch with no events at all to be immediately drained")
+	}
+
+	withQueue := splashStatusState{
+		have:    true,
+		shownAt: t0,
+		queue:   []splashStatusEvent{{source: "codex", stage: FetchStarted}},
+	}
+	if splashStatusDrained(withQueue, t0.Add(minDisplay), minDisplay) {
+		t.Fatal("expected drained=false while events remain queued")
+	}
+
+	justShown := splashStatusState{have: true, shownAt: t0}
+	if splashStatusDrained(justShown, t0.Add(minDisplay/2), minDisplay) {
+		t.Fatal("expected drained=false before the current event's minDisplay elapses")
+	}
+	if !splashStatusDrained(justShown, t0.Add(minDisplay), minDisplay) {
+		t.Fatal("expected drained=true once the queue is empty and minDisplay has elapsed")
+	}
+}
+
 // TestRenderSummary_CompactSelectsReducedSections is issue 102's acceptance
 // criterion: `harnez usage --summary --compact` must render the same reduced
 // panel set as `--watch --compact` (compactWatchSections), not just be

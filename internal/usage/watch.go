@@ -1799,6 +1799,63 @@ func centerLine(s string, width int) string {
 	return strings.Repeat(" ", pad) + s
 }
 
+// splashStatusMinDisplay is the minimum time each queued FetchStage event
+// stays on screen before splashStatusAdvance lets the next one replace it.
+// Local sub-fetches (claude/agy/codex) routinely complete in well under this
+// project's splashFrameInterval paint cadence, so without pacing the splash
+// only ever shows whichever event happened to be latest when the fetch
+// finished -- the whole point of issue 169's status line (seeing each stage
+// go by) was otherwise lost. 300ms is long enough to read a short line, short
+// enough that a handful of queued events don't meaningfully delay handing
+// control to the real dashboard once the fetch is actually done.
+const splashStatusMinDisplay = 300 * time.Millisecond
+
+// splashStatusEvent is one FetchStage transition queued for display.
+type splashStatusEvent struct {
+	source string
+	stage  FetchStage
+}
+
+// splashStatusState is the splash status line's queue of pending events plus
+// which one is currently on screen. reportFetchStage (in RunWatchWithOptions)
+// appends to queue; splashStatusAdvance pops from it on a minimum-display
+// cadence so every event gets a turn instead of only the latest one.
+type splashStatusState struct {
+	queue   []splashStatusEvent
+	current splashStatusEvent
+	have    bool
+	shownAt time.Time
+}
+
+// splashStatusAdvance pops the next queued event into st.current once
+// splashStatusMinDisplay has elapsed since the current one was shown (or
+// immediately, if nothing has been shown yet). Pure function of (st, now) so
+// it can be unit-tested without a real clock/goroutines.
+func splashStatusAdvance(st splashStatusState, now time.Time, minDisplay time.Duration) splashStatusState {
+	if len(st.queue) == 0 {
+		return st
+	}
+	if st.have && now.Sub(st.shownAt) < minDisplay {
+		return st
+	}
+	st.current = st.queue[0]
+	st.queue = st.queue[1:]
+	st.have = true
+	st.shownAt = now
+	return st
+}
+
+// splashStatusDrained reports whether the status queue is empty and the
+// currently-shown event (if any) has been up long enough that advancing
+// again would be a no-op -- i.e. there is nothing left worth waiting to
+// display. RunWatchWithOptions uses this to decide when it's safe to leave
+// the splash after the underlying fetch has finished: without it, a fetch
+// that completes faster than its own queued events can be paced through
+// would cut the display short exactly as before this fix.
+func splashStatusDrained(st splashStatusState, now time.Time, minDisplay time.Duration) bool {
+	return len(st.queue) == 0 && (!st.have || now.Sub(st.shownAt) >= minDisplay)
+}
+
 // splashStatusLine renders one FetchStage event (issue 169) as the single
 // status line shown under the startup splash's bar, reporting which
 // per-source fetch CollectAll/CollectRemote most recently started, finished,
@@ -2118,26 +2175,31 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		outMu.Unlock()
 	}
 
-	// splashStatus (issue 169) holds the latest FetchStage event reported by
+	// splashStatus (issue 169) queues FetchStage events reported by
 	// CollectAllProgress/CollectRemoteProgress below, so the splash loop's
 	// paintSplash (which runs on its own goroutine/timer, not renderFrame's)
-	// can render it as the splash's single status line. It is written from
-	// renderFrame's fetch goroutine and read from the splash loop, so it is
-	// guarded by its own mutex rather than reusing outMu/secLock, which guard
-	// unrelated state.
+	// can pace them onto the splash's single status line via
+	// splashStatusAdvance/splashStatusMinDisplay. It is written from
+	// renderFrame's fetch goroutine and read/advanced from the splash loop,
+	// so it is guarded by its own mutex rather than reusing outMu/secLock,
+	// which guard unrelated state.
 	var splashStatusMu sync.Mutex
-	var splashStatusSource string
-	var splashStatusStage FetchStage
-	var splashStatusHave bool
+	var splashStatus splashStatusState
 	reportFetchStage := func(source string, stage FetchStage) {
 		splashStatusMu.Lock()
-		splashStatusSource = source
-		splashStatusStage = stage
-		splashStatusHave = true
+		splashStatus.queue = append(splashStatus.queue, splashStatusEvent{source: source, stage: stage})
 		splashStatusMu.Unlock()
 	}
 
-	renderFrame := func() {
+	// fetchAndUpdate does renderFrame's live fetch and lastSummary/lastRates
+	// update but stops short of draw(). Split out so the startup path below
+	// can run the fetch in the background while the splash is still showing,
+	// without the fetch's completion instantly overwriting the splash mid-
+	// status-queue-drain (see splashLoop's fetchDone/drained handling) --
+	// renderFrame (fetchAndUpdate+draw, used by every other call site) still
+	// paints immediately, since only the very first startup fetch has a
+	// splash to coordinate with.
+	fetchAndUpdate := func() {
 		secLock.Lock()
 		targetHost := activeHost
 		procRequested := sec.Processes
@@ -2170,25 +2232,33 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 
 		lastSummary = applyStaleQuota(fresh, lastSummary)
 		lastRates = tracker.update(lastSummary)
+	}
+
+	renderFrame := func() {
+		fetchAndUpdate()
 		draw()
 	}
 
-	// Startup splash (issue 164): renderFrame()'s first call blocks on a live
-	// network fetch (CollectAll/CollectRemote), which used to leave the
-	// alt-screen blank for the whole fetch. Run that first call in the
-	// background and paint an animated splash in its place until it
-	// finishes, so the terminal never sits empty. Esc aborts only this wait
-	// (splashSkip, handled by the tty-reader goroutine above via
-	// dispatchSplashKey) -- it freezes the splash rather than quitting, and
-	// the fetch keeps running in its goroutine regardless. Only one of this
-	// goroutine and the splash loop below ever touches lastSummary/
-	// lastProcs/currentHost/draw() at a time: the goroutine owns them
-	// exclusively until firstFrameDone closes, then this goroutine resumes
-	// exclusive ownership for the rest of the run.
+	// Startup splash (issue 164): the first fetch (CollectAll/CollectRemote)
+	// used to leave the alt-screen blank for its whole duration. Run it in
+	// the background via fetchAndUpdate (renderFrame minus its draw() -- see
+	// above) and paint an animated splash in its place until it finishes, so
+	// the terminal never sits empty. draw() itself is deliberately deferred
+	// to the splash loop below (not called here) so a fetch that finishes
+	// before the status queue has been fully paced through (issue 169) can't
+	// have its draw() silently overwritten by a subsequent splash repaint --
+	// see the splashLoop comment below. Esc aborts only the wait (splashSkip,
+	// handled by the tty-reader goroutine above via dispatchSplashKey) -- it
+	// freezes the splash rather than quitting, and the fetch keeps running
+	// in its goroutine regardless. Only one of this goroutine and the splash
+	// loop below ever touches lastSummary/lastProcs/currentHost at a time:
+	// the goroutine owns them exclusively until firstFrameDone closes, then
+	// the splash loop (and, after it exits, the rest of this function)
+	// resumes exclusive ownership for the rest of the run.
 	firstFrameDone := make(chan struct{})
 	go func() {
 		defer close(firstFrameDone)
-		renderFrame()
+		fetchAndUpdate()
 	}()
 
 	// splashEstimate/splashHaveEstimate (issue 168) are loaded once, before
@@ -2201,47 +2271,79 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	// mid-fetch anyway.
 	splashEstimate, splashHaveEstimate := loadFetchDurationEstimate(homeDir, fetchDurationKindForHost(configuredHost))
 
-	paintSplash := func(elapsed time.Duration, animate bool) {
+	// paintSplash advances the status queue on splashStatusMinDisplay pacing,
+	// paints the frame, and reports whether the queue is now drained (see
+	// splashStatusDrained) so the splash loop below knows when it's safe to
+	// stop waiting once the underlying fetch has finished.
+	paintSplash := func(elapsed time.Duration, animate bool) (drained bool) {
 		cols, rows := terminalSize(out)
+		now := time.Now()
 		splashStatusMu.Lock()
-		statusSource, statusStage, statusHave := splashStatusSource, splashStatusStage, splashStatusHave
+		splashStatus = splashStatusAdvance(splashStatus, now, splashStatusMinDisplay)
+		statusText := splashStatusLine(splashStatus.current.source, splashStatus.current.stage, splashStatus.have)
+		drained = splashStatusDrained(splashStatus, now, splashStatusMinDisplay)
 		splashStatusMu.Unlock()
-		statusText := splashStatusLine(statusSource, statusStage, statusHave)
 		frame := buildSplashFrame(cols, rows, elapsed, animate, splashEstimate, splashHaveEstimate, statusText)
 		outMu.Lock()
 		frame.paint(out)
 		outMu.Unlock()
+		return drained
 	}
 
 	splashStart := time.Now()
 	splashTicker := time.NewTicker(splashFrameInterval)
 	paintSplash(0, true)
+	// fetchDone latches true once firstFrameDone fires; firstFrameDoneCh is
+	// then nilled so the select below stops selecting an already-closed
+	// channel every iteration. The loop keeps ticking/painting after that
+	// until the status queue drains (splashStatusDrained), so a fetch that
+	// completes faster than its own events can be paced through still lets
+	// each one get its splashStatusMinDisplay turn instead of jumping
+	// straight to whichever event happened to be latest.
+	fetchDone := false
+	firstFrameDoneCh := firstFrameDone
 splashLoop:
 	for {
 		select {
 		case <-sigCtx.Done():
 			splashTicker.Stop()
 			return nil
-		case <-firstFrameDone:
-			splashTicker.Stop()
-			splashActive.Store(false)
-			break splashLoop
+		case <-firstFrameDoneCh:
+			fetchDone = true
+			firstFrameDoneCh = nil
+			// No queued events yet (e.g. the whole fetch was served from
+			// cache with no live sub-fetch to report) -- exit immediately
+			// rather than waiting for the next splashTicker.C tick.
+			if paintSplash(time.Since(splashStart), true) {
+				splashTicker.Stop()
+				splashActive.Store(false)
+				draw()
+				break splashLoop
+			}
 		case <-splashSkip:
 			splashTicker.Stop()
 			splashActive.Store(false)
 			paintSplash(time.Since(splashStart), false)
 			// The fetch is already running in the goroutine above; wait for
 			// it (or a quit) without repainting, since lastSummary et al.
-			// are its exclusively-owned state until it finishes and calls
-			// draw() itself.
+			// are its exclusively-owned state until it finishes. Esc means
+			// "stop waiting", so unlike the normal exit below, draw() fires
+			// the instant the fetch is ready -- no queue-drain grace period.
 			select {
 			case <-firstFrameDone:
+				draw()
 			case <-sigCtx.Done():
 				return nil
 			}
 			break splashLoop
 		case <-splashTicker.C:
-			paintSplash(time.Since(splashStart), true)
+			drained := paintSplash(time.Since(splashStart), true)
+			if fetchDone && drained {
+				splashTicker.Stop()
+				splashActive.Store(false)
+				draw()
+				break splashLoop
+			}
 		}
 	}
 
