@@ -41,13 +41,10 @@ lifetime, not a persistent log file.
 - **Styling stays spec-driven**, per this project's established convention (issue 164/168 both
   reused `spec/colors.yaml`'s named colors via `ansiWrap` rather than hardcoding ANSI codes) — reuse
   `ansiWrap`/existing named colors for the status line's styling; don't hardcode new escape codes.
-- Scope note in the user's request: "and that also to the agent" — unclear whether this means (a)
-  the same stage-by-stage status reporting should also be visible/logged for agent-driven callers
-  of `harnez usage` (non-interactive/`--summary` output, or agents invoking the CLI programmatically
-  rather than a human watching `--watch`), or (b) something else entirely (transcription artifact —
-  this user dictates via voice-to-text, see project ASR guidance). **Clarify with the user before
-  implementing** whether a non-interactive/agent-facing surface for this same status stream is
-  in scope for this ticket or a separate follow-up.
+- User confirmed "and that also to the agent" was shorthand for "hand this ticket off to a dev
+  agent" (ASR/dictation phrasing), not a request for a non-interactive/agent-facing status surface.
+  Scope stays limited to the interactive `--watch` splash — no `--summary`/programmatic-caller
+  changes needed.
 
 ## 3. Implementation & Verification Plan
 
