@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -248,7 +249,7 @@ func TestCollectAllRunsCollectorsConcurrently(t *testing.T) {
 	client := &http.Client{Transport: &sleepyRoundTripper{delay: delay}}
 
 	start := time.Now()
-	collectAll(context.Background(), homeDir, client, false)
+	collectAll(context.Background(), homeDir, client, false, nil)
 	elapsed := time.Since(start)
 
 	// Generous upper bound: well under the ~150ms a sequential run of
@@ -257,5 +258,61 @@ func TestCollectAllRunsCollectorsConcurrently(t *testing.T) {
 	const maxElapsed = 120 * time.Millisecond
 	if elapsed >= maxElapsed {
 		t.Errorf("expected collectAll to run its 3 collectors concurrently (~%s total), took %s (>= %s, looks sequential)", delay, elapsed, maxElapsed)
+	}
+}
+
+// TestCollectAllProgressReportsStartedAndTerminalStageForEverySource is issue
+// 169's core contract for the fetch-stage-reporting mechanism: with no prior
+// cached snapshot (so every one of the three per-agent collectors actually
+// runs live), CollectAllProgress's callback must see a FetchStarted followed
+// by exactly one terminal stage (FetchDone or FetchFailed) for each of
+// "claude", "agy", "codex" -- never zero events (the splash would show
+// nothing) and never more than one terminal event per source (the splash's
+// "only the latest event" contract assumes a clean start->terminal sequence
+// per source, not a source flip-flopping).
+func TestCollectAllProgressReportsStartedAndTerminalStageForEverySource(t *testing.T) {
+	homeDir := t.TempDir() // empty: no creds/auth anywhere, so every collector
+	// takes its fast "not installed" path rather than a real network call.
+	client := &http.Client{Transport: &sleepyRoundTripper{delay: 0}}
+
+	var mu sync.Mutex
+	started := map[string]int{}
+	terminal := map[string]int{}
+
+	progress := func(source string, stage FetchStage) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch stage {
+		case FetchStarted:
+			started[source]++
+		case FetchDone, FetchFailed:
+			terminal[source]++
+		}
+	}
+
+	CollectAllProgress(context.Background(), homeDir, client, progress)
+
+	for _, source := range []string{"claude", "agy", "codex"} {
+		if started[source] != 1 {
+			t.Errorf("expected exactly 1 FetchStarted for %q, got %d", source, started[source])
+		}
+		if terminal[source] != 1 {
+			t.Errorf("expected exactly 1 terminal (done/failed) event for %q, got %d", source, terminal[source])
+		}
+	}
+}
+
+// TestCollectAllProgressNilCallbackIsNoop checks that a nil FetchProgressFunc
+// (what every non-watch caller -- CollectAll, CollectAllLive, --summary,
+// RenderSummary, the collector daemon -- passes) never panics and produces
+// the same UsageSummary shape as before this ticket's change, i.e. the
+// progress-reporting mechanism is purely additive.
+func TestCollectAllProgressNilCallbackIsNoop(t *testing.T) {
+	homeDir := t.TempDir()
+	client := &http.Client{Transport: &sleepyRoundTripper{delay: 0}}
+
+	summary := CollectAllProgress(context.Background(), homeDir, client, nil)
+	if len(summary.Agents) != 3 {
+		t.Fatalf("expected 3 agents in summary, got %d", len(summary.Agents))
 	}
 }

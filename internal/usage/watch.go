@@ -1799,6 +1799,28 @@ func centerLine(s string, width int) string {
 	return strings.Repeat(" ", pad) + s
 }
 
+// splashStatusLine renders one FetchStage event (issue 169) as the single
+// status line shown under the startup splash's bar, reporting which
+// per-source fetch CollectAll/CollectRemote most recently started, finished,
+// or failed. have is false before the first event has arrived (e.g. the
+// whole fetch is being served from a fresh cache with no live sub-fetch at
+// all), in which case the caller renders no status line.
+func splashStatusLine(source string, stage FetchStage, have bool) string {
+	if !have || source == "" {
+		return ""
+	}
+	switch stage {
+	case FetchStarted:
+		return fmt.Sprintf("fetching %s...", source)
+	case FetchDone:
+		return fmt.Sprintf("%s done", source)
+	case FetchFailed:
+		return fmt.Sprintf("%s failed", source)
+	default:
+		return ""
+	}
+}
+
 // buildSplashFrame paints the startup splash (issue 164): a spinner, an
 // indeterminate progress bar (rendered via internal/rograph, the same bar
 // renderer the rest of the dashboard uses), and a short hint line, centered
@@ -1818,7 +1840,13 @@ func centerLine(s string, width int) string {
 // RunWatchWithOptions before the splash loop starts; they drive
 // splashBarPercent's determinate-vs-sweep choice. See splashBarPercent for
 // the calculation itself.
-func buildSplashFrame(cols, rows int, elapsed time.Duration, animate bool, estimate time.Duration, haveEstimate bool) screenFrame {
+//
+// statusText (issue 169) is the latest rendered FetchStage event (see
+// splashStatusLine) -- e.g. "fetching codex..." then "codex done" -- shown as
+// exactly one line under the bar, or omitted entirely when empty (no event
+// has arrived yet). It deliberately carries only the single latest event,
+// never a scrolling history, per the ticket's "single line" scope.
+func buildSplashFrame(cols, rows int, elapsed time.Duration, animate bool, estimate time.Duration, haveEstimate bool, statusText string) screenFrame {
 	spinner := splashSpinnerGlyph(elapsed)
 	hint := "Esc to skip"
 	if !animate {
@@ -1837,7 +1865,11 @@ func buildSplashFrame(cols, rows int, elapsed time.Duration, animate bool, estim
 	title := ansiWrap("bold", spinner+"  harnez usage")
 	hintLine := ansiWrap("dim-grey", hint)
 
-	content := []string{title, "", bar, "", hintLine}
+	content := []string{title, "", bar}
+	if animate && statusText != "" {
+		content = append(content, "", ansiWrap("dim-grey", statusText))
+	}
+	content = append(content, "", hintLine)
 	top := (rows - len(content)) / 2
 	if top < 0 {
 		top = 0
@@ -2086,6 +2118,25 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		outMu.Unlock()
 	}
 
+	// splashStatus (issue 169) holds the latest FetchStage event reported by
+	// CollectAllProgress/CollectRemoteProgress below, so the splash loop's
+	// paintSplash (which runs on its own goroutine/timer, not renderFrame's)
+	// can render it as the splash's single status line. It is written from
+	// renderFrame's fetch goroutine and read from the splash loop, so it is
+	// guarded by its own mutex rather than reusing outMu/secLock, which guard
+	// unrelated state.
+	var splashStatusMu sync.Mutex
+	var splashStatusSource string
+	var splashStatusStage FetchStage
+	var splashStatusHave bool
+	reportFetchStage := func(source string, stage FetchStage) {
+		splashStatusMu.Lock()
+		splashStatusSource = source
+		splashStatusStage = stage
+		splashStatusHave = true
+		splashStatusMu.Unlock()
+	}
+
 	renderFrame := func() {
 		secLock.Lock()
 		targetHost := activeHost
@@ -2097,10 +2148,10 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		var fresh UsageSummary
 		if targetHost != "" {
 			var procRes *AgentProcessCount
-			fresh, procRes, _ = CollectRemote(sigCtx, targetHost, procRequested)
+			fresh, procRes, _ = CollectRemoteProgress(sigCtx, targetHost, procRequested, reportFetchStage)
 			lastProcs = procRes
 		} else {
-			fresh = CollectAll(sigCtx, homeDir, client)
+			fresh = CollectAllProgress(sigCtx, homeDir, client, reportFetchStage)
 			lastProcs = nil
 			if historyDir != "" {
 				// Best-effort: a missed append shouldn't interrupt the dashboard.
@@ -2152,7 +2203,11 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 
 	paintSplash := func(elapsed time.Duration, animate bool) {
 		cols, rows := terminalSize(out)
-		frame := buildSplashFrame(cols, rows, elapsed, animate, splashEstimate, splashHaveEstimate)
+		splashStatusMu.Lock()
+		statusSource, statusStage, statusHave := splashStatusSource, splashStatusStage, splashStatusHave
+		splashStatusMu.Unlock()
+		statusText := splashStatusLine(statusSource, statusStage, statusHave)
+		frame := buildSplashFrame(cols, rows, elapsed, animate, splashEstimate, splashHaveEstimate, statusText)
 		outMu.Lock()
 		frame.paint(out)
 		outMu.Unlock()

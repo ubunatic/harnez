@@ -1657,8 +1657,8 @@ func TestSplashBarPercentDeterminateFillsAndCaps(t *testing.T) {
 // variants fit within the requested terminal geometry.
 func TestBuildSplashFrameAnimateVsFrozen(t *testing.T) {
 	cols, rows := 80, 24
-	animated := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false)
-	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false, 0, false)
+	animated := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "")
+	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false, 0, false, "")
 
 	if len(animated.lines) > rows || len(frozen.lines) > rows {
 		t.Fatalf("expected splash frames to fit within %d rows, got %d/%d", rows, len(animated.lines), len(frozen.lines))
@@ -1676,6 +1676,67 @@ func TestBuildSplashFrameAnimateVsFrozen(t *testing.T) {
 	}
 	if strings.Contains(stripANSI(frozenText), "Esc to skip") {
 		t.Fatalf("expected the frozen (post-skip) splash to drop the Esc hint, got:\n%s", stripANSI(frozenText))
+	}
+}
+
+// TestSplashStatusLineFormatsEachStage checks splashStatusLine's (issue 169)
+// pure text rendering for each FetchStage, and that it renders nothing at
+// all before the first event has arrived (have=false) or for an empty
+// source -- both cases the splash treats as "no status line yet" rather than
+// rendering a blank/garbled line.
+func TestSplashStatusLineFormatsEachStage(t *testing.T) {
+	if got := splashStatusLine("codex", FetchStarted, false); got != "" {
+		t.Fatalf("expected no status line before the first event, got %q", got)
+	}
+	if got := splashStatusLine("", FetchStarted, true); got != "" {
+		t.Fatalf("expected no status line for an empty source, got %q", got)
+	}
+	if got := splashStatusLine("codex", FetchStarted, true); !strings.Contains(got, "codex") || !strings.Contains(got, "fetching") {
+		t.Fatalf("expected FetchStarted status line to mention 'fetching' and the source, got %q", got)
+	}
+	if got := splashStatusLine("codex", FetchDone, true); !strings.Contains(got, "codex") || !strings.Contains(got, "done") {
+		t.Fatalf("expected FetchDone status line to mention 'done' and the source, got %q", got)
+	}
+	if got := splashStatusLine("codex", FetchFailed, true); !strings.Contains(got, "codex") || !strings.Contains(got, "failed") {
+		t.Fatalf("expected FetchFailed status line to mention 'failed' and the source, got %q", got)
+	}
+}
+
+// TestBuildSplashFrameStatusLine checks issue 169's splash status line: it
+// appears, styled, when animating with non-empty statusText; it stays out of
+// the frame entirely both when statusText is empty (no event yet) and once
+// the splash has frozen (animate=false, post-Esc), matching how the hint
+// line already changes text on freeze -- the fetch goroutine that would keep
+// producing new stage events still owns lastSummary/lastProcs exclusively at
+// that point, so nothing new should render.
+func TestBuildSplashFrameStatusLine(t *testing.T) {
+	cols, rows := 80, 24
+
+	withStatus := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "fetching codex...")
+	withStatusText := stripANSI(strings.Join(withStatus.lines, "\n"))
+	if !strings.Contains(withStatusText, "fetching codex...") {
+		t.Fatalf("expected the animating splash to show the status line, got:\n%s", withStatusText)
+	}
+
+	noStatus := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "")
+	noStatusText := stripANSI(strings.Join(noStatus.lines, "\n"))
+	if strings.Contains(noStatusText, "fetching") {
+		t.Fatalf("expected no status line when statusText is empty, got:\n%s", noStatusText)
+	}
+
+	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false, 0, false, "fetching codex...")
+	frozenText := stripANSI(strings.Join(frozen.lines, "\n"))
+	if strings.Contains(frozenText, "fetching codex...") {
+		t.Fatalf("expected the frozen (post-skip) splash to drop the status line, got:\n%s", frozenText)
+	}
+
+	for _, line := range withStatus.lines {
+		if visLen(line) > cols {
+			t.Fatalf("expected splash frame lines to fit within %d cols, got %q (%d)", cols, line, visLen(line))
+		}
+	}
+	if len(withStatus.lines) > rows {
+		t.Fatalf("expected splash frame to fit within %d rows, got %d", rows, len(withStatus.lines))
 	}
 }
 

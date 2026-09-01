@@ -20,6 +20,36 @@ type remoteUsagePayload struct {
 // If SSH fails or harnez is unavailable remotely, it returns a fallback UsageSummary with
 // QuotaFetchError set, along with the error.
 func CollectRemote(ctx context.Context, host string, includeProcs bool) (UsageSummary, *AgentProcessCount, error) {
+	return collectRemote(ctx, host, includeProcs, nil)
+}
+
+// CollectRemoteProgress is CollectRemote with an additional FetchProgressFunc
+// (issue 169). Unlike CollectAllProgress's real per-source fan-out, a remote
+// fetch is one opaque SSH round trip (there is no per-source breakdown to
+// observe from here), so it reports exactly one FetchStarted immediately
+// followed by one FetchDone/FetchFailed once the SSH call returns -- enough
+// for the `--watch` startup splash to show "fetching <host>..." while the
+// call is in flight. progress may be nil (same behavior as CollectRemote).
+func CollectRemoteProgress(ctx context.Context, host string, includeProcs bool, progress FetchProgressFunc) (UsageSummary, *AgentProcessCount, error) {
+	return collectRemote(ctx, host, includeProcs, progress)
+}
+
+func collectRemote(ctx context.Context, host string, includeProcs bool, progress FetchProgressFunc) (UsageSummary, *AgentProcessCount, error) {
+	if progress != nil {
+		progress(host, FetchStarted)
+	}
+	summary, procs, err := doCollectRemote(ctx, host, includeProcs)
+	if progress != nil {
+		if err != nil {
+			progress(host, FetchFailed)
+		} else {
+			progress(host, FetchDone)
+		}
+	}
+	return summary, procs, err
+}
+
+func doCollectRemote(ctx context.Context, host string, includeProcs bool) (UsageSummary, *AgentProcessCount, error) {
 	host = strings.TrimSpace(host)
 	if host == "" {
 		err := fmt.Errorf("ssh host cannot be empty")

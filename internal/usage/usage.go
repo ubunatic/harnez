@@ -15,6 +15,31 @@ import (
 	"ubunatic.com/harnez/internal/rograph"
 )
 
+// FetchStage reports one per-source fetch's lifecycle during
+// CollectAll/CollectAllProgress and CollectRemote/CollectRemoteProgress
+// (issue 169). It exists purely so a live caller (the `--watch` startup
+// splash) can render a "what's happening right now" status line -- it has no
+// effect on the fetch itself and non-watch callers never see it.
+type FetchStage int
+
+const (
+	// FetchStarted is reported just before a source's live collect begins.
+	FetchStarted FetchStage = iota
+	// FetchDone is reported once a source's collect returns without error.
+	FetchDone
+	// FetchFailed is reported once a source's collect returns with a quota
+	// fetch error (AgentUsage.QuotaFetchError set).
+	FetchFailed
+)
+
+// FetchProgressFunc is an optional callback invoked as each per-source fetch
+// CollectAll/CollectRemote runs reports its stage transitions. source is a
+// short identifier (e.g. "claude", "codex", "agy", or a remote host name).
+// A nil FetchProgressFunc is always safe to pass -- CollectAll/CollectRemote
+// simply skip the callback, so existing non-watch callers (--summary,
+// RenderSummary, the collector daemon, etc.) pay zero cost.
+type FetchProgressFunc func(source string, stage FetchStage)
+
 // CollectAll gathers usage, quotas, and state from all supported agents. It
 // reads each agent's snapshot from the shared collector-daemon cache first
 // (see StateDir) and only falls back to a live collect for agents whose
@@ -24,7 +49,16 @@ import (
 // when the daemon has never run: every read simply falls back to live
 // collection exactly as before issue 082.
 func CollectAll(ctx context.Context, homeDir string, client *http.Client) UsageSummary {
-	return collectAll(ctx, homeDir, client, true)
+	return collectAll(ctx, homeDir, client, true, nil)
+}
+
+// CollectAllProgress is CollectAll with an additional FetchProgressFunc
+// (issue 169) reporting each per-source fetch's started/done/failed stage as
+// it happens, so a live caller (the `--watch` startup splash) can render a
+// status line for what's currently in flight. progress may be nil (same
+// behavior as CollectAll).
+func CollectAllProgress(ctx context.Context, homeDir string, client *http.Client, progress FetchProgressFunc) UsageSummary {
+	return collectAll(ctx, homeDir, client, true, progress)
 }
 
 // CollectAllLive always runs the live collectors, ignoring any cached
@@ -32,10 +66,10 @@ func CollectAll(ctx context.Context, homeDir string, client *http.Client) UsageS
 // daemon never just reads back its own (possibly still-fresh) cache instead
 // of actually refreshing it.
 func CollectAllLive(ctx context.Context, homeDir string, client *http.Client) UsageSummary {
-	return collectAll(ctx, homeDir, client, false)
+	return collectAll(ctx, homeDir, client, false, nil)
 }
 
-func collectAll(ctx context.Context, homeDir string, client *http.Client, useCache bool) UsageSummary {
+func collectAll(ctx context.Context, homeDir string, client *http.Client, useCache bool, progress FetchProgressFunc) UsageSummary {
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
@@ -44,9 +78,43 @@ func collectAll(ctx context.Context, homeDir string, client *http.Client, useCac
 	agyDir := filepath.Join(homeDir, ".gemini", "antigravity-cli")
 	codexDir := filepath.Join(homeDir, ".codex")
 
-	collectClaude := func() AgentUsage { return CollectClaude(ctx, claudeDir, client) }
-	collectAGY := func() AgentUsage { return CollectAGY(ctx, agyDir, client) }
-	collectCodex := func() AgentUsage { return CollectCodex(ctx, codexDir, client) }
+	// reportDone reports FetchDone/FetchFailed based on whether the
+	// collected AgentUsage carries a quota fetch error -- the same signal
+	// RenderText already surfaces as "quota: unavailable (...)".
+	reportDone := func(source string, u AgentUsage) {
+		if progress == nil {
+			return
+		}
+		if u.QuotaFetchError != "" {
+			progress(source, FetchFailed)
+		} else {
+			progress(source, FetchDone)
+		}
+	}
+	reportStarted := func(source string) {
+		if progress != nil {
+			progress(source, FetchStarted)
+		}
+	}
+
+	collectClaude := func() AgentUsage {
+		reportStarted("claude")
+		u := CollectClaude(ctx, claudeDir, client)
+		reportDone("claude", u)
+		return u
+	}
+	collectAGY := func() AgentUsage {
+		reportStarted("agy")
+		u := CollectAGY(ctx, agyDir, client)
+		reportDone("agy", u)
+		return u
+	}
+	collectCodex := func() AgentUsage {
+		reportStarted("codex")
+		u := CollectCodex(ctx, codexDir, client)
+		reportDone("codex", u)
+		return u
+	}
 
 	var claudeUsage, agyUsage, codexUsage AgentUsage
 	if useCache {
