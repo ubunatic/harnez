@@ -1,6 +1,6 @@
 # 153 — Assess whether command-tree placement should be spec-driven
 
-**Status**: Open
+**Status**: Closed — assessed, not building (see Assessment below)
 **Priority**: P3 (Low)
 **Severity**: N/A (assessment)
 **Category**: CLI Design / Research
@@ -57,6 +57,41 @@ A short written assessment (in this ticket or a linked note) covering: current t
 whether reorganization is warranted now, and a recommendation on whether a `spec/commands.yaml`-style
 mechanism is worth building — or whether ad hoc placement + occasional manual moves (like [[152]])
 is sufficient at this project's current scale.
+
+## Assessment (2026-09-01)
+
+**Current tree inventory** (`cmd/harnez/main.go` + per-command files): 19 top-level commands
+today (the ticket's "17" is stale) — `apply, diff, scan-docs, clean, status, usage, load-stream,
+init, assess, agent-collector, distill, mode, release, statusline, rate, exec, stats, index,
+repo-status`. Two already nest: `usage history {timeline, fetch, record, stats}` and
+`distill hook` / `exec hook`.
+
+**1. Is the tree actually a problem?** Only one clear grouping candidate exists today:
+`agent-collector` vs. `usage`, already filed and scoped as [[152]]. `rate`, `stats`, and `exec`
+share a loose "telemetry" theme but each has a distinct enough verb (record a score / aggregate
+scores / run+auto-rate a wrapped command) that forcing them under one parent now would trade a
+scannable flat list for a speculative grouping with no second concrete instance driving it. 19
+top-level entries in `harnez --help` is still short enough to scan in one screen.
+
+**2. General grouping principle**: sound as a rule of thumb, but the project doesn't yet have
+enough natural second concerns to reorganize around beyond `usage` (which already absorbed
+`history` and is slated to absorb `agent-collector` per [[152]]). Applying it further today would
+be reorganizing for a principle's sake, not because a specific pain point exists.
+
+**3. Should placement be spec-driven (`spec/commands.yaml`)?** No. The actual source of truth for
+placement is already centralized to two call sites — `usageCmd.AddCommand(historyCmd)` and the
+single `root.AddCommand(...)` call in `main.go:528` — so there is no drift risk a spec layer would
+close; a YAML file would duplicate that list without removing the `cobra.Command{}` wiring it
+describes, adding indirection (spec ↔ code sync, plus Cobra's builder style doesn't lend itself to
+being generated from data) for no consistency win at this scale. This differs from
+`spec/actions.yaml`/`colors.yaml`, which are sources of truth for data consumed by multiple code
+paths — the command tree has exactly one consumer (`main.go`'s own wiring).
+
+**Recommendation**: Drop this ticket. Don't build a spec-driven placement mechanism. Keep placing
+commands ad hoc, with manual reorganization on the rare occasion two commands' concerns visibly
+overlap (as with [[152]]). Revisit only if the top-level count grows well past today's 19 *and*
+multiple concrete overlap cases (not just a shared theme) are found in one pass — that would be
+the actual signal that ad hoc placement stopped scaling.
 
 ## Out of Scope
 
