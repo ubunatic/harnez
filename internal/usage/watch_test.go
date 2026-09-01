@@ -1600,20 +1600,54 @@ func TestSplashSpinnerGlyphCyclesThroughNamedSequence(t *testing.T) {
 	}
 }
 
-// TestSplashBarPercentSweepsAndReturnsToZero checks the indeterminate bar's
-// triangle wave stays within [0,100] and returns to 0 once per period,
-// rather than climbing monotonically like a real progress percentage would
-// (there is no known total to measure the pending fetch against).
-func TestSplashBarPercentSweepsAndReturnsToZero(t *testing.T) {
-	if got := splashBarPercent(0); got != 0 {
-		t.Fatalf("expected splashBarPercent(0) == 0, got %v", got)
+// TestSplashBarPercentSweepFallback checks that, with no persisted estimate
+// (haveEstimate=false -- a true cold start, issue 168), splashBarPercent
+// falls back to the original issue-164 indeterminate triangle wave: stays
+// within [0,100] and returns to 0 once per splashBarSweepPeriod, rather than
+// climbing monotonically like a real progress percentage would.
+func TestSplashBarPercentSweepFallback(t *testing.T) {
+	if got := splashBarPercent(0, 0, false); got != 0 {
+		t.Fatalf("expected splashBarPercent(0, no estimate) == 0, got %v", got)
 	}
-	if got := splashBarPercent(splashBarSweepPeriod); got != 0 {
+	if got := splashBarPercent(splashBarSweepPeriod, 0, false); got != 0 {
 		t.Fatalf("expected splashBarPercent to return to 0 after a full period, got %v", got)
 	}
-	mid := splashBarPercent(splashBarSweepPeriod / 4)
+	mid := splashBarPercent(splashBarSweepPeriod/4, 0, false)
 	if mid <= 0 || mid >= 100 {
 		t.Fatalf("expected a quarter-period sample strictly between 0 and 100, got %v", mid)
+	}
+	// A zero/negative estimate is treated the same as "no estimate" even if
+	// haveEstimate is mistakenly true -- never divide by a non-positive
+	// duration.
+	if got := splashBarPercent(splashBarSweepPeriod/4, 0, true); got != mid {
+		t.Fatalf("expected a zero estimate to fall back to the sweep like haveEstimate=false, got %v want %v", got, mid)
+	}
+}
+
+// TestSplashBarPercentDeterminateFillsAndCaps checks issue 168's core
+// contract once a duration estimate exists: the bar climbs monotonically
+// with elapsed/estimate and never reaches/exceeds splashBarCapPercent, so it
+// can never visually "finish" before the real fetch actually completes.
+func TestSplashBarPercentDeterminateFillsAndCaps(t *testing.T) {
+	estimate := 4 * time.Second
+
+	if got := splashBarPercent(0, estimate, true); got != 0 {
+		t.Fatalf("expected splashBarPercent(0, estimate) == 0, got %v", got)
+	}
+	quarter := splashBarPercent(estimate/4, estimate, true)
+	if want := 25.0; quarter != want {
+		t.Fatalf("expected 25%% at a quarter of the estimate, got %v", quarter)
+	}
+	half := splashBarPercent(estimate/2, estimate, true)
+	if half <= quarter {
+		t.Fatalf("expected the bar to climb monotonically: half=%v not > quarter=%v", half, quarter)
+	}
+
+	if got := splashBarPercent(estimate, estimate, true); got != splashBarCapPercent {
+		t.Fatalf("expected the bar to be capped at %v once elapsed reaches the estimate, got %v", splashBarCapPercent, got)
+	}
+	if got := splashBarPercent(10*estimate, estimate, true); got != splashBarCapPercent {
+		t.Fatalf("expected the bar to stay capped at %v well past the estimate, got %v", splashBarCapPercent, got)
 	}
 }
 
@@ -1623,8 +1657,8 @@ func TestSplashBarPercentSweepsAndReturnsToZero(t *testing.T) {
 // variants fit within the requested terminal geometry.
 func TestBuildSplashFrameAnimateVsFrozen(t *testing.T) {
 	cols, rows := 80, 24
-	animated := buildSplashFrame(cols, rows, 3*splashFrameInterval, true)
-	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false)
+	animated := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false)
+	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false, 0, false)
 
 	if len(animated.lines) > rows || len(frozen.lines) > rows {
 		t.Fatalf("expected splash frames to fit within %d rows, got %d/%d", rows, len(animated.lines), len(frozen.lines))

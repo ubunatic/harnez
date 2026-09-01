@@ -1739,11 +1739,44 @@ func splashSpinnerGlyph(elapsed time.Duration) string {
 	return frames[idx]
 }
 
-// splashBarPercent sweeps 0-100-0 over splashBarSweepPeriod so the splash
-// bar reads as "indeterminate work in progress" rather than a real quota
-// percentage -- there is no known total to measure the pending fetch
-// against.
-func splashBarPercent(elapsed time.Duration) float64 {
+// splashBarCapPercent bounds the determinate splash bar (issue 168) below
+// 100% until the fetch it is tracking actually completes, so the bar never
+// visually "finishes" and then appears to stall while the dashboard is
+// still waiting on real data.
+const splashBarCapPercent = 95.0
+
+// splashBarPercent computes the startup splash bar's fill percentage.
+//
+// When haveEstimate is true, it is determinate: pct = 100 * elapsed /
+// estimate, capped at splashBarCapPercent, so the bar fills monotonically
+// left-to-right and reaches ~95% around when the tracked fetch
+// (CollectAll/CollectRemote) is expected to finish -- estimate comes from
+// this project's own persisted fetch-duration history (fetchdurations.go),
+// not a guess.
+//
+// When haveEstimate is false (a true cold start: no prior sample exists yet
+// for this fetch kind), it falls back to the original issue-164 sweep --
+// 0-100-0 over splashBarSweepPeriod -- reading as "indeterminate work in
+// progress" rather than fabricating a determinate bar with no real basis.
+func splashBarPercent(elapsed, estimate time.Duration, haveEstimate bool) float64 {
+	if !haveEstimate || estimate <= 0 {
+		return splashBarPercentSweep(elapsed)
+	}
+	pct := 100 * float64(elapsed) / float64(estimate)
+	switch {
+	case pct < 0:
+		return 0
+	case pct > splashBarCapPercent:
+		return splashBarCapPercent
+	default:
+		return pct
+	}
+}
+
+// splashBarPercentSweep sweeps 0-100-0 over splashBarSweepPeriod -- the
+// original issue-164 indeterminate bar, kept as splashBarPercent's
+// no-estimate-yet fallback.
+func splashBarPercentSweep(elapsed time.Duration) float64 {
 	phase := elapsed % splashBarSweepPeriod
 	half := splashBarSweepPeriod / 2
 	if phase < half {
@@ -1779,7 +1812,13 @@ func centerLine(s string, width int) string {
 // lastProcs/currentHost, which the still-running background fetch goroutine
 // owns exclusively until it finishes and calls draw() itself; painting the
 // live dashboard from two goroutines at once would race on those vars.
-func buildSplashFrame(cols, rows int, elapsed time.Duration, animate bool) screenFrame {
+//
+// estimate/haveEstimate (issue 168) are the persisted fetch-duration
+// estimate for the fetch kind this splash is waiting on, loaded once by
+// RunWatchWithOptions before the splash loop starts; they drive
+// splashBarPercent's determinate-vs-sweep choice. See splashBarPercent for
+// the calculation itself.
+func buildSplashFrame(cols, rows int, elapsed time.Duration, animate bool, estimate time.Duration, haveEstimate bool) screenFrame {
 	spinner := splashSpinnerGlyph(elapsed)
 	hint := "Esc to skip"
 	if !animate {
@@ -1789,7 +1828,7 @@ func buildSplashFrame(cols, rows int, elapsed time.Duration, animate bool) scree
 
 	barOpts := watchBarOptions()
 	barOpts.Width = splashBarWidth
-	pct := splashBarPercent(elapsed)
+	pct := splashBarPercent(elapsed, estimate, haveEstimate)
 	if !animate {
 		pct = 0
 	}
@@ -2054,6 +2093,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		secLock.Unlock()
 
 		currentHost = targetHost
+		fetchStart := time.Now()
 		var fresh UsageSummary
 		if targetHost != "" {
 			var procRes *AgentProcessCount
@@ -2066,6 +2106,15 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				// Best-effort: a missed append shouldn't interrupt the dashboard.
 				_ = AppendHistory(historyDir, fresh)
 			}
+		}
+		// Feed this fetch's wall-clock duration into the persisted
+		// fetch-duration estimate (issue 168) that drives the startup
+		// splash's determinate bar on the *next* --watch run for this fetch
+		// kind. Skipped on a canceled context (Ctrl-C mid-fetch) since that
+		// duration reflects an aborted fetch, not a real completion time,
+		// and would drag the rolling estimate down artificially.
+		if sigCtx.Err() == nil {
+			recordFetchDuration(homeDir, fetchDurationKindForHost(targetHost), time.Since(fetchStart))
 		}
 
 		lastSummary = applyStaleQuota(fresh, lastSummary)
@@ -2091,9 +2140,19 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		renderFrame()
 	}()
 
+	// splashEstimate/splashHaveEstimate (issue 168) are loaded once, before
+	// the splash loop starts, for the fetch kind this first renderFrame()
+	// call is about to target (configuredHost, same as activeHost at this
+	// point -- no key has been handled yet, so it cannot have changed).
+	// They stay fixed for the life of this one splash: the estimate only
+	// needs to be roughly right, and re-reading the cache on every tick
+	// would just be needless disk I/O for a value that won't have changed
+	// mid-fetch anyway.
+	splashEstimate, splashHaveEstimate := loadFetchDurationEstimate(homeDir, fetchDurationKindForHost(configuredHost))
+
 	paintSplash := func(elapsed time.Duration, animate bool) {
 		cols, rows := terminalSize(out)
-		frame := buildSplashFrame(cols, rows, elapsed, animate)
+		frame := buildSplashFrame(cols, rows, elapsed, animate, splashEstimate, splashHaveEstimate)
 		outMu.Lock()
 		frame.paint(out)
 		outMu.Unlock()
