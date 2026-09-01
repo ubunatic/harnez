@@ -85,7 +85,10 @@ The tracker index `issues/README.md` maintains a synchronized inventory of all t
 Run `harnez index` (issue 148) to regenerate its table from `issues/*.md` +
 `issues/archive/*.md` metadata instead of hand-editing rows — it is idempotent (a
 second run against unchanged tickets makes no further change) and has a `--check`
-flag that exits 1 on drift without writing, for CI/pre-commit use. `harnez index`
+flag that exits 1 on drift without writing, for CI/pre-commit use — and prints a
+unified diff of exactly what would change, so running it directly in an agent
+session surfaces specific drift the agent can act on immediately, without a
+separate diff step. `harnez index`
 also regenerates `docs/README.md`'s `docs/studies/` table from `docs/studies/*.md`;
 see that file's own note on how a study's index topic is derived. Manual edits to
 either table are always safe to make, but will be overwritten by the next

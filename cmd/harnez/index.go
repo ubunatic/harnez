@@ -4,8 +4,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -27,10 +30,13 @@ their actual source of truth, so they stop drifting:
 
 It is idempotent: run against unchanged sources, it reports no changes.
 Pass --check to fail (exit 1) instead of writing, for CI/pre-commit use --
-mirrors 'harnez diff --exit-code' (issue 037).`,
+mirrors 'harnez diff --exit-code' (issue 037). --check also prints a unified
+diff of the drift, so the output is self-contained enough for an agent
+running the command directly in-session to see exactly what changed and
+fix the offending ticket(s) without a separate diff step.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runIndex(dir, check)
+			return runIndex(cmd.OutOrStdout(), dir, check)
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/ and docs/")
@@ -38,14 +44,14 @@ mirrors 'harnez diff --exit-code' (issue 037).`,
 	return cmd
 }
 
-func runIndex(dir string, check bool) error {
+func runIndex(w io.Writer, dir string, check bool) error {
 	issuesReadme := filepath.Join(dir, "issues", "README.md")
 	issuesDir := filepath.Join(dir, "issues")
 	docsReadme := filepath.Join(dir, "docs", "README.md")
 	docsDir := filepath.Join(dir, "docs")
 
 	if check {
-		return runIndexCheck(issuesReadme, issuesDir, docsReadme, docsDir)
+		return runIndexCheck(w, issuesReadme, issuesDir, docsReadme, docsDir)
 	}
 
 	issuesChanged, err := index.UpdateIssuesReadme(issuesReadme, issuesDir)
@@ -57,16 +63,16 @@ func runIndex(dir string, check bool) error {
 		return fmt.Errorf("index: %w", err)
 	}
 
-	printIndexResult(issuesReadme, issuesChanged)
-	printIndexResult(docsReadme, docsChanged)
+	printIndexResult(w, issuesReadme, issuesChanged)
+	printIndexResult(w, docsReadme, docsChanged)
 	return nil
 }
 
-func printIndexResult(path string, changed bool) {
+func printIndexResult(w io.Writer, path string, changed bool) {
 	if changed {
-		fmt.Printf("updated %s\n", path)
+		fmt.Fprintf(w, "updated %s\n", path)
 	} else {
-		fmt.Printf("%s up to date\n", path)
+		fmt.Fprintf(w, "%s up to date\n", path)
 	}
 }
 
@@ -77,8 +83,10 @@ func printIndexResult(path string, changed bool) {
 // round-trip, but --check is not on any latency-sensitive path, and this
 // keeps the check path reusing the exact same write-and-compare logic
 // runIndex uses instead of a second, divergent implementation). On drift
-// it exits 1 after reporting, mirroring `harnez diff --exit-code` (037).
-func runIndexCheck(issuesReadme, issuesDir, docsReadme, docsDir string) error {
+// it prints a unified diff of exactly what changed -- so an agent running
+// this command directly in a session sees the specifics inline and can act
+// on them -- then exits 1, mirroring `harnez diff --exit-code` (037).
+func runIndexCheck(w io.Writer, issuesReadme, issuesDir, docsReadme, docsDir string) error {
 	drift := false
 
 	for _, t := range []struct {
@@ -98,17 +106,66 @@ func runIndexCheck(issuesReadme, issuesDir, docsReadme, docsDir string) error {
 		}
 		if changed {
 			drift = true
-			fmt.Printf("would update %s\n", t.path)
+			newContent, err := os.ReadFile(t.path)
+			if err != nil {
+				return fmt.Errorf("index --check: read regenerated %s: %w", t.path, err)
+			}
+			fmt.Fprintf(w, "would update %s\n", t.path)
+			if err := printUnifiedDiff(w, t.path, orig, newContent); err != nil {
+				return fmt.Errorf("index --check: %w", err)
+			}
 			if err := os.WriteFile(t.path, orig, 0o644); err != nil {
 				return fmt.Errorf("index --check: restore %s: %w", t.path, err)
 			}
 		} else {
-			fmt.Printf("%s up to date\n", t.path)
+			fmt.Fprintf(w, "%s up to date\n", t.path)
 		}
 	}
 
 	if drift {
 		os.Exit(1)
+	}
+	return nil
+}
+
+// printUnifiedDiff shells out to `diff -u`, matching the pattern
+// internal/markdown.diffSection already uses for `harnez diff`, so drift
+// output looks the same across both commands.
+func printUnifiedDiff(w io.Writer, label string, oldContent, newContent []byte) error {
+	writeTemp := func(b []byte) (string, error) {
+		f, err := os.CreateTemp("", "harnez-index-diff-*")
+		if err != nil {
+			return "", err
+		}
+		_, werr := f.Write(b)
+		cerr := f.Close()
+		if werr != nil {
+			return f.Name(), werr
+		}
+		return f.Name(), cerr
+	}
+
+	oldFile, err := writeTemp(oldContent)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(oldFile)
+
+	newFile, err := writeTemp(newContent)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(newFile)
+
+	cmd := exec.Command("diff", "-u", "--label", label, "--label", label, oldFile, newFile)
+	cmd.Stdout = w
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return nil
+		}
+		return fmt.Errorf("diff %s: %w", label, err)
 	}
 	return nil
 }
