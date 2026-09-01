@@ -1,6 +1,7 @@
 # 172 — AGY "Claude/GPT" Row Drops Its Second Window at 100%, Breaking All Usage Grid Alignment
 
-**Status**: Open
+**Status**: Blocked — rendering bug (§2/§3.2) fixed; upstream AGY-CLI question (§1/§3.1) and
+n/a-placeholder design question (§3.3) remain open pending live account verification
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -81,3 +82,20 @@ because it's at 100% for the weekly and this removes the second part of the row.
   two, asserting the rendered lines all share the same bracket-column position (this project has an
   existing pattern of `formatCompactGroupLineWithLabelWidth`-style pure-function tests to extend —
   check `internal/usage/watch_test.go`).
+
+## 5. Resolution Note (rendering bug only)
+
+The §2/§3.2 alignment bug is fixed: `formatAllUsageTableLine` (`internal/usage/watch.go:733`) now
+dispatches a single-window row to a new `formatAllUsageSingleWindowLine` helper (same file,
+directly below the two-window branch) that reuses the two-window branch's
+`prefix + bar + midStr` layout and renders the missing second bar as a blank placeholder bracket
+(`blankBarPlaceholder()`, `"[    ]"`) rather than omitting it or rendering a misleading real 0%
+gauge. Covered by `TestAllUsageBoxSingleWindowRowAligns` in `internal/usage/watch_test.go`, which
+asserts the single-window row's second bracket lands in the same column as its two-window box-mate
+and is the blank placeholder, not a real bar.
+
+Still open and NOT addressed by this fix:
+- §1/§3.1: whether AGY's own CLI genuinely omits the five-hour line at 100% weekly (upstream
+  behavior) vs. a harnez-side parsing gap — needs live-account or captured-fixture verification.
+- §3.3: whether harnez should render an explicit "n/a"/"exhausted" placeholder (distinct from the
+  blank alignment placeholder added here) when a window is genuinely and permanently absent upstream.

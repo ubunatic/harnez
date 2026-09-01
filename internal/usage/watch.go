@@ -731,8 +731,11 @@ func formatAllUsageLine(label string, windows []QuotaWindow, contentW, labelWidt
 }
 
 func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labelWidth int) string {
-	if len(windows) < 2 {
+	if len(windows) == 0 {
 		return formatCompactGroupLineWithLabelWidth(label, windows, contentW, labelWidth)
+	}
+	if len(windows) == 1 {
+		return formatAllUsageSingleWindowLine(label, windows[0], contentW, labelWidth)
 	}
 
 	var w1, w2 QuotaWindow
@@ -787,6 +790,51 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 	}
 
 	return prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), b2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
+}
+
+// blankBarPlaceholder renders an empty bracket the same width as a real
+// rograph.RenderBar bar (given watchBarOptions() + Width=4), for a window
+// slot that genuinely has no data. It intentionally does NOT call
+// rograph.RenderBar(0, ...), which renders a real (if visually empty) 0%
+// gauge indistinguishable from a genuinely-empty window — this is a distinct
+// "no data" placeholder, not a 0% reading.
+func blankBarPlaceholder() string {
+	return "[" + strings.Repeat(" ", 4) + "]"
+}
+
+// formatAllUsageSingleWindowLine renders a row that has exactly one
+// QuotaWindow (e.g. the AGY "Claude/GPT" group when its 5-hour window is
+// absent) using the same prefix + bar + midStr column layout as
+// formatAllUsageTableLine's two-window rows, but with a blank placeholder
+// bracket standing in for the missing second bar. This keeps the row's
+// second-bracket column aligned with its box-mates instead of the row simply
+// being shorter (issue 172).
+func formatAllUsageSingleWindowLine(label string, w QuotaWindow, contentW, labelWidth int) string {
+	d1 := compactDurationText(w)
+
+	b1opts := watchBarOptions()
+	b1opts.Width = 4
+	b1 := rograph.RenderBar(w.UsedPercent, b1opts)
+	b2 := blankBarPlaceholder()
+	prefix := rograph.PadLabel(label, labelWidth) + "  "
+
+	midBlock := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w.UsedPercent, d1))
+	midStr := rograph.PadLabel(midBlock, 10)
+
+	line := prefix + b1 + " " + midStr + " " + b2
+	if visLen(line) <= contentW {
+		return line
+	}
+
+	// Drop d1 if too long, matching the two-window branch's narrow-width
+	// fallback pattern.
+	midStrNoD1 := rograph.PadLabel(fmt.Sprintf("%.0f%%", w.UsedPercent), 5)
+	line = prefix + b1 + " " + midStrNoD1 + " " + b2
+	if visLen(line) <= contentW {
+		return line
+	}
+
+	return prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w.UsedPercent), b2}, " ")
 }
 
 func compactDurationText(w QuotaWindow) string {

@@ -563,6 +563,87 @@ func TestAllUsageBoxSecondBarColumnAlignment(t *testing.T) {
 	}
 }
 
+// TestAllUsageBoxSingleWindowRowAligns is the regression test for issue 172:
+// the AGY "Claude/GPT" group can legitimately end up with only one
+// QuotaWindow (e.g. its 5-hour window absent while weekly sits at 100%).
+// Mixed into a box whose other rows have two windows, that row must still
+// occupy the same second-bracket column as its box-mates — via a blank
+// placeholder bar, not a real 0%-filled gauge — rather than rendering
+// visibly shorter.
+func TestAllUsageBoxSingleWindowRowAligns(t *testing.T) {
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Agents: []AgentUsage{
+			{
+				AgentID: "agy", Name: "Antigravity", Installed: true, Authenticated: true,
+				ModelGroups: []ModelGroup{
+					{
+						Name: "Gemini",
+						Windows: []QuotaWindow{
+							{Name: "Weekly", UsedPercent: 5, DurationLeft: 3*24*time.Hour + 20*time.Hour},
+							{Name: "Session", UsedPercent: 48, DurationLeft: 2*time.Hour + 12*time.Minute},
+						},
+					},
+					{
+						Name: "Claude/GPT",
+						// Only the weekly window is present — the confirmed
+						// issue-172 scenario.
+						Windows: []QuotaWindow{
+							{Name: "Weekly", UsedPercent: 100, DurationLeft: 2*24*time.Hour + 13*time.Hour},
+						},
+					},
+				},
+			},
+			{
+				AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true,
+				Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 46, DurationLeft: 5*24*time.Hour + 12*time.Hour},
+				Session: &QuotaWindow{Name: "Session", UsedPercent: 66, DurationLeft: 2*time.Hour + 21*time.Minute},
+			},
+		},
+	}
+
+	box := buildAllUsageBox(summary, 74, false)
+	if len(box.lines) != 3 {
+		t.Fatalf("expected 3 all-usage rows, got %d: %v", len(box.lines), box.lines)
+	}
+
+	var singleWindowLine, twoWindowLine string
+	for _, line := range box.lines {
+		stripped := stripANSI(line)
+		if strings.HasPrefix(stripped, "Claude/GPT") {
+			singleWindowLine = stripped
+		} else if strings.HasPrefix(stripped, "Gemini") {
+			twoWindowLine = stripped
+		}
+	}
+	if singleWindowLine == "" || twoWindowLine == "" {
+		t.Fatalf("expected both Claude/GPT and Gemini rows, got: %v", box.lines)
+	}
+
+	// 1. The second bracket must start at the same column in both rows.
+	singleIdx := strings.LastIndex(singleWindowLine, "[")
+	twoIdx := strings.LastIndex(twoWindowLine, "[")
+	if singleIdx < 0 || twoIdx < 0 {
+		t.Fatalf("expected a second bracket in both rows: single=%q two=%q", singleWindowLine, twoWindowLine)
+	}
+	singleCol := utf8.RuneCountInString(singleWindowLine[:singleIdx])
+	twoCol := utf8.RuneCountInString(twoWindowLine[:twoIdx])
+	if singleCol != twoCol {
+		t.Errorf("second bracket column mismatch: single-window row col %d, two-window row col %d\n  single: %q\n  two:    %q",
+			singleCol, twoCol, singleWindowLine, twoWindowLine)
+	}
+
+	// 2. The single-window row's second bracket must be the blank
+	// placeholder, not a real (0%-filled) bar.
+	if !strings.HasSuffix(strings.TrimRight(singleWindowLine, " "), "[    ]") {
+		t.Errorf("expected blank placeholder second bracket on single-window row, got: %q", singleWindowLine)
+	}
+
+	if got := visLen(singleWindowLine); got > box.width-4 {
+		t.Errorf("single-window line width %d exceeds contentW %d: %q", got, box.width-4, singleWindowLine)
+	}
+}
+
 // TestCompactWatchSectionsAndAllUsageToggle also covers issue 093's flag
 // interaction bug: `--watch --compact --proc` must show the Processes panel
 // even though compactWatchSections() itself never enables it — --proc is an
