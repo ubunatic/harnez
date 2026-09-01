@@ -15,8 +15,9 @@ shell commands. Those commands do not offer a stable, user-facing query
 language for status filtering and Boolean text search, and they force agents
 and users to remember the tracker layout.
 
-Add a deliberate `harnez find <entity> <query>` command. Its first useful
-entity is `issues`, making these invocations clear and predictable:
+Add a deliberate `harnez find <entity> [options] <query...>` command. Its
+first useful entity is `issues`, making these invocations clear and
+predictable:
 
 ```console
 $ harnez find issues "is:open vram gtt"
@@ -38,87 +39,143 @@ without requiring a formal search grammar.
 - Implement `issues` as the only supported entity in the first release.
   Reject unknown entities with a concise error that names the valid entity;
   do not silently treat an entity as a directory or search arbitrary files.
-- Use `harnez find <entity> <query>` (one or more remaining arguments joined
-  with a single space) rather than inventing entity-specific top-level
-  commands. A quoted query is recommended when it contains spaces or `|`,
-  but the shell's normal argument splitting must not change AND semantics.
+- Use `harnez find <entity> [options] <query...>` rather than inventing
+  entity-specific top-level commands. Parse flags with Cobra, trim the
+  remaining query arguments, and join them with one space. Reject a missing
+  or whitespace-only query.
+- Add `-d, --dir <path>` to select the repository root, defaulting to `.` in
+  the same style as `harnez index` and `harnez repo-status`. Search
+  `issues/*.md` and `issues/archive/*.md`, excluding `issues/README.md` and
+  every other directory. Active and archived issues are both in scope by
+  default; use a status filter to narrow lifecycle state.
+- Separate AND terms may be passed as separate shell arguments. An OR query
+  must quote the full query or escape the pipe because an unquoted `|` is a
+  shell pipeline operator:
+
+  ```console
+  harnez find issues status:open vram gtt
+  harnez find issues "status:open vram|gtt"
+  ```
+
+  Quotes in these examples are shell quoting only; v1 has no phrase syntax.
 - Place `find` as a new top-level verb. It is a repository-data discovery
   operation, not a mode of `status`, `index`, or `assess`; no existing command
   provides a natural parent. This is consistent with the concrete-placement
   reasoning in [[154]] and does not reopen the broader assessment closed in
   [[153-command-tree-placement-spec-assessment]].
 
+### Searchable document and deterministic fuzzy matching
+
+- Search the H1 title after removing its leading ticket number and the issue
+  body after the first metadata-closing horizontal rule. Do not search the
+  metadata header itself. Preserve text inside code spans/fences and link
+  destinations so remembered identifiers and paths remain discoverable.
+- Normalize both searchable text and bare alternatives by Unicode lowercasing,
+  replacing Markdown syntax and non-letter/non-number characters with spaces,
+  and collapsing whitespace. This deliberately turns punctuation-separated
+  identifiers such as `time-gauge` into adjacent searchable tokens without
+  exposing regex syntax.
+- A bare alternative matches a field when its complete normalized text is a
+  substring of that field, or when each of its normalized tokens matches a
+  field token by prefix or bounded typo distance. Use Damerau-Levenshtein
+  distance so a transposition counts as one edit: terms of four characters or
+  fewer receive no typo expansion, terms of five through eight allow one edit,
+  and terms of nine or more allow two. This protects short identifiers such as
+  `gtt` and `vram` from noisy fuzzy expansion.
+- Every whitespace-separated group must match. For an OR group, retain the
+  best matching alternative. Assign match classes in this order:
+
+  1. exact normalized substring in title;
+  2. token-prefix match in title;
+  3. bounded fuzzy-token match in title;
+  4. exact normalized substring in body;
+  5. token-prefix match in body;
+  6. bounded fuzzy-token match in body.
+
+  Rank a result by its worst group class, then the sum of all group classes,
+  then numeric ticket number, then repository-relative path. This puts strong
+  title matches ahead of weak body matches while remaining deterministic.
+- Document the searchable fields, normalization, fuzzy thresholds, and
+  ranking in `--help`. Do not require regexes or a formal Boolean language for
+  ordinary discovery.
+
 ### Version-one issue-query grammar
 
-- Bare terms use forgiving, case-insensitive fuzzy text matching over each
-  issue's title and body. Define a deliberately small, deterministic v1
-  matcher (for example normalized substring and/or token-prefix matching),
-  document its searchable fields and normalization in `--help`, and cover it
-  with tests. Do not require users to learn regexes, exact phrases, or a
-  formal Boolean language for ordinary discovery.
 - Whitespace between terms is AND: `vram gtt` means issues containing both
   terms.
 - `|` separates OR alternatives within one term: `vram|gtt` means either;
   `vram|gtt memory` means `(vram OR gtt) AND memory`.
 - A recognized `field:value` token is a filter ANDed with other terms.
-  Version one supports `status:<value>` and the alias `is:<value>`, with the
-  same accepted normalized values as the tracker (`open`, `in-progress`,
-  `blocked`, `closed`, `draft`). It must match statuses with explanatory
-  suffixes (for example `Open — deferred`).
+  Version one supports `status:<value>` and the alias `is:<value>`.
+  `status:open` and `is:open` match every unresolved issue whose leading raw
+  lifecycle is `Open`, `In Progress`, or `Blocked`. `in-progress` and
+  `blocked` narrow to their corresponding leading raw lifecycle;
+  `closed` and `draft` match their canonical categories. Matching ignores
+  case and explanatory status suffixes, but the accepted query spellings are
+  exactly `open`, `in-progress`, `blocked`, `closed`, and `draft`.
 - Boolean precedence is fixed: field filters and whitespace AND bind outside
-  OR, so `status:open vram|gtt` is `status:open AND (vram OR gtt)`. Parentheses,
-  negation, field OR, regexes, and implicit phrase syntax are explicitly out
-  of scope for v1 and must produce either literal-text behavior documented in
-  `--help` or a clear parse error — choose one, test it, and do not guess.
-- Malformed filters (empty `status:`, an unknown field, unsupported status,
-  dangling/empty OR alternative) are usage errors, not zero-result searches.
+  text OR, so `status:open vram|gtt` is `status:open AND (vram OR gtt)`.
+- `|` is valid only inside one compact text group. A standalone pipe, leading
+  or trailing pipe, empty alternative (`a||b`), whitespace around a pipe, or
+  filter alternative (`status:open|closed`) is a usage error. Parentheses,
+  literal quote characters, negation, an empty filter, unknown fields, and
+  unsupported status values are also usage errors with an actionable hint.
+  Regex-looking punctuation is normalized as ordinary text and is never
+  executed. These cases must not degrade into zero-result searches or guessed
+  Boolean semantics.
 
-### No-result behavior: preserve exactness
+### No-result behavior: preserve the query
 
-`harnez find` must return only exact matches by default. It must **not**
-silently relax `is:open vram gtt` into `is:open AND (vram OR gtt)`: that makes
-an apparently precise query return issues that do not satisfy it.
+`harnez find` must return only issues satisfying every AND group under the
+defined fuzzy matcher. It must **not** silently relax `is:open vram gtt` into
+`is:open AND (vram OR gtt)`: that makes an apparently precise query return
+issues that do not satisfy it.
 
-After the exact engine and output contract are stable, assess an explicit,
-opt-in discovery mode such as `--relax-and` (or a separately named
-`--suggest-relaxation`) that, only after zero exact results, prints a clearly
-labeled alternative query and its results. It must never alter the default
-result set, exit status, or machine-readable output. Do not select a flag or
-implement this mode until its UX is designed and tested.
+An explicit relaxation mode may be assessed in a separate ticket after this
+contract is stable. It must not be selected or implemented as part of v1.
 
 ### Output, exit status, and errors
 
-- Default output is deterministic, one compact result per line: ticket number,
-  status, title, and repository-relative ticket path. Sort by numeric ticket
-  number ascending. Keep Markdown/ANSI out of the default format.
-- Add `--json` only if the implementation can define and test a stable
-  schema (number, title, raw status, path); otherwise leave it as a follow-up.
-- Successful search, including zero exact matches, exits 0. Zero results print
-  no result lines; a succinct `no issues matched` diagnostic may go to stderr
-  only if it does not compromise pipe-friendly stdout. Invalid entity/query,
-  unreadable tracker data, or malformed filters exit non-zero with actionable
-  stderr.
+- Default output is UTF-8, deterministic, and tab-separated, with exactly one
+  result per line:
+
+  ```text
+  NUMBER<TAB>RAW_STATUS<TAB>PLAIN_TITLE<TAB>REPOSITORY_RELATIVE_PATH
+  ```
+
+  Remove the leading `NNN —` portion and Markdown formatting delimiters from
+  the displayed title, collapse embedded whitespace, and print paths such as
+  `issues/158-find-entity-query-command.md`. Replace any embedded tabs or
+  newlines in status/title fields with spaces. Emit no ANSI styling or header.
+- Apply the fuzzy relevance ordering defined above. Raw status is displayed so
+  suffixes such as `Blocked — waiting for upstream` remain useful.
+- Successful search, including zero matches, exits 0. Zero matches emit
+  nothing on stdout or stderr. Invalid entity/query, a missing/unreadable
+  tracker, or malformed ticket data exits non-zero with actionable stderr.
+- `--json` is out of scope for v1; add it only in a follow-up with a separately
+  specified stable schema and ordering contract.
 
 ## 3. Implementation & Verification Plan
 
-- [ ] Add a top-level Cobra `find` command, accepting an entity and a
-      non-empty query; document grammar and examples in its long help and the
-      README command reference.
+- [ ] Add a top-level Cobra `find` command, accepting an entity, `-d/--dir`,
+      and a non-empty query; document grammar, shell quoting, fuzzy behavior,
+      ranking, output, and examples in its long help and README command
+      reference.
 - [ ] Reuse or extend `internal/issues` scanning/parsing rather than scraping
-      `issues/README.md`; include both active and archived issue files only
-      when the chosen `issues` entity contract says so. **Decision needed at
-      implementation:** search active tickets only by default, or all tracker
-      tickets; whichever is chosen must be named in help and covered by tests.
+      `issues/README.md`. Extend its issue representation or add a focused
+      search document type so the post-metadata body is available. Cover both
+      active and archived files and exclude metadata from bare-text matching.
 - [ ] Implement parsing/evaluation as a small independently tested package,
-      not inline Cobra argument handling. Test aliases, normalization,
-      whitespace AND, `|` OR, precedence, field-plus-text combinations,
-      matching status suffixes, and every malformed-query error.
+      not inline Cobra argument handling. Test aliases, normalization, fuzzy
+      thresholds and transposition, short-token protection, whitespace AND,
+      `|` OR, precedence, ranking, field-plus-text combinations, exact status
+      lifecycle behavior, suffixes, and every malformed-query error.
 - [ ] Test a temporary tracker fixture with open, closed, archived, and
-      suffix-status tickets; assert deterministic output, zero-match exit 0,
-      and non-zero usage errors.
-- [ ] Confirm no default fallback relaxation occurs for a no-result AND
-      query. If an opt-in relaxation UX is later added, file or amend a
-      focused follow-up with exact output and exit semantics first.
+      suffix-status tickets. Include hits found only in body text and code,
+      text appearing only in metadata that must not match, title/body ranking,
+      stable ties, exact tab-separated output, silent zero-match exit 0, and
+      non-zero usage errors.
+- [ ] Confirm no default Boolean relaxation occurs for a no-result AND query.
 - [ ] Run `go test ./...`, `make install`, `harnez status`, and update the
       README command reference plus this ticket/index before closure.
 
@@ -135,3 +192,4 @@ implement this mode until its UX is designed and tested.
   filesystem search.
 - Searching entities other than `issues` in v1.
 - Any implicit query relaxation that changes exact search semantics.
+- Phrase search, JSON output, and configurable ranking/fuzzy thresholds.
