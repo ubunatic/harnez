@@ -1,105 +1,134 @@
-# 160 — Feasibility: Split `usage --watch` Viewer From App-Logic Server
+# 160 — Feasibility: Extract `usage --watch` Layout/UI/Keyboard Into a Renderer-Agnostic Module
 
 **Status**: Open — feasibility assessment, no implementation decision yet
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Architecture
 **Related**: [[082-agent-usage-collector-daemon]] (existing precedent: collection already runs as an
-  independent, always-on process writing snapshots the TUI reads), [[110-remote-load-batch-vs-streaming-collection-modes]]
-  (existing precedent: a long-lived side-channel — SSH `ControlMaster` — managed alongside the
-  `--watch` process lifecycle), `internal/usage/watch.go` (`screenFrame`, `RunWatchWithOptions`)
+  independent, always-on process writing snapshots the TUI reads), [[161-collector-remote-control-host-and-prometheus-exposition]]
+  (sibling ticket: opt-in HTTP `/metrics` exposition on `agent-collector` — the HTTP-serving
+  precedent this ticket's HTML idea would reuse), `internal/rograph/*` (bar/sparkline renderers —
+  currently bake ANSI directly into returned strings), `internal/usage/watch.go` (`screenFrame`,
+  `buildWatchFrameAt`, `dispatchWatchKey`, `RunWatchWithOptions`)
+
+## Rescope (2026-09-01)
+
+Originally scoped as a client/server *process* split (thin terminal viewer + a server owning
+collectors/frame-building, connected over a local socket, purely to survive `harnez` rebuilds
+without killing the terminal session). Rescoped, per discussion, to something broader: extract
+layout, UI structure, and keyboard-control handling into a module that is renderer-agnostic —
+not committed to terminal/ANSI output — so that module *could* run inside a server and be
+rendered as HTML (e.g. custom elements for bars/sparklines) and served over HTTP, the same way
+161's collector will serve Prometheus metrics. The original "just keep the terminal viewer alive
+across rebuilds" goal is still in scope, but now as one possible renderer/transport (terminal)
+rather than the whole design.
 
 ## Problem
 
-Developing `harnez` itself (its own usage/watch/collector code) currently requires restarting
-`harnez usage --watch` every time the binary is rebuilt, because `--watch` is one monolithic
-process: terminal I/O (raw mode via `stty`, SIGWINCH resize, key input), the redraw loop, and all
-app logic (collectors, frame layout, remote streaming) are compiled into a single binary and run
-in one process (`RunWatchWithOptions`, `watch.go:1718`). A code change to any of it means killing
-and relaunching the terminal session that's watching it.
+Two compounding problems, not just one:
 
-Desired: keep the terminal viewer attached (or reconnecting) across `harnez` rebuilds, so
-iterating on the app logic doesn't interrupt the live dashboard.
+1. Developing `harnez` itself requires restarting `usage --watch` on every rebuild, because
+   viewer (terminal I/O) and app logic (collectors, layout, keyboard dispatch) are one process
+   (`RunWatchWithOptions`, `watch.go:1718`) — this is the original 160 problem, still valid.
+2. The dashboard is terminal-only. There's no way to view the same data in a browser, and no
+   shared representation that a hypothetical HTML view and the terminal view could both render
+   from — today "layout" and "ANSI rendering" are the same code, not two separable steps.
 
 ## Findings
 
-1. **The render output is already a clean, serializable boundary.** `screenFrame`
-   (`watch.go:330-334`) is just `{lines []string, cols, rows int}` with a `paint(out io.Writer)`
-   method (`watch.go:347-358`) that writes ANSI cursor-home + per-line content + erase-to-EOL. A
-   `screenFrame` is trivially serializable (newline-joined text, or a JSON array of lines) and
-   `paint` doesn't care whether `out` is a local terminal or a `net.Conn` — this is the natural
-   seam for a client/server split.
+1. **Layout and ANSI presentation are NOT currently separable — this changes the original
+   feasibility finding.** The prior version of this ticket noted `screenFrame`
+   (`watch.go:330-334`, `{lines []string, cols, rows}`) as "already a clean serializable
+   boundary." That's true only for a terminal-to-terminal split. `screenFrame.lines` are fully
+   ANSI-baked strings by the time they exist: `rograph.RenderBar`/`RenderSparkline`
+   (`internal/rograph/options.go`) embed raw `\x1b[...m` escape sequences directly into the
+   returned string, and `watch.go`'s line-builders (`formatGPULine`, `formatGPUMemoryLines`,
+   `formatAllUsageTableLine`, etc.) `fmt.Sprintf` those ANSI-laden bar strings together with
+   labels and text in one step. There is no intermediate structured form (e.g. a widget tree of
+   "label + bar(value, max, color) + trailing text") — layout and terminal-specific styling
+   happen together, at construction time, throughout `watch.go`. An HTML renderer cannot reuse
+   any of this as-is; it would need to parse ANSI back out, which is the wrong direction.
 
-2. **A "server" precedent already exists.** Issue 082 shipped `harnez agent-collector`: a
-   long-running process that collects and writes atomic JSON snapshots
-   (`~/.local/state/harnez/agents/usage/<agent>.json`) independent of any TUI being open. It
-   already decouples *data collection* from *display* — but not *frame building* (layout,
-   `buildWatchFrameAt`, section state, hotkeys) from *display*, which is the piece this ticket is
-   about.
+2. **What a renderer-agnostic module would actually require**: introducing a structured
+   intermediate representation — a small widget/row model (e.g. `Row{Label string, Bars []Bar,
+   Sparkline []float64, Trailing string}`, mirroring what `internal/rograph` already computes
+   numerically before it stringifies to ANSI) that `buildWatchFrameAt` produces instead of
+   `screenFrame`. Two independent renderers then consume that model: the existing ANSI terminal
+   painter (today's `rograph` + `screenFrame.paint`), and a new HTML renderer (could use plain
+   `<div>`/`<progress>`-style markup, or custom elements like `<harnez-bar value="63" max="100">`
+   for the browser to style/animate client-side). This is a real refactor of `internal/rograph`
+   and every `watch.go` line-builder, not a thin wrapper — bigger than the original process-split
+   scope.
 
-3. **`RunWatchWithOptions` currently owns everything in one goroutine tree**: `stty` raw-mode
-   setup/teardown, SIGWINCH-driven resize, a `fetchChan`/`redrawChan` pair, key-dispatch
-   (`dispatchWatchKey`), section-preset state, the remote-Load streaming manager (issue 110's
-   SSH `ControlMaster`, already a long-lived side-process managed via the same lifecycle/defer
-   pattern this ticket would need to generalize), and finally `renderFrame()` → `screenFrame.paint`.
-   Splitting cleanly means drawing a line between "owns terminal, owns keys, owns local state
-   like section presets/scroll position" (viewer) and "owns collectors, owns layout, computes
-   `screenFrame`" (server).
+3. **Keyboard control has the same shape problem.** `dispatchWatchKey` (`watch.go:474`) takes a
+   raw input byte read from the terminal (`stty cbreak` mode) and mutates `watchKeyState`
+   in-process. Serving the same controls over HTTP (e.g. a browser view with clickable
+   panel-toggle buttons) means keyboard dispatch also needs an transport-agnostic input event
+   (already true in spirit — `dispatchWatchKey` is already a "pure function of key + state", per
+   its own doc comment at `watch.go:432` — the gap is only that its *source* is hardcoded to a
+   local terminal read loop, not that its logic is coupled to the terminal).
 
-4. **Local-only, not a network service.** This only needs a Unix domain socket (or the existing
-   snapshot-file directory, polled) — no auth/remote-exposure design burden, unlike issue 035's
-   proxy sidecar idea. A `harnez usage --watch` invocation would: try to connect to a local
-   socket; if nothing's listening, spawn (or instruct the user to run) `harnez usage serve` and
-   connect; render frames pushed from the server; on disconnect, show a "reconnecting…" frame
-   and retry rather than exiting.
+4. **HTTP-serving precedent already exists as of 161.** `agent-collector`'s planned opt-in
+   `/metrics` endpoint (161) establishes the pattern: an existing headless daemon gains an
+   optional HTTP listener, off by default. A hypothetical HTML dashboard view would reuse that
+   same opt-in-HTTP posture rather than inventing a new one — but per the 2026-09-01 decision
+   below, it should NOT reuse the *same process* as the collector.
 
-5. **What stays in the viewer vs. moves to the server** (rough split, to be firmed up if this
-   proceeds to a real spec):
-   - Viewer (should change rarely, so restarting the server doesn't require restarting this):
-     raw-mode terminal setup, SIGWINCH → terminal size, keypress capture, reconnect loop,
-     `screenFrame.paint`.
-   - Server (restartable independently during development): collectors, `buildWatchFrameAt`,
-     section-preset/hotkey state (or: hotkeys stay client-side and are sent to the server as
-     small messages — needs a decision, since some state like debug-overlay toggle is purely
-     cosmetic and could live in either place).
-   - Ambiguous, needs a decision during spec: remote-Load SSH streaming (issue 110) — probably
-     belongs on the server side since it's collection, not rendering.
+5. **Where this module would run**: still a server process, still separate from
+   `agent-collector` (per the standing decision below), reading data the same way `--watch`
+   does today (082's snapshot files / whatever 161 exposes) and producing the structured row
+   model. Both a terminal client and an HTTP/HTML client would connect to it — terminal over a
+   local socket (original scope, unaffected by the HTML idea), browser over HTTP.
 
 ## Feasibility Verdict
 
-Feasible, moderate-sized refactor, no fundamentally new mechanism required — reuses two patterns
-already proven in this codebase (082's always-on background process, 110's persistent side-channel
-managed across the watch process's lifetime). Main design work is genuinely deciding the
-viewer/server message boundary (frame-only push, vs. also forwarding keys/hotkeys to the server)
-and the reconnect/spawn UX, not proving the split is possible.
+The terminal-only viewer/server split (original 160 scope) is still feasible as previously
+assessed — unaffected by this rescope. The renderer-agnostic layout module needed to also support
+an HTML view is a materially larger refactor: `internal/rograph` and most of `watch.go`'s line
+formatters would need to stop baking ANSI at construction time and instead emit a structured row
+model, with ANSI-terminal and HTML as two thin renderers over that model. Feasible, but should be
+staged: (a) extract the structured model and keep only the terminal renderer working from it
+first — this alone unblocks the original rebuild-without-restart goal — then (b) add an HTML
+renderer and HTTP transport as a second phase, once the model has proven itself against the one
+real consumer (the terminal) it needs to support today.
 
 ## Desired Outcome (if pursued)
 
-A follow-up implementation ticket, once the message-boundary question above is settled, covering:
-- `harnez usage serve` (or folded into `agent-collector`) exposing `screenFrame`s over a local
-  Unix socket.
-- `harnez usage --watch` becomes a thin client: terminal I/O + reconnect loop + `paint`.
-- Rebuilding/restarting the server does not kill the viewer; the viewer shows a reconnecting
-  state and resumes automatically once the server is back.
+Phase 1 (was the whole ticket before rescope): thin terminal viewer + server over a local socket,
+using a new structured row model instead of pre-rendered `screenFrame` strings internally, but
+still rendering ANSI as the only output for now.
+
+Phase 2 (new, from this rescope): an HTML renderer consuming the same row model, served over
+HTTP by the same server process (not `agent-collector` — see decision below), with keyboard-style
+controls exposed as clickable/toggleable browser controls dispatched through the same
+`dispatchWatchKey`-shaped, transport-agnostic input handling.
 
 ## Architecture Decision (2026-09-01)
 
 Considered folding the frame-building "server" (and issue 110's remote-Load `ControlMaster`,
 currently owned by the `--watch` process) into `agent-collector` (082) to avoid running a third
 long-lived process. **Decided against it for the frame-building/display piece** — this ticket
-(160) stays scoped to the viewer/frame-painting split only, kept separate from `agent-collector`,
-which stays collection-only, not display.
+(160) stays scoped to the viewer/layout/HTML-rendering split only, kept separate from
+`agent-collector`, which stays collection-only, not display. This still holds after the rescope:
+the HTML/HTTP rendering piece added here is a *display* concern (like the terminal renderer it
+sits alongside), not a *collection* concern, so it stays out of `agent-collector` for the same
+reason the original frame-building server did.
 
 The remote-Load `ControlMaster` piece was reconsidered separately and **is** being merged into
 `agent-collector`, since it's data-gathering, not display — tracked in
 [[161-collector-remote-control-host-and-prometheus-exposition]], split out from this ticket so 160
-doesn't mix frame-painting concerns with collector-architecture changes.
+doesn't mix rendering concerns with collector-architecture changes.
 
 ## Acceptance Criteria (for this feasibility ticket)
 
-- [x] Confirm whether a clean viewer/server seam exists in the current code (yes — `screenFrame`).
-- [x] Identify what precedent already exists for a long-lived, independently-restartable process
-      (yes — issue 082's collector daemon, issue 110's SSH `ControlMaster` manager).
-- [x] Identify the open design questions a real implementation ticket would need to resolve
-      (message boundary for keys/hotkeys; where remote-Load streaming lives).
-- [ ] Decide whether to proceed to an implementation ticket (user call, not made here).
+- [x] Confirm whether a clean viewer/server seam exists in the current code for the
+      terminal-only split (yes — `screenFrame`, unaffected by the rescope).
+- [x] Confirm whether that same seam supports a renderer-agnostic (e.g. HTML) view (no — ANSI is
+      baked in at construction time throughout `rograph` and `watch.go`'s line-builders; a real
+      structured row model would need to be introduced first).
+- [x] Identify what precedent exists for opt-in HTTP serving on a headless daemon (161's planned
+      `/metrics` endpoint).
+- [x] Confirm the display-vs-collection process boundary decision still holds after the rescope
+      (yes — HTML rendering is display, stays out of `agent-collector`).
+- [ ] Decide whether to proceed to an implementation ticket, and whether to stage it (terminal
+      split first, HTML renderer second) or attempt both together (user call, not made here).

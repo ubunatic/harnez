@@ -158,5 +158,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 157 | [157-spec-driven-usage-watch-chart-glyphs.md](157-spec-driven-usage-watch-chart-glyphs.md) | Specify every `usage --watch` chart glyph | Closed — resolved in 2787da7; absent chart backgrounds in 7da5720/9649600 |
 | 158 | [158-find-entity-query-command.md](158-find-entity-query-command.md) | Add a `harnez find <entity> <query>` query command | Open |
 | 159 | [159-spec-driven-bar-bracket-toggle.md](159-spec-driven-bar-bracket-toggle.md) | Spec-driven enable/disable of bar/graph `[]` brackets | Closed — resolved in aff9b98 |
-| 160 | [160-watch-viewer-server-split-feasibility.md](160-watch-viewer-server-split-feasibility.md) | Feasibility: split `usage --watch` viewer from app-logic server | Open — assessment complete, feasible |
+| 160 | [160-watch-viewer-server-split-feasibility.md](160-watch-viewer-server-split-feasibility.md) | Feasibility: extract `usage --watch` layout/UI/keyboard into a renderer-agnostic (HTML-capable) module | Open — rescoped, staged rollout recommended |
 | 161 | [161-collector-remote-control-host-and-prometheus-exposition.md](161-collector-remote-control-host-and-prometheus-exposition.md) | Collector: absorb remote-load control host + opt-in Prometheus exposition | Open |
