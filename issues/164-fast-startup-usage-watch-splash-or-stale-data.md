@@ -1,6 +1,6 @@
 # 164 — Fast Startup for `usage --watch`: Abortable Progress-Bar Splash by Default
 
-**Status**: Open
+**Status**: Closed — resolved in a1178d4 (splash only; §2.2 stale-cache-first paint remains a future follow-up)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
