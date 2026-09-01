@@ -1444,6 +1444,38 @@ func TestDispatchWatchKeyDebugOverlayRendersAndRestoresFrame(t *testing.T) {
 	}
 }
 
+// TestAllUsageLinesAtDebugOverlayCountsDown proves the compact All Usage
+// panel recalculates its gauge from LastRefreshed on each redraw timestamp,
+// without requiring a new usage collection. It also locks the future and
+// overdue bounds to full and empty respectively (issue 147).
+func TestAllUsageLinesAtDebugOverlayCountsDown(t *testing.T) {
+	refreshed := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	summary := UsageSummary{Agents: []AgentUsage{
+		{
+			AgentID:       "claude",
+			Name:          "Claude Code",
+			Installed:     true,
+			Authenticated: true,
+			LastRefreshed: refreshed,
+			Weekly:        &QuotaWindow{Name: "Weekly", UsedPercent: 25},
+		},
+	}}
+
+	assertGauge := func(now time.Time, want string) {
+		t.Helper()
+		lines := stripANSI(strings.Join(allUsageLinesAt(summary, 72, true, now), "\n"))
+		if !strings.Contains(lines, "Claude C"+want) {
+			t.Fatalf("gauge at %s = %q, want Claude C%s", now, lines, want)
+		}
+	}
+
+	assertGauge(refreshed, "[█]")
+	assertGauge(refreshed.Add(DefaultCollectorInterval/2), "[▄]")
+	assertGauge(refreshed.Add(DefaultCollectorInterval), "[▁]")
+	assertGauge(refreshed.Add(-time.Second), "[█]")
+	assertGauge(refreshed.Add(2*DefaultCollectorInterval), "[▁]")
+}
+
 // TestDispatchWatchKeyModeCyclesAndKeepsShowProcesses covers the [m] preset
 // shortcut through the same dispatch path RunWatch uses, including the
 // showProcesses carry-through that initialWatchSections already guarantees

@@ -622,7 +622,14 @@ func buildProcessesBox(width int, counts *AgentProcessCount) wbox {
 }
 
 func buildAllUsageBox(summary UsageSummary, width int, debugOverlay bool) wbox {
-	lines := allUsageLines(summary, width-4, debugOverlay)
+	return buildAllUsageBoxAt(summary, width, debugOverlay, time.Now())
+}
+
+// buildAllUsageBoxAt renders the aggregate usage panel using one timestamp for
+// every row. The watch redraw captures this timestamp once so each agent's
+// gauge advances together on every frame rather than retaining prior output.
+func buildAllUsageBoxAt(summary UsageSummary, width int, debugOverlay bool, now time.Time) wbox {
+	lines := allUsageLinesAt(summary, width-4, debugOverlay, now)
 	if len(lines) == 0 {
 		lines = []string{ansiDimGrey + "no quota windows available\x1b[0m"}
 	}
@@ -630,13 +637,16 @@ func buildAllUsageBox(summary UsageSummary, width int, debugOverlay bool) wbox {
 }
 
 func allUsageLines(summary UsageSummary, contentW int, debugOverlay bool) []string {
+	return allUsageLinesAt(summary, contentW, debugOverlay, time.Now())
+}
+
+func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now time.Time) []string {
 	type allUsageRow struct {
 		label         string
 		windows       []QuotaWindow
 		lastRefreshed time.Time
 	}
 
-	now := time.Now()
 	var rows []allUsageRow
 	labelWidth := 0
 	for _, agent := range summary.Agents {
@@ -1051,6 +1061,12 @@ func staleLabel(name string) string {
 // in its title, btop-style, instead of a separate legend. Deliberately terse
 // compared to the full `harnez usage` report.
 func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live, debugOverlay bool) wbox {
+	return buildAgentBoxAt(agent, rate, width, showTokens, live, debugOverlay, time.Now())
+}
+
+// buildAgentBoxAt is buildAgentBox with the redraw timestamp supplied by the
+// caller, keeping all freshness gauges in a watch frame consistent.
+func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, live, debugOverlay bool, now time.Time) wbox {
 	title := fmt.Sprintf("%s %s", watchBoxSymbol(agent.AgentID), agent.Name)
 
 	if !agent.Installed {
@@ -1090,7 +1106,7 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 		if !debugOverlay {
 			return label
 		}
-		return freshnessOverlayLabel(label, agent.LastRefreshed, time.Now())
+		return freshnessOverlayLabel(label, agent.LastRefreshed, now)
 	}
 
 	// Render quota lines. If the agent has ModelGroups (e.g. AGY), render each group
@@ -1350,6 +1366,9 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	if len(opts) > 0 {
 		opt = opts[0]
 	}
+	// A frame's freshness gauges all use this redraw time. draw() builds a new
+	// frame every second, so the values are recalculated without a usage fetch.
+	now := time.Now()
 
 	if opt.ShowControls {
 		ocols := cols - safetyMargin
@@ -1506,12 +1525,12 @@ func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval 
 	}
 	var panels []panel
 	if sec.AllUsage {
-		panels = append(panels, panel{"a", func(w int) wbox { return buildAllUsageBox(summary, w, opt.DebugOverlay) }})
+		panels = append(panels, panel{"a", func(w int) wbox { return buildAllUsageBoxAt(summary, w, opt.DebugOverlay, now) }})
 	}
 	for _, agent := range visible {
 		agent := agent
 		panels = append(panels, panel{agentKey(agent.AgentID), func(w int) wbox {
-			return buildAgentBox(agent, rates[agent.AgentID], w, sec.Tokens, live, opt.DebugOverlay)
+			return buildAgentBoxAt(agent, rates[agent.AgentID], w, sec.Tokens, live, opt.DebugOverlay, now)
 		}})
 	}
 	if sec.History {
