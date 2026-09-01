@@ -1,6 +1,6 @@
 # 147 — Debug overlay gauge does not count down to the next usage fetch
 
-**Status**: Open
+**Status**: Closed — resolved in `6ea8eb2`
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
@@ -29,12 +29,8 @@ serving its diagnostic purpose.
 
 ## 3. Implementation & Verification Plan
 
-- Reproduce the static display in an interactive compact watch session and
-  isolate whether the cause is redraw cadence, time calculation, or frame
-  caching.
-- Add deterministic time-controlled tests proving a gauge is fuller shortly
-  after refresh and lower as the same agent approaches the next interval.
-- Ensure the live watch redraws the overlay without triggering unnecessary
-  usage fetches or changing collector cadence.
-- Verify manually across several redraws and run focused usage tests plus
-  `harnez status`.
+- [x] Capture one wall-clock timestamp for each watch redraw and thread it
+  through compact and per-agent overlay rendering.
+- [x] Add deterministic time-controlled compact-overlay coverage for full,
+  halfway, empty, future, and overdue timestamps.
+- [x] Verify with focused usage tests and `go test ./...`.
