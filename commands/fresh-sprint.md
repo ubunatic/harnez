@@ -47,4 +47,5 @@ For focused, well-defined tasks, bypass the full 5-phase ceremony in favor of a 
 - Terminate finished subagents immediately (`manage_subagents kill`).
 - Ensure no lingering background processes or timers remain.
 - Update ticket status in `issues/*.md` and `issues/README.md`.
-- Verify with `harnez status`.
+- Verify with `harnez status`; run `harnez index` to regenerate `issues/README.md` and
+  `docs/README.md`'s studies table instead of hand-editing rows.

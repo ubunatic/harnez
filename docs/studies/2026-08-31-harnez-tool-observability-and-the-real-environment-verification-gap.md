@@ -1,5 +1,7 @@
 # Study: `harnez-tool-observability` and the Real-Environment Verification Gap
 
+<!-- harnez:topic: `harnez-tool-observability` (issues 115–124): eight tickets shipped with green tests while automatic capture was completely non-functional in real usage — four bugs (two found by review, two only by live-restarting a real session), and why the tests didn't catch the live-only two -->
+
 **Date**: 2026-08-31
 **Scope**: End-to-end delivery of a new feature (tool-call telemetry: `harnez rate`/`harnez exec`/`harnez stats`,
 plus the `apply`-managed hook wiring that makes capture automatic) via eight sequential fresh-dev-agent tickets,

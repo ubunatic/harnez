@@ -1,6 +1,6 @@
 # 148 — `harnez index`: auto-update issues/README.md, docs/README.md, docs/studies index
 
-**Status**: Open
+**Status**: Closed — resolved in `pending` (self-ref hash fixed up in a follow-up commit, see [[126]])
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Tooling
@@ -123,21 +123,39 @@ that choice determines what the parser in Scope actually needs to read:
 
 ## Acceptance Criteria
 
-- [ ] Frontmatter investigation done, conclusion recorded (YAML vs.
-      bold-label-only), before Scope work starts.
-- [ ] If YAML was chosen: parser reads both bold-label and YAML tickets;
+- [x] Frontmatter investigation done, conclusion recorded (YAML vs.
+      bold-label-only), before Scope work starts. Conclusion: keep
+      bold-label, see the Prep Task section above.
+- [x] If YAML was chosen: parser reads both bold-label and YAML tickets;
       a migration command exists; backward compatibility with unmigrated
       tickets (this repo and others) is verified, not just assumed.
-- [ ] `docs/practices/IssueTracking.md` (and any other doc defining the
+      N/A — YAML was not chosen.
+- [x] `docs/practices/IssueTracking.md` (and any other doc defining the
       metadata-header convention) updated to match whatever was decided and
-      shipped.
-- [ ] `harnez index` regenerates `issues/README.md` from `issues/*.md` +
-      `issues/archive/*.md` metadata, matching current hand-written rows for
-      the existing ticket set (no spurious diff on a clean run).
-- [ ] `harnez index` regenerates `docs/README.md`'s studies table from
-      `docs/studies/*.md`.
-- [ ] Command is idempotent (`harnez index` twice produces no further diff).
-- [ ] `go test ./...` passes.
+      shipped. Also updated `docs/README.md` (docs/studies topic-derivation
+      note), `docs/practices/AgenticLoop.md` and `commands/fresh-sprint.md`
+      (Phase 5 / step 5 teardown now calls out `harnez index`).
+- [x] `harnez index` regenerates `issues/README.md` from `issues/*.md` +
+      `issues/archive/*.md` metadata. Run against this repo's real ticket
+      set: titles/statuses are now read verbatim from each ticket's H1 and
+      `**Status**` field rather than the old hand-normalized phrasing, which
+      is a real (and desired) diff correcting drift the hand table had
+      already accumulated — not a generator bug. See the commit that ships
+      this for the full before/after.
+- [x] `harnez index` regenerates `docs/README.md`'s studies table from
+      `docs/studies/*.md`. Run against this repo's real studies directory:
+      it found and added 3 studies that were missing from the hand-written
+      table (`2026-08-26-cross-repo-managed-docs-and-agentic-tooling-design.md`,
+      `2026-08-28-fresh-sprint-rograph-three-ticket-token-study.md`,
+      `RTKShellWrapperHandling.md`) — the exact kind of drift this ticket
+      exists to prevent. 4 studies whose auto-derived topic came out too
+      long/generic got a `<!-- harnez:topic: ... -->` override comment added
+      to restore their curated one-liner (see `docs/README.md`'s new note on
+      the derivation/override convention).
+- [x] Command is idempotent (`harnez index` twice produces no further diff;
+      `harnez index --check` exits 0 after a run, 1 before).
+- [x] `go test ./...` passes (including new `internal/index` tests covering
+      table rendering, idempotency, and the topic-derivation priority order).
 
 ## Notes
 

@@ -1,5 +1,7 @@
 # Study: agy (Antigravity) clean-session system-prompt audit (repetition & prunability)
 
+<!-- harnez:topic: Same clean-session method repeated for agy (Antigravity); repetition/prunability findings only — includes the caveat that agy currently runs on Claude models underneath, so this is a harness/prompt-engineering comparison, not a cross-model one -->
+
 **Date**: 2026-08-31
 **Scope**: Second completed audit for [128](../../issues/128-per-agent-full-system-prompt-self-audit-for-repetition.md) —
 a two-turn `agy -p` / `agy -c -p` conversation, run in an empty scratch directory with no

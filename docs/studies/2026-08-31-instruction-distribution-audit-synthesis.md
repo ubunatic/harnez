@@ -1,5 +1,7 @@
 # Study: Instruction-distribution audit — synthesis (Product Discovery + Technical Advisor)
 
+<!-- harnez:topic: Product-discovery + technical-advisor synthesis on global/user-home vs. per-project instruction distribution and duplication; prioritized findings table that became [[130]]'s 8-item scope -->
+
 **Date**: 2026-08-31
 **Scope**: Condensed synthesis of two parallel subagent audits — a Product Discovery pass (delivery
 mechanism/UX angle) and a Technical Advisor pass (implementation/injection-mechanics angle) — into

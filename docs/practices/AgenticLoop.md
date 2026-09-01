@@ -139,7 +139,7 @@ Agentic software engineering scales effectively when concurrency is structured a
 - **Goal**: Continually refine agent workflows, document tooling friction, and persist session insights.
 - **Mechanics**:
   - Record session friction, harness observations, and process recommendations in `docs/feedback/` (agentic workflow feedback) or `docs/studies/` (in-depth engineering case studies).
-  - Update issue tracker status (`issues/README.md`) and run `harnez status` to ensure zero drift between issues and indices.
+  - Update issue tracker status (`issues/README.md`) and run `harnez status` to ensure zero drift between issues and indices; run `harnez index` (issue 148) to regenerate `issues/README.md` and `docs/README.md`'s studies table from their source files instead of hand-editing rows.
   - Prepare clean, conventional commit messages.
 
 ---

@@ -214,29 +214,17 @@ func ParseTrackerTable(content string) ([]TableRow, error) {
 	return rows, nil
 }
 
-// Lint scans the issues directory and issues/README.md on disk, returning a report of all discrepancies.
-func Lint(issuesDir string) (*Report, error) {
-	return LintFS(os.DirFS(issuesDir), ".")
+// Scan walks issuesDir (and its "archive" subdir) collecting IssueFile
+// entries for every NNN-*.md file found, sorted by Number then RelPath.
+func Scan(issuesDir string) ([]IssueFile, error) {
+	return ScanFS(os.DirFS(issuesDir), ".")
 }
 
-// LintFS allows in-memory and embedded fs testing.
-func LintFS(sysFS fs.FS, root string) (*Report, error) {
-	readmePath := filepath.Join(root, "README.md")
-	readmeBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(readmePath))
-	if err != nil {
-		return nil, fmt.Errorf("read tracker readme %s: %w", readmePath, err)
-	}
-
-	tableRows, err := ParseTrackerTable(string(readmeBytes))
-	if err != nil {
-		return nil, fmt.Errorf("parse tracker table: %w", err)
-	}
-
+// ScanFS allows in-memory and embedded fs testing of Scan.
+func ScanFS(sysFS fs.FS, root string) ([]IssueFile, error) {
 	var issueFiles []IssueFile
-	fileMap := make(map[string]IssueFile)
-	numToFileMap := make(map[string][]IssueFile)
 
-	err = fs.WalkDir(sysFS, filepath.ToSlash(root), func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(sysFS, filepath.ToSlash(root), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -261,22 +249,59 @@ func LintFS(sysFS fs.FS, root string) (*Report, error) {
 				return err
 			}
 			title, rawStatus, hasStatus := ParseIssueFile(string(content))
-			issueFile := IssueFile{
+			issueFiles = append(issueFiles, IssueFile{
 				Number:       num,
 				RelPath:      relSlash,
 				Title:        title,
 				RawStatus:    rawStatus,
 				Canonical:    CanonicalizeStatus(rawStatus),
 				HasStatusTag: hasStatus,
-			}
-			issueFiles = append(issueFiles, issueFile)
-			fileMap[relSlash] = issueFile
-			numToFileMap[num] = append(numToFileMap[num], issueFile)
+			})
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("scan issue files: %w", err)
+	}
+
+	sort.Slice(issueFiles, func(i, j int) bool {
+		if issueFiles[i].Number != issueFiles[j].Number {
+			return issueFiles[i].Number < issueFiles[j].Number
+		}
+		return issueFiles[i].RelPath < issueFiles[j].RelPath
+	})
+
+	return issueFiles, nil
+}
+
+// Lint scans the issues directory and issues/README.md on disk, returning a report of all discrepancies.
+func Lint(issuesDir string) (*Report, error) {
+	return LintFS(os.DirFS(issuesDir), ".")
+}
+
+// LintFS allows in-memory and embedded fs testing.
+func LintFS(sysFS fs.FS, root string) (*Report, error) {
+	readmePath := filepath.Join(root, "README.md")
+	readmeBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(readmePath))
+	if err != nil {
+		return nil, fmt.Errorf("read tracker readme %s: %w", readmePath, err)
+	}
+
+	tableRows, err := ParseTrackerTable(string(readmeBytes))
+	if err != nil {
+		return nil, fmt.Errorf("parse tracker table: %w", err)
+	}
+
+	issueFiles, err := ScanFS(sysFS, root)
+	if err != nil {
+		return nil, err
+	}
+
+	fileMap := make(map[string]IssueFile)
+	numToFileMap := make(map[string][]IssueFile)
+	for _, f := range issueFiles {
+		fileMap[f.RelPath] = f
+		numToFileMap[f.Number] = append(numToFileMap[f.Number], f)
 	}
 
 	var diags []Diagnostic

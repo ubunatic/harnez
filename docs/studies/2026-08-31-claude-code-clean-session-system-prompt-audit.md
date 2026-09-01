@@ -1,5 +1,7 @@
 # Study: Claude Code clean-session system-prompt audit (repetition & prunability)
 
+<!-- harnez:topic: Clean-session self-audit method (`claude -p` / `claude -c -p` in an empty scratch dir): Claude Code's own harness-native system prompt measured for repetition and prunability, and why the Tool Feedback Protocol directive gets skipped despite being correctly injected -->
+
 **Date**: 2026-08-31
 **Scope**: First completed audit for [128](../../issues/128-per-agent-full-system-prompt-self-audit-for-repetition.md) —
 a two-turn `claude -p` / `claude -c -p` conversation, run in an empty scratch directory with no
