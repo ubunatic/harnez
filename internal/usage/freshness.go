@@ -1,10 +1,6 @@
 package usage
 
-import (
-	"time"
-
-	"ubunatic.com/harnez/internal/rograph"
-)
+import "time"
 
 // freshnessFraction returns how much of DefaultCollectorInterval remains
 // before the next background-collector tick (issue 082) for an agent whose
@@ -55,8 +51,7 @@ func freshnessGauge(fraction float64) string {
 	if fraction > 1 {
 		fraction = 1
 	}
-	glyph := rograph.RenderPercentSparkline([]float64{fraction * 100}, rograph.SparklineOptions{Width: 1})
-	return "[" + glyph + "]"
+	return "[" + timeoutSnakeGlyph(fraction) + "]"
 }
 
 // freshnessOverlayLabel returns the countdown glyph before a shortened label

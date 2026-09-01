@@ -728,8 +728,12 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 	d1 := compactDurationText(w1)
 	d2 := compactDurationText(w2)
 
-	b1 := rograph.RenderBar(w1.UsedPercent, rograph.BarOptions{Width: 4, SubChar: true, ANSI: true})
-	b2 := rograph.RenderBar(w2.UsedPercent, rograph.BarOptions{Width: 4, SubChar: true, ANSI: true})
+	b1opts := watchBarOptions()
+	b1opts.Width = 4
+	b2opts := watchBarOptions()
+	b2opts.Width = 4
+	b1 := rograph.RenderBar(w1.UsedPercent, b1opts)
+	b2 := rograph.RenderBar(w2.UsedPercent, b2opts)
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
 
 	midBlock := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w1.UsedPercent, d1))
@@ -902,7 +906,7 @@ func formatCPULine(load CPULoad) string {
 		tempPart = fmt.Sprintf(" (%.0f°C)", load.TempC)
 	}
 	label := padLoadLabel(fmt.Sprintf("cpu (%d cores)", load.NumCPU))
-	return fmt.Sprintf("%s [%s] %s%s", label, rograph.PercentSparkline(series, min(rograph.MaxWidth, len(series))), avgPart, tempPart)
+	return fmt.Sprintf("%s [%s] %s%s", label, watchPercentSparkline(series, min(rograph.MaxWidth, len(series))), avgPart, tempPart)
 }
 
 func formatSystemMemoryLine(mem SystemMemory) string {
@@ -923,7 +927,7 @@ func formatGPULine(g GPU) string {
 	if g.HaveTemp {
 		tempPart = fmt.Sprintf(" (%.0f°C)", g.TempC)
 	}
-	return fmt.Sprintf("%s [%s] %.0f%%%s", label, rograph.PercentSparkline(series, min(rograph.MaxWidth, len(series))), g.UtilPercent, tempPart)
+	return fmt.Sprintf("%s [%s] %.0f%%%s", label, watchPercentSparkline(series, min(rograph.MaxWidth, len(series))), g.UtilPercent, tempPart)
 }
 
 func formatGPUMemoryLines(g GPU) []string {
@@ -1191,7 +1195,9 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 			resetStr = " " + FormatCompactDuration(w.DurationLeft)
 		}
 		lbl := rograph.PadLabel(label, labelWidth)
-		bar := rograph.RenderBar(w.UsedPercent, rograph.BarOptions{Width: 4, SubChar: true, ANSI: true})
+		barOpts := watchBarOptions()
+		barOpts.Width = 4
+		bar := rograph.RenderBar(w.UsedPercent, barOpts)
 		line := fmt.Sprintf("%s %s %3.0f%%%s", lbl, bar, w.UsedPercent, resetStr)
 		if visLen(line) > contentW {
 			line = fmt.Sprintf("%s %s %3.0f%%", lbl, bar, w.UsedPercent)
@@ -1222,8 +1228,12 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 	d2 := compactDurationText(w2)
 
 	lbl := rograph.PadLabel(label, labelWidth)
-	b1 := rograph.RenderBar(w1.UsedPercent, rograph.BarOptions{Width: 4, SubChar: true, ANSI: true})
-	b2 := rograph.RenderBar(w2.UsedPercent, rograph.BarOptions{Width: 4, SubChar: true, ANSI: true})
+	b1opts := watchBarOptions()
+	b1opts.Width = 4
+	b2opts := watchBarOptions()
+	b2opts.Width = 4
+	b1 := rograph.RenderBar(w1.UsedPercent, b1opts)
+	b2 := rograph.RenderBar(w2.UsedPercent, b2opts)
 
 	midBlock := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w1.UsedPercent, d1))
 	midStr := rograph.PadLabel(midBlock, 10)

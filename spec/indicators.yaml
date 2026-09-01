@@ -10,4 +10,16 @@ timeout-snake:
   title: "Time gauge braille snake"
   # frames: ["⣿", "⣾", "⣶", "⣴", "⣤", "⣠", "⣀", "⢀", "⠀"] # eat top-to-bottom, left-to-right
   # frames: ["⣿", "⣾", "⣼", "⣸", "⢸", "⢰", "⢠", "⢀", "⠀"] # eat down the left side, then down the right
-  frames: ["⣿", "⡿", "⠿", "⠻", "⠹", "⠸", "⠰", "⠠", "⠀"]
+  # frames: ["⣿", "⡿", "⠿", "⠻", "⠹", "⠸", "⠰", "⠠", "⠀"]
+  frames: ["⠿", "⠷", "⠧", "⠇", "⠃", "⠁", "⠀"] # 2×3: top-right, down right, then up left
+
+# Every glyph that draws a quota bar in `usage --watch`. `sub-character`
+# progresses from one eighth to seven eighths; `filled` completes a cell.
+usage-bar:
+  filled: "█"
+  empty: "░"
+  sub-character: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+
+# CPU and GPU load timelines map 0% through 100% in this declared order.
+load-sparkline:
+  frames: ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]

@@ -72,11 +72,11 @@ func TestFreshnessGauge(t *testing.T) {
 		fraction float64
 		want     string
 	}{
-		{"full", 1.0, "[█]"},
-		{"half", 0.5, "[▄]"},
-		{"empty", 0.0, "[▁]"},
-		{"clamps above 1", 1.5, "[█]"},
-		{"clamps below 0 (overdue)", -0.5, "[▁]"},
+		{"full", 1.0, "[" + timeoutSnakeGlyph(1) + "]"},
+		{"half", 0.5, "[" + timeoutSnakeGlyph(.5) + "]"},
+		{"empty", 0.0, "[" + timeoutSnakeGlyph(0) + "]"},
+		{"clamps above 1", 1.5, "[" + timeoutSnakeGlyph(1) + "]"},
+		{"clamps below 0 (overdue)", -0.5, "[" + timeoutSnakeGlyph(0) + "]"},
 	}
 
 	for _, tt := range tests {
@@ -100,7 +100,7 @@ func TestFreshnessOverlayLabel(t *testing.T) {
 
 	t.Run("puts the full glyph first and keeps the label width intact", func(t *testing.T) {
 		got := freshnessOverlayLabel("Gemini", now, now)
-		want := "⣿ Gem…"
+		want := timeoutSnakeGlyph(1) + " Gem…"
 		if got != want {
 			t.Errorf("freshnessOverlayLabel() = %q, want %q", got, want)
 		}
@@ -111,7 +111,7 @@ func TestFreshnessOverlayLabel(t *testing.T) {
 
 	t.Run("overdue agent drains to the empty braille glyph", func(t *testing.T) {
 		got := freshnessOverlayLabel("Weekly", now.Add(-2*DefaultCollectorInterval), now)
-		want := "⠀ Wee…"
+		want := timeoutSnakeGlyph(0) + " Wee…"
 		if got != want {
 			t.Errorf("freshnessOverlayLabel() = %q, want %q", got, want)
 		}
@@ -119,8 +119,8 @@ func TestFreshnessOverlayLabel(t *testing.T) {
 
 	t.Run("label with 3 or fewer runes is replaced in full", func(t *testing.T) {
 		got := freshnessOverlayLabel("5h", now, now)
-		if got != "⣿" {
-			t.Errorf("freshnessOverlayLabel() = %q, want %q", got, "⣿")
+		if got != timeoutSnakeGlyph(1) {
+			t.Errorf("freshnessOverlayLabel() = %q, want %q", got, timeoutSnakeGlyph(1))
 		}
 	})
 }

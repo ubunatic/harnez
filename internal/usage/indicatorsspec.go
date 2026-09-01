@@ -3,12 +3,14 @@ package usage
 import (
 	"fmt"
 	"io/fs"
+	"math"
 	"strings"
 	"sync"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/rograph"
 )
 
 const indicatorsSpecPath = "spec/indicators.yaml"
@@ -16,7 +18,19 @@ const indicatorsSpecPath = "spec/indicators.yaml"
 // indicatorsSpec mirrors spec/schemas/indicators.schema.json. The parser
 // additionally fixes the semantic endpoints of the finite time gauge.
 type indicatorsSpec struct {
-	TimeoutSnake indicatorSequence `yaml:"timeout-snake"`
+	TimeoutSnake  indicatorSequence `yaml:"timeout-snake"`
+	UsageBar      usageBarSpec      `yaml:"usage-bar"`
+	LoadSparkline glyphSequence     `yaml:"load-sparkline"`
+}
+
+type usageBarSpec struct {
+	Filled       string   `yaml:"filled"`
+	Empty        string   `yaml:"empty"`
+	SubCharacter []string `yaml:"sub-character"`
+}
+
+type glyphSequence struct {
+	Frames []string `yaml:"frames"`
 }
 
 type indicatorSequence struct {
@@ -46,13 +60,39 @@ func parseIndicatorsYAML(data []byte) (indicatorsSpec, error) {
 			}
 		}
 	}
-	if sequence.Frames[0] != "⣿" {
-		return indicatorsSpec{}, fmt.Errorf("indicators spec: timeout-snake: first frame must be full braille ⣿")
+	if err := validateOneRune("usage-bar filled", spec.UsageBar.Filled); err != nil {
+		return indicatorsSpec{}, err
 	}
-	if sequence.Frames[len(sequence.Frames)-1] != "⠀" {
-		return indicatorsSpec{}, fmt.Errorf("indicators spec: timeout-snake: last frame must be empty braille ⠀")
+	if err := validateOneRune("usage-bar empty", spec.UsageBar.Empty); err != nil {
+		return indicatorsSpec{}, err
+	}
+	if spec.UsageBar.Filled == spec.UsageBar.Empty {
+		return indicatorsSpec{}, fmt.Errorf("indicators spec: usage-bar: filled and empty must differ")
+	}
+	if len(spec.UsageBar.SubCharacter) == 0 {
+		return indicatorsSpec{}, fmt.Errorf("indicators spec: usage-bar: need sub-character frames")
+	}
+	for i, frame := range spec.UsageBar.SubCharacter {
+		if err := validateOneRune(fmt.Sprintf("usage-bar sub-character frame %d", i), frame); err != nil {
+			return indicatorsSpec{}, err
+		}
+	}
+	if len(spec.LoadSparkline.Frames) < 2 {
+		return indicatorsSpec{}, fmt.Errorf("indicators spec: load-sparkline: need at least two frames")
+	}
+	for i, frame := range spec.LoadSparkline.Frames {
+		if err := validateOneRune(fmt.Sprintf("load-sparkline frame %d", i), frame); err != nil {
+			return indicatorsSpec{}, err
+		}
 	}
 	return spec, nil
+}
+
+func validateOneRune(name, value string) error {
+	if utf8.RuneCountInString(value) != 1 {
+		return fmt.Errorf("indicators spec: %s: want one rune", name)
+	}
+	return nil
 }
 
 func loadIndicators() (indicatorsSpec, error) {
@@ -85,6 +125,24 @@ func timeoutSnakeGlyph(fraction float64) string {
 	if fraction >= 1 {
 		return frames[0]
 	}
-	idx := int((1 - fraction) * float64(len(frames)-1))
+	idx := int(math.Round((1 - fraction) * float64(len(frames)-1)))
 	return frames[idx]
+}
+
+func watchBarOptions() rograph.BarOptions {
+	spec := mustIndicators().UsageBar
+	partial := make([]rune, len(spec.SubCharacter))
+	for i, glyph := range spec.SubCharacter {
+		partial[i] = []rune(glyph)[0]
+	}
+	return rograph.BarOptions{Fill: []rune(spec.Filled)[0], Empty: []rune(spec.Empty)[0], SubChar: true, SubCharacterGlyphs: partial, ANSI: true}
+}
+
+func watchPercentSparkline(values []float64, width int) string {
+	frames := mustIndicators().LoadSparkline.Frames
+	glyphs := make([]rune, len(frames))
+	for i, glyph := range frames {
+		glyphs[i] = []rune(glyph)[0]
+	}
+	return rograph.RenderPercentSparkline(values, rograph.SparklineOptions{Width: width, Glyphs: glyphs, ANSI: true})
 }

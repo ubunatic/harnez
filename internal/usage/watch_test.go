@@ -1421,7 +1421,7 @@ func TestDispatchWatchKeyDebugOverlayRendersAndRestoresFrame(t *testing.T) {
 
 	debug := render(toggled.debugOverlay)
 	debugText := stripANSI(strings.Join(debug.lines, "\n"))
-	if !strings.Contains(debugText, "⣿ Claude C…") {
+	if !strings.Contains(debugText, timeoutSnakeGlyph(1)+" Claude C…") {
 		t.Fatalf("debug frame does not show the aggregate per-agent freshness gauge:\n%s", debugText)
 	}
 	if debug.cols != normal.cols || debug.rows != normal.rows || len(debug.lines) != len(normal.lines) {
@@ -1469,11 +1469,11 @@ func TestAllUsageLinesAtDebugOverlayCountsDown(t *testing.T) {
 		}
 	}
 
-	assertGauge(refreshed, "⣿")
-	assertGauge(refreshed.Add(DefaultWatchInterval/2), "⠹")
-	assertGauge(refreshed.Add(DefaultWatchInterval), "⠀")
-	assertGauge(refreshed.Add(-time.Second), "⣿")
-	assertGauge(refreshed.Add(2*DefaultWatchInterval), "⠀")
+	assertGauge(refreshed, timeoutSnakeGlyph(1))
+	assertGauge(refreshed.Add(DefaultWatchInterval/2), timeoutSnakeGlyph(.5))
+	assertGauge(refreshed.Add(DefaultWatchInterval), timeoutSnakeGlyph(0))
+	assertGauge(refreshed.Add(-time.Second), timeoutSnakeGlyph(1))
+	assertGauge(refreshed.Add(2*DefaultWatchInterval), timeoutSnakeGlyph(0))
 }
 
 // TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval exercises the
@@ -1490,11 +1490,12 @@ func TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval(t *testing.T) {
 	frame := buildWatchFrameAt(summary, nil, DefaultWatchInterval, compactWatchSections(), 90, 24, true,
 		t.TempDir(), t.TempDir(), refreshed.Add(DefaultWatchInterval/2), WatchOptions{Compact: true, DebugOverlay: true})
 	text := stripANSI(strings.Join(frame.lines, "\n"))
-	if !strings.Contains(text, "⠹ Claude C…") {
+	halfGauge := timeoutSnakeGlyph(.5)
+	if !strings.Contains(text, halfGauge+" Claude C…") {
 		t.Fatalf("watch frame at half its fetch interval did not render half gauge:\n%s", text)
 	}
 	raw := strings.Join(frame.lines, "\n")
-	wantGauge := ansiOpen("time-gauge-fg") + ansiOpen("time-gauge-bg") + "⠹\x1b[0m Claude C…"
+	wantGauge := ansiOpen("time-gauge-fg") + ansiOpen("time-gauge-bg") + halfGauge + "\x1b[0m Claude C…"
 	if !strings.Contains(raw, wantGauge) {
 		t.Fatalf("watch frame does not render the compact time gauge with its independent colors: %q", raw)
 	}

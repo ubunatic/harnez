@@ -36,6 +36,10 @@ type BarOptions struct {
 	// '░'); custom glyphs fall back to whole-character snapping since
 	// eighth-block glyphs only exist for the default block characters.
 	SubChar bool
+	// SubCharacterGlyphs supplies the ascending partial-fill glyphs. Empty
+	// uses rograph's legacy eighth-block sequence; callers with a visual spec
+	// should pass their resolved sequence.
+	SubCharacterGlyphs []rune
 	// ANSI wraps the rendered bar (including any percent label) in a
 	// background ANSI sequence, matching RenderSparkline's convention.
 	// Plain output is the default so callers can opt in only for terminal
@@ -73,7 +77,7 @@ var eighthBlockGlyphs = []rune("▏▎▍▌▋▊▉█")
 // solid '█' fill and the flat background. Callers rendering without a
 // background wrap should keep '░' so the bar's empty region stays visible
 // on a plain terminal with no color support.
-func eighthBlockFill(pct float64, width int, emptyRune rune) string {
+func eighthBlockFill(pct float64, width int, fill, emptyRune rune, partial []rune) string {
 	totalEighths := int(float64(width*8) * (pct / 100))
 	if totalEighths < 0 {
 		totalEighths = 0
@@ -91,12 +95,12 @@ func eighthBlockFill(pct float64, width int, emptyRune rune) string {
 	}
 
 	var b strings.Builder
-	b.WriteString(strings.Repeat("█", fullChars))
+	b.WriteString(strings.Repeat(string(fill), fullChars))
 	if fullChars < width {
 		if remainder == 0 {
 			b.WriteRune(emptyRune)
 		} else {
-			b.WriteRune(eighthBlockGlyphs[remainder-1])
+			b.WriteRune(partial[remainder-1])
 		}
 		b.WriteString(strings.Repeat(string(emptyRune), width-fullChars-1))
 	}
@@ -120,6 +124,9 @@ type SparklineOptions struct {
 	ANSI bool
 	// BackgroundANSI is the SGR code used when ANSI is true. Empty uses "100".
 	BackgroundANSI string
+	// Glyphs supplies low-to-high sparkline frames. Empty uses the package
+	// default so rograph remains independent of application configuration.
+	Glyphs []rune
 }
 
 // RenderBar renders a single-value terminal bar or stripe. Values outside the
@@ -145,7 +152,11 @@ func RenderBar(value float64, opts BarOptions) string {
 	}
 
 	var glyphs string
-	if opts.SubChar && fill == '█' && empty == '░' {
+	if opts.SubChar && (len(opts.SubCharacterGlyphs) > 0 || (fill == '█' && empty == '░')) {
+		partial := opts.SubCharacterGlyphs
+		if len(partial) == 0 {
+			partial = eighthBlockGlyphs
+		}
 		emptyRune := empty
 		if opts.ANSI {
 			// The background wrap below already covers the whole glyph
@@ -154,7 +165,7 @@ func RenderBar(value float64, opts BarOptions) string {
 			// on top of it. See eighthBlockFill's doc comment.
 			emptyRune = ' '
 		}
-		glyphs = eighthBlockFill(pct, width, emptyRune)
+		glyphs = eighthBlockFill(pct, width, fill, emptyRune, partial)
 	} else {
 		filledCount := int(float64(width) * (pct / 100))
 		if filledCount < 0 {
@@ -202,7 +213,7 @@ func RenderSparkline(values []float64, opts SparklineOptions) string {
 	minimum, maximum, flat := sparkRange(values, opts)
 	spark := make([]rune, len(values))
 	for i, value := range values {
-		spark[i] = sparkGlyph(value, minimum, maximum, flat)
+		spark[i] = sparkGlyphWithGlyphs(value, minimum, maximum, flat, opts.Glyphs)
 	}
 
 	out := string(spark)
@@ -308,8 +319,15 @@ func sparkRange(values []float64, opts SparklineOptions) (float64, float64, bool
 }
 
 func sparkGlyph(value, minimum, maximum float64, flat bool) rune {
+	return sparkGlyphWithGlyphs(value, minimum, maximum, flat, nil)
+}
+
+func sparkGlyphWithGlyphs(value, minimum, maximum float64, flat bool, glyphs []rune) rune {
+	if len(glyphs) == 0 {
+		glyphs = percentSparkChars
+	}
 	if flat {
-		return percentSparkChars[(len(percentSparkChars)-1)/2]
+		return glyphs[(len(glyphs)-1)/2]
 	}
 	if math.IsNaN(value) || value < minimum {
 		value = minimum
@@ -317,14 +335,14 @@ func sparkGlyph(value, minimum, maximum float64, flat bool) rune {
 	if value > maximum {
 		value = maximum
 	}
-	idx := int(((value - minimum) / (maximum - minimum)) * float64(len(percentSparkChars)-1))
+	idx := int(((value - minimum) / (maximum - minimum)) * float64(len(glyphs)-1))
 	if idx < 0 {
 		idx = 0
 	}
-	if idx >= len(percentSparkChars) {
-		idx = len(percentSparkChars) - 1
+	if idx >= len(glyphs) {
+		idx = len(glyphs) - 1
 	}
-	return percentSparkChars[idx]
+	return glyphs[idx]
 }
 
 func isFinite(value float64) bool {
