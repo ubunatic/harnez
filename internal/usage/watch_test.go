@@ -1421,7 +1421,7 @@ func TestDispatchWatchKeyDebugOverlayRendersAndRestoresFrame(t *testing.T) {
 
 	debug := render(toggled.debugOverlay)
 	debugText := stripANSI(strings.Join(debug.lines, "\n"))
-	if !strings.Contains(debugText, "Claude C[█]") {
+	if !strings.Contains(debugText, "█ Claude C…") {
 		t.Fatalf("debug frame does not show the aggregate per-agent freshness gauge:\n%s", debugText)
 	}
 	if debug.cols != normal.cols || debug.rows != normal.rows || len(debug.lines) != len(normal.lines) {
@@ -1464,16 +1464,16 @@ func TestAllUsageLinesAtDebugOverlayCountsDown(t *testing.T) {
 	assertGauge := func(now time.Time, want string) {
 		t.Helper()
 		lines := stripANSI(strings.Join(allUsageLinesAt(summary, 72, true, now, DefaultWatchInterval), "\n"))
-		if !strings.Contains(lines, "Claude C"+want) {
-			t.Fatalf("gauge at %s = %q, want Claude C%s", now, lines, want)
+		if !strings.Contains(lines, want+" Claude C…") {
+			t.Fatalf("gauge at %s = %q, want %s Claude C…", now, lines, want)
 		}
 	}
 
-	assertGauge(refreshed, "[█]")
-	assertGauge(refreshed.Add(DefaultWatchInterval/2), "[▄]")
-	assertGauge(refreshed.Add(DefaultWatchInterval), "[▁]")
-	assertGauge(refreshed.Add(-time.Second), "[█]")
-	assertGauge(refreshed.Add(2*DefaultWatchInterval), "[▁]")
+	assertGauge(refreshed, "█")
+	assertGauge(refreshed.Add(DefaultWatchInterval/2), "▄")
+	assertGauge(refreshed.Add(DefaultWatchInterval), "▁")
+	assertGauge(refreshed.Add(-time.Second), "█")
+	assertGauge(refreshed.Add(2*DefaultWatchInterval), "▁")
 }
 
 // TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval exercises the
@@ -1490,7 +1490,7 @@ func TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval(t *testing.T) {
 	frame := buildWatchFrameAt(summary, nil, DefaultWatchInterval, compactWatchSections(), 90, 24, true,
 		t.TempDir(), t.TempDir(), refreshed.Add(DefaultWatchInterval/2), WatchOptions{Compact: true, DebugOverlay: true})
 	text := stripANSI(strings.Join(frame.lines, "\n"))
-	if !strings.Contains(text, "Claude C[▄]") {
+	if !strings.Contains(text, "▄ Claude C…") {
 		t.Fatalf("watch frame at half its fetch interval did not render half gauge:\n%s", text)
 	}
 }

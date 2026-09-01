@@ -61,11 +61,11 @@ func freshnessGauge(fraction float64) string {
 	return "[" + glyph + "]"
 }
 
-// freshnessOverlayLabel returns label with its last 3 runes replaced by a
-// countdown gauge built from lastRefreshed/now (issue 131's `!` debug
-// overlay). It replaces — never appends or pads — so the label's total
-// visible width is unchanged from non-overlay rendering. Labels with 3 or
-// fewer runes are replaced in full, since there is nothing left to keep.
+// freshnessOverlayLabel returns the countdown glyph before a shortened label
+// (issue 131's `!` debug overlay). It replaces — never appends or pads — so
+// the label's total visible width is unchanged from non-overlay rendering.
+// Labels with 3 or fewer runes are replaced in full, since there is nothing
+// left to keep.
 func freshnessOverlayLabel(label string, lastRefreshed, now time.Time) string {
 	return freshnessOverlayLabelForInterval(label, lastRefreshed, now, DefaultCollectorInterval)
 }
@@ -73,10 +73,11 @@ func freshnessOverlayLabel(label string, lastRefreshed, now time.Time) string {
 // freshnessOverlayLabelForInterval renders the watch debug gauge against the
 // watch's next scheduled fetch rather than the unrelated collector schedule.
 func freshnessOverlayLabelForInterval(label string, lastRefreshed, now time.Time, interval time.Duration) string {
-	gauge := freshnessGauge(freshnessFractionForInterval(lastRefreshed, now, interval))
+	fraction := freshnessFractionForInterval(lastRefreshed, now, interval)
+	glyph := rograph.RenderPercentSparkline([]float64{fraction * 100}, rograph.SparklineOptions{Width: 1})
 	r := []rune(label)
 	if len(r) <= 3 {
-		return gauge
+		return glyph
 	}
-	return string(r[:len(r)-3]) + gauge
+	return glyph + " " + string(r[:len(r)-3]) + "…"
 }
