@@ -13,7 +13,7 @@
         "required": ["title", "sgr"],
         "properties": {
           "title": {
-            "type": "string",
+            "type": ["string", "null"],
             "minLength": 1
           },
           "description": {

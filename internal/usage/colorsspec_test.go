@@ -58,18 +58,21 @@ func TestParseWatchColorsYAMLMalformedFailsClearly(t *testing.T) {
 
 func TestParseWatchColorsYAMLValidatesRequiredFields(t *testing.T) {
 	cases := []struct {
-		name string
-		yaml string
+		name  string
+		yaml  string
+		valid bool
 	}{
-		{"no colors", "colors: {}\n"},
-		{"missing title", "colors:\n  panel-bg:\n    sgr: \"100\"\n"},
-		{"missing sgr", "colors:\n  panel-bg:\n    title: Panel background\n"},
+		{"no colors", "colors: {}\n", false},
+		{"missing title", "colors:\n  panel-bg:\n    sgr: \"100\"\n", false},
+		{"missing sgr", "colors:\n  accent:\n    title: Accent\n", false},
+		{"empty panel background", "colors:\n  panel-bg:\n    title: Panel background\n    sgr: \"\"\n", true},
+		{"null panel background", "colors:\n  panel-bg:\n    title: Panel background\n    sgr: null\n", true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := parseWatchColorsYAML([]byte(c.yaml))
-			if err == nil {
-				t.Fatalf("expected a validation error for %q, got nil", c.name)
+			if (err == nil) != c.valid {
+				t.Fatalf("parseWatchColorsYAML(%q) error = %v, want valid=%t", c.name, err, c.valid)
 			}
 		})
 	}

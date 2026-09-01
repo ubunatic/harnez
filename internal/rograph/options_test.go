@@ -74,6 +74,18 @@ func TestRenderSparklineOptions(t *testing.T) {
 	}
 }
 
+func TestANSIChartsOmitWrapperWhenResolvedBackgroundIsAbsent(t *testing.T) {
+	old := DefaultBackgroundANSI
+	DefaultBackgroundANSI = ""
+	t.Cleanup(func() { DefaultBackgroundANSI = old })
+	if got, want := RenderBar(50, BarOptions{Width: 2, ANSI: true}), "[█░]"; got != want {
+		t.Fatalf("bar without background = %q, want %q", got, want)
+	}
+	if got, want := RenderPercentSparkline([]float64{0, 100}, SparklineOptions{ANSI: true}), "▁█"; got != want {
+		t.Fatalf("sparkline without background = %q, want %q", got, want)
+	}
+}
+
 func TestFormatPercent(t *testing.T) {
 	tests := []struct {
 		name      string

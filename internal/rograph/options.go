@@ -183,7 +183,9 @@ func RenderBar(value float64, opts BarOptions) string {
 		if code == "" {
 			code = DefaultBackgroundANSI
 		}
-		glyphOut = "\x1b[" + code + "m" + glyphs + "\x1b[0m"
+		if code != "" {
+			glyphOut = "\x1b[" + code + "m" + glyphs + "\x1b[0m"
+		}
 	}
 
 	var b strings.Builder
@@ -223,6 +225,9 @@ func RenderSparkline(values []float64, opts SparklineOptions) string {
 	code := opts.BackgroundANSI
 	if code == "" {
 		code = DefaultBackgroundANSI
+	}
+	if code == "" {
+		return out
 	}
 	return "\x1b[" + code + "m" + out + "\x1b[0m"
 }
