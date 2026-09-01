@@ -279,6 +279,14 @@ agents_md:
           `harnez rate <tool_name> <1-5> "<1-line outcome summary>" "<project_folder>/<ticket_name>"`
           Example: `harnez rate Read 5 "found the bug in apply.go" harnez/117-harnez-rate-command`
           Score 5 flawless, 3 partial, 1 useless.
+      - name: Issue Tracker Discovery
+        content: |
+          ### Issue Tracker Discovery (harnez find)
+          When searching for existing issues or allocating next ticket numbers, always use
+          `harnez find` instead of `ls issues/`, `find`, or raw grep:
+          - `harnez find -d <repo> issues status:open` — list active open issues
+          - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text
+          - `harnez index -d <repo>` — update issues/README.md after filing or updating tickets
 
   # config for local md file
   local:

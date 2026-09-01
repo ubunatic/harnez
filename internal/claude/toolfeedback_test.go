@@ -124,3 +124,29 @@ func TestApplyInstallsToolFeedbackProtocol(t *testing.T) {
 		}
 	}
 }
+
+func TestIssueTrackerDiscoveryConfigEntry(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	var found *MDSection
+	for i := range cfg.AgentsMD.Global.Sections {
+		s := &cfg.AgentsMD.Global.Sections[i]
+		if s.Name == "Issue Tracker Discovery" {
+			found = s
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected an agents_md.global.sections entry named %q in embedded config.yaml", "Issue Tracker Discovery")
+	}
+	if !strings.Contains(found.Content, "harnez find -d <repo> issues status:open") {
+		t.Errorf("expected Issue Tracker Discovery section to contain harnez find status:open, got:\n%s", found.Content)
+	}
+	if !strings.Contains(found.Content, "harnez index -d <repo>") {
+		t.Errorf("expected Issue Tracker Discovery section to contain harnez index, got:\n%s", found.Content)
+	}
+}
+

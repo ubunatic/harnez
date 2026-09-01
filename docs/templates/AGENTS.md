@@ -16,6 +16,14 @@ Run from project root.
 - Commit documentation changes and `issues/*.md` changes immediately, don't batch them behind
   pending code work.
 
+## Issue Tracker Discovery (harnez find)
+
+When searching for existing issues or allocating next ticket numbers, always use
+`harnez find` instead of `ls issues/`, `find`, or raw grep:
+- `harnez find -d <repo> issues status:open` — list active open issues
+- `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text
+- `harnez index -d <repo>` — update issues/README.md after filing or updating tickets
+
 ## Editing Discipline
 
 - Prefer structured patch tools (`apply_patch`) or whole-block replacements over narrow string substitution edits.

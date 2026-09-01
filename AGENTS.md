@@ -43,6 +43,14 @@ Adhere to `@docs/IssueTracking.md` for issue tracking conventions across `issues
 tracker synchronization). Commit documentation changes and `issues/*.md` changes
 immediately, don't batch them behind pending code work.
 
+## Issue Tracker Discovery (harnez find)
+
+When searching for existing issues or allocating next ticket numbers, always use
+`harnez find` instead of `ls issues/`, `find`, or raw grep:
+- `harnez find -d <repo> issues status:open` — list active open issues
+- `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text
+- `harnez index -d <repo>` — update issues/README.md after filing or updating tickets
+
 ## Development & Review Workflow
 
 Run from project root.

@@ -176,3 +176,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 175 | [175-promote-structured-patching-over-fragile-edits.md](175-promote-structured-patching-over-fragile-edits.md) | Agent Instruction & Practice: Promote Structured Patching Over Fragile Edits | Closed — resolved in structured patching guidelines |
 | 176 | [176-structured-capped-subagent-completion-report-contract.md](176-structured-capped-subagent-completion-report-contract.md) | Structured, Capped Subagent Completion-Report Contract | Open |
 | 177 | [177-lean-post-edit-build-check-for-control-flow-edits.md](177-lean-post-edit-build-check-for-control-flow-edits.md) | Lean, Scoped Post-Edit Build Check for Control-Flow-Reshaping Edits | Open |
+| 178 | [178-distill-smart-mode-error-pattern-preservation.md](178-distill-smart-mode-error-pattern-preservation.md) | Distill: Opt-In Smart Mode with Classifier-Driven Error Pattern Preservation | Open |
+| 179 | [179-instruct-agents-on-harnez-find-in-agents-md.md](179-instruct-agents-on-harnez-find-in-agents-md.md) | Instruct Agents on `harnez find` for Issue Discovery in `AGENTS.md` | Closed |
