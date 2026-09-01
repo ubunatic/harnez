@@ -1,6 +1,6 @@
 # 155 — Define a spec-driven braille snake timeout indicator for the time gauge
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -14,20 +14,21 @@ The debug time gauge currently renders its normal block-sparkline glyph even
 when the scheduled refresh is overdue. That makes an expired/timeout state
 look like an ordinary empty countdown rather than a distinct, active warning.
 
-Use a cycling braille “snake” as the timeout indicator so an overdue gauge is
-visually unambiguous without changing the compact overlay's width.
+Use a finite braille “snake” depletion as the time gauge so the remaining
+time is visually legible without changing the compact overlay's width.
 
 ## 2. Technical Specification / Findings
 
-- Preserve the existing one-glyph, block-sparkline countdown while data is
-  fresh and the next refresh is still pending.
-- Once the freshness interval has elapsed, render one frame from a braille
-  snake sequence in place of the normal empty gauge glyph. Advance the frame
-  from a deterministic time-derived index so independent rows redraw in sync.
+- Preserve the existing one-glyph time-gauge geometry while data is fresh and
+  the next refresh is still pending.
+- Render one frame from a finite braille snake sequence for the whole
+  countdown. Derive its index deterministically from remaining freshness time
+  so independent rows redraw in sync; do not cycle after timeout.
 - Define the ordered frame sequence in a new YAML specification under `spec/`
-  (for example, `spec/indicators.yaml`), not as a Go constant. The initial
-  candidate sequence is `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`; the implementation must consume the
-  declared ordering verbatim.
+  (for example, `spec/indicators.yaml`), not as a Go constant. It must begin
+  with full braille `⣿`, follow a deterministic snake-like depletion, and
+  end with empty braille `⠀`; the implementation must consume the declared
+  ordering verbatim.
 - Add a companion JSON Schema requiring a non-empty sequence of single-rune
   braille frames. Embed, load, and validate it with the same no-fallback
   discipline as the existing watch color spec.
@@ -37,10 +38,10 @@ visually unambiguous without changing the compact overlay's width.
 
 ## 3. Implementation & Verification Plan
 
-- [ ] Add the indicator YAML file and JSON Schema, with the ordered braille
+- [x] Add the indicator YAML file and JSON Schema, with the ordered braille
   snake frames as the single source of truth.
-- [ ] Load the embedded sequence in `internal/usage`; replace only the
-  overdue/timeout gauge state with a deterministic animated frame.
-- [ ] Test schema loading, exact sequence fidelity, frame cycling/wraparound,
+- [x] Load the embedded sequence in `internal/usage`; map the countdown from
+  full to empty without looping after timeout.
+- [x] Test schema loading, exact sequence fidelity, finite depletion,
   normal countdown preservation, ANSI styling, and one-rune visible width.
-- [ ] Run focused usage/spec tests and `go test ./...`.
+- [x] Run focused usage/spec tests and `go test ./...`.

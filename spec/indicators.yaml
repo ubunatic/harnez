@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=schemas/indicators.schema.json
+#
+# One-rune status indicators used by `harnez usage --watch`.
+#
+# timeout-snake is a finite, time-derived depletion: it begins as a full
+# braille cell when a refresh arrives and drains in the declared order to an
+# empty cell as the next refresh becomes due. It does not loop or spin after
+# timeout; the empty final frame truthfully represents no time remaining.
+timeout-snake:
+  title: "Time gauge braille snake"
+  frames: ["⣿", "⡿", "⠿", "⠻", "⠹", "⠸", "⠰", "⠠", "⠀"]

@@ -98,9 +98,9 @@ func TestFreshnessGauge(t *testing.T) {
 func TestFreshnessOverlayLabel(t *testing.T) {
 	now := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
 
-	t.Run("puts the glyph first and keeps the label width intact", func(t *testing.T) {
+	t.Run("puts the full glyph first and keeps the label width intact", func(t *testing.T) {
 		got := freshnessOverlayLabel("Gemini", now, now)
-		want := "█ Gem…"
+		want := "⣿ Gem…"
 		if got != want {
 			t.Errorf("freshnessOverlayLabel() = %q, want %q", got, want)
 		}
@@ -109,9 +109,9 @@ func TestFreshnessOverlayLabel(t *testing.T) {
 		}
 	})
 
-	t.Run("overdue agent drains to the empty glyph", func(t *testing.T) {
+	t.Run("overdue agent drains to the empty braille glyph", func(t *testing.T) {
 		got := freshnessOverlayLabel("Weekly", now.Add(-2*DefaultCollectorInterval), now)
-		want := "▁ Wee…"
+		want := "⠀ Wee…"
 		if got != want {
 			t.Errorf("freshnessOverlayLabel() = %q, want %q", got, want)
 		}
@@ -119,8 +119,8 @@ func TestFreshnessOverlayLabel(t *testing.T) {
 
 	t.Run("label with 3 or fewer runes is replaced in full", func(t *testing.T) {
 		got := freshnessOverlayLabel("5h", now, now)
-		if got != "█" {
-			t.Errorf("freshnessOverlayLabel() = %q, want %q", got, "█")
+		if got != "⣿" {
+			t.Errorf("freshnessOverlayLabel() = %q, want %q", got, "⣿")
 		}
 	})
 }

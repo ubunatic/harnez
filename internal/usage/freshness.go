@@ -72,7 +72,7 @@ func freshnessOverlayLabel(label string, lastRefreshed, now time.Time) string {
 // watch's next scheduled fetch rather than the unrelated collector schedule.
 func freshnessOverlayLabelForInterval(label string, lastRefreshed, now time.Time, interval time.Duration) string {
 	fraction := freshnessFractionForInterval(lastRefreshed, now, interval)
-	glyph := rograph.RenderPercentSparkline([]float64{fraction * 100}, rograph.SparklineOptions{Width: 1})
+	glyph := timeoutSnakeGlyph(fraction)
 	r := []rune(label)
 	if len(r) <= 3 {
 		return glyph

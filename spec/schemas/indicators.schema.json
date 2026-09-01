@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ubunatic.com/harnez/spec/schemas/indicators.schema.json",
+  "title": "harnez usage --watch indicators",
+  "type": "object",
+  "required": ["timeout-snake"],
+  "properties": {
+    "timeout-snake": {
+      "type": "object",
+      "required": ["title", "frames"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1},
+        "frames": {
+          "type": "array",
+          "minItems": 2,
+          "items": {"type": "string", "pattern": "^[\\u2800-\\u28FF]$"}
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
