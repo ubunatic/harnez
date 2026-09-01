@@ -19,11 +19,7 @@ colors:
     sgr: "100"
   time-gauge-fg:
     title: "Debug time gauge foreground"
-    description: >-
-      Dark grey foreground (SGR 90, bright-black) for the compact debug overlay's
-      freshness countdown glyph. Kept separate from other graph colors so
-      the time gauge can be tuned independently.
-    sgr: "90"
+    sgr: "40"
   time-gauge-bg:
     title: "Debug time gauge background"
     description: >-
