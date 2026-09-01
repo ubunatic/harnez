@@ -147,3 +147,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 146 | [146-recent-subagent-activity-watch-box.md](146-recent-subagent-activity-watch-box.md) | Assess recent subagent activity in compact usage watch | Open |
 | 147 | [147-debug-overlay-gauge-does-not-count-down.md](147-debug-overlay-gauge-does-not-count-down.md) | Debug overlay gauge does not count down to the next usage fetch | Closed — resolved in `e1d370d` |
 | 148 | [148-harnez-index-command-for-issues-docs-studies.md](148-harnez-index-command-for-issues-docs-studies.md) | `harnez index`: auto-update issues/README.md, docs/README.md, docs/studies index | Open |
+| 149 | [149-agent-specific-profiles-codex-async-wait-instruction.md](149-agent-specific-profiles-codex-async-wait-instruction.md) | Agent-specific instruction profiles, first use case: Codex async-wait guidance | Open |

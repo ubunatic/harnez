@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [[108-subagent-dispatch-sequential-default-and-issue-number-race-guard]], `AGENTS.md`, Codex subagent dispatch configuration
+**Related**: [[108-subagent-dispatch-sequential-default-and-issue-number-race-guard]], [[149-agent-specific-profiles-codex-async-wait-instruction]] (establishes the per-agent profile mechanism this policy's content likely migrates into), `AGENTS.md`, Codex subagent dispatch configuration
 
 ---
 
