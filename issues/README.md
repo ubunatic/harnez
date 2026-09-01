@@ -149,3 +149,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 148 | [148-harnez-index-command-for-issues-docs-studies.md](148-harnez-index-command-for-issues-docs-studies.md) | `harnez index`: auto-update issues/README.md, docs/README.md, docs/studies index | Closed — resolved in `fce2b4a` |
 | 149 | [149-agent-specific-profiles-codex-async-wait-instruction.md](149-agent-specific-profiles-codex-async-wait-instruction.md) | Agent-specific instruction profiles, first use case: Codex async-wait guidance | Open |
 | 150 | [150-time-gauge-color-parity-and-spec.md](150-time-gauge-color-parity-and-spec.md) | Give the debug time gauge graph-color parity and an independent color spec | Open |
+| 151 | [151-on-demand-doc-lookup-vs-materialized-instructions-research.md](151-on-demand-doc-lookup-vs-materialized-instructions-research.md) | Research: on-demand doc lookup vs. materialized instructions, and temporary per-repo agent profiles | Open |

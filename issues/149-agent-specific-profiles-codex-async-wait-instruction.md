@@ -6,7 +6,10 @@
 **Category**: Agentic Ergonomics
 **Related**: [[144-codex-subagent-model-selection-policy]] (same class of problem — a Codex-only
 correction with no home in the shared instruction set — likely becomes the second use case for
-this same mechanism), [[130-instruction-distribution-audit-followups]] (prior distribution audit,
+this same mechanism), [[151-on-demand-doc-lookup-vs-materialized-instructions-research]] (research
+ticket asking whether this profile mechanism should also apply per-repository and temporarily, and
+whether materialization itself is the right delivery model for generic docs — depends on this
+ticket's mechanism existing first), [[130-instruction-distribution-audit-followups]] (prior distribution audit,
 scoped to *uniform* content delivered to different targets, not *differentiated* per-agent
 content), [[108-subagent-dispatch-sequential-default-and-issue-number-race-guard]], `config.yaml`
 `agents_md` section
