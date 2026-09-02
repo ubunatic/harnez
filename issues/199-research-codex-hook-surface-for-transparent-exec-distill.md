@@ -1,6 +1,6 @@
 # 199 — Research: does Codex CLI have a hook surface like agy's hooks.json?
 
-**Status**: Draft
+**Status**: Closed — research complete
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Research
