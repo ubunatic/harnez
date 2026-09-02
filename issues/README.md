@@ -194,3 +194,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 191 | [191-load-box-ram-chart-hardware-label-and-chart-mode-spec.md](191-load-box-ram-chart-hardware-label-and-chart-mode-spec.md) | Load Box RAM Chart, Hardware Module Label, and Chart Mode Spec | Closed |
 | 192 | [192-integrate-git-doc-history-cli-command.md](192-integrate-git-doc-history-cli-command.md) | Integrate Git Document History Telemetry into `harnez` CLI Command | Closed |
 | 193 | [193-research-agy-hook-surface-for-transparent-exec-distill.md](193-research-agy-hook-surface-for-transparent-exec-distill.md) | Research: can agy tool calls be routed through `harnez exec`/`harnez distill` without configuring agy itself? | Open |
+| 194 | [194-harnez-next-ticket-number-and-reserve.md](194-harnez-next-ticket-number-and-reserve.md) | `harnez find issues next` (or similar) to report and reserve the next free ticket number | Open |
