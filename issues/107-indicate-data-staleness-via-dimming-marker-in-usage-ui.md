@@ -1,6 +1,6 @@
 # 107 — Indicate data staleness via dimming/marker in usage UI (compact + full views)
 
-**Status**: Open
+**Status**: Closed — resolved in b7295cd
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -174,3 +174,81 @@ spec.
 - Consider whether the "verify"/offline-derivability audit ticket referenced in this ticket's
   origin (not found in the repo as of filing — see the Related note above) should land first,
   since it may reshape what "stale" even means at the data-model level.
+
+## Resolution Note
+
+Implemented without waiting for issue 105 (still open/unimplemented as of this work), using only
+the per-agent signals that already exist today (`Sources`, `QuotaFetchError`, `LastRefreshed`) —
+per this ticket's own instruction not to block on 105. A note pointing 105 at the vocabulary
+introduced here has been added to `issues/105-surface-per-collector-fetch-status-in-usage-ui.md`.
+
+**Staleness definition** — new `AgentUsage.IsValueStale()` (`internal/usage/types.go`), a per-agent
+verdict (the data model still has no per-`QuotaWindow` provenance field, so granularity stays
+row-level, matching the ticket's own investigation finding). True whenever any of:
+- `QuotaFetchError != ""` (a live fetch was attempted this cycle and failed);
+- any `Sources` entry contains the substring `"stale"` (matches the pre-existing issue 032/086
+  tagging convention: `"(stale)"`, `"(cached, stale)"`, `"(usage-history, stale)"` — deliberately
+  does NOT match a plain `"(cached)"` tag, which is a fresh, non-stale cache hit);
+- `LastRefreshed` is non-zero and older than `DefaultCacheStaleness` (2× the collector interval,
+  30 min) — reusing the same duration `cacheOrLive` itself uses to decide "old enough to attempt a
+  live recollect," rather than inventing an unrelated threshold. A zero `LastRefreshed` is
+  "unknown," not stale, matching `IsStale`'s existing contract. This is intentionally a much
+  tighter/more sensitive threshold than `DefaultDisplayStaleness` (7d, issue 101's unrelated
+  auto-hide gate) — the two answer different questions ("should this row still be shown at all" vs.
+  "should this row's numbers read as live right now") and both now coexist without collision.
+
+**Dim mechanism** — dim-only (SGR `\x1b[90m`, the "dim-grey" named color in `spec/colors.yaml`),
+reconciling the pre-existing `\x1b[2m`/"dim-faint" vs. `\x1b[90m`/"dim-grey" split onto dim-grey
+everywhere: dim-grey was already the dominant convention (10+ call sites in `watch.go` vs. one),
+and being an explicit color substitution rather than reliance on the SGR "faint" attribute, it
+degrades more consistently across terminal emulators (some render faint identically to normal
+text; dim-grey visibly changes color on nearly all of them). `RenderText`'s "sources:" note
+(`usage.go`, previously the sole `dim-faint` call site) was migrated to dim-grey. `dim-faint`
+itself is left defined in `spec/colors.yaml`/`colorsspec.go` rather than deleted, in case a future
+feature wants the distinct "true faint" semantic rather than "de-emphasized."
+
+New `staleValueANSI`/`ansiWrapPreservingResets` helpers (`internal/usage/colorsspec.go`) wrap a
+whole already-built line rather than an individual token: a plain SGR wrap would be silently
+canceled partway through by a bar glyph's own embedded `\x1b[0m` reset (`rograph.RenderBar` always
+closes its background-color wrap), so the helper re-asserts dim-grey immediately after every
+embedded reset. Confirmed zero-width-cost via `visLen`/`stripANSI` (both strip ANSI before any
+layout math), matching the ticket's own free-width finding — see
+`TestStaleValueANSIPreservesResetsAndCostsNoWidth`.
+
+Per AC #2 (terminal-independent complement, not dimming alone): the compact `[a]` All Usage
+aggregate (tightest width budget, active field-dropping fallback) gets **dim-only**, no text — a
+literal marker would cost real, counted width there. The fuller per-agent panel/box (`--watch`
+non-compact panels, `buildAgentBoxAt`) and the full/verbose `--summary` view (`RenderText`) both
+have comfortable room to spare, so both additionally append a plain-text `" · stale"` suffix onto
+the existing "updated ... ago"/"Updated:" caption line — a terminal-independent signal that
+survives on any terminal regardless of how (or whether) it renders dim-grey distinctly.
+
+**View-by-view treatment**:
+- Compact `[a]` All Usage aggregate (`allUsageLinesAt`/`formatAllUsageTableLine`/
+  `formatAllUsageSingleWindowLine`, `watch.go`): whole row dimmed when the contributing agent's
+  `IsValueStale()` is true (per-agent, shared across all of that agent's model-group rows). No text
+  marker.
+- Fuller per-agent panel (`buildAgentBoxAt`, `watch.go`, used by non-compact `--watch` and
+  individual per-agent panels): quota line(s) dimmed + `" · stale"` appended to the "updated ...
+  ago" caption.
+- Full/verbose `--summary` (`RenderText`, `usage.go`): Session/Weekly/ModelGroup value lines dimmed
+  + `" · stale"` appended to the "Updated:" caption. Also fixed a latent width-measurement bug this
+  change would otherwise have triggered: the box-sizing/padding math there used a raw
+  `utf8.RuneCountInString` on each line (no prior line ever carried embedded ANSI), which would
+  have mis-sized/mis-padded the box once dimmed lines were introduced; switched to the
+  ANSI-stripping `visLen` already used everywhere in `watch.go`.
+
+Both compact and full-view dimming were verified with unit tests
+(`TestAllUsageLinesAtDimsStaleAgentRow`, `TestBuildAgentBoxDimsStaleQuotaAndAnnotatesUpdatedCaption`,
+`TestRenderTextDimsStaleQuotaLineAndAnnotatesUpdated`) and manually against the real installed
+binary at realistic terminal widths (`COLUMNS=100 harnez usage`, plus a scratch scenario forcing a
+stale AGY row) — output stayed correctly aligned, embedded bar colors survived the dim wrap intact,
+and a genuinely-fresh agent in the same view rendered with no dimming and no `"stale"` text.
+
+Fixed one latent test bug surfaced by this change: `TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval`
+(`watch_test.go`) hardcoded an absolute past `LastRefreshed` date instead of a `time.Now()`-relative
+one, which crossed the new (much shorter) staleness threshold as real time passed and started
+tripping the new dimming. Updated it to a relative timestamp, matching the pattern already used by
+the other staleness-adjacent tests in the same file.
+
+`go build ./...`, `go vet ./...`, and `go test ./...` all pass.

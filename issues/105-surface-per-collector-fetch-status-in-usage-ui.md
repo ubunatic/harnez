@@ -131,3 +131,32 @@ repeating the same manual-log-diffing investigation.
   collector daemon process itself alive," this ticket is "did each agent's most recent collection
   attempt actually succeed, and with what data provenance." Both could plausibly share UI real
   estate but shouldn't be conflated in implementation.
+
+## Note from issue 107 (dimming/de-emphasis for stale values, implemented)
+
+107 shipped without waiting for this ticket (per its own instructions), using only the per-agent
+signals available today. Before designing this ticket's fetch-status vocabulary/enum, be aware of
+what 107 already introduced so this ticket reuses/reconciles it rather than inventing a second,
+incompatible notion:
+
+- `AgentUsage.IsValueStale()` (`internal/usage/types.go`): a per-agent-row (not per-`QuotaWindow`)
+  "should this row's numbers read as live right now" verdict — true when `QuotaFetchError != ""`,
+  or a `Sources` entry contains the substring `"stale"` (the existing `"(stale)"`/`"(cached,
+  stale)"`/`"(usage-history, stale)"` tagging convention), or `LastRefreshed` is older than
+  `DefaultCacheStaleness` (30 min). This is a coarser, string-matched, per-agent boolean —
+  exactly the kind of thing this ticket's proposed explicit `fetch mode: live | history | cache |
+  none` enum would supersede. If that enum lands, `IsValueStale` should be re-derived from it
+  (fetch mode `history`/`cache`/`none` implying stale, `live` implying not) rather than kept as a
+  second, parallel heuristic.
+- A rendering convention (`internal/usage/colorsspec.go`'s `staleValueANSI`) that dims a value with
+  `\x1b[90m` ("dim-grey", now the sole de-emphasis/staleness color — see 107's Resolution Note for
+  why `\x1b[2m`/"dim-faint" was retired from active use) and, in views with room to spare (full
+  `--summary`, `--watch` per-agent panels — NOT the compact `[a]` All Usage aggregate, which stays
+  dim-only for width reasons), appends a plain-text `" · stale"` suffix to the existing "updated
+  ... ago" caption. If this ticket adds a distinct glyph/marker vocabulary for collector-fetch
+  status (criterion 2's "live / history-fallback / no-data" markers), keep it visually distinct
+  from the `" · stale"` suffix or fold the two together deliberately — don't let a row end up with
+  two independent-looking staleness annotations that actually mean overlapping things.
+- Granularity is still per-agent, not per-`QuotaWindow`, in both tickets' current state — 107's
+  investigation flagged this same data-model gap as the reason it couldn't do finer-grained
+  dimming; this ticket's provenance-enum idea is the natural place to fix that for both, if pursued.
