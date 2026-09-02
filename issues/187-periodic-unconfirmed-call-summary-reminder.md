@@ -1,6 +1,6 @@
 # 187 — Periodic "Summary: X tool calls in `<dur>`" reminder (spec-first)
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -73,5 +73,62 @@ landed when you pick this up; otherwise compute your own) from
 
 ## Resolution Note
 
-(To be filled in by the implementing agent — document the spec's final
-shape, the threshold/condition decision, and why.)
+**Spec shape**: a new `spec/reminders.yaml` + `spec/schemas/reminders.schema.json`
+(house style: YAML authoring, JSON Schema validation, embedded via the existing
+root `//go:embed spec` directive in `embed.go` — no new embed target needed).
+Chose a new file over folding into `spec/actions.yaml`/`colors.yaml`: those two
+are about the `usage --watch` TUI specifically (hotkeys, ANSI colors); this is
+about the CLI-wide session-tip hook, a different consumer and lifecycle, so a
+sibling top-level spec file keeps the "one file per concern" pattern those two
+already establish rather than overloading either with an unrelated schema.
+
+The spec defines a `reminders` map (currently one entry, `summary`) with
+`title`, `description`, a `message` template (`{calls}`/`{duration}`
+placeholders, substituted by `internal/sessionstate.renderReminder`), and a
+`threshold_multiplier` + `replaces` pair that encode the condition/composition
+decision below. Loader/validator: `internal/sessionstate/remindersspec.go`,
+mirroring `internal/usage/actionsspec.go`'s parse-then-index pattern
+(`parseRemindersYAML` fails clearly on bad YAML/schema violations, never
+panics; `mustRemindersSpec()` is the build-time invariant used only by tests
+and available for future callers, while `GapTip` itself calls the
+error-tolerant `summaryReminder()` so a corrupted embedded spec degrades to
+the pre-existing plain/heartbeat tips instead of ever panicking out of the
+"never block a real command" `sessionTipHook` path).
+
+**Threshold/condition decision**: the summary reminder **replaces** the
+plain and heartbeat gap-tips' wording once its own, strictly larger threshold
+is crossed — it does not stack as a third independent nag. Concretely,
+`threshold_multiplier: 4` in the spec is applied against the *existing* base
+units (`rateGapThreshold` calls / `rateGapIdleDuration()`) already defined in
+`internal/sessionstate/sessionstate.go`, giving an 80-call / 80-minute
+summary threshold by default — exactly 2x `heartbeatGapThreshold`'s own 2x
+multiple of the plain threshold. Rationale for "replaces, not stacks":
+issue 179's heartbeat tip already established that regressing to multiple
+concurrent nag channels for the same underlying gap (unconfirmed tool
+activity) reintroduces the chattiness issue 181 deliberately narrowed away
+from. A session that's ignored both the plain and heartbeat tips doesn't need
+a *third* differently-worded reminder stacked on top — it needs the
+next-more-specific one to replace what would otherwise repeat. Expressing the
+threshold as a multiplier of the existing base units (rather than a new
+absolute constant) also means retuning `HARNEZ_RATE_GAP_IDLE_MINUTES` (issue
+186) automatically keeps the three-tier ladder's relative spacing intact
+without a second, disconnected constant to update in lockstep.
+
+**Composition**: `GapTip` checks the summary condition first (most specific,
+since it only fires at the largest gap), then heartbeat, then plain, same as
+before issue 187 — all three still share one `tipCooldown` gate, one
+`feedbackDisabled` opt-out check, and return at most one line per invocation.
+`internal/sessionstate/remindersspec.go`'s `summaryReminder()`/`renderReminder()`
+plus `sessionstate.go`'s `GapTip` doc comment spell out the ordering; the
+schema's `replaces` enum (`plain_rate_gap`/`heartbeat_rate_gap`) documents the
+relationship in the spec itself (informational — `GapTip`'s checking order is
+what actually enforces it) so the composition intent isn't only a Go comment.
+
+**Tests**: `internal/sessionstate/remindersspec_test.go` covers spec
+load/validation (embedded-spec integrity test mirroring
+`TestEmbeddedActionsSpecIsValid`, malformed-YAML and missing/invalid-field
+cases), `formatReminderDuration`/`renderReminder` output with concrete
+numbers, and `GapTip` condition-trigger/composition/opt-out behavior
+(summary supersedes heartbeat once its threshold is crossed, time-only
+trigger parity with issue 186, `feedbackDisabled` suppresses it same as the
+other two). `go build ./...`, `go vet ./...`, and `go test ./...` all pass.
