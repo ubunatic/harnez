@@ -17,6 +17,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/telemetry"
 )
@@ -27,6 +28,7 @@ func newStatsCmd() *cobra.Command {
 	var ticketFlag string
 	var autoFlag bool
 	var jsonOut bool
+	var overheadFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "stats [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--auto]",
@@ -55,11 +57,12 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runStats(cmd.OutOrStdout(), statsOptions{
-				Tool:   toolFlag,
-				Agent:  agentFlag,
-				Ticket: ticketFlag,
-				Auto:   autoFlag,
-				JSON:   jsonOut,
+				Tool:     toolFlag,
+				Agent:    agentFlag,
+				Ticket:   ticketFlag,
+				Auto:     autoFlag,
+				JSON:     jsonOut,
+				Overhead: overheadFlag,
 			})
 		},
 	}
@@ -68,6 +71,8 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 	cmd.Flags().StringVar(&ticketFlag, "ticket", "", "filter to one ticket_id")
 	cmd.Flags().BoolVar(&autoFlag, "auto", false, "filter to the current session, resolved from the environment (like harnez rate/exec)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output the report as JSON instead of a formatted table")
+	cmd.Flags().BoolVar(&overheadFlag, "overhead", false,
+		"also report the harnez rate feedback overhead (issue 142): call count/bytes from telemetry plus an ESTIMATED token cost, clearly labeled as an estimate, not provider-reported")
 	return cmd
 }
 
@@ -76,26 +81,44 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 // override DBPath/Getenv/StateDir to isolate from the user's real
 // telemetry DB and environment.
 type statsOptions struct {
-	Tool   string
-	Agent  string
-	Ticket string
-	Auto   bool
-	JSON   bool
+	Tool     string
+	Agent    string
+	Ticket   string
+	Auto     bool
+	JSON     bool
+	Overhead bool
 
 	DBPath   string              // telemetry DB path override; empty means telemetry.DefaultDBPath()
 	Getenv   func(string) string // nil means os.Getenv; only consulted when Auto is set
 	StateDir string              // resolve.Session state/lock dir override; only consulted when Auto is set
+	Config   *claude.Config      // config override for the --overhead instruction-text size; nil means claude.LoadConfigEmbedded()
 }
 
 // statsReport is the full shape rendered by both the table and JSON
 // renderers — kept as one Go value so --json is guaranteed to report the
 // same numbers the table does (they're built from the same struct).
 type statsReport struct {
-	Filter  telemetry.Filter              `json:"filter"`
-	Empty   bool                          `json:"empty"`
-	ByTool  []telemetry.GroupStats        `json:"by_tool,omitempty"`
-	ByAgent []telemetry.GroupStats        `json:"by_agent,omitempty"`
-	Savings telemetry.DistillationSavings `json:"distillation_savings"`
+	Filter   telemetry.Filter              `json:"filter"`
+	Empty    bool                          `json:"empty"`
+	ByTool   []telemetry.GroupStats        `json:"by_tool,omitempty"`
+	ByAgent  []telemetry.GroupStats        `json:"by_agent,omitempty"`
+	Savings  telemetry.DistillationSavings `json:"distillation_savings"`
+	Overhead *rateOverheadReport           `json:"rate_feedback_overhead,omitempty"`
+}
+
+// rateOverheadReport is the --overhead addendum (issue 142): real measured
+// call-count/byte data from telemetry (Calls, TotalCallBytes, AvgCallBytes,
+// InstructionBytes) alongside token figures explicitly derived with a
+// ~4-bytes-per-token heuristic and labeled as such — never presented as
+// provider-reported.
+type rateOverheadReport struct {
+	Calls                      int64   `json:"calls"`
+	TotalCallBytes             int64   `json:"total_call_bytes"`
+	AvgCallBytes               float64 `json:"avg_call_bytes"`
+	InstructionBytes           int     `json:"instruction_bytes"`
+	EstimatedCallTokens        int64   `json:"estimated_call_tokens"`
+	EstimatedInstructionTokens int64   `json:"estimated_instruction_tokens"`
+	EstimateMethod             string  `json:"estimate_method"`
 }
 
 // runStats resolves opts into a telemetry.Filter, queries the DB, and
@@ -138,6 +161,14 @@ func runStats(w io.Writer, opts statsOptions) error {
 		return fmt.Errorf("stats: %w", err)
 	}
 
+	if opts.Overhead {
+		overhead, err := buildRateOverheadReport(db, f, opts.Config)
+		if err != nil {
+			return fmt.Errorf("stats: %w", err)
+		}
+		report.Overhead = &overhead
+	}
+
 	if opts.JSON {
 		return renderStatsJSON(w, report)
 	}
@@ -167,6 +198,38 @@ func buildStatsReport(db *telemetry.DB, f telemetry.Filter) (statsReport, error)
 		ByTool:  byTool,
 		ByAgent: byAgent,
 		Savings: savings,
+	}, nil
+}
+
+// buildRateOverheadReport pairs telemetry.RateCallOverhead (real, measured
+// per-call data) with claude.ToolFeedbackProtocolBytes (the one-time
+// instruction-text size) and converts both to ESTIMATED token counts via
+// telemetry.EstimateTokens — see issue 142. cfg defaults to
+// claude.LoadConfigEmbedded() when nil (production use); tests inject a
+// fixture config instead.
+func buildRateOverheadReport(db *telemetry.DB, f telemetry.Filter, cfg *claude.Config) (rateOverheadReport, error) {
+	overhead, err := db.RateCallOverhead(f)
+	if err != nil {
+		return rateOverheadReport{}, fmt.Errorf("rate overhead: %w", err)
+	}
+
+	if cfg == nil {
+		loaded, err := claude.LoadConfigEmbedded()
+		if err != nil {
+			return rateOverheadReport{}, fmt.Errorf("load config: %w", err)
+		}
+		cfg = loaded
+	}
+	instructionBytes := claude.ToolFeedbackProtocolBytes(cfg)
+
+	return rateOverheadReport{
+		Calls:                      overhead.Count,
+		TotalCallBytes:             overhead.TotalCallBytes,
+		AvgCallBytes:               overhead.AvgCallBytes,
+		InstructionBytes:           instructionBytes,
+		EstimatedCallTokens:        telemetry.EstimateTokens(overhead.TotalCallBytes),
+		EstimatedInstructionTokens: telemetry.EstimateTokens(int64(instructionBytes)),
+		EstimateMethod:             "ESTIMATE: ~4 bytes/token heuristic, not provider-reported",
 	}, nil
 }
 
@@ -215,6 +278,16 @@ func renderStatsTable(w io.Writer, report statsReport) error {
 		fmt.Fprintf(w, "distillation byte savings: %.2f%% (%d rows, %d -> %d bytes)\n",
 			report.Savings.Ratio*100, report.Savings.Count,
 			report.Savings.RawBytes, report.Savings.DistilledBytes)
+	}
+
+	if o := report.Overhead; o != nil {
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "harnez rate feedback overhead (issue 142):")
+		fmt.Fprintf(w, "  calls: %d, total call bytes: %d, avg call bytes: %.1f (measured)\n",
+			o.Calls, o.TotalCallBytes, o.AvgCallBytes)
+		fmt.Fprintf(w, "  instruction text: %d bytes, injected once per session (not per call)\n", o.InstructionBytes)
+		fmt.Fprintf(w, "  %s: ~%d call tokens + ~%d one-time instruction tokens\n",
+			o.EstimateMethod, o.EstimatedCallTokens, o.EstimatedInstructionTokens)
 	}
 	return nil
 }

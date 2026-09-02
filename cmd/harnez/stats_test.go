@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -192,6 +193,106 @@ func TestRunStatsAuto_FiltersToResolvedCurrentSession(t *testing.T) {
 	}
 	if strings.Contains(out, "codex") {
 		t.Errorf("--auto for sess-1 output should not mention codex (belongs to sess-2); got:\n%s", out)
+	}
+}
+
+// overheadFixtureConfig returns a minimal claude.Config with one
+// rate_feedback-gated section (40 bytes) and one gated skill (10 bytes),
+// so buildRateOverheadReport's claude.ToolFeedbackProtocolBytes has a
+// hand-computable expected value (50) instead of depending on the real
+// embedded config.yaml's current wording.
+func overheadFixtureConfig() *claude.Config {
+	return &claude.Config{
+		AgentsMD: claude.AgentsMD{
+			Global: claude.AgentsMDTarget{
+				Sections: []claude.MDSection{
+					{Name: "Tool Feedback Protocol", RateFeedback: true, Content: strings.Repeat("x", 40)},
+					{Name: "Unrelated Section", Content: strings.Repeat("y", 999)},
+				},
+			},
+		},
+		Skills: []claude.Command{
+			{Name: "tool-feedback-protocol", RateFeedback: true, Content: strings.Repeat("z", 10)},
+			{Name: "unrelated-skill", Content: strings.Repeat("w", 999)},
+		},
+	}
+}
+
+// TestRunStatsOverhead_MatchesHandComputedFixture verifies issue 142's
+// --overhead report: real measured call_type="internal" (harnez rate)
+// count/bytes from telemetry (2 calls, 1000+2000=3000 bytes, avg 1500 —
+// per seedStatsFixture's doc comment) paired with the fixture config's
+// instruction-text byte size (40+10=50), and that the token figures are
+// clearly derived via the documented ~4-bytes-per-token estimate rather
+// than presented as exact/provider-reported.
+func TestRunStatsOverhead_MatchesHandComputedFixture(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	seedStatsFixture(t, dbPath)
+	cfg := overheadFixtureConfig()
+
+	var buf bytes.Buffer
+	if err := runStats(&buf, statsOptions{DBPath: dbPath, Overhead: true, Config: cfg}); err != nil {
+		t.Fatalf("runStats: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"harnez rate feedback overhead", "calls: 2", "total call bytes: 3000",
+		"instruction text: 50 bytes", "ESTIMATE",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("--overhead table output missing %q; got:\n%s", want, out)
+		}
+	}
+
+	var jsonBuf bytes.Buffer
+	if err := runStats(&jsonBuf, statsOptions{DBPath: dbPath, JSON: true, Overhead: true, Config: cfg}); err != nil {
+		t.Fatalf("runStats: %v", err)
+	}
+	var report statsReport
+	if err := json.Unmarshal(jsonBuf.Bytes(), &report); err != nil {
+		t.Fatalf("json.Unmarshal: %v\noutput: %s", err, jsonBuf.String())
+	}
+	if report.Overhead == nil {
+		t.Fatal("report.Overhead is nil, want populated")
+	}
+	o := report.Overhead
+	if o.Calls != 2 {
+		t.Errorf("Calls = %d, want 2", o.Calls)
+	}
+	if o.TotalCallBytes != 3000 {
+		t.Errorf("TotalCallBytes = %d, want 3000", o.TotalCallBytes)
+	}
+	if o.AvgCallBytes != 1500 {
+		t.Errorf("AvgCallBytes = %v, want 1500", o.AvgCallBytes)
+	}
+	if o.InstructionBytes != 50 {
+		t.Errorf("InstructionBytes = %d, want 50", o.InstructionBytes)
+	}
+	if o.EstimatedCallTokens != 3000/4 {
+		t.Errorf("EstimatedCallTokens = %d, want %d", o.EstimatedCallTokens, 3000/4)
+	}
+	if o.EstimatedInstructionTokens != 50/4 {
+		t.Errorf("EstimatedInstructionTokens = %d, want %d", o.EstimatedInstructionTokens, 50/4)
+	}
+	if !strings.Contains(strings.ToUpper(o.EstimateMethod), "ESTIMATE") {
+		t.Errorf("EstimateMethod = %q, want it to clearly say ESTIMATE", o.EstimateMethod)
+	}
+}
+
+// TestRunStatsWithoutOverheadFlag_OmitsOverheadField confirms --overhead
+// is opt-in: report.Overhead stays nil (and the JSON key absent via
+// omitempty) when the flag isn't passed, so existing `harnez stats`
+// callers/scripts see no shape change.
+func TestRunStatsWithoutOverheadFlag_OmitsOverheadField(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	seedStatsFixture(t, dbPath)
+
+	var buf bytes.Buffer
+	if err := runStats(&buf, statsOptions{DBPath: dbPath, JSON: true}); err != nil {
+		t.Fatalf("runStats: %v", err)
+	}
+	if strings.Contains(buf.String(), "rate_feedback_overhead") {
+		t.Errorf("expected no rate_feedback_overhead key without --overhead, got:\n%s", buf.String())
 	}
 }
 

@@ -64,6 +64,40 @@ func TestRunRate_ParsesPositionalArgsAndWritesRow(t *testing.T) {
 	}
 }
 
+// TestRunRate_RecordsCallPayloadBytes verifies issue 142's per-call
+// overhead measurement: runRate populates RawBytes with the real, measured
+// size of the rate call's own argument payload (not a token estimate —
+// see telemetry.EstimateTokens for that conversion), and a longer
+// description/ticket produces a proportionally larger value.
+func TestRunRate_RecordsCallPayloadBytes(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "tool_catalog.sqlite")
+
+	if err := runRate([]string{"Read", "4", "short"}, rateOptions{
+		SessionFlag: "sess-1",
+		DBPath:      dbPath,
+		StateDir:    filepath.Join(tmp, "state"),
+	}); err != nil {
+		t.Fatalf("runRate() error = %v", err)
+	}
+	short := lastRow(t, dbPath)
+	if short.RawBytes <= 0 {
+		t.Fatalf("RawBytes = %d, want > 0 for a real recorded call payload", short.RawBytes)
+	}
+
+	if err := runRate([]string{"Read", "4", "a much longer description of what happened", "myproj/142-overhead"}, rateOptions{
+		SessionFlag: "sess-1",
+		DBPath:      dbPath,
+		StateDir:    filepath.Join(tmp, "state"),
+	}); err != nil {
+		t.Fatalf("runRate() error = %v", err)
+	}
+	long := lastRow(t, dbPath)
+	if long.RawBytes <= short.RawBytes {
+		t.Errorf("RawBytes for the longer call = %d, want > short call's %d", long.RawBytes, short.RawBytes)
+	}
+}
+
 func TestRunRate_RejectsOutOfRangeScore(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "tool_catalog.sqlite")

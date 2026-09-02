@@ -600,6 +600,8 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 	}
 	printResult("wrote", settingsPath, sr)
 
+	disableRateFeedback := RateFeedbackDisabled(cfg, nil)
+
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
 		gTarget := fsutil.ExpandHome(g.Target)
 		ruleTargets := []string{gTarget}
@@ -610,6 +612,21 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 			gr := applyResult{}
 			var presentNames []string
 			for _, s := range g.Sections {
+				// issue 142: a rate_feedback-gated section is actively
+				// removed (not merely skipped) when disabled, so toggling
+				// the flag off cleans up a previously-installed instruction
+				// rather than leaving it stale on the next apply.
+				if s.RateFeedback && disableRateFeedback {
+					removed, cleaned, err := markdown.Clean(ruleTarget, s.Name)
+					if err != nil {
+						return fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
+					}
+					if removed || cleaned {
+						gr.changed = true
+						gr.notes = append(gr.notes, s.Name+": removed (rate feedback disabled)")
+					}
+					continue
+				}
 				r, err := applySectionMD(ruleTarget, s.Name, s.Content)
 				if err != nil {
 					return fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
@@ -674,6 +691,27 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 		targets := skillTargets(cfg)
 		var skillNames []string
 		for _, skill := range cfg.Skills {
+			// issue 142: a rate_feedback-gated skill is actively removed
+			// (not merely skipped) when disabled — same rationale as the
+			// section-clean branch above.
+			if skill.RateFeedback && disableRateFeedback {
+				for _, skillsRoot := range targets {
+					skillDir := filepath.Join(skillsRoot, skill.Name)
+					path := filepath.Join(skillDir, "SKILL.md")
+					if _, err := os.Stat(path); err == nil {
+						if err := os.Remove(path); err != nil {
+							return fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
+						}
+						changes++
+						fmt.Printf("  removed %s\n", path)
+						_ = os.Remove(skillDir) // best-effort: drop now-empty dir
+					} else if !os.IsNotExist(err) {
+						return fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
+					}
+				}
+				skillNames = append(skillNames, skill.Name+" (disabled)")
+				continue
+			}
 			content, err := genSkillContent(skill, cfg.FS)
 			if err != nil {
 				return err
@@ -781,6 +819,8 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 	if err := report(diffSettingsJSON(filepath.Join(target, "settings.json"), buildSettingsDoc(cfg))); err != nil {
 		return false, fmt.Errorf("settings: %w", err)
 	}
+	disableRateFeedback := RateFeedbackDisabled(cfg, nil)
+
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
 		ruleTargets := []string{fsutil.ExpandHome(g.Target)}
 		if root := primeAgentRoot(cfg); root != "" {
@@ -788,6 +828,15 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 		}
 		for _, ruleTarget := range ruleTargets {
 			for _, s := range g.Sections {
+				if s.RateFeedback && disableRateFeedback {
+					// Disabled: drift means the gated section is still
+					// present and needs removal, not a content mismatch
+					// against s.Content.
+					if markdown.ContainsSection(ruleTarget, s.Name) {
+						anyChanged = true
+					}
+					continue
+				}
 				if err := report(diffSectionMD(ruleTarget, s.Name, s.Content)); err != nil {
 					return false, fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
 				}
@@ -803,6 +852,17 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 	}
 	if len(cfg.Skills) > 0 {
 		for _, skill := range cfg.Skills {
+			if skill.RateFeedback && disableRateFeedback {
+				for _, skillsRoot := range skillTargets(cfg) {
+					path := filepath.Join(skillsRoot, skill.Name, "SKILL.md")
+					if _, err := os.Stat(path); err == nil {
+						anyChanged = true
+					} else if !os.IsNotExist(err) {
+						return false, fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
+					}
+				}
+				continue
+			}
 			content, err := genSkillContent(skill, cfg.FS)
 			if err != nil {
 				return false, err

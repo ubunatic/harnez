@@ -243,6 +243,50 @@ type DistillationSavings struct {
 	Ratio          float64
 }
 
+// rateCallType is the call_type value only `harnez rate` writes (see
+// cmd/harnez/rate.go) — it uniquely identifies rate-feedback calls in the
+// tool_calls table without needing a separate flag column.
+const rateCallType = "internal"
+
+// RateCallOverhead summarizes the measured per-call cost attributable to
+// `harnez rate` calls (call_type="internal") matching f — the count and
+// argument-payload bytes issue 142's overhead report needs. It is real
+// measured data (RawBytes, populated by cmd/harnez/rate.go's
+// rateCallPayloadBytes), not a token estimate; EstimateTokens converts it
+// to a labeled estimate for reporting.
+type RateCallOverhead struct {
+	Count          int64
+	TotalCallBytes int64
+	AvgCallBytes   float64
+}
+
+// RateCallOverhead computes the rate-call overhead aggregate matching f.
+// Any CallType set on f is overridden to "internal" — this report is
+// specifically about `harnez rate` calls, not a general filter escape
+// hatch.
+func (d *DB) RateCallOverhead(f Filter) (RateCallOverhead, error) {
+	f.CallType = rateCallType
+	s, err := d.Aggregate(f)
+	if err != nil {
+		return RateCallOverhead{}, fmt.Errorf("rate call overhead: %w", err)
+	}
+	o := RateCallOverhead{Count: s.Count, TotalCallBytes: s.TotalRawBytes}
+	if s.Count > 0 {
+		o.AvgCallBytes = float64(s.TotalRawBytes) / float64(s.Count)
+	}
+	return o, nil
+}
+
+// EstimateTokens converts a byte count to an ESTIMATED token count using a
+// ~4-bytes-per-token heuristic (a commonly cited rough average for English
+// text under BPE-style tokenizers). This is explicitly NOT a
+// provider-reported token count — harnez has no access to the calling
+// model's real tokenizer or usage numbers — callers must label any output
+// derived from this as an estimate (see issue 142).
+func EstimateTokens(bytes int64) int64 {
+	return bytes / 4
+}
+
 // DistillationSavings computes the byte-savings aggregate matching f.
 func (d *DB) DistillationSavings(f Filter) (DistillationSavings, error) {
 	where, args := f.whereClause()

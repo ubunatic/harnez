@@ -151,6 +151,21 @@ func runRate(args []string, opts rateOptions) error {
 	return insertRateRow(dbPath, toolName, description, agent, sessionID, ticketID, score)
 }
 
+// rateCallPayloadBytes approximates the size of the `harnez rate` command
+// line an agent actually issues — tool_name, score, quoted description, and
+// ticket_id, roughly matching the Long help text's usage line — as a real,
+// measured (not tokenizer-estimated) proxy for per-call overhead. See issue
+// 142: this is deliberately the argument bytes, not a token count, since
+// harnez has no access to the calling model's tokenizer.
+func rateCallPayloadBytes(toolName, description, ticketID string, score int) int64 {
+	// `rate <tool_name> <score> "<description>" [<ticket_id>]`
+	n := len("rate ") + len(toolName) + len(" ") + len(strconv.Itoa(score)) + len(` "`) + len(description) + len(`"`)
+	if ticketID != "" {
+		n += len(" ") + len(ticketID)
+	}
+	return int64(n)
+}
+
 // insertRateRow opens the telemetry DB at dbPath and writes one row. Split
 // out from runRate so tests can point it at a throwaway DB path via
 // TELEMETRY_DB_PATH-style plumbing without touching the user's real DB.
@@ -177,6 +192,12 @@ func insertRateRow(dbPath, toolName, description, agent, sessionID, ticketID str
 		Score:       &score,
 		Note:        description,
 		ExitCode:    nil,
+		// RawBytes here is the byte length of the rate call's own argument
+		// payload (tool_name/score/description/ticket), not any distilled
+		// output — there is none for `harnez rate`. It's the measured
+		// per-call proxy issue 142's overhead report uses; see
+		// telemetry.RateCallOverhead and cmd/harnez/stats.go's --overhead.
+		RawBytes: rateCallPayloadBytes(toolName, description, ticketID, score),
 	}
 
 	if err := db.Insert(call); err != nil {

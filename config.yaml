@@ -1,5 +1,16 @@
 target_dir: ~/.claude
 
+# feedback steers the Tool Feedback Protocol instruction injection (the
+# `harnez rate` call-to-action below and its skill) — see issue 142.
+# Setting disable_rate_protocol: true (or $HARNEZ_DISABLE_RATE_FEEDBACK to
+# any truthy value) makes `harnez apply` omit and actively remove that
+# instruction from ~/.claude/CLAUDE.md/AGENTS.md and the installed skill
+# directories. It does NOT disable `harnez rate`, `harnez exec`, or
+# `harnez stats` themselves — only the instruction that tells agents to
+# call `harnez rate` in the first place.
+feedback:
+  disable_rate_protocol: false
+
 docs:
   - golang
   - bash
@@ -216,6 +227,7 @@ skills:
 
   - name: tool-feedback-protocol
     description: "Use after an internal tool call (Read, Edit, Bash, etc.) in a harnez-tracked project (issues/ present) failed or didn't produce the expected outcome — record it via harnez rate before moving to the next step. Skip it for routine successful calls."
+    rate_feedback: true
     content: |
       # Tool Feedback Protocol
 
@@ -279,6 +291,7 @@ agents_md:
             project — it applies everywhere and is glue between local and global docs only,
             steering the agentic setup rather than carrying project-specific content.
       - name: Tool Feedback Protocol
+        rate_feedback: true
         content: |
           ### Tool Feedback Protocol
           Harnez-tracked projects only (`issues/` present); omit ticket or skip otherwise.

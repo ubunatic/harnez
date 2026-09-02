@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
@@ -31,6 +32,45 @@ type Config struct {
 	PrimeAgentTarget   string            `yaml:"prime_agent_target"`
 	AgentsMD           AgentsMD          `yaml:"agents_md"`
 	Make               MakeConfig        `yaml:"make"`
+	Feedback           FeedbackConfig    `yaml:"feedback"`
+}
+
+// FeedbackConfig steers the Tool Feedback Protocol instruction injection
+// (the `harnez rate` call-to-action rendered into agents_md.global.sections
+// and the tool-feedback-protocol skill) — see issue 142. It deliberately
+// does not touch any other telemetry: `harnez rate`, `harnez exec`, and
+// `harnez stats` keep working unconditionally regardless of this flag; it
+// only stops `harnez apply` from (re-)injecting the instruction that tells
+// agents to call `harnez rate` in the first place.
+type FeedbackConfig struct {
+	// DisableRateProtocol, when true, makes `harnez apply` omit (and
+	// actively remove, if already installed) every agents_md.global.sections
+	// entry and skill marked `rate_feedback: true` in config.yaml. Also
+	// settable via the HARNEZ_DISABLE_RATE_FEEDBACK env var (any value other
+	// than "", "0", "false", "no", "off" counts as true) for a quick local
+	// override that doesn't require editing config.yaml; the env var wins
+	// only in the sense that either source being true disables it — there is
+	// no way to force it back on via env once config.yaml disables it.
+	DisableRateProtocol bool `yaml:"disable_rate_protocol"`
+}
+
+// RateFeedbackDisabled reports whether the Tool Feedback Protocol
+// instruction should be omitted (config flag OR env var — see
+// FeedbackConfig's doc comment). getenv is injected for tests; nil means
+// os.Getenv.
+func RateFeedbackDisabled(cfg *Config, getenv func(string) string) bool {
+	if cfg.Feedback.DisableRateProtocol {
+		return true
+	}
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	switch strings.ToLower(strings.TrimSpace(getenv("HARNEZ_DISABLE_RATE_FEEDBACK"))) {
+	case "", "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }
 
 // MakeConfig steers how harnez reconciles its own targets (e.g. `help`)
@@ -83,6 +123,10 @@ type Command struct {
 	Description string `yaml:"description"`
 	Content     string `yaml:"content"`
 	File        string `yaml:"file"` // path relative to config dir; overrides content if set
+	// RateFeedback marks this skill as part of the Tool Feedback Protocol
+	// instruction (issue 142): `harnez apply` omits/removes it when
+	// RateFeedbackDisabled(cfg) is true.
+	RateFeedback bool `yaml:"rate_feedback,omitempty"`
 }
 
 type AgentsMD struct {
@@ -103,6 +147,10 @@ type AgentsMDTarget struct {
 type MDSection struct {
 	Name    string `yaml:"name"`
 	Content string `yaml:"content"`
+	// RateFeedback marks this section as part of the Tool Feedback Protocol
+	// instruction (issue 142): `harnez apply` omits/removes it when
+	// RateFeedbackDisabled(cfg) is true.
+	RateFeedback bool `yaml:"rate_feedback,omitempty"`
 }
 
 // RepoMode describes a repo's git setup (solo/fork/team) as a short
@@ -152,6 +200,29 @@ func LoadConfigEmbedded() (*Config, error) {
 	cfg.Dir = "."
 	cfg.FS = harnez.DefaultFS
 	return &cfg, nil
+}
+
+// ToolFeedbackProtocolBytes returns the combined byte size of every
+// agents_md.global.sections entry and skill marked `rate_feedback: true` in
+// config.yaml — the Tool Feedback Protocol instruction text (issue 122)
+// that RateFeedbackDisabled lets `harnez apply` omit. It's a rough proxy
+// for the one-time, per-session system-prompt cost of that instruction
+// (injected once, not per `harnez rate` call) — see issue 142's overhead
+// measurement, which pairs this with the per-call cost from
+// telemetry.RateCallOverhead.
+func ToolFeedbackProtocolBytes(cfg *Config) int {
+	n := 0
+	for _, s := range cfg.AgentsMD.Global.Sections {
+		if s.RateFeedback {
+			n += len(s.Content)
+		}
+	}
+	for _, sk := range cfg.Skills {
+		if sk.RateFeedback {
+			n += len(sk.Content)
+		}
+	}
+	return n
 }
 
 func DefaultTarget() string {
