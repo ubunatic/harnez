@@ -58,7 +58,11 @@ func UpdateIssuesReadme(readmePath, issuesDir string) (bool, error) {
 
 	orig, err := os.ReadFile(readmePath)
 	if err != nil {
-		return false, fmt.Errorf("read %s: %w", readmePath, err)
+		if os.IsNotExist(err) {
+			orig = []byte("# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n")
+		} else {
+			return false, fmt.Errorf("read %s: %w", readmePath, err)
+		}
 	}
 	content := string(orig)
 

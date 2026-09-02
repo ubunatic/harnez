@@ -44,27 +44,47 @@ fix the offending ticket(s) without a separate diff step.`,
 	return cmd
 }
 
+func pathExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}
+
+func dirExists(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && st.IsDir()
+}
+
 func runIndex(w io.Writer, dir string, check bool) error {
 	issuesReadme := filepath.Join(dir, "issues", "README.md")
 	issuesDir := filepath.Join(dir, "issues")
 	docsReadme := filepath.Join(dir, "docs", "README.md")
 	docsDir := filepath.Join(dir, "docs")
 
+	hasIssues := dirExists(issuesDir) || pathExists(issuesReadme)
+	hasDocs := dirExists(filepath.Join(docsDir, "studies")) && pathExists(docsReadme)
+
+	if !hasIssues && !hasDocs {
+		return fmt.Errorf("index: no issues/ or docs/studies/ found in %s", dir)
+	}
+
 	if check {
-		return runIndexCheck(w, issuesReadme, issuesDir, docsReadme, docsDir)
+		return runIndexCheck(w, issuesReadme, issuesDir, docsReadme, docsDir, hasIssues, hasDocs)
 	}
 
-	issuesChanged, err := index.UpdateIssuesReadme(issuesReadme, issuesDir)
-	if err != nil {
-		return fmt.Errorf("index: %w", err)
+	if hasIssues {
+		issuesChanged, err := index.UpdateIssuesReadme(issuesReadme, issuesDir)
+		if err != nil {
+			return fmt.Errorf("index: %w", err)
+		}
+		printIndexResult(w, issuesReadme, issuesChanged)
 	}
-	docsChanged, err := index.UpdateDocsReadme(docsReadme, docsDir)
-	if err != nil {
-		return fmt.Errorf("index: %w", err)
+	if hasDocs {
+		docsChanged, err := index.UpdateDocsReadme(docsReadme, docsDir)
+		if err != nil {
+			return fmt.Errorf("index: %w", err)
+		}
+		printIndexResult(w, docsReadme, docsChanged)
 	}
-
-	printIndexResult(w, issuesReadme, issuesChanged)
-	printIndexResult(w, docsReadme, docsChanged)
 	return nil
 }
 
@@ -86,19 +106,36 @@ func printIndexResult(w io.Writer, path string, changed bool) {
 // it prints a unified diff of exactly what changed -- so an agent running
 // this command directly in a session sees the specifics inline and can act
 // on them -- then exits 1, mirroring `harnez diff --exit-code` (037).
-func runIndexCheck(w io.Writer, issuesReadme, issuesDir, docsReadme, docsDir string) error {
+func runIndexCheck(w io.Writer, issuesReadme, issuesDir, docsReadme, docsDir string, hasIssues, hasDocs bool) error {
 	drift := false
 
-	for _, t := range []struct {
+	type target struct {
 		path   string
 		update func() (bool, error)
-	}{
-		{issuesReadme, func() (bool, error) { return index.UpdateIssuesReadme(issuesReadme, issuesDir) }},
-		{docsReadme, func() (bool, error) { return index.UpdateDocsReadme(docsReadme, docsDir) }},
-	} {
+	}
+	var targets []target
+
+	if hasIssues {
+		targets = append(targets, target{
+			path:   issuesReadme,
+			update: func() (bool, error) { return index.UpdateIssuesReadme(issuesReadme, issuesDir) },
+		})
+	}
+	if hasDocs {
+		targets = append(targets, target{
+			path:   docsReadme,
+			update: func() (bool, error) { return index.UpdateDocsReadme(docsReadme, docsDir) },
+		})
+	}
+
+	for _, t := range targets {
 		orig, err := os.ReadFile(t.path)
 		if err != nil {
-			return fmt.Errorf("index --check: read %s: %w", t.path, err)
+			if os.IsNotExist(err) {
+				orig = nil
+			} else {
+				return fmt.Errorf("index --check: read %s: %w", t.path, err)
+			}
 		}
 		changed, err := t.update()
 		if err != nil {
@@ -114,7 +151,9 @@ func runIndexCheck(w io.Writer, issuesReadme, issuesDir, docsReadme, docsDir str
 			if err := printUnifiedDiff(w, t.path, orig, newContent); err != nil {
 				return fmt.Errorf("index --check: %w", err)
 			}
-			if err := os.WriteFile(t.path, orig, 0o644); err != nil {
+			if orig == nil {
+				os.Remove(t.path)
+			} else if err := os.WriteFile(t.path, orig, 0o644); err != nil {
 				return fmt.Errorf("index --check: restore %s: %w", t.path, err)
 			}
 		} else {
