@@ -41,10 +41,10 @@ In `harnez usage --watch` and `--compact`, setting RAM and VRAM/GTT charts to `s
   - RAM history must maintain `ramHistory` and pad to width 10 so `ram (45G) [<10 chars>]` aligns perfectly with `cpu (16 cores) [<10 chars>]`.
 
 ### 2. VRAM & GTT Dual Split Preservation
-- In bar mode: keep the adjacent dual 4-cell bars `[VRAM][GTT]` (total 10 chars with brackets).
-- In sparkline mode:
-  - If both VRAM and GTT exist (`HaveVRAM && HaveGTT`), render adjacent dual 4-cell sparklines `[VRAM][GTT]` (e.g. `[▁▁▁▁][▁▁▁▁]`), or maintain the combined 10-char width while preserving the dual split.
-  - Alternatively, if `vram` mode is bar (or if dual split is bar), default `vram: bar` in `spec/indicators.yaml` so the dual `[VRAM][GTT]` bars are displayed, or support dual sparklines.
+- In bar mode: keep the adjacent dual 4-cell bars `[VRAM][GTT]` (total 10 chars with brackets, e.g. `[███ ][▏   ]`).
+- In sparkline mode: render adjacent dual 4-cell sparkline timelines `[<VRAM-spark-timeline>][<GTT-spark-timeline>]` (total 10 chars with brackets, e.g. `[▁▁▁▁][▁▁▁▁]`).
+- Track rolling percent histories for both VRAM and GTT on the GPU struct (`VRAMPercentHistory []float64`, `GTTPercentHistory []float64`).
+- If only one of VRAM or GTT is present, render single 10-char sparkline or bar. If both are present, render adjacent 4-cell brackets `[VRAM][GTT]`.
 
 ---
 
