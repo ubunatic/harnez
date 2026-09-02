@@ -1,6 +1,6 @@
 # 189 — Git-History Time-Series Telemetry & Token/Size Evolution for Managed Documentation
 
-**Status**: Open
+**Status**: Closed — Phase 1 research & canary prototype verified in 45dfd26/c4128ed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Telemetry / Documentation Metrics
