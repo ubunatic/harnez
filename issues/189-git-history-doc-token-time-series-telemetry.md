@@ -137,18 +137,30 @@ Visualizing multi-month token trends directly in a terminal requires compact, hi
 
 ---
 
-### 3.5 Architectural Recommendations for Harnez
+### 3.5 Architectural Recommendations & Go Canary Prototype Plan
 
-1. **Engine**: Implement `internal/telemetry/dochistory.go` using streaming `git log` and `git cat-file --batch` with pure Go string/byte scanning.
-2. **Deduplication**: Key raw metrics computation on Git Blob SHA to avoid re-parsing identical contents across multiple commits.
-3. **Storage**: Integrate into `~/.harnez/tool_catalog.sqlite` under the `doc_snapshots` table with WAL mode and `busy_timeout` per issue 116.
-4. **Surface**: Expose via `harnez stats --docs` (repo-wide stacked breakdown) and `harnez stats --doc <path>` (detailed single-file sparkline/trend history).
+1. **Phased Delivery — Dedicated Research & Go Canary Prototype**:
+   - Before wiring full SQLite persistence and Cobra CLI flags, build a lightweight, standalone Go canary prototype in `scripts/canary-doc-history/main.go` (or `scripts/canary-doc-history/`).
+   - The canary will directly exercise:
+     * Streaming `git log --follow --format="commit %H %at %s" -- <file>` execution.
+     * Streaming blob extraction via `git cat-file --batch`.
+     * Computing byte, line, word, estimated token (`(len+3)/4`), and heading counts per commit.
+     * Rendering a prototype ASCII sparkline (`  ▂▃▄▅▆▇█`) and tabular timeline for a given file (e.g. `docs/lang/Go.md` or `AGENTS.md`).
+   - Benchmarking the canary against real `harnez` git history (from May 2026 to present) to measure execution latency and blob deduplication cache hit rates.
+
+2. **Full Integration (Phase 2)**:
+   - **Engine**: Package into `internal/telemetry/dochistory.go` or `internal/assess/dochistory.go`.
+   - **Storage**: Integrate into `~/.harnez/tool_catalog.sqlite` under the `doc_snapshots` table.
+   - **Surface**: Expose via `harnez stats --docs` (repo-wide stacked breakdown) and `harnez stats --doc <path>` (detailed single-file sparkline/trend history).
 
 ---
 
 ## 4. Verification Plan
 
-1. Run git history extraction on `harnez` (`docs/lang/Go.md`, `AGENTS.md`) from May 2026 to present.
-2. Verify rename tracking across historical doc reorganizations.
-3. Validate time-series storage in SQLite.
-4. Output ASCII trendline / stacked metrics via `harnez stats`.
+1. **Canary Validation (`scripts/canary-doc-history/main.go`)**:
+   - Run canary on `docs/lang/Go.md` and `AGENTS.md` spanning May 2026 to present.
+   - Verify rename tracking across historical doc reorganizations without checkout thrashing.
+   - Confirm sub-100ms extraction speed on single-file history.
+2. **Integration Verification**:
+   - Validate time-series storage in SQLite (`tool_catalog.sqlite`).
+   - Output ASCII trendline / stacked metrics via `harnez stats`.
