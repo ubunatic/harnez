@@ -191,5 +191,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 188 | [188-unrated-failure-correlation-nudge.md](188-unrated-failure-correlation-nudge.md) | Nudge specifically when real tool-call failures went unrated | Open |
 | 189 | [189-git-history-doc-token-time-series-telemetry.md](189-git-history-doc-token-time-series-telemetry.md) | Git-History Time-Series Telemetry & Token/Size Evolution for Managed Documentation | Closed — Phase 1 research & canary prototype verified in 45dfd26/c4128ed |
 | 190 | [190-multi-doc-stacked-token-history-canary.md](190-multi-doc-stacked-token-history-canary.md) | Multi-Doc Git History Token Evolution & Stacked Chart Canary | Closed |
-| 191 | [191-load-box-ram-chart-hardware-label-and-chart-mode-spec.md](191-load-box-ram-chart-hardware-label-and-chart-mode-spec.md) | Load Box RAM Chart, Hardware Module Label, and Chart Mode Spec | Open |
+| 191 | [191-load-box-ram-chart-hardware-label-and-chart-mode-spec.md](191-load-box-ram-chart-hardware-label-and-chart-mode-spec.md) | Load Box RAM Chart, Hardware Module Label, and Chart Mode Spec | Closed |
 | 192 | [192-integrate-git-doc-history-cli-command.md](192-integrate-git-doc-history-cli-command.md) | Integrate Git Document History Telemetry into `harnez` CLI Command | Closed |
+| 193 | [193-research-agy-hook-surface-for-transparent-exec-distill.md](193-research-agy-hook-surface-for-transparent-exec-distill.md) | Research: can agy tool calls be routed through `harnez exec`/`harnez distill` without configuring agy itself? | Open |
