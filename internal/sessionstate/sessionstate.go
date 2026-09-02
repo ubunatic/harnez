@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -114,8 +115,19 @@ func Record(s *State, subcommand string, now time.Time) {
 // call-count thresholds, no time-based decay) for a v1 — see issue 183.
 const (
 	// rateGapThreshold is how many harnez calls may pass since the last
-	// `harnez rate` call before a gap tip becomes eligible to fire.
+	// `harnez rate` call (a failure rating OR an --ok heartbeat — Record
+	// treats both the same, see its doc comment) before a gap tip becomes
+	// eligible to fire.
 	rateGapThreshold = 20
+	// heartbeatGapThreshold is how many calls may pass since the last
+	// `harnez rate` call before the gap tip switches from the generic
+	// "you haven't rated anything" reminder to specifically suggesting the
+	// lean `harnez rate --ok` heartbeat (issue 179). Set to 2x
+	// rateGapThreshold so it only takes over once a full reminder cycle has
+	// already gone unanswered — this stays rarer than the existing tip
+	// rather than adding a second frequent nag, per issue 179's "don't
+	// regress to pre-181 chattiness" constraint.
+	heartbeatGapThreshold = 2 * rateGapThreshold
 	// findMinCalls is the minimum total call count before "you've never
 	// used harnez find" becomes a meaningful observation rather than noise
 	// on a session's very first call.
@@ -128,22 +140,34 @@ const (
 // GapTip returns at most one short, single-line proactive tip given s's
 // current state, or ok=false if nothing is worth surfacing right now
 // (either no gap is detected, or a tip already fired within tipCooldown
-// calls). Checking order is deliberate: the rate-policy gap (tied to issue
-// 181's narrowed, failure-only rating policy) takes priority over the
-// find-underuse observation, since it's the more actionable of the two.
-func GapTip(s State) (string, bool) {
+// calls). feedbackDisabled mirrors claude.RateFeedbackDisabled (issue 142):
+// when true, both rate-related tips (the failure-rating reminder and the
+// issue-179 heartbeat nudge) are suppressed — a session that opted out of
+// the Tool Feedback Protocol shouldn't get nagged about either half of it —
+// though the unrelated find-underuse tip still can fire. Checking order is
+// deliberate: the larger heartbeat gap is checked before the plain rate
+// gap (more specific/actionable once the silence has gone on long enough),
+// which in turn takes priority over the find-underuse observation.
+func GapTip(s State, feedbackDisabled bool) (string, bool) {
 	if s.Total-s.TotalAtLastTip < tipCooldown {
 		return "", false
 	}
 
-	callsSinceRate := s.Total - s.TotalAtLastRate
-	if s.LastRateAt.IsZero() {
-		callsSinceRate = s.Total
-	}
-	if callsSinceRate >= rateGapThreshold {
-		return "harnez tip: no `harnez rate` call in this session's last " +
-			"20+ calls — remember, only rate a tool call that failed or " +
-			"missed the expected outcome (see Tool Feedback Protocol).", true
+	if !feedbackDisabled {
+		callsSinceRate := s.Total - s.TotalAtLastRate
+		if s.LastRateAt.IsZero() {
+			callsSinceRate = s.Total
+		}
+		if callsSinceRate >= heartbeatGapThreshold {
+			return fmt.Sprintf("harnez tip: %d+ calls since any `harnez rate` call this "+
+				"session — if nothing has failed, confirm with `harnez rate --ok` instead "+
+				"of staying silent (see Tool Feedback Protocol).", heartbeatGapThreshold), true
+		}
+		if callsSinceRate >= rateGapThreshold {
+			return "harnez tip: no `harnez rate` call in this session's last " +
+				"20+ calls — remember, only rate a tool call that failed or " +
+				"missed the expected outcome (see Tool Feedback Protocol).", true
+		}
 	}
 
 	if s.Total >= findMinCalls {

@@ -243,36 +243,53 @@ type DistillationSavings struct {
 	Ratio          float64
 }
 
-// rateCallType is the call_type value only `harnez rate` writes (see
-// cmd/harnez/rate.go) — it uniquely identifies rate-feedback calls in the
-// tool_calls table without needing a separate flag column.
+// rateCallType is the call_type value a failure/unexpected-outcome
+// `harnez rate` call writes (see cmd/harnez/rate.go) — it uniquely
+// identifies per-tool ratings in the tool_calls table without needing a
+// separate flag column.
 const rateCallType = "internal"
 
+// HeartbeatCallType is the call_type value `harnez rate --ok` writes
+// (issue 179) — a lean "N calls since the last check were fine"
+// confirmation. Deliberately distinct from rateCallType so a heartbeat's
+// NULL score/exit_code (see cmd/harnez/rate.go's runRateOk) never mixes
+// into failure-rating aggregates under an ambiguous shared call_type, and
+// so RateCallOverhead/HeartbeatStats can each select their own rows
+// cleanly.
+const HeartbeatCallType = "heartbeat"
+
 // RateCallOverhead summarizes the measured per-call cost attributable to
-// `harnez rate` calls (call_type="internal") matching f — the count and
-// argument-payload bytes issue 142's overhead report needs. It is real
+// `harnez rate` calls matching f — both failure ratings (call_type
+// "internal") and --ok heartbeats (call_type "heartbeat") count toward
+// this, since both are the same CLI command's overhead (issue 142); use
+// HeartbeatStats for heartbeat-specific reporting (issue 179). It is real
 // measured data (RawBytes, populated by cmd/harnez/rate.go's
-// rateCallPayloadBytes), not a token estimate; EstimateTokens converts it
-// to a labeled estimate for reporting.
+// rateCallPayloadBytes/heartbeatCallPayloadBytes), not a token estimate;
+// EstimateTokens converts it to a labeled estimate for reporting.
 type RateCallOverhead struct {
 	Count          int64
 	TotalCallBytes int64
 	AvgCallBytes   float64
 }
 
-// RateCallOverhead computes the rate-call overhead aggregate matching f.
-// Any CallType set on f is overridden to "internal" — this report is
-// specifically about `harnez rate` calls, not a general filter escape
-// hatch.
+// RateCallOverhead computes the rate-call overhead aggregate matching f,
+// summed across both rateCallType and HeartbeatCallType rows. Any CallType
+// already set on f is ignored — this report is specifically about
+// `harnez rate` calls (in either mode), not a general filter escape hatch.
 func (d *DB) RateCallOverhead(f Filter) (RateCallOverhead, error) {
-	f.CallType = rateCallType
-	s, err := d.Aggregate(f)
-	if err != nil {
-		return RateCallOverhead{}, fmt.Errorf("rate call overhead: %w", err)
+	var o RateCallOverhead
+	for _, ct := range []string{rateCallType, HeartbeatCallType} {
+		cf := f
+		cf.CallType = ct
+		s, err := d.Aggregate(cf)
+		if err != nil {
+			return RateCallOverhead{}, fmt.Errorf("rate call overhead: %w", err)
+		}
+		o.Count += s.Count
+		o.TotalCallBytes += s.TotalRawBytes
 	}
-	o := RateCallOverhead{Count: s.Count, TotalCallBytes: s.TotalRawBytes}
-	if s.Count > 0 {
-		o.AvgCallBytes = float64(s.TotalRawBytes) / float64(s.Count)
+	if o.Count > 0 {
+		o.AvgCallBytes = float64(o.TotalCallBytes) / float64(o.Count)
 	}
 	return o, nil
 }
@@ -311,4 +328,64 @@ func (d *DB) DistillationSavings(f Filter) (DistillationSavings, error) {
 		ds.Ratio = 1 - (float64(ds.DistilledBytes) / float64(ds.RawBytes))
 	}
 	return ds, nil
+}
+
+// HeartbeatInfo summarizes a session's `harnez rate --ok` heartbeat
+// history matching f (issue 179): how many heartbeats were recorded, when
+// the most recent one landed, and how many tool_calls rows of any
+// call_type have landed since — a rough "confirmed-clean streak" length
+// for `harnez stats` to surface, since silence alone can't distinguish
+// "everything's been fine" from "the agent forgot the protocol."
+type HeartbeatInfo struct {
+	Count      int64
+	LastAt     time.Time // zero if Count == 0
+	CallsSince int64     // tool_calls rows (any call_type) matching f with created_at > LastAt; 0 if Count == 0
+}
+
+// HeartbeatStats computes HeartbeatInfo for the rows matching f. Any
+// CallType already set on f is ignored for the heartbeat lookup itself
+// (overridden to HeartbeatCallType) but still applies to the CallsSince
+// follow-up count, which intentionally spans every call_type to reflect
+// real activity since the last confirmed-clean checkpoint.
+func (d *DB) HeartbeatStats(f Filter) (HeartbeatInfo, error) {
+	hbFilter := f
+	hbFilter.CallType = HeartbeatCallType
+	where, args := hbFilter.whereClause()
+	ctx, cancel := defaultContext()
+	defer cancel()
+
+	var info HeartbeatInfo
+	var lastAt *string
+	row := d.sql.QueryRowContext(ctx, `
+		SELECT COUNT(*), MAX(created_at)
+		FROM tool_calls`+where, args...)
+	if err := row.Scan(&info.Count, &lastAt); err != nil {
+		return HeartbeatInfo{}, fmt.Errorf("telemetry: heartbeat stats: %w", err)
+	}
+	if info.Count == 0 || lastAt == nil {
+		return info, nil
+	}
+	t, err := time.Parse(time.RFC3339Nano, *lastAt)
+	if err != nil {
+		return HeartbeatInfo{}, fmt.Errorf("telemetry: parse heartbeat created_at %q: %w", *lastAt, err)
+	}
+	info.LastAt = t
+
+	sinceFilter := f
+	sinceFilter.CallType = "" // count all call types since the last heartbeat
+	sinceFilter.Since = t
+	sinceWhere, sinceArgs := sinceFilter.whereClause()
+	ctx2, cancel2 := defaultContext()
+	defer cancel2()
+	var callsSince int64
+	if err := d.sql.QueryRowContext(ctx2, `SELECT COUNT(*) FROM tool_calls`+sinceWhere, sinceArgs...).Scan(&callsSince); err != nil {
+		return HeartbeatInfo{}, fmt.Errorf("telemetry: heartbeat calls-since: %w", err)
+	}
+	// Since.whereClause() uses ">=", so the heartbeat row itself (created_at
+	// == t) is included once; subtract it back out.
+	if callsSince > 0 {
+		callsSince--
+	}
+	info.CallsSince = callsSince
+	return info, nil
 }

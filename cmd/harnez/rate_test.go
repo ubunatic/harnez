@@ -338,3 +338,106 @@ func BenchmarkRunRate(b *testing.B) {
 		}
 	}
 }
+
+// Tests for issue 179's `harnez rate --ok` heartbeat.
+
+func TestRunRateOk_WritesDistinctHeartbeatRow(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "tool_catalog.sqlite")
+
+	err := runRateOk([]string{"nothing failed", "myproj/179-heartbeat"}, rateOptions{
+		SessionFlag: "sess-1",
+		DBPath:      dbPath,
+		StateDir:    filepath.Join(tmp, "state"),
+		Getenv:      func(string) string { return "" },
+	}, 0)
+	if err != nil {
+		t.Fatalf("runRateOk() error = %v", err)
+	}
+
+	row := lastRow(t, dbPath)
+	if row.CallType != telemetry.HeartbeatCallType {
+		t.Errorf("CallType = %q, want %q", row.CallType, telemetry.HeartbeatCallType)
+	}
+	if row.Score != nil {
+		t.Errorf("Score = %v, want nil for a heartbeat", row.Score)
+	}
+	if row.ExitCode != nil {
+		t.Errorf("ExitCode = %v, want nil", row.ExitCode)
+	}
+	if row.Note != "nothing failed" {
+		t.Errorf("Note = %q, want %q", row.Note, "nothing failed")
+	}
+	if row.TicketID != "myproj/179-heartbeat" {
+		t.Errorf("TicketID = %q, want %q", row.TicketID, "myproj/179-heartbeat")
+	}
+	if row.RawBytes <= 0 {
+		t.Errorf("RawBytes = %d, want > 0", row.RawBytes)
+	}
+}
+
+func TestRunRateOk_DefaultsNoteToOk(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "tool_catalog.sqlite")
+
+	if err := runRateOk(nil, rateOptions{
+		SessionFlag: "sess-1",
+		DBPath:      dbPath,
+		StateDir:    filepath.Join(tmp, "state"),
+		Getenv:      func(string) string { return "" },
+	}, 0); err != nil {
+		t.Fatalf("runRateOk() error = %v", err)
+	}
+	if row := lastRow(t, dbPath); row.Note != "ok" {
+		t.Errorf("Note = %q, want default %q", row.Note, "ok")
+	}
+}
+
+func TestRunRateOk_SinceFoldedIntoNote(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "tool_catalog.sqlite")
+
+	if err := runRateOk(nil, rateOptions{
+		SessionFlag: "sess-1",
+		DBPath:      dbPath,
+		StateDir:    filepath.Join(tmp, "state"),
+		Getenv:      func(string) string { return "" },
+	}, 12); err != nil {
+		t.Fatalf("runRateOk() error = %v", err)
+	}
+	if row := lastRow(t, dbPath); !strings.Contains(row.Note, "12") {
+		t.Errorf("Note = %q, want it to mention the --since count (12)", row.Note)
+	}
+}
+
+func TestRunRateOk_DoesNotDiluteFailureRatings(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "tool_catalog.sqlite")
+	opts := rateOptions{
+		SessionFlag: "sess-1",
+		DBPath:      dbPath,
+		StateDir:    filepath.Join(tmp, "state"),
+		Getenv:      func(string) string { return "" },
+	}
+
+	if err := runRate([]string{"Read", "1", "totally failed", "proj/1-t"}, opts); err != nil {
+		t.Fatalf("runRate() error = %v", err)
+	}
+	if err := runRateOk(nil, opts, 0); err != nil {
+		t.Fatalf("runRateOk() error = %v", err)
+	}
+
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+
+	stats, err := db.Aggregate(telemetry.Filter{CallType: "internal"})
+	if err != nil {
+		t.Fatalf("Aggregate: %v", err)
+	}
+	if stats.Count != 1 || stats.AvgScore != 1 {
+		t.Errorf("internal-only aggregate = %+v, want Count=1 AvgScore=1 (heartbeat must stay out of it)", stats)
+	}
+}

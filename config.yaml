@@ -226,7 +226,7 @@ skills:
     file: commands/harnez-sync.md
 
   - name: tool-feedback-protocol
-    description: "Use after an internal tool call (Read, Edit, Bash, etc.) in a harnez-tracked project (issues/ present) failed or didn't produce the expected outcome — record it via harnez rate before moving to the next step. Skip it for routine successful calls."
+    description: "Use after an internal tool call (Read, Edit, Bash, etc.) in a harnez-tracked project (issues/ present) failed or didn't produce the expected outcome — record it via harnez rate before moving to the next step. Also use if a harnez tip nudges you after a long quiet stretch and nothing has failed — confirm with harnez rate --ok. Skip both for routine successful calls."
     rate_feedback: true
     content: |
       # Tool Feedback Protocol
@@ -253,6 +253,18 @@ skills:
 
       Score 5 = flawless, 3 = partial success / required adjustment, 1 = total failure /
       useless output.
+
+      Silence is otherwise ambiguous — it could mean "all fine" or "forgot the protocol." If
+      a harnez tip nudges you after a long quiet stretch and nothing has failed, confirm with
+      a lean heartbeat instead of staying silent or inventing a fake per-tool score:
+
+      ```
+      harnez rate --ok
+      ```
+
+      No tool name, score, or ticket required; it records a distinct, lightweight
+      confirmation, kept out of failure-rate metrics. Don't call it proactively on a fixed
+      schedule — only in response to the tip, so this stays rare.
 
       Why this, and why now (not at session end): the score is a judgment only the acting
       agent can make in the moment — a mechanized PostToolUse hook can log that a call
@@ -299,6 +311,8 @@ agents_md:
           `harnez rate <tool_name> <1-5> "<1-line outcome summary>" "<project_folder>/<ticket_name>"`
           Example: `harnez rate Grep 1 "missed target, wrong file" harnez/117-harnez-rate-command`
           Score 5 flawless, 3 partial, 1 useless.
+          If prompted after a long quiet stretch and nothing has failed, confirm with
+          `harnez rate --ok` instead of staying silent — no tool name, score, or ticket required.
       - name: Issue Tracker Discovery
         content: |
           ### Issue Tracker Discovery (harnez find)

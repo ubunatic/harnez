@@ -8,7 +8,7 @@ import (
 
 func TestGapTip_FreshSessionNoTip(t *testing.T) {
 	s := State{Calls: map[string]Invocation{}}
-	if _, ok := GapTip(s); ok {
+	if _, ok := GapTip(s, false); ok {
 		t.Errorf("expected a fresh session (Total=0) to produce no tip")
 	}
 }
@@ -22,7 +22,7 @@ func TestGapTip_RateGapTriggersReminder(t *testing.T) {
 		Record(&s, "distill", now)
 	}
 
-	tip, ok := GapTip(s)
+	tip, ok := GapTip(s, false)
 	if !ok {
 		t.Fatalf("expected a rate-gap tip to fire after %d unrated calls", s.Total)
 	}
@@ -40,7 +40,7 @@ func TestGapTip_RecentRateSuppressesReminder(t *testing.T) {
 	Record(&s, "find", now) // also clear the find-underuse heuristic
 	Record(&s, "rate", now) // resets the rate-gap counter
 
-	if tip, ok := GapTip(s); ok {
+	if tip, ok := GapTip(s, false); ok {
 		t.Errorf("expected no tip once both rate and find gaps are cleared, got: %q", tip)
 	}
 }
@@ -55,7 +55,7 @@ func TestGapTip_FindUnderuseFiresWhenNoRateGap(t *testing.T) {
 	}
 	Record(&s, "rate", now)
 
-	tip, ok := GapTip(s)
+	tip, ok := GapTip(s, false)
 	if !ok {
 		t.Fatalf("expected a find-underuse tip to fire")
 	}
@@ -73,7 +73,7 @@ func TestGapTip_UsingFindSuppressesUnderuseTip(t *testing.T) {
 	Record(&s, "find", now)
 	Record(&s, "rate", now)
 
-	if _, ok := GapTip(s); ok {
+	if _, ok := GapTip(s, false); ok {
 		t.Errorf("expected no tip once both rate and find have been used")
 	}
 }
@@ -87,7 +87,7 @@ func TestGapTip_CooldownSuppressesRepeatTip(t *testing.T) {
 	// Simulate a tip having just fired.
 	s.TotalAtLastTip = s.Total
 
-	if _, ok := GapTip(s); ok {
+	if _, ok := GapTip(s, false); ok {
 		t.Errorf("expected cooldown to suppress an immediate repeat tip")
 	}
 
@@ -95,7 +95,7 @@ func TestGapTip_CooldownSuppressesRepeatTip(t *testing.T) {
 	for i := 0; i < tipCooldown; i++ {
 		Record(&s, "distill", now)
 	}
-	if _, ok := GapTip(s); !ok {
+	if _, ok := GapTip(s, false); !ok {
 		t.Errorf("expected the tip to become eligible again after the cooldown elapses")
 	}
 }
@@ -148,5 +148,76 @@ func TestLoadSave_RoundTrip(t *testing.T) {
 	}
 	if loaded.Calls["distill"].Count != 1 {
 		t.Errorf("expected distill count=1 after round trip, got %d", loaded.Calls["distill"].Count)
+	}
+}
+
+// Issue 179: the heartbeat-specific gap tip and its interaction with issue
+// 142's rate-feedback opt-out.
+
+func TestGapTip_HeartbeatGapSupersedesPlainRateGap(t *testing.T) {
+	now := time.Now()
+	s := State{Calls: map[string]Invocation{}}
+	// heartbeatGapThreshold (40) unrated calls: past both thresholds, so the
+	// more specific heartbeat nudge must win over the plain rate-gap tip.
+	for i := 0; i < heartbeatGapThreshold; i++ {
+		Record(&s, "distill", now)
+	}
+
+	tip, ok := GapTip(s, false)
+	if !ok {
+		t.Fatalf("expected a heartbeat-gap tip to fire after %d unrated calls", s.Total)
+	}
+	if !strings.Contains(tip, "--ok") {
+		t.Errorf("expected tip to suggest `harnez rate --ok`, got: %q", tip)
+	}
+}
+
+func TestGapTip_BelowHeartbeatThresholdUsesPlainReminder(t *testing.T) {
+	now := time.Now()
+	s := State{Calls: map[string]Invocation{}}
+	// One call short of heartbeatGapThreshold: still the plain rate-gap tip,
+	// not the heartbeat-specific one.
+	for i := 0; i < heartbeatGapThreshold-1; i++ {
+		Record(&s, "distill", now)
+	}
+
+	tip, ok := GapTip(s, false)
+	if !ok {
+		t.Fatalf("expected a rate-gap tip to fire after %d unrated calls", s.Total)
+	}
+	if strings.Contains(tip, "--ok") {
+		t.Errorf("expected the plain rate-gap tip (no --ok mention) below heartbeatGapThreshold, got: %q", tip)
+	}
+}
+
+func TestGapTip_HeartbeatCallClearsRateGap(t *testing.T) {
+	now := time.Now()
+	s := State{Calls: map[string]Invocation{}}
+	for i := 0; i < heartbeatGapThreshold; i++ {
+		Record(&s, "distill", now)
+	}
+	Record(&s, "find", now) // clear the find-underuse heuristic too
+	Record(&s, "rate", now) // an --ok heartbeat is still subcommand "rate"
+
+	if tip, ok := GapTip(s, false); ok {
+		t.Errorf("expected a heartbeat/rate call to clear the gap, got tip: %q", tip)
+	}
+}
+
+func TestGapTip_FeedbackDisabledSuppressesRateAndHeartbeatTips(t *testing.T) {
+	now := time.Now()
+	s := State{Calls: map[string]Invocation{}}
+	for i := 0; i < heartbeatGapThreshold; i++ {
+		Record(&s, "distill", now)
+	}
+	Record(&s, "find", now) // also clear the find-underuse heuristic
+
+	if tip, ok := GapTip(s, true); ok {
+		t.Errorf("expected feedbackDisabled=true to suppress both rate-gap and heartbeat tips, got: %q", tip)
+	}
+
+	// Sanity check: the same state without the opt-out still produces a tip.
+	if _, ok := GapTip(s, false); !ok {
+		t.Errorf("expected feedbackDisabled=false to still surface a tip for the same state")
 	}
 }

@@ -58,10 +58,12 @@ func detectAgent(flagValue string, getenv func(string) string) string {
 func newRateCmd() *cobra.Command {
 	var agentFlag string
 	var sessionFlag string
+	var okFlag bool
+	var sinceFlag int
 
 	cmd := &cobra.Command{
 		Use:   `rate <tool_name> <score> "<description>" [<ticket_id>]`,
-		Short: "Record a 1-5 quality rating for an internal tool call",
+		Short: "Record a 1-5 quality rating for an internal tool call, or a lean --ok heartbeat",
 		Long: `rate writes a single tool_calls row (call_type=internal, exit_code=NULL)
 recording how well an internal tool call (file read, edit, semantic scan,
 web search, ...) served the agent's purpose. Designed to fire immediately
@@ -76,15 +78,42 @@ after every such tool call without MCP/JSON-RPC schema overhead:
                is resolved from the current git branch (or the session's
                most recently used ticket) instead of being written as NULL
 
-Sub-20ms end-to-end target: this fires many times per agent turn.`,
-		Args:         cobra.RangeArgs(3, 4),
+Sub-20ms end-to-end target: this fires many times per agent turn.
+
+--ok records a distinct, lighter-weight heartbeat instead of a per-tool
+rating (call_type=heartbeat, score=NULL, exit_code=NULL) — issue 179's
+answer to "silence is ambiguous": confirm a stretch of tool calls was fine
+without inventing a fake per-tool score for it. No tool_name/score
+required:
+
+  harnez rate --ok ["<note>"] [<ticket_id>] [--since <n>]
+
+  note       optional one-line note (defaults to "ok")
+  ticket_id  optional, same resolution as the default form
+  --since n  optional: how many tool calls this heartbeat covers (recorded
+             in the note for human reference only; not a queryable column)`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if okFlag {
+				if len(args) > 2 {
+					return fmt.Errorf(`rate --ok: at most 2 args ("<note>" [<ticket_id>]), got %d`, len(args))
+				}
+				return nil
+			}
+			return cobra.RangeArgs(3, 4)(cmd, args)
+		},
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRate(args, rateOptions{AgentFlag: agentFlag, SessionFlag: sessionFlag})
+			opts := rateOptions{AgentFlag: agentFlag, SessionFlag: sessionFlag}
+			if okFlag {
+				return runRateOk(args, opts, sinceFlag)
+			}
+			return runRate(args, opts)
 		},
 	}
 	cmd.Flags().StringVar(&agentFlag, "agent", "", "agent identifier override (default: $HARNEZ_AGENT or auto-detect)")
 	cmd.Flags().StringVar(&sessionFlag, "session", "", "session_id override (default: resolve.Session())")
+	cmd.Flags().BoolVar(&okFlag, "ok", false, "record a lean heartbeat confirming recent tool calls were fine, instead of a per-tool rating")
+	cmd.Flags().IntVar(&sinceFlag, "since", 0, "with --ok: number of tool calls this heartbeat covers (descriptive only)")
 	return cmd
 }
 
@@ -151,6 +180,51 @@ func runRate(args []string, opts rateOptions) error {
 	return insertRateRow(dbPath, toolName, description, agent, sessionID, ticketID, score)
 }
 
+// runRateOk implements `harnez rate --ok`: it resolves agent/session/ticket
+// the same way runRate does, then writes a heartbeat row instead of a
+// per-tool rating. args is [] | ["<note>"] | ["<note>", "<ticket_id>"] —
+// validated by newRateCmd's Args func before this runs.
+func runRateOk(args []string, opts rateOptions, since int) error {
+	note := "ok"
+	if len(args) >= 1 && args[0] != "" {
+		note = args[0]
+	}
+	var explicitTicket string
+	if len(args) == 2 {
+		explicitTicket = args[1]
+	}
+
+	agent := detectAgent(opts.AgentFlag, opts.Getenv)
+
+	sessionID, err := resolve.Session(resolve.SessionOptions{
+		Explicit: opts.SessionFlag,
+		Getenv:   opts.Getenv,
+		LockDir:  opts.StateDir,
+	})
+	if err != nil {
+		return fmt.Errorf("rate --ok: resolve session: %w", err)
+	}
+
+	ticketID, err := resolve.Ticket(resolve.TicketOptions{
+		Explicit:  explicitTicket,
+		SessionID: sessionID,
+		StateDir:  opts.StateDir,
+	})
+	if err != nil {
+		return fmt.Errorf("rate --ok: resolve ticket: %w", err)
+	}
+
+	dbPath := opts.DBPath
+	if dbPath == "" {
+		p, err := telemetry.DefaultDBPath()
+		if err != nil {
+			return fmt.Errorf("rate --ok: %w", err)
+		}
+		dbPath = p
+	}
+	return insertHeartbeatRow(dbPath, note, agent, sessionID, ticketID, since)
+}
+
 // rateCallPayloadBytes approximates the size of the `harnez rate` command
 // line an agent actually issues — tool_name, score, quoted description, and
 // ticket_id, roughly matching the Long help text's usage line — as a real,
@@ -210,6 +284,65 @@ func insertRateRow(dbPath, toolName, description, agent, sessionID, ticketID str
 			return fmt.Errorf("rate: score must be between 1 and 5, got %d", score)
 		}
 		return fmt.Errorf("rate: %w", err)
+	}
+	return nil
+}
+
+// heartbeatCallPayloadBytes mirrors rateCallPayloadBytes for the `rate
+// --ok` form — a real, measured proxy for this lighter call's own
+// argument-payload size, so telemetry.RateCallOverhead's byte totals stay
+// meaningful once heartbeats are included alongside failure ratings.
+func heartbeatCallPayloadBytes(note, ticketID string, since int) int64 {
+	// `rate --ok "<note>" [<ticket_id>] [--since <n>]`
+	n := len(`rate --ok "`) + len(note) + len(`"`)
+	if ticketID != "" {
+		n += len(" ") + len(ticketID)
+	}
+	if since > 0 {
+		n += len(" --since ") + len(strconv.Itoa(since))
+	}
+	return int64(n)
+}
+
+// insertHeartbeatRow opens the telemetry DB at dbPath and writes one
+// heartbeat row (call_type=heartbeat, score=NULL, exit_code=NULL) —
+// issue 179's lean alternative to a per-tool rating. since, when > 0, is
+// folded into the note for human reference; it isn't a queryable column
+// (kept lean — see telemetry.HeartbeatStats for the queryable
+// last-heartbeat/calls-since data `harnez stats` actually reports).
+func insertHeartbeatRow(dbPath, note, agent, sessionID, ticketID string, since int) error {
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("rate --ok: open telemetry db: %w", err)
+	}
+	defer db.Close()
+
+	wd, err := os.Getwd()
+	if err != nil {
+		wd = ""
+	}
+
+	rawBytes := heartbeatCallPayloadBytes(note, ticketID, since)
+	if since > 0 {
+		note = fmt.Sprintf("%s (last ~%d calls)", note, since)
+	}
+
+	call := telemetry.ToolCall{
+		SessionID:   sessionID,
+		TicketID:    ticketID,
+		ProjectName: filepath.Base(wd),
+		WorkingDir:  wd,
+		AgentID:     agent,
+		ToolName:    "heartbeat",
+		CallType:    telemetry.HeartbeatCallType,
+		Score:       nil,
+		Note:        note,
+		ExitCode:    nil,
+		RawBytes:    rawBytes,
+	}
+
+	if err := db.Insert(call); err != nil {
+		return fmt.Errorf("rate --ok: %w", err)
 	}
 	return nil
 }

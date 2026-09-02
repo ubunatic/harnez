@@ -343,6 +343,50 @@ func TestRunStatsEmptyDB_NoCrash(t *testing.T) {
 	}
 }
 
+// Issue 179: `harnez stats` surfaces a session's heartbeat (`harnez rate
+// --ok`) history via HeartbeatStats — last-heartbeat time and how many
+// tool_calls rows (any call_type) landed since.
+func TestRunStats_ReportsHeartbeatInfo(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	seedStatsFixture(t, dbPath)
+
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := db.Insert(telemetry.ToolCall{
+		SessionID: "sess-1", TicketID: "harnez/179", AgentID: "claude",
+		ToolName: "heartbeat", CallType: telemetry.HeartbeatCallType,
+		Note: "ok", RawBytes: 20,
+	}); err != nil {
+		t.Fatalf("Insert heartbeat: %v", err)
+	}
+	db.Close()
+
+	var buf bytes.Buffer
+	if err := runStats(&buf, statsOptions{DBPath: dbPath, JSON: true}); err != nil {
+		t.Fatalf("runStats: %v", err)
+	}
+	var report statsReport
+	if err := json.Unmarshal(buf.Bytes(), &report); err != nil {
+		t.Fatalf("json.Unmarshal: %v\noutput: %s", err, buf.String())
+	}
+	if report.Heartbeat.Count != 1 {
+		t.Errorf("Heartbeat.Count = %d, want 1", report.Heartbeat.Count)
+	}
+	if report.Heartbeat.LastAt.IsZero() {
+		t.Error("Heartbeat.LastAt is zero, want the heartbeat's timestamp")
+	}
+
+	var tableBuf bytes.Buffer
+	if err := runStats(&tableBuf, statsOptions{DBPath: dbPath}); err != nil {
+		t.Fatalf("runStats (table): %v", err)
+	}
+	if !strings.Contains(tableBuf.String(), "heartbeat") {
+		t.Errorf("expected table output to mention heartbeat, got:\n%s", tableBuf.String())
+	}
+}
+
 func TestStatsCmdHelp_DocumentsFlags(t *testing.T) {
 	cmd := newStatsCmd()
 	cmd.SetArgs([]string{"--help"})

@@ -98,12 +98,13 @@ type statsOptions struct {
 // renderers — kept as one Go value so --json is guaranteed to report the
 // same numbers the table does (they're built from the same struct).
 type statsReport struct {
-	Filter   telemetry.Filter              `json:"filter"`
-	Empty    bool                          `json:"empty"`
-	ByTool   []telemetry.GroupStats        `json:"by_tool,omitempty"`
-	ByAgent  []telemetry.GroupStats        `json:"by_agent,omitempty"`
-	Savings  telemetry.DistillationSavings `json:"distillation_savings"`
-	Overhead *rateOverheadReport           `json:"rate_feedback_overhead,omitempty"`
+	Filter    telemetry.Filter              `json:"filter"`
+	Empty     bool                          `json:"empty"`
+	ByTool    []telemetry.GroupStats        `json:"by_tool,omitempty"`
+	ByAgent   []telemetry.GroupStats        `json:"by_agent,omitempty"`
+	Savings   telemetry.DistillationSavings `json:"distillation_savings"`
+	Heartbeat telemetry.HeartbeatInfo       `json:"heartbeat"`
+	Overhead  *rateOverheadReport           `json:"rate_feedback_overhead,omitempty"`
 }
 
 // rateOverheadReport is the --overhead addendum (issue 142): real measured
@@ -191,13 +192,18 @@ func buildStatsReport(db *telemetry.DB, f telemetry.Filter) (statsReport, error)
 	if err != nil {
 		return statsReport{}, fmt.Errorf("distillation savings: %w", err)
 	}
+	heartbeat, err := db.HeartbeatStats(f)
+	if err != nil {
+		return statsReport{}, fmt.Errorf("heartbeat stats: %w", err)
+	}
 
 	return statsReport{
-		Filter:  f,
-		Empty:   len(byTool) == 0 && len(byAgent) == 0,
-		ByTool:  byTool,
-		ByAgent: byAgent,
-		Savings: savings,
+		Filter:    f,
+		Empty:     len(byTool) == 0 && len(byAgent) == 0,
+		ByTool:    byTool,
+		ByAgent:   byAgent,
+		Savings:   savings,
+		Heartbeat: heartbeat,
 	}, nil
 }
 
@@ -278,6 +284,14 @@ func renderStatsTable(w io.Writer, report statsReport) error {
 		fmt.Fprintf(w, "distillation byte savings: %.2f%% (%d rows, %d -> %d bytes)\n",
 			report.Savings.Ratio*100, report.Savings.Count,
 			report.Savings.RawBytes, report.Savings.DistilledBytes)
+	}
+
+	fmt.Fprintln(w)
+	if hb := report.Heartbeat; hb.Count == 0 {
+		fmt.Fprintln(w, "heartbeat (harnez rate --ok, issue 179): none recorded")
+	} else {
+		fmt.Fprintf(w, "heartbeat (harnez rate --ok, issue 179): %d recorded, last at %s, %d call(s) since\n",
+			hb.Count, hb.LastAt.Format("2006-01-02T15:04:05Z07:00"), hb.CallsSince)
 	}
 
 	if o := report.Overhead; o != nil {

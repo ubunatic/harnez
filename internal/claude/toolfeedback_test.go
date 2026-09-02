@@ -33,12 +33,20 @@ func TestToolFeedbackProtocolConfigEntry(t *testing.T) {
 	if !strings.Contains(found.Content, "harnez rate <tool_name> <1-5>") {
 		t.Errorf("expected Tool Feedback Protocol section to contain the harnez rate invocation, got:\n%s", found.Content)
 	}
+	// Issue 179: the section also documents the lean ok-heartbeat rule
+	// alongside the original failure-only rule.
+	if !strings.Contains(found.Content, "harnez rate --ok") {
+		t.Errorf("expected Tool Feedback Protocol section to also document `harnez rate --ok`, got:\n%s", found.Content)
+	}
 
-	// Sanity-check the ~25-token estimate from the ticket (rough word count,
-	// not a real tokenizer — see issue 122 AC).
+	// Word-budget check, extended from issue 122's original ~25-token
+	// estimate to accommodate issue 179's genuinely added second rule
+	// (rough word count, not a real tokenizer). The upper bound still
+	// exists to catch a regression back to a verbose, pre-181-style
+	// instruction — it isn't unbounded.
 	words := strings.Fields(found.Content)
-	if len(words) < 15 || len(words) > 60 {
-		t.Errorf("expected Tool Feedback Protocol content to be roughly ~25 tokens, got %d words:\n%s", len(words), found.Content)
+	if len(words) < 15 || len(words) > 90 {
+		t.Errorf("expected Tool Feedback Protocol content to stay concise (~15-90 words for two short rules), got %d words:\n%s", len(words), found.Content)
 	}
 }
 

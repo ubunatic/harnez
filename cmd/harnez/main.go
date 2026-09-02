@@ -39,7 +39,18 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 	}
 	sessionstate.Record(&s, cmd.Name(), time.Now())
 
-	if tip, ok := sessionstate.GapTip(s); ok {
+	// feedbackDisabled mirrors issue 142's opt-out: a session with the Tool
+	// Feedback Protocol disabled (config.yaml's feedback.disable_rate_protocol
+	// or $HARNEZ_DISABLE_RATE_FEEDBACK) shouldn't get nagged about either
+	// half of it — the failure-rating reminder or issue 179's --ok heartbeat
+	// nudge. Best-effort: a failed config load just leaves tips enabled,
+	// matching this hook's overall "never block a real command" stance.
+	feedbackDisabled := false
+	if cfg, cfgErr := claude.LoadConfigEmbedded(); cfgErr == nil {
+		feedbackDisabled = claude.RateFeedbackDisabled(cfg, nil)
+	}
+
+	if tip, ok := sessionstate.GapTip(s, feedbackDisabled); ok {
 		fmt.Fprintln(cmd.ErrOrStderr(), tip)
 		s.TotalAtLastTip = s.Total
 	}
