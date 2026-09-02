@@ -140,7 +140,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 139 | [139-codex-usage-window-rollover-stale-limit.md](139-codex-usage-window-rollover-stale-limit.md) | Codex Usage Window Rollover Keeps Stale Limit State | Open |
 | 140 | [140-debug-overlay-does-not-work.md](140-debug-overlay-does-not-work.md) | `!` debug overlay does not work in `harnez usage --watch` | Closed — resolved in `bc3f148` |
 | 141 | [141-codex-status-bar-agent-count.md](141-codex-status-bar-agent-count.md) | Show the running-agent count in the Codex status bar | Open |
-| 142 | [142-disable-rate-feedback-and-measure-overhead.md](142-disable-rate-feedback-and-measure-overhead.md) | Allow disabling `harnez rate` feedback and measure its token overhead | Open |
+| 142 | [142-disable-rate-feedback-and-measure-overhead.md](142-disable-rate-feedback-and-measure-overhead.md) | Allow disabling `harnez rate` feedback and measure its token overhead | Resolved |
 | 143 | [143-show-git-status-in-all-agent-status-bars.md](143-show-git-status-in-all-agent-status-bars.md) | Show Git status in all agent status bars | Open |
 | 144 | [144-codex-subagent-model-selection-policy.md](144-codex-subagent-model-selection-policy.md) | Ensure Codex uses the correct model for subagents | Open |
 | 145 | [145-orchestrator-session-skill-and-command.md](145-orchestrator-session-skill-and-command.md) | Add an orchestrator-session skill and command | Open |
@@ -177,6 +177,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 176 | [176-structured-capped-subagent-completion-report-contract.md](176-structured-capped-subagent-completion-report-contract.md) | Structured, Capped Subagent Completion-Report Contract | Open |
 | 177 | [177-lean-post-edit-build-check-for-control-flow-edits.md](177-lean-post-edit-build-check-for-control-flow-edits.md) | Lean, Scoped Post-Edit Build Check for Control-Flow-Reshaping Edits | Open |
 | 178 | [178-distill-smart-mode-error-pattern-preservation.md](178-distill-smart-mode-error-pattern-preservation.md) | Distill: Opt-In Smart Mode with Classifier-Driven Error Pattern Preservation | Open |
+| 179 | [179-harnez-rate-ok-heartbeat.md](179-harnez-rate-ok-heartbeat.md) | `harnez rate --ok`: lean periodic heartbeat to confirm tool calls are still fine | Open |
 | 179 | [179-instruct-agents-on-harnez-find-in-agents-md.md](179-instruct-agents-on-harnez-find-in-agents-md.md) | Instruct Agents on `harnez find` for Issue Discovery in `AGENTS.md` | Closed |
 | 180 | [180-watch-and-review-compact-commands.md](180-watch-and-review-compact-commands.md) | Harnez Should Watch `/compact` Events and Assess Before/After Quality | Closed (scoped down — see Research Findings and Resolution Note) |
 | 181 | [181-narrow-harnez-rate-to-failure-cases.md](181-narrow-harnez-rate-to-failure-cases.md) | Narrow `harnez rate` to Failure/Unexpected-Outcome Cases | Closed |
