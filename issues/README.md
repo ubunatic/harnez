@@ -178,3 +178,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 177 | [177-lean-post-edit-build-check-for-control-flow-edits.md](177-lean-post-edit-build-check-for-control-flow-edits.md) | Lean, Scoped Post-Edit Build Check for Control-Flow-Reshaping Edits | Open |
 | 178 | [178-distill-smart-mode-error-pattern-preservation.md](178-distill-smart-mode-error-pattern-preservation.md) | Distill: Opt-In Smart Mode with Classifier-Driven Error Pattern Preservation | Open |
 | 179 | [179-instruct-agents-on-harnez-find-in-agents-md.md](179-instruct-agents-on-harnez-find-in-agents-md.md) | Instruct Agents on `harnez find` for Issue Discovery in `AGENTS.md` | Closed |
+| 180 | [180-watch-and-review-compact-commands.md](180-watch-and-review-compact-commands.md) | Harnez Should Watch `/compact` Events and Assess Before/After Quality | Open |
+| 181 | [181-narrow-harnez-rate-to-failure-cases.md](181-narrow-harnez-rate-to-failure-cases.md) | Narrow `harnez rate` to Failure/Unexpected-Outcome Cases | Open |
+| 182 | [182-distill-truncation-with-note.md](182-distill-truncation-with-note.md) | `harnez distill` Should Truncate Very Long Output With an Explicit Note | Open |
+| 183 | [183-session-state-assessment-and-reminders.md](183-session-state-assessment-and-reminders.md) | Session State Tracking + Proactive Gap Reminders for Coding-Env Callers | Open |
