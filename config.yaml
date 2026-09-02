@@ -215,13 +215,20 @@ skills:
     file: commands/harnez-sync.md
 
   - name: tool-feedback-protocol
-    description: "Use immediately after completing any internal tool call (Read, Edit, Bash, etc.) in a harnez-tracked project (issues/ present) — record how well the call actually worked via harnez rate, before moving to the next step"
+    description: "Use after an internal tool call (Read, Edit, Bash, etc.) in a harnez-tracked project (issues/ present) failed or didn't produce the expected outcome — record it via harnez rate before moving to the next step. Skip it for routine successful calls."
     content: |
       # Tool Feedback Protocol
 
-      This project is harnez-tracked (`issues/` present). After every internal tool call —
-      Read, Edit, Bash, Grep, whatever just ran — record whether it actually worked before
-      moving on:
+      This project is harnez-tracked (`issues/` present). Rate a tool call — Read, Edit,
+      Bash, Grep, whatever just ran — only when:
+
+      - it failed (non-zero exit, error result, exception), or
+      - it succeeded but didn't produce the expected outcome (a fix that didn't fix, a
+        search that missed the target, a build that passed but the feature still didn't
+        work).
+
+      Routine successful calls (a Read that returned the right file, a Grep that found the
+      match) don't need a rating — this is the signal-carrying subset, not every call.
 
       ```
       harnez rate <tool_name> <1-5> "<1-line outcome summary>" "<project_folder>/<ticket_name>"
@@ -229,7 +236,7 @@ skills:
 
       Example:
       ```
-      harnez rate Read 5 "found the bug in apply.go" harnez/117-harnez-rate-command
+      harnez rate Grep 1 "search missed the target function, wrong file" harnez/117-harnez-rate-command
       ```
 
       Score 5 = flawless, 3 = partial success / required adjustment, 1 = total failure /
@@ -275,9 +282,9 @@ agents_md:
         content: |
           ### Tool Feedback Protocol
           Harnez-tracked projects only (`issues/` present); omit ticket or skip otherwise.
-          After any internal tool call, record it:
+          Rate a call only when it failed or produced an unexpected outcome — not routine successes:
           `harnez rate <tool_name> <1-5> "<1-line outcome summary>" "<project_folder>/<ticket_name>"`
-          Example: `harnez rate Read 5 "found the bug in apply.go" harnez/117-harnez-rate-command`
+          Example: `harnez rate Grep 1 "missed target, wrong file" harnez/117-harnez-rate-command`
           Score 5 flawless, 3 partial, 1 useless.
       - name: Issue Tracker Discovery
         content: |

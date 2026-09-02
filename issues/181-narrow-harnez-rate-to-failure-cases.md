@@ -1,6 +1,6 @@
 # 181 — Narrow `harnez rate` to Failure/Unexpected-Outcome Cases
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -45,3 +45,42 @@ need updating to avoid contradicting the new narrower policy.
 3. Check `internal/claude/toolfeedback_test.go` (recently touched per git status) for any test
    assumptions tied to the old "rate everything" framing that need updating.
 4. Verify with `go test ./...`; update `issues/README.md`.
+
+## 4. Resolution Note
+
+Both source-of-truth locations for the instruction were config.yaml-driven, not hand-authored
+copies, so there was exactly one place per delivery mechanism to change:
+
+- `config.yaml`'s `agents_md.global.sections` entry named "Tool Feedback Protocol" (renders into
+  `~/.claude/CLAUDE.md` and its `~/AGENTS.md`/`~/.prime/agent/AGENTS.md` mirrors via `harnez
+  apply`'s managed-section mechanism).
+- `config.yaml`'s `skills` entry named `tool-feedback-protocol` (renders into
+  `~/.claude/skills/tool-feedback-protocol/SKILL.md`), including its `description:` line which
+  previously said "Use immediately after completing any internal tool call" — that description
+  is itself an instruction surface (skill-picker text), so it was rewritten to state the
+  failure/unexpected-outcome condition rather than "any call".
+
+Both were rewritten to: rate only when a call (a) failed, or (b) succeeded but missed the
+expected outcome — not after routine successful calls. The exact `harnez rate <tool_name> <1-5>
+"<summary>" "<project>/<ticket>"` syntax and the 5/3/1 scoring rubric were kept verbatim per the
+ticket's constraint. The worked example was changed from a success case ("found the bug") to a
+failure case ("missed target, wrong file") so the example itself models the new policy instead of
+contradicting it.
+
+`internal/claude/toolfeedback_test.go` needed no changes: its assertions only check for the
+literal `harnez rate <tool_name> <1-5>` substring and a rough 15-60 word budget on the section
+content, neither of which encodes the old "rate everything" framing in a way that would make the
+test wrong under the new policy. The new section content lands at ~57 words, still inside that
+budget.
+
+`harnez rate` itself (cmd/harnez rate subcommand) has no argument validation, help text, or
+reminder logic that assumes "rate every call" — it just accepts an already-decided score and
+writes a telemetry record, so no code changes were needed there. (Issue 183's proactive-reminder
+work will need to consult this narrowed policy when it decides when a "gap" exists — noted as
+context, not implemented here.)
+
+Verification: `go build ./...` and `go test ./...` pass (all packages). `make install` and
+`make apply` were both run; `make apply` confirmed the rewritten section text and skill file are
+now live under `~/.claude/CLAUDE.md` and `~/.claude/skills/tool-feedback-protocol/SKILL.md`.
+
+No scope was trimmed from the original ticket text.
