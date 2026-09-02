@@ -50,6 +50,26 @@ func TestIssuesTableMissingStatus(t *testing.T) {
 	}
 }
 
+func TestIssuesTableReservedPlaceholder(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "001-open-task.md"), "# 001 — Open task\n\n**Status**: Open\n")
+	writeFile(t, filepath.Join(dir, "002-reserved.md"), "# 002 — Reserved\n\n**Status**: Draft\n\n---\n\nReserved placeholder ticket.\n")
+
+	table, err := IssuesTable(dir)
+	if err != nil {
+		t.Fatalf("IssuesTable: %v", err)
+	}
+	want := `| # | File | Title | Status |
+|---|------|-------|--------|
+| 001 | [001-open-task.md](001-open-task.md) | Open task | Open |
+| 002 | [002-reserved.md](002-reserved.md) | Reserved | Draft |
+`
+	if table != want {
+		t.Errorf("IssuesTable mismatch with reserved ticket:\ngot:\n%s\nwant:\n%s", table, want)
+	}
+}
+
+
 func TestUpdateIssuesReadmeIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	issuesDir := filepath.Join(dir, "issues")

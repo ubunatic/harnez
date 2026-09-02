@@ -1,6 +1,8 @@
 package issues
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 )
@@ -317,3 +319,111 @@ func TestLintFS_Scenarios(t *testing.T) {
 		}
 	})
 }
+
+func TestNextNumber(t *testing.T) {
+	t.Run("empty directory returns 001", func(t *testing.T) {
+		fs := fstest.MapFS{}
+		files, err := ScanFS(fs, ".")
+		if err != nil {
+			t.Fatalf("ScanFS error: %v", err)
+		}
+		got := NextNumberFromFiles(files)
+		if got != "001" {
+			t.Errorf("NextNumberFromFiles() = %q, want %q", got, "001")
+		}
+	})
+
+	t.Run("max plus one with gaps and archive", func(t *testing.T) {
+		fs := fstest.MapFS{
+			"001-first.md":         &fstest.MapFile{Data: []byte("# 001 — First\n\n**Status:** Closed\n")},
+			"005-gap.md":           &fstest.MapFile{Data: []byte("# 005 — Gap\n\n**Status:** Open\n")},
+			"archive/010-arch.md":  &fstest.MapFile{Data: []byte("# 010 — Arch\n\n**Status:** Closed\n")},
+			"099-near-hundred.md":  &fstest.MapFile{Data: []byte("# 099 — Near Hundred\n\n**Status:** Open\n")},
+		}
+		files, err := ScanFS(fs, ".")
+		if err != nil {
+			t.Fatalf("ScanFS error: %v", err)
+		}
+		got := NextNumberFromFiles(files)
+		if got != "100" {
+			t.Errorf("NextNumberFromFiles() = %q, want %q", got, "100")
+		}
+	})
+
+	t.Run("large numbers 1000+", func(t *testing.T) {
+		fs := fstest.MapFS{
+			"999-end.md": &fstest.MapFile{Data: []byte("# 999 — End\n\n**Status:** Open\n")},
+		}
+		files, err := ScanFS(fs, ".")
+		if err != nil {
+			t.Fatalf("ScanFS error: %v", err)
+		}
+		got := NextNumberFromFiles(files)
+		if got != "1000" {
+			t.Errorf("NextNumberFromFiles() = %q, want %q", got, "1000")
+		}
+	})
+}
+
+func TestSlugify(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"", ""},
+		{"Simple Title", "simple-title"},
+		{"`harnez find` Issues: Next & Reserve!", "harnez-find-issues-next-reserve"},
+		{"---Already-Kebab---", "already-kebab"},
+		{"Multiple   Spaces   and --- dashes", "multiple-spaces-and-dashes"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := Slugify(tt.input); got != tt.want {
+				t.Errorf("Slugify(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReserve_AtomicAndCollisionAvoidance(t *testing.T) {
+	dir := t.TempDir()
+
+	// 1. Initial reservation on empty directory
+	num1, file1, err := Reserve(dir, ReserveOptions{})
+	if err != nil {
+		t.Fatalf("Reserve failed: %v", err)
+	}
+	if num1 != "001" || file1 != "001-reserved.md" {
+		t.Fatalf("Reserve on empty dir got %q, %q; want 001, 001-reserved.md", num1, file1)
+	}
+
+	// Verify content of reserved file
+	content1, err := os.ReadFile(filepath.Join(dir, file1))
+	if err != nil {
+		t.Fatalf("ReadFile %s: %v", file1, err)
+	}
+	title1, status1, has1 := ParseIssueFile(string(content1))
+	if !has1 || status1 != "Draft" || title1 != "001 — Reserved" {
+		t.Errorf("reserved file metadata mismatch: title=%q, status=%q, has=%v", title1, status1, has1)
+	}
+
+	// 2. Second reservation with custom title
+	num2, file2, err := Reserve(dir, ReserveOptions{Title: "Fix load balancer"})
+	if err != nil {
+		t.Fatalf("Reserve failed: %v", err)
+	}
+	if num2 != "002" || file2 != "002-fix-load-balancer.md" {
+		t.Fatalf("Reserve got %q, %q; want 002, 002-fix-load-balancer.md", num2, file2)
+	}
+
+	// 3. Sequential third reservation
+	num3, file3, err := Reserve(dir, ReserveOptions{})
+	if err != nil {
+		t.Fatalf("Reserve failed: %v", err)
+	}
+	if num3 != "003" || file3 != "003-reserved.md" {
+		t.Fatalf("Reserve got %q, %q; want 003, 003-reserved.md", num3, file3)
+	}
+}
+

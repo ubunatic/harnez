@@ -3,9 +3,12 @@
 // "issues" (issues/*.md and issues/archive/*.md); see
 // issues/158-find-entity-query-command.md for the full query grammar,
 // ranking, and output contract.
+// It also provides `harnez find issues next` (issue 194) to calculate
+// and reserve the next free issue number.
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -16,8 +19,18 @@ import (
 	"ubunatic.com/harnez/internal/issues"
 )
 
+type nextResultJSON struct {
+	Number   string `json:"number"`
+	Reserved bool   `json:"reserved"`
+	File     string `json:"file,omitempty"`
+	Path     string `json:"path,omitempty"`
+}
+
 func newFindCmd() *cobra.Command {
 	var dir string
+	var nextFlag bool
+	var reserveFlag string
+	var jsonFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "find <entity> [options] <query...>",
@@ -31,6 +44,13 @@ Entities:
            issues/README.md and every other file/directory). Both active and
            archived tickets are in scope by default; use a status filter to
            narrow lifecycle state.
+
+Subcommands / Allocation:
+  harnez find issues next [--reserve [title]] [--json]
+           Compute the next free ticket number (max+1, formatted with 3+ digits).
+           When --reserve is supplied, atomically writes a Draft placeholder
+           ticket file (issues/<NNN>-reserved.md or issues/<NNN>-<title-slug>.md)
+           so concurrent callers do not receive colliding numbers.
 
 Query grammar:
   whitespace         AND: 'vram gtt' requires both terms.
@@ -91,17 +111,86 @@ actionable stderr message.`,
 		Args:         cobra.MinimumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runFind(cmd.OutOrStdout(), dir, args)
+			return runFind(cmd.OutOrStdout(), dir, args, nextFlag, cmd.Flags().Changed("reserve"), reserveFlag, jsonFlag)
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
+	cmd.Flags().BoolVar(&nextFlag, "next", false, "report or reserve the next free issue number")
+	cmd.Flags().StringVar(&reserveFlag, "reserve", "", "reserve the next free issue number with an optional title")
+	cmd.Flags().Lookup("reserve").NoOptDefVal = " "
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "output in JSON format")
+
 	return cmd
 }
 
-func runFind(w io.Writer, dir string, args []string) error {
+func runFindNext(w io.Writer, dir string, reserve bool, title string, jsonOutput bool) error {
+	issuesDir := filepath.Join(dir, "issues")
+	if reserve {
+		num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: strings.TrimSpace(title)})
+		if err != nil {
+			return fmt.Errorf("reserve issue: %w", err)
+		}
+		relPath := filepath.ToSlash(filepath.Join("issues", filename))
+		if jsonOutput {
+			data, err := json.Marshal(nextResultJSON{
+				Number:   num,
+				Reserved: true,
+				File:     filename,
+				Path:     relPath,
+			})
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(w, string(data))
+			return nil
+		}
+		fmt.Fprintln(w, num)
+		return nil
+	}
+
+	num, _, err := issues.NextNumber(issuesDir)
+	if err != nil {
+		return fmt.Errorf("next issue number: %w", err)
+	}
+	if jsonOutput {
+		data, err := json.Marshal(nextResultJSON{
+			Number:   num,
+			Reserved: false,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(w, string(data))
+		return nil
+	}
+	fmt.Fprintln(w, num)
+	return nil
+}
+
+func runFind(w io.Writer, dir string, args []string, nextFlag, hasReserveFlag bool, reserveTitle string, jsonOutput bool) error {
 	entity := args[0]
 	if entity != "issues" {
 		return fmt.Errorf("find: unsupported entity %q (only \"issues\" is supported)", entity)
+	}
+
+	// Handle `harnez find issues next ...` subcommand syntax
+	if len(args) > 1 && args[1] == "next" {
+		reserve := hasReserveFlag
+		title := reserveTitle
+		// If additional arguments are provided after 'next', e.g. `harnez find issues next --reserve "My Title"`
+		// or `harnez find issues next "My Title"` (if reserve flag is set)
+		if len(args) > 2 {
+			extra := strings.TrimSpace(strings.Join(args[2:], " "))
+			if extra != "" && strings.TrimSpace(title) == "" {
+				title = extra
+			}
+		}
+		return runFindNext(w, dir, reserve, title, jsonOutput)
+	}
+
+	// Handle flags on `harnez find issues --next` or `harnez find issues --reserve`
+	if nextFlag || hasReserveFlag {
+		return runFindNext(w, dir, hasReserveFlag, reserveTitle, jsonOutput)
 	}
 
 	query := strings.TrimSpace(strings.Join(args[1:], " "))
@@ -128,3 +217,4 @@ func runFind(w io.Writer, dir string, args []string) error {
 	}
 	return nil
 }
+

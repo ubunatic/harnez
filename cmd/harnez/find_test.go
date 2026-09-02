@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,10 +37,14 @@ func findFixtureDir(t *testing.T) string {
 	return dir
 }
 
+func testRunFind(w io.Writer, dir string, args ...string) error {
+	return runFind(w, dir, args, false, false, "", false)
+}
+
 func TestRunFind_ExactTSVOutput(t *testing.T) {
 	dir := findFixtureDir(t)
 	var out bytes.Buffer
-	if err := runFind(&out, dir, []string{"issues", "vram"}); err != nil {
+	if err := testRunFind(&out, dir, "issues", "vram"); err != nil {
 		t.Fatalf("runFind: %v", err)
 	}
 	want := "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\n" +
@@ -52,7 +57,7 @@ func TestRunFind_ExactTSVOutput(t *testing.T) {
 func TestRunFind_ExcludesReadme(t *testing.T) {
 	dir := findFixtureDir(t)
 	var out bytes.Buffer
-	if err := runFind(&out, dir, []string{"issues", "File"}); err != nil {
+	if err := testRunFind(&out, dir, "issues", "File"); err != nil {
 		t.Fatalf("runFind: %v", err)
 	}
 	if out.String() != "" {
@@ -63,7 +68,7 @@ func TestRunFind_ExcludesReadme(t *testing.T) {
 func TestRunFind_ZeroMatchesExitsCleanly(t *testing.T) {
 	dir := findFixtureDir(t)
 	var out bytes.Buffer
-	if err := runFind(&out, dir, []string{"issues", "zzznotfound"}); err != nil {
+	if err := testRunFind(&out, dir, "issues", "zzznotfound"); err != nil {
 		t.Fatalf("runFind: unexpected error: %v", err)
 	}
 	if out.String() != "" {
@@ -74,7 +79,7 @@ func TestRunFind_ZeroMatchesExitsCleanly(t *testing.T) {
 func TestRunFind_StatusFilterAndTextCombo(t *testing.T) {
 	dir := findFixtureDir(t)
 	var out bytes.Buffer
-	if err := runFind(&out, dir, []string{"issues", "status:closed", "vram|gtt"}); err != nil {
+	if err := testRunFind(&out, dir, "issues", "status:closed", "vram|gtt"); err != nil {
 		t.Fatalf("runFind: %v", err)
 	}
 	want := "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\n" +
@@ -87,7 +92,7 @@ func TestRunFind_StatusFilterAndTextCombo(t *testing.T) {
 func TestRunFind_UnknownEntityIsUsageError(t *testing.T) {
 	dir := findFixtureDir(t)
 	var out bytes.Buffer
-	err := runFind(&out, dir, []string{"docs", "vram"})
+	err := testRunFind(&out, dir, "docs", "vram")
 	if err == nil {
 		t.Fatal("expected error for unsupported entity")
 	}
@@ -96,7 +101,7 @@ func TestRunFind_UnknownEntityIsUsageError(t *testing.T) {
 func TestRunFind_EmptyQueryIsUsageError(t *testing.T) {
 	dir := findFixtureDir(t)
 	var out bytes.Buffer
-	err := runFind(&out, dir, []string{"issues", "   "})
+	err := testRunFind(&out, dir, "issues", "   ")
 	if err == nil {
 		t.Fatal("expected error for empty query")
 	}
@@ -112,8 +117,80 @@ func TestRunFind_MalformedQueryIsUsageError(t *testing.T) {
 	}
 	for _, args := range cases {
 		var out bytes.Buffer
-		if err := runFind(&out, dir, args); err == nil {
+		if err := testRunFind(&out, dir, args...); err == nil {
 			t.Errorf("runFind(%v): expected usage error, got nil", args)
 		}
 	}
 }
+
+func TestRunFind_IssuesNext(t *testing.T) {
+	dir := findFixtureDir(t)
+	// Current max issue in fixture is 101, so next is 102
+	var out bytes.Buffer
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, false, "", false); err != nil {
+		t.Fatalf("runFind next: %v", err)
+	}
+	if out.String() != "102\n" {
+		t.Errorf("runFind issues next = %q, want %q", out.String(), "102\n")
+	}
+
+	// Flag form: --next
+	out.Reset()
+	if err := runFind(&out, dir, []string{"issues"}, true, false, "", false); err != nil {
+		t.Fatalf("runFind --next: %v", err)
+	}
+	if out.String() != "102\n" {
+		t.Errorf("runFind issues --next = %q, want %q", out.String(), "102\n")
+	}
+
+	// JSON format
+	out.Reset()
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, false, "", true); err != nil {
+		t.Fatalf("runFind next --json: %v", err)
+	}
+	wantJSON := `{"number":"102","reserved":false}` + "\n"
+	if out.String() != wantJSON {
+		t.Errorf("runFind issues next --json = %q, want %q", out.String(), wantJSON)
+	}
+}
+
+func TestRunFind_IssuesNextReserve(t *testing.T) {
+	dir := findFixtureDir(t)
+	var out bytes.Buffer
+
+	// Reserve without title
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "", false); err != nil {
+		t.Fatalf("runFind issues next --reserve: %v", err)
+	}
+	if out.String() != "102\n" {
+		t.Errorf("got %q, want %q", out.String(), "102\n")
+	}
+	reservedFile := filepath.Join(dir, "issues", "102-reserved.md")
+	if _, err := os.Stat(reservedFile); err != nil {
+		t.Fatalf("expected reserved file %s to exist: %v", reservedFile, err)
+	}
+
+	// Second reservation with title
+	out.Reset()
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "New Feature", false); err != nil {
+		t.Fatalf("runFind issues next --reserve 'New Feature': %v", err)
+	}
+	if out.String() != "103\n" {
+		t.Errorf("got %q, want %q", out.String(), "103\n")
+	}
+	titledFile := filepath.Join(dir, "issues", "103-new-feature.md")
+	if _, err := os.Stat(titledFile); err != nil {
+		t.Fatalf("expected reserved file %s to exist: %v", titledFile, err)
+	}
+
+	// Third reservation with JSON
+	out.Reset()
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "JSON Feature", true); err != nil {
+		t.Fatalf("runFind issues next --reserve --json: %v", err)
+	}
+	wantJSON := `{"number":"104","reserved":true,"file":"104-json-feature.md","path":"issues/104-json-feature.md"}` + "\n"
+	if out.String() != wantJSON {
+		t.Errorf("runFind issues next --reserve --json = %q, want %q", out.String(), wantJSON)
+	}
+}
+

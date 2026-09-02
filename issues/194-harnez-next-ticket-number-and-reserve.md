@@ -1,6 +1,6 @@
 # 194 — `harnez find issues next` (or similar) to report and reserve the next free ticket number
 
-**Status**: Open
+**Status**: Closed — resolved and verified
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -85,3 +85,13 @@ top-level command if that fits the CLI's existing structure better; check
    `--reserve` collision avoidance, and reserved-placeholder handling by
    `harnez index`.
 7. `go test ./...` passes.
+
+## Verification
+
+- Implemented `NextNumber`, `NextNumberFromFiles`, `Slugify`, and `Reserve` in `internal/issues/issues.go`.
+- Implemented `harnez find issues next`, `--next`, `--reserve`, and `--json` in `cmd/harnez/find.go`.
+- Added unit tests in `internal/issues/issues_test.go`, `internal/index/index_test.go`, and `cmd/harnez/find_test.go`.
+- Documented in `docs/practices/IssueTracking.md` and `AGENTS.md`.
+- Verified live command `harnez find issues next` (outputs `195`) and `harnez find issues next --json` (`{"number":"195","reserved":false}`).
+- Verified `make test && make install` succeeds cleanly.
+

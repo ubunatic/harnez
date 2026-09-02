@@ -497,3 +497,101 @@ func LintFS(sysFS fs.FS, root string) (*Report, error) {
 
 	return report, nil
 }
+
+// NextNumber scans issuesDir (and archive) and calculates the next free ticket
+// number formatted with at least 3 digits (e.g. "195").
+// If the directory has no issues, it returns ("001", 1, nil).
+// Otherwise it returns max(allocated)+1.
+func NextNumber(issuesDir string) (string, int, error) {
+	files, err := Scan(issuesDir)
+	if err != nil {
+		return "", 0, err
+	}
+	return NextNumberFromFiles(files), maxNumberFromFiles(files) + 1, nil
+}
+
+func maxNumberFromFiles(files []IssueFile) int {
+	maxNum := 0
+	for _, f := range files {
+		if n, err := strconv.Atoi(f.Number); err == nil {
+			if n > maxNum {
+				maxNum = n
+			}
+		}
+	}
+	return maxNum
+}
+
+// NextNumberFromFiles computes the next ticket number string formatted with at
+// least 3 digits (e.g. "001", "195", "1000") given a slice of scanned issue files.
+func NextNumberFromFiles(files []IssueFile) string {
+	next := maxNumberFromFiles(files) + 1
+	return fmt.Sprintf("%03d", next)
+}
+
+var nonAlphanumericSlugRe = regexp.MustCompile(`[^a-z0-9]+`)
+
+// Slugify converts a raw title into a lowercase kebab-case slug for filenames.
+func Slugify(s string) string {
+	s = strings.ToLower(s)
+	s = nonAlphanumericSlugRe.ReplaceAllString(s, "-")
+	s = strings.Trim(s, "-")
+	return s
+}
+
+// ReserveOptions configures ticket reservation.
+type ReserveOptions struct {
+	Title string // Optional title for the reserved ticket
+}
+
+// Reserve allocates the next ticket number and atomically creates a placeholder
+// ticket file under issuesDir. If a race occurs (file exists), it retries with the
+// next number until successful.
+func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string, err error) {
+	if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+		return "", "", fmt.Errorf("create issues dir: %w", err)
+	}
+
+	for attempts := 0; attempts < 100; attempts++ {
+		files, err := Scan(issuesDir)
+		if err != nil {
+			return "", "", fmt.Errorf("scan issues for reservation: %w", err)
+		}
+		nextNum := NextNumberFromFiles(files)
+
+		var baseName string
+		var titleText string
+		slug := Slugify(opts.Title)
+		if slug != "" {
+			baseName = fmt.Sprintf("%s-%s.md", nextNum, slug)
+			titleText = strings.TrimSpace(opts.Title)
+		} else {
+			baseName = fmt.Sprintf("%s-reserved.md", nextNum)
+			titleText = "Reserved"
+		}
+
+		content := fmt.Sprintf("# %s — %s\n\n**Status**: Draft\n\n---\n\nReserved placeholder ticket.\n", nextNum, titleText)
+
+		targetPath := filepath.Join(issuesDir, baseName)
+		f, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err != nil {
+			if os.IsExist(err) {
+				// File already exists; retry loop to allocate the next number.
+				continue
+			}
+			return "", "", fmt.Errorf("reserve ticket file %s: %w", targetPath, err)
+		}
+		if _, err := f.WriteString(content); err != nil {
+			_ = f.Close()
+			return "", "", fmt.Errorf("write reserved ticket file %s: %w", targetPath, err)
+		}
+		if err := f.Close(); err != nil {
+			return "", "", fmt.Errorf("close reserved ticket file %s: %w", targetPath, err)
+		}
+
+		return nextNum, baseName, nil
+	}
+
+	return "", "", fmt.Errorf("failed to reserve ticket after multiple attempts due to concurrent collisions")
+}
+

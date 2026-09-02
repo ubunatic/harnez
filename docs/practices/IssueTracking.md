@@ -40,6 +40,12 @@ Do not conflate **Priority** with **Severity**:
 
 Every issue file is placed under `issues/NNN-kebab-case-title.md` (e.g. `issues/042-standardized-issue-priority-schema.md`).
 
+### Allocating & Reserving Ticket Numbers
+To allocate the next issue number, use `harnez find issues next` instead of ad hoc shell commands (`ls | grep | sort | tail`):
+- `harnez find issues next` — reports the next free ticket number (e.g., `195`) calculated as `max(allocated) + 1` across `issues/*.md` and `issues/archive/*.md`.
+- `harnez find issues next --reserve "Ticket Title"` (or `harnez find issues next --reserve`) — atomically allocates the next number and creates a placeholder ticket file (`issues/NNN-<title-slug>.md` or `issues/NNN-reserved.md` with status `Draft`) using `O_CREATE|O_EXCL` to prevent number collisions between concurrent agents.
+- `harnez find issues next --json` — outputs machine-readable JSON (`{"number":"195","reserved":false}`).
+
 The top of each ticket MUST contain the standardized metadata block:
 
 ```markdown

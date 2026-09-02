@@ -47,9 +47,12 @@ immediately, don't batch them behind pending code work.
 
 When searching for existing issues or allocating next ticket numbers, always use
 `harnez find` instead of `ls issues/`, `find`, or raw grep:
+- `harnez find -d <repo> issues next` — compute the next free ticket number (or `--json`)
+- `harnez find -d <repo> issues next --reserve [title]` — atomically claim and create placeholder ticket file
 - `harnez find -d <repo> issues status:open` — list active open issues
 - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text
 - `harnez index -d <repo>` — update issues/README.md after filing or updating tickets
+
 
 ## Development & Review Workflow
 
