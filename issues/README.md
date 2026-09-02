@@ -181,4 +181,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 180 | [180-watch-and-review-compact-commands.md](180-watch-and-review-compact-commands.md) | Harnez Should Watch `/compact` Events and Assess Before/After Quality | Closed (scoped down — see Research Findings and Resolution Note) |
 | 181 | [181-narrow-harnez-rate-to-failure-cases.md](181-narrow-harnez-rate-to-failure-cases.md) | Narrow `harnez rate` to Failure/Unexpected-Outcome Cases | Closed |
 | 182 | [182-distill-truncation-with-note.md](182-distill-truncation-with-note.md) | `harnez distill` Should Truncate Very Long Output With an Explicit Note | Closed |
-| 183 | [183-session-state-assessment-and-reminders.md](183-session-state-assessment-and-reminders.md) | Session State Tracking + Proactive Gap Reminders for Coding-Env Callers | Open |
+| 183 | [183-session-state-assessment-and-reminders.md](183-session-state-assessment-and-reminders.md) | Session State Tracking + Proactive Gap Reminders for Coding-Env Callers | Closed (v1, trimmed per the ticket's own allowance — see Resolution Note) |

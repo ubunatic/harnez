@@ -13,8 +13,40 @@ import (
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/assess"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/sessionstate"
 	"ubunatic.com/harnez/internal/usage"
 )
+
+// sessionTipHook is `harnez`'s CLI-dispatch hook point for issue 183's
+// session-state tracking: it fires (as root's PersistentPreRunE) on every
+// subcommand invocation, records it against this session's usage history,
+// and — best-effort, never fatal — prints at most one short proactive tip
+// to stderr when sessionstate.GapTip finds something worth surfacing. Any
+// failure here (can't resolve a session id, can't read/write the state
+// file) is swallowed silently: this is a nice-to-have nudge, not something
+// that should ever block or fail a real command.
+func sessionTipHook(cmd *cobra.Command, _ []string) error {
+	sessionID, err := resolve.Session(resolve.SessionOptions{})
+	if err != nil || sessionID == "" {
+		return nil
+	}
+	stateDir := resolve.DefaultStateDir()
+
+	s, err := sessionstate.Load(stateDir, sessionID)
+	if err != nil {
+		return nil
+	}
+	sessionstate.Record(&s, cmd.Name(), time.Now())
+
+	if tip, ok := sessionstate.GapTip(s); ok {
+		fmt.Fprintln(cmd.ErrOrStderr(), tip)
+		s.TotalAtLastTip = s.Total
+	}
+
+	_ = sessionstate.Save(stateDir, s) // best-effort; a lost tick isn't worth surfacing an error for
+	return nil
+}
 
 // resolveUsageHost decides the effective --host value for `harnez usage`:
 // the explicit flag always wins (issue 109 acceptance criterion 3); when the
@@ -63,9 +95,10 @@ func main() {
 	var target string
 
 	root := &cobra.Command{
-		Use:     "harnez",
-		Short:   "Manage Claude Code, Prime Agent, and other agent harnesses from a YAML definition",
-		Version: harnez.Version,
+		Use:               "harnez",
+		Short:             "Manage Claude Code, Prime Agent, and other agent harnesses from a YAML definition",
+		Version:           harnez.Version,
+		PersistentPreRunE: sessionTipHook,
 	}
 
 	var usageJSON bool
