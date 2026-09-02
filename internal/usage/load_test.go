@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -58,7 +59,7 @@ func TestReadAMDGPUMemoryAggregatesVRAMAndGTT(t *testing.T) {
 	writeSysfsUint(t, deviceDir, "mem_info_gtt_total", 12*1024*1024*1024)
 
 	var g GPU
-	readAMDGPUMemory(deviceDir, &g)
+	readAMDGPUMemory(deviceDir, "card0", &g)
 
 	if !g.HaveMem || !g.HaveVRAM || !g.HaveGTT {
 		t.Fatalf("memory flags = HaveMem:%v HaveVRAM:%v HaveGTT:%v, want all true", g.HaveMem, g.HaveVRAM, g.HaveGTT)
@@ -72,6 +73,12 @@ func TestReadAMDGPUMemoryAggregatesVRAMAndGTT(t *testing.T) {
 	if g.MemPercent != 30 {
 		t.Errorf("MemPercent = %.1f, want 30.0", g.MemPercent)
 	}
+	if len(g.VRAMPercentHistory) == 0 || g.VRAMPercentHistory[len(g.VRAMPercentHistory)-1] != 62.5 {
+		t.Errorf("VRAMPercentHistory = %v, want last sample 62.5", g.VRAMPercentHistory)
+	}
+	if len(g.GTTPercentHistory) == 0 || math.Abs(g.GTTPercentHistory[len(g.GTTPercentHistory)-1]-(100.0/12.0)) > 1e-4 {
+		t.Errorf("GTTPercentHistory = %v, want last sample approx %.2f", g.GTTPercentHistory, 100.0/12.0)
+	}
 }
 
 func TestReadAMDGPUMemoryGracefullyHandlesMissingGTT(t *testing.T) {
@@ -80,7 +87,7 @@ func TestReadAMDGPUMemoryGracefullyHandlesMissingGTT(t *testing.T) {
 	writeSysfsUint(t, deviceDir, "mem_info_vram_total", 4*1024*1024*1024)
 
 	var g GPU
-	readAMDGPUMemory(deviceDir, &g)
+	readAMDGPUMemory(deviceDir, "card1", &g)
 
 	if !g.HaveMem || !g.HaveVRAM {
 		t.Fatalf("VRAM flags = HaveMem:%v HaveVRAM:%v, want true", g.HaveMem, g.HaveVRAM)
@@ -90,6 +97,9 @@ func TestReadAMDGPUMemoryGracefullyHandlesMissingGTT(t *testing.T) {
 	}
 	if g.MemUsedMiB != 2*1024 || g.MemTotalMiB != 4*1024 {
 		t.Errorf("combined memory = %.1f/%.1f MiB, want 2048.0/4096.0", g.MemUsedMiB, g.MemTotalMiB)
+	}
+	if len(g.VRAMPercentHistory) == 0 || g.VRAMPercentHistory[len(g.VRAMPercentHistory)-1] != 50 {
+		t.Errorf("VRAMPercentHistory = %v, want last sample 50.0", g.VRAMPercentHistory)
 	}
 }
 

@@ -431,6 +431,11 @@ type GPU struct {
 	// oldest first, populated by the AMD sysfs path (cheap enough to poll
 	// every redraw).
 	UtilHistory []float64
+
+	// VRAMPercentHistory and GTTPercentHistory track rolling usage % windows
+	// for VRAM and GTT timelines.
+	VRAMPercentHistory []float64
+	GTTPercentHistory  []float64
 }
 
 // loadHistoryLen is how many recent samples are kept for a Load box
@@ -479,6 +484,8 @@ var ramHistory sampleHistory
 var (
 	gpuHistoryMu sync.Mutex
 	gpuHistory   = map[string]*sampleHistory{}
+	vramHistory  = map[string]*sampleHistory{}
+	gttHistory   = map[string]*sampleHistory{}
 )
 
 // appendGPUHistory records pct as the latest sample for the GPU identified
@@ -489,6 +496,28 @@ func appendGPUHistory(key string, pct float64) []float64 {
 	if !ok {
 		h = &sampleHistory{}
 		gpuHistory[key] = h
+	}
+	gpuHistoryMu.Unlock()
+	return h.append(pct)
+}
+
+func appendVRAMHistory(key string, pct float64) []float64 {
+	gpuHistoryMu.Lock()
+	h, ok := vramHistory[key]
+	if !ok {
+		h = &sampleHistory{}
+		vramHistory[key] = h
+	}
+	gpuHistoryMu.Unlock()
+	return h.append(pct)
+}
+
+func appendGTTHistory(key string, pct float64) []float64 {
+	gpuHistoryMu.Lock()
+	h, ok := gttHistory[key]
+	if !ok {
+		h = &sampleHistory{}
+		gttHistory[key] = h
 	}
 	gpuHistoryMu.Unlock()
 	return h.append(pct)
@@ -665,7 +694,7 @@ func readAMDSysfsFromGlob(pattern string) ([]GPU, error) {
 			g.UtilPercent = hist[len(hist)-1]
 		}
 
-		readAMDGPUMemory(deviceDir, &g)
+		readAMDGPUMemory(deviceDir, cardName, &g)
 
 		if hwmonMatches, err := filepath.Glob(filepath.Join(deviceDir, "hwmon", "hwmon*", "temp1_input")); err == nil && len(hwmonMatches) > 0 {
 			if milliC, err := readSysfsUint(hwmonMatches[0]); err == nil {
@@ -682,7 +711,7 @@ func readAMDSysfsFromGlob(pattern string) ([]GPU, error) {
 	return gpus, nil
 }
 
-func readAMDGPUMemory(deviceDir string, g *GPU) {
+func readAMDGPUMemory(deviceDir, cardName string, g *GPU) {
 	vramUsed, errVRAMUsed := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_used"))
 	vramTotal, errVRAMTotal := readSysfsUint(filepath.Join(deviceDir, "mem_info_vram_total"))
 	if errVRAMUsed == nil && errVRAMTotal == nil && vramTotal > 0 {
@@ -691,6 +720,8 @@ func readAMDGPUMemory(deviceDir string, g *GPU) {
 		g.MemUsedMiB += g.VRAMUsedMiB
 		g.MemTotalMiB += g.VRAMTotalMiB
 		g.HaveVRAM = true
+		vramPct := percent(g.VRAMUsedMiB, g.VRAMTotalMiB)
+		g.VRAMPercentHistory = appendVRAMHistory(cardName, vramPct)
 	}
 
 	gttUsed, errGTTUsed := readSysfsUint(filepath.Join(deviceDir, "mem_info_gtt_used"))
@@ -701,6 +732,8 @@ func readAMDGPUMemory(deviceDir string, g *GPU) {
 		g.MemUsedMiB += g.GTTUsedMiB
 		g.MemTotalMiB += g.GTTTotalMiB
 		g.HaveGTT = true
+		gttPct := percent(g.GTTUsedMiB, g.GTTTotalMiB)
+		g.GTTPercentHistory = appendGTTHistory(cardName, gttPct)
 	}
 
 	if g.MemTotalMiB > 0 {

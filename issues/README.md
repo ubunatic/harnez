@@ -198,4 +198,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 195 | [195-path-shim-wrapper-for-agy-exec-distill-interception.md](195-path-shim-wrapper-for-agy-exec-distill-interception.md) | Implement a PATH-shim wrapper to route agy's shelled-out tool calls through harnez exec/distill | Draft |
 | 196 | [196-agy-native-hooks-plan-alongside-claude-hooks.md](196-agy-native-hooks-plan-alongside-claude-hooks.md) | Plan: use real agy hooks (`hooks.json`) alongside Claude Code hooks | Draft |
 | 197 | [197-agent-shell-enhancements-user-invoked-aliases.md](197-agent-shell-enhancements-user-invoked-aliases.md) | "Agent shell enhancements": user-invoked aliases/shell funcs feature | Draft |
-| 198 | [198-load-box-sparkline-width-and-vram-gtt-split-restoration.md](198-load-box-sparkline-width-and-vram-gtt-split-restoration.md) | Load Box RAM/VRAM Sparkline Width & VRAM/GTT Split Restoration | Open |
+| 198 | [198-load-box-sparkline-width-and-vram-gtt-split-restoration.md](198-load-box-sparkline-width-and-vram-gtt-split-restoration.md) | Load Box RAM/VRAM Sparkline Width & VRAM/GTT Split Restoration | Closed |

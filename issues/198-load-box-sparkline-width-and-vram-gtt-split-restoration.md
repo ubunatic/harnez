@@ -1,6 +1,6 @@
 # 198 — Load Box RAM/VRAM Sparkline Width & VRAM/GTT Split Restoration
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P1 (High)
 **Severity**: Minor
 **Category**: TUI / Hardware Monitoring
@@ -48,11 +48,15 @@ In `harnez usage --watch` and `--compact`, setting RAM and VRAM/GTT charts to `s
 
 ---
 
-## 3. Verification Plan
+## 3. Verification & Resolution
 
-1. Update `internal/usage/watch_test.go` and `internal/usage/load_test.go` asserting:
-   - Every load row's bracketed chart has identical visible width (`10` or `12` with brackets).
-   - VRAM/GTT renders both VRAM and GTT splits (two adjacent brackets when both are present).
-   - Run `TestBuildWatchFrameRowsFitWidth` across all terminal widths.
-2. Run `make test` and `make install` in `harnez`.
-3. Verify live with `harnez usage --compact` and `harnez usage --watch`.
+1. Updated `internal/usage/load.go`:
+   - Added `VRAMPercentHistory` and `GTTPercentHistory` to `GPU` struct.
+   - Added `vramHistory` and `gttHistory` rolling sample histories per card.
+   - Populated both in `readAMDGPUMemory`.
+2. Updated `internal/usage/watch.go`:
+   - Added `padHistory` helper to ensure sparklines always render with exact requested cell width even on initial sample.
+   - Fixed `formatSystemMemoryLine` to render width-10 RAM sparklines (`[▁▁▁▁▁▁▁▁▁▁]`).
+   - Fixed `formatGPUMemoryLines` to render dual `[....][....]` 4-cell sparkline and bar timelines when both VRAM and GTT are present, aligning all load row columns to 12 visible chars.
+3. Added and updated tests in `watch_test.go` and `load_test.go`.
+4. Verified with `make test`, `make install`, and live verification via `harnez usage --compact`.

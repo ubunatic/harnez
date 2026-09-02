@@ -1008,17 +1008,31 @@ func formatCPULine(load CPULoad) string {
 	return fmt.Sprintf("%s %s %s%s", label, chart, avgPart, tempPart)
 }
 
+func padHistory(series []float64, current float64, width int) []float64 {
+	if len(series) >= width {
+		return series
+	}
+	fillVal := current
+	if len(series) > 0 {
+		fillVal = series[0]
+	}
+	res := make([]float64, width)
+	padCount := width - len(series)
+	for i := 0; i < padCount; i++ {
+		res[i] = fillVal
+	}
+	copy(res[padCount:], series)
+	return res
+}
+
 func formatSystemMemoryLine(mem SystemMemory) string {
 	label := FormatRAMLabel(mem)
 	pct := percent(mem.UsedMiB, mem.TotalMiB)
 
 	var chart string
 	if mustIndicators().LoadCharts.RAMMode() == LoadChartSparkline {
-		series := mem.PercentHistory
-		if len(series) == 0 {
-			series = []float64{pct}
-		}
-		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, len(series))))
+		series := padHistory(mem.PercentHistory, pct, rograph.MaxWidth)
+		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, rograph.MaxWidth))
 	} else {
 		chart = rograph.RenderBar(pct, watchBarOptions())
 	}
@@ -1050,10 +1064,9 @@ func formatGPULine(g GPU) string {
 }
 
 // formatGPUMemoryLines renders GPU memory as a single "gpu vram/gtt" row
-// combining VRAM and GTT into adjacent compact bars (issue 089), replacing
-// the earlier two plain-text rows (gpu mem / vram/gtt). It mirrors
-// formatAllUsageTableLine's adjacent-dual-bar pattern (two rograph.RenderBar
-// calls side by side) rather than hand-rolling a new bar renderer.
+// combining VRAM and GTT into adjacent compact bars/sparklines (issue 089, issue 198),
+// replacing the earlier two plain-text rows (gpu mem / vram/gtt). It mirrors
+// formatAllUsageTableLine's adjacent-dual-bar pattern rather than hand-rolling a new bar renderer.
 //
 // g.MemUsedMiB/MemTotalMiB/MemPercent already hold the VRAM+GTT combined
 // totals (see readAMDGPUMemory in load.go, which accumulates into them from
@@ -1063,21 +1076,37 @@ func formatGPUMemoryLines(g GPU) []string {
 	label := padLoadLabel("gpu vram/gtt")
 
 	var chart string
-	if mustIndicators().LoadCharts.VRAMMode() == LoadChartSparkline {
-		series := []float64{g.MemPercent}
-		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, len(series))))
+	if g.HaveVRAM && g.HaveGTT {
+		vramPct := percent(g.VRAMUsedMiB, g.VRAMTotalMiB)
+		gttPct := percent(g.GTTUsedMiB, g.GTTTotalMiB)
+		if mustIndicators().LoadCharts.VRAMMode() == LoadChartSparkline {
+			vramSeries := padHistory(g.VRAMPercentHistory, vramPct, 4)
+			gttSeries := padHistory(g.GTTPercentHistory, gttPct, 4)
+			chart = fmt.Sprintf("[%s][%s]", watchPercentSparkline(vramSeries, 4), watchPercentSparkline(gttSeries, 4))
+		} else {
+			barOpts := watchBarOptions()
+			barOpts.Width = 4
+			chart = rograph.RenderBar(vramPct, barOpts) + rograph.RenderBar(gttPct, barOpts)
+		}
 	} else {
-		barOpts := watchBarOptions()
-		barOpts.Width = 4
-
-		var bars strings.Builder
+		var activePct float64
+		var activeHist []float64
 		if g.HaveVRAM {
-			bars.WriteString(rograph.RenderBar(percent(g.VRAMUsedMiB, g.VRAMTotalMiB), barOpts))
+			activePct = percent(g.VRAMUsedMiB, g.VRAMTotalMiB)
+			activeHist = g.VRAMPercentHistory
+		} else if g.HaveGTT {
+			activePct = percent(g.GTTUsedMiB, g.GTTTotalMiB)
+			activeHist = g.GTTPercentHistory
+		} else {
+			activePct = g.MemPercent
 		}
-		if g.HaveGTT {
-			bars.WriteString(rograph.RenderBar(percent(g.GTTUsedMiB, g.GTTTotalMiB), barOpts))
+
+		if mustIndicators().LoadCharts.VRAMMode() == LoadChartSparkline {
+			series := padHistory(activeHist, activePct, rograph.MaxWidth)
+			chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, rograph.MaxWidth))
+		} else {
+			chart = rograph.RenderBar(activePct, watchBarOptions())
 		}
-		chart = bars.String()
 	}
 
 	line := fmt.Sprintf("%s %s %s/%sG %.0f%%", label, chart, formatGiB(g.MemUsedMiB), formatGiB(g.MemTotalMiB), g.MemPercent)
