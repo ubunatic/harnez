@@ -294,6 +294,14 @@ agents_md:
           - `harnez find -d <repo> issues status:open` — list active open issues
           - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text
           - `harnez index -d <repo>` — update issues/README.md after filing or updating tickets
+      - name: Agent-Filed Feedback
+        content: |
+          ### Agent-Filed Feedback (harnez feedback)
+          Harnez-tracked projects only. When you observe a genuine harnez bug or a
+          broken/contradictory instruction — not routine friction, uncertainty, or
+          anything you could resolve by asking — record it:
+          `harnez feedback issue "<description>" [--severity bug|instruction]`
+          Do not call this for routine friction; see `harnez feedback list` to review past entries.
 
   # config for local md file
   local:

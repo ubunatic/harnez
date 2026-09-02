@@ -150,3 +150,46 @@ func TestIssueTrackerDiscoveryConfigEntry(t *testing.T) {
 	}
 }
 
+// TestAgentFeedbackConfigEntry verifies issue 185's decision: the
+// "reverse-feedback" instruction telling agents to call `harnez feedback`
+// (issue 184) when they themselves observe a genuine harnez bug or a
+// broken/contradictory instruction is a declarative
+// agents_md.global.sections entry in config.yaml, mirroring how the Tool
+// Feedback Protocol (issue 122) and Issue Tracker Discovery sections are
+// defined, rather than a new code path. It also enforces issue 181's
+// word-budget discipline (~50-60 words) that this ticket was asked to
+// match, and checks the instruction is narrowly event-triggered rather than
+// a blanket "log anything" mandate.
+func TestAgentFeedbackConfigEntry(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	var found *MDSection
+	for i := range cfg.AgentsMD.Global.Sections {
+		s := &cfg.AgentsMD.Global.Sections[i]
+		if s.Name == "Agent-Filed Feedback" {
+			found = s
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected an agents_md.global.sections entry named %q in embedded config.yaml", "Agent-Filed Feedback")
+	}
+	if !strings.Contains(found.Content, "harnez feedback issue") {
+		t.Errorf("expected Agent-Filed Feedback section to contain the harnez feedback invocation, got:\n%s", found.Content)
+	}
+	if !strings.Contains(found.Content, "not routine friction") {
+		t.Errorf("expected Agent-Filed Feedback section to scope the trigger narrowly (not routine friction), got:\n%s", found.Content)
+	}
+
+	// Word-budget discipline from issue 181's resolution note, ~50-60 words
+	// (rough word count, not a real tokenizer — matches
+	// TestToolFeedbackProtocolConfigEntry's own tolerance band).
+	words := strings.Fields(found.Content)
+	if len(words) < 40 || len(words) > 65 {
+		t.Errorf("expected Agent-Filed Feedback content to be roughly 50-60 words, got %d words:\n%s", len(words), found.Content)
+	}
+}
+
