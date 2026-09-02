@@ -20,8 +20,12 @@
 - `sanitizeContent` / `stripMetaCommentary` LLM output cleaning
 - Error paths: missing home dir, unwritable target, unknown language
 
-**Config/repo consistency lint:**
-Every `commands/*.md` in the repo should have a matching entry in `config.yaml`. Nothing
-enforces this — a file can be added (or removed) without updating `config.yaml` and apply
-silently ignores it. A `make lint` target or Go test diffing `ls commands/*.md` against
-`config.yaml` entries would catch this.
+**Config/repo consistency lint:** — RESOLVED, see below.
+
+## Update (2026-09-02)
+
+`make lint` (commit `311226d`, `scripts/lint.sh`) now checks every `commands/*.md` is
+registered in `config.yaml`, closing the "Config/repo consistency lint" gap. The pure-helper
+coverage gaps above (`sectionBounds`, `stripComments`, `mergeLangs`, `mergePermissions`,
+`sanitizeContent`/`stripMetaCommentary`, error paths) are still untested — status remains
+Open, scope narrowed to just those items.
