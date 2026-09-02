@@ -152,6 +152,66 @@ func TestFilterHeadTail_UnderLimit(t *testing.T) {
 	}
 }
 
+func TestFilterHeadTailBytes(t *testing.T) {
+	var lines []string
+	for i := 0; i < 500; i++ {
+		lines = append(lines, fmt.Sprintf("line %03d: some build log content here", i))
+	}
+	in := strings.Join(lines, "\n")
+
+	maxBytes := 2000
+	got := FilterHeadTailBytes(in, maxBytes)
+
+	if len(got) >= len(in) {
+		t.Fatalf("expected output shorter than input (%d bytes); got %d bytes >= input %d bytes", maxBytes, len(got), len(in))
+	}
+	if !strings.Contains(got, truncationSentinel) {
+		t.Fatalf("expected truncation sentinel %q in output, got:\n%s", truncationSentinel, got)
+	}
+	if !strings.HasPrefix(got, "line 000:") {
+		t.Errorf("expected the head to be preserved, got prefix %q", got[:20])
+	}
+	if !strings.HasSuffix(got, "line 499: some build log content here") {
+		t.Errorf("expected the tail to be preserved, got suffix %q", got[len(got)-40:])
+	}
+	// The note must state how many bytes were omitted and the cap applied.
+	if !strings.Contains(got, fmt.Sprintf("%d-byte cap", maxBytes)) {
+		t.Errorf("expected note to mention the %d-byte cap, got:\n%s", maxBytes, got)
+	}
+}
+
+func TestFilterHeadTailBytes_UnderLimit(t *testing.T) {
+	in := "short output\nwith a few lines\n"
+	got := FilterHeadTailBytes(in, 10_000)
+	if got != in {
+		t.Errorf("FilterHeadTailBytes() = %q, want unchanged", got)
+	}
+}
+
+func TestFilterHeadTailBytes_Disabled(t *testing.T) {
+	in := strings.Repeat("x", 5000)
+	got := FilterHeadTailBytes(in, 0)
+	if got != in {
+		t.Errorf("FilterHeadTailBytes() with maxBytes=0 = %q, want unchanged input", got)
+	}
+}
+
+func TestDistill_MaxBytesCap(t *testing.T) {
+	var lines []string
+	for i := 0; i < 1000; i++ {
+		lines = append(lines, fmt.Sprintf("unique log line %04d with enough content to add up in bytes", i))
+	}
+	in := strings.Join(lines, "\n")
+
+	got := Distill(in, Options{Mode: ModeRaw, MaxLines: 0, MaxBytes: 1000, NoDedup: true})
+	if len(got) > 1000+len(truncationSentinel)+80 {
+		t.Fatalf("expected Distill to respect MaxBytes cap, got %d bytes:\n%s", len(got), got)
+	}
+	if !strings.Contains(got, truncationSentinel) {
+		t.Errorf("expected Distill output to contain the truncation sentinel, got:\n%s", got)
+	}
+}
+
 func TestDetectMode(t *testing.T) {
 	cases := []struct {
 		name string

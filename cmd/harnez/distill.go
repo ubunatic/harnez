@@ -18,6 +18,7 @@ import (
 func newDistillCmd() *cobra.Command {
 	var mode string
 	var maxLines int
+	var maxBytes int
 	var noDedup bool
 
 	cmd := &cobra.Command{
@@ -36,6 +37,7 @@ the wrapped command's exit code:
 			opts := distill.Options{
 				Mode:     distill.Mode(mode),
 				MaxLines: maxLines,
+				MaxBytes: maxBytes,
 				NoDedup:  noDedup,
 			}
 
@@ -54,6 +56,7 @@ the wrapped command's exit code:
 
 	cmd.Flags().StringVar(&mode, "mode", "auto", "filter mode: auto, gotest, git, raw")
 	cmd.Flags().IntVar(&maxLines, "max-lines", 300, "truncate output beyond this many lines (0 disables)")
+	cmd.Flags().IntVar(&maxBytes, "max-bytes", 200_000, "hard byte cap on output; truncates head+tail with a note when exceeded (0 disables)")
 	cmd.Flags().BoolVar(&noDedup, "no-dedup", false, "skip collapsing repeated lines")
 
 	cmd.AddCommand(newDistillHookCmd())

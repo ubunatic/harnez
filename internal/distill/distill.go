@@ -24,7 +24,8 @@ const (
 // Options controls the distillation pipeline.
 type Options struct {
 	Mode     Mode
-	MaxLines int // 0 disables head/tail truncation
+	MaxLines int // 0 disables line-based head/tail truncation
+	MaxBytes int // 0 disables the byte-based hard cap (see FilterHeadTailBytes)
 	NoDedup  bool
 }
 
@@ -168,6 +169,72 @@ func FilterHeadTail(lines []string, maxLines int) string {
 	return strings.Join(out, "\n")
 }
 
+// truncationSentinel prefixes every byte-cap truncation note. It is a fixed,
+// grep-able string so an agent (or a downstream tool) can reliably detect
+// "this output was truncated, don't treat it as complete" without having to
+// parse free-text, and so it's never mistaken for meaningful command output.
+const truncationSentinel = "[harnez-distill:truncated"
+
+// FilterHeadTailBytes enforces a hard byte cap on s, keeping whole lines from
+// the head and tail and eliding the middle — the same head+tail shape as
+// FilterHeadTail, but bounded by bytes rather than line count so a handful of
+// pathologically long lines (a giant JSON dump, a single huge stack trace)
+// can't blow past a byte budget that a line-count cap alone wouldn't catch.
+//
+// Placement rationale (see issue 182): build/test logs put the actionable
+// signal at both ends — the invoked command and early setup/compile errors
+// at the head, the final failure/summary at the tail — so both ends are kept
+// and only the noisy middle is elided, matching the "middle_lines" strategy
+// used by comparable tools (e.g. OpenAI Codex's head+tail tool-output cap)
+// rather than a plain head-only or tail-only cut.
+//
+// The note is a fixed sentinel (truncationSentinel) followed by exact
+// omitted/total/cap byte counts, so it's machine-parseable rather than
+// free-text an agent might mistake for real output or grounds to retry the
+// command expecting a different, untruncated result.
+func FilterHeadTailBytes(s string, maxBytes int) string {
+	if maxBytes <= 0 || len(s) <= maxBytes {
+		return s
+	}
+
+	headBytes := maxBytes / 2
+	tailBytes := maxBytes - headBytes
+
+	// Round the head cut back to the preceding newline so we never split a
+	// line in half.
+	headEnd := headBytes
+	if headEnd > len(s) {
+		headEnd = len(s)
+	}
+	if idx := strings.LastIndexByte(s[:headEnd], '\n'); idx >= 0 {
+		headEnd = idx + 1
+	} else {
+		headEnd = 0
+	}
+
+	// Round the tail cut forward to the following newline for the same
+	// reason.
+	tailStart := len(s) - tailBytes
+	if tailStart < 0 {
+		tailStart = 0
+	}
+	if idx := strings.IndexByte(s[tailStart:], '\n'); idx >= 0 {
+		tailStart += idx + 1
+	}
+
+	if tailStart <= headEnd {
+		// Not enough room for a clean split (e.g. one gigantic line with no
+		// newlines nearby); fall back to a hard byte cut at the midpoint.
+		headEnd = headBytes
+		tailStart = headEnd
+	}
+
+	omitted := tailStart - headEnd
+	note := fmt.Sprintf("\n%s %d bytes omitted, %d of %d total bytes kept, %d-byte cap]\n",
+		truncationSentinel, omitted, len(s)-omitted, len(s), maxBytes)
+	return s[:headEnd] + note + s[tailStart:]
+}
+
 // DetectMode guesses the structured filter to apply from output content.
 func DetectMode(s string) Mode {
 	switch {
@@ -201,6 +268,9 @@ func Distill(input string, opts Options) string {
 	}
 	if opts.MaxLines > 0 {
 		s = FilterHeadTail(strings.Split(s, "\n"), opts.MaxLines)
+	}
+	if opts.MaxBytes > 0 {
+		s = FilterHeadTailBytes(s, opts.MaxBytes)
 	}
 	return s
 }
