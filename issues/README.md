@@ -201,3 +201,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 198 | [198-load-box-sparkline-width-and-vram-gtt-split-restoration.md](198-load-box-sparkline-width-and-vram-gtt-split-restoration.md) | Load Box RAM/VRAM Sparkline Width & VRAM/GTT Split Restoration | Closed |
 | 199 | [199-research-codex-hook-surface-for-transparent-exec-distill.md](199-research-codex-hook-surface-for-transparent-exec-distill.md) | Research: does Codex CLI have a hook surface like agy's hooks.json? | Closed — research complete |
 | 200 | [200-codex-native-hooks-preTooluse-wiring.md](200-codex-native-hooks-preTooluse-wiring.md) | Implement native Codex hooks wiring (harnez codex-hooks) | Closed |
+| 201 | [201-double-timeseries-resolution-and-add-btop-style-braille-sparklines.md](201-double-timeseries-resolution-and-add-btop-style-braille-sparklines.md) | Double timeseries resolution and add btop-style Braille sparklines | Open |
