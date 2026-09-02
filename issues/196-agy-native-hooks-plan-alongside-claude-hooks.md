@@ -1,6 +1,6 @@
 # 196 — Plan: use real agy hooks (`hooks.json`) alongside Claude Code hooks
 
-**Status**: Draft
+**Status**: Closed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Research / Feature
@@ -76,3 +76,59 @@ covering:
    re-derive it.
 3. No code changes in this ticket — implementation gets its own follow-up
    ticket(s) once the plan is reviewed.
+
+## Resolution Note
+
+Plan superseded by direct implementation (user asked to "do some real work
+and setup the hooks" rather than stop at a plan). Answers to the five
+planning points, as actually built:
+
+1. **Config location**: global only, `~/.gemini/config/hooks.json`
+   (`internal/agy.HooksPath`) — mirrors `apply`'s global-only scope per
+   `docs/CLIDesign.md` rather than `init`'s project-local one, since agy's
+   hooks.json is itself a shared/global config file, not per-project.
+2. **What harnez manages**: a single named hook entry (`"harnez"`,
+   `internal/agy.HookName`) with one `PreToolUse` handler matching
+   `run_command`, pointing at `harnez agy-hooks hook`
+   (`cmd/harnez/agyhooks.go`). It rewrites any non-empty, not-already-routed
+   `CommandLine` to `harnez exec --tool <first word> -- bash -c '<original>'`
+   — same `bash -c`-wrapping rationale as `harnez exec hook`'s Claude Code
+   counterpart (shell metacharacters must survive as one argument).
+   `PostToolUse` telemetry parity was left out of v1: `harnez exec` already
+   records the `tool_calls` row itself once the rewritten command runs, so
+   a second `PostToolUse` hook would be redundant, not additive.
+3. **Drift detection**: `internal/agy.Status` compares the live `"harnez"`
+   entry against `BuildHooksDoc()` and reports `installed`/`drifted`
+   separately; `harnez agy-hooks status` surfaces this today. Wiring it
+   into the broader `harnez status` roll-up was left as a follow-up rather
+   than done here, to keep this ticket's diff scoped to the new package/command.
+4. **Relationship to 195**: complementary, not exclusive. 195's PATH-shim
+   requires zero agy-side config and only intercepts commands that resolve
+   through `$PATH`; this ticket's native hook requires an explicit
+   `harnez agy-hooks apply` (agy-side opt-in) but is not `$PATH`-dependent
+   and gets structured allow/deny/rewrite semantics. A user could run
+   either, both, or neither — nothing here assumes 195 is installed.
+5. **Command surface**: landed as its own top-level `harnez agy-hooks`
+   command group (`apply`, `status`, `hook`) rather than an `apply --agy`
+   flag — keeps it out of the global `apply`'s Claude-specific managed-keys
+   list (`internal/claude.managedSettingsKeys`) and out of `init`'s
+   project-local scope entirely, consistent with `docs/CLIDesign.md`'s
+   caution against blurring the two.
+
+**Implementation**: `internal/agy/hooks.go` (`BuildHooksDoc`, `Apply`,
+`Status`, `Remove` — merge/preserve-unrelated-keys semantics mirroring
+`internal/claude`'s `applySettingsJSON`/`cleanSettingsJSON`), wired into
+`cmd/harnez/agyhooks.go` (`agy-hooks apply|status|hook`) and registered in
+`cmd/harnez/main.go`'s root command. Verified live: `harnez agy-hooks
+apply` against a scratch `$HOME` wrote a well-formed `hooks.json`; `harnez
+agy-hooks hook` correctly rewrote `git status && echo hi` to
+`harnez exec --tool git -- bash -c 'git status && echo hi'` (JSON-encoded
+`&&` renders as `&&`, harmless — same escaping `harnez exec
+hook`'s `json.NewEncoder` already produces) and passed through an
+already-routed command unchanged. Tests:
+`internal/agy/hooks_test.go` (create/idempotent-apply, preserve-unrelated-
+keys, drift detection, missing-file status, remove + preserve, remove-
+empties-file) and `cmd/harnez/agyhooks_test.go` (hook rewrite, already-
+routed skip, empty-command skip, shell-metacharacter preservation, apply/
+status cobra wiring against a sandboxed `$HOME`). `go test ./...` and
+`make install` both pass.
