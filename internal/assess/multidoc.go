@@ -566,6 +566,7 @@ var CategoryPalette = []CategoryStyle{
 	{Key: "practices", Label: "practices", Block: "▓", ANSIColor: "32"},  // Green
 	{Key: "studies", Label: "studies", Block: "▒", ANSIColor: "35"},      // Magenta
 	{Key: "feedback", Label: "feedback", Block: "░", ANSIColor: "33"},    // Yellow
+	{Key: "issues", Label: "issues", Block: "◈", ANSIColor: "38;5;208"},  // Orange
 	{Key: "root", Label: "root (AGENTS.md)", Block: "■", ANSIColor: "34"},// Blue
 	{Key: "docs", Label: "docs", Block: "◆", ANSIColor: "37"},            // White
 	{Key: "other", Label: "other", Block: "▲", ANSIColor: "31"},          // Red
@@ -718,15 +719,40 @@ func RenderMultiDocHistory(res *MultiDocResult, opts ...RenderMultiDocOptions) s
 	milestones := SampleMilestones(res.Timeline, 5)
 	if len(milestones) > 0 {
 		b.WriteString("── Category Breakdown Across Milestones ────────────────────────────\n")
-		// Legend
-		var legendParts []string
-		for _, p := range CategoryPalette {
-			if useColor {
-				legendParts = append(legendParts, fmt.Sprintf("\x1b[%sm█\x1b[0m %s", p.ANSIColor, p.Label))
-			} else {
-				legendParts = append(legendParts, fmt.Sprintf("%s %s", p.Block, p.Label))
+		// Legend: only show categories that are actively present in the dataset
+		activeCats := make(map[string]bool)
+		for _, m := range milestones {
+			for cat, tok := range m.CategoryTok {
+				if tok > 0 {
+					activeCats[cat] = true
+				}
 			}
 		}
+		for _, s := range res.DocSummaries {
+			if s.CurrentTokens > 0 || s.PeakTokens > 0 {
+				activeCats[s.Category] = true
+			}
+		}
+
+		var legendParts []string
+		for _, p := range CategoryPalette {
+			if activeCats[p.Key] {
+				if useColor {
+					legendParts = append(legendParts, fmt.Sprintf("\x1b[%sm█\x1b[0m %s", p.ANSIColor, p.Label))
+				} else {
+					legendParts = append(legendParts, fmt.Sprintf("%s %s", p.Block, p.Label))
+				}
+				delete(activeCats, p.Key)
+			}
+		}
+		for cat := range activeCats {
+			if useColor {
+				legendParts = append(legendParts, fmt.Sprintf("\x1b[90m█\x1b[0m %s", cat))
+			} else {
+				legendParts = append(legendParts, fmt.Sprintf("● %s", cat))
+			}
+		}
+
 		b.WriteString(fmt.Sprintf("Legend: %s\n", strings.Join(legendParts, "  ")))
 		b.WriteString(fmt.Sprintf("%-20s  %-30s  %10s  %6s\n", "MILESTONE", "PROPORTION BAR", "TOKENS", "DOCS"))
 		b.WriteString(strings.Repeat("─", 74) + "\n")
