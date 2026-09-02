@@ -2,6 +2,7 @@ package usage
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,13 +49,16 @@ type CPULoad struct {
 	Memory SystemMemory
 }
 
-// SystemMemory holds RAM usage parsed from /proc/meminfo.
+// SystemMemory holds RAM usage parsed from /proc/meminfo and hardware geometry.
 type SystemMemory struct {
-	UsedMiB      float64
-	TotalMiB     float64
-	AvailableMiB float64
-	Ok           bool
+	UsedMiB        float64
+	TotalMiB       float64
+	AvailableMiB   float64
+	Ok             bool
+	Geometry       string
+	PercentHistory []float64
 }
+
 
 // CurrentCPULoad reads the system load averages and the instantaneous CPU
 // usage. Load averages come from /proc/loadavg, falling back to the
@@ -97,8 +101,12 @@ func CurrentSystemMemory() SystemMemory {
 	if err != nil {
 		return SystemMemory{}
 	}
+	mem.Geometry = readRAMGeometry(mem.TotalMiB)
+	pct := percent(mem.UsedMiB, mem.TotalMiB)
+	mem.PercentHistory = ramHistory.append(pct)
 	return mem
 }
+
 
 // cpuTempHwmonDrivers are the hwmon driver names known to report a CPU
 // package/die temperature (as opposed to battery, NVMe, Wi-Fi, etc. hwmons
@@ -396,6 +404,7 @@ func parseMeminfo(text string) (SystemMemory, error) {
 		TotalMiB:     float64(total) / 1024,
 		AvailableMiB: float64(available) / 1024,
 		Ok:           true,
+		Geometry:     fallbackRAMGeometry(float64(total) / 1024),
 	}, nil
 }
 
@@ -460,6 +469,10 @@ func (h *sampleHistory) snapshot() []float64 {
 
 // cpuHistory is the single rolling window for CurrentCPULoad's aggregate %.
 var cpuHistory sampleHistory
+
+// ramHistory is the single rolling window for CurrentSystemMemory's utilization %.
+var ramHistory sampleHistory
+
 
 // gpuHistoryMu guards gpuHistory, a per-GPU (keyed by sysfs card name)
 // rolling window, since a system can have more than one GPU.
@@ -740,3 +753,144 @@ func readLoadavgFromUptime() (CPULoad, error) {
 	}
 	return CPULoad{Load1: l1, Load5: l5, Load15: l15}, nil
 }
+
+// FormatRAMLabel formats the padded RAM label for the Load box, e.g. "ram (2x16G)" or "ram (45G)".
+func FormatRAMLabel(mem SystemMemory) string {
+	geom := mem.Geometry
+	if geom == "" && mem.TotalMiB > 0 {
+		geom = fallbackRAMGeometry(mem.TotalMiB)
+	}
+	if geom != "" {
+		return padLoadLabel(fmt.Sprintf("ram (%s)", geom))
+	}
+	return padLoadLabel("ram")
+}
+
+func readRAMGeometry(totalMiB float64) string {
+	if geom := readRAMGeometryFromEDAC(); geom != "" {
+		return geom
+	}
+	if geom := readRAMGeometryFromDMI(); geom != "" {
+		return geom
+	}
+	return fallbackRAMGeometry(totalMiB)
+}
+
+func readRAMGeometryFromEDAC() string {
+	return readRAMGeometryFromEDACPattern("/sys/devices/system/edac/mc/mc*/dimm*/size", "/sys/devices/system/edac/mc/mc*/csrow*/size")
+}
+
+func readRAMGeometryFromEDACPattern(dimmPattern, csrowPattern string) string {
+	matches, err := filepath.Glob(dimmPattern)
+	if err != nil || len(matches) == 0 {
+		if csrowPattern != "" {
+			matches, err = filepath.Glob(csrowPattern)
+		}
+	}
+	if err != nil || len(matches) == 0 {
+		return ""
+	}
+	sizes := map[int]int{}
+	totalCount := 0
+	for _, p := range matches {
+		val, err := readSysfsUint(p)
+		if err != nil || val == 0 {
+			continue
+		}
+		// EDAC reports size in Megabytes (MiB)
+		gib := int(math.Round(float64(val) / 1024.0))
+		if gib <= 0 {
+			gib = 1
+		}
+		sizes[gib]++
+		totalCount++
+	}
+	if totalCount == 0 {
+		return ""
+	}
+	if len(sizes) == 1 {
+		for gib, count := range sizes {
+			if count > 1 {
+				return fmt.Sprintf("%dx%dG", count, gib)
+			}
+			return fmt.Sprintf("%dG", gib)
+		}
+	}
+	tot := 0
+	for gib, count := range sizes {
+		tot += gib * count
+	}
+	return fmt.Sprintf("%dG", tot)
+}
+
+func readRAMGeometryFromDMI() string {
+	return readRAMGeometryFromDMIPattern("/sys/firmware/dmi/entries/17-*/raw")
+}
+
+func readRAMGeometryFromDMIPattern(pattern string) string {
+	matches, err := filepath.Glob(pattern)
+	if err != nil || len(matches) == 0 {
+		return ""
+	}
+	sizes := map[int]int{}
+	totalCount := 0
+	for _, p := range matches {
+		data, err := os.ReadFile(p)
+		if err != nil || len(data) < 14 {
+			continue
+		}
+		if data[0] != 17 { // Type 17: Memory Device
+			continue
+		}
+		sizeVal := uint16(data[12]) | (uint16(data[13]) << 8)
+		if sizeVal == 0 || sizeVal == 0xFFFF {
+			continue
+		}
+		var mib int
+		if sizeVal == 0x7FFF && len(data) >= 32 {
+			extSize := uint32(data[28]) | (uint32(data[29]) << 8) | (uint32(data[30]) << 16) | (uint32(data[31]) << 24)
+			mib = int(extSize)
+		} else if sizeVal&0x8000 != 0 {
+			mib = int(sizeVal&0x7FFF) / 1024
+		} else {
+			mib = int(sizeVal)
+		}
+		if mib <= 0 {
+			continue
+		}
+		gib := int(math.Round(float64(mib) / 1024.0))
+		if gib <= 0 {
+			gib = 1
+		}
+		sizes[gib]++
+		totalCount++
+	}
+	if totalCount == 0 {
+		return ""
+	}
+	if len(sizes) == 1 {
+		for gib, count := range sizes {
+			if count > 1 {
+				return fmt.Sprintf("%dx%dG", count, gib)
+			}
+			return fmt.Sprintf("%dG", gib)
+		}
+	}
+	tot := 0
+	for gib, count := range sizes {
+		tot += gib * count
+	}
+	return fmt.Sprintf("%dG", tot)
+}
+
+func fallbackRAMGeometry(totalMiB float64) string {
+	if totalMiB <= 0 {
+		return ""
+	}
+	gib := int(math.Round(totalMiB / 1024.0))
+	if gib <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%dG", gib)
+}
+

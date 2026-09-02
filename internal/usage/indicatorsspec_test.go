@@ -42,6 +42,18 @@ func TestEmbeddedIndicatorsSpecIsValidAndExact(t *testing.T) {
 	if got, wantName := spec.LoadSparkline.Sequence, "vertical-block-scale-8"; got != wantName {
 		t.Errorf("load-sparkline sequence = %q, want %q", got, wantName)
 	}
+	if got, want := spec.LoadCharts.CPU, "sparkline"; got != want {
+		t.Errorf("load-charts.cpu = %q, want %q", got, want)
+	}
+	if got, want := spec.LoadCharts.GPU, "sparkline"; got != want {
+		t.Errorf("load-charts.gpu = %q, want %q", got, want)
+	}
+	if got, want := spec.LoadCharts.RAM, "bar"; got != want {
+		t.Errorf("load-charts.ram = %q, want %q", got, want)
+	}
+	if got, want := spec.LoadCharts.VRAM, "bar"; got != want {
+		t.Errorf("load-charts.vram = %q, want %q", got, want)
+	}
 	for name, sequence := range spec.Sequences {
 		for i, frame := range sequence.Frames {
 			if width := runewidth.StringWidth(frame); width != 1 {
@@ -50,6 +62,7 @@ func TestEmbeddedIndicatorsSpecIsValidAndExact(t *testing.T) {
 		}
 	}
 }
+
 
 func TestTimeoutSnakeGlyphDrainsWithoutWrapping(t *testing.T) {
 	frames := mustIndicators().TimeoutSnake.Frames
@@ -163,6 +176,11 @@ usage-bar:
   sub-character-sequence: partial
   wrapper: {enabled: true, left: "[", right: "]"}
 load-sparkline: {sequence: spark}
+load-charts:
+  cpu: sparkline
+  gpu: sparkline
+  ram: bar
+  vram: bar
 `
 
 func TestParseIndicatorsYAMLRejectsInvalidRegistryAndReferences(t *testing.T) {
@@ -186,6 +204,7 @@ func TestParseIndicatorsYAMLRejectsInvalidRegistryAndReferences(t *testing.T) {
 		{"sparkline semantic mismatch", strings.Replace(validIndicatorsFixture, "load-sparkline: {sequence: spark}", "load-sparkline: {sequence: spinner}", 1), "has kind \"spinner\", want \"sparkline\""},
 		{"inline frames rejected", strings.Replace(validIndicatorsFixture, "timeout-snake: {title: timer, sequence: countdown}", "timeout-snake: {title: timer, sequence: countdown, frames: [\"█\", \" \"]}", 1), "field frames not found"},
 		{"multi-rune cell", strings.Replace(validIndicatorsFixture, "frames: [\"▏\", \"▉\"]", "frames: [\"e\\u0301\", \"▉\"]", 1), "sequence \"partial\" frame 0: want one rune"},
+		{"invalid load-chart cpu mode", strings.Replace(validIndicatorsFixture, "cpu: sparkline", "cpu: circular", 1), "indicators spec: load-charts: cpu: unknown mode \"circular\""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -199,6 +218,43 @@ func TestParseIndicatorsYAMLRejectsInvalidRegistryAndReferences(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadChartModesAndAliases(t *testing.T) {
+	spec := loadChartsSpec{
+		CPU:  "timeseries",
+		GPU:  "gauge",
+		RAM:  "sparkline",
+		VRAM: "bar",
+	}
+	if got := spec.CPUMode(); got != LoadChartSparkline {
+		t.Errorf("CPUMode(timeseries) = %q, want %q", got, LoadChartSparkline)
+	}
+	if got := spec.GPUMode(); got != LoadChartBar {
+		t.Errorf("GPUMode(gauge) = %q, want %q", got, LoadChartBar)
+	}
+	if got := spec.RAMMode(); got != LoadChartSparkline {
+		t.Errorf("RAMMode(sparkline) = %q, want %q", got, LoadChartSparkline)
+	}
+	if got := spec.VRAMMode(); got != LoadChartBar {
+		t.Errorf("VRAMMode(bar) = %q, want %q", got, LoadChartBar)
+	}
+
+	// Empty defaults:
+	var emptySpec loadChartsSpec
+	if got := emptySpec.CPUMode(); got != LoadChartSparkline {
+		t.Errorf("empty CPUMode = %q, want default %q", got, LoadChartSparkline)
+	}
+	if got := emptySpec.GPUMode(); got != LoadChartSparkline {
+		t.Errorf("empty GPUMode = %q, want default %q", got, LoadChartSparkline)
+	}
+	if got := emptySpec.RAMMode(); got != LoadChartBar {
+		t.Errorf("empty RAMMode = %q, want default %q", got, LoadChartBar)
+	}
+	if got := emptySpec.VRAMMode(); got != LoadChartBar {
+		t.Errorf("empty VRAMMode = %q, want default %q", got, LoadChartBar)
+	}
+}
+
 
 func TestResolvedCountdownSupportsVariableLengthsAndEndpoints(t *testing.T) {
 	tests := []struct {

@@ -24,7 +24,65 @@ type indicatorsSpec struct {
 	TimeoutSnake  indicatorReference                `yaml:"timeout-snake"`
 	UsageBar      usageBarSpec                      `yaml:"usage-bar"`
 	LoadSparkline glyphSequenceReference            `yaml:"load-sparkline"`
+	LoadCharts    loadChartsSpec                    `yaml:"load-charts"`
 }
+
+// LoadChartMode defines the visual presentation mode for load indicators.
+type LoadChartMode string
+
+const (
+	LoadChartSparkline LoadChartMode = "sparkline"
+	LoadChartBar       LoadChartMode = "bar"
+)
+
+type loadChartsSpec struct {
+	CPU  string `yaml:"cpu"`
+	GPU  string `yaml:"gpu"`
+	RAM  string `yaml:"ram"`
+	VRAM string `yaml:"vram"`
+}
+
+func (s loadChartsSpec) CPUMode() LoadChartMode {
+	return parseLoadChartMode(s.CPU, LoadChartSparkline)
+}
+
+func (s loadChartsSpec) GPUMode() LoadChartMode {
+	return parseLoadChartMode(s.GPU, LoadChartSparkline)
+}
+
+func (s loadChartsSpec) RAMMode() LoadChartMode {
+	return parseLoadChartMode(s.RAM, LoadChartBar)
+}
+
+func (s loadChartsSpec) VRAMMode() LoadChartMode {
+	return parseLoadChartMode(s.VRAM, LoadChartBar)
+}
+
+func parseLoadChartMode(val string, defaultMode LoadChartMode) LoadChartMode {
+	switch strings.ToLower(strings.TrimSpace(val)) {
+	case "sparkline", "timeseries":
+		return LoadChartSparkline
+	case "bar", "gauge":
+		return LoadChartBar
+	case "":
+		return defaultMode
+	default:
+		return defaultMode
+	}
+}
+
+func validateLoadChartMode(field, val string) error {
+	if val == "" {
+		return nil
+	}
+	switch strings.ToLower(strings.TrimSpace(val)) {
+	case "sparkline", "timeseries", "bar", "gauge":
+		return nil
+	default:
+		return fmt.Errorf("indicators spec: load-charts: %s: unknown mode %q", field, val)
+	}
+}
+
 
 type usageBarSpec struct {
 	Filled               string         `yaml:"filled"`
@@ -145,6 +203,20 @@ func parseIndicatorsYAML(data []byte) (indicatorsSpec, error) {
 		}
 	}
 	spec.LoadSparkline.Frames = sparklineFrames
+
+	if err := validateLoadChartMode("cpu", spec.LoadCharts.CPU); err != nil {
+		return indicatorsSpec{}, err
+	}
+	if err := validateLoadChartMode("gpu", spec.LoadCharts.GPU); err != nil {
+		return indicatorsSpec{}, err
+	}
+	if err := validateLoadChartMode("ram", spec.LoadCharts.RAM); err != nil {
+		return indicatorsSpec{}, err
+	}
+	if err := validateLoadChartMode("vram", spec.LoadCharts.VRAM); err != nil {
+		return indicatorsSpec{}, err
+	}
+
 	return spec, nil
 }
 

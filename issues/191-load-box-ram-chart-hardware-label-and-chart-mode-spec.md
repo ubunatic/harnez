@@ -1,6 +1,6 @@
 # 191 — Load Box RAM Chart, Hardware Module Label, and Chart Mode Spec
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: TUI / Hardware Monitoring

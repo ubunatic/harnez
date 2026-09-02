@@ -972,7 +972,7 @@ func padLoadLabel(label string) string {
 	return rograph.PadLabel(label, loadLabelWidth)
 }
 
-// formatCPULine renders the "cpu (N cores) [spark] avg% (temp)" line. The
+// formatCPULine renders the "cpu (N cores) [<chart>] avg% (temp)" line. The
 // spark is a timeline of recent aggregate real-time % samples, not a
 // per-core snapshot — a spatial snapshot barely changes frame to frame,
 // while a trend over the last ~10 samples actually shows something moving.
@@ -994,15 +994,39 @@ func formatCPULine(load CPULoad) string {
 		tempPart = fmt.Sprintf(" (%.0f°C)", load.TempC)
 	}
 	label := padLoadLabel(fmt.Sprintf("cpu (%d cores)", load.NumCPU))
-	return fmt.Sprintf("%s [%s] %s%s", label, watchPercentSparkline(series, min(rograph.MaxWidth, len(series))), avgPart, tempPart)
+
+	var chart string
+	if mustIndicators().LoadCharts.CPUMode() == LoadChartBar {
+		val := 0.0
+		if load.CPUPercentOk {
+			val = load.CPUPercent
+		}
+		chart = rograph.RenderBar(val, watchBarOptions())
+	} else {
+		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, len(series))))
+	}
+	return fmt.Sprintf("%s %s %s%s", label, chart, avgPart, tempPart)
 }
 
 func formatSystemMemoryLine(mem SystemMemory) string {
-	label := padLoadLabel("ram")
-	return fmt.Sprintf("%s %s/%sG %.0f%%", label, formatGiB(mem.UsedMiB), formatGiB(mem.TotalMiB), percent(mem.UsedMiB, mem.TotalMiB))
+	label := FormatRAMLabel(mem)
+	pct := percent(mem.UsedMiB, mem.TotalMiB)
+
+	var chart string
+	if mustIndicators().LoadCharts.RAMMode() == LoadChartSparkline {
+		series := mem.PercentHistory
+		if len(series) == 0 {
+			series = []float64{pct}
+		}
+		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, len(series))))
+	} else {
+		chart = rograph.RenderBar(pct, watchBarOptions())
+	}
+
+	return fmt.Sprintf("%s %s %s/%sG %.0f%%", label, chart, formatGiB(mem.UsedMiB), formatGiB(mem.TotalMiB), pct)
 }
 
-// formatGPULine renders the "gpu (name) [spark] avg% (temp)" line. The
+// formatGPULine renders the "gpu (name) [<chart>] avg% (temp)" line. The
 // sparkline shows recent history (UtilHistory), or degenerates to a single
 // current-value glyph if no history has been collected yet.
 func formatGPULine(g GPU) string {
@@ -1015,7 +1039,14 @@ func formatGPULine(g GPU) string {
 	if g.HaveTemp {
 		tempPart = fmt.Sprintf(" (%.0f°C)", g.TempC)
 	}
-	return fmt.Sprintf("%s [%s] %.0f%%%s", label, watchPercentSparkline(series, min(rograph.MaxWidth, len(series))), g.UtilPercent, tempPart)
+
+	var chart string
+	if mustIndicators().LoadCharts.GPUMode() == LoadChartBar {
+		chart = rograph.RenderBar(g.UtilPercent, watchBarOptions())
+	} else {
+		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, len(series))))
+	}
+	return fmt.Sprintf("%s %s %.0f%%%s", label, chart, g.UtilPercent, tempPart)
 }
 
 // formatGPUMemoryLines renders GPU memory as a single "gpu vram/gtt" row
@@ -1031,20 +1062,28 @@ func formatGPULine(g GPU) string {
 func formatGPUMemoryLines(g GPU) []string {
 	label := padLoadLabel("gpu vram/gtt")
 
-	barOpts := watchBarOptions()
-	barOpts.Width = 4
+	var chart string
+	if mustIndicators().LoadCharts.VRAMMode() == LoadChartSparkline {
+		series := []float64{g.MemPercent}
+		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, len(series))))
+	} else {
+		barOpts := watchBarOptions()
+		barOpts.Width = 4
 
-	var bars strings.Builder
-	if g.HaveVRAM {
-		bars.WriteString(rograph.RenderBar(percent(g.VRAMUsedMiB, g.VRAMTotalMiB), barOpts))
-	}
-	if g.HaveGTT {
-		bars.WriteString(rograph.RenderBar(percent(g.GTTUsedMiB, g.GTTTotalMiB), barOpts))
+		var bars strings.Builder
+		if g.HaveVRAM {
+			bars.WriteString(rograph.RenderBar(percent(g.VRAMUsedMiB, g.VRAMTotalMiB), barOpts))
+		}
+		if g.HaveGTT {
+			bars.WriteString(rograph.RenderBar(percent(g.GTTUsedMiB, g.GTTTotalMiB), barOpts))
+		}
+		chart = bars.String()
 	}
 
-	line := fmt.Sprintf("%s %s %s/%sG %.0f%%", label, bars.String(), formatGiB(g.MemUsedMiB), formatGiB(g.MemTotalMiB), g.MemPercent)
+	line := fmt.Sprintf("%s %s %s/%sG %.0f%%", label, chart, formatGiB(g.MemUsedMiB), formatGiB(g.MemTotalMiB), g.MemPercent)
 	return []string{line}
 }
+
 
 func formatGiB(mib float64) string {
 	return fmt.Sprintf("%.1f", mib/1024)

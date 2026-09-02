@@ -71,11 +71,22 @@ func TestFormatMemoryLines(t *testing.T) {
 	ram := formatSystemMemoryLine(SystemMemory{
 		UsedMiB:  8 * 1024,
 		TotalMiB: 32 * 1024,
+		Geometry: "2x16G",
 		Ok:       true,
 	})
-	if got, want := stripANSI(ram), "ram              8.0/32.0G 25%"; got != want {
+	if got, want := stripANSI(ram), "ram (2x16G)      [██▌       ] 8.0/32.0G 25%"; got != want {
 		t.Errorf("formatSystemMemoryLine = %q, want %q", got, want)
 	}
+
+	ramFallback := formatSystemMemoryLine(SystemMemory{
+		UsedMiB:  8 * 1024,
+		TotalMiB: 32 * 1024,
+		Ok:       true,
+	})
+	if got, want := stripANSI(ramFallback), "ram (32G)        [██▌       ] 8.0/32.0G 25%"; got != want {
+		t.Errorf("formatSystemMemoryLine fallback = %q, want %q", got, want)
+	}
+
 
 	gpu := formatGPUMemoryLines(GPU{
 		MemUsedMiB:   6 * 1024,

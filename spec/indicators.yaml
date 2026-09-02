@@ -78,3 +78,11 @@ usage-bar:
 # CPU and GPU load timelines map 0% through 100% in this declared order.
 load-sparkline:
   sequence: vertical-block-scale-8
+
+# Presentation modes for hardware load indicators in `usage --watch`.
+# Supported modes: sparkline (or timeseries), bar (or gauge).
+load-charts:
+  cpu: sparkline
+  gpu: sparkline
+  ram: bar
+  vram: bar

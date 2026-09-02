@@ -3,7 +3,7 @@
   "$id": "https://ubunatic.com/harnez/spec/schemas/indicators.schema.json",
   "title": "harnez usage --watch indicators",
   "type": "object",
-  "required": ["sequences", "timeout-snake", "usage-bar", "load-sparkline"],
+  "required": ["sequences", "timeout-snake", "usage-bar", "load-sparkline", "load-charts"],
   "properties": {
     "sequences": {
       "type": "object",
@@ -44,6 +44,28 @@
       "required": ["sequence"],
       "properties": {
         "sequence": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "load-charts": {
+      "type": "object",
+      "properties": {
+        "cpu": {
+          "type": "string",
+          "enum": ["sparkline", "timeseries", "bar", "gauge"]
+        },
+        "gpu": {
+          "type": "string",
+          "enum": ["sparkline", "timeseries", "bar", "gauge"]
+        },
+        "ram": {
+          "type": "string",
+          "enum": ["sparkline", "timeseries", "bar", "gauge"]
+        },
+        "vram": {
+          "type": "string",
+          "enum": ["sparkline", "timeseries", "bar", "gauge"]
+        }
       },
       "additionalProperties": false
     }
