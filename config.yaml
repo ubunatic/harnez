@@ -189,6 +189,7 @@ commands:
 
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
+codex_hooks_target: ~/.codex/config.toml
 claude_skills_target: ~/.claude/skills
 prime_agent_target: ~/.prime/agent
 

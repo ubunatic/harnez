@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"ubunatic.com/harnez/internal/codex"
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/jsonc"
 	"ubunatic.com/harnez/internal/markdown"
@@ -735,6 +736,29 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 			skillNames = append(skillNames, skill.Name)
 		}
 		addStat("skills", strings.Join(skillNames, ", "))
+	}
+
+	// Codex's own native hooks.json-equivalent (config.toml's [hooks.<name>]
+	// tables) is a distinct config format from Claude's settings.json, so it
+	// isn't folded into buildSettingsDoc/applySettingsJSON above — it gets
+	// its own merge (internal/codex.Apply, preserving unrelated hooks/keys
+	// the same way applySettingsJSON preserves unmanaged settings keys). See
+	// issues/199 (research) and issues/200 (this wiring, originally a
+	// standalone `harnez codex-hooks apply` command, folded into `apply`
+	// per user direction rather than staying a separate command).
+	if cfg.CodexHooksTarget != "" {
+		hooksPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
+		changed, err := codex.Apply(hooksPath)
+		if err != nil {
+			return fmt.Errorf("codex hooks: %w", err)
+		}
+		if changed {
+			changes++
+			fmt.Printf("  wrote %s\n", hooksPath)
+			fmt.Println("  note: Codex will prompt for hook-trust review before this hook becomes active (see its /hooks panel).")
+		} else {
+			addStat("codex hooks", "up to date")
+		}
 	}
 
 	if adapters := distillAdapters(cfg); len(adapters) > 0 {

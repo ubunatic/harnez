@@ -174,3 +174,65 @@ All testing used `t.TempDir()`/`t.Setenv("HOME", ...)` sandboxing; the one
 live check against a real `codex --strict-config doctor` used a
 `CODEX_HOME`-scoped scratch directory and never touched this machine's
 real `~/.codex/config.toml`.
+
+## Follow-up: folded into `harnez apply` (post-review redesign)
+
+The first pass above landed a standalone `harnez codex-hooks
+apply|status|hook` command group, mirroring `agy-hooks` exactly. After
+review, the user rejected the standalone-command shape ("we don't need
+codex-hooks") and asked for installation to fold into `harnez apply`'s
+existing global-sync flow instead — unlike agy, which requires an
+explicit, separate agy-side hooks.json write the user opts into, Codex's
+hooks live in the same `~/.codex/config.toml` `harnez apply` already
+touches for skills, so a second standalone management command added
+ceremony `apply` could absorb directly.
+
+Changes made on top of the original implementation:
+
+- `internal/claude.Config` gained `CodexHooksTarget string
+  \`yaml:"codex_hooks_target"\`` (config.go), defaulted in `config.yaml`
+  to `~/.codex/config.toml` — mirroring the existing "when configured"
+  gate pattern `CodexSkillsTarget` already uses, so setting it empty
+  opts a user out.
+- `internal/claude/apply.go`'s `ApplyAll` now calls `internal/codex.Apply`
+  directly (new import) when `cfg.CodexHooksTarget != ""`, printing the
+  same "wrote ..."/hook-trust note lines `codex-hooks apply` used to
+  print, and rolling into the same changes-counter/pStats summary the
+  rest of `apply` uses. Verified live: `harnez apply` against a scratch
+  `$HOME` writes `.codex/config.toml` alongside the Codex skills it
+  already wrote, a second `apply` reports "codex hooks: up to date"
+  (idempotent), and `CODEX_HOME=<scratch> codex --strict-config doctor`
+  still parses the result cleanly.
+- `cmd/harnez/codexhooks.go`'s `apply`/`status` cobra subcommands and the
+  `codex-hooks` command group wrapper were deleted. Only the PreToolUse
+  handshake survives, as a single **hidden** top-level command
+  (`newCodexHookCmd`, `Use: "codex-hook"`, `Hidden: true`) — it doesn't
+  appear in `harnez --help`, since nothing about it is meant for direct
+  interactive use; Codex's config just needs a stable command string to
+  shell out to. `internal/codex.BuildHooksDoc`'s `command` field was
+  updated from `"harnez codex-hooks hook"` to `"harnez codex-hook"` to
+  match.
+- `internal/codex/hooks.go` (`Apply`/`Status`/`Remove`/`BuildHooksDoc`)
+  was NOT changed beyond the command-string rename — its merge/preserve
+  semantics are reused as-is by `ApplyAll`.
+- Test fallout: every existing test that calls `ApplyAll` with an
+  embedded/default `Config` now explicitly sets `cfg.CodexHooksTarget` to
+  a `t.TempDir()`-scoped path (mirroring the existing `CodexSkillsTarget`
+  override convention in the same tests) — without this, those tests
+  would otherwise have written to this machine's real
+  `~/.codex/config.toml` once `config.yaml`'s new default took effect.
+  Updated: `claudeskills_test.go`, `telemetry_hook_test.go`,
+  `toolfeedback_disable_test.go`, `toolfeedback_test.go`,
+  `integration_test.go`. The old `codex-hooks apply/status` cobra test in
+  `cmd/harnez/codexhooks_test.go` was removed; the hook-handshake tests
+  (rewrite, already-routed, empty-command, shell-metacharacter cases)
+  were kept unchanged since `runCodexHooksHook`'s behavior didn't change.
+- Diff/clean/status parity for the new `apply`-managed `.codex/config.toml`
+  entry (i.e. `harnez diff`/`harnez status` reporting drift on it, `harnez
+  clean` removing it) was left out of this pass, same scoping call 196
+  made for agy's `harnez status` integration — a future ticket if wanted.
+
+`go build ./...`, `go test ./...`, and `make install` all pass after
+these changes; `gofmt -l` reports no new issues (pre-existing unrelated
+formatting gaps in a handful of other `internal/claude` files were
+confirmed present before this change too, via `git stash`).

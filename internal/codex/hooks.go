@@ -38,8 +38,9 @@ func HooksPath(home string) string {
 // Q2 — real installed plugin hooks.json files on the research machine use
 // "Bash" as a matcher value, and Codex's PreToolUse schema is otherwise a
 // near-exact mirror of Claude Code's own, which also matches "Bash"),
-// whose command handler is `harnez codex-hooks hook` (the PreToolUse
-// handshake implemented in cmd/harnez/codexhooks.go).
+// whose command handler is `harnez codex-hook` (the hidden PreToolUse
+// handshake command implemented in cmd/harnez/codexhooks.go; installation
+// itself happens via `harnez apply`, not a separate management command).
 //
 // timeoutSec is intentionally omitted: issue 199's Q5 confirmed a
 // per-hook timeoutSec field exists, but the real default numeric value
@@ -61,7 +62,7 @@ func BuildHooksDoc() map[string]any {
 					{
 						"matcher": "Bash",
 						"hooks": []map[string]any{
-							{"type": "command", "command": "harnez codex-hooks hook"},
+							{"type": "command", "command": "harnez codex-hook"},
 						},
 					},
 				},

@@ -3,41 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"testing"
-
-	"ubunatic.com/harnez/internal/codex"
 )
-
-func TestCodexHooksApplyAndStatusCmds(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	applyCmd := newCodexHooksApplyCmd()
-	var applyOut bytes.Buffer
-	applyCmd.SetOut(&applyOut)
-	if err := applyCmd.RunE(applyCmd, nil); err != nil {
-		t.Fatalf("apply: %v", err)
-	}
-
-	path := codex.HooksPath(home)
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("expected %s to exist: %v", path, err)
-	}
-	if got := applyOut.String(); !bytes.Contains([]byte(got), []byte("trust review")) {
-		t.Errorf("apply output = %q, want hook-trust note", got)
-	}
-
-	statusCmd := newCodexHooksStatusCmd()
-	var statusOut bytes.Buffer
-	statusCmd.SetOut(&statusOut)
-	if err := statusCmd.RunE(statusCmd, nil); err != nil {
-		t.Fatalf("status: %v", err)
-	}
-	if got := statusOut.String(); !bytes.Contains([]byte(got), []byte("up to date")) {
-		t.Errorf("status output = %q, want up-to-date", got)
-	}
-}
 
 func TestRunCodexHooksHook_RewritesCommand(t *testing.T) {
 	in := bytes.NewBufferString(`{"hookEventName":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git status"},"tool_use_id":"1","session_id":"s","turn_id":"t","cwd":"/tmp","permission_mode":"default","model":"gpt"}`)

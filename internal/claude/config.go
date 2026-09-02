@@ -28,6 +28,7 @@ type Config struct {
 	DistillAutopipe    DistillAutopipe   `yaml:"distill_autopipe"`
 	SkillsTarget       string            `yaml:"skills_target"`
 	CodexSkillsTarget  string            `yaml:"codex_skills_target"`
+	CodexHooksTarget   string            `yaml:"codex_hooks_target"`
 	ClaudeSkillsTarget string            `yaml:"claude_skills_target"`
 	PrimeAgentTarget   string            `yaml:"prime_agent_target"`
 	AgentsMD           AgentsMD          `yaml:"agents_md"`

@@ -59,6 +59,7 @@ func TestApplyOmitsToolFeedbackProtocolWhenDisabled(t *testing.T) {
 	}
 	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
 	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
+	cfg.CodexHooksTarget = filepath.Join(t.TempDir(), "codex-config.toml")
 	skillsDir := filepath.Join(t.TempDir(), "claude-skills")
 	cfg.ClaudeSkillsTarget = skillsDir
 	cfg.PrimeAgentTarget = ""

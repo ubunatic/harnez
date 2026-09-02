@@ -47,6 +47,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	primeAgentDir := filepath.Join(t.TempDir(), "prime-agent")
 	cfg.SkillsTarget = geminiSkillsDir
 	cfg.CodexSkillsTarget = codexSkillsDir
+	cfg.CodexHooksTarget = filepath.Join(t.TempDir(), "codex-config.toml")
 	cfg.ClaudeSkillsTarget = claudeSkillsDir
 	cfg.PrimeAgentTarget = primeAgentDir
 	cfg.AgentsMD.Global.Target = filepath.Join(t.TempDir(), "CLAUDE.md")
