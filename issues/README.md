@@ -189,4 +189,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 186 | [186-time-based-gap-tip-alongside-call-count.md](186-time-based-gap-tip-alongside-call-count.md) | Time-based reminder alongside the call-count gap-tip | Open |
 | 187 | [187-periodic-unconfirmed-call-summary-reminder.md](187-periodic-unconfirmed-call-summary-reminder.md) | Periodic "Summary: X tool calls in `<dur>`" reminder (spec-first) | Open |
 | 188 | [188-unrated-failure-correlation-nudge.md](188-unrated-failure-correlation-nudge.md) | Nudge specifically when real tool-call failures went unrated | Open |
-| 189 | [189-git-history-doc-token-time-series-telemetry.md](189-git-history-doc-token-time-series-telemetry.md) | Git-History Time-Series Telemetry & Token/Size Evolution for Managed Documentation | Open |
+| 189 | [189-git-history-doc-token-time-series-telemetry.md](189-git-history-doc-token-time-series-telemetry.md) | Git-History Time-Series Telemetry & Token/Size Evolution for Managed Documentation | Closed — Phase 1 research & canary prototype verified in 45dfd26/c4128ed |
+| 190 | [190-multi-doc-stacked-token-history-canary.md](190-multi-doc-stacked-token-history-canary.md) | Multi-Doc Git History Token Evolution & Stacked Chart Canary | Closed |
