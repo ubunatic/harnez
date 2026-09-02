@@ -122,7 +122,7 @@ func TestGapTip_SummaryThresholdSupersedesHeartbeatAndPlain(t *testing.T) {
 		Record(&s, "distill", now)
 	}
 
-	tip, ok := GapTip(s, false, now)
+	tip, ok := GapTip(s, false, now, 0)
 	if !ok {
 		t.Fatalf("expected a summary tip to fire after %d unrated calls", s.Total)
 	}
@@ -143,7 +143,7 @@ func TestGapTip_BelowSummaryThresholdStillUsesHeartbeatTip(t *testing.T) {
 		Record(&s, "distill", now)
 	}
 
-	tip, ok := GapTip(s, false, now)
+	tip, ok := GapTip(s, false, now, 0)
 	if !ok {
 		t.Fatalf("expected a heartbeat tip to fire after %d unrated calls", s.Total)
 	}
@@ -169,7 +169,7 @@ func TestGapTip_SummaryReminderTimeOnlyTrigger(t *testing.T) {
 		Record(&s, "distill", later)
 	}
 
-	tip, ok := GapTip(s, false, later)
+	tip, ok := GapTip(s, false, later, 0)
 	if !ok {
 		t.Fatalf("expected a time-based summary tip after %v idle", later.Sub(start))
 	}
@@ -193,10 +193,10 @@ func TestGapTip_SummaryReminderRespectsFeedbackDisabled(t *testing.T) {
 	}
 	Record(&s, "find", now) // clear the unrelated find-underuse heuristic
 
-	if tip, ok := GapTip(s, true, now); ok {
+	if tip, ok := GapTip(s, true, now, 0); ok {
 		t.Errorf("expected feedbackDisabled=true to suppress the summary reminder too, got: %q", tip)
 	}
-	if _, ok := GapTip(s, false, now); !ok {
+	if _, ok := GapTip(s, false, now, 0); !ok {
 		t.Errorf("expected feedbackDisabled=false to still surface the summary tip for the same state")
 	}
 }

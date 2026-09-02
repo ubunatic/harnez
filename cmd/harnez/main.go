@@ -15,6 +15,7 @@ import (
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/sessionstate"
+	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
 )
 
@@ -51,7 +52,25 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 		feedbackDisabled = claude.RateFeedbackDisabled(cfg, nil)
 	}
 
-	if tip, ok := sessionstate.GapTip(s, feedbackDisabled, now); ok {
+	// Issue 188: query telemetry for genuinely-failed tool calls this
+	// session that have gone unrated since the last `harnez rate` call —
+	// see telemetry.UnratedFailureCount's doc comment for the session-window
+	// linkage heuristic. Best-effort like everything else in this hook: a
+	// missing/unopenable DB just means the sharper nudge can't fire this
+	// call, falling back to GapTip's plain count/time-based tips.
+	unratedFailures := 0
+	if !feedbackDisabled {
+		if dbPath, err := telemetry.DefaultDBPath(); err == nil {
+			if db, err := telemetry.Open(dbPath); err == nil {
+				if n, err := db.UnratedFailureCount(telemetry.Filter{SessionID: sessionID}); err == nil {
+					unratedFailures = int(n)
+				}
+				db.Close()
+			}
+		}
+	}
+
+	if tip, ok := sessionstate.GapTip(s, feedbackDisabled, now, unratedFailures); ok {
 		fmt.Fprintln(cmd.ErrOrStderr(), tip)
 		s.TotalAtLastTip = s.Total
 	}

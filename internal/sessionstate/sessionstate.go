@@ -176,10 +176,27 @@ func rateGapIdleDuration() time.Duration {
 	return rateGapIdle
 }
 
+// UnratedFailures returns the number of genuinely-failed tool calls this
+// session recorded (per internal/telemetry's GroupStats.FailureCount
+// definition: exit_code != 0 OR score <= 2) that have gone unrated since
+// the last `harnez rate` call — see internal/telemetry's
+// UnratedFailureCount, which sessionTipHook queries and passes in here.
+// sessionstate itself never talks to internal/telemetry directly (it has
+// no DB dependency and stays a pure, easily-unit-tested package); the
+// count crossing this package's boundary as a plain int keeps that
+// separation while still letting GapTip prioritize it correctly.
+//
 // GapTip returns at most one short, single-line proactive tip given s's
 // current state as of now, or ok=false if nothing is worth surfacing right
 // now (either no gap is detected, or a tip already fired within tipCooldown
-// calls). feedbackDisabled mirrors claude.RateFeedbackDisabled (issue 142):
+// calls). unratedFailures is issue 188's sharper signal: when positive (and
+// feedback isn't disabled), it takes priority over every other tip below —
+// "N real failures went unrated" is strictly more actionable than the
+// generic count/time-based silence tips, so it preempts them rather than
+// stacking alongside them in the same call. It still respects the same
+// tipCooldown gate as everything else in this function, so a persistent
+// unrated-failure streak doesn't nag on every single invocation either.
+// feedbackDisabled mirrors claude.RateFeedbackDisabled (issue 142):
 // when true, both rate-related tips (the failure-rating reminder and the
 // issue-179 heartbeat nudge) are suppressed — a session that opted out of
 // the Tool Feedback Protocol shouldn't get nagged about either half of it —
@@ -203,9 +220,15 @@ func rateGapIdleDuration() time.Duration {
 // larger gap than either), its concrete "X calls in <dur>" wording replaces
 // what the heartbeat or plain tip would otherwise have said this call. See
 // summaryReminder()/renderReminder() in remindersspec.go.
-func GapTip(s State, feedbackDisabled bool, now time.Time) (string, bool) {
+func GapTip(s State, feedbackDisabled bool, now time.Time, unratedFailures int) (string, bool) {
 	if s.Total-s.TotalAtLastTip < tipCooldown {
 		return "", false
+	}
+
+	if !feedbackDisabled && unratedFailures > 0 {
+		return fmt.Sprintf("harnez tip: %d tool call(s) failed without a `harnez rate` "+
+			"report — use `harnez rate <tool> <score> \"<summary>\"` to record what went "+
+			"wrong (see Tool Feedback Protocol).", unratedFailures), true
 	}
 
 	if !feedbackDisabled {

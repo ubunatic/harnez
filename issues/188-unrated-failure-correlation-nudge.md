@@ -1,6 +1,6 @@
 # 188 — Nudge specifically when real tool-call failures went unrated
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -59,3 +59,40 @@ for (`internal/telemetry`) but doesn't use.
 5. Unit tests cover: unrated-failure trigger, rated-failure non-trigger,
    zero-failure non-trigger, and opt-out suppression.
 6. `go test ./...` passes.
+
+## Resolution Note
+
+**Failure-linkage heuristic**: the `tool_calls` schema has no column
+linking a `harnez rate` row back to the specific call(s) it covers, and
+adding one (plus updating every rate-call site to populate it) was judged
+out of scope for a v1 nudge. Instead `internal/telemetry.UnratedFailureCount`
+uses the session-window proxy the ticket explicitly sanctioned: the most
+recent `call_type="internal"` rate call in the session marks the point up
+to which prior failures are presumed addressed, so only failures (per
+`GroupStats.FailureCount`'s exact definition — `exit_code != 0 OR
+score <= 2`) recorded *after* that point (or all of them, if no rate call
+has fired yet this session) count as unrated. This isn't perfect per-call
+linkage — an agent could rate one failure while leaving an earlier,
+concurrent one unaddressed — but it's far simpler than adding a linkage
+column and correct in the common fix-or-rate-then-move-on case this ticket
+targets. Rate/heartbeat rows themselves are excluded from the failure scan
+so a rating's own row never counts as the failure being reported on.
+
+**Prioritization**: `sessionstate.GapTip` gained a new `unratedFailures int`
+parameter (`cmd/harnez/main.go`'s `sessionTipHook` queries
+`UnratedFailureCount` scoped to the current session and passes the count
+in, best-effort — a missing/unopenable telemetry DB just leaves it at 0).
+When `unratedFailures > 0` and feedback isn't disabled, this check is the
+first thing `GapTip` evaluates, preempting the spec-driven summary
+reminder, the heartbeat nudge, and the plain rate-gap tip in the same
+call — "N real failures went unrated" is a strictly sharper signal than
+any of those, so it replaces rather than stacks alongside them. It still
+shares the same `tipCooldown` gate and issue 142 opt-out as every other tip
+in `GapTip`, so a persistent unrated-failure streak doesn't become a new,
+more chatty nag channel on top of the existing ones.
+
+**Tests**: `internal/telemetry/unratedfailures_test.go` covers the DB-level
+heuristic (trigger, rated-failure exclusion, zero-failure, low-score
+failures, post-rate-only counting, session scoping).
+`internal/sessionstate/sessionstate_test.go` covers the pure `GapTip`
+priority/opt-out/cooldown behavior for the new parameter.

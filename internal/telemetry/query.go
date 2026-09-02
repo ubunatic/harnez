@@ -342,6 +342,67 @@ type HeartbeatInfo struct {
 	CallsSince int64     // tool_calls rows (any call_type) matching f with created_at > LastAt; 0 if Count == 0
 }
 
+// UnratedFailureCount computes issue 188's unrated-failure signal for f
+// (normally scoped to SessionID): how many genuinely-failed tool calls
+// (exit_code != 0 OR score <= 2 — GroupStats.FailureCount's exact
+// definition, reused rather than reinvented) have gone unrated since the
+// last `harnez rate` failure-rating call (call_type "internal") matching f.
+//
+// Linkage heuristic: the schema has no column linking a rating row back to
+// the specific tool call(s) it covers, and adding one (plus updating every
+// rate-call site to populate it) is real surface area for a v1. Instead
+// this uses a session-window proxy explicitly sanctioned by issue 188: the
+// most recent "internal" rate call marks the point up to which the agent
+// is presumed to have addressed prior failures, so only failures *after*
+// that point (or, if no rate call has ever fired, all of them) count as
+// unrated. This is not perfect per-call linkage — an agent could rate one
+// failure while leaving an earlier concurrent one unaddressed — but it is
+// far simpler and correct in the common case (fix-or-rate, then move on)
+// that issue 188 targets. call_type "internal"/"heartbeat" rows themselves
+// are excluded from the failure count: a rate call's own row is never the
+// failure being reported on.
+func (d *DB) UnratedFailureCount(f Filter) (int64, error) {
+	rateFilter := f
+	rateFilter.CallType = rateCallType
+	where, args := rateFilter.whereClause()
+	ctx, cancel := defaultContext()
+	defer cancel()
+
+	var lastRateAt *string
+	row := d.sql.QueryRowContext(ctx, `SELECT MAX(created_at) FROM tool_calls`+where, args...)
+	if err := row.Scan(&lastRateAt); err != nil {
+		return 0, fmt.Errorf("telemetry: unrated failure count: last rate call: %w", err)
+	}
+
+	failureFilter := f
+	failureFilter.CallType = ""
+	if lastRateAt != nil {
+		t, err := time.Parse(time.RFC3339Nano, *lastRateAt)
+		if err != nil {
+			return 0, fmt.Errorf("telemetry: unrated failure count: parse last rate created_at %q: %w", *lastRateAt, err)
+		}
+		failureFilter.Since = t.Add(time.Nanosecond) // strictly after the rate call itself
+	}
+	fWhere, fArgs := failureFilter.whereClause()
+	extra := "call_type NOT IN (?, ?) AND ((exit_code IS NOT NULL AND exit_code != 0) OR (score IS NOT NULL AND score <= 2))"
+	if fWhere == "" {
+		fWhere = " WHERE " + extra
+	} else {
+		fWhere += " AND " + extra
+	}
+	fArgs = append(fArgs, rateCallType, HeartbeatCallType)
+
+	ctx2, cancel2 := defaultContext()
+	defer cancel2()
+
+	var count int64
+	err := d.sql.QueryRowContext(ctx2, `SELECT COUNT(*) FROM tool_calls`+fWhere, fArgs...).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("telemetry: unrated failure count: %w", err)
+	}
+	return count, nil
+}
+
 // HeartbeatStats computes HeartbeatInfo for the rows matching f. Any
 // CallType already set on f is ignored for the heartbeat lookup itself
 // (overridden to HeartbeatCallType) but still applies to the CallsSince

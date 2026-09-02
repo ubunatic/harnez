@@ -188,7 +188,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 185 | [185-instruct-agents-to-submit-feedback-on-bugs-and-bad-instructions.md](185-instruct-agents-to-submit-feedback-on-bugs-and-bad-instructions.md) | Instruct Agents to Use `harnez feedback` When They Observe Bugs or Bad Instructions | Closed — instruction added to config.yaml's agents_md.global.sections |
 | 186 | [186-time-based-gap-tip-alongside-call-count.md](186-time-based-gap-tip-alongside-call-count.md) | Time-based reminder alongside the call-count gap-tip | Closed |
 | 187 | [187-periodic-unconfirmed-call-summary-reminder.md](187-periodic-unconfirmed-call-summary-reminder.md) | Periodic "Summary: X tool calls in `<dur>`" reminder (spec-first) | Closed |
-| 188 | [188-unrated-failure-correlation-nudge.md](188-unrated-failure-correlation-nudge.md) | Nudge specifically when real tool-call failures went unrated | Open |
+| 188 | [188-unrated-failure-correlation-nudge.md](188-unrated-failure-correlation-nudge.md) | Nudge specifically when real tool-call failures went unrated | Closed |
 | 189 | [189-git-history-doc-token-time-series-telemetry.md](189-git-history-doc-token-time-series-telemetry.md) | Git-History Time-Series Telemetry & Token/Size Evolution for Managed Documentation | Closed — Phase 1 research & canary prototype verified in 45dfd26/c4128ed |
 | 190 | [190-multi-doc-stacked-token-history-canary.md](190-multi-doc-stacked-token-history-canary.md) | Multi-Doc Git History Token Evolution & Stacked Chart Canary | Closed |
 | 191 | [191-load-box-ram-chart-hardware-label-and-chart-mode-spec.md](191-load-box-ram-chart-hardware-label-and-chart-mode-spec.md) | Load Box RAM Chart, Hardware Module Label, and Chart Mode Spec | Closed |
