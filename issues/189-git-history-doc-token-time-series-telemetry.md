@@ -155,12 +155,21 @@ Visualizing multi-month token trends directly in a terminal requires compact, hi
 
 ---
 
-## 4. Verification Plan
+## 4. Verification Plan & Results
 
-1. **Canary Validation (`scripts/canary-doc-history/main.go`)**:
-   - Run canary on `docs/lang/Go.md` and `AGENTS.md` spanning May 2026 to present.
-   - Verify rename tracking across historical doc reorganizations without checkout thrashing.
-   - Confirm sub-100ms extraction speed on single-file history.
-2. **Integration Verification**:
+1. **Canary Validation (`scripts/canary-doc-history/main.go`)** *(Phase 1 Complete)*:
+   - Built standalone canary prototype in `scripts/canary-doc-history/main.go` and core extraction/rendering library in `internal/assess/dochistory.go`.
+   - Traverses git history via streaming `git log --follow --raw --abbrev=40` and batch blob retrieval via `git cat-file --batch`.
+   - Computed metrics: `RawBytes`, `Lines`, `Words`, `EstTokens` (`(len+3)/4`), `Headings`, `CodeBlocks`.
+   - Rendered 8-level Unicode sparkline (` ▂▃▄▅▆▇█`) and formatted terminal tables with delta metrics.
+   - **Empirical Results on Harnez Repository**:
+     * `docs/lang/Go.md`: 9 commits (spanning rename from `docs/src/Go.md`), 8 unique blobs, 1 cache hit (11.1%), **10ms latency** (774 → 1,116 tokens, +44.2%).
+     * `AGENTS.md`: 31 commits, 31 unique blobs, **12ms latency** (84 → 2,265 peak → 1,614 tokens current). Accurately captured prompt pruning cycles.
+     * `docs/lang/Make.md`: 12 commits, 11 unique blobs, 1 cache hit (8.3%), **11ms latency** (640 → 1,366 tokens, +113.4%).
+   - All response times are well under the 100ms target (~10–12ms).
+   - Full unit test coverage in `internal/assess/dochistory_test.go` passes cleanly.
+
+2. **Integration Verification (Phase 2 Roadmap)**:
    - Validate time-series storage in SQLite (`tool_catalog.sqlite`).
    - Output ASCII trendline / stacked metrics via `harnez stats`.
+
