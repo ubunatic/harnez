@@ -1,6 +1,6 @@
 # 192 — Integrate Git Document History Telemetry into `harnez` CLI Command
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: CLI / Telemetry
