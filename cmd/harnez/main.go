@@ -37,7 +37,8 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return nil
 	}
-	sessionstate.Record(&s, cmd.Name(), time.Now())
+	now := time.Now()
+	sessionstate.Record(&s, cmd.Name(), now)
 
 	// feedbackDisabled mirrors issue 142's opt-out: a session with the Tool
 	// Feedback Protocol disabled (config.yaml's feedback.disable_rate_protocol
@@ -50,7 +51,7 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 		feedbackDisabled = claude.RateFeedbackDisabled(cfg, nil)
 	}
 
-	if tip, ok := sessionstate.GapTip(s, feedbackDisabled); ok {
+	if tip, ok := sessionstate.GapTip(s, feedbackDisabled, now); ok {
 		fmt.Fprintln(cmd.ErrOrStderr(), tip)
 		s.TotalAtLastTip = s.Total
 	}

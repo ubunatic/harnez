@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -46,6 +47,13 @@ type State struct {
 	// mechanism doesn't become the same chatty, ignored signal issue 181
 	// narrowed harnez rate away from.
 	TotalAtLastTip int `json:"total_at_last_tip"`
+
+	// FirstCallAt records this session's first-ever harnez invocation time.
+	// It's the wall-clock anchor issue 186's time-based gap tip uses when
+	// LastRateAt is still zero (no `harnez rate` call yet this session) —
+	// mirroring the count-based fallback that uses s.Total as callsSinceRate
+	// in that same situation.
+	FirstCallAt time.Time `json:"first_call_at,omitzero"`
 }
 
 // fileName returns the per-session state file's basename: a short hash of
@@ -99,6 +107,9 @@ func Save(stateDir string, s State) error {
 
 // Record updates s in place for one invocation of subcommand at time now.
 func Record(s *State, subcommand string, now time.Time) {
+	if s.Total == 0 && s.FirstCallAt.IsZero() {
+		s.FirstCallAt = now
+	}
 	s.Total++
 	inv := s.Calls[subcommand]
 	inv.Count++
@@ -113,6 +124,7 @@ func Record(s *State, subcommand string, now time.Time) {
 
 // Tuning constants for the gap heuristics. Deliberately simple (fixed
 // call-count thresholds, no time-based decay) for a v1 — see issue 183.
+// Issue 186 adds a wall-clock counterpart (rateGapIdle) alongside these.
 const (
 	// rateGapThreshold is how many harnez calls may pass since the last
 	// `harnez rate` call (a failure rating OR an --ok heartbeat — Record
@@ -135,11 +147,38 @@ const (
 	// tipCooldown is the minimum number of further calls between two tips,
 	// so a persistent gap doesn't nag on every single invocation.
 	tipCooldown = 10
+
+	// rateGapIdle is issue 186's wall-clock counterpart to rateGapThreshold:
+	// a session with few but widely-spaced-out calls may never cross the
+	// call-count threshold, so idle time alone can also make the plain
+	// rate-gap tip eligible. 20 minutes is a starting default — long enough
+	// that a normal think-then-act pause doesn't trip it, short enough to
+	// still catch a genuinely idle/forgotten session within one sitting.
+	// Overridable via rateGapIdleEnv for tuning without a code change.
+	rateGapIdle = 20 * time.Minute
+
+	// rateGapIdleEnv, when set to a positive integer, overrides rateGapIdle
+	// (in minutes). heartbeatGapIdle is always derived as 2x whatever value
+	// is in effect, mirroring heartbeatGapThreshold's relationship to
+	// rateGapThreshold.
+	rateGapIdleEnv = "HARNEZ_RATE_GAP_IDLE_MINUTES"
 )
 
+// rateGapIdleDuration returns the effective wall-clock idle threshold for
+// the plain rate-gap tip: rateGapIdle, unless rateGapIdleEnv names a
+// positive integer number of minutes.
+func rateGapIdleDuration() time.Duration {
+	if v := os.Getenv(rateGapIdleEnv); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Minute
+		}
+	}
+	return rateGapIdle
+}
+
 // GapTip returns at most one short, single-line proactive tip given s's
-// current state, or ok=false if nothing is worth surfacing right now
-// (either no gap is detected, or a tip already fired within tipCooldown
+// current state as of now, or ok=false if nothing is worth surfacing right
+// now (either no gap is detected, or a tip already fired within tipCooldown
 // calls). feedbackDisabled mirrors claude.RateFeedbackDisabled (issue 142):
 // when true, both rate-related tips (the failure-rating reminder and the
 // issue-179 heartbeat nudge) are suppressed — a session that opted out of
@@ -148,22 +187,39 @@ const (
 // deliberate: the larger heartbeat gap is checked before the plain rate
 // gap (more specific/actionable once the silence has gone on long enough),
 // which in turn takes priority over the find-underuse observation.
-func GapTip(s State, feedbackDisabled bool) (string, bool) {
+//
+// Issue 186: alongside the call-count gap (callsSinceRate), each threshold
+// also has a wall-clock counterpart (elapsedSinceRate vs rateGapIdle /
+// heartbeatGapIdle) — a slow-paced session with few calls per unit time may
+// never cross the count threshold even though a long silence has passed.
+// Whichever signal (count or time) crosses its threshold first wins; they
+// share the same tipCooldown gate and feedbackDisabled opt-out rather than
+// firing as a separate, redundant tip.
+func GapTip(s State, feedbackDisabled bool, now time.Time) (string, bool) {
 	if s.Total-s.TotalAtLastTip < tipCooldown {
 		return "", false
 	}
 
 	if !feedbackDisabled {
 		callsSinceRate := s.Total - s.TotalAtLastRate
-		if s.LastRateAt.IsZero() {
+		rateAnchor := s.LastRateAt
+		if rateAnchor.IsZero() {
 			callsSinceRate = s.Total
+			rateAnchor = s.FirstCallAt
 		}
-		if callsSinceRate >= heartbeatGapThreshold {
+		var elapsedSinceRate time.Duration
+		if !rateAnchor.IsZero() && now.After(rateAnchor) {
+			elapsedSinceRate = now.Sub(rateAnchor)
+		}
+		rateIdle := rateGapIdleDuration()
+		heartbeatIdle := 2 * rateIdle
+
+		if callsSinceRate >= heartbeatGapThreshold || elapsedSinceRate >= heartbeatIdle {
 			return fmt.Sprintf("harnez tip: %d+ calls since any `harnez rate` call this "+
 				"session — if nothing has failed, confirm with `harnez rate --ok` instead "+
 				"of staying silent (see Tool Feedback Protocol).", heartbeatGapThreshold), true
 		}
-		if callsSinceRate >= rateGapThreshold {
+		if callsSinceRate >= rateGapThreshold || elapsedSinceRate >= rateIdle {
 			return "harnez tip: no `harnez rate` call in this session's last " +
 				"20+ calls — remember, only rate a tool call that failed or " +
 				"missed the expected outcome (see Tool Feedback Protocol).", true
