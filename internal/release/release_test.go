@@ -18,6 +18,9 @@ func TestParseSemverAndBump(t *testing.T) {
 		{"0.1.0", "patch", "0.1.1"},
 		{"0.1.0", "minor", "0.2.0"},
 		{"0.1.0", "major", "1.0.0"},
+		{"1.0", "patch", "1.0.1"},
+		{"1.0", "minor", "1.1.0"},
+		{"1.0", "major", "2.0.0"},
 		{"v1.2.3", "patch", "1.2.4"},
 		{"1.2.3", "2.0.0", "2.0.0"},
 		{"1.0.0-beta.1", "patch", "1.0.1"},
@@ -638,5 +641,154 @@ func TestPreflightForgeValidation(t *testing.T) {
 		t.Errorf("expected dry-run push to codeberg, got %s", buf.String())
 	}
 }
+
+func TestAutoDetectCurrentVersion_ManifestAndPackageJSON(t *testing.T) {
+	// 1. Manifest V3 / V2 JSON detection
+	tmpDir1 := t.TempDir()
+	manifestContent := `{\n  "manifest_version": 3,\n  "name": "LinkLit",\n  "version": "1.0",\n  "description": "test"\n}\n`
+	_ = os.WriteFile(filepath.Join(tmpDir1, "manifest.json"), []byte(manifestContent), 0644)
+
+	v, err := AutoDetectCurrentVersion(tmpDir1)
+	if err != nil || v != "1.0" {
+		t.Errorf("AutoDetectCurrentVersion manifest.json = %q (err: %v), want %q", v, err, "1.0")
+	}
+
+	// 2. package.json detection
+	tmpDir2 := t.TempDir()
+	pkgContent := `{\n  "name": "my-tool",\n  "version": "2.4.1",\n  "main": "index.js"\n}\n`
+	_ = os.WriteFile(filepath.Join(tmpDir2, "package.json"), []byte(pkgContent), 0644)
+
+	v, err = AutoDetectCurrentVersion(tmpDir2)
+	if err != nil || v != "2.4.1" {
+		t.Errorf("AutoDetectCurrentVersion package.json = %q (err: %v), want %q", v, err, "2.4.1")
+	}
+}
+
+func TestSyncLanguageFiles_ManifestAndPackageJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+	manifestOriginal := "{\n  \"manifest_version\": 3,\n  \"name\": \"LinkLit\",\n  \"version\": \"1.0\",\n  \"description\": \"test\"\n}\n"
+	_ = os.WriteFile(manifestPath, []byte(manifestOriginal), 0644)
+
+	pkgPath := filepath.Join(tmpDir, "package.json")
+	pkgOriginal := "{\n  \"name\": \"test-pkg\",\n  \"version\": \"1.2.0\",\n  \"dependencies\": {}\n}\n"
+	_ = os.WriteFile(pkgPath, []byte(pkgOriginal), 0644)
+
+	res, err := SyncLanguageFiles(tmpDir, "1.2.1", nil)
+	if err != nil {
+		t.Fatalf("SyncLanguageFiles error: %v", err)
+	}
+
+	if len(res.UpdatedFiles) != 2 {
+		t.Errorf("expected 2 updated files, got %d: %v", len(res.UpdatedFiles), res.UpdatedFiles)
+	}
+
+	manifestUpdated, _ := os.ReadFile(manifestPath)
+	expectedManifest := "{\n  \"manifest_version\": 3,\n  \"name\": \"LinkLit\",\n  \"version\": \"1.2.1\",\n  \"description\": \"test\"\n}\n"
+	if string(manifestUpdated) != expectedManifest {
+		t.Errorf("manifest.json mismatch:\ngot:\n%s\nwant:\n%s", string(manifestUpdated), expectedManifest)
+	}
+
+	pkgUpdated, _ := os.ReadFile(pkgPath)
+	expectedPkg := "{\n  \"name\": \"test-pkg\",\n  \"version\": \"1.2.1\",\n  \"dependencies\": {}\n}\n"
+	if string(pkgUpdated) != expectedPkg {
+		t.Errorf("package.json mismatch:\ngot:\n%s\nwant:\n%s", string(pkgUpdated), expectedPkg)
+	}
+}
+
+func TestTagPrefixFormatting(t *testing.T) {
+	tests := []struct {
+		prefix   string
+		version  string
+		expected string
+	}{
+		{"linklit-v", "1.0.1", "linklit-v1.0.1"},
+		{"v", "1.0.1", "v1.0.1"},
+		{"", "1.0.1", "1.0.1"},
+		{"subpkg/v", "2.0.0", "subpkg/v2.0.0"},
+	}
+
+	for _, tc := range tests {
+		got := FormatTag(tc.prefix, tc.version)
+		if got != tc.expected {
+			t.Errorf("FormatTag(%q, %q) = %q, want %q", tc.prefix, tc.version, got, tc.expected)
+		}
+	}
+
+	// Test dry-run with tag_prefix from version.yaml
+	tmpDir := t.TempDir()
+	var buf bytes.Buffer
+	keyFile := filepath.Join(tmpDir, ".minisign.key")
+	_ = os.WriteFile(keyFile, []byte("dummy-key"), 0600)
+	_ = os.WriteFile(filepath.Join(tmpDir, "version.yaml"), []byte("version: 1.0.0\ntag_prefix: linklit-v\n"), 0644)
+
+	opt := Options{
+		Dir:         tmpDir,
+		Bump:        "patch",
+		DryRun:      true,
+		SignKey:     keyFile,
+		SkipBuild:   true,
+		SkipPublish: true,
+		SkipPush:    true,
+		Out:         &buf,
+	}
+
+	if err := Run(opt); err != nil {
+		t.Fatalf("Run error with tag_prefix: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "tag: linklit-v1.0.1") {
+		t.Errorf("expected tag linklit-v1.0.1 in output, got: %s", out)
+	}
+	if !strings.Contains(out, "Would commit version bump and create tag linklit-v1.0.1") {
+		t.Errorf("expected dry-run tag creation for linklit-v1.0.1, got: %s", out)
+	}
+}
+
+func TestBuildCmdMakefileFallback(t *testing.T) {
+	// 1. Fallback to make pack
+	tmpDirPack := t.TempDir()
+	_ = os.WriteFile(filepath.Join(tmpDirPack, "Makefile"), []byte("pack:\n\t@echo 'packing'\n"), 0644)
+	target := detectMakefileBuildTarget(tmpDirPack)
+	if target != "pack" {
+		t.Errorf("detectMakefileBuildTarget = %q, want 'pack'", target)
+	}
+
+	// 2. Fallback to make dist
+	tmpDirDist := t.TempDir()
+	_ = os.WriteFile(filepath.Join(tmpDirDist, "Makefile"), []byte("dist:\n\t@echo 'disting'\n"), 0644)
+	target = detectMakefileBuildTarget(tmpDirDist)
+	if target != "dist" {
+		t.Errorf("detectMakefileBuildTarget = %q, want 'dist'", target)
+	}
+
+	// 3. Dry-run execution with pack target
+	var buf bytes.Buffer
+	keyFile := filepath.Join(tmpDirPack, ".minisign.key")
+	_ = os.WriteFile(keyFile, []byte("dummy-key"), 0600)
+	_ = os.WriteFile(filepath.Join(tmpDirPack, "version.yaml"), []byte("version: 1.0.0\n"), 0644)
+
+	opt := Options{
+		Dir:         tmpDirPack,
+		Bump:        "patch",
+		DryRun:      true,
+		SignKey:     keyFile,
+		SkipPublish: true,
+		SkipPush:    true,
+		Out:         &buf,
+	}
+
+	if err := Run(opt); err != nil {
+		t.Fatalf("Run error with make pack fallback: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Running make target: pack") {
+		t.Errorf("expected output to mention running make target: pack, got: %s", out)
+	}
+}
+
 
 

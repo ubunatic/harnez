@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -19,6 +20,7 @@ type Options struct {
 	Force       bool
 	SignKey     string
 	BuildCmd    string
+	TagPrefix   string
 	SkipBuild   bool
 	SkipSign    bool
 	SkipPublish bool
@@ -81,6 +83,13 @@ func Run(opt Options) error {
 	var tagName string
 	spec, specPath, _ := LoadVersionSpec(opt.Dir)
 
+	tagPrefix := "v"
+	if opt.TagPrefix != "" {
+		tagPrefix = opt.TagPrefix
+	} else if spec != nil && spec.TagPrefix != nil {
+		tagPrefix = *spec.TagPrefix
+	}
+
 	if opt.Continue {
 		if spec != nil && spec.Version != "" {
 			targetVersion = spec.Version
@@ -91,7 +100,7 @@ func Run(opt Options) error {
 			}
 			targetVersion = detected
 		}
-		tagName = "v" + strings.TrimPrefix(targetVersion, "v")
+		tagName = FormatTag(tagPrefix, targetVersion)
 		fmt.Fprintf(opt.Out, "  [version]   Continuing release for version: %s (tag: %s)\n", targetVersion, tagName)
 	} else {
 		var currentVersion string
@@ -105,8 +114,13 @@ func Run(opt Options) error {
 			currentVersion = detected
 		}
 
+		cleanCurrent := strings.TrimPrefix(currentVersion, "v")
+		if tagPrefix != "" && strings.HasPrefix(currentVersion, tagPrefix) {
+			cleanCurrent = strings.TrimPrefix(currentVersion, tagPrefix)
+		}
+
 		if !opt.Force {
-			prevTag := "v" + strings.TrimPrefix(currentVersion, "v")
+			prevTag := FormatTag(tagPrefix, cleanCurrent)
 			exists, err := tagExists(opt.Dir, prevTag)
 			if err != nil {
 				return fmt.Errorf("check previous tag %s: %w", prevTag, err)
@@ -128,7 +142,7 @@ func Run(opt Options) error {
 			return fmt.Errorf("bump version (%s -> %s): %w", currentVersion, opt.Bump, err)
 		}
 		targetVersion = bumped.String()
-		tagName = bumped.TagName()
+		tagName = FormatTag(tagPrefix, targetVersion)
 
 		fmt.Fprintf(opt.Out, "  [version]   Bumping version: %s -> %s (tag: %s)\n", currentVersion, targetVersion, tagName)
 
@@ -185,7 +199,7 @@ func Run(opt Options) error {
 
 	// 5. Artifact Build & Packaging
 	if !opt.SkipBuild {
-		if err := runBuildStep(opt); err != nil {
+		if err := runBuildStep(opt, spec); err != nil {
 			return err
 		}
 	}
@@ -253,9 +267,16 @@ func runPreflight(opt Options) error {
 	if !opt.SkipPublish {
 		required = append(required, "fj")
 	}
-	if !opt.SkipBuild && opt.BuildCmd == "" {
+	buildCmd := opt.BuildCmd
+	spec, _, _ := LoadVersionSpec(opt.Dir)
+	if buildCmd == "" && spec != nil {
+		buildCmd = spec.BuildCmd
+	}
+	if !opt.SkipBuild && buildCmd == "" {
 		if fileExists(filepath.Join(opt.Dir, ".goreleaser.yaml")) || fileExists(filepath.Join(opt.Dir, ".goreleaser.yml")) {
 			required = append(required, "goreleaser")
+		} else if detectMakefileBuildTarget(opt.Dir) != "" {
+			required = append(required, "make")
 		}
 	}
 
@@ -338,11 +359,16 @@ func gitCreateTag(dir, tagName, tagMsg string) error {
 	return runCmd(dir, "git", "tag", "-a", tagName, "-m", tagMsg)
 }
 
-func runBuildStep(opt Options) error {
-	if opt.BuildCmd != "" {
-		fmt.Fprintf(opt.Out, "  [build]     Running custom build command: %s\n", opt.BuildCmd)
+func runBuildStep(opt Options, spec *VersionSpec) error {
+	buildCmd := opt.BuildCmd
+	if buildCmd == "" && spec != nil {
+		buildCmd = spec.BuildCmd
+	}
+
+	if buildCmd != "" {
+		fmt.Fprintf(opt.Out, "  [build]     Running custom build command: %s\n", buildCmd)
 		if !opt.DryRun {
-			parts := strings.Fields(opt.BuildCmd)
+			parts := strings.Fields(buildCmd)
 			if err := runCmd(opt.Dir, parts[0], parts[1:]...); err != nil {
 				return fmt.Errorf("build failed: %w", err)
 			}
@@ -369,8 +395,59 @@ func runBuildStep(opt Options) error {
 		return nil
 	}
 
+	if target := detectMakefileBuildTarget(opt.Dir); target != "" {
+		cmdStr := "make " + target
+		fmt.Fprintf(opt.Out, "  [build]     Running make target: %s\n", target)
+		if !opt.DryRun {
+			if err := runCmd(opt.Dir, "make", target); err != nil {
+				return fmt.Errorf("build (%s) failed: %w", cmdStr, err)
+			}
+		}
+		return nil
+	}
+
 	fmt.Fprintf(opt.Out, "  [build]     No .goreleaser.yaml found and no --build-cmd specified; skipping artifact build\n")
 	return nil
+}
+
+func detectMakefileBuildTarget(dir string) string {
+	makefilePath := filepath.Join(dir, "Makefile")
+	if !fileExists(makefilePath) {
+		makefilePath = filepath.Join(dir, "makefile")
+		if !fileExists(makefilePath) {
+			makefilePath = filepath.Join(dir, "GNUmakefile")
+			if !fileExists(makefilePath) {
+				return ""
+			}
+		}
+	}
+
+	for _, target := range []string{"pack", "dist"} {
+		if hasMakefileTarget(dir, target) {
+			return target
+		}
+	}
+	return ""
+}
+
+func hasMakefileTarget(dir, target string) bool {
+	cmd := exec.Command("make", "-n", target)
+	cmd.Dir = dir
+	if err := cmd.Run(); err == nil {
+		return true
+	}
+
+	for _, name := range []string{"Makefile", "makefile", "GNUmakefile"} {
+		p := filepath.Join(dir, name)
+		data, err := os.ReadFile(p)
+		if err == nil {
+			targetRegex := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(target) + `\s*:`)
+			if targetRegex.Match(data) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func runSigningStep(opt Options, projectName, version, keyPath string) error {
@@ -395,6 +472,10 @@ func runSigningStep(opt Options, projectName, version, keyPath string) error {
 func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) error {
 	distDir := filepath.Join(opt.Dir, "dist")
 	if !fileExists(distDir) {
+		if opt.DryRun {
+			fmt.Fprintf(opt.Out, "  [dry-run]   Would publish release %s via fj release\n", tagName)
+			return nil
+		}
 		return fmt.Errorf("dist directory %s does not exist; cannot publish", distDir)
 	}
 
@@ -419,6 +500,10 @@ func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) 
 	}
 
 	if len(attachments) == 0 {
+		if opt.DryRun {
+			fmt.Fprintf(opt.Out, "  [dry-run]   Would publish release %s via fj release\n", tagName)
+			return nil
+		}
 		return fmt.Errorf("no release artifacts found in dist/")
 	}
 

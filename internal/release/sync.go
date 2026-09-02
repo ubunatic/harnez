@@ -22,6 +22,7 @@ var (
 	zigZonVerRegex      = regexp.MustCompile(`(?m)(\.version\s*=\s*)["'][^"']+["']`)
 	zigVersionVarRegex  = regexp.MustCompile(`(?m)^(pub\s+const\s+version\s*=\s*)["'][^"']+["']`)
 	cargoVersionRegex   = regexp.MustCompile(`(?m)(^\[package\][\s\S]*?^version\s*=\s*)["'][^"']+["']`)
+	jsonVersionRegex    = regexp.MustCompile(`(?m)("version"\s*:\s*)"([^"]*)"`)
 )
 
 // AutoDetectCurrentVersion inspects the repo files or git tags to find the latest version.
@@ -63,7 +64,17 @@ func AutoDetectCurrentVersion(dir string) (string, error) {
 		return v, nil
 	}
 
-	// 6. Check git tags
+	// 6. Check WebExtension manifest.json
+	if v, ok := readManifestVersion(filepath.Join(dir, "manifest.json")); ok {
+		return v, nil
+	}
+
+	// 7. Check package.json
+	if v, ok := readPackageJSONVersion(filepath.Join(dir, "package.json")); ok {
+		return v, nil
+	}
+
+	// 8. Check git tags
 	cmd := exec.Command("git", "describe", "--tags", "--abbrev=0")
 	cmd.Dir = dir
 	if out, err := cmd.Output(); err == nil {
@@ -153,6 +164,22 @@ func SyncLanguageFiles(dir string, version string, explicitFiles []string) (*Syn
 		}
 	}
 
+	// Auto-detect and sync WebExtension manifest.json
+	manifestPath := filepath.Join(dir, "manifest.json")
+	if fileExists(manifestPath) {
+		if err := updateManifestVersion(manifestPath, version, res); err != nil {
+			return nil, err
+		}
+	}
+
+	// Auto-detect and sync package.json
+	pkgJsonPath := filepath.Join(dir, "package.json")
+	if fileExists(pkgJsonPath) {
+		if err := updatePackageJSONVersion(pkgJsonPath, version, res); err != nil {
+			return nil, err
+		}
+	}
+
 	return res, nil
 }
 
@@ -172,6 +199,10 @@ func syncSingleFile(path string, version string, res *SyncResult) error {
 		return updatePyVersion(path, version, res)
 	case base == "Cargo.toml":
 		return updateCargoVersion(path, version, res)
+	case base == "manifest.json":
+		return updateManifestVersion(path, version, res)
+	case base == "package.json":
+		return updatePackageJSONVersion(path, version, res)
 	}
 	return nil
 }
@@ -423,3 +454,51 @@ func updateCargoVersion(path string, version string, res *SyncResult) error {
 	}
 	return nil
 }
+
+// Helpers for reading/updating WebExtension manifest.json & package.json
+func readManifestVersion(path string) (string, bool) {
+	return readJSONVersion(path)
+}
+
+func readPackageJSONVersion(path string) (string, bool) {
+	return readJSONVersion(path)
+}
+
+func readJSONVersion(path string) (string, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", false
+	}
+	matches := jsonVersionRegex.FindStringSubmatch(string(data))
+	if len(matches) >= 3 {
+		return matches[2], true
+	}
+	return "", false
+}
+
+func updateManifestVersion(path string, version string, res *SyncResult) error {
+	return updateJSONVersion(path, version, res)
+}
+
+func updatePackageJSONVersion(path string, version string, res *SyncResult) error {
+	return updateJSONVersion(path, version, res)
+}
+
+func updateJSONVersion(path string, version string, res *SyncResult) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	s := string(data)
+	if jsonVersionRegex.MatchString(s) {
+		newContent := jsonVersionRegex.ReplaceAllString(s, fmt.Sprintf(`${1}%q`, version))
+		if newContent != s {
+			if err := os.WriteFile(path, []byte(newContent), 0644); err != nil {
+				return err
+			}
+			res.UpdatedFiles = append(res.UpdatedFiles, path)
+		}
+	}
+	return nil
+}
+

@@ -14,6 +14,8 @@ import (
 // VersionSpec represents the version.yaml specification format.
 type VersionSpec struct {
 	Version    string   `yaml:"version,omitempty" json:"version,omitempty"`
+	TagPrefix  *string  `yaml:"tag_prefix,omitempty" json:"tag_prefix,omitempty"`
+	BuildCmd   string   `yaml:"build_cmd,omitempty" json:"build_cmd,omitempty"`
 	Major      *int     `yaml:"major,omitempty" json:"major,omitempty"`
 	Minor      *int     `yaml:"minor,omitempty" json:"minor,omitempty"`
 	Patch      *int     `yaml:"patch,omitempty" json:"patch,omitempty"`
@@ -22,7 +24,24 @@ type VersionSpec struct {
 	Files      []string `yaml:"files,omitempty" json:"files,omitempty"`
 }
 
-var semverRegex = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+([0-9A-Za-z.-]+))?$`)
+// GetTagPrefix returns the configured tag prefix or "v" if unset.
+func (s *VersionSpec) GetTagPrefix() string {
+	if s != nil && s.TagPrefix != nil {
+		return *s.TagPrefix
+	}
+	return "v"
+}
+
+// FormatTag returns the version string prefixed with prefix.
+func FormatTag(prefix, version string) string {
+	clean := strings.TrimPrefix(version, "v")
+	if prefix != "" && strings.HasPrefix(version, prefix) {
+		clean = strings.TrimPrefix(version, prefix)
+	}
+	return prefix + clean
+}
+
+var semverRegex = regexp.MustCompile(`^v?(\d+)\.(\d+)(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?(?:\+([0-9A-Za-z.-]+))?$`)
 
 // Semver represents a parsed semantic version.
 type Semver struct {
@@ -50,7 +69,7 @@ func (s Semver) TagName() string {
 	return "v" + s.String()
 }
 
-// ParseSemver parses a semver string like "0.1.0" or "v1.2.3-beta.1+2026".
+// ParseSemver parses a semver string like "0.1.0", "1.0", or "v1.2.3-beta.1+2026".
 func ParseSemver(raw string) (Semver, error) {
 	raw = strings.TrimSpace(raw)
 	matches := semverRegex.FindStringSubmatch(raw)
@@ -60,7 +79,10 @@ func ParseSemver(raw string) (Semver, error) {
 
 	maj, _ := strconv.Atoi(matches[1])
 	min, _ := strconv.Atoi(matches[2])
-	pat, _ := strconv.Atoi(matches[3])
+	pat := 0
+	if matches[3] != "" {
+		pat, _ = strconv.Atoi(matches[3])
+	}
 
 	return Semver{
 		Major:      maj,

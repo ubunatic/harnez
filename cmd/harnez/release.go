@@ -36,6 +36,7 @@ func newReleaseCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&opt.SignKey, "sign-key", "s", "", "path to secret minisign key (defaults to ~/.minisign/<project>.key)")
 	cmd.Flags().StringVarP(&opt.Dir, "dir", "d", ".", "target project directory")
 	cmd.Flags().StringVar(&opt.BuildCmd, "build-cmd", "", "custom build command (defaults to goreleaser or make dist)")
+	cmd.Flags().StringVar(&opt.TagPrefix, "tag-prefix", "", "override git tag prefix (defaults to tag_prefix in version.yaml or 'v')")
 	cmd.Flags().BoolVar(&opt.SkipBuild, "skip-build", false, "skip artifact compilation/packaging")
 	cmd.Flags().BoolVar(&opt.SkipSign, "skip-sign", false, "skip minisign cryptographic signing")
 	cmd.Flags().BoolVar(&opt.SkipPublish, "skip-publish", false, "skip publishing artifacts to forge via fj")
