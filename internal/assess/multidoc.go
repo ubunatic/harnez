@@ -552,22 +552,27 @@ func SampleMilestones(timeline []MultiDocSnapshot, maxMilestones int) []Mileston
 	return res
 }
 
-// CategoryPalette assigns visually distinct block characters for categories.
-var CategoryPalette = []struct {
-	Key   string
-	Block string
-}{
-	{"lang", "█"},
-	{"practices", "▓"},
-	{"studies", "▒"},
-	{"feedback", "░"},
-	{"root", "■"},
-	{"docs", "◆"},
-	{"other", "▲"},
+// CategoryStyle defines visually distinct block characters and ANSI colors for categories.
+type CategoryStyle struct {
+	Key       string
+	Label     string
+	Block     string
+	ANSIColor string
+}
+
+// CategoryPalette assigns visually distinct colors and glyphs for categories.
+var CategoryPalette = []CategoryStyle{
+	{Key: "lang", Label: "lang", Block: "█", ANSIColor: "36"},            // Cyan
+	{Key: "practices", Label: "practices", Block: "▓", ANSIColor: "32"},  // Green
+	{Key: "studies", Label: "studies", Block: "▒", ANSIColor: "35"},      // Magenta
+	{Key: "feedback", Label: "feedback", Block: "░", ANSIColor: "33"},    // Yellow
+	{Key: "root", Label: "root (AGENTS.md)", Block: "■", ANSIColor: "34"},// Blue
+	{Key: "docs", Label: "docs", Block: "◆", ANSIColor: "37"},            // White
+	{Key: "other", Label: "other", Block: "▲", ANSIColor: "31"},          // Red
 }
 
 // RenderStackedBar creates a stacked bar representing category token proportions.
-func RenderStackedBar(categoryTok map[string]int, totalTokens int, width int) string {
+func RenderStackedBar(categoryTok map[string]int, totalTokens int, width int, useColor bool) string {
 	if totalTokens <= 0 || width <= 0 {
 		return strings.Repeat(" ", width)
 	}
@@ -575,6 +580,7 @@ func RenderStackedBar(categoryTok map[string]int, totalTokens int, width int) st
 	type catShare struct {
 		key   string
 		glyph string
+		color string
 		tok   int
 		chars int
 	}
@@ -585,6 +591,7 @@ func RenderStackedBar(categoryTok map[string]int, totalTokens int, width int) st
 			shares = append(shares, catShare{
 				key:   p.Key,
 				glyph: p.Block,
+				color: p.ANSIColor,
 				tok:   tok,
 			})
 		}
@@ -602,6 +609,7 @@ func RenderStackedBar(categoryTok map[string]int, totalTokens int, width int) st
 			shares = append(shares, catShare{
 				key:   cat,
 				glyph: "●",
+				color: "90",
 				tok:   tok,
 			})
 		}
@@ -642,15 +650,32 @@ func RenderStackedBar(categoryTok map[string]int, totalTokens int, width int) st
 
 	var b strings.Builder
 	for _, s := range shares {
-		b.WriteString(strings.Repeat(s.glyph, s.chars))
+		if s.chars <= 0 {
+			continue
+		}
+		if useColor {
+			b.WriteString(fmt.Sprintf("\x1b[%sm%s\x1b[0m", s.color, strings.Repeat("█", s.chars)))
+		} else {
+			b.WriteString(strings.Repeat(s.glyph, s.chars))
+		}
 	}
 	return b.String()
 }
 
+// RenderMultiDocOptions configures the formatting and colorization of multi-doc reports.
+type RenderMultiDocOptions struct {
+	Color bool
+}
+
 // RenderMultiDocHistory renders the multi-document report to a terminal-formatted string.
-func RenderMultiDocHistory(res *MultiDocResult) string {
+func RenderMultiDocHistory(res *MultiDocResult, opts ...RenderMultiDocOptions) string {
 	if res == nil || len(res.Timeline) == 0 {
 		return "No document git history found for specified targets.\n"
+	}
+
+	useColor := false
+	if len(opts) > 0 {
+		useColor = opts[0].Color
 	}
 
 	var b strings.Builder
@@ -696,14 +721,18 @@ func RenderMultiDocHistory(res *MultiDocResult) string {
 		// Legend
 		var legendParts []string
 		for _, p := range CategoryPalette {
-			legendParts = append(legendParts, fmt.Sprintf("%s %s", p.Block, p.Key))
+			if useColor {
+				legendParts = append(legendParts, fmt.Sprintf("\x1b[%sm█\x1b[0m %s", p.ANSIColor, p.Label))
+			} else {
+				legendParts = append(legendParts, fmt.Sprintf("%s %s", p.Block, p.Label))
+			}
 		}
 		b.WriteString(fmt.Sprintf("Legend: %s\n", strings.Join(legendParts, "  ")))
 		b.WriteString(fmt.Sprintf("%-20s  %-30s  %10s  %6s\n", "MILESTONE", "PROPORTION BAR", "TOKENS", "DOCS"))
 		b.WriteString(strings.Repeat("─", 74) + "\n")
 
 		for _, m := range milestones {
-			bar := RenderStackedBar(m.CategoryTok, m.TotalTokens, 30)
+			bar := RenderStackedBar(m.CategoryTok, m.TotalTokens, 30, useColor)
 			b.WriteString(fmt.Sprintf("%-20s  [%s]  %10s  %6d\n",
 				m.Label, bar, formatNumber(m.TotalTokens), m.ActiveDocs))
 		}

@@ -15,7 +15,11 @@ import (
 func main() {
 	jsonFlag := flag.Bool("json", false, "Output results as JSON")
 	repoFlag := flag.String("repo", ".", "Path to git repository root")
+	colorFlag := flag.Bool("color", true, "Enable ANSI colorized stacked bars and legend")
+	noColorFlag := flag.Bool("no-color", false, "Disable ANSI colors")
 	flag.Parse()
+
+	useColor := *colorFlag && !*noColorFlag
 
 	targets := flag.Args()
 	if len(targets) == 0 {
@@ -40,5 +44,5 @@ func main() {
 		return
 	}
 
-	fmt.Print(assess.RenderMultiDocHistory(res))
+	fmt.Print(assess.RenderMultiDocHistory(res, assess.RenderMultiDocOptions{Color: useColor}))
 }

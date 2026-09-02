@@ -169,7 +169,7 @@ func TestRenderStackedBar(t *testing.T) {
 		"practices": 300,
 		"studies":   100,
 	}
-	bar := RenderStackedBar(catTok, 1000, 20)
+	bar := RenderStackedBar(catTok, 1000, 20, false)
 	runes := []rune(bar)
 	if len(runes) != 20 {
 		t.Fatalf("RenderStackedBar len = %d; want 20", len(runes))
@@ -178,6 +178,11 @@ func TestRenderStackedBar(t *testing.T) {
 	// Check that lang (█), practices (▓), studies (▒) glyphs are present
 	if !strings.Contains(bar, "█") || !strings.Contains(bar, "▓") || !strings.Contains(bar, "▒") {
 		t.Errorf("RenderStackedBar missing expected glyphs: %s", bar)
+	}
+
+	colorBar := RenderStackedBar(catTok, 1000, 20, true)
+	if !strings.Contains(colorBar, "\x1b[36m") {
+		t.Errorf("RenderStackedBar(useColor=true) missing ANSI cyan code: %s", colorBar)
 	}
 }
 
