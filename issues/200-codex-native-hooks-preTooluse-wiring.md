@@ -1,6 +1,6 @@
 # 200 — Implement native Codex hooks wiring (harnez codex-hooks)
 
-**Status**: Draft
+**Status**: Closed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
@@ -99,20 +99,78 @@ merge/status/remove semantics:
 
 ## Acceptance Criteria
 
-1. `internal/codex` package exists with `Apply`/`Status`/`Remove` covering
-   create, idempotent-reapply, drift detection, and preserve-unrelated-
-   content semantics (mirroring `internal/agy/hooks_test.go`'s coverage).
-2. `harnez codex-hooks apply` writes a well-formed `~/.codex/config.toml`
-   `[hooks.harnez]` `PreToolUse` entry, verified against a real
-   `CODEX_HOME`-scoped `codex --strict-config doctor` run (per 199's Q2
-   verification method) so the config is confirmed schema-valid, not just
-   internally self-consistent.
-3. `harnez codex-hooks hook` correctly rewrites a real shell command
-   (including one with shell metacharacters, e.g. `&&`) into a
+1. **Met.** `internal/codex` package exists with `Apply`/`Status`/`Remove`
+   covering create, idempotent-reapply, drift detection, and
+   preserve-unrelated-content semantics (`internal/codex/hooks_test.go`,
+   mirroring `internal/agy/hooks_test.go`'s coverage 1:1).
+2. **Met.** `harnez codex-hooks apply` writes a well-formed
+   `~/.codex/config.toml` `[hooks.harnez]` `PreToolUse` entry (BurntSushi
+   TOML encoder, emitting real `[[array.of.tables]]` header syntax, not
+   collapsed inline tables). Verified live: wrote a scratch `CODEX_HOME`
+   whose pre-existing `config.toml` had an unrelated top-level key
+   (`model`, `approval_policy`) and an unrelated named hook
+   (`hooks.someone-elses-plugin-hook`), ran `harnez codex-hooks apply`
+   against it, then `CODEX_HOME=<scratch> codex --strict-config doctor` —
+   output shows `config.toml parse    ok`, and the file still contains
+   both the unrelated key and the unrelated hook alongside the new
+   `[hooks.harnez]` table. The real `~/.codex/config.toml` on this machine
+   was never touched (confirmed no `hooks.harnez` entry present
+   afterward). Auth/network failures in the same doctor run are expected
+   (no credentials in the scratch sandbox) and unrelated to config schema
+   validity.
+3. **Met.** `harnez codex-hooks hook` correctly rewrites a shell command
+   with metacharacters (`git status && echo done`) into a
    `harnez exec`-routed form, and passes through an already-routed or
-   empty command unchanged — mirroring `cmd/harnez/agyhooks_test.go`'s
-   coverage.
-4. Hook-trust interaction is documented (see Scope point 3) so a user
-   running `harnez codex-hooks apply` isn't surprised when Codex prompts
-   for trust review.
-5. `go test ./...` and `make install` pass.
+   empty command unchanged (`cmd/harnez/codexhooks_test.go`, mirroring
+   `cmd/harnez/agyhooks_test.go`'s coverage).
+4. **Met.** Hook-trust interaction is documented both as a doc comment on
+   `newCodexHooksCmd` and as a printed note on `harnez codex-hooks apply`
+   ("Codex will prompt for hook-trust review before this hook becomes
+   active").
+5. **Met.** `go test ./...`, `go build ./...`, and `make install` all
+   pass; `gofmt -l` clean on all new/changed files.
+
+## Resolution Note
+
+Implemented as planned, mirroring `internal/agy`/`cmd/harnez/agyhooks.go`
+almost line-for-line, with the necessary TOML-vs-JSON substitution:
+
+1. **TOML library**: added `github.com/BurntSushi/toml` (no existing TOML
+   dependency in `go.mod`). Its encoder emits proper `[[hooks.harnez.Pre
+   ToolUse]]` array-of-tables syntax for nested `[]map[string]any` values
+   (matching 199's Q2 example config verbatim), and its decoder round-
+   trips a `map[string]any` shape whose array-of-tables come back as
+   `[]map[string]interface{}` — the same generic-map merge strategy
+   `internal/agy`'s `mergeHooksDoc` uses for JSON, ported as-is
+   (`internal/codex/hooks.go`'s `mergeHooksDoc`). Only the `hooks.harnez`
+   subtree is ever replaced; every other top-level key and named hook
+   table passes through the merge untouched.
+2. **Matcher**: `"Bash"`, per 199's Q2 finding that real installed plugin
+   `hooks.json` files use that value and Codex's `PreToolUse` schema
+   otherwise mirrors Claude Code's own.
+3. **`tool_input.command` field name**: chosen by inference, not confirmed
+   live — 199's Q2 found Codex's `PreToolUse` stdin schema is a near-exact
+   mirror of Claude Code's, so `codexPreToolUseInput` in
+   `cmd/harnez/codexhooks.go` uses `tool_input.command` (Claude Code's own
+   field name) rather than agy's `args.CommandLine`. Documented as an
+   explicit assumption in a code comment at the type definition; if a real
+   Codex `Bash` `tool_input` turns out to use a different field, that's
+   the one place to fix.
+4. **`timeoutSec`**: left unresolved per Scope point 4 — omitted entirely
+   from `BuildHooksDoc()` rather than guessed, with a doc comment
+   explaining why (199's Q5 couldn't recover the real default from binary
+   strings alone, and pinning it down needs upstream docs or a live
+   hook-trust experiment out of scope here).
+5. **Hook-trust note**: printed by `codex-hooks apply` and documented in
+   `newCodexHooksCmd`'s `Long` text (Scope point 3) — `harnez` does not
+   set `--dangerously-bypass-hook-trust` on the user's behalf.
+6. Reused `alreadyRoutedThroughExec`/`shellQuote` from `cmd/harnez/exec.go`
+   (same package) rather than duplicating them, per the ticket's
+   direction.
+7. Wired into `cmd/harnez/main.go`'s root command alongside
+   `newAgyHooksCmd()`.
+
+All testing used `t.TempDir()`/`t.Setenv("HOME", ...)` sandboxing; the one
+live check against a real `codex --strict-config doctor` used a
+`CODEX_HOME`-scoped scratch directory and never touched this machine's
+real `~/.codex/config.toml`.
