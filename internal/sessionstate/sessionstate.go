@@ -195,6 +195,14 @@ func rateGapIdleDuration() time.Duration {
 // Whichever signal (count or time) crosses its threshold first wins; they
 // share the same tipCooldown gate and feedbackDisabled opt-out rather than
 // firing as a separate, redundant tip.
+//
+// Issue 187: a third, spec-defined ("summary") reminder composes into this
+// same slot rather than adding a fourth independent nag channel: once the
+// gap crosses spec/reminders.yaml's summary.threshold_multiplier (checked
+// before the heartbeat/plain thresholds, since it only fires at a strictly
+// larger gap than either), its concrete "X calls in <dur>" wording replaces
+// what the heartbeat or plain tip would otherwise have said this call. See
+// summaryReminder()/renderReminder() in remindersspec.go.
 func GapTip(s State, feedbackDisabled bool, now time.Time) (string, bool) {
 	if s.Total-s.TotalAtLastTip < tipCooldown {
 		return "", false
@@ -213,6 +221,25 @@ func GapTip(s State, feedbackDisabled bool, now time.Time) (string, bool) {
 		}
 		rateIdle := rateGapIdleDuration()
 		heartbeatIdle := 2 * rateIdle
+
+		// Issue 187: the spec-defined "summary" reminder gives a concrete
+		// call count + duration instead of the plain/heartbeat tips' vaguer
+		// wording, but only once the gap has gone on long enough that both
+		// of those have already had a chance to fire and be ignored (its
+		// threshold_multiplier is checked first, ahead of the heartbeat and
+		// plain thresholds below, since it fires only at a strictly larger
+		// gap than either). It composes into this same one-tip-per-call
+		// slot rather than stacking as a third nag channel: whichever
+		// condition matches, GapTip returns at most one line. A missing or
+		// invalid embedded spec just skips this branch, falling back to the
+		// plain/heartbeat tips below.
+		if r, ok := summaryReminder(); ok {
+			summaryThreshold := int(r.ThresholdMultiplier * float64(rateGapThreshold))
+			summaryIdle := time.Duration(r.ThresholdMultiplier * float64(rateIdle))
+			if callsSinceRate >= summaryThreshold || elapsedSinceRate >= summaryIdle {
+				return renderReminder(r, callsSinceRate, elapsedSinceRate), true
+			}
+		}
 
 		if callsSinceRate >= heartbeatGapThreshold || elapsedSinceRate >= heartbeatIdle {
 			return fmt.Sprintf("harnez tip: %d+ calls since any `harnez rate` call this "+

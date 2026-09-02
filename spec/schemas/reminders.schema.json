@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ubunatic.com/harnez/spec/schemas/reminders.schema.json",
+  "title": "harnez session-usage reminder registry",
+  "type": "object",
+  "required": ["reminders"],
+  "properties": {
+    "reminders": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["title", "message", "threshold_multiplier", "replaces"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "threshold_multiplier": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "replaces": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["plain_rate_gap", "heartbeat_rate_gap"]
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

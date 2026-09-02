@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=schemas/reminders.schema.json
+#
+# Proactive session-usage reminders shown by harnez's PersistentPreRunE hook
+# (sessionTipHook, cmd/harnez/main.go) via internal/sessionstate.GapTip. This
+# is the single source of truth for reminder message wording and the
+# threshold at which the concrete call-count/duration "summary" reminder
+# takes over from the plainer issue-183/186 gap-tips -- see issue 187 and
+# docs/other/Spec.md.
+#
+# Deliberately *not* the source of truth for the base thresholds themselves
+# (rateGapThreshold / rateGapIdleDuration() in
+# internal/sessionstate/sessionstate.go, tunable at runtime via
+# HARNEZ_RATE_GAP_IDLE_MINUTES): threshold_multiplier below is expressed
+# relative to those, so retuning the base gap thresholds doesn't require a
+# matching spec edit to keep the reminder ladder's relative spacing intact.
+reminders:
+  summary:
+    title: "Unconfirmed call-count summary"
+    description: >
+      A concrete, occasional reminder giving the agent an exact tool-call
+      count and elapsed wall-clock duration since the last `harnez rate`
+      call (a failure rating or a `--ok` heartbeat both count), instead of
+      the vaguer "no rate call in a while" wording the plain and heartbeat
+      gap-tips use. Fires once a session has gone unconfirmed long enough
+      that both of the more generic tips have already had a chance to fire
+      and be ignored -- see threshold_multiplier below.
+    # message is a single-line template. {calls} is replaced with the
+    # integer call count since the last rate/heartbeat call; {duration}
+    # with a short "1h30m"/"45m"-style rendering of the elapsed wall-clock
+    # duration. Editing this string is a pure copy change: no Go
+    # recompile required.
+    message: >-
+      harnez tip: Summary: {calls} tool calls in {duration}; call `harnez
+      rate --ok` to confirm healthy tool usage.
+    # threshold_multiplier: how many multiples of the existing base rate-gap
+    # threshold/idle-duration (rateGapThreshold calls / rateGapIdleDuration())
+    # must pass -- by either the call-count or wall-clock signal, same
+    # either-wins rule issue 186 established between those two -- before
+    # this reminder's wording takes over. heartbeatGapThreshold is already
+    # 2x rateGapThreshold, so multiplier 4 means this only fires once a
+    # session is as far again past the heartbeat threshold as the heartbeat
+    # threshold is past the plain one: two full unanswered reminder cycles,
+    # not a third independent nag arriving sooner than either.
+    threshold_multiplier: 4
+    # replaces: which of the existing sessionstate tips this reminder's
+    # wording takes over from once threshold_multiplier is crossed, so all
+    # three compose as one nudge slot (one line per invocation, same
+    # tipCooldown gate, same feedbackDisabled opt-out) instead of stacking
+    # as a third independent nag channel. Documentation only -- GapTip's
+    # checking order is what actually enforces this -- but keeps the
+    # relationship explicit in the single source of truth rather than only
+    # in a Go comment.
+    replaces: ["plain_rate_gap", "heartbeat_rate_gap"]
