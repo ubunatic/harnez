@@ -63,7 +63,6 @@ func TestEmbeddedIndicatorsSpecIsValidAndExact(t *testing.T) {
 	}
 }
 
-
 func TestTimeoutSnakeGlyphDrainsWithoutWrapping(t *testing.T) {
 	frames := mustIndicators().TimeoutSnake.Frames
 	for i, want := range frames {
@@ -92,7 +91,7 @@ func TestWatchChartRenderersUseDeclaredGlyphs(t *testing.T) {
 	if got, want := len(bar.SubCharacterGlyphs), len(spec.UsageBar.SubCharacter); got != want {
 		t.Fatalf("bar partial glyph count = %d, want %d", got, want)
 	}
-	got := stripANSI(watchPercentSparkline([]float64{0, 100}, 2))
+	got := stripANSI(watchPercentSparkline([]float64{0, 0, 0, 100}, 2))
 	want := spec.LoadSparkline.Frames[0] + spec.LoadSparkline.Frames[len(spec.LoadSparkline.Frames)-1]
 	if got != want {
 		t.Fatalf("load sparkline = %q, want spec endpoints %q", got, want)
@@ -222,21 +221,21 @@ func TestParseIndicatorsYAMLRejectsInvalidRegistryAndReferences(t *testing.T) {
 func TestLoadChartModesAndAliases(t *testing.T) {
 	spec := loadChartsSpec{
 		CPU:  "timeseries",
-		GPU:  "gauge",
+		GPU:  "btop",
 		RAM:  "sparkline",
-		VRAM: "bar",
+		VRAM: "gauge",
 	}
 	if got := spec.CPUMode(); got != LoadChartSparkline {
 		t.Errorf("CPUMode(timeseries) = %q, want %q", got, LoadChartSparkline)
 	}
-	if got := spec.GPUMode(); got != LoadChartBar {
-		t.Errorf("GPUMode(gauge) = %q, want %q", got, LoadChartBar)
+	if got := spec.GPUMode(); got != LoadChartBraille {
+		t.Errorf("GPUMode(btop) = %q, want %q", got, LoadChartBraille)
 	}
 	if got := spec.RAMMode(); got != LoadChartSparkline {
 		t.Errorf("RAMMode(sparkline) = %q, want %q", got, LoadChartSparkline)
 	}
 	if got := spec.VRAMMode(); got != LoadChartBar {
-		t.Errorf("VRAMMode(bar) = %q, want %q", got, LoadChartBar)
+		t.Errorf("VRAMMode(gauge) = %q, want %q", got, LoadChartBar)
 	}
 
 	// Empty defaults:
@@ -254,7 +253,6 @@ func TestLoadChartModesAndAliases(t *testing.T) {
 		t.Errorf("empty VRAMMode = %q, want default %q", got, LoadChartSparkline)
 	}
 }
-
 
 func TestResolvedCountdownSupportsVariableLengthsAndEndpoints(t *testing.T) {
 	tests := []struct {
@@ -321,8 +319,12 @@ func TestSelectedIndicatorOutputsHaveStableANSIVisibleGeometry(t *testing.T) {
 	if width := runewidth.StringWidth(bar); width != rograph.MaxWidth+2 {
 		t.Errorf("selected ANSI bar %q has width %d, want %d", bar, width, rograph.MaxWidth+2)
 	}
-	spark := stripANSI(watchPercentSparkline([]float64{0, 25, 50, 100}, 4))
+	spark := stripANSI(watchPercentSparkline([]float64{0, 25, 50, 75, 0, 25, 50, 100}, 4))
 	if width := runewidth.StringWidth(spark); width != 4 {
 		t.Errorf("selected ANSI sparkline %q has width %d, want 4", spark, width)
+	}
+	braille := []rune(stripANSI(watchPercentSparkline([]float64{0, 100}, 1, LoadChartBraille)))
+	if len(braille) != 1 || braille[0] < 0x2800 || braille[0] > 0x28ff {
+		t.Errorf("selected Braille sparkline = %q, want one Braille cell", string(braille))
 	}
 }

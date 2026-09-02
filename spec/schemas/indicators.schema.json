@@ -52,19 +52,19 @@
       "properties": {
         "cpu": {
           "type": "string",
-          "enum": ["sparkline", "timeseries", "bar", "gauge"]
+          "enum": ["sparkline", "timeseries", "braille", "btop", "bar", "gauge"]
         },
         "gpu": {
           "type": "string",
-          "enum": ["sparkline", "timeseries", "bar", "gauge"]
+          "enum": ["sparkline", "timeseries", "braille", "btop", "bar", "gauge"]
         },
         "ram": {
           "type": "string",
-          "enum": ["sparkline", "timeseries", "bar", "gauge"]
+          "enum": ["sparkline", "timeseries", "braille", "btop", "bar", "gauge"]
         },
         "vram": {
           "type": "string",
-          "enum": ["sparkline", "timeseries", "bar", "gauge"]
+          "enum": ["sparkline", "timeseries", "braille", "btop", "bar", "gauge"]
         }
       },
       "additionalProperties": false

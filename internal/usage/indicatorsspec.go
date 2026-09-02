@@ -32,6 +32,7 @@ type LoadChartMode string
 
 const (
 	LoadChartSparkline LoadChartMode = "sparkline"
+	LoadChartBraille   LoadChartMode = "braille"
 	LoadChartBar       LoadChartMode = "bar"
 )
 
@@ -62,6 +63,8 @@ func parseLoadChartMode(val string, defaultMode LoadChartMode) LoadChartMode {
 	switch strings.ToLower(strings.TrimSpace(val)) {
 	case "sparkline", "timeseries":
 		return LoadChartSparkline
+	case "braille", "btop":
+		return LoadChartBraille
 	case "bar", "gauge":
 		return LoadChartBar
 	case "":
@@ -76,13 +79,12 @@ func validateLoadChartMode(field, val string) error {
 		return nil
 	}
 	switch strings.ToLower(strings.TrimSpace(val)) {
-	case "sparkline", "timeseries", "bar", "gauge":
+	case "sparkline", "timeseries", "braille", "btop", "bar", "gauge":
 		return nil
 	default:
 		return fmt.Errorf("indicators spec: load-charts: %s: unknown mode %q", field, val)
 	}
 }
-
 
 type usageBarSpec struct {
 	Filled               string         `yaml:"filled"`
@@ -333,11 +335,15 @@ func barOptionsFromSpec(spec usageBarSpec) rograph.BarOptions {
 	return opts
 }
 
-func watchPercentSparkline(values []float64, width int) string {
+func watchPercentSparkline(values []float64, width int, modes ...LoadChartMode) string {
 	frames := mustIndicators().LoadSparkline.Frames
 	glyphs := make([]rune, len(frames))
 	for i, glyph := range frames {
 		glyphs[i] = []rune(glyph)[0]
 	}
-	return rograph.RenderPercentSparkline(values, rograph.SparklineOptions{Width: width, Glyphs: glyphs, ANSI: true})
+	opts := rograph.SparklineOptions{Width: width, Glyphs: glyphs, ANSI: true}
+	if len(modes) > 0 && modes[0] == LoadChartBraille {
+		opts.Presentation = rograph.SparklineBraille
+	}
+	return rograph.RenderPercentSparkline(values, opts)
 }

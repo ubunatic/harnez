@@ -80,7 +80,10 @@ load-sparkline:
   sequence: vertical-block-scale-8
 
 # Presentation modes for hardware load indicators in `usage --watch`.
-# Supported modes: sparkline (or timeseries), bar (or gauge).
+# Supported modes: sparkline (or timeseries), braille (or btop), bar (or gauge).
+# Braille maps two chronological samples into each terminal cell, using its
+# left and right dot columns respectively. Block sparklines use the same
+# doubled sample window while retaining the newer sample from each pair.
 load-charts:
   cpu: sparkline
   gpu: sparkline

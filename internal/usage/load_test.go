@@ -252,16 +252,15 @@ func TestFallbackRAMGeometry(t *testing.T) {
 
 func TestRAMHistoryAppendsAndSnapshots(t *testing.T) {
 	var hist sampleHistory
-	for i := 1; i <= 15; i++ {
+	for i := 1; i <= loadHistoryLen+5; i++ {
 		hist.append(float64(i * 5))
 	}
 	snap := hist.snapshot()
 	if len(snap) != loadHistoryLen {
 		t.Fatalf("snapshot length = %d, want %d", len(snap), loadHistoryLen)
 	}
-	// Last element should be 15 * 5 = 75
-	if snap[len(snap)-1] != 75 {
-		t.Errorf("last element = %.0f, want 75", snap[len(snap)-1])
+	// Last element should retain the newest sample.
+	if want := float64((loadHistoryLen + 5) * 5); snap[len(snap)-1] != want {
+		t.Errorf("last element = %.0f, want %.0f", snap[len(snap)-1], want)
 	}
 }
-

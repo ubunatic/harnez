@@ -107,12 +107,29 @@ func eighthBlockFill(pct float64, width int, fill, emptyRune rune, partial []run
 	return b.String()
 }
 
+// SparklinePresentation selects how a pair of time-series samples is drawn.
+type SparklinePresentation uint8
+
+const (
+	// SparklineBlocks reduces each sample pair to its newer value and draws it
+	// with the configured lower-block glyph scale.
+	SparklineBlocks SparklinePresentation = iota
+	// SparklineBraille draws the older sample in the left Braille dot column
+	// and the newer sample in the right column. Each column is quantized to
+	// four bottom-aligned dots (left: 7,3,2,1; right: 8,6,5,4).
+	SparklineBraille
+)
+
 // SparklineOptions configures RenderSparkline. The zero value renders a
-// no-ANSI, relative-scale sparkline capped at MaxWidth glyphs.
+// no-ANSI, relative-scale block sparkline capped at MaxWidth cells.
 type SparklineOptions struct {
-	// Width is the maximum number of recent values to render. Zero uses
-	// MaxWidth; negative values clamp to 1.
+	// Width is the maximum number of terminal cells to render. Each cell
+	// consumes two chronological samples; zero uses MaxWidth and negative
+	// values clamp to one cell.
 	Width int
+	// Presentation selects block or Braille rendering. The zero value is
+	// SparklineBlocks.
+	Presentation SparklinePresentation
 	// Min and Max define the scale when FixedRange is true.
 	Min float64
 	Max float64
@@ -200,22 +217,31 @@ func RenderBar(value float64, opts BarOptions) string {
 	return b.String()
 }
 
-// RenderSparkline renders the most recent values as one terminal glyph per
-// value. Relative mode derives the range from the rendered values, while
-// FixedRange mode clamps values to opts.Min and opts.Max.
+// RenderSparkline renders up to Width terminal cells from the newest 2*Width
+// samples. Samples are oldest first. An odd-length window keeps its oldest
+// singleton as the first cell (duplicated across Braille columns); all later
+// cells contain adjacent pairs. Block cells deliberately use the newer value
+// of a pair so the current/latest observation is always represented. Relative
+// mode derives one range across the complete retained sample window.
 func RenderSparkline(values []float64, opts SparklineOptions) string {
 	width := optionWidth(opts.Width)
 	if len(values) == 0 {
 		return ""
 	}
-	if len(values) > width {
-		values = values[len(values)-width:]
+	resolution := width * 2
+	if len(values) > resolution {
+		values = values[len(values)-resolution:]
 	}
 
 	minimum, maximum, flat := sparkRange(values, opts)
-	spark := make([]rune, len(values))
-	for i, value := range values {
-		spark[i] = sparkGlyphWithGlyphs(value, minimum, maximum, flat, opts.Glyphs)
+	spark := make([]rune, 0, (len(values)+1)/2)
+	start := 0
+	if len(values)%2 != 0 {
+		spark = append(spark, sparkCell(values[0], values[0], minimum, maximum, flat, opts))
+		start = 1
+	}
+	for i := start; i < len(values); i += 2 {
+		spark = append(spark, sparkCell(values[i], values[i+1], minimum, maximum, flat, opts))
 	}
 
 	out := string(spark)
@@ -230,6 +256,46 @@ func RenderSparkline(values []float64, opts SparklineOptions) string {
 		return out
 	}
 	return "\x1b[" + code + "m" + out + "\x1b[0m"
+}
+
+func sparkCell(older, newer, minimum, maximum float64, flat bool, opts SparklineOptions) rune {
+	if opts.Presentation != SparklineBraille {
+		return sparkGlyphWithGlyphs(newer, minimum, maximum, flat, opts.Glyphs)
+	}
+	return brailleGlyph(older, newer, minimum, maximum, flat)
+}
+
+// brailleGlyph maps each sample to a four-dot, bottom-aligned Braille column.
+// The Unicode Braille bit positions are left 1,2,3,7 and right 4,5,6,8;
+// filling from bottom to top makes zero U+2800 and the maximum U+28FF.
+func brailleGlyph(older, newer, minimum, maximum float64, flat bool) rune {
+	left := brailleColumnLevel(older, minimum, maximum, flat)
+	right := brailleColumnLevel(newer, minimum, maximum, flat)
+	var bits rune
+	leftBits := [...]rune{0, 1 << 6, (1 << 6) | (1 << 2), (1 << 6) | (1 << 2) | (1 << 1), (1 << 6) | (1 << 2) | (1 << 1) | 1}
+	rightBits := [...]rune{0, 1 << 7, (1 << 7) | (1 << 5), (1 << 7) | (1 << 5) | (1 << 4), (1 << 7) | (1 << 5) | (1 << 4) | (1 << 3)}
+	bits = leftBits[left] | rightBits[right]
+	return 0x2800 + bits
+}
+
+func brailleColumnLevel(value, minimum, maximum float64, flat bool) int {
+	if flat {
+		return 2
+	}
+	if math.IsNaN(value) || math.IsInf(value, -1) || value < minimum {
+		value = minimum
+	}
+	if math.IsInf(value, 1) || value > maximum {
+		value = maximum
+	}
+	level := int(((value - minimum) / (maximum - minimum)) * 4)
+	if level < 0 {
+		return 0
+	}
+	if level > 4 {
+		return 4
+	}
+	return level
 }
 
 // RenderPercentSparkline renders values on a fixed 0-100 scale. It is the

@@ -996,14 +996,15 @@ func formatCPULine(load CPULoad) string {
 	label := padLoadLabel(fmt.Sprintf("cpu (%d cores)", load.NumCPU))
 
 	var chart string
-	if mustIndicators().LoadCharts.CPUMode() == LoadChartBar {
+	mode := mustIndicators().LoadCharts.CPUMode()
+	if mode == LoadChartBar {
 		val := 0.0
 		if load.CPUPercentOk {
 			val = load.CPUPercent
 		}
 		chart = rograph.RenderBar(val, watchBarOptions())
 	} else {
-		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, len(series))))
+		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, (len(series)+1)/2), mode))
 	}
 	return fmt.Sprintf("%s %s %s%s", label, chart, avgPart, tempPart)
 }
@@ -1030,9 +1031,10 @@ func formatSystemMemoryLine(mem SystemMemory) string {
 	pct := percent(mem.UsedMiB, mem.TotalMiB)
 
 	var chart string
-	if mustIndicators().LoadCharts.RAMMode() == LoadChartSparkline {
-		series := padHistory(mem.PercentHistory, pct, rograph.MaxWidth)
-		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, rograph.MaxWidth))
+	mode := mustIndicators().LoadCharts.RAMMode()
+	if mode != LoadChartBar {
+		series := padHistory(mem.PercentHistory, pct, rograph.MaxWidth*2)
+		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, rograph.MaxWidth, mode))
 	} else {
 		chart = rograph.RenderBar(pct, watchBarOptions())
 	}
@@ -1055,10 +1057,11 @@ func formatGPULine(g GPU) string {
 	}
 
 	var chart string
-	if mustIndicators().LoadCharts.GPUMode() == LoadChartBar {
+	mode := mustIndicators().LoadCharts.GPUMode()
+	if mode == LoadChartBar {
 		chart = rograph.RenderBar(g.UtilPercent, watchBarOptions())
 	} else {
-		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, len(series))))
+		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, (len(series)+1)/2), mode))
 	}
 	return fmt.Sprintf("%s %s %.0f%%%s", label, chart, g.UtilPercent, tempPart)
 }
@@ -1079,10 +1082,11 @@ func formatGPUMemoryLines(g GPU) []string {
 	if g.HaveVRAM && g.HaveGTT {
 		vramPct := percent(g.VRAMUsedMiB, g.VRAMTotalMiB)
 		gttPct := percent(g.GTTUsedMiB, g.GTTTotalMiB)
-		if mustIndicators().LoadCharts.VRAMMode() == LoadChartSparkline {
-			vramSeries := padHistory(g.VRAMPercentHistory, vramPct, 4)
-			gttSeries := padHistory(g.GTTPercentHistory, gttPct, 4)
-			chart = fmt.Sprintf("[%s][%s]", watchPercentSparkline(vramSeries, 4), watchPercentSparkline(gttSeries, 4))
+		mode := mustIndicators().LoadCharts.VRAMMode()
+		if mode != LoadChartBar {
+			vramSeries := padHistory(g.VRAMPercentHistory, vramPct, 8)
+			gttSeries := padHistory(g.GTTPercentHistory, gttPct, 8)
+			chart = fmt.Sprintf("[%s][%s]", watchPercentSparkline(vramSeries, 4, mode), watchPercentSparkline(gttSeries, 4, mode))
 		} else {
 			barOpts := watchBarOptions()
 			barOpts.Width = 4
@@ -1101,9 +1105,10 @@ func formatGPUMemoryLines(g GPU) []string {
 			activePct = g.MemPercent
 		}
 
-		if mustIndicators().LoadCharts.VRAMMode() == LoadChartSparkline {
-			series := padHistory(activeHist, activePct, rograph.MaxWidth)
-			chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, rograph.MaxWidth))
+		mode := mustIndicators().LoadCharts.VRAMMode()
+		if mode != LoadChartBar {
+			series := padHistory(activeHist, activePct, rograph.MaxWidth*2)
+			chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, rograph.MaxWidth, mode))
 		} else {
 			chart = rograph.RenderBar(activePct, watchBarOptions())
 		}
@@ -1112,7 +1117,6 @@ func formatGPUMemoryLines(g GPU) []string {
 	line := fmt.Sprintf("%s %s %s/%sG %.0f%%", label, chart, formatGiB(g.MemUsedMiB), formatGiB(g.MemTotalMiB), g.MemPercent)
 	return []string{line}
 }
-
 
 func formatGiB(mib float64) string {
 	return fmt.Sprintf("%.1f", mib/1024)

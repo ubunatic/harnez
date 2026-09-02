@@ -59,7 +59,6 @@ type SystemMemory struct {
 	PercentHistory []float64
 }
 
-
 // CurrentCPULoad reads the system load averages and the instantaneous CPU
 // usage. Load averages come from /proc/loadavg, falling back to the
 // `uptime` command where /proc is unavailable (e.g. macOS, containers
@@ -106,7 +105,6 @@ func CurrentSystemMemory() SystemMemory {
 	mem.PercentHistory = ramHistory.append(pct)
 	return mem
 }
-
 
 // cpuTempHwmonDrivers are the hwmon driver names known to report a CPU
 // package/die temperature (as opposed to battery, NVMe, Wi-Fi, etc. hwmons
@@ -191,7 +189,9 @@ var (
 // cumulative total, so filling the chart immediately still costs real time,
 // just compressed from the ~10s it'd otherwise take at the 1s redraw
 // cadence down to about 1s.
-const historyBurstInterval = 100 * time.Millisecond
+// Keep the startup seed near one second even though the doubled timeline now
+// collects twenty observations.
+const historyBurstInterval = 50 * time.Millisecond
 
 // currentCPUPercents reports aggregate and per-core CPU busy% since the last
 // call, computed from the delta between two /proc/stat frames (btop-style
@@ -438,9 +438,9 @@ type GPU struct {
 	GTTPercentHistory  []float64
 }
 
-// loadHistoryLen is how many recent samples are kept for a Load box
-// timeline sparkline (CPU aggregate %, or one per GPU's utilization %).
-const loadHistoryLen = 10
+// loadHistoryLen is the doubled internal resolution of a width-10 Load box
+// timeline: each rendered cell consumes two chronological samples.
+const loadHistoryLen = 20
 
 // sampleHistory is a small mutex-protected rolling window of recent 0-100%
 // samples, used to render a Load box timeline sparkline.
@@ -477,7 +477,6 @@ var cpuHistory sampleHistory
 
 // ramHistory is the single rolling window for CurrentSystemMemory's utilization %.
 var ramHistory sampleHistory
-
 
 // gpuHistoryMu guards gpuHistory, a per-GPU (keyed by sysfs card name)
 // rolling window, since a system can have more than one GPU.
@@ -926,4 +925,3 @@ func fallbackRAMGeometry(totalMiB float64) string {
 	}
 	return fmt.Sprintf("%dG", gib)
 }
-
