@@ -199,7 +199,17 @@ func StartRemoteLoadStream(ctx context.Context, host string) (<-chan LoadSnapsho
 		cm.Close()
 		return nil, noop, fmt.Errorf("pipe stdout for load-stream child on %s: %w", host, err)
 	}
+	// Give the ssh child a live stdin instead of leaving cmd.Stdin nil (which
+	// os/exec defaults to /dev/null). ssh forwards an already-EOF stdin over
+	// the channel, and the remote RunLoadStream reads that as its "parent
+	// tore down" shutdown signal within moments of starting — see issue 114.
+	// Holding the write end open here, and only closing it from stop(), makes
+	// stdin-EOF the genuine intentional-shutdown signal RunLoadStream's doc
+	// comment already describes.
+	stdinR, stdinW := io.Pipe()
+	cmd.Stdin = stdinR
 	if err := cmd.Start(); err != nil {
+		_ = stdinW.Close()
 		cm.Close()
 		return nil, noop, fmt.Errorf("start load-stream child on %s: %w", host, err)
 	}
@@ -207,6 +217,10 @@ func StartRemoteLoadStream(ctx context.Context, host string) (<-chan LoadSnapsho
 	var stopOnce sync.Once
 	stop := func() {
 		stopOnce.Do(func() {
+			// Close the stdin pipe first so the remote process's stdin-EOF
+			// path (a genuine signal now) gets a chance to fire, then still
+			// fall back to Kill() as the primary, unconditional teardown.
+			_ = stdinW.Close()
 			if cmd.Process != nil {
 				_ = cmd.Process.Kill()
 			}

@@ -230,6 +230,78 @@ collectLoop:
 	}
 }
 
+// TestStartRemoteLoadStream_HoldsChildStdinOpen guards against issue 114's
+// regression: StartRemoteLoadStream must give the ssh child a live stdin,
+// not let os/exec default cmd.Stdin to /dev/null. The fake "remote" script
+// below mimics RunLoadStream's real shape: a background loop emits samples
+// while the foreground blocks reading stdin, only tearing the loop down
+// once stdin actually reaches EOF. With the pre-fix nil-Stdin bug, the
+// foreground `cat` would see an already-EOF /dev/null and the script would
+// exit almost immediately; with the fix, StartRemoteLoadStream holds the
+// pipe's write end open, so the script must keep streaming samples until
+// stop() closes it.
+func TestStartRemoteLoadStream_HoldsChildStdinOpen(t *testing.T) {
+	origStart := sshControlMasterStartCmd
+	origExit := sshControlMasterExitCmd
+	origChild := sshLoadStreamChildCmd
+	defer func() {
+		sshControlMasterStartCmd = origStart
+		sshControlMasterExitCmd = origExit
+		sshLoadStreamChildCmd = origChild
+	}()
+
+	sshControlMasterStartCmd = func(ctlPath, host string) *exec.Cmd { return exec.Command("true") }
+	sshControlMasterExitCmd = func(ctlPath, host string) *exec.Cmd { return exec.Command("true") }
+
+	snap := LoadSnapshot{CPU: CPULoad{NumCPU: 4, Ok: true}}
+	data, _ := json.Marshal(snap)
+	script := fakeScript(t, fmt.Sprintf(
+		"i=0\n"+
+			"while [ $i -lt 200 ]; do\n"+
+			"  echo '%s'\n"+
+			"  sleep 0.01\n"+
+			"  i=$((i+1))\n"+
+			"done &\n"+
+			"loop_pid=$!\n"+
+			"cat >/dev/null\n"+
+			"kill $loop_pid 2>/dev/null\n", string(data)))
+	sshLoadStreamChildCmd = func(ctx context.Context, ctlPath, host string) *exec.Cmd {
+		return exec.CommandContext(ctx, script)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch, stop, err := StartRemoteLoadStream(ctx, "um760")
+	if err != nil {
+		t.Fatalf("StartRemoteLoadStream: %v", err)
+	}
+	defer stop()
+
+	// Drain samples for a window well past the pre-fix false-EOF failure
+	// mode (which reproduced within tens of milliseconds), asserting the
+	// channel never closes on its own during that window.
+	window := time.After(500 * time.Millisecond)
+	count := 0
+drainLoop:
+	for {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				t.Fatalf("channel closed prematurely after %d samples (stdin-EOF false-triggered shutdown)", count)
+			}
+			count++
+		case <-window:
+			break drainLoop
+		}
+	}
+	if count == 0 {
+		t.Fatal("expected at least one sample to have streamed during the window")
+	}
+
+	stop()
+}
+
 func TestStartRemoteLoadStream_ControlMasterFailurePropagates(t *testing.T) {
 	origStart := sshControlMasterStartCmd
 	defer func() { sshControlMasterStartCmd = origStart }()

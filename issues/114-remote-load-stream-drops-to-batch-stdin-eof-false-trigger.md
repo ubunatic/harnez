@@ -1,6 +1,6 @@
 # 114 — Remote Load stream drops to batch shortly after connecting: stdin-EOF false-triggers shutdown
 
-**Status**: Open
+**Status**: Resolved
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -112,3 +112,44 @@ either resolves the false-trigger bug, but they leave different code behind.
 5. `go test ./...` / `make check` pass; live-verify against a real host
    (`um760` is reachable in this dev environment) that `streaming` is now
    stable rather than flapping.
+
+## Resolution Note
+
+Took the ticket's first suggested direction (io.Pipe, not the RunLoadStream
+simplification): `StartRemoteLoadStream` (`internal/usage/loadstream.go`)
+now creates an `io.Pipe()` and sets `cmd.Stdin = stdinR` before `cmd.Start()`,
+instead of leaving `cmd.Stdin` nil. The write end (`stdinW`) is held open for
+the life of the stream and closed only inside `stop()`, right before
+`cmd.Process.Kill()` — so a real stdin-EOF now only ever happens when the
+local `--watch` session intentionally tears the stream down, matching
+`RunLoadStream`'s existing doc comment on the remote side. `RunLoadStream`
+itself is unchanged: its stdin-EOF-watching goroutine stays as a
+belt-and-suspenders secondary teardown signal alongside `Kill()`, which
+remains the primary/unconditional one. Went this way over deleting
+`RunLoadStream`'s stdin-EOF path because it required a much smaller,
+localized diff, and it preserves `TestRunLoadStream_StopsOnStdinEOF` as a
+real regression test for a genuine teardown signal rather than deleting it.
+
+Added `TestStartRemoteLoadStream_HoldsChildStdinOpen` to
+`loadstream_test.go` (AC #3): a fake "remote" shell script structured like
+the real `RunLoadStream` (background sample loop, foreground blocking `cat`
+that only tears the loop down on real stdin EOF) is driven through
+`StartRemoteLoadStream`. Confirmed the test fails against the pre-fix
+nil-`cmd.Stdin` code (channel closes after 1 sample) and passes with the fix
+(samples keep flowing for the whole 500ms window, channel only closes when
+`stop()` is called). Note: an earlier draft of this test put the fake
+script's stdin-reading `cat` in a backgrounded subshell (`(cat ...) &`),
+which is itself a red herring for anyone extending this test later — POSIX
+shells redirect a background job's stdin to `/dev/null` when not explicitly
+redirected, which reproduces the exact same false-EOF failure mode
+independent of the Go-side fix. The script here deliberately keeps `cat` in
+the foreground for this reason.
+
+Live-verified with `scripts/canary-watch-pty.sh 65` against the configured
+`load.watch_host` (`x600`, reachable in this environment — `um760` was also
+reachable but isn't the configured watch host): 120/120 `[R]` box redraws
+over 65s showed `(@x600 · streaming)`, zero flaps to `batch` (AC #1).
+Confirmed no zombie regression: `ssh x600 'pgrep -af "harnez load-stream"'`
+returned empty immediately after the canary's `--watch` session exited (AC
+#4). `go test ./...` passes (AC #5). `make install` run after the Go
+changes.
