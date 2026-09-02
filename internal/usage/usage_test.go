@@ -12,6 +12,55 @@ import (
 	"time"
 )
 
+// TestRenderTextDimsStaleQuotaLineAndAnnotatesUpdated verifies issue 107's
+// full/verbose-view treatment: a stale agent's quota line is wrapped in the
+// dim-grey convention and the "Updated:" caption gets a terminal-independent
+// "· stale" suffix, while an otherwise-identical fresh agent gets neither.
+func TestRenderTextDimsStaleQuotaLineAndAnnotatesUpdated(t *testing.T) {
+	now := time.Now()
+	summary := UsageSummary{
+		Timestamp: now,
+		Agents: []AgentUsage{
+			{
+				AgentID: "agy", Name: "Antigravity (AGY)", Installed: true, Authenticated: true,
+				Session:       &QuotaWindow{Name: "5h", UsedPercent: 42},
+				LastRefreshed: now.Add(-3 * time.Hour),
+			},
+			{
+				AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+				Session:       &QuotaWindow{Name: "5h", UsedPercent: 42},
+				LastRefreshed: now,
+			},
+		},
+	}
+
+	text := RenderText(summary)
+
+	// Isolate each agent's box so an assertion about one can't accidentally
+	// match text that belongs to the other.
+	agyIdx := strings.Index(text, "Antigravity (AGY)")
+	claudeIdx := strings.Index(text, "Claude Code")
+	if agyIdx < 0 || claudeIdx < 0 {
+		t.Fatalf("expected both agent boxes in output:\n%s", text)
+	}
+	var agyBox, claudeBox string
+	if agyIdx < claudeIdx {
+		agyBox, claudeBox = text[agyIdx:claudeIdx], text[claudeIdx:]
+	} else {
+		claudeBox, agyBox = text[claudeIdx:agyIdx], text[agyIdx:]
+	}
+
+	if !strings.Contains(agyBox, ansiOpen("dim-grey")) {
+		t.Errorf("expected the stale agent's box to contain a dim-grey wrap, got:\n%s", stripANSI(agyBox))
+	}
+	if !strings.Contains(agyBox, "· stale") {
+		t.Errorf("expected the stale agent's Updated caption to say '· stale', got:\n%s", stripANSI(agyBox))
+	}
+	if strings.Contains(claudeBox, "· stale") {
+		t.Errorf("expected the fresh agent's Updated caption to NOT say '· stale', got:\n%s", stripANSI(claudeBox))
+	}
+}
+
 func TestRenderSummary(t *testing.T) {
 	now := time.Date(2026, 8, 17, 22, 0, 0, 0, time.UTC)
 	resetTime := now.Add(4 * time.Hour)

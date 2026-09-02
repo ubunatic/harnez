@@ -337,6 +337,35 @@ func TestAgentUsageIsStale(t *testing.T) {
 	}
 }
 
+// TestAgentUsageIsValueStale table-drives issue 107's dimming/de-emphasis
+// verdict, distinct from TestAgentUsageIsStale's much coarser 7-day
+// auto-hide threshold.
+func TestAgentUsageIsValueStale(t *testing.T) {
+	cases := []struct {
+		name  string
+		agent AgentUsage
+		want  bool
+	}{
+		{"zero LastRefreshed, no other signal", AgentUsage{}, false},
+		{"just refreshed", AgentUsage{LastRefreshed: time.Now()}, false},
+		{"5 minutes old, well within cache window", AgentUsage{LastRefreshed: time.Now().Add(-5 * time.Minute)}, false},
+		{"3 hours old, past the live-recollect window", AgentUsage{LastRefreshed: time.Now().Add(-3 * time.Hour)}, true},
+		{"QuotaFetchError set even though just refreshed", AgentUsage{LastRefreshed: time.Now(), QuotaFetchError: "connection refused"}, true},
+		{"Sources tagged (stale)", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"~/.claude/harnez-quota-cache.json (stale)"}}, true},
+		{"Sources tagged (cached, stale)", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"/state/agy.json (cached, stale)"}}, true},
+		{"Sources tagged (usage-history, stale)", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"~/.claude/harnez/usage-history (usage-history, stale)"}}, true},
+		{"Sources tagged plain (cached), not stale", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"/state/claude.json (cached)"}}, false},
+		{"Sources with a live RPC source, not stale", AgentUsage{LastRefreshed: time.Now(), Sources: []string{"127.0.0.1 (LanguageServer RPC)"}}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.agent.IsValueStale(); got != tc.want {
+				t.Errorf("IsValueStale() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestCollectAllCacheFirst checks CollectAll's cache-first behavior end to
 // end: with no daemon-written snapshot, it falls back to a live collect
 // (matching pre-082 behavior exactly, so existing callers see no change

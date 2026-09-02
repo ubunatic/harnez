@@ -224,6 +224,11 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 			continue
 		}
 		shown++
+		// valueStale drives issue 107's dimming convention for this agent's
+		// quota lines below: distinct from (and much narrower than) the
+		// IsStale/DefaultDisplayStaleness auto-hide check above it -- see
+		// AgentUsage.IsValueStale's doc comment.
+		valueStale := agent.IsValueStale()
 		var lines []string
 
 		if !agent.Installed {
@@ -261,7 +266,11 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 						resetInfo = fmt.Sprintf(" · Resets %s", localTime)
 					}
 				}
-				lines = append(lines, fmt.Sprintf("  %s %5.1f%% used%s", bar, agent.Session.UsedPercent, resetInfo))
+				line := fmt.Sprintf("  %s %5.1f%% used%s", bar, agent.Session.UsedPercent, resetInfo)
+				if valueStale {
+					line = staleValueANSI(line)
+				}
+				lines = append(lines, line)
 			}
 
 			if agent.Weekly != nil {
@@ -279,7 +288,11 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 						resetInfo = fmt.Sprintf(" · Resets %s", localTime)
 					}
 				}
-				lines = append(lines, fmt.Sprintf("  %s %5.1f%% used%s", bar, agent.Weekly.UsedPercent, resetInfo))
+				line := fmt.Sprintf("  %s %5.1f%% used%s", bar, agent.Weekly.UsedPercent, resetInfo)
+				if valueStale {
+					line = staleValueANSI(line)
+				}
+				lines = append(lines, line)
 			}
 
 			// Live quota fetch failed: surface it explicitly rather than
@@ -308,7 +321,11 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 							resetInfo = fmt.Sprintf(" · Resets %s", localTime)
 						}
 					}
-					lines = append(lines, fmt.Sprintf("  %-28s %s %5.1f%% used%s", w.Name+":", bar, w.UsedPercent, resetInfo))
+					line := fmt.Sprintf("  %-28s %s %5.1f%% used%s", w.Name+":", bar, w.UsedPercent, resetInfo)
+					if valueStale {
+						line = staleValueANSI(line)
+					}
+					lines = append(lines, line)
 				}
 			}
 
@@ -347,15 +364,25 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 		// "Last updated" annotation (issue 101): staleness should be visible
 		// rather than silently implied, especially once cacheOrLive is
 		// serving a last-known snapshot well past the live-recollect window.
+		// Issue 107: this view has room to spare, so pair the dimming above
+		// with a plain-text "· stale" suffix here -- a terminal-independent
+		// complement for terminals that don't render dim-grey distinctly
+		// (AC #2), cheap to add since this caption already exists.
 		if !agent.LastRefreshed.IsZero() {
-			lines = append(lines, fmt.Sprintf("Updated:      %s", FormatAgo(agent.LastRefreshed)))
+			updated := fmt.Sprintf("Updated:      %s", FormatAgo(agent.LastRefreshed))
+			if valueStale {
+				updated += " · stale"
+			}
+			lines = append(lines, ansiWrap("dim-grey", updated))
 		}
 
-		// Calculate content width: max visible rune length among lines and title
-		// Box content width = maxLineLen + 2 (for 2ch padding after longest line)
+		// Calculate content width: max visible rune length among lines and
+		// title. visLen (not a raw rune count) since lines can now carry
+		// issue 107's embedded ANSI staleness styling, which must not count
+		// toward the box's width budget.
 		maxLen := utf8.RuneCountInString(agent.Name) + 4
 		for _, l := range lines {
-			if lLen := utf8.RuneCountInString(l); lLen > maxLen {
+			if lLen := visLen(l); lLen > maxLen {
 				maxLen = lLen
 			}
 		}
@@ -414,7 +441,9 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 			}
 
 			for _, sl := range sourceLines {
-				sb.WriteString(fmt.Sprintf("%s%s\033[0m\n", ansiDimFaint, sl))
+				// dim-grey, not dim-faint (issue 107 reconciliation) -- see
+				// staleValueANSI's doc comment in colorsspec.go.
+				sb.WriteString(fmt.Sprintf("%s%s\033[0m\n", ansiDimGrey, sl))
 			}
 		}
 		sb.WriteString("\n")

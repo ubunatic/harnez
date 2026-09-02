@@ -672,6 +672,7 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		label         string
 		windows       []QuotaWindow
 		lastRefreshed time.Time
+		stale         bool
 	}
 
 	var rows []allUsageRow
@@ -680,6 +681,11 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		if !agent.HasUsageData() {
 			continue
 		}
+		// Issue 107: staleness is a per-agent-row verdict (the data model has
+		// no per-QuotaWindow provenance yet — see AgentUsage.IsValueStale's
+		// doc comment), so every row this agent contributes (its model
+		// groups included) shares the one flag.
+		stale := agent.IsValueStale()
 		if len(agent.ModelGroups) > 0 {
 			for _, mg := range agent.ModelGroups {
 				label := mg.Name
@@ -688,7 +694,7 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 				} else if strings.EqualFold(label, "Claude and GPT models") || strings.EqualFold(label, "Claude and GPT") {
 					label = "Claude/GPT"
 				}
-				rows = append(rows, allUsageRow{label: label, windows: mg.Windows, lastRefreshed: agent.LastRefreshed})
+				rows = append(rows, allUsageRow{label: label, windows: mg.Windows, lastRefreshed: agent.LastRefreshed, stale: stale})
 				if n := visLen(label); n > labelWidth {
 					labelWidth = n
 				}
@@ -704,7 +710,7 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 			wins = append(wins, *agent.Session)
 		}
 		if len(wins) > 0 {
-			rows = append(rows, allUsageRow{label: agent.Name, windows: wins, lastRefreshed: agent.LastRefreshed})
+			rows = append(rows, allUsageRow{label: agent.Name, windows: wins, lastRefreshed: agent.LastRefreshed, stale: stale})
 			if n := visLen(agent.Name); n > labelWidth {
 				labelWidth = n
 			}
@@ -720,6 +726,13 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		line := formatAllUsageLine(label, row.windows, contentW, labelWidth)
 		if debugOverlay {
 			line = styleTimeGaugeGlyph(line)
+		}
+		// Issue 107: dim only, no text marker -- the All Usage aggregate is
+		// the tightest-budget compact view (formatCompactGroupLineWithLabelWidth's
+		// active field-dropping fallback), and dim-grey costs zero visible
+		// width since visLen/stripANSI strip it before any layout math.
+		if row.stale {
+			line = staleValueANSI(line)
 		}
 		lines = append(lines, line)
 	}
@@ -1170,6 +1183,12 @@ func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, li
 		return wbox{title: title, lines: []string{ansiDimGrey + "installed, not logged in\x1b[0m"}, width: width}
 	}
 
+	// stale drives issue 107's dimming of this panel's quota values, plus a
+	// plain-text "· stale" complement on the "updated" caption below --
+	// per-agent panels (unlike the compact All Usage table) have room to
+	// spare for it (see the ticket's width-budget assessment).
+	stale := agent.IsValueStale()
+
 	var lines []string
 
 	acct := agent.Account
@@ -1215,6 +1234,9 @@ func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, li
 				label = "Claude/GPT"
 			}
 			line := formatCompactGroupLine(overlayLabel(label), mg.Windows, contentW)
+			if stale {
+				line = staleValueANSI(line)
+			}
 			lines = append(lines, line)
 		}
 	} else if agent.Session != nil || agent.Weekly != nil {
@@ -1229,9 +1251,15 @@ func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, li
 		if len(wins) == 2 {
 			label := "Wk / 5h"
 			line := formatCompactGroupLine(overlayLabel(label), wins, contentW)
+			if stale {
+				line = staleValueANSI(line)
+			}
 			lines = append(lines, line)
 		} else if len(wins) == 1 {
 			line := formatCompactGroupLine(overlayLabel(wins[0].Name), wins, contentW)
+			if stale {
+				line = staleValueANSI(line)
+			}
 			lines = append(lines, line)
 		}
 	}
@@ -1258,7 +1286,11 @@ func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, li
 	}
 
 	if !agent.LastRefreshed.IsZero() {
-		lines = append(lines, fmt.Sprintf("%supdated %s\x1b[0m", ansiDimGrey, FormatAgo(agent.LastRefreshed)))
+		updated := "updated " + FormatAgo(agent.LastRefreshed)
+		if stale {
+			updated += " · stale"
+		}
+		lines = append(lines, ansiDimGrey+updated+"\x1b[0m")
 	}
 
 	return wbox{title: title, lines: lines, width: width}

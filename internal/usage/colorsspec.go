@@ -106,6 +106,44 @@ func ansiWrap(name, s string) string {
 	return ansiOpen(name) + s + "\x1b[0m"
 }
 
+// ansiWrapPreservingResets is ansiWrap for strings that already contain their
+// own embedded "\x1b[0m" resets (e.g. a compact quota line built from
+// rograph.RenderBar segments, which each close with their own reset). A
+// plain ansiWrap would only dim up to the first embedded reset -- SGR "0" is
+// a full attribute reset, so anything after it reverts to the terminal's
+// normal styling, silently un-dimming the rest of the line. This re-asserts
+// the named color immediately after every embedded reset so the whole string
+// reads uniformly styled end to end.
+func ansiWrapPreservingResets(name, s string) string {
+	if s == "" {
+		return s
+	}
+	open := ansiOpen(name)
+	body := strings.ReplaceAll(s, "\x1b[0m", "\x1b[0m"+open)
+	return open + body + "\x1b[0m"
+}
+
+// staleValueANSI applies the staleness/de-emphasis convention issue 107
+// introduces to a rendered quota line: dim-grey (\x1b[90m), reconciling the
+// two pre-existing "dim" conventions this codebase carried (dim-grey,
+// pervasive across watch.go, vs. dim-faint/\x1b[2m, previously used only by
+// RenderText's "sources:" note). dim-grey was picked as the sole
+// de-emphasis/staleness convention going forward because (a) it was already
+// the dominant convention by a wide margin, and (b) it substitutes an
+// explicit gray foreground color rather than relying on the SGR "faint"
+// attribute, which a meaningful share of terminal emulators render
+// identically to normal-intensity text -- dim-grey's degradation (falling
+// back to a literal gray-256/ANSI color the terminal's palette maps
+// somehow) is more consistent across emulators than faint's (silently doing
+// nothing). RenderText's sources note was migrated onto this convention
+// too, so dim-faint (still a valid named color in spec/colors.yaml) has no
+// remaining call site; it is left defined rather than deleted in case a
+// future feature genuinely wants the distinct "faint" semantic rather than
+// "de-emphasized."
+func staleValueANSI(s string) string {
+	return ansiWrapPreservingResets("dim-grey", s)
+}
+
 // Named ANSI open-sequence vars for the watch TUI's most common call sites
 // (issue 137's color/style audit). These resolve spec/colors.yaml once, at
 // package init, so watch.go/usage.go call sites can concatenate them into

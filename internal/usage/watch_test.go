@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"ubunatic.com/harnez/internal/rograph"
 )
 
 // TestBuildWatchFrameRowsFitWidth guards the layout bug that broke `--watch`:
@@ -1562,7 +1564,12 @@ func TestAllUsageLinesAtDebugOverlayCountsDown(t *testing.T) {
 // cadence, the halfway glyph must appear 30 seconds after the last fetch,
 // independent of the collector's 15-minute cadence (issue 147).
 func TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval(t *testing.T) {
-	refreshed := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	// refreshed must track real wall-clock time (not a fixed past date): issue
+	// 107's IsValueStale checks LastRefreshed against actual time.Now(), and
+	// this test's debug-gauge math only cares about the relative offset
+	// (refreshed vs. the "now" passed to buildWatchFrameAt below), not the
+	// absolute date.
+	refreshed := time.Now()
 	summary := UsageSummary{Agents: []AgentUsage{{
 		AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
 		LastRefreshed: refreshed, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 25},
@@ -1932,5 +1939,124 @@ func TestRenderSummary_CompactSelectsReducedSections(t *testing.T) {
 	}
 	if !strings.Contains(compactText, "⁷ Load") {
 		t.Fatalf("expected --summary --compact to keep the Load box, got:\n%s", compactText)
+	}
+}
+
+// TestStaleValueANSIPreservesResetsAndCostsNoWidth verifies issue 107's
+// dimming helper against the two constraints the ticket's own investigation
+// flagged: (a) an embedded "\x1b[0m" reset (e.g. from rograph.RenderBar's own
+// background-color wrap) must not silently cancel the outer dim partway
+// through the line, and (b) the wrap must add zero visLen width, since
+// visLen/stripANSI strip ANSI before any layout math runs.
+func TestStaleValueANSIPreservesResetsAndCostsNoWidth(t *testing.T) {
+	opts := watchBarOptions()
+	opts.Width = 4
+	bar := rograph.RenderBar(42, opts) // embeds its own "\x1b[...m...\x1b[0m"
+	line := "Claude Code " + bar + " 42%"
+
+	styled := staleValueANSI(line)
+
+	if visLen(styled) != visLen(line) {
+		t.Fatalf("staleValueANSI changed visible width: got %d, want %d (line %q)", visLen(styled), visLen(line), stripANSI(styled))
+	}
+	if stripANSI(styled) != stripANSI(line) {
+		t.Fatalf("staleValueANSI changed visible content: got %q, want %q", stripANSI(styled), stripANSI(line))
+	}
+	// Every "\x1b[0m" reset inside the string except the final closing one
+	// must be immediately followed by a re-assertion of the dim-grey open
+	// sequence, or text after the bar's own reset would render at normal
+	// intensity instead of staying dim.
+	dimOpen := ansiOpen("dim-grey")
+	resets := strings.Count(styled, "\x1b[0m")
+	reassertions := strings.Count(styled, "\x1b[0m"+dimOpen)
+	if resets < 2 {
+		t.Fatalf("expected the bar's embedded reset plus staleValueANSI's own closing reset, got %d resets in %q", resets, styled)
+	}
+	if reassertions != resets-1 {
+		t.Fatalf("expected every embedded reset but the final one to re-assert dim-grey (%d of %d), got %d in %q",
+			resets-1, resets, reassertions, styled)
+	}
+}
+
+// TestAllUsageLinesAtDimsStaleAgentRow verifies the compact [a] All Usage
+// aggregate's issue 107 treatment: a row for an agent whose value is stale
+// per IsValueStale is wrapped in the dim-grey convention, while a fresh
+// agent's row in the same box is not -- and the dimming costs zero layout
+// width, matching the ticket's free-width finding for this exact view.
+func TestAllUsageLinesAtDimsStaleAgentRow(t *testing.T) {
+	summary := UsageSummary{
+		Agents: []AgentUsage{
+			{
+				AgentID: "agy", Name: "Antigravity", Installed: true, Authenticated: true,
+				Weekly:        &QuotaWindow{Name: "Weekly", UsedPercent: 86, DurationLeft: 2 * 24 * time.Hour},
+				Session:       &QuotaWindow{Name: "Session", UsedPercent: 12, DurationLeft: 3 * time.Hour},
+				Sources:       []string{"~/.claude/harnez/usage-history (usage-history, stale)"},
+				LastRefreshed: time.Now().Add(-8 * 24 * time.Hour),
+			},
+			{
+				AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+				Weekly:        &QuotaWindow{Name: "Weekly", UsedPercent: 10, DurationLeft: 6 * 24 * time.Hour},
+				Session:       &QuotaWindow{Name: "Session", UsedPercent: 5, DurationLeft: 4 * time.Hour},
+				LastRefreshed: time.Now(),
+			},
+		},
+	}
+
+	lines := allUsageLines(summary, 70, false)
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 rows, got %d: %v", len(lines), lines)
+	}
+
+	agyLine, claudeLine := lines[0], lines[1]
+	if !strings.HasPrefix(stripANSI(agyLine), "Antigravity") {
+		t.Fatalf("expected first row to be Antigravity, got %q", stripANSI(agyLine))
+	}
+	if !strings.Contains(agyLine, ansiOpen("dim-grey")) {
+		t.Errorf("expected the stale Antigravity row to be dim-grey wrapped, got %q", agyLine)
+	}
+	if strings.Contains(claudeLine, ansiOpen("dim-grey")) {
+		t.Errorf("expected the fresh Claude Code row to NOT be dim-grey wrapped, got %q", claudeLine)
+	}
+	if visLen(agyLine) > 70 || visLen(claudeLine) > 70 {
+		t.Errorf("dimming must cost zero layout width: agy=%d claude=%d (contentW=70)", visLen(agyLine), visLen(claudeLine))
+	}
+}
+
+// TestBuildAgentBoxDimsStaleQuotaAndAnnotatesUpdatedCaption verifies the
+// fuller per-agent --watch/--summary panel treatment (buildAgentBox): unlike
+// the compact All Usage aggregate, this view has room to spare, so a stale
+// agent's quota line is both dim-grey wrapped AND the "updated ... ago"
+// caption gets a terminal-independent "· stale" suffix (issue 107 AC #2).
+func TestBuildAgentBoxDimsStaleQuotaAndAnnotatesUpdatedCaption(t *testing.T) {
+	stale := AgentUsage{
+		AgentID: "agy", Name: "Antigravity", Installed: true, Authenticated: true,
+		Session:       &QuotaWindow{Name: "5h", UsedPercent: 42},
+		LastRefreshed: time.Now().Add(-3 * time.Hour),
+	}
+	fresh := AgentUsage{
+		AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+		Session:       &QuotaWindow{Name: "5h", UsedPercent: 42},
+		LastRefreshed: time.Now(),
+	}
+
+	staleBox := buildAgentBox(stale, agentRate{}, 60, false, false, false)
+	freshBox := buildAgentBox(fresh, agentRate{}, 60, false, false, false)
+
+	staleText := strings.Join(staleBox.lines, "\n")
+	freshText := strings.Join(freshBox.lines, "\n")
+
+	if !strings.Contains(staleText, "· stale") {
+		t.Errorf("expected the stale panel's updated caption to say '· stale', got:\n%s", stripANSI(staleText))
+	}
+	if strings.Contains(freshText, "· stale") {
+		t.Errorf("expected the fresh panel's updated caption to NOT say '· stale', got:\n%s", stripANSI(freshText))
+	}
+	if !strings.Contains(staleText, ansiOpen("dim-grey")+"5h") && !strings.Contains(stripANSI(staleText), "42%") {
+		t.Errorf("expected the stale panel's quota line to be present and dim-grey wrapped, got:\n%q", staleText)
+	}
+	for _, l := range staleBox.lines {
+		if lw := visLen(l); lw > staleBox.width-4 {
+			t.Errorf("stale line exceeds content width %d: %d %q", staleBox.width-4, lw, stripANSI(l))
+		}
 	}
 }

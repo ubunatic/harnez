@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"strings"
 	"time"
 )
 
@@ -99,6 +100,50 @@ func (a AgentUsage) IsStale(maxAge time.Duration) bool {
 		return false
 	}
 	return time.Since(a.LastRefreshed) > maxAge
+}
+
+// IsValueStale reports whether this agent's currently-displayed quota values
+// should be treated as not-reliably-live for UI purposes (issue 107): the
+// signal renderers use to dim a row's percentages/times, distinct from
+// IsStale's much coarser 7-day auto-hide gate (issue 101) and orthogonal to
+// issue 105's still-unimplemented per-collector fetch-status work (105 may
+// later add an explicit per-QuotaWindow "fetch mode" enum; until it does,
+// this is a per-agent-row verdict only — see the granularity note on
+// AgentUsage.Sources above and issue 105's Related section).
+//
+// True whenever any of:
+//   - QuotaFetchError is set: a live fetch was attempted this cycle and
+//     failed, so any quota values currently on screen were carried over from
+//     a previous frame or from disk rather than from this attempt
+//     (applyStaleQuota's " (stale)" window-label convention already marks
+//     this case explicitly in --watch; IsValueStale generalizes the same
+//     verdict to one-shot/--summary output, which has no previous frame);
+//   - a Sources entry is tagged "stale" — the pre-existing issue 032/086
+//     convention collectors already append to a Sources string when serving
+//     a stale on-disk cache or a usage-history fallback ("(stale)",
+//     "(cached, stale)", "(usage-history, stale)"). A plain "(cached)" tag
+//     (a fresh, non-stale cache hit) does NOT match this substring check and
+//     is correctly left live-styled.
+//   - LastRefreshed is non-zero and older than DefaultCacheStaleness — the
+//     same duration cacheOrLive itself uses to decide "old enough to attempt
+//     a live recollect instead of serving this snapshot as-is." Reusing it
+//     here means: once a displayed snapshot is old enough that the collector
+//     would already have tried to refresh it, treat it as not verifiably
+//     live rather than inventing a second, unrelated threshold.
+//
+// A zero LastRefreshed is "unknown," not "stale," matching IsStale's
+// contract — callers that construct an AgentUsage directly (tests, mostly)
+// without threading LastRefreshed through are not spuriously flagged.
+func (a AgentUsage) IsValueStale() bool {
+	if a.QuotaFetchError != "" {
+		return true
+	}
+	for _, s := range a.Sources {
+		if strings.Contains(s, "stale") {
+			return true
+		}
+	}
+	return a.IsStale(DefaultCacheStaleness)
 }
 
 // HasUsageData reports whether a collector actually found real local or
