@@ -375,7 +375,7 @@ func batchFetchBlobs(ctx context.Context, repoDir string, blobSHAs []string) (ma
 	return results, nil
 }
 
-// SparklineGlyphs defines the 8-level Unicode sparkline character scale.
+// SparklineGlyphs defines the 8-level Unicode lower block sparkline scale (U+2581 to U+2588).
 var SparklineGlyphs = []rune(" ▂▃▄▅▆▇█")
 
 // RenderSparkline maps a slice of integer values to a Unicode sparkline.
