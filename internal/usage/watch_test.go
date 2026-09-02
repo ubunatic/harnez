@@ -74,7 +74,7 @@ func TestFormatMemoryLines(t *testing.T) {
 		Geometry: "2x16G",
 		Ok:       true,
 	})
-	if got, want := stripANSI(ram), "ram (2x16G)      [██▌       ] 8.0/32.0G 25%"; got != want {
+	if got, want := stripANSI(ram), "ram (2x16G)      [▂] 8.0/32.0G 25%"; got != want {
 		t.Errorf("formatSystemMemoryLine = %q, want %q", got, want)
 	}
 
@@ -83,10 +83,9 @@ func TestFormatMemoryLines(t *testing.T) {
 		TotalMiB: 32 * 1024,
 		Ok:       true,
 	})
-	if got, want := stripANSI(ramFallback), "ram (32G)        [██▌       ] 8.0/32.0G 25%"; got != want {
+	if got, want := stripANSI(ramFallback), "ram (32G)        [▂] 8.0/32.0G 25%"; got != want {
 		t.Errorf("formatSystemMemoryLine fallback = %q, want %q", got, want)
 	}
-
 
 	gpu := formatGPUMemoryLines(GPU{
 		MemUsedMiB:   6 * 1024,
@@ -110,10 +109,8 @@ func TestFormatMemoryLines(t *testing.T) {
 	if !strings.Contains(got, "6.0/20.0G 30%") {
 		t.Errorf("formatGPUMemoryLines[0] = %q, want combined %q", got, "6.0/20.0G 30%")
 	}
-	// Two adjacent bracketed bars (VRAM then GTT), no bar-renderer other
-	// than rograph.RenderBar is expected to appear here.
-	if strings.Count(got, "[") != 2 || strings.Count(got, "]") != 2 {
-		t.Errorf("formatGPUMemoryLines[0] = %q, want two adjacent [..][..] bars", got)
+	if !strings.Contains(got, "[▃]") {
+		t.Errorf("formatGPUMemoryLines[0] = %q, want sparkline [▃]", got)
 	}
 }
 

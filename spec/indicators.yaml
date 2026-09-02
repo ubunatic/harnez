@@ -84,5 +84,5 @@ load-sparkline:
 load-charts:
   cpu: sparkline
   gpu: sparkline
-  ram: bar
-  vram: bar
+  ram: sparkline
+  vram: sparkline

@@ -48,10 +48,10 @@ func TestEmbeddedIndicatorsSpecIsValidAndExact(t *testing.T) {
 	if got, want := spec.LoadCharts.GPU, "sparkline"; got != want {
 		t.Errorf("load-charts.gpu = %q, want %q", got, want)
 	}
-	if got, want := spec.LoadCharts.RAM, "bar"; got != want {
+	if got, want := spec.LoadCharts.RAM, "sparkline"; got != want {
 		t.Errorf("load-charts.ram = %q, want %q", got, want)
 	}
-	if got, want := spec.LoadCharts.VRAM, "bar"; got != want {
+	if got, want := spec.LoadCharts.VRAM, "sparkline"; got != want {
 		t.Errorf("load-charts.vram = %q, want %q", got, want)
 	}
 	for name, sequence := range spec.Sequences {
@@ -247,11 +247,11 @@ func TestLoadChartModesAndAliases(t *testing.T) {
 	if got := emptySpec.GPUMode(); got != LoadChartSparkline {
 		t.Errorf("empty GPUMode = %q, want default %q", got, LoadChartSparkline)
 	}
-	if got := emptySpec.RAMMode(); got != LoadChartBar {
-		t.Errorf("empty RAMMode = %q, want default %q", got, LoadChartBar)
+	if got := emptySpec.RAMMode(); got != LoadChartSparkline {
+		t.Errorf("empty RAMMode = %q, want default %q", got, LoadChartSparkline)
 	}
-	if got := emptySpec.VRAMMode(); got != LoadChartBar {
-		t.Errorf("empty VRAMMode = %q, want default %q", got, LoadChartBar)
+	if got := emptySpec.VRAMMode(); got != LoadChartSparkline {
+		t.Errorf("empty VRAMMode = %q, want default %q", got, LoadChartSparkline)
 	}
 }
 

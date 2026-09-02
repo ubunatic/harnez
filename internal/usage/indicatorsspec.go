@@ -51,11 +51,11 @@ func (s loadChartsSpec) GPUMode() LoadChartMode {
 }
 
 func (s loadChartsSpec) RAMMode() LoadChartMode {
-	return parseLoadChartMode(s.RAM, LoadChartBar)
+	return parseLoadChartMode(s.RAM, LoadChartSparkline)
 }
 
 func (s loadChartsSpec) VRAMMode() LoadChartMode {
-	return parseLoadChartMode(s.VRAM, LoadChartBar)
+	return parseLoadChartMode(s.VRAM, LoadChartSparkline)
 }
 
 func parseLoadChartMode(val string, defaultMode LoadChartMode) LoadChartMode {
