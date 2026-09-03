@@ -271,12 +271,16 @@ func min(a, b int) int {
 }
 
 // TestDefaultLocalClassifier_ClassifyBatch_ValidResponse verifies that a
-// mocked local OpenAI-compatible endpoint's chat-completions response is
-// parsed into the expected ActivityCategory enum values, and that the
-// request never targets anything but the configured local BaseURL.
+// mocked local OpenAI-compatible endpoint's per-turn chat-completions replies
+// are parsed into the expected ActivityCategory enum values, that the
+// request never targets anything but the configured local BaseURL, and that
+// the message history sent on each turn correctly grows to include every
+// prior note and reply (the "one growing conversation" contract).
 func TestDefaultLocalClassifier_ClassifyBatch_ValidResponse(t *testing.T) {
 	notes := []string{"go test ./... failed", "some unrelated developer note"}
+	want := []ActivityCategory{CategoryTest, CategoryOther}
 
+	turn := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
 			t.Errorf("unexpected request path: %s", r.URL.Path)
@@ -285,18 +289,29 @@ func TestDefaultLocalClassifier_ClassifyBatch_ValidResponse(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request body: %v", err)
 		}
-		if len(req.Messages) != 1 || req.Messages[0].Role != "user" {
-			t.Fatalf("unexpected request messages: %+v", req.Messages)
+		wantLen := 2 + 2*turn // system + (user,assistant)*turn + this turn's user
+		if len(req.Messages) != wantLen {
+			t.Fatalf("turn %d: got %d messages, want %d: %+v", turn, len(req.Messages), wantLen, req.Messages)
 		}
-		catsJSON, _ := json.Marshal([]string{"test", "other"})
+		if req.Messages[0].Role != "system" {
+			t.Fatalf("turn %d: messages[0].Role = %q, want system", turn, req.Messages[0].Role)
+		}
+		last := req.Messages[len(req.Messages)-1]
+		wantContent := fmt.Sprintf("%d: %s", turn+1, notes[turn])
+		if last.Role != "user" || last.Content != wantContent {
+			t.Fatalf("turn %d: last message = %+v, want user %q", turn, last, wantContent)
+		}
+
+		reply := fmt.Sprintf("%d: %s", turn+1, want[turn])
 		resp := chatCompletionResponse{}
 		resp.Choices = []struct {
 			Message chatCompletionMessage `json:"message"`
 		}{
-			{Message: chatCompletionMessage{Role: "assistant", Content: "```json\n" + string(catsJSON) + "\n```"}},
+			{Message: chatCompletionMessage{Role: "assistant", Content: reply}},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
+		turn++
 	}))
 	defer srv.Close()
 
@@ -305,7 +320,6 @@ func TestDefaultLocalClassifier_ClassifyBatch_ValidResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClassifyBatch() unexpected error: %v", err)
 	}
-	want := []ActivityCategory{CategoryTest, CategoryOther}
 	if len(got) != len(want) {
 		t.Fatalf("ClassifyBatch() returned %d categories, want %d", len(got), len(want))
 	}
@@ -313,6 +327,9 @@ func TestDefaultLocalClassifier_ClassifyBatch_ValidResponse(t *testing.T) {
 		if cat != want[i] {
 			t.Errorf("ClassifyBatch()[%d] = %q, want %q", i, cat, want[i])
 		}
+	}
+	if turn != len(notes) {
+		t.Fatalf("server saw %d turns, want %d", turn, len(notes))
 	}
 }
 
@@ -335,15 +352,16 @@ func TestDefaultLocalClassifier_ClassifyBatch_ServerDown(t *testing.T) {
 }
 
 // TestDefaultLocalClassifier_ClassifyBatch_BadResponse verifies that a
-// malformed (non-JSON-array) model response yields an error rather than a
-// panic.
+// malformed (not "<n>: <category>") model reply for one turn falls back to
+// CategoryOther for that note alone, without erroring the whole batch — a
+// single wayward reply should never invalidate an otherwise-working session.
 func TestDefaultLocalClassifier_ClassifyBatch_BadResponse(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := chatCompletionResponse{}
 		resp.Choices = []struct {
 			Message chatCompletionMessage `json:"message"`
 		}{
-			{Message: chatCompletionMessage{Role: "assistant", Content: "not valid json at all"}},
+			{Message: chatCompletionMessage{Role: "assistant", Content: "not a valid turn reply at all"}},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -351,9 +369,52 @@ func TestDefaultLocalClassifier_ClassifyBatch_BadResponse(t *testing.T) {
 	defer srv.Close()
 
 	c := &DefaultLocalClassifier{BaseURL: srv.URL + "/v1", Timeout: 5 * time.Second}
-	_, err := c.ClassifyBatch(context.Background(), []string{"a note"})
-	if err == nil {
-		t.Fatal("ClassifyBatch() expected error for malformed model response, got nil")
+	got, err := c.ClassifyBatch(context.Background(), []string{"a note"})
+	if err != nil {
+		t.Fatalf("ClassifyBatch() unexpected error for malformed turn reply: %v", err)
+	}
+	if len(got) != 1 || got[0] != CategoryOther {
+		t.Fatalf("ClassifyBatch() = %v, want [%q] (graceful per-note fallback)", got, CategoryOther)
+	}
+}
+
+// TestDefaultLocalClassifier_ClassifyBatch_MidSessionFailure verifies that
+// when the endpoint answers the first turn but then fails partway through a
+// session, notes already classified are kept and only the remainder falls
+// back to CategoryOther — a partial session shouldn't discard prior work.
+func TestDefaultLocalClassifier_ClassifyBatch_MidSessionFailure(t *testing.T) {
+	notes := []string{"go test failed", "second note", "third note"}
+	turn := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if turn == 1 {
+			// Simulate the server dying after the first turn.
+			panic(http.ErrAbortHandler)
+		}
+		resp := chatCompletionResponse{}
+		resp.Choices = []struct {
+			Message chatCompletionMessage `json:"message"`
+		}{
+			{Message: chatCompletionMessage{Role: "assistant", Content: fmt.Sprintf("%d: test", turn+1)}},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+		turn++
+	}))
+	defer srv.Close()
+
+	c := &DefaultLocalClassifier{BaseURL: srv.URL + "/v1", Timeout: 2 * time.Second}
+	got, err := c.ClassifyBatch(context.Background(), notes)
+	if err != nil {
+		t.Fatalf("ClassifyBatch() unexpected error for mid-session failure: %v", err)
+	}
+	want := []ActivityCategory{CategoryTest, CategoryOther, CategoryOther}
+	if len(got) != len(want) {
+		t.Fatalf("ClassifyBatch() returned %d categories, want %d", len(got), len(want))
+	}
+	for i, cat := range got {
+		if cat != want[i] {
+			t.Errorf("ClassifyBatch()[%d] = %q, want %q", i, cat, want[i])
+		}
 	}
 }
 

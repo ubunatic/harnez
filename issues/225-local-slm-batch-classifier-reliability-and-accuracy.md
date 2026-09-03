@@ -73,26 +73,62 @@ currently invalidates cached categories when `defaultClassifierModel`, `classify
 the classifier implementation itself changes. Worth a schema addition (e.g. a `classifier_version`
 column) in a future pass if the model/prompt is expected to keep evolving.
 
-## 4. Possible Directions (not yet decided)
+## 5. Redesign: One Growing Session Instead of Batched JSON Arrays
 
-- Few-shot examples in `classifyPromptTemplate` for ambiguous/generic notes.
-- A `classifier_version`/model-tag column on `note_category_cache` so a model or prompt change
-  invalidates only the entries it should, instead of requiring a manual full clear.
+The user's suggestion (2026-09-04): instead of asking for a whole batch's categories back as one
+JSON array in a single request (the design that produced the ~20-60% count-mismatch failures
+above), hold one conversation per chunk — a system preamble once, then one note per turn
+(`"<n>: <note>"` → `"<n>: <category>"`), each turn appended to the message history resent on the
+next call.
+
+This eliminates the failure mode at its root rather than mitigating it: there is no array to close
+early or lose count of, so a bad reply costs only its own note (falls back to `CategoryOther`
+locally, session continues) instead of invalidating a whole chunk. Implemented in
+`DefaultLocalClassifier.ClassifyBatch` (`internal/telemetry/classify.go`); `batchSize` (now the
+conversation length before starting a fresh session, not an array size) raised from 20 to 60,
+since large batches are no longer risky — only bounded by the local model's context window.
+`classify_live_test.go`'s `TestDefaultLocalClassifier_LiveManual` verified a full 60-note session
+against the real DB and a live server: **zero format failures**, all 60 notes classified, ~1.3s/turn
+average (consistent with llama-server's prompt-prefix caching — confirmed earlier via its response
+`cached_tokens` field — keeping each turn's reprocessing to just the newly appended note/reply
+rather than the whole growing history).
+
+A subsequent full `--classify` export (262 distinct Tier-1 misses, existing 182 cache entries left
+in place) completed with **zero stderr warnings** — every batch's session ran to completion cleanly.
+Resulting distribution: `other` 3045, `edit` 159, `inspection` 131, `test` 104, `build` 99,
+`workflow` 61, `git` 54, `debug` 42, `config` 8 (total 3703 calls) — no runaway category, `edit`
+back in the same range as the Tier-1-only baseline (138) despite classifying far more notes.
+
+This resolves the reliability half of this ticket (§1-§2's count-mismatch problem). Accuracy
+(whether individual classifications are *correct*, not just well-formed) is still not independently
+verified against ground truth — see §6.
+
+## 6. Possible Directions (not yet decided)
+
+- Independently verify a sample of classifications against ground truth (have a human or a stronger
+  model re-label a random sample, compare) — nothing here has measured *accuracy*, only format
+  reliability and absence of runaway categories.
+- Few-shot examples in the system preamble for ambiguous/generic notes (e.g. `"clean success"`,
+  which has landed as `edit`, `build`, and `other` across different sessions/models in testing —
+  still not obviously stable for the most generic notes).
+- A `classifier_version`/model-tag column on `note_category_cache` so a model, prompt, or protocol
+  change (like this session's array→session redesign) invalidates only the entries it should,
+  instead of requiring a manual full clear (see §3 — this bit us twice in one afternoon).
 - An even larger cached-on-demand model (`mistral-nemo-12b-instruct-q4`, `qwen3.8-27b-instruct-q4`)
   traded against latency and first-run download size — neither is cached yet on this box.
-- Per-note (batch size 1) classification for notes below some ambiguity heuristic, at the cost of
-  more requests.
-- Treat count-mismatch responses as a stronger signal — e.g. retry once with a smaller sub-batch
-  before falling back to `CategoryOther`, rather than discarding the whole batch (qwen3-4b still hit
-  this ~20% of the time in testing, just less often than qwen2.5-3b's ~60%).
+- Now that per-note failures are cheap and isolated, consider whether `batchSize` (session length)
+  can grow further before hitting the context-window ceiling, trading fewer session restarts
+  (each restart resends the system preamble cold) against a single very long session's risk of
+  quality drift over many turns — not measured here.
 
-## 4. Acceptance Criteria
+## 7. Acceptance Criteria
 
 Not yet scoped — file first, decide direction in a follow-up pass. At minimum:
-1. Document (in this ticket or a `docs/studies/` note) a measured accuracy/coverage baseline for
-   the current model + prompt, so future changes can be compared against it.
-2. Decide whether the current behavior (silent-but-logged fallback, occasional wrong-but-plausible
-   labels) is acceptable for `activity_category`'s stated use as "safe for public visual
-   analytics," given 212's premise that the taxonomy is supposed to be safe/low-risk even when
-   wrong — or whether accuracy needs to improve before `--classify` should be recommended for
-   general use.
+1. Document (in this ticket or a `docs/studies/` note) a measured *accuracy* baseline (not just
+   format-reliability, which §5 now covers) for the current model + protocol, ideally against a
+   hand-labeled sample, so future changes can be compared against it.
+2. Decide whether the current behavior (silent-but-logged fallback, occasional plausible-but-wrong
+   labels, unverified accuracy) is acceptable for `activity_category`'s stated use as "safe for
+   public visual analytics," given 212's premise that the taxonomy is supposed to be safe/low-risk
+   even when wrong — or whether accuracy needs independent verification before `--classify` should
+   be recommended for general use.

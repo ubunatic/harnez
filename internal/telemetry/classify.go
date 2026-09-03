@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -305,14 +306,17 @@ func ClassifyNotes(ctx context.Context, db *DB, calls []ToolCall, classifier Not
 		}
 	}
 
-	// batchSize was 50 until a live-DB diagnostic (see classify_live_test.go,
-	// TestDefaultLocalClassifier_LiveManual) showed the small local model
-	// (qwen2.5-3b) falling into a repetition loop past ~20-30 notes/batch —
-	// it kept emitting "other" well beyond the requested count instead of
-	// closing the JSON array, so every batch of 50 failed and silently
-	// degraded to CategoryOther for the whole chunk. 20 was reliable in
-	// testing; keep headroom below the point where it broke down.
-	const batchSize = 20
+	// batchSize now bounds one DefaultLocalClassifier conversation's length
+	// (see its ClassifyBatch doc comment: one note per turn, not one JSON
+	// array per batch), so a bad reply only costs its own note rather than
+	// the whole chunk — the old failure mode this constant used to guard
+	// against (small models losing track and repeating entries past a large
+	// JSON array's requested length) no longer applies. This now just bounds
+	// how much conversation history accumulates before starting a fresh
+	// session, to stay well clear of the local model's serve context window
+	// (16384 tokens for qwen3-4b-instruct-2507-q4 on this box): 60 notes at
+	// a generous ~55 tokens/turn is ~3.3k tokens, comfortable headroom.
+	const batchSize = 60
 	classifiedMap := make(map[string]ActivityCategory, len(distinctNotes))
 	toCache := make(map[string]ActivityCategory, len(distinctNotes))
 
@@ -378,12 +382,28 @@ func sha256Hex(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// DefaultLocalClassifier implements NoteBatchClassifier by calling a local
+// DefaultLocalClassifier implements NoteBatchClassifier by holding one
+// growing conversation per ClassifyBatch call against a local
 // OpenAI-compatible chat-completions endpoint (e.g. `lmcoder serve`, which
-// exposes llama-server's standard /v1/chat/completions route). Note text is
-// only ever sent to BaseURL, which defaults to localhost — never to a cloud
-// API. If the local server is not running, ClassifyBatch returns an error and
-// the caller (ClassifyNotes) falls back to CategoryOther for the batch.
+// exposes llama-server's standard /v1/chat/completions route): a system
+// preamble once, then one note per turn ("<n>: <note>" -> "<n>: <category>"),
+// each turn appended to the message history sent on the next call. This
+// replaced an earlier design that asked for a whole batch's categories as one
+// JSON array in a single request — that failed unpredictably as batches grew
+// (the small local model would lose track and repeat entries instead of
+// closing the array). Per-turn requests are self-contained: a bad reply only
+// costs that one note (falls back to CategoryOther), never the whole batch.
+// Because each call resends the full growing history and llama-server caches
+// matching prompt prefixes (confirmed via its response `cached_tokens`
+// field), only the newly appended note/reply needs reprocessing each turn —
+// so this isn't N independent cold requests despite looking like one.
+//
+// Note text is only ever sent to BaseURL, which defaults to localhost — never
+// to a cloud API. If the local server is unreachable on the very first turn,
+// ClassifyBatch returns an error and the caller (ClassifyNotes) falls back to
+// CategoryOther for the whole batch, same as before; a failure after the
+// session is already underway instead falls back only the remaining
+// unclassified notes in that batch, logging its own warning.
 type DefaultLocalClassifier struct {
 	// BaseURL is the OpenAI-compatible API root, e.g. "http://localhost:8734/v1".
 	// Defaults to defaultClassifierBaseURL when empty.
@@ -412,18 +432,13 @@ type chatCompletionRequest struct {
 	Messages    []chatCompletionMessage `json:"messages"`
 	Temperature float64                 `json:"temperature"`
 	MaxTokens   int                     `json:"max_tokens"`
-	Stop        []string                `json:"stop,omitempty"`
 }
 
-// maxTokensPerNote bounds generation length so a small local model that fails
-// to terminate its JSON array cleanly (observed on batches of ~50 notes: the
-// response runs on until it exhausts the context window, taking minutes
-// instead of seconds and surfacing only as a misleading "context deadline
-// exceeded") fails fast with a parse error instead of hanging the request.
-// Longest category name is "inspection" (~3 tokens incl. quotes/comma); 8
-// tokens/note plus fixed overhead leaves comfortable headroom.
-const maxTokensPerNote = 16
-const maxTokensOverhead = 64
+// turnMaxTokens bounds a single turn's reply to "<n>: <category>" — the
+// longest category name is "inspection" (~2-3 tokens), plus the number and
+// punctuation, so this leaves comfortable headroom while still failing fast
+// if a turn goes off the rails instead of rambling for a long time.
+const turnMaxTokens = 16
 
 type chatCompletionMessage struct {
 	Role    string `json:"role"`
@@ -436,7 +451,7 @@ type chatCompletionResponse struct {
 	} `json:"choices"`
 }
 
-const classifyPromptTemplate = `You are a strict text classification model categorizing developer tool-call notes into one of exactly 9 canonical activity categories:
+const classifySystemPrompt = `You are a fast local classification tool for developer tool-call notes. There are exactly 9 canonical activity categories:
 - test (go test, pytest, jest, assertion checks)
 - build (go build, cargo, gcc, syntax/compiler runs)
 - edit (file edits, patches, refactors)
@@ -445,15 +460,23 @@ const classifyPromptTemplate = `You are a strict text classification model categ
 - debug (reproducing crashes, inspecting panics, traces)
 - workflow (agent handoff, issue tracking, protocol injection)
 - config (settings, hooks, dotfiles, environment setup)
-- other (unclassified fallback)
+- other (unclassified, generic, or ambiguous fallback)
 
-For each of the %[1]d note(s) in the JSON array below, determine the most fitting category.
-Respond with ONLY a JSON array of exactly %[1]d string(s) (one of the 9 lowercase category names above per note), in the same order as the input notes.
-Do not include markdown code fences, explanations, or any text other than the JSON array itself.
+I will send you one note per turn, in the form "<number>: <note text>". For
+each one, reply with EXACTLY "<number>: <category>" — the same number I sent,
+a colon, a space, and exactly one of the 9 lowercase category names above.
+Do not include markdown, punctuation beyond that single colon, explanations,
+or any other text. Wait for each line before replying; never anticipate or
+batch ahead.`
 
-Input notes:
-%[2]s`
+// turnReplyPattern matches a single "<number>: <category>" reply line,
+// tolerating minor whitespace/formatting drift from the model.
+var turnReplyPattern = regexp.MustCompile(`^\s*(\d+)\s*:\s*([a-zA-Z]+)\s*$`)
 
+// ClassifyBatch runs notes through one growing conversation (see the
+// DefaultLocalClassifier doc comment for why): a system preamble once, then
+// one request per note, each appending that note and the model's reply to
+// the message history sent on the next request.
 func (c *DefaultLocalClassifier) ClassifyBatch(ctx context.Context, notes []string) ([]ActivityCategory, error) {
 	if len(notes) == 0 {
 		return nil, nil
@@ -468,94 +491,95 @@ func (c *DefaultLocalClassifier) ClassifyBatch(ctx context.Context, notes []stri
 	}
 	timeout := c.Timeout
 	if timeout <= 0 {
-		// A 20-note batch against qwen3-4b-instruct-2507-q4 measured ~11s on
-		// this box's iGPU under light load; 45s leaves headroom for a
-		// contended GPU while still failing well before a human would give
-		// up waiting on `--classify`.
+		// Per-turn, not per-batch: a single reply is a couple of tokens, and
+		// llama-server caches the matching prompt prefix from the previous
+		// turn, so this is generous headroom even under GPU contention, not
+		// a budget that needs to scale with session length.
 		timeout = 45 * time.Second
 	}
-	cctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	notesJSON, err := json.Marshal(notes)
-	if err != nil {
-		return nil, fmt.Errorf("telemetry: marshal notes for classify prompt: %w", err)
-	}
-	prompt := fmt.Sprintf(classifyPromptTemplate, len(notes), string(notesJSON))
-
-	reqBody := chatCompletionRequest{
-		Model: model,
-		Messages: []chatCompletionMessage{
-			{Role: "user", Content: prompt},
-		},
-		Temperature: 0.0,
-		MaxTokens:   len(notes)*maxTokensPerNote + maxTokensOverhead,
-		// Stop at the array's closing bracket instead of relying solely on
-		// max_tokens — observed failure mode was the model repeating entries
-		// past the requested count rather than closing the array (see
-		// batchSize comment above).
-		Stop: []string{"]"},
-	}
-	reqJSON, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("telemetry: marshal chat completion request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(cctx, http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(reqJSON))
-	if err != nil {
-		return nil, fmt.Errorf("telemetry: build classifier request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: timeout}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		if cctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("telemetry: local classifier at %s did not respond within %s (server reachable but too slow, or the model failed to terminate its response — try a smaller batch, a smaller/faster model, or a longer Timeout): %w", baseURL, timeout, err)
+	messages := []chatCompletionMessage{{Role: "system", Content: classifySystemPrompt}}
+	out := make([]ActivityCategory, len(notes))
+
+	for i, note := range notes {
+		n := i + 1
+		messages = append(messages, chatCompletionMessage{Role: "user", Content: fmt.Sprintf("%d: %s", n, note)})
+
+		reqBody := chatCompletionRequest{
+			Model:       model,
+			Messages:    messages,
+			Temperature: 0.0,
+			MaxTokens:   turnMaxTokens,
 		}
-		return nil, fmt.Errorf("telemetry: local classifier endpoint at %s unreachable (is `lmcoder serve`/`lmcoder start` running?): %w", baseURL, err)
-	}
-	defer resp.Body.Close()
+		reqJSON, err := json.Marshal(reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: marshal chat completion request for note %d: %w", n, err)
+		}
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("telemetry: read classifier response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("telemetry: classifier endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
-	}
+		cctx, cancel := context.WithTimeout(ctx, timeout)
+		httpReq, err := http.NewRequestWithContext(cctx, http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(reqJSON))
+		if err != nil {
+			cancel()
+			return nil, fmt.Errorf("telemetry: build classifier request for note %d: %w", n, err)
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
 
-	var envelope chatCompletionResponse
-	if err := json.Unmarshal(respBody, &envelope); err != nil {
-		return nil, fmt.Errorf("telemetry: parse classifier json response: %w", err)
-	}
-	if len(envelope.Choices) == 0 {
-		return nil, fmt.Errorf("telemetry: classifier response contained no choices")
-	}
+		resp, err := client.Do(httpReq)
+		if err != nil {
+			deadlineExceeded := cctx.Err() == context.DeadlineExceeded
+			cancel()
+			var wrapped error
+			if deadlineExceeded {
+				wrapped = fmt.Errorf("telemetry: local classifier at %s did not respond to note %d within %s (server reachable but too slow, or overloaded): %w", baseURL, n, timeout, err)
+			} else {
+				wrapped = fmt.Errorf("telemetry: local classifier endpoint at %s unreachable on note %d (is `lmcoder serve`/`lmcoder start` running?): %w", baseURL, n, err)
+			}
+			if i == 0 {
+				// Nothing succeeded yet — let the caller (ClassifyNotes)
+				// apply its own whole-batch fallback and warning.
+				return nil, wrapped
+			}
+			// Session was already underway: keep what we classified so far,
+			// fall the rest back to CategoryOther, and warn locally instead
+			// of failing the whole batch.
+			fmt.Fprintf(os.Stderr, "harnez: warning: classifier session request failed on note %d/%d, falling back to %q for the remaining %d note(s) in this session: %v\n", n, len(notes), CategoryOther, len(notes)-i, wrapped)
+			for j := i; j < len(notes); j++ {
+				out[j] = CategoryOther
+			}
+			return out, nil
+		}
 
-	raw := strings.TrimSpace(envelope.Choices[0].Message.Content)
-	raw = strings.TrimPrefix(raw, "```json")
-	raw = strings.TrimPrefix(raw, "```")
-	raw = strings.TrimSuffix(raw, "```")
-	raw = strings.TrimSpace(raw)
-	// The "]" stop sequence above is excluded from the returned content by
-	// the OpenAI-compatible API convention, so re-append it before parsing.
-	if strings.HasPrefix(raw, "[") && !strings.HasSuffix(raw, "]") {
-		raw += "]"
-	}
+		respBody, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: read classifier response for note %d: %w", n, err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("telemetry: classifier endpoint returned status %d for note %d: %s", resp.StatusCode, n, strings.TrimSpace(string(respBody)))
+		}
 
-	var catStrs []string
-	if err := json.Unmarshal([]byte(raw), &catStrs); err != nil {
-		return nil, fmt.Errorf("telemetry: parse categories JSON array (model response was %d chars, possibly truncated by max_tokens=%d — raw response: %s): %w", len(raw), reqBody.MaxTokens, truncateForError(raw, 300), err)
-	}
-	if len(catStrs) != len(notes) {
-		return nil, fmt.Errorf("telemetry: classifier returned %d categories, want %d", len(catStrs), len(notes))
-	}
+		var envelope chatCompletionResponse
+		if err := json.Unmarshal(respBody, &envelope); err != nil {
+			return nil, fmt.Errorf("telemetry: parse classifier json response for note %d: %w", n, err)
+		}
+		if len(envelope.Choices) == 0 {
+			return nil, fmt.Errorf("telemetry: classifier response for note %d contained no choices", n)
+		}
 
-	out := make([]ActivityCategory, len(catStrs))
-	for i, s := range catStrs {
-		cat := ActivityCategory(strings.ToLower(strings.TrimSpace(s)))
+		reply := strings.TrimSpace(envelope.Choices[0].Message.Content)
+		messages = append(messages, chatCompletionMessage{Role: "assistant", Content: reply})
+
+		m := turnReplyPattern.FindStringSubmatch(reply)
+		if m == nil || m[1] != strconv.Itoa(n) {
+			fmt.Fprintf(os.Stderr, "harnez: warning: unexpected classifier reply for note %d, falling back to %q: %s\n", n, CategoryOther, truncateForError(reply, 200))
+			out[i] = CategoryOther
+			continue
+		}
+		cat := ActivityCategory(strings.ToLower(m[2]))
 		if !cat.IsValid() {
+			fmt.Fprintf(os.Stderr, "harnez: warning: classifier returned unknown category %q for note %d, falling back to %q\n", m[2], n, CategoryOther)
 			cat = CategoryOther
 		}
 		out[i] = cat
