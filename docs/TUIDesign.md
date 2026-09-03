@@ -41,7 +41,14 @@ not start at `⣿` or finish at a particular blank glyph.
 - Every frame in a fixed gauge slot must be one Unicode rune occupying **one
   terminal column**. Validate display width in addition to rune count; byte
   length is irrelevant. Test the whole styled output after stripping ANSI
-  escapes.
+  escapes (`runewidth.StringWidth(stripANSI(line))`).
+- Format dynamic labels and numeric/percentage fields with a fixed column
+  budget (e.g. `%3.0f%%` for 0–100%, or sized duration fields) so transitioning
+  from `99%` to `100%` never shifts or jitters adjacent visual columns.
+- For 2-samples-per-cell Braille sparklines, history series must be padded to
+  `2 * TargetWidth`, not `TargetWidth`. If a remote host or offline feed returns
+  fewer samples than the visual budget, pad with baseline zero glyphs so remote
+  and local charts maintain identical cell widths.
 - Avoid emoji clocks (`🕛…🕚`) and moon phases (`🌑…🌘`) in fixed-width layouts:
   their presentation and width vary by terminal and font, often to two cells.
 - U+2800 (`⠀`, Braille blank) is a real Braille pattern, not a space. Prefer a

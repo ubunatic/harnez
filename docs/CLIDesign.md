@@ -23,9 +23,18 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `mode`  | Local / Repo | Switch ConciseMode terseness level and sync AGENTS.local.md overlay |
 | `distill` | Shell / Hooks | Distill verbose command outputs for context conservation |
 | `release` | Local / Repo | Language-agnostic version bump, build, minisign signing, and forge publishing |
+| `find`  | Local / Repo | Fast repository entity discovery with short fuzzy-filter grammar (`issues`) |
 
 `apply` and `init` operate on disjoint flag surfaces by design. `apply` takes `-t`
 (Claude config dir); `init` takes `-d` (project dir). They cannot be confused.
+
+## Interactive discovery & bounded ingestion
+
+Commands designed for exploratory use in agentic loops or interactive terminals (e.g. `harnez find issues`) must respect context window budgets:
+
+1. **Default Bounded Limits**: Commands should paginate by default (e.g. `-n 10` for the last/top items) rather than dumping unbounded records. Provide an explicit `--all` escape hatch to uncap results when needed.
+2. **Forgiving Zero-Arg Defaults**: Running an exploratory command with zero arguments or filters should surface recent/high-level items instead of throwing a usage error.
+3. **Deterministic Ranking & Output**: Keep output parsable (e.g. TSV without ANSI escapes) with stable tie-breaking.
 
 ## Why the separation matters
 
