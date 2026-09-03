@@ -28,6 +28,23 @@ type indicatorsSpec struct {
 	ChartBackground       string                            `yaml:"chart-background"`
 	LoadChartPresentation string                            `yaml:"load-chart-presentation"`
 	UsageBarPresentation  string                            `yaml:"usage-bar-presentation"`
+	HeatBands             []float64                         `yaml:"heat-bands"`
+}
+
+// defaultHeatBands reproduces heatForegroundANSI's historical hardcoded
+// breakpoints (issue 223) so an indicators.yaml that omits heat-bands
+// renders byte-for-byte identically to before it became spec-driven.
+var defaultHeatBands = []float64{25, 50, 75}
+
+// heatBands returns the three ascending upper-bound percentages that split
+// the shared four-color heat ramp (chart-cool/chart-green/chart-yellow/
+// chart-warm) into its cool/green/yellow/warm bands. Falls back to
+// defaultHeatBands when the spec omits heat-bands.
+func (s indicatorsSpec) heatBands() []float64 {
+	if len(s.HeatBands) == 0 {
+		return defaultHeatBands
+	}
+	return s.HeatBands
 }
 
 // LoadChartPresentation selects whether load histories and their current
@@ -331,6 +348,19 @@ func parseIndicatorsYAML(data []byte) (indicatorsSpec, error) {
 	if presentation := strings.ToLower(strings.TrimSpace(spec.UsageBarPresentation)); presentation != "" && presentation != string(UsageBarMonochrome) && presentation != string(UsageBarHeat) {
 		return indicatorsSpec{}, fmt.Errorf("indicators spec: usage-bar-presentation: unknown mode %q", spec.UsageBarPresentation)
 	}
+	if len(spec.HeatBands) > 0 {
+		if len(spec.HeatBands) != 3 {
+			return indicatorsSpec{}, fmt.Errorf("indicators spec: heat-bands: need exactly 3 ascending values, got %d", len(spec.HeatBands))
+		}
+		for i, band := range spec.HeatBands {
+			if band < 0 || band > 100 {
+				return indicatorsSpec{}, fmt.Errorf("indicators spec: heat-bands[%d]: %v out of range [0, 100]", i, band)
+			}
+			if i > 0 && band <= spec.HeatBands[i-1] {
+				return indicatorsSpec{}, fmt.Errorf("indicators spec: heat-bands: values must be strictly ascending, got %v", spec.HeatBands)
+			}
+		}
+	}
 
 	return spec, nil
 }
@@ -452,15 +482,18 @@ func chartBackgroundANSI() string {
 }
 
 // heatForegroundANSI implements the btop-inspired, discrete four-band load
-// ramp. Values at the endpoints stay in their lower band: 0–25 cool blue,
-// >25–50 green, >50–75 yellow, and >75–100 warm red.
+// ramp. Values at the endpoints stay in their lower band: 0–band[0] cool
+// blue, >band[0]–band[1] green, >band[1]–band[2] yellow, and >band[2]–100
+// warm red. Band edges come from spec/indicators.yaml's heat-bands (issue
+// 223), defaulting to [25, 50, 75] when the spec omits it.
 func heatForegroundANSI(value float64) string {
+	bands := mustIndicators().heatBands()
 	switch {
-	case math.IsNaN(value) || value <= 25:
+	case math.IsNaN(value) || value <= bands[0]:
 		return colorSGR("chart-cool")
-	case value <= 50:
+	case value <= bands[1]:
 		return colorSGR("chart-green")
-	case value <= 75:
+	case value <= bands[2]:
 		return colorSGR("chart-yellow")
 	default:
 		return colorSGR("chart-warm")

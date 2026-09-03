@@ -104,6 +104,15 @@ load-chart-presentation: heat
 # `monochrome` to disable it.
 usage-bar-presentation: heat
 
+# heat-bands (issue 223) are the three ascending upper-bound percentages that
+# split the shared four-color heat ramp -- chart-cool/chart-green/
+# chart-yellow/chart-warm (spec/colors.yaml) -- into its bands: 0-band[0] is
+# cool, >band[0]-band[1] is green, >band[1]-band[2] is yellow, and
+# >band[2]-100 is warm. Shared by both load-chart-presentation and
+# usage-bar-presentation heat coloring. Omit to use the historical [25, 50,
+# 75] default.
+heat-bands: [25, 50, 75]
+
 # Presentation modes for hardware load indicators in `usage --watch`.
 # Supported modes: sparkline (or timeseries), braille (or btop), bar (or gauge).
 # Braille maps two chronological samples into each terminal cell, using its

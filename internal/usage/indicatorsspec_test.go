@@ -426,6 +426,48 @@ func TestHeatForegroundBands(t *testing.T) {
 	}
 }
 
+func TestHeatBandsDefaultToHistoricalValuesWhenUnset(t *testing.T) {
+	spec, err := parseIndicatorsYAML([]byte(validIndicatorsFixture + "chart-background: panel-bg\nload-chart-presentation: monochrome\nusage-bar-presentation: heat\n"))
+	if err != nil {
+		t.Fatalf("parse spec without heat-bands: %v", err)
+	}
+	if got, want := spec.heatBands(), defaultHeatBands; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("heatBands() = %v, want default %v", got, want)
+	}
+}
+
+func TestHeatBandsCustomValuesResolveAndValidate(t *testing.T) {
+	spec, err := parseIndicatorsYAML([]byte(validIndicatorsFixture + "chart-background: panel-bg\nload-chart-presentation: monochrome\nusage-bar-presentation: heat\nheat-bands: [10, 40, 90]\n"))
+	if err != nil {
+		t.Fatalf("parse spec with custom heat-bands: %v", err)
+	}
+	if got, want := spec.heatBands(), []float64{10, 40, 90}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("heatBands() = %v, want %v", got, want)
+	}
+
+	for _, tt := range []struct {
+		name string
+		data string
+		want string
+	}{
+		{"wrong count", "heat-bands: [10, 90]\n", "need exactly 3 ascending values"},
+		{"out of range low", "heat-bands: [-1, 40, 90]\n", "out of range"},
+		{"out of range high", "heat-bands: [10, 40, 101]\n", "out of range"},
+		{"not ascending", "heat-bands: [40, 10, 90]\n", "strictly ascending"},
+		{"duplicate", "heat-bands: [25, 25, 75]\n", "strictly ascending"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseIndicatorsYAML([]byte(validIndicatorsFixture + "chart-background: panel-bg\nload-chart-presentation: monochrome\nusage-bar-presentation: heat\n" + tt.data))
+			if err == nil {
+				t.Fatal("parseIndicatorsYAML succeeded, want validation error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("parseIndicatorsYAML error = %q, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadChartModesAndAliases(t *testing.T) {
 	spec := loadChartsSpec{
 		CPU:  "timeseries",

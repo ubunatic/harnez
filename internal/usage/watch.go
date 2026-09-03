@@ -36,6 +36,12 @@ const rateHistoryLen = 12
 const minBoxWidth = 34
 const maxTotalWidth = 120
 
+// compactBarWidth is the fixed cell width of a quota/usage bar rendered
+// inline in a compact row (all-usage rows, model-group rows, etc.), as
+// opposed to a full box's own bar width. Named so the seven call sites that
+// need it stay in lockstep -- see issue 223.
+const compactBarWidth = 4
+
 // maxPanelContentWidth caps every panel's *declared* preferred width, so
 // truncation is a single deliberate policy applied consistently across all
 // panel types (Claude/AGY/Codex, All Usage, History, Processes, Load)
@@ -797,9 +803,9 @@ func formatAllUsageTableLineWithMidWidth(label string, windows []QuotaWindow, co
 	d2 := compactDurationText(w2)
 
 	b1opts := usageBarOptionsWithPresentation(presentation, w1.UsedPercent)
-	b1opts.Width = 4
+	b1opts.Width = compactBarWidth
 	b2opts := usageBarOptionsWithPresentation(presentation, w2.UsedPercent)
-	b2opts.Width = 4
+	b2opts.Width = compactBarWidth
 	b1 := rograph.RenderBar(w1.UsedPercent, b1opts)
 	b2 := rograph.RenderBar(w2.UsedPercent, b2opts)
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
@@ -872,7 +878,7 @@ func formatAllUsageSingleWindowLineWithMidWidth(label string, w QuotaWindow, con
 	d1 := compactDurationText(w)
 
 	b1opts := usageBarOptionsWithPresentation(presentation, w.UsedPercent)
-	b1opts.Width = 4
+	b1opts.Width = compactBarWidth
 	b1 := rograph.RenderBar(w.UsedPercent, b1opts)
 	b2 := blankBarPlaceholder()
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
@@ -1136,7 +1142,7 @@ func formatGPUMemoryLines(g GPU) []string {
 			chart = fmt.Sprintf("[%s][%s]", watchPercentSparkline(vramSeries, 4, mode), watchPercentSparkline(gttSeries, 4, mode))
 		} else {
 			barOpts := watchLoadBarOptions(vramPct)
-			barOpts.Width = 4
+			barOpts.Width = compactBarWidth
 			chart = rograph.RenderBar(vramPct, barOpts)
 			barOpts.ForegroundANSI = ""
 			if mustIndicators().chartPresentation() == LoadChartHeat {
@@ -1438,7 +1444,7 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 		}
 		lbl := rograph.PadLabel(label, labelWidth)
 		barOpts := watchUsageBarOptions(w.UsedPercent)
-		barOpts.Width = 4
+		barOpts.Width = compactBarWidth
 		bar := rograph.RenderBar(w.UsedPercent, barOpts)
 		line := fmt.Sprintf("%s %s %s%s", lbl, bar, padWatchUsagePercent(w.UsedPercent, 3), resetStr)
 		if visLen(line) > contentW {
@@ -1471,9 +1477,9 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 
 	lbl := rograph.PadLabel(label, labelWidth)
 	b1opts := watchUsageBarOptions(w1.UsedPercent)
-	b1opts.Width = 4
+	b1opts.Width = compactBarWidth
 	b2opts := watchUsageBarOptions(w2.UsedPercent)
-	b2opts.Width = 4
+	b2opts.Width = compactBarWidth
 	b1 := rograph.RenderBar(w1.UsedPercent, b1opts)
 	b2 := rograph.RenderBar(w2.UsedPercent, b2opts)
 

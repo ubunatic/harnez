@@ -1,6 +1,6 @@
 # 223 — Spec-driven usage-bar heat thresholds and a named compact-bar-width constant
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Cleanup
@@ -78,3 +78,36 @@ inside `internal/usage` with no rograph boundary violation.
 - `compactBarWidth` (or equivalent name) replaces the repeated `Width = 4`
   literals in `internal/usage/watch.go`.
 - `go test ./...`, `make check`, `make install` pass.
+
+## 5. Resolution
+
+- `internal/usage/watch.go`: added `const compactBarWidth = 4` next to the
+  other layout constants (`minBoxWidth`, `maxTotalWidth`) and replaced all
+  7 inline `.Width = 4` call sites with it.
+- `internal/usage/indicatorsspec.go`: added `indicatorsSpec.HeatBands
+  []float64` (`yaml: "heat-bands"`), a `defaultHeatBands = []float64{25, 50,
+  75}` fallback, and `indicatorsSpec.heatBands()` resolving one or the
+  other. `parseIndicatorsYAML` validates an optional `heat-bands`: exactly 3
+  values, each in [0, 100], strictly ascending. `heatForegroundANSI` now
+  reads its band edges from `mustIndicators().heatBands()` instead of
+  hardcoded `25`/`50`/`75` literals; the color names it maps to
+  (`chart-cool`/`chart-green`/`chart-yellow`/`chart-warm`) were already
+  spec-driven via `colorSGR`.
+- `spec/indicators.yaml` / `spec/schemas/indicators.schema.json`: documented
+  and shipped `heat-bands: [25, 50, 75]` (the historical default, so
+  existing rendering is byte-for-byte unchanged) plus schema validation
+  (array of exactly 3 numbers, 0-100).
+- Also folded in the two doc-only nits noted in the audit: fixed
+  `internal/rograph/options.go`'s stale `BarOptions.SubChar` doc comment
+  (it described the pre-issue-220 fill/empty-only gate; the real gate also
+  accepts any caller-supplied `SubCharacterGlyphs`) and added a
+  cross-reference in `subCharacterFill`'s doc comment distinguishing it from
+  the unrelated `brailleGlyph`/`SparklineBraille` Braille renderer in the
+  same file.
+- Tests added: `TestHeatBandsDefaultToHistoricalValuesWhenUnset`,
+  `TestHeatBandsCustomValuesResolveAndValidate` (custom bands resolve
+  correctly; wrong count, out-of-range, non-ascending, and duplicate values
+  all rejected with clear errors) in `internal/usage/indicatorsspec_test.go`.
+  The pre-existing `TestHeatForegroundBands` continues to pass unchanged
+  against the embedded spec, confirming byte-for-byte default reproduction.
+- `go test ./...`, `make check`, and `make install` all pass.

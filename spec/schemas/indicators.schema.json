@@ -69,6 +69,12 @@
       "type": "string",
       "enum": ["monochrome", "heat"]
     },
+    "heat-bands": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"type": "number", "minimum": 0, "maximum": 100}
+    },
     "load-charts": {
       "type": "object",
       "properties": {
