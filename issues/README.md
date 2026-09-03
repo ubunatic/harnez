@@ -217,3 +217,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 214 | [214-add-256-color-heat-palette-option-for-charts.md](214-add-256-color-heat-palette-option-for-charts.md) | Add 256-color heat palette option for charts | Open |
 | 215 | [215-llm-backfill-and-reclassification-mode-for-telemetry-tool-notes.md](215-llm-backfill-and-reclassification-mode-for-telemetry-tool-notes.md) | LLM Backfill and Reclassification Mode for Telemetry Tool Notes | Open |
 | 216 | [216-switch-telemetry-classifier-from-claude-cli-to-lmcoder-local-slm.md](216-switch-telemetry-classifier-from-claude-cli-to-lmcoder-local-slm.md) | Switch Telemetry Note Classifier from Claude CLI to Local SLM via `lmcoder` | Open |
+| 217 | [217-add-n-limit-and-all-flag-to-harnez-find-issues.md](217-add-n-limit-and-all-flag-to-harnez-find-issues.md) | Add -n Limit (Default: 10) and --all Flag to harnez find issues | Open |
