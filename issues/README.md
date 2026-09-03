@@ -212,4 +212,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 209 | [209-move-agy-hooks-management-into-harnez-apply.md](209-move-agy-hooks-management-into-harnez-apply.md) | Move `agy-hooks` Management into `harnez apply` | Open |
 | 210 | [210-make-low-nonzero-braille-load-values-visible.md](210-make-low-nonzero-braille-load-values-visible.md) | Make low nonzero Braille load values visible | In Progress |
 | 211 | [211-adopt-btop-style-heat-colored-charts-with-a-unified-background.md](211-adopt-btop-style-heat-colored-charts-with-a-unified-background.md) | Adopt btop-style heat-colored charts with a unified background | In Review |
-| 212 | [212-taxonomic-classification-of-telemetry-tool-notes.md](212-taxonomic-classification-of-telemetry-tool-notes.md) | Taxonomic Classification of Telemetry Tool Notes for Safe Visual Analytics | Open |
+| 212 | [212-taxonomic-classification-of-telemetry-tool-notes.md](212-taxonomic-classification-of-telemetry-tool-notes.md) | Taxonomic Classification of Telemetry Tool Notes for Safe Visual Analytics | Closed |

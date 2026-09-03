@@ -1,6 +1,6 @@
 # 212 — Taxonomic Classification of Telemetry Tool Notes for Safe Visual Analytics
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature / Telemetry
@@ -120,7 +120,8 @@ In `harnez usage export`:
 
 ## 4. Acceptance Criteria
 
-1. Fast rule classifier in `internal/telemetry` tags tool calls without adding measurable latency (< 1ms).
-2. No row-by-row LLM calls: any model classification is chunked, opt-in, and cached by SHA-256 hash.
-3. `harnez usage export` includes the safe `activity_category` enum field.
-4. Unit tests prove that secret strings (tokens, paths, client names) in the note are never exposed in `activity_category`.
+- [x] Fast rule classifier in `internal/telemetry` tags tool calls without adding measurable latency (< 1ms).
+- [x] No row-by-row LLM calls: any model classification is chunked, opt-in, and cached by SHA-256 hash.
+- [x] `harnez usage export` includes the safe `activity_category` enum field.
+- [x] Unit tests prove that secret strings (tokens, paths, client names) in the note are never exposed in `activity_category`.
+
