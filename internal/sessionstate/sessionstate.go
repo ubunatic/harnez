@@ -181,6 +181,11 @@ func rateGapIdleDuration() time.Duration {
 // definition: exit_code != 0 OR score <= 2) that have gone unrated since
 // the last `harnez rate` call — see internal/telemetry's
 // UnratedFailureCount, which sessionTipHook queries and passes in here.
+// Issue 226: a shell command the agent ran expecting it to fail (see
+// cmd/harnez/exec.go's HARNEZ_EXPECT_FAILURE convention) is excluded from
+// this count at the telemetry layer (UnratedFailureCount itself skips
+// telemetry.ExpectedFailureCallType rows) — GapTip below never has to know
+// about that distinction, it just sees a smaller/zero unratedFailures.
 // sessionstate itself never talks to internal/telemetry directly (it has
 // no DB dependency and stays a pure, easily-unit-tested package); the
 // count crossing this package's boundary as a plain int keeps that

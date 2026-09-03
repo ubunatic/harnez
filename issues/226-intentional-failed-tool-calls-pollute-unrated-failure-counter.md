@@ -1,6 +1,12 @@
 # 226 — Intentionally-Failed Tool Calls Pollute the Unrated-Failure Counter
 
-**Status**: Open
+**Status**: Closed — resolved: implemented both proposed directions. Direction 1
+(docs-only `|| true`/`|| echo` convention) documented in the `tool-feedback-protocol`
+skill content (`config.yaml`). Direction 2 added a `HARNEZ_EXPECT_FAILURE=1` command
+prefix that `harnez exec` detects and records as `call_type=shell-expected`
+(`telemetry.ExpectedFailureCallType`) — true exit code always preserved/returned,
+excluded from `GroupStats.FailureCount` and `UnratedFailureCount`. See section 4 below
+for the concrete design decisions.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feedback / Tool Feedback Protocol
@@ -61,3 +67,58 @@ Not yet scoped — pick a direction (or both) in a follow-up pass. At minimum:
    accountability.
 3. Downstream analytics that currently read failure counts as an agent/tool-quality signal should
    be able to exclude calls marked this way, if direction 2 is chosen.
+
+## 4. Resolution — Both Directions Implemented
+
+### Direction 1 (docs-only)
+
+Added a paragraph + two examples to the `tool-feedback-protocol` skill's `content:` block in
+`config.yaml` (the single source of truth embedded into the `harnez apply`-installed
+`~/.claude/skills/tool-feedback-protocol/SKILL.md`), right after the `--ok` heartbeat
+explanation: wrap a command expected to fail so the *wrapping* call's own exit code is 0
+(`cmd || echo "expected failure: exit=$?"`), which `harnez exec` records as `exit_code=0`,
+keeping it out of `FailureCount`/`UnratedFailureCount` with zero code changes. Cross-referenced
+against direction 2 for when the real exit code must still reach the caller.
+
+### Direction 2 (tracker-side escape hatch)
+
+**Storage mechanism — reused `call_type`, not a new column.** `internal/telemetry/schema.go`
+has no migration framework by design (`schemaVersion` bump forces a "delete the file" reset, no
+in-place `ALTER TABLE` — see its doc comment); a new boolean column would force every existing
+user's local telemetry DB to be discarded on upgrade for what is fundamentally a classification
+value. `call_type` (`internal`/`heartbeat`/`shell`) is already the established "how should this
+row be read" discriminator with an existing exclusion pattern in both
+`GroupStats.FailureCount`'s SQL and `UnratedFailureCount`'s `call_type NOT IN (...)` clause, so a
+fourth value — `telemetry.ExpectedFailureCallType` = `"shell-expected"` — composes directly into
+both without new columns or a schema version bump. `exit_code` is never faked: the row still
+stores the command's true exit code, only `call_type` differs from the normal `"shell"` rows.
+
+**Detection mechanism — env var, but detected from command *text*, not process env, for the
+hook-rewritten path.** The issue's framing (`cmd/harnez/exec.go`'s execution stage "already has
+access to the full environment the child inherits") undersells one real wrinkle discovered while
+implementing: because the PreToolUse hook wraps every Bash call as
+`harnez exec --tool Bash -- bash -c '<original command>'`, an agent-typed
+`HARNEZ_EXPECT_FAILURE=1 <command>` prefix lives *inside* that quoted script string — it is a
+shell-level assignment scoped to the inner `bash -c`'s own execution, and never reaches `harnez
+exec`'s own `os.Environ()`. `detectExpectFailure` (`cmd/harnez/exec.go`) therefore checks two
+independent signals: `opts.Getenv(HARNEZ_EXPECT_FAILURE)` for direct/scripted `harnez exec`
+invocations where the var genuinely is in the process's own env, and a regex
+(`expectFailureCmdRE`) matching a leading `HARNEZ_EXPECT_FAILURE=1`/`=true` assignment (allowing
+other leading `VAR=value` assignments first) against each spawned arg, which is what actually
+catches the normal agent-typed-command path. Both are documented inline so a future reader isn't
+surprised the "environment" half of the mechanism is the minority case.
+
+**No parallel `--expected` flag added to `harnez rate`.** `harnez rate`'s score is already a
+first-person, at-call-time judgment the agent enters directly — there is no mechanical
+after-the-fact reclassification step to guard against the way there is for a shell exit code
+(the agent choosing to score something a 4 instead of a 1 *is* the "declare intent at call time"
+mechanism already). AC2's retroactive-laundering concern is specific to direction 2's exec path;
+extending it to `rate` would add surface area without closing a real gap.
+
+**Files changed**: `internal/telemetry/query.go` (`ExpectedFailureCallType` const,
+`aggregateGroupedBy`/`UnratedFailureCount` exclusion), `cmd/harnez/exec.go`
+(`expectFailureEnv`/`expectFailureCmdRE`/`detectExpectFailure`, `execCall.ExpectFailure`,
+`recordExecTelemetry` call_type selection), `internal/sessionstate/sessionstate.go` (doc comment
+sync), `config.yaml` (direction 1 doc + direction 2 mention). Tests added in
+`internal/telemetry/telemetry_test.go`, `internal/telemetry/unratedfailures_test.go`,
+`cmd/harnez/exec_test.go`.

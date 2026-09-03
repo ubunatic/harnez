@@ -282,6 +282,158 @@ func TestRunExecWrapper_TelemetryWriteNeverBlocksCommand(t *testing.T) {
 	}
 }
 
+// TestRunExecWrapper_ExpectFailureRecordsExpectedCallTypeAndTrueExitCode
+// covers issue 226 direction 2 end-to-end: a command whose text carries a
+// leading HARNEZ_EXPECT_FAILURE=1 assignment (the shape the PreToolUse
+// hook's rewritten `bash -c '<original command>'` produces) must still
+// return/record the command's real exit code — never faked or swallowed —
+// while the telemetry row's call_type is classified as
+// telemetry.ExpectedFailureCallType instead of "shell".
+func TestRunExecWrapper_ExpectFailureRecordsExpectedCallTypeAndTrueExitCode(t *testing.T) {
+	opts := testExecOptions(t)
+	opts.InsertTimeout = 2 * time.Second
+
+	var out, errOut bytes.Buffer
+	code, err := runExecWrapper(
+		[]string{"bash", "-c", "HARNEZ_EXPECT_FAILURE=1 sh -c 'exit 7'"},
+		opts, strings.NewReader(""), &out, &errOut,
+	)
+	if err != nil {
+		t.Fatalf("runExecWrapper() error = %v", err)
+	}
+	if code != 7 {
+		t.Fatalf("exit code = %d, want 7 (true exit code, never faked)", code)
+	}
+
+	db, err := telemetry.Open(opts.DBPath)
+	if err != nil {
+		t.Fatalf("Open telemetry db: %v", err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{CallType: telemetry.ExpectedFailureCallType})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 shell-expected row, got %d", len(rows))
+	}
+	if rows[0].ExitCode == nil || *rows[0].ExitCode != 7 {
+		t.Errorf("exit_code = %v, want 7", rows[0].ExitCode)
+	}
+
+	// The plain "shell" call_type must not also carry this row.
+	plain, err := db.Query(telemetry.Filter{CallType: "shell"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(plain) != 0 {
+		t.Errorf("expected 0 plain shell rows, got %d", len(plain))
+	}
+}
+
+// TestRunExecWrapper_UnmarkedFailureStillRecordsShell is the regression
+// guard alongside the test above: an ordinary failing command with no
+// HARNEZ_EXPECT_FAILURE marker keeps being recorded as call_type=shell,
+// exactly as before issue 226.
+func TestRunExecWrapper_UnmarkedFailureStillRecordsShell(t *testing.T) {
+	opts := testExecOptions(t)
+	opts.InsertTimeout = 2 * time.Second
+
+	var out, errOut bytes.Buffer
+	code, err := runExecWrapper(
+		[]string{"bash", "-c", "sh -c 'exit 7'"},
+		opts, strings.NewReader(""), &out, &errOut,
+	)
+	if err != nil {
+		t.Fatalf("runExecWrapper() error = %v", err)
+	}
+	if code != 7 {
+		t.Fatalf("exit code = %d, want 7", code)
+	}
+
+	db, err := telemetry.Open(opts.DBPath)
+	if err != nil {
+		t.Fatalf("Open telemetry db: %v", err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{CallType: "shell"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 shell row, got %d", len(rows))
+	}
+	if rows[0].ExitCode == nil || *rows[0].ExitCode != 7 {
+		t.Errorf("exit_code = %v, want 7", rows[0].ExitCode)
+	}
+}
+
+// TestRunExecWrapper_ExpectFailureViaProcessEnv covers the direct/manual
+// invocation path: opts.Getenv(HARNEZ_EXPECT_FAILURE) set truthy, as would
+// happen for a scripted `HARNEZ_EXPECT_FAILURE=1 harnez exec --tool ... --`
+// call rather than one routed through the PreToolUse hook's bash -c wrap.
+func TestRunExecWrapper_ExpectFailureViaProcessEnv(t *testing.T) {
+	opts := testExecOptions(t)
+	opts.InsertTimeout = 2 * time.Second
+	opts.Getenv = func(k string) string {
+		if k == expectFailureEnv {
+			return "1"
+		}
+		return ""
+	}
+
+	var out, errOut bytes.Buffer
+	code, err := runExecWrapper([]string{"sh", "-c", "exit 3"}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil {
+		t.Fatalf("runExecWrapper() error = %v", err)
+	}
+	if code != 3 {
+		t.Fatalf("exit code = %d, want 3", code)
+	}
+
+	db, err := telemetry.Open(opts.DBPath)
+	if err != nil {
+		t.Fatalf("Open telemetry db: %v", err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{CallType: telemetry.ExpectedFailureCallType})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 shell-expected row, got %d", len(rows))
+	}
+}
+
+func TestDetectExpectFailure(t *testing.T) {
+	cases := []struct {
+		name string
+		opts execOptions
+		args []string
+		want bool
+	}{
+		{"no marker", execOptions{Getenv: func(string) string { return "" }}, []string{"bash", "-c", "curl example.com"}, false},
+		{"leading env assignment", execOptions{Getenv: func(string) string { return "" }}, []string{"bash", "-c", "HARNEZ_EXPECT_FAILURE=1 curl example.com"}, true},
+		{"leading env assignment, true value", execOptions{Getenv: func(string) string { return "" }}, []string{"bash", "-c", "HARNEZ_EXPECT_FAILURE=true curl example.com"}, true},
+		{"other var before it", execOptions{Getenv: func(string) string { return "" }}, []string{"bash", "-c", "FOO=bar HARNEZ_EXPECT_FAILURE=1 curl example.com"}, true},
+		{"not at start of command", execOptions{Getenv: func(string) string { return "" }}, []string{"bash", "-c", "curl example.com HARNEZ_EXPECT_FAILURE=1"}, false},
+		{"process env set", execOptions{Getenv: func(k string) string {
+			if k == expectFailureEnv {
+				return "1"
+			}
+			return ""
+		}}, []string{"git", "status"}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := detectExpectFailure(tc.opts, tc.args)
+			if got != tc.want {
+				t.Errorf("detectExpectFailure(%v) = %v, want %v", tc.args, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRunExecWrapper_MissingTool(t *testing.T) {
 	opts := testExecOptions(t)
 	opts.Tool = ""

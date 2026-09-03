@@ -116,11 +116,16 @@ type Stats struct {
 // ungrouped Aggregate, so the two are kept as distinct types rather than
 // risking the same field name silently meaning two different things.
 type GroupStats struct {
-	Key            string
-	Count          int64
-	AvgScore       float64 // 0 if no scored rows
-	ScoredCount    int64   // rows with a non-NULL score, denominator for AvgScore
-	FailureCount   int64   // rows with exit_code != 0 OR score <= 2
+	Key         string
+	Count       int64
+	AvgScore    float64 // 0 if no scored rows
+	ScoredCount int64   // rows with a non-NULL score, denominator for AvgScore
+	// FailureCount counts rows with exit_code != 0 OR score <= 2, excluding
+	// rows with call_type == ExpectedFailureCallType (issue 226): a shell
+	// command an agent ran expecting it to fail is real telemetry (its true
+	// exit_code is still stored) but isn't "failed agent/tool behavior" for
+	// this quality signal's purposes.
+	FailureCount   int64
 	TotalRawBytes  int64
 	TotalDistilled int64
 	AvgDurationMs  float64
@@ -136,20 +141,28 @@ func (d *DB) aggregateGroupedBy(column string, f Filter) ([]GroupStats, error) {
 	ctx, cancel := defaultContext()
 	defer cancel()
 
+	// The FailureCount CASE excludes ExpectedFailureCallType rows (issue
+	// 226): an intentionally-expected shell failure still has its true
+	// exit_code stored, but must not count toward this quality signal — see
+	// GroupStats.FailureCount's doc comment. args needs the bound param
+	// spliced in before the shared where args, matching the CASE's position
+	// in the SQL text.
+	queryArgs := append([]any{ExpectedFailureCallType}, args...)
 	rows, err := d.sql.QueryContext(ctx, `
 		SELECT
 			`+column+`,
 			COUNT(*),
 			AVG(score),
 			COUNT(score),
-			COUNT(CASE WHEN (exit_code IS NOT NULL AND exit_code != 0)
-			           OR (score IS NOT NULL AND score <= 2) THEN 1 END),
+			COUNT(CASE WHEN call_type != ?
+			           AND ((exit_code IS NOT NULL AND exit_code != 0)
+			                OR (score IS NOT NULL AND score <= 2)) THEN 1 END),
 			COALESCE(SUM(raw_bytes), 0),
 			COALESCE(SUM(distilled_bytes), 0),
 			AVG(duration_ms)
 		FROM tool_calls`+where+`
 		GROUP BY `+column+`
-		ORDER BY COUNT(*) DESC, `+column+` ASC`, args...)
+		ORDER BY COUNT(*) DESC, `+column+` ASC`, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: aggregate grouped by %s: %w", column, err)
 	}
@@ -258,6 +271,26 @@ const rateCallType = "internal"
 // cleanly.
 const HeartbeatCallType = "heartbeat"
 
+// ExpectedFailureCallType is the call_type value `harnez exec` writes for a
+// shell command an agent ran expecting it to fail (issue 226's direction
+// 2 — e.g. probing whether a server is down, deliberately reproducing a
+// bug) instead of the normal "shell" — see cmd/harnez/exec.go's
+// HARNEZ_EXPECT_FAILURE convention. The row still carries the command's
+// real exit_code (never faked) so ad-hoc queries/exports keep seeing the
+// truth; only the aggregate signals below (GroupStats.FailureCount,
+// UnratedFailureCount) treat it as excluded from "genuinely failed,"
+// mirroring rateCallType/HeartbeatCallType's own exclusion.
+//
+// Reusing call_type for this — rather than a new boolean column — was a
+// deliberate issue 226 design call: this schema has no migration
+// framework (schema.go's schemaVersion doc comment: a version bump forces
+// a "delete the file" reset, no in-place ALTER TABLE), so a new column
+// would force every existing user's local telemetry DB to be discarded on
+// upgrade. call_type is already the established "how was this row meant
+// to be read" discriminator (internal/heartbeat/shell), so a fourth value
+// composes with the existing exclusion pattern for free.
+const ExpectedFailureCallType = "shell-expected"
+
 // RateCallOverhead summarizes the measured per-call cost attributable to
 // `harnez rate` calls matching f — both failure ratings (call_type
 // "internal") and --ok heartbeats (call_type "heartbeat") count toward
@@ -360,7 +393,11 @@ type HeartbeatInfo struct {
 // far simpler and correct in the common case (fix-or-rate, then move on)
 // that issue 188 targets. call_type "internal"/"heartbeat" rows themselves
 // are excluded from the failure count: a rate call's own row is never the
-// failure being reported on.
+// failure being reported on. call_type "shell-expected"
+// (ExpectedFailureCallType) rows are excluded too (issue 226): a shell
+// command an agent ran expecting it to fail shouldn't trip this nag just
+// because it composes fine with GroupStats.FailureCount's plain mechanical
+// definition.
 func (d *DB) UnratedFailureCount(f Filter) (int64, error) {
 	rateFilter := f
 	rateFilter.CallType = rateCallType
@@ -384,13 +421,13 @@ func (d *DB) UnratedFailureCount(f Filter) (int64, error) {
 		failureFilter.Since = t.Add(time.Nanosecond) // strictly after the rate call itself
 	}
 	fWhere, fArgs := failureFilter.whereClause()
-	extra := "call_type NOT IN (?, ?) AND ((exit_code IS NOT NULL AND exit_code != 0) OR (score IS NOT NULL AND score <= 2))"
+	extra := "call_type NOT IN (?, ?, ?) AND ((exit_code IS NOT NULL AND exit_code != 0) OR (score IS NOT NULL AND score <= 2))"
 	if fWhere == "" {
 		fWhere = " WHERE " + extra
 	} else {
 		fWhere += " AND " + extra
 	}
-	fArgs = append(fArgs, rateCallType, HeartbeatCallType)
+	fArgs = append(fArgs, rateCallType, HeartbeatCallType, ExpectedFailureCallType)
 
 	ctx2, cancel2 := defaultContext()
 	defer cancel2()

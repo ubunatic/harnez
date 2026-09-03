@@ -149,6 +149,55 @@ func TestUnratedFailureCount_OnlyCountsFailuresAfterLastRate(t *testing.T) {
 	}
 }
 
+// TestUnratedFailureCount_ExpectedFailureExcluded covers issue 226: a
+// shell row marked call_type=ExpectedFailureCallType (the classification
+// cmd/harnez/exec.go writes for a HARNEZ_EXPECT_FAILURE=1-prefixed
+// command) is not counted, even though it carries a real non-zero
+// exit_code that would otherwise trip UnratedFailureCount.
+func TestUnratedFailureCount_ExpectedFailureExcluded(t *testing.T) {
+	db := openTestDB(t)
+	now := time.Now().UTC()
+
+	expected := execCall("sess-1", "Bash", nil, intPtr(1), now)
+	expected.CallType = ExpectedFailureCallType
+	if err := db.Insert(expected); err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+
+	n, err := db.UnratedFailureCount(Filter{SessionID: "sess-1"})
+	if err != nil {
+		t.Fatalf("UnratedFailureCount: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("UnratedFailureCount = %d, want 0 (expected failure excluded)", n)
+	}
+}
+
+// TestUnratedFailureCount_MixedExpectedAndRealFailures ensures the
+// exclusion is per-row: an expected-failure row sitting alongside a real,
+// unmarked failure must not mask the real one.
+func TestUnratedFailureCount_MixedExpectedAndRealFailures(t *testing.T) {
+	db := openTestDB(t)
+	now := time.Now().UTC()
+
+	expected := execCall("sess-1", "Bash", nil, intPtr(1), now)
+	expected.CallType = ExpectedFailureCallType
+	real := execCall("sess-1", "Bash", nil, intPtr(1), now.Add(time.Second))
+	for _, c := range []ToolCall{expected, real} {
+		if err := db.Insert(c); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+	}
+
+	n, err := db.UnratedFailureCount(Filter{SessionID: "sess-1"})
+	if err != nil {
+		t.Fatalf("UnratedFailureCount: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("UnratedFailureCount = %d, want 1 (only the unmarked real failure)", n)
+	}
+}
+
 func TestUnratedFailureCount_ScopedToSession(t *testing.T) {
 	db := openTestDB(t)
 	now := time.Now().UTC()

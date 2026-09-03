@@ -3,6 +3,12 @@
 // exit code, and records a call_type='shell' telemetry row. See
 // issues/118-harnez-exec-shell-interceptor.md.
 //
+// Issue 226: a command prefixed with HARNEZ_EXPECT_FAILURE=1 (see
+// expectFailureEnv/detectExpectFailure below) records call_type
+// telemetry.ExpectedFailureCallType instead of "shell" — its real exit
+// code is still preserved and stored, only the failure-signal
+// classification changes.
+//
 // Two-stage split per docs/HookRewritePattern.md (mirroring
 // distill.go's newDistillHookCmd/runDistillHook vs runDistillWrapper):
 //
@@ -25,6 +31,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -42,6 +49,61 @@ import (
 // comment: the wrapped command's own execution/exit must never be at the
 // mercy of a slow or hung DB write.
 const defaultExecInsertTimeout = 200 * time.Millisecond
+
+// expectFailureEnv is issue 226's direction-2 convention: an agent that
+// runs a shell command it deliberately expects to fail (probing whether a
+// server is down, reproducing a bug to observe its exact failure mode)
+// prefixes the command with this var so the resulting tool_calls row is
+// recorded with call_type=telemetry.ExpectedFailureCallType instead of
+// "shell" — excluded from GroupStats.FailureCount/UnratedFailureCount,
+// but never with a faked or swallowed exit code; see detectExpectFailure
+// and runExecWrapper's use of it below.
+//
+//	HARNEZ_EXPECT_FAILURE=1 curl -sf http://maybe-down-host/health
+const expectFailureEnv = "HARNEZ_EXPECT_FAILURE"
+
+// expectFailureCmdRE matches a leading HARNEZ_EXPECT_FAILURE=1 (or =true,
+// any case) shell-style assignment at the start of a command string,
+// optionally preceded by other leading VAR=value assignments — the shape
+// the PreToolUse hook's rewritten `bash -c '<original command>'` carries
+// when an agent types `HARNEZ_EXPECT_FAILURE=1 <command>` directly.
+var expectFailureCmdRE = regexp.MustCompile(`^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*` + expectFailureEnv + `=(1|[Tt][Rr][Uu][Ee])\b`)
+
+// detectExpectFailure reports whether args (the command runExecWrapper is
+// about to spawn) should be recorded as an intentionally-expected failure
+// per issue 226's direction 2. It checks two independent signals, since
+// this command never reaches this process's own environment the same way
+// twice depending on how it was invoked:
+//
+//   - opts.Getenv(expectFailureEnv): covers direct/manual `harnez exec`
+//     use, where the caller's own process environment already carries the
+//     var (e.g. a scripted `HARNEZ_EXPECT_FAILURE=1 harnez exec --tool
+//     ... --` invocation).
+//   - expectFailureCmdRE against each arg: covers the normal agent path.
+//     The agent never invokes `harnez exec` directly — the PreToolUse hook
+//     (runExecHook, below) has already rewritten the Bash tool call into
+//     `harnez exec ... -- bash -c '<original command>'` before this
+//     process starts, so an env-var assignment the agent typed at the
+//     front of their command lives inside args (the wrapped script text),
+//     not in this process's own os.Environ().
+//
+// This never changes the child's actual exit code — see runExecWrapper's
+// doc comment: only how the resulting telemetry row is classified.
+func detectExpectFailure(opts execOptions, args []string) bool {
+	getenv := opts.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	if v := getenv(expectFailureEnv); v == "1" || strings.EqualFold(v, "true") {
+		return true
+	}
+	for _, a := range args {
+		if expectFailureCmdRE.MatchString(a) {
+			return true
+		}
+	}
+	return false
+}
 
 func newExecCmd() *cobra.Command {
 	var toolFlag string
@@ -100,10 +162,10 @@ type execOptions struct {
 	Ticket  string
 	Distill string
 
-	Getenv        func(string) string // nil means os.Getenv
-	StateDir      string              // resolve.Session/Ticket state/lock dir override
-	DBPath        string              // telemetry DB path override; empty means telemetry.DefaultDBPath()
-	InsertTimeout time.Duration       // bound on waiting for the telemetry write; <=0 means defaultExecInsertTimeout
+	Getenv        func(string) string                                // nil means os.Getenv
+	StateDir      string                                             // resolve.Session/Ticket state/lock dir override
+	DBPath        string                                             // telemetry DB path override; empty means telemetry.DefaultDBPath()
+	InsertTimeout time.Duration                                      // bound on waiting for the telemetry write; <=0 means defaultExecInsertTimeout
 	Insert        func(dbPath string, call telemetry.ToolCall) error // nil means defaultInsertExecRow
 }
 
@@ -203,6 +265,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		DistilledBytes: distilledBytesPtr,
 		Score:          &score,
 		Note:           note,
+		ExpectFailure:  detectExpectFailure(opts, args),
 	})
 
 	return exitCode, nil
@@ -239,6 +302,13 @@ type execCall struct {
 	DistilledBytes *int64
 	Score          *int
 	Note           string
+	// ExpectFailure marks this row as an intentionally-expected failure
+	// (issue 226's HARNEZ_EXPECT_FAILURE convention, detected by
+	// detectExpectFailure) — recordExecTelemetry writes call_type
+	// telemetry.ExpectedFailureCallType instead of "shell" when true. The
+	// row's ExitCode is never altered by this flag; only the call_type
+	// classification changes.
+	ExpectFailure bool
 }
 
 // recordExecTelemetry makes the single best-effort, bounded attempt at
@@ -286,6 +356,10 @@ func recordExecTelemetry(opts execOptions, call execCall) {
 		}
 
 		exitCode := call.ExitCode
+		callType := "shell"
+		if call.ExpectFailure {
+			callType = telemetry.ExpectedFailureCallType
+		}
 		tc := telemetry.ToolCall{
 			SessionID:      sessionID,
 			TicketID:       ticketID,
@@ -293,7 +367,7 @@ func recordExecTelemetry(opts execOptions, call execCall) {
 			WorkingDir:     wd,
 			AgentID:        detectAgent("", opts.Getenv),
 			ToolName:       call.Tool,
-			CallType:       "shell",
+			CallType:       callType,
 			Score:          call.Score,
 			Note:           call.Note,
 			ExitCode:       &exitCode,

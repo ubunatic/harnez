@@ -267,6 +267,23 @@ skills:
       confirmation, kept out of failure-rate metrics. Don't call it proactively on a fixed
       schedule — only in response to the tip, so this stays rare.
 
+      Some commands are *expected* to fail — probing whether a server is down,
+      deliberately reproducing a bug, a negative-case test. Don't launder a real failure
+      into "expected" after the fact; declare the intent on the command itself, at call
+      time (issue 226):
+
+      - Cheapest, for any shell command: make the *wrapping* call's own exit code 0, e.g.
+        `curl -sf http://maybe-down-host/health || echo "expected failure: exit=$?"`.
+        `harnez exec` (the invisible `Bash` PreToolUse rewrite) records the wrapping
+        command's exit code, so it never enters `FailureCount`/`UnratedFailureCount` to
+        begin with — nothing else to do, and no `harnez rate` call needed either.
+      - If you need the command's real exit code preserved and returned (e.g. your own
+        `$?`-dependent logic downstream needs it), prefix instead:
+        `HARNEZ_EXPECT_FAILURE=1 curl -sf http://maybe-down-host/health`. `harnez exec`
+        detects the marker and records the row's call_type as an expected failure — the
+        true exit code is still returned to you and stored in telemetry, only the
+        failure-signal classification changes.
+
       Why this, and why now (not at session end): the score is a judgment only the acting
       agent can make in the moment — a mechanized PostToolUse hook can log that a call
       happened, but not whether it helped. Rating right after the call, while the outcome is

@@ -280,6 +280,38 @@ func TestAggregateByTool(t *testing.T) {
 	}
 }
 
+// TestAggregateByToolExcludesExpectedFailures covers issue 226: a shell
+// row marked call_type=ExpectedFailureCallType still has a non-zero
+// exit_code (a real, intentional failure) but must not count toward
+// GroupStats.FailureCount, unlike an otherwise-identical unmarked failure.
+func TestAggregateByToolExcludesExpectedFailures(t *testing.T) {
+	db := openTestDB(t)
+
+	expected := sampleCall("sess-1", "Bash", 5, 1)
+	expected.CallType = ExpectedFailureCallType
+	unmarked := sampleCall("sess-1", "Bash", 5, 1)
+	unmarked.CallType = "shell"
+	for _, c := range []ToolCall{expected, unmarked} {
+		if err := db.Insert(c); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+	}
+
+	groups, err := db.AggregateByTool(Filter{})
+	if err != nil {
+		t.Fatalf("AggregateByTool: %v", err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("len(groups) = %d, want 1", len(groups))
+	}
+	if groups[0].Count != 2 {
+		t.Errorf("Count = %d, want 2 (both rows still counted)", groups[0].Count)
+	}
+	if groups[0].FailureCount != 1 {
+		t.Errorf("FailureCount = %d, want 1 (only the unmarked failure)", groups[0].FailureCount)
+	}
+}
+
 func TestAggregateByAgent(t *testing.T) {
 	db := openTestDB(t)
 
