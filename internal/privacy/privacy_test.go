@@ -52,20 +52,20 @@ func TestScrubText_RedactsHomePathEmailAndToken(t *testing.T) {
 	got := ScrubText(raw)
 
 	for _, leaked := range []string{"/home/testuser", "testuser", "someone@example.com", "someone", "sk-ABCDEFGHIJ1234567890abcdefghij"} {
-		if contains(got, leaked) {
+		if strings.Contains(got, leaked) {
 			t.Errorf("ScrubText output still contains sensitive substring %q: %q", leaked, got)
 		}
 	}
-	if !contains(got, "Fixed bug in") {
+	if !strings.Contains(got, "Fixed bug in") {
 		t.Errorf("ScrubText dropped non-sensitive context, want it preserved: %q", got)
 	}
-	if !contains(got, "~") {
+	if !strings.Contains(got, "~") {
 		t.Errorf("ScrubText did not replace home path with ~: %q", got)
 	}
-	if !contains(got, "[redacted-email]") {
+	if !strings.Contains(got, "[redacted-email]") {
 		t.Errorf("ScrubText did not redact email: %q", got)
 	}
-	if !contains(got, "[redacted-token]") {
+	if !strings.Contains(got, "[redacted-token]") {
 		t.Errorf("ScrubText did not redact token: %q", got)
 	}
 }
@@ -74,17 +74,4 @@ func TestScrubText_EmptyIsEmpty(t *testing.T) {
 	if got := ScrubText(""); got != "" {
 		t.Errorf("ScrubText(\"\") = %q, want \"\"", got)
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && indexOf(s, substr) >= 0
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }
