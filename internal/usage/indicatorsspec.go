@@ -20,12 +20,23 @@ const indicatorsSpecPath = "spec/indicators.yaml"
 // references are resolved by parseIndicatorsYAML, before any renderer sees
 // the options, so internal/rograph stays independent of application specs.
 type indicatorsSpec struct {
-	Sequences     map[string]namedIndicatorSequence `yaml:"sequences"`
-	TimeoutSnake  indicatorReference                `yaml:"timeout-snake"`
-	UsageBar      usageBarSpec                      `yaml:"usage-bar"`
-	LoadSparkline glyphSequenceReference            `yaml:"load-sparkline"`
-	LoadCharts    loadChartsSpec                    `yaml:"load-charts"`
+	Sequences             map[string]namedIndicatorSequence `yaml:"sequences"`
+	TimeoutSnake          indicatorReference                `yaml:"timeout-snake"`
+	UsageBar              usageBarSpec                      `yaml:"usage-bar"`
+	LoadSparkline         glyphSequenceReference            `yaml:"load-sparkline"`
+	LoadCharts            loadChartsSpec                    `yaml:"load-charts"`
+	ChartBackground       string                            `yaml:"chart-background"`
+	LoadChartPresentation string                            `yaml:"load-chart-presentation"`
 }
+
+// LoadChartPresentation selects whether load histories and their current
+// percentage labels are plain monochrome or use the shared heat palette.
+type LoadChartPresentation string
+
+const (
+	LoadChartMonochrome LoadChartPresentation = "monochrome"
+	LoadChartHeat       LoadChartPresentation = "heat"
+)
 
 // LoadChartMode defines the visual presentation mode for load indicators.
 type LoadChartMode string
@@ -84,6 +95,20 @@ func validateLoadChartMode(field, val string) error {
 	default:
 		return fmt.Errorf("indicators spec: load-charts: %s: unknown mode %q", field, val)
 	}
+}
+
+func (s indicatorsSpec) chartBackgroundName() string {
+	if strings.TrimSpace(s.ChartBackground) == "" {
+		return "panel-bg"
+	}
+	return s.ChartBackground
+}
+
+func (s indicatorsSpec) chartPresentation() LoadChartPresentation {
+	if strings.EqualFold(strings.TrimSpace(s.LoadChartPresentation), string(LoadChartHeat)) {
+		return LoadChartHeat
+	}
+	return LoadChartMonochrome
 }
 
 type usageBarSpec struct {
@@ -218,6 +243,12 @@ func parseIndicatorsYAML(data []byte) (indicatorsSpec, error) {
 	if err := validateLoadChartMode("vram", spec.LoadCharts.VRAM); err != nil {
 		return indicatorsSpec{}, err
 	}
+	if strings.TrimSpace(spec.ChartBackground) != "" && spec.ChartBackground != "panel-bg" {
+		return indicatorsSpec{}, fmt.Errorf("indicators spec: chart-background: unknown color %q", spec.ChartBackground)
+	}
+	if presentation := strings.ToLower(strings.TrimSpace(spec.LoadChartPresentation)); presentation != "" && presentation != string(LoadChartMonochrome) && presentation != string(LoadChartHeat) {
+		return indicatorsSpec{}, fmt.Errorf("indicators spec: load-chart-presentation: unknown mode %q", spec.LoadChartPresentation)
+	}
 
 	return spec, nil
 }
@@ -304,7 +335,52 @@ func namedSequenceFrames(name, wantKind string) []string {
 }
 
 func watchBarOptions() rograph.BarOptions {
-	return barOptionsFromSpec(mustIndicators().UsageBar)
+	opts := barOptionsFromSpec(mustIndicators().UsageBar)
+	opts.BackgroundANSI = chartBackgroundANSI()
+	return opts
+}
+
+// watchLoadBarOptions adds the same heat foreground used by a colored history
+// and its adjacent current-value label. Generic quota bars retain their own
+// foreground policy while still inheriting the shared chart background.
+func watchLoadBarOptions(value float64) rograph.BarOptions {
+	opts := watchBarOptions()
+	if mustIndicators().chartPresentation() == LoadChartHeat {
+		opts.ForegroundANSI = heatForegroundANSI(value)
+	}
+	return opts
+}
+
+func chartBackgroundANSI() string {
+	return colorSGR(mustIndicators().chartBackgroundName())
+}
+
+// heatForegroundANSI implements the btop-inspired, discrete four-band load
+// ramp. Values at the endpoints stay in their lower band: 0–25 cool blue,
+// >25–50 green, >50–75 yellow, and >75–100 warm red.
+func heatForegroundANSI(value float64) string {
+	switch {
+	case math.IsNaN(value) || value <= 25:
+		return colorSGR("chart-cool")
+	case value <= 50:
+		return colorSGR("chart-green")
+	case value <= 75:
+		return colorSGR("chart-yellow")
+	default:
+		return colorSGR("chart-warm")
+	}
+}
+
+func watchLoadPercent(value float64) string {
+	return watchLoadPercentWithPresentation(mustIndicators().chartPresentation(), value)
+}
+
+func watchLoadPercentWithPresentation(presentation LoadChartPresentation, value float64) string {
+	label := fmt.Sprintf("%.0f%%", value)
+	if presentation != LoadChartHeat {
+		return label
+	}
+	return "\x1b[" + heatForegroundANSI(value) + "m" + label + "\x1b[0m"
 }
 
 // barOptionsFromSpec converts a parsed usage-bar spec into rograph.BarOptions.
@@ -336,14 +412,25 @@ func barOptionsFromSpec(spec usageBarSpec) rograph.BarOptions {
 }
 
 func watchPercentSparkline(values []float64, width int, modes ...LoadChartMode) string {
-	frames := mustIndicators().LoadSparkline.Frames
+	mode := LoadChartSparkline
+	if len(modes) > 0 {
+		mode = modes[0]
+	}
+	return rograph.RenderPercentSparkline(values, sparklineOptionsFromSpec(mustIndicators(), width, mode))
+}
+
+func sparklineOptionsFromSpec(spec indicatorsSpec, width int, mode LoadChartMode) rograph.SparklineOptions {
+	frames := spec.LoadSparkline.Frames
 	glyphs := make([]rune, len(frames))
 	for i, glyph := range frames {
 		glyphs[i] = []rune(glyph)[0]
 	}
-	opts := rograph.SparklineOptions{Width: width, Glyphs: glyphs, ANSI: true}
-	if len(modes) > 0 && modes[0] == LoadChartBraille {
+	opts := rograph.SparklineOptions{Width: width, Glyphs: glyphs, ANSI: true, BackgroundANSI: colorSGR(spec.chartBackgroundName())}
+	if mode == LoadChartBraille {
 		opts.Presentation = rograph.SparklineBraille
 	}
-	return rograph.RenderPercentSparkline(values, opts)
+	if spec.chartPresentation() == LoadChartHeat {
+		opts.ForegroundANSI = heatForegroundANSI
+	}
+	return opts
 }

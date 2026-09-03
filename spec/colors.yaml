@@ -11,7 +11,24 @@
 colors:
   panel-bg:
     title: "Panel background"
-    sgr: "100"
+    description: "Shared black chart field selected by indicators.yaml"
+    sgr: "40"
+  chart-cool:
+    title: "Chart cool"
+    description: "0–25% load-history and current percentage foreground"
+    sgr: "34"
+  chart-green:
+    title: "Chart green"
+    description: ">25–50% load-history and current percentage foreground"
+    sgr: "32"
+  chart-yellow:
+    title: "Chart yellow"
+    description: ">50–75% load-history and current percentage foreground"
+    sgr: "33"
+  chart-warm:
+    title: "Chart warm"
+    description: ">75–100% load-history and current percentage foreground"
+    sgr: "31"
   time-gauge-fg:
     title: "Debug time gauge foreground"
     sgr: "40"

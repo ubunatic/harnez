@@ -26,6 +26,11 @@ func TestEmbeddedColorsSpecIsValid(t *testing.T) {
 			t.Fatalf("expected embedded spec to define %q", name)
 		}
 	}
+	for _, name := range []string{"chart-cool", "chart-green", "chart-yellow", "chart-warm"} {
+		if _, ok := spec.Colors[name]; !ok {
+			t.Fatalf("expected embedded spec to define %q", name)
+		}
+	}
 
 	defer func() {
 		if r := recover(); r != nil {

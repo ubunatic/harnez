@@ -3,7 +3,7 @@
   "$id": "https://ubunatic.com/harnez/spec/schemas/indicators.schema.json",
   "title": "harnez usage --watch indicators",
   "type": "object",
-  "required": ["sequences", "timeout-snake", "usage-bar", "load-sparkline", "load-charts"],
+  "required": ["sequences", "timeout-snake", "usage-bar", "load-sparkline", "chart-background", "load-chart-presentation", "load-charts"],
   "properties": {
     "sequences": {
       "type": "object",
@@ -46,6 +46,14 @@
         "sequence": {"type": "string", "minLength": 1}
       },
       "additionalProperties": false
+    },
+    "chart-background": {
+      "type": "string",
+      "enum": ["panel-bg"]
+    },
+    "load-chart-presentation": {
+      "type": "string",
+      "enum": ["monochrome", "heat"]
     },
     "load-charts": {
       "type": "object",

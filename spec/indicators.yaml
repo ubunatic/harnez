@@ -79,6 +79,12 @@ usage-bar:
 load-sparkline:
   sequence: vertical-block-scale-8
 
+# All chart surfaces resolve this one named background from spec/colors.yaml.
+# Keep history and current percentage monochrome by default; set `heat` to
+# color both from cool blue through green/yellow to warm red.
+chart-background: panel-bg
+load-chart-presentation: monochrome
+
 # Presentation modes for hardware load indicators in `usage --watch`.
 # Supported modes: sparkline (or timeseries), braille (or btop), bar (or gauge).
 # Braille maps two chronological samples into each terminal cell, using its

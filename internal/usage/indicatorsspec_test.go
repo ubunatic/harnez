@@ -204,6 +204,8 @@ func TestParseIndicatorsYAMLRejectsInvalidRegistryAndReferences(t *testing.T) {
 		{"inline frames rejected", strings.Replace(validIndicatorsFixture, "timeout-snake: {title: timer, sequence: countdown}", "timeout-snake: {title: timer, sequence: countdown, frames: [\"█\", \" \"]}", 1), "field frames not found"},
 		{"multi-rune cell", strings.Replace(validIndicatorsFixture, "frames: [\"▏\", \"▉\"]", "frames: [\"e\\u0301\", \"▉\"]", 1), "sequence \"partial\" frame 0: want one rune"},
 		{"invalid load-chart cpu mode", strings.Replace(validIndicatorsFixture, "cpu: sparkline", "cpu: circular", 1), "indicators spec: load-charts: cpu: unknown mode \"circular\""},
+		{"invalid chart background", validIndicatorsFixture + "chart-background: other-bg\n", "indicators spec: chart-background: unknown color \"other-bg\""},
+		{"invalid chart presentation", validIndicatorsFixture + "load-chart-presentation: rainbow\n", "indicators spec: load-chart-presentation: unknown mode \"rainbow\""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -215,6 +217,49 @@ func TestParseIndicatorsYAMLRejectsInvalidRegistryAndReferences(t *testing.T) {
 				t.Fatalf("parseIndicatorsYAML error = %q, want substring %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestLoadChartPresentationHeatCouplesChartAndPercentage(t *testing.T) {
+	spec, err := parseIndicatorsYAML([]byte(validIndicatorsFixture + "chart-background: panel-bg\nload-chart-presentation: heat\n"))
+	if err != nil {
+		t.Fatalf("parse heat indicators spec: %v", err)
+	}
+	if got, want := spec.chartPresentation(), LoadChartHeat; got != want {
+		t.Fatalf("chart presentation = %q, want %q", got, want)
+	}
+	if got, want := sparklineOptionsFromSpec(spec, 1, LoadChartBraille).BackgroundANSI, colorSGR("panel-bg"); got != want {
+		t.Fatalf("sparkline background = %q, want shared %q", got, want)
+	}
+	if got, want := watchLoadPercentWithPresentation(spec.chartPresentation(), 80), "\x1b[31m80%\x1b[0m"; got != want {
+		t.Fatalf("heat percentage = %q, want %q", got, want)
+	}
+	chart := rograph.RenderPercentSparkline([]float64{5, 80}, sparklineOptionsFromSpec(spec, 1, LoadChartBraille))
+	if want := "\x1b[40;31m⣸\x1b[0m"; chart != want {
+		t.Fatalf("heat Braille = %q, want %q", chart, want)
+	}
+	if got := stripANSI(chart); runewidth.StringWidth(got) != 1 {
+		t.Fatalf("heat chart visible width = %d, want 1", runewidth.StringWidth(got))
+	}
+}
+
+func TestWatchBarsUseTheSharedChartBackground(t *testing.T) {
+	if got, want := watchBarOptions().BackgroundANSI, chartBackgroundANSI(); got != want {
+		t.Fatalf("bar background = %q, want shared chart background %q", got, want)
+	}
+}
+
+func TestHeatForegroundBands(t *testing.T) {
+	for _, tt := range []struct {
+		value float64
+		want  string
+	}{
+		{0, "34"}, {25, "34"}, {25.01, "32"}, {50, "32"},
+		{50.01, "33"}, {75, "33"}, {75.01, "31"}, {100, "31"},
+	} {
+		if got := heatForegroundANSI(tt.value); got != tt.want {
+			t.Errorf("heatForegroundANSI(%v) = %q, want %q", tt.value, got, tt.want)
+		}
 	}
 }
 

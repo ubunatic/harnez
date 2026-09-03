@@ -57,6 +57,7 @@ func TestRenderSparklineOptions(t *testing.T) {
 		{"invalid fixed range uses middle glyph", []float64{1, 2}, SparklineOptions{FixedRange: true, Min: 5, Max: 5}, "▄"},
 		{"percent convenience uses absolute scale", []float64{5, 5, 5}, SparklineOptions{}, "▁▁"},
 		{"ansi wraps output", []float64{0, 100}, SparklineOptions{ANSI: true, BackgroundANSI: "44"}, "\x1b[44m█\x1b[0m"},
+		{"cell foreground preserves background", []float64{0, 100}, SparklineOptions{ANSI: true, BackgroundANSI: "40", ForegroundANSI: func(float64) string { return "31" }}, "\x1b[40;31m█\x1b[0m"},
 	}
 
 	for _, tt := range tests {
@@ -71,6 +72,24 @@ func TestRenderSparklineOptions(t *testing.T) {
 				t.Errorf("sparkline render = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRenderBrailleSparklineCellForegroundUsesTallerColumn(t *testing.T) {
+	got := RenderPercentSparkline([]float64{5, 90}, SparklineOptions{
+		Presentation:   SparklineBraille,
+		Width:          1,
+		ANSI:           true,
+		BackgroundANSI: "40",
+		ForegroundANSI: func(value float64) string {
+			if value > 75 {
+				return "31"
+			}
+			return "34"
+		},
+	})
+	if want := "\x1b[40;31m⣸\x1b[0m"; got != want {
+		t.Fatalf("colored Braille = %q, want %q", got, want)
 	}
 }
 

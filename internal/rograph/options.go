@@ -48,6 +48,9 @@ type BarOptions struct {
 	// BackgroundANSI is the SGR code used when ANSI is true. Empty uses
 	// "100" (bright-black), the same default as RenderSparkline.
 	BackgroundANSI string
+	// ForegroundANSI is an optional SGR foreground code applied to the graph
+	// glyphs only. Callers retain control of any nearby labels.
+	ForegroundANSI string
 }
 
 // DefaultBackgroundANSI is the SGR background code RenderBar and
@@ -141,6 +144,11 @@ type SparklineOptions struct {
 	ANSI bool
 	// BackgroundANSI is the SGR code used when ANSI is true. Empty uses "100".
 	BackgroundANSI string
+	// ForegroundANSI returns the SGR foreground code for a rendered cell's
+	// representative value. Nil leaves the chart monochrome. The callback is
+	// deliberately spec-agnostic so this dependency-free package never needs
+	// to know an application's palette.
+	ForegroundANSI func(value float64) string
 	// Glyphs supplies low-to-high sparkline frames. Empty uses the package
 	// default so rograph remains independent of application configuration.
 	Glyphs []rune
@@ -201,6 +209,9 @@ func RenderBar(value float64, opts BarOptions) string {
 			code = DefaultBackgroundANSI
 		}
 		if code != "" {
+			if opts.ForegroundANSI != "" {
+				code += ";" + opts.ForegroundANSI
+			}
 			glyphOut = "\x1b[" + code + "m" + glyphs + "\x1b[0m"
 		}
 	}
@@ -255,7 +266,45 @@ func RenderSparkline(values []float64, opts SparklineOptions) string {
 	if code == "" {
 		return out
 	}
-	return "\x1b[" + code + "m" + out + "\x1b[0m"
+	if opts.ForegroundANSI == nil {
+		return "\x1b[" + code + "m" + out + "\x1b[0m"
+	}
+	var styled strings.Builder
+	for i, glyph := range spark {
+		value := sparkCellValue(values, i, opts)
+		foreground := opts.ForegroundANSI(value)
+		styled.WriteString("\x1b[")
+		styled.WriteString(code)
+		if foreground != "" {
+			styled.WriteByte(';')
+			styled.WriteString(foreground)
+		}
+		styled.WriteString("m")
+		styled.WriteRune(glyph)
+		styled.WriteString("\x1b[0m")
+	}
+	return styled.String()
+}
+
+// sparkCellValue returns the value that owns a cell's foreground. Blocks use
+// their newer sample; Braille uses the taller of its two columns so heat color
+// follows the visually dominant bar in the cell.
+func sparkCellValue(values []float64, cell int, opts SparklineOptions) float64 {
+	index := cell * 2
+	if len(values)%2 != 0 {
+		if cell == 0 {
+			return values[0]
+		}
+		index = cell*2 - 1
+	}
+	older, newer := values[index], values[index+1]
+	if opts.Presentation != SparklineBraille || !isFinite(older) {
+		return newer
+	}
+	if !isFinite(newer) || older > newer {
+		return older
+	}
+	return newer
 }
 
 func sparkCell(older, newer, minimum, maximum float64, flat bool, opts SparklineOptions) rune {

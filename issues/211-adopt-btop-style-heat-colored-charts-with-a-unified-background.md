@@ -1,6 +1,6 @@
 # 211 — Adopt btop-style heat-colored charts with a unified background
 
-**Status**: In Progress
+**Status**: In Review
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
