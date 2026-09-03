@@ -82,14 +82,18 @@ func TestTimeoutSnakeGlyphDrainsWithoutWrapping(t *testing.T) {
 func TestWatchChartRenderersUseDeclaredGlyphs(t *testing.T) {
 	spec := mustIndicators()
 	bar := watchBarOptions()
-	if got, want := bar.Fill, []rune(spec.UsageBar.Filled)[0]; got != want {
-		t.Fatalf("bar fill = %q, want spec %q", got, want)
+	wantFill, wantEmpty, wantPartialCount := []rune(spec.UsageBar.Filled)[0], []rune(spec.UsageBar.Empty)[0], len(spec.UsageBar.SubCharacter)
+	if spec.UsageBar.resolvedStyle() == UsageBarStyleBraille {
+		wantFill, wantEmpty, wantPartialCount = []rune(spec.UsageBar.Braille.Full)[0], []rune(spec.UsageBar.Braille.Empty)[0], 1
 	}
-	if got, want := bar.Empty, []rune(spec.UsageBar.Empty)[0]; got != want {
-		t.Fatalf("bar empty = %q, want spec %q", got, want)
+	if got := bar.Fill; got != wantFill {
+		t.Fatalf("bar fill = %q, want spec %q", got, wantFill)
 	}
-	if got, want := len(bar.SubCharacterGlyphs), len(spec.UsageBar.SubCharacter); got != want {
-		t.Fatalf("bar partial glyph count = %d, want %d", got, want)
+	if got := bar.Empty; got != wantEmpty {
+		t.Fatalf("bar empty = %q, want spec %q", got, wantEmpty)
+	}
+	if got := len(bar.SubCharacterGlyphs); got != wantPartialCount {
+		t.Fatalf("bar partial glyph count = %d, want %d", got, wantPartialCount)
 	}
 	got := stripANSI(watchPercentSparkline([]float64{0, 0, 0, 100}, 2))
 	want := spec.LoadSparkline.Frames[0] + spec.LoadSparkline.Frames[len(spec.LoadSparkline.Frames)-1]
@@ -258,7 +262,7 @@ func TestUsageBarPresentationHeatCouplesBarAndPercentage(t *testing.T) {
 	opts := usageBarOptionsWithPresentation(spec.usageBarPresentation(), 62.5)
 	opts.Width = 4
 	bar := rograph.RenderBar(62.5, opts)
-	if want := "[\x1b[40;33m██▌ \x1b[0m]"; bar != want {
+	if want := "[\x1b[40;33m⣿⣿⡇ \x1b[0m]"; bar != want {
 		t.Fatalf("heat usage bar = %q, want %q", bar, want)
 	}
 	if strings.Contains(bar, "░") {
@@ -271,7 +275,7 @@ func TestUsageBarPresentationHeatCouplesBarAndPercentage(t *testing.T) {
 	monoOpts := usageBarOptionsWithPresentation(UsageBarMonochrome, 62.5)
 	monoOpts.Width = 4
 	monochrome := rograph.RenderBar(62.5, monoOpts)
-	if want := "[\x1b[40m██▌ \x1b[0m]"; monochrome != want {
+	if want := "[\x1b[40m⣿⣿⡇ \x1b[0m]"; monochrome != want {
 		t.Fatalf("monochrome usage bar = %q, want %q", monochrome, want)
 	}
 	if got, want := watchUsagePercentWithPresentation(UsageBarMonochrome, 62.5), "62%"; got != want {

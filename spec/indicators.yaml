@@ -61,19 +61,15 @@ timeout-snake:
 # Every glyph that draws a quota bar in `usage --watch`. `sub-character`
 # progresses from one eighth to seven eighths; `filled` completes a cell.
 #
-# style (issue 220) selects the bar's glyph vocabulary: "block" (the default,
-# also implied by omitting style) keeps this eighth-block rendering; opt into
-# "braille" to quantize each cell to empty/half/full using the `braille`
-# glyphs below instead -- matching the Braille visual language load charts
-# already use. Only one style is active at a time; switch by changing style
-# and filling in braille.full/half/empty (all three are required once style
-# is "braille"). Example opt-in, left commented so the default stays block:
-#
-#   style: braille
-#   braille:
-#     full: "⣿"
-#     half: "⡇"
-#     empty: "⠀"   # U+2800 BRAILLE PATTERN BLANK, a blank Braille cell
+# style (issue 220) selects the bar's glyph vocabulary: "block" keeps the
+# eighth-block rendering (still available, and still what filled/empty/
+# sub-character-sequence below configure); "braille" quantizes each cell to
+# empty/half/full using the `braille` glyphs, matching the Braille visual
+# language load charts already use. Only one style is active at a time;
+# switch by changing style and filling in braille.full/half/empty (all three
+# are required once style is "braille"). This spec ships with style: braille
+# as the default usage-bar look; revert to style: block (and drop/ignore the
+# braille block) to restore the historical eighth-block rendering.
 #
 # wrapper (issue 159) controls the `[`/`]` brackets drawn around each bar.
 # enabled: false renders the bar glyphs alone (rograph.BarOptions.NoWrapper);
@@ -84,7 +80,11 @@ usage-bar:
   filled: "█"
   empty: "░"
   sub-character-sequence: horizontal-eighths-7
-  style: block
+  style: braille
+  braille:
+    full: "⣿"
+    half: "⡇"
+    empty: "⠀"   # U+2800 BRAILLE PATTERN BLANK, a blank Braille cell
   wrapper:
     enabled: true
     left: "["

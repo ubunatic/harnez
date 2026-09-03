@@ -351,14 +351,15 @@ func TestBuildAllUsageBox(t *testing.T) {
 	// starts at the same column in every row — that's the alignment guarantee
 	// this test verifies. "93% 2d8h" (8 chars) pads to 10 → 2 trailing spaces;
 	// "85% 8h51m" (9 chars) pads to 10 → 1 trailing space. Empty bar cells
-	// render as a plain space, not '░', under the ANSI background wrap (issue
-	// 136 follow-up — see eighthBlockFill's doc comment in
-	// internal/rograph/options.go).
+	// render as a plain space, not '░'/'⠀', under the ANSI background wrap
+	// (issue 136 follow-up — see subCharacterFill's doc comment in
+	// internal/rograph/options.go). Bar glyphs are Braille (issue 220's
+	// default style): ⣿ full, ⡇ half.
 	want := []string{
-		"Gemini        [███▋] 93% 2d8h   [    ] 3% 4h58m",
-		"Claude/GPT    [█▍  ] 35% 6d2h   [    ] 0% 4h58m",
-		"Claude Code   [███▍] 85% 8h51m  [▎   ] 9% 4h51m",
-		"OpenAI Codex  [█▌  ] 39% 5d9h   [    ] 0% 4h59m",
+		"Gemini        [⣿⣿⣿⡇] 93% 2d8h   [    ] 3% 4h58m",
+		"Claude/GPT    [⣿   ] 35% 6d2h   [    ] 0% 4h58m",
+		"Claude Code   [⣿⣿⣿ ] 85% 8h51m  [    ] 9% 4h51m",
+		"OpenAI Codex  [⣿⡇  ] 39% 5d9h   [    ] 0% 4h59m",
 	}
 	for i := range want {
 		if got := stripANSI(box.lines[i]); got != want[i] {
@@ -452,8 +453,9 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 	// is tight enough that the second window's duration (d2) must be dropped on
 	// the Claude row to stay within contentW. The second [    ] bar must still
 	// appear and must align at the same column in both rows. Empty cells render
-	// as a plain space (not '░') under the ANSI background wrap — see
-	// eighthBlockFill's doc comment in internal/rograph/options.go.
+	// as a plain space (not '░'/'⠀') under the ANSI background wrap — see
+	// subCharacterFill's doc comment in internal/rograph/options.go. Bar
+	// glyphs are Braille (issue 220's default style): ⣿ full, ⡇ half.
 	secondBarCol := -1
 	for _, line := range box.lines {
 		stripped := stripANSI(line)
@@ -461,17 +463,17 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 			t.Fatalf("line visible width %d exceeds contentW %d: %q", got, contentW, stripped)
 		}
 		// Both bars must still be present.
-		if !strings.Contains(stripped, "[    ]") && !strings.Contains(stripped, "[█") {
+		if !strings.Contains(stripped, "[    ]") && !strings.Contains(stripped, "[⣿") {
 			t.Fatalf("expected second bar to remain visible in narrow row: %q", stripped)
 		}
 		switch {
 		case strings.Contains(stripped, "Claude Code"):
 			// d2 dropped to fit; d1 kept; percent shown.
-			if !strings.Contains(stripped, "[███▍]") || !strings.Contains(stripped, "85%") || !strings.Contains(stripped, "[▍   ]") || !strings.Contains(stripped, "11%") {
+			if !strings.Contains(stripped, "[⣿⣿⣿ ]") || !strings.Contains(stripped, "85%") || !strings.Contains(stripped, "[    ]") || !strings.Contains(stripped, "11%") {
 				t.Fatalf("expected Claude second bar and percent to remain visible in narrow row: %q", stripped)
 			}
 		case strings.Contains(stripped, "OpenAI Codex"):
-			if !strings.Contains(stripped, "[▌   ]") || !strings.Contains(stripped, "13%") {
+			if !strings.Contains(stripped, "[⡇   ]") || !strings.Contains(stripped, "13%") {
 				t.Fatalf("expected Codex second bar and percent to remain visible in narrow row: %q", stripped)
 			}
 		default:
@@ -498,7 +500,7 @@ func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 // TestAllUsageBoxSecondBarColumnAlignment is the canonical alignment test: it
 // builds an [a] All Usage box with rows whose mid-column content varies in
 // length (3-digit vs 4-digit percent, 4- vs 5-char duration, no duration) and
-// asserts every second [░] bar starts at exactly the same column, at several
+// asserts every second bar starts at exactly the same column, at several
 // representative box widths. This is the unit-level equivalent of the smoke
 // test that runs the real binary.
 func TestAllUsageBoxSecondBarColumnAlignment(t *testing.T) {
@@ -820,10 +822,11 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 	}
 	// Mid-column padded to 10 chars → "85% 8h51m " (10) + " " + "[    ]" = 2 spaces before second bar.
 	// Bars carry an ANSI background wrap (issue 133); empty cells render as a
-	// plain space under that wrap rather than '░' (issue 136 follow-up — see
-	// eighthBlockFill's doc comment in internal/rograph/options.go), so strip
-	// escapes before matching.
-	if !strings.Contains(stripANSI(frameText), "Claude Code  [███▍] 85% 8h51m  [▎   ] 9% 4h51m") {
+	// plain space under that wrap rather than '░'/'⠀' (issue 136 follow-up —
+	// see subCharacterFill's doc comment in internal/rograph/options.go), so
+	// strip escapes before matching. Bar glyphs are Braille (issue 220's
+	// default style): ⣿ full, ⡇ half.
+	if !strings.Contains(stripANSI(frameText), "Claude Code  [⣿⣿⣿ ] 85% 8h51m  [    ] 9% 4h51m") {
 		t.Fatalf("expected compact all-usage row to keep short-window time at 100 columns, got:\n%s", frameText)
 	}
 	if !strings.Contains(frameText, "[?]controls") || !strings.Contains(frameText, "[m]ode") {
