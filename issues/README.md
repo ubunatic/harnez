@@ -222,3 +222,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 219 | [219-subtle-usage-bar-colors-relative-to-braille-charts.md](219-subtle-usage-bar-colors-relative-to-braille-charts.md) | Make usage-bar colors subtler than Braille charts | Open |
 | 220 | [220-add-spec-driven-braille-usage-bar-glyph-style.md](220-add-spec-driven-braille-usage-bar-glyph-style.md) | Add a spec-driven Braille usage-bar glyph style | Open |
 | 221 | [221-promote-go-for-scripts-and-tooling-across-repos-and-explicit.md](221-promote-go-for-scripts-and-tooling-across-repos-and-explicit.md) | Promote Go for Scripts and Tooling Across Repos and Explicitly Demote/Disallow Ad-Hoc Python | Open |
+| 222 | [222-advise-git-c-make-c-over-cd.md](222-advise-git-c-make-c-over-cd.md) | Advise agents to use `git -C`/`make -C` etc. instead of `cd`-ing into dirs | Open |
