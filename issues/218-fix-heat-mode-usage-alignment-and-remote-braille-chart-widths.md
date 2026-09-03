@@ -4,7 +4,7 @@
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
-**Related**: Issue 211; Issue 213; commits `878f83d`, `49b2311`, `77fc20b`, `5b924e4`, `e232aee`
+**Related**: Issue 211; Issue 213; commits `878f83d`, `49b2311`, `77fc20b`, `5b924e4`, `e232aee`, `bf51b25`
 
 ---
 
@@ -60,3 +60,19 @@ alignment of the dashboard.
 - Verified with targeted usage tests, `make check`, and `make install`.
 - Remote CPU/GPU Braille-width investigation remains open and was explicitly
   excluded from this implementation scope.
+
+## 5. Quota Alignment Follow-up
+
+- Commit `bf51b25` fixes the remaining wide-duration path exposed by the live
+  `Claude/GPT` row (`100% 22h30m`). The prior 10-cell middle field covered
+  `99% 22h30m` but overflowed by one display cell at `100%`.
+- All Usage now derives one shared middle-column width from the longest first
+  quota duration in the table, while reserving four display cells for every
+  percentage through `100%`. This keeps every second quota bar on the same
+  terminal column without special-casing a duration or percentage.
+- ANSI-stripped display-column tests cover `0%`, `99%`, and `100%` with real
+  durations (`8h51m`, `6d2h`, and `22h30m`) in monochrome and heat modes at
+  All Usage box widths 51, 55, 60, 80, and 100. The same matrix covers the
+  single-window placeholder path.
+- Verified with targeted regression tests, `go test ./...`, `make check`, and
+  `make install`.
