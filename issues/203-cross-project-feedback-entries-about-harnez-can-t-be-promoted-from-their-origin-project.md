@@ -1,6 +1,6 @@
 # 203 — Cross-project feedback entries about harnez can't be promoted from their origin project
 
-**Status**: Closed — resolved in PENDING_COMMIT
+**Status**: Closed — resolved in 70bc0fd
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
