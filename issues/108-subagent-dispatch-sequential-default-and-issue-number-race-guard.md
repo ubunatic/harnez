@@ -112,6 +112,19 @@ Two independent options worth considering for whoever picks this up:
 Don't over-design either option in this ticket; pick one or both when
 actually picking this up.
 
+## Recurrence (2026-09-03)
+
+`harnez status` flagged this exact symptom again, live: `issues/README.md` currently carries
+two distinct files each claiming issue 179 (`179-harnez-rate-ok-heartbeat.md`,
+`179-instruct-agents-on-harnez-find-in-agents-md.md`) and issue 180
+(`180-release-webextension-manifest-and-json-version-sync.md`,
+`180-watch-and-review-compact-commands.md`) — both pairs pre-date this session's own ticket
+work (202–208, which used `harnez find issues next --reserve` throughout and did not
+collide). Left as-is rather than silently renumbered inline, since fixing it means picking a
+canonical number for each pair and updating every cross-reference to the bumped one — that's
+real work belonging to whoever picks up the mechanical guard in this ticket, not a drive-by
+edit. Confirms the race is still live under real usage, not just a one-off from 2026-08-30.
+
 ## Acceptance Criteria
 
 1. Document (this ticket) whether `harnez status` already catches duplicate
