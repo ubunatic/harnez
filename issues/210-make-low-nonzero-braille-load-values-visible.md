@@ -1,6 +1,6 @@
 # 210 — Make low nonzero Braille load values visible
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Bug
