@@ -210,3 +210,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 207 | [207-codex-pretooluse-timeoutsec-default.md](207-codex-pretooluse-timeoutsec-default.md) | Determine real Codex `timeoutSec` default for PreToolUse hooks | Draft |
 | 208 | [208-sqlite-export-format-for-harnez-usage-export.md](208-sqlite-export-format-for-harnez-usage-export.md) | SQLite Export Format for `harnez usage export` | Open |
 | 209 | [209-move-agy-hooks-management-into-harnez-apply.md](209-move-agy-hooks-management-into-harnez-apply.md) | Move `agy-hooks` Management into `harnez apply` | Open |
+| 210 | [210-make-low-nonzero-braille-load-values-visible.md](210-make-low-nonzero-braille-load-values-visible.md) | Make low nonzero Braille load values visible | Open |
