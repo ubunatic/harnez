@@ -221,3 +221,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 218 | [archive/218-fix-heat-mode-usage-alignment-and-remote-braille-chart-widths.md](archive/218-fix-heat-mode-usage-alignment-and-remote-braille-chart-widths.md) | Fix heat-mode usage alignment and remote Braille chart widths | Closed — resolved in `bf51b25` and `f0f5cef` |
 | 219 | [219-subtle-usage-bar-colors-relative-to-braille-charts.md](219-subtle-usage-bar-colors-relative-to-braille-charts.md) | Make usage-bar colors subtler than Braille charts | Open |
 | 220 | [220-add-spec-driven-braille-usage-bar-glyph-style.md](220-add-spec-driven-braille-usage-bar-glyph-style.md) | Add a spec-driven Braille usage-bar glyph style | Open |
+| 221 | [221-promote-go-for-scripts-and-tooling-across-repos-and-explicit.md](221-promote-go-for-scripts-and-tooling-across-repos-and-explicit.md) | Promote Go for Scripts and Tooling Across Repos and Explicitly Demote/Disallow Ad-Hoc Python | Open |
