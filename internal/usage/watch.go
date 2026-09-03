@@ -771,17 +771,16 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 	d1 := compactDurationText(w1)
 	d2 := compactDurationText(w2)
 
-	b1opts := watchBarOptions()
+	b1opts := watchUsageBarOptions(w1.UsedPercent)
 	b1opts.Width = 4
-	b2opts := watchBarOptions()
+	b2opts := watchUsageBarOptions(w2.UsedPercent)
 	b2opts.Width = 4
 	b1 := rograph.RenderBar(w1.UsedPercent, b1opts)
 	b2 := rograph.RenderBar(w2.UsedPercent, b2opts)
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
 
-	midBlock := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w1.UsedPercent, d1))
-	midStr := rograph.PadLabel(midBlock, 10)
-	endStr := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w2.UsedPercent, d2))
+	midStr := padWatchUsagePercentWithDuration(w1.UsedPercent, d1, 10)
+	endStr := watchUsagePercentWithDuration(w2.UsedPercent, d2)
 
 	line := prefix + b1 + " " + midStr + " " + b2 + " " + endStr
 	if visLen(line) <= contentW {
@@ -789,20 +788,20 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 	}
 
 	// Drop d2 if too long
-	endStrNoD2 := fmt.Sprintf("%.0f%%", w2.UsedPercent)
+	endStrNoD2 := watchUsagePercent(w2.UsedPercent)
 	line = prefix + b1 + " " + midStr + " " + b2 + " " + endStrNoD2
 	if visLen(line) <= contentW {
 		return line
 	}
 
 	// Drop d1 as well
-	midStrNoD1 := rograph.PadLabel(fmt.Sprintf("%.0f%%", w1.UsedPercent), 5)
+	midStrNoD1 := padWatchUsagePercentWithDuration(w1.UsedPercent, "", 5)
 	line = prefix + b1 + " " + midStrNoD1 + " " + b2 + " " + endStrNoD2
 	if visLen(line) <= contentW {
 		return line
 	}
 
-	return prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w1.UsedPercent), b2, fmt.Sprintf("%.0f%%", w2.UsedPercent)}, " ")
+	return prefix + strings.Join([]string{b1, watchUsagePercent(w1.UsedPercent), b2, watchUsagePercent(w2.UsedPercent)}, " ")
 }
 
 // blankBarPlaceholder renders an empty bracket the same width as a real
@@ -825,14 +824,13 @@ func blankBarPlaceholder() string {
 func formatAllUsageSingleWindowLine(label string, w QuotaWindow, contentW, labelWidth int) string {
 	d1 := compactDurationText(w)
 
-	b1opts := watchBarOptions()
+	b1opts := watchUsageBarOptions(w.UsedPercent)
 	b1opts.Width = 4
 	b1 := rograph.RenderBar(w.UsedPercent, b1opts)
 	b2 := blankBarPlaceholder()
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
 
-	midBlock := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w.UsedPercent, d1))
-	midStr := rograph.PadLabel(midBlock, 10)
+	midStr := padWatchUsagePercentWithDuration(w.UsedPercent, d1, 10)
 
 	line := prefix + b1 + " " + midStr + " " + b2
 	if visLen(line) <= contentW {
@@ -841,13 +839,13 @@ func formatAllUsageSingleWindowLine(label string, w QuotaWindow, contentW, label
 
 	// Drop d1 if too long, matching the two-window branch's narrow-width
 	// fallback pattern.
-	midStrNoD1 := rograph.PadLabel(fmt.Sprintf("%.0f%%", w.UsedPercent), 5)
+	midStrNoD1 := padWatchUsagePercentWithDuration(w.UsedPercent, "", 5)
 	line = prefix + b1 + " " + midStrNoD1 + " " + b2
 	if visLen(line) <= contentW {
 		return line
 	}
 
-	return prefix + strings.Join([]string{b1, fmt.Sprintf("%.0f%%", w.UsedPercent), b2}, " ")
+	return prefix + strings.Join([]string{b1, watchUsagePercent(w.UsedPercent), b2}, " ")
 }
 
 func compactDurationText(w QuotaWindow) string {
@@ -1390,12 +1388,12 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 			resetStr = " " + FormatCompactDuration(w.DurationLeft)
 		}
 		lbl := rograph.PadLabel(label, labelWidth)
-		barOpts := watchBarOptions()
+		barOpts := watchUsageBarOptions(w.UsedPercent)
 		barOpts.Width = 4
 		bar := rograph.RenderBar(w.UsedPercent, barOpts)
-		line := fmt.Sprintf("%s %s %3.0f%%%s", lbl, bar, w.UsedPercent, resetStr)
+		line := fmt.Sprintf("%s %s %s%s", lbl, bar, padWatchUsagePercent(w.UsedPercent, 3), resetStr)
 		if visLen(line) > contentW {
-			line = fmt.Sprintf("%s %s %3.0f%%", lbl, bar, w.UsedPercent)
+			line = fmt.Sprintf("%s %s %s", lbl, bar, padWatchUsagePercent(w.UsedPercent, 3))
 		}
 		return line
 	}
@@ -1423,16 +1421,15 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 	d2 := compactDurationText(w2)
 
 	lbl := rograph.PadLabel(label, labelWidth)
-	b1opts := watchBarOptions()
+	b1opts := watchUsageBarOptions(w1.UsedPercent)
 	b1opts.Width = 4
-	b2opts := watchBarOptions()
+	b2opts := watchUsageBarOptions(w2.UsedPercent)
 	b2opts.Width = 4
 	b1 := rograph.RenderBar(w1.UsedPercent, b1opts)
 	b2 := rograph.RenderBar(w2.UsedPercent, b2opts)
 
-	midBlock := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w1.UsedPercent, d1))
-	midStr := rograph.PadLabel(midBlock, 10)
-	endStr := strings.TrimSpace(fmt.Sprintf("%.0f%% %s", w2.UsedPercent, d2))
+	midStr := padWatchUsagePercentWithDuration(w1.UsedPercent, d1, 10)
+	endStr := watchUsagePercentWithDuration(w2.UsedPercent, d2)
 
 	// Format: Label [b1] pct1 d1 [b2] pct2 d2 (e.g. Gemini [███░] 91% 2h [░░░░] 0% 3d)
 	line := fmt.Sprintf("%s %s %s %s %s", lbl, b1, midStr, b2, endStr)
@@ -1441,14 +1438,14 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 	}
 
 	// Drop d2 if too long
-	endStrNoD2 := fmt.Sprintf("%.0f%%", w2.UsedPercent)
+	endStrNoD2 := watchUsagePercent(w2.UsedPercent)
 	line = fmt.Sprintf("%s %s %s %s %s", lbl, b1, midStr, b2, endStrNoD2)
 	if visLen(line) <= contentW {
 		return line
 	}
 
 	// Drop d1 as well
-	midStrNoD1 := rograph.PadLabel(fmt.Sprintf("%.0f%%", w1.UsedPercent), 5)
+	midStrNoD1 := padWatchUsagePercentWithDuration(w1.UsedPercent, "", 5)
 	line = fmt.Sprintf("%s %s %s %s %s", lbl, b1, midStrNoD1, b2, endStrNoD2)
 	if visLen(line) <= contentW {
 		return line
@@ -1457,7 +1454,7 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 	// If still too long in very narrow box, shrink label
 	for lw := labelWidth - 1; lw >= 6; lw-- {
 		lblShrunk := rograph.PadLabel(label, lw)
-		line = fmt.Sprintf("%s %s %.0f%% %s %.0f%%", lblShrunk, b1, w1.UsedPercent, b2, w2.UsedPercent)
+		line = fmt.Sprintf("%s %s %s %s %s", lblShrunk, b1, watchUsagePercent(w1.UsedPercent), b2, watchUsagePercent(w2.UsedPercent))
 		if visLen(line) <= contentW {
 			return line
 		}

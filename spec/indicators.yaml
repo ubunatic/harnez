@@ -84,6 +84,9 @@ load-sparkline:
 # color both from cool blue through green/yellow to warm red.
 chart-background: panel-bg
 load-chart-presentation: monochrome
+# Quota/usage bars are independent of load histories; set `heat` to color a
+# filled bar and its adjacent percentage with the shared cool-to-warm palette.
+usage-bar-presentation: monochrome
 
 # Presentation modes for hardware load indicators in `usage --watch`.
 # Supported modes: sparkline (or timeseries), braille (or btop), bar (or gauge).

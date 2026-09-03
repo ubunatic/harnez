@@ -243,6 +243,57 @@ func TestLoadChartPresentationHeatCouplesChartAndPercentage(t *testing.T) {
 	}
 }
 
+func TestUsageBarPresentationHeatCouplesBarAndPercentage(t *testing.T) {
+	spec, err := parseIndicatorsYAML([]byte(validIndicatorsFixture + "chart-background: panel-bg\nload-chart-presentation: monochrome\nusage-bar-presentation: heat\n"))
+	if err != nil {
+		t.Fatalf("parse heat usage-bar spec: %v", err)
+	}
+	if got, want := spec.usageBarPresentation(), UsageBarHeat; got != want {
+		t.Fatalf("usage bar presentation = %q, want %q", got, want)
+	}
+	if got, want := watchUsagePercentWithPresentation(spec.usageBarPresentation(), 62.5), "\x1b[33m62%\x1b[0m"; got != want {
+		t.Fatalf("heat usage percentage = %q, want %q", got, want)
+	}
+
+	opts := usageBarOptionsWithPresentation(spec.usageBarPresentation(), 62.5)
+	opts.Width = 4
+	bar := rograph.RenderBar(62.5, opts)
+	if want := "[\x1b[40;33m██▌ \x1b[0m]"; bar != want {
+		t.Fatalf("heat usage bar = %q, want %q", bar, want)
+	}
+	if strings.Contains(bar, "░") {
+		t.Fatalf("heat usage bar = %q, want a flat background without empty stipple", bar)
+	}
+	if got := runewidth.StringWidth(stripANSI(bar)); got != 6 { // [ + 4 cells + ]
+		t.Fatalf("heat usage bar visible width = %d, want 6", got)
+	}
+
+	monoOpts := usageBarOptionsWithPresentation(UsageBarMonochrome, 62.5)
+	monoOpts.Width = 4
+	monochrome := rograph.RenderBar(62.5, monoOpts)
+	if want := "[\x1b[40m██▌ \x1b[0m]"; monochrome != want {
+		t.Fatalf("monochrome usage bar = %q, want %q", monochrome, want)
+	}
+	if got, want := watchUsagePercentWithPresentation(UsageBarMonochrome, 62.5), "62%"; got != want {
+		t.Fatalf("monochrome usage percentage = %q, want %q", got, want)
+	}
+}
+
+func TestUsageBarPresentationDefaultsAndRejectsUnknownValues(t *testing.T) {
+	spec, err := parseIndicatorsYAML([]byte(validIndicatorsFixture + "chart-background: panel-bg\nload-chart-presentation: monochrome\n"))
+	if err != nil {
+		t.Fatalf("parse default usage-bar presentation: %v", err)
+	}
+	if got, want := spec.usageBarPresentation(), UsageBarMonochrome; got != want {
+		t.Fatalf("default usage bar presentation = %q, want %q", got, want)
+	}
+
+	_, err = parseIndicatorsYAML([]byte(validIndicatorsFixture + "chart-background: panel-bg\nload-chart-presentation: monochrome\nusage-bar-presentation: heat-256\n"))
+	if err == nil || !strings.Contains(err.Error(), `usage-bar-presentation: unknown mode "heat-256"`) {
+		t.Fatalf("invalid usage-bar presentation error = %v, want unknown-mode error", err)
+	}
+}
+
 func TestWatchBarsUseTheSharedChartBackground(t *testing.T) {
 	if got, want := watchBarOptions().BackgroundANSI, chartBackgroundANSI(); got != want {
 		t.Fatalf("bar background = %q, want shared chart background %q", got, want)

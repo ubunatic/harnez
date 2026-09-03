@@ -27,6 +27,7 @@ type indicatorsSpec struct {
 	LoadCharts            loadChartsSpec                    `yaml:"load-charts"`
 	ChartBackground       string                            `yaml:"chart-background"`
 	LoadChartPresentation string                            `yaml:"load-chart-presentation"`
+	UsageBarPresentation  string                            `yaml:"usage-bar-presentation"`
 }
 
 // LoadChartPresentation selects whether load histories and their current
@@ -36,6 +37,17 @@ type LoadChartPresentation string
 const (
 	LoadChartMonochrome LoadChartPresentation = "monochrome"
 	LoadChartHeat       LoadChartPresentation = "heat"
+)
+
+// UsageBarPresentation selects whether quota bars and their current
+// percentage labels stay monochrome or use the shared heat palette.
+// It deliberately has its own setting: load history presentation and quota
+// presentation can be chosen independently.
+type UsageBarPresentation string
+
+const (
+	UsageBarMonochrome UsageBarPresentation = "monochrome"
+	UsageBarHeat       UsageBarPresentation = "heat"
 )
 
 // LoadChartMode defines the visual presentation mode for load indicators.
@@ -109,6 +121,13 @@ func (s indicatorsSpec) chartPresentation() LoadChartPresentation {
 		return LoadChartHeat
 	}
 	return LoadChartMonochrome
+}
+
+func (s indicatorsSpec) usageBarPresentation() UsageBarPresentation {
+	if strings.EqualFold(strings.TrimSpace(s.UsageBarPresentation), string(UsageBarHeat)) {
+		return UsageBarHeat
+	}
+	return UsageBarMonochrome
 }
 
 type usageBarSpec struct {
@@ -249,6 +268,9 @@ func parseIndicatorsYAML(data []byte) (indicatorsSpec, error) {
 	if presentation := strings.ToLower(strings.TrimSpace(spec.LoadChartPresentation)); presentation != "" && presentation != string(LoadChartMonochrome) && presentation != string(LoadChartHeat) {
 		return indicatorsSpec{}, fmt.Errorf("indicators spec: load-chart-presentation: unknown mode %q", spec.LoadChartPresentation)
 	}
+	if presentation := strings.ToLower(strings.TrimSpace(spec.UsageBarPresentation)); presentation != "" && presentation != string(UsageBarMonochrome) && presentation != string(UsageBarHeat) {
+		return indicatorsSpec{}, fmt.Errorf("indicators spec: usage-bar-presentation: unknown mode %q", spec.UsageBarPresentation)
+	}
 
 	return spec, nil
 }
@@ -340,6 +362,20 @@ func watchBarOptions() rograph.BarOptions {
 	return opts
 }
 
+// watchUsageBarOptions applies the optional quota-bar heat presentation.
+// Its background and all glyph geometry still come from watchBarOptions.
+func watchUsageBarOptions(value float64) rograph.BarOptions {
+	return usageBarOptionsWithPresentation(mustIndicators().usageBarPresentation(), value)
+}
+
+func usageBarOptionsWithPresentation(presentation UsageBarPresentation, value float64) rograph.BarOptions {
+	opts := watchBarOptions()
+	if presentation == UsageBarHeat {
+		opts.ForegroundANSI = heatForegroundANSI(value)
+	}
+	return opts
+}
+
 // watchLoadBarOptions adds the same heat foreground used by a colored history
 // and its adjacent current-value label. Generic quota bars retain their own
 // foreground policy while still inheriting the shared chart background.
@@ -381,6 +417,39 @@ func watchLoadPercentWithPresentation(presentation LoadChartPresentation, value 
 		return label
 	}
 	return "\x1b[" + heatForegroundANSI(value) + "m" + label + "\x1b[0m"
+}
+
+func watchUsagePercent(value float64) string {
+	return watchUsagePercentWithPresentation(mustIndicators().usageBarPresentation(), value)
+}
+
+func watchUsagePercentWithPresentation(presentation UsageBarPresentation, value float64) string {
+	label := fmt.Sprintf("%.0f%%", value)
+	if presentation != UsageBarHeat {
+		return label
+	}
+	return "\x1b[" + heatForegroundANSI(value) + "m" + label + "\x1b[0m"
+}
+
+// padWatchUsagePercent adds leading display cells without including ANSI
+// bytes in the width calculation, so compact quota columns stay aligned in
+// both presentation modes.
+func padWatchUsagePercent(value float64, width int) string {
+	label := watchUsagePercent(value)
+	return strings.Repeat(" ", max(0, width-visLen(label))) + label
+}
+
+func watchUsagePercentWithDuration(value float64, duration string) string {
+	label := watchUsagePercent(value)
+	if duration == "" {
+		return label
+	}
+	return label + " " + duration
+}
+
+func padWatchUsagePercentWithDuration(value float64, duration string, width int) string {
+	label := watchUsagePercentWithDuration(value, duration)
+	return label + strings.Repeat(" ", max(0, width-visLen(label)))
 }
 
 // barOptionsFromSpec converts a parsed usage-bar spec into rograph.BarOptions.
