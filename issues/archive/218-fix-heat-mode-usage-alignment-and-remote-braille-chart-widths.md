@@ -1,10 +1,10 @@
 # 218 — Fix heat-mode usage alignment and remote Braille chart widths
 
-**Status**: In Progress
+**Status**: Closed — resolved in `bf51b25` and `f0f5cef`
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
-**Related**: Issue 211; Issue 213; commits `878f83d`, `49b2311`, `77fc20b`, `5b924e4`, `e232aee`, `bf51b25`
+**Related**: Issue 211; Issue 213; commits `878f83d`, `49b2311`, `77fc20b`, `5b924e4`, `e232aee`, `bf51b25`, `f0f5cef`
 
 ---
 
@@ -76,3 +76,23 @@ alignment of the dashboard.
   single-window placeholder path.
 - Verified with targeted regression tests, `go test ./...`, `make check`, and
   `make install`.
+
+## 6. Remote Braille Width Resolution
+
+- Commit `f0f5cef` fixes the remaining remote CPU and GPU/Phoenix chart
+  width regression. Remote snapshots can contain short histories while a
+  stream warms up or when batch collection restarts the remote process.
+- The doubled Braille resolution consumes two samples per display cell, but
+  CPU/GPU formatters derived their requested chart width directly from the
+  retained sample count. A 10-sample remote history therefore rendered only
+  five cells while a fully seeded 20-sample local history rendered ten.
+- CPU and GPU histories now use the existing history-padding policy before
+  requesting the shared ten-cell chart width. Padding repeats the oldest
+  available observation and retains all real samples, matching the existing
+  RAM and VRAM/GTT behavior without hardcoded visual spaces.
+- ANSI-stripped tests compare remote short/full histories with fully seeded
+  local counterparts for CPU and GPU/Phoenix rows at compact width 34 and
+  normal width 48. They assert intrinsic chart width and column bounds plus
+  rendered panel width/alignment.
+- Verified with targeted regression tests, `go test ./...`, `make check`, and
+  `make install`; heat presentation and btop defaults remain unchanged.
