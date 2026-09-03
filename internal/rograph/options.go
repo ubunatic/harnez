@@ -30,11 +30,14 @@ type BarOptions struct {
 	// clamp to 0.
 	PercentPrecision int
 	// SubChar renders the single boundary character (where fill transitions
-	// from filled to empty) using a horizontal eighth-block glyph
-	// (▏▎▍▌▋▊▉█) instead of snapping it to fully filled or fully empty.
-	// Only applies when Fill and Empty are left at their defaults ('█' and
-	// '░'); custom glyphs fall back to whole-character snapping since
-	// eighth-block glyphs only exist for the default block characters.
+	// from filled to empty) at sub-character precision instead of snapping
+	// it to fully filled or fully empty. It applies whenever the caller
+	// supplies SubCharacterGlyphs, or when Fill and Empty are left at their
+	// defaults ('█' and '░'), in which case rograph's built-in horizontal
+	// eighth-block glyphs (▏▎▍▌▋▊▉) are used. Custom Fill/Empty glyphs with
+	// no SubCharacterGlyphs fall back to whole-character snapping, since
+	// the built-in eighth-block glyphs only exist for the default block
+	// characters.
 	SubChar bool
 	// SubCharacterGlyphs supplies the ascending partial-fill glyphs. Empty
 	// uses rograph's legacy eighth-block sequence; callers with a visual spec
@@ -79,8 +82,13 @@ var eighthBlockGlyphs = []rune("▏▎▍▌▋▊▉")
 // both the empty and fully-filled endpoints; its length determines the
 // precision (subdivisions = len(partial)+1). The historical eighth-block
 // bar passes seven glyphs for eight subdivisions per cell; a Braille bar
-// (issue 220) passes a single half-cell glyph for two subdivisions per
-// cell -- the same accounting generalized, not a parallel code path.
+// (issue 220) passes a single half-cell glyph (e.g. "⡇") for two
+// subdivisions per cell -- the same accounting generalized, not a parallel
+// code path. This "Braille bar" quantization is unrelated to this file's
+// other Braille renderer, brailleGlyph/SparklineBraille below: that one
+// maps two chronological sparkline samples onto a four-dot bottom-aligned
+// Braille column pair, a different problem (a two-sample dot matrix, not a
+// single-cell fill boundary) that happens to reuse the same Unicode block.
 //
 // emptyRune is the character used for cells past the boundary that are
 // fully empty. Callers with an ANSI background wrap (RenderBar's ANSI
