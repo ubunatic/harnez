@@ -1,6 +1,6 @@
 # 202 — Reserved placeholder filename can diverge from hand-authored ticket slug
 
-**Status**: Open
+**Status**: Closed — resolved in c4d6a67
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -36,3 +36,25 @@ than re-deriving the filename from the title.
   listing it as a separate open issue.
 - Verify by reproducing the original divergence (reserve with one title, write to a
   differently-derived slug) and confirming index no longer double-lists it.
+
+## 4. Resolution
+
+Implemented remediation option 1, the smaller of the two proposed fixes: `harnez find
+issues next --reserve` now prints the exact reserved filename in its non-JSON output
+(`cmd/harnez/find.go`, `runFindNext`), as `<NUMBER><TAB>issues/<reserved-filename>.md`,
+instead of just the bare ticket number. The JSON form already carried `file`/`path`
+fields (issue 194); only the plain-text form was missing this. Callers that write ticket
+content directly to the printed path can no longer diverge from the slug Reserve()
+actually picked, removing the divergence opportunity at the source rather than trying to
+detect it after the fact. `docs/practices/IssueTracking.md` was updated to tell agents to
+use the printed path rather than re-deriving a slug from the title by hand.
+
+Added `TestRunFind_IssuesNextReservePrintsExactFilename` (`cmd/harnez/find_test.go`),
+which reserves a placeholder for a title ("Add Doubled-Res. Sparklines!") whose
+plausible hand-derived slug ("add-doubled-resolution-sparklines") differs from the slug
+`Slugify` actually produces ("add-doubled-res-sparklines"), then asserts the path printed
+by `--reserve` exists on disk while the hand-derived guess does not -- reproducing and
+resolving the exact scenario from issue 202. Existing reserve tests
+(`TestRunFind_IssuesNextReserve`) were updated for the new tab-separated output format.
+
+`go test ./...` passes. `make install` run after the Go change.
