@@ -1,10 +1,10 @@
 # 213 — Add opt-in heat presentation for usage bars
 
-**Status**: In Progress
+**Status**: In Review
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
-**Related**: Issue 211; `usage-bar` in `spec/indicators.yaml`
+**Related**: Issue 211; commit `878f83d`; `usage-bar` in `spec/indicators.yaml`
 
 ---
 

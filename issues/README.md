@@ -213,7 +213,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 210 | [210-make-low-nonzero-braille-load-values-visible.md](210-make-low-nonzero-braille-load-values-visible.md) | Make low nonzero Braille load values visible | In Progress |
 | 211 | [211-adopt-btop-style-heat-colored-charts-with-a-unified-background.md](211-adopt-btop-style-heat-colored-charts-with-a-unified-background.md) | Adopt btop-style heat-colored charts with a unified background | In Review |
 | 212 | [212-taxonomic-classification-of-telemetry-tool-notes.md](212-taxonomic-classification-of-telemetry-tool-notes.md) | Taxonomic Classification of Telemetry Tool Notes for Safe Visual Analytics | Closed |
-| 213 | [213-add-opt-in-heat-presentation-for-usage-bars.md](213-add-opt-in-heat-presentation-for-usage-bars.md) | Add opt-in heat presentation for usage bars | In Progress |
+| 213 | [213-add-opt-in-heat-presentation-for-usage-bars.md](213-add-opt-in-heat-presentation-for-usage-bars.md) | Add opt-in heat presentation for usage bars | In Review |
 | 214 | [214-add-256-color-heat-palette-option-for-charts.md](214-add-256-color-heat-palette-option-for-charts.md) | Add 256-color heat palette option for charts | Open |
 | 215 | [215-llm-backfill-and-reclassification-mode-for-telemetry-tool-notes.md](215-llm-backfill-and-reclassification-mode-for-telemetry-tool-notes.md) | LLM Backfill and Reclassification Mode for Telemetry Tool Notes | Open |
 | 216 | [216-switch-telemetry-classifier-from-claude-cli-to-lmcoder-local-slm.md](216-switch-telemetry-classifier-from-claude-cli-to-lmcoder-local-slm.md) | Switch Telemetry Note Classifier from Claude CLI to Local SLM via `lmcoder` | Open |
