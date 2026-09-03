@@ -1167,6 +1167,79 @@ func TestBuildLoadBox_RemoteUsesSnapshot(t *testing.T) {
 	}
 }
 
+// TestIssue218RemoteLoadBrailleWidthParity covers remote snapshots produced
+// by both older/just-started collectors (short history) and fully warmed
+// collectors. Two samples feed each Braille cell, so renderers must pad to
+// the shared twenty-sample retention window before requesting ten cells.
+func TestIssue218RemoteLoadBrailleWidthParity(t *testing.T) {
+	full := make([]float64, loadHistoryLen)
+	for i := range full {
+		full[i] = float64((i * 7) % 100)
+	}
+	short := []float64{18, 42}
+
+	for _, width := range []int{minBoxWidth, 48} {
+		for _, remoteHistory := range [][]float64{short, full} {
+			name := fmt.Sprintf("width=%d/history=%d", width, len(remoteHistory))
+			t.Run(name, func(t *testing.T) {
+				local := &LoadSnapshot{
+					CPU:  CPULoad{NumCPU: 8, CPUPercent: 42, CPUPercentOk: true, PercentHistory: full},
+					GPUs: []GPU{{Name: "Phoenix", UtilPercent: 42, UtilHistory: full}},
+				}
+				remote := &LoadSnapshot{
+					CPU:  CPULoad{NumCPU: 8, CPUPercent: 42, CPUPercentOk: true, PercentHistory: remoteHistory},
+					GPUs: []GPU{{Name: "Phoenix", UtilPercent: 42, UtilHistory: remoteHistory}},
+				}
+
+				localBox := buildLoadBox(width, "", local)
+				remoteBox := buildRemoteLoadBox(width, "phoenix", remote, true)
+				for row := range 2 {
+					localStart, localEnd := bracketColumns(stripANSI(localBox.lines[row]))
+					remoteStart, remoteEnd := bracketColumns(stripANSI(remoteBox.lines[row]))
+					if localStart != remoteStart || localEnd != remoteEnd {
+						t.Errorf("intrinsic row %d chart columns remote=(%d,%d), local=(%d,%d)", row, remoteStart, remoteEnd, localStart, localEnd)
+					}
+					if got := remoteEnd - remoteStart + 1; got != rograph.MaxWidth+2 {
+						t.Errorf("intrinsic row %d remote chart width = %d, want %d: %q", row, got, rograph.MaxWidth+2, stripANSI(remoteBox.lines[row]))
+					}
+				}
+
+				localRows := renderWBox(localBox)
+				remoteRows := renderWBox(remoteBox)
+				for _, row := range []int{1, 2} { // CPU, then GPU/Phoenix.
+					localText := stripANSI(localRows[row])
+					remoteText := stripANSI(remoteRows[row])
+					if got := runewidth.StringWidth(localText); got != width {
+						t.Fatalf("local row %d width = %d, want %d: %q", row, got, width, localText)
+					}
+					if got := runewidth.StringWidth(remoteText); got != width {
+						t.Fatalf("remote row %d width = %d, want %d: %q", row, got, width, remoteText)
+					}
+
+					localStart, localEnd := bracketColumns(localText)
+					remoteStart, remoteEnd := bracketColumns(remoteText)
+					if localStart != remoteStart || localEnd != remoteEnd {
+						t.Errorf("row %d chart columns remote=(%d,%d), local=(%d,%d)\nremote: %q\n local: %q",
+							row, remoteStart, remoteEnd, localStart, localEnd, remoteText, localText)
+					}
+				}
+			})
+		}
+	}
+}
+
+func bracketColumns(s string) (int, int) {
+	startByte := strings.Index(s, "[")
+	if startByte < 0 {
+		return -1, -1
+	}
+	endOffset := strings.Index(s[startByte:], "]")
+	if endOffset < 0 {
+		return runewidth.StringWidth(s[:startByte]), -1
+	}
+	return runewidth.StringWidth(s[:startByte]), runewidth.StringWidth(s[:startByte+endOffset])
+}
+
 // TestBuildLoadBox_RemoteWithoutSnapshotDoesNotFallBackLocally guards the
 // specific failure this issue is about: a remote session with no snapshot
 // yet (fresh fallback summary, SSH hiccup) must show an explicit

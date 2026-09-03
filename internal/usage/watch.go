@@ -1030,6 +1030,7 @@ func formatCPULine(load CPULoad) string {
 		}
 		series = []float64{val}
 	}
+	series = padHistory(series, load.CPUPercent, loadHistoryLen)
 	avgPart := "n/a"
 	if load.CPUPercentOk {
 		avgPart = watchLoadPercent(load.CPUPercent)
@@ -1049,7 +1050,7 @@ func formatCPULine(load CPULoad) string {
 		}
 		chart = rograph.RenderBar(val, watchLoadBarOptions(val))
 	} else {
-		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, (len(series)+1)/2), mode))
+		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, rograph.MaxWidth, mode))
 	}
 	return fmt.Sprintf("%s %s %s%s", label, chart, avgPart, tempPart)
 }
@@ -1095,6 +1096,7 @@ func formatGPULine(g GPU) string {
 	if len(series) == 0 {
 		series = []float64{g.UtilPercent}
 	}
+	series = padHistory(series, g.UtilPercent, loadHistoryLen)
 	label := padLoadLabel(fmt.Sprintf("gpu (%s)", g.Name))
 	tempPart := ""
 	if g.HaveTemp {
@@ -1106,7 +1108,7 @@ func formatGPULine(g GPU) string {
 	if mode == LoadChartBar {
 		chart = rograph.RenderBar(g.UtilPercent, watchLoadBarOptions(g.UtilPercent))
 	} else {
-		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, min(rograph.MaxWidth, (len(series)+1)/2), mode))
+		chart = fmt.Sprintf("[%s]", watchPercentSparkline(series, rograph.MaxWidth, mode))
 	}
 	return fmt.Sprintf("%s %s %s%s", label, chart, watchLoadPercent(g.UtilPercent), tempPart)
 }
