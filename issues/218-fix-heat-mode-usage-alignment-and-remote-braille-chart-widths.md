@@ -1,6 +1,6 @@
 # 218 — Fix heat-mode usage alignment and remote Braille chart widths
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug

@@ -218,4 +218,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 215 | [215-llm-backfill-and-reclassification-mode-for-telemetry-tool-notes.md](215-llm-backfill-and-reclassification-mode-for-telemetry-tool-notes.md) | LLM Backfill and Reclassification Mode for Telemetry Tool Notes | Open |
 | 216 | [216-switch-telemetry-classifier-from-claude-cli-to-lmcoder-local-slm.md](216-switch-telemetry-classifier-from-claude-cli-to-lmcoder-local-slm.md) | Switch Telemetry Note Classifier from Claude CLI to Local SLM via `lmcoder` | Open |
 | 217 | [217-add-n-limit-and-all-flag-to-harnez-find-issues.md](217-add-n-limit-and-all-flag-to-harnez-find-issues.md) | Add -n Limit (Default: 10) and --all Flag to harnez find issues | Open |
-| 218 | [218-fix-heat-mode-usage-alignment-and-remote-braille-chart-widths.md](218-fix-heat-mode-usage-alignment-and-remote-braille-chart-widths.md) | Fix heat-mode usage alignment and remote Braille chart widths | Open |
+| 218 | [218-fix-heat-mode-usage-alignment-and-remote-braille-chart-widths.md](218-fix-heat-mode-usage-alignment-and-remote-braille-chart-widths.md) | Fix heat-mode usage alignment and remote Braille chart widths | In Progress |
