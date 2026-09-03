@@ -143,3 +143,47 @@ func TestExportAll(t *testing.T) {
 		t.Errorf("ProjectDir = %q, want %q", exp.ToolCalls[0].ProjectDir, "foo")
 	}
 }
+
+func TestBuildExport_IncludesActivityCategory(t *testing.T) {
+	rows := []ToolCall{
+		{
+			CreatedAt: time.Now(),
+			SessionID: "sess-1",
+			AgentID:   "claude",
+			ToolName:  "Edit",
+			CallType:  "shell",
+			Note:      "fixed bug in parser",
+		},
+		{
+			CreatedAt: time.Now(),
+			SessionID: "sess-1",
+			AgentID:   "claude",
+			ToolName:  "Bash",
+			CallType:  "shell",
+			Note:      "go test ./...",
+		},
+	}
+
+	exp := BuildExport(rows, time.Now())
+	if len(exp.ToolCalls) != 2 {
+		t.Fatalf("expected 2 calls, got %d", len(exp.ToolCalls))
+	}
+	if exp.ToolCalls[0].ActivityCategory != CategoryEdit {
+		t.Errorf("call 0 category = %q, want %q", exp.ToolCalls[0].ActivityCategory, CategoryEdit)
+	}
+	if exp.ToolCalls[1].ActivityCategory != CategoryTest {
+		t.Errorf("call 1 category = %q, want %q", exp.ToolCalls[1].ActivityCategory, CategoryTest)
+	}
+
+	data, err := json.Marshal(exp)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	out := string(data)
+	if !strings.Contains(out, `"activity_category":"edit"`) {
+		t.Errorf("expected activity_category edit in JSON output: %s", out)
+	}
+	if !strings.Contains(out, `"activity_category":"test"`) {
+		t.Errorf("expected activity_category test in JSON output: %s", out)
+	}
+}

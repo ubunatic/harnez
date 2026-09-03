@@ -98,6 +98,9 @@ func TestRunUsageExport_EndToEndScrubsRawPII(t *testing.T) {
 	if call["project_dir"] != "foo" {
 		t.Errorf("expected project_dir %q, got %v", "foo", call["project_dir"])
 	}
+	if call["activity_category"] != "inspection" {
+		t.Errorf("expected activity_category %q, got %v", "inspection", call["activity_category"])
+	}
 
 	usg, ok := envelope["usage"].(map[string]any)
 	if !ok {

@@ -63,4 +63,13 @@ CREATE TABLE IF NOT EXISTS note_sanitization_cache (
 	clean_text  TEXT NOT NULL,
 	created_at  TEXT NOT NULL
 );
+
+-- note_category_cache backs issue 212's Tier 2 persistent content-hash cache:
+-- sha256(raw note text) -> activity_category enum string, avoiding re-evaluating
+-- seen notes. Purely additive table (no schemaVersion bump needed).
+CREATE TABLE IF NOT EXISTS note_category_cache (
+	raw_hash    TEXT PRIMARY KEY,
+	category    TEXT NOT NULL,
+	created_at  TEXT NOT NULL
+);
 `

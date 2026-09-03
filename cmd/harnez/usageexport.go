@@ -8,6 +8,9 @@
 // issues/204-sanitized-telemetry-and-token-export-for-datavis.md's
 // "Progress / Scope Note" section.
 //
+// Scope note (issue 212): Adds --classify flag to optionally enable Tier 3
+// batch note classification into canonical ActivityCategory enums.
+//
 // All scrubbing (path normalization, account masking, hostname
 // sanitization) lives in internal/telemetry/export.go and
 // internal/usage/export.go, not here — this file only resolves flags,
@@ -41,6 +44,7 @@ func newUsageExportCmd() *cobra.Command {
 	var dbPath string
 	var historyDir string
 	var privacyFlag string
+	var classify bool
 
 	cmd := &cobra.Command{
 		Use:   "export --out=<file>",
@@ -48,7 +52,8 @@ func newUsageExportCmd() *cobra.Command {
 		Long: `export writes a single scrubbed JSON file combining:
 
   - Tool-call telemetry from internal/telemetry (~/.harnez/tool_catalog.sqlite):
-    call frequency, scores, exit codes, durations, byte savings.
+    call frequency, scores, exit codes, durations, byte savings, and
+    taxonomic activity_category.
   - Token/session usage history from internal/usage
     (~/.claude/harnez/usage-history/*.jsonl): per-agent token totals and
     quota-window percentages over time.
@@ -57,8 +62,9 @@ Privacy: absolute filesystem paths (working directories, ticket IDs,
 project names) are always reduced to their final path component only;
 account/email fields are always masked via the same MaskAccount helper
 used elsewhere in harnez; hostnames are always anonymized to opaque
-per-export-run labels. --privacy controls what happens to free-text
-fields (tool-call notes, usage Sources/Details):
+per-export-run labels. activity_category is always safe and present.
+--privacy controls what happens to free-text fields (tool-call notes,
+usage Sources/Details):
 
   public          (default) drop free text entirely.
   agent-sanitized keep tool-call notes, rewritten via the claude CLI into
@@ -70,11 +76,17 @@ fields (tool-call notes, usage Sources/Details):
   raw             keep every field completely unscrubbed. Local/private
                   use only.
 
+Taxonomic Classification:
+  --classify      opt-in batch classification of unmatched tool notes
+                  using local model (lmcoder/claude) into canonical
+                  activity categories.
+
 This is a JSON-only export (issue 204's first pass) — SQLite export is not
 yet implemented.
 
   harnez usage export --out=telemetry.json
-  harnez usage export --out=telemetry.json --privacy=agent-sanitized`,
+  harnez usage export --out=telemetry.json --privacy=agent-sanitized
+  harnez usage export --out=telemetry.json --classify`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if out == "" {
@@ -84,13 +96,14 @@ yet implemented.
 			if err != nil {
 				return err
 			}
-			return runUsageExportLevel(out, dbPath, historyDir, level)
+			return runUsageExportFull(out, dbPath, historyDir, level, classify)
 		},
 	}
 	cmd.Flags().StringVar(&out, "out", "", "output file path for the sanitized JSON export (required)")
 	cmd.Flags().StringVar(&dbPath, "db", "", "override the telemetry database path (default: ~/.harnez/tool_catalog.sqlite)")
 	cmd.Flags().StringVar(&historyDir, "history-dir", "", "override the usage-history directory (default: ~/.claude/harnez/usage-history)")
 	cmd.Flags().StringVar(&privacyFlag, "privacy", "public", "privacy level: public|agent-sanitized|internal|raw")
+	cmd.Flags().BoolVar(&classify, "classify", false, "opt-in batch classification of notes using local model runner (issue 212)")
 	return cmd
 }
 
@@ -107,6 +120,11 @@ func runUsageExport(out, dbPath, historyDir string) error {
 // when level is privacy.LevelAgentSanitized — every other level never
 // shells out to the claude CLI.
 func runUsageExportLevel(out, dbPath, historyDir string, level privacy.Level) error {
+	return runUsageExportFull(out, dbPath, historyDir, level, false)
+}
+
+// runUsageExportFull supports both privacy levels and the --classify option.
+func runUsageExportFull(out, dbPath, historyDir string, level privacy.Level, classify bool) error {
 	now := time.Now()
 	ctx := context.Background()
 
@@ -127,7 +145,13 @@ func runUsageExportLevel(out, dbPath, historyDir string, level privacy.Level) er
 	if level == privacy.LevelAgentSanitized {
 		sanitizer = privacy.NewClaudeCLISanitizer()
 	}
-	telExport, err := telemetry.ExportAllLevel(ctx, db, now, level, sanitizer)
+
+	var classifier telemetry.NoteBatchClassifier
+	if classify {
+		classifier = &telemetry.DefaultLocalClassifier{}
+	}
+
+	telExport, err := telemetry.ExportAllWithClassifier(ctx, db, now, level, sanitizer, classifier)
 	if err != nil {
 		return fmt.Errorf("export telemetry: %w", err)
 	}
