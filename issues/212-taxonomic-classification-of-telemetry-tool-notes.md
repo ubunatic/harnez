@@ -95,13 +95,14 @@ Raw Note / Tool Call
    - Stored in SQLite (`~/.harnez/note_category_cache.sqlite` or table in `tool_catalog.sqlite`).
    - Maps `sha256(note) -> category_enum`.
 
-3. **Tier 3 — Small Local Model (SLM) Batch Classifier (Export Time Only)**:
-   - Purpose: Disambiguates custom, fuzzy agent notes without paying for expensive cloud models. Text classification into 9 fixed enums does NOT require a multi-hundred-billion parameter frontier reasoning model; a lightweight 1B–8B local model (via Ollama, llama.cpp, or a fast embedded classifier) is ideal.
+3. **Tier 3 — Small Local Model (SLM) Batch Classifier via `lmcoder` (Export Time Only)**:
+   - Purpose: Disambiguates custom, fuzzy agent notes without paying for expensive cloud models. Text classification into 9 fixed enums does NOT require a multi-hundred-billion parameter frontier reasoning model; a lightweight 1B–8B local model is ideal.
+   - **Local Runner Integration**: Leverage companion tool **[`lmcoder`](/lmcoder)** (which provides local model serving, sandboxing, and canary endpoints) or standard local backends (llama.cpp/Ollama) to run the batch classification turns locally at zero API cost.
    - Runs **only** when `harnez usage export --classify` is explicitly invoked.
    - Evaluates only unique cache misses in bulk batches (e.g. 50–100 distinct notes at once).
    - Prompt is strictly a classification matrix: takes a numbered list of short notes and outputs `[ {index: 1, cat: "test"}, {index: 2, cat: "workflow"}, ... ]`.
    - Results are permanently saved to `note_category_cache`, so each unique note is classified at most once in its lifetime.
-   - Zero hard dependency: If the local SLM runner is offline, unmatched notes safely default to `"other"`.
+   - Zero hard dependency: If `lmcoder` or the local SLM runner is offline, unmatched notes safely default to `"other"`.
 
 ---
 
