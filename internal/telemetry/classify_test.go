@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -266,4 +268,108 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// TestDefaultLocalClassifier_ClassifyBatch_ValidResponse verifies that a
+// mocked local OpenAI-compatible endpoint's chat-completions response is
+// parsed into the expected ActivityCategory enum values, and that the
+// request never targets anything but the configured local BaseURL.
+func TestDefaultLocalClassifier_ClassifyBatch_ValidResponse(t *testing.T) {
+	notes := []string{"go test ./... failed", "some unrelated developer note"}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Errorf("unexpected request path: %s", r.URL.Path)
+		}
+		var req chatCompletionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if len(req.Messages) != 1 || req.Messages[0].Role != "user" {
+			t.Fatalf("unexpected request messages: %+v", req.Messages)
+		}
+		catsJSON, _ := json.Marshal([]string{"test", "other"})
+		resp := chatCompletionResponse{}
+		resp.Choices = []struct {
+			Message chatCompletionMessage `json:"message"`
+		}{
+			{Message: chatCompletionMessage{Role: "assistant", Content: "```json\n" + string(catsJSON) + "\n```"}},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	c := &DefaultLocalClassifier{BaseURL: srv.URL + "/v1", Timeout: 5 * time.Second}
+	got, err := c.ClassifyBatch(context.Background(), notes)
+	if err != nil {
+		t.Fatalf("ClassifyBatch() unexpected error: %v", err)
+	}
+	want := []ActivityCategory{CategoryTest, CategoryOther}
+	if len(got) != len(want) {
+		t.Fatalf("ClassifyBatch() returned %d categories, want %d", len(got), len(want))
+	}
+	for i, cat := range got {
+		if cat != want[i] {
+			t.Errorf("ClassifyBatch()[%d] = %q, want %q", i, cat, want[i])
+		}
+	}
+}
+
+// TestDefaultLocalClassifier_ClassifyBatch_ServerDown verifies that when the
+// local endpoint is unreachable, ClassifyBatch returns an error (rather than
+// hanging or panicking) so ClassifyNotes' caller-side fallback to
+// CategoryOther can take over.
+func TestDefaultLocalClassifier_ClassifyBatch_ServerDown(t *testing.T) {
+	// Use a port that is not listening: start and immediately close a server
+	// to obtain a URL with nothing bound to it.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	deadURL := srv.URL
+	srv.Close()
+
+	c := &DefaultLocalClassifier{BaseURL: deadURL + "/v1", Timeout: 2 * time.Second}
+	_, err := c.ClassifyBatch(context.Background(), []string{"a note"})
+	if err == nil {
+		t.Fatal("ClassifyBatch() expected error for unreachable local endpoint, got nil")
+	}
+}
+
+// TestDefaultLocalClassifier_ClassifyBatch_BadResponse verifies that a
+// malformed (non-JSON-array) model response yields an error rather than a
+// panic.
+func TestDefaultLocalClassifier_ClassifyBatch_BadResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := chatCompletionResponse{}
+		resp.Choices = []struct {
+			Message chatCompletionMessage `json:"message"`
+		}{
+			{Message: chatCompletionMessage{Role: "assistant", Content: "not valid json at all"}},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	c := &DefaultLocalClassifier{BaseURL: srv.URL + "/v1", Timeout: 5 * time.Second}
+	_, err := c.ClassifyBatch(context.Background(), []string{"a note"})
+	if err == nil {
+		t.Fatal("ClassifyBatch() expected error for malformed model response, got nil")
+	}
+}
+
+// TestDefaultLocalClassifier_ClassifyBatch_ViaClassifyNotes verifies that the
+// existing ClassifyNotes fallback-to-CategoryOther logic still triggers
+// gracefully when the HTTP-based classifier fails, with no panic or hang.
+func TestDefaultLocalClassifier_ClassifyBatch_ViaClassifyNotes(t *testing.T) {
+	c := &DefaultLocalClassifier{BaseURL: "http://127.0.0.1:1/v1", Timeout: 500 * time.Millisecond}
+	calls := []ToolCall{
+		{ToolName: "Bash", Note: "totally unclassifiable developer prose"},
+	}
+	cats, err := ClassifyNotes(context.Background(), nil, calls, c, time.Now())
+	if err != nil {
+		t.Fatalf("ClassifyNotes() unexpected error: %v", err)
+	}
+	if len(cats) != 1 || cats[0] != CategoryOther {
+		t.Fatalf("ClassifyNotes() = %v, want [%q] (graceful fallback)", cats, CategoryOther)
+	}
 }

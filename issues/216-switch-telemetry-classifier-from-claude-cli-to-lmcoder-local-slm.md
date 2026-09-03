@@ -1,6 +1,6 @@
 # 216 — Switch Telemetry Note Classifier from Claude CLI to Local SLM via `lmcoder`
 
-**Status**: Open
+**Status**: Closed — resolved: `DefaultLocalClassifier` now POSTs to a local OpenAI-compatible endpoint (default `http://localhost:8734/v1/chat/completions`, e.g. `lmcoder serve`) instead of shelling out to `claude -p`; graceful fallback to `CategoryOther` on unreachable/erroring endpoint verified in tests.
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature / Telemetry

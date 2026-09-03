@@ -7,7 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os/exec"
+	"io"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -352,11 +353,42 @@ func sha256Hex(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// DefaultLocalClassifier implements NoteBatchClassifier by invoking `lmcoder` or `claude -p`
-// if available, with graceful fallback to CategoryOther if offline or unavailable.
+// DefaultLocalClassifier implements NoteBatchClassifier by calling a local
+// OpenAI-compatible chat-completions endpoint (e.g. `lmcoder serve`, which
+// exposes llama-server's standard /v1/chat/completions route). Note text is
+// only ever sent to BaseURL, which defaults to localhost — never to a cloud
+// API. If the local server is not running, ClassifyBatch returns an error and
+// the caller (ClassifyNotes) falls back to CategoryOther for the batch.
 type DefaultLocalClassifier struct {
-	Bin     string
+	// BaseURL is the OpenAI-compatible API root, e.g. "http://localhost:8734/v1".
+	// Defaults to defaultClassifierBaseURL when empty.
+	BaseURL string
+	// Model is the model name to request from the local server. Defaults to
+	// defaultClassifierModel when empty.
+	Model   string
 	Timeout time.Duration
+}
+
+const (
+	defaultClassifierBaseURL = "http://localhost:8734/v1"
+	defaultClassifierModel   = "qwen2.5-3b-instruct-q4"
+)
+
+type chatCompletionRequest struct {
+	Model       string                  `json:"model"`
+	Messages    []chatCompletionMessage `json:"messages"`
+	Temperature float64                 `json:"temperature"`
+}
+
+type chatCompletionMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type chatCompletionResponse struct {
+	Choices []struct {
+		Message chatCompletionMessage `json:"message"`
+	} `json:"choices"`
 }
 
 const classifyPromptTemplate = `You are a strict text classification model categorizing developer tool-call notes into one of exactly 9 canonical activity categories:
@@ -381,14 +413,17 @@ func (c *DefaultLocalClassifier) ClassifyBatch(ctx context.Context, notes []stri
 	if len(notes) == 0 {
 		return nil, nil
 	}
-	bin := c.Bin
-	if bin == "" {
-		// Prefer lmcoder if available, else claude
-		bin = "claude"
+	baseURL := strings.TrimSuffix(c.BaseURL, "/")
+	if baseURL == "" {
+		baseURL = defaultClassifierBaseURL
+	}
+	model := c.Model
+	if model == "" {
+		model = defaultClassifierModel
 	}
 	timeout := c.Timeout
 	if timeout <= 0 {
-		timeout = 90 * time.Second
+		timeout = 10 * time.Second
 	}
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -399,27 +434,48 @@ func (c *DefaultLocalClassifier) ClassifyBatch(ctx context.Context, notes []stri
 	}
 	prompt := fmt.Sprintf(classifyPromptTemplate, len(notes), string(notesJSON))
 
-	cmd := exec.CommandContext(cctx, bin, "-p", "--output-format", "json")
-	cmd.Stdin = strings.NewReader(prompt)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("telemetry: batch classifier invocation failed: %w (stderr: %s)", err, strings.TrimSpace(stderr.String()))
+	reqBody := chatCompletionRequest{
+		Model: model,
+		Messages: []chatCompletionMessage{
+			{Role: "user", Content: prompt},
+		},
+		Temperature: 0.0,
+	}
+	reqJSON, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("telemetry: marshal chat completion request: %w", err)
 	}
 
-	var envelope struct {
-		Result  string `json:"result"`
-		IsError bool   `json:"is_error"`
+	httpReq, err := http.NewRequestWithContext(cctx, http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(reqJSON))
+	if err != nil {
+		return nil, fmt.Errorf("telemetry: build classifier request: %w", err)
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
-		return nil, fmt.Errorf("telemetry: parse classifier json envelope: %w", err)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("telemetry: local classifier endpoint unreachable: %w", err)
 	}
-	if envelope.IsError {
-		return nil, fmt.Errorf("telemetry: classifier reported error: %s", envelope.Result)
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("telemetry: read classifier response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("telemetry: classifier endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
 
-	raw := strings.TrimSpace(envelope.Result)
+	var envelope chatCompletionResponse
+	if err := json.Unmarshal(respBody, &envelope); err != nil {
+		return nil, fmt.Errorf("telemetry: parse classifier json response: %w", err)
+	}
+	if len(envelope.Choices) == 0 {
+		return nil, fmt.Errorf("telemetry: classifier response contained no choices")
+	}
+
+	raw := strings.TrimSpace(envelope.Choices[0].Message.Content)
 	raw = strings.TrimPrefix(raw, "```json")
 	raw = strings.TrimPrefix(raw, "```")
 	raw = strings.TrimSuffix(raw, "```")
