@@ -288,9 +288,12 @@ func brailleColumnLevel(value, minimum, maximum float64, flat bool) int {
 	if math.IsInf(value, 1) || value > maximum {
 		value = maximum
 	}
-	level := int(((value - minimum) / (maximum - minimum)) * 4)
-	if level < 0 {
-		return 0
+	// Match btop's visible baseline: normalized zero and invalid values use
+	// the lowest dot rather than U+2800. The remaining rows divide the range
+	// into (0, 25], (25, 50], (50, 75], and (75, 100].
+	level := int(math.Ceil(((value - minimum) / (maximum - minimum)) * 4))
+	if level < 1 {
+		return 1
 	}
 	if level > 4 {
 		return 4

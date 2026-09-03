@@ -94,9 +94,9 @@ func TestRenderBrailleSparkline(t *testing.T) {
 		opts SparklineOptions
 		want string
 	}{
-		{"pair orientation", []float64{0, 100, 100, 0}, fixed, "⢸⡇"},
-		{"odd leading singleton is duplicated", []float64{10, 20, 30}, fixed, "⠀⢀"},
-		{"latest doubled window", []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100}, SparklineOptions{Presentation: SparklineBraille, FixedRange: true, Min: 0, Max: 100, Width: 10}, "⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸"},
+		{"pair orientation", []float64{0, 100, 100, 0}, fixed, "⣸⣇"},
+		{"odd leading singleton is duplicated", []float64{10, 20, 30}, fixed, "⣀⣠"},
+		{"latest doubled window", []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100}, SparklineOptions{Presentation: SparklineBraille, FixedRange: true, Min: 0, Max: 100, Width: 10}, "⣀⣀⣀⣀⣀⣀⣀⣀⣀⣸"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -104,6 +104,48 @@ func TestRenderBrailleSparkline(t *testing.T) {
 				t.Fatalf("RenderSparkline() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBrailleColumnLevelFixedRangeBoundaries(t *testing.T) {
+	tests := []struct {
+		name  string
+		value float64
+		want  int
+	}{
+		{"zero uses visible baseline", 0, 1},
+		{"low positive keeps baseline", 0.01, 1},
+		{"twenty percent is visible", 20, 1},
+		{"first band endpoint", 25, 1},
+		{"second band begins", 25.01, 2},
+		{"second band endpoint", 50, 2},
+		{"third band begins", 50.01, 3},
+		{"third band endpoint", 75, 3},
+		{"fourth band begins", 75.01, 4},
+		{"maximum fills all dots", 100, 4},
+		{"below range clamps to baseline", -1, 1},
+		{"above range clamps to full", 101, 4},
+		{"nan normalizes to baseline", math.NaN(), 1},
+		{"negative infinity normalizes to baseline", math.Inf(-1), 1},
+		{"positive infinity clamps to full", math.Inf(1), 4},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := brailleColumnLevel(tt.value, 0, 100, false); got != tt.want {
+				t.Fatalf("brailleColumnLevel(%v) = %d, want %d", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRenderBrailleSparklineFixedRangeBaselineIsNotBlank(t *testing.T) {
+	got := RenderPercentSparkline([]float64{0, 20}, SparklineOptions{Presentation: SparklineBraille, Width: 1})
+	if got == "⠀" {
+		t.Fatal("zero/20% Braille samples rendered as blank U+2800")
+	}
+	if want := "⣀"; got != want {
+		t.Fatalf("RenderPercentSparkline(0, 20) = %q, want %q", got, want)
 	}
 }
 
