@@ -53,3 +53,75 @@ Add a sanitized export mechanism to `harnez`:
 1. Define export schema and privacy scrubbing rules in `internal/telemetry/export.go` and `internal/usage/export.go`.
 2. Implement CLI subcommand (e.g. `harnez telemetry export` or `harnez usage export`).
 3. Add unit and integration tests verifying that paths like `/home/uwe/...` and email addresses are scrubbed from exported payloads.
+
+## 4. Progress / Scope Note
+
+First pass (2026-09-03) implemented **JSON export only**:
+
+- `harnez usage export --out=<file> [--db <path>] [--history-dir <dir>]`, nested under
+  `usage` (`cmd/harnez/usageexport.go`), writing a single envelope combining both
+  telemetry and usage-history exports.
+- `internal/telemetry/export.go`: `BuildExport`/`ExportAll` transform `tool_calls` rows
+  into `ExportToolCall` records.
+- `internal/usage/export.go`: `BuildUsageExport`/`ExportHistory` transform merged
+  `HistoryEntry` records into `ExportPoint` records.
+
+**SQLite export is deferred** to a follow-up ticket — not implemented, not stubbed.
+
+Fields scrubbed and how:
+
+- `WorkingDir` / `ProjectName` / `TicketID` (telemetry): reduced to `filepath.Base(...)`
+  only (e.g. `/home/uwe/projects/harnez` -> `harnez`) via `normalizeProjectPath`, applied
+  uniformly to all three fields in case any of them ever holds a path rather than a
+  short identifier. Exported as `project_dir` / `project_name` / `ticket_id`.
+- `Account` (usage, e.g. an email): re-run through the existing `MaskAccount` helper
+  (`internal/usage/util.go`). Every current producer already masks `Account` before it
+  is set, so this is a defensive re-application (idempotent on an already-masked value),
+  not a new masking scheme.
+- `Hostname` (usage-history): **not** passed through only `sanitizeHostname` — that
+  helper (`internal/usage/history.go`) just makes a value filesystem-safe (lowercase,
+  disallowed characters swapped for `-`); it does not anonymize, and a real hostname
+  routinely embeds a username (e.g. `uwes-workstation.local`). Instead each real
+  hostname is mapped to an opaque, per-export-run label (`host-1`, `host-2`, ...)
+  assigned in first-seen order (`anonymizeHostname` in `internal/usage/export.go`),
+  using `sanitizeHostname`'s output only as the map key so formatting differences don't
+  split one machine into two labels. This keeps per-machine trends distinguishable in
+  the exported timeseries without leaking the real name.
+- `Note` (telemetry, free text) and `Sources`/`Details` (usage, free-form
+  strings/maps): dropped entirely rather than exported. Both are unstructured
+  human/tool-written text that has historically held paths or other identifying
+  content, with no safe automatic way to scrub arbitrary free text.
+- `SessionID`: kept as-is. It is produced by `internal/resolve.Session()`, not derived
+  from username, hostname, or email — reasoned to carry no PII on its own. Worth
+  revisiting if `resolve.Session`'s derivation ever changes to embed anything
+  identifying.
+
+Tests (assert by string search over the actual serialized JSON bytes, not just that a
+scrub function was invoked):
+
+- `internal/telemetry/export_test.go`: `TestBuildExport_ScrubsWorkingDir`,
+  `TestBuildExport_ScrubsAbsolutePathTicketAndProject`, `TestBuildExport_DropsNote`,
+  `TestExportAll`.
+- `internal/usage/export_test.go`: `TestBuildUsageExport_ScrubsAccountAndHostname`,
+  `TestBuildUsageExport_DropsSourcesAndDetails`,
+  `TestBuildUsageExport_StableHostLabels`, `TestExportHistory`.
+- `cmd/harnez/usageexport_test.go`: `TestRunUsageExport_EndToEndScrubsRawPII` (full
+  CLI-layer round trip against a temp `~/.harnez`-style fixture: sqlite db + jsonl
+  history file, checking the written output file),
+  `TestRunUsageExport_ToleratesMissingFixtureDirs`.
+
+`go test ./...` passes except one pre-existing, environment-dependent flaky test
+(`TestBuildWatchFrameCompactAllUsageDoesNotStarveLoad` in `internal/usage`, unrelated to
+this ticket — it reads the real local `~/.claude/harnez/usage-history` directory's live
+size into a layout-width assertion) confirmed to fail identically with or without this
+ticket's changes present.
+
+Independent security review of the scrubbing logic is still pending, per this ticket's
+Status remaining Open (not Closed).
+
+Note on scope vs. §2's privacy-level scheme: this pass does not implement the `--privacy`
+flag or Levels 1-4 (including the Level 2 LLM-in-the-loop note-sanitization pipeline with
+its content-hash cache) — it implements a single fixed behavior equivalent in spirit to
+"drop the free-text `note`/`Sources`/`Details` fields, scrub everything else," closest to
+§2's Level 1. The privacy-level flag, per-level behavior, and the LLM-based note cleaner
+remain open follow-up work alongside SQLite export.
