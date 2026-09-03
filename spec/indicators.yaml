@@ -98,4 +98,4 @@ load-charts:
   cpu: btop
   gpu: btop
   ram: btop
-  vram: sparkline
+  vram: btop

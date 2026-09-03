@@ -109,8 +109,8 @@ func TestFormatMemoryLines(t *testing.T) {
 	if !strings.Contains(got, "6.0/20.0G 30%") {
 		t.Errorf("formatGPUMemoryLines[0] = %q, want combined %q", got, "6.0/20.0G 30%")
 	}
-	if !strings.Contains(got, "[▅▅▅▅][▁▁▁▁]") {
-		t.Errorf("formatGPUMemoryLines[0] = %q, want dual sparklines [▅▅▅▅][▁▁▁▁]", got)
+	if !strings.Contains(got, "[⣶⣶⣶⣶][⣀⣀⣀⣀]") {
+		t.Errorf("formatGPUMemoryLines[0] = %q, want dual Braille charts [⣶⣶⣶⣶][⣀⣀⣀⣀]", got)
 	}
 }
 

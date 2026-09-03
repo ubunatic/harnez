@@ -51,7 +51,7 @@ func TestEmbeddedIndicatorsSpecIsValidAndExact(t *testing.T) {
 	if got, want := spec.LoadCharts.RAM, "btop"; got != want {
 		t.Errorf("load-charts.ram = %q, want %q", got, want)
 	}
-	if got, want := spec.LoadCharts.VRAM, "sparkline"; got != want {
+	if got, want := spec.LoadCharts.VRAM, "btop"; got != want {
 		t.Errorf("load-charts.vram = %q, want %q", got, want)
 	}
 	for name, sequence := range spec.Sequences {
