@@ -18,7 +18,8 @@ prefer the existing quiet, monochrome display.
 ## 2. Technical Specification
 
 - Add `usage-bar-presentation: monochrome | heat` to the indicator spec and
-  schema. Its default must be `monochrome`.
+  schema. The shipped indicator profile uses `heat`; `monochrome` remains the
+  explicit quiet alternative.
 - In `heat` mode, use the shared heat palette for the filled/partial portion
   of each usage bar and its adjacent numeric percentage. The empty portion
   remains the single spec-owned chart background; do not paint it as a second

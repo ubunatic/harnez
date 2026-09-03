@@ -80,13 +80,14 @@ load-sparkline:
   sequence: vertical-block-scale-8
 
 # All chart surfaces resolve this one named background from spec/colors.yaml.
-# Keep history and current percentage monochrome by default; set `heat` to
-# color both from cool blue through green/yellow to warm red.
+# Use the restrained btop-style heat ramp for history and current percentages;
+# set `monochrome` to disable their foreground colors.
 chart-background: panel-bg
-load-chart-presentation: monochrome
-# Quota/usage bars are independent of load histories; set `heat` to color a
-# filled bar and its adjacent percentage with the shared cool-to-warm palette.
-usage-bar-presentation: monochrome
+load-chart-presentation: heat
+# Quota/usage bars are independent of load histories. `heat` colors a filled
+# bar and its adjacent percentage with the shared cool-to-warm palette; set
+# `monochrome` to disable it.
+usage-bar-presentation: heat
 
 # Presentation modes for hardware load indicators in `usage --watch`.
 # Supported modes: sparkline (or timeseries), braille (or btop), bar (or gauge).

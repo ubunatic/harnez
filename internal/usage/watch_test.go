@@ -1602,7 +1602,10 @@ func TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval(t *testing.T) {
 	if got := strings.Count(raw, wantGauge); got != 1 {
 		t.Fatalf("time-gauge styled glyph appears %d times, want only the compact gauge: %q", got, raw)
 	}
-	if !strings.Contains(raw, "["+ansiOpen("panel-bg")) {
+	// A heat-colored graph combines the shared panel background with its
+	// value-derived foreground in one SGR sequence (for example 40;34), while
+	// monochrome uses the background alone. Both must retain the panel field.
+	if !strings.Contains(raw, "\x1b["+colorSGR("panel-bg")) {
 		t.Fatalf("watch frame lost an existing graph's panel background: %q", raw)
 	}
 }
