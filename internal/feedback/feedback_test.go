@@ -112,6 +112,52 @@ func TestAppendIsolatesDifferentProjects(t *testing.T) {
 	}
 }
 
+func TestFindByIDSearchesAcrossProjects(t *testing.T) {
+	feedbackDir := t.TempDir()
+	projA := filepath.Join(t.TempDir(), "smarthome")
+	projB := filepath.Join(t.TempDir(), "harnez")
+
+	e := Entry{ID: "1607041e", Description: "harnez bug observed while working in smarthome", Status: StatusNew}
+	if err := Append(feedbackDir, projA, e); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	// Not found when scoped to project B's own log.
+	bEntries, err := Load(feedbackDir, projB)
+	if err != nil {
+		t.Fatalf("Load B: %v", err)
+	}
+	if len(bEntries) != 0 {
+		t.Fatalf("expected project B's log to be empty, got %+v", bEntries)
+	}
+
+	// FindByID locates it regardless of which project's log holds it.
+	found, path, err := FindByID(feedbackDir, "1607041e")
+	if err != nil {
+		t.Fatalf("FindByID failed: %v", err)
+	}
+	if found.Description != e.Description {
+		t.Errorf("expected found entry description %q, got %q", e.Description, found.Description)
+	}
+	wantPath, err := Path(feedbackDir, projA)
+	if err != nil {
+		t.Fatalf("Path: %v", err)
+	}
+	if path != wantPath {
+		t.Errorf("expected source path %q, got %q", wantPath, path)
+	}
+}
+
+func TestFindByIDUnknownIDReturnsError(t *testing.T) {
+	feedbackDir := t.TempDir()
+	if err := Append(feedbackDir, t.TempDir(), Entry{ID: "known", Description: "x", Status: StatusNew}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	if _, _, err := FindByID(feedbackDir, "does-not-exist"); err == nil {
+		t.Fatal("expected error for unknown id, got nil")
+	}
+}
+
 func TestSlug(t *testing.T) {
 	cases := map[string]string{
 		"Fix the `harnez apply` idempotency bug!": "fix-the-harnez-apply-idempotency-bug",

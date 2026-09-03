@@ -161,7 +161,12 @@ func newFeedbackPromoteCmd() *cobra.Command {
 using docs/IssueTracking.md's metadata schema, reusing the same ticket
 numbering ` + "`harnez find`/`harnez index`" + ` already use. It does not run
 ` + "`harnez index`" + ` itself — run that afterward to add the new ticket to
-issues/README.md.`,
+issues/README.md.
+
+If the id isn't found in -d's own log, promote falls back to searching every
+project's log under ~/.harnez/feedback/ — an entry logged from project A
+about project B can still be promoted straight into B's issues/ (issue 203)
+without manually locating and reading the raw JSONL.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runFeedbackPromote(cmd.OutOrStdout(), dir, args[0])
@@ -185,8 +190,21 @@ func runFeedbackPromote(w io.Writer, dir, id string) error {
 			break
 		}
 	}
+
+	// Not in -d's own log: fall back to searching every project's log
+	// (issue 203), so an entry logged from a different project about this
+	// one can still be promoted without manually locating the raw JSONL.
+	logPath, pathErr := feedback.Path(feedbackDir, dir)
+	if pathErr != nil {
+		return fmt.Errorf("feedback: %w", pathErr)
+	}
 	if found == nil {
-		return fmt.Errorf("feedback: no entry with id %q (see `harnez feedback list -d %s --all`)", id, dir)
+		e, srcPath, err := feedback.FindByID(feedbackDir, id)
+		if err != nil {
+			return fmt.Errorf("feedback: no entry with id %q (see `harnez feedback list -d %s --all`)", id, dir)
+		}
+		found = &e
+		logPath = srcPath
 	}
 	if found.Status == feedback.StatusPromoted {
 		return fmt.Errorf("feedback: entry %s was already promoted to %s", id, found.TicketPath)
@@ -199,7 +217,7 @@ func runFeedbackPromote(w io.Writer, dir, id string) error {
 	}
 	found.Status = feedback.StatusPromoted
 	found.TicketPath = path
-	if err := feedback.Append(feedbackDir, dir, *found); err != nil {
+	if err := feedback.AppendToPath(logPath, *found); err != nil {
 		return fmt.Errorf("feedback: %w", err)
 	}
 	fmt.Fprintf(w, "filed %s; run `harnez index -d %s` to add it to issues/README.md\n", path, dir)

@@ -100,6 +100,14 @@ func Append(feedbackDir, projectDir string, e Entry) error {
 	if err != nil {
 		return err
 	}
+	return AppendToPath(path, e)
+}
+
+// AppendToPath writes one entry as a new JSONL line directly to path,
+// skipping the projectDir->path hashing Append normally does. Used to
+// update an entry found via FindByID in a log keyed by a project other
+// than the one currently being operated on (issue 203).
+func AppendToPath(path string, e Entry) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("feedback: creating feedback dir: %w", err)
 	}
@@ -129,6 +137,36 @@ func Load(feedbackDir, projectDir string) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+	return loadPath(path)
+}
+
+// FindByID searches every log under feedbackDir — not just one project's —
+// for an entry with the given id, returning the entry and the log file path
+// it was found in. `harnez feedback promote` falls back to this when the id
+// isn't present in the `-d` target's own log, so an entry logged from
+// project A about project B can still be promoted into B's issues/ (issue
+// 203) without manually locating and reading the raw JSONL.
+func FindByID(feedbackDir, id string) (Entry, string, error) {
+	matches, err := filepath.Glob(filepath.Join(feedbackDir, "*.jsonl"))
+	if err != nil {
+		return Entry{}, "", fmt.Errorf("feedback: globbing feedback dir: %w", err)
+	}
+	for _, path := range matches {
+		entries, err := loadPath(path)
+		if err != nil {
+			return Entry{}, "", err
+		}
+		for _, e := range entries {
+			if e.ID == id {
+				return e, path, nil
+			}
+		}
+	}
+	return Entry{}, "", fmt.Errorf("feedback: no entry with id %q in any project log under %s", id, feedbackDir)
+}
+
+// loadPath reads and folds one log file at path, same semantics as Load.
+func loadPath(path string) ([]Entry, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
