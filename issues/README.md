@@ -209,3 +209,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 206 | [206-confirm-codex-pretooluse-command-field.md](206-confirm-codex-pretooluse-command-field.md) | Confirm `tool_input.command` field name against a live Codex PreToolUse call | Draft |
 | 207 | [207-codex-pretooluse-timeoutsec-default.md](207-codex-pretooluse-timeoutsec-default.md) | Determine real Codex `timeoutSec` default for PreToolUse hooks | Draft |
 | 208 | [208-sqlite-export-format-for-harnez-usage-export.md](208-sqlite-export-format-for-harnez-usage-export.md) | SQLite Export Format for `harnez usage export` | Open |
+| 209 | [209-move-agy-hooks-management-into-harnez-apply.md](209-move-agy-hooks-management-into-harnez-apply.md) | Move `agy-hooks` Management into `harnez apply` | Open |
