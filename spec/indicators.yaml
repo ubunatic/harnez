@@ -83,7 +83,7 @@ load-sparkline:
 # Keep history and current percentage monochrome by default; set `heat` to
 # color both from cool blue through green/yellow to warm red.
 chart-background: panel-bg
-load-chart-presentation: heat
+load-chart-presentation: monochrome
 
 # Presentation modes for hardware load indicators in `usage --watch`.
 # Supported modes: sparkline (or timeseries), braille (or btop), bar (or gauge).
@@ -91,7 +91,7 @@ load-chart-presentation: heat
 # left and right dot columns respectively. Block sparklines use the same
 # doubled sample window while retaining the newer sample from each pair.
 load-charts:
-  cpu: btop
-  gpu: btop
-  ram: btop
-  vram: btop
+  cpu: sparkline
+  gpu: sparkline
+  ram: sparkline
+  vram: sparkline
