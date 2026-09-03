@@ -718,12 +718,22 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 	}
 
 	var lines []string
+	midWidth := 10
+	for _, row := range rows {
+		if len(row.windows) == 0 {
+			continue
+		}
+		duration := compactDurationText(firstAllUsageWindow(row.windows))
+		if duration != "" {
+			midWidth = max(midWidth, 4+1+visLen(duration))
+		}
+	}
 	for _, row := range rows {
 		label := row.label
 		if debugOverlay {
 			label = freshnessOverlayLabelForInterval(label, row.lastRefreshed, now, refreshInterval)
 		}
-		line := formatAllUsageLine(label, row.windows, contentW, labelWidth)
+		line := formatAllUsageTableLineWithMidWidth(label, row.windows, contentW, labelWidth, midWidth, mustIndicators().usageBarPresentation())
 		if debugOverlay {
 			line = styleTimeGaugeGlyph(line)
 		}
@@ -748,11 +758,22 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 }
 
 func formatAllUsageTableLineWithPresentation(label string, windows []QuotaWindow, contentW, labelWidth int, presentation UsageBarPresentation) string {
+	midWidth := 10
+	if len(windows) > 0 {
+		duration := compactDurationText(firstAllUsageWindow(windows))
+		if duration != "" {
+			midWidth = max(midWidth, 4+1+visLen(duration))
+		}
+	}
+	return formatAllUsageTableLineWithMidWidth(label, windows, contentW, labelWidth, midWidth, presentation)
+}
+
+func formatAllUsageTableLineWithMidWidth(label string, windows []QuotaWindow, contentW, labelWidth, midWidth int, presentation UsageBarPresentation) string {
 	if len(windows) == 0 {
 		return formatCompactGroupLineWithLabelWidth(label, windows, contentW, labelWidth)
 	}
 	if len(windows) == 1 {
-		return formatAllUsageSingleWindowLineWithPresentation(label, windows[0], contentW, labelWidth, presentation)
+		return formatAllUsageSingleWindowLineWithMidWidth(label, windows[0], contentW, labelWidth, midWidth, presentation)
 	}
 
 	var w1, w2 QuotaWindow
@@ -783,7 +804,7 @@ func formatAllUsageTableLineWithPresentation(label string, windows []QuotaWindow
 	b2 := rograph.RenderBar(w2.UsedPercent, b2opts)
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
 
-	midStr := padWatchUsagePercentWithDurationAndPresentation(presentation, w1.UsedPercent, d1, 10)
+	midStr := padWatchUsagePercentWithDurationAndPresentation(presentation, w1.UsedPercent, d1, midWidth)
 	endStr := watchUsagePercentWithDurationAndPresentation(presentation, w2.UsedPercent, d2)
 
 	line := prefix + b1 + " " + midStr + " " + b2 + " " + endStr
@@ -808,6 +829,16 @@ func formatAllUsageTableLineWithPresentation(label string, windows []QuotaWindow
 	return prefix + strings.Join([]string{b1, padWatchUsagePercentWithPresentation(presentation, w1.UsedPercent, 4), b2, watchUsagePercentWithPresentation(presentation, w2.UsedPercent)}, " ")
 }
 
+func firstAllUsageWindow(windows []QuotaWindow) QuotaWindow {
+	for _, window := range windows {
+		name := strings.ToLower(window.Name)
+		if strings.Contains(name, "week") || strings.Contains(name, "7-day") {
+			return window
+		}
+	}
+	return windows[0]
+}
+
 // blankBarPlaceholder renders an empty bracket the same width as a real
 // rograph.RenderBar bar (given watchBarOptions() + Width=4), for a window
 // slot that genuinely has no data. It intentionally does NOT call
@@ -830,6 +861,14 @@ func formatAllUsageSingleWindowLine(label string, w QuotaWindow, contentW, label
 }
 
 func formatAllUsageSingleWindowLineWithPresentation(label string, w QuotaWindow, contentW, labelWidth int, presentation UsageBarPresentation) string {
+	midWidth := 10
+	if duration := compactDurationText(w); duration != "" {
+		midWidth = max(midWidth, 4+1+visLen(duration))
+	}
+	return formatAllUsageSingleWindowLineWithMidWidth(label, w, contentW, labelWidth, midWidth, presentation)
+}
+
+func formatAllUsageSingleWindowLineWithMidWidth(label string, w QuotaWindow, contentW, labelWidth, midWidth int, presentation UsageBarPresentation) string {
 	d1 := compactDurationText(w)
 
 	b1opts := usageBarOptionsWithPresentation(presentation, w.UsedPercent)
@@ -838,7 +877,7 @@ func formatAllUsageSingleWindowLineWithPresentation(label string, w QuotaWindow,
 	b2 := blankBarPlaceholder()
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
 
-	midStr := padWatchUsagePercentWithDurationAndPresentation(presentation, w.UsedPercent, d1, 10)
+	midStr := padWatchUsagePercentWithDurationAndPresentation(presentation, w.UsedPercent, d1, midWidth)
 
 	line := prefix + b1 + " " + midStr + " " + b2
 	if visLen(line) <= contentW {

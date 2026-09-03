@@ -582,63 +582,69 @@ func TestAllUsageBoxSecondBarColumnAlignment(t *testing.T) {
 // use the same second-gauge column via the blank placeholder.
 func TestIssue218AllUsageQuotaLayoutInvariants(t *testing.T) {
 	const labelWidth = 10
-	percentages := []float64{0, 99, 100}
+	rows := []struct {
+		percentage float64
+		duration   time.Duration
+	}{
+		{percentage: 0, duration: 8*time.Hour + 51*time.Minute},
+		{percentage: 99, duration: 6*24*time.Hour + 2*time.Hour},
+		{percentage: 100, duration: 22*time.Hour + 30*time.Minute},
+	}
 	presentations := []UsageBarPresentation{UsageBarMonochrome, UsageBarHeat}
 	widths := []struct {
 		name     string
 		contentW int
 	}{
-		{name: "compact", contentW: 34},
-		{name: "full", contentW: 60},
+		{name: "box-51", contentW: 47},
+		{name: "box-55", contentW: 51},
+		{name: "box-60", contentW: 56},
+		{name: "box-80", contentW: 76},
+		{name: "box-100", contentW: 96},
 	}
+	// Four cells reserve every percentage through 100%; the separator and
+	// longest real duration determine the remainder for every row.
+	const midWidth = 4 + 1 + len("22h30m")
 
 	for _, presentation := range presentations {
 		for _, width := range widths {
 			t.Run(string(presentation)+"/"+width.name, func(t *testing.T) {
 				wantSecondBarCol := -1
-				wantLineWidth := -1
-				for _, percentage := range percentages {
+				for _, row := range rows {
 					windows := []QuotaWindow{
-						{Name: "Weekly", UsedPercent: percentage}, // missing duration
+						{Name: "Weekly", UsedPercent: row.percentage, DurationLeft: row.duration},
 						{Name: "Session", UsedPercent: 42},
 					}
-					line := formatAllUsageTableLineWithPresentation("Claude/GPT", windows, width.contentW, labelWidth, presentation)
+					line := formatAllUsageTableLineWithMidWidth("Claude/GPT", windows, width.contentW, labelWidth, midWidth, presentation)
 					stripped := stripANSI(line)
 					if got := runewidth.StringWidth(stripped); got > width.contentW {
-						t.Fatalf("%.0f%% line width = %d, exceeds content width %d: %q", percentage, got, width.contentW, stripped)
+						t.Fatalf("%.0f%% line width = %d, exceeds content width %d: %q", row.percentage, got, width.contentW, stripped)
 					}
 					secondBarCol := terminalColumnBeforeLast(stripped, "[")
 					if secondBarCol < 0 {
-						t.Fatalf("%.0f%% row has no second bar: %q", percentage, stripped)
+						t.Fatalf("%.0f%% row has no second bar: %q", row.percentage, stripped)
 					}
 					if wantSecondBarCol < 0 {
 						wantSecondBarCol = secondBarCol
-						wantLineWidth = runewidth.StringWidth(stripped)
-					} else {
-						if secondBarCol != wantSecondBarCol {
-							t.Errorf("%.0f%% second bar column = %d, want %d: %q", percentage, secondBarCol, wantSecondBarCol, stripped)
-						}
-						if got := runewidth.StringWidth(stripped); got != wantLineWidth {
-							t.Errorf("%.0f%% line width = %d, want %d: %q", percentage, got, wantLineWidth, stripped)
-						}
+					} else if secondBarCol != wantSecondBarCol {
+						t.Errorf("%.0f%% second bar column = %d, want %d: %q", row.percentage, secondBarCol, wantSecondBarCol, stripped)
 					}
 					if presentation == UsageBarHeat && !strings.Contains(line, "\x1b[") {
-						t.Errorf("%.0f%% heat row lacks ANSI styling: %q", percentage, line)
+						t.Errorf("%.0f%% heat row lacks ANSI styling: %q", row.percentage, line)
 					}
 				}
 
 				wantPlaceholderCol := -1
-				for _, percentage := range percentages {
-					partial := formatAllUsageSingleWindowLineWithPresentation("Claude/GPT", QuotaWindow{Name: "Weekly", UsedPercent: percentage}, width.contentW, labelWidth, presentation)
+				for _, row := range rows {
+					partial := formatAllUsageSingleWindowLineWithMidWidth("Claude/GPT", QuotaWindow{Name: "Weekly", UsedPercent: row.percentage, DurationLeft: row.duration}, width.contentW, labelWidth, midWidth, presentation)
 					partialStripped := stripANSI(partial)
 					placeholderCol := terminalColumnBeforeLast(partialStripped, "[")
 					if wantPlaceholderCol < 0 {
 						wantPlaceholderCol = placeholderCol
 					} else if placeholderCol != wantPlaceholderCol {
-						t.Errorf("%.0f%% partial-data placeholder column = %d, want %d: %q", percentage, placeholderCol, wantPlaceholderCol, partialStripped)
+						t.Errorf("%.0f%% partial-data placeholder column = %d, want %d: %q", row.percentage, placeholderCol, wantPlaceholderCol, partialStripped)
 					}
 					if got := runewidth.StringWidth(partialStripped); got > width.contentW {
-						t.Errorf("%.0f%% partial-data width = %d, exceeds content width %d: %q", percentage, got, width.contentW, partialStripped)
+						t.Errorf("%.0f%% partial-data width = %d, exceeds content width %d: %q", row.percentage, got, width.contentW, partialStripped)
 					}
 					if !strings.HasSuffix(strings.TrimRight(partialStripped, " "), "[    ]") {
 						t.Errorf("partial-data row lacks blank placeholder: %q", partialStripped)
