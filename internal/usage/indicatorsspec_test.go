@@ -42,13 +42,13 @@ func TestEmbeddedIndicatorsSpecIsValidAndExact(t *testing.T) {
 	if got, wantName := spec.LoadSparkline.Sequence, "vertical-block-scale-8"; got != wantName {
 		t.Errorf("load-sparkline sequence = %q, want %q", got, wantName)
 	}
-	if got, want := spec.LoadCharts.CPU, "sparkline"; got != want {
+	if got, want := spec.LoadCharts.CPU, "btop"; got != want {
 		t.Errorf("load-charts.cpu = %q, want %q", got, want)
 	}
-	if got, want := spec.LoadCharts.GPU, "sparkline"; got != want {
+	if got, want := spec.LoadCharts.GPU, "btop"; got != want {
 		t.Errorf("load-charts.gpu = %q, want %q", got, want)
 	}
-	if got, want := spec.LoadCharts.RAM, "sparkline"; got != want {
+	if got, want := spec.LoadCharts.RAM, "btop"; got != want {
 		t.Errorf("load-charts.ram = %q, want %q", got, want)
 	}
 	if got, want := spec.LoadCharts.VRAM, "sparkline"; got != want {

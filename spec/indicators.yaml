@@ -95,7 +95,7 @@ usage-bar-presentation: heat
 # left and right dot columns respectively. Block sparklines use the same
 # doubled sample window while retaining the newer sample from each pair.
 load-charts:
-  cpu: sparkline
-  gpu: sparkline
-  ram: sparkline
+  cpu: btop
+  gpu: btop
+  ram: btop
   vram: sparkline
