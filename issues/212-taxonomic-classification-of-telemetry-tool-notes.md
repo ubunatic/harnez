@@ -95,11 +95,13 @@ Raw Note / Tool Call
    - Stored in SQLite (`~/.harnez/note_category_cache.sqlite` or table in `tool_catalog.sqlite`).
    - Maps `sha256(note) -> category_enum`.
 
-3. **Tier 3 — Bounded Batch Classifier (Export Time Only)**:
+3. **Tier 3 — Small Local Model (SLM) Batch Classifier (Export Time Only)**:
+   - Purpose: Disambiguates custom, fuzzy agent notes without paying for expensive cloud models. Text classification into 9 fixed enums does NOT require a multi-hundred-billion parameter frontier reasoning model; a lightweight 1B–8B local model (via Ollama, llama.cpp, or a fast embedded classifier) is ideal.
    - Runs **only** when `harnez usage export --classify` is explicitly invoked.
-   - Collects only unique cache misses.
-   - Delivers them in bulk batches (e.g. 100 notes at a time) to a small, fast model (e.g. local Ollama / small LLM / lightweight CLI turn), asking only for an index-to-category enum mapping.
-   - If offline or unconfigured, unmatched notes safely fall back to `other` without failing the export.
+   - Evaluates only unique cache misses in bulk batches (e.g. 50–100 distinct notes at once).
+   - Prompt is strictly a classification matrix: takes a numbered list of short notes and outputs `[ {index: 1, cat: "test"}, {index: 2, cat: "workflow"}, ... ]`.
+   - Results are permanently saved to `note_category_cache`, so each unique note is classified at most once in its lifetime.
+   - Zero hard dependency: If the local SLM runner is offline, unmatched notes safely default to `"other"`.
 
 ---
 
