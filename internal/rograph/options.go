@@ -64,12 +64,23 @@ type BarOptions struct {
 var DefaultBackgroundANSI = "100"
 
 // eighthBlockGlyphs are the horizontal eighth-block glyphs used for a
-// sub-character fill boundary, 1/8 through 8/8 width.
-var eighthBlockGlyphs = []rune("▏▎▍▌▋▊▉█")
+// sub-character fill boundary, 1/8 through 7/8 width. There is no 8/8 entry:
+// a full eighth boundary is a whole filled cell, produced by fill itself
+// (see subCharacterFill's fullChars accounting), so only the seven strictly
+// partial glyphs are needed here. This mirrors spec/indicators.yaml's
+// horizontal-eighths-7 sequence, which is likewise seven frames.
+var eighthBlockGlyphs = []rune("▏▎▍▌▋▊▉")
 
-// eighthBlockFill renders width default-glyph characters with the single
-// boundary character rendered at eighth-block precision rather than snapped
+// subCharacterFill renders width default-glyph characters with the single
+// boundary character rendered at sub-character precision rather than snapped
 // to fully filled or fully empty. pct must already be clamped to [0, 100].
+//
+// partial supplies the ascending partial-fill glyphs for one cell, excluding
+// both the empty and fully-filled endpoints; its length determines the
+// precision (subdivisions = len(partial)+1). The historical eighth-block
+// bar passes seven glyphs for eight subdivisions per cell; a Braille bar
+// (issue 220) passes a single half-cell glyph for two subdivisions per
+// cell -- the same accounting generalized, not a parallel code path.
 //
 // emptyRune is the character used for cells past the boundary that are
 // fully empty. Callers with an ANSI background wrap (RenderBar's ANSI
@@ -80,18 +91,19 @@ var eighthBlockGlyphs = []rune("▏▎▍▌▋▊▉█")
 // solid '█' fill and the flat background. Callers rendering without a
 // background wrap should keep '░' so the bar's empty region stays visible
 // on a plain terminal with no color support.
-func eighthBlockFill(pct float64, width int, fill, emptyRune rune, partial []rune) string {
-	totalEighths := int(float64(width*8) * (pct / 100))
-	if totalEighths < 0 {
-		totalEighths = 0
+func subCharacterFill(pct float64, width int, fill, emptyRune rune, partial []rune) string {
+	subdivisions := len(partial) + 1
+	totalSubunits := int(float64(width*subdivisions) * (pct / 100))
+	if totalSubunits < 0 {
+		totalSubunits = 0
 	}
-	maxEighths := width * 8
-	if totalEighths > maxEighths {
-		totalEighths = maxEighths
+	maxSubunits := width * subdivisions
+	if totalSubunits > maxSubunits {
+		totalSubunits = maxSubunits
 	}
 
-	fullChars := totalEighths / 8
-	remainder := totalEighths % 8
+	fullChars := totalSubunits / subdivisions
+	remainder := totalSubunits % subdivisions
 	if fullChars >= width {
 		fullChars = width
 		remainder = 0
@@ -187,10 +199,10 @@ func RenderBar(value float64, opts BarOptions) string {
 			// The background wrap below already covers the whole glyph
 			// run, so a flat space (no ink) reads as pure panel-bg here
 			// instead of '░''s own stipple pattern layering a third tone
-			// on top of it. See eighthBlockFill's doc comment.
+			// on top of it. See subCharacterFill's doc comment.
 			emptyRune = ' '
 		}
-		glyphs = eighthBlockFill(pct, width, fill, emptyRune, partial)
+		glyphs = subCharacterFill(pct, width, fill, emptyRune, partial)
 	} else {
 		filledCount := int(float64(width) * (pct / 100))
 		if filledCount < 0 {

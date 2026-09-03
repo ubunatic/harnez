@@ -131,11 +131,50 @@ func (s indicatorsSpec) usageBarPresentation() UsageBarPresentation {
 }
 
 type usageBarSpec struct {
-	Filled               string         `yaml:"filled"`
-	Empty                string         `yaml:"empty"`
-	SubCharacterSequence string         `yaml:"sub-character-sequence"`
-	SubCharacter         []string       `yaml:"-"`
-	Wrapper              barWrapperSpec `yaml:"wrapper"`
+	Filled               string              `yaml:"filled"`
+	Empty                string              `yaml:"empty"`
+	SubCharacterSequence string              `yaml:"sub-character-sequence"`
+	SubCharacter         []string            `yaml:"-"`
+	Style                string              `yaml:"style"`
+	Braille              usageBarBrailleSpec `yaml:"braille"`
+	Wrapper              barWrapperSpec      `yaml:"wrapper"`
+}
+
+// UsageBarStyle selects the glyph vocabulary a usage bar renders with.
+// UsageBarStyleBlock (the default, unnamed style) keeps the historical
+// block-fill/eighth-boundary rendering byte-for-byte unchanged.
+// UsageBarStyleBraille (issue 220) is an opt-in style that quantizes each
+// cell to empty/half/full using the glyphs declared in usageBarSpec.Braille,
+// matching the Braille visual language load charts already use.
+type UsageBarStyle string
+
+const (
+	UsageBarStyleBlock   UsageBarStyle = "block"
+	UsageBarStyleBraille UsageBarStyle = "braille"
+)
+
+// usageBarBrailleSpec declares the three glyphs a Braille-style usage bar
+// needs: a fully filled cell, a half-filled cell (the single sub-character
+// boundary glyph, same role as sub-character-sequence plays for the block
+// style), and a fully empty cell. All three are required and validated by
+// parseIndicatorsYAML whenever style resolves to "braille" -- see
+// validateOneRune and the distinctness check next to it.
+type usageBarBrailleSpec struct {
+	Full  string `yaml:"full"`
+	Half  string `yaml:"half"`
+	Empty string `yaml:"empty"`
+}
+
+// resolvedStyle normalizes the spec's free-form style string. An empty or
+// unrecognized value already fails parseIndicatorsYAML's validation, so by
+// the time callers reach barOptionsFromSpec only "" (pre-validation callers,
+// e.g. direct unit tests of the zero value) and "block" fall through to the
+// default here.
+func (s usageBarSpec) resolvedStyle() UsageBarStyle {
+	if strings.EqualFold(strings.TrimSpace(s.Style), string(UsageBarStyleBraille)) {
+		return UsageBarStyleBraille
+	}
+	return UsageBarStyleBlock
 }
 
 // barWrapperSpec (issue 159) controls the `[`/`]` brackets drawn around a
@@ -230,6 +269,27 @@ func parseIndicatorsYAML(data []byte) (indicatorsSpec, error) {
 		}
 	}
 	spec.UsageBar.SubCharacter = subCharacterFrames
+	switch strings.ToLower(strings.TrimSpace(spec.UsageBar.Style)) {
+	case "", string(UsageBarStyleBlock), string(UsageBarStyleBraille):
+	default:
+		return indicatorsSpec{}, fmt.Errorf("indicators spec: usage-bar: style: unknown style %q", spec.UsageBar.Style)
+	}
+	if spec.UsageBar.resolvedStyle() == UsageBarStyleBraille {
+		if err := validateOneRune("usage-bar braille full", spec.UsageBar.Braille.Full); err != nil {
+			return indicatorsSpec{}, err
+		}
+		if err := validateOneRune("usage-bar braille half", spec.UsageBar.Braille.Half); err != nil {
+			return indicatorsSpec{}, err
+		}
+		if err := validateOneRune("usage-bar braille empty", spec.UsageBar.Braille.Empty); err != nil {
+			return indicatorsSpec{}, err
+		}
+		if spec.UsageBar.Braille.Full == spec.UsageBar.Braille.Half ||
+			spec.UsageBar.Braille.Full == spec.UsageBar.Braille.Empty ||
+			spec.UsageBar.Braille.Half == spec.UsageBar.Braille.Empty {
+			return indicatorsSpec{}, fmt.Errorf("indicators spec: usage-bar braille: full, half, and empty must all differ")
+		}
+	}
 	if spec.UsageBar.Wrapper.Enabled && spec.UsageBar.Wrapper.Left == "" && spec.UsageBar.Wrapper.Right != "" {
 		return indicatorsSpec{}, fmt.Errorf("indicators spec: usage-bar wrapper: left is empty but right is set")
 	}
@@ -472,13 +532,25 @@ func padWatchUsagePercentWithDurationAndPresentation(presentation UsageBarPresen
 // wrapper-enabled/disabled resolution directly against parsed YAML rather
 // than only the embedded default.
 func barOptionsFromSpec(spec usageBarSpec) rograph.BarOptions {
+	fill := []rune(spec.Filled)[0]
+	empty := []rune(spec.Empty)[0]
 	partial := make([]rune, len(spec.SubCharacter))
 	for i, glyph := range spec.SubCharacter {
 		partial[i] = []rune(glyph)[0]
 	}
+	if spec.resolvedStyle() == UsageBarStyleBraille {
+		// The Braille style only ever quantizes to empty/half/full, so it
+		// needs exactly one sub-character (half) glyph -- the same
+		// generalized subCharacterFill machinery the block style uses with
+		// its seven eighth-block glyphs, just with subdivisions=2 instead
+		// of 8 (see internal/rograph/options.go's subCharacterFill).
+		fill = []rune(spec.Braille.Full)[0]
+		empty = []rune(spec.Braille.Empty)[0]
+		partial = []rune{[]rune(spec.Braille.Half)[0]}
+	}
 	opts := rograph.BarOptions{
-		Fill:               []rune(spec.Filled)[0],
-		Empty:              []rune(spec.Empty)[0],
+		Fill:               fill,
+		Empty:              empty,
 		SubChar:            true,
 		SubCharacterGlyphs: partial,
 		ANSI:               true,

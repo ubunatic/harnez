@@ -91,6 +91,41 @@ func TestRenderProgressBarEighthBlockBoundary(t *testing.T) {
 	}
 }
 
+func TestRenderBarBrailleTwoLevelBoundary(t *testing.T) {
+	// A Braille-style bar (issue 220) reuses the same sub-character
+	// machinery with only a half-cell partial glyph, giving each cell two
+	// subdivisions (empty/half/full) instead of eighths' eight. At width 4,
+	// full cells are 25 percentage points and a half cell is 12.5 points.
+	opts := func(width int) BarOptions {
+		return BarOptions{
+			Width:              width,
+			SubChar:            true,
+			Fill:               '⣿',
+			Empty:              '⠀',
+			SubCharacterGlyphs: []rune{'⡇'},
+		}
+	}
+	tests := []struct {
+		name string
+		pct  float64
+		want string
+	}{
+		{"0% is fully empty", 0, "[⠀⠀⠀⠀]"},
+		{"half-boundary at 12.5%", 12.5, "[⡇⠀⠀⠀]"},
+		{"one full cell at 25%", 25, "[⣿⠀⠀⠀]"},
+		{"87.5% is three full cells plus a half cell", 87.5, "[⣿⣿⣿⡇]"},
+		{"100% is fully filled", 100, "[⣿⣿⣿⣿]"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RenderBar(tt.pct, opts(4))
+			if got != tt.want {
+				t.Errorf("RenderBar(%v, braille width 4) = %q, want %q", tt.pct, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRenderBarSubCharOptOut(t *testing.T) {
 	// Without SubChar, RenderBar keeps the legacy whole-character snapping
 	// behavior even at a percentage that would otherwise land mid-eighth.

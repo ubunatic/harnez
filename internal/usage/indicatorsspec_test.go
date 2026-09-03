@@ -294,6 +294,114 @@ func TestUsageBarPresentationDefaultsAndRejectsUnknownValues(t *testing.T) {
 	}
 }
 
+// validBrailleIndicatorsFixture opts a usage-bar into the Braille style
+// (issue 220): the same registry as validIndicatorsFixture, with style and
+// its three required glyphs declared. Width-four percentage examples below
+// mirror the ticket's exact acceptance criterion: three full cells (25pp
+// each) plus one half cell (12.5pp) is 87.5%, rendering "⣿⣿⣿⡇".
+const validBrailleIndicatorsFixture = `
+sequences:
+  countdown: {title: countdown, kind: countdown, frames: ["█", " "]}
+  spinner: {title: spinner, kind: spinner, frames: ["▘", "▝"]}
+  partial: {title: partial, kind: bar-partial, frames: ["▏", "▉"]}
+  spark: {title: spark, kind: sparkline, frames: ["▁", "█"]}
+timeout-snake: {title: timer, sequence: countdown}
+usage-bar:
+  filled: "█"
+  empty: "░"
+  sub-character-sequence: partial
+  style: braille
+  braille: {full: "⣿", half: "⡇", empty: "⠀"}
+  wrapper: {enabled: true, left: "[", right: "]"}
+load-sparkline: {sequence: spark}
+load-charts:
+  cpu: sparkline
+  gpu: sparkline
+  ram: bar
+  vram: bar
+`
+
+func TestUsageBarStyleBrailleParsesAndRendersQuantizedCells(t *testing.T) {
+	spec, err := parseIndicatorsYAML([]byte(validBrailleIndicatorsFixture))
+	if err != nil {
+		t.Fatalf("parseIndicatorsYAML: %v", err)
+	}
+	if got, want := spec.UsageBar.resolvedStyle(), UsageBarStyleBraille; got != want {
+		t.Fatalf("resolvedStyle() = %q, want %q", got, want)
+	}
+
+	opts := barOptionsFromSpec(spec.UsageBar)
+	if got, want := opts.Fill, '⣿'; got != want {
+		t.Fatalf("Braille bar Fill = %q, want %q", got, want)
+	}
+	if got, want := opts.Empty, '⠀'; got != want {
+		t.Fatalf("Braille bar Empty = %q, want %q", got, want)
+	}
+	if got, want := opts.SubCharacterGlyphs, []rune{'⡇'}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Braille bar SubCharacterGlyphs = %q, want %q", got, want)
+	}
+
+	// ANSI is off here so the rendered empty-cell glyph is the spec's own
+	// Braille blank rather than the ANSI-wrap's flat-space substitution
+	// (see internal/rograph/options.go's RenderBar ANSI handling).
+	opts.ANSI = false
+	opts.Width = 4
+	tests := []struct {
+		name string
+		pct  float64
+		want string
+	}{
+		{"0% is fully empty", 0, "[⠀⠀⠀⠀]"},
+		{"half-boundary at 12.5%", 12.5, "[⡇⠀⠀⠀]"},
+		{"three full cells plus a half cell at 87.5%", 87.5, "[⣿⣿⣿⡇]"},
+		{"100% is fully filled", 100, "[⣿⣿⣿⣿]"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := rograph.RenderBar(tt.pct, opts)
+			if got != tt.want {
+				t.Errorf("RenderBar(%v, Braille width 4) = %q, want %q", tt.pct, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUsageBarStyleDefaultsToBlockWhenUnset(t *testing.T) {
+	spec, err := parseIndicatorsYAML([]byte(validIndicatorsFixture))
+	if err != nil {
+		t.Fatalf("parseIndicatorsYAML: %v", err)
+	}
+	if got, want := spec.UsageBar.resolvedStyle(), UsageBarStyleBlock; got != want {
+		t.Fatalf("resolvedStyle() with no style field = %q, want %q", got, want)
+	}
+}
+
+func TestUsageBarStyleBrailleRejectsInvalidSpecs(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want string
+	}{
+		{"unknown style", strings.Replace(validBrailleIndicatorsFixture, "style: braille", "style: dotted", 1), `usage-bar: style: unknown style "dotted"`},
+		{"missing full glyph", strings.Replace(validBrailleIndicatorsFixture, `braille: {full: "⣿", half: "⡇", empty: "⠀"}`, `braille: {full: "", half: "⡇", empty: "⠀"}`, 1), "usage-bar braille full: want one rune"},
+		{"missing half glyph", strings.Replace(validBrailleIndicatorsFixture, `braille: {full: "⣿", half: "⡇", empty: "⠀"}`, `braille: {full: "⣿", half: "", empty: "⠀"}`, 1), "usage-bar braille half: want one rune"},
+		{"missing empty glyph", strings.Replace(validBrailleIndicatorsFixture, `braille: {full: "⣿", half: "⡇", empty: "⠀"}`, `braille: {full: "⣿", half: "⡇", empty: ""}`, 1), "usage-bar braille empty: want one rune"},
+		{"multi-rune full glyph", strings.Replace(validBrailleIndicatorsFixture, `full: "⣿"`, `full: "⣿⣿"`, 1), "usage-bar braille full: want one rune"},
+		{"duplicate full and half glyphs", strings.Replace(validBrailleIndicatorsFixture, `half: "⡇"`, `half: "⣿"`, 1), "usage-bar braille: full, half, and empty must all differ"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseIndicatorsYAML([]byte(tt.data))
+			if err == nil {
+				t.Fatal("parseIndicatorsYAML succeeded, want validation error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("parseIndicatorsYAML error = %q, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestWatchBarsUseTheSharedChartBackground(t *testing.T) {
 	if got, want := watchBarOptions().BackgroundANSI, chartBackgroundANSI(); got != want {
 		t.Fatalf("bar background = %q, want shared chart background %q", got, want)
