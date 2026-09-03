@@ -1,6 +1,6 @@
 # 213 — Add opt-in heat presentation for usage bars
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
