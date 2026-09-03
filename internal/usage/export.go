@@ -11,6 +11,8 @@ package usage
 import (
 	"fmt"
 	"time"
+
+	"ubunatic.com/harnez/internal/privacy"
 )
 
 // ExportPoint is one scrubbed (timestamp, agent) sample, safe for external
@@ -33,27 +35,35 @@ import (
 //     value, so re-applying it here is a cheap belt-and-suspenders
 //     guarantee against a future producer that forgets to mask.
 //   - Sources (file paths / API endpoints inspected) and Details
-//     (free-form key/value strings) are dropped entirely: both are
-//     unstructured and have historically held local filesystem paths,
-//     with no safe automatic way to scrub arbitrary free text.
+//     (free-form key/value strings) are dropped entirely at the default
+//     privacy level: both are unstructured and have historically held
+//     local filesystem paths, with no safe automatic way to scrub
+//     arbitrary free text. At privacy.LevelInternal/LevelRaw they survive
+//     (scrubbed or raw respectively) as the Sources/Details fields below —
+//     see BuildUsageExportLevel's doc comment for why LevelAgentSanitized
+//     falls back to the same scrubbing as LevelInternal here rather than
+//     going through an LLM (there is no usage-side equivalent of
+//     telemetry's free-text "note").
 type ExportPoint struct {
-	Timestamp          time.Time        `json:"timestamp"`
-	Hostname           string           `json:"hostname"`
-	AgentID            string           `json:"agent_id"`
-	Name               string           `json:"name,omitempty"`
-	Account            string           `json:"account,omitempty"`
-	PlanTier           string           `json:"plan_tier,omitempty"`
-	Installed          bool             `json:"installed"`
-	Authenticated      bool             `json:"authenticated"`
-	TotalTokens        int64            `json:"total_tokens,omitempty"`
-	InputTokens        int64            `json:"input_tokens,omitempty"`
-	OutputTokens       int64            `json:"output_tokens,omitempty"`
-	CacheReadTokens    int64            `json:"cache_read_tokens,omitempty"`
-	CacheWriteTokens   int64            `json:"cache_write_tokens,omitempty"`
-	CostUSD            float64          `json:"cost_usd,omitempty"`
-	ModelTokens        map[string]int64 `json:"model_tokens,omitempty"`
-	SessionUsedPercent float64          `json:"session_used_percent,omitempty"`
-	WeeklyUsedPercent  float64          `json:"weekly_used_percent,omitempty"`
+	Timestamp          time.Time         `json:"timestamp"`
+	Hostname           string            `json:"hostname"`
+	AgentID            string            `json:"agent_id"`
+	Name               string            `json:"name,omitempty"`
+	Account            string            `json:"account,omitempty"`
+	PlanTier           string            `json:"plan_tier,omitempty"`
+	Installed          bool              `json:"installed"`
+	Authenticated      bool              `json:"authenticated"`
+	TotalTokens        int64             `json:"total_tokens,omitempty"`
+	InputTokens        int64             `json:"input_tokens,omitempty"`
+	OutputTokens       int64             `json:"output_tokens,omitempty"`
+	CacheReadTokens    int64             `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens   int64             `json:"cache_write_tokens,omitempty"`
+	CostUSD            float64           `json:"cost_usd,omitempty"`
+	ModelTokens        map[string]int64  `json:"model_tokens,omitempty"`
+	SessionUsedPercent float64           `json:"session_used_percent,omitempty"`
+	WeeklyUsedPercent  float64           `json:"weekly_used_percent,omitempty"`
+	Sources            []string          `json:"sources,omitempty"`
+	Details            map[string]string `json:"details,omitempty"`
 }
 
 // UsageExport is the top-level JSON payload for `harnez usage export`'s
@@ -64,9 +74,22 @@ type UsageExport struct {
 }
 
 // BuildUsageExport transforms merged history entries (see ReadHistory) into
-// the scrubbed UsageExport payload. It is a pure function over its input so
-// it can be unit tested without touching disk (see export_test.go).
+// the scrubbed UsageExport payload at privacy.LevelPublic — the original,
+// pre-issue-204-v2 behavior. Existing callers/tests are unaffected by the
+// addition of privacy levels. It is a pure function over its input so it
+// can be unit tested without touching disk (see export_test.go).
 func BuildUsageExport(entries []HistoryEntry, now time.Time) UsageExport {
+	return BuildUsageExportLevel(entries, now, privacy.LevelPublic)
+}
+
+// BuildUsageExportLevel is BuildUsageExport's privacy-level-aware form.
+// Sources/Details are dropped at LevelPublic, scrubbed via
+// privacy.ScrubText at LevelAgentSanitized and LevelInternal (usage has no
+// free-text "note" concept for an LLM sanitizer to target — see
+// ExportPoint's doc comment — so LevelAgentSanitized intentionally reuses
+// LevelInternal's regex scrub here rather than being a no-op), and passed
+// through raw at LevelRaw.
+func BuildUsageExportLevel(entries []HistoryEntry, now time.Time, level privacy.Level) UsageExport {
 	out := UsageExport{GeneratedAt: now}
 	hostLabels := make(map[string]string)
 	for _, e := range entries {
@@ -81,6 +104,16 @@ func BuildUsageExport(entries []HistoryEntry, now time.Time) UsageExport {
 				PlanTier:      a.PlanTier,
 				Installed:     a.Installed,
 				Authenticated: a.Authenticated,
+			}
+			switch level {
+			case privacy.LevelPublic:
+				// Sources/Details stay nil (dropped).
+			case privacy.LevelAgentSanitized, privacy.LevelInternal:
+				p.Sources = privacy.ScrubStrings(a.Sources)
+				p.Details = privacy.ScrubMap(a.Details)
+			case privacy.LevelRaw:
+				p.Sources = a.Sources
+				p.Details = a.Details
 			}
 			if a.Tokens != nil {
 				p.TotalTokens = a.Tokens.TotalTokens
@@ -122,11 +155,17 @@ func anonymizeHostname(labels map[string]string, raw string) string {
 }
 
 // ExportHistory reads *.jsonl history entries under dir (see HistoryDir)
-// and returns the scrubbed UsageExport payload.
+// and returns the scrubbed UsageExport payload at privacy.LevelPublic.
+// Existing callers/tests are unaffected by the addition of privacy levels.
 func ExportHistory(dir string, now time.Time) (UsageExport, error) {
+	return ExportHistoryLevel(dir, now, privacy.LevelPublic)
+}
+
+// ExportHistoryLevel is ExportHistory's privacy-level-aware form.
+func ExportHistoryLevel(dir string, now time.Time, level privacy.Level) (UsageExport, error) {
 	entries, err := ReadHistory(dir)
 	if err != nil {
 		return UsageExport{}, err
 	}
-	return BuildUsageExport(entries, now), nil
+	return BuildUsageExportLevel(entries, now, level), nil
 }

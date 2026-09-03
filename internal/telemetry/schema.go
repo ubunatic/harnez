@@ -50,4 +50,17 @@ CREATE INDEX IF NOT EXISTS idx_tool_calls_ticket_id   ON tool_calls (ticket_id);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_tool_name   ON tool_calls (tool_name);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_agent_id    ON tool_calls (agent_id);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_created_at  ON tool_calls (created_at);
+
+-- note_sanitization_cache backs issue 204's Level 2 (agent-sanitized)
+-- export privacy level: sha256(raw note text) -> LLM-sanitized text, so a
+-- given note is only ever sent to the NoteSanitizer once, no matter how
+-- many export runs reference it. This is purely additive relative to
+-- schemaVersion 2's shape (a new table, no change to tool_calls itself),
+-- so it does not require a schemaVersion bump — CREATE TABLE IF NOT
+-- EXISTS already applies it to a pre-existing database file on next Open.
+CREATE TABLE IF NOT EXISTS note_sanitization_cache (
+	raw_hash    TEXT PRIMARY KEY,
+	clean_text  TEXT NOT NULL,
+	created_at  TEXT NOT NULL
+);
 `

@@ -15,12 +15,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/privacy"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
 )
@@ -38,6 +40,7 @@ func newUsageExportCmd() *cobra.Command {
 	var out string
 	var dbPath string
 	var historyDir string
+	var privacyFlag string
 
 	cmd := &cobra.Command{
 		Use:   "export --out=<file>",
@@ -51,32 +54,61 @@ func newUsageExportCmd() *cobra.Command {
     quota-window percentages over time.
 
 Privacy: absolute filesystem paths (working directories, ticket IDs,
-project names) are reduced to their final path component only; account/
-email fields are masked via the same MaskAccount helper used elsewhere in
-harnez; hostnames are sanitized the same way the on-disk history filenames
-already are. Free-form fields with no safe automatic scrubbing (call
-notes, Details, Sources) are dropped rather than risk a leak.
+project names) are always reduced to their final path component only;
+account/email fields are always masked via the same MaskAccount helper
+used elsewhere in harnez; hostnames are always anonymized to opaque
+per-export-run labels. --privacy controls what happens to free-text
+fields (tool-call notes, usage Sources/Details):
+
+  public          (default) drop free text entirely.
+  agent-sanitized keep tool-call notes, rewritten via the claude CLI into
+                  high-level, non-identifying summaries (content-hash
+                  cached — a given note is only ever sent once).
+  internal        keep free text, with obvious sensitive substrings
+                  (home paths, emails, API-key-shaped tokens) redacted
+                  in place.
+  raw             keep every field completely unscrubbed. Local/private
+                  use only.
 
 This is a JSON-only export (issue 204's first pass) — SQLite export is not
 yet implemented.
 
-  harnez usage export --out=telemetry.json`,
+  harnez usage export --out=telemetry.json
+  harnez usage export --out=telemetry.json --privacy=agent-sanitized`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if out == "" {
 				return fmt.Errorf("--out is required")
 			}
-			return runUsageExport(out, dbPath, historyDir)
+			level, err := privacy.ParseLevel(privacyFlag)
+			if err != nil {
+				return err
+			}
+			return runUsageExportLevel(out, dbPath, historyDir, level)
 		},
 	}
 	cmd.Flags().StringVar(&out, "out", "", "output file path for the sanitized JSON export (required)")
 	cmd.Flags().StringVar(&dbPath, "db", "", "override the telemetry database path (default: ~/.harnez/tool_catalog.sqlite)")
 	cmd.Flags().StringVar(&historyDir, "history-dir", "", "override the usage-history directory (default: ~/.claude/harnez/usage-history)")
+	cmd.Flags().StringVar(&privacyFlag, "privacy", "public", "privacy level: public|agent-sanitized|internal|raw")
 	return cmd
 }
 
+// runUsageExport preserves the original 3-arg signature at
+// privacy.LevelPublic — the pre-issue-204-v2-privacy-levels default
+// behavior. Existing callers/tests are unaffected by the addition of
+// privacy levels.
 func runUsageExport(out, dbPath, historyDir string) error {
+	return runUsageExportLevel(out, dbPath, historyDir, privacy.LevelPublic)
+}
+
+// runUsageExportLevel is runUsageExport's privacy-level-aware form. A
+// privacy.NoteSanitizer (the real ClaudeCLISanitizer) is only constructed
+// when level is privacy.LevelAgentSanitized — every other level never
+// shells out to the claude CLI.
+func runUsageExportLevel(out, dbPath, historyDir string, level privacy.Level) error {
 	now := time.Now()
+	ctx := context.Background()
 
 	if dbPath == "" {
 		p, err := telemetry.DefaultDBPath()
@@ -91,7 +123,11 @@ func runUsageExport(out, dbPath, historyDir string) error {
 	}
 	defer db.Close()
 
-	telExport, err := telemetry.ExportAll(db, now)
+	var sanitizer privacy.NoteSanitizer
+	if level == privacy.LevelAgentSanitized {
+		sanitizer = privacy.NewClaudeCLISanitizer()
+	}
+	telExport, err := telemetry.ExportAllLevel(ctx, db, now, level, sanitizer)
 	if err != nil {
 		return fmt.Errorf("export telemetry: %w", err)
 	}
@@ -99,7 +135,7 @@ func runUsageExport(out, dbPath, historyDir string) error {
 	if historyDir == "" {
 		historyDir = usage.HistoryDir("")
 	}
-	usageExport, err := usage.ExportHistory(historyDir, now)
+	usageExport, err := usage.ExportHistoryLevel(historyDir, now, level)
 	if err != nil {
 		return fmt.Errorf("export usage history: %w", err)
 	}
