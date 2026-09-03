@@ -17,18 +17,28 @@ External visualizations (such as personal dashboards or public/portfolio website
 - Tool invocation distribution, success vs. failure rates, and distillation byte savings.
 - Adherence to the visual exploration mantra: *"Overview first, details on demand"*.
 
-However, exporting the raw SQLite or JSONL directly poses two issues:
-1. **Privacy & Security Leakage**: `tool_calls` and usage snapshots store real system paths (`working_dir`), system usernames, account emails, hostnames, and session IDs.
-2. **Missing Unified Export Format**: Tool telemetry and token metrics currently reside in separate stores with separate schemas. There is no command to produce a clean, scrubbed SQLite database or JSON dataset ready for static web consumption.
+However, exporting the raw SQLite or JSONL directly poses serious privacy and security risks:
+1. **Delicate Prose & Business Secrets in Tool Notes**:
+   - The `note` column in `tool_calls` (and potential tool arguments/prompts) contains free-form text written by agents (e.g. `note: "git status: clean tree...", "filed issue 128...", customer repo details, internal architectures"`). In commercial, proprietary, or client projects, these notes can reveal intellectual property, commercial roadmaps, commit hashes, client names, or secret internals.
+2. **System & Identity Leakage**:
+   - `tool_calls` and usage snapshots store real absolute filesystem paths (`working_dir`), system usernames, account emails, hostnames, and session IDs.
+3. **Missing Unified Export Format & Anonymization Policies**:
+   - There is no mechanism to selectively strip free-form text or export purely numerical/categorical aggregations.
 
 ## 2. Proposed Solution & Architecture
 
 Add a sanitized export mechanism to `harnez`:
-- E.g. `harnez export telemetry --out=<file> [--format=json|sqlite] [--anonymize]` (or `harnez usage export`).
-- **Anonymization / Scrubbing**:
-  - Replace absolute filesystem paths with relative or normalized project identifiers (`ubunatic.com`, `harnez`, `other`).
-  - Strip personal email addresses and host credentials.
-  - Round timestamps or bin data into hourly/daily aggregations if desired for compact transfer.
+- E.g. `harnez export telemetry --out=<file> [--format=json|sqlite] [--privacy=public|internal|raw]`
+
+### Privacy / Anonymization Levels:
+- **Level 1 — Public / Zero-Prose (Default for web datavis)**:
+  - **Completely drop free-form prose**: omit `note`, arguments, and command lines entirely.
+  - **Bucket or generalize categorical fields**: map `project_name` to an opt-in allowlist or generic aliases (`project-a`, `project-b`), strip `working_dir`, strip `session_id` and replace with salted ephemeral session hashes if session grouping is needed.
+  - **Aggregate metrics only**: timestamp (rounded to hour/day), `agent_id`, `tool_name`, `call_type`, `score`, exit code / success bool, durations, token counts, and distillation byte savings.
+- **Level 2 — Internal / Scrubbed**:
+  - Retain structural fields, but regex-scrub paths (`/home/<user>/...` -> `~/...`), emails, and API keys.
+- **Level 3 — Raw**:
+  - Full unscrubbed export for local/private backup.
 - **Output Formats**:
   - **JSON**: Compact aggregate timeseries & breakdown records suitable for static dashboard loading.
   - **SQLite**: A clean, single-table/relational file with sensitive fields redacted or omitted, usable client-side via WebAssembly SQLite (`sql.js`).

@@ -381,7 +381,7 @@ func main() {
 	}
 
 	historyCmd.AddCommand(historyTimelineCmd, historyFetchCmd, historyRecordCmd, historyStatsCmd)
-	usageCmd.AddCommand(historyCmd)
+	usageCmd.AddCommand(historyCmd, newUsageExportCmd())
 
 	var collectorInterval time.Duration
 	var collectorOnce bool
