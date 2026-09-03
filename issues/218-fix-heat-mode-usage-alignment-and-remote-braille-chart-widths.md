@@ -4,7 +4,7 @@
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
-**Related**: Issue 211; Issue 213; commits `878f83d`, `49b2311`, `77fc20b`, `5b924e4`
+**Related**: Issue 211; Issue 213; commits `878f83d`, `49b2311`, `77fc20b`, `5b924e4`, `e232aee`
 
 ---
 
@@ -47,3 +47,16 @@ alignment of the dashboard.
   intact.
 - Run targeted tests, `go test ./...`, `make check`, `make install`, and a
   visual `harnez usage --watch` check before closure.
+
+## 4. Implementation Checkpoint
+
+- Quota-layout scope implemented in `e232aee`, ready for review.
+- Root cause: the narrowest All Usage fallback emitted the first styled
+  percentage without its former fixed-width field. `100%` therefore occupied
+  one more terminal cell than `99%` and shifted the second quota bar.
+- The fallback now pads by ANSI-stripped display width, with invariant tests
+  for `0%`, `99%`, `100%`, missing durations, and single-window data at compact
+  and full widths in monochrome and heat modes.
+- Verified with targeted usage tests, `make check`, and `make install`.
+- Remote CPU/GPU Braille-width investigation remains open and was explicitly
+  excluded from this implementation scope.
