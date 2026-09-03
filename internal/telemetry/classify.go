@@ -396,7 +396,15 @@ type DefaultLocalClassifier struct {
 
 const (
 	defaultClassifierBaseURL = "http://localhost:8734/v1"
-	defaultClassifierModel   = "qwen2.5-3b-instruct-q4"
+	// defaultClassifierModel: qwen3-4b-instruct-2507-q4 (Qwen3, July 2025) —
+	// the best already-cached lmcoder model for this box (see
+	// ~/projects/lmcoder/spec/models.yaml). Chosen over qwen2.5-3b-instruct-q4
+	// (mid-2024, the original default), which is a full generation older,
+	// similar size/speed, and has a much smaller native context (32k vs
+	// 262k). Larger cached-on-demand options (mistral-nemo-12b,
+	// qwen3.8-27b-instruct-q4) trade latency/download size for quality; not
+	// used as the default here.
+	defaultClassifierModel = "qwen3-4b-instruct-2507-q4"
 )
 
 type chatCompletionRequest struct {
@@ -460,7 +468,11 @@ func (c *DefaultLocalClassifier) ClassifyBatch(ctx context.Context, notes []stri
 	}
 	timeout := c.Timeout
 	if timeout <= 0 {
-		timeout = 10 * time.Second
+		// A 20-note batch against qwen3-4b-instruct-2507-q4 measured ~11s on
+		// this box's iGPU under light load; 45s leaves headroom for a
+		// contended GPU while still failing well before a human would give
+		// up waiting on `--classify`.
+		timeout = 45 * time.Second
 	}
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
