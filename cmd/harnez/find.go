@@ -50,7 +50,11 @@ Subcommands / Allocation:
            Compute the next free ticket number (max+1, formatted with 3+ digits).
            When --reserve is supplied, atomically writes a Draft placeholder
            ticket file (issues/<NNN>-reserved.md or issues/<NNN>-<title-slug>.md)
-           so concurrent callers do not receive colliding numbers.
+           so concurrent callers do not receive colliding numbers. Non-JSON
+           output is "<NUMBER>\t<PATH>" so callers write the ticket's real
+           content directly to the reserved path instead of re-deriving the
+           slug from the title (which can diverge, leaving an orphaned
+           placeholder behind -- see issue 202).
 
 Query grammar:
   whitespace         AND: 'vram gtt' requires both terms.
@@ -144,7 +148,7 @@ func runFindNext(w io.Writer, dir string, reserve bool, title string, jsonOutput
 			fmt.Fprintln(w, string(data))
 			return nil
 		}
-		fmt.Fprintln(w, num)
+		fmt.Fprintf(w, "%s\t%s\n", num, relPath)
 		return nil
 	}
 
