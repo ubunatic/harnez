@@ -223,3 +223,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 220 | [220-add-spec-driven-braille-usage-bar-glyph-style.md](220-add-spec-driven-braille-usage-bar-glyph-style.md) | Add a spec-driven Braille usage-bar glyph style | Closed |
 | 221 | [221-promote-go-for-scripts-and-tooling-across-repos-and-explicit.md](221-promote-go-for-scripts-and-tooling-across-repos-and-explicit.md) | Promote Go for Scripts and Tooling Across Repos and Explicitly Demote/Disallow Ad-Hoc Python | Open |
 | 222 | [222-advise-git-c-make-c-over-cd.md](222-advise-git-c-make-c-over-cd.md) | Advise agents to use `git -C`/`make -C` etc. instead of `cd`-ing into dirs | Open |
+| 223 | [223-spec-driven-heat-thresholds-and-named-compact-bar-width.md](223-spec-driven-heat-thresholds-and-named-compact-bar-width.md) | Spec-driven usage-bar heat thresholds and a named compact-bar-width constant | Open |
