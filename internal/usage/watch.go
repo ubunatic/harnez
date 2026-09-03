@@ -744,11 +744,15 @@ func formatAllUsageLine(label string, windows []QuotaWindow, contentW, labelWidt
 }
 
 func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labelWidth int) string {
+	return formatAllUsageTableLineWithPresentation(label, windows, contentW, labelWidth, mustIndicators().usageBarPresentation())
+}
+
+func formatAllUsageTableLineWithPresentation(label string, windows []QuotaWindow, contentW, labelWidth int, presentation UsageBarPresentation) string {
 	if len(windows) == 0 {
 		return formatCompactGroupLineWithLabelWidth(label, windows, contentW, labelWidth)
 	}
 	if len(windows) == 1 {
-		return formatAllUsageSingleWindowLine(label, windows[0], contentW, labelWidth)
+		return formatAllUsageSingleWindowLineWithPresentation(label, windows[0], contentW, labelWidth, presentation)
 	}
 
 	var w1, w2 QuotaWindow
@@ -771,16 +775,16 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 	d1 := compactDurationText(w1)
 	d2 := compactDurationText(w2)
 
-	b1opts := watchUsageBarOptions(w1.UsedPercent)
+	b1opts := usageBarOptionsWithPresentation(presentation, w1.UsedPercent)
 	b1opts.Width = 4
-	b2opts := watchUsageBarOptions(w2.UsedPercent)
+	b2opts := usageBarOptionsWithPresentation(presentation, w2.UsedPercent)
 	b2opts.Width = 4
 	b1 := rograph.RenderBar(w1.UsedPercent, b1opts)
 	b2 := rograph.RenderBar(w2.UsedPercent, b2opts)
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
 
-	midStr := padWatchUsagePercentWithDuration(w1.UsedPercent, d1, 10)
-	endStr := watchUsagePercentWithDuration(w2.UsedPercent, d2)
+	midStr := padWatchUsagePercentWithDurationAndPresentation(presentation, w1.UsedPercent, d1, 10)
+	endStr := watchUsagePercentWithDurationAndPresentation(presentation, w2.UsedPercent, d2)
 
 	line := prefix + b1 + " " + midStr + " " + b2 + " " + endStr
 	if visLen(line) <= contentW {
@@ -788,20 +792,20 @@ func formatAllUsageTableLine(label string, windows []QuotaWindow, contentW, labe
 	}
 
 	// Drop d2 if too long
-	endStrNoD2 := watchUsagePercent(w2.UsedPercent)
+	endStrNoD2 := watchUsagePercentWithPresentation(presentation, w2.UsedPercent)
 	line = prefix + b1 + " " + midStr + " " + b2 + " " + endStrNoD2
 	if visLen(line) <= contentW {
 		return line
 	}
 
 	// Drop d1 as well
-	midStrNoD1 := padWatchUsagePercentWithDuration(w1.UsedPercent, "", 5)
+	midStrNoD1 := padWatchUsagePercentWithDurationAndPresentation(presentation, w1.UsedPercent, "", 5)
 	line = prefix + b1 + " " + midStrNoD1 + " " + b2 + " " + endStrNoD2
 	if visLen(line) <= contentW {
 		return line
 	}
 
-	return prefix + strings.Join([]string{b1, watchUsagePercent(w1.UsedPercent), b2, watchUsagePercent(w2.UsedPercent)}, " ")
+	return prefix + strings.Join([]string{b1, padWatchUsagePercentWithPresentation(presentation, w1.UsedPercent, 4), b2, watchUsagePercentWithPresentation(presentation, w2.UsedPercent)}, " ")
 }
 
 // blankBarPlaceholder renders an empty bracket the same width as a real
@@ -822,15 +826,19 @@ func blankBarPlaceholder() string {
 // second-bracket column aligned with its box-mates instead of the row simply
 // being shorter (issue 172).
 func formatAllUsageSingleWindowLine(label string, w QuotaWindow, contentW, labelWidth int) string {
+	return formatAllUsageSingleWindowLineWithPresentation(label, w, contentW, labelWidth, mustIndicators().usageBarPresentation())
+}
+
+func formatAllUsageSingleWindowLineWithPresentation(label string, w QuotaWindow, contentW, labelWidth int, presentation UsageBarPresentation) string {
 	d1 := compactDurationText(w)
 
-	b1opts := watchUsageBarOptions(w.UsedPercent)
+	b1opts := usageBarOptionsWithPresentation(presentation, w.UsedPercent)
 	b1opts.Width = 4
 	b1 := rograph.RenderBar(w.UsedPercent, b1opts)
 	b2 := blankBarPlaceholder()
 	prefix := rograph.PadLabel(label, labelWidth) + "  "
 
-	midStr := padWatchUsagePercentWithDuration(w.UsedPercent, d1, 10)
+	midStr := padWatchUsagePercentWithDurationAndPresentation(presentation, w.UsedPercent, d1, 10)
 
 	line := prefix + b1 + " " + midStr + " " + b2
 	if visLen(line) <= contentW {
@@ -839,13 +847,13 @@ func formatAllUsageSingleWindowLine(label string, w QuotaWindow, contentW, label
 
 	// Drop d1 if too long, matching the two-window branch's narrow-width
 	// fallback pattern.
-	midStrNoD1 := padWatchUsagePercentWithDuration(w.UsedPercent, "", 5)
+	midStrNoD1 := padWatchUsagePercentWithDurationAndPresentation(presentation, w.UsedPercent, "", 5)
 	line = prefix + b1 + " " + midStrNoD1 + " " + b2
 	if visLen(line) <= contentW {
 		return line
 	}
 
-	return prefix + strings.Join([]string{b1, watchUsagePercent(w.UsedPercent), b2}, " ")
+	return prefix + strings.Join([]string{b1, padWatchUsagePercentWithPresentation(presentation, w.UsedPercent, 4), b2}, " ")
 }
 
 func compactDurationText(w QuotaWindow) string {

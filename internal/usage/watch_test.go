@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/mattn/go-runewidth"
 	"ubunatic.com/harnez/internal/rograph"
 )
 
@@ -571,6 +572,89 @@ func TestAllUsageBoxSecondBarColumnAlignment(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestIssue218AllUsageQuotaLayoutInvariants locks the visual geometry of the
+// quota table rather than its ANSI byte representation. In particular, the
+// narrow fallback must reserve the same percentage field for 0%, 99%, and
+// 100%; heat styling must not affect either a row's display width or the
+// second gauge's terminal column. Single-window rows cover partial data and
+// use the same second-gauge column via the blank placeholder.
+func TestIssue218AllUsageQuotaLayoutInvariants(t *testing.T) {
+	const labelWidth = 10
+	percentages := []float64{0, 99, 100}
+	presentations := []UsageBarPresentation{UsageBarMonochrome, UsageBarHeat}
+	widths := []struct {
+		name     string
+		contentW int
+	}{
+		{name: "compact", contentW: 34},
+		{name: "full", contentW: 60},
+	}
+
+	for _, presentation := range presentations {
+		for _, width := range widths {
+			t.Run(string(presentation)+"/"+width.name, func(t *testing.T) {
+				wantSecondBarCol := -1
+				wantLineWidth := -1
+				for _, percentage := range percentages {
+					windows := []QuotaWindow{
+						{Name: "Weekly", UsedPercent: percentage}, // missing duration
+						{Name: "Session", UsedPercent: 42},
+					}
+					line := formatAllUsageTableLineWithPresentation("Claude/GPT", windows, width.contentW, labelWidth, presentation)
+					stripped := stripANSI(line)
+					if got := runewidth.StringWidth(stripped); got > width.contentW {
+						t.Fatalf("%.0f%% line width = %d, exceeds content width %d: %q", percentage, got, width.contentW, stripped)
+					}
+					secondBarCol := terminalColumnBeforeLast(stripped, "[")
+					if secondBarCol < 0 {
+						t.Fatalf("%.0f%% row has no second bar: %q", percentage, stripped)
+					}
+					if wantSecondBarCol < 0 {
+						wantSecondBarCol = secondBarCol
+						wantLineWidth = runewidth.StringWidth(stripped)
+					} else {
+						if secondBarCol != wantSecondBarCol {
+							t.Errorf("%.0f%% second bar column = %d, want %d: %q", percentage, secondBarCol, wantSecondBarCol, stripped)
+						}
+						if got := runewidth.StringWidth(stripped); got != wantLineWidth {
+							t.Errorf("%.0f%% line width = %d, want %d: %q", percentage, got, wantLineWidth, stripped)
+						}
+					}
+					if presentation == UsageBarHeat && !strings.Contains(line, "\x1b[") {
+						t.Errorf("%.0f%% heat row lacks ANSI styling: %q", percentage, line)
+					}
+				}
+
+				wantPlaceholderCol := -1
+				for _, percentage := range percentages {
+					partial := formatAllUsageSingleWindowLineWithPresentation("Claude/GPT", QuotaWindow{Name: "Weekly", UsedPercent: percentage}, width.contentW, labelWidth, presentation)
+					partialStripped := stripANSI(partial)
+					placeholderCol := terminalColumnBeforeLast(partialStripped, "[")
+					if wantPlaceholderCol < 0 {
+						wantPlaceholderCol = placeholderCol
+					} else if placeholderCol != wantPlaceholderCol {
+						t.Errorf("%.0f%% partial-data placeholder column = %d, want %d: %q", percentage, placeholderCol, wantPlaceholderCol, partialStripped)
+					}
+					if got := runewidth.StringWidth(partialStripped); got > width.contentW {
+						t.Errorf("%.0f%% partial-data width = %d, exceeds content width %d: %q", percentage, got, width.contentW, partialStripped)
+					}
+					if !strings.HasSuffix(strings.TrimRight(partialStripped, " "), "[    ]") {
+						t.Errorf("partial-data row lacks blank placeholder: %q", partialStripped)
+					}
+				}
+			})
+		}
+	}
+}
+
+func terminalColumnBeforeLast(s, marker string) int {
+	idx := strings.LastIndex(s, marker)
+	if idx < 0 {
+		return -1
+	}
+	return runewidth.StringWidth(s[:idx])
 }
 
 // TestAllUsageBoxSingleWindowRowAligns is the regression test for issue 172:

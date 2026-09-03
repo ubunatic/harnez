@@ -435,12 +435,20 @@ func watchUsagePercentWithPresentation(presentation UsageBarPresentation, value 
 // bytes in the width calculation, so compact quota columns stay aligned in
 // both presentation modes.
 func padWatchUsagePercent(value float64, width int) string {
-	label := watchUsagePercent(value)
+	return padWatchUsagePercentWithPresentation(mustIndicators().usageBarPresentation(), value, width)
+}
+
+func padWatchUsagePercentWithPresentation(presentation UsageBarPresentation, value float64, width int) string {
+	label := watchUsagePercentWithPresentation(presentation, value)
 	return strings.Repeat(" ", max(0, width-visLen(label))) + label
 }
 
 func watchUsagePercentWithDuration(value float64, duration string) string {
-	label := watchUsagePercent(value)
+	return watchUsagePercentWithDurationAndPresentation(mustIndicators().usageBarPresentation(), value, duration)
+}
+
+func watchUsagePercentWithDurationAndPresentation(presentation UsageBarPresentation, value float64, duration string) string {
+	label := watchUsagePercentWithPresentation(presentation, value)
 	if duration == "" {
 		return label
 	}
@@ -448,7 +456,14 @@ func watchUsagePercentWithDuration(value float64, duration string) string {
 }
 
 func padWatchUsagePercentWithDuration(value float64, duration string, width int) string {
-	label := watchUsagePercentWithDuration(value, duration)
+	return padWatchUsagePercentWithDurationAndPresentation(mustIndicators().usageBarPresentation(), value, duration, width)
+}
+
+func padWatchUsagePercentWithDurationAndPresentation(presentation UsageBarPresentation, value float64, duration string, width int) string {
+	label := watchUsagePercentWithPresentation(presentation, value)
+	if duration != "" {
+		label += " " + duration
+	}
 	return label + strings.Repeat(" ", max(0, width-visLen(label)))
 }
 
