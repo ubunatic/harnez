@@ -1,6 +1,6 @@
 # 204 — Sanitized Telemetry & Token Export Subcommand for Visual Analytics
 
-**Status**: Open
+**Status**: Closed — resolved in 219c212
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -236,5 +236,18 @@ note, unrelated to this change, re-confirmed to fail identically without these c
   `TestBuildUsageExportLevel_Public_MatchesBuildUsageExport`.
 
 Independent security-focused review of this pass (the subprocess invocation, the prompt
-construction, and the regex scrub patterns) is still pending, per this ticket's Status
-remaining Open. SQLite export also remains deferred, unchanged from the first pass.
+construction, and the regex scrub patterns) was completed inline by the orchestrating
+session: no blocking findings (fixed argv, stdin-delivered prompt, JSON-marshaled note
+content, output-size truncation in error paths, honest false-positive tradeoff documented
+on the token regex).
+
+## 5. Resolution
+
+Closed. JSON export with all four privacy levels (`public`/`agent-sanitized`/`internal`/
+`raw`), the `claude`-CLI-backed sanitizer, and its content-hash cache are implemented,
+tested, and reviewed as described above.
+
+SQLite export (§2 "Output Formats") remains unimplemented and is split out to a follow-up
+ticket rather than left dangling here — see [[208]] — since it is a materially separate
+piece of work (a different output writer, its own "clean file for `sql.js`" schema
+concerns) with no dependency on anything closed by this ticket.
