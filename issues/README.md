@@ -225,3 +225,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 222 | [222-advise-git-c-make-c-over-cd.md](222-advise-git-c-make-c-over-cd.md) | Advise agents to use `git -C`/`make -C` etc. instead of `cd`-ing into dirs | Open |
 | 223 | [223-spec-driven-heat-thresholds-and-named-compact-bar-width.md](223-spec-driven-heat-thresholds-and-named-compact-bar-width.md) | Spec-driven usage-bar heat thresholds and a named compact-bar-width constant | Closed |
 | 224 | [224-initialize-website-rules-and-scaffold-direct-android-releases.md](224-initialize-website-rules-and-scaffold-direct-android-releases.md) | Initialize website rules and scaffold direct Android releases | Open |
+| 225 | [225-local-slm-batch-classifier-reliability-and-accuracy.md](225-local-slm-batch-classifier-reliability-and-accuracy.md) | Local SLM Batch Classifier: Reliability & Accuracy Follow-Up | Open |

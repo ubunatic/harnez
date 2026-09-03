@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -304,7 +305,14 @@ func ClassifyNotes(ctx context.Context, db *DB, calls []ToolCall, classifier Not
 		}
 	}
 
-	const batchSize = 50
+	// batchSize was 50 until a live-DB diagnostic (see classify_live_test.go,
+	// TestDefaultLocalClassifier_LiveManual) showed the small local model
+	// (qwen2.5-3b) falling into a repetition loop past ~20-30 notes/batch —
+	// it kept emitting "other" well beyond the requested count instead of
+	// closing the JSON array, so every batch of 50 failed and silently
+	// degraded to CategoryOther for the whole chunk. 20 was reliable in
+	// testing; keep headroom below the point where it broke down.
+	const batchSize = 20
 	classifiedMap := make(map[string]ActivityCategory, len(distinctNotes))
 	toCache := make(map[string]ActivityCategory, len(distinctNotes))
 
@@ -318,7 +326,13 @@ func ClassifyNotes(ctx context.Context, db *DB, calls []ToolCall, classifier Not
 
 		cats, err := classifier.ClassifyBatch(ctx, chunk)
 		if err != nil {
-			// Graceful fallback to CategoryOther on classifier failure
+			// Graceful fallback to CategoryOther on classifier failure (issue
+			// 216 AC3) — but still surface *why*, since a silently-failing
+			// classifier and a working one otherwise look identical in the
+			// export output (see issue 216 follow-up: swallowed errors made a
+			// broken Tier 3 pass indistinguishable from --classify not being
+			// used at all).
+			fmt.Fprintf(os.Stderr, "harnez: warning: batch classification failed for %d note(s), falling back to %q: %v\n", len(chunk), CategoryOther, err)
 			for _, n := range chunk {
 				classifiedMap[n] = CategoryOther
 			}
@@ -346,6 +360,17 @@ func ClassifyNotes(ctx context.Context, db *DB, calls []ToolCall, classifier Not
 	}
 
 	return out, nil
+}
+
+// truncateForError trims s to at most n runes for embedding in error
+// messages, so a runaway or malformed model response doesn't blow up log
+// output while still giving enough context to diagnose it.
+func truncateForError(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "...(truncated)"
 }
 
 func sha256Hex(s string) string {
@@ -378,7 +403,19 @@ type chatCompletionRequest struct {
 	Model       string                  `json:"model"`
 	Messages    []chatCompletionMessage `json:"messages"`
 	Temperature float64                 `json:"temperature"`
+	MaxTokens   int                     `json:"max_tokens"`
+	Stop        []string                `json:"stop,omitempty"`
 }
+
+// maxTokensPerNote bounds generation length so a small local model that fails
+// to terminate its JSON array cleanly (observed on batches of ~50 notes: the
+// response runs on until it exhausts the context window, taking minutes
+// instead of seconds and surfacing only as a misleading "context deadline
+// exceeded") fails fast with a parse error instead of hanging the request.
+// Longest category name is "inspection" (~3 tokens incl. quotes/comma); 8
+// tokens/note plus fixed overhead leaves comfortable headroom.
+const maxTokensPerNote = 16
+const maxTokensOverhead = 64
 
 type chatCompletionMessage struct {
 	Role    string `json:"role"`
@@ -440,6 +477,12 @@ func (c *DefaultLocalClassifier) ClassifyBatch(ctx context.Context, notes []stri
 			{Role: "user", Content: prompt},
 		},
 		Temperature: 0.0,
+		MaxTokens:   len(notes)*maxTokensPerNote + maxTokensOverhead,
+		// Stop at the array's closing bracket instead of relying solely on
+		// max_tokens — observed failure mode was the model repeating entries
+		// past the requested count rather than closing the array (see
+		// batchSize comment above).
+		Stop: []string{"]"},
 	}
 	reqJSON, err := json.Marshal(reqBody)
 	if err != nil {
@@ -455,7 +498,10 @@ func (c *DefaultLocalClassifier) ClassifyBatch(ctx context.Context, notes []stri
 	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("telemetry: local classifier endpoint unreachable: %w", err)
+		if cctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("telemetry: local classifier at %s did not respond within %s (server reachable but too slow, or the model failed to terminate its response — try a smaller batch, a smaller/faster model, or a longer Timeout): %w", baseURL, timeout, err)
+		}
+		return nil, fmt.Errorf("telemetry: local classifier endpoint at %s unreachable (is `lmcoder serve`/`lmcoder start` running?): %w", baseURL, err)
 	}
 	defer resp.Body.Close()
 
@@ -480,10 +526,15 @@ func (c *DefaultLocalClassifier) ClassifyBatch(ctx context.Context, notes []stri
 	raw = strings.TrimPrefix(raw, "```")
 	raw = strings.TrimSuffix(raw, "```")
 	raw = strings.TrimSpace(raw)
+	// The "]" stop sequence above is excluded from the returned content by
+	// the OpenAI-compatible API convention, so re-append it before parsing.
+	if strings.HasPrefix(raw, "[") && !strings.HasSuffix(raw, "]") {
+		raw += "]"
+	}
 
 	var catStrs []string
 	if err := json.Unmarshal([]byte(raw), &catStrs); err != nil {
-		return nil, fmt.Errorf("telemetry: parse categories JSON array: %w", err)
+		return nil, fmt.Errorf("telemetry: parse categories JSON array (model response was %d chars, possibly truncated by max_tokens=%d — raw response: %s): %w", len(raw), reqBody.MaxTokens, truncateForError(raw, 300), err)
 	}
 	if len(catStrs) != len(notes) {
 		return nil, fmt.Errorf("telemetry: classifier returned %d categories, want %d", len(catStrs), len(notes))
