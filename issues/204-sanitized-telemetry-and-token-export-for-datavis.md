@@ -35,9 +35,14 @@ Add a sanitized export mechanism to `harnez`:
   - **Completely drop free-form prose**: omit `note`, arguments, and command lines entirely.
   - **Bucket or generalize categorical fields**: map `project_name` to an opt-in allowlist or generic aliases (`project-a`, `project-b`), strip `working_dir`, strip `session_id` and replace with salted ephemeral session hashes if session grouping is needed.
   - **Aggregate metrics only**: timestamp (rounded to hour/day), `agent_id`, `tool_name`, `call_type`, `score`, exit code / success bool, durations, token counts, and distillation byte savings.
-- **Level 2 — Internal / Scrubbed**:
+- **Level 2 — Agent-Sanitized Prose (LLM-in-the-loop / Incremental Cleaner)**:
+  - When human-readable context or notes *are* desired on demand (e.g. high-level summaries of what an agent did), use an agent/LLM-based cleaning pipeline:
+    - **Prompt Contract**: Rewrites or summarizes delicate tool notes into sanitized, high-level abstract descriptions (e.g., "Refactored UI component styling" instead of "Fixed internal auth bug in client Acme Corp repo").
+    - **Incremental Processing & Content-Hash Caching**: Never re-process unchanged text. Compute `sha256(raw_note)` (or row ID) and store sanitized counterparts in a local translation/cache table (`note_sanitization_cache: raw_hash -> clean_text`).
+    - **Incremental Stream**: When new telemetry rows arrive, only new un-sanitized texts are dispatched to the agent cleaning step before export.
+- **Level 3 — Internal / Scrubbed**:
   - Retain structural fields, but regex-scrub paths (`/home/<user>/...` -> `~/...`), emails, and API keys.
-- **Level 3 — Raw**:
+- **Level 4 — Raw**:
   - Full unscrubbed export for local/private backup.
 - **Output Formats**:
   - **JSON**: Compact aggregate timeseries & breakdown records suitable for static dashboard loading.
