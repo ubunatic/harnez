@@ -1,6 +1,6 @@
 # 238 — `harnez init` doesn't gitignore `issues/README.md.lock` in managed repos
 
-**Status**: Open
+**Status**: In Progress — fresh sprint implementation
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
