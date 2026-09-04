@@ -31,6 +31,11 @@ git -C <repo> add issues/<ticket>.md issues/README.md
 git -C <repo> commit -m "docs(issues): file <ticket-summary>"
 ```
 
+> **Keep this skill deliberately thin.** The repository's `AGENTS.md` and
+> issue-tracking documentation should already be in context. `/issue` should
+> provide the invocation trigger and command TL;DR, not duplicate or restate
+> the full issue workflow.
+
 ## 1. Problem & Motivation
 
 Harnez installs several reusable commands as slash commands and cross-agent
@@ -58,6 +63,9 @@ the commands an agent normally needs to run.
 - Start the body with a short TL;DR showing the normal commands: search for a
   duplicate, atomically reserve the next ticket, edit the reserved file,
   rebuild the index, stage the exact tracker files, and commit them.
+- Do not over-specify the workflow or copy issue-tracking policy into the
+  skill. Assume applicable repository instructions are already loaded; point
+  the agent to them and include only guidance unique to invoking `/issue`.
 - Respect repository-local instructions and issue conventions. In a
   harnez-managed repository, prefer `harnez find ... issues` and
   `harnez find ... issues next --reserve` over raw directory scans or manual
@@ -96,5 +104,7 @@ the commands an agent normally needs to run.
 - A normal invocation produces a correctly numbered, indexed ticket that
   follows the target repository's metadata and commit rules.
 - Duplicate discovery and atomic reservation are explicit parts of the flow.
+- The skill stays concise and does not duplicate issue workflow already
+  supplied by repository context.
 - Verification covers installation, idempotency, and preservation of unrelated
   working-tree changes.
