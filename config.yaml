@@ -191,6 +191,10 @@ commands:
     description: "Autonomously sweep sibling agent projects for managed-docs drift and reconcile it (scan -> triage -> stop-marker protect -> init -> verify)"
     file: commands/harnez-sync.md
 
+  - name: roadmap
+    description: "Product-manager-style roadmap creation/update from the open issue backlog (check issues -> check existing roadmap -> synthesize/reconcile by product value axis)"
+    file: commands/roadmap.md
+
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
 codex_hooks_target: ~/.codex/config.toml
@@ -233,6 +237,10 @@ skills:
   - name: harnez-sync
     description: "Autonomously sweep sibling agent projects for managed-docs drift and reconcile it (scan -> triage -> stop-marker protect -> init -> verify)"
     file: commands/harnez-sync.md
+
+  - name: roadmap
+    description: "Product-manager-style roadmap creation/update from the open issue backlog (check issues -> check existing roadmap -> synthesize/reconcile by product value axis)"
+    file: commands/roadmap.md
 
   - name: tool-feedback-protocol
     description: "Use after an internal tool call (Read, Edit, Bash, etc.) in a harnez-tracked project (issues/ present) failed or didn't produce the expected outcome — record it via harnez rate before moving to the next step. Also use if a harnez tip nudges you after a long quiet stretch and nothing has failed — confirm with harnez rate --ok. Skip both for routine successful calls."
