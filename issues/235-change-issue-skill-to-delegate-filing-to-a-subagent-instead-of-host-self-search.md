@@ -55,11 +55,10 @@ prescribed by this ticket).
 
 ## 3. Open Questions
 
-- **Sync vs. async wait**: should the host block on the subagent's filing result (to report the
-  ticket number back immediately, which is often what the user wants next) or dispatch-and-stay-
-  responsive like `harnez-sync`? Ticket filing is typically fast; blocking may be the more useful
-  default here even though it diverges from other skills' async-by-default framing. Decide with
-  evidence, not by copying `harnez-sync`'s pattern uncritically.
+- **Sync vs. async wait — resolved**: default is async (dispatch, stay responsive, report back
+  when the subagent completes) unless the user explicitly asks to wait, consistent with
+  `AGENTS.md`'s general non-blocking-by-default rule and `harnez-sync`'s pattern. Do not special-
+  case `/issue` as synchronous-by-default just because filing is typically fast.
 - **What exactly goes in the handoff prompt**: the ticket says "what it knows from the session so
   far" — needs a concrete minimum bar (the raw ask, verbatim where useful; any files/commits/
   tickets already touched this session that are relevant; any explicit constraints the user
