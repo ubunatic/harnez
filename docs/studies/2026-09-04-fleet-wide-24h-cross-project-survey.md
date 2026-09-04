@@ -225,11 +225,43 @@ changes to report).
 
 ---
 
-## Placeholder: `smarthome`
+## `smarthome`: blended in from its own story
 
-*A separate agent session is writing `smarthome`'s own 24h story in parallel. That
-repo had 55 commits in this same window — the single highest count of any repo
-surveyed — spanning (per its `ubunatic.com`-side footprint seen here) at least a
-`v0.1.0-phase1` Android APK release with LFS-tracked binary and minisig signature,
-plus a new public subpage. Once that story is complete, blend its sections into
-this document (or cross-link it) rather than duplicating the analysis here.*
+The placeholder above has been resolved: `smarthome`'s own retrospective,
+`smarthome/docs/studies/2026-09-04-three-days-to-a-public-release.md` (separate repo,
+not directly linkable from here), is complete. Its scope is wider than this survey's
+24h window — a
+full 53-hour, three-day arc from `git init` to a signed public release — so rather
+than duplicate its analysis here, this section cross-links the pieces relevant to
+the fleet-wide picture:
+
+- **Scale**: 112 commits, 111 files, +11,270/−24 lines, 27 tickets (20 closed), 45
+  unit tests, ending in a signed public APK live at `ubunatic.com/smarthome/` and
+  running on two household devices — the single highest-throughput repo of any
+  surveyed here, fleet-wide or not.
+- **Headline pattern, shared with `harnez`'s telemetry-classifier churn (§4 above)**:
+  every real bug in `smarthome` (OkHttp crash, `wss://` port fallback, QR scanner
+  orientation, a shipped-then-withdrawn pin/unpin feature) surfaced on a real device,
+  in modules with zero automated tests — the same "green suite, live-only failure"
+  shape as `harnez`'s classifier, just caught by canary-first discipline instead of
+  live discovery in most cases.
+- **A live, currently-open gap**: the published site's Privacy Policy link 404s in
+  production (smarthome study §4.1, ticket 028) — caught by the retrospective itself,
+  not by any test or review gate. This directly motivated the new "assert link
+  liveness, not presence" release-exit-criterion added to
+  [`GoRelease.md`](../practices/GoRelease.md) §6 as part of this survey's follow-up.
+- **Tracker drift**: four `smarthome` tickets read `In Progress` for shipped,
+  live-verified work (study §4.2) — the same failure mode as this survey's own
+  observation that closing tickets doesn't happen automatically once work ships. Now
+  captured as an explicit invariant in
+  [`IssueTracking.md`](../practices/IssueTracking.md) §5 and
+  [`AgenticLoop.md`](../practices/AgenticLoop.md) Phase 5.
+- **Evidence that generalized past `smarthome` itself**: its `harnez stats` data
+  (`Edit` 11.1% failure vs. `apply_patch` 4.2% over 132 calls) turned an
+  intuition-based editing rule into an empirically backed one, folded into
+  `AgenticLoop.md`'s anti-patterns list.
+
+See the `smarthome` study directly for the full canary-first development narrative,
+the security-cleanup post-mortem (real household credentials baked into source for
+two days before a human-gated sanitization pass), and the four research tickets that
+correctly concluded "don't build this."

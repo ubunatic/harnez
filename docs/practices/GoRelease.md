@@ -262,3 +262,20 @@ with the old public key; commit the new `minisign.pub` and say so in the commit 
 The publish step attaches everything in `dist/` matching `*.tar.gz`, `*.zip`, `*.minisig`,
 `SHA256SUMS`, or `<project>-*`. A scripted project therefore ends up with the same three
 assets as a Go one: the tarball, `SHA256SUMS`, and `SHA256SUMS.minisig`.
+
+## 6. Exit Criteria: Assert Link Liveness, Not Link Presence
+
+A pre-release legal/compliance check (Impressum, AGPL source link, privacy policy) that only
+greps for a string is not evidence the release is safe to announce — it is evidence the string
+exists somewhere in a source file. `smarthome`'s `make legal-check` correctly verified an
+Impressum link and an AGPL source link were *present*, passed cleanly, and still shipped a
+public release whose Privacy Policy link 404s in production, because no `website/privacy/`
+page was ever generated to match the linked URL (see
+`docs/studies/2026-09-04-three-days-to-a-public-release.md` §4.1). A string check on a URL
+that 404s produces false confidence, which is worse than no check at all.
+
+**Rule**: before announcing a release, every externally-linked page reachable from the
+published site or app (Impressum, privacy policy, source repo, license file) must be probed
+live (`curl -o /dev/null -sw '%{http_code}'`) and return 200 — not just grepped for in source.
+Add this as an explicit step in the project's release/legal-check target, after publish and
+before the release is announced as done.

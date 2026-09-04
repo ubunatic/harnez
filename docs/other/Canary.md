@@ -123,6 +123,33 @@ These findings shaped that project's OCR implementation in the
 
 ---
 
+## Historical example — a headless peer as a standing canary harness
+
+**Mechanism:** an Android app talking to network appliances (an LG webOS TV, a FRITZ!Box)
+has a 3-minute build/install/tap cycle per probe, which makes ad hoc canary scripts too
+slow to write for every mechanism worth checking.
+
+**Canary:** `smarthome` (see `docs/studies/2026-09-04-three-days-to-a-public-release.md`)
+built a standalone Go CLI (`cmd/flimmerkasten`) as a *host-side peer* speaking the same
+wire protocols (SSAP, TR-064, Wake-on-LAN) as the Android app, instead of writing one-off
+canary scripts per mechanism. `make flimmerkasten-off` / `make fritzbox-status` became a
+standing, reusable canary harness rather than a disposable probe.
+
+**Finding:** every external mechanism in that project was probed live through the CLI
+before the matching Android feature was built (Wake-on-LAN, FRITZ!Box least-privilege
+users, ARD foreground-app queries — the last two probes concluded "not viable" and
+*cancelled* features rather than triggering multi-day debugging). The one-time cost of the
+peer CLI is repaid on every subsequent probe, which is why this was the single largest
+velocity multiplier across 20 features shipped in three days.
+
+**Rule of thumb, generalized:** when a feature's target is a device or service reachable
+over a network protocol and the primary client is slow to iterate on (a mobile app, a
+GUI), build a headless CLI speaking the same protocol *first*. Treat it as a standing
+canary harness, not a throwaway script — keep it in the tree alongside the feature it
+supports.
+
+---
+
 ## Canary Scope vs Integration Tests
 
 Canaries are intentionally distinct from full integration test suites:
