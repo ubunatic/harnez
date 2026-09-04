@@ -143,6 +143,10 @@ commands:
     description: "Create/update evergreen docs and issue files for the current session"
     file: commands/evergreen.md
 
+  - name: issue
+    description: "File a new repository issue or ticket when asked; do not trigger merely because work references an existing issue"
+    file: commands/issue.md
+
   - name: story
     description: "Write a candid engineering retrospective and case study in docs/studies/"
     file: commands/story.md
@@ -197,6 +201,10 @@ skills:
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
     file: commands/evergreen.md
+
+  - name: issue
+    description: "File a new repository issue or ticket when asked; do not trigger merely because work references an existing issue"
+    file: commands/issue.md
 
   - name: story
     description: "Write a candid engineering retrospective and case study in docs/studies/"

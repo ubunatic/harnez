@@ -1,6 +1,6 @@
 # 229 — Add /issue skill for filing repository tickets
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
@@ -98,13 +98,13 @@ the commands an agent normally needs to run.
 
 ## Acceptance Criteria
 
-- `/issue` is available through every configured command/skill installation
+- [x] `/issue` is available through every configured command/skill installation
   surface supported by harnez.
-- The skill begins with a practical TL;DR listing the commands to run.
-- A normal invocation produces a correctly numbered, indexed ticket that
+- [x] The skill begins with a practical TL;DR listing the commands to run.
+- [x] A normal invocation produces a correctly numbered, indexed ticket that
   follows the target repository's metadata and commit rules.
-- Duplicate discovery and atomic reservation are explicit parts of the flow.
-- The skill stays concise and does not duplicate issue workflow already
+- [x] Duplicate discovery and atomic reservation are explicit parts of the flow.
+- [x] The skill stays concise and does not duplicate issue workflow already
   supplied by repository context.
-- Verification covers installation, idempotency, and preservation of unrelated
+- [x] Verification covers installation, idempotency, and preservation of unrelated
   working-tree changes.
