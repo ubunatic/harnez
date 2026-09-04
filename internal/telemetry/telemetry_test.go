@@ -341,6 +341,72 @@ func TestAggregateByAgent(t *testing.T) {
 	}
 }
 
+// TestAggregateByProject covers issue 227: a per-project breakdown,
+// grouped on project_name (the stable identity across relocations of a
+// checkout, per the ticket's Notes), mirroring TestAggregateByAgent.
+func TestAggregateByProject(t *testing.T) {
+	db := openTestDB(t)
+
+	c1 := sampleCall("sess-1", "Read", 5, 0)
+	c1.ProjectName = "harnez"
+	c2 := sampleCall("sess-1", "Read", 3, 1)
+	c2.ProjectName = "harnez"
+	c3 := sampleCall("sess-2", "Edit", 4, 0)
+	c3.ProjectName = "voxi"
+	for _, c := range []ToolCall{c1, c2, c3} {
+		if err := db.Insert(c); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+	}
+
+	groups, err := db.AggregateByProject(Filter{})
+	if err != nil {
+		t.Fatalf("AggregateByProject: %v", err)
+	}
+	if len(groups) != 2 {
+		t.Fatalf("len(groups) = %d, want 2", len(groups))
+	}
+	// ORDER BY COUNT(*) DESC, key ASC: harnez (2 calls) before voxi (1 call).
+	if groups[0].Key != "harnez" || groups[0].Count != 2 {
+		t.Errorf("groups[0] = %+v, want Key=harnez Count=2", groups[0])
+	}
+	wantAvg := (5.0 + 3.0) / 2.0
+	if diff := groups[0].AvgScore - wantAvg; diff < -0.0001 || diff > 0.0001 {
+		t.Errorf("groups[0].AvgScore = %v, want %v", groups[0].AvgScore, wantAvg)
+	}
+	if groups[0].FailureCount != 1 {
+		t.Errorf("groups[0].FailureCount = %d, want 1", groups[0].FailureCount)
+	}
+	if groups[1].Key != "voxi" || groups[1].Count != 1 {
+		t.Errorf("groups[1] = %+v, want Key=voxi Count=1", groups[1])
+	}
+}
+
+// TestFilterProject covers the Filter.Project field (issue 227): filters
+// tool_calls rows down to one project_name, combining with other filters
+// via AND like the pre-existing ToolName/AgentID/TicketID fields.
+func TestFilterProject(t *testing.T) {
+	db := openTestDB(t)
+
+	c1 := sampleCall("sess-1", "Read", 5, 0)
+	c1.ProjectName = "harnez"
+	c2 := sampleCall("sess-2", "Read", 3, 1)
+	c2.ProjectName = "voxi"
+	for _, c := range []ToolCall{c1, c2} {
+		if err := db.Insert(c); err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+	}
+
+	groups, err := db.AggregateByTool(Filter{Project: "harnez"})
+	if err != nil {
+		t.Fatalf("AggregateByTool: %v", err)
+	}
+	if len(groups) != 1 || groups[0].Count != 1 {
+		t.Fatalf("groups = %+v, want 1 group with Count=1", groups)
+	}
+}
+
 func TestAggregateByToolExcludesNullDistilledBytes(t *testing.T) {
 	db := openTestDB(t)
 

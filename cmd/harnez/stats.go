@@ -1,13 +1,15 @@
 // stats implements `harnez stats`, an analytical report over the
 // tool_calls telemetry table (internal/telemetry, issue 116): call
-// frequency, average score, and failure rate broken down per tool and
-// per agent, plus a global distillation byte-savings ratio. See
-// issues/120-harnez-stats-analytical-reporting.md.
+// frequency, average score, and failure rate broken down per tool, per
+// agent, and per project, plus a global distillation byte-savings ratio.
+// See issues/120-harnez-stats-analytical-reporting.md and
+// issues/227-harnez-stats-per-project-aggregation-and-project-filter.md.
 //
 // All SQL lives in internal/telemetry (AggregateByTool, AggregateByAgent,
-// DistillationSavings) per this ticket's explicit "keep SQL out of the
-// CLI command file" note — this file only resolves flags into a
-// telemetry.Filter, calls those methods, and renders the result.
+// AggregateByProject, DistillationSavings) per this ticket's explicit
+// "keep SQL out of the CLI command file" note — this file only resolves
+// flags into a telemetry.Filter, calls those methods, and renders the
+// result.
 package main
 
 import (
@@ -26,18 +28,19 @@ func newStatsCmd() *cobra.Command {
 	var toolFlag string
 	var agentFlag string
 	var ticketFlag string
+	var projectFlag string
 	var autoFlag bool
 	var jsonOut bool
 	var overheadFlag bool
 
 	cmd := &cobra.Command{
-		Use:   "stats [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--auto]",
+		Use:   "stats [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--project <name>] [--auto]",
 		Short: "Report call frequency, average score, failure rate, and byte savings from tool_calls telemetry",
 		Long: `stats renders an analytical report over the tool_calls telemetry table
 (internal/telemetry, issue 116, populated by 'harnez rate' and 'harnez exec'):
 
-  - Call frequency, average score, and failure rate broken down per tool
-    and per agent.
+  - Call frequency, average score, and failure rate broken down per tool,
+    per agent, and per project.
   - A global distillation byte-savings ratio (1 - distilled/raw bytes),
     computed only over rows where distillation actually ran
     (distilled_bytes IS NOT NULL).
@@ -45,11 +48,16 @@ func newStatsCmd() *cobra.Command {
   harnez stats
   harnez stats --tool Read --agent claude
   harnez stats --ticket harnez/120-harnez-stats-analytical-reporting --json
+  harnez stats --project harnez
   harnez stats --auto
 
 --auto resolves session_id from the current environment (internal/resolve,
 same resolution harnez rate/harnez exec use) and filters to just this
 session's calls, instead of the all-time/all-session default.
+
+--project filters to one project_name (issue 227) — the stable project
+identity stored per tool_calls row, matching the by-project breakdown in
+the report.
 
 Filters combine with AND when more than one is given. Default output is a
 formatted terminal table; --json emits the same numbers unformatted for
@@ -60,6 +68,7 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 				Tool:     toolFlag,
 				Agent:    agentFlag,
 				Ticket:   ticketFlag,
+				Project:  projectFlag,
 				Auto:     autoFlag,
 				JSON:     jsonOut,
 				Overhead: overheadFlag,
@@ -69,6 +78,7 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 	cmd.Flags().StringVar(&toolFlag, "tool", "", "filter to one tool_name")
 	cmd.Flags().StringVar(&agentFlag, "agent", "", "filter to one agent_id")
 	cmd.Flags().StringVar(&ticketFlag, "ticket", "", "filter to one ticket_id")
+	cmd.Flags().StringVar(&projectFlag, "project", "", "filter to one project_name")
 	cmd.Flags().BoolVar(&autoFlag, "auto", false, "filter to the current session, resolved from the environment (like harnez rate/exec)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output the report as JSON instead of a formatted table")
 	cmd.Flags().BoolVar(&overheadFlag, "overhead", false,
@@ -84,6 +94,7 @@ type statsOptions struct {
 	Tool     string
 	Agent    string
 	Ticket   string
+	Project  string
 	Auto     bool
 	JSON     bool
 	Overhead bool
@@ -102,6 +113,7 @@ type statsReport struct {
 	Empty     bool                          `json:"empty"`
 	ByTool    []telemetry.GroupStats        `json:"by_tool,omitempty"`
 	ByAgent   []telemetry.GroupStats        `json:"by_agent,omitempty"`
+	ByProject []telemetry.GroupStats        `json:"by_project,omitempty"`
 	Savings   telemetry.DistillationSavings `json:"distillation_savings"`
 	Heartbeat telemetry.HeartbeatInfo       `json:"heartbeat"`
 	Overhead  *rateOverheadReport           `json:"rate_feedback_overhead,omitempty"`
@@ -144,6 +156,7 @@ func runStats(w io.Writer, opts statsOptions) error {
 		ToolName: opts.Tool,
 		AgentID:  opts.Agent,
 		TicketID: opts.Ticket,
+		Project:  opts.Project,
 	}
 
 	if opts.Auto {
@@ -188,6 +201,10 @@ func buildStatsReport(db *telemetry.DB, f telemetry.Filter) (statsReport, error)
 	if err != nil {
 		return statsReport{}, fmt.Errorf("aggregate by agent: %w", err)
 	}
+	byProject, err := db.AggregateByProject(f)
+	if err != nil {
+		return statsReport{}, fmt.Errorf("aggregate by project: %w", err)
+	}
 	savings, err := db.DistillationSavings(f)
 	if err != nil {
 		return statsReport{}, fmt.Errorf("distillation savings: %w", err)
@@ -199,9 +216,10 @@ func buildStatsReport(db *telemetry.DB, f telemetry.Filter) (statsReport, error)
 
 	return statsReport{
 		Filter:    f,
-		Empty:     len(byTool) == 0 && len(byAgent) == 0,
+		Empty:     len(byTool) == 0 && len(byAgent) == 0 && len(byProject) == 0,
 		ByTool:    byTool,
 		ByAgent:   byAgent,
+		ByProject: byProject,
 		Savings:   savings,
 		Heartbeat: heartbeat,
 	}, nil
@@ -270,6 +288,12 @@ func renderStatsTable(w io.Writer, report statsReport) error {
 	fmt.Fprintln(tw)
 	fmt.Fprintln(tw, "AGENT\tCALLS\tAVG SCORE\tFAILURE RATE")
 	for _, g := range report.ByAgent {
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n",
+			g.Key, g.Count, formatAvgScore(g), formatFailureRate(g))
+	}
+	fmt.Fprintln(tw)
+	fmt.Fprintln(tw, "PROJECT\tCALLS\tAVG SCORE\tFAILURE RATE")
+	for _, g := range report.ByProject {
 		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n",
 			g.Key, g.Count, formatAvgScore(g), formatFailureRate(g))
 	}

@@ -28,6 +28,11 @@ import (
 //	claude: 2 calls, avg score 3.00, failure rate 50.0%
 //	codex:  1 call,  avg score 4.00, failure rate 0.0%
 //
+// Expected per-project:
+//
+//	harnez: 2 calls, avg score 3.00, failure rate 50.0%
+//	voxi:   1 call,  avg score 4.00, failure rate 0.0%
+//
 // Expected distillation savings (only the 2 rows with non-NULL
 // distilled_bytes): raw=3000, distilled=1200, ratio=1-(1200/3000)=0.60.
 func seedStatsFixture(t *testing.T, dbPath string) {
@@ -41,19 +46,22 @@ func seedStatsFixture(t *testing.T, dbPath string) {
 	rows := []telemetry.ToolCall{
 		{
 			SessionID: "sess-1", TicketID: "harnez/120", AgentID: "claude",
-			ToolName: "Read", CallType: "internal",
+			ProjectName: "harnez",
+			ToolName:    "Read", CallType: "internal",
 			Score: intPtr(5), ExitCode: intPtr(0),
 			RawBytes: 1000, DistilledBytes: int64Ptr(200),
 		},
 		{
 			SessionID: "sess-1", TicketID: "harnez/120", AgentID: "claude",
-			ToolName: "Read", CallType: "shell",
+			ProjectName: "harnez",
+			ToolName:    "Read", CallType: "shell",
 			Score: intPtr(1), ExitCode: intPtr(1),
 			RawBytes: 500,
 		},
 		{
 			SessionID: "sess-2", TicketID: "harnez/120", AgentID: "codex",
-			ToolName: "Edit", CallType: "internal",
+			ProjectName: "voxi",
+			ToolName:    "Edit", CallType: "internal",
 			Score: intPtr(4), ExitCode: intPtr(0),
 			RawBytes: 2000, DistilledBytes: int64Ptr(1000),
 		},
@@ -83,6 +91,8 @@ func TestRunStatsTable_MatchesHandComputedFixture(t *testing.T) {
 		"Edit", "1", "4.00", "0.0%",
 		"claude",
 		"codex",
+		"harnez",
+		"voxi",
 		"60.00%",
 	} {
 		if !strings.Contains(out, want) {
@@ -126,6 +136,24 @@ func TestRunStatsJSON_ValidAndMatchesTable(t *testing.T) {
 		t.Errorf("Read.FailureCount = %d, want 1", read.FailureCount)
 	}
 
+	byProject := map[string]telemetry.GroupStats{}
+	for _, g := range report.ByProject {
+		byProject[g.Key] = g
+	}
+	harnezProj, ok := byProject["harnez"]
+	if !ok {
+		t.Fatal("no harnez group in JSON output's by_project")
+	}
+	if harnezProj.Count != 2 {
+		t.Errorf("harnez.Count = %d, want 2", harnezProj.Count)
+	}
+	if diff := harnezProj.AvgScore - 3.0; diff < -0.0001 || diff > 0.0001 {
+		t.Errorf("harnez.AvgScore = %v, want 3.0", harnezProj.AvgScore)
+	}
+	if voxi, ok := byProject["voxi"]; !ok || voxi.Count != 1 {
+		t.Errorf("voxi group = %+v (ok=%v), want Count=1", voxi, ok)
+	}
+
 	if diff := report.Savings.Ratio - 0.6; diff < -0.0001 || diff > 0.0001 {
 		t.Errorf("Savings.Ratio = %v, want 0.6", report.Savings.Ratio)
 	}
@@ -159,6 +187,41 @@ func TestRunStatsFilters_ToolAgentTicket(t *testing.T) {
 	}
 	if !strings.Contains(out, "Edit") {
 		t.Errorf("--tool Edit output missing Edit; got:\n%s", out)
+	}
+}
+
+// TestRunStatsFilters_Project covers issue 227's --project flag, and its
+// AND-combination with --tool: --project harnez alone should still see
+// both harnez rows (Read x2) but not voxi's Edit row; --project harnez
+// --tool Edit combined should see neither project's Edit-less rows,
+// yielding an empty result.
+func TestRunStatsFilters_Project(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	seedStatsFixture(t, dbPath)
+
+	var buf bytes.Buffer
+	if err := runStats(&buf, statsOptions{DBPath: dbPath, Project: "harnez"}); err != nil {
+		t.Fatalf("runStats: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "voxi") {
+		t.Errorf("--project harnez output should not mention voxi; got:\n%s", out)
+	}
+	if !strings.Contains(out, "harnez") {
+		t.Errorf("--project harnez output missing harnez; got:\n%s", out)
+	}
+	if !strings.Contains(out, "Read") {
+		t.Errorf("--project harnez output should still show tool Read; got:\n%s", out)
+	}
+
+	// AND-combination with --tool: harnez has no Edit rows, so this must
+	// be empty, not a crash or a stale non-empty result.
+	var combinedBuf bytes.Buffer
+	if err := runStats(&combinedBuf, statsOptions{DBPath: dbPath, Project: "harnez", Tool: "Edit"}); err != nil {
+		t.Fatalf("runStats: %v", err)
+	}
+	if !strings.Contains(strings.ToLower(combinedBuf.String()), "no data") {
+		t.Errorf("--project harnez --tool Edit should yield no data; got:\n%s", combinedBuf.String())
 	}
 }
 
@@ -320,8 +383,8 @@ func TestRunStatsEmptyResult_TableAndJSON(t *testing.T) {
 	if !report.Empty {
 		t.Errorf("report.Empty = false, want true; report: %+v", report)
 	}
-	if len(report.ByTool) != 0 || len(report.ByAgent) != 0 {
-		t.Errorf("expected no by_tool/by_agent groups on empty result, got %+v", report)
+	if len(report.ByTool) != 0 || len(report.ByAgent) != 0 || len(report.ByProject) != 0 {
+		t.Errorf("expected no by_tool/by_agent/by_project groups on empty result, got %+v", report)
 	}
 }
 
@@ -397,7 +460,7 @@ func TestStatsCmdHelp_DocumentsFlags(t *testing.T) {
 		t.Fatalf("--help: %v", err)
 	}
 	out := buf.String()
-	for _, flag := range []string{"--tool", "--agent", "--ticket", "--json"} {
+	for _, flag := range []string{"--tool", "--agent", "--ticket", "--project", "--json"} {
 		if !strings.Contains(out, flag) {
 			t.Errorf("--help output missing %q; got:\n%s", flag, out)
 		}

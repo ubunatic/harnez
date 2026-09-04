@@ -16,6 +16,7 @@ type Filter struct {
 	TicketID  string
 	SessionID string
 	CallType  string
+	Project   string    // filters on project_name (issue 227)
 	Since     time.Time // rows with created_at >= Since, if non-zero
 	Until     time.Time // rows with created_at < Until, if non-zero
 }
@@ -37,6 +38,7 @@ func (f Filter) whereClause() (string, []any) {
 	add("ticket_id", f.TicketID)
 	add("session_id", f.SessionID)
 	add("call_type", f.CallType)
+	add("project_name", f.Project)
 	if !f.Since.IsZero() {
 		clauses = append(clauses, "created_at >= ?")
 		args = append(args, f.Since.Format(time.RFC3339Nano))
@@ -205,6 +207,17 @@ func (d *DB) AggregateByTool(f Filter) ([]GroupStats, error) {
 // `harnez stats` needs.
 func (d *DB) AggregateByAgent(f Filter) ([]GroupStats, error) {
 	return d.aggregateGroupedBy("agent_id", f)
+}
+
+// AggregateByProject summarizes tool_calls rows matching f, one GroupStats
+// row per distinct project_name — the per-project breakdown issue 227's
+// `harnez stats` needs (call frequency, average score, and failure rate
+// broken down per project, for users working across multiple checkouts).
+// Grouped on project_name rather than working_dir per issue 227's Notes:
+// project_name is the more stable identity across relocations of a
+// checkout.
+func (d *DB) AggregateByProject(f Filter) ([]GroupStats, error) {
+	return d.aggregateGroupedBy("project_name", f)
 }
 
 // Aggregate summarizes the tool_calls rows matching f.
