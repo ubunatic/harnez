@@ -63,12 +63,10 @@ similarly to `/roadmap`'s dispatch-a-fresh-subagent shape:
   dictation pipeline) this step needs different concrete guidance — decide per-repo or leave the
   method itself to the dispatched subagent's judgment, similar to how `/roadmap` leaves "value
   axis" derivation open-ended rather than prescribing a fixed method.
-- **Relationship to `/roadmap`**: should discovery run as a precursor step inside `/roadmap`
-  itself (roadmap becomes "discovery + sequencing" combined), or stay a fully separate skill
-  invoked independently? Leaning separate — they have different cadences (discovery is
+- **Relationship to `/roadmap` — resolved: stays separate.** Different cadences (discovery is
   occasional/exploratory, roadmap sequencing is more routine) and different output review needs
   (discovery candidates need human judgment before becoming tickets; roadmap output doesn't touch
-  the tracker at all) — but worth deciding deliberately rather than defaulting.
+  the tracker at all). Implement as its own `commands/discovery.md`, not a mode/flag of `/roadmap`.
 - **False-positive risk**: gap analysis from an LLM against a product's docs is prone to proposing
   generic "nice to have" features that don't actually fit the product's real constraints (see this
   repo's own `docs/AgenticLoop.md` anti-pattern culture around not inventing scope). The skill
