@@ -22,6 +22,7 @@ Agentic software engineering scales effectively when concurrency is structured a
    - Multiple subagents may concurrently explore, read, grep, and analyze the codebase.
    - Only **one** agent may modify files, write code, or execute build mutations in a shared workspace at any given time.
    - Concurrent writes produce race conditions, broken intermediate states, git conflicts, and corrupt dependencies.
+   - **Sequential dispatch is the default for every task type, not just file-overlapping code edits.** Two subagents each doing "read-only" investigation or ticket-filing work can still race on a shared, sequentially-allocated resource they both read and then write independently — e.g. two agents each scanning `issues/README.md` for "the next free issue number" and landing on the same one, because each read a snapshot that was already stale by the time it wrote (see `docs/studies/2026-08-30-usage-panel-integration-and-the-agy-collector-cliff.md`). File-level non-overlap is not sufficient evidence that parallel dispatch is safe. Dispatch one subagent at a time unless the user explicitly requests parallel execution for a specific task — and even then, verify the run actually was concurrent and check for this class of race afterward.
 
 2. **Canary & Test-Driven Verification**:
    - Every task must be verified with real test executions (`go test ./...`, `make smoke`, canary probes) before declaring completion.
@@ -48,6 +49,17 @@ Agentic software engineering scales effectively when concurrency is structured a
 7. **Media & Demo Verification Gate**:
    - When creating, updating, or adding media assets (e.g. reels, WebM demos, terminal recordings, screenshots) intended for documentation or websites, **always ask the user for explicit confirmation** that the recorded visual output matches their exact expectations before publishing or embedding it.
    - Never automatically publish or embed unverified recordings (guarding against invisible typing, missing UI frames, or unexpected rendering artifacts).
+
+8. **Deployment Transparency — 3-State Grounding**:
+   - Remote deployment status has three independent states that must never be conflated:
+     **Local State** (checkout, configs, unit tests), **Deployed Artifact State** (remote
+     filesystem binaries, permissions, config overlays), and **Active Daemon State** (remote
+     process table, systemd units, active crontab entries).
+   - Agents must never declare remote deployment status without probing the live host over SSH
+     (`crontab -l`, `ls -la`, `file`, `head`). A clean local build or passing local test is
+     evidence about Local State only. See
+     [docs/practices/DeploymentTransparency.md](DeploymentTransparency.md) for the full
+     invariant, minimum probes, and anti-patterns.
 
 ---
 
@@ -106,6 +118,14 @@ Agentic software engineering scales effectively when concurrency is structured a
     - **Docs & Ticket Sync**: Are all issue status tags, README indices, and docs updated in sync with code?
     - **Backward Compatibility & Invariants**: Does the change uphold project invariants and CLI design boundaries?
     - **Token Efficiency & Code Clarity**: Is the code concise, readable, and free of redundant abstractions?
+    - **Live/Real-Environment Verification for hooks & env-resolution features**: for any change that installs a live
+      agent hook, writes global config (`apply`), or resolves state from the ambient environment (branch name,
+      session env vars, cwd), passing `go test ./...` is not sufficient evidence it works — test fixtures routinely
+      supply explicit args or isolated temp dirs that mask exactly the resolution failures real usage hits (e.g. a
+      branch-name heuristic that assumes per-ticket branches when the user never creates them; two independently
+      unit-tested hooks that only collide once both are installed together). Require one real, live end-to-end
+      check after a genuine restart/re-apply against the actual environment before the ticket is done — see the
+      2026-08-31 `harnez-tool-observability` case study for the concrete failure this caught (docs/studies/).
 
 ### Phase 4: Process & Subagent Hygiene (Teardown & Drain)
 - **Goal**: Prevent zombie accumulation, orphan processes, and stuck background tasks.
@@ -119,7 +139,12 @@ Agentic software engineering scales effectively when concurrency is structured a
 - **Goal**: Continually refine agent workflows, document tooling friction, and persist session insights.
 - **Mechanics**:
   - Record session friction, harness observations, and process recommendations in `docs/feedback/` (agentic workflow feedback) or `docs/studies/` (in-depth engineering case studies).
-  - Update issue tracker status (`issues/README.md`) and run `harnez status` to ensure zero drift between issues and indices.
+  - Update issue tracker status (`issues/README.md`) and run `harnez status` to ensure zero drift between issues and indices; run `harnez index` (issue 148) to regenerate `issues/README.md` and `docs/README.md`'s studies table from their source files instead of hand-editing rows.
+  - **Closing gate**: for every ticket touched this session whose work is now shipped and
+    verified, flip its `Status` header to `Closed` before ending the session — do not let a
+    green build and a commit stand in for closing the ticket. See
+    [IssueTracking.md](IssueTracking.md) §5 ("Closing Is Part Of Done") and the `smarthome`
+    tracker-drift case (`docs/studies/2026-09-04-three-days-to-a-public-release.md` §4.2).
   - Prepare clean, conventional commit messages.
 
 ---
@@ -199,7 +224,30 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 - ❌ **Parallel Writing**: Spawning multiple subagents with write permissions on the same workspace simultaneously.
 - ❌ **Blocking Handoff Waits**: Treating "hand this to a subagent" as permission to block the main chat while waiting for the child. The host is always the responsive orchestrator.
 - ❌ **Silent Verification**: Assuming a fix works without running test commands or canary scripts.
+- ❌ **Unit-Test-Only Confidence for Hook/Environment Features**: Treating a green `go test ./...` as proof a
+  hook-installing or environment-resolution-dependent feature actually works in production. Eight tickets shipped
+  with passing, well-written unit tests on 2026-08-31 (`harnez-tool-observability`) while automatic capture was
+  completely non-functional in real usage. Manual code review (not tests) caught two cross-ticket integration bugs
+  (two independently-tested `PreToolUse` hooks racing once both were installed; a rewrite that broke on shell
+  metacharacters an outer shell re-interpreted). But a branch-name-shaped-ticket heuristic that could never match
+  this user's actual workflow, and a schema-version guard that trusted a pre-existing file, both passed every unit
+  test *and* code review — they were only found by restarting a real session, adding debug logging, and checking
+  real output against the real DB.
+- ❌ **Deployment State Conflation**: Declaring a remote binary "deployed" or a job "scheduled" based on local build/test success or a clean `scp`/push exit code, without probing the live host (see [DeploymentTransparency.md](DeploymentTransparency.md)).
 - ❌ **Blind Revert of Failed Work**: Running `git checkout --`, `git reset --hard`, or `git stash drop` on a failed implementation attempt without first committing it somewhere recoverable. A prose summary of what was tried is not a substitute for the actual diff — it cannot be `git diff`ed, re-applied, or independently re-verified against the gate it was tested against.
+- ❌ **Narrow String-Substitution Edits Over Structured Patches**: The existing "prefer
+  `apply_patch`/whole-block replacement over narrow string substitution" rule was written from
+  intuition; `smarthome`'s `harnez stats` now backs it with numbers — `Edit` failed at **11.1%**
+  across 108 calls vs. `apply_patch` at **4.2%** across 24 calls in the same repo (2.6× the rate),
+  see `docs/studies/2026-09-04-three-days-to-a-public-release.md` §4.6. Prefer `apply_patch` when
+  both are available.
+- ❌ **Baking Real Credentials In For A Fast Dev Loop**: Hardcoding real device hostnames, MACs,
+  subnets, or credentials "temporarily" to speed up local iteration, intending to scrub before
+  publication. `smarthome` did this for two days and had to run a full history-sanitization pass
+  (new commits, rewritten tickets) before its public release could ship — a public-release gate
+  that was only caught by a human decision, not tooling (`docs/studies/2026-09-04-three-days-to-a-public-release.md`
+  §4.3). Start with RFC-1918/example values and a credential-source seam from the first commit;
+  wire a secret scanner into the project's `check`/`test` target immediately, not retroactively.
 - ❌ **Orphaned Background Tasks**: Leaving background `tail -f`, watch loops, or timers running after work is completed.
 - ❌ **Lost Context / Ephemeral-Only Retrospectives**: Discussing important harness friction or bugs in chat without writing them down to `docs/feedback/` or `issues/`.
 - ❌ **Rubber-Stamp Reviews**: Running a review pass that does not inspect actual test assertions or file diffs.

@@ -123,27 +123,32 @@ These findings shaped that project's OCR implementation in the
 
 ---
 
-## Historical example — driving a TTY-dependent TUI from a non-interactive shell
+## Historical example — a headless peer as a standing canary harness
 
-**Mechanism:** `harnez usage --watch` reads `/dev/tty` directly for keypresses
-and runs `stty` against it, so a plain pipe/redirect from a script leaves it
-unable to detect a terminal at all — there's nothing to observe.
+**Mechanism:** an Android app talking to network appliances (an LG webOS TV, a FRITZ!Box)
+has a 3-minute build/install/tap cycle per probe, which makes ad hoc canary scripts too
+slow to write for every mechanism worth checking.
 
-**Canary:** `scripts/canary-watch-pty.sh SECONDS` — uses util-linux's `script`
-to allocate a real pseudo-terminal (the same mechanism an interactive
-terminal emulator provides), records a fixed duration of `--watch`'s live
-redraw output, then greps the capture for panel titles and (for issue 114)
-counts how often the `[R]` Remote Load box's `streaming`/`batch` label
-occurs, to detect flapping between the two.
+**Canary:** `smarthome` (see `docs/studies/2026-09-04-three-days-to-a-public-release.md`)
+built a standalone Go CLI (`cmd/flimmerkasten`) as a *host-side peer* speaking the same
+wire protocols (SSAP, TR-064, Wake-on-LAN) as the Android app, instead of writing one-off
+canary scripts per mechanism. `make flimmerkasten-off` / `make fritzbox-status` became a
+standing, reusable canary harness rather than a disposable probe.
 
-**Finding:** confirmed issue 114 live — 20s of capture against a real
-streaming session showed 15 `batch` redraws vs. only 4 `streaming`, direct
-evidence the stream was connecting and dropping almost immediately rather
-than holding. Also surfaced an environment gotcha: `script`'s absence from
-a `which script` check turned out to be a stale shell PATH hash in that
-session, not a real absence — worth an unconditional `hash -r` (or a fresh
-shell) before trusting a negative `which` result for a binary that should
-exist.
+**Finding:** every external mechanism in that project was probed live through the CLI
+before the matching Android feature was built (Wake-on-LAN, FRITZ!Box least-privilege
+users, ARD foreground-app queries — the last two probes concluded "not viable" and
+*cancelled* features rather than triggering multi-day debugging). The one-time cost of the
+peer CLI is repaid on every subsequent probe, which is why this was the single largest
+velocity multiplier across 20 features shipped in three days.
+
+**Rule of thumb, generalized:** when a feature's target is a device or service reachable
+over a network protocol and the primary client is slow to iterate on (a mobile app, a
+GUI), build a headless CLI speaking the same protocol *first*. Treat it as a standing
+canary harness, not a throwaway script — keep it in the tree alongside the feature it
+supports.
+
+---
 
 ## Canary Scope vs Integration Tests
 
