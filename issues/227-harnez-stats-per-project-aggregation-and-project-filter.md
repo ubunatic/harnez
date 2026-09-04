@@ -1,6 +1,6 @@
 # 227 — harnez stats: per-project aggregation and --project filter
 
-**Status**: Closed — resolved in <pending-commit-sha>
+**Status**: Closed — resolved in 574ab62
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
