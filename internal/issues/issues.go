@@ -174,6 +174,36 @@ func ParseIssueFile(content string) (title string, rawStatus string, hasStatus b
 	return title, rawStatus, hasStatus
 }
 
+// RewriteStatus replaces the value portion of a ticket's "**Status**:" line
+// with newStatus, leaving every other line -- including the "**Status**:"
+// label text itself, its original leading whitespace/list-bullet prefix,
+// and unrelated content such as `[[wikilink]]` references elsewhere in the
+// file -- byte-for-byte untouched. It shares statusLineRegex, the same
+// anchor ParseIssueFile uses to locate the line, so read and write agree on
+// exactly where the Status line is (issue 232). Returns the rewritten
+// content and whether it differs from content; an error is returned only
+// if no "**Status**:" line is found at all.
+func RewriteStatus(content, newStatus string) (string, bool, error) {
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		loc := statusLineRegex.FindStringSubmatchIndex(line)
+		if loc == nil {
+			continue
+		}
+		// loc[2:4] is the span of capture group 1 (the status value) within
+		// this exact line -- statusLineRegex tolerates leading whitespace via
+		// `^\s*`, so it matches the raw (non-trimmed) line directly.
+		valStart, valEnd := loc[2], loc[3]
+		newLine := line[:valStart] + newStatus + line[valEnd:]
+		if newLine == line {
+			return content, false, nil
+		}
+		lines[i] = newLine
+		return strings.Join(lines, "\n"), true, nil
+	}
+	return "", false, fmt.Errorf("no '**Status**:' line found")
+}
+
 // thematicBreakRegex matches a Markdown thematic break ("---", "***", "___",
 // optionally space-separated) on its own line, per CommonMark.
 var thematicBreakRegex = regexp.MustCompile(`^(-[ \t]*-[ \t]*-[ \t]*(?:-[ \t]*)*|\*[ \t]*\*[ \t]*\*[ \t]*(?:\*[ \t]*)*|_[ \t]*_[ \t]*_[ \t]*(?:_[ \t]*)*)$`)

@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -68,7 +70,6 @@ func TestIssuesTableReservedPlaceholder(t *testing.T) {
 		t.Errorf("IssuesTable mismatch with reserved ticket:\ngot:\n%s\nwant:\n%s", table, want)
 	}
 }
-
 
 func TestUpdateIssuesReadmeIdempotent(t *testing.T) {
 	dir := t.TempDir()
@@ -210,5 +211,55 @@ Some intro.
 	}
 	if changed {
 		t.Error("expected second run to report changed=false (idempotent)")
+	}
+}
+
+// TestUpdateIssuesReadme_LockContentionFailsFastNotHang verifies the
+// non-blocking, bounded-retry flock issue 232 adds around
+// UpdateIssuesReadme's read-modify-write: when another holder already has
+// the exclusive lock on README.md's sidecar ".lock" file, UpdateIssuesReadme
+// must return an error within its bounded retry budget (~250ms) rather than
+// blocking indefinitely, and it must leave README.md untouched.
+func TestUpdateIssuesReadme_LockContentionFailsFastNotHang(t *testing.T) {
+	dir := t.TempDir()
+	issuesDir := filepath.Join(dir, "issues")
+	writeFile(t, filepath.Join(issuesDir, "001-first-bug.md"), "# 001 — First bug\n\n**Status**: Open\n")
+
+	readme := filepath.Join(issuesDir, "README.md")
+	original := "# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n"
+	writeFile(t, readme, original)
+
+	// Simulate a concurrent holder: open+lock the same sidecar lock file
+	// UpdateIssuesReadme will try to acquire.
+	lockPath := readme + ".lock"
+	holder, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatalf("open lock file: %v", err)
+	}
+	if err := syscall.Flock(int(holder.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatalf("hold flock: %v", err)
+	}
+	defer func() {
+		syscall.Flock(int(holder.Fd()), syscall.LOCK_UN)
+		holder.Close()
+	}()
+
+	start := time.Now()
+	_, err = UpdateIssuesReadme(readme, issuesDir)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected UpdateIssuesReadme to fail while the lock is held by another process")
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("UpdateIssuesReadme took %s to fail -- expected a bounded retry, not a long/indefinite block", elapsed)
+	}
+
+	got, readErr := os.ReadFile(readme)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(got) != original {
+		t.Errorf("README.md was modified despite failing to acquire the lock")
 	}
 }

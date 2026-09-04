@@ -16,9 +16,50 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
+	"time"
 
 	"ubunatic.com/harnez/internal/issues"
 )
+
+// readmeLockRetries/readmeLockDelay bound how long UpdateIssuesReadme waits
+// for the advisory flock on issues/README.md before giving up (~250ms total
+// budget) -- the same non-blocking, bounded-retry flock idiom
+// internal/usage/livefetchcache.go uses for its shared cache file (issue
+// 232). Unlike that best-effort cache, this write is not optional, so a
+// lock that can't be acquired within the budget is a hard error rather
+// than a silent skip.
+const readmeLockRetries = 5
+const readmeLockDelay = 50 * time.Millisecond
+
+// lockReadme takes a non-blocking, bounded-retry exclusive flock on a
+// sidecar ".lock" file next to path, so two concurrent `harnez index` (or
+// `harnez issues <verb>`) invocations never interleave writes to the same
+// issues/README.md. Released automatically on process exit even if the
+// holder crashes or is killed, since it's a kernel-held advisory lock, not
+// a file whose mere existence signals "locked".
+func lockReadme(path string) (*os.File, error) {
+	lockPath := path + ".lock"
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open lock file %s: %w", lockPath, err)
+	}
+	for attempt := 0; attempt <= readmeLockRetries; attempt++ {
+		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
+			return f, nil
+		}
+		if attempt < readmeLockRetries {
+			time.Sleep(readmeLockDelay)
+		}
+	}
+	f.Close()
+	return nil, fmt.Errorf("could not acquire lock on %s (held by another process)", path)
+}
+
+func unlockReadme(f *os.File) {
+	_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	_ = f.Close()
+}
 
 var issueNumTitlePrefix = regexp.MustCompile(`^\d{3}\s*[—-]\s*`)
 
@@ -76,6 +117,12 @@ var issuesTableHeaderRe = regexp.MustCompile(`(?m)^\|\s*#\s*\|`)
 // issues/README.md) from the tickets in issuesDir, preserving every line
 // before the table verbatim. Returns whether the file's content changed.
 func UpdateIssuesReadme(readmePath, issuesDir string) (bool, error) {
+	lockFile, err := lockReadme(readmePath)
+	if err != nil {
+		return false, fmt.Errorf("update %s: %w", readmePath, err)
+	}
+	defer unlockReadme(lockFile)
+
 	table, err := IssuesTable(issuesDir)
 	if err != nil {
 		return false, err

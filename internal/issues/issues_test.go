@@ -427,3 +427,74 @@ func TestReserve_AtomicAndCollisionAvoidance(t *testing.T) {
 	}
 }
 
+// TestRewriteStatus covers issue 232's requirement that rewriting the
+// Status line must not disturb surrounding content, including
+// [[wikilink]]-style references and the label text/prefix around the
+// value itself.
+func TestRewriteStatus(t *testing.T) {
+	tests := []struct {
+		name        string
+		content     string
+		newStatus   string
+		wantContent string
+		wantChanged bool
+		wantErr     bool
+	}{
+		{
+			name:        "standard bold status line, preserves rest of file",
+			content:     "# 042 — Example\n\n**Status**: Open\n**Priority**: P2 (Medium)\n**Related**: [[041-other-ticket]]\n",
+			newStatus:   "Closed — resolved",
+			wantContent: "# 042 — Example\n\n**Status**: Closed — resolved\n**Priority**: P2 (Medium)\n**Related**: [[041-other-ticket]]\n",
+			wantChanged: true,
+		},
+		{
+			name:        "status line inside body text is untouched, only header line rewritten",
+			content:     "**Status**: Open\n\n---\n\nSee also: mentions of \"status\" and **Status** later in prose, not a header.\n",
+			newStatus:   "Draft",
+			wantContent: "**Status**: Draft\n\n---\n\nSee also: mentions of \"status\" and **Status** later in prose, not a header.\n",
+			wantChanged: true,
+		},
+		{
+			name:        "identical new status is a no-op",
+			content:     "**Status**: Open\n**Category**: Bug\n",
+			newStatus:   "Open",
+			wantContent: "**Status**: Open\n**Category**: Bug\n",
+			wantChanged: false,
+		},
+		{
+			name:      "no status line present is an error",
+			content:   "# 042 — Example\n\nNo status header here.\n",
+			newStatus: "Closed",
+			wantErr:   true,
+		},
+		{
+			name:        "leading list-bullet prefix preserved",
+			content:     "- **Status**: In Progress\n",
+			newStatus:   "Blocked — waiting on upstream",
+			wantContent: "- **Status**: Blocked — waiting on upstream\n",
+			wantChanged: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, changed, err := RewriteStatus(tc.content, tc.newStatus)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected an error, got content: %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if changed != tc.wantChanged {
+				t.Errorf("changed = %v, want %v", changed, tc.wantChanged)
+			}
+			if got != tc.wantContent {
+				t.Errorf("content mismatch:\ngot:  %q\nwant: %q", got, tc.wantContent)
+			}
+		})
+	}
+}
+
