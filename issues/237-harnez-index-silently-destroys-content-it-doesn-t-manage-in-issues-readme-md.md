@@ -1,6 +1,6 @@
 # 237 — `harnez index` silently destroys content it doesn't manage in `issues/README.md`
 
-**Status**: In Progress — fresh sprint implementation
+**Status**: Closed — resolved in f0fdcf2
 **Priority**: P1 (High)
 **Severity**: Critical
 **Category**: Bug
