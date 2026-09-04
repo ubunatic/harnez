@@ -45,6 +45,31 @@ func IssuesTable(issuesDir string) (string, error) {
 	return b.String(), nil
 }
 
+// StatusCounts aggregates the same ticket set IssuesTable renders
+// (issuesDir + issuesDir/archive/*.md) into open/closed/draft/unknown
+// counts by canonical status category -- the rollup issue 228's
+// `harnez index` snapshot-write path records into the telemetry DB's
+// issue_status_snapshots table (internal/telemetry).
+func StatusCounts(issuesDir string) (open, closed, draft, unknown int, err error) {
+	files, err := issues.Scan(issuesDir)
+	if err != nil {
+		return 0, 0, 0, 0, fmt.Errorf("scan issues: %w", err)
+	}
+	for _, f := range files {
+		switch f.Canonical {
+		case issues.StatusOpen:
+			open++
+		case issues.StatusClosed:
+			closed++
+		case issues.StatusDraft:
+			draft++
+		default:
+			unknown++
+		}
+	}
+	return open, closed, draft, unknown, nil
+}
+
 var issuesTableHeaderRe = regexp.MustCompile(`(?m)^\|\s*#\s*\|`)
 
 // UpdateIssuesReadme regenerates the ticket table in readmePath (normally

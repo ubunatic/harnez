@@ -72,4 +72,28 @@ CREATE TABLE IF NOT EXISTS note_category_cache (
 	category    TEXT NOT NULL,
 	created_at  TEXT NOT NULL
 );
+
+-- issue_status_snapshots backs issue 228: an append-only history of
+-- open/closed/draft/unknown ticket counts per project, one row per
+-- 'harnez index' run whose counts differ from that project's most recent
+-- prior row (see InsertIssueSnapshot's dedupe check in issuesnapshot.go --
+-- the dedupe itself is a Go-side read-then-compare, not a DB constraint,
+-- since "identical to the latest row for this project" isn't expressible
+-- as a single-row UNIQUE/CHECK constraint). Purely additive table (no
+-- schemaVersion bump needed), reusing this same telemetry DB rather than a
+-- separate issues/.status-history.jsonl file so all of this repo's SQL/
+-- storage-format ownership stays in one place, per issue 120's "keep SQL
+-- out of the CLI" convention.
+CREATE TABLE IF NOT EXISTS issue_status_snapshots (
+	id            INTEGER PRIMARY KEY AUTOINCREMENT,
+	created_at    TEXT    NOT NULL,
+	project_name  TEXT    NOT NULL,
+	open_count    INTEGER NOT NULL DEFAULT 0 CHECK (open_count >= 0),
+	closed_count  INTEGER NOT NULL DEFAULT 0 CHECK (closed_count >= 0),
+	draft_count   INTEGER NOT NULL DEFAULT 0 CHECK (draft_count >= 0),
+	unknown_count INTEGER NOT NULL DEFAULT 0 CHECK (unknown_count >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_issue_status_snapshots_project     ON issue_status_snapshots (project_name);
+CREATE INDEX IF NOT EXISTS idx_issue_status_snapshots_created_at  ON issue_status_snapshots (created_at);
 `

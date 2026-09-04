@@ -5,7 +5,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"ubunatic.com/harnez/internal/telemetry"
 )
 
 // findFixtureDir writes a small temporary tracker fixture (issue 158's
@@ -38,7 +42,7 @@ func findFixtureDir(t *testing.T) string {
 }
 
 func testRunFind(w io.Writer, dir string, args ...string) error {
-	return runFind(w, dir, args, false, false, "", false)
+	return runFind(w, dir, args, false, false, "", false, "")
 }
 
 func TestRunFind_ExactTSVOutput(t *testing.T) {
@@ -127,7 +131,7 @@ func TestRunFind_IssuesNext(t *testing.T) {
 	dir := findFixtureDir(t)
 	// Current max issue in fixture is 101, so next is 102
 	var out bytes.Buffer
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, false, "", false); err != nil {
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, false, "", false, ""); err != nil {
 		t.Fatalf("runFind next: %v", err)
 	}
 	if out.String() != "102\n" {
@@ -136,7 +140,7 @@ func TestRunFind_IssuesNext(t *testing.T) {
 
 	// Flag form: --next
 	out.Reset()
-	if err := runFind(&out, dir, []string{"issues"}, true, false, "", false); err != nil {
+	if err := runFind(&out, dir, []string{"issues"}, true, false, "", false, ""); err != nil {
 		t.Fatalf("runFind --next: %v", err)
 	}
 	if out.String() != "102\n" {
@@ -145,7 +149,7 @@ func TestRunFind_IssuesNext(t *testing.T) {
 
 	// JSON format
 	out.Reset()
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, false, "", true); err != nil {
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, false, "", true, ""); err != nil {
 		t.Fatalf("runFind next --json: %v", err)
 	}
 	wantJSON := `{"number":"102","reserved":false}` + "\n"
@@ -159,7 +163,7 @@ func TestRunFind_IssuesNextReserve(t *testing.T) {
 	var out bytes.Buffer
 
 	// Reserve without title
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "", false); err != nil {
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "", false, ""); err != nil {
 		t.Fatalf("runFind issues next --reserve: %v", err)
 	}
 	if out.String() != "102\tissues/102-reserved.md\n" {
@@ -172,7 +176,7 @@ func TestRunFind_IssuesNextReserve(t *testing.T) {
 
 	// Second reservation with title
 	out.Reset()
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "New Feature", false); err != nil {
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "New Feature", false, ""); err != nil {
 		t.Fatalf("runFind issues next --reserve 'New Feature': %v", err)
 	}
 	if out.String() != "103\tissues/103-new-feature.md\n" {
@@ -185,7 +189,7 @@ func TestRunFind_IssuesNextReserve(t *testing.T) {
 
 	// Third reservation with JSON
 	out.Reset()
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "JSON Feature", true); err != nil {
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "JSON Feature", true, ""); err != nil {
 		t.Fatalf("runFind issues next --reserve --json: %v", err)
 	}
 	wantJSON := `{"number":"104","reserved":true,"file":"104-json-feature.md","path":"issues/104-json-feature.md"}` + "\n"
@@ -206,7 +210,7 @@ func TestRunFind_IssuesNextReservePrintsExactFilename(t *testing.T) {
 	var out bytes.Buffer
 
 	title := "Add Doubled-Res. Sparklines!"
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, title, false); err != nil {
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, title, false, ""); err != nil {
 		t.Fatalf("runFind issues next --reserve %q: %v", title, err)
 	}
 
@@ -239,3 +243,79 @@ func TestRunFind_IssuesNextReservePrintsExactFilename(t *testing.T) {
 	}
 }
 
+
+// TestRunFindHistory_TableShowsBothRecordedPoints seeds two distinct
+// issue_status_snapshots rows directly via telemetry.InsertIssueSnapshot
+// and verifies runFindHistory's table output surfaces both, oldest first
+// -- issue 228's read-path acceptance criterion.
+func TestRunFindHistory_TableShowsBothRecordedPoints(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatalf("telemetry.Open: %v", err)
+	}
+	t1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := db.InsertIssueSnapshot(telemetry.IssueStatusSnapshot{
+		CreatedAt: t1, ProjectName: "harnez", OpenCount: 10, ClosedCount: 5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.InsertIssueSnapshot(telemetry.IssueStatusSnapshot{
+		CreatedAt: t2, ProjectName: "harnez", OpenCount: 8, ClosedCount: 8,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := runFindHistory(&out, findHistoryOptions{DBPath: dbPath}); err != nil {
+		t.Fatalf("runFindHistory: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "10") || !strings.Contains(got, "5") {
+		t.Errorf("expected first snapshot's counts in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "8") {
+		t.Errorf("expected second snapshot's counts in output, got:\n%s", got)
+	}
+	firstIdx := strings.Index(got, "2026-01-01")
+	secondIdx := strings.Index(got, "2026-02-01")
+	if firstIdx == -1 || secondIdx == -1 || firstIdx > secondIdx {
+		t.Errorf("expected oldest-first ordering (2026-01-01 before 2026-02-01), got:\n%s", got)
+	}
+}
+
+// TestRunFindHistory_ProjectFilter verifies --project narrows results to
+// one project_name, mirroring issue 227's harnez stats --project idiom.
+func TestRunFindHistory_ProjectFilter(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatalf("telemetry.Open: %v", err)
+	}
+	if _, err := db.InsertIssueSnapshot(telemetry.IssueStatusSnapshot{ProjectName: "harnez", OpenCount: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.InsertIssueSnapshot(telemetry.IssueStatusSnapshot{ProjectName: "voxi", OpenCount: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := runFindHistory(&out, findHistoryOptions{DBPath: dbPath, Project: "harnez"}); err != nil {
+		t.Fatalf("runFindHistory: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "harnez") {
+		t.Errorf("expected harnez row in filtered output, got:\n%s", got)
+	}
+	if strings.Contains(got, "voxi") {
+		t.Errorf("expected voxi row to be filtered out, got:\n%s", got)
+	}
+}

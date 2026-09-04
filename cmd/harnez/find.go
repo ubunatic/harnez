@@ -13,10 +13,12 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/find"
 	"ubunatic.com/harnez/internal/issues"
+	"ubunatic.com/harnez/internal/telemetry"
 )
 
 type nextResultJSON struct {
@@ -31,6 +33,7 @@ func newFindCmd() *cobra.Command {
 	var nextFlag bool
 	var reserveFlag string
 	var jsonFlag bool
+	var historyProjectFlag string
 
 	cmd := &cobra.Command{
 		Use:   "find <entity> [options] <query...>",
@@ -55,6 +58,15 @@ Subcommands / Allocation:
            content directly to the reserved path instead of re-deriving the
            slug from the title (which can diverge, leaving an orphaned
            placeholder behind -- see issue 202).
+
+  harnez find issues history [--project <name>] [--json]
+           Render the open/closed/draft/unknown ticket-count snapshot
+           history 'harnez index' records into the telemetry DB on each run
+           (issue 228), oldest first. --project narrows to one project_name
+           (the same identity 'harnez stats --project' filters on, issue
+           227); omitted shows every project's snapshots. Non-JSON output is
+           a formatted table: PROJECT, CREATED_AT, OPEN, CLOSED, DRAFT,
+           UNKNOWN.
 
 Query grammar:
   whitespace         AND: 'vram gtt' requires both terms.
@@ -115,7 +127,7 @@ actionable stderr message.`,
 		Args:         cobra.MinimumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runFind(cmd.OutOrStdout(), dir, args, nextFlag, cmd.Flags().Changed("reserve"), reserveFlag, jsonFlag)
+			return runFind(cmd.OutOrStdout(), dir, args, nextFlag, cmd.Flags().Changed("reserve"), reserveFlag, jsonFlag, historyProjectFlag)
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
@@ -123,8 +135,72 @@ actionable stderr message.`,
 	cmd.Flags().StringVar(&reserveFlag, "reserve", "", "reserve the next free issue number with an optional title")
 	cmd.Flags().Lookup("reserve").NoOptDefVal = " "
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "output in JSON format")
+	cmd.Flags().StringVar(&historyProjectFlag, "project", "", "with 'history': filter to one project_name")
 
 	return cmd
+}
+
+// findHistoryOptions bundles runFindHistory's inputs. DBPath is a telemetry
+// DB path override (empty means telemetry.DefaultDBPath()) used only by
+// tests, the same test-only-override pattern as indexOptions.DBPath and
+// statsOptions.DBPath elsewhere in this package -- production callers
+// (runFind) always leave it empty.
+type findHistoryOptions struct {
+	Project string
+	JSON    bool
+	DBPath  string
+}
+
+// runFindHistory renders `harnez find issues history` (issue 228): the
+// open/closed/draft/unknown ticket-count snapshots 'harnez index' has
+// recorded into the telemetry DB, oldest first, optionally filtered to one
+// project_name.
+func runFindHistory(w io.Writer, opts findHistoryOptions) error {
+	dbPath := opts.DBPath
+	if dbPath == "" {
+		p, err := telemetry.DefaultDBPath()
+		if err != nil {
+			return fmt.Errorf("find issues history: %w", err)
+		}
+		dbPath = p
+	}
+
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("find issues history: open telemetry db: %w", err)
+	}
+	defer db.Close()
+
+	snapshots, err := db.QueryIssueSnapshots(opts.Project)
+	if err != nil {
+		return fmt.Errorf("find issues history: %w", err)
+	}
+
+	if opts.JSON {
+		if snapshots == nil {
+			snapshots = []telemetry.IssueStatusSnapshot{}
+		}
+		data, err := json.MarshalIndent(snapshots, "", "  ")
+		if err != nil {
+			return fmt.Errorf("find issues history: %w", err)
+		}
+		fmt.Fprintln(w, string(data))
+		return nil
+	}
+
+	if len(snapshots) == 0 {
+		fmt.Fprintln(w, "no data: no issue status snapshots recorded yet (run 'harnez index' first)")
+		return nil
+	}
+
+	tw := tabwriter.NewWriter(w, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(tw, "PROJECT\tCREATED_AT\tOPEN\tCLOSED\tDRAFT\tUNKNOWN")
+	for _, s := range snapshots {
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%d\t%d\n",
+			s.ProjectName, s.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			s.OpenCount, s.ClosedCount, s.DraftCount, s.UnknownCount)
+	}
+	return tw.Flush()
 }
 
 func runFindNext(w io.Writer, dir string, reserve bool, title string, jsonOutput bool) error {
@@ -171,10 +247,15 @@ func runFindNext(w io.Writer, dir string, reserve bool, title string, jsonOutput
 	return nil
 }
 
-func runFind(w io.Writer, dir string, args []string, nextFlag, hasReserveFlag bool, reserveTitle string, jsonOutput bool) error {
+func runFind(w io.Writer, dir string, args []string, nextFlag, hasReserveFlag bool, reserveTitle string, jsonOutput bool, historyProject string) error {
 	entity := args[0]
 	if entity != "issues" {
 		return fmt.Errorf("find: unsupported entity %q (only \"issues\" is supported)", entity)
+	}
+
+	// Handle `harnez find issues history ...` subcommand syntax
+	if len(args) > 1 && args[1] == "history" {
+		return runFindHistory(w, findHistoryOptions{Project: historyProject, JSON: jsonOutput})
 	}
 
 	// Handle `harnez find issues next ...` subcommand syntax
