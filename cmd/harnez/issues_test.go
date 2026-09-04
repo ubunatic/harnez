@@ -316,6 +316,107 @@ func TestRunIssuesVerb_TicketNotFound(t *testing.T) {
 	}
 }
 
+// TestRunIssuesNew_NoTitleCreatesReservedPlaceholder covers the plain
+// `harnez issues new` case (no title): it must allocate the next free
+// number, create issues/<NNN>-reserved.md with Status: Draft, and print
+// "<NUMBER>\t<PATH>" -- without requiring any existing ticket file, unlike
+// every other issues verb (findTicketFile is never consulted).
+func TestRunIssuesNew_NoTitleCreatesReservedPlaceholder(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+
+	var out bytes.Buffer
+	if err := runIssuesNew(&out, dir, "", false); err != nil {
+		t.Fatalf("runIssuesNew: %v", err)
+	}
+	want := "043\tissues/043-reserved.md\n"
+	if out.String() != want {
+		t.Errorf("got %q, want %q", out.String(), want)
+	}
+	reservedPath := filepath.Join(dir, "issues", "043-reserved.md")
+	content, err := os.ReadFile(reservedPath)
+	if err != nil {
+		t.Fatalf("expected reserved file to exist: %v", err)
+	}
+	if !strings.Contains(string(content), "**Status**: Draft") {
+		t.Errorf("expected Draft placeholder status, got:\n%s", content)
+	}
+}
+
+// TestRunIssuesNew_WithTitleSlugifiesFilename covers the titled case and
+// the --json output shape, mirroring the exact fields
+// `find issues next --reserve --json` used to emit before issue 233.
+func TestRunIssuesNew_WithTitleSlugifiesFilename(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+
+	var out bytes.Buffer
+	if err := runIssuesNew(&out, dir, "New Feature", false); err != nil {
+		t.Fatalf("runIssuesNew: %v", err)
+	}
+	want := "043\tissues/043-new-feature.md\n"
+	if out.String() != want {
+		t.Errorf("got %q, want %q", out.String(), want)
+	}
+
+	out.Reset()
+	if err := runIssuesNew(&out, dir, "JSON Feature", true); err != nil {
+		t.Fatalf("runIssuesNew --json: %v", err)
+	}
+	wantJSON := `{"number":"044","reserved":true,"file":"044-json-feature.md","path":"issues/044-json-feature.md"}` + "\n"
+	if out.String() != wantJSON {
+		t.Errorf("runIssuesNew --json = %q, want %q", out.String(), wantJSON)
+	}
+}
+
+// TestRunIssuesNew_ODirectExclPreventsCollisions reproduces the O_EXCL
+// collision-safety behavior issue 233 requires 'new' to preserve exactly:
+// if the target file already exists (e.g. another concurrent caller won the
+// race for that number), Reserve retries with the next number rather than
+// clobbering the existing file or erroring out.
+func TestRunIssuesNew_ODirectExclPreventsCollisions(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+
+	// Pre-create the file the next reservation would naturally land on,
+	// simulating a concurrent winner of ticket 043.
+	collidingPath := filepath.Join(dir, "issues", "043-reserved.md")
+	if err := os.WriteFile(collidingPath, []byte("pre-existing content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := runIssuesNew(&out, dir, "", false); err != nil {
+		t.Fatalf("runIssuesNew: %v", err)
+	}
+	want := "044\tissues/044-reserved.md\n"
+	if out.String() != want {
+		t.Errorf("got %q, want %q (expected collision to be skipped past)", out.String(), want)
+	}
+
+	// The pre-existing colliding file must be untouched.
+	got, err := os.ReadFile(collidingPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "pre-existing content\n" {
+		t.Errorf("collision victim file was overwritten, got:\n%s", got)
+	}
+}
+
+// TestRunIssuesNew_DoesNotRequireExistingTicketFile confirms 'new' does not
+// go through findTicketFile the way every other verb does: it must succeed
+// in an issues/ directory that starts out completely empty.
+func TestRunIssuesNew_DoesNotRequireExistingTicketFile(t *testing.T) {
+	dir := repoInit(t)
+	// Deliberately no issues/ directory at all yet.
+	var out bytes.Buffer
+	if err := runIssuesNew(&out, dir, "First Ticket", false); err != nil {
+		t.Fatalf("runIssuesNew on empty repo: %v", err)
+	}
+	want := "001\tissues/001-first-ticket.md\n"
+	if out.String() != want {
+		t.Errorf("got %q, want %q", out.String(), want)
+	}
+}
+
 func TestRunIssuesVerb_BlockRequiresReason(t *testing.T) {
 	dir, _ := issuesFixtureRepo(t, sampleTicket)
 	var out bytes.Buffer

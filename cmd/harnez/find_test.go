@@ -42,7 +42,7 @@ func findFixtureDir(t *testing.T) string {
 }
 
 func testRunFind(w io.Writer, dir string, args ...string) error {
-	return runFind(w, dir, args, false, false, "", false, "")
+	return runFind(w, dir, args, false, false, "")
 }
 
 func TestRunFind_ExactTSVOutput(t *testing.T) {
@@ -131,7 +131,7 @@ func TestRunFind_IssuesNext(t *testing.T) {
 	dir := findFixtureDir(t)
 	// Current max issue in fixture is 101, so next is 102
 	var out bytes.Buffer
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, false, "", false, ""); err != nil {
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, false, ""); err != nil {
 		t.Fatalf("runFind next: %v", err)
 	}
 	if out.String() != "102\n" {
@@ -140,7 +140,7 @@ func TestRunFind_IssuesNext(t *testing.T) {
 
 	// Flag form: --next
 	out.Reset()
-	if err := runFind(&out, dir, []string{"issues"}, true, false, "", false, ""); err != nil {
+	if err := runFind(&out, dir, []string{"issues"}, true, false, ""); err != nil {
 		t.Fatalf("runFind --next: %v", err)
 	}
 	if out.String() != "102\n" {
@@ -149,7 +149,7 @@ func TestRunFind_IssuesNext(t *testing.T) {
 
 	// JSON format
 	out.Reset()
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, false, "", true, ""); err != nil {
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, ""); err != nil {
 		t.Fatalf("runFind next --json: %v", err)
 	}
 	wantJSON := `{"number":"102","reserved":false}` + "\n"
@@ -158,88 +158,35 @@ func TestRunFind_IssuesNext(t *testing.T) {
 	}
 }
 
-func TestRunFind_IssuesNextReserve(t *testing.T) {
+// TestRunFind_IssuesNextIsReadOnly confirms `find issues next` never creates
+// a ticket file -- reservation/creation moved to `harnez issues new` (see
+// TestRunIssuesNew_* in issues_test.go). Repeated calls must keep returning
+// the same next-free number since nothing is allocated.
+func TestRunFind_IssuesNextIsReadOnly(t *testing.T) {
 	dir := findFixtureDir(t)
 	var out bytes.Buffer
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, false, ""); err != nil {
+		t.Fatalf("runFind next: %v", err)
+	}
+	if out.String() != "102\n" {
+		t.Errorf("got %q, want %q", out.String(), "102\n")
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "issues"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), "102") {
+			t.Errorf("find issues next must not create a file, found %q", e.Name())
+		}
+	}
 
-	// Reserve without title
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "", false, ""); err != nil {
-		t.Fatalf("runFind issues next --reserve: %v", err)
-	}
-	if out.String() != "102\tissues/102-reserved.md\n" {
-		t.Errorf("got %q, want %q", out.String(), "102\tissues/102-reserved.md\n")
-	}
-	reservedFile := filepath.Join(dir, "issues", "102-reserved.md")
-	if _, err := os.Stat(reservedFile); err != nil {
-		t.Fatalf("expected reserved file %s to exist: %v", reservedFile, err)
-	}
-
-	// Second reservation with title
 	out.Reset()
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "New Feature", false, ""); err != nil {
-		t.Fatalf("runFind issues next --reserve 'New Feature': %v", err)
+	if err := runFind(&out, dir, []string{"issues", "next"}, false, false, ""); err != nil {
+		t.Fatalf("runFind next (2nd call): %v", err)
 	}
-	if out.String() != "103\tissues/103-new-feature.md\n" {
-		t.Errorf("got %q, want %q", out.String(), "103\tissues/103-new-feature.md\n")
-	}
-	titledFile := filepath.Join(dir, "issues", "103-new-feature.md")
-	if _, err := os.Stat(titledFile); err != nil {
-		t.Fatalf("expected reserved file %s to exist: %v", titledFile, err)
-	}
-
-	// Third reservation with JSON
-	out.Reset()
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, "JSON Feature", true, ""); err != nil {
-		t.Fatalf("runFind issues next --reserve --json: %v", err)
-	}
-	wantJSON := `{"number":"104","reserved":true,"file":"104-json-feature.md","path":"issues/104-json-feature.md"}` + "\n"
-	if out.String() != wantJSON {
-		t.Errorf("runFind issues next --reserve --json = %q, want %q", out.String(), wantJSON)
-	}
-}
-
-// TestRunFind_IssuesNextReservePrintsExactFilename reproduces issue 202: a
-// caller that hand-derives a slug from the same title used for --reserve can
-// land on a different filename than the one Reserve() actually created
-// (e.g. "Add Doubled-Res. Sparklines!" slugifies differently depending on
-// how the caller handles punctuation). Requiring callers to write to the
-// filename printed by --reserve, instead of re-deriving it, removes that
-// divergence opportunity at the source.
-func TestRunFind_IssuesNextReservePrintsExactFilename(t *testing.T) {
-	dir := findFixtureDir(t)
-	var out bytes.Buffer
-
-	title := "Add Doubled-Res. Sparklines!"
-	if err := runFind(&out, dir, []string{"issues", "next"}, false, true, title, false, ""); err != nil {
-		t.Fatalf("runFind issues next --reserve %q: %v", title, err)
-	}
-
-	got := out.String()
-	parts := bytes.SplitN([]byte(got), []byte("\t"), 2)
-	if len(parts) != 2 {
-		t.Fatalf("expected NUMBER<TAB>PATH output, got %q", got)
-	}
-	num := string(parts[0])
-	printedPath := string(bytes.TrimSuffix(parts[1], []byte("\n")))
-
-	// A plausible hand-derived slug that differs from the one Reserve()
-	// actually produced (e.g. dropping the trailing period differently, or
-	// collapsing "doubled-res" vs "doubled-resolution").
-	handDerivedPath := filepath.Join("issues", num+"-add-doubled-resolution-sparklines.md")
-	if printedPath == handDerivedPath {
-		t.Fatalf("test setup invalid: hand-derived path %q should differ from printed path", handDerivedPath)
-	}
-
-	// The path harnez actually printed must exist and be the one Reserve()
-	// created; a caller writing ticket content there never diverges.
-	if _, err := os.Stat(filepath.Join(dir, printedPath)); err != nil {
-		t.Fatalf("printed reserve path %q does not exist on disk: %v", printedPath, err)
-	}
-	// And the hand-derived guess must NOT exist -- proving that following
-	// the printed path (rather than re-deriving a slug) is what avoids the
-	// orphaned-placeholder bug.
-	if _, err := os.Stat(filepath.Join(dir, handDerivedPath)); err == nil {
-		t.Fatalf("hand-derived path %q unexpectedly exists; test no longer demonstrates divergence", handDerivedPath)
+	if out.String() != "102\n" {
+		t.Errorf("second call got %q, want %q (no allocation should have occurred)", out.String(), "102\n")
 	}
 }
 

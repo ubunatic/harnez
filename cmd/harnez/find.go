@@ -3,8 +3,11 @@
 // "issues" (issues/*.md and issues/archive/*.md); see
 // issues/158-find-entity-query-command.md for the full query grammar,
 // ranking, and output contract.
-// It also provides `harnez find issues next` (issue 194) to calculate
-// and reserve the next free issue number.
+// It also provides `harnez find issues next` (issue 194) to calculate the
+// next free issue number, a pure read-only query. Reserving/creating that
+// number is `harnez issues new` (cmd/harnez/issues.go) -- find stays a pure
+// query surface, mirroring issues.go's own "find is read-only, issues is the
+// write-side counterpart" doc comment.
 package main
 
 import (
@@ -31,7 +34,6 @@ type nextResultJSON struct {
 func newFindCmd() *cobra.Command {
 	var dir string
 	var nextFlag bool
-	var reserveFlag string
 	var jsonFlag bool
 	var historyProjectFlag string
 
@@ -49,15 +51,12 @@ Entities:
            narrow lifecycle state.
 
 Subcommands / Allocation:
-  harnez find issues next [--reserve [title]] [--json]
-           Compute the next free ticket number (max+1, formatted with 3+ digits).
-           When --reserve is supplied, atomically writes a Draft placeholder
-           ticket file (issues/<NNN>-reserved.md or issues/<NNN>-<title-slug>.md)
-           so concurrent callers do not receive colliding numbers. Non-JSON
-           output is "<NUMBER>\t<PATH>" so callers write the ticket's real
-           content directly to the reserved path instead of re-deriving the
-           slug from the title (which can diverge, leaving an orphaned
-           placeholder behind -- see issue 202).
+  harnez find issues next [--json]
+           Compute and report the next free ticket number (max+1, formatted
+           with 3+ digits). Read-only: it does not create or reserve
+           anything. To atomically reserve that number and create a Draft
+           placeholder ticket file, use 'harnez issues new [title]' instead
+           (cmd/harnez/issues.go) -- find never mutates.
 
   harnez find issues history [--project <name>] [--json]
            Render the open/closed/draft/unknown ticket-count snapshot
@@ -127,13 +126,11 @@ actionable stderr message.`,
 		Args:         cobra.MinimumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runFind(cmd.OutOrStdout(), dir, args, nextFlag, cmd.Flags().Changed("reserve"), reserveFlag, jsonFlag, historyProjectFlag)
+			return runFind(cmd.OutOrStdout(), dir, args, nextFlag, jsonFlag, historyProjectFlag)
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
-	cmd.Flags().BoolVar(&nextFlag, "next", false, "report or reserve the next free issue number")
-	cmd.Flags().StringVar(&reserveFlag, "reserve", "", "reserve the next free issue number with an optional title")
-	cmd.Flags().Lookup("reserve").NoOptDefVal = " "
+	cmd.Flags().BoolVar(&nextFlag, "next", false, "report the next free issue number")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "output in JSON format")
 	cmd.Flags().StringVar(&historyProjectFlag, "project", "", "with 'history': filter to one project_name")
 
@@ -203,31 +200,8 @@ func runFindHistory(w io.Writer, opts findHistoryOptions) error {
 	return tw.Flush()
 }
 
-func runFindNext(w io.Writer, dir string, reserve bool, title string, jsonOutput bool) error {
+func runFindNext(w io.Writer, dir string, jsonOutput bool) error {
 	issuesDir := filepath.Join(dir, "issues")
-	if reserve {
-		num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: strings.TrimSpace(title)})
-		if err != nil {
-			return fmt.Errorf("reserve issue: %w", err)
-		}
-		relPath := filepath.ToSlash(filepath.Join("issues", filename))
-		if jsonOutput {
-			data, err := json.Marshal(nextResultJSON{
-				Number:   num,
-				Reserved: true,
-				File:     filename,
-				Path:     relPath,
-			})
-			if err != nil {
-				return err
-			}
-			fmt.Fprintln(w, string(data))
-			return nil
-		}
-		fmt.Fprintf(w, "%s\t%s\n", num, relPath)
-		return nil
-	}
-
 	num, _, err := issues.NextNumber(issuesDir)
 	if err != nil {
 		return fmt.Errorf("next issue number: %w", err)
@@ -247,7 +221,7 @@ func runFindNext(w io.Writer, dir string, reserve bool, title string, jsonOutput
 	return nil
 }
 
-func runFind(w io.Writer, dir string, args []string, nextFlag, hasReserveFlag bool, reserveTitle string, jsonOutput bool, historyProject string) error {
+func runFind(w io.Writer, dir string, args []string, nextFlag, jsonOutput bool, historyProject string) error {
 	entity := args[0]
 	if entity != "issues" {
 		return fmt.Errorf("find: unsupported entity %q (only \"issues\" is supported)", entity)
@@ -258,24 +232,14 @@ func runFind(w io.Writer, dir string, args []string, nextFlag, hasReserveFlag bo
 		return runFindHistory(w, findHistoryOptions{Project: historyProject, JSON: jsonOutput})
 	}
 
-	// Handle `harnez find issues next ...` subcommand syntax
+	// Handle `harnez find issues next` subcommand syntax
 	if len(args) > 1 && args[1] == "next" {
-		reserve := hasReserveFlag
-		title := reserveTitle
-		// If additional arguments are provided after 'next', e.g. `harnez find issues next --reserve "My Title"`
-		// or `harnez find issues next "My Title"` (if reserve flag is set)
-		if len(args) > 2 {
-			extra := strings.TrimSpace(strings.Join(args[2:], " "))
-			if extra != "" && strings.TrimSpace(title) == "" {
-				title = extra
-			}
-		}
-		return runFindNext(w, dir, reserve, title, jsonOutput)
+		return runFindNext(w, dir, jsonOutput)
 	}
 
-	// Handle flags on `harnez find issues --next` or `harnez find issues --reserve`
-	if nextFlag || hasReserveFlag {
-		return runFindNext(w, dir, hasReserveFlag, reserveTitle, jsonOutput)
+	// Handle flag form: `harnez find issues --next`
+	if nextFlag {
+		return runFindNext(w, dir, jsonOutput)
 	}
 
 	query := strings.TrimSpace(strings.Join(args[1:], " "))

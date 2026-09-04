@@ -71,7 +71,7 @@ func assertIssueTLDR(t *testing.T, path, content string) {
 	for _, want := range []string{
 		"## TL;DR",
 		`harnez find -d <repo> issues "<search terms>"`,
-		`harnez find -d <repo> issues next --reserve "<title>"`,
+		`harnez issues new -d <repo> "<title>"`,
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("expected %s to contain %q, got:\n%s", path, want, content)

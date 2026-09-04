@@ -11,6 +11,14 @@
 // resyncs issues/README.md and commits by default, mirroring
 // docs/IssueTracking.md's Lifecycle Invariants 2 (Atomic Index
 // Synchronization) and 3 (Immediate Tracker Commit).
+//
+// `issues new [title]` is the one exception to the resync-and-commit
+// default: it atomically reserves the next free ticket number and creates a
+// Draft placeholder file (internal/issues.Reserve), the same mutation
+// `harnez find issues next --reserve` used to perform before issue 233 moved
+// it here to keep `find` a pure query surface. Like the old --reserve path,
+// it never commits -- there's nothing yet worth resyncing the README for
+// until the placeholder has real content.
 package main
 
 import (
@@ -75,6 +83,17 @@ Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
   block <reason>   Status: "Blocked — <reason>" (reason required)
   close [reason]   Status: Closed (bare), or "Closed — <reason>"
   draft [reason]   Status: Draft, or "Draft — <reason>"
+  new [title]      Atomically reserve the next free issue number and create
+                    a Draft placeholder file (issues/<NNN>-<title-slug>.md,
+                    or issues/<NNN>-reserved.md with no title), using
+                    O_CREATE|O_EXCL so concurrent callers never collide. Non-
+                    JSON output is "<NUMBER>\t<PATH>" -- write the ticket's
+                    real content directly to that printed path instead of
+                    re-deriving the slug from the title by hand (a
+                    hand-derived slug can diverge and leave an orphaned
+                    placeholder behind, see issue 202). Unlike every other
+                    verb, 'new' takes no ticket number (there isn't one yet)
+                    and never commits.
 
 'close' with no reason writes bare "Closed", never an auto-fabricated
 "Closed — resolved" -- both are common in the corpus and this command does
@@ -96,9 +115,21 @@ committing, and exits 1 if there is drift from the requested state (mirrors
 A nonexistent or ambiguous ticket number is a caller-bug error (non-zero
 exit, actionable stderr) -- unlike 'harnez find', where zero matches is a
 valid, exit-0 answer.`,
-		Args:         cobra.MinimumNArgs(2),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return fmt.Errorf("issues: requires a verb (open, start, block, close, draft, new)")
+			}
+			if args[0] == "new" {
+				return nil // [title] is optional, no ticket-number argument exists yet
+			}
+			return cobra.MinimumNArgs(2)(cmd, args)
+		},
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if args[0] == "new" {
+				title := strings.TrimSpace(strings.Join(args[1:], " "))
+				return runIssuesNew(cmd.OutOrStdout(), dir, title, jsonFlag)
+			}
 			opts := issuesRunOptions{
 				Dir:       dir,
 				Check:     checkFlag || dryRunFlag,
@@ -163,6 +194,37 @@ func composeNewStatus(verb, reason string) (string, error) {
 	default:
 		return "", fmt.Errorf("issues: unknown verb %q (expected one of: open, start, block, close, draft)", verb)
 	}
+}
+
+// runIssuesNew implements `harnez issues new [title]`: atomically reserve
+// the next free ticket number and create a Draft placeholder file, using
+// the exact internal/issues.Reserve call and output contract
+// `harnez find issues next --reserve` used before issue 233 moved the
+// mutation out of `find`. It intentionally does not require (or accept) a
+// ticket number -- there isn't one until this call allocates it -- and never
+// touches issues/README.md or git, unlike every other `issues` verb.
+func runIssuesNew(w io.Writer, dir, title string, jsonOutput bool) error {
+	issuesDir := filepath.Join(dir, "issues")
+	num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: title})
+	if err != nil {
+		return fmt.Errorf("issues new: %w", err)
+	}
+	relPath := filepath.ToSlash(filepath.Join("issues", filename))
+	if jsonOutput {
+		data, err := json.Marshal(nextResultJSON{
+			Number:   num,
+			Reserved: true,
+			File:     filename,
+			Path:     relPath,
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(w, string(data))
+		return nil
+	}
+	fmt.Fprintf(w, "%s\t%s\n", num, relPath)
+	return nil
 }
 
 // findTicketFile locates the single issues/*.md (or issues/archive/*.md)
