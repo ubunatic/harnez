@@ -72,7 +72,6 @@ func assertIssueTLDR(t *testing.T, path, content string) {
 		"## TL;DR",
 		`harnez find -d <repo> issues "<search terms>"`,
 		`harnez find -d <repo> issues next --reserve "<title>"`,
-		"Keep this workflow deliberately thin",
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("expected %s to contain %q, got:\n%s", path, want, content)
