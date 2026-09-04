@@ -1,6 +1,6 @@
 # 232 — `harnez issues [verb]`: single-call ticket status changes with index sync and commit-by-default
 
-**Status**: Open
+**Status**: Closed — implemented; see 232's own ticket file for design, command lives in cmd/harnez/issues.go
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
