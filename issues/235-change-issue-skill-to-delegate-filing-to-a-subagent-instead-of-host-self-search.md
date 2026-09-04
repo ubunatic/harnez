@@ -1,6 +1,6 @@
 # 235 — Change /issue skill to delegate filing to a subagent instead of host self-search
 
-**Status**: Open
+**Status**: Closed — implemented; commands/issue.md now delegates filing to a fresh subagent, async by default, reviewed and verified
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
