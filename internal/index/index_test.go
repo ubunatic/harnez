@@ -111,6 +111,73 @@ func TestUpdateIssuesReadmeIdempotent(t *testing.T) {
 	}
 }
 
+func TestUpdateIssuesReadmePreservesTrailingProse(t *testing.T) {
+	dir := t.TempDir()
+	issuesDir := filepath.Join(dir, "issues")
+	writeFile(t, filepath.Join(issuesDir, "001-first-bug.md"), "# 001 — First bug\n\n**Status**: Open\n")
+
+	readme := filepath.Join(issuesDir, "README.md")
+	trailing := "\n## Recommended work queue\n\n1. Keep this hand-authored plan.\n"
+	writeFile(t, readme, "# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n| 001 | [stale.md](stale.md) | stale | Stale |\n"+trailing)
+
+	changed, err := UpdateIssuesReadme(readme, issuesDir)
+	if err != nil {
+		t.Fatalf("UpdateIssuesReadme: %v", err)
+	}
+	if !changed {
+		t.Fatal("expected canonical table regeneration to report changed=true")
+	}
+	got, err := os.ReadFile(readme)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(string(got), trailing) {
+		t.Errorf("trailing prose changed or disappeared:\n%s", got)
+	}
+	if !strings.Contains(string(got), "[001-first-bug.md](001-first-bug.md)") {
+		t.Errorf("canonical table was not regenerated:\n%s", got)
+	}
+}
+
+func TestUpdateIssuesReadmeRefusesCustomizedColumnsWithoutWriting(t *testing.T) {
+	dir := t.TempDir()
+	issuesDir := filepath.Join(dir, "issues")
+	writeFile(t, filepath.Join(issuesDir, "001-first-bug.md"), "# 001 — First bug\n\n**Status**: Open\n")
+
+	readme := filepath.Join(issuesDir, "README.md")
+	original := `# Issues
+
+Tracker context that must survive.
+
+| # | File | Title | Status | Priority |
+|---|------|-------|--------|----------|
+| 001 | [old.md](old.md) | Curated title | Open | P1 |
+
+## WebApp UI track
+
+1. Preserve this project plan exactly.
+`
+	writeFile(t, readme, original)
+
+	changed, err := UpdateIssuesReadme(readme, issuesDir)
+	if err == nil {
+		t.Fatal("expected customized table schema to be refused")
+	}
+	if changed {
+		t.Fatal("refused update must report changed=false")
+	}
+	if !strings.Contains(err.Error(), "refusing to replace customized issues table header") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got, readErr := os.ReadFile(readme)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(got) != original {
+		t.Errorf("README changed despite refusal:\ngot:\n%s\nwant:\n%s", got, original)
+	}
+}
+
 func TestStudyTopic(t *testing.T) {
 	tests := []struct {
 		name    string

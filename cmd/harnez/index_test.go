@@ -137,3 +137,48 @@ func TestRunIndex_NoOpRunsDoNotGrowHistory(t *testing.T) {
 		t.Fatalf("expected exactly 1 snapshot after 3 no-op runs, got %d: %+v", len(snapshots), snapshots)
 	}
 }
+
+func TestRunIndex_RefusesCustomizedIssuesTableWithoutWriting(t *testing.T) {
+	repoDir := t.TempDir()
+	issuesDir := filepath.Join(repoDir, "issues")
+	if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(issuesDir, "001-first.md"),
+		[]byte("# 001 — First\n\n**Status**: Open\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	readme := filepath.Join(issuesDir, "README.md")
+	original := `# Issues
+
+| # | File | Title | Status | Priority |
+|---|------|-------|--------|----------|
+| 001 | [old.md](old.md) | Curated title | Open | P1 |
+
+## Recommended work queue
+
+1. Keep this hand-authored plan.
+`
+	if err := os.WriteFile(readme, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	err := runIndex(&out, indexOptions{Dir: repoDir, DBPath: filepath.Join(t.TempDir(), "telemetry.sqlite")})
+	if err == nil {
+		t.Fatal("expected harnez index path to refuse a customized issues table")
+	}
+	if !strings.Contains(err.Error(), "refusing to replace customized issues table header") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got, readErr := os.ReadFile(readme)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(got) != original {
+		t.Errorf("README changed despite refusal:\ngot:\n%s\nwant:\n%s", got, original)
+	}
+	if out.Len() != 0 {
+		t.Errorf("refused index should not report an update, got %q", out.String())
+	}
+}

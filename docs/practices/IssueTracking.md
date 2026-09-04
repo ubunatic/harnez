@@ -98,11 +98,17 @@ second run against unchanged tickets makes no further change) and has a `--check
 flag that exits 1 on drift without writing, for CI/pre-commit use — and prints a
 unified diff of exactly what would change, so running it directly in an agent
 session surfaces specific drift the agent can act on immediately, without a
-separate diff step. `harnez index`
+separate diff step. For `issues/README.md`, only the consecutive Markdown
+table lines beginning at the exact `| # | File | Title | Status |` header are
+managed: prose before or after that table is preserved verbatim. A customized
+table header (for example, one with an added Priority or Target column) is
+refused without writing the file, because harnez cannot regenerate values for
+project-specific columns; reconcile that schema manually before adopting the
+generated table. `harnez index`
 also regenerates `docs/README.md`'s `docs/studies/` table from `docs/studies/*.md`;
 see that file's own note on how a study's index topic is derived. Manual edits to
-either table are always safe to make, but will be overwritten by the next
-`harnez index` run — prefer fixing the source ticket/study file instead.
+rows within either managed table will be overwritten by the next `harnez index`
+run — prefer fixing the source ticket/study file instead.
 
 ```markdown
 # Issues

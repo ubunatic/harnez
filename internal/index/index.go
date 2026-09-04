@@ -113,9 +113,13 @@ func StatusCounts(issuesDir string) (open, closed, draft, unknown int, err error
 
 var issuesTableHeaderRe = regexp.MustCompile(`(?m)^\|\s*#\s*\|`)
 
+const issuesTableHeader = "| # | File | Title | Status |"
+
 // UpdateIssuesReadme regenerates the ticket table in readmePath (normally
-// issues/README.md) from the tickets in issuesDir, preserving every line
-// before the table verbatim. Returns whether the file's content changed.
+// issues/README.md) from the tickets in issuesDir. Content before and after
+// the canonical table is preserved verbatim. A customized table schema is
+// refused so project-specific columns are never silently discarded. Returns
+// whether the file's content changed.
 func UpdateIssuesReadme(readmePath, issuesDir string) (bool, error) {
 	lockFile, err := lockReadme(readmePath)
 	if err != nil {
@@ -143,7 +147,35 @@ func UpdateIssuesReadme(readmePath, issuesDir string) (bool, error) {
 		return false, fmt.Errorf("%s: could not find issues table header ('| # | File | Title | Status |')", readmePath)
 	}
 
-	newContent := content[:loc[0]] + table
+	headerEnd := strings.IndexByte(content[loc[0]:], '\n')
+	if headerEnd == -1 {
+		headerEnd = len(content)
+	} else {
+		headerEnd += loc[0]
+	}
+	header := strings.TrimSpace(content[loc[0]:headerEnd])
+	if header != issuesTableHeader {
+		return false, fmt.Errorf("%s: refusing to replace customized issues table header %q; expected %q (project-specific columns must be reconciled manually)", readmePath, header, issuesTableHeader)
+	}
+
+	// The managed block is the consecutive run of Markdown table lines that
+	// starts at the canonical header. Stop before the first non-table line so
+	// hand-authored sections after the table survive regeneration.
+	tableEnd := loc[0]
+	for tableEnd < len(content) {
+		lineEnd := strings.IndexByte(content[tableEnd:], '\n')
+		if lineEnd == -1 {
+			lineEnd = len(content)
+		} else {
+			lineEnd += tableEnd + 1
+		}
+		if !strings.HasPrefix(strings.TrimSpace(content[tableEnd:lineEnd]), "|") {
+			break
+		}
+		tableEnd = lineEnd
+	}
+
+	newContent := content[:loc[0]] + table + content[tableEnd:]
 	if newContent == content {
 		return false, nil
 	}
