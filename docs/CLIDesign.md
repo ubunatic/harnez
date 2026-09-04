@@ -71,6 +71,7 @@ harnez init [-d <dir>] [--docs <name>...]
         │
         ├── create AGENTS.md (template) if absent
         ├── create CLAUDE.md symlink → AGENTS.md
+        ├── ignore /issues/README.md.lock in .git/info/exclude when issues/ exists
         ├── auto-detect docs (default:auto/true entries in config.yaml)
         ├── apply cfg.AgentsMD.Local sections (Language Conventions, etc.)
         └── for each --docs <name> (explicit + auto-detected):
@@ -80,6 +81,8 @@ harnez init [-d <dir>] [--docs <name>...]
 ```
 
 All steps are idempotent. Running `init --docs golang` twice is safe.
+The lock-file rule is local to each clone and leaves the project's shared
+`.gitignore` untouched; rerun `init` after cloning a harnez-managed tracker.
 
 ## apply flow
 

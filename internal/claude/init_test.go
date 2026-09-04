@@ -5,6 +5,7 @@ package claude_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -191,6 +192,55 @@ func TestRunInit_CustomTemplate(t *testing.T) {
 	}
 }
 
+func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
+	dir := t.TempDir()
+	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitignore := "dist/\n# project-specific rules\n"
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(gitignore), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	excludePath := filepath.Join(dir, ".git", "info", "exclude")
+	if err := os.WriteFile(excludePath, []byte("# existing local rules\n*.local-cache\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := claude.RunInit(dir, nil, nil, "", false, false, false, false); err != nil {
+		t.Fatalf("RunInit failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "issues", "README.md.lock"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "check-ignore", "issues/README.md.lock").CombinedOutput(); err != nil {
+		t.Fatalf("issues lock is not ignored after init: %v (%s)", err, out)
+	}
+	gotGitignore, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotGitignore) != gitignore {
+		t.Errorf("project .gitignore changed:\ngot:\n%s\nwant:\n%s", gotGitignore, gitignore)
+	}
+
+	if err := claude.RunInit(dir, nil, nil, "", false, false, false, false); err != nil {
+		t.Fatalf("RunInit second run failed: %v", err)
+	}
+	exclude, err := os.ReadFile(excludePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(exclude), "/issues/README.md.lock") != 1 {
+		t.Errorf("lock ignore should appear exactly once after two init runs:\n%s", exclude)
+	}
+	if !strings.Contains(string(exclude), "*.local-cache") {
+		t.Errorf("existing local exclude content was lost:\n%s", exclude)
+	}
+}
+
 func TestRunInitAll_InitializesOnlyEligibleChildren(t *testing.T) {
 	workspace := t.TempDir()
 
@@ -263,4 +313,3 @@ func TestRunInitAll_NoEligibleChildrenIsNotAnError(t *testing.T) {
 		t.Fatalf("expected no error scanning a workspace with no eligible children, got: %v", err)
 	}
 }
-

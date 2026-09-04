@@ -286,6 +286,17 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 	}
 
 	_, _ = fsutil.EnsureGitExclude(dir, "AGENTS.local.md")
+	if fileExists(filepath.Join(dir, "issues")) {
+		const issuesReadmeLock = "/issues/README.md.lock"
+		ignored, err := fsutil.EnsureGitExclude(dir, issuesReadmeLock)
+		if err != nil {
+			return fmt.Errorf("ignore %s: %w", issuesReadmeLock, err)
+		}
+		if ignored {
+			fmt.Printf("  ignored %s in .git/info/exclude\n", issuesReadmeLock)
+			changes++
+		}
+	}
 
 	if cfg != nil {
 		if err := validateDocNames(cfg, docs); err != nil {
@@ -501,4 +512,3 @@ func migrateLegacyMarkers(path string) (bool, error) {
 	}
 	return true, os.WriteFile(path, []byte(newContent), 0o644)
 }
-
