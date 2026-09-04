@@ -66,11 +66,13 @@ The top of each ticket MUST contain the standardized metadata block:
 ### Allowed Values
 
 - **Status**:
-  - `Open`: Unresolved, ready to be worked on.
-  - `In Progress`: Actively being worked on in current session.
-  - `Blocked — <reason>`: Waiting on upstream dependency or external resolution.
+  - `Open`: Unresolved, ready to be worked on. May carry an optional `— <note>` suffix.
+  - `In Progress`: Actively being worked on in current session. May carry an optional `— <note>`
+    suffix (e.g. `In Progress — implementation complete; tracker closure awaits ...`, as issue 201
+    does in practice).
+  - `Blocked — <reason>`: Waiting on upstream dependency or external resolution. Reason required.
   - `Closed — <resolution>`: Completed and verified with tests (e.g. `Closed — resolved in 58d1fa3`, `Closed — invalid`).
-  - `Draft`: Tentative proposal or placeholder.
+  - `Draft`: Tentative proposal or placeholder. May carry an optional `— <note>` suffix.
 - **Priority**: `P0 (Critical)`, `P1 (High)`, `P2 (Medium)`, `P3 (Low)`
 - **Severity**: `Critical`, `Major`, `Moderate`, `Minor`
 - **Category**: `Bug`, `Feature`, `Architecture`, `Documentation`, `Performance`, `Refactor`, `Agentic Ergonomics`, `Infrastructure`

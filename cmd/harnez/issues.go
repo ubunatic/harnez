@@ -71,10 +71,10 @@ commits both files by default.
 Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
 
   open [reason]    Status: Open, or "Open — <reason>"
-  start            Status: In Progress (no reason)
+  start [reason]   Status: In Progress, or "In Progress — <reason>"
   block <reason>   Status: "Blocked — <reason>" (reason required)
   close [reason]   Status: Closed (bare), or "Closed — <reason>"
-  draft            Status: Draft (no reason)
+  draft [reason]   Status: Draft, or "Draft — <reason>"
 
 'close' with no reason writes bare "Closed", never an auto-fabricated
 "Closed — resolved" -- both are common in the corpus and this command does
@@ -141,10 +141,10 @@ func composeNewStatus(verb, reason string) (string, error) {
 		}
 		return "Open — " + reason, nil
 	case "start":
-		if reason != "" {
-			return "", fmt.Errorf("issues start: does not take a reason (got %q) -- 'In Progress' has no free-text slot in docs/IssueTracking.md's schema", reason)
+		if reason == "" {
+			return "In Progress", nil
 		}
-		return "In Progress", nil
+		return "In Progress — " + reason, nil
 	case "block":
 		if reason == "" {
 			return "", fmt.Errorf(`issues block: reason is required, e.g. 'harnez issues block <number> "waiting on upstream fix"'`)
@@ -156,10 +156,10 @@ func composeNewStatus(verb, reason string) (string, error) {
 		}
 		return "Closed — " + reason, nil
 	case "draft":
-		if reason != "" {
-			return "", fmt.Errorf("issues draft: does not take a reason (got %q)", reason)
+		if reason == "" {
+			return "Draft", nil
 		}
-		return "Draft", nil
+		return "Draft — " + reason, nil
 	default:
 		return "", fmt.Errorf("issues: unknown verb %q (expected one of: open, start, block, close, draft)", verb)
 	}

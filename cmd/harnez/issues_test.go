@@ -43,13 +43,13 @@ func TestComposeNewStatus_Table(t *testing.T) {
 		{"open", "", "Open", false},
 		{"open", "deferred", "Open — deferred", false},
 		{"start", "", "In Progress", false},
-		{"start", "x", "", true},
+		{"start", "picking this up to unblock 043", "In Progress — picking this up to unblock 043", false},
 		{"block", "waiting on upstream", "Blocked — waiting on upstream", false},
 		{"block", "", "", true},
 		{"close", "", "Closed", false},
 		{"close", "resolved", "Closed — resolved", false},
 		{"draft", "", "Draft", false},
-		{"draft", "x", "", true},
+		{"draft", "x", "Draft — x", false},
 		{"review", "", "", true},
 	}
 	for _, c := range cases {
