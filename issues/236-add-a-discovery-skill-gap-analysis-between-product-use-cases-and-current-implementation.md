@@ -1,6 +1,6 @@
 # 236 — Add a /discovery skill: gap analysis between product use cases and current implementation
 
-**Status**: Open
+**Status**: Closed — implemented; commands/discovery.md + config.yaml registration, reviewed and verified
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
