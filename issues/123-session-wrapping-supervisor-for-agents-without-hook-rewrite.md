@@ -1,6 +1,6 @@
 # 123 — `harnez run <agent>`: session-wrapping supervisor for agents without hook-rewrite support
 
-**Status**: Open
+**Status**: Closed — obsolete (all target agents have native hook surfaces; see 196/200)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Architecture
@@ -79,3 +79,32 @@ This exists purely so the "session-wrapping" idea raised during the
 architecture discussion isn't lost, and so 115–122 aren't blocked
 re-litigating it. Pick it up later only as a deliberate, separately
 prioritized decision — not as a default continuation of 119.
+
+## Implementation Plan
+
+**Skipped — the premise this ticket was parked on has since been disproven.**
+
+This ticket's two preconditions were (1) [[119]]'s canary work confirming at least
+one target agent has *no* usable hook-rewrite point, and (2) the independent-tool
+model shipping for Claude Code. Precondition 2 holds ([[119]] closed in `51ebe41`),
+but precondition 1 failed in the opposite direction: every target agent turned out
+to *have* a native hook surface, and all three are now wired.
+
+- Claude Code — `PreToolUse`/`Bash` → `harnez exec hook` (`config.yaml` hooks block, [[119]]).
+- agy — native `hooks.json` `PreToolUse` → `harnez agy-hooks hook` ([[193]] research, [[196]] shipped, `internal/agy/hooks.go`).
+- Codex — `config.toml` `[hooks.*]` `PreToolUse` → `harnez codex-hook` ([[199]] research, [[200]] shipped, `internal/codex/hooks.go`); [[199]]'s findings explicitly record `PostToolUse`/`PreToolUse` support, contradicting the 2026-08-19 study's "no generic hooks lifecycle dispatch" assumption this ticket cited.
+- Pi / OpenCode — covered by the extension/plugin delivery paths (`distill_autopipe.pi_extension_target`, `opencode_plugin_target`), not by process wrapping.
+
+No actionable plan: there is currently no supported agent for which a
+session-wrapping supervisor is the only option, so building PTY proxying,
+signal forwarding, and exec-level command detection would buy nothing over the
+shipped hook wiring.
+
+**Recommended action**: flip `**Status**` to `Closed — obsolete (all target agents
+have native hook surfaces; see 196/200)` and keep this file as the record of why
+the second track was considered and dropped. Re-open only if a future target
+agent is researched (the [[193]]/[[199]] research-ticket pattern) and found to
+have no hook/plugin surface at all — that research, not this ticket, is the
+trigger.
+
+**Scope**: none (close-out only).

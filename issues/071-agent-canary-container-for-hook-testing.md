@@ -1,6 +1,6 @@
 # 071 — Agent Canary Architecture: Separate `harnez` Container, `lmcoder` Hosts Server+Proxy Only
 
-**Status**: Open — architecture decided, implementation split into [[072-agent-canary-local-llm-pi-opencode]] and [[073-agent-canary-cloud-credentialed-claude-agy-codex]]
+**Status**: Closed — architecture delivered; remaining scope tracked by [[073-agent-canary-cloud-credentialed-claude-agy-codex]]
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics & UI Standards
@@ -79,3 +79,54 @@ hostname per tool.
   distill-eligible tool call is the ceiling — this is about verifying hook mechanics, not agent
   capability.
 - Not attempting `lmcoder`'s own local-model-serving/tuning concerns.
+
+---
+
+## Implementation Plan
+
+### Assessment: architecture decided and delivered; nothing left to implement here
+
+Verified 2026-09-04 — every §3 decision is already realized in-tree:
+
+- `scripts/agent-canary/Containerfile` exists: **one** combined file (not one
+  per agent), `node:22-slim`, no `ENTRYPOINT`, per-tool `RUN npm install -g`
+  layers (`opencode-ai`, and `@earendil-works/pi-coding-agent` with
+  `--ignore-scripts` exactly as §3 predicted), with `harnez` cross-built from a
+  `golang:1.24-bookworm` stage. Naming matches `lmcoder`'s `scripts/agent-canaries/`.
+- `scripts/agent-canary/run.sh` drives `build|static|pi|opencode|pi-hook|opencode-hook`
+  and documents the `lmcoder start` / `lmcoder proxy` prerequisite on a
+  dedicated port (`HARNEZ_AGENT_CANARY_PROXY_PORT=8736`,
+  `HARNEZ_AGENT_CANARY_BACKEND_PORT=8737`), with an explicit "do not use the
+  default 8735 proxy or any um760-backed proxy" warning — the §3 ownership
+  split, implemented.
+- `scripts/agent-canary/configs/` + `bin/` hold the runtime templates and
+  launchers; `lmcoder`'s images were not extended.
+- **[[072-agent-canary-local-llm-pi-opencode]] is Closed** (live local
+  Pi/OpenCode liveness verified; hook-fire probe inconclusive, tracked by
+  [[070-cross-agent-distill-autopipe-hook-agy-codex-pi-opencode]]).
+- **[[073-agent-canary-cloud-credentialed-claude-agy-codex]] is still Open and
+  deferred**, blocked on the credential-mounting security posture.
+
+### Close-out steps (no code)
+
+1. Flip this ticket's `Status` to
+   `Closed — architecture delivered; remaining scope tracked by [[073]]`,
+   since 071's own deliverable was the *decision* plus the split, both of
+   which landed. A parent ticket should not stay open merely because one
+   deferred child is open — 073 carries its own blocker.
+2. Confirm `docs/other/Canary.md` mentions the agent-canary container as a
+   worked example, or leave it alone if the doc is intentionally generic.
+3. Do **not** open the cross-repo `lmcoder` Containerfile-proliferation issue
+   §3 mentions — the ticket explicitly records that as the user's call, not an
+   assumed action.
+
+### Risks / open questions
+
+- Only close after confirming with the user that a parent-architecture ticket
+  closing ahead of its deferred child matches this tracker's convention; the
+  alternative (keep 071 open as an umbrella until 073 resolves) is defensible
+  and costs nothing.
+
+### Scope
+
+**None (close-out only)** — a status-header edit, no implementation.
