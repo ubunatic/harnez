@@ -6,11 +6,9 @@ In a harnez-managed repository, run:
 
 ```bash
 harnez find -d <repo> issues "<search terms>"
-harnez find -d <repo> issues next --reserve "<title>"
+harnez issues new -d <repo> "<title>"
 # Fill the returned ticket path using the repository's issue conventions.
-harnez index -d <repo>
-git -C <repo> add issues/<ticket>.md issues/README.md
-git -C <repo> commit -m "docs(issues): file <ticket-summary>"
+harnez issues open -d <repo> <n> --commit "docs(issues): file <n>, <summary>"
 ```
 
 Keep this workflow deliberately thin: the repository instructions and issue-tracking

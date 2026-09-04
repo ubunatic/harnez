@@ -45,12 +45,13 @@ immediately, don't batch them behind pending code work.
 
 ## Issue Tracker Discovery (harnez find)
 
-When searching for existing issues or allocating next ticket numbers, always use
-`harnez find` instead of `ls issues/`, `find`, or raw grep:
-- `harnez find -d <repo> issues next` — compute the next free ticket number (or `--json`)
-- `harnez find -d <repo> issues next --reserve [title]` — atomically claim and create placeholder ticket file
+When searching for existing issues, computing the next ticket number, or allocating one,
+always use `harnez find` / `harnez issues` instead of `ls issues/`, `find`, or raw grep:
+- `harnez find -d <repo> issues next` — compute the next free ticket number (or `--json`); read-only
+- `harnez issues new -d <repo> [title]` — atomically reserve that number and create a placeholder ticket file
 - `harnez find -d <repo> issues status:open` — list active open issues
 - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text
+- `harnez issues <verb> -d <repo> <n> [reason]` — change a ticket's status and commit, in one call
 - `harnez index -d <repo>` — update issues/README.md after filing or updating tickets
 
 
@@ -116,8 +117,6 @@ Adhere to the following conventions.
 
 Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
-- Issue Tracking Practices @docs/IssueTracking.md,
-  P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
 - Go/Golang @docs/Go.md,
   Modern Go, avoid deps but use Cobra, add tests
 - Bash/Shell @docs/Bash.md,
@@ -137,4 +136,6 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   YAML spec files as single source of truth; Go code must not duplicate spec values
 - Agentic Loop Practices @docs/AgenticLoop.md,
   5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
+- Issue Tracking Practices @docs/IssueTracking.md,
+  P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
 <!-- harnez:end Language Conventions -->

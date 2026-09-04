@@ -41,10 +41,12 @@ Do not conflate **Priority** with **Severity**:
 Every issue file is placed under `issues/NNN-kebab-case-title.md` (e.g. `issues/042-standardized-issue-priority-schema.md`).
 
 ### Allocating & Reserving Ticket Numbers
-To allocate the next issue number, use `harnez find issues next` instead of ad hoc shell commands (`ls | grep | sort | tail`):
-- `harnez find issues next` — reports the next free ticket number (e.g., `195`) calculated as `max(allocated) + 1` across `issues/*.md` and `issues/archive/*.md`.
-- `harnez find issues next --reserve "Ticket Title"` (or `harnez find issues next --reserve`) — atomically allocates the next number and creates a placeholder ticket file (`issues/NNN-<title-slug>.md` or `issues/NNN-reserved.md` with status `Draft`) using `O_CREATE|O_EXCL` to prevent number collisions between concurrent agents. Prints `NNN<TAB>issues/<reserved-filename>.md` — write the real ticket content directly to that printed path rather than re-deriving the slug from the title by hand; a hand-derived slug can diverge from the reserved filename and leave an orphaned placeholder behind (see issue 202).
+Computing the next issue number and reserving/creating it are two separate commands, split across
+`find` (read-only query) and `issues` (write-side): never use ad hoc shell commands (`ls | grep |
+sort | tail`) for either.
+- `harnez find issues next` — reports the next free ticket number (e.g., `195`) calculated as `max(allocated) + 1` across `issues/*.md` and `issues/archive/*.md`. Read-only: it never creates or reserves anything.
 - `harnez find issues next --json` — outputs machine-readable JSON (`{"number":"195","reserved":false}`).
+- `harnez issues new "Ticket Title"` (or `harnez issues new` with no title) — atomically allocates the next number and creates a placeholder ticket file (`issues/NNN-<title-slug>.md` or `issues/NNN-reserved.md` with status `Draft`) using `O_CREATE|O_EXCL` to prevent number collisions between concurrent agents. Prints `NNN<TAB>issues/<reserved-filename>.md` — write the real ticket content directly to that printed path rather than re-deriving the slug from the title by hand; a hand-derived slug can diverge from the reserved filename and leave an orphaned placeholder behind (see issue 202). Add `--json` for the same JSON shape as above with `"reserved":true` plus `file`/`path`. `new` never commits.
 
 The top of each ticket MUST contain the standardized metadata block:
 
