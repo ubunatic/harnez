@@ -1,6 +1,6 @@
 # 234 — Add a /roadmap skill: product-manager-style roadmap creation/update from open issues
 
-**Status**: Open
+**Status**: Closed — implemented; commands/roadmap.md + config.yaml registration, reviewed and verified
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
