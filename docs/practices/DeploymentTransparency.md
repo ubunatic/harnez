@@ -10,7 +10,7 @@ Agents that provision or pair on remote infrastructure routinely conflate three 
 actually running there right now. This doc establishes an invariant that closes that gap.
 
 Origin: proposed from a `webman` pairing retrospective (see
-[issues/058](../../issues/058-deployment-transparency-and-concise-pairing-mode.md)) after two
+an early deployment-transparency pairing incident) after two
 concrete failures — a stale `~/bin/weg` binary surviving a `weg` → `webman` rename because the
 remote host was never re-probed, and a daemon silently falling back to a public `example.com`
 fixture after spec sanitization because the private overlay resolution path was never verified
@@ -52,17 +52,16 @@ extrapolating from local state — e.g. "cannot verify remote crontab; last loca
   remote host is running that version.
 - Treating "the deploy command exited 0" as proof of Active Daemon State — a successful `scp`/build
   step proves nothing about whether a service picked up the new artifact.
-- Assuming a config decoupling (public fixture vs. private overlay, see
-  [docs/other/Spec.md](../other/Spec.md)) resolved correctly on the remote host just because it
+- Assuming a config decoupling (public fixture vs. private overlay) resolved correctly on the remote host just because it
   resolves correctly in local tests — verify the daemon actually loaded the private overlay, not
   the embedded public fallback.
 
 ## Relation to Other Practices
 
-- [docs/practices/AgenticLoop.md](AgenticLoop.md) §1.2 (Canary & Test-Driven Verification) already
+- The Agentic Loop practice's Canary & Test-Driven Verification invariant already
   requires real test execution before declaring completion; this doc extends that requirement
   explicitly to remote/deployed state, which local test runs cannot cover.
-- [docs/practices/ConciseMode.md](ConciseMode.md) documents the Operational Pairing bullet format
+- The optional Concise Mode practice documents the Operational Pairing bullet format
   for reporting probe results tersely during live deployment sessions.
-- [docs/lang/Make.md](../lang/Make.md) documents the `make deploy` / `make status` target
+- The Make practice documents the `make deploy` / `make status` target
   convention used to make these probes repeatable rather than ad hoc SSH one-liners.

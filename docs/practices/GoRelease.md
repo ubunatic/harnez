@@ -270,8 +270,7 @@ greps for a string is not evidence the release is safe to announce — it is evi
 exists somewhere in a source file. `smarthome`'s `make legal-check` correctly verified an
 Impressum link and an AGPL source link were *present*, passed cleanly, and still shipped a
 public release whose Privacy Policy link 404s in production, because no `website/privacy/`
-page was ever generated to match the linked URL (see
-`docs/studies/2026-09-04-three-days-to-a-public-release.md` §4.1). A string check on a URL
+page was ever generated to match the linked URL. A string check on a URL
 that 404s produces false confidence, which is worse than no check at all.
 
 **Rule**: before announcing a release, every externally-linked page reachable from the

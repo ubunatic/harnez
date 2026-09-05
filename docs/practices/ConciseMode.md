@@ -61,7 +61,7 @@ Live deployment and infrastructure-provisioning pairing sessions (SSH sessions, 
 "is it actually deployed" checks) have a reporting need distinct from the three narrative tiers
 above: not just less prose, but a fixed structure so an operator can scan the response for the one
 fact that matters — usually a gap. This emerged from a `webman` pairing retro (see
-[issues/058](../../issues/058-deployment-transparency-and-concise-pairing-mode.md)): switching to a
+an early deployment-transparency pairing incident: switching to a
 strict bullet structure measurably improved operator alignment and cycle speed over both normal
 prose and the generic terse tiers above.
 
@@ -72,7 +72,7 @@ omitting any category with nothing to report:
 - **Status** — exit code or direct observation (not an interpretation).
 - **Gaps / Discrepancies** — anything that doesn't match what local state predicted (this is the
   category most narrative styles bury under reassurance — see
-  [DeploymentTransparency.md](DeploymentTransparency.md)).
+  the optional `deployment-transparency` practice when the project has remote deployment).
 - **Next action** — the single recommended next step.
 
 This format composes with the tiers above rather than replacing them: use it specifically while

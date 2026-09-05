@@ -105,8 +105,8 @@ table header (for example, one with an added Priority or Target column) is
 refused without writing the file, because harnez cannot regenerate values for
 project-specific columns; reconcile that schema manually before adopting the
 generated table. `harnez index`
-also regenerates `docs/README.md`'s `docs/studies/` table from `docs/studies/*.md`;
-see that file's own note on how a study's index topic is derived. Manual edits to
+also regenerates the project's studies index when that convention exists; otherwise
+the issues index is updated independently. Manual edits to
 rows within either managed table will be overwritten by the next `harnez index`
 run — prefer fixing the source ticket/study file instead.
 
@@ -136,12 +136,11 @@ When an issue is closed and verified, move it to `issues/archive/NNN-kebab-case.
 1. **Test Verification Before Closure**: Never mark a ticket `Closed` without executing the test suite (`go test ./...`, `make check`) and confirming assertion rigor.
 2. **Atomic Index Synchronization**: Whenever ticket status changes in the file, immediately update `issues/README.md`.
 3. **Immediate Tracker Commit**: After creating or updating issue-tracker files, commit the ticket file and synchronized index immediately in their own small commit. Do not batch tracker metadata with unrelated code or defer it to a later feature-work checkpoint.
-4. **Traceability**: Link relevant study notes (`docs/studies/`), retrospectives (`docs/feedback/`), ADRs, and commits in the `**Related**:` header.
+4. **Traceability**: Link relevant study notes, retrospectives, ADRs, and commits in the `**Related**:` header, using the project's existing durable documentation location.
 5. **Closing Is Part Of Done**: Progress-noting a ticket to `In Progress` is disciplined for
    free — closing it is not, because nothing forces the last step. The `smarthome` project
    shipped 112 commits in three days with excellent open/progress hygiene, yet four tickets
-   still read `In Progress` for work that was demonstrably shipped and live-verified (see
-   `docs/studies/2026-09-04-three-days-to-a-public-release.md` §4.2). A session that ends on a
+   still read `In Progress` for work that was demonstrably shipped and live-verified. A session that ends on a
    green build and a commit is not done until every ticket it touched has its `Status` flipped
    and `harnez index` has been run. Treat "did I close what I finished?" as an explicit
    end-of-session check, not an assumption that closing happens naturally alongside the code.
