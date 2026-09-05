@@ -5,8 +5,8 @@
 **Severity**: Minor
 **Category**: Documentation
 **Related**: `issues/179-harnez-rate-ok-heartbeat.md`,
-`issues/179-instruct-agents-on-harnez-find-in-agents-md.md`,
-`issues/180-release-webextension-manifest-and-json-version-sync.md`,
+`issues/242-instruct-agents-on-harnez-find-in-agents-md.md` (was `179-instruct-agents-on-harnez-find-in-agents-md.md`),
+`issues/243-release-webextension-manifest-and-json-version-sync.md` (was `180-release-webextension-manifest-and-json-version-sync.md`),
 `issues/180-watch-and-review-compact-commands.md`, IssueTracking.md §4.1 lifecycle
 invariant #4 ("No duplicate ticket numbers exist")
 
@@ -41,3 +41,19 @@ Not yet planned. Likely shape: pick one ticket in each colliding pair to keep it
 and renumber the other to the next free number (`harnez find issues next`), updating its
 filename, its own `# NNN — Title` header, and its `issues/README.md` row. Verify with
 `harnez status` (duplicate diagnostic gone) and `harnez index --check` (clean).
+
+## 4. Resolution
+
+Renumbered the ticket in each pair with fewer/no incoming full-filename references (grep
+across `issues/*.md`; `docs/**/*.md` had none for either number):
+
+- `179-harnez-rate-ok-heartbeat.md` kept its number (referenced by 186, 187, 188).
+  `179-instruct-agents-on-harnez-find-in-agents-md.md` (no other incoming references) ->
+  renumbered to [242](242-instruct-agents-on-harnez-find-in-agents-md.md).
+- `180-watch-and-review-compact-commands.md` kept its number (referenced by 183).
+  `180-release-webextension-manifest-and-json-version-sync.md` (no other incoming
+  references) -> renumbered to
+  [243](243-release-webextension-manifest-and-json-version-sync.md).
+
+Updated the one cross-reference in issue 108 that named the old filenames. Regenerated
+`issues/README.md` via `harnez index`; `harnez status` no longer reports either duplicate.

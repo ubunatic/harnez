@@ -116,8 +116,10 @@ actually picking this up.
 
 `harnez status` flagged this exact symptom again, live: `issues/README.md` currently carries
 two distinct files each claiming issue 179 (`179-harnez-rate-ok-heartbeat.md`,
-`179-instruct-agents-on-harnez-find-in-agents-md.md`) and issue 180
-(`180-release-webextension-manifest-and-json-version-sync.md`,
+`179-instruct-agents-on-harnez-find-in-agents-md.md`, renumbered to
+[242](242-instruct-agents-on-harnez-find-in-agents-md.md) in issue 240) and issue 180
+(`180-release-webextension-manifest-and-json-version-sync.md`, renumbered to
+[243](243-release-webextension-manifest-and-json-version-sync.md) in issue 240,
 `180-watch-and-review-compact-commands.md`) — both pairs pre-date this session's own ticket
 work (202–208, which used `harnez find issues next --reserve` throughout and did not
 collide). Left as-is rather than silently renumbered inline, since fixing it means picking a

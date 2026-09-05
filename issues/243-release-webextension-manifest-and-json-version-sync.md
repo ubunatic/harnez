@@ -1,4 +1,4 @@
-# 180 — Support WebExtension `manifest.json` and `package.json` Version Sync in `harnez release`
+# 243 — Support WebExtension `manifest.json` and `package.json` Version Sync in `harnez release`
 
 **Status**: Closed
 **Priority**: P2 (Medium)

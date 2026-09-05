@@ -1,4 +1,4 @@
-# 179 — Instruct Agents on `harnez find` for Issue Discovery in `AGENTS.md`
+# 242 — Instruct Agents on `harnez find` for Issue Discovery in `AGENTS.md`
 
 **Status**: Closed
 **Priority**: P2 (Medium)
