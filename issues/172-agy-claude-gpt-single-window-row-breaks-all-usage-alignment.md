@@ -99,3 +99,73 @@ Still open and NOT addressed by this fix:
   behavior) vs. a harnez-side parsing gap — needs live-account or captured-fixture verification.
 - §3.3: whether harnez should render an explicit "n/a"/"exhausted" placeholder (distinct from the
   blank alignment placeholder added here) when a window is genuinely and permanently absent upstream.
+
+---
+
+## 6. Implementation Plan (remaining open items only)
+
+The §2/§3.2 rendering bug is fixed and tested (`formatAllUsageSingleWindowLineWithMidWidth`,
+`internal/usage/watch.go:877`; `TestAllUsageBoxSingleWindowRowAligns`). Nothing below re-opens that.
+What remains is §1/§3.1 (upstream cause) and §3.3 (whether an explicit "n/a" placeholder is
+warranted) — and §3.3 is genuinely undecidable until §3.1 is answered, so the plan is sequenced, not
+parallel.
+
+### Step 1 — Answer §3.1 with captured evidence, not reasoning (blocking)
+
+This cannot be resolved by reading `parseAGYUsageOutput` again; it needs the bytes AGY actually
+prints. Two acceptance paths, either is sufficient:
+
+- **(a) Live capture.** Next time an AGY Claude/GPT weekly window is at or near 100%, run
+  `agy -p "/usage" > /tmp/agy-usage-capped.txt` and commit the sanitized text as a fixture under
+  the existing AGY test fixture convention used by `internal/usage/agy_test.go`. Then assert against
+  it directly.
+- **(b) Opportunistic capture.** Add a debug escape hatch — an env var (e.g.
+  `HARNEZ_AGY_DUMP=<path>`) that makes the AGY collector write the raw `agy -p "/usage"` bytes to a
+  file before parsing. Roughly 5 lines in `internal/usage/agy.go` near the exec call (~line 450).
+  This makes the capture possible whenever the condition happens to occur, instead of requiring the
+  user to notice and act during the window.
+
+Prefer (b) if the capped state is not currently reproducible on demand — the whole ticket has been
+stalled on "needs live verification", and (b) converts that from a lucky-timing problem into a
+passive one.
+
+While capturing, also record `QuotaFetchError`: a transient fetch failure and a genuinely-absent
+line are indistinguishable from the rendered row alone, and §2 explicitly flags this as an
+alternative hypothesis that must be ruled out.
+
+### Step 2 — Branch on the answer
+
+- **If AGY genuinely omits the five-hour line at 100% weekly** (upstream behaviour): implement §3.3.
+  Add a distinct placeholder — semantically "no data upstream", not the blank alignment bracket —
+  rendered from the indicators spec (`internal/usage/indicatorsspec.go`), not hardcoded in
+  `watch.go`, per this project's spec-driven `--watch` styling convention. The distinction matters:
+  the current blank bracket means "this row has fewer windows"; the new state means "this window
+  exists but upstream told us nothing". Extend `TestAllUsageBoxSingleWindowRowAligns` with a case
+  asserting the two render differently while occupying identical column width.
+- **If harnez's parser is dropping a line AGY does print**: this becomes a plain parser bug in
+  `parseAGYUsageOutput` (`internal/usage/agy.go:189`) — most likely the `len(fields) < 4` or the
+  `strconv.ParseFloat` guard silently skipping a row whose percentage renders as something other
+  than a bare number at the 0%-remaining boundary (e.g. `"0"`, `"<1"`, `"—"`). Fix with the captured
+  fixture as the regression test. §3.3 then does not apply at all.
+
+### Key Decisions / Tradeoffs
+
+- **Do not implement §3.3 speculatively.** Building an "exhausted/n-a" placeholder before knowing
+  whether the window is actually absent risks shipping a permanent visual state for a transient
+  fetch failure — strictly worse than today's honest blank bracket.
+- **Debug dump over live-watching**: a 5-line env-gated capture hook is cheaper than keeping this
+  ticket blocked indefinitely on catching a rare account state by hand.
+
+### Risks / Open Questions
+
+- The capped state may never recur on this account, leaving §3.1 permanently unanswerable. If Step 1
+  yields nothing after a reasonable window, the honest close is: mark §3.1/§3.3 **Won't Fix —
+  unreproducible**, and close the ticket on the already-shipped alignment fix. That is a legitimate
+  outcome, not a failure.
+- A fixture captured from a live account needs scrubbing (reset timestamps are fine; account
+  identifiers are not).
+
+### Scope
+
+**Small.** Step 1 is ~5 lines plus a fixture; Step 2 is either a small parser fix or a small spec-
+driven placeholder. The cost here is calendar time waiting for the upstream state, not engineering.

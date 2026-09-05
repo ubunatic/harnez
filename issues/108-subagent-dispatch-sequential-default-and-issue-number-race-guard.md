@@ -136,3 +136,124 @@ edit. Confirms the race is still live under real usage, not just a one-off from 
    (already in force via `feedback_no_parallel_agents.md`), with this ticket
    as its paired process-level documentation and the mechanical-guard
    options as the follow-up engineering work.
+
+---
+
+## Implementation Plan
+
+### New finding: `Reserve` does **not** actually close the race
+
+Since this ticket was filed, `harnez find issues next --reserve` shipped
+(`internal/issues/issues.go:550`, `Reserve`). It looks like proposed-fix option 2, but
+re-reading it shows it is not:
+
+```go
+baseName = fmt.Sprintf("%s-%s.md", nextNum, slug)   // number + *title slug*
+...
+f, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+if os.IsExist(err) { continue }   // retry with the next number
+```
+
+The `O_EXCL` compare-and-swap keys on the **full filename**, i.e. number *plus slug*. Two
+agents reserving number 106 with *different* titles produce two different filenames, both
+`O_EXCL`-create successfully, and both "own" 106 — exactly the 2026-08-30 incident, and
+exactly the 179/180 pairs the 2026-09-03 recurrence found. `Reserve` only defends against
+two agents choosing the same number *and* the same title.
+
+So option 2 is ~80% built and has one real bug; that is now the highest-value work here.
+
+### Steps
+
+1. **`internal/issues/issues.go` — make `Reserve`'s claim number-exclusive.**
+   Add a sentinel keyed on the number alone, claimed before the titled file is written:
+   ```go
+   claimPath := filepath.Join(issuesDir, "."+nextNum+".claim")
+   c, err := os.OpenFile(claimPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+   if os.IsExist(err) { continue }  // someone else holds this number, try the next
+   ```
+   Then write the real `NNN-slug.md`, then `os.Remove(claimPath)`. Also guard against the
+   pre-existing-file case the current code misses: before claiming, reject `nextNum` if any
+   `NNN-*.md` already exists (cheap, since `Scan` already walked the dir — check
+   `numToFileMap`-style, not a second `filepath.Glob`).
+   - **Stale-claim handling**: a crashed reserve leaves a `.claim` file that blocks a number
+     forever. Treat a claim file older than ~60s as abandoned and steal it (`os.Stat` mtime
+     check before the `continue`). Keep this simple — no PID tracking, no lockfile library.
+   - Dotfiles are ignored by `ScanFS`'s `NNN-*.md` pattern, so claims never appear as
+     tickets; confirm that when implementing and add a test for it.
+
+2. **`internal/issues/issues.go` `LintFS` — use the dead `numToFileMap` (line 393-396).**
+   After the existing `tableNumCount` duplicate loop (~line 464), add:
+   ```go
+   for num, files := range numToFileMap {
+       if len(files) > 1 {
+           // paths sorted for deterministic output
+           diags = append(diags, Diagnostic{Kind: DiagDuplicateNumber, IssueNum: num,
+               Message: fmt.Sprintf("issue number %s claimed by %d files: %s", num, len(files), strings.Join(paths, ", "))})
+       }
+   }
+   ```
+   Reuse `DiagDuplicateNumber` rather than adding a kind — same problem, different
+   detection surface, and any consumer switching on the kind keeps working. **But** the
+   existing table-level loop and this one will now both fire for the common case (both
+   files also have README rows), producing two diagnostics for one problem. Either
+   de-duplicate by skipping the table-level diagnostic when the file-level one already
+   fired for that number, or (simpler, preferred) merge the messages: emit one diagnostic
+   per number reporting both counts. Pick the merge — one problem, one line.
+
+3. **Tests — `internal/issues/issues_test.go`.**
+   - `LintFS` over an `fstest.MapFS` with `106-a.md` and `106-b.md` and **only one** README
+     row: assert exactly one `DiagDuplicateNumber` for 106. This is the case that is
+     undetectable today and is the whole point of step 2.
+   - Both files *and* both rows present: assert exactly **one** diagnostic, not two.
+   - `Reserve` concurrency test: `t.TempDir()`, N goroutines calling `Reserve` with
+     *distinct* titles, `errgroup`/`WaitGroup`; assert the returned numbers are all
+     distinct and that the on-disk `NNN-` prefixes are all distinct. This test fails
+     against today's implementation and passes after step 1 — write it first.
+   - `Reserve` with a stale `.claim` file present: assert the number is reclaimed.
+   - `Reserve` leaves no `.claim` files behind on success.
+
+4. **Clean up the live 179/180 duplicates** (the 2026-09-03 recurrence). This is
+   bookkeeping, not code, and should be a **separate commit** from steps 1-3:
+   for each pair, keep the earlier-committed file's number (`git log --diff-filter=A` on
+   each file to determine which came first), renumber the other to the next free number
+   via `harnez find issues next --reserve`, `git mv`, update its `# NNN —` heading, then
+   `grep -rn "\b179\b"` / `\b180\b` across `issues/` and `docs/` to fix cross-references
+   ("[[179-...]]" wiki-links included), then `harnez index` and confirm `harnez status`
+   reports zero tracker diagnostics.
+
+5. **`docs/practices/AgenticLoop.md`** — extend Invariant 1 (Parallel Read, Sequential
+   Write) with one sentence naming the broader hazard this incident proved: a
+   *read-then-derive-then-write* on shared state (the next issue number) races even when
+   the written files don't overlap. Point at `harnez find issues next --reserve` as the
+   mechanical answer. Two or three lines; do not restructure the doc.
+
+### Design decisions / tradeoffs
+
+- **Fix `Reserve`, don't replace it with a counter file.** A monotonic counter file would
+  also work and is simpler to reason about, but it desynchronizes from the filesystem the
+  moment a ticket is deleted or renumbered by hand (which step 4 is about to do), and the
+  directory *is* already the source of truth. The claim-file fix keeps one source of truth.
+- **Keep the linter even though `Reserve` will be race-free.** Numbers also get allocated
+  by hand and by agents that don't call `Reserve`; detection is the backstop, not the fix.
+- **Don't build enforcement of the sequential-dispatch rule.** It's a host-orchestrator
+  behavior, already in memory and in this ticket; `harnez` has no lever over subagent
+  dispatch. Part (a) is documentation-complete.
+
+### Risks / open questions
+
+- The concurrency test is the only thing proving step 1 works; make it deterministic
+  (fixed goroutine count, no `time.Sleep`-based synchronization) or it becomes a flaky
+  test that gets skipped.
+- Renumbering in step 4 breaks any external link to `issues/179-...`. Solo repo, no
+  external consumers — acceptable; mention the old number in the renumbered ticket body
+  so a future grep finds it.
+- Stale-claim stealing has a theoretical window where two agents both steal the same
+  60s-old claim. Acceptable: the pre-claim "does `NNN-*.md` already exist" check catches
+  the practical version, and the alternative (real advisory locking) is over-built for a
+  solo repo's ticket numbering.
+
+### Scope
+
+**Small-to-medium** — steps 1-3 are ~60 lines plus tests in one file; step 4 is a
+mechanical but careful cross-reference sweep best done as its own commit; step 5 is three
+lines of docs.

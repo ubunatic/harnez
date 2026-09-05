@@ -130,3 +130,104 @@ ticket(s) from it — do not implement anything from this ticket directly.
   decides.
 - Migrating any doc out of default materialization for real — the pilot in item 6 is scoped as a
   follow-up ticket, contingent on the user accepting the design doc's recommendation.
+
+---
+
+## Implementation Plan
+
+This is a research ticket, so the plan below is a **plan for producing the design document**, not
+a coding plan. No code is written under this ticket (per Out of Scope).
+
+### Sequencing constraint
+
+Research question 4 (per-repo/temporary profile layering) depends on [[149]]'s mechanism at least
+existing as a design. [[149]]'s own research finding is now recorded in its Implementation Plan:
+`agents_md.global` today writes to `~/.claude/CLAUDE.md` (+ `~/.prime/agent/AGENTS.md`) with
+`~/AGENTS.md` symlinked to the Claude file, so *all* agents currently read identical bytes, and
+per-target scoping requires a new agent-owned file. Read that finding before drafting item 4 —
+it changes whether "per-repo-per-agent" is a natural generalization or a second axis.
+
+### Step-by-step
+
+1. **Measure before theorising (item 1 — the only question with a cheap empirical answer).**
+   Do not answer "does on-demand lookup reduce context cost" from intuition. Two measurements:
+   - **Static footprint**: for each bundled doc in `config.yaml`'s `agents_md.languages` map,
+     record installed byte/token size (`harnez assess` already does token estimation — reuse it
+     rather than writing a counter).
+   - **Actual read behaviour**: query `internal/telemetry`'s `tool_calls` table for Read/Grep
+     calls whose path matches `~/.claude/docs/*` or `docs/lang/*`, grouped by session. This gives
+     a real "never touched this session" vs "read once and kept" split from existing recorded
+     data — the single highest-value input to the whole design doc, and available today without
+     building anything. Confirm the table actually records file paths first (`harnez stats`,
+     `internal/telemetry/query.go`); if it does not, say so and treat item 1 as unmeasured rather
+     than guessing.
+
+2. **Inventory the materialization surface** (feeds items 1, 3, 6). Enumerate what `apply`/`init`
+   actually write: `agents_md.global.sections`, `agents_md.local.sections`, `languages[*].target`
+   (~19 docs under `~/.claude/docs/`), `commands/`, `skills/`. Note which of these land in a
+   *system prompt* (always-loaded: `CLAUDE.md`, `AGENTS.md`) versus which are merely *files on
+   disk an agent may read* (`~/.claude/docs/*.md`). This distinction is currently blurred in the
+   ticket's framing and materially changes the answer: docs that are only referenced via `@docs/`
+   already cost nothing until read, so "de-materializing" them saves disk, not context. Expect
+   this to shrink the problem substantially — report that honestly if so.
+
+3. **Section-addressability audit (item 3).** Sample ~5 bundled docs and check whether their
+   `##` heading structure is already a usable retrieval unit. `harnez index`'s topic-extraction
+   logic (from [[148]], see `docs/README.md` generation) is prior art for splitting docs by
+   heading — reuse its findings rather than re-deriving.
+
+4. **Mechanism comparison (item 2).** Compare CLI (`harnez ask`), CLI+`--list` index, DuckDB-backed
+   lookup, and MCP server across: does it require new agent-side capability (CLI: no; MCP: yes,
+   per-agent config), discoverability (an instruction line vs. a tool listed in the agent's tool
+   schema — MCP wins here and it matters), latency, and cross-agent portability. State plainly
+   where evidence is absent: whether a given agent reliably calls an optional tool is **not**
+   known and should be flagged as such, with a proposed cheap experiment (ship a no-op
+   `harnez ask` that only logs invocations to `tool_calls`, ship the instruction, and count calls
+   over a week — falsifiable in days, costs almost nothing).
+
+5. **Per-repo/temporary layering (item 4).** Assess a `.harnez/` dir against the `AGENTS.local.md`
+   precedent (see this repo's own `AGENTS.local.md` + `CLAUDE.md` `@AGENTS.local.md` reference,
+   and `harnez mode`, which already writes a local overlay). Specifically address TTL/expiry: the
+   existing precedent has none and "temporary" silently becoming permanent is the concrete failure
+   mode to design against.
+
+6. **Dedup bound (item 8).** Do the arithmetic explicitly rather than describing it: typical
+   answer size (from step 1's measurements) vs. per-answer bookkeeping (session id, doc id,
+   timestamp, the "already provided" notice text). If overhead is within ~1 order of magnitude of
+   answer size, recommend against dedup and say why. Note the cross-harness fork/inheritance
+   problem as a correctness blocker, not a nuance.
+
+7. **Write the design doc**: `docs/studies/2026-XX-XX-on-demand-doc-lookup-vs-materialization.md`
+   (a study/report, per `docs/` layout rules — this is background research, not an evergreen
+   generic doc, so it does not belong in `docs/practices/` or `docs/lang/`). Structure it as the
+   ticket's Deliverable section prescribes: options + tradeoffs per question, an explicitly
+   labelled recommendation, a backward-compatibility statement, and a small pilot sketch.
+
+8. **File follow-up tickets from the doc only after user review.** Do not pre-file them.
+
+### Design decisions / tradeoffs for the research itself
+
+- **Evidence first, options second.** Steps 1-3 are cheap and use data harnez already has; doing
+  them before the mechanism comparison prevents a well-argued design for a non-problem.
+- **A "do nothing" recommendation is a valid outcome** and should be presented as a first-class
+  option, especially if step 2 shows most of the footprint is on-disk-only docs that already cost
+  nothing until read.
+- Deliverable goes in `docs/studies/`, not `docs/proposed/` — `proposed/` is for docs that may
+  become copyable/generic, and this one is harnez-specific background.
+
+### Risks / open questions
+
+- **The premise may be weaker than the ticket assumes.** If `~/.claude/docs/*.md` are not in the
+  system prompt, item 1's "footprint whether or not it's used" applies only to the `agents_md`
+  sections, which are already small. Confirm early (step 2) and rescope the doc if so.
+- Telemetry may not record enough path detail to answer item 1 (see step 1's caveat).
+- Scope creep into implementing `harnez ask` — the no-op logging probe in step 4 is the *only*
+  code-adjacent artifact allowed, and it belongs in a follow-up ticket, not here.
+- Runtime note in the ticket header applies: this needs a frontier-reasoning model; a fast model
+  will produce a plausible-sounding doc that skips steps 1-3 entirely.
+
+### Scope estimate
+
+**Large** (research effort, not code) — one focused session for steps 1-3 (measurement), a second
+for steps 4-7 (the doc). Each individual step is small; the deliverable is long and the reasoning
+is the deliverable.

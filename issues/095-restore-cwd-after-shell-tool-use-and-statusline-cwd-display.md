@@ -132,3 +132,85 @@ changed.
 - Not adding git branch, model name, cost, or any field beyond `cwd` to
   the status line — explicitly out of scope for this MVP; a richer status
   line is a separate future ticket if wanted.
+
+---
+
+## Implementation Plan
+
+Scoped to **part 1 only** (the documented convention). Part 2 shipped; nothing to plan there.
+
+### Where the rule belongs
+
+Two candidate homes, and the answer is **both, with different weight**:
+
+- **`config.yaml` → `agents_md.global.sections`** (rendered into `~/.claude/CLAUDE.md` by
+  `harnez apply`, via `internal/claude/apply.go` → `markdown.Apply`). This is the
+  load-bearing surface: it lands in *every* session's system prompt, in every project,
+  automatically. The existing `Instructions Hierarchy` section already carries exactly this
+  class of cross-cutting tool-use rule (Context Discipline, Editing Discipline, Voice
+  Input), so this rule is a sibling bullet, not a new mechanism.
+- **`docs/lang/Bash.md`** — the copyable Bash conventions doc. Good for the *long* version
+  (rationale, the `ubunatic.com` incident, the trust-boundary caveat), but it is only
+  loaded when a project opts in via `init --docs Bash`, so it cannot be the only home.
+
+Constraint from `CLAUDE.md`'s own "Minimal Global Docs" rule: the global file must stay
+short. So keep the global text to **2–3 lines max**, and put the reasoning in `Bash.md`.
+
+### Steps
+
+1. **`docs/lang/Bash.md`** — add a new numbered section (after §6 "Commands & Traps", before
+   §7 "Functions"; renumber accordingly, or append as a new §8 "Working-Directory Hygiene"
+   to avoid renumbering churn) covering:
+   - Prefer `make -C <dir>`, `git -C <dir>`, absolute paths, or a subshell `(cd dir && cmd)`
+     over a bare `cd dir && cmd` chain.
+   - If a bare `cd` is unavoidable, `cd` back before the tool call ends.
+   - Why: an agent shell tool's cwd can be shared with the human's interactive shell; the
+     failure surfaces several commands later as an unrelated-looking `make`/`git` error.
+   - Explicit note that this is an **advisory mitigation, not enforcement** — carry over the
+     ticket's "Sharpened motivation" paragraph in condensed form so the doc doesn't overclaim.
+
+2. **`config.yaml`** — add one bullet to the existing `agents_md.global.sections` entry named
+   `Instructions Hierarchy` (currently ~lines 304-322), in the same style as the neighbouring
+   `Context Discipline:` / `Editing Discipline:` bullets:
+   ```yaml
+   - Working-Directory Hygiene: prefer `make -C`/`git -C`/absolute paths or a subshell
+     over bare `cd`; if you must `cd`, return to the starting directory before the tool
+     call ends — the shell may be shared with the user's own terminal.
+     See @docs/Bash.md.
+   ```
+   Do **not** create a new top-level section for this — a new section means a new managed
+   `harnez:begin/end` block in every project's CLAUDE.md, and this rule is one bullet.
+
+3. **Verify propagation**: `harnez diff` (dry) should show the `Instructions Hierarchy`
+   section changing exactly once; a subsequent `harnez apply` then `harnez diff` must report
+   "No changes" (idempotency). `scripts/smoke-test.sh` covers this loop.
+
+4. **Tests**: `internal/claude`'s existing apply/diff tests operate on section content
+   generically, so no new Go test is strictly required. If `config.yaml` content is asserted
+   anywhere (check `internal/claude/*_test.go` for hardcoded section text), update that
+   fixture; otherwise no code change at all — this ticket is config + docs only.
+
+### Design decisions
+
+- **One bullet in an existing section, not a new section.** Adding a section costs a managed
+  block in every downstream `CLAUDE.md` forever; the rule doesn't earn that.
+- **No enforcement mechanism.** The ticket already establishes that hard-scoping cwd is a
+  Claude Code product-level change, outside `harnez apply`. Do not attempt a hook-based
+  guard (e.g. a `PostToolUse` hook that `cd`s back) — hooks run in their own process and
+  cannot mutate the agent shell's cwd, so it would silently do nothing.
+- Keep wording tool-agnostic ("the shell tool") rather than naming Claude Code's `Bash`
+  tool, since the same global file is applied to Codex/AGY harnesses too.
+
+### Risks / open questions
+
+- Whether the shell tool's session is actually shared with the user's terminal varies by
+  harness and by version; the rule is phrased as a cheap always-on habit precisely so it
+  doesn't depend on getting that answer right.
+- Minor conflict risk with the `~/projects/CLAUDE.md` "Multi-repo shell commands" section
+  (uman-managed, not harnez-managed), which already says something adjacent for a different
+  reason. Cross-reference it rather than restating it, so the two don't drift.
+
+### Scope
+
+**Small** — one config bullet, one docs section, one smoke-test verification pass. No Go
+code changes expected.

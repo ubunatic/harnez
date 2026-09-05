@@ -43,3 +43,22 @@ more legible timeline that never vanishes at light load.
 - Run `go test ./internal/rograph`, relevant `internal/usage` tests, then
   `go test ./...` and `make check`; record any independently reproducible
   baseline failure separately rather than weakening assertions.
+
+---
+
+## Implementation Plan
+
+**Skipped — implementation already complete; only tracker closure remains.**
+
+`brailleColumnLevel` in `internal/rograph/options.go` already implements the
+btop-style visible baseline (`math.Ceil(((value-min)/(max-min))*4)` clamped into
+`[1, 4]`, with NaN/-Inf/below-min normalized to the minimum and therefore to
+level 1), and its comment documents the `(0,25] (25,50] (50,75] (75,100]` bands.
+Coverage exists: `TestBrailleColumnLevelFixedRangeBoundaries`,
+`TestRenderBrailleSparklineFixedRangeBaselineIsNotBlank` (asserts a 0%/20% pair
+is not U+2800), and `TestRenderBrailleSparklineIsSafeForAllInputs`.
+
+Remaining step: `go test ./internal/rograph ./internal/usage` passes. Run
+`make check` on a clean tree (the working tree currently has unrelated in-flight
+`cmd/harnez` edits that break `go vet`), then set Status to
+`Closed — resolved in <commit>` and run `harnez index`.

@@ -29,3 +29,109 @@
 
 - [Issue 023: `harnez usage`](023-usage-command-token-quota-tracking.md) — original command this extends
 - [docs/studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md](../docs/studies/2026-08-18-usage-watch-tui-terminal-rendering-postmortem.md) — session this was discovered in
+
+---
+
+## Implementation Plan
+
+**The Codex half of this ticket is now unblocked.** Re-probed while planning
+(2026-09-04): `~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl` now
+exists on this machine (it did not when the ticket was filed) and carries
+**plain-JSON** cumulative token counts — no protobuf, no reverse engineering:
+
+```jsonc
+{"timestamp":"2026-09-03T20:08:47.765Z","ordinal":1270,"type":"event_msg",
+ "payload":{"type":"token_count","info":{
+   "total_token_usage":{"input_tokens":14698822,"cached_input_tokens":14500608,
+     "cache_write_input_tokens":0,"output_tokens":53722,
+     "reasoning_output_tokens":14274,"total_tokens":14752544},
+   "last_token_usage":{...}}}}
+```
+
+The first line of each rollout is a `session_meta` record with `session_id`,
+`cwd`, `cli_version`, and `model_provider` — enough for per-project attribution.
+AGY remains protobuf-only (confirmed: `gen_metadata.data` blobs start `X'1204…'`,
+classic protobuf wire format, no `.proto` locally).
+
+So: **do Codex now, defer AGY, drop nothing.** Ticket's option 2 is confirmed
+true; option 1 stays deferred; option 3 applies to AGY only.
+
+### Steps (Codex)
+
+1. **`internal/usage/codex.go`** — add `collectCodexTokens(codexDir string) (*TokenBreakdown, []string)`:
+   - Walk `~/.codex/sessions/**/rollout-*.jsonl`. Cap the walk by mtime window
+     (e.g. rollouts touched in the last N days, N from the caller) so the cost
+     doesn't grow without bound as history accumulates.
+   - For each file, **read backwards** for the last `event_msg`/`token_count`
+     record rather than parsing the whole file — `total_token_usage` is
+     cumulative per session, so only the final one matters. A tail-read of the
+     last ~64KB covers it in practice; fall back to a full scan only if no
+     `token_count` is found in the tail.
+   - Sum `total_token_usage` across sessions into `TokenBreakdown`:
+     `InputTokens` ← `input_tokens`, `OutputTokens` ← `output_tokens`,
+     `CacheReadTokens` ← `cached_input_tokens`,
+     `CacheWriteTokens` ← `cache_write_input_tokens`, `TotalTokens` ← `total_tokens`.
+     `reasoning_output_tokens` has no `TokenBreakdown` field — either fold it
+     into `OutputTokens` or surface it via `Details["reasoning_tokens"]`;
+     prefer `Details` so the existing four-way breakdown keeps its meaning.
+     Leave `CostUSD` at 0 (no local price table for Codex).
+   - Append each parsed rollout path family to `usage.Sources` as a single
+     summarizing entry (`~/.codex/sessions (N rollouts)`), not N paths.
+2. **Wire into `CollectCodex`** (`internal/usage/codex.go:117`): set
+   `usage.Tokens` after the existing quota fetch, mirroring how
+   `internal/usage/claude.go:110-137` sets it from `stats-cache.json`. Keep it
+   non-fatal — a parse failure must degrade to today's percentage-only display,
+   never error the whole collector.
+3. **Cache it.** Scanning rollouts on every `--watch` tick is wasteful. Reuse
+   the existing snapshot machinery in `internal/usage/statecache.go`
+   (`WriteAgentSnapshot` / `ReadAgentSnapshot` / `cacheOrLive`) rather than
+   introducing a new cache file; the token sum rides along in the persisted
+   `AgentUsage`. Only recompute when the newest rollout's mtime is newer than
+   the snapshot's `FetchedAt`.
+4. **Tests** — `internal/usage/codex_test.go`: build a temp `sessions/` tree
+   with two synthetic rollout files (one with several `token_count` records, one
+   with none), assert the summed `TokenBreakdown` fields exactly (not just
+   non-nil), assert the no-`token_count` file contributes zero rather than
+   erroring, and assert a malformed JSON line is skipped without failing the
+   collector.
+5. **UI**: no change expected — the `[T]` toggle in `harnez usage --watch`
+   already renders `usage.Tokens` when non-nil. Verify with `make smoke` /
+   a live `harnez usage --json | jq '.[] | select(.agent_id=="codex") | .tokens'`.
+
+### AGY
+
+Leave unimplemented in this ticket; note that
+[034](034-hook-triggered-token-extraction.md) proposes the better route
+(hook payload → `transcript.jsonl` seek) which avoids the protobuf entirely.
+Update this ticket's status to reflect "Codex done, AGY tracked in 034" rather
+than closing it outright.
+
+### Design decisions / tradeoffs
+
+- **Backwards tail-read over full parse**: rollouts reach multi-MB; the counter
+  is cumulative, so the last record is the only one needed. Worth the modest
+  complexity.
+- **Cumulative-per-session summing double-counts nothing** as long as each
+  rollout file is one session — confirmed by `session_meta.session_id` being
+  unique per file. Guard anyway: de-duplicate by `session_id`, since Codex has
+  historically written resumed sessions into new files with the same id.
+- **No new cache format** (contra issue 034's `~/.cache/harnez/usage.json`);
+  `statecache.go` already exists and is what `usage`/`--watch` read.
+
+### Risks / open questions
+
+- Codex rollout schema is undocumented and version-dependent
+  (`cli_version: 0.153.0` here). Parse defensively: unknown/missing fields →
+  zero, never an error. Consider recording the observed `cli_version` in
+  `Details` so a future schema break is diagnosable from `harnez usage --json`.
+- Privacy: rollouts contain full conversation text. The parser must extract
+  only the numeric `token_count` payload and must never copy message content
+  into snapshots or exports — cross-check `internal/usage/privacy_export_test.go`
+  expectations before landing.
+- Unbounded history growth makes a naive walk slow; the mtime window plus the
+  snapshot cache are load-bearing, not optional.
+
+### Scope
+
+**Medium** for Codex (one new parser + cache wiring + tests, ~200 lines).
+**Large / deferred** for AGY (protobuf reverse engineering — do not start here).

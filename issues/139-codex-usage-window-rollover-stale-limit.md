@@ -58,3 +58,118 @@ collector refresh.
   window reset.
 - If fresh live fetch fails after rollover, the panel marks the data as
   stale/degraded instead of presenting the old exhausted window as fresh.
+
+---
+
+## Implementation Plan
+
+### Root-cause analysis (from source, no repro needed)
+
+Three independent contributors, all confirmed by reading the code:
+
+1. **`DurationLeft` is frozen at collect time.** `buildCodexQuotaWindow`
+   (`internal/usage/codex.go:85-115`) computes `qw.DurationLeft = t.Sub(now)`
+   once and stores it in the `QuotaWindow` struct
+   (`internal/usage/types.go:9-15`). That value is serialized into both the
+   live-fetch cache (`~/.codex/harnez-quota-cache.json`) and the collector
+   snapshot. Every renderer reads the stored field rather than recomputing from
+   `ResetAt`: `compactDurationText` (`watch.go:904`),
+   `formatCompactGroupLineWithLabelWidth` (`watch.go:1442`), and
+   `usage.go:261-320`. A snapshot taken 1 minute before rollover therefore
+   renders `1m` forever, which is exactly the reported symptom.
+2. **Nothing marks a window expired.** There is no `ResetAt <= now` check
+   anywhere. A window whose reset has passed still renders its old
+   `UsedPercent` (100%) as current.
+3. **The stale-snapshot fallback can pin it indefinitely.** `cacheOrLive`
+   (`internal/usage/statecache.go`) serves `snap.Usage` tagged
+   `(cached, stale)` whenever a live recollect loses quota signal, and
+   `DefaultDisplayStaleness` is 7 days. Post-rollover fetch failures therefore
+   keep serving the pre-rollover exhausted window.
+
+Note the bug is **not Codex-specific** — `claude.go:230-252` and
+`agy.go:237-239` build windows the same way. Fix at the `QuotaWindow` level so
+all three agents benefit; keep the ticket's Codex test as the regression case.
+
+### Steps
+
+1. `internal/usage/types.go` — add two pure methods on `QuotaWindow`:
+   - `func (w QuotaWindow) RemainingAt(now time.Time) time.Duration` — if
+     `ResetAt != nil`, return `max(0, ResetAt.Sub(now))`; otherwise fall back to
+     the stored `DurationLeft` (windows built from `ResetAfterSeconds` with no
+     absolute reset still have `ResetAt` set, so the fallback is only for
+     legacy/handwritten values).
+   - `func (w QuotaWindow) ExpiredAt(now time.Time) bool` — `ResetAt != nil &&
+     !ResetAt.After(now)`.
+   Do **not** change the JSON shape or remove the `DurationLeft` field —
+   existing snapshots on disk must keep decoding.
+2. `internal/usage/watch.go` — thread the already-available frame `now` (the
+   watch redraw already captures one; see `buildAllUsageBoxAt`/`buildAgentBoxAt`)
+   into the duration formatters:
+   - `compactDurationText(w, now)` and
+     `formatCompactGroupLineWithLabelWidth(..., now)` use `w.RemainingAt(now)`.
+   - When `w.ExpiredAt(now)`, render the countdown slot as a stale marker
+     (reuse the existing dim styling, e.g. `~` or `--`) and dim/annotate the
+     percentage rather than showing a confident `100%`. Keep the exact same
+     visible width so `uix.Layout` column planning is unaffected.
+3. `internal/usage/usage.go:255-325` — same substitution for the non-watch
+   one-shot renderer, using `time.Now()` at the top of the render call.
+4. `internal/usage/codex.go` — in the live-fetch cache hit branch
+   (`codex.go:228`), also treat the cached payload as unusable when both its
+   windows are expired, so a rollover forces a live refetch rather than waiting
+   out `MinWatchInterval`. Mirror in `claude.go`/`agy.go` only if trivially
+   symmetric; otherwise leave for a follow-up.
+5. `internal/usage/statecache.go` — in `cacheOrLive`'s "don't blank a
+   stale-but-real snapshot" branch, keep serving the snapshot (that guard is
+   correct and load-bearing per issue 101) but ensure the expired-window
+   rendering from step 2 is what the user sees. No change needed here if step 2
+   is done at render time — verify with a test rather than editing.
+
+### Tests
+
+All fixture-driven, no network, deterministic:
+
+- `internal/usage/types_test.go` — table test for `RemainingAt`/`ExpiredAt`:
+  reset in the future, exactly now, in the past, `ResetAt == nil`.
+- `internal/usage/codex_test.go` — `buildCodexQuotaWindow` with a `ResetAt` in
+  the past yields a window that `ExpiredAt(now)` reports true for.
+- `internal/usage/watch_test.go` — golden-ish assertion: a `QuotaWindow{
+  UsedPercent: 100, ResetAt: now-5m, DurationLeft: 1*time.Minute}` renders
+  without a `1m` countdown and with the stale marker; the same window with
+  `ResetAt: now+1m` still renders `1m`. This is the ticket's required
+  regression test.
+- `internal/usage/statecache_test.go` — a snapshot whose windows are all expired
+  still round-trips (no blanking), proving step 5 is a render-layer fix.
+
+### Design decisions / tradeoffs
+
+- **Recompute at render, don't rewrite state.** Mutating `DurationLeft` in the
+  cache would need a writer on every read path and would fight the flock
+  protocol in `livefetchcache.go`. A pure `RemainingAt(now)` accessor is
+  testable and touches no I/O.
+- **Keep `DurationLeft` in the JSON.** Removing it breaks decoding of existing
+  snapshots and the exported history (`internal/usage/export.go`,
+  `history.go`).
+- **Degrade, don't hide.** Per the Acceptance Criteria, an expired window is
+  marked stale rather than dropped — dropping it would make Codex look
+  uninstalled.
+
+### Risks / open questions
+
+- Compact-layout width: the stale marker must not change `visLen`, or the
+  `uix.Layout` measure/render two-pass in `watch.go:1786+` will re-plan columns.
+  Pick a marker of equal width to the longest countdown it replaces, or reuse
+  the existing "no duration" path (empty string) plus a dimmed percentage.
+- Open question: should an expired *weekly* window be presented differently from
+  an expired *session* window? Weekly rollovers are rarer and a stale weekly
+  reading is less misleading. Suggest identical treatment for v1; revisit if
+  noisy.
+- Codex's `wham/usage` may legitimately report a `reset_at` slightly in the past
+  during the server-side rollover window. Consider a small grace (e.g. treat as
+  expired only after `ResetAt + 60s`) to avoid a flapping stale marker; decide
+  with one live observation.
+
+### Scope
+
+**Medium** — small, well-bounded code change across 4 files, but it touches the
+shared quota-window type used by all three collectors and both renderers, plus
+five focused test additions.

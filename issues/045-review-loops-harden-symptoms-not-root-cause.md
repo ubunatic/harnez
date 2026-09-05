@@ -86,3 +86,55 @@ Documentation-only change, no code:
    plausible-sounding mechanism on its face.
 3. No test/verification beyond re-reading the doc for consistency — this is
    guidance, not enforced logic.
+
+---
+
+## Implementation Plan
+
+Confirmed gap: `docs/practices/AgenticLoop.md` Phase 3's Review Checklist
+(§2, ~line 111) currently lists only Test Assertion Rigor, Docs & Ticket Sync,
+Backward Compatibility & Invariants, and Token Efficiency — no root-cause /
+upstream-fix item. `commands/sprint.md` Phase 3 (~line 39) restates the
+checklist inline, so both must change together. Overlaps with 042 (same two
+files, adjacent sections) — land them in one commit if scheduled together.
+
+### Steps
+
+1. `docs/practices/AgenticLoop.md` Phase 3 Review Checklist: add a fifth item,
+   e.g.
+   > **Root Cause vs. Symptom**: for a defensive/robustness fix (parsing
+   > subprocess or tool output, retry/tolerance logic, error swallowing), ask
+   > whether the *source* of the unexpected input can be fixed instead — a flag,
+   > a config setting, a different invocation. Verify any proposed upstream fix
+   > against the real tool/source before treating it as the fix; a
+   > plausible-sounding mechanism is not a verified one.
+2. `commands/sprint.md` Phase 3: add the same checklist item as one line so the
+   command's inline summary does not drift from the practice doc.
+3. Reviewer-prompt surface (§2 item 2 of this ticket): `commands/sprint.md`
+   Phase 3 spawns the reviewer — put the "identify the upstream source of the
+   unexpected input" instruction in the *spawn prompt text* there, not only in
+   the checklist, since a fresh reviewer subagent reads the prompt it is handed.
+   Check `commands/fresh-sprint.md`'s inline-review step for the same need.
+4. Verification: re-read for consistency, `harnez diff` clean, no code changes.
+
+### Design decisions
+
+- One checklist item, not a new section: the failure mode is "reviewer inherits
+  the framing", and the fix is a question in the checklist the reviewer already
+  walks. A separate section would be read less, not more.
+- Include the *verification* clause (the second layer from §1). Without it the
+  guidance reproduces the exact second failure this ticket documents — an
+  unverified upstream theory written up as settled fact.
+
+### Risks / open questions
+
+- Over-application: reviewers might start demanding upstream fixes for genuinely
+  necessary defensive code. Mitigate by scoping the item to "ask and record the
+  answer", not "block the commit".
+- Whether reviewer subagents in practice read `commands/sprint.md` or only their
+  spawn prompt — step 3 exists to cover both; confirm the actual spawn text
+  before editing.
+
+### Scope
+
+Small (docs-only, 2–3 files, ~8 added lines). Bundle with 042.

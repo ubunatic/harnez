@@ -73,3 +73,95 @@ positive pattern recurs across other sibling projects, not just `weg`.
   the actual current file state after a burst of edits), not about the
   LSP being wrong in principle — worth distinguishing from a general
   "LSP integration is unreliable" claim, which isn't what was observed.
+
+---
+
+## Implementation Plan
+
+### Framing: pick one of §2's three options first
+
+This ticket deliberately left the design open. The plan below **picks option 3
+first, option 2 second, option 1 as prerequisite research, and drops the
+disagreement-detector (first bullet of §2.3)** — with the reasoning stated so a
+future agent can overrule it rather than re-derive it.
+
+The disagreement-detector is rejected as the opening move: harnez sees tool
+calls via its telemetry hooks, but the LSP `<system-reminder>` blocks are
+injected into the *conversation* by the harness, not routed through any hook
+harnez installs — so harnez has no observation point for "the diagnostic said
+X" to compare against "`go build` then said Y". Building that would require
+transcript scraping, which this repo's Troubleshooting norms explicitly warn
+against.
+
+### Steps
+
+**Step 1 — Research the toggle (blocking, cheap, do this before anything else).**
+Determine whether Claude Code exposes a setting to disable background language-
+server diagnostics, and at which scope (global `~/.claude/settings.json`,
+project `.claude/settings.json`, or env var). Check `claude config list` / the
+settings schema / release notes; do **not** guess a key name. Two outcomes:
+- *A toggle exists* → continue to steps 2-4.
+- *No toggle exists* → skip steps 2-3, do step 4 only, and record the negative
+  finding in this ticket so it isn't re-researched.
+
+**Step 2 — Make the setting managed (only if step 1 found a real key).**
+`internal/claude/config.go` already carries per-feature scalar fields
+(`StatusLine bool`, `Model`, `Effort`); add the LSP toggle the same way
+(`yaml:"..."`, one field, no new subsystem), and write it in
+`internal/claude/apply.go` alongside the other `settings.json` keys. Add the
+key to `config.yaml`. Follow the CLI-scope rule in `docs/CLIDesign.md`: this is
+a global `~/.claude` concern, so it belongs to `apply`, **not** `init`.
+
+**Step 3 — Surface the state (the ticket's actual ask #2).**
+`internal/claude/status.go` already has `hasSettingsKey(path, key)` and an
+`Applied:` checklist built from `[]entry{label, check}` (`status.go:15,63`).
+Add one entry reporting the LSP-diagnostics key's presence/value so the state
+is inspectable via `harnez status` instead of being an invisible background
+behavior. Test it in `internal/claude/integration_test.go` the same way other
+applied-key checks are tested (present / absent / drifted).
+
+**Step 4 — Document the discipline (do this regardless of steps 1-3).**
+Add to `docs/practices/AgenticLoop.md` section 4 anti-patterns, next to the
+existing verification bullets:
+> ❌ **Trusting a Background Diagnostic Over the Real Toolchain**: acting on an
+> auto-posted LSP/`<system-reminder>` diagnostic block (reverting code,
+> reporting a broken build) without re-running the project's real gate
+> (`go build ./... && go vet ./... && gofmt -l .`, `make check`). Language
+> servers lag a burst of edits — a cross-file rename or a just-fixed type
+> error reliably produces phantom errors for several turns. The diagnostic is a
+> hint to verify, never a result.
+
+Then resync (`harnez apply`, downstream `harnez init --docs AgenticLoop`).
+
+**Step 5 — Verify.** Steps 2-3 touch Go, so `make install` and one live check:
+run `harnez apply` against a scratch target, then `harnez status`, and confirm
+the new line reflects the actual `settings.json` content — per AgenticLoop
+Phase 3's "Live/Real-Environment Verification for hooks & env-resolution
+features", passing `go test ./...` alone is not sufficient evidence here.
+
+### Design decisions / tradeoffs
+
+- **Report, don't decide.** harnez surfaces the setting and lets the user pin
+  it in `config.yaml`; it does not default to disabling LSP diagnostics. The
+  ticket itself notes the failure mode is *staleness*, not the LSP being wrong
+  in principle — the true-positive value is real.
+- **Doc bullet is unconditional.** It is the only part of this that works even
+  if no toggle exists, and it is what actually caught every instance in the
+  `weg` session.
+- **No transcript scraping**, per the reasoning above and this repo's
+  Troubleshooting & Log Exploration norms.
+
+### Risks / open questions
+
+- Step 1 may find no toggle, reducing this ticket to a one-bullet doc change —
+  that is an acceptable outcome, not a failure.
+- The setting key may be undocumented/unstable across Claude Code releases; if
+  so, prefer reporting it read-only in `harnez status` (step 3) and skip step 2
+  rather than writing an unstable key on every `apply`.
+- Evidence base is one project (`weg`). Before investing in steps 2-3, a cheap
+  sanity check is whether the pattern recurs in other sibling projects.
+
+### Scope
+
+**Small** if step 1 finds no toggle (doc bullet only). **Medium** otherwise
+(one config field, one apply write, one status check, tests, live verify).

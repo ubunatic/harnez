@@ -107,3 +107,61 @@ Keep the audit itself concise per project convention — the goal is a small
 number of high-confidence findings (specific duplicated lines, specific
 prunable sections), not an exhaustive line-by-line transcript of the system
 prompt pasted into a doc.
+
+---
+
+## Implementation Plan
+
+Two of four acceptance criteria are already met (repeatable method + clean-baseline
+studies for Claude Code and agy). What remains is (a) the *with-project-docs*
+pass for both agents and (b) filing follow-up trim tickets. This is a research
+ticket — no production code changes.
+
+### Steps
+
+1. **Re-read the method** in
+   `docs/studies/2026-08-31-claude-code-clean-session-system-prompt-audit.md` §1
+   and reuse it verbatim: two-turn `claude -p` / `claude -c -p` from a scratch
+   directory. Do not invent a second method — comparability with the baseline
+   study is the whole point.
+2. **Claude Code, with-project-docs pass**: run the same two-turn prompt from
+   `~/projects/harnez` itself (not an empty dir), so the real stack loads:
+   `~/.claude/CLAUDE.md`, `~/projects/CLAUDE.md`, `harnez/CLAUDE.md`,
+   `AGENTS.local.md`, `docs/practices/ConciseMode.md`, the memory index, and the
+   skills list. Ask for the same four report items (per-layer size, repetition,
+   model-native vs. harness-specific, non-removable-but-overridable).
+3. **Diff against the baseline**: the delta between the clean-session numbers and
+   this run *is* the harnez-attributable cost. Report it as a single number per
+   layer — that framing is what makes the study actionable.
+4. **agy pass**: repeat step 2 for agy per the agy study's method, keeping
+   `harnez rate` enforcement out of scope there (122 does not cover agy).
+5. **Write up** as one new `docs/studies/2026-09-XX-with-project-docs-system-prompt-audit.md`
+   covering both agents, not two files — the comparison is the finding. Link it
+   from `docs/README.md`'s study table and from this ticket.
+6. **File follow-up trim tickets** (one per concrete cut, using
+   `harnez find issues next --reserve`), seeded with the candidates already
+   listed in Acceptance Criteria item 4 plus whatever the new pass surfaces.
+   Do **not** apply any trim inside this ticket.
+7. Tick the two remaining checkboxes and close.
+
+### Design decisions
+
+- Same method, different working directory — a new prompt design would make the
+  two passes incomparable and waste the completed baseline work.
+- One combined write-up rather than per-agent studies: the baseline pass already
+  produced per-agent files; the value now is cross-agent comparison.
+- Findings only, trims deferred. Keeping the audit and the cuts in separate
+  tickets is what keeps the audit honest (no pressure to justify a pre-decided cut).
+
+### Risks / open questions
+
+- Self-report accuracy: an agent's estimate of its own prompt size is
+  approximate. Where possible cross-check against actual file byte counts
+  (`wc -c` on each loaded file) rather than trusting the model's token estimate.
+- Non-determinism: the loaded stack changes as skills/docs are added, so a
+  finding has a shelf life. Date-stamp the study and note the harnez commit SHA
+  the audit ran against.
+
+### Scope
+
+Medium (two audit runs, one study write-up, N small follow-up tickets; no code).

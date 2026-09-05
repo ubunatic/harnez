@@ -160,3 +160,137 @@ incompatible notion:
 - Granularity is still per-agent, not per-`QuotaWindow`, in both tickets' current state — 107's
   investigation flagged this same data-model gap as the reason it couldn't do finer-grained
   dimming; this ticket's provenance-enum idea is the natural place to fix that for both, if pursued.
+
+---
+
+## Implementation Plan
+
+### Core decision: add an explicit `FetchMode` enum, retire the string-matching
+
+The ticket's own note answers its main open question. `IsValueStale()`
+(`internal/usage/types.go:137`) currently decides staleness by
+`strings.Contains(source, "stale")` over free-text `Sources` strings — that heuristic is
+what this ticket must replace, not extend. Everything else follows from having the enum.
+
+```go
+// internal/usage/types.go
+type FetchMode string
+
+const (
+    FetchModeUnknown FetchMode = ""        // collector predates the field / not threaded through
+    FetchModeLive    FetchMode = "live"    // fresh answer from the agent this cycle
+    FetchModeCache   FetchMode = "cache"   // daemon snapshot (statecache.go)
+    FetchModeHistory FetchMode = "history" // usage-history fallback (fillFromHistoryIfNoQuotaWindows)
+    FetchModeNone    FetchMode = "none"    // nothing available; see QuotaFetchError for why
+)
+```
+
+Added to `AgentUsage` as `FetchMode FetchMode \`json:"fetch_mode,omitempty"\`` plus
+`LastSuccessfulFetch time.Time \`json:"last_successful_fetch,omitempty"\`` (AC #1's
+"last successful fetch time, distinct from the wall-clock `updated` label"). Both are
+`omitempty` so existing on-disk snapshots deserialize unchanged as `FetchModeUnknown`.
+
+`IsValueStale()` is then re-derived, exactly as the ticket's 107 note prescribes:
+`FetchModeCache/History/None` → stale, `FetchModeLive` → not stale, `FetchModeUnknown` →
+**fall back to today's string/timestamp heuristic verbatim** so no behavior regresses for
+snapshots or collectors that haven't been updated.
+
+### Steps, in order
+
+1. **`internal/usage/types.go`** — add `FetchMode`, the constants, the two `AgentUsage`
+   fields, a `FetchStatus() (mode FetchMode, age time.Duration, reason string)` helper
+   that synthesizes the one human-readable status string every view will render, and the
+   rewritten `IsValueStale()` with the unknown-mode fallback. Keep `Sources` untouched —
+   it stays the raw provenance dump for the verbose view; the enum is the *classification*
+   layered on top, not a replacement.
+
+2. **Set the mode at each origin point** (this is the bulk of the work, ~1 line each):
+   - `internal/usage/claude.go`, `codex.go`, `agy.go`: `FetchModeLive` +
+     `LastSuccessfulFetch = time.Now()` on a successful live fetch; `FetchModeCache` on
+     their internal stale-cache fallback paths (the `(stale)`/`(cached)` `Sources` tagging
+     sites — grep `"(stale)"` / `"(cached"` to find them all).
+   - `internal/usage/statecache.go` `cacheOrLive` (~line 205): when it serves the daemon
+     snapshot rather than calling `collect`, stamp `FetchModeCache` and carry
+     `LastSuccessfulFetch` from the snapshot's `FetchedAt`.
+   - `internal/usage/usage.go` `fillFromHistoryIfNoQuotaWindows` (~line 148-150): stamp
+     `FetchModeHistory`.
+   - `internal/usage/usage.go` collectAll's zero-`LastRefreshed` defaulting (~line 167-176):
+     this is the line 103 called out as actively misleading. Keep defaulting `LastRefreshed`
+     (it means "when we last looked"), but do **not** default `LastSuccessfulFetch` — a zero
+     value there is the honest "never" signal, and `FetchModeNone` should be stamped when a
+     collector returns with neither data nor a `QuotaFetchError`.
+
+   Cross-reference only, do not fix here: 104 AC #3's `len(ports)==0` → `QuotaFetchError`
+   gap in `agy.go`. This plan's `FetchModeNone` gives that case somewhere to land, but the
+   AGY-specific fix belongs to 104.
+
+3. **Verbose/full view — `internal/usage/usage.go` `RenderText` (~line 360-430).** Replace
+   nothing; *add* one line above the existing raw `sources:` dump:
+   ```
+   collector: live · fetched 2m ago
+   collector: cache · last live fetch 6d ago
+   collector: no data · no agy process found (last live fetch 7d ago)
+   ```
+   Reuse `staleValueANSI` for the non-live cases so it matches 107's dim-grey convention.
+   Keep the existing `" · stale"` suffix on the `updated` caption **or** drop it in favour
+   of this line — pick one; two annotations meaning overlapping things is the exact failure
+   the 107 note warns about. Recommendation: **drop the `" · stale"` suffix in the verbose
+   view only** (this new line is strictly more informative there) and keep it everywhere
+   107 put it that this ticket doesn't touch.
+
+4. **`--watch` per-agent panel — `internal/usage/watch.go:~1036-1055`.** Same line as
+   step 3, one row, already has the vertical budget.
+
+5. **Compact / `[a] All Usage` — `internal/usage/watch.go` `allUsageLinesAt` (~line 676+).**
+   This is AC #2 and #3 and the width-sensitive part:
+   - The `allUsageRow` struct already carries `stale bool`; add `mode FetchMode`.
+   - **AC #3: choose option (a)** — render a minimal row for any agent with
+     `HasUsageData() == true` but zero quota windows, instead of `continue`-ing past it.
+     The row is `label` + the compact marker + a short reason, no bars. Rationale: "no
+     windows" collapsing to "no row" is literally 103's bug shape; the aggregate is the
+     view where an agent's *absence* is most misleading.
+   - **Marker vocabulary (AC #5 decision)**: a single trailing suffix, no new glyph
+     alphabet, no color-only signalling (fails on non-color terminals and duplicates 107):
+     | mode | suffix | width |
+     |---|---|---|
+     | live | *(nothing)* | 0 |
+     | cache / history | `·6d` (age of last successful fetch) | 3-4 |
+     | none | `·—` plus, if it fits, a short reason | 2+ |
+     Dim-grey (`staleValueANSI`) applied to the suffix only. Absence-of-marker means live,
+     which keeps the common case at zero width cost — the only way to satisfy AC #4's
+     width budget without touching `internal/uix`'s planner caps.
+   - Compute the suffix **before** label-width padding so `labelWidth` accounts for it;
+     if `contentW` can't fit label + bars + suffix, drop the reason text first, then the
+     age, then the suffix entirely (never the bars).
+
+6. **Tests** (`internal/usage/types_test.go`, `watch_test.go`, `usage_test.go`):
+   - `IsValueStale` truth table across all five modes **plus** the unknown-mode fallback
+     asserting byte-identical behavior to today for legacy inputs.
+   - Round-trip: an `AgentUsage` with `FetchMode`/`LastSuccessfulFetch` through
+     `WriteAgentSnapshot`/`ReadAgentSnapshot`; and a legacy snapshot JSON without the
+     fields deserializing to `FetchModeUnknown` without error.
+   - `allUsageLinesAt` with a fabricated agent that has `HasUsageData() == true` and zero
+     `ModelGroups`/`Weekly`/`Session`: assert a row *is* emitted and carries the marker
+     (this is the direct 103-regression test).
+   - `allUsageLinesAt` at a narrow `contentW` (e.g. 40): assert no rendered line exceeds
+     `contentW` — AC #4, asserted mechanically rather than eyeballed.
+
+### Tradeoffs / risks
+
+- **Enum threading is the risk, not the rendering.** There are several places a collector
+  can return, and missing one leaves `FetchModeUnknown` — which degrades to today's
+  behavior rather than to a wrong claim. That fallback is deliberate and should not be
+  removed even once every site is covered.
+- **Per-`QuotaWindow` provenance stays out of scope.** Both 105 and 107 flagged it; doing
+  it means changing `QuotaWindow` and every collector's parse path. The per-agent enum
+  already satisfies every AC here. Note it as follow-up, don't build it.
+- **`Sources` stays.** Deleting it would break the verbose view's usefulness and any
+  downstream JSON consumer; the enum sits alongside.
+- Ordering vs. 103/104: this can and probably should land **first**, per the ticket's own
+  note, so those fixes are verifiable through the UI.
+
+### Scope
+
+**Medium** — one data-model addition, ~8 small collector call-site changes, three render
+sites, and a focused test batch. Contained to `internal/usage`; no CLI flags, no new files
+strictly required (`FetchMode` can live in `types.go`).

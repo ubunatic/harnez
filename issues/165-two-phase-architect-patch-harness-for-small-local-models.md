@@ -58,3 +58,41 @@ rather than a new bolt-on system.
   can be scoped as "add a small-local-model profile" rather than a bespoke command surface.
 - No implementation should start until this is prioritized relative to [[149]]/[[151]]; filed here
   for tracking only.
+
+---
+
+## Implementation Plan
+
+**Deliberately short — this ticket is filed for tracking only** (§3: "No
+implementation should start until this is prioritized relative to [[149]]/[[151]]"),
+and both of those are still Open. Building a small-local-model harness now would
+mean inventing a second, parallel profile mechanism that 149 is about to define,
+and committing to materialized per-model instructions while 151 is still asking
+whether materialization is the right delivery model at all.
+
+The one step that is useful now and does not front-run either dependency:
+
+1. **Decide whether this is a profile or a workflow.** Answer §3's open question
+   on paper before any code: how much of `docs/practices/AgenticLoop.md` §3's
+   existing Advisor (read-only) / Dev Worker (write) role split can a *single*
+   small model reuse by running the two roles as consecutive turns in one
+   session, versus what genuinely needs new machinery. The specific thing that
+   is *not* covered by the existing split is the one-file-diff-at-a-time
+   constraint plus the automated test-output-into-retry-prompt loop — those are
+   an execution harness, not an instruction profile, and conflating the two is
+   the main design risk here.
+2. If the answer is "mostly reusable", this collapses to a
+   `small-local-model` entry in [[149]]'s profile mechanism plus a stricter
+   variant of `commands/sprint.md` — Small/Medium.
+3. If the answer is "the test-retry loop must be mechanized", that is a separate
+   `harnez`-side runner ticket and should be filed as such rather than expanded
+   here — Large, and it needs its own justification against actually available
+   local-model tooling.
+
+**Recommended action**: leave Open/blocked, revisit after 149 lands. Re-score
+priority then; P3 looks right while no local-model workflow is in active use.
+
+### Scope
+
+Not scoped — blocked on [[149]] and [[151]]. Step 1 above (a written decision,
+no code) is Small and can be done at any time.

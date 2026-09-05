@@ -48,3 +48,54 @@ mechanism — likely nothing to test here beyond nudging-doc presence) against t
 4. Test protocol: same minimal ping-pong + one distill-eligible tool call as issue 072, not full
    agentic tasks.
 5. Verify with a live run against the real installed-in-container CLIs, plus `harnez status`.
+
+---
+
+## Implementation Plan
+
+### Skipped: still blocked on an external decision the agent cannot make
+
+The blocker in §2 is a *user* decision about credential-mounting posture
+(read-only vs. read-write mounts, and explicitly accepting that this container
+is trusted-but-isolated rather than sandboxed from the user's real
+Claude/AGY/Codex accounts). No amount of research or code resolves it, so no
+implementation plan is written here beyond the §3 sequence already recorded.
+Keep this ticket deferred until that decision lands.
+
+### What is worth doing *before* unblocking (cheap, zero-risk)
+
+1. **Answer §3 step 3 first, on paper.** Per [[070-cross-agent-distill-autopipe-hook-agy-codex-pi-opencode]],
+   AGY and Codex have no real pre-exec rewrite hook — so a credentialed AGY/Codex
+   container would verify only "the nudging instructions are present," which is
+   checkable from a plain file assertion with no credentials, no container, and
+   no blast radius. If that holds, this ticket collapses to **Claude Code only**,
+   which is a much smaller credential surface (one CLI, one credential file) and
+   makes the posture decision correspondingly easier to make.
+2. **AGY CLI research** (install path / npm package name, currently
+   unresearched) is read-only and can be done any time — but only if step 1
+   concludes AGY is worth containerizing at all. Do step 1 first; it may make
+   step 2 unnecessary.
+3. **Reuse, do not rebuild.** Whenever this unblocks, the target is the existing
+   `scripts/agent-canary/Containerfile` (already in-tree from 072: `node:22-slim`,
+   no `ENTRYPOINT`, one `RUN npm install -g` layer per CLI) plus
+   `scripts/agent-canary/run.sh` (already parameterized by env vars, already
+   documents its podman invocation). Adding Claude Code is one `RUN` line, one
+   launcher in `scripts/agent-canary/bin/`, and one `run.sh` subcommand — the
+   image work is genuinely small. The cost of this ticket is entirely the
+   security decision, not the build.
+
+### Recommended framing for the unblocking decision (for the user)
+
+- Mount credentials **read-only** and into a throwaway `HOME`
+  (`/tmp/harnez-home`, which the image already sets) — never bake into the image.
+- Scope the test protocol to ping-pong plus one distill-eligible tool call
+  (§4), so a buggy hook rewrite has minimal opportunity to do anything with the
+  credentials it can see.
+- Accept explicitly that this is isolation-from-the-host, **not**
+  isolation-from-the-account: a hook that exfiltrates or burns quota still can.
+
+### Scope
+
+**Blocked / not estimable.** Once unblocked and reduced to Claude-Code-only:
+**small**. If AGY (net-new Containerfile, no prior art anywhere) stays in
+scope: **medium**.

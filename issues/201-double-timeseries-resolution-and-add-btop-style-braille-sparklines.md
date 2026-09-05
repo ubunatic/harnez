@@ -90,3 +90,23 @@ through `usage`.
 - Do not build a separate bespoke chart pipeline for btop mode.
 - Do not alter spinner or countdown Braille sequences; this concerns
   time-series charts only.
+
+---
+
+## Implementation Plan
+
+**Skipped — implementation already complete; only tracker closure remains.**
+
+The doubled-resolution contract and Braille presentation are in
+`internal/rograph/options.go` (`SparklineBraille`, `sparkCell`, `sparkCellValue`,
+`brailleGlyph`, `brailleColumnLevel`) with coverage in
+`internal/rograph/options_test.go` (doubled-window, all-inputs safety,
+foreground-per-cell) and `internal/usage/indicatorsspec_test.go`
+(`LoadChartBraille` spec selection).
+
+Remaining step: the baseline failure that blocked closure no longer reproduces —
+`go test ./...` passes on the current tree. Re-run `make check` on a clean
+worktree (the tree currently has unrelated in-flight edits in `cmd/harnez` that
+make `go vet ./...` fail on `cmd/harnez/index.go:60`, which is not this
+ticket's concern), then flip Status to `Closed — resolved in <commit>` and
+run `harnez index`.

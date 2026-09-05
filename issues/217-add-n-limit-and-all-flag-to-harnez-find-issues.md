@@ -52,3 +52,84 @@ Add flags to `cmd/harnez/find.go`:
 - [ ] Run `make check` and `make install`.
 - [ ] Update documentation / help text in `cmd/harnez/find.go`.
 
+
+---
+
+## Implementation Plan
+
+Code reviewed: `cmd/harnez/find.go` `runFind` (line ~250 onward) joins
+`args[1:]` into a query, rejects empty with `find: query must not be empty`, then
+prints every `find.Search` result unbounded. `find.Search`
+(`internal/find/search.go`) sorts by worstClass, sumClasses, numeric ticket
+number ascending, then path — so for a filter-only query (`status:open`) every
+result shares class 0 and the order is purely ticket number ascending. That makes
+"the last N" a plain tail of the sorted slice, no new sort needed.
+
+### Design decisions
+
+- **Truncate in `cmd/harnez/find.go`, not in `internal/find`.** `Search` is the
+  ranking contract from issue 158; keeping it total and letting the CLI decide
+  presentation preserves that contract and keeps the change to one file plus
+  tests. Add a tiny exported helper only if a second caller appears.
+- **Two different truncations, selected by whether the query has text groups**
+  (`len(q.Groups) == 0`):
+  - *filter-only or bare* → take the **tail** N (highest ticket numbers), keeping
+    ascending order in the output so the newest ticket is the last line printed.
+  - *ranked text search* → take the **head** N (best matches), since head is
+    already "top N" under the existing sort.
+  This matches §2.3 exactly and is the only place the two behaviours differ.
+- **`--all` wins over `-n`** when both are given, rather than erroring —
+  `--all` is an explicit "no limit" and treating the combination as a usage
+  error buys nothing.
+- **Bare `harnez find issues` becomes legal** and means "last 10". Keep the
+  `query must not be empty` error only for the case where a query was *given*
+  and parsed to nothing (e.g. whitespace-only quoted arg) — that is still a
+  real user mistake. If that distinction proves fiddly, allow both; it is not
+  load-bearing.
+
+### Steps
+
+1. `cmd/harnez/find.go` `newFindCmd`: add
+   `cmd.Flags().IntVarP(&limit, "limit", "n", 10, "...")` and
+   `cmd.Flags().BoolVarP(&all, "all", "a", false, "...")`. Thread both into
+   `runFind` — its signature is already a long positional list; consider
+   collapsing the flag args into a `findOptions` struct in the same commit,
+   following the existing `findHistoryOptions` precedent in this file.
+2. `runFind`: after the `next`/`history` subcommand branches (which must ignore
+   `-n`/`--all` entirely), replace the empty-query error with the bare-query
+   path; validate `limit` (`<= 0` → `fmt.Errorf("find: --limit must be >= 1")`)
+   unless `--all` is set.
+3. Empty-query path: skip `find.ParseQuery` and build a match-everything query,
+   or short-circuit to "all scanned files as Results". Prefer the latter — do
+   not add an empty-query special case inside `ParseQuery`, whose strict
+   grammar-error behaviour (issue 158) is deliberate.
+4. Apply the head/tail truncation described above, then print as today.
+5. Update the command's `Long` help: document both flags, the default of 10, the
+   head-vs-tail rule, and that `next`/`history` are unaffected.
+6. Tests:
+   - `internal/find/search_test.go` — unchanged (contract untouched); add a case
+     only if a helper lands there.
+   - `cmd/harnez/find_test.go` — default caps at 10; `-n 3` on a filter query
+     returns the three highest-numbered tickets; `-n 3` on a text query returns
+     the three best-ranked; `--all` returns everything; `-n 0` and `-n -1` error;
+     bare `harnez find issues` returns the last 10; `find issues next` and
+     `find issues history` ignore the flags.
+7. `make check` (and `make install` per repo convention, at commit time).
+
+### Risks / open questions
+
+- **Silent truncation breaks existing scripted callers**, including harnez's own
+  instruction blocks that tell agents to run `harnez find -d <repo> issues status:open`
+  to list open issues — those will now see 10. Mitigation: print a one-line
+  stderr note when results were truncated (e.g.
+  `# 63 matches, showing 10 (use --all)`), keeping stdout's TSV contract
+  byte-clean. Recommended; confirm it does not upset any parser.
+- `-a` as the short flag for `--all` does not currently collide with anything on
+  this command (`-d`, `-n` are taken), but check the global flag set.
+- The instruction text in `config.yaml`'s "Issue Tracker Discovery" sections and
+  `docs/templates/AGENTS.md` should mention `--all` once this lands, so agents
+  know how to get the full list.
+
+### Scope
+
+Small (one CLI file, ~40 lines plus tests).

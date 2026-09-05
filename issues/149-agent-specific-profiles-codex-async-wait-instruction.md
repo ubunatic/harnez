@@ -64,3 +64,101 @@ shape, motivating a real per-agent profile mechanism rather than another shared-
 - Building a general templating/inheritance system across all five agent targets — start with the
   minimum needed to scope one instruction to one agent; generalize later if a third use case shows
   the pattern repeating.
+
+---
+
+## Implementation Plan
+
+### Key structural finding (research, 2026-09-04)
+
+There is currently **no per-agent instruction file at all**. `apply.go:606-650` applies
+`agents_md.global.sections` to a `ruleTargets` list that is exactly:
+
+1. `fsutil.ExpandHome(cfg.AgentsMD.Global.Target)` → `~/.claude/CLAUDE.md`
+2. `primeAgentRoot(cfg)/AGENTS.md` → `~/.prime/agent/AGENTS.md` (only if the root exists)
+
+and then symlinks `~/AGENTS.md → ~/.claude/CLAUDE.md` (`config.yaml:301-302`, verified on disk).
+Codex and Gemini read that same symlinked file, so *today the Claude file and the Codex file are
+literally the same bytes*. Per-agent scoping therefore cannot be done by filtering sections into
+existing targets — it needs a **new, agent-owned target file** that only that agent reads. Codex
+already has a config root (`~/.codex/`, with a `rules/` dir and `config.toml`) and harnez already
+addresses it (`codex_skills_target`, `codex_hooks_target`), so the plumbing precedent exists.
+
+### Steps
+
+1. **Config schema** (`internal/claude/config.go`): add to `AgentsMD`:
+   ```go
+   Agents map[string]AgentsMDTarget `yaml:"agents"`
+   ```
+   Reuse `AgentsMDTarget` verbatim (it already carries `Target`, `Symlink`, `Sections`) rather
+   than inventing a new struct. Map key = agent id (`codex`, `claude`, `agy`, `gemini`, `prime`),
+   matching the `AgentID` vocabulary `internal/usage` already uses.
+
+2. **Apply pass** (`internal/claude/apply.go`): add an `agents_md.agents` loop directly after the
+   existing `Global` block (~line 650). It is a near-copy of the global loop: for each entry,
+   expand `Target`, run `applySectionMD(target, s.Name, s.Content)` per section, honour the same
+   `s.RateFeedback && disableRateFeedback` → `markdown.Clean` removal path, then `printResult` /
+   `addStat`. Skip an entry whose parent dir does not exist (same posture as `primeAgentRoot`
+   returning "" — do not create `~/.codex` for a user who does not run Codex).
+
+3. **Config content** (`config.yaml`, after the `agents_md.global` block): add
+   ```yaml
+   agents:
+     codex:
+       target: ~/.codex/AGENTS.md
+       sections:
+         - name: Background Job Waiting
+           content: |
+             ...
+   ```
+   Content per scope item 2: state that Codex has no host-notified subagent-completion callback,
+   so a host must not spin a tight poll loop; prescribe the least-bad supported primitive
+   (`collaboration.spawn_agent` + a bounded/backoff check, or an explicit user-visible handoff —
+   see [[156]] for what the Agents view actually shows). Verify the exact tool names against a
+   live Codex environment before wording this as fact; do not invent a primitive.
+
+4. **`clean` / `diff` / `status` parity** — the three commands that enumerate managed sections
+   must learn about the new map or they will report drift and fail to clean:
+   - `apply.go:848` (diff block) and `apply.go:922` (clean block): mirror the same loop.
+   - `internal/claude/status.go:70-84`: add agent targets to `ruleTargets` and the section census
+     (`status.go:42-43` prints `N global, N local` — extend to include agent counts).
+
+5. **Tests** (`internal/claude/apply_test.go` or a new `agents_profile_test.go`): assert with a
+   temp HOME that (a) an `agents.codex` section lands in `~/.codex/AGENTS.md`, (b) it does **not**
+   appear in `~/.claude/CLAUDE.md` or `~/.prime/agent/AGENTS.md` — this is scope item 3's
+   verification, and it must be a real negative assertion, not just a positive one, (c) apply is
+   idempotent on a second run, (d) `clean` removes the agent section.
+
+6. **Docs**: `docs/CLIDesign.md` is the right home (it already owns the apply-vs-init target
+   table). Add a short subsection under the command-responsibilities table describing
+   `agents_md.agents` as the place for agent-differentiated content, with the rule: *shared
+   behaviour goes in `global`; a correction that would be inert or wrong for another agent goes in
+   `agents.<id>`*. Also add the new file to `docs/CLIDesign.md`'s target listing.
+
+### Design decisions / tradeoffs
+
+- **New file per agent, not filtered sections in a shared file.** The symlink makes filtering
+  impossible without breaking `~/AGENTS.md → ~/.claude/CLAUDE.md`, and breaking that symlink is a
+  much larger behavioural change than adding one small extra file.
+- **Reuse `AgentsMDTarget`, not a new `AgentProfile` type.** Scope explicitly forbids building a
+  templating/inheritance system; a map of the existing struct is the minimum that works.
+- **Map, not a repeated list with an `agent:` field** — makes "one profile per agent" structurally
+  enforced and gives config authors an obvious lookup key.
+- **Additive only**: nothing about `global`/`local` changes, so an unset `agents:` key is a no-op.
+
+### Risks / open questions
+
+- **Does Codex actually read `~/.codex/AGENTS.md`?** This is the load-bearing assumption. Verify
+  empirically (write a marker line, start a fresh Codex session, ask it to quote the line) before
+  merging — if Codex only reads `~/AGENTS.md`, the whole approach needs a different anchor (e.g.
+  a `~/.codex/rules/harnez.rules` entry, since `~/.codex/rules/` exists on this machine).
+- Content accuracy for the Codex async primitive is unverified; the mechanism can land before the
+  content is final, but do not ship guessed tool names.
+- Adding a fourth managed instruction file increases the surface `status`/`diff`/`clean` must keep
+  in sync — step 4 is not optional cleanup, it is part of the feature.
+
+### Scope estimate
+
+**Medium** — the mechanism itself is small (one struct field, one apply loop, three parity
+updates, tests), but the parity work across apply/diff/clean/status plus the empirical Codex
+verification is what pushes it past "small".

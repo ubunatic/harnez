@@ -88,3 +88,129 @@ harnez telemetry classify --dry-run
   - Forced reclassification overwrite when `--reclassify=true`.
   - Batch write-back transaction safety.
 - [ ] Verify `make check` and `make install`.
+
+---
+
+## Implementation Plan
+
+### Current state (verified)
+
+- `internal/telemetry/schema.go`: `schemaVersion = 2`; `schemaDDL` defines
+  `tool_calls` (no `activity_category`) plus the two additive cache tables
+  (`note_sanitization_cache`, `note_category_cache`), both of which the file's
+  own comments call out as *not* needing a version bump because
+  `CREATE TABLE IF NOT EXISTS` applies them to an existing file.
+- `internal/telemetry/telemetry.go` `Open` runs `schemaDDL` then
+  `checkAndStampSchemaVersion(sqlDB, path, tableExisted)`. Its comment documents
+  the real 2026-08-31 incident where a stale-shape file got auto-stamped: the
+  guard's whole purpose is to fail loudly and tell the user to delete the file
+  rather than silently accept a mismatched column set. **An added column
+  interacts directly with this guard** — see Design decisions.
+- `ClassifyNotes(ctx, db, calls, classifier, now)` in `classify.go` already
+  implements the exact Tier1→Tier2 cache→Tier3 batch pipeline the ticket
+  describes, including dedupe and `note_category_cache` write-back. The backfill
+  engine should call it, not reimplement it.
+- `Filter` in `query.go` already has `Since`/`Until` (`created_at >= / <`), so
+  `--days` needs no new filter plumbing — just `Since = now.AddDate(0,0,-days)`.
+- `ToolCall` in `types.go` has no `ActivityCategory` field; `Query`'s SELECT
+  column list would need it.
+
+### Steps
+
+1. **Schema** (`internal/telemetry/schema.go` + `telemetry.go`)
+   - Add `activity_category TEXT NOT NULL DEFAULT ''` to `schemaDDL`'s
+     `tool_calls`, plus
+     `CREATE INDEX IF NOT EXISTS idx_tool_calls_activity_category ON tool_calls (activity_category);`.
+   - Bump `schemaVersion` to `3` with a comment entry, and add a narrow additive
+     migration in `Open`: when the table pre-existed and lacks the column, run
+     `ALTER TABLE tool_calls ADD COLUMN activity_category TEXT NOT NULL DEFAULT '';`
+     before `checkAndStampSchemaVersion`, then let the stamp proceed. Detect via
+     `PRAGMA table_info(tool_calls)`, not by parsing an error string.
+2. **Read path** (`types.go`, `query.go`, `insert.go`)
+   - Add `ActivityCategory string` to `ToolCall`; include the column in `Query`'s
+     SELECT and row scan. Leave `Insert` alone for now — new rows keep writing
+     `''` and are picked up by the next backfill (see open questions).
+3. **Backfill engine** — new `internal/telemetry/backfill.go`:
+   - `ClassifyBackfillOptions{Since time.Time; Reclassify, DryRun bool; Classifier NoteBatchClassifier}`.
+     Drop the ticket's separate `Days int` field — resolve days→`Since` at the CLI
+     layer so the engine has one unambiguous time input.
+   - `ClassifyBackfillReport{TotalScanned, UpdatedRows, Tier1, Tier2Hits, Tier3, int; Duration time.Duration}`.
+   - `func (d *DB) BackfillClassifications(ctx, opts) (ClassifyBackfillReport, error)`:
+     select candidate rows (`Query` + an `activity_category = ''` clause when
+     `!Reclassify`), hand them to `ClassifyNotes`, then write back in one
+     transaction with a single prepared
+     `UPDATE tool_calls SET activity_category = ? WHERE id = ?`. `DryRun` skips
+     the transaction entirely but still fills the report.
+   - Chunk the scan (e.g. 500 rows) so a multi-year database does not load
+     entirely into memory, and so a Tier-3 failure mid-run leaves earlier chunks
+     committed rather than losing everything.
+   - Tier counters: `ClassifyNotes` currently returns only categories, not which
+     tier produced each. Either extend it with a parallel `[]tier` return (small,
+     contained change) or drop the per-tier fields from the report. Recommend
+     extending — the tier split is the main thing that tells a user whether their
+     local model actually ran.
+4. **CLI** — new `cmd/harnez/classify.go` registering `harnez usage classify`
+   under the existing `usageCmd` (alongside `export`), *not* a new top-level
+   `harnez telemetry` group: `usage export --classify` already lives there, and a
+   new top-level noun for one command adds a help-surface entry for nothing.
+   Flags: `--reclassify`, `--days=N`, `--since=<duration|date>`, `--dry-run`,
+   `--db=<path>`. `--days` and `--since` are mutually exclusive (error, do not
+   guess). Print the report as a short human summary; add `--json` only if asked.
+5. **Tests**
+   - `internal/telemetry/backfill_test.go` against a `t.TempDir()` db: date
+     filtering; idempotence (a second non-reclassify run reports 0 updated rows);
+     `--reclassify` overwriting an existing category; `DryRun` leaving the table
+     unchanged while reporting a non-zero would-update count; a stub
+     `NoteBatchClassifier` that errors mid-run leaving earlier chunks committed
+     and no partial row corrupted.
+   - Migration test: create a db with the v2 DDL, insert a row, reopen with the
+     new code, and assert the column exists, the old row survives with `''`, and
+     `PRAGMA user_version` is 3.
+   - `cmd/harnez/classify_test.go`: flag validation, `--days`+`--since` conflict.
+6. `go test ./...`, `make check`, `make install`, then a real
+   `harnez usage classify --dry-run` against `~/.harnez/tool_catalog.sqlite`.
+
+### Design decisions / tradeoffs
+
+- **A real `ALTER TABLE` migration, against the repo's stated "no migration
+  framework, just delete the file" bias.** That policy is defensible for a
+  *cache*, but this ticket's entire premise is preserving historical rows —
+  telling users to delete the database to get a new column would destroy the data
+  the backfill exists to enrich. The compromise: one hand-written additive
+  `ADD COLUMN` guarded by `PRAGMA table_info`, explicitly *not* a framework, with
+  a comment saying so. Worth confirming with the user before implementing, since
+  it edits the one file that argues against exactly this.
+- **Reuse `ClassifyNotes` rather than reimplementing the tier ladder** in the
+  backfill engine — the ticket's §2.2 pseudo-pipeline restates logic that already
+  exists and would drift.
+- **Denormalized column alongside the hash cache, not instead of it.** The cache
+  stays authoritative per note text; the column is a materialized per-row copy so
+  SQL/analytics/SQLite export (issue 208) can group by category without a join.
+  Accept that the two can disagree after a reclassify until the next backfill.
+- **`harnez usage classify`, not `harnez telemetry classify`** — keeps the CLI
+  surface flat and colocates it with `usage export --classify`.
+
+### Risks / open questions
+
+- **Should `Insert` populate `activity_category` at write time** (running Tier 1,
+  which is pure and cheap, on every insert)? That would make backfill a
+  one-time/occasional operation instead of a permanent chore, but it puts work on
+  the hot hook path. Recommend Tier 1 at insert time in a follow-up ticket, not
+  here.
+- Tier 3 runs a local model over potentially thousands of distinct notes on the
+  first full backfill; wall-clock could be minutes. Needs progress output
+  (per-chunk line) and respect for `ctx` cancellation so Ctrl-C leaves a
+  consistent db.
+- Interaction with issue 208: if 208 lands first its SQLite writer should read
+  the new column; if this lands first, 208's export gains it for free. Neither
+  blocks the other, but whichever is second should check.
+- `--reclassify` over a large window will re-hit the cache, not the model, unless
+  the cache is also invalidated. Decide whether `--reclassify` implies "ignore
+  Tier 2 cache" (probably yes, since the stated use case is "after rule/prompt
+  updates") and document it — this is the ticket's least-specified behaviour.
+
+### Scope
+
+**Large** — schema migration, a new engine, `ToolCall`/`Query` changes, a new CLI
+command, and a change to `ClassifyNotes`' return shape. Splitting the schema +
+read-path change (steps 1-2) into its own commit before the engine is advisable.

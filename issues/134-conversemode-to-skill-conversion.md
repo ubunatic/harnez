@@ -76,3 +76,60 @@ it fires (description: "user asks to speed up responses / reduce verbosity
 
 No longer blocked — [[130]] item 7's Skill infra and the design ambiguity
 are both resolved. Ready to pick up whenever scheduled.
+
+---
+
+## Implementation Plan
+
+**Important finding that changes the scope**: a `mode` Skill entry already
+exists in `config.yaml`'s `skills:` list (line ~217, `file: commands/mode.md`)
+and is already installed to `claude_skills_target` — it is live in Claude Code's
+skill list today. So the infrastructure work is done; what is missing is purely
+the *trigger surface*. Its current description —
+`"Switch ConciseMode terseness level (lite, std, ultra, off) and sync AGENTS.md"` —
+is command-shaped: it fires when the user types `/mode`, but not when the user
+says "you're too verbose", "keep it short", or "this local model is slow".
+
+### Design decision
+
+**Amend the existing `mode` entry's description; do not add a second
+`concise-mode` skill.** Two skills over the same mechanism compete for the same
+trigger, and the loser is invisible — exactly the buried-directive failure mode
+128 documents. The Skill body (`commands/mode.md`) already does the right thing:
+it invokes `harnez mode <tier>` and points at `@docs/practices/ConciseMode.md`
+without duplicating the tier table, satisfying this ticket's Scope bullets 2
+and 3. `harnez mode`'s `AGENTS.md`/`AGENTS.local.md` rewrite stays untouched, per
+the settled hybrid verdict.
+
+### Steps
+
+1. `config.yaml`, `skills:` → `mode` entry: rewrite `description:` to be
+   trigger-shaped, in the same style as the `tool-feedback-protocol` entry
+   (which names its trigger conditions explicitly). Something like:
+   > Use when the user asks for shorter/faster replies, says responses are too
+   > verbose, mentions slow inference or low-TPS/local hardware, or types
+   > `/mode` — switch the ConciseMode terseness tier (lite, std, ultra, off) by
+   > running `harnez mode <tier>`, which also persists the tier into AGENTS.md
+   > so other sessions and agents inherit it.
+2. `commands/mode.md`: add two lines at the top of `## Behavior` stating the
+   natural-language triggers, so the loaded body reinforces the description.
+   Do not expand it further — the doc's brevity is a feature.
+3. `harnez apply` on a scratch HOME (or `scripts/smoke-test.sh`) and confirm
+   `harnez diff` is clean afterward.
+4. `go test ./...` — check whether `internal/claude/claudeskills_test.go` asserts
+   on the `mode` skill's description text; update the fixture if so.
+5. Tick Acceptance Criteria 2–4 and close, recording in Notes that the decision
+   was "amend the existing entry", not "add a new skill".
+
+### Risks / open questions
+
+- A broad trigger description can cause spurious activation (any mention of
+  "slow" firing the skill). Keep the trigger list to the four concrete phrasings
+  above rather than a general "verbosity" concept.
+- If the user genuinely wants a *separate* named skill for discoverability
+  (`/concise-mode`), that is a one-line config addition later — but note it would
+  need a distinct body, not a duplicate of `commands/mode.md`.
+
+### Scope
+
+Small (one config description, two doc lines, one possible test fixture).

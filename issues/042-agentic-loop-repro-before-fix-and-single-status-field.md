@@ -124,3 +124,54 @@ committing to implement it as part of 042.
   fixes (the deadlock trigger, the bucket radius, the stale Status line)
   are already resolved there; this ticket is purely about promoting the
   general lesson into the shared harness practice doc.
+
+---
+
+## Implementation Plan
+
+Verified still unaddressed: `docs/practices/AgenticLoop.md` (258 lines) has no
+occurrence of "repro", and its only root-cause line is §4 item 3 (friction
+reporting), which is a different concern. `commands/sprint.md` (62 lines)
+summarizes the phases inline rather than only linking them, so both files need
+the edit or they will drift.
+
+### Steps
+
+1. `docs/practices/AgenticLoop.md`, **Phase 2** (§2, starts line ~100): add one
+   new bullet at the end of the Mechanics list — the §2.1 text of this ticket,
+   trimmed to 3–4 lines. Keep the wording "a fix can pass every pre-existing
+   gate and still not address the defect" — that is the load-bearing part.
+2. `docs/practices/AgenticLoop.md`, **Phase 5** (§2, starts line ~138): add one
+   bullet under the tracker-sync mechanics with §2.2's text, trimmed to 2 lines
+   ("check the whole file for more than one status-bearing field; prefer exactly
+   one per file in the local template").
+3. `commands/sprint.md`: add a one-line echo of each to its Phase 2 (line ~32)
+   and Phase 5 (line ~55) blocks — a pointer, not a restatement, so the practice
+   doc stays canonical.
+4. Verify with `harnez diff` (and `harnez apply` on a scratch HOME, or
+   `scripts/smoke-test.sh`) that the bundled doc copies cleanly; no Go changes,
+   so `go test ./...` is a no-op gate but should still be run.
+5. Do not restructure the doc, do not add a new top-level section, and do not
+   implement §2.3's `harnez status` linter — explicitly out of scope here; if it
+   is wanted, file it separately after this lands.
+
+### Design decisions
+
+- Both additions go in as bullets inside existing Mechanics lists rather than as
+  new sub-headings: the doc is already 6 sections deep and adding headings for
+  two rules inflates the very instruction stack 128 is auditing.
+- The Phase 2 rule is scoped to *defect-shaped* tickets explicitly, so
+  feature work is not burdened with a "produce a baseline number first" step it
+  does not need.
+
+### Risks / open questions
+
+- Length: this doc is bundled into every managed project's context. Cap the two
+  additions at ~6 lines total; if the drafted text runs longer, cut the
+  trafficsim narrative and keep only the rule.
+- Sibling projects that already copied `AgenticLoop.md` locally will show drift
+  until `harnez init`/`/harnez-sync` reconciles them — expected, not a blocker.
+
+### Scope
+
+Small (docs-only, two files, ~6 added lines).

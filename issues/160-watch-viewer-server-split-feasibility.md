@@ -132,3 +132,91 @@ doesn't mix rendering concerns with collector-architecture changes.
       (yes — HTML rendering is display, stays out of `agent-collector`).
 - [ ] Decide whether to proceed to an implementation ticket, and whether to stage it (terminal
       split first, HTML renderer second) or attempt both together (user call, not made here).
+
+---
+
+## Implementation Plan
+
+This is a feasibility ticket whose research ACs are already checked. The only open AC is the
+**proceed/stage decision, which is explicitly a user call**. So this plan covers (a) closing the
+assessment out and (b) the concrete staging sketch the user needs in order to make that call — not
+an implementation to start now.
+
+### Line-number corrections (2026-09-04 re-verification)
+
+The Findings section's references have drifted; correct them when this ticket is next touched:
+
+| Ticket says | Actual (`internal/usage/watch.go`, 2688 lines) |
+|---|---|
+| `screenFrame` at 330-334 | `type screenFrame` at **337**, `paint` at **354** |
+| `dispatchWatchKey` at 474 | **481** |
+| `RunWatchWithOptions` at 1718 | **2176** |
+| — | `buildWatchFrameAt` at **1632** |
+
+### One finding to add before deciding
+
+`internal/rograph/row.go` is **already renderer-agnostic**: `PadLabel` and `RowLayout` are pure
+width arithmetic returning `(barWidth, keepTrailing)` with no ANSI. The ANSI baking is confined to
+`RenderBar` (`options.go:180`, escapes at 235) and `RenderSparkline` (`options.go:257`, escapes at
+290-304). That narrows Finding 2's "real refactor of `internal/rograph`" claim considerably: the
+*geometry* layer already separates cleanly; what is entangled is the glyph+color stringification
+and `watch.go`'s ~15 `format*Line` builders that `Sprintf` those strings together. Worth recording,
+because it lowers the estimated cost of Phase 1 relative to the current verdict.
+
+### Steps to close this ticket
+
+1. **Add the corrected line numbers and the `row.go` finding above** into the Findings section
+   (or leave them here — they are recorded either way).
+2. **Enumerate the actual blast radius** so the user's decision is cost-informed, not vibes-based:
+   `grep -c "rograph\." internal/usage/watch.go` and a list of the `format*Line` functions that
+   would need to emit a model instead of a string (`formatAllUsageTableLine` :762 and its two
+   variants :766/:777, `formatGPULine` :1100, `formatGPUMemoryLines`, …). One paragraph, one list.
+3. **Present the staged option to the user** as the ticket's Feasibility Verdict already
+   recommends, with the two phases costed separately:
+   - **Phase 1** — introduce a structured row model (`Row{Label string, Bars []Bar, Sparkline
+     []float64, Trailing string}`) produced by `buildWatchFrameAt`, with the existing ANSI painter
+     as its only renderer. `screenFrame` becomes `[]Row` + dims; `paint` becomes the ANSI renderer.
+     Unblocks the original rebuild-without-restart goal (terminal viewer + server over a local
+     socket, serializing `[]Row` instead of pre-baked strings). Independently valuable even if
+     Phase 2 never happens.
+   - **Phase 2** — an HTML renderer over the same model, served over HTTP by the same server
+     process (not `agent-collector` — per the standing 2026-09-01 decision), with browser controls
+     dispatched through the already-pure `dispatchWatchKey` (`watch.go:481`) fed from a
+     transport-agnostic input event instead of a raw terminal byte.
+4. **Record the decision in this ticket**, tick the last AC, and set Status to
+   `Closed — assessment complete, implementation tracked in NNN` (filing the implementation
+   ticket(s) only if the user says proceed). If the user defers, mark
+   `Blocked — awaiting proceed decision` rather than leaving it plain Open.
+
+### Design decisions / tradeoffs (for the eventual implementation ticket)
+
+- **Stage it.** Phase 1 has one real consumer (the terminal) that can validate the model
+  immediately; Phase 2 has zero consumers until it is built. Building both at once means designing
+  a model against a hypothetical second renderer — the classic premature-abstraction trap.
+- **Regression guard is the deciding practical risk**, not the refactor itself: `--watch` output is
+  ANSI-exact and easy to break invisibly. There is already a pty canary (`canary-watch-pty`) and
+  `internal/rograph` has real tests (`options_test.go`, `rograph_test.go`, `row_test.go`) — Phase 1
+  should start by capturing golden ANSI frames through the existing pty harness, then refactor
+  until the goldens still match byte-for-byte. Do that first, not last.
+- **Do not fold into `agent-collector`** — decision already made and re-confirmed after the
+  rescope; the implementation ticket must restate it so it is not silently relitigated.
+- Order relative to [[161]]: 161 moves the remote-Load `ControlMaster` out of
+  `RunWatchWithOptions`, which shrinks the very function Phase 1 restructures. **Do 161 first** —
+  otherwise both tickets edit the same lifecycle wiring.
+
+### Risks / open questions
+
+- Sequencing conflict with [[161]] (above) — the single most actionable scheduling note here.
+- `buildWatchFrameAt` takes 12 parameters (`watch.go:1632`); introducing a row model without also
+  addressing that signature will make the refactor uglier than the current code. Decide up front
+  whether to bundle the params into an options struct as part of Phase 1 or explicitly defer it.
+- Phase 2's value is unvalidated — no one has asked for the browser view except as an idea. It may
+  be worth building Phase 1 and stopping.
+
+### Scope estimate
+
+- Closing **this** ticket (steps 1-4): **small** — a research write-up and a user decision.
+- Phase 1, if approved: **medium** (row model + ANSI renderer + golden-frame guards, ~15 line
+  builders touched, one file).
+- Phase 2, if approved: **large** (HTML renderer, HTTP transport, input-event abstraction, plus a
+  second UI to keep in sync with the terminal one indefinitely).

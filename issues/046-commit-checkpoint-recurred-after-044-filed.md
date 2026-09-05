@@ -63,3 +63,80 @@ This sharpens 044's fix rather than replacing it:
 3. No code changes. Verify by re-reading `docs/AgenticLoop.md` for a
    concrete, non-optional trigger point rather than general guidance.
 4. Close together with 044 once both land.
+
+---
+
+## Implementation Plan
+
+### Current state (verified 2026-09-04)
+
+- **044 is Closed** — its fix landed: `docs/lang/Git.md:17` now carries the
+  "Ask-first harness interaction" bullet (ask the user *at session kickoff*
+  for standing commit authority).
+- `docs/practices/AgenticLoop.md:96` already mirrors that in the sprint
+  kickoff mechanics ("Establish commit authority upfront…").
+- **The gap this ticket names is still open**: both existing notes fire at
+  *kickoff*. Neither Phase 3 (`AgenticLoop.md:111-129`) nor Phase 4
+  (`:130-137`) nor Phase 5 (`:138-149`) contains a checkpoint that fires at
+  the *end* of verified work. Phase 5 ends with "Prepare clean, conventional
+  commit messages" — preparing a message is not the same trigger as
+  "uncommitted verified work is a finding, ask now."
+
+So the residual scope is exactly step 2 of §3 above: the structural trigger,
+docs-only, no code.
+
+### Steps
+
+1. `docs/practices/AgenticLoop.md`, **Phase 3 mechanics** (after the Review
+   Checklist block, ~line 129): add a closing mechanic making the commit
+   question part of *leaving* Phase 3, not optional courtesy — e.g.
+   "**Exit condition**: Phase 3 is not complete until reviewed, verified work
+   is either committed or the user has been explicitly asked to authorize the
+   commit. Under an ask-first harness with no standing authority from kickoff,
+   asking *is* the exit action — do not carry a clean, reviewed diff into
+   Phase 4."
+2. Same file, **Phase 5 mechanics** (~line 140, alongside the existing
+   `harnez status` bullet): add "Run `git status` before writing the retro or
+   session story — uncommitted reviewed work is itself a retro finding, not a
+   background condition."
+3. Same file, **section 4 Anti-Patterns** (~line 237, next to the existing
+   *Blind Revert of Failed Work* bullet): add
+   "❌ **Reviewed-But-Uncommitted Carryover**: finishing a review gate and
+   moving on (retro, story, `/compact`, next ticket) with verified work still
+   in the working tree, waiting for the user to notice. Two occurrences in one
+   `weg` session (issues 044, 046)."
+4. Do **not** re-edit `docs/lang/Git.md` — 044's note is landed and correct;
+   this ticket deliberately adds the trigger elsewhere rather than
+   strengthening the passive note.
+5. Re-sync the copyable doc: `harnez apply` (installs to `~/.claude/docs/`),
+   plus `harnez init --docs AgenticLoop` in downstream projects on their next
+   sync. No `go` changes, so no `make install` needed.
+6. Verify by re-reading the three edited spots: the Phase 3 wording must be a
+   non-optional exit condition ("is not complete until"), not advice
+   ("consider asking") — that distinction is the entire point of this ticket.
+7. Close 046 (044 is already Closed; no joint close needed anymore).
+
+### Design decisions / tradeoffs
+
+- **Three placements, not one.** Kickoff (already landed) covers "may I",
+  Phase 3 exit covers "now is the moment", Phase 5 covers "did we actually".
+  This ticket's evidence is that a single passive placement did not hold, so
+  redundancy across trigger points is the deliberate fix, not bloat.
+- **Docs-only, no enforcement hook.** A `Stop`-hook that greps `git status`
+  for uncommitted tracked changes was considered and rejected for now: it
+  would fire on every session including deliberate WIP, and this repo prefers
+  a doc trigger before a mechanism. If 046-style recurrence shows up a third
+  time, file a follow-up for the hook rather than pre-building it.
+
+### Risks / open questions
+
+- Doc-trigger durability is unproven — the same failure mode could recur
+  despite three placements. Mitigation is the recurrence itself becomes the
+  evidence for escalating to a hook.
+- Wording must not conflict with kickoff authority: if the user granted
+  standing commit permission at kickoff, the Phase 3 exit action is *commit*,
+  not *ask*. State both branches explicitly.
+
+### Scope
+
+**Small** — three bullet-sized edits to one doc plus a resync.

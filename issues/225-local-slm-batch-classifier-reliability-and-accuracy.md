@@ -132,3 +132,111 @@ Not yet scoped — file first, decide direction in a follow-up pass. At minimum:
    public visual analytics," given 212's premise that the taxonomy is supposed to be safe/low-risk
    even when wrong — or whether accuracy needs independent verification before `--classify` should
    be recommended for general use.
+
+---
+
+## Implementation Plan
+
+§5 already closed the reliability half in code. What remains is (a) a measured
+accuracy baseline, and (b) the cache-invalidation gap from §3 that will bite
+again on the next model/prompt change. Both are cheap; the open *decision* in §7
+item 2 is the only thing that needs the user.
+
+### Part 1 — Cache versioning (do first; it unblocks safe experimentation)
+
+Without this, every accuracy experiment either contaminates the real
+`~/.harnez/tool_catalog.sqlite` or requires another hand-run
+`DELETE FROM note_category_cache`.
+
+1. **`internal/telemetry/classify.go`** — introduce
+   `const classifierVersion = "<model>/<protocol>/<prompt-rev>"`, e.g.
+   `"qwen3-4b-instruct-2507-q4/session-v1"`. Bump it by hand whenever
+   `defaultClassifierModel`, `classifyPromptTemplate`, or `ClassifyBatch`'s
+   protocol changes.
+2. **Same file, `ClassifyNotes`** — change the Tier 2 cache key from
+   `sha256Hex(c.Note)` to `sha256Hex(classifierVersion + "\n" + c.Note)`.
+   Introduce a `cacheKey(note string) string` helper so both the Tier 1 miss
+   path (~line 245) and the Tier 3 write path use one definition.
+   Do **not** add a `classifier_version` column: `schema.go`'s `schemaVersion`
+   has no migration framework (a bump forces users to delete their DB — see
+   `query.go`'s issue 226 note making exactly this call), and folding the version
+   into the hash gets the same invalidation for free with zero schema change.
+   Stale rows simply become unreachable.
+3. **Optional, same change** — a `DeleteStaleCachedCategories` helper or a
+   `harnez usage export --reclassify` flag that clears rows whose key no longer
+   matches, so unreachable entries don't accumulate forever. Given the table is
+   a few hundred rows, defer this unless the user asks; note the growth in the
+   schema comment instead.
+4. **`internal/telemetry/schema.go`** — update the `note_category_cache` comment
+   to state that `raw_hash` is `sha256(classifierVersion + "\n" + note)`, not the
+   bare note hash, and why (this is the exact gotcha §3 documents).
+5. **Tests** (`internal/telemetry/classify_test.go`) — assert that two different
+   `classifierVersion` values produce different cache keys for the same note, and
+   that a cached entry written under version A is *not* returned under version B
+   (i.e. the note goes back to Tier 3). This is the regression that §3's manual
+   fix left unguarded.
+
+### Part 2 — Accuracy baseline (§7 item 1)
+
+6. Build a **hand-labeled sample**: pull ~100 distinct Tier-1-miss note texts
+   from the real DB (deterministic sample — order by hash, take every Nth — so
+   it is reproducible), and record them with a human/stronger-model label in a
+   committed fixture, e.g. `internal/telemetry/testdata/note_labels.golden`
+   (TSV: `note<TAB>category`). Sanitized notes only; check the existing
+   `note_sanitization_cache` path is applied before committing anything to the
+   repo, since these are real command notes.
+7. **`internal/telemetry/classify_live_test.go`** — add
+   `TestDefaultLocalClassifier_AccuracyBaseline`, opt-in behind the existing
+   `RUN_LIVE_CLASSIFY_TEST=1` guard (never in `go test ./...`). It runs the
+   fixture's notes through `DefaultLocalClassifier` against a live server and
+   reports overall agreement plus a per-category confusion breakdown. It should
+   **report, not gate** at first — assert only a loose floor (e.g. >= 60%
+   agreement) so it fails on catastrophic regression without becoming flaky.
+8. **`docs/studies/<date>-classifier-accuracy-baseline.md`** — record the
+   measured number, the model, the protocol version, and the confusion table, so
+   the few-shot and larger-model experiments in §6 have something to beat.
+   Cross-link from this ticket.
+
+### Part 3 — The decision in §7 item 2
+
+9. Once the number from step 8 exists, put it to the user: is measured accuracy
+   `X%` acceptable for `activity_category`'s stated "safe for public visual
+   analytics" use (212's premise being that the taxonomy is low-risk even when
+   wrong)? Only after that answer should `--classify` be documented as
+   generally recommended, or gated behind a caveat in
+   `docs/` / `harnez usage export --help`. Do not pre-empt this in code.
+
+### Design decisions / tradeoffs
+
+- **Version-in-the-hash over a schema column.** The column is the "obvious"
+  design but collides with this codebase's explicit no-migrations invariant and
+  would cost every user their telemetry DB. The hash prefix is one line and
+  strictly additive. Cost: unreachable rows accumulate (bounded, small).
+- **Accuracy test is opt-in and advisory.** A live local model in CI is not
+  reproducible; a hard accuracy assertion would flake on load. Report the number,
+  assert only a floor.
+- **Deterministic sample, committed fixture.** Without a fixed sample, "accuracy
+  improved" is unfalsifiable across sessions.
+- **Do not touch `batchSize` or the session protocol.** §5 measured zero format
+  failures at 60; §6's "can it go higher" is a separate experiment with its own
+  risk (quality drift over a long session) and should not ride along.
+
+### Risks / open questions
+
+- **Sanitization**: committing real note text as a test fixture puts production
+  command strings in git. Verify the sanitizer covers them, or hand-review all
+  ~100 lines before committing. If either is uncomfortable, keep the fixture
+  local-only (gitignored) and commit just the measured summary in the study doc.
+- **Ground-truth labeling is itself subjective** — §1's `"clean success"` case
+  shows generic notes have no obviously correct label. Expect a ceiling well
+  below 100%; the study doc should record the labeler's tie-breaking rule.
+- Bumping the cache key invalidates all ~180-260 existing entries on first run
+  after upgrade, forcing one slower re-classify. Acceptable and self-healing, but
+  worth a line in the release note.
+- Few-shot examples (§6) may be the cheapest accuracy win, but should be measured
+  *against* the baseline from Part 2 — sequence it after, in its own ticket.
+
+### Scope
+
+Part 1: **small**. Part 2: **medium** (dominated by hand-labeling, not code).
+Part 3: a decision, not work.

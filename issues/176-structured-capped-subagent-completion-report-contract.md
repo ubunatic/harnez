@@ -80,3 +80,88 @@ mechanisms' scope.
 - No code changes required for the initial doc-convention version; validate by dispatching a real
   subagent under the new convention and confirming its `<result>` stays within the target line
   ceiling while the ticket file still carries full detail.
+
+---
+
+## 5. Implementation Plan
+
+Doc + prompt-convention change only, per §4. No Go code. The work is small; the value depends
+entirely on the convention being cited from every dispatch site, so the plan is mostly about
+wiring the references, not about writing the doc.
+
+### Step 1 — Write `docs/practices/SubagentReporting.md`
+
+Keep it under ~60 lines — a practice doc that itself blows the context budget would be
+self-refuting. Content:
+
+1. The contract from §2.1 as a literal, copy-pasteable block a dispatch prompt can paste verbatim
+   (fields: files changed as `path:line-range`, commit hashes, test pass/fail counts, spec/doc
+   changes, friction-only-if-nontrivial; 15-20 line ceiling).
+2. The §2.2 rule stated as a directive: detailed findings go in the ticket file, chat carries the
+   pointer. Cite `docs/practices/AgenticLoop.md` Invariant 4.
+3. One "before/after" example — a real multi-paragraph report next to its capped form. This is the
+   part that actually transfers; the field list alone will not.
+4. An explicit non-goal, per §3.2: this is a convention, not a validated schema. Say so, so future
+   readers do not go looking for enforcement that does not exist.
+
+### Step 2 — Register it as a copyable practice doc
+
+Add an entry to `config.yaml`'s `docs.practices` block (alongside `agentic-loop`,
+`issue-tracking`, `concise-mode` at ~line 465-490):
+
+```
+    subagent-reporting:
+      name: "Subagent Reporting Contract"
+      ref: "@docs/SubagentReporting.md"
+      hint: "capped 15-20 line completion report, fixed fields, detail goes to the ticket file"
+      source: docs/practices/SubagentReporting.md
+      target: ~/.claude/docs/SubagentReporting.md
+      local: ./docs/SubagentReporting.md
+      default: false
+```
+
+`default: false` — this is a workflow convention, not something every project should inherit
+unasked, matching how `concise-mode` is registered.
+
+### Step 3 — Wire the references (the step that makes it real)
+
+1. `docs/practices/AgenticLoop.md`: add one line to Phase 1's and Phase 2's mechanics pointing at
+   the new doc for report shape. Do not restate the contract there — a second copy will drift.
+2. `commands/sprint.md`: amend the dispatch instructions (lines ~22 and ~40, advisor and reviewer
+   spawns) to cite the contract.
+3. `commands/fresh-sprint.md`: same at the subagent-spawn step (~line 21). Note §4 of that file
+   already has "Calibrated Friction Reporting" — the new doc's friction field must be phrased to
+   agree with it, not duplicate or contradict it. Check that wording before writing Step 1.3.
+4. `config.yaml`'s `commands:` entries for `sprint` and `fresh-sprint` mirror these files — confirm
+   whether the command content is inlined in `config.yaml` or sourced from `commands/*.md`, and
+   update whichever is authoritative. Getting this wrong means `harnez apply` silently reverts the
+   edit.
+
+### Step 4 — Validate
+
+Per §4: dispatch one real subagent under the new convention on an actual ticket, and check the
+returned `<result>` block against the 15-20 line ceiling. Record the observed line count in this
+ticket. One trial is enough to tell whether the phrasing lands; it is not a statistical claim.
+
+### Key Decisions / Tradeoffs
+
+- **Doc-only first, no `harnez report` command.** §3.1 raises it as a follow-up; keep it there. A
+  storage-backed report command solves queryability, which is not the problem this ticket names —
+  the problem is first-hop context cost, and a command does not reduce that.
+- **Single source, referenced everywhere** rather than the contract text pasted into each skill.
+  Costs an indirection at dispatch time; saves three copies drifting apart.
+- **Accepting unenforceability.** A subagent can ignore the cap. The realistic win is moving the
+  median report from ~5 paragraphs to ~15 lines, not eliminating the tail.
+
+### Risks / Open Questions
+
+- The real failure mode is that dispatch prompts written ad hoc (not via `/sprint`) never cite the
+  doc, so the convention only binds the scripted paths. Mitigation would be putting a one-line
+  version directly in `AGENTS.md` — but that pays a permanent system-prompt cost to fix an
+  occasional one. Worth an explicit decision when this lands; recommend not doing it initially.
+- Step 3.4 is the actual trap: if `config.yaml` inlines command content, editing `commands/*.md`
+  alone does nothing after the next `apply`. Verify with `harnez diff` before committing.
+
+### Scope
+
+**Small** — one ~60-line doc, one config entry, four reference edits, one live validation run.
