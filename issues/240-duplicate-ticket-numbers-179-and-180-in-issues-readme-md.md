@@ -1,6 +1,6 @@
 # 240 — Duplicate ticket numbers 179 and 180 in issues/README.md
 
-**Status**: Open — harnez status catch during 2026-09-05 evergreen review
+**Status**: Closed — resolved in aca4da7
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation
