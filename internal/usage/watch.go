@@ -396,11 +396,15 @@ type watchSections struct {
 	History   bool
 	Processes bool
 	Load      bool
+	Mic       bool
 	Tokens    bool
 }
 
 func defaultWatchSections() watchSections {
-	return watchSections{Claude: true, AGY: true, Codex: true, History: true, Processes: false, Load: true, Tokens: true}
+	// Mic starts off like Processes (issue 244): a small opt-in status box
+	// rather than a permanent panel, per issue 085's "keep it minimal by
+	// default" precedent for this kind of box.
+	return watchSections{Claude: true, AGY: true, Codex: true, History: true, Processes: false, Load: true, Mic: false, Tokens: true}
 }
 
 func compactWatchSections() watchSections {
@@ -577,6 +581,8 @@ func applyWatchSectionKey(sec *watchSections, key byte) bool {
 		sec.Processes = !sec.Processes
 	case "toggle_load":
 		sec.Load = !sec.Load
+	case "toggle_mic":
+		sec.Mic = !sec.Mic
 	case "toggle_tokens":
 		sec.Tokens = !sec.Tokens
 	case "reset_default":
@@ -1187,6 +1193,48 @@ func percent(used, total float64) float64 {
 	return used / total * 100
 }
 
+// buildMicBox renders issue 244's compact panel: the default system
+// microphone's input level and whether anything is currently recording
+// from it. st is resolved once per redraw frame by the caller (see the
+// micStatus comment in buildWatchFrameAt) so the panel-measure/panel-render
+// double-build that every panel gets doesn't spawn the underlying pactl/
+// amixer subprocess twice.
+func buildMicBox(width int, st MicStatus) wbox {
+	title := watchBoxSymbol("mic") + " Mic"
+	return wbox{title: title, lines: buildMicBoxLines(st), width: width}
+}
+
+// buildMicBoxLines renders MicStatus as a single line, or a dim
+// "unavailable" placeholder when no audio interface was found at all
+// (Available == false) — the box itself is never added to the panel list
+// in that case (see buildWatchFrameAt), but this keeps buildMicBoxLines
+// safe to call standalone, e.g. from tests.
+func buildMicBoxLines(st MicStatus) []string {
+	if !st.Available {
+		return []string{ansiDimGrey + "mic unavailable\x1b[0m"}
+	}
+
+	bar := rograph.RenderBar(st.Level, rograph.BarOptions{IncludePercent: true, PercentPrecision: 0})
+
+	recordingWord := "off"
+	if st.Recording {
+		recordingWord = "on"
+	}
+	if st.Backend == "amixer" {
+		// ALSA has no generic "who's holding this device open" signal the
+		// way PipeWire/PulseAudio's source-outputs list does (see
+		// currentMicStatusAmixer) — say so rather than implying "off" is an
+		// actual observation.
+		recordingWord = "n/a"
+	}
+
+	line := fmt.Sprintf("%s   recording %s", bar, recordingWord)
+	if st.Muted {
+		line += ansiDimGrey + "  (muted)\x1b[0m"
+	}
+	return []string{line}
+}
+
 // buildHistoryBox renders a compact 4th panel showing recorded usage history stats.
 func buildHistoryBox(homeDir, historyDir string, width int) wbox {
 	title := watchBoxSymbol("history") + " History"
@@ -1525,6 +1573,10 @@ type WatchOptions struct {
 	ProcCounts    *AgentProcessCount
 	Compact       bool
 	ShowProcesses bool
+	// ShowMic forces the Mic box on at startup (issue 244's `--mic` flag),
+	// the same "explicit request wins over the current preset" role
+	// ShowProcesses plays for Processes.
+	ShowMic bool
 	// ShowControls draws the [?]-triggered Controls overlay (issue 094)
 	// instead of the normal panel grid for this frame.
 	ShowControls bool
@@ -1578,7 +1630,7 @@ func controlsOverlayLines() []string {
 	l = append(l, fmt.Sprintf("  [%s]  All Usage       [%s]  Claude", sym("toggle_all_usage"), sym("toggle_claude")))
 	l = append(l, fmt.Sprintf("  [%s]  AGY             [%s]  Codex", sym("toggle_agy"), sym("toggle_codex")))
 	l = append(l, fmt.Sprintf("  [%s]  History         [%s]  Processes", sym("toggle_history"), sym("toggle_processes")))
-	l = append(l, fmt.Sprintf("  [%s]  Load", sym("toggle_load")))
+	l = append(l, fmt.Sprintf("  [%s]  Load            [%s]  Mic", sym("toggle_load"), sym("toggle_mic")))
 	l = append(l, "")
 	l = append(l, bold("Data rows"))
 	l = append(l, fmt.Sprintf("  [%s]  token velocity / details on agent panels", sym("toggle_tokens")))
@@ -1609,6 +1661,16 @@ func initialWatchSections(opts WatchOptions) watchSections {
 	// entirely (issue 093).
 	if opts.ShowProcesses {
 		sec.Processes = true
+	}
+	// --mic (issue 244) gets the same "explicit request wins at startup"
+	// treatment as --proc above, but deliberately not the further
+	// dispatchWatchKey/cycle_preset reapplication --proc also gets ([m]
+	// re-forces Processes back on after switching presets) — a live
+	// audio-device box is enough of a niche, opt-in addition that keeping
+	// it out of the preset-cycle machinery isn't worth widening
+	// dispatchWatchKey's signature (and every existing call site) for.
+	if opts.ShowMic {
+		sec.Mic = true
 	}
 	return sec
 }
@@ -1771,6 +1833,14 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 			loadSnapshot = &snap
 		}
 	}
+	// The Mic box is local-only (issue 244): a remote host's audio device
+	// isn't observable over the existing --host snapshot machinery, so it
+	// is never built in remote mode, matching Processes'
+	// opt.Host == "" gate on loadSnapshot above.
+	var micStatus MicStatus
+	if sec.Mic && opt.Host == "" {
+		micStatus = CurrentMicStatus()
+	}
 	var procCounts *AgentProcessCount
 	if sec.Processes {
 		procCounts = opt.ProcCounts
@@ -1808,6 +1878,13 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	}
 	if sec.Load {
 		panels = append(panels, panel{"L", func(w int) wbox { return buildLoadBox(w, opt.Host, loadSnapshot) }})
+	}
+	// Only registered when a real audio interface was actually found
+	// (Available) — per issue 244, the box hides itself entirely on a
+	// machine with no usable pactl/amixer backend rather than rendering an
+	// empty or error-y panel just because the user's toggle is on.
+	if sec.Mic && micStatus.Available {
+		panels = append(panels, panel{"M", func(w int) wbox { return buildMicBox(w, micStatus) }})
 	}
 	if opt.RemoteLoadHost != "" {
 		remoteHost, remoteSnap, remoteStreaming := opt.RemoteLoadHost, opt.RemoteLoadSnapshot, opt.RemoteLoadStreaming

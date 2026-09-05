@@ -138,6 +138,7 @@ func main() {
 	var usageWatch bool
 	var usageRaw bool
 	var usageProcesses bool
+	var usageMic bool
 	var usageCompact bool
 	var usageInterval time.Duration
 	var usageHost string
@@ -182,6 +183,7 @@ func main() {
 					Host:           usageHost,
 					Compact:        usageCompact,
 					ShowProcesses:  usageProcesses,
+					ShowMic:        usageMic,
 					RemoteLoadHost: loadWatchHost,
 				})
 			}
@@ -265,6 +267,7 @@ func main() {
 	usageCmd.Flags().BoolVarP(&usageRaw, "raw", "r", false, "print the detailed per-field usage report instead of the compact dashboard")
 	usageCmd.Flags().BoolVarP(&usageProcesses, "proc", "p", false, "show running agent processes panel in the default view / --watch")
 	usageCmd.Flags().BoolVar(&usageProcesses, "processes", false, "show running agent processes panel in the default view / --watch")
+	usageCmd.Flags().BoolVar(&usageMic, "mic", false, "show the microphone level/recording panel in --watch (hidden if no audio interface is found)")
 	usageCmd.Flags().DurationVar(&usageInterval, "interval", usage.DefaultWatchInterval,
 		fmt.Sprintf("refresh interval for --watch (minimum %s, to avoid hammering live quota APIs)", usage.MinWatchInterval))
 

@@ -69,6 +69,13 @@ actions:
     symbol: "⁷"
     category: box
     box: load
+  toggle_mic:
+    title: "Mic"
+    description: "Toggle the microphone level/recording box"
+    keys: ["8"]
+    symbol: "⁸"
+    category: box
+    box: mic
   toggle_tokens:
     title: "Token velocity / details"
     description: "Toggle the token velocity/detail row on agent panels"

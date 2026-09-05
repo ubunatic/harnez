@@ -50,6 +50,7 @@ var validBoxIDs = map[string]bool{
 	"history":   true,
 	"processes": true,
 	"load":      true,
+	"mic":       true,
 }
 
 // decodeSpecKey turns one spec key token into the byte RunWatchWithOptions's

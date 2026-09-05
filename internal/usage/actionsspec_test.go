@@ -179,6 +179,7 @@ func TestSpecDrivenDispatchMatchesDocumentedKeys(t *testing.T) {
 		"history":   func(s watchSections) bool { return s.History },
 		"processes": func(s watchSections) bool { return s.Processes },
 		"load":      func(s watchSections) bool { return s.Load },
+		"mic":       func(s watchSections) bool { return s.Mic },
 	}
 
 	for name, a := range wa.spec.Actions {
