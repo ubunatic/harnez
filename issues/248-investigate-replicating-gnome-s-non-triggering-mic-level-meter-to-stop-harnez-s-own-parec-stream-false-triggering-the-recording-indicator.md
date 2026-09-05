@@ -1,6 +1,6 @@
 # 248 — Investigate Replicating GNOME's Non-Triggering Mic Level Meter to Stop harnez's Own `parec` Stream False-Triggering the Recording Indicator
 
-**Status**: Open — Filed follow-up research ticket on GNOME mic meter mechanism
+**Status**: Closed — Research and live canary confirmed GNOME exemption via application.id=org.gnome.VolumeControl
 **Priority**: P2 (Medium)
 **Severity**: Minor (UX/trust regression, real workaround exists — toggle the Mic box off)
 **Category**: UX / Agentic Ergonomics / Privacy Perception
