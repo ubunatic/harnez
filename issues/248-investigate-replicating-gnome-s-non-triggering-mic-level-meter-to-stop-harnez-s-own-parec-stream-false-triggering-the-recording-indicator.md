@@ -178,5 +178,19 @@ The deterministic companion check is non-audio and safe to run automatically:
 scripts/test-canary-gnome-mic-indicator.sh
 ```
 
-Live indicator results remain intentionally unrecorded until the user runs these phases on the
-target GNOME session.
+## 6. Live Result and Conclusion
+
+The interactive canary was run on the target Fedora GNOME session. Its three synchronized states
+were observed as follows:
+
+1. The `parec` stream tagged `application.id=org.gnome.VolumeControl` left the microphone indicator
+   off.
+2. Adding an otherwise ordinary `parec` recorder made the indicator turn on while the exempt stream
+   remained active.
+3. Stopping both recorders made the indicator turn off again.
+
+This confirms that upstream GNOME Shell's relevant exemption is the source-output's
+`application.id`, not its `media.name`, `"Peak detect"` stream name, peak-detection mode, or
+`node.passive`. The focused production change should tag harnez's meter stream with
+`--property=application.id=org.gnome.VolumeControl`; a separately identified ordinary recorder
+continues to surface correctly, so the exemption does not mask genuine concurrent recording.
