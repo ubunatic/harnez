@@ -1,4 +1,4 @@
-# 233 — AGENTS.md note: verify doc edits target the right file (repo-local vs docs/practices|lang|other source)
+# 233 — AGENTS.md note: verify doc edits target the right file (repo-local vs docs/practices, lang, other source)
 
 **Status**: Draft
 **Priority**: P2 (Medium)
