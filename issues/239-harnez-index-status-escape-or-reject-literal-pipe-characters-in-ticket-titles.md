@@ -1,6 +1,6 @@
 # 239 — harnez index/status: escape or reject literal pipe characters in ticket titles
 
-**Status**: Open — harnez status catch during 2026-09-05 evergreen review
+**Status**: Closed — resolved in b2463db
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
