@@ -1,6 +1,6 @@
 # 249 — Copied Practice Docs Retain Dangling and Inapplicable Dependencies
 
-**Status**: Open
+**Status**: In Progress — begin copied-doc dependency validation
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
