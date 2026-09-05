@@ -1,13 +1,13 @@
 # 250 — Research Linux Desktop Microphone Indicators and Live Input Signal Meters
 
-**Status**: Open
+**Status**: In Progress — research complete; doc at `docs/MicIndicators.md`; Xfce live canary and KDE `node.virtual` canary still pending
 **Priority**: P2 (Medium)
 **Severity**: Minor (cross-desktop privacy UX and portability uncertainty)
 **Category**: Architecture
 **Related**: [[248-investigate-replicating-gnome-s-non-triggering-mic-level-meter-to-stop-harnez-s-own-parec-stream-false-triggering-the-recording-indicator]],
 [[244-show-system-mic-level-and-recording-on-off-as-new-usage-watch-tui-box]],
 [[245-show-live-mic-input-signal-level-peak-rms-alongside-configured-volume-in-usage-watch]],
-`docs/Canary.md`
+`docs/Canary.md`, `docs/MicIndicators.md`
 
 ---
 
@@ -94,3 +94,53 @@ For each covered environment, determine:
   meter alone, meter plus ordinary recorder, then cleanup.
 - Research findings recorded in this ticket or a linked study, with unresolved questions and
   confidence levels stated explicitly. No production-code change belongs to this ticket.
+
+---
+
+## Research Findings
+
+Full research doc: `docs/MicIndicators.md`
+
+### Summary
+
+| Desktop | Indicator exists | Exemption mechanism | Confidence |
+|---|---|---|---|
+| GNOME | Yes (volume.js) | `application.id ∈ skippedApps` | CONFIRMED |
+| KDE Plasma | Yes (plasma-pa) | `node.virtual = true` | CONFIRMED (source); canary pending |
+| Cinnamon | No | — | INFERRED |
+| Xfce | Yes (xfce4-pulseaudio-plugin) | Unknown | UNCONFIRMED |
+| COSMIC | No | — | INFERRED |
+
+### Key primary-source findings
+
+1. **GNOME Shell `volume.js`** (read directly from gitlab.gnome.org, main branch, 2026-09-05):
+   `_maybeShowInput()` maintains a hardcoded `skippedApps` array containing
+   `org.gnome.VolumeControl` and `org.PulseAudio.pavucontrol`. Any source-output
+   with a matching `application.id` is excluded. Live canary (issue 248) confirmed.
+
+2. **plasma-pa `microphoneindicator.cpp`** (read directly from invent.kde.org, master branch, 2026-09-05):
+   `recordingApplications()` excludes any source-output whose `VirtualStream` role
+   is true. `VirtualStream` maps to PipeWire's `node.virtual = true`. There is no
+   `application.id` allowlist in KDE.
+
+3. **Portable strategy (C):** Both properties together (`application.id=org.gnome.VolumeControl`
+   + `node.virtual=true`) provide coverage on GNOME and KDE simultaneously without interference.
+
+4. **Identity-spoofing concern:** Using `org.gnome.VolumeControl` is a GNOME-internal
+   private allowlist, not a stable public API. It is structurally an anti-pattern but
+   pragmatically the only GNOME-side lever available today.
+
+### Confidence levels
+
+- GNOME exemption: HIGH (confirmed by source code inspection + live canary)
+- KDE exemption (`node.virtual`): MEDIUM (confirmed by source; not canary-tested live)
+- Cinnamon no-indicator: LOW (secondary sources only)
+- Xfce no exemption: LOW (secondary sources; plugin source not directly inspected)
+- COSMIC no indicator: LOW (secondary sources)
+
+### Open gaps requiring live canary
+
+1. KDE Plasma 6 — does `--property=node.virtual=true` in `parec` actually suppress
+   the plasma-pa microphone indicator?
+2. Xfce — does `xfce4-pulseaudio-plugin` v0.5.x check `node.virtual`?
+3. Ubuntu GNOME — does the distro patch `volume.js` skippedApps?
