@@ -173,6 +173,13 @@ type Language struct {
 	// Default controls whether init copies this doc without an explicit --doc flag.
 	// "true" = always copy, "false" = only if explicitly requested, "auto" = detect from project.
 	Default string `yaml:"default"`
+	// DependsOn lists normative copied-doc dependencies by config name. Init
+	// resolves these transitively; illustrative material must not be listed.
+	DependsOn []string `yaml:"depends_on,omitempty"`
+	// Capabilities documents the optional project capabilities this whole doc
+	// governs. Capability docs remain explicit opt-ins; generic docs must phrase
+	// capability-specific guidance conditionally rather than assume it applies.
+	Capabilities []string `yaml:"capabilities,omitempty"`
 }
 
 func LoadConfig(path string) (*Config, error) {

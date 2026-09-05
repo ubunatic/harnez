@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -14,6 +15,26 @@ import (
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/markdown"
 )
+
+var markdownRelativeLinkRE = regexp.MustCompile(`\[[^]]*\]\(([^)#]+)(?:#[^)]*)?\)`)
+var unavailableProjectDocRE = regexp.MustCompile(`docs/(?:studies|feedback)/[^\s` + "`" + `)]+\.md`)
+var projectDestinationRE = regexp.MustCompile(`docs/(?:studies|feedback)/`)
+
+func markdownOutsideFences(data []byte) string {
+	var b strings.Builder
+	inFence := false
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+			continue
+		}
+		if !inFence {
+			b.WriteString(line)
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
+}
 
 const summarySection = "Project Summary"
 
@@ -182,6 +203,106 @@ func validateDocNames(cfg *Config, names []string) error {
 		strings.Join(unknown, ", "), strings.Join(docNamesInOrder(cfg), ", "))
 }
 
+// resolveDocDependencies returns a deterministic dependency-first closure.
+func resolveDocDependencies(cfg *Config, names []string) ([]string, error) {
+	state := make(map[string]uint8)
+	var resolved []string
+	var visit func(string) error
+	visit = func(name string) error {
+		lang, ok := cfg.AgentsMD.Languages[name]
+		if !ok {
+			return fmt.Errorf("unknown copied doc %q", name)
+		}
+		if state[name] == 1 {
+			return fmt.Errorf("copied-doc dependency cycle at %q", name)
+		}
+		if state[name] == 2 {
+			return nil
+		}
+		state[name] = 1
+		for _, dep := range lang.DependsOn {
+			if _, ok := cfg.AgentsMD.Languages[dep]; !ok {
+				return fmt.Errorf("doc %q depends on unknown doc %q; define it or remove depends_on", name, dep)
+			}
+			if err := visit(dep); err != nil {
+				return err
+			}
+		}
+		state[name] = 2
+		resolved = append(resolved, name)
+		return nil
+	}
+	for _, name := range names {
+		if err := visit(name); err != nil {
+			return nil, err
+		}
+	}
+	return resolved, nil
+}
+
+// validateCopyableDocCatalog rejects unmodeled hard edges before init writes
+// anything. Relative links to configured copied docs are normative edges;
+// illustrative repository material must be summarized inline or externally linked.
+func ValidateCopyableDocCatalog(cfg *Config) error {
+	byBase := make(map[string]string)
+	for _, name := range docNamesInOrder(cfg) {
+		lang := cfg.AgentsMD.Languages[name]
+		if lang.Local != "" {
+			base := filepath.Base(lang.Local)
+			if prior, exists := byBase[base]; exists {
+				return fmt.Errorf("copyable docs %q and %q share local target %q", prior, name, base)
+			}
+			byBase[base] = name
+		}
+	}
+	for _, name := range docNamesInOrder(cfg) {
+		lang := cfg.AgentsMD.Languages[name]
+		if len(lang.Capabilities) > 0 && lang.Default != "" && lang.Default != "false" {
+			return fmt.Errorf("capability-scoped doc %q must use default: false; select capabilities explicitly", name)
+		}
+		data, err := fs.ReadFile(cfg.FS, lang.Source)
+		if err != nil {
+			return fmt.Errorf("copyable doc %q source %q: %w", name, lang.Source, err)
+		}
+		closure, err := resolveDocDependencies(cfg, []string{name})
+		if err != nil {
+			return err
+		}
+		allowed := make(map[string]bool, len(closure))
+		for _, dep := range closure[:len(closure)-1] {
+			allowed[dep] = true
+		}
+		for _, match := range markdownRelativeLinkRE.FindAllStringSubmatch(markdownOutsideFences(data), -1) {
+			if strings.Contains(match[1], "://") || strings.HasPrefix(match[1], "mailto:") {
+				continue
+			}
+			target, configured := byBase[filepath.Base(match[1])]
+			if !configured {
+				return fmt.Errorf("copyable doc %q source %q has repository-relative illustrative reference %q; summarize it inline or use a stable external link", name, lang.Source, match[1])
+			}
+			if target != name && !allowed[target] {
+				return fmt.Errorf("copyable doc %q source %q has undeclared hard reference %q; add %q to depends_on or make the reference illustrative and self-contained", name, lang.Source, match[1], target)
+			}
+		}
+		if match := unavailableProjectDocRE.FindString(string(data)); match != "" {
+			return fmt.Errorf("copyable doc %q source %q references unavailable project material %q; summarize it inline or use a stable external link", name, lang.Source, match)
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			if !projectDestinationRE.MatchString(line) {
+				continue
+			}
+			lower := strings.ToLower(line)
+			optional := strings.Contains(lower, "when present") ||
+				strings.Contains(lower, "when one exists") || strings.Contains(lower, "optional")
+			fallback := strings.Contains(lower, "otherwise")
+			if !optional || !fallback {
+				return fmt.Errorf("copyable doc %q source %q assumes project destination %q; make it optional and state a fallback", name, lang.Source, projectDestinationRE.FindString(line))
+			}
+		}
+	}
+	return nil
+}
+
 // detectDoc returns true if project dir contains signals for the named doc.
 func detectDoc(dir, name string) bool {
 	switch name {
@@ -234,6 +355,14 @@ func initialAgentsMD(cfg *Config) string {
 // RunInit creates AGENTS.md and CLAUDE.md symlink in a project directory,
 // applies config-defined local sections, and sets up language docs and Makefile targets.
 func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool) error {
+	if cfg != nil {
+		if err := validateDocNames(cfg, docs); err != nil {
+			return err
+		}
+		if err := ValidateCopyableDocCatalog(cfg); err != nil {
+			return err
+		}
+	}
 	agentsPath := filepath.Join(dir, "AGENTS.md")
 	claudePath := filepath.Join(dir, "CLAUDE.md")
 
@@ -299,10 +428,11 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 	}
 
 	if cfg != nil {
-		if err := validateDocNames(cfg, docs); err != nil {
+		docs = append(docs, autoDetectDocs(dir, cfg, docs)...)
+		docs, err = resolveDocDependencies(cfg, docs)
+		if err != nil {
 			return err
 		}
-		docs = append(docs, autoDetectDocs(dir, cfg, docs)...)
 
 		// Apply config-defined local AGENTS.md sections (e.g. Language Conventions).
 		if l := cfg.AgentsMD.Local; l.Target != "" {

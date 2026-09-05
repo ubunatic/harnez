@@ -500,6 +500,7 @@ agents_md:
       target: ~/.claude/docs/AgenticLoop.md
       local: ./docs/AgenticLoop.md
       default: true
+      depends_on: [issue-tracking]
     issue-tracking:
       name: "Issue Tracking Practices"
       ref: "@docs/IssueTracking.md"
@@ -541,6 +542,7 @@ agents_md:
       target: ~/.claude/docs/DeploymentTransparency.md
       local: ./docs/DeploymentTransparency.md
       default: false
+      capabilities: [remote-deployment]
     gorelease:
       name: "Release Pipeline"
       ref: "@docs/GoRelease.md"

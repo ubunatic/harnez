@@ -131,6 +131,11 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 	if len(cfg.AgentsMD.Languages) > 0 {
 		fmt.Println()
 		fmt.Println("Docs:")
+		if err := ValidateCopyableDocCatalog(cfg); err != nil {
+			fmt.Printf("  %-14s error: %v\n", "catalog:", err)
+		} else {
+			fmt.Printf("  %-14s ok\n", "catalog:")
+		}
 		for _, name := range cfg.Docs {
 			lang, ok := cfg.AgentsMD.Languages[name]
 			if !ok {

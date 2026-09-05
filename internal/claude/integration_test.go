@@ -212,6 +212,9 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if !strings.Contains(out, "settings.json [model]") || !strings.Contains(out, "ok") {
 		t.Errorf("Expected RunStatus to list settings state as ok, got:\n%s", out)
 	}
+	if !strings.Contains(out, "catalog:       ok") {
+		t.Errorf("Expected RunStatus to report copied-doc catalog health, got:\n%s", out)
+	}
 	if !strings.Contains(out, filepath.Join(geminiSkillsDir, "evergreen", "SKILL.md")) {
 		t.Errorf("Expected RunStatus to list Gemini skill target, got:\n%s", out)
 	}

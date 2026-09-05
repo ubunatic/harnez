@@ -4,10 +4,13 @@
 package claude
 
 import (
+	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func testConfig() *Config {
@@ -22,6 +25,212 @@ func testConfig() *Config {
 				"agentic-loop": {Default: "true"},
 			},
 		},
+	}
+}
+
+func TestResolveDocDependenciesTransitiveAndDeterministic(t *testing.T) {
+	cfg := &Config{AgentsMD: AgentsMD{Languages: map[string]Language{
+		"leaf":   {DependsOn: []string{"middle"}},
+		"middle": {DependsOn: []string{"base"}},
+		"base":   {},
+		"other":  {},
+	}}}
+	got, err := resolveDocDependencies(cfg, []string{"leaf", "other", "leaf"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"base", "middle", "leaf", "other"}; !slices.Equal(got, want) {
+		t.Fatalf("closure = %v, want %v", got, want)
+	}
+}
+
+func TestResolveDocDependenciesActionableErrors(t *testing.T) {
+	t.Run("unknown", func(t *testing.T) {
+		cfg := &Config{AgentsMD: AgentsMD{Languages: map[string]Language{
+			"top": {DependsOn: []string{"missing"}},
+		}}}
+		_, err := resolveDocDependencies(cfg, []string{"top"})
+		if err == nil || !strings.Contains(err.Error(), `doc "top" depends on unknown doc "missing"`) ||
+			!strings.Contains(err.Error(), "define it or remove depends_on") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+	t.Run("cycle", func(t *testing.T) {
+		cfg := &Config{AgentsMD: AgentsMD{Languages: map[string]Language{
+			"a": {DependsOn: []string{"b"}}, "b": {DependsOn: []string{"a"}},
+		}}}
+		_, err := resolveDocDependencies(cfg, []string{"a"})
+		if err == nil || !strings.Contains(err.Error(), "dependency cycle") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestValidateCopyableDocCatalogClassifiesReferences(t *testing.T) {
+	tests := []struct {
+		name string
+		doc  string
+		want string
+	}{
+		{"undeclared hard", "See [base](Base.md).\n", `undeclared hard reference "Base.md"`},
+		{"missing illustrative", "See [study](../studies/example.md).\n", `repository-relative illustrative reference "../studies/example.md"`},
+		{"bare missing illustrative", "See `docs/studies/example.md`.\n", `references unavailable project material "docs/studies/example.md"`},
+		{"destination assumption", "Write findings to `docs/feedback/`.\n", `assumes project destination "docs/feedback/"`},
+		{"optional destination without fallback", "Use `docs/feedback/` when present.\n", `assumes project destination "docs/feedback/"`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{
+				FS: fstest.MapFS{
+					"top.md":  &fstest.MapFile{Data: []byte(tc.doc)},
+					"base.md": &fstest.MapFile{Data: []byte("# Base\n")},
+				},
+				AgentsMD: AgentsMD{Languages: map[string]Language{
+					"top":  {Source: "top.md", Local: "docs/Top.md"},
+					"base": {Source: "base.md", Local: "docs/Base.md"},
+				}},
+			}
+			err := ValidateCopyableDocCatalog(cfg)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("unexpected validation error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateCopyableDocCatalogRejectsImplicitCapability(t *testing.T) {
+	cfg := &Config{
+		FS: fstest.MapFS{"deploy.md": &fstest.MapFile{Data: []byte("# Deploy\n")}},
+		AgentsMD: AgentsMD{Languages: map[string]Language{
+			"deploy": {Source: "deploy.md", Local: "docs/Deploy.md", Default: "true", Capabilities: []string{"remote-deployment"}},
+		}},
+	}
+	err := ValidateCopyableDocCatalog(cfg)
+	if err == nil || !strings.Contains(err.Error(), "must use default: false") {
+		t.Fatalf("unexpected capability validation error: %v", err)
+	}
+}
+
+func TestRunInitEmojigShapeCopiesHardDependencyWithoutCapabilityBoilerplate(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# emojig\n\nNo daemon or remote host.\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loop := "See [tracking](IssueTracking.md). Optional examples are explained inline.\n"
+	cfg := &Config{
+		FS: fstest.MapFS{
+			"loop.md":   &fstest.MapFile{Data: []byte(loop)},
+			"issues.md": &fstest.MapFile{Data: []byte("# Tracking\n")},
+			"deploy.md": &fstest.MapFile{Data: []byte("# Remote deployment\n")},
+		},
+		AgentsMD: AgentsMD{Languages: map[string]Language{
+			"agentic-loop":            {Source: "loop.md", Local: "./docs/AgenticLoop.md", DependsOn: []string{"issue-tracking"}},
+			"issue-tracking":          {Source: "issues.md", Local: "./docs/IssueTracking.md"},
+			"deployment-transparency": {Source: "deploy.md", Local: "./docs/DeploymentTransparency.md", Capabilities: []string{"remote-deployment"}},
+		}},
+	}
+	if err := RunInit(dir, cfg, []string{"agentic-loop"}, "", true, false, false, false); err != nil {
+		t.Fatal(err)
+	}
+	first, err := os.ReadFile(filepath.Join(dir, "docs", "AgenticLoop.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := RunInit(dir, cfg, []string{"agentic-loop"}, "", true, false, false, false); err != nil {
+		t.Fatalf("idempotent rerun: %v", err)
+	}
+	second, err := os.ReadFile(filepath.Join(dir, "docs", "AgenticLoop.md"))
+	if err != nil || !slices.Equal(first, second) {
+		t.Fatalf("rerun changed copied doc: %v", err)
+	}
+	for _, name := range []string{"AgenticLoop.md", "IssueTracking.md"} {
+		if _, err := os.Stat(filepath.Join(dir, "docs", name)); err != nil {
+			t.Fatalf("hard dependency %s not copied: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "docs", "DeploymentTransparency.md")); !os.IsNotExist(err) {
+		t.Fatalf("capability doc copied without opt-in: %v", err)
+	}
+	for _, entry := range []string{"AgenticLoop.md", "IssueTracking.md"} {
+		data, err := fs.ReadFile(os.DirFS(filepath.Join(dir, "docs")), entry)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "docs/studies/") {
+			t.Fatalf("missing illustrative reference survived in %s", entry)
+		}
+	}
+}
+
+func TestEmbeddedCopyableDocGraph(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := docNamesInOrder(cfg)
+	closure, err := resolveDocDependencies(cfg, all)
+	if err != nil {
+		t.Fatalf("invalid complete copied-doc graph: %v", err)
+	}
+	if len(closure) != len(all) {
+		t.Fatalf("complete graph lost nodes: got %d, want %d", len(closure), len(all))
+	}
+	if err := ValidateCopyableDocCatalog(cfg); err != nil {
+		t.Fatalf("invalid complete copied-doc reference graph: %v", err)
+	}
+	loop := cfg.AgentsMD.Languages["agentic-loop"]
+	if !slices.Equal(loop.DependsOn, []string{"issue-tracking"}) {
+		t.Fatalf("Agentic Loop hard dependencies = %v", loop.DependsOn)
+	}
+	deploy := cfg.AgentsMD.Languages["deployment-transparency"]
+	if deploy.Default != "false" || !slices.Equal(deploy.Capabilities, []string{"remote-deployment"}) {
+		t.Fatalf("deployment capability metadata = default:%q capabilities:%v", deploy.Default, deploy.Capabilities)
+	}
+	data, err := fs.ReadFile(cfg.FS, loop.Source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dangling := range []string{
+		"docs/studies/2026-08-30-usage-panel-integration-and-the-agy-collector-cliff.md",
+		"docs/studies/2026-09-04-three-days-to-a-public-release.md",
+		"](DeploymentTransparency.md)",
+	} {
+		if strings.Contains(string(data), dangling) {
+			t.Errorf("portable Agentic Loop retains unavailable reference %q", dangling)
+		}
+	}
+}
+
+func TestRunInitEmbeddedEmojigShapeHasNoUnavailableProjectMaterial(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# emojig\n\nNo daemon or remote host.\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := RunInit(dir, cfg, []string{"agentic-loop"}, "", true, false, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "docs", "IssueTracking.md")); err != nil {
+		t.Fatalf("hard dependency missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "docs", "DeploymentTransparency.md")); !os.IsNotExist(err) {
+		t.Fatalf("inapplicable capability doc copied: %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "docs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		data, err := os.ReadFile(filepath.Join(dir, "docs", entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if match := unavailableProjectDocRE.Find(data); match != nil {
+			t.Errorf("%s retains unavailable project material %q", entry.Name(), match)
+		}
 	}
 }
 
@@ -235,5 +444,3 @@ func filepathDir(p string) string {
 	}
 	return p[:idx]
 }
-
-
