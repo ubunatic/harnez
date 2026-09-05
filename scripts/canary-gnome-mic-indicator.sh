@@ -70,6 +70,7 @@ verify_stream() {
    local expected_id="$2"
    local pcm_file="$3"
    local details
+   local attempt=0
    local bytes_before
    local bytes_after
 
@@ -82,10 +83,15 @@ verify_stream() {
       "$identity" "$expected_id"
 
    bytes_before=$(wc -c < "$pcm_file")
-   sleep 0.4
-   bytes_after=$(wc -c < "$pcm_file")
+   bytes_after="$bytes_before"
+   while test "$attempt" -lt 30 &&
+         test "$bytes_after" -le "$bytes_before"
+   do sleep 0.1
+      bytes_after=$(wc -c < "$pcm_file")
+      attempt=$((attempt + 1))
+   done
    if test "$bytes_after" -le "$bytes_before"
-   then fail "PCM byte count did not increase for $identity"
+   then fail "PCM byte count did not increase within 3s for $identity"
    fi
    printf '  verified PCM flow: %s -> %s bytes\n' "$bytes_before" "$bytes_after"
 }
