@@ -166,10 +166,11 @@ scripts/canary-gnome-mic-indicator.sh combined 10
 
 `control` opens an ordinary uniquely identified `parec` stream. `exempt` sets
 `application.id=org.gnome.VolumeControl`. `combined` starts and verifies the exempt stream first,
-keeps it active, and then starts a separately identified ordinary recorder so the expected
-indicator transition is unambiguous. The canary confirms the matching source-output properties and
-increasing PCM byte counts, bounds recorder lifetimes with `timeout`, and traps exit/signals to reap
-its processes. Calling it with no phase only prints usage and exits; it never starts capture.
+then waits for Enter before starting a separately identified ordinary recorder and waits for Enter
+again before cleanup. These checkpoints make each expected indicator transition unambiguous. The
+canary confirms the matching source-output properties and increasing PCM byte counts, bounds each
+interactive prompt and recorder lifetime, and traps exit/signals to reap its processes. Calling it
+with no phase only prints usage and exits; it never starts capture.
 
 The deterministic companion check is non-audio and safe to run automatically:
 

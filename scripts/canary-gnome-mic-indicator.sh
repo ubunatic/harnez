@@ -13,9 +13,10 @@ usage() {
       'PHASE:' \
       '  control   ordinary parec; the indicator should appear' \
       '  exempt    parec tagged application.id=org.gnome.VolumeControl' \
-      '  combined  keep the exempt stream active, then start ordinary parec' \
+      '  combined  press Enter between exempt, ordinary, and cleanup steps' \
       '' \
-      'SECONDS defaults to 8 and must be 3..60. Watch the GNOME indicator.'
+      'SECONDS defaults to 8 and must be 3..60; it bounds each prompt.' \
+      'Watch the GNOME indicator throughout each phase.'
 }
 
 fail() {
@@ -100,8 +101,9 @@ start_capture() {
    local identity="$1"
    local application_id="$2"
    local pcm_file="$3"
+   local lifetime="${4:-$seconds}"
 
-   timeout --signal=TERM --kill-after=2 "${seconds}s" \
+   timeout --signal=TERM --kill-after=2 "${lifetime}s" \
       parec --raw --channels=1 --rate=8000 \
             --stream-name="$identity" \
             --property="application.name=$identity" \
@@ -162,14 +164,30 @@ case "$phase" in
       verify_stream "$exempt_id" "org.gnome.VolumeControl" "$work_dir/exempt.pcm"
       ;;
    combined)
+      if ! test -t 0
+      then fail "combined phase requires an interactive terminal"
+      fi
       printf 'T+0s: starting GNOME-identity recorder; indicator should remain OFF if exempt.\n'
-      start_capture "$exempt_id" "org.gnome.VolumeControl" "$work_dir/exempt.pcm"
+      combined_lifetime=$((seconds * 2 + 8))
+      start_capture "$exempt_id" "org.gnome.VolumeControl" "$work_dir/exempt.pcm" "$combined_lifetime"
       verify_stream "$exempt_id" "org.gnome.VolumeControl" "$work_dir/exempt.pcm"
-      printf 'Next: exempt stream remains active; starting ordinary recorder; indicator expected ON.\n'
+      printf 'CHECK 1: confirm the indicator is OFF, then press Enter to add the ordinary recorder.\n'
+      if ! read -r -t "$seconds"
+      then fail "timed out waiting for CHECK 1 confirmation"
+      fi
+      printf 'Starting ordinary recorder; indicator expected ON.\n'
       start_capture "$normal_id" "io.codeberg.ubunatic.harnez.canary.$run_id" "$work_dir/normal.pcm"
       verify_stream "$normal_id" "io.codeberg.ubunatic.harnez.canary.$run_id" "$work_dir/normal.pcm"
       source_output "$exempt_id" >/dev/null || fail "exempt stream stopped before combined verification"
       printf '  verified both uniquely tagged source-outputs are concurrently active\n'
+      printf 'CHECK 2: confirm the indicator is ON, then press Enter to stop both recorders.\n'
+      if ! read -r -t "$seconds"
+      then fail "timed out waiting for CHECK 2 confirmation"
+      fi
+      cleanup
+      trap - EXIT
+      printf 'CHECK 3: both recorders stopped; confirm the indicator turns OFF.\n'
+      exit 0
       ;;
 esac
 
