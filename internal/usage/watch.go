@@ -1204,7 +1204,9 @@ func buildMicBox(width int, st MicStatus) wbox {
 	return wbox{title: title, lines: buildMicBoxLines(st), width: width}
 }
 
-// buildMicBoxLines renders MicStatus as a single line, or a dim
+// buildMicBoxLines renders MicStatus as two lines — the configured-gain bar
+// (issue 244) and, below it, the live peak/RMS reading (issue 245) or an
+// "n/a" placeholder when live capture isn't available — or a single dim
 // "unavailable" placeholder when no audio interface was found at all
 // (Available == false) — the box itself is never added to the panel list
 // in that case (see buildWatchFrameAt), but this keeps buildMicBoxLines
@@ -1232,7 +1234,22 @@ func buildMicBoxLines(st MicStatus) []string {
 	if st.Muted {
 		line += ansiDimGrey + "  (muted)\x1b[0m"
 	}
-	return []string{line}
+
+	// Issue 245: a second line for the genuine live signal reading,
+	// alongside (not replacing) the gain bar above — "gain" answers "is the
+	// mic turned up", "live" answers "is sound actually reaching it right
+	// now". Rendered as "n/a" rather than a fabricated bar when the capture
+	// subprocess isn't available (no parec, amixer backend, or still
+	// (re)connecting) — see micLiveManager's doc comment for when that is.
+	var liveLine string
+	if st.LiveAvailable {
+		liveBar := rograph.RenderBar(st.LiveLevel, rograph.BarOptions{IncludePercent: true, PercentPrecision: 0})
+		liveLine = fmt.Sprintf("%s   live", liveBar)
+	} else {
+		liveLine = ansiDimGrey + "live n/a" + "\x1b[0m"
+	}
+
+	return []string{line, liveLine}
 }
 
 // buildHistoryBox renders a compact 4th panel showing recorded usage history stats.
@@ -1577,6 +1594,14 @@ type WatchOptions struct {
 	// the same "explicit request wins over the current preset" role
 	// ShowProcesses plays for Processes.
 	ShowMic bool
+	// MicLiveLevel/MicLiveAvailable (issue 245) carry this frame's live
+	// peak/RMS reading from the watch loop's background micLiveManager,
+	// resolved outside buildWatchFrameAt exactly like RemoteLoadSnapshot
+	// below — the capture subprocess is a long-lived, once-per-session
+	// resource (see RunWatchWithOptions), not something a pure frame-build
+	// function should spawn itself.
+	MicLiveLevel     float64
+	MicLiveAvailable bool
 	// ShowControls draws the [?]-triggered Controls overlay (issue 094)
 	// instead of the normal panel grid for this frame.
 	ShowControls bool
@@ -1840,6 +1865,8 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	var micStatus MicStatus
 	if sec.Mic && opt.Host == "" {
 		micStatus = CurrentMicStatus()
+		micStatus.LiveLevel = opt.MicLiveLevel
+		micStatus.LiveAvailable = opt.MicLiveAvailable
 	}
 	var procCounts *AgentProcessCount
 	if sec.Processes {
@@ -2430,6 +2457,24 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	fmt.Fprint(out, "\033[?1049h\033[?25l\033[2J\033[H")
 	defer fmt.Fprint(out, "\033[?25h\033[?1049l")
 
+	// micLiveMgr (issue 245) owns the background capture subprocess for the
+	// Mic box's live peak/RMS reading. draw() is the only place buildWatchFrame
+	// is invoked for the life of this loop (see its own comment above), and
+	// every draw() call happens on this single goroutine, so micLiveMgr can
+	// be a plain local var here with no extra locking — same reasoning as
+	// lastSummary/lastRates above. Started lazily the first time the Mic box
+	// is actually visible in local mode, stopped the moment it isn't
+	// (toggled off, or a remote host takes over) so no capture subprocess
+	// ever runs while the box is off (issue 245 requirement 4), and always
+	// stopped via the deferred cleanup below so a quit mid-session can't
+	// leave one running (Zero Zombie Guarantee).
+	var micLiveMgr *micLiveManager
+	defer func() {
+		if micLiveMgr != nil {
+			micLiveMgr.Stop()
+		}
+	}()
+
 	draw := func() {
 		secLock.Lock()
 		activeSec := sec
@@ -2446,6 +2491,19 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			remoteLoadMu.Unlock()
 		}
 
+		wantMicLive := activeSec.Mic && currentHost == ""
+		switch {
+		case wantMicLive && micLiveMgr == nil:
+			micLiveMgr = startMicLiveManager(sigCtx)
+		case !wantMicLive && micLiveMgr != nil:
+			micLiveMgr.Stop()
+			micLiveMgr = nil
+		}
+		var micLive micLiveReading
+		if micLiveMgr != nil {
+			micLive = micLiveMgr.Snapshot()
+		}
+
 		cols, rows := terminalSize(out)
 		frame := buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir, WatchOptions{
 			Host:                currentHost,
@@ -2455,6 +2513,8 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			RemoteLoadSnapshot:  remoteSnap,
 			RemoteLoadStreaming: remoteStreaming,
 			DebugOverlay:        activeDebugOverlay,
+			MicLiveLevel:        micLive.Level,
+			MicLiveAvailable:    micLive.Available,
 		})
 		outMu.Lock()
 		frame.paint(out)

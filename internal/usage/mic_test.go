@@ -121,8 +121,8 @@ func TestBuildMicBoxLinesHidesWhenUnavailable(t *testing.T) {
 
 func TestBuildMicBoxLinesPactlRecording(t *testing.T) {
 	lines := buildMicBoxLines(MicStatus{Available: true, Backend: "pactl", Level: 80, Recording: true})
-	if len(lines) != 1 {
-		t.Fatalf("expected a single line, got %v", lines)
+	if len(lines) != 2 {
+		t.Fatalf("expected a gain line and a live line, got %v", lines)
 	}
 	if got := lines[0]; !containsAll(got, "80", "recording on") {
 		t.Errorf("buildMicBoxLines recording=true = %q, want it to mention 80%% and recording on", got)
@@ -140,6 +140,30 @@ func TestBuildMicBoxLinesMuted(t *testing.T) {
 	lines := buildMicBoxLines(MicStatus{Available: true, Backend: "pactl", Level: 0, Muted: true})
 	if got := lines[0]; !containsAll(got, "muted") {
 		t.Errorf("buildMicBoxLines muted = %q, want it to mention muted", got)
+	}
+}
+
+// Issue 245: buildMicBoxLines' second line renders the live peak/RMS
+// reading, or an "n/a" placeholder when the capture subprocess isn't
+// available (no parec, amixer backend, still (re)connecting) — distinct
+// from Available==false, which hides the whole box (tested above).
+func TestBuildMicBoxLinesLiveAvailable(t *testing.T) {
+	lines := buildMicBoxLines(MicStatus{Available: true, Backend: "pactl", Level: 50, LiveAvailable: true, LiveLevel: 37})
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %v", lines)
+	}
+	if got := lines[1]; !containsAll(got, "37", "live") {
+		t.Errorf("buildMicBoxLines live line = %q, want it to mention 37%% and live", got)
+	}
+}
+
+func TestBuildMicBoxLinesLiveUnavailable(t *testing.T) {
+	lines := buildMicBoxLines(MicStatus{Available: true, Backend: "amixer", Level: 100, LiveAvailable: false})
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %v", lines)
+	}
+	if got := lines[1]; !containsAll(got, "live", "n/a") {
+		t.Errorf("buildMicBoxLines live-unavailable line = %q, want it to mention live n/a", got)
 	}
 }
 

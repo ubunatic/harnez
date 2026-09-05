@@ -40,6 +40,20 @@ type MicStatus struct {
 	// Backend names which interface produced this reading: "pactl" or
 	// "amixer". Empty when Available is false.
 	Backend string
+	// LiveLevel is a genuine live signal reading (0-100, RMS-based) of the
+	// actual incoming sound hitting the default source right now — issue
+	// 245's answer to "the volume slider is always at 100%, that's not the
+	// real noise". Unlike Level (the configured gain, unmoving unless the
+	// user changes it), this comes from a held-open low-rate audio capture
+	// (see miclive.go) and changes continuously with real ambient sound.
+	// Meaningless when LiveAvailable is false.
+	LiveLevel float64
+	// LiveAvailable reports whether LiveLevel is a real, currently-flowing
+	// reading. False while the capture subprocess is (re)connecting,
+	// permanently false on the amixer backend or when no capture binary
+	// (`parec`) is installed — the box renders "n/a" for the live meter in
+	// that case rather than a fabricated 0.
+	LiveAvailable bool
 }
 
 // micBackendKind is the audio-server interface CurrentMicStatus reads from,
