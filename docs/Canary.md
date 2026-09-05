@@ -129,8 +129,8 @@ These findings shaped that project's OCR implementation in the
 has a 3-minute build/install/tap cycle per probe, which makes ad hoc canary scripts too
 slow to write for every mechanism worth checking.
 
-**Canary:** `smarthome` (see `docs/studies/2026-09-04-three-days-to-a-public-release.md`)
-built a standalone Go CLI (`cmd/flimmerkasten`) as a *host-side peer* speaking the same
+**Canary:** One Android/network-appliance project built a standalone Go CLI as a
+*host-side peer* speaking the same
 wire protocols (SSAP, TR-064, Wake-on-LAN) as the Android app, instead of writing one-off
 canary scripts per mechanism. `make flimmerkasten-off` / `make fritzbox-status` became a
 standing, reusable canary harness rather than a disposable probe.

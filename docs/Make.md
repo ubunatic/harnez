@@ -120,7 +120,8 @@ Add `make check-fast` when full checks are slow; it should keep broad coverage b
 
 Any project with mutating provisioners (pushes a binary, config, or schedule to a remote host)
 must expose the same four self-documenting targets, so deploy/verify is never ad hoc SSH
-one-liners. See [docs/practices/DeploymentTransparency.md](../practices/DeploymentTransparency.md)
+one-liners. For projects with remote deployment, install the optional
+`deployment-transparency` practice
 for why the query targets (`run`/`status`) must probe the live host rather than assume success
 from a completed `deploy`.
 
