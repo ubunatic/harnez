@@ -74,13 +74,28 @@ harnez init [-d <dir>] [--docs <name>...]
         ├── ignore /issues/README.md.lock in .git/info/exclude when issues/ exists
         ├── auto-detect docs (default:auto/true entries in config.yaml)
         ├── apply cfg.AgentsMD.Local sections (Language Conventions, etc.)
-        └── for each --docs <name> (explicit + auto-detected):
+        └── resolve explicit hard doc dependencies transitively
+            (project-local only; never expands apply's global scope)
+            └── for each --docs <name> (explicit + auto-detected + dependencies):
                 ├── copy docs/<name>.md locally  (for @docs/ refs)
                 ├── scaffold Makefile from template  (if no Makefile)
                 └── inject targets block into existing Makefile
 ```
 
 All steps are idempotent. Running `init --docs golang` twice is safe.
+
+## Copyable-doc contract
+
+- `depends_on` names normative sibling docs required to follow a rule. `init` copies the
+  deterministic, dependency-first transitive closure and rejects unknown dependencies or cycles.
+- Illustrative examples and case studies are not dependencies. Copyable docs must summarize their
+  lesson inline or use a stable external link; they must not leave repository-relative links that
+  only resolve in harnez's source tree.
+- A copyable doc may name `docs/feedback/`, `docs/studies/`, or another destination only as an
+  optional convention with an explicit fallback when that directory is absent.
+- `capabilities` documents an opt-in architecture governed by a whole doc (for example
+  `remote-deployment`). Generic docs must state such rules conditionally; `init` does not generate
+  per-project prose variants or infer architecture from directory names.
 The lock-file rule is local to each clone and leaves the project's shared
 `.gitignore` untouched; rerun `init` after cloning a harnez-managed tracker.
 
