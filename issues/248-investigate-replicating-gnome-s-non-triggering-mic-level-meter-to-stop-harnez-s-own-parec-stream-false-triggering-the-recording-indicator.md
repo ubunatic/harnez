@@ -151,3 +151,31 @@ necessary once (1)/(2) above are tried.
   "Peak detect" system-wide, to avoid a false "recording on" reading whenever *any* app (not just
   harnez) opens GNOME's own meter? This would be a small, separate, generally-applicable fix to
   245's existing detection regardless of what happens with harnez's own stream.
+
+## 5. Manual Canary
+
+`scripts/canary-gnome-mic-indicator.sh` now provides three explicit, timed phases for testing the
+desktop indicator without changing production code. Run each phase separately and watch the GNOME
+top-bar indicator:
+
+```bash
+scripts/canary-gnome-mic-indicator.sh control 8
+scripts/canary-gnome-mic-indicator.sh exempt 8
+scripts/canary-gnome-mic-indicator.sh combined 10
+```
+
+`control` opens an ordinary uniquely identified `parec` stream. `exempt` sets
+`application.id=org.gnome.VolumeControl`. `combined` starts and verifies the exempt stream first,
+keeps it active, and then starts a separately identified ordinary recorder so the expected
+indicator transition is unambiguous. The canary confirms the matching source-output properties and
+increasing PCM byte counts, bounds recorder lifetimes with `timeout`, and traps exit/signals to reap
+its processes. Calling it with no phase only prints usage and exits; it never starts capture.
+
+The deterministic companion check is non-audio and safe to run automatically:
+
+```bash
+scripts/test-canary-gnome-mic-indicator.sh
+```
+
+Live indicator results remain intentionally unrecorded until the user runs these phases on the
+target GNOME session.
