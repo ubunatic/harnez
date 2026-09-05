@@ -77,6 +77,7 @@ func IssuesTable(issuesDir string) (string, error) {
 	b.WriteString("|---|------|-------|--------|\n")
 	for _, f := range files {
 		title := issueNumTitlePrefix.ReplaceAllString(f.Title, "")
+		title = strings.ReplaceAll(title, "|", `\|`)
 		status := f.RawStatus
 		if status == "" {
 			status = "Unknown"

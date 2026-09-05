@@ -70,7 +70,12 @@ type Report struct {
 var (
 	issueFileRegex   = regexp.MustCompile(`^(\d{3})-.*\.md$`)
 	statusLineRegex  = regexp.MustCompile(`(?i)^\s*[-*]?\s*\*\*status:?\*\*:?\s*(.+)$`)
-	tableRowRegex    = regexp.MustCompile(`^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$`)
+	// tableRowRegex splits a Markdown table row into its four cells. A cell
+	// is any run of characters that are neither a bare "|" nor a backslash,
+	// or a backslash-escaped character (e.g. "\|" for a literal pipe inside
+	// a title) -- so an escaped pipe written by IssuesTable (or by hand)
+	// is not mistaken for a column boundary. See issue 239.
+	tableRowRegex    = regexp.MustCompile(`^\|((?:\\.|[^|\\])*)\|((?:\\.|[^|\\])*)\|((?:\\.|[^|\\])*)\|((?:\\.|[^|\\])*)\|$`)
 	markdownLinkRegx = regexp.MustCompile(`^\[([^\]]+)\]\(([^)]+)\)$`)
 )
 
@@ -271,6 +276,13 @@ func PlainTitle(rawTitle string) string {
 	return strings.Join(strings.Fields(t), " ")
 }
 
+// unescapeTableCell reverses the "\|" -> "|" escaping IssuesTable applies
+// when writing a cell, so a title containing a literal pipe round-trips
+// back to its original text. See issue 239.
+func unescapeTableCell(s string) string {
+	return strings.ReplaceAll(s, `\|`, `|`)
+}
+
 // ParseTrackerTable extracts table entries from issues/README.md.
 func ParseTrackerTable(content string) ([]TableRow, error) {
 	var rows []TableRow
@@ -294,10 +306,10 @@ func ParseTrackerTable(content string) ([]TableRow, error) {
 			continue
 		}
 
-		c1 := strings.TrimSpace(matches[1])
-		c2 := strings.TrimSpace(matches[2])
-		c3 := strings.TrimSpace(matches[3])
-		c4 := strings.TrimSpace(matches[4])
+		c1 := unescapeTableCell(strings.TrimSpace(matches[1]))
+		c2 := unescapeTableCell(strings.TrimSpace(matches[2]))
+		c3 := unescapeTableCell(strings.TrimSpace(matches[3]))
+		c4 := unescapeTableCell(strings.TrimSpace(matches[4]))
 
 		if strings.EqualFold(c1, "#") || strings.HasPrefix(c1, "---") || strings.HasPrefix(c1, ":---") || strings.HasPrefix(c1, "-") {
 			inTable = true

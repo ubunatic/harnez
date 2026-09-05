@@ -229,6 +229,33 @@ func TestParseTrackerTable(t *testing.T) {
 	}
 }
 
+// TestParseTrackerTable_EscapedPipeInTitle covers issue 239: a title
+// containing an escaped pipe ("\|") must be parsed as a single cell with
+// the literal "|" restored, not as an extra column boundary.
+func TestParseTrackerTable_EscapedPipeInTitle(t *testing.T) {
+	readme := `| # | File | Title | Status |
+|---|------|-------|--------|
+| 233 | [233-x.md](233-x.md) | docs/practices\|lang\|other source | Closed |
+`
+	rows, err := ParseTrackerTable(readme)
+	if err != nil {
+		t.Fatalf("ParseTrackerTable unexpected error: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row (escaped pipes must not split columns), got %d: %+v", len(rows), rows)
+	}
+	row := rows[0]
+	if row.Number != "233" {
+		t.Errorf("expected number 233, got %q", row.Number)
+	}
+	if row.Title != "docs/practices|lang|other source" {
+		t.Errorf("expected literal pipes restored in title, got %q", row.Title)
+	}
+	if row.Status != "Closed" {
+		t.Errorf("expected status Closed, got %q", row.Status)
+	}
+}
+
 func TestLintFS_Scenarios(t *testing.T) {
 	t.Run("all synced", func(t *testing.T) {
 		fs := fstest.MapFS{

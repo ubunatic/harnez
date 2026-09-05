@@ -7,6 +7,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"ubunatic.com/harnez/internal/issues"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -68,6 +70,34 @@ func TestIssuesTableReservedPlaceholder(t *testing.T) {
 `
 	if table != want {
 		t.Errorf("IssuesTable mismatch with reserved ticket:\ngot:\n%s\nwant:\n%s", table, want)
+	}
+}
+
+// TestIssuesTablePipeInTitleRoundTripsThroughLint covers issue 239: a
+// ticket title containing a literal "|" must be escaped on write so the
+// generated table row still parses as exactly one row, and must not
+// produce spurious Lint diagnostics (e.g. a false "unindexed ticket file"
+// from the title's pipe being read back as a column separator).
+func TestIssuesTablePipeInTitleRoundTripsThroughLint(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "233-pipe-title.md"), "# 233 — docs/practices|lang|other source\n\n**Status**: Closed\n")
+
+	table, err := IssuesTable(dir)
+	if err != nil {
+		t.Fatalf("IssuesTable: %v", err)
+	}
+	if !strings.Contains(table, `docs/practices\|lang\|other source`) {
+		t.Fatalf("expected escaped pipes in generated table, got:\n%s", table)
+	}
+
+	writeFile(t, filepath.Join(dir, "README.md"), "# Issues\n\n"+table)
+
+	report, err := issues.Lint(dir)
+	if err != nil {
+		t.Fatalf("Lint: %v", err)
+	}
+	if len(report.Diagnostics) != 0 {
+		t.Errorf("expected 0 diagnostics for pipe-in-title round trip, got %d: %+v", len(report.Diagnostics), report.Diagnostics)
 	}
 }
 
