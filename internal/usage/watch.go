@@ -2407,6 +2407,94 @@ func (t *micActivityTracker) ShouldRedraw(reading micLiveReading, now time.Time)
 	}
 }
 
+// redrawThrottler coalesces and rate-limits redraw requests to enforce a
+// maximum frame rate (issue 259: MinFrameInterval >= 50ms / <= 20 FPS cap).
+// Background measurement hooks (e.g. mic audio PCM streams) can fire dozens
+// of times per second without overwhelming the TUI renderer.
+type redrawThrottler struct {
+	mu          sync.Mutex
+	minInterval time.Duration
+	lastFired   time.Time
+	pending     bool
+	timer       *time.Timer
+	trigger     func()
+	stopped     bool
+}
+
+func newRedrawThrottler(minInterval time.Duration, trigger func()) *redrawThrottler {
+	if minInterval < 50*time.Millisecond {
+		minInterval = 50 * time.Millisecond
+	}
+	return &redrawThrottler{
+		minInterval: minInterval,
+		trigger:     trigger,
+	}
+}
+
+func (t *redrawThrottler) Request() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.stopped {
+		return
+	}
+
+	now := time.Now()
+	elapsed := now.Sub(t.lastFired)
+	if !t.pending && (t.lastFired.IsZero() || elapsed >= t.minInterval) {
+		t.lastFired = now
+		t.trigger()
+		return
+	}
+
+	if t.pending {
+		return
+	}
+
+	t.pending = true
+	delay := t.minInterval - elapsed
+	if delay < 0 {
+		delay = 0
+	}
+	t.scheduleTimerLocked(delay)
+}
+
+func (t *redrawThrottler) scheduleTimerLocked(delay time.Duration) {
+	t.timer = time.AfterFunc(delay, func() {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		if t.stopped || !t.pending {
+			return
+		}
+		now := time.Now()
+		elapsed := now.Sub(t.lastFired)
+		if elapsed < t.minInterval {
+			t.scheduleTimerLocked(t.minInterval - elapsed)
+			return
+		}
+		t.pending = false
+		t.lastFired = now
+		t.trigger()
+	})
+}
+
+func (t *redrawThrottler) MarkDrawn(now time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.lastFired = now
+}
+
+func (t *redrawThrottler) Stop() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.stopped = true
+	t.pending = false
+	if t.timer != nil {
+		t.timer.Stop()
+		t.timer = nil
+	}
+}
+
 func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string, opts WatchOptions) error {
 	if interval < MinWatchInterval {
 		interval = MinWatchInterval
@@ -2444,11 +2532,19 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	}
 
 	redrawChan := make(chan struct{}, 1)
-	requestRedraw := func() {
+	requestRedrawRaw := func() {
 		select {
 		case redrawChan <- struct{}{}:
 		default:
 		}
+	}
+
+	spec := watchMicLiveSpec()
+	throttler := newRedrawThrottler(spec.HighFPSDelay(), requestRedrawRaw)
+	defer throttler.Stop()
+
+	requestRedraw := func() {
+		throttler.Request()
 	}
 
 	// remote Load streaming (issue 110): started here, alongside this
@@ -2655,6 +2751,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		outMu.Lock()
 		frame.paint(out)
 		outMu.Unlock()
+		throttler.MarkDrawn(time.Now())
 	}
 
 	// splashStatus (issue 169) queues FetchStage events reported by

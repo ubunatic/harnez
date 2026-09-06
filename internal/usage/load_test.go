@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestParseMeminfoUsesMemAvailable(t *testing.T) {
@@ -253,7 +254,7 @@ func TestFallbackRAMGeometry(t *testing.T) {
 func TestRAMHistoryAppendsAndSnapshots(t *testing.T) {
 	var hist sampleHistory
 	for i := 1; i <= loadHistoryLen+5; i++ {
-		hist.append(float64(i * 5))
+		hist.forceAppend(float64(i * 5))
 	}
 	snap := hist.snapshot()
 	if len(snap) != loadHistoryLen {
@@ -262,5 +263,84 @@ func TestRAMHistoryAppendsAndSnapshots(t *testing.T) {
 	// Last element should retain the newest sample.
 	if want := float64((loadHistoryLen + 5) * 5); snap[len(snap)-1] != want {
 		t.Errorf("last element = %.0f, want %.0f", snap[len(snap)-1], want)
+	}
+}
+
+func TestSampleHistoryRateThrottling(t *testing.T) {
+	var hist sampleHistory
+	now := time.Now()
+
+	// Initial append records the first sample.
+	snap := hist.appendAt(10.0, now, minLoadSampleInterval)
+	if len(snap) != 1 || snap[0] != 10.0 {
+		t.Fatalf("initial append = %v, want [10.0]", snap)
+	}
+
+	// Rapid successive calls within minLoadSampleInterval (e.g. at +10ms, +50ms)
+	// must update the latest sample in place without adding new slots.
+	for i := 1; i <= 100; i++ {
+		snap = hist.appendAt(float64(10+i), now.Add(time.Duration(i)*5*time.Millisecond), minLoadSampleInterval)
+	}
+	if len(snap) != 1 {
+		t.Fatalf("rapid appends length = %d, want 1", len(snap))
+	}
+	if snap[0] != 110.0 {
+		t.Errorf("in-place updated sample = %.1f, want 110.0", snap[0])
+	}
+
+	// Once minLoadSampleInterval (1s) has passed, append advances history.
+	snap = hist.appendAt(200.0, now.Add(1100*time.Millisecond), minLoadSampleInterval)
+	if len(snap) != 2 {
+		t.Fatalf("append after 1.1s length = %d, want 2", len(snap))
+	}
+	if snap[0] != 110.0 || snap[1] != 200.0 {
+		t.Errorf("samples = %v, want [110.0, 200.0]", snap)
+	}
+
+	// Another rapid burst at +1.2s updates only the latest slot.
+	snap = hist.appendAt(250.0, now.Add(1200*time.Millisecond), minLoadSampleInterval)
+	if len(snap) != 2 {
+		t.Fatalf("burst append length = %d, want 2", len(snap))
+	}
+	if snap[1] != 250.0 {
+		t.Errorf("updated sample = %.1f, want 250.0", snap[1])
+	}
+
+	// Next 1s window advances to 3 samples.
+	snap = hist.appendAt(300.0, now.Add(2100*time.Millisecond), minLoadSampleInterval)
+	if len(snap) != 3 {
+		t.Fatalf("append after 2.1s length = %d, want 3", len(snap))
+	}
+	if snap[2] != 300.0 {
+		t.Errorf("new sample = %.1f, want 300.0", snap[2])
+	}
+}
+
+func TestCurrentCPULoadRateThrottling(t *testing.T) {
+	// Prime the first reading so cpuHistory and cpuFrameMu have initial state.
+	load1 := CurrentCPULoad()
+	if !load1.Ok {
+		t.Skip("skipping CPU load test: /proc/stat or /proc/loadavg unavailable")
+	}
+
+	initialCPULen := len(cpuHistory.snapshot())
+	initialRAMLen := len(ramHistory.snapshot())
+
+	// Rapidly call CurrentCPULoad 100 times in a tight loop.
+	for i := 0; i < 100; i++ {
+		_ = CurrentCPULoad()
+	}
+
+	// History buffers should not have advanced 100 times.
+	finalCPULen := len(cpuHistory.snapshot())
+	finalRAMLen := len(ramHistory.snapshot())
+
+	if finalCPULen > initialCPULen+1 {
+		t.Errorf("cpuHistory length grew from %d to %d after rapid calls, want at most %d",
+			initialCPULen, finalCPULen, initialCPULen+1)
+	}
+	if finalRAMLen > initialRAMLen+1 {
+		t.Errorf("ramHistory length grew from %d to %d after rapid calls, want at most %d",
+			initialRAMLen, finalRAMLen, initialRAMLen+1)
 	}
 }

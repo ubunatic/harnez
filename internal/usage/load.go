@@ -243,7 +243,7 @@ func burstSeedCPUHistory(first cpuStatFrame) (float64, bool, []float64, bool) {
 		}
 		aggPct, aggOk, perCore, perCoreOk = cpuFramePercents(prev, cur)
 		if aggOk {
-			cpuHistory.append(aggPct)
+			cpuHistory.forceAppend(aggPct)
 		}
 		cpuFrameMu.Lock()
 		lastCPUFrame = cur
@@ -442,22 +442,58 @@ type GPU struct {
 // timeline: each rendered cell consumes two chronological samples.
 const loadHistoryLen = 20
 
+// minLoadSampleInterval is the minimum spacing between consecutive appends
+// to rolling hardware load histories (CPU, GPU, RAM). When the TUI redraws
+// at high FPS (e.g. 20 Hz during speech-activated mic activity), hardware
+// timeline charts must maintain a steady 1s temporal resolution instead of
+// scrolling violently.
+const minLoadSampleInterval = 1 * time.Second
+
 // sampleHistory is a small mutex-protected rolling window of recent 0-100%
 // samples, used to render a Load box timeline sparkline.
 type sampleHistory struct {
-	mu      sync.Mutex
-	samples []float64
+	mu         sync.Mutex
+	samples    []float64
+	lastSample time.Time
 }
 
-// append records pct as the latest sample and returns a copy of the
-// trailing loadHistoryLen-sample window (oldest first).
+// append records pct as the latest sample if at least minLoadSampleInterval has
+// elapsed since the previous sample (or if no sample exists yet), and returns a
+// copy of the trailing loadHistoryLen-sample window (oldest first). If called
+// within minLoadSampleInterval, it updates the latest sample in place and returns
+// the snapshot without advancing the historical time-series ring buffer.
 func (h *sampleHistory) append(pct float64) []float64 {
+	return h.appendAt(pct, time.Now(), minLoadSampleInterval)
+}
+
+// appendAt records pct at a specific timestamp and minimum interval threshold.
+func (h *sampleHistory) appendAt(pct float64, now time.Time, minInterval time.Duration) []float64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.lastSample.IsZero() || now.Sub(h.lastSample) >= minInterval {
+		h.samples = append(h.samples, pct)
+		if len(h.samples) > loadHistoryLen {
+			h.samples = h.samples[len(h.samples)-loadHistoryLen:]
+		}
+		h.lastSample = now
+	} else if len(h.samples) > 0 {
+		h.samples[len(h.samples)-1] = pct
+	}
+	out := make([]float64, len(h.samples))
+	copy(out, h.samples)
+	return out
+}
+
+// forceAppend unconditionally appends pct to the history window, bypassing the
+// rate throttle (used e.g. during startup burst seeding and unit tests).
+func (h *sampleHistory) forceAppend(pct float64) []float64 {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.samples = append(h.samples, pct)
 	if len(h.samples) > loadHistoryLen {
 		h.samples = h.samples[len(h.samples)-loadHistoryLen:]
 	}
+	h.lastSample = time.Now()
 	out := make([]float64, len(h.samples))
 	copy(out, h.samples)
 	return out
@@ -498,6 +534,17 @@ func appendGPUHistory(key string, pct float64) []float64 {
 	}
 	gpuHistoryMu.Unlock()
 	return h.append(pct)
+}
+
+func forceAppendGPUHistory(key string, pct float64) []float64 {
+	gpuHistoryMu.Lock()
+	h, ok := gpuHistory[key]
+	if !ok {
+		h = &sampleHistory{}
+		gpuHistory[key] = h
+	}
+	gpuHistoryMu.Unlock()
+	return h.forceAppend(pct)
 }
 
 func appendVRAMHistory(key string, pct float64) []float64 {
@@ -543,7 +590,7 @@ func burstSeedGPUHistory(key, busyPath string) []float64 {
 		if err != nil {
 			break
 		}
-		hist = appendGPUHistory(key, float64(v))
+		hist = forceAppendGPUHistory(key, float64(v))
 		if i < loadHistoryLen-1 {
 			time.Sleep(historyBurstInterval)
 		}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -2481,4 +2482,97 @@ func TestMicActivityTracker(t *testing.T) {
 		t.Errorf("expected ShouldRedraw=false for 'off' mode even during loud speech")
 	}
 }
+
+func TestRedrawThrottlerCoalescingAndRateLimit(t *testing.T) {
+	var count atomic.Int32
+	throttler := newRedrawThrottler(50*time.Millisecond, func() {
+		count.Add(1)
+	})
+	defer throttler.Stop()
+
+	// Initial rapid burst of 100 requests.
+	for i := 0; i < 100; i++ {
+		throttler.Request()
+	}
+
+	// Immediately after initial burst, exactly 1 draw should have triggered synchronously.
+	if got := count.Load(); got != 1 {
+		t.Fatalf("immediate triggers = %d, want 1", got)
+	}
+
+	// Wait for the coalesced trailing frame (at +50ms) to fire.
+	time.Sleep(80 * time.Millisecond)
+	if got := count.Load(); got != 2 {
+		t.Fatalf("triggers after frame interval = %d, want 2", got)
+	}
+
+	// Request during the rate-limit window (30ms after trailing frame): must be queued, not immediate.
+	throttler.Request()
+	if got := count.Load(); got != 2 {
+		t.Fatalf("triggers during throttle window = %d, want 2", got)
+	}
+
+	// Wait for the queued request to fire.
+	time.Sleep(80 * time.Millisecond)
+	if got := count.Load(); got != 3 {
+		t.Fatalf("triggers after queued frame = %d, want 3", got)
+	}
+
+	// Wait past the full interval (>50ms after previous trigger).
+	time.Sleep(70 * time.Millisecond)
+
+	// Now a new burst starts after the full interval: triggers immediately.
+	for i := 0; i < 100; i++ {
+		throttler.Request()
+	}
+	if got := count.Load(); got != 4 {
+		t.Fatalf("immediate triggers after full interval = %d, want 4", got)
+	}
+
+	// Wait for its coalesced trailing frame.
+	time.Sleep(80 * time.Millisecond)
+	if got := count.Load(); got != 5 {
+		t.Fatalf("triggers after second burst trailing frame = %d, want 5", got)
+	}
+}
+
+func TestRedrawThrottlerMarkDrawn(t *testing.T) {
+	var count atomic.Int32
+	throttler := newRedrawThrottler(50*time.Millisecond, func() {
+		count.Add(1)
+	})
+	defer throttler.Stop()
+
+	// Mark drawn just now.
+	throttler.MarkDrawn(time.Now())
+
+	// Request redraw immediately: should be delayed rather than triggering immediately.
+	throttler.Request()
+	if got := count.Load(); got != 0 {
+		t.Fatalf("immediate triggers after MarkDrawn = %d, want 0", got)
+	}
+
+	time.Sleep(80 * time.Millisecond)
+	if got := count.Load(); got != 1 {
+		t.Fatalf("triggers after interval = %d, want 1", got)
+	}
+}
+
+func TestRedrawThrottlerStop(t *testing.T) {
+	var count atomic.Int32
+	throttler := newRedrawThrottler(50*time.Millisecond, func() {
+		count.Add(1)
+	})
+
+	throttler.MarkDrawn(time.Now())
+	throttler.Request() // Pending timer scheduled
+
+	throttler.Stop()
+	time.Sleep(80 * time.Millisecond)
+
+	if got := count.Load(); got != 0 {
+		t.Fatalf("triggers after Stop() = %d, want 0", got)
+	}
+}
+
 
