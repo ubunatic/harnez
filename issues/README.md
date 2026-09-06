@@ -11,7 +11,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 003 | [003-mergedocs-dedup-bug.md](003-mergedocs-dedup-bug.md) | mergeDocs dedup bug — duplicate --docs flags pass through | Closed — fixed in `internal/claude/apply.go` and `internal/jsonc/jsonc.go` (2026-08-19) |
 | 004 | [004-diff-exit-code-swallowed.md](004-diff-exit-code-swallowed.md) | diff exit code 2 (error) silently swallowed | Closed — fixed in `internal/markdown/markdown.go` and `internal/claude/apply.go` (2026-08-19) |
 | 005 | [005-permissions-grow-only.md](005-permissions-grow-only.md) | Permissions are grow-only — revoked entries never removed | Open |
-| 006 | [006-status-checks-only-model.md](006-status-checks-only-model.md) | status settings.json check covers only model key | Open — partially fixed |
+| 006 | [006-status-checks-only-model.md](006-status-checks-only-model.md) | status settings.json check covers only model key | Closed — resolved in a39b916 |
 | 007 | [007-no-tests.md](007-no-tests.md) | Thin test coverage — gaps remaining | Open — partially addressed |
 | 008 | [archive/008-commands-summary-excludes-new.md](archive/008-commands-summary-excludes-new.md) | Apply summary omits newly written commands | Fixed (2026-06-23) |
 | 009 | [009-diff-clean-no-makefile-targets.md](009-diff-clean-no-makefile-targets.md) | diff and clean don't cover Makefile targets | Open |
@@ -23,7 +23,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 015 | [015-agents-md-uman-workspace-awareness.md](015-agents-md-uman-workspace-awareness.md) | AGENTS.md must teach agents about uman (workspace glue) | Open |
 | 016 | [016-make-smoke-convention.md](016-make-smoke-convention.md) | `make smoke` convention: live-run targets in Make.md | Open |
 | 017 | [017-spec-md-is-cati-specific-not-generic.md](017-spec-md-is-cati-specific-not-generic.md) | `docs/Spec.md` (bundled, `default: true`) is Cati-specific, not a generic guide | Closed |
-| 018 | [018-mark-bundled-docs-in-frontmatter.md](018-mark-bundled-docs-in-frontmatter.md) | Bundled docs don't self-identify as harnez-managed | Open |
+| 018 | [018-mark-bundled-docs-in-frontmatter.md](018-mark-bundled-docs-in-frontmatter.md) | Bundled docs don't self-identify as harnez-managed | Closed — resolved in e371540 (backfill), 9a5081d (guard test) |
 | 019 | [019-rename-to-harnez.md](019-rename-to-harnez.md) | Rename project from claudeconfig to harnez | Closed |
 | 020 | [archive/020-tools-command-os-tools.md](archive/020-tools-command-os-tools.md) | `harnez tools`: guided OS-level tool installation | Closed — extracted into standalone project [`voxi`](https://github.com/ubunatic/voxi) (see issue 029) |
 | 023 | [archive/023-usage-command-token-quota-tracking.md](archive/023-usage-command-token-quota-tracking.md) | `harnez usage`: Unified Token, Session & Quota Status Command | Closed — resolved in `48a2585` (`--watch` live view) and `6c82176` (`--summary` view, quota-fetch robustness), 2026-08-18 |
