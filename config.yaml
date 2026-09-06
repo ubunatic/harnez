@@ -406,6 +406,7 @@ agents_md:
         No ";", break before then/else/docs
         No "if [[]]", No "if []", Use "if test"
         smart indent!
+        Use git -C/make -C, not cd
       source: docs/lang/Bash.md
       target: ~/.claude/docs/Bash.md
       local: ./docs/Bash.md

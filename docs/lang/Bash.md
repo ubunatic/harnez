@@ -116,6 +116,68 @@ Avoid arbitrary fixed indentation for command blocks. Prefer **alignment continu
 - Define functions before first invocation.
 - Return status with `return 0` / `return 1` (exit codes, never printed booleans).
 
+## 8. Directory Scoping — Prefer `-C` Over `cd`
+
+**Rule**: if the command has a directory flag, use it — never `cd` purely for scoping.
+
+The shell tool's cwd persists across tool calls within a session. A `cd` in one call
+silently changes where the *next* unrelated call runs, producing wrong-repo results
+with no error (e.g. `git status` reporting on the wrong repo after a stray `cd`).
+
+### Flag table (verified against each tool's help)
+
+| Command | Directory flag | Example |
+|---------|---------------|---------|
+| `git`   | `-C <dir>`    | `git -C ~/projects/foo status` |
+| `make`  | `-C <dir>`    | `make -C ~/projects/foo test` |
+| `go`    | `-C <dir>` (Go 1.20+) | `go -C ~/projects/foo build ./...` |
+| `npm`   | `--prefix <dir>` | `npm --prefix ~/projects/foo install` |
+| `cargo` | `--manifest-path <path>` | `cargo build --manifest-path ~/projects/foo/Cargo.toml` |
+
+### Fallback — when no flag exists
+
+If the tool has no directory flag, keep the `cd` and the command in **one** call and
+prefer the subshell form so cwd is restored automatically even within that call:
+
+```bash
+# ✅ Subshell: cwd is restored when the subshell exits
+(cd /some/dir && some-tool --flag)
+
+# ⚠️  Inline: cwd leaks into the rest of this call, but at least doesn't persist
+#    into the next tool call (do not split across calls)
+cd /some/dir && some-tool --flag
+```
+
+Never issue a bare `cd` with the intent of letting its effect carry into a *later*
+separate tool call — that is the failure mode.
+
+### Restore-cwd convention for shared shell environments
+
+In environments where the shell tool's session is **shared with the user's interactive
+terminal** (not an isolated subprocess per call), a `cd` the agent issues outlives the
+tool call and silently changes the *human's* prompt too.
+
+**Advisory mitigation** (this cannot be mechanically enforced — see issue 095):
+
+- Prefer `git -C`/`make -C`, absolute paths, or the subshell form `(cd dir && cmd)`
+  as the first choice; they restore cwd automatically.
+- If a bare `cd` is unavoidable (tool only accepts relative paths), `cd` back to the
+  starting directory before the tool call ends. Capture the start first:
+
+  ```bash
+  orig=$(pwd)
+  cd /some/dir
+  some-tool --relative-only-flag
+  cd "$orig"
+  ```
+
+- This is an **advisory mitigation, not enforcement** — the shell tool can navigate
+  anywhere the OS user can reach regardless of project scope; this convention just makes
+  a well-behaved agent less likely to leave the shared shell in a surprising place.
+
+See also: issue 095 (cwd-leaking incident, trust-boundary analysis) and issue 222
+(multi-repo wrong-repo failure from stray `cd`).
+
 ## Appendix — Awk Portability
 The default `awk` on Debian, Ubuntu, and Raspberry Pi OS is **mawk**, not gawk.
 Avoid gawk extensions:
