@@ -1,7 +1,7 @@
 # 217 — Add -n Limit (Default: 10) and --all Flag to harnez find issues
 
 **Status**: Open
-**Priority**: P2 (Medium)
+**Priority**: P1 (High) — bumped from P2 2026-09-07 after a second real occurrence (see Recurrence section); flagged as a recurring papercut across "any find/list command"
 **Severity**: Minor
 **Category**: Feature / CLI
 **Related**: [158-find-entity-query-command.md](158-find-entity-query-command.md), [194-reserve-next-issue-number.md](194-reserve-next-issue-number.md), [docs/CLIDesign.md](../docs/CLIDesign.md)
