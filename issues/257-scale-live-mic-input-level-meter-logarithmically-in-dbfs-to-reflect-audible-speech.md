@@ -1,6 +1,6 @@
 # 257 — Scale Live Mic Input Level Meter Logarithmically in dBFS to Reflect Audible Speech
 
-**Status**: In Progress — in progress — lean fresh-sprint
+**Status**: Closed — logarithmic dBFS scaling for live mic meter landed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: UX / Agentic Ergonomics
