@@ -1922,8 +1922,8 @@ func TestSplashBarPercentDeterminateFillsAndCaps(t *testing.T) {
 // variants fit within the requested terminal geometry.
 func TestBuildSplashFrameAnimateVsFrozen(t *testing.T) {
 	cols, rows := 80, 24
-	animated := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "")
-	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false, 0, false, "")
+	animated := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "", "")
+	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false, 0, false, "", "")
 
 	if len(animated.lines) > rows || len(frozen.lines) > rows {
 		t.Fatalf("expected splash frames to fit within %d rows, got %d/%d", rows, len(animated.lines), len(frozen.lines))
@@ -1967,6 +1967,94 @@ func TestSplashStatusLineFormatsEachStage(t *testing.T) {
 	}
 }
 
+// TestSplashBadgesLine checks issue 252's cumulative completed source badges line:
+// green checkmarks for completed sources, red/warm cross marks for failed sources,
+// and empty string when no badges exist.
+func TestSplashBadgesLine(t *testing.T) {
+	if got := splashBadgesLine(nil); got != "" {
+		t.Fatalf("expected empty string for nil badges, got %q", got)
+	}
+	if got := splashBadgesLine([]splashBadge{}); got != "" {
+		t.Fatalf("expected empty string for empty badges, got %q", got)
+	}
+
+	badges := []splashBadge{
+		{source: "agy", ok: true},
+		{source: "claude", ok: true},
+		{source: "mic", ok: true},
+	}
+	got := splashBadgesLine(badges)
+	stripped := stripANSI(got)
+	want := "✓ agy  ✓ claude  ✓ mic"
+	if stripped != want {
+		t.Fatalf("expected badges %q, got %q", want, stripped)
+	}
+	if !strings.Contains(got, colorSGR("chart-green")) {
+		t.Fatalf("expected checkmarks to use chart-green color, got %q", got)
+	}
+
+	failedBadges := []splashBadge{
+		{source: "agy", ok: true},
+		{source: "codex", ok: false},
+	}
+	failedGot := splashBadgesLine(failedBadges)
+	failedStripped := stripANSI(failedGot)
+	failedWant := "✓ agy  ✗ codex"
+	if failedStripped != failedWant {
+		t.Fatalf("expected failed badges %q, got %q", failedWant, failedStripped)
+	}
+	if !strings.Contains(failedGot, colorSGR("chart-warm")) {
+		t.Fatalf("expected failed marks to use chart-warm color, got %q", failedGot)
+	}
+}
+
+// TestSplashStatusRecordAccumulatesBadges checks that splashStatusRecord queues
+// events for the rolling single-line status log and accumulates completed/failed
+// badges only on terminal stages (FetchDone, FetchFailed), updating idempotently.
+func TestSplashStatusRecordAccumulatesBadges(t *testing.T) {
+	var st splashStatusState
+
+	// Started stage queues an event but creates no badge yet.
+	st = splashStatusRecord(st, "agy", FetchStarted)
+	if len(st.queue) != 1 || len(st.badges) != 0 {
+		t.Fatalf("expected 1 queued event and 0 badges on FetchStarted, got queue=%d badges=%d", len(st.queue), len(st.badges))
+	}
+
+	// Done stage queues an event and creates a successful badge.
+	st = splashStatusRecord(st, "agy", FetchDone)
+	if len(st.queue) != 2 || len(st.badges) != 1 {
+		t.Fatalf("expected 2 queued events and 1 badge on FetchDone, got queue=%d badges=%d", len(st.queue), len(st.badges))
+	}
+	if st.badges[0].source != "agy" || !st.badges[0].ok {
+		t.Fatalf("expected badge agy (ok=true), got %+v", st.badges[0])
+	}
+
+	// Another source starts and fails.
+	st = splashStatusRecord(st, "codex", FetchStarted)
+	st = splashStatusRecord(st, "codex", FetchFailed)
+	if len(st.badges) != 2 {
+		t.Fatalf("expected 2 badges, got %d", len(st.badges))
+	}
+	if st.badges[1].source != "codex" || st.badges[1].ok {
+		t.Fatalf("expected badge codex (ok=false), got %+v", st.badges[1])
+	}
+
+	// Idempotent update on same source.
+	st = splashStatusRecord(st, "codex", FetchDone)
+	if len(st.badges) != 2 {
+		t.Fatalf("expected badge count to remain 2 on update, got %d", len(st.badges))
+	}
+	if st.badges[1].source != "codex" || !st.badges[1].ok {
+		t.Fatalf("expected codex badge to update to ok=true, got %+v", st.badges[1])
+	}
+
+	// Empty source is a no-op.
+	st = splashStatusRecord(st, "", FetchDone)
+	if len(st.badges) != 2 {
+		t.Fatalf("expected empty source to be ignored, got %d badges", len(st.badges))
+	}
+}
+
 // TestBuildSplashFrameStatusLine checks issue 169's splash status line: it
 // appears, styled, when animating with non-empty statusText; it stays out of
 // the frame entirely both when statusText is empty (no event yet) and once
@@ -1977,19 +2065,19 @@ func TestSplashStatusLineFormatsEachStage(t *testing.T) {
 func TestBuildSplashFrameStatusLine(t *testing.T) {
 	cols, rows := 80, 24
 
-	withStatus := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "fetching codex...")
+	withStatus := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "fetching codex...", "")
 	withStatusText := stripANSI(strings.Join(withStatus.lines, "\n"))
 	if !strings.Contains(withStatusText, "fetching codex...") {
 		t.Fatalf("expected the animating splash to show the status line, got:\n%s", withStatusText)
 	}
 
-	noStatus := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "")
+	noStatus := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "", "")
 	noStatusText := stripANSI(strings.Join(noStatus.lines, "\n"))
 	if strings.Contains(noStatusText, "fetching") {
 		t.Fatalf("expected no status line when statusText is empty, got:\n%s", noStatusText)
 	}
 
-	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false, 0, false, "fetching codex...")
+	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false, 0, false, "fetching codex...", "")
 	frozenText := stripANSI(strings.Join(frozen.lines, "\n"))
 	if strings.Contains(frozenText, "fetching codex...") {
 		t.Fatalf("expected the frozen (post-skip) splash to drop the status line, got:\n%s", frozenText)
@@ -2002,6 +2090,81 @@ func TestBuildSplashFrameStatusLine(t *testing.T) {
 	}
 	if len(withStatus.lines) > rows {
 		t.Fatalf("expected splash frame to fit within %d rows, got %d", rows, len(withStatus.lines))
+	}
+}
+
+// TestBuildSplashFrameBadgesRow checks issue 252's completed source badges row:
+// it appears directly under the status log line when animating, remains centered,
+// and drops cleanly on freeze (post-Esc) or tight geometries.
+func TestBuildSplashFrameBadgesRow(t *testing.T) {
+	cols, rows := 80, 24
+
+	badges := []splashBadge{
+		{source: "agy", ok: true},
+		{source: "claude", ok: true},
+		{source: "mic", ok: true},
+	}
+	badgesLine := splashBadgesLine(badges)
+
+	frame := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "fetching codex...", badgesLine)
+	text := stripANSI(strings.Join(frame.lines, "\n"))
+
+	if !strings.Contains(text, "fetching codex...") {
+		t.Fatalf("expected status line in splash frame, got:\n%s", text)
+	}
+	if !strings.Contains(text, "✓ agy  ✓ claude  ✓ mic") {
+		t.Fatalf("expected badges row in splash frame, got:\n%s", text)
+	}
+
+	// Verify that the badges row appears directly after the status line.
+	statusIdx := -1
+	badgeIdx := -1
+	for i, l := range frame.lines {
+		un := stripANSI(l)
+		if strings.Contains(un, "fetching codex...") {
+			statusIdx = i
+		}
+		if strings.Contains(un, "✓ agy  ✓ claude  ✓ mic") {
+			badgeIdx = i
+		}
+	}
+	if statusIdx == -1 || badgeIdx == -1 || badgeIdx != statusIdx+1 {
+		t.Fatalf("expected badges row to be directly on the line following status line: status=%d badge=%d", statusIdx, badgeIdx)
+	}
+
+	// Frozen (post-Esc) frame must drop both status line and badges row.
+	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false, 0, false, "fetching codex...", badgesLine)
+	frozenText := stripANSI(strings.Join(frozen.lines, "\n"))
+	if strings.Contains(frozenText, "✓ agy") || strings.Contains(frozenText, "fetching") {
+		t.Fatalf("expected frozen splash to omit badges and status line, got:\n%s", frozenText)
+	}
+
+	// Badges without status line (e.g. before next stage starts or after draining).
+	onlyBadges := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "", badgesLine)
+	onlyBadgesText := stripANSI(strings.Join(onlyBadges.lines, "\n"))
+	if !strings.Contains(onlyBadgesText, "✓ agy  ✓ claude  ✓ mic") {
+		t.Fatalf("expected badges row even when statusText is empty, got:\n%s", onlyBadgesText)
+	}
+
+	// Geometry bounds checks: frame lines must not exceed cols or rows.
+	for _, l := range frame.lines {
+		if visLen(l) > cols {
+			t.Fatalf("line exceeds cols (%d): %q (%d)", cols, l, visLen(l))
+		}
+	}
+	if len(frame.lines) > rows {
+		t.Fatalf("frame lines (%d) exceed rows (%d)", len(frame.lines), rows)
+	}
+
+	// Constrained geometry (narrow / short terminal).
+	small := buildSplashFrame(40, 6, 3*splashFrameInterval, true, 0, false, "fetching codex...", badgesLine)
+	if len(small.lines) > 6 {
+		t.Fatalf("small frame lines (%d) exceed 6 rows", len(small.lines))
+	}
+	for _, l := range small.lines {
+		if visLen(l) > 40 {
+			t.Fatalf("small frame line exceeds 40 cols: %q (%d)", l, visLen(l))
+		}
 	}
 }
 

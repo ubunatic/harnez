@@ -2129,6 +2129,12 @@ type splashStatusEvent struct {
 	stage  FetchStage
 }
 
+// splashBadge represents one completed (or failed) probe/collector badge (issue 252).
+type splashBadge struct {
+	source string
+	ok     bool
+}
+
 // splashStatusState is the splash status line's queue of pending events plus
 // which one is currently on screen. reportFetchStage (in RunWatchWithOptions)
 // appends to queue; splashStatusAdvance pops from it on a minimum-display
@@ -2138,6 +2144,33 @@ type splashStatusState struct {
 	current splashStatusEvent
 	have    bool
 	shownAt time.Time
+	badges  []splashBadge
+}
+
+// splashStatusRecord records a new FetchStage event into st: appending the
+// event to queue for the rolling single-line status log, and recording a
+// completed/failed badge into st.badges when the event is terminal (FetchDone
+// or FetchFailed).
+func splashStatusRecord(st splashStatusState, source string, stage FetchStage) splashStatusState {
+	if source == "" {
+		return st
+	}
+	st.queue = append(st.queue, splashStatusEvent{source: source, stage: stage})
+	if stage == FetchDone || stage == FetchFailed {
+		ok := stage == FetchDone
+		found := false
+		for i, b := range st.badges {
+			if b.source == source {
+				st.badges[i].ok = ok
+				found = true
+				break
+			}
+		}
+		if !found {
+			st.badges = append(st.badges, splashBadge{source: source, ok: ok})
+		}
+	}
+	return st
 }
 
 // splashStatusAdvance pops the next queued event into st.current once
@@ -2191,6 +2224,28 @@ func splashStatusLine(source string, stage FetchStage, have bool) string {
 	}
 }
 
+// splashBadgesLine renders the cumulative list of completed/failed source badges
+// (issue 252) shown under the single rolling fetch status log line on the
+// startup splash screen. Successfully completed sources render as green
+// checkmarks (e.g. "✓ agy"), while failed sources render as warm cross marks
+// (e.g. "✗ codex"). Returns empty string when no badges are present.
+func splashBadgesLine(badges []splashBadge) string {
+	if len(badges) == 0 {
+		return ""
+	}
+	items := make([]string, len(badges))
+	for i, b := range badges {
+		var mark string
+		if b.ok {
+			mark = ansiWrap("chart-green", "✓")
+		} else {
+			mark = ansiWrap("chart-warm", "✗")
+		}
+		items[i] = mark + " " + ansiWrap("dim-grey", b.source)
+	}
+	return strings.Join(items, "  ")
+}
+
 // buildSplashFrame paints the startup splash (issue 164): a spinner, an
 // indeterminate progress bar (rendered via internal/rograph, the same bar
 // renderer the rest of the dashboard uses), and a short hint line, centered
@@ -2216,7 +2271,11 @@ func splashStatusLine(source string, stage FetchStage, have bool) string {
 // exactly one line under the bar, or omitted entirely when empty (no event
 // has arrived yet). It deliberately carries only the single latest event,
 // never a scrolling history, per the ticket's "single line" scope.
-func buildSplashFrame(cols, rows int, elapsed time.Duration, animate bool, estimate time.Duration, haveEstimate bool, statusText string) screenFrame {
+//
+// badgesText (issue 252) is the cumulative completed source badges line
+// (see splashBadgesLine) -- e.g. "✓ agy  ✓ claude  ✓ mic" -- shown directly
+// under the status line, or omitted entirely when empty.
+func buildSplashFrame(cols, rows int, elapsed time.Duration, animate bool, estimate time.Duration, haveEstimate bool, statusText, badgesText string) screenFrame {
 	spinner := splashSpinnerGlyph(elapsed)
 	hint := "Esc to skip"
 	if !animate {
@@ -2236,8 +2295,16 @@ func buildSplashFrame(cols, rows int, elapsed time.Duration, animate bool, estim
 	hintLine := ansiWrap("dim-grey", hint)
 
 	content := []string{title, "", bar}
-	if animate && statusText != "" {
-		content = append(content, "", ansiWrap("dim-grey", statusText))
+	if animate {
+		if statusText != "" {
+			content = append(content, "", ansiWrap("dim-grey", statusText))
+		}
+		if badgesText != "" {
+			if statusText == "" {
+				content = append(content, "")
+			}
+			content = append(content, badgesText)
+		}
 	}
 	content = append(content, "", hintLine)
 	top := (rows - len(content)) / 2
@@ -2533,7 +2600,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	var splashStatus splashStatusState
 	reportFetchStage := func(source string, stage FetchStage) {
 		splashStatusMu.Lock()
-		splashStatus.queue = append(splashStatus.queue, splashStatusEvent{source: source, stage: stage})
+		splashStatus = splashStatusRecord(splashStatus, source, stage)
 		splashStatusMu.Unlock()
 	}
 
@@ -2559,7 +2626,16 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			fresh, procRes, _ = CollectRemoteProgress(sigCtx, targetHost, procRequested, reportFetchStage)
 			lastProcs = procRes
 		} else {
+			var micWg sync.WaitGroup
+			micWg.Add(1)
+			go func() {
+				defer micWg.Done()
+				reportFetchStage("mic", FetchStarted)
+				_ = CurrentMicStatus()
+				reportFetchStage("mic", FetchDone)
+			}()
 			fresh = CollectAllProgress(sigCtx, homeDir, client, reportFetchStage)
+			micWg.Wait()
 			lastProcs = nil
 			if historyDir != "" {
 				// Best-effort: a missed append shouldn't interrupt the dashboard.
@@ -2627,9 +2703,10 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		splashStatusMu.Lock()
 		splashStatus = splashStatusAdvance(splashStatus, now, splashStatusMinDisplay)
 		statusText := splashStatusLine(splashStatus.current.source, splashStatus.current.stage, splashStatus.have)
+		badgesText := splashBadgesLine(splashStatus.badges)
 		drained = splashStatusDrained(splashStatus, now, splashStatusMinDisplay)
 		splashStatusMu.Unlock()
-		frame := buildSplashFrame(cols, rows, elapsed, animate, splashEstimate, splashHaveEstimate, statusText)
+		frame := buildSplashFrame(cols, rows, elapsed, animate, splashEstimate, splashHaveEstimate, statusText, badgesText)
 		outMu.Lock()
 		frame.paint(out)
 		outMu.Unlock()
