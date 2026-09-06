@@ -3,6 +3,7 @@ title: Agentic Loop Practices
 weight: 40
 ---
 
+<!-- harnez:bundled -->
 # Agentic Loop Practices — Multi-Agent Sprint Workflow
 
 This document establishes the canonical practice for orchestrating multi-agent development loops. It defines the lifecycle, synchronization invariants, role archetypes, and quality gates required to conduct rapid, collision-free agentic sprints.

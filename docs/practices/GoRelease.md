@@ -3,6 +3,7 @@ title: Release Pipeline
 weight: 50
 ---
 
+<!-- harnez:bundled -->
 # Release Pipeline & Non-Interactive Signing
 
 This document establishes the canonical standard for releasing projects across the

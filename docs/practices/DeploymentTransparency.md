@@ -3,6 +3,7 @@ title: Deployment Transparency Practices
 weight: 47
 ---
 
+<!-- harnez:bundled -->
 # Deployment Transparency — Live State Grounding
 
 Agents that provision or pair on remote infrastructure routinely conflate three distinct layers of

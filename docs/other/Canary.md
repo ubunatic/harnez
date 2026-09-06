@@ -3,6 +3,7 @@ title: Canary-First Development
 weight: 20
 ---
 
+<!-- harnez:bundled -->
 # Canary-First Development
 
 A **canary** is a minimal, standalone test that validates one external

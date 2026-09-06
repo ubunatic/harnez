@@ -3,6 +3,7 @@ title: ConciseMode Practices
 weight: 46
 ---
 
+<!-- harnez:bundled -->
 # ConciseMode — Graded Output Terseness
 
 Output generation latency, not reasoning, is the bottleneck on slow inference paths (e.g. local

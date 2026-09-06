@@ -3,6 +3,7 @@ title: Website Building Rules
 weight: 25
 ---
 
+<!-- harnez:bundled -->
 # Website Building Rules
 
 Rules for any agent asked to build or update a project website (`website/` dir,

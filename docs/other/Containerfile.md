@@ -3,6 +3,7 @@ title: Containerfile Build Efficiency
 weight: 40
 ---
 
+<!-- harnez:bundled -->
 # Containerfile.md — Fast, Cached, and Incremental Container Builds
 
 Containerfiles (Dockerfiles) build efficiently only when each instruction is placed by how
