@@ -131,8 +131,17 @@ load-charts:
 #   "off": strictly 1s normal redraws only
 # normal-delay-ms: baseline redraw delay during silence / idle (e.g. 1000ms)
 # high-fps-delay-ms: speech-activated high-frequency redraw delay (e.g. 50ms)
+# value: metric to display across the rolling sample window:
+#   "max" (default): peak level across window (fast attack, clear speech transients)
+#   "avg": mean RMS across window
+#   "min": minimum level across window
+#   "live": instantaneous last sample
+# window-seconds: duration of rolling sample window in seconds (e.g. 0.1 for 100ms)
 mic-live:
   high-fps: auto
   normal-delay-ms: 1000
   high-fps-delay-ms: 50
+  value: max
+  window-seconds: 0.1
+
 

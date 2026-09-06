@@ -92,11 +92,19 @@ type micLiveReading struct {
 
 // micLiveMeter is the mutex-guarded handoff point between the background
 // capture goroutine (the only writer) and the watch redraw loop (the only
+type micSample struct {
+	ts    time.Time
+	level float64
+}
+
+// micLiveMeter is the mutex-guarded handoff point between the background
+// capture goroutine (the only writer) and the watch redraw loop (the only
 // reader) — same shape as runRemoteLoadManager's lastRemoteLoad/remoteLoadMu
 // pair, just scoped to this one value instead of a whole LoadSnapshot.
 type micLiveMeter struct {
 	mu      sync.Mutex
 	reading micLiveReading
+	samples []micSample
 }
 
 func (m *micLiveMeter) set(r micLiveReading) {
@@ -105,15 +113,60 @@ func (m *micLiveMeter) set(r micLiveReading) {
 	m.mu.Unlock()
 }
 
-func (m *micLiveMeter) update(rawLevel float64, available bool) micLiveReading {
+func (m *micLiveMeter) update(rawLevel float64, available bool, now time.Time, metric MicLiveValueMetric, window time.Duration) micLiveReading {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !available {
+		m.samples = nil
 		m.reading = micLiveReading{Available: false, Level: 0}
 		return m.reading
 	}
-	newLevel := micLiveApplyBallistics(m.reading.Level, rawLevel)
-	m.reading = micLiveReading{Level: newLevel, Available: true}
+
+	m.samples = append(m.samples, micSample{ts: now, level: rawLevel})
+
+	cutoff := now.Add(-window)
+	start := 0
+	for start < len(m.samples) && m.samples[start].ts.Before(cutoff) {
+		start++
+	}
+	if start > 0 {
+		m.samples = m.samples[start:]
+	}
+
+	if len(m.samples) == 0 {
+		m.reading = micLiveReading{Level: rawLevel, Available: true}
+		return m.reading
+	}
+
+	var computed float64
+	switch metric {
+	case MicLiveValueLive:
+		computed = rawLevel
+	case MicLiveValueMin:
+		computed = m.samples[0].level
+		for _, s := range m.samples[1:] {
+			if s.level < computed {
+				computed = s.level
+			}
+		}
+	case MicLiveValueAvg:
+		var sum float64
+		for _, s := range m.samples {
+			sum += s.level
+		}
+		computed = sum / float64(len(m.samples))
+	case MicLiveValueMax:
+		fallthrough
+	default:
+		computed = m.samples[0].level
+		for _, s := range m.samples[1:] {
+			if s.level > computed {
+				computed = s.level
+			}
+		}
+	}
+
+	m.reading = micLiveReading{Level: computed, Available: true}
 	return m.reading
 }
 
@@ -188,7 +241,8 @@ func runMicLiveManager(ctx context.Context, m *micLiveMeter, onSample func(micLi
 		if ctx.Err() != nil {
 			return
 		}
-		m.update(0, false)
+		spec := watchMicLiveSpec()
+		m.update(0, false, time.Now(), spec.ValueMetric(), spec.WindowDuration())
 		if onSample != nil {
 			onSample(micLiveReading{Available: false})
 		}
@@ -210,6 +264,8 @@ func captureMicLiveOnce(ctx context.Context, m *micLiveMeter, onSample func(micL
 		"--format=s16le",
 		"--rate="+strconv.Itoa(micLiveSampleRate),
 		"--channels=1",
+		"--latency-msec=20",
+		"--process-time-msec=20",
 		"-d", "@DEFAULT_SOURCE@",
 	)
 	cmd.Cancel = func() error {
@@ -230,7 +286,8 @@ func captureMicLiveOnce(ctx context.Context, m *micLiveMeter, onSample func(micL
 		n, err := io.ReadFull(stdout, buf)
 		if n > 0 {
 			rawLevel := micLiveAmplitudeFromPCM16LE(buf[:n])
-			reading := m.update(rawLevel, true)
+			spec := watchMicLiveSpec()
+			reading := m.update(rawLevel, true, time.Now(), spec.ValueMetric(), spec.WindowDuration())
 			if onSample != nil {
 				onSample(reading)
 			}

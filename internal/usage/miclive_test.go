@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"math"
 	"testing"
+	"time"
 )
 
 // pcm16LE encodes signed 16-bit samples as little-endian bytes, matching
@@ -202,8 +203,11 @@ func TestMicLiveApplyBallistics_ClampToRawFloor(t *testing.T) {
 
 func TestMicLiveMeter_Update(t *testing.T) {
 	var m micLiveMeter
-	// Initial update with speech
-	r1 := m.update(40.0, true)
+	t0 := time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)
+	window := 100 * time.Millisecond
+
+	// 1. Initial sample with Max metric
+	r1 := m.update(40.0, true, t0, MicLiveValueMax, window)
 	if !r1.Available || r1.Level != 40.0 {
 		t.Errorf("update speech: got %+v, want {Level: 40, Available: true}", r1)
 	}
@@ -211,10 +215,41 @@ func TestMicLiveMeter_Update(t *testing.T) {
 		t.Errorf("snapshot mismatch: got %+v, want %+v", snap, r1)
 	}
 
-	// Update when unavailable (subprocess exited/restarting)
-	r2 := m.update(0.0, false)
-	if r2.Available || r2.Level != 0.0 {
-		t.Errorf("update unavailable: got %+v, want {Level: 0, Available: false}", r2)
+	// 2. Add smaller sample within window: Max should remain 40.0
+	r2 := m.update(20.0, true, t0.Add(20*time.Millisecond), MicLiveValueMax, window)
+	if r2.Level != 40.0 {
+		t.Errorf("expected max level 40.0, got %v", r2.Level)
+	}
+
+	// 3. Test Avg metric across the two samples (40 and 20 -> 30)
+	rAvg := m.update(20.0, true, t0.Add(40*time.Millisecond), MicLiveValueAvg, window)
+	// samples in window: 40, 20, 20 -> avg = 80/3 = 26.666...
+	if rAvg.Level < 26.0 || rAvg.Level > 27.0 {
+		t.Errorf("expected avg ~26.66, got %v", rAvg.Level)
+	}
+
+	// 4. Test Min metric across window (min = 20)
+	rMin := m.update(25.0, true, t0.Add(50*time.Millisecond), MicLiveValueMin, window)
+	if rMin.Level != 20.0 {
+		t.Errorf("expected min level 20.0, got %v", rMin.Level)
+	}
+
+	// 5. Test Live metric (instantaneous latest: 25.0)
+	rLive := m.update(25.0, true, t0.Add(60*time.Millisecond), MicLiveValueLive, window)
+	if rLive.Level != 25.0 {
+		t.Errorf("expected live level 25.0, got %v", rLive.Level)
+	}
+
+	// 6. Advance past window: older samples expired
+	rExpired := m.update(15.0, true, t0.Add(200*time.Millisecond), MicLiveValueMax, window)
+	if rExpired.Level != 15.0 {
+		t.Errorf("expected level 15.0 after window expiry, got %v", rExpired.Level)
+	}
+
+	// 7. Update when unavailable (subprocess exited/restarting)
+	rUnavail := m.update(0.0, false, t0.Add(300*time.Millisecond), MicLiveValueMax, window)
+	if rUnavail.Available || rUnavail.Level != 0.0 {
+		t.Errorf("update unavailable: got %+v, want {Level: 0, Available: false}", rUnavail)
 	}
 }
 

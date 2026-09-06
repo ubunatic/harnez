@@ -137,10 +137,22 @@ const (
 	MicLiveHighFPSOff  MicLiveHighFPSMode = "off"
 )
 
+// MicLiveValueMetric controls which metric across the rolling window is displayed.
+type MicLiveValueMetric string
+
+const (
+	MicLiveValueMax  MicLiveValueMetric = "max"
+	MicLiveValueAvg  MicLiveValueMetric = "avg"
+	MicLiveValueMin  MicLiveValueMetric = "min"
+	MicLiveValueLive MicLiveValueMetric = "live"
+)
+
 type micLiveSpec struct {
-	HighFPS        string `yaml:"high-fps"`
-	NormalDelayMS  int    `yaml:"normal-delay-ms"`
-	HighFPSDelayMS int    `yaml:"high-fps-delay-ms"`
+	HighFPS        string  `yaml:"high-fps"`
+	NormalDelayMS  int     `yaml:"normal-delay-ms"`
+	HighFPSDelayMS int     `yaml:"high-fps-delay-ms"`
+	Value          string  `yaml:"value"`
+	WindowSeconds  float64 `yaml:"window-seconds"`
 }
 
 func (s micLiveSpec) HighFPSMode() MicLiveHighFPSMode {
@@ -166,6 +178,28 @@ func (s micLiveSpec) HighFPSDelay() time.Duration {
 		return 50 * time.Millisecond
 	}
 	return time.Duration(s.HighFPSDelayMS) * time.Millisecond
+}
+
+func (s micLiveSpec) ValueMetric() MicLiveValueMetric {
+	switch strings.ToLower(strings.TrimSpace(s.Value)) {
+	case "avg":
+		return MicLiveValueAvg
+	case "min":
+		return MicLiveValueMin
+	case "live":
+		return MicLiveValueLive
+	case "max":
+		fallthrough
+	default:
+		return MicLiveValueMax
+	}
+}
+
+func (s micLiveSpec) WindowDuration() time.Duration {
+	if s.WindowSeconds <= 0 {
+		return 100 * time.Millisecond
+	}
+	return time.Duration(s.WindowSeconds * float64(time.Second))
 }
 
 func (s indicatorsSpec) micLive() micLiveSpec {

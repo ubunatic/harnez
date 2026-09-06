@@ -113,6 +113,15 @@
           "type": "integer",
           "minimum": 10,
           "maximum": 1000
+        },
+        "value": {
+          "type": "string",
+          "enum": ["avg", "min", "max", "live"]
+        },
+        "window-seconds": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 60.0
         }
       },
       "additionalProperties": false

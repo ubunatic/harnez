@@ -591,15 +591,31 @@ func TestEmbeddedIndicatorsSpecMicLive(t *testing.T) {
 	if got := spec.HighFPSDelay(); got != 50*time.Millisecond {
 		t.Errorf("mic-live high fps delay = %v, want 50ms", got)
 	}
+	if got := spec.ValueMetric(); got != MicLiveValueMax {
+		t.Errorf("mic-live value metric = %q, want %q", got, MicLiveValueMax)
+	}
+	if got := spec.WindowDuration(); got != 100*time.Millisecond {
+		t.Errorf("mic-live window duration = %v, want 100ms", got)
+	}
 
 	// Test parsing variants
-	onSpec := micLiveSpec{HighFPS: "on"}
+	onSpec := micLiveSpec{HighFPS: "on", Value: "avg", WindowSeconds: 0.5}
 	if got := onSpec.HighFPSMode(); got != MicLiveHighFPSOn {
 		t.Errorf("onSpec.HighFPSMode = %q, want %q", got, MicLiveHighFPSOn)
 	}
-	offSpec := micLiveSpec{HighFPS: "off"}
+	if got := onSpec.ValueMetric(); got != MicLiveValueAvg {
+		t.Errorf("onSpec.ValueMetric = %q, want %q", got, MicLiveValueAvg)
+	}
+	if got := onSpec.WindowDuration(); got != 500*time.Millisecond {
+		t.Errorf("onSpec.WindowDuration = %v, want 500ms", got)
+	}
+
+	offSpec := micLiveSpec{HighFPS: "off", Value: "min"}
 	if got := offSpec.HighFPSMode(); got != MicLiveHighFPSOff {
 		t.Errorf("offSpec.HighFPSMode = %q, want %q", got, MicLiveHighFPSOff)
+	}
+	if got := offSpec.ValueMetric(); got != MicLiveValueMin {
+		t.Errorf("offSpec.ValueMetric = %q, want %q", got, MicLiveValueMin)
 	}
 }
 
