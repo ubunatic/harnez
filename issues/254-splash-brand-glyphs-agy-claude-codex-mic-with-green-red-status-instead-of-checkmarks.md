@@ -1,6 +1,6 @@
 # 254 — Splash: Brand Glyphs (Λ agy ✳ claude ֍ codex ● mic) with Green/Red Status Instead of Checkmarks
 
-**Status**: In Progress — in progress — lean fresh-sprint
+**Status**: Closed — brand glyphs with green/red status landed
 **Priority**: P2 (Medium)
 **Severity**: Minor (UX polish / brand alignment)
 **Category**: UX / Agentic Ergonomics
