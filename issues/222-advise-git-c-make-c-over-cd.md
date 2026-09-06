@@ -1,6 +1,6 @@
 # 222 — Advise agents to use `git -C`/`make -C` etc. instead of `cd`-ing into dirs
 
-**Status**: Open
+**Status**: Closed — resolved in 22503de (docs(bash): add directory-scoping section and -C-over-cd guidance (#222))
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics

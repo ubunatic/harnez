@@ -1,6 +1,6 @@
 # 125 — Long-running agent runs should use async feedback instead of chat polling
 
-**Status**: Open
+**Status**: Closed — resolved in 22503de (Chat-Visible Empty Polling anti-pattern added to AgenticLoop.md §6)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics

@@ -1,6 +1,6 @@
 # 095 — Advise agentic workers to restore the original working directory; surface `cwd` in the Claude Code status line
 
-**Status**: Open — partially resolved (part 2 shipped, part 1 still open)
+**Status**: Closed — part 1 resolved in 22503de + 0ccea9f (docs/lang/Bash.md §8 + config.yaml WD Hygiene bullet); part 2 (statusline) previously shipped
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
