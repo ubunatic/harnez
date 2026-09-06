@@ -444,3 +444,29 @@ func filepathDir(p string) string {
 	}
 	return p[:idx]
 }
+
+// TestAllConfigDeclaredCopyableDocsHaveBundledMarker is a guard that ensures every
+// source file declared under agents_md.languages in config.yaml carries the
+// <!-- harnez:bundled --> marker. It reads from the embedded FS so it covers
+// exactly the set that actually gets installed — not a broader glob.
+// When a new copyable doc is added to config.yaml without the marker, this test fails.
+func TestAllConfigDeclaredCopyableDocsHaveBundledMarker(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+	const marker = "<!-- harnez:bundled -->"
+	for name, lang := range cfg.AgentsMD.Languages {
+		if lang.Source == "" {
+			continue
+		}
+		data, err := fs.ReadFile(cfg.FS, lang.Source)
+		if err != nil {
+			t.Errorf("doc %q: cannot read source %q from embedded FS: %v", name, lang.Source, err)
+			continue
+		}
+		if !strings.Contains(string(data), marker) {
+			t.Errorf("doc %q (source: %q) is missing %s", name, lang.Source, marker)
+		}
+	}
+}
