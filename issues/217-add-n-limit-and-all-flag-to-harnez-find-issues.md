@@ -133,3 +133,44 @@ result shares class 0 and the order is purely ticket number ascending. That make
 ### Scope
 
 Small (one CLI file, ~40 lines plus tests).
+
+## Recurrence (2026-09-07)
+
+Hit again live in `voxi` (a sibling harnez-managed project), doing ordinary
+ticket-tracker work:
+
+```
+$ harnez find issues "is:open" -n 5
+Error: unknown shorthand flag: 'n' in -n
+```
+
+The user's framing this time: "`-n` seems like a must for any find/list
+commands" — i.e. this is not perceived as a `find issues`-only gap but a
+general CLI ergonomics expectation (`head -n`, `git log -n`), and it should
+be considered for every harnez subcommand that renders a list of results,
+not only `find issues`. Workaround given was piping through `head -N`
+manually, which works but doesn't match the user's own mental model of how
+this tool should behave.
+
+A pass over `cmd/harnez/` (2026-09-07) turned up other genuinely list-shaped,
+potentially-unbounded outputs that would benefit from the same `-n`/`--limit`
+convention once this ticket's design lands, beyond the `find issues` case
+already scoped above:
+
+- `harnez find issues history` (`cmd/harnez/find.go`) — renders every
+  recorded issue-status snapshot, oldest first, unbounded.
+- `harnez feedback list` (`cmd/harnez/feedback.go`) — lists every unreviewed
+  feedback entry for a project.
+- `harnez usage history timeline` (`cmd/harnez/main.go`) — renders the merged
+  usage-history timeline across all recorded machine logs, unbounded.
+- `harnez stats` (`cmd/harnez/stats.go`) — its `ByTool`/`ByAgent`/`ByProject`
+  grouped breakdowns grow with the corpus and have no cap today.
+
+Not proposing a full spec for all four here — this ticket's own §2/§3 design
+(head-vs-tail truncation, `--all` escape hatch, truncation notice on stderr)
+should stay scoped to `find issues` as originally planned and land first.
+But whoever picks this up should treat "give `find issues` its `-n`" as the
+reference implementation for a shared convention, and open follow-up work
+(or fold it in here if trivial) to apply the same `-n`/`--limit int` flag,
+consistently, to the other list-shaped commands above rather than
+special-casing just the one command that happened to get hit twice.
