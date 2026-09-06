@@ -1,6 +1,6 @@
 # 259 — Decouple Hardware Load Timeline Sampling from High-FPS TUI Redraw Cadence
 
-**Status**: Open
+**Status**: In Progress — in progress — lean fresh-sprint
 **Priority**: P2 (Medium)
 **Severity**: Moderate (high-frequency mic redraws accelerate CPU/GPU/RAM history scrolling 20x, destroying sparkline time-series resolution)
 **Category**: Performance / UX / Architecture
