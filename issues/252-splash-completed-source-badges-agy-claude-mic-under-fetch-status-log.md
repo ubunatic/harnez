@@ -1,6 +1,6 @@
 # 252 — Splash: Completed Source Badges (✓ agy ✓ claude … ✓ mic) Under Fetch Status Log
 
-**Status**: Open
+**Status**: In Progress — in progress — lean fresh-sprint
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: UX / Agentic Ergonomics
