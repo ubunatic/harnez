@@ -1,6 +1,6 @@
 # 249 — Copied Practice Docs Retain Dangling and Inapplicable Dependencies
 
-**Status**: In Progress — begin copied-doc dependency validation
+**Status**: Closed — resolved in fb696be (and preceding commits dfa2e0e, 31073bf, b22a3e8, f98030a, 2b300da)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
@@ -99,22 +99,22 @@ dependency and applicability drift first.
 
 ## 6. Acceptance Criteria
 
-- [ ] A canary builds the dependency/applicability graph for all docs installable by `harnez init
+- [x] A canary builds the dependency/applicability graph for all docs installable by `harnez init
   --docs`, classifying hard, illustrative, capability-scoped, and destination references.
-- [ ] Installing Agentic Loop guidance into an emojig-shaped fixture produces no broken relative
+- [x] Installing Agentic Loop guidance into an emojig-shaped fixture produces no broken relative
   doc links and no unexplained references to unavailable case studies.
-- [ ] Deployment-specific normative guidance is either installed with an explicit selected
+- [x] Deployment-specific normative guidance is either installed with an explicit selected
   capability or excluded/reframed for a project that declares remote hosts and daemons out of
   scope.
-- [ ] The chosen behavior is deterministic and idempotent and does not copy the entire harnez docs
+- [x] The chosen behavior is deterministic and idempotent and does not copy the entire harnez docs
   tree as an implicit dependency closure.
-- [ ] Tests cover transitive hard dependencies, missing illustrative references, and an
+- [x] Tests cover transitive hard dependencies, missing illustrative references, and an
   architecture-inapplicable section.
-- [ ] `harnez status` or a dedicated validator reports broken/undeclared copied-doc dependencies
+- [x] `harnez status` or a dedicated validator reports broken/undeclared copied-doc dependencies
   with the source doc, reference, and remediation.
-- [ ] Documentation states what a copyable doc may assume about sibling docs, project directories,
+- [x] Documentation states what a copyable doc may assume about sibling docs, project directories,
   and optional capabilities.
-- [ ] Issue 018 is referenced for the separate AgenticLoop marker gap rather than reimplemented
+- [x] Issue 018 is referenced for the separate AgenticLoop marker gap rather than reimplemented
   here.
 
 ## 7. Verification Guidance
