@@ -153,3 +153,68 @@ func TestMicLiveManagerNilSafe(t *testing.T) {
 		t.Errorf("nil Snapshot() = %+v, want zero value", got)
 	}
 }
+
+func TestMicLiveApplyBallistics_InstantAttack(t *testing.T) {
+	// A sudden louder peak must immediately jump without lag (fast attack).
+	if got := micLiveApplyBallistics(0.0, 45.0); got != 45.0 {
+		t.Errorf("instant attack from 0 to 45 = %v, want 45", got)
+	}
+	if got := micLiveApplyBallistics(30.0, 75.0); got != 75.0 {
+		t.Errorf("instant attack from 30 to 75 = %v, want 75", got)
+	}
+	if got := micLiveApplyBallistics(50.0, 50.0); got != 50.0 {
+		t.Errorf("equal levels = %v, want 50", got)
+	}
+}
+
+func TestMicLiveApplyBallistics_SmoothDecay(t *testing.T) {
+	// A drop to silence should decay smoothly across consecutive chunks.
+	level := 50.0
+	for step := 1; step <= 5; step++ {
+		next := micLiveApplyBallistics(level, 0.0)
+		expected := level * micLiveDecayFactor
+		if math.Abs(next-expected) > 1e-6 {
+			t.Fatalf("step %d decay: got %v, want %v", step, next, expected)
+		}
+		if next >= level {
+			t.Fatalf("step %d: level did not decrease (%v -> %v)", step, level, next)
+		}
+		level = next
+	}
+}
+
+func TestMicLiveApplyBallistics_CutoffToZero(t *testing.T) {
+	// When decayed level falls below micLiveDecayCutoff, it must snap cleanly to 0.
+	got := micLiveApplyBallistics(0.6, 0.0)
+	// 0.6 * 0.8 = 0.48 < 0.5 cutoff -> 0.0
+	if got != 0.0 {
+		t.Errorf("decay below cutoff = %v, want 0.0", got)
+	}
+}
+
+func TestMicLiveApplyBallistics_ClampToRawFloor(t *testing.T) {
+	// When raw level is lower than prev but higher than decayed, level settles at raw.
+	// prev=40, decay=32, raw=35 -> 35
+	if got := micLiveApplyBallistics(40.0, 35.0); got != 35.0 {
+		t.Errorf("decay with floor: got %v, want 35.0", got)
+	}
+}
+
+func TestMicLiveMeter_Update(t *testing.T) {
+	var m micLiveMeter
+	// Initial update with speech
+	r1 := m.update(40.0, true)
+	if !r1.Available || r1.Level != 40.0 {
+		t.Errorf("update speech: got %+v, want {Level: 40, Available: true}", r1)
+	}
+	if snap := m.snapshot(); snap != r1 {
+		t.Errorf("snapshot mismatch: got %+v, want %+v", snap, r1)
+	}
+
+	// Update when unavailable (subprocess exited/restarting)
+	r2 := m.update(0.0, false)
+	if r2.Available || r2.Level != 0.0 {
+		t.Errorf("update unavailable: got %+v, want {Level: 0, Available: false}", r2)
+	}
+}
+

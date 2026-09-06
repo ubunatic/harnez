@@ -2366,6 +2366,37 @@ func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, 
 	return RunWatchWithOptions(ctx, homeDir, client, out, interval, historyDir, opts)
 }
 
+// micActivityTracker dynamically gates high-frequency UI redraws during
+// speech activity (issue 258).
+type micActivityTracker struct {
+	mu          sync.Mutex
+	lastActive  time.Time
+	gracePeriod time.Duration
+}
+
+func newMicActivityTracker(gracePeriod time.Duration) *micActivityTracker {
+	return &micActivityTracker{
+		gracePeriod: gracePeriod,
+	}
+}
+
+// ShouldRedraw reports whether an incoming mic reading warrants a fast UI redraw.
+// Returns true if level is > 0 (active sound/speech) or within gracePeriod after
+// speech ceased, and false during prolonged silence.
+func (t *micActivityTracker) ShouldRedraw(reading micLiveReading, now time.Time) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if reading.Level > 0 {
+		t.lastActive = now
+		return true
+	}
+	if !t.lastActive.IsZero() && now.Sub(t.lastActive) <= t.gracePeriod {
+		return true
+	}
+	return false
+}
+
 func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string, opts WatchOptions) error {
 	if interval < MinWatchInterval {
 		interval = MinWatchInterval
@@ -2583,7 +2614,12 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		wantMicLive := activeSec.Mic && currentHost == ""
 		switch {
 		case wantMicLive && micLiveMgr == nil:
-			micLiveMgr = startMicLiveManager(sigCtx)
+			tracker := newMicActivityTracker(micGracePeriod)
+			micLiveMgr = startMicLiveManager(sigCtx, func(r micLiveReading) {
+				if tracker.ShouldRedraw(r, time.Now()) {
+					requestRedraw()
+				}
+			})
 		case !wantMicLive && micLiveMgr != nil:
 			micLiveMgr.Stop()
 			micLiveMgr = nil

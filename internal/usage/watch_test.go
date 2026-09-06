@@ -2428,3 +2428,45 @@ func TestBuildAgentBoxDimsStaleQuotaAndAnnotatesUpdatedCaption(t *testing.T) {
 		}
 	}
 }
+
+// TestMicActivityTracker verifies the adaptive high-frequency UI redraw gating
+// logic during speech and silence (issue 258).
+func TestMicActivityTracker(t *testing.T) {
+	gracePeriod := 800 * time.Millisecond
+	tracker := newMicActivityTracker(gracePeriod)
+	t0 := time.Date(2026, 9, 6, 23, 0, 0, 0, time.UTC)
+
+	// 1. Startup in silence: ShouldRedraw must return false to preserve 1 Hz idle cadence.
+	if tracker.ShouldRedraw(micLiveReading{Level: 0, Available: true}, t0) {
+		t.Errorf("expected ShouldRedraw=false during initial silence")
+	}
+
+	// 2. Sound/speech begins: Level > 0 must return true to trigger fast redraws.
+	if !tracker.ShouldRedraw(micLiveReading{Level: 42.0, Available: true}, t0.Add(100*time.Millisecond)) {
+		t.Errorf("expected ShouldRedraw=true when active speech is detected")
+	}
+
+	// 3. Speech pauses between words (within grace period): must return true.
+	pauseTime := t0.Add(100*time.Millisecond + 400*time.Millisecond)
+	if !tracker.ShouldRedraw(micLiveReading{Level: 0.0, Available: true}, pauseTime) {
+		t.Errorf("expected ShouldRedraw=true during grace period after speech")
+	}
+
+	// 4. Silence persists past grace period: must return false to throttle back to 1 Hz.
+	silentTime := t0.Add(100*time.Millisecond + 900*time.Millisecond)
+	if tracker.ShouldRedraw(micLiveReading{Level: 0.0, Available: true}, silentTime) {
+		t.Errorf("expected ShouldRedraw=false once grace period has elapsed")
+	}
+
+	// 5. Prolonged silence: remains false.
+	if tracker.ShouldRedraw(micLiveReading{Level: 0.0, Available: true}, t0.Add(5*time.Second)) {
+		t.Errorf("expected ShouldRedraw=false during prolonged silence")
+	}
+
+	// 6. Speech resumes: returns true and re-arms the grace period.
+	restartTime := t0.Add(6 * time.Second)
+	if !tracker.ShouldRedraw(micLiveReading{Level: 35.0, Available: true}, restartTime) {
+		t.Errorf("expected ShouldRedraw=true when speech resumes")
+	}
+}
+

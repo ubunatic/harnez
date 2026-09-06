@@ -37,11 +37,11 @@ const (
 	// subprocess's CPU/bandwidth footprint negligible for a status box that
 	// may sit open for a whole watch session.
 	micLiveSampleRate = 8000
-	// micLiveChunkBytes is ~200ms of mono s16le audio at micLiveSampleRate
-	// (8000 samples/sec * 2 bytes/sample * 0.2s = 3200 bytes) — frequent
-	// enough to feel live at the watch loop's redraw cadence, coarse enough
-	// to keep the amplitude computation itself trivial.
-	micLiveChunkBytes = 3200
+	// micLiveChunkBytes is ~50ms of mono s16le audio at micLiveSampleRate
+	// (8000 samples/sec * 2 bytes/sample * 0.05s = 800 bytes) — frequent
+	// enough (20 Hz) to provide smooth, real-time VU meter response during
+	// speech while keeping RMS computation trivial (issue 258).
+	micLiveChunkBytes = 800
 	// micLiveRetryInterval paces reconnect attempts after the capture
 	// subprocess exits early (source unplugged, PipeWire restarted) or
 	// never starts (permission denied) — mirrors remoteLoadRetryInterval's
@@ -54,7 +54,32 @@ const (
 	// voice in the 25%-45% range on the visual TUI bar while suppressing ambient
 	// room silence (< -60 dBFS, RMS < 33).
 	micLiveMinDBFS = -60.0
+	// micLiveDecayFactor defines the smooth exponential release rate per 50ms
+	// audio chunk (~20 Hz) (issue 258). Instant attack jumps immediately to new
+	// peaks; release decays smoothly so syllables and speech pauses connect
+	// naturally rather than flickering.
+	micLiveDecayFactor = 0.80
+	// micLiveDecayCutoff is the floor below which decayed level snaps cleanly
+	// to zero (issue 258).
+	micLiveDecayCutoff = 0.5
+	// micGracePeriod is the duration high-frequency redraws continue after
+	// sound/speech returns to silence (issue 258) to allow smooth ballistics
+	// decay release before idling back to standard 1s cadence.
+	micGracePeriod = 800 * time.Millisecond
 )
+
+// micLiveApplyBallistics updates previous level with the raw chunk level:
+// instant attack on rises, smooth exponential release on falls (issue 258).
+func micLiveApplyBallistics(prev, raw float64) float64 {
+	if raw >= prev {
+		return raw
+	}
+	decayed := prev * micLiveDecayFactor
+	if decayed < raw || decayed < micLiveDecayCutoff {
+		return raw
+	}
+	return decayed
+}
 
 // micLiveReading is one published sample from the background capture
 // goroutine: Level is 0-100 like MicStatus.Level, and Available reports
@@ -80,6 +105,18 @@ func (m *micLiveMeter) set(r micLiveReading) {
 	m.mu.Unlock()
 }
 
+func (m *micLiveMeter) update(rawLevel float64, available bool) micLiveReading {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !available {
+		m.reading = micLiveReading{Available: false, Level: 0}
+		return m.reading
+	}
+	newLevel := micLiveApplyBallistics(m.reading.Level, rawLevel)
+	m.reading = micLiveReading{Level: newLevel, Available: true}
+	return m.reading
+}
+
 func (m *micLiveMeter) snapshot() micLiveReading {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -91,14 +128,16 @@ func (m *micLiveMeter) snapshot() micLiveReading {
 // toggled off or the watch loop exits — never leave one running unobserved
 // (Zero Zombie Guarantee, docs/practices/AgenticLoop.md).
 type micLiveManager struct {
-	meter  micLiveMeter
-	cancel context.CancelFunc
+	meter    micLiveMeter
+	cancel   context.CancelFunc
+	onSample func(micLiveReading)
 }
 
 // startMicLiveManager begins capturing, deriving its own lifetime from
 // parent (the watch loop's sigCtx) so a Ctrl-C/SIGTERM that ends the whole
 // --watch process also tears this down even if Stop is never called
-// explicitly. Returns nil immediately, without spawning anything, when live
+// explicitly. If onSample is non-nil, it is invoked on every newly processed
+// audio chunk. Returns nil immediately, without spawning anything, when live
 // capture structurally can't work here: no pactl backend (issue 244 already
 // requires pactl's streaming-capable Recording field for this scope; the
 // plain-ALSA amixer fallback has no monitor-stream equivalent, matching
@@ -106,16 +145,16 @@ type micLiveManager struct {
 // or no `parec` binary installed. This is the "degrade gracefully" path
 // (issue 245 requirement 3): the caller renders LiveAvailable: false, never
 // an error.
-func startMicLiveManager(parent context.Context) *micLiveManager {
+func startMicLiveManager(parent context.Context, onSample func(micLiveReading)) *micLiveManager {
 	ctx, cancel := context.WithCancel(parent)
-	mgr := &micLiveManager{cancel: cancel}
+	mgr := &micLiveManager{cancel: cancel, onSample: onSample}
 	if resolveMicBackend() != micBackendPactl {
 		return mgr
 	}
 	if _, err := exec.LookPath("parec"); err != nil {
 		return mgr
 	}
-	go runMicLiveManager(ctx, &mgr.meter)
+	go runMicLiveManager(ctx, &mgr.meter, mgr.onSample)
 	return mgr
 }
 
@@ -143,13 +182,16 @@ func (m *micLiveManager) Snapshot() micLiveReading {
 // source can come and go mid-session (USB mic unplugged, PipeWire
 // restarted) without that being a reason to give up on the box for the
 // rest of the run.
-func runMicLiveManager(ctx context.Context, m *micLiveMeter) {
+func runMicLiveManager(ctx context.Context, m *micLiveMeter, onSample func(micLiveReading)) {
 	for ctx.Err() == nil {
-		captureMicLiveOnce(ctx, m)
+		captureMicLiveOnce(ctx, m, onSample)
 		if ctx.Err() != nil {
 			return
 		}
-		m.set(micLiveReading{Available: false})
+		m.update(0, false)
+		if onSample != nil {
+			onSample(micLiveReading{Available: false})
+		}
 		waitOrDone(ctx, micLiveRetryInterval)
 	}
 }
@@ -162,7 +204,7 @@ func runMicLiveManager(ctx context.Context, m *micLiveMeter) {
 // together these are what makes ctx cancellation (tied to the watch loop's
 // own sigCtx, or to Stop() on box-toggle-off) an actual clean-teardown path
 // rather than an abandoned pipe.
-func captureMicLiveOnce(ctx context.Context, m *micLiveMeter) {
+func captureMicLiveOnce(ctx context.Context, m *micLiveMeter, onSample func(micLiveReading)) {
 	cmd := exec.CommandContext(ctx, "parec",
 		"--raw",
 		"--format=s16le",
@@ -187,7 +229,11 @@ func captureMicLiveOnce(ctx context.Context, m *micLiveMeter) {
 	for ctx.Err() == nil {
 		n, err := io.ReadFull(stdout, buf)
 		if n > 0 {
-			m.set(micLiveReading{Level: micLiveAmplitudeFromPCM16LE(buf[:n]), Available: true})
+			rawLevel := micLiveAmplitudeFromPCM16LE(buf[:n])
+			reading := m.update(rawLevel, true)
+			if onSample != nil {
+				onSample(reading)
+			}
 		}
 		if err != nil {
 			break
