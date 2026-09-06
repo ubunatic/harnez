@@ -77,6 +77,69 @@ func TestMicLiveAmplitudeFromPCM16LESineWaveOrdering(t *testing.T) {
 	}
 }
 
+func TestMicLiveAmplitudeFromPCM16LE_CalibratedVectors(t *testing.T) {
+	constantBuffer := func(val int16) []byte {
+		samples := make([]int16, 400)
+		for i := range samples {
+			samples[i] = val
+		}
+		return pcm16LE(samples)
+	}
+
+	tests := []struct {
+		name    string
+		buf     []byte
+		wantMin float64
+		wantMax float64
+	}{
+		{
+			name:    "absolute silence (zeroes)",
+			buf:     pcm16LE(make([]int16, 400)),
+			wantMin: 0.0,
+			wantMax: 0.0,
+		},
+		{
+			name:    "below noise floor (RMS 20 < -60 dBFS)",
+			buf:     constantBuffer(20),
+			wantMin: 0.0,
+			wantMax: 0.0,
+		},
+		{
+			name:    "quiet conversational speech (RMS 180 ~ -45.2 dBFS)",
+			buf:     constantBuffer(180),
+			wantMin: 24.0,
+			wantMax: 25.5,
+		},
+		{
+			name:    "normal conversational speech (RMS 550 ~ -35.5 dBFS)",
+			buf:     constantBuffer(550),
+			wantMin: 40.0,
+			wantMax: 42.0,
+		},
+		{
+			name:    "loud speech peak (RMS 2700 ~ -21.7 dBFS)",
+			buf:     constantBuffer(2700),
+			wantMin: 63.0,
+			wantMax: 65.0,
+		},
+		{
+			name:    "full scale clipping (RMS 32767 ~ -0.0 dBFS)",
+			buf:     constantBuffer(32767),
+			wantMin: 99.9,
+			wantMax: 100.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := micLiveAmplitudeFromPCM16LE(tt.buf)
+			if got < tt.wantMin || got > tt.wantMax {
+				t.Errorf("micLiveAmplitudeFromPCM16LE() = %v, want in [%v, %v]", got, tt.wantMin, tt.wantMax)
+			}
+		})
+	}
+}
+
 // TestMicLiveManagerNilSafe documents the nil-receiver-safe contract Stop/
 // Snapshot rely on (mirrored from other nil-safe helpers in this package):
 // draw() in watch.go calls both unconditionally on whatever micLiveMgr

@@ -47,6 +47,13 @@ const (
 	// never starts (permission denied) — mirrors remoteLoadRetryInterval's
 	// role for the analogous remote-load streaming manager.
 	micLiveRetryInterval = 5 * time.Second
+	// micLiveMinDBFS is the calibrated noise-floor cutoff for the live input
+	// meter (issue 257). Digital full-scale is 0 dBFS (RMS 32768). Conversational
+	// speech recorded with standard ADC gain typically sits at -46 to -35 dBFS
+	// (RMS ~150-600). Mapping [-60 dBFS, 0 dBFS] to [0, 100] places conversational
+	// voice in the 25%-45% range on the visual TUI bar while suppressing ambient
+	// room silence (< -60 dBFS, RMS < 33).
+	micLiveMinDBFS = -60.0
 )
 
 // micLiveReading is one published sample from the background capture
@@ -193,9 +200,10 @@ func captureMicLiveOnce(ctx context.Context, m *micLiveMeter) {
 // of signed 16-bit little-endian mono PCM samples — pure and subprocess-free
 // so it's directly unit-testable against synthetic buffers (silence, a known
 // sine wave, full-scale noise). Odd trailing bytes (a chunk cut mid-sample)
-// are ignored. This is a rough linear ratio against int16 full-scale, not a
-// calibrated dBFS meter — sufficient for "is sound reaching the mic right
-// now", not for audio engineering.
+// are ignored. The RMS level is scaled logarithmically in dBFS across
+// [micLiveMinDBFS, 0] dBFS mapped to [0, 100] (issue 257) so conversational
+// speech registers visibly at 25%-45% instead of being crushed into the bottom
+// 1-2% by linear math.
 func micLiveAmplitudeFromPCM16LE(buf []byte) float64 {
 	n := len(buf) / 2
 	if n == 0 {
@@ -208,7 +216,11 @@ func micLiveAmplitudeFromPCM16LE(buf []byte) float64 {
 		sumSq += v * v
 	}
 	rms := math.Sqrt(sumSq / float64(n))
-	level := rms / 32768 * 100
+	if rms <= 0 {
+		return 0
+	}
+	dBFS := 20 * math.Log10(rms / 32768.0)
+	level := (dBFS - micLiveMinDBFS) / (0 - micLiveMinDBFS) * 100.0
 	if level > 100 {
 		level = 100
 	}
