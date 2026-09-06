@@ -1967,9 +1967,32 @@ func TestSplashStatusLineFormatsEachStage(t *testing.T) {
 	}
 }
 
-// TestSplashBadgesLine checks issue 252's cumulative completed source badges line:
-// green checkmarks for completed sources, red/warm cross marks for failed sources,
-// and empty string when no badges exist.
+// TestSplashSourceGlyph checks issue 254 brand glyph mapping.
+func TestSplashSourceGlyph(t *testing.T) {
+	tests := []struct {
+		source string
+		want   string
+	}{
+		{"agy", "Λ"},
+		{"claude", "✳"},
+		{"codex", "֍"},
+		{"gemini", "✦"},
+		{"mic", "●"},
+		{"gpu", "⚙"},
+		{"load", "⚙"},
+		{"unknown", "●"},
+		{"", "●"},
+	}
+	for _, tc := range tests {
+		if got := splashSourceGlyph(tc.source); got != tc.want {
+			t.Errorf("splashSourceGlyph(%q) = %q, want %q", tc.source, got, tc.want)
+		}
+	}
+}
+
+// TestSplashBadgesLine checks issues 252/254 cumulative completed source badges line:
+// brand glyphs colored chart-green for completed sources, chart-warm for failed sources,
+// dim-grey labels, and empty string when no badges exist.
 func TestSplashBadgesLine(t *testing.T) {
 	if got := splashBadgesLine(nil); got != "" {
 		t.Fatalf("expected empty string for nil badges, got %q", got)
@@ -1982,15 +2005,20 @@ func TestSplashBadgesLine(t *testing.T) {
 		{source: "agy", ok: true},
 		{source: "claude", ok: true},
 		{source: "mic", ok: true},
+		{source: "gemini", ok: true},
+		{source: "gpu", ok: true},
 	}
 	got := splashBadgesLine(badges)
 	stripped := stripANSI(got)
-	want := "✓ agy  ✓ claude  ✓ mic"
+	want := "Λ agy  ✳ claude  ● mic  ✦ gemini  ⚙ gpu"
 	if stripped != want {
 		t.Fatalf("expected badges %q, got %q", want, stripped)
 	}
 	if !strings.Contains(got, colorSGR("chart-green")) {
 		t.Fatalf("expected checkmarks to use chart-green color, got %q", got)
+	}
+	if !strings.Contains(got, colorSGR("dim-grey")) {
+		t.Fatalf("expected labels to use dim-grey color, got %q", got)
 	}
 
 	failedBadges := []splashBadge{
@@ -1999,7 +2027,7 @@ func TestSplashBadgesLine(t *testing.T) {
 	}
 	failedGot := splashBadgesLine(failedBadges)
 	failedStripped := stripANSI(failedGot)
-	failedWant := "✓ agy  ✗ codex"
+	failedWant := "Λ agy  ֍ codex"
 	if failedStripped != failedWant {
 		t.Fatalf("expected failed badges %q, got %q", failedWant, failedStripped)
 	}
@@ -2112,7 +2140,7 @@ func TestBuildSplashFrameBadgesRow(t *testing.T) {
 	if !strings.Contains(text, "fetching codex...") {
 		t.Fatalf("expected status line in splash frame, got:\n%s", text)
 	}
-	if !strings.Contains(text, "✓ agy  ✓ claude  ✓ mic") {
+	if !strings.Contains(text, "Λ agy  ✳ claude  ● mic") {
 		t.Fatalf("expected badges row in splash frame, got:\n%s", text)
 	}
 
@@ -2124,7 +2152,7 @@ func TestBuildSplashFrameBadgesRow(t *testing.T) {
 		if strings.Contains(un, "fetching codex...") {
 			statusIdx = i
 		}
-		if strings.Contains(un, "✓ agy  ✓ claude  ✓ mic") {
+		if strings.Contains(un, "Λ agy  ✳ claude  ● mic") {
 			badgeIdx = i
 		}
 	}
@@ -2135,14 +2163,14 @@ func TestBuildSplashFrameBadgesRow(t *testing.T) {
 	// Frozen (post-Esc) frame must drop both status line and badges row.
 	frozen := buildSplashFrame(cols, rows, 3*splashFrameInterval, false, 0, false, "fetching codex...", badgesLine)
 	frozenText := stripANSI(strings.Join(frozen.lines, "\n"))
-	if strings.Contains(frozenText, "✓ agy") || strings.Contains(frozenText, "fetching") {
+	if strings.Contains(frozenText, "Λ agy") || strings.Contains(frozenText, "fetching") {
 		t.Fatalf("expected frozen splash to omit badges and status line, got:\n%s", frozenText)
 	}
 
 	// Badges without status line (e.g. before next stage starts or after draining).
 	onlyBadges := buildSplashFrame(cols, rows, 3*splashFrameInterval, true, 0, false, "", badgesLine)
 	onlyBadgesText := stripANSI(strings.Join(onlyBadges.lines, "\n"))
-	if !strings.Contains(onlyBadgesText, "✓ agy  ✓ claude  ✓ mic") {
+	if !strings.Contains(onlyBadgesText, "Λ agy  ✳ claude  ● mic") {
 		t.Fatalf("expected badges row even when statusText is empty, got:\n%s", onlyBadgesText)
 	}
 

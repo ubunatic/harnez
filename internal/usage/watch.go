@@ -2224,24 +2224,46 @@ func splashStatusLine(source string, stage FetchStage, have bool) string {
 	}
 }
 
+// splashSourceGlyph maps a probe source name to its brand/source glyph (issue 254).
+func splashSourceGlyph(source string) string {
+	switch source {
+	case "agy":
+		return "Λ"
+	case "claude":
+		return "✳"
+	case "codex":
+		return "֍"
+	case "gemini":
+		return "✦"
+	case "mic":
+		return "●"
+	case "gpu", "load":
+		return "⚙"
+	default:
+		return "●"
+	}
+}
+
 // splashBadgesLine renders the cumulative list of completed/failed source badges
-// (issue 252) shown under the single rolling fetch status log line on the
-// startup splash screen. Successfully completed sources render as green
-// checkmarks (e.g. "✓ agy"), while failed sources render as warm cross marks
-// (e.g. "✗ codex"). Returns empty string when no badges are present.
+// (issues 252, 254) shown under the single rolling fetch status log line on the
+// startup splash screen. Each source renders with its brand-specific glyph
+// (e.g. "Λ agy", "✳ claude"), styled in chart-green on success or chart-warm
+// on failure, with the source label in dim grey. Returns empty string when no
+// badges are present.
 func splashBadgesLine(badges []splashBadge) string {
 	if len(badges) == 0 {
 		return ""
 	}
 	items := make([]string, len(badges))
 	for i, b := range badges {
-		var mark string
+		glyph := splashSourceGlyph(b.source)
+		var color string
 		if b.ok {
-			mark = ansiWrap("chart-green", "✓")
+			color = "chart-green"
 		} else {
-			mark = ansiWrap("chart-warm", "✗")
+			color = "chart-warm"
 		}
-		items[i] = mark + " " + ansiWrap("dim-grey", b.source)
+		items[i] = ansiWrap(color, glyph) + " " + ansiWrap("dim-grey", b.source)
 	}
 	return strings.Join(items, "  ")
 }
@@ -2272,8 +2294,8 @@ func splashBadgesLine(badges []splashBadge) string {
 // has arrived yet). It deliberately carries only the single latest event,
 // never a scrolling history, per the ticket's "single line" scope.
 //
-// badgesText (issue 252) is the cumulative completed source badges line
-// (see splashBadgesLine) -- e.g. "✓ agy  ✓ claude  ✓ mic" -- shown directly
+// badgesText (issues 252, 254) is the cumulative completed source badges line
+// (see splashBadgesLine) -- e.g. "Λ agy  ✳ claude  ● mic" -- shown directly
 // under the status line, or omitted entirely when empty.
 func buildSplashFrame(cols, rows int, elapsed time.Duration, animate bool, estimate time.Duration, haveEstimate bool, statusText, badgesText string) screenFrame {
 	spinner := splashSpinnerGlyph(elapsed)
