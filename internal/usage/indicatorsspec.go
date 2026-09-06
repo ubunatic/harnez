@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/mattn/go-runewidth"
@@ -29,6 +30,7 @@ type indicatorsSpec struct {
 	LoadChartPresentation string                            `yaml:"load-chart-presentation"`
 	UsageBarPresentation  string                            `yaml:"usage-bar-presentation"`
 	HeatBands             []float64                         `yaml:"heat-bands"`
+	MicLive               micLiveSpec                       `yaml:"mic-live"`
 }
 
 // defaultHeatBands reproduces heatForegroundANSI's historical hardcoded
@@ -124,6 +126,54 @@ func validateLoadChartMode(field, val string) error {
 	default:
 		return fmt.Errorf("indicators spec: load-charts: %s: unknown mode %q", field, val)
 	}
+}
+
+// MicLiveHighFPSMode controls the high FPS redraw mode for the live mic meter.
+type MicLiveHighFPSMode string
+
+const (
+	MicLiveHighFPSAuto MicLiveHighFPSMode = "auto"
+	MicLiveHighFPSOn   MicLiveHighFPSMode = "on"
+	MicLiveHighFPSOff  MicLiveHighFPSMode = "off"
+)
+
+type micLiveSpec struct {
+	HighFPS        string `yaml:"high-fps"`
+	NormalDelayMS  int    `yaml:"normal-delay-ms"`
+	HighFPSDelayMS int    `yaml:"high-fps-delay-ms"`
+}
+
+func (s micLiveSpec) HighFPSMode() MicLiveHighFPSMode {
+	switch strings.ToLower(strings.TrimSpace(s.HighFPS)) {
+	case "on":
+		return MicLiveHighFPSOn
+	case "off":
+		return MicLiveHighFPSOff
+	default:
+		return MicLiveHighFPSAuto
+	}
+}
+
+func (s micLiveSpec) NormalDelay() time.Duration {
+	if s.NormalDelayMS <= 0 {
+		return time.Second
+	}
+	return time.Duration(s.NormalDelayMS) * time.Millisecond
+}
+
+func (s micLiveSpec) HighFPSDelay() time.Duration {
+	if s.HighFPSDelayMS <= 0 {
+		return 50 * time.Millisecond
+	}
+	return time.Duration(s.HighFPSDelayMS) * time.Millisecond
+}
+
+func (s indicatorsSpec) micLive() micLiveSpec {
+	return s.MicLive
+}
+
+func watchMicLiveSpec() micLiveSpec {
+	return mustIndicators().micLive()
 }
 
 func (s indicatorsSpec) chartBackgroundName() string {

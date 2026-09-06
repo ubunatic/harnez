@@ -2367,34 +2367,44 @@ func RunWatchWithHost(ctx context.Context, homeDir string, client *http.Client, 
 }
 
 // micActivityTracker dynamically gates high-frequency UI redraws during
-// speech activity (issue 258).
+// speech activity (issue 258) with spec-driven high-fps mode.
 type micActivityTracker struct {
 	mu          sync.Mutex
 	lastActive  time.Time
 	gracePeriod time.Duration
+	mode        MicLiveHighFPSMode
 }
 
-func newMicActivityTracker(gracePeriod time.Duration) *micActivityTracker {
+func newMicActivityTracker(gracePeriod time.Duration, mode MicLiveHighFPSMode) *micActivityTracker {
 	return &micActivityTracker{
 		gracePeriod: gracePeriod,
+		mode:        mode,
 	}
 }
 
 // ShouldRedraw reports whether an incoming mic reading warrants a fast UI redraw.
-// Returns true if level is > 0 (active sound/speech) or within gracePeriod after
-// speech ceased, and false during prolonged silence.
+// Evaluates against the configured HighFPSMode (auto, on, off).
 func (t *micActivityTracker) ShouldRedraw(reading micLiveReading, now time.Time) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if reading.Level > 0 {
-		t.lastActive = now
+	switch t.mode {
+	case MicLiveHighFPSOff:
+		return false
+	case MicLiveHighFPSOn:
 		return true
+	case MicLiveHighFPSAuto:
+		fallthrough
+	default:
+		if reading.Level > 0 {
+			t.lastActive = now
+			return true
+		}
+		if !t.lastActive.IsZero() && now.Sub(t.lastActive) <= t.gracePeriod {
+			return true
+		}
+		return false
 	}
-	if !t.lastActive.IsZero() && now.Sub(t.lastActive) <= t.gracePeriod {
-		return true
-	}
-	return false
 }
 
 func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Client, out io.Writer, interval time.Duration, historyDir string, opts WatchOptions) error {
@@ -2614,7 +2624,8 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		wantMicLive := activeSec.Mic && currentHost == ""
 		switch {
 		case wantMicLive && micLiveMgr == nil:
-			tracker := newMicActivityTracker(micGracePeriod)
+			spec := watchMicLiveSpec()
+			tracker := newMicActivityTracker(micGracePeriod, spec.HighFPSMode())
 			micLiveMgr = startMicLiveManager(sigCtx, func(r micLiveReading) {
 				if tracker.ShouldRedraw(r, time.Now()) {
 					requestRedraw()

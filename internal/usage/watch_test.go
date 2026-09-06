@@ -2430,10 +2430,10 @@ func TestBuildAgentBoxDimsStaleQuotaAndAnnotatesUpdatedCaption(t *testing.T) {
 }
 
 // TestMicActivityTracker verifies the adaptive high-frequency UI redraw gating
-// logic during speech and silence (issue 258).
+// logic during speech and silence across spec modes (auto, on, off) (issue 258).
 func TestMicActivityTracker(t *testing.T) {
 	gracePeriod := 800 * time.Millisecond
-	tracker := newMicActivityTracker(gracePeriod)
+	tracker := newMicActivityTracker(gracePeriod, MicLiveHighFPSAuto)
 	t0 := time.Date(2026, 9, 6, 23, 0, 0, 0, time.UTC)
 
 	// 1. Startup in silence: ShouldRedraw must return false to preserve 1 Hz idle cadence.
@@ -2467,6 +2467,18 @@ func TestMicActivityTracker(t *testing.T) {
 	restartTime := t0.Add(6 * time.Second)
 	if !tracker.ShouldRedraw(micLiveReading{Level: 35.0, Available: true}, restartTime) {
 		t.Errorf("expected ShouldRedraw=true when speech resumes")
+	}
+
+	// Test "on" mode: always returns true regardless of speech.
+	onTracker := newMicActivityTracker(gracePeriod, MicLiveHighFPSOn)
+	if !onTracker.ShouldRedraw(micLiveReading{Level: 0.0, Available: true}, t0) {
+		t.Errorf("expected ShouldRedraw=true for 'on' mode even during silence")
+	}
+
+	// Test "off" mode: always returns false regardless of speech.
+	offTracker := newMicActivityTracker(gracePeriod, MicLiveHighFPSOff)
+	if offTracker.ShouldRedraw(micLiveReading{Level: 80.0, Available: true}, t0) {
+		t.Errorf("expected ShouldRedraw=false for 'off' mode even during loud speech")
 	}
 }
 

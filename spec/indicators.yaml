@@ -123,3 +123,16 @@ load-charts:
   gpu: btop
   ram: btop
   vram: btop
+
+# Live microphone input level meter configuration (issue 245, 257, 258).
+# high-fps controls speech-activated high-frequency redraws:
+#   "auto" (default): dynamic 10-20 FPS when speech/sound is active, idle 1s during silence
+#   "on": continuous high FPS while the Mic box is visible
+#   "off": strictly 1s normal redraws only
+# normal-delay-ms: baseline redraw delay during silence / idle (e.g. 1000ms)
+# high-fps-delay-ms: speech-activated high-frequency redraw delay (e.g. 50ms)
+mic-live:
+  high-fps: auto
+  normal-delay-ms: 1000
+  high-fps-delay-ms: 50
+

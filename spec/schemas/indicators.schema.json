@@ -96,6 +96,26 @@
         }
       },
       "additionalProperties": false
+    },
+    "mic-live": {
+      "type": "object",
+      "properties": {
+        "high-fps": {
+          "type": "string",
+          "enum": ["auto", "on", "off"]
+        },
+        "normal-delay-ms": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 10000
+        },
+        "high-fps-delay-ms": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 1000
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,

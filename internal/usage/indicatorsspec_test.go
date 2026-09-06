@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mattn/go-runewidth"
 	"ubunatic.com/harnez/internal/rograph"
@@ -578,3 +579,27 @@ func TestSelectedIndicatorOutputsHaveStableANSIVisibleGeometry(t *testing.T) {
 		t.Errorf("selected Braille sparkline = %q, want one Braille cell", string(braille))
 	}
 }
+
+func TestEmbeddedIndicatorsSpecMicLive(t *testing.T) {
+	spec := watchMicLiveSpec()
+	if got := spec.HighFPSMode(); got != MicLiveHighFPSAuto {
+		t.Errorf("mic-live high-fps mode = %q, want %q", got, MicLiveHighFPSAuto)
+	}
+	if got := spec.NormalDelay(); got != 1000*time.Millisecond {
+		t.Errorf("mic-live normal delay = %v, want 1000ms", got)
+	}
+	if got := spec.HighFPSDelay(); got != 50*time.Millisecond {
+		t.Errorf("mic-live high fps delay = %v, want 50ms", got)
+	}
+
+	// Test parsing variants
+	onSpec := micLiveSpec{HighFPS: "on"}
+	if got := onSpec.HighFPSMode(); got != MicLiveHighFPSOn {
+		t.Errorf("onSpec.HighFPSMode = %q, want %q", got, MicLiveHighFPSOn)
+	}
+	offSpec := micLiveSpec{HighFPS: "off"}
+	if got := offSpec.HighFPSMode(); got != MicLiveHighFPSOff {
+		t.Errorf("offSpec.HighFPSMode = %q, want %q", got, MicLiveHighFPSOff)
+	}
+}
+
