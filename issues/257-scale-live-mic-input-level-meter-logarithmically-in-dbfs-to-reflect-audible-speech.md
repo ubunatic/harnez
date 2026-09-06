@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: UX / Agentic Ergonomics
-**Related**: [[245-show-live-mic-input-signal-level-peak-rms-alongside-configured-volume-in-usage-watch]], [[244-show-system-mic-level-and-recording-on-off-as-new-usage-watch-tui-box]], `internal/usage/miclive.go`
+**Related**: [[245-show-live-mic-input-signal-level-peak-rms-alongside-configured-volume-in-usage-watch]], [[244-show-system-mic-level-and-recording-on-off-as-new-usage-watch-tui-box]], `internal/usage/miclive.go`, `../voxi/issues/070-show-recorded-volume-rms-column-in-voxi-chunks-list.md`
 
 ---
 
@@ -41,6 +41,11 @@ level := rms / 32768 * 100
 
 Because human hearing is logarithmic and audio metering standard practice (e.g., VU meters in `pavucontrol`, OBS, DAWs) maps decibels across a range such as $-60\text{ dBFS}$ to $0\text{ dBFS}$, a linear scaling squashes virtually all audible voice activity into the bottom $1 - 2\%$ of the visual UI bar.
 
+### Cross-Project Evidence: Voxi Issue 070 Calibration
+`voxi` encountered this exact calibration pitfall in issue 070 (`voxi/issues/070-show-recorded-volume-rms-column-in-voxi-chunks-list.md`):
+- An initial linear mapping against full-scale rendered real speech chunks (RMS ~180) as completely blank/0-level.
+- Voxi fixed this by switching to a logarithmic mapping spanning a calibrated floor of $\text{RMS } 80$ (just below the speech gate's $\text{MinMeanRMS } 120$) up to a ceiling of $\text{RMS } 8192$ (25% full scale, leaving headroom for loud speech before clipping).
+
 ---
 
 ## 3. Desired Behavior & Proposed Solution
@@ -58,6 +63,8 @@ With $\text{dBFS}_{\text{min}} = -60\text{ dBFS}$:
 - Normal speech (RMS $\approx 550$, $-35\text{ dBFS}$) $\to \approx 42\%$
 - Strong speech / peaks (RMS $\approx 2,700$, $-22\text{ dBFS}$) $\to \approx 63\%$
 - Near clipping (RMS $\approx 20,000$, $-4\text{ dBFS}$) $\to \approx 93\%$
+
+Alternatively, follow Voxi 070's logarithmic RMS scale (`log(RMS/80) / log(8192/80) * 100`), which yields a comparable conversational range ($20\% - 65\%$).
 
 This provides an intuitive, responsive VU meter in the TUI box that reflects active voice presence without altering raw underlying capture logic.
 
