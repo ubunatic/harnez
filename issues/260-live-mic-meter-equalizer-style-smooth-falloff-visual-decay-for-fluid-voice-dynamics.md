@@ -1,6 +1,6 @@
 # 260 — Live Mic Meter: Equalizer-Style Smooth Falloff / Visual Decay for Fluid Voice Dynamics
 
-**Status**: Open — filed via /issue
+**Status**: Resolved / Closed
 **Priority**: P2 (Medium)
 **Severity**: Minor (visual polish: eliminates jerky/strobe bar movement while retaining zero-lag onset)
 **Category**: UX / Agentic Ergonomics
@@ -21,7 +21,7 @@ between syllables. This makes the live bar feel jumpy, nervous, and strobe-like 
 
 Like professional equalizer displays, spectrum visualizers, and DAW VU meters, an intuitive audio level meter
 combines **instantaneous attack** (immediate rise to peaks) with a **smooth, fast visual falloff/decay** (releasing
-smoothly over ~150–250ms) so speech rhythms feel natural, fluid, and continuous.
+smooth over ~150–250ms) so speech rhythms feel natural, fluid, and continuous.
 
 ---
 
@@ -58,11 +58,11 @@ In `spec/indicators.yaml` / `spec/schemas/indicators.schema.json`, expose option
 
 ## 4. Acceptance Criteria
 
-- [ ] Voice onsets jump instantly to peak level with zero perceptible lag.
-- [ ] During speech pauses and between syllables, the bar falls off smoothly over ~150–250ms rather than flashing abruptly to zero.
-- [ ] Prolonged silence settles cleanly to 0%.
-- [ ] `decay-ms` is spec-driven with sensible defaults.
-- [ ] All existing and new tests pass (`make check`).
+- [x] Voice onsets jump instantly to peak level with zero perceptible lag.
+- [x] During speech pauses and between syllables, the bar falls off smoothly over ~150–250ms rather than flashing abruptly to zero.
+- [x] Prolonged silence settles cleanly to 0%.
+- [x] `decay-ms` is spec-driven with sensible defaults.
+- [x] All existing and new tests pass (`make check`).
 
 ---
 

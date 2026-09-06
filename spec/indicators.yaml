@@ -124,7 +124,7 @@ load-charts:
   ram: btop
   vram: btop
 
-# Live microphone input level meter configuration (issue 245, 257, 258).
+# Live microphone input level meter configuration (issue 245, 257, 258, 260).
 # high-fps controls speech-activated high-frequency redraws:
 #   "auto" (default): dynamic 10-20 FPS when speech/sound is active, idle 1s during silence
 #   "on": continuous high FPS while the Mic box is visible
@@ -137,11 +137,15 @@ load-charts:
 #   "min": minimum level across window
 #   "live": instantaneous last sample
 # window-seconds: duration of rolling sample window in seconds (e.g. 0.1 for 100ms)
+# decay-ms: visual decay half-life / release duration in milliseconds (issue 260)
+#   for smooth equalizer-style falloff ballistics; set to 0 for raw instantaneous snap
 mic-live:
   high-fps: auto
   normal-delay-ms: 1000
   high-fps-delay-ms: 50
   value: max
   window-seconds: 0.1
+  decay-ms: 150
+
 
 

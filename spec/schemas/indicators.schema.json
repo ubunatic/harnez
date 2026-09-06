@@ -122,6 +122,11 @@
           "type": "number",
           "minimum": 0.01,
           "maximum": 60.0
+        },
+        "decay-ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
         }
       },
       "additionalProperties": false

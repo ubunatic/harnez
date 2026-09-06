@@ -153,6 +153,7 @@ type micLiveSpec struct {
 	HighFPSDelayMS int     `yaml:"high-fps-delay-ms"`
 	Value          string  `yaml:"value"`
 	WindowSeconds  float64 `yaml:"window-seconds"`
+	DecayMS        int     `yaml:"decay-ms"`
 }
 
 func (s micLiveSpec) HighFPSMode() MicLiveHighFPSMode {
@@ -200,6 +201,13 @@ func (s micLiveSpec) WindowDuration() time.Duration {
 		return 100 * time.Millisecond
 	}
 	return time.Duration(s.WindowSeconds * float64(time.Second))
+}
+
+func (s micLiveSpec) DecayDuration() time.Duration {
+	if s.DecayMS <= 0 {
+		return 0
+	}
+	return time.Duration(s.DecayMS) * time.Millisecond
 }
 
 func (s indicatorsSpec) micLive() micLiveSpec {

@@ -54,13 +54,8 @@ const (
 	// voice in the 25%-45% range on the visual TUI bar while suppressing ambient
 	// room silence (< -60 dBFS, RMS < 33).
 	micLiveMinDBFS = -60.0
-	// micLiveDecayFactor defines the smooth exponential release rate per 50ms
-	// audio chunk (~20 Hz) (issue 258). Instant attack jumps immediately to new
-	// peaks; release decays smoothly so syllables and speech pauses connect
-	// naturally rather than flickering.
-	micLiveDecayFactor = 0.80
-	// micLiveDecayCutoff is the floor below which decayed level snaps cleanly
-	// to zero (issue 258).
+	// micLiveDecayCutoff is the floor (0.5%) below which decayed level snaps cleanly
+	// to zero (issue 258, 260).
 	micLiveDecayCutoff = 0.5
 	// micGracePeriod is the duration high-frequency redraws continue after
 	// sound/speech returns to silence (issue 258) to allow smooth ballistics
@@ -68,15 +63,30 @@ const (
 	micGracePeriod = 800 * time.Millisecond
 )
 
-// micLiveApplyBallistics updates previous level with the raw chunk level:
-// instant attack on rises, smooth exponential release on falls (issue 258).
-func micLiveApplyBallistics(prev, raw float64) float64 {
-	if raw >= prev {
-		return raw
+// micLiveApplyBallistics updates previous level with the target level:
+// instant attack on rises, smooth exponential release on falls (issue 258, 260).
+// When target level >= prev level, it snaps instantly to target level.
+// When target level < prev level, it decays exponentially over elapsed dt with time constant tau:
+//   decayed = prev * exp(-dt / tau)
+// Clamped to not drop below target level, and snaps to 0.0 below micLiveDecayCutoff (0.5%).
+// If decayDuration <= 0, it falls back to instant update (no decay).
+func micLiveApplyBallistics(prev, target float64, dt, decayDuration time.Duration) float64 {
+	if decayDuration <= 0 {
+		return target
 	}
-	decayed := prev * micLiveDecayFactor
-	if decayed < raw || decayed < micLiveDecayCutoff {
-		return raw
+	if target >= prev {
+		return target
+	}
+	if dt <= 0 {
+		return prev
+	}
+	tau := decayDuration.Seconds()
+	decayed := prev * math.Exp(-dt.Seconds()/tau)
+	if decayed < target {
+		decayed = target
+	}
+	if decayed < micLiveDecayCutoff {
+		return 0.0
 	}
 	return decayed
 }
@@ -90,8 +100,6 @@ type micLiveReading struct {
 	Available bool
 }
 
-// micLiveMeter is the mutex-guarded handoff point between the background
-// capture goroutine (the only writer) and the watch redraw loop (the only
 type micSample struct {
 	ts    time.Time
 	level float64
@@ -102,9 +110,11 @@ type micSample struct {
 // reader) — same shape as runRemoteLoadManager's lastRemoteLoad/remoteLoadMu
 // pair, just scoped to this one value instead of a whole LoadSnapshot.
 type micLiveMeter struct {
-	mu      sync.Mutex
-	reading micLiveReading
-	samples []micSample
+	mu             sync.Mutex
+	reading        micLiveReading
+	samples        []micSample
+	lastUpdate     time.Time
+	displayedLevel float64
 }
 
 func (m *micLiveMeter) set(r micLiveReading) {
@@ -113,11 +123,13 @@ func (m *micLiveMeter) set(r micLiveReading) {
 	m.mu.Unlock()
 }
 
-func (m *micLiveMeter) update(rawLevel float64, available bool, now time.Time, metric MicLiveValueMetric, window time.Duration) micLiveReading {
+func (m *micLiveMeter) update(rawLevel float64, available bool, now time.Time, metric MicLiveValueMetric, window time.Duration, decay time.Duration) micLiveReading {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !available {
 		m.samples = nil
+		m.lastUpdate = time.Time{}
+		m.displayedLevel = 0
 		m.reading = micLiveReading{Available: false, Level: 0}
 		return m.reading
 	}
@@ -133,40 +145,46 @@ func (m *micLiveMeter) update(rawLevel float64, available bool, now time.Time, m
 		m.samples = m.samples[start:]
 	}
 
+	var targetLevel float64
 	if len(m.samples) == 0 {
-		m.reading = micLiveReading{Level: rawLevel, Available: true}
-		return m.reading
-	}
-
-	var computed float64
-	switch metric {
-	case MicLiveValueLive:
-		computed = rawLevel
-	case MicLiveValueMin:
-		computed = m.samples[0].level
-		for _, s := range m.samples[1:] {
-			if s.level < computed {
-				computed = s.level
+		targetLevel = rawLevel
+	} else {
+		switch metric {
+		case MicLiveValueLive:
+			targetLevel = rawLevel
+		case MicLiveValueMin:
+			targetLevel = m.samples[0].level
+			for _, s := range m.samples[1:] {
+				if s.level < targetLevel {
+					targetLevel = s.level
+				}
+			}
+		case MicLiveValueAvg:
+			var sum float64
+			for _, s := range m.samples {
+				sum += s.level
+			}
+			targetLevel = sum / float64(len(m.samples))
+		case MicLiveValueMax:
+			fallthrough
+		default:
+			targetLevel = m.samples[0].level
+			for _, s := range m.samples[1:] {
+				if s.level > targetLevel {
+					targetLevel = s.level
+				}
 			}
 		}
-	case MicLiveValueAvg:
-		var sum float64
-		for _, s := range m.samples {
-			sum += s.level
-		}
-		computed = sum / float64(len(m.samples))
-	case MicLiveValueMax:
-		fallthrough
-	default:
-		computed = m.samples[0].level
-		for _, s := range m.samples[1:] {
-			if s.level > computed {
-				computed = s.level
-			}
-		}
 	}
 
-	m.reading = micLiveReading{Level: computed, Available: true}
+	var dt time.Duration
+	if !m.lastUpdate.IsZero() {
+		dt = now.Sub(m.lastUpdate)
+	}
+	m.displayedLevel = micLiveApplyBallistics(m.displayedLevel, targetLevel, dt, decay)
+	m.lastUpdate = now
+
+	m.reading = micLiveReading{Level: m.displayedLevel, Available: true}
 	return m.reading
 }
 
@@ -242,7 +260,7 @@ func runMicLiveManager(ctx context.Context, m *micLiveMeter, onSample func(micLi
 			return
 		}
 		spec := watchMicLiveSpec()
-		m.update(0, false, time.Now(), spec.ValueMetric(), spec.WindowDuration())
+		m.update(0, false, time.Now(), spec.ValueMetric(), spec.WindowDuration(), spec.DecayDuration())
 		if onSample != nil {
 			onSample(micLiveReading{Available: false})
 		}
@@ -287,7 +305,7 @@ func captureMicLiveOnce(ctx context.Context, m *micLiveMeter, onSample func(micL
 		if n > 0 {
 			rawLevel := micLiveAmplitudeFromPCM16LE(buf[:n])
 			spec := watchMicLiveSpec()
-			reading := m.update(rawLevel, true, time.Now(), spec.ValueMetric(), spec.WindowDuration())
+			reading := m.update(rawLevel, true, time.Now(), spec.ValueMetric(), spec.WindowDuration(), spec.DecayDuration())
 			if onSample != nil {
 				onSample(reading)
 			}

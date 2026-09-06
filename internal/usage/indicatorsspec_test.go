@@ -597,9 +597,12 @@ func TestEmbeddedIndicatorsSpecMicLive(t *testing.T) {
 	if got := spec.WindowDuration(); got != 100*time.Millisecond {
 		t.Errorf("mic-live window duration = %v, want 100ms", got)
 	}
+	if got := spec.DecayDuration(); got != 150*time.Millisecond {
+		t.Errorf("mic-live decay duration = %v, want 150ms", got)
+	}
 
 	// Test parsing variants
-	onSpec := micLiveSpec{HighFPS: "on", Value: "avg", WindowSeconds: 0.5}
+	onSpec := micLiveSpec{HighFPS: "on", Value: "avg", WindowSeconds: 0.5, DecayMS: 200}
 	if got := onSpec.HighFPSMode(); got != MicLiveHighFPSOn {
 		t.Errorf("onSpec.HighFPSMode = %q, want %q", got, MicLiveHighFPSOn)
 	}
@@ -609,6 +612,9 @@ func TestEmbeddedIndicatorsSpecMicLive(t *testing.T) {
 	if got := onSpec.WindowDuration(); got != 500*time.Millisecond {
 		t.Errorf("onSpec.WindowDuration = %v, want 500ms", got)
 	}
+	if got := onSpec.DecayDuration(); got != 200*time.Millisecond {
+		t.Errorf("onSpec.DecayDuration = %v, want 200ms", got)
+	}
 
 	offSpec := micLiveSpec{HighFPS: "off", Value: "min"}
 	if got := offSpec.HighFPSMode(); got != MicLiveHighFPSOff {
@@ -616,6 +622,9 @@ func TestEmbeddedIndicatorsSpecMicLive(t *testing.T) {
 	}
 	if got := offSpec.ValueMetric(); got != MicLiveValueMin {
 		t.Errorf("offSpec.ValueMetric = %q, want %q", got, MicLiveValueMin)
+	}
+	if got := offSpec.DecayDuration(); got != 0 {
+		t.Errorf("offSpec.DecayDuration = %v, want 0", got)
 	}
 }
 
