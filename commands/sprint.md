@@ -35,6 +35,7 @@ Follow these 5 phases sequentially:
    - Add or update unit tests alongside or before modifying implementation code.
    - Run tests (`go test -count=1 ./...`, `make test`) to verify each milestone before moving to the next.
    - Maintain codebase stability, ensuring clean compilation at every step.
+   - For defect-shaped tickets: establish a concrete reproduction baseline *before* coding the fix (see `@docs/AgenticLoop.md` Phase 2, "Repro-before-fix").
 
 ### Phase 3: Pre-Commit Review Gate (Independent Reviewer)
 1. Spawn an independent reviewer subagent (or conduct a dedicated review pass).
@@ -59,4 +60,5 @@ Follow these 5 phases sequentially:
    - Update issue status in `issues/*.md` (e.g. `Status: Closed`).
    - Update `issues/README.md` table.
    - Run `harnez status` to ensure all issue statuses are clean and validated.
+   - When closing a ticket, check the whole file for multiple status-bearing fields and update all (see `@docs/AgenticLoop.md` Phase 5, "Single Status field").
 3. Present a clear, concise summary of completed tickets and accomplishments to the user.

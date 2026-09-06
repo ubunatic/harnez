@@ -1,6 +1,6 @@
 # 042 — `docs/practices/AgenticLoop.md` is missing "repro before fix" and "one Status field per ticket" guidance
 
-**Status**: Open
+**Status**: Closed — resolved in commit pending
 **Category**: Documentation / Agentic Orchestration
 **Related**: [039 — AgenticLoop practices and /sprint command](039-agentic-loop-practices-and-sprint-command.md), [Study: 2026-08-20 Lane discipline, deadlock escape, and spatial bucketing (trafficsim)](../../trafficsim/docs/studies/2026-08-20-lane-discipline-deadlock-escape-and-spatial-bucketing.md)
 
