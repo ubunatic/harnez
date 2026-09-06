@@ -1,6 +1,6 @@
 # 258 — Dynamic Refresh Rate for Live Mic Meter: High-Frequency UI Redraw on Speech Activity
 
-**Status**: Open
+**Status**: In Progress — in progress — lean fresh-sprint
 **Priority**: P2 (Medium)
 **Severity**: Moderate (1 Hz UI redraw rate prevents live mic level bar from functioning as a responsive VU meter)
 **Category**: UX / Performance / Agentic Ergonomics
