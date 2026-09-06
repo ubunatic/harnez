@@ -1,6 +1,6 @@
 # 046 — The exact gap from 044 recurred in the same session that filed it
 
-**Status**: Open
+**Status**: Closed — resolved in commit pending
 **Category**: Documentation / Agentic Ergonomics
 **Related**: [044](044-git-md-proactive-commit-vs-harness-ask-first.md), [docs/Git.md](../docs/Git.md)
 

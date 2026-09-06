@@ -128,6 +128,7 @@ Agentic software engineering scales effectively when concurrency is structured a
       check after a genuine restart/re-apply against the actual environment before the ticket is done; record
       a project-local case study or ticket for any concrete failure this catches.
     - **Root Cause vs. Symptom**: For a defensive or robustness fix (parsing subprocess/tool output, retry/tolerance logic, error swallowing), ask whether the *source* of the unexpected input can be fixed instead — a flag, a config setting, a different invocation. Verify any proposed upstream fix against the real tool/source before treating it as the fix; a plausible-sounding mechanism is not a verified one. If multiple review rounds each find a new edge case in the same defensive code, that is a signal to step back to Phase 2 and fix the root cause rather than harden the symptom further. ([#045](../issues/045-review-loops-harden-symptoms-not-root-cause.md))
+  - **Exit condition**: Phase 3 is not complete until reviewed, verified work is either committed or the user has been explicitly asked to authorize the commit. If standing commit authority was granted at kickoff, commit now. If not, asking *is* the exit action — do not carry a clean, reviewed diff into Phase 4. ([#046](../issues/046-commit-checkpoint-recurred-after-044-filed.md))
 
 ### Phase 4: Process & Subagent Hygiene (Teardown & Drain)
 - **Goal**: Prevent zombie accumulation, orphan processes, and stuck background tasks.
@@ -147,6 +148,7 @@ Agentic software engineering scales effectively when concurrency is structured a
     verified, flip its `Status` header to `Closed` before ending the session — do not let a
     green build and a commit stand in for closing the ticket. See
     [IssueTracking.md](IssueTracking.md) §5 ("Closing Is Part Of Done").
+  - Run `git status` before writing the retro or session story — uncommitted reviewed work is itself a retro finding, not a background condition. ([#046](../issues/046-commit-checkpoint-recurred-after-044-filed.md))
   - Prepare clean, conventional commit messages.
 
 ---
@@ -237,6 +239,7 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
   real output against the real DB.
 - ❌ **Deployment State Conflation**: In a project with remote deployment, declaring a remote binary "deployed" or a job "scheduled" based on local build/test success or a clean transfer exit code, without probing the live host.
 - ❌ **Blind Revert of Failed Work**: Running `git checkout --`, `git reset --hard`, or `git stash drop` on a failed implementation attempt without first committing it somewhere recoverable. A prose summary of what was tried is not a substitute for the actual diff — it cannot be `git diff`ed, re-applied, or independently re-verified against the gate it was tested against.
+- ❌ **Reviewed-But-Uncommitted Carryover**: Finishing a review gate and moving on (retro, story, `/compact`, next ticket) with verified work still in the working tree, waiting for the user to notice. Phase 3 is not complete until the commit is made or the user has been explicitly asked to authorize it. Recurred twice in one `weg` session — issues 044 and 046. ([#046](../issues/046-commit-checkpoint-recurred-after-044-filed.md))
 - ❌ **Narrow String-Substitution Edits Over Structured Patches**: The existing "prefer
   `apply_patch`/whole-block replacement over narrow string substitution" rule was written from
   intuition; `smarthome`'s `harnez stats` now backs it with numbers — `Edit` failed at **11.1%**
