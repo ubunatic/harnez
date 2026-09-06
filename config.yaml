@@ -344,6 +344,10 @@ agents_md:
           - Minimal Global Docs: keep this global file free of anything not relevant to every
             project — it applies everywhere and is glue between local and global docs only,
             steering the agentic setup rather than carrying project-specific content.
+          - Working-Directory Hygiene: prefer `make -C`/`git -C`/absolute paths or a subshell
+            `(cd dir && cmd)` over bare `cd`; if you must `cd`, return to the starting directory
+            before the tool call ends — the shell may be shared with the user's own terminal.
+            See @docs/Bash.md §8.
       - name: Tool Feedback Protocol
         rate_feedback: true
         content: |
