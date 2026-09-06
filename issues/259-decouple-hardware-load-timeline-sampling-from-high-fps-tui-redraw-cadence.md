@@ -24,38 +24,37 @@ However, during high-FPS redraws, the CPU, GPU, and RAM load timeline graphs scr
 3. This compresses what should be 10–20 seconds of load history into less than a second, rendering the load
    graphs unreadable and misleading whenever the user speaks.
 
-The hardware load timeline sampling cadence must be strictly decoupled from the UI repaint/redraw rate.
+---
+
+## 2. Core Invariant & Architectural Principles
+
+> **General Principle: The TUI refresh is the most expensive operation in the system. No measurement or recording process should ever trigger a UI repaint beyond the configured target FPS, and no background sampling rate should be coupled to the display frame rate.**
+
+### 2.1 The Two-Domain Decoupling
+1. **Measurement / Sampling Domain**:
+   - Background producers (audio PCM streams, `/proc/stat` samplers, network telemetry, daemon updates) run at their own intrinsic domain frequencies (e.g. 20–50 Hz for audio chunks, 1 Hz for CPU/GPU load).
+   - They write data purely into in-memory buffers or shared-state structs (e.g. `micLiveMeter`, `cpuHistory`).
+   - Time-series histories advance according to **wall-clock elapsed time**, never according to screen repaints.
+
+2. **Display / Rendering Domain**:
+   - TUI redraw (`draw()`) is the CPU and I/O bottleneck (ANSI string generation, box layout, cursor repositioning, TTY writes).
+   - Redraw requests from background measurement hooks must be **coalesced and rate-limited** by a strict token bucket / debounce gate that enforces a hard ceiling:
+     $$\text{MinFrameInterval} = \max(\text{high-fps-delay-ms},\; 50\text{ms}) \implies \text{MaxFPS} \le 20$$
+   - A rapid burst of 100 audio samples will update the in-memory rolling meter 100 times, but the UI will redraw at most once per 50ms, rendering the latest state.
 
 ---
 
-## 2. Technical Design & Architecture
+## 3. Implementation Plan
 
-### 2.1 Time-Paced Hardware Sampling (Rate-Throttled History Append)
-- In `internal/usage/load.go`:
-  - Enforce a minimum sampling duration between history appends (e.g. `minLoadSampleInterval = 1 * time.Second`).
-  - When `CurrentCPULoad()`, `CurrentGPUs()`, or `CurrentSystemMemory()` is called:
-    - If `time.Since(lastSampleTime) < minLoadSampleInterval`, return the current instantaneous load values
-      and the existing `PercentHistory` snapshot without appending a new slice to `cpuHistory`.
-    - If `time.Since(lastSampleTime) >= minLoadSampleInterval`, sample the `/proc` delta, append the new sample,
-      and update `lastSampleTime`.
-- This guarantees that rapid UI redraws (whether from 20 Hz mic audio, terminal resizes, or keypresses) only
-  repaint the screen and never distort the temporal scale of hardware timelines.
-
-### 2.2 Independent Load Snapshot Cache in `watch.go`
-- Alternatively / complementarily, `RunWatchWithOptions` can maintain a cached `localLoadSnapshot` updated
-  only on `loadTicker.C` (1 Hz), while high-frequency `draw()` calls during speech pass the cached load
-  snapshot into `buildWatchFrameAt` without triggering redundant `/proc/stat` reads.
-
----
-
-## 3. Scope of Implementation
-
-1. **`internal/usage/load.go`**:
-   - Throttle history appends (`cpuHistory`, `gpuHistory`, `memHistory`) to a fixed minimum interval (1s).
-   - Ensure delta calculations against `/proc/stat` remain accurate when read between sample intervals.
-2. **`internal/usage/load_test.go` & `watch_test.go`**:
-   - Add unit tests verifying that invoking `CurrentCPULoad()` / `CurrentGPUs()` 50 times in rapid succession
-     does not over-append to the history buffer and maintains 1s time-series pacing.
+1. **Decouple Load Sampling in `internal/usage/load.go`**:
+   - Rate-throttle `cpuHistory`, `gpuHistory`, `memHistory` appends to a minimum 1-second interval (`minLoadSampleInterval = 1 * time.Second`).
+   - Multiple `CurrentCPULoad()` calls within that 1-second window return the current values and snapshot without advancing the historical time-series.
+2. **Debounce & Coalesce Redraws in `internal/usage/watch.go`**:
+   - Enforce a minimum interval between consecutive `draw()` executions (`high-fps-delay-ms`, default 50ms) regardless of how frequently background goroutines signal `requestRedraw()`.
+   - Prevent any single producer from flooding the render loop.
+3. **Unit Testing**:
+   - Verify that 100 rapid `CurrentCPULoad()` calls append exactly 1 sample to `cpuHistory`.
+   - Verify that 100 rapid `requestRedraw()` calls trigger at most 1 draw per minimum frame interval.
 
 ---
 
