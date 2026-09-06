@@ -1,6 +1,6 @@
 # status settings.json check covers only model key
 
-**Status:** Open — partially fixed
+**Status:** Closed — resolved in a39b916
 
 **Severity:** Low — misleading output, not a data-loss bug
 

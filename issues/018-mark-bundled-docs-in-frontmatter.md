@@ -1,6 +1,6 @@
 # 018 — Bundled docs don't self-identify as harnez-managed
 
-**Status:** Open
+**Status:** Closed — resolved in e371540 (backfill), 9a5081d (guard test)
 
 ## Context
 
