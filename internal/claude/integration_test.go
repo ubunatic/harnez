@@ -209,7 +209,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunStatus failed: %v", err)
 	}
-	if !strings.Contains(out, "settings.json [model]") || !strings.Contains(out, "ok") {
+	if !strings.Contains(out, "settings.json [effortLevel]") || !strings.Contains(out, "ok") {
 		t.Errorf("Expected RunStatus to list settings state as ok, got:\n%s", out)
 	}
 	if !strings.Contains(out, "catalog:       ok") {

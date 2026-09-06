@@ -132,7 +132,7 @@ func TestApplyInstallsTelemetryHook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunStatus failed: %v", err)
 	}
-	if !containsAll(out, "hooks:", "settings.json [model]", "ok") {
+	if !containsAll(out, "hooks:", "settings.json [hooks]", "ok") {
 		t.Errorf("expected RunStatus to report hooks count and settings state, got:\n%s", out)
 	}
 

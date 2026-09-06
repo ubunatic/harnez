@@ -61,11 +61,18 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 	}
 
 	settingsPath := filepath.Join(target, "settings.json")
-	checks := []entry{
-		{
-			label: "settings.json [model]",
-			check: func() bool { return hasSettingsKey(settingsPath, "model") },
-		},
+	settingsDoc := buildSettingsDoc(cfg)
+	applied := jsonc.Read(settingsPath)
+	var checks []entry
+	for _, k := range managedSettingsKeys {
+		if _, inDoc := settingsDoc[k]; !inDoc {
+			continue // config doesn't declare this key — nothing to verify
+		}
+		k := k
+		checks = append(checks, entry{
+			label: "settings.json [" + k + "]",
+			check: func() bool { _, ok := applied[k]; return ok },
+		})
 	}
 	ruleTargets := []string{fsutil.ExpandHome(cfg.AgentsMD.Global.Target)}
 	if root := primeAgentRoot(cfg); root != "" {
