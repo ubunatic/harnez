@@ -1,6 +1,6 @@
 # 056 — AgenticLoop.md anti-patterns: add "piping long-running output through a buffering filter"
 
-**Status**: Closed — resolved in commit pending
+**Status**: Closed — resolved in d741b99
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
