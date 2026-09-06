@@ -45,6 +45,7 @@ Follow these 5 phases sequentially:
    - **Invariants & CLI Design**: Are command boundaries (`apply` vs `init`) and architectural rules respected?
    - **Media & Demo Verification**: If reels, WebM files, or UI screenshots were produced, has explicit user confirmation been obtained before publishing?
    - **Code Cleanliness**: Is the code token-efficient, idiomatic, and minimal?
+   - **Root Cause vs. Symptom**: For defensive/robustness fixes, ask whether the unexpected input's *source* can be fixed instead; verify any upstream fix against the real tool before treating it as done (see `@docs/AgenticLoop.md` Phase 3).
 3. Address any review findings before proceeding to commit.
 
 ### Phase 4: Process & Subagent Hygiene (Teardown & Drain)

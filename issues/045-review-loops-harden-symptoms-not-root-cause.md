@@ -1,6 +1,6 @@
 # 045 — Multi-round review loops harden the symptom, not the root cause
 
-**Status**: Open
+**Status**: Closed — resolved in commit pending
 **Category**: Agentic Ergonomics / Review Practice
 **Related**: [docs/practices/AgenticLoop.md](../docs/practices/AgenticLoop.md), [039](039-agentic-loop-practices-and-sprint-command.md)
 

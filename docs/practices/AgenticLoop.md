@@ -127,6 +127,7 @@ Agentic software engineering scales effectively when concurrency is structured a
       unit-tested hooks that only collide once both are installed together). Require one real, live end-to-end
       check after a genuine restart/re-apply against the actual environment before the ticket is done; record
       a project-local case study or ticket for any concrete failure this catches.
+    - **Root Cause vs. Symptom**: For a defensive or robustness fix (parsing subprocess/tool output, retry/tolerance logic, error swallowing), ask whether the *source* of the unexpected input can be fixed instead — a flag, a config setting, a different invocation. Verify any proposed upstream fix against the real tool/source before treating it as the fix; a plausible-sounding mechanism is not a verified one. If multiple review rounds each find a new edge case in the same defensive code, that is a signal to step back to Phase 2 and fix the root cause rather than harden the symptom further. ([#045](../issues/045-review-loops-harden-symptoms-not-root-cause.md))
 
 ### Phase 4: Process & Subagent Hygiene (Teardown & Drain)
 - **Goal**: Prevent zombie accumulation, orphan processes, and stuck background tasks.
