@@ -1,6 +1,6 @@
 # 252 — Splash: Completed Source Badges (✓ agy ✓ claude … ✓ mic) Under Fetch Status Log
 
-**Status**: In Progress — in progress — lean fresh-sprint
+**Status**: Closed — completed source badges rendered under splash fetch status log
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: UX / Agentic Ergonomics
@@ -65,14 +65,23 @@ at-a-glance confirmation of completed collectors before the live dashboard paint
 
 ## 4. Acceptance Criteria
 
-- [ ] As each collector/probe finishes during `--watch` startup splash, its checkmark badge (e.g. `✓ agy`, `✓ claude`, `✓ mic`) appears in a dedicated line under the fetch status log.
-- [ ] Completed badges persist and accumulate across the splash animation until the live dashboard paints.
-- [ ] Failed sources (if any) are either distinguished (e.g. `✗ name`) or omitted cleanly.
-- [ ] Layout remains centered, visually balanced, and respects terminal size constraints.
-- [ ] Unit tests pass and `make check` succeeds cleanly.
+- [x] As each collector/probe finishes during `--watch` startup splash, its checkmark badge (e.g. `✓ agy`, `✓ claude`, `✓ mic`) appears in a dedicated line under the fetch status log.
+- [x] Completed badges persist and accumulate across the splash animation until the live dashboard paints.
+- [x] Failed sources (if any) are either distinguished (e.g. `✗ name`) or omitted cleanly.
+- [x] Layout remains centered, visually balanced, and respects terminal size constraints.
+- [x] Unit tests pass and `make check` succeeds cleanly.
 
 ## 5. Verification
 
-- **Automated**: `go test -v ./internal/usage/...` covering `buildSplashFrame` and badge rendering.
+- **Automated**: `go test -v ./internal/usage/...` covering `buildSplashFrame`, `splashBadgesLine`, `splashStatusRecord`, and badge rendering.
 - **Interactive**: Run `harnez usage --watch` on cold and warm cache; verify that completed badges appear sequentially under the status log line before transitioning to the dashboard grid.
+
+## 6. Resolution
+
+- Implemented `splashBadge` tracking and `splashStatusRecord` in `internal/usage/watch.go` to accumulate finished probe stages (`FetchDone`, `FetchFailed`) in real time.
+- Implemented `splashBadgesLine` using spec-driven colors (`ansiWrap` with `chart-green` for `✓` and `chart-warm` for `✗`, `dim-grey` for labels).
+- Updated `buildSplashFrame` to render the completed badge row directly under the rolling status line while preserving centering and viewport boundary constraints.
+- Integrated concurrent startup probe for `mic` in `fetchAndUpdate` so local subsystems report progress stages alongside agent collectors.
+- Added comprehensive unit test coverage in `internal/usage/watch_test.go` (`TestSplashBadgesLine`, `TestSplashStatusRecordAccumulatesBadges`, `TestBuildSplashFrameBadgesRow`).
+
 
