@@ -208,6 +208,10 @@ func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 	if err := os.WriteFile(excludePath, []byte("# existing local rules\n*.local-cache\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	hookPath := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho user-hook\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := claude.RunInit(dir, nil, nil, "", false, false, false, false); err != nil {
 		t.Fatalf("RunInit failed: %v", err)
@@ -238,6 +242,24 @@ func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 	}
 	if !strings.Contains(string(exclude), "*.local-cache") {
 		t.Errorf("existing local exclude content was lost:\n%s", exclude)
+	}
+	attributes, err := os.ReadFile(filepath.Join(dir, ".gitattributes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(attributes), "issues/README.md merge=harnez-issues-index") != 1 {
+		t.Errorf("generated-index attribute should appear once:\n%s", attributes)
+	}
+	driver, err := exec.Command("git", "-C", dir, "config", "--local", "--get", "merge.harnez-issues-index.driver").Output()
+	if err != nil || strings.TrimSpace(string(driver)) != "harnez issues merge-driver %O %A %B" {
+		t.Errorf("merge driver not configured: %v (%q)", err, driver)
+	}
+	hook, err := os.ReadFile(hookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(hook), "echo user-hook") || strings.Count(string(hook), "# harnez:begin issues-index-lint") != 1 {
+		t.Errorf("pre-commit hook was not preserved/idempotently extended:\n%s", hook)
 	}
 }
 

@@ -48,6 +48,24 @@ sort | tail`) for either.
 - `harnez find issues next --json` — outputs machine-readable JSON (`{"number":"195","reserved":false}`).
 - `harnez issues new "Ticket Title"` (or `harnez issues new` with no title) — atomically allocates the next number and creates a placeholder ticket file (`issues/NNN-<title-slug>.md` or `issues/NNN-reserved.md` with status `Draft`) using `O_CREATE|O_EXCL` to prevent number collisions between concurrent agents. Prints `NNN<TAB>issues/<reserved-filename>.md` — write the real ticket content directly to that printed path rather than re-deriving the slug from the title by hand; a hand-derived slug can diverge from the reserved filename and leave an orphaned placeholder behind (see issue 202). Add `--json` for the same JSON shape as above with `"reserved":true` plus `file`/`path`. `new` never commits.
 
+**Cross-clone reconciliation.** The atomic reservation above
+only guards concurrent writers sharing one working tree; it cannot see a number reserved in a
+*different* clone/session that hasn't been pushed yet. A ticket filed locally can still collide
+with a ticket independently filed and pushed elsewhere in the interim — the collision only
+surfaces when histories converge. Run `harnez init` once per clone, commit its managed
+`.gitattributes` line, then use `harnez issues rebase [upstream]`. The wrapper records the exact
+locally introduced ticket paths from commit history, replays them with a path-scoped generated
+index merge driver, renumbers collisions deterministically above the combined maximum, rebuilds
+`issues/README.md`, and creates an explicit repair commit. `--dry-run` prints ownership and
+proposed mappings without mutation. State lives under Git's worktree-specific metadata and a
+rerun resumes repair after `git rebase --continue` or a partial repair failure. Substantive ticket
+conflicts remain unresolved; use Git's normal continue/abort commands and rerun the wrapper.
+Unrelated staged and unstaged changes are autostashed and restored with their staging state.
+
+`harnez issues lint` is the read-only validation gate installed by `init`. It rejects duplicate
+numbers, conflicting numeric filename/H1 prefixes, and generated-index drift. Legacy tickets
+whose H1 never carried a numeric prefix remain valid.
+
 The top of each ticket MUST contain the standardized metadata block:
 
 ```markdown
@@ -98,11 +116,17 @@ second run against unchanged tickets makes no further change) and has a `--check
 flag that exits 1 on drift without writing, for CI/pre-commit use — and prints a
 unified diff of exactly what would change, so running it directly in an agent
 session surfaces specific drift the agent can act on immediately, without a
-separate diff step. `harnez index`
+separate diff step. For `issues/README.md`, only the consecutive Markdown
+table lines beginning at the exact `| # | File | Title | Status |` header are
+managed: prose before or after that table is preserved verbatim. A customized
+table header (for example, one with an added Priority or Target column) is
+refused without writing the file, because harnez cannot regenerate values for
+project-specific columns; reconcile that schema manually before adopting the
+generated table. `harnez index`
 also regenerates the project's studies index when that convention exists; otherwise
 the issues index is updated independently. Manual edits to
-either table are always safe to make, but will be overwritten by the next
-`harnez index` run — prefer fixing the source ticket/study file instead.
+rows within either managed table will be overwritten by the next `harnez index`
+run — prefer fixing the source ticket/study file instead.
 
 ```markdown
 # Issues

@@ -128,11 +128,6 @@ func UpdateIssuesReadme(readmePath, issuesDir string) (bool, error) {
 	}
 	defer unlockReadme(lockFile)
 
-	table, err := IssuesTable(issuesDir)
-	if err != nil {
-		return false, err
-	}
-
 	orig, err := os.ReadFile(readmePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -141,11 +136,31 @@ func UpdateIssuesReadme(readmePath, issuesDir string) (bool, error) {
 			return false, fmt.Errorf("read %s: %w", readmePath, err)
 		}
 	}
-	content := string(orig)
+	newContent, err := RenderIssuesReadme(string(orig), issuesDir, readmePath)
+	if err != nil {
+		return false, err
+	}
+	if newContent == string(orig) {
+		return false, nil
+	}
+	if err := os.WriteFile(readmePath, []byte(newContent), 0o644); err != nil {
+		return false, fmt.Errorf("write %s: %w", readmePath, err)
+	}
+	return true, nil
+}
+
+// RenderIssuesReadme returns the canonical generated tracker content without
+// touching the filesystem. Callers such as lint and Git merge drivers use it
+// when mutation of the checked-out README would be unsafe.
+func RenderIssuesReadme(content, issuesDir, readmePath string) (string, error) {
+	table, err := IssuesTable(issuesDir)
+	if err != nil {
+		return "", err
+	}
 
 	loc := issuesTableHeaderRe.FindStringIndex(content)
 	if loc == nil {
-		return false, fmt.Errorf("%s: could not find issues table header ('| # | File | Title | Status |')", readmePath)
+		return "", fmt.Errorf("%s: could not find issues table header ('| # | File | Title | Status |')", readmePath)
 	}
 
 	headerEnd := strings.IndexByte(content[loc[0]:], '\n')
@@ -156,7 +171,7 @@ func UpdateIssuesReadme(readmePath, issuesDir string) (bool, error) {
 	}
 	header := strings.TrimSpace(content[loc[0]:headerEnd])
 	if header != issuesTableHeader {
-		return false, fmt.Errorf("%s: refusing to replace customized issues table header %q; expected %q (project-specific columns must be reconciled manually)", readmePath, header, issuesTableHeader)
+		return "", fmt.Errorf("%s: refusing to replace customized issues table header %q; expected %q (project-specific columns must be reconciled manually)", readmePath, header, issuesTableHeader)
 	}
 
 	// The managed block is the consecutive run of Markdown table lines that
@@ -177,13 +192,7 @@ func UpdateIssuesReadme(readmePath, issuesDir string) (bool, error) {
 	}
 
 	newContent := content[:loc[0]] + table + content[tableEnd:]
-	if newContent == content {
-		return false, nil
-	}
-	if err := os.WriteFile(readmePath, []byte(newContent), 0o644); err != nil {
-		return false, fmt.Errorf("write %s: %w", readmePath, err)
-	}
-	return true, nil
+	return newContent, nil
 }
 
 var (

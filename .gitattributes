@@ -1,1 +1,2 @@
 *.webm filter=lfs diff=lfs merge=lfs -text
+issues/README.md merge=harnez-issues-index

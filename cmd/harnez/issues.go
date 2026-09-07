@@ -101,6 +101,12 @@ Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
                     resyncs issues/README.md, and commits both files by default.
                     Guarded by O_CREATE|O_EXCL so concurrent claims or existing
                     tickets are never overwritten.
+  rebase [upstream] Replay local commits onto upstream, deriving local ticket
+                    ownership from history and deterministically repairing any
+                    number collisions in an explicit final commit. --dry-run
+                    prints the plan without changing Git state.
+  lint              Read-only validation for duplicate numbers, conflicting
+                    filename/H1 numbers, and generated-index drift.
 
 'close' with no reason writes bare "Closed", never an auto-fabricated
 "Closed — resolved" -- both are common in the corpus and this command does
@@ -124,7 +130,7 @@ exit, actionable stderr) -- unlike 'harnez find', where zero matches is a
 valid, exit-0 answer.`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return fmt.Errorf("issues: requires a verb (open, start, block, close, draft, new, mv)")
+				return fmt.Errorf("issues: requires a verb (open, start, block, close, draft, new, mv, rebase, lint)")
 			}
 			if args[0] == "new" {
 				return nil // [title] is optional, no ticket-number argument exists yet
@@ -135,10 +141,41 @@ valid, exit-0 answer.`,
 				}
 				return nil
 			}
+			if args[0] == "rebase" {
+				if len(args) > 2 {
+					return fmt.Errorf("issues rebase: accepts at most one argument: [upstream]")
+				}
+				return nil
+			}
+			if args[0] == "lint" {
+				if len(args) != 1 {
+					return fmt.Errorf("issues lint: accepts no arguments")
+				}
+				return nil
+			}
+			if args[0] == "merge-driver" {
+				if len(args) != 4 {
+					return fmt.Errorf("issues merge-driver: expected %%O %%A %%B paths")
+				}
+				return nil
+			}
 			return cobra.MinimumNArgs(2)(cmd, args)
 		},
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if args[0] == "merge-driver" {
+				return runIssuesMergeDriver(args[2])
+			}
+			if args[0] == "rebase" {
+				upstream := "@{upstream}"
+				if len(args) == 2 {
+					upstream = args[1]
+				}
+				return runIssuesRebase(cmd.OutOrStdout(), dir, upstream, checkFlag || dryRunFlag)
+			}
+			if args[0] == "lint" {
+				return runIssuesLint(cmd.OutOrStdout(), dir)
+			}
 			if args[0] == "new" {
 				title := strings.TrimSpace(strings.Join(args[1:], " "))
 				return runIssuesNew(cmd.OutOrStdout(), dir, title, jsonFlag)

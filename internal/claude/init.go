@@ -425,6 +425,11 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 			fmt.Printf("  ignored %s in .git/info/exclude\n", issuesReadmeLock)
 			changes++
 		}
+		gitChanges, err := installIssuesGitIntegration(dir)
+		if err != nil {
+			return err
+		}
+		changes += gitChanges
 	}
 
 	if cfg != nil {
@@ -571,6 +576,90 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 		fmt.Printf("%d change(s).\n", changes)
 	}
 	return nil
+}
+
+const issuesAttributesLine = "issues/README.md merge=harnez-issues-index"
+const issuesHookBlock = `# harnez:begin issues-index-lint
+if command -v harnez >/dev/null 2>&1
+then harnez issues lint -d "$(git rev-parse --show-toplevel)" || exit $?
+fi
+# harnez:end issues-index-lint
+`
+
+// installIssuesGitIntegration installs clone-local driver configuration and
+// repository files through init. It deliberately does nothing outside Git
+// repositories and appends to (rather than replacing) user-owned files.
+func installIssuesGitIntegration(dir string) (int, error) {
+	if err := exec.Command("git", "-C", dir, "rev-parse", "--git-dir").Run(); err != nil {
+		return 0, nil
+	}
+	changes := 0
+	attributes := filepath.Join(dir, ".gitattributes")
+	content, err := os.ReadFile(attributes)
+	if err != nil && !os.IsNotExist(err) {
+		return 0, fmt.Errorf("read %s: %w", attributes, err)
+	}
+	if !containsExactLine(string(content), issuesAttributesLine) {
+		prefix := string(content)
+		if prefix != "" && !strings.HasSuffix(prefix, "\n") {
+			prefix += "\n"
+		}
+		if err := os.WriteFile(attributes, []byte(prefix+issuesAttributesLine+"\n"), 0o644); err != nil {
+			return 0, fmt.Errorf("write %s: %w", attributes, err)
+		}
+		fmt.Printf("  configured %s as a generated merge path\n", attributes)
+		changes++
+	}
+	configArgs := []string{"-C", dir, "config", "--local", "merge.harnez-issues-index.driver", "harnez issues merge-driver %O %A %B"}
+	if out, err := exec.Command("git", configArgs...).CombinedOutput(); err != nil {
+		return 0, fmt.Errorf("configure generated issue-index merge driver: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	nameArgs := []string{"-C", dir, "config", "--local", "merge.harnez-issues-index.name", "harnez generated issue index"}
+	if out, err := exec.Command("git", nameArgs...).CombinedOutput(); err != nil {
+		return 0, fmt.Errorf("name generated issue-index merge driver: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	hooksDirOut, err := exec.Command("git", "-C", dir, "rev-parse", "--git-path", "hooks").Output()
+	if err != nil {
+		return 0, fmt.Errorf("locate Git hooks: %w", err)
+	}
+	hooksDir := strings.TrimSpace(string(hooksDirOut))
+	if !filepath.IsAbs(hooksDir) {
+		hooksDir = filepath.Join(dir, hooksDir)
+	}
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		return 0, fmt.Errorf("create Git hooks directory: %w", err)
+	}
+	hook := filepath.Join(hooksDir, "pre-commit")
+	hookContent, err := os.ReadFile(hook)
+	if err != nil && !os.IsNotExist(err) {
+		return 0, fmt.Errorf("read %s: %w", hook, err)
+	}
+	if !strings.Contains(string(hookContent), "# harnez:begin issues-index-lint") {
+		prefix := string(hookContent)
+		if prefix == "" {
+			prefix = "#!/bin/sh\n"
+		} else if !strings.HasSuffix(prefix, "\n") {
+			prefix += "\n"
+		}
+		if err := os.WriteFile(hook, []byte(prefix+issuesHookBlock), 0o755); err != nil {
+			return 0, fmt.Errorf("write %s: %w", hook, err)
+		}
+		if err := os.Chmod(hook, 0o755); err != nil {
+			return 0, fmt.Errorf("make %s executable: %w", hook, err)
+		}
+		fmt.Printf("  installed issue-index lint in %s\n", hook)
+		changes++
+	}
+	return changes, nil
+}
+
+func containsExactLine(content, want string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == want {
+			return true
+		}
+	}
+	return false
 }
 
 // RunInitAll discovers eligible child project directories under parentDir
