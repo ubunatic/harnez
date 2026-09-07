@@ -10,7 +10,7 @@
 
 `apply` and `init` are intentionally separate — do not merge their concerns.
 
-- `apply` — global `~/.claude` only: settings, hooks, commands, docs; flags: `-c`, `-t`, `-d`
+- `apply` — global `~/.claude` only: settings, hooks, commands, docs; flags: `-c`, `-t`, `-d`, `-s`
 - `init`  — project dir only: AGENTS.md, local sections, doc copies, Makefile; flags: `-c`, `-d`, `--docs`
 
 Before changing any command's flags or adding project-local behaviour to `apply`, read

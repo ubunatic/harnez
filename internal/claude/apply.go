@@ -594,6 +594,53 @@ func BashShimPath() string {
 	return filepath.Join(home, ".harnez", "shims", "bash")
 }
 
+const HarnezEnvContent = `# harnez:begin env
+# Shell environment and helper functions for harnez-managed tools and agents.
+
+# Antigravity (AGY) wrapper with guarded shims PATH and agent indicator
+agy() {
+    PATH="$HOME/.harnez/shims:$PATH" ANTIGRAVITY_AGENT=1 command agy "$@"
+}
+# harnez:end env
+`
+
+const HarnezShellRCSnippet = `if [ -f "$HOME/.harnez/env.sh" ]; then
+    . "$HOME/.harnez/env.sh"
+fi
+`
+
+// HarnezEnvPath returns the standard location of the harnez environment script (~/.harnez/env.sh).
+func HarnezEnvPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".harnez", "env.sh")
+}
+
+// ShellRCPaths returns potential shell rc targets (~/.bashrc, ~/.zshrc) that exist,
+// or ~/.bashrc if neither exists.
+func ShellRCPaths() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	candidates := []string{
+		filepath.Join(home, ".bashrc"),
+		filepath.Join(home, ".zshrc"),
+	}
+	var existing []string
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			existing = append(existing, p)
+		}
+	}
+	if len(existing) == 0 {
+		return []string{candidates[0]}
+	}
+	return existing
+}
+
 func localPath(projectDir, rel string) string {
 	if filepath.IsAbs(rel) || projectDir == "" || projectDir == "." {
 		return rel
@@ -619,11 +666,10 @@ func mergeDocs(fromConfig, fromFlag []string) []string {
 
 // ApplyAll applies configuration. installSystemd additionally installs the
 // harnez-agent-collector systemd --user unit (issue 082) to
-// ~/.config/systemd/user/ — a real machine-level, home-relative location
-// outside `target`, so it defaults to off to keep plain `harnez apply` (and
-// this package's own tests, which sandbox `target` but not $HOME) free of
-// side effects on the real user home directory unless explicitly requested.
-func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool) error {
+// ~/.config/systemd/user/. installShell (opt-in) additionally injects the
+// harnez environment source block into shell rc files (~/.bashrc, ~/.zshrc).
+func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool, installShell ...bool) error {
+	shellOpt := len(installShell) > 0 && installShell[0]
 	if err := validateDocNames(cfg, docs); err != nil {
 		return err
 	}
@@ -964,6 +1010,38 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 		}
 	}
 
+	if envPath := HarnezEnvPath(); envPath != "" {
+		changed, err := fsutil.WriteIfChanged(envPath, []byte(HarnezEnvContent))
+		if err != nil {
+			return fmt.Errorf("harnez env %s: %w", envPath, err)
+		}
+		if changed {
+			changes++
+			fmt.Printf("  wrote %s\n", envPath)
+		} else {
+			addStat("env script", fsutil.ContractHome(envPath))
+		}
+	}
+
+	if shellOpt {
+		for _, rcPath := range ShellRCPaths() {
+			changed, existed, err := markdown.ApplyMK(rcPath, "env", HarnezShellRCSnippet)
+			if err != nil {
+				return fmt.Errorf("shell rc %s: %w", rcPath, err)
+			}
+			if changed {
+				changes++
+				if existed {
+					fmt.Printf("  updated %s [env]\n", rcPath)
+				} else {
+					fmt.Printf("  wrote %s [env]\n", rcPath)
+				}
+			} else {
+				addStat("shell rc", fsutil.ContractHome(rcPath))
+			}
+		}
+	}
+
 	if installSystemd {
 		unitPath, ur, err := installSystemdUnit(cfg.FS)
 		if err != nil {
@@ -1124,6 +1202,24 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 		}
 	}
 
+	if envPath := HarnezEnvPath(); envPath != "" {
+		if _, err := os.Stat(envPath); err != nil {
+			anyChanged = true
+		} else {
+			data, readErr := os.ReadFile(envPath)
+			if readErr != nil || string(data) != HarnezEnvContent {
+				anyChanged = true
+			}
+		}
+	}
+	for _, rcPath := range ShellRCPaths() {
+		if markdown.ContainsSectionMK(rcPath, "env") {
+			if changed, err := markdown.DiffMK(rcPath, "env", HarnezShellRCSnippet); err != nil || changed {
+				anyChanged = true
+			}
+		}
+	}
+
 	gearExe := gearExecutable()
 	for _, link := range GearSymlinkTargets(target, cfg) {
 		if _, err := os.Lstat(link); err != nil {
@@ -1220,6 +1316,17 @@ func CleanAll(target string, cfg *Config) error {
 		if err := os.Remove(shimPath); err == nil {
 			fmt.Printf("  removed %s\n", shimPath)
 			_ = os.Remove(filepath.Dir(shimPath))
+		}
+	}
+	if envPath := HarnezEnvPath(); envPath != "" {
+		if err := os.Remove(envPath); err == nil {
+			fmt.Printf("  removed %s\n", envPath)
+			_ = os.Remove(filepath.Dir(envPath))
+		}
+	}
+	for _, rcPath := range ShellRCPaths() {
+		if removed, _, err := markdown.CleanMK(rcPath, "env"); err == nil && removed {
+			fmt.Printf("  cleaned %s [env]\n", rcPath)
 		}
 	}
 	for _, link := range GearSymlinkTargets(target, cfg) {

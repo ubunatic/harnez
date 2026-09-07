@@ -437,6 +437,7 @@ func main() {
 	var applyDocs []string
 	var forceDocs bool
 	var applySystemd bool
+	var applyShell bool
 	apply := &cobra.Command{
 		Use:   "apply",
 		Short: "Apply config.yaml to global Claude Code and agent harness directories",
@@ -447,7 +448,7 @@ func main() {
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
-			return claude.ApplyAll(t, cfg, applyDocs, forceDocs, applySystemd)
+			return claude.ApplyAll(t, cfg, applyDocs, forceDocs, applySystemd, applyShell)
 		},
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
@@ -456,6 +457,8 @@ func main() {
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing docs with bundled versions")
 	apply.Flags().BoolVar(&applySystemd, "systemd", false,
 		"install the harnez-agent-collector systemd --user unit to ~/.config/systemd/user (issue 082)")
+	apply.Flags().BoolVarP(&applyShell, "shell", "s", false,
+		"inject harnez environment source into ~/.bashrc and ~/.zshrc")
 
 	var diffExitCode bool
 	var captureDocs bool

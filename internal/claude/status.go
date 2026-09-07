@@ -177,6 +177,33 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 			state: shimState,
 		})
 	}
+	if envPath := HarnezEnvPath(); envPath != "" {
+		envState := "missing"
+		if _, err := os.Stat(envPath); err == nil {
+			data, readErr := os.ReadFile(envPath)
+			if readErr == nil && string(data) == HarnezEnvContent {
+				envState = "ok"
+			} else {
+				envState = "drifted"
+			}
+		}
+		checks = append(checks, entry{
+			label: envPath,
+			state: envState,
+		})
+	}
+	for _, rcPath := range ShellRCPaths() {
+		if markdown.ContainsSectionMK(rcPath, "env") {
+			rcState := "ok"
+			if changed, err := markdown.DiffMK(rcPath, "env", HarnezShellRCSnippet); err != nil || changed {
+				rcState = "drifted"
+			}
+			checks = append(checks, entry{
+				label: rcPath + " [env]",
+				state: rcState,
+			})
+		}
+	}
 	for _, link := range GearSymlinkTargets(target, cfg) {
 		link := link
 		checks = append(checks, entry{
