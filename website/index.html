@@ -3,30 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>harnez — declarative agent and Claude Code harness</title>
+  <title>harnez — declarative agent &amp; developer harness</title>
+  <meta name="description" content="One config.yaml drives Claude Code, Google Antigravity, OpenAI Codex, and Prime Agent harnesses. Live multi-agent quota monitoring, hardware telemetry, two-stage hook interception, and analytical tool stats.">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-    /* Declared so the injected navbar's light-dark() resolves against
-       this page's theme rather than the viewer's OS setting. */
-    color-scheme: light;
+      /* Declared so the injected navbar's light-dark() resolves against
+         this page's theme rather than the viewer's OS setting. */
+      color-scheme: light;
 
-      --bg:       #f7f6f3;
-      --surface:  #ffffff;
-      --border:   #e2e0da;
-      --text:     #1c1917;
-      --muted:    #6b6762;
-      --accent:   #c84b00;
-      --accent2:  #e05c00;
-      --code-bg:  #1a1917;
-      --code-fg:  #d4d0c8;
-      --green:    #2d7d46;
-      --radius:   6px;
-      --font:     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Liberation Sans',
-                  Helvetica, Arial, sans-serif;
-      --mono:     'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Liberation Mono',
-                  'DejaVu Sans Mono', monospace;
+      --bg:         #f7f6f3;
+      --surface:    #ffffff;
+      --border:     #e2e0da;
+      --text:       #1c1917;
+      --muted:      #6b6762;
+      --accent:     #c84b00;
+      --accent2:    #e05c00;
+      --code-bg:    #1a1917;
+      --code-fg:    #d4d0c8;
+      --green:      #2d7d46;
+      --green-bg:   #dcfce7;
+      --blue:       #0369a1;
+      --blue-bg:    #e0f2fe;
+      --red:        #b91c1c;
+      --red-bg:     #fee2e2;
+      --radius:     8px;
+      --font:       -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Liberation Sans',
+                    Helvetica, Arial, sans-serif;
+      --mono:       'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Liberation Mono',
+                    'DejaVu Sans Mono', monospace;
     }
 
     body {
@@ -41,13 +47,16 @@
     a:hover { text-decoration: underline; }
 
     /* ── layout ─────────────────────────────────────────────── */
-    .container { max-width: 860px; margin: 0 auto; padding: 0 1.5rem; }
+    .container { max-width: 900px; margin: 0 auto; padding: 0 1.5rem; }
 
     /* ── header ─────────────────────────────────────────────── */
     header {
       border-bottom: 1px solid var(--border);
       background: var(--surface);
       padding: 1rem 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
     .header-inner {
       display: flex;
@@ -72,36 +81,55 @@
       align-items: center;
       font-size: 0.9rem;
     }
+    .header-links a { color: var(--muted); font-weight: 500; }
+    .header-links a:hover { color: var(--accent); text-decoration: none; }
     .berg-link {
       display: flex;
       align-items: center;
       gap: 0.4rem;
-      color: var(--muted);
-      font-weight: 500;
+      color: var(--text) !important;
+      font-weight: 600;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
     }
-    .berg-link:hover { color: var(--accent); text-decoration: none; }
+    .berg-link:hover { border-color: var(--accent); color: var(--accent) !important; text-decoration: none; }
 
     /* ── hero ───────────────────────────────────────────────── */
     .hero {
-      padding: 3.5rem 0 3rem;
+      padding: 3.5rem 0 2.5rem;
       text-align: center;
     }
+    .hero-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--accent);
+      background: #fff0e6;
+      border: 1px solid #ffd1b3;
+      padding: 0.25rem 0.8rem;
+      border-radius: 99px;
+      margin-bottom: 1rem;
+    }
     .hero h1 {
-      font-size: clamp(1.8rem, 5vw, 2.6rem);
+      font-size: clamp(2rem, 5.5vw, 2.9rem);
       font-weight: 800;
       letter-spacing: -0.03em;
-      line-height: 1.2;
-      margin-bottom: 1rem;
+      line-height: 1.15;
+      margin-bottom: 1.1rem;
     }
     .hero h1 em {
       font-style: normal;
       color: var(--accent);
     }
-    .hero p {
-      font-size: 1.1rem;
+    .hero p.lead {
+      font-size: 1.15rem;
       color: var(--muted);
-      max-width: 560px;
-      margin: 0 auto 2rem;
+      max-width: 660px;
+      margin: 0 auto 1.75rem;
+      line-height: 1.6;
     }
     .pill-row {
       display: flex;
@@ -125,13 +153,14 @@
       background: var(--code-bg);
       border-radius: var(--radius);
       padding: 1.25rem 1.5rem;
-      max-width: 520px;
+      max-width: 560px;
       margin: 0 auto;
       text-align: left;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
     }
     .install .label {
       font-size: 0.75rem;
-      color: #6b6762;
+      color: #8c8882;
       font-family: var(--mono);
       margin-bottom: 0.5rem;
       letter-spacing: 0.05em;
@@ -147,155 +176,136 @@
     .install code .prompt { color: #6b8c6b; user-select: none; }
     .install code .cmd    { color: #d4d0c8; }
     .install code .arg    { color: #c8a870; }
-    .install code .cmt    { color: #5a5855; }
+    .install code .cmt    { color: #6c6965; }
 
     /* ── section ────────────────────────────────────────────── */
-    section { padding: 2.5rem 0; border-top: 1px solid var(--border); }
-    section h2 {
-      font-size: 1.25rem;
+    section { padding: 3rem 0; border-top: 1px solid var(--border); }
+    .section-header {
+      margin-bottom: 1.5rem;
+    }
+    .section-tag {
+      font-family: var(--mono);
+      font-size: 0.75rem;
       font-weight: 700;
-      margin-bottom: 1.25rem;
-      letter-spacing: -0.02em;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      display: block;
+      margin-bottom: 0.3rem;
+    }
+    section h2 {
+      font-size: 1.45rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      color: var(--text);
+    }
+    .section-desc {
+      font-size: 0.95rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+      max-width: 720px;
     }
 
-    /* ── features grid ───────────────────────────────────────── */
-    .features {
+    /* ── stats metric banner ─────────────────────────────────── */
+    .metrics-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 1rem;
+      margin-bottom: 1.5rem;
     }
-    .feature {
+    .metric-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 1rem 1.1rem;
+      padding: 1.1rem;
+      text-align: center;
     }
-    .feature h3 {
-      font-size: 0.9rem;
-      font-weight: 600;
-      margin-bottom: 0.35rem;
-      color: var(--text);
-    }
-    .feature p {
-      font-size: 0.83rem;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-    .feature code {
+    .metric-val {
       font-family: var(--mono);
-      font-size: 0.8rem;
-      background: var(--bg);
-      padding: 0.1em 0.3em;
-      border-radius: 3px;
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1.1;
+      margin-bottom: 0.25rem;
     }
-
-    /* ── command table ───────────────────────────────────────── */
-    .cmd-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    .cmd-table th {
-      text-align: left;
-      padding: 0.5rem 0.75rem;
-      border-bottom: 2px solid var(--border);
-      font-size: 0.78rem;
+    .metric-label {
+      font-size: 0.8rem;
+      color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+    .metric-sub {
+      font-size: 0.75rem;
       color: var(--muted);
-    }
-    .cmd-table td {
-      padding: 0.6rem 0.75rem;
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
-    }
-    .cmd-table tr:last-child td { border-bottom: none; }
-    .cmd-table code {
+      margin-top: 0.2rem;
       font-family: var(--mono);
-      font-size: 0.83rem;
-      background: var(--bg);
-      padding: 0.1em 0.35em;
-      border-radius: 3px;
     }
-    .flag { color: var(--accent); }
 
-    /* ── how it works ────────────────────────────────────────── */
-    .how-list { display: flex; flex-direction: column; gap: 1rem; }
-    .how-item {
-      display: grid;
-      grid-template-columns: 2rem 1fr;
-      gap: 0.75rem;
-      align-items: start;
+    /* ── visual terminal showcase ────────────────────────────── */
+    .showcase-frame {
+      background: #151413;
+      border: 1px solid #2e2b28;
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin: 1.5rem 0;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
     }
-    .how-num {
-      width: 2rem;
-      height: 2rem;
-      background: var(--accent);
-      color: #fff;
-      border-radius: 50%;
-      font-size: 0.8rem;
-      font-weight: 700;
+    .showcase-titlebar {
+      background: #1f1d1a;
+      border-bottom: 1px solid #2e2b28;
+      padding: 0.55rem 0.9rem;
       display: flex;
       align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      margin-top: 0.1rem;
+      gap: 0.5rem;
     }
-    .how-item h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.2rem; }
-    .how-item p  { font-size: 0.88rem; color: var(--muted); line-height: 1.5; }
-    .how-item code {
+    .term-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .term-dot.red { background: #ff5f56; }
+    .term-dot.yellow { background: #ffbd2e; }
+    .term-dot.green { background: #27c93f; }
+    .showcase-title {
       font-family: var(--mono);
+      font-size: 0.78rem;
+      color: #8c8882;
+      margin-left: 0.4rem;
+    }
+    .showcase-img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .showcase-dual {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 720px) {
+      .showcase-dual { grid-template-columns: 1fr; }
+    }
+    .showcase-caption {
       font-size: 0.82rem;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      padding: 0.1em 0.35em;
-      border-radius: 3px;
-    }
-
-    /* ── code block ──────────────────────────────────────────── */
-    .codeblock {
-      background: var(--code-bg);
-      border-radius: var(--radius);
-      padding: 1.1rem 1.25rem;
-      overflow-x: auto;
-    }
-    .codeblock pre {
-      font-family: var(--mono);
-      font-size: 0.85rem;
-      color: var(--code-fg);
-      line-height: 1.75;
-      white-space: pre;
-    }
-    .codeblock .k  { color: #c8a870; }   /* keyword / key */
-    .codeblock .s  { color: #88b87a; }   /* string */
-    .codeblock .c  { color: #5a5855; }   /* comment */
-    .codeblock .p  { color: #6b8c6b; }   /* prompt */
-
-    /* ── footer ──────────────────────────────────────────────── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 2rem 0;
-      text-align: center;
-      font-size: 0.85rem;
       color: var(--muted);
-    }
-    footer a { color: var(--muted); }
-    footer a:hover { color: var(--accent); }
-    .footer-berg {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
       margin-top: 0.5rem;
+      line-height: 1.45;
     }
 
     /* ── story section ───────────────────────────────────────── */
     .story-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
       gap: 1rem;
-      margin-top: 0.5rem;
     }
     .story-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 1.2rem;
+      padding: 1.25rem;
       display: flex;
       flex-direction: column;
     }
@@ -310,22 +320,163 @@
       border-radius: 4px;
       margin-bottom: 0.75rem;
     }
-    .story-tag.problem  { background: #fee2e2; color: #b91c1c; }
-    .story-tag.approach { background: #e0f2fe; color: #0369a1; }
-    .story-tag.result   { background: #dcfce7; color: #15803d; }
+    .story-tag.problem  { background: var(--red-bg); color: var(--red); }
+    .story-tag.approach { background: var(--blue-bg); color: var(--blue); }
+    .story-tag.result   { background: var(--green-bg); color: var(--green); }
     .story-card h3 {
-      font-size: 0.95rem;
+      font-size: 0.98rem;
       font-weight: 700;
-      margin-bottom: 0.4rem;
+      margin-bottom: 0.45rem;
       color: var(--text);
     }
     .story-card p {
-      font-size: 0.85rem;
+      font-size: 0.86rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── features grid ───────────────────────────────────────── */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+    }
+    .feature {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem;
+    }
+    .feature h3 {
+      font-size: 0.92rem;
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+      color: var(--text);
+    }
+    .feature p {
+      font-size: 0.84rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .feature code {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 0.1em 0.3em;
+      border-radius: 3px;
+    }
+
+    /* ── tables ─────────────────────────────────────────────── */
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 1.25rem 0;
+    }
+    .cmd-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .cmd-table th {
+      text-align: left;
+      padding: 0.65rem 0.85rem;
+      background: #faf9f6;
+      border-bottom: 2px solid var(--border);
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
       color: var(--muted);
     }
-    @media (max-width: 600px) {
+    .cmd-table td {
+      padding: 0.65rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .cmd-table tr:last-child td { border-bottom: none; }
+    .cmd-table code {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      background: var(--bg);
+      padding: 0.15em 0.4em;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+    }
+    .flag { color: var(--accent); font-weight: 600; }
+
+    /* ── code block ──────────────────────────────────────────── */
+    .codeblock {
+      background: var(--code-bg);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    .codeblock pre {
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      color: var(--code-fg);
+      line-height: 1.75;
+      white-space: pre;
+    }
+    .codeblock .k  { color: #c8a870; }   /* keyword / key */
+    .codeblock .s  { color: #88b87a; }   /* string */
+    .codeblock .c  { color: #73706a; }   /* comment */
+    .codeblock .p  { color: #6b8c6b; }   /* prompt */
+    .codeblock .o  { color: #e05c00; }   /* output / metric */
+
+    /* ── how it works ────────────────────────────────────────── */
+    .how-list { display: flex; flex-direction: column; gap: 1rem; }
+    .how-item {
+      display: grid;
+      grid-template-columns: 2.2rem 1fr;
+      gap: 0.85rem;
+      align-items: start;
+    }
+    .how-num {
+      width: 2.2rem;
+      height: 2.2rem;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      font-size: 0.85rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 0.1rem;
+    }
+    .how-item h3 { font-size: 0.96rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .how-item p  { font-size: 0.88rem; color: var(--muted); line-height: 1.5; }
+    .how-item code {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    /* ── footer ──────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2.5rem 0;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--muted);
+      background: var(--surface);
+    }
+    footer a { color: var(--muted); font-weight: 500; }
+    footer a:hover { color: var(--accent); }
+    .footer-berg {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.75rem;
+    }
+
+    @media (max-width: 650px) {
       .header-links .nav-link { display: none; }
-      .hero { padding: 2rem 0; }
+      .hero { padding: 2.25rem 0 1.75rem; }
     }
   </style>
 </head>
@@ -336,21 +487,20 @@
   <div class="container">
     <div class="header-inner">
       <a class="logo" href="#">
-        <!-- minimal terminal/config icon -->
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
           <rect width="28" height="28" rx="6" fill="#1a1917"/>
           <path d="M7 10l4 4-4 4" stroke="#e05c00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           <line x1="14" y1="18" x2="21" y2="18" stroke="#6b6762" stroke-width="2" stroke-linecap="round"/>
         </svg>
-        harnez
+        <span>harnez</span>
       </a>
       <nav class="header-links">
-        <a class="nav-link" href="#story">Story</a>
-        <a class="nav-link" href="#install">Install</a>
+        <a class="nav-link" href="#story">Why</a>
+        <a class="nav-link" href="#usage">Live Dashboard</a>
+        <a class="nav-link" href="#telemetry">Telemetry &amp; Stats</a>
         <a class="nav-link" href="#commands">Commands</a>
-        <a class="nav-link" href="#usage">Usage monitor</a>
+        <a class="nav-link" href="#install">Install</a>
         <a class="berg-link" href="https://codeberg.org/ubunatic/harnez" target="_blank" rel="noopener">
-          <!-- Codeberg berg/mountain icon -->
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-label="Codeberg">
             <path d="m8 3 4 8 5-5 5 15H2L8 3z"/>
           </svg>
@@ -365,18 +515,19 @@
 <main>
 <div class="hero">
   <div class="container">
+    <div class="hero-badge">Multi-Agent Harness &bull; Telemetry &bull; Live Quotas</div>
     <h1>Declarative <em>developer &amp; agent</em><br>harness</h1>
-    <p>One <code style="font-family:var(--mono);font-size:0.95em;background:var(--surface);border:1px solid var(--border);padding:0.1em 0.4em;border-radius:4px">config.yaml</code> drives everything Claude Code and AI agents read — permissions, model effort, hooks, instructions, cross-agent skills, and engineering conventions. Apply is idempotent.</p>
+    <p class="lead">One <code style="font-family:var(--mono);font-size:0.95em;background:var(--surface);border:1px solid var(--border);padding:0.1em 0.45em;border-radius:4px">config.yaml</code> drives everything Claude Code, Google Antigravity (AGY), OpenAI Codex, and Prime Agent read. Idempotent configuration, two-stage hook interception, real-time quota &amp; hardware monitoring, and SQLite tool telemetry.</p>
 
     <div class="pill-row">
       <span class="pill">settings.json</span>
-      <span class="pill">CLAUDE.md</span>
       <span class="pill">AGENTS.md</span>
-      <span class="pill">commands/</span>
-      <span class="pill">skills/</span>
-      <span class="pill">docs/</span>
-      <span class="pill">hooks</span>
+      <span class="pill">CLAUDE.md</span>
+      <span class="pill">hooks.json</span>
       <span class="pill">usage --watch</span>
+      <span class="pill">harnez stats</span>
+      <span class="pill">PipeWire live mic</span>
+      <span class="pill">5-phase /sprint</span>
     </div>
 
     <div class="install" id="install">
@@ -393,262 +544,414 @@
 <!-- ── STORY: PROBLEM → APPROACH → RESULT ────────────────────────── -->
 <section id="story">
   <div class="container">
-    <h2>Why harnez?</h2>
+    <div class="section-header">
+      <span class="section-tag">Motivation</span>
+      <h2>Why harnez?</h2>
+    </div>
     <div class="story-grid">
       <div class="story-card">
         <div class="story-tag problem">Problem</div>
-        <h3>Configuration Drift &amp; Fragmented Agents</h3>
-        <p>AI coding agent configurations drift rapidly across machines and tools. Permissions wipe on updates, prompt rules diverge across repositories, slash commands and skills need separate target directories for Claude Code, Gemini, and Codex, while quota limits cause silent failures.</p>
+        <h3>Configuration Drift &amp; Blind Spots</h3>
+        <p>AI coding agent setups drift across machines and providers. Tool permissions wipe on updates, prompt conventions diverge across repositories, multi-agent skills need disparate target directories, and unexpected rate limits or silent tool failures stall workflows without telemetry.</p>
       </div>
       <div class="story-card">
         <div class="story-tag approach">Approach</div>
-        <h3>Single Declarative Source of Truth</h3>
-        <p>A central <code>config.yaml</code> idempotently manages global configs, local project scaffolding, and universal skills. Non-destructive key merging and HTML-comment boundaries preserve user customization, while a unified usage monitor and 5-phase sprint workflow enforce operational discipline.</p>
+        <h3>Declarative Source of Truth &amp; Native Hooks</h3>
+        <p>A single declarative <code>config.yaml</code> idempotently manages global configs, local project scaffolding, and cross-agent skills. Two-stage <code>PreToolUse</code> hooks rewrite commands to proxy stdio unbuffered and capture execution metrics directly into a local SQLite database.</p>
       </div>
       <div class="story-card">
         <div class="story-tag result">Result</div>
-        <h3>Deterministic, Zero-Drift Engineering</h3>
-        <p>Zero drift across all agent harnesses, one-command project onboarding via <code>harnez init</code>, live cross-provider quota tracking with rate-limit protection, and structured, zero-zombie agentic sprint execution.</p>
+        <h3>Deterministic, Observable Engineering</h3>
+        <p>Zero drift across all agent harnesses, one-command project onboarding via <code>harnez init</code>, live cross-provider quota tracking with rate-limit protection, and quantitative tool call reliability metrics via <code>harnez stats</code>.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ── FEATURES ─────────────────────────────────────────────────── -->
-<section>
-  <div class="container">
-    <h2>What it manages</h2>
-    <div class="features">
-      <div class="feature">
-        <h3>Effort &amp; optional model</h3>
-        <p>Set <code>effort</code> centrally; <code>model</code> is unmanaged by default so user and client choices in <code>settings.json</code> are preserved.</p>
-      </div>
-      <div class="feature">
-        <h3>Permissions</h3>
-        <p>Allow/deny lists are <em>merged</em>, not replaced — your user-managed keys survive every apply.</p>
-      </div>
-      <div class="feature">
-        <h3>Lifecycle hooks</h3>
-        <p>Declare <code>Stop</code>, <code>PreToolUse</code>, and other hooks in YAML; harnez writes the right JSON shape.</p>
-      </div>
-      <div class="feature">
-        <h3>CLAUDE.md / AGENTS.md</h3>
-        <p>Managed sections live inside HTML-comment markers. Unmanaged project rules are never overwritten.</p>
-      </div>
-      <div class="feature">
-        <h3>Multi-agent skills</h3>
-        <p>Distributes slash commands &amp; Agent Skills across Claude (<code>~/.claude/commands/</code>), Gemini (<code>~/.gemini/skills/</code>), Codex (<code>~/.codex/skills/</code>), and Prime Agent (<code>~/.prime/agent/</code>).</p>
-      </div>
-      <div class="feature">
-        <h3>Language &amp; practice docs</h3>
-        <p>Bundles conventions for Go, Bash, Make, Rust, Zig, C++, GTK4, Git, Markdown, Canary-first probes, Spec-driven architecture, and Agentic Loops.</p>
-      </div>
-      <div class="feature">
-        <h3>5-phase agentic sprints</h3>
-        <p>Orchestrate structured <code>/sprint</code> workflows: Parallel Advisory Discovery &rarr; TDD Dev &rarr; Pre-Commit Review Gate &rarr; Process Hygiene &rarr; Retrospective.</p>
-      </div>
-      <div class="feature">
-        <h3>Token &amp; quota monitor</h3>
-        <p><code>usage</code> reads tokens, plans, and live quota windows across Claude Code, Antigravity, and Codex — as a report, a one-shot grid, or a live <code>--watch</code> dashboard.</p>
-      </div>
-      <div class="feature">
-        <h3>Project setup &amp; upgrade</h3>
-        <p><code>init</code> sets up <code>AGENTS.md</code>, symlinks <code>CLAUDE.md</code>, copies local docs, notes repo git mode (<code>solo|fork|team</code>), and reconciles Makefile targets.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── QUICK START ───────────────────────────────────────────────── -->
-<section>
-  <div class="container">
-    <h2>Quick start</h2>
-    <div class="codeblock">
-      <pre><span class="p"># sync global Claude, Gemini, Codex, and Prime harnesses (idempotent)</span>
-<span class="p">$</span> harnez apply --force-docs
-
-<span class="p"># preview changes without writing (exit code 1 if drift detected)</span>
-<span class="p">$</span> harnez diff --exit-code
-
-<span class="p"># check configuration and installed doc status</span>
-<span class="p">$</span> harnez status
-
-<span class="p"># inspect live cross-agent quota and token velocity</span>
-<span class="p">$</span> harnez usage --watch
-
-<span class="p"># set up or upgrade a project directory with language docs</span>
-<span class="p">$</span> harnez init -d /path/to/project --docs golang,make -y
-
-<span class="p"># upgrade all sibling repositories in workspace</span>
-<span class="p">$</span> make init-siblings</pre>
-    </div>
-  </div>
-</section>
-
-<!-- ── COMMANDS ──────────────────────────────────────────────────── -->
-<section id="commands">
-  <div class="container">
-    <h2>Commands reference</h2>
-    <table class="cmd-table">
-      <thead>
-        <tr>
-          <th>Command</th>
-          <th>Key flags</th>
-          <th>What it does</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><code>apply</code></td>
-          <td><code class="flag">-c</code> <code class="flag">-t</code> <code class="flag">-d</code> <code class="flag">--force-docs</code></td>
-          <td>Sync global Claude, Gemini, Codex, and Prime Agent rules, prompts, skills, and docs</td>
-        </tr>
-        <tr>
-          <td><code>init</code></td>
-          <td><code class="flag">-c</code> <code class="flag">-d</code> <code class="flag">--docs</code> <code class="flag">-m</code> <code class="flag">--summary</code> <code class="flag">--update</code> <code class="flag">--replace</code> <code class="flag">-y</code></td>
-          <td>Set up a project: AGENTS.md, doc copies, repo mode, Makefile targets</td>
-        </tr>
-        <tr>
-          <td><code>diff</code></td>
-          <td><code class="flag">-c</code> <code class="flag">-t</code> <code class="flag">-e</code></td>
-          <td>Preview changes without writing (<code class="flag">-e, --exit-code</code> exits with 1 on drift)</td>
-        </tr>
-        <tr>
-          <td><code>clean</code></td>
-          <td><code class="flag">-c</code> <code class="flag">-t</code></td>
-          <td>Remove managed keys from <code>settings.json</code>; strip MD sections</td>
-        </tr>
-        <tr>
-          <td><code>status</code></td>
-          <td><code class="flag">-c</code> <code class="flag">-t</code></td>
-          <td>Print config summary and check which items are present on disk</td>
-        </tr>
-        <tr>
-          <td><code>usage</code></td>
-          <td><code class="flag">-w</code> <code class="flag">-s</code> <code class="flag">--interval</code> <code class="flag">--json</code> <code class="flag">--agent</code> <code class="flag">--offline</code></td>
-          <td>Show tokens, plans, and quota windows across agents (aliases: <code>quota</code>, <code>tokens</code>, <code>stats</code>) — <a href="#usage">see below</a></td>
-        </tr>
-      </tbody>
-    </table>
-    <p style="margin-top:0.85rem;font-size:0.85rem;color:var(--muted)">
-      All commands accept <code>-c &lt;path&gt;</code> (config file) and <code>-t &lt;dir&gt;</code> (Claude config directory).
-      The binary is self-contained — no flags needed for the common case.
-    </p>
-  </div>
-</section>
-
-<!-- ── USAGE MONITOR ─────────────────────────────────────────────── -->
+<!-- ── LIVE USAGE & HARDWARE DASHBOARD ──────────────────────────── -->
 <section id="usage">
   <div class="container">
-    <h2>Token &amp; quota monitor</h2>
-    <p style="font-size:0.9rem;color:var(--muted);margin-bottom:1.25rem">
-      <code>harnez usage</code> (aliases: <code>quota</code>, <code>tokens</code>, <code>stats</code>)
-      pulls token totals, plan tier, active model, and live quota windows from Claude Code,
-      Antigravity&nbsp;(AGY), and OpenAI Codex into one view. Three ways to read it: the full
-      report, a compact one-shot grid, or a live dashboard.
-    </p>
-
-    <div class="codeblock" style="margin-bottom:1.25rem">
-      <pre><span class="c"># full detailed report — every quota window, token breakdown, and data source</span>
-<span class="p">$</span> harnez usage
-
-<span class="c"># compact one-shot grid, printed once and exited — for a quick glance or scripts</span>
-<span class="p">$</span> harnez usage --summary        <span class="c"># -s</span>
-
-<span class="c"># live btop-style dashboard, refreshed in place with a tokens/min sparkline</span>
-<span class="p">$</span> harnez usage --watch          <span class="c"># -w</span>
-
-<span class="c"># machine-readable, or narrowed to one agent, or strictly local (no network)</span>
-<span class="p">$</span> harnez usage --json
-<span class="p">$</span> harnez usage --agent claude   <span class="c"># claude | agy | codex</span>
-<span class="p">$</span> harnez usage --offline</pre>
+    <div class="section-header">
+      <span class="section-tag">Real-Time Observability</span>
+      <h2>Unified Token, Quota &amp; Hardware Dashboard</h2>
+      <p class="section-desc">
+        <code>harnez usage</code> (aliases: <code>quota</code>, <code>tokens</code>) unifies live rate-limit quota windows, token velocity sparklines, host hardware load, remote SSH nodes, and microphone speech meters into one interactive btop-style dashboard.
+      </p>
     </div>
 
-    <div class="codeblock" style="margin-bottom:1.25rem">
-      <pre>Agentic usage  21:58:34 CEST
+    <!-- Main Dashboard Screenshot -->
+    <div class="showcase-frame">
+      <div class="showcase-titlebar">
+        <span class="term-dot red"></span>
+        <span class="term-dot yellow"></span>
+        <span class="term-dot green"></span>
+        <span class="showcase-title">harnez usage --watch</span>
+      </div>
+      <img class="showcase-img" src="assets/usage-dashboard.png" alt="harnez usage live terminal dashboard showing All Usage, CPU/RAM/GPU load, Mic level meter, and Remote Load streaming" />
+    </div>
 
-┌─ [C] Claude Code ──────────────────────────────┐ ┌─ [G] Antigravity (AGY) ────────────────────────┐
-│ alice@example.com · Max                        │ │ alice@example.com · Consumer                   │
-│ 5-hour           [████░░░░░░░░] 41.0% · 2h13m  │ │ model: Gemini 3 Pro                            │
-│ weekly           [███████░░░░░] 62.0% · 3d04h  │ │ Gemini Models…   [██░░░░░░░░░░] 18.0% · 4h02m  │
-│ [T] tok: 8,420,155 total · 1,204/min [▂▃▅▇▆▄▃] │ │ Claude and GPT…  [████████░░░░] 73.0% · 1h47m  │
-└────────────────────────────────────────────────┘ └────────────────────────────────────────────────┘
-┌─ [O] OpenAI Codex ─────────────────────────────┐
-│ alice@example.com · Plus                       │
-│ model: gpt-5.6-codex                           │
-│ 5-hour           [█░░░░░░░░░░░] 12.0% · 4h31m  │
-│ [T] tok: 633,891 total · 0/min [▁▁▂▁▁▁▁]       │
-└────────────────────────────────────────────────┘
+    <div class="showcase-dual">
+      <div>
+        <div class="showcase-frame">
+          <div class="showcase-titlebar">
+            <span class="term-dot red"></span>
+            <span class="term-dot yellow"></span>
+            <span class="term-dot green"></span>
+            <span class="showcase-title">harnez usage (splash badge)</span>
+          </div>
+          <img class="showcase-img" src="assets/usage-splash.png" alt="harnez usage splash screen showing green readiness badges for Codex, Claude, AGY, and Mic" />
+        </div>
+        <p class="showcase-caption">
+          <strong>Instant Splash Status:</strong> Red/green brand glyphs (<code>● codex</code>, <code>✱ claude</code>, <code>Λ agy</code>, <code>● mic</code>) provide sub-second verification of provider connectivity and recording state on startup.
+        </p>
+      </div>
+      <div>
+        <div class="features" style="grid-template-columns: 1fr; gap: 0.75rem;">
+          <div class="feature">
+            <h3>Multi-Provider Quotas</h3>
+            <p>Live 5-hour and weekly rate limits for Claude Code, Gemini/Antigravity, and OpenAI Codex with reset countdowns and shared file-locked disk caching.</p>
+          </div>
+          <div class="feature">
+            <h3>Hardware &amp; Remote Streaming</h3>
+            <p>Local CPU, RAM, and GPU/VRAM telemetry (AMD Cezanne/Phoenix, NVIDIA) alongside remote node metrics streamed over SSH (<code>--host @x600</code>).</p>
+          </div>
+          <div class="feature">
+            <h3>Live Speech &amp; Mic Ballistics</h3>
+            <p>PipeWire (<code>pw-record</code>), ALSA (<code>arecord</code>), and PulseAudio live input capture with logarithmic dBFS scaling and equalizer-style visual decay.</p>
+          </div>
+        </div>
+      </div>
+    </div>
 
-refresh every 1m0s   [a]ll  [q]uit</pre>
+    <div class="codeblock">
+      <pre><span class="c"># live btop-style dashboard with tokens/min sparkline and hardware load</span>
+<span class="p">$</span> harnez usage --watch          <span class="c"># -w</span>
+
+<span class="c"># compact one-shot summary for status bars and quick CLI glances</span>
+<span class="p">$</span> harnez usage --summary        <span class="c"># -s</span>
+
+<span class="c"># stream live telemetry from a remote compute node over SSH</span>
+<span class="p">$</span> harnez usage --watch --host user@x600
+
+<span class="c"># inspect JSON output for custom statuslines or automation</span>
+<span class="p">$</span> harnez usage --json</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ── TELEMETRY & ANALYTICAL REPORTING ──────────────────────────── -->
+<section id="telemetry">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Quantitative Insights</span>
+      <h2>Tool Telemetry &amp; Analytical Reporting</h2>
+      <p class="section-desc">
+        <code>harnez stats</code> queries the local SQLite telemetry database populated by <code>harnez exec</code> and <code>harnez rate</code>. It breaks down call frequency, quality scores, failure rates, and distillation byte savings across tools, agents, and repositories.
+      </p>
+    </div>
+
+    <!-- Live Telemetry Metrics -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-val">5,800+</div>
+        <div class="metric-label">Tracked Tool Calls</div>
+        <div class="metric-sub">Captured non-blocking</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val">54.3%</div>
+        <div class="metric-label">Byte Savings</div>
+        <div class="metric-sub">Output distillation</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val">4.82<span style="font-size:1rem;color:var(--muted)">/5</span></div>
+        <div class="metric-label">Avg Tool Score</div>
+        <div class="metric-sub">Quality evaluation</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-val">3.9%</div>
+        <div class="metric-label">Failure Rate</div>
+        <div class="metric-sub">Claude harness runs</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="cmd-table">
+        <thead>
+          <tr>
+            <th>Tool / Dimension</th>
+            <th>Sample Calls</th>
+            <th>Avg Score (1–5)</th>
+            <th>Failure Rate</th>
+            <th>Operational Role</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Bash</code> (via <code>harnez exec</code>)</td>
+            <td>5,594</td>
+            <td>4.82</td>
+            <td>4.1%</td>
+            <td>Proxied shell execution with automatic exit scoring</td>
+          </tr>
+          <tr>
+            <td><code>Edit</code> / <code>apply_patch</code></td>
+            <td>144</td>
+            <td>4.48</td>
+            <td>11.1%</td>
+            <td>Structured codebase modification &amp; diff application</td>
+          </tr>
+          <tr>
+            <td><code>Read</code> / <code>Write</code> / <code>Grep</code></td>
+            <td>59</td>
+            <td>4.92</td>
+            <td>0.0%</td>
+            <td>High-reliability read-only and code-writing operations</td>
+          </tr>
+          <tr>
+            <td><code>heartbeat</code> (<code>rate --ok</code>)</td>
+            <td>37</td>
+            <td>n/a</td>
+            <td>0.0%</td>
+            <td>Lean liveness assertions (issue 179)</td>
+          </tr>
+          <tr>
+            <td><strong>Agent: Claude Code</strong></td>
+            <td>5,337</td>
+            <td>4.85</td>
+            <td>3.9%</td>
+            <td>Primary agent session attribution via session ID</td>
+          </tr>
+          <tr>
+            <td><strong>Agent: OpenAI Codex</strong></td>
+            <td>553</td>
+            <td>4.42</td>
+            <td>9.4%</td>
+            <td>Codex exec interception &amp; telemetry tracking</td>
+          </tr>
+          <tr>
+            <td><strong>Agent: Antigravity (AGY)</strong></td>
+            <td>21</td>
+            <td>5.00</td>
+            <td>0.0%</td>
+            <td>Native <code>hooks.json</code> PreToolUse interception</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="codeblock">
+      <pre><span class="p"># render the full analytical report with tool, agent, and project breakdowns</span>
+<span class="p">$</span> harnez stats
+
+<span class="p"># filter report to the current session (resolved from environment)</span>
+<span class="p">$</span> harnez stats --auto
+
+<span class="p"># inspect feedback token overhead and distillation ratios</span>
+<span class="p">$</span> harnez stats --overhead --project harnez
+
+<span class="o">distillation byte savings: 54.33% (27,957 -> 12,769 bytes)
+heartbeat (harnez rate --ok): 37 recorded, last at 2026-09-07T07:19:55Z
+feedback overhead: 28.1 avg bytes/call, ~943 one-time instruction tokens</span></pre>
     </div>
 
     <div class="features">
       <div class="feature">
-        <h3>Live dashboard</h3>
-        <p><code>--watch</code> redraws in place and tracks a tokens/min trend. Toggle panels
-        from the keyboard: <code>c</code> Claude, <code>g</code> AGY, <code>o</code> Codex,
-        <code>t</code> tokens, <code>a</code> all, <code>q</code> quit. The refresh cadence is
-        <code>--interval</code> (default 15s, floor 10s).</p>
+        <h3>Two-Stage Hook Interception</h3>
+        <p><code>PreToolUse</code> hooks rewrite commands into <code>harnez exec -- &lt;cmd&gt;</code>. The hook process exits immediately; the wrapper proxies unbuffered stdio, captures timing and exit codes, and writes SQLite telemetry in a bounded goroutine without blocking the agent.</p>
       </div>
       <div class="feature">
-        <h3>Failures stay visible</h3>
-        <p>A failed live quota call is reported as <code>quota: unavailable (HTTP 429)</code>
-        instead of silently leaving the window blank — so &ldquo;fetch failed&rdquo; never looks
-        like &ldquo;this plan has no such limit&rdquo;.</p>
+        <h3>Noise Distillation Engine</h3>
+        <p><code>harnez distill</code> automatically strips passing test noise, repetitive logs, and ANSI escape codes before output enters the agent's context window, saving over 50% in context tokens and bandwidth.</p>
       </div>
       <div class="feature">
-        <h3>Stale beats blank</h3>
-        <p>On a transient failure <code>--watch</code> keeps the last known-good reading, marked
-        <code>(stale)</code>, rather than blanking a panel. A successful refresh always wins.</p>
-      </div>
-      <div class="feature">
-        <h3>Shared quota cache</h3>
-        <p>Live quota readings are cached in <code>~/.claude/harnez-quota-cache.json</code> and
-        coordinated with a file lock, so several concurrent <code>harnez</code> processes share
-        one reading instead of each hammering the API into a rate limit.</p>
+        <h3>Native Multi-Agent Hooks</h3>
+        <p>Includes dedicated hook adapters: <code>harnez agy-hooks</code> for Google Antigravity's dynamic top-level <code>hooks.json</code> schema, Claude Code <code>settings.json</code> hooks, and Codex shell wrappers.</p>
       </div>
     </div>
+  </div>
+</section>
 
-    <p style="margin-top:0.85rem;font-size:0.85rem;color:var(--muted)">
-      Everything is read-only: local agent state under <code>~/.claude</code>,
-      <code>~/.gemini</code>, and <code>~/.codex</code>, plus each vendor's own quota endpoint.
-      <code>--offline</code> skips the network entirely and reports from local caches.
-    </p>
+<!-- ── FEATURES GRID ─────────────────────────────────────────────── -->
+<section id="features">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Capabilities</span>
+      <h2>Core Engine Features</h2>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <h3>Multi-Agent Harness</h3>
+        <p>Centralizes skills, permissions, and conventions across Claude Code (<code>~/.claude</code>), Google Antigravity (<code>~/.gemini</code>), Codex (<code>~/.codex</code>), and Prime Agent (<code>~/.prime</code>).</p>
+      </div>
+      <div class="feature">
+        <h3>Non-Destructive Key Merging</h3>
+        <p>Permissions, effort levels, and hooks in <code>settings.json</code> are merged cleanly. User themes, authentication tokens, and manual overrides remain completely intact.</p>
+      </div>
+      <div class="feature">
+        <h3>Structured 5-Phase Sprints</h3>
+        <p>Orchestrate structured <code>/sprint</code> workflows: Parallel Advisory Discovery &rarr; Sequential TDD &rarr; Pre-Commit Review Gate &rarr; Process Hygiene &rarr; Retrospective.</p>
+      </div>
+      <div class="feature">
+        <h3>Live Logarithmic Mic Meter</h3>
+        <p>Equalizer-style smooth decay and speech-activated dynamic refresh rates via PipeWire (<code>pw-record</code>), ALSA, and PulseAudio with logarithmic dBFS scaling.</p>
+      </div>
+      <div class="feature">
+        <h3>Repository Discovery &amp; Issues</h3>
+        <p><code>harnez find</code> and <code>harnez issues</code> offer fast fuzzy search, next-ticket reservation, and automatic README index synchronization.</p>
+      </div>
+      <div class="feature">
+        <h3>Copyable Language &amp; Practice Docs</h3>
+        <p>Bundles battle-tested conventions for Go, Bash, Make, Rust, Zig, C++, GTK4, Markdown, Canary-first probes, Spec architectures, and Agentic Loops.</p>
+      </div>
+      <div class="feature">
+        <h3>Concise Mode Switching</h3>
+        <p><code>harnez mode</code> adjusts prompt terseness levels dynamically and syncs <code>AGENTS.local.md</code> overlays across active workspace repos.</p>
+      </div>
+      <div class="feature">
+        <h3>One-Command Project Scaffolding</h3>
+        <p><code>harnez init</code> provisions <code>AGENTS.md</code>, symlinks <code>CLAUDE.md</code>, installs requested language docs, and reconciles Makefile targets.</p>
+      </div>
+      <div class="feature">
+        <h3>Release &amp; Forge Automation</h3>
+        <p><code>harnez release</code> coordinates semantic version bumps, builds, minisign signatures, and Codeberg release forge uploads.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── COMMANDS REFERENCE ────────────────────────────────────────── -->
+<section id="commands">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">CLI Reference</span>
+      <h2>Commands Reference</h2>
+      <p class="section-desc">Self-contained, fast Go binary with no external dependencies required for daily workflows.</p>
+    </div>
+    <div class="table-wrap">
+      <table class="cmd-table">
+        <thead>
+          <tr>
+            <th>Command</th>
+            <th>Key flags</th>
+            <th>What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>apply</code></td>
+            <td><code class="flag">-c</code> <code class="flag">-t</code> <code class="flag">-d</code> <code class="flag">--force-docs</code></td>
+            <td>Sync global Claude, Gemini, Codex, and Prime Agent rules, prompts, skills, and docs idempotently</td>
+          </tr>
+          <tr>
+            <td><code>usage</code></td>
+            <td><code class="flag">-w</code> <code class="flag">-s</code> <code class="flag">--host</code> <code class="flag">--mic</code> <code class="flag">--json</code> <code class="flag">--offline</code></td>
+            <td>Live dashboard &amp; sparkline monitor for token quotas, CPU/RAM/GPU load, and mic speech ballistics</td>
+          </tr>
+          <tr>
+            <td><code>stats</code></td>
+            <td><code class="flag">--auto</code> <code class="flag">--overhead</code> <code class="flag">--project</code> <code class="flag">--tool</code> <code class="flag">--json</code></td>
+            <td>Analytical report over tool call frequency, average quality score, failure rate, and byte savings</td>
+          </tr>
+          <tr>
+            <td><code>exec</code></td>
+            <td><code class="flag">--tool</code> <code class="flag">--expect-failure</code> <code class="flag">--distill</code></td>
+            <td>Proxy stdio unbuffered, execute commands, and record non-blocking telemetry rows to SQLite</td>
+          </tr>
+          <tr>
+            <td><code>agy-hooks</code></td>
+            <td><code class="flag">apply</code> <code class="flag">status</code> <code class="flag">hook</code></td>
+            <td>Manage Google Antigravity native <code>hooks.json</code> PreToolUse interception and routing</td>
+          </tr>
+          <tr>
+            <td><code>distill</code></td>
+            <td><code class="flag">--</code> <code class="flag">hook</code></td>
+            <td>Strip low-signal test suite noise, ANSI escapes, and redundant output to conserve context tokens</td>
+          </tr>
+          <tr>
+            <td><code>init</code></td>
+            <td><code class="flag">-c</code> <code class="flag">-d</code> <code class="flag">--docs</code> <code class="flag">-m</code> <code class="flag">-y</code> <code class="flag">--update</code></td>
+            <td>Set up a project directory: AGENTS.md, doc copies, git mode, and Makefile targets</td>
+          </tr>
+          <tr>
+            <td><code>diff</code></td>
+            <td><code class="flag">-c</code> <code class="flag">-t</code> <code class="flag">-e</code></td>
+            <td>Preview pending changes without writing (<code class="flag">-e, --exit-code</code> returns 1 on drift)</td>
+          </tr>
+          <tr>
+            <td><code>find</code></td>
+            <td><code class="flag">-d</code> <code class="flag">issues</code> <code class="flag">docs</code> <code class="flag">--json</code></td>
+            <td>Fuzzy search across tickets, documentation entities, and compute next issue numbers</td>
+          </tr>
+          <tr>
+            <td><code>issues</code></td>
+            <td><code class="flag">new</code> <code class="flag">start</code> <code class="flag">close</code> <code class="flag">-d</code></td>
+            <td>Change ticket status, resync <code>issues/README.md</code>, and commit in one atomic step</td>
+          </tr>
+          <tr>
+            <td><code>mode</code></td>
+            <td><code class="flag">concise</code> <code class="flag">verbose</code> <code class="flag">normal</code></td>
+            <td>Switch concise mode terseness level and update <code>AGENTS.local.md</code> overlays</td>
+          </tr>
+          <tr>
+            <td><code>rate</code></td>
+            <td><code class="flag">1-5</code> <code class="flag">--ok</code> <code class="flag">--note</code></td>
+            <td>Record tool quality feedback score or a lean heartbeat into telemetry SQLite database</td>
+          </tr>
+          <tr>
+            <td><code>release</code></td>
+            <td><code class="flag">patch</code> <code class="flag">minor</code> <code class="flag">major</code></td>
+            <td>Run version bump, test suite, binary build, minisign signing, and forge release publication</td>
+          </tr>
+          <tr>
+            <td><code>clean</code></td>
+            <td><code class="flag">-c</code> <code class="flag">-t</code></td>
+            <td>Remove managed keys from <code>settings.json</code> and strip managed Markdown blocks</td>
+          </tr>
+          <tr>
+            <td><code>status</code></td>
+            <td><code class="flag">-c</code> <code class="flag">-t</code></td>
+            <td>Print configuration summary and verify applied file integrity on disk</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
 
 <!-- ── HOW IT WORKS ──────────────────────────────────────────────── -->
 <section>
   <div class="container">
-    <h2>How it works</h2>
+    <div class="section-header">
+      <span class="section-tag">Architecture</span>
+      <h2>How it works</h2>
+    </div>
     <div class="how-list">
       <div class="how-item">
         <div class="how-num">1</div>
         <div>
-          <h3>Key merge, not replace</h3>
-          <p>harnez only writes the keys it owns (<code>effortLevel</code>, <code>permissions</code>, <code>hooks</code>, <code>env</code>, <code>spinnerVerbs</code>, <code>mcpServers</code>, and <code>model</code> if explicitly configured). Every other key in <code>settings.json</code> — theme, plugins, auth — is preserved.</p>
+          <h3>Two-Stage Hook Interception</h3>
+          <p>PreToolUse lifecycle hooks rewrite tool invocations (such as <code>Bash</code> or <code>run_command</code>) into <code>harnez exec</code> wrappers. The hook returns instantaneously, letting <code>harnez exec</code> supervise execution, proxy unbuffered stdio, and write telemetry asynchronously to SQLite.</p>
         </div>
       </div>
       <div class="how-item">
         <div class="how-num">2</div>
         <div>
-          <h3>Managed sections in Markdown</h3>
-          <p>Content in <code>CLAUDE.md</code> / <code>AGENTS.md</code> is wrapped in HTML-comment markers. Sections outside those markers are never modified. Multiple sections coexist independently.</p>
+          <h3>Key Merge, Not Replace</h3>
+          <p>harnez only mutates keys it explicitly manages (<code>effortLevel</code>, <code>permissions</code>, <code>hooks</code>, <code>env</code>, <code>spinnerVerbs</code>, <code>mcpServers</code>). User preferences, dark themes, and auth tokens in <code>settings.json</code> and <code>hooks.json</code> are strictly preserved.</p>
         </div>
       </div>
       <div class="how-item">
         <div class="how-num">3</div>
         <div>
-          <h3>Symlink convention</h3>
-          <p><code>AGENTS.md</code> is the canonical file (readable by any agent); <code>CLAUDE.md</code> is a symlink so Claude Code finds it. Same pattern globally: <code>~/.claude/CLAUDE.md</code> is real; <code>~/AGENTS.md</code> links to it.</p>
+          <h3>Managed Markdown Boundaries</h3>
+          <p>Content in <code>AGENTS.md</code> and <code>CLAUDE.md</code> is bounded by HTML comments (<code>&lt;!-- harnez:begin ... --&gt;</code>). Custom rules, project architectures, and unmanaged sections outside those comments are never overwritten.</p>
         </div>
       </div>
       <div class="how-item">
         <div class="how-num">4</div>
         <div>
-          <h3>Idempotent by design</h3>
-          <p>Run <code>harnez apply</code> as often as you like. If settings drift, re-running restores the managed keys while leaving everything else alone.</p>
+          <h3>Shared Caching &amp; Lock Coordination</h3>
+          <p>Live quota queries and hardware metrics are cached on disk with file locks (<code>~/.claude/harnez-quota-cache.json</code>). Multiple running terminals and agent subprocesses share cached readings without hitting upstream API rate limits.</p>
         </div>
       </div>
     </div>
@@ -658,7 +961,10 @@ refresh every 1m0s   [a]ll  [q]uit</pre>
 <!-- ── CONFIG SAMPLE ─────────────────────────────────────────────── -->
 <section>
   <div class="container">
-    <h2>config.yaml at a glance</h2>
+    <div class="section-header">
+      <span class="section-tag">Specification</span>
+      <h2>config.yaml at a glance</h2>
+    </div>
     <div class="codeblock">
       <pre><span class="k">target_dir:</span> <span class="s">~/.claude</span>
 <span class="k">skills_target:</span> <span class="s">~/.gemini/skills</span>
@@ -670,9 +976,10 @@ refresh every 1m0s   [a]ll  [q]uit</pre>
   <span class="s">- bash</span>
   <span class="s">- make</span>
   <span class="s">- agentic-loop</span>
+  <span class="s">- canary</span>
+  <span class="s">- spec</span>
 
-<span class="c"># model: sonnet  # optional override; unmanaged by default</span>
-<span class="k">effort:</span>  <span class="s">medium</span>
+<span class="k">effort:</span> <span class="s">medium</span>
 
 <span class="k">permissions:</span>
   <span class="k">allow:</span>
@@ -681,13 +988,11 @@ refresh every 1m0s   [a]ll  [q]uit</pre>
     <span class="s">- "Read(~/projects/**)"</span>
 
 <span class="k">hooks:</span>
+  <span class="s">- event: PreToolUse</span>
+    <span class="s">matcher: Bash</span>
+    <span class="s">command: "harnez exec hook"</span>
   <span class="s">- event: Stop</span>
-    <span class="s">command: "ffplay -nodisp -autoexit /usr/share/sounds/…"</span>
-
-<span class="k">commands:</span>
-  <span class="s">- name: review</span>
-    <span class="s">description: "Review current branch against main"</span>
-    <span class="s">file: commands/review.md</span>
+    <span class="s">command: "ffplay -nodisp -autoexit /usr/share/sounds/..."</span>
 
 <span class="k">skills:</span>
   <span class="s">- name: sprint</span>
@@ -701,7 +1006,7 @@ refresh every 1m0s   [a]ll  [q]uit</pre>
 <!-- ── FOOTER ────────────────────────────────────────────────────── -->
 <footer>
   <div class="container">
-    <div>harnez — MIT licence</div>
+    <div>harnez &mdash; MIT licence &bull; Declarative Agent &amp; Developer Harness</div>
     <div class="footer-berg">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="m8 3 4 8 5-5 5 15H2L8 3z"/>

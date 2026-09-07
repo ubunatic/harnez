@@ -199,6 +199,10 @@ commands:
     description: "Product discovery gap analysis: compare a repo's stated use cases against its real implemented surface and the open+closed issue tracker to surface untracked capability gaps as candidates (never files tickets itself)"
     file: commands/discovery.md
 
+  - name: publish
+    description: "Multi-project release & publish pipeline: detects project shape (CLI, artifact app, website, hybrid), executes pre-flight checks, verifies media, requires explicit confirmation before external push, syncs website, and asserts live endpoint liveness"
+    file: commands/publish.md
+
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
 codex_hooks_target: ~/.codex/config.toml
@@ -249,6 +253,10 @@ skills:
   - name: discovery
     description: "Product discovery gap analysis: compare a repo's stated use cases against its real implemented surface and the open+closed issue tracker to surface untracked capability gaps as candidates (never files tickets itself)"
     file: commands/discovery.md
+
+  - name: publish
+    description: "Multi-project release & publish pipeline: detects project shape (CLI, artifact app, website, hybrid), executes pre-flight checks, verifies media, requires explicit confirmation before external push, syncs website, and asserts live endpoint liveness"
+    file: commands/publish.md
 
   - name: tool-feedback-protocol
     description: "Use after an internal tool call (Read, Edit, Bash, etc.) in a harnez-tracked project (issues/ present) failed or didn't produce the expected outcome — record it via harnez rate before moving to the next step. Also use if a harnez tip nudges you after a long quiet stretch and nothing has failed — confirm with harnez rate --ok. Skip both for routine successful calls."

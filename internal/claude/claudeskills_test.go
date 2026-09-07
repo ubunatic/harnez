@@ -45,6 +45,16 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 	if !strings.HasPrefix(content, "---\nname: \"evergreen\"\ndescription:") {
 		t.Errorf("expected %s to carry Agent Skills frontmatter (name/description), got:\n%s", skillPath, content)
 	}
+
+	publishPath := filepath.Join(claudeSkillsDir, "publish", "SKILL.md")
+	pubData, err := os.ReadFile(publishPath)
+	if err != nil {
+		t.Fatalf("expected %s to be written: %v", publishPath, err)
+	}
+	pubContent := string(pubData)
+	if !strings.HasPrefix(pubContent, "---\nname: \"publish\"\ndescription:") {
+		t.Errorf("expected %s to carry Agent Skills frontmatter (name/description), got:\n%s", publishPath, pubContent)
+	}
 	// diff must report no drift immediately after apply.
 	changed, err := DiffAll(targetDir, cfg)
 	if err != nil {

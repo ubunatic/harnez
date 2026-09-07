@@ -88,14 +88,15 @@ Ask an agent to publish/release the current project, where the mechanism depends
 
 ## 4. Implementation & Verification Plan
 
-Not yet planned — filed to capture the request as stated; both skills need a design pass before
-implementation, particularly:
-- Whether `/commit`'s ownership logic needs new tooling or is achievable purely as agent judgment
-  encoded in the skill's prose (likely the latter, matching how other harnez skills like
-  `harnez-sync.md` and `fresh-sprint.md` encode policy as instructions rather than new CLI code).
-- Whether `/publish` should be one skill with per-project-shape branches, or a thin dispatcher that
-  defers to a project-local publish recipe/doc.
+### Milestone 1: `/publish` Skill (Implemented in this sprint)
+- Created `commands/publish.md` with 5-stage publishing pipeline:
+  1. Pre-flight verification & cleanliness checks (`git status`, `make check`, `make test`, artifact dry-runs).
+  2. Media & artifact verification gate.
+  3. Mandatory user confirmation gate before any irreversible external actions (`git push`, forge release, `ubunatic.com` live sync).
+  4. Live execution: `harnez release` or `make release`, `uman website sync <project>`, `ubunatic.com` build & deploy via `make sync`.
+  5. Post-publish 3-state grounding & live HTTP 200 liveness probe (`@docs/practices/DeploymentTransparency.md`, `@docs/practices/GoRelease.md` §6).
+- Registered `publish` under `commands:` and `skills:` in `config.yaml`.
+- Verified roundtrip generation in `internal/claude/claudeskills_test.go` and verified with `scripts/lint.sh` and `make test`.
 
-No acceptance criteria fixed yet beyond: `/commit` and `/publish` exist under `commands/`, are
-discoverable via the Skill tool listing, and follow this repo's existing skill-authoring conventions
-(reference real tickets, real Make/harnez targets, no invented CLI flags that don't exist).
+### Milestone 2: `/commit` Skill (Pending / Follow-up)
+- Follow-up work to define `/commit` for staged commit ownership split (main host agent vs original subagent).
