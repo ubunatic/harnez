@@ -607,7 +607,7 @@ agy() {
 
 const HarnezShellRCSnippet = `if test -f "$HOME/.harnez/env.sh"
 then
-    . "$HOME/.harnez/env.sh"
+    source "$HOME/.harnez/env.sh"
 fi
 `
 
