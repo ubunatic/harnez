@@ -1,6 +1,6 @@
 # 209 — Move `agy-hooks` Management into `harnez apply`
 
-**Status**: Open
+**Status**: Closed — folded agy-hooks management into harnez apply and status, hid agy-hooks CLI command
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactor / Architecture
