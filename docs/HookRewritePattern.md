@@ -110,8 +110,7 @@ in managed agent environments / PATH (`~/.claude/bin/⚙`, `~/go/bin/⚙`, etc.)
   ```sh
   #!/bin/sh
   if test "$HARNEZ_INTERCEPTED" = "1"
-  then
-      exec /bin/bash "$@"
+  then exec /bin/bash "$@"
   fi
   export HARNEZ_INTERCEPTED=1
   exec harnez exec -- /bin/bash "$@"
