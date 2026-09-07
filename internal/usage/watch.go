@@ -1211,6 +1211,13 @@ func buildMicBox(width int, st MicStatus) wbox {
 // (Available == false) — the box itself is never added to the panel list
 // in that case (see buildWatchFrameAt), but this keeps buildMicBoxLines
 // safe to call standalone, e.g. from tests.
+//
+// Issue 262: the live line's "n/a" placeholder distinguishes the amixer
+// backend's permanent structural limitation (no streaming-capable
+// equivalent to parec — see miclive.go's startMicLiveManager) from the
+// generic transient case (pactl backend still (re)connecting, or no parec
+// binary installed) so an amixer-only user isn't left guessing whether the
+// live meter is broken or simply unsupported on their setup.
 func buildMicBoxLines(st MicStatus) []string {
 	if !st.Available {
 		return []string{ansiDimGrey + "mic unavailable\x1b[0m"}
@@ -1242,10 +1249,19 @@ func buildMicBoxLines(st MicStatus) []string {
 	// subprocess isn't available (no parec, amixer backend, or still
 	// (re)connecting) — see micLiveManager's doc comment for when that is.
 	var liveLine string
-	if st.LiveAvailable {
+	switch {
+	case st.LiveAvailable:
 		liveBar := rograph.RenderBar(st.LiveLevel, rograph.BarOptions{IncludePercent: true, PercentPrecision: 0})
 		liveLine = fmt.Sprintf("%s   live", liveBar)
-	} else {
+	case st.Backend == "amixer":
+		// Issue 262: the amixer/plain-ALSA fallback has no streaming-capable
+		// equivalent to parec (see miclive.go's startMicLiveManager doc
+		// comment) — this is a permanent, structural limitation of the
+		// backend, not a transient "still connecting" state, so say so
+		// explicitly instead of the generic "n/a" that could as easily mean
+		// "reconnecting" on a pactl system.
+		liveLine = ansiDimGrey + "live n/a (needs pactl/PipeWire)" + "\x1b[0m"
+	default:
 		liveLine = ansiDimGrey + "live n/a" + "\x1b[0m"
 	}
 

@@ -167,6 +167,27 @@ func TestBuildMicBoxLinesLiveUnavailable(t *testing.T) {
 	}
 }
 
+// Issue 262: the amixer backend can never stream a live reading (issue
+// 244/245 — no parec-equivalent for plain ALSA), a permanent structural
+// limitation distinct from a pactl system that is merely still
+// (re)connecting. The live line must say so explicitly rather than reusing
+// the same bare "n/a" for both cases, so an amixer-only user doesn't read
+// the live meter as broken.
+func TestBuildMicBoxLinesLiveUnavailableAmixerExplainsWhy(t *testing.T) {
+	amixerLines := buildMicBoxLines(MicStatus{Available: true, Backend: "amixer", Level: 100, LiveAvailable: false})
+	if got := amixerLines[1]; !containsAll(got, "live", "n/a", "pactl") {
+		t.Errorf("buildMicBoxLines amixer live-unavailable line = %q, want it to explain pactl/PipeWire is required", got)
+	}
+
+	pactlLines := buildMicBoxLines(MicStatus{Available: true, Backend: "pactl", Level: 100, LiveAvailable: false})
+	if got := pactlLines[1]; strings.Contains(got, "pactl") {
+		t.Errorf("buildMicBoxLines pactl live-unavailable line = %q, should not claim pactl is missing", got)
+	}
+	if got := pactlLines[1]; !containsAll(got, "live", "n/a") {
+		t.Errorf("buildMicBoxLines pactl live-unavailable line = %q, want it to mention live n/a", got)
+	}
+}
+
 func containsAll(s string, subs ...string) bool {
 	for _, sub := range subs {
 		if !strings.Contains(s, sub) {
