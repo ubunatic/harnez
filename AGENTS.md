@@ -123,8 +123,8 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   Read before multi-line shell: Make recipes, embedded scripts
   No ";", break before then/else/docs
   No "if [[]]", No "if []", Use "if test"
-  3-line if-then-fi ("then <cmd>" same line); source over .
   smart indent!
+  Use git -C/make -C, not cd
 - Make/Makefile @docs/Make.md,
   ⚙️ phony sentinel, self-doc help, build dependency pattern
 - Markdown @docs/Markdown.md,
@@ -135,8 +135,8 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   probe external mechanisms before building features on them
 - Spec system @docs/Spec.md,
   YAML spec files as single source of truth; Go code must not duplicate spec values
-- Agentic Loop Practices @docs/AgenticLoop.md,
-  5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
 - Issue Tracking Practices @docs/IssueTracking.md,
   P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
+- Agentic Loop Practices @docs/AgenticLoop.md,
+  5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
 <!-- harnez:end Language Conventions -->

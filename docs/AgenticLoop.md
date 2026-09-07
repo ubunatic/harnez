@@ -3,6 +3,7 @@ title: Agentic Loop Practices
 weight: 40
 ---
 
+<!-- harnez:bundled -->
 # Agentic Loop Practices — Multi-Agent Sprint Workflow
 
 This document establishes the canonical practice for orchestrating multi-agent development loops. It defines the lifecycle, synchronization invariants, role archetypes, and quality gates required to conduct rapid, collision-free agentic sprints.
@@ -104,6 +105,7 @@ Agentic software engineering scales effectively when concurrency is structured a
   - Test-Driven Verification: Write or adapt unit tests alongside or prior to code changes.
   - Validate intermediate milestones with fast test suites (`go test ./...`).
   - Keep the workspace in a compilable, passing state at every step.
+  - **Repro-before-fix for defect-shaped tickets**: For bug/timing/deadlock/race tickets, construct (or reuse) a reproduction that asserts a concrete numeric baseline *before* writing the fix. Verify the implementation against that number, not just `go test` exiting 0 — a fix can pass every pre-existing gate and still not address the defect if the existing gates weren't built to catch it.
   - **Commit stale/failed work before discarding it**: When an implementation attempt is abandoned — because it regressed a gate, because a cleaner strategy was found, or because it was simply wrong — do not `git checkout --`/`git reset --hard`/`git stash drop` it away as the first move. Commit it first, on the current branch or a throwaway one (e.g. `git commit -m "wip: attempt N, reverted — see issue NNN" --no-verify` only if hooks block a WIP commit, otherwise a normal commit), *then* revert the working tree with `git revert` or by checking out the prior commit. This keeps the failed attempt in `git log`/`git reflog` as a real, diffable artifact instead of only as prose in a ticket. A short-lived local branch (`git branch attempt-2-endpoint-cone`) pointing at the WIP commit is even better when more than one attempt is worth preserving side-by-side. Only skip this for genuinely trivial, single-line experiments where the narrative description *is* the diff (e.g. "tried threshold=50, tried threshold=25, both failed" needs no commit) — the bar is "would a future reader want to `git diff` this," not "is this attempt tidy."
 
 **Model selection:** Use a fast capable model for clear, bounded, testable subagent tasks. Use a more capable model for ambiguity, architecture, security, deep debugging, broad changes, or final review. Escalate on uncertainty, failed checks, or scope growth; never trade away verification for speed.
@@ -126,6 +128,8 @@ Agentic software engineering scales effectively when concurrency is structured a
       unit-tested hooks that only collide once both are installed together). Require one real, live end-to-end
       check after a genuine restart/re-apply against the actual environment before the ticket is done; record
       a project-local case study or ticket for any concrete failure this catches.
+    - **Root Cause vs. Symptom**: For a defensive or robustness fix (parsing subprocess/tool output, retry/tolerance logic, error swallowing), ask whether the *source* of the unexpected input can be fixed instead — a flag, a config setting, a different invocation. Verify any proposed upstream fix against the real tool/source before treating it as the fix; a plausible-sounding mechanism is not a verified one. If multiple review rounds each find a new edge case in the same defensive code, that is a signal to step back to Phase 2 and fix the root cause rather than harden the symptom further.
+  - **Exit condition**: Phase 3 is not complete until reviewed, verified work is either committed or the user has been explicitly asked to authorize the commit. If standing commit authority was granted at kickoff, commit now. If not, asking *is* the exit action — do not carry a clean, reviewed diff into Phase 4.
 
 ### Phase 4: Process & Subagent Hygiene (Teardown & Drain)
 - **Goal**: Prevent zombie accumulation, orphan processes, and stuck background tasks.
@@ -141,10 +145,12 @@ Agentic software engineering scales effectively when concurrency is structured a
 - **Mechanics**:
   - Record session friction, harness observations, and process recommendations in the project's durable feedback/study location when one exists, or in a related project doc or ticket otherwise.
   - Update issue tracker status (`issues/README.md`) and run `harnez status` to ensure zero drift between issues and indices; run `harnez index` (issue 148) to regenerate `issues/README.md` and `docs/README.md`'s studies table from their source files instead of hand-editing rows.
+  - **Single Status field per ticket**: When updating a ticket's status, check the *entire* file for more than one status-bearing field (a top-of-file summary line and a separate `## Status` section are both common). Update all occurrences together, or standardize on exactly one per file in the local template.
   - **Closing gate**: for every ticket touched this session whose work is now shipped and
     verified, flip its `Status` header to `Closed` before ending the session — do not let a
     green build and a commit stand in for closing the ticket. See
     [IssueTracking.md](IssueTracking.md) §5 ("Closing Is Part Of Done").
+  - Run `git status` before writing the retro or session story — uncommitted reviewed work is itself a retro finding, not a background condition.
   - Prepare clean, conventional commit messages.
 
 ---
@@ -167,7 +173,7 @@ Agentic software engineering scales effectively when concurrency is structured a
        └── High Ambiguity / Regressions    ──> Escalate to Independent Reviewer Subagent
           |
           v
-   (4) Fast Hygiene & Teardown (kill child agents, zero zombies)
+   (4) Fast Hygiene & Teardown (kill child agents, zero zombies, harnez rate --ok)
 ```
 
 For focused, day-to-day tickets, running the full 5-phase ceremony with separate advisor and reviewer subagents introduces unnecessary latency and token overhead. The **Lean Fresh-Handoff** pattern provides a lightweight, fast-path alternative:
@@ -182,8 +188,9 @@ For focused, day-to-day tickets, running the full 5-phase ceremony with separate
    - If automated tests pass cleanly and confidence is high, skip dispatching an independent reviewer subagent.
    - The primary orchestrator performs a rapid inline diff review before finalizing.
    - Escalate to a formal reviewer agent only if there is cross-subsystem blast radius, missing automated test coverage, or unexpected complexity.
-4. **Fast Hygiene**:
+4. **Fast Hygiene & Status Sync**:
    - Immediately terminate child subagents (`manage_subagents kill`) and clear background tasks.
+   - Record an `--ok` heartbeat (`harnez rate --ok "<note>" [<ticket_id>]`) to confirm clean sprint completion in telemetry.
 
 ### Workflow Selection Matrix
 
@@ -235,6 +242,7 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
   real output against the real DB.
 - ❌ **Deployment State Conflation**: In a project with remote deployment, declaring a remote binary "deployed" or a job "scheduled" based on local build/test success or a clean transfer exit code, without probing the live host.
 - ❌ **Blind Revert of Failed Work**: Running `git checkout --`, `git reset --hard`, or `git stash drop` on a failed implementation attempt without first committing it somewhere recoverable. A prose summary of what was tried is not a substitute for the actual diff — it cannot be `git diff`ed, re-applied, or independently re-verified against the gate it was tested against.
+- ❌ **Reviewed-But-Uncommitted Carryover**: Finishing a review gate and moving on (retro, story, `/compact`, next ticket) with verified work still in the working tree, waiting for the user to notice. Phase 3 is not complete until the commit is made or the user has been explicitly asked to authorize it. Recurred twice in one `weg` session — issues 044 and 046.
 - ❌ **Narrow String-Substitution Edits Over Structured Patches**: The existing "prefer
   `apply_patch`/whole-block replacement over narrow string substitution" rule was written from
   intuition; `smarthome`'s `harnez stats` now backs it with numbers — `Edit` failed at **11.1%**
@@ -254,3 +262,6 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 - ❌ **Prompt Micromanagement**: Overburdening subagent dispatches with redundant base rules, tool definitions, or style guides already present in the harness system prompt.
 - ❌ **Friction Noise Over-Reporting**: Emitting repetitive, low-signal friction reports on fast, routine tasks.
 - ❌ **Blocking `sleep` Waits**: Using a long `sleep N` — or a loop of short sleeps — to wait out a CI run, deploy, remote queue, or background process. A blocking sleep burns the agent's own turn and context budget for its full duration with no record of what was being waited for if the session is interrupted mid-wait, and a sleep-loop wastes cycles on empty polls instead of yielding control until state actually changes. Prefer letting harness-tracked background work notify on completion; when polling genuinely-external state is unavoidable, use the harness's scheduled-wakeup or interval-loop mechanism (e.g. `/loop`, `manage_task` notifications) so the agent yields between checks, and match the interval to how fast the watched state actually changes rather than a fixed short interval "just in case." Never chain long leading sleeps to route around a harness restriction on blocking sleep — that defeats the restriction's purpose.
+- ❌ **Chat-Visible Empty Polling** — staying attached to a long-running job (benchmark run, canary, CI, deploy, remote agent) and re-checking it on a fixed short interval while it produces no new output. Distinct from the `Blocking sleep Waits` anti-pattern above: the agent *is* yielding between checks, but each check spends context and user attention to report "still running." Prefer a real completion signal: a harness-tracked background task, a notification, or a scheduled wakeup. If no completion callback exists, launch the work in a detached/durable form that writes a log or result file, then hand the user the job id, log path, and expected budget and return control. When polling is genuinely unavoidable, size the interval to the job's expected duration (a 40-minute job does not get 30-second polls) and surface only *events* — started, first output, status file changed, exited, artifact written, timeout, cleanup — not heartbeats. Before finishing, check for lingering background processes per Invariant 3 (Zero Zombie Guarantee).
+- ❌ **Buffered Long-Running Output**: Piping a long-running build/test/canary command through `tail`, `grep`, `sort`, `wc`, `head`, or any other filter that buffers stdout — the filter emits nothing until the whole pipeline exits, so a multi-minute command looks silent/stuck with zero progress visibility. Run it plain (letting the harness's background-task mechanism handle it past its timeout) or use `cmd 2>&1 | tee /tmp/x.log` if a trimmed final summary is also wanted. See also: `Blocking sleep Waits` (same symptom, different cause).
+- ❌ **`cd`-scoped commands**: prefer `git -C <dir> status` over `cd <dir> && git status` — the shell tool's cwd persists into later, unrelated calls and silently targets the wrong repo. Use the tool's directory flag (`git -C`, `make -C`, `go -C`, `npm --prefix`, `cargo --manifest-path`); when no flag exists, use a subshell `(cd <dir> && cmd)` so cwd is restored automatically. See `docs/lang/Bash.md §8` for the full flag table and restore-cwd convention.
