@@ -109,9 +109,9 @@ else # Capture output with ANSI codes stripped via sed.
         then in_all_usage=true
              continue
         fi
+        # Stop at the closing border.
         if test "$in_all_usage" = true
-        then # Stop at the closing border.
-             if printf '%s\n' "$line" | grep -qF "└"
+        then if printf '%s\n' "$line" | grep -qF "└"
              then break
              fi
              # Content lines start with "│ "
