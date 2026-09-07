@@ -20,9 +20,8 @@ for f in commands/*.md
 do
     name=$(basename "$f" .md)
     if ! echo "${cmd_names}" | grep -qx "${name}"
-    then
-        echo "lint: unregistered command file: ${f}"
-        fail=1
+    then echo "lint: unregistered command file: ${f}"
+         fail=1
     fi
 done
 
@@ -30,23 +29,19 @@ done
 for js in contrib/*/*.js
 do
     if test -f "${js}"
-    then
-        if ! node -c "${js}"
-        then
-            echo "lint: JS syntax error in ${js}"
-            fail=1
-        fi
+    then if ! node -c "${js}"
+         then echo "lint: JS syntax error in ${js}"
+              fail=1
+         fi
     fi
 done
 
 # Check GNOME extension metadata and package validity if directory exists
 if command -v gnome-extensions >/dev/null 2>&1 && test -d contrib/gnome-shell-extension
-then
-    if ! gnome-extensions pack --force --out-dir=/tmp contrib/gnome-shell-extension >/dev/null 2>&1
-    then
-        echo "lint: gnome-extensions pack validation failed"
-        fail=1
-    fi
+then if ! gnome-extensions pack --force --out-dir=/tmp contrib/gnome-shell-extension >/dev/null 2>&1
+     then echo "lint: gnome-extensions pack validation failed"
+          fail=1
+     fi
 fi
 
 test "${fail}" -eq 0 && echo "lint: ok"

@@ -7,44 +7,33 @@ set -euo pipefail
 echo "==> Probing Agent Configuration Directories..."
 
 if test -d "${HOME}/.claude"
-then
-    echo "  [FOUND] ~/.claude"
-    if test -f "${HOME}/.claude/.credentials.json"
-    then
-        echo "    - credentials present"
-    fi
-    if test -f "${HOME}/.claude/stats-cache.json"
-    then
-        echo "    - stats-cache.json present"
-    fi
-else
-    echo "  [NOT FOUND] ~/.claude"
+then echo "  [FOUND] ~/.claude"
+     if test -f "${HOME}/.claude/.credentials.json"
+     then echo "    - credentials present"
+     fi
+     if test -f "${HOME}/.claude/stats-cache.json"
+     then echo "    - stats-cache.json present"
+     fi
+else echo "  [NOT FOUND] ~/.claude"
 fi
 
 if test -d "${HOME}/.gemini/antigravity-cli"
-then
-    echo "  [FOUND] ~/.gemini/antigravity-cli"
-    if test -f "${HOME}/.gemini/antigravity-cli/antigravity-oauth-token"
-    then
-        echo "    - oauth token present"
-    fi
-else
-    echo "  [NOT FOUND] ~/.gemini/antigravity-cli"
+then echo "  [FOUND] ~/.gemini/antigravity-cli"
+     if test -f "${HOME}/.gemini/antigravity-cli/antigravity-oauth-token"
+     then echo "    - oauth token present"
+     fi
+else echo "  [NOT FOUND] ~/.gemini/antigravity-cli"
 fi
 
 if test -d "${HOME}/.codex"
-then
-    echo "  [FOUND] ~/.codex"
-    if test -f "${HOME}/.codex/auth.json"
-    then
-        echo "    - auth.json present"
-    fi
-    if test -f "${HOME}/.codex/config.toml"
-    then
-        echo "    - config.toml present"
-    fi
-else
-    echo "  [NOT FOUND] ~/.codex"
+then echo "  [FOUND] ~/.codex"
+     if test -f "${HOME}/.codex/auth.json"
+     then echo "    - auth.json present"
+     fi
+     if test -f "${HOME}/.codex/config.toml"
+     then echo "    - config.toml present"
+     fi
+else echo "  [NOT FOUND] ~/.codex"
 fi
 
 echo ""

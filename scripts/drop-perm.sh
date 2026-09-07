@@ -11,9 +11,8 @@ pattern="${1:?Usage: drop-perm.sh PATTERN}"
 settings="$HOME/.claude/settings.json"
 
 if test ! -f "$settings"
-then
-    echo "settings.json not found: $settings" >&2
-    exit 1
+then echo "settings.json not found: $settings" >&2
+     exit 1
 fi
 
 before=$(jq '.permissions.allow | length' "$settings")
