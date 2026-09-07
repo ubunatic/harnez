@@ -117,6 +117,18 @@ func TestIssuesRebaseRepairsIndependentTicketCollisions(t *testing.T) {
 
 const issuesAttributesLineForTest = "issues/README.md merge=harnez-issues-index"
 
+func TestIssuesRebaseMissingIntegrationShowsExactSetupCommand(t *testing.T) {
+	dir := t.TempDir()
+	gitTestRun(t, dir, "init", "-b", "main")
+	err := runIssuesRebase(&bytes.Buffer{}, dir, "main", false)
+	if err == nil {
+		t.Fatal("expected missing-integration error")
+	}
+	if !strings.Contains(err.Error(), "harnez init --issues-git") {
+		t.Fatalf("error does not contain exact setup command: %v", err)
+	}
+}
+
 func TestIssuesMergeDriverOnlyValidatesCurrentVersion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "current")
 	readme, err := os.ReadFile(filepath.Join("..", "..", "issues", "README.md"))

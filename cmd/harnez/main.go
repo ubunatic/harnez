@@ -562,7 +562,7 @@ func main() {
 	var initDocs []string
 	var initConfigPath string
 	var initRepoMode string
-	var initSummary, initUpdate, initReplace, initYes, initAll bool
+	var initSummary, initUpdate, initReplace, initYes, initAll, initIssuesGit bool
 	initCmd := &cobra.Command{
 		Use:   "init",
 		Short: "Set up a project directory with AGENTS.md, language docs, and Makefile targets",
@@ -571,10 +571,14 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
-			if initAll {
-				return claude.RunInitAll(initDir, cfg, initDocs, initRepoMode, initSummary, initUpdate, initReplace)
+			var issuesGit *bool
+			if cmd.Flags().Changed("issues-git") {
+				issuesGit = &initIssuesGit
 			}
-			return claude.RunInit(initDir, cfg, initDocs, initRepoMode, initYes, initSummary, initUpdate, initReplace)
+			if initAll {
+				return claude.RunInitAllWithIssuesGit(initDir, cfg, initDocs, initRepoMode, initSummary, initUpdate, initReplace, issuesGit)
+			}
+			return claude.RunInitWithIssuesGit(initDir, cfg, initDocs, initRepoMode, initYes, initSummary, initUpdate, initReplace, issuesGit)
 		},
 	}
 	initCmd.Flags().StringVarP(&initConfigPath, "config", "c", "", "path to config YAML file (default: embedded)")
@@ -587,6 +591,7 @@ func main() {
 	initCmd.Flags().BoolVar(&initSummary, "summary", false, "run claude -p to generate a project summary and add it to AGENTS.md")
 	initCmd.Flags().BoolVar(&initUpdate, "update", false, "re-fetch and refresh the project summary (implies --summary)")
 	initCmd.Flags().BoolVar(&initReplace, "replace", false, "delete existing AGENTS.md and recreate from template before init")
+	initCmd.Flags().BoolVar(&initIssuesGit, "issues-git", false, "enable issue-index Git integration (use --issues-git=false to remove it)")
 
 	var assessJSON bool
 	assessCmd := &cobra.Command{

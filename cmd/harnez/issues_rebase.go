@@ -154,11 +154,11 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 	}
 	driver, err := gitOutput(dir, "config", "--local", "--get", "merge.harnez-issues-index.driver")
 	if err != nil || strings.TrimSpace(driver) == "" {
-		return fmt.Errorf("issues rebase: generated-index merge driver is not installed; run 'harnez init -d %s' and retry", dir)
+		return fmt.Errorf("issues rebase: issue Git integration is not enabled; run 'harnez init --issues-git' and retry")
 	}
 	attribute, err := gitOutput(dir, "check-attr", "merge", "--", "issues/README.md")
 	if err != nil || !strings.HasSuffix(attribute, ": harnez-issues-index") {
-		return fmt.Errorf("issues rebase: issues/README.md is not marked as generated; run 'harnez init -d %s', commit .gitattributes, and retry", dir)
+		return fmt.Errorf("issues rebase: issue Git integration is not enabled; run 'harnez init --issues-git' and retry")
 	}
 	statePath, err := rebaseStatePath(dir)
 	if err != nil {

@@ -67,11 +67,13 @@ by-product: there is no `--project` flag anymore.
 ## init flow
 
 ```
-harnez init [-d <dir>] [--docs <name>...]
+harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]]
         │
         ├── create AGENTS.md (template) if absent
         ├── create CLAUDE.md symlink → AGENTS.md
         ├── ignore /issues/README.md.lock in .git/info/exclude when issues/ exists
+        ├── enable issue-index attributes, local merge driver, and hook only with --issues-git
+        │   └── --issues-git=false narrowly removes only the harnez-managed integration
         ├── auto-detect docs (default:auto/true entries in config.yaml)
         ├── apply cfg.AgentsMD.Local sections (Language Conventions, etc.)
         └── resolve explicit hard doc dependencies transitively

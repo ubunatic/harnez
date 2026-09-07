@@ -355,6 +355,13 @@ func initialAgentsMD(cfg *Config) string {
 // RunInit creates AGENTS.md and CLAUDE.md symlink in a project directory,
 // applies config-defined local sections, and sets up language docs and Makefile targets.
 func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool) error {
+	return RunInitWithIssuesGit(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, nil)
+}
+
+// RunInitWithIssuesGit runs project initialization and, when issuesGit is
+// non-nil, explicitly enables or disables the issue tracker Git integration.
+// A nil value leaves that integration untouched.
+func RunInitWithIssuesGit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool) error {
 	if cfg != nil {
 		if err := validateDocNames(cfg, docs); err != nil {
 			return err
@@ -425,7 +432,14 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 			fmt.Printf("  ignored %s in .git/info/exclude\n", issuesReadmeLock)
 			changes++
 		}
-		gitChanges, err := installIssuesGitIntegration(dir)
+	}
+	if issuesGit != nil {
+		var gitChanges int
+		if *issuesGit {
+			gitChanges, err = installIssuesGitIntegration(dir)
+		} else {
+			gitChanges, err = removeIssuesGitIntegration(dir)
+		}
 		if err != nil {
 			return err
 		}
@@ -677,6 +691,87 @@ func installIssuesGitIntegration(dir string) (int, error) {
 	return changes, nil
 }
 
+func removeIssuesGitIntegration(dir string) (int, error) {
+	if err := exec.Command("git", "-C", dir, "rev-parse", "--git-dir").Run(); err != nil {
+		return 0, nil
+	}
+	changes := 0
+	attributes := filepath.Join(dir, ".gitattributes")
+	content, err := os.ReadFile(attributes)
+	if err != nil && !os.IsNotExist(err) {
+		return 0, fmt.Errorf("read %s: %w", attributes, err)
+	}
+	if err == nil {
+		var kept []string
+		removed := false
+		for _, line := range strings.Split(string(content), "\n") {
+			if strings.TrimSpace(line) == issuesAttributesLine {
+				removed = true
+				continue
+			}
+			kept = append(kept, line)
+		}
+		if removed {
+			if err := os.WriteFile(attributes, []byte(strings.Join(kept, "\n")), 0o644); err != nil {
+				return 0, fmt.Errorf("write %s: %w", attributes, err)
+			}
+			changes++
+		}
+	}
+	for _, key := range []string{"merge.harnez-issues-index.driver", "merge.harnez-issues-index.name"} {
+		cmd := exec.Command("git", "-C", dir, "config", "--local", "--unset-all", key)
+		if out, err := cmd.CombinedOutput(); err == nil {
+			changes++
+		} else if cmd.ProcessState.ExitCode() != 5 {
+			return 0, fmt.Errorf("remove %s: %w: %s", key, err, strings.TrimSpace(string(out)))
+		}
+	}
+	hooksDirOut, err := exec.Command("git", "-C", dir, "rev-parse", "--git-path", "hooks").Output()
+	if err != nil {
+		return 0, fmt.Errorf("locate Git hooks: %w", err)
+	}
+	hooksDir := strings.TrimSpace(string(hooksDirOut))
+	if !filepath.IsAbs(hooksDir) {
+		hooksDir = filepath.Join(dir, hooksDir)
+	}
+	hook := filepath.Join(hooksDir, "pre-commit")
+	hookContent, err := os.ReadFile(hook)
+	if err != nil && !os.IsNotExist(err) {
+		return 0, fmt.Errorf("read %s: %w", hook, err)
+	}
+	if err == nil {
+		updated, removed, err := removeManagedIssuesHook(string(hookContent))
+		if err != nil {
+			return 0, fmt.Errorf("update %s: %w", hook, err)
+		}
+		if removed {
+			if err := os.WriteFile(hook, []byte(updated), 0o755); err != nil {
+				return 0, fmt.Errorf("write %s: %w", hook, err)
+			}
+			changes++
+		}
+	}
+	return changes, nil
+}
+
+func removeManagedIssuesHook(content string) (string, bool, error) {
+	const startMarker = "# harnez:begin issues-index-lint"
+	const endMarker = "# harnez:end issues-index-lint"
+	start := strings.Index(content, startMarker)
+	if start < 0 {
+		return content, false, nil
+	}
+	endRel := strings.Index(content[start:], endMarker)
+	if endRel < 0 {
+		return content, false, fmt.Errorf("managed issue-index hook block has no end marker")
+	}
+	end := start + endRel + len(endMarker)
+	if end < len(content) && content[end] == '\n' {
+		end++
+	}
+	return content[:start] + content[end:], true, nil
+}
+
 func containsExactLine(content, want string) bool {
 	for _, line := range strings.Split(content, "\n") {
 		if strings.TrimSpace(line) == want {
@@ -693,6 +788,10 @@ func containsExactLine(content, want string) bool {
 // `harnez init --all ..` from a project one level under $HOME can never treat
 // $HOME itself as a project container (see issue 068).
 func RunInitAll(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool) error {
+	return RunInitAllWithIssuesGit(parentDir, cfg, docs, repoMode, withSummary, update, replace, nil)
+}
+
+func RunInitAllWithIssuesGit(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool, issuesGit *bool) error {
 	if parentDir == "" {
 		return fmt.Errorf("parent directory is empty")
 	}
@@ -726,7 +825,7 @@ func RunInitAll(parentDir string, cfg *Config, docs []string, repoMode string, w
 	var errs []string
 	for _, child := range children {
 		fmt.Printf("== %s ==\n", filepath.Base(child))
-		if err := RunInit(child, cfg, docs, repoMode, true, withSummary, update, replace); err != nil {
+		if err := RunInitWithIssuesGit(child, cfg, docs, repoMode, true, withSummary, update, replace, issuesGit); err != nil {
 			fmt.Printf("  error: %v\n", err)
 			errs = append(errs, fmt.Sprintf("%s: %v", child, err))
 			continue

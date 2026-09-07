@@ -63,7 +63,8 @@ conflicts remain unresolved; use Git's normal continue/abort commands and rerun 
 Unrelated staged and unstaged changes are autostashed and restored with their staging state.
 
 `harnez issues lint` validates the working tree; `harnez issues lint --cached` validates a
-temporary materialization of the Git index and is the pre-commit gate installed by `init`. Both
+temporary materialization of the Git index and is the pre-commit gate installed by
+`harnez init --issues-git`. Both
 reject duplicate numbers, conflicting numeric filename/H1 prefixes, and generated-index drift.
 Legacy tickets whose H1 never carried a numeric prefix remain valid.
 
