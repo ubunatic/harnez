@@ -453,7 +453,39 @@ Legacy PulseAudio is increasingly rare as of 2024.
 
 ---
 
-*Last updated: 2026-09-05. Covers upstream GNOME Shell main branch and plasma-pa master branch.*
+## 15. Live Input Meter Ballistics & Decoupled TUI Architecture
+
+Building a live voice indicator in a terminal UI requires balancing instantaneous onset responsiveness, fluid visual continuity, and low CPU overhead.
+
+### 15.1 Logarithmic dBFS Meter Scaling (Issue [[257](../issues/257-scale-live-mic-input-level-meter-logarithmically-in-dbfs-to-reflect-audible-speech.md)])
+Linear PCM amplitudes compress audible human speech (typically 30–50 dB below full-scale) into the bottom 1–5% of a level bar.
+- `harnez usage --watch` scales input logarithmically from **`-60 dBFS` (0%) to `0 dBFS` (100%)**:
+  $$\text{level} = \max\left(0.0, \, 1.0 + \frac{20 \log_{10}(\text{RMS}) - \text{PeakOffset}}{60}\right)$$
+- Whisper/silence registers around 5–15%; conversational speech spans 35–70%; shouting approaches 90–100%.
+
+### 15.2 Low-Latency Rolling Window (Issue [[258](../issues/258-dynamic-refresh-rate-for-live-mic-meter-high-frequency-ui-redraw-on-speech-activity.md)])
+To eliminate perceptible audio buffer lag:
+- A rolling window buffer maintains samples across `window-seconds` (default: `0.1s` / 100ms).
+- The aggregation metric (`value: "max"`) takes the peak sample within that window, guaranteeing immediate onset detection on voice start.
+
+### 15.3 Equalizer Release Ballistics (Issue [[260](../issues/260-live-mic-meter-equalizer-style-smooth-falloff-visual-decay-for-fluid-voice-dynamics.md)])
+A raw 100ms max aggregation without release ballistics collapses abruptly to zero between syllables, creating a strobe-like jitter.
+`internal/usage/miclive.go` applies professional VU/equalizer ballistics:
+1. **Instant Peak Attack**: If $\text{targetLevel} \ge \text{displayedLevel}$, the displayed level immediately jumps to the peak with zero lag.
+2. **Smooth Visual Decay**: If $\text{targetLevel} < \text{displayedLevel}$, the displayed level decays exponentially over elapsed time:
+   $$\text{decayedLevel} = \text{prevLevel} \times \exp\left(-\frac{\Delta t}{\tau}\right)$$
+   where $\tau = \text{decay-ms}$ (default `150ms`).
+3. **Clean Floor Snap**: When decayed level drops below $0.5\%$, it snaps cleanly to $0.0\%$.
+
+### 15.4 Decoupled Hardware Load Sampling & Coalesced Redraw (Issue [[259](../issues/259-decouple-hardware-load-timeline-sampling-from-high-fps-tui-redraw-cadence.md)])
+- **Dynamic Framerate**: Redraw rate bumps dynamically from normal cadence (~4 FPS / 250ms) to high-FPS (~20 FPS / 50ms) when voice activity is detected (`high-fps: "auto"`).
+- **Decoupled Timeline Sparklines**: High-FPS TUI repaints must not accelerate historical sparkline timelines or overburden CPU/GPU collectors. Hardware timeline sampling is strictly paced at `minLoadSampleInterval = 1s` in `internal/usage/load.go`.
+- **Redraw Throttling**: `redrawThrottler` enforces a strict 20 FPS rendering ceiling, debouncing and coalescing bursty background signals.
+
+---
+
+*Last updated: 2026-09-07. Covers upstream GNOME Shell main branch, plasma-pa master branch, and harnez live meter architecture.*
 *Primary sources: GNOME Shell `volume.js` (read directly from gitlab.gnome.org),*
 *plasma-pa `microphoneindicator.cpp` (read directly from invent.kde.org),*
-*issue 248 live canary result on Fedora GNOME.*
+*issue 248 live canary result on Fedora GNOME, and issues 257–260 implementation.*
+

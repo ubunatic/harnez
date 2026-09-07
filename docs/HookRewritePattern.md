@@ -87,16 +87,60 @@ wrapping the result for `harnez exec`'s telemetry capture — per the composabil
 constraint above, `harnez distill hook` is no longer separately installed by `apply`,
 even though the command still exists and works standalone for direct/manual use.
 
+---
+
+## Multi-Harness Hook Architectures
+
+### 1. Claude Code (`~/.claude/settings.json`)
+- **Protocol**: `PreToolUse` on matcher `Bash`.
+- **Payload**: `{tool_name, tool_input: {command}}`.
+- **Response**: `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": {"command": "harnez exec --tool <tool> -- bash -c '<escaped>'"}}}`.
+- **Config**: Managed via `harnez apply`.
+
+### 2. Google Antigravity (`~/.gemini/config/hooks.json`)
+- **Protocol**: `PreToolUse` on matcher `run_command` (see [issues/196](../issues/196-agy-native-hooks-plan-alongside-claude-hooks.md), [issues/267](../issues/267-fix-agy-hooks-json-top-level-schema-nesting-for-pretooluse-interception.md)).
+- **Top-Level Schema Requirement**: Antigravity's lifecycle hook parser requires named hooks at the **top level** of `hooks.json` without an extra `"hooks":` key:
+  ```json
+  {
+    "harnez": {
+      "enabled": true,
+      "PreToolUse": [
+        {
+          "matcher": "run_command",
+          "hooks": [
+            { "type": "command", "command": "harnez agy-hooks hook" }
+          ]
+        }
+      ]
+    }
+  }
+  ```
+- **Payload**: `{"toolCall": {"name": "run_command", "args": {"CommandLine": "..."}}, "conversationId": "..."}`.
+- **Response**: `{"decision": "allow", "overwrite": {"CommandLine": "harnez exec --tool <tool> -- bash -c '<escaped>'"}}`.
+- **Live Reload**: Antigravity dynamically re-reads `hooks.json` before each tool execution; changes take effect immediately without restarting the host session.
+- **Config**: Managed via `harnez agy-hooks apply` / `harnez agy-hooks status`.
+
+---
+
+## Telemetry & Agent Attribution
+
+When the wrapped command executes under `harnez exec`, it resolves session and agent identity:
+- **Claude Code**: `CLAUDE_CODE_SESSION_ID` → `agent_id: "claude"`.
+- **Google Antigravity**: `ANTIGRAVITY_CONVERSATION_ID`, `ANTIGRAVITY_AGENT=1` → `agent_id: "agy"` (see [issues/266](../issues/266-support-antigravity-session-and-agent-id-resolution-in-telemetry.md)).
+- **Codex**: `CODEX_SESSION_ID` → `agent_id: "codex"`.
+- **Fallback**: PPID-keyed sliding window lockfile (`~/.harnez/sessions/`).
+
+---
+
 ## Applying it to a new feature
 
 1. Add the feature's rewrite logic under `<feature> hook`, matching `runDistillHook`'s
-   shape (decode payload → decide → encode `hookSpecificOutput`, or no-op).
+   shape (decode payload → decide → encode `hookSpecificOutput` / `overwrite`, or no-op).
 2. Point the rewrite at whatever subcommand does the real work — usually the feature's
    own wrapper form, not a third command.
-3. Wire the hook's `command:` string into `config.yaml` and let `apply`'s existing
-   hooks-merge install it — do not add a new top-level installer command (see
-   [issues/119](../issues/119-harnez-hook-agent-hook-management.md)'s 2026-08-31
-   decision for the footgun this avoids).
+3. Wire the hook's `command:` string into `config.yaml` / `hooks.json` and let `apply`'s
+   existing hooks-merge install it — do not add a new top-level installer command.
 4. If the wrapper stage's own telemetry/side-effect write can fail or block, make it
    best-effort and non-blocking relative to the wrapped command's exit — the hook
    protocol gives no way to retry or recover after the fact.
+
