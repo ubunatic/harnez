@@ -1,6 +1,6 @@
 # 276 — Add harnez lint command for fast rule adherence checking
 
-**Status**: Open
+**Status**: Closed — resolved in 5d09901
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature / Agentic Ergonomics
