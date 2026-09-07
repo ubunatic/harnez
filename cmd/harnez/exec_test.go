@@ -572,6 +572,18 @@ func TestRunExecHook_IgnoresEmptyCommand(t *testing.T) {
 	}
 }
 
+func TestRunExecHook_IgnoresGearCommand(t *testing.T) {
+	in := strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"⚙ echo 'hello'"}}`)
+	var out bytes.Buffer
+	if err := runExecHook(in, &out); err != nil {
+		t.Fatalf("runExecHook() error = %v", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("expected no output for a gear command, got %q", out.String())
+	}
+}
+
+
 func TestIsGearInvocation(t *testing.T) {
 	cases := []struct {
 		arg0 string

@@ -86,3 +86,29 @@ func TestRunAgyHooksHook_PreservesShellMetacharacters(t *testing.T) {
 		t.Errorf("Overwrite.CommandLine = %q, want %q", got.Overwrite.CommandLine, want)
 	}
 }
+
+func TestRunAgyHooksHook_SkipsGearCommand(t *testing.T) {
+	original := "⚙ echo 'hello'"
+	payload, _ := json.Marshal(map[string]any{
+		"toolCall": map[string]any{
+			"name": "run_command",
+			"args": map[string]any{"CommandLine": original},
+		},
+	})
+	var out bytes.Buffer
+	if err := runAgyHooksHook(bytes.NewReader(payload), &out); err != nil {
+		t.Fatalf("runAgyHooksHook: %v", err)
+	}
+
+	var got agyPreToolUseOutput
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
+	}
+	if got.Decision != "allow" {
+		t.Errorf("Decision = %q, want allow", got.Decision)
+	}
+	if got.Overwrite.CommandLine != "" {
+		t.Errorf("expected no rewrite for gear command, got %q", got.Overwrite.CommandLine)
+	}
+}
+

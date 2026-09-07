@@ -77,3 +77,27 @@ func TestRunCodexHooksHook_PreservesShellMetacharacters(t *testing.T) {
 		t.Errorf("UpdatedInput[command] = %q, want %q", got.UpdatedInput["command"], want)
 	}
 }
+
+func TestRunCodexHooksHook_SkipsGearCommand(t *testing.T) {
+	original := "⚙ echo 'hello'"
+	payload, _ := json.Marshal(map[string]any{
+		"tool_name":  "Bash",
+		"tool_input": map[string]any{"command": original},
+	})
+	var out bytes.Buffer
+	if err := runCodexHooksHook(bytes.NewReader(payload), &out); err != nil {
+		t.Fatalf("runCodexHooksHook: %v", err)
+	}
+
+	var got codexPreToolUseOutput
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
+	}
+	if got.PermissionDecision != "allow" {
+		t.Errorf("PermissionDecision = %q, want allow", got.PermissionDecision)
+	}
+	if len(got.UpdatedInput) != 0 {
+		t.Errorf("expected no rewrite for gear command, got %v", got.UpdatedInput)
+	}
+}
+

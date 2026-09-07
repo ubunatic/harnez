@@ -460,9 +460,23 @@ settings is issues/119's job, out of this command's scope.`,
 }
 
 // execInvocationRE-equivalent guard: avoid re-wrapping a command that
-// already routes through harnez exec.
+// already routes through harnez exec (or the ⚙ alias/shim).
 func alreadyRoutedThroughExec(command string) bool {
-	return strings.Contains(command, "harnez exec")
+	if strings.Contains(command, "harnez exec") {
+		return true
+	}
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
+		return false
+	}
+	fields := strings.Fields(trimmed)
+	if len(fields) > 0 {
+		first := filepath.Base(fields[0])
+		if isGearInvocation(first) {
+			return true
+		}
+	}
+	return false
 }
 
 // runExecHook decodes a PreToolUse hook payload from in and, if it's a
