@@ -137,14 +137,16 @@ func TestRunStatus_ReportsRemovedManagedKey(t *testing.T) {
 	t.Errorf("no settings.json [hooks] line found after removal, full output:\n%s", out)
 }
 
-// TestRunStatus_AgyAndCodexHooks verifies that status reports agy and codex hooks.
-func TestRunStatus_AgyAndCodexHooks(t *testing.T) {
-	dir := t.TempDir()
-	agyTarget := filepath.Join(t.TempDir(), "gemini", "config", "hooks.json")
-	codexTarget := filepath.Join(t.TempDir(), "codex-config.toml")
+// TestRunStatus_BashShimAndCodexHooks verifies that status reports bash shim and codex hooks.
+func TestRunStatus_BashShimAndCodexHooks(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	dir := filepath.Join(tmpHome, ".claude")
+	codexTarget := filepath.Join(tmpHome, ".codex", "config.toml")
+	shimPath := filepath.Join(tmpHome, ".harnez", "shims", "bash")
 
 	cfg := &Config{
-		AgyHooksTarget:   agyTarget,
 		CodexHooksTarget: codexTarget,
 	}
 
@@ -155,17 +157,14 @@ func TestRunStatus_AgyAndCodexHooks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunStatus failed: %v", err)
 	}
-	if !strings.Contains(out, agyTarget+" [harnez]") || !strings.Contains(out, "missing") {
-		t.Errorf("expected agy hooks missing, got:\n%s", out)
+	if !strings.Contains(out, shimPath) || !strings.Contains(out, "missing") {
+		t.Errorf("expected bash shim missing, got:\n%s", out)
 	}
 	if !strings.Contains(out, codexTarget+" [hooks.harnez]") || !strings.Contains(out, "missing") {
 		t.Errorf("expected codex hooks missing, got:\n%s", out)
 	}
 
-	// Create parent dir for agy and apply
-	if err := os.MkdirAll(filepath.Dir(filepath.Dir(agyTarget)), 0755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
+	// Apply
 	if err := ApplyAll(dir, cfg, nil, false, false); err != nil {
 		t.Fatalf("ApplyAll failed: %v", err)
 	}
@@ -177,8 +176,8 @@ func TestRunStatus_AgyAndCodexHooks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunStatus post-apply failed: %v", err)
 	}
-	if !strings.Contains(out, agyTarget+" [harnez]") || !strings.Contains(out, "ok") {
-		t.Errorf("expected agy hooks ok, got:\n%s", out)
+	if !strings.Contains(out, shimPath) || !strings.Contains(out, "ok") {
+		t.Errorf("expected bash shim ok, got:\n%s", out)
 	}
 	if !strings.Contains(out, codexTarget+" [hooks.harnez]") || !strings.Contains(out, "ok") {
 		t.Errorf("expected codex hooks ok, got:\n%s", out)

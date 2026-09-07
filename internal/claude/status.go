@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"ubunatic.com/harnez/internal/agy"
 	"ubunatic.com/harnez/internal/codex"
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/issues"
@@ -163,20 +162,19 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 			state: state,
 		})
 	}
-	if cfg.AgyHooksTarget != "" {
-		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
-		installed, drifted := agy.Status(hooksPath)
-		state := "missing"
-		if installed {
-			if drifted {
-				state = "drifted"
+	if shimPath := BashShimPath(); shimPath != "" {
+		shimState := "missing"
+		if fi, err := os.Stat(shimPath); err == nil {
+			data, readErr := os.ReadFile(shimPath)
+			if readErr == nil && string(data) == BashShimContent && fi.Mode().Perm() == 0755 {
+				shimState = "ok"
 			} else {
-				state = "ok"
+				shimState = "drifted"
 			}
 		}
 		checks = append(checks, entry{
-			label: hooksPath + " [harnez]",
-			state: state,
+			label: shimPath,
+			state: shimState,
 		})
 	}
 	for _, link := range GearSymlinkTargets(target, cfg) {

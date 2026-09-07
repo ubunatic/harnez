@@ -102,28 +102,20 @@ in managed agent environments / PATH (`~/.claude/bin/⚙`, `~/go/bin/⚙`, etc.)
 - **Response**: `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": {"command": "harnez exec --tool <tool> -- bash -c '<escaped>'"}}}`.
 - **Config**: Managed via `harnez apply`.
 
-### 2. Google Antigravity (`~/.gemini/config/hooks.json`)
-- **Protocol**: `PreToolUse` on matcher `run_command` (see [issues/196](../issues/196-agy-native-hooks-plan-alongside-claude-hooks.md), [issues/267](../issues/267-fix-agy-hooks-json-top-level-schema-nesting-for-pretooluse-interception.md)).
-- **Top-Level Schema Requirement**: Antigravity's lifecycle hook parser requires named hooks at the **top level** of `hooks.json` without an extra `"hooks":` key:
-  ```json
-  {
-    "harnez": {
-      "enabled": true,
-      "PreToolUse": [
-        {
-          "matcher": "run_command",
-          "hooks": [
-            { "type": "command", "command": "harnez agy-hooks hook" }
-          ]
-        }
-      ]
-    }
-  }
+### 2. Google Antigravity (`~/.harnez/shims/bash`)
+- **Mechanism**: Guarded `bash` PATH shim (see [issues/195](../issues/195-agy-path-shim-vs-native-hooks-options-and-tradeoffs.md), [issues/271](../issues/271-decommission-agy-hooks-pretooluse-interception-in-favor-of-guarded-bash-path-shim.md)).
+- **Clean UI & Zero Overwrite Artifacts**: Antigravity's PreToolUse `overwrite.CommandLine` hook mechanism leaks wrapper plumbing (e.g. `Bash(⚙ ...)` or `Bash(harnez exec ...)`) into user-facing chat traces. The quiet PATH shim intercepts `run_command` transparently while preserving native, clean commands in the UI (e.g. `Bash(git status)`).
+- **Recursion Guard**: Uses `HARNEZ_INTERCEPTED=1` to ensure nested subshells (e.g. `bash script.sh` inside an agent command) execute directly via `/bin/bash` without recursive wrapping.
+- **Shim Script** (`mode 0755`):
+  ```sh
+  #!/bin/sh
+  if [ "$HARNEZ_INTERCEPTED" = "1" ]; then
+      exec /bin/bash "$@"
+  fi
+  export HARNEZ_INTERCEPTED=1
+  exec harnez exec -- /bin/bash "$@"
   ```
-- **Payload**: `{"toolCall": {"name": "run_command", "args": {"CommandLine": "..."}}, "conversationId": "..."}`.
-- **Response**: `{"decision": "allow", "overwrite": {"CommandLine": "harnez exec --tool <tool> -- bash -c '<escaped>'"}}`.
-- **Live Reload**: Antigravity dynamically re-reads `hooks.json` before each tool execution; changes take effect immediately without restarting the host session.
-- **Config**: Managed via `harnez agy-hooks apply` / `harnez agy-hooks status`.
+- **Config & Activation**: Provisioned and managed by `harnez apply` at `~/.harnez/shims/bash`. Enabled in AGY environments via `PATH="$HOME/.harnez/shims:$PATH"` (e.g. via alias or environment wrapper). Stale `hooks.json` registrations are cleaned up automatically by `harnez apply`.
 
 ---
 

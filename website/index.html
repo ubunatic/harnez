@@ -764,8 +764,8 @@ feedback overhead: 28.1 avg bytes/call, ~943 one-time instruction tokens</span><
         <p><code>harnez distill</code> automatically strips passing test noise, repetitive logs, and ANSI escape codes before output enters the agent's context window, saving over 50% in context tokens and bandwidth.</p>
       </div>
       <div class="feature">
-        <h3>Native Multi-Agent Hooks</h3>
-        <p>Includes dedicated hook adapters: <code>harnez agy-hooks</code> for Google Antigravity's dynamic top-level <code>hooks.json</code> schema, Claude Code <code>settings.json</code> hooks, and Codex shell wrappers.</p>
+        <h3>Native Multi-Agent Hooks &amp; Shims</h3>
+        <p>Includes dedicated adapters: quiet guarded <code>bash</code> PATH shim for Google Antigravity, Claude Code <code>settings.json</code> hooks, and Codex shell wrappers.</p>
       </div>
     </div>
   </div>
@@ -856,11 +856,6 @@ feedback overhead: 28.1 avg bytes/call, ~943 one-time instruction tokens</span><
             <td><code>exec</code></td>
             <td><code class="flag">--tool</code> <code class="flag">--expect-failure</code> <code class="flag">--distill</code></td>
             <td>Proxy stdio unbuffered, execute commands, and record non-blocking telemetry rows to SQLite</td>
-          </tr>
-          <tr>
-            <td><code>agy-hooks</code></td>
-            <td><code class="flag">apply</code> <code class="flag">status</code> <code class="flag">hook</code></td>
-            <td>Manage Google Antigravity native <code>hooks.json</code> PreToolUse interception and routing</td>
           </tr>
           <tr>
             <td><code>distill</code></td>

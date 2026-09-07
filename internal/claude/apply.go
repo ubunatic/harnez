@@ -576,6 +576,24 @@ func GearSymlinkTargets(target string, cfg *Config) []string {
 	return targets
 }
 
+// BashShimContent is the guarded bash PATH-shim script (issue 271).
+const BashShimContent = `#!/bin/sh
+if [ "$HARNEZ_INTERCEPTED" = "1" ]; then
+    exec /bin/bash "$@"
+fi
+export HARNEZ_INTERCEPTED=1
+exec harnez exec -- /bin/bash "$@"
+`
+
+// BashShimPath returns the standard location of the guarded bash shim (~/.harnez/shims/bash).
+func BashShimPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".harnez", "shims", "bash")
+}
+
 func localPath(projectDir, rel string) string {
 	if filepath.IsAbs(rel) || projectDir == "" || projectDir == "." {
 		return rel
@@ -860,21 +878,18 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 		}
 	}
 
-	// Antigravity's (AGY) native hooks.json lifecycle hooks (~/.gemini/config/hooks.json)
-	// route run_command calls through `harnez exec` (see issues/196, issues/209, issues/267).
+	// Decommissioned agy-hooks: clean up any stale hook in ~/.gemini/config/hooks.json (issue 271)
 	if cfg.AgyHooksTarget != "" {
 		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
 		agentHome := filepath.Dir(filepath.Dir(hooksPath))
 		if _, err := os.Stat(agentHome); err == nil {
-			changed, err := agy.Apply(hooksPath)
+			cleaned, err := agy.Remove(hooksPath)
 			if err != nil {
-				return fmt.Errorf("agy hooks: %w", err)
+				return fmt.Errorf("agy hooks cleanup: %w", err)
 			}
-			if changed {
+			if cleaned {
 				changes++
-				fmt.Printf("  wrote %s\n", hooksPath)
-			} else {
-				addStat("agy hooks", "up to date")
+				fmt.Printf("  cleaned %s (decommissioned agy-hooks)\n", hooksPath)
 			}
 		}
 	}
@@ -934,6 +949,19 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 	}
 	if len(gearStats) > 0 {
 		addStat("⚙ symlink", strings.Join(gearStats, ", "))
+	}
+
+	if shimPath := BashShimPath(); shimPath != "" {
+		changed, err := fsutil.WriteExecutableIfChanged(shimPath, []byte(BashShimContent))
+		if err != nil {
+			return fmt.Errorf("bash shim %s: %w", shimPath, err)
+		}
+		if changed {
+			changes++
+			fmt.Printf("  wrote %s\n", shimPath)
+		} else {
+			addStat("bash shim", fsutil.ContractHome(shimPath))
+		}
 	}
 
 	if installSystemd {
@@ -1079,8 +1107,18 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
 		agentHome := filepath.Dir(filepath.Dir(hooksPath))
 		if _, err := os.Stat(agentHome); err == nil {
-			installed, drifted := agy.Status(hooksPath)
-			if !installed || drifted {
+			if installed, _ := agy.Status(hooksPath); installed {
+				anyChanged = true
+			}
+		}
+	}
+
+	if shimPath := BashShimPath(); shimPath != "" {
+		if fi, err := os.Stat(shimPath); err != nil {
+			anyChanged = true
+		} else {
+			data, readErr := os.ReadFile(shimPath)
+			if readErr != nil || string(data) != BashShimContent || fi.Mode().Perm() != 0755 {
 				anyChanged = true
 			}
 		}
@@ -1176,6 +1214,12 @@ func CleanAll(target string, cfg *Config) error {
 		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
 		if _, err := agy.Remove(hooksPath); err != nil {
 			return fmt.Errorf("agy hooks [%s]: %w", hooksPath, err)
+		}
+	}
+	if shimPath := BashShimPath(); shimPath != "" {
+		if err := os.Remove(shimPath); err == nil {
+			fmt.Printf("  removed %s\n", shimPath)
+			_ = os.Remove(filepath.Dir(shimPath))
 		}
 	}
 	for _, link := range GearSymlinkTargets(target, cfg) {

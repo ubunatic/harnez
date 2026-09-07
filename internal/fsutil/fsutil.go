@@ -69,6 +69,29 @@ func WriteIfChanged(dst string, data []byte) (changed bool, err error) {
 	return true, nil
 }
 
+// WriteExecutableIfChanged writes data to dst with mode 0755 only if the content or mode differs.
+// Replaces symlinks with real files unconditionally.
+// Returns changed = true if the file was written or permissions were changed.
+func WriteExecutableIfChanged(dst string, data []byte) (changed bool, err error) {
+	if fi, err := os.Lstat(dst); err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 {
+			os.Remove(dst) //nolint:errcheck
+		} else if existing, err := os.ReadFile(dst); err == nil && bytes.Equal(existing, data) && fi.Mode().Perm() == 0755 {
+			return false, nil
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(dst, data, 0755); err != nil {
+		return false, err
+	}
+	if err := os.Chmod(dst, 0755); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // Copy copies a file from src to dst, writing only if content differs.
 func Copy(src, dst string) (changed bool, err error) {
 	data, err := os.ReadFile(src)
