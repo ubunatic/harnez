@@ -1,6 +1,6 @@
 # 269 — harnez issues mv: renumber a ticket by number, rename file, fix header, resync README
 
-**Status**: In Progress
+**Status**: Closed — implemented in 58217b6
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
