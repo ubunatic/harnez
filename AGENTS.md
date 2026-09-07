@@ -123,6 +123,7 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   Read before multi-line shell: Make recipes, embedded scripts
   No ";", break before then/else/docs
   No "if [[]]", No "if []", Use "if test"
+  3-line if-then-fi ("then <cmd>" same line); source over .
   smart indent!
 - Make/Makefile @docs/Make.md,
   ⚙️ phony sentinel, self-doc help, build dependency pattern
