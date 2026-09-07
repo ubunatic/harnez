@@ -658,7 +658,7 @@ func TestGearMulticallExecution(t *testing.T) {
 
 	// 1. Test basic command execution: ⚙ echo hello
 	cmd := exec.Command(gearPath, "echo", "hello from gear")
-	cmd.Env = append(os.Environ(), "HARNEZ_DISABLE_RATE_FEEDBACK=1")
+	cmd.Env = append(os.Environ(), "HARNEZ_DISABLE_RATE_FEEDBACK=1", "ANTIGRAVITY_CONVERSATION_ID=", "CLAUDE_CONVERSATION_ID=")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("⚙ echo failed: %v\n%s", err, string(out))
@@ -669,7 +669,7 @@ func TestGearMulticallExecution(t *testing.T) {
 
 	// 2. Test exit code forwarding: ⚙ sh -c 'exit 42'
 	cmd = exec.Command(gearPath, "sh", "-c", "exit 42")
-	cmd.Env = append(os.Environ(), "HARNEZ_DISABLE_RATE_FEEDBACK=1")
+	cmd.Env = append(os.Environ(), "HARNEZ_DISABLE_RATE_FEEDBACK=1", "ANTIGRAVITY_CONVERSATION_ID=", "CLAUDE_CONVERSATION_ID=")
 	err = cmd.Run()
 	if err == nil {
 		t.Fatal("expected non-zero exit code 42, got nil")

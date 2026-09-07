@@ -48,6 +48,7 @@ type issuesResult struct {
 	Committed     bool   `json:"committed"`
 	CommitSHA     string `json:"commit_sha"`
 	Noop          bool   `json:"noop"`
+	OldNumber     string `json:"old_number,omitempty"`
 }
 
 // issuesRunOptions bundles runIssuesVerb's inputs.
@@ -94,6 +95,12 @@ Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
                     placeholder behind, see issue 202). Unlike every other
                     verb, 'new' takes no ticket number (there isn't one yet)
                     and never commits.
+  mv <old> [new]   Renumber a ticket to [new] (default: next free number
+                    from scanning issuesDir). Renames the file keeping the
+                    same slug, rewrites the '# <new> — <title>' header line,
+                    resyncs issues/README.md, and commits both files by default.
+                    Guarded by O_CREATE|O_EXCL so concurrent claims or existing
+                    tickets are never overwritten.
 
 'close' with no reason writes bare "Closed", never an auto-fabricated
 "Closed — resolved" -- both are common in the corpus and this command does
@@ -117,10 +124,16 @@ exit, actionable stderr) -- unlike 'harnez find', where zero matches is a
 valid, exit-0 answer.`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return fmt.Errorf("issues: requires a verb (open, start, block, close, draft, new)")
+				return fmt.Errorf("issues: requires a verb (open, start, block, close, draft, new, mv)")
 			}
 			if args[0] == "new" {
 				return nil // [title] is optional, no ticket-number argument exists yet
+			}
+			if args[0] == "mv" {
+				if len(args) < 2 || len(args) > 3 {
+					return fmt.Errorf("issues mv: accepts 1 or 2 arguments: <ticket-number> [new-number]")
+				}
+				return nil
 			}
 			return cobra.MinimumNArgs(2)(cmd, args)
 		},
@@ -136,6 +149,22 @@ valid, exit-0 answer.`,
 				JSON:      jsonFlag,
 				NoCommit:  noCommitFlag,
 				CommitMsg: commitMsgFlag,
+			}
+			if args[0] == "mv" {
+				oldArg := args[1]
+				var newArg string
+				if len(args) > 2 {
+					newArg = args[2]
+				}
+				result, drift, err := runIssuesMv(cmd.OutOrStdout(), oldArg, newArg, opts)
+				if err != nil {
+					return err
+				}
+				printIssuesResult(cmd.OutOrStdout(), result, opts)
+				if opts.Check && drift {
+					os.Exit(1)
+				}
+				return nil
 			}
 			result, drift, err := runIssuesVerb(cmd.OutOrStdout(), args[0], args[1], args[2:], opts)
 			if err != nil {
@@ -230,29 +259,55 @@ func runIssuesNew(w io.Writer, dir, title string, jsonOutput bool) error {
 // findTicketFile locates the single issues/*.md (or issues/archive/*.md)
 // file whose Number matches ticketArg (accepting "232", "32", or "032"
 // alike, normalized to the same %03d width Scan/ParseTrackerTable use).
-// A nonexistent or ambiguous number is a caller-bug error, per issue 232
-// §3's "fail loudly, unlike find's zero-matches-is-valid convention".
+// Non-numeric arguments (such as "266-slug.md" or "archive/266-slug.md")
+// resolve by path, filename, or slug to support disambiguating colliding
+// numbers. A nonexistent or ambiguous number is a caller-bug error, per
+// issue 232 §3's "fail loudly, unlike find's zero-matches-is-valid convention".
 func findTicketFile(issuesDir, ticketArg string) (issues.IssueFile, error) {
-	n, err := strconv.Atoi(strings.TrimSpace(ticketArg))
-	if err != nil || n < 0 {
-		return issues.IssueFile{}, fmt.Errorf("issues: invalid ticket number %q (expected a non-negative integer)", ticketArg)
-	}
-	ticketNum := fmt.Sprintf("%03d", n)
-
+	ticketArg = strings.TrimSpace(ticketArg)
 	files, err := issues.Scan(issuesDir)
 	if err != nil {
 		return issues.IssueFile{}, fmt.Errorf("issues: %w", err)
 	}
 
+	n, err := strconv.Atoi(ticketArg)
+	if err == nil {
+		if n < 0 {
+			return issues.IssueFile{}, fmt.Errorf("issues: invalid ticket number %q (expected a non-negative integer)", ticketArg)
+		}
+		ticketNum := fmt.Sprintf("%03d", n)
+		var matches []issues.IssueFile
+		for _, f := range files {
+			if f.Number == ticketNum {
+				matches = append(matches, f)
+			}
+		}
+		switch len(matches) {
+		case 0:
+			return issues.IssueFile{}, fmt.Errorf("issues: no ticket found for number %q under %s (checked issues/*.md and issues/archive/*.md)", ticketNum, issuesDir)
+		case 1:
+			return matches[0], nil
+		default:
+			var paths []string
+			for _, m := range matches {
+				paths = append(paths, m.RelPath)
+			}
+			return issues.IssueFile{}, fmt.Errorf("issues: ambiguous ticket number %q matches multiple files: %s", ticketNum, strings.Join(paths, ", "))
+		}
+	}
+
+	cleaned := strings.TrimPrefix(filepath.ToSlash(ticketArg), "issues/")
 	var matches []issues.IssueFile
 	for _, f := range files {
-		if f.Number == ticketNum {
+		base := filepath.Base(f.RelPath)
+		slug := strings.TrimSuffix(base, ".md")
+		if f.RelPath == cleaned || base == cleaned || slug == cleaned {
 			matches = append(matches, f)
 		}
 	}
 	switch len(matches) {
 	case 0:
-		return issues.IssueFile{}, fmt.Errorf("issues: no ticket found for number %q under %s (checked issues/*.md and issues/archive/*.md)", ticketNum, issuesDir)
+		return issues.IssueFile{}, fmt.Errorf("issues: no ticket found for %q under %s (checked issues/*.md and issues/archive/*.md)", ticketArg, issuesDir)
 	case 1:
 		return matches[0], nil
 	default:
@@ -260,8 +315,171 @@ func findTicketFile(issuesDir, ticketArg string) (issues.IssueFile, error) {
 		for _, m := range matches {
 			paths = append(paths, m.RelPath)
 		}
-		return issues.IssueFile{}, fmt.Errorf("issues: ambiguous ticket number %q matches multiple files: %s", ticketNum, strings.Join(paths, ", "))
+		return issues.IssueFile{}, fmt.Errorf("issues: ambiguous ticket %q matches multiple files: %s", ticketArg, strings.Join(paths, ", "))
 	}
+}
+
+// runIssuesMv implements `harnez issues mv <old> [new]`:
+// 1. Resolve old ticket with findTicketFile.
+// 2. Resolve target number (newArg if given, else issues.NextNumberFromFiles).
+// 3. Reject if target ticket number is already claimed by another file.
+// 4. Rename file (keeping slug intact), rewrite header '# <new> — <title>', resync issues/README.md.
+// 5. Guard against collisions using O_CREATE|O_EXCL on target filename.
+// 6. Handle --check / --dry-run (simulate and restore), --no-commit, --json.
+// 7. Commit changes via git staging if not --no-commit.
+func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (issuesResult, bool, error) {
+	issuesDir := filepath.Join(opts.Dir, "issues")
+	f, err := findTicketFile(issuesDir, oldArg)
+	if err != nil {
+		return issuesResult{}, false, err
+	}
+
+	files, err := issues.Scan(issuesDir)
+	if err != nil {
+		return issuesResult{}, false, fmt.Errorf("issues mv: %w", err)
+	}
+
+	var newNum string
+	if strings.TrimSpace(newArg) != "" {
+		n, err := strconv.Atoi(strings.TrimSpace(newArg))
+		if err != nil || n < 0 {
+			return issuesResult{}, false, fmt.Errorf("issues mv: invalid new ticket number %q (expected a non-negative integer)", newArg)
+		}
+		newNum = fmt.Sprintf("%03d", n)
+	} else {
+		newNum = issues.NextNumberFromFiles(files)
+	}
+
+	oldPath := filepath.Join(issuesDir, f.RelPath)
+	oldGitRelPath := filepath.ToSlash(filepath.Join("issues", f.RelPath))
+
+	content, err := os.ReadFile(oldPath)
+	if err != nil {
+		return issuesResult{}, false, fmt.Errorf("issues mv: read %s: %w", oldPath, err)
+	}
+
+	_, status, _ := issues.ParseIssueFile(string(content))
+
+	result := issuesResult{
+		Number:    newNum,
+		File:      oldGitRelPath,
+		OldStatus: status,
+		NewStatus: status,
+		OldNumber: f.Number,
+	}
+
+	if f.Number == newNum {
+		result.Noop = true
+		return result, false, nil
+	}
+
+	for _, f2 := range files {
+		if f2.Number == newNum && f2.RelPath != f.RelPath {
+			return issuesResult{}, false, fmt.Errorf("issues mv: target ticket number %s already exists (%s)", newNum, f2.RelPath)
+		}
+	}
+
+	dirPart, filePart := filepath.Split(f.RelPath)
+	var newBaseName string
+	if strings.HasPrefix(filePart, f.Number+"-") {
+		newBaseName = fmt.Sprintf("%s-%s", newNum, strings.TrimPrefix(filePart, f.Number+"-"))
+	} else if strings.HasPrefix(filePart, f.Number) {
+		newBaseName = fmt.Sprintf("%s%s", newNum, strings.TrimPrefix(filePart, f.Number))
+	} else {
+		newBaseName = fmt.Sprintf("%s-%s", newNum, filePart)
+	}
+
+	newRelPath := filepath.Join(dirPart, newBaseName)
+	newPath := filepath.Join(issuesDir, newRelPath)
+	newGitRelPath := filepath.ToSlash(filepath.Join("issues", newRelPath))
+	result.File = newGitRelPath
+
+	newContent, err := issues.RewriteHeaderNumber(string(content), newNum)
+	if err != nil {
+		return issuesResult{}, false, fmt.Errorf("issues mv: %w", err)
+	}
+
+	readmePath := filepath.Join(issuesDir, "README.md")
+
+	if opts.Check {
+		if _, err := os.Stat(newPath); err == nil {
+			return issuesResult{}, false, fmt.Errorf("issues mv --check: destination file %s already exists", newGitRelPath)
+		}
+		origReadme, readErr := os.ReadFile(readmePath)
+		readmeExisted := readErr == nil
+		if readErr != nil && !os.IsNotExist(readErr) {
+			return issuesResult{}, false, fmt.Errorf("issues mv --check: read %s: %w", readmePath, readErr)
+		}
+
+		if err := os.WriteFile(newPath, []byte(newContent), 0o644); err != nil {
+			return issuesResult{}, false, fmt.Errorf("issues mv --check: write %s: %w", newPath, err)
+		}
+		_ = os.Remove(oldPath)
+
+		readmeChanged, updErr := index.UpdateIssuesReadme(readmePath, issuesDir)
+
+		// Always restore
+		_ = os.WriteFile(oldPath, content, 0o644)
+		_ = os.Remove(newPath)
+		if readmeExisted {
+			_ = os.WriteFile(readmePath, origReadme, 0o644)
+		} else {
+			_ = os.Remove(readmePath)
+		}
+
+		if updErr != nil {
+			return issuesResult{}, false, fmt.Errorf("issues mv --check: %w", updErr)
+		}
+
+		result.ReadmeUpdated = readmeChanged
+		return result, true, nil
+	}
+
+	claimFile, err := os.OpenFile(newPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		if os.IsExist(err) {
+			return issuesResult{}, false, fmt.Errorf("issues mv: destination file %s already exists: %w", newGitRelPath, err)
+		}
+		return issuesResult{}, false, fmt.Errorf("issues mv: claim destination %s: %w", newGitRelPath, err)
+	}
+	if _, err := claimFile.WriteString(newContent); err != nil {
+		_ = claimFile.Close()
+		_ = os.Remove(newPath)
+		return issuesResult{}, false, fmt.Errorf("issues mv: write %s: %w", newPath, err)
+	}
+	if err := claimFile.Close(); err != nil {
+		_ = os.Remove(newPath)
+		return issuesResult{}, false, fmt.Errorf("issues mv: close %s: %w", newPath, err)
+	}
+
+	if err := os.Remove(oldPath); err != nil {
+		_ = os.Remove(newPath)
+		return issuesResult{}, false, fmt.Errorf("issues mv: remove old file %s: %w", oldPath, err)
+	}
+
+	readmeChanged, err := index.UpdateIssuesReadme(readmePath, issuesDir)
+	if err != nil {
+		_ = os.WriteFile(oldPath, content, 0o644)
+		_ = os.Remove(newPath)
+		return issuesResult{}, false, fmt.Errorf("issues mv: update README: %w", err)
+	}
+	result.ReadmeUpdated = readmeChanged
+
+	if !opts.NoCommit {
+		msg := opts.CommitMsg
+		if msg == "" {
+			msg = fmt.Sprintf("docs(issues): renumber %s to %s", f.Number, newNum)
+		}
+		readmeRelPath := filepath.ToSlash(filepath.Join("issues", "README.md"))
+		sha, err := gitAddAndCommit(opts.Dir, []string{oldGitRelPath, newGitRelPath, readmeRelPath}, msg)
+		if err != nil {
+			return issuesResult{}, false, fmt.Errorf("issues mv: commit: %w", err)
+		}
+		result.Committed = true
+		result.CommitSHA = sha
+	}
+
+	return result, false, nil
 }
 
 // runIssuesVerb performs the full status-change: locate the ticket,
@@ -429,6 +647,9 @@ func printIssuesResult(w io.Writer, result issuesResult, opts issuesRunOptions) 
 
 func formatIssuesLine(r issuesResult, check bool) string {
 	if r.Noop {
+		if r.OldNumber != "" && r.OldNumber != r.Number {
+			return fmt.Sprintf("%s -> %s: already at %s (no change)", r.OldNumber, r.Number, r.File)
+		}
 		return fmt.Sprintf("%s: already %s (no change)", r.Number, r.NewStatus)
 	}
 	var parts []string
@@ -446,6 +667,9 @@ func formatIssuesLine(r issuesResult, check bool) string {
 		} else {
 			parts = append(parts, "not committed")
 		}
+	}
+	if r.OldNumber != "" && r.OldNumber != r.Number {
+		return fmt.Sprintf("%s -> %s: %s (%s)", r.OldNumber, r.Number, r.File, strings.Join(parts, ", "))
 	}
 	return fmt.Sprintf("%s: %s -> %s (%s)", r.Number, r.OldStatus, r.NewStatus, strings.Join(parts, ", "))
 }

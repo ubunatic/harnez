@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"ubunatic.com/harnez/internal/issues"
 )
 
 // issuesFixtureRepo builds a minimal git repo with an issues/ tree
@@ -484,3 +486,404 @@ func repoRunGitOutput(t *testing.T, dir string, args ...string) string {
 	}
 	return string(out)
 }
+
+func TestRunIssuesMv_HappyPath(t *testing.T) {
+	dir, oldTicketPath := issuesFixtureRepo(t, sampleTicket)
+
+	var out bytes.Buffer
+	result, drift, err := runIssuesMv(&out, "42", "268", issuesRunOptions{Dir: dir})
+	if err != nil {
+		t.Fatalf("runIssuesMv: %v", err)
+	}
+	if drift {
+		t.Errorf("expected drift=false outside --check")
+	}
+	if result.Number != "268" || result.OldNumber != "042" {
+		t.Errorf("unexpected numbers in result: %+v", result)
+	}
+	if result.File != "issues/268-example-ticket.md" {
+		t.Errorf("unexpected file in result: %q", result.File)
+	}
+	if !result.ReadmeUpdated {
+		t.Errorf("expected README to be updated")
+	}
+	if !result.Committed || result.CommitSHA == "" {
+		t.Errorf("expected commit to be created: %+v", result)
+	}
+
+	// Old file must be gone
+	if _, err := os.Stat(oldTicketPath); !os.IsNotExist(err) {
+		t.Errorf("old ticket file still exists at %s", oldTicketPath)
+	}
+
+	// New file must exist with rewritten header
+	newPath := filepath.Join(dir, "issues", "268-example-ticket.md")
+	got, err := os.ReadFile(newPath)
+	if err != nil {
+		t.Fatalf("read new ticket file: %v", err)
+	}
+	wantContent := "# 268 — Example Ticket\n\n**Status**: Open\n\n---\n\nSee [[041-other-ticket]] for context.\n"
+	if string(got) != wantContent {
+		t.Errorf("new ticket content mismatch:\ngot:  %q\nwant: %q", string(got), wantContent)
+	}
+
+	// README must refer to 268 and not 042
+	readme, err := os.ReadFile(filepath.Join(dir, "issues", "README.md"))
+	if err != nil {
+		t.Fatalf("read README: %v", err)
+	}
+	if strings.Contains(string(readme), "042") {
+		t.Errorf("README still contains 042:\n%s", readme)
+	}
+	if !strings.Contains(string(readme), "268") || !strings.Contains(string(readme), "268-example-ticket.md") {
+		t.Errorf("README does not contain 268 row:\n%s", readme)
+	}
+
+	// Commit must stage old file deletion/rename, new file addition, and README modification
+	logOut := repoRunGitOutput(t, dir, "log", "-1", "--name-status", "--format=%s")
+	if !strings.Contains(logOut, "docs(issues): renumber 042 to 268") {
+		t.Errorf("unexpected commit message: %s", logOut)
+	}
+	if !strings.Contains(logOut, "issues/042-example-ticket.md") || !strings.Contains(logOut, "issues/268-example-ticket.md") || !strings.Contains(logOut, "issues/README.md") {
+		t.Errorf("commit does not touch all expected files:\n%s", logOut)
+	}
+}
+
+func TestRunIssuesMv_DefaultNextTargetNumber(t *testing.T) {
+	dir := repoInit(t)
+	issuesDir := filepath.Join(dir, "issues")
+	if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t1 := filepath.Join(issuesDir, "042-ticket.md")
+	if err := os.WriteFile(t1, []byte("# 042 — Ticket One\n\n**Status**: Open\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t2 := filepath.Join(issuesDir, "099-another.md")
+	if err := os.WriteFile(t2, []byte("# 099 — Ticket Two\n\n**Status**: Open\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(issuesDir, "README.md"),
+		[]byte("# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repoRunGit(t, dir, "add", "issues")
+	repoRunGit(t, dir, "commit", "-q", "-m", "init tickets")
+
+	filesBefore, err := issues.Scan(issuesDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNext := issues.NextNumberFromFiles(filesBefore)
+
+	var out bytes.Buffer
+	result, _, err := runIssuesMv(&out, "42", "", issuesRunOptions{Dir: dir})
+	if err != nil {
+		t.Fatalf("runIssuesMv: %v", err)
+	}
+	if result.Number != wantNext {
+		t.Errorf("result.Number = %q, want %q", result.Number, wantNext)
+	}
+	if _, err := os.Stat(filepath.Join(issuesDir, wantNext+"-ticket.md")); err != nil {
+		t.Errorf("expected target file %s-ticket.md to exist: %v", wantNext, err)
+	}
+	if _, err := os.Stat(t1); !os.IsNotExist(err) {
+		t.Errorf("expected old file 042-ticket.md to be removed")
+	}
+}
+
+func TestRunIssuesMv_CollisionScenarioGitPull(t *testing.T) {
+	// Reproduce the actual git pull collision from issue 269:
+	// Two files in the working tree claiming 266 with different slugs,
+	// and a 267 file.
+	dir := repoInit(t)
+	issuesDir := filepath.Join(dir, "issues")
+	if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	tTelemetry := filepath.Join(issuesDir, "266-telemetry-ticket.md")
+	if err := os.WriteFile(tTelemetry, []byte("# 266 — Telemetry Ticket\n\n**Status**: Open\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tExec := filepath.Join(issuesDir, "266-exec-timeout.md")
+	if err := os.WriteFile(tExec, []byte("# 266 — Exec Timeout\n\n**Status**: In Progress\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tHooks := filepath.Join(issuesDir, "267-hooks-fix.md")
+	if err := os.WriteFile(tHooks, []byte("# 267 — Hooks Fix\n\n**Status**: Closed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Conflicted README table with duplicate 266 rows
+	readmeContent := `# Issues Tracker
+
+| # | File | Title | Status |
+|---|------|-------|--------|
+| 266 | [266-telemetry-ticket.md](266-telemetry-ticket.md) | Telemetry Ticket | Open |
+| 266 | [266-exec-timeout.md](266-exec-timeout.md) | Exec Timeout | In Progress |
+| 267 | [267-hooks-fix.md](267-hooks-fix.md) | Hooks Fix | Closed |
+`
+	if err := os.WriteFile(filepath.Join(issuesDir, "README.md"), []byte(readmeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repoRunGit(t, dir, "add", "issues")
+	repoRunGit(t, dir, "commit", "-q", "-m", "merge conflict state")
+
+	// Verify linter detects the duplicate issue number
+	reportBefore, err := issues.Lint(issuesDir)
+	if err != nil {
+		t.Fatalf("Lint: %v", err)
+	}
+	hasDup := false
+	for _, d := range reportBefore.Diagnostics {
+		if d.Kind == issues.DiagDuplicateNumber && d.IssueNum == "266" {
+			hasDup = true
+			break
+		}
+	}
+	if !hasDup {
+		t.Fatalf("expected Lint to report DiagDuplicateNumber before mv, got: %+v", reportBefore.Diagnostics)
+	}
+
+	// Attempting bare "266" should fail with ambiguous error because 2 files match number 266
+	var out bytes.Buffer
+	_, _, err = runIssuesMv(&out, "266", "", issuesRunOptions{Dir: dir})
+	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("expected ambiguous ticket error for bare '266', got: %v", err)
+	}
+
+	// Renumber the colliding 266-exec-timeout.md by filename to next free number (268)
+	out.Reset()
+	result, _, err := runIssuesMv(&out, "266-exec-timeout.md", "", issuesRunOptions{Dir: dir})
+	if err != nil {
+		t.Fatalf("runIssuesMv disambiguated: %v", err)
+	}
+	if result.Number != "268" {
+		t.Errorf("result.Number = %q, want 268", result.Number)
+	}
+
+	// Assert:
+	// 1. Renamed file exists at new path with corrected header
+	renamedPath := filepath.Join(issuesDir, "268-exec-timeout.md")
+	content, err := os.ReadFile(renamedPath)
+	if err != nil {
+		t.Fatalf("read renamed file: %v", err)
+	}
+	if !strings.HasPrefix(string(content), "# 268 — Exec Timeout") {
+		t.Errorf("unexpected header in renamed file:\n%s", content)
+	}
+
+	// 2. Old colliding file is removed
+	if _, err := os.Stat(tExec); !os.IsNotExist(err) {
+		t.Errorf("old file 266-exec-timeout.md still exists")
+	}
+
+	// 3. Slot 266 has exactly one remaining file
+	if _, err := os.Stat(tTelemetry); err != nil {
+		t.Errorf("266-telemetry-ticket.md missing: %v", err)
+	}
+
+	// 4. README has no duplicate-number rows and no conflict marker strings
+	readmeBytes, err := os.ReadFile(filepath.Join(issuesDir, "README.md"))
+	if err != nil {
+		t.Fatalf("read README: %v", err)
+	}
+	readmeStr := string(readmeBytes)
+	for _, marker := range []string{"<<<<<<<", "=======", ">>>>>>>"} {
+		if strings.Contains(readmeStr, marker) {
+			t.Errorf("README contains leftover conflict marker %q", marker)
+		}
+	}
+
+	// 5. Lint reports 0 DiagDuplicateNumber diagnostics
+	reportAfter, err := issues.Lint(issuesDir)
+	if err != nil {
+		t.Fatalf("Lint after: %v", err)
+	}
+	for _, d := range reportAfter.Diagnostics {
+		if d.Kind == issues.DiagDuplicateNumber {
+			t.Errorf("unexpected duplicate number diagnostic after mv: %+v", d)
+		}
+	}
+}
+
+func TestRunIssuesMv_TargetOccupiedFailsWithoutSideEffects(t *testing.T) {
+	dir := repoInit(t)
+	issuesDir := filepath.Join(dir, "issues")
+	if err := os.MkdirAll(issuesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t1 := filepath.Join(issuesDir, "042-one.md")
+	c1 := "# 042 — One\n\n**Status**: Open\n"
+	if err := os.WriteFile(t1, []byte(c1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t2 := filepath.Join(issuesDir, "043-two.md")
+	c2 := "# 043 — Two\n\n**Status**: Open\n"
+	if err := os.WriteFile(t2, []byte(c2), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	readmePath := filepath.Join(issuesDir, "README.md")
+	origReadme := "# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n| 042 | [042-one.md](042-one.md) | One | Open |\n| 043 | [043-two.md](043-two.md) | Two | Open |\n"
+	if err := os.WriteFile(readmePath, []byte(origReadme), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repoRunGit(t, dir, "add", "issues")
+	repoRunGit(t, dir, "commit", "-q", "-m", "init")
+
+	var out bytes.Buffer
+	_, _, err := runIssuesMv(&out, "42", "43", issuesRunOptions{Dir: dir})
+	if err == nil {
+		t.Fatalf("expected error moving to already-occupied number 043")
+	}
+
+	// Verify no files changed
+	got1, _ := os.ReadFile(t1)
+	if string(got1) != c1 {
+		t.Errorf("042-one.md modified unexpectedly")
+	}
+	got2, _ := os.ReadFile(t2)
+	if string(got2) != c2 {
+		t.Errorf("043-two.md modified unexpectedly")
+	}
+	gotReadme, _ := os.ReadFile(readmePath)
+	if string(gotReadme) != origReadme {
+		t.Errorf("README modified unexpectedly")
+	}
+}
+
+func TestRunIssuesMv_NoCommit(t *testing.T) {
+	dir, oldTicketPath := issuesFixtureRepo(t, sampleTicket)
+	shaBefore := repoRunGitOutput(t, dir, "rev-parse", "HEAD")
+
+	var out bytes.Buffer
+	result, _, err := runIssuesMv(&out, "42", "268", issuesRunOptions{Dir: dir, NoCommit: true})
+	if err != nil {
+		t.Fatalf("runIssuesMv --no-commit: %v", err)
+	}
+	if result.Committed || result.CommitSHA != "" {
+		t.Errorf("expected Committed=false, CommitSHA='', got %+v", result)
+	}
+
+	// File rename and README update happened on disk
+	if _, err := os.Stat(oldTicketPath); !os.IsNotExist(err) {
+		t.Errorf("old ticket file still exists")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "issues", "268-example-ticket.md")); err != nil {
+		t.Errorf("new ticket file does not exist")
+	}
+
+	// But no git commit was made
+	shaAfter := repoRunGitOutput(t, dir, "rev-parse", "HEAD")
+	if shaBefore != shaAfter {
+		t.Errorf("commit was created under --no-commit: before=%s, after=%s", shaBefore, shaAfter)
+	}
+}
+
+func TestRunIssuesMv_CheckDryRun(t *testing.T) {
+	dir, oldTicketPath := issuesFixtureRepo(t, sampleTicket)
+	shaBefore := repoRunGitOutput(t, dir, "rev-parse", "HEAD")
+	origReadme, _ := os.ReadFile(filepath.Join(dir, "issues", "README.md"))
+
+	var out bytes.Buffer
+	result, drift, err := runIssuesMv(&out, "42", "268", issuesRunOptions{Dir: dir, Check: true})
+	if err != nil {
+		t.Fatalf("runIssuesMv --check: %v", err)
+	}
+	if !drift {
+		t.Errorf("expected drift=true under --check")
+	}
+	if !result.ReadmeUpdated {
+		t.Errorf("expected ReadmeUpdated=true under --check")
+	}
+
+	// Disk should be untouched
+	if _, err := os.Stat(oldTicketPath); err != nil {
+		t.Errorf("old ticket file missing after --check: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "issues", "268-example-ticket.md")); !os.IsNotExist(err) {
+		t.Errorf("new ticket file exists on disk after --check")
+	}
+	readmeAfter, _ := os.ReadFile(filepath.Join(dir, "issues", "README.md"))
+	if string(readmeAfter) != string(origReadme) {
+		t.Errorf("README was modified during --check")
+	}
+	shaAfter := repoRunGitOutput(t, dir, "rev-parse", "HEAD")
+	if shaBefore != shaAfter {
+		t.Errorf("git commit was created during --check")
+	}
+}
+
+func TestRunIssuesMv_NoopSameNumber(t *testing.T) {
+	dir, oldTicketPath := issuesFixtureRepo(t, sampleTicket)
+	shaBefore := repoRunGitOutput(t, dir, "rev-parse", "HEAD")
+
+	var out bytes.Buffer
+	result, drift, err := runIssuesMv(&out, "42", "42", issuesRunOptions{Dir: dir})
+	if err != nil {
+		t.Fatalf("runIssuesMv noop: %v", err)
+	}
+	if drift {
+		t.Errorf("expected drift=false on noop")
+	}
+	if !result.Noop {
+		t.Errorf("expected result.Noop=true on same number")
+	}
+	if _, err := os.Stat(oldTicketPath); err != nil {
+		t.Errorf("old ticket file missing: %v", err)
+	}
+	shaAfter := repoRunGitOutput(t, dir, "rev-parse", "HEAD")
+	if shaBefore != shaAfter {
+		t.Errorf("git commit was created on noop")
+	}
+}
+
+func TestFormatIssuesLine_MvFormatting(t *testing.T) {
+	mvResult := issuesResult{
+		Number:        "268",
+		OldNumber:     "042",
+		File:          "issues/268-example.md",
+		OldStatus:     "Open",
+		NewStatus:     "Open",
+		ReadmeUpdated: true,
+		Committed:     true,
+		CommitSHA:     "abc1234",
+	}
+	line := formatIssuesLine(mvResult, false)
+	want := "042 -> 268: issues/268-example.md (README updated, committed abc1234)"
+	if line != want {
+		t.Errorf("formatIssuesLine() = %q, want %q", line, want)
+	}
+
+	checkLine := formatIssuesLine(mvResult, true)
+	wantCheck := "042 -> 268: issues/268-example.md (would update README, would commit)"
+	if checkLine != wantCheck {
+		t.Errorf("formatIssuesLine(check=true) = %q, want %q", checkLine, wantCheck)
+	}
+}
+
+func TestIssuesCmd_MvArgsValidation(t *testing.T) {
+	cmd := newIssuesCmd()
+	cases := []struct {
+		args    []string
+		wantErr bool
+	}{
+		{[]string{}, true},
+		{[]string{"mv"}, true},
+		{[]string{"mv", "42", "268", "extra"}, true},
+		{[]string{"mv", "42"}, false},
+		{[]string{"mv", "42", "268"}, false},
+	}
+	for _, c := range cases {
+		err := cmd.Args(cmd, c.args)
+		if c.wantErr && err == nil {
+			t.Errorf("cmd.Args(%v): expected error, got nil", c.args)
+		}
+		if !c.wantErr && err != nil {
+			t.Errorf("cmd.Args(%v): unexpected error: %v", c.args, err)
+		}
+	}
+}
+
+

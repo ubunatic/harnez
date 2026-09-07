@@ -525,3 +525,86 @@ func TestRewriteStatus(t *testing.T) {
 	}
 }
 
+func TestRewriteHeaderNumber(t *testing.T) {
+	tests := []struct {
+		name        string
+		content     string
+		newNum      string
+		wantContent string
+		wantErr     bool
+	}{
+		{
+			name:        "standard header, preserves rest of file",
+			content:     "# 042 — Example\n\n**Status**: Open\n\n## 042 Subheading\n",
+			newNum:      "269",
+			wantContent: "# 269 — Example\n\n**Status**: Open\n\n## 042 Subheading\n",
+		},
+		{
+			name:        "unusual spacing around em dash",
+			content:     "#   042   —   Example\n\n**Status**: Open\n",
+			newNum:      "269",
+			wantContent: "#   269   —   Example\n\n**Status**: Open\n",
+		},
+		{
+			name:        "hyphen separator",
+			content:     "# 042 - Example\n",
+			newNum:      "269",
+			wantContent: "# 269 - Example\n",
+		},
+		{
+			name:        "en dash separator",
+			content:     "# 042 – Example\n",
+			newNum:      "269",
+			wantContent: "# 269 – Example\n",
+		},
+		{
+			name:        "colon separator",
+			content:     "# 042: Example\n",
+			newNum:      "269",
+			wantContent: "# 269: Example\n",
+		},
+		{
+			name:        "bare number in header",
+			content:     "# 042\n",
+			newNum:      "269",
+			wantContent: "# 269\n",
+		},
+		{
+			name:        "leading whitespace before hash",
+			content:     "  # 042 — Example\n",
+			newNum:      "269",
+			wantContent: "  # 269 — Example\n",
+		},
+		{
+			name:    "missing header entirely",
+			content: "No heading here\n\n**Status**: Open\n",
+			newNum:  "269",
+			wantErr: true,
+		},
+		{
+			name:    "header without number",
+			content: "# Title without number\n\n**Status**: Open\n",
+			newNum:  "269",
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := RewriteHeaderNumber(tc.content, tc.newNum)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got: %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.wantContent {
+				t.Errorf("content mismatch:\ngot:  %q\nwant: %q", got, tc.wantContent)
+			}
+		})
+	}
+}
+

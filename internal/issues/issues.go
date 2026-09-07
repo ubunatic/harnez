@@ -77,6 +77,7 @@ var (
 	// is not mistaken for a column boundary. See issue 239.
 	tableRowRegex    = regexp.MustCompile(`^\|((?:\\.|[^|\\])*)\|((?:\\.|[^|\\])*)\|((?:\\.|[^|\\])*)\|((?:\\.|[^|\\])*)\|$`)
 	markdownLinkRegx = regexp.MustCompile(`^\[([^\]]+)\]\(([^)]+)\)$`)
+	headerLineRegex  = regexp.MustCompile(`^(\s*#\s*)(\d+)(\s*[—–:-].*|\s*)$`)
 )
 
 // LeadingLifecycle extracts the leading raw lifecycle token from a free-form
@@ -207,6 +208,23 @@ func RewriteStatus(content, newStatus string) (string, bool, error) {
 		return strings.Join(lines, "\n"), true, nil
 	}
 	return "", false, fmt.Errorf("no '**Status**:' line found")
+}
+
+// RewriteHeaderNumber replaces the ticket number in the first H1 header line
+// (e.g. "# 042 — Title") with newNum, leaving every other line and the rest
+// of the header line (title, separator, spacing) untouched.
+func RewriteHeaderNumber(content, newNum string) (string, error) {
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		loc := headerLineRegex.FindStringSubmatchIndex(line)
+		if loc == nil {
+			continue
+		}
+		numStart, numEnd := loc[4], loc[5]
+		lines[i] = line[:numStart] + newNum + line[numEnd:]
+		return strings.Join(lines, "\n"), nil
+	}
+	return "", fmt.Errorf("no '# <num> — ...' header line found")
 }
 
 // thematicBreakRegex matches a Markdown thematic break ("---", "***", "___",
