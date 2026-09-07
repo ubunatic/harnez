@@ -179,6 +179,13 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 			state: state,
 		})
 	}
+	for _, link := range GearSymlinkTargets(target, cfg) {
+		link := link
+		checks = append(checks, entry{
+			label: link,
+			check: func() bool { _, err := os.Lstat(link); return err == nil },
+		})
+	}
 
 	for _, e := range checks {
 		state := e.state

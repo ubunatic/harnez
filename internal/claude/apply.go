@@ -541,6 +541,41 @@ func commandTargets(target string, cfg *Config) []string {
 	return targets
 }
 
+func gearExecutable() string {
+	if exe, err := os.Executable(); err == nil && exe != "" {
+		return exe
+	}
+	return "harnez"
+}
+
+// GearSymlinkTargets returns the list of candidate paths where the ⚙ multicall
+// symlink should be provisioned for agent environments and PATH execution.
+func GearSymlinkTargets(target string, cfg *Config) []string {
+	var targets []string
+	if target != "" {
+		targets = appendUniquePath(targets, filepath.Join(target, "bin", "⚙"))
+	}
+	if cfg != nil {
+		defaultTarget := ExpandTarget("", cfg.TargetDir)
+		if target == defaultTarget {
+			if home, err := os.UserHomeDir(); err == nil {
+				goBin := filepath.Join(home, "go", "bin")
+				if fi, err := os.Stat(goBin); err == nil && fi.IsDir() {
+					targets = appendUniquePath(targets, filepath.Join(goBin, "⚙"))
+				}
+				localBin := filepath.Join(home, ".local", "bin")
+				if fi, err := os.Stat(localBin); err == nil && fi.IsDir() {
+					targets = appendUniquePath(targets, filepath.Join(localBin, "⚙"))
+				}
+			}
+		}
+		if root := primeAgentRoot(cfg); root != "" {
+			targets = appendUniquePath(targets, filepath.Join(root, "bin", "⚙"))
+		}
+	}
+	return targets
+}
+
 func localPath(projectDir, rel string) string {
 	if filepath.IsAbs(rel) || projectDir == "" || projectDir == "." {
 		return rel
@@ -883,6 +918,24 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 		}
 	}
 
+	gearExe := gearExecutable()
+	var gearStats []string
+	for _, link := range GearSymlinkTargets(target, cfg) {
+		lr, err := ensureSymlink(link, gearExe)
+		if err != nil {
+			return fmt.Errorf("gear symlink %s: %w", link, err)
+		}
+		if lr.changed {
+			changes++
+			fmt.Printf("  symlink %s → %s\n", link, gearExe)
+		} else {
+			gearStats = append(gearStats, fsutil.ContractHome(link))
+		}
+	}
+	if len(gearStats) > 0 {
+		addStat("⚙ symlink", strings.Join(gearStats, ", "))
+	}
+
 	if installSystemd {
 		unitPath, ur, err := installSystemdUnit(cfg.FS)
 		if err != nil {
@@ -1033,6 +1086,23 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 		}
 	}
 
+	gearExe := gearExecutable()
+	for _, link := range GearSymlinkTargets(target, cfg) {
+		if _, err := os.Lstat(link); err != nil {
+			anyChanged = true
+		} else if targetDst, err := os.Readlink(link); err != nil {
+			anyChanged = true
+		} else {
+			expected := gearExe
+			if rel, err := filepath.Rel(filepath.Dir(link), gearExe); err == nil {
+				expected = rel
+			}
+			if targetDst != expected && targetDst != gearExe {
+				anyChanged = true
+			}
+		}
+	}
+
 	if !anyChanged {
 		fmt.Println("No changes.")
 	}
@@ -1106,6 +1176,12 @@ func CleanAll(target string, cfg *Config) error {
 		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
 		if _, err := agy.Remove(hooksPath); err != nil {
 			return fmt.Errorf("agy hooks [%s]: %w", hooksPath, err)
+		}
+	}
+	for _, link := range GearSymlinkTargets(target, cfg) {
+		if err := os.Remove(link); err == nil {
+			fmt.Printf("  removed %s\n", link)
+			_ = os.Remove(filepath.Dir(link)) // best-effort clean empty bin dir
 		}
 	}
 	return nil

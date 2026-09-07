@@ -87,6 +87,11 @@ wrapping the result for `harnez exec`'s telemetry capture — per the composabil
 constraint above, `harnez distill hook` is no longer separately installed by `apply`,
 even though the command still exists and works standalone for direct/manual use.
 
+**Compact Agent Alias `⚙` (Issue 270)**: `harnez apply` provisions a `⚙` symlink
+in managed agent environments / PATH (`~/.claude/bin/⚙`, `~/go/bin/⚙`, etc.). Invoking
+`⚙ <cmd>` (e.g. `⚙ echo hello`, `⚙ --tool test -- true`) dispatches directly to
+`harnez exec` without boilerplate or token overhead in agent transcripts.
+
 ---
 
 ## Multi-Harness Hook Architectures

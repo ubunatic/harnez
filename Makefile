@@ -27,12 +27,14 @@ run: ⚙️ build  # run the application locally
 
 install: ⚙️ build  # install binary to ~/go/bin (user)
 	go install ./cmd/harnez
+	@ln -sf harnez $$(go env GOPATH)/bin/⚙ 2>/dev/null || ln -sf harnez $(HOME)/go/bin/⚙
 
 install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wide)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
+	sudo ln -sf $(BINARY) $(PREFIX)/bin/⚙
 
 uninstall: ⚙️  # remove installed binary from system and user paths
-	rm -f $(shell which $(BINARY) 2>/dev/null) $(PREFIX)/bin/$(BINARY)
+	rm -f $(shell which $(BINARY) 2>/dev/null) $(PREFIX)/bin/$(BINARY) $(PREFIX)/bin/⚙ $(HOME)/go/bin/⚙ $$(go env GOPATH)/bin/⚙ 2>/dev/null
 
 apply: ⚙️ build  # apply config to ~/.claude globally
 	./$(BINARY) apply -c $(CONFIG) -t $(TARGET)

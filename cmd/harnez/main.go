@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -18,6 +19,12 @@ import (
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
 )
+
+// isGearInvocation reports whether the program was invoked under the ⚙ alias / multicall name.
+func isGearInvocation(arg0 string) bool {
+	base := filepath.Base(arg0)
+	return base == "⚙" || base == "⚙️" || base == "\xe2\x9a\x99" || base == "\xe2\x9a\x99\xef\xb8\x8f"
+}
 
 // sessionTipHook is `harnez`'s CLI-dispatch hook point for issue 183's
 // session-state tracking: it fires (as root's PersistentPreRunE) on every
@@ -122,6 +129,10 @@ func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact bool) erro
 }
 
 func main() {
+	if len(os.Args) > 0 && isGearInvocation(os.Args[0]) {
+		os.Args = append([]string{"harnez", "exec"}, os.Args[1:]...)
+	}
+
 	var configPath string
 	var target string
 

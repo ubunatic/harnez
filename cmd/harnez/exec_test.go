@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -568,5 +569,134 @@ func TestRunExecHook_IgnoresEmptyCommand(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Errorf("expected no output for an empty command, got %q", out.String())
+	}
+}
+
+func TestIsGearInvocation(t *testing.T) {
+	cases := []struct {
+		arg0 string
+		want bool
+	}{
+		{"⚙", true},
+		{"⚙️", true},
+		{"\xe2\x9a\x99", true},
+		{"\xe2\x9a\x99\xef\xb8\x8f", true},
+		{"/usr/local/bin/⚙", true},
+		{"/home/user/.claude/bin/⚙", true},
+		{"/home/user/go/bin/⚙️", true},
+		{"./⚙", true},
+		{"harnez", false},
+		{"exec", false},
+		{"/usr/local/bin/harnez", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.arg0, func(t *testing.T) {
+			if got := isGearInvocation(tc.arg0); got != tc.want {
+				t.Errorf("isGearInvocation(%q) = %v, want %v", tc.arg0, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExecCmd_GearAliasAndFlags(t *testing.T) {
+	cmd := newExecCmd()
+	hasGearAlias := false
+	for _, alias := range cmd.Aliases {
+		if alias == "⚙" || alias == "⚙️" {
+			hasGearAlias = true
+			break
+		}
+	}
+	if !hasGearAlias {
+		t.Errorf("expected newExecCmd to have ⚙ alias, got %v", cmd.Aliases)
+	}
+
+	// Verify --expect-failure flag exists
+	f := cmd.Flags().Lookup("expect-failure")
+	if f == nil {
+		t.Fatal("expected --expect-failure flag on exec command")
+	}
+	if f.Value.Type() != "bool" {
+		t.Errorf("expected --expect-failure flag to be bool, got %s", f.Value.Type())
+	}
+
+	// Verify --tool flag exists and is optional
+	tf := cmd.Flags().Lookup("tool")
+	if tf == nil {
+		t.Fatal("expected --tool flag on exec command")
+	}
+}
+
+func TestGearMulticallExecution(t *testing.T) {
+	// Build a real test binary of harnez to test os.Args[0] multicall symlink dispatch
+	binDir := t.TempDir()
+	binPath := filepath.Join(binDir, "harnez")
+	buildCmd := exec.Command("go", "build", "-o", binPath, "./cmd/harnez")
+	buildCmd.Dir = filepath.Join("..", "..")
+	if out, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("go build failed: %v\n%s", err, string(out))
+	}
+
+	// Create ⚙ symlink pointing to harnez binary
+	gearPath := filepath.Join(binDir, "⚙")
+	if err := os.Symlink(binPath, gearPath); err != nil {
+		t.Fatalf("create symlink failed: %v", err)
+	}
+
+	// 1. Test basic command execution: ⚙ echo hello
+	cmd := exec.Command(gearPath, "echo", "hello from gear")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("⚙ echo failed: %v\n%s", err, string(out))
+	}
+	if strings.TrimSpace(string(out)) != "hello from gear" {
+		t.Errorf("stdout = %q, want %q", strings.TrimSpace(string(out)), "hello from gear")
+	}
+
+	// 2. Test exit code forwarding: ⚙ sh -c 'exit 42'
+	cmd = exec.Command(gearPath, "sh", "-c", "exit 42")
+	err = cmd.Run()
+	if err == nil {
+		t.Fatal("expected non-zero exit code 42, got nil")
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if exitErr.ExitCode() != 42 {
+			t.Errorf("exit code = %d, want 42", exitErr.ExitCode())
+		}
+	} else {
+		t.Fatalf("unexpected error type: %v", err)
+	}
+
+	// 3. Test telemetry recording with --tool and --expect-failure flags
+	stateDir := filepath.Join(binDir, "state")
+	dbPath := filepath.Join(binDir, "telemetry.sqlite")
+	cmd = exec.Command(gearPath, "--tool", "custom-tool", "--expect-failure", "--", "sh", "-c", "exit 3")
+	cmd.Env = append(os.Environ(),
+		"HARNEZ_STATE_DIR="+stateDir,
+		"HARNEZ_DB_PATH="+dbPath,
+	)
+	err = cmd.Run()
+	if err == nil {
+		t.Fatal("expected exit code 3")
+	}
+	if errors.As(err, &exitErr) && exitErr.ExitCode() != 3 {
+		t.Errorf("exit code = %d, want 3", exitErr.ExitCode())
+	}
+
+	// Verify telemetry row
+	db, dbErr := telemetry.Open(dbPath)
+	if dbErr == nil {
+		defer db.Close()
+		rows, qErr := db.Query(telemetry.Filter{CallType: telemetry.ExpectedFailureCallType})
+		if qErr == nil && len(rows) > 0 {
+			if rows[0].ToolName != "custom-tool" {
+				t.Errorf("tool_name = %q, want custom-tool", rows[0].ToolName)
+			}
+			if rows[0].ExitCode == nil || *rows[0].ExitCode != 3 {
+				t.Errorf("exit_code = %v, want 3", rows[0].ExitCode)
+			}
+		}
 	}
 }

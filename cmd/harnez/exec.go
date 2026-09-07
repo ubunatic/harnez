@@ -109,10 +109,12 @@ func newExecCmd() *cobra.Command {
 	var toolFlag string
 	var ticketFlag string
 	var distillFlag string
+	var expectFailureFlag bool
 
 	cmd := &cobra.Command{
-		Use:   "exec --tool <tool_name> [--ticket <ticket_id>] [--distill[=<mode>]] -- <command...>",
-		Short: "Run a command, proxy its stdio unbuffered, and record shell-call telemetry",
+		Use:     "exec [--tool <tool_name>] [--ticket <ticket_id>] [--distill[=<mode>]] [--expect-failure] -- <command...>",
+		Aliases: []string{"⚙", "⚙️"},
+		Short:   "Run a command, proxy its stdio unbuffered, and record shell-call telemetry",
 		Long: `exec wraps an arbitrary command: it spawns <command...> as a subprocess,
 proxies its stdin/stdout/stderr to the caller with no added buffering
 latency, preserves and re-exits with the child's exact exit code
@@ -123,6 +125,8 @@ distillation is active), and synthetic quality score (1-5).
   harnez exec --tool git -- git status
   harnez exec --tool npm --ticket harnez/118-harnez-exec-shell-interceptor -- npm test
   harnez exec --tool Bash --distill -- go test ./...
+  ⚙ echo "hello from gear"
+  ⚙ --tool test -- true
 
 The telemetry write is best-effort and bounded: it never delays the
 wrapped command's own execution, and gives up waiting on a slow/hung DB
@@ -132,8 +136,16 @@ See 'harnez exec hook' for the separate PreToolUse rewrite stage that
 points an agent's Bash tool calls at this command.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			exitCode, err := runExecWrapper(args, execOptions{Tool: toolFlag, Ticket: ticketFlag, Distill: distillFlag},
-				cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
+			tool := toolFlag
+			if tool == "" {
+				tool = "Bash"
+			}
+			exitCode, err := runExecWrapper(args, execOptions{
+				Tool:          tool,
+				Ticket:        ticketFlag,
+				Distill:       distillFlag,
+				ExpectFailure: expectFailureFlag,
+			}, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -143,9 +155,11 @@ points an agent's Bash tool calls at this command.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&toolFlag, "tool", "", "tool identifier the wrapped command belongs to, e.g. git, npm, Bash (required)")
+	cmd.Flags().SetInterspersed(false)
+	cmd.Flags().StringVar(&toolFlag, "tool", "", "tool identifier the wrapped command belongs to, e.g. git, npm, Bash (default: Bash)")
 	cmd.Flags().StringVar(&ticketFlag, "ticket", "", "ticket_id override (default: resolve.Ticket())")
 	cmd.Flags().StringVar(&distillFlag, "distill", "", "distillation filter mode (auto, gotest, git, raw)")
+	cmd.Flags().BoolVar(&expectFailureFlag, "expect-failure", false, "record telemetry row with call_type=shell-expected")
 	cmd.Flags().Lookup("distill").NoOptDefVal = "auto"
 
 	cmd.AddCommand(newExecHookCmd())
@@ -158,9 +172,10 @@ points an agent's Bash tool calls at this command.`,
 // from the caller's real environment/DB and to inject slow/failing
 // writers for the non-blocking-telemetry acceptance criterion.
 type execOptions struct {
-	Tool    string
-	Ticket  string
-	Distill string
+	Tool          string
+	Ticket        string
+	Distill       string
+	ExpectFailure bool
 
 	Getenv        func(string) string                                // nil means os.Getenv
 	StateDir      string                                             // resolve.Session/Ticket state/lock dir override
@@ -265,7 +280,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		DistilledBytes: distilledBytesPtr,
 		Score:          &score,
 		Note:           note,
-		ExpectFailure:  detectExpectFailure(opts, args),
+		ExpectFailure:  opts.ExpectFailure || detectExpectFailure(opts, args),
 	})
 
 	return exitCode, nil
