@@ -177,6 +177,79 @@ func TestRunRate_AgentAutoDetectFromEnv(t *testing.T) {
 	}
 }
 
+func TestDetectAgent_AntigravityEnvVars(t *testing.T) {
+	cases := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{
+			name: "conversation ID set",
+			env:  map[string]string{"ANTIGRAVITY_CONVERSATION_ID": "conv-12345"},
+			want: "agy",
+		},
+		{
+			name: "agent flag set",
+			env:  map[string]string{"ANTIGRAVITY_AGENT": "1"},
+			want: "agy",
+		},
+		{
+			name: "agentapi exe set",
+			env:  map[string]string{"ANTIGRAVITY_AGENTAPI_EXE": "/usr/bin/agentapi"},
+			want: "agy",
+		},
+		{
+			name: "session id fallback set",
+			env:  map[string]string{"ANTIGRAVITY_SESSION_ID": "sess-old"},
+			want: "agy",
+		},
+		{
+			name: "harnez agent override wins over agy env",
+			env: map[string]string{
+				"HARNEZ_AGENT":                "custom-agent",
+				"ANTIGRAVITY_CONVERSATION_ID": "conv-12345",
+			},
+			want: "custom-agent",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := detectAgent("", func(k string) string { return tc.env[k] })
+			if got != tc.want {
+				t.Errorf("detectAgent() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRunRate_AntigravityAgentAutoDetect(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "tool_catalog.sqlite")
+
+	getenv := func(k string) string {
+		if k == "ANTIGRAVITY_CONVERSATION_ID" {
+			return "conv-uuid-123"
+		}
+		return ""
+	}
+	err := runRate([]string{"Edit", "5", "desc", "proj/266-t"}, rateOptions{
+		DBPath:   dbPath,
+		StateDir: filepath.Join(tmp, "state"),
+		Getenv:   getenv,
+	})
+	if err != nil {
+		t.Fatalf("runRate() error = %v", err)
+	}
+	row := lastRow(t, dbPath)
+	if row.AgentID != "agy" {
+		t.Errorf("AgentID = %q, want %q", row.AgentID, "agy")
+	}
+	if row.SessionID != "conv-uuid-123" {
+		t.Errorf("SessionID = %q, want %q", row.SessionID, "conv-uuid-123")
+	}
+}
+
 func TestRunRate_AgentDefaultsUnknown(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "tool_catalog.sqlite")

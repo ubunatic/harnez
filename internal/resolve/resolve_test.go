@@ -114,6 +114,22 @@ func TestSession_EnvVarWins(t *testing.T) {
 	}
 }
 
+func TestSession_AntigravityConversationID(t *testing.T) {
+	env := map[string]string{
+		"ANTIGRAVITY_CONVERSATION_ID": "8dfe521d-1918-497d-a548-fb2394b49f53",
+		"ANTIGRAVITY_SESSION_ID":      "fallback-session-id",
+	}
+	id, err := resolve.Session(resolve.SessionOptions{
+		Getenv: func(k string) string { return env[k] },
+	})
+	if err != nil {
+		t.Fatalf("Session() error = %v", err)
+	}
+	if id != "8dfe521d-1918-497d-a548-fb2394b49f53" {
+		t.Errorf("Session() = %q, want ANTIGRAVITY_CONVERSATION_ID value", id)
+	}
+}
+
 func TestSession_PPIDFallbackStableAcrossCalls(t *testing.T) {
 	tmp := t.TempDir()
 	getenv := func(string) string { return "" }

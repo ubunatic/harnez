@@ -1,6 +1,7 @@
 # 266 — Support Antigravity Session and Agent ID Resolution in Telemetry
 
-**Status**: Open — filed via /issue
+**Status**: Closed — resolved
+
 **Priority**: P2 (Medium)
 **Severity**: Minor (telemetry attribution fix: links agy tool calls and sessions accurately in tool_catalog.sqlite)
 **Category**: Telemetry / Multi-Harness Parity
@@ -75,11 +76,11 @@ In `fresh-sprint` teardown instructions and practices (`docs/practices/AgenticLo
 
 ## 4. Acceptance Criteria
 
-- [ ] `resolve.Session` resolves `ANTIGRAVITY_CONVERSATION_ID` to the exact session ID string.
-- [ ] `detectAgent` identifies `ANTIGRAVITY_CONVERSATION_ID` / `ANTIGRAVITY_AGENT` as `"agy"`.
-- [ ] `harnez exec` tool executions in agy write telemetry rows with `agent_id="agy"` and `session_id=<conversation_id>`.
-- [ ] `harnez stats` reports `agy` calls in the `AGENT` breakdown table.
-- [ ] All tests pass (`make check`).
+- [x] `resolve.Session` resolves `ANTIGRAVITY_CONVERSATION_ID` to the exact session ID string.
+- [x] `detectAgent` identifies `ANTIGRAVITY_CONVERSATION_ID` / `ANTIGRAVITY_AGENT` as `"agy"`.
+- [x] `harnez exec` tool executions in agy write telemetry rows with `agent_id="agy"` and `session_id=<conversation_id>`.
+- [x] `harnez stats` reports `agy` calls in the `AGENT` breakdown table.
+- [x] All tests pass (`make check`).
 
 ---
 

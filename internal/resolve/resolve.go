@@ -23,23 +23,17 @@ const SessionInactivityWindow = 30 * time.Minute
 // SessionEnvVars lists agent-provided session-id environment variables, in
 // priority order (first non-empty wins).
 //
-// Verification for issue 121: only CLAUDE_CODE_SESSION_ID is confirmed —
-// observed directly via `env` in a live Claude Code CLI session while
-// developing this ticket (e.g. CLAUDE_CODE_SESSION_ID=6587aea8-...).
-// CLAUDE_SESSION_ID, the name guessed in the original ticket 121 spec, is
-// NOT set in that environment and is not otherwise referenced anywhere in
-// this repo. ANTIGRAVITY_SESSION_ID and CODEX_SESSION_ID are UNCONFIRMED:
-// no Antigravity or Codex session was available in this repo to inspect,
-// and web search found no documented env var for either (a Codex CLI
-// feature request for exactly this, openai/codex#8923, is open and
-// unimplemented as of writing). They are kept here as placeholders so a
-// confirmed name is a one-line change; do not rely on them without
-// re-verifying first.
+// Verification for issue 121 / 266:
+// - CLAUDE_CODE_SESSION_ID is confirmed (Claude Code CLI, issue 121)
+// - ANTIGRAVITY_CONVERSATION_ID is confirmed (Antigravity CLI / IDE runtime, issue 266)
+// - CLAUDE_SESSION_ID and ANTIGRAVITY_SESSION_ID are unconfirmed/fallback placeholders
+// - CODEX_SESSION_ID is unconfirmed: feature request open on Codex CLI
 var SessionEnvVars = []string{
-	"CLAUDE_CODE_SESSION_ID", // confirmed: Claude Code CLI (issue 121 verification)
-	"CLAUDE_SESSION_ID",      // unconfirmed: original spec guess, not observed anywhere
-	"ANTIGRAVITY_SESSION_ID", // unconfirmed: guess, no Antigravity session available to verify
-	"CODEX_SESSION_ID",       // unconfirmed: guess, not documented/shipped by Codex CLI as of writing
+	"CLAUDE_CODE_SESSION_ID",      // confirmed: Claude Code CLI (issue 121 verification)
+	"CLAUDE_SESSION_ID",           // unconfirmed: original spec guess, not observed anywhere
+	"ANTIGRAVITY_CONVERSATION_ID", // confirmed: Antigravity CLI / IDE runtime (issue 266)
+	"ANTIGRAVITY_SESSION_ID",      // compatibility fallback
+	"CODEX_SESSION_ID",            // unconfirmed: guess, not documented/shipped by Codex CLI as of writing
 }
 
 // SessionOptions configures Session resolution.

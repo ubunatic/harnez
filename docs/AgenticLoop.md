@@ -133,6 +133,7 @@ Agentic software engineering scales effectively when concurrency is structured a
   - Inspect running background tasks with the harness's task-management capability.
   - Explicitly kill or drain completed, idle, or lingering background jobs, schedule timers, and watch subprocesses.
   - Terminate child subagents with the harness's subagent lifecycle controls after they finish.
+  - Record an `--ok` heartbeat (`harnez rate --ok "<note>" [<ticket_id>]`) to register clean sprint completion and successful tool execution in telemetry.
   - Ensure the host and system state is pristine.
 
 ### Phase 5: Agentic Flow Quality Retrospective (Learning Capture)

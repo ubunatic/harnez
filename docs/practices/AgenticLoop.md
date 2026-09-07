@@ -137,6 +137,7 @@ Agentic software engineering scales effectively when concurrency is structured a
   - Inspect running background tasks with the harness's task-management capability.
   - Explicitly kill or drain completed, idle, or lingering background jobs, schedule timers, and watch subprocesses.
   - Terminate child subagents with the harness's subagent lifecycle controls after they finish.
+  - Record an `--ok` heartbeat (`harnez rate --ok "<note>" [<ticket_id>]`) to register clean sprint completion and successful tool execution in telemetry.
   - Ensure the host and system state is pristine.
 
 ### Phase 5: Agentic Flow Quality Retrospective (Learning Capture)
@@ -172,7 +173,7 @@ Agentic software engineering scales effectively when concurrency is structured a
        └── High Ambiguity / Regressions    ──> Escalate to Independent Reviewer Subagent
           |
           v
-   (4) Fast Hygiene & Teardown (kill child agents, zero zombies)
+   (4) Fast Hygiene & Teardown (kill child agents, zero zombies, harnez rate --ok)
 ```
 
 For focused, day-to-day tickets, running the full 5-phase ceremony with separate advisor and reviewer subagents introduces unnecessary latency and token overhead. The **Lean Fresh-Handoff** pattern provides a lightweight, fast-path alternative:
@@ -187,8 +188,9 @@ For focused, day-to-day tickets, running the full 5-phase ceremony with separate
    - If automated tests pass cleanly and confidence is high, skip dispatching an independent reviewer subagent.
    - The primary orchestrator performs a rapid inline diff review before finalizing.
    - Escalate to a formal reviewer agent only if there is cross-subsystem blast radius, missing automated test coverage, or unexpected complexity.
-4. **Fast Hygiene**:
+4. **Fast Hygiene & Status Sync**:
    - Immediately terminate child subagents (`manage_subagents kill`) and clear background tasks.
+   - Record an `--ok` heartbeat (`harnez rate --ok "<note>" [<ticket_id>]`) to confirm clean sprint completion in telemetry.
 
 ### Workflow Selection Matrix
 

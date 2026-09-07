@@ -30,7 +30,10 @@ var rateAgentEnvVars = []struct {
 }{
 	{"CLAUDE_CODE_SESSION_ID", "claude"},
 	{"CLAUDE_SESSION_ID", "claude"},
-	{"ANTIGRAVITY_SESSION_ID", "antigravity"},
+	{"ANTIGRAVITY_CONVERSATION_ID", "agy"},
+	{"ANTIGRAVITY_AGENT", "agy"},
+	{"ANTIGRAVITY_AGENTAPI_EXE", "agy"},
+	{"ANTIGRAVITY_SESSION_ID", "agy"},
 	{"CODEX_SESSION_ID", "codex"},
 }
 
