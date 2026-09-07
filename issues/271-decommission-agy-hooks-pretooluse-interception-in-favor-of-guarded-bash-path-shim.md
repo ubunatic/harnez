@@ -1,6 +1,6 @@
 # 271 — Decommission agy-hooks PreToolUse interception in favor of guarded bash PATH shim
 
-**Status**: Open
+**Status**: Closed — resolved in 2546f75
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Refactoring
@@ -37,9 +37,9 @@ This ticket tracks deprecating and decommissioning the `agy-hooks` `PreToolUse` 
 
 ## 3. Acceptance Criteria
 
-- [ ] `~/.harnez/shims/bash` is created and managed by `harnez apply`.
-- [ ] AGY launched with `PATH=~/.harnez/shims:$PATH` routes all `run_command` calls through `harnez exec` while displaying clean native commands in the UI.
-- [ ] Inner `bash` calls inside agent commands do not recurse or record duplicate telemetry rows.
-- [ ] `harnez apply` ensures `~/.gemini/config/hooks.json` does not contain stale `agy-hooks` entries.
-- [ ] Automated tests verify the `bash` shim, recursion guard, and telemetry capture.
+- [x] `~/.harnez/shims/bash` is created and managed by `harnez apply`.
+- [x] AGY launched with `PATH=~/.harnez/shims:$PATH` routes all `run_command` calls through `harnez exec` while displaying clean native commands in the UI.
+- [x] Inner `bash` calls inside agent commands do not recurse or record duplicate telemetry rows.
+- [x] `harnez apply` ensures `~/.gemini/config/hooks.json` does not contain stale `agy-hooks` entries.
+- [x] Automated tests verify the `bash` shim, recursion guard, and telemetry capture.
 
