@@ -24,7 +24,8 @@ func strconvQuote(s string) string { return strconv.Quote(s) }
 // subprocess side effects, just bash's own word-splitting/quoting rules.
 func shlexSplitForTest(rewritten string) ([]string, error) {
 	const sep = "\x1f"
-	script := "harnez() { for a in \"$@\"; do printf '%s" + sep + "' \"$a\"; done; }\n" + rewritten
+	script := "harnez() { for a in \"$@\"; do printf '%s" + sep + "' \"$a\"; done; }\n" +
+		"⚙() { for a in \"$@\"; do printf '%s" + sep + "' \"$a\"; done; }\n" + rewritten
 	out, err := exec.Command("bash", "-c", script).Output()
 	if err != nil {
 		return nil, err
@@ -435,12 +436,12 @@ func TestDetectExpectFailure(t *testing.T) {
 	}
 }
 
-func TestRunExecWrapper_MissingTool(t *testing.T) {
+func TestRunExecWrapper_InfersTool(t *testing.T) {
 	opts := testExecOptions(t)
 	opts.Tool = ""
-	_, err := runExecWrapper([]string{"true"}, opts, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{})
-	if err == nil {
-		t.Fatal("expected an error when --tool is empty")
+	code, err := runExecWrapper([]string{"true"}, opts, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{})
+	if err != nil || code != 0 {
+		t.Fatalf("expected inferred tool execution to succeed, got code %d, err %v", code, err)
 	}
 }
 
@@ -464,7 +465,7 @@ func TestRunExecHook_RewritesBashCommand(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("output not valid JSON: %v\n%s", err, out.String())
 	}
-	want := "harnez exec --tool Bash -- bash -c 'git status'"
+	want := "⚙ bash -c 'git status'"
 	if got.HookSpecificOutput.UpdatedInput["command"] != want {
 		t.Errorf("updatedInput.command = %q, want %q", got.HookSpecificOutput.UpdatedInput["command"], want)
 	}
@@ -476,7 +477,7 @@ func TestRunExecHook_RewritesBashCommand(t *testing.T) {
 // TestRunExecHook_PreservesShellMetacharacters is the regression check for
 // the bug found reviewing issue 119: Claude Code re-executes the rewritten
 // command via its own outer 'bash -c', so a naive
-// "harnez exec --tool Bash -- <command>" splice lets that outer shell
+// "⚙ -- <command>" splice lets that outer shell
 // re-interpret pipes/&&/; in <command> instead of harnez exec ever seeing
 // them as part of one wrapped command. Wrapping in a quoted 'bash -c'
 // argument must keep the whole original command intact.
@@ -501,8 +502,7 @@ func TestRunExecHook_PreservesShellMetacharacters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("outer shell failed to parse rewritten command %q: %v", rewritten, err)
 	}
-	// "$@" inside the shadowing function excludes the command name itself.
-	want := []string{"exec", "--tool", "Bash", "--", "bash", "-c", original}
+	want := []string{"bash", "-c", original}
 	if len(outerArgs) != len(want) {
 		t.Fatalf("outer-shell tokenization of %q = %v, want %v", rewritten, outerArgs, want)
 	}
@@ -534,8 +534,8 @@ func TestRunExecHook_ComposesDistillAutopipe(t *testing.T) {
 	if !strings.Contains(rewritten, "--distill") && !strings.Contains(rewritten, "harnez distill") {
 		t.Errorf("updatedInput.command = %q, want it to route through distill (autopipe enabled)", rewritten)
 	}
-	if !strings.HasPrefix(rewritten, "harnez exec --tool Bash") {
-		t.Errorf("updatedInput.command = %q, want it still wrapped by harnez exec", rewritten)
+	if !strings.HasPrefix(rewritten, "⚙") {
+		t.Errorf("updatedInput.command = %q, want it still wrapped by ⚙", rewritten)
 	}
 }
 
@@ -712,3 +712,27 @@ func TestGearMulticallExecution(t *testing.T) {
 		}
 	}
 }
+
+func TestInferToolFromArgs(t *testing.T) {
+	cases := []struct {
+		args        []string
+		defaultTool string
+		want        string
+	}{
+		{nil, "Bash", "Bash"},
+		{[]string{"git", "status"}, "Bash", "git"},
+		{[]string{"/usr/bin/npm", "test"}, "Bash", "npm"},
+		{[]string{"bash", "-c", "git status && echo done"}, "Bash", "git"},
+		{[]string{"sh", "-c", "FOO=bar /usr/bin/go test ./..."}, "Bash", "go"},
+		{[]string{"bash", "-c", "sudo apt update"}, "Bash", "apt"},
+		{[]string{"bash", "-c", "echo hello"}, "Bash", "echo"},
+		{[]string{"git", "diff"}, "CustomTool", "CustomTool"},
+	}
+	for _, tc := range cases {
+		got := inferToolFromArgs(tc.args, tc.defaultTool)
+		if got != tc.want {
+			t.Errorf("inferToolFromArgs(%v, %q) = %q, want %q", tc.args, tc.defaultTool, got, tc.want)
+		}
+	}
+}
+

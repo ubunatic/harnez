@@ -138,7 +138,7 @@ points an agent's Bash tool calls at this command.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			tool := toolFlag
 			if tool == "" {
-				tool = "Bash"
+				tool = inferToolFromArgs(args, "Bash")
 			}
 			exitCode, err := runExecWrapper(args, execOptions{
 				Tool:          tool,
@@ -156,7 +156,7 @@ points an agent's Bash tool calls at this command.`,
 		},
 	}
 	cmd.Flags().SetInterspersed(false)
-	cmd.Flags().StringVar(&toolFlag, "tool", "", "tool identifier the wrapped command belongs to, e.g. git, npm, Bash (default: Bash)")
+	cmd.Flags().StringVar(&toolFlag, "tool", "", "tool identifier the wrapped command belongs to, e.g. git, npm, Bash (default: inferred from command or Bash)")
 	cmd.Flags().StringVar(&ticketFlag, "ticket", "", "ticket_id override (default: resolve.Ticket())")
 	cmd.Flags().StringVar(&distillFlag, "distill", "", "distillation filter mode (auto, gotest, git, raw)")
 	cmd.Flags().BoolVar(&expectFailureFlag, "expect-failure", false, "record telemetry row with call_type=shell-expected")
@@ -198,6 +198,35 @@ func (c *byteCounter) total() int64 {
 	return atomic.LoadInt64(&c.n)
 }
 
+// inferToolFromArgs extracts the effective tool name from args when --tool is not explicitly provided.
+func inferToolFromArgs(args []string, defaultTool string) string {
+	fallback := "Bash"
+	if defaultTool != "" && defaultTool != "Bash" {
+		return defaultTool
+	}
+	if len(args) == 0 {
+		return fallback
+	}
+	if len(args) >= 3 && (args[0] == "bash" || args[0] == "sh") && args[1] == "-c" {
+		fields := strings.Fields(args[2])
+		for _, f := range fields {
+			if strings.Contains(f, "=") && !strings.HasPrefix(f, "-") {
+				continue
+			}
+			base := filepath.Base(f)
+			if base != "" && base != "bash" && base != "sh" && base != "sudo" && base != "env" {
+				return base
+			}
+		}
+		return fallback
+	}
+	base := filepath.Base(args[0])
+	if base != "" && base != "bash" && base != "sh" {
+		return base
+	}
+	return fallback
+}
+
 // runExecWrapper spawns args as a subprocess, proxying stdin/stdout/stderr
 // to in/out/errOut with no added buffering latency (canary-verified: see
 // issues/118's Canary section — Stdin passed through as the underlying
@@ -217,10 +246,10 @@ func (c *byteCounter) total() int64 {
 func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut io.Writer) (int, error) {
 	debugLog("exec wrapper: invoked, tool=%q ticket=%q distill=%q args=%v", opts.Tool, opts.Ticket, opts.Distill, args)
 	if len(args) == 0 {
-		return 0, fmt.Errorf("exec: no command given (usage: harnez exec --tool <tool_name> -- <command...>)")
+		return 0, fmt.Errorf("exec: no command given (usage: harnez exec -- <command...>)")
 	}
 	if opts.Tool == "" {
-		return 0, fmt.Errorf("exec: --tool is required")
+		opts.Tool = inferToolFromArgs(args, "Bash")
 	}
 
 	counter := &byteCounter{}
@@ -533,7 +562,12 @@ func runExecHook(in io.Reader, out io.Writer) error {
 		distillFlag = " --distill"
 	}
 
-	rewritten := fmt.Sprintf("harnez exec --tool %s%s -- bash -c %s", payload.ToolName, distillFlag, shellQuote(effective))
+	var rewritten string
+	if distillFlag != "" {
+		rewritten = fmt.Sprintf("⚙%s -- bash -c %s", distillFlag, shellQuote(effective))
+	} else {
+		rewritten = fmt.Sprintf("⚙ bash -c %s", shellQuote(effective))
+	}
 	debugLog("exec hook: rewriting %q -> %q", command, rewritten)
 	return json.NewEncoder(out).Encode(hookOutput{
 		HookSpecificOutput: hookSpecificOutput{

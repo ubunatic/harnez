@@ -21,14 +21,14 @@ func TestRunCodexHooksHook_RewritesCommand(t *testing.T) {
 	if got.PermissionDecision != "allow" {
 		t.Errorf("PermissionDecision = %q, want allow", got.PermissionDecision)
 	}
-	want := "harnez exec --tool git -- bash -c 'git status'"
+	want := "⚙ bash -c 'git status'"
 	if got.UpdatedInput["command"] != want {
 		t.Errorf("UpdatedInput[command] = %q, want %q", got.UpdatedInput["command"], want)
 	}
 }
 
 func TestRunCodexHooksHook_SkipsAlreadyRouted(t *testing.T) {
-	original := "harnez exec --tool git -- bash -c 'git status'"
+	original := "⚙ bash -c 'git status'"
 	payload, _ := json.Marshal(map[string]any{
 		"tool_name":  "Bash",
 		"tool_input": map[string]any{"command": original},
@@ -72,7 +72,7 @@ func TestRunCodexHooksHook_PreservesShellMetacharacters(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
 	}
-	want := "harnez exec --tool git -- bash -c 'git status && echo done'"
+	want := "⚙ bash -c 'git status && echo done'"
 	if got.UpdatedInput["command"] != want {
 		t.Errorf("UpdatedInput[command] = %q, want %q", got.UpdatedInput["command"], want)
 	}

@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -105,13 +104,8 @@ func runAgyHooksHook(in io.Reader, out io.Writer) error {
 		return nil
 	}
 
-	tool := "agy"
-	if fields := strings.Fields(command); len(fields) > 0 {
-		tool = fields[0]
-	}
-
 	var resp agyPreToolUseOutput
 	resp.Decision = "allow"
-	resp.Overwrite.CommandLine = fmt.Sprintf("harnez exec --tool %s -- bash -c %s", tool, shellQuote(command))
+	resp.Overwrite.CommandLine = fmt.Sprintf("⚙ bash -c %s", shellQuote(command))
 	return json.NewEncoder(out).Encode(resp)
 }

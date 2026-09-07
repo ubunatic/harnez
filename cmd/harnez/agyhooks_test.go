@@ -28,14 +28,14 @@ func TestRunAgyHooksHook_RewritesCommand(t *testing.T) {
 	if got.Decision != "allow" {
 		t.Errorf("Decision = %q, want allow", got.Decision)
 	}
-	want := "harnez exec --tool git -- bash -c 'git status'"
+	want := "⚙ bash -c 'git status'"
 	if got.Overwrite.CommandLine != want {
 		t.Errorf("Overwrite.CommandLine = %q, want %q", got.Overwrite.CommandLine, want)
 	}
 }
 
 func TestRunAgyHooksHook_SkipsAlreadyRouted(t *testing.T) {
-	original := "harnez exec --tool git -- bash -c 'git status'"
+	original := "⚙ bash -c 'git status'"
 	payload, _ := json.Marshal(map[string]any{
 		"toolCall": map[string]any{
 			"name": "run_command",
@@ -81,7 +81,7 @@ func TestRunAgyHooksHook_PreservesShellMetacharacters(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
 	}
-	want := "harnez exec --tool git -- bash -c 'git status && echo done'"
+	want := "⚙ bash -c 'git status && echo done'"
 	if got.Overwrite.CommandLine != want {
 		t.Errorf("Overwrite.CommandLine = %q, want %q", got.Overwrite.CommandLine, want)
 	}

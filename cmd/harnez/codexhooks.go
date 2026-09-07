@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -101,15 +100,10 @@ func runCodexHooksHook(in io.Reader, out io.Writer) error {
 		return nil
 	}
 
-	tool := "codex"
-	if fields := strings.Fields(command); len(fields) > 0 {
-		tool = fields[0]
-	}
-
 	resp := codexPreToolUseOutput{
 		PermissionDecision: "allow",
 		UpdatedInput: map[string]string{
-			"command": fmt.Sprintf("harnez exec --tool %s -- bash -c %s", tool, shellQuote(command)),
+			"command": fmt.Sprintf("⚙ bash -c %s", shellQuote(command)),
 		},
 	}
 	return json.NewEncoder(out).Encode(resp)
