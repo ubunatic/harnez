@@ -1,6 +1,6 @@
 # 280 — Make generated issue index and ticket numbering rebase-safe
 
-**Status**: Open
+**Status**: Closed — resolved in b9bf99d and follow-up
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
