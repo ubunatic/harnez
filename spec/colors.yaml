@@ -9,6 +9,9 @@
 # sgr is one or more semicolon-separated SGR parameter codes, applied as
 # "\x1b[<sgr>m...\x1b[0m".
 colors:
+  background:
+    title: "Terminal-native background"
+    description: "Default transparent/native terminal background selected by indicators.yaml (no forced ANSI SGR)"
   panel-bg:
     title: "Panel background"
     description: "Shared black chart field selected by indicators.yaml"

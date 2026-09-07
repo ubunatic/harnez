@@ -1446,6 +1446,20 @@ func TestBuildWatchFrameCompactAllUsageDoesNotStarveLoad(t *testing.T) {
 				Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 86, DurationLeft: 7*time.Hour + 16*time.Minute},
 				Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 24, DurationLeft: 3*time.Hour + 10*time.Minute}},
 		},
+		Load: &LoadSnapshot{
+			CPU: CPULoad{
+				NumCPU:       4,
+				CPUPercent:   15,
+				CPUPercentOk: true,
+				Ok:           true,
+				Memory: SystemMemory{
+					UsedMiB:      4096,
+					TotalMiB:     16384,
+					AvailableMiB: 12288,
+					Ok:           true,
+				},
+			},
+		},
 	}
 
 	frame := buildWatchFrame(summary, nil, 60*time.Second, compactWatchSections(), 100, 24, false, "", "")
@@ -2320,6 +2334,7 @@ func TestRenderSummary_CompactSelectsReducedSections(t *testing.T) {
 func TestStaleValueANSIPreservesResetsAndCostsNoWidth(t *testing.T) {
 	opts := watchBarOptions()
 	opts.Width = 4
+	opts.BackgroundANSI = colorSGR("panel-bg")
 	bar := rograph.RenderBar(42, opts) // embeds its own "\x1b[...m...\x1b[0m"
 	line := "Claude Code " + bar + " 42%"
 

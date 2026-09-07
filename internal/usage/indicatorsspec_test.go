@@ -55,6 +55,9 @@ func TestEmbeddedIndicatorsSpecIsValidAndExact(t *testing.T) {
 	if got, want := spec.LoadCharts.VRAM, "btop"; got != want {
 		t.Errorf("load-charts.vram = %q, want %q", got, want)
 	}
+	if got, want := spec.ChartBackground, "background"; got != want {
+		t.Errorf("chart-background = %q, want %q", got, want)
+	}
 	for name, sequence := range spec.Sequences {
 		for i, frame := range sequence.Frames {
 			if width := runewidth.StringWidth(frame); width != 1 {
@@ -263,7 +266,7 @@ func TestUsageBarPresentationHeatCouplesBarAndPercentage(t *testing.T) {
 	opts := usageBarOptionsWithPresentation(spec.usageBarPresentation(), 62.5)
 	opts.Width = 4
 	bar := rograph.RenderBar(62.5, opts)
-	if want := "[\x1b[40;33m⣿⣿⡇ \x1b[0m]"; bar != want {
+	if want := "[\x1b[33m⣿⣿⡇ \x1b[0m]"; bar != want {
 		t.Fatalf("heat usage bar = %q, want %q", bar, want)
 	}
 	if strings.Contains(bar, "░") {
@@ -273,10 +276,16 @@ func TestUsageBarPresentationHeatCouplesBarAndPercentage(t *testing.T) {
 		t.Fatalf("heat usage bar visible width = %d, want 6", got)
 	}
 
+	opts.BackgroundANSI = colorSGR(spec.chartBackgroundName())
+	barWithPanelBg := rograph.RenderBar(62.5, opts)
+	if want := "[\x1b[40;33m⣿⣿⡇ \x1b[0m]"; barWithPanelBg != want {
+		t.Fatalf("heat usage bar with panel-bg = %q, want %q", barWithPanelBg, want)
+	}
+
 	monoOpts := usageBarOptionsWithPresentation(UsageBarMonochrome, 62.5)
 	monoOpts.Width = 4
 	monochrome := rograph.RenderBar(62.5, monoOpts)
-	if want := "[\x1b[40m⣿⣿⡇ \x1b[0m]"; monochrome != want {
+	if want := "[⣿⣿⡇ ]"; monochrome != want {
 		t.Fatalf("monochrome usage bar = %q, want %q", monochrome, want)
 	}
 	if got, want := watchUsagePercentWithPresentation(UsageBarMonochrome, 62.5), "62%"; got != want {
@@ -410,6 +419,69 @@ func TestUsageBarStyleBrailleRejectsInvalidSpecs(t *testing.T) {
 func TestWatchBarsUseTheSharedChartBackground(t *testing.T) {
 	if got, want := watchBarOptions().BackgroundANSI, chartBackgroundANSI(); got != want {
 		t.Fatalf("bar background = %q, want shared chart background %q", got, want)
+	}
+}
+
+// TestDefaultChartRenderingOmitsForcedBlackBackground covers Issue 261:
+// default monochrome chart rendering (bars, sparklines, Braille load histories)
+// must not force a black ANSI background (\x1b[40m) and should let the terminal-native
+// background show through.
+func TestDefaultChartRenderingOmitsForcedBlackBackground(t *testing.T) {
+	spec := mustIndicators()
+	if got, want := spec.chartBackgroundName(), "background"; got != want {
+		t.Fatalf("spec.chartBackgroundName() = %q, want %q", got, want)
+	}
+	if got := chartBackgroundANSI(); got != "" {
+		t.Fatalf("chartBackgroundANSI() = %q, want empty (no background SGR override)", got)
+	}
+
+	// Bar rendering with default options
+	bar := rograph.RenderBar(50, watchBarOptions())
+	if strings.Contains(bar, "40m") || strings.Contains(bar, "[40") {
+		t.Errorf("default RenderBar contains forced black background SGR: %q", bar)
+	}
+
+	// Monochrome bar rendering
+	monoBar := rograph.RenderBar(50, usageBarOptionsWithPresentation(UsageBarMonochrome, 50))
+	if strings.Contains(monoBar, "40m") || strings.Contains(monoBar, "[40") {
+		t.Errorf("monochrome RenderBar contains forced black background SGR: %q", monoBar)
+	}
+
+	// Sparkline rendering with default spec
+	spark := watchPercentSparkline([]float64{0, 100}, 2, LoadChartSparkline)
+	if strings.Contains(spark, "40m") || strings.Contains(spark, "[40") {
+		t.Errorf("default watchPercentSparkline sparkline contains forced black background SGR: %q", spark)
+	}
+
+	// Braille sparkline rendering with default spec
+	braille := watchPercentSparkline([]float64{0, 100}, 1, LoadChartBraille)
+	if strings.Contains(braille, "40m") || strings.Contains(braille, "[40") {
+		t.Errorf("default watchPercentSparkline braille contains forced black background SGR: %q", braille)
+	}
+}
+
+// TestChartBackgroundPanelBgOptInPreserved covers Issue 261:
+// panel-bg remains available and unaffected when explicitly configured in indicators spec.
+func TestChartBackgroundPanelBgOptInPreserved(t *testing.T) {
+	spec, err := parseIndicatorsYAML([]byte(validIndicatorsFixture + "chart-background: panel-bg\nload-chart-presentation: monochrome\n"))
+	if err != nil {
+		t.Fatalf("parseIndicatorsYAML with chart-background: panel-bg: %v", err)
+	}
+	if got, want := spec.chartBackgroundName(), "panel-bg"; got != want {
+		t.Fatalf("spec.chartBackgroundName() = %q, want %q", got, want)
+	}
+	if got, want := colorSGR(spec.chartBackgroundName()), "40"; got != want {
+		t.Fatalf("colorSGR(panel-bg) = %q, want %q", got, want)
+	}
+
+	opts := sparklineOptionsFromSpec(spec, 1, LoadChartBraille)
+	if got, want := opts.BackgroundANSI, "40"; got != want {
+		t.Fatalf("sparkline BackgroundANSI = %q, want %q", got, want)
+	}
+
+	rendered := rograph.RenderPercentSparkline([]float64{0, 100}, opts)
+	if !strings.Contains(rendered, "\x1b[40m") {
+		t.Fatalf("rendered Braille with panel-bg = %q, want to contain \\x1b[40m", rendered)
 	}
 }
 

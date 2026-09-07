@@ -46,7 +46,7 @@ func parseWatchColorsYAML(data []byte) (watchColorsSpec, error) {
 		if strings.TrimSpace(c.Title) == "" {
 			return watchColorsSpec{}, fmt.Errorf("colors spec: color %q: missing title", name)
 		}
-		if name != "panel-bg" && name != "time-gauge-bg" && strings.TrimSpace(c.SGR) == "" {
+		if name != "background" && name != "panel-bg" && name != "time-gauge-bg" && strings.TrimSpace(c.SGR) == "" {
 			return watchColorsSpec{}, fmt.Errorf("colors spec: color %q: missing sgr", name)
 		}
 	}
@@ -154,15 +154,14 @@ var (
 	ansiDimFaint = ansiOpen("dim-faint")
 )
 
-// init wires rograph's ANSI background default to the "panel-bg" color
-// spec/colors.yaml defines. internal/rograph is a separate, dependency-free
-// package (no imports beyond stdlib, per its package doc) and must not gain
-// spec-loading machinery of its own, so the spec lookup happens here in
-// internal/usage -- which already imports rograph -- and the resolved value
-// is pushed into rograph as a plain string default. This avoids both an
-// import cycle (rograph would need to import usage to self-resolve) and a
-// layering violation (rograph would need to know about spec/ and yaml
-// parsing).
+// init wires rograph's ANSI background default to the "background" color
+// spec/colors.yaml defines (resolving to empty string / terminal-native background).
+// internal/rograph is a separate, dependency-free package (no imports beyond stdlib,
+// per its package doc) and must not gain spec-loading machinery of its own, so the
+// spec lookup happens here in internal/usage -- which already imports rograph -- and
+// the resolved value is pushed into rograph as a plain string default. This avoids
+// both an import cycle (rograph would need to import usage to self-resolve) and a
+// layering violation (rograph would need to know about spec/ and yaml parsing).
 func init() {
-	rograph.DefaultBackgroundANSI = colorSGR("panel-bg")
+	rograph.DefaultBackgroundANSI = colorSGR("background")
 }

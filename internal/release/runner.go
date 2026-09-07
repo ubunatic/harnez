@@ -260,6 +260,12 @@ func Run(opt Options) error {
 }
 
 func runPreflight(opt Options) error {
+	if !opt.SkipPush || !opt.SkipPublish {
+		if _, err := DetectForgeInfo(opt.Dir); err != nil {
+			return err
+		}
+	}
+
 	required := []string{"git"}
 	if !opt.SkipSign {
 		required = append(required, "minisign")
@@ -283,12 +289,6 @@ func runPreflight(opt Options) error {
 	for _, bin := range required {
 		if _, err := exec.LookPath(bin); err != nil {
 			return fmt.Errorf("required tool %q not found in PATH", bin)
-		}
-	}
-
-	if !opt.SkipPush || !opt.SkipPublish {
-		if _, err := DetectForgeInfo(opt.Dir); err != nil {
-			return err
 		}
 	}
 

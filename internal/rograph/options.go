@@ -233,6 +233,8 @@ func RenderBar(value float64, opts BarOptions) string {
 				code += ";" + opts.ForegroundANSI
 			}
 			glyphOut = "\x1b[" + code + "m" + glyphs + "\x1b[0m"
+		} else if opts.ForegroundANSI != "" {
+			glyphOut = "\x1b[" + opts.ForegroundANSI + "m" + glyphs + "\x1b[0m"
 		}
 	}
 
@@ -283,7 +285,7 @@ func RenderSparkline(values []float64, opts SparklineOptions) string {
 	if code == "" {
 		code = DefaultBackgroundANSI
 	}
-	if code == "" {
+	if code == "" && opts.ForegroundANSI == nil {
 		return out
 	}
 	if opts.ForegroundANSI == nil {
@@ -293,10 +295,18 @@ func RenderSparkline(values []float64, opts SparklineOptions) string {
 	for i, glyph := range spark {
 		value := sparkCellValue(values, i, opts)
 		foreground := opts.ForegroundANSI(value)
+		if code == "" && foreground == "" {
+			styled.WriteRune(glyph)
+			continue
+		}
 		styled.WriteString("\x1b[")
-		styled.WriteString(code)
-		if foreground != "" {
-			styled.WriteByte(';')
+		if code != "" {
+			styled.WriteString(code)
+			if foreground != "" {
+				styled.WriteByte(';')
+				styled.WriteString(foreground)
+			}
+		} else {
 			styled.WriteString(foreground)
 		}
 		styled.WriteString("m")

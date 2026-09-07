@@ -59,7 +59,7 @@
     },
     "chart-background": {
       "type": "string",
-      "enum": ["panel-bg"]
+      "enum": ["background", "panel-bg"]
     },
     "load-chart-presentation": {
       "type": "string",

@@ -95,9 +95,11 @@ load-sparkline:
   sequence: vertical-block-scale-8
 
 # All chart surfaces resolve this one named background from spec/colors.yaml.
+# Defaults to `background` (terminal-native/transparent background with no forced ANSI SGR).
+# Set to `panel-bg` to explicitly opt into a shared black chart field (`sgr: "40"`).
 # Use the restrained btop-style heat ramp for history and current percentages;
 # set `monochrome` to disable their foreground colors.
-chart-background: panel-bg
+chart-background: background
 load-chart-presentation: heat
 # Quota/usage bars are independent of load histories. `heat` colors a filled
 # bar and its adjacent percentage with the shared cool-to-warm palette; set

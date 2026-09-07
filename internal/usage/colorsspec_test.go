@@ -18,6 +18,9 @@ func TestEmbeddedColorsSpecIsValid(t *testing.T) {
 	if len(spec.Colors) == 0 {
 		t.Fatalf("expected at least one color in the embedded spec")
 	}
+	if _, ok := spec.Colors["background"]; !ok {
+		t.Fatalf("expected embedded spec to define \"background\"")
+	}
 	if _, ok := spec.Colors["panel-bg"]; !ok {
 		t.Fatalf("expected embedded spec to define \"panel-bg\"")
 	}
@@ -67,6 +70,9 @@ func TestParseWatchColorsYAMLValidatesRequiredFields(t *testing.T) {
 		{"no colors", "colors: {}\n", false},
 		{"missing title", "colors:\n  panel-bg:\n    sgr: \"100\"\n", false},
 		{"missing sgr", "colors:\n  accent:\n    title: Accent\n", false},
+		{"missing background sgr", "colors:\n  background:\n    title: Terminal-native background\n", true},
+		{"empty background sgr", "colors:\n  background:\n    title: Terminal-native background\n    sgr: \"\"\n", true},
+		{"null background sgr", "colors:\n  background:\n    title: Terminal-native background\n    sgr: null\n", true},
 		{"missing time gauge background", "colors:\n  time-gauge-bg:\n    title: Time gauge background\n", true},
 		{"empty panel background", "colors:\n  panel-bg:\n    title: Panel background\n    sgr: \"\"\n", true},
 		{"null panel background", "colors:\n  panel-bg:\n    title: Panel background\n    sgr: null\n", true},
@@ -80,6 +86,20 @@ func TestParseWatchColorsYAMLValidatesRequiredFields(t *testing.T) {
 				t.Fatalf("parseWatchColorsYAML(%q) error = %v, want valid=%t", c.name, err, c.valid)
 			}
 		})
+	}
+}
+
+// TestBackgroundSGRResolvesEmptyFromSpec verifies that background resolves
+// to an empty SGR code (terminal-native/transparent background with no SGR override).
+func TestBackgroundSGRResolvesEmptyFromSpec(t *testing.T) {
+	got := colorSGR("background")
+	spec := mustWatchColors()
+	want := spec.Colors["background"].SGR
+	if got != want {
+		t.Errorf("colorSGR(\"background\") = %q, want %q (from embedded spec)", got, want)
+	}
+	if got != "" {
+		t.Errorf("expected an empty SGR code for background, got %q", got)
 	}
 }
 
@@ -112,13 +132,13 @@ func TestPanelBackgroundSGRMissingColorPanics(t *testing.T) {
 }
 
 // TestInitWiresRographDefaultFromSpec is the layering-decision proof: usage
-// package init() must have already pushed spec/colors.yaml's "panel-bg"
+// package init() must have already pushed spec/colors.yaml's "background"
 // value into rograph.DefaultBackgroundANSI by the time any test in this
 // package (or the binary) runs, since rograph itself has no way to read the
 // spec.
 func TestInitWiresRographDefaultFromSpec(t *testing.T) {
-	want := colorSGR("panel-bg")
+	want := colorSGR("background")
 	if rograph.DefaultBackgroundANSI != want {
-		t.Errorf("rograph.DefaultBackgroundANSI = %q, want %q (spec/colors.yaml panel-bg)", rograph.DefaultBackgroundANSI, want)
+		t.Errorf("rograph.DefaultBackgroundANSI = %q, want %q (spec/colors.yaml background)", rograph.DefaultBackgroundANSI, want)
 	}
 }

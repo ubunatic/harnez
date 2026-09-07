@@ -220,7 +220,7 @@ func watchMicLiveSpec() micLiveSpec {
 
 func (s indicatorsSpec) chartBackgroundName() string {
 	if strings.TrimSpace(s.ChartBackground) == "" {
-		return "panel-bg"
+		return "background"
 	}
 	return s.ChartBackground
 }
@@ -431,7 +431,7 @@ func parseIndicatorsYAML(data []byte) (indicatorsSpec, error) {
 	if err := validateLoadChartMode("vram", spec.LoadCharts.VRAM); err != nil {
 		return indicatorsSpec{}, err
 	}
-	if strings.TrimSpace(spec.ChartBackground) != "" && spec.ChartBackground != "panel-bg" {
+	if bg := strings.TrimSpace(spec.ChartBackground); bg != "" && bg != "background" && bg != "panel-bg" {
 		return indicatorsSpec{}, fmt.Errorf("indicators spec: chart-background: unknown color %q", spec.ChartBackground)
 	}
 	if presentation := strings.ToLower(strings.TrimSpace(spec.LoadChartPresentation)); presentation != "" && presentation != string(LoadChartMonochrome) && presentation != string(LoadChartHeat) {
