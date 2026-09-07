@@ -24,6 +24,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
 	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
 	cfg.CodexHooksTarget = filepath.Join(t.TempDir(), "codex-config.toml")
+	cfg.AgyHooksTarget = filepath.Join(t.TempDir(), "gemini", "config", "hooks.json")
 	cfg.ClaudeSkillsTarget = claudeSkillsDir
 	cfg.PrimeAgentTarget = filepath.Join(t.TempDir(), "prime-agent")
 	cfg.AgentsMD.Global.Target = filepath.Join(t.TempDir(), "CLAUDE.md")

@@ -3,36 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"testing"
-
-	"ubunatic.com/harnez/internal/agy"
 )
 
-func TestAgyHooksApplyAndStatusCmds(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	applyCmd := newAgyHooksApplyCmd()
-	var applyOut bytes.Buffer
-	applyCmd.SetOut(&applyOut)
-	if err := applyCmd.RunE(applyCmd, nil); err != nil {
-		t.Fatalf("apply: %v", err)
-	}
-
-	path := agy.HooksPath(home)
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("expected %s to exist: %v", path, err)
-	}
-
-	statusCmd := newAgyHooksStatusCmd()
-	var statusOut bytes.Buffer
-	statusCmd.SetOut(&statusOut)
-	if err := statusCmd.RunE(statusCmd, nil); err != nil {
-		t.Fatalf("status: %v", err)
-	}
-	if got := statusOut.String(); !bytes.Contains([]byte(got), []byte("up to date")) {
-		t.Errorf("status output = %q, want up-to-date", got)
+func TestAgyHooksCmd_Hidden(t *testing.T) {
+	cmd := newAgyHooksCmd()
+	if !cmd.Hidden {
+		t.Errorf("expected agy-hooks command to be Hidden: true")
 	}
 }
 

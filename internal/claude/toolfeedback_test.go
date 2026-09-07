@@ -69,6 +69,7 @@ func TestApplyInstallsToolFeedbackProtocol(t *testing.T) {
 	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
 	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
 	cfg.CodexHooksTarget = filepath.Join(t.TempDir(), "codex-config.toml")
+	cfg.AgyHooksTarget = filepath.Join(t.TempDir(), "gemini", "config", "hooks.json")
 	cfg.ClaudeSkillsTarget = filepath.Join(t.TempDir(), "claude-skills")
 	cfg.PrimeAgentTarget = primeAgentDir
 	cfg.AgentsMD.Global.Target = claudeMDPath

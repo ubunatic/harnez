@@ -1,85 +1,46 @@
 // agyhooks implements `harnez agy-hooks`, the agy-side counterpart to
-// `harnez exec hook`: instead of a quiet PATH-shim (issues/195), this
-// writes agy's own hooks.json (issue 193's Findings) so agy's PreToolUse
-// contract routes run_command calls through `harnez exec`, the same way
-// internal/claude's PreToolUse/Bash wiring does for Claude Code. See
-// issues/196-agy-native-hooks-plan-alongside-claude-hooks.md.
+// `harnez exec hook` and `harnez codex-hook`: instead of a quiet PATH-shim
+// (issues/195), `harnez apply` writes agy's own hooks.json (issue 193's
+// Findings, issues/209) so agy's PreToolUse contract routes run_command calls
+// through `harnez exec`, the same way internal/claude's PreToolUse/Bash wiring
+// does for Claude Code. This file implements the handshake command that
+// config entry points at. Installing it is `harnez apply`'s job
+// (internal/claude/apply.go). See issues/196, issues/209, and issues/267.
 package main
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"ubunatic.com/harnez/internal/agy"
 )
 
 func newAgyHooksCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "agy-hooks",
-		Short: "Manage agy's native hooks.json PreToolUse wiring (harnez exec routing)",
-		Long: `agy-hooks manages the "harnez" named hook entry inside agy's own
-hooks.json (global, ~/.gemini/config/hooks.json) — the "tell agy" native
-hook mechanism found by issue 193's research, complementary to issue 195's
-quiet PATH-shim. Installing it is an explicit, agy-side opt-in: agy will
-run 'harnez agy-hooks hook' before every run_command tool call and, if
-that call isn't already routed through 'harnez exec', rewrite it to be.`,
+		Use:    "agy-hooks",
+		Short:  "agy PreToolUse handler: rewrite run_command calls to route through 'harnez exec'",
+		Hidden: true,
+		Long: `agy-hooks implements agy's PreToolUse command-handler contract for the
+"run_command" matcher (see issue 193's Findings, issue 209). It reads the toolCall
+JSON payload from stdin and, for a non-empty CommandLine not already
+routed through 'harnez exec', emits a decision:"allow" envelope whose
+overwrite.CommandLine points at:
+
+  harnez exec --tool <first-word-of-command> -- bash -c <original command>
+
+This is the handshake stage only: it never spawns the command or writes
+telemetry itself (see docs/HookRewritePattern.md). 'harnez apply' installs
+the hooks.json entry that invokes this command; there is no separate
+'agy-hooks apply/status' command group.`,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAgyHooksHook(cmd.InOrStdin(), cmd.OutOrStdout())
+		},
 	}
-	cmd.AddCommand(newAgyHooksApplyCmd(), newAgyHooksStatusCmd(), newAgyHooksHookCmd())
+	cmd.AddCommand(newAgyHooksHookCmd())
 	return cmd
-}
-
-func newAgyHooksApplyCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:          "apply",
-		Short:        "Install/update the harnez PreToolUse entry in agy's hooks.json",
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return err
-			}
-			path := agy.HooksPath(home)
-			changed, err := agy.Apply(path)
-			if err != nil {
-				return err
-			}
-			if changed {
-				fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", path)
-			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "up to date: %s\n", path)
-			}
-			return nil
-		},
-	}
-}
-
-func newAgyHooksStatusCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:          "status",
-		Short:        "Report whether agy's hooks.json has the harnez entry, and whether it has drifted",
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return err
-			}
-			path := agy.HooksPath(home)
-			installed, drifted := agy.Status(path)
-			switch {
-			case !installed:
-				fmt.Fprintf(cmd.OutOrStdout(), "not installed: %s\n", path)
-			case drifted:
-				fmt.Fprintf(cmd.OutOrStdout(), "drifted: %s (run 'harnez agy-hooks apply' to repair)\n", path)
-			default:
-				fmt.Fprintf(cmd.OutOrStdout(), "up to date: %s\n", path)
-			}
-			return nil
-		},
-	}
 }
 
 // agyPreToolUseInput mirrors agy's documented PreToolUse stdin contract

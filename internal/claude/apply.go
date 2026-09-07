@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"ubunatic.com/harnez/internal/agy"
 	"ubunatic.com/harnez/internal/codex"
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/jsonc"
@@ -824,6 +825,25 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 		}
 	}
 
+	// Antigravity's (AGY) native hooks.json lifecycle hooks (~/.gemini/config/hooks.json)
+	// route run_command calls through `harnez exec` (see issues/196, issues/209, issues/267).
+	if cfg.AgyHooksTarget != "" {
+		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
+		agentHome := filepath.Dir(filepath.Dir(hooksPath))
+		if _, err := os.Stat(agentHome); err == nil {
+			changed, err := agy.Apply(hooksPath)
+			if err != nil {
+				return fmt.Errorf("agy hooks: %w", err)
+			}
+			if changed {
+				changes++
+				fmt.Printf("  wrote %s\n", hooksPath)
+			} else {
+				addStat("agy hooks", "up to date")
+			}
+		}
+	}
+
 	if adapters := distillAdapters(cfg); len(adapters) > 0 {
 		for _, adapter := range adapters {
 			ar, err := writeFileIfChanged(adapter.path, []byte(adapter.content))
@@ -995,6 +1015,23 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 			}
 		}
 	}
+	if cfg.CodexHooksTarget != "" {
+		hooksPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
+		installed, drifted := codex.Status(hooksPath)
+		if !installed || drifted {
+			anyChanged = true
+		}
+	}
+	if cfg.AgyHooksTarget != "" {
+		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
+		agentHome := filepath.Dir(filepath.Dir(hooksPath))
+		if _, err := os.Stat(agentHome); err == nil {
+			installed, drifted := agy.Status(hooksPath)
+			if !installed || drifted {
+				anyChanged = true
+			}
+		}
+	}
 
 	if !anyChanged {
 		fmt.Println("No changes.")
@@ -1057,6 +1094,18 @@ func CleanAll(target string, cfg *Config) error {
 				// content harnez didn't write.
 				_ = os.Remove(skillDir)
 			}
+		}
+	}
+	if cfg.CodexHooksTarget != "" {
+		hooksPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
+		if _, err := codex.Remove(hooksPath); err != nil {
+			return fmt.Errorf("codex hooks [%s]: %w", hooksPath, err)
+		}
+	}
+	if cfg.AgyHooksTarget != "" {
+		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
+		if _, err := agy.Remove(hooksPath); err != nil {
+			return fmt.Errorf("agy hooks [%s]: %w", hooksPath, err)
 		}
 	}
 	return nil

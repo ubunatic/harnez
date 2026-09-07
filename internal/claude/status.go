@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"ubunatic.com/harnez/internal/agy"
+	"ubunatic.com/harnez/internal/codex"
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/jsonc"
@@ -62,6 +64,7 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 	type entry struct {
 		label string
 		check func() bool
+		state string
 	}
 
 	settingsPath := filepath.Join(target, "settings.json")
@@ -144,11 +147,47 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 			check: func() bool { _, err := os.Stat(adapter.path); return err == nil },
 		})
 	}
+	if cfg.CodexHooksTarget != "" {
+		hooksPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
+		installed, drifted := codex.Status(hooksPath)
+		state := "missing"
+		if installed {
+			if drifted {
+				state = "drifted"
+			} else {
+				state = "ok"
+			}
+		}
+		checks = append(checks, entry{
+			label: hooksPath + " [hooks.harnez]",
+			state: state,
+		})
+	}
+	if cfg.AgyHooksTarget != "" {
+		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
+		installed, drifted := agy.Status(hooksPath)
+		state := "missing"
+		if installed {
+			if drifted {
+				state = "drifted"
+			} else {
+				state = "ok"
+			}
+		}
+		checks = append(checks, entry{
+			label: hooksPath + " [harnez]",
+			state: state,
+		})
+	}
 
 	for _, e := range checks {
-		state := "missing"
-		if e.check() {
-			state = "ok"
+		state := e.state
+		if state == "" {
+			if e.check != nil && e.check() {
+				state = "ok"
+			} else {
+				state = "missing"
+			}
 		}
 		fmt.Printf("  %-48s %s\n", e.label, state)
 	}

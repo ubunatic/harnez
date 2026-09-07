@@ -136,3 +136,51 @@ func TestRunStatus_ReportsRemovedManagedKey(t *testing.T) {
 	}
 	t.Errorf("no settings.json [hooks] line found after removal, full output:\n%s", out)
 }
+
+// TestRunStatus_AgyAndCodexHooks verifies that status reports agy and codex hooks.
+func TestRunStatus_AgyAndCodexHooks(t *testing.T) {
+	dir := t.TempDir()
+	agyTarget := filepath.Join(t.TempDir(), "gemini", "config", "hooks.json")
+	codexTarget := filepath.Join(t.TempDir(), "codex-config.toml")
+
+	cfg := &Config{
+		AgyHooksTarget:   agyTarget,
+		CodexHooksTarget: codexTarget,
+	}
+
+	// Before apply -> missing
+	out, err := captureStdoutStatus(func() error {
+		return RunStatus("(test)", cfg, dir)
+	})
+	if err != nil {
+		t.Fatalf("RunStatus failed: %v", err)
+	}
+	if !strings.Contains(out, agyTarget+" [harnez]") || !strings.Contains(out, "missing") {
+		t.Errorf("expected agy hooks missing, got:\n%s", out)
+	}
+	if !strings.Contains(out, codexTarget+" [hooks.harnez]") || !strings.Contains(out, "missing") {
+		t.Errorf("expected codex hooks missing, got:\n%s", out)
+	}
+
+	// Create parent dir for agy and apply
+	if err := os.MkdirAll(filepath.Dir(filepath.Dir(agyTarget)), 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := ApplyAll(dir, cfg, nil, false, false); err != nil {
+		t.Fatalf("ApplyAll failed: %v", err)
+	}
+
+	// After apply -> ok
+	out, err = captureStdoutStatus(func() error {
+		return RunStatus("(test)", cfg, dir)
+	})
+	if err != nil {
+		t.Fatalf("RunStatus post-apply failed: %v", err)
+	}
+	if !strings.Contains(out, agyTarget+" [harnez]") || !strings.Contains(out, "ok") {
+		t.Errorf("expected agy hooks ok, got:\n%s", out)
+	}
+	if !strings.Contains(out, codexTarget+" [hooks.harnez]") || !strings.Contains(out, "ok") {
+		t.Errorf("expected codex hooks ok, got:\n%s", out)
+	}
+}

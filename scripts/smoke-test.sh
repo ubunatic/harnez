@@ -93,7 +93,7 @@ echo ""
 echo "All apply/diff/clean smoke tests passed."
 
 echo ""
-echo "=== usage --summary --compact: output and bar alignment ==="
+echo "=== usage --compact: output and bar alignment ==="
 
 # Use the installed binary so this tests what's actually deployed.
 installed_bin="$(command -v harnez 2>/dev/null || true)"
@@ -104,7 +104,7 @@ else
     # Capture output with ANSI codes stripped via sed.
     # We can't pipe through 'strip-ansi' tools that may not be installed, so
     # use a sed expression to remove ESC[…m sequences inline.
-    raw_usage=$("$installed_bin" usage --summary --compact 2>/dev/null || true)
+    raw_usage=$("$installed_bin" usage --compact 2>/dev/null || true)
     usage_plain=$(printf '%s\n' "$raw_usage" | sed 's/\x1b\[[0-9;]*m//g')
 
     # Smoke: command must produce some output and exit 0.
@@ -120,7 +120,7 @@ else
     all_usage_rows=""
     while IFS= read -r line
     do
-        if printf '%s\n' "$line" | grep -qF "[a] All Usage"
+        if printf '%s\n' "$line" | grep -q "All Usage"
         then
             in_all_usage=true
             continue
@@ -146,7 +146,7 @@ EOF
 
     if test -z "$all_usage_rows"
     then
-        fail "no [a] All Usage rows found in 'harnez usage --summary --compact' output"
+        fail "no All Usage rows found in 'harnez usage --compact' output"
     fi
     pass "found [a] All Usage rows"
 
