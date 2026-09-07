@@ -1,6 +1,6 @@
 # 261 — Default chart background should use terminal-native "background", not forced black panel-bg
 
-**Status**: Open
+**Status**: Closed — Default chart background now uses terminal-native background (transparent / no forced SGR), with panel-bg retained as opt-in
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Enhancement
