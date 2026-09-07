@@ -118,7 +118,8 @@ installed version:
 - Configured-gain reading (`CurrentMicStatus`, issue 244's one-shot
   `pactl`/`amixer` polls) is out of scope here — this ticket is about the
   *live streaming* meter only (issue 245's scope), matching how 264 is
-  also scoped to the live path.
+  also scoped to the live path. Follow-up: issue 270 implements that
+  configured-gain/mute read for the pipewire backend via `wpctl`.
 - Add a `captureMicLiveOnce`-equivalent function (e.g.
   `captureMicLiveOnceViaPipeWire`) invoking `pw-record` (or `pw-cat -r`)
   with the raw-mode flags above, feeding the same stdout pipe →

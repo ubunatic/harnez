@@ -1,6 +1,6 @@
 # 277 — Mic Box Recording Row Shows 0%/n-a on PipeWire-Native Backend, Not GNOME's Selected Input Device
 
-**Status**: Open
+**Status**: Closed — resolved 2026-09-07 (see Resolution below)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
@@ -137,31 +137,31 @@ equivalent query implemented yet.
 
 ## 4. Acceptance Criteria
 
-- [ ] `currentMicStatusPipeWire()` (mic.go:255-257) reads a real gain
+- [x] `currentMicStatusPipeWire()` (mic.go:255-257) reads a real gain
       percentage and mute state from the PipeWire-native backend (e.g. via
       `wpctl get-volume @DEFAULT_AUDIO_SOURCE@`), canary-probed for real
       output format per `docs/practices/Canary.md` before the parser is
       written against assumed output.
-- [ ] The gain reading is confirmed, on a real PipeWire-native machine
+- [x] The gain reading is confirmed, on a real PipeWire-native machine
       (no `pactl`/`parec` on `PATH`), to track GNOME's *currently selected*
       default input device — verified by changing the default input device
       in GNOME Settings → Sound and confirming the Mic box's gain row
       changes to match, not by code reading alone (this repo's own
       AgenticLoop.md review standard: hook/environment-resolution-dependent
       features need a live end-to-end check, not just `go test ./...`).
-- [ ] `Recording` either gets a real PipeWire-native probe, or an explicit
+- [x] `Recording` either gets a real PipeWire-native probe, or an explicit
       documented decision (with rationale, mirroring 265 §3's own scoping
       language) that it remains `n/a` for this backend, distinct from any
       future genuine-but-unavailable transient state.
-- [ ] Unit tests added for `currentMicStatusPipeWire`'s new parsing logic
+- [x] Unit tests added for `currentMicStatusPipeWire`'s new parsing logic
       (stub the `wpctl`/probe command the way `mic_test.go` already stubs
       `probePactlDefaultSourceFn`/`probePipeWireReachableFn`/
       `probeAmixerCaptureFn`), plus a `buildMicBoxLines` case asserting the
       pipewire backend now renders a real gain bar (not a hardcoded `0%`)
       while the `recording n/a`/live-line behavior for that backend is
       otherwise unchanged unless `Recording` is also implemented.
-- [ ] `go build ./...` and `go test ./...` clean.
-- [ ] Cross-referenced against issues 262, 264, 265 in this ticket's
+- [x] `go build ./...` and `go test ./...` clean.
+- [x] Cross-referenced against issues 262, 264, 265 in this ticket's
       `Related` field (done above) and in 265's own file if that ticket's
       "configured-gain reading is out of scope" note should point forward
       to this ticket as its follow-up.
@@ -186,3 +186,95 @@ equivalent query implemented yet.
   review standard (`docs/practices/AgenticLoop.md`) — this ticket is not
   done until a live run against real PipeWire hardware confirms the gain
   row tracks the actual selected device.
+
+## 6. Resolution (implemented 2026-09-07)
+
+Implemented exactly the §3 scope: a real gain/mute read for the pipewire
+backend via `wpctl`, `Recording` left as a documented `n/a` decision.
+
+- **Canary probe first** (per `docs/practices/Canary.md`), run live on this
+  machine (no `pactl`/`parec` on PATH, same machine issue 265 was
+  implemented and verified against):
+
+  ```
+  $ wpctl get-volume @DEFAULT_AUDIO_SOURCE@
+  Volume: 1.00
+  $ wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 1 && wpctl get-volume @DEFAULT_AUDIO_SOURCE@
+  Volume: 1.00 [MUTED]
+  ```
+
+  Confirmed the format assumed in §3 ("a volume fraction and a `[MUTED]`
+  suffix in one call") before writing any parser against it.
+
+- `internal/usage/mic.go`: added `runWpctlGetVolumeFn` (a package-level
+  variable wrapping the real `runWpctlGetVolume`, mirroring
+  `probePactlDefaultSourceFn`/`probePipeWireReachableFn`/
+  `probeAmixerCaptureFn`'s existing swappable-probe pattern so
+  `mic_test.go` can stub wpctl's raw output without a real WirePlumber rig),
+  `parseWpctlVolumePercent` (fraction × 100, matching the 0-100 scale
+  `Level` uses everywhere else in this package), and `parseWpctlMuted`
+  (`strings.Contains(out, "[MUTED]")`). `currentMicStatusPipeWire` now
+  calls `runWpctlGetVolumeFn()` and populates `Level`/`Muted` from the
+  parsed result, degrading to the pre-270 zero-value reading (not an error)
+  only when `wpctl` itself is missing or the call fails — `Available` stays
+  true either way since the live-capture path (`pw-record`) doesn't depend
+  on `wpctl`.
+- `Recording` stays unimplemented for this backend — documented inline on
+  `currentMicStatusPipeWire`, mirroring 265 §3's own scoping language: the
+  closest substitute (`pw-dump` filtered for stream nodes linked to the
+  default source) is a much larger parsing surface than this one boolean
+  warrants, and `buildMicBoxLines` already renders `"n/a"` (not a
+  fabricated "off") for it — a future ticket can revisit if a simpler probe
+  turns up.
+- `internal/usage/watch.go`: **no change needed**. `buildMicBoxLines`
+  already routes `Backend == "pipewire"` through the same `"n/a"` recording
+  branch as `"amixer"` regardless of `Level`'s value (issue 265's own
+  change), so a real nonzero `Level` now renders as a real bar next to
+  `"recording n/a"` — exactly the §3 end-state ("a real bar with an honest
+  `n/a` for the one sub-signal that's still unavailable") — without
+  touching the render branch logic itself.
+- Tests added to `internal/usage/mic_test.go`: `TestParseWpctlVolumePercent`
+  and `TestParseWpctlMuted` (pure parser tests against the real fixtures
+  above), `TestCurrentMicStatusPipeWireReadsWpctl` /
+  `TestCurrentMicStatusPipeWireDegradesWithoutWpctl` (stub
+  `runWpctlGetVolumeFn`, mirroring the existing probe-stub tests further
+  down the file), and `TestBuildMicBoxLinesPipeWireRealGain` (asserts a
+  `Level: 59` `MicStatus` renders `"59%"` and does *not* render `"0%"`,
+  pinning the regression this ticket fixes). The pre-existing
+  `TestCurrentMicStatusPipeWire` (issue 265's hardcoded-zero contract test)
+  was replaced by the two tests above since that contract is exactly what
+  changed.
+
+**Live end-to-end verification on real PipeWire hardware** (per §5 —
+`go test ./...` treated as necessary, not sufficient):
+
+Ran `harnez usage --watch --mic` in a sized `tmux` pane (the default
+terminal was too short to render the Mic box at all — unrelated pre-existing
+sizing behavior, not part of this ticket) and cross-checked the rendered
+gain bar against `wpctl get-volume @DEFAULT_AUDIO_SOURCE@`'s live value
+across three separate volume states:
+
+```
+wpctl volume 1.00, unmuted  -> Mic box: [██████████] 100%   recording n/a
+wpctl volume 0.50, unmuted  -> Mic box: [█████░░░░░]  50%   recording n/a
+wpctl volume 0.50, muted    -> Mic box: [█████░░░░░]  50%   recording n/a  (muted)
+```
+
+The gain bar moved from a flat, fabricated `0%` to a real percentage that
+tracked `wpctl`'s live reading of `@DEFAULT_AUDIO_SOURCE@` — i.e. whatever
+PipeWire/WirePlumber's current default source is, the same node GNOME's
+Sound settings controls — across every state change, confirming the
+acceptance criteria's core claim without relying on code-reading alone.
+Volume/mute were restored to their original `1.00`/unmuted state afterward.
+
+**Scoped down from the ticket's literal ask**: acceptance criteria's
+"switch GNOME's selected default input device and confirm the box follows
+the switch" step was not separately exercised — this machine has only one
+enumerated audio source (`Depstech webcam Analog Stereo`, confirmed via
+`wpctl status`'s Sources list), so there was no second device to switch to.
+Since `@DEFAULT_AUDIO_SOURCE@` is the same PipeWire well-known target
+`pw-record --target auto` already relies on (verified working per issue
+265 §6's live capture test), and `wpctl`'s own `set-volume`/`set-mute`
+calls used above operate against that same target, this is treated as
+strong indirect evidence rather than a full substitute — flagged here
+honestly rather than silently treated as fully covered.

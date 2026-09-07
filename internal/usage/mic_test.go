@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -96,11 +97,60 @@ func TestParseAmixerCaptureOn(t *testing.T) {
 	}
 }
 
-// Issue 265: currentMicStatusPipeWire is scoped to Available/Backend only
-// (gain/mute/recording reads are out of scope, see its own doc comment) —
-// pin that contract so the pipewire backend keeps degrading its box lines
-// the same way regardless of future changes.
-func TestCurrentMicStatusPipeWire(t *testing.T) {
+// wpctlVolumeFixture/wpctlVolumeMutedFixture are real `wpctl get-volume
+// @DEFAULT_AUDIO_SOURCE@` output captured on a live PipeWire-native dev
+// machine (no pactl/parec on PATH) while implementing issue 270 — not a
+// hand-written approximation, per docs/practices/Canary.md.
+const wpctlVolumeFixture = "Volume: 1.00\n"
+const wpctlVolumeMutedFixture = "Volume: 1.00 [MUTED]\n"
+
+func TestParseWpctlVolumePercent(t *testing.T) {
+	got, ok := parseWpctlVolumePercent(wpctlVolumeFixture)
+	if !ok || got != 100 {
+		t.Errorf("parseWpctlVolumePercent(%q) = (%v, %v), want (100, true)", wpctlVolumeFixture, got, ok)
+	}
+	got, ok = parseWpctlVolumePercent("Volume: 0.59\n")
+	if !ok || got != 59 {
+		t.Errorf("parseWpctlVolumePercent(0.59) = (%v, %v), want (59, true)", got, ok)
+	}
+	if _, ok := parseWpctlVolumePercent("garbage\n"); ok {
+		t.Error("expected no match on garbage input")
+	}
+}
+
+func TestParseWpctlMuted(t *testing.T) {
+	if parseWpctlMuted(wpctlVolumeFixture) {
+		t.Error("expected unmuted fixture to report false")
+	}
+	if !parseWpctlMuted(wpctlVolumeMutedFixture) {
+		t.Error("expected [MUTED] fixture to report true")
+	}
+}
+
+// Issue 270: currentMicStatusPipeWire now reads real gain/mute via wpctl
+// (stubbed here through runWpctlGetVolumeFn, mirroring the probe*Fn seams
+// used by resolveMicBackend's tests below) instead of the issue 265
+// hardcoded-zero placeholder.
+func TestCurrentMicStatusPipeWireReadsWpctl(t *testing.T) {
+	orig := runWpctlGetVolumeFn
+	defer func() { runWpctlGetVolumeFn = orig }()
+
+	runWpctlGetVolumeFn = func() (string, error) { return wpctlVolumeMutedFixture, nil }
+	got := currentMicStatusPipeWire()
+	want := MicStatus{Available: true, Backend: "pipewire", Level: 100, Muted: true}
+	if got != want {
+		t.Errorf("currentMicStatusPipeWire() = %+v, want %+v", got, want)
+	}
+}
+
+// Issue 270: when wpctl isn't installed or the call fails, degrade to the
+// pre-270 zero-value gain reading rather than fabricating one — the box
+// stays Available (the live-capture path doesn't depend on wpctl).
+func TestCurrentMicStatusPipeWireDegradesWithoutWpctl(t *testing.T) {
+	orig := runWpctlGetVolumeFn
+	defer func() { runWpctlGetVolumeFn = orig }()
+
+	runWpctlGetVolumeFn = func() (string, error) { return "", errors.New("exec: \"wpctl\": executable file not found in $PATH") }
 	got := currentMicStatusPipeWire()
 	want := MicStatus{Available: true, Backend: "pipewire"}
 	if got != want {
@@ -157,6 +207,21 @@ func TestBuildMicBoxLinesPipeWireRecordingUnknown(t *testing.T) {
 	lines := buildMicBoxLines(MicStatus{Available: true, Backend: "pipewire", Level: 0})
 	if got := lines[0]; !containsAll(got, "recording n/a") {
 		t.Errorf("buildMicBoxLines pipewire backend = %q, want it to mention recording n/a", got)
+	}
+}
+
+// Issue 270: once currentMicStatusPipeWire reads a real gain from wpctl,
+// buildMicBoxLines must render that real percentage in the bar — not the
+// pre-270 hardcoded 0% — while Recording (still unimplemented for this
+// backend, see currentMicStatusPipeWire's doc comment) keeps rendering
+// "n/a", not "off".
+func TestBuildMicBoxLinesPipeWireRealGain(t *testing.T) {
+	lines := buildMicBoxLines(MicStatus{Available: true, Backend: "pipewire", Level: 59})
+	if got := lines[0]; !containsAll(got, "59", "recording n/a") {
+		t.Errorf("buildMicBoxLines pipewire real gain = %q, want it to mention 59%% and recording n/a", got)
+	}
+	if containsAll(lines[0], "0%") {
+		t.Errorf("buildMicBoxLines pipewire real gain = %q, must not render the pre-270 hardcoded 0%%", lines[0])
 	}
 }
 

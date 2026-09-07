@@ -97,6 +97,12 @@ var (
 	probeAmixerCaptureFn      = probeAmixerCapture
 )
 
+// runWpctlGetVolumeFn is the real `wpctl get-volume @DEFAULT_AUDIO_SOURCE@`
+// invocation behind a package-level variable (issue 270), mirroring the
+// probe*Fn seams above, so mic_test.go can stub its raw output/error
+// independently without a real wpctl/WirePlumber rig on the test machine.
+var runWpctlGetVolumeFn = runWpctlGetVolume
+
 // resolveMicBackend canary-probes, in preference order: PipeWire/PulseAudio
 // via `pactl` (the modern Linux default per this repo's kernel-standard-
 // metrics-sourcing policy of preferring the most portable interface); then,
@@ -192,6 +198,17 @@ func probePipeWireReachable() bool {
 	return exec.CommandContext(ctx, "pw-cli", "info", "0").Run() == nil
 }
 
+// runWpctlGetVolume shells out to `wpctl get-volume @DEFAULT_AUDIO_SOURCE@`
+// (issue 270) and returns its raw stdout. Only called from the pipewire
+// backend, which already confirmed `wpctl`'s sibling PipeWire tooling
+// (`pw-record`/`pw-cli`) is reachable via probePipeWireReachable — but
+// `wpctl` ships in a separate `wireplumber` package on some distros, so a
+// missing binary here degrades via the error return, not a panic.
+func runWpctlGetVolume() (string, error) {
+	out, err := exec.Command("wpctl", "get-volume", "@DEFAULT_AUDIO_SOURCE@").Output()
+	return string(out), err
+}
+
 // probeAmixerCapture reports whether ALSA's simple mixer has a 'Capture'
 // control at all (the common name for the primary capture control; systems
 // with a differently-named capture control fall through to Available:
@@ -244,16 +261,54 @@ func currentMicStatusPactl() MicStatus {
 }
 
 // currentMicStatusPipeWire reports the pipewire backend's one-shot status.
-// Issue 265 scopes configured-gain/mute/recording reads out (§3: "out of
-// scope here — this ticket is about the live streaming meter only") since
-// there is no `pactl get-source-volume`-equivalent one-shot PipeWire-native
-// CLI call to reuse without a much larger parsing surface (`pw-cli`'s
-// output is a verbose property dump, not a stable "NN%" line). Level/Muted/
-// Recording therefore stay at their zero values here; only Available/
-// Backend are meaningful, which is enough for buildMicBoxLines to render
-// the box and for startMicLiveManager to light up the live line below it.
+// Issue 265 originally scoped configured-gain/mute/recording reads out of
+// this backend entirely (§3: "out of scope here — this ticket is about the
+// live streaming meter only"), reasoning that there was no
+// `pactl get-source-volume`-equivalent one-shot PipeWire-native CLI call to
+// reuse without a much larger parsing surface (`pw-cli`'s output is a
+// verbose property dump, not a stable "NN%" line). That left Level/Muted
+// hardcoded at zero, which issue 270 found actively misleading: a flat 0%
+// gain bar reads as "this is the real level", not as "unsupported".
+//
+// Issue 270 closes the gain/mute half of that gap using WirePlumber's
+// `wpctl get-volume @DEFAULT_AUDIO_SOURCE@` — canary-probed live on a real
+// PipeWire-native machine (no pactl/parec on PATH) before this parser was
+// written; real observed output:
+//
+//	Volume: 1.00
+//	Volume: 1.00 [MUTED]
+//
+// Like `pw-record --target auto` (the live-capture path in miclive.go),
+// `@DEFAULT_AUDIO_SOURCE@` resolves against PipeWire/WirePlumber's actual
+// current default node, so this reading tracks whatever GNOME's sound
+// settings currently has selected, not a stale/hardcoded device.
+//
+// Recording stays unimplemented here, mirroring 265 §3's own scoping
+// language: `pactl list short source-outputs` (used by currentMicStatusPactl)
+// has no direct one-shot `wpctl` equivalent — the closest substitute would
+// be filtering `pw-dump`'s full node graph for stream nodes linked to the
+// default source, a much larger parsing surface than this box's scope
+// warrants for one boolean. buildMicBoxLines already renders "n/a" (not a
+// fabricated "off") for this backend's Recording, so leaving it false here
+// is a documented decision, not an oversight — a future ticket can revisit
+// it if a simpler probe turns up.
 func currentMicStatusPipeWire() MicStatus {
-	return MicStatus{Available: true, Backend: "pipewire"}
+	st := MicStatus{Available: true, Backend: "pipewire"}
+
+	out, err := runWpctlGetVolumeFn()
+	if err != nil {
+		// wpctl not installed, or the call failed (e.g. no default source
+		// configured) — degrade to the pre-270 zero-value gain reading
+		// rather than fabricating one; the box still renders (Available
+		// stays true) since the pipewire backend's live-capture path
+		// (pw-record) doesn't depend on wpctl at all.
+		return st
+	}
+	if level, ok := parseWpctlVolumePercent(out); ok {
+		st.Level = level
+	}
+	st.Muted = parseWpctlMuted(out)
+	return st
 }
 
 func currentMicStatusAmixer() MicStatus {
@@ -307,6 +362,36 @@ func parseAmixerCapturePercent(out string) (float64, bool) {
 	}
 	v, err := strconv.ParseFloat(m[1], 64)
 	return v, err == nil
+}
+
+// wpctlVolumeRe matches the fractional volume in `wpctl get-volume`'s
+// output — real observed formats (issue 270 canary probe):
+//
+//	Volume: 1.00
+//	Volume: 1.00 [MUTED]
+var wpctlVolumeRe = regexp.MustCompile(`Volume:\s*([\d.]+)`)
+
+// parseWpctlVolumePercent converts wpctl's 0.0-1.0(+) fraction to a 0-100
+// percent, matching the scale of Level everywhere else in this package
+// (pactl/amixer already report NN%). wpctl allows volumes above 1.00 (boosted
+// gain) — that's passed through rather than clamped, same as pactl/amixer's
+// own percent readings.
+func parseWpctlVolumePercent(out string) (float64, bool) {
+	m := wpctlVolumeRe.FindStringSubmatch(out)
+	if m == nil {
+		return 0, false
+	}
+	v, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		return 0, false
+	}
+	return v * 100, true
+}
+
+// parseWpctlMuted reports whether wpctl's get-volume output carries the
+// "[MUTED]" suffix observed in the issue 270 canary probe.
+func parseWpctlMuted(out string) bool {
+	return strings.Contains(out, "[MUTED]")
 }
 
 // parseAmixerCaptureOn reports whether amixer's Capture control shows at
