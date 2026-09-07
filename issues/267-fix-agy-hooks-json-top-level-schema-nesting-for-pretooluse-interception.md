@@ -1,6 +1,6 @@
 # 267 — Fix agy hooks.json Top-Level Schema Nesting for PreToolUse Interception
 
-**Status**: Open — filed via /issue
+**Status**: Closed (Resolved)
 **Priority**: P2 (Medium)
 **Severity**: Normal (fixes missing PreToolUse command interception in agy)
 **Category**: Hooks / Multi-Harness Integration
@@ -74,10 +74,10 @@ In `internal/agy/hooks.go`:
 
 ## 4. Acceptance Criteria
 
-- [ ] `~/.gemini/config/hooks.json` is generated with `"harnez"` as a top-level key.
-- [ ] `harnez agy-hooks status` reports `up to date`.
-- [ ] `internal/agy` unit tests pass cleanly.
-- [ ] `make check` and `make install` pass.
+- [x] `~/.gemini/config/hooks.json` is generated with `"harnez"` as a top-level key.
+- [x] `harnez agy-hooks status` reports `up to date`.
+- [x] `internal/agy` unit tests pass cleanly.
+- [x] `make check` and `make install` pass.
 
 ---
 

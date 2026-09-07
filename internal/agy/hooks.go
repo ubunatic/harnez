@@ -34,17 +34,19 @@ func HooksPath(home string) string {
 // command handler is `harnez agy-hooks hook` (the PreToolUse handshake
 // implemented in cmd/harnez/agyhooks.go), mirroring the shape of
 // internal/claude's own PreToolUse/Bash wiring for Claude Code.
+//
+// Per agy's hook schema specification (agy-customizations/docs/hooks.md),
+// named hooks are defined as top-level keys in hooks.json rather than
+// nested under a redundant "hooks" root object.
 func BuildHooksDoc() map[string]any {
 	return map[string]any{
-		"hooks": map[string]any{
-			HookName: map[string]any{
-				"enabled": true,
-				"PreToolUse": []map[string]any{
-					{
-						"matcher": "run_command",
-						"hooks": []map[string]any{
-							{"type": "command", "command": "harnez agy-hooks hook"},
-						},
+		HookName: map[string]any{
+			"enabled": true,
+			"PreToolUse": []map[string]any{
+				{
+					"matcher": "run_command",
+					"hooks": []map[string]any{
+						{"type": "command", "command": "harnez agy-hooks hook"},
 					},
 				},
 			},
@@ -52,25 +54,52 @@ func BuildHooksDoc() map[string]any {
 	}
 }
 
-// mergeHooksDoc replaces only the HookName entry under "hooks", leaving
-// every other top-level key and every other named hook in existing intact.
+// extractHook extracts the HookName configuration from doc. It looks for
+// doc[HookName] at the top level first. If the hook is only found nested
+// under legacy doc["hooks"][HookName], or if both exist, legacy is returned
+// as true so Status and mergeHooksDoc can flag or clean the drift.
+func extractHook(doc map[string]any) (entry any, legacy bool, found bool) {
+	legacyHook := false
+	if hooks, ok := doc["hooks"].(map[string]any); ok {
+		if _, exists := hooks[HookName]; exists {
+			legacyHook = true
+		}
+	}
+	if entry, ok := doc[HookName]; ok {
+		return entry, legacyHook, true
+	}
+	if legacyHook {
+		hooks := doc["hooks"].(map[string]any)
+		return hooks[HookName], true, true
+	}
+	return nil, false, false
+}
+
+// mergeHooksDoc replaces HookName at the root level, cleans up any legacy
+// HookName under "hooks", and leaves every other top-level key and other named
+// hooks intact.
 func mergeHooksDoc(existing, incoming map[string]any) map[string]any {
 	out := make(map[string]any, len(existing)+1)
 	for k, v := range existing {
 		out[k] = v
 	}
-	mergedHooks := map[string]any{}
+	// Clean up legacy "hooks" entry if it exists
 	if existingHooks, ok := out["hooks"].(map[string]any); ok {
+		mergedHooks := make(map[string]any, len(existingHooks))
 		for k, v := range existingHooks {
-			mergedHooks[k] = v
+			if k != HookName {
+				mergedHooks[k] = v
+			}
+		}
+		if len(mergedHooks) == 0 {
+			delete(out, "hooks")
+		} else {
+			out["hooks"] = mergedHooks
 		}
 	}
-	if incomingHooks, ok := incoming["hooks"].(map[string]any); ok {
-		for k, v := range incomingHooks {
-			mergedHooks[k] = v
-		}
+	if hookEntry, ok := incoming[HookName]; ok {
+		out[HookName] = hookEntry
 	}
-	out["hooks"] = mergedHooks
 	return out
 }
 
@@ -101,44 +130,53 @@ func Apply(path string) (changed bool, err error) {
 
 // Status reports whether HookName is present in the hooks.json at path,
 // and whether its content has drifted from what BuildHooksDoc would
-// write — the drift-detection surface issues/196's plan calls for
-// alongside `harnez status`, unlike issue 195's unlintable PATH-shim.
+// write (including legacy nested "hooks" wrapping) — the drift-detection
+// surface issues/196's plan calls for alongside `harnez status`, unlike
+// issue 195's unlintable PATH-shim.
 func Status(path string) (installed bool, drifted bool) {
 	existing := jsonc.Read(path)
-	hooks, ok := existing["hooks"].(map[string]any)
-	if !ok {
+	entry, legacy, found := extractHook(existing)
+	if !found {
 		return false, false
 	}
-	entry, ok := hooks[HookName]
-	if !ok {
-		return false, false
+	if legacy {
+		return true, true
 	}
-
-	want := BuildHooksDoc()["hooks"].(map[string]any)[HookName]
+	want := BuildHooksDoc()[HookName]
 	wantData, _ := json.Marshal(want)
 	gotData, _ := json.Marshal(entry)
 	return true, string(wantData) != string(gotData)
 }
 
-// Remove deletes the HookName entry from hooks.json at path, leaving any
-// other named hooks and top-level keys intact. If the file ends up with
-// no remaining top-level keys, it is removed entirely (mirroring
-// internal/claude's cleanSettingsJSON). A missing file or missing entry
-// is a no-op, not an error.
+// Remove deletes the HookName entry from hooks.json at path, cleaning up
+// both top-level and legacy nested entries, leaving any other named hooks
+// and top-level keys intact. If the file ends up with no remaining top-level
+// keys, it is removed entirely (mirroring internal/claude's cleanSettingsJSON).
+// A missing file or missing entry is a no-op, not an error.
 func Remove(path string) (changed bool, err error) {
 	existing := jsonc.Read(path)
-	hooks, ok := existing["hooks"].(map[string]any)
-	if !ok {
+	if len(existing) == 0 {
 		return false, nil
 	}
-	if _, ok := hooks[HookName]; !ok {
-		return false, nil
+
+	found := false
+	if _, ok := existing[HookName]; ok {
+		delete(existing, HookName)
+		found = true
 	}
-	delete(hooks, HookName)
-	if len(hooks) == 0 {
-		delete(existing, "hooks")
-	} else {
-		existing["hooks"] = hooks
+	if hooks, ok := existing["hooks"].(map[string]any); ok {
+		if _, ok := hooks[HookName]; ok {
+			delete(hooks, HookName)
+			found = true
+			if len(hooks) == 0 {
+				delete(existing, "hooks")
+			} else {
+				existing["hooks"] = hooks
+			}
+		}
+	}
+	if !found {
+		return false, nil
 	}
 
 	if len(existing) == 0 {
@@ -146,4 +184,9 @@ func Remove(path string) (changed bool, err error) {
 	}
 	data := append(jsonc.MarshalPretty(existing), '\n')
 	return true, os.WriteFile(path, data, 0644)
+}
+
+// Delete is an alias for Remove.
+func Delete(path string) (changed bool, err error) {
+	return Remove(path)
 }
