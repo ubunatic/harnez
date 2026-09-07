@@ -92,17 +92,77 @@ reproduction.
 
 - [ ] Root cause identified and confirmed against the user's actual machine
       (backend, section toggle, host view) — not just inferred from code
-      reading.
-- [ ] Either the live meter is fixed to show for the user's backend/setup, or
+      reading. **Not done** — no access to the user's machine or any real
+      mic hardware in this sandboxed environment; see §6 for what was
+      verified from code alone and what still needs the user.
+- [x] Either the live meter is fixed to show for the user's backend/setup, or
       — if the amixer backend genuinely cannot stream live peak/RMS — the Mic
       box clearly communicates *why* (distinct message from generic
       "unavailable"/"n/a") instead of silently omitting the live line.
-- [ ] Regression/unit test covering the specific gate that was found to be
+- [x] Regression/unit test covering the specific gate that was found to be
       the cause (backend selection, section/host gating, or capture
       subprocess failure).
 - [ ] `docs/MicIndicators.md` (issue 250) and/or this repo's mic-related
       tickets updated if the investigation surfaces a genuine implementation
-      gap not already tracked by issues 244/245/250/251/253.
+      gap not already tracked by issues 244/245/250/251/253. **N/A** — no
+      new implementation gap was found beyond the messaging fix in §6, which
+      is fully described here.
+
+## 6. Resolution (investigation against the three candidate gates)
+
+Re-read `miclive.go`, `mic.go`, `watch.go`, and `indicatorsspec.go` in full
+against the three candidate gates from §2. Two of the three are working as
+designed and were left untouched; the third gate (amixer backend) is a real,
+already-documented limitation whose *messaging* was the actual bug — fixed.
+
+1. **Backend gate (`startMicLiveManager`, miclive.go:219-230)** — confirmed:
+   live capture is started only when `resolveMicBackend() == micBackendPactl`
+   and `parec` is on `PATH`; the amixer path returns a manager that never
+   spawns anything, matching the file's own doc comment. This is deliberate
+   (issue 244/245: plain ALSA has no `parec`-equivalent streaming API) —
+   **not a bug**, but its silent "n/a" was indistinguishable from a
+   transient pactl reconnect, which *is* the bug (see below).
+2. **Section/host gate (`watch.go:2720`,
+   `wantMicLive := activeSec.Mic && currentHost == ""`)** — confirmed real,
+   and confirmed **not a bug**: `buildWatchFrameAt` (watch.go ~1861-1870)
+   already gates the whole `micStatus` fetch on `opt.Host == ""` for the
+   same reason (a remote host's audio device isn't observable over the
+   existing `--host` snapshot machinery) — the live-capture gate is
+   consistent with that existing, intentional local-only design, not a
+   separate bug.
+3. **Availability gate (`watch.go:1913`,
+   `sec.Mic && micStatus.Available`)** — confirmed **not a bug**:
+   `CurrentMicStatus()` (mic.go:147-156) sets `Available: true` for *either*
+   backend that resolves (pactl or amixer) — `resolveMicBackend()` only
+   returns `micBackendNone` (which hides the whole box) when neither `pactl`
+   nor `amixer` produced anything. An amixer-only machine still shows the
+   Mic box with a working configured-gain bar; only the live sub-line is
+   affected, per gate 1.
+
+**Root cause of the reported UX gap**: on an amixer-only system (no
+PipeWire/PulseAudio), the live line correctly can never populate (gate 1,
+by design) but rendered the exact same dim `"live n/a"` placeholder as a
+pactl system's transient "still (re)connecting" state — a user with a
+working mic and a working configured-gain bar had no way to tell "this will
+never work here" from "this is about to start working." Fixed in
+`buildMicBoxLines` (watch.go): the live line now renders
+`"live n/a (needs pactl/PipeWire)"` specifically when `st.Backend ==
+"amixer"`, leaving the plain `"live n/a"` for the pactl-but-not-yet-flowing
+case. Added `TestBuildMicBoxLinesLiveUnavailableAmixerExplainsWhy` asserting
+both branches (mic_test.go).
+
+**What could not be confirmed in this sandboxed environment** (no real audio
+hardware, no access to the user's machine): which backend
+`resolveMicBackend()` actually picks for the user, whether their Mic section
+is toggled on, and whether they were viewing a remote host — i.e. whether
+the reported symptom is in fact the amixer case fixed here, or something
+else not yet identified. `go test ./...` passing (see commit) is not
+sufficient evidence for a hook/environment-resolution-dependent feature like
+this per `docs/AgenticLoop.md`'s review standard — a human should run
+`harnez usage --watch` for real and report back which of the two live-line
+messages they see, and whether it now matches their actual backend.
+Leaving Status **Open** pending that live confirmation; reopen/adjust scope
+if it turns out their symptom isn't the amixer case.
 
 ## 5. Verification Guidance
 
