@@ -28,6 +28,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 	cfg.PrimeAgentTarget = filepath.Join(t.TempDir(), "prime-agent")
 	cfg.AgentsMD.Global.Target = filepath.Join(t.TempDir(), "CLAUDE.md")
 	cfg.AgentsMD.Global.Symlink = ""
+	cfg.AgentsMD.Agents = nil // issue 149: keep tests off the real ~/.codex path
 	cfg.DistillAutopipe.PiExtensionTarget = filepath.Join(t.TempDir(), "pi", "harnez-distill.ts")
 	cfg.DistillAutopipe.OpenCodePluginTarget = filepath.Join(t.TempDir(), "opencode", "harnez-distill.ts")
 

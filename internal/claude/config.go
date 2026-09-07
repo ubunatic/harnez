@@ -131,10 +131,11 @@ type Command struct {
 }
 
 type AgentsMD struct {
-	Global    AgentsMDTarget      `yaml:"global"`
-	Local     AgentsMDTarget      `yaml:"local"`
-	Languages map[string]Language `yaml:"languages"`
-	RepoModes map[string]RepoMode `yaml:"repo_modes"`
+	Global    AgentsMDTarget            `yaml:"global"`
+	Local     AgentsMDTarget            `yaml:"local"`
+	Agents    map[string]AgentsMDTarget `yaml:"agents"`
+	Languages map[string]Language       `yaml:"languages"`
+	RepoModes map[string]RepoMode       `yaml:"repo_modes"`
 }
 
 type AgentsMDTarget struct {

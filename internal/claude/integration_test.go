@@ -52,6 +52,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	cfg.PrimeAgentTarget = primeAgentDir
 	cfg.AgentsMD.Global.Target = filepath.Join(t.TempDir(), "CLAUDE.md")
 	cfg.AgentsMD.Global.Symlink = ""
+	cfg.AgentsMD.Agents = nil // issue 149: keep tests off the real ~/.codex path
 	piExtensionPath := filepath.Join(t.TempDir(), "pi", "harnez-distill.ts")
 	openCodePluginPath := filepath.Join(t.TempDir(), "opencode", "harnez-distill.ts")
 	cfg.DistillAutopipe.PiExtensionTarget = piExtensionPath

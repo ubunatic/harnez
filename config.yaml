@@ -390,6 +390,29 @@ agents_md:
     template: docs/templates/AGENTS.md
     # Language Conventions section is generated dynamically from -l flags
 
+  # agent-specific instruction profiles (issue 149): each key is an agent id
+  # with its own owned target file, scoped to exactly that agent. Nothing
+  # here reaches ~/.claude/CLAUDE.md, AGENTS.md, or ~/.prime/agent/AGENTS.md.
+  # Rule: shared behavior goes in `global`; a correction that would be inert
+  # or wrong for another agent goes here under `agents.<id>`.
+  agents:
+    codex:
+      target: ~/.codex/AGENTS.md
+      sections:
+        - name: Background Job Waiting
+          content: |
+            ### Background Job Waiting
+            Codex has no host-notified subagent/background-job completion callback like
+            Claude Code's. `codex agents` only lets you browse agent sessions on the shared
+            local app-server daemon, and `codex queue` only queues a message into an existing
+            session — neither is an event-driven completion notification. Verified against
+            codex-cli 0.153.4: no such primitive exists yet.
+            Do not spin a tight polling loop waiting on a background task or subagent. If you
+            must wait on one, use a bounded/backoff poll (increasing delay between checks, with
+            a maximum number of attempts or a maximum wait time) against `codex agents` rather
+            than a fixed tight loop, and prefer surfacing the wait to the user instead of
+            blocking silently.
+
   # available language docs — always installed to ~/.claude/docs/ on apply
   # use --docs <name>,<name> to copy into a project and update its AGENTS.md
   # default: true=always copy on init, false=only if explicitly requested, auto=detect from project

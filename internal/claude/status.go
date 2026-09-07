@@ -39,8 +39,12 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 	fmt.Printf("  %-14s %d\n", "commands:", len(cfg.Commands))
 	fmt.Printf("  %-14s %d\n", "skills:", len(cfg.Skills))
 	fmt.Printf("  %-14s %d\n", "distill:", len(distillAdapters(cfg)))
-	fmt.Printf("  %-14s %d global, %d local\n", "agents_md:",
-		len(cfg.AgentsMD.Global.Sections), len(cfg.AgentsMD.Local.Sections))
+	agentSectionCount := 0
+	for _, a := range cfg.AgentsMD.Agents {
+		agentSectionCount += len(a.Sections)
+	}
+	fmt.Printf("  %-14s %d global, %d local, %d agent\n", "agents_md:",
+		len(cfg.AgentsMD.Global.Sections), len(cfg.AgentsMD.Local.Sections), agentSectionCount)
 
 	localCfg, localCfgPath, localCfgErr := usage.LoadLocalConfig("")
 	localCfgState := "absent"
@@ -95,6 +99,20 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 			label: lTarget + " [" + s.Name + "]",
 			check: func() bool { return markdown.ContainsSection(lTarget, s.Name) },
 		})
+	}
+	for _, id := range sortedAgentIDs(cfg.AgentsMD.Agents) {
+		a := cfg.AgentsMD.Agents[id]
+		aTarget := fsutil.ExpandHome(a.Target)
+		if aTarget == "" {
+			continue
+		}
+		for _, s := range a.Sections {
+			s := s
+			checks = append(checks, entry{
+				label: aTarget + " [" + s.Name + "]",
+				check: func() bool { return markdown.ContainsSection(aTarget, s.Name) },
+			})
+		}
 	}
 	for _, cmd := range cfg.Commands {
 		cmd := cmd

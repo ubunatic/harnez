@@ -65,6 +65,7 @@ func TestApplyOmitsToolFeedbackProtocolWhenDisabled(t *testing.T) {
 	cfg.PrimeAgentTarget = ""
 	cfg.AgentsMD.Global.Target = claudeMDPath
 	cfg.AgentsMD.Global.Symlink = ""
+	cfg.AgentsMD.Agents = nil // issue 149: keep tests off the real ~/.codex path
 	cfg.DistillAutopipe.PiExtensionTarget = filepath.Join(t.TempDir(), "pi", "harnez-distill.ts")
 	cfg.DistillAutopipe.OpenCodePluginTarget = filepath.Join(t.TempDir(), "opencode", "harnez-distill.ts")
 

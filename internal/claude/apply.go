@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"ubunatic.com/harnez/internal/codex"
@@ -483,6 +484,18 @@ func primeAgentRoot(cfg *Config) string {
 	return fsutil.ExpandHome(cfg.PrimeAgentTarget)
 }
 
+// sortedAgentIDs returns the keys of an agents_md.agents map in stable
+// (alphabetical) order, so repeated applies iterate agent profiles in a
+// deterministic sequence despite Go's randomized map iteration.
+func sortedAgentIDs(agents map[string]AgentsMDTarget) []string {
+	ids := make([]string, 0, len(agents))
+	for id := range agents {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
 func appendUniquePath(paths []string, path string) []string {
 	if path == "" {
 		return paths
@@ -657,6 +670,56 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 				fmt.Printf("  symlink %s → %s\n", link, gTarget)
 			}
 		}
+	}
+
+	// agents_md.agents (issue 149): agent-specific instruction profiles, one
+	// owned file per agent id, scoped to exactly that agent. Skip an entry
+	// whose parent dir does not exist — same soft-skip posture as
+	// primeAgentRoot returning "" — so we never create ~/.codex (or similar)
+	// for a user who does not run that agent.
+	for _, id := range sortedAgentIDs(cfg.AgentsMD.Agents) {
+		a := cfg.AgentsMD.Agents[id]
+		if len(a.Sections) == 0 {
+			continue
+		}
+		aTarget := fsutil.ExpandHome(a.Target)
+		if aTarget == "" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Dir(aTarget)); err != nil {
+			continue
+		}
+		errCtx := fmt.Sprintf("agents_md.agents[%s]", id)
+		ar := applyResult{}
+		var presentNames []string
+		for _, s := range a.Sections {
+			if s.RateFeedback && disableRateFeedback {
+				removed, cleaned, err := markdown.Clean(aTarget, s.Name)
+				if err != nil {
+					return fmt.Errorf("%s %s [%s]: %w", errCtx, aTarget, s.Name, err)
+				}
+				if removed || cleaned {
+					ar.changed = true
+					ar.notes = append(ar.notes, s.Name+": removed (rate feedback disabled)")
+				}
+				continue
+			}
+			r, err := applySectionMD(aTarget, s.Name, s.Content)
+			if err != nil {
+				return fmt.Errorf("%s %s [%s]: %w", errCtx, aTarget, s.Name, err)
+			}
+			if r.changed {
+				ar.changed = true
+				ar.notes = append(ar.notes, r.notes...)
+			} else {
+				presentNames = append(presentNames, s.Name)
+			}
+		}
+		if ar.changed {
+			changes++
+		}
+		printResult("wrote", aTarget, ar)
+		addStat(fsutil.ContractHome(aTarget), strings.Join(presentNames, ", "))
 	}
 
 	if len(cfg.Commands) > 0 {
@@ -874,6 +937,31 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 			}
 		}
 	}
+	for _, id := range sortedAgentIDs(cfg.AgentsMD.Agents) {
+		a := cfg.AgentsMD.Agents[id]
+		if len(a.Sections) == 0 {
+			continue
+		}
+		aTarget := fsutil.ExpandHome(a.Target)
+		if aTarget == "" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Dir(aTarget)); err != nil {
+			continue
+		}
+		errCtx := fmt.Sprintf("agents_md.agents[%s]", id)
+		for _, s := range a.Sections {
+			if s.RateFeedback && disableRateFeedback {
+				if markdown.ContainsSection(aTarget, s.Name) {
+					anyChanged = true
+				}
+				continue
+			}
+			if err := report(diffSectionMD(aTarget, s.Name, s.Content)); err != nil {
+				return false, fmt.Errorf("%s %s [%s]: %w", errCtx, aTarget, s.Name, err)
+			}
+		}
+	}
 	if len(cfg.Skills) > 0 {
 		for _, skill := range cfg.Skills {
 			if skill.RateFeedback && disableRateFeedback {
@@ -938,6 +1026,21 @@ func CleanAll(target string, cfg *Config) error {
 		for _, s := range sections {
 			if err := cleanSectionMD(l.Target, s.Name); err != nil {
 				return fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
+			}
+		}
+	}
+	for _, id := range sortedAgentIDs(cfg.AgentsMD.Agents) {
+		a := cfg.AgentsMD.Agents[id]
+		if len(a.Sections) == 0 {
+			continue
+		}
+		aTarget := fsutil.ExpandHome(a.Target)
+		if aTarget == "" {
+			continue
+		}
+		for _, s := range a.Sections {
+			if err := cleanSectionMD(aTarget, s.Name); err != nil {
+				return fmt.Errorf("agents_md.agents[%s] %s [%s]: %w", id, aTarget, s.Name, err)
 			}
 		}
 	}

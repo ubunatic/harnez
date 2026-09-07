@@ -1,6 +1,6 @@
 # 149 — Agent-specific instruction profiles, first use case: Codex async-wait guidance
 
-**Status**: Open
+**Status**: Closed — mechanism + Codex content shipped, reviewed, and committed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -148,10 +148,13 @@ addresses it (`codex_skills_target`, `codex_hooks_target`), so the plumbing prec
 
 ### Risks / open questions
 
-- **Does Codex actually read `~/.codex/AGENTS.md`?** This is the load-bearing assumption. Verify
-  empirically (write a marker line, start a fresh Codex session, ask it to quote the line) before
-  merging — if Codex only reads `~/AGENTS.md`, the whole approach needs a different anchor (e.g.
-  a `~/.codex/rules/harnez.rules` entry, since `~/.codex/rules/` exists on this machine).
+- **Does Codex actually read `~/.codex/AGENTS.md`? — VERIFIED YES (2026-09-07).** Wrote a unique
+  marker line to `~/.codex/AGENTS.md` (which did not previously exist on this machine) and ran a
+  fresh headless `codex exec "quote the secret marker string"` from `/home/uwe/projects/harnez`.
+  Codex correctly quoted the marker with no other exposure to it, confirming it reads
+  `~/.codex/AGENTS.md` as a real instruction anchor. Test file removed after verification. The
+  originally planned anchor (`~/.codex/AGENTS.md`) is correct — no fallback (e.g.
+  `~/.codex/rules/harnez.rules`, which is a structured permission-rule file, not prose) is needed.
 - Content accuracy for the Codex async primitive is unverified; the mechanism can land before the
   content is final, but do not ship guessed tool names.
 - Adding a fourth managed instruction file increases the surface `status`/`diff`/`clean` must keep
@@ -162,3 +165,63 @@ addresses it (`codex_skills_target`, `codex_hooks_target`), so the plumbing prec
 **Medium** — the mechanism itself is small (one struct field, one apply loop, three parity
 updates, tests), but the parity work across apply/diff/clean/status plus the empirical Codex
 verification is what pushes it past "small".
+
+---
+
+## Implementation Record (2026-09-07)
+
+Implemented as planned, with two deviations noted below.
+
+**Files changed:**
+- `internal/claude/config.go` — added `Agents map[string]AgentsMDTarget` to `AgentsMD`.
+- `internal/claude/apply.go` — added a `sortedAgentIDs` helper (deterministic map iteration,
+  not called out in the plan but needed since Go map order is randomized) and mirrored
+  apply/diff/clean loops over `cfg.AgentsMD.Agents`, each soft-skipping an entry whose
+  target's parent directory doesn't exist on disk.
+- `internal/claude/status.go` — extended the `agents_md:` census line to `%d global, %d
+  local, %d agent` and added agent targets to the `ruleTargets` check census.
+- `config.yaml` — added `agents_md.agents.codex` with a `Background Job Waiting` section.
+- `internal/claude/agents_profile_test.go` (new) — 7 tests: lands-in-own-target,
+  does-not-leak-to-global/prime (negative assertion), soft-skip-missing-root, idempotent
+  apply, clean removes it, no false diff-drift after apply, status census count.
+- `docs/CLIDesign.md` — new "Agent-specific instruction profiles (`agents_md.agents`)"
+  section with the global-vs-agents rule of thumb and a target-file table; added the new
+  apply-flow line.
+- **Deviation (test hygiene fix, not in original plan)**: `claudeskills_test.go`,
+  `issue_skill_test.go`, `telemetry_hook_test.go`, `toolfeedback_disable_test.go`,
+  `toolfeedback_test.go`, `integration_test.go` — each adds `cfg.AgentsMD.Agents = nil`
+  next to the existing `cfg.AgentsMD.Global.Symlink = ""` override. These tests call
+  `LoadConfigEmbedded()` (the real `config.yaml`) and run `ApplyAll`/`CleanAll` without
+  overriding `$HOME`. Once `config.yaml` declared a real `~/.codex/AGENTS.md` default
+  target, `TestIntegrationWorkflow` on this dev machine (which has `~/.codex` since Codex
+  is installed) started writing to and then cleaning the real file on every `go test`
+  run — the exact real-`$HOME` test-pollution failure mode the surrounding tests already
+  guard against for `CodexSkillsTarget`/`ClaudeSkillsTarget`/etc. Confirmed via `ls
+  ~/.codex/AGENTS.md` before/after the full suite run.
+
+**Codex async primitive — verified against codex-cli 0.153.4** (`codex --help`, `codex
+agents --help`, `codex queue --help`): there is no host-notified completion callback.
+`codex agents` browses agent sessions on the shared local app-server daemon (a manual/CLI
+browse, not a push notification); `codex queue` only queues a message into an *existing*
+session. Neither is event-driven. The shipped content states this plainly and prescribes
+a bounded/backoff poll against `codex agents` as the least-bad fallback, per scope item 2.
+
+**Post-implementation verification** (scope item 3): ran `make install` then `harnez diff`
+(showed only the new `~/.codex/AGENTS.md [Background Job Waiting]` addition), then `harnez
+apply`. `md5sum` of `~/.claude/CLAUDE.md` and `~/.prime/agent/AGENTS.md` before/after apply
+were identical (`834b00e38bcf9a6a3d9229647fd1499f` both). `~/.codex/AGENTS.md` was created
+containing only the new managed section. A second `harnez apply`/`harnez diff` reported "No
+changes." `harnez status` reports `agents_md:     4 global, 0 local, 1 agent`.
+
+**Test results**: `go build ./...` clean; `go test ./...` — all packages pass, including
+the 7 new `agents_profile_test.go` cases and the full pre-existing suite (`internal/claude`
+0.167s, `internal/usage` 15.28s, etc.), no regressions.
+
+**Not done here (per Out of Scope)**: issue 144's model-selection content was not migrated
+into this mechanism.
+
+**Review**: inline-reviewed diff (config.go/apply.go/status.go/config.yaml/tests/docs), reran
+`go test ./... -count=1` (all green), re-verified real `~/.codex/AGENTS.md` content and
+`~/.claude/CLAUDE.md` md5sum independently. Removed one out-of-scope stray file
+(`update_roadmap.py`) the dev subagent left behind, unrelated to this ticket. Closed and
+committed.

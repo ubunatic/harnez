@@ -113,8 +113,41 @@ harnez apply [-t <dir>] [-d <name>...] [--force-docs]
         ├── write ~/.claude/skills/<name>/SKILL.md for each skill (real Agent Skills, auto-loaded)
         ├── write ~/.prime/agent/AGENTS.md managed sections
         ├── write ~/.prime/agent/prompts/<name>.md and skills/<name>/SKILL.md
+        ├── write agents_md.agents[<id>] managed sections into that agent's own target
+        │       (e.g. ~/.codex/AGENTS.md) — skipped if the target's parent dir is absent
         └── install docs to ~/.claude/docs/ and ~/.prime/agent/docs/
 ```
+
+## Agent-specific instruction profiles (`agents_md.agents`)
+
+`agents_md.global` and `agents_md.local` are shared: every section they carry lands in
+every target agent reads (`~/.claude/CLAUDE.md`, and via the `~/AGENTS.md` symlink,
+Codex, Gemini, and Prime Agent too). That's the wrong shape for a correction that is
+inert or actively wrong for agents other than the one it's about — see issue 149. Codex
+subagents have no host-notified background-job/subagent-completion callback the way
+Claude Code does; telling Claude Code or agy "don't poll" would just be noise, since they
+already behave correctly.
+
+`agents_md.agents` is a `map[string]AgentsMDTarget` (same struct `global`/`local` use —
+`target`, `symlink`, `template`, `content`, `sections`) keyed by agent id. Each entry owns
+a real file that only that agent reads; nothing here is filtered into a shared file. `apply`
+skips an entry whose target's parent directory doesn't exist on disk, so a user who
+doesn't run Codex never gets a `~/.codex` directory created for them. `diff`, `clean`, and
+`status` all know about this map too — an agent profile is a fully managed target, not a
+one-off write.
+
+**Rule of thumb**: shared behavior (applies the same way to every agent) goes in
+`global`. A correction that would be inert or wrong for another agent goes in
+`agents.<id>`.
+
+Current agent-owned targets:
+
+| Target file | Agent(s) | Managed via |
+|---|---|---|
+| `~/.claude/CLAUDE.md` | Claude Code | `agents_md.global` |
+| `~/AGENTS.md` (symlink → `~/.claude/CLAUDE.md`) | Codex, Gemini (shared content only) | `agents_md.global.symlink` |
+| `~/.prime/agent/AGENTS.md` | Prime Agent | `agents_md.global` (mirrored target) |
+| `~/.codex/AGENTS.md` | Codex only | `agents_md.agents.codex` |
 
 ## Flag shorthands
 
