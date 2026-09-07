@@ -1,6 +1,6 @@
 # 282 — Make issue Git integration opt-in via init issues-git
 
-**Status**: Open
+**Status**: Closed — implemented by 3f663f8
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Feature
