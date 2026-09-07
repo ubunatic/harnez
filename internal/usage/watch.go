@@ -1229,11 +1229,13 @@ func buildMicBoxLines(st MicStatus) []string {
 	if st.Recording {
 		recordingWord = "on"
 	}
-	if st.Backend == "amixer" {
+	if st.Backend == "amixer" || st.Backend == "pipewire" {
 		// ALSA has no generic "who's holding this device open" signal the
 		// way PipeWire/PulseAudio's source-outputs list does (see
 		// currentMicStatusAmixer) — say so rather than implying "off" is an
-		// actual observation.
+		// actual observation. The pipewire backend (issue 265) doesn't probe
+		// this either — it's scoped to the live-capture path only (see
+		// currentMicStatusPipeWire) — so it gets the same "n/a" treatment.
 		recordingWord = "n/a"
 	}
 
@@ -1254,13 +1256,16 @@ func buildMicBoxLines(st MicStatus) []string {
 		liveBar := rograph.RenderBar(st.LiveLevel, rograph.BarOptions{IncludePercent: true, PercentPrecision: 0})
 		liveLine = fmt.Sprintf("%s   live", liveBar)
 	case st.Backend == "amixer":
-		// Issue 262: the amixer/plain-ALSA fallback has no streaming-capable
-		// equivalent to parec (see miclive.go's startMicLiveManager doc
-		// comment) — this is a permanent, structural limitation of the
-		// backend, not a transient "still connecting" state, so say so
-		// explicitly instead of the generic "n/a" that could as easily mean
-		// "reconnecting" on a pactl system.
-		liveLine = ansiDimGrey + "live n/a (needs pactl/PipeWire)" + "\x1b[0m"
+		// Issue 262/265: the amixer/plain-ALSA fallback has no
+		// streaming-capable equivalent to parec or pw-record (see
+		// miclive.go's startMicLiveManager doc comment) — this is a
+		// permanent, structural limitation of the backend, not a transient
+		// "still connecting" state, so say so explicitly instead of the
+		// generic "n/a" that could as easily mean "reconnecting" on a pactl
+		// or pipewire system. Both a live-capture-capable backend (pactl,
+		// parec) and this PipeWire-native one (issue 265, pw-record) are
+		// tried before falling back to amixer, so the message names both.
+		liveLine = ansiDimGrey + "live n/a (needs pactl or PipeWire w/ pw-record)" + "\x1b[0m"
 	default:
 		liveLine = ansiDimGrey + "live n/a" + "\x1b[0m"
 	}

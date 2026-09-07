@@ -26,11 +26,22 @@ import (
 // --raw --format=s16le --rate=8000 --channels=1 -d @DEFAULT_SOURCE@` and the
 // `pw-cat -r --target <source> --format s16 --rate 8000 --channels 1 -`
 // equivalent produced live, changing amplitude data and terminated cleanly
-// on SIGTERM. `parec` was chosen: it already matches this file's pactl-only
-// backend gate (issue 244 only builds the streaming-capable Recording field
-// on the pactl backend, never amixer) and needs no numeric sink/source id
-// resolution — `@DEFAULT_SOURCE@` tracks source changes on its own, the same
-// symbolic name mic.go's pactl calls already use.
+// on SIGTERM. `parec` was chosen for the pactl backend: it already matches
+// this file's pactl-only backend gate (issue 244 only builds the
+// streaming-capable Recording field on the pactl backend, never amixer) and
+// needs no numeric sink/source id resolution — `@DEFAULT_SOURCE@` tracks
+// source changes on its own, the same symbolic name mic.go's pactl calls
+// already use.
+//
+// Issue 265 added a second capture path, captureMicLiveOnceViaPipeWire,
+// for PipeWire systems missing the `pulseaudio-utils` compat package (no
+// `pactl`/`parec` on PATH — see mic.go's micBackendPipeWire and
+// probePipeWireReachable). It uses `pw-record` rather than `pw-cat`:
+// `pw-record` is dedicated to recording (no `-r`/`--record` mode flag
+// needed) and, like `pw-cat`, leaves `--target` at its default ("auto"),
+// which tracks the current default capture source. Live-verified on this
+// session's actual pactl-less PipeWire machine (see issue 265's Resolution
+// section for the exact command and observed RMS values).
 const (
 	// micLiveSampleRate is deliberately low: this box only needs a coarse
 	// amplitude reading, not audio fidelity, and a low rate keeps the
@@ -67,7 +78,9 @@ const (
 // instant attack on rises, smooth exponential release on falls (issue 258, 260).
 // When target level >= prev level, it snaps instantly to target level.
 // When target level < prev level, it decays exponentially over elapsed dt with time constant tau:
-//   decayed = prev * exp(-dt / tau)
+//
+//	decayed = prev * exp(-dt / tau)
+//
 // Clamped to not drop below target level, and snaps to 0.0 below micLiveDecayCutoff (0.5%).
 // If decayDuration <= 0, it falls back to instant update (no decay).
 func micLiveApplyBallistics(prev, target float64, dt, decayDuration time.Duration) float64 {
@@ -209,23 +222,33 @@ type micLiveManager struct {
 // --watch process also tears this down even if Stop is never called
 // explicitly. If onSample is non-nil, it is invoked on every newly processed
 // audio chunk. Returns nil immediately, without spawning anything, when live
-// capture structurally can't work here: no pactl backend (issue 244 already
-// requires pactl's streaming-capable Recording field for this scope; the
-// plain-ALSA amixer fallback has no monitor-stream equivalent, matching
-// buildMicBoxLines' existing "n/a" treatment of amixer's Recording field),
-// or no `parec` binary installed. This is the "degrade gracefully" path
-// (issue 245 requirement 3): the caller renders LiveAvailable: false, never
-// an error.
+// capture structurally can't work here: neither the pactl backend (issue
+// 244 already requires pactl's streaming-capable Recording field for this
+// scope, and needs `parec` on PATH) nor the pipewire backend (issue 265,
+// needs `pw-record` on PATH) is resolved — the plain-ALSA amixer fallback
+// has no monitor-stream equivalent to either, matching buildMicBoxLines'
+// existing "n/a" treatment of amixer's Recording field. This is the
+// "degrade gracefully" path (issue 245 requirement 3): the caller renders
+// LiveAvailable: false, never an error.
 func startMicLiveManager(parent context.Context, onSample func(micLiveReading)) *micLiveManager {
 	ctx, cancel := context.WithCancel(parent)
 	mgr := &micLiveManager{cancel: cancel, onSample: onSample}
-	if resolveMicBackend() != micBackendPactl {
+
+	var capture func(context.Context, *micLiveMeter, func(micLiveReading))
+	switch resolveMicBackend() {
+	case micBackendPactl:
+		if _, err := exec.LookPath("parec"); err == nil {
+			capture = captureMicLiveOnce
+		}
+	case micBackendPipeWire:
+		if _, err := exec.LookPath("pw-record"); err == nil {
+			capture = captureMicLiveOnceViaPipeWire
+		}
+	}
+	if capture == nil {
 		return mgr
 	}
-	if _, err := exec.LookPath("parec"); err != nil {
-		return mgr
-	}
-	go runMicLiveManager(ctx, &mgr.meter, mgr.onSample)
+	go runMicLiveManager(ctx, &mgr.meter, mgr.onSample, capture)
 	return mgr
 }
 
@@ -253,9 +276,9 @@ func (m *micLiveManager) Snapshot() micLiveReading {
 // source can come and go mid-session (USB mic unplugged, PipeWire
 // restarted) without that being a reason to give up on the box for the
 // rest of the run.
-func runMicLiveManager(ctx context.Context, m *micLiveMeter, onSample func(micLiveReading)) {
+func runMicLiveManager(ctx context.Context, m *micLiveMeter, onSample func(micLiveReading), capture func(context.Context, *micLiveMeter, func(micLiveReading))) {
 	for ctx.Err() == nil {
-		captureMicLiveOnce(ctx, m, onSample)
+		capture(ctx, m, onSample)
 		if ctx.Err() != nil {
 			return
 		}
@@ -286,6 +309,38 @@ func captureMicLiveOnce(ctx context.Context, m *micLiveMeter, onSample func(micL
 		"--process-time-msec=20",
 		"-d", "@DEFAULT_SOURCE@",
 	)
+	runMicLiveCapture(ctx, cmd, m, onSample)
+}
+
+// captureMicLiveOnceViaPipeWire is captureMicLiveOnce's PipeWire-native
+// counterpart (issue 265), for systems running PipeWire without the
+// `pulseaudio-utils` compat package (no `pactl`/`parec` on PATH — see
+// probePipeWireReachable in mic.go). `pw-record` writes the same raw PCM16LE
+// mono stream shape `parec` does when given `--raw` (no WAV/container
+// header) and `-` as its output target (write to stdout), so it feeds
+// micLiveAmplitudeFromPCM16LE and the ballistics pipeline below completely
+// unchanged — confirmed by this ticket's own hand canary probe (§2 of issue
+// 265) and re-verified live against this session's actual PipeWire-without-
+// pactl machine. `--target` is left at its default ("auto"), which tracks
+// the currently-configured default capture source the same way `parec -d
+// @DEFAULT_SOURCE@` does.
+func captureMicLiveOnceViaPipeWire(ctx context.Context, m *micLiveMeter, onSample func(micLiveReading)) {
+	cmd := exec.CommandContext(ctx, "pw-record",
+		"--raw",
+		"--format=s16",
+		"--rate="+strconv.Itoa(micLiveSampleRate),
+		"--channels=1",
+		"-",
+	)
+	runMicLiveCapture(ctx, cmd, m, onSample)
+}
+
+// runMicLiveCapture starts cmd (a `parec` or `pw-record` invocation already
+// configured to stream raw PCM16LE mono samples on stdout) and drives the
+// shared read/amplitude/ballistics pipeline both capture paths use. See
+// captureMicLiveOnce's doc comment for the cmd.Cancel/WaitDelay
+// clean-teardown rationale, which applies identically to either subprocess.
+func runMicLiveCapture(ctx context.Context, cmd *exec.Cmd, m *micLiveMeter, onSample func(micLiveReading)) {
 	cmd.Cancel = func() error {
 		return cmd.Process.Signal(syscall.SIGTERM)
 	}
@@ -340,7 +395,7 @@ func micLiveAmplitudeFromPCM16LE(buf []byte) float64 {
 	if rms <= 0 {
 		return 0
 	}
-	dBFS := 20 * math.Log10(rms / 32768.0)
+	dBFS := 20 * math.Log10(rms/32768.0)
 	level := (dBFS - micLiveMinDBFS) / (0 - micLiveMinDBFS) * 100.0
 	if level > 100 {
 		level = 100

@@ -1,11 +1,13 @@
 package usage
 
 import (
+	"context"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // MicStatus is a single poll of the default system microphone input: its
@@ -51,8 +53,9 @@ type MicStatus struct {
 	// LiveAvailable reports whether LiveLevel is a real, currently-flowing
 	// reading. False while the capture subprocess is (re)connecting,
 	// permanently false on the amixer backend or when no capture binary
-	// (`parec`) is installed — the box renders "n/a" for the live meter in
-	// that case rather than a fabricated 0.
+	// (`parec`, or `pw-record` on the pipewire backend) is installed — the
+	// box renders "n/a" for the live meter in that case rather than a
+	// fabricated 0.
 	LiveAvailable bool
 }
 
@@ -65,6 +68,15 @@ type micBackendKind int
 const (
 	micBackendNone micBackendKind = iota
 	micBackendPactl
+	// micBackendPipeWire (issue 265) is a PipeWire-native fallback for
+	// systems running PipeWire without the `pulseaudio-utils` compat
+	// package (no `pactl`/`parec` on PATH) — common on modern desktops
+	// where PipeWire is the default sound server but the PulseAudio-compat
+	// CLI shim is an optional extra package. Gain/mute/recording reads stay
+	// out of scope (issue 265 §3 — those still fall through to amixer, or
+	// degrade to zero values below); only the live-capture path in
+	// miclive.go actually uses this backend.
+	micBackendPipeWire
 	micBackendAmixer
 )
 
@@ -74,14 +86,27 @@ var (
 	micBackendKnown bool
 )
 
-// resolveMicBackend canary-probes, in preference order, PipeWire/PulseAudio
-// (`pactl`, the modern Linux default per this repo's kernel-standard-
-// metrics-sourcing policy of preferring the most portable interface) and
-// then plain ALSA (`amixer`) as the fallback for systems with no sound
-// server. Each candidate is a real read-only invocation, not just a
-// LookPath check (docs/practices/Canary.md) — a binary can be installed
-// but non-functional (no default source configured, no capture control on
-// this card).
+// probePactlDefaultSourceFn/probePipeWireReachableFn/probeAmixerCaptureFn
+// are the real probes behind package-level variables (mirroring
+// runAGYUsageCmdFn in agy.go) so tests can stub each candidate's outcome
+// independently and exercise resolveMicBackend's preference order without a
+// real pactl/PipeWire/ALSA rig on the test machine.
+var (
+	probePactlDefaultSourceFn = probePactlDefaultSource
+	probePipeWireReachableFn  = probePipeWireReachable
+	probeAmixerCaptureFn      = probeAmixerCapture
+)
+
+// resolveMicBackend canary-probes, in preference order: PipeWire/PulseAudio
+// via `pactl` (the modern Linux default per this repo's kernel-standard-
+// metrics-sourcing policy of preferring the most portable interface); then,
+// on PipeWire systems missing the `pulseaudio-utils` compat package (issue
+// 265), PipeWire-native `pw-record`/`pw-cli`; then plain ALSA (`amixer`) as
+// the final fallback for systems with no sound server at all. Each
+// candidate is a real read-only invocation, not just a LookPath check
+// (docs/practices/Canary.md) — a binary can be installed but non-functional
+// (no default source configured, no capture control on this card, no
+// reachable PipeWire socket).
 func resolveMicBackend() micBackendKind {
 	micBackendMu.Lock()
 	if micBackendKnown {
@@ -93,9 +118,11 @@ func resolveMicBackend() micBackendKind {
 
 	kind := micBackendNone
 	switch {
-	case probePactlDefaultSource() != "":
+	case probePactlDefaultSourceFn() != "":
 		kind = micBackendPactl
-	case probeAmixerCapture():
+	case probePipeWireReachableFn():
+		kind = micBackendPipeWire
+	case probeAmixerCaptureFn():
 		kind = micBackendAmixer
 	}
 
@@ -103,6 +130,18 @@ func resolveMicBackend() micBackendKind {
 	micBackendValue, micBackendKnown = kind, true
 	micBackendMu.Unlock()
 	return kind
+}
+
+// resetMicBackendCacheForTest clears resolveMicBackend's cached result so
+// tests can re-probe with a freshly stubbed probePactlDefaultSourceFn/
+// probePipeWireReachableFn/probeAmixerCaptureFn. Test-only; production code
+// never needs to invalidate the cache mid-process (see resolveMicBackend's
+// doc comment: the installed interface doesn't change over a watch
+// session's lifetime).
+func resetMicBackendCacheForTest() {
+	micBackendMu.Lock()
+	micBackendKnown = false
+	micBackendMu.Unlock()
 }
 
 // MicAvailable reports whether resolveMicBackend found any usable audio
@@ -124,6 +163,33 @@ func probePactlDefaultSource() string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// pwCliProbeTimeout bounds the `pw-cli info 0` canary invocation below —
+// this runs on every cold resolveMicBackend() call on a pactl-less machine,
+// so it must never hang the caller if PipeWire is installed but its socket
+// is wedged (docs/practices/Canary.md: a real read-only call, not just a
+// LookPath check, but still bounded).
+const pwCliProbeTimeout = 2 * time.Second
+
+// probePipeWireReachable reports whether this machine can use the
+// PipeWire-native live-capture backend (issue 265): `pw-record` (the binary
+// miclive.go's captureMicLiveOnceViaPipeWire actually shells out to) must be
+// on PATH, and a real `pw-cli info 0` call against the running PipeWire
+// daemon must succeed — confirming an actual reachable socket, not just
+// that pipewire-bin happens to be installed. Only reached when
+// probePactlDefaultSource already failed, so this never overrides the
+// existing, more mature pactl path.
+func probePipeWireReachable() bool {
+	if _, err := exec.LookPath("pw-record"); err != nil {
+		return false
+	}
+	if _, err := exec.LookPath("pw-cli"); err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), pwCliProbeTimeout)
+	defer cancel()
+	return exec.CommandContext(ctx, "pw-cli", "info", "0").Run() == nil
 }
 
 // probeAmixerCapture reports whether ALSA's simple mixer has a 'Capture'
@@ -148,6 +214,8 @@ func CurrentMicStatus() MicStatus {
 	switch resolveMicBackend() {
 	case micBackendPactl:
 		return currentMicStatusPactl()
+	case micBackendPipeWire:
+		return currentMicStatusPipeWire()
 	case micBackendAmixer:
 		return currentMicStatusAmixer()
 	default:
@@ -173,6 +241,19 @@ func currentMicStatusPactl() MicStatus {
 		st.Recording = strings.TrimSpace(string(soOut)) != ""
 	}
 	return st
+}
+
+// currentMicStatusPipeWire reports the pipewire backend's one-shot status.
+// Issue 265 scopes configured-gain/mute/recording reads out (§3: "out of
+// scope here — this ticket is about the live streaming meter only") since
+// there is no `pactl get-source-volume`-equivalent one-shot PipeWire-native
+// CLI call to reuse without a much larger parsing surface (`pw-cli`'s
+// output is a verbose property dump, not a stable "NN%" line). Level/Muted/
+// Recording therefore stay at their zero values here; only Available/
+// Backend are meaningful, which is enough for buildMicBoxLines to render
+// the box and for startMicLiveManager to light up the live line below it.
+func currentMicStatusPipeWire() MicStatus {
+	return MicStatus{Available: true, Backend: "pipewire"}
 }
 
 func currentMicStatusAmixer() MicStatus {

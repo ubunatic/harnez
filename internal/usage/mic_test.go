@@ -96,6 +96,18 @@ func TestParseAmixerCaptureOn(t *testing.T) {
 	}
 }
 
+// Issue 265: currentMicStatusPipeWire is scoped to Available/Backend only
+// (gain/mute/recording reads are out of scope, see its own doc comment) —
+// pin that contract so the pipewire backend keeps degrading its box lines
+// the same way regardless of future changes.
+func TestCurrentMicStatusPipeWire(t *testing.T) {
+	got := currentMicStatusPipeWire()
+	want := MicStatus{Available: true, Backend: "pipewire"}
+	if got != want {
+		t.Errorf("currentMicStatusPipeWire() = %+v, want %+v", got, want)
+	}
+}
+
 func TestCurrentMicStatusPactlUsesRealCommands(t *testing.T) {
 	// currentMicStatusPactl/currentMicStatusAmixer shell out directly and
 	// have no seam for fixture injection (mirroring CurrentGPUs/
@@ -133,6 +145,18 @@ func TestBuildMicBoxLinesAmixerRecordingUnknown(t *testing.T) {
 	lines := buildMicBoxLines(MicStatus{Available: true, Backend: "amixer", Level: 100})
 	if got := lines[0]; !containsAll(got, "recording n/a") {
 		t.Errorf("buildMicBoxLines amixer backend = %q, want it to mention recording n/a", got)
+	}
+}
+
+// Issue 265: the pipewire backend, like amixer, has no source-outputs-style
+// signal for "who's holding this device open" — currentMicStatusPipeWire
+// leaves Recording at its zero value, and the box must say "n/a" rather
+// than imply "off" is a real observation, exactly like the amixer case
+// above.
+func TestBuildMicBoxLinesPipeWireRecordingUnknown(t *testing.T) {
+	lines := buildMicBoxLines(MicStatus{Available: true, Backend: "pipewire", Level: 0})
+	if got := lines[0]; !containsAll(got, "recording n/a") {
+		t.Errorf("buildMicBoxLines pipewire backend = %q, want it to mention recording n/a", got)
 	}
 }
 
@@ -178,6 +202,14 @@ func TestBuildMicBoxLinesLiveUnavailableAmixerExplainsWhy(t *testing.T) {
 	if got := amixerLines[1]; !containsAll(got, "live", "n/a", "pactl") {
 		t.Errorf("buildMicBoxLines amixer live-unavailable line = %q, want it to explain pactl/PipeWire is required", got)
 	}
+	// Issue 265: amixer is only reached once *both* live-capable backends
+	// (pactl/parec and the new pipewire/pw-record path) have failed to
+	// resolve — the "n/a" explanation must name both, not just pactl, or an
+	// amixer-only user on a PipeWire-less machine is told to install
+	// PipeWire tooling that would never help them anyway.
+	if got := amixerLines[1]; !containsAll(got, "PipeWire") {
+		t.Errorf("buildMicBoxLines amixer live-unavailable line = %q, want it to also mention PipeWire/pw-record", got)
+	}
 
 	pactlLines := buildMicBoxLines(MicStatus{Available: true, Backend: "pactl", Level: 100, LiveAvailable: false})
 	if got := pactlLines[1]; strings.Contains(got, "pactl") {
@@ -185,6 +217,74 @@ func TestBuildMicBoxLinesLiveUnavailableAmixerExplainsWhy(t *testing.T) {
 	}
 	if got := pactlLines[1]; !containsAll(got, "live", "n/a") {
 		t.Errorf("buildMicBoxLines pactl live-unavailable line = %q, want it to mention live n/a", got)
+	}
+
+	// Issue 265: a pipewire-backend reading that is transiently unavailable
+	// (still (re)connecting the pw-record subprocess) must not fall into the
+	// amixer branch's permanent "needs pactl/PipeWire" message — PipeWire is
+	// exactly what this backend already found.
+	pipeWireLines := buildMicBoxLines(MicStatus{Available: true, Backend: "pipewire", Level: 0, LiveAvailable: false})
+	if got := pipeWireLines[1]; strings.Contains(got, "needs pactl") {
+		t.Errorf("buildMicBoxLines pipewire live-unavailable line = %q, should not claim pactl/PipeWire is missing", got)
+	}
+	if got := pipeWireLines[1]; !containsAll(got, "live", "n/a") {
+		t.Errorf("buildMicBoxLines pipewire live-unavailable line = %q, want it to mention live n/a", got)
+	}
+}
+
+// Issue 265: resolveMicBackend must prefer pw-record/PipeWire over amixer
+// when pactl/parec are absent but a PipeWire socket is reachable, and must
+// still prefer pactl over pipewire when both resolve — exercised via the
+// swappable probe*Fn variables rather than real subprocesses, since none of
+// pactl/pw-record/amixer are guaranteed present on the test machine.
+func TestResolveMicBackendPrefersPipeWireOverAmixer(t *testing.T) {
+	origPactl, origPipeWire, origAmixer := probePactlDefaultSourceFn, probePipeWireReachableFn, probeAmixerCaptureFn
+	t.Cleanup(func() {
+		probePactlDefaultSourceFn, probePipeWireReachableFn, probeAmixerCaptureFn = origPactl, origPipeWire, origAmixer
+		resetMicBackendCacheForTest()
+	})
+
+	probePactlDefaultSourceFn = func() string { return "" } // no pactl/parec on PATH
+	probePipeWireReachableFn = func() bool { return true }  // PipeWire socket reachable, pw-record on PATH
+	probeAmixerCaptureFn = func() bool { return true }      // amixer also present, but must lose to pipewire
+	resetMicBackendCacheForTest()
+
+	if got := resolveMicBackend(); got != micBackendPipeWire {
+		t.Errorf("resolveMicBackend() = %v, want micBackendPipeWire when pactl absent and PipeWire reachable", got)
+	}
+}
+
+func TestResolveMicBackendPrefersPactlOverPipeWire(t *testing.T) {
+	origPactl, origPipeWire, origAmixer := probePactlDefaultSourceFn, probePipeWireReachableFn, probeAmixerCaptureFn
+	t.Cleanup(func() {
+		probePactlDefaultSourceFn, probePipeWireReachableFn, probeAmixerCaptureFn = origPactl, origPipeWire, origAmixer
+		resetMicBackendCacheForTest()
+	})
+
+	probePactlDefaultSourceFn = func() string { return "alsa_input.pci-0000_00_1f.3.analog-stereo" }
+	probePipeWireReachableFn = func() bool { return true }
+	probeAmixerCaptureFn = func() bool { return true }
+	resetMicBackendCacheForTest()
+
+	if got := resolveMicBackend(); got != micBackendPactl {
+		t.Errorf("resolveMicBackend() = %v, want micBackendPactl when a default source is configured", got)
+	}
+}
+
+func TestResolveMicBackendFallsBackToAmixerWhenNeitherPactlNorPipeWire(t *testing.T) {
+	origPactl, origPipeWire, origAmixer := probePactlDefaultSourceFn, probePipeWireReachableFn, probeAmixerCaptureFn
+	t.Cleanup(func() {
+		probePactlDefaultSourceFn, probePipeWireReachableFn, probeAmixerCaptureFn = origPactl, origPipeWire, origAmixer
+		resetMicBackendCacheForTest()
+	})
+
+	probePactlDefaultSourceFn = func() string { return "" }
+	probePipeWireReachableFn = func() bool { return false }
+	probeAmixerCaptureFn = func() bool { return true }
+	resetMicBackendCacheForTest()
+
+	if got := resolveMicBackend(); got != micBackendAmixer {
+		t.Errorf("resolveMicBackend() = %v, want micBackendAmixer when neither pactl nor PipeWire resolve", got)
 	}
 }
 

@@ -1,8 +1,12 @@
 package usage
 
 import (
+	"context"
 	"encoding/binary"
 	"math"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -352,3 +356,113 @@ func TestMicLiveMeter_Update_WithDecayBallistics(t *testing.T) {
 	}
 }
 
+// writeFakeAudioBinary writes an executable shell script into dir named
+// name that dumps payload to stdout and exits (clean EOF, no lingering
+// process) — a stand-in for `parec`/`pw-record` that lets
+// runMicLiveCapture's real exec.Command/StdoutPipe/io.ReadFull machinery run
+// against a known byte stream instead of a real audio device.
+func writeFakeAudioBinary(t *testing.T, dir, name string, payload []byte) string {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("fake audio binary script assumes a POSIX shell (linux CI)")
+	}
+	payloadPath := filepath.Join(dir, name+".pcm")
+	if err := os.WriteFile(payloadPath, payload, 0o600); err != nil {
+		t.Fatalf("write payload: %v", err)
+	}
+	scriptPath := filepath.Join(dir, name)
+	script := "#!/bin/sh\ncat " + payloadPath + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write fake binary %s: %v", name, err)
+	}
+	return scriptPath
+}
+
+// TestCaptureMicLiveOnceViaPipeWireMatchesPactlAmplitude is issue 265's core
+// parity requirement: PCM16LE data flowing through the new pw-record path
+// must produce the exact same amplitude reading as the same bytes flowing
+// through the existing parec/pactl path, since both call the same
+// runMicLiveCapture -> micLiveAmplitudeFromPCM16LE pipeline unchanged. This
+// drives a real *exec.Cmd (a fake `pw-record` script standing in for the
+// real binary) through captureMicLiveOnceViaPipeWire end to end, rather than
+// only unit-testing the pure amplitude function.
+func TestCaptureMicLiveOnceViaPipeWireMatchesPactlAmplitude(t *testing.T) {
+	samples := make([]int16, micLiveChunkBytes/2)
+	for i := range samples {
+		samples[i] = 550 // matches the calibrated "normal conversational speech" vector
+	}
+	payload := pcm16LE(samples)
+	wantLevel := micLiveAmplitudeFromPCM16LE(payload)
+	if wantLevel <= 0 {
+		t.Fatalf("test fixture produced a zero amplitude, fixture is broken")
+	}
+
+	dir := t.TempDir()
+	fakeBin := writeFakeAudioBinary(t, dir, "pw-record", payload)
+	t.Setenv("PATH", filepath.Dir(fakeBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	var m micLiveMeter
+	var got []micLiveReading
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	captureMicLiveOnceViaPipeWire(ctx, &m, func(r micLiveReading) { got = append(got, r) })
+
+	if len(got) != 1 {
+		t.Fatalf("expected exactly one sample from the single-chunk fake binary, got %d: %+v", len(got), got)
+	}
+	if !got[0].Available {
+		t.Fatalf("expected sample to be Available, got %+v", got[0])
+	}
+	if got[0].Level != wantLevel {
+		t.Errorf("pw-record path amplitude = %v, want %v (same as micLiveAmplitudeFromPCM16LE on identical bytes, matching the pactl/parec path's computation)", got[0].Level, wantLevel)
+	}
+}
+
+// TestStartMicLiveManagerSelectsPipeWireCaptureFn documents startMicLiveManager's
+// backend->capture-function wiring (issue 265): on the pipewire backend with
+// pw-record on PATH, it must actually dispatch to
+// captureMicLiveOnceViaPipeWire (not silently no-op the way pre-265 code
+// did for every non-pactl backend). Proven by observing a real onSample
+// callback fire from the spawned goroutine's fake `pw-record` output,
+// rather than only checking the returned *micLiveManager is non-nil (which
+// is always true regardless of whether a goroutine was actually started).
+func TestStartMicLiveManagerSelectsPipeWireCaptureFn(t *testing.T) {
+	origPactl, origPipeWire, origAmixer := probePactlDefaultSourceFn, probePipeWireReachableFn, probeAmixerCaptureFn
+	t.Cleanup(func() {
+		probePactlDefaultSourceFn, probePipeWireReachableFn, probeAmixerCaptureFn = origPactl, origPipeWire, origAmixer
+		resetMicBackendCacheForTest()
+	})
+	probePactlDefaultSourceFn = func() string { return "" }
+	probePipeWireReachableFn = func() bool { return true }
+	probeAmixerCaptureFn = func() bool { return false }
+	resetMicBackendCacheForTest()
+
+	samples := make([]int16, micLiveChunkBytes/2)
+	for i := range samples {
+		samples[i] = 550
+	}
+	dir := t.TempDir()
+	fakeBin := writeFakeAudioBinary(t, dir, "pw-record", pcm16LE(samples))
+	t.Setenv("PATH", filepath.Dir(fakeBin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	samplesCh := make(chan micLiveReading, 1)
+	mgr := startMicLiveManager(ctx, func(r micLiveReading) {
+		select {
+		case samplesCh <- r:
+		default:
+		}
+	})
+	t.Cleanup(mgr.Stop)
+
+	select {
+	case r := <-samplesCh:
+		if !r.Available || r.Level <= 0 {
+			t.Errorf("expected a real available, non-zero reading from the fake pw-record binary, got %+v", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for onSample: startMicLiveManager did not dispatch to the pipewire capture path")
+	}
+}
