@@ -216,3 +216,58 @@ ticket (do not scope-creep into these without a separate ticket):
   its own `O_CREATE|O_EXCL` claim on the new path). If issue 108's number-exclusive
   claim mechanism lands first, `mv` should reuse it rather than duplicating a second,
   possibly divergent claim implementation — worth a quick check when picking this up.
+
+## 4. Post-Implementation Rebase Recovery Audit (2026-09-07)
+
+The later 270/271 collision showed that `issues mv` is useful in this situation, but
+the apparently simple recovery sequence — abort the rebase, move the tickets, then
+redo the rebase — has two important constraints.
+
+### What the repository history proves
+
+- The interrupted pull started at local `6cfdf15` and fetched/rebased onto remote
+  `30af601`. Local commits `2e60073` and `e44d499` originally introduced unrelated
+  tickets 270 and 271; the fetched branch already contained different tickets 270
+  through 276.
+- `harnez issues mv` was implemented remotely in `58217b6`, which is an ancestor of
+  `30af601` but not of the pre-pull local commit `6cfdf15`. Therefore the command was
+  not available from that checkout's source. An already-installed binary from the
+  other session could still provide it, but that is an environment-dependent fact,
+  not a recovery guarantee. Without that installed binary, use the manual rename
+  recipe before rewriting history.
+- After the fetch, the correct explicit destinations were 277 and 278. Bare
+  `harnez issues mv 270` on the aborted local branch would have selected 272 from
+  that branch's visible files and still collided with the fetched branch's 272.
+  Determine targets against both histories; do not trust the local default-next
+  calculation during cross-clone recovery.
+
+### Why two ordinary move commits are insufficient for a rebase
+
+Running these after `git rebase --abort` would produce sensible endpoint state:
+
+```sh
+harnez issues mv 270 277
+harnez issues mv 271 278
+```
+
+However, a subsequent rebase still replays `2e60073` (add local ticket 270) before
+the later 270-to-277 move commit, and replays `e44d499` (add local ticket 271) before
+its later move. The original colliding adds can therefore conflict before Git ever
+reaches the corrective move commits. `issues mv` changes the current tree; it does
+not rewrite earlier commits.
+
+For a genuinely conflict-avoiding rebase, abort first and rewrite the local commits
+before retrying: amend `2e60073` so it introduces 277 directly and amend `e44d499`
+so it introduces 278 directly (using `harnez issues mv --no-commit` while an
+interactive rebase is stopped at each commit, then `git commit --amend`). Inspect and
+amend subsequent commits as needed, then run `git rebase 30af601`. A merge-based pull
+can instead consume the endpoint rename commits, but that deliberately changes the
+integration strategy from rebase to merge.
+
+### Reference caveat
+
+Renumbering is intentionally number-local. It does not rewrite commit messages,
+comments, `Related` metadata, or prose in later commits. In this incident the code
+commit and follow-up ticket contained many semantic references to issue 270; those
+had to become 277, while references to the fetched branch's real issue 270 had to
+remain unchanged. This requires a bounded manual audit after history rewriting.
