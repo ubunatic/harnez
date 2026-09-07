@@ -581,7 +581,7 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 const issuesAttributesLine = "issues/README.md merge=harnez-issues-index"
 const issuesHookBlock = `# harnez:begin issues-index-lint
 if command -v harnez >/dev/null 2>&1
-then harnez issues lint -d "$(git rev-parse --show-toplevel)" || exit $?
+then harnez issues lint --cached -d "$(git rev-parse --show-toplevel)" || exit $?
 fi
 # harnez:end issues-index-lint
 `
@@ -634,20 +634,44 @@ func installIssuesGitIntegration(dir string) (int, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return 0, fmt.Errorf("read %s: %w", hook, err)
 	}
-	if !strings.Contains(string(hookContent), "# harnez:begin issues-index-lint") {
-		prefix := string(hookContent)
+	hookText := string(hookContent)
+	wantHook := hookText
+	const hookStart = "# harnez:begin issues-index-lint"
+	const hookEnd = "# harnez:end issues-index-lint"
+	if start := strings.Index(hookText, hookStart); start >= 0 {
+		endRel := strings.Index(hookText[start:], hookEnd)
+		if endRel < 0 {
+			return 0, fmt.Errorf("update %s: managed issue-index hook block has no end marker", hook)
+		}
+		end := start + endRel + len(hookEnd)
+		if end < len(hookText) && hookText[end] == '\n' {
+			end++
+		}
+		wantHook = hookText[:start] + issuesHookBlock + hookText[end:]
+	} else {
+		prefix := hookText
 		if prefix == "" {
 			prefix = "#!/bin/sh\n"
 		} else if !strings.HasSuffix(prefix, "\n") {
 			prefix += "\n"
 		}
-		if err := os.WriteFile(hook, []byte(prefix+issuesHookBlock), 0o755); err != nil {
+		wantHook = prefix + issuesHookBlock
+	}
+	if wantHook != hookText {
+		if err := os.WriteFile(hook, []byte(wantHook), 0o755); err != nil {
 			return 0, fmt.Errorf("write %s: %w", hook, err)
 		}
-		if err := os.Chmod(hook, 0o755); err != nil {
+		fmt.Printf("  installed issue-index lint in %s\n", hook)
+		changes++
+	}
+	info, err := os.Stat(hook)
+	if err != nil {
+		return 0, fmt.Errorf("stat %s: %w", hook, err)
+	}
+	if info.Mode().Perm()&0o111 == 0 {
+		if err := os.Chmod(hook, info.Mode().Perm()|0o111); err != nil {
 			return 0, fmt.Errorf("make %s executable: %w", hook, err)
 		}
-		fmt.Printf("  installed issue-index lint in %s\n", hook)
 		changes++
 	}
 	return changes, nil

@@ -62,9 +62,10 @@ rerun resumes repair after `git rebase --continue` or a partial repair failure. 
 conflicts remain unresolved; use Git's normal continue/abort commands and rerun the wrapper.
 Unrelated staged and unstaged changes are autostashed and restored with their staging state.
 
-`harnez issues lint` is the read-only validation gate installed by `init`. It rejects duplicate
-numbers, conflicting numeric filename/H1 prefixes, and generated-index drift. Legacy tickets
-whose H1 never carried a numeric prefix remain valid.
+`harnez issues lint` validates the working tree; `harnez issues lint --cached` validates a
+temporary materialization of the Git index and is the pre-commit gate installed by `init`. Both
+reject duplicate numbers, conflicting numeric filename/H1 prefixes, and generated-index drift.
+Legacy tickets whose H1 never carried a numeric prefix remain valid.
 
 The top of each ticket MUST contain the standardized metadata block:
 

@@ -67,6 +67,7 @@ func newIssuesCmd() *cobra.Command {
 	var jsonFlag bool
 	var noCommitFlag bool
 	var commitMsgFlag string
+	var cachedFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "issues <verb> <ticket-number> [reason...]",
@@ -174,6 +175,9 @@ valid, exit-0 answer.`,
 				return runIssuesRebase(cmd.OutOrStdout(), dir, upstream, checkFlag || dryRunFlag)
 			}
 			if args[0] == "lint" {
+				if cachedFlag {
+					return runIssuesLintCached(cmd.OutOrStdout(), dir)
+				}
 				return runIssuesLint(cmd.OutOrStdout(), dir)
 			}
 			if args[0] == "new" {
@@ -215,6 +219,7 @@ valid, exit-0 answer.`,
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
+	cmd.Flags().BoolVar(&cachedFlag, "cached", false, "validate the staged Git snapshot (issues lint only)")
 	cmd.Flags().BoolVar(&checkFlag, "check", false, "report what would change without writing or committing; exit 1 on drift")
 	cmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "alias for --check")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "output a single JSON object instead of a text line")

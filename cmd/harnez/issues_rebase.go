@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -187,8 +188,17 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 	if err != nil {
 		return fmt.Errorf("issues rebase: %w", err)
 	}
+	if resume && state.Phase == "restore" {
+		if err := restoreStagedChanges(dir, state); err != nil {
+			return fmt.Errorf("issues rebase: staged-state recovery failed; state retained at %s: %w", statePath, err)
+		}
+		if err := runIssuesLint(w, dir); err != nil {
+			return err
+		}
+		return os.Remove(statePath)
+	}
 	if resume && state.Phase == "repair" {
-		if err := repairRebasedTickets(w, dir, state); err != nil {
+		if err := repairRebasedTickets(w, dir, state, statePath); err != nil {
 			return fmt.Errorf("issues rebase: repair retry failed; state retained at %s: %w", statePath, err)
 		}
 		return os.Remove(statePath)
@@ -245,7 +255,7 @@ func runIssuesRebase(w io.Writer, dir, upstream string, dryRun bool) error {
 	if err := writeRebaseState(statePath, state); err != nil {
 		return fmt.Errorf("issues rebase: persist repair state: %w", err)
 	}
-	if err := repairRebasedTickets(w, dir, state); err != nil {
+	if err := repairRebasedTickets(w, dir, state, statePath); err != nil {
 		return fmt.Errorf("issues rebase: replay completed but repair failed; state retained at %s; fix the diagnostic and rerun 'harnez issues rebase %s': %w", statePath, upstream, err)
 	}
 	if err := os.Remove(statePath); err != nil && !os.IsNotExist(err) {
@@ -292,7 +302,7 @@ func plannedCollisions(dir, upstream string, state rebaseState) (int, []rebaseOw
 	return max, collisions, nil
 }
 
-func repairRebasedTickets(w io.Writer, dir string, state rebaseState) error {
+func repairRebasedTickets(w io.Writer, dir string, state rebaseState, statePath string) error {
 	var stage []string
 	mutated := false
 	for _, repair := range state.Repairs {
@@ -307,11 +317,15 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState) error {
 			return newErr
 		}
 		if oldInfo == nil && newInfo != nil {
+			content, readErr := os.ReadFile(newPath)
+			if readErr != nil || !strings.HasPrefix(string(content), "# "+repair.NewNumber+" ") {
+				return fmt.Errorf("repair destination %s is incomplete or has the wrong header", repair.NewPath)
+			}
 			stage = append(stage, repair.OldPath, repair.NewPath)
 			continue
 		}
-		if oldInfo == nil || newInfo != nil {
-			return fmt.Errorf("repair state is ambiguous for %s -> %s; leave state intact and restore exactly one source path", repair.OldPath, repair.NewPath)
+		if oldInfo == nil {
+			return fmt.Errorf("repair source and destination are both missing for %s -> %s; restore the source and retry", repair.OldPath, repair.NewPath)
 		}
 		content, err := os.ReadFile(old)
 		if err != nil {
@@ -321,16 +335,59 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState) error {
 		if err != nil {
 			return fmt.Errorf("%s: %w", repair.OldPath, err)
 		}
-		fd, err := os.OpenFile(newPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-		if err != nil {
-			return fmt.Errorf("claim %s: %w", repair.NewPath, err)
+		tempID := sha256.Sum256([]byte(state.Head + "\x00" + repair.OldPath + "\x00" + repair.NewPath))
+		tmpPath := fmt.Sprintf("%s.harnez-%x.tmp", newPath, tempID[:6])
+		if newInfo != nil {
+			existing, readErr := os.ReadFile(newPath)
+			if readErr == nil && string(existing) == rewritten {
+				if err := os.Remove(old); err != nil {
+					return err
+				}
+				_ = os.Remove(tmpPath)
+				mutated = true
+				stage = append(stage, repair.OldPath, repair.NewPath)
+				continue
+			}
+			return fmt.Errorf("repair destination %s was claimed with unexpected content; refusing to overwrite it", repair.NewPath)
 		}
-		if _, err = fd.WriteString(rewritten); err != nil {
-			fd.Close()
-			return err
+		tmpContent, tmpErr := os.ReadFile(tmpPath)
+		if tmpErr == nil {
+			if string(tmpContent) != rewritten {
+				return fmt.Errorf("transaction temp %s has unexpected content; refusing to replace it", tmpPath)
+			}
+		} else if !os.IsNotExist(tmpErr) {
+			return tmpErr
+		} else {
+			scratchPattern := tmpPath + ".scratch-*"
+			staleScratch, _ := filepath.Glob(scratchPattern)
+			for _, scratch := range staleScratch {
+				_ = os.Remove(scratch)
+			}
+			fd, createErr := os.CreateTemp(filepath.Dir(tmpPath), filepath.Base(tmpPath)+".scratch-")
+			if createErr != nil {
+				return fmt.Errorf("create transaction scratch for %s: %w", repair.NewPath, createErr)
+			}
+			scratchPath := fd.Name()
+			if _, createErr = fd.WriteString(rewritten); createErr != nil {
+				fd.Close()
+				_ = os.Remove(scratchPath)
+				return createErr
+			}
+			if createErr = fd.Close(); createErr != nil {
+				_ = os.Remove(scratchPath)
+				return createErr
+			}
+			if createErr = os.Link(scratchPath, tmpPath); createErr != nil {
+				_ = os.Remove(scratchPath)
+				return fmt.Errorf("publish transaction temp for %s: %w", repair.NewPath, createErr)
+			}
+			_ = os.Remove(scratchPath)
 		}
-		if err = fd.Close(); err != nil {
-			return err
+		if err := os.Link(tmpPath, newPath); err != nil {
+			return fmt.Errorf("atomically claim %s without overwrite: %w", repair.NewPath, err)
+		}
+		if err := os.Remove(tmpPath); err != nil {
+			return fmt.Errorf("remove completed transaction temp %s: %w", tmpPath, err)
 		}
 		if err := os.Remove(old); err != nil {
 			return err
@@ -366,14 +423,34 @@ func repairRebasedTickets(w io.Writer, dir string, state rebaseState) error {
 	if _, err := gitOutput(dir, commitArgs...); err != nil {
 		return err
 	}
-	if state.Staged != "" {
-		cmd := exec.Command("git", "-C", dir, "apply", "--cached", "--whitespace=nowarn", "-")
-		cmd.Stdin = strings.NewReader(state.Staged)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("restore unrelated staged changes: %w: %s", err, strings.TrimSpace(string(out)))
-		}
+	state.Phase = "restore"
+	if err := writeRebaseState(statePath, state); err != nil {
+		return fmt.Errorf("persist staged-state recovery phase: %w", err)
+	}
+	if err := restoreStagedChanges(dir, state); err != nil {
+		return err
 	}
 	return runIssuesLint(w, dir)
+}
+
+func restoreStagedChanges(dir string, state rebaseState) error {
+	cmd := exec.Command("git", "-C", dir, "diff", "--cached", "--binary")
+	current, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+	if string(current) == state.Staged || state.Staged == "" {
+		return nil
+	}
+	if len(current) != 0 {
+		return fmt.Errorf("index contains unexpected staged changes; recovery state retained")
+	}
+	cmd = exec.Command("git", "-C", dir, "apply", "--cached", "--whitespace=nowarn", "-")
+	cmd.Stdin = strings.NewReader(state.Staged)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("restore unrelated staged changes: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 func runIssuesLint(w io.Writer, dir string) error {
@@ -415,6 +492,19 @@ func runIssuesLint(w io.Writer, dir string) error {
 	}
 	fmt.Fprintln(w, "issues tracker valid")
 	return nil
+}
+
+func runIssuesLintCached(w io.Writer, dir string) error {
+	tmp, err := os.MkdirTemp("", "harnez-issues-index-")
+	if err != nil {
+		return fmt.Errorf("issues lint --cached: %w", err)
+	}
+	defer os.RemoveAll(tmp)
+	prefix := tmp + string(os.PathSeparator)
+	if _, err := gitOutput(dir, "checkout-index", "--all", "--prefix="+prefix); err != nil {
+		return fmt.Errorf("issues lint --cached: materialize index: %w", err)
+	}
+	return runIssuesLint(w, tmp)
 }
 
 // runIssuesMergeDriver rebuilds Git's current temporary version from ticket
