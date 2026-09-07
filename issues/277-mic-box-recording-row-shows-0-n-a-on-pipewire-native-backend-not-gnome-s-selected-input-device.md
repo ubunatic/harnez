@@ -215,7 +215,7 @@ backend via `wpctl`, `Recording` left as a documented `n/a` decision.
   `Level` uses everywhere else in this package), and `parseWpctlMuted`
   (`strings.Contains(out, "[MUTED]")`). `currentMicStatusPipeWire` now
   calls `runWpctlGetVolumeFn()` and populates `Level`/`Muted` from the
-  parsed result, degrading to the pre-270 zero-value reading (not an error)
+  parsed result, degrading to the pre-277 zero-value reading (not an error)
   only when `wpctl` itself is missing or the call fails — `Available` stays
   true either way since the live-capture path (`pw-record`) doesn't depend
   on `wpctl`.
