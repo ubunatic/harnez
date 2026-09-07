@@ -658,6 +658,7 @@ func TestGearMulticallExecution(t *testing.T) {
 
 	// 1. Test basic command execution: ⚙ echo hello
 	cmd := exec.Command(gearPath, "echo", "hello from gear")
+	cmd.Env = append(os.Environ(), "HARNEZ_DISABLE_RATE_FEEDBACK=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("⚙ echo failed: %v\n%s", err, string(out))
@@ -668,6 +669,7 @@ func TestGearMulticallExecution(t *testing.T) {
 
 	// 2. Test exit code forwarding: ⚙ sh -c 'exit 42'
 	cmd = exec.Command(gearPath, "sh", "-c", "exit 42")
+	cmd.Env = append(os.Environ(), "HARNEZ_DISABLE_RATE_FEEDBACK=1")
 	err = cmd.Run()
 	if err == nil {
 		t.Fatal("expected non-zero exit code 42, got nil")
@@ -725,6 +727,7 @@ func TestInferToolFromArgs(t *testing.T) {
 		{[]string{"bash", "-c", "git status && echo done"}, "Bash", "git"},
 		{[]string{"sh", "-c", "FOO=bar /usr/bin/go test ./..."}, "Bash", "go"},
 		{[]string{"bash", "-c", "sudo apt update"}, "Bash", "apt"},
+		{[]string{"bash", "-c", "sudo -u root npm test"}, "Bash", "npm"},
 		{[]string{"bash", "-c", "echo hello"}, "Bash", "echo"},
 		{[]string{"git", "diff"}, "CustomTool", "CustomTool"},
 	}
@@ -748,6 +751,12 @@ func TestIsSimpleShellCommand(t *testing.T) {
 		{"sqlite3 db \"SELECT 1;\"", false},
 		{"make check", true},
 		{"go test ./...", true},
+		{"cd /tmp", false},
+		{"read -r line", false},
+		{"! git diff --quiet", false},
+		{"[[ -f foo ]]", false},
+		{"--version", false},
+		{"-h", false},
 		{"git status && echo done", false},
 		{"git status || echo fail", false},
 		{"git status; echo done", false},
@@ -782,6 +791,7 @@ func TestFormatGearRewrite(t *testing.T) {
 		{"git status && echo done", "", "⚙ bash -c 'git status && echo done'"},
 		{"go test ./...", "--distill", "⚙ --distill -- bash -c 'go test ./...'"},
 		{"VAR=1 git diff", "", "⚙ bash -c 'VAR=1 git diff'"},
+		{"cd /tmp", "", "⚙ bash -c 'cd /tmp'"},
 	}
 	for _, tc := range cases {
 		got := formatGearRewrite(tc.cmd, tc.distillFlag)
@@ -790,5 +800,27 @@ func TestFormatGearRewrite(t *testing.T) {
 		}
 	}
 }
+
+func TestAlreadyRoutedThroughExec_WithEnvPrefix(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want bool
+	}{
+		{"⚙ git status", true},
+		{"HARNEZ_EXPECT_FAILURE=1 ⚙ git status", true},
+		{"FOO=bar BAR=baz ⚙ echo test", true},
+		{"harnez exec -- git status", true},
+		{"HARNEZ_EXPECT_FAILURE=1 harnez exec -- git status", true},
+		{"git status", false},
+		{"VAR=1 git status", false},
+	}
+	for _, tc := range cases {
+		got := alreadyRoutedThroughExec(tc.cmd)
+		if got != tc.want {
+			t.Errorf("alreadyRoutedThroughExec(%q) = %v, want %v", tc.cmd, got, tc.want)
+		}
+	}
+}
+
 
 

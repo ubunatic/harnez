@@ -207,22 +207,32 @@ func inferToolFromArgs(args []string, defaultTool string) string {
 	if len(args) == 0 {
 		return fallback
 	}
+	var tokens []string
 	if len(args) >= 3 && (args[0] == "bash" || args[0] == "sh") && args[1] == "-c" {
-		fields := strings.Fields(args[2])
-		for _, f := range fields {
-			if strings.Contains(f, "=") && !strings.HasPrefix(f, "-") {
-				continue
-			}
-			base := filepath.Base(f)
-			if base != "" && base != "bash" && base != "sh" && base != "sudo" && base != "env" {
-				return base
-			}
-		}
-		return fallback
+		tokens = strings.Fields(args[2])
+	} else {
+		tokens = args
 	}
-	base := filepath.Base(args[0])
-	if base != "" && base != "bash" && base != "sh" {
-		return base
+
+	skipNext := false
+	for _, tok := range tokens {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		if strings.Contains(tok, "=") && !strings.HasPrefix(tok, "-") {
+			continue // skip VAR=val
+		}
+		if strings.HasPrefix(tok, "-") {
+			if tok == "-u" || tok == "-g" || tok == "-C" || tok == "-w" || tok == "--user" || tok == "--group" || tok == "--directory" {
+				skipNext = true
+			}
+			continue
+		}
+		base := filepath.Base(tok)
+		if base != "" && base != "bash" && base != "sh" && base != "sudo" && base != "env" && base != "doas" && base != "nohup" {
+			return base
+		}
 	}
 	return fallback
 }
@@ -488,7 +498,7 @@ settings is issues/119's job, out of this command's scope.`,
 	}
 }
 
-// execInvocationRE-equivalent guard: avoid re-wrapping a command that
+// alreadyRoutedThroughExec guard: avoid re-wrapping a command that
 // already routes through harnez exec (or the ⚙ alias/shim).
 func alreadyRoutedThroughExec(command string) bool {
 	if strings.Contains(command, "harnez exec") {
@@ -499,42 +509,16 @@ func alreadyRoutedThroughExec(command string) bool {
 		return false
 	}
 	fields := strings.Fields(trimmed)
-	if len(fields) > 0 {
-		first := filepath.Base(fields[0])
-		if isGearInvocation(first) {
-			return true
+	for _, f := range fields {
+		if strings.Contains(f, "=") && !strings.HasPrefix(f, "-") {
+			continue // skip VAR=val prefixes
 		}
+		first := filepath.Base(f)
+		return isGearInvocation(first)
 	}
 	return false
 }
 
-// runExecHook decodes a PreToolUse hook payload from in and, if it's a
-// non-empty Bash command not already wrapped, writes the rewrite envelope
-// to out. It is side-effect-free: no subprocess is spawned and no
-// telemetry row is written here (see docs/HookRewritePattern.md).
-//
-// The rewritten command routes through 'bash -c <quoted original>' rather
-// than splicing the original command's tokens directly after "--": Claude
-// Code re-executes the rewritten string via its own outer 'bash -c', so
-// any shell metacharacters in the original command (pipes, &&, ;, quoting)
-// would otherwise be re-interpreted by that outer shell instead of reaching
-// harnez exec as a single argument — silently breaking telemetry capture
-// and, for '&&'/';', silently running part of the command outside harnez
-// exec's wrapping entirely. Wrapping in a quoted 'bash -c' argument keeps
-// the original command intact as one shell string, exactly as distill's
-// own hook rewrite already does (see internal/distill/hook.go).
-//
-// This hook also applies distill's PreToolUse rewrite (HARNEZ_DISTILL_AUTOPIPE)
-// itself, composing it into the one rewrite this hook emits, rather than
-// relying on Claude Code to run two separate PreToolUse hooks on the same
-// Bash matcher: per Claude Code's hooks-guide ("Limitations" — when
-// multiple PreToolUse hooks return updatedInput for the same tool, hooks
-// run in parallel and the last one to finish wins, non-deterministically),
-// two independently-rewriting hooks on the same matcher is a real bug, not
-// a hypothetical — see docs/HookRewritePattern.md. apply only installs
-// this one PreToolUse/Bash hook; distill's own hook command still exists
-// and works standalone, it's just not separately wired into apply's
-// managed hooks anymore (see config.yaml).
 // isSimpleShellCommand reports whether a shell command string consists of a single
 // simple command (no pipelines, boolean operators, redirects, compound statements,
 // subshells, or variable-assignment prefixes) that can be safely prefixed directly
@@ -557,16 +541,23 @@ func isSimpleShellCommand(command string) bool {
 		return false
 	}
 
+	// Avoid leading flag collisions with Cobra flags (e.g. -v, --version, -h)
+	if strings.HasPrefix(fields[0], "-") {
+		return false
+	}
+
 	// Check for variable assignment prefix (e.g. VAR=val cmd)
 	if strings.Contains(fields[0], "=") {
 		return false
 	}
 
-	// Check for shell keywords / builtins that cannot be arguments to an external binary
+	// Check for shell keywords and builtins without independent binaries on PATH
 	switch fields[0] {
 	case "if", "then", "else", "elif", "fi", "case", "esac", "for", "while", "until", "do", "done",
 		"in", "select", "time", "function", "export", "set", "unset", "alias", "unalias",
-		"source", ".", "eval", "exec", "trap", "return", "exit", "builtin", "command", "shopt":
+		"source", ".", "eval", "exec", "trap", "return", "exit", "builtin", "command", "shopt",
+		"cd", "read", "pushd", "popd", "dirs", "declare", "typeset", "local", "readonly",
+		"type", "ulimit", "umask", "disown", "jobs", "bg", "fg", "wait", "!", "[[", "]]":
 		return false
 	}
 
