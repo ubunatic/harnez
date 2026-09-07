@@ -109,7 +109,8 @@ in managed agent environments / PATH (`~/.claude/bin/⚙`, `~/go/bin/⚙`, etc.)
 - **Shim Script** (`mode 0755`):
   ```sh
   #!/bin/sh
-  if [ "$HARNEZ_INTERCEPTED" = "1" ]; then
+  if test "$HARNEZ_INTERCEPTED" = "1"
+  then
       exec /bin/bash "$@"
   fi
   export HARNEZ_INTERCEPTED=1

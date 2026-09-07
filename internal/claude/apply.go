@@ -578,7 +578,8 @@ func GearSymlinkTargets(target string, cfg *Config) []string {
 
 // BashShimContent is the guarded bash PATH-shim script (issue 271).
 const BashShimContent = `#!/bin/sh
-if [ "$HARNEZ_INTERCEPTED" = "1" ]; then
+if test "$HARNEZ_INTERCEPTED" = "1"
+then
     exec /bin/bash "$@"
 fi
 export HARNEZ_INTERCEPTED=1
@@ -604,7 +605,8 @@ agy() {
 # harnez:end env
 `
 
-const HarnezShellRCSnippet = `if [ -f "$HOME/.harnez/env.sh" ]; then
+const HarnezShellRCSnippet = `if test -f "$HOME/.harnez/env.sh"
+then
     . "$HOME/.harnez/env.sh"
 fi
 `
