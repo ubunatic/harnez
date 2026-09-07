@@ -280,3 +280,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 279 | [279-avoid-persistent-issues-readme-lock-sidecar-in-working-trees.md](279-avoid-persistent-issues-readme-lock-sidecar-in-working-trees.md) | Avoid persistent issues README lock sidecar in working trees | Open |
 | 280 | [280-make-generated-issue-index-and-ticket-numbering-rebase-safe.md](280-make-generated-issue-index-and-ticket-numbering-rebase-safe.md) | Make generated issue index and ticket numbering rebase-safe | Open |
 | 281 | [281-make-advisor-discovery-opt-in-except-for-highly-undecidable-problems.md](281-make-advisor-discovery-opt-in-except-for-highly-undecidable-problems.md) | Make advisor discovery opt-in except for highly undecidable problems | Open |
+| 282 | [282-make-issue-git-integration-opt-in-via-init-issues-git.md](282-make-issue-git-integration-opt-in-via-init-issues-git.md) | Make issue Git integration opt-in via init issues-git | Open |
