@@ -1,6 +1,6 @@
 # Roadmap
 
-Working roadmap for the open backlog (77 tickets as of 2026-09-04). Derived from each ticket's
+Working roadmap for the open backlog (updated 2026-09-07). Derived from each ticket's
 appended `## Implementation Plan`, so scope calls here reflect the planning pass, not a fresh
 re-derivation.
 
@@ -18,6 +18,15 @@ Sequencing buckets:
 
 ---
 
+
+## 0. Shipped Recently
+
+- **006** — `fix(status): check all managed settings keys`
+- **018** — bundled marker backfill + guard test
+- **042**, **045**, **046**, **056**, **125**, **222**, **095 pt.1** — AgenticLoop & practice docs improvements
+- **229** — `/issue` skill
+- **249** — portable copyable-doc contract
+
 ## 1. Usage watch TUI — correctness & legibility
 
 The `--watch` dashboard is the tool's front door. Everything that makes it lie, misalign, or
@@ -29,19 +38,28 @@ hide a failed collector belongs at the front of the queue.
 | 201 — doubled sparkline resolution + Braille | done, tracker closure only | **Now** |
 | 139 — Codex quota window rollover keeps stale limit | M — three root causes, all identified in-plan (frozen `DurationLeft`, cache, renderers) | **Now** |
 | 105 — per-collector fetch status in usage UI | M — introduces `FetchMode` enum, retires `strings.Contains(source,"stale")` | **Now** |
+| 262 — live mic level meter not showing | S/M, P1 bug — fixes broken live stats | **Now** |
+| 255 — collector resilience: retries & TUI logs | M — prevents transient splash failures | **Now** |
 | 085 — show collector-daemon status in watch | S — no plan written yet; small sibling of 105, land with it | **Next** |
+| 264 — ALSA/arecord live-mic-level backend | M — follows 262 for amixer systems | **Next** |
+| 250 — research desktop mic indicators | S, in progress — solves cross-desktop privacy UX | **Next** |
+| 251 — suppress desktop mic indicators | M — depends on 250 | **Next** |
+| 253 — mic view triggers desktop privacy indicator | S/M | **Next** |
+| 256 — persist watch & collector launch logs | M — follows 255 | **Next** |
+| 261 — default chart background native | S — cosmetic | **Next** |
 | 172 — AGY single-window row alignment | rendering bug fixed; remainder needs a live capped account | **Park** (§9) |
 | 219 — subtler usage-bar colors vs Braille charts | S — spec/colors.yaml ramp split | **Next** |
 | 214 — 256-color heat palette option | M — third value for two existing presentation enums | **Next** |
 | 143 — Git status in all agent status bars | M — shared collector + per-agent wiring | **Next** |
 | 141 — running-agent count in Codex status bar | blocked: Codex status line is a closed item picker, not a command hook | **Later** |
 | 146 — recent-subagent-activity watch box | L — needs a per-tool feasibility matrix first | **Later** |
+| 247 — third mic graph (amplitude-over-time audiogram) | M/L — visual addition, evaluate after 262 | **Later** |
 | 051 — multi-host monitoring + host navigation | L — introduces an "active host" concept the watch state has never had | **Later** |
 | 160 — extract watch layout/UI into renderer-agnostic module | feasibility done; only the user's proceed/stage call remains | **Later** |
 | 161 — collector absorbs remote-load host + Prometheus | M, but only pays off after 160/051 direction is set | **Later** |
 
-Rationale: 210 → 201 → 139 → 105 is the shortest path to "the dashboard never shows a wrong or
-silently stale number." 105 is the one that stops the recurring class of incident (086, 103/104)
+Rationale: 210 → 201 → 139 → 105 → 262 → 255 is the shortest path to "the dashboard never shows a wrong or
+silently stale number." 262 fixes a broken TUI box; 255 stops opaque errors. 105 is the one that stops the recurring class of incident (086, 103/104)
 where a dead collector was only caught by hand-digging on disk. Cosmetics (219, 214) and the
 status-bar work follow once the numbers are trustworthy.
 
@@ -79,30 +97,22 @@ clean tree.
 |---|---|---|
 | 217 — `-n` limit (default 10) and `--all` on `find issues` | S | **Now** |
 | 108 — sequential subagent dispatch + number-allocation race guard | **`Reserve` does not actually close the race** — `O_EXCL` keys on number *plus slug*, so two agents can both own one number (the 179/180 pairs) | **Now** |
-| 229 — `/issue` skill for filing tickets | S/M — config.yaml command+skill registration, pipeline tests | **Now** |
 | 126 — document `Closed — resolved in <commit>` | S, docs-only; evidence says converge on Option B (bare `Closed`) | **Now** |
+| 246 — add /commit and /publish Skills | M — multi-project staged commit ownership | **Next** |
 
 Rationale: 108 is a live data-integrity bug in the tracker — duplicate ticket numbers have
-already happened twice. 217 and 229 are small and directly reduce daily friction.
+already happened twice. 217 is small and directly reduces daily friction. 246 extends the skill set.
 
 ## 5. Agent instructions & practice docs
 
 Two sub-clusters: a batch of small `AgenticLoop.md` edits, and a larger question about how
 instructions are delivered at all.
 
-**Docs batch — land as one or two commits** (all touch `docs/practices/AgenticLoop.md`, several
-also `commands/sprint.md`; landing them separately guarantees conflicts):
+**Docs batch — New** (Previous batch shipped: 042, 045, 046, 056, 125, 222, 095 part 1):
 
-- 042 — repro-before-fix + one Status field per ticket (Phase 2 / Phase 5)
-- 045 — root-cause vs. symptom review-checklist item (Phase 3)
-- 046 — end-of-work commit checkpoint (the 044 gap that recurred)
-- 056 — "piping long-running output through a buffering filter" anti-pattern
-- 125 — chat-visible empty polling anti-pattern
-- 222 — prefer `git -C` / `make -C` over `cd` (also `docs/lang/Bash.md`)
-- 095 part 1 — restore cwd after shell tool use (2–3 lines in the global section, rationale in Bash.md)
+- 263 — `docs/practices/PrototypingFeatures.md`: canary-first IS the prototyping/isolation practice
 
-→ **Now.** Zero code, high per-session value, and they collide with each other if deferred
-individually.
+→ **Now.** High per-session value.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
@@ -126,10 +136,8 @@ are the measurement side of the same problem — do them near 149 so the audit i
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 006 — status checks only the `model` key | S — iterate `managedSettingsKeys`, gate on presence in the built doc | **Now** |
-| 018 — mark bundled docs in front matter | S — marker convention already load-bearing; 10 of 20 copyable docs unmarked, backfill + lint | **Now** |
+| 209 — move `agy-hooks` into `harnez apply` | S/M — Codex hooks are the exact precedent; also fixes the `status` gap | **Now** |
 | 005 — permissions are grow-only | M — needs a managed-permission state sidecar so user/Claude-Code additions survive | **Next** |
-| 209 — move `agy-hooks` into `harnez apply` | S/M — Codex hooks are the exact precedent; also fixes the `status` gap | **Next** |
 | 152 — move `agent-collector` under `usage` | S, **but** the systemd unit hardcodes `ExecStart … agent-collector`; needs an alias + migration, not a rename | **Next** |
 | 015 — teach AGENTS.md about `uman` | S — mirror the `repo_modes` opt-in mechanism, not a global section | **Next** |
 | 016 — `make smoke` convention in Make.md | S, docs + template | **Next** |
@@ -140,8 +148,7 @@ are the measurement side of the same problem — do them near 149 so the audit i
 | 009 — `diff`/`clean` don't cover Makefile targets | scope corrected: belongs on `init --dry-run`, not on the global-only `DiffAll`/`CleanAll` | **Later** |
 | 013 — `promote` command | L, new command with an agent-invocation surface | **Later** |
 
-Rationale: 006 and 018 are ~an hour each and remove two classes of silent wrongness (status
-reporting "ok" for keys it never checks; agents hand-editing docs that get overwritten). 005 is
+Rationale: With 006 and 018 shipped, 209 moves up to fix a missing piece in `apply` (agy-hooks). 005 is
 the real one but needs the state sidecar designed carefully so `apply` never deletes a
 permission the user approved interactively.
 
@@ -213,10 +220,11 @@ building it twice.
 
 ## Suggested order of attack
 
-1. **Dashboard truth**: 210 → 201 (close) → 139 → 105 (+085)
-2. **Tracker integrity**: 108 → 217 → 229 → 126
-3. **Docs batch, one commit**: 042, 045, 046, 056, 125, 222, 095(pt.1) — plus 166 Part A
-4. **Cheap `apply` correctness**: 006, 018, 030 (Codex half)
+1. **Dashboard truth & resilience**: 210 → 201 (close) → 139 → 105 → 262 → 255
+2. **Tracker integrity**: 108 → 217 → 126
+3. **Docs batch**: 263 — plus 166 Part A
+4. **Cheap `apply` correctness**: 209, 030 (Codex half)
 5. **Instruction architecture**: 149 → 144, 151, 128, 135, 134
-6. **Collector depth**: 113 → 111 → 034
-7. Everything in **Later**, reprioritized once 149 and 160 have decisions attached.
+6. **Mic indicators & Audio UX**: 250 → 251 → 264 → 253
+7. **Collector depth**: 113 → 111 → 034
+8. Everything in **Later**, reprioritized once 149 and 160 have decisions attached.
