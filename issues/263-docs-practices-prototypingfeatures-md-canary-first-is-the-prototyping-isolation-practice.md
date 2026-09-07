@@ -59,8 +59,11 @@ parallel mechanism.
 - **Not covered by canary-first, and worth an honest note rather than false parity**:
   - **Environment/process isolation mechanics** (worktrees, sandboxed containers, VM-per-agent)
     are a *runtime* isolation concern, not a design-probe concern — canary-first says nothing
-    about where a canary itself runs relative to the main working tree. Worth a short
-    cross-reference, not a rewrite.
+    about where a canary itself runs relative to the main working tree. This is a genuinely
+    separate story: it's orthogonal to *what* gets prototyped and combinable with any agent
+    work generically (not specific to prototyping), so it's explicitly out of scope here and
+    low priority if ever pursued as its own doc. Worth at most a one-line cross-reference, not
+    a rewrite.
   - **Feature flags for gradual/staged rollout** of an already-built feature — canary-first is a
     pre-build probe, not a rollout mechanism. Out of scope for canary-first and should be named
     as an explicit non-goal rather than silently absorbed into the "prototyping" framing.
