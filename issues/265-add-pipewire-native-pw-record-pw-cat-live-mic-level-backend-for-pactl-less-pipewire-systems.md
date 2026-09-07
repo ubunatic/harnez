@@ -1,0 +1,183 @@
+# 265 — Add PipeWire-native pw-record/pw-cat live-mic-level backend for pactl-less PipeWire systems
+
+**Status**: Open
+**Priority**: P1 (High)
+**Severity**: Moderate
+**Category**: Feature
+**Related**: Issue 262; Issue 264; Issue 245; Issue 244; `internal/usage/mic.go`; `internal/usage/miclive.go`
+
+---
+
+## 1. Problem & Motivation
+
+Confirmed live, on the user's actual current machine, this session (not
+hypothetical):
+
+- `which pactl` / `which parec` → **not found**. Neither binary is on PATH.
+- PipeWire is fully installed and running: `systemctl --user status
+  pipewire pipewire-pulse` shows both **active**; `pw-cli info 0` succeeds.
+- Installed packages: `pipewire`, `pipewire-pulse`, `pipewire-alsa`,
+  `pipewire-audio`, `pipewire-bin`, `wireplumber` — but **not**
+  `pulseaudio-utils`, the separate compatibility package that ships
+  `pactl`/`parec`.
+- `pw-cat`, `pw-record`, and `pw-cli` **are** on PATH (they ship with
+  `pipewire-bin`, installed automatically whenever the PipeWire server
+  itself is, unlike `pulseaudio-utils` which is optional).
+
+This exactly matches the user's original complaint that led to issue 262:
+"other app in the system can use the mic so we should too." Other apps on
+this machine talk to PipeWire directly (or via the `pipewire-alsa`/
+`pipewire-pulse` compat shims) and the mic works fine. But
+`internal/usage/mic.go`'s `resolveMicBackend()` only probes `pactl
+get-default-source`, and `internal/usage/miclive.go`'s live-capture path
+(`captureMicLiveOnce`) is hard-gated to `resolveMicBackend() ==
+micBackendPactl` and shells out to `parec` specifically (verified against
+current source in this session, post-262 fix at commit 5eb361c — the gate
+and the `parec` invocation are unchanged). With no `pactl`/`parec` on PATH,
+`resolveMicBackend()` falls through to the `amixer` probe, and the box shows
+`"live n/a (needs pactl/PipeWire)"` — even though PipeWire is fully running
+and usable. The message issue 262 shipped is accurate about *why* today's
+code can't get a live reading, but it describes a codebase gap, not a
+hardware/OS constraint: this machine's mic is fully live-capturable, this
+codebase just doesn't know how to ask PipeWire for it without the
+PulseAudio-compat shim installed.
+
+This is **complementary to issue 264, not a duplicate**. 264 targets
+systems with no PipeWire session at all (amixer-only, e.g. plain ALSA with
+no sound server) and proposes an ALSA/`arecord` live backend. This ticket
+targets systems **with PipeWire running** but **without the
+`pactl`/`parec` compatibility package** — arguably the more common modern
+desktop case today: PipeWire is now the Ubuntu/Fedora default sound server,
+and `pulseaudio-utils` is not always pulled in as a dependency (as
+demonstrated by this exact machine). The two tickets propose different
+backends for genuinely different gaps in `resolveMicBackend()`'s coverage.
+
+## 2. Format-Compatibility Findings (Verified This Session)
+
+`internal/usage/miclive.go`'s own doc comment (lines 24-33) already records
+a hand canary-probe from issue 245's original investigation
+(2026-09-05, on a PipeWire 17.0 dev machine): both
+
+```
+parec --raw --format=s16le --rate=8000 --channels=1 -d @DEFAULT_SOURCE@
+```
+
+and
+
+```
+pw-cat -r --target <source> --format s16 --rate 8000 --channels 1 -
+```
+
+were probed side by side and **both produced live, changing amplitude data
+and terminated cleanly on SIGTERM**. `parec` was chosen at the time purely
+because it matched the existing pactl-only backend gate and needed no
+numeric source-id resolution (`@DEFAULT_SOURCE@` vs. a PipeWire node
+target) — not because `pw-cat` was structurally worse. That prior probe is
+strong prior evidence this approach works; this session did not have
+physical mic access to re-run a live capture, so re-verify the actual byte
+stream on a real machine before merging (see Open Questions).
+
+Re-checked `pw-record --help` and `pw-cat --help` on this session's machine
+(pipewire-bin present) to confirm flag support against the current
+installed version:
+
+- Both tools support `--rate`, `--channels`, `--format` (default `s16`,
+  i.e. signed 16-bit — matches `micLiveAmplitudeFromPCM16LE`'s expected
+  `int16` little-endian samples), and `--container` (raw vs. wav/etc.).
+- `-a, --raw` (`pw-record`) / the RAW mode flag forces raw sample output
+  with no container header — needed so the byte stream `captureMicLiveOnce`
+  reads from stdout is pure PCM samples, not a WAV-wrapped stream (a WAV
+  header would corrupt the first ~44 bytes fed into
+  `micLiveAmplitudeFromPCM16LE`).
+- `pw-cat` additionally exposes `-r, --record` (recording mode) and
+  `--target` (set node target serial or name, default auto) — the
+  mechanism to pin capture to a specific source/node, playing the same role
+  `parec -d @DEFAULT_SOURCE@` plays today.
+- `pw-record` is dedicated to recording (no `-r` mode flag needed) and
+  otherwise exposes the same `--rate`/`--channels`/`--format`/`-a` surface.
+- Net: either tool, invoked with `--raw --format=s16 --rate=8000
+  --channels=1 -` (writing to stdout via `-` as the output file/target),
+  should produce the same raw PCM16LE mono stream shape
+  `micLiveAmplitudeFromPCM16LE` already consumes from `parec`, requiring no
+  changes to the RMS/ballistics code in `miclive.go` — only a new capture
+  subprocess invocation function analogous to `captureMicLiveOnce`.
+
+## 3. Proposed Approach
+
+- Extend `resolveMicBackend()` (or add a capture-layer probe alongside it)
+  with a new backend kind, e.g. `micBackendPipeWireNative`, detected when
+  `pactl`/`parec` are absent but a PipeWire socket is reachable (e.g.
+  `pw-cli info 0` succeeds, or `pw-record`/`pw-cat` are on PATH and a
+  quick, bounded canary invocation succeeds).
+- Detection/fallback order becomes: **1) `pactl`/`parec`** (existing,
+  unchanged — most mature, symbolic `@DEFAULT_SOURCE@` resolution) → **2)
+  `pw-record`/`pw-cat`** (new, this ticket — PipeWire running, no
+  PulseAudio-compat shim) → **3) `amixer`** (existing, static-only; issue
+  264's proposed ALSA/`arecord` live path would slot in here or alongside
+  it for systems with neither PipeWire nor pactl).
+- Configured-gain reading (`CurrentMicStatus`, issue 244's one-shot
+  `pactl`/`amixer` polls) is out of scope here — this ticket is about the
+  *live streaming* meter only (issue 245's scope), matching how 264 is
+  also scoped to the live path.
+- Add a `captureMicLiveOnce`-equivalent function (e.g.
+  `captureMicLiveOnceViaPipeWire`) invoking `pw-record` (or `pw-cat -r`)
+  with the raw-mode flags above, feeding the same stdout pipe →
+  `micLiveAmplitudeFromPCM16LE` → ballistics pipeline unchanged.
+- Update the Mic box's "n/a" messaging (issue 262's fix) so it no longer
+  says "needs pactl/PipeWire" once a PipeWire-native path exists and is
+  tried — the message should only degrade to a genuine "no audio
+  interface" state when neither compat layer works.
+
+## 4. Open Questions
+
+- **Node/source targeting**: `parec -d @DEFAULT_SOURCE@` resolves the
+  default source symbolically with no numeric ID lookup. `pw-record`'s
+  `--target` defaults to "auto" per its own help text — confirm this
+  actually follows the same default-source semantics as PulseAudio's
+  `@DEFAULT_SOURCE@` (i.e. picks the currently-configured default capture
+  device) rather than an arbitrary/first node, especially when multiple
+  input devices are present.
+- **Permission model**: does `pw-record`/`pw-cat` require anything beyond
+  what `parec` needs (e.g. a running user session bus, `XDG_RUNTIME_DIR`,
+  membership in an `audio`-adjacent group) that could differ across
+  distros/desktop environments?
+- **CPU/latency cost**: `parec`'s `--latency-msec=20 --process-time-msec=20`
+  flags tune buffering for the 20 Hz sample cadence issue 258 established.
+  Confirm `pw-record`/`pw-cat` expose equivalent latency controls, or that
+  their defaults are close enough not to regress meter smoothness.
+- **Zero-zombie verification**: `captureMicLiveOnce`'s `cmd.Cancel` sends
+  SIGTERM and `cmd.WaitDelay` bounds subprocess teardown (issue 245's
+  "zero-zombie verified" requirement, per AgenticLoop.md Invariant 3).
+  Confirm `pw-record`/`pw-cat` terminate cleanly on SIGTERM the same way —
+  the doc-comment canary probe (§2 above) reported clean termination, but
+  re-verify under the actual `cmd.Cancel`/`cmd.WaitDelay` harness, not just
+  manual Ctrl-C.
+- **False-triggering the recording indicator**: issue 248 investigated
+  `parec`'s own capture stream tripping GNOME's mic-in-use indicator and
+  found an `application.id=org.gnome.VolumeControl` property exemption.
+  Confirm whether `pw-record`/`pw-cat` need the same (or an equivalent)
+  property set to avoid the same false-trigger, since they open their own
+  independent PipeWire stream.
+
+## 5. Acceptance Criteria
+
+- [ ] New PipeWire-native live-capture backend (`pw-record` or `pw-cat -r`,
+      pick one after resolving the targeting question above) added to
+      `internal/usage/miclive.go`, reusing
+      `micLiveAmplitudeFromPCM16LE`/ballistics unchanged.
+- [ ] `resolveMicBackend()` (or an adjacent capture-layer probe) tries
+      `pactl`/`parec` first, then this new path, then falls through to
+      `amixer` — existing pactl-path behavior and tests unchanged.
+- [ ] Live-verified on a real PipeWire-without-pulseaudio-utils machine
+      (this exact scenario, not just unit tests) that the Mic box shows a
+      genuine, changing live level — per AgenticLoop.md's Live/Real-
+      Environment Verification requirement for env-resolution-dependent
+      features.
+- [ ] Mic box "n/a" messaging (issue 262) updated to reflect the new
+      fallback order, no longer claiming "needs pactl/PipeWire" once this
+      path exists.
+- [ ] Zero-zombie check: subprocess cleanly terminates on SIGTERM/context
+      cancellation, matching `captureMicLiveOnce`'s existing guarantee.
+- [ ] Cross-referenced against issue 264 in both tickets' `Related` fields
+      (no scope overlap — this covers PipeWire-without-pactl, 264 covers
+      no-PipeWire-at-all).

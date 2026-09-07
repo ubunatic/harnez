@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
-**Related**: Issue 262; Issue 245; Issue 244; Issue 248; Issue 257; Issue 258; Issue 260; `internal/usage/miclive.go`; `internal/usage/mic.go`; `internal/usage/watch.go`
+**Related**: Issue 262; Issue 245; Issue 244; Issue 248; Issue 257; Issue 258; Issue 260; Issue 265 (complementary — PipeWire-native `pw-record`/`pw-cat` backend for systems with PipeWire but no `pactl`/`parec`; this ticket covers no-PipeWire-at-all amixer-only systems); `internal/usage/miclive.go`; `internal/usage/mic.go`; `internal/usage/watch.go`
 
 ---
 
