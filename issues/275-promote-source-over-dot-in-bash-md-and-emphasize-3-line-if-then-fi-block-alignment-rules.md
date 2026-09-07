@@ -1,6 +1,6 @@
 # 275 — Promote source over dot in Bash.md and emphasize 3-line if-then-fi block alignment rules
 
-**Status**: Open
+**Status**: Closed — resolved in d7bef73
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Documentation / Agentic Ergonomics
