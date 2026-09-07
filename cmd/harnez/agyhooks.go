@@ -106,6 +106,6 @@ func runAgyHooksHook(in io.Reader, out io.Writer) error {
 
 	var resp agyPreToolUseOutput
 	resp.Decision = "allow"
-	resp.Overwrite.CommandLine = fmt.Sprintf("⚙ bash -c %s", shellQuote(command))
+	resp.Overwrite.CommandLine = formatGearRewrite(command, "")
 	return json.NewEncoder(out).Encode(resp)
 }

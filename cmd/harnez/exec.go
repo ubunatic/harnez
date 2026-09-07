@@ -535,6 +535,58 @@ func alreadyRoutedThroughExec(command string) bool {
 // this one PreToolUse/Bash hook; distill's own hook command still exists
 // and works standalone, it's just not separately wired into apply's
 // managed hooks anymore (see config.yaml).
+// isSimpleShellCommand reports whether a shell command string consists of a single
+// simple command (no pipelines, boolean operators, redirects, compound statements,
+// subshells, or variable-assignment prefixes) that can be safely prefixed directly
+// with `⚙ ` without requiring `bash -c` wrapping.
+func isSimpleShellCommand(command string) bool {
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
+		return false
+	}
+
+	// Check for shell metacharacters / control operators / variables / subshells
+	for _, char := range []string{"\n", "\r", ";", "&", "|", "<", ">", "$", "`", "(", ")", "{", "}"} {
+		if strings.Contains(trimmed, char) {
+			return false
+		}
+	}
+
+	fields := strings.Fields(trimmed)
+	if len(fields) == 0 {
+		return false
+	}
+
+	// Check for variable assignment prefix (e.g. VAR=val cmd)
+	if strings.Contains(fields[0], "=") {
+		return false
+	}
+
+	// Check for shell keywords / builtins that cannot be arguments to an external binary
+	switch fields[0] {
+	case "if", "then", "else", "elif", "fi", "case", "esac", "for", "while", "until", "do", "done",
+		"in", "select", "time", "function", "export", "set", "unset", "alias", "unalias",
+		"source", ".", "eval", "exec", "trap", "return", "exit", "builtin", "command", "shopt":
+		return false
+	}
+
+	return true
+}
+
+// formatGearRewrite formats a command to be routed through ⚙.
+// For simple commands with no distill flag, it produces `⚙ <command>` directly without `bash -c`.
+// For compound/pipeline commands or when flags are present, it wraps with `⚙ ... -- bash -c <quoted>`.
+func formatGearRewrite(command string, distillFlag string) string {
+	distillFlag = strings.TrimSpace(distillFlag)
+	if distillFlag == "" && isSimpleShellCommand(command) {
+		return fmt.Sprintf("⚙ %s", strings.TrimSpace(command))
+	}
+	if distillFlag != "" {
+		return fmt.Sprintf("⚙ %s -- bash -c %s", distillFlag, shellQuote(command))
+	}
+	return fmt.Sprintf("⚙ bash -c %s", shellQuote(command))
+}
+
 func runExecHook(in io.Reader, out io.Writer) error {
 	raw, err := io.ReadAll(in)
 	if err != nil {
@@ -562,12 +614,7 @@ func runExecHook(in io.Reader, out io.Writer) error {
 		distillFlag = " --distill"
 	}
 
-	var rewritten string
-	if distillFlag != "" {
-		rewritten = fmt.Sprintf("⚙%s -- bash -c %s", distillFlag, shellQuote(effective))
-	} else {
-		rewritten = fmt.Sprintf("⚙ bash -c %s", shellQuote(effective))
-	}
+	rewritten := formatGearRewrite(effective, distillFlag)
 	debugLog("exec hook: rewriting %q -> %q", command, rewritten)
 	return json.NewEncoder(out).Encode(hookOutput{
 		HookSpecificOutput: hookSpecificOutput{

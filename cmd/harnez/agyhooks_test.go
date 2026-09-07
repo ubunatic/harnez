@@ -28,14 +28,14 @@ func TestRunAgyHooksHook_RewritesCommand(t *testing.T) {
 	if got.Decision != "allow" {
 		t.Errorf("Decision = %q, want allow", got.Decision)
 	}
-	want := "⚙ bash -c 'git status'"
+	want := "⚙ git status"
 	if got.Overwrite.CommandLine != want {
 		t.Errorf("Overwrite.CommandLine = %q, want %q", got.Overwrite.CommandLine, want)
 	}
 }
 
 func TestRunAgyHooksHook_SkipsAlreadyRouted(t *testing.T) {
-	original := "⚙ bash -c 'git status'"
+	original := "⚙ git status"
 	payload, _ := json.Marshal(map[string]any{
 		"toolCall": map[string]any{
 			"name": "run_command",

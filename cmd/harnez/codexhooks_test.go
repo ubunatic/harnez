@@ -21,14 +21,14 @@ func TestRunCodexHooksHook_RewritesCommand(t *testing.T) {
 	if got.PermissionDecision != "allow" {
 		t.Errorf("PermissionDecision = %q, want allow", got.PermissionDecision)
 	}
-	want := "⚙ bash -c 'git status'"
+	want := "⚙ git status"
 	if got.UpdatedInput["command"] != want {
 		t.Errorf("UpdatedInput[command] = %q, want %q", got.UpdatedInput["command"], want)
 	}
 }
 
 func TestRunCodexHooksHook_SkipsAlreadyRouted(t *testing.T) {
-	original := "⚙ bash -c 'git status'"
+	original := "⚙ git status"
 	payload, _ := json.Marshal(map[string]any{
 		"tool_name":  "Bash",
 		"tool_input": map[string]any{"command": original},

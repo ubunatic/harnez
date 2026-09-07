@@ -103,7 +103,7 @@ func runCodexHooksHook(in io.Reader, out io.Writer) error {
 	resp := codexPreToolUseOutput{
 		PermissionDecision: "allow",
 		UpdatedInput: map[string]string{
-			"command": fmt.Sprintf("⚙ bash -c %s", shellQuote(command)),
+			"command": formatGearRewrite(command, ""),
 		},
 	}
 	return json.NewEncoder(out).Encode(resp)

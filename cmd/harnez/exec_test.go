@@ -465,7 +465,7 @@ func TestRunExecHook_RewritesBashCommand(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("output not valid JSON: %v\n%s", err, out.String())
 	}
-	want := "⚙ bash -c 'git status'"
+	want := "⚙ git status"
 	if got.HookSpecificOutput.UpdatedInput["command"] != want {
 		t.Errorf("updatedInput.command = %q, want %q", got.HookSpecificOutput.UpdatedInput["command"], want)
 	}
@@ -735,4 +735,60 @@ func TestInferToolFromArgs(t *testing.T) {
 		}
 	}
 }
+
+func TestIsSimpleShellCommand(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want bool
+	}{
+		{"git status", true},
+		{"git diff --stat", true},
+		{"npm test", true},
+		{"sqlite3 ~/.harnez/tool_catalog.sqlite \"SELECT * FROM tool_calls\"", true},
+		{"sqlite3 db \"SELECT 1;\"", false},
+		{"make check", true},
+		{"go test ./...", true},
+		{"git status && echo done", false},
+		{"git status || echo fail", false},
+		{"git status; echo done", false},
+		{"git log | grep fix", false},
+		{"echo hello > /tmp/out", false},
+		{"echo hello >> /tmp/out", false},
+		{"cat < /tmp/in", false},
+		{"echo $(pwd)", false},
+		{"echo `pwd`", false},
+		{"VAR=1 git status", false},
+		{"export FOO=bar", false},
+		{"for f in *.go; do echo $f; done", false},
+		{"if test -f foo; then echo yes; fi", false},
+		{"", false},
+		{"   ", false},
+	}
+	for _, tc := range cases {
+		got := isSimpleShellCommand(tc.cmd)
+		if got != tc.want {
+			t.Errorf("isSimpleShellCommand(%q) = %v, want %v", tc.cmd, got, tc.want)
+		}
+	}
+}
+
+func TestFormatGearRewrite(t *testing.T) {
+	cases := []struct {
+		cmd         string
+		distillFlag string
+		want        string
+	}{
+		{"git status", "", "⚙ git status"},
+		{"git status && echo done", "", "⚙ bash -c 'git status && echo done'"},
+		{"go test ./...", "--distill", "⚙ --distill -- bash -c 'go test ./...'"},
+		{"VAR=1 git diff", "", "⚙ bash -c 'VAR=1 git diff'"},
+	}
+	for _, tc := range cases {
+		got := formatGearRewrite(tc.cmd, tc.distillFlag)
+		if got != tc.want {
+			t.Errorf("formatGearRewrite(%q, %q) = %q, want %q", tc.cmd, tc.distillFlag, got, tc.want)
+		}
+	}
+}
+
 
