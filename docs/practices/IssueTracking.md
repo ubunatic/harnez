@@ -48,6 +48,21 @@ sort | tail`) for either.
 - `harnez find issues next --json` — outputs machine-readable JSON (`{"number":"195","reserved":false}`).
 - `harnez issues new "Ticket Title"` (or `harnez issues new` with no title) — atomically allocates the next number and creates a placeholder ticket file (`issues/NNN-<title-slug>.md` or `issues/NNN-reserved.md` with status `Draft`) using `O_CREATE|O_EXCL` to prevent number collisions between concurrent agents. Prints `NNN<TAB>issues/<reserved-filename>.md` — write the real ticket content directly to that printed path rather than re-deriving the slug from the title by hand; a hand-derived slug can diverge from the reserved filename and leave an orphaned placeholder behind (see issue 202). Add `--json` for the same JSON shape as above with `"reserved":true` plus `file`/`path`. `new` never commits.
 
+**Known gap — cross-clone collisions survive `O_CREATE|O_EXCL`.** The atomic reservation above
+only guards concurrent writers sharing one working tree; it cannot see a number reserved in a
+*different* clone/session that hasn't been pushed yet. A ticket filed locally can still collide
+with a ticket independently filed and pushed elsewhere in the interim — the collision only
+surfaces later, as a `git pull`/rebase conflict on the ticket file and on the generated
+`issues/README.md`. This has happened at least twice: issue 240 (duplicate 179/180, resolved by
+hand) and, concretely, this session (a locally-filed-but-unpushed 266 collided with remote
+tickets that had independently claimed 266 and 267). Manual recovery recipe until issue 269
+(`harnez issues mv`) ships: `git mv` the losing ticket file to the next free number, fix its
+in-file `# NNN — ...` header to match, resolve any `issues/README.md` conflict by taking either
+side (`git checkout --theirs`) and then regenerating authoritatively with `harnez index` rather
+than hand-merging conflict markers — `harnez index` does not always fully clear stray
+`<<<<<<<`/`=======`/`>>>>>>>` lines left in a file it's asked to regenerate over, so verify with a
+conflict-marker grep afterward.
+
 The top of each ticket MUST contain the standardized metadata block:
 
 ```markdown
