@@ -19,7 +19,12 @@ func newReleaseCmd() *cobra.Command {
   5. Cryptographically signs SHA256SUMS with minisign (non-interactive).
   6. Verifies/enables Forgejo/Codeberg repository 'has_releases' unit via API.
   7. Tags and pushes git branch and tags to remote origin.
-  8. Publishes release and attaches artifacts to Codeberg/Forgejo via fj.`,
+  8. Publishes release and attaches artifacts to Codeberg/Forgejo via fj.
+
+The build step runs with GOWORK=off by default, so an enclosing go.work
+file (e.g. sibling modules checked out for local co-development) never
+substitutes untagged local sources for a pinned go.mod/go.sum dependency.
+Pass --allow-workspace to opt back in when that's genuinely intended.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opt.Out = cmd.OutOrStdout()
 			if len(args) > 0 && opt.Bump == "" {
@@ -41,6 +46,7 @@ func newReleaseCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opt.SkipSign, "skip-sign", false, "skip minisign cryptographic signing")
 	cmd.Flags().BoolVar(&opt.SkipPublish, "skip-publish", false, "skip publishing artifacts to forge via fj")
 	cmd.Flags().BoolVar(&opt.SkipPush, "skip-push", false, "skip pushing git commit and tags to remote")
+	cmd.Flags().BoolVar(&opt.AllowWorkspace, "allow-workspace", false, "honor an enclosing go.work file during the build step (default: GOWORK=off, so the release always builds against pinned, tagged go.mod/go.sum deps, not untagged local workspace sources)")
 
 	return cmd
 }

@@ -25,7 +25,13 @@ type Options struct {
 	SkipSign    bool
 	SkipPublish bool
 	SkipPush    bool
-	Out         io.Writer
+	// AllowWorkspace lets the build step honor an enclosing go.work file
+	// (e.g. sibling modules under active co-development). Off by default so
+	// a release always builds against pinned, tagged go.mod/go.sum
+	// dependencies rather than whatever untagged local sources happen to be
+	// checked out in a workspace member directory.
+	AllowWorkspace bool
+	Out            io.Writer
 }
 
 // Run executes the end-to-end release lifecycle.
@@ -369,7 +375,7 @@ func runBuildStep(opt Options, spec *VersionSpec) error {
 		fmt.Fprintf(opt.Out, "  [build]     Running custom build command: %s\n", buildCmd)
 		if !opt.DryRun {
 			parts := strings.Fields(buildCmd)
-			if err := runCmd(opt.Dir, parts[0], parts[1:]...); err != nil {
+			if err := runBuildCmd(opt, parts[0], parts[1:]...); err != nil {
 				return fmt.Errorf("build failed: %w", err)
 			}
 		}
@@ -386,9 +392,13 @@ func runBuildStep(opt Options, spec *VersionSpec) error {
 		if opt.Continue {
 			args = append(args, "--skip=validate")
 		}
-		fmt.Fprintf(opt.Out, "  [build]     Running goreleaser %s\n", strings.Join(args, " "))
+		if !opt.AllowWorkspace {
+			fmt.Fprintf(opt.Out, "  [build]     Running goreleaser %s (GOWORK=off)\n", strings.Join(args, " "))
+		} else {
+			fmt.Fprintf(opt.Out, "  [build]     Running goreleaser %s (GOWORK honored: --allow-workspace)\n", strings.Join(args, " "))
+		}
 		if !opt.DryRun {
-			if err := runCmd(opt.Dir, "goreleaser", args...); err != nil {
+			if err := runBuildCmd(opt, "goreleaser", args...); err != nil {
 				return fmt.Errorf("goreleaser build failed: %w", err)
 			}
 		}
@@ -399,7 +409,7 @@ func runBuildStep(opt Options, spec *VersionSpec) error {
 		cmdStr := "make " + target
 		fmt.Fprintf(opt.Out, "  [build]     Running make target: %s\n", target)
 		if !opt.DryRun {
-			if err := runCmd(opt.Dir, "make", target); err != nil {
+			if err := runBuildCmd(opt, "make", target); err != nil {
 				return fmt.Errorf("build (%s) failed: %w", cmdStr, err)
 			}
 		}
@@ -532,4 +542,32 @@ func runCmd(dir, name string, args ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// runBuildCmd runs the build-step subprocess (goreleaser, make, or a custom
+// --build-cmd). Unless opt.AllowWorkspace is set, it forces GOWORK=off so an
+// enclosing go.work file (e.g. a sibling module under active co-development)
+// can't silently substitute untagged local sources for a pinned, released
+// dependency during the build.
+func runBuildCmd(opt Options, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = opt.Dir
+	cmd.Env = buildEnv(opt.AllowWorkspace)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func buildEnv(allowWorkspace bool) []string {
+	env := os.Environ()
+	if allowWorkspace {
+		return env
+	}
+	filtered := env[:0]
+	for _, e := range env {
+		if !strings.HasPrefix(e, "GOWORK=") {
+			filtered = append(filtered, e)
+		}
+	}
+	return append(filtered, "GOWORK=off")
 }

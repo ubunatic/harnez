@@ -790,5 +790,29 @@ func TestBuildCmdMakefileFallback(t *testing.T) {
 	}
 }
 
+func TestBuildEnvGOWORK(t *testing.T) {
+	t.Setenv("GOWORK", "/somewhere/go.work")
+
+	env := buildEnv(false)
+	found := false
+	for _, e := range env {
+		if e == "GOWORK=off" {
+			found = true
+		}
+		if strings.HasPrefix(e, "GOWORK=") && e != "GOWORK=off" {
+			t.Errorf("buildEnv(false) leaked non-off GOWORK entry: %s", e)
+		}
+	}
+	if !found {
+		t.Error("buildEnv(false) expected GOWORK=off in the resulting env")
+	}
+
+	env = buildEnv(true)
+	for _, e := range env {
+		if e == "GOWORK=off" {
+			t.Error("buildEnv(true) should not force GOWORK=off")
+		}
+	}
+}
 
 
