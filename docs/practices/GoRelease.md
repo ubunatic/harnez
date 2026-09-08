@@ -187,6 +187,16 @@ If GoReleaser succeeds or tags are pushed but publishing encounters a network/fo
 harnez release --continue
 ```
 
+### go.work and Local Co-Development
+
+If sibling modules are checked out under a shared `go.work` (e.g. `~/projects/go.work`
+listing `./harnez` and `./voxi` for co-development), the build step forces `GOWORK=off`
+by default. Without this, an enclosing `go.work` silently substitutes the untagged local
+checkout for a pinned `go.mod`/`go.sum` dependency, so a release could ship built against
+uncommitted local source instead of the version it claims to depend on. Pass
+`--allow-workspace` only when that substitution is genuinely intended (e.g. deliberately
+cutting a release to validate an in-flight cross-repo change before either side is tagged).
+
 ---
 
 ## 5. Non-Go / Scripted Projects
