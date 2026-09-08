@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"ubunatic.com/voxi/audiolevel"
 )
 
 // MicStatus is a single poll of the default system microphone input: its
@@ -254,8 +256,13 @@ func currentMicStatusPactl() MicStatus {
 	if muteOut, err := exec.Command("pactl", "get-source-mute", "@DEFAULT_SOURCE@").Output(); err == nil {
 		st.Muted = parsePactlMute(string(muteOut))
 	}
-	if soOut, err := exec.Command("pactl", "list", "short", "source-outputs").Output(); err == nil {
-		st.Recording = strings.TrimSpace(string(soOut)) != ""
+	// Long form (not "list short"): only it carries the application.id/
+	// media.name properties audiolevel.IsGenuineRecording filters on, so
+	// this box's own audiolevel-driven meter stream (tagged via
+	// audiolevel.ParecCommand, see docs/MicIndicators.md §8 Strategy C)
+	// doesn't fool this Recording reading into always showing "on".
+	if soOut, err := exec.Command("pactl", "list", "source-outputs").Output(); err == nil {
+		st.Recording = audiolevel.IsGenuineRecording(string(soOut))
 	}
 	return st
 }
