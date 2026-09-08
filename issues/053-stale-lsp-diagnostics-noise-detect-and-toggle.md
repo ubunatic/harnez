@@ -165,3 +165,56 @@ features", passing `go test ./...` alone is not sufficient evidence here.
 
 **Small** if step 1 finds no toggle (doc bullet only). **Medium** otherwise
 (one config field, one apply write, one status check, tests, live verify).
+
+---
+
+## Research Update (2026-09-08) — Step 1 resolved: the toggle exists
+
+Confirmed in a live `voxi` session: Claude Code's Go and Rust diagnostics come
+from two first-party **plugins**, not a hardcoded core feature —
+`gopls-lsp@claude-plugins-official` and `rust-analyzer-lsp@claude-plugins-official`.
+Each wires its language server into an automatic post-`Edit`/`Write` hook that
+injects diagnostics as a `<system-reminder>` block with no explicit request
+from the user or agent, on every edit.
+
+The only lever found is a global `enabledPlugins` map in
+`~/.claude/settings.json`:
+
+```json
+{
+  "enabledPlugins": {
+    "gopls-lsp@claude-plugins-official": false,
+    "rust-analyzer-lsp@claude-plugins-official": false
+  }
+}
+```
+
+This was hand-set to `false`/`false` for this session as an immediate
+workaround (outside any repo, not committed anywhere) after a batch of
+auto-injected gopls diagnostics on a harnez file turned out to be stale/wrong
+— `go build`/`go vet`/`go test` all passed cleanly — the same staleness
+failure mode this ticket already documents. It reinforces this ticket's
+existing framing: report the setting, don't default to disabling it (real
+true-positive value exists), but make it a first-class, inspectable toggle
+instead of a manual settings.json edit.
+
+This is **distinct** from `docs/practices/AgenticLoop.md` §1 invariant 6
+("Context Discipline & Range-Bounded Ingestion") — that principle is about
+avoiding whole-file reads on active system-prompt files, not about LSP
+diagnostics. Don't conflate the two when writing step 4's doc bullet.
+
+Per-language granularity is now known to be free: since the two plugins are
+already independent keys, a per-language toggle (matching `gopls`/
+`rust-analyzer` separately) costs nothing extra over a blanket on/off — worth
+weighing against a single flag when designing the `config.yaml` field in
+step 2. Still undecided: whether anything finer-grained than per-plugin
+on/off (e.g. severity-based suppression) is worth the complexity — no
+evidence yet that it's needed beyond a blanket toggle.
+
+**Unblocks**: step 1 is done; step 2 (add the config field + `apply` write
+via `applySettingsJSON` in `internal/claude/apply.go:217`, following the flat
+scalar/struct field pattern already used in `internal/claude/config.go`'s
+`Config` struct, e.g. `StatusLine bool` / `FeedbackConfig`) can proceed
+directly — no further toggle research needed. This is purely the harnez-side
+tracking; no `~/.claude/settings.json` outside this repo was touched by this
+update.
