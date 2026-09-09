@@ -1,0 +1,120 @@
+# 287 — Ambient go.work breaks unrelated sibling repositories; adopt a general fix
+
+**Status**: Open
+**Priority**: P2 (Medium)
+**Severity**: Moderate
+**Category**: Infrastructure
+**Related**: [issues/284](284-harnez-release-build-step-defaults-to-gowork-off-with-allow-workspace-override.md) (first instance, fixed narrowly for `harnez release`'s own build step), [docs/practices/GoRelease.md §4 "go.work and Local Co-Development"](../docs/practices/GoRelease.md)
+
+---
+
+## 1. Problem & Motivation
+
+`~/projects/go.work` (`use ./harnez ./voxi`) exists for legitimate
+cross-repo co-development — harnez's `internal/usage/mic.go` imports
+`ubunatic.com/voxi/audiolevel` (see issue 284). Go auto-detects this file
+by walking up from the CWD, so it silently applies to *any* `go
+build`/`go run`/`go list`/etc. invoked from a working directory nested
+anywhere under `~/projects` — not just inside `harnez` or `voxi`.
+
+Issue 284 found and fixed the first instance: `harnez release`'s own
+build step was silently affected, forced `GOWORK=off` by default with a
+`--allow-workspace` opt-back-in.
+
+**Second instance, found live 2026-09-08, in a third, unrelated repo —
+`~/projects/ubunatic.com`:** running `uman website sync voxi` failed:
+
+```
+directory gopkg is contained in a module that is not one of the
+workspace modules listed in go.work. You can add the module to the
+workspace using:
+	go work use .
+make: *** [Makefile:21: ingest-gopkg] Error 1
+```
+
+Root cause: `ubunatic.com/Makefile`'s `ingest-gopkg` target runs `cd
+scripts && go run ./gopkg ingest $(PKG)` — `scripts/` is its own Go
+module (`ubunatic.com/scripts`), nested under
+`~/projects/ubunatic.com/scripts`, itself nested under `~/projects`.
+Because `~/projects/go.work` only lists `./harnez` and `./voxi`, Go
+refused to run a module that isn't a workspace member — even though this
+has nothing to do with the harnez/voxi cross-dev workspace at all. It's
+collateral damage on a completely unrelated repo's unrelated tooling.
+
+Worked around live (uncommitted, in `ubunatic.com`, out of scope for
+this ticket) by adding `export GOWORK := off` near the top of
+`ubunatic.com/Makefile` — same fix *pattern* as issue 284, hand-applied
+to yet another repo's build tooling.
+
+This is not a one-off: `~/projects/.uman.toml` lists ~20 sibling
+projects (books, cati, mdview, pdf-doctor, psync, spriteview,
+trafficsim, uman, wayreel, webman, etc.), any of which could hit the
+identical failure the moment a `go` command runs from inside it while
+`~/projects/go.work` exists and doesn't list it. Patching each sibling's
+Makefile by hand as it's discovered does not scale and leaves the
+blast radius live for every repo not yet hit.
+
+## 2. Scope — Review Later, Decide General Fix
+
+This ticket is filed to review later and pick a *general* solution, not
+to implement one now. Directions to evaluate (none pre-decided; note
+which are drawn from existing project docs vs. new suggestions from this
+ticket's filing):
+
+1. **Should `~/projects/go.work` exist ambiently/persistently at all?**
+   Given its blast radius on unrelated tooling across every sibling
+   repo, consider creating/removing it on demand only for an active
+   harnez+voxi co-dev session (e.g. a documented `go work use`/`go work
+   edit -dropuse` dance, or a wrapper script) instead of it sitting
+   permanently in `~/projects`. (New suggestion, not drawn from existing
+   docs.)
+2. **Is there a Go-level mechanism to scope a workspace file's effect
+   more narrowly** than "any CWD nested anywhere below it" — e.g. does
+   `GOWORK` support a per-invocation opt-in instead of ambient opt-out,
+   or is `GOWORK=off`-by-default-then-opt-in feasible for interactive
+   shell use (as opposed to build scripts, which is what issue 284
+   already solved)? (New suggestion; needs a canary check against real
+   `go` tooling docs/behavior before treating any answer as verified,
+   per this project's canary-first-development practice.)
+3. **Should `uman` itself defensively set `GOWORK=off` for every
+   subprocess it shells out to** (build hooks, sync hooks, etc.) by
+   default — mirroring what `harnez release`'s build runner already does
+   (issue 284) — so individual sibling repos' Makefiles don't each need
+   to know about this ambient workspace file? This would be a single fix
+   point (in `uman`, source likely at `~/projects/uman`) instead of N
+   per-repo patches. (New suggestion, structurally analogous to issue
+   284's fix but at the orchestrator level instead of per-repo.)
+4. **Where should this be documented once decided** —
+   `docs/practices/GoRelease.md` §4 "go.work and Local Co-Development"
+   (added for issue 284) is currently scoped to release tooling
+   specifically; this blast-radius risk is broader than release tooling
+   (it hit a `uman`/website-sync workflow, not a release). Decide whether
+   §4 gets broadened, or a new/renamed doc is warranted.
+
+## 3. Non-Goals (for now)
+
+- No implementation is included in this filing commit; investigation and
+  implementation belong to the follow-up work tracked here.
+- Not touching `~/projects/ubunatic.com` (already worked around ad hoc
+  there this session; that fix is uncommitted and out of scope here).
+- Not deciding here whether the harnez+voxi `go.work` should exist at
+  all — recorded above as an open question for whoever picks this up,
+  not as this ticket's own opinion.
+
+## 4. Acceptance Criteria
+
+- [ ] Reproduce and document the ambient-workspace failure with a small
+      canary from a Go module below `~/projects` that is not listed in
+      `~/projects/go.work`.
+- [ ] Evaluate the workspace-lifecycle, Go-environment, and orchestrator-level
+      options above against normal harnez+voxi co-development and unrelated
+      sibling-repository commands.
+- [ ] Record the chosen general policy and why it is preferred, including how
+      developers deliberately opt into the harnez+voxi workspace when needed.
+- [ ] Implement the chosen fix at the narrowest shared control point that
+      protects unrelated sibling repositories without requiring ad hoc edits
+      in every repository.
+- [ ] Verify the original `uman website sync voxi` path, an unrelated sibling
+      Go command, and an intentional harnez+voxi workspace workflow.
+- [ ] Update the appropriate shared Go guidance so future repositories and
+      automation inherit the policy.
