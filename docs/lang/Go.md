@@ -49,6 +49,14 @@ weight: 60
   cross-repository workspace for one command, select it explicitly, for example
   `GOWORK=/path/to/go.work go test ./...`. Release builds still use their separate
   `GOWORK=off` policy unless `harnez release --allow-workspace` is passed.
+- When a module has a local `replace` pointing at a sibling module, include both modules in the
+  project-local workspace (for example, `use ( ./ ../loom )`). A workspace does not make a
+  relative replacement path portable: copied projects still need the sibling directory, or a
+  published module version. Keep the `replace` in `go.mod` when `GOWORK=off` builds still need the
+  local fallback.
+- After copying a project, validate every relative replacement with `go list ./...`. A missing
+  sibling replacement can make `gopls` repeatedly diagnose the module and make editor saves
+  appear to hang while the workspace is loading.
 
 ## Spec-Driven Apps
 - Avoid hard-coding application configuration, UI labels, controls, text, icons, or layout variables in Go code.
