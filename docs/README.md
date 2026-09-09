@@ -92,6 +92,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-09-04-fleet-wide-24h-cross-project-survey.md](studies/2026-09-04-fleet-wide-24h-cross-project-survey.md) | Fleet-wide 24h survey (2026-09-03→04) across harnez, lmcoder, ubunatic.com, voxi, uman, psync — 95 commits, ~15k line delta, six independently-driven sprints observed from git history rather than a single session |
 | [studies/2026-09-05-issues-verb-roadmap-discovery-and-index-data-loss.md](studies/2026-09-05-issues-verb-roadmap-discovery-and-index-data-loss.md) | `cmd/harnez/issues.go`, `internal/issues/issues.go`, `internal/index/index.go`, `commands/issue.md`, `commands/roadmap.md`, `commands/discovery.md`, tickets 232–240. |
 | [studies/2026-09-08-cross-repo-release-onboarding-and-the-gowork-silent-substitution-trap.md](studies/2026-09-08-cross-repo-release-onboarding-and-the-gowork-silent-substitution-trap.md) | Cross-Repo Release Onboarding and the go.work Silent-Substitution Trap |
+| [studies/2026-09-09-external-agent-review-and-dispatch.md](studies/2026-09-09-external-agent-review-and-dispatch.md) | External Agent Review, Artifact-First Completion, and Claude Dispatch Lessons |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
 | [studies/RTKShellWrapperHandling.md](studies/RTKShellWrapperHandling.md) | RTK: Shell-Wrapper and Pipe Handling in Command-Rewrite Hooks |
 | [studies/Worktrees.md](studies/Worktrees.md) | Worktrees — learnings & TODOs |
