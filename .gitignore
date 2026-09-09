@@ -4,3 +4,4 @@
 /my-project
 /dist/
 /issues/README.md.lock
+*.lock
