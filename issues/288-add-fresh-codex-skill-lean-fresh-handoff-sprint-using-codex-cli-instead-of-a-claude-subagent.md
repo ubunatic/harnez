@@ -1,13 +1,22 @@
-# 288 — Add a `/fresh-codex` skill: lean fresh-handoff sprint that dispatches to an external agent CLI instead of a same-vendor subagent (also cover `agy`)
+# 288 — Add a `/harnez-agent` skill: lean fresh-handoff sprint that dispatches to an external agent CLI instead of a same-vendor subagent (covers `codex` and `agy`)
 
 **Status**: Open
 **Priority**: P3 (Low)
 **Severity**: Enhancement
 **Category**: Feature
+**Depends on**: [291 `harnez agent` command](291-add-harnez-agent-command-standardized-non-interactive-dispatch-to-external-coding-agent-clis-codex-agy.md)
+— the skill should shell out to `harnez agent run`/`harnez agent review` rather than
+hand-constructing raw `codex`/`agy` invocations itself, per the `commands/harnez-sync.md` precedent
+below. Not a hard blocker (see 291 §4 Non-Goals): a first skill version could hand-construct the
+invocations directly, as this session's trials did, and migrate once 291 lands.
 **Related**: `commands/fresh-sprint.md` (structural precedent — the lean fresh-handoff pattern this
 skill adapts), `commands/harnez-sync.md` (precedent for a skill that drives an existing external
 CLI rather than reimplementing logic inline), `docs/AgenticLoop.md` (5-phase/lean-handoff practice
 reference)
+
+**Naming note**: originally scoped/named as `/fresh-codex` (Codex-only); renamed to `/harnez-agent`
+once the `agy` trial (§2b) confirmed the pattern generalizes across tools, and to match the planned
+companion CLI command's name (291) so the skill and the command it drives are named consistently.
 
 ---
 
@@ -22,7 +31,7 @@ cost/quality tradeoffs, or simply because that CLI is already open in another te
 
 **Important framing note**: this is not "a Claude-specific skill that also happens to shell out to
 Codex." Skills in this repo are agent-agnostic instructions — any coding agent capable of running
-shell commands and following a markdown playbook can execute `/fresh-codex`, not only Claude Code.
+shell commands and following a markdown playbook can execute `/harnez-agent`, not only Claude Code.
 The skill's job is to orchestrate: dispatch the implementation subtask to the `codex` CLI as a
 non-interactive, one-shot subprocess, then apply the same self-verification and inline-review
 discipline `/fresh-sprint` already uses, regardless of which agent is running the orchestration
@@ -143,34 +152,37 @@ agy --model gemini-3.8-flash-medium -p="<prompt text>"
 ## 3. Proposed Skill Shape
 
 Adapt `commands/fresh-sprint.md`'s five steps, replacing step 1-2 (dispatch to a fresh subagent)
-with a subprocess call to whichever external CLI the operator selects (`codex` or `agy` to start):
+with a dispatch through `harnez agent` (291) — once 291 exists, the skill should not reconstruct
+`codex`/`agy` flag recipes inline at all; that logic lives in 291's adapters, exactly the
+`harnez-sync`-style "drive the CLI, don't reimplement its logic" principle. Until 291 lands, a
+first version of this skill may hand-construct the invocations directly (the flag recipes in §2 for
+`codex`, §2b.2 for `agy`), but should carry a visible TODO to migrate once 291 ships.
 
 1. **Clean Goal Handoff** — same as `/fresh-sprint`: a self-contained prompt (the target CLI has no
    shared context) naming the ticket, target files, acceptance criteria, and explicit
    verification commands to run before reporting done. Must also tell the target CLI which repo
    conventions doc to read (this repo's `AGENTS.md`/`CLAUDE.md` equivalent) since it has no access
-   to the orchestrating agent's system prompt.
-2. **Non-interactive dispatch** — construct the invocation for whichever CLI was chosen, using its
-   own documented flag recipe (see §2 for `codex`, §2b.2 for `agy`) rather than a shared abstraction
-   — the two tools' non-interactive-mode flags are not analogous (`codex`'s `-a`/`-s` sandbox/
-   approval pair vs. `agy`'s `-p=`/`--print=` value-flag quirk and blocked
-   `--dangerously-skip-permissions`). Never default either tool to its most permissive
-   sandbox/approval mode without the user having explicitly chosen that for this invocation — ask
-   if not already established in the current conversation. Resolve the model string against the
-   tool's own config/model-list command (`~/.codex/config.toml`, `agy models`) or an explicit
-   user-given value; never guess a bare codename (see §2's `sol` vs `gpt-5.6-sol` case).
-3. **Autonomous execution** — run in the background (mirroring "Stay Responsive" in
+   to the orchestrating agent's system prompt. Written to a file and passed as `harnez agent run
+   --prompt-file` (291 §2.1), not an inline string.
+2. **Non-interactive dispatch** — `harnez agent run --tool <codex|agy> ...` (291 §2.1). The skill's
+   job here shrinks to: pick the tool (ask the user if not already established), get the
+   sandbox/approval policy from the user explicitly — 291 refuses to default to the most permissive
+   option, but the skill must still be the one asking, since 291 has no conversational context of
+   its own — and resolve/confirm the model. 291 owns getting the actual flags right per tool.
+3. **Autonomous execution** — `harnez agent run --background` (mirroring "Stay Responsive" in
    `/fresh-sprint`); do not block the host turn on a long-running dispatch unless the user asked to
-   wait.
+   wait. Poll/await via `harnez agent status <run-id>`.
 4. **Confidence-gated inline review** — mandatory independent re-verification (repo-native test/
    build commands) regardless of what the dispatched CLI's own final message claims. Read the
-   actual diff. Per §2b.1's finding, actively *offer* a second review pass from a different
-   agent/model than the one that implemented the change, not only a same-agent inline read —
-   this caught a real false-positive bug a same-session human review missed. Escalate to a full
-   reviewer pass on cross-subsystem blast radius or dispatched-CLI-reported uncertainty, same
-   thresholds as `/fresh-sprint`.
+   actual diff. Per §2b.1's finding, actively *offer* a second review pass via `harnez agent review`
+   (291 §2.2) from a different agent/model than the one that implemented the change, not only a
+   same-agent inline read — this caught a real false-positive bug a same-session human review
+   missed (voxi issue 094). Escalate to a full reviewer pass on cross-subsystem blast radius or
+   dispatched-CLI-reported uncertainty, same thresholds as `/fresh-sprint`.
 5. **Fast teardown & status sync** — same as `/fresh-sprint`: update ticket status, run
-   `harnez index`, no lingering background processes.
+   `harnez index`, no lingering background processes. The `call_type='agent_dispatch'` telemetry
+   row 291 records means this step no longer needs the skill itself to write down "how well this
+   went" by hand — that data point is now structured and queryable.
 
 ## 4. Non-Goals
 
@@ -178,6 +190,7 @@ with a subprocess call to whichever external CLI the operator selects (`codex` o
   `agy` specifically (both have live trial data as of this ticket), each with its own documented
   invocation recipe; generalize the dispatch mechanism only if a third CLI integration is actually
   needed later and the two existing recipes turn out to share real structure worth factoring.
-- Not a replacement for `/fresh-sprint` — all of `/fresh-sprint`, `/fresh-codex` (Codex), and an
-  `agy` target should coexist as alternative lean-handoff destinations, selected explicitly by the
-  operator or the user, never auto-chosen based on availability alone.
+- Not a replacement for `/fresh-sprint` — `/fresh-sprint` (same-vendor subagent) and
+  `/harnez-agent` (external CLI, `--tool codex|agy`) should coexist as alternative lean-handoff
+  destinations, selected explicitly by the operator or the user, never auto-chosen based on
+  availability alone.
