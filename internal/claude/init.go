@@ -446,6 +446,14 @@ func RunInitWithIssuesGit(dir string, cfg *Config, docs []string, repoMode strin
 		changes += gitChanges
 	}
 
+	workspaceChanged, err := reconcileGoWorkspace(dir)
+	if err != nil {
+		return err
+	}
+	if workspaceChanged {
+		changes++
+	}
+
 	if cfg != nil {
 		docs = append(docs, autoDetectDocs(dir, cfg, docs)...)
 		docs, err = resolveDocDependencies(cfg, docs)

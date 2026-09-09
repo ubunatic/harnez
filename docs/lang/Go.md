@@ -36,6 +36,20 @@ weight: 60
   ```
   Use the `BINARY` variable from the Makefile as the canonical name so the `.gitignore` entry and the build output always match.
 
+## Workspace Isolation
+
+- Go automatically applies the nearest enclosing `go.work` to every descendant directory. A
+  persistent workspace for sibling-module development can therefore break an unrelated nested
+  repository whose modules are absent from that workspace.
+- `harnez init` probes `go env GOWORK` and the active workspace's parsed module list. When an
+  enclosing workspace omits any Go module found in the target repository, init creates a minimal
+  project-local `go.work` that uses all of the repository's modules. Existing local workspaces are
+  always preserved, and init creates nothing when there is no module or no demonstrated hazard.
+- A project-local workspace is the normal isolation boundary. To deliberately use a different
+  cross-repository workspace for one command, select it explicitly, for example
+  `GOWORK=/path/to/go.work go test ./...`. Release builds still use their separate
+  `GOWORK=off` policy unless `harnez release --allow-workspace` is passed.
+
 ## Spec-Driven Apps
 - Avoid hard-coding application configuration, UI labels, controls, text, icons, or layout variables in Go code.
 - Define them in YAML specs under `spec/` (e.g. `spec/strings.yaml`, `spec/layout.yaml`, `spec/controls.yaml`) with `$schema` in `spec/schemas/`.
