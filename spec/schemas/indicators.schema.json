@@ -123,6 +123,11 @@
           "minimum": 0.01,
           "maximum": 60.0
         },
+        "attack-ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
+        },
         "decay-ms": {
           "type": "integer",
           "minimum": 0,

@@ -69,3 +69,5 @@ modernc.org/token v1.1.0 h1:Xl7Ap9dKaEs5kLoOQeQmPWevfnk/DM5qcLcYlA8ys6Y=
 modernc.org/token v1.1.0/go.mod h1:UGzOrNV1mAFSEB63lOFHIpNRUVMvYTc6yu1SMY/XTDM=
 ubunatic.com/voxi v0.1.1 h1:v06TQfV46pBNfx1qCpnYAOYlZstE2bwE0YLlKqfrk5M=
 ubunatic.com/voxi v0.1.1/go.mod h1:drL5byHT4b1z1tanhphG5x+4Up80OAEKn3TiYrdhE2w=
+ubunatic.com/voxi v0.1.2 h1:rSx31jesJSGQL8MSHAHcc5rfLPhYZxNnQ3Z1UeOCKIM=
+ubunatic.com/voxi v0.1.2/go.mod h1:drL5byHT4b1z1tanhphG5x+4Up80OAEKn3TiYrdhE2w=

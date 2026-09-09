@@ -197,6 +197,28 @@ uncommitted local source instead of the version it claims to depend on. Pass
 `--allow-workspace` only when that substitution is genuinely intended (e.g. deliberately
 cutting a release to validate an in-flight cross-repo change before either side is tagged).
 
+**Repin after every dependency release, don't let it drift.** Outside `harnez release`'s
+forced `GOWORK=off`, plain `go build`/`go test` inside the workspace still use the
+workspace substitution by design — that's the point of co-developing under `go.work`. But
+it also means an API change in the local sibling module (e.g. voxi) can build clean in the
+consuming module (harnez) indefinitely while the consumer's `go.mod` still pins an older,
+incompatible tagged version — a gap that only surfaces once something builds without the
+workspace (a fresh clone, CI, `GOWORK=off go build ./...`). Concrete case: voxi's
+`audiolevel.Spec` function type gained a 4th return value (attack duration, voxi commit
+`7b76138`); harnez kept building fine under `go.work` for 32 commits' worth of drift before
+this surfaced. Whenever a local sibling module's exported API changes in a way the
+consumer depends on: tag + push a release on the sibling first, then immediately run
+`GOFLAGS=-mod=mod go get <module>@vX.Y.Z` in the consumer to repin `go.mod`/`go.sum` to
+match — don't treat this as optional cleanup, do it in the same session as the API change.
+
+To catch drift automatically rather than relying on remembering: the `check` target (both
+this project's `Makefile` and `docs/templates/Makefile`, applied via `harnez init`) runs
+`go vet`/`go test` with `GOWORK=off` forced. This is harmless when no `go.work` is active
+(same result as a plain `go build`) and catches exactly this class of bug the moment `make
+check` runs, instead of only at release time. The faster `check-fast` target intentionally
+does *not* force it, so the inner dev loop can still test against an uncommitted local
+sibling checkout while co-developing.
+
 ---
 
 ## 5. Non-Go / Scripted Projects

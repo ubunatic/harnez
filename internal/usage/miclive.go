@@ -87,9 +87,9 @@ func startMicLiveManager(parent context.Context, onSample func(micLiveReading)) 
 		}
 	}
 
-	spec := func() (audiolevel.Metric, time.Duration, time.Duration) {
+	spec := func() (audiolevel.Metric, time.Duration, time.Duration, time.Duration) {
 		s := watchMicLiveSpec()
-		return audiolevel.Metric(s.ValueMetric()), s.WindowDuration(), s.DecayDuration()
+		return audiolevel.Metric(s.ValueMetric()), s.WindowDuration(), s.AttackDuration(), s.DecayDuration()
 	}
 	mgr := audiolevel.StartManager(parent, buildCmd, audiolevel.DefaultChunkBytes, audiolevel.DefaultMinDBFS, micLiveRetryInterval, spec, onSample)
 	return &micLiveManager{mgr: mgr}

@@ -139,6 +139,9 @@ load-charts:
 #   "min": minimum level across window
 #   "live": instantaneous last sample
 # window-seconds: duration of rolling sample window in seconds (e.g. 0.1 for 100ms)
+# attack-ms: visual rise ease duration in milliseconds; both attack and decay
+#   interpolate through intermediate values (voxi ApplyBallisticsEased), set
+#   to 0 to snap instantly on rises
 # decay-ms: visual decay half-life / release duration in milliseconds (issue 260)
 #   for smooth equalizer-style falloff ballistics; set to 0 for raw instantaneous snap
 mic-live:
@@ -147,6 +150,7 @@ mic-live:
   high-fps-delay-ms: 50
   value: max
   window-seconds: 0.1
+  attack-ms: 60
   decay-ms: 150
 
 
