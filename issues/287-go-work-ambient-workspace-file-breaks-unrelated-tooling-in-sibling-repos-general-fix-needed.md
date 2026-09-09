@@ -91,6 +91,41 @@ ticket's filing):
    (it hit a `uman`/website-sync workflow, not a release). Decide whether
    §4 gets broadened, or a new/renamed doc is warranted.
 
+## 3.1 Proposed `harnez init` policy
+
+As a project-wide default, make `harnez init` inspect the Go workspace
+situation before writing any project-local workspace file. The proposed
+decision rule is:
+
+1. If the target repository already has a local `go.work`, leave it alone.
+2. If it has no local `go.work`, discover whether Go sees a parent
+   `go.work`, and whether the target project/module is listed in that parent
+   workspace.
+3. If a parent workspace exists but does not include the target project,
+   create a minimal local `go.work` for the target's Go modules, such as
+   `use ./scripts`, when the repository has a Go module that needs the
+   isolation. This makes the repository's normal `go` commands resolve from
+   its own declared modules rather than inheriting an unrelated parent
+   workspace.
+4. If there is no Go module, no parent workspace hazard, or no evidence that
+   a local workspace is useful, do not create `go.work` merely because
+   `harnez init` ran.
+
+The implementation should run a small real `go` probe rather than infer the
+answer from directory names alone. Candidate probes include `go env GOWORK`
+from the target repository and, for each relevant module, `go list -m` or an
+equivalent command that confirms whether the discovered parent workspace
+contains that module. The probe must distinguish a local workspace from an
+ambient parent workspace and must handle `GOWORK=off` explicitly.
+
+The guiding rule is least surprise: `harnez init` should make the best
+choice for the repository's actual shape, but should not add files
+prematurely. A generated local `go.work` is justified only by a demonstrated
+ambient-workspace hazard and a detected Go module; otherwise initialization
+must remain file-preserving. The behavior should be reported in the init
+summary and support a dry-run or explainable decision path so users can see
+why a workspace file was or was not created.
+
 ## 3. Non-Goals (for now)
 
 - No implementation is included in this filing commit; investigation and
@@ -118,3 +153,9 @@ ticket's filing):
       Go command, and an intentional harnez+voxi workspace workflow.
 - [ ] Update the appropriate shared Go guidance so future repositories and
       automation inherit the policy.
+- [ ] Add `harnez init` probes for: no local workspace with an unrelated
+      parent workspace; a project already listed in the parent workspace; no
+      parent workspace; and a repository with no Go module.
+- [ ] Verify that `harnez init` creates a minimal local `go.work` only for
+      the first hazard case, preserves existing local files, and reports the
+      decision without creating files in the other cases.
