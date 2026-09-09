@@ -16,8 +16,8 @@ integration, currently scoped to hook-trust wiring, not task dispatch)
 
 ## 1. Problem
 
-288's two live trials (`codex`, `agy`) surfaced the same class of friction on both tools, each in a
-different shape:
+288's live trials (`codex`, `agy`, and Claude Code) surfaced the same class of friction on the
+tools, each in a different shape:
 
 - **`codex`**: global flags (`-a`/`--ask-for-approval`, `-s`/`--sandbox`) must precede the `exec`
   subcommand; model ids need a full `gpt-<version>-<codename>` form (a bare codename like `sol`
@@ -36,6 +36,14 @@ free-standing shell flags with no record of who chose them or why — unlike `ha
 already wraps arbitrary shell commands with stdio proxying, exit-code preservation, and a
 `call_type='shell'` telemetry row (issue 118).
 
+Claude Code adds a separate operational finding. `claude --model sonnet
+--dangerously-skip-permissions -p "..."` successfully performed a write-capable independent
+review and filed issues 289/290, but remained alive for several minutes without producing a final
+response. The caller must treat the process handle and repository artifacts as the source of truth,
+enforce a bounded timeout, and explicitly tear down a hung process. A review may complete useful
+writes before final stdout appears. `--dangerously-skip-permissions` is an explicit authorization
+choice and must not be a default.
+
 ## 2. Proposal
 
 A new `harnez agent` command family that centralizes per-tool invocation correctness and adds a
@@ -45,13 +53,14 @@ rather than arbitrary shell commands.
 ### 2.1 `harnez agent run`
 
 ```sh
-harnez agent run --tool codex --sandbox <policy> --approval <policy> [--model <id>] \
+harnez agent run --tool <codex|agy|claude> --sandbox <policy> --approval <policy> [--model <id>] \
   --repo <dir> [--ticket <N>] --prompt-file <path> [--background] [--json-log <path>]
 
 harnez agent run --tool agy [--model <id>] --repo <dir> [--ticket <N>] --prompt-file <path>
 ```
 
-- `--tool` selects a registered adapter (`codex`, `agy` to start). Each adapter (an
+- `--tool` selects a registered adapter (`codex`, `agy`, and Claude Code as the next observed
+  candidate). Each adapter (an
   `internal/<tool>` package, alongside the existing `internal/codex` hooks package but a distinct
   concern — task dispatch, not hook-trust config) owns that tool's exact flag grammar, so the
   friction in §1 is fixed once, in one place, instead of relearned per skill/session.
@@ -69,7 +78,8 @@ harnez agent run --tool agy [--model <id>] --repo <dir> [--ticket <N>] --prompt-
 - `--background`: mirrors this repo's own "Responsive Host Orchestrator" invariant — dispatch and
   return a run handle immediately rather than blocking, for callers (skills, sessions) that must
   stay responsive. `harnez agent status <run-id>` (or a `--json-log` file the caller can tail/poll
-  itself) covers checking in later.
+  itself) covers checking in later. Every adapter must also have a bounded timeout and teardown
+  operation for processes that stop producing progress after creating artifacts.
 - Records a `call_type='agent_dispatch'` (or similarly named) telemetry row: tool, model, repo,
   ticket (if given), sandbox/approval policy actually used, start/end time, exit status. This is
   the mechanism that turns "record how well this goes" (this session's ad hoc per-trial writeup in
@@ -93,7 +103,8 @@ harnez agent review --tool codex --model gpt-5.6-sol --repo <dir> --target <path
   write access, and the adapter should enforce that rather than trust the caller to remember it
   (per 288 §2b.1's own note that this is a real distinction worth making explicit).
 - Same telemetry row shape as `run`, tagged so review dispatches are distinguishable from
-  implementation dispatches in later analysis.
+  implementation dispatches in later analysis. The row should record timeout, termination, and
+  artifact-presence outcomes separately from the child process exit status.
 
 ### 2.3 `harnez agent list-tools`
 
@@ -128,8 +139,10 @@ and `agy`), not speculatively for tools nobody has actually driven yet.
 
 - Unit tests per adapter: argv construction from normalized inputs, especially the exact bugs 288
   documented (codex flag-before-subcommand ordering, agy's `-p=` value-flag requirement,
-  bare-codename rejection).
+  bare-codename rejection, and Claude Code's model/print/permission flags).
 - A live end-to-end check per docs/practices/AgenticLoop.md's "Live/Real-Environment Verification"
   note — unit tests alone would not have caught either tool's real-world quirk in §1; run at least
   one real dispatch against each adapter against a throwaway/read-only task and confirm the
-  constructed invocation actually behaves as intended before considering an adapter done.
+  constructed invocation actually behaves as intended before considering an adapter done. For
+  Claude Code, include a bounded timeout/teardown probe and verify that issue/feedback artifacts
+  written before termination are retained and reported.

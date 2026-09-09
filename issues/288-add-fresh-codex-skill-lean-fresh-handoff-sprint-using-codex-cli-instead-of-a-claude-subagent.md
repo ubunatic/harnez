@@ -149,6 +149,40 @@ agy --model gemini-3.8-flash-medium -p="<prompt text>"
   --check` run in the same repo immediately after. One trivial, low-ambiguity task; not a strong
   signal either way on `agy`'s capability for larger implementation work.
 
+### 2c. Claude Code review dispatch
+
+A 2026-09-09 trial used the installed Claude Code CLI as an independent reviewer for the issue
+287 implementation:
+
+```sh
+claude --model sonnet --dangerously-skip-permissions -p "<self-contained review prompt>"
+```
+
+The call produced useful results: it found two concrete defects that were not apparent from the
+implementation diff alone, created issues 289 and 290, and wrote a durable review record under
+`docs/feedback/`. It was especially valuable because it ran the code under the same ambient
+`go.work` conditions the feature was intended to manage and checked the claimed live artifact
+independently.
+
+The invocation exposed operational requirements for the skill:
+
+- `-p` makes the call noninteractive, but write-capable review prompts need an explicit permission
+  decision. `--dangerously-skip-permissions` is a strong authorization choice and must never be
+  silently selected by a skill.
+- A noninteractive CLI can remain alive without producing useful stdout for several minutes even
+  after it has created its findings. The caller needs a bounded timeout, process inspection, and a
+  kill/teardown path; it must not wait indefinitely for a final narrative response.
+- Useful artifacts may exist before the process reports completion. The caller should inspect the
+  worktree, preserve only the intended staged issue/feedback files, and independently verify the
+  resulting commits.
+- The review prompt should require a durable report describing scope, findings, tests, tickets, and
+  call effectiveness. This makes the trial reusable when final stdout is lost or the process is
+  stopped after its artifacts are complete.
+
+This is one successful Claude review data point, not a claim that every Sonnet review will find
+defects. Cross-agent review remains most useful for infrastructure-shaped changes and should be
+independently verified like Codex and AGY output.
+
 ## 3. Proposed Skill Shape
 
 Adapt `commands/fresh-sprint.md`'s five steps, replacing step 1-2 (dispatch to a fresh subagent)
@@ -164,7 +198,7 @@ first version of this skill may hand-construct the invocations directly (the fla
    conventions doc to read (this repo's `AGENTS.md`/`CLAUDE.md` equivalent) since it has no access
    to the orchestrating agent's system prompt. Written to a file and passed as `harnez agent run
    --prompt-file` (291 §2.1), not an inline string.
-2. **Non-interactive dispatch** — `harnez agent run --tool <codex|agy> ...` (291 §2.1). The skill's
+2. **Non-interactive dispatch** — `harnez agent run --tool <codex|agy|claude> ...` (291 §2.1). The skill's
    job here shrinks to: pick the tool (ask the user if not already established), get the
    sandbox/approval policy from the user explicitly — 291 refuses to default to the most permissive
    option, but the skill must still be the one asking, since 291 has no conversational context of
@@ -191,6 +225,6 @@ first version of this skill may hand-construct the invocations directly (the fla
   invocation recipe; generalize the dispatch mechanism only if a third CLI integration is actually
   needed later and the two existing recipes turn out to share real structure worth factoring.
 - Not a replacement for `/fresh-sprint` — `/fresh-sprint` (same-vendor subagent) and
-  `/harnez-agent` (external CLI, `--tool codex|agy`) should coexist as alternative lean-handoff
+  `/harnez-agent` (external CLI, `--tool codex|agy|claude`) should coexist as alternative lean-handoff
   destinations, selected explicitly by the operator or the user, never auto-chosen based on
   availability alone.
