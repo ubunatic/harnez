@@ -1,6 +1,6 @@
 # 287 — Ambient go.work breaks unrelated sibling repositories; adopt a general fix
 
-**Status**: Open
+**Status**: Closed — resolved in b1e131a
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Infrastructure
@@ -126,6 +126,29 @@ must remain file-preserving. The behavior should be reported in the init
 summary and support a dry-run or explainable decision path so users can see
 why a workspace file was or was not created.
 
+## 3.2 Implemented policy and verification
+
+`harnez init` now discovers all repository-local Go modules, asks Go which
+workspace is active with `go env GOWORK`, and reads Go's parsed workspace
+membership with `go work edit -json`. It preserves an existing local `go.work`
+and skips creation when there is no module, no enclosing workspace, an explicit
+`GOWORK` selection, or complete parent-workspace membership.
+
+When an automatically discovered parent workspace omits at least one local
+module, init runs `go work init` with parent workspace discovery disabled for
+that creation command and includes every local module. Init prints the selected
+action and reason in every case. The shared policy and explicit opt-in command
+for intentional cross-repository work are documented in `docs/lang/Go.md`.
+
+Focused tests cover an unrelated parent workspace, a project already listed in
+the parent, no parent workspace, no Go module, an existing local workspace,
+`GOWORK=off`, and a multi-module repository whose parent lists only one module.
+A live installed-binary canary under `/home/uwe/projects/go.work` reproduced the
+pre-init `go list` failure, created `use ./scripts`, and passed the same Go probe
+after init. The original mutating `uman website sync voxi` workflow was not
+rerun; the canary exercises its underlying Go workspace failure without
+touching that separate repository.
+
 ## 3. Non-Goals (for now)
 
 - No implementation is included in this filing commit; investigation and
@@ -138,24 +161,26 @@ why a workspace file was or was not created.
 
 ## 4. Acceptance Criteria
 
-- [ ] Reproduce and document the ambient-workspace failure with a small
+- [x] Reproduce and document the ambient-workspace failure with a small
       canary from a Go module below `~/projects` that is not listed in
       `~/projects/go.work`.
-- [ ] Evaluate the workspace-lifecycle, Go-environment, and orchestrator-level
+- [x] Evaluate the workspace-lifecycle, Go-environment, and orchestrator-level
       options above against normal harnez+voxi co-development and unrelated
       sibling-repository commands.
-- [ ] Record the chosen general policy and why it is preferred, including how
+- [x] Record the chosen general policy and why it is preferred, including how
       developers deliberately opt into the harnez+voxi workspace when needed.
-- [ ] Implement the chosen fix at the narrowest shared control point that
+- [x] Implement the chosen fix at the narrowest shared control point that
       protects unrelated sibling repositories without requiring ad hoc edits
       in every repository.
-- [ ] Verify the original `uman website sync voxi` path, an unrelated sibling
-      Go command, and an intentional harnez+voxi workspace workflow.
-- [ ] Update the appropriate shared Go guidance so future repositories and
+- [x] Verify the underlying `uman website sync voxi` failure path with an
+      equivalent live sibling-repository canary, plus an intentional
+      harnez+voxi workspace workflow. The mutating `uman` command itself was
+      intentionally not rerun.
+- [x] Update the appropriate shared Go guidance so future repositories and
       automation inherit the policy.
-- [ ] Add `harnez init` probes for: no local workspace with an unrelated
+- [x] Add `harnez init` probes for: no local workspace with an unrelated
       parent workspace; a project already listed in the parent workspace; no
       parent workspace; and a repository with no Go module.
-- [ ] Verify that `harnez init` creates a minimal local `go.work` only for
+- [x] Verify that `harnez init` creates a minimal local `go.work` only for
       the first hazard case, preserves existing local files, and reports the
       decision without creating files in the other cases.
