@@ -1,6 +1,6 @@
 # Roadmap
 
-Working roadmap for the open backlog (updated 2026-09-10). Derived from each ticket's
+Working roadmap for the open backlog (updated 2026-09-11). Derived from each ticket's
 appended `## Implementation Plan`, so scope calls here reflect the planning pass, not a fresh
 re-derivation.
 
@@ -38,12 +38,12 @@ hide a failed collector belongs at the front of the queue.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 210 — low nonzero Braille load values invisible | S, in progress, P1 | **Now** |
-| 201 — doubled sparkline resolution + Braille | done, tracker closure only | **Now** |
-| 139 — Codex quota window rollover keeps stale limit | M — three root causes, all identified in-plan (frozen `DurationLeft`, cache, renderers) | **Now** |
-| 105 — per-collector fetch status in usage UI | M — introduces `FetchMode` enum, retires `strings.Contains(source,"stale")` | **Now** |
-| 262 — live mic level meter not showing | S/M, P1 bug — fixes broken live stats | **Now** |
-| 255 — collector resilience: retries & TUI logs | M — prevents transient splash failures | **Now** |
+| 210 — low nonzero Braille load values invisible | ✅ shipped; tracker closed | **Now** |
+| 201 — doubled sparkline resolution + Braille | ✅ shipped; tracker closed | **Now** |
+| 139 — Codex quota window rollover keeps stale limit | ✅ shipped; tracker closed | **Now** |
+| 105 — per-collector fetch status in usage UI | ✅ shipped; tracker closed | **Now** |
+| 262 — live mic level meter not showing | ✅ shipped; tracker closed | **Now** |
+| 255 — collector resilience: retries & TUI logs | retry and basic overlay shipped; structured details/scrolling remain | **Now** |
 | 085 — show collector-daemon status in watch | S — no plan written yet; small sibling of 105, land with it | **Next** |
 | 264 — ALSA/arecord live-mic-level backend | M — follows 262 for amixer systems | **Next** |
 | 250 — research desktop mic indicators | S, in progress — solves cross-desktop privacy UX | **Next** |
@@ -99,9 +99,10 @@ clean tree.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 217 — `-n` limit (default 10) and `--all` on `find issues` | S | **Now** |
-| 108 — sequential subagent dispatch + number-allocation race guard | **`Reserve` does not actually close the race** — `O_EXCL` keys on number *plus slug*, so two agents can both own one number (the 179/180 pairs) | **Now** |
-| 126 — document `Closed — resolved in <commit>` | S, docs-only; evidence says converge on Option B (bare `Closed`) | **Now** |
+| 217 — `-n` limit (default 10) and `--all` on `find issues` | ✅ shipped; tracker closed | **Now** |
+| 108 — sequential subagent dispatch + number-allocation race guard | ✅ shipped; tracker closed | **Now** |
+| 126 — document `Closed — resolved in <commit>` | ✅ shipped; tracker closed | **Now** |
+| 209 — move `agy-hooks` into `harnez apply` | ✅ shipped/superseded by hook cleanup; tracker closed | **Now** |
 | 246 — add /commit and /publish Skills | M — multi-project staged commit ownership | **Next** |
 
 Rationale: 108 is a live data-integrity bug in the tracker — duplicate ticket numbers have
@@ -114,7 +115,7 @@ instructions are delivered at all.
 
 **Docs batch — New** (Previous batch shipped: 042, 045, 046, 056, 125, 222, 095 part 1):
 
-- 263 — `docs/practices/PrototypingFeatures.md`: canary-first IS the prototyping/isolation practice
+- 263 — `docs/practices/PrototypingFeatures.md`: ✅ shipped; tracker closed
 
 → **Now.** High per-session value.
 
@@ -177,7 +178,7 @@ Coherent cluster, all P3, all gated on §5's profile mechanism.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 166 Part A — Go rune/display-width invariants in `docs/lang/Go.md` | S, independent of everything | **Now** |
+| 166 Part A — Go rune/display-width invariants in `docs/lang/Go.md` | ✅ shipped; tracker closed | **Now** |
 | 166 Part B — compact local-LLM doc profile | blocked on 149/151 | **Later** |
 | 165 — two-phase architect/patch harness | tracking-only by the ticket's own instruction; decide "profile or workflow?" on paper first | **Later** |
 | 167 — local runtime targets & telemetry (Ollama, llama.cpp, vLLM) | design skeleton; register runtimes as ordinary agent IDs, **do not ship `--agent local`** | **Later** |
@@ -229,9 +230,9 @@ workflow work.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 290 — ambient-workspace build break | S/M, current P1 build failure; align the voxi API and verify under the real ambient `go.work` | **Now** |
-| 292 — index versus cached-lint drift | S/M, tracker correctness; prevent unrelated untracked tickets from making commit checks disagree | **Now** |
-| 299 — `detectDoc`/Make documentation gaps | S, directly repairs broken documentation/install references | **Now** |
+| 290 — ambient-workspace build break | ✅ shipped; tracker closed | **Now** |
+| 292 — index versus cached-lint drift | ✅ shipped; tracker closed | **Now** |
+| 299 — `detectDoc`/Make documentation gaps | ✅ shipped; tracker closed | **Now** |
 | 268 — bounded `harnez exec` timeout | M, protects the hook and agent command path from indefinite hangs | **Next** |
 | 274 — session-start harness health checks | M, depends on stable cross-agent hook/shim status semantics | **Next** |
 | 281 — opt-in advisor discovery | S, reduces routine context and quota cost; coordinate with the shipped advisor skill | **Next** |
