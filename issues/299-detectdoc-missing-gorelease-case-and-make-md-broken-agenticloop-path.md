@@ -1,6 +1,6 @@
 # 299 — detectDoc missing gorelease case and Make.md broken AgenticLoop path
 
-**Status**: Open
+**Status**: Closed — resolved in b5013ab: gorelease auto-detection and consumer-safe AgenticLoop reference fixed; internal/claude tests pass
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
