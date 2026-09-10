@@ -1,6 +1,6 @@
 # 105 — Surface per-collector fetch status in usage UI, including compact view
 
-**Status**: Open
+**Status**: Open — partial staleness and splash visibility; collector provenance remains missing
 **Priority**: P2 (Medium) — this is observability/UX, not itself a data-correctness bug like
 103/104; it doesn't lose or misrepresent quota numbers on its own. But given that 103/104 were
 only found by the user cross-referencing manual disk digging (AGY's own conversation DB/log
@@ -20,6 +20,24 @@ axis), `internal/usage/types.go` (`AgentUsage.Sources`, `QuotaFetchError`, `Last
 `internal/usage/usage.go:~284-300` (existing verbose "sources:" line)
 
 ## Problem
+
+### Audit — 2026-09-10
+
+- **Conclusion: partially solved.** `AgentUsage.IsValueStale`,
+  `allUsageLinesAt`, `buildAgentBox`, and `RenderText` already dim stale
+  values; full views annotate age/staleness. Splash stages and badges expose
+  initial fetch completion/failure. These supersede the historical claim
+  below that the aggregate has no staleness concept at all.
+- Remaining: concise live/cache/history/no-source classification and last
+  successful fetch provenance across full and compact views. The aggregate
+  still adds rows from quota windows; it has no diagnostic-only row for an
+  agent with usage evidence but no windows. Per-agent watch errors are shown
+  only when windows are absent, so a fallback can still hide the error detail.
+- **Measured:** `go test ./...` passes. Existing assertions include
+  `TestAllUsageLinesAtDimsStaleAgentRow`,
+  `TestBuildAgentBoxDimsStaleQuotaAndAnnotatesUpdatedCaption`, and
+  `TestSplashStatusLineFormatsEachStage`; they verify these partial surfaces,
+  not the complete provenance vocabulary and narrow-width acceptance cases.
 
 Issues 103 and 104 together describe a real, multi-day AGY quota-collection failure: no live AGY
 process happened to be running at any harnez poll tick for 7+ days, the on-disk stale-cache

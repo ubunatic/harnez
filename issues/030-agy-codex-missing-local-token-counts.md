@@ -1,12 +1,29 @@
 # 030 — AGY and Codex have no local token-count source
 
-**Status**: Open
+**Status**: Open — Codex source identified, but neither collector populates local token counts
 **Category**: Feature gap
 **Discovered**: 2026-08-18, while adding a `[T]` token-count toggle to `harnez usage --watch` panels
 
 ---
 
 ## Problem
+
+### Audit — 2026-09-10
+
+- **Conclusion: unsolved implementation; source discovery complete for Codex.**
+  `CollectCodex` reads configuration, authentication, and quota data, but never
+  sets `AgentUsage.Tokens`. `CollectAGY` also leaves it unset. The only usage
+  collector assigning a `TokenBreakdown` remains Claude; no rollout/token_count
+  parser is wired into `internal/usage`.
+- **Reported evidence:** the advisor reuse study
+  [records local Codex rollout counters](../docs/studies/2026-09-10-advisor-session-reuse-and-cross-agent-dispatch.md).
+  Thus the original absence-of-local-source statement is historical, not a
+  current blocker. Inspecting advisor stats manually did not implement #030.
+- **Measured:** `go test ./...` passes. Codex collector tests cover quota
+  assignment, cache age, and concurrent fetch suppression; they contain no
+  multi-rollout numeric aggregation or malformed-record regression tests.
+  The Codex implementation plan remains pending; AGY extraction remains
+  unimplemented and related to #034. No transcript content was read in this audit.
 
 `harnez usage` (and its `--watch` live view) shows a `TokenBreakdown` (input/output/cache/total tokens) for Claude Code, but never for Antigravity (AGY) or OpenAI Codex. This isn't a missing UI toggle — there is currently no local data source to populate it from:
 

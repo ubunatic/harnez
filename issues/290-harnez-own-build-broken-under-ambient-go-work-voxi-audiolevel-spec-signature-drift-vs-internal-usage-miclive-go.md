@@ -1,6 +1,6 @@
 # 290 — harnez's own build is broken under the ambient go.work: voxi's `audiolevel.Spec` signature drifted from `internal/usage/miclive.go`
 
-**Status**: Open
+**Status**: Closed — resolved in 5cca6a0; ambient-workspace build and tests verified 2026-09-10
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -83,9 +83,22 @@ hypothetical.
 
 ## 4. Acceptance Criteria
 
-- [ ] `go build ./...` and `go test ./...` pass under the ambient
+- [x] `go build ./...` and `go test ./...` pass under the ambient
       `~/projects/go.work` (no `GOWORK=off`), not just with it off.
-- [ ] `internal/usage/miclive.go`'s `Spec` closure matches voxi's
+- [x] `internal/usage/miclive.go`'s `Spec` closure matches voxi's
       current `audiolevel.Spec` signature.
-- [ ] Record whether a pinned/`replace`d voxi version is adopted to
+- [x] Record whether a pinned/`replace`d voxi version is adopted to
       prevent recurrence, or why it's deliberately left floating.
+
+## Audit — 2026-09-10
+
+- **Conclusion: complete.** Commit `5cca6a0` supplies metric, window, attack,
+  and decay from `startMicLiveManager`; `micLiveSpec.AttackDuration()` and
+  `spec/indicators.yaml` provide the attack setting.
+- **Measured:** `go env GOWORK` reports `/home/uwe/projects/go.work`;
+  `go build ./...` and `go test ./...` pass without a GOWORK override.
+  The mic manager and embedded indicator tests cover capture and spec wiring.
+- `go.mod` pins `ubunatic.com/voxi v0.1.2`, with no replace directive.
+  The intentional ambient workspace still selects sibling source; that pin
+  does not prevent workspace drift. The same fix makes `make check` use
+  `GOWORK=off` to also expose pinned-dependency incompatibility.

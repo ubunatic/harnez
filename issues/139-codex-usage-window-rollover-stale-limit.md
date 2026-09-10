@@ -1,11 +1,26 @@
 # 139 - Codex Usage Window Rollover Keeps Stale Limit State
 
-**Status**: Open  
+**Status**: Open — rollover handling remains unsolved
 **Priority**: P2  
 **Severity**: Medium  
 **Category**: Usage / Quota UI
 
 ## Problem
+
+### Audit — 2026-09-10
+
+- **Conclusion: unsolved (source inspection).** `buildCodexQuotaWindow` still
+  freezes `DurationLeft` at collection; `compactDurationText`, compact group
+  rendering, and `RenderText` still read that stored duration. `QuotaWindow`
+  has no render-time expiry/remaining-time accessor.
+- Existing per-agent stale marking helps on fetch failure, but does not detect
+  a reset timestamp passing while the snapshot otherwise looks fresh.
+- `TestCollectCodexExpiredCacheTriggersLiveFetch` tests cache **age** using
+  `FetchedAt`, not quota-window rollover. `TestBuildCodexQuotaWindow` tests
+  construction, not a subsequent frame crossing reset. The deterministic
+  rollover regression required below remains missing.
+- **Measured:** `go test ./...` passes; this does not establish the missing
+  rollover behavior. No live quota-reset observation was performed.
 
 `harnez usage` can show stale Codex quota-window state when an existing
 watch/UI session spans a limit-window reset. The observed UI started

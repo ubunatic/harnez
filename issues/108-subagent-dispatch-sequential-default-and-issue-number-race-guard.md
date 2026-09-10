@@ -1,12 +1,34 @@
 # 108 — Subagent dispatch needs a hard sequential-by-default rule + issue-number allocation race guard
 
-**Status**: Open
+**Status**: Open — partial tooling exists; different-title allocation race and file-level lint gap remain
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
 **Related**: [docs/practices/AgenticLoop.md](../docs/practices/AgenticLoop.md), [docs/studies/2026-08-29-a-day-of-fresh-sprints.md](../docs/studies/2026-08-29-a-day-of-fresh-sprints.md), [issue 036](036-harnez-status-issues-tracker-linter.md) (tracker linter), issue 106, issue 107, commit `f6d8766`
 
 ## Incident (2026-08-30)
+
+### Audit — 2026-09-10
+
+- **Conclusion: partially solved; mechanical gaps remain (source inspection).**
+  `harnez issues new` calls `issues.Reserve` directly. `Reserve` still scans
+  for the next number and uses `O_EXCL` on the complete number-plus-title
+  filename, without a number-level lock. Concurrent different-title callers
+  can therefore claim the same number. `LintFS` still builds `numToFileMap`
+  without using it to diagnose duplicate files independently of README rows.
+- **Measured:** `go test ./...` and fresh `go test -count=1 ./internal/issues`
+  (within the scoped verification run) pass. Inspected
+  `TestReserve_AtomicAndCollisionAvoidance`: it makes three sequential calls;
+  it does not test concurrent distinct titles. `TestLintFS_Scenarios` has no
+  duplicate-files-with-one-row assertion. No concurrent live reservation was
+  attempted, so this audit created no tickets.
+- Existing numbering/rebase tooling and repaired historical duplicates do
+  not close these gaps. The current command is `harnez issues new`, not the
+  historical `find issues next --reserve` spelling used below.
+- The historical all-task sequential policy is not the current repo rule:
+  AGENTS.md and the sprint practice allow parallel read-only advisory work
+  with sequential development. Do not treat the old memory-file claim as
+  current authority; protect shared derived state mechanically.
 
 During a `/fresh-sprint` session, two subagents were dispatched close together
 in time, each with an independent "investigation/ticket-filing only, no code

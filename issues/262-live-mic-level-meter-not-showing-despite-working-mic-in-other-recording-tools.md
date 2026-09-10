@@ -1,6 +1,6 @@
 # 262 — Live mic level meter not showing despite working mic in other recording tools
 
-**Status**: Open
+**Status**: Open — partial backend and messaging fixes; original live symptom unconfirmed
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Bug
@@ -9,6 +9,25 @@
 ---
 
 ## 1. Problem & Motivation
+
+### Audit — 2026-09-10
+
+- **Conclusion: partially solved.** The historical pactl-only description
+  below is obsolete: `startMicLiveManager` now selects either parec or
+  PipeWire pw-record and delegates capture/retry to voxi's audiolevel manager
+  (PipeWire support: `51f0bd4`, extraction: `14f0aed`). The amixer explanation
+  remains implemented in `buildMicBoxLines`.
+- **Measured:** `go test ./...` passes. Inspected
+  `TestStartMicLiveManagerSelectsPipeWireCaptureFn`, which asserts an available,
+  nonzero sample from a fake pw-record process, backend-precedence tests,
+  and `TestBuildMicBoxLinesLiveUnavailableAmixerExplainsWhy` for all three
+  backend messages. These are synthetic checks, not real-device verification.
+- **Unknown:** whether these fixes resolve the user's original setup and
+  symptom. No microphone capture was started for this audit. Keep the live
+  confirmation criterion open; ALSA capture remains tracked by #264.
+- Recording working in another app does not by itself rule out a different
+  device selection or permission context for harnez; the earlier assertion
+  below should not be treated as a confirmed diagnosis.
 
 User report (verbatim): "the live MIC level is not shown currently even though
 I can record fine in my rec tools." Recording working correctly in other

@@ -1,6 +1,6 @@
 # 209 — Move `agy-hooks` Management into `harnez apply`
 
-**Status**: Closed — folded agy-hooks management into harnez apply and status, hid agy-hooks CLI command
+**Status**: Closed — original integration shipped; legacy hooks subsequently decommissioned by #271
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactor / Architecture
@@ -9,6 +9,22 @@
 ---
 
 ## 1. Problem & Motivation
+
+### Audit — 2026-09-10
+
+- **Conclusion: complete, with subsequent design supersession.** Keep closed;
+  do not restore the old acceptance criteria as new work. #271 replaced AGY
+  PreToolUse interception with the guarded bash shim; #273 separately tracks
+  an opt-in restoration proposal.
+- Current `ApplyAll` removes the legacy harnez hook while preserving custom
+  hooks. `DiffAll` detects a remaining legacy hook, and cleanup removes it.
+  `cmd/harnez/agyhooks.go` and its top-level command are no longer present.
+  The original install/status plan below is historical, not today's contract.
+- **Measured:** `go test ./...` passes, including `internal/agy`,
+  `internal/claude`, and `cmd/harnez`. Inspected
+  `TestApplyCleansUpDecommissionedAgyHooks`: it verifies drift detection,
+  removal, and preservation of the custom hook. Bash-shim tests cover the
+  replacement's execution and recursion guard.
 
 `harnez` currently exposes `harnez agy-hooks` as a top-level CLI command to manage Antigravity's `~/.gemini/config/hooks.json` (`apply` and `status`).
 

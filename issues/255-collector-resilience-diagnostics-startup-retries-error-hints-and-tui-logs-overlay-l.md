@@ -1,6 +1,6 @@
 # 255 — Collector Resilience & Diagnostics: Startup Retries, Error Hints, and TUI Logs Overlay (`l`)
 
-**Status**: Open
+**Status**: Open — partial Claude auth recovery; general retries and logs overlay absent
 **Priority**: P2 (Medium)
 **Severity**: Moderate (transient collector failure during startup splash causes false-positive failure badges and opaque errors)
 **Category**: Architecture / UX / Diagnostics
@@ -14,6 +14,22 @@
 ---
 
 ## 1. Problem & Motivation
+
+### Audit — 2026-09-10
+
+- **Conclusion: partially solved.** `CollectClaude` now invokes the Claude CLI
+  after an unauthorized response, rereads credentials, and retries the quota
+  API (`28c53a8`). `TestCollectClaudeRefreshesThroughClaudeCLIAfterUnauthorized`
+  verifies the refreshed credential is used. This is one auth recovery path,
+  not the cross-collector transient startup retry policy requested here.
+- `collectAll` still calls each collector once and immediately reports its
+  final `QuotaFetchError` through `FetchFailed`. There is no shared collector
+  event ring buffer or scrollable logs overlay in `watch.go`; key dispatch
+  and `spec/actions.yaml` expose controls/debug views, not the proposed logs
+  action. Splash badges and fetch-duration estimates are partial diagnostics.
+- **Measured:** `go test ./...` passes. Existing splash/status, duration, and
+  Claude refresh tests do not cover general transient retries, log scrolling,
+  or logs-overlay key handling. Those acceptance criteria remain open.
 
 During `--watch` startup splash, collector probes (such as Codex, Claude, or AGY) can occasionally fail
 on the first cold attempt due to transient network latency, token refresh delays, or locked cache files.
@@ -76,4 +92,3 @@ Furthermore, when a probe does fail:
 
 - **Automated**: `go test -v ./internal/usage/...` covering logs overlay dispatch, formatting, and retry logic.
 - **Manual Verification**: Run `harnez usage --watch`, press `l` to inspect the collector event log, verify error details and clean exit.
-
