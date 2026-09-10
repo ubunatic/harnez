@@ -1,6 +1,6 @@
 # 166 — Go rune/display-width invariants in docs/lang/Go.md
 
-**Status**: Open
+**Status**: Closed — resolved: documented rune handling, terminal cell width, ANSI stripping, and TUI width assertions; compact profile remains in #231
 **Priority**: P3 (Low)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
