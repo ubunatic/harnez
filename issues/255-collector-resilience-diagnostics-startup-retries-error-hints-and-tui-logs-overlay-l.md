@@ -47,8 +47,10 @@
 
 - **Measured:** `go build ./...`, `go test -count=1 ./...`, and `make check` are green; bounded
   retries and the `l` overlay have focused test coverage.
-- **Still open:** events retain only formatted source/stage strings, without error text, duration,
-  retry count, provenance, or a scroll offset. The ticket remains open until those diagnostics land.
+- Structured completion events now include sanitized error text and duration, and the overlay has a
+  bounded offset with `j/k/u/d` navigation (`3fac07b`, `6c211b7`).
+- **Still open:** full arrow/PageUp/PageDown escape-sequence decoding and end-to-end overlay tests.
+  The ticket remains open until those interaction details land.
 
 During `--watch` startup splash, collector probes (such as Codex, Claude, or AGY) can occasionally fail
 on the first cold attempt due to transient network latency, token refresh delays, or locked cache files.

@@ -43,7 +43,7 @@ hide a failed collector belongs at the front of the queue.
 | 139 — Codex quota window rollover keeps stale limit | ✅ shipped; tracker closed | **Now** |
 | 105 — per-collector fetch status in usage UI | ✅ shipped; tracker closed | **Now** |
 | 262 — live mic level meter not showing | ✅ shipped; tracker closed | **Now** |
-| 255 — collector resilience: retries & TUI logs | retry and basic overlay shipped; structured details/scrolling remain | **Now** |
+| 255 — collector resilience: retries & TUI logs | retry, structured details, and basic scrolling shipped; full key decoding/tests remain | **Now** |
 | 085 — show collector-daemon status in watch | S — no plan written yet; small sibling of 105, land with it | **Next** |
 | 264 — ALSA/arecord live-mic-level backend | M — follows 262 for amixer systems | **Next** |
 | 250 — research desktop mic indicators | S, in progress — solves cross-desktop privacy UX | **Next** |
