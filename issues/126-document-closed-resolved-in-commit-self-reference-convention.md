@@ -1,6 +1,6 @@
 # 126 — Document the `Closed — resolved in <commit>` self-reference convention
 
-**Status**: Open
+**Status**: Closed — resolved: closure uses a short resolution; git log on the ticket supplies commit traceability
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation
