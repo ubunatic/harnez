@@ -1,6 +1,6 @@
 # 201 — Double timeseries resolution and add btop-style Braille sparklines
 
-**Status**: In Progress — implementation complete; tracker closure awaits an unrelated baseline layout-test failure in `make check`
+**Status**: Closed — resolved: doubled timeseries/Braille implementation and safety tests are complete
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
