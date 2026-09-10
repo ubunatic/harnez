@@ -14,6 +14,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat (consult when updating permission schemas) |
 | [TUIDesign.md](TUIDesign.md) | Single-cell time-indicator semantics, safe Unicode presets, and display-width/font pitfalls (consult when changing gauges, bars, sparks, or spinners) |
+| [Testing.md](Testing.md) | Test layers and verification entry points for package, integration, static, smoke, canary, and live checks |
 
 
 Copyable docs (installed to Claude and Prime Agent global dirs on `apply`, copied to projects via `--docs`) live in subdirs.

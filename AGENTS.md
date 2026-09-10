@@ -139,4 +139,6 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
 - Agentic Loop Practices @docs/AgenticLoop.md,
   5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
+- Testing @docs/Testing.md,
+  optional lookup for test-layer selection and advanced verification cases
 <!-- harnez:end Language Conventions -->
