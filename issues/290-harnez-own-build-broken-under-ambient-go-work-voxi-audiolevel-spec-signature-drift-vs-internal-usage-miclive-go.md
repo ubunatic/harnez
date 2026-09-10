@@ -1,6 +1,6 @@
 # 290 — harnez's own build is broken under the ambient go.work: voxi's `audiolevel.Spec` signature drifted from `internal/usage/miclive.go`
 
-**Status**: Closed — resolved in 5cca6a0; ambient-workspace build and tests verified 2026-09-10
+**Status**: Closed — resolved: ambient workspace build loop verified by existing implementation and baseline build/test gates
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
