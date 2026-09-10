@@ -6,6 +6,9 @@ weight: 20
 <!-- harnez:bundled -->
 # Canary-First Development
 
+For the broader feature-prototyping framing and its limits, see
+`@docs/PrototypingFeatures.md`.
+
 A **canary** is a minimal, standalone test that validates one external
 mechanism before any feature code is built on top of it. It is not a
 unit test — it has no assertions framework and lives outside the main test

@@ -442,7 +442,7 @@ agents_md:
     golang:
       name: "Go/Golang"
       ref: "@docs/Go.md"
-      hint: "Modern Go, avoid deps but use Cobra, add tests"
+      hint: "Modern Go, avoid deps but use Cobra, add tests; use runes and display width for terminal layout"
       source: docs/lang/Go.md
       target: ~/.claude/docs/Go.md
       local: ./docs/Go.md
@@ -551,6 +551,16 @@ agents_md:
       local: ./docs/AgenticLoop.md
       default: true
       depends_on: [issue-tracking]
+
+    prototyping-features:
+      name: "Feature prototyping"
+      ref: "@docs/PrototypingFeatures.md"
+      hint: "canary-first is the feature-prototyping practice; separate runtime isolation and rollout flags"
+      source: docs/practices/PrototypingFeatures.md
+      target: ~/.claude/docs/PrototypingFeatures.md
+      local: ./docs/PrototypingFeatures.md
+      default: false
+      depends_on: [canary]
     issue-tracking:
       name: "Issue Tracking Practices"
       ref: "@docs/IssueTracking.md"

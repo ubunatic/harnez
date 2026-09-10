@@ -23,7 +23,7 @@ Before changing any command's flags or adding project-local behaviour to `apply`
 `docs/lang/` — copyable language/SDK/framework docs (Go, Bash, Make, Git, Rust, Cpp, Markdown, GTK4, Zig).
 Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --docs <name>`.
 
-`docs/practices/` — copyable workflow and practice docs (AgenticLoop, IssueTracking). Same install mechanics as `docs/lang/`.
+`docs/practices/` — copyable workflow and practice docs (AgenticLoop, IssueTracking, PrototypingFeatures). Same install mechanics as `docs/lang/`.
 
 `docs/other/` — copyable docs that don't form a category yet (Canary, Spec, Containerfile). Same install mechanics as `docs/lang/`.
 
@@ -133,6 +133,8 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   conventional commits, work on the default branch, don't push unless asked
 - Canary-first development @docs/Canary.md,
   probe external mechanisms before building features on them
+- Feature prototyping @docs/PrototypingFeatures.md,
+  canary-first is the pre-build prototyping and mechanism-isolation practice
 - Spec system @docs/Spec.md,
   YAML spec files as single source of truth; Go code must not duplicate spec values
 - Issue Tracking Practices @docs/IssueTracking.md,
