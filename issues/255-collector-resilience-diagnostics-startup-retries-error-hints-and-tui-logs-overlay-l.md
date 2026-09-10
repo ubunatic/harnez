@@ -43,6 +43,13 @@
 - Structured collector error details, scrolling, and richer diagnostics remain
   open for a future follow-up.
 
+### Sprint checkpoint — 2026-09-11
+
+- **Measured:** `go build ./...`, `go test -count=1 ./...`, and `make check` are green; bounded
+  retries and the `l` overlay have focused test coverage.
+- **Still open:** events retain only formatted source/stage strings, without error text, duration,
+  retry count, provenance, or a scroll offset. The ticket remains open until those diagnostics land.
+
 During `--watch` startup splash, collector probes (such as Codex, Claude, or AGY) can occasionally fail
 on the first cold attempt due to transient network latency, token refresh delays, or locked cache files.
 Because `CollectAllProgress` currently reports `FetchFailed` immediately on the first attempt without a
