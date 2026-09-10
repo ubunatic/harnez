@@ -1,6 +1,6 @@
 # 139 - Codex Usage Window Rollover Keeps Stale Limit State
 
-**Status**: Closed — render-time quota rollover and expired Codex cache refetch implemented in 410396a
+**Status**: Closed — resolved: Codex quota rollover recomputation, cache rejection, and expiry staleness handling are complete
 **Priority**: P2  
 **Severity**: Medium  
 **Category**: Usage / Quota UI
