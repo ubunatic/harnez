@@ -308,6 +308,8 @@ func detectDoc(dir, name string) bool {
 	switch name {
 	case "golang":
 		return fileExists(filepath.Join(dir, "go.mod"))
+	case "gorelease":
+		return fileExists(filepath.Join(dir, "go.mod"))
 	case "bash":
 		return globExists(dir, "*.sh") || globExists(filepath.Join(dir, "scripts"), "*.sh")
 	case "make":

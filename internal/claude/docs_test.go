@@ -276,6 +276,15 @@ func TestDetectDoc(t *testing.T) {
 	if detectDoc(dir, "zig") {
 		t.Error("detectDoc(empty, zig) should be false")
 	}
+	if detectDoc(dir, "gorelease") {
+		t.Error("detectDoc(empty, gorelease) should be false")
+	}
+	if err := testingWriteFile(filepath.Join(dir, "go.mod"), "module example\n\ngo 1.23\n"); err != nil {
+		t.Fatal(err)
+	}
+	if !detectDoc(dir, "gorelease") {
+		t.Error("detectDoc(dir with go.mod, gorelease) should be true")
+	}
 	// test zig detection via build.zig
 	zigFile := dir + "/build.zig"
 	if err := testingWriteFile(zigFile, "const std = @import(\"std\");\n"); err != nil {
@@ -368,7 +377,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: nil,
 			wantOrder: []string{
-				"golang", "bash", "make", "zig", "cpp", "markdown", "git", "canary", "spec", "agentic-loop", "issue-tracking",
+				"golang", "bash", "make", "zig", "cpp", "markdown", "git", "canary", "spec", "agentic-loop", "issue-tracking", "gorelease",
 			},
 		},
 		{
@@ -412,7 +421,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: []string{"golang", "canary"},
 			wantOrder: []string{
-				"make", "markdown", "git", "spec", "agentic-loop", "issue-tracking",
+				"make", "markdown", "git", "spec", "agentic-loop", "issue-tracking", "gorelease",
 			},
 		},
 	}

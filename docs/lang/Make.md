@@ -145,4 +145,4 @@ backup: ⚙️  # sync state snapshots from the remote host
 - `make backup` — sync state snapshots (config overlays, data) down from the remote host before a
   risky deploy.
 - Every target here queries or mutates a real remote host — treat it like `make smoke` (see
-  `docs/practices/AgenticLoop.md`): safe to define, but only run when you intend the live effect.
+  `@docs/AgenticLoop.md`): safe to define, but only run when you intend the live effect.
