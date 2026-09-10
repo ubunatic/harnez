@@ -3,7 +3,7 @@
 Use this skill only when the user explicitly invokes `/docup <category>` or
 otherwise names a supported Docup category.
 
-Supported category: `testing`.
+Supported categories: `testing`, `arch`.
 
 Interpret the explicit category as plain request text. Accept exactly one
 supported category. If the category is missing, unknown, or ambiguous, report
@@ -11,8 +11,10 @@ the supported categories and stop without editing files. Do not depend on
 harness-specific argument substitution or nested slash-command behavior.
 
 After selecting a category, read only its companion guide from the installed
-skill's `references/` directory. For `testing`, read
-`references/DocupTesting.md`.
+skill's `references/` directory:
+
+- `testing` → `references/DocupTesting.md`
+- `arch` → `references/DocupArch.md`
 
 Apply the selected guide's bounded workflow to the current repository. Keep one
 repository and one category in scope, inspect at most 10 evidence files, and

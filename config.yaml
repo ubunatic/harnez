@@ -212,11 +212,13 @@ prime_agent_target: ~/.prime/agent
 
 skills:
   - name: docup
-    description: "Review and update bounded repository documentation by category (testing)"
+    description: "Review and update bounded repository documentation by category (testing, architecture)"
     file: docs/commands/Docup.md
     resources:
       - source: docs/commands/DocupTesting.md
         target: references/DocupTesting.md
+      - source: docs/commands/DocupArch.md
+        target: references/DocupArch.md
 
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
