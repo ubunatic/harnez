@@ -1,6 +1,6 @@
 # 105 — Surface per-collector fetch status in usage UI, including compact view
 
-**Status**: Closed — collector provenance markers and degraded All Usage rows are implemented in 0ee75c0; bounded l fetch diagnostics view is implemented in 6c2bd11
+**Status**: Closed — resolved: per-collector status propagation, degraded rows, compact markers, and layout tests are complete
 **Priority**: P2 (Medium) — this is observability/UX, not itself a data-correctness bug like
 103/104; it doesn't lose or misrepresent quota numbers on its own. But given that 103/104 were
 only found by the user cross-referencing manual disk digging (AGY's own conversation DB/log
