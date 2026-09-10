@@ -1,6 +1,6 @@
 # 292 — `harnez index` reports "up to date" while `issues lint --cached` reports drift for the same repo, caused by unrelated untracked ticket files
 
-**Status**: Open
+**Status**: Closed — resolved: cached lint now names unrelated untracked ticket files and explains the staged-ticket-set mismatch; regression fixture added
 **Priority**: P2 (Medium)
 **Severity**: Bug (confusing failure, blocks unrelated commits)
 **Category**: Issue Tracker Tooling
