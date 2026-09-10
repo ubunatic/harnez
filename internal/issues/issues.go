@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 )
 
 // IssueFile represents an individual issue markdown file on disk.
@@ -68,8 +70,8 @@ type Report struct {
 }
 
 var (
-	issueFileRegex   = regexp.MustCompile(`^(\d{3})-.*\.md$`)
-	statusLineRegex  = regexp.MustCompile(`(?i)^\s*[-*]?\s*\*\*status:?\*\*:?\s*(.+)$`)
+	issueFileRegex  = regexp.MustCompile(`^(\d{3})-.*\.md$`)
+	statusLineRegex = regexp.MustCompile(`(?i)^\s*[-*]?\s*\*\*status:?\*\*:?\s*(.+)$`)
 	// tableRowRegex splits a Markdown table row into its four cells. A cell
 	// is any run of characters that are neither a bare "|" nor a backslash,
 	// or a backslash-escaped character (e.g. "\|" for a literal pipe inside
@@ -530,6 +532,16 @@ func LintFS(sysFS fs.FS, root string) (*Report, error) {
 	}
 
 	for _, f := range issueFiles {
+		if files := numToFileMap[f.Number]; len(files) > 1 && files[0].RelPath == f.RelPath {
+			for _, duplicate := range files[1:] {
+				diags = append(diags, Diagnostic{
+					Kind:     DiagDuplicateNumber,
+					IssueNum: f.Number,
+					Path:     duplicate.RelPath,
+					Message:  fmt.Sprintf("duplicate issue number %s claimed by files '%s' and '%s'", f.Number, f.RelPath, duplicate.RelPath),
+				})
+			}
+		}
 		if _, indexedByPath := tablePathMap[f.RelPath]; !indexedByPath {
 			if tableNumCount[f.Number] == 0 {
 				diags = append(diags, Diagnostic{
@@ -612,6 +624,19 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 		return "", "", fmt.Errorf("create issues dir: %w", err)
 	}
 
+	lockPath := filepath.Join(issuesDir, ".reserve.lock")
+	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return "", "", fmt.Errorf("open reservation lock: %w", err)
+	}
+	defer func() {
+		_ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+		_ = lock.Close()
+	}()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return "", "", fmt.Errorf("lock reservations: %w", err)
+	}
+
 	for attempts := 0; attempts < 100; attempts++ {
 		files, err := Scan(issuesDir)
 		if err != nil {
@@ -637,6 +662,7 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 		if err != nil {
 			if os.IsExist(err) {
 				// File already exists; retry loop to allocate the next number.
+				time.Sleep(time.Millisecond)
 				continue
 			}
 			return "", "", fmt.Errorf("reserve ticket file %s: %w", targetPath, err)
@@ -654,4 +680,3 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 
 	return "", "", fmt.Errorf("failed to reserve ticket after multiple attempts due to concurrent collisions")
 }
-

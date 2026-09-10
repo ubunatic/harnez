@@ -1,6 +1,7 @@
 package issues
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -92,9 +93,9 @@ func TestParseBody(t *testing.T) {
 		want    string
 	}{
 		{
-			name: "standard metadata rule",
+			name:    "standard metadata rule",
 			content: "# 158 — Add find\n\n**Status**: Open\n**Related**: x\n\n---\n\nBody paragraph one.\n\nBody paragraph two.\n",
-			want: "\nBody paragraph one.\n\nBody paragraph two.\n",
+			want:    "\nBody paragraph one.\n\nBody paragraph two.\n",
 		},
 		{
 			name:    "no thematic break present, falls back to ## heading",
@@ -257,6 +258,33 @@ func TestParseTrackerTable_EscapedPipeInTitle(t *testing.T) {
 }
 
 func TestLintFS_Scenarios(t *testing.T) {
+	t.Run("duplicate file numbers are diagnosed without duplicate table rows", func(t *testing.T) {
+		fs := fstest.MapFS{
+			"README.md": &fstest.MapFile{Data: []byte(`
+| # | File | Title | Status |
+|---|------|-------|--------|
+| 001 | [001-first.md](001-first.md) | First | Open |
+`)},
+			"001-first.md":  &fstest.MapFile{Data: []byte("# 001 — First\n\n**Status:** Open\n")},
+			"001-second.md": &fstest.MapFile{Data: []byte("# 001 — Second\n\n**Status:** Open\n")},
+		}
+
+		report, err := LintFS(fs, ".")
+		if err != nil {
+			t.Fatalf("LintFS error: %v", err)
+		}
+		found := false
+		for _, diagnostic := range report.Diagnostics {
+			if diagnostic.Kind == DiagDuplicateNumber && diagnostic.IssueNum == "001" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected file-level duplicate diagnostic, got %+v", report.Diagnostics)
+		}
+	})
+
 	t.Run("all synced", func(t *testing.T) {
 		fs := fstest.MapFS{
 			"README.md": &fstest.MapFile{
@@ -362,10 +390,10 @@ func TestNextNumber(t *testing.T) {
 
 	t.Run("max plus one with gaps and archive", func(t *testing.T) {
 		fs := fstest.MapFS{
-			"001-first.md":         &fstest.MapFile{Data: []byte("# 001 — First\n\n**Status:** Closed\n")},
-			"005-gap.md":           &fstest.MapFile{Data: []byte("# 005 — Gap\n\n**Status:** Open\n")},
-			"archive/010-arch.md":  &fstest.MapFile{Data: []byte("# 010 — Arch\n\n**Status:** Closed\n")},
-			"099-near-hundred.md":  &fstest.MapFile{Data: []byte("# 099 — Near Hundred\n\n**Status:** Open\n")},
+			"001-first.md":        &fstest.MapFile{Data: []byte("# 001 — First\n\n**Status:** Closed\n")},
+			"005-gap.md":          &fstest.MapFile{Data: []byte("# 005 — Gap\n\n**Status:** Open\n")},
+			"archive/010-arch.md": &fstest.MapFile{Data: []byte("# 010 — Arch\n\n**Status:** Closed\n")},
+			"099-near-hundred.md": &fstest.MapFile{Data: []byte("# 099 — Near Hundred\n\n**Status:** Open\n")},
 		}
 		files, err := ScanFS(fs, ".")
 		if err != nil {
@@ -451,6 +479,38 @@ func TestReserve_AtomicAndCollisionAvoidance(t *testing.T) {
 	}
 	if num3 != "003" || file3 != "003-reserved.md" {
 		t.Fatalf("Reserve got %q, %q; want 003, 003-reserved.md", num3, file3)
+	}
+}
+
+func TestReserve_ConcurrentDifferentTitlesUseDistinctNumbers(t *testing.T) {
+	dir := t.TempDir()
+	const reservations = 8
+	type result struct {
+		num  string
+		file string
+		err  error
+	}
+	results := make(chan result, reservations)
+	for i := 0; i < reservations; i++ {
+		go func(i int) {
+			num, file, err := Reserve(dir, ReserveOptions{Title: fmt.Sprintf("title %d", i)})
+			results <- result{num: num, file: file, err: err}
+		}(i)
+	}
+
+	seen := make(map[string]bool)
+	for i := 0; i < reservations; i++ {
+		got := <-results
+		if got.err != nil {
+			t.Fatalf("Reserve failed: %v", got.err)
+		}
+		if seen[got.num] {
+			t.Fatalf("duplicate reservation number %s from %s", got.num, got.file)
+		}
+		seen[got.num] = true
+	}
+	if len(seen) != reservations {
+		t.Fatalf("got %d unique reservations, want %d", len(seen), reservations)
 	}
 }
 
@@ -607,4 +667,3 @@ func TestRewriteHeaderNumber(t *testing.T) {
 		})
 	}
 }
-

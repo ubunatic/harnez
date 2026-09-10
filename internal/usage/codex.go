@@ -225,7 +225,7 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 		defer lockLiveFetchInProcess(cachePath)()
 		cache := readLiveFetchCache[codexQuotaPayload](cachePath)
 
-		if cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval {
+		if cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval && !codexQuotaCacheExpired(cache.Payload, time.Now()) {
 			usage.Session = cache.Payload.Session
 			usage.Weekly = cache.Payload.Weekly
 			usage.Sources = append(usage.Sources, "~/.codex/harnez-quota-cache.json")
@@ -319,4 +319,19 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 	}
 
 	return usage
+}
+
+func codexQuotaCacheExpired(payload codexQuotaPayload, now time.Time) bool {
+	windows := 0
+	expired := 0
+	for _, w := range []*QuotaWindow{payload.Session, payload.Weekly} {
+		if w == nil {
+			continue
+		}
+		windows++
+		if w.ExpiredAt(now) {
+			expired++
+		}
+	}
+	return windows > 0 && windows == expired
 }

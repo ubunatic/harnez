@@ -1,6 +1,37 @@
 package usage
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
+
+func TestQuotaWindowRemainingAndExpiry(t *testing.T) {
+	now := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	future := now.Add(2 * time.Hour)
+	for _, tc := range []struct {
+		name      string
+		reset     *time.Time
+		stored    time.Duration
+		remaining time.Duration
+		expired   bool
+	}{
+		{"future", &future, time.Minute, 2 * time.Hour, false},
+		{"past", ptrTime(now.Add(-time.Minute)), time.Hour, 0, true},
+		{"legacy", nil, 3 * time.Hour, 3 * time.Hour, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := QuotaWindow{ResetAt: tc.reset, DurationLeft: tc.stored}
+			if got := w.RemainingAt(now); got != tc.remaining {
+				t.Errorf("RemainingAt() = %s, want %s", got, tc.remaining)
+			}
+			if got := w.ExpiredAt(now); got != tc.expired {
+				t.Errorf("ExpiredAt() = %v, want %v", got, tc.expired)
+			}
+		})
+	}
+}
+
+func ptrTime(t time.Time) *time.Time { return &t }
 
 // TestAgentUsage_HasUsageData exercises the issue-083 predicate that decides
 // whether a renderer should show a box/row for an agent: only once real

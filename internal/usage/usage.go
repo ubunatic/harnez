@@ -206,6 +206,7 @@ func RenderJSON(summary UsageSummary) (string, error) {
 // call (Decision §2).
 func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 	opt := firstOpt(opts)
+	now := time.Now()
 	var sb strings.Builder
 
 	sb.WriteString("Agentic Coding Usage & Quota Monitor\n")
@@ -260,8 +261,8 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 				resetInfo := ""
 				if agent.Session.ResetAt != nil {
 					localTime := agent.Session.ResetAt.Local().Format("15:04 (MST)")
-					if agent.Session.DurationLeft > 0 {
-						resetInfo = fmt.Sprintf(" · Resets %s (in %s)", localTime, FormatDuration(agent.Session.DurationLeft))
+					if remaining := agent.Session.RemainingAt(now); remaining > 0 {
+						resetInfo = fmt.Sprintf(" · Resets %s (in %s)", localTime, FormatDuration(remaining))
 					} else {
 						resetInfo = fmt.Sprintf(" · Resets %s", localTime)
 					}
@@ -282,8 +283,8 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 				resetInfo := ""
 				if agent.Weekly.ResetAt != nil {
 					localTime := agent.Weekly.ResetAt.Local().Format("Jan 02, 15:04 (MST)")
-					if agent.Weekly.DurationLeft > 0 {
-						resetInfo = fmt.Sprintf(" · Resets %s (in %s)", localTime, FormatDuration(agent.Weekly.DurationLeft))
+					if remaining := agent.Weekly.RemainingAt(now); remaining > 0 {
+						resetInfo = fmt.Sprintf(" · Resets %s (in %s)", localTime, FormatDuration(remaining))
 					} else {
 						resetInfo = fmt.Sprintf(" · Resets %s", localTime)
 					}
@@ -315,8 +316,8 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 					resetInfo := ""
 					if w.ResetAt != nil {
 						localTime := w.ResetAt.Local().Format("Jan 02, 15:04 (MST)")
-						if w.DurationLeft > 0 {
-							resetInfo = fmt.Sprintf(" · Resets %s (in %s)", localTime, FormatDuration(w.DurationLeft))
+						if remaining := w.RemainingAt(now); remaining > 0 {
+							resetInfo = fmt.Sprintf(" · Resets %s (in %s)", localTime, FormatDuration(remaining))
 						} else {
 							resetInfo = fmt.Sprintf(" · Resets %s", localTime)
 						}

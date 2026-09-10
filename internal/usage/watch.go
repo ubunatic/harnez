@@ -908,18 +908,19 @@ func formatAllUsageSingleWindowLineWithMidWidth(label string, w QuotaWindow, con
 }
 
 func compactDurationText(w QuotaWindow) string {
-	if w.DurationLeft <= 0 {
+	remaining := w.RemainingAt(time.Now())
+	if remaining <= 0 {
 		return ""
 	}
-	if w.DurationLeft >= 24*time.Hour && w.DurationLeft < 48*time.Hour {
-		days := int(w.DurationLeft.Hours()) / 24
-		hours := int(w.DurationLeft.Hours()) % 24
+	if remaining >= 24*time.Hour && remaining < 48*time.Hour {
+		days := int(remaining.Hours()) / 24
+		hours := int(remaining.Hours()) % 24
 		if hours > 0 {
 			return fmt.Sprintf("%dd%dh", days, hours)
 		}
 		return fmt.Sprintf("%dd", days)
 	}
-	return FormatCompactDuration(w.DurationLeft)
+	return FormatCompactDuration(remaining)
 }
 
 // buildLoadBox renders a compact panel showing CPU and GPU load, styled

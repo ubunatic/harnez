@@ -16,6 +16,27 @@ type QuotaWindow struct {
 	Severity         string        `json:"severity,omitempty"`
 }
 
+// RemainingAt derives the live countdown from ResetAt when available. The
+// stored DurationLeft remains a compatibility fallback for older snapshots.
+func (w QuotaWindow) RemainingAt(now time.Time) time.Duration {
+	if w.ResetAt != nil {
+		remaining := w.ResetAt.Sub(now)
+		if remaining < 0 {
+			return 0
+		}
+		return remaining
+	}
+	if w.DurationLeft < 0 {
+		return 0
+	}
+	return w.DurationLeft
+}
+
+// ExpiredAt reports whether an absolute reset timestamp has passed.
+func (w QuotaWindow) ExpiredAt(now time.Time) bool {
+	return w.ResetAt != nil && !w.ResetAt.After(now)
+}
+
 // TokenBreakdown holds detailed token metrics when available locally or remotely.
 type TokenBreakdown struct {
 	InputTokens      int64   `json:"input_tokens"`
@@ -141,6 +162,19 @@ func (a AgentUsage) IsValueStale() bool {
 	for _, s := range a.Sources {
 		if strings.Contains(s, "stale") {
 			return true
+		}
+	}
+	now := time.Now()
+	for _, w := range []*QuotaWindow{a.Session, a.Weekly} {
+		if w != nil && w.ExpiredAt(now) {
+			return true
+		}
+	}
+	for _, group := range a.ModelGroups {
+		for _, w := range group.Windows {
+			if w.ExpiredAt(now) {
+				return true
+			}
 		}
 	}
 	return a.IsStale(DefaultCacheStaleness)

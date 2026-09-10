@@ -294,8 +294,6 @@ func TestBuildHistoryBox(t *testing.T) {
 }
 
 func TestBuildAllUsageBox(t *testing.T) {
-	weeklyReset := testTime.Add(2*24*time.Hour + 8*time.Hour)
-	sessionReset := testTime.Add(4*time.Hour + 58*time.Minute)
 	summary := UsageSummary{
 		Timestamp: testTime,
 		Agents: []AgentUsage{
@@ -308,15 +306,15 @@ func TestBuildAllUsageBox(t *testing.T) {
 					{
 						Name: "Gemini Models",
 						Windows: []QuotaWindow{
-							{Name: "Weekly", UsedPercent: 93, ResetAt: &weeklyReset, DurationLeft: 2*24*time.Hour + 8*time.Hour},
-							{Name: "Session (5-hour)", UsedPercent: 3, ResetAt: &sessionReset, DurationLeft: 4*time.Hour + 58*time.Minute},
+							{Name: "Weekly", UsedPercent: 93, DurationLeft: 2*24*time.Hour + 8*time.Hour},
+							{Name: "Session (5-hour)", UsedPercent: 3, DurationLeft: 4*time.Hour + 58*time.Minute},
 						},
 					},
 					{
 						Name: "Claude and GPT models",
 						Windows: []QuotaWindow{
-							{Name: "Weekly", UsedPercent: 35, ResetAt: &weeklyReset, DurationLeft: 6*24*time.Hour + 2*time.Hour},
-							{Name: "Session (5-hour)", UsedPercent: 0, ResetAt: &sessionReset, DurationLeft: 4*time.Hour + 58*time.Minute},
+							{Name: "Weekly", UsedPercent: 35, DurationLeft: 6*24*time.Hour + 2*time.Hour},
+							{Name: "Session (5-hour)", UsedPercent: 0, DurationLeft: 4*time.Hour + 58*time.Minute},
 						},
 					},
 				},
@@ -2589,5 +2587,3 @@ func TestRedrawThrottlerStop(t *testing.T) {
 		t.Fatalf("triggers after Stop() = %d, want 0", got)
 	}
 }
-
-
