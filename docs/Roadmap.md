@@ -1,6 +1,6 @@
 # Roadmap
 
-Working roadmap for the open backlog (updated 2026-09-07). Derived from each ticket's
+Working roadmap for the open backlog (updated 2026-09-10). Derived from each ticket's
 appended `## Implementation Plan`, so scope calls here reflect the planning pass, not a fresh
 re-derivation.
 
@@ -26,6 +26,10 @@ Sequencing buckets:
 - **042**, **045**, **046**, **056**, **125**, **222**, **095 pt.1** — AgenticLoop & practice docs improvements
 - **229** — `/issue` skill
 - **249** — portable copyable-doc contract
+- **070**, **072** — local-agent canary and cross-agent distill research/verification
+- **216** — local SLM telemetry classifier endpoint
+- **301** — cross-agent Docup testing skill
+- **303** — prose-first reusable advisor skill with four-target distribution
 
 ## 1. Usage watch TUI — correctness & legibility
 
@@ -192,6 +196,7 @@ building it twice.
   *every* target agent turned out to have a native hook surface, and all are wired. A PTY
   supervisor would buy nothing.
 - **201** — implementation complete; only the tracker entry is open.
+- **302** — the requested comparison study now exists at `docs/studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md`; close after confirming the tracker record reflects that deliverable.
 
 **Park — blocked on something no amount of work here resolves:**
 
@@ -216,15 +221,47 @@ building it twice.
   direct Android release scaffold shares no code path with it and deserves its own ticket.
 - **166** — Part A (Go rune/width docs) ships now; Part B stays blocked on 149/151.
 
+## 10. Newer backlog: build, harness, and documentation follow-through
+
+These tickets were filed or materially clarified after the previous roadmap. They are ordered by
+their effect on a working harnez session, then by the dependency they create for later agent
+workflow work.
+
+| Ticket | Scope | Bucket |
+|---|---|---|
+| 290 — ambient-workspace build break | S/M, current P1 build failure; align the voxi API and verify under the real ambient `go.work` | **Now** |
+| 292 — index versus cached-lint drift | S/M, tracker correctness; prevent unrelated untracked tickets from making commit checks disagree | **Now** |
+| 299 — `detectDoc`/Make documentation gaps | S, directly repairs broken documentation/install references | **Now** |
+| 268 — bounded `harnez exec` timeout | M, protects the hook and agent command path from indefinite hangs | **Next** |
+| 274 — session-start harness health checks | M, depends on stable cross-agent hook/shim status semantics | **Next** |
+| 281 — opt-in advisor discovery | S, reduces routine context and quota cost; coordinate with the shipped advisor skill | **Next** |
+| 285 — durable-note wording contract | S, closes a trust gap in normal agent conversations | **Next** |
+| 288 → 291 — external-agent handoff, then standardized CLI dispatch | M/L combined; settle the prose handoff before adding the command/adapters | **Next** |
+| 293 — recoverable roadmap synthesis | M, improves this planning workflow; depends on an explicit safe recovery location | **Next** |
+| 295 — actionable startup splash status | M, makes usage failures legible after the core dashboard fixes | **Next** |
+| 296 — always compute distill savings | S/M, improves honest efficiency reporting; follow the existing telemetry model | **Next** |
+| 297 — linked language subdocuments | M, extends the proven copyable-doc pipeline without bloating core docs | **Next** |
+| 298 — commit checkpoint/file-granularity guidance | S, documentation first; split any hook enforcement into a separate design | **Next** |
+| 300 — raw-mode and PTY input guidance | S, verified documentation gap with a low implementation cost | **Next** |
+| 302 — plugin/self-modification research | study complete; close candidate in §9, with any Harnez design as a separately reviewed follow-up | **Close candidate** |
+
+Rationale: 290 blocks the normal build/test loop and therefore precedes feature work. 292 and 299
+are similarly cheap correctness repairs in the tracker and documentation surfaces. The next group
+hardens the agent-facing execution and planning loop; 288 and 291 stay together because a handoff
+contract without a tested dispatch surface, or a dispatcher without that contract, would create
+another incompatible workflow. 302 remains outside implementation sequencing until its research
+recommendations have been reviewed.
+
 ---
 
 ## Suggested order of attack
 
-1. **Dashboard truth & resilience**: 210 → 201 (close) → 139 → 105 → 262 → 255
-2. **Tracker integrity**: 108 → 217 → 126
-3. **Docs batch**: 263 — plus 166 Part A
-4. **Cheap `apply` correctness**: 209, 030 (Codex half)
-5. **Instruction architecture**: 149 → 144, 151, 128, 135, 134
-6. **Mic indicators & Audio UX**: 250 → 251 → 264 → 253
-7. **Collector depth**: 113 → 111 → 034
-8. Everything in **Later**, reprioritized once 149 and 160 have decisions attached.
+1. **Restore the development loop**: 290 → 210 → 201 (close) → 139 → 105 → 262 → 255
+2. **Repair tracker and install/documentation correctness**: 292 → 299 → 108 → 217 → 126 → 209
+3. **Finish the current docs batch**: 263 → 166 Part A → 297 → 300
+4. **Harden agent execution and planning**: 268 → 274 → 281 → 285 → 293 → 295
+5. **Instruction and dispatch architecture**: 149 → 144, 151, 128, 135, 134 → 288 → 291
+6. **Mic indicators and audio UX**: 250 → 251 → 264 → 253
+7. **Collector depth and efficiency evidence**: 030 → 113 → 111 → 034 → 296
+8. Revisit **Later** items after 149 and 160 have decisions attached; close 302 once its study is
+   accepted, and keep any plugin implementation outside this roadmap until separately scoped.
