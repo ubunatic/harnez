@@ -36,8 +36,12 @@
 - Added one bounded 200 ms retry around each startup collector in
   `CollectAll`/`CollectAllProgress`; Claude's existing OAuth refresh path is
   preserved (`56a80f4`).
-- The structured collector event log, `l` diagnostics overlay, and scrolling
-  controls remain open.
+- Added a bounded, session-only fetch-stage event ring and a basic `l`/`L`
+  diagnostics overlay (`6c2bd11`). It shows recent started/done/failed events
+  and is dismissible with `l`, `?`, Esc, or q. The overlay intentionally does
+  not claim to be a complete collector log or persist events.
+- Structured collector error details, scrolling, and richer diagnostics remain
+  open for a future follow-up.
 
 During `--watch` startup splash, collector probes (such as Codex, Claude, or AGY) can occasionally fail
 on the first cold attempt due to transient network latency, token refresh delays, or locked cache files.
