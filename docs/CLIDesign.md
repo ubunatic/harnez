@@ -110,9 +110,9 @@ harnez apply [-t <dir>] [-d <name>...] [--force-docs]
         ├── write ~/.claude/CLAUDE.md managed sections
         ├── create ~/AGENTS.md symlink → ~/.claude/CLAUDE.md
         ├── write ~/.claude/commands/<name>.md for each command
-        ├── write ~/.gemini/skills/<name>/SKILL.md for each skill
-        ├── write ~/.codex/skills/<name>/SKILL.md for each skill when configured
-        ├── write ~/.claude/skills/<name>/SKILL.md for each skill (real Agent Skills, auto-loaded)
+        ├── write each skill's SKILL.md and declared resources to ~/.gemini/skills/<name>/
+        ├── write each skill's SKILL.md and declared resources to ~/.codex/skills/<name>/ when configured
+        ├── write each skill's SKILL.md and declared resources to ~/.claude/skills/<name>/ (real Agent Skills, auto-loaded)
         ├── write ~/.prime/agent/AGENTS.md managed sections
         ├── write ~/.prime/agent/prompts/<name>.md and skills/<name>/SKILL.md
         ├── write agents_md.agents[<id>] managed sections into that agent's own target
