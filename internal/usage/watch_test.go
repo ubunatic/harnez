@@ -472,6 +472,18 @@ func TestCollectorStatusMarkerFitsNarrowAgentBox(t *testing.T) {
 	}
 }
 
+func TestAllUsageShowsEmptyModelGroupAsDegradedRow(t *testing.T) {
+	summary := UsageSummary{Agents: []AgentUsage{{
+		AgentID: "agy", Name: "Antigravity (AGY)", Installed: true,
+		Sources:     []string{"usage-history (stale)"},
+		ModelGroups: []ModelGroup{{Name: "Gemini Models"}},
+	}}}
+	text := stripANSI(strings.Join(allUsageLines(summary, 50, false), "\n"))
+	if !strings.Contains(text, "◇ Antigravity (AGY)") {
+		t.Fatalf("empty model group was omitted from All Usage: %q", text)
+	}
+}
+
 func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 	summary := UsageSummary{
 		Timestamp: testTime,
@@ -1713,6 +1725,15 @@ func TestDispatchWatchKeyDiagnosticsOverlay(t *testing.T) {
 		closed, effect := dispatchWatchKey(state, key, false)
 		if closed.diagnosticsOpen || !effect.redraw {
 			t.Errorf("key %q did not dismiss diagnostics overlay: state=%+v effect=%+v", key, closed, effect)
+		}
+	}
+	controls, _ := dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, '?', false)
+	if _, effect := dispatchWatchKey(controls, 'l', false); !effect.redraw {
+		t.Fatal("l from Controls overlay did not request redraw")
+	} else {
+		switched, _ := dispatchWatchKey(controls, 'l', false)
+		if !switched.diagnosticsOpen || switched.overlayOpen {
+			t.Fatalf("l did not switch from Controls to diagnostics: %+v", switched)
 		}
 	}
 }

@@ -489,6 +489,7 @@ func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyS
 	switch {
 	case action == "toggle_diagnostics":
 		st.diagnosticsOpen = !st.diagnosticsOpen
+		st.overlayOpen = false
 		return st, watchKeyEffect{redraw: true}
 	case action == "toggle_controls":
 		st.diagnosticsOpen = false
@@ -738,6 +739,7 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		// groups included) shares the one flag.
 		stale := agent.IsValueStale()
 		if len(agent.ModelGroups) > 0 {
+			hasWindow := false
 			for _, mg := range agent.ModelGroups {
 				label := mg.Name
 				if strings.EqualFold(label, "Gemini Models") {
@@ -745,7 +747,20 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 				} else if strings.EqualFold(label, "Claude and GPT models") || strings.EqualFold(label, "Claude and GPT") {
 					label = "Claude/GPT"
 				}
+				if len(mg.Windows) > 0 {
+					hasWindow = true
+				}
 				rows = append(rows, allUsageRow{label: label, windows: mg.Windows, lastRefreshed: agent.LastRefreshed, stale: stale})
+				if n := visLen(label); n > labelWidth {
+					labelWidth = n
+				}
+			}
+			if hasWindow {
+				continue
+			}
+			if marker := collectorStatusMarker(agent); marker != "" {
+				label := collectorStatusLabel(agent, agent.Name)
+				rows = append(rows, allUsageRow{label: label, lastRefreshed: agent.LastRefreshed, stale: stale})
 				if n := visLen(label); n > labelWidth {
 					labelWidth = n
 				}
