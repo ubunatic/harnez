@@ -91,17 +91,30 @@ The user-facing entry point should be a cross-agent skill named
 `/harnez-advisor`, with `reuse` as its first subcommand. The project prefix
 avoids collisions with harness-native names such as Claude's generic
 `/advisor`, while leaving room for future subcommands such as `new` and
-`status`. This makes the workflow callable from each supported harness using
-the same slash-command shape:
+`status`. The slash command should accept the remainder of the invocation as
+ordinary request text. This keeps it portable across supported harnesses
+without depending on a shared argument-substitution or flag parser:
 
 ```text
-/harnez-advisor reuse [--agent claude|codex|agy|gemini|prime]
-                      [--session ID] [--effort low|medium|high]
-                      [--fresh] [--json] [--dry-run]
+/harnez-advisor reuse the previous compatible Codex advisor session for this
+project, use low reasoning, and report measured cache evidence
 ```
 
-The skill should delegate compatibility and evidence decisions to one Harnez
-command with per-tool adapters. The corresponding host-side contract is:
+The skill should interpret that prose request and delegate compatibility and
+evidence decisions to one Harnez command with per-tool adapters. Standard
+parameter passing for a skill or slash command is:
+
+- Put the request, target agent, task scope, and desired effort in the text
+  following the skill name.
+- Use explicit phrases such as “agent Codex,” “session `<id>`,” “fresh session,”
+  or “low reasoning” when those choices matter.
+- Ask the skill to echo its interpreted parameters before an operation that
+  could resume or launch work.
+- Treat harness-specific argument placeholders, nested slash-command syntax,
+  and `--flags` as unsupported in the portable skill interface.
+
+The future host-side CLI may offer strict flags for scripts and automation. Its
+separate contract could be:
 
 ```text
 harnez advisor reuse [--agent claude|codex|agy|gemini|prime]
@@ -121,9 +134,10 @@ silently starting an interactive agent. The result identifies:
 - token/cache/latency/cost fields when the adapter can obtain them; and
 - fallback reason and the command needed to continue.
 
-The default should be `--effort low` for bounded advisory work where the tool
-supports an effort control. The user must be able to request another level, and
-the result must say when the selected tool cannot honor that setting.
+The future CLI should default to `--effort low` for bounded advisory work where
+the tool supports an effort control. In the portable skill, the user can request
+“low reasoning” or another level in prose, and the result must say when the
+selected tool cannot honor that setting.
 
 ## Compatibility identity
 
