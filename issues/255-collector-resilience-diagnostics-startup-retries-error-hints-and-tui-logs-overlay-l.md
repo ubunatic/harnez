@@ -31,6 +31,14 @@
   Claude refresh tests do not cover general transient retries, log scrolling,
   or logs-overlay key handling. Those acceptance criteria remain open.
 
+### Implementation progress — 2026-09-10
+
+- Added one bounded 200 ms retry around each startup collector in
+  `CollectAll`/`CollectAllProgress`; Claude's existing OAuth refresh path is
+  preserved (`56a80f4`).
+- The structured collector event log, `l` diagnostics overlay, and scrolling
+  controls remain open.
+
 During `--watch` startup splash, collector probes (such as Codex, Claude, or AGY) can occasionally fail
 on the first cold attempt due to transient network latency, token refresh delays, or locked cache files.
 Because `CollectAllProgress` currently reports `FetchFailed` immediately on the first attempt without a
