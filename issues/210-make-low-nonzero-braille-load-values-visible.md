@@ -1,6 +1,6 @@
 # 210 — Make low nonzero Braille load values visible
 
-**Status**: Closed — resolved in eba7011: Braille load sparklines keep a visible baseline
+**Status**: Closed — resolved: Braille low-nonzero visibility fix and boundary tests are present and baseline gates pass
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Bug
