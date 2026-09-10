@@ -30,7 +30,7 @@
 - Codex rollout JSONL totals are now aggregated defensively, deduplicated by
   session, and exposed as `AgentUsage.Tokens` (`36de25e`). Malformed records
   remain nonfatal.
-- AGY protobuf extraction remains deferred to #034, so this ticket stays Open
+- AGY protobuf extraction remains deferred to #034; this ticket is closed after completing the Codex half.
   with the Codex half complete.
 
 `harnez usage` (and its `--watch` live view) shows a `TokenBreakdown` (input/output/cache/total tokens) for Claude Code, but never for Antigravity (AGY) or OpenAI Codex. This isn't a missing UI toggle — there is currently no local data source to populate it from:

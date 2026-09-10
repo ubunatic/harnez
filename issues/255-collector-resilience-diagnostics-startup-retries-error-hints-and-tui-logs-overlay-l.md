@@ -1,6 +1,6 @@
 # 255 — Collector Resilience & Diagnostics: Startup Retries, Error Hints, and TUI Logs Overlay (`l`)
 
-**Status**: Open — partial Claude auth recovery; general retries and logs overlay absent
+**Status**: Open — partial; bounded retries and a basic `l` diagnostics overlay are implemented, richer diagnostics remain
 **Priority**: P2 (Medium)
 **Severity**: Moderate (transient collector failure during startup splash causes false-positive failure badges and opaque errors)
 **Category**: Architecture / UX / Diagnostics
