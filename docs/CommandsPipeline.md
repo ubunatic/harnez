@@ -105,6 +105,22 @@ outputs. Prime prompt templates reuse command format unchanged because both form
 4. Verify: the `skills:` summary line and `make status` should show the name in every
    configured skill target.
 
+Skills may declare supporting resources when their body refers to companion files:
+
+```yaml
+skills:
+  - name: docup
+    file: docs/commands/Docup.md
+    resources:
+      - source: docs/commands/DocupTesting.md
+        target: references/DocupTesting.md
+```
+
+Sources are read from the embedded/config filesystem. Targets are copied below
+the installed skill directory and are included in apply, diff, status, clean,
+and idempotency checks. Keep resource targets relative to the skill directory;
+the installer rejects absolute paths and parent traversal.
+
 ### Source reuse
 
 A single `commands/<name>.md` file can back both a Claude command (`commands:` entry) and

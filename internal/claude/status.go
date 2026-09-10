@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -130,12 +131,38 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 		targets := skillTargets(cfg)
 		for _, skill := range cfg.Skills {
 			skill := skill
+			resources, err := genSkillResources(skill, cfg.FS)
+			if err != nil {
+				return err
+			}
 			for _, skillsRoot := range targets {
-				path := filepath.Join(skillsRoot, skill.Name, "SKILL.md")
+				skillDir := filepath.Join(skillsRoot, skill.Name)
+				path, err := safeSkillPath(skillDir, "SKILL.md")
+				if err != nil {
+					return err
+				}
 				checks = append(checks, entry{
 					label: path,
 					check: func() bool { _, err := os.Stat(path); return err == nil },
 				})
+				for _, resource := range resources {
+					resource := resource
+					resourcePath, err := safeSkillPath(skillDir, resource.target)
+					if err != nil {
+						return err
+					}
+					resourceState := "missing"
+					if installed, readErr := os.ReadFile(resourcePath); readErr == nil {
+						resourceState = "drifted"
+						if bytes.Equal(installed, resource.data) {
+							resourceState = "ok"
+						}
+					}
+					checks = append(checks, entry{
+						label: resourcePath,
+						state: resourceState,
+					})
+				}
 			}
 		}
 	}

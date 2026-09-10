@@ -25,6 +25,22 @@ do
     fi
 done
 
+# Every docs/commands/*.md source must be registered as a skill file or
+# supporting resource. This keeps embedded command categories discoverable.
+for f in docs/commands/*.md
+do
+    registered=0
+    if grep -Fq "file: ${f}" "${config}"
+    then registered=1
+    elif grep -Fq "source: ${f}" "${config}"
+    then registered=1
+    fi
+    if test "${registered}" -eq 0
+    then echo "lint: unregistered docs command source: ${f}"
+         fail=1
+    fi
+done
+
 # Check JavaScript syntax for GNOME extensions if node is present
 for js in contrib/*/*.js
 do

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -481,6 +482,83 @@ func genSkillContent(cmd Command, fsys fs.FS) (string, error) {
 	return sb.String(), nil
 }
 
+type skillResourceContent struct {
+	target string
+	data   []byte
+}
+
+func validateSkillResourceTarget(skillName, target string) (string, error) {
+	cleanTarget := path.Clean(target)
+	if target == "" || path.IsAbs(target) || cleanTarget == "." || cleanTarget == ".." || strings.HasPrefix(cleanTarget, "../") {
+		return "", fmt.Errorf("skill %s: resource target %q must stay inside the skill directory", skillName, target)
+	}
+	if cleanTarget == "SKILL.md" {
+		return "", fmt.Errorf("skill %s: resource target %q is reserved for the generated skill body", skillName, target)
+	}
+	return filepath.FromSlash(cleanTarget), nil
+}
+
+func validateSkillResourceTargets(skill Command) ([]string, error) {
+	targets := make([]string, 0, len(skill.Resources))
+	for _, resource := range skill.Resources {
+		if resource.Source == "" {
+			return nil, fmt.Errorf("skill %s: resource source is required", skill.Name)
+		}
+		target, err := validateSkillResourceTarget(skill.Name, resource.Target)
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, target)
+	}
+	sortedTargets := append([]string(nil), targets...)
+	sort.Strings(sortedTargets)
+	for i := 1; i < len(sortedTargets); i++ {
+		if sortedTargets[i] == sortedTargets[i-1] || strings.HasPrefix(sortedTargets[i], sortedTargets[i-1]+string(filepath.Separator)) {
+			return nil, fmt.Errorf("skill %s: resource targets overlap at %q", skill.Name, sortedTargets[i])
+		}
+	}
+	return targets, nil
+}
+
+func genSkillResources(skill Command, fsys fs.FS) ([]skillResourceContent, error) {
+	targets, err := validateSkillResourceTargets(skill)
+	if err != nil {
+		return nil, err
+	}
+	resources := make([]skillResourceContent, 0, len(skill.Resources))
+	for i, resource := range skill.Resources {
+		data, err := fs.ReadFile(fsys, resource.Source)
+		if err != nil {
+			return nil, fmt.Errorf("skill %s resource %s: %w", skill.Name, resource.Source, err)
+		}
+		resources = append(resources, skillResourceContent{target: targets[i], data: data})
+	}
+	return resources, nil
+}
+
+func safeSkillPath(skillDir, relativePath string) (string, error) {
+	if info, err := os.Lstat(skillDir); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("skill path %s is a symlink", skillDir)
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	current := skillDir
+	for _, part := range strings.Split(relativePath, string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if err != nil {
+			if os.IsNotExist(err) {
+				break
+			}
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("skill path %s is a symlink", current)
+		}
+	}
+	return filepath.Join(skillDir, relativePath), nil
+}
+
 func primeAgentRoot(cfg *Config) string {
 	return fsutil.ExpandHome(cfg.PrimeAgentTarget)
 }
@@ -861,7 +939,10 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 			if skill.RateFeedback && disableRateFeedback {
 				for _, skillsRoot := range targets {
 					skillDir := filepath.Join(skillsRoot, skill.Name)
-					path := filepath.Join(skillDir, "SKILL.md")
+					path, err := safeSkillPath(skillDir, "SKILL.md")
+					if err != nil {
+						return err
+					}
 					if _, err := os.Stat(path); err == nil {
 						if err := os.Remove(path); err != nil {
 							return fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
@@ -872,6 +953,21 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 					} else if !os.IsNotExist(err) {
 						return fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
 					}
+					resourceTargets, err := validateSkillResourceTargets(skill)
+					if err != nil {
+						return err
+					}
+					for _, resourceTarget := range resourceTargets {
+						resourcePath, err := safeSkillPath(skillDir, resourceTarget)
+						if err != nil {
+							return err
+						}
+						if err := os.Remove(resourcePath); err != nil && !os.IsNotExist(err) {
+							return fmt.Errorf("skill %s resource [%s]: %w", skill.Name, resourcePath, err)
+						}
+						_ = os.Remove(filepath.Dir(resourcePath))
+					}
+					_ = os.Remove(skillDir)
 				}
 				skillNames = append(skillNames, skill.Name+" (disabled)")
 				continue
@@ -880,12 +976,19 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 			if err != nil {
 				return err
 			}
+			resources, err := genSkillResources(skill, cfg.FS)
+			if err != nil {
+				return err
+			}
 			for _, skillsRoot := range targets {
 				skillDir := filepath.Join(skillsRoot, skill.Name)
+				path, err := safeSkillPath(skillDir, "SKILL.md")
+				if err != nil {
+					return err
+				}
 				if err := os.MkdirAll(skillDir, 0755); err != nil {
 					return fmt.Errorf("skill %s dir: %w", skill.Name, err)
 				}
-				path := filepath.Join(skillDir, "SKILL.md")
 				oldContent, _ := os.ReadFile(path)
 				cr := applyResult{changed: string(oldContent) != content}
 				if cr.changed {
@@ -895,6 +998,23 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 					changes++
 				}
 				printResult("wrote", path, cr)
+				for _, resource := range resources {
+					resourcePath, err := safeSkillPath(skillDir, resource.target)
+					if err != nil {
+						return err
+					}
+					if err := os.MkdirAll(filepath.Dir(resourcePath), 0755); err != nil {
+						return fmt.Errorf("skill %s resource dir: %w", skill.Name, err)
+					}
+					rr, err := writeFileIfChanged(resourcePath, resource.data)
+					if err != nil {
+						return fmt.Errorf("skill %s resource: %w", skill.Name, err)
+					}
+					if rr.changed {
+						changes++
+					}
+					printResult("wrote", resourcePath, rr)
+				}
 			}
 			skillNames = append(skillNames, skill.Name)
 		}
@@ -1158,8 +1278,16 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 			if err != nil {
 				return false, err
 			}
+			resources, err := genSkillResources(skill, cfg.FS)
+			if err != nil {
+				return false, err
+			}
 			for _, skillsRoot := range skillTargets(cfg) {
-				path := filepath.Join(skillsRoot, skill.Name, "SKILL.md")
+				skillDir := filepath.Join(skillsRoot, skill.Name)
+				path, err := safeSkillPath(skillDir, "SKILL.md")
+				if err != nil {
+					return false, err
+				}
 				existing, readErr := os.ReadFile(path)
 				if readErr != nil {
 					if os.IsNotExist(readErr) {
@@ -1170,6 +1298,23 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 				}
 				if string(existing) != content {
 					anyChanged = true
+				}
+				for _, resource := range resources {
+					resourcePath, err := safeSkillPath(skillDir, resource.target)
+					if err != nil {
+						return false, err
+					}
+					existing, readErr := os.ReadFile(resourcePath)
+					if readErr != nil {
+						if os.IsNotExist(readErr) {
+							anyChanged = true
+							continue
+						}
+						return false, fmt.Errorf("skill %s resource [%s]: %w", skill.Name, resourcePath, readErr)
+					}
+					if !bytes.Equal(existing, resource.data) {
+						anyChanged = true
+					}
 				}
 			}
 		}
@@ -1289,9 +1434,26 @@ func CleanAll(target string, cfg *Config) error {
 		for _, skill := range cfg.Skills {
 			for _, skillsRoot := range skillTargets(cfg) {
 				skillDir := filepath.Join(skillsRoot, skill.Name)
-				path := filepath.Join(skillDir, "SKILL.md")
+				path, err := safeSkillPath(skillDir, "SKILL.md")
+				if err != nil {
+					return err
+				}
 				if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 					return fmt.Errorf("skill %s [%s]: %w", skill.Name, path, err)
+				}
+				resourceTargets, err := validateSkillResourceTargets(skill)
+				if err != nil {
+					return err
+				}
+				for _, resourceTarget := range resourceTargets {
+					resourcePath, err := safeSkillPath(skillDir, resourceTarget)
+					if err != nil {
+						return err
+					}
+					if err := os.Remove(resourcePath); err != nil && !os.IsNotExist(err) {
+						return fmt.Errorf("skill %s resource [%s]: %w", skill.Name, resourcePath, err)
+					}
+					_ = os.Remove(filepath.Dir(resourcePath))
 				}
 				// Best-effort: drop the now-empty per-skill directory. Ignore
 				// errors (e.g. directory holds other files) — never clean

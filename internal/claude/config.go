@@ -121,14 +121,23 @@ type DistillAutopipe struct {
 }
 
 type Command struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	Content     string `yaml:"content"`
-	File        string `yaml:"file"` // path relative to config dir; overrides content if set
+	Name        string          `yaml:"name"`
+	Description string          `yaml:"description"`
+	Content     string          `yaml:"content"`
+	File        string          `yaml:"file"` // path relative to config dir; overrides content if set
+	Resources   []SkillResource `yaml:"resources,omitempty"`
 	// RateFeedback marks this skill as part of the Tool Feedback Protocol
 	// instruction (issue 142): `harnez apply` omits/removes it when
 	// RateFeedbackDisabled(cfg) is true.
 	RateFeedback bool `yaml:"rate_feedback,omitempty"`
+}
+
+// SkillResource is a supporting file copied beside an installed skill.
+// Source is resolved from the embedded/config filesystem; Target is relative
+// to the installed skill directory.
+type SkillResource struct {
+	Source string `yaml:"source"`
+	Target string `yaml:"target"`
 }
 
 type AgentsMD struct {
