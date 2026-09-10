@@ -1,6 +1,6 @@
 # 301 — Add /docup testing skill for periodic testing documentation maintenance
 
-**Status**: Open — deferred pending review and assessment
+**Status**: Closed — implemented in bacb68f
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation
