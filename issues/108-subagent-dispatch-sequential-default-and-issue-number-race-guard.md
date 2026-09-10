@@ -1,6 +1,6 @@
 # 108 — Subagent dispatch needs a hard sequential-by-default rule + issue-number allocation race guard
 
-**Status**: Open — partial tooling exists; different-title allocation race and file-level lint gap remain
+**Status**: Closed — number-level reservation locking and file-level duplicate diagnostics implemented in 410396a
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
