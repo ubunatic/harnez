@@ -1,6 +1,6 @@
 # 217 — Add -n Limit (Default: 10) and --all Flag to harnez find issues
 
-**Status**: Open
+**Status**: Closed — resolved in 9e31efd: find issues now defaults to newest 10, supports --limit/-n and --all, with ranked-search and bare-list tests
 **Priority**: P1 (High) — bumped from P2 2026-09-07 after a second real occurrence (see Recurrence section); flagged as a recurring papercut across "any find/list command"
 **Severity**: Minor
 **Category**: Feature / CLI
