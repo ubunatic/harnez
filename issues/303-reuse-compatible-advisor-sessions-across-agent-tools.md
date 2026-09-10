@@ -1,6 +1,6 @@
 # 303 — Reuse compatible advisor sessions across agent tools
 
-**Status**: Open
+**Status**: Closed — implemented in 327753e: prose-first harnez-advisor skill with four-target distribution test and native-resume guidance
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
