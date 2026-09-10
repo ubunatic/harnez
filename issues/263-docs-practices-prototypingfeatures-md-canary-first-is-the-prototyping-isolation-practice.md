@@ -1,6 +1,6 @@
 # 263 — docs/practices/PrototypingFeatures.md: canary-first IS the prototyping/isolation practice
 
-**Status**: Open
+**Status**: Closed — resolved: added copyable PrototypingFeatures practice, Canary cross-link, AGENTS guidance, and config registration
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation
