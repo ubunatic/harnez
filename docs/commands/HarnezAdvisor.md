@@ -4,6 +4,8 @@ The interface is prose-first: interpret the request and state the plan before ac
 
 Reuse a session only through that harness's native resume, continue, or fork mechanism, and only when the agent family and version, model and effort where relevant, project identity, instruction and permission context, advisor role, task scope, and session validity all agree. A Harnez telemetry session ID is for correlation; it is not a provider resume ID. Never choose a provider session by recency or by matching a Harnez ID.
 
+Prefer advisors already working in this session, context, project, or feature. Treat unrelated or random advisor sessions as poor candidates unless the request explicitly identifies them.
+
 If a critical value is missing, mismatched, unsupported, expired, or ambiguous, explain why and use a fresh advisor session when the request permits it. Low reasoning is the default only where the harness supports it; report when it cannot be honored.
 
 Current capability guidance:
