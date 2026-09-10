@@ -419,6 +419,59 @@ func TestBuildAllUsageBox_StaleAndHistoricalAgents(t *testing.T) {
 	}
 }
 
+func TestCollectorStatusMarkersAndDegradedAllUsageRow(t *testing.T) {
+	summary := UsageSummary{Agents: []AgentUsage{
+		{
+			AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+			Sources: []string{"127.0.0.1 (quota RPC)"},
+			Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 12},
+		},
+		{
+			AgentID: "agy", Name: "Antigravity (AGY)", Installed: true,
+			Sources: []string{"usage-history (stale)"},
+		},
+		{
+			AgentID: "codex", Name: "OpenAI Codex", Installed: true,
+			QuotaFetchError: "no session found",
+		},
+	}}
+
+	if got := collectorStatusMarker(summary.Agents[0]); got != "●" {
+		t.Fatalf("live marker = %q, want ●", got)
+	}
+	if got := collectorStatusMarker(summary.Agents[1]); got != "◇" {
+		t.Fatalf("history marker = %q, want ◇", got)
+	}
+	if got := collectorStatusMarker(summary.Agents[2]); got != "!" {
+		t.Fatalf("unavailable marker = %q, want !", got)
+	}
+
+	box := buildAllUsageBox(summary, 60, false)
+	text := stripANSI(strings.Join(box.lines, "\n"))
+	if !strings.Contains(text, "! OpenAI Codex") {
+		t.Errorf("All Usage text %q does not contain degraded row", text)
+	}
+	if strings.Contains(text, "! OpenAI Codex [") {
+		t.Errorf("degraded row fabricated a quota bar: %q", text)
+	}
+}
+
+func TestCollectorStatusMarkerFitsNarrowAgentBox(t *testing.T) {
+	agent := AgentUsage{
+		AgentID: "codex", Name: "OpenAI Codex", Installed: true,
+		QuotaFetchError: "no session found",
+	}
+	box := buildAgentBox(agent, agentRate{}, minBoxWidth, false, false, false)
+	for _, line := range box.lines {
+		if got := visLen(line); got > box.width-4 {
+			t.Fatalf("line width %d exceeds content width %d: %q", got, box.width-4, stripANSI(line))
+		}
+	}
+	if !strings.Contains(stripANSI(box.title), "! OpenAI") {
+		t.Fatalf("agent title lacks collector marker: %q", stripANSI(box.title))
+	}
+}
+
 func TestAllUsageBoxNarrowKeepsSecondQuotaVisible(t *testing.T) {
 	summary := UsageSummary{
 		Timestamp: testTime,

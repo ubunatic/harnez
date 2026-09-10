@@ -675,6 +675,32 @@ func buildAllUsageBoxAt(summary UsageSummary, width int, debugOverlay bool, now 
 	return wbox{title: watchBoxSymbol("all_usage") + " All Usage", lines: lines, width: width}
 }
 
+// collectorStatusMarker is deliberately short so it remains useful in the
+// compact panels and the narrow All Usage table. Unknown legacy snapshots do
+// not get a marker because they carry no reliable provenance signal.
+func collectorStatusMarker(agent AgentUsage) string {
+	status := agent.CollectorStatus()
+	if status == "unknown" {
+		return ""
+	}
+	switch status {
+	case "live":
+		return "●"
+	case "history", "cache":
+		return "◇"
+	default:
+		return "!"
+	}
+}
+
+func collectorStatusLabel(agent AgentUsage, label string) string {
+	marker := collectorStatusMarker(agent)
+	if marker == "" {
+		return label
+	}
+	return marker + " " + label
+}
+
 func allUsageLines(summary UsageSummary, contentW int, debugOverlay bool) []string {
 	return allUsageLinesAt(summary, contentW, debugOverlay, time.Now(), DefaultWatchInterval)
 }
@@ -722,8 +748,18 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 			wins = append(wins, *agent.Session)
 		}
 		if len(wins) > 0 {
-			rows = append(rows, allUsageRow{label: agent.Name, windows: wins, lastRefreshed: agent.LastRefreshed, stale: stale})
-			if n := visLen(agent.Name); n > labelWidth {
+			label := agent.Name
+			rows = append(rows, allUsageRow{label: label, windows: wins, lastRefreshed: agent.LastRefreshed, stale: stale})
+			if n := visLen(label); n > labelWidth {
+				labelWidth = n
+			}
+		} else if marker := collectorStatusMarker(agent); marker != "" {
+			// Keep a collector with evidence but no quota windows visible in the
+			// aggregate. The marker and name distinguish a failed/empty fetch from
+			// an agent that was never discovered, without fabricating quota bars.
+			label := collectorStatusLabel(agent, agent.Name)
+			rows = append(rows, allUsageRow{label: label, lastRefreshed: agent.LastRefreshed, stale: stale})
+			if n := visLen(label); n > labelWidth {
 				labelWidth = n
 			}
 		}
@@ -1391,7 +1427,7 @@ func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live
 // buildAgentBoxAt is buildAgentBox with the redraw timestamp supplied by the
 // caller, keeping all freshness gauges in a watch frame consistent.
 func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, live, debugOverlay bool, now time.Time, refreshInterval time.Duration) wbox {
-	title := fmt.Sprintf("%s %s", watchBoxSymbol(agent.AgentID), agent.Name)
+	title := fmt.Sprintf("%s %s", watchBoxSymbol(agent.AgentID), collectorStatusLabel(agent, agent.Name))
 
 	if !agent.Installed {
 		return wbox{title: title, lines: []string{ansiDimGrey + "not installed\x1b[0m"}, width: width}
