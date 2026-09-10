@@ -33,6 +33,28 @@ func TestQuotaWindowRemainingAndExpiry(t *testing.T) {
 
 func ptrTime(t time.Time) *time.Time { return &t }
 
+func TestCollectorStatus(t *testing.T) {
+	tests := []struct {
+		name   string
+		agent  AgentUsage
+		status string
+	}{
+		{"live quota", AgentUsage{Session: &QuotaWindow{}}, "live"},
+		{"cached", AgentUsage{Sources: []string{"quota-cache.json (cached)"}}, "cache"},
+		{"history", AgentUsage{Sources: []string{"usage-history (stale)"}}, "history"},
+		{"error", AgentUsage{QuotaFetchError: "timeout"}, "unavailable"},
+		{"no data", AgentUsage{Sources: []string{"settings.json"}}, "no-data"},
+		{"unknown", AgentUsage{}, "unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.agent.CollectorStatus(); got != tc.status {
+				t.Errorf("CollectorStatus() = %q, want %q", got, tc.status)
+			}
+		})
+	}
+}
+
 // TestAgentUsage_HasUsageData exercises the issue-083 predicate that decides
 // whether a renderer should show a box/row for an agent: only once real
 // recorded local/remote state was actually found for it, not merely because

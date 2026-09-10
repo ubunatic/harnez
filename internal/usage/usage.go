@@ -231,6 +231,9 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 		// AgentUsage.IsValueStale's doc comment.
 		valueStale := agent.IsValueStale()
 		var lines []string
+		if status := agent.CollectorStatus(); status != "unknown" {
+			lines = append(lines, "Collector:    "+status)
+		}
 
 		if !agent.Installed {
 			lines = append(lines, "Status:       Not installed / Directory not found")

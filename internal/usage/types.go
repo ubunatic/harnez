@@ -203,6 +203,30 @@ func (a AgentUsage) HasUsageData() bool {
 		a.QuotaFetchError != ""
 }
 
+// CollectorStatus summarizes the provenance of the current agent reading for
+// compact and verbose renderers. It intentionally derives from existing
+// fields so persisted JSON remains compatible.
+func (a AgentUsage) CollectorStatus() string {
+	if a.QuotaFetchError != "" {
+		return "unavailable"
+	}
+	for _, source := range a.Sources {
+		if strings.Contains(source, "usage-history") {
+			return "history"
+		}
+		if strings.Contains(source, "cached") || strings.Contains(source, "cache") {
+			return "cache"
+		}
+	}
+	if a.hasQuotaSignal() {
+		return "live"
+	}
+	if len(a.Sources) > 0 || a.Error != "" {
+		return "no-data"
+	}
+	return "unknown"
+}
+
 // LoadSnapshot is a compact CPU/GPU load reading carried alongside
 // UsageSummary so the `[L] Load` panel can be rendered from remote data
 // without a second SSH round trip (issue 090). It's populated on the host
