@@ -1,6 +1,6 @@
 # 030 — AGY and Codex have no local token-count source
 
-**Status**: Open — Codex source identified, but neither collector populates local token counts
+**Status**: Closed — Codex rollout token aggregation is complete in 36de25e; AGY token extraction is deferred to #034 because its local data remains opaque protobuf
 **Category**: Feature gap
 **Discovered**: 2026-08-18, while adding a `[T]` token-count toggle to `harnez usage --watch` panels
 
