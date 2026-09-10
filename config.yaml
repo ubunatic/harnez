@@ -220,6 +220,10 @@ skills:
       - source: docs/commands/DocupArch.md
         target: references/DocupArch.md
 
+  - name: harnez-advisor
+    description: "Reuse compatible advisor sessions across supported agent tools using prose requests"
+    file: docs/commands/HarnezAdvisor.md
+
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
     file: commands/evergreen.md

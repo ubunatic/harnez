@@ -121,6 +121,12 @@ the installed skill directory and are included in apply, diff, status, clean,
 and idempotency checks. Keep resource targets relative to the skill directory;
 the installer rejects absolute paths and parent traversal.
 
+The `harnez-advisor` skill is a prose-first coordination contract. It delegates
+resume, continue, or fork operations to each harness's native interface and
+falls back to a fresh session when compatibility cannot be established. It
+does not provide portable flags or turn Harnez telemetry IDs into provider
+session IDs; a future host CLI can add that machine-readable layer.
+
 ### Source reuse
 
 A single `commands/<name>.md` file can back both a Claude command (`commands:` entry) and
