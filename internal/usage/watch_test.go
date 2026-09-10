@@ -1695,6 +1695,47 @@ func TestDispatchWatchKeyOverlayOpenClose(t *testing.T) {
 	}
 }
 
+func TestDispatchWatchKeyDiagnosticsOverlay(t *testing.T) {
+	state, effect := dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, 'l', false)
+	if !state.diagnosticsOpen || !effect.redraw {
+		t.Fatalf("l did not open diagnostics overlay: state=%+v effect=%+v", state, effect)
+	}
+	state, effect = dispatchWatchKey(state, 'l', false)
+	if state.diagnosticsOpen || !effect.redraw {
+		t.Fatalf("second l did not close diagnostics overlay: state=%+v effect=%+v", state, effect)
+	}
+
+	state, _ = dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, 'L', false)
+	if !state.diagnosticsOpen {
+		t.Fatal("uppercase L did not open diagnostics overlay")
+	}
+	for _, key := range []byte{'?', 'q', 27} {
+		closed, effect := dispatchWatchKey(state, key, false)
+		if closed.diagnosticsOpen || !effect.redraw {
+			t.Errorf("key %q did not dismiss diagnostics overlay: state=%+v effect=%+v", key, closed, effect)
+		}
+	}
+}
+
+func TestDiagnosticsOverlayFitsAndShowsRecentEvents(t *testing.T) {
+	lines := diagnosticsOverlayLines([]string{"12:00:01 started claude", "12:00:02 failed codex"})
+	text := stripANSI(strings.Join(lines, "\n"))
+	for _, want := range []string{"Fetch diagnostics", "started claude", "failed codex"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("diagnostics overlay %q does not contain %q", text, want)
+		}
+	}
+	frame := buildWatchFrame(UsageSummary{}, nil, DefaultWatchInterval, defaultWatchSections(), 80, 18, true, "", "", WatchOptions{
+		ShowDiagnostics: true,
+		Diagnostics:     []string{"12:00:01 started claude"},
+	})
+	for i, line := range frame.lines {
+		if got := visLen(line); got > frame.cols {
+			t.Fatalf("diagnostics frame line %d width %d exceeds %d: %q", i, got, frame.cols, stripANSI(line))
+		}
+	}
+}
+
 // TestDispatchWatchKeyDebugOverlayRendersAndRestoresFrame covers issue 140
 // through the production dispatch and frame-rendering paths. In particular,
 // compact mode relies on the aggregate All Usage panel, so its per-agent rows

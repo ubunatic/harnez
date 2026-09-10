@@ -444,11 +444,12 @@ func nextWatchPreset(idx int) (watchSections, string, int) {
 // shell around testable logic instead of embedding the overlay/preset
 // dispatch rules inline where only a real PTY could exercise them.
 type watchKeyState struct {
-	sec            watchSections
-	overlayOpen    bool
-	presetIdx      int
-	configuredHost string
-	activeHost     string
+	sec             watchSections
+	overlayOpen     bool
+	diagnosticsOpen bool
+	presetIdx       int
+	configuredHost  string
+	activeHost      string
 	// debugOverlay is issue 131's `!`-toggled per-agent freshness countdown
 	// overlay: in-process only, never persisted, independent of overlayOpen
 	// (the [?] Controls reference overlay).
@@ -486,9 +487,21 @@ func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyS
 	action := mustWatchActions().actionForKey(key)
 
 	switch {
+	case action == "toggle_diagnostics":
+		st.diagnosticsOpen = !st.diagnosticsOpen
+		return st, watchKeyEffect{redraw: true}
 	case action == "toggle_controls":
+		st.diagnosticsOpen = false
 		st.overlayOpen = !st.overlayOpen
 		return st, watchKeyEffect{redraw: true}
+
+	case st.diagnosticsOpen:
+		switch key {
+		case 'q', 'Q', 3, 27, '\r', '\n', 'l', 'L', '?':
+			st.diagnosticsOpen = false
+			return st, watchKeyEffect{redraw: true}
+		}
+		return st, watchKeyEffect{}
 
 	case st.overlayOpen:
 		// Dismiss keys are deliberately not spec-driven: Enter closes the
@@ -1663,6 +1676,9 @@ type WatchOptions struct {
 	// ShowControls draws the [?]-triggered Controls overlay (issue 094)
 	// instead of the normal panel grid for this frame.
 	ShowControls bool
+	// ShowDiagnostics draws the bounded in-session collector fetch log.
+	ShowDiagnostics bool
+	Diagnostics     []string
 
 	// RemoteLoadHost is load.watch_host (issue 110), independent of Host —
 	// when non-empty, a separate "[R] Remote Load (@RemoteLoadHost)" panel
@@ -1720,6 +1736,7 @@ func controlsOverlayLines() []string {
 	l = append(l, "")
 	l = append(l, bold("Session"))
 	l = append(l, fmt.Sprintf("  [%s]              toggle remote/local host (when a host is configured)", sym("toggle_remote")))
+	l = append(l, fmt.Sprintf("  [%s]              open/close fetch diagnostics", sym("toggle_diagnostics")))
 	l = append(l, fmt.Sprintf("  [%s]              toggle per-agent freshness countdown gauge (debug overlay)", sym("toggle_debug_overlay")))
 	l = append(l, fmt.Sprintf("  [%s] / Ctrl-C / Esc   quit", sym("quit")))
 	l = append(l, "")
@@ -1758,6 +1775,30 @@ func initialWatchSections(opts WatchOptions) watchSections {
 	return sec
 }
 
+func diagnosticsOverlayLines(entries []string) []string {
+	dim := func(s string) string { return ansiWrap("dim-grey", s) }
+	lines := []string{ansiWrap("bold", "Fetch diagnostics") + "  " + dim("(press l, Esc, q, or ? to close)"), ""}
+	if len(entries) == 0 {
+		lines = append(lines, dim("no collector events yet"))
+		return lines
+	}
+	lines = append(lines, entries...)
+	return lines
+}
+
+func formatDiagnosticEvent(source string, stage FetchStage, at time.Time) string {
+	name := "unknown"
+	switch stage {
+	case FetchStarted:
+		name = "started"
+	case FetchDone:
+		name = "done"
+	case FetchFailed:
+		name = "failed"
+	}
+	return fmt.Sprintf("%s %-6s %s", at.Format("15:04:05"), name, source)
+}
+
 // buildWatchFrame lays out one compact, btop-style grid frame: agent panels
 // side by side where the terminal is wide enough, filtered by sec, plus a
 // footer of toggle badges for each panel and the token line.
@@ -1791,6 +1832,16 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 			ocols = minTerminalWidth
 		}
 		return fit(controlsOverlayLines(), ocols, rows)
+	}
+	if opt.ShowDiagnostics {
+		ocols := cols - safetyMargin
+		if ocols > maxTotalWidth {
+			ocols = maxTotalWidth
+		}
+		if ocols < minTerminalWidth {
+			ocols = minTerminalWidth
+		}
+		return fit(diagnosticsOverlayLines(opt.Diagnostics), ocols, rows)
 	}
 
 	targetHistoryDir := historyDir
@@ -2572,6 +2623,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	var secLock sync.Mutex
 	sec := initialWatchSections(opts)
 	overlayOpen := false
+	diagnosticsOpen := false
 	presetIdx := 0
 	debugOverlay := false
 	if opts.Compact {
@@ -2681,15 +2733,16 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				}
 				secLock.Lock()
 				st := watchKeyState{
-					sec:            sec,
-					overlayOpen:    overlayOpen,
-					presetIdx:      presetIdx,
-					configuredHost: configuredHost,
-					activeHost:     activeHost,
-					debugOverlay:   debugOverlay,
+					sec:             sec,
+					overlayOpen:     overlayOpen,
+					diagnosticsOpen: diagnosticsOpen,
+					presetIdx:       presetIdx,
+					configuredHost:  configuredHost,
+					activeHost:      activeHost,
+					debugOverlay:    debugOverlay,
 				}
 				newSt, eff := dispatchWatchKey(st, buf[0], opts.ShowProcesses)
-				sec, overlayOpen, presetIdx, activeHost, debugOverlay = newSt.sec, newSt.overlayOpen, newSt.presetIdx, newSt.activeHost, newSt.debugOverlay
+				sec, overlayOpen, diagnosticsOpen, presetIdx, activeHost, debugOverlay = newSt.sec, newSt.overlayOpen, newSt.diagnosticsOpen, newSt.presetIdx, newSt.activeHost, newSt.debugOverlay
 
 				if eff.quit {
 					secLock.Unlock()
@@ -2733,6 +2786,16 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	var lastRates map[string]agentRate
 	var lastProcs *AgentProcessCount
 	var currentHost string
+	var diagnosticsMu sync.Mutex
+	var diagnostics []string
+	appendDiagnostic := func(source string, stage FetchStage) {
+		diagnosticsMu.Lock()
+		defer diagnosticsMu.Unlock()
+		diagnostics = append(diagnostics, formatDiagnosticEvent(source, stage, time.Now()))
+		if len(diagnostics) > 24 {
+			diagnostics = diagnostics[len(diagnostics)-24:]
+		}
+	}
 
 	// Enter the alternate screen buffer, as vim/htop/less do. It gives the
 	// redraw loop a viewport with no scrollback of its own, so `\x1b[H` always
@@ -2763,8 +2826,12 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		secLock.Lock()
 		activeSec := sec
 		showControls := overlayOpen
+		showDiagnostics := diagnosticsOpen
 		activeDebugOverlay := debugOverlay
 		secLock.Unlock()
+		diagnosticsMu.Lock()
+		diagnosticSnapshot := append([]string(nil), diagnostics...)
+		diagnosticsMu.Unlock()
 
 		var remoteSnap *LoadSnapshot
 		var remoteStreaming bool
@@ -2799,6 +2866,8 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			Host:                currentHost,
 			ProcCounts:          lastProcs,
 			ShowControls:        showControls,
+			ShowDiagnostics:     showDiagnostics,
+			Diagnostics:         diagnosticSnapshot,
 			RemoteLoadHost:      remoteLoadHost,
 			RemoteLoadSnapshot:  remoteSnap,
 			RemoteLoadStreaming: remoteStreaming,
@@ -2823,6 +2892,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	var splashStatusMu sync.Mutex
 	var splashStatus splashStatusState
 	reportFetchStage := func(source string, stage FetchStage) {
+		appendDiagnostic(source, stage)
 		splashStatusMu.Lock()
 		splashStatus = splashStatusRecord(splashStatus, source, stage)
 		splashStatusMu.Unlock()

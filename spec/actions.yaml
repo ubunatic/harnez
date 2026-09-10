@@ -112,6 +112,12 @@ actions:
     keys: ["?"]
     symbol: "?"
     category: session
+  toggle_diagnostics:
+    title: "Fetch diagnostics"
+    description: "Open/close the in-session collector fetch diagnostics view"
+    keys: ["l", "L"]
+    symbol: "l"
+    category: session
   toggle_debug_overlay:
     title: "Debug overlay"
     description: "Toggle the per-agent freshness countdown gauge overlay (in-process, not persisted)"
