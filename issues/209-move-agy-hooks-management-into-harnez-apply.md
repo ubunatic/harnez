@@ -1,6 +1,6 @@
 # 209 — Move `agy-hooks` Management into `harnez apply`
 
-**Status**: Closed — original integration shipped; legacy hooks subsequently decommissioned by #271
+**Status**: Closed — resolved: AGY hook migration is superseded by the decommissioned-hook cleanup and preservation behavior
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactor / Architecture
