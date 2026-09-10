@@ -454,6 +454,10 @@ func restoreStagedChanges(dir string, state rebaseState) error {
 }
 
 func runIssuesLint(w io.Writer, dir string) error {
+	return runIssuesLintMode(w, dir, false, nil)
+}
+
+func runIssuesLintMode(w io.Writer, dir string, cached bool, untrackedTickets []string) error {
 	issuesDir := filepath.Join(dir, "issues")
 	files, err := issues.Scan(issuesDir)
 	if err != nil {
@@ -488,6 +492,12 @@ func runIssuesLint(w io.Writer, dir string) error {
 		return fmt.Errorf("issues lint: %w", err)
 	}
 	if generated != string(orig) {
+		if cached {
+			if len(untrackedTickets) > 0 {
+				return fmt.Errorf("issues lint --cached: generated index differs from the staged ticket set; untracked ticket files are not part of this check: %s; stage or remove them, then regenerate issues/README.md", strings.Join(untrackedTickets, ", "))
+			}
+			return fmt.Errorf("issues lint --cached: generated index differs from the staged ticket set; inspect the staged ticket files and regenerate issues/README.md")
+		}
 		return fmt.Errorf("issues lint: issues/README.md is generated index drift; run 'harnez index'")
 	}
 	fmt.Fprintln(w, "issues tracker valid")
@@ -504,7 +514,14 @@ func runIssuesLintCached(w io.Writer, dir string) error {
 	if _, err := gitOutput(dir, "checkout-index", "--all", "--prefix="+prefix); err != nil {
 		return fmt.Errorf("issues lint --cached: materialize index: %w", err)
 	}
-	return runIssuesLint(w, tmp)
+	status, _ := gitOutput(dir, "status", "--short", "--untracked-files=all")
+	var untrackedTickets []string
+	for _, line := range strings.Split(status, "\n") {
+		if strings.HasPrefix(line, "?? ") && strings.HasPrefix(strings.TrimSpace(line[3:]), "issues/") {
+			untrackedTickets = append(untrackedTickets, strings.TrimSpace(line[3:]))
+		}
+	}
+	return runIssuesLintMode(w, tmp, true, untrackedTickets)
 }
 
 // runIssuesMergeDriver rebuilds Git's current temporary version from ticket

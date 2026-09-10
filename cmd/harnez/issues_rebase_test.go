@@ -117,6 +117,32 @@ func TestIssuesRebaseRepairsIndependentTicketCollisions(t *testing.T) {
 
 const issuesAttributesLineForTest = "issues/README.md merge=harnez-issues-index"
 
+func TestRunIssuesLintCachedNamesUntrackedTicketWhenIndexIncludesIt(t *testing.T) {
+	dir := t.TempDir()
+	gitTestRun(t, dir, "init", "-b", "main")
+	gitTestRun(t, dir, "config", "user.name", "Test")
+	gitTestRun(t, dir, "config", "user.email", "test@example.invalid")
+	if err := os.Mkdir(filepath.Join(dir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "issues", "README.md"), []byte("# Issues\n\n| # | File | Title | Status |\n|---|------|-------|--------|\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeTestTicket(t, dir, 1, "tracked")
+	commitIssueIndex(t, dir, "base")
+	writeTestTicket(t, dir, 2, "untracked")
+	if _, err := indexpkg.UpdateIssuesReadme(filepath.Join(dir, "issues", "README.md"), filepath.Join(dir, "issues")); err != nil {
+		t.Fatal(err)
+	}
+	gitTestRun(t, dir, "add", "issues/README.md")
+
+	var out bytes.Buffer
+	err := runIssuesLintCached(&out, dir)
+	if err == nil || !strings.Contains(err.Error(), "issues/002-untracked.md") || !strings.Contains(err.Error(), "staged ticket set") {
+		t.Fatalf("cached lint error = %v, want actionable untracked-ticket diagnostic", err)
+	}
+}
+
 func TestIssuesRebaseMissingIntegrationShowsExactSetupCommand(t *testing.T) {
 	dir := t.TempDir()
 	gitTestRun(t, dir, "init", "-b", "main")
