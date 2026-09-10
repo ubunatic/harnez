@@ -18,8 +18,10 @@ boundary or depends on the real environment.
   output behavior.
 - **Canaries and live checks** — `scripts/canary-*.sh` and the matching Go
   programs probe external CLIs, network/SSH behavior, microphones, and PTYs.
-  Use these when a fake cannot establish that the real mechanism works. The
-  canary guidance is in [other/Canary.md](other/Canary.md).
+  Use `make agent-canary-static` for the deterministic container checks and
+  `make install-canary` to verify the latest release installation. Use the
+  focused canaries when a fake cannot establish that the real mechanism works.
+  The canary guidance is in [other/Canary.md](other/Canary.md).
 - **Manual or visual verification** — TUI, terminal, media, and desktop
   integration changes may need a real installed binary (`make install`) and a
   live observation such as `harnez usage --watch`. Tests prove invariants;
