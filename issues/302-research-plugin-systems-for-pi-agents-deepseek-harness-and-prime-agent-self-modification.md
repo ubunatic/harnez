@@ -4,7 +4,7 @@
 **Priority**: P3 (Low)
 **Severity**: N/A (research)
 **Category**: Documentation
-**Related**: [Pi extensions](https://pi.dev/docs/latest/extensions), [DeepSeek Harness architecture](https://deepseek-harness.github.io/deepseek-harness/en/reference/), [Prime Agent extensions](https://github.com/PrimeIntellect-ai/prime-agent/blob/main/packages/coding-agent/docs/extensions.md)
+**Related**: [Research study](../docs/studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md), [Pi extensions](https://pi.dev/docs/latest/extensions), [DeepSeek Harness architecture](https://deepseek-harness.github.io/deepseek-harness/en/reference/), [Prime Agent repository](https://github.com/PrimeIntellect-ai/prime-agent)
 
 ---
 
