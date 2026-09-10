@@ -1757,6 +1757,18 @@ func TestDiagnosticsOverlayFitsAndShowsRecentEvents(t *testing.T) {
 	}
 }
 
+func TestFormatDetailedDiagnosticEventIncludesDurationAndSanitizedError(t *testing.T) {
+	got := stripANSI(formatDetailedDiagnosticEvent(FetchDiagnostic{
+		Source: "codex", Stage: FetchFailed, Duration: 1250 * time.Millisecond,
+		Error: "HTTP 503\nretry exhausted",
+	}, time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)))
+	for _, want := range []string{"12:00:00", "failed", "codex", "1.25s", "HTTP 503 retry exhausted"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("detailed diagnostic %q missing %q", got, want)
+		}
+	}
+}
+
 // TestDispatchWatchKeyDebugOverlayRendersAndRestoresFrame covers issue 140
 // through the production dispatch and frame-rendering paths. In particular,
 // compact mode relies on the aggregate All Usage panel, so its per-agent rows

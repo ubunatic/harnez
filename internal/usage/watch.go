@@ -1814,6 +1814,28 @@ func formatDiagnosticEvent(source string, stage FetchStage, at time.Time) string
 	return fmt.Sprintf("%s %-6s %s", at.Format("15:04:05"), name, source)
 }
 
+func formatDetailedDiagnosticEvent(e FetchDiagnostic, at time.Time) string {
+	if e.Stage == FetchStarted {
+		return formatDiagnosticEvent(e.Source, e.Stage, at)
+	}
+	line := fmt.Sprintf("%s %-6s %s (%s)", at.Format("15:04:05"), diagnosticStageName(e.Stage), e.Source, e.Duration.Round(time.Millisecond))
+	if e.Error != "" {
+		line += ": " + strings.ReplaceAll(strings.ReplaceAll(e.Error, "\n", " "), "\r", " ")
+	}
+	return line
+}
+
+func diagnosticStageName(stage FetchStage) string {
+	switch stage {
+	case FetchDone:
+		return "done"
+	case FetchFailed:
+		return "failed"
+	default:
+		return "unknown"
+	}
+}
+
 // buildWatchFrame lays out one compact, btop-style grid frame: agent panels
 // side by side where the terminal is wide enough, filtered by sec, plus a
 // footer of toggle badges for each panel and the token line.
@@ -2912,6 +2934,17 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		splashStatus = splashStatusRecord(splashStatus, source, stage)
 		splashStatusMu.Unlock()
 	}
+	reportFetchDiagnostic := func(event FetchDiagnostic) {
+		if event.Stage == FetchStarted {
+			return // reportFetchStage already records the lifecycle start
+		}
+		diagnosticsMu.Lock()
+		defer diagnosticsMu.Unlock()
+		diagnostics = append(diagnostics, formatDetailedDiagnosticEvent(event, time.Now()))
+		if len(diagnostics) > 24 {
+			diagnostics = diagnostics[len(diagnostics)-24:]
+		}
+	}
 
 	// fetchAndUpdate does renderFrame's live fetch and lastSummary/lastRates
 	// update but stops short of draw(). Split out so the startup path below
@@ -2943,7 +2976,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				_ = CurrentMicStatus()
 				reportFetchStage("mic", FetchDone)
 			}()
-			fresh = CollectAllProgress(sigCtx, homeDir, client, reportFetchStage)
+			fresh = CollectAllProgressDetailed(sigCtx, homeDir, client, reportFetchStage, reportFetchDiagnostic)
 			micWg.Wait()
 			lastProcs = nil
 			if historyDir != "" {

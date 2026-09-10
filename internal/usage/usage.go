@@ -40,20 +40,38 @@ const (
 // RenderSummary, the collector daemon, etc.) pay zero cost.
 type FetchProgressFunc func(source string, stage FetchStage)
 
+// FetchDiagnosticFunc receives structured lifecycle details for a collector
+// fetch. It supplements FetchProgressFunc without changing that compatibility
+// surface (issue 255).
+type FetchDiagnosticFunc func(FetchDiagnostic)
+
+// FetchDiagnostic describes one collector lifecycle event.
+type FetchDiagnostic struct {
+	Source   string
+	Stage    FetchStage
+	Duration time.Duration
+	Error    string
+}
+
 const collectorRetryDelay = 200 * time.Millisecond
 
 func collectWithRetry(ctx context.Context, collect func() AgentUsage) AgentUsage {
+	usage, _ := collectWithRetryInfo(ctx, collect)
+	return usage
+}
+
+func collectWithRetryInfo(ctx context.Context, collect func() AgentUsage) (AgentUsage, int) {
 	usage := collect()
 	if usage.QuotaFetchError == "" {
-		return usage
+		return usage, 1
 	}
 	timer := time.NewTimer(collectorRetryDelay)
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
-		return usage
+		return usage, 1
 	case <-timer.C:
-		return collect()
+		return collect(), 2
 	}
 }
 
@@ -78,6 +96,12 @@ func CollectAllProgress(ctx context.Context, homeDir string, client *http.Client
 	return collectAll(ctx, homeDir, client, true, progress)
 }
 
+// CollectAllProgressDetailed is CollectAllProgress with structured
+// diagnostics for the watch logs overlay.
+func CollectAllProgressDetailed(ctx context.Context, homeDir string, client *http.Client, progress FetchProgressFunc, diagnostic FetchDiagnosticFunc) UsageSummary {
+	return collectAllWithDiagnostics(ctx, homeDir, client, true, progress, diagnostic)
+}
+
 // CollectAllLive always runs the live collectors, ignoring any cached
 // snapshot. This is what `harnez agent-collector` uses on each tick, so the
 // daemon never just reads back its own (possibly still-fresh) cache instead
@@ -87,6 +111,10 @@ func CollectAllLive(ctx context.Context, homeDir string, client *http.Client) Us
 }
 
 func collectAll(ctx context.Context, homeDir string, client *http.Client, useCache bool, progress FetchProgressFunc) UsageSummary {
+	return collectAllWithDiagnostics(ctx, homeDir, client, useCache, progress, nil)
+}
+
+func collectAllWithDiagnostics(ctx context.Context, homeDir string, client *http.Client, useCache bool, progress FetchProgressFunc, diagnostic FetchDiagnosticFunc) UsageSummary {
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
@@ -98,38 +126,46 @@ func collectAll(ctx context.Context, homeDir string, client *http.Client, useCac
 	// reportDone reports FetchDone/FetchFailed based on whether the
 	// collected AgentUsage carries a quota fetch error -- the same signal
 	// RenderText already surfaces as "quota: unavailable (...)".
-	reportDone := func(source string, u AgentUsage) {
-		if progress == nil {
-			return
-		}
+	reportDone := func(source string, started time.Time, u AgentUsage) {
+		stage := FetchDone
 		if u.QuotaFetchError != "" {
-			progress(source, FetchFailed)
-		} else {
-			progress(source, FetchDone)
+			stage = FetchFailed
+		}
+		if progress != nil {
+			progress(source, stage)
+		}
+		if diagnostic != nil {
+			diagnostic(FetchDiagnostic{Source: source, Stage: stage, Duration: time.Since(started), Error: u.QuotaFetchError})
 		}
 	}
 	reportStarted := func(source string) {
 		if progress != nil {
 			progress(source, FetchStarted)
 		}
+		if diagnostic != nil {
+			diagnostic(FetchDiagnostic{Source: source, Stage: FetchStarted})
+		}
 	}
 
 	collectClaude := func() AgentUsage {
 		reportStarted("claude")
-		u := collectWithRetry(ctx, func() AgentUsage { return CollectClaude(ctx, claudeDir, client) })
-		reportDone("claude", u)
+		started := time.Now()
+		u, _ := collectWithRetryInfo(ctx, func() AgentUsage { return CollectClaude(ctx, claudeDir, client) })
+		reportDone("claude", started, u)
 		return u
 	}
 	collectAGY := func() AgentUsage {
 		reportStarted("agy")
-		u := collectWithRetry(ctx, func() AgentUsage { return CollectAGY(ctx, agyDir, client) })
-		reportDone("agy", u)
+		started := time.Now()
+		u, _ := collectWithRetryInfo(ctx, func() AgentUsage { return CollectAGY(ctx, agyDir, client) })
+		reportDone("agy", started, u)
 		return u
 	}
 	collectCodex := func() AgentUsage {
 		reportStarted("codex")
-		u := collectWithRetry(ctx, func() AgentUsage { return CollectCodex(ctx, codexDir, client) })
-		reportDone("codex", u)
+		started := time.Now()
+		u, _ := collectWithRetryInfo(ctx, func() AgentUsage { return CollectCodex(ctx, codexDir, client) })
+		reportDone("codex", started, u)
 		return u
 	}
 
