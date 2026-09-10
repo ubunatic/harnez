@@ -12,6 +12,23 @@ import (
 	"time"
 )
 
+func TestCollectWithRetryRetriesQuotaFailure(t *testing.T) {
+	attempts := 0
+	got := collectWithRetry(context.Background(), func() AgentUsage {
+		attempts++
+		if attempts == 1 {
+			return AgentUsage{QuotaFetchError: "temporary failure"}
+		}
+		return AgentUsage{Session: &QuotaWindow{Name: "5-hour"}}
+	})
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+	if got.QuotaFetchError != "" || got.Session == nil {
+		t.Fatalf("retry result = %+v, want successful usage", got)
+	}
+}
+
 // TestRenderTextDimsStaleQuotaLineAndAnnotatesUpdated verifies issue 107's
 // full/verbose-view treatment: a stale agent's quota line is wrapped in the
 // dim-grey convention and the "Updated:" caption gets a terminal-independent

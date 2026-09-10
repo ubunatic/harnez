@@ -40,6 +40,23 @@ const (
 // RenderSummary, the collector daemon, etc.) pay zero cost.
 type FetchProgressFunc func(source string, stage FetchStage)
 
+const collectorRetryDelay = 200 * time.Millisecond
+
+func collectWithRetry(ctx context.Context, collect func() AgentUsage) AgentUsage {
+	usage := collect()
+	if usage.QuotaFetchError == "" {
+		return usage
+	}
+	timer := time.NewTimer(collectorRetryDelay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return usage
+	case <-timer.C:
+		return collect()
+	}
+}
+
 // CollectAll gathers usage, quotas, and state from all supported agents. It
 // reads each agent's snapshot from the shared collector-daemon cache first
 // (see StateDir) and only falls back to a live collect for agents whose
@@ -99,19 +116,19 @@ func collectAll(ctx context.Context, homeDir string, client *http.Client, useCac
 
 	collectClaude := func() AgentUsage {
 		reportStarted("claude")
-		u := CollectClaude(ctx, claudeDir, client)
+		u := collectWithRetry(ctx, func() AgentUsage { return CollectClaude(ctx, claudeDir, client) })
 		reportDone("claude", u)
 		return u
 	}
 	collectAGY := func() AgentUsage {
 		reportStarted("agy")
-		u := CollectAGY(ctx, agyDir, client)
+		u := collectWithRetry(ctx, func() AgentUsage { return CollectAGY(ctx, agyDir, client) })
 		reportDone("agy", u)
 		return u
 	}
 	collectCodex := func() AgentUsage {
 		reportStarted("codex")
-		u := CollectCodex(ctx, codexDir, client)
+		u := collectWithRetry(ctx, func() AgentUsage { return CollectCodex(ctx, codexDir, client) })
 		reportDone("codex", u)
 		return u
 	}
