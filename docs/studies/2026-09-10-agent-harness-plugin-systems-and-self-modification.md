@@ -235,6 +235,104 @@ The strongest lessons are:
 These are design implications, not a proposal to implement self-modification in
 Harnez under this study.
 
+## Astra assessment for Harnez
+
+The previous Astra advisor assessed that Harnez would benefit from a limited
+plugin concept, but that a general runtime plugin system would currently add
+more risk than value. The useful first step is a declarative **capability
+bundle** layer over the existing `config.yaml` → `apply`/`init` pipeline.
+
+### Expected value
+
+The value is moderate to high for packaging and distribution as the existing
+resource mechanism grows. A capability bundle could package a skill, commands,
+supporting resources, documentation, and optional configuration; distribute
+harness-specific adapters; enable or disable optional capabilities; and make
+source, target, version, and validation provenance inspectable.
+
+Potential use cases include:
+
+- Claude hooks, AGY shims, Pi extensions, or Prime skills distributed as named
+  capabilities.
+- Project-scoped bundles installed through `init` and global bundles installed
+  through `apply`.
+- Future telemetry collectors or integration adapters that use existing Harnez
+  extension points.
+
+The value is low for replacing Harnez's internal architecture. `apply`, `init`,
+`diff`, `status`, and `clean` already provide the central lifecycle and should
+remain authoritative.
+
+### Minimal design
+
+The first version should be declarative and reuse existing skills, resources,
+hooks, docs, and target expansion code rather than introduce a second
+installer. A manifest could live under `plugins/<name>/plugin.yaml`, with
+`config.yaml` enabling selected manifests:
+
+```yaml
+plugins:
+  - name: docup
+    version: "1"
+    scope: global
+    skills:
+      - docup
+    resources:
+      - source: docs/commands/Docup.md
+        target: ...
+```
+
+The manifest should record:
+
+- a stable name and version;
+- the supported Harnez schema or API version;
+- owned artifacts and target scope (`global`, `project`, or both);
+- required validations;
+- source provenance; and
+- explicit enablement.
+
+A capability bundle should expand into existing managed artifacts. Its ownership
+must remain visible so collisions, diffs, status, cleanup, and migrations are
+deterministic. The core commands must continue to own installation behavior and
+scope precedence.
+
+### Boundaries
+
+The initial design should exclude:
+
+- dynamic Go loading or arbitrary in-process plugins;
+- plugins replacing `apply` or `init` semantics;
+- changes to core configuration precedence or security policy;
+- automatic network installation;
+- autonomous self-modification and promotion;
+- silent creation of global directories or project files; and
+- plugin-owned credentials, permissions, or release behavior without dedicated
+  opt-in.
+
+Executable plugins, if ever added, should use a versioned subprocess protocol
+with explicit capabilities, approval before installation, disposable
+evaluation, recorded provenance, and rollback. Pi's full-permission extensions
+and Prime Agent's unsandboxed Python kernel show why “plugin” cannot imply
+“safe.” DeepSeek Harness's unloadable composition is useful, but Harnez would
+also need file-level rollback and ownership records.
+
+### Open design questions
+
+- Is the primary goal reusable packaging, third-party extensibility, or agent
+  self-modification? The MVP should target packaging.
+- Should this be a new manifest format, or should existing skills and resources
+  gain grouping and provenance fields first?
+- Should sources be embedded Harnez assets, local paths, sibling repositories,
+  or a package registry?
+- Are executable plugins intended at all, or should Harnez remain declarative?
+- What ownership and migration rules apply when a bundle removes or renames a
+  resource?
+- Should enablement be global, per harness, per project, or all three?
+- What approval and rollback semantics are required before a bundle can install
+  hooks or executable adapters?
+- Does “plugin” add useful meaning, or is “capability bundle” a better name for
+  the safe first version?
+
 ## Limits and source status
 
 This study uses public documentation and source repositories accessed on
