@@ -87,9 +87,18 @@ Sources: [Gemini CLI session management](https://github.com/google-gemini/gemini
 
 ## Proposed interface
 
-Use a single Harnez entry point with per-tool adapters. A skill can guide an
-agent to use it, but the compatibility and evidence decisions should live in a
-command so every harness receives the same result. A possible contract is:
+The user-facing entry point should be a cross-agent skill named `/advisor`, with
+`reuse` as its first subcommand. This makes the workflow callable from each
+supported harness using the same slash-command shape:
+
+```text
+/advisor reuse [--agent claude|codex|agy|gemini|prime]
+              [--session ID] [--effort low|medium|high]
+              [--fresh] [--json] [--dry-run]
+```
+
+The skill should delegate compatibility and evidence decisions to one Harnez
+command with per-tool adapters. The corresponding host-side contract is:
 
 ```text
 harnez advisor reuse [--agent claude|codex|agy|gemini|prime]
@@ -97,7 +106,7 @@ harnez advisor reuse [--agent claude|codex|agy|gemini|prime]
                      [--fresh] [--json] [--dry-run]
 ```
 
-The command should produce a launch plan or structured result rather than
+The `/advisor` skill should produce a launch plan or structured result rather than
 silently starting an interactive agent. The result identifies:
 
 - selected agent and adapter;
@@ -230,7 +239,7 @@ one.
 ## Recommendation
 
 Implement the first version as a **session-selection and evidence command**,
-with a thin cross-agent skill that explains when to invoke it. Keep launching
+exposed through the `/advisor reuse` skill. Keep launching
 and provider-specific resumption in adapters, keep compatibility decisions
 strict, default bounded advisory work to low effort, and make unknown savings
 the normal honest result when no matched control exists.
