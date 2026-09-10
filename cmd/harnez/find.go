@@ -36,6 +36,8 @@ func newFindCmd() *cobra.Command {
 	var nextFlag bool
 	var jsonFlag bool
 	var historyProjectFlag string
+	var limitFlag int
+	var allFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "find <entity> [options] <query...>",
@@ -126,13 +128,18 @@ actionable stderr message.`,
 		Args:         cobra.MinimumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runFind(cmd.OutOrStdout(), dir, args, nextFlag, jsonFlag, historyProjectFlag)
+			if limitFlag <= 0 {
+				return fmt.Errorf("find: --limit must be greater than zero")
+			}
+			return runFindWithOptions(cmd.OutOrStdout(), dir, args, nextFlag, jsonFlag, historyProjectFlag, limitFlag, allFlag)
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
 	cmd.Flags().BoolVar(&nextFlag, "next", false, "report the next free issue number")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "output in JSON format")
 	cmd.Flags().StringVar(&historyProjectFlag, "project", "", "with 'history': filter to one project_name")
+	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 10, "limit issue results (default: newest 10 for listings)")
+	cmd.Flags().BoolVarP(&allFlag, "all", "a", false, "show all matching issue results")
 
 	return cmd
 }
@@ -222,6 +229,13 @@ func runFindNext(w io.Writer, dir string, jsonOutput bool) error {
 }
 
 func runFind(w io.Writer, dir string, args []string, nextFlag, jsonOutput bool, historyProject string) error {
+	if len(args) > 1 && strings.TrimSpace(strings.Join(args[1:], " ")) == "" {
+		return fmt.Errorf("find: query must not be empty")
+	}
+	return runFindWithOptions(w, dir, args, nextFlag, jsonOutput, historyProject, 0, true)
+}
+
+func runFindWithOptions(w io.Writer, dir string, args []string, nextFlag, jsonOutput bool, historyProject string, limit int, all bool) error {
 	entity := args[0]
 	if entity != "issues" {
 		return fmt.Errorf("find: unsupported entity %q (only \"issues\" is supported)", entity)
@@ -243,13 +257,15 @@ func runFind(w io.Writer, dir string, args []string, nextFlag, jsonOutput bool, 
 	}
 
 	query := strings.TrimSpace(strings.Join(args[1:], " "))
+	var q *find.Query
 	if query == "" {
-		return fmt.Errorf("find: query must not be empty")
-	}
-
-	q, err := find.ParseQuery(query)
-	if err != nil {
-		return err
+		q = &find.Query{}
+	} else {
+		var err error
+		q, err = find.ParseQuery(query)
+		if err != nil {
+			return err
+		}
 	}
 
 	issuesDir := filepath.Join(dir, "issues")
@@ -261,9 +277,16 @@ func runFind(w io.Writer, dir string, args []string, nextFlag, jsonOutput bool, 
 		files[i].RelPath = filepath.ToSlash(filepath.Join("issues", files[i].RelPath))
 	}
 
-	for _, r := range find.Search(files, q) {
+	results := find.Search(files, q)
+	if !all && limit > 0 && len(results) > limit {
+		if len(q.Groups) == 0 {
+			results = results[len(results)-limit:]
+		} else {
+			results = results[:limit]
+		}
+	}
+	for _, r := range results {
 		fmt.Fprintln(w, find.FormatTSV(r))
 	}
 	return nil
 }
-

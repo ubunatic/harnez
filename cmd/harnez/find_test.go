@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,8 +27,8 @@ func findFixtureDir(t *testing.T) string {
 	}
 
 	files := map[string]string{
-		"issues/100-open-vram.md": "# 100 — VRAM Load Panel\n\n**Status**: Open\n\n---\n\nDiscusses vram usage.\n",
-		"issues/101-closed-gtt.md": "# 101 — GTT Memory Cleanup\n\n**Status:** Closed — resolved in abc123\n\n---\n\nHandles gtt allocation.\n",
+		"issues/100-open-vram.md":             "# 100 — VRAM Load Panel\n\n**Status**: Open\n\n---\n\nDiscusses vram usage.\n",
+		"issues/101-closed-gtt.md":            "# 101 — GTT Memory Cleanup\n\n**Status:** Closed — resolved in abc123\n\n---\n\nHandles gtt allocation.\n",
 		"issues/archive/050-archived-vram.md": "# 050 — Archived VRAM Ticket\n\n**Status:** Closed\n\n---\n\nvram content here too.\n",
 		// Must never appear in results: it's the tracker index, not a ticket.
 		"issues/README.md": "| # | File | Title | Status |\n|---|------|-------|--------|\n| 100 | [100-open-vram.md](100-open-vram.md) | VRAM Load Panel | Open |\n",
@@ -111,6 +112,50 @@ func TestRunFind_EmptyQueryIsUsageError(t *testing.T) {
 	}
 }
 
+func TestRunFind_DefaultListingTakesNewestTen(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "issues"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for n := 1; n <= 12; n++ {
+		name := fmt.Sprintf("%03d-ticket.md", n)
+		content := fmt.Sprintf("# %03d — Ticket %d\n\n**Status**: Open\n\n---\n\nbody\n", n, n)
+		if err := os.WriteFile(filepath.Join(dir, "issues", name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out bytes.Buffer
+	if err := runFindWithOptions(&out, dir, []string{"issues"}, false, false, "", 10, false); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 10 || !strings.HasPrefix(lines[0], "003\t") || !strings.HasPrefix(lines[9], "012\t") {
+		t.Fatalf("default listing = %q, want tickets 003 through 012", out.String())
+	}
+}
+
+func TestRunFind_TextSearchKeepsBestMatches(t *testing.T) {
+	dir := findFixtureDir(t)
+	var out bytes.Buffer
+	if err := runFindWithOptions(&out, dir, []string{"issues", "vram"}, false, false, "", 1, false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(out.String(), "050\t") {
+		t.Fatalf("ranked limit selected %q, want best title match 050", out.String())
+	}
+}
+
+func TestRunFind_BareQueryCanBeUncapped(t *testing.T) {
+	dir := findFixtureDir(t)
+	var out bytes.Buffer
+	if err := runFindWithOptions(&out, dir, []string{"issues"}, false, false, "", 1, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(out.String(), "\n"); got != 3 {
+		t.Fatalf("--all output lines = %d, want 3", got)
+	}
+}
+
 func TestRunFind_MalformedQueryIsUsageError(t *testing.T) {
 	dir := findFixtureDir(t)
 	cases := [][]string{
@@ -189,7 +234,6 @@ func TestRunFind_IssuesNextIsReadOnly(t *testing.T) {
 		t.Errorf("second call got %q, want %q (no allocation should have occurred)", out.String(), "102\n")
 	}
 }
-
 
 // TestRunFindHistory_TableShowsBothRecordedPoints seeds two distinct
 // issue_status_snapshots rows directly via telemetry.InsertIssueSnapshot
