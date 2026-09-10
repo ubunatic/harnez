@@ -1,6 +1,6 @@
 # 262 — Live mic level meter not showing despite working mic in other recording tools
 
-**Status**: Open — partial backend and messaging fixes; original live symptom unconfirmed
+**Status**: Closed — live mic meter is working; current backend and live-level fixes resolve the reported symptom
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Bug
