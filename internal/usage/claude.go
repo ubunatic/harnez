@@ -6,22 +6,37 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
 
+const claudeUsageCmdTimeout = 20 * time.Second
+
+var runClaudeUsageCmdFn = runClaudeUsageCmd
+
+func runClaudeUsageCmd(ctx context.Context) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, claudeUsageCmdTimeout)
+	defer cancel()
+	return exec.CommandContext(ctx, "claude", "-p", "/usage").CombinedOutput()
+}
+
 // ClaudeCredentials models ~/.claude/.credentials.json
 type ClaudeCredentials struct {
-	ClaudeAiOauth struct {
-		AccessToken           string   `json:"accessToken"`
-		RefreshToken          string   `json:"refreshToken"`
-		ExpiresAt             int64    `json:"expiresAt"`
-		RefreshTokenExpiresAt int64    `json:"refreshTokenExpiresAt"`
-		Scopes                []string `json:"scopes"`
-		SubscriptionType      string   `json:"subscriptionType"`
-		RateLimitTier         string   `json:"rateLimitTier"`
-	} `json:"claudeAiOauth"`
+	ClaudeAiOauth claudeOAuthCredentials `json:"claudeAiOauth"`
+}
+
+type claudeOAuthCredentials struct {
+	AccessToken           string   `json:"accessToken"`
+	RefreshToken          string   `json:"refreshToken"`
+	ExpiresAt             int64    `json:"expiresAt"`
+	RefreshTokenExpiresAt int64    `json:"refreshTokenExpiresAt"`
+	Scopes                []string `json:"scopes"`
+	SubscriptionType      string   `json:"subscriptionType"`
+	RateLimitTier         string   `json:"rateLimitTier"`
 }
 
 // ClaudeStatsCache models ~/.claude/stats-cache.json
@@ -73,6 +88,126 @@ type ClaudeOauthUsageResponse struct {
 type claudeQuotaPayload struct {
 	Session *QuotaWindow `json:"session,omitempty"`
 	Weekly  *QuotaWindow `json:"weekly,omitempty"`
+}
+
+type claudeQuotaFetch struct {
+	payload    claudeQuotaPayload
+	extraUsage string
+}
+
+func fetchClaudeQuota(ctx context.Context, client *http.Client, oauth ClaudeCredentials) (claudeQuotaFetch, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.anthropic.com/api/oauth/usage", nil)
+	if err != nil {
+		return claudeQuotaFetch{}, 0, fmt.Errorf("request build error: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+oauth.ClaudeAiOauth.AccessToken)
+	req.Header.Set("User-Agent", "claude-code/2.1.233")
+	req.Header.Set("anthropic-client", "claude-code/2.1.233")
+	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return claudeQuotaFetch{}, 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return claudeQuotaFetch{}, resp.StatusCode, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	var oauthUsage ClaudeOauthUsageResponse
+	if err := json.NewDecoder(resp.Body).Decode(&oauthUsage); err != nil {
+		return claudeQuotaFetch{}, resp.StatusCode, fmt.Errorf("decode error: %v", err)
+	}
+
+	result := claudeQuotaFetch{}
+	now := time.Now()
+	if oauthUsage.FiveHour != nil {
+		qw := QuotaWindow{
+			Name:             "Session (5-hour)",
+			UsedPercent:      oauthUsage.FiveHour.Utilization,
+			RemainingPercent: 100.0 - oauthUsage.FiveHour.Utilization,
+		}
+		if qw.RemainingPercent < 0 {
+			qw.RemainingPercent = 0
+		}
+		if oauthUsage.FiveHour.ResetsAt != "" {
+			if t, err := time.Parse(time.RFC3339Nano, oauthUsage.FiveHour.ResetsAt); err == nil {
+				qw.ResetAt = &t
+				if t.After(now) {
+					qw.DurationLeft = t.Sub(now)
+				}
+			}
+		}
+		result.payload.Session = &qw
+	}
+	if oauthUsage.SevenDay != nil {
+		qw := QuotaWindow{
+			Name:             "Weekly (7-day)",
+			UsedPercent:      oauthUsage.SevenDay.Utilization,
+			RemainingPercent: 100.0 - oauthUsage.SevenDay.Utilization,
+		}
+		if qw.RemainingPercent < 0 {
+			qw.RemainingPercent = 0
+		}
+		if oauthUsage.SevenDay.ResetsAt != "" {
+			if t, err := time.Parse(time.RFC3339Nano, oauthUsage.SevenDay.ResetsAt); err == nil {
+				qw.ResetAt = &t
+				if t.After(now) {
+					qw.DurationLeft = t.Sub(now)
+				}
+			}
+		}
+		result.payload.Weekly = &qw
+	}
+	if oauthUsage.ExtraUsage != nil && oauthUsage.ExtraUsage.IsEnabled {
+		result.extraUsage = fmt.Sprintf("%.2f %s", oauthUsage.ExtraUsage.UsedCredits, oauthUsage.ExtraUsage.Currency)
+	}
+	return result, resp.StatusCode, nil
+}
+
+var claudeUsagePercentRE = regexp.MustCompile(`(?i)^Current (session|week).*?([0-9]+(?:\.[0-9]+)?)% used`)
+
+func parseClaudeUsageOutput(out []byte) claudeQuotaPayload {
+	var payload claudeQuotaPayload
+	for _, line := range strings.Split(string(out), "\n") {
+		match := claudeUsagePercentRE.FindStringSubmatch(strings.TrimSpace(line))
+		if len(match) != 3 {
+			continue
+		}
+		percent, err := strconv.ParseFloat(match[2], 64)
+		if err != nil {
+			continue
+		}
+		window := &QuotaWindow{UsedPercent: percent, RemainingPercent: 100 - percent}
+		if window.RemainingPercent < 0 {
+			window.RemainingPercent = 0
+		}
+		if match[1] == "session" {
+			window.Name = "Session (5-hour)"
+			payload.Session = window
+		} else {
+			window.Name = "Weekly (7-day)"
+			payload.Weekly = window
+		}
+	}
+	return payload
+}
+
+func claudeQuotaPayloadHasWindows(payload claudeQuotaPayload) bool {
+	return payload.Session != nil || payload.Weekly != nil
+}
+
+func readClaudeOAuthCredentials(path string) (claudeOAuthCredentials, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return claudeOAuthCredentials{}, err
+	}
+	var creds ClaudeCredentials
+	if err := json.Unmarshal(data, &creds); err != nil {
+		return claudeOAuthCredentials{}, err
+	}
+	return creds.ClaudeAiOauth, nil
 }
 
 // CollectClaude inspects ~/.claude for credentials, cached stats, and queries live usage when online.
@@ -196,77 +331,50 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 			defer unlockLiveFetchCache(lockFile)
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.anthropic.com/api/oauth/usage", nil)
-		if err == nil {
-			req.Header.Set("Authorization", "Bearer "+oauth.AccessToken)
-			req.Header.Set("User-Agent", "claude-code/2.1.233")
-			req.Header.Set("anthropic-client", "claude-code/2.1.233")
-			req.Header.Set("anthropic-beta", "oauth-2025-04-20")
-			req.Header.Set("Accept", "application/json")
-
-			resp, err := client.Do(req)
-			if err != nil {
-				usage.QuotaFetchError = err.Error()
-			} else {
-				defer resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					var oauthUsage ClaudeOauthUsageResponse
-					if err := json.NewDecoder(resp.Body).Decode(&oauthUsage); err != nil {
-						usage.QuotaFetchError = fmt.Sprintf("decode error: %v", err)
+		fetched, status, fetchErr := fetchClaudeQuota(ctx, client, ClaudeCredentials{ClaudeAiOauth: oauth})
+		if fetchErr == nil {
+			usage.Session = fetched.payload.Session
+			usage.Weekly = fetched.payload.Weekly
+			if fetched.extraUsage != "" {
+				usage.Details["extra_usage"] = fetched.extraUsage
+			}
+			usage.Sources = append(usage.Sources, "api.anthropic.com/api/oauth/usage")
+		} else if status == http.StatusUnauthorized {
+			// Claude Code owns the OAuth refresh flow. A print-mode /usage
+			// request is non-interactive and, as observed in the real CLI,
+			// refreshes ~/.claude/.credentials.json when the access token has
+			// expired. Retry the API with the newly written access token.
+			out, cmdErr := runClaudeUsageCmdFn(ctx)
+			if cmdErr == nil {
+				if refreshed, readErr := readClaudeOAuthCredentials(credsPath); readErr == nil && refreshed.AccessToken != "" {
+					refetched, retryStatus, retryErr := fetchClaudeQuota(ctx, client, ClaudeCredentials{ClaudeAiOauth: refreshed})
+					if retryErr == nil {
+						fetched = refetched
+						fetchErr = nil
+						usage.Sources = append(usage.Sources, "api.anthropic.com/api/oauth/usage (after claude -p /usage refresh)")
 					} else {
-						usage.Sources = append(usage.Sources, "api.anthropic.com/api/oauth/usage")
-						now := time.Now()
-						if oauthUsage.FiveHour != nil {
-							qw := QuotaWindow{
-								Name:             "Session (5-hour)",
-								UsedPercent:      oauthUsage.FiveHour.Utilization,
-								RemainingPercent: 100.0 - oauthUsage.FiveHour.Utilization,
-							}
-							if qw.RemainingPercent < 0 {
-								qw.RemainingPercent = 0
-							}
-							if oauthUsage.FiveHour.ResetsAt != "" {
-								if t, err := time.Parse(time.RFC3339Nano, oauthUsage.FiveHour.ResetsAt); err == nil {
-									qw.ResetAt = &t
-									if t.After(now) {
-										qw.DurationLeft = t.Sub(now)
-									}
-								}
-							}
-							usage.Session = &qw
-						}
-
-						if oauthUsage.SevenDay != nil {
-							qw := QuotaWindow{
-								Name:             "Weekly (7-day)",
-								UsedPercent:      oauthUsage.SevenDay.Utilization,
-								RemainingPercent: 100.0 - oauthUsage.SevenDay.Utilization,
-							}
-							if qw.RemainingPercent < 0 {
-								qw.RemainingPercent = 0
-							}
-							if oauthUsage.SevenDay.ResetsAt != "" {
-								if t, err := time.Parse(time.RFC3339Nano, oauthUsage.SevenDay.ResetsAt); err == nil {
-									qw.ResetAt = &t
-									if t.After(now) {
-										qw.DurationLeft = t.Sub(now)
-									}
-								}
-							}
-							usage.Weekly = &qw
-						}
-
-						if oauthUsage.ExtraUsage != nil && oauthUsage.ExtraUsage.IsEnabled {
-							usage.Details["extra_usage"] = fmt.Sprintf("%.2f %s", oauthUsage.ExtraUsage.UsedCredits, oauthUsage.ExtraUsage.Currency)
-						}
+						status = retryStatus
 					}
-				} else {
-					usage.QuotaFetchError = fmt.Sprintf("HTTP %d", resp.StatusCode)
-					usage.Details["live_quota_status"] = usage.QuotaFetchError
 				}
 			}
+			if fetchErr != nil {
+				fallback := parseClaudeUsageOutput(out)
+				if claudeQuotaPayloadHasWindows(fallback) {
+					fetched = claudeQuotaFetch{payload: fallback}
+					fetchErr = nil
+					usage.Sources = append(usage.Sources, "claude -p /usage (fallback)")
+				}
+			}
+		}
+		if fetchErr != nil {
+			usage.QuotaFetchError = fetchErr.Error()
+			usage.Details["live_quota_status"] = usage.QuotaFetchError
 		} else {
-			usage.QuotaFetchError = fmt.Sprintf("request build error: %v", err)
+			usage.Session = fetched.payload.Session
+			usage.Weekly = fetched.payload.Weekly
+			if fetched.extraUsage != "" {
+				usage.Details["extra_usage"] = fetched.extraUsage
+			}
 		}
 
 		if usage.QuotaFetchError == "" {

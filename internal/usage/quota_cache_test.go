@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -195,6 +196,73 @@ func TestCollectClaudeFallsBackToStaleCacheOnFetchFailure(t *testing.T) {
 	}
 	if usage.Weekly == nil || usage.Weekly.Name != "Weekly (7-day) (stale)" {
 		t.Errorf("Weekly = %+v, want stale-labeled", usage.Weekly)
+	}
+}
+
+func TestCollectClaudeRefreshesThroughClaudeCLIAfterUnauthorized(t *testing.T) {
+	dir := claudeFixtureDir(t)
+	if err := os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{
+		"claudeAiOauth": {"accessToken": "old-token", "subscriptionType": "pro"}
+	}`), 0600); err != nil {
+		t.Fatalf("write initial credentials: %v", err)
+	}
+
+	var mu sync.Mutex
+	calls := 0
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		calls++
+		call := calls
+		mu.Unlock()
+		if call == 1 {
+			http.Error(w, "expired", http.StatusUnauthorized)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer new-token" {
+			t.Errorf("retry Authorization = %q, want renewed token", got)
+		}
+		_, _ = w.Write([]byte(`{"five_hour":{"utilization":12},"seven_day":{"utilization":34}}`))
+	}))
+	defer mockServer.Close()
+
+	original := runClaudeUsageCmdFn
+	runClaudeUsageCmdFn = func(context.Context) ([]byte, error) {
+		if err := os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{
+			"claudeAiOauth": {"accessToken": "new-token", "subscriptionType": "pro"}
+		}`), 0600); err != nil {
+			t.Fatalf("write renewed credentials: %v", err)
+		}
+		return []byte("Current session: 12% used\nCurrent week (all models): 34% used"), nil
+	}
+	defer func() { runClaudeUsageCmdFn = original }()
+
+	usage := collectClaudeAgainstURL(t, dir, mockServer)
+	if usage.QuotaFetchError != "" {
+		t.Fatalf("QuotaFetchError = %q, want empty after refresh", usage.QuotaFetchError)
+	}
+	if usage.Session == nil || usage.Session.UsedPercent != 12 {
+		t.Errorf("Session = %+v, want 12%%", usage.Session)
+	}
+	if usage.Weekly == nil || usage.Weekly.UsedPercent != 34 {
+		t.Errorf("Weekly = %+v, want 34%%", usage.Weekly)
+	}
+	if !strings.Contains(strings.Join(usage.Sources, ","), "after claude -p /usage refresh") {
+		t.Errorf("Sources = %v, want CLI refresh source", usage.Sources)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 2 {
+		t.Errorf("HTTP calls = %d, want initial failure plus renewed retry", calls)
+	}
+}
+
+func TestParseClaudeUsageOutput(t *testing.T) {
+	payload := parseClaudeUsageOutput([]byte("You are currently using your subscription\nCurrent session: 0% used\nCurrent week (all models): 66% used · resets Sep 12, 7pm (Europe/Berlin)"))
+	if payload.Session == nil || payload.Session.UsedPercent != 0 {
+		t.Errorf("Session = %+v, want 0%%", payload.Session)
+	}
+	if payload.Weekly == nil || payload.Weekly.UsedPercent != 66 {
+		t.Errorf("Weekly = %+v, want 66%%", payload.Weekly)
 	}
 }
 
