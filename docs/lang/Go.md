@@ -84,6 +84,13 @@ weight: 60
 - Unexported types for internal results; exported only when crossing package boundary.
 - Pointer fields (`*bool`, `*int`) for optional struct values; add `boolPtr`/`intPtr` helpers.
 - Section banners: `// ── Section name ────────────────────────────────────────────`
+
+## Strings, Runes & Terminal Width
+- Never index or slice a string by byte offset (`s[i:j]`) for human-readable text or aligned output.
+- Never use `len(s)` as a visual column count: it measures bytes, not terminal cells.
+- Use `[]rune(s)` for character-count logic and `runewidth.StringWidth` for terminal width.
+- Strip ANSI escapes before measuring width; test rendered cell width, not rune count.
+- The existing `internal/usage` width assertions are the canonical pattern for TUI output.
 - Doc comments on all exported symbols.
 
 ## Output Discipline
