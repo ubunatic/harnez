@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [Plugin-system assessment](../docs/studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md), commit `f1ac8ef`
+**Related**: [Plugin-system assessment](../docs/studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md), [Advisor session reuse study](../docs/studies/2026-09-10-advisor-session-reuse-and-cross-agent-dispatch.md), commit `f1ac8ef`
 
 ---
 
