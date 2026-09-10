@@ -346,7 +346,7 @@ func sparkCell(older, newer, minimum, maximum float64, flat bool, opts Sparkline
 
 // brailleGlyph maps each sample to a four-dot, bottom-aligned Braille column.
 // The Unicode Braille bit positions are left 1,2,3,7 and right 4,5,6,8;
-// filling from bottom to top makes zero U+2800 and the maximum U+28FF.
+// filling from bottom to top makes the baseline ⣀ and the maximum U+28FF.
 func brailleGlyph(older, newer, minimum, maximum float64, flat bool) rune {
 	left := brailleColumnLevel(older, minimum, maximum, flat)
 	right := brailleColumnLevel(newer, minimum, maximum, flat)
