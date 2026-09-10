@@ -68,7 +68,7 @@ The top of each ticket MUST contain the standardized metadata block:
 ```markdown
 # NNN — Title of the Issue
 
-**Status**: Open | In Progress | Blocked — <reason> | Closed — resolved in <commit> | Draft
+**Status**: Open | In Progress | Blocked — <reason> | Closed — <resolution> | Draft
 **Priority**: P0 (Critical) | P1 (High) | P2 (Medium) | P3 (Low)
 **Severity**: Critical | Major | Moderate | Minor
 **Category**: Bug | Feature | Architecture | Documentation | Performance | Refactor | Agentic Ergonomics
@@ -94,7 +94,13 @@ The top of each ticket MUST contain the standardized metadata block:
     suffix (e.g. `In Progress — implementation complete; tracker closure awaits ...`, as issue 201
     does in practice).
   - `Blocked — <reason>`: Waiting on upstream dependency or external resolution. Reason required.
-  - `Closed — <resolution>`: Completed and verified with tests (e.g. `Closed — resolved in 58d1fa3`, `Closed — invalid`).
+  - `Closed — <resolution>`: Completed and verified with tests (e.g. `Closed — resolved`, `Closed — invalid`).
+
+    **Why no commit hash**: a commit's hash is content-addressed and cannot be known by the
+    commit that writes it, so a ticket cannot self-reference its own closing commit without a
+    follow-up fixup commit. Record the resolution in words and use
+    `git log --oneline -- issues/NNN-*.md` for traceability. A hash is optional only when it
+    deliberately points to an earlier commit.
   - `Draft`: Tentative proposal or placeholder. May carry an optional `— <note>` suffix.
 - **Priority**: `P0 (Critical)`, `P1 (High)`, `P2 (Medium)`, `P3 (Low)`
 - **Severity**: `Critical`, `Major`, `Moderate`, `Minor`
