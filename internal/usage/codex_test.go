@@ -50,6 +50,29 @@ func TestBuildCodexQuotaWindow(t *testing.T) {
 	})
 }
 
+func TestCollectCodexTokensAggregatesFinalSessionCounts(t *testing.T) {
+	dir := t.TempDir()
+	rolloutDir := filepath.Join(dir, "sessions", "2026", "09", "10")
+	if err := os.MkdirAll(rolloutDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	data := `{"type":"session_meta","payload":{"session_id":"s1"}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":10,"cached_input_tokens":2,"output_tokens":3,"total_tokens":15}}}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":20,"cached_input_tokens":4,"output_tokens":5,"total_tokens":29}}}}
+malformed
+`
+	if err := os.WriteFile(filepath.Join(rolloutDir, "rollout-a.jsonl"), []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, count := collectCodexTokens(dir)
+	if count != 1 || got == nil {
+		t.Fatalf("collectCodexTokens() = %+v, %d; want one rollout", got, count)
+	}
+	if got.InputTokens != 20 || got.CacheReadTokens != 4 || got.OutputTokens != 5 || got.TotalTokens != 29 {
+		t.Fatalf("token totals = %+v, want final cumulative record", got)
+	}
+}
+
 func TestCollectCodex_RateLimitWindowAssignment(t *testing.T) {
 	now := time.Now()
 	resp := CodexWhamUsageResponse{

@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -78,6 +80,76 @@ type CodexWhamUsageResponse struct {
 type codexQuotaPayload struct {
 	Session *QuotaWindow `json:"session,omitempty"`
 	Weekly  *QuotaWindow `json:"weekly,omitempty"`
+}
+
+type codexTokenUsage struct {
+	Input, Cached, CacheWrite, Output, Total int64
+}
+
+func collectCodexTokens(codexDir string) (*TokenBreakdown, int) {
+	root := filepath.Join(codexDir, "sessions")
+	bySession := map[string]codexTokenUsage{}
+	rollouts := 0
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() || !strings.HasPrefix(info.Name(), "rollout-") || !strings.HasSuffix(info.Name(), ".jsonl") {
+			return nil
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+		sessionID := path
+		var latest codexTokenUsage
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			var record struct {
+				Type    string `json:"type"`
+				Payload struct {
+					SessionID string `json:"session_id"`
+					Type      string `json:"type"`
+					Info      struct {
+						Total struct {
+							Input      int64 `json:"input_tokens"`
+							Cached     int64 `json:"cached_input_tokens"`
+							CacheWrite int64 `json:"cache_write_input_tokens"`
+							Output     int64 `json:"output_tokens"`
+							Total      int64 `json:"total_tokens"`
+						} `json:"total_token_usage"`
+					} `json:"info"`
+				} `json:"payload"`
+			}
+			if json.Unmarshal(scanner.Bytes(), &record) != nil {
+				continue
+			}
+			if record.Type == "session_meta" && record.Payload.SessionID != "" {
+				sessionID = record.Payload.SessionID
+			}
+			if record.Type == "event_msg" && record.Payload.Type == "token_count" {
+				t := record.Payload.Info.Total
+				if t.Total > 0 {
+					latest = codexTokenUsage{t.Input, t.Cached, t.CacheWrite, t.Output, t.Total}
+				}
+			}
+		}
+		if latest.Total > 0 {
+			bySession[sessionID] = latest
+			rollouts++
+		}
+		return nil
+	})
+	if len(bySession) == 0 {
+		return nil, rollouts
+	}
+	total := &TokenBreakdown{}
+	for _, t := range bySession {
+		total.InputTokens += t.Input
+		total.CacheReadTokens += t.Cached
+		total.CacheWriteTokens += t.CacheWrite
+		total.OutputTokens += t.Output
+		total.TotalTokens += t.Total
+	}
+	return total, rollouts
 }
 
 // buildCodexQuotaWindow converts one wham rate-limit window into a QuotaWindow,
@@ -213,6 +285,10 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 				usage.Details["token_expired"] = "true"
 			}
 		}
+	}
+	if tokens, rollouts := collectCodexTokens(codexDir); tokens != nil {
+		usage.Tokens = tokens
+		usage.Sources = append(usage.Sources, fmt.Sprintf("~/.codex/sessions (%s rollouts)", strconv.Itoa(rollouts)))
 	}
 
 	// 3. Query live quota endpoint if client and access_token are provided,
