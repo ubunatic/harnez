@@ -39,6 +39,14 @@ axis), `internal/usage/types.go` (`AgentUsage.Sources`, `QuotaFetchError`, `Last
   `TestSplashStatusLineFormatsEachStage`; they verify these partial surfaces,
   not the complete provenance vocabulary and narrow-width acceptance cases.
 
+### Implementation progress — 2026-09-10
+
+- Added `AgentUsage.CollectorStatus()` and surfaced the derived status in the
+  verbose usage view, reusing `Sources`, `QuotaFetchError`, and quota/token
+  presence without changing the JSON shape (`c645ed8`).
+- The compact per-row marker and diagnostic no-window aggregate row remain
+  open, so this ticket stays Open/partial.
+
 Issues 103 and 104 together describe a real, multi-day AGY quota-collection failure: no live AGY
 process happened to be running at any harnez poll tick for 7+ days, the on-disk stale-cache
 fallback had nothing to fall back to either, and none of this was ever surfaced anywhere in
