@@ -6,6 +6,10 @@ Reuse a session only through that harness's native resume, continue, or fork mec
 
 Prefer advisors already working in this session, context, project, or feature. Treat unrelated or random advisor sessions as poor candidates unless the request explicitly identifies them.
 
+Advisor lifecycle is decided by the orchestrator. Track when an advisor was last used and whether its project, feature, role, model, instructions, and permissions still match. Reuse a recent matching advisor directly. If a matching advisor is stale, ask it to compact its context before resuming so later requests can use a smaller summary while retaining relevant memory. Start a fresh advisor when the scope is unrelated or compatibility is uncertain. Staleness is a signal for compaction, not an automatic rejection.
+
+After requesting compaction, confirm that the advisor returned a concise retained-context summary. Where token data is available, compare the next request's input and cached-input counts with the pre-compaction turn; do not claim savings from compaction without that evidence.
+
 If a critical value is missing, mismatched, unsupported, expired, or ambiguous, explain why and use a fresh advisor session when the request permits it. Low reasoning is the default only where the harness supports it; report when it cannot be honored.
 
 Current capability guidance:

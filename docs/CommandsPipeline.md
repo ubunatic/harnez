@@ -125,7 +125,10 @@ The `harnez-advisor` skill is a prose-first coordination contract. It delegates
 resume, continue, or fork operations to each harness's native interface and
 falls back to a fresh session when compatibility cannot be established. It
 does not provide portable flags or turn Harnez telemetry IDs into provider
-session IDs; a future host CLI can add that machine-readable layer.
+session IDs; the orchestrator decides when a stale but relevant advisor should
+compact before reuse. A future host CLI can add machine-readable lifecycle
+operations such as `harnez advisor status`, `harnez advisor compact <session>`,
+and `harnez advisor reuse --stale-after ...`.
 
 ### Source reuse
 
