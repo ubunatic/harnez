@@ -5,3 +5,7 @@
 /dist/
 /issues/README.md.lock
 *.lock
+
+# local Go workspace (untracked; see go.work.example)
+/go.work
+/go.work.sum

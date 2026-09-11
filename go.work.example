@@ -1,0 +1,9 @@
+// harnez:managed
+// Example Go workspace for local co-development with voxi.
+// Symlinked or copied to go.work locally (untracked).
+go 1.26.5
+
+use (
+	.
+	../voxi
+)
