@@ -1,144 +1,232 @@
 package claude
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
 
-type goWorkAction uint8
+const managedWorkspaceMarker = "// harnez:managed"
 
-const (
-	goWorkSkip goWorkAction = iota
-	goWorkCreate
-)
+func isManagedWorkspace(dir string) (isManaged bool, hasExample bool, hasWork bool, isSymlink bool, isTracked bool) {
+	examplePath := filepath.Join(dir, "go.work.example")
+	workPath := filepath.Join(dir, "go.work")
 
-type goWorkPlan struct {
-	action     goWorkAction
-	targetDir  string
-	workspace  string
-	moduleDirs []string
-	moduleArgs []string
-	reason     string
-}
-
-type goCommandRunner func(dir string, args ...string) (string, error)
-
-func runGoCommand(dir string, args ...string) (string, error) {
-	cmd := exec.Command("go", args...)
-	cmd.Dir = dir
-	return combinedCommandOutput(cmd)
-}
-
-func runGoCommandWithoutWorkspace(dir string, args ...string) (string, error) {
-	cmd := exec.Command("go", args...)
-	cmd.Dir = dir
-	for _, entry := range os.Environ() {
-		if !strings.HasPrefix(entry, "GOWORK=") {
-			cmd.Env = append(cmd.Env, entry)
+	if data, err := os.ReadFile(examplePath); err == nil {
+		hasExample = true
+		if strings.Contains(string(data), managedWorkspaceMarker) {
+			isManaged = true
 		}
 	}
-	cmd.Env = append(cmd.Env, "GOWORK=off")
-	return combinedCommandOutput(cmd)
+
+	if fi, err := os.Lstat(workPath); err == nil {
+		hasWork = true
+		if fi.Mode()&os.ModeSymlink != 0 {
+			isSymlink = true
+			if target, err := os.Readlink(workPath); err == nil && (target == "go.work.example" || strings.HasSuffix(target, "go.work.example")) {
+				isManaged = true
+			}
+		} else if data, err := os.ReadFile(workPath); err == nil {
+			if strings.Contains(string(data), managedWorkspaceMarker) {
+				isManaged = true
+			}
+		}
+	}
+
+	if hasWork && !isSymlink {
+		cmd := exec.Command("git", "ls-files", "--error-unmatch", "go.work")
+		cmd.Dir = dir
+		if err := cmd.Run(); err == nil {
+			isTracked = true
+		}
+	}
+
+	return
 }
 
-func combinedCommandOutput(cmd *exec.Cmd) (string, error) {
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return strings.TrimSpace(string(out)), err
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-func planGoWorkspace(dir string, run goCommandRunner) (goWorkPlan, error) {
-	targetDir, err := filepath.Abs(dir)
-	if err != nil {
-		return goWorkPlan{}, fmt.Errorf("resolve project directory: %w", err)
-	}
-	targetDir = cleanExistingPath(targetDir)
-	localWork := filepath.Join(targetDir, "go.work")
-	if _, err := os.Lstat(localWork); err == nil {
-		return goWorkPlan{targetDir: targetDir, workspace: localWork, reason: "local go.work already exists"}, nil
+func ensureGitignoreEntries(dir string, entries ...string) (bool, error) {
+	gitignorePath := filepath.Join(dir, ".gitignore")
+	var existing []byte
+	if data, err := os.ReadFile(gitignorePath); err == nil {
+		existing = data
 	} else if !os.IsNotExist(err) {
-		return goWorkPlan{}, fmt.Errorf("stat %s: %w", localWork, err)
+		return false, err
 	}
 
-	moduleDirs, moduleArgs, err := findGoModules(targetDir)
-	if err != nil {
-		return goWorkPlan{}, err
-	}
-	if len(moduleDirs) == 0 {
-		return goWorkPlan{targetDir: targetDir, reason: "no Go modules found"}, nil
-	}
-
-	activeWork, probeErr := run(targetDir, "env", "GOWORK")
-	if probeErr != nil {
-		return goWorkPlan{targetDir: targetDir, moduleDirs: moduleDirs, moduleArgs: moduleArgs,
-			reason: fmt.Sprintf("Go workspace probe failed: %v%s", probeErr, commandOutputSuffix(activeWork))}, nil
-	}
-	activeWork = strings.TrimSpace(activeWork)
-	if activeWork == "off" {
-		return goWorkPlan{targetDir: targetDir, moduleDirs: moduleDirs, moduleArgs: moduleArgs,
-			reason: "Go workspace discovery is disabled by GOWORK=off"}, nil
-	}
-	if activeWork == "" {
-		return goWorkPlan{targetDir: targetDir, moduleDirs: moduleDirs, moduleArgs: moduleArgs,
-			reason: "Go reports no active workspace"}, nil
-	}
-
-	activeWork = cleanExistingPath(activeWork)
-	if configured := strings.TrimSpace(os.Getenv("GOWORK")); configured != "" {
-		return goWorkPlan{targetDir: targetDir, workspace: activeWork, moduleDirs: moduleDirs, moduleArgs: moduleArgs,
-			reason: "GOWORK explicitly selects a workspace, so a local file would not override it"}, nil
-	}
-	if !containsPath(filepath.Dir(activeWork), targetDir) || filepath.Dir(activeWork) == targetDir {
-		return goWorkPlan{targetDir: targetDir, workspace: activeWork, moduleDirs: moduleDirs, moduleArgs: moduleArgs,
-			reason: "active go.work is not an enclosing parent workspace"}, nil
-	}
-
-	workspaceJSON, probeErr := run(targetDir, "work", "edit", "-json")
-	if probeErr != nil {
-		return goWorkPlan{targetDir: targetDir, workspace: activeWork, moduleDirs: moduleDirs, moduleArgs: moduleArgs,
-			reason: fmt.Sprintf("parent workspace membership probe failed: %v%s", probeErr, commandOutputSuffix(workspaceJSON))}, nil
-	}
-	included, err := parseWorkspaceModules(activeWork, workspaceJSON)
-	if err != nil {
-		return goWorkPlan{targetDir: targetDir, workspace: activeWork, moduleDirs: moduleDirs, moduleArgs: moduleArgs,
-			reason: fmt.Sprintf("parent workspace membership probe returned invalid JSON: %v", err)}, nil
-	}
-	for _, moduleDir := range moduleDirs {
-		if !included[cleanExistingPath(moduleDir)] {
-			return goWorkPlan{
-				action: goWorkCreate, targetDir: targetDir, workspace: activeWork,
-				moduleDirs: moduleDirs, moduleArgs: moduleArgs,
-				reason: "an enclosing workspace omits one or more project Go modules",
-			}, nil
+	content := string(existing)
+	var toAdd []string
+	for _, entry := range entries {
+		pattern := strings.TrimPrefix(entry, "/")
+		if !strings.Contains(content, entry) && !strings.Contains(content, pattern) {
+			toAdd = append(toAdd, entry)
 		}
 	}
-	return goWorkPlan{targetDir: targetDir, workspace: activeWork, moduleDirs: moduleDirs, moduleArgs: moduleArgs,
-		reason: "all project Go modules are already included in the enclosing workspace"}, nil
+
+	if len(toAdd) == 0 {
+		return false, nil
+	}
+
+	var b bytes.Buffer
+	b.Write(existing)
+	if len(existing) > 0 && !strings.HasSuffix(content, "\n") {
+		b.WriteString("\n")
+	}
+	b.WriteString("\n# local Go workspace (untracked; see go.work.example)\n")
+	for _, entry := range toAdd {
+		b.WriteString(entry + "\n")
+	}
+
+	if err := os.WriteFile(gitignorePath, b.Bytes(), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
-func reconcileGoWorkspace(dir string) (bool, error) {
-	plan, err := planGoWorkspace(dir, runGoCommand)
+func detectGoVersion(dir string) string {
+	goModPath := filepath.Join(dir, "go.mod")
+	if data, err := os.ReadFile(goModPath); err == nil {
+		re := regexp.MustCompile(`(?m)^go\s+([0-9.]+)`)
+		if m := re.FindStringSubmatch(string(data)); len(m) > 1 {
+			return m[1]
+		}
+	}
+	return "1.26.5"
+}
+
+func generateGoWorkExample(dir string, moduleArgs []string) string {
+	version := detectGoVersion(dir)
+	var b strings.Builder
+	b.WriteString(managedWorkspaceMarker + "\n")
+	b.WriteString("// Example Go workspace for local co-development.\n")
+	b.WriteString("// Symlinked or copied to go.work locally (untracked).\n")
+	b.WriteString(fmt.Sprintf("go %s\n\n", version))
+	b.WriteString("use (\n")
+	for _, arg := range moduleArgs {
+		b.WriteString(fmt.Sprintf("\t%s\n", arg))
+	}
+	b.WriteString(")\n")
+	return b.String()
+}
+
+func reconcileGoWorkspace(dir string, optIn bool) (bool, error) {
+	moduleDirs, moduleArgs, err := findGoModules(dir)
 	if err != nil {
 		return false, err
 	}
-	if plan.action != goWorkCreate {
-		fmt.Printf("  go.work skipped: %s\n", plan.reason)
+	if len(moduleDirs) == 0 {
 		return false, nil
 	}
-	if output, err := runGoCommandWithoutWorkspace(plan.targetDir, append([]string{"work", "init"}, plan.moduleArgs...)...); err != nil {
-		return false, fmt.Errorf("create %s: go work init: %w%s", filepath.Join(plan.targetDir, "go.work"), err, commandOutputSuffix(output))
+
+	examplePath := filepath.Join(dir, "go.work.example")
+	workPath := filepath.Join(dir, "go.work")
+
+	isManaged, hasExample, hasWork, isSymlink, isTracked := isManagedWorkspace(dir)
+
+	// If not managed and opt-in was NOT requested
+	if !isManaged && !optIn {
+		if hasWork && isTracked {
+			fmt.Printf("  go.work skipped: go.work is tracked in git (use --gowork or add '%s' to opt in)\n", managedWorkspaceMarker)
+			return false, nil
+		}
+		if hasWork {
+			fmt.Printf("  go.work skipped: local untracked go.work exists (use --gowork or add '%s' to opt in)\n", managedWorkspaceMarker)
+			return false, nil
+		}
+		// No go.work and no go.work.example: default is skip
+		return false, nil
 	}
-	fmt.Printf("  created %s (%d module(s); isolates from %s)\n",
-		filepath.Join(plan.targetDir, "go.work"), len(plan.moduleDirs), plan.workspace)
-	return true, nil
+
+	var changed bool
+
+	// Case 1: Tracked go.work being migrated with opt-in
+	if hasWork && isTracked && optIn && !isManaged {
+		workData, err := os.ReadFile(workPath)
+		if err != nil {
+			return false, fmt.Errorf("read %s: %w", workPath, err)
+		}
+		exampleContent := managedWorkspaceMarker + "\n" + string(workData)
+		if err := os.WriteFile(examplePath, []byte(exampleContent), 0o644); err != nil {
+			return false, fmt.Errorf("write %s: %w", examplePath, err)
+		}
+		gitRm := exec.Command("git", "rm", "--cached", "go.work")
+		gitRm.Dir = dir
+		_ = gitRm.Run()
+		_ = os.Remove(workPath)
+		if err := os.Symlink("go.work.example", workPath); err != nil {
+			return false, fmt.Errorf("symlink %s: %w", workPath, err)
+		}
+		if gitignoreChanged, err := ensureGitignoreEntries(dir, "/go.work", "/go.work.sum"); err == nil && gitignoreChanged {
+			changed = true
+		}
+		fmt.Printf("  migrated tracked go.work to go.work.example and created symlink\n")
+		return true, nil
+	}
+
+	// Case 2: Untracked go.work being adopted
+	if hasWork && !isSymlink && (!hasExample || optIn) {
+		workData, err := os.ReadFile(workPath)
+		if err != nil {
+			return false, fmt.Errorf("read %s: %w", workPath, err)
+		}
+		exampleContent := string(workData)
+		if !strings.Contains(exampleContent, managedWorkspaceMarker) {
+			exampleContent = managedWorkspaceMarker + "\n" + exampleContent
+		}
+		if err := os.WriteFile(examplePath, []byte(exampleContent), 0o644); err != nil {
+			return false, fmt.Errorf("write %s: %w", examplePath, err)
+		}
+		_ = os.Remove(workPath)
+		if err := os.Symlink("go.work.example", workPath); err != nil {
+			return false, fmt.Errorf("symlink %s: %w", workPath, err)
+		}
+		if gitignoreChanged, err := ensureGitignoreEntries(dir, "/go.work", "/go.work.sum"); err == nil && gitignoreChanged {
+			changed = true
+		}
+		fmt.Printf("  migrated go.work to go.work.example and created symlink\n")
+		return true, nil
+	}
+
+	// Case 3: Need to create go.work.example from scratch
+	if !hasExample {
+		exampleContent := generateGoWorkExample(dir, moduleArgs)
+		if err := os.WriteFile(examplePath, []byte(exampleContent), 0o644); err != nil {
+			return false, fmt.Errorf("write %s: %w", examplePath, err)
+		}
+		changed = true
+	}
+
+	// Case 4: Ensure symlink
+	if !hasWork {
+		if err := os.Symlink("go.work.example", workPath); err != nil {
+			return false, fmt.Errorf("symlink %s: %w", workPath, err)
+		}
+		changed = true
+		fmt.Printf("  created symlink %s -> go.work.example\n", workPath)
+	} else if isSymlink {
+		target, err := os.Readlink(workPath)
+		if err != nil || (target != "go.work.example" && target != examplePath) {
+			_ = os.Remove(workPath)
+			if err := os.Symlink("go.work.example", workPath); err != nil {
+				return false, fmt.Errorf("recreate symlink %s: %w", workPath, err)
+			}
+			changed = true
+		}
+	}
+
+	// Ensure .gitignore
+	if gitignoreChanged, err := ensureGitignoreEntries(dir, "/go.work", "/go.work.sum"); err != nil {
+		return false, err
+	} else if gitignoreChanged {
+		changed = true
+	}
+
+	return changed, nil
 }
 
 func findGoModules(root string) ([]string, []string, error) {
@@ -183,43 +271,3 @@ func ignoredModuleScanDir(name string) bool {
 	}
 }
 
-func parseWorkspaceModules(workFile, data string) (map[string]bool, error) {
-	var parsed struct {
-		Use []struct {
-			DiskPath string
-		}
-	}
-	if err := json.Unmarshal([]byte(data), &parsed); err != nil {
-		return nil, err
-	}
-	included := make(map[string]bool, len(parsed.Use))
-	base := filepath.Dir(workFile)
-	for _, use := range parsed.Use {
-		path := use.DiskPath
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(base, path)
-		}
-		included[cleanExistingPath(path)] = true
-	}
-	return included, nil
-}
-
-func cleanExistingPath(path string) string {
-	path = filepath.Clean(path)
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		return filepath.Clean(resolved)
-	}
-	return path
-}
-
-func containsPath(parent, child string) bool {
-	rel, err := filepath.Rel(parent, child)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
-func commandOutputSuffix(output string) string {
-	if output == "" {
-		return ""
-	}
-	return ": " + output
-}

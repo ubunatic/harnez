@@ -364,6 +364,11 @@ func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes,
 // non-nil, explicitly enables or disables the issue tracker Git integration.
 // A nil value leaves that integration untouched.
 func RunInitWithIssuesGit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool) error {
+	return RunInitWithGoWork(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, issuesGit, false)
+}
+
+// RunInitWithGoWork runs project initialization and supports explicit --gowork management.
+func RunInitWithGoWork(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool, gowork bool) error {
 	if cfg != nil {
 		if err := validateDocNames(cfg, docs); err != nil {
 			return err
@@ -453,7 +458,7 @@ func RunInitWithIssuesGit(dir string, cfg *Config, docs []string, repoMode strin
 		changes += gitChanges
 	}
 
-	workspaceChanged, err := reconcileGoWorkspace(dir)
+	workspaceChanged, err := reconcileGoWorkspace(dir, gowork)
 	if err != nil {
 		return err
 	}
@@ -807,6 +812,10 @@ func RunInitAll(parentDir string, cfg *Config, docs []string, repoMode string, w
 }
 
 func RunInitAllWithIssuesGit(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool, issuesGit *bool) error {
+	return RunInitAllWithGoWork(parentDir, cfg, docs, repoMode, withSummary, update, replace, issuesGit, false)
+}
+
+func RunInitAllWithGoWork(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool, issuesGit *bool, gowork bool) error {
 	if parentDir == "" {
 		return fmt.Errorf("parent directory is empty")
 	}
@@ -840,7 +849,7 @@ func RunInitAllWithIssuesGit(parentDir string, cfg *Config, docs []string, repoM
 	var errs []string
 	for _, child := range children {
 		fmt.Printf("== %s ==\n", filepath.Base(child))
-		if err := RunInitWithIssuesGit(child, cfg, docs, repoMode, true, withSummary, update, replace, issuesGit); err != nil {
+		if err := RunInitWithGoWork(child, cfg, docs, repoMode, true, withSummary, update, replace, issuesGit, gowork); err != nil {
 			fmt.Printf("  error: %v\n", err)
 			errs = append(errs, fmt.Sprintf("%s: %v", child, err))
 			continue

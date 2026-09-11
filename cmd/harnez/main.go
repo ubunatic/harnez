@@ -562,7 +562,7 @@ func main() {
 	var initDocs []string
 	var initConfigPath string
 	var initRepoMode string
-	var initSummary, initUpdate, initReplace, initYes, initAll, initIssuesGit bool
+	var initSummary, initUpdate, initReplace, initYes, initAll, initIssuesGit, initGoWork bool
 	initCmd := &cobra.Command{
 		Use:   "init",
 		Short: "Set up a project directory with AGENTS.md, language docs, and Makefile targets",
@@ -576,9 +576,9 @@ func main() {
 				issuesGit = &initIssuesGit
 			}
 			if initAll {
-				return claude.RunInitAllWithIssuesGit(initDir, cfg, initDocs, initRepoMode, initSummary, initUpdate, initReplace, issuesGit)
+				return claude.RunInitAllWithGoWork(initDir, cfg, initDocs, initRepoMode, initSummary, initUpdate, initReplace, issuesGit, initGoWork)
 			}
-			return claude.RunInitWithIssuesGit(initDir, cfg, initDocs, initRepoMode, initYes, initSummary, initUpdate, initReplace, issuesGit)
+			return claude.RunInitWithGoWork(initDir, cfg, initDocs, initRepoMode, initYes, initSummary, initUpdate, initReplace, issuesGit, initGoWork)
 		},
 	}
 	initCmd.Flags().StringVarP(&initConfigPath, "config", "c", "", "path to config YAML file (default: embedded)")
@@ -592,6 +592,7 @@ func main() {
 	initCmd.Flags().BoolVar(&initUpdate, "update", false, "re-fetch and refresh the project summary (implies --summary)")
 	initCmd.Flags().BoolVar(&initReplace, "replace", false, "delete existing AGENTS.md and recreate from template before init")
 	initCmd.Flags().BoolVar(&initIssuesGit, "issues-git", false, "enable issue-index Git integration (use --issues-git=false to remove it)")
+	initCmd.Flags().BoolVar(&initGoWork, "gowork", false, "set up or migrate Go workspace (go.work.example + untracked local go.work symlink)")
 
 	var assessJSON bool
 	assessCmd := &cobra.Command{
