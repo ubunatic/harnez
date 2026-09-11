@@ -69,6 +69,7 @@ by-product: there is no `--project` flag anymore.
 ```
 harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]]
         │
+        ├── check for project drift (go.mod module vs. git origin vs. directory name)
         ├── create AGENTS.md (template) if absent
         ├── create CLAUDE.md symlink → AGENTS.md
         ├── ignore /issues/README.md.lock in .git/info/exclude when issues/ exists
