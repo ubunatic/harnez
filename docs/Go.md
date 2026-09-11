@@ -69,6 +69,7 @@ weight: 60
 - Use `RunE` instead of `Run` — return errors, don't `os.Exit` inside commands.
 - Set `SilenceUsage: true` on commands where error is not a usage mistake.
 - **Version Wiring**: Keep `var Version = "..."` in `version.go` (synced automatically by `harnez release` from `version.yaml`) and wire `rootCmd.Version = Version`.
+- **Man Pages**: Provide `<tool> man` (stdout roff) and `<tool> man --install` (writes `.1` files to `~/.local/share/man/man1` or `/usr/local/share/man/man1`) via `cobra/doc` so `go install` users get man pages. Only read `@docs/ManPages.md` when first implementing or troubleshooting man page setup.
 - **Releases**: Provide a thin `release: check ⚙️` recipe that delegates to `harnez release`. See `@docs/GoRelease.md`.
 
 ## State Management
