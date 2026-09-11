@@ -15,7 +15,7 @@ If a critical value is missing, mismatched, unsupported, expired, or ambiguous, 
 Current capability guidance:
 
 - Claude: use the installed CLI's native resume, continue, or fork behavior when exposed.
-- Codex: resume by the native session ID; local rollout metadata may provide input, cached-input, output, reasoning, and total token counts.
+- Codex: resume by the native session ID; local rollout metadata may provide input, cached-input, output, reasoning, and total token counts. The installed CLI's `exec`/`resume` subcommands take `-m/--model` but no dedicated effort/reasoning flag; set it via `-c model_reasoning_effort=<level>` instead, and verify the exact key against `codex exec --help` and `~/.codex/config.toml`, since both can change across versions. Resolve a named model alias (e.g. a user's own "fast"/"deep" shorthand) by checking that user's `~/.codex/config.toml` model tables — never assume a name maps to a fixed model ID.
 - AGY and Gemini: use the specific installed harness's continue or resume behavior when available. Do not assume AGY and Gemini have the same session interface.
 - Prime: report unsupported and use a fresh fallback while no Prime executable or session API is available; use native reuse once that capability exists.
 
