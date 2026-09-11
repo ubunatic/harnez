@@ -372,12 +372,17 @@ func RunInitWithIssuesGit(dir string, cfg *Config, docs []string, repoMode strin
 			return err
 		}
 	}
+	for _, w := range CheckProjectDrift(dir) {
+		fmt.Printf("  ⚠️  drift: %s\n", w)
+	}
+
 	agentsPath := filepath.Join(dir, "AGENTS.md")
 	claudePath := filepath.Join(dir, "CLAUDE.md")
 
 	if update {
 		withSummary = true
 	}
+
 
 	changes := 0
 
@@ -864,3 +869,59 @@ func migrateLegacyMarkers(path string) (bool, error) {
 	}
 	return true, os.WriteFile(path, []byte(newContent), 0o644)
 }
+
+// CheckProjectDrift checks for inconsistencies between a project's go.mod module name,
+// git remote origin URL repository name, and directory name.
+func CheckProjectDrift(dir string) []string {
+	var warnings []string
+	goModPath := filepath.Join(dir, "go.mod")
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		absDir = dir
+	}
+	dirBase := filepath.Base(absDir)
+
+	var moduleBase string
+	if data, err := os.ReadFile(goModPath); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "module ") {
+				modPath := strings.TrimSpace(strings.TrimPrefix(line, "module"))
+				parts := strings.Split(modPath, "/")
+				if len(parts) > 0 {
+					moduleBase = parts[len(parts)-1]
+				}
+				break
+			}
+		}
+	}
+
+	var repoBase string
+	var remoteURL string
+	if out, err := exec.Command("git", "-C", dir, "remote", "get-url", "origin").Output(); err == nil {
+		remoteURL = strings.TrimSpace(string(out))
+		if remoteURL != "" {
+			trimmed := strings.TrimSuffix(remoteURL, ".git")
+			parts := strings.Split(trimmed, "/")
+			if len(parts) > 0 {
+				repoBase = parts[len(parts)-1]
+				if colon := strings.LastIndex(repoBase, ":"); colon >= 0 {
+					repoBase = repoBase[colon+1:]
+				}
+			}
+		}
+	}
+
+	if moduleBase != "" && repoBase != "" && !strings.EqualFold(moduleBase, repoBase) {
+		warnings = append(warnings, fmt.Sprintf("go.mod module %q does not match git origin repository %q (%s)", moduleBase, repoBase, remoteURL))
+	}
+	if moduleBase != "" && dirBase != "" && !strings.EqualFold(moduleBase, dirBase) {
+		warnings = append(warnings, fmt.Sprintf("go.mod module %q does not match directory name %q", moduleBase, dirBase))
+	}
+	if repoBase != "" && dirBase != "" && !strings.EqualFold(repoBase, dirBase) {
+		warnings = append(warnings, fmt.Sprintf("directory name %q does not match git origin repository %q (%s)", dirBase, repoBase, remoteURL))
+	}
+
+	return warnings
+}
+

@@ -409,3 +409,44 @@ func TestRunInitAll_NoEligibleChildrenIsNotAnError(t *testing.T) {
 		t.Fatalf("expected no error scanning a workspace with no eligible children, got: %v", err)
 	}
 }
+
+func TestCheckProjectDrift(t *testing.T) {
+	tempRoot := t.TempDir()
+	projDir := filepath.Join(tempRoot, "psync")
+	if err := os.MkdirAll(projDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Matching case
+	if err := os.WriteFile(filepath.Join(projDir, "go.mod"), []byte("module ubunatic.com/psync\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if warnings := claude.CheckProjectDrift(projDir); len(warnings) != 0 {
+		t.Errorf("expected 0 warnings for clean matching project, got %d: %v", len(warnings), warnings)
+	}
+
+	// 2. Mismatched go.mod module vs directory name
+	if err := os.WriteFile(filepath.Join(projDir, "go.mod"), []byte("module ubunatic.com/uman\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	warnings := claude.CheckProjectDrift(projDir)
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning for mismatched module name, got %d: %v", len(warnings), warnings)
+	}
+	if !strings.Contains(warnings[0], "go.mod module \"uman\" does not match directory name \"psync\"") {
+		t.Errorf("unexpected warning message: %s", warnings[0])
+	}
+
+	// 3. Initialize git with mismatched origin URL
+	if err := exec.Command("git", "-C", projDir, "init", "-q").Run(); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec.Command("git", "-C", projDir, "remote", "add", "origin", "ssh://git@codeberg.org/ubunatic/other.git").Run(); err != nil {
+		t.Fatal(err)
+	}
+	warnings = claude.CheckProjectDrift(projDir)
+	if len(warnings) < 2 {
+		t.Errorf("expected at least 2 warnings with mismatched git origin and go.mod, got %d: %v", len(warnings), warnings)
+	}
+}
+
