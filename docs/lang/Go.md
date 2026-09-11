@@ -20,7 +20,7 @@ weight: 60
 ## Language & Deps
 - **Modern Go**: Leverage current features like `any` and generics, but only where they explicitly reduce boilerplate/noise.
 - **Minimise external deps**: Default to the Go Standard Library. If you need an external library, get approval first.
-- **Allowed CLI & Config Libraries**: `github.com/spf13/cobra` for CLI tools, `gopkg.in/yaml.v3` for config files.
+- **Allowed & Recommended Libraries**: `github.com/spf13/cobra` for CLI tools, `gopkg.in/yaml.v3` for YAML config/spec files, and `github.com/google/jsonschema-go/jsonschema` for JSON Schema validation and schema-aware tooling. Use the latter with `yaml.v3` when validating YAML documents against JSON Schemas, as in the Loom `validate-spec` tool.
 - **No Heavy Frameworks**: No ORMs (write raw SQL), no logging frameworks (use standard `log`), no Dependency Injection (DI) containers (pass dependencies explicitly).
 
 ## Project Layout
