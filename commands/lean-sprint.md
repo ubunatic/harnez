@@ -38,12 +38,12 @@ For focused, well-defined tasks, bypass the full 5-phase ceremony in favor of a 
 
 ### 2. Autonomous Execution & Self-Verification
 - The dev subagent executes the implementation autonomously and reports back to you.
-- Enforce strict self-verification using repo-native commands (`go test ./...`, `make test`, `make check`, canary probes).
-- Must verify passing tests with real assertions before declaring completion.
+- Enforce strict self-verification using repo-native commands (`go test ./...`, `make test`, `make check`, canary probes) — real assertions, not just a clean exit code.
+- For defect-shaped tasks (bug/timing/race): establish a concrete reproduction baseline *before* the fix, and verify against that, not just green tests (see `@docs/AgenticLoop.md` Phase 2, "Repro-before-fix").
 
 ### 3. Confidence-Gated Inline Review
 - If automated tests pass cleanly and confidence is high (routine bug fix, small feature, internal refactor), skip spawning an independent reviewer subagent.
-- The Host Orchestrator performs a rapid inline diff review.
+- The Host Orchestrator performs a rapid inline diff review, including whether a defensive/robustness fix could instead fix its root cause (see `@docs/AgenticLoop.md` Phase 3, "Root Cause vs. Symptom").
 - Escalate to a full Phase 3 Reviewer agent only if:
   - There is cross-subsystem blast radius or architectural ambiguity.
   - Automated tests cannot fully cover runtime behavioral contracts.
@@ -54,10 +54,7 @@ For focused, well-defined tasks, bypass the full 5-phase ceremony in favor of a 
 - Do not emit repetitive boilerplate or trivial environment noise on routine, fast iterations.
 - If authentic friction is discovered, record it in `docs/feedback/` or append to related tickets.
 
-### 5. Fast Teardown & Status Sync
-- Terminate finished subagents immediately (`manage_subagents kill`).
-- Ensure no lingering background processes or timers remain.
-- Record an `--ok` heartbeat (`harnez rate --ok "<note>" [<ticket>]`) to confirm clean sprint completion in telemetry.
-- Update ticket status in `issues/*.md` and `issues/README.md`.
-- Verify with `harnez status`; run `harnez index` to regenerate `issues/README.md` and
-  `docs/README.md`'s studies table instead of hand-editing rows.
+### 5. Teardown & Status Sync
+- Terminate the dev subagent once its work is reviewed, using the harness's actual subagent lifecycle control (not an invented command name); drain any other background jobs or timers.
+- Update ticket status in `issues/*.md` — check the whole file for more than one status-bearing field (see `@docs/AgenticLoop.md` Phase 5, "Single Status field") — and refresh `issues/README.md`.
+- Verify with `harnez status`; run `harnez index` instead of hand-editing `issues/README.md` or the studies table.
