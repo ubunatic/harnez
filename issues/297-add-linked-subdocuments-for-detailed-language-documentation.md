@@ -4,7 +4,10 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Documentation
-**Related**: `docs/lang/Go.md`, `docs/lang/GoWork.md` (proposed), `harnez init --docs`
+**Related**: `docs/lang/Go.md`, `docs/lang/GoWork.md` (proposed), `harnez init --docs`;
+issue 317 (same idea, already solved for skills via `config.yaml`'s
+`resources:` mechanism — see the `docup` skill precedent; worth reusing that
+mechanism here instead of designing a second one for lang docs)
 
 ---
 

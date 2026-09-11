@@ -97,6 +97,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-09-09-external-agent-review-and-dispatch.md](studies/2026-09-09-external-agent-review-and-dispatch.md) | External Agent Review, Artifact-First Completion, and Claude Dispatch Lessons |
 | [studies/2026-09-10-advisor-session-reuse-and-cross-agent-dispatch.md](studies/2026-09-10-advisor-session-reuse-and-cross-agent-dispatch.md) | Advisor session reuse, cache evidence, and cross-agent dispatch design |
 | [studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md](studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md) | Pi, DeepSeek Harness, and Prime Agent plugin systems and self-modification |
+| [studies/2026-09-11-first-live-codex-advisor-design-gate-and-a-third-init-drop-recurrence.md](studies/2026-09-11-first-live-codex-advisor-design-gate-and-a-third-init-drop-recurrence.md) | First live harnez-advisor Codex design-review call, and a third live recurrence of the opt-in-doc-drop bug |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
 | [studies/RTKShellWrapperHandling.md](studies/RTKShellWrapperHandling.md) | RTK: Shell-Wrapper and Pipe Handling in Command-Rewrite Hooks |
 | [studies/Worktrees.md](studies/Worktrees.md) | Worktrees — learnings & TODOs |

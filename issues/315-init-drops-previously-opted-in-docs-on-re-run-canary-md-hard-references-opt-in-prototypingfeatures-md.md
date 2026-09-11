@@ -1,7 +1,7 @@
 # 315 — init drops previously opted-in docs on re-run; Canary.md hard-references opt-in PrototypingFeatures.md
 
 **Status**: Open
-**Priority**: P2 (Medium)
+**Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Bug
 
@@ -57,6 +57,25 @@ ls docs/PrototypingFeatures.md   # missing
 grep -n PrototypingFeatures docs/Canary.md   # still references it
 ```
 Fixed locally for this repo by re-running `harnez init --docs prototyping-features`.
+
+## Recurrences
+
+Reproduced live a second and third time in the same week, on completely
+unrelated trigger actions:
+
+- 2026-09-11, onboarding `docs/lang/ManPages.md` (adding a new auto-detected
+  lang doc) — same drop.
+- 2026-09-11, onboarding a one-line `timeout` convention addition to
+  `docs/lang/Bash.md` (issue 319) — running `harnez init` purely to verify
+  the doc propagated dropped `prototyping-features` again, on a session with
+  no relation to the doc-selection logic at all.
+
+Three independent hits from two unrelated actions indicate this fires on
+*any* plain `harnez init` re-run in a project that has ever opted into a
+`default: false` doc — not an edge case. See
+`docs/studies/2026-09-11-first-live-codex-advisor-design-gate-and-a-third-init-drop-recurrence.md`
+for the full write-up. Worth revisiting priority (currently P2/Moderate)
+given how easily and repeatedly this actually fires in practice.
 
 ## Suggested fix
 

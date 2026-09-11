@@ -4,6 +4,8 @@
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
+**Related**: issue 297 (same on-demand-splitting idea, generalized to
+`docs/lang/` docs instead of skills — solve once, generically, if picked up)
 
 ---
 
