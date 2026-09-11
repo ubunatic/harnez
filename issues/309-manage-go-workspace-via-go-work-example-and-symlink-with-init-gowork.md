@@ -1,6 +1,6 @@
 # 309 — Manage Go workspace via go.work.example and symlink with init --gowork
 
-**Status**: Open
+**Status**: Closed — resolved in 29b993d
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Infrastructure
