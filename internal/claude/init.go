@@ -310,6 +310,8 @@ func detectDoc(dir, name string) bool {
 		return fileExists(filepath.Join(dir, "go.mod"))
 	case "gorelease":
 		return fileExists(filepath.Join(dir, "go.mod"))
+	case "manpages":
+		return goModRequires(dir, "github.com/spf13/cobra")
 	case "bash":
 		return globExists(dir, "*.sh") || globExists(filepath.Join(dir, "scripts"), "*.sh")
 	case "make":
@@ -335,6 +337,17 @@ func fileExists(path string) bool {
 func globExists(dir, pattern string) bool {
 	matches, err := filepath.Glob(filepath.Join(dir, pattern))
 	return err == nil && len(matches) > 0
+}
+
+// goModRequires reports whether dir's go.mod names module as a dependency
+// (direct or indirect). It is a plain substring check, not a full go.mod
+// parse — good enough to gate an optional doc's auto-detection.
+func goModRequires(dir, module string) bool {
+	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), module)
 }
 
 func initialAgentsMD(cfg *Config) string {

@@ -25,6 +25,7 @@ Generated copies land here (root) after `apply` / `init`.
 | File | Topic | Read Trigger / Scope |
 |------|-------|----------------------|
 | [lang/Go.md](lang/Go.md) | Go conventions | Bounded read only for Cobra flag idioms, error wrapping conventions, or test templates |
+| [lang/ManPages.md](lang/ManPages.md) | Man pages for Go/Cobra CLIs | Read when wiring `<cmd> man`/`--install`, `cobra/doc` generation, or GoReleaser/NFPM man page packaging |
 | [lang/Bash.md](lang/Bash.md) | Bash/Shell conventions | Read for exact `if test` construct syntax, formatting rules, or directory-flag scoping (`git -C`/`make -C` over `cd`) |
 | [lang/Make.md](lang/Make.md) | Makefile conventions | Read for ⚙️ sentinel phony mechanics and help-target recipes |
 | [lang/Git.md](lang/Git.md) | Git conventions | Read for commit message format and worktree workflows |

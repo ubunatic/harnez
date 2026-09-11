@@ -492,6 +492,14 @@ agents_md:
       target: ~/.claude/docs/Go.md
       local: ./docs/Go.md
       default: auto   # go.mod
+    manpages:
+      name: "Man Pages for Go CLIs"
+      ref: "@docs/ManPages.md"
+      hint: "cobra/doc GenManTree; <cmd> man / man --install; XDG ~/.local/share/man/man1"
+      source: docs/lang/ManPages.md
+      target: ~/.claude/docs/ManPages.md
+      local: ./docs/ManPages.md
+      default: auto   # go.mod + cobra dep
     bash:
       name: "Bash/Shell"
       ref: "@docs/Bash.md"

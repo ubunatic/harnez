@@ -26,8 +26,8 @@ instead of `ls issues/`, `find`, or raw grep:
 - `harnez find -d <repo> issues next` — report the next free ticket number (read-only)
 - `harnez issues new -d <repo> "<title>"` — atomically reserve that number and create
   a placeholder ticket file; write the ticket to the printed path
-- `harnez issues <verb> -d <repo> <n> [reason]` — change a ticket's status and resync
-  `issues/README.md`, in one call
+- `harnez issues <verb> -d <repo> <n> [reason]` — change a ticket's status, resync
+  `issues/README.md`, and commit, in one call
 - `harnez index -d <repo>` — update `issues/README.md` after filing or updating tickets
 - Commit documentation and `issues/*.md` changes immediately; don't batch them behind
   pending code work.
@@ -161,4 +161,6 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
 - Release Pipeline @docs/GoRelease.md,
   harnez release, version.yaml spec, GoReleaser v2, non-interactive minisign (-W), Forgejo has_releases, language-agnostic (Go/Python/Zig/Rust/scripted)
+- Man Pages for Go CLIs @docs/ManPages.md,
+  cobra/doc GenManTree; <cmd> man / man --install; XDG ~/.local/share/man/man1
 <!-- harnez:end Language Conventions -->
