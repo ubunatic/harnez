@@ -1,6 +1,6 @@
 # 319 — Document Linux `timeout` command convention: prefix long-running shell commands in Bash.md
 
-**Status**: Open
+**Status**: Closed — implemented 2026-09-11
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Documentation
@@ -53,9 +53,23 @@ harnesses, or execution paths that don't go through `harnez exec` at all.
 
 ## Verification
 
-- [ ] `docs/lang/Bash.md` (or `docs/practices/AgenticLoop.md`, per the
-      decision above) documents the `timeout` convention with a concrete
-      example.
-- [ ] `harnez apply` propagates the updated doc to
-      `~/.claude/docs/Bash.md` (or the AgenticLoop.md equivalent).
-- [ ] No code changes required — documentation only.
+- [x] `docs/lang/Bash.md` (§7 Commands & Traps) documents the `timeout`
+      convention with a concrete example, exit-code note, and a
+      cross-reference to `docs/practices/AgenticLoop.md`'s existing
+      "Blocking sleep Waits"/"Buffered Long-Running Output" anti-patterns.
+- [x] `harnez init` propagates the updated doc into this project's local
+      `docs/Bash.md` copy, confirmed via `git diff`.
+- [x] No code changes required — documentation only.
+
+## Implementation note
+
+Placed in `docs/lang/Bash.md` (language mechanics) rather than
+`docs/practices/AgenticLoop.md` (workflow), since `timeout` is a Bash-level
+command-invocation mechanic, not an orchestration-level anti-pattern — with a
+cross-reference added in both directions is unnecessary; a pointer from
+Bash.md to AgenticLoop.md's related anti-patterns is sufficient.
+
+Re-running `harnez init` to verify propagation reproduced issue 315 again
+(dropped `prototyping-features` from AGENTS.md) — worked around with
+`harnez init --docs prototyping-features` as before; root cause remains open
+in issue 315.

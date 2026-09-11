@@ -150,6 +150,19 @@ Avoid arbitrary fixed indentation for command blocks. Prefer **alignment continu
 - Capture output cleanly: `out=$(cmd 2>&1)`.
 - Redirects: `> file` to write, `>> file` to append, `2>/dev/null` to suppress errors.
 - Temp files: `mktemp`; clean up with `trap 'rm -f "$tmp"' EXIT`.
+- **Prefix uncertain-duration commands with `timeout`**: when invoking something
+  without a client-side timeout of its own — a network probe, a lock wait, an
+  external service call — wrap it rather than risk an indefinite hang:
+  ```bash
+  timeout 30 curl -sf https://example.com/health
+  ```
+  Size the seconds argument to the command's expected duration, not one fixed
+  global value. `timeout` exits `124` when it kills the command — check for
+  that distinctly from the wrapped command's own failure exit codes if
+  downstream logic branches on `$?`. This is about individual command
+  invocations; for waiting on a long-running background job instead, see
+  `docs/practices/AgenticLoop.md`'s "Blocking sleep Waits" and "Buffered
+  Long-Running Output" anti-patterns.
 
 ## 8. Functions
 - Define functions before first invocation.
