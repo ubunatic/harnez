@@ -155,7 +155,7 @@ Agentic software engineering scales effectively when concurrency is structured a
 
 ---
 
-## 3. The Lean Fresh-Handoff Pattern (`/fresh-sprint`)
+## 3. The Lean Fresh-Handoff Pattern (`/lean-sprint`)
 
 ```
    Host Orchestrator
@@ -194,7 +194,7 @@ For focused, day-to-day tickets, running the full 5-phase ceremony with separate
 
 ### Workflow Selection Matrix
 
-| Dimension | Formal 5-Phase Loop (`/sprint`) | Lean Fresh-Handoff (`/fresh-sprint`) |
+| Dimension | Formal 5-Phase Loop (`/sprint`) | Lean Fresh-Handoff (`/lean-sprint`) |
 |---|---|---|
 | **Scope** | Multi-ticket sprints, major features, broad refactors | Single focused ticket, bug fix, localized feature |
 | **Discovery** | Parallel read-only advisor subagents | Targeted orchestrator/dev grep & range-bounded reads |

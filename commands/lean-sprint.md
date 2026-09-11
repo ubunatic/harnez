@@ -9,18 +9,18 @@ Reference Practice: `@docs/AgenticLoop.md`
 You, the agent that received this invocation, are the Host Orchestrator for this task.
 Run the complete lean workflow below yourself, in this session: goal handoff, autonomous
 execution with self-verification, confidence-gated review, calibrated friction reporting,
-and teardown with status sync. Do not delegate the fresh-sprint workflow itself to another
+and teardown with status sync. Do not delegate the lean-sprint workflow itself to another
 orchestrator. The dev subagent in step 1 is a worker you dispatch and whose result you
 review — it is not a replacement orchestrator. This is not a choice: direct invocation
-always means inline execution. To make a different agent run the fresh sprint instead,
-the user invokes the `fresh-sprinter` delegator, not this skill.
+always means inline execution. To make a different agent run the lean sprint instead,
+the user invokes the `lean-sprinter` delegator, not this skill.
 
 ---
 
 ## Invocation Syntax
 
-- `/fresh-sprint <ticket-numbers>` (e.g. `/fresh-sprint 064` or `/fresh-sprint 042, 043`)
-- `/fresh-sprint "<scoped-task-or-bug-description>"`
+- `/lean-sprint <ticket-numbers>` (e.g. `/lean-sprint 064` or `/lean-sprint 042, 043`)
+- `/lean-sprint "<scoped-task-or-bug-description>"`
 
 ---
 

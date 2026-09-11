@@ -46,7 +46,7 @@ func (c ActivityCategory) IsValid() bool {
 
 var (
 	// Category-specific regexes used by ClassifyTier1 (sub-microsecond deterministic matching)
-	reWorkflowNote = regexp.MustCompile(`(?i)(?:committed\s+(?:ticket|issue|study|synthesis|changes|updates|worktree)|updated\s+(?:issues/)?readme|filed\s+(?:ticket|issue)|created\s+issue|reserving\s+issue|loaded\s+tool\s+feedback|loaded\s+evergreen|agent\s+handoff|inline-reviewed\s+fresh-sprint|subagent|handing\s+work\s+to\s+subagent)`)
+	reWorkflowNote = regexp.MustCompile(`(?i)(?:committed\s+(?:ticket|issue|study|synthesis|changes|updates|worktree)|updated\s+(?:issues/)?readme|filed\s+(?:ticket|issue)|created\s+issue|reserving\s+issue|loaded\s+tool\s+feedback|loaded\s+evergreen|agent\s+handoff|inline-reviewed\s+(?:fresh|lean)-sprint|subagent|handing\s+work\s+to\s+subagent)`)
 	reGitNote      = regexp.MustCompile(`(?i)(?:^git\s+|git\s+status|git\s+diff|git\s+commit|git\s+log|git\s+checkout|git\s+branch|working\s+tree\s+is\s+clean|clean\s+tree|commits?\s+ahead)`)
 	reConfigNote   = regexp.MustCompile(`(?i)(?:settings\.json|dotfiles|env\s+setup|configure|configuration|environment\s+setup|agy-hooks|\.gitconfig)`)
 	reTestNote     = regexp.MustCompile(`(?i)(?:go\s+test|pytest|jest|test\s+failure|tests?\s+pass|test\s+passed|unit\s+tests|all\s+tests|assertions?)`)
