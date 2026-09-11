@@ -4,6 +4,17 @@ Orchestrate a structured, 5-phase agentic sprint loop across specified tickets, 
 
 Reference Practice: `@docs/AgenticLoop.md`
 
+## Role Contract — Direct Execution
+
+You, the agent that received this invocation, are the sprint orchestrator for this
+task. Execute all five phases below yourself, in this session. Do not hand the sprint
+as a whole to another agent, subagent, or external CLI, and do not spawn a second
+sprint orchestrator. Delegation inside the workflow is still required where each phase
+says so — the reusable advisor (Phase 1), the named developers (Phase 2), and the
+independent reviewer (Phase 3) are delegated by you and report back to you. This is
+not a choice: direct invocation always means inline execution. To make a different
+agent run the sprint instead, the user invokes the `sprinter` delegator, not this skill.
+
 ---
 
 ## Invocation Syntax

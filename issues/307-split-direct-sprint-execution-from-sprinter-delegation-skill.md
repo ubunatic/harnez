@@ -1,6 +1,6 @@
 # 307 — Deterministic direct execution and delegation for sprint workflows
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -33,16 +33,23 @@ The direct skills and delegators must make this role distinction explicit: direc
 
 ## 3. Acceptance Criteria
 
-- [ ] `/sprint` unambiguously instructs the receiving user-facing agent to execute the full five phases inline; it does not instruct that agent to spawn another sprint orchestrator.
-- [ ] `/fresh-sprint` unambiguously instructs the receiving user-facing agent to execute its complete lean workflow inline; it does not leave inline-versus-delegated execution to model choice.
-- [ ] The `/sprint` workflow still requires sequential reusable advisor discovery, sequential reusable developers, an independent pre-commit review gate, process/subagent hygiene, and a flow-quality retrospective.
-- [ ] A registered `sprinter` delegator is brief and self-contained, passes the given task context to a user-selected-model subagent, requires a complete read of the installed `sprint` skill, and makes that subagent the sprint orchestrator.
-- [ ] A registered fresh-sprint delegator (preferably `fresh-sprinter`, or one documented bounded alternative) is equally brief and deterministic, requires a complete read of the installed `fresh-sprint` skill, and makes the selected subagent the fresh-sprint orchestrator.
-- [ ] Both delegators explicitly require delegation, while both direct skills explicitly require inline execution; no prompt says or implies that the receiving model may choose the role.
-- [ ] Neither delegator duplicates or reinterprets its full workflow, hard-codes a model, or adds a second orchestration policy that can drift from the corresponding direct skill.
-- [ ] `config.yaml` registers all four skills/paths correctly without creating an unintended command or omitting a configured target; the final naming choice is consistent in source, config, generated output, and documentation.
-- [ ] Normal apply/generation refreshes all four installed Codex skill artifacts, including the direct skills and both brief delegators, and verification confirms their role language is current and idempotent.
-- [ ] No unrelated product, skill, command, or generated files are modified by the ticket’s implementation beyond the files and generated targets intentionally covered by this scope.
+- [x] `/sprint` unambiguously instructs the receiving user-facing agent to execute the full five phases inline; it does not instruct that agent to spawn another sprint orchestrator.
+- [x] `/fresh-sprint` unambiguously instructs the receiving user-facing agent to execute its complete lean workflow inline; it does not leave inline-versus-delegated execution to model choice.
+- [x] The `/sprint` workflow still requires sequential reusable advisor discovery, sequential reusable developers, an independent pre-commit review gate, process/subagent hygiene, and a flow-quality retrospective.
+- [x] A registered `sprinter` delegator is brief and self-contained, passes the given task context to a user-selected-model subagent, requires a complete read of the installed `sprint` skill, and makes that subagent the sprint orchestrator.
+- [x] A registered fresh-sprint delegator (preferably `fresh-sprinter`, or one documented bounded alternative) is equally brief and deterministic, requires a complete read of the installed `fresh-sprint` skill, and makes the selected subagent the fresh-sprint orchestrator.
+- [x] Both delegators explicitly require delegation, while both direct skills explicitly require inline execution; no prompt says or implies that the receiving model may choose the role.
+- [x] Neither delegator duplicates or reinterprets its full workflow, hard-codes a model, or adds a second orchestration policy that can drift from the corresponding direct skill.
+- [x] `config.yaml` registers all four skills/paths correctly without creating an unintended command or omitting a configured target; the final naming choice is consistent in source, config, generated output, and documentation.
+- [x] Normal apply/generation refreshes all four installed Codex skill artifacts, including the direct skills and both brief delegators, and verification confirms their role language is current and idempotent.
+- [x] No unrelated product, skill, command, or generated files are modified by the ticket’s implementation beyond the files and generated targets intentionally covered by this scope.
+
+## 5. Implementation Notes
+
+- Delegator sources live in `docs/commands/` (`Sprinter.md`, `FreshSprinter.md`), registered only under `skills:` in `config.yaml` — not under `commands/`, since `scripts/lint.sh` forces every `commands/*.md` file to also register a slash command, which would have created an unintended command.
+- Correction to §1: the `fresh-sprinter` Codex path did **not** already exist prior to this ticket (`~/.codex/skills/` had no `fresh-sprinter` entry). The name was still adopted for symmetry with `sprinter`.
+- Registering the two new skills fans out to 8 installed directories (Gemini, Codex, Claude, Prime skill roots × 2 skills), not just the 4 Codex paths named in scope — this is normal pipeline behavior (`internal/claude/apply.go` `skillTargets`), not scope creep.
+- Verified via `make lint`, `make check`, `make install`, `make apply` (twice, second run reported "No changes" — idempotent), `make status`, `scripts/smoke-test.sh`, and `harnez status`.
 
 ## 4. Migration & Verification Plan
 

@@ -248,6 +248,14 @@ skills:
     description: "Execute a lean fresh-handoff sprint (Goal Handoff -> Autonomous Dev -> Inline Review -> Hygiene)"
     file: commands/fresh-sprint.md
 
+  - name: sprinter
+    description: "Delegate a full 5-phase sprint to a user-selected-model subagent that reads and executes the sprint skill"
+    file: docs/commands/Sprinter.md
+
+  - name: fresh-sprinter
+    description: "Delegate a lean fresh-handoff sprint to a user-selected-model subagent that reads and executes the fresh-sprint skill"
+    file: docs/commands/FreshSprinter.md
+
   - name: mode
     description: "Switch ConciseMode terseness level (lite, std, ultra, off) and sync AGENTS.md"
     file: commands/mode.md

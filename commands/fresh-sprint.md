@@ -4,6 +4,17 @@ Orchestrate a lean, fast-path agentic handoff for scoped development tasks and d
 
 Reference Practice: `@docs/AgenticLoop.md`
 
+## Role Contract — Direct Execution
+
+You, the agent that received this invocation, are the Host Orchestrator for this task.
+Run the complete lean workflow below yourself, in this session: goal handoff, autonomous
+execution with self-verification, confidence-gated review, calibrated friction reporting,
+and teardown with status sync. Do not delegate the fresh-sprint workflow itself to another
+orchestrator. The dev subagent in step 1 is a worker you dispatch and whose result you
+review — it is not a replacement orchestrator. This is not a choice: direct invocation
+always means inline execution. To make a different agent run the fresh sprint instead,
+the user invokes the `fresh-sprinter` delegator, not this skill.
+
 ---
 
 ## Invocation Syntax
@@ -18,7 +29,7 @@ Reference Practice: `@docs/AgenticLoop.md`
 For focused, well-defined tasks, bypass the full 5-phase ceremony in favor of a fast-path execution loop:
 
 ### 1. Clean Goal Handoff
-- The Host Orchestrator spawns a fresh subagent with a single, clear objective.
+- You, as Host Orchestrator, spawn a fresh dev subagent with a single, clear objective, and retain ownership of the workflow.
 - Provide:
   - Concise problem statement & target ticket/spec references.
   - Concrete target files/packages and acceptance/verification criteria.
@@ -26,7 +37,7 @@ For focused, well-defined tasks, bypass the full 5-phase ceremony in favor of a 
 - **Stay Responsive**: Dispatching the subagent must not block the main chat. Report the handoff and return control to the user, or continue only with non-overlapping local work. Do not wait for the subagent unless the user explicitly asks or integration is immediately blocked on its result.
 
 ### 2. Autonomous Execution & Self-Verification
-- The subagent executes the implementation autonomously.
+- The dev subagent executes the implementation autonomously and reports back to you.
 - Enforce strict self-verification using repo-native commands (`go test ./...`, `make test`, `make check`, canary probes).
 - Must verify passing tests with real assertions before declaring completion.
 
