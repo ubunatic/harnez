@@ -106,3 +106,49 @@ type ClaudeSettings struct {
   schema (permissions.deny entries, `disableBundledSkills` etc.) against a real
   installed version before writing the Go structs — the request doesn't cite a
   version or source for this schema.
+
+## External design review (Codex/Astra advisor, 2026-09-11)
+
+Ran via `harnez-advisor` (issue 303): `codex exec -m gpt-6-astra -c
+model_reasoning_effort=low`, read-only — no project files were changed.
+
+**Verdict: No-go as written; conditional go after these revisions.**
+
+1. **Deny list / preset**: Don't make `full` the default. `AskUserQuestion`,
+   `EnterPlanMode`, `ExitPlanMode`, `SendMessage`, `ReportFindings`,
+   `ScheduleWakeup` support interaction, approval, and coordination — their
+   removal is a behavioral choice, not token-cost cleanup, and needs explicit
+   opt-in. Defer `full` from v1 or rename it `aggressive` and require explicit
+   selection. A `minimal` preset should be limited to verified
+   integration-only tools (`DesignSync`, `PushNotification`, `RemoteTrigger`);
+   keep `NotebookEdit` and the `Cron*` flags separately selectable rather than
+   bundled in.
+2. **Scope**: `apply`'s global scope is architecturally coherent for a
+   genuine user-wide preference (does not itself violate `CLIDesign.md`), but
+   any project-dependent opt-out belongs in project-local settings, not by
+   making `apply` project-aware. Preview/status output should explicitly name
+   the target file and state "affects every project for this user."
+3. **Structs**: The proposed `*bool` struct model is acceptable as a patch
+   description but insufficient as a full settings-file model — round-
+   tripping the whole file through it would silently drop unknown fields
+   (`permissions.allow`, `ask`, etc.). Require a raw-JSON-preserving merge
+   that only appends missing exact strings, and reconcile with the
+   `Permissions{Allow, Deny}` type already in `internal/claude/config.go:100`
+   rather than introducing a competing model.
+4. **Revert semantics (blocker)**: "reset booleans to false" is wrong —
+   revert must restore prior state, not defaults. Requires a persisted
+   ownership record (what harnez actually added vs. what pre-existed) so
+   revert only undoes owned changes and never clobbers a pre-existing `true`
+   or a pre-existing deny entry.
+5. **Acceptance criteria**: add a verified Claude Code settings-schema
+   version/source; a canary proving actual tool-definition removal and
+   measured context reduction (not just a successful JSON write); behavioral
+   tests that clarification/plan-approval/coordination still work under the
+   default preset; and tests for pre-existing true/false/absent values,
+   overlapping denies, unknown nested fields, and repeated apply/revert
+   cycles.
+
+**Disposition**: implementation should not start until the preset, ownership
+model, and validation gate above are captured in this ticket. A narrow,
+explicit-opt-in global preset remains defensible; the proposed `full`-by-
+default and reset-to-default revert are not.
