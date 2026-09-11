@@ -1229,13 +1229,10 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 			}
 		}
 	}
-	if l := cfg.AgentsMD.Local; len(l.Sections) > 0 {
-		for _, s := range l.Sections {
-			if err := report(diffSectionMD(l.Target, s.Name, s.Content)); err != nil {
-				return false, fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
-			}
-		}
-	}
+	// agents_md.local.Sections are applied by `init` (project scaffolding),
+	// never by ApplyAll (global apply) — see buildAgentProfileTestConfig's doc comment.
+	// DiffAll must not report drift here: it would be drift ApplyAll can
+	// never resolve, since it doesn't write this target at all.
 	for _, id := range sortedAgentIDs(cfg.AgentsMD.Agents) {
 		a := cfg.AgentsMD.Agents[id]
 		if len(a.Sections) == 0 {

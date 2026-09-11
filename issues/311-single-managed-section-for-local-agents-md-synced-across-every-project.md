@@ -1,6 +1,6 @@
 # 311 — Single managed section for local AGENTS.md, synced across every project
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics / Docs Pipeline
@@ -95,28 +95,28 @@ reconcile on re-apply than many.
 
 ## 3. Acceptance Criteria
 
-- [ ] Exactly one new managed section defined under `agents_md.local` in
+- [x] Exactly one new managed section defined under `agents_md.local` in
       `config.yaml`, content-sourced the same way `agents_md.global.sections` is.
-- [ ] `docs/templates/AGENTS.md` carries the new section wrapped in its own
+- [x] `docs/templates/AGENTS.md` carries the new section wrapped in its own
       `harnez:begin`/`harnez:end` markers, distinct from `Local Overlays` and
       `Project Summary`.
-- [ ] The section's content contains only universal, cross-cutting rules — no
+- [x] The section's content contains only universal, cross-cutting rules — no
       project-specific content.
-- [ ] "Editing Discipline" no longer exists as unmarked, hand-duplicated free text
+- [x] "Editing Discipline" no longer exists as unmarked, hand-duplicated free text
       in `docs/templates/AGENTS.md` — it lives only in the new managed section (or
       is otherwise fully deduplicated against the global file's copy — final call
       at implementation time).
-- [ ] A sync mechanism (via `init`/`apply` or a new command) rewrites just this
+- [x] A sync mechanism (via `init`/`apply` or a new command) rewrites just this
       block in an existing `AGENTS.md` without disturbing any other content,
       reusing the existing `cleanSectionMD`-style primitive.
-- [ ] Harnez's own project `AGENTS.md` is migrated: its Editing Discipline (and any
+- [x] Harnez's own project `AGENTS.md` is migrated: its Editing Discipline (and any
       other now-managed content) comes from the new managed block, not
       hand-duplicated text; its project-specific extra sections remain as
       free-form custom content, untouched.
-- [ ] `docs/templates/AGENTS.md` contains no mention of harnez's own internal
+- [x] `docs/templates/AGENTS.md` contains no mention of harnez's own internal
       template/self-management mechanics — that context stays local to harnez's
       own `AGENTS.md` only, and is not authored by this ticket's implementation.
-- [ ] No unrelated docs/config/generated files are modified beyond this scope.
+- [x] No unrelated docs/config/generated files are modified beyond this scope.
 
 ## 4. Migration & Verification Plan
 
@@ -134,3 +134,34 @@ reconcile on re-apply than many.
    clobber that project's local customizations.
 5. `git diff`/`git status` to confirm scope: only the intended config/template/code
    files plus the migrated `AGENTS.md` files changed.
+
+## 5. Implementation Notes
+
+- The mechanism already existed end-to-end (`AgentsMDTarget.Sections`, `init.go`'s
+  `applySectionMD` loop, `status.go`'s presence checks, `docs_capture.go`'s drift
+  compare) — no schema change was needed, just config content, a template edit, and
+  a migration.
+- **Real bug found and fixed**: `DiffAll` (`internal/claude/apply.go`) unconditionally
+  checked `agents_md.local.Sections` for drift, but `ApplyAll` never writes them —
+  that's exclusively `init`'s job, per `buildAgentProfileTestConfig`'s own doc comment
+  in `agents_profile_test.go`. This was latent dead code (harmless while
+  `local.sections` was empty) that broke six unrelated tests the moment content was
+  added, since `agents_md.local.Target` is the relative path `AGENTS.md` — resolved
+  against whatever the process's CWD happened to be, not the target under diff.
+  Removed the check from `DiffAll` rather than making `ApplyAll` write local sections,
+  per this repo's own CLI-scope-separation rule (`apply` is global-only, `init` is
+  project-only). Added `TestRunInit_AppliesManagedConventionsSection` for regression
+  coverage of the intended (correct) path.
+- Migration of harnez's own `AGENTS.md` was a one-time hand-edit, not something
+  `init` can do automatically — `markdown.Apply`/`applySection` only replaces content
+  between existing markers or appends at EOF; it never removes unmarked free text.
+  Confirmed via `internal/markdown/markdown.go`. This means any other already-`init`'d
+  project that had the same free-text duplication needs the same one-time manual
+  cleanup; the new managed block will otherwise just land appended at the end of its
+  `AGENTS.md` on next `init`, coexisting with (not replacing) the stale free text.
+- **Follow-up filed as issue 312**: `config.yaml`'s `agents_md.global.sections`
+  ("Instructions Hierarchy") still independently hand-duplicates "Editing Discipline"
+  and part of "Issue Tracker Discovery", and the two copies have since drifted to
+  different wording — so the de-duplication this ticket set out to fix is 2-of-3, not
+  3-of-3. Acceptable per this ticket's own AC #4 (explicitly left as an implementation
+  call), but worth closing separately.

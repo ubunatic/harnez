@@ -450,3 +450,60 @@ func TestCheckProjectDrift(t *testing.T) {
 	}
 }
 
+// TestRunInit_AppliesManagedConventionsSection verifies issue 311's core
+// contract: agents_md.local.sections are written into an existing AGENTS.md
+// alongside its custom content, without duplicating on a second run.
+func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/managedconv\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	initialAgentsMD := `# Custom Project Working Agreement
+
+- Preamble: hand-authored, must survive init.
+
+## Custom Downstream Section
+- Project-specific rule that must survive init.
+`
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	if err := os.WriteFile(agentsPath, []byte(initialAgentsMD), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		t.Fatalf("first RunInit failed: %v", err)
+	}
+	first, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(first)
+
+	if n := strings.Count(content, "<!-- harnez:begin Harnez Managed Conventions -->"); n != 1 {
+		t.Errorf("expected exactly one Harnez Managed Conventions section, got %d in:\n%s", n, content)
+	}
+	if !strings.Contains(content, "### Editing Discipline") {
+		t.Errorf("expected Editing Discipline inside the managed section, got:\n%s", content)
+	}
+	if !strings.Contains(content, "# Custom Project Working Agreement") ||
+		!strings.Contains(content, "## Custom Downstream Section") {
+		t.Errorf("expected hand-authored custom content to survive, got:\n%s", content)
+	}
+
+	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		t.Fatalf("second RunInit failed: %v", err)
+	}
+	second, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(second) != content {
+		t.Errorf("expected RunInit to be idempotent, got a diff between runs:\nfirst:\n%s\nsecond:\n%s", content, second)
+	}
+}
