@@ -172,7 +172,7 @@ commands:
     file: commands/sync-mattpocock-skills.md
 
   - name: sprint
-    description: "Orchestrate a 5-phase agentic sprint loop (Advisors -> Dev -> Review -> Hygiene -> Retro)"
+    description: "Orchestrate a 5-phase agentic sprint loop (Sequential Advisor -> Reusable Dev -> Review -> Hygiene -> Retro)"
     file: commands/sprint.md
 
   - name: fresh-sprint
@@ -241,7 +241,7 @@ skills:
     file: commands/domain-modeling.md
 
   - name: sprint
-    description: "Orchestrate a 5-phase agentic sprint loop (Advisors -> Dev -> Review -> Hygiene -> Retro)"
+    description: "Orchestrate a 5-phase agentic sprint loop (Sequential Advisor -> Reusable Dev -> Review -> Hygiene -> Retro)"
     file: commands/sprint.md
 
   - name: fresh-sprint
