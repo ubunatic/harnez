@@ -26,8 +26,8 @@ instead of `ls issues/`, `find`, or raw grep:
 - `harnez find -d <repo> issues next` — report the next free ticket number (read-only)
 - `harnez issues new -d <repo> "<title>"` — atomically reserve that number and create
   a placeholder ticket file; write the ticket to the printed path
-- `harnez issues <verb> -d <repo> <n> [reason]` — change a ticket's status, resync
-  `issues/README.md`, and commit, in one call
+- `harnez issues <verb> -d <repo> <n> [reason]` — change a ticket's status and resync
+  `issues/README.md`, in one call
 - `harnez index -d <repo>` — update `issues/README.md` after filing or updating tickets
 - Commit documentation and `issues/*.md` changes immediately; don't batch them behind
   pending code work.
@@ -135,8 +135,12 @@ Adhere to the following conventions.
 
 Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
+- Canary-first development @docs/Canary.md,
+  probe external mechanisms before building features on them
+- Feature prototyping @docs/PrototypingFeatures.md,
+  canary-first is the feature-prototyping practice; separate runtime isolation and rollout flags
 - Go/Golang @docs/Go.md,
-  Modern Go, avoid deps but use Cobra, add tests
+  Modern Go, avoid deps but use Cobra, add tests; use runes and display width for terminal layout
 - Bash/Shell @docs/Bash.md,
   Read before multi-line shell: Make recipes, embedded scripts
   No ";", break before then/else/docs
@@ -149,16 +153,12 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   PascalCase for evergreens, kebab-case for ephemeral docs; ASCII art in chat, Mermaid only in docs/
 - Git @docs/Git.md,
   conventional commits, work on the default branch, don't push unless asked
-- Canary-first development @docs/Canary.md,
-  probe external mechanisms before building features on them
-- Feature prototyping @docs/PrototypingFeatures.md,
-  canary-first is the pre-build prototyping and mechanism-isolation practice
 - Spec system @docs/Spec.md,
   YAML spec files as single source of truth; Go code must not duplicate spec values
 - Issue Tracking Practices @docs/IssueTracking.md,
   P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
 - Agentic Loop Practices @docs/AgenticLoop.md,
   5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
-- Testing @docs/Testing.md,
-  optional lookup for test-layer selection and advanced verification cases
+- Release Pipeline @docs/GoRelease.md,
+  harnez release, version.yaml spec, GoReleaser v2, non-interactive minisign (-W), Forgejo has_releases, language-agnostic (Go/Python/Zig/Rust/scripted)
 <!-- harnez:end Language Conventions -->
