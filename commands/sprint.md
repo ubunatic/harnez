@@ -19,7 +19,7 @@ Follow these 5 phases sequentially:
 
 ### Phase 1: Sequential Advisory Discovery (One Reusable Advisor)
 1. Parse the target tickets or goals from the prompt.
-2. Reuse the current advisor session if available; otherwise start one reusable advisor with a frontier model. Record its session ID and model. Use this same advisor for every ticket, one at a time; never dispatch the next ticket before the previous ticket's compaction completes.
+2. Reuse the current advisor session if available; a closed or parked advisor remains eligible for native reuse. Start a new reusable advisor with a frontier model only when no compatible session exists or the existing one has an explicit health/compatibility failure, such as the Codex usage-limit dead-session behavior. Record its session ID and model. Use this same advisor for every ticket, one at a time; never dispatch the next ticket before the previous ticket's compaction completes.
 3. Hand the advisor one ticket or bounded goal at a time. Instruct it to:
    - Audit problem statements in `issues/` and related code paths using targeted `grep_search` and range-bounded reads (avoid whole-file reads on `AGENTS.md` or active prompt rules).
    - Check whether work is already completed or if prior assumptions changed.
