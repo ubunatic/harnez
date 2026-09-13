@@ -1,6 +1,6 @@
 # 326 — Record every harnez CLI invocation into a durable cli_invocations telemetry table
 
-**Status**: Draft
+**Status**: Closed — resolved in ef5dd30
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
