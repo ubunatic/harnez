@@ -48,17 +48,18 @@ func rewriteBareNumericLimit(args []string) []string {
 }
 
 // rewriteArgsForBareLimit scans a full harnez argv (excluding the program
-// name) and applies rewriteBareNumericLimit only to the two invocation
-// shapes issue 318 scopes the shorthand to: `harnez find ...` and `harnez
-// issues list ...`. Every other command -- including every other `issues`
-// verb, where a bare number is a ticket-number positional argument, not a
-// limit -- is left untouched.
+// name) and applies rewriteBareNumericLimit only to the invocation shapes
+// the shorthand is scoped to: `harnez find ...` and `harnez issues list ...`
+// (issue 318), plus `harnez log ...` (issue 327, where `harnez log -5` is
+// the direct `git log -5` analogue this command is modelled on). Every
+// other command -- including every other `issues` verb, where a bare number
+// is a ticket-number positional argument, not a limit -- is left untouched.
 func rewriteArgsForBareLimit(args []string) []string {
 	if len(args) == 0 {
 		return args
 	}
 	switch args[0] {
-	case "find":
+	case "find", "log":
 		return append(args[:1:1], rewriteBareNumericLimit(args[1:])...)
 	case "issues":
 		if len(args) > 1 && args[1] == "list" {

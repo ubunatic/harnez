@@ -24,6 +24,15 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `distill` | Shell / Hooks | Distill verbose command outputs for context conservation |
 | `release` | Local / Repo | Language-agnostic version bump, build, minisign signing, and forge publishing |
 | `find`  | Local / Repo | Fast repository entity discovery with short fuzzy-filter grammar (`issues`) |
+| `log`   | Harnez's own invocation record | Chronological `git log`-shaped stream of harnez CLI invocations (`cli_invocations`) |
+
+`log` is a third axis alongside `find` and `stats`, not a synonym for either: `find`
+reads **repository entities** (tickets, docs), `stats` and `dochistory` render
+**aggregates** over tool calls and managed docs, and `log` replays **harnez's own
+invocations** — which subcommand ran, when, where, by whom, and whether it succeeded.
+It takes no subcommands by design, so it can never grow wrappers that duplicate
+`harnez stats`, `harnez find issues history`, `harnez dochistory`, or
+`git log -- docs/ issues/`.
 
 `apply` and `init` operate on disjoint flag surfaces by design. `apply` takes `-t`
 (Claude config dir); `init` takes `-d` (project dir). They cannot be confused.

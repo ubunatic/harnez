@@ -19,6 +19,16 @@ type Filter struct {
 	Project   string    // filters on project_name (issue 227)
 	Since     time.Time // rows with created_at >= Since, if non-zero
 	Until     time.Time // rows with created_at < Until, if non-zero
+
+	// Command and FailedOnly apply only to QueryCLIInvocations (issue 326):
+	// cli_invocations has a command column where tool_calls has tool_name,
+	// and `harnez log --failed` needs a non-string predicate that no
+	// tool_calls consumer wants. They live on this shared Filter (rather
+	// than in a second filter type) per issue 326's scope note, and are
+	// ignored by whereClause below — the tool_calls query path never sees
+	// them.
+	Command    string
+	FailedOnly bool // rows with a non-NULL, non-zero exit_code
 }
 
 // whereClause builds a "WHERE ..." SQL fragment (or "" if unfiltered) and
@@ -52,6 +62,129 @@ func (f Filter) whereClause() (string, []any) {
 		return "", nil
 	}
 	return " WHERE " + strings.Join(clauses, " AND "), args
+}
+
+// cliWhereClause is whereClause's cli_invocations counterpart: the same
+// "zero-value fields are ignored" contract, restricted to the columns that
+// table actually has. It is a separate builder rather than a flag on
+// whereClause because the two tables genuinely differ (no tool_name /
+// call_type here; no command / exit-code predicate there) — splicing a
+// `command = ?` clause into a tool_calls query would be a runtime SQL
+// error, so the split is enforced structurally.
+func (f Filter) cliWhereClause() (string, []any) {
+	var clauses []string
+	var args []any
+
+	add := func(col, val string) {
+		if val != "" {
+			clauses = append(clauses, col+" = ?")
+			args = append(args, val)
+		}
+	}
+	add("agent_id", f.AgentID)
+	add("ticket_id", f.TicketID)
+	add("session_id", f.SessionID)
+	add("project_name", f.Project)
+	add("command", f.Command)
+	if f.FailedOnly {
+		clauses = append(clauses, "exit_code IS NOT NULL AND exit_code != 0")
+	}
+	if !f.Since.IsZero() {
+		clauses = append(clauses, "created_at >= ?")
+		args = append(args, f.Since.Format(time.RFC3339Nano))
+	}
+	if !f.Until.IsZero() {
+		clauses = append(clauses, "created_at < ?")
+		args = append(args, f.Until.Format(time.RFC3339Nano))
+	}
+
+	if len(clauses) == 0 {
+		return "", nil
+	}
+	return " WHERE " + strings.Join(clauses, " AND "), args
+}
+
+// QueryCLIInvocations returns the cli_invocations rows matching f, newest
+// first, capped at limit (a limit <= 0 means uncapped — `harnez log --all`).
+// All filtering is pushed into SQL: issue 327 explicitly forbids fetching
+// an unbounded result set and post-filtering it in Go.
+func (d *DB) QueryCLIInvocations(f Filter, limit int) ([]CLIInvocation, error) {
+	where, args := f.cliWhereClause()
+	query := `
+		SELECT id, created_at, session_id, agent_id, command, args, project_name,
+		       working_dir, ticket_id, exit_code, duration_ms, harnez_version
+		FROM cli_invocations` + where + `
+		ORDER BY created_at DESC, id DESC`
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
+
+	ctx, cancel := defaultContext()
+	defer cancel()
+
+	rows, err := d.sql.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("telemetry: query cli invocations: %w", err)
+	}
+	defer rows.Close()
+
+	var out []CLIInvocation
+	for rows.Next() {
+		var c CLIInvocation
+		var createdAt string
+		if err := rows.Scan(
+			&c.ID, &createdAt, &c.SessionID, &c.AgentID, &c.Command, &c.Args,
+			&c.ProjectName, &c.WorkingDir, &c.TicketID, &c.ExitCode,
+			&c.DurationMs, &c.HarnezVersion,
+		); err != nil {
+			return nil, fmt.Errorf("telemetry: scan cli invocation row: %w", err)
+		}
+		parsed, err := time.Parse(time.RFC3339Nano, createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: parse created_at %q: %w", createdAt, err)
+		}
+		c.CreatedAt = parsed
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("telemetry: query cli invocation rows: %w", err)
+	}
+	return out, nil
+}
+
+// CLIInvocationCounts returns how many cli_invocations rows match f,
+// grouped by command — the per-subcommand call counts issue 328 hands to
+// internal/sessionstate at the sessionTipHook boundary so that package can
+// stop maintaining its own duplicate counter without gaining a DB
+// dependency. The total is the sum of the returned map's values.
+func (d *DB) CLIInvocationCounts(f Filter) (map[string]int, error) {
+	where, args := f.cliWhereClause()
+	ctx, cancel := defaultContext()
+	defer cancel()
+
+	rows, err := d.sql.QueryContext(ctx, `
+		SELECT command, COUNT(*)
+		FROM cli_invocations`+where+`
+		GROUP BY command`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("telemetry: cli invocation counts: %w", err)
+	}
+	defer rows.Close()
+
+	out := map[string]int{}
+	for rows.Next() {
+		var command string
+		var count int
+		if err := rows.Scan(&command, &count); err != nil {
+			return nil, fmt.Errorf("telemetry: scan cli invocation count: %w", err)
+		}
+		out[command] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("telemetry: cli invocation count rows: %w", err)
+	}
+	return out, nil
 }
 
 // Query returns the tool_calls rows matching f, newest first.

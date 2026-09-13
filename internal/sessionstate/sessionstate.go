@@ -105,6 +105,52 @@ func Save(stateDir string, s State) error {
 	return os.WriteFile(Path(stateDir, s.SessionID), data, 0o644)
 }
 
+// ApplyCounts replaces s's Total and per-subcommand Count fields with
+// counts sourced elsewhere, leaving every other field (LastAt timestamps,
+// FirstCallAt, and the tip/rate bookkeeping this package owns) untouched.
+//
+// Issue 328: once cli_invocations (issue 326) records every invocation, it
+// holds a strict superset of the *counting* half of this package's state,
+// and leaving both to count independently is a guaranteed drift source. But
+// TotalAtLastTip, LastRateAt, and TotalAtLastRate exist nowhere else, so
+// this is a split, not a deletion: the durable table owns counting, this
+// package keeps owning tip bookkeeping. The counts cross the boundary as a
+// plain map so sessionstate gains no DB dependency and stays a pure,
+// easily-unit-tested package — exactly as unratedFailures already does for
+// GapTip.
+//
+// Callers pass the counts as of *before* the current invocation and then
+// call Record for it, so the in-flight call (whose cli_invocations row is
+// only written after the command body completes) is still counted. When the
+// telemetry DB is unavailable, callers skip this entirely and the JSON
+// state file's own counts stand unchanged — the tip heuristics must keep
+// working with no DB at all.
+func ApplyCounts(s *State, calls map[string]int) {
+	if calls == nil {
+		return
+	}
+	if s.Calls == nil {
+		s.Calls = map[string]Invocation{}
+	}
+	total := 0
+	for name, count := range calls {
+		inv := s.Calls[name]
+		inv.Count = count
+		s.Calls[name] = inv
+		total += count
+	}
+	// Subcommands present in the JSON file but absent from calls were
+	// recorded when the DB was unavailable (or pruned since). Keep them: the
+	// find-underuse tip reads a per-subcommand Count, and silently zeroing a
+	// command the session demonstrably ran would make the tip lie.
+	for name, inv := range s.Calls {
+		if _, ok := calls[name]; !ok {
+			total += inv.Count
+		}
+	}
+	s.Total = total
+}
+
 // Record updates s in place for one invocation of subcommand at time now.
 func Record(s *State, subcommand string, now time.Time) {
 	if s.Total == 0 && s.FirstCallAt.IsZero() {

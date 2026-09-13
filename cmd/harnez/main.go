@@ -46,6 +46,16 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	now := time.Now()
+	// Issue 328: cli_invocations (issue 326) is the authoritative count of
+	// what this session has run, so the counting half of sessionstate's
+	// state is re-sourced from it here rather than accumulated twice.
+	// ApplyCounts lands the durable baseline first; Record then adds the
+	// in-flight invocation, whose own row is only written after the command
+	// body returns. A nil map (no DB, unreadable DB, empty table) means the
+	// JSON file's own counts stand and the tips keep working unchanged.
+	if dbPath, err := telemetry.DefaultDBPath(); err == nil {
+		sessionstate.ApplyCounts(&s, sessionCallCounts(dbPath, sessionID))
+	}
 	sessionstate.Record(&s, cmd.Name(), now)
 
 	// feedbackDisabled mirrors issue 142's opt-out: a session with the Tool
@@ -586,9 +596,11 @@ func main() {
 	}
 	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
 
-	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newCodexHookCmd(), newLintCmd())
-	root.SetArgs(rewriteArgsForBareLimit(os.Args[1:]))
-	if err := root.Execute(); err != nil {
+	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newCodexHookCmd(), newLintCmd(), newLogCmd())
+	// executeAndRecord, not root.Execute, is the entry point: issue 326's
+	// cli_invocations row can only be written from here, around Execute —
+	// see cmd/harnez/clilog.go for why neither of Cobra's hook points works.
+	if err := executeAndRecord(root, os.Args[1:], cliLogOptions{}); err != nil {
 		os.Exit(1)
 	}
 }

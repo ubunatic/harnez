@@ -22,3 +22,25 @@ type ToolCall struct {
 	RawBytes       int64
 	DistilledBytes *int64 // populated only when distillation ran; nil (SQL NULL) otherwise
 }
+
+// CLIInvocation is one row of the cli_invocations table (issue 326): a
+// single `harnez <subcommand>` run. Field set mirrors the columns in
+// schemaDDL (schema.go) exactly, same rule as ToolCall above.
+//
+// Unlike ToolCall this carries json tags: `harnez log --json` (issue 327)
+// emits the row slice directly, so the wire names are part of that
+// command's contract rather than an accident of Go field naming.
+type CLIInvocation struct {
+	ID            int64     `json:"id"` // assigned by SQLite (AUTOINCREMENT); ignored on insert
+	CreatedAt     time.Time `json:"created_at"`
+	SessionID     string    `json:"session_id"`
+	AgentID       string    `json:"agent_id"` // issue 328's vocabulary: "agent:<id>" / "human" / "unknown"
+	Command       string    `json:"command"`  // full cobra path without the root, e.g. "issues new"
+	Args          string    `json:"args"`     // redacted at write time; never raw argv
+	ProjectName   string    `json:"project_name"`
+	WorkingDir    string    `json:"working_dir"`
+	TicketID      string    `json:"ticket_id"`
+	ExitCode      *int      `json:"exit_code"` // nil only for a row whose command never returned (not written today)
+	DurationMs    int64     `json:"duration_ms"`
+	HarnezVersion string    `json:"harnez_version"`
+}

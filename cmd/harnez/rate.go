@@ -40,6 +40,18 @@ var rateAgentEnvVars = []struct {
 // detectAgent resolves the agent_id to record: --agent flag, then
 // $HARNEZ_AGENT, then the first matching entry in rateAgentEnvVars, else
 // "unknown". getenv is injected for tests; nil means os.Getenv.
+//
+// The "unknown" return here is a shrug, not a classification: it means "no
+// agent env var was found", which conflates a human at a terminal with an
+// agent that exports nothing harnez recognises (resolve.SessionEnvVars
+// documents two of its entries as unconfirmed guesses). tool_calls rows are
+// written by an agent deliberately calling `harnez rate`/`harnez exec`, so
+// that ambiguity is harmless there. It is NOT harmless for
+// cli_invocations.agent_id, which records unattended invocations including
+// a human's — see classifyInvoker (cmd/harnez/attribution.go) and issue
+// 328, which wraps this function in the documented
+// "agent:<id>" / "human" / "unknown" vocabulary that `harnez log --human` /
+// `--agent` filter on.
 func detectAgent(flagValue string, getenv func(string) string) string {
 	if flagValue != "" {
 		return flagValue

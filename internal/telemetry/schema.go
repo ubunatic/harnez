@@ -96,4 +96,43 @@ CREATE TABLE IF NOT EXISTS issue_status_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_issue_status_snapshots_project     ON issue_status_snapshots (project_name);
 CREATE INDEX IF NOT EXISTS idx_issue_status_snapshots_created_at  ON issue_status_snapshots (created_at);
+
+-- cli_invocations backs issue 326: one row per harnez CLI invocation --
+-- which subcommand ran, when, in which project, by whom, and whether it
+-- succeeded -- written from main() around root.Execute() (cmd/harnez's
+-- executeAndRecord) and read back by harnez log (issue 327). It is
+-- deliberately a separate table from tool_calls rather than a fifth
+-- call_type on it: tool_calls rows are *deliberate* agent-authored
+-- telemetry (a rating, a wrapped shell command) whose aggregates
+-- (GroupStats.FailureCount, UnratedFailureCount, the rate-overhead report)
+-- are tuned around that assumption. Folding an automatic per-invocation
+-- row into the same table would silently change every one of those numbers.
+--
+-- Purely additive table (no schemaVersion bump needed) -- CREATE TABLE IF
+-- NOT EXISTS applies it to a pre-existing database file on next Open, same
+-- reasoning as the three tables above.
+--
+-- args is redacted at write time (see cmd/harnez/clilog.go's redactArgs):
+-- flag names are kept, flag values and unsafe-looking positionals are
+-- replaced with a placeholder. Raw argv is never stored -- it can carry
+-- absolute paths, hostnames (usage --host), and ticket titles.
+CREATE TABLE IF NOT EXISTS cli_invocations (
+	id             INTEGER PRIMARY KEY AUTOINCREMENT,
+	created_at     TEXT    NOT NULL,
+	session_id     TEXT    NOT NULL,
+	agent_id       TEXT    NOT NULL,
+	command        TEXT    NOT NULL,
+	args           TEXT    NOT NULL DEFAULT '',
+	project_name   TEXT    NOT NULL DEFAULT '',
+	working_dir    TEXT    NOT NULL DEFAULT '',
+	ticket_id      TEXT    NOT NULL DEFAULT '',
+	exit_code      INTEGER,
+	duration_ms    INTEGER NOT NULL DEFAULT 0 CHECK (duration_ms >= 0),
+	harnez_version TEXT    NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_cli_invocations_created_at ON cli_invocations (created_at);
+CREATE INDEX IF NOT EXISTS idx_cli_invocations_project    ON cli_invocations (project_name);
+CREATE INDEX IF NOT EXISTS idx_cli_invocations_session_id ON cli_invocations (session_id);
+CREATE INDEX IF NOT EXISTS idx_cli_invocations_command    ON cli_invocations (command);
 `
