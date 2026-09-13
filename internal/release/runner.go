@@ -217,15 +217,16 @@ func Run(opt Options) error {
 		}
 	}
 
-	// 7. Check Forgejo / Codeberg Releases unit
+	// 7. Check Forgejo / Codeberg Releases unit via fj (shares auth with publish step)
 	forge, err := DetectForgeInfo(opt.Dir)
 	if err == nil && forge != nil {
-		token := GetForgeToken(forge.Host)
-		if token != "" {
-			enabled, err := EnsureHasReleases(forge, token, opt.DryRun)
-			if err != nil {
+		if opt.DryRun {
+			fmt.Fprintf(opt.Out, "  [dry-run]   Would verify/enable 'has_releases' via fj\n")
+		} else {
+			cmd := exec.Command("fj", "repo", "units", "releases", "--enable", "true", "-C", opt.Dir)
+			if err := cmd.Run(); err != nil {
 				fmt.Fprintf(opt.Out, "  [forge]     Warning: could not verify 'has_releases' (non-fatal)\n")
-			} else if enabled {
+			} else {
 				fmt.Fprintf(opt.Out, "  [forge]     Verified/Enabled 'has_releases' on %s/%s\n", forge.Owner, forge.Repo)
 			}
 		}
