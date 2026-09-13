@@ -233,6 +233,9 @@ func findGoModules(root string) ([]string, []string, error) {
 	var dirs []string
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
+			if path != root {
+				return filepath.SkipDir
+			}
 			return walkErr
 		}
 		if entry.IsDir() && path != root && ignoredModuleScanDir(entry.Name()) {
@@ -263,8 +266,11 @@ func findGoModules(root string) ([]string, []string, error) {
 }
 
 func ignoredModuleScanDir(name string) bool {
+	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
+		return true
+	}
 	switch name {
-	case ".git", ".hg", ".svn", "node_modules", "vendor":
+	case "node_modules", "vendor", "testdata":
 		return true
 	default:
 		return false

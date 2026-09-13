@@ -250,14 +250,14 @@ Every ticket in `issues/NNN-kebab-case.md` begins with standard metadata headers
 | Command | Flags | What it does |
 |---|---|---|
 | `apply` | `-c` `-t` `-d` `--force-docs` | Sync global Claude, Gemini, Codex, and Prime Agent rules, prompts, skills, and docs |
-| `init` | `-c` `-d` `--docs` `-m` `--summary` `--update` `--replace` `-y` | Set up a project: AGENTS.md, doc copies, Makefile targets |
+| `init` | `-c` `-d` `-f` `--docs` `-m` `--summary` `--update` `--replace` `-y` | Set up a project: AGENTS.md, doc copies, Makefile targets |
 | `diff` | `-c` `-t` `-e` `--capture-docs` `--out` | Preview changes without writing (`-e, --exit-code` exits with 1 on drift; `--capture-docs` writes report to inbox) |
 | `scan-docs` | `-c <dir>` | Read-only scan of child projects for managed doc drift |
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
 | `status` | `-c` `-t` | Print config summary and check which items are present on disk |
 | `assess` | `[path]` `--json` | Fast code/doc metrics, token estimation, and repo feasibility report |
 | `mode` | `[level]` `--status` `--clear` | Switch ConciseMode terseness level and sync AGENTS.local.md overlay |
-| `distill` | `[hook\|filter]` | Distill verbose command outputs for agent context conservation |
+| `distill` | `[hook|filter]` | Distill verbose command outputs for agent context conservation |
 | `release` | `--bump` `--continue` `--dry-run` `-s` | Language-agnostic version bump, build, minisign signing, and forge publishing |
 | `usage` | `--json` `--agent` `--offline` `-w` `-s` `--interval` | Show unified token, session, and quota status across AI coding agents (aliases: `quota`, `tokens`, `stats`) |
 | `find <entity> <query…>` | `-d` | Fuzzy-text/filter query over repository-data entities (`issues` only in v1) |
@@ -287,6 +287,7 @@ All commands accept `-c <path>` (config file, default: embedded).
 `init` also accepts:
 
 - `-d <dir>` — project directory (default: `.`)
+- `-f, --force` — allow initializing home directory, root, or non-coding directory
 - `--docs <name>[,<name>…]` — doc(s) to set up in the project (comma-separated or repeated)
 - `-m, --repo-mode <mode>` — repo git setup to note in AGENTS.md (`solo`, `fork`, `team`)
 - `--summary` — run `claude -p` to generate an AI project summary in AGENTS.md

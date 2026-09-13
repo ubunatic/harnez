@@ -67,8 +67,9 @@ by-product: there is no `--project` flag anymore.
 ## init flow
 
 ```
-harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]]
+harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]] [--force]
         │
+        ├── validate target directory (refuses $HOME, root, or non-coding dirs without --force)
         ├── check for project drift (go.mod module vs. git origin vs. directory name)
         ├── create AGENTS.md (template) if absent
         ├── create CLAUDE.md symlink → AGENTS.md
@@ -85,7 +86,7 @@ harnez init [-d <dir>] [--docs <name>...] [--issues-git[=false]]
                 └── inject targets block into existing Makefile
 ```
 
-All steps are idempotent. Running `init --docs golang` twice is safe.
+All steps are idempotent. Running `init --docs golang` twice is safe. Running in non-coding repositories or `$HOME` is rejected unless `--force` (`-f`) is explicitly passed.
 
 ## Copyable-doc contract
 

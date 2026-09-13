@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -247,6 +248,9 @@ func TestIntegrationWorkflow(t *testing.T) {
 
 	// 10. Run project init (without CLI summary)
 	projDir := t.TempDir()
+	if err := exec.Command("git", "-C", projDir, "init", "-q").Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
 	err = claude.RunInit(projDir, nil, nil, "", false, false, false, false)
 	if err != nil {
 		t.Fatalf("RunInit failed: %v", err)

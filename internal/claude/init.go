@@ -367,21 +367,186 @@ func initialAgentsMD(cfg *Config) string {
 	return "Adhere to the following conventions.\n"
 }
 
+var projectManifestNames = map[string]struct{}{
+	"go.mod":              {},
+	"go.work":             {},
+	"go.work.example":     {},
+	"Cargo.toml":          {},
+	"Cargo.lock":          {},
+	"package.json":        {},
+	"pnpm-workspace.yaml": {},
+	"Makefile":            {},
+	"GNUmakefile":         {},
+	"makefile":            {},
+	"justfile":            {},
+	"Taskfile.yml":        {},
+	"Taskfile.yaml":       {},
+	"CMakeLists.txt":      {},
+	"meson.build":         {},
+	"build.zig":           {},
+	"build.zig.zon":       {},
+	"pyproject.toml":      {},
+	"setup.py":            {},
+	"setup.cfg":           {},
+	"requirements.txt":    {},
+	"Pipfile":             {},
+	"pom.xml":             {},
+	"build.gradle":        {},
+	"build.gradle.kts":    {},
+	"Gemfile":             {},
+	"Containerfile":       {},
+	"Dockerfile":          {},
+	"docker-compose.yml":  {},
+	"docker-compose.yaml": {},
+	"compose.yaml":        {},
+	"compose.yml":         {},
+	"AGENTS.md":           {},
+	"CLAUDE.md":           {},
+}
+
+var sourceFileExtensions = map[string]struct{}{
+	".go":    {},
+	".rs":    {},
+	".py":    {},
+	".c":     {},
+	".cpp":   {},
+	".cc":    {},
+	".cxx":   {},
+	".h":     {},
+	".hpp":   {},
+	".hxx":   {},
+	".zig":   {},
+	".ts":    {},
+	".js":    {},
+	".mjs":   {},
+	".cjs":   {},
+	".sh":    {},
+	".bash":  {},
+	".java":  {},
+	".rb":    {},
+	".php":   {},
+	".swift": {},
+	".kt":    {},
+	".kts":   {},
+	".scala": {},
+	".lua":   {},
+	".nim":   {},
+	".hs":    {},
+}
+
+var codeSubdirectories = map[string]struct{}{
+	"src":      {},
+	"cmd":      {},
+	"internal": {},
+	"lib":      {},
+	"pkg":      {},
+	"scripts":  {},
+	"app":      {},
+	"issues":   {},
+	"spec":     {},
+}
+
+func isEligibleProjectDir(dir string) bool {
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+		return true
+	}
+	cmd := exec.Command("git", "-C", dir, "rev-parse", "--is-inside-work-tree")
+	if out, err := cmd.Output(); err == nil && strings.TrimSpace(string(out)) == "true" {
+		return true
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if _, ok := projectManifestNames[name]; ok {
+			return true
+		}
+		if !entry.IsDir() {
+			ext := strings.ToLower(filepath.Ext(name))
+			if _, ok := sourceFileExtensions[ext]; ok {
+				return true
+			}
+		} else {
+			if _, ok := codeSubdirectories[strings.ToLower(name)]; ok {
+				if name == "issues" || name == "spec" {
+					return true
+				}
+				subEntries, err := os.ReadDir(filepath.Join(dir, name))
+				if err == nil {
+					for _, subEntry := range subEntries {
+						subName := subEntry.Name()
+						if _, ok := projectManifestNames[subName]; ok {
+							return true
+						}
+						subExt := strings.ToLower(filepath.Ext(subName))
+						if _, ok := sourceFileExtensions[subExt]; ok {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// ValidateInitTarget checks whether dir is safe to initialize.
+// It refuses the user's home directory, root directory, or non-coding directory unless force is true.
+func ValidateInitTarget(dir string, force bool) error {
+	if force {
+		return nil
+	}
+
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("resolve directory: %w", err)
+	}
+
+	if home, herr := os.UserHomeDir(); herr == nil {
+		if homeAbs, aerr := filepath.Abs(home); aerr == nil && abs == homeAbs {
+			return fmt.Errorf("refusing to run init directly on home directory %s; use --force to override", abs)
+		}
+	}
+
+	if abs == "/" || filepath.Dir(abs) == abs {
+		return fmt.Errorf("refusing to run init directly on root directory %s; use --force to override", abs)
+	}
+
+	if !isEligibleProjectDir(abs) {
+		return fmt.Errorf("refusing to run init in %s: directory is not a Git repository and contains no recognized project or source files; use --force to override", abs)
+	}
+
+	return nil
+}
+
 // RunInit creates AGENTS.md and CLAUDE.md symlink in a project directory,
 // applies config-defined local sections, and sets up language docs and Makefile targets.
 func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool) error {
-	return RunInitWithIssuesGit(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, nil)
+	return RunInitWithForce(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, nil, false, false)
 }
 
 // RunInitWithIssuesGit runs project initialization and, when issuesGit is
 // non-nil, explicitly enables or disables the issue tracker Git integration.
 // A nil value leaves that integration untouched.
 func RunInitWithIssuesGit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool) error {
-	return RunInitWithGoWork(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, issuesGit, false)
+	return RunInitWithForce(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, issuesGit, false, false)
 }
 
 // RunInitWithGoWork runs project initialization and supports explicit --gowork management.
 func RunInitWithGoWork(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool, gowork bool) error {
+	return RunInitWithForce(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, issuesGit, gowork, false)
+}
+
+// RunInitWithForce runs project initialization with explicit --gowork and --force support.
+func RunInitWithForce(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool, gowork bool, force bool) error {
+	if err := ValidateInitTarget(dir, force); err != nil {
+		return err
+	}
 	if cfg != nil {
 		if err := validateDocNames(cfg, docs); err != nil {
 			return err

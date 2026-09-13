@@ -169,6 +169,9 @@ It is completely managed manually by the administrator.
 
 func TestRunInit_CustomTemplate(t *testing.T) {
 	dir := t.TempDir()
+	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
 
 	cfg, err := claude.LoadConfigEmbedded()
 	if err != nil {
@@ -505,5 +508,119 @@ func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
 	}
 	if string(second) != content {
 		t.Errorf("expected RunInit to be idempotent, got a diff between runs:\nfirst:\n%s\nsecond:\n%s", content, second)
+	}
+}
+
+func TestRunInit_RefusesHomeDirectoryWithoutForce(t *testing.T) {
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("cannot resolve home directory: %v", err)
+	}
+	err = claude.RunInit(home, cfg, nil, "", false, false, false, false)
+	if err == nil {
+		t.Fatal("expected RunInit to refuse home directory without force, got nil error")
+	}
+	if !strings.Contains(err.Error(), "home directory") {
+		t.Errorf("expected home directory safety error, got: %v", err)
+	}
+}
+
+func TestRunInit_RefusesNonCodingDirectoryWithoutForce(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	err = claude.RunInit(dir, cfg, nil, "", false, false, false, false)
+	if err == nil {
+		t.Fatal("expected RunInit to refuse empty non-coding directory without force, got nil error")
+	}
+	if !strings.Contains(err.Error(), "not a Git repository and contains no recognized project or source files") {
+		t.Errorf("expected non-coding directory safety error, got: %v", err)
+	}
+}
+
+func TestRunInit_AllowsNonCodingDirectoryWithForce(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	err = claude.RunInitWithForce(dir, cfg, nil, "", true, false, false, false, nil, false, true)
+	if err != nil {
+		t.Fatalf("expected RunInitWithForce to succeed with force=true, got: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err != nil {
+		t.Errorf("expected AGENTS.md to be created: %v", err)
+	}
+}
+
+func TestRunInit_AllowsCodingRepositories(t *testing.T) {
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	cases := []struct {
+		name  string
+		setup func(dir string)
+	}{
+		{
+			name: "git repository",
+			setup: func(dir string) {
+				_ = exec.Command("git", "-C", dir, "init", "-q").Run()
+			},
+		},
+		{
+			name: "cargo toml",
+			setup: func(dir string) {
+				_ = os.WriteFile(filepath.Join(dir, "Cargo.toml"), []byte("[package]\nname = \"demo\"\n"), 0o644)
+			},
+		},
+		{
+			name: "package json",
+			setup: func(dir string) {
+				_ = os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}\n"), 0o644)
+			},
+		},
+		{
+			name: "makefile",
+			setup: func(dir string) {
+				_ = os.WriteFile(filepath.Join(dir, "Makefile"), []byte("all:\n"), 0o644)
+			},
+		},
+		{
+			name: "source file in src",
+			setup: func(dir string) {
+				_ = os.MkdirAll(filepath.Join(dir, "src"), 0o755)
+				_ = os.WriteFile(filepath.Join(dir, "src", "main.py"), []byte("print('hello')\n"), 0o644)
+			},
+		},
+		{
+			name: "issues directory",
+			setup: func(dir string) {
+				_ = os.MkdirAll(filepath.Join(dir, "issues"), 0o755)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			tc.setup(dir)
+			if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+				t.Fatalf("expected RunInit to succeed for %s, got: %v", tc.name, err)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err != nil {
+				t.Errorf("expected AGENTS.md to be created: %v", err)
+			}
+		})
 	}
 }

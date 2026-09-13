@@ -170,3 +170,25 @@ func assertNotExists(t *testing.T, path string) {
 	}
 }
 
+func TestFindGoModules_IgnoresDotDirsAndTestData(t *testing.T) {
+	root := t.TempDir()
+	writeGoModule(t, root, "example.com/root")
+	writeGoModule(t, filepath.Join(root, ".cache", "mod1"), "example.com/cache")
+	writeGoModule(t, filepath.Join(root, ".git", "mod2"), "example.com/git")
+	writeGoModule(t, filepath.Join(root, "testdata", "fixture1"), "example.com/fixture")
+	writeGoModule(t, filepath.Join(root, "subpkg"), "example.com/subpkg")
+
+	dirs, args, err := findGoModules(root)
+	if err != nil {
+		t.Fatalf("findGoModules failed: %v", err)
+	}
+
+	if len(dirs) != 2 {
+		t.Fatalf("expected 2 discovered modules (root and subpkg), got %d: %v", len(dirs), dirs)
+	}
+	if len(args) != 2 || args[0] != "." || args[1] != "./subpkg" {
+		t.Fatalf("unexpected module args: %v", args)
+	}
+}
+
+
