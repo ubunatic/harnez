@@ -1,6 +1,6 @@
 # 327 — harnez log top-level verb: chronological invocation history across projects
 
-**Status**: Draft
+**Status**: Closed — resolved in ef5dd30
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
