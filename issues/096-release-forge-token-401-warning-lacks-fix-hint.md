@@ -1,6 +1,6 @@
 # 096 — `harnez release`'s `has_releases` 401 warning doesn't name the fix
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug

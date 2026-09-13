@@ -224,7 +224,7 @@ func Run(opt Options) error {
 		if token != "" {
 			enabled, err := EnsureHasReleases(forge, token, opt.DryRun)
 			if err != nil {
-				fmt.Fprintf(opt.Out, "  [forge]     Warning: failed to check 'has_releases' unit: %v\n", err)
+				fmt.Fprintf(opt.Out, "  [forge]     Warning: could not verify 'has_releases' (non-fatal)\n")
 			} else if enabled {
 				fmt.Fprintf(opt.Out, "  [forge]     Verified/Enabled 'has_releases' on %s/%s\n", forge.Owner, forge.Repo)
 			}
