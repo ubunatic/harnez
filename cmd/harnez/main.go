@@ -495,7 +495,7 @@ func main() {
 				}
 				fmt.Printf("Captured managed docs drift in %s\n", path)
 				if diffExitCode && changed {
-					os.Exit(1)
+					return silenceIfExitCode(cmd, &exitCodeError{Code: 1})
 				}
 				return nil
 			}
@@ -505,7 +505,7 @@ func main() {
 				return err
 			}
 			if diffExitCode && changed {
-				os.Exit(1)
+				return silenceIfExitCode(cmd, &exitCodeError{Code: 1})
 			}
 			return nil
 		},
@@ -601,6 +601,6 @@ func main() {
 	// cli_invocations row can only be written from here, around Execute —
 	// see cmd/harnez/clilog.go for why neither of Cobra's hook points works.
 	if err := executeAndRecord(root, os.Args[1:], cliLogOptions{}); err != nil {
-		os.Exit(1)
+		os.Exit(exitCodeFromRunError(err))
 	}
 }

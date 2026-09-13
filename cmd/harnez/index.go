@@ -57,7 +57,7 @@ logged (DEBUG=1) and otherwise swallowed -- they never fail this command.
 View recorded snapshots with 'harnez find issues history'.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runIndex(cmd.OutOrStdout(), indexOptions{Dir: dir, Check: check})
+			return silenceIfExitCode(cmd, runIndex(cmd.OutOrStdout(), indexOptions{Dir: dir, Check: check}))
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/ and docs/")
@@ -247,7 +247,7 @@ func runIndexCheck(w io.Writer, issuesReadme, issuesDir, docsReadme, docsDir str
 	}
 
 	if drift {
-		os.Exit(1)
+		return &exitCodeError{Code: 1}
 	}
 	return nil
 }

@@ -150,7 +150,7 @@ points an agent's Bash tool calls at this command.`,
 				return err
 			}
 			if exitCode != 0 {
-				os.Exit(exitCode)
+				return silenceIfExitCode(cmd, &exitCodeError{Code: exitCode})
 			}
 			return nil
 		},

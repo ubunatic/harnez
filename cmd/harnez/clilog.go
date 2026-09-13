@@ -217,10 +217,7 @@ func recordCLIInvocation(root *cobra.Command, argv, rewritten []string, elapsed 
 	}
 	defer db.Close()
 
-	exitCode := 0
-	if runErr != nil {
-		exitCode = 1
-	}
+	exitCode := exitCodeFromRunError(runErr)
 	wd, err := os.Getwd()
 	if err != nil {
 		wd = ""

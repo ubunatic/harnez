@@ -42,7 +42,7 @@ the wrapped command's exit code:
 			}
 
 			if len(args) > 0 {
-				return runDistillWrapper(args, opts)
+				return silenceIfExitCode(cmd, runDistillWrapper(args, opts))
 			}
 
 			input, err := io.ReadAll(os.Stdin)
@@ -165,7 +165,7 @@ func runDistillWrapper(args []string, opts distill.Options) error {
 	var exitErr *exec.ExitError
 	if runErr != nil {
 		if errors.As(runErr, &exitErr) {
-			os.Exit(exitErr.ExitCode())
+			return &exitCodeError{Code: exitErr.ExitCode()}
 		}
 		return fmt.Errorf("run %v: %w", args, runErr)
 	}

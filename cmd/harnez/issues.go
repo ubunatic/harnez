@@ -220,7 +220,7 @@ valid, exit-0 answer.`,
 				}
 				printIssuesResult(cmd.OutOrStdout(), result, opts)
 				if opts.Check && drift {
-					os.Exit(1)
+					return silenceIfExitCode(cmd, &exitCodeError{Code: 1})
 				}
 				return nil
 			}
@@ -230,7 +230,7 @@ valid, exit-0 answer.`,
 			}
 			printIssuesResult(cmd.OutOrStdout(), result, opts)
 			if opts.Check && drift {
-				os.Exit(1)
+				return silenceIfExitCode(cmd, &exitCodeError{Code: 1})
 			}
 			return nil
 		},
