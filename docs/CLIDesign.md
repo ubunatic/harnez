@@ -45,6 +45,36 @@ Commands designed for exploratory use in agentic loops or interactive terminals 
 2. **Forgiving Zero-Arg Defaults**: Running an exploratory command with zero arguments or filters should surface recent/high-level items instead of throwing a usage error.
 3. **Deterministic Ranking & Output**: Keep output parsable (e.g. TSV without ANSI escapes) with stable tie-breaking.
 
+## Exit codes: never `os.Exit` inside `RunE`
+
+`os.Exit` terminates the process immediately, so nothing after it in the call stack ever
+runs — including `main()`'s `executeAndRecord` (issue 326), the one place that writes a
+`cli_invocations` row for `harnez log`. Every command that called `os.Exit` directly from
+inside `RunE` (`index --check`, `issues --check`, `diff --exit-code`, `exec`, `distill`'s
+subprocess wrapper) was invisible to `harnez log` until fixed, not merely mis-recorded —
+see `docs/studies/2026-09-13-cli-invocation-log-exit-code-anti-pattern-and-self-pollution.md`.
+
+The rule, and the mechanism that makes it easy to follow, live in
+`cmd/harnez/exitcode.go`:
+
+- A `RunE` that needs a specific process exit code (not the plain 0/1 a returned error
+  otherwise maps to — a `git diff`-style drift signal, or a wrapped subprocess's own exit
+  code) returns `&exitCodeError{Code: n}` instead of calling `os.Exit`.
+- `main()`, after `root.Execute()` returns, is the **only** place that calls `os.Exit`,
+  via `exitCodeFromRunError` (do not confuse with `exec.go`'s own `exitCodeFromError`,
+  which extracts a *wrapped subprocess's* shell-convention code from an `*exec.ExitError` —
+  a different mapping over a different kind of error).
+- `silenceIfExitCode(cmd, err)` sets `cmd.SilenceErrors`/`cmd.SilenceUsage` only when `err`
+  is the sentinel, so Cobra prints nothing extra for a signal the command already reported
+  itself. This works because Cobra reads both fields at print time, after `RunE` returns —
+  not at command-construction time — so setting them from deep inside `RunE`, immediately
+  before returning the sentinel, leaves the same command's other, genuine error returns
+  printing exactly as before. Do not set `SilenceErrors`/`SilenceUsage: true` on the command
+  struct itself just to cover this one path; that would also swallow real errors.
+
+When adding a new command that needs a non-1 exit code, use this pattern from the start —
+do not reach for `os.Exit`.
+
 ## Why the separation matters
 
 Before the split, `apply` accepted both `-t <claude-dir>` and `-p <project-dir>`.

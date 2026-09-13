@@ -11,6 +11,25 @@ boundary or depends on the real environment.
   `internal/claude/integration_test.go`, CLI tests under `cmd/harnez/`, and
   tests using temporary files, HTTP servers, subprocess seams, or PTYs cover
   interactions across package and operating-system boundaries.
+
+  **Isolate the real binary's state with `t.Setenv("HOME", tmpDir)`, not
+  invented env vars.** A test that builds and runs the actual compiled
+  `harnez` binary as a subprocess (e.g. `cmd/harnez/exec_test.go`'s
+  `TestGearMulticallExecution`) cannot pass Go structs to isolate its
+  DB/state path the way an in-process test does (`testExecOptions.DBPath`,
+  `statsOptions.DBPath`, `logOptions.DBPath`, etc.) — the only channels are
+  argv, env, and cwd/`$HOME`. `telemetry.DefaultDBPath()` and
+  `resolve.DefaultStateDir()` resolve **only** from `os.UserHomeDir()`; there
+  is no `HARNEZ_DB_PATH`/`HARNEZ_STATE_DIR` (or any other path-shaped)
+  production override today (see issue 331/332). A test that invents such an
+  env var and never verifies it took effect will silently write into the
+  *developer's real* `~/.harnez/tool_catalog.sqlite` on every run — this
+  happened for months before it was caught, because the polluted rows
+  (project `"harnez"`, command `exec`) are indistinguishable from genuine
+  usage. Use `t.Setenv("HOME", tmpDir)` for real isolation, the pattern
+  `internal/claude/bash_shim_test.go` already uses, and assert against the
+  DB/state path *under that overridden `$HOME`* rather than a path nothing
+  reads.
 - **Static checks** — `make check` runs `go vet ./...` and `go test ./...`
   with `GOWORK=off`; `make lint` checks registered command documentation.
 - **Smoke tests** — `make smoke` runs `scripts/smoke-test.sh`, which builds the
