@@ -1,6 +1,6 @@
 # 328 — Human vs agent invocation attribution and retiring the duplicate sessionstate call counter
 
-**Status**: Draft
+**Status**: Closed — resolved in ef5dd30
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Refactor
