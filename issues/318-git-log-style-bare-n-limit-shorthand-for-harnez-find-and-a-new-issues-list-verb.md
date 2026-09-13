@@ -1,6 +1,6 @@
 # 318 — git-log-style bare -N limit shorthand for harnez find and a new issues list verb
 
-**Status**: Open
+**Status**: Closed — resolved in 29729d1
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
