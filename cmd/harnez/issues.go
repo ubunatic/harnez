@@ -68,6 +68,8 @@ func newIssuesCmd() *cobra.Command {
 	var noCommitFlag bool
 	var commitMsgFlag string
 	var cachedFlag bool
+	var limitFlag int
+	var allFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "issues <verb> <ticket-number> [reason...]",
@@ -108,6 +110,12 @@ Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
                     prints the plan without changing Git state.
   lint              Read-only validation for duplicate numbers, conflicting
                     filename/H1 numbers, and generated-index drift.
+  list [filter]     Read-only: list tickets matching [filter] (default:
+                    "is:open"), a thin wrapper over 'harnez find issues' --
+                    not a status-mutation verb, and does not accept
+                    --check/--dry-run/--commit/--no-commit. Supports the
+                    same -n/--limit/--all flags as 'find', plus the bare
+                    git-log-style '-N' shorthand (e.g. 'issues list -3').
 
 'close' with no reason writes bare "Closed", never an auto-fabricated
 "Closed — resolved" -- both are common in the corpus and this command does
@@ -131,10 +139,13 @@ exit, actionable stderr) -- unlike 'harnez find', where zero matches is a
 valid, exit-0 answer.`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return fmt.Errorf("issues: requires a verb (open, start, block, close, draft, new, mv, rebase, lint)")
+				return fmt.Errorf("issues: requires a verb (open, start, block, close, draft, new, mv, rebase, lint, list)")
 			}
 			if args[0] == "new" {
 				return nil // [title] is optional, no ticket-number argument exists yet
+			}
+			if args[0] == "list" {
+				return nil // [filter] is optional, defaults to "is:open"
 			}
 			if args[0] == "mv" {
 				if len(args) < 2 || len(args) > 3 {
@@ -184,6 +195,12 @@ valid, exit-0 answer.`,
 				title := strings.TrimSpace(strings.Join(args[1:], " "))
 				return runIssuesNew(cmd.OutOrStdout(), dir, title, jsonFlag)
 			}
+			if args[0] == "list" {
+				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
+					return fmt.Errorf("issues list: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
+				}
+				return runIssuesList(cmd.OutOrStdout(), dir, args[1:], jsonFlag, limitFlag, allFlag)
+			}
 			opts := issuesRunOptions{
 				Dir:       dir,
 				Check:     checkFlag || dryRunFlag,
@@ -225,8 +242,24 @@ valid, exit-0 answer.`,
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "output a single JSON object instead of a text line")
 	cmd.Flags().BoolVar(&noCommitFlag, "no-commit", false, "rewrite the ticket file and README but do not git add/commit")
 	cmd.Flags().StringVar(&commitMsgFlag, "commit", "", `override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")`)
+	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 10, "with 'list': limit results (default: newest 10)")
+	cmd.Flags().BoolVarP(&allFlag, "all", "a", false, "with 'list': show all matching results")
 
 	return cmd
+}
+
+// runIssuesList implements the read-only `harnez issues list [filter]`
+// verb (issue 318): a thin wrapper over find's existing issues-query engine
+// rather than a second, diverging filter/limit implementation, so the two
+// commands never drift on ranking/filtering semantics. Defaults to the
+// "is:open" filter when no filter text is given; an explicit filter always
+// replaces the default rather than being ANDed with it.
+func runIssuesList(w io.Writer, dir string, filterArgs []string, jsonOutput bool, limit int, all bool) error {
+	filter := strings.TrimSpace(strings.Join(filterArgs, " "))
+	if filter == "" {
+		filter = "is:open"
+	}
+	return runFindWithOptions(w, dir, []string{"issues", filter}, false, jsonOutput, "", limit, all)
 }
 
 // composeNewStatus renders the "**Status**:" value a verb+reason pair
