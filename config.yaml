@@ -207,6 +207,28 @@ commands:
     description: "Local LLM server lifecycle management, fast interactive prompt streaming with session continuity, and sandboxed coding agent execution"
     file: commands/lmcoder.md
 
+  - name: release
+    description: "Lean CLI release: commit pending code, push, run harnez release, fix issues or ask on login"
+    file: commands/release.md
+
+  - name: commit
+    description: "Commit all pending code, including stray issues/docs changes, into a clean working tree"
+    content: |
+      Run `git status`. Stage and commit all pending changes, including stray
+      issues/ or docs/ files that weren't part of the current task, provided
+      you are either the author of that code or have done a quick sanity check
+      on stray docs content. Goal: a clean working tree. This is manual-only —
+      do not treat this command as a trigger for auto-commit behavior elsewhere
+      in the session.
+
+  - name: pull
+    description: "git pull, resolve conflicts if needed, summarize what changed"
+    content: |
+      Run `git pull`. If conflicts arise, resolve them and explain the
+      resolution. Summarize what was pulled using `git log` (author, count,
+      one-line themes). Only inspect the full diff if the log summary is
+      insufficient to explain a change.
+
 
 skills_target: ~/.gemini/skills
 codex_skills_target: ~/.codex/skills
