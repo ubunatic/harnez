@@ -583,7 +583,6 @@ func TestRunExecHook_IgnoresGearCommand(t *testing.T) {
 	}
 }
 
-
 func TestIsGearInvocation(t *testing.T) {
 	cases := []struct {
 		arg0 string
@@ -656,6 +655,26 @@ func TestGearMulticallExecution(t *testing.T) {
 		t.Fatalf("create symlink failed: %v", err)
 	}
 
+	// This test runs the real compiled binary, which now (issue 326) writes
+	// a cli_invocations row on every invocation via main()'s
+	// executeAndRecord, on top of the pre-existing tool_calls/sessionstate
+	// writes `exec` itself performs. Both telemetry.DefaultDBPath and
+	// resolve.DefaultStateDir resolve purely from os.UserHomeDir() -- there
+	// never was a HARNEZ_DB_PATH/HARNEZ_STATE_DIR override in production
+	// code, so the env vars of those names set below were silently inert
+	// and every subprocess invocation was actually writing into the
+	// *developer's real* ~/.harnez/tool_catalog.sqlite (indistinguishable
+	// from genuine usage: cwd is this package directory, so project_name
+	// recorded as plain "harnez"). t.Setenv("HOME", ...) redirects
+	// os.UserHomeDir() for the whole test -- the only override point that
+	// actually exists -- matching the isolation pattern
+	// internal/claude/bash_shim_test.go already uses.
+	fakeHome := filepath.Join(binDir, "home")
+	if err := os.MkdirAll(fakeHome, 0o755); err != nil {
+		t.Fatalf("create fake home: %v", err)
+	}
+	t.Setenv("HOME", fakeHome)
+
 	// 1. Test basic command execution: ⚙ echo hello
 	cmd := exec.Command(gearPath, "echo", "hello from gear")
 	cmd.Env = append(os.Environ(), "HARNEZ_DISABLE_RATE_FEEDBACK=1", "ANTIGRAVITY_CONVERSATION_ID=", "CLAUDE_CONVERSATION_ID=")
@@ -684,13 +703,8 @@ func TestGearMulticallExecution(t *testing.T) {
 	}
 
 	// 3. Test telemetry recording with --tool and --expect-failure flags
-	stateDir := filepath.Join(binDir, "state")
-	dbPath := filepath.Join(binDir, "telemetry.sqlite")
 	cmd = exec.Command(gearPath, "--tool", "custom-tool", "--expect-failure", "--", "sh", "-c", "exit 3")
-	cmd.Env = append(os.Environ(),
-		"HARNEZ_STATE_DIR="+stateDir,
-		"HARNEZ_DB_PATH="+dbPath,
-	)
+	cmd.Env = os.Environ()
 	err = cmd.Run()
 	if err == nil {
 		t.Fatal("expected exit code 3")
@@ -699,19 +713,26 @@ func TestGearMulticallExecution(t *testing.T) {
 		t.Errorf("exit code = %d, want 3", exitErr.ExitCode())
 	}
 
-	// Verify telemetry row
+	// Verify telemetry row, under the isolated fakeHome this test actually
+	// controls (there is no env-var override to point at a different path).
+	dbPath := filepath.Join(fakeHome, ".harnez", "tool_catalog.sqlite")
 	db, dbErr := telemetry.Open(dbPath)
-	if dbErr == nil {
-		defer db.Close()
-		rows, qErr := db.Query(telemetry.Filter{CallType: telemetry.ExpectedFailureCallType})
-		if qErr == nil && len(rows) > 0 {
-			if rows[0].ToolName != "custom-tool" {
-				t.Errorf("tool_name = %q, want custom-tool", rows[0].ToolName)
-			}
-			if rows[0].ExitCode == nil || *rows[0].ExitCode != 3 {
-				t.Errorf("exit_code = %v, want 3", rows[0].ExitCode)
-			}
-		}
+	if dbErr != nil {
+		t.Fatalf("open isolated telemetry db %s: %v", dbPath, dbErr)
+	}
+	defer db.Close()
+	rows, qErr := db.Query(telemetry.Filter{CallType: telemetry.ExpectedFailureCallType})
+	if qErr != nil {
+		t.Fatalf("query telemetry rows: %v", qErr)
+	}
+	if len(rows) == 0 {
+		t.Fatal("expected at least one expected-failure telemetry row, got none")
+	}
+	if rows[0].ToolName != "custom-tool" {
+		t.Errorf("tool_name = %q, want custom-tool", rows[0].ToolName)
+	}
+	if rows[0].ExitCode == nil || *rows[0].ExitCode != 3 {
+		t.Errorf("exit_code = %v, want 3", rows[0].ExitCode)
 	}
 }
 
@@ -821,6 +842,3 @@ func TestAlreadyRoutedThroughExec_WithEnvPrefix(t *testing.T) {
 		}
 	}
 }
-
-
-
