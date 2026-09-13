@@ -1,6 +1,6 @@
 # 320 — Safeguard harnez init against home directory and non-coding repositories with --force flag
 
-**Status**: Open
+**Status**: Closed — implemented target directory safeguards and --force flag for init
 **Priority**: P1 (High)
 **Severity**: High
 **Category**: Bug
@@ -45,9 +45,9 @@ While `harnez init --all` previously contained a safety check refusing `$HOME` (
 
 ## 4. Acceptance Criteria
 
-- [ ] `harnez init` fails with a clear message when run in `$HOME` without `--force`.
-- [ ] `harnez init` fails with a clear message when run in root `/` without `--force`.
-- [ ] `harnez init` fails with a clear message when run in an empty non-coding directory without `--force`.
-- [ ] `harnez init --force` succeeds in home, root, or empty non-coding directories.
-- [ ] `harnez init` succeeds without `--force` in valid Git repositories or directories with project/source manifests.
-- [ ] `findGoModules` does not hard-fail on unreadable or permission-restricted subdirectories.
+- [x] `harnez init` fails with a clear message when run in `$HOME` without `--force`.
+- [x] `harnez init` fails with a clear message when run in root `/` without `--force`.
+- [x] `harnez init` fails with a clear message when run in an empty non-coding directory without `--force`.
+- [x] `harnez init --force` succeeds in home, root, or empty non-coding directories.
+- [x] `harnez init` succeeds without `--force` in valid Git repositories or directories with project/source manifests.
+- [x] `findGoModules` does not hard-fail on unreadable or permission-restricted subdirectories.
