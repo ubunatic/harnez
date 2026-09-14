@@ -6,15 +6,22 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"flag"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
+	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -54,13 +61,15 @@ func main() {
 
 	fs := flag.NewFlagSet("macos-podman", flag.ExitOnError)
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, `Usage: go run ./scripts/macos-podman [run|stop|status|clean] [flags]
+		fmt.Fprintf(os.Stderr, `Usage: go run ./scripts/macos-podman [run|stop|status|boot-status|screenshot|clean] [flags]
 
 Actions:
-  run       Start macOS container (default)
-  stop      Stop running macOS container (bounded timeout)
-  status    Show status, ports, and readiness check
-  clean     Stop and remove container and storage directory
+  run          Start macOS container (default)
+  stop         Stop running macOS container (bounded timeout)
+  status       Show basic status, endpoints, and quick HTTP check
+  boot-status  Comprehensive boot diagnosis, guest stages, logs & screenshot
+  screenshot   Capture current guest screen to PNG
+  clean        Stop and remove container and storage directory
 
 Flags:
 `)
@@ -89,7 +98,7 @@ SSH:            ssh -p %d localhost
 	args := os.Args[1:]
 	if len(args) > 0 {
 		switch args[0] {
-		case "run", "stop", "status", "clean":
+		case "run", "stop", "status", "boot-status", "boot", "screenshot", "clean":
 			cfg.action = args[0]
 			args = args[1:]
 		default:
@@ -112,6 +121,14 @@ SSH:            ssh -p %d localhost
 		err = doStop(ctx, cfg)
 	case "status":
 		err = doStatus(ctx, cfg)
+	case "boot-status", "boot":
+		err = doBootStatus(ctx, cfg)
+	case "screenshot":
+		outputPath := "/tmp/macos_screen.png"
+		if fs.NArg() > 0 {
+			outputPath = fs.Arg(0)
+		}
+		err = doScreenshot(ctx, cfg, outputPath)
 	case "clean":
 		err = doClean(ctx, cfg)
 	default:
@@ -329,3 +346,250 @@ func printEndpoints(cfg config) {
 		fmt.Printf("  Storage: %s (persistent)\n", cfg.storageDir)
 	}
 }
+
+func doBootStatus(ctx context.Context, cfg config) error {
+	exists, running := containerRunning(ctx, cfg.name)
+	fmt.Printf("Container: %s (version: macOS %s)\n", cfg.name, cfg.version)
+	fmt.Printf("  State:    exists=%v running=%v\n", exists, running)
+	if !running {
+		fmt.Println("  Status:   Guest is not running. Run 'go run ./scripts/macos-podman run' to start.")
+		return nil
+	}
+
+	printEndpoints(cfg)
+
+	fmt.Println("\n--- Service Probes ---")
+	// 1. Web UI probe
+	client := http.Client{Timeout: 1 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://localhost:%d", cfg.httpPort))
+	if err == nil {
+		resp.Body.Close()
+		fmt.Printf("  Web (noVNC): HTTP %s (Active)\n", resp.Status)
+	} else {
+		fmt.Printf("  Web (noVNC): Down (%v)\n", err)
+	}
+
+	// 2. VNC probe
+	if banner, err := probeTCPBanner(cfg.vncPort, 1*time.Second); err == nil {
+		fmt.Printf("  VNC Server:  Active (%s)\n", strings.TrimSpace(banner))
+	} else {
+		fmt.Printf("  VNC Server:  Unreachable (%v)\n", err)
+	}
+
+	// 3. SSH probe
+	if banner, err := probeTCPBanner(cfg.sshPort, 1*time.Second); err == nil {
+		fmt.Printf("  SSH Server:  Active (%s)\n", strings.TrimSpace(banner))
+	} else {
+		fmt.Println("  SSH Server:  Waiting for macOS guest daemon to start...")
+	}
+
+	fmt.Println("\n--- QEMU / Hypervisor Status ---")
+	if qmpStatus, err := queryQEMUMonitor(ctx, cfg.name, "info status"); err == nil {
+		for _, line := range strings.Split(qmpStatus, "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "VM status:") {
+				fmt.Printf("  VM State:    %s\n", line)
+			}
+		}
+	}
+	if qmpCPUs, err := queryQEMUMonitor(ctx, cfg.name, "info cpus"); err == nil {
+		for _, line := range strings.Split(qmpCPUs, "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "* CPU") || strings.HasPrefix(line, "CPU") {
+				fmt.Printf("  QEMU CPUs:   %s\n", line)
+			}
+		}
+	}
+
+	fmt.Println("\n--- Bootloader & Kernel Diagnostic Inspection ---")
+	stage := assessBootStage(ctx, cfg.name)
+	fmt.Printf("  Current Boot Stage: %s\n", stage)
+
+	fmt.Println("\n--- Guest Screen Capture ---")
+	screenshotPath := "/tmp/macos_screen.png"
+	w, h, err := captureGuestScreen(ctx, cfg.name, screenshotPath)
+	if err == nil {
+		fmt.Printf("  Screenshot:  Captured %dx%d -> %s\n", w, h, screenshotPath)
+	} else {
+		fmt.Printf("  Screenshot:  Capture failed: %v\n", err)
+	}
+
+	return nil
+}
+
+func doScreenshot(ctx context.Context, cfg config, outPath string) error {
+	exists, running := containerRunning(ctx, cfg.name)
+	if !exists || !running {
+		return fmt.Errorf("container %q is not running", cfg.name)
+	}
+	w, h, err := captureGuestScreen(ctx, cfg.name, outPath)
+	if err != nil {
+		return fmt.Errorf("failed to capture screenshot: %w", err)
+	}
+	fmt.Printf("Saved screenshot (%dx%d) to %s\n", w, h, outPath)
+	return nil
+}
+
+func assessBootStage(ctx context.Context, name string) string {
+	logCmd := exec.CommandContext(ctx, "podman", "logs", "--tail", "100", name)
+	out, err := logCmd.Output()
+	if err != nil {
+		return "Unknown (logs unavailable)"
+	}
+	logs := string(out)
+
+	if strings.Contains(logs, "Kernel panic") || strings.Contains(logs, "panic(cpu") {
+		return "CRITICAL: Kernel Panic detected in serial logs"
+	}
+	if strings.Contains(logs, "HANDOFF TO XNU") {
+		return "Stage 3/4: Kernel Active (XNU loaded, Apple logo displayed / Recovery initializing)"
+	}
+	if strings.Contains(logs, "OpenCore") || strings.Contains(logs, "BdsDxe") {
+		return "Stage 2/4: OpenCore EFI Bootloader initializing"
+	}
+	if strings.Contains(logs, "Booting macOS using QEMU") {
+		return "Stage 1/4: QEMU hypervisor initialized"
+	}
+	return "Stage 1/4: Container starting"
+}
+
+func probeTCPBanner(port int, timeout time.Duration) (string, error) {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), timeout)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	buf := make([]byte, 256)
+	n, err := conn.Read(buf)
+	if err != nil && n == 0 {
+		return "Connected (no initial banner)", nil
+	}
+	return string(buf[:n]), nil
+}
+
+func queryQEMUMonitor(ctx context.Context, name, command string) (string, error) {
+	pyScript := fmt.Sprintf(`
+import socket
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(2.0)
+s.connect('/dev/shm/monitor.sock')
+s.sendall(b'%s\n')
+out = b''
+try:
+    while True:
+        c = s.recv(1024)
+        if not c: break
+        out += c
+except:
+    pass
+s.close()
+print(out.decode('utf-8', errors='ignore'))
+`, command)
+
+	cmd := exec.CommandContext(ctx, "podman", "exec", name, "python3", "-c", pyScript)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+func captureGuestScreen(ctx context.Context, name string, outPath string) (int, int, error) {
+	dumpScript := `
+import socket
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(2.0)
+s.connect('/dev/shm/monitor.sock')
+s.sendall(b'screendump /dev/shm/screen.ppm\n')
+s.close()
+`
+	cmd := exec.CommandContext(ctx, "podman", "exec", name, "python3", "-c", dumpScript)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return 0, 0, fmt.Errorf("screendump command failed: %s: %w", string(out), err)
+	}
+
+	catCmd := exec.CommandContext(ctx, "podman", "exec", name, "cat", "/dev/shm/screen.ppm")
+	ppmData, err := catCmd.Output()
+	if err != nil {
+		return 0, 0, fmt.Errorf("read screen.ppm failed: %w", err)
+	}
+
+	return convertPPMToPNG(ppmData, outPath)
+}
+
+func convertPPMToPNG(ppmData []byte, outPath string) (int, int, error) {
+	reader := bufio.NewReader(bytes.NewReader(ppmData))
+
+	// 1. Read magic number
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return 0, 0, fmt.Errorf("read PPM magic: %w", err)
+	}
+	magic := strings.TrimSpace(line)
+	if magic != "P6" {
+		return 0, 0, fmt.Errorf("unsupported PPM format %q (expected P6)", magic)
+	}
+
+	// 2. Read dimensions (skipping comments)
+	for {
+		line, err = reader.ReadString('\n')
+		if err != nil {
+			return 0, 0, fmt.Errorf("read PPM dimensions: %w", err)
+		}
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "#") && len(line) > 0 {
+			break
+		}
+	}
+
+	dims := strings.Fields(line)
+	if len(dims) < 2 {
+		return 0, 0, fmt.Errorf("invalid PPM dimension line: %q", line)
+	}
+	width, err := strconv.Atoi(dims[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid width: %w", err)
+	}
+	height, err := strconv.Atoi(dims[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid height: %w", err)
+	}
+
+	// 3. Read maxval line
+	for {
+		line, err = reader.ReadString('\n')
+		if err != nil {
+			return 0, 0, fmt.Errorf("read PPM maxval: %w", err)
+		}
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "#") && len(line) > 0 {
+			break
+		}
+	}
+
+	// 4. Decode binary RGB pixels
+	img := image.NewNRGBA(image.Rect(0, 0, width, height))
+	buf := make([]byte, 3)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			if _, err := io.ReadFull(reader, buf); err != nil {
+				return 0, 0, fmt.Errorf("read pixel data at (%d,%d): %w", x, y, err)
+			}
+			img.SetNRGBA(x, y, color.NRGBA{R: buf[0], G: buf[1], B: buf[2], A: 255})
+		}
+	}
+
+	outFile, err := os.Create(outPath)
+	if err != nil {
+		return 0, 0, fmt.Errorf("create output file %s: %w", outPath, err)
+	}
+	defer outFile.Close()
+
+	if err := png.Encode(outFile, img); err != nil {
+		return 0, 0, fmt.Errorf("encode png: %w", err)
+	}
+
+	return width, height, nil
+}
+
