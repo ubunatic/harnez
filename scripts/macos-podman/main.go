@@ -270,7 +270,7 @@ func doRun(ctx context.Context, cfg config) error {
 
 	if isAMDCPU() {
 		fmt.Println("AMD CPU detected: applying Intel CPUID spoofing and disabling 64-bit PCI hole for macOS kernel stability...")
-		runArgs = append(runArgs, "-e", "ARGS=-cpu Haswell-noTSX,vendor=GenuineIntel -global q35-pcihost.pci-hole64-size=0", "-e", "QEMU_CPU=Haswell-noTSX")
+		runArgs = append(runArgs, "-e", "CPU_MODEL=Haswell-noTSX,stepping=3", "-e", "ARGS=-global q35-pcihost.pci-hole64-size=0")
 	}
 
 	if !cfg.noShared && cfg.sharedDir != "" {
@@ -533,27 +533,38 @@ func doScreenshot(ctx context.Context, cfg config, outPath string) error {
 }
 
 func assessBootStage(ctx context.Context, name string) string {
-	// First check live CPU registers for panic / fault
+	logCmd := exec.CommandContext(ctx, "podman", "logs", "--tail", "100", name)
+	out, err := logCmd.Output()
+	logs := ""
+	if err == nil {
+		logs = string(out)
+	}
+
+	if strings.Contains(logs, "Kernel panic") || strings.Contains(logs, "panic(cpu") || strings.Contains(logs, "machine_check.c") {
+		return "CRITICAL: Kernel Panic detected in serial logs"
+	}
+
+	// Check live CPU registers for halt/spin loop
 	if regOut, err := queryQEMUMonitor(ctx, name, "info registers"); err == nil {
-		cr2 := extractRegValue(regOut, "CR2=")
 		rip := extractRegValue(regOut, "RIP=")
-		if cr2 != "" && cr2 != "0000000000000000" {
-			return fmt.Sprintf("CRITICAL: Kernel Page Fault at 0x%s (RIP=0x%s)", cr2, rip)
+		if rip != "" {
+			if disOut, err := queryQEMUMonitor(ctx, name, "xp /4i 0x"+rip); err == nil {
+				if strings.Contains(disOut, "jmp") && strings.Contains(disOut, rip) {
+					cr2 := extractRegValue(regOut, "CR2=")
+					return fmt.Sprintf("CRITICAL: Kernel Spin Halt at RIP=0x%s (Fault Address: 0x%s)", rip, cr2)
+				}
+			}
 		}
 	}
 
-	logCmd := exec.CommandContext(ctx, "podman", "logs", "--tail", "100", name)
-	out, err := logCmd.Output()
-	if err != nil {
-		return "Unknown (logs unavailable)"
+	if strings.Contains(logs, "Language Chooser") || strings.Contains(logs, "macOS Utilities") {
+		return "Stage 4/4: macOS Recovery GUI Active (Interactive Shell ready: Utilities -> Terminal)"
 	}
-	logs := string(out)
-
-	if strings.Contains(logs, "Kernel panic") || strings.Contains(logs, "panic(cpu") {
-		return "CRITICAL: Kernel Panic detected in serial logs"
+	if strings.Contains(logs, "WindowServer") || strings.Contains(logs, "com.apple.xpc.launchd") {
+		return "Stage 3.5/4: macOS Userland Services (launchd active, WindowServer initializing)"
 	}
 	if strings.Contains(logs, "HANDOFF TO XNU") {
-		return "Stage 3/4: Kernel Active (XNU loaded, Apple logo displayed / Recovery initializing)"
+		return "Stage 3/4: Kernel Active (XNU loaded, Apple logo displayed)"
 	}
 	if strings.Contains(logs, "OpenCore") || strings.Contains(logs, "BdsDxe") {
 		return "Stage 2/4: OpenCore EFI Bootloader initializing"
@@ -808,17 +819,22 @@ func doInspect(ctx context.Context, cfg config) error {
 
 	// 4. Panic / Fault Analysis
 	fmt.Println("\n[Diagnosis]")
-	if cr2 != "" && cr2 != "0000000000000000" {
-		fmt.Printf("  ALERT: Page Fault detected at address 0x%s!\n", cr2)
-		if cr2 == "0000000000000040" || cr2 == "0000000000000000" {
-			fmt.Println("  Cause: Kernel NULL pointer dereference (e.g. unsupported PCIe/virtio device descriptor).")
+	if rip != "" {
+		if disOut, err := queryQEMUMonitor(ctx, cfg.name, fmt.Sprintf("xp /4i 0x%s", rip)); err == nil && strings.Contains(disOut, "jmp") && strings.Contains(disOut, rip) {
+			fmt.Printf("  ALERT: Kernel Spin Halt / Panic Loop detected at RIP=0x%s!\n", rip)
+			if cr2 == "0000000000000040" {
+				fmt.Println("  Cause: Kernel NULL pointer dereference (+0x40 in IOPMrootDomain / Power Management).")
+			}
+			return nil
 		}
-	} else if strings.HasPrefix(rip, "ffffff80") {
-		fmt.Println("  Status: Executing in 64-bit macOS XNU Kernel address space.")
-	} else if strings.HasPrefix(rip, "00007") {
-		fmt.Println("  Status: Executing in Userland space (GUI / launchd active).")
+	}
+
+	if cpl == "3" || strings.HasPrefix(rip, "00000001") || strings.HasPrefix(rip, "00007") {
+		fmt.Println("  Status: Active Userland execution (WindowServer / Recovery GUI / Apps active).")
+	} else if strings.HasPrefix(rip, "ffffff80") || strings.HasPrefix(rip, "ffffffb") {
+		fmt.Println("  Status: Active 64-bit macOS XNU Kernel execution (Drivers / IOKit / Syscalls).")
 	} else {
-		fmt.Println("  Status: Executing in EFI / Bootloader phase.")
+		fmt.Println("  Status: Active EFI / Bootloader execution.")
 	}
 
 	return nil
