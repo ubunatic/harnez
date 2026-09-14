@@ -1,0 +1,14 @@
+name: macos-hello
+on:
+  workflow_dispatch:
+jobs:
+  hello:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go version && uname -a
+      - run: go build ./...
+      - run: go test ./...
