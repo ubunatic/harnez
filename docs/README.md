@@ -104,6 +104,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-09-11-first-live-codex-advisor-design-gate-and-a-third-init-drop-recurrence.md](studies/2026-09-11-first-live-codex-advisor-design-gate-and-a-third-init-drop-recurrence.md) | First live harnez-advisor Codex design-review call, and a third live recurrence of the opt-in-doc-drop bug |
 | [studies/2026-09-13-cli-invocation-log-exit-code-anti-pattern-and-self-pollution.md](studies/2026-09-13-cli-invocation-log-exit-code-anti-pattern-and-self-pollution.md) | harnez log feature arc (cli_invocations, attribution, log verb), the os.Exit-in-RunE anti-pattern it exposed, and a telemetry self-pollution bug found while dogfooding it |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
+| [studies/MacOSContainerAMD.md](studies/MacOSContainerAMD.md) | macOS Containers on AMD KVM & Podman: Architecture, Quirks, and Diagnostic Guide |
 | [studies/RTKShellWrapperHandling.md](studies/RTKShellWrapperHandling.md) | RTK: Shell-Wrapper and Pipe Handling in Command-Rewrite Hooks |
 | [studies/Worktrees.md](studies/Worktrees.md) | Worktrees — learnings & TODOs |
 
