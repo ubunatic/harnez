@@ -94,3 +94,29 @@ Once Stage 4/4 is active:
    /shared/scripts/macos-hello/hello_darwin_amd64
    ```
 
+---
+
+## 6. Full macOS Installation onto Persistent Storage (`data.img`)
+
+To have a fully installed, real macOS operating system with persistent user accounts, daemons, and SSH access:
+
+### Step 1: Initialize Virtual Disk
+In the Recovery GUI (**[http://localhost:8006](http://localhost:8006)**):
+1. Launch **Disk Utility** from the macOS Utilities window (or run `diskutil eraseDisk APFS "Macintosh HD" GPT /dev/disk0` in Terminal).
+2. Select the uninitialized QEMU drive (64 GB).
+3. Click **Erase**:
+   * **Name**: `Macintosh HD`
+   * **Format**: `APFS`
+   * **Scheme**: `GUID Partition Map`
+4. Quit Disk Utility.
+
+### Step 2: Trigger macOS Installation
+1. Select **Reinstall macOS Big Sur** &rarr; **Continue**.
+2. Accept the software license agreement.
+3. Select **Macintosh HD** as the destination disk and click **Install**.
+4. The installer will download components from Apple and install the OS onto `./macos-storage/11/data.img`.
+
+### Step 3: Persistent Boot
+* Because `./macos-storage` is mapped persistently to `/storage` on the host, all installed OS files and state are saved in `./macos-storage/11/data.img`.
+* Subsequent boots will automatically detect the installed system and boot straight into the full macOS environment without passing through Recovery.
+
