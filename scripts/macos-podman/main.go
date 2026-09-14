@@ -774,27 +774,35 @@ func configureNoVNC(ctx context.Context, remoteHost, name string) {
 	_ = cmd2.Run()
 
 	// Patch vnc.html: inject a hostname-tinted favicon.
-	// Hashes window.location.hostname to a hue, applies hue-rotate+saturate
-	// to the existing favicon.svg via Canvas, and sets it as the page icon.
-	// Uses python3 to avoid shell quoting issues with the JS snippet.
+	// Fetches favicon.svg, injects a feColorMatrix hueRotate SVG filter derived
+	// from window.location.hostname, and sets it as the page icon via blob URL.
+	// Canvas is avoided because SVG images are tainted for canvas readback.
+	// Uses python3 to safely write the JS without shell quoting issues. Idempotent.
 	faviconScript := `
-import sys
+import sys, re
 path='/usr/share/novnc/vnc.html'
 html=open(path).read()
+html=re.sub(r'<script>\(function\(\)\{function hostnameHue.*?\}\)\(\);</script>','',html,flags=re.DOTALL)
 if 'hostnameHue' in html:
     sys.exit(0)
 s=(
     '<script>(function(){'
     'function hostnameHue(h){var n=0;for(var i=0;i<h.length;i++)n=(Math.imul(31,n)+h.charCodeAt(i))|0;return((n>>>0)%360);}'
-    'function setTintedFavicon(hue){var img=new Image();img.onload=function(){'
-    'var c=document.createElement("canvas");c.width=c.height=64;'
-    'var ctx=c.getContext("2d");'
-    'ctx.filter="hue-rotate("+hue+"deg) saturate(1.6) brightness(1.1)";'
-    'ctx.drawImage(img,0,0,64,64);'
+    'document.addEventListener("DOMContentLoaded",function(){'
+    'var hue=hostnameHue(window.location.hostname);'
+    'fetch("app/images/favicon.svg")'
+    '.then(function(r){return r.text();})'
+    '.then(function(svg){'
+    'var f="<filter id=\"hf\"><feColorMatrix type=\"hueRotate\" values=\""+hue+"\"/>'
+    '<feComponentTransfer><feSaturate values=\"1.8\"/></feComponentTransfer></filter>";'
+    'svg=svg.replace("<g>",f+"<g filter=\"url(#hf)\">");'
+    'var blob=new Blob([svg],{type:"image/svg+xml"});'
+    'var url=URL.createObjectURL(blob);'
     'var lnk=document.querySelector("link[rel=icon]")||document.createElement("link");'
-    'lnk.rel="icon";lnk.type="image/png";lnk.href=c.toDataURL("image/png");'
-    'document.head.appendChild(lnk);};img.src="app/images/favicon.svg";}'
-    'document.addEventListener("DOMContentLoaded",function(){setTintedFavicon(hostnameHue(window.location.hostname));});'
+    'lnk.rel="icon";lnk.type="image/svg+xml";lnk.href=url;'
+    'document.head.appendChild(lnk);'
+    '});'
+    '});'
     '})();</script>'
 )
 open(path,'w').write(html.replace('</head>',s+'</head>',1))
