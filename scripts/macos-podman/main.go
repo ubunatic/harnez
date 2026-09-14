@@ -459,10 +459,11 @@ func doSendText(ctx context.Context, cfg config, text string) error {
 		'*':  "shift-8",
 		'(':  "shift-9",
 		')':  "shift-0",
-		'!':  "shift-1",
-		'@':  "shift-2",
 		'#':  "shift-3",
 	}
+
+	text = strings.ReplaceAll(text, "\\n", "\n")
+	text = strings.ReplaceAll(text, "\\t", "\t")
 
 	for _, r := range text {
 		var k string
