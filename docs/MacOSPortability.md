@@ -80,6 +80,15 @@ Architecture decisions, platform boundaries, and implementation strategy for tra
 - **Status**: Implemented (2026-09-14), detailed case study in [MacOSContainerAMD.md](studies/MacOSContainerAMD.md).
 - **Tool**: Standalone sibling project `../podmac`; install with `make -C ../podmac install`.
 - **Architecture**: Runs real macOS Darwin kernels (Big Sur 11, Sonoma 14) under rootless Podman + KVM with OpenCore on AMD Ryzen hosts (`t14` local laptop and `x600` compute node).
+- **Ownership boundary**: Harnez owns macOS portability tests and the case study;
+  podmac owns the guest-management CLI, its storage behavior, and its issue tracker.
+  The podmac `docs/StorageAndRuntime.md` evergreen records mount and noVNC
+  behavior. Harnez's `make install` no longer installs the guest manager.
+- **Operational pitfalls**: `./macos-storage` and `--shared .` depend on the
+  caller's working directory; an existing container keeps its original bind
+  mounts regardless of where a later `podmac status` runs. Use explicit paths
+  when starting a guest from a different directory. The current status output
+  can show configured paths rather than actual mounts (podmac issue 003).
 - **Capabilities & Tooling**:
   - `podmac --host <node> boot-status [-s]` — real-time boot stage tracking & guest screenshot capture.
   - `podmac --host <node> inspect` — CPU registers, instruction pointer disassembly, and Mach-O trap analysis.

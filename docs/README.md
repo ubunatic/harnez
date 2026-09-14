@@ -12,7 +12,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent (consult when changing command pipelines) |
 | [HookRewritePattern.md](HookRewritePattern.md) | Two-stage PreToolUse hook pattern (rewrite now, capture later): `<feature> hook` vs. `<feature>` wrapper, `harnez distill hook` as reference implementation, plus two hard-won constraints — hooks on the same matcher don't compose (last-to-finish wins) and a rewritten command must stay one shell token (consult before adding any new agent-hook-driven feature) |
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
-| [MacOSPortability.md](MacOSPortability.md) | macOS/Darwin portability architecture: subsystem-by-subsystem OS-gating plan, macOS CI (`make macos-ci`), dev-deps install pattern (consult before adding platform-specific code or CI) |
+| [MacOSPortability.md](MacOSPortability.md) | macOS/Darwin portability architecture: OS-gating, CI, dev-deps, and the standalone podmac boundary (consult before platform-specific code, CI, or guest tooling changes) |
 | [MicIndicators.md](MicIndicators.md) | Linux desktop microphone privacy-indicator survey (consult when building mic-activity detection or indicators) |
 | [Models.md](Models.md) | Model assessment: comparison notes across Claude/Gemini/GPT generations (consult when picking a model tier for a subagent or workflow) |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat (consult when updating permission schemas) |
@@ -112,6 +112,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 
 | File | Topic |
 |------|-------|
+| [feedback/2026-09-15-podmac-extraction-and-live-verification.md](feedback/2026-09-15-podmac-extraction-and-live-verification.md) | Podmac extraction, live favicon verification, storage/mount boundaries, and missed physical-directory cleanup |
 | [feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md](feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md) | Subagent domain extraction blindspots, wrapper traps, and proposed harnez features |
 | [feedback/2026-08-19-orchestrated-subagents-process-hygiene-and-review-loops.md](feedback/2026-08-19-orchestrated-subagents-process-hygiene-and-review-loops.md) | Parallel advisors, sequential dev orchestration, background zombie hygiene, and pre-commit review gates |
 | [feedback/2026-08-24-repo-assessment-and-managed-docs-effectiveness.md](feedback/2026-08-24-repo-assessment-and-managed-docs-effectiveness.md) | `harnez assess` delivery, token heuristics, managed docs effectiveness, and self-assessment findings |
