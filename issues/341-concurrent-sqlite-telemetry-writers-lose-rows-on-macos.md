@@ -31,6 +31,13 @@ due to differing fsync/locking semantics or differing timing.
 Discovered via the `macos-hello` CI workflow (issue 338) — first real-macOS test run
 surfaced this; it was invisible on Linux CI.
 
+**Confirmed flaky, not deterministic**: a second `macos-hello` run (same code, no fix
+applied) passed `TestConcurrentWriters` cleanly. This is consistent with a genuine
+race condition rather than a hard macOS incompatibility — do not close this ticket on
+the strength of a passing run; it needs to pass reliably across many runs (or under
+`-race` with an artificial delay forcing the interleaving) before being considered
+fixed.
+
 ## 2. Technical Specification
 
 1. Reproduce locally against a real or virtualized macOS host (or narrow the race
