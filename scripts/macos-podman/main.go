@@ -41,6 +41,7 @@ type config struct {
 	noShared    bool
 	autoRm      bool
 	stopTimeout int
+	noCrop      bool
 }
 
 func main() {
@@ -94,6 +95,7 @@ SSH:            ssh -p %d localhost
 	fs.BoolVar(&cfg.noShared, "no-shared", false, "Disable mounting host directory")
 	fs.BoolVar(&cfg.autoRm, "rm", false, "Remove container on exit (ephemeral mode)")
 	fs.IntVar(&cfg.stopTimeout, "timeout", cfg.stopTimeout, "Stop timeout in seconds before force kill")
+	fs.BoolVar(&cfg.noCrop, "no-crop", false, "Disable auto-cropping of black borders from screenshots")
 
 	args := os.Args[1:]
 	if len(args) > 0 {
@@ -407,9 +409,9 @@ func doBootStatus(ctx context.Context, cfg config) error {
 
 	fmt.Println("\n--- Guest Screen Capture ---")
 	screenshotPath := "/tmp/macos_screen.png"
-	w, h, err := captureGuestScreen(ctx, cfg.name, screenshotPath)
+	w, h, err := captureGuestScreen(ctx, cfg.name, screenshotPath, !cfg.noCrop)
 	if err == nil {
-		fmt.Printf("  Screenshot:  Captured %dx%d -> %s\n", w, h, screenshotPath)
+		fmt.Printf("  Screenshot:  Captured %dx%d (auto-cropped) -> %s\n", w, h, screenshotPath)
 	} else {
 		fmt.Printf("  Screenshot:  Capture failed: %v\n", err)
 	}
@@ -422,7 +424,7 @@ func doScreenshot(ctx context.Context, cfg config, outPath string) error {
 	if !exists || !running {
 		return fmt.Errorf("container %q is not running", cfg.name)
 	}
-	w, h, err := captureGuestScreen(ctx, cfg.name, outPath)
+	w, h, err := captureGuestScreen(ctx, cfg.name, outPath, !cfg.noCrop)
 	if err != nil {
 		return fmt.Errorf("failed to capture screenshot: %w", err)
 	}
@@ -495,7 +497,7 @@ print(out.decode('utf-8', errors='ignore'))
 	return string(out), nil
 }
 
-func captureGuestScreen(ctx context.Context, name string, outPath string) (int, int, error) {
+func captureGuestScreen(ctx context.Context, name string, outPath string, autoCrop bool) (int, int, error) {
 	dumpScript := `
 import socket
 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -515,10 +517,10 @@ s.close()
 		return 0, 0, fmt.Errorf("read screen.ppm failed: %w", err)
 	}
 
-	return convertPPMToPNG(ppmData, outPath)
+	return convertPPMToPNG(ppmData, outPath, autoCrop)
 }
 
-func convertPPMToPNG(ppmData []byte, outPath string) (int, int, error) {
+func convertPPMToPNG(ppmData []byte, outPath string, autoCrop bool) (int, int, error) {
 	reader := bufio.NewReader(bytes.NewReader(ppmData))
 
 	// 1. Read magic number
@@ -580,16 +582,73 @@ func convertPPMToPNG(ppmData []byte, outPath string) (int, int, error) {
 		}
 	}
 
+	var finalImg image.Image = img
+	finalWidth, finalHeight := width, height
+	if autoCrop {
+		finalImg, finalWidth, finalHeight = cropBlackBorders(img)
+	}
+
 	outFile, err := os.Create(outPath)
 	if err != nil {
 		return 0, 0, fmt.Errorf("create output file %s: %w", outPath, err)
 	}
 	defer outFile.Close()
 
-	if err := png.Encode(outFile, img); err != nil {
+	if err := png.Encode(outFile, finalImg); err != nil {
 		return 0, 0, fmt.Errorf("encode png: %w", err)
 	}
 
-	return width, height, nil
+	return finalWidth, finalHeight, nil
+}
+
+func cropBlackBorders(img *image.NRGBA) (image.Image, int, int) {
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	minX, minY := width, height
+	maxX, maxY := -1, -1
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			c := img.NRGBAAt(x, y)
+			if c.R > 8 || c.G > 8 || c.B > 8 {
+				if x < minX {
+					minX = x
+				}
+				if x > maxX {
+					maxX = x
+				}
+				if y < minY {
+					minY = y
+				}
+				if y > maxY {
+					maxY = y
+				}
+			}
+		}
+	}
+
+	if maxX < minX || maxY < minY {
+		return img, width, height
+	}
+
+	const pad = 16
+	if minX -= pad; minX < 0 {
+		minX = 0
+	}
+	if minY -= pad; minY < 0 {
+		minY = 0
+	}
+	if maxX += pad + 1; maxX > width {
+		maxX = width
+	}
+	if maxY += pad + 1; maxY > height {
+		maxY = height
+	}
+
+	cropRect := image.Rect(minX, minY, maxX, maxY)
+	cropped := img.SubImage(cropRect)
+	return cropped, cropRect.Dx(), cropRect.Dy()
 }
 
