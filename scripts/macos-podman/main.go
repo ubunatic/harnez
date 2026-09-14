@@ -758,8 +758,20 @@ func doRun(ctx context.Context, cfg config) error {
 func configureNoVNC(ctx context.Context, remoteHost, name string) {
 	patchCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := podmanCmd(patchCtx, remoteHost, "exec", name, "sed", "-i", "s/UI.initSetting('show_dot', false);/UI.initSetting('show_dot', true);/g", "/usr/share/novnc/app/ui.js")
+
+	// Patch ui.js: show cursor dot.
+	cmd := podmanCmd(patchCtx, remoteHost, "exec", name, "sed", "-i",
+		"s/UI.initSetting('show_dot', false);/UI.initSetting('show_dot', true);/g",
+		"/usr/share/novnc/app/ui.js")
 	_ = cmd.Run()
+
+	// Patch vnc.html: prepend window.location.hostname to the page title so
+	// browser tabs read e.g. "x600 — macOS" rather than just "macOS".
+	const titleScript = `<script>document.addEventListener('DOMContentLoaded',function(){document.title=window.location.hostname+' \u2014 '+document.title;});</script>`
+	cmd2 := podmanCmd(patchCtx, remoteHost, "exec", name, "sed", "-i",
+		"s|</head>|"+titleScript+"</head>|",
+		"/usr/share/novnc/vnc.html")
+	_ = cmd2.Run()
 }
 
 func doStop(ctx context.Context, cfg config) error {
