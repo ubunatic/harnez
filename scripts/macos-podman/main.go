@@ -765,12 +765,12 @@ func configureNoVNC(ctx context.Context, remoteHost, name string) {
 		"/usr/share/novnc/app/ui.js")
 	_ = cmd.Run()
 
-	// Patch vnc.html: prepend window.location.hostname to the page title so
-	// browser tabs read e.g. "x600 — macOS" rather than just "macOS".
-	const titleScript = `<script>document.addEventListener('DOMContentLoaded',function(){document.title=window.location.hostname+' \u2014 '+document.title;});</script>`
+	// Patch ui.js: prepend window.location.hostname to the tab title.
+	// noVNC sets document.title after connecting (overwriting DOMContentLoaded),
+	// so we patch the assignment site directly in ui.js.
 	cmd2 := podmanCmd(patchCtx, remoteHost, "exec", name, "sed", "-i",
-		"s|</head>|"+titleScript+"</head>|",
-		"/usr/share/novnc/vnc.html")
+		`s|document.title = title + " - " + PAGE_TITLE;|document.title = window.location.hostname + " \xe2\x80\x94 " + title + " - " + PAGE_TITLE;|`,
+		"/usr/share/novnc/app/ui.js")
 	_ = cmd2.Run()
 }
 
