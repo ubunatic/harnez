@@ -71,7 +71,9 @@ sequenceDiagram
 
 ## 4. Diagnostic & Deep Inspection Toolkit
 
-The standalone `podmac` CLI provides built-in deep inspection tools via QMP monitor socket:
+The standalone `podmac` CLI provides built-in deep inspection tools via QMP monitor socket.
+The commands in this case study run from the harnez project root, so their relative
+storage path and `/shared/scripts/macos-hello` example continue to use harnez data:
 
 * **Boot Status**: `podmac boot-status [-s]`
   * Queries HTTP, VNC, SSH, QEMU CPU thread state, serial logs, and captures auto-cropped guest screenshots.
