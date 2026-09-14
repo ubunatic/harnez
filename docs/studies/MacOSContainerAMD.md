@@ -213,3 +213,29 @@ go run ./scripts/macos-podman snapshot restore pre-update
 # Delete obsolete snapshots
 go run ./scripts/macos-podman snapshot rm pre-update
 ```
+
+---
+
+## 11. Virtual Disk Resizing & APFS Expansion
+
+When macOS major version upgrades or heavy SDK installations require additional disk space:
+
+1. **Expand raw disk image (Host)**:
+   ```bash
+   # Resize sparse raw image (instantaneous, 0 physical bytes allocated until used)
+   truncate -s 128G ./macos-storage/11/data.img
+   # On remote node x600:
+   ssh x600 "truncate -s 128G ~/macos-storage/11/data.img"
+   ```
+
+2. **Launch with enlarged disk capacity**:
+   ```bash
+   go run ./scripts/macos-podman --host x600 run --disk 128G
+   ```
+
+3. **Expand APFS Container (macOS Guest Terminal or Recovery)**:
+   ```bash
+   # Grow APFS container to fill 100% of newly available drive capacity
+   diskutil apfs resizeContainer disk0s2 0
+   ```
+
