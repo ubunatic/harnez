@@ -236,6 +236,21 @@ When macOS major version upgrades or heavy SDK installations require additional 
 3. **Expand APFS Container (macOS Guest Terminal or Recovery)**:
    ```bash
    # Grow APFS container to fill 100% of newly available drive capacity
-   diskutil apfs resizeContainer disk0s2 0
+   diskutil apfs resizeContainer disk2s2 0
    ```
 
+---
+
+## 12. Direct Headless SSH Automation & Darwin Binary Execution
+
+With Remote Login (`sshd`) active and public keys installed in `~/.ssh/authorized_keys`, the macOS guest on `x600` functions as a headless Darwin compute target:
+
+```bash
+# Direct SSH execution
+ssh -p 2222 dev@x600 "sw_vers && uname -a"
+
+# Cross-compile Darwin binary on Linux host and execute on macOS guest
+GOOS=darwin GOARCH=amd64 go build -o /tmp/hello_darwin_amd64 ./scripts/macos-hello
+scp -P 2222 /tmp/hello_darwin_amd64 dev@x600:/tmp/
+ssh -p 2222 dev@x600 "/tmp/hello_darwin_amd64"
+```
