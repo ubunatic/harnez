@@ -1,13 +1,16 @@
 # Roadmap
 
-Working roadmap for the open backlog (updated 2026-09-11). Derived from each ticket's
+Working roadmap for the open backlog (updated 2026-09-14). Derived from each ticket's
 appended `## Implementation Plan`, so scope calls here reflect the planning pass, not a fresh
 re-derivation.
 
+**Strategic Goal — OS-Agnostic & Cross-Platform Readiness (macOS first)**:
+harnez is preparing to become fully OS-agnostic, targeting macOS (Darwin) as the primary non-Linux platform. This requires eliminating hardcoded GNU/Linux CLI tool dependencies (`stty`, `pactl`, `amixer`, `/proc/*`) in favor of standard Go cross-platform libraries (such as `golang.org/x/term`), OS build-tag splits for system telemetry, and platform audio/process abstractions.
+
 **Guiding bias for ordering**: harnez's primary daily surface is a single workstation with
 `harnez usage --watch` open in a terminal split, plus the issue tracker and the instruction
-docs that every agent session loads. Work that makes that daily loop more correct or more
-legible outranks work that adds new capability surface.
+docs that every agent session loads. Work that makes that daily loop more correct, more
+legible, and OS-agnostic outranks work that adds new capability surface.
 
 Sequencing buckets:
 
@@ -31,7 +34,20 @@ Sequencing buckets:
 - **301** — cross-agent Docup testing skill
 - **303** — prose-first reusable advisor skill with four-target distribution
 
-## 1. Usage watch TUI — correctness & legibility
+## 1. OS-Agnostic Readiness (macOS first) & Terminal Modernization
+
+Laying the foundation to run seamlessly across operating systems (macOS / Darwin at first), eliminating brittle Linux-only subprocess forks in the interactive TUI and establishing portable system abstraction layers.
+
+| Ticket | Scope | Bucket |
+|---|---|---|
+| 286 — promote `golang.org/x/term` for terminal operations in Go conventions & watch.go | S — add `x/term` carve-out to `docs/lang/Go.md`, replace `stty` subprocesses & raw-mode ioctls in `internal/usage/watch.go` with `x/term` | **Now** |
+| (Architecture) — OS build-tag split for system telemetry (`/proc` vs Darwin `sysctl`/`mach_vm`) | M — decouple Linux `/proc/stat`, `/proc/meminfo`, `/proc/loadavg` behind OS-specific collectors | **Next** |
+| (Architecture) — Cross-platform process detection (`ps` vs Darwin API/`sysctl`) | S/M — replace GNU-specific `ps -eo comm=` with portable detection | **Next** |
+| (Architecture) — macOS CoreAudio / microphone level probe backend | M — platform backend counterpart to PipeWire/Pulse/ALSA | **Later** |
+
+Rationale: 286 is immediate, high-leverage low-hanging fruit — it updates the Go convention docs, eliminates the `stty` dependency from `watch.go`, and cuts subprocess CPU overhead in one clean step. It directly unlocks running the watch TUI reliably on macOS and non-GNU environments without requiring coreutils `stty`.
+
+## 2. Usage watch TUI — correctness & legibility
 
 The `--watch` dashboard is the tool's front door. Everything that makes it lie, misalign, or
 hide a failed collector belongs at the front of the queue.
@@ -257,7 +273,7 @@ recommendations have been reviewed.
 
 ## Suggested order of attack
 
-1. **Restore the development loop**: 290 → 210 → 201 (close) → 139 → 105 → 262 → 255
+1. **OS-Agnostic terminal foundation & dev loop**: 286 (Go conventions + `x/term` watch.go refactor) → 290 → 210 → 201 (close) → 139 → 105 → 262 → 255
 2. **Repair tracker and install/documentation correctness**: 292 → 299 → 108 → 217 → 126 → 209
 3. **Finish the current docs batch**: 263 → 166 Part A → 297 → 300
 4. **Harden agent execution and planning**: 268 → 274 → 281 → 285 → 293 → 295
