@@ -1,6 +1,6 @@
 # 345 — Fix virtiofs/9p shared folder mount in macos-podman guest
 
-**Status**: Open
+**Status**: Closed — Moved to podmac issue 001
 **Priority**: P2
 **Severity**: Medium
 **Category**: macos-podman / guest integration
