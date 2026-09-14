@@ -511,6 +511,45 @@ func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
 	}
 }
 
+// TestRunInit_PreservesOptInDocOnPlainReinit guards against a regression where
+// a plain re-init (no --docs flag) silently dropped a previously opted-in
+// optional (default: false) doc, because doc selection was recomputed purely
+// from defaults/auto-detection with no awareness of the existing AGENTS.md.
+func TestRunInit_PreservesOptInDocOnPlainReinit(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/optindoc\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	if err := claude.RunInit(dir, cfg, []string{"prototyping-features"}, "", true, false, false, false); err != nil {
+		t.Fatalf("first RunInit (explicit opt-in) failed: %v", err)
+	}
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	first, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(first), "@docs/PrototypingFeatures.md") {
+		t.Fatalf("expected opt-in doc ref present after explicit --docs run, got:\n%s", first)
+	}
+
+	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		t.Fatalf("second RunInit (plain re-init, no --docs) failed: %v", err)
+	}
+	second, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(second), "@docs/PrototypingFeatures.md") {
+		t.Errorf("plain re-init dropped the previously opted-in optional doc, got:\n%s", second)
+	}
+}
+
 func TestRunInit_RefusesHomeDirectoryWithoutForce(t *testing.T) {
 	cfg, err := claude.LoadConfigEmbedded()
 	if err != nil {

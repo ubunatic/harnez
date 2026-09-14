@@ -166,6 +166,31 @@ func autoDetectDocs(dir string, cfg *Config, explicit []string) []string {
 	return detected
 }
 
+// existingLangDocs returns doc names whose @docs/*.md ref already appears in
+// the target file's "Language Conventions" managed section, so a plain
+// re-init preserves optional (default: false) docs a prior --docs run added
+// instead of silently dropping them (issue 341-followup, harnez self-init).
+func existingLangDocs(agentsPath string, cfg *Config) []string {
+	data, err := os.ReadFile(agentsPath)
+	if err != nil {
+		return nil
+	}
+	content := string(data)
+	_, _, ok := markdown.SectionBounds(content,
+		markdown.MDMarkers.Begin("Language Conventions"), markdown.MDMarkers.End("Language Conventions"))
+	if !ok {
+		return nil
+	}
+	var found []string
+	for _, name := range docNamesInOrder(cfg) {
+		lang := cfg.AgentsMD.Languages[name]
+		if lang.Ref != "" && strings.Contains(content, lang.Ref) {
+			found = append(found, name)
+		}
+	}
+	return found
+}
+
 // docNamesInOrder returns all language doc names, following the top-level
 // docs: list order first, then any remaining names sorted.
 func docNamesInOrder(cfg *Config) []string {
@@ -645,6 +670,7 @@ func RunInitWithForce(dir string, cfg *Config, docs []string, repoMode string, a
 	}
 
 	if cfg != nil {
+		docs = append(docs, existingLangDocs(agentsPath, cfg)...)
 		docs = append(docs, autoDetectDocs(dir, cfg, docs)...)
 		docs, err = resolveDocDependencies(cfg, docs)
 		if err != nil {

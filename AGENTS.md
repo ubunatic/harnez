@@ -135,10 +135,6 @@ Adhere to the following conventions.
 
 Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
-- Canary-first development @docs/Canary.md,
-  probe external mechanisms before building features on them
-- Feature prototyping @docs/PrototypingFeatures.md,
-  canary-first is the feature-prototyping practice; separate runtime isolation and rollout flags
 - Go/Golang @docs/Go.md,
   Modern Go, avoid deps but use Cobra, add tests; use runes and display width for terminal layout
 - Bash/Shell @docs/Bash.md,
@@ -153,6 +149,8 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   PascalCase for evergreens, kebab-case for ephemeral docs; ASCII art in chat, Mermaid only in docs/
 - Git @docs/Git.md,
   conventional commits, work on the default branch, don't push unless asked
+- Canary-first development @docs/Canary.md,
+  probe external mechanisms before building features on them
 - Spec system @docs/Spec.md,
   YAML spec files as single source of truth; Go code must not duplicate spec values
 - Issue Tracking Practices @docs/IssueTracking.md,
@@ -163,4 +161,6 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   harnez release, version.yaml spec, GoReleaser v2, non-interactive minisign (-W), Forgejo has_releases, language-agnostic (Go/Python/Zig/Rust/scripted)
 - Man Pages for Go CLIs @docs/ManPages.md,
   cobra/doc GenManTree; <cmd> man / man --install; XDG ~/.local/share/man/man1
+- Feature prototyping @docs/PrototypingFeatures.md,
+  canary-first is the feature-prototyping practice; separate runtime isolation and rollout flags
 <!-- harnez:end Language Conventions -->
