@@ -772,6 +772,35 @@ func configureNoVNC(ctx context.Context, remoteHost, name string) {
 		`s|document.title = title + " - " + PAGE_TITLE;|document.title = window.location.hostname + " \xe2\x80\x94 " + title + " - " + PAGE_TITLE;|`,
 		"/usr/share/novnc/app/ui.js")
 	_ = cmd2.Run()
+
+	// Patch vnc.html: inject a hostname-tinted favicon.
+	// Hashes window.location.hostname to a hue, applies hue-rotate+saturate
+	// to the existing favicon.svg via Canvas, and sets it as the page icon.
+	// Uses python3 to avoid shell quoting issues with the JS snippet.
+	faviconScript := `
+import sys
+path='/usr/share/novnc/vnc.html'
+html=open(path).read()
+if 'hostnameHue' in html:
+    sys.exit(0)
+s=(
+    '<script>(function(){'
+    'function hostnameHue(h){var n=0;for(var i=0;i<h.length;i++)n=(Math.imul(31,n)+h.charCodeAt(i))|0;return((n>>>0)%360);}'
+    'function setTintedFavicon(hue){var img=new Image();img.onload=function(){'
+    'var c=document.createElement("canvas");c.width=c.height=64;'
+    'var ctx=c.getContext("2d");'
+    'ctx.filter="hue-rotate("+hue+"deg) saturate(1.6) brightness(1.1)";'
+    'ctx.drawImage(img,0,0,64,64);'
+    'var lnk=document.querySelector("link[rel=icon]")||document.createElement("link");'
+    'lnk.rel="icon";lnk.type="image/png";lnk.href=c.toDataURL("image/png");'
+    'document.head.appendChild(lnk);};img.src="app/images/favicon.svg";}'
+    'document.addEventListener("DOMContentLoaded",function(){setTintedFavicon(hostnameHue(window.location.hostname));});'
+    '})();</script>'
+)
+open(path,'w').write(html.replace('</head>',s+'</head>',1))
+`
+	cmd3 := podmanCmd(patchCtx, remoteHost, "exec", name, "python3", "-c", faviconScript)
+	_ = cmd3.Run()
 }
 
 func doStop(ctx context.Context, cfg config) error {
