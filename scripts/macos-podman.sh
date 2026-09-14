@@ -8,10 +8,12 @@ container_name="macos-kvm"
 macos_version="13"
 http_port="8006"
 vnc_port="5900"
+ssh_port="2222"
 cpu_cores="2"
 ram_size="4G"
 disk_size="64G"
 storage_dir="./macos-storage"
+shared_dir="."
 auto_rm="false"
 action="run"
 
@@ -31,6 +33,9 @@ Flags:
   --name <name>    Container name (default: macos-kvm)
   --port <port>    Web noVNC HTTP port (default: 8006)
   --vnc-port <p>   VNC port (default: 5900)
+  --ssh-port <p>   SSH port (default: 2222)
+  --shared <dir>   Host directory to mount at /shared in macOS (default: current repo '.')
+  --no-shared      Disable mounting host directory
   --cpu <cores>    CPU cores (default: 2)
   --ram <size>     RAM size (default: 4G)
   --disk <size>    Disk size (default: 64G)
@@ -39,6 +44,7 @@ Flags:
 
 Web UI (noVNC): http://localhost:8006
 VNC:            localhost:5900
+SSH:            localhost:2222
 EOF
 }
 
@@ -67,6 +73,18 @@ do case "$1" in
        --vnc-port)
            vnc_port="$2"
            shift 2
+           ;;
+       --ssh-port)
+           ssh_port="$2"
+           shift 2
+           ;;
+       --shared)
+           shared_dir="$2"
+           shift 2
+           ;;
+       --no-shared)
+           shared_dir=""
+           shift
            ;;
        --cpu)
            cpu_cores="$2"
@@ -114,13 +132,15 @@ do_run() {
     then
         if test "$(podman inspect -f '{{.State.Running}}' "$container_name" 2>/dev/null)" = "true"
         then printf 'Container %q is already running.\n' "$container_name"
-             printf 'Web UI: http://localhost:%s\n' "$http_port"
-             printf 'VNC:    localhost:%s\n' "$vnc_port"
+             printf '  Web UI: http://localhost:%s\n' "$http_port"
+             printf '  VNC:    localhost:%s\n' "$vnc_port"
+             printf '  SSH:    ssh -p %s localhost\n' "$ssh_port"
              exit 0
         else printf 'Starting existing stopped container %q...\n' "$container_name"
              podman start "$container_name"
-             printf 'Web UI: http://localhost:%s\n' "$http_port"
-             printf 'VNC:    localhost:%s\n' "$vnc_port"
+             printf '  Web UI: http://localhost:%s\n' "$http_port"
+             printf '  VNC:    localhost:%s\n' "$vnc_port"
+             printf '  SSH:    ssh -p %s localhost\n' "$ssh_port"
              exit 0
         fi
     fi
@@ -133,6 +153,7 @@ do_run() {
         "--name" "$container_name"
         "-p" "${http_port}:8006"
         "-p" "${vnc_port}:5900"
+        "-p" "${ssh_port}:22"
         "-e" "VERSION=${macos_version}"
         "-e" "CPU_CORES=${cpu_cores}"
         "-e" "RAM_SIZE=${ram_size}"
@@ -140,6 +161,16 @@ do_run() {
         "-v" "${storage_dir}:/storage:Z"
         "--stop-timeout" "120"
     )
+
+    if test -n "$shared_dir"
+    then
+        if test -d "$shared_dir"
+        then
+            abs_shared="$(cd "$shared_dir" && pwd)"
+            run_args+=("-v" "${abs_shared}:/shared:Z")
+        else printf 'WARNING: shared directory %q does not exist, skipping mount\n' "$shared_dir" >&2
+        fi
+    fi
 
     if test -e /dev/kvm
     then run_args+=("--device" "/dev/kvm")
@@ -161,6 +192,10 @@ do_run() {
     printf '\nContainer %q started successfully.\n' "$container_name"
     printf '  Web UI: http://localhost:%s\n' "$http_port"
     printf '  VNC:    localhost:%s\n' "$vnc_port"
+    printf '  SSH:    ssh -p %s localhost\n' "$ssh_port"
+    if test -n "$shared_dir" && test -d "$shared_dir"
+    then printf '  Shared: %s -> /shared\n' "$(cd "$shared_dir" && pwd)"
+    fi
     if test "$auto_rm" = "true"
     then printf '  Auto-remove: enabled (--rm)\n'
     else printf '  Storage: %s (preserved across restarts)\n' "$storage_dir"
@@ -184,6 +219,7 @@ do_status() {
         if test "$running" = "true"
         then printf '  Web UI: http://localhost:%s\n' "$http_port"
              printf '  VNC:    localhost:%s\n' "$vnc_port"
+             printf '  SSH:    ssh -p %s localhost\n' "$ssh_port"
              podman logs --tail 10 "$container_name"
         fi
     else printf 'Container %q is not present.\n' "$container_name"
