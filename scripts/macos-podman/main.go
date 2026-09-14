@@ -2,14 +2,13 @@
 //
 // Usage:
 //
-//	go run ./scripts/macos-podman [run|stop|status|clean] [flags]
+//	go run ./scripts/macos-podman [run|stop|status|boot-status|screenshot|clean] [flags]
 package main
 
 import (
 	"bufio"
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"image"
 	"image/color"
@@ -24,10 +23,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 type config struct {
-	action      string
 	name        string
 	version     string
 	httpPort    int
@@ -42,104 +42,145 @@ type config struct {
 	autoRm      bool
 	stopTimeout int
 	noCrop      bool
+	short       bool
+}
+
+var cfg = config{
+	name:        "macos-kvm",
+	version:     "13",
+	httpPort:    8006,
+	vncPort:     5900,
+	sshPort:     2222,
+	cpuCores:    1,
+	ramSize:     "4G",
+	diskSize:    "64G",
+	storageDir:  "./macos-storage",
+	sharedDir:   ".",
+	autoRm:      false,
+	stopTimeout: 10,
+	noCrop:      false,
+	short:       false,
 }
 
 func main() {
-	cfg := config{
-		name:        "macos-kvm",
-		version:     "13",
-		httpPort:    8006,
-		vncPort:     5900,
-		sshPort:     2222,
-		cpuCores:    1,
-		ramSize:     "4G",
-		diskSize:    "64G",
-		storageDir:  "./macos-storage",
-		sharedDir:   ".",
-		autoRm:      false,
-		stopTimeout: 10,
-	}
-
-	fs := flag.NewFlagSet("macos-podman", flag.ExitOnError)
-	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, `Usage: go run ./scripts/macos-podman [run|stop|status|boot-status|screenshot|clean] [flags]
-
-Actions:
-  run          Start macOS container (default)
-  stop         Stop running macOS container (bounded timeout)
-  status       Show basic status, endpoints, and quick HTTP check
-  boot-status  Comprehensive boot diagnosis, guest stages, logs & screenshot
-  screenshot   Capture current guest screen to PNG
-  clean        Stop and remove container and storage directory
-
-Flags:
-`)
-		fs.PrintDefaults()
-		fmt.Fprintf(os.Stderr, `
-Web UI (noVNC): http://localhost:%d
-VNC:            localhost:%d
-SSH:            ssh -p %d localhost
-`, cfg.httpPort, cfg.vncPort, cfg.sshPort)
-	}
-
-	fs.StringVar(&cfg.name, "name", cfg.name, "Container name")
-	fs.StringVar(&cfg.version, "version", cfg.version, "macOS version (11=BigSur, 12=Monterey, 13=Ventura, 14=Sonoma, 15=Sequoia)")
-	fs.IntVar(&cfg.httpPort, "port", cfg.httpPort, "Web noVNC HTTP port")
-	fs.IntVar(&cfg.vncPort, "vnc-port", cfg.vncPort, "VNC port")
-	fs.IntVar(&cfg.sshPort, "ssh-port", cfg.sshPort, "SSH port")
-	fs.IntVar(&cfg.cpuCores, "cpu", cfg.cpuCores, "CPU cores (default 1 for AMD Ryzen compatibility)")
-	fs.StringVar(&cfg.ramSize, "ram", cfg.ramSize, "RAM size")
-	fs.StringVar(&cfg.diskSize, "disk", cfg.diskSize, "Disk size")
-	fs.StringVar(&cfg.storageDir, "storage", cfg.storageDir, "Storage path on host")
-	fs.StringVar(&cfg.sharedDir, "shared", cfg.sharedDir, "Host directory to mount at /shared")
-	fs.BoolVar(&cfg.noShared, "no-shared", false, "Disable mounting host directory")
-	fs.BoolVar(&cfg.autoRm, "rm", false, "Remove container on exit (ephemeral mode)")
-	fs.IntVar(&cfg.stopTimeout, "timeout", cfg.stopTimeout, "Stop timeout in seconds before force kill")
-	fs.BoolVar(&cfg.noCrop, "no-crop", false, "Disable auto-cropping of black borders from screenshots")
-
-	args := os.Args[1:]
-	if len(args) > 0 {
-		switch args[0] {
-		case "run", "stop", "status", "boot-status", "boot", "screenshot", "clean":
-			cfg.action = args[0]
-			args = args[1:]
-		default:
-			cfg.action = "run"
-		}
-	} else {
-		cfg.action = "run"
-	}
-
-	if err := fs.Parse(args); err != nil {
-		os.Exit(1)
-	}
-
-	ctx := context.Background()
-	var err error
-	switch cfg.action {
-	case "run":
-		err = doRun(ctx, cfg)
-	case "stop":
-		err = doStop(ctx, cfg)
-	case "status":
-		err = doStatus(ctx, cfg)
-	case "boot-status", "boot":
-		err = doBootStatus(ctx, cfg)
-	case "screenshot":
-		outputPath := "/tmp/macos_screen.png"
-		if fs.NArg() > 0 {
-			outputPath = fs.Arg(0)
-		}
-		err = doScreenshot(ctx, cfg, outputPath)
-	case "clean":
-		err = doClean(ctx, cfg)
-	default:
-		err = fmt.Errorf("unknown action: %s", cfg.action)
-	}
-
-	if err != nil {
+	rootCmd := newRootCommand()
+	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+func newRootCommand() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:   "macos-podman [command]",
+		Short: "Manage containerized macOS KVM instances via Podman",
+		Long: `Manage containerized macOS KVM instances via Podman.
+
+Default action (without subcommands) starts the macOS container.
+
+Endpoints:
+  Web UI (noVNC): http://localhost:8006
+  VNC:            localhost:5900
+  SSH:            ssh -p 2222 localhost`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doRun(cmd.Context(), cfg)
+		},
+	}
+
+	// Persistent flags
+	pf := rootCmd.PersistentFlags()
+	pf.StringVar(&cfg.name, "name", cfg.name, "Container name")
+	pf.StringVar(&cfg.version, "version", cfg.version, "macOS version (11=BigSur, 12=Monterey, 13=Ventura, 14=Sonoma, 15=Sequoia)")
+	pf.IntVar(&cfg.httpPort, "port", cfg.httpPort, "Web noVNC HTTP port")
+	pf.IntVar(&cfg.vncPort, "vnc-port", cfg.vncPort, "VNC port")
+	pf.IntVar(&cfg.sshPort, "ssh-port", cfg.sshPort, "SSH port")
+	pf.IntVar(&cfg.cpuCores, "cpu", cfg.cpuCores, "CPU cores (default 1 for AMD Ryzen compatibility)")
+	pf.StringVar(&cfg.ramSize, "ram", cfg.ramSize, "RAM size")
+	pf.StringVar(&cfg.diskSize, "disk", cfg.diskSize, "Disk size")
+	pf.StringVar(&cfg.storageDir, "storage", cfg.storageDir, "Storage path on host")
+	pf.StringVar(&cfg.sharedDir, "shared", cfg.sharedDir, "Host directory to mount at /shared")
+	pf.BoolVar(&cfg.noShared, "no-shared", false, "Disable mounting host directory")
+	pf.BoolVar(&cfg.autoRm, "rm", false, "Remove container on exit (ephemeral mode)")
+	pf.IntVar(&cfg.stopTimeout, "timeout", cfg.stopTimeout, "Stop timeout in seconds before force kill")
+	pf.BoolVar(&cfg.noCrop, "no-crop", false, "Disable auto-cropping of black borders from screenshots")
+	pf.BoolVarP(&cfg.short, "short", "s", false, "Compact single-line output summary")
+
+	// Subcommands
+	rootCmd.AddCommand(
+		newRunCommand(),
+		newStopCommand(),
+		newStatusCommand(),
+		newBootStatusCommand(),
+		newScreenshotCommand(),
+		newCleanCommand(),
+	)
+
+	return rootCmd
+}
+
+func newRunCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "run",
+		Short: "Start macOS container",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doRun(cmd.Context(), cfg)
+		},
+	}
+}
+
+func newStopCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "stop",
+		Short: "Stop running macOS container (bounded timeout)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doStop(cmd.Context(), cfg)
+		},
+	}
+}
+
+func newStatusCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show basic status, endpoints, and quick HTTP check",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doStatus(cmd.Context(), cfg)
+		},
+	}
+}
+
+func newBootStatusCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:     "boot-status",
+		Aliases: []string{"boot"},
+		Short:   "Comprehensive boot diagnosis, guest stages, logs & screenshot",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doBootStatus(cmd.Context(), cfg)
+		},
+	}
+}
+
+func newScreenshotCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "screenshot [output_path.png]",
+		Short: "Capture current guest screen to PNG",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			outPath := "/tmp/macos_screen.png"
+			if len(args) > 0 {
+				outPath = args[0]
+			}
+			return doScreenshot(cmd.Context(), cfg, outPath)
+		},
+	}
+}
+
+func newCleanCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "clean",
+		Short: "Stop and remove container and storage directory",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doClean(cmd.Context(), cfg)
+		},
 	}
 }
 
@@ -290,6 +331,26 @@ func doStop(ctx context.Context, cfg config) error {
 
 func doStatus(ctx context.Context, cfg config) error {
 	exists, running := containerRunning(ctx, cfg.name)
+	if cfg.short {
+		if !running {
+			if exists {
+				fmt.Println("Status: STOPPED (container exists)")
+			} else {
+				fmt.Println("Status: NOT_FOUND")
+			}
+			return nil
+		}
+		webStatus := "down"
+		client := http.Client{Timeout: 500 * time.Millisecond}
+		if resp, err := client.Get(fmt.Sprintf("http://localhost:%d", cfg.httpPort)); err == nil {
+			resp.Body.Close()
+			webStatus = resp.Status
+		}
+		fmt.Printf("[RUNNING] Container: %s | Web: %s | Ports: web=%d vnc=%d ssh=%d\n",
+			cfg.name, webStatus, cfg.httpPort, cfg.vncPort, cfg.sshPort)
+		return nil
+	}
+
 	fmt.Printf("Container: %s\n", cfg.name)
 	fmt.Printf("  Exists:  %v\n", exists)
 	fmt.Printf("  Running: %v\n", running)
@@ -351,39 +412,69 @@ func printEndpoints(cfg config) {
 
 func doBootStatus(ctx context.Context, cfg config) error {
 	exists, running := containerRunning(ctx, cfg.name)
-	fmt.Printf("Container: %s (version: macOS %s)\n", cfg.name, cfg.version)
-	fmt.Printf("  State:    exists=%v running=%v\n", exists, running)
 	if !running {
+		if cfg.short {
+			if exists {
+				fmt.Println("Status: STOPPED (container exists)")
+			} else {
+				fmt.Println("Status: NOT_FOUND")
+			}
+			return nil
+		}
+		fmt.Printf("Container: %s (version: macOS %s)\n", cfg.name, cfg.version)
+		fmt.Printf("  State:    exists=%v running=%v\n", exists, running)
 		fmt.Println("  Status:   Guest is not running. Run 'go run ./scripts/macos-podman run' to start.")
 		return nil
 	}
 
-	printEndpoints(cfg)
+	stage := assessBootStage(ctx, cfg.name)
 
-	fmt.Println("\n--- Service Probes ---")
 	// 1. Web UI probe
 	client := http.Client{Timeout: 1 * time.Second}
-	resp, err := client.Get(fmt.Sprintf("http://localhost:%d", cfg.httpPort))
-	if err == nil {
+	webStatus := "Down"
+	if resp, err := client.Get(fmt.Sprintf("http://localhost:%d", cfg.httpPort)); err == nil {
 		resp.Body.Close()
-		fmt.Printf("  Web (noVNC): HTTP %s (Active)\n", resp.Status)
-	} else {
-		fmt.Printf("  Web (noVNC): Down (%v)\n", err)
+		webStatus = fmt.Sprintf("HTTP %s (Active)", resp.Status)
 	}
 
 	// 2. VNC probe
+	vncStatus := "Unreachable"
 	if banner, err := probeTCPBanner(cfg.vncPort, 1*time.Second); err == nil {
-		fmt.Printf("  VNC Server:  Active (%s)\n", strings.TrimSpace(banner))
-	} else {
-		fmt.Printf("  VNC Server:  Unreachable (%v)\n", err)
+		vncStatus = fmt.Sprintf("Active (%s)", strings.TrimSpace(banner))
 	}
 
 	// 3. SSH probe
+	sshStatus := "Waiting for guest daemon"
 	if banner, err := probeTCPBanner(cfg.sshPort, 1*time.Second); err == nil {
-		fmt.Printf("  SSH Server:  Active (%s)\n", strings.TrimSpace(banner))
-	} else {
-		fmt.Println("  SSH Server:  Waiting for macOS guest daemon to start...")
+		if strings.Contains(banner, "SSH") {
+			sshStatus = fmt.Sprintf("Ready (%s)", strings.TrimSpace(banner))
+		} else {
+			sshStatus = "Port open (starting up)"
+		}
 	}
+
+	// 4. Screenshot
+	screenshotPath := "/tmp/macos_screen.png"
+	w, h, err := captureGuestScreen(ctx, cfg.name, screenshotPath, !cfg.noCrop)
+	screenInfo := "Capture failed"
+	if err == nil {
+		screenInfo = fmt.Sprintf("%dx%d", w, h)
+	}
+
+	if cfg.short {
+		fmt.Printf("[RUNNING] %s | Web: %s | VNC: %s | SSH: %s | Screen: %s -> %s\n",
+			stage, webStatus, vncStatus, sshStatus, screenInfo, screenshotPath)
+		return nil
+	}
+
+	fmt.Printf("Container: %s (version: macOS %s)\n", cfg.name, cfg.version)
+	fmt.Printf("  State:    exists=%v running=%v\n", exists, running)
+	printEndpoints(cfg)
+
+	fmt.Println("\n--- Service Probes ---")
+	fmt.Printf("  Web (noVNC): %s\n", webStatus)
+	fmt.Printf("  VNC Server:  %s\n", vncStatus)
+	fmt.Printf("  SSH Server:  %s\n", sshStatus)
 
 	fmt.Println("\n--- QEMU / Hypervisor Status ---")
 	if qmpStatus, err := queryQEMUMonitor(ctx, cfg.name, "info status"); err == nil {
@@ -404,14 +495,11 @@ func doBootStatus(ctx context.Context, cfg config) error {
 	}
 
 	fmt.Println("\n--- Bootloader & Kernel Diagnostic Inspection ---")
-	stage := assessBootStage(ctx, cfg.name)
 	fmt.Printf("  Current Boot Stage: %s\n", stage)
 
 	fmt.Println("\n--- Guest Screen Capture ---")
-	screenshotPath := "/tmp/macos_screen.png"
-	w, h, err := captureGuestScreen(ctx, cfg.name, screenshotPath, !cfg.noCrop)
 	if err == nil {
-		fmt.Printf("  Screenshot:  Captured %dx%d (auto-cropped) -> %s\n", w, h, screenshotPath)
+		fmt.Printf("  Screenshot:  Captured %s (auto-cropped) -> %s\n", screenInfo, screenshotPath)
 	} else {
 		fmt.Printf("  Screenshot:  Capture failed: %v\n", err)
 	}
@@ -651,4 +739,3 @@ func cropBlackBorders(img *image.NRGBA) (image.Image, int, int) {
 	cropped := img.SubImage(cropRect)
 	return cropped, cropRect.Dx(), cropRect.Dy()
 }
-
