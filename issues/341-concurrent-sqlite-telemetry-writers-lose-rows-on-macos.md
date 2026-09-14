@@ -1,6 +1,6 @@
 # 341 — Concurrent SQLite telemetry writers lose rows on macOS
 
-**Status**: In Progress — opened with macOS concurrent-writer repro details
+**Status**: Open — filed, not yet started
 **Priority**: P2 (Medium)
 **Severity**: Data Loss (Telemetry)
 **Category**: Cross-Platform / Concurrency
