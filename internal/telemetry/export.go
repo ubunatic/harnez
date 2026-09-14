@@ -125,7 +125,7 @@ func BuildExportWithCategories(rows []ToolCall, now time.Time, level privacy.Lev
 			ProjectName:      normalizeProjectPath(r.ProjectName),
 			ProjectDir:       normalizeProjectPath(r.WorkingDir),
 			AgentID:          r.AgentID,
-			ToolName:         r.ToolName,
+			ToolName:         CanonicalToolName(r.ToolName),
 			CallType:         r.CallType,
 			Score:            r.Score,
 			ActivityCategory: cat,

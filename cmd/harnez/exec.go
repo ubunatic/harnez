@@ -198,34 +198,6 @@ func (c *byteCounter) total() int64 {
 	return atomic.LoadInt64(&c.n)
 }
 
-// shellMetacharacters are the control-operator/substitution characters
-// isSimpleShellCommand treats as making a command non-simple. Shared here
-// as inferToolFromArgs's token boundary set (issue 344): a bare token
-// containing any of these (e.g. "2>/dev/null", "&&") is a shell operator
-// or redirect, never a real command word, so it must stop the scan rather
-// than being mistaken for one.
-var shellMetacharacters = []string{"\n", "\r", ";", "&", "|", "<", ">", "$", "`", "(", ")", "{", "}"}
-
-// shellKeywords are the shell keywords/builtins isSimpleShellCommand
-// already excludes from being treated as a standalone simple command.
-// inferToolFromArgs reuses the same set as a scan-stopping boundary
-// (issue 344): a leading "for"/"if"/etc. means the rest of the tokens are
-// loop/conditional syntax, not a command word to keep hunting through.
-var shellKeywords = map[string]bool{
-	"if": true, "then": true, "else": true, "elif": true, "fi": true,
-	"case": true, "esac": true, "for": true, "while": true, "until": true,
-	"do": true, "done": true, "in": true, "select": true, "time": true,
-	"function": true, "export": true, "set": true, "unset": true,
-	"alias": true, "unalias": true, "source": true, ".": true, "eval": true,
-	"exec": true, "trap": true, "return": true, "exit": true,
-	"builtin": true, "command": true, "shopt": true, "cd": true,
-	"read": true, "pushd": true, "popd": true, "dirs": true,
-	"declare": true, "typeset": true, "local": true, "readonly": true,
-	"type": true, "ulimit": true, "umask": true, "disown": true,
-	"jobs": true, "bg": true, "fg": true, "wait": true, "!": true,
-	"[[": true, "]]": true,
-}
-
 // inferToolFromArgs extracts the effective tool name from args when --tool is not explicitly provided.
 func inferToolFromArgs(args []string, defaultTool string) string {
 	fallback := "Bash"
@@ -261,12 +233,12 @@ func inferToolFromArgs(args []string, defaultTool string) string {
 		// "2>/dev/null", an operator like "&&") is never a real command
 		// word — stop instead of returning it or scanning past it, since
 		// we can no longer trust later tokens to be a plain command either.
-		for _, meta := range shellMetacharacters {
+		for _, meta := range telemetry.ShellMetacharacters {
 			if strings.Contains(tok, meta) {
 				return fallback
 			}
 		}
-		if shellKeywords[tok] {
+		if telemetry.ShellKeywords[tok] {
 			return fallback
 		}
 		base := filepath.Base(tok)
@@ -275,29 +247,12 @@ func inferToolFromArgs(args []string, defaultTool string) string {
 		}
 		// A bare positional argument (a data filename/glob, not a command)
 		// with no leading command word before it isn't a tool either.
-		if looksLikeDataFile(base) {
+		if telemetry.LooksLikeDataFile(base) {
 			return fallback
 		}
 		return base
 	}
 	return fallback
-}
-
-// looksLikeDataFile reports whether base looks like a plain data/document
-// filename or glob rather than an executable command word — e.g. a bare
-// "README.md" or "*.lock" positional argument captured with no preceding
-// command token (issue 344). Deliberately conservative: only common
-// non-executable extensions and glob characters are treated as data files,
-// so real command names are never misclassified.
-func looksLikeDataFile(base string) bool {
-	if strings.ContainsAny(base, "*?[") {
-		return true
-	}
-	switch filepath.Ext(base) {
-	case ".md", ".txt", ".log", ".lock", ".json", ".yaml", ".yml", ".gz", ".tar", ".zip", ".csv":
-		return true
-	}
-	return false
 }
 
 // runExecWrapper spawns args as a subprocess, proxying stdin/stdout/stderr
@@ -593,7 +548,7 @@ func isSimpleShellCommand(command string) bool {
 	}
 
 	// Check for shell metacharacters / control operators / variables / subshells
-	for _, char := range shellMetacharacters {
+	for _, char := range telemetry.ShellMetacharacters {
 		if strings.Contains(trimmed, char) {
 			return false
 		}
@@ -615,7 +570,7 @@ func isSimpleShellCommand(command string) bool {
 	}
 
 	// Check for shell keywords and builtins without independent binaries on PATH
-	if shellKeywords[fields[0]] {
+	if telemetry.ShellKeywords[fields[0]] {
 		return false
 	}
 
