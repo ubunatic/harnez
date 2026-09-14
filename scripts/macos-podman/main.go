@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/spf13/cobra"
 )
@@ -113,6 +114,9 @@ Endpoints:
 		newBootStatusCommand(),
 		newInspectCommand(),
 		newScreenshotCommand(),
+		newTypeCommand(),
+		newSendKeyCommand(),
+		newInstallCommand(),
 		newCleanCommand(),
 	)
 
@@ -194,6 +198,118 @@ func newCleanCommand() *cobra.Command {
 			return doClean(cmd.Context(), cfg)
 		},
 	}
+}
+
+func newTypeCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "type <text>",
+		Short: "Send keystrokes directly to macOS guest via QEMU monitor",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doSendText(cmd.Context(), cfg.name, args[0])
+		},
+	}
+}
+
+func newSendKeyCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "send-key <key>",
+		Short: "Send a special key (ret, spc, tab, ctrl-c, etc.) to macOS guest",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doSendKey(cmd.Context(), cfg.name, args[0])
+		},
+	}
+}
+
+func newInstallCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "install-os",
+		Short: "Automate macOS disk formatting and trigger OS installation in Recovery",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doAutomatedInstall(cmd.Context(), cfg)
+		},
+	}
+}
+
+func doSendKey(ctx context.Context, name, key string) error {
+	exists, running := containerRunning(ctx, name)
+	if !exists || !running {
+		return fmt.Errorf("container %q is not running", name)
+	}
+	_, err := queryQEMUMonitor(ctx, name, fmt.Sprintf("sendkey %s", key))
+	return err
+}
+
+func doSendText(ctx context.Context, name, text string) error {
+	exists, running := containerRunning(ctx, name)
+	if !exists || !running {
+		return fmt.Errorf("container %q is not running", name)
+	}
+
+	keymap := map[rune]string{
+		' ':  "spc",
+		'\n': "ret",
+		'-':  "minus",
+		'_':  "shift-minus",
+		'/':  "slash",
+		'.':  "dot",
+		':':  "shift-semicolon",
+		';':  "semicolon",
+		'=':  "equal",
+		'"':  "shift-apostrophe",
+		'\'': "apostrophe",
+		'\\': "backslash",
+		'+':  "shift-equal",
+		'$':  "shift-4",
+		'%':  "shift-5",
+		'&':  "shift-7",
+		'*':  "shift-8",
+		'(':  "shift-9",
+		')':  "shift-0",
+		'!':  "shift-1",
+		'@':  "shift-2",
+		'#':  "shift-3",
+	}
+
+	for _, r := range text {
+		var k string
+		if val, ok := keymap[r]; ok {
+			k = val
+		} else if unicode.IsUpper(r) {
+			k = fmt.Sprintf("shift-%c", unicode.ToLower(r))
+		} else {
+			k = string(r)
+		}
+		if _, err := queryQEMUMonitor(ctx, name, fmt.Sprintf("sendkey %s", k)); err != nil {
+			return fmt.Errorf("sendkey %s: %w", k, err)
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	return nil
+}
+
+func doAutomatedInstall(ctx context.Context, cfg config) error {
+	stage := assessBootStage(ctx, cfg.name)
+	if !strings.Contains(stage, "Stage 4/4") && !strings.Contains(stage, "Language Chooser") && !strings.Contains(stage, "Recovery") {
+		return fmt.Errorf("guest is not in Stage 4/4 Recovery mode (current: %s)", stage)
+	}
+
+	fmt.Println("Triggering automated disk initialization and installation...")
+	fmt.Println("1. Sending 'ret' to confirm Language Chooser (if pending)...")
+	_ = doSendKey(ctx, cfg.name, "ret")
+	time.Sleep(1 * time.Second)
+
+	fmt.Println("2. Formatting target virtual disk (Macintosh HD, APFS, GPT)...")
+	if err := doSendText(ctx, cfg.name, "diskutil eraseDisk APFS \"Macintosh HD\" GPT /dev/disk0\n"); err != nil {
+		return fmt.Errorf("send diskutil command: %w", err)
+	}
+
+	fmt.Println("\nDisk erase command sent to Recovery Terminal.")
+	fmt.Println("Monitor progress via:")
+	fmt.Println("  go run ./scripts/macos-podman screenshot")
+	fmt.Println("  go run ./scripts/macos-podman boot-status")
+	return nil
 }
 
 func checkPrerequisites() error {
