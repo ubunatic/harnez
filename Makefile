@@ -28,7 +28,6 @@ run: ⚙️ build  # run the application locally
 install: ⚙️ build  # install binary to ~/go/bin (user)
 	go install ./cmd/harnez
 	@ln -sf harnez $$(go env GOPATH)/bin/⚙ 2>/dev/null || ln -sf harnez $(HOME)/go/bin/⚙
-	go install ./scripts/macos-podman
 
 install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wide)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
