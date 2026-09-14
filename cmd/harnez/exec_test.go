@@ -751,6 +751,13 @@ func TestInferToolFromArgs(t *testing.T) {
 		{[]string{"bash", "-c", "sudo -u root npm test"}, "Bash", "npm"},
 		{[]string{"bash", "-c", "echo hello"}, "Bash", "echo"},
 		{[]string{"git", "diff"}, "CustomTool", "CustomTool"},
+		// issue 344: redirect target, keyword, operator, and bare
+		// filename tokens must never be mistaken for a tool name.
+		{[]string{"bash", "-c", "npm test 2>/dev/null || true"}, "Bash", "npm"},
+		{[]string{"bash", "-c", "2>/dev/null || true"}, "Bash", "Bash"},
+		{[]string{"bash", "-c", "for f in *.lock; do echo $f; done"}, "Bash", "Bash"},
+		{[]string{"bash", "-c", "make check && make install"}, "Bash", "make"},
+		{[]string{"README.md"}, "Bash", "Bash"},
 	}
 	for _, tc := range cases {
 		got := inferToolFromArgs(tc.args, tc.defaultTool)
