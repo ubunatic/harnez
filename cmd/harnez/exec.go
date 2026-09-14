@@ -139,6 +139,8 @@ points an agent's Bash tool calls at this command.`,
 			tool := toolFlag
 			if tool == "" {
 				tool = inferToolFromArgs(args, "Bash")
+			} else if err := validateToolName(tool); err != nil {
+				return err
 			}
 			exitCode, err := runExecWrapper(args, execOptions{
 				Tool:          tool,
@@ -164,6 +166,34 @@ points an agent's Bash tool calls at this command.`,
 
 	cmd.AddCommand(newExecHookCmd())
 	return cmd
+}
+
+// validateToolName rejects an explicit --tool value at the point it's
+// accepted, before any telemetry row is ever written. Root-cause fix for
+// issue 344's follow-up: ad hoc manual `harnez exec --tool "<label>"`
+// invocations across several projects used --tool as a free-text label
+// (a filename, a version tag, a username) instead of a real tool
+// identifier, fragmenting tool_stats. CanonicalToolName (toolname.go)
+// cleans up historical rows at export time, but that is a read-time
+// backstop only — this stops new garbage from being inserted at all,
+// reusing the same "does this look like a command word" check.
+func validateToolName(tool string) error {
+	trimmed := strings.TrimSpace(tool)
+	if trimmed == "" {
+		return fmt.Errorf("exec: --tool must not be blank")
+	}
+	if len(strings.Fields(trimmed)) > 1 {
+		return fmt.Errorf("exec: --tool %q looks like a full command, not a tool identifier — pass a plain name like git, npm, or Bash", trimmed)
+	}
+	for _, meta := range telemetry.ShellMetacharacters {
+		if strings.Contains(trimmed, meta) {
+			return fmt.Errorf("exec: --tool %q contains a shell metacharacter, not a tool identifier", trimmed)
+		}
+	}
+	if telemetry.LooksLikeDataFile(trimmed) {
+		return fmt.Errorf("exec: --tool %q looks like a filename, version tag, or argument value, not a tool identifier", trimmed)
+	}
+	return nil
 }
 
 // execOptions bundles runExecWrapper's inputs. The zero value plus a real

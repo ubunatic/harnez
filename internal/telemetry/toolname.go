@@ -21,6 +21,7 @@ package telemetry
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -65,12 +66,21 @@ func LooksLikeDataFile(base string) bool {
 	if strings.HasPrefix(base, ".") && base != "." && base != ".." {
 		return true
 	}
+	if semverLike.MatchString(base) {
+		return true
+	}
 	switch filepath.Ext(base) {
-	case ".md", ".txt", ".log", ".lock", ".json", ".yaml", ".yml", ".gz", ".tar", ".zip", ".csv":
+	case ".md", ".txt", ".log", ".lock", ".json", ".yaml", ".yml", ".gz", ".tar", ".zip", ".csv",
+		".conf", ".cfg", ".ini", ".toml", ".xml", ".html", ".htm", ".pem", ".key", ".crt":
 		return true
 	}
 	return false
 }
+
+// semverLike matches a bare version tag ("v0.1.10", "1.2.3") — a value
+// that shows up as a --tool argument during release verification, never
+// as a real binary's own name.
+var semverLike = regexp.MustCompile(`^v?\d+(\.\d+){1,3}$`)
 
 // CanonicalToolName groups an already-recorded tool_name down to its
 // leading command word when it looks like a full shell command rather than

@@ -767,6 +767,30 @@ func TestInferToolFromArgs(t *testing.T) {
 	}
 }
 
+func TestValidateToolName(t *testing.T) {
+	cases := []struct {
+		tool    string
+		wantErr bool
+	}{
+		{"git", false},
+		{"npm", false},
+		{"Bash", false},
+		{"", true},
+		{"   ", true},
+		{"git status", true},
+		{"default.conf", true},
+		{"v0.1.10", true},
+		{"models.json:ro,Z", true},
+		{"cmd1 && cmd2", true},
+	}
+	for _, tc := range cases {
+		err := validateToolName(tc.tool)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("validateToolName(%q) error = %v, wantErr %v", tc.tool, err, tc.wantErr)
+		}
+	}
+}
+
 func TestIsSimpleShellCommand(t *testing.T) {
 	cases := []struct {
 		cmd  string
