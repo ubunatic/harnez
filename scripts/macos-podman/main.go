@@ -123,6 +123,7 @@ Endpoints:
 		newSnapshotCommand(),
 		newSyncCommand(),
 		newCleanCommand(),
+		newSetupCommand(),
 	)
 
 	return rootCmd
@@ -235,6 +236,89 @@ func newInstallCommand() *cobra.Command {
 			return doAutomatedInstall(cmd.Context(), cfg)
 		},
 	}
+}
+
+func newSetupCommand() *cobra.Command {
+	var hostname string
+	var pubkeyPath string
+	var guestUser string
+
+	cmd := &cobra.Command{
+		Use:   "setup",
+		Short: "Initial guest setup: set hostname and install SSH public key",
+		Long: `Connect to the macOS guest via SSH and perform first-boot setup:
+  - Set HostName, LocalHostName, and ComputerName via scutil (requires sudo + TTY)
+  - Optionally install a public key into ~/.ssh/authorized_keys
+
+Requires the guest SSH server to be reachable on --ssh-port (default 2222).
+sudo will prompt for the guest user password interactively.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doSetup(cmd.Context(), cfg, hostname, guestUser, pubkeyPath)
+		},
+	}
+
+	cmd.Flags().StringVar(&hostname, "hostname", "", "Hostname to set on the macOS guest (e.g. macos-t14)")
+	cmd.Flags().StringVar(&pubkeyPath, "pubkey", "", "Path to SSH public key to install in guest ~/.ssh/authorized_keys")
+	cmd.Flags().StringVar(&guestUser, "user", "dev", "Guest SSH username")
+	return cmd
+}
+
+func doSetup(ctx context.Context, cfg config, hostname, guestUser, pubkeyPath string) error {
+	if hostname == "" && pubkeyPath == "" {
+		return fmt.Errorf("nothing to do: specify --hostname and/or --pubkey")
+	}
+
+	sshTarget := fmt.Sprintf("%s@%s", guestUser, hostName(cfg.remoteHost))
+	portStr := fmt.Sprintf("%d", cfg.sshPort)
+
+	// Install public key if requested.
+	if pubkeyPath != "" {
+		pubkeyBytes, err := os.ReadFile(pubkeyPath)
+		if err != nil {
+			return fmt.Errorf("read pubkey %q: %w", pubkeyPath, err)
+		}
+		pubkey := strings.TrimSpace(string(pubkeyBytes))
+		script := fmt.Sprintf(
+			"mkdir -p ~/.ssh && chmod 700 ~/.ssh && "+
+				"grep -qxF %s ~/.ssh/authorized_keys 2>/dev/null || echo %s >> ~/.ssh/authorized_keys && "+
+				"chmod 600 ~/.ssh/authorized_keys && echo 'key installed'",
+			shellEscape(pubkey), shellEscape(pubkey),
+		)
+		cmd := exec.CommandContext(ctx, "ssh",
+			"-o", "StrictHostKeyChecking=no",
+			"-p", portStr,
+			sshTarget, script,
+		)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		fmt.Printf("Installing public key from %s into %s ~/.ssh/authorized_keys...\n", pubkeyPath, sshTarget)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("install pubkey: %w", err)
+		}
+	}
+
+	// Set hostname via sudo scutil (needs a TTY).
+	if hostname != "" {
+		script := fmt.Sprintf(
+			"sudo scutil --set HostName %s && sudo scutil --set LocalHostName %s && sudo scutil --set ComputerName %s && echo 'hostname set'",
+			shellEscape(hostname), shellEscape(hostname), shellEscape(hostname),
+		)
+		cmd := exec.CommandContext(ctx, "ssh",
+			"-t",
+			"-o", "StrictHostKeyChecking=no",
+			"-p", portStr,
+			sshTarget, script,
+		)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		fmt.Printf("Setting hostname to %q on %s (sudo password required)...\n", hostname, sshTarget)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("set hostname: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func newSnapshotCommand() *cobra.Command {
