@@ -120,6 +120,7 @@ Endpoints:
 		newTypeCommand(),
 		newSendKeyCommand(),
 		newInstallCommand(),
+		newSnapshotCommand(),
 		newSyncCommand(),
 		newCleanCommand(),
 	)
@@ -234,6 +235,165 @@ func newInstallCommand() *cobra.Command {
 			return doAutomatedInstall(cmd.Context(), cfg)
 		},
 	}
+}
+
+func newSnapshotCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "snapshot",
+		Aliases: []string{"snap"},
+		Short:   "Manage persistent storage snapshots (save, list, restore, rm)",
+	}
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "save [name]",
+		Short: "Create a named snapshot of current macOS storage",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := ""
+			if len(args) > 0 {
+				name = args[0]
+			}
+			return doSnapshotSave(cmd.Context(), cfg, name)
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List all existing snapshots",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doSnapshotList(cmd.Context(), cfg)
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "restore <name>",
+		Short: "Restore macOS storage from a named snapshot",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doSnapshotRestore(cmd.Context(), cfg, args[0])
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:     "rm <name>",
+		Aliases: []string{"delete"},
+		Short:   "Delete a snapshot",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doSnapshotDelete(cmd.Context(), cfg, args[0])
+		},
+	})
+
+	return cmd
+}
+
+func runHostShell(ctx context.Context, remoteHost, script string) (string, error) {
+	var cmd *exec.Cmd
+	if remoteHost != "" {
+		cmd = exec.CommandContext(ctx, "ssh", remoteHost, script)
+	} else {
+		cmd = exec.CommandContext(ctx, "bash", "-c", script)
+	}
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func resolveSnapshotPath(snapDir, version, name string) string {
+	if strings.HasPrefix(name, version+"-") {
+		return fmt.Sprintf("%s/%s", snapDir, name)
+	}
+	return fmt.Sprintf("%s/%s-%s", snapDir, version, name)
+}
+
+func doSnapshotSave(ctx context.Context, cfg config, name string) error {
+	if name == "" {
+		name = time.Now().Format("20060102-150405")
+	}
+	_, running := containerRunning(ctx, cfg.remoteHost, cfg.name)
+	if running {
+		fmt.Printf("Notice: container %q is running on %s. Taking snapshot of current disk state.\n", cfg.name, hostName(cfg.remoteHost))
+	}
+	snapDir := fmt.Sprintf("%s/.snapshots", cfg.storageDir)
+	snapTarget := resolveSnapshotPath(snapDir, cfg.version, name)
+	srcDir := fmt.Sprintf("%s/%s", cfg.storageDir, cfg.version)
+
+	fmt.Printf("Saving snapshot %q on %s (source: %s)...\n", name, hostName(cfg.remoteHost), srcDir)
+	script := fmt.Sprintf("mkdir -p %s && rm -rf %s && cp -r --sparse=always %s %s", shellEscape(snapDir), shellEscape(snapTarget), shellEscape(srcDir), shellEscape(snapTarget))
+	out, err := runHostShell(ctx, cfg.remoteHost, script)
+	if err != nil {
+		return fmt.Errorf("snapshot save failed: %s: %w", strings.TrimSpace(out), err)
+	}
+
+	sizeOut, _ := runHostShell(ctx, cfg.remoteHost, fmt.Sprintf("du -sh %s 2>/dev/null", shellEscape(snapTarget)))
+	size := strings.Fields(strings.TrimSpace(sizeOut))
+	sizeStr := "unknown"
+	if len(size) > 0 {
+		sizeStr = size[0]
+	}
+	fmt.Printf("Snapshot %q saved successfully.\n  Path: %s\n  Size: %s\n", name, snapTarget, sizeStr)
+	return nil
+}
+
+func doSnapshotList(ctx context.Context, cfg config) error {
+	snapDir := fmt.Sprintf("%s/.snapshots", cfg.storageDir)
+	script := fmt.Sprintf("if [ -d %s ]; then du -sh %s/* 2>/dev/null; fi", shellEscape(snapDir), shellEscape(snapDir))
+	out, err := runHostShell(ctx, cfg.remoteHost, script)
+	if err != nil {
+		return fmt.Errorf("list snapshots failed: %s: %w", strings.TrimSpace(out), err)
+	}
+	trimmed := strings.TrimSpace(out)
+	if trimmed == "" {
+		fmt.Printf("No snapshots found in %s on %s.\n", snapDir, hostName(cfg.remoteHost))
+		return nil
+	}
+	lines := strings.Split(trimmed, "\n")
+	fmt.Printf("Snapshots in %s on %s:\n", snapDir, hostName(cfg.remoteHost))
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			snapName := filepath.Base(parts[1])
+			fmt.Printf("  - %-32s (%s)\n", snapName, parts[0])
+		}
+	}
+	return nil
+}
+
+func doSnapshotRestore(ctx context.Context, cfg config, name string) error {
+	_, running := containerRunning(ctx, cfg.remoteHost, cfg.name)
+	if running {
+		return fmt.Errorf("container %q is running on %s. Stop container before restoring: 'go run ./scripts/macos-podman stop'", cfg.name, hostName(cfg.remoteHost))
+	}
+	snapDir := fmt.Sprintf("%s/.snapshots", cfg.storageDir)
+	snapTarget := resolveSnapshotPath(snapDir, cfg.version, name)
+	destDir := fmt.Sprintf("%s/%s", cfg.storageDir, cfg.version)
+
+	fmt.Printf("Restoring snapshot %q on %s to %s...\n", name, hostName(cfg.remoteHost), destDir)
+	script := fmt.Sprintf("if [ ! -d %s ]; then if [ -d %s/%s ]; then snap=%s/%s; else echo 'Snapshot not found'; exit 1; fi; else snap=%s; fi; rm -rf %s && cp -r --sparse=always \"$snap\" %s",
+		shellEscape(snapTarget),
+		shellEscape(snapDir), shellEscape(name),
+		shellEscape(snapDir), shellEscape(name),
+		shellEscape(snapTarget),
+		shellEscape(destDir),
+		shellEscape(destDir),
+	)
+	out, err := runHostShell(ctx, cfg.remoteHost, script)
+	if err != nil {
+		return fmt.Errorf("snapshot restore failed: %s: %w", strings.TrimSpace(out), err)
+	}
+	fmt.Printf("Snapshot %q restored successfully to %s.\n", name, destDir)
+	return nil
+}
+
+func doSnapshotDelete(ctx context.Context, cfg config, name string) error {
+	snapDir := fmt.Sprintf("%s/.snapshots", cfg.storageDir)
+	snapTarget := resolveSnapshotPath(snapDir, cfg.version, name)
+	script := fmt.Sprintf("rm -rf %s %s/%s", shellEscape(snapTarget), shellEscape(snapDir), shellEscape(name))
+	out, err := runHostShell(ctx, cfg.remoteHost, script)
+	if err != nil {
+		return fmt.Errorf("snapshot delete failed: %s: %w", strings.TrimSpace(out), err)
+	}
+	fmt.Printf("Snapshot %q deleted from %s.\n", name, hostName(cfg.remoteHost))
+	return nil
 }
 
 func newSyncCommand() *cobra.Command {

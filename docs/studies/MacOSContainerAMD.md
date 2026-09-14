@@ -191,6 +191,25 @@ go run ./scripts/macos-podman --host x600 inspect
 * **VNC**: `x600:5900`
 * **SSH**: `ssh -p 2222 x600`
 
+---
 
+## 10. Snapshot & Rollback Management
 
+To safely experiment with OS updates, kext modifications, or experimental builds without risking a working baseline, `macos-podman` provides built-in sparse snapshot management (both locally and across remote nodes):
 
+```bash
+# Save a named snapshot before risky operations
+go run ./scripts/macos-podman snapshot save pre-update
+go run ./scripts/macos-podman --host x600 snapshot save pre-update
+
+# List all stored snapshots and their disk sizes
+go run ./scripts/macos-podman snapshot list
+go run ./scripts/macos-podman --host x600 snapshot list
+
+# Restore from a snapshot if an update breaks OpenCore or kernel boot
+go run ./scripts/macos-podman stop
+go run ./scripts/macos-podman snapshot restore pre-update
+
+# Delete obsolete snapshots
+go run ./scripts/macos-podman snapshot rm pre-update
+```
