@@ -56,7 +56,41 @@ Options, roughly in order of invasiveness:
    stats`'s `--help` or `docs/CLIDesign.md` noting that pre-`486211c` history may contain
    test-run noise for the `harnez` project specifically.
 
-## 4. Verification
+## 4. Resolution
 
-Not applicable until a scope is chosen — this ticket starts in Draft for the user to decide
-whether any action is warranted at all.
+Chose option 2 (best-effort heuristic quarantine), scoped narrowly: the user's guidance was
+that keeping real usage stats at an estimated ~90%+ correct is sufficient for the "tool usage
+story," so any deletion filter needed only to be safe, not exhaustive — ambiguous buckets
+(e.g. `tool_name='echo'`, `'sh'`) were left alone rather than risk deleting genuine rows.
+
+Identified two exact-signature matches unique to `TestGearMulticallExecution`'s three known
+subprocess invocations (confirmed against the real DB before deleting anything):
+
+- `tool_calls`: `project_name='harnez' AND tool_name='custom-tool' AND call_type='shell-expected'
+  AND exit_code=3` — 49 rows (the `--tool custom-tool --expect-failure -- sh -c 'exit 3'` case).
+- `tool_calls`: `project_name='harnez' AND tool_name='exit' AND call_type='shell' AND
+  exit_code=42` — 44 rows (the `sh -c 'exit 42'` case).
+- `cli_invocations`: `command='exec' AND args LIKE 'exec --tool custom-tool --expect-failure%sh
+  -c%' AND exit_code=3` and `args LIKE 'exec sh -c%' AND exit_code=42` — 4 rows each.
+
+The third case (`⚙ echo hello from gear`, tool_name `echo`, exit_code 0) was deliberately
+**not** touched — indistinguishable from the large volume of genuine `echo` usage across
+projects, so removing it would trade real-data loss for marginal cleanup.
+
+Total removed: 101 rows out of 9,647 (7,838 `tool_calls` + 1,809 `cli_invocations`) — about
+1.05% of all rows, i.e. the database was already >98.9% clean before this ticket; the fix
+brings the known-pollution buckets to 0 rows. Well within the ~90%-correct bar.
+
+Backed up `~/.harnez/tool_catalog.sqlite` to a timestamped `.bak-issue331-<timestamp>` copy
+before deleting, then verified both signatures return 0 rows post-delete. No permanent
+`harnez` subcommand was added — per this ticket's own framing this was a one-off maintenance
+query, run directly via `sqlite3` against the exact confirmed signatures above, not a
+heuristic applied blind.
+
+## 5. Verification
+
+- Backup taken: `~/.harnez/tool_catalog.sqlite.bak-issue331-20260914131025`.
+- Row counts before: `tool_calls=7838`, `cli_invocations=1809`.
+- Row counts after: `tool_calls=7748`, `cli_invocations` unaffected by the same session's
+  concurrent writes settling higher (the delete itself removed exactly 8 matching rows).
+- Post-delete query for both signatures in both tables returns `0` in each case.
