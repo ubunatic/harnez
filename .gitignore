@@ -13,3 +13,5 @@
 # local macOS container storage & test binaries
 /macos-storage/
 /scripts/macos-hello/hello_*
+downloads
+macos-podman
