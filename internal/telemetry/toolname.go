@@ -80,7 +80,7 @@ func CanonicalToolName(raw string) string {
 		}
 	}
 	fields := strings.Fields(trimmed)
-	if !hasMeta && len(fields) <= 1 && !ShellKeywords[trimmed] && !LooksLikeDataFile(trimmed) {
+	if !hasMeta && len(fields) <= 1 && !ShellKeywords[trimmed] && !LooksLikeDataFile(stripQuotes(trimmed)) {
 		return trimmed
 	}
 
@@ -108,7 +108,7 @@ func CanonicalToolName(raw string) string {
 		if ShellKeywords[tok] {
 			return fallback
 		}
-		base := filepath.Base(tok)
+		base := filepath.Base(stripQuotes(tok))
 		if base == "" || base == "bash" || base == "sh" || base == "sudo" || base == "env" || base == "doas" || base == "nohup" {
 			continue
 		}
@@ -118,4 +118,12 @@ func CanonicalToolName(raw string) string {
 		return base
 	}
 	return fallback
+}
+
+// stripQuotes trims a single matching pair of leading/trailing quote
+// characters. A stray, unmatched quote (e.g. from a mis-escaped --tool
+// value) is common corruption in captured tool_name strings — it should
+// not defeat the extension/glob checks in LooksLikeDataFile.
+func stripQuotes(s string) string {
+	return strings.Trim(s, `"'`)
 }

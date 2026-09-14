@@ -24,6 +24,12 @@ func TestCanonicalToolName(t *testing.T) {
 		{"*.lock", "Bash"},
 		{"README.md", "Bash"},
 		{"*.lock && git add -u && git commit -m \"chore\" || true", "Bash"},
+		// issue 344 follow-up: mis-escaped/manual --tool values with a
+		// stray trailing quote must not defeat data-file detection.
+		{`crispasr-linux-x86_64.tar.gz"`, "Bash"},
+		{`test-crispasr.tar.gz`, "Bash"},
+		{`crispasr-linux-x86_64.tar.gz" 2>&1 | head -n 40`, "Bash"},
+		{"crispasr --version", "crispasr"},
 	}
 	for _, tc := range cases {
 		got := CanonicalToolName(tc.raw)
