@@ -4,6 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Build & Distribution (macOS Delivery)
 **Category**: Packaging & CI / Multi-OS
+**Related**: [docs/MacOSPortability.md](../docs/MacOSPortability.md)
 
 ---
 

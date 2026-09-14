@@ -4,6 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: UX Polish (Platform Compatibility)
 **Category**: Config & Hooks / Multi-OS
+**Related**: [docs/MacOSPortability.md](../docs/MacOSPortability.md)
 
 ---
 

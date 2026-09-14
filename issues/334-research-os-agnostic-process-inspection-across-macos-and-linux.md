@@ -4,6 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Functional Gap (Platform Portability)
 **Category**: Architecture / Multi-OS
+**Related**: [docs/MacOSPortability.md](../docs/MacOSPortability.md)
 
 ---
 

@@ -4,6 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Security & Usability (Platform Parity)
 **Category**: Permissions / Multi-OS
+**Related**: [docs/MacOSPortability.md](../docs/MacOSPortability.md)
 
 ---
 

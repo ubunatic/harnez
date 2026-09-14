@@ -4,6 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Architecture (Platform Portability)
 **Category**: Architecture / Shims & Hooks
+**Related**: [docs/MacOSPortability.md](../docs/MacOSPortability.md)
 
 ---
 
