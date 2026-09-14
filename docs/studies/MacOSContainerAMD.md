@@ -71,11 +71,11 @@ sequenceDiagram
 
 ## 4. Diagnostic & Deep Inspection Toolkit
 
-Our CLI runner (`scripts/macos-podman/main.go`) provides built-in deep inspection tools via QMP monitor socket:
+The standalone `podmac` CLI provides built-in deep inspection tools via QMP monitor socket:
 
-* **Boot Status**: `go run ./scripts/macos-podman boot-status [-s]`
+* **Boot Status**: `podmac boot-status [-s]`
   * Queries HTTP, VNC, SSH, QEMU CPU thread state, serial logs, and captures auto-cropped guest screenshots.
-* **Deep Register & Stack Inspection**: `go run ./scripts/macos-podman inspect`
+* **Deep Register & Stack Inspection**: `podmac inspect`
   * Reads RIP, RSP, CR0, CR2 (Page Fault Address), CR3 (Page Table Base), and CPL (Ring 0 supervisor vs Ring 3 user).
   * Disassembles active machine instructions at `$rip`.
   * Dumps stack slots at `$rsp` and traverses trap call frames to pinpoint faulting C++/Mach functions in XNU.
@@ -134,16 +134,16 @@ To enable headless automation and continuous testing without manual browser inte
 ### CLI Subcommands
 ```bash
 # 1. Type raw text or shell commands into guest terminal
-go run ./scripts/macos-podman type "uname -a\n"
+podmac type "uname -a\n"
 
 # 2. Execute cross-compiled Darwin binaries mounted from host
-go run ./scripts/macos-podman type "/shared/scripts/macos-hello/hello_darwin_amd64\n"
+podmac type "/shared/scripts/macos-hello/hello_darwin_amd64\n"
 
 # 3. Send navigation / control keys (ret, spc, tab, ctrl-c)
-go run ./scripts/macos-podman send-key ret
+podmac send-key ret
 
 # 4. Automate one-shot APFS partition creation in Recovery
-go run ./scripts/macos-podman install-os
+podmac install-os
 ```
 
 ### Key Encoding Architecture
@@ -171,19 +171,19 @@ The containerized macOS environment can be migrated and executed seamlessly on r
 ### One-Command Sparse Replication
 ```bash
 # Sync local persistent storage to x600 (sparse mode preserves unallocated disk space)
-go run ./scripts/macos-podman sync x600
+podmac sync x600
 ```
 
 ### Remote Headless Orchestration
 ```bash
 # Start macOS container on remote host x600
-go run ./scripts/macos-podman --host x600 run
+podmac --host x600 run
 
 # Monitor boot & capture screenshots remotely
-go run ./scripts/macos-podman --host x600 boot-status
+podmac --host x600 boot-status
 
 # Inspect CPU & memory remotely
-go run ./scripts/macos-podman --host x600 inspect
+podmac --host x600 inspect
 ```
 
 ### Remote Endpoints
@@ -195,23 +195,23 @@ go run ./scripts/macos-podman --host x600 inspect
 
 ## 10. Snapshot & Rollback Management
 
-To safely experiment with OS updates, kext modifications, or experimental builds without risking a working baseline, `macos-podman` provides built-in sparse snapshot management (both locally and across remote nodes):
+To safely experiment with OS updates, kext modifications, or experimental builds without risking a working baseline, `podmac` provides built-in sparse snapshot management (both locally and across remote nodes):
 
 ```bash
 # Save a named snapshot before risky operations
-go run ./scripts/macos-podman snapshot save pre-update
-go run ./scripts/macos-podman --host x600 snapshot save pre-update
+podmac snapshot save pre-update
+podmac --host x600 snapshot save pre-update
 
 # List all stored snapshots and their disk sizes
-go run ./scripts/macos-podman snapshot list
-go run ./scripts/macos-podman --host x600 snapshot list
+podmac snapshot list
+podmac --host x600 snapshot list
 
 # Restore from a snapshot if an update breaks OpenCore or kernel boot
-go run ./scripts/macos-podman stop
-go run ./scripts/macos-podman snapshot restore pre-update
+podmac stop
+podmac snapshot restore pre-update
 
 # Delete obsolete snapshots
-go run ./scripts/macos-podman snapshot rm pre-update
+podmac snapshot rm pre-update
 ```
 
 ---
@@ -230,7 +230,7 @@ When macOS major version upgrades or heavy SDK installations require additional 
 
 2. **Launch with enlarged disk capacity**:
    ```bash
-   go run ./scripts/macos-podman --host x600 run --disk 128G
+   podmac --host x600 run --disk 128G
    ```
 
 3. **Expand APFS Container (macOS Guest Terminal or Recovery)**:
@@ -295,11 +295,10 @@ ssh -p 2222 dev@x600 "/tmp/hello_darwin_amd64"
 +------------------------------------+          +------------------------------------+
                    ^                                       ^
                    |                                       |
-                   +--- [scripts/macos-podman/main.go] ---+
+                   +--- [../podmac/main.go] ---+
                         - Unified Cobra CLI tool
                         - Sparse rsync replication (`sync`)
                         - Headless QEMU monitor (`type`, `send-key`)
                         - Persistent snapshot engine (`snapshot save/restore`)
                         - Remote execution bridge (`--host x600`)
 ```
-

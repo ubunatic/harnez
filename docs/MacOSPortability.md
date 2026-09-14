@@ -76,15 +76,16 @@ Architecture decisions, platform boundaries, and implementation strategy for tra
   automatically on push/PR to the mirror. Wiring that in (and deciding on cost
   tradeoffs of running macOS CI on every push) is future work, not yet ticketed.
 
-### 2.8 Local & Remote Containerized macOS Testing Engine (`macos-podman`)
-- **Status**: Implemented (2026-09-14), detailed case study in [`docs/studies/MacOSContainerAMD.md`](file:///home/uwe/projects/harnez/docs/studies/MacOSContainerAMD.md).
+### 2.8 Local & Remote Containerized macOS Testing Engine (`podmac`)
+- **Status**: Implemented (2026-09-14), detailed case study in [MacOSContainerAMD.md](studies/MacOSContainerAMD.md).
+- **Tool**: Standalone sibling project `../podmac`; install with `make -C ../podmac install`.
 - **Architecture**: Runs real macOS Darwin kernels (Big Sur 11, Sonoma 14) under rootless Podman + KVM with OpenCore on AMD Ryzen hosts (`t14` local laptop and `x600` compute node).
 - **Capabilities & Tooling**:
-  - `go run ./scripts/macos-podman --host <node> boot-status [-s]` — real-time boot stage tracking & guest screenshot capture.
-  - `go run ./scripts/macos-podman --host <node> inspect` — CPU registers, instruction pointer disassembly, and Mach-O trap analysis.
-  - `go run ./scripts/macos-podman --host <node> type "<cmd>\n"` — headless programmatic terminal control via QEMU QMP socket.
-  - `go run ./scripts/macos-podman --host <node> snapshot save/list/restore/rm` — sparse persistent storage snapshotting and rollback.
-  - `go run ./scripts/macos-podman sync <node>` — one-command sparse rsync storage replication.
+  - `podmac --host <node> boot-status [-s]` — real-time boot stage tracking & guest screenshot capture.
+  - `podmac --host <node> inspect` — CPU registers, instruction pointer disassembly, and Mach-O trap analysis.
+  - `podmac --host <node> type "<cmd>\n"` — headless programmatic terminal control via QEMU QMP socket.
+  - `podmac --host <node> snapshot save/list/restore/rm` — sparse persistent storage snapshotting and rollback.
+  - `podmac sync <node>` — one-command sparse rsync storage replication.
   - Direct headless SSH execution (`ssh -p 2222 dev@<node>`) for running cross-compiled Go Darwin test binaries.
 
 ---
