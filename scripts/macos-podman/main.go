@@ -44,6 +44,7 @@ type config struct {
 	stopTimeout int
 	noCrop      bool
 	short       bool
+	remoteHost  string
 }
 
 var cfg = config{
@@ -61,6 +62,7 @@ var cfg = config{
 	stopTimeout: 10,
 	noCrop:      false,
 	short:       false,
+	remoteHost:  "",
 }
 
 func main() {
@@ -105,6 +107,7 @@ Endpoints:
 	pf.IntVar(&cfg.stopTimeout, "timeout", cfg.stopTimeout, "Stop timeout in seconds before force kill")
 	pf.BoolVar(&cfg.noCrop, "no-crop", false, "Disable auto-cropping of black borders from screenshots")
 	pf.BoolVarP(&cfg.short, "short", "s", false, "Compact single-line output summary")
+	pf.StringVarP(&cfg.remoteHost, "host", "H", "", "Remote SSH host for podman execution (e.g. x600)")
 
 	// Subcommands
 	rootCmd.AddCommand(
@@ -117,6 +120,7 @@ Endpoints:
 		newTypeCommand(),
 		newSendKeyCommand(),
 		newInstallCommand(),
+		newSyncCommand(),
 		newCleanCommand(),
 	)
 
@@ -230,6 +234,34 @@ func newInstallCommand() *cobra.Command {
 			return doAutomatedInstall(cmd.Context(), cfg)
 		},
 	}
+}
+
+func newSyncCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "sync [remote_host]",
+		Short: "Sync local persistent macOS storage to remote host using sparse rsync",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			destHost := cfg.remoteHost
+			if len(args) > 0 {
+				destHost = args[0]
+			}
+			if destHost == "" {
+				return fmt.Errorf("specify remote host via argument or --host/-H flag (e.g. macos-podman sync x600)")
+			}
+			return doSyncStorage(cmd.Context(), cfg, destHost)
+		},
+	}
+}
+
+func doSyncStorage(ctx context.Context, cfg config, remoteHost string) error {
+	fmt.Printf("Syncing %s to %s:%s (sparse mode)...\n", cfg.storageDir, remoteHost, cfg.storageDir)
+	mkdirCmd := exec.CommandContext(ctx, "ssh", remoteHost, fmt.Sprintf("mkdir -p %s", cfg.storageDir))
+	_ = mkdirCmd.Run()
+	cmd := exec.CommandContext(ctx, "rsync", "-avz", "--sparse", "--progress", cfg.storageDir+"/", fmt.Sprintf("%s:%s/", remoteHost, cfg.storageDir))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func doSendKey(ctx context.Context, name, key string) error {

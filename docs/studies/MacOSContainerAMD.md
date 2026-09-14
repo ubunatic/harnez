@@ -162,5 +162,35 @@ As of 2026-09-14:
 * CPU execution runs stably in Ring 3 (`CPL=3`) userland mode on AMD Ryzen with KVM acceleration.
 * Persistent environment is ready for local cross-platform development, continuous testing of Go Darwin binaries, and headless automation.
 
+---
+
+## 9. Remote Execution & Migration to Dedicated Nodes (e.g. `x600`)
+
+The containerized macOS environment can be migrated and executed seamlessly on remote Linux compute nodes (e.g. `x600` featuring AMD Ryzen 7 8700G, 16 vCPUs, 45 GiB RAM, 338 GiB NVMe, and KVM):
+
+### One-Command Sparse Replication
+```bash
+# Sync local persistent storage to x600 (sparse mode preserves unallocated disk space)
+go run ./scripts/macos-podman sync x600
+```
+
+### Remote Headless Orchestration
+```bash
+# Start macOS container on remote host x600
+go run ./scripts/macos-podman --host x600 run
+
+# Monitor boot & capture screenshots remotely
+go run ./scripts/macos-podman --host x600 boot-status
+
+# Inspect CPU & memory remotely
+go run ./scripts/macos-podman --host x600 inspect
+```
+
+### Remote Endpoints
+* **Web UI (noVNC)**: `http://x600:8006`
+* **VNC**: `x600:5900`
+* **SSH**: `ssh -p 2222 x600`
+
+
 
 
