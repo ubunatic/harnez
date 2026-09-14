@@ -210,7 +210,7 @@ func newTypeCommand() *cobra.Command {
 		Short: "Send keystrokes directly to macOS guest via QEMU monitor",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return doSendText(cmd.Context(), cfg.name, args[0])
+			return doSendText(cmd.Context(), cfg, args[0])
 		},
 	}
 }
@@ -221,7 +221,7 @@ func newSendKeyCommand() *cobra.Command {
 		Short: "Send a special key (ret, spc, tab, ctrl-c, etc.) to macOS guest",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return doSendKey(cmd.Context(), cfg.name, args[0])
+			return doSendKey(cmd.Context(), cfg, args[0])
 		},
 	}
 }
@@ -264,19 +264,19 @@ func doSyncStorage(ctx context.Context, cfg config, remoteHost string) error {
 	return cmd.Run()
 }
 
-func doSendKey(ctx context.Context, name, key string) error {
-	exists, running := containerRunning(ctx, name)
+func doSendKey(ctx context.Context, cfg config, key string) error {
+	exists, running := containerRunning(ctx, cfg.remoteHost, cfg.name)
 	if !exists || !running {
-		return fmt.Errorf("container %q is not running", name)
+		return fmt.Errorf("container %q is not running", cfg.name)
 	}
-	_, err := queryQEMUMonitor(ctx, name, fmt.Sprintf("sendkey %s", key))
+	_, err := queryQEMUMonitor(ctx, cfg.remoteHost, cfg.name, fmt.Sprintf("sendkey %s", key))
 	return err
 }
 
-func doSendText(ctx context.Context, name, text string) error {
-	exists, running := containerRunning(ctx, name)
+func doSendText(ctx context.Context, cfg config, text string) error {
+	exists, running := containerRunning(ctx, cfg.remoteHost, cfg.name)
 	if !exists || !running {
-		return fmt.Errorf("container %q is not running", name)
+		return fmt.Errorf("container %q is not running", cfg.name)
 	}
 
 	keymap := map[rune]string{
@@ -313,7 +313,7 @@ func doSendText(ctx context.Context, name, text string) error {
 		} else {
 			k = string(r)
 		}
-		if _, err := queryQEMUMonitor(ctx, name, fmt.Sprintf("sendkey %s", k)); err != nil {
+		if _, err := queryQEMUMonitor(ctx, cfg.remoteHost, cfg.name, fmt.Sprintf("sendkey %s", k)); err != nil {
 			return fmt.Errorf("sendkey %s: %w", k, err)
 		}
 		time.Sleep(30 * time.Millisecond)
@@ -322,18 +322,18 @@ func doSendText(ctx context.Context, name, text string) error {
 }
 
 func doAutomatedInstall(ctx context.Context, cfg config) error {
-	stage := assessBootStage(ctx, cfg.name)
+	stage := assessBootStage(ctx, cfg.remoteHost, cfg.name)
 	if !strings.Contains(stage, "Stage 4/4") && !strings.Contains(stage, "Language Chooser") && !strings.Contains(stage, "Recovery") {
 		return fmt.Errorf("guest is not in Stage 4/4 Recovery mode (current: %s)", stage)
 	}
 
 	fmt.Println("Triggering automated disk initialization and installation...")
 	fmt.Println("1. Sending 'ret' to confirm Language Chooser (if pending)...")
-	_ = doSendKey(ctx, cfg.name, "ret")
+	_ = doSendKey(ctx, cfg, "ret")
 	time.Sleep(1 * time.Second)
 
 	fmt.Println("2. Formatting target virtual disk (Macintosh HD, APFS, GPT)...")
-	if err := doSendText(ctx, cfg.name, "diskutil eraseDisk APFS \"Macintosh HD\" GPT /dev/disk0\n"); err != nil {
+	if err := doSendText(ctx, cfg, "diskutil eraseDisk APFS \"Macintosh HD\" GPT /dev/disk0\n"); err != nil {
 		return fmt.Errorf("send diskutil command: %w", err)
 	}
 
@@ -344,28 +344,77 @@ func doAutomatedInstall(ctx context.Context, cfg config) error {
 	return nil
 }
 
-func checkPrerequisites() error {
+func shellEscape(s string) string {
+	if s == "" {
+		return "''"
+	}
+	safe := true
+	for _, r := range s {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' || r == '/' || r == ':' || r == '=' || r == ',') {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+func podmanCmd(ctx context.Context, remoteHost string, args ...string) *exec.Cmd {
+	if remoteHost != "" {
+		escaped := make([]string, len(args))
+		for i, a := range args {
+			escaped[i] = shellEscape(a)
+		}
+		sshArg := "podman " + strings.Join(escaped, " ")
+		return exec.CommandContext(ctx, "ssh", remoteHost, sshArg)
+	}
+	return exec.CommandContext(ctx, "podman", args...)
+}
+
+func checkPrerequisites(remoteHost string) error {
+	if remoteHost != "" {
+		cmd := exec.Command("ssh", remoteHost, "podman --version")
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("remote host %q: podman is not reachable via SSH (%w)", remoteHost, err)
+		}
+		kvmCmd := exec.Command("ssh", remoteHost, "test -w /dev/kvm")
+		if err := kvmCmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "WARNING: /dev/kvm is not writeable on %s — add user to kvm group: 'sudo usermod -aG kvm $USER'\n", remoteHost)
+		}
+		return nil
+	}
+
 	if _, err := exec.LookPath("podman"); err != nil {
 		return fmt.Errorf("podman is not installed or not in PATH")
 	}
 	if runtime.GOOS == "linux" {
-		if _, err := os.Stat("/dev/kvm"); os.IsNotExist(err) {
-			fmt.Fprintln(os.Stderr, "WARNING: /dev/kvm not found — macOS will run unaccelerated")
+		kvmCmd := exec.Command("test", "-w", "/dev/kvm")
+		if err := kvmCmd.Run(); err != nil {
+			fmt.Fprintln(os.Stderr, "WARNING: /dev/kvm is not writeable — add user to kvm group: 'sudo usermod -aG kvm $USER'")
 		}
 	}
 	return nil
 }
 
-func isAMDCPU() bool {
-	data, err := os.ReadFile("/proc/cpuinfo")
+func isAMDCPU(remoteHost string) bool {
+	var data []byte
+	var err error
+	if remoteHost != "" {
+		cmd := exec.Command("ssh", remoteHost, "cat /proc/cpuinfo")
+		data, err = cmd.Output()
+	} else {
+		data, err = os.ReadFile("/proc/cpuinfo")
+	}
 	if err != nil {
 		return false
 	}
 	return strings.Contains(string(data), "AuthenticAMD")
 }
 
-func containerRunning(ctx context.Context, name string) (exists bool, running bool) {
-	cmd := exec.CommandContext(ctx, "podman", "inspect", "-f", "{{.State.Running}}", name)
+func containerRunning(ctx context.Context, remoteHost, name string) (exists bool, running bool) {
+	cmd := podmanCmd(ctx, remoteHost, "inspect", "-f", "{{.State.Running}}", name)
 	out, err := cmd.Output()
 	if err != nil {
 		return false, false
@@ -373,33 +422,42 @@ func containerRunning(ctx context.Context, name string) (exists bool, running bo
 	return true, strings.TrimSpace(string(out)) == "true"
 }
 
+func hostName(remoteHost string) string {
+	if remoteHost != "" {
+		return remoteHost
+	}
+	return "localhost"
+}
+
 func doRun(ctx context.Context, cfg config) error {
-	if err := checkPrerequisites(); err != nil {
+	if err := checkPrerequisites(cfg.remoteHost); err != nil {
 		return err
 	}
 
-	exists, running := containerRunning(ctx, cfg.name)
+	exists, running := containerRunning(ctx, cfg.remoteHost, cfg.name)
 	if exists && running {
-		fmt.Printf("Container %q is already running.\n", cfg.name)
+		fmt.Printf("Container %q is already running on %s.\n", cfg.name, hostName(cfg.remoteHost))
 		printEndpoints(cfg)
 		return nil
 	}
 
 	if exists && !running {
-		fmt.Printf("Starting existing stopped container %q...\n", cfg.name)
+		fmt.Printf("Starting existing stopped container %q on %s...\n", cfg.name, hostName(cfg.remoteHost))
 		startCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(startCtx, "podman", "start", cfg.name)
+		cmd := podmanCmd(startCtx, cfg.remoteHost, "start", cfg.name)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to start container: %s: %w", string(out), err)
 		}
-		configureNoVNC(ctx, cfg.name)
+		configureNoVNC(ctx, cfg.remoteHost, cfg.name)
 		printEndpoints(cfg)
 		return nil
 	}
 
-	if err := os.MkdirAll(cfg.storageDir, 0o755); err != nil {
-		return fmt.Errorf("create storage dir: %w", err)
+	if cfg.remoteHost == "" {
+		if err := os.MkdirAll(cfg.storageDir, 0o755); err != nil {
+			return fmt.Errorf("create storage dir: %w", err)
+		}
 	}
 
 	runArgs := []string{
@@ -416,12 +474,12 @@ func doRun(ctx context.Context, cfg config) error {
 		"--stop-timeout", fmt.Sprintf("%d", cfg.stopTimeout),
 	}
 
-	if isAMDCPU() {
-		fmt.Println("AMD CPU detected: applying Intel CPUID spoofing and disabling 64-bit PCI hole for macOS kernel stability...")
+	if isAMDCPU(cfg.remoteHost) {
+		fmt.Printf("AMD CPU detected on %s: applying Intel CPUID spoofing and disabling 64-bit PCI hole...\n", hostName(cfg.remoteHost))
 		runArgs = append(runArgs, "-e", "CPU_MODEL=Haswell-noTSX,stepping=3", "-e", "ARGS=-global q35-pcihost.pci-hole64-size=0")
 	}
 
-	if !cfg.noShared && cfg.sharedDir != "" {
+	if !cfg.noShared && cfg.sharedDir != "" && cfg.remoteHost == "" {
 		if abs, err := filepath.Abs(cfg.sharedDir); err == nil {
 			if info, err := os.Stat(abs); err == nil && info.IsDir() {
 				runArgs = append(runArgs, "-v", fmt.Sprintf("%s:/shared:Z", abs))
@@ -429,60 +487,55 @@ func doRun(ctx context.Context, cfg config) error {
 		}
 	}
 
-	if _, err := os.Stat("/dev/kvm"); err == nil {
-		runArgs = append(runArgs, "--device", "/dev/kvm")
-	}
-	if _, err := os.Stat("/dev/net/tun"); err == nil {
-		runArgs = append(runArgs, "--device", "/dev/net/tun", "--cap-add", "NET_ADMIN")
-	}
+	runArgs = append(runArgs, "--device", "/dev/kvm", "--device", "/dev/net/tun", "--cap-add", "NET_ADMIN")
 	if cfg.autoRm {
 		runArgs = append(runArgs, "--rm")
 	}
 
 	runArgs = append(runArgs, "docker.io/dockurr/macos:latest")
 
-	fmt.Printf("Launching macOS %s in Podman (container: %s)...\n", cfg.version, cfg.name)
-	launchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	fmt.Printf("Launching macOS %s in Podman on %s (container: %s)...\n", cfg.version, hostName(cfg.remoteHost), cfg.name)
+	launchCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(launchCtx, "podman", runArgs...)
+	cmd := podmanCmd(launchCtx, cfg.remoteHost, runArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("podman run failed: %s: %w", string(out), err)
 	}
 
-	fmt.Printf("Container %q started successfully.\n", cfg.name)
-	configureNoVNC(ctx, cfg.name)
+	fmt.Printf("Container %q started successfully on %s.\n", cfg.name, hostName(cfg.remoteHost))
+	configureNoVNC(ctx, cfg.remoteHost, cfg.name)
 	printEndpoints(cfg)
 	return nil
 }
 
-func configureNoVNC(ctx context.Context, name string) {
+func configureNoVNC(ctx context.Context, remoteHost, name string) {
 	patchCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(patchCtx, "podman", "exec", name, "sed", "-i", "s/UI.initSetting('show_dot', false);/UI.initSetting('show_dot', true);/g", "/usr/share/novnc/app/ui.js")
+	cmd := podmanCmd(patchCtx, remoteHost, "exec", name, "sed", "-i", "s/UI.initSetting('show_dot', false);/UI.initSetting('show_dot', true);/g", "/usr/share/novnc/app/ui.js")
 	_ = cmd.Run()
 }
 
 func doStop(ctx context.Context, cfg config) error {
-	exists, running := containerRunning(ctx, cfg.name)
+	exists, running := containerRunning(ctx, cfg.remoteHost, cfg.name)
 	if !exists {
-		fmt.Printf("Container %q does not exist.\n", cfg.name)
+		fmt.Printf("Container %q does not exist on %s.\n", cfg.name, hostName(cfg.remoteHost))
 		return nil
 	}
 	if !running {
-		fmt.Printf("Container %q is already stopped.\n", cfg.name)
+		fmt.Printf("Container %q is already stopped on %s.\n", cfg.name, hostName(cfg.remoteHost))
 		return nil
 	}
 
-	fmt.Printf("Stopping container %q (timeout: %ds)...\n", cfg.name, cfg.stopTimeout)
+	fmt.Printf("Stopping container %q on %s (timeout: %ds)...\n", cfg.name, hostName(cfg.remoteHost), cfg.stopTimeout)
 	stopCtx, cancel := context.WithTimeout(ctx, time.Duration(cfg.stopTimeout+5)*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(stopCtx, "podman", "stop", cfg.name)
+	cmd := podmanCmd(stopCtx, cfg.remoteHost, "stop", cfg.name)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		fmt.Printf("Graceful stop failed (%v). Force killing container %q...\n", err, cfg.name)
-		_ = exec.CommandContext(ctx, "podman", "kill", cfg.name).Run()
+		fmt.Printf("Graceful stop failed (%v). Force killing container %q on %s...\n", err, cfg.name, hostName(cfg.remoteHost))
+		_ = podmanCmd(ctx, cfg.remoteHost, "kill", cfg.name).Run()
 	} else {
 		fmt.Printf("Container %q stopped: %s\n", cfg.name, strings.TrimSpace(string(out)))
 	}
@@ -490,7 +543,7 @@ func doStop(ctx context.Context, cfg config) error {
 }
 
 func doStatus(ctx context.Context, cfg config) error {
-	exists, running := containerRunning(ctx, cfg.name)
+	exists, running := containerRunning(ctx, cfg.remoteHost, cfg.name)
 	if cfg.short {
 		if !running {
 			if exists {
@@ -523,7 +576,7 @@ func doStatus(ctx context.Context, cfg config) error {
 
 	// Quick HTTP readiness probe
 	client := http.Client{Timeout: 1 * time.Second}
-	resp, err := client.Get(fmt.Sprintf("http://localhost:%d", cfg.httpPort))
+	resp, err := client.Get(fmt.Sprintf("http://%s:%d", hostName(cfg.remoteHost), cfg.httpPort))
 	if err == nil {
 		defer resp.Body.Close()
 		fmt.Printf("  Web UI:  HTTP %s (Ready)\n", resp.Status)
@@ -532,7 +585,7 @@ func doStatus(ctx context.Context, cfg config) error {
 	}
 
 	// Tail recent logs
-	logCmd := exec.CommandContext(ctx, "podman", "logs", "--tail", "5", cfg.name)
+	logCmd := podmanCmd(ctx, cfg.remoteHost, "logs", "--tail", "5", cfg.name)
 	if out, err := logCmd.Output(); err == nil && len(bytes.TrimSpace(out)) > 0 {
 		fmt.Println("\nRecent Logs:")
 		fmt.Println(string(out))
@@ -541,10 +594,13 @@ func doStatus(ctx context.Context, cfg config) error {
 }
 
 func doClean(ctx context.Context, cfg config) error {
-	fmt.Printf("Cleaning up container %q...\n", cfg.name)
-	_ = exec.CommandContext(ctx, "podman", "rm", "-f", cfg.name).Run()
+	fmt.Printf("Cleaning up container %q on %s...\n", cfg.name, hostName(cfg.remoteHost))
+	_ = podmanCmd(ctx, cfg.remoteHost, "rm", "-f", cfg.name).Run()
 
-	if _, err := os.Stat(cfg.storageDir); err == nil {
+	if cfg.remoteHost != "" {
+		fmt.Printf("Removing storage directory %s on %s...\n", cfg.storageDir, cfg.remoteHost)
+		_ = exec.CommandContext(ctx, "ssh", cfg.remoteHost, fmt.Sprintf("rm -rf %s", cfg.storageDir)).Run()
+	} else if _, err := os.Stat(cfg.storageDir); err == nil {
 		fmt.Printf("Removing storage directory %s...\n", cfg.storageDir)
 		if err := os.RemoveAll(cfg.storageDir); err != nil {
 			return fmt.Errorf("remove storage dir: %w", err)
@@ -555,10 +611,11 @@ func doClean(ctx context.Context, cfg config) error {
 }
 
 func printEndpoints(cfg config) {
-	fmt.Printf("  Web UI:  http://localhost:%d\n", cfg.httpPort)
-	fmt.Printf("  VNC:     localhost:%d\n", cfg.vncPort)
-	fmt.Printf("  SSH:     ssh -p %d localhost\n", cfg.sshPort)
-	if !cfg.noShared && cfg.sharedDir != "" {
+	h := hostName(cfg.remoteHost)
+	fmt.Printf("  Web UI:  http://%s:%d\n", h, cfg.httpPort)
+	fmt.Printf("  VNC:     %s:%d\n", h, cfg.vncPort)
+	fmt.Printf("  SSH:     ssh -p %d %s\n", cfg.sshPort, h)
+	if !cfg.noShared && cfg.sharedDir != "" && cfg.remoteHost == "" {
 		if abs, err := filepath.Abs(cfg.sharedDir); err == nil {
 			fmt.Printf("  Shared:  %s -> /shared\n", abs)
 		}
@@ -571,7 +628,7 @@ func printEndpoints(cfg config) {
 }
 
 func doBootStatus(ctx context.Context, cfg config) error {
-	exists, running := containerRunning(ctx, cfg.name)
+	exists, running := containerRunning(ctx, cfg.remoteHost, cfg.name)
 	if !running {
 		if cfg.short {
 			if exists {
@@ -581,31 +638,32 @@ func doBootStatus(ctx context.Context, cfg config) error {
 			}
 			return nil
 		}
-		fmt.Printf("Container: %s (version: macOS %s)\n", cfg.name, cfg.version)
+		fmt.Printf("Container: %s on %s (version: macOS %s)\n", cfg.name, hostName(cfg.remoteHost), cfg.version)
 		fmt.Printf("  State:    exists=%v running=%v\n", exists, running)
 		fmt.Println("  Status:   Guest is not running. Run 'go run ./scripts/macos-podman run' to start.")
 		return nil
 	}
 
-	stage := assessBootStage(ctx, cfg.name)
+	stage := assessBootStage(ctx, cfg.remoteHost, cfg.name)
+	h := hostName(cfg.remoteHost)
 
 	// 1. Web UI probe
 	client := http.Client{Timeout: 1 * time.Second}
 	webStatus := "Down"
-	if resp, err := client.Get(fmt.Sprintf("http://localhost:%d", cfg.httpPort)); err == nil {
+	if resp, err := client.Get(fmt.Sprintf("http://%s:%d", h, cfg.httpPort)); err == nil {
 		resp.Body.Close()
 		webStatus = fmt.Sprintf("HTTP %s (Active)", resp.Status)
 	}
 
 	// 2. VNC probe
 	vncStatus := "Unreachable"
-	if banner, err := probeTCPBanner(cfg.vncPort, 1*time.Second); err == nil {
+	if banner, err := probeTCPBanner(h, cfg.vncPort, 1*time.Second); err == nil {
 		vncStatus = fmt.Sprintf("Active (%s)", strings.TrimSpace(banner))
 	}
 
 	// 3. SSH probe
 	sshStatus := "Waiting for guest daemon"
-	if banner, err := probeTCPBanner(cfg.sshPort, 1*time.Second); err == nil {
+	if banner, err := probeTCPBanner(h, cfg.sshPort, 1*time.Second); err == nil {
 		if strings.Contains(banner, "SSH") {
 			sshStatus = fmt.Sprintf("Ready (%s)", strings.TrimSpace(banner))
 		} else {
@@ -615,19 +673,19 @@ func doBootStatus(ctx context.Context, cfg config) error {
 
 	// 4. Screenshot
 	screenshotPath := "/tmp/macos_screen.png"
-	w, h, err := captureGuestScreen(ctx, cfg.name, screenshotPath, !cfg.noCrop)
+	w, hpx, err := captureGuestScreen(ctx, cfg.remoteHost, cfg.name, screenshotPath, !cfg.noCrop)
 	screenInfo := "Capture failed"
 	if err == nil {
-		screenInfo = fmt.Sprintf("%dx%d", w, h)
+		screenInfo = fmt.Sprintf("%dx%d", w, hpx)
 	}
 
 	if cfg.short {
-		fmt.Printf("[RUNNING] %s | Web: %s | VNC: %s | SSH: %s | Screen: %s -> %s\n",
-			stage, webStatus, vncStatus, sshStatus, screenInfo, screenshotPath)
+		fmt.Printf("[RUNNING on %s] %s | Web: %s | VNC: %s | SSH: %s | Screen: %s -> %s\n",
+			h, stage, webStatus, vncStatus, sshStatus, screenInfo, screenshotPath)
 		return nil
 	}
 
-	fmt.Printf("Container: %s (version: macOS %s)\n", cfg.name, cfg.version)
+	fmt.Printf("Container: %s on %s (version: macOS %s)\n", cfg.name, h, cfg.version)
 	fmt.Printf("  State:    exists=%v running=%v\n", exists, running)
 	printEndpoints(cfg)
 
@@ -637,7 +695,7 @@ func doBootStatus(ctx context.Context, cfg config) error {
 	fmt.Printf("  SSH Server:  %s\n", sshStatus)
 
 	fmt.Println("\n--- QEMU / Hypervisor Status ---")
-	if qmpStatus, err := queryQEMUMonitor(ctx, cfg.name, "info status"); err == nil {
+	if qmpStatus, err := queryQEMUMonitor(ctx, cfg.remoteHost, cfg.name, "info status"); err == nil {
 		for _, line := range strings.Split(qmpStatus, "\n") {
 			line = strings.TrimSpace(line)
 			if strings.HasPrefix(line, "VM status:") {
@@ -645,7 +703,7 @@ func doBootStatus(ctx context.Context, cfg config) error {
 			}
 		}
 	}
-	if qmpCPUs, err := queryQEMUMonitor(ctx, cfg.name, "info cpus"); err == nil {
+	if qmpCPUs, err := queryQEMUMonitor(ctx, cfg.remoteHost, cfg.name, "info cpus"); err == nil {
 		for _, line := range strings.Split(qmpCPUs, "\n") {
 			line = strings.TrimSpace(line)
 			if strings.HasPrefix(line, "* CPU") || strings.HasPrefix(line, "CPU") {
@@ -668,11 +726,11 @@ func doBootStatus(ctx context.Context, cfg config) error {
 }
 
 func doScreenshot(ctx context.Context, cfg config, outPath string) error {
-	exists, running := containerRunning(ctx, cfg.name)
+	exists, running := containerRunning(ctx, cfg.remoteHost, cfg.name)
 	if !exists || !running {
-		return fmt.Errorf("container %q is not running", cfg.name)
+		return fmt.Errorf("container %q is not running on %s", cfg.name, hostName(cfg.remoteHost))
 	}
-	w, h, err := captureGuestScreen(ctx, cfg.name, outPath, !cfg.noCrop)
+	w, h, err := captureGuestScreen(ctx, cfg.remoteHost, cfg.name, outPath, !cfg.noCrop)
 	if err != nil {
 		return fmt.Errorf("failed to capture screenshot: %w", err)
 	}
@@ -680,8 +738,8 @@ func doScreenshot(ctx context.Context, cfg config, outPath string) error {
 	return nil
 }
 
-func assessBootStage(ctx context.Context, name string) string {
-	logCmd := exec.CommandContext(ctx, "podman", "logs", "--tail", "100", name)
+func assessBootStage(ctx context.Context, remoteHost, name string) string {
+	logCmd := podmanCmd(ctx, remoteHost, "logs", "--tail", "100", name)
 	out, err := logCmd.Output()
 	logs := ""
 	if err == nil {
@@ -693,10 +751,10 @@ func assessBootStage(ctx context.Context, name string) string {
 	}
 
 	// Check live CPU registers for halt/spin loop
-	if regOut, err := queryQEMUMonitor(ctx, name, "info registers"); err == nil {
+	if regOut, err := queryQEMUMonitor(ctx, remoteHost, name, "info registers"); err == nil {
 		rip := extractRegValue(regOut, "RIP=")
 		if rip != "" {
-			if disOut, err := queryQEMUMonitor(ctx, name, "xp /4i 0x"+rip); err == nil {
+			if disOut, err := queryQEMUMonitor(ctx, remoteHost, name, "xp /4i 0x"+rip); err == nil {
 				if strings.Contains(disOut, "jmp") && strings.Contains(disOut, rip) {
 					cr2 := extractRegValue(regOut, "CR2=")
 					return fmt.Sprintf("CRITICAL: Kernel Spin Halt at RIP=0x%s (Fault Address: 0x%s)", rip, cr2)
@@ -723,8 +781,8 @@ func assessBootStage(ctx context.Context, name string) string {
 	return "Stage 1/4: Container starting"
 }
 
-func probeTCPBanner(port int, timeout time.Duration) (string, error) {
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), timeout)
+func probeTCPBanner(host string, port int, timeout time.Duration) (string, error) {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), timeout)
 	if err != nil {
 		return "", err
 	}
@@ -738,7 +796,7 @@ func probeTCPBanner(port int, timeout time.Duration) (string, error) {
 	return string(buf[:n]), nil
 }
 
-func queryQEMUMonitor(ctx context.Context, name, command string) (string, error) {
+func queryQEMUMonitor(ctx context.Context, remoteHost, name, command string) (string, error) {
 	pyScript := fmt.Sprintf(`
 import socket
 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -757,7 +815,7 @@ s.close()
 print(out.decode('utf-8', errors='ignore'))
 `, command)
 
-	cmd := exec.CommandContext(ctx, "podman", "exec", name, "python3", "-c", pyScript)
+	cmd := podmanCmd(ctx, remoteHost, "exec", name, "python3", "-c", pyScript)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", err
@@ -765,7 +823,7 @@ print(out.decode('utf-8', errors='ignore'))
 	return string(out), nil
 }
 
-func captureGuestScreen(ctx context.Context, name string, outPath string, autoCrop bool) (int, int, error) {
+func captureGuestScreen(ctx context.Context, remoteHost, name string, outPath string, autoCrop bool) (int, int, error) {
 	dumpScript := `
 import socket
 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -774,12 +832,12 @@ s.connect('/dev/shm/monitor.sock')
 s.sendall(b'screendump /dev/shm/screen.ppm\n')
 s.close()
 `
-	cmd := exec.CommandContext(ctx, "podman", "exec", name, "python3", "-c", dumpScript)
+	cmd := podmanCmd(ctx, remoteHost, "exec", name, "python3", "-c", dumpScript)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return 0, 0, fmt.Errorf("screendump command failed: %s: %w", string(out), err)
 	}
 
-	catCmd := exec.CommandContext(ctx, "podman", "exec", name, "cat", "/dev/shm/screen.ppm")
+	catCmd := podmanCmd(ctx, remoteHost, "exec", name, "cat", "/dev/shm/screen.ppm")
 	ppmData, err := catCmd.Output()
 	if err != nil {
 		return 0, 0, fmt.Errorf("read screen.ppm failed: %w", err)
@@ -921,15 +979,15 @@ func cropBlackBorders(img *image.NRGBA) (image.Image, int, int) {
 }
 
 func doInspect(ctx context.Context, cfg config) error {
-	exists, running := containerRunning(ctx, cfg.name)
+	exists, running := containerRunning(ctx, cfg.remoteHost, cfg.name)
 	if !exists || !running {
-		return fmt.Errorf("container %q is not running", cfg.name)
+		return fmt.Errorf("container %q is not running on %s", cfg.name, hostName(cfg.remoteHost))
 	}
 
-	fmt.Printf("=== Guest Deep Inspection: %s ===\n", cfg.name)
+	fmt.Printf("=== Guest Deep Inspection: %s on %s ===\n", cfg.name, hostName(cfg.remoteHost))
 
 	// 1. Query CPU Registers
-	regOut, err := queryQEMUMonitor(ctx, cfg.name, "info registers")
+	regOut, err := queryQEMUMonitor(ctx, cfg.remoteHost, cfg.name, "info registers")
 	if err != nil {
 		return fmt.Errorf("query registers: %w", err)
 	}
@@ -952,7 +1010,7 @@ func doInspect(ctx context.Context, cfg config) error {
 	// 2. Disassemble Instructions at RIP
 	if rip != "" {
 		fmt.Printf("\n[Instructions at RIP (%s)]\n", rip)
-		if disOut, err := queryQEMUMonitor(ctx, cfg.name, fmt.Sprintf("x /8i 0x%s", rip)); err == nil {
+		if disOut, err := queryQEMUMonitor(ctx, cfg.remoteHost, cfg.name, fmt.Sprintf("x /8i 0x%s", rip)); err == nil {
 			printCleanMonitorOutput(disOut)
 		}
 	}
@@ -960,7 +1018,7 @@ func doInspect(ctx context.Context, cfg config) error {
 	// 3. Stack memory dump
 	if rsp != "" {
 		fmt.Printf("\n[Stack Memory at RSP (%s)]\n", rsp)
-		if stackOut, err := queryQEMUMonitor(ctx, cfg.name, fmt.Sprintf("x /8gx 0x%s", rsp)); err == nil {
+		if stackOut, err := queryQEMUMonitor(ctx, cfg.remoteHost, cfg.name, fmt.Sprintf("x /8gx 0x%s", rsp)); err == nil {
 			printCleanMonitorOutput(stackOut)
 		}
 	}
@@ -968,7 +1026,7 @@ func doInspect(ctx context.Context, cfg config) error {
 	// 4. Panic / Fault Analysis
 	fmt.Println("\n[Diagnosis]")
 	if rip != "" {
-		if disOut, err := queryQEMUMonitor(ctx, cfg.name, fmt.Sprintf("xp /4i 0x%s", rip)); err == nil && strings.Contains(disOut, "jmp") && strings.Contains(disOut, rip) {
+		if disOut, err := queryQEMUMonitor(ctx, cfg.remoteHost, cfg.name, fmt.Sprintf("xp /4i 0x%s", rip)); err == nil && strings.Contains(disOut, "jmp") && strings.Contains(disOut, rip) {
 			fmt.Printf("  ALERT: Kernel Spin Halt / Panic Loop detected at RIP=0x%s!\n", rip)
 			if cr2 == "0000000000000040" {
 				fmt.Println("  Cause: Kernel NULL pointer dereference (+0x40 in IOPMrootDomain / Power Management).")
