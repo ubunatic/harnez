@@ -1,6 +1,6 @@
 # 331 — Historical cli_invocations/tool_calls pollution from pre-fix test runs
 
-**Status**: Draft
+**Status**: Closed — resolved
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Data Quality

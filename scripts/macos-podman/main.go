@@ -47,7 +47,7 @@ type config struct {
 
 var cfg = config{
 	name:        "macos-kvm",
-	version:     "13",
+	version:     "11",
 	httpPort:    8006,
 	vncPort:     5900,
 	sshPort:     2222,
@@ -269,8 +269,8 @@ func doRun(ctx context.Context, cfg config) error {
 	}
 
 	if isAMDCPU() {
-		fmt.Println("AMD CPU detected: applying Intel CPUID spoofing for macOS kernel stability...")
-		runArgs = append(runArgs, "-e", "ARGS=-cpu Haswell-noTSX,vendor=GenuineIntel", "-e", "QEMU_CPU=Haswell-noTSX")
+		fmt.Println("AMD CPU detected: applying Intel CPUID spoofing and disabling 64-bit PCI hole for macOS kernel stability...")
+		runArgs = append(runArgs, "-e", "ARGS=-cpu Haswell-noTSX,vendor=GenuineIntel -global q35-pcihost.pci-hole64-size=0", "-e", "QEMU_CPU=Haswell-noTSX")
 	}
 
 	if !cfg.noShared && cfg.sharedDir != "" {
