@@ -120,6 +120,11 @@ In the Recovery GUI (**[http://localhost:8006](http://localhost:8006)**):
 * Because `./macos-storage` is mapped persistently to `/storage` on the host, all installed OS files and state are saved in `./macos-storage/11/data.img`.
 * Subsequent boots will automatically detect the installed system and boot straight into the full macOS environment without passing through Recovery.
 
+### Recovery UI Lifecycle & Springboard Focus Quirk
+* **Windowless Process State**: In macOS, closing an app's window (via `exit` or `Cmd+W`) leaves the process running in the background while holding top menu bar focus (e.g. `Terminal`, `Shell`, `Edit`).
+* **Springboard Suppression**: In Recovery mode (where no Dock or App Switcher exists), the main 4-option launcher (`OSIESpringboard`) remains hidden as long as any utility process is active.
+* **Resolution**: Terminate the windowless process using `Cmd+Q` (or `Windows+Q` on non-Apple keyboards, or `killall <AppName>`). `OSIESpringboard` immediately unhides the main recovery launcher.
+
 ---
 
 ## 7. Programmatic Terminal Steering via QEMU QMP
