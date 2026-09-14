@@ -45,12 +45,20 @@ boundary or depends on the real environment.
   integration changes may need a real installed binary (`make install`) and a
   live observation such as `harnez usage --watch`. Tests prove invariants;
   they do not prove every terminal or desktop rendering outcome.
+- **Remote-OS CI** — `make macos-ci` dispatches `.github/workflows/macos-hello.yaml`
+  on the GitHub mirror's real `macos-14` runner and polls quietly for a
+  PASS/FAIL result (no `gh run watch` job-tree spam — safe to call repeatedly
+  from an agent). Use it for anything cross-platform-shaped where `go build`
+  alone isn't evidence — see
+  [MacOSPortability.md §2.7](MacOSPortability.md#27-ci-verification-macos-hello).
+  `workflow_dispatch`-only for now; not yet wired into push/PR (issue 338).
 
 Common entry points:
 
 ```sh
 make check       # vet plus the complete Go suite
 make smoke       # build plus live smoke checks
+make macos-ci    # trigger + quietly watch real macOS CI on the GitHub mirror
 make install     # install the current binary to ~/go/bin
 ```
 

@@ -12,7 +12,11 @@ Not needed for routine coding; reach for these during investigations or design w
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent (consult when changing command pipelines) |
 | [HookRewritePattern.md](HookRewritePattern.md) | Two-stage PreToolUse hook pattern (rewrite now, capture later): `<feature> hook` vs. `<feature>` wrapper, `harnez distill hook` as reference implementation, plus two hard-won constraints — hooks on the same matcher don't compose (last-to-finish wins) and a rewritten command must stay one shell token (consult before adding any new agent-hook-driven feature) |
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
+| [MacOSPortability.md](MacOSPortability.md) | macOS/Darwin portability architecture: subsystem-by-subsystem OS-gating plan, macOS CI (`make macos-ci`), dev-deps install pattern (consult before adding platform-specific code or CI) |
+| [MicIndicators.md](MicIndicators.md) | Linux desktop microphone privacy-indicator survey (consult when building mic-activity detection or indicators) |
+| [Models.md](Models.md) | Model assessment: comparison notes across Claude/Gemini/GPT generations (consult when picking a model tier for a subagent or workflow) |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat (consult when updating permission schemas) |
+| [Roadmap.md](Roadmap.md) | Working roadmap synthesized from the open issue backlog (consult before prioritizing new work; regenerate via `/roadmap`) |
 | [TUIDesign.md](TUIDesign.md) | Single-cell time-indicator semantics, safe Unicode presets, and display-width/font pitfalls (consult when changing gauges, bars, sparks, or spinners) |
 | [Testing.md](Testing.md) | Test layers and verification entry points for package, integration, static, smoke, canary, and live checks |
 

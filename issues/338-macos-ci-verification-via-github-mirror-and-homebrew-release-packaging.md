@@ -1,34 +1,41 @@
-# 338 — macOS CI verification via GitHub mirror and Homebrew release packaging
+# 338 — macOS CI verification via GitHub mirror
 
-**Status**: Open
+**Status**: Open — core CI landed, Homebrew scope dropped, push/PR trigger + CLI smoke test remain
 **Priority**: P2 (Medium)
 **Severity**: Build & Distribution (macOS Delivery)
 **Category**: Packaging & CI / Multi-OS
-**Related**: [docs/MacOSPortability.md](../docs/MacOSPortability.md)
+**Related**: [docs/MacOSPortability.md](../docs/MacOSPortability.md), [341](341-concurrent-sqlite-telemetry-writers-lose-rows-on-macos.md)
 
 ---
 
 ## 1. Problem & Motivation
 
-`harnez` builds native macOS binaries (`harnez_darwin_amd64` and `harnez_darwin_arm64`) via `.goreleaser.yaml`, but currently has no continuous integration (CI) pipeline running on macOS hosts to verify build health, runtime execution, and tests against real Darwin kernels.
+`harnez` builds native macOS binaries (`harnez_darwin_amd64` and `harnez_darwin_arm64`) via `.goreleaser.yaml`, but had no continuous integration (CI) pipeline running on macOS hosts to verify build health, runtime execution, and tests against real Darwin kernels.
 
-Codeberg (the primary git forge) does not provide native macOS runner instances. However, the repository has a synced GitHub mirror (`git@github.com:ubunatic/harnez.git`), which supports GitHub Actions with native macOS runners (`macos-latest` / Apple Silicon).
+Codeberg (the primary git forge) does not provide native macOS runner instances. The repository has a synced GitHub mirror (`git@github.com:ubunatic/harnez.git`), which supports GitHub Actions with native macOS runners.
 
-Additionally, distributing `harnez` on macOS is best served via a Homebrew tap (`brew install ubunatic/tap/harnez`) in addition to raw tarball archives.
+**2026-09-14 decision**: Homebrew tap distribution is out of scope, now and likely
+long-term. macOS users install the same way as every other platform — `curl`
+installer or `go install` — not via `brew`. The original title/scope included a
+`brews:` GoReleaser block; that has been dropped from this ticket entirely.
 
-## 2. Technical Specification
+## 2. What's Done (2026-09-14)
 
-1. **GitHub Actions Workflow for macOS CI**:
-   - Create `.github/workflows/macos-ci.yaml` (triggered on push/PR mirrored to GitHub).
-   - Run matrix builds and tests on macOS (`macos-latest` / `macos-14` Apple Silicon).
-   - Run `go test ./...` and `harnez` CLI smoke tests on Darwin.
-2. **GoReleaser Homebrew Tap Integration**:
-   - Configure GoReleaser v2 `brews` block in `.goreleaser.yaml` to publish formula definitions to a Homebrew tap repository upon release.
-   - Verify non-interactive binary packaging, man page installation, and completions for Homebrew users.
+- `.github/workflows/macos-hello.yaml` — `workflow_dispatch`-only, `macos-14`
+  runner, `go build ./...` + `go test ./...`.
+- `make macos-ci` (`scripts/macos-ci.sh`) — dispatches the run and polls
+  quietly (no `gh run watch` job-tree spam), prints a single PASS/FAIL summary.
+- `scripts/install-dev-deps.sh` — OS-aware dev-tool installer (currently just
+  `minisign`), kept out of the workflow YAML to keep it minimal; candidate for a
+  future `harnez install --dev` subcommand.
+- First real run surfaced a genuine macOS-only bug: [issue #341](341-concurrent-sqlite-telemetry-writers-lose-rows-on-macos.md)
+  (`internal/telemetry` concurrent SQLite writer race).
 
-## 3. Implementation & Verification Plan
+## 3. Remaining Scope
 
-1. Add macOS workflow `.github/workflows/macos-ci.yaml`.
-2. Configure Homebrew formula generation in `.goreleaser.yaml`.
-3. Test workflow execution against the GitHub mirror.
-4. Verify end-to-end `brew install` flow on a real or virtual macOS machine.
+1. Decide whether/how to wire `macos-hello` into `push`/PR triggers on the
+   mirror (currently manual-only via `make macos-ci`) — weigh macOS runner cost
+   against the value of catching platform regressions automatically.
+2. Add a `harnez` CLI smoke test step (not just `go test ./...`) to catch
+   runtime/packaging issues the unit tests wouldn't (e.g. `harnez --help`,
+   a real `harnez status` run) on Darwin.
