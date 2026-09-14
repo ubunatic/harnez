@@ -254,3 +254,52 @@ GOOS=darwin GOARCH=amd64 go build -o /tmp/hello_darwin_amd64 ./scripts/macos-hel
 scp -P 2222 /tmp/hello_darwin_amd64 dev@x600:/tmp/
 ssh -p 2222 dev@x600 "/tmp/hello_darwin_amd64"
 ```
+
+---
+
+## 13. Rootless Podman & Device Group Inheritance
+
+### The KVM Permission Trap on Remote Non-Interactive Sessions
+* On Linux hosts where `/dev/kvm` is owned by `root:kvm` (`crw-rw----+`), non-root users gain access via membership in the `kvm` group.
+* `systemd-logind` assigns dynamic ACLs only to active graphical seats. In headless or SSH non-login sessions, access relies solely on POSIX group permissions (`gid 991`).
+* **Rootless Podman User Namespace**: By default, rootless Podman drops all host supplemental groups when entering the user namespace. Inside the container, `/dev/kvm` appears owned by `nobody:nogroup` and unwriteable, causing QEMU to fail with `KVM acceleration is not available`.
+* **Fix**: Passing `--group-add keep-groups` instructs Podman to preserve the invoking user's supplementary group memberships (including `kvm` and `render`) inside the rootless user namespace, restoring `/dev/kvm` read/write access.
+
+---
+
+## 14. OS Upgrade Strategies: OTA vs Version-Isolated Clean Deployments
+
+| Dimension | In-Place Software Update (OTA) | Clean Version-Isolated Instance (`--version <N>`) |
+| :--- | :--- | :--- |
+| **Bootloader Compatibility** | **High Failure Risk**: Staged kernel updates mismatch the static OpenCore `boot.img`. | **Guaranteed**: Uses upstream tested OpenCore booter matched to the exact macOS release. |
+| **Reversibility** | Requires APFS snapshot recovery or external disk snapshot restoration. | Native directory isolation (`./macos-storage/11`, `./macos-storage/14`). |
+| **Disk Space Overhead** | Requires ~35–45 GB free space during installation staging. | Allocates a fresh growable raw sparse disk image (`data.img`). |
+| **Recommended Usage** | Minor point releases within the same major version (e.g. 11.6 &rarr; 11.7.11). | Major version transitions (Big Sur &rarr; Sonoma &rarr; Sequoia). |
+
+---
+
+## 15. Multi-Node Fleet Architecture (`t14` + `x600`)
+
+```
++------------------------------------+          +------------------------------------+
+| Local Dev Host (t14)              |          | Remote Compute Node (x600)         |
+| AMD Ryzen 5 PRO 5650U (12 vCPUs)   |          | AMD Ryzen 7 8700G (16 vCPUs)       |
+| 24 GiB RAM, Btrfs filesystem       |          | 45 GiB RAM, NVMe Ext4 filesystem   |
++------------------------------------+          +------------------------------------+
+| Container: macos-kvm (macOS 14)    |          | Container: macos-kvm (macOS 11)    |
+| Storage: ./macos-storage/14 (128G) |          | Storage: ~/macos-storage/11 (128G) |
+| Web UI:  http://localhost:8006     |          | Web UI:  http://x600:8006          |
+| VNC:     localhost:5900            |          | VNC:     x600:5900                 |
+| SSH:     ssh -p 2222 localhost     |          | SSH:     ssh -p 2222 dev@x600      |
+| Snapshots: (on-demand)             |          | Snapshots: .snapshots/11-pre-update|
++------------------------------------+          +------------------------------------+
+                   ^                                       ^
+                   |                                       |
+                   +--- [scripts/macos-podman/main.go] ---+
+                        - Unified Cobra CLI tool
+                        - Sparse rsync replication (`sync`)
+                        - Headless QEMU monitor (`type`, `send-key`)
+                        - Persistent snapshot engine (`snapshot save/restore`)
+                        - Remote execution bridge (`--host x600`)
+```
+

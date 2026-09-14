@@ -76,14 +76,16 @@ Architecture decisions, platform boundaries, and implementation strategy for tra
   automatically on push/PR to the mirror. Wiring that in (and deciding on cost
   tradeoffs of running macOS CI on every push) is future work, not yet ticketed.
 
-### 2.8 Local Containerized macOS Testing Engine (`macos-podman`)
+### 2.8 Local & Remote Containerized macOS Testing Engine (`macos-podman`)
 - **Status**: Implemented (2026-09-14), detailed case study in [`docs/studies/MacOSContainerAMD.md`](file:///home/uwe/projects/harnez/docs/studies/MacOSContainerAMD.md).
-- **Architecture**: Runs real macOS Darwin kernels under Podman + KVM with OpenCore on AMD Ryzen hosts.
-- **Tooling**:
-  - `go run ./scripts/macos-podman boot-status [-s]` — real-time boot stage tracking & screenshots.
-  - `go run ./scripts/macos-podman inspect` — CPU registers, instruction pointer disassembly, and Mach-O trap analysis.
-  - `go run ./scripts/macos-podman type "<cmd>\n"` — headless programmatic terminal control via QEMU QMP socket.
-  - `/shared` VirtFS mount for running local cross-compiled Go Darwin test binaries directly.
+- **Architecture**: Runs real macOS Darwin kernels (Big Sur 11, Sonoma 14) under rootless Podman + KVM with OpenCore on AMD Ryzen hosts (`t14` local laptop and `x600` compute node).
+- **Capabilities & Tooling**:
+  - `go run ./scripts/macos-podman --host <node> boot-status [-s]` — real-time boot stage tracking & guest screenshot capture.
+  - `go run ./scripts/macos-podman --host <node> inspect` — CPU registers, instruction pointer disassembly, and Mach-O trap analysis.
+  - `go run ./scripts/macos-podman --host <node> type "<cmd>\n"` — headless programmatic terminal control via QEMU QMP socket.
+  - `go run ./scripts/macos-podman --host <node> snapshot save/list/restore/rm` — sparse persistent storage snapshotting and rollback.
+  - `go run ./scripts/macos-podman sync <node>` — one-command sparse rsync storage replication.
+  - Direct headless SSH execution (`ssh -p 2222 dev@<node>`) for running cross-compiled Go Darwin test binaries.
 
 ---
 
