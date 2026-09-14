@@ -153,4 +153,14 @@ QEMU monitor requires translating UTF-8 characters and control codes into intern
 * Spacing and lines (`\n`, ` `) &rarr; `ret`, `spc`
 * Inter-keystroke spacing (30 ms) ensures the guest macOS HID event queue does not drop fast-burst scancodes.
 
+---
+
+## 8. Verified Milestone: Persistent Full macOS Desktop
+
+As of 2026-09-14:
+* Full macOS Big Sur (11) operating system is fully installed and sealed onto `./macos-storage/11/data.img`.
+* CPU execution runs stably in Ring 3 (`CPL=3`) userland mode on AMD Ryzen with KVM acceleration.
+* Persistent environment is ready for local cross-platform development, continuous testing of Go Darwin binaries, and headless automation.
+
+
 
