@@ -10,5 +10,6 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go version && uname -a
+      - run: bash scripts/install-dev-deps.sh
       - run: go build ./...
       - run: go test ./...
