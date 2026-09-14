@@ -48,9 +48,21 @@ var ShellKeywords = map[string]bool{
 }
 
 // LooksLikeDataFile reports whether base looks like a plain data/document
-// filename or glob rather than an executable command word.
+// filename, glob, or other non-command argument value (a docker volume
+// spec "models.json:ro,Z", an ssh host "user@host:22", a package@version
+// pin, a hidden dotfile) rather than an executable command word. Real
+// binary names never contain '@', ':', ',', or a stray quote, and never
+// start with '.' — those characters/positions only show up in argument
+// *values*, which is exactly the class of bare positional token this
+// guards against being mistaken for a tool.
 func LooksLikeDataFile(base string) bool {
-	if strings.ContainsAny(base, "*?[") {
+	if base == "" {
+		return false
+	}
+	if strings.ContainsAny(base, "*?[@:,'\"") {
+		return true
+	}
+	if strings.HasPrefix(base, ".") && base != "." && base != ".." {
 		return true
 	}
 	switch filepath.Ext(base) {
@@ -80,8 +92,9 @@ func CanonicalToolName(raw string) string {
 		}
 	}
 	fields := strings.Fields(trimmed)
-	if !hasMeta && len(fields) <= 1 && !ShellKeywords[trimmed] && !LooksLikeDataFile(stripQuotes(trimmed)) {
-		return trimmed
+	cleaned := stripQuotes(trimmed)
+	if !hasMeta && len(fields) <= 1 && !ShellKeywords[cleaned] && !LooksLikeDataFile(cleaned) {
+		return cleaned
 	}
 
 	fallback := "Bash"

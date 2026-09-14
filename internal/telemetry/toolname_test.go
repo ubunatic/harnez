@@ -30,6 +30,21 @@ func TestCanonicalToolName(t *testing.T) {
 		{`test-crispasr.tar.gz`, "Bash"},
 		{`crispasr-linux-x86_64.tar.gz" 2>&1 | head -n 40`, "Bash"},
 		{"crispasr --version", "crispasr"},
+		// further reported garbage: argument-value-shaped single tokens
+		// (volume specs, ssh host:port, package@version pins, dotfiles,
+		// bare punctuation) with no metacharacter or whitespace to catch
+		// them, so they need the character-class check instead.
+		{"models.json:ro,Z", "Bash"},
+		{".minisign", "Bash"},
+		{"cm-git@codeberg.org:22", "Bash"},
+		{`entry.sh"`, "entry.sh"},
+		{"voxi-modifierd@latest", "Bash"},
+		{`macos-hello"`, "macos-hello"},
+		{",", "Bash"},
+		// shell builtins/keywords with no independent binary group under
+		// Bash even as a single bare token, consistent with issue 344.
+		{"cd", "Bash"},
+		{"scripts/lint.sh", "scripts/lint.sh"},
 	}
 	for _, tc := range cases {
 		got := CanonicalToolName(tc.raw)
