@@ -76,6 +76,15 @@ Architecture decisions, platform boundaries, and implementation strategy for tra
   automatically on push/PR to the mirror. Wiring that in (and deciding on cost
   tradeoffs of running macOS CI on every push) is future work, not yet ticketed.
 
+### 2.8 Local Containerized macOS Testing Engine (`macos-podman`)
+- **Status**: Implemented (2026-09-14), detailed case study in [`docs/studies/MacOSContainerAMD.md`](file:///home/uwe/projects/harnez/docs/studies/MacOSContainerAMD.md).
+- **Architecture**: Runs real macOS Darwin kernels under Podman + KVM with OpenCore on AMD Ryzen hosts.
+- **Tooling**:
+  - `go run ./scripts/macos-podman boot-status [-s]` — real-time boot stage tracking & screenshots.
+  - `go run ./scripts/macos-podman inspect` — CPU registers, instruction pointer disassembly, and Mach-O trap analysis.
+  - `go run ./scripts/macos-podman type "<cmd>\n"` — headless programmatic terminal control via QEMU QMP socket.
+  - `/shared` VirtFS mount for running local cross-compiled Go Darwin test binaries directly.
+
 ---
 
 ## 3. Implementation Roadmap

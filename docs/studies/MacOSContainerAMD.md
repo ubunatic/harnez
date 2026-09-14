@@ -120,3 +120,32 @@ In the Recovery GUI (**[http://localhost:8006](http://localhost:8006)**):
 * Because `./macos-storage` is mapped persistently to `/storage` on the host, all installed OS files and state are saved in `./macos-storage/11/data.img`.
 * Subsequent boots will automatically detect the installed system and boot straight into the full macOS environment without passing through Recovery.
 
+---
+
+## 7. Programmatic Terminal Steering via QEMU QMP
+
+To enable headless automation and continuous testing without manual browser interaction, our runner communicates over the UNIX domain socket `/dev/shm/monitor.sock` inside the container:
+
+### CLI Subcommands
+```bash
+# 1. Type raw text or shell commands into guest terminal
+go run ./scripts/macos-podman type "uname -a\n"
+
+# 2. Execute cross-compiled Darwin binaries mounted from host
+go run ./scripts/macos-podman type "/shared/scripts/macos-hello/hello_darwin_amd64\n"
+
+# 3. Send navigation / control keys (ret, spc, tab, ctrl-c)
+go run ./scripts/macos-podman send-key ret
+
+# 4. Automate one-shot APFS partition creation in Recovery
+go run ./scripts/macos-podman install-os
+```
+
+### Key Encoding Architecture
+QEMU monitor requires translating UTF-8 characters and control codes into internal QEMU key event descriptors:
+* Uppercase characters (`A-Z`) &rarr; `shift-<a>`
+* Punctuation symbols (`_`, `:`, `"`, `+`, `$`, `/`) &rarr; mapped to explicit `shift-minus`, `shift-semicolon`, `shift-apostrophe`, etc.
+* Spacing and lines (`\n`, ` `) &rarr; `ret`, `spc`
+* Inter-keystroke spacing (30 ms) ensures the guest macOS HID event queue does not drop fast-burst scancodes.
+
+
