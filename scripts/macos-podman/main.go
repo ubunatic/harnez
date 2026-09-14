@@ -111,6 +111,7 @@ Endpoints:
 		newStopCommand(),
 		newStatusCommand(),
 		newBootStatusCommand(),
+		newInspectCommand(),
 		newScreenshotCommand(),
 		newCleanCommand(),
 	)
@@ -155,6 +156,17 @@ func newBootStatusCommand() *cobra.Command {
 		Short:   "Comprehensive boot diagnosis, guest stages, logs & screenshot",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return doBootStatus(cmd.Context(), cfg)
+		},
+	}
+}
+
+func newInspectCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:     "inspect",
+		Aliases: []string{"registers", "cpu", "mem", "debug"},
+		Short:   "Deep inspection of guest CPU registers, instruction pointer (RIP), stack & memory",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return doInspect(cmd.Context(), cfg)
 		},
 	}
 }
@@ -521,6 +533,15 @@ func doScreenshot(ctx context.Context, cfg config, outPath string) error {
 }
 
 func assessBootStage(ctx context.Context, name string) string {
+	// First check live CPU registers for panic / fault
+	if regOut, err := queryQEMUMonitor(ctx, name, "info registers"); err == nil {
+		cr2 := extractRegValue(regOut, "CR2=")
+		rip := extractRegValue(regOut, "RIP=")
+		if cr2 != "" && cr2 != "0000000000000000" {
+			return fmt.Sprintf("CRITICAL: Kernel Page Fault at 0x%s (RIP=0x%s)", cr2, rip)
+		}
+	}
+
 	logCmd := exec.CommandContext(ctx, "podman", "logs", "--tail", "100", name)
 	out, err := logCmd.Output()
 	if err != nil {
@@ -739,3 +760,101 @@ func cropBlackBorders(img *image.NRGBA) (image.Image, int, int) {
 	cropped := img.SubImage(cropRect)
 	return cropped, cropRect.Dx(), cropRect.Dy()
 }
+
+func doInspect(ctx context.Context, cfg config) error {
+	exists, running := containerRunning(ctx, cfg.name)
+	if !exists || !running {
+		return fmt.Errorf("container %q is not running", cfg.name)
+	}
+
+	fmt.Printf("=== Guest Deep Inspection: %s ===\n", cfg.name)
+
+	// 1. Query CPU Registers
+	regOut, err := queryQEMUMonitor(ctx, cfg.name, "info registers")
+	if err != nil {
+		return fmt.Errorf("query registers: %w", err)
+	}
+
+	rip := extractRegValue(regOut, "RIP=")
+	rsp := extractRegValue(regOut, "RSP=")
+	cr0 := extractRegValue(regOut, "CR0=")
+	cr2 := extractRegValue(regOut, "CR2=")
+	cr3 := extractRegValue(regOut, "CR3=")
+	cpl := extractRegValue(regOut, "CPL=")
+
+	fmt.Println("\n[CPU Execution & Memory State]")
+	fmt.Printf("  RIP: %s\n", rip)
+	fmt.Printf("  RSP: %s\n", rsp)
+	fmt.Printf("  CR0: %s (Protected/Paging)\n", cr0)
+	fmt.Printf("  CR2: %s (Page Fault Address)\n", cr2)
+	fmt.Printf("  CR3: %s (Page Table Base)\n", cr3)
+	fmt.Printf("  CPL: %s (%s)\n", cpl, cplDescription(cpl))
+
+	// 2. Disassemble Instructions at RIP
+	if rip != "" {
+		fmt.Printf("\n[Instructions at RIP (%s)]\n", rip)
+		if disOut, err := queryQEMUMonitor(ctx, cfg.name, fmt.Sprintf("x /8i 0x%s", rip)); err == nil {
+			printCleanMonitorOutput(disOut)
+		}
+	}
+
+	// 3. Stack memory dump
+	if rsp != "" {
+		fmt.Printf("\n[Stack Memory at RSP (%s)]\n", rsp)
+		if stackOut, err := queryQEMUMonitor(ctx, cfg.name, fmt.Sprintf("x /8gx 0x%s", rsp)); err == nil {
+			printCleanMonitorOutput(stackOut)
+		}
+	}
+
+	// 4. Panic / Fault Analysis
+	fmt.Println("\n[Diagnosis]")
+	if cr2 != "" && cr2 != "0000000000000000" {
+		fmt.Printf("  ALERT: Page Fault detected at address 0x%s!\n", cr2)
+		if cr2 == "0000000000000040" || cr2 == "0000000000000000" {
+			fmt.Println("  Cause: Kernel NULL pointer dereference (e.g. unsupported PCIe/virtio device descriptor).")
+		}
+	} else if strings.HasPrefix(rip, "ffffff80") {
+		fmt.Println("  Status: Executing in 64-bit macOS XNU Kernel address space.")
+	} else if strings.HasPrefix(rip, "00007") {
+		fmt.Println("  Status: Executing in Userland space (GUI / launchd active).")
+	} else {
+		fmt.Println("  Status: Executing in EFI / Bootloader phase.")
+	}
+
+	return nil
+}
+
+func extractRegValue(output, key string) string {
+	idx := strings.Index(output, key)
+	if idx == -1 {
+		return ""
+	}
+	sub := output[idx+len(key):]
+	fields := strings.Fields(sub)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
+func cplDescription(cpl string) string {
+	switch cpl {
+	case "0":
+		return "Ring 0 - Kernel Supervisor Mode"
+	case "3":
+		return "Ring 3 - Userland Mode"
+	default:
+		return "Privilege Level " + cpl
+	}
+}
+
+func printCleanMonitorOutput(out string) {
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "QEMU") || strings.HasPrefix(line, "(qemu)") {
+			continue
+		}
+		fmt.Printf("    %s\n", line)
+	}
+}
+
