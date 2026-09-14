@@ -773,10 +773,9 @@ func configureNoVNC(ctx context.Context, remoteHost, name string) {
 		"/usr/share/novnc/app/ui.js")
 	_ = cmd2.Run()
 
-	// Patch vnc.html: inject a hostname-tinted favicon.
-	// Fetches favicon.svg, injects a feColorMatrix hueRotate SVG filter derived
-	// from window.location.hostname, and sets it as the page icon via blob URL.
-	// Canvas is avoided because SVG images are tainted for canvas readback.
+	// Patch vnc.html: inject a host-tinted favicon. noVNC ships an ICO, not
+	// app/images/favicon.svg, so generate a self-contained SVG instead.
+	// Include the port so instances opened through localhost have distinct colors.
 	// Uses python3 to safely write the JS without shell quoting issues. Idempotent.
 	faviconScript := `
 import sys, re
@@ -789,19 +788,16 @@ s=(
     '<script>(function(){'
     'function hostnameHue(h){var n=0;for(var i=0;i<h.length;i++)n=(Math.imul(31,n)+h.charCodeAt(i))|0;return((n>>>0)%360);}'
     'document.addEventListener("DOMContentLoaded",function(){'
-    'var hue=hostnameHue(window.location.hostname);'
-    'fetch("app/images/favicon.svg")'
-    '.then(function(r){return r.text();})'
-    '.then(function(svg){'
-    'var f="<defs><filter id=\"hf\"><feColorMatrix type=\"hueRotate\" values=\""+hue+"\"/>'
-    '<feColorMatrix type=\"saturate\" values=\"1.8\"/></filter></defs>";'
-    'svg=svg.replace("<g>",f+"<g filter=\"url(#hf)\">");'
-    'var blob=new Blob([svg],{type:"image/svg+xml"});'
-    'var url=URL.createObjectURL(blob);'
-    'var lnk=document.querySelector("link[rel=icon]")||document.createElement("link");'
-    'lnk.rel="icon";lnk.type="image/svg+xml";lnk.href=url;'
+    'var hue=hostnameHue(window.location.host);'
+    'var svg="<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 64 64\\">"'
+    '+"<rect width=\\"64\\" height=\\"64\\" rx=\\"12\\" fill=\\"hsl("+hue+" 75% 45%)\\"/>"'
+    '+"<rect x=\\"10\\" y=\\"13\\" width=\\"44\\" height=\\"32\\" rx=\\"4\\" fill=\\"none\\" stroke=\\"white\\" stroke-width=\\"5\\"/>"'
+    '+"<path d=\\"M24 53h16M32 45v8\\" stroke=\\"white\\" stroke-width=\\"5\\" stroke-linecap=\\"round\\"/>"'
+    '+"</svg>";'
+    'document.querySelectorAll("link[rel~=icon]").forEach(function(link){link.remove();});'
+    'var lnk=document.createElement("link");'
+    'lnk.rel="icon";lnk.type="image/svg+xml";lnk.href="data:image/svg+xml,"+encodeURIComponent(svg);'
     'document.head.appendChild(lnk);'
-    '});'
     '});'
     '})();</script>'
 )
