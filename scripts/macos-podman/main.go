@@ -647,7 +647,7 @@ func doRun(ctx context.Context, cfg config) error {
 		}
 	}
 
-	runArgs = append(runArgs, "--device", "/dev/kvm", "--device", "/dev/net/tun", "--cap-add", "NET_ADMIN")
+	runArgs = append(runArgs, "--group-add", "keep-groups", "--device", "/dev/kvm", "--device", "/dev/net/tun", "--cap-add", "NET_ADMIN")
 	if cfg.autoRm {
 		runArgs = append(runArgs, "--rm")
 	}
