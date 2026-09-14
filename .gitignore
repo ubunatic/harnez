@@ -9,3 +9,7 @@
 # local Go workspace (untracked; see go.work.example)
 /go.work
 /go.work.sum
+
+# local macOS container storage & test binaries
+/macos-storage/
+/scripts/macos-hello/hello_*
