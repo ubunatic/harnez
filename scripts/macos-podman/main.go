@@ -173,6 +173,7 @@ func doRun(ctx context.Context, cfg config) error {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to start container: %s: %w", string(out), err)
 		}
+		configureNoVNC(ctx, cfg.name)
 		printEndpoints(cfg)
 		return nil
 	}
@@ -231,8 +232,16 @@ func doRun(ctx context.Context, cfg config) error {
 	}
 
 	fmt.Printf("Container %q started successfully.\n", cfg.name)
+	configureNoVNC(ctx, cfg.name)
 	printEndpoints(cfg)
 	return nil
+}
+
+func configureNoVNC(ctx context.Context, name string) {
+	patchCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(patchCtx, "podman", "exec", name, "sed", "-i", "s/UI.initSetting('show_dot', false);/UI.initSetting('show_dot', true);/g", "/usr/share/novnc/app/ui.js")
+	_ = cmd.Run()
 }
 
 func doStop(ctx context.Context, cfg config) error {
