@@ -1,6 +1,6 @@
 # 316 — settings.json debloat: harnez apply --debloat / status --debloat / revert --debloat
 
-**Status**: Draft
+**Status**: Open
 **Priority**: P1 (High)
 **Severity**: Minor
 **Category**: Feature
@@ -152,3 +152,42 @@ model_reasoning_effort=low`, read-only — no project files were changed.
 model, and validation gate above are captured in this ticket. A narrow,
 explicit-opt-in global preset remains defensible; the proposed `full`-by-
 default and reset-to-default revert are not.
+
+## Decided design (2026-09-15)
+
+Resolved with the user against the two open blockers above.
+
+1. **Presets**:
+   - `--preset minimal` (default when `--debloat` given with no `--preset`):
+     denies only verified integration-only tools — `DesignSync`,
+     `PushNotification`, `RemoteTrigger`.
+   - `--preset aggressive`: everything in `minimal`, plus the
+     interaction/safety-relevant tools from the original "full" list —
+     `AskUserQuestion`, `ScheduleWakeup`, `ReportFindings`, `SendMessage`,
+     `EnterPlanMode`, `ExitPlanMode`. Only applied when the user explicitly
+     passes `--preset aggressive` — never the default.
+   - `NotebookEdit` and `CronCreate`/`CronDelete`/`CronList` stay separately
+     selectable (e.g. `--debloat-notebook-edit`, `--debloat-cron`), not bundled
+     into either preset by default.
+   - The `disableBundledSkills`/`disableWorkflows`/`disableRemoteControl`/
+     `disableClaudeAiConnectors`/`disableArtifact` booleans stay individually
+     selectable flags, off by default, independent of preset choice.
+
+2. **Ownership/revert model**: persist a sidecar ownership record (e.g.
+   `~/.claude/.harnez-debloat.json`) written at apply time, capturing the
+   **prior value** of every key/entry harnez is about to touch (each deny
+   entry it adds; each boolean's prior value, including "absent"). `harnez
+   revert --debloat` reads this record and restores exactly those prior
+   values (re-adds a pre-existing deny entry if harnez's own entry happened
+   to duplicate one already present; restores a pre-existing `true` instead
+   of resetting to `false`; removes a boolean key entirely if it was absent
+   before), then deletes the record. This avoids clobbering user state and
+   satisfies review point 4.
+
+3. Still required per the review before this ships: reconcile with the
+   existing raw-JSON-preserving merge (`applySettingsJSON` /
+   `managedSettingsKeys` in `internal/claude/apply.go`) rather than
+   introducing a competing `*bool` struct model that round-trips the whole
+   file — new debloat keys should be merged the same way, with unknown
+   nested fields preserved untouched. `status --debloat` should name the
+   target file explicitly and state it affects every project for the user.
