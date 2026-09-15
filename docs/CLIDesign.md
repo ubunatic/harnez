@@ -198,6 +198,25 @@ Current agent-owned targets:
 `--dir`. When adding new flags to either command, check for shorthand conflicts before
 committing to a letter.
 
+## Testing `apply` safely: `-t`/`--target` does not fully isolate it
+
+`-t <dir>` only redirects `settings.json` and the `commands/`/skill-directory writes
+listed in the `apply flow` diagram above. It does **not** redirect the Codex config
+(`~/.codex/config.toml`), the `⚙` binary symlinks (`~/.claude/bin`, `~/go/bin`,
+`~/.local/bin`, `~/.prime/agent/bin`), the bash shim/env script (`~/.harnez/shims`,
+`~/.harnez/env.sh`), or the agent-specific `AGENTS.md` targets — those are hardcoded to
+real `$HOME`-relative paths regardless of `-t`, because `apply` is architecturally
+global (see "Why the separation matters" above). Running `harnez apply -t
+/tmp/some-test-dir` for a "quick isolated smoke test" still mutates the real, live
+harness install.
+
+This bit a real session (issue 316, 2026-09-15): a debloat-feature smoke test using
+`-t` pointed the real `⚙` symlinks at a throwaway temp binary, which was then deleted,
+leaving them dangling until a real `harnez apply` (no `-t`) was re-run to fix them. If
+you need a genuinely isolated `apply` test, either accept that it will re-sync your real
+global state (safe if already applied and idempotent) or point `HOME`/relevant XDG vars
+at a scratch directory for the whole test process, not just `-t`.
+
 ## Known gaps
 
 - `diff` and `clean` are global-only and have no awareness of project Makefiles — see issue #009.
