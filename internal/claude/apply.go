@@ -1085,7 +1085,7 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 			docTargets = appendUniquePath(docTargets, filepath.Join(root, "docs", filepath.Base(lang.Target)))
 		}
 		for _, dst := range docTargets {
-			fr, err := installDoc(cfg.FS, lang.Source, dst, forceDocs)
+			fr, err := installDoc(cfg.FS, lang.SourceFor(""), dst, forceDocs)
 			if err != nil {
 				return fmt.Errorf("language %s: install %s: %w", name, dst, err)
 			}
@@ -1093,7 +1093,7 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 				changes++
 				fmt.Printf("  installed %s\n", dst)
 			} else {
-				state := langDocState(cfg.FS, lang.Source, dst)
+				state := langDocState(cfg.FS, lang.SourceFor(""), dst)
 				addStat(name, fsutil.ContractHome(dst)+" ["+state+"]")
 			}
 		}

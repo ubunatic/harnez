@@ -285,7 +285,7 @@ func ValidateCopyableDocCatalog(cfg *Config) error {
 		if len(lang.Capabilities) > 0 && lang.Default != "" && lang.Default != "false" {
 			return fmt.Errorf("capability-scoped doc %q must use default: false; select capabilities explicitly", name)
 		}
-		data, err := fs.ReadFile(cfg.FS, lang.Source)
+		data, err := fs.ReadFile(cfg.FS, lang.SourceFor(""))
 		if err != nil {
 			return fmt.Errorf("copyable doc %q source %q: %w", name, lang.Source, err)
 		}
@@ -723,7 +723,7 @@ func RunInitWithForce(dir string, cfg *Config, docs []string, repoMode string, a
 			if !ok || lang.Local == "" {
 				continue
 			}
-			data, err := fs.ReadFile(cfg.FS, lang.Source)
+			data, err := fs.ReadFile(cfg.FS, lang.SourceFor(""))
 			if err != nil {
 				return fmt.Errorf("language %s: read source: %w", name, err)
 			}

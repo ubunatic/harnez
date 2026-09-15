@@ -282,11 +282,13 @@ func compareConfiguredDocs(repoDir string, cfg *Config) ([]docsDriftFile, error)
 		}
 		localPath := localPath(repoDir, lang.Local)
 		known[filepath.Clean(localPath)] = true
-		sourcePath := filepath.Join(cfg.Dir, filepath.FromSlash(lang.Source))
+		// TODO(issue 358): resolves against full Source only; a lite-installed
+		// local doc will show false drift until variant-marker resolution lands.
+		sourcePath := filepath.Join(cfg.Dir, filepath.FromSlash(lang.SourceFor("")))
 		if absSource, absErr := filepath.Abs(sourcePath); absErr == nil {
 			known[filepath.Clean(absSource)] = true
 		}
-		source, err := fs.ReadFile(cfg.FS, filepath.ToSlash(lang.Source))
+		source, err := fs.ReadFile(cfg.FS, filepath.ToSlash(lang.SourceFor("")))
 		if err != nil {
 			return nil, fmt.Errorf("read configured source %s: %w", sourcePath, err)
 		}

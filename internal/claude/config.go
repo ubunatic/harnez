@@ -192,14 +192,17 @@ type RepoMode struct {
 }
 
 type Language struct {
-	Name     string `yaml:"name"`
-	Ref      string `yaml:"ref"`
-	Hint     string `yaml:"hint"`
-	Source   string `yaml:"source"`
-	Target   string `yaml:"target"`
-	Local    string `yaml:"local"`
-	Template string `yaml:"template"` // scaffold file written once to project if absent
-	Targets  string `yaml:"targets"`  // managed section injected into existing template file
+	Name   string `yaml:"name"`
+	Ref    string `yaml:"ref"`
+	Hint   string `yaml:"hint"`
+	Source string `yaml:"source"`
+	// LiteSource is an optional tagline-only variant of Source for capable
+	// models tolerating compressed docs. SourceFor resolves between them.
+	LiteSource string `yaml:"lite_source,omitempty"`
+	Target     string `yaml:"target"`
+	Local      string `yaml:"local"`
+	Template   string `yaml:"template"` // scaffold file written once to project if absent
+	Targets    string `yaml:"targets"`  // managed section injected into existing template file
 	// Default controls whether init copies this doc without an explicit --doc flag.
 	// "true" = always copy, "false" = only if explicitly requested, "auto" = detect from project.
 	Default string `yaml:"default"`
@@ -210,6 +213,16 @@ type Language struct {
 	// governs. Capability docs remain explicit opt-ins; generic docs must phrase
 	// capability-specific guidance conditionally rather than assume it applies.
 	Capabilities []string `yaml:"capabilities,omitempty"`
+}
+
+// SourceFor returns LiteSource when variant is "lite" and LiteSource is set,
+// otherwise it falls back to Source. Any other variant value (including "",
+// the default) always resolves to Source.
+func (l Language) SourceFor(variant string) string {
+	if variant == "lite" && l.LiteSource != "" {
+		return l.LiteSource
+	}
+	return l.Source
 }
 
 func LoadConfig(path string) (*Config, error) {

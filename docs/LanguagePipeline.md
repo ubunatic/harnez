@@ -12,6 +12,7 @@ How `--docs <name>` flows from `config.yaml` into a project via `apply` (global)
 | Field | Command | Destination | Behaviour |
 |-------|---------|-------------|-----------|
 | `source` | `apply` | `~/.claude/docs/<name>.md`, `~/.prime/agent/docs/<name>.md` | Installed globally unless an existing custom doc is preserved |
+| `lite_source` | `apply`/`init` | same as `source` | Optional tagline-only variant of `source`. `Language.SourceFor(variant)` resolves `lite_source` when `variant == "lite"` and it's set, else falls back to `source`. Schema-only as of issue 357 — no CLI flag selects `variant` yet (see issue 360). |
 | `local` | `init` | `<project>/docs/<name>.md` | Written/updated on every init |
 | `template` | `init` | `<project>/Makefile` (basename of path) | Written **once** — skipped if file exists |
 | `targets` | `init` | `<project>/Makefile` (managed section) | Injected/updated — skipped if template was just scaffolded |
