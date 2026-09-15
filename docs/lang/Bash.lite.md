@@ -151,7 +151,7 @@ cd "$orig"
 
 See issue 095 (cwd leak, trust boundary), issue 222 (multi-repo wrong-repo failure).
 
-## 10. On demand
+## 10. Awk Portability (rarely needed)
 
-Awk portability (mawk vs gawk) — look up only when about to write awk:
-`docs/lang/Bash.md` § "Appendix — Awk Portability" (`#appendix--awk-portability`).
+Default is mawk, not gawk — no 3-arg `match(str, /re/, arr)` (use `split()`/`sub()`/`gsub()`),
+no `strtonum()` (write a manual `h2d()`), no `gensub()` (use `sub()`/`gsub()` + a temp var).
