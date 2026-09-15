@@ -12,6 +12,7 @@ func newInitCmd() *cobra.Command {
 	var initDocs []string
 	var initConfigPath string
 	var initRepoMode string
+	var initVariant string
 	var initSummary, initUpdate, initReplace, initYes, initAll, initIssuesGit, initGoWork, initForce bool
 
 	initCmd := &cobra.Command{
@@ -27,9 +28,9 @@ func newInitCmd() *cobra.Command {
 				issuesGit = &initIssuesGit
 			}
 			if initAll {
-				return claude.RunInitAllWithGoWork(initDir, cfg, initDocs, initRepoMode, initSummary, initUpdate, initReplace, issuesGit, initGoWork)
+				return claude.RunInitAllWithVariant(initDir, cfg, initDocs, initRepoMode, initSummary, initUpdate, initReplace, issuesGit, initGoWork, initVariant)
 			}
-			return claude.RunInitWithForce(initDir, cfg, initDocs, initRepoMode, initYes, initSummary, initUpdate, initReplace, issuesGit, initGoWork, initForce)
+			return claude.RunInitWithVariant(initDir, cfg, initDocs, initRepoMode, initYes, initSummary, initUpdate, initReplace, issuesGit, initGoWork, initForce, initVariant)
 		},
 	}
 	initCmd.Flags().StringVarP(&initConfigPath, "config", "c", "", "path to config YAML file (default: embedded)")
@@ -38,6 +39,7 @@ func newInitCmd() *cobra.Command {
 	initCmd.Flags().BoolVar(&initAll, "all", false,
 		"treat --dir as a workspace directory and non-interactively init every eligible child (has AGENTS.md/CLAUDE.md); refuses $HOME (see issue 068)")
 	initCmd.Flags().StringSliceVar(&initDocs, "docs", nil, "docs to set up in the project, comma-separated or repeated (e.g. golang,canary)")
+	initCmd.Flags().StringVar(&initVariant, "variant", "full", "doc variant to install: lite or full (docs without a lite variant fall back to full)")
 	initCmd.Flags().StringVarP(&initRepoMode, "repo-mode", "m", "", "repo git setup to note in AGENTS.md (solo, fork, team)")
 	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "assume yes when reconciling Makefile targets (no prompt)")
 	initCmd.Flags().BoolVar(&initSummary, "summary", false, "run claude -p to generate a project summary and add it to AGENTS.md")

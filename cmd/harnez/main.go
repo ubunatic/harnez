@@ -448,6 +448,7 @@ func main() {
 	var forceDocs bool
 	var applySystemd bool
 	var applyShell bool
+	var applyVariant string
 	var debloat bool
 	var debloatPreset string
 	var debloatNotebookEdit bool
@@ -467,7 +468,7 @@ func main() {
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
-			if err := claude.ApplyAll(t, cfg, applyDocs, forceDocs, applySystemd, applyShell); err != nil {
+			if err := claude.ApplyAllVariant(t, cfg, applyDocs, forceDocs, applySystemd, applyVariant, applyShell); err != nil {
 				return err
 			}
 			opts := claude.DebloatOptions{
@@ -498,6 +499,7 @@ func main() {
 	apply.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 	apply.Flags().StringSliceVarP(&applyDocs, "docs", "d", nil, "doc(s) to install globally, comma-separated or repeated (e.g. golang,canary)")
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing docs with bundled versions")
+	apply.Flags().StringVar(&applyVariant, "variant", "full", "doc variant to install: lite or full (docs without a lite variant fall back to full)")
 	apply.Flags().BoolVar(&applySystemd, "systemd", false,
 		"install the harnez-agent-collector systemd --user unit to ~/.config/systemd/user (issue 082)")
 	apply.Flags().BoolVarP(&applyShell, "shell", "s", false,
@@ -670,7 +672,7 @@ func main() {
 	}
 	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
 
-	root.AddCommand(apply, diff, scanDocs, clean, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newCodexHookCmd(), newLintCmd(), newLogCmd())
+	root.AddCommand(apply, diff, scanDocs, clean, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newCodexHookCmd(), newLintCmd(), newLogCmd(), newDocsCmd())
 	// executeAndRecord, not root.Execute, is the entry point: issue 326's
 	// cli_invocations row can only be written from here, around Execute —
 	// see cmd/harnez/clilog.go for why neither of Cobra's hook points works.

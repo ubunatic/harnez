@@ -719,6 +719,35 @@ func ShellRCPaths() []string {
 	return existing
 }
 
+// SwitchDocVariant re-installs a single already project-installed doc through
+// the same installDoc/MergeManagedDoc path init.go uses, swapping which
+// source variant supplies the managed content while preserving any
+// harnez:stop-delimited local section. It touches nothing else — no other
+// doc, no Makefile, no AGENTS.md section. name must be a valid entry in
+// cfg.AgentsMD.Languages with Local set; variant must be "lite" or "full".
+func SwitchDocVariant(dir string, cfg *Config, name, variant string) (changed bool, err error) {
+	if variant != "lite" && variant != "full" {
+		return false, fmt.Errorf("invalid variant %q: must be lite or full", variant)
+	}
+	lang, ok := cfg.AgentsMD.Languages[name]
+	if !ok {
+		return false, fmt.Errorf("unknown doc: %s", name)
+	}
+	if lang.Local == "" {
+		return false, fmt.Errorf("doc %q has no project-local target (local: unset)", name)
+	}
+	resolveVariant := variant
+	if variant == "full" {
+		resolveVariant = ""
+	}
+	if variant == "lite" && lang.LiteSource == "" {
+		return false, fmt.Errorf("doc %q has no lite_source configured; nothing to switch to", name)
+	}
+	dst := localPath(dir, lang.Local)
+	r, err := installDoc(cfg.FS, lang.SourceFor(resolveVariant), dst, true)
+	return r.changed, err
+}
+
 func localPath(projectDir, rel string) string {
 	if filepath.IsAbs(rel) || projectDir == "" || projectDir == "." {
 		return rel
@@ -746,7 +775,16 @@ func mergeDocs(fromConfig, fromFlag []string) []string {
 // harnez-agent-collector systemd --user unit (issue 082) to
 // ~/.config/systemd/user/. installShell (opt-in) additionally injects the
 // harnez environment source block into shell rc files (~/.bashrc, ~/.zshrc).
+// ApplyAll installs the managed configuration into target, always using the
+// full doc source. See ApplyAllVariant to select a lite_source variant.
 func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool, installShell ...bool) error {
+	return ApplyAllVariant(target, cfg, docs, forceDocs, installSystemd, "", installShell...)
+}
+
+// ApplyAllVariant is ApplyAll with an explicit doc variant ("" or "lite")
+// selecting which source (Language.SourceFor) is installed for docs that
+// declare a lite_source.
+func ApplyAllVariant(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool, docVariant string, installShell ...bool) error {
 	shellOpt := len(installShell) > 0 && installShell[0]
 	if err := validateDocNames(cfg, docs); err != nil {
 		return err
@@ -1085,7 +1123,7 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 			docTargets = appendUniquePath(docTargets, filepath.Join(root, "docs", filepath.Base(lang.Target)))
 		}
 		for _, dst := range docTargets {
-			fr, err := installDoc(cfg.FS, lang.SourceFor(""), dst, forceDocs)
+			fr, err := installDoc(cfg.FS, lang.SourceFor(docVariant), dst, forceDocs)
 			if err != nil {
 				return fmt.Errorf("language %s: install %s: %w", name, dst, err)
 			}
@@ -1093,7 +1131,7 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 				changes++
 				fmt.Printf("  installed %s\n", dst)
 			} else {
-				state := langDocState(cfg.FS, lang.SourceFor(""), dst)
+				state := langDocState(cfg.FS, lang.SourceFor(docVariant), dst)
 				addStat(name, fsutil.ContractHome(dst)+" ["+state+"]")
 			}
 		}

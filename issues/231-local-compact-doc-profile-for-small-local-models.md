@@ -4,11 +4,10 @@
 **Priority**: P3 (Low)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [Issue 360](360-harnez-docs-variant-name-lite-full-thin-switch-verb.md) (proposes the
-same doc-variant-selection mechanism for the opposite audience — strong models tolerating
-tagline-only lite docs vs. this ticket's weak models needing compact docs; likely supersedes this
-ticket's mechanism half, leaving only the "which local models need which default" policy question
-open), [[166-compact-local-llm-doc-profile-and-go-rune-width-invariants]] (split from — original
+**Related**: [Issue 360](360-harnez-docs-variant-name-lite-full-thin-switch-verb.md) (shipped —
+its `lite_source`/`SourceFor(variant)`/`--variant` mechanism supersedes this ticket's own
+"Implementation Plan" step 1 below; only the content-authoring/policy work in steps 2-3 remains),
+[[166-compact-local-llm-doc-profile-and-go-rune-width-invariants]] (split from — original
 ticket's Part B), [[165-two-phase-architect-patch-harness-for-small-local-models]] (same
 `qwen-27b-local` source/motivation — small local models need a different interaction/instruction
 shape than this project's docs and sprint workflow currently assume; likely the same profile work),
@@ -59,12 +58,17 @@ flag with its own bespoke code path. No implementation should start until priori
 
 **Stays blocked — do not start until [[149]]'s per-agent/per-profile mechanism exists.**
 
-When it does:
+Step 1 below (mechanism design) is superseded by issue 360, which shipped `Language.LiteSource`/
+`SourceFor(variant)` plus `--variant lite|full` on `init`/`apply` and `harnez docs variant <name>
+<lite|full>` for already-installed docs — exactly the "alternate `source:` per doc entry, reusing
+existing copy machinery" shape step 1 proposed, generalized rather than compact-specific. When
+149 unblocks this ticket, only steps 2-3 (content authoring, line-cap test) remain to do; do not
+re-design the selection mechanism.
 
-1. Model `local-compact` as a *profile* in the existing `docs:` config structure, not a new
-   top-level `target_profile` key with its own code path — a profile should select an alternate
-   `source:` per doc entry (e.g. `source_compact: docs/compact/Go.md`), so `apply`/`init` reuse the
-   existing copy machinery unchanged.
+1. ~~Model `local-compact` as a *profile* in the existing `docs:` config structure...~~ Superseded
+   by issue 360's `lite_source`/`SourceFor`/`--variant` — a `local-compact` doc is just another
+   variant value (or a differently-named `Language` field if "compact" needs to coexist with
+   "lite" as a distinct third variant; TBD when 149 unblocks this).
 2. Author compact variants only for docs a small model actually needs at edit time (Go, Bash,
    Markdown) — not a mechanical shrink of all 15 doc entries.
 3. Enforce the budget with a test, not a convention: a `TestCompactDocsUnderLineCap` in the config/

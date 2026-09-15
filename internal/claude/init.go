@@ -569,6 +569,13 @@ func RunInitWithGoWork(dir string, cfg *Config, docs []string, repoMode string, 
 
 // RunInitWithForce runs project initialization with explicit --gowork and --force support.
 func RunInitWithForce(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool, gowork bool, force bool) error {
+	return RunInitWithVariant(dir, cfg, docs, repoMode, assumeYes, withSummary, update, replace, issuesGit, gowork, force, "")
+}
+
+// RunInitWithVariant is RunInitWithForce with an explicit doc variant
+// ("" or "lite") selecting which source (Language.SourceFor) is copied for
+// docs that declare a lite_source.
+func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool, gowork bool, force bool, variant string) error {
 	if err := ValidateInitTarget(dir, force); err != nil {
 		return err
 	}
@@ -723,7 +730,7 @@ func RunInitWithForce(dir string, cfg *Config, docs []string, repoMode string, a
 			if !ok || lang.Local == "" {
 				continue
 			}
-			data, err := fs.ReadFile(cfg.FS, lang.SourceFor(""))
+			data, err := fs.ReadFile(cfg.FS, lang.SourceFor(variant))
 			if err != nil {
 				return fmt.Errorf("language %s: read source: %w", name, err)
 			}
@@ -1020,6 +1027,13 @@ func RunInitAllWithIssuesGit(parentDir string, cfg *Config, docs []string, repoM
 }
 
 func RunInitAllWithGoWork(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool, issuesGit *bool, gowork bool) error {
+	return RunInitAllWithVariant(parentDir, cfg, docs, repoMode, withSummary, update, replace, issuesGit, gowork, "")
+}
+
+// RunInitAllWithVariant is RunInitAllWithGoWork with an explicit doc variant
+// ("" or "lite") selecting which source (Language.SourceFor) is copied for
+// docs that declare a lite_source, threaded into each child's RunInitWithVariant call.
+func RunInitAllWithVariant(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool, issuesGit *bool, gowork bool, variant string) error {
 	if parentDir == "" {
 		return fmt.Errorf("parent directory is empty")
 	}
@@ -1053,7 +1067,7 @@ func RunInitAllWithGoWork(parentDir string, cfg *Config, docs []string, repoMode
 	var errs []string
 	for _, child := range children {
 		fmt.Printf("== %s ==\n", filepath.Base(child))
-		if err := RunInitWithGoWork(child, cfg, docs, repoMode, true, withSummary, update, replace, issuesGit, gowork); err != nil {
+		if err := RunInitWithVariant(child, cfg, docs, repoMode, true, withSummary, update, replace, issuesGit, gowork, false, variant); err != nil {
 			fmt.Printf("  error: %v\n", err)
 			errs = append(errs, fmt.Sprintf("%s: %v", child, err))
 			continue
