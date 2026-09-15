@@ -62,6 +62,17 @@ GitHub issue reports):
       an edit to the 2026-09-15 debloat study, since that file was being
       concurrently edited for issue 348 in the same session).
 
+## Implementation follow-up (2026-09-16)
+
+The verified mechanism now ships through the config-driven debloat presets.
+Minimal applies 19 `user-invocable-only` overrides; aggressive adds
+`domain-modeling`, `evergreen`, and `lmcoder`. `fresh-sprint` and
+`fresh-sprinter` are decommissioned in favour of their `lean-*` replacements,
+and `apply` removes their stale installed command/skill artifacts. Live aggressive
+verification reported 343 Skills tokens, preserved the five intentionally
+auto-loadable skills, and was idempotent on a second apply. Revert/status support
+includes the per-skill override ownership state.
+
 ## Related
 
 - Issue 316 — `harnez apply --debloat`.

@@ -273,3 +273,15 @@ already plays this role for `permissions`/`hooks`/etc.). Moved to a new
 needed no change since it only reads its own sidecar ownership record, not
 preset content. Tests updated to load the real embedded config rather than
 duplicating literal lists in test code.
+
+## Follow-up (2026-09-16): config-driven user-skill overrides
+
+Following issue 349's live proof, debloat presets now merge `skillOverrides`
+from `config.yaml`. Minimal retains 19 slash-oriented workflows as
+`user-invocable-only`; aggressive additionally applies that mode to
+`domain-modeling`, `evergreen`, and `lmcoder`. The sidecar records each prior
+value so `revert --debloat` restores user state exactly, while
+`status --debloat` displays active ownership. The retired `fresh-sprint` and
+`fresh-sprinter` installed artifacts are removed during `apply` in favour of
+the `lean-*` workflow. Live aggressive `/context` verification measured 343
+Skills tokens and a second application was idempotent.

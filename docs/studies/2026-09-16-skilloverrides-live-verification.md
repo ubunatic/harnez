@@ -75,6 +75,25 @@ for. `skillOverrides` is a complementary, finer-grained lever worth exposing sep
 skill names) for projects that want to keep most bundled skills but trim a handful — not
 a replacement for the existing preset.
 
+## Shipped follow-up — user-skill debloat presets
+
+The verified mechanism now backs `harnez apply --debloat` as a config-driven
+user-skill policy:
+
+- Both presets set 19 explicit workflows to `user-invocable-only`, keeping their
+  slash entry points while removing their startup descriptions.
+- `aggressive` additionally makes `domain-modeling`, `evergreen`, and `lmcoder`
+  user-invocable-only.
+- The superseded `fresh-sprint`/`fresh-sprinter` artifacts are decommissioned and
+  removed by `apply`; `lean-sprint`/`lean-sprinter` are their canonical replacements.
+- `status --debloat` reports each managed override, and `revert --debloat` restores
+  the exact prior per-skill values using the ownership sidecar.
+
+Live verification with the aggressive preset reduced Claude Code's `/context`
+Skills estimate from approximately 1.2k tokens to **343 tokens**, leaving only
+`harnez-advisor`, `issue`, `publish`, `tool-feedback-protocol`, and `website`
+auto-loadable. A second apply reported `No changes`.
+
 **Caveat on durability**: this is one version snapshot (2.1.273). Issue 347's own research
 noted this area shows signs of active flux across Claude Code releases — re-verify with
 this same method before depending on it in a shipped feature, and re-check after any
