@@ -1,6 +1,6 @@
 # 358 — Self-describing variant marker so drift detection tolerates lite docs
 
-**Status**: Open
+**Status**: Closed — variant marker + drift resolution implemented and reviewed
 **Priority**: P3 (Low)
 **Severity**: Bug (prerequisite — blocks shipping any lite doc)
 **Category**: Templates / Docs
@@ -35,13 +35,13 @@ every existing doc) behaves exactly as today (implicit `variant=full`).
 
 ## 3. Acceptance Criteria
 
-- [ ] `<!-- harnez:variant=lite -->` (or equivalent) marker recognized by
+- [x] `<!-- harnez:variant=lite -->` (or equivalent) marker recognized by
       `internal/markdown` alongside existing managed-block markers.
-- [ ] `docs_capture.go` resolves drift baseline from the installed doc's own variant
+- [x] `docs_capture.go` resolves drift baseline from the installed doc's own variant
       marker, not a fixed `source` reference.
-- [ ] Test: a lite-installed doc reports clean drift status in `harnez status`.
-- [ ] Test: a locally-edited lite doc (content changed after install) still correctly
+- [x] Test: a lite-installed doc reports clean drift status in `harnez status`.
+- [x] Test: a locally-edited lite doc (content changed after install) still correctly
       reports drift — the marker-based resolution doesn't mask real edits.
-- [ ] Test: an unmarked (full-variant) doc's drift detection is unchanged from current
+- [x] Test: an unmarked (full-variant) doc's drift detection is unchanged from current
       behavior — no regression for the existing doc set.
-- [ ] `go test ./...` and `scripts/smoke-test.sh` pass.
+- [x] `go test ./...` and `scripts/smoke-test.sh` pass.
