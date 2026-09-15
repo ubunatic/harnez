@@ -32,6 +32,16 @@ docs:
 # model: sonnet  # unmanaged by default, let user or client choose
 effort: medium
 
+# Artifacts formerly installed by harnez that `apply` removes during
+# migrations. Keep this list spec-driven so renamed workflows do not linger
+# indefinitely in user-level command/skill directories.
+decommissioned:
+  commands:
+    - fresh-sprint
+  skills:
+    - fresh-sprint
+    - fresh-sprinter
+
 # how `init` reconciles its own Makefile targets (e.g. `help`) into an
 # existing project Makefile — see docs/src/Make.md
 make:
@@ -46,6 +56,34 @@ debloat:
   # user/project skills; add lean harnez replacements only for demonstrated
   # gaps (issue 348).
   preset_disable_bundled_skills: true
+  # Slash-oriented user skills stay available explicitly without consuming
+  # startup context.
+  preset_skill_overrides:
+    commit: user-invocable-only
+    discovery: user-invocable-only
+    docup: user-invocable-only
+    grill-with-docs: user-invocable-only
+    grilling: user-invocable-only
+    harnez-sync: user-invocable-only
+    lean-sprint: user-invocable-only
+    lean-sprinter: user-invocable-only
+    make-spec: user-invocable-only
+    mode: user-invocable-only
+    pull: user-invocable-only
+    release: user-invocable-only
+    review: user-invocable-only
+    roadmap: user-invocable-only
+    sprint: user-invocable-only
+    sprinter: user-invocable-only
+    standup: user-invocable-only
+    story: user-invocable-only
+    sync-mattpocock-skills: user-invocable-only
+  # These retain prose-triggering under the minimal preset and become
+  # explicit-only under the deliberately stronger aggressive preset.
+  aggressive_skill_overrides:
+    domain-modeling: user-invocable-only
+    evergreen: user-invocable-only
+    lmcoder: user-invocable-only
   # verified integration-only tools; safe to deny under any preset.
   minimal_deny:
     - DesignSync

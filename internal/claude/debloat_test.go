@@ -93,6 +93,95 @@ func TestApplyDebloat_PresetBundledSkillsFollowsConfig(t *testing.T) {
 	}
 }
 
+func TestApplyDebloat_MinimalSkillOverrides(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := ApplyDebloat(dir, testDebloatConfig(t), DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+
+	settings := readSettings(t, dir)
+	overrides, _ := settings["skillOverrides"].(map[string]any)
+	if got, want := len(overrides), 19; got != want {
+		t.Fatalf("minimal skill override count = %d, want %d: %v", got, want, overrides)
+	}
+	if got := overrides["commit"]; got != "user-invocable-only" {
+		t.Fatalf("commit override = %v, want user-invocable-only", got)
+	}
+	for _, name := range []string{"domain-modeling", "evergreen", "lmcoder"} {
+		if got, present := overrides[name]; present {
+			t.Fatalf("minimal preset unexpectedly overrides %s = %v", name, got)
+		}
+	}
+}
+
+func TestApplyDebloat_AggressiveSkillOverrides(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := ApplyDebloat(dir, testDebloatConfig(t), DebloatOptions{Preset: DebloatPresetAggressive}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+
+	settings := readSettings(t, dir)
+	overrides, _ := settings["skillOverrides"].(map[string]any)
+	if got, want := len(overrides), 22; got != want {
+		t.Fatalf("aggressive skill override count = %d, want %d: %v", got, want, overrides)
+	}
+	for _, name := range []string{"domain-modeling", "evergreen", "lmcoder"} {
+		if got := overrides[name]; got != "user-invocable-only" {
+			t.Fatalf("%s override = %v, want user-invocable-only", name, got)
+		}
+	}
+}
+
+func TestApplyDebloat_RejectsInvalidSkillOverrideMode(t *testing.T) {
+	dir := t.TempDir()
+	cfg := testDebloatConfig(t)
+	cfg.PresetSkillOverrides = map[string]string{"commit": "sometimes"}
+
+	err := ApplyDebloat(dir, cfg, DebloatOptions{Preset: DebloatPresetMinimal})
+	if err == nil {
+		t.Fatal("expected invalid skill override mode to fail")
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "settings.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("settings.json should not be written on invalid config, stat err=%v", statErr)
+	}
+}
+
+func TestApplyRevertDebloat_RestoresSkillOverrides(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.json")
+	initial := map[string]any{
+		"skillOverrides": map[string]any{
+			"commit":       "on",
+			"personal-one": "off",
+		},
+	}
+	data, _ := json.MarshalIndent(initial, "", "  ")
+	if err := os.WriteFile(settingsPath, data, 0644); err != nil {
+		t.Fatalf("seed settings.json: %v", err)
+	}
+
+	if err := ApplyDebloat(dir, testDebloatConfig(t), DebloatOptions{Preset: DebloatPresetAggressive}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+	if err := RevertDebloat(dir); err != nil {
+		t.Fatalf("RevertDebloat: %v", err)
+	}
+
+	settings := readSettings(t, dir)
+	overrides, _ := settings["skillOverrides"].(map[string]any)
+	if got := overrides["commit"]; got != "on" {
+		t.Fatalf("commit after revert = %v, want on", got)
+	}
+	if got := overrides["personal-one"]; got != "off" {
+		t.Fatalf("unrelated override after revert = %v, want off", got)
+	}
+	if _, present := overrides["discovery"]; present {
+		t.Fatalf("discovery should be absent after revert, got %v", overrides["discovery"])
+	}
+}
+
 func TestApplyDebloat_StandaloneBundledSkillsToggle(t *testing.T) {
 	dir := t.TempDir()
 	cfg := testDebloatConfig(t)

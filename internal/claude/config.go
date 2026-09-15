@@ -11,31 +11,39 @@ import (
 )
 
 type Config struct {
-	Dir                string            `yaml:"-"`
-	FS                 fs.FS             `yaml:"-"`
-	TargetDir          string            `yaml:"target_dir"`
-	Docs               []string          `yaml:"docs"`
-	Model              string            `yaml:"model"`
-	Effort             string            `yaml:"effort"`
-	Verbs              []string          `yaml:"verbs"`
-	Permissions        Permissions       `yaml:"permissions"`
-	Hooks              []Hook            `yaml:"hooks"`
-	Env                map[string]string `yaml:"env"`
-	MCPServers         []MCPServer       `yaml:"mcp_servers"`
-	StatusLine         bool              `yaml:"status_line"`
-	Commands           []Command         `yaml:"commands"`
-	Skills             []Command         `yaml:"skills"`
-	DistillAutopipe    DistillAutopipe   `yaml:"distill_autopipe"`
-	SkillsTarget       string            `yaml:"skills_target"`
-	CodexSkillsTarget  string            `yaml:"codex_skills_target"`
-	CodexHooksTarget   string            `yaml:"codex_hooks_target"`
-	AgyHooksTarget     string            `yaml:"agy_hooks_target"`
-	ClaudeSkillsTarget string            `yaml:"claude_skills_target"`
-	PrimeAgentTarget   string            `yaml:"prime_agent_target"`
-	AgentsMD           AgentsMD          `yaml:"agents_md"`
-	Make               MakeConfig        `yaml:"make"`
-	Feedback           FeedbackConfig    `yaml:"feedback"`
-	Debloat            DebloatConfig     `yaml:"debloat"`
+	Dir                string               `yaml:"-"`
+	FS                 fs.FS                `yaml:"-"`
+	TargetDir          string               `yaml:"target_dir"`
+	Docs               []string             `yaml:"docs"`
+	Model              string               `yaml:"model"`
+	Effort             string               `yaml:"effort"`
+	Verbs              []string             `yaml:"verbs"`
+	Permissions        Permissions          `yaml:"permissions"`
+	Hooks              []Hook               `yaml:"hooks"`
+	Env                map[string]string    `yaml:"env"`
+	MCPServers         []MCPServer          `yaml:"mcp_servers"`
+	StatusLine         bool                 `yaml:"status_line"`
+	Commands           []Command            `yaml:"commands"`
+	Skills             []Command            `yaml:"skills"`
+	DistillAutopipe    DistillAutopipe      `yaml:"distill_autopipe"`
+	SkillsTarget       string               `yaml:"skills_target"`
+	CodexSkillsTarget  string               `yaml:"codex_skills_target"`
+	CodexHooksTarget   string               `yaml:"codex_hooks_target"`
+	AgyHooksTarget     string               `yaml:"agy_hooks_target"`
+	ClaudeSkillsTarget string               `yaml:"claude_skills_target"`
+	PrimeAgentTarget   string               `yaml:"prime_agent_target"`
+	AgentsMD           AgentsMD             `yaml:"agents_md"`
+	Make               MakeConfig           `yaml:"make"`
+	Feedback           FeedbackConfig       `yaml:"feedback"`
+	Debloat            DebloatConfig        `yaml:"debloat"`
+	Decommissioned     DecommissionedConfig `yaml:"decommissioned"`
+}
+
+// DecommissionedConfig lists artifacts that older harnez versions installed
+// and current `apply` runs must remove after a rename or retirement.
+type DecommissionedConfig struct {
+	Commands []string `yaml:"commands"`
+	Skills   []string `yaml:"skills"`
 }
 
 // DebloatConfig is the single source of truth for `apply --debloat`'s
@@ -48,6 +56,10 @@ type DebloatConfig struct {
 	// PresetDisableBundledSkills disables Claude Code's bundled skill
 	// catalogue under any selected preset while leaving user/project skills.
 	PresetDisableBundledSkills bool `yaml:"preset_disable_bundled_skills"`
+	// PresetSkillOverrides apply under either preset. AggressiveSkillOverrides
+	// are added only for the explicitly selected aggressive preset.
+	PresetSkillOverrides     map[string]string `yaml:"preset_skill_overrides"`
+	AggressiveSkillOverrides map[string]string `yaml:"aggressive_skill_overrides"`
 	// MinimalDeny are verified integration-only tools denied under any
 	// preset ("minimal" and "aggressive" both include these).
 	MinimalDeny []string `yaml:"minimal_deny"`

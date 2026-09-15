@@ -619,6 +619,50 @@ func commandTargets(target string, cfg *Config) []string {
 	return targets
 }
 
+func decommissionedName(name string) error {
+	if name == "" || filepath.Base(name) != name || name == "." || name == ".." {
+		return fmt.Errorf("invalid decommissioned artifact name %q", name)
+	}
+	return nil
+}
+
+func removeDecommissionedArtifacts(target string, cfg *Config) (int, error) {
+	changes := 0
+	for _, name := range cfg.Decommissioned.Commands {
+		if err := decommissionedName(name); err != nil {
+			return changes, err
+		}
+		for _, root := range commandTargets(target, cfg) {
+			artifact := filepath.Join(root, name+".md")
+			if err := os.Remove(artifact); err == nil {
+				changes++
+				fmt.Printf("  removed %s\n", artifact)
+			} else if !os.IsNotExist(err) {
+				return changes, fmt.Errorf("remove decommissioned command %s: %w", artifact, err)
+			}
+		}
+	}
+	for _, name := range cfg.Decommissioned.Skills {
+		if err := decommissionedName(name); err != nil {
+			return changes, err
+		}
+		for _, root := range skillTargets(cfg) {
+			artifact := filepath.Join(root, name)
+			if _, err := os.Stat(artifact); os.IsNotExist(err) {
+				continue
+			} else if err != nil {
+				return changes, fmt.Errorf("inspect decommissioned skill %s: %w", artifact, err)
+			}
+			if err := os.RemoveAll(artifact); err != nil {
+				return changes, fmt.Errorf("remove decommissioned skill %s: %w", artifact, err)
+			}
+			changes++
+			fmt.Printf("  removed %s\n", artifact)
+		}
+	}
+	return changes, nil
+}
+
 func gearExecutable() string {
 	if exe, err := os.Executable(); err == nil && exe != "" {
 		return exe
@@ -790,6 +834,11 @@ func ApplyAllVariant(target string, cfg *Config, docs []string, forceDocs bool, 
 		return err
 	}
 	changes := 0
+	removed, err := removeDecommissionedArtifacts(target, cfg)
+	if err != nil {
+		return err
+	}
+	changes += removed
 
 	type pStat struct{ label, detail string }
 	var pStats []pStat

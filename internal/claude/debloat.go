@@ -106,6 +106,9 @@ type debloatRecord struct {
 	// BoolPrior maps a toggle key to its value before harnez first set it.
 	// A nil value means the key was absent before.
 	BoolPrior map[string]*bool `json:"boolPrior"`
+	// SkillOverridePrior maps each managed skill to its value before harnez
+	// first changed it. A nil value means the override was absent before.
+	SkillOverridePrior map[string]*string `json:"skillOverridePrior,omitempty"`
 }
 
 func debloatRecordPath(target string) string {
@@ -113,7 +116,10 @@ func debloatRecordPath(target string) string {
 }
 
 func readDebloatRecord(target string) debloatRecord {
-	rec := debloatRecord{BoolPrior: map[string]*bool{}}
+	rec := debloatRecord{
+		BoolPrior:          map[string]*bool{},
+		SkillOverridePrior: map[string]*string{},
+	}
 	data, err := os.ReadFile(debloatRecordPath(target))
 	if err != nil {
 		return rec
@@ -122,7 +128,32 @@ func readDebloatRecord(target string) debloatRecord {
 	if rec.BoolPrior == nil {
 		rec.BoolPrior = map[string]*bool{}
 	}
+	if rec.SkillOverridePrior == nil {
+		rec.SkillOverridePrior = map[string]*string{}
+	}
 	return rec
+}
+
+func (o DebloatOptions) skillOverrides(cfg DebloatConfig) (map[string]string, error) {
+	want := map[string]string{}
+	if o.Preset != "" {
+		for name, mode := range cfg.PresetSkillOverrides {
+			want[name] = mode
+		}
+	}
+	if o.Preset == DebloatPresetAggressive {
+		for name, mode := range cfg.AggressiveSkillOverrides {
+			want[name] = mode
+		}
+	}
+	for name, mode := range want {
+		switch mode {
+		case "on", "name-only", "user-invocable-only", "off":
+		default:
+			return nil, fmt.Errorf("invalid skill override for %q: %q", name, mode)
+		}
+	}
+	return want, nil
 }
 
 func writeDebloatRecord(target string, rec debloatRecord) error {
@@ -139,6 +170,10 @@ func writeDebloatRecord(target string, rec debloatRecord) error {
 // RevertDebloat can restore them exactly.
 func ApplyDebloat(target string, cfg DebloatConfig, opts DebloatOptions) error {
 	deny, err := opts.denyList(cfg)
+	if err != nil {
+		return err
+	}
+	skillOverrides, err := opts.skillOverrides(cfg)
 	if err != nil {
 		return err
 	}
@@ -190,6 +225,25 @@ func ApplyDebloat(target string, cfg DebloatConfig, opts DebloatOptions) error {
 			}
 		}
 		settings[key] = true
+	}
+
+	if len(skillOverrides) > 0 {
+		existing, _ := settings["skillOverrides"].(map[string]any)
+		if existing == nil {
+			existing = map[string]any{}
+		}
+		for name, mode := range skillOverrides {
+			if _, tracked := rec.SkillOverridePrior[name]; !tracked {
+				if cur, ok := existing[name].(string); ok {
+					curCopy := cur
+					rec.SkillOverridePrior[name] = &curCopy
+				} else {
+					rec.SkillOverridePrior[name] = nil
+				}
+			}
+			existing[name] = mode
+		}
+		settings["skillOverrides"] = existing
 	}
 
 	data := append(jsonc.MarshalPretty(settings), '\n')
@@ -251,6 +305,25 @@ func RevertDebloat(target string) error {
 			delete(settings, key)
 		} else {
 			settings[key] = *prior
+		}
+	}
+
+	if len(rec.SkillOverridePrior) > 0 {
+		existing, _ := settings["skillOverrides"].(map[string]any)
+		if existing == nil {
+			existing = map[string]any{}
+		}
+		for name, prior := range rec.SkillOverridePrior {
+			if prior == nil {
+				delete(existing, name)
+			} else {
+				existing[name] = *prior
+			}
+		}
+		if len(existing) == 0 {
+			delete(settings, "skillOverrides")
+		} else {
+			settings["skillOverrides"] = existing
 		}
 	}
 
@@ -317,6 +390,34 @@ func StatusDebloat(target string, cfg DebloatConfig) error {
 			}
 		}
 		fmt.Printf("  %-26s %s\n", key, state)
+	}
+
+	knownSkillOverrides := map[string]string{}
+	for name, mode := range cfg.PresetSkillOverrides {
+		knownSkillOverrides[name] = mode
+	}
+	for name, mode := range cfg.AggressiveSkillOverrides {
+		knownSkillOverrides[name] = mode
+	}
+	skillNames := make([]string, 0, len(knownSkillOverrides))
+	for name := range knownSkillOverrides {
+		skillNames = append(skillNames, name)
+	}
+	sort.Strings(skillNames)
+	activeSkillOverrides, _ := settings["skillOverrides"].(map[string]any)
+	fmt.Println("skillOverrides:")
+	for _, name := range skillNames {
+		mode, active := activeSkillOverrides[name].(string)
+		state := "unset"
+		if active {
+			state = mode
+			if _, tracked := rec.SkillOverridePrior[name]; tracked {
+				state += " (harnez-managed)"
+			} else {
+				state += " (pre-existing)"
+			}
+		}
+		fmt.Printf("  %-26s %s\n", name, state)
 	}
 	return nil
 }
