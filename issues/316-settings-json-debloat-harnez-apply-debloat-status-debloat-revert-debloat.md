@@ -88,7 +88,7 @@ type ClaudeSettings struct {
 ## Open design questions before implementation
 
 - **`apply` is global-only by design** (see `docs/CLIDesign.md` and the "CLI
-  command scope" section in this repo's `CLAUDE.md`): `apply` writes
+  command scope" section in this repo's `AGENTS.md`): `apply` writes
   `~/.claude/settings.json` for the whole user, not per-project. A debloat preset
   applied here affects every project the user works in, including ones that rely
   on the denied tools. Confirm this is the intended scope (vs. a project-local
@@ -233,7 +233,7 @@ Shipped in `internal/claude/debloat.go` (+ `cmd/harnez/main.go` wiring):
 Assessed every deferred tool not already covered by a preset against this
 project's actual conventions:
 
-- `EnterWorktree`/`ExitWorktree`: this project's own `CLAUDE.md` explicitly
+- `EnterWorktree`/`ExitWorktree`: this project's own `AGENTS.md` explicitly
   forbids worktree-isolated subagents for harnez work — verified-unused by
   written convention, not just observation. Added to `aggressive_extra_deny`
   (grouped there per the user's call, rather than the more conservative
