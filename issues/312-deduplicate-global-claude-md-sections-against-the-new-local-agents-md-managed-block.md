@@ -1,6 +1,6 @@
 # 312 — Deduplicate global CLAUDE.md sections against the new local AGENTS.md managed block
 
-**Status**: Open
+**Status**: Closed — superseded by 354
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics / Docs Pipeline
