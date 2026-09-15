@@ -34,7 +34,7 @@ The user corrected the process expectation:
 
 The rule is now captured in `AGENTS.md`, `docs/templates/AGENTS.md`,
 `docs/practices/AgenticLoop.md`, `docs/AgenticLoop.md`, `commands/sprint.md`, and
-`commands/fresh-sprint.md`: the host remains the responsive orchestrator. Handoff means dispatch
+`commands/lean-sprint.md`: the host remains the responsive orchestrator. Handoff means dispatch
 and stay available, not wait by default.
 
 ## Decisions

@@ -27,7 +27,7 @@ Each phase's **Mechanics** and **Constraints** are summarized inline below; see 
 - **### Phase 4: Process & Subagent Hygiene (Teardown & Drain)** — inspect and kill/drain lingering tasks, timers, subagents.
 - **### Phase 5: Agentic Flow Quality Retrospective (Learning Capture)** — record friction in a durable doc/ticket; sync tracker (`issues/README.md`, `harnez status`/`index`); **Single Status field per ticket** kept in sync everywhere; **Closing gate**: close shipped+verified tickets before ending; `git status` before the retro.
 
-## 3. Lean Fresh-Handoff Pattern (`/fresh-sprint`)
+## 3. Lean Fresh-Handoff Pattern (`/lean-sprint`)
 For a single focused ticket: **Clean Goal Handoff** (one objective; **Trust the Base Framework** — don't restate base rules already in the system prompt; stay responsive) → **Autonomous Execution & Self-Verification** → **Confidence-Gated Inline Review** (skip a formal reviewer when tests pass and confidence is high; escalate on cross-subsystem risk) → **Fast Hygiene** / **Fast Hygiene & Status Sync** (kill children immediately). ### Workflow Selection Matrix: **Overhead** and **Host Responsiveness** both favor the full 5-phase loop for multi-ticket/major/broad work; lean fresh-handoff for one ticket/bug fix.
 
 ## 4. Calibrated Friction Reporting
