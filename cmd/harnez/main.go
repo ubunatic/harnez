@@ -448,6 +448,15 @@ func main() {
 	var forceDocs bool
 	var applySystemd bool
 	var applyShell bool
+	var debloat bool
+	var debloatPreset string
+	var debloatNotebookEdit bool
+	var debloatCron bool
+	var debloatDisableBundledSkills bool
+	var debloatDisableWorkflows bool
+	var debloatDisableRemoteControl bool
+	var debloatDisableClaudeAiConnectors bool
+	var debloatDisableArtifact bool
 	apply := &cobra.Command{
 		Use:   "apply",
 		Short: "Apply config.yaml to global Claude Code and agent harness directories",
@@ -458,7 +467,31 @@ func main() {
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
-			return claude.ApplyAll(t, cfg, applyDocs, forceDocs, applySystemd, applyShell)
+			if err := claude.ApplyAll(t, cfg, applyDocs, forceDocs, applySystemd, applyShell); err != nil {
+				return err
+			}
+			opts := claude.DebloatOptions{
+				NotebookEdit:              debloatNotebookEdit,
+				Cron:                      debloatCron,
+				DisableBundledSkills:      debloatDisableBundledSkills,
+				DisableWorkflows:          debloatDisableWorkflows,
+				DisableRemoteControl:      debloatDisableRemoteControl,
+				DisableClaudeAiConnectors: debloatDisableClaudeAiConnectors,
+				DisableArtifact:           debloatDisableArtifact,
+			}
+			if debloat {
+				opts.Preset = debloatPreset
+				if opts.Preset == "" {
+					opts.Preset = claude.DebloatPresetMinimal
+				}
+			} else if debloatPreset != "" {
+				opts.Preset = debloatPreset
+			}
+			if opts.Requested() {
+				fmt.Printf("Applying debloat (preset=%q) → %s\n", opts.Preset, filepath.Join(t, "settings.json"))
+				return claude.ApplyDebloat(t, opts)
+			}
+			return nil
 		},
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
@@ -469,6 +502,17 @@ func main() {
 		"install the harnez-agent-collector systemd --user unit to ~/.config/systemd/user (issue 082)")
 	apply.Flags().BoolVarP(&applyShell, "shell", "s", false,
 		"inject harnez environment source into ~/.bashrc and ~/.zshrc")
+	apply.Flags().BoolVar(&debloat, "debloat", false,
+		"deny integration-only tools in settings.json to reduce context/token cost (default preset: minimal; issue 316)")
+	apply.Flags().StringVar(&debloatPreset, "debloat-preset", "",
+		`debloat preset: "minimal" (default) or "aggressive" (also denies interaction/safety tools; explicit opt-in only)`)
+	apply.Flags().BoolVar(&debloatNotebookEdit, "debloat-notebook-edit", false, "also deny NotebookEdit")
+	apply.Flags().BoolVar(&debloatCron, "debloat-cron", false, "also deny CronCreate/CronDelete/CronList")
+	apply.Flags().BoolVar(&debloatDisableBundledSkills, "debloat-disable-bundled-skills", false, "set disableBundledSkills: true")
+	apply.Flags().BoolVar(&debloatDisableWorkflows, "debloat-disable-workflows", false, "set disableWorkflows: true")
+	apply.Flags().BoolVar(&debloatDisableRemoteControl, "debloat-disable-remote-control", false, "set disableRemoteControl: true")
+	apply.Flags().BoolVar(&debloatDisableClaudeAiConnectors, "debloat-disable-claude-ai-connectors", false, "set disableClaudeAiConnectors: true")
+	apply.Flags().BoolVar(&debloatDisableArtifact, "debloat-disable-artifact", false, "set disableArtifact: true")
 
 	var diffExitCode bool
 	var captureDocs bool
@@ -552,6 +596,7 @@ func main() {
 	clean.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	clean.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 
+	var statusDebloat bool
 	status := &cobra.Command{
 		Use:          "status",
 		Short:        "Show config summary and applied state",
@@ -562,11 +607,40 @@ func main() {
 				return fmt.Errorf("load config: %w", err)
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
+			if statusDebloat {
+				return claude.StatusDebloat(t)
+			}
 			return claude.RunStatus(name, cfg, t)
 		},
 	}
 	status.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	status.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
+	status.Flags().BoolVar(&statusDebloat, "debloat", false, "show debloat-managed deny entries and toggles instead of full status (issue 316)")
+
+	var revertDebloat bool
+	revert := &cobra.Command{
+		Use:          "revert",
+		Short:        "Revert managed one-off changes (currently: --debloat)",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, _, err := claude.OpenConfig(configPath)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+			t := claude.ExpandTarget(target, cfg.TargetDir)
+			if !revertDebloat {
+				return fmt.Errorf("revert requires --debloat")
+			}
+			if err := claude.RevertDebloat(t); err != nil {
+				return err
+			}
+			fmt.Printf("Reverted debloat changes in %s\n", filepath.Join(t, "settings.json"))
+			return nil
+		},
+	}
+	revert.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
+	revert.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
+	revert.Flags().BoolVar(&revertDebloat, "debloat", false, "restore settings.json to its pre-debloat state (issue 316)")
 
 	var assessJSON bool
 	assessCmd := &cobra.Command{
@@ -596,7 +670,7 @@ func main() {
 	}
 	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
 
-	root.AddCommand(apply, diff, scanDocs, clean, status, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newCodexHookCmd(), newLintCmd(), newLogCmd())
+	root.AddCommand(apply, diff, scanDocs, clean, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newCodexHookCmd(), newLintCmd(), newLogCmd())
 	// executeAndRecord, not root.Execute, is the entry point: issue 326's
 	// cli_invocations row can only be written from here, around Execute —
 	// see cmd/harnez/clilog.go for why neither of Cobra's hook points works.

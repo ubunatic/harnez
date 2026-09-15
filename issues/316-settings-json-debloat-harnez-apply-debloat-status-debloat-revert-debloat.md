@@ -1,6 +1,6 @@
 # 316 — settings.json debloat: harnez apply --debloat / status --debloat / revert --debloat
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P1 (High)
 **Severity**: Minor
 **Category**: Feature
@@ -191,3 +191,34 @@ Resolved with the user against the two open blockers above.
    file — new debloat keys should be merged the same way, with unknown
    nested fields preserved untouched. `status --debloat` should name the
    target file explicitly and state it affects every project for the user.
+
+## Implementation (2026-09-15)
+
+Shipped in `internal/claude/debloat.go` (+ `cmd/harnez/main.go` wiring):
+
+- `harnez apply --debloat[=<any>] [--debloat-preset minimal|aggressive]
+  [--debloat-notebook-edit] [--debloat-cron] [--debloat-disable-*]` — merges
+  into `<target>/settings.json` via `jsonc.Read`/`jsonc.UnionStrings`/
+  `jsonc.MarshalPretty`, the same raw-map approach `applySettingsJSON` uses,
+  so unrelated fields (`permissions.allow`, `model`, unknown keys) round-trip
+  untouched. `--debloat` alone defaults to `minimal`; `aggressive` requires
+  the explicit `--debloat-preset aggressive` flag.
+- `harnez status --debloat` — prints every known debloat-managed deny entry
+  and toggle with on/off + harnez-managed/pre-existing state, naming the
+  target settings.json path and the "affects every project" caveat.
+- `harnez revert --debloat` (new top-level command) — restores prior state
+  from a sidecar ownership record at `<target>/.harnez-debloat.json`, which
+  captures each touched key's *pre-debloat* value only the first time
+  harnez touches it (so stacking minimal → aggressive → revert restores the
+  true original state, not just the last apply's state), then deletes the
+  record.
+- Tests in `internal/claude/debloat_test.go` cover: minimal-on-empty, zero
+  data loss with pre-existing unrelated fields/deny entries, revert leaving
+  pre-existing deny entries alone, revert restoring a prior `true` toggle,
+  revert removing a toggle that was absent before, a full apply→revert
+  round trip (JSON-semantic diff), aggressive never triggered by `--debloat`
+  alone, revert with no record erroring, and status running with/without a
+  record. `go build ./...` and `go test ./...` pass with no regressions.
+- Verified live end-to-end with the built binary against a temp target dir
+  (apply → status → revert), confirming actual settings.json content at
+  each step.

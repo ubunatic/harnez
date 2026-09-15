@@ -1,0 +1,256 @@
+// SPDX-FileCopyrightText: 2026 Uwe Jugel
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package claude
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"sort"
+	"testing"
+)
+
+func readSettings(t *testing.T, dir string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, "settings.json"))
+	if err != nil {
+		t.Fatalf("read settings.json: %v", err)
+	}
+	m := map[string]any{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("parse settings.json: %v", err)
+	}
+	return m
+}
+
+func denyOf(m map[string]any) []string {
+	perms, _ := m["permissions"].(map[string]any)
+	var out []string
+	for _, v := range denySlice(perms) {
+		out = append(out, v)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func denySlice(perms map[string]any) []string {
+	raw, _ := perms["deny"].([]any)
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		if s, ok := v.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func TestApplyDebloat_MinimalOnEmpty(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := ApplyDebloat(dir, DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+
+	got := denyOf(readSettings(t, dir))
+	want := []string{"DesignSync", "PushNotification", "RemoteTrigger"}
+	sort.Strings(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("deny = %v, want %v", got, want)
+	}
+}
+
+func TestApplyDebloat_PreservesUnrelatedData(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.json")
+	initial := map[string]any{
+		"permissions": map[string]any{
+			"allow": []string{"Bash(git:*)"},
+			"deny":  []string{"SomeOtherTool"},
+		},
+		"model":       "opus",
+		"customField": map[string]any{"nested": true},
+	}
+	data, _ := json.MarshalIndent(initial, "", "  ")
+	if err := os.WriteFile(settingsPath, data, 0644); err != nil {
+		t.Fatalf("seed settings.json: %v", err)
+	}
+
+	if err := ApplyDebloat(dir, DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+
+	settings := readSettings(t, dir)
+	if settings["model"] != "opus" {
+		t.Errorf("model field lost: %+v", settings)
+	}
+	cf, _ := settings["customField"].(map[string]any)
+	if cf["nested"] != true {
+		t.Errorf("customField.nested lost: %+v", settings)
+	}
+	perms, _ := settings["permissions"].(map[string]any)
+	allow := denySlice(map[string]any{"deny": perms["allow"]})
+	if len(allow) != 1 || allow[0] != "Bash(git:*)" {
+		t.Errorf("permissions.allow lost: %+v", perms["allow"])
+	}
+
+	deny := denySlice(perms)
+	sort.Strings(deny)
+	want := []string{"DesignSync", "PushNotification", "RemoteTrigger", "SomeOtherTool"}
+	if !reflect.DeepEqual(deny, want) {
+		t.Fatalf("deny = %v, want %v (union, no duplicates, pre-existing kept)", deny, want)
+	}
+}
+
+func TestRevertDebloat_LeavesPreExistingDenyEntry(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.json")
+	initial := map[string]any{
+		"permissions": map[string]any{"deny": []string{"DesignSync"}},
+	}
+	data, _ := json.MarshalIndent(initial, "", "  ")
+	if err := os.WriteFile(settingsPath, data, 0644); err != nil {
+		t.Fatalf("seed settings.json: %v", err)
+	}
+
+	if err := ApplyDebloat(dir, DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+	if err := RevertDebloat(dir); err != nil {
+		t.Fatalf("RevertDebloat: %v", err)
+	}
+
+	deny := denyOf(readSettings(t, dir))
+	if !reflect.DeepEqual(deny, []string{"DesignSync"}) {
+		t.Fatalf("deny after revert = %v, want pre-existing [DesignSync] preserved", deny)
+	}
+}
+
+func TestRevertDebloat_RestoresPriorTrueToggle(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.json")
+	initial := map[string]any{"disableArtifact": true}
+	data, _ := json.MarshalIndent(initial, "", "  ")
+	if err := os.WriteFile(settingsPath, data, 0644); err != nil {
+		t.Fatalf("seed settings.json: %v", err)
+	}
+
+	if err := ApplyDebloat(dir, DebloatOptions{DisableArtifact: true}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+	if err := RevertDebloat(dir); err != nil {
+		t.Fatalf("RevertDebloat: %v", err)
+	}
+
+	settings := readSettings(t, dir)
+	if settings["disableArtifact"] != true {
+		t.Fatalf("disableArtifact after revert = %v, want true restored", settings["disableArtifact"])
+	}
+}
+
+func TestRevertDebloat_RemovesToggleAbsentBefore(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := ApplyDebloat(dir, DebloatOptions{DisableWorkflows: true}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+	settings := readSettings(t, dir)
+	if settings["disableWorkflows"] != true {
+		t.Fatalf("expected disableWorkflows true after apply, got %v", settings["disableWorkflows"])
+	}
+
+	if err := RevertDebloat(dir); err != nil {
+		t.Fatalf("RevertDebloat: %v", err)
+	}
+	settings = readSettings(t, dir)
+	if _, present := settings["disableWorkflows"]; present {
+		t.Fatalf("disableWorkflows should be absent after revert, got %v", settings["disableWorkflows"])
+	}
+}
+
+func TestApplyRevertDebloat_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.json")
+	initial := map[string]any{
+		"permissions": map[string]any{
+			"allow": []string{"Bash(git:*)"},
+			"deny":  []string{"SomeOtherTool"},
+		},
+		"model": "opus",
+	}
+	before, _ := json.Marshal(initial)
+	data, _ := json.MarshalIndent(initial, "", "  ")
+	if err := os.WriteFile(settingsPath, data, 0644); err != nil {
+		t.Fatalf("seed settings.json: %v", err)
+	}
+
+	if err := ApplyDebloat(dir, DebloatOptions{
+		Preset:       DebloatPresetAggressive,
+		NotebookEdit: true,
+		Cron:         true,
+	}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+	if err := RevertDebloat(dir); err != nil {
+		t.Fatalf("RevertDebloat: %v", err)
+	}
+
+	after := readSettings(t, dir)
+	var beforeMap map[string]any
+	if err := json.Unmarshal(before, &beforeMap); err != nil {
+		t.Fatalf("unmarshal before: %v", err)
+	}
+	if !reflect.DeepEqual(normalizeForCompare(beforeMap), normalizeForCompare(after)) {
+		t.Fatalf("round trip mismatch:\nbefore=%+v\nafter=%+v", beforeMap, after)
+	}
+	if _, err := os.Stat(debloatRecordPath(dir)); !os.IsNotExist(err) {
+		t.Fatalf("expected sidecar record removed after revert, stat err=%v", err)
+	}
+}
+
+// normalizeForCompare re-marshals through JSON so both sides use identical
+// dynamic types ([]any, map[string]any) regardless of how they were built.
+func normalizeForCompare(m map[string]any) map[string]any {
+	data, _ := json.Marshal(m)
+	var out map[string]any
+	_ = json.Unmarshal(data, &out)
+	return out
+}
+
+func TestApplyDebloat_AggressiveRequiresExplicitPreset(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := ApplyDebloat(dir, DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+
+	deny := denyOf(readSettings(t, dir))
+	for _, tool := range debloatAggressiveExtraDeny {
+		for _, d := range deny {
+			if d == tool {
+				t.Fatalf("minimal preset must not deny %q, got deny=%v", tool, deny)
+			}
+		}
+	}
+}
+
+func TestRevertDebloat_NoRecordErrors(t *testing.T) {
+	dir := t.TempDir()
+	if err := RevertDebloat(dir); err == nil {
+		t.Fatal("expected error reverting with no debloat record present")
+	}
+}
+
+func TestStatusDebloat_RunsWithAndWithoutRecord(t *testing.T) {
+	dir := t.TempDir()
+	if err := StatusDebloat(dir); err != nil {
+		t.Fatalf("StatusDebloat (no record): %v", err)
+	}
+	if err := ApplyDebloat(dir, DebloatOptions{Preset: DebloatPresetMinimal, DisableArtifact: true}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+	if err := StatusDebloat(dir); err != nil {
+		t.Fatalf("StatusDebloat (with record): %v", err)
+	}
+}
