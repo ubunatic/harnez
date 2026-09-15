@@ -1,6 +1,6 @@
 # 357 — config.yaml: lite_source variant field on copyable doc entries
 
-**Status**: Open
+**Status**: Closed — schema/plumbing implemented and reviewed
 **Priority**: P3 (Low)
 **Severity**: Feature
 **Category**: Templates / Docs / Token Efficiency
@@ -52,14 +52,14 @@ Entries without `lite_source` set behave exactly as today under either variant v
 
 ## 3. Acceptance Criteria
 
-- [ ] `Language` struct has an optional `lite_source` field; config schema docs updated.
-- [ ] `SourceFor(variant string) string` resolver implemented and unit-tested for both
+- [x] `Language` struct has an optional `lite_source` field; config schema docs updated.
+- [x] `SourceFor(variant string) string` resolver implemented and unit-tested for both
       branches (lite-set, lite-unset).
-- [ ] All three read sites (`apply.go`, `init.go` ×2, `docs_capture.go`) use the resolver
+- [x] All three read sites (`apply.go`, `init.go` ×2, `docs_capture.go`) use the resolver
       instead of `lang.Source` directly.
-- [ ] Regression test: an entry with no `lite_source` resolves to `source` under both
+- [x] Regression test: an entry with no `lite_source` resolves to `source` under both
       `variant: "full"` and `variant: "lite"` — confirms zero behavior change for every
       existing doc entry until a lite variant is actually authored.
-- [ ] `go test ./...` and `scripts/smoke-test.sh` pass.
-- [ ] No lite doc content is authored in this ticket — schema/plumbing only. See issue
+- [x] `go test ./...` and `scripts/smoke-test.sh` pass.
+- [x] No lite doc content is authored in this ticket — schema/plumbing only. See issue
       359 for the pilot content.
