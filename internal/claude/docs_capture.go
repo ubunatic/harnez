@@ -282,19 +282,21 @@ func compareConfiguredDocs(repoDir string, cfg *Config) ([]docsDriftFile, error)
 		}
 		localPath := localPath(repoDir, lang.Local)
 		known[filepath.Clean(localPath)] = true
-		// TODO(issue 358): resolves against full Source only; a lite-installed
-		// local doc will show false drift until variant-marker resolution lands.
-		sourcePath := filepath.Join(cfg.Dir, filepath.FromSlash(lang.SourceFor("")))
-		if absSource, absErr := filepath.Abs(sourcePath); absErr == nil {
-			known[filepath.Clean(absSource)] = true
-		}
-		source, err := fs.ReadFile(cfg.FS, filepath.ToSlash(lang.SourceFor("")))
-		if err != nil {
-			return nil, fmt.Errorf("read configured source %s: %w", sourcePath, err)
-		}
 		current, readErr := os.ReadFile(localPath)
 		if readErr != nil && !os.IsNotExist(readErr) {
 			return nil, fmt.Errorf("read project doc %s: %w", localPath, readErr)
+		}
+		// Resolve against the installed doc's own variant marker (issue 358),
+		// not unconditionally against the full Source — a lite-installed doc
+		// must diff against lite_source or it shows permanent false drift.
+		variant := markdown.ParseVariantMarker(string(current))
+		sourcePath := filepath.Join(cfg.Dir, filepath.FromSlash(lang.SourceFor(variant)))
+		if absSource, absErr := filepath.Abs(sourcePath); absErr == nil {
+			known[filepath.Clean(absSource)] = true
+		}
+		source, err := fs.ReadFile(cfg.FS, filepath.ToSlash(lang.SourceFor(variant)))
+		if err != nil {
+			return nil, fmt.Errorf("read configured source %s: %w", sourcePath, err)
 		}
 		managedSource := []byte(markdown.ExtractManagedDocContent(string(source)))
 		managedCurrent := []byte(markdown.ExtractManagedDocContent(string(current)))

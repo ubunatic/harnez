@@ -259,6 +259,99 @@ func TestCaptureDocsDriftEmbeddedConfigFallsBackToLabel(t *testing.T) {
 	}
 }
 
+func TestCaptureDocsDriftLiteVariantMarkerReportsIdentical(t *testing.T) {
+	sourceDir := t.TempDir()
+	repoDir := t.TempDir()
+	writeCaptureFile(t, sourceDir, "docs/Go.md", "# Go Guidelines full\n")
+	writeCaptureFile(t, sourceDir, "docs/Go.lite.md", "<!-- harnez:variant=lite -->\n# Go tagline\n")
+	writeCaptureFile(t, repoDir, "docs/Go.md", "<!-- harnez:variant=lite -->\n# Go tagline\n")
+	cfg := &Config{
+		Dir:  sourceDir,
+		FS:   os.DirFS(sourceDir),
+		Docs: []string{"go"},
+		AgentsMD: AgentsMD{Languages: map[string]Language{
+			"go": {Source: "docs/Go.md", LiteSource: "docs/Go.lite.md", Local: "docs/Go.md"},
+		}},
+	}
+	out := filepath.Join(repoDir, "report.md")
+	_, changed, err := CaptureDocsDrift(repoDir, out, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("lite-installed doc matching lite_source was reported as changed")
+	}
+	report, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(report), "## `docs/Go.md` (identical)") {
+		t.Fatalf("expected identical status for lite-installed doc, got:\n%s", string(report))
+	}
+}
+
+func TestCaptureDocsDriftLiteVariantLocalEditStillReportsChanged(t *testing.T) {
+	sourceDir := t.TempDir()
+	repoDir := t.TempDir()
+	writeCaptureFile(t, sourceDir, "docs/Go.md", "# Go Guidelines full\n")
+	writeCaptureFile(t, sourceDir, "docs/Go.lite.md", "<!-- harnez:variant=lite -->\n# Go tagline\n")
+	writeCaptureFile(t, repoDir, "docs/Go.md", "<!-- harnez:variant=lite -->\n# Go tagline edited locally\n")
+	cfg := &Config{
+		Dir:  sourceDir,
+		FS:   os.DirFS(sourceDir),
+		Docs: []string{"go"},
+		AgentsMD: AgentsMD{Languages: map[string]Language{
+			"go": {Source: "docs/Go.md", LiteSource: "docs/Go.lite.md", Local: "docs/Go.md"},
+		}},
+	}
+	out := filepath.Join(repoDir, "report.md")
+	_, changed, err := CaptureDocsDrift(repoDir, out, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("locally-edited lite doc was reported as identical — marker resolution masked a real edit")
+	}
+	report, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(report), "## `docs/Go.md` (changed)") {
+		t.Fatalf("expected changed status for edited lite doc, got:\n%s", string(report))
+	}
+}
+
+func TestCaptureDocsDriftUnmarkedDocUnaffectedByVariantResolution(t *testing.T) {
+	sourceDir := t.TempDir()
+	repoDir := t.TempDir()
+	writeCaptureFile(t, sourceDir, "docs/Go.md", "# Go Guidelines full\n")
+	writeCaptureFile(t, sourceDir, "docs/Go.lite.md", "<!-- harnez:variant=lite -->\n# Go tagline\n")
+	writeCaptureFile(t, repoDir, "docs/Go.md", "# Go Guidelines full\n")
+	cfg := &Config{
+		Dir:  sourceDir,
+		FS:   os.DirFS(sourceDir),
+		Docs: []string{"go"},
+		AgentsMD: AgentsMD{Languages: map[string]Language{
+			"go": {Source: "docs/Go.md", LiteSource: "docs/Go.lite.md", Local: "docs/Go.md"},
+		}},
+	}
+	out := filepath.Join(repoDir, "report.md")
+	_, changed, err := CaptureDocsDrift(repoDir, out, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("unmarked full-variant doc identical to full source was reported as changed")
+	}
+	report, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(report), "## `docs/Go.md` (identical)") {
+		t.Fatalf("expected identical status for unmarked full doc, got:\n%s", string(report))
+	}
+}
+
 func writeCaptureFile(t *testing.T, root, name, content string) {
 	t.Helper()
 	path := filepath.Join(root, filepath.FromSlash(name))

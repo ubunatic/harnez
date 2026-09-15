@@ -139,3 +139,25 @@ func TestMarkdownDiff_ExecError(t *testing.T) {
 	}
 }
 
+
+func TestParseVariantMarker(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"lite marker as first line", "<!-- harnez:variant=lite -->\n# Doc\n", "lite"},
+		{"lite marker after leading blank lines", "\n\n<!-- harnez:variant=lite -->\n# Doc\n", "lite"},
+		{"no marker", "# Doc\n", ""},
+		{"frontmatter without marker", "---\ntitle: Doc\n---\n# Doc\n", ""},
+		{"marker not on first line", "# Doc\n<!-- harnez:variant=lite -->\n", ""},
+		{"empty content", "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := markdown.ParseVariantMarker(c.content); got != c.want {
+				t.Errorf("ParseVariantMarker(%q) = %q, want %q", c.content, got, c.want)
+			}
+		})
+	}
+}

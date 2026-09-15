@@ -41,6 +41,22 @@ func ExtractManagedDocContent(content string) string {
 	return strings.TrimRight(content, "\r\n") + "\n"
 }
 
+// VariantMarkerLite marks a copyable doc's content as the "lite" variant
+// (issue 357's lite_source). It is recognized only as the first non-blank
+// line of a doc's content, so it round-trips through installation without
+// colliding with YAML frontmatter appearing later in the file.
+const VariantMarkerLite = "<!-- harnez:variant=lite -->"
+
+// ParseVariantMarker returns "lite" if content's first non-blank line is the
+// harnez:variant=lite marker, else "" (implicit full variant).
+func ParseVariantMarker(content string) string {
+	line, _, _ := strings.Cut(strings.TrimLeft(content, "\r\n"), "\n")
+	if strings.TrimSpace(line) == VariantMarkerLite {
+		return "lite"
+	}
+	return ""
+}
+
 // stopMarkerIndex returns the byte offset of the first stop marker in content,
 // or -1 if none is present.
 func stopMarkerIndex(content string) int {
