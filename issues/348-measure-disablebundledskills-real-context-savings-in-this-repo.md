@@ -1,6 +1,6 @@
 # 348 — Measure disableBundledSkills real context savings in this repo
 
-**Status**: In Progress — measured saving accepted; promoting into default debloat presets
+**Status**: Closed — implemented and live-verified
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Research
