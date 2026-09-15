@@ -439,7 +439,9 @@ agents_md:
             then to the active harness directory (~/.claude or ~/.prime/agent).
           - Context Discipline: avoid whole-file reads on active system-prompt files (AGENTS.md,
             CLAUDE.md); use grep or range-bounded reads — see @docs/AgenticLoop.md Invariant 6.
-          - Editing Discipline: prefer structured patch tools (apply_patch) or whole-block replacements over narrow string substitution edits. When making multi-line edits, ensure sufficient surrounding context lines to avoid ambiguous pattern matches.
+          - Editing Discipline & Issue Tracker Discovery: for a harnez-tracked project
+            (`issues/` present), see that project's AGENTS.md "Harnez Managed Conventions"
+            block for `apply_patch`-preferred editing and `harnez find`/`harnez issues` usage.
           - Voice Input: the user may use speech-to-text (ASR); interpret phonetic homophones and transcription anomalies with context awareness.
           - Always use absolute file paths for global instructions.
             Always use relative file paths for local instructions.
@@ -461,21 +463,6 @@ agents_md:
           Score 5 flawless, 3 partial, 1 useless.
           If prompted after a long quiet stretch and nothing has failed, confirm with
           `harnez rate --ok` instead of staying silent — no tool name, score, or ticket required.
-      - name: Issue Tracker Discovery
-        content: |
-          ### Issue Tracker Discovery (harnez find)
-          When searching for existing issues, computing the next ticket number, or allocating
-          one, always use `harnez find` / `harnez issues` instead of `ls issues/`, `find`, or
-          raw grep:
-          - `harnez find -d <repo> issues status:open` — list active open issues
-          - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text
-          - `harnez find -d <repo> issues next` — report the next free ticket number (read-only)
-          - `harnez issues new -d <repo> "<title>"` — atomically reserve that number and create a
-            placeholder ticket file (prints `NNN<TAB>issues/<file>`); write ticket content to the
-            printed path
-          - `harnez issues <verb> -d <repo> <n> [reason]` — change a ticket's status (`open`,
-            `start`, `block`, `close`, `draft`), resync `issues/README.md`, and commit, in one call
-          - `harnez index -d <repo>` — update issues/README.md after filing or updating tickets
       - name: Agent-Filed Feedback
         content: |
           ### Agent-Filed Feedback (harnez feedback)

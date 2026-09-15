@@ -100,9 +100,8 @@ Run from project root.
 - Never ingest large raw logs or whole transcript files into context.
 
 ## Background Tasks & Process Hygiene
-- Regularly inspect spawned background tasks and explicitly terminate idle, completed, or zombie tasks.
-- Clean up watch commands, poll loops, schedule timers, and background test subprocesses before finishing a task.
-- Never abandon orphan processes or lingering watch tasks in the background.
+See `@docs/AgenticLoop.md` Invariant 3 (Zero Zombie Guarantee) for tracking and
+terminating background tasks, watch loops, and subagents.
 - Subagent handoff must not block the main chat. When the user asks to hand work to a subagent,
   spawn/delegate the task and remain responsive as the host orchestrator; do not immediately wait
   on the child agent unless the user explicitly asks you to wait or the next user-visible
@@ -119,11 +118,11 @@ See `@docs/AgenticLoop.md` Invariant 6 (Context Discipline & Range-Bounded Inges
 for the canonical statement of this rule.
 
 ## Voice & Transcription Input Awareness
-- The user often uses voice-to-text / speech transcription (ASR).
-- Be alert for phonetic homophones and transcription artifacts (e.g. "Southern Exploration" → "start an exploration agent", "harness" → "harnez"). Reason about user intent from phonetic similarity and conversation context before asking for clarification.
+Global Voice Input rule applies (`~/.claude/CLAUDE.md`); project-specific homophone
+example: "Southern Exploration" → "start an exploration agent", "harness" → "harnez".
 
 ## Demo Recordings & Media Verification
-- When creating, editing, or adding media assets (e.g. reels, WebM demos, screenshots) intended for documentation or websites, **always ask the user for explicit confirmation** that the recorded visual output matches their exact expectations before publishing or embedding it.
+See `@docs/AgenticLoop.md` Invariant 7 (Media & Demo Verification Gate).
 
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup

@@ -25,21 +25,6 @@ The `spec/` directory is **application code**, not runtime user configuration. T
 - ❌ **Unvalidated YAML**: Maintaining YAML files without a corresponding JSON Schema.
 - ❌ **Silent drift**: Adding properties to YAML that are not declared in the JSON Schema.
 
-**Case in point (2026-09-15, issue 316)**: `internal/claude/debloat.go`'s deny-list
-presets (`minimal`/`aggressive` tool-name membership) were first implemented as
-hardcoded Go package vars — exactly the "shadowing" anti-pattern above, on genuine
-product-decision content (which tools belong to which preset) rather than incidental
-code detail. Caught by the user, not by review or tests, after the code had already
-shipped and been used live. Fixed by moving the lists into `config.yaml`'s new
-`debloat:` section (the single-source-of-truth role this project's `config.yaml`
-already plays for `permissions`/`hooks`/etc. — note this project doesn't use the
-`spec/` directory layout above for `apply`-related settings; `config.yaml` fills that
-role instead, `spec/*.yaml` is reserved for the usage-dashboard subsystem). Lesson:
-before adding any new Go slice/map of named, business-meaningful values (tool lists,
-preset membership, category names), check whether it belongs in `config.yaml` or
-`spec/*.yaml` first — this class of violation compiles cleanly and passes tests, so
-nothing catches it automatically.
-
 ---
 
 ## 2. Standard Layout

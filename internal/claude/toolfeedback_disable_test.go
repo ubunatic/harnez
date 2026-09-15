@@ -89,7 +89,7 @@ func TestApplyOmitsToolFeedbackProtocolWhenDisabled(t *testing.T) {
 	}
 
 	// Step 2: disable and re-apply — the section/skill must be actively
-	// removed, and other sections (e.g. Issue Tracker Discovery) untouched.
+	// removed, and other sections (e.g. Agent-Filed Feedback) untouched.
 	cfg.Feedback.DisableRateProtocol = true
 	if err := ApplyAll(targetDir, cfg, nil, false, false); err != nil {
 		t.Fatalf("second ApplyAll (disabled) failed: %v", err)
@@ -102,8 +102,8 @@ func TestApplyOmitsToolFeedbackProtocolWhenDisabled(t *testing.T) {
 	if strings.Contains(content, "Tool Feedback Protocol") {
 		t.Errorf("expected Tool Feedback Protocol section removed after disabling, got:\n%s", content)
 	}
-	if !strings.Contains(content, "### Issue Tracker Discovery") {
-		t.Errorf("expected unrelated Issue Tracker Discovery section to remain untouched, got:\n%s", content)
+	if !strings.Contains(content, "### Agent-Filed Feedback") {
+		t.Errorf("expected unrelated Agent-Filed Feedback section to remain untouched, got:\n%s", content)
 	}
 	if _, err := os.Stat(skillPath); !os.IsNotExist(err) {
 		t.Errorf("expected skill file %s to be removed after disabling, stat err = %v", skillPath, err)

@@ -137,27 +137,35 @@ func TestApplyInstallsToolFeedbackProtocol(t *testing.T) {
 }
 
 func TestIssueTrackerDiscoveryConfigEntry(t *testing.T) {
+	// Issue 354: this content's canonical owner moved from
+	// agents_md.global.sections to agents_md.local.sections (the per-project
+	// managed block) to remove duplication across the two files. The global
+	// file now carries only a one-line pointer to the local managed block.
 	cfg, err := LoadConfigEmbedded()
 	if err != nil {
 		t.Fatalf("LoadConfigEmbedded failed: %v", err)
 	}
 
 	var found *MDSection
-	for i := range cfg.AgentsMD.Global.Sections {
-		s := &cfg.AgentsMD.Global.Sections[i]
-		if s.Name == "Issue Tracker Discovery" {
+	for i := range cfg.AgentsMD.Local.Sections {
+		s := &cfg.AgentsMD.Local.Sections[i]
+		if strings.Contains(s.Content, "harnez find -d <repo> issues status:open") {
 			found = s
 			break
 		}
 	}
 	if found == nil {
-		t.Fatalf("expected an agents_md.global.sections entry named %q in embedded config.yaml", "Issue Tracker Discovery")
-	}
-	if !strings.Contains(found.Content, "harnez find -d <repo> issues status:open") {
-		t.Errorf("expected Issue Tracker Discovery section to contain harnez find status:open, got:\n%s", found.Content)
+		t.Fatalf("expected an agents_md.local.sections entry containing the harnez find command list in embedded config.yaml")
 	}
 	if !strings.Contains(found.Content, "harnez index -d <repo>") {
-		t.Errorf("expected Issue Tracker Discovery section to contain harnez index, got:\n%s", found.Content)
+		t.Errorf("expected Issue Tracker Discovery content to contain harnez index, got:\n%s", found.Content)
+	}
+
+	for i := range cfg.AgentsMD.Global.Sections {
+		s := &cfg.AgentsMD.Global.Sections[i]
+		if s.Name == "Issue Tracker Discovery" {
+			t.Errorf("expected the full Issue Tracker Discovery section to be removed from agents_md.global.sections (canonical owner is now local.sections); found duplicate")
+		}
 	}
 }
 
