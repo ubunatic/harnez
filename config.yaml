@@ -659,6 +659,7 @@ agents_md:
       ref: "@docs/AgenticLoop.md"
       hint: "5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee"
       source: docs/practices/AgenticLoop.md
+      lite_source: docs/practices/AgenticLoop.lite.md
       target: ~/.claude/docs/AgenticLoop.md
       local: ./docs/AgenticLoop.md
       default: true
