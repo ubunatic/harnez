@@ -569,6 +569,7 @@ agents_md:
         smart indent!
         Use git -C/make -C, not cd
       source: docs/lang/Bash.md
+      lite_source: docs/lang/Bash.lite.md
       target: ~/.claude/docs/Bash.md
       local: ./docs/Bash.md
       default: auto   # *.sh files
@@ -577,6 +578,7 @@ agents_md:
       ref: "@docs/Make.md"
       hint: "⚙️ phony sentinel, self-doc help, build dependency pattern"
       source: docs/lang/Make.md
+      lite_source: docs/lang/Make.lite.md
       target: ~/.claude/docs/Make.md
       local: ./docs/Make.md
       template: docs/templates/Makefile
