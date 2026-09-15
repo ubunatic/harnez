@@ -46,17 +46,26 @@ debloat:
     - DesignSync
     - PushNotification
     - RemoteTrigger
-  # interaction/safety-relevant tools; denied only under the explicit
-  # --debloat-preset aggressive opt-in, never by default. SendMessage is
-  # deliberately excluded: it's required to follow up with a spawned
-  # subagent/teammate, which the Agent tool alone cannot do (see
+  # interaction/safety-relevant tools plus verified-unused integration
+  # tools; denied only under the explicit --debloat-preset aggressive
+  # opt-in, never by default. SendMessage is deliberately excluded: it's
+  # required to follow up with a spawned subagent/teammate, which the Agent
+  # tool alone cannot do (see
   # docs/studies/2026-09-15-debloat-context-usage-measurement-and-cli-flag-comparison.md).
+  # EnterWorktree/ExitWorktree: this project's own CLAUDE.md forbids
+  # worktree-isolated subagents for harnez work. The Google Drive MCP
+  # tools: never used; also covered by disable_claude_ai_connectors, listed
+  # here too for status/revert visibility under the deny list itself.
   aggressive_extra_deny:
     - AskUserQuestion
     - ScheduleWakeup
     - ReportFindings
     - EnterPlanMode
     - ExitPlanMode
+    - EnterWorktree
+    - ExitWorktree
+    - mcp__claude_ai_Google_Drive__authenticate
+    - mcp__claude_ai_Google_Drive__complete_authentication
   # separately opt-in via their own flags, independent of preset choice.
   cron_deny:
     - CronCreate

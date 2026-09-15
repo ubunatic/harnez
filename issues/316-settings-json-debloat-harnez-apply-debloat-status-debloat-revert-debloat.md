@@ -228,6 +228,30 @@ Shipped in `internal/claude/debloat.go` (+ `cmd/harnez/main.go` wiring):
   `docs/studies/2026-09-15-debloat-context-usage-measurement-and-cli-flag-comparison.md`
   for the full table and comparison against `--bare`/`--safe-mode`.
 
+## Follow-up 2 (2026-09-15): `EnterWorktree`/`ExitWorktree`/Google Drive MCP tools added to `aggressive`
+
+Assessed every deferred tool not already covered by a preset against this
+project's actual conventions:
+
+- `EnterWorktree`/`ExitWorktree`: this project's own `CLAUDE.md` explicitly
+  forbids worktree-isolated subagents for harnez work — verified-unused by
+  written convention, not just observation. Added to `aggressive_extra_deny`
+  (grouped there per the user's call, rather than the more conservative
+  `minimal` placement originally proposed).
+- `mcp__claude_ai_Google_Drive__authenticate` /
+  `complete_authentication`: never used; already covered functionally by
+  `disable_claude_ai_connectors`, added to the deny list as well for
+  `status --debloat` / `revert --debloat` visibility.
+- Considered and explicitly declined: `TaskOutput`/`TaskStop` (required by
+  the Zero Zombie Guarantee hygiene phase), `Monitor` (used for background
+  event streaming), `EndConversation` (proposed but not requested — left
+  out), `WebFetch`/`WebSearch` (ambiguous value, held for a separate
+  decision).
+
+Verified live against the real `~/.claude/settings.json`
+(revert → reapply → `status --debloat` confirms all four new entries
+`on (harnez-managed)`).
+
 ## Follow-up (2026-09-15): `SendMessage` removed from `aggressive`, preset content moved to config.yaml
 
 Applying `aggressive` live against the real `~/.claude/settings.json` (with
