@@ -44,15 +44,51 @@ claude --settings '{"disableBundledSkills":true}' -p '/context'
 The result corrects issue 347's inference: only about 1.9k of the 3.1k Skills
 row was bundled-skill weight in this repo; 1.2k belongs to user/project
 skills. More importantly, the reproducible 2.0k increase in System tools
-offsets the Skills-row reduction at `/context`'s reporting precision. We know
-the toggle removes bundled skills, but do **not** yet have evidence that it
-reduces net context.
+offsets the Skills-row reduction at `/context`'s reporting precision. The
+API-usage test below establishes that this is a `/context` accounting defect,
+not a real loss of the saving.
+
+## Server-reported API validation (2026-09-16)
+
+`/context` is a local command, not an API measurement. Running it with
+`--output-format json` reported `duration_api_ms: 0`, `num_turns: 0`, and zero
+input, cache, and output tokens for both settings. Its category table is an
+estimate generated inside Claude Code.
+
+To measure the real request, ran the same minimal prompt from `/tmp`, outside
+`~/projects`, with session persistence disabled:
+
+```text
+claude --settings '{"disableBundledSkills":false}' --no-session-persistence \
+  -p 'Reply with exactly OK.' --output-format json
+claude --settings '{"disableBundledSkills":true}' --no-session-persistence \
+  -p 'Reply with exactly OK.' --output-format json
+```
+
+Two alternating off/on pairs returned identical server-reported input counts
+for each setting. Total input is the sum of `input_tokens`,
+`cache_creation_input_tokens`, and `cache_read_input_tokens`, per Anthropic's
+prompt-caching usage definition:
+
+| Setting | Sonnet input | Auxiliary Haiku input | Combined input |
+|---|---:|---:|---:|
+| `false` | 37,498 | 897 | 38,395 |
+| `true` | 35,378 | 897 | 36,275 |
+| Delta | -2,120 | 0 | **-2,120 (-5.5%)** |
+
+The comparable cache-hit pair produced the same four-token model output and
+cost $0.0084952 with the toggle off versus $0.0080712 with it on. This removes
+output variation and cache-write pricing as explanations for the input delta.
+
+Conclusion: `disableBundledSkills` both removes the 12 bundled skills and
+saves 2,120 actual input tokens for this clean minimal prompt. `/context`
+incorrectly moves approximately the same amount from its Skills row into its
+System-tools row, hiding the real saving while leaving its displayed total
+unchanged. The clean-repo and real harnez-repo `/context` runs reproduce the
+same display defect, so it is upstream behavior rather than project config.
 
 ## Remaining task
 
-- Explain or characterize the reproducible System-tools increase under the
-  toggle. Determine whether this is genuine prompt/tool-schema growth,
-  category reclassification, or a `/context` accounting artifact.
 - Record the live result and explanation in the 2026-09-15 debloat study (or
   a new dated study entry).
 - Make the go/no-go recommendation using net context impact and capability
@@ -63,8 +99,9 @@ reduces net context.
 - Version-stamped, repeated A/B result is documented in a durable study,
   including Skills, System tools, and net reported context rather than
   assuming that a smaller Skills row means net savings.
-- The 2.0k System-tools increase is explained or explicitly bounded as a
-  reporting artifact/unknown, with enough evidence for a go/no-go decision.
+- The 2.0k System-tools increase is identified as a `/context` accounting
+  artifact using server-reported API usage, with enough evidence for a
+  go/no-go decision.
 - Confirms that bundled skills disappear while user/project skills remain,
   and corrects issue 347's inference about the 3.1k Skills baseline.
 - Feeds into a go/no-go for adding `disableBundledSkills` as a `--debloat`
