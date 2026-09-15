@@ -227,3 +227,25 @@ Shipped in `internal/claude/debloat.go` (+ `cmd/harnez/main.go` wiring):
   `aggressive` ~7% (2.5k tokens) — see
   `docs/studies/2026-09-15-debloat-context-usage-measurement-and-cli-flag-comparison.md`
   for the full table and comparison against `--bare`/`--safe-mode`.
+
+## Follow-up (2026-09-15): `SendMessage` removed from `aggressive`, preset content moved to config.yaml
+
+Applying `aggressive` live against the real `~/.claude/settings.json` (with
+explicit user go-ahead) showed the deny list denying `SendMessage` cuts off
+the ability to send a follow-up message to an already-spawned subagent —
+the `Agent` tool alone can spawn and receive a completion handback, but
+cannot continue a conversation with it. Since `aggressive` is meant to trim
+integration-tool cost, not remove a core agent-coordination capability,
+`SendMessage` was dropped from `aggressive_extra_deny`.
+
+Also: the preset deny lists (`minimal_deny`, `aggressive_extra_deny`,
+`cron_deny`, `notebook_deny`) were originally hardcoded as Go package vars
+in `internal/claude/debloat.go`, which violates this repo's `docs/Spec.md`
+rule ("YAML spec files/config.yaml are the single source of truth;
+application code must not duplicate or shadow spec values" — config.yaml
+already plays this role for `permissions`/`hooks`/etc.). Moved to a new
+`debloat:` section in `config.yaml`, loaded via a `DebloatConfig` struct on
+`Config`, threaded through `ApplyDebloat`/`StatusDebloat`. `RevertDebloat`
+needed no change since it only reads its own sidecar ownership record, not
+preset content. Tests updated to load the real embedded config rather than
+duplicating literal lists in test code.

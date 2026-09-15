@@ -489,7 +489,7 @@ func main() {
 			}
 			if opts.Requested() {
 				fmt.Printf("Applying debloat (preset=%q) → %s\n", opts.Preset, filepath.Join(t, "settings.json"))
-				return claude.ApplyDebloat(t, opts)
+				return claude.ApplyDebloat(t, cfg.Debloat, opts)
 			}
 			return nil
 		},
@@ -608,7 +608,7 @@ func main() {
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			if statusDebloat {
-				return claude.StatusDebloat(t)
+				return claude.StatusDebloat(t, cfg.Debloat)
 			}
 			return claude.RunStatus(name, cfg, t)
 		},

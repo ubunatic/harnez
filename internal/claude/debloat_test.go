@@ -12,6 +12,19 @@ import (
 	"testing"
 )
 
+// testDebloatConfig loads the real embedded config.yaml so these tests
+// exercise the actual spec content (docs/Spec.md: config.yaml is the single
+// source of truth for debloat preset membership) instead of a duplicated
+// literal list.
+func testDebloatConfig(t *testing.T) DebloatConfig {
+	t.Helper()
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded: %v", err)
+	}
+	return cfg.Debloat
+}
+
 func readSettings(t *testing.T, dir string) map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(dir, "settings.json"))
@@ -49,7 +62,7 @@ func denySlice(perms map[string]any) []string {
 func TestApplyDebloat_MinimalOnEmpty(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := ApplyDebloat(dir, DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
+	if err := ApplyDebloat(dir, testDebloatConfig(t), DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
 		t.Fatalf("ApplyDebloat: %v", err)
 	}
 
@@ -77,7 +90,7 @@ func TestApplyDebloat_PreservesUnrelatedData(t *testing.T) {
 		t.Fatalf("seed settings.json: %v", err)
 	}
 
-	if err := ApplyDebloat(dir, DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
+	if err := ApplyDebloat(dir, testDebloatConfig(t), DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
 		t.Fatalf("ApplyDebloat: %v", err)
 	}
 
@@ -114,7 +127,7 @@ func TestRevertDebloat_LeavesPreExistingDenyEntry(t *testing.T) {
 		t.Fatalf("seed settings.json: %v", err)
 	}
 
-	if err := ApplyDebloat(dir, DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
+	if err := ApplyDebloat(dir, testDebloatConfig(t), DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
 		t.Fatalf("ApplyDebloat: %v", err)
 	}
 	if err := RevertDebloat(dir); err != nil {
@@ -136,7 +149,7 @@ func TestRevertDebloat_RestoresPriorTrueToggle(t *testing.T) {
 		t.Fatalf("seed settings.json: %v", err)
 	}
 
-	if err := ApplyDebloat(dir, DebloatOptions{DisableArtifact: true}); err != nil {
+	if err := ApplyDebloat(dir, testDebloatConfig(t), DebloatOptions{DisableArtifact: true}); err != nil {
 		t.Fatalf("ApplyDebloat: %v", err)
 	}
 	if err := RevertDebloat(dir); err != nil {
@@ -152,7 +165,7 @@ func TestRevertDebloat_RestoresPriorTrueToggle(t *testing.T) {
 func TestRevertDebloat_RemovesToggleAbsentBefore(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := ApplyDebloat(dir, DebloatOptions{DisableWorkflows: true}); err != nil {
+	if err := ApplyDebloat(dir, testDebloatConfig(t), DebloatOptions{DisableWorkflows: true}); err != nil {
 		t.Fatalf("ApplyDebloat: %v", err)
 	}
 	settings := readSettings(t, dir)
@@ -185,7 +198,7 @@ func TestApplyRevertDebloat_RoundTrip(t *testing.T) {
 		t.Fatalf("seed settings.json: %v", err)
 	}
 
-	if err := ApplyDebloat(dir, DebloatOptions{
+	if err := ApplyDebloat(dir, testDebloatConfig(t), DebloatOptions{
 		Preset:       DebloatPresetAggressive,
 		NotebookEdit: true,
 		Cron:         true,
@@ -221,12 +234,12 @@ func normalizeForCompare(m map[string]any) map[string]any {
 func TestApplyDebloat_AggressiveRequiresExplicitPreset(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := ApplyDebloat(dir, DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
+	if err := ApplyDebloat(dir, testDebloatConfig(t), DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
 		t.Fatalf("ApplyDebloat: %v", err)
 	}
 
 	deny := denyOf(readSettings(t, dir))
-	for _, tool := range debloatAggressiveExtraDeny {
+	for _, tool := range testDebloatConfig(t).AggressiveExtraDeny {
 		for _, d := range deny {
 			if d == tool {
 				t.Fatalf("minimal preset must not deny %q, got deny=%v", tool, deny)
@@ -244,13 +257,13 @@ func TestRevertDebloat_NoRecordErrors(t *testing.T) {
 
 func TestStatusDebloat_RunsWithAndWithoutRecord(t *testing.T) {
 	dir := t.TempDir()
-	if err := StatusDebloat(dir); err != nil {
+	if err := StatusDebloat(dir, testDebloatConfig(t)); err != nil {
 		t.Fatalf("StatusDebloat (no record): %v", err)
 	}
-	if err := ApplyDebloat(dir, DebloatOptions{Preset: DebloatPresetMinimal, DisableArtifact: true}); err != nil {
+	if err := ApplyDebloat(dir, testDebloatConfig(t), DebloatOptions{Preset: DebloatPresetMinimal, DisableArtifact: true}); err != nil {
 		t.Fatalf("ApplyDebloat: %v", err)
 	}
-	if err := StatusDebloat(dir); err != nil {
+	if err := StatusDebloat(dir, testDebloatConfig(t)); err != nil {
 		t.Fatalf("StatusDebloat (with record): %v", err)
 	}
 }

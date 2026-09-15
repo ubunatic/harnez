@@ -35,6 +35,25 @@ type Config struct {
 	AgentsMD           AgentsMD          `yaml:"agents_md"`
 	Make               MakeConfig        `yaml:"make"`
 	Feedback           FeedbackConfig    `yaml:"feedback"`
+	Debloat            DebloatConfig     `yaml:"debloat"`
+}
+
+// DebloatConfig is the single source of truth for `apply --debloat`'s
+// preset content (issue 316): which tool names each preset denies. Go code
+// must read these lists rather than hardcoding preset membership (see
+// docs/Spec.md — config.yaml is this project's spec for apply-related
+// settings, the same role spec/*.yaml plays for the usage dashboard).
+type DebloatConfig struct {
+	// MinimalDeny are verified integration-only tools denied under any
+	// preset ("minimal" and "aggressive" both include these).
+	MinimalDeny []string `yaml:"minimal_deny"`
+	// AggressiveExtraDeny are interaction/safety-relevant tools denied only
+	// under the explicit "aggressive" preset, on top of MinimalDeny.
+	AggressiveExtraDeny []string `yaml:"aggressive_extra_deny"`
+	// CronDeny/NotebookDeny are separately opt-in via their own flags,
+	// independent of preset choice.
+	CronDeny     []string `yaml:"cron_deny"`
+	NotebookDeny []string `yaml:"notebook_deny"`
 }
 
 // FeedbackConfig steers the Tool Feedback Protocol instruction injection

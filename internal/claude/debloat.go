@@ -22,20 +22,11 @@ const (
 	DebloatPresetAggressive = "aggressive"
 )
 
-// debloatMinimalDeny are verified integration-only tools with no interactive
-// or coordination role; safe to deny by default under any preset.
-var debloatMinimalDeny = []string{"DesignSync", "PushNotification", "RemoteTrigger"}
-
-// debloatAggressiveExtraDeny additionally denies interaction/safety-relevant
-// tools (clarifying questions, plan-mode gate, scheduled wakeups, structured
-// findings, agent messaging). Only ever applied under explicit opt-in.
-var debloatAggressiveExtraDeny = []string{
-	"AskUserQuestion", "ScheduleWakeup", "ReportFindings", "SendMessage",
-	"EnterPlanMode", "ExitPlanMode",
-}
-
-var debloatCronDeny = []string{"CronCreate", "CronDelete", "CronList"}
-var debloatNotebookDeny = []string{"NotebookEdit"}
+// Preset deny-list content (which tool names belong to which preset) lives
+// in config.yaml's `debloat:` section (DebloatConfig), not here — see
+// docs/Spec.md: config.yaml is this project's single source of truth for
+// apply-related settings, and Go code must not shadow it with hardcoded
+// lists.
 
 // debloatBoolKeys are the settings.json top-level boolean toggles debloat can
 // set, in stable display order.
@@ -66,24 +57,24 @@ func (o DebloatOptions) Requested() bool {
 		o.DisableClaudeAiConnectors || o.DisableArtifact
 }
 
-func (o DebloatOptions) denyList() ([]string, error) {
+func (o DebloatOptions) denyList(cfg DebloatConfig) ([]string, error) {
 	var deny []string
 	switch o.Preset {
 	case "":
 		// no preset selected; opt-in flags below may still add entries.
 	case DebloatPresetMinimal:
-		deny = append(deny, debloatMinimalDeny...)
+		deny = append(deny, cfg.MinimalDeny...)
 	case DebloatPresetAggressive:
-		deny = append(deny, debloatMinimalDeny...)
-		deny = append(deny, debloatAggressiveExtraDeny...)
+		deny = append(deny, cfg.MinimalDeny...)
+		deny = append(deny, cfg.AggressiveExtraDeny...)
 	default:
 		return nil, fmt.Errorf("unknown --debloat-preset %q (want %q or %q)", o.Preset, DebloatPresetMinimal, DebloatPresetAggressive)
 	}
 	if o.NotebookEdit {
-		deny = append(deny, debloatNotebookDeny...)
+		deny = append(deny, cfg.NotebookDeny...)
 	}
 	if o.Cron {
-		deny = append(deny, debloatCronDeny...)
+		deny = append(deny, cfg.CronDeny...)
 	}
 	return deny, nil
 }
@@ -144,8 +135,8 @@ func writeDebloatRecord(target string, rec debloatRecord) error {
 // <target>/settings.json, preserving every other field untouched, and
 // records prior values for the keys it touches for the first time so
 // RevertDebloat can restore them exactly.
-func ApplyDebloat(target string, opts DebloatOptions) error {
-	deny, err := opts.denyList()
+func ApplyDebloat(target string, cfg DebloatConfig, opts DebloatOptions) error {
+	deny, err := opts.denyList(cfg)
 	if err != nil {
 		return err
 	}
@@ -274,7 +265,7 @@ func RevertDebloat(target string) error {
 // StatusDebloat prints the currently-active debloat-managed deny entries and
 // boolean toggles for <target>/settings.json, naming the file explicitly and
 // noting that it is a global, all-projects setting.
-func StatusDebloat(target string) error {
+func StatusDebloat(target string, cfg DebloatConfig) error {
 	settingsPath := filepath.Join(target, "settings.json")
 	settings := jsonc.Read(settingsPath)
 	rec := readDebloatRecord(target)
@@ -288,7 +279,7 @@ func StatusDebloat(target string) error {
 		denySet[d] = struct{}{}
 	}
 
-	allKnownDeny := append(append(append([]string{}, debloatMinimalDeny...), debloatAggressiveExtraDeny...), append(debloatCronDeny, debloatNotebookDeny...)...)
+	allKnownDeny := append(append(append([]string{}, cfg.MinimalDeny...), cfg.AggressiveExtraDeny...), append(cfg.CronDeny, cfg.NotebookDeny...)...)
 	sort.Strings(allKnownDeny)
 	fmt.Println("permissions.deny:")
 	for _, d := range allKnownDeny {

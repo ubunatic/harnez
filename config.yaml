@@ -38,6 +38,33 @@ make:
   phony_fix: ours   # ours|all|none — how to handle existing .PHONY lines
   phony_sentinel: "" # override the ⚙️ token; empty = auto-detect or default
 
+# debloat is the single source of truth for `harnez apply --debloat`'s
+# preset content (issue 316) — do not hardcode these lists in Go.
+debloat:
+  # verified integration-only tools; safe to deny under any preset.
+  minimal_deny:
+    - DesignSync
+    - PushNotification
+    - RemoteTrigger
+  # interaction/safety-relevant tools; denied only under the explicit
+  # --debloat-preset aggressive opt-in, never by default. SendMessage is
+  # deliberately excluded: it's required to follow up with a spawned
+  # subagent/teammate, which the Agent tool alone cannot do (see
+  # docs/studies/2026-09-15-debloat-context-usage-measurement-and-cli-flag-comparison.md).
+  aggressive_extra_deny:
+    - AskUserQuestion
+    - ScheduleWakeup
+    - ReportFindings
+    - EnterPlanMode
+    - ExitPlanMode
+  # separately opt-in via their own flags, independent of preset choice.
+  cron_deny:
+    - CronCreate
+    - CronDelete
+    - CronList
+  notebook_deny:
+    - NotebookEdit
+
 permissions:
   allow:
     # system diagnostics
