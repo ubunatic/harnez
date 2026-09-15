@@ -134,6 +134,15 @@ Definition of Done: issue 348 (real in-repo token measurement) and issue
 349 (live `skillOverrides` verification, the one finding here with the most
 leverage to change this recommendation if it turns out to work).
 
+**Update (2026-09-16, issue 349)**: `skillOverrides` was live-verified against
+Claude Code 2.1.273 and found to work correctly, including for bundled
+skills — contradicting finding 3's unverified GitHub-issue reports. See
+`docs/studies/2026-09-16-skilloverrides-live-verification.md`. This does
+not change the recommendation above (`disableBundledSkills` stays the
+right lever for the "remove the whole catalogue" case `--debloat`
+addresses), but it does mean `skillOverrides` is now a confirmed, viable
+option for a future finer-grained per-skill control if that's ever wanted.
+
 ## Related
 
 - Issue 316 — `harnez apply --debloat` / `status --debloat` / `revert --debloat` (the
