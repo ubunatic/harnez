@@ -97,12 +97,16 @@ on every prompt. Plain `harnez apply` remains unchanged, and the standalone
 `--debloat-disable-bundled-skills` flag remains useful when the user wants this
 toggle without a deny-list preset.
 
-## Remaining task
+## Completion
 
-- Record the live result and explanation in the 2026-09-15 debloat study (or
-  a new dated study entry).
-- Implement the accepted go decision in the spec-driven debloat presets,
-  tests, CLI help, and installed binary.
+- Recorded the live result and `/context` accounting defect in the 2026-09-15
+  debloat study.
+- Added the config-driven bundled-skill default to both debloat presets while
+  preserving the standalone toggle flag.
+- Added regression coverage for the preset default, config opt-out, and
+  standalone flag; `make check` passes.
+- Installed the updated binary and live-verified `harnez apply --debloat`,
+  `harnez status --debloat`, and Claude's surviving user-skill list.
 
 ## Definition of done
 
