@@ -1,6 +1,6 @@
 # 348 — Measure disableBundledSkills real context savings in this repo
 
-**Status**: Open
+**Status**: In Progress — measured saving accepted; promoting into default debloat presets
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Research
@@ -87,12 +87,22 @@ System-tools row, hiding the real saving while leaving its displayed total
 unchanged. The clean-repo and real harnez-repo `/context` runs reproduce the
 same display defect, so it is upstream behavior rather than project config.
 
+## Decision (2026-09-16)
+
+Promote `disableBundledSkills: true` into both debloat presets. The measured
+recurring saving justifies making it part of `harnez apply --debloat`; if a
+bundled playbook proves load-bearing later, add a lean harnez-authored variant
+for that demonstrated need rather than paying for the entire bundled catalogue
+on every prompt. Plain `harnez apply` remains unchanged, and the standalone
+`--debloat-disable-bundled-skills` flag remains useful when the user wants this
+toggle without a deny-list preset.
+
 ## Remaining task
 
 - Record the live result and explanation in the 2026-09-15 debloat study (or
   a new dated study entry).
-- Make the go/no-go recommendation using net context impact and capability
-  tradeoffs, not the Skills row alone.
+- Implement the accepted go decision in the spec-driven debloat presets,
+  tests, CLI help, and installed binary.
 
 ## Definition of done
 
