@@ -4,7 +4,9 @@
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Templates / Docs / Token Efficiency
-**Related**: [Issue 354](354-collapse-duplicated-instruction-blocks-across-claude-md-agents-md-templates-into-single-source-pointer-pattern.md) (prompted this assessment), [Issue 323](323-docs-lang-bash-md-hard-references-docs-practices-agenticloop-md-instead-of-docs-agenticloop-md-alias.md) (path-aliasing fragility — do this first), [Issue 249](249-copied-practice-docs-retain-dangling-and-inapplicable-dependencies.md) (per-project doc drift — this multiplies that surface), [docs/practices/AgenticLoop.md](../docs/practices/AgenticLoop.md)
+**Related**: [Issue 359](359-pilot-agenticloop-lite-md-behavioral-canary-gate.md) (lower-blast-radius
+alternative — a lite variant of the whole doc may make this extraction unnecessary; see that
+ticket's cross-link back here), [Issue 354](354-collapse-duplicated-instruction-blocks-across-claude-md-agents-md-templates-into-single-source-pointer-pattern.md) (prompted this assessment), [Issue 323](323-docs-lang-bash-md-hard-references-docs-practices-agenticloop-md-instead-of-docs-agenticloop-md-alias.md) (path-aliasing fragility — do this first), [Issue 249](249-copied-practice-docs-retain-dangling-and-inapplicable-dependencies.md) (per-project doc drift — this multiplies that surface), [docs/practices/AgenticLoop.md](../docs/practices/AgenticLoop.md)
 
 ---
 

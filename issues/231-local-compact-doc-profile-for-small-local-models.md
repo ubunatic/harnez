@@ -4,7 +4,11 @@
 **Priority**: P3 (Low)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [[166-compact-local-llm-doc-profile-and-go-rune-width-invariants]] (split from — original
+**Related**: [Issue 360](360-harnez-docs-variant-name-lite-full-thin-switch-verb.md) (proposes the
+same doc-variant-selection mechanism for the opposite audience — strong models tolerating
+tagline-only lite docs vs. this ticket's weak models needing compact docs; likely supersedes this
+ticket's mechanism half, leaving only the "which local models need which default" policy question
+open), [[166-compact-local-llm-doc-profile-and-go-rune-width-invariants]] (split from — original
 ticket's Part B), [[165-two-phase-architect-patch-harness-for-small-local-models]] (same
 `qwen-27b-local` source/motivation — small local models need a different interaction/instruction
 shape than this project's docs and sprint workflow currently assume; likely the same profile work),
