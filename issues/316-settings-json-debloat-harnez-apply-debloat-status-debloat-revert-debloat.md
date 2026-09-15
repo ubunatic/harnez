@@ -222,3 +222,8 @@ Shipped in `internal/claude/debloat.go` (+ `cmd/harnez/main.go` wiring):
 - Verified live end-to-end with the built binary against a temp target dir
   (apply → status → revert), confirming actual settings.json content at
   each step.
+- Measured actual context-token impact per preset with `claude -p "/context"`
+  in a clean test project: `minimal` ~0% (only trims deferred-tool schemas),
+  `aggressive` ~7% (2.5k tokens) — see
+  `docs/studies/2026-09-15-debloat-context-usage-measurement-and-cli-flag-comparison.md`
+  for the full table and comparison against `--bare`/`--safe-mode`.
