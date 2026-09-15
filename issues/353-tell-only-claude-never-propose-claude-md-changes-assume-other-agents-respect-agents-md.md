@@ -1,4 +1,4 @@
-# 353 — Tell only Claude: never propose CLAUDE.md changes, assume other agents respect AGENTS.md
+# 353 — Tell only Claude: never propose CLAUDE.md changes; check repo docs/AGENTS.md before any instruction-file change
 
 **Status**: Open
 **Priority**: P3 (Low)
@@ -9,12 +9,19 @@
 
 ## Summary
 
-Add a Claude-Code-specific instruction (not a general cross-agent rule — scope this to
-Claude only, since other agent harnesses this project supports don't necessarily read
-`CLAUDE.md` at all): Claude should never propose edits framed around `CLAUDE.md` as the
-managed source file. It should always work in terms of `AGENTS.md` as the single managed
-source, and assume that other agents already active on a repo (Codex, Gemini, Prime
-Agent, etc.) respect `AGENTS.md`, not a Claude-specific file.
+Two related instructions, both about agent instruction-file habits:
+
+1. A Claude-Code-specific instruction (not a general cross-agent rule — scope this to
+   Claude only, since other agent harnesses this project supports don't necessarily read
+   `CLAUDE.md` at all): Claude should never propose edits framed around `CLAUDE.md` as the
+   managed source file. It should always work in terms of `AGENTS.md` as the single managed
+   source, and assume that other agents already active on a repo (Codex, Gemini, Prime
+   Agent, etc.) respect `AGENTS.md`, not a Claude-specific file.
+2. A broader discipline (see "Extension" section below): before any agent proposes a
+   change to its own instruction file at all, it should first check whether the repo's
+   own `docs/` and `AGENTS.md` already cover the topic, or should — instruction-file
+   edits are for agent-specific habits, not a substitute for shared, versioned project
+   documentation.
 
 ## Background
 
@@ -62,6 +69,45 @@ this doesn't leak into content other agents also read).
   rule is about not treating it as the thing to *propose changes to* in project-local
   ticket/doc work, not about pretending the file doesn't exist).
 
+## Extension (2026-09-15): docs-first discipline before proposing instruction-file changes
+
+Broader than the Claude-only rule above — this applies to any agent working in a repo,
+regardless of which instruction file it personally reads (`CLAUDE.md` for Claude,
+`AGENTS.md` for Codex/others, `instructions.md` for other harnesses).
+
+**Problem**: an agent that jumps straight to "let's add a line to my instructions file"
+when it hits friction or learns something skips a cheaper, more durable step: checking
+whether the repo's own `docs/` and `AGENTS.md` already cover it, or should. This project's
+own `docs/evergreen` skill already encodes the right ordering for *session recaps*
+(evergreen docs and issues first, instruction-file changes only proposed to the user, not
+applied automatically) — but that discipline should apply any time an agent is about to
+suggest an instruction-file edit, not only during an explicit `/evergreen` pass. Symptom
+seen this session: multiple tickets (348, 349, 351, 352, 353 itself) proposed instruction-
+file additions before checking whether `docs/Spec.md`, `docs/CLIDesign.md`, or
+`docs/Permissions.md` already said (or should say) the same thing at the evergreen-doc
+layer, where it's shared, versioned, and visible to every agent — not just the one whose
+instruction file gets edited.
+
+**Task**: add a rule — for Claude specifically, and worth phrasing so it's easy to port
+into `AGENTS.md` for other agents too — along these lines:
+
+> Before proposing a change to your own instruction file (`CLAUDE.md`/`AGENTS.md`/
+> `instructions.md`), first check whether the repo's own `docs/` (evergreen docs) and
+> `AGENTS.md` already cover the topic, or whether the learning belongs there instead.
+> Evergreen docs are shared across every agent working on the repo and are the right home
+> for durable decisions, pitfalls, and architecture notes; an instruction-file edit should
+> be reserved for agent-specific behavioral habits (like this ticket's own CLAUDE.md-vs-
+> AGENTS.md example) that don't belong in shared project documentation. When in doubt,
+> propose the `docs/` change first and only add an instruction-file pointer if the repo
+> docs alone wouldn't surface it reliably.
+
+**Definition of done (extension)**:
+- Rule is live wherever the rest of 353's Claude-specific instruction lands.
+- Doesn't contradict `docs/evergreen`'s existing "propose harness improvements, let the
+  user decide" step-3 guidance — this extension is about the *order of consideration*
+  (repo docs/AGENTS.md first) before that proposal is even made, not about removing the
+  user's final say.
+
 ## Related
 
 - Issue 351, 352 — both had ticket drafts this session that incorrectly referenced
@@ -69,3 +115,6 @@ this doesn't leak into content other agents also read).
 - `docs/CLIDesign.md` — `init flow` (project-level: `AGENTS.md` primary, `CLAUDE.md`
   symlink) and `apply flow` (global-level: `CLAUDE.md` primary, `AGENTS.md` symlink) —
   read both before implementing, the direction differs by scope.
+- `/evergreen` skill — already encodes docs-first discipline for session recaps; this
+  ticket's extension generalizes that ordering to any instruction-file proposal, not only
+  explicit evergreen passes.
