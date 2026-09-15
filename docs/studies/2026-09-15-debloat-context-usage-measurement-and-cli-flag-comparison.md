@@ -84,6 +84,23 @@ features can save, but neither is a knob comparable to, or combinable with, issu
 customizations, shed a targeted list of built-in tool definitions" — a narrower, more
 surgical claim than either flag makes.
 
+## Finding 4 — the deny list takes effect live, mid-session, not just on next startup
+
+Applied `aggressive` directly to the real `~/.claude/settings.json` (with the user's
+explicit go-ahead, apply-then-revert-immediately) to verify the round trip against a real
+running session rather than only a temp directory. The denied tools
+(`AskUserQuestion`, `SendMessage`, `ScheduleWakeup`, `ReportFindings`,
+`EnterPlanMode`/`ExitPlanMode`, plus the `minimal` entries) disappeared from the *current,
+already-running* session immediately after `harnez apply --debloat --debloat-preset
+aggressive` returned — no restart required. `harnez revert --debloat` restored them
+just as immediately, and removed the sidecar `.harnez-debloat.json` record as designed.
+
+This matters for how `aggressive` should be presented to users: toggling it is not a
+"next session" decision, it can cut off tools an agent is using mid-task. That is a
+reason to keep it opt-in and explicit (as decided), and to warn users who might reach for
+it while an agent session is actively running rather than only recommending it be applied
+between sessions.
+
 ## Takeaway for future debloat-adjacent work
 
 When someone proposes a new "reduce context" lever, first check which of these three
