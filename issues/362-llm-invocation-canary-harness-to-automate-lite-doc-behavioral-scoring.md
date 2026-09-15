@@ -1,6 +1,6 @@
 # 362 — LLM-invocation canary harness to automate lite-doc behavioral scoring
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P3 (Low)
 **Severity**: Feature
 **Category**: Templates / Docs / Canary
@@ -41,12 +41,39 @@ pass). If not, evaluate a minimal direct API call (Claude API, respecting existi
 `docs/practices/ClaudeAPI.md`-equivalent conventions if any) as a fallback, gated on cost/rate
 concerns for a CI-adjacent tool.
 
-## 3. Acceptance Criteria
+## 3. Resolution (superseded the original proposed fix above)
 
-- [ ] A runnable harness (script or `harnez` subcommand) takes a `fixtures.yaml` + two doc variant
-      paths and produces a scored pass/fail report per fixture, matching issue 359's manual
-      `results.md` format.
-- [ ] Documented cost/rate-limit behavior if it calls a real LLM API.
-- [ ] Re-run issue 359's `scripts/canary-agenticloop-lite/fixtures.yaml` through the new harness
-      and compare against the manual `results.md` scoring — note any discrepancies.
-- [ ] `go test ./...` and `scripts/smoke-test.sh` pass (if implemented as a `harnez` subcommand).
+The proposed fix above (custom `fixtures.yaml`-driven LLM-invocation-and-pattern-scoring harness)
+turned out to be unnecessary complexity. Manual experimentation (2026-09-15, prompted by user
+question "are we sure the test agent did not see the other bash docs?") found a much simpler and
+more rigorous approach already available:
+
+1. `claude -p` (the existing CLI, non-interactively) run from a scratch directory **outside any
+   harnez-managed project** gives genuine isolation — no local `AGENTS.md`/`CLAUDE.md` gets
+   auto-injected, unlike an in-conversation subagent spawned inside this repo (which does inherit
+   the project's own instructions, invalidating an in-repo "bare agent" test).
+2. `harnez lint --check` already exists and mechanically judges the generated code against real
+   rules (Bash conditionals, source-over-dot, etc.) — no custom `pattern`/`forbid_pattern` regex
+   format needed.
+
+Shipped as `scripts/canary-lite-doc/run.sh`: takes a lite doc + a task-description fixture file,
+spawns the isolated `claude -p` session, and runs `harnez lint --check` on the real output file.
+Two fixtures (`fixtures/bash-deploy-check.task.md`, `fixtures/make-widget.task.md`) both pass —
+see `scripts/canary-lite-doc/results.md`.
+
+This also supersedes issue 359's manual/reasoning-based scoring for future lite docs: no need to
+reason through what a response "would" say — the harness actually runs it.
+
+## 3a. Acceptance Criteria (original, retained for history)
+
+- [x] A runnable harness takes a doc + task and produces a scored pass/fail report — delivered as
+      `scripts/canary-lite-doc/run.sh` (lint-based judging instead of a custom fixtures.yaml
+      pattern-match format).
+- [x] Documented behavior — see `scripts/canary-lite-doc/results.md`; no LLM API cost/rate-limit
+      concerns apply since it shells out to the already-installed `claude` CLI, not a raw API call.
+- [x] Re-validated against real docs (Bash.lite.md, Make.lite.md) rather than re-running issue
+      359's AgenticLoop fixtures — AgenticLoop's rules aren't lint-checkable (no `harnez lint`
+      support for prose/process docs), so the lint-based judge only applies to lintable languages
+      (Bash, Make, Go, Markdown) for now; AgenticLoop-style canaries still need manual/other
+      scoring.
+- [x] No `go test`/`smoke-test.sh` impact — pure shell script addition, no Go code changed.
