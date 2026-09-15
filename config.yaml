@@ -41,6 +41,11 @@ make:
 # debloat is the single source of truth for `harnez apply --debloat`'s
 # preset content (issue 316) — do not hardcode these lists in Go.
 debloat:
+  # Disable Claude Code's bundled skill catalogue under every preset. Real
+  # server usage measured a 2,120-token (5.5%) input saving while preserving
+  # user/project skills; add lean harnez replacements only for demonstrated
+  # gaps (issue 348).
+  preset_disable_bundled_skills: true
   # verified integration-only tools; safe to deny under any preset.
   minimal_deny:
     - DesignSync

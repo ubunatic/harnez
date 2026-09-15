@@ -72,6 +72,40 @@ func TestApplyDebloat_MinimalOnEmpty(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("deny = %v, want %v", got, want)
 	}
+	settings := readSettings(t, dir)
+	if settings["disableBundledSkills"] != true {
+		t.Fatalf("minimal preset disableBundledSkills = %v, want true", settings["disableBundledSkills"])
+	}
+}
+
+func TestApplyDebloat_PresetBundledSkillsFollowsConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfg := testDebloatConfig(t)
+	cfg.PresetDisableBundledSkills = false
+
+	if err := ApplyDebloat(dir, cfg, DebloatOptions{Preset: DebloatPresetMinimal}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+
+	settings := readSettings(t, dir)
+	if _, present := settings["disableBundledSkills"]; present {
+		t.Fatalf("minimal preset wrote disableBundledSkills despite config opt-out: %v", settings["disableBundledSkills"])
+	}
+}
+
+func TestApplyDebloat_StandaloneBundledSkillsToggle(t *testing.T) {
+	dir := t.TempDir()
+	cfg := testDebloatConfig(t)
+	cfg.PresetDisableBundledSkills = false
+
+	if err := ApplyDebloat(dir, cfg, DebloatOptions{DisableBundledSkills: true}); err != nil {
+		t.Fatalf("ApplyDebloat: %v", err)
+	}
+
+	settings := readSettings(t, dir)
+	if settings["disableBundledSkills"] != true {
+		t.Fatalf("standalone disableBundledSkills = %v, want true", settings["disableBundledSkills"])
+	}
 }
 
 func TestApplyDebloat_PreservesUnrelatedData(t *testing.T) {

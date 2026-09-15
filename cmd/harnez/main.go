@@ -505,12 +505,12 @@ func main() {
 	apply.Flags().BoolVarP(&applyShell, "shell", "s", false,
 		"inject harnez environment source into ~/.bashrc and ~/.zshrc")
 	apply.Flags().BoolVar(&debloat, "debloat", false,
-		"deny integration-only tools in settings.json to reduce context/token cost (default preset: minimal; issue 316)")
+		"apply the minimal context-saving preset (deny integration-only tools and disable bundled skills)")
 	apply.Flags().StringVar(&debloatPreset, "debloat-preset", "",
-		`debloat preset: "minimal" (default) or "aggressive" (also denies interaction/safety tools; explicit opt-in only)`)
+		`debloat preset: "minimal" (default) or "aggressive"; both disable bundled skills`)
 	apply.Flags().BoolVar(&debloatNotebookEdit, "debloat-notebook-edit", false, "also deny NotebookEdit")
 	apply.Flags().BoolVar(&debloatCron, "debloat-cron", false, "also deny CronCreate/CronDelete/CronList")
-	apply.Flags().BoolVar(&debloatDisableBundledSkills, "debloat-disable-bundled-skills", false, "set disableBundledSkills: true")
+	apply.Flags().BoolVar(&debloatDisableBundledSkills, "debloat-disable-bundled-skills", false, "disable bundled skills without requiring a debloat preset")
 	apply.Flags().BoolVar(&debloatDisableWorkflows, "debloat-disable-workflows", false, "set disableWorkflows: true")
 	apply.Flags().BoolVar(&debloatDisableRemoteControl, "debloat-disable-remote-control", false, "set disableRemoteControl: true")
 	apply.Flags().BoolVar(&debloatDisableClaudeAiConnectors, "debloat-disable-claude-ai-connectors", false, "set disableClaudeAiConnectors: true")

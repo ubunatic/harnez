@@ -39,11 +39,15 @@ type Config struct {
 }
 
 // DebloatConfig is the single source of truth for `apply --debloat`'s
-// preset content (issue 316): which tool names each preset denies. Go code
-// must read these lists rather than hardcoding preset membership (see
+// preset content (issues 316 and 348): which tool names each preset denies
+// and which safe boolean settings it enables. Go code must read these
+// values rather than hardcoding preset membership (see
 // docs/Spec.md — config.yaml is this project's spec for apply-related
 // settings, the same role spec/*.yaml plays for the usage dashboard).
 type DebloatConfig struct {
+	// PresetDisableBundledSkills disables Claude Code's bundled skill
+	// catalogue under any selected preset while leaving user/project skills.
+	PresetDisableBundledSkills bool `yaml:"preset_disable_bundled_skills"`
 	// MinimalDeny are verified integration-only tools denied under any
 	// preset ("minimal" and "aggressive" both include these).
 	MinimalDeny []string `yaml:"minimal_deny"`

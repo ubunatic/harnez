@@ -22,8 +22,8 @@ const (
 	DebloatPresetAggressive = "aggressive"
 )
 
-// Preset deny-list content (which tool names belong to which preset) lives
-// in config.yaml's `debloat:` section (DebloatConfig), not here — see
+// Preset content (deny lists and safe boolean defaults) lives in
+// config.yaml's `debloat:` section (DebloatConfig), not here — see
 // docs/Spec.md: config.yaml is this project's single source of truth for
 // apply-related settings, and Go code must not shadow it with hardcoded
 // lists.
@@ -79,9 +79,11 @@ func (o DebloatOptions) denyList(cfg DebloatConfig) ([]string, error) {
 	return deny, nil
 }
 
-func (o DebloatOptions) boolToggles() map[string]bool {
+func (o DebloatOptions) boolToggles(cfg DebloatConfig) map[string]bool {
+	disableBundledSkills := o.DisableBundledSkills ||
+		o.Preset != "" && cfg.PresetDisableBundledSkills
 	return map[string]bool{
-		"disableBundledSkills":      o.DisableBundledSkills,
+		"disableBundledSkills":      disableBundledSkills,
 		"disableWorkflows":          o.DisableWorkflows,
 		"disableRemoteControl":      o.DisableRemoteControl,
 		"disableClaudeAiConnectors": o.DisableClaudeAiConnectors,
@@ -175,7 +177,7 @@ func ApplyDebloat(target string, cfg DebloatConfig, opts DebloatOptions) error {
 		settings["permissions"] = perms
 	}
 
-	for key, want := range opts.boolToggles() {
+	for key, want := range opts.boolToggles(cfg) {
 		if !want {
 			continue
 		}
