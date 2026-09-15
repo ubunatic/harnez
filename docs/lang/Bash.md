@@ -14,7 +14,8 @@ weight: 61
 > 1. `set -euo pipefail`, always, on line two.
 > 2. `if test …` — never `[ … ]`, never `[[ … ]]`, no `;`, 3-line `if-then-fi` (`then <cmd>` on same line).
 > 3. Always use `source`, never `.` for scripts and dotfiles (`~/.bashrc`, `~/.zshrc`).
-> 4. Quote every expansion; declare `local` separately for command substitutions; assume default `awk` is mawk.
+> 4. Quote every expansion; declare `local` separately for command substitutions.
+> 5. Writing awk? Default is mawk, not gawk — see the optional Appendix before using gawk extensions.
 
 ---
 
@@ -231,6 +232,7 @@ See also: issue 095 (cwd-leaking incident, trust-boundary analysis) and issue 22
 (multi-repo wrong-repo failure from stray `cd`).
 
 ## Appendix — Awk Portability
+Optional, look up on demand — rarely needed in this codebase. Skip unless you're about to write awk directly.
 The default `awk` on Debian, Ubuntu, and Raspberry Pi OS is **mawk**, not gawk.
 Avoid gawk extensions:
 - ❌ Do not use 3-argument `match(str, /re/, arr)` — use `split()` or `sub()`/`gsub()` instead.
