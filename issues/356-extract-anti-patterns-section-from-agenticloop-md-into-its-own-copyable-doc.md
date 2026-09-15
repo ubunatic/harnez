@@ -1,6 +1,6 @@
 # 356 — Extract Anti-Patterns section from AgenticLoop.md into its own copyable doc
 
-**Status**: Open
+**Status**: Closed — superseded by 359's AgenticLoop.lite.md variant mechanism
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Templates / Docs / Token Efficiency
