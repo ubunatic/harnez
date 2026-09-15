@@ -1,6 +1,6 @@
 # 349 — Verify whether skillOverrides works on the installed Claude Code version
 
-**Status**: Open
+**Status**: Closed — skillOverrides live-verified functional on 2.1.273, including for bundled skills
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Research
@@ -46,14 +46,21 @@ GitHub issue reports):
 
 ## Definition of done
 
-- Documented, version-stamped finding: does `skillOverrides` work at all on
-  the installed version, and if so, for which skill categories (plain
-  user/project skills only, or bundled skills too)?
-- Updates issue 347's recommendation if this changes the answer (e.g. if
-  `skillOverrides` does work for bundled skills, prefer it over
-  `disableBundledSkills` and consider whether `--debloat` should expose it).
-- Record as a dated `docs/studies/` entry or an update to the existing
-  2026-09-15 debloat study, per this project's evergreen-doc conventions.
+- [x] Documented, version-stamped finding: does `skillOverrides` work at all
+      on the installed version, and if so, for which skill categories (plain
+      user/project skills only, or bundled skills too)? — **Yes, on Claude
+      Code 2.1.273, for both.** All four modes (`on`/`off`/`name-only`/
+      `user-invocable-only`) produced distinct, correct behavior against
+      `dataviz`, a bundled (`Built-in`) skill. See
+      `docs/studies/2026-09-16-skilloverrides-live-verification.md`.
+- [x] Updates issue 347's recommendation if this changes the answer — added
+      a dated update note to 347; overall recommendation (keep
+      `disableBundledSkills` as the catalogue-wide lever) is unchanged, but
+      `skillOverrides` is now confirmed as a viable finer-grained option if
+      ever wanted.
+- [x] Recorded as a dated `docs/studies/` entry (separate file rather than
+      an edit to the 2026-09-15 debloat study, since that file was being
+      concurrently edited for issue 348 in the same session).
 
 ## Related
 
