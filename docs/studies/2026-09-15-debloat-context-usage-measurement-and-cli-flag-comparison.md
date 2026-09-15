@@ -9,6 +9,7 @@ built-in `claude` CLI flags (`--bare`, `--safe-mode`) the user asked about as po
 alternatives.
 
 **Accessed**: 2026-09-15
+**Updated**: 2026-09-16
 
 ## Finding 1 — `claude -p "/context" [--settings '{"permissions":{"deny":[...]}}']` is a real, cheap measurement harness for preset design
 
@@ -100,6 +101,37 @@ This matters for how `aggressive` should be presented to users: toggling it is n
 reason to keep it opt-in and explicit (as decided), and to warn users who might reach for
 it while an agent session is actively running rather than only recommending it be applied
 between sessions.
+
+## Finding 5 — `disableBundledSkills` saves 2,120 real input tokens despite `/context` hiding the saving
+
+Issue 348 repeated the `/context` A/B test on Claude Code 2.1.273 in both this repo and a
+clean repository outside `~/projects`. The toggle worked functionally in every run: all 12
+built-in skills disappeared while all 28 user/project skills remained. `/context` showed
+Skills falling from 3.1k to 1.2k, but System tools rising from 7.7k to 9.7k, leaving its
+reported total unchanged.
+
+That total is not an API measurement. JSON output confirmed `/context` is local
+(`duration_api_ms: 0`, `num_turns: 0`, and zero usage tokens). Two alternating real-prompt
+A/B pairs, using `Reply with exactly OK.` from `/tmp` with session persistence disabled,
+reported stable server usage:
+
+| Setting | Sonnet input | Auxiliary Haiku input | Combined input |
+|---|---:|---:|---:|
+| `disableBundledSkills: false` | 37,498 | 897 | 38,395 |
+| `disableBundledSkills: true` | 35,378 | 897 | 36,275 |
+| Delta | -2,120 | 0 | **-2,120 (-5.5%)** |
+
+Total input here is `input_tokens + cache_creation_input_tokens +
+cache_read_input_tokens`. The comparable cache-hit pair returned the same four-token
+output, ruling out output variation and cache creation as causes of the input delta.
+Therefore `/context` has an accounting defect: it reattributes approximately the removed
+skill-listing weight to System tools even though the API request is genuinely smaller.
+
+Decision: make `disableBundledSkills: true` part of both debloat presets. Plain `harnez
+apply` remains unchanged; the standalone `--debloat-disable-bundled-skills` flag remains
+available for applying only this toggle. If a removed bundled playbook later proves
+load-bearing, add a lean harnez-authored replacement for that demonstrated need rather
+than restoring the entire recurring catalogue.
 
 ## Takeaway for future debloat-adjacent work
 
