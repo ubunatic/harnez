@@ -1,6 +1,6 @@
 # 363 — Dense dos/don'ts-only rewrite of lite docs, validated by canary-lite-doc
 
-**Status**: Open
+**Status**: Closed — dense rewrite shipped, reviewed, canary harness hardened to Go along the way
 **Priority**: P3 (Low)
 **Severity**: Feature
 **Category**: Templates / Docs / Token Efficiency
@@ -47,14 +47,21 @@ known deficiency — the current lite docs are not broken.
 
 ## 3. Acceptance Criteria
 
-- [ ] Rewritten `Bash.lite.md`/`Make.lite.md` drafted, targeting meaningfully smaller byte count
-      than the current lite docs (report actual bytes; no fixed target — smaller than current is
-      the bar, not a specific percentage).
-- [ ] At least 4-6 total fixtures across both docs (existing 2 plus 2-4 new ones covering
-      currently-untested rules) all pass `scripts/canary-lite-doc/run.sh` against the new rewrite.
-- [ ] Side-by-side canary run comparing current lite docs vs. the rewrite on the same fixture set,
-      recorded in `scripts/canary-lite-doc/results.md`.
-- [ ] `harnez lint --check` on every fixture's generated output still reports zero findings (the
-      mechanical judge, not a subjective read of "does this still transmit the rule").
-- [ ] If any fixture regresses vs. the current lite doc, do not ship that section's rewrite — keep
-      the current wording for that rule and document why in this ticket.
+- [x] Rewritten `Bash.lite.md`/`Make.lite.md` drafted. Bash: 6237 -> 4767 bytes (-23.6% vs. prior
+      lite, -51.3% vs. full doc). Make: 4724 -> 3998 bytes (-15.4% vs. prior lite, -26.8% vs. full).
+- [x] 6 total fixtures (2 existing + 4 new: `bash-local-exitcode`, `bash-log-pipeline`,
+      `make-deploy-parity`, `make-phony-help`) all pass against the rewrite.
+- [x] Side-by-side comparison recorded in `scripts/canary-lite-doc/results.md`.
+- [x] 0 lint findings on every fixture's generated output.
+- [x] No fixture regressed — every rule transmitted correctly at the denser wording on the first
+      run; independent review spot-checked 19 distinct rules across both docs with no omissions.
+      One deliberate non-compression content change made along the way (not a regression): the
+      awk/mawk portability appendix was made optional/on-demand (a one-line pointer to the full
+      doc) rather than inlined, per explicit follow-up request — awk is rarely written in this
+      codebase, so it no longer pays its token cost every session.
+
+Side effect: the canary harness itself (`scripts/canary-lite-doc/`) was rewritten from bash to Go
+during this work — the bash version's `tail -1` parsing of the agent's chat reply for the output
+path broke nondeterministically when the model's reply put commentary after the path instead of
+before it. The Go version checks for the fixture's explicitly-named output path directly instead
+of parsing any model output, and lints via a direct `internal/lint` import.
