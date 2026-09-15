@@ -1,6 +1,6 @@
 # 360 — harnez docs variant <name> lite|full — thin switch verb
 
-**Status**: Open
+**Status**: Closed — flags + docs variant verb implemented, reviewed, and manually verified end-to-end
 **Priority**: P3 (Low)
 **Severity**: Feature
 **Category**: CLI / Templates
@@ -38,15 +38,15 @@ making 231's proposed mechanism redundant.
 
 ## 3. Acceptance Criteria
 
-- [ ] `init --variant lite` and `apply --variant lite` install the lite source for any
+- [x] `init --variant lite` and `apply --variant lite` install the lite source for any
       doc entry that has one, full source otherwise (no error for docs without a lite
       variant — silent fallback to full).
-- [ ] `harnez docs variant agentic-loop lite -d <repo>` swaps only that doc's installed
+- [x] `harnez docs variant agentic-loop lite -d <repo>` swaps only that doc's installed
       content, preserves any local `harnez:stop` section, and reports success/failure.
-- [ ] Running `harnez status`/`harnez diff` immediately after a variant switch reports
+- [x] Running `harnez status`/`harnez diff` immediately after a variant switch reports
       clean (confirms issue 358's marker-based drift detection is correctly wired here).
-- [ ] `go test ./...` and `scripts/smoke-test.sh` pass; `docs/CLIDesign.md`'s apply/init
+- [x] `go test ./...` and `scripts/smoke-test.sh` pass; `docs/CLIDesign.md`'s apply/init
       separation is unchanged (no project-local behavior added to `apply`).
-- [ ] Issue 231 closed as superseded by this mechanism, or explicitly re-scoped to
+- [x] Issue 231 closed as superseded by this mechanism, or explicitly re-scoped to
       whatever question (if any) remains after this ships — e.g. "which local models
       need lite by default" is a policy question distinct from the switching mechanism.
