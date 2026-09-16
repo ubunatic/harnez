@@ -69,6 +69,8 @@ Invocations:
 
 func newRepoHistoryCmd() *cobra.Command {
 	var dir string
+	var color bool = true
+	var noColor bool
 	var jsonOut bool
 
 	cmd := &cobra.Command{
@@ -83,14 +85,18 @@ Invocations:
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDocHistory(cmd.OutOrStdout(), docHistoryOptions{
-				Dir:    dir,
-				JSON:   jsonOut,
-				Tracks: true,
+				Dir:     dir,
+				Color:   color,
+				NoColor: noColor,
+				JSON:    jsonOut,
+				Tracks:  true,
 			})
 		},
 	}
 
 	cmd.Flags().StringVarP(&dir, "dir", "d", "", "repository root directory (default: current directory or git root)")
+	cmd.Flags().BoolVar(&color, "color", true, "enable ANSI color output")
+	cmd.Flags().BoolVar(&noColor, "no-color", false, "disable ANSI color output")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output history in JSON format")
 
 	return cmd
@@ -131,7 +137,7 @@ func runDocHistory(w io.Writer, opts docHistoryOptions) error {
 			fmt.Fprintln(w, string(data))
 			return nil
 		}
-		fmt.Fprint(w, assess.RenderMultiTrackCard(res))
+		fmt.Fprint(w, assess.RenderMultiTrackCard(res, assess.RenderMultiTrackCardOptions{Color: useColor}))
 		return nil
 	}
 

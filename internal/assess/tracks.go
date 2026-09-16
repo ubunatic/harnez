@@ -367,18 +367,18 @@ func ExtractMultiTrackHistoryContext(ctx context.Context, repoDir string) (*Mult
 		}
 
 		// Sparkline values: for Code/Tests/Docs/Skills use Tokens (or Lines if Tokens 0), for Issues use total tickets / open
-		sparkValues := make([]int, len(pts))
+		sparkValues := make([]float64, len(pts))
 		for j, p := range pts {
 			if track == TrackIssues {
-				sparkValues[j] = p.Files
+				sparkValues[j] = float64(p.Files)
 			} else if track == TrackCode || track == TrackTests {
-				sparkValues[j] = p.Lines
+				sparkValues[j] = float64(p.Lines)
 			} else {
-				sparkValues[j] = p.Tokens
+				sparkValues[j] = float64(p.Tokens)
 			}
 		}
 
-		spark := RenderSparkline(sparkValues, 10)
+		spark := RenderBrailleSparkline(sparkValues, BrailleOptions{Width: 10, Color: false})
 		tracks[track] = &TrackEvolution{
 			Track:         track,
 			CurrentFiles:  curFiles,
@@ -614,10 +614,20 @@ func parseTicketStatus(buf []byte) (isOpen bool, isClosed bool, hasStatus bool) 
 	return false, false, false
 }
 
+// RenderMultiTrackCardOptions configures RenderMultiTrackCard.
+type RenderMultiTrackCardOptions struct {
+	Color bool
+}
+
 // RenderMultiTrackCard formats the MultiTrackHistoryResult into a clean terminal card.
-func RenderMultiTrackCard(res *MultiTrackHistoryResult) string {
+func RenderMultiTrackCard(res *MultiTrackHistoryResult, opts ...RenderMultiTrackCardOptions) string {
 	if res == nil {
 		return ""
+	}
+
+	useColor := false
+	if len(opts) > 0 {
+		useColor = opts[0].Color
 	}
 
 	var sb strings.Builder
@@ -630,8 +640,21 @@ func RenderMultiTrackCard(res *MultiTrackHistoryResult) string {
 		}
 
 		spark := te.Sparkline
+		if useColor && len(te.Points) > 0 {
+			sparkValues := make([]float64, len(te.Points))
+			for j, p := range te.Points {
+				if track == TrackIssues {
+					sparkValues[j] = float64(p.Files)
+				} else if track == TrackCode || track == TrackTests {
+					sparkValues[j] = float64(p.Lines)
+				} else {
+					sparkValues[j] = float64(p.Tokens)
+				}
+			}
+			spark = RenderBrailleSparkline(sparkValues, BrailleOptions{Width: 10, Color: true})
+		}
 		if spark == "" {
-			spark = strings.Repeat(" ", 8)
+			spark = strings.Repeat(" ", 10)
 		}
 
 		switch track {
