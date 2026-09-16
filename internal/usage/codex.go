@@ -375,10 +375,12 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 			// Live fetch succeeded: persist it for sibling processes/next
 			// tick, but only if we actually hold the lock.
 			if locked {
+				now := time.Now()
 				_ = writeLiveFetchCache(cachePath, liveFetchCache[codexQuotaPayload]{
-					FetchedAt: time.Now(),
+					FetchedAt: now,
 					Payload:   codexQuotaPayload{Session: usage.Session, Weekly: usage.Weekly},
 				})
+				_ = AppendQuotaHistoryForAgent(resolveQuotaHistoryDir(codexDir), usage, now)
 			}
 		} else if cache != nil {
 			// Live fetch failed: fall back to the disk cache regardless of

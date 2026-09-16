@@ -381,10 +381,12 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 			// Live fetch succeeded: persist it for sibling processes/next
 			// tick, but only if we actually hold the lock.
 			if locked {
+				now := time.Now()
 				_ = writeLiveFetchCache(cachePath, liveFetchCache[claudeQuotaPayload]{
-					FetchedAt: time.Now(),
+					FetchedAt: now,
 					Payload:   claudeQuotaPayload{Session: usage.Session, Weekly: usage.Weekly},
 				})
+				_ = AppendQuotaHistoryForAgent(resolveQuotaHistoryDir(claudeDir), usage, now)
 			}
 		} else if cache != nil {
 			// Live fetch failed: fall back to the disk cache regardless of

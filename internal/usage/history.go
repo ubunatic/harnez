@@ -65,6 +65,9 @@ func HistorySummaryStats(dir string) (HistorySummaryData, error) {
 	}
 
 	for _, path := range matches {
+		if filepath.Base(path) == QuotaHistoryFilename {
+			continue
+		}
 		info, err := os.Stat(path)
 		if err != nil {
 			continue
@@ -267,6 +270,9 @@ func ReadHistory(dir string) ([]HistoryEntry, error) {
 
 	var entries []HistoryEntry
 	for _, path := range matches {
+		if filepath.Base(path) == QuotaHistoryFilename {
+			continue
+		}
 		f, err := os.Open(path)
 		if err != nil {
 			continue

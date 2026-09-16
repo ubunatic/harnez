@@ -432,10 +432,12 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 				// processes/next tick, but only if we actually hold the
 				// lock.
 				if locked {
+					now := time.Now()
 					_ = writeLiveFetchCache(cachePath, liveFetchCache[agyQuotaPayload]{
-						FetchedAt: time.Now(),
+						FetchedAt: now,
 						Payload:   agyQuotaPayload{ModelGroups: groups},
 					})
+					_ = AppendQuotaHistoryForAgent(resolveQuotaHistoryDir(geminiDir), usage, now)
 				}
 			} else {
 				// The exec call failed, timed out, or came back with no
