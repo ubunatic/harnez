@@ -797,6 +797,7 @@ func newRootCmd() *cobra.Command {
 	var assessJSON bool
 	var assessTokens bool
 	var assessHistory bool
+	var assessRAMP bool
 	assessCmd := &cobra.Command{
 		Use:   "assess [path]",
 		Short: "Fast code/doc metrics, token estimation, and repository feasibility report",
@@ -805,6 +806,23 @@ func newRootCmd() *cobra.Command {
 			targetPath := "."
 			if len(args) > 0 {
 				targetPath = args[0]
+			}
+
+			if assessRAMP {
+				profile, err := assess.AssessRAMP(targetPath)
+				if err != nil {
+					return fmt.Errorf("assess --ramp %s: %w", targetPath, err)
+				}
+				if assessJSON {
+					out, err := assess.RenderRAMPJSON(profile)
+					if err != nil {
+						return fmt.Errorf("render json: %w", err)
+					}
+					fmt.Println(out)
+					return nil
+				}
+				fmt.Print(assess.RenderRAMPText(profile))
+				return nil
 			}
 
 			if assessTokens {
@@ -860,6 +878,7 @@ func newRootCmd() *cobra.Command {
 	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
 	assessCmd.Flags().BoolVar(&assessTokens, "tokens", false, "display project-level lifetime AI token attribution and cost of change")
 	assessCmd.Flags().BoolVar(&assessHistory, "history", false, "display multi-track repository evolution history")
+	assessCmd.Flags().BoolVar(&assessRAMP, "ramp", false, "display RAMP repository AI maturity profile and evidence inventory")
 
 	root.AddCommand(apply, diff, scanDocs, clean, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newHookCmd(), newLintCmd(), newLogCmd(), newDocsCmd())
 	return root

@@ -225,7 +225,24 @@ you need a genuinely isolated `apply` test, either accept that it will re-sync y
 global state (safe if already applied and idempotent) or point `HOME`/relevant XDG vars
 at a scratch directory for the whole test process, not just `-t`.
 
+## RAMP Maturity Assessment (`init --ramp`, `assess --ramp`)
+
+`harnez init --ramp` and `harnez assess --ramp` provide an offline, read-only RAMP-informed estimate based on the four maturity levels:
+
+- **L1: Unconfigured** — No validated committed AI artifacts.
+- **L2: Grounded Prompting** — AI behavior rules (`AGENTS.md`, `.cursorrules`, `.windsurfrules`), AI tool config (`.claude/settings.json`), or agent architecture/standards docs.
+- **L3: Agent Augmented** — Named agents, reusable commands (`.claude/commands/`), or domain skills (`skills/*/SKILL.md`).
+- **L4: Orchestration** — Multi-agent flows (`flows/*.yaml`) or committed agent session logs (`.system_generated/logs/transcript*.jsonl`).
+
+### Scoring Rules and Boundaries:
+1. **Committed Baseline vs. Projected**: Only clean, committed files in Git qualify for the baseline score. Uncommitted changes and scaffolding projected by `init` are reported separately as *projected* until committed. When Git metadata is absent, existing files are handled explicitly as uncommitted/projected.
+2. **Highest Qualifying Level**: The profile reports the highest level evidenced by qualifying artifacts without capping the score when lower-level categories are missing.
+3. **Coherence Alerts**: If higher-level artifacts exist without foundational lower levels (e.g. L3 or L4 without L2 baseline instructions), a coherence warning is emitted.
+4. **No False Promotion**: Generic documentation (`README.md`), build files (`Makefile`), CI configs (`.github/workflows`), and service units (`*.service`) do not promote RAMP levels. Ambiguous paths are marked `unknown` with low confidence.
+5. **Offline & Non-Executing**: Assessment strictly reads file content (bounded to 64KB) and inspects Git metadata without executing any project commands (`go`, `make`, tests, scripts, or service managers).
+
 ## Known gaps
 
 - `diff` and `clean` are global-only and have no awareness of project Makefiles — see issue #009.
 - `status` does not check whether the project Makefile targets block is present.
+

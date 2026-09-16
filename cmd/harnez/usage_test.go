@@ -113,6 +113,9 @@ func TestUsageProjectFlag_CobraRegistered(t *testing.T) {
 				if c.Flags().Lookup("history") == nil {
 					t.Errorf("missing --history flag on assess command")
 				}
+				if c.Flags().Lookup("ramp") == nil {
+					t.Errorf("missing --ramp flag on assess command")
+				}
 			}
 		}
 	}

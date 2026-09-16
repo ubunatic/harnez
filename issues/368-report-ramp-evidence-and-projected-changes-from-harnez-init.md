@@ -1,6 +1,6 @@
 # 368 — Report RAMP evidence and projected changes from harnez init
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -21,10 +21,10 @@
 
 ## 3. Exit Criteria
 
-- [ ] Fixtures cover L1–L4, mixed levels, missing lower levels, ambiguous paths, ordinary project docs, and uncommitted scaffolding.
-- [ ] A report cites inspectable evidence and distinguishes baseline from projected level.
-- [ ] Repeated assessment has stable output and makes no repository or global writes.
-- [ ] CLI/design docs explain the scoring rule and its limits.
+- [x] Fixtures cover L1–L4, mixed levels, missing lower levels, ambiguous paths, ordinary project docs, and uncommitted scaffolding.
+- [x] A report cites inspectable evidence and distinguishes baseline from projected level.
+- [x] Repeated assessment has stable output and makes no repository or global writes.
+- [x] CLI/design docs explain the scoring rule and its limits.
 
 ## 4. Verification
 

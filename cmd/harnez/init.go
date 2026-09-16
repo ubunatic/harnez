@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/assess"
 	"ubunatic.com/harnez/internal/claude"
 )
 
@@ -14,6 +15,7 @@ func newInitCmd() *cobra.Command {
 	var initRepoMode string
 	var initVariant string
 	var initSummary, initUpdate, initReplace, initYes, initAll, initIssuesGit, initGoWork, initForce, initQuota1 bool
+	var initRAMP, initRAMPReport, initJSON bool
 
 	initCmd := &cobra.Command{
 		Use:   "init",
@@ -22,6 +24,23 @@ func newInitCmd() *cobra.Command {
 			cfg, _, err := claude.OpenConfig(initConfigPath)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
+			}
+			if initRAMP || initRAMPReport {
+				projected := claude.ProjectedInitFiles(initDir, cfg, initDocs)
+				profile, err := assess.AssessRAMPWithProjected(initDir, projected)
+				if err != nil {
+					return fmt.Errorf("assess RAMP %s: %w", initDir, err)
+				}
+				if initJSON {
+					out, err := assess.RenderRAMPJSON(profile)
+					if err != nil {
+						return err
+					}
+					fmt.Println(out)
+					return nil
+				}
+				fmt.Print(assess.RenderRAMPInitText(profile))
+				return nil
 			}
 			var issuesGit *bool
 			if cmd.Flags().Changed("issues-git") {
@@ -48,6 +67,9 @@ func newInitCmd() *cobra.Command {
 	initCmd.Flags().BoolVar(&initIssuesGit, "issues-git", false, "enable issue-index Git integration (use --issues-git=false to remove it)")
 	initCmd.Flags().BoolVar(&initGoWork, "gowork", false, "set up or migrate Go workspace (go.work.example + untracked local go.work symlink)")
 	initCmd.Flags().BoolVar(&initQuota1, "quota-1", false, "scaffold Quota-1 single-test guardrails in AGENTS.md and Makefile")
+	initCmd.Flags().BoolVar(&initRAMP, "ramp", false, "report RAMP maturity profile and projected init changes (offline, read-only)")
+	initCmd.Flags().BoolVar(&initRAMPReport, "ramp-report", false, "alias for --ramp")
+	initCmd.Flags().BoolVar(&initJSON, "json", false, "output RAMP report in JSON format")
 
 	return initCmd
 }

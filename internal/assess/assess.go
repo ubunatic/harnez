@@ -70,6 +70,7 @@ type AssessmentReport struct {
 	Warnings        []string          `json:"warnings"`
 	CodeToTestRatio float64           `json:"code_to_test_ratio,omitempty"`
 	CodeToDocRatio  float64           `json:"code_to_doc_ratio,omitempty"`
+	RAMP            *RAMPProfile      `json:"ramp,omitempty"`
 }
 
 // EstimateTokens calculates an approximate token count based on character length.
@@ -122,7 +123,7 @@ func InspectFile(path, relPath string) (*FileMetrics, error) {
 	}
 
 	ext := strings.ToLower(filepath.Ext(path))
-	if defaultIgnoredExts[ext] {
+	if defaultIgnoredExts[ext] || fi.Size() > 10*1024*1024 {
 		return nil, nil
 	}
 
@@ -396,6 +397,8 @@ func AssessPath(targetPath string) (*AssessmentReport, error) {
 		report.Feasibility = "Attention Needed"
 		report.FeasibilityDesc = "elevated maintenance risks or token density"
 	}
+
+	report.RAMP, _ = AssessRAMP(absTarget)
 
 	return report, nil
 }

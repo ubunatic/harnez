@@ -58,3 +58,41 @@ func TestInitCmd_Quota1Flag(t *testing.T) {
 		t.Errorf("flag default = %q, want false", f.DefValue)
 	}
 }
+
+func TestInitCmd_RAMPReport(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0644)
+
+	cmd := newInitCmd()
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"-d", dir, "--ramp"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("expected init --ramp to succeed, got: %v", err)
+	}
+
+	// Read-only check: AGENTS.md must NOT have been written
+	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Errorf("init --ramp should be read-only and not create AGENTS.md")
+	}
+}
+
+func TestInitCmd_RAMPJSON(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0644)
+
+	cmd := newInitCmd()
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"-d", dir, "--ramp", "--json"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("expected init --ramp --json to succeed, got: %v", err)
+	}
+}
+

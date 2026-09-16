@@ -52,10 +52,15 @@ func RenderText(report *AssessmentReport) string {
 	}
 
 	b.WriteString("────────────────────────────────────────────────────────────────────────\n")
+	if report.RAMP != nil {
+		b.WriteString(fmt.Sprintf("RAMP Level:   %s (%s) [Baseline: %s, Projected: %s]\n",
+			report.RAMP.BaselineLevel, LevelDescription(report.RAMP.BaselineLevel),
+			report.RAMP.BaselineLevel, report.RAMP.ProjectedLevel))
+	}
 	if report.FeasibilityDesc != "" {
-		b.WriteString(fmt.Sprintf("Feasibility: %s (%s)\n", report.Feasibility, report.FeasibilityDesc))
+		b.WriteString(fmt.Sprintf("Feasibility:  %s (%s)\n", report.Feasibility, report.FeasibilityDesc))
 	} else {
-		b.WriteString(fmt.Sprintf("Feasibility: %s\n", report.Feasibility))
+		b.WriteString(fmt.Sprintf("Feasibility:  %s\n", report.Feasibility))
 	}
 
 	b.WriteString("Warnings:\n")

@@ -558,6 +558,24 @@ func ValidateInitTarget(dir string, force bool) error {
 	return nil
 }
 
+// ProjectedInitFiles returns the list of repository-relative paths that harnez init would create or reconcile.
+func ProjectedInitFiles(dir string, cfg *Config, docs []string) []string {
+	var files []string
+	files = append(files, "AGENTS.md", "CLAUDE.md")
+	if cfg != nil {
+		allDocs := append([]string(nil), docs...)
+		allDocs = append(allDocs, existingLangDocs(filepath.Join(dir, "AGENTS.md"), cfg)...)
+		allDocs = append(allDocs, autoDetectDocs(dir, cfg, allDocs)...)
+		allDocs, _ = resolveDocDependencies(cfg, allDocs)
+		for _, name := range allDocs {
+			if lang, ok := cfg.AgentsMD.Languages[name]; ok && lang.Local != "" {
+				files = append(files, lang.Local)
+			}
+		}
+	}
+	return files
+}
+
 // RunInit creates AGENTS.md and CLAUDE.md symlink in a project directory,
 // applies config-defined local sections, and sets up language docs and Makefile targets.
 func RunInit(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool) error {
