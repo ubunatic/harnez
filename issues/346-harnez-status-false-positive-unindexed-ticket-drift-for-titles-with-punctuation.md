@@ -1,6 +1,6 @@
 # 346 — `harnez status` false-positive "unindexed ticket" drift for titles with punctuation
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
