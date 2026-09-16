@@ -1,6 +1,6 @@
 # 376 — Multi-track git history evolution sparks across code, tests, docs, skills, and issues
 
-**Status**: Open  
+**Status**: In Progress
 **Priority**: P2 (Medium)  
 **Severity**: Minor  
 **Category**: Feature  
