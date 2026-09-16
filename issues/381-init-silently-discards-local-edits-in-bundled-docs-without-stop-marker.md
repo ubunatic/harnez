@@ -1,6 +1,6 @@
 # 381 — init silently discards local edits in bundled docs without stop marker
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
