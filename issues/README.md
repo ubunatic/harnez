@@ -367,3 +367,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 366 | [366-automated-doc-compression-command-skill-with-llm-canary-evaluation-loop.md](366-automated-doc-compression-command-skill-with-llm-canary-evaluation-loop.md) | Automated doc compression command/skill with LLM canary evaluation loop | Open |
 | 367 | [367-harnez-find-issues-status-open-returns-truncated-incomplete-results.md](367-harnez-find-issues-status-open-returns-truncated-incomplete-results.md) | harnez find issues status:open returns truncated/incomplete results | Open |
 | 368 | [368-report-ramp-evidence-and-projected-changes-from-harnez-init.md](368-report-ramp-evidence-and-projected-changes-from-harnez-init.md) | Report RAMP evidence and projected changes from harnez init | Open |
+| 369 | [369-detect-go-library-cli-and-tui-shape-for-init-guidance.md](369-detect-go-library-cli-and-tui-shape-for-init-guidance.md) | Detect Go library CLI and TUI shape for init guidance | Open |
