@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/agy"
 )
 
 type Config struct {
@@ -32,6 +33,7 @@ type Config struct {
 	AgyHooksTarget     string               `yaml:"agy_hooks_target"`
 	ClaudeSkillsTarget string               `yaml:"claude_skills_target"`
 	PrimeAgentTarget   string               `yaml:"prime_agent_target"`
+	AgyTarget          string               `yaml:"agy_target"`
 	AgentsMD           AgentsMD             `yaml:"agents_md"`
 	Make               MakeConfig           `yaml:"make"`
 	Feedback           FeedbackConfig       `yaml:"feedback"`
@@ -56,6 +58,8 @@ type DebloatConfig struct {
 	// CodexFeatures are the only Codex [features] keys managed by either
 	// debloat preset. Unlisted Codex settings remain untouched.
 	CodexFeatures map[string]bool `yaml:"codex_features"`
+	// Agy contains Antigravity tool lists for debloat presets (issue 372).
+	Agy agy.DebloatConfig `yaml:"agy"`
 	// PresetDisableBundledSkills disables Claude Code's bundled skill
 	// catalogue under any selected preset while leaving user/project skills.
 	PresetDisableBundledSkills bool `yaml:"preset_disable_bundled_skills"`

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"ubunatic.com/harnez/internal/agy"
 	"ubunatic.com/harnez/internal/jsonc"
 )
 
@@ -169,6 +170,10 @@ func writeDebloatRecord(target string, rec debloatRecord) error {
 // records prior values for the keys it touches for the first time so
 // RevertDebloat can restore them exactly.
 func ApplyDebloat(target string, cfg DebloatConfig, opts DebloatOptions) error {
+	if agy.IsAgyTarget(target) {
+		_, err := agy.ApplyDebloat(target, cfg.Agy, opts.Preset)
+		return err
+	}
 	deny, err := opts.denyList(cfg)
 	if err != nil {
 		return err
@@ -264,6 +269,16 @@ func ApplyDebloat(target string, cfg DebloatConfig, opts DebloatOptions) error {
 // record. Keys/entries that pre-existed before harnez touched them, or that
 // harnez never touched, are left untouched.
 func RevertDebloat(target string) error {
+	if agy.IsAgyTarget(target) {
+		reverted, err := agy.RevertDebloat(target)
+		if err != nil {
+			return err
+		}
+		if !reverted {
+			return fmt.Errorf("no debloat record found at %s (nothing to revert)", target)
+		}
+		return nil
+	}
 	recordPath := debloatRecordPath(target)
 	if _, err := os.Stat(recordPath); os.IsNotExist(err) {
 		return fmt.Errorf("no debloat record found at %s (nothing to revert)", recordPath)
@@ -341,6 +356,9 @@ func RevertDebloat(target string) error {
 // boolean toggles for <target>/settings.json, naming the file explicitly and
 // noting that it is a global, all-projects setting.
 func StatusDebloat(target string, cfg DebloatConfig) error {
+	if agy.IsAgyTarget(target) {
+		return agy.StatusDebloat(target, cfg.Agy)
+	}
 	settingsPath := filepath.Join(target, "settings.json")
 	settings := jsonc.Read(settingsPath)
 	rec := readDebloatRecord(target)

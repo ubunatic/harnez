@@ -75,6 +75,17 @@ debloat:
   codex_features:
     apps: false
     plugins: false
+  # Antigravity target debloat definitions (issue 372).
+  agy:
+    minimal_deny:
+      - schedule
+      - generate_image
+      - ask_question
+    aggressive_extra_deny:
+      - read_url_content
+      - search_web
+      - define_subagent
+      - manage_subagents
   # Disable Claude Code's bundled skill catalogue under every preset. Real
   # server usage measured a 2,120-token (5.5%) input saving while preserving
   # user/project skills; add lean harnez replacements only for demonstrated
@@ -286,6 +297,7 @@ codex_hooks_target: ~/.codex/config.toml
 agy_hooks_target: ~/.gemini/config/hooks.json
 claude_skills_target: ~/.claude/skills
 prime_agent_target: ~/.prime/agent
+agy_target: ~/.gemini/antigravity-cli
 
 skills:
   - name: docup

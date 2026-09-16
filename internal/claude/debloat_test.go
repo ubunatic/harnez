@@ -33,6 +33,18 @@ func TestDebloatCodexFeatureMembershipFromEmbeddedSpec(t *testing.T) {
 	}
 }
 
+func TestDebloatAgyMembershipFromEmbeddedSpec(t *testing.T) {
+	agyCfg := testDebloatConfig(t).Agy
+	wantMinimal := []string{"schedule", "generate_image", "ask_question"}
+	if !reflect.DeepEqual(agyCfg.MinimalDeny, wantMinimal) {
+		t.Fatalf("Agy minimal deny = %v, want %v", agyCfg.MinimalDeny, wantMinimal)
+	}
+	wantAggressive := []string{"read_url_content", "search_web", "define_subagent", "manage_subagents"}
+	if !reflect.DeepEqual(agyCfg.AggressiveExtraDeny, wantAggressive) {
+		t.Fatalf("Agy aggressive deny = %v, want %v", agyCfg.AggressiveExtraDeny, wantAggressive)
+	}
+}
+
 func readSettings(t *testing.T, dir string) map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(dir, "settings.json"))

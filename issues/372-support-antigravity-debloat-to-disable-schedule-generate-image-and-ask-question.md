@@ -1,6 +1,6 @@
 # 372 — Support Antigravity debloat to disable schedule, generate_image, and ask_question
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P1 (High)
 **Severity**: Minor
 **Category**: Feature
@@ -55,8 +55,8 @@ Antigravity CLI configuration lives in `~/.gemini/antigravity-cli/settings.json`
 
 ## Acceptance Criteria
 
-- [ ] `config.yaml` debloat spec extended with `agy` tool presets (`schedule`, `generate_image`, `ask_question`).
-- [ ] Go debloat implementation handles Antigravity settings path and JSON schema.
-- [ ] Sidecar recording (`.harnez-debloat.json`) ensures atomic reverts.
-- [ ] `harnez status --debloat` reports AGY debloat status accurately.
-- [ ] Unit tests cover AGY debloat apply, merge, status, and revert flows.
+- [x] `config.yaml` debloat spec extended with `agy` tool presets (`schedule`, `generate_image`, `ask_question`).
+- [x] Go debloat implementation handles Antigravity settings path and JSON schema.
+- [x] Sidecar recording (`.harnez-debloat.json`) ensures atomic reverts.
+- [x] `harnez status --debloat` reports AGY debloat status accurately.
+- [x] Unit tests cover AGY debloat apply, merge, status, and revert flows.

@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/agy"
 	"ubunatic.com/harnez/internal/assess"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/codex"
@@ -461,6 +462,7 @@ func main() {
 	var debloatDisableClaudeAiConnectors bool
 	var debloatDisableArtifact bool
 	var codexTarget string
+	var agyTarget string
 	apply := &cobra.Command{
 		Use:   "apply",
 		Short: "Apply config.yaml to global Claude Code and agent harness directories",
@@ -471,6 +473,9 @@ func main() {
 			}
 			if codexTarget != "" {
 				cfg.CodexHooksTarget = codexTarget
+			}
+			if agyTarget != "" {
+				cfg.AgyTarget = agyTarget
 			}
 			if (debloat || debloatPreset != "") && len(cfg.Debloat.CodexFeatures) > 0 && cfg.CodexHooksTarget == "" {
 				return fmt.Errorf("codex_hooks_target is required for Codex debloat")
@@ -498,6 +503,13 @@ func main() {
 				opts.Preset = debloatPreset
 			}
 			if opts.Requested() {
+				if agy.IsAgyTarget(t) {
+					fmt.Printf("Applying Antigravity debloat (preset=%q) → %s\n", opts.Preset, filepath.Join(t, "settings.json"))
+					if _, err := agy.ApplyDebloat(t, cfg.Debloat.Agy, opts.Preset); err != nil {
+						return err
+					}
+					return nil
+				}
 				fmt.Printf("Applying debloat (preset=%q) → %s\n", opts.Preset, filepath.Join(t, "settings.json"))
 				if err := claude.ApplyDebloat(t, cfg.Debloat, opts); err != nil {
 					return err
@@ -509,6 +521,13 @@ func main() {
 						return err
 					}
 				}
+				if opts.Preset != "" && cfg.AgyTarget != "" {
+					agyPath := fsutil.ExpandHome(cfg.AgyTarget)
+					fmt.Printf("Applying Antigravity debloat → %s\n", filepath.Join(agyPath, "settings.json"))
+					if _, err := agy.ApplyDebloat(agyPath, cfg.Debloat.Agy, opts.Preset); err != nil {
+						return err
+					}
+				}
 				return nil
 			}
 			return nil
@@ -517,6 +536,7 @@ func main() {
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	apply.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 	apply.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
+	apply.Flags().StringVar(&agyTarget, "agy-target", "", "Antigravity config directory (default: agy_target from config.yaml)")
 	apply.Flags().StringSliceVarP(&applyDocs, "docs", "d", nil, "doc(s) to install globally, comma-separated or repeated (e.g. golang,canary)")
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing docs with bundled versions")
 	apply.Flags().StringVar(&applyVariant, "variant", "full", "doc variant to install: lite or full (docs without a lite variant fall back to full)")
@@ -525,7 +545,7 @@ func main() {
 	apply.Flags().BoolVarP(&applyShell, "shell", "s", false,
 		"inject harnez environment source into ~/.bashrc and ~/.zshrc")
 	apply.Flags().BoolVar(&debloat, "debloat", false,
-		"apply the minimal Claude and Codex context-saving preset from config.yaml")
+		"apply the minimal Claude, Codex, and Antigravity context-saving preset from config.yaml")
 	apply.Flags().StringVar(&debloatPreset, "debloat-preset", "",
 		`debloat preset: "minimal" (default) or "aggressive"; both disable bundled skills`)
 	apply.Flags().BoolVar(&debloatNotebookEdit, "debloat-notebook-edit", false, "also deny NotebookEdit")
@@ -631,13 +651,26 @@ func main() {
 			if codexTarget != "" {
 				cfg.CodexHooksTarget = codexTarget
 			}
+			if agyTarget != "" {
+				cfg.AgyTarget = agyTarget
+			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			if statusDebloat {
+				if agy.IsAgyTarget(t) {
+					return agy.StatusDebloat(t, cfg.Debloat.Agy)
+				}
 				if err := claude.StatusDebloat(t, cfg.Debloat); err != nil {
 					return err
 				}
 				if cfg.CodexHooksTarget != "" {
-					return codex.StatusDebloat(fsutil.ExpandHome(cfg.CodexHooksTarget), cfg.Debloat.CodexFeatures)
+					if err := codex.StatusDebloat(fsutil.ExpandHome(cfg.CodexHooksTarget), cfg.Debloat.CodexFeatures); err != nil {
+						return err
+					}
+				}
+				if cfg.AgyTarget != "" {
+					if err := agy.StatusDebloat(fsutil.ExpandHome(cfg.AgyTarget), cfg.Debloat.Agy); err != nil {
+						return err
+					}
 				}
 				return nil
 			}
@@ -647,6 +680,7 @@ func main() {
 	status.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	status.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 	status.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
+	status.Flags().StringVar(&agyTarget, "agy-target", "", "Antigravity config directory (default: agy_target from config.yaml)")
 	status.Flags().BoolVar(&statusDebloat, "debloat", false, "show debloat-managed deny entries and toggles instead of full status (issue 316)")
 
 	var revertDebloat bool
@@ -662,9 +696,23 @@ func main() {
 			if codexTarget != "" {
 				cfg.CodexHooksTarget = codexTarget
 			}
+			if agyTarget != "" {
+				cfg.AgyTarget = agyTarget
+			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			if !revertDebloat {
 				return fmt.Errorf("revert requires --debloat")
+			}
+			if agy.IsAgyTarget(t) {
+				reverted, err := agy.RevertDebloat(t)
+				if err != nil {
+					return err
+				}
+				if !reverted {
+					return fmt.Errorf("no debloat record found at %s (nothing to revert)", t)
+				}
+				fmt.Printf("Reverted Antigravity debloat changes in %s\n", filepath.Join(t, "settings.json"))
+				return nil
 			}
 			claudeRecord := filepath.Join(t, ".harnez-debloat.json")
 			claudeReverted := false
@@ -688,7 +736,19 @@ func main() {
 					fmt.Printf("Reverted Codex debloat changes in %s\n", codexPath)
 				}
 			}
-			if !claudeReverted && !codexReverted {
+			agyReverted := false
+			if cfg.AgyTarget != "" {
+				agyPath := fsutil.ExpandHome(cfg.AgyTarget)
+				var err error
+				agyReverted, err = agy.RevertDebloat(agyPath)
+				if err != nil {
+					return err
+				}
+				if agyReverted {
+					fmt.Printf("Reverted Antigravity debloat changes in %s\n", filepath.Join(agyPath, "settings.json"))
+				}
+			}
+			if !claudeReverted && !codexReverted && !agyReverted {
 				return fmt.Errorf("no debloat record found")
 			}
 			if claudeReverted {
@@ -700,7 +760,8 @@ func main() {
 	revert.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	revert.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 	revert.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
-	revert.Flags().BoolVar(&revertDebloat, "debloat", false, "restore Claude and Codex settings to their pre-debloat state")
+	revert.Flags().StringVar(&agyTarget, "agy-target", "", "Antigravity config directory (default: agy_target from config.yaml)")
+	revert.Flags().BoolVar(&revertDebloat, "debloat", false, "restore Claude, Codex, and Antigravity settings to their pre-debloat state")
 
 	var assessJSON bool
 	assessCmd := &cobra.Command{
