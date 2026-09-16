@@ -101,6 +101,40 @@ func TestIssuesTablePipeInTitleRoundTripsThroughLint(t *testing.T) {
 	}
 }
 
+// TestIssuesTablePunctuationInTitleRoundTripsThroughLint covers issue 346: a
+// ticket title containing colons, parens, and slashes must round-trip cleanly
+// between IssuesTable and issues.Lint without producing false-positive
+// unindexed file diagnostics or broken links.
+func TestIssuesTablePunctuationInTitleRoundTripsThroughLint(t *testing.T) {
+	dir := t.TempDir()
+	ticketPath := filepath.Join(dir, "040-treemap-theming-theme-1-current-vs-theme-2-quad-halfblock-sub-cell-rendering.md")
+	ticketContent := `# 040 — Treemap theming: theme 1 (current) vs. theme 2 (quad/halfblock sub-cell rendering)
+
+**Status**: Closed — shipped as ` + "`TreemapThemeNumbered`" + ` (thin seven-eighths edges + a corner number on every box), --theme 1|2, tests, verified. Superseded two earlier designs after live visual review; see §7.
+**Priority**: P3 (Low)
+
+---
+
+## 1. Problem
+`
+	writeFile(t, ticketPath, ticketContent)
+
+	table, err := IssuesTable(dir)
+	if err != nil {
+		t.Fatalf("IssuesTable: %v", err)
+	}
+
+	writeFile(t, filepath.Join(dir, "README.md"), "# Issues\n\n"+table)
+
+	report, err := issues.Lint(dir)
+	if err != nil {
+		t.Fatalf("Lint: %v", err)
+	}
+	if len(report.Diagnostics) != 0 {
+		t.Errorf("expected 0 diagnostics for punctuation-in-title round trip, got %d: %+v", len(report.Diagnostics), report.Diagnostics)
+	}
+}
+
 func TestUpdateIssuesReadmeIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	issuesDir := filepath.Join(dir, "issues")

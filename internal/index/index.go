@@ -61,8 +61,6 @@ func unlockReadme(f *os.File) {
 	_ = f.Close()
 }
 
-var issueNumTitlePrefix = regexp.MustCompile(`^\d{3}\s*[—-]\s*`)
-
 // IssuesTable renders the full issues/README.md table (header row,
 // separator row, and one row per ticket) from the tickets found under
 // issuesDir and issuesDir/archive.
@@ -76,9 +74,9 @@ func IssuesTable(issuesDir string) (string, error) {
 	b.WriteString("| # | File | Title | Status |\n")
 	b.WriteString("|---|------|-------|--------|\n")
 	for _, f := range files {
-		title := issueNumTitlePrefix.ReplaceAllString(f.Title, "")
+		title := issues.StripTicketNumber(f.Title)
 		title = strings.ReplaceAll(title, "|", `\|`)
-		status := f.RawStatus
+		status := strings.ReplaceAll(f.RawStatus, "|", `\|`)
 		if status == "" {
 			status = "Unknown"
 		}

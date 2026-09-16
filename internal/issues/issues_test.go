@@ -131,6 +131,8 @@ func TestStripTicketNumber(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"158 — Add a `harnez find` command", "Add a `harnez find` command"},
 		{"036 - Issues Tracker Status Linter", "Issues Tracker Status Linter"},
+		{"040 — Treemap theming: theme 1 (current) vs. theme 2 (quad/halfblock sub-cell rendering)", "Treemap theming: theme 1 (current) vs. theme 2 (quad/halfblock sub-cell rendering)"},
+		{"042: Example", "Example"},
 		{"No leading number", "No leading number"},
 	}
 	for _, tt := range tests {
@@ -254,6 +256,36 @@ func TestParseTrackerTable_EscapedPipeInTitle(t *testing.T) {
 	}
 	if row.Status != "Closed" {
 		t.Errorf("expected status Closed, got %q", row.Status)
+	}
+}
+
+// TestParseTrackerTable_PunctuationInTitle covers issue 346: ticket titles and
+// status strings containing colons, parens, and slashes must parse cleanly
+// without disrupting table rows or file matching.
+func TestParseTrackerTable_PunctuationInTitle(t *testing.T) {
+	readme := `| # | File | Title | Status |
+|---|------|-------|--------|
+| 040 | [040-treemap-theming-theme-1-current-vs-theme-2-quad-halfblock-sub-cell-rendering.md](040-treemap-theming-theme-1-current-vs-theme-2-quad-halfblock-sub-cell-rendering.md) | Treemap theming: theme 1 (current) vs. theme 2 (quad/halfblock sub-cell rendering) | Closed — shipped as ` + "`TreemapThemeNumbered`" + ` (thin seven-eighths edges + a corner number on every box), --theme 1\|2, tests, verified. Superseded two earlier designs after live visual review; see §7. |
+`
+	rows, err := ParseTrackerTable(readme)
+	if err != nil {
+		t.Fatalf("ParseTrackerTable unexpected error: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d: %+v", len(rows), rows)
+	}
+	row := rows[0]
+	if row.Number != "040" {
+		t.Errorf("expected number 040, got %q", row.Number)
+	}
+	if row.LinkTarget != "040-treemap-theming-theme-1-current-vs-theme-2-quad-halfblock-sub-cell-rendering.md" {
+		t.Errorf("unexpected LinkTarget: %q", row.LinkTarget)
+	}
+	if row.Title != "Treemap theming: theme 1 (current) vs. theme 2 (quad/halfblock sub-cell rendering)" {
+		t.Errorf("unexpected Title: %q", row.Title)
+	}
+	if row.Canonical != StatusClosed {
+		t.Errorf("expected StatusClosed, got %v", row.Canonical)
 	}
 }
 
