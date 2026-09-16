@@ -29,7 +29,7 @@ result unless the user explicitly asked to wait.
 
 ### Step 1 — Check open issues
 
-- Run `harnez find -d <repo> issues status:open` to enumerate the active backlog.
+- Run `harnez find -d <repo> issues -a status:open` to enumerate the active backlog.
 - Read each open ticket's file. Most tickets carry an appended `## Implementation Plan` section
   from a prior planning pass — if present, use it for scope, dependencies, and blockers rather
   than re-deriving them from scratch. Fall back to the ticket's own problem statement and

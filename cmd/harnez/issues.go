@@ -200,7 +200,7 @@ valid, exit-0 answer.`,
 				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
 					return fmt.Errorf("issues list: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
 				}
-				return runIssuesList(cmd.OutOrStdout(), dir, args[1:], jsonFlag, limitFlag, allFlag)
+				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, args[1:], jsonFlag, limitFlag, allFlag)
 			}
 			opts := issuesRunOptions{
 				Dir:       dir,
@@ -255,12 +255,12 @@ valid, exit-0 answer.`,
 // commands never drift on ranking/filtering semantics. Defaults to the
 // "is:open" filter when no filter text is given; an explicit filter always
 // replaces the default rather than being ANDed with it.
-func runIssuesList(w io.Writer, dir string, filterArgs []string, jsonOutput bool, limit int, all bool) error {
+func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutput bool, limit int, all bool) error {
 	filter := strings.TrimSpace(strings.Join(filterArgs, " "))
 	if filter == "" {
 		filter = "is:open"
 	}
-	return runFindWithOptions(w, dir, []string{"issues", filter}, false, jsonOutput, "", limit, all)
+	return runFindWithOptions(w, errW, dir, []string{"issues", filter}, false, jsonOutput, "", limit, all)
 }
 
 // composeNewStatus renders the "**Status**:" value a verb+reason pair

@@ -131,7 +131,7 @@ actionable stderr message.`,
 			if limitFlag <= 0 {
 				return fmt.Errorf("find: --limit must be greater than zero")
 			}
-			return runFindWithOptions(cmd.OutOrStdout(), dir, args, nextFlag, jsonFlag, historyProjectFlag, limitFlag, allFlag)
+			return runFindWithOptions(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, args, nextFlag, jsonFlag, historyProjectFlag, limitFlag, allFlag)
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
@@ -232,10 +232,10 @@ func runFind(w io.Writer, dir string, args []string, nextFlag, jsonOutput bool, 
 	if len(args) > 1 && strings.TrimSpace(strings.Join(args[1:], " ")) == "" {
 		return fmt.Errorf("find: query must not be empty")
 	}
-	return runFindWithOptions(w, dir, args, nextFlag, jsonOutput, historyProject, 0, true)
+	return runFindWithOptions(w, io.Discard, dir, args, nextFlag, jsonOutput, historyProject, 0, true)
 }
 
-func runFindWithOptions(w io.Writer, dir string, args []string, nextFlag, jsonOutput bool, historyProject string, limit int, all bool) error {
+func runFindWithOptions(w, errW io.Writer, dir string, args []string, nextFlag, jsonOutput bool, historyProject string, limit int, all bool) error {
 	entity := args[0]
 	if entity != "issues" {
 		return fmt.Errorf("find: unsupported entity %q (only \"issues\" is supported)", entity)
@@ -278,11 +278,18 @@ func runFindWithOptions(w io.Writer, dir string, args []string, nextFlag, jsonOu
 	}
 
 	results := find.Search(files, q)
-	if !all && limit > 0 && len(results) > limit {
+	total := len(results)
+	if !all && limit > 0 && total > limit {
 		if len(q.Groups) == 0 {
-			results = results[len(results)-limit:]
+			results = results[total-limit:]
+			if errW != nil {
+				fmt.Fprintf(errW, "# %d matches, showing last %d (use --all to show all)\n", total, limit)
+			}
 		} else {
 			results = results[:limit]
+			if errW != nil {
+				fmt.Fprintf(errW, "# %d matches, showing top %d (use --all to show all)\n", total, limit)
+			}
 		}
 	}
 	for _, r := range results {

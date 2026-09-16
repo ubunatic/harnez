@@ -124,35 +124,46 @@ func TestRunFind_DefaultListingTakesNewestTen(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	var out bytes.Buffer
-	if err := runFindWithOptions(&out, dir, []string{"issues"}, false, false, "", 10, false); err != nil {
+	var out, errOut bytes.Buffer
+	if err := runFindWithOptions(&out, &errOut, dir, []string{"issues"}, false, false, "", 10, false); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	if len(lines) != 10 || !strings.HasPrefix(lines[0], "003\t") || !strings.HasPrefix(lines[9], "012\t") {
 		t.Fatalf("default listing = %q, want tickets 003 through 012", out.String())
 	}
+	wantNotice := "# 12 matches, showing last 10 (use --all to show all)\n"
+	if errOut.String() != wantNotice {
+		t.Errorf("truncation notice = %q, want %q", errOut.String(), wantNotice)
+	}
 }
 
 func TestRunFind_TextSearchKeepsBestMatches(t *testing.T) {
 	dir := findFixtureDir(t)
-	var out bytes.Buffer
-	if err := runFindWithOptions(&out, dir, []string{"issues", "vram"}, false, false, "", 1, false); err != nil {
+	var out, errOut bytes.Buffer
+	if err := runFindWithOptions(&out, &errOut, dir, []string{"issues", "vram"}, false, false, "", 1, false); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(out.String(), "050\t") {
 		t.Fatalf("ranked limit selected %q, want best title match 050", out.String())
 	}
+	wantNotice := "# 2 matches, showing top 1 (use --all to show all)\n"
+	if errOut.String() != wantNotice {
+		t.Errorf("truncation notice = %q, want %q", errOut.String(), wantNotice)
+	}
 }
 
 func TestRunFind_BareQueryCanBeUncapped(t *testing.T) {
 	dir := findFixtureDir(t)
-	var out bytes.Buffer
-	if err := runFindWithOptions(&out, dir, []string{"issues"}, false, false, "", 1, true); err != nil {
+	var out, errOut bytes.Buffer
+	if err := runFindWithOptions(&out, &errOut, dir, []string{"issues"}, false, false, "", 1, true); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Count(out.String(), "\n"); got != 3 {
 		t.Fatalf("--all output lines = %d, want 3", got)
+	}
+	if errOut.String() != "" {
+		t.Fatalf("expected no truncation notice when --all is set, got %q", errOut.String())
 	}
 }
 

@@ -149,7 +149,7 @@ func TestIssueTrackerDiscoveryConfigEntry(t *testing.T) {
 	var found *MDSection
 	for i := range cfg.AgentsMD.Local.Sections {
 		s := &cfg.AgentsMD.Local.Sections[i]
-		if strings.Contains(s.Content, "harnez find -d <repo> issues status:open") {
+		if strings.Contains(s.Content, "harnez find -d <repo> issues -a status:open") {
 			found = s
 			break
 		}

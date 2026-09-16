@@ -23,7 +23,7 @@ Put project-specific rules outside this block.
 Applies when this project has an `issues/` tracker. To search existing issues,
 compute the next ticket number, or allocate one, use `harnez find` / `harnez issues`
 instead of `ls issues/`, `find`, or raw grep:
-- `harnez find -d <repo> issues status:open` — list active open issues
+- `harnez find -d <repo> issues -a status:open` — list active open issues
 - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text
 - `harnez find -d <repo> issues next` — report the next free ticket number (read-only)
 - `harnez issues new -d <repo> "<title>"` — atomically reserve that number and create
