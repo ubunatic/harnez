@@ -249,12 +249,13 @@ Every ticket in `issues/NNN-kebab-case.md` begins with standard metadata headers
 
 | Command | Flags | What it does |
 |---|---|---|
-| `apply` | `-c` `-t` `-d` `--force-docs` | Sync global Claude, Gemini, Codex, and Prime Agent rules, prompts, skills, and docs |
+| `apply` | `-c` `-t` `-d` `--force-docs` `--debloat` | Sync global Claude, Gemini, Codex, and Prime Agent rules, prompts, skills, and docs |
 | `init` | `-c` `-d` `-f` `--docs` `-m` `--summary` `--update` `--replace` `-y` | Set up a project: AGENTS.md, doc copies, Makefile targets |
 | `diff` | `-c` `-t` `-e` `--capture-docs` `--out` | Preview changes without writing (`-e, --exit-code` exits with 1 on drift; `--capture-docs` writes report to inbox) |
 | `scan-docs` | `-c <dir>` | Read-only scan of child projects for managed doc drift |
 | `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
-| `status` | `-c` `-t` | Print config summary and check which items are present on disk |
+| `status` | `-c` `-t` `--debloat` | Print config summary and check which items are present on disk |
+| `revert` | `--debloat` | Restore Claude and Codex settings recorded before debloat |
 | `assess` | `[path]` `--json` | Fast code/doc metrics, token estimation, and repo feasibility report |
 | `mode` | `[level]` `--status` `--clear` | Switch ConciseMode terseness level and sync AGENTS.local.md overlay |
 | `distill` | `[hook|filter]` | Distill verbose command outputs for agent context conservation |
@@ -269,6 +270,18 @@ All commands accept `-c <path>` (config file, default: embedded).
 - `-t <dir>` — Claude config directory (default: `~/.claude`)
 - `-d, --docs <name>[,<name>…]` — extra doc(s) to install globally (comma-separated or repeated)
 - `--force-docs` — overwrite existing docs with bundled versions
+- `--debloat` — apply the default Claude and Codex context preset from `config.yaml`
+- `--codex-target <path>` — override the Codex `config.toml` target for apply, status, or revert
+
+`debloat.codex_features` in `config.yaml` is the complete Codex debloat list:
+`features.apps=false` and `features.plugins=false`. Unlisted Codex settings are
+outside debloat. Removing a feature from the spec and reapplying restores its
+recorded prior value. `harnez status --debloat` shows current values and
+ownership; `harnez revert --debloat` restores both agents' recorded values.
+The Codex record sits beside `config.toml` as
+`config.toml.harnez-debloat.json`. Disabling Apps and plugins removes their
+integrations; the [Codex context canary](scripts/canary-codex-context/results.md)
+records the measured input-token effect.
 
 `diff` also accepts:
 
