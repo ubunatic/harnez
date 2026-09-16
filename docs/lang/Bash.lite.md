@@ -14,8 +14,8 @@ DO `source f` — readable, greppable (`grep 'source '`), distinct from `./scrip
 DON'T `. f` — dot is lost in whitespace, confusable with paths, ungreppable.
 
 ```bash
-source ~/.bashrc; source "$script_dir/lib.sh"   # ✅
-. ~/.bashrc                                     # ❌
+source ~/.bashrc   # ✅
+. ~/.bashrc        # ❌
 ```
 
 ## 3. Conditionals — TOP RULE: `if test`, never brackets
