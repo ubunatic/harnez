@@ -395,7 +395,7 @@ func installDoc(fsys fs.FS, src, dst string, force bool) (applyResult, error) {
 	if err != nil {
 		return applyResult{}, err
 	}
-	return writeFileIfChanged(dst, markdown.MergeManagedDoc(dst, data))
+	return writeManagedDoc(dst, data)
 }
 
 func buildLangConventions(names []string, cfg *Config) string {

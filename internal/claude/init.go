@@ -47,7 +47,6 @@ const quota1SectionContent = `## Quota-1 Guardrails
 - **Enforced Test Target**: Execute tests via ` + "`make test-q1`" + ` (or ` + "`harnez exec --quota-1 -- <test-cmd>`" + `).
 - **Unauthorized Bypass Forbidden**: Bypassing guardrails via ` + "`QUOTA_BYPASS=1`" + ` or ` + "`HARNEZ_QUOTA_BYPASS=1`" + ` is strictly reserved for human developers and CI environments. Agent loops must not set or pass bypass flags.`
 
-
 const summaryPrompt = `Summarize this project for a coding agent in plain markdown.
 Cover: what it does, the main components and their roles, key conventions, and anything
 important to know before making changes.
@@ -608,7 +607,6 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		withSummary = true
 	}
 
-
 	changes := 0
 
 	if replace {
@@ -693,6 +691,21 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		if err != nil {
 			return err
 		}
+		// Check every selected doc before copying any of them. A markerless
+		// local edit must never be lost halfway through a multi-doc init.
+		for _, name := range docs {
+			lang, ok := cfg.AgentsMD.Languages[name]
+			if !ok || lang.Local == "" {
+				continue
+			}
+			data, err := fs.ReadFile(cfg.FS, lang.SourceFor(variant))
+			if err != nil {
+				return fmt.Errorf("language %s: read source: %w", name, err)
+			}
+			if _, _, err := prepareManagedDoc(localPath(dir, lang.Local), data); err != nil {
+				return fmt.Errorf("language %s: copy: %w", name, err)
+			}
+		}
 
 		// Apply config-defined local AGENTS.md sections (e.g. Language Conventions).
 		if l := cfg.AgentsMD.Local; l.Target != "" {
@@ -745,7 +758,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 				return fmt.Errorf("language %s: read source: %w", name, err)
 			}
 			localDoc := localPath(dir, lang.Local)
-			cr, err := writeFileIfChanged(localDoc, markdown.MergeManagedDoc(localDoc, data))
+			cr, err := writeManagedDoc(localDoc, data)
 			if err != nil {
 				return fmt.Errorf("language %s: copy: %w", name, err)
 			}
@@ -1200,4 +1213,3 @@ func CheckProjectDrift(dir string) []string {
 
 	return warnings
 }
-

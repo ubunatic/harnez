@@ -39,7 +39,7 @@ func TestRunInitWithVariantLiteFallsBackSilentlyForDocsWithoutLiteSource(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(goData) != "# Go full\n" {
+	if !strings.HasPrefix(string(goData), "# Go full\n\n<!-- harnez:stop -->") {
 		t.Fatalf("doc without lite_source did not silently fall back to full content, got:\n%s", goData)
 	}
 	loopData, err := os.ReadFile(filepath.Join(dir, "docs", "AgenticLoop.md"))
@@ -65,6 +65,9 @@ func TestSwitchDocVariantSwapsToLiteAndBack(t *testing.T) {
 		}},
 	}
 	localPath := filepath.Join(repoDir, "docs", "Go.md")
+	if _, err := writeManagedDoc(localPath, []byte("# Go full\n")); err != nil {
+		t.Fatal(err)
+	}
 
 	changed, err := SwitchDocVariant(repoDir, cfg, "go", "lite")
 	if err != nil {
@@ -92,7 +95,7 @@ func TestSwitchDocVariantSwapsToLiteAndBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != "# Go full\n" {
+	if !strings.HasPrefix(string(data), "# Go full\n\n<!-- harnez:stop -->") {
 		t.Fatalf("local doc not restored to full content, got:\n%s", data)
 	}
 }
