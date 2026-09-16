@@ -1,6 +1,6 @@
 # 377 — Project-level token attribution and generative cost-of-change metrics
 
-**Status**: Open  
+**Status**: In Progress
 **Priority**: P2 (Medium)  
 **Severity**: Minor  
 **Category**: Feature  
