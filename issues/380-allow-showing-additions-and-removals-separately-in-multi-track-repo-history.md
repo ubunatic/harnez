@@ -1,6 +1,6 @@
 # 380 — Allow showing additions and removals separately in multi-track repo history
 
-**Status**: In Progress
+**Status**: Closed — resolved in ea751c5
 **Priority**: P2 (Medium)  
 **Severity**: Minor  
 **Category**: Feature  
