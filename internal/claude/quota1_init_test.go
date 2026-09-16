@@ -69,8 +69,8 @@ func TestRunInitWithVariant_Quota1_Scaffolding(t *testing.T) {
 	if !strings.Contains(makeContent, "test-q1:") {
 		t.Errorf("expected test-q1 target in Makefile, got:\n%s", makeContent)
 	}
-	if !strings.Contains(makeContent, "⚙ --quota-1 -- $(MAKE) test") {
-		t.Errorf("expected ⚙ --quota-1 -- $(MAKE) test in Makefile, got:\n%s", makeContent)
+	if !strings.Contains(makeContent, "harnez exec --quota-1 -- $(MAKE) test") {
+		t.Errorf("expected harnez exec --quota-1 -- $(MAKE) test in Makefile, got:\n%s", makeContent)
 	}
 
 	// 5. Idempotency: run again, should succeed without corrupting or duplicating

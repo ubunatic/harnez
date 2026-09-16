@@ -808,7 +808,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		printResult("wrote", agentsPath, r)
 
 		makePath := localPath(dir, "Makefile")
-		targetSnippet := "test-q1: 🤖  # run tests under Quota-1 enforcement\n\t⚙ --quota-1 -- $(MAKE) test\n"
+		targetSnippet := "test-q1: 🤖  # run tests under Quota-1 enforcement\n\tharnez exec --quota-1 -- $(MAKE) test\n"
 		if _, err := os.Stat(makePath); os.IsNotExist(err) {
 			initialMake := fmt.Sprintf(".PHONY: ⚙️ 🤖\n⚙️:\n🤖:\n\n%s", targetSnippet)
 			if err := os.WriteFile(makePath, []byte(initialMake), 0644); err != nil {

@@ -97,3 +97,6 @@ release: check ⚙️  # release the project using harnez
 sync: ⚙️  # push here, pull there, build there, verify
 	git push
 	ssh $(HOST) "cd $(HOST_DIR) && git pull && make install && make status"
+
+test-q1: 🤖  # run tests under Quota-1 enforcement
+	harnez exec --quota-1 -- $(MAKE) test
