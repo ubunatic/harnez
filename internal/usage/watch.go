@@ -389,33 +389,34 @@ type namedWindow struct {
 // Toggled interactively via keypress; see RunWatch. The key for each panel
 // (shown in its own title bar, btop-style) is fixed here.
 type watchSections struct {
-	AllUsage  bool
-	Claude    bool
-	AGY       bool
-	Codex     bool
-	History   bool
-	Processes bool
-	Load      bool
-	Mic       bool
-	Tokens    bool
+	AllUsage   bool
+	Claude     bool
+	AGY        bool
+	Codex      bool
+	History    bool
+	Processes  bool
+	Load       bool
+	Mic        bool
+	Tokens     bool
+	RemoteLoad bool
 }
 
 func defaultWatchSections() watchSections {
 	// Mic starts off like Processes (issue 244): a small opt-in status box
 	// rather than a permanent panel, per issue 085's "keep it minimal by
 	// default" precedent for this kind of box.
-	return watchSections{Claude: true, AGY: true, Codex: true, History: true, Processes: false, Load: true, Mic: false, Tokens: true}
+	return watchSections{Claude: true, AGY: true, Codex: true, History: true, Processes: false, Load: true, Mic: false, Tokens: true, RemoteLoad: true}
 }
 
 func compactWatchSections() watchSections {
-	return watchSections{AllUsage: true, Load: true, Tokens: true}
+	return watchSections{AllUsage: true, Load: true, Tokens: true, RemoteLoad: true}
 }
 
 // agentsOnlyWatchSections shows only the discovered per-agent boxes plus
 // token detail, with History/Load/Processes/AllUsage all off — the
 // "Agents-only" preset from issue 094's proposal section 4.
 func agentsOnlyWatchSections() watchSections {
-	return watchSections{Claude: true, AGY: true, Codex: true, Tokens: true}
+	return watchSections{Claude: true, AGY: true, Codex: true, Tokens: true, RemoteLoad: false}
 }
 
 // watchPresetOrder and watchPresetNames define the fixed cycle order for the
@@ -554,6 +555,8 @@ func dispatchWatchKey(st watchKeyState, key byte, showProcesses bool) (watchKeyS
 				}
 				return st, watchKeyEffect{fetch: true}
 			}
+			st.sec.RemoteLoad = !st.sec.RemoteLoad
+			return st, watchKeyEffect{redraw: true}
 		case "quit":
 			return st, watchKeyEffect{quit: true}
 		}
@@ -1965,6 +1968,9 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	if !sec.AllUsage {
 		hiddenCount++
 	}
+	if opt.RemoteLoadHost != "" && !sec.RemoteLoad {
+		hiddenCount++
+	}
 	hiddenHint := ""
 	if hiddenCount > 0 {
 		hiddenHint = fmt.Sprintf("   %s%d hidden (press ? for controls)\x1b[0m", ansiDimGrey, hiddenCount)
@@ -2079,7 +2085,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	if sec.Mic && micStatus.Available {
 		panels = append(panels, panel{"M", func(w int) wbox { return buildMicBox(w, micStatus) }})
 	}
-	if opt.RemoteLoadHost != "" {
+	if sec.RemoteLoad && opt.RemoteLoadHost != "" {
 		remoteHost, remoteSnap, remoteStreaming := opt.RemoteLoadHost, opt.RemoteLoadSnapshot, opt.RemoteLoadStreaming
 		panels = append(panels, panel{"R", func(w int) wbox { return buildRemoteLoadBox(w, remoteHost, remoteSnap, remoteStreaming) }})
 	}

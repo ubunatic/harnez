@@ -1707,6 +1707,64 @@ func TestDispatchWatchKeyOverlayOpenClose(t *testing.T) {
 	}
 }
 
+func TestDispatchWatchKeyToggleRemote(t *testing.T) {
+	// When configuredHost is empty (e.g. local mode with load.watch_host),
+	// pressing r toggles RemoteLoad section and requests a redraw.
+	stLocal := watchKeyState{sec: defaultWatchSections()}
+	if !stLocal.sec.RemoteLoad {
+		t.Fatalf("expected RemoteLoad to default to true")
+	}
+	stLocal, eff := dispatchWatchKey(stLocal, 'r', false)
+	if stLocal.sec.RemoteLoad || !eff.redraw || eff.fetch {
+		t.Fatalf("expected 'r' to disable RemoteLoad and request redraw, got RemoteLoad=%v eff=%+v", stLocal.sec.RemoteLoad, eff)
+	}
+	stLocal, eff = dispatchWatchKey(stLocal, 'R', false)
+	if !stLocal.sec.RemoteLoad || !eff.redraw || eff.fetch {
+		t.Fatalf("expected 'R' to re-enable RemoteLoad and request redraw, got RemoteLoad=%v eff=%+v", stLocal.sec.RemoteLoad, eff)
+	}
+
+	// When configuredHost is set (e.g. --host or usage.default_host),
+	// pressing r toggles activeHost and requests a fetch.
+	stRemote := watchKeyState{sec: defaultWatchSections(), configuredHost: "remote-worker-1", activeHost: "remote-worker-1"}
+	stRemote, eff = dispatchWatchKey(stRemote, 'r', false)
+	if stRemote.activeHost != "" || !eff.fetch {
+		t.Fatalf("expected 'r' to switch activeHost to empty and request fetch, got activeHost=%q eff=%+v", stRemote.activeHost, eff)
+	}
+	stRemote, eff = dispatchWatchKey(stRemote, 'r', false)
+	if stRemote.activeHost != "remote-worker-1" || !eff.fetch {
+		t.Fatalf("expected 'r' to restore activeHost to remote-worker-1 and request fetch, got activeHost=%q eff=%+v", stRemote.activeHost, eff)
+	}
+}
+
+func TestBuildWatchFrame_RemoteLoadToggle(t *testing.T) {
+	summary := UsageSummary{Timestamp: testTime}
+	sec := defaultWatchSections()
+	opts := WatchOptions{
+		RemoteLoadHost: "phoenix",
+		RemoteLoadSnapshot: &LoadSnapshot{
+			CPU: CPULoad{NumCPU: 8, CPUPercent: 10, CPUPercentOk: true},
+		},
+	}
+
+	// Enabled by default
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, true, "", "", opts)
+	frameText := strings.Join(frame.lines, "\n")
+	if !strings.Contains(frameText, "Remote Load") {
+		t.Fatalf("expected Remote Load box in frame, got:\n%s", frameText)
+	}
+
+	// Toggled off
+	sec.RemoteLoad = false
+	frameDisabled := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, true, "", "", opts)
+	disabledText := strings.Join(frameDisabled.lines, "\n")
+	if strings.Contains(disabledText, "Remote Load") {
+		t.Fatalf("expected Remote Load box to be hidden when sec.RemoteLoad is false, got:\n%s", disabledText)
+	}
+	if !strings.Contains(disabledText, "hidden (press ? for controls)") {
+		t.Fatalf("expected hidden panel count in header, got:\n%s", disabledText)
+	}
+}
+
 func TestDispatchWatchKeyDiagnosticsOverlay(t *testing.T) {
 	state, effect := dispatchWatchKey(watchKeyState{sec: defaultWatchSections()}, 'l', false)
 	if !state.diagnosticsOpen || !effect.redraw {

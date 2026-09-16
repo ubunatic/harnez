@@ -1,7 +1,7 @@
-# TUI Design — Single-Cell Time Indicators
+# TUI Design — Indicators, Panels & Keybinding Invariants
 
 Consult this when adding or changing a timeout gauge, progress/usage bar,
-sparkline, spinner, or other repeatedly redrawn terminal indicator.
+sparkline, spinner, multi-panel grid layout, or raw-mode hotkey dispatcher.
 
 ## Choose the semantic before the glyph
 
@@ -59,6 +59,21 @@ not start at `⣿` or finish at a particular blank glyph.
 - ANSI colors are styling around a frame, never part of its geometry. Apply
   style after padding/positioning; permit foreground-only rendering when no
   background SGR is configured.
+
+## Panel visibility and keybinding invariants
+
+- **Every rendered panel must be backed by the view model**: Never append or render
+  a box directly based on options or configuration alone (e.g. `opt.RemoteLoadHost != ""`).
+  Route all panel drawing through explicit boolean fields in the visibility state
+  (`watchSections.RemoteLoad`). Unconditional rendering bypasses user layout presets
+  (`compact`, `agents-only`), breaks hidden-panel counts, and defeats reset-to-default controls.
+- **Visual hotkey affordance contract**: If a panel title or footer displays a bracketed
+  hotkey badge (e.g. `[R]` in `[R] Remote Load` or `[r]emote` in the footer), pressing
+  that hotkey must never be a silent no-op.
+- **Multi-source fallback dispatch**: When a single hotkey has distinct meanings depending
+  on runtime context (e.g. `r` switching primary `--host` when configured vs. toggling the
+  auxiliary `load.watch_host` panel in local sessions), the key dispatcher must fall back
+  gracefully across all active configurations rather than silently dropping unhandled paths.
 
 ## References
 
