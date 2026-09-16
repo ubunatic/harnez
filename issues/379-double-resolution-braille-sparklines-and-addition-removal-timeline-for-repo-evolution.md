@@ -1,6 +1,6 @@
 # 379 — Double-resolution braille sparklines and addition/removal timeline for repo evolution
 
-**Status**: Open  
+**Status**: In Progress
 **Priority**: P2 (Medium)  
 **Severity**: Minor  
 **Category**: Feature  
