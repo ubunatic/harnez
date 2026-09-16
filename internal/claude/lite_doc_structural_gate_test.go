@@ -66,6 +66,8 @@ func TestLiteDocStructuralGate(t *testing.T) {
 		{"agentic-loop", "../../docs/practices/AgenticLoop.md", "../../docs/practices/AgenticLoop.lite.md"},
 		{"bash", "../../docs/lang/Bash.md", "../../docs/lang/Bash.lite.md"},
 		{"make", "../../docs/lang/Make.md", "../../docs/lang/Make.lite.md"},
+		{"gorelease", "../../docs/practices/GoRelease.md", "../../docs/practices/GoRelease.lite.md"},
+		{"issue-tracking", "../../docs/practices/IssueTracking.md", "../../docs/practices/IssueTracking.lite.md"},
 	}
 	headingRE := regexp.MustCompile(`(?m)^##\s+(.+)$`)
 

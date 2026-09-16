@@ -91,3 +91,52 @@ path anyway; the actual task-specified names are `version-probe.sh` and
 | `Make.lite.md` | `make-widget.task.md` | `Makefile` | PASS |
 | `Make.lite.md` | `make-deploy-parity.task.md` | `Makefile` | PASS |
 | `Make.lite.md` | `make-phony-help.task.md` | `Makefile` | PASS |
+
+## 2026-09-16b — GoRelease.lite.md and IssueTracking.lite.md (NOT lint-validated)
+
+Two new lite docs were authored in the same dense dos/don'ts style:
+`docs/practices/GoRelease.lite.md` and `docs/practices/IssueTracking.lite.md`,
+registered via `lite_source:` on the `gorelease:` and `issue-tracking:` entries
+in `config.yaml` and added to `TestLiteDocStructuralGate`.
+
+**These two docs are deliberately out of scope for this lint-based harness.**
+`internal/lint` only understands Bash/Go/Make/Markdown *syntax* rules. It knows
+nothing about release-process conventions (version.yaml, minisign `-W`,
+`--continue`, GOWORK=off) or ticket-metadata conventions (Status/Priority/
+Severity/Category vocabularies, `harnez find issues next` vs `harnez issues
+new`). A fixture for either doc would pass `internal/lint` trivially — a
+generated `Makefile`, shell script, or Markdown ticket can satisfy every Bash
+and Make rule while ignoring every rule the doc actually teaches. Adding such a
+fixture would report PASS without evidence, which is worse than no fixture.
+
+Validation status for these two docs: **gates below passed; the isolated-agent
+behavioral check did NOT run.**
+
+Passed, mechanically:
+
+- `go build ./...` — clean.
+- `go test ./internal/claude/... -run TestLiteDocStructuralGate -v` — all 5
+  pairs pass, including the two new ones (no full-doc `## ` section left with
+  zero surviving vocabulary).
+- `go test ./...` — full suite green.
+- `./scripts/smoke-test.sh` — all apply/diff/clean/idempotency/drift-repair
+  checks pass with both new `lite_source:` entries present in `config.yaml`.
+
+Not run, and not claimed:
+
+- The manual isolated-agent check (scratch dir outside any harnez project,
+  `claude -p` with only the lite doc as `STYLE.md`, then human inspection of the
+  answer against the full doc) planned for both docs — one ticket-writing task
+  for `IssueTracking.lite.md`, one pre-release question for
+  `GoRelease.lite.md`. The session's shell became unusable partway through
+  (every `Bash` call exited 126 with `(eval):1: permission denied: ⚙`, i.e. the
+  global `PreToolUse` hook `harnez exec hook` could not execute), so no
+  `claude -p` run was possible. No substitute was faked: an in-repo subagent is
+  *not* an isolated proxy, because this repo's own `CLAUDE.md` references
+  `@docs/IssueTracking.md`, which auto-expands the full doc into the subagent's
+  context and destroys exactly the isolation the check depends on.
+
+Follow-up for whoever picks this up: run those two isolated-agent probes once
+the shell is healthy and append the honest result here. Byte counts for the two
+new lite docs were likewise not measured (`wc -c` unavailable); the full docs
+are 12744 B (`GoRelease.md`) and 10563 B (`IssueTracking.md`).
