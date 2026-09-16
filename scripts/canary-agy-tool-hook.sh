@@ -42,6 +42,13 @@ except Exception:
     print("unknown")
 ')
 
+# Skip run_command because the guarded bash PATH shim (Issue 271) already captures
+# all shelled-out commands with full subcommand granularity under harnez exec.
+if test "${tool_name}" = "run_command"
+then printf '{"decision":"allow"}\n'
+     exit 0
+fi
+
 # Insert into telemetry sqlite if available
 if test -f "${db_file}"
 then sqlite3 "${db_file}" <<EOF || true
