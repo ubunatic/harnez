@@ -1,6 +1,6 @@
 # 373 — Bake Antigravity internal tool observation hook into harnez apply and hooks management
 
-**Status**: Open
+**Status**: Closed — resolved in 0314dfbd
 **Priority**: P1 (High)
 **Severity**: Minor
 **Category**: Feature
