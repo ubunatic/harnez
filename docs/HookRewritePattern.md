@@ -111,20 +111,26 @@ in managed agent environments / PATH (`~/.claude/bin/⚙`, `~/go/bin/⚙`, etc.)
 - **Response**: `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": {"command": "harnez exec --tool <tool> -- bash -c '<escaped>'"}}}`.
 - **Config**: Managed via `harnez apply`.
 
-### 2. Google Antigravity (`~/.harnez/shims/bash`)
-- **Mechanism**: Guarded `bash` PATH shim (see [issues/195](../issues/195-agy-path-shim-vs-native-hooks-options-and-tradeoffs.md), [issues/271](../issues/271-decommission-agy-hooks-pretooluse-interception-in-favor-of-guarded-bash-path-shim.md)).
-- **Clean UI & Zero Overwrite Artifacts**: Antigravity's PreToolUse `overwrite.CommandLine` hook mechanism leaks wrapper plumbing (e.g. `Bash(⚙ ...)` or `Bash(harnez exec ...)`) into user-facing chat traces. The quiet PATH shim intercepts `run_command` transparently while preserving native, clean commands in the UI (e.g. `Bash(git status)`).
-- **Recursion Guard**: Uses `HARNEZ_INTERCEPTED=1` to ensure nested subshells (e.g. `bash script.sh` inside an agent command) execute directly via `/bin/bash` without recursive wrapping.
-- **Shim Script** (`mode 0755`):
-  ```sh
-  #!/bin/sh
-  if test "$HARNEZ_INTERCEPTED" = "1"
-  then exec /bin/bash "$@"
-  fi
-  export HARNEZ_INTERCEPTED=1
-  exec harnez exec -- /bin/bash "$@"
-  ```
-- **Config & Activation**: Provisioned and managed by `harnez apply` at `~/.harnez/shims/bash`. Enabled in AGY environments via `PATH="$HOME/.harnez/shims:$PATH"` (e.g. via alias or environment wrapper). Stale `hooks.json` registrations are cleaned up automatically by `harnez apply`.
+### 2. Google Antigravity (`~/.harnez/shims/bash` & `hooks.json`)
+- **Shell Command Interception (Guarded `bash` PATH shim)**:
+  - See [issues/195](../issues/195-agy-path-shim-vs-native-hooks-options-and-tradeoffs.md) and [issues/271](../issues/271-decommission-agy-hooks-pretooluse-interception-in-favor-of-guarded-bash-path-shim.md).
+  - **Clean UI & Zero Overwrite Artifacts**: Antigravity's PreToolUse `overwrite.CommandLine` hook mechanism leaks wrapper plumbing (e.g. `Bash(⚙ ...)` or `Bash(harnez exec ...)`) into user-facing chat traces. The quiet PATH shim intercepts `run_command` transparently while preserving native, clean commands in the UI (e.g. `Bash(git status)`).
+  - **Recursion Guard**: Uses `HARNEZ_INTERCEPTED=1` to ensure nested subshells (e.g. `bash script.sh` inside an agent command) execute directly via `/bin/bash` without recursive wrapping.
+  - **Shim Script** (`~/.harnez/shims/bash`, mode `0755`):
+    ```sh
+    #!/bin/sh
+    if test "$HARNEZ_INTERCEPTED" = "1"
+    then exec /bin/bash "$@"
+    fi
+    export HARNEZ_INTERCEPTED=1
+    exec harnez exec -- /bin/bash "$@"
+    ```
+  - **Activation**: Provisioned by `harnez apply` at `~/.harnez/shims/bash`. Enabled in AGY environments via `PATH="$HOME/.harnez/shims:$PATH"`.
+
+- **Client-Native Tool Observation (`hooks.json` PreToolUse Observer)**:
+  - See [issues/373](../issues/373-bake-antigravity-internal-tool-observation-hook-into-harnez-apply-and-hooks-management.md) and canary at `scripts/canary-agy-tool-hook.sh`.
+  - **The Distinction**: Issue 271 decommissioned `hooks.json` for *command rewriting* because `overwrite.CommandLine` polluted the UI. However, client-internal RPC tools (`schedule`, `generate_image`, `ask_question`, `view_file`, `replace_file_content`, etc.) never invoke bash and are completely invisible to PATH shims.
+  - **Passive Observation**: A read-only `PreToolUse` hook with `matcher: "*"` returns `{"decision": "allow"}` without rewriting commands. This introduces **zero UI artifacts** while seamlessly capturing all host-internal tool calls into `tool_catalog.sqlite` for `harnez stats`.
 
 ---
 
