@@ -45,6 +45,7 @@ boundary or depends on the real environment.
   integration changes may need a real installed binary (`make install`) and a
   live observation such as `harnez usage --watch`. Tests prove invariants;
   they do not prove every terminal or desktop rendering outcome.
+- **Quota-1 enforced checks** — `make test-q1` runs the test suite wrapped in `harnez exec --quota-1 -- make test`. Under Quota-1 guardrails, test execution is gated: running tests consecutively without modifying workspace files is blocked with a non-zero exit code to prevent tight test-retry loops. Note that Quota-1 detects file `mtime` across the repository root; parallel doc/ticket edits in a shared workspace will update repo timestamps and satisfy the check.
 - **Remote-OS CI** — `make macos-ci` dispatches `.github/workflows/macos-hello.yaml`
   on the GitHub mirror's real `macos-14` runner and polls quietly for a
   PASS/FAIL result (no `gh run watch` job-tree spam — safe to call repeatedly
@@ -56,6 +57,7 @@ boundary or depends on the real environment.
 Common entry points:
 
 ```sh
+make test-q1     # run test suite under Quota-1 guardrail enforcement
 make check       # vet plus the complete Go suite
 make smoke       # build plus live smoke checks
 make macos-ci    # trigger + quietly watch real macOS CI on the GitHub mirror
