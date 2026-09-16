@@ -14,6 +14,8 @@ import (
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/assess"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/codex"
+	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/sessionstate"
 	"ubunatic.com/harnez/internal/telemetry"
@@ -458,6 +460,7 @@ func main() {
 	var debloatDisableRemoteControl bool
 	var debloatDisableClaudeAiConnectors bool
 	var debloatDisableArtifact bool
+	var codexTarget string
 	apply := &cobra.Command{
 		Use:   "apply",
 		Short: "Apply config.yaml to global Claude Code and agent harness directories",
@@ -465,6 +468,12 @@ func main() {
 			cfg, name, err := claude.OpenConfig(configPath)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
+			}
+			if codexTarget != "" {
+				cfg.CodexHooksTarget = codexTarget
+			}
+			if (debloat || debloatPreset != "") && len(cfg.Debloat.CodexFeatures) > 0 && cfg.CodexHooksTarget == "" {
+				return fmt.Errorf("codex_hooks_target is required for Codex debloat")
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
@@ -490,13 +499,24 @@ func main() {
 			}
 			if opts.Requested() {
 				fmt.Printf("Applying debloat (preset=%q) → %s\n", opts.Preset, filepath.Join(t, "settings.json"))
-				return claude.ApplyDebloat(t, cfg.Debloat, opts)
+				if err := claude.ApplyDebloat(t, cfg.Debloat, opts); err != nil {
+					return err
+				}
+				if opts.Preset != "" && cfg.CodexHooksTarget != "" {
+					codexPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
+					fmt.Printf("Applying Codex debloat → %s\n", codexPath)
+					if _, err := codex.ApplyDebloat(codexPath, cfg.Debloat.CodexFeatures); err != nil {
+						return err
+					}
+				}
+				return nil
 			}
 			return nil
 		},
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	apply.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
+	apply.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
 	apply.Flags().StringSliceVarP(&applyDocs, "docs", "d", nil, "doc(s) to install globally, comma-separated or repeated (e.g. golang,canary)")
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing docs with bundled versions")
 	apply.Flags().StringVar(&applyVariant, "variant", "full", "doc variant to install: lite or full (docs without a lite variant fall back to full)")
@@ -505,7 +525,7 @@ func main() {
 	apply.Flags().BoolVarP(&applyShell, "shell", "s", false,
 		"inject harnez environment source into ~/.bashrc and ~/.zshrc")
 	apply.Flags().BoolVar(&debloat, "debloat", false,
-		"apply the minimal context-saving preset (deny integration-only tools and disable bundled skills)")
+		"apply the minimal Claude and Codex context-saving preset from config.yaml")
 	apply.Flags().StringVar(&debloatPreset, "debloat-preset", "",
 		`debloat preset: "minimal" (default) or "aggressive"; both disable bundled skills`)
 	apply.Flags().BoolVar(&debloatNotebookEdit, "debloat-notebook-edit", false, "also deny NotebookEdit")
@@ -608,15 +628,25 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
+			if codexTarget != "" {
+				cfg.CodexHooksTarget = codexTarget
+			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			if statusDebloat {
-				return claude.StatusDebloat(t, cfg.Debloat)
+				if err := claude.StatusDebloat(t, cfg.Debloat); err != nil {
+					return err
+				}
+				if cfg.CodexHooksTarget != "" {
+					return codex.StatusDebloat(fsutil.ExpandHome(cfg.CodexHooksTarget), cfg.Debloat.CodexFeatures)
+				}
+				return nil
 			}
 			return claude.RunStatus(name, cfg, t)
 		},
 	}
 	status.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	status.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
+	status.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
 	status.Flags().BoolVar(&statusDebloat, "debloat", false, "show debloat-managed deny entries and toggles instead of full status (issue 316)")
 
 	var revertDebloat bool
@@ -629,20 +659,48 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
+			if codexTarget != "" {
+				cfg.CodexHooksTarget = codexTarget
+			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			if !revertDebloat {
 				return fmt.Errorf("revert requires --debloat")
 			}
-			if err := claude.RevertDebloat(t); err != nil {
+			claudeRecord := filepath.Join(t, ".harnez-debloat.json")
+			claudeReverted := false
+			if _, err := os.Stat(claudeRecord); err == nil {
+				if err := claude.RevertDebloat(t); err != nil {
+					return err
+				}
+				claudeReverted = true
+			} else if !os.IsNotExist(err) {
 				return err
 			}
-			fmt.Printf("Reverted debloat changes in %s\n", filepath.Join(t, "settings.json"))
+			codexReverted := false
+			if cfg.CodexHooksTarget != "" {
+				codexPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
+				var err error
+				codexReverted, err = codex.RevertDebloat(codexPath)
+				if err != nil {
+					return err
+				}
+				if codexReverted {
+					fmt.Printf("Reverted Codex debloat changes in %s\n", codexPath)
+				}
+			}
+			if !claudeReverted && !codexReverted {
+				return fmt.Errorf("no debloat record found")
+			}
+			if claudeReverted {
+				fmt.Printf("Reverted Claude debloat changes in %s\n", filepath.Join(t, "settings.json"))
+			}
 			return nil
 		},
 	}
 	revert.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	revert.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
-	revert.Flags().BoolVar(&revertDebloat, "debloat", false, "restore settings.json to its pre-debloat state (issue 316)")
+	revert.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
+	revert.Flags().BoolVar(&revertDebloat, "debloat", false, "restore Claude and Codex settings to their pre-debloat state")
 
 	var assessJSON bool
 	assessCmd := &cobra.Command{

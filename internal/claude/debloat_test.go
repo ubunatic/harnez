@@ -25,6 +25,14 @@ func testDebloatConfig(t *testing.T) DebloatConfig {
 	return cfg.Debloat
 }
 
+func TestDebloatCodexFeatureMembershipFromEmbeddedSpec(t *testing.T) {
+	features := testDebloatConfig(t).CodexFeatures
+	want := map[string]bool{"apps": false, "plugins": false}
+	if !reflect.DeepEqual(features, want) {
+		t.Fatalf("Codex debloat features = %v, want %v", features, want)
+	}
+}
+
 func readSettings(t *testing.T, dir string) map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(dir, "settings.json"))

@@ -53,6 +53,9 @@ type DecommissionedConfig struct {
 // docs/Spec.md — config.yaml is this project's spec for apply-related
 // settings, the same role spec/*.yaml plays for the usage dashboard).
 type DebloatConfig struct {
+	// CodexFeatures are the only Codex [features] keys managed by either
+	// debloat preset. Unlisted Codex settings remain untouched.
+	CodexFeatures map[string]bool `yaml:"codex_features"`
 	// PresetDisableBundledSkills disables Claude Code's bundled skill
 	// catalogue under any selected preset while leaving user/project skills.
 	PresetDisableBundledSkills bool `yaml:"preset_disable_bundled_skills"`

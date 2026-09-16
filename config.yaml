@@ -65,6 +65,16 @@ make:
 # debloat is the single source of truth for `harnez apply --debloat`'s
 # preset content (issue 316) — do not hardcode these lists in Go.
 debloat:
+  # Codex: only these feature keys belong to either debloat preset. Every
+  # unlisted Codex feature, skill, MCP server, hook, and setting is untouched
+  # by debloat. The target file is set by codex_hooks_target. The Codex
+  # context canary measured first-turn savings of 2,470 tokens for apps and
+  # 1,753 tokens for plugins on Codex CLI 0.154.0. Together they saved
+  # 2,876 tokens (16.4%) in the harnez repo; see
+  # scripts/canary-codex-context/results.md. Both toggles remove capabilities.
+  codex_features:
+    apps: false
+    plugins: false
   # Disable Claude Code's bundled skill catalogue under every preset. Real
   # server usage measured a 2,120-token (5.5%) input saving while preserving
   # user/project skills; add lean harnez replacements only for demonstrated
