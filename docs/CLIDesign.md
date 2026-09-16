@@ -145,7 +145,7 @@ The lock-file rule is local to each clone and leaves the project's shared
 ## apply flow
 
 ```
-harnez apply [-t <dir>] [-d <name>...] [--force-docs]
+harnez apply [-t <dir>] [-d <name>...] [--force-docs] [--debloat] [--codex-target <file>]
         │
         ├── merge managed keys into settings.json
         ├── write ~/.claude/CLAUDE.md managed sections
@@ -153,13 +153,20 @@ harnez apply [-t <dir>] [-d <name>...] [--force-docs]
         ├── write ~/.claude/commands/<name>.md for each command
         ├── write each skill's SKILL.md and declared resources to ~/.gemini/skills/<name>/
         ├── write each skill's SKILL.md and declared resources to ~/.codex/skills/<name>/ when configured
+        ├── merge [hooks.harnez] into Codex config.toml when configured
         ├── write each skill's SKILL.md and declared resources to ~/.claude/skills/<name>/ (real Agent Skills, auto-loaded)
         ├── write ~/.prime/agent/AGENTS.md managed sections
         ├── write ~/.prime/agent/prompts/<name>.md and skills/<name>/SKILL.md
         ├── write agents_md.agents[<id>] managed sections into that agent's own target
         │       (e.g. ~/.codex/AGENTS.md) — skipped if the target's parent dir is absent
-        └── install docs to ~/.claude/docs/ and ~/.prime/agent/docs/
+        ├── install docs to ~/.claude/docs/ and ~/.prime/agent/docs/
+        └── if --debloat: merge the Claude preset and spec-listed Codex features
 ```
+
+Codex config ownership, status, revert, and the exact debloat boundary are
+documented in [CodexSettings.md](CodexSettings.md). `config.yaml`'s
+`debloat.codex_features` lists every Codex feature that debloat manages; an
+unlisted feature is outside that set.
 
 ## Agent-specific instruction profiles (`agents_md.agents`)
 
@@ -200,13 +207,13 @@ committing to a letter.
 
 ## Testing `apply` safely: `-t`/`--target` does not fully isolate it
 
-`-t <dir>` only redirects `settings.json` and the `commands/`/skill-directory writes
-listed in the `apply flow` diagram above. It does **not** redirect the Codex config
-(`~/.codex/config.toml`), the `⚙` binary symlinks (`~/.claude/bin`, `~/go/bin`,
-`~/.local/bin`, `~/.prime/agent/bin`), the bash shim/env script (`~/.harnez/shims`,
-`~/.harnez/env.sh`), or the agent-specific `AGENTS.md` targets — those are hardcoded to
-real `$HOME`-relative paths regardless of `-t`, because `apply` is architecturally
-global (see "Why the separation matters" above). Running `harnez apply -t
+`-t <dir>` redirects the Claude config directory. It does **not** redirect the Codex
+config (`~/.codex/config.toml`); `--codex-target <file>` redirects that file for
+`apply`, `status`, and `revert`. Neither flag redirects the `⚙` binary symlinks
+(`~/.claude/bin`, `~/go/bin`, `~/.local/bin`, `~/.prime/agent/bin`), the bash
+shim/env script (`~/.harnez/shims`, `~/.harnez/env.sh`), or the agent-specific
+`AGENTS.md` targets. Those paths remain global because `apply` is a global
+operation (see "Why the separation matters" above). Running `harnez apply -t
 /tmp/some-test-dir` for a "quick isolated smoke test" still mutates the real, live
 harness install.
 
