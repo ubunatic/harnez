@@ -1,6 +1,6 @@
 # 367 — harnez find issues status:open returns truncated/incomplete results
 
-**Status:** Open
+**Status:** Closed — surface stderr truncation notice when capped and document -a in templates
 
 **Severity:** Major — silently corrupts backlog reconciliation and roadmap planning
 
