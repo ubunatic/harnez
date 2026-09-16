@@ -1,6 +1,6 @@
 # 379 — Double-resolution braille sparklines and addition/removal timeline for repo evolution
 
-**Status**: In Progress
+**Status**: Closed — resolved in bb5a101
 **Priority**: P2 (Medium)  
 **Severity**: Minor  
 **Category**: Feature  
@@ -71,8 +71,8 @@ Issues:  [⣀⣠⣤⣦⣶⣿⣿⣿⣿] 379 tickets (149 open · 230 closed)
 
 ## 4. Acceptance Criteria
 
-- [ ] `internal/assess/` implements 2-samples-per-cell Braille sparkline generation (`0x2800` mapping).
-- [ ] Baseline zero renders as `⣀` (`\u28C0`), not empty whitespace or mid-blocks.
-- [ ] Multi-track evolution charts (`harnez dochistory --tracks`) render 20-sample Braille sparklines across 10-cell width.
-- [ ] Addition/removal color tinting (green for additions, red for removals, yellow for churn) supported when ANSI color is enabled.
-- [ ] Unit tests verify Braille dot math, baseline rendering, and 20-sample resampling.
+- [x] `internal/assess/` implements 2-samples-per-cell Braille sparkline generation (`0x2800` mapping).
+- [x] Baseline zero renders as `⣀` (`\u28C0`), not empty whitespace or mid-blocks.
+- [x] Multi-track evolution charts (`harnez dochistory --tracks`) render 20-sample Braille sparklines across 10-cell width.
+- [x] Addition/removal color tinting (green for additions, red for removals, yellow for churn) supported when ANSI color is enabled.
+- [x] Unit tests verify Braille dot math, baseline rendering, and 20-sample resampling.
