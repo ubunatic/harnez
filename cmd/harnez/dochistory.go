@@ -34,7 +34,7 @@ func newDocHistoryCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "dochistory [files...]",
-		Aliases: []string{"doc-history"},
+		Aliases: []string{"doc-history", "repo-history"},
 		Short:   "Analyze Git document and multi-track repository evolution history",
 		Long: `dochistory analyzes Git history, tracking token evolution,
 metrics, multi-track categories (code, tests, docs, skills, issues), and distributions across commits.
