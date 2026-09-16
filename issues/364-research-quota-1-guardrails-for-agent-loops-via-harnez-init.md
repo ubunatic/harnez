@@ -1,77 +1,80 @@
-# 364 — Research Quota-1 guardrails for agent loops via harnez init
+# 364 — Research Quota-1 (single test run per step) guardrails for LLM loops via harnez init
 
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [docs/practices/AgenticLoop.md](../docs/practices/AgenticLoop.md), [issues/023-usage-command-token-quota-tracking.md](archive/023-usage-command-token-quota-tracking.md), [issues/106-verify-offline-derivability-of-quota-state.md](106-verify-offline-derivability-of-quota-state.md), [issues/293-make-roadmap-synthesis-recoverable-across-quota-interruptions.md](293-make-roadmap-synthesis-recoverable-across-quota-interruptions.md)
+**Related**: [docs/practices/AgenticLoop.md](../docs/practices/AgenticLoop.md), [docs/HookRewritePattern.md](../docs/HookRewritePattern.md), [issues/118-harnez-exec-shell-interceptor.md](118-harnez-exec-shell-interceptor.md), [issues/177-lean-post-edit-build-check-for-control-flow-edits.md](177-lean-post-edit-build-check-for-control-flow-edits.md)
 
 ---
 
 ## 1. Problem & Motivation
 
-Autonomous and semi-autonomous LLM agent loops (such as iterative test-fix runners, multi-step refactoring workflows, subagent orchestrators, and automated sprint execution) frequently run until they hit a hard quota or rate-limit ceiling. 
+In autonomous and iterative LLM agent loops (TDD cycles, bug-fixing, refactoring), models frequently exhibit test-thrashing anti-patterns:
+1. **Multi-Test Spamming**: Running multiple test commands consecutively within a single turn without intermediate code edits or reasoning.
+2. **Broad Test Suite Spam**: Re-running entire test suites (e.g. `go test ./...` or `pytest`) repeatedly instead of executing a single, targeted unit test.
+3. **Flakiness & Context Bloat**: Consuming thousands of tokens on repetitive test outputs in a single turn without forming a fresh hypothesis.
 
-When an agent hits a hard quota boundary mid-turn:
-1. **Uncommitted / Incomplete State**: Changes may be left uncommitted or unindexed without a clean commit checkpoint.
-2. **Zombie Subagents & Background Tasks**: Child processes or scheduled timers remain active or orphaned because the parent agent could not execute its Phase 4 hygiene/cleanup.
-3. **No Graceful Handoff**: The agent fails mid-operation with an unhandled API error rather than creating a resumption marker for the next session.
+The **Quota-1 pattern** enforces a strict execution budget during development loops: **an LLM is permitted at most ONE test run per turn/step**. 
 
-The **Quota-1** design pattern addresses this by maintaining a safety floor (reserving at least 1 turn / unit of quota before exhaustion). When the floor is reached, the agentic loop is proactively halted, allowing the agent to run final cleanups, commit in-progress artifacts, document remaining work, and shut down cleanly before hard exhaustion.
+If the agent attempts to execute a second test within the same step (or before modifying code), the harness intercepts the execution, blocks the redundant run, and reminds the agent to inspect the existing test results, formulate a hypothesis, and make code edits before re-testing.
 
-This research ticket investigates how `harnez init` can scaffold and inject Quota-1 guardrails directly into target repositories.
-
----
-
-## 2. Quota-1 Concept & Failure Modes
-
-### 2.1 The Quota-1 Pattern
-- Instead of running a loop until an HTTP 429 / quota error is thrown, the loop driver or agent harness monitors remaining rate/quota windows (e.g. via `harnez usage` or quota collectors).
-- When remaining capacity hits the threshold (e.g., remaining quota $\le 1$ or below a safety buffer percentage), the loop transitions from **Productive Dispatch** to **Graceful Drain**:
-  - Halts new task/subagent dispatches.
-  - Completes and commits current discrete steps.
-  - Serializes state / resumption checkpoints.
-  - Cleans up background tasks and timers.
-
-### 2.2 Key Failure Modes to Guard Against
-- **Mid-Edit Interruption**: Quota cutoffs during file writes leaving broken syntax or partial edits.
-- **Deadlocked Subagents**: Inability of a parent to receive child responses or send follow-ups.
-- **Lost Context on Re-entry**: Future agents resuming without knowing where the previous agent stopped.
+This ticket researches how `harnez init` can scaffold and enforce Quota-1 guardrails across client repositories.
 
 ---
 
-## 3. Potential Integration Points for `harnez init`
+## 2. Quota-1 Guardrail Architecture & Mechanics
 
-`harnez init` configures project-level scaffolding (`AGENTS.md`, `Makefile`, copyable practice docs). Potential integration mechanisms include:
+### 2.1 Enforcement Points
+- **PreToolUse Hook Interception**:
+  A `PreToolUse` hook (extending `harnez exec hook` or a project-level test wrapper) monitors tool invocations matching test runners (`go test`, `pytest`, `cargo test`, `npm test`, `make test`, `ctest`, etc.).
+- **Step / Turn State Accounting**:
+  - Ephemeral state (in `internal/sessionstate/` or `/tmp/.harnez-step-*` / environment variable) records test executions within the current agent turn.
+  - Test quota resets to 1 whenever a file edit (write/patch) occurs or a new turn begins.
+- **Quota Exceeded Action**:
+  When a second test execution is attempted without an intervening code modification:
+  - The hook rejects the invocation with an actionable diagnostic message:
+    `"Quota-1 Guardrail: Only 1 test run permitted per step. Analyze the prior failure, modify code, and run a targeted test."`
+  - Prevents runaway token consumption and halts infinite test-retry loops.
 
-1. **`AGENTS.md` / `AgenticLoop.md` Invariant Addition**:
-   - Add a canonical invariant (e.g. *Invariant 8: Quota-1 Loop Guardrail*) instructing agents running iterative loops to check quota headroom before starting multi-turn subtasks, and to trigger graceful drain when near quota boundaries.
-2. **Makefile Scaffolding**:
-   - Add pre-flight targets or wrapper recipes (e.g. `make loop-check`, `make agent-preflight`) that query `harnez usage --json` / exit non-zero if quota is insufficient.
-3. **Task & Sprint Tooling Integration**:
-   - Update `/sprint`, `harnez issues`, and autonomous script templates to respect Quota-1 boundaries and emit structured resumption metadata on pause.
-4. **Project Pre-Execution Hooks / Shims**:
-   - Scaffolding project-local scripts or hooks that verify quota availability prior to triggering heavy background agent jobs.
+### 2.2 Promoting Targeted Test Execution
+- Quota-1 can be coupled with targeted test filters (e.g. requiring `-run <TestName>` or specific test file targeting during development loops, reserving full-suite runs for Phase 3 review gates).
 
 ---
 
-## 4. Research Questions & Exploration Scope
+## 3. Integration & Scaffolding via `harnez init`
 
-1. **Telemetry & Query Latency**:
-   - Can `harnez usage` (or the underlying usage storage / cache) provide sub-100ms quota checks suitable for pre-loop evaluation without adding significant overhead?
-2. **Cross-Harness Posture**:
-   - How do Claude Code, Codex, and AGY report quota exhaustion, and can a unified Quota-1 threshold function across all three?
-3. **Scaffolding UX in `harnez init`**:
-   - Should Quota-1 guardrails be default-on in `harnez init` templates (Makefile + AGENTS.md), or opt-in via flags (e.g. `harnez init --guardrails`)?
-4. **Clean Resumption Protocol**:
-   - Define the exact schema for resumption tickets/markers when a Quota-1 drain occurs mid-sprint.
+`harnez init` configures project-level agent environments. Potential scaffolding mechanisms include:
+
+1. **`AGENTS.md` / `AgenticLoop.md` Invariant**:
+   - Add a canonical invariant in Phase 2 (Sequential Development & TDD): *Invariant: Quota-1 Test Discipline — one hypothesis, one targeted test execution per turn*.
+2. **Project Hook Scaffolding**:
+   - Provisioning PreToolUse test interceptor hooks in `settings.json` (Claude Code), `hooks.json` (AGY), or shell wrappers (Codex).
+3. **Makefile Guardrails**:
+   - Scaffolding test runner targets in project `Makefile`s (e.g. `make test-unit`, `make test-single`) that integrate with the Quota-1 state tracker.
+4. **Language-Specific Guidance in `docs/lang/`**:
+   - Updating `docs/lang/Go.md`, `Bash.md`, `Rust.md`, `Cpp.md`, etc., with explicit single-test targeting syntax (e.g. `go test -run TestX ./pkg`).
+
+---
+
+## 4. Research & Design Questions
+
+1. **Turn Boundary & File Edit Detection**:
+   - How can the hook reliably differentiate between a new turn vs. multiple tool calls within the same turn across Claude Code, Google Antigravity, and Codex?
+   - Can file modification timestamps (`fsutil`) or post-edit hooks reset the turn quota cleanly?
+2. **Failure vs. Build/Syntax Checks**:
+   - Distinguishing quick compiler/syntax checks (e.g. `go build`, `tsc --noEmit`) from heavy test runner executions (`go test ./...`).
+3. **Opt-in vs. Default-on Scaffolding**:
+   - Should `harnez init` enable Quota-1 test guardrails by default, or provide a `--quota-1` / `--strict-tdd` opt-in flag?
+4. **Bypass Mechanism**:
+   - How can human developers or Phase 3 review subagents legitimately run full test suites without tripping the single-test limiter?
 
 ---
 
 ## 5. Acceptance Criteria
 
-- [ ] Survey existing quota-monitoring mechanisms in `internal/usage/` and assess suitability for fast loop pre-flight checks.
-- [ ] Define the canonical Quota-1 invariant and draft updates for `docs/practices/AgenticLoop.md`.
-- [ ] Design the `harnez init` scaffolding changes (Makefile targets and `AGENTS.md` rules).
-- [ ] Prototyping & Canary: Test a Quota-1 loop guardrail against a simulated quota exhaustion scenario.
-- [ ] Produce an implementation ticket or PR for incorporating the guardrails into `harnez init`.
+- [ ] Analyze turn/step boundary detection mechanisms across supported agent harnesses.
+- [ ] Prototype a PreToolUse hook interceptor that tracks test runner invocations and enforces a 1-test-per-step limit.
+- [ ] Draft the Quota-1 TDD invariant for `docs/practices/AgenticLoop.md`.
+- [ ] Design the `harnez init` scaffolding integration (hooks, Makefile recipes, `AGENTS.md` rules).
+- [ ] Implement a canary test verifying that a 2nd consecutive test execution is rejected with a clear remediation message.
