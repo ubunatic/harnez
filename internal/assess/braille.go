@@ -17,6 +17,9 @@ type BrailleOptions struct {
 	// Default/no color for flat (v_{i+1} == v_i)
 	Color bool
 
+	// InvertColor swaps green and red tinting (useful for removal sparklines).
+	InvertColor bool
+
 	// FixedRange uses Min and Max instead of calculating min/max from values.
 	FixedRange bool
 	Min        float64
@@ -186,12 +189,17 @@ func RenderBrailleSparkline(values []float64, opts BrailleOptions) string {
 		glyph := BrailleGlyph(lvlLeft, lvlRight)
 
 		if opts.Color {
-			if vRight > vLeft {
+			isUp := vRight > vLeft
+			isDown := vRight < vLeft
+			if opts.InvertColor {
+				isUp, isDown = isDown, isUp
+			}
+			if isUp {
 				// Growth / additions -> Green (\x1b[32m)
 				sb.WriteString("\x1b[32m")
 				sb.WriteRune(glyph)
 				sb.WriteString("\x1b[0m")
-			} else if vRight < vLeft {
+			} else if isDown {
 				// Removals / reduction -> Red (\x1b[31m)
 				sb.WriteString("\x1b[31m")
 				sb.WriteRune(glyph)

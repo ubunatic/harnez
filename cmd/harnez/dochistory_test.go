@@ -273,6 +273,36 @@ func TestRunDocHistory_Tracks(t *testing.T) {
 	if res.TotalCommits != 2 {
 		t.Errorf("TotalCommits = %d; want 2", res.TotalCommits)
 	}
+	for trackType, track := range res.Tracks {
+		if track.AddSparkline == "" || track.RemoveSparkline == "" {
+			t.Errorf("track %s missing add/remove sparkline", trackType)
+		}
+	}
+}
+
+func TestRunDocHistory_Tracks_Diff(t *testing.T) {
+	repoDir := createDocHistoryFixture(t)
+	var out bytes.Buffer
+
+	opts := docHistoryOptions{
+		Dir:     repoDir,
+		Tracks:  true,
+		Diff:    true,
+		Color:   false,
+		NoColor: true,
+	}
+
+	if err := runDocHistory(&out, opts); err != nil {
+		t.Fatalf("runDocHistory --tracks --diff failed: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "Repo Evolution Diffs") {
+		t.Errorf("output missing Repo Evolution Diffs: %s", got)
+	}
+	if !strings.Contains(got, "[+] Adds:") || !strings.Contains(got, "[-] Rms:") || !strings.Contains(got, "[=] Net:") {
+		t.Errorf("output missing diff breakdown sections: %s", got)
+	}
 }
 
 func TestDocHistoryCmd_CobraFlags(t *testing.T) {
@@ -299,10 +329,17 @@ func TestDocHistoryCmd_CobraFlags(t *testing.T) {
 		t.Errorf("missing repo-history alias in %v", cmd.Aliases)
 	}
 
-	flags := []string{"dir", "color", "no-color", "json", "tracks"}
+	flags := []string{"dir", "color", "no-color", "json", "tracks", "diff", "diffs"}
 	for _, f := range flags {
 		if cmd.Flags().Lookup(f) == nil {
 			t.Errorf("missing flag --%s", f)
+		}
+	}
+
+	repoCmd := newRepoHistoryCmd()
+	for _, f := range []string{"dir", "color", "no-color", "json", "diff", "diffs"} {
+		if repoCmd.Flags().Lookup(f) == nil {
+			t.Errorf("repoCmd missing flag --%s", f)
 		}
 	}
 }

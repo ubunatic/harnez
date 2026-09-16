@@ -22,6 +22,7 @@ type docHistoryOptions struct {
 	NoColor bool
 	JSON    bool
 	Tracks  bool
+	Diff    bool
 	Targets []string
 }
 
@@ -31,6 +32,7 @@ func newDocHistoryCmd() *cobra.Command {
 	var noColor bool
 	var jsonOut bool
 	var tracks bool
+	var diff bool
 
 	cmd := &cobra.Command{
 		Use:     "dochistory [files...]",
@@ -42,17 +44,23 @@ metrics, multi-track categories (code, tests, docs, skills, issues), and distrib
 Invocations:
   harnez dochistory                    # Analyze default managed documentation (docs/ and AGENTS.md)
   harnez dochistory --tracks           # Multi-track repository evolution sparks (code, tests, docs, skills, issues)
+  harnez dochistory --tracks --diff    # Expanded additions and removals breakdown table
   harnez dochistory docs/lang/Go.md    # Single-file timeline and token sparkline
   harnez dochistory docs/ issues       # Multi-directory / glob stacked category breakdown
   harnez dochistory --json             # Machine-readable JSON output`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			isTracks := tracks
+			if diff && len(args) == 0 {
+				isTracks = true
+			}
 			return runDocHistory(cmd.OutOrStdout(), docHistoryOptions{
 				Dir:     dir,
 				Color:   color,
 				NoColor: noColor,
 				JSON:    jsonOut,
-				Tracks:  tracks,
+				Tracks:  isTracks,
+				Diff:    diff,
 				Targets: args,
 			})
 		},
@@ -63,6 +71,9 @@ Invocations:
 	cmd.Flags().BoolVar(&noColor, "no-color", false, "disable ANSI color output")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output history in JSON format")
 	cmd.Flags().BoolVar(&tracks, "tracks", false, "analyze multi-track repository evolution (code, tests, docs, skills, issues)")
+	cmd.Flags().BoolVar(&diff, "diff", false, "show additions and removals breakdown in multi-track history")
+	cmd.Flags().BoolVar(&diff, "diffs", false, "alias for --diff")
+	_ = cmd.Flags().MarkHidden("diffs")
 
 	return cmd
 }
@@ -72,6 +83,7 @@ func newRepoHistoryCmd() *cobra.Command {
 	var color bool = true
 	var noColor bool
 	var jsonOut bool
+	var diff bool
 
 	cmd := &cobra.Command{
 		Use:   "repo-history",
@@ -81,6 +93,7 @@ the 5 functional tracks: code, tests, docs, agent skills, and issue tickets.
 
 Invocations:
   harnez repo-history        # Terminal multi-track evolution card
+  harnez repo-history --diff # Expanded additions and removals breakdown table
   harnez repo-history --json # Structured JSON evolution time-series`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -90,6 +103,7 @@ Invocations:
 				NoColor: noColor,
 				JSON:    jsonOut,
 				Tracks:  true,
+				Diff:    diff,
 			})
 		},
 	}
@@ -98,6 +112,9 @@ Invocations:
 	cmd.Flags().BoolVar(&color, "color", true, "enable ANSI color output")
 	cmd.Flags().BoolVar(&noColor, "no-color", false, "disable ANSI color output")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output history in JSON format")
+	cmd.Flags().BoolVar(&diff, "diff", false, "show additions and removals breakdown in multi-track history")
+	cmd.Flags().BoolVar(&diff, "diffs", false, "alias for --diff")
+	_ = cmd.Flags().MarkHidden("diffs")
 
 	return cmd
 }
@@ -135,6 +152,10 @@ func runDocHistory(w io.Writer, opts docHistoryOptions) error {
 				return fmt.Errorf("render json: %w", err)
 			}
 			fmt.Fprintln(w, string(data))
+			return nil
+		}
+		if opts.Diff {
+			fmt.Fprint(w, assess.RenderMultiTrackHistoryTableWithDiffs(res, assess.RenderTracksOptions{Color: useColor}))
 			return nil
 		}
 		fmt.Fprint(w, assess.RenderMultiTrackCard(res, assess.RenderMultiTrackCardOptions{Color: useColor}))

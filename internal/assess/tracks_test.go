@@ -82,18 +82,36 @@ func TestExtractMultiTrackHistoryTempRepo(t *testing.T) {
 	runGit("add", ".")
 	runGit("commit", "-m", "add world")
 
+	// Commit 3: Remove an issue ticket and reduce code LOC
+	runGit("rm", "issues/002-feature.md")
+	_ = os.WriteFile(filepath.Join(tmpDir, "pkg", "lib.go"), []byte("package pkg\nfunc Hello() string { return \"hello\" }\n"), 0644)
+	runGit("add", "-A")
+	runGit("commit", "-m", "prune issue and trim code")
+
 	res, err := ExtractMultiTrackHistory(tmpDir)
 	if err != nil {
 		t.Fatalf("ExtractMultiTrackHistory failed: %v", err)
 	}
 
-	if res.TotalCommits != 2 {
-		t.Errorf("TotalCommits = %d; want 2", res.TotalCommits)
+	if res.TotalCommits != 3 {
+		t.Errorf("TotalCommits = %d; want 3", res.TotalCommits)
 	}
 
 	codeTrack := res.Tracks[TrackCode]
 	if codeTrack == nil || codeTrack.CurrentFiles != 1 {
 		t.Errorf("codeTrack unexpected: %+v", codeTrack)
+	}
+	if codeTrack.TotalAdded <= 0 {
+		t.Errorf("codeTrack.TotalAdded = %d; want > 0", codeTrack.TotalAdded)
+	}
+	if codeTrack.TotalRemoved <= 0 {
+		t.Errorf("codeTrack.TotalRemoved = %d; want > 0", codeTrack.TotalRemoved)
+	}
+	if len(codeTrack.AddedPoints) != 3 || len(codeTrack.RemovedPoints) != 3 {
+		t.Errorf("codeTrack points length unexpected: added=%d, removed=%d", len(codeTrack.AddedPoints), len(codeTrack.RemovedPoints))
+	}
+	if codeTrack.AddSparkline == "" || codeTrack.RemoveSparkline == "" {
+		t.Errorf("codeTrack missing add/remove sparklines")
 	}
 
 	testTrack := res.Tracks[TrackTests]
@@ -112,7 +130,7 @@ func TestExtractMultiTrackHistoryTempRepo(t *testing.T) {
 	}
 
 	issuesTrack := res.Tracks[TrackIssues]
-	if issuesTrack == nil || issuesTrack.CurrentFiles != 2 || issuesTrack.OpenTickets != 1 || issuesTrack.ClosedTickets != 1 {
+	if issuesTrack == nil || issuesTrack.CurrentFiles != 1 || issuesTrack.TotalRemoved != 1 {
 		t.Errorf("issuesTrack unexpected: %+v", issuesTrack)
 	}
 
@@ -122,5 +140,26 @@ func TestExtractMultiTrackHistoryTempRepo(t *testing.T) {
 	}
 	if !strings.Contains(card, "Code:") || !strings.Contains(card, "Tests:") || !strings.Contains(card, "Issues:") {
 		t.Errorf("card missing tracks: %s", card)
+	}
+
+	// Test diff rendering without color
+	diffTable := RenderMultiTrackHistoryTableWithDiffs(res, RenderTracksOptions{Color: false})
+	if !strings.Contains(diffTable, "Repo Evolution Diffs") {
+		t.Errorf("diffTable missing header: %s", diffTable)
+	}
+	if !strings.Contains(diffTable, "[+] Adds:") || !strings.Contains(diffTable, "[-] Rms:") || !strings.Contains(diffTable, "[=] Net:") {
+		t.Errorf("diffTable missing diff sections: %s", diffTable)
+	}
+
+	// Test diff rendering with color
+	diffTableColor := RenderMultiTrackHistoryTableWithDiffs(res, RenderTracksOptions{Color: true})
+	if !strings.Contains(diffTableColor, "\x1b[32m[+]\x1b[0m") || !strings.Contains(diffTableColor, "\x1b[31m[-]\x1b[0m") {
+		t.Errorf("diffTableColor missing ANSI color tags: %s", diffTableColor)
+	}
+
+	// Test RenderMultiTrackCard with Diff: true
+	cardDiff := RenderMultiTrackCard(res, RenderMultiTrackCardOptions{Diff: true})
+	if !strings.Contains(cardDiff, "Repo Evolution Diffs") {
+		t.Errorf("cardDiff missing header: %s", cardDiff)
 	}
 }

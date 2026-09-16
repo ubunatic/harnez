@@ -59,15 +59,21 @@ type TrackPoint struct {
 
 // TrackEvolution contains the time-series points, summary metrics, and sparkline for a single track.
 type TrackEvolution struct {
-	Track         TrackType    `json:"track"`
-	CurrentFiles  int          `json:"current_files"`
-	CurrentLines  int          `json:"current_lines"`
-	CurrentTokens int          `json:"current_tokens"`
-	CurrentBytes  int64        `json:"current_bytes"`
-	OpenTickets   int          `json:"open_tickets,omitempty"`
-	ClosedTickets int          `json:"closed_tickets,omitempty"`
-	Sparkline     string       `json:"sparkline"`
-	Points        []TrackPoint `json:"points"`
+	Track           TrackType    `json:"track"`
+	CurrentFiles    int          `json:"current_files"`
+	CurrentLines    int          `json:"current_lines"`
+	CurrentTokens   int          `json:"current_tokens"`
+	CurrentBytes    int64        `json:"current_bytes"`
+	OpenTickets     int          `json:"open_tickets,omitempty"`
+	ClosedTickets   int          `json:"closed_tickets,omitempty"`
+	TotalAdded      int          `json:"total_added"`
+	TotalRemoved    int          `json:"total_removed"`
+	Sparkline       string       `json:"sparkline"`
+	AddSparkline    string       `json:"add_sparkline,omitempty"`
+	RemoveSparkline string       `json:"remove_sparkline,omitempty"`
+	AddedPoints     []int        `json:"added_points,omitempty"`
+	RemovedPoints   []int        `json:"removed_points,omitempty"`
+	Points          []TrackPoint `json:"points"`
 }
 
 // MultiTrackHistoryResult is the complete multi-track repository evolution report.
@@ -366,29 +372,76 @@ func ExtractMultiTrackHistoryContext(ctx context.Context, repoDir string) (*Mult
 			curClosed = latest.Closed
 		}
 
-		// Sparkline values: for Code/Tests/Docs/Skills use Tokens (or Lines if Tokens 0), for Issues use total tickets / open
-		sparkValues := make([]float64, len(pts))
+		// Primary metric values per track
+		rawValues := make([]int, len(pts))
 		for j, p := range pts {
-			if track == TrackIssues {
-				sparkValues[j] = float64(p.Files)
-			} else if track == TrackCode || track == TrackTests {
-				sparkValues[j] = float64(p.Lines)
-			} else {
-				sparkValues[j] = float64(p.Tokens)
+			switch track {
+			case TrackCode, TrackTests:
+				rawValues[j] = p.Lines
+			case TrackDocs:
+				rawValues[j] = p.Tokens
+			case TrackSkills, TrackIssues:
+				rawValues[j] = p.Files
+			default:
+				rawValues[j] = p.Lines
 			}
 		}
 
+		addedPoints := make([]int, len(pts))
+		removedPoints := make([]int, len(pts))
+		if len(pts) > 0 {
+			addedPoints[0] = rawValues[0]
+			removedPoints[0] = 0
+			for j := 0; j < len(pts)-1; j++ {
+				delta := rawValues[j+1] - rawValues[j]
+				if delta > 0 {
+					addedPoints[j+1] = addedPoints[j] + delta
+					removedPoints[j+1] = removedPoints[j]
+				} else if delta < 0 {
+					addedPoints[j+1] = addedPoints[j]
+					removedPoints[j+1] = removedPoints[j] + (-delta)
+				} else {
+					addedPoints[j+1] = addedPoints[j]
+					removedPoints[j+1] = removedPoints[j]
+				}
+			}
+		}
+
+		var totAdded, totRemoved int
+		if len(pts) > 0 {
+			totAdded = addedPoints[len(pts)-1]
+			totRemoved = removedPoints[len(pts)-1]
+		}
+
+		sparkValues := make([]float64, len(pts))
+		addFloats := make([]float64, len(pts))
+		removeFloats := make([]float64, len(pts))
+		for j := range pts {
+			sparkValues[j] = float64(rawValues[j])
+			addFloats[j] = float64(addedPoints[j])
+			removeFloats[j] = float64(removedPoints[j])
+		}
+
 		spark := RenderBrailleSparkline(sparkValues, BrailleOptions{Width: 10, Color: false})
+		addSpark := RenderBrailleSparkline(addFloats, BrailleOptions{Width: 10, Color: false})
+		removeSpark := RenderBrailleSparkline(removeFloats, BrailleOptions{Width: 10, Color: false, InvertColor: true})
+
 		tracks[track] = &TrackEvolution{
-			Track:         track,
-			CurrentFiles:  curFiles,
-			CurrentLines:  curLines,
-			CurrentTokens: curTokens,
-			CurrentBytes:  curBytes,
-			OpenTickets:   curOpen,
-			ClosedTickets: curClosed,
-			Sparkline:     spark,
-			Points:        pts,
+			Track:           track,
+			CurrentFiles:    curFiles,
+			CurrentLines:    curLines,
+			CurrentTokens:   curTokens,
+			CurrentBytes:    curBytes,
+			OpenTickets:     curOpen,
+			ClosedTickets:   curClosed,
+			TotalAdded:      totAdded,
+			TotalRemoved:    totRemoved,
+			Sparkline:       spark,
+			AddSparkline:    addSpark,
+			RemoveSparkline: removeSpark,
+			AddedPoints:     addedPoints,
+			RemovedPoints:   removedPoints,
+			Points:          pts,
 		}
 	}
 
@@ -463,7 +516,14 @@ func parseMultiTrackLog(output []byte) ([]commitTrackDelta, []string, error) {
 				tabParts := strings.Split(line, "\t")
 				var oldPath, newPath string
 				if len(tabParts) == 2 {
-					newPath = tabParts[1]
+					if strings.HasPrefix(status, "D") {
+						oldPath = tabParts[1]
+					} else if strings.HasPrefix(status, "A") {
+						newPath = tabParts[1]
+					} else {
+						oldPath = tabParts[1]
+						newPath = tabParts[1]
+					}
 				} else if len(tabParts) >= 3 {
 					oldPath = tabParts[1]
 					newPath = tabParts[2]
@@ -614,9 +674,15 @@ func parseTicketStatus(buf []byte) (isOpen bool, isClosed bool, hasStatus bool) 
 	return false, false, false
 }
 
+// RenderTracksOptions configures multi-track rendering functions.
+type RenderTracksOptions struct {
+	Color bool
+}
+
 // RenderMultiTrackCardOptions configures RenderMultiTrackCard.
 type RenderMultiTrackCardOptions struct {
 	Color bool
+	Diff  bool
 }
 
 // RenderMultiTrackCard formats the MultiTrackHistoryResult into a clean terminal card.
@@ -628,6 +694,9 @@ func RenderMultiTrackCard(res *MultiTrackHistoryResult, opts ...RenderMultiTrack
 	useColor := false
 	if len(opts) > 0 {
 		useColor = opts[0].Color
+		if opts[0].Diff {
+			return RenderMultiTrackHistoryTableWithDiffs(res, RenderTracksOptions{Color: useColor})
+		}
 	}
 
 	var sb strings.Builder
@@ -690,4 +759,140 @@ func formatK(n int) string {
 		return fmt.Sprintf("%.0fk", val)
 	}
 	return fmt.Sprintf("%.1fk", val)
+}
+
+// RenderMultiTrackHistoryTableWithDiffs formats the MultiTrackHistoryResult into an expanded additions/removals breakdown table.
+func RenderMultiTrackHistoryTableWithDiffs(result *MultiTrackHistoryResult, opts RenderTracksOptions) string {
+	if result == nil {
+		return ""
+	}
+
+	useColor := opts.Color
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Repo Evolution Diffs (%s · %d commits · %dd)\n", result.RepoName, result.TotalCommits, result.DaysSpan))
+
+	plusTag := "[+]"
+	minusTag := "[-]"
+	eqTag := "[=]"
+	if useColor {
+		plusTag = "\x1b[32m[+]\x1b[0m"
+		minusTag = "\x1b[31m[-]\x1b[0m"
+	}
+
+	for _, track := range AllTrackTypes {
+		te, ok := result.Tracks[track]
+		if !ok || te == nil {
+			continue
+		}
+
+		addSpark := te.AddSparkline
+		removeSpark := te.RemoveSparkline
+		netSpark := te.Sparkline
+
+		if useColor && len(te.Points) > 0 {
+			rawValues := make([]int, len(te.Points))
+			for j, p := range te.Points {
+				switch track {
+				case TrackCode, TrackTests:
+					rawValues[j] = p.Lines
+				case TrackDocs:
+					rawValues[j] = p.Tokens
+				case TrackSkills, TrackIssues:
+					rawValues[j] = p.Files
+				default:
+					rawValues[j] = p.Lines
+				}
+			}
+
+			addFloats := make([]float64, len(te.AddedPoints))
+			for j, v := range te.AddedPoints {
+				addFloats[j] = float64(v)
+			}
+			removeFloats := make([]float64, len(te.RemovedPoints))
+			for j, v := range te.RemovedPoints {
+				removeFloats[j] = float64(v)
+			}
+			sparkValues := make([]float64, len(rawValues))
+			for j, v := range rawValues {
+				sparkValues[j] = float64(v)
+			}
+
+			addSpark = RenderBrailleSparkline(addFloats, BrailleOptions{Width: 10, Color: true})
+			removeSpark = RenderBrailleSparkline(removeFloats, BrailleOptions{Width: 10, Color: true, InvertColor: true})
+			netSpark = RenderBrailleSparkline(sparkValues, BrailleOptions{Width: 10, Color: true})
+		}
+
+		if addSpark == "" {
+			addSpark = strings.Repeat(" ", 10)
+		}
+		if removeSpark == "" {
+			removeSpark = strings.Repeat(" ", 10)
+		}
+		if netSpark == "" {
+			netSpark = strings.Repeat(" ", 10)
+		}
+
+		var netVal int
+		var unit string
+		switch track {
+		case TrackCode, TrackTests:
+			netVal = te.CurrentLines
+			unit = "LOC"
+		case TrackDocs:
+			netVal = te.CurrentTokens
+			unit = "tokens"
+		case TrackSkills:
+			netVal = te.CurrentFiles
+			unit = "skills"
+		case TrackIssues:
+			netVal = te.CurrentFiles
+			unit = "tickets"
+		}
+
+		sAdd := "+" + formatK(te.TotalAdded)
+		sRms := "0"
+		if te.TotalRemoved > 0 {
+			sRms = "-" + formatK(te.TotalRemoved)
+		}
+		sNet := formatK(netVal)
+
+		w := len(sAdd)
+		if len(sRms) > w {
+			w = len(sRms)
+		}
+		if len(sNet) > w {
+			w = len(sNet)
+		}
+
+		fmtAdd := fmt.Sprintf("%*s", w, sAdd)
+		fmtRms := fmt.Sprintf("%*s", w, sRms)
+		fmtNet := fmt.Sprintf("%*s", w, sNet)
+
+		if useColor {
+			fmtAdd = "\x1b[32m" + fmtAdd + "\x1b[0m"
+			fmtRms = "\x1b[31m" + fmtRms + "\x1b[0m"
+		}
+
+		sb.WriteString(fmt.Sprintf("%s:\n", string(track)))
+		sb.WriteString(fmt.Sprintf("  %s Adds: [%s] %s %s\n", plusTag, addSpark, fmtAdd, unit))
+		sb.WriteString(fmt.Sprintf("  %s Rms:  [%s] %s %s\n", minusTag, removeSpark, fmtRms, unit))
+
+		switch track {
+		case TrackCode:
+			tokStr := formatK(te.CurrentTokens)
+			sb.WriteString(fmt.Sprintf("  %s Net:  [%s] %s %s (%s tokens)\n", eqTag, netSpark, fmtNet, unit, tokStr))
+		case TrackTests:
+			tokStr := formatK(te.CurrentTokens)
+			sb.WriteString(fmt.Sprintf("  %s Net:  [%s] %s %s (%s tokens) · %.2f test/code ratio\n", eqTag, netSpark, fmtNet, unit, tokStr, result.TestCodeRatio))
+		case TrackDocs:
+			sb.WriteString(fmt.Sprintf("  %s Net:  [%s] %s %s (%d files)\n", eqTag, netSpark, fmtNet, unit, te.CurrentFiles))
+		case TrackSkills:
+			tokStr := formatK(te.CurrentTokens)
+			sb.WriteString(fmt.Sprintf("  %s Net:  [%s] %s %s (%s tokens)\n", eqTag, netSpark, fmtNet, unit, tokStr))
+		case TrackIssues:
+			sb.WriteString(fmt.Sprintf("  %s Net:  [%s] %s %s (%d open · %d closed)\n", eqTag, netSpark, fmtNet, unit, te.OpenTickets, te.ClosedTickets))
+		}
+	}
+
+	return sb.String()
 }
