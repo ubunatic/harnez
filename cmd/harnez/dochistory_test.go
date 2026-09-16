@@ -235,6 +235,46 @@ func TestRunDocHistory_ColorToggles(t *testing.T) {
 	}
 }
 
+func TestRunDocHistory_Tracks(t *testing.T) {
+	repoDir := createDocHistoryFixture(t)
+	var out bytes.Buffer
+
+	opts := docHistoryOptions{
+		Dir:    repoDir,
+		Tracks: true,
+	}
+
+	if err := runDocHistory(&out, opts); err != nil {
+		t.Fatalf("runDocHistory --tracks failed: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "Repo Evolution") {
+		t.Errorf("output missing Repo Evolution: %s", got)
+	}
+	if !strings.Contains(got, "Docs:") {
+		t.Errorf("output missing Docs track: %s", got)
+	}
+
+	// JSON mode
+	var outJSON bytes.Buffer
+	optsJSON := docHistoryOptions{
+		Dir:    repoDir,
+		Tracks: true,
+		JSON:   true,
+	}
+	if err := runDocHistory(&outJSON, optsJSON); err != nil {
+		t.Fatalf("runDocHistory --tracks --json failed: %v", err)
+	}
+	var res assess.MultiTrackHistoryResult
+	if err := json.Unmarshal(outJSON.Bytes(), &res); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if res.TotalCommits != 2 {
+		t.Errorf("TotalCommits = %d; want 2", res.TotalCommits)
+	}
+}
+
 func TestDocHistoryCmd_CobraFlags(t *testing.T) {
 	cmd := newDocHistoryCmd()
 
@@ -242,18 +282,24 @@ func TestDocHistoryCmd_CobraFlags(t *testing.T) {
 		t.Errorf("cmd.Use = %q; want dochistory [files...]", cmd.Use)
 	}
 
-	hasAlias := false
+	hasAliasDoc := false
+	hasAliasRepo := false
 	for _, a := range cmd.Aliases {
 		if a == "doc-history" {
-			hasAlias = true
-			break
+			hasAliasDoc = true
+		}
+		if a == "repo-history" {
+			hasAliasRepo = true
 		}
 	}
-	if !hasAlias {
+	if !hasAliasDoc {
 		t.Errorf("missing doc-history alias in %v", cmd.Aliases)
 	}
+	if !hasAliasRepo {
+		t.Errorf("missing repo-history alias in %v", cmd.Aliases)
+	}
 
-	flags := []string{"dir", "color", "no-color", "json"}
+	flags := []string{"dir", "color", "no-color", "json", "tracks"}
 	for _, f := range flags {
 		if cmd.Flags().Lookup(f) == nil {
 			t.Errorf("missing flag --%s", f)

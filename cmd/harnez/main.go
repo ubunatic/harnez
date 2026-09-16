@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -146,6 +147,16 @@ func main() {
 		os.Args = append([]string{"harnez", "exec"}, os.Args[1:]...)
 	}
 
+	root := newRootCmd()
+	// executeAndRecord, not root.Execute, is the entry point: issue 326's
+	// cli_invocations row can only be written from here, around Execute —
+	// see cmd/harnez/clilog.go for why neither of Cobra's hook points works.
+	if err := executeAndRecord(root, os.Args[1:], cliLogOptions{}); err != nil {
+		os.Exit(exitCodeFromRunError(err))
+	}
+}
+
+func newRootCmd() *cobra.Command {
 	var configPath string
 	var target string
 
@@ -166,6 +177,7 @@ func main() {
 	var usageCompact bool
 	var usageInterval time.Duration
 	var usageHost string
+	var usageProject string
 	usageCmd := &cobra.Command{
 		Use:     "usage",
 		Aliases: []string{"quota", "tokens"},
@@ -210,6 +222,23 @@ func main() {
 					ShowMic:        usageMic,
 					RemoteLoadHost: loadWatchHost,
 				})
+			}
+
+			if usageProject != "" {
+				res, err := usage.CollectProjectUsage(usageProject)
+				if err != nil {
+					return fmt.Errorf("project usage: %w", err)
+				}
+				if usageJSON {
+					data, err := json.MarshalIndent(res, "", "  ")
+					if err != nil {
+						return fmt.Errorf("render json: %w", err)
+					}
+					fmt.Println(string(data))
+					return nil
+				}
+				fmt.Print(usage.RenderProjectUsageCard(res))
+				return nil
 			}
 
 			if usageJSON || usageRaw {
@@ -282,6 +311,8 @@ func main() {
 			return nil
 		},
 	}
+	usageCmd.Flags().StringVar(&usageProject, "project", "", "attribute lifetime tokens and cost-of-change to a repository directory")
+	usageCmd.Flags().StringVar(&usageProject, "cwd", "", "alias for --project")
 	usageCmd.Flags().BoolVar(&usageJSON, "json", false, "output usage in JSON format")
 	usageCmd.Flags().StringVar(&usageAgent, "agent", "", "filter to a specific agent (claude, agy, codex)")
 	usageCmd.Flags().StringVar(&usageHost, "host", "", "query usage from a remote host via SSH")
@@ -764,6 +795,8 @@ func main() {
 	revert.Flags().BoolVar(&revertDebloat, "debloat", false, "restore Claude, Codex, and Antigravity settings to their pre-debloat state")
 
 	var assessJSON bool
+	var assessTokens bool
+	var assessHistory bool
 	assessCmd := &cobra.Command{
 		Use:   "assess [path]",
 		Short: "Fast code/doc metrics, token estimation, and repository feasibility report",
@@ -773,6 +806,41 @@ func main() {
 			if len(args) > 0 {
 				targetPath = args[0]
 			}
+
+			if assessTokens {
+				res, err := usage.CollectProjectUsage(targetPath)
+				if err != nil {
+					return fmt.Errorf("assess --tokens %s: %w", targetPath, err)
+				}
+				if assessJSON {
+					data, err := json.MarshalIndent(res, "", "  ")
+					if err != nil {
+						return fmt.Errorf("render json: %w", err)
+					}
+					fmt.Println(string(data))
+					return nil
+				}
+				fmt.Print(usage.RenderProjectUsageCard(res))
+				return nil
+			}
+
+			if assessHistory {
+				res, err := assess.ExtractMultiTrackHistory(targetPath)
+				if err != nil {
+					return fmt.Errorf("assess --history %s: %w", targetPath, err)
+				}
+				if assessJSON {
+					data, err := json.MarshalIndent(res, "", "  ")
+					if err != nil {
+						return fmt.Errorf("render json: %w", err)
+					}
+					fmt.Println(string(data))
+					return nil
+				}
+				fmt.Print(assess.RenderMultiTrackCard(res))
+				return nil
+			}
+
 			report, err := assess.AssessPath(targetPath)
 			if err != nil {
 				return fmt.Errorf("assess %s: %w", targetPath, err)
@@ -790,12 +858,9 @@ func main() {
 		},
 	}
 	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
+	assessCmd.Flags().BoolVar(&assessTokens, "tokens", false, "display project-level lifetime AI token attribution and cost of change")
+	assessCmd.Flags().BoolVar(&assessHistory, "history", false, "display multi-track repository evolution history")
 
-	root.AddCommand(apply, diff, scanDocs, clean, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newCodexHookCmd(), newHookCmd(), newLintCmd(), newLogCmd(), newDocsCmd())
-	// executeAndRecord, not root.Execute, is the entry point: issue 326's
-	// cli_invocations row can only be written from here, around Execute —
-	// see cmd/harnez/clilog.go for why neither of Cobra's hook points works.
-	if err := executeAndRecord(root, os.Args[1:], cliLogOptions{}); err != nil {
-		os.Exit(exitCodeFromRunError(err))
-	}
+	root.AddCommand(apply, diff, scanDocs, clean, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newHookCmd(), newLintCmd(), newLogCmd(), newDocsCmd())
+	return root
 }

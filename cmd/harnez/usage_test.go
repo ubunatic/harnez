@@ -93,3 +93,28 @@ func TestValidateUsageFlags_RawAlone_OK(t *testing.T) {
 		t.Fatalf("--raw alone should be allowed, got error: %v", err)
 	}
 }
+
+func TestUsageProjectFlag_CobraRegistered(t *testing.T) {
+	root := newRootCmd()
+	if usageCmd := root.Commands(); usageCmd != nil {
+		for _, c := range usageCmd {
+			if c.Name() == "usage" {
+				if c.Flags().Lookup("project") == nil {
+					t.Errorf("missing --project flag on usage command")
+				}
+				if c.Flags().Lookup("cwd") == nil {
+					t.Errorf("missing --cwd flag on usage command")
+				}
+			}
+			if c.Name() == "assess" {
+				if c.Flags().Lookup("tokens") == nil {
+					t.Errorf("missing --tokens flag on assess command")
+				}
+				if c.Flags().Lookup("history") == nil {
+					t.Errorf("missing --history flag on assess command")
+				}
+			}
+		}
+	}
+}
+
