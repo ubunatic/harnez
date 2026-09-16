@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"ubunatic.com/harnez/internal/agy"
 	"ubunatic.com/harnez/internal/codex"
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/issues"
@@ -188,6 +189,25 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 			label: hooksPath + " [hooks.harnez]",
 			state: state,
 		})
+	}
+	if cfg.AgyHooksTarget != "" {
+		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
+		agentHome := filepath.Dir(filepath.Dir(hooksPath))
+		if _, err := os.Stat(agentHome); err == nil {
+			installed, drifted := agy.Status(hooksPath)
+			state := "missing"
+			if installed {
+				if drifted {
+					state = "drifted"
+				} else {
+					state = "ok"
+				}
+			}
+			checks = append(checks, entry{
+				label: hooksPath + " [" + agy.HookName + "]",
+				state: state,
+			})
+		}
 	}
 	if shimPath := BashShimPath(); shimPath != "" {
 		shimState := "missing"

@@ -730,7 +730,7 @@ func main() {
 	}
 	assessCmd.Flags().BoolVar(&assessJSON, "json", false, "output report in JSON format")
 
-	root.AddCommand(apply, diff, scanDocs, clean, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newCodexHookCmd(), newLintCmd(), newLogCmd(), newDocsCmd())
+	root.AddCommand(apply, diff, scanDocs, clean, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newCodexHookCmd(), newHookCmd(), newLintCmd(), newLogCmd(), newDocsCmd())
 	// executeAndRecord, not root.Execute, is the entry point: issue 326's
 	// cli_invocations row can only be written from here, around Execute —
 	// see cmd/harnez/clilog.go for why neither of Cobra's hook points works.

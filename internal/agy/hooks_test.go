@@ -24,8 +24,15 @@ func TestBuildHooksDoc(t *testing.T) {
 	if !ok || len(preToolUse) == 0 {
 		t.Fatalf("PreToolUse invalid or empty: %v", entry["PreToolUse"])
 	}
-	if matcher, _ := preToolUse[0]["matcher"].(string); matcher != "run_command" {
-		t.Errorf("matcher = %q, want 'run_command'", matcher)
+	if matcher, _ := preToolUse[0]["matcher"].(string); matcher != "*" {
+		t.Errorf("matcher = %q, want '*'", matcher)
+	}
+	hooks, ok := preToolUse[0]["hooks"].([]map[string]any)
+	if !ok || len(hooks) == 0 {
+		t.Fatalf("hooks invalid or empty: %v", preToolUse[0]["hooks"])
+	}
+	if cmd, _ := hooks[0]["command"].(string); cmd != "harnez hook agy" {
+		t.Errorf("command = %q, want 'harnez hook agy'", cmd)
 	}
 }
 

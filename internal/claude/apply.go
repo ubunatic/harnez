@@ -1131,18 +1131,21 @@ func ApplyAllVariant(target string, cfg *Config, docs []string, forceDocs bool, 
 		}
 	}
 
-	// Decommissioned agy-hooks: clean up any stale hook in ~/.gemini/config/hooks.json (issue 271)
+	// Antigravity native tool observation hook (issue 373):
+	// Install/update wildcard PreToolUse hook in ~/.gemini/config/hooks.json if ~/.gemini exists.
 	if cfg.AgyHooksTarget != "" {
 		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
 		agentHome := filepath.Dir(filepath.Dir(hooksPath))
 		if _, err := os.Stat(agentHome); err == nil {
-			cleaned, err := agy.Remove(hooksPath)
+			changed, err := agy.Apply(hooksPath)
 			if err != nil {
-				return fmt.Errorf("agy hooks cleanup: %w", err)
+				return fmt.Errorf("agy hooks: %w", err)
 			}
-			if cleaned {
+			if changed {
 				changes++
-				fmt.Printf("  cleaned %s (decommissioned agy-hooks)\n", hooksPath)
+				fmt.Printf("  wrote %s\n", hooksPath)
+			} else {
+				addStat("agy hooks", "up to date")
 			}
 		}
 	}
@@ -1414,7 +1417,8 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
 		agentHome := filepath.Dir(filepath.Dir(hooksPath))
 		if _, err := os.Stat(agentHome); err == nil {
-			if installed, _ := agy.Status(hooksPath); installed {
+			installed, drifted := agy.Status(hooksPath)
+			if !installed || drifted {
 				anyChanged = true
 			}
 		}

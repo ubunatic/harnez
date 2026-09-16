@@ -124,18 +124,18 @@ func TestBashShimProvisioningAndLifecycle(t *testing.T) {
 	}
 }
 
-func TestApplyCleansUpDecommissionedAgyHooks(t *testing.T) {
+func TestApplyInstallsAgyObservationHooks(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 
 	targetDir := filepath.Join(tmpHome, ".claude")
 	agyHooksPath := filepath.Join(tmpHome, ".gemini", "config", "hooks.json")
 
-	// Seed hooks.json with legacy harnez hook
+	// Seed .gemini environment with existing custom hook
 	if err := os.MkdirAll(filepath.Dir(agyHooksPath), 0755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	initialJSON := `{"harnez": {"enabled": true, "PreToolUse": []}, "custom": {"enabled": true}}`
+	initialJSON := `{"custom": {"enabled": true}}`
 	if err := os.WriteFile(agyHooksPath, []byte(initialJSON), 0644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -154,23 +154,23 @@ func TestApplyCleansUpDecommissionedAgyHooks(t *testing.T) {
 	cfg.AgentsMD.Global.Symlink = ""
 	cfg.AgentsMD.Agents = nil
 
-	// DiffAll should detect that hooks.json has the decommissioned harnez hook
+	// DiffAll should detect that hooks.json is missing the harnez observer hook
 	changed, err := claude.DiffAll(targetDir, cfg)
 	if err != nil {
 		t.Fatalf("DiffAll: %v", err)
 	}
 	if !changed {
-		t.Errorf("expected DiffAll to detect stale agy hook in hooks.json")
+		t.Errorf("expected DiffAll to detect missing harnez hook in hooks.json")
 	}
 
-	// ApplyAll should remove harnez from hooks.json while preserving "custom"
+	// ApplyAll should write harnez observer hook to hooks.json while preserving "custom"
 	if err := claude.ApplyAll(targetDir, cfg, nil, false, false); err != nil {
 		t.Fatalf("ApplyAll: %v", err)
 	}
 
-	installed, _ := agy.Status(agyHooksPath)
-	if installed {
-		t.Errorf("expected harnez hook removed from hooks.json after ApplyAll")
+	installed, drifted := agy.Status(agyHooksPath)
+	if !installed || drifted {
+		t.Errorf("expected harnez hook installed and not drifted in hooks.json after ApplyAll, got installed=%v drifted=%v", installed, drifted)
 	}
 	data, err := os.ReadFile(agyHooksPath)
 	if err != nil {
@@ -178,6 +178,9 @@ func TestApplyCleansUpDecommissionedAgyHooks(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "custom") {
 		t.Errorf("expected custom hook preserved, got:\n%s", string(data))
+	}
+	if !strings.Contains(string(data), "harnez hook agy") {
+		t.Errorf("expected harnez hook agy in hooks.json, got:\n%s", string(data))
 	}
 }
 

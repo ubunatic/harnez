@@ -30,8 +30,8 @@ This ticket tracks baking the Antigravity tool observation hook directly into `h
 
 ## Acceptance Criteria
 
-- [ ] `harnez` provides an internal subcommand/handler to process Antigravity `PreToolUse` stdin and write to `tool_catalog.sqlite`.
-- [ ] `internal/agy/hooks.go` is updated so `BuildHooksDoc()` registers the wildcard tool observer hook.
-- [ ] `harnez apply` installs/updates the hook in `~/.gemini/config/hooks.json` when `~/.gemini` exists.
-- [ ] `harnez status` and `harnez diff` report AGY hook status accurately.
-- [ ] Unit tests in `internal/agy` and `cmd/harnez` verify apply, drift detection, removal, and idempotency.
+- [x] `harnez` provides an internal subcommand/handler to process Antigravity `PreToolUse` stdin and write to `tool_catalog.sqlite`.
+- [x] `internal/agy/hooks.go` is updated so `BuildHooksDoc()` registers the wildcard tool observer hook.
+- [x] `harnez apply` installs/updates the hook in `~/.gemini/config/hooks.json` when `~/.gemini` exists.
+- [x] `harnez status` and `harnez diff` report AGY hook status accurately.
+- [x] Unit tests in `internal/agy` and `cmd/harnez` verify apply, drift detection, removal, and idempotency.

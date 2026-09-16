@@ -30,10 +30,10 @@ func HooksPath(home string) string {
 }
 
 // BuildHooksDoc returns the harnez-managed "harnez" named hook entry:
-// a PreToolUse hook matching agy's "run_command" tool-step type, whose
-// command handler is `harnez agy-hooks hook` (the PreToolUse handshake
-// implemented in cmd/harnez/agyhooks.go), mirroring the shape of
-// internal/claude's own PreToolUse/Bash wiring for Claude Code.
+// a PreToolUse hook matching all tools (matcher "*"), whose command handler is
+// `harnez hook agy` (the PreToolUse observation hook implemented in cmd/harnez/hook.go).
+// This passively observes all client-native tools and run_command executions
+// and records telemetry into tool_catalog.sqlite without rewriting commands.
 //
 // Per agy's hook schema specification (agy-customizations/docs/hooks.md),
 // named hooks are defined as top-level keys in hooks.json rather than
@@ -44,9 +44,9 @@ func BuildHooksDoc() map[string]any {
 			"enabled": true,
 			"PreToolUse": []map[string]any{
 				{
-					"matcher": "run_command",
+					"matcher": "*",
 					"hooks": []map[string]any{
-						{"type": "command", "command": "harnez agy-hooks hook"},
+						{"type": "command", "command": "harnez hook agy"},
 					},
 				},
 			},

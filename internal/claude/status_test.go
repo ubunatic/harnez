@@ -137,17 +137,24 @@ func TestRunStatus_ReportsRemovedManagedKey(t *testing.T) {
 	t.Errorf("no settings.json [hooks] line found after removal, full output:\n%s", out)
 }
 
-// TestRunStatus_BashShimAndCodexHooks verifies that status reports bash shim and codex hooks.
-func TestRunStatus_BashShimAndCodexHooks(t *testing.T) {
+// TestRunStatus_BashShimCodexAndAgyHooks verifies that status reports bash shim, codex hooks, and agy hooks.
+func TestRunStatus_BashShimCodexAndAgyHooks(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 
 	dir := filepath.Join(tmpHome, ".claude")
 	codexTarget := filepath.Join(tmpHome, ".codex", "config.toml")
+	agyTarget := filepath.Join(tmpHome, ".gemini", "config", "hooks.json")
 	shimPath := filepath.Join(tmpHome, ".harnez", "shims", "bash")
+
+	// Ensure .gemini home exists so agy hooks are checked
+	if err := os.MkdirAll(filepath.Join(tmpHome, ".gemini"), 0755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
 
 	cfg := &Config{
 		CodexHooksTarget: codexTarget,
+		AgyHooksTarget:   agyTarget,
 	}
 
 	// Before apply -> missing
@@ -162,6 +169,9 @@ func TestRunStatus_BashShimAndCodexHooks(t *testing.T) {
 	}
 	if !strings.Contains(out, codexTarget+" [hooks.harnez]") || !strings.Contains(out, "missing") {
 		t.Errorf("expected codex hooks missing, got:\n%s", out)
+	}
+	if !strings.Contains(out, agyTarget+" [harnez]") || !strings.Contains(out, "missing") {
+		t.Errorf("expected agy hooks missing, got:\n%s", out)
 	}
 
 	// Apply
@@ -181,5 +191,8 @@ func TestRunStatus_BashShimAndCodexHooks(t *testing.T) {
 	}
 	if !strings.Contains(out, codexTarget+" [hooks.harnez]") || !strings.Contains(out, "ok") {
 		t.Errorf("expected codex hooks ok, got:\n%s", out)
+	}
+	if !strings.Contains(out, agyTarget+" [harnez]") || !strings.Contains(out, "ok") {
+		t.Errorf("expected agy hooks ok, got:\n%s", out)
 	}
 }
