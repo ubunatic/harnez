@@ -369,3 +369,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 368 | [368-report-ramp-evidence-and-projected-changes-from-harnez-init.md](368-report-ramp-evidence-and-projected-changes-from-harnez-init.md) | Report RAMP evidence and projected changes from harnez init | Open |
 | 369 | [369-detect-go-library-cli-and-tui-shape-for-init-guidance.md](369-detect-go-library-cli-and-tui-shape-for-init-guidance.md) | Detect Go library CLI and TUI shape for init guidance | Open |
 | 370 | [370-offer-useful-go-agent-capabilities-through-harnez-init.md](370-offer-useful-go-agent-capabilities-through-harnez-init.md) | Offer useful Go agent capabilities through harnez init | Open |
+| 371 | [371-add-optional-systemd-service-guidance-to-go-init-profile.md](371-add-optional-systemd-service-guidance-to-go-init-profile.md) | Add optional systemd service guidance to Go init profile | Open |
