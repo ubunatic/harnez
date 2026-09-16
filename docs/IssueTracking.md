@@ -55,13 +55,21 @@ with a ticket independently filed and pushed elsewhere in the interim — the co
 surfaces later, as a `git pull`/rebase conflict on the ticket file and on the generated
 `issues/README.md`. This has happened at least twice: issue 240 (duplicate 179/180, resolved by
 hand) and, concretely, this session (a locally-filed-but-unpushed 266 collided with remote
+tickets that had independently claimed 266 and 267). Manual recovery recipe until issue 269
+(`harnez issues mv`) ships: `git mv` the losing ticket file to the next free number, fix its
+in-file `# NNN — ...` header to match, resolve any `issues/README.md` conflict by taking either
+side (`git checkout --theirs`) and then regenerating authoritatively with `harnez index` rather
+than hand-merging conflict markers — `harnez index` does not always fully clear stray
+`<<<<<<<`/`=======`/`>>>>>>>` lines left in a file it's asked to regenerate over, so verify with a
+conflict-marker grep afterward.
+
 ### Updating Ticket Status (`harnez issues <verb>`)
 Use `harnez issues <verb>` to change a ticket's status, resync `issues/README.md`, and commit in one call:
 - `harnez issues open <n> [reason]` — Status: Open (or `Open — <reason>`)
 - `harnez issues start <n> [reason]` — Status: In Progress (or `In Progress — <reason>`)
 - `harnez issues block <n> <reason>` — Status: `Blocked — <reason>` (reason required)
-- `harnez issues close <n> [reason]` — Status: Closed (or `Closed — <reason>`)
-- `harnez issues done <n> [reason]` — Alias for `close`: Status: Closed (or `Closed — <reason>`)
+- `harnez issues close <n> [reason]` — Status: Closed (or `Closed — <resolution>`)
+- `harnez issues done <n> [reason]` — Alias for `close`: Status: Closed (or `Closed — <resolution>`)
 - `harnez issues draft <n> [reason]` — Status: Draft (or `Draft — <reason>`)
 - `harnez issues mv <old> [new]` — Renumber a ticket, rename file, rewrite `# NNN — ...` header, and resync
 - `harnez issues list [filter]` — List matching tickets (e.g. `is:open`)
