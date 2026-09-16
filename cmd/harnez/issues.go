@@ -86,6 +86,7 @@ Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
   start [reason]   Status: In Progress, or "In Progress — <reason>"
   block <reason>   Status: "Blocked — <reason>" (reason required)
   close [reason]   Status: Closed (bare), or "Closed — <reason>"
+  done [reason]    Status: Closed (bare), or "Closed — <reason>" (alias for close)
   draft [reason]   Status: Draft, or "Draft — <reason>"
   new [title]      Atomically reserve the next free issue number and create
                     a Draft placeholder file (issues/<NNN>-<title-slug>.md,
@@ -139,7 +140,7 @@ exit, actionable stderr) -- unlike 'harnez find', where zero matches is a
 valid, exit-0 answer.`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return fmt.Errorf("issues: requires a verb (open, start, block, close, draft, new, mv, rebase, lint, list)")
+				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, new, mv, rebase, lint, list)")
 			}
 			if args[0] == "new" {
 				return nil // [title] is optional, no ticket-number argument exists yet
@@ -285,7 +286,7 @@ func composeNewStatus(verb, reason string) (string, error) {
 			return "", fmt.Errorf(`issues block: reason is required, e.g. 'harnez issues block <number> "waiting on upstream fix"'`)
 		}
 		return "Blocked — " + reason, nil
-	case "close":
+	case "close", "done":
 		if reason == "" {
 			return "Closed", nil
 		}
@@ -296,7 +297,7 @@ func composeNewStatus(verb, reason string) (string, error) {
 		}
 		return "Draft — " + reason, nil
 	default:
-		return "", fmt.Errorf("issues: unknown verb %q (expected one of: open, start, block, close, draft)", verb)
+		return "", fmt.Errorf("issues: unknown verb %q (expected one of: open, start, block, close, done, draft)", verb)
 	}
 }
 
@@ -669,6 +670,9 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 // "docs(issues): close 228, record resolved-in commit sha and regenerate
 // index").
 func defaultCommitMessage(verb, ticketNumber, reason string) string {
+	if verb == "done" {
+		verb = "close"
+	}
 	msg := fmt.Sprintf("docs(issues): %s %s", verb, ticketNumber)
 	if reason != "" {
 		msg += ", " + reason

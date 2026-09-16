@@ -50,6 +50,8 @@ func TestComposeNewStatus_Table(t *testing.T) {
 		{"block", "", "", true},
 		{"close", "", "Closed", false},
 		{"close", "resolved", "Closed — resolved", false},
+		{"done", "", "Closed", false},
+		{"done", "resolved", "Closed — resolved", false},
 		{"draft", "", "Draft", false},
 		{"draft", "x", "Draft — x", false},
 		{"review", "", "", true},
@@ -137,6 +139,34 @@ func TestRunIssuesVerb_BareCloseDoesNotFabricateReason(t *testing.T) {
 	got, _ := os.ReadFile(ticketPath)
 	if !strings.Contains(string(got), "**Status**: Closed\n") {
 		t.Errorf("ticket file does not have bare Closed status:\n%s", got)
+	}
+}
+
+func TestRunIssuesVerb_DoneAliasForClose(t *testing.T) {
+	dir, ticketPath := issuesFixtureRepo(t, sampleTicket)
+
+	var out bytes.Buffer
+	result, drift, err := runIssuesVerb(&out, "done", "42", []string{"completed"}, issuesRunOptions{Dir: dir})
+	if err != nil {
+		t.Fatalf("runIssuesVerb: %v", err)
+	}
+	if drift {
+		t.Errorf("expected drift=false outside --check")
+	}
+	if result.OldStatus != "Open" || result.NewStatus != "Closed — completed" {
+		t.Errorf("unexpected status transition: %+v", result)
+	}
+	got, err := os.ReadFile(ticketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "# 042 — Example Ticket\n\n**Status**: Closed — completed\n\n---\n\nSee [[041-other-ticket]] for context.\n"
+	if string(got) != want {
+		t.Errorf("ticket file rewritten unexpectedly.\ngot:  %q\nwant: %q", string(got), want)
+	}
+	logOut := repoRunGitOutput(t, dir, "log", "-1", "--name-only", "--format=%s")
+	if !strings.Contains(logOut, "docs(issues): close 042, completed") {
+		t.Errorf("unexpected commit message, got:\n%s", logOut)
 	}
 }
 
