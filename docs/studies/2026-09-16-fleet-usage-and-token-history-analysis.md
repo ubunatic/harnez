@@ -94,50 +94,63 @@ The 100-day window divides into four distinct operational epochs:
 
 | Operational Epoch | Timeframe | Peak Daily Burn | Dominant Characteristics |
 | :--- | :--- | :--- | :--- |
-| **1. Foundation Sprints** | June 7 – July 6 | 2.31 M / day | Single-agent execution, no prompt caching, baseline Sonnet 4.6 & Opus 4.8 usage. |
+| **1. Foundation Sprints** | June 7 – July 6 | 2.31 M / day | Single-agent execution baseline, Sonnet 4.6 & Opus 4.8 usage (`dailyModelTokens` recorded output tokens only). |
 | **2. Summer Baseline** | July 7 – Aug 18 | < 0.1 M / day | Low activity / maintenance pause; stable base stats. |
-| **3. Multi-Agent Prototyping** | Aug 19 – Aug 23 | 110.26 M / day | Introduction of parallel subagent loops (`/fresh-sprint`), prompt caching rollout begins (68% $\rightarrow$ 82%). |
-| **4. Autonomous Sprint Hyper-Velocity** | Sept 6 – Sept 16 | 2,170.30 M / day | Full prompt caching dominance (96.7%), cross-repo releases, deep tree exploration, Sonnet 5 adoption. |
+| **3. Multi-Agent Prototyping** | Aug 19 – Aug 23 | 110.26 M / day | Introduction of parallel subagent loops (`/fresh-sprint`), per-turn JSONL session logging active. |
+| **4. Autonomous Sprint Hyper-Velocity** | Sept 6 – Sept 16 | 2,170.30 M / day | High-concurrency autonomous sprints, cross-repo releases, deep tree exploration, Sonnet 5 adoption. |
 
 ### 3.3 Epoch Velocity Detail Table
 
-| Date | Cumulative Tokens (M) | Daily Burn (M) | Cache Read (M) | Cache Hit % | Active / Top Models |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **2026-06-07** | 0.62 | +0.62 | 0.00 | 0.0% | Opus 4.8 (0.4M), Sonnet 4.6 (0.2M) |
-| **2026-06-10** | 5.16 | +1.21 | 0.00 | 0.0% | Sonnet 4.6 (2.4M), Opus 4.8 (2.0M), Fable 5 (0.7M) |
-| **2026-06-15** | 12.76 | +1.51 | 0.00 | 0.0% | Sonnet 4.6 (6.5M), Fable 5 (4.0M), Opus 4.8 (2.0M) |
-| **2026-06-25** | 22.13 | +1.12 | 0.00 | 0.0% | Sonnet 4.6 (12.8M), Opus 4.8 (5.0M), Fable 5 (4.0M) |
-| **2026-07-01** | 27.55 | +0.92 | 0.00 | 0.0% | Sonnet 4.6 (16.8M), Opus 4.8 (5.6M), Sonnet 5 (0.9M) |
-| **2026-07-06** | 35.63 | +0.51 | 0.00 | 0.0% | Sonnet 4.6 (17.9M), Fable 5 (8.6M), Opus 4.8 (6.1M) |
-| **2026-08-20** | 40.58 | +4.01 | 4.68 | 11.5% | Sonnet 4.6 (17.9M), Fable 5 (8.6M), Sonnet 5 (7.7M) |
-| **2026-08-22** | 123.22 | +82.64 | 84.01 | 68.2% | Sonnet 5 (90.3M), Sonnet 4.6 (17.9M), Fable 5 (8.6M) |
-| **2026-08-23** | 233.48 | +110.26 | 192.16 | 82.3% | Sonnet 5 (200.6M), Sonnet 4.6 (17.9M), Fable 5 (8.6M) |
-| **2026-09-08** | 1,001.36 | +619.66 | 953.77 | 95.2% | Sonnet 5 (968.5M), Sonnet 4.6 (17.9M), Fable 5 (8.6M) |
-| **2026-09-09** | 1,671.67 | +670.30 | 1,619.13 | 96.9% | Sonnet 5 (1,638.8M), Sonnet 4.6 (17.9M), Fable 5 (8.6M) |
-| **2026-09-16** | 3,975.22 | +2,170.30 | 3,842.57 | 96.7% | Sonnet 4.6 (1.60B), Fable 5 (1.19B), Sonnet 5 (603.1M) |
+| Date | Cumulative Tokens (M) | Daily Burn (M) | Active / Top Models | Logging Regime |
+| :--- | :---: | :---: | :--- | :--- |
+| **2026-06-07** | 0.62 | +0.62 | Opus 4.8 (0.4M), Sonnet 4.6 (0.2M) | `stats-cache` daily output tokens |
+| **2026-06-10** | 5.16 | +1.21 | Sonnet 4.6 (2.4M), Opus 4.8 (2.0M), Fable 5 (0.7M) | `stats-cache` daily output tokens |
+| **2026-06-15** | 12.76 | +1.51 | Sonnet 4.6 (6.5M), Fable 5 (4.0M), Opus 4.8 (2.0M) | `stats-cache` daily output tokens |
+| **2026-06-25** | 22.13 | +1.12 | Sonnet 4.6 (12.8M), Opus 4.8 (5.0M), Fable 5 (4.0M) | `stats-cache` daily output tokens |
+| **2026-07-01** | 27.55 | +0.92 | Sonnet 4.6 (16.8M), Opus 4.8 (5.6M), Sonnet 5 (0.9M) | `stats-cache` daily output tokens |
+| **2026-07-06** | 35.63 | +0.51 | Sonnet 4.6 (17.9M), Fable 5 (8.6M), Opus 4.8 (6.1M) | `stats-cache` daily output tokens |
+| **2026-08-20** | 40.58 | +4.01 | Sonnet 4.6 (17.9M), Fable 5 (8.6M), Sonnet 5 (7.7M) | Per-turn project JSONL |
+| **2026-08-22** | 123.22 | +82.64 | Sonnet 5 (90.3M), Sonnet 4.6 (17.9M), Fable 5 (8.6M) | Per-turn project JSONL |
+| **2026-08-23** | 233.48 | +110.26 | Sonnet 5 (200.6M), Sonnet 4.6 (17.9M), Fable 5 (8.6M) | Per-turn project JSONL |
+| **2026-09-08** | 1,001.36 | +619.66 | Sonnet 5 (968.5M), Sonnet 4.6 (17.9M), Fable 5 (8.6M) | Per-turn project JSONL |
+| **2026-09-09** | 1,671.67 | +670.30 | Sonnet 5 (1,638.8M), Sonnet 4.6 (17.9M), Fable 5 (8.6M) | Per-turn project JSONL |
+| **2026-09-16** | 3,975.22 | +2,170.30 | Sonnet 4.6 (1.60B), Fable 5 (1.19B), Sonnet 5 (603.1M) | Per-turn project JSONL + `stats-cache` |
 
 ---
 
-## 4. Prompt Caching Efficiency & Throughput Leverage
+## 4. Prompt Caching: Reality vs. Telemetry Logging Artifacts
 
-Prompt caching introduced in mid-August transformed the fleet's unit economics and quota throughput.
+An initial naive scan of the timeseries suggested that prompt caching only activated in August. However, deep inspection of the underlying data structures reveals this was a **telemetry logging schema artifact**, not a lack of prompt caching:
 
+### 4.1 Root Cause of the Telemetry Discrepancy
+
+1. **`stats-cache.json` Schema Asymmetry**:
+   * Claude Code's `dailyModelTokens` array historically only recorded **output/generation tokens** per day (~35.6M across June/July).
+   * However, `stats-cache.json`'s cumulative `modelUsage` table reveals that June/July models were **already operating at >98% prompt caching efficiency**:
+     * `claude-sonnet-4-6`: **1,541,997,549** cache read tokens vs **17,791,909** output tokens (**98.8% cache hit ratio**).
+     * `claude-opus-4-8`: **501,569,967** cache read tokens vs **5,068,632** output tokens (**98.9% cache hit ratio**).
+     * `claude-fable-5`: **1,153,319,441** cache read tokens vs **7,352,196** output tokens (**99.3% cache hit ratio**).
+2. **Shift to Per-Turn Project Logging**:
+   * In late August/September, project session transcripts (`~/.claude/projects/*/*.jsonl`) recorded fine-grained `cache_read_input_tokens` per turn directly, making the day-to-day cache volume explicitly visible in turn-level logs.
+
+```text
+Actual Lifetime Model Caching Breakdown (x600 Anchor):
+┌───────────────────────────┬──────────────┬───────────────┬──────────────────┬─────────────┐
+│ Model                     │ Input Tokens │ Output Tokens │ Cache Read Input │ Cache Ratio │
+├───────────────────────────┼──────────────┼───────────────┼──────────────────┼─────────────┤
+│ claude-sonnet-4-6         │ 76,024       │ 17,791,909    │ 1,541,997,549    │ 98.8%       │
+│ claude-fable-5            │ 1,272,217    │ 7,352,196     │ 1,153,319,441    │ 99.3%       │
+│ claude-opus-4-8           │ 1,037,146    │ 5,068,632     │ 501,569,967      │ 98.9%       │
+│ claude-sonnet-5           │ 453,827      │ 2,302,419     │ 592,406,663      │ 99.5%       │
+│ claude-haiku-4-5-20251001 │ 16,629       │ 258,088       │ 53,279,510       │ 99.5%       │
+└───────────────────────────┴──────────────┴───────────────┴──────────────────┴─────────────┘
+Total Cache Reads: 3,842,573,130 (96.66% of all 3.975B lifetime tokens)
 ```
-Prompt Caching Efficiency Progression (June -> Sept 2026)
 
- June 2026:  [--------------------] 0.0% Cache Hit Ratio (Full raw ingress per turn)
- Aug 20, 2026: [==------------------] 11.5% Cache Hit Ratio (Initial activation)
- Aug 22, 2026: [==============------] 68.2% Cache Hit Ratio (Subagent context reuse)
- Aug 23, 2026: [================----] 82.3% Cache Hit Ratio (Multi-turn sprint loops)
- Sept 16, 2026: [=================== -] 96.7% Cache Hit Ratio (Steady-state autonomous loops)
-```
+### 4.2 Economic & Throughput Implications
 
-### Economic & Latency Implications
-
-1. **Context Reuse**: Multi-agent sprints pass substantial shared project instructions (`AGENTS.md`, guidelines, codebase maps). With 96.7% caching, 97 out of every 100 context tokens are read directly from local Anthropic KV-caches without incurring fresh prompt processing latencies.
-2. **Effective Velocity Multiplier**: A raw 2.17 Billion daily token throughput on Sept 16 translates to only ~32.8M output tokens and ~2.85M raw input write tokens, keeping the fleet safely inside the Pro weekly quota allowance (80% used).
-
----
+* Rather than being a recent innovation, prompt caching has been the **foundational scaling pillar** throughout the entire 100-day development arc.
+* **30x–100x Amplification**: Without KV-cache persistence across turns, a 3.98B token throughput would have been economically impossible under standard Pro subscription tier quotas. Prompt caching allowed multi-thousand turn loops while keeping billable output and cache-write tokens under ~35M tokens.
 
 ## 5. Model Distribution & Evolutionary Transitions
 
