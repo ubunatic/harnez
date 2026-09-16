@@ -1,80 +1,51 @@
-# 364 — Research Quota-1 (single test run per step) guardrails for LLM loops via harnez init
+# 364 — Research Quota-1 approach for LLM loops and scaffolding plan for harnez init
 
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [docs/practices/AgenticLoop.md](../docs/practices/AgenticLoop.md), [docs/HookRewritePattern.md](../docs/HookRewritePattern.md), [issues/118-harnez-exec-shell-interceptor.md](118-harnez-exec-shell-interceptor.md), [issues/177-lean-post-edit-build-check-for-control-flow-edits.md](177-lean-post-edit-build-check-for-control-flow-edits.md)
+**Related**: [docs/practices/AgenticLoop.md](../docs/practices/AgenticLoop.md), [docs/CLIDesign.md](../docs/CLIDesign.md), [docs/HookRewritePattern.md](../docs/HookRewritePattern.md)
 
 ---
 
 ## 1. Problem & Motivation
 
-In autonomous and iterative LLM agent loops (TDD cycles, bug-fixing, refactoring), models frequently exhibit test-thrashing anti-patterns:
-1. **Multi-Test Spamming**: Running multiple test commands consecutively within a single turn without intermediate code edits or reasoning.
-2. **Broad Test Suite Spam**: Re-running entire test suites (e.g. `go test ./...` or `pytest`) repeatedly instead of executing a single, targeted unit test.
-3. **Flakiness & Context Bloat**: Consuming thousands of tokens on repetitive test outputs in a single turn without forming a fresh hypothesis.
+Quota-1 is an emerging pattern for LLM agent loops designed to allow the model to only run **ONE test per step** and enforce this boundary via hooks, shims, or wrappers.
 
-The **Quota-1 pattern** enforces a strict execution budget during development loops: **an LLM is permitted at most ONE test run per turn/step**. 
+During autonomous coding loops and TDD workflows, models often struggle with test execution discipline — such as running multiple tests in a single step, re-running test suites without code edits, or spamming redundant checks.
 
-If the agent attempts to execute a second test within the same step (or before modifying code), the harness intercepts the execution, blocks the redundant run, and reminds the agent to inspect the existing test results, formulate a hypothesis, and make code edits before re-testing.
-
-This ticket researches how `harnez init` can scaffold and enforce Quota-1 guardrails across client repositories.
+This ticket is an open research investigation to:
+1. Research and formalize the Quota-1 approach for LLM loops.
+2. Formulate a design and plan for how `harnez init` can provide and scaffold Quota-1 guardrails into client repositories.
 
 ---
 
-## 2. Quota-1 Guardrail Architecture & Mechanics
+## 2. Research Scope & Open Questions
 
-### 2.1 Enforcement Points
-- **PreToolUse Hook Interception**:
-  A `PreToolUse` hook (extending `harnez exec hook` or a project-level test wrapper) monitors tool invocations matching test runners (`go test`, `pytest`, `cargo test`, `npm test`, `make test`, `ctest`, etc.).
-- **Step / Turn State Accounting**:
-  - Ephemeral state (in `internal/sessionstate/` or `/tmp/.harnez-step-*` / environment variable) records test executions within the current agent turn.
-  - Test quota resets to 1 whenever a file edit (write/patch) occurs or a new turn begins.
-- **Quota Exceeded Action**:
-  When a second test execution is attempted without an intervening code modification:
-  - The hook rejects the invocation with an actionable diagnostic message:
-    `"Quota-1 Guardrail: Only 1 test run permitted per step. Analyze the prior failure, modify code, and run a targeted test."`
-  - Prevents runaway token consumption and halts infinite test-retry loops.
+This investigation should research and answer the following questions from first principles without pre-committing to an assumed implementation:
 
-### 2.2 Promoting Targeted Test Execution
-- Quota-1 can be coupled with targeted test filters (e.g. requiring `-run <TestName>` or specific test file targeting during development loops, reserving full-suite runs for Phase 3 review gates).
+### 2.1 Quota-1 Concept & Semantics
+- How is Quota-1 defined across different agent architectures and literature?
+- What constitutes a "step" or "turn" boundary across different harness models (Claude Code, Google Antigravity, Codex)?
+- What constitutes a "test run" vs. non-test commands (compilation/build, linting, syntax checking, type-checking)?
+- When and how should the quota reset (on file modification, on next user turn, on explicit state transition)?
 
----
+### 2.2 Enforcement Mechanisms
+- What are the viable interception layers for enforcing a single-test quota (PreToolUse lifecycle hooks, shell shims, Makefile wrappers, proxy wrappers)?
+- How do different enforcement points behave under each supported agent harness?
+- What should happen when the quota is exceeded (blocking with feedback, silent skip, deferral, warning)?
 
-## 3. Integration & Scaffolding via `harnez init`
-
-`harnez init` configures project-level agent environments. Potential scaffolding mechanisms include:
-
-1. **`AGENTS.md` / `AgenticLoop.md` Invariant**:
-   - Add a canonical invariant in Phase 2 (Sequential Development & TDD): *Invariant: Quota-1 Test Discipline — one hypothesis, one targeted test execution per turn*.
-2. **Project Hook Scaffolding**:
-   - Provisioning PreToolUse test interceptor hooks in `settings.json` (Claude Code), `hooks.json` (AGY), or shell wrappers (Codex).
-3. **Makefile Guardrails**:
-   - Scaffolding test runner targets in project `Makefile`s (e.g. `make test-unit`, `make test-single`) that integrate with the Quota-1 state tracker.
-4. **Language-Specific Guidance in `docs/lang/`**:
-   - Updating `docs/lang/Go.md`, `Bash.md`, `Rust.md`, `Cpp.md`, etc., with explicit single-test targeting syntax (e.g. `go test -run TestX ./pkg`).
+### 2.3 Scaffolding & Ergonomics via `harnez init`
+- How should `harnez init` inject or configure these guardrails in client repositories?
+- What artifacts should be generated (e.g., repository rules in `AGENTS.md`, local hook definitions, Makefile recipes)?
+- Should this be an opt-in feature (e.g., `harnez init --guardrails` / `init --quota-1`) or part of default scaffolding?
+- What escape hatches or bypass mechanisms are necessary for human developers, full CI runs, and Phase 3 review agents?
 
 ---
 
-## 4. Research & Design Questions
+## 3. Acceptance Criteria
 
-1. **Turn Boundary & File Edit Detection**:
-   - How can the hook reliably differentiate between a new turn vs. multiple tool calls within the same turn across Claude Code, Google Antigravity, and Codex?
-   - Can file modification timestamps (`fsutil`) or post-edit hooks reset the turn quota cleanly?
-2. **Failure vs. Build/Syntax Checks**:
-   - Distinguishing quick compiler/syntax checks (e.g. `go build`, `tsc --noEmit`) from heavy test runner executions (`go test ./...`).
-3. **Opt-in vs. Default-on Scaffolding**:
-   - Should `harnez init` enable Quota-1 test guardrails by default, or provide a `--quota-1` / `--strict-tdd` opt-in flag?
-4. **Bypass Mechanism**:
-   - How can human developers or Phase 3 review subagents legitimately run full test suites without tripping the single-test limiter?
-
----
-
-## 5. Acceptance Criteria
-
-- [ ] Analyze turn/step boundary detection mechanisms across supported agent harnesses.
-- [ ] Prototype a PreToolUse hook interceptor that tracks test runner invocations and enforces a 1-test-per-step limit.
-- [ ] Draft the Quota-1 TDD invariant for `docs/practices/AgenticLoop.md`.
-- [ ] Design the `harnez init` scaffolding integration (hooks, Makefile recipes, `AGENTS.md` rules).
-- [ ] Implement a canary test verifying that a 2nd consecutive test execution is rejected with a clear remediation message.
+- [ ] Complete research study documenting the Quota-1 approach, semantics, and prior art.
+- [ ] Evaluate candidate enforcement architectures across supported agent environments.
+- [ ] Produce a concrete design and plan for how `harnez init` will scaffold Quota-1 guardrails into repositories.
+- [ ] File follow-up implementation ticket(s) based on the decided plan.
