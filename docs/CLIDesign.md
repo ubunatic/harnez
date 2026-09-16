@@ -17,9 +17,10 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `scan-docs` | Workspace | Read-only scan of child projects for managed doc drift |
 | `clean` | Global | Remove managed keys / strip MD sections |
 | `status`| Global | Config summary + applied-state checks |
-| `usage` | Multi-Agent (local/remote) | Zero-cost token counters, live quota tracking, procs (`-p`), remote host (`--host`) |
+| `usage` | Multi-Agent (local/remote) | Zero-cost token counters, live quota tracking, project attribution (`--project`), procs (`-p`), remote host (`--host`) |
 | `usage history` | Analytical / Logs | Timeline, remote fetch, stats & sparklines across `~/.claude/harnez/usage-history/` |
 | `assess`| Local / Repo | Fast code/doc metrics, token estimation, and feasibility report (`--json`) |
+| `dochistory` / `repo-history` | Local / Repo | Multi-track Git artifact evolution, Braille sparklines (`--tracks`), and diff breakdown (`--diff`) |
 | `mode`  | Local / Repo | Switch ConciseMode terseness level and sync AGENTS.local.md overlay |
 | `distill` | Shell / Hooks | Distill verbose command outputs for context conservation |
 | `release` | Local / Repo | Language-agnostic version bump, build, minisign signing, and forge publishing |

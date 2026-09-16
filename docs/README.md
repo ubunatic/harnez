@@ -18,6 +18,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [Models.md](Models.md) | Model assessment: comparison notes across Claude/Gemini/GPT generations (consult when picking a model tier for a subagent or workflow) |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat (consult when updating permission schemas) |
 | [Roadmap.md](Roadmap.md) | Working roadmap synthesized from the open issue backlog (consult before prioritizing new work; regenerate via `/roadmap`) |
+| [Telemetry.md](Telemetry.md) | Telemetry and evolution architecture: multi-agent usage tracking, quota history snapshotting, multi-track Git artifact evolution, and project token attribution (consult when modifying analytics or usage pipelines) |
 | [TUIDesign.md](TUIDesign.md) | Single-cell indicator semantics, panel visibility model invariants, and raw-mode hotkey contracts (consult when changing gauges, multi-panel layouts, or key dispatch) |
 | [Testing.md](Testing.md) | Test layers and verification entry points for package, integration, static, smoke, canary, and live checks |
 
