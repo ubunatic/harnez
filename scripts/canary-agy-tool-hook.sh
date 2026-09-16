@@ -42,11 +42,23 @@ except Exception:
     print("unknown")
 ')
 
-# Skip run_command because the guarded bash PATH shim (Issue 271) already captures
-# all shelled-out commands with full subcommand granularity under harnez exec.
+# Categorize call_type and note based on tool type:
+# - run_command preps a downstream Bash execution -> call_type: 'hook:prep', note: CommandLine
+# - client RPC tools (view_file, schedule, generate_image...) -> call_type: 'hook:rpc'
+call_type="hook:rpc"
+note=""
+
 if test "${tool_name}" = "run_command"
-then printf '{"decision":"allow"}\n'
-     exit 0
+then call_type="hook:prep"
+     note=$(printf '%s' "${payload}" | python3 -c '
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    cmd = data.get("toolCall", {}).get("args", {}).get("CommandLine", "")
+    print(f"preps:Bash | {cmd}" if cmd else "preps:Bash")
+except Exception:
+    print("preps:Bash")
+')
 fi
 
 # Insert into telemetry sqlite if available
@@ -56,15 +68,17 @@ INSERT INTO tool_calls (
     session_id,
     agent_id,
     tool_name,
-    score,
     call_type,
+    score,
+    note,
     created_at
 ) VALUES (
     '${session_id}',
     'agy',
     '${tool_name}',
+    '${call_type}',
     5.0,
-    'exec',
+    '${note}',
     datetime('now')
 );
 EOF
