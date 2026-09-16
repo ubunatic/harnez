@@ -1,6 +1,6 @@
 # 375 — Append quota window snapshots to quota-history.jsonl on cache refresh
 
-**Status**: Open  
+**Status**: In Progress
 **Priority**: P2 (Medium)  
 **Severity**: Minor  
 **Category**: Feature  
