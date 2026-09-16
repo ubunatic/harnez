@@ -39,6 +39,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/distill"
+	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/telemetry"
 )
@@ -105,14 +106,41 @@ func detectExpectFailure(opts execOptions, args []string) bool {
 	return false
 }
 
+// quota1Env is the environment variable that triggers Quota-1 enforcement.
+const quota1Env = "HARNEZ_QUOTA_1"
+
+// quota1CmdRE matches a leading HARNEZ_QUOTA_1=1 command prefix.
+var quota1CmdRE = regexp.MustCompile(`^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*` + quota1Env + `=(1|[Tt][Rr][Uu][Ee])\b`)
+
+// detectQuota1 reports whether args should be run under Quota-1 single-test enforcement.
+func detectQuota1(opts execOptions, args []string) bool {
+	if opts.Quota1 {
+		return true
+	}
+	getenv := opts.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	if v := getenv(quota1Env); v == "1" || strings.EqualFold(v, "true") {
+		return true
+	}
+	for _, a := range args {
+		if quota1CmdRE.MatchString(a) {
+			return true
+		}
+	}
+	return false
+}
+
 func newExecCmd() *cobra.Command {
 	var toolFlag string
 	var ticketFlag string
 	var distillFlag string
 	var expectFailureFlag bool
+	var quota1Flag bool
 
 	cmd := &cobra.Command{
-		Use:     "exec [--tool <tool_name>] [--ticket <ticket_id>] [--distill[=<mode>]] [--expect-failure] -- <command...>",
+		Use:     "exec [--tool <tool_name>] [--ticket <ticket_id>] [--distill[=<mode>]] [--expect-failure] [--quota-1] -- <command...>",
 		Aliases: []string{"⚙", "⚙️"},
 		Short:   "Run a command, proxy its stdio unbuffered, and record shell-call telemetry",
 		Long: `exec wraps an arbitrary command: it spawns <command...> as a subprocess,
@@ -147,6 +175,7 @@ points an agent's Bash tool calls at this command.`,
 				Ticket:        ticketFlag,
 				Distill:       distillFlag,
 				ExpectFailure: expectFailureFlag,
+				Quota1:        quota1Flag,
 			}, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
 			if err != nil {
 				return err
@@ -162,6 +191,7 @@ points an agent's Bash tool calls at this command.`,
 	cmd.Flags().StringVar(&ticketFlag, "ticket", "", "ticket_id override (default: resolve.Ticket())")
 	cmd.Flags().StringVar(&distillFlag, "distill", "", "distillation filter mode (auto, gotest, git, raw)")
 	cmd.Flags().BoolVar(&expectFailureFlag, "expect-failure", false, "record telemetry row with call_type=shell-expected")
+	cmd.Flags().BoolVar(&quota1Flag, "quota-1", false, "enforce Quota-1 single-test boundary (require code edits between runs)")
 	cmd.Flags().Lookup("distill").NoOptDefVal = "auto"
 
 	cmd.AddCommand(newExecHookCmd())
@@ -206,6 +236,8 @@ type execOptions struct {
 	Ticket        string
 	Distill       string
 	ExpectFailure bool
+	Quota1        bool
+	Quota1Dir     string
 
 	Getenv        func(string) string                                // nil means os.Getenv
 	StateDir      string                                             // resolve.Session/Ticket state/lock dir override
@@ -308,6 +340,20 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 	if opts.Tool == "" {
 		opts.Tool = inferToolFromArgs(args, "Bash")
+	}
+
+	if detectQuota1(opts, args) {
+		res, err := quota1.CheckAndRecord(quota1.CheckOptions{
+			Dir:    opts.Quota1Dir,
+			Getenv: opts.Getenv,
+		})
+		if err != nil {
+			return 1, fmt.Errorf("exec: %w", err)
+		}
+		if !res.Allowed {
+			fmt.Fprintln(errOut, res.Message)
+			return 1, nil
+		}
 	}
 
 	counter := &byteCounter{}

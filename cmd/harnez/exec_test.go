@@ -873,3 +873,123 @@ func TestAlreadyRoutedThroughExec_WithEnvPrefix(t *testing.T) {
 		}
 	}
 }
+
+func TestRunExecWrapper_Quota1(t *testing.T) {
+	repoDir := t.TempDir()
+	gitDir := filepath.Join(repoDir, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatalf("mkdir .git: %v", err)
+	}
+	srcFile := filepath.Join(repoDir, "app.go")
+	baseTime := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	if err := os.WriteFile(srcFile, []byte("package app\n"), 0644); err != nil {
+		t.Fatalf("write app.go: %v", err)
+	}
+	_ = os.Chtimes(srcFile, baseTime, baseTime)
+
+	opts := testExecOptions(t)
+	opts.Quota1 = true
+	opts.Quota1Dir = repoDir
+
+	// 1. First run: allowed
+	var out1, errOut1 bytes.Buffer
+	code1, err := runExecWrapper([]string{"echo", "test1"}, opts, strings.NewReader(""), &out1, &errOut1)
+	if err != nil {
+		t.Fatalf("run 1 error = %v", err)
+	}
+	if code1 != 0 {
+		t.Fatalf("run 1 exit code = %d, want 0", code1)
+	}
+	if !strings.Contains(out1.String(), "test1") {
+		t.Errorf("stdout = %q, want test1", out1.String())
+	}
+
+	// 2. Second run without file changes: blocked!
+	var out2, errOut2 bytes.Buffer
+	code2, err := runExecWrapper([]string{"echo", "test2"}, opts, strings.NewReader(""), &out2, &errOut2)
+	if err != nil {
+		t.Fatalf("run 2 error = %v", err)
+	}
+	if code2 != 1 {
+		t.Fatalf("run 2 exit code = %d, want 1", code2)
+	}
+	if out2.String() != "" {
+		t.Errorf("stdout should be empty when child is blocked, got %q", out2.String())
+	}
+	if !strings.Contains(errOut2.String(), "Quota-1: test execution blocked") {
+		t.Errorf("stderr = %q, want Quota-1 blocked message", errOut2.String())
+	}
+
+	// 3. Edit source file: allowed again
+	time.Sleep(20 * time.Millisecond)
+	if err := os.WriteFile(srcFile, []byte("package app\n// edited\n"), 0644); err != nil {
+		t.Fatalf("edit app.go: %v", err)
+	}
+
+	var out3, errOut3 bytes.Buffer
+	code3, err := runExecWrapper([]string{"echo", "test3"}, opts, strings.NewReader(""), &out3, &errOut3)
+	if err != nil {
+		t.Fatalf("run 3 error = %v", err)
+	}
+	if code3 != 0 {
+		t.Fatalf("run 3 exit code = %d, want 0", code3)
+	}
+	if !strings.Contains(out3.String(), "test3") {
+		t.Errorf("stdout = %q, want test3", out3.String())
+	}
+
+	// 4. Test HARNEZ_QUOTA_1=1 env activates quota
+	envOpts := testExecOptions(t)
+	envOpts.Quota1 = false
+	envOpts.Quota1Dir = repoDir
+	envOpts.Getenv = func(k string) string {
+		if k == "HARNEZ_QUOTA_1" {
+			return "1"
+		}
+		return ""
+	}
+	var out4, errOut4 bytes.Buffer
+	code4, err := runExecWrapper([]string{"echo", "test4"}, envOpts, strings.NewReader(""), &out4, &errOut4)
+	if err != nil {
+		t.Fatalf("run 4 error = %v", err)
+	}
+	if code4 != 1 {
+		t.Fatalf("run 4 exit code = %d, want 1 (blocked via env)", code4)
+	}
+	if !strings.Contains(errOut4.String(), "Quota-1: test execution blocked") {
+		t.Errorf("stderr = %q, want Quota-1 blocked message", errOut4.String())
+	}
+
+	// 5. Test QUOTA_BYPASS=1 bypasses quota
+	bypassOpts := testExecOptions(t)
+	bypassOpts.Quota1 = true
+	bypassOpts.Quota1Dir = repoDir
+	bypassOpts.Getenv = func(k string) string {
+		if k == "QUOTA_BYPASS" {
+			return "1"
+		}
+		return ""
+	}
+	var out5, errOut5 bytes.Buffer
+	code5, err := runExecWrapper([]string{"echo", "test5"}, bypassOpts, strings.NewReader(""), &out5, &errOut5)
+	if err != nil {
+		t.Fatalf("run 5 error = %v", err)
+	}
+	if code5 != 0 {
+		t.Fatalf("run 5 exit code = %d, want 0 (bypassed)", code5)
+	}
+	if !strings.Contains(out5.String(), "test5") {
+		t.Errorf("stdout = %q, want test5", out5.String())
+	}
+}
+
+func TestNewExecCmd_Quota1Flag(t *testing.T) {
+	cmd := newExecCmd()
+	f := cmd.Flags().Lookup("quota-1")
+	if f == nil {
+		t.Fatal("expected --quota-1 flag to be registered")
+	}
+	if f.DefValue != "false" {
+		t.Errorf("flag default = %q, want false", f.DefValue)
+	}
+}

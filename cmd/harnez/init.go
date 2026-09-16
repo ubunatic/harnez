@@ -13,7 +13,7 @@ func newInitCmd() *cobra.Command {
 	var initConfigPath string
 	var initRepoMode string
 	var initVariant string
-	var initSummary, initUpdate, initReplace, initYes, initAll, initIssuesGit, initGoWork, initForce bool
+	var initSummary, initUpdate, initReplace, initYes, initAll, initIssuesGit, initGoWork, initForce, initQuota1 bool
 
 	initCmd := &cobra.Command{
 		Use:   "init",
@@ -28,9 +28,9 @@ func newInitCmd() *cobra.Command {
 				issuesGit = &initIssuesGit
 			}
 			if initAll {
-				return claude.RunInitAllWithVariant(initDir, cfg, initDocs, initRepoMode, initSummary, initUpdate, initReplace, issuesGit, initGoWork, initVariant)
+				return claude.RunInitAllWithVariant(initDir, cfg, initDocs, initRepoMode, initSummary, initUpdate, initReplace, issuesGit, initGoWork, initVariant, initQuota1)
 			}
-			return claude.RunInitWithVariant(initDir, cfg, initDocs, initRepoMode, initYes, initSummary, initUpdate, initReplace, issuesGit, initGoWork, initForce, initVariant)
+			return claude.RunInitWithVariant(initDir, cfg, initDocs, initRepoMode, initYes, initSummary, initUpdate, initReplace, issuesGit, initGoWork, initForce, initVariant, initQuota1)
 		},
 	}
 	initCmd.Flags().StringVarP(&initConfigPath, "config", "c", "", "path to config YAML file (default: embedded)")
@@ -47,6 +47,7 @@ func newInitCmd() *cobra.Command {
 	initCmd.Flags().BoolVar(&initReplace, "replace", false, "delete existing AGENTS.md and recreate from template before init")
 	initCmd.Flags().BoolVar(&initIssuesGit, "issues-git", false, "enable issue-index Git integration (use --issues-git=false to remove it)")
 	initCmd.Flags().BoolVar(&initGoWork, "gowork", false, "set up or migrate Go workspace (go.work.example + untracked local go.work symlink)")
+	initCmd.Flags().BoolVar(&initQuota1, "quota-1", false, "scaffold Quota-1 single-test guardrails in AGENTS.md and Makefile")
 
 	return initCmd
 }

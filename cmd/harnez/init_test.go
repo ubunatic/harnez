@@ -47,3 +47,14 @@ func TestInitCmd_AllowsNonCodingDirectoryWithForce(t *testing.T) {
 		t.Errorf("expected CLAUDE.md to be created: %v", err)
 	}
 }
+
+func TestInitCmd_Quota1Flag(t *testing.T) {
+	cmd := newInitCmd()
+	f := cmd.Flags().Lookup("quota-1")
+	if f == nil {
+		t.Fatal("expected --quota-1 flag to be registered on init command")
+	}
+	if f.DefValue != "false" {
+		t.Errorf("flag default = %q, want false", f.DefValue)
+	}
+}

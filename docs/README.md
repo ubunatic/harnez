@@ -17,7 +17,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [Models.md](Models.md) | Model assessment: comparison notes across Claude/Gemini/GPT generations (consult when picking a model tier for a subagent or workflow) |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat (consult when updating permission schemas) |
 | [Roadmap.md](Roadmap.md) | Working roadmap synthesized from the open issue backlog (consult before prioritizing new work; regenerate via `/roadmap`) |
-| [TUIDesign.md](TUIDesign.md) | Single-cell time-indicator semantics, safe Unicode presets, and display-width/font pitfalls (consult when changing gauges, bars, sparks, or spinners) |
+| [TUIDesign.md](TUIDesign.md) | Single-cell indicator semantics, panel visibility model invariants, and raw-mode hotkey contracts (consult when changing gauges, multi-panel layouts, or key dispatch) |
 | [Testing.md](Testing.md) | Test layers and verification entry points for package, integration, static, smoke, canary, and live checks |
 
 
@@ -109,6 +109,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-09-16-skilloverrides-live-verification.md](studies/2026-09-16-skilloverrides-live-verification.md) | live verification of Claude Code's skillOverrides settings.json field against an installed version, resolving issue 347's unverified GitHub-issue claims |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
 | [studies/MacOSContainerAMD.md](studies/MacOSContainerAMD.md) | macOS Containers on AMD KVM & Podman: Architecture, Quirks, and Diagnostic Guide |
+| [studies/Quota1Approach.md](studies/Quota1Approach.md) | Research Study: Quota-1 Guardrails for LLM Agent Loops |
 | [studies/RTKShellWrapperHandling.md](studies/RTKShellWrapperHandling.md) | RTK: Shell-Wrapper and Pipe Handling in Command-Rewrite Hooks |
 | [studies/Worktrees.md](studies/Worktrees.md) | Worktrees — learnings & TODOs |
 

@@ -1,6 +1,6 @@
 # 364 — Research Quota-1 approach for LLM loops and scaffolding plan for harnez init
 
-**Status**: Open
+**Status**: Closed — resolved with quota-1 implementation and scaffolding
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -45,7 +45,8 @@ This investigation should research and answer the following questions from first
 
 ## 3. Acceptance Criteria
 
-- [ ] Complete research study documenting the Quota-1 approach, semantics, and prior art.
-- [ ] Evaluate candidate enforcement architectures across supported agent environments.
-- [ ] Produce a concrete design and plan for how `harnez init` will scaffold Quota-1 guardrails into repositories.
-- [ ] File follow-up implementation ticket(s) based on the decided plan.
+- [x] Complete research study documenting the Quota-1 approach, semantics, and prior art (`docs/studies/Quota1Approach.md`).
+- [x] Evaluate candidate enforcement architectures across supported agent environments.
+- [x] Produce a concrete design and plan for how `harnez init` will scaffold Quota-1 guardrails into repositories.
+- [x] Implement and ship Quota-1 state tracking (`internal/quota1`), execution interceptor (`harnez exec --quota-1`), and scaffolding (`harnez init --quota-1`).
+

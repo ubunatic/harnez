@@ -38,6 +38,16 @@ func markdownOutsideFences(data []byte) string {
 
 const summarySection = "Project Summary"
 
+const quota1SectionName = "Quota-1 Guardrails"
+
+const quota1SectionContent = `## Quota-1 Guardrails
+
+- **Single-Test Boundary**: Under Quota-1 rules, the agent may only run the test suite once per step/turn.
+- **Code Modification Required**: If tests fail or complete, you MUST modify repository source files before running tests again. Repeated test runs without intermediate code modifications are blocked.
+- **Enforced Test Target**: Execute tests via ` + "`make test-q1`" + ` (or ` + "`harnez exec --quota-1 -- <test-cmd>`" + `).
+- **Unauthorized Bypass Forbidden**: Bypassing guardrails via ` + "`QUOTA_BYPASS=1`" + ` or ` + "`HARNEZ_QUOTA_BYPASS=1`" + ` is strictly reserved for human developers and CI environments. Agent loops must not set or pass bypass flags.`
+
+
 const summaryPrompt = `Summarize this project for a coding agent in plain markdown.
 Cover: what it does, the main components and their roles, key conventions, and anything
 important to know before making changes.
@@ -574,8 +584,8 @@ func RunInitWithForce(dir string, cfg *Config, docs []string, repoMode string, a
 
 // RunInitWithVariant is RunInitWithForce with an explicit doc variant
 // ("" or "lite") selecting which source (Language.SourceFor) is copied for
-// docs that declare a lite_source.
-func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool, gowork bool, force bool, variant string) error {
+// docs that declare a lite_source, and an optional quota1 flag.
+func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string, assumeYes, withSummary, update, replace bool, issuesGit *bool, gowork bool, force bool, variant string, quota1 ...bool) error {
 	if err := ValidateInitTarget(dir, force); err != nil {
 		return err
 	}
@@ -782,6 +792,44 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 						fmt.Printf("  exists  %s (targets unchanged)\n", dest)
 					}
 				}
+			}
+		}
+	}
+
+	quota1Active := len(quota1) > 0 && quota1[0]
+	if quota1Active {
+		r, err := applySectionMD(agentsPath, quota1SectionName, quota1SectionContent)
+		if err != nil {
+			return fmt.Errorf("agents_md [%s]: %w", quota1SectionName, err)
+		}
+		if r.changed {
+			changes++
+		}
+		printResult("wrote", agentsPath, r)
+
+		makePath := localPath(dir, "Makefile")
+		targetSnippet := "test-q1: 🤖  # run tests under Quota-1 enforcement\n\t⚙ --quota-1 -- $(MAKE) test\n"
+		if _, err := os.Stat(makePath); os.IsNotExist(err) {
+			initialMake := fmt.Sprintf(".PHONY: ⚙️ 🤖\n⚙️:\n🤖:\n\n%s", targetSnippet)
+			if err := os.WriteFile(makePath, []byte(initialMake), 0644); err != nil {
+				return fmt.Errorf("scaffold %s: %w", makePath, err)
+			}
+			changes++
+			fmt.Printf("  scaffolded %s (test-q1)\n", makePath)
+		} else if err == nil {
+			var makeCfg MakeConfig
+			if cfg != nil {
+				makeCfg = cfg.Make
+			}
+			tr, err := ReconcileMakeTargets(makePath, targetSnippet, makeCfg, assumeYes, nil)
+			if err != nil {
+				return fmt.Errorf("reconcile test-q1 in %s: %w", makePath, err)
+			}
+			if tr {
+				changes++
+				fmt.Printf("  reconciled %s (test-q1)\n", makePath)
+			} else {
+				fmt.Printf("  exists  %s (test-q1 unchanged)\n", makePath)
 			}
 		}
 	}
@@ -1033,7 +1081,7 @@ func RunInitAllWithGoWork(parentDir string, cfg *Config, docs []string, repoMode
 // RunInitAllWithVariant is RunInitAllWithGoWork with an explicit doc variant
 // ("" or "lite") selecting which source (Language.SourceFor) is copied for
 // docs that declare a lite_source, threaded into each child's RunInitWithVariant call.
-func RunInitAllWithVariant(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool, issuesGit *bool, gowork bool, variant string) error {
+func RunInitAllWithVariant(parentDir string, cfg *Config, docs []string, repoMode string, withSummary, update, replace bool, issuesGit *bool, gowork bool, variant string, quota1 ...bool) error {
 	if parentDir == "" {
 		return fmt.Errorf("parent directory is empty")
 	}
@@ -1064,10 +1112,11 @@ func RunInitAllWithVariant(parentDir string, cfg *Config, docs []string, repoMod
 		fmt.Printf("No eligible project directories found under %s\n", abs)
 		return nil
 	}
+	quota1Active := len(quota1) > 0 && quota1[0]
 	var errs []string
 	for _, child := range children {
 		fmt.Printf("== %s ==\n", filepath.Base(child))
-		if err := RunInitWithVariant(child, cfg, docs, repoMode, true, withSummary, update, replace, issuesGit, gowork, false, variant); err != nil {
+		if err := RunInitWithVariant(child, cfg, docs, repoMode, true, withSummary, update, replace, issuesGit, gowork, false, variant, quota1Active); err != nil {
 			fmt.Printf("  error: %v\n", err)
 			errs = append(errs, fmt.Sprintf("%s: %v", child, err))
 			continue
