@@ -1,0 +1,17 @@
+{
+  "harnez-tool-observer": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/uwe/projects/harnez/scripts/canary-agy-tool-hook.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
