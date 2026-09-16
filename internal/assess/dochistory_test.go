@@ -50,6 +50,11 @@ func TestRenderSparkline(t *testing.T) {
 		t.Errorf("RenderSparkline(flat) len = %d; want 3", len([]rune(got)))
 	}
 
+	zeros := []int{0, 0, 0, 0}
+	if got := RenderSparkline(zeros, 10); got != "\u2581\u2581\u2581\u2581" {
+		t.Errorf("RenderSparkline(zeros) = %q; want %q", got, "\u2581\u2581\u2581\u2581")
+	}
+
 	rising := []int{10, 20, 30, 40, 50, 60, 70, 80}
 	spark := RenderSparkline(rising, 10)
 	sparkRunes := []rune(spark)

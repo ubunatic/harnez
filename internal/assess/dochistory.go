@@ -403,8 +403,12 @@ func RenderSparkline(values []int, maxWidth int) string {
 	res := make([]rune, len(values))
 
 	if maxVal == minVal {
+		glyph := SparklineGlyphs[0]
+		if maxVal > 0 {
+			glyph = SparklineGlyphs[numGlyphs/2]
+		}
 		for i := range values {
-			res[i] = SparklineGlyphs[numGlyphs/2]
+			res[i] = glyph
 		}
 		return string(res)
 	}
