@@ -1,6 +1,6 @@
 # 380 — Allow showing additions and removals separately in multi-track repo history
 
-**Status**: Open  
+**Status**: In Progress
 **Priority**: P2 (Medium)  
 **Severity**: Minor  
 **Category**: Feature  
