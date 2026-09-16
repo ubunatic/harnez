@@ -30,15 +30,6 @@ func TestIssueCommandAndSkillInstallToEveryConfiguredTarget(t *testing.T) {
 		t.Fatalf("ApplyAll failed: %v", err)
 	}
 
-	for _, commandRoot := range commandTargets(targetDir, cfg) {
-		path := filepath.Join(commandRoot, "issue.md")
-		content := readIssueInstall(t, path)
-		if !strings.HasPrefix(content, "---\ndescription:") {
-			t.Errorf("expected command frontmatter in %s, got:\n%s", path, content)
-		}
-		assertIssueTLDR(t, path, content)
-	}
-
 	for _, skillsRoot := range skillTargets(cfg) {
 		path := filepath.Join(skillsRoot, "issue", "SKILL.md")
 		content := readIssueInstall(t, path)

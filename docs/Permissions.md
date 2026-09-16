@@ -68,3 +68,11 @@ Key behaviors confirmed live (issue 316, `harnez apply --debloat` /
   unchanged from baseline, confirming it doesn't touch this mechanism at all. See the
   study doc above for the full three-axis breakdown (tool denial / harness features /
   user customization) before proposing a new "reduce context" lever.
+
+## Interaction between `PreToolUse` hook rewrites and `permissions.allow`
+
+When a `PreToolUse` hook rewrites a tool command (e.g. `harnez exec hook` rewriting `git status` to `⚙ git status`):
+
+- **Permission checks run on the rewritten input**: Claude Code evaluates `permissions.allow` rules against the modified command string, not the original agent invocation. A rule matching `Bash(git *)` does not match `⚙ git status`.
+- **Wrapper allow rules are required**: For hooks that prepend a wrapper or multicall alias (such as `⚙` or `harnez exec`), `permissions.allow` must include rules covering the wrapper (e.g. `Bash(⚙ *)`, `Bash(harnez *)`). Without this, every rewritten command is considered unapproved.
+- **Compound failure mode with denied interaction tools**: If `permissions.deny` includes `AskUserQuestion` (e.g. `--debloat-preset aggressive`) or if running in an automated / non-interactive subagent context, Claude cannot prompt the user to approve unallowed commands. Repeated permission denials on rewritten commands lead Claude Code to conclude that the `Bash` tool is broken or non-functional.

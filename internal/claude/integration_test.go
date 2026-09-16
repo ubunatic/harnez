@@ -104,11 +104,11 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(primeAgentDir, "skills", "sprint", "SKILL.md")); err != nil {
 		t.Fatalf("Expected Prime Agent sprint skill to be written: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(primeAgentDir, "prompts", "evergreen.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(primeAgentDir, "prompts", "standup.md")); err != nil {
 		t.Fatalf("Expected Prime Agent prompt to be written: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(primeAgentDir, "prompts", "sprint.md")); err != nil {
-		t.Fatalf("Expected Prime Agent sprint prompt to be written: %v", err)
+	if _, err := os.Stat(filepath.Join(primeAgentDir, "prompts", "review.md")); err != nil {
+		t.Fatalf("Expected Prime Agent review prompt to be written: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(primeAgentDir, "AGENTS.md")); err != nil {
 		t.Fatalf("Expected Prime Agent rules to be written: %v", err)
@@ -119,8 +119,8 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(primeAgentDir, "docs", "AgenticLoop.md")); err != nil {
 		t.Fatalf("Expected Prime Agent AgenticLoop doc to be written: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(targetDir, "commands", "sprint.md")); err != nil {
-		t.Fatalf("Expected Claude sprint command to be written: %v", err)
+	if _, err := os.Stat(filepath.Join(targetDir, "commands", "standup.md")); err != nil {
+		t.Fatalf("Expected Claude standup command to be written: %v", err)
 	}
 	if data, err := os.ReadFile(piExtensionPath); err != nil {
 		t.Fatalf("Expected Pi distill adapter to be written: %v", err)
@@ -230,7 +230,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if !strings.Contains(out, filepath.Join(primeAgentDir, "skills", "evergreen", "SKILL.md")) {
 		t.Errorf("Expected RunStatus to list Prime Agent skill target, got:\n%s", out)
 	}
-	if !strings.Contains(out, filepath.Join(primeAgentDir, "prompts", "evergreen.md")) {
+	if !strings.Contains(out, filepath.Join(primeAgentDir, "prompts", "standup.md")) {
 		t.Errorf("Expected RunStatus to list Prime Agent prompt target, got:\n%s", out)
 	}
 	if !strings.Contains(out, filepath.Join(primeAgentDir, "AGENTS.md")) {

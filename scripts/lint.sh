@@ -7,19 +7,11 @@ set -euo pipefail
 config="config.yaml"
 fail=0
 
-# Extract names declared under the commands: block only (stops at next top-level key).
-cmd_names=$(awk '
-    /^commands:/ { in_block=1; next }
-    in_block && /^[a-z]/ { exit }
-    in_block && /- name:/ { print $3 }
-' "${config}")
-
-# Every commands/*.md must be registered in config.yaml.
+# Every commands/*.md must be registered in config.yaml (under commands: or skills:).
 # (The reverse — every file: entry must exist — is enforced by apply itself.)
 for f in commands/*.md
 do
-    name=$(basename "$f" .md)
-    if ! echo "${cmd_names}" | grep -qx "${name}"
+    if ! grep -Fq "file: ${f}" "${config}"
     then echo "lint: unregistered command file: ${f}"
          fail=1
     fi

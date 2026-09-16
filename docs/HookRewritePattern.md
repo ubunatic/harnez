@@ -46,6 +46,15 @@ instead: `<feature> -- bash -c '<original, single-quote-escaped>'` (see
 `cmd/harnez/exec.go`'s `shellQuote`, or distill's own approach of embedding the original
 command inline inside one larger shell string, `internal/distill/hook.go`).
 
+**PreToolUse rewrites run before permission evaluation; wrapper commands must be allow-listed.**
+Claude Code evaluates its `permissions.allow` rules against the rewritten string returned in
+`updatedInput`, not the original command. If a hook rewrites `git status` into `⚙ git status`
+or `harnez exec -- git status`, rules like `Bash(git *)` will not match. The wrapper itself
+(e.g. `Bash(⚙ *)`, `Bash(harnez *)`) must be explicitly present in `permissions.allow`.
+Otherwise, every command requires interactive user confirmation — which cascades into complete
+tool failure if interaction tools like `AskUserQuestion` are denied (such as under
+`--debloat-preset aggressive`).
+
 ## The pattern: rewrite now, capture later
 
 Split the feature into two stages, each a separate CLI entry point with its own stdin

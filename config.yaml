@@ -38,6 +38,20 @@ effort: medium
 decommissioned:
   commands:
     - fresh-sprint
+    - evergreen
+    - issue
+    - story
+    - domain-modeling
+    - sprint
+    - lean-sprint
+    - mode
+    - website
+    - harnez-sync
+    - roadmap
+    - discovery
+    - publish
+    - lmcoder
+    - release
   skills:
     - fresh-sprint
     - fresh-sprinter
@@ -143,6 +157,9 @@ permissions:
     - "Bash(git *)"
     - "Bash(make *)"
     - "Bash(go *)"
+    # harnez shims & execution wrapper (issue 270)
+    - "Bash(⚙ *)"
+    - "Bash(harnez *)"
     # shell basics
     - "Bash(ls *)"
     - "Bash(cd *)"
@@ -218,22 +235,6 @@ commands:
     content: |
       Run `git log --since=midnight --oneline` and summarize what was done.
 
-  - name: evergreen
-    description: "Create/update evergreen docs and issue files for the current session"
-    file: commands/evergreen.md
-
-  - name: issue
-    description: "File a new repository issue or ticket when asked; do not trigger merely because work references an existing issue"
-    file: commands/issue.md
-
-  - name: story
-    description: "Write a candid engineering retrospective and case study in docs/studies/"
-    file: commands/story.md
-
-  - name: domain-modeling
-    description: "Actively build and sharpen the project's domain model, glossary, and ADRs"
-    file: commands/domain-modeling.md
-
   - name: grilling
     description: "Interview relentlessly about a plan or design until every branch is resolved"
     file: commands/grilling.md
@@ -249,46 +250,6 @@ commands:
   - name: sync-mattpocock-skills
     description: "Diff our adapted mattpocock/skills commands against upstream and report drift"
     file: commands/sync-mattpocock-skills.md
-
-  - name: sprint
-    description: "Orchestrate a 5-phase agentic sprint loop (Sequential Advisor -> Reusable Dev -> Review -> Hygiene -> Retro)"
-    file: commands/sprint.md
-
-  - name: lean-sprint
-    description: "Execute a lean fresh-handoff sprint (Goal Handoff -> Autonomous Dev -> Inline Review -> Hygiene)"
-    file: commands/lean-sprint.md
-
-  - name: mode
-    description: "Switch ConciseMode terseness level (lite, std, ultra, off) and sync AGENTS.md"
-    file: commands/mode.md
-
-  - name: website
-    description: "Build or update a project website — reads docs/Website.md rules (hosting, branding, static/no-CDN, subpage links) before generating any content"
-    file: commands/website.md
-
-  - name: harnez-sync
-    description: "Autonomously sweep sibling agent projects for managed-docs drift and reconcile it (scan -> triage -> stop-marker protect -> init -> verify)"
-    file: commands/harnez-sync.md
-
-  - name: roadmap
-    description: "Product-manager-style roadmap creation/update from the open issue backlog (check issues -> check existing roadmap -> synthesize/reconcile by product value axis)"
-    file: commands/roadmap.md
-
-  - name: discovery
-    description: "Product discovery gap analysis: compare a repo's stated use cases against its real implemented surface and the open+closed issue tracker to surface untracked capability gaps as candidates (never files tickets itself)"
-    file: commands/discovery.md
-
-  - name: publish
-    description: "Multi-project release & publish pipeline: detects project shape (CLI, artifact app, website, hybrid), executes pre-flight checks, verifies media, requires explicit confirmation before external push, syncs website, and asserts live endpoint liveness"
-    file: commands/publish.md
-
-  - name: lmcoder
-    description: "Local LLM server lifecycle management, fast interactive prompt streaming with session continuity, and sandboxed coding agent execution"
-    file: commands/lmcoder.md
-
-  - name: release
-    description: "Lean CLI release: commit pending code, push, run harnez release, fix issues or ask on login"
-    file: commands/release.md
 
   - name: commit
     description: "Commit all pending code, including stray issues/docs changes, into a clean working tree"
@@ -724,6 +685,7 @@ agents_md:
       ref: "@docs/IssueTracking.md"
       hint: "P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync"
       source: docs/practices/IssueTracking.md
+      lite_source: docs/practices/IssueTracking.lite.md
       target: ~/.claude/docs/IssueTracking.md
       local: ./docs/IssueTracking.md
       default: true
@@ -766,6 +728,7 @@ agents_md:
       ref: "@docs/GoRelease.md"
       hint: "harnez release, version.yaml spec, GoReleaser v2, non-interactive minisign (-W), Forgejo has_releases, language-agnostic (Go/Python/Zig/Rust/scripted)"
       source: docs/practices/GoRelease.md
+      lite_source: docs/practices/GoRelease.lite.md
       target: ~/.claude/docs/GoRelease.md
       local: ./docs/GoRelease.md
       template: docs/templates/version.yaml
