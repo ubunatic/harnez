@@ -1,6 +1,6 @@
 # 409 — Provider-adaptive output routing in harnez read and subagent dispatch
 
-**Status**: Open
+**Status**: Closed — implemented and tested in e09ea23
 **Priority**: P2 (Medium)
 **Severity**: Feature / Optimization
 **Category**: Multi-Agent Dispatch / Context Optimization
