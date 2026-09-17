@@ -156,6 +156,12 @@ func main() {
 			if len(flagFixtures) == 0 {
 				flagFixtures = []string{"hello"}
 			}
+			if len(flagAgents) == 0 {
+				flagAgents = []string{"claude"}
+			}
+			if len(flagVariants) == 0 {
+				flagVariants = []string{"lite"}
+			}
 			if flagPNG {
 				flagDelivery = "png"
 			}
@@ -196,6 +202,9 @@ func main() {
 				if len(flagVariants) == 1 {
 					flagCostVariant = flagVariants[0]
 				}
+				if len(flagAgents) == 1 {
+					flagAgents = []string{flagAgents[0]}
+				}
 				flagCostLink, flagCostDelivery, flagCostDryRun = flagLink, flagDelivery, flagDryRun
 				return measureCost()
 			}
@@ -204,7 +213,7 @@ func main() {
 	}
 	runCmd.Flags().StringSliceVar(&flagAgents, "agent", nil, "run only this agent CLI, one of: claude, agy (repeatable); default: all agents")
 	runCmd.Flags().StringSliceVar(&flagVariants, "variant", nil, "run only this doc variant, one of: full, lite (repeatable); default: both variants")
-	runCmd.Flags().StringVar(&flagLink, "link", "soft", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
+	runCmd.Flags().StringVar(&flagLink, "link", "hard", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
 	runCmd.Flags().StringVar(&flagDelivery, "delivery", "native", "doc delivery mode: native (text/markdown as-is) or png (rendered via `harnez read -I` context card; not valid with --link=embed)")
 	runCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "prepare and print fixture workspaces without invoking agents")
 	runCmd.Flags().BoolVar(&flagMeasureCost, "measure-cost", false, "measure one fixture's agent token usage instead of scoring the normal run")
