@@ -59,6 +59,13 @@ var (
 	flagWorkspaceDir string
 	flagDryRun       bool
 	flagMeasureCost  bool
+	flagPNG          bool
+	flagText         bool
+	flagClaude       bool
+	flagAGY          bool
+	flagLite         bool
+	flagFull         bool
+	flagMeasure      bool
 )
 
 // validDeliveryModes are the supported --delivery values controlling whether
@@ -140,7 +147,33 @@ func main() {
 	runCmd := &cobra.Command{
 		Use:   "run",
 		Short: "Invoke agent CLIs against fixtures and score real replies",
+		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			flagFixtures = args
+			if len(flagFixtures) == 0 {
+				flagFixtures = []string{"hello"}
+			}
+			if flagPNG {
+				flagDelivery = "png"
+			}
+			if flagText {
+				flagDelivery = "native"
+			}
+			if flagClaude {
+				flagAgents = []string{"claude"}
+			}
+			if flagAGY {
+				flagAgents = []string{"agy"}
+			}
+			if flagLite {
+				flagVariants = []string{"lite"}
+			}
+			if flagFull {
+				flagVariants = []string{"full"}
+			}
+			if flagMeasure {
+				flagMeasureCost = true
+			}
 			if flagMeasureCost {
 				if len(flagFixtures) > 1 || len(flagVariants) > 1 {
 					return fmt.Errorf("--measure-cost accepts one --fixture and one --variant")
@@ -157,13 +190,19 @@ func main() {
 			return run()
 		},
 	}
-	runCmd.Flags().StringSliceVar(&flagFixtures, "fixture", nil, "run only fixtures with this id (repeatable); default: all fixtures")
 	runCmd.Flags().StringSliceVar(&flagAgents, "agent", nil, "run only this agent CLI, one of: claude, agy (repeatable); default: all agents")
 	runCmd.Flags().StringSliceVar(&flagVariants, "variant", nil, "run only this doc variant, one of: full, lite (repeatable); default: both variants")
 	runCmd.Flags().StringVar(&flagLink, "link", "soft", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
 	runCmd.Flags().StringVar(&flagDelivery, "delivery", "native", "doc delivery mode: native (text/markdown as-is) or png (rendered via `harnez read -I` context card; not valid with --link=embed)")
 	runCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "prepare and print fixture workspaces without invoking agents")
 	runCmd.Flags().BoolVar(&flagMeasureCost, "measure-cost", false, "measure one fixture's agent token usage instead of scoring the normal run")
+	runCmd.Flags().BoolVar(&flagPNG, "png", false, "use PNG document delivery")
+	runCmd.Flags().BoolVar(&flagText, "text", false, "use native text document delivery")
+	runCmd.Flags().BoolVar(&flagClaude, "claude", false, "run only Claude")
+	runCmd.Flags().BoolVar(&flagAGY, "agy", false, "run only Agy")
+	runCmd.Flags().BoolVar(&flagLite, "lite", false, "use the lite variant")
+	runCmd.Flags().BoolVar(&flagFull, "full", false, "use the full variant")
+	runCmd.Flags().BoolVar(&flagMeasure, "measure", false, "alias for --measure-cost")
 
 	fixturesCmd := &cobra.Command{
 		Use:   "fixtures",
