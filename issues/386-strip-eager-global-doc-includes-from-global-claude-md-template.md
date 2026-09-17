@@ -1,6 +1,6 @@
 # 386 — Strip eager global doc includes from global CLAUDE.md template
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -79,9 +79,9 @@ To ensure future edits do not reintroduce eager include directives into global t
    - Run `claude -p "Canary prompt"` and inspect the effective prompt / token count to confirm neither `Bash.md` nor `AgenticLoop.md` are inlined.
 
 ### 3.2 Exit Criteria
-- [ ] `config.yaml` under `agents_md.global.sections` contains no `@docs/` eager include tokens.
-- [ ] Automated regression test in `internal/claude` enforces that `agents_md.global.sections` has no `@docs/` references.
-- [ ] `make test-q1` passes with zero regressions.
-- [ ] `harnez apply` cleanly syncs `~/.claude/CLAUDE.md` without diff errors.
-- [ ] Canary run in clean workspace confirms startup context is reduced by ~12.6 KB (~3,250 tokens).
-- [ ] Issue tracker (`issues/README.md`) is synchronized via `harnez index`.
+- [x] `config.yaml` under `agents_md.global.sections` contains no `@docs/` eager include tokens.
+- [x] Automated regression test in `internal/claude` enforces that `agents_md.global.sections` has no `@docs/` references.
+- [x] `make test-q1` passes with zero regressions.
+- [x] `harnez apply` cleanly syncs `~/.claude/CLAUDE.md` without diff errors.
+- [x] Canary run in clean workspace confirms startup context is reduced by ~12.6 KB (~3,250 tokens).
+- [x] Issue tracker (`issues/README.md`) is synchronized via `harnez index`.
