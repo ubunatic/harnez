@@ -782,6 +782,10 @@ func measureCost() error {
 		for _, ref := range expectedContextDocs(docs, flagCostDelivery) {
 			fmt.Printf("    %s\n", ref)
 		}
+		fmt.Println("  expected workspace tree")
+		for _, ref := range expectedWorkspaceFiles(docs, flagCostLink, flagCostDelivery) {
+			fmt.Printf("    %s\n", ref)
+		}
 		if err := setupLinkedWorkspace(work, repoRoot, docs, flagCostLink, flagCostDelivery); err != nil {
 			fmt.Printf("  FAIL  setup workspace: %v\n", err)
 			os.RemoveAll(work)
@@ -881,6 +885,14 @@ func expectedContextDocs(docs []string, delivery string) []string {
 		refs = append(refs, name)
 	}
 	return refs
+}
+
+func expectedWorkspaceFiles(docs []string, link, delivery string) []string {
+	files := []string{"AGENTS.md"}
+	if delivery == "png" || link == "hard" {
+		files = append(files, expectedContextDocs(docs, delivery)...)
+	}
+	return files
 }
 
 func imageTokenEstimate(path, agent string) int {
