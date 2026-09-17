@@ -1,6 +1,6 @@
 # 411 — Report session token use and final context size in canary-agenticloop-lite units
 
-**Status**: Open
+**Status**: Closed — implemented and verified: claude -p/agy -p --output-format json both expose parsed usage; measure-cost verb added, baseline measured (claude=60278, agy=40685 tokens/unit) and documented in results.md, along with the honest live-session-introspection limitation
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
