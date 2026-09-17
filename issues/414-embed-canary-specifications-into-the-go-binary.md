@@ -27,6 +27,9 @@ checkout and can silently use the wrong or stale specification.
   require.
 - Keep an explicit development override/path mechanism where useful, with clear
   precedence over the embedded defaults.
+- Add a CLI verb that initializes a clean temporary workspace for a user to run
+  manual experiments, using the same embedded specifications and linkable assets
+  as automated canary runs.
 - Ensure embedded YAML remains the single source of truth and is not duplicated
   in Go structs or string literals.
 
@@ -37,6 +40,8 @@ checkout and can silently use the wrong or stale specification.
 - From an arbitrary working directory, with no knowledge of the Harnez checkout,
   the installed canary creates a temporary workspace containing the correct
   `AGENTS.md` and all required linked document assets.
+- The manual-workspace CLI verb creates an equivalent clean workspace and clearly
+  reports its path and lifecycle/cleanup behavior.
 - All supported `@<file>`, `See <file>`, `@<image>`, and `See <image>` targets
   resolve from embedded assets when running installed binaries.
 - Development runs can still select an explicit YAML file for rapid iteration.
