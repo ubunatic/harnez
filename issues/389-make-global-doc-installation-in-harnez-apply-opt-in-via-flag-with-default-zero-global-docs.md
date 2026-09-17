@@ -1,6 +1,6 @@
 # 389 — Make global doc installation in harnez apply opt-in via flag with default zero global docs
 
-**Status**: Open
+**Status**: Closed — made global docs opt-in with zero default global docs on apply
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture & Context Optimization
@@ -40,9 +40,9 @@ Project conventions belong inside project repositories (`harnez init`), and glob
 
 ## 3. Acceptance Criteria
 
-- [ ] `config.yaml` `docs:` defaults to empty (`[]`).
-- [ ] Bare `harnez apply` installs zero global docs into `~/.claude/docs/` or `~/.prime/agent/docs/`.
-- [ ] `harnez apply --docs <name>...` installs only the explicitly requested docs.
-- [ ] Stale unmanaged global docs in `~/.claude/docs/` can be cleaned up.
-- [ ] All unit tests in `internal/claude` pass under `make test-q1`.
-- [ ] Clean workspace canary passes verifying zero global doc baggage.
+- [x] `config.yaml` `docs:` defaults to empty (`[]`).
+- [x] Bare `harnez apply` installs zero global docs into `~/.claude/docs/` or `~/.prime/agent/docs/`.
+- [x] `harnez apply --docs <name>...` installs only the explicitly requested docs.
+- [x] Stale unmanaged global docs in `~/.claude/docs/` can be cleaned up.
+- [x] All unit tests in `internal/claude` pass under `make test-q1`.
+- [x] Clean workspace canary passes verifying zero global doc baggage.
