@@ -926,17 +926,18 @@ func measureCost() error {
 				}
 			}
 			if len(missing) > 0 {
+				fmt.Printf("  actual: missing %s\n", strings.Join(missing, ", "))
+				fmt.Println("  $ tree")
+				if tree, treeErr := exec.Command("tree", work).CombinedOutput(); treeErr == nil {
+					fmt.Print(string(tree))
+				} else {
+					for _, entry := range entries {
+						fmt.Printf("%s\n", entry.Name())
+					}
+				}
 				return fmt.Errorf("dry-run %s/%s: missing files: %s", flagCostVariant, target.ID, strings.Join(missing, ", "))
 			}
 			fmt.Println("  actual: all expected files present")
-			fmt.Println("  $ tree")
-			if tree, treeErr := exec.Command("tree", work).CombinedOutput(); treeErr == nil {
-				fmt.Print(string(tree))
-			} else {
-				for _, entry := range entries {
-					fmt.Printf("%s\n", entry.Name())
-				}
-			}
 			fmt.Println("  PASS (dry-run)")
 			continue
 		}
