@@ -1,6 +1,6 @@
 # Roadmap
 
-Working roadmap for the open backlog (updated 2026-09-14). Derived from each ticket's
+Working roadmap for the open backlog (updated 2026-09-17). Derived from each ticket's
 appended `## Implementation Plan`, so scope calls here reflect the planning pass, not a fresh
 re-derivation.
 
@@ -24,6 +24,7 @@ Sequencing buckets:
 
 ## 0. Shipped Recently
 
+- **030, 071, 096, 105, 108, 126, 139, 149, 201, 209, 210, 217, 261, 262, 290, 292, 299** — shipped/closed
 - **006** — `fix(status): check all managed settings keys`
 - **018** — bundled marker backfill + guard test
 - **042**, **045**, **046**, **056**, **125**, **222**, **095 pt.1** — AgenticLoop & practice docs improvements
@@ -37,7 +38,6 @@ Sequencing buckets:
 ## 1. OS-Agnostic Readiness (macOS first) & Terminal Modernization
 
 Laying the foundation to run seamlessly across operating systems (macOS / Darwin at first), eliminating brittle Linux-only subprocess forks in the interactive TUI and establishing portable system abstraction layers.
-
 | Ticket | Scope | Bucket |
 |---|---|---|
 | 286 — promote `golang.org/x/term` for terminal operations in Go conventions & watch.go | S — add `x/term` carve-out to `docs/lang/Go.md`, replace `stty` subprocesses & raw-mode ioctls in `internal/usage/watch.go` with `x/term` | **Now** |
@@ -51,14 +51,8 @@ Rationale: 286 is immediate, high-leverage low-hanging fruit — it updates the 
 
 The `--watch` dashboard is the tool's front door. Everything that makes it lie, misalign, or
 hide a failed collector belongs at the front of the queue.
-
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 210 — low nonzero Braille load values invisible | ✅ shipped; tracker closed | **Now** |
-| 201 — doubled sparkline resolution + Braille | ✅ shipped; tracker closed | **Now** |
-| 139 — Codex quota window rollover keeps stale limit | ✅ shipped; tracker closed | **Now** |
-| 105 — per-collector fetch status in usage UI | ✅ shipped; tracker closed | **Now** |
-| 262 — live mic level meter not showing | ✅ shipped; tracker closed | **Now** |
 | 255 — collector resilience: retries & TUI logs | retry, structured details, and basic scrolling shipped; full key decoding/tests remain | **Now** |
 | 085 — show collector-daemon status in watch | S — no plan written yet; small sibling of 105, land with it | **Next** |
 | 264 — ALSA/arecord live-mic-level backend | M — follows 262 for amixer systems | **Next** |
@@ -66,7 +60,6 @@ hide a failed collector belongs at the front of the queue.
 | 251 — suppress desktop mic indicators | M — depends on 250 | **Next** |
 | 253 — mic view triggers desktop privacy indicator | S/M | **Next** |
 | 256 — persist watch & collector launch logs | M — follows 255 | **Next** |
-| 261 — default chart background native | S — cosmetic | **Next** |
 | 172 — AGY single-window row alignment | rendering bug fixed; remainder needs a live capped account | **Park** (§9) |
 | 219 — subtler usage-bar colors vs Braille charts | S — spec/colors.yaml ramp split | **Next** |
 | 214 — 256-color heat palette option | M — third value for two existing presentation enums | **Next** |
@@ -84,10 +77,8 @@ where a dead collector was only caught by hand-digging on disk. Cosmetics (219, 
 status-bar work follow once the numbers are trustworthy.
 
 ## 2. Collector pipeline & token sources
-
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 030 — AGY/Codex have no local token counts | **Codex half now unblocked** — `~/.codex/sessions/**/rollout-*.jsonl` carries plain-JSON `token_count`; AGY half still protobuf | **Now** (Codex only) |
 | 034 — hook-triggered token extraction | plan revised: hook infra now exists (`agy-hooks`, `codex-hook`), scope shrank | **Next** |
 | 113 — per-collector roundtrip times, `usage --meta` | S/M — extend existing `internal/usage/fetchdurations.go`, do not build a second timing store | **Next** |
 | 111 — per-agent cadence/timeout/cancellation | premise corrected: collection is already concurrent; reduced to cadence + timeout + cancel | **Next** |
@@ -98,7 +89,6 @@ Rationale: doing the Codex half of 030 first is nearly free and unblocks the tok
 second agent. 113 before 111 — you want the measurements before tuning the cadence they'd inform.
 
 ## 3. Telemetry data layer & analytics
-
 | Ticket | Scope | Bucket |
 |---|---|---|
 | 127 — move `internal/telemetry` SQL into `spec/` | M — 10 statements, not the 5 the ticket lists; needs a clean tree | **Next** |
@@ -112,13 +102,8 @@ precedes 215's backfill. 127 is pure architecture hygiene — schedule it into a
 clean tree.
 
 ## 4. Issue tracking & tracker tooling
-
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 217 — `-n` limit (default 10) and `--all` on `find issues` | ✅ shipped; tracker closed | **Now** |
-| 108 — sequential subagent dispatch + number-allocation race guard | ✅ shipped; tracker closed | **Now** |
-| 126 — document `Closed — resolved in <commit>` | ✅ shipped; tracker closed | **Now** |
-| 209 — move `agy-hooks` into `harnez apply` | ✅ shipped/superseded by hook cleanup; tracker closed | **Now** |
 | 246 — add /commit and /publish Skills | M — multi-project staged commit ownership | **Next** |
 
 Rationale: 108 is a live data-integrity bug in the tracker — duplicate ticket numbers have
@@ -134,13 +119,11 @@ instructions are delivered at all.
 - 263 — `docs/practices/PrototypingFeatures.md`: ✅ shipped; tracker closed
 
 → **Now.** High per-session value.
-
 | Ticket | Scope | Bucket |
 |---|---|---|
 | 221 — Go-first for scripts, demote ad-hoc Python | S — do *not* add a new `docs/practices/Languages.md` (130's precedent) | **Next** |
 | 176 — capped subagent completion-report contract | S — new `docs/practices/SubagentReporting.md` + skill refs | **Next** |
 | 156 — document `collaboration.spawn_agent` in Codex Agents | S, docs-only | **Next** |
-| 149 — agent-specific instruction profiles (Codex async-wait) | M — **key finding: there is no per-agent instruction file today**; `~/AGENTS.md` symlinks to `~/.claude/CLAUDE.md`, so this needs a new agent-owned target | **Next** |
 | 144 — Codex subagent model selection policy | S once 149 exists (its content migrates into a profile) | **Next** (after 149) |
 | 151 — on-demand lookup vs. materialized instructions (research) | research doc; item 4 depends on 149's design | **Next** (after 149) |
 | 128 — full system-prompt self-audit for repetition | research; 2 of 4 ACs met, needs the with-project-docs pass | **Next** |
@@ -154,17 +137,14 @@ all either depend on it or would invent a competing mechanism if they land first
 are the measurement side of the same problem — do them near 149 so the audit informs the design.
 
 ## 6. Config & doc management (`apply` / `init` core)
-
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 209 — move `agy-hooks` into `harnez apply` | S/M — Codex hooks are the exact precedent; also fixes the `status` gap | **Now** |
 | 005 — permissions are grow-only | M — needs a managed-permission state sidecar so user/Claude-Code additions survive | **Next** |
 | 152 — move `agent-collector` under `usage` | S, **but** the systemd unit hardcodes `ExecStart … agent-collector`; needs an alias + migration, not a rename | **Next** |
 | 015 — teach AGENTS.md about `uman` | S — mirror the `repo_modes` opt-in mechanism, not a global section | **Next** |
 | 016 — `make smoke` convention in Make.md | S, docs + template | **Next** |
 | 224 — website rules auto-install | S — `Website.md` is *already* copyable; make it self-install for website-capable projects. **Split the Android release scaffold into its own ticket.** | **Next** |
 | 092 — latest-release links / README install | S — Option B (linter probe) only; explicitly reject the managed-README-block option | **Next** |
-| 096 — `has_releases` 401 warning lacks the fix hint | S — thread token provenance out of `GetForgeToken` | **Next** |
 | 170 — modularize `cmd/harnez/main.go` | M refactor — every command closes over two shared vars | **Later** |
 | 009 — `diff`/`clean` don't cover Makefile targets | scope corrected: belongs on `init --dry-run`, not on the global-only `DiffAll`/`CleanAll` | **Later** |
 | 013 — `promote` command | L, new command with an agent-invocation surface | **Later** |
@@ -174,14 +154,12 @@ the real one but needs the state sidecar designed carefully so `apply` never del
 permission the user approved interactively.
 
 ## 7. Testing, canary & agent visibility
-
 | Ticket | Scope | Bucket |
 |---|---|---|
 | 010 — smoke-test that agents see installed skills/commands | **unblocked** — wayreel#11 landed, `verifyContains` exists | **Next** |
 | 007 — thin test coverage | M — one test file per package; `stripComments` genuinely lacks `/* */` support, which silently yields an empty map | **Next** |
 | 177 — lean post-edit build check for control-flow edits | M — hook option chosen; prototype the heuristic against real past edits first | **Later** |
 | 124 — PostToolUse auto-capture of tool-call counts | canary-gated: run the payload probe before writing code | **Later** |
-| 071 — agent canary architecture | delivered; nothing left to implement | **Close** (§9) |
 | 073 — credentialed cloud-agent canary | blocked on a user decision about credential-mounting posture | **Park** (§9) |
 
 Rationale: 007's `/* */` gap is the sharp edge — a hand-written JSONC config with block comments
@@ -191,7 +169,6 @@ rest of 007's table-test sweep waits.
 ## 8. Local-LLM support
 
 Coherent cluster, all P3, all gated on §5's profile mechanism.
-
 | Ticket | Scope | Bucket |
 |---|---|---|
 | 166 Part A — Go rune/display-width invariants in `docs/lang/Go.md` | ✅ shipped; tracker closed | **Now** |
@@ -243,12 +220,8 @@ building it twice.
 These tickets were filed or materially clarified after the previous roadmap. They are ordered by
 their effect on a working harnez session, then by the dependency they create for later agent
 workflow work.
-
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 290 — ambient-workspace build break | ✅ shipped; tracker closed | **Now** |
-| 292 — index versus cached-lint drift | ✅ shipped; tracker closed | **Now** |
-| 299 — `detectDoc`/Make documentation gaps | ✅ shipped; tracker closed | **Now** |
 | 268 — bounded `harnez exec` timeout | M, protects the hook and agent command path from indefinite hangs | **Next** |
 | 274 — session-start harness health checks | M, depends on stable cross-agent hook/shim status semantics | **Next** |
 | 281 — opt-in advisor discovery | S, reduces routine context and quota cost; coordinate with the shipped advisor skill | **Next** |
@@ -270,6 +243,77 @@ another incompatible workflow. 302 remains outside implementation sequencing unt
 recommendations have been reviewed.
 
 ---
+
+
+## 11. macOS Porting & OS-Agnostic Execution
+
+| Ticket | Scope | Bucket |
+|---|---|---|
+| 334 — Research OS-agnostic process inspection across macOS and Linux | - | **Next** |
+| 335 — Support afplay audio notifications on macOS in default hooks | - | **Next** |
+| 336 — Research cross-platform shell shim patterns for macOS and Linux | - | **Next** |
+| 337 — Research macOS system permissions and CLI whitelist for config template | - | **Next** |
+| 338 — macOS CI verification via GitHub mirror | - | **Next** |
+| 339 — Graceful degradation and gating of hardware telemetry and mic probes on macOS | - | **Next** |
+| 341 — Concurrent SQLite telemetry writers lose rows on macOS | - | **Next** |
+
+## 12. Multimodal & Visual Context
+
+| Ticket | Scope | Bucket |
+|---|---|---|
+| 374 — Refresh README CLI coverage and website link | - | **Next** |
+| 399 — harnez read image enhancements: configurable line-number cadence and AST-safe whitespace compression | - | **Next** |
+| 402 — Move config diff below status and free top-level harnez diff for visual git diff | - | **Next** |
+| 403 — Transparent hook interception and distill adapter for multi-slice file reads via harnez read | - | **Next** |
+
+## 13. Agent Instructions & Tooling (Newer)
+
+| Ticket | Scope | Bucket |
+|---|---|---|
+| 306 — Detect and quarantine Codex subagents that remain unusable after usage limits | - | **Next** |
+| 315 — init drops previously opted-in docs on re-run; Canary.md hard-references opt-in PrototypingFeatures.md | - | **Next** |
+| 322 — Evolve /story skill with optional focus areas, tooling fit, and human-steering divergence analysis | - | **Next** |
+| 323 — docs/lang/Bash.md hard-references docs/practices/AgenticLoop.md instead of @docs/AgenticLoop.md alias | - | **Next** |
+| 342 — MVP: /harnez-agent skill and CLI dispatch for agy host to codex:sol subagent | - | **Next** |
+| 351 — Add AGENTS.md pointer: check config.yaml/Spec.md before hardcoding named business-value lists in Go | - | **Next** |
+| 352 — Tell agents unrelated untracked files from parallel sessions are expected, not a fabrication concern | - | **Next** |
+| 353 — Tell only Claude: never propose CLAUDE.md changes; check repo docs/AGENTS.md before any instruction-file change | - | **Next** |
+| 355 — harnez apply/init do not prune agentsmd sections removed from config.yaml, leaving orphaned managed blocks | - | **Next** |
+| 365 — Add harnez release --init=<lang|mode> to bootstrap release scaffolding | - | **Next** |
+| 366 — Automated doc compression command/skill with LLM canary evaluation loop | - | **Next** |
+| 369 — Detect Go library CLI and TUI shape for init guidance | - | **Next** |
+| 370 — Offer useful Go agent capabilities through harnez init | - | **Next** |
+| 371 — Add optional systemd service guidance to Go init profile | - | **Next** |
+| 382 — Make user shell shortcuts available to Codex, Claude, AGY, and other agents | - | **Next** |
+
+## 14. Telemetry & Misc (Newer)
+
+| Ticket | Scope | Bucket |
+|---|---|---|
+| 304 — Advisor lifecycle CLI and metadata tracking | - | **Later** |
+| 305 — Investigate stats --auto failure rates disagreeing with observed tool outcomes | - | **Later** |
+| 310 — Check for ambient enclosing go.work in harnez status and lint | - | **Later** |
+| 313 — Canary convention: require go.work/GOWORK probe before trusting scratch-module dependency checks | - | **Later** |
+| 314 — harnez release: auto-create minisign key if missing and no repo key defined | - | **Later** |
+| 317 — split harnez-advisor per-harness guidance into resources/ reference files | - | **Later** |
+| 321 — harnez release --login flag to authenticate or refresh forge credentials via fj auth login | - | **Later** |
+| 324 — docs/lang/Go.md canonical-pattern reference to internal/usage is dangling in consumer repos | - | **Later** |
+| 329 — Gate harnez release on REUSE Compliance, with --no-reuse and a Global Opt-Out | - | **Later** |
+| 330 — Adopt voxi audiolevel's Rolling Braille Timeline Alongside the Existing Live Mic-Level Bar | - | **Later** |
+| 333 — Retire docs/feedback/, consolidate into docs/studies/ with labels/categories for grouping and filtering | - | **Later** |
+| 340 — Support label, project, and category query filters in harnez find issues | - | **Later** |
+| 361 — harnez docs variant --check CLI verb for lite-doc structural gate | - | **Later** |
+| 378 — Fleet-wide multi-repo git history sparks and token attribution matrix for uman | - | **Later** |
+| 383 — Disable queued question tool prompts in Codex sessions | - | **Later** |
+| 384 — harnez assess directory validation and -d/--dir flag support | - | **Later** |
+| 385 — Tokens command to count tokens in files and directories | - | **Later** |
+
+
+Rationale for newer backlog sequencing:
+- macOS Porting (Section 11) is elevated to Next to fulfill the primary OS-Agnostic Readiness objective.
+- Multimodal/Visual Context (Section 12) is Next because visual debugging has proven critical for resolving TUI alignment and rendering bugs.
+- Agent Instructions (Section 13) are scheduled as Next because they prevent context leaks and improve the daily agentic workflow correctness.
+- Telemetry/Misc (Section 14) are placed in Later to ensure the core execution loops are hardened first.
 
 ## Suggested order of attack
 
