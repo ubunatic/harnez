@@ -461,6 +461,21 @@ func runClaudeJSON(dir, prompt string) (tokenUsage, string, error) {
 	return parsed.Usage, parsed.Result, nil
 }
 
+// runClaudeContext runs claude's real /context breakdown in dir (with
+// whatever doc has already been copied in as AGENTS.md), returning its
+// markdown report of the actual token composition (system prompt, tools,
+// skills, memory files) as claude itself measures it — more accurate than
+// this harness's own bytes/4 doc-size estimate.
+func runClaudeContext(dir string) (string, error) {
+	cmd := exec.Command("claude", "-p", "--permission-mode", "bypassPermissions", "/context")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("claude -p /context: %w", err)
+	}
+	return string(out), nil
+}
+
 func runAgyJSON(dir, prompt string) (tokenUsage, string, error) {
 	cmd := exec.Command("agy", "-p", prompt, "--output-format", "json")
 	cmd.Dir = dir
@@ -572,12 +587,13 @@ func measureCost() error {
 	}
 
 	type jsonRunner struct {
-		name string
-		run  func(dir, prompt string) (tokenUsage, string, error)
+		name    string
+		run     func(dir, prompt string) (tokenUsage, string, error)
+		context func(dir string) (string, error) // nil if the CLI has no /context equivalent
 	}
 	allRunners := []jsonRunner{
-		{name: "claude", run: runClaudeJSON},
-		{name: "agy", run: runAgyJSON},
+		{name: "claude", run: runClaudeJSON, context: runClaudeContext},
+		{name: "agy", run: runAgyJSON}, // agy has no /context command
 	}
 	runners := allRunners
 	if len(flagAgents) > 0 {
@@ -635,6 +651,24 @@ this request:
 				total += ref.tokens
 			}
 			fmt.Printf("    %-38s %10s  ~%6d tok\n", "total", "", total)
+		}
+		if r.context != nil {
+			if ctxOut, err := r.context(work); err == nil {
+				fmt.Println("  /context (real, before fixture prompt)")
+				for _, line := range strings.Split(strings.TrimSpace(ctxOut), "\n") {
+					// Trim the per-skill breakdown table (dozens of rows) and
+					// keep only the category summary above it — that's the
+					// part relevant to "where do the tokens come from".
+					if strings.HasPrefix(line, "### Skills") {
+						break
+					}
+					fmt.Printf("    %s\n", line)
+				}
+			} else {
+				fmt.Printf("  /context  FAIL %v\n", err)
+			}
+		} else {
+			fmt.Println("  /context  n/a (agent has no /context equivalent)")
 		}
 		usage, response, err := r.run(work, prompt)
 		os.RemoveAll(work)
