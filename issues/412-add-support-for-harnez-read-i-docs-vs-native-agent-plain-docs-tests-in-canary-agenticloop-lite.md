@@ -1,6 +1,6 @@
 # 412 — add support for harnez read -I docs vs native agent plain docs tests in canary-agenticloop-lite
 
-**Status**: Open
+**Status**: Closed — implemented --delivery native|png; probe assumption confirmed by real invocation, see results.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
