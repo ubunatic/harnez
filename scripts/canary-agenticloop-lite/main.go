@@ -874,7 +874,9 @@ func measureCost() error {
 		if i > 0 {
 			fmt.Println()
 		}
-		fmt.Printf("[%s]\n", r.name)
+		if !flagCostDryRun {
+			fmt.Printf("[%s]\n", r.name)
+		}
 		if _, err := exec.LookPath(r.name); err != nil {
 			fmt.Printf("  SKIP  %s not on PATH\n", r.name)
 			continue
