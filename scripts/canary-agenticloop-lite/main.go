@@ -42,7 +42,7 @@ import (
 // embeddedAssets is the release-time fallback for canary specifications and
 // their linked documents. The source tree remains the development authority.
 //
-//go:embed embedded/fixtures.yaml
+//go:embed fixtures.yaml
 var embeddedAssets embed.FS
 
 var (
@@ -330,7 +330,7 @@ func embeddedRepo() (string, func(), error) {
 }
 
 func embeddedRead(name string) ([]byte, error) {
-	if name == "embedded/fixtures.yaml" {
+	if name == "fixtures.yaml" {
 		return embeddedAssets.ReadFile(name)
 	}
 	return projectdocs.FS.ReadFile(strings.TrimPrefix(name, "embedded/"))
@@ -343,7 +343,7 @@ func loadFixtures() ([]fixture, error) {
 	}
 	var data []byte
 	if fixturesAbs == "" {
-		data, err = embeddedAssets.ReadFile("embedded/fixtures.yaml")
+		data, err = embeddedAssets.ReadFile("fixtures.yaml")
 	} else {
 		data, err = os.ReadFile(fixturesAbs)
 	}
@@ -1240,7 +1240,7 @@ func initWorkspace() error {
 		return fmt.Errorf("create workspace: %w", err)
 	}
 	for name, target := range map[string]string{
-		"embedded/fixtures.yaml":        "fixtures.yaml",
+		"fixtures.yaml":                 "fixtures.yaml",
 		"AgenticLoop.md":                "docs/AgenticLoop.md",
 		"practices/AgenticLoop.lite.md": "docs/practices/AgenticLoop.lite.md",
 		"lang/Bash.md":                  "docs/lang/Bash.md",
