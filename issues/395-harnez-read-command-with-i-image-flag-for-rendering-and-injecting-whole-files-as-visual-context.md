@@ -1,6 +1,6 @@
 # 395 — harnez read command with -I/--image flag for rendering and injecting whole files as visual context
 
-**Status**: Open
+**Status**: Closed — Implemented harnez read with -I/--image visual card rendering and token accounting
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: CLI / Context Optimization
