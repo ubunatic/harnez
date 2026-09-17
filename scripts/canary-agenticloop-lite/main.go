@@ -56,6 +56,7 @@ var (
 	flagDelivery     string
 	flagCostDelivery string
 	flagWorkspaceDir string
+	flagDryRun       bool
 )
 
 // validDeliveryModes are the supported --delivery values controlling whether
@@ -146,6 +147,7 @@ func main() {
 	runCmd.Flags().StringSliceVar(&flagVariants, "variant", nil, "run only this doc variant, one of: full, lite (repeatable); default: both variants")
 	runCmd.Flags().StringVar(&flagLink, "link", "soft", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
 	runCmd.Flags().StringVar(&flagDelivery, "delivery", "native", "doc delivery mode: native (text/markdown as-is) or png (rendered via `harnez read -I` context card; not valid with --link=embed)")
+	runCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "prepare and print fixture workspaces without invoking agents")
 
 	fixturesCmd := &cobra.Command{
 		Use:   "fixtures",
@@ -366,6 +368,33 @@ func run() error {
 		if len(variants) == 0 {
 			return fmt.Errorf("no doc variants matched --variant=%v (known: full, lite)", flagVariants)
 		}
+	}
+	if flagDryRun {
+		for _, v := range variants {
+			for _, fx := range fixtures {
+				work, err := os.MkdirTemp("", "canary-agenticloop-lite.dry-run.*")
+				if err != nil {
+					return err
+				}
+				docs := append([]string{v.path}, fixtureDocs(repoRoot, v.name, fx)...)
+				err = setupLinkedWorkspace(work, repoRoot, docs, flagLink, flagDelivery)
+				if err == nil {
+					fmt.Printf("[%s/%s] PASS (dry-run)\n  task: %s\n  workspace: %s\n  files:\n", v.name, fx.ID, fx.Prompt, work)
+					entries, readErr := os.ReadDir(work)
+					if readErr != nil {
+						err = readErr
+					} else {
+						for _, entry := range entries {
+							fmt.Printf("    %s\n", entry.Name())
+						}
+					}
+				}
+				if err != nil {
+					return fmt.Errorf("dry-run %s/%s: %w", v.name, fx.ID, err)
+				}
+			}
+		}
+		return nil
 	}
 
 	allAgents := []agentCLI{
