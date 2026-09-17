@@ -16,6 +16,10 @@ import (
 func testConfig() *Config {
 	return &Config{
 		Docs: []string{"golang", "make"},
+		DocsProfiles: map[string][]string{
+			"core": {"agentic-loop", "spec"},
+			"dev":  {"agentic-loop", "spec", "golang"},
+		},
 		AgentsMD: AgentsMD{
 			Languages: map[string]Language{
 				"golang":       {Default: "auto"},
@@ -259,7 +263,7 @@ func TestDocNamesInOrder(t *testing.T) {
 
 func TestValidateDocNames(t *testing.T) {
 	cfg := testConfig()
-	if err := validateDocNames(cfg, []string{"golang", "canary"}); err != nil {
+	if err := validateDocNames(cfg, []string{"golang", "canary", "core", "dev", "full", "all"}); err != nil {
 		t.Fatalf("valid names rejected: %v", err)
 	}
 	err := validateDocNames(cfg, []string{"golang", "bogus"})
@@ -500,9 +504,45 @@ func TestExpandDocNames(t *testing.T) {
 		t.Fatal("expected non-empty catalog of docs")
 	}
 
-	expanded := expandDocNames(cfg, []string{"all"})
-	if !slices.Equal(expanded, allDocs) {
-		t.Fatalf("expandDocNames(all) = %v, want %v", expanded, allDocs)
+	// all expands to all docs in order
+	expandedAll := expandDocNames(cfg, []string{"all"})
+	if !slices.Equal(expandedAll, allDocs) {
+		t.Fatalf("expandDocNames(all) = %v, want %v", expandedAll, allDocs)
+	}
+
+	// core profile
+	expandedCore := expandDocNames(cfg, []string{"core"})
+	wantCore := []string{"agentic-loop", "issue-tracking"}
+	if !slices.Equal(expandedCore, wantCore) {
+		t.Fatalf("expandDocNames(core) = %v, want %v", expandedCore, wantCore)
+	}
+
+	// dev profile
+	expandedDev := expandDocNames(cfg, []string{"dev"})
+	wantDev := []string{"agentic-loop", "issue-tracking", "bash", "git"}
+	if !slices.Equal(expandedDev, wantDev) {
+		t.Fatalf("expandDocNames(dev) = %v, want %v", expandedDev, wantDev)
+	}
+
+	// full profile
+	expandedFull := expandDocNames(cfg, []string{"full"})
+	wantFull := cfg.DocsProfiles["full"]
+	if !slices.Equal(expandedFull, wantFull) {
+		t.Fatalf("expandDocNames(full) = %v, want %v", expandedFull, wantFull)
+	}
+
+	// mixed with explicit doc and deduplication
+	mixed := expandDocNames(cfg, []string{"core", "golang", "core"})
+	wantMixed := []string{"agentic-loop", "issue-tracking", "golang"}
+	if !slices.Equal(mixed, wantMixed) {
+		t.Fatalf("expandDocNames(core, golang, core) = %v, want %v", mixed, wantMixed)
+	}
+
+	// deduplication across profiles
+	dedup := expandDocNames(cfg, []string{"core", "dev", "core"})
+	wantDedup := []string{"agentic-loop", "issue-tracking", "bash", "git"}
+	if !slices.Equal(dedup, wantDedup) {
+		t.Fatalf("expandDocNames(core, dev, core) = %v, want %v", dedup, wantDedup)
 	}
 
 	specific := expandDocNames(cfg, []string{"golang", "bash"})
@@ -572,5 +612,35 @@ func TestApplyOptInDocsAndCleanUnmanaged(t *testing.T) {
 	}
 	if _, err := os.Stat(bashDoc); !os.IsNotExist(err) {
 		t.Fatalf("expected Bash.md to be removed by CleanAll")
+	}
+}
+
+func TestApplyDocsProfileCore(t *testing.T) {
+	targetDir := t.TempDir()
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+	cfg.PrimeAgentTarget = ""
+
+	if err := ApplyAll(targetDir, cfg, []string{"core"}, false, false); err != nil {
+		t.Fatalf("ApplyAll with core failed: %v", err)
+	}
+	agenticDoc := filepath.Join(targetDir, "docs", "AgenticLoop.md")
+	issueDoc := filepath.Join(targetDir, "docs", "IssueTracking.md")
+	goDoc := filepath.Join(targetDir, "docs", "Go.md")
+	bashDoc := filepath.Join(targetDir, "docs", "Bash.md")
+
+	if _, err := os.Stat(agenticDoc); err != nil {
+		t.Fatalf("expected AgenticLoop.md to exist: %v", err)
+	}
+	if _, err := os.Stat(issueDoc); err != nil {
+		t.Fatalf("expected IssueTracking.md to exist: %v", err)
+	}
+	if _, err := os.Stat(goDoc); !os.IsNotExist(err) {
+		t.Fatalf("expected Go.md not to exist with core profile")
+	}
+	if _, err := os.Stat(bashDoc); !os.IsNotExist(err) {
+		t.Fatalf("expected Bash.md not to exist with core profile")
 	}
 }

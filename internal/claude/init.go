@@ -222,18 +222,42 @@ func docNamesInOrder(cfg *Config) []string {
 	return append(names, rest...)
 }
 
-// expandDocNames expands "all" to docNamesInOrder(cfg) and returns deduplicated names.
+// expandDocNames expands profile names and "all" or "full" to their constituent doc lists,
+// and returns deduplicated names.
 func expandDocNames(cfg *Config, names []string) []string {
 	if cfg == nil {
 		return names
 	}
 	var expanded []string
-	for _, name := range names {
+	visitedProfiles := make(map[string]bool)
+
+	var expand func(name string)
+	expand = func(name string) {
 		if name == "all" {
 			expanded = append(expanded, docNamesInOrder(cfg)...)
-		} else {
-			expanded = append(expanded, name)
+			return
 		}
+		if cfg.DocsProfiles != nil {
+			if profileDocs, ok := cfg.DocsProfiles[name]; ok {
+				if visitedProfiles[name] {
+					return
+				}
+				visitedProfiles[name] = true
+				for _, doc := range profileDocs {
+					expand(doc)
+				}
+				return
+			}
+		}
+		if name == "full" {
+			expanded = append(expanded, docNamesInOrder(cfg)...)
+			return
+		}
+		expanded = append(expanded, name)
+	}
+
+	for _, name := range names {
+		expand(name)
 	}
 	return jsonc.UnionStrings(nil, expanded)
 }
@@ -241,10 +265,18 @@ func expandDocNames(cfg *Config, names []string) []string {
 // validateDocNames returns an error naming any requested doc that is not
 // defined in the config, so typos fail loudly instead of being skipped.
 func validateDocNames(cfg *Config, names []string) error {
+	if cfg == nil {
+		return nil
+	}
 	var unknown []string
 	for _, name := range names {
-		if name == "all" {
+		if name == "all" || name == "full" {
 			continue
+		}
+		if cfg.DocsProfiles != nil {
+			if _, ok := cfg.DocsProfiles[name]; ok {
+				continue
+			}
 		}
 		if _, ok := cfg.AgentsMD.Languages[name]; !ok {
 			unknown = append(unknown, name)

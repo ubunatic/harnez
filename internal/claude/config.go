@@ -16,6 +16,7 @@ type Config struct {
 	FS                 fs.FS                `yaml:"-"`
 	TargetDir          string               `yaml:"target_dir"`
 	Docs               []string             `yaml:"docs"`
+	DocsProfiles       map[string][]string  `yaml:"docs_profiles"`
 	Model              string               `yaml:"model"`
 	Effort             string               `yaml:"effort"`
 	Verbs              []string             `yaml:"verbs"`

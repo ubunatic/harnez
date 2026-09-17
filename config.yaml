@@ -15,6 +15,33 @@ feedback:
 # Global docs are opt-in via `apply --docs <name>...` (or `--docs all` / `-d <name>...`) and default to empty.
 docs: []
 
+docs_profiles:
+  core:
+    - agentic-loop
+    - issue-tracking
+  dev:
+    - agentic-loop
+    - issue-tracking
+    - bash
+    - git
+  full:
+    - golang
+    - bash
+    - make
+    - rust
+    - zig
+    - cpp
+    - markdown
+    - git
+    - gtk4
+    - canary
+    - spec
+    - agentic-loop
+    - issue-tracking
+    - concise-mode
+    - website
+    - gorelease
+
 # model: sonnet  # unmanaged by default, let user or client choose
 effort: medium
 
