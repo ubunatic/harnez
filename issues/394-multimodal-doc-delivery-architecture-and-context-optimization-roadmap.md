@@ -1,6 +1,6 @@
 # 394 — Multimodal doc delivery architecture and context optimization roadmap
 
-**Status**: Open
+**Status**: Closed — Authored 4-Tier Multimodal Context Delivery Architecture specification in docs/MultimodalContextDelivery.md
 **Priority**: P3 (Low)
 **Severity**: Low
 **Category**: Architecture & Design
