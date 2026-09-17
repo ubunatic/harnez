@@ -73,7 +73,8 @@ fi
 # Probe Antigravity / Gemini CLI (Inlined)
 if command -v agy >/dev/null 2>&1
 then agy_reply=$(cd "${tmpdir}" && agy -p "${prompt_inlined}" 2>/dev/null | tr '\n' ' ' | sed 's/  */ /g')
-     if echo "${agy_reply}" | grep -q -i "^NO"
+     agy_clean=$(echo "${agy_reply}" | tr -d '*' | sed 's/^[ \t]*//')
+     if echo "${agy_clean}" | grep -q -i "^NO"
      then printf '%-12s | %-8s | %s\n' "agy" "CLEAN" "${agy_reply}"
      else printf '%-12s | %-8s | %s\n' "agy" "INLINED" "${agy_reply}"
           violations=$((violations + 1))
