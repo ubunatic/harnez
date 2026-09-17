@@ -69,6 +69,7 @@ var (
 	flagSoft         bool
 	flagHard         bool
 	flagEmbed        bool
+	flagRM           bool
 )
 
 // validDeliveryModes are the supported --delivery values controlling whether
@@ -240,6 +241,7 @@ func main() {
 	runCmd.Flags().BoolVar(&flagSoft, "soft", false, "use soft document links")
 	runCmd.Flags().BoolVar(&flagHard, "hard", false, "use eager document links")
 	runCmd.Flags().BoolVar(&flagEmbed, "embed", false, "embed document text directly")
+	runCmd.Flags().BoolVar(&flagRM, "rm", false, "remove the temporary workspace after the run")
 
 	fixturesCmd := &cobra.Command{
 		Use:   "fixtures",
@@ -543,7 +545,11 @@ func runFixture(repoRoot string, ag agentCLI, v docVariant, fx fixture, link, de
 	if err != nil {
 		return result{agent: ag.name, variant: v.name, id: fx.ID, status: fail, detail: "mkdtemp: " + err.Error()}
 	}
-	defer os.RemoveAll(work)
+	defer func() {
+		if flagRM {
+			_ = os.RemoveAll(work)
+		}
+	}()
 
 	docs := append([]string{v.path}, fixtureDocs(repoRoot, v.name, fx)...)
 	if err := setupLinkedWorkspace(work, repoRoot, docs, link, delivery); err != nil {
@@ -887,6 +893,9 @@ func measureCost() error {
 			anyErr = true
 			continue
 		}
+		if !flagCostDryRun {
+			fmt.Printf("[%s] workspace: %s\n", r.name, work)
+		}
 		docs := []string{docPath}
 		docs = append(docs, fixtureDocs(repoRoot, flagCostVariant, *target)...)
 		if flagCostDryRun {
@@ -969,7 +978,9 @@ func measureCost() error {
 			fmt.Println("  /context  n/a (agent has no /context equivalent)")
 		}
 		usage, response, err := r.run(work, prompt)
-		os.RemoveAll(work)
+		if flagRM {
+			os.RemoveAll(work)
+		}
 		if err != nil {
 			fmt.Printf("  FAIL  %v\n", err)
 			anyErr = true
