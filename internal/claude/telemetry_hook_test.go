@@ -176,3 +176,99 @@ func settingsHasTelemetryHook(t *testing.T, settingsPath string) bool {
 	}
 	return false
 }
+
+// TestReadHookConfigEntry verifies issue 405's decision: the file-read interception
+// hooks (harnez hook read) for View and ReadMultipleFiles are declarative config.yaml
+// entries installed into settings.json under PreToolUse.
+func TestReadHookConfigEntry(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	matchers := map[string]bool{"View": false, "ReadMultipleFiles": false}
+	for i := range cfg.Hooks {
+		h := &cfg.Hooks[i]
+		if h.Event == "PreToolUse" && h.Command == "harnez hook read" {
+			if _, ok := matchers[h.Matcher]; ok {
+				matchers[h.Matcher] = true
+			}
+		}
+	}
+	for m, found := range matchers {
+		if !found {
+			t.Errorf("expected PreToolUse hook for matcher %q with command %q, hooks: %+v",
+				m, "harnez hook read", cfg.Hooks)
+		}
+	}
+}
+
+func TestApplyInstallsReadHooks(t *testing.T) {
+	targetDir := t.TempDir()
+	settingsPath := filepath.Join(targetDir, "settings.json")
+
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
+	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
+	cfg.CodexHooksTarget = filepath.Join(t.TempDir(), "codex-config.toml")
+	cfg.AgyHooksTarget = filepath.Join(t.TempDir(), "gemini", "config", "hooks.json")
+	cfg.ClaudeSkillsTarget = filepath.Join(t.TempDir(), "claude-skills")
+	cfg.PrimeAgentTarget = filepath.Join(t.TempDir(), "prime-agent")
+	cfg.AgentsMD.Global.Target = filepath.Join(t.TempDir(), "CLAUDE.md")
+	cfg.AgentsMD.Global.Symlink = ""
+	cfg.AgentsMD.Agents = nil
+	cfg.DistillAutopipe.PiExtensionTarget = filepath.Join(t.TempDir(), "pi", "harnez-distill.ts")
+	cfg.DistillAutopipe.OpenCodePluginTarget = filepath.Join(t.TempDir(), "opencode", "harnez-distill.ts")
+
+	if err := ApplyAll(targetDir, cfg, nil, false, false); err != nil {
+		t.Fatalf("first ApplyAll failed: %v", err)
+	}
+
+	if !settingsHasHook(t, settingsPath, "PreToolUse", "View", "harnez hook read") {
+		t.Errorf("expected settings.json to contain PreToolUse/View hook")
+	}
+	if !settingsHasHook(t, settingsPath, "PreToolUse", "ReadMultipleFiles", "harnez hook read") {
+		t.Errorf("expected settings.json to contain PreToolUse/ReadMultipleFiles hook")
+	}
+
+	// Idempotency: second apply must preserve hooks without duplication
+	if err := ApplyAll(targetDir, cfg, nil, false, false); err != nil {
+		t.Fatalf("second ApplyAll failed: %v", err)
+	}
+	if !settingsHasHook(t, settingsPath, "PreToolUse", "View", "harnez hook read") {
+		t.Errorf("expected settings.json to retain PreToolUse/View hook after second apply")
+	}
+	if !settingsHasHook(t, settingsPath, "PreToolUse", "ReadMultipleFiles", "harnez hook read") {
+		t.Errorf("expected settings.json to retain PreToolUse/ReadMultipleFiles hook after second apply")
+	}
+}
+
+func settingsHasHook(t *testing.T, settingsPath, event, matcher, command string) bool {
+	t.Helper()
+	m := jsonc.Read(settingsPath)
+	hooks, ok := m["hooks"].(map[string]any)
+	if !ok {
+		return false
+	}
+	entries, ok := hooks[event].([]any)
+	if !ok {
+		return false
+	}
+	for _, entry := range entries {
+		em, ok := entry.(map[string]any)
+		if !ok || em["matcher"] != matcher {
+			continue
+		}
+		hs, _ := em["hooks"].([]any)
+		for _, h := range hs {
+			hm, ok := h.(map[string]any)
+			if ok && hm["command"] == command {
+				return true
+			}
+		}
+	}
+	return false
+}

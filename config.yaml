@@ -238,6 +238,12 @@ hooks:
   - event: PreToolUse
     matcher: Bash
     command: "harnez exec hook"
+  - event: PreToolUse
+    matcher: View
+    command: "harnez hook read"
+  - event: PreToolUse
+    matcher: ReadMultipleFiles
+    command: "harnez hook read"
 
 # thinking verbs (get rid of annoying word creations)
 verbs:

@@ -54,6 +54,9 @@ type State struct {
 	// mirroring the count-based fallback that uses s.Total as callsSinceRate
 	// in that same situation.
 	FirstCallAt time.Time `json:"first_call_at,omitzero"`
+
+	// LastVerb records the most recently invoked subcommand for discovery-time tips (issue 405).
+	LastVerb string `json:"last_verb,omitempty"`
 }
 
 // fileName returns the per-session state file's basename: a short hash of
@@ -153,6 +156,7 @@ func ApplyCounts(s *State, calls map[string]int) {
 
 // Record updates s in place for one invocation of subcommand at time now.
 func Record(s *State, subcommand string, now time.Time) {
+	s.LastVerb = subcommand
 	if s.Total == 0 && s.FirstCallAt.IsZero() {
 		s.FirstCallAt = now
 	}
@@ -280,6 +284,10 @@ func GapTip(s State, feedbackDisabled bool, now time.Time, unratedFailures int) 
 		return fmt.Sprintf("harnez tip: %d tool call(s) failed without a `harnez rate` "+
 			"report — use `harnez rate <tool> <score> \"<summary>\"` to record what went "+
 			"wrong (see Tool Feedback Protocol).", unratedFailures), true
+	}
+
+	if !feedbackDisabled && (s.LastVerb == "find" || s.LastVerb == "issues") {
+		return "harnez tip: remember to use 'harnez read -I' (visual context cards) or 'harnez read -L <range> -n' for line-numbered editing anchors rather than native IDE file-read tools.", true
 	}
 
 	if !feedbackDisabled {

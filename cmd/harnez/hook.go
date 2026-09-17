@@ -6,11 +6,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,10 +58,15 @@ func newHookCmd() *cobra.Command {
 	agyCmd := newAgyHookCmd()
 	agyCmd.Aliases = []string{"agy-tool"}
 	cmd.AddCommand(agyCmd)
+
+	readCmd := newReadHookCmd()
+	cmd.AddCommand(readCmd)
+
 	return cmd
 }
 
 type agyHookOptions struct {
+	BaseDir  string
 	DBPath   string
 	StateDir string
 	Insert   func(dbPath string, call telemetry.ToolCall) error
@@ -113,12 +120,22 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 		}
 	}
 
-	scoreVal := 5
-	wd, err := os.Getwd()
-	if err != nil {
-		wd = ""
+	wd := opts.BaseDir
+	if wd == "" {
+		var err error
+		wd, err = os.Getwd()
+		if err != nil {
+			wd = ""
+		}
 	}
 
+	deny, reason := evaluateReadToolDiscipline(toolName, payload.ToolCall.Args, wd)
+	if deny {
+		callType = "hook:deny"
+		note = "reading_discipline:intercepted"
+	}
+
+	scoreVal := 5
 	tc := telemetry.ToolCall{
 		CreatedAt:   time.Now().UTC(),
 		SessionID:   sessionID,
@@ -145,6 +162,305 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 		_ = insertFn(dbPath, tc) // best-effort insert
 	}
 
+	if deny {
+		outObj := map[string]string{
+			"decision": "deny",
+			"reason":   reason,
+		}
+		data, _ := json.Marshal(outObj)
+		fmt.Fprintln(out, string(data))
+		return nil
+	}
+
 	fmt.Fprintln(out, `{"decision":"allow"}`)
+	return nil
+}
+
+// readingDisciplineDenyReason is the structured guidance message returned when an agent
+// attempts native IDE file viewing on large files without using harnez read (issue 405).
+const readingDisciplineDenyReason = "harnez guard: native view_file on large files (>100 lines) violates Reading & Context Discipline. Execute 'harnez read -I <file>' for visual cards or 'harnez read -L <range> -n <file>' for line-bounded editing anchors."
+
+// isReadTool reports whether toolName is a client-native file reading tool that
+// should be intercepted under Reading & Context Discipline.
+func isReadTool(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "view_file", "view", "read_file", "readfile", "readmultiplefiles", "read_multiple_files":
+		return true
+	default:
+		return false
+	}
+}
+
+// extractFilePaths extracts target file path(s) from tool args/input across AGY, Claude Code, and generic tools.
+func extractFilePaths(args map[string]any) []string {
+	if args == nil {
+		return nil
+	}
+	var paths []string
+	for _, key := range []string{"AbsolutePath", "file_path", "path", "FilePath", "Path", "target_file", "TargetFile", "file", "File"} {
+		if v, ok := args[key]; ok {
+			if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+				paths = append(paths, strings.TrimSpace(s))
+				break
+			}
+		}
+	}
+	for _, key := range []string{"paths", "files", "Paths", "Files"} {
+		if v, ok := args[key]; ok {
+			switch list := v.(type) {
+			case []string:
+				for _, s := range list {
+					if strings.TrimSpace(s) != "" {
+						paths = append(paths, strings.TrimSpace(s))
+					}
+				}
+			case []any:
+				for _, item := range list {
+					if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+						paths = append(paths, strings.TrimSpace(s))
+					}
+				}
+			}
+		}
+	}
+	return paths
+}
+
+func parseLineNumber(v any) (int, bool) {
+	switch val := v.(type) {
+	case int:
+		return val, true
+	case int64:
+		return int(val), true
+	case float64:
+		return int(val), true
+	case string:
+		if n, err := strconv.Atoi(strings.TrimSpace(val)); err == nil {
+			return n, true
+		}
+	case json.Number:
+		if n, err := val.Int64(); err == nil {
+			return int(n), true
+		}
+	}
+	return 0, false
+}
+
+type readRange struct {
+	hasRange  bool
+	startLine int
+	endLine   int
+}
+
+// extractReadRange extracts line range boundaries from tool arguments.
+func extractReadRange(args map[string]any) readRange {
+	if args == nil {
+		return readRange{}
+	}
+	var r readRange
+	for _, k := range []string{"view_range", "viewRange"} {
+		if v, ok := args[k]; ok {
+			switch arr := v.(type) {
+			case []any:
+				if len(arr) == 2 {
+					s, sOk := parseLineNumber(arr[0])
+					e, eOk := parseLineNumber(arr[1])
+					if sOk && eOk {
+						r.hasRange = true
+						r.startLine = s
+						r.endLine = e
+						return r
+					}
+				}
+			case []int:
+				if len(arr) == 2 {
+					r.hasRange = true
+					r.startLine = arr[0]
+					r.endLine = arr[1]
+					return r
+				}
+			case []float64:
+				if len(arr) == 2 {
+					r.hasRange = true
+					r.startLine = int(arr[0])
+					r.endLine = int(arr[1])
+					return r
+				}
+			}
+		}
+	}
+
+	for _, k := range []string{"StartLine", "start_line", "startLine"} {
+		if v, ok := args[k]; ok {
+			if n, ok := parseLineNumber(v); ok && n > 0 {
+				r.startLine = n
+				r.hasRange = true
+				break
+			}
+		}
+	}
+	for _, k := range []string{"EndLine", "end_line", "endLine"} {
+		if v, ok := args[k]; ok {
+			if n, ok := parseLineNumber(v); ok && n > 0 {
+				r.endLine = n
+				r.hasRange = true
+				break
+			}
+		}
+	}
+	return r
+}
+
+func countFileLines(path string) (int, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	if len(data) == 0 {
+		return 0, nil
+	}
+	lines := bytes.Count(data, []byte("\n"))
+	if !bytes.HasSuffix(data, []byte("\n")) {
+		lines++
+	}
+	return lines, nil
+}
+
+// evaluateReadToolDiscipline checks if a tool invocation on a target file violates
+// Reading & Context Discipline (file >= 100 lines or range >= 100 lines or unconstrained whole-file read of a >=100 line file).
+func evaluateReadToolDiscipline(toolName string, args map[string]any, baseDir string) (bool, string) {
+	if !isReadTool(toolName) {
+		return false, ""
+	}
+
+	rng := extractReadRange(args)
+	if rng.hasRange && rng.startLine > 0 && rng.endLine >= rng.startLine {
+		if rng.endLine-rng.startLine+1 >= 100 {
+			return true, readingDisciplineDenyReason
+		}
+	}
+
+	paths := extractFilePaths(args)
+	for _, p := range paths {
+		target := p
+		if !filepath.IsAbs(target) && baseDir != "" {
+			target = filepath.Join(baseDir, target)
+		}
+		totalLines, err := countFileLines(target)
+		if err != nil {
+			// If file doesn't exist on disk, we can't count lines; range check above already checked explicit >= 100.
+			continue
+		}
+		if totalLines < 100 {
+			// Allowed: file is smaller than 100 lines.
+			continue
+		}
+		// totalLines >= 100
+		if !rng.hasRange {
+			// Unconstrained whole-file read of a >= 100 line file!
+			return true, readingDisciplineDenyReason
+		}
+		if rng.startLine > 0 && rng.endLine >= rng.startLine {
+			if rng.endLine-rng.startLine+1 >= 100 {
+				return true, readingDisciplineDenyReason
+			}
+		} else if rng.startLine > 0 && rng.endLine == 0 {
+			if totalLines-rng.startLine+1 >= 100 {
+				return true, readingDisciplineDenyReason
+			}
+		} else if rng.endLine > 0 && rng.startLine == 0 {
+			if rng.endLine >= 100 {
+				return true, readingDisciplineDenyReason
+			}
+		}
+	}
+
+	return false, ""
+}
+
+// claudePreToolUseInput represents the JSON payload received from Claude Code on stdin
+// during a PreToolUse lifecycle event.
+type claudePreToolUseInput struct {
+	HookEventName string         `json:"hookEventName"`
+	ToolName      string         `json:"tool_name"`
+	ToolInput     map[string]any `json:"tool_input"`
+	ToolUseID     string         `json:"tool_use_id"`
+	SessionID     string         `json:"session_id"`
+	Cwd           string         `json:"cwd"`
+}
+
+type claudeHookOutput struct {
+	HookSpecificOutput claudeHookSpecificOutput `json:"hookSpecificOutput"`
+	SystemMessage      string                   `json:"systemMessage,omitempty"`
+}
+
+type claudeHookSpecificOutput struct {
+	PermissionDecision string `json:"permissionDecision"`
+}
+
+type readHookOptions struct {
+	BaseDir  string
+	DBPath   string
+	StateDir string
+	Insert   func(dbPath string, call telemetry.ToolCall) error
+}
+
+func newReadHookCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:    "read",
+		Short:  "Claude Code PreToolUse file-read interception hook",
+		Hidden: true,
+		Long: `read accepts Claude Code's PreToolUse JSON payload on stdin for View and ReadMultipleFiles,
+intercepts unconstrained or large (>=100 lines) file reads, and returns a permissionDecision of deny
+with guidance to use 'harnez read'. Small files (<100 lines) and bounded slices (<100 lines) are allowed.`,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runClaudeReadHook(cmd.InOrStdin(), cmd.OutOrStdout(), readHookOptions{})
+		},
+	}
+	return cmd
+}
+
+func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error {
+	raw, err := io.ReadAll(in)
+	if err != nil {
+		fmt.Fprintln(out, `{"hookSpecificOutput":{"permissionDecision":"allow"}}`)
+		return fmt.Errorf("read claude read hook payload: %w", err)
+	}
+
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		fmt.Fprintln(out, `{"hookSpecificOutput":{"permissionDecision":"allow"}}`)
+		return nil
+	}
+
+	var payload claudePreToolUseInput
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		fmt.Fprintln(out, `{"hookSpecificOutput":{"permissionDecision":"allow"}}`)
+		return fmt.Errorf("decode claude read hook payload: %w", err)
+	}
+
+	baseDir := opts.BaseDir
+	if baseDir == "" {
+		if payload.Cwd != "" {
+			baseDir = payload.Cwd
+		} else {
+			baseDir, _ = os.Getwd()
+		}
+	}
+
+	deny, reason := evaluateReadToolDiscipline(payload.ToolName, payload.ToolInput, baseDir)
+	if deny {
+		resp := claudeHookOutput{
+			HookSpecificOutput: claudeHookSpecificOutput{
+				PermissionDecision: "deny",
+			},
+			SystemMessage: reason,
+		}
+		data, _ := json.Marshal(resp)
+		fmt.Fprintln(out, string(data))
+		return nil
+	}
+
+	fmt.Fprintln(out, `{"hookSpecificOutput":{"permissionDecision":"allow"}}`)
 	return nil
 }

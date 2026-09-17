@@ -430,3 +430,62 @@ func TestGapTip_UnratedFailuresRespectsCooldown(t *testing.T) {
 		t.Errorf("expected the shared tipCooldown gate to suppress a repeat unrated-failure nudge, got: %q", tip)
 	}
 }
+
+func TestRecord_TracksLastVerb(t *testing.T) {
+	now := time.Now()
+	s := State{Calls: map[string]Invocation{}}
+	Record(&s, "find", now)
+	if s.LastVerb != "find" {
+		t.Errorf("expected LastVerb=find, got %q", s.LastVerb)
+	}
+	Record(&s, "issues", now)
+	if s.LastVerb != "issues" {
+		t.Errorf("expected LastVerb=issues, got %q", s.LastVerb)
+	}
+	Record(&s, "distill", now)
+	if s.LastVerb != "distill" {
+		t.Errorf("expected LastVerb=distill, got %q", s.LastVerb)
+	}
+}
+
+func TestGapTip_ReadingDisciplineTipForFindAndIssues(t *testing.T) {
+	now := time.Now()
+	s := State{Calls: map[string]Invocation{}}
+
+	// Make 10 calls to clear tipCooldown (starts at 0, Total reaches 10).
+	for i := 0; i < tipCooldown; i++ {
+		Record(&s, "distill", now)
+	}
+	// Call find: LastVerb becomes "find".
+	Record(&s, "find", now)
+
+	wantTip := "harnez tip: remember to use 'harnez read -I' (visual context cards) or 'harnez read -L <range> -n' for line-numbered editing anchors rather than native IDE file-read tools."
+	tip, ok := GapTip(s, false, now, 0)
+	if !ok {
+		t.Fatalf("expected reading discipline tip to fire when LastVerb is find and cooldown elapsed")
+	}
+	if tip != wantTip {
+		t.Errorf("got tip %q, want %q", tip, wantTip)
+	}
+
+	// Respect cooldown: simulate tip having fired.
+	s.TotalAtLastTip = s.Total
+	if tip, ok := GapTip(s, false, now, 0); ok {
+		t.Errorf("expected cooldown to suppress reading discipline tip, got: %q", tip)
+	}
+
+	// 10 more calls to clear cooldown.
+	for i := 0; i < tipCooldown; i++ {
+		Record(&s, "distill", now)
+	}
+	// Call issues: LastVerb becomes "issues".
+	Record(&s, "issues", now)
+
+	tip, ok = GapTip(s, false, now, 0)
+	if !ok {
+		t.Fatalf("expected reading discipline tip to fire when LastVerb is issues and cooldown elapsed")
+	}
+	if tip != wantTip {
+		t.Errorf("got tip %q, want %q", tip, wantTip)
+	}
+}
