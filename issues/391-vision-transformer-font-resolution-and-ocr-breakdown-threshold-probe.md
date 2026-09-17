@@ -1,6 +1,6 @@
 # 391 — Vision Transformer font resolution and OCR breakdown threshold probe
 
-**Status**: Open
+**Status**: Closed — completed font probe canary; determined 9px ViT patch lower bound
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Research & Canary / Context Optimization
