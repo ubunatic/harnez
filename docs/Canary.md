@@ -187,3 +187,5 @@ on the one mechanism you are validating.
 **Confusing canaries with integration test suites.** Expecting a canary script
 to continuously import production abstractions or mirror end-to-end feature logic
 defeats its purpose as an isolated, stable probe of an environment mechanism.
+
+<!-- harnez:stop -->

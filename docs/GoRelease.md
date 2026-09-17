@@ -229,3 +229,5 @@ before announcing done.
 ```bash
 curl -o /dev/null -sw '%{http_code}' https://example.com/privacy/
 ```
+
+<!-- harnez:stop -->

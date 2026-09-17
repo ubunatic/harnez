@@ -161,3 +161,5 @@ When modifying spec-driven features:
 - [ ] Validated schema: `make validate-spec` (or language test equivalent).
 - [ ] Verified integrity tests pass: `go test ./...` / `cargo test` / `pytest`.
 - [ ] Cleaned up obsolete definitions, orphaned actions, and schema enums.
+
+<!-- harnez:stop -->

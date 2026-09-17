@@ -14,8 +14,8 @@ DO `source f` — readable, greppable (`grep 'source '`), distinct from `./scrip
 DON'T `. f` — dot is lost in whitespace, confusable with paths, ungreppable.
 
 ```bash
-source ~/.bashrc; source "$script_dir/lib.sh"   # ✅
-. ~/.bashrc                                     # ❌
+source ~/.bashrc   # ✅
+. ~/.bashrc        # ❌
 ```
 
 ## 3. Conditionals — TOP RULE: `if test`, never brackets
@@ -155,3 +155,5 @@ See issue 095 (cwd leak, trust boundary), issue 222 (multi-repo wrong-repo failu
 
 Default is mawk, not gawk — no 3-arg `match(str, /re/, arr)` (use `split()`/`sub()`/`gsub()`),
 no `strtonum()` (write a manual `h2d()`), no `gensub()` (use `sub()`/`gsub()` + a temp var).
+
+<!-- harnez:stop -->

@@ -116,3 +116,5 @@ backup: ⚙️  # sync state snapshots from the remote host
 - `backup` — pull state snapshots (config overlays, data) down before a risky deploy
 - all four touch a real remote host — like `make smoke` (@docs/AgenticLoop.md): safe to define,
   run only when you intend the live effect
+
+<!-- harnez:stop -->

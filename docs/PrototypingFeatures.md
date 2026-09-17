@@ -26,3 +26,5 @@ Canary-first does not claim to replace:
 
 Those are separate design or delivery concerns. Use them when needed, but keep
 the canary as the evidence for whether the underlying mechanism actually works.
+
+<!-- harnez:stop -->
