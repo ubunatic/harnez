@@ -33,7 +33,12 @@ Prompt-only instructions in `AGENTS.md` and system prompts provide essential gui
    - Emit a structured guidance message when intercepted:
      `"harnez guard: native view_file on large files (>100 lines) violates Reading & Context Discipline. Execute 'harnez read -I <file>' for visual cards or 'harnez read -L <range> -n <file>' for line-bounded editing anchors."`
 
-### 2.2 Integration Across Harnez Subsystems
+### 2.2 Proactive Sessionstate Tips in `harnez find` & `harnez issues <verb>`
+- **Discovery-Time Priming**: When `harnez find` or `harnez issues <verb>` runs, the agent is preparing to inspect files or begin dev work.
+- **Sessionstate Tip Engine**: Add an occasional proactive reminder to `internal/sessionstate/sessionstate.go` (gated by `tipCooldown` / `TotalAtLastTip` so it stays non-intrusive):
+  `"harnez tip: remember to use 'harnez read -I' (visual context cards) or 'harnez read -L <range> -n' for line-numbered editing anchors rather than native IDE file-read tools."`
+
+### 2.3 Integration Across Harnez Subsystems
 - **`internal/claude` & `internal/agy`**: Add the PreToolUse hook generator to `harnez apply` to automatically configure `~/.claude/settings.json` and agent tool hook definitions.
 - **Canary & Verification**: Extend `scripts/smoke-test.sh` and hook test suites in `cmd/harnez/hook_test.go` to verify that `view_file` calls on large repository files trigger interception.
 
@@ -41,8 +46,9 @@ Prompt-only instructions in `AGENTS.md` and system prompts provide essential gui
 
 ## 3. Acceptance Criteria
 
+- [ ] Proactive reading discipline tip integrated into `internal/sessionstate/` for `harnez find` and `harnez issues`.
 - [ ] PreToolUse hook definition implemented in `internal/claude/` (and corresponding cross-harness definitions in `internal/agy/`).
 - [ ] Hook intercepts native file-read tools when target files exceed line threshold or when unbounded reads occur.
 - [ ] Clear error/redirect feedback guiding the agent to `harnez read -I` or `harnez read -L -n`.
-- [ ] Unit tests in `cmd/harnez/` and `internal/claude/` verifying hook generation and matchers.
+- [ ] Unit tests in `cmd/harnez/` and `internal/claude/` verifying hook generation, matchers, and session tips.
 - [ ] End-to-end verification proving that agents attempting `view_file` on large files are redirected to `harnez read`.
