@@ -18,7 +18,7 @@ The selected executor reads the target repository's applicable instructions and
 issue-tracking guidance before acting, then runs the filing workflow end to end:
 
 ```bash
-harnez find -d <repo> issues "<search terms>"
+harnez find -d <repo> issues "<search terms>" -I  # or inspect rendered PNG via view_file
 harnez issues new -d <repo> "<title>"
 # Fill the returned ticket path using the repository's issue conventions.
 harnez issues open -d <repo> <n> --commit "docs(issues): file <n>, <summary>"

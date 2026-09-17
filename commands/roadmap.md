@@ -29,14 +29,14 @@ result unless the user explicitly asked to wait.
 
 ### Step 1 — Check open issues
 
-- Run `harnez find -d <repo> issues -a status:open` to enumerate the active backlog.
-- Read each open ticket's file. Most tickets carry an appended `## Implementation Plan` section
+- Run `harnez find -d <repo> issues -a status:open -I` (or `harnez find`) to get the backlog overview card and inspect it with `view_file` for an immediate high-level visual survey. Use `-r` or `--json` when scripting programmatic extractions.
+- Read each open ticket's file (preferring `harnez issues show -d <repo> <n> -I` or targeted range reads to avoid text context inflation). Most tickets carry an appended `## Implementation Plan` section
   from a prior planning pass — if present, use it for scope, dependencies, and blockers rather
   than re-deriving them from scratch. Fall back to the ticket's own problem statement and
   acceptance criteria only when no plan section exists.
-- Skim root-level `docs/*.md` briefly for architectural context if useful, but don't do deep
+- Skim root-level `docs/*.md` briefly for architectural context if useful (e.g. using `harnez read -I <doc>` to inspect visual context cards), but don't do deep
   whole-file ingestion — Context Discipline norms apply (see `docs/AgenticLoop.md` Invariant 6):
-  prefer targeted greps and range-bounded reads over bulk document ingestion.
+  prefer targeted greps, image cards, and range-bounded reads over bulk document ingestion.
 
 ### Step 2 — Check the current roadmap
 

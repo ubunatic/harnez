@@ -56,8 +56,8 @@ stated use case would reasonably expect but that Step 2 didn't turn up, check th
 already tracked — **in both open and closed tickets**, so this never re-proposes something the
 project already deliberately rejected or deferred:
 
-- Run `harnez find -d <repo> issues "<candidate topic>"` per candidate (fuzzy search covers both
-  open and closed tickets by default) before treating anything as a genuine gap.
+- Run `harnez find -d <repo> issues "<candidate topic>" -I` per candidate (fuzzy search covers both
+  open and closed tickets by default; inspect the rendered overview PNG via `view_file` for fast visual scanning) before treating anything as a genuine gap.
 - For a broader sweep instead of one-candidate-at-a-time, skim `issues/README.md`'s index and the
   closed/archive ticket titles directly for topical overlap.
 - Drop (or note as "already covered/already rejected") any candidate that matches an existing

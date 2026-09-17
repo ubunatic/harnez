@@ -538,8 +538,9 @@ agents_md:
           Applies when this project has an `issues/` tracker. To search existing issues,
           compute the next ticket number, or allocate one, use `harnez find` / `harnez issues`
           instead of `ls issues/`, `find`, or raw grep:
-          - `harnez find -d <repo> issues -a status:open` — list active open issues
-          - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text
+          - `harnez find -d <repo> issues -a status:open` — list active open issues (use `-I` for visual overview PNG card)
+          - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text (use `-I` for visual overview)
+          - `harnez issues show -d <repo> <n> -I` — render single issue as styled visual PNG card (inspect via `view_file`)
           - `harnez find -d <repo> issues next` — report the next free ticket number (read-only)
           - `harnez issues new -d <repo> "<title>"` — atomically reserve that number and create
             a placeholder ticket file; write the ticket to the printed path
