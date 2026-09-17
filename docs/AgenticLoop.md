@@ -15,7 +15,7 @@ Tagline-only variant. Same rules as the full doc, no prose/case-studies. See
 3. **Zero Zombie Guarantee** — track and terminate every background process, timer, and subagent before ending a session.
 4. **Responsive Host Orchestrator** — stay available to the user; delegating ≠ blocking on the child unless asked or truly required.
 5. **In-Repository Single Source of Truth** — tickets/decisions/retros live in git (`issues/`, `docs/feedback/`, `docs/studies/`), not just chat.
-6. **Context Discipline & Range-Bounded Ingestion** — never whole-file-read `AGENTS.md`/active system rules; grep or bounded reads.
+6. **Context Discipline & Range-Bounded Ingestion** — never whole-file-read `AGENTS.md`/active system rules; grep or bounded reads. Global instruction templates must use lazy reference citations, never naked `@docs/...` eager include directives (which inlines thousands of tokens globally on startup).
 7. **Media & Demo Verification Gate** — **always ask the user for explicit confirmation** of recorded output before publishing/embedding.
 8. **Deployment Transparency — 3-State Grounding (when applicable)** — **Local State**, **Deployed Artifact State**, and **Active Daemon State** are independent; local build/test proves nothing about the other two (remote-deploying projects only).
 
@@ -54,7 +54,7 @@ For a single focused ticket: **Clean Goal Handoff** (one objective; **Trust the 
 - **Orphaned Background Tasks** — leftover `tail -f`/watch loops/timers after work is done.
 - **Lost Context / Ephemeral-Only Retrospectives** — friction/bugs discussed in chat but never written to a durable doc/ticket.
 - **Rubber-Stamp Reviews** — a review that doesn't actually inspect assertions or diffs.
-- **Unbounded Doc Ingestion** — whole-file-reading `AGENTS.md`/bundled docs already in the active prompt.
+- **Unbounded Doc Ingestion & Eager Global Includes** — whole-file-reading `AGENTS.md`/bundled docs already in the prompt, or writing naked `@docs/...` includes in global templates (`~/.claude/CLAUDE.md`).
 - **Unverified Media Publishing** — publishing recordings/screenshots without explicit user confirmation.
 - **Prompt Micromanagement** — restating base rules/tool docs the harness already provides in a subagent prompt.
 - **Friction Noise Over-Reporting** — repetitive, low-signal friction reports on routine tasks.

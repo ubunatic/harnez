@@ -46,6 +46,7 @@ Agentic software engineering scales effectively when concurrency is structured a
 6. **Context Discipline & Range-Bounded Ingestion**:
    - Never execute whole-file reads on files already present in the active system prompt (`AGENTS.md`, `CLAUDE.md`, system rules).
    - Prefer index consultation, `grep_search`, and range-bounded reads (`StartLine`/`EndLine`) over bulk document ingestion. In-file warning banners are ineffective once returned into message history.
+   - **Lazy Reference Pointers vs. Eager Include Directives in Global Prompts**: Global instruction templates (`~/.claude/CLAUDE.md`, `~/.prime/agent/AGENTS.md`) must use plain-text citations (`(see docs/Bash.md §8)`, `(AgenticLoop Invariant 6)`) and **never** naked `@docs/...` includes. Claude Code treats `@path` in `CLAUDE.md` as an eager macro-include, inlining full doc files into every session across all projects globally (~12.6 KB / ~3,250 tokens burned before turn 1). Reserve eager `@docs/...` includes strictly for project-local `AGENTS.md` language/practice opt-ins.
 
 7. **Media & Demo Verification Gate**:
    - When creating, updating, or adding media assets (e.g. reels, WebM demos, terminal recordings, screenshots) intended for documentation or websites, **always ask the user for explicit confirmation** that the recorded visual output matches their exact expectations before publishing or embedding it.
@@ -258,6 +259,7 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 - ❌ **Lost Context / Ephemeral-Only Retrospectives**: Discussing important harness friction or bugs in chat without writing them down to a durable project doc or ticket.
 - ❌ **Rubber-Stamp Reviews**: Running a review pass that does not inspect actual test assertions or file diffs.
 - ❌ **Unbounded Doc Ingestion**: Executing whole-file read tools on `AGENTS.md` or bundled reference docs whose summaries are already in the active system prompt.
+- ❌ **Eager Include Directives in Global Instruction Templates**: Writing naked `@docs/...` includes in global instructions (`~/.claude/CLAUDE.md`, `~/.prime/agent/AGENTS.md`), which causes harnesses like Claude Code to inlining thousands of tokens of docs into every session globally. Use plain-text citations and keep global files minimal.
 - ❌ **Unverified Media Publishing**: Publishing or embedding demo reels, WebM files, or UI screenshots on websites or documentation without explicit user confirmation of the visual output.
 - ❌ **Prompt Micromanagement**: Overburdening subagent dispatches with redundant base rules, tool definitions, or style guides already present in the harness system prompt.
 - ❌ **Friction Noise Over-Reporting**: Emitting repetitive, low-signal friction reports on fast, routine tasks.
