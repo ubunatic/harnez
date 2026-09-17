@@ -10,7 +10,7 @@ import (
 	"ubunatic.com/harnez/internal/markdown"
 )
 
-// Tier represents the ConciseMode terseness level.
+// Tier represents the ConciseMode terseness level or doc mode.
 type Tier string
 
 const (
@@ -18,6 +18,7 @@ const (
 	TierLite     Tier = "lite"
 	TierStandard Tier = "std"
 	TierUltra    Tier = "ultra"
+	TierVision   Tier = "vision"
 )
 
 const ConciseModeSection = "Concise Mode"
@@ -64,6 +65,14 @@ var tiers = map[Tier]TierInfo{
 		Directive:  "[HARNEZ DIRECTIVE: Operational mode switched to Concise Ultra (Level 3).\n- Output confined to essential diffs, command invocations, and single-line status confirmations.\n- Zero narrative text.\n- Core invariant: preserve all code, diffs, tool parameters, and command syntax 100% verbatim.]",
 		AgentsLine: "## Operational Mode: Concise Ultra (Level 3)\n- STRICT: Output confined to essential diffs, command invocations, and single-line status confirmations.\n- ZERO narrative prose, conversational text, explanations, or filler.\n- Core invariant: preserve all code, diffs, tool parameters, and command syntax 100% verbatim.\n- Reference: @docs/practices/ConciseMode.md",
 	},
+	TierVision: {
+		Tier:       TierVision,
+		Level:      4,
+		Name:       "Vision Mode",
+		ShortDesc:  "Multimodal visual card context delivery (docs/vision/ or .harnez/cards/)",
+		Directive:  "[HARNEZ DIRECTIVE: Operational mode switched to Vision Mode.\n- Visual cheatsheet cards linked under ./docs/vision/ and STYLE_GUIDE.png.\n- Multimodal vision context active for subagent dispatch.\n- Core invariant: preserve all code, diffs, tool parameters, and command syntax 100% verbatim.]",
+		AgentsLine: "## Operational Mode: Vision Mode\n- Visual cheatsheet cards staged in ./docs/vision/ and .harnez/cards/.\n- Subagent dispatches use visual context cards (@docs/vision/*.png) for token-compressed guidance.\n- Reference: @docs/practices/ConciseMode.md",
+	},
 }
 
 // ParseTier resolves user input strings/numbers into a canonical Tier.
@@ -76,10 +85,12 @@ func ParseTier(input string) (Tier, error) {
 		return TierStandard, nil
 	case "ultra", "3", "level3", "l3":
 		return TierUltra, nil
+	case "vision", "4", "level4", "v", "vis":
+		return TierVision, nil
 	case "off", "reset", "default", "none", "0":
 		return TierOff, nil
 	default:
-		return "", fmt.Errorf("unknown mode %q: expected lite (1), std (2), ultra (3), or off", input)
+		return "", fmt.Errorf("unknown mode %q: expected lite (1), std (2), ultra (3), vision (4), or off", input)
 	}
 }
 

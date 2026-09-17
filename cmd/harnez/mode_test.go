@@ -56,6 +56,24 @@ func TestModeCmd_Execution(t *testing.T) {
 		t.Errorf("AGENTS.md not updated to Ultra:\n%s", string(content))
 	}
 
+	// 2b. Run with `vision`
+	stdout.Reset()
+	stderr.Reset()
+	cmd = newModeCmd()
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"--file", agentsFile, "vision"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("mode vision failed: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Vision Mode") {
+		t.Errorf("expected Vision Mode directive, got: %s", stdout.String())
+	}
+	content, _ = os.ReadFile(agentsFile)
+	if !strings.Contains(string(content), "Operational Mode: Vision Mode") {
+		t.Errorf("AGENTS.md not updated to Vision Mode:\n%s", string(content))
+	}
+
 	// 3. Subcommand invocation `mode off`
 	stdout.Reset()
 	stderr.Reset()

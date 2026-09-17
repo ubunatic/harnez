@@ -16,6 +16,7 @@ func newDocsCmd() *cobra.Command {
 		Short: "Project-scoped operations on already-installed copyable docs",
 	}
 	cmd.AddCommand(newDocsVariantCmd())
+	cmd.AddCommand(newDocsCardsCmd())
 	return cmd
 }
 

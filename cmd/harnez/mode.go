@@ -53,6 +53,7 @@ Tiers:
   lite (1)        Level 1: Concise Lite (Professional Terse, no pleasantries)
   std (2)         Level 2: Concise Standard (Telegraphic fragments, zero filler)
   ultra (3)       Level 3: Concise Ultra (Diffs/status only, zero narrative)
+  vision (4)      Vision Mode: Multimodal visual cheatsheet context (@docs/vision/*.png)
   off (0, reset)  Disable ConciseMode / reset local overlay
 
 Flags:
@@ -78,7 +79,7 @@ Flags:
 	cmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "suppress stdout directive (file sync only)")
 	cmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "display directive and planned file changes without modifying disk")
 
-	// Subcommands for direct invocation: `harnez mode lite`, `harnez mode std`, `harnez mode ultra`, `harnez mode off`
+	// Subcommands for direct invocation: `harnez mode lite`, `harnez mode std`, `harnez mode ultra`, `harnez mode vision`, `harnez mode off`
 	subTiers := []struct {
 		name    string
 		aliases []string
@@ -87,6 +88,7 @@ Flags:
 		{"lite", []string{"1", "level1"}, "Switch to Concise Lite (Level 1)"},
 		{"std", []string{"standard", "2", "level2"}, "Switch to Concise Standard (Level 2)"},
 		{"ultra", []string{"3", "level3"}, "Switch to Concise Ultra (Level 3)"},
+		{"vision", []string{"4", "level4", "v", "vis"}, "Switch to Vision Mode (Multimodal visual cards)"},
 		{"off", []string{"reset", "default", "0"}, "Disable ConciseMode / remove overlay directive"},
 	}
 

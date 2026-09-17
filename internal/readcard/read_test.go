@@ -158,3 +158,65 @@ func TestTokenStatsFormulas(t *testing.T) {
 		t.Errorf("invalid image token stats: %+v", imgStats)
 	}
 }
+
+func TestRenderBundleCardAndCheckCard(t *testing.T) {
+	tmpDir := t.TempDir()
+	outPath := filepath.Join(tmpDir, "dev_3in1.png")
+
+	sections := []CardSection{
+		{
+			Title:    "Bash Rules",
+			Filename: "Bash.md",
+			Lines: []string{
+				"# Bash Rules",
+				"- No ';', break before then/else",
+				"- Use if test, no [[ ]]",
+			},
+		},
+		{
+			Title:    "Make Rules",
+			Filename: "Make.md",
+			Lines: []string{
+				"# Make Rules",
+				"- Use phony sentinel",
+				"- Self-documenting help",
+			},
+		},
+		{
+			Title:    "Git Rules",
+			Filename: "Git.md",
+			Lines: []string{
+				"# Git Rules",
+				"- Conventional commits",
+				"- Work on default branch",
+			},
+		},
+	}
+
+	res, err := RenderBundleCard(sections, BundleOptions{
+		Title:        "Harnez Core Developer Cheatsheet (3-in-1)",
+		Columns:      3,
+		FontSize:     11,
+		OutputPath:   outPath,
+		MaxDimension: 1568,
+	})
+	if err != nil {
+		t.Fatalf("RenderBundleCard failed: %v", err)
+	}
+
+	if len(res.Files) == 0 || res.Files[0] != outPath {
+		t.Errorf("expected output path %s, got %+v", outPath, res.Files)
+	}
+	if res.Width > 1568 || res.Height > 1568 {
+		t.Errorf("bundle dimensions (%dx%d) exceed 1568px bound", res.Width, res.Height)
+	}
+
+	checkRes, err := CheckCard(outPath, 1568)
+	if err != nil {
+		t.Fatalf("CheckCard failed: %v", err)
+	}
+	if !checkRes.Passed || !checkRes.ValidBounds || !checkRes.ValidFont {
+		t.Errorf("expected CheckCard to pass, got %+v", checkRes)
+	}
+}
+

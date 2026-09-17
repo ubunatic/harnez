@@ -25,6 +25,9 @@ func TestParseTier(t *testing.T) {
 		{"2", mode.TierStandard, false},
 		{"ultra", mode.TierUltra, false},
 		{"3", mode.TierUltra, false},
+		{"vision", mode.TierVision, false},
+		{"4", mode.TierVision, false},
+		{"v", mode.TierVision, false},
 		{"off", mode.TierOff, false},
 		{"reset", mode.TierOff, false},
 		{"default", mode.TierOff, false},
@@ -104,6 +107,19 @@ func TestSetMode_Lifecycle(t *testing.T) {
 	content, _ = os.ReadFile(agentsFile)
 	if !strings.Contains(string(content), "Concise Ultra (Level 3)") {
 		t.Errorf("AGENTS.md missing Ultra tier line:\n%s", string(content))
+	}
+
+	// 3b. Switch to Vision
+	res, err = mode.SetMode(mode.TierVision, mode.Options{FilePath: agentsFile})
+	if err != nil {
+		t.Fatalf("SetMode(TierVision) failed: %v", err)
+	}
+	if !res.Changed {
+		t.Errorf("Expected Changed=true on tier switch to Vision")
+	}
+	content, _ = os.ReadFile(agentsFile)
+	if !strings.Contains(string(content), "Operational Mode: Vision Mode") {
+		t.Errorf("AGENTS.md missing Vision Mode line:\n%s", string(content))
 	}
 
 	// 4. Dry run to Off
