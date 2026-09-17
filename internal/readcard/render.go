@@ -177,13 +177,17 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	cols := opts.Columns
 	if cols <= 0 {
 		// Auto choose columns
-		switch {
-		case totalLines <= 65:
+		if maxLineLen > 85 {
 			cols = 1
-		case totalLines <= 160:
-			cols = 2
-		default:
-			cols = 2
+		} else {
+			switch {
+			case totalLines <= 65:
+				cols = 1
+			case totalLines <= 160:
+				cols = 2
+			default:
+				cols = 2
+			}
 		}
 	}
 	if cols > 4 {
@@ -308,10 +312,14 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 				codeX := colX + gutterWidth
 				tokens := HighlightLine(rawLine, ext, &inMultiComment)
 				tokenX := codeX
+				maxColX := colX + colWidth - 4
+				if c == cols-1 {
+					maxColX = cardWidth - paddingX
+				}
 				for _, tok := range tokens {
 					tokCol := tokenColor(tok.Type, theme)
-					tokenX += font.DrawString(img, tok.Text, tokenX, curY, tokCol)
-					if tokenX >= colX+colWidth-cw {
+					tokenX += font.DrawStringBounded(img, tok.Text, tokenX, curY, maxColX, tokCol)
+					if tokenX >= maxColX {
 						break // visually wrap/clip at column edge
 					}
 				}

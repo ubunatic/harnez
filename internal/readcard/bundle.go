@@ -176,10 +176,11 @@ func RenderBundleCard(sections []CardSection, opts BundleOptions) (*RenderResult
 			curY := contentY + (lineIdx * lineHeight)
 			tokens := HighlightLine(rawLine, ext, &inMultiComment)
 			tokenX := colX + 4
+			maxSecX := colX + colWidth - 4
 			for _, tok := range tokens {
 				tokCol := tokenColor(tok.Type, theme)
-				tokenX += font.DrawString(img, tok.Text, tokenX, curY, tokCol)
-				if tokenX >= colX+colWidth-cw {
+				tokenX += font.DrawStringBounded(img, tok.Text, tokenX, curY, maxSecX, tokCol)
+				if tokenX >= maxSecX {
 					break
 				}
 			}

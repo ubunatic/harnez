@@ -71,6 +71,29 @@ func (f *MonospaceFont) DrawString(img *image.RGBA, s string, x, y int, col colo
 	return curX - x
 }
 
+// DrawStringBounded draws a single-line string of runes onto img at (x, y) stopping before maxX.
+func (f *MonospaceFont) DrawStringBounded(img *image.RGBA, s string, x, y, maxX int, col color.RGBA) int {
+	curX := x
+	for len(s) > 0 {
+		if curX+f.CharWidth > maxX {
+			break
+		}
+		r, size := utf8.DecodeRuneInString(s)
+		s = s[size:]
+		if r == '\t' {
+			// Tab expands to 4 spaces
+			if curX+f.CharWidth*4 > maxX {
+				break
+			}
+			curX += f.CharWidth * 4
+			continue
+		}
+		f.DrawRune(img, r, curX, y, col)
+		curX += f.CharWidth
+	}
+	return curX - x
+}
+
 // Font5x8 provides the canonical 5x8 retro pixel font (6x8 cell) for maximum density and 1-bit crisp contrast.
 var Font5x8 = buildFont5x8()
 

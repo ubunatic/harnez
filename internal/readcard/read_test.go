@@ -448,6 +448,221 @@ func TestRenderFileToCards_CroppedWidth(t *testing.T) {
 	}
 }
 
+func TestDrawStringBounded(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 100, 20))
+	bg := color.RGBA{R: 10, G: 10, B: 10, A: 255}
+	fg := color.RGBA{R: 255, G: 255, B: 255, A: 255}
+	for y := 0; y < 20; y++ {
+		for x := 0; x < 100; x++ {
+			img.SetRGBA(x, y, bg)
+		}
+	}
+
+	font := Font5x8 // cw = 6, ch = 8
+	startX := 10
+	startY := 5
+	// Allow exactly 3 characters = 3 * 6 = 18 px -> maxX = 10 + 18 = 28
+	maxX := startX + font.CharWidth*3
+	drawnWidth := font.DrawStringBounded(img, "ABCDEFGH", startX, startY, maxX, fg)
+
+	if drawnWidth != font.CharWidth*3 {
+		t.Errorf("expected drawnWidth %d, got %d", font.CharWidth*3, drawnWidth)
+	}
+
+	// Verify that at x >= maxX, no pixel was modified from bg
+	for y := 0; y < 20; y++ {
+		for x := maxX; x < 100; x++ {
+			c := img.RGBAAt(x, y)
+			if c != bg {
+				t.Fatalf("pixel at (%d, %d) was modified to %+v, want %+v (bleed past maxX %d)", x, y, c, bg, maxX)
+			}
+		}
+	}
+
+	// Verify that at least some pixels in the bounded area were drawn
+	var modifiedCount int
+	for y := startY; y < startY+font.CharHeight; y++ {
+		for x := startX; x < maxX; x++ {
+			if img.RGBAAt(x, y) == fg {
+				modifiedCount++
+			}
+		}
+	}
+	if modifiedCount == 0 {
+		t.Fatalf("expected glyph pixels to be drawn in [%d, %d)", startX, maxX)
+	}
+
+	// Test boundary within a character cell: maxX = startX + font.CharWidth*3 + 2
+	for y := 0; y < 20; y++ {
+		for x := 0; x < 100; x++ {
+			img.SetRGBA(x, y, bg)
+		}
+	}
+	maxX2 := startX + font.CharWidth*3 + 2
+	drawnWidth2 := font.DrawStringBounded(img, "ABCDEFGH", startX, startY, maxX2, fg)
+	if drawnWidth2 != font.CharWidth*3 {
+		t.Errorf("expected drawnWidth2 %d, got %d", font.CharWidth*3, drawnWidth2)
+	}
+	for y := 0; y < 20; y++ {
+		for x := startX + font.CharWidth*3; x < 100; x++ {
+			c := img.RGBAAt(x, y)
+			if c != bg {
+				t.Fatalf("pixel at (%d, %d) was modified when maxX was %d (partial glyph bleed)", x, y, maxX2)
+			}
+		}
+	}
+}
+
+func TestRenderFileToCards_NoBleedAcrossColumns(t *testing.T) {
+	tmpDir := t.TempDir()
+	outPath := filepath.Join(tmpDir, "long_lines_2col.png")
+
+	// Create 100 lines with 200 characters each
+	lines := make([]string, 100)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("// Line %03d: %s", i+1, strings.Repeat("A_very_long_identifier_sequence_that_exceeds_column_width_", 4))
+	}
+
+	res, err := RenderFileToCards(lines, "long.go", RenderOptions{
+		OutputPath:      outPath,
+		Columns:         2,
+		FontSize:        11,
+		ShowLineNumbers: true,
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+
+	f, err := os.Open(res.Files[0])
+	if err != nil {
+		t.Fatalf("failed to open generated png: %v", err)
+	}
+	defer f.Close()
+
+	imgDecoded, err := png.Decode(f)
+	if err != nil {
+		t.Fatalf("failed to decode png: %v", err)
+	}
+	bounds := imgDecoded.Bounds()
+	img := image.NewRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			img.Set(x, y, imgDecoded.At(x, y))
+		}
+	}
+
+	// Layout geometry matching render.go
+	font := Font5x8
+	cw := font.CharWidth
+	headerHeight := 36
+	paddingX := 16
+	paddingY := 12
+	colGap := 16
+
+	maxLineNum := len(lines)
+	digits := len(fmt.Sprintf("%d", maxLineNum))
+	if digits < 3 {
+		digits = 3
+	}
+	gutterWidth := (digits+1)*cw + 12
+
+	maxLineLen := 120 // capped at 120
+	colWidth := gutterWidth + (maxLineLen * cw) + 16
+	if (2*colWidth)+colGap+(paddingX*2) > 1568 {
+		colWidth = (1568 - (paddingX * 2) - colGap) / 2
+	}
+
+	col0X := paddingX
+	col1X := paddingX + colWidth + colGap
+	sepX := col1X - (colGap / 2)
+	maxCol0X := col0X + colWidth - 4
+
+	bg := DarkTheme.Bg
+	colSep := DarkTheme.ColumnSep
+
+	// Verify that between maxCol0X and sepX (excluding sepX), all pixels are bg
+	for y := headerHeight + paddingY; y < res.Height-paddingY; y++ {
+		for x := maxCol0X; x < sepX; x++ {
+			c := img.RGBAAt(x, y)
+			if c != bg {
+				t.Fatalf("pixel at (%d, %d) between col0 and sep was modified to %+v, want bg %+v", x, y, c, bg)
+			}
+		}
+	}
+
+	// Verify that at sepX the column separator is drawn
+	sepFound := false
+	for y := headerHeight + paddingY; y < res.Height-paddingY; y++ {
+		if img.RGBAAt(sepX, y) == colSep {
+			sepFound = true
+			break
+		}
+	}
+	if !sepFound {
+		t.Errorf("expected column separator line at x=%d", sepX)
+	}
+
+	// Verify that between sepX+1 and col1X, all pixels are bg
+	for y := headerHeight + paddingY; y < res.Height-paddingY; y++ {
+		for x := sepX + 1; x < col1X; x++ {
+			c := img.RGBAAt(x, y)
+			if c != bg {
+				t.Fatalf("pixel at (%d, %d) between sep and col1 was modified to %+v, want bg %+v", x, y, c, bg)
+			}
+		}
+	}
+}
+
+func TestRenderFileToCards_AutoColumnLongLines(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 100 lines of length 95 chars
+	longLines := make([]string, 100)
+	for i := range longLines {
+		longLines[i] = fmt.Sprintf("const ConfigEntry%03d = \"value_%s\"", i+1, strings.Repeat("x", 65))
+	}
+
+	// Auto columns (Columns: 0) with maxLineLen > 85 should keep cols = 1
+	res1, err := RenderFileToCards(longLines, "config.go", RenderOptions{
+		OutputPath: filepath.Join(tmpDir, "auto.png"),
+		Columns:    0,
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+	if res1.Columns != 1 {
+		t.Errorf("expected auto column selection to choose 1 column for long lines (>85 chars), got %d", res1.Columns)
+	}
+
+	// Explicit Columns: 2 should still be respected even for long lines
+	res2, err := RenderFileToCards(longLines, "config.go", RenderOptions{
+		OutputPath: filepath.Join(tmpDir, "explicit2.png"),
+		Columns:    2,
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+	if res2.Columns != 2 {
+		t.Errorf("expected explicit Columns=2 to be respected, got %d", res2.Columns)
+	}
+
+	// Moderate length lines (<= 85 chars) with 100 lines should auto-select 2 columns
+	shortLines := make([]string, 100)
+	for i := range shortLines {
+		shortLines[i] = fmt.Sprintf("const Item%03d = %d", i+1, i+1)
+	}
+	res3, err := RenderFileToCards(shortLines, "short.go", RenderOptions{
+		OutputPath: filepath.Join(tmpDir, "auto2.png"),
+		Columns:    0,
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+	if res3.Columns != 2 {
+		t.Errorf("expected auto column selection to choose 2 columns for normal lines, got %d", res3.Columns)
+	}
+}
+
 
 
 
