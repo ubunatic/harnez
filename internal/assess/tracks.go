@@ -115,9 +115,10 @@ func ClassifyTrack(relPath string) (TrackType, bool) {
 		return TrackIssues, true
 	}
 
-	// 4. Skills: agent skill declarations (skills/**/SKILL.md, commands/*.md, skills/**/*.md)
+	// 4. Skills: agent skill declarations (skills/**/SKILL.md, docs/commands/*.md, commands/*.md, skills/**/*.md)
 	if (parts[0] == "skills" && (lowerBase == "skill.md" || strings.HasSuffix(lowerBase, ".md"))) ||
-		(parts[0] == "commands" && strings.HasSuffix(lowerBase, ".md")) {
+		(parts[0] == "commands" && strings.HasSuffix(lowerBase, ".md")) ||
+		(len(parts) >= 2 && parts[0] == "docs" && parts[1] == "commands" && strings.HasSuffix(lowerBase, ".md")) {
 		return TrackSkills, true
 	}
 

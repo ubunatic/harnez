@@ -24,6 +24,7 @@ func TestClassifyTrack(t *testing.T) {
 		{"CLAUDE.md", TrackDocs, true},
 		{"AGENTS.md", TrackDocs, true},
 		{"skills/git/SKILL.md", TrackSkills, true},
+		{"docs/commands/sprint.md", TrackSkills, true},
 		{"commands/test.md", TrackSkills, true},
 		{"issues/376-multi-track.md", TrackIssues, true},
 		{"issues/README.md", TrackDocs, true}, // issues/README.md is doc index

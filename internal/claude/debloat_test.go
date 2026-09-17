@@ -122,13 +122,13 @@ func TestApplyDebloat_MinimalSkillOverrides(t *testing.T) {
 
 	settings := readSettings(t, dir)
 	overrides, _ := settings["skillOverrides"].(map[string]any)
-	if got, want := len(overrides), 19; got != want {
+	if got, want := len(overrides), 13; got != want {
 		t.Fatalf("minimal skill override count = %d, want %d: %v", got, want, overrides)
 	}
 	if got := overrides["commit"]; got != "user-invocable-only" {
 		t.Fatalf("commit override = %v, want user-invocable-only", got)
 	}
-	for _, name := range []string{"domain-modeling", "evergreen", "lmcoder"} {
+	for _, name := range []string{"evergreen", "lmcoder"} {
 		if got, present := overrides[name]; present {
 			t.Fatalf("minimal preset unexpectedly overrides %s = %v", name, got)
 		}
@@ -144,10 +144,10 @@ func TestApplyDebloat_AggressiveSkillOverrides(t *testing.T) {
 
 	settings := readSettings(t, dir)
 	overrides, _ := settings["skillOverrides"].(map[string]any)
-	if got, want := len(overrides), 22; got != want {
+	if got, want := len(overrides), 15; got != want {
 		t.Fatalf("aggressive skill override count = %d, want %d: %v", got, want, overrides)
 	}
-	for _, name := range []string{"domain-modeling", "evergreen", "lmcoder"} {
+	for _, name := range []string{"evergreen", "lmcoder"} {
 		if got := overrides[name]; got != "user-invocable-only" {
 			t.Fatalf("%s override = %v, want user-invocable-only", name, got)
 		}
@@ -197,8 +197,8 @@ func TestApplyRevertDebloat_RestoresSkillOverrides(t *testing.T) {
 	if got := overrides["personal-one"]; got != "off" {
 		t.Fatalf("unrelated override after revert = %v, want off", got)
 	}
-	if _, present := overrides["discovery"]; present {
-		t.Fatalf("discovery should be absent after revert, got %v", overrides["discovery"])
+	if _, present := overrides["docup"]; present {
+		t.Fatalf("docup should be absent after revert, got %v", overrides["docup"])
 	}
 }
 

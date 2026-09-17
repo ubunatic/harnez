@@ -32,6 +32,8 @@ install: ⚙️ build  # install binary to ~/go/bin (user)
 install-tools: ⚙️  # install scripts/*/main.go canary CLIs to ~/go/bin
 	go install ./scripts/canary-agenticloop-lite
 
+install-all: install install-tools ⚙️  # install app and  tools
+
 install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wide)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
 	sudo ln -sf $(BINARY) $(PREFIX)/bin/⚙
@@ -64,7 +66,7 @@ clean: ⚙️ build  # remove managed blocks from the Claude Code config directo
 status: ⚙️ build  # show config summary and applied state
 	./$(BINARY) status -c $(CONFIG) -t $(TARGET)
 
-lint: ⚙️  # check commands/*.md files are all registered in config.yaml
+lint: ⚙️  # check docs/commands/*.md files are all registered in config.yaml
 	bash scripts/lint.sh
 
 agent-canary-build: ⚙️ build  # build the shared Pi/OpenCode canary container

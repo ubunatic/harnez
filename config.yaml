@@ -65,9 +65,16 @@ decommissioned:
     - publish
     - lmcoder
     - release
+    - grilling
+    - grill-with-docs
+    - make-spec
+    - sync-mattpocock-skills
   skills:
     - fresh-sprint
     - fresh-sprinter
+    - domain-modeling
+    - harnez-sync
+    - discovery
 
 # how `init` reconciles its own Makefile targets (e.g. `help`) into an
 # existing project Makefile — see docs/src/Make.md
@@ -108,14 +115,9 @@ debloat:
   # startup context.
   preset_skill_overrides:
     commit: user-invocable-only
-    discovery: user-invocable-only
     docup: user-invocable-only
-    grill-with-docs: user-invocable-only
-    grilling: user-invocable-only
-    harnez-sync: user-invocable-only
     lean-sprint: user-invocable-only
     lean-sprinter: user-invocable-only
-    make-spec: user-invocable-only
     mode: user-invocable-only
     pull: user-invocable-only
     release: user-invocable-only
@@ -125,11 +127,9 @@ debloat:
     sprinter: user-invocable-only
     standup: user-invocable-only
     story: user-invocable-only
-    sync-mattpocock-skills: user-invocable-only
   # These retain prose-triggering under the minimal preset and become
   # explicit-only under the deliberately stronger aggressive preset.
   aggressive_skill_overrides:
-    domain-modeling: user-invocable-only
     evergreen: user-invocable-only
     lmcoder: user-invocable-only
   # verified integration-only tools; safe to deny under any preset.
@@ -278,22 +278,6 @@ commands:
     content: |
       Run `git log --since=midnight --oneline` and summarize what was done.
 
-  - name: grilling
-    description: "Interview relentlessly about a plan or design until every branch is resolved"
-    file: commands/grilling.md
-
-  - name: grill-with-docs
-    description: "Grilling session that also sharpens the domain model and updates CONTEXT.md/ADRs inline"
-    file: commands/grill-with-docs.md
-
-  - name: make-spec
-    description: "Turn the current conversation into a spec and publish it to issues/"
-    file: commands/make-spec.md
-
-  - name: sync-mattpocock-skills
-    description: "Diff our adapted mattpocock/skills commands against upstream and report drift"
-    file: commands/sync-mattpocock-skills.md
-
   - name: commit
     description: "Commit all pending code, including stray issues/docs changes, into a clean working tree"
     content: |
@@ -337,27 +321,23 @@ skills:
 
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
-    file: commands/evergreen.md
+    file: docs/commands/evergreen.md
 
   - name: issue
     description: "File a new repository issue or ticket when asked; do not trigger merely because work references an existing issue"
-    file: commands/issue.md
+    file: docs/commands/issue.md
 
   - name: story
     description: "Write a candid engineering retrospective and case study in docs/studies/"
-    file: commands/story.md
-
-  - name: domain-modeling
-    description: "Actively build and sharpen the project's domain model, glossary, and ADRs"
-    file: commands/domain-modeling.md
+    file: docs/commands/story.md
 
   - name: sprint
     description: "Orchestrate a 5-phase agentic sprint loop (Sequential Advisor -> Reusable Dev -> Review -> Hygiene -> Retro)"
-    file: commands/sprint.md
+    file: docs/commands/sprint.md
 
   - name: lean-sprint
     description: "Execute a lean fresh-handoff sprint (Goal Handoff -> Autonomous Dev -> Inline Review -> Hygiene)"
-    file: commands/lean-sprint.md
+    file: docs/commands/lean-sprint.md
 
   - name: sprinter
     description: "Delegate a full 5-phase sprint to a user-selected-model subagent that reads and executes the sprint skill"
@@ -369,35 +349,27 @@ skills:
 
   - name: mode
     description: "Switch ConciseMode terseness level (lite, std, ultra, off) and sync AGENTS.md"
-    file: commands/mode.md
+    file: docs/commands/mode.md
 
   - name: website
     description: "Build or update a project website — reads docs/Website.md rules (hosting, branding, static/no-CDN, subpage links) before generating any content"
-    file: commands/website.md
-
-  - name: harnez-sync
-    description: "Autonomously sweep sibling agent projects for managed-docs drift and reconcile it (scan -> triage -> stop-marker protect -> init -> verify)"
-    file: commands/harnez-sync.md
+    file: docs/commands/website.md
 
   - name: roadmap
     description: "Product-manager-style roadmap creation/update from the open issue backlog (check issues -> check existing roadmap -> synthesize/reconcile by product value axis)"
-    file: commands/roadmap.md
-
-  - name: discovery
-    description: "Product discovery gap analysis: compare a repo's stated use cases against its real implemented surface and the open+closed issue tracker to surface untracked capability gaps as candidates (never files tickets itself)"
-    file: commands/discovery.md
+    file: docs/commands/roadmap.md
 
   - name: publish
     description: "Multi-project release & publish pipeline: detects project shape (CLI, artifact app, website, hybrid), executes pre-flight checks, verifies media, requires explicit confirmation before external push, syncs website, and asserts live endpoint liveness"
-    file: commands/publish.md
+    file: docs/commands/publish.md
 
   - name: lmcoder
     description: "Local LLM server lifecycle management, fast interactive prompt streaming with session continuity, and sandboxed coding agent execution"
-    file: commands/lmcoder.md
+    file: docs/commands/lmcoder.md
 
   - name: release
     description: "Lean CLI release: commit pending code, push, run harnez release, fix issues or ask on login"
-    file: commands/release.md
+    file: docs/commands/release.md
 
 
   - name: tool-feedback-protocol

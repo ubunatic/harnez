@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Check that every commands/*.md has a matching entry in config.yaml.
+# Check that every docs/commands/*.md has a matching entry in config.yaml.
 # Run from the project root: scripts/lint.sh
 
 set -euo pipefail
@@ -7,17 +7,7 @@ set -euo pipefail
 config="config.yaml"
 fail=0
 
-# Every commands/*.md must be registered in config.yaml (under commands: or skills:).
-# (The reverse — every file: entry must exist — is enforced by apply itself.)
-for f in commands/*.md
-do
-    if ! grep -Fq "file: ${f}" "${config}"
-    then echo "lint: unregistered command file: ${f}"
-         fail=1
-    fi
-done
-
-# Every docs/commands/*.md source must be registered as a skill file or
+# Every docs/commands/*.md source must be registered as a skill/command file or
 # supporting resource. This keeps embedded command categories discoverable.
 for f in docs/commands/*.md
 do
