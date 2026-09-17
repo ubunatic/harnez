@@ -611,6 +611,44 @@ func skillTargets(cfg *Config) []string {
 	return targets
 }
 
+func docTargets(target string, lang Language, cfg *Config) []string {
+	var targets []string
+	if target != "" {
+		targets = append(targets, filepath.Join(target, "docs", filepath.Base(lang.Target)))
+	} else if lang.Target != "" {
+		targets = append(targets, fsutil.ExpandHome(lang.Target))
+	}
+	if root := primeAgentRoot(cfg); root != "" && lang.Target != "" {
+		targets = appendUniquePath(targets, filepath.Join(root, "docs", filepath.Base(lang.Target)))
+	}
+	return targets
+}
+
+// CleanUnmanagedDocs removes docs in ~/.claude/docs/ and ~/.prime/agent/docs/
+// that are not present in keepDocs.
+func CleanUnmanagedDocs(target string, cfg *Config, keepDocs []string) (int, error) {
+	keepSet := make(map[string]struct{}, len(keepDocs))
+	for _, name := range expandDocNames(cfg, keepDocs) {
+		keepSet[name] = struct{}{}
+	}
+	removed := 0
+	for name, lang := range cfg.AgentsMD.Languages {
+		if _, keep := keepSet[name]; keep {
+			continue
+		}
+		for _, dst := range docTargets(target, lang, cfg) {
+			if err := os.Remove(dst); err == nil {
+				removed++
+				fmt.Printf("  removed %s\n", dst)
+				_ = os.Remove(filepath.Dir(dst))
+			} else if !os.IsNotExist(err) {
+				return removed, fmt.Errorf("remove doc %s [%s]: %w", name, dst, err)
+			}
+		}
+	}
+	return removed, nil
+}
+
 func commandTargets(target string, cfg *Config) []string {
 	targets := []string{filepath.Join(target, "commands")}
 	if root := primeAgentRoot(cfg); root != "" {
@@ -830,6 +868,7 @@ func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, install
 // declare a lite_source.
 func ApplyAllVariant(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool, docVariant string, installShell ...bool) error {
 	shellOpt := len(installShell) > 0 && installShell[0]
+	docs = expandDocNames(cfg, docs)
 	if err := validateDocNames(cfg, docs); err != nil {
 		return err
 	}
@@ -1170,11 +1209,7 @@ func ApplyAllVariant(target string, cfg *Config, docs []string, forceDocs bool, 
 		if !ok {
 			return fmt.Errorf("unknown doc: %s", name)
 		}
-		docTargets := []string{fsutil.ExpandHome(lang.Target)}
-		if root := primeAgentRoot(cfg); root != "" {
-			docTargets = appendUniquePath(docTargets, filepath.Join(root, "docs", filepath.Base(lang.Target)))
-		}
-		for _, dst := range docTargets {
+		for _, dst := range docTargets(target, lang, cfg) {
 			fr, err := installDoc(cfg.FS, lang.SourceFor(docVariant), dst, forceDocs)
 			if err != nil {
 				return fmt.Errorf("language %s: install %s: %w", name, dst, err)
@@ -1470,6 +1505,19 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 		}
 	}
 
+	for _, name := range cfg.Docs {
+		lang, ok := cfg.AgentsMD.Languages[name]
+		if !ok {
+			continue
+		}
+		for _, dst := range docTargets(target, lang, cfg) {
+			state := langDocState(cfg.FS, lang.Source, dst)
+			if state != "bundled" {
+				anyChanged = true
+			}
+		}
+	}
+
 	if !anyChanged {
 		fmt.Println("No changes.")
 	}
@@ -1480,6 +1528,14 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 func CleanAll(target string, cfg *Config) error {
 	if err := cleanSettingsJSON(filepath.Join(target, "settings.json")); err != nil {
 		return fmt.Errorf("settings: %w", err)
+	}
+	for _, lang := range cfg.AgentsMD.Languages {
+		for _, dst := range docTargets(target, lang, cfg) {
+			if err := os.Remove(dst); err == nil {
+				fmt.Printf("  removed %s\n", dst)
+				_ = os.Remove(filepath.Dir(dst))
+			}
+		}
 	}
 	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
 		ruleTargets := []string{fsutil.ExpandHome(g.Target)}

@@ -480,6 +480,9 @@ func newRootCmd() *cobra.Command {
 
 	var applyDocs []string
 	var forceDocs bool
+	var applyCleanDocs bool
+	var applyRemoveDocs bool
+	var applyNoDocs bool
 	var applySystemd bool
 	var applyShell bool
 	var applyVariant string
@@ -513,6 +516,15 @@ func newRootCmd() *cobra.Command {
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
 			fmt.Printf("Applying %s → %s\n", name, t)
+			if applyNoDocs || applyRemoveDocs {
+				applyDocs = []string{}
+				applyCleanDocs = true
+			}
+			if applyCleanDocs {
+				if _, err := claude.CleanUnmanagedDocs(t, cfg, applyDocs); err != nil {
+					return err
+				}
+			}
 			if err := claude.ApplyAllVariant(t, cfg, applyDocs, forceDocs, applySystemd, applyVariant, applyShell); err != nil {
 				return err
 			}
@@ -568,8 +580,11 @@ func newRootCmd() *cobra.Command {
 	apply.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 	apply.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
 	apply.Flags().StringVar(&agyTarget, "agy-target", "", "Antigravity config directory (default: agy_target from config.yaml)")
-	apply.Flags().StringSliceVarP(&applyDocs, "docs", "d", nil, "doc(s) to install globally, comma-separated or repeated (e.g. golang,canary)")
+	apply.Flags().StringSliceVarP(&applyDocs, "docs", "d", nil, "doc(s) to install globally, comma-separated or repeated (e.g. golang,canary,all)")
 	apply.Flags().BoolVar(&forceDocs, "force-docs", false, "overwrite existing docs with bundled versions")
+	apply.Flags().BoolVar(&applyCleanDocs, "clean-docs", false, "remove unmanaged global docs from ~/.claude/docs/ and ~/.prime/agent/docs/")
+	apply.Flags().BoolVar(&applyRemoveDocs, "remove-docs", false, "remove all global docs from ~/.claude/docs/ and ~/.prime/agent/docs/")
+	apply.Flags().BoolVar(&applyNoDocs, "no-docs", false, "do not install global docs, removing any previously installed global docs")
 	apply.Flags().StringVar(&applyVariant, "variant", "full", "doc variant to install: lite or full (docs without a lite variant fall back to full)")
 	apply.Flags().BoolVar(&applySystemd, "systemd", false,
 		"install the harnez-agent-collector systemd --user unit to ~/.config/systemd/user (issue 082)")

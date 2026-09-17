@@ -13,6 +13,7 @@ import (
 
 	"ubunatic.com/harnez"
 	"ubunatic.com/harnez/internal/fsutil"
+	"ubunatic.com/harnez/internal/jsonc"
 	"ubunatic.com/harnez/internal/markdown"
 )
 
@@ -221,11 +222,30 @@ func docNamesInOrder(cfg *Config) []string {
 	return append(names, rest...)
 }
 
+// expandDocNames expands "all" to docNamesInOrder(cfg) and returns deduplicated names.
+func expandDocNames(cfg *Config, names []string) []string {
+	if cfg == nil {
+		return names
+	}
+	var expanded []string
+	for _, name := range names {
+		if name == "all" {
+			expanded = append(expanded, docNamesInOrder(cfg)...)
+		} else {
+			expanded = append(expanded, name)
+		}
+	}
+	return jsonc.UnionStrings(nil, expanded)
+}
+
 // validateDocNames returns an error naming any requested doc that is not
 // defined in the config, so typos fail loudly instead of being skipped.
 func validateDocNames(cfg *Config, names []string) error {
 	var unknown []string
 	for _, name := range names {
+		if name == "all" {
+			continue
+		}
 		if _, ok := cfg.AgentsMD.Languages[name]; !ok {
 			unknown = append(unknown, name)
 		}
@@ -607,6 +627,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		return err
 	}
 	if cfg != nil {
+		docs = expandDocNames(cfg, docs)
 		if err := validateDocNames(cfg, docs); err != nil {
 			return err
 		}

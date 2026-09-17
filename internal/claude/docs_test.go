@@ -377,7 +377,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: nil,
 			wantOrder: []string{
-				"golang", "bash", "make", "zig", "cpp", "markdown", "git", "canary", "spec", "agentic-loop", "issue-tracking", "gorelease",
+				"agentic-loop", "bash", "canary", "cpp", "git", "golang", "gorelease", "issue-tracking", "make", "markdown", "spec", "zig",
 			},
 		},
 		{
@@ -388,7 +388,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: nil,
 			wantOrder: []string{
-				"rust", "zig", "markdown", "git", "canary", "spec", "agentic-loop", "issue-tracking",
+				"agentic-loop", "canary", "git", "issue-tracking", "markdown", "rust", "spec", "zig",
 			},
 		},
 		{
@@ -399,7 +399,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: nil,
 			wantOrder: []string{
-				"zig", "markdown", "git", "canary", "spec", "agentic-loop", "issue-tracking",
+				"agentic-loop", "canary", "git", "issue-tracking", "markdown", "spec", "zig",
 			},
 		},
 		{
@@ -410,7 +410,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: nil,
 			wantOrder: []string{
-				"markdown", "git", "canary", "spec", "agentic-loop", "issue-tracking",
+				"agentic-loop", "canary", "git", "issue-tracking", "markdown", "spec",
 			},
 		},
 		{
@@ -421,7 +421,7 @@ func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
 			},
 			explicit: []string{"golang", "canary"},
 			wantOrder: []string{
-				"make", "markdown", "git", "spec", "agentic-loop", "issue-tracking", "gorelease",
+				"agentic-loop", "git", "gorelease", "issue-tracking", "make", "markdown", "spec",
 			},
 		},
 	}
@@ -477,5 +477,100 @@ func TestAllConfigDeclaredCopyableDocsHaveBundledMarker(t *testing.T) {
 		if !strings.Contains(string(data), marker) {
 			t.Errorf("doc %q (source: %q) is missing %s", name, lang.Source, marker)
 		}
+	}
+}
+
+func TestConfigDefaultZeroDocs(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+	if len(cfg.Docs) != 0 {
+		t.Fatalf("expected default config.yaml docs to be empty [], got %v", cfg.Docs)
+	}
+}
+
+func TestExpandDocNames(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+	allDocs := docNamesInOrder(cfg)
+	if len(allDocs) == 0 {
+		t.Fatal("expected non-empty catalog of docs")
+	}
+
+	expanded := expandDocNames(cfg, []string{"all"})
+	if !slices.Equal(expanded, allDocs) {
+		t.Fatalf("expandDocNames(all) = %v, want %v", expanded, allDocs)
+	}
+
+	specific := expandDocNames(cfg, []string{"golang", "bash"})
+	if want := []string{"golang", "bash"}; !slices.Equal(specific, want) {
+		t.Fatalf("expandDocNames(golang, bash) = %v, want %v", specific, want)
+	}
+}
+
+func TestApplyOptInDocsAndCleanUnmanaged(t *testing.T) {
+	targetDir := t.TempDir()
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+	cfg.PrimeAgentTarget = ""
+
+	// 1. Bare apply with default zero docs -> 0 docs written
+	if err := ApplyAll(targetDir, cfg, nil, false, false); err != nil {
+		t.Fatalf("ApplyAll failed: %v", err)
+	}
+	goDoc := filepath.Join(targetDir, "docs", "Go.md")
+	bashDoc := filepath.Join(targetDir, "docs", "Bash.md")
+	if _, err := os.Stat(goDoc); !os.IsNotExist(err) {
+		t.Fatalf("expected Go.md not to exist after bare apply")
+	}
+
+	// 2. Opt-in apply with --docs golang -> only Go.md is installed
+	if err := ApplyAll(targetDir, cfg, []string{"golang"}, false, false); err != nil {
+		t.Fatalf("ApplyAll with golang failed: %v", err)
+	}
+	if _, err := os.Stat(goDoc); err != nil {
+		t.Fatalf("expected Go.md to exist after opt-in apply: %v", err)
+	}
+	if _, err := os.Stat(bashDoc); !os.IsNotExist(err) {
+		t.Fatalf("expected Bash.md not to exist when only golang requested")
+	}
+
+	// 3. CleanUnmanagedDocs with keepDocs []string{"bash"} -> Go.md removed
+	removed, err := CleanUnmanagedDocs(targetDir, cfg, []string{"bash"})
+	if err != nil {
+		t.Fatalf("CleanUnmanagedDocs failed: %v", err)
+	}
+	if removed != 1 {
+		t.Fatalf("expected 1 removed doc, got %d", removed)
+	}
+	if _, err := os.Stat(goDoc); !os.IsNotExist(err) {
+		t.Fatalf("expected Go.md to be removed by CleanUnmanagedDocs")
+	}
+
+	// 4. Opt-in apply with --docs all -> Go.md and Bash.md installed
+	if err := ApplyAll(targetDir, cfg, []string{"all"}, false, false); err != nil {
+		t.Fatalf("ApplyAll with all failed: %v", err)
+	}
+	if _, err := os.Stat(goDoc); err != nil {
+		t.Fatalf("expected Go.md to exist after apply all: %v", err)
+	}
+	if _, err := os.Stat(bashDoc); err != nil {
+		t.Fatalf("expected Bash.md to exist after apply all: %v", err)
+	}
+
+	// 5. CleanAll -> removes all docs
+	if err := CleanAll(targetDir, cfg); err != nil {
+		t.Fatalf("CleanAll failed: %v", err)
+	}
+	if _, err := os.Stat(goDoc); !os.IsNotExist(err) {
+		t.Fatalf("expected Go.md to be removed by CleanAll")
+	}
+	if _, err := os.Stat(bashDoc); !os.IsNotExist(err) {
+		t.Fatalf("expected Bash.md to be removed by CleanAll")
 	}
 }

@@ -284,11 +284,7 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 			if !ok {
 				continue
 			}
-			docTargets := []string{fsutil.ExpandHome(lang.Target)}
-			if root := primeAgentRoot(cfg); root != "" {
-				docTargets = appendUniquePath(docTargets, filepath.Join(root, "docs", filepath.Base(lang.Target)))
-			}
-			for _, dst := range docTargets {
+			for _, dst := range docTargets(target, lang, cfg) {
 				state := langDocState(cfg.FS, lang.Source, dst)
 				fmt.Printf("  %-14s %s [%s]\n", name+":", fsutil.ContractHome(dst), state)
 			}
