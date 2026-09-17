@@ -55,6 +55,7 @@ var (
 	flagCostLink     string
 	flagDelivery     string
 	flagCostDelivery string
+	flagCostDryRun   bool
 	flagWorkspaceDir string
 	flagDryRun       bool
 )
@@ -182,6 +183,7 @@ func main() {
 	measureCostCmd.Flags().StringVar(&flagCostVariant, "variant", "full", "doc variant to use, one of: full, lite")
 	measureCostCmd.Flags().StringVar(&flagCostLink, "link", "soft", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
 	measureCostCmd.Flags().StringVar(&flagCostDelivery, "delivery", "native", "doc delivery mode: native (text/markdown as-is) or png (rendered via `harnez read -I` context card; not valid with --link=embed)")
+	measureCostCmd.Flags().BoolVar(&flagCostDryRun, "dry-run", false, "prepare and print the workspace without invoking agents")
 
 	workspaceCmd := &cobra.Command{Use: "workspace", Short: "Manage clean manual experiment workspaces"}
 	workspaceInitCmd := &cobra.Command{Use: "init", Short: "Create a clean temporary workspace from embedded assets", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error { return initWorkspace() }}
@@ -814,6 +816,22 @@ func measureCost() error {
 		fmt.Println("  expected workspace tree")
 		for _, ref := range expectedWorkspaceFiles(docs, flagCostLink, flagCostDelivery) {
 			fmt.Printf("    %s\n", ref)
+		}
+		if flagCostDryRun {
+			if err := setupLinkedWorkspace(work, repoRoot, docs, flagCostLink, flagCostDelivery); err != nil {
+				os.RemoveAll(work)
+				return fmt.Errorf("dry-run setup workspace: %w", err)
+			}
+			fmt.Printf("  PASS (dry-run) workspace: %s\n  files:\n", work)
+			entries, err := os.ReadDir(work)
+			if err != nil {
+				os.RemoveAll(work)
+				return err
+			}
+			for _, entry := range entries {
+				fmt.Printf("    %s\n", entry.Name())
+			}
+			continue
 		}
 		if err := setupLinkedWorkspace(work, repoRoot, docs, flagCostLink, flagCostDelivery); err != nil {
 			fmt.Printf("  FAIL  setup workspace: %v\n", err)
