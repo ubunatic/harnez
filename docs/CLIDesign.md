@@ -25,6 +25,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `distill` | Shell / Hooks | Distill verbose command outputs for context conservation |
 | `release` | Local / Repo | Language-agnostic version bump, build, minisign signing, and forge publishing |
 | `find`  | Local / Repo | Fast repository entity discovery with short fuzzy-filter grammar (`issues`) |
+| `read`  | Local / Agent Context | Bounded file reading and multi-column visual PNG context card rendering (`-I/--image`) |
 | `log`   | Harnez's own invocation record | Chronological `git log`-shaped stream of harnez CLI invocations (`cli_invocations`) |
 
 `log` is a third axis alongside `find` and `stats`, not a synonym for either: `find`
