@@ -441,6 +441,59 @@ func runAgyJSON(dir, prompt string) (tokenUsage, error) {
 	return parsed.Usage, nil
 }
 
+// docRef is one file pulled into context, directly or via @include chain.
+type docRef struct {
+	path   string // relative to repoRoot for display
+	bytes  int
+	tokens int // rough estimate: bytes / 4
+}
+
+// includeRefPattern matches an eager @path include directive on its own
+// reference point in a doc line, e.g. "@docs/Foo.md" or "@AGENTS.local.md".
+// Deliberately conservative (word-boundary + path-like charset) since this
+// is a best-effort trace, not a full markdown/CLAUDE.md macro parser.
+var includeRefPattern = regexp.MustCompile(`@([A-Za-z0-9_./-]+\.md)`)
+
+// traceDocContext walks entryPath and recursively follows @path include
+// directives (resolved relative to repoRoot), returning one docRef per
+// unique file actually found on disk, entryPath first. Missing referenced
+// files are silently skipped — this traces what the harness's own doc
+// variants actually pull in, not a strict-include validator.
+func traceDocContext(repoRoot, entryPath string) ([]docRef, error) {
+	var refs []docRef
+	seen := map[string]bool{}
+	var walk func(path string) error
+	walk = func(path string) error {
+		abs := path
+		if !filepath.IsAbs(abs) {
+			abs = filepath.Join(repoRoot, path)
+		}
+		if seen[abs] {
+			return nil
+		}
+		seen[abs] = true
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return nil // referenced doc not present — skip, not fatal
+		}
+		rel, err := filepath.Rel(repoRoot, abs)
+		if err != nil {
+			rel = abs
+		}
+		refs = append(refs, docRef{path: rel, bytes: len(data), tokens: len(data) / 4})
+		for _, m := range includeRefPattern.FindAllStringSubmatch(string(data), -1) {
+			if err := walk(m[1]); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(entryPath); err != nil {
+		return nil, err
+	}
+	return refs, nil
+}
+
 func measureCost() error {
 	fixturesAbs, err := resolveFixturesPath()
 	if err != nil {
@@ -519,6 +572,15 @@ this request:
 			os.RemoveAll(work)
 			anyErr = true
 			continue
+		}
+		if refs, err := traceDocContext(repoRoot, docPath); err == nil {
+			total := 0
+			fmt.Printf("%-8s docs pulled into context:\n", r.name)
+			for _, ref := range refs {
+				fmt.Printf("%-8s   %-40s %6d bytes  ~%5d tokens\n", "", ref.path, ref.bytes, ref.tokens)
+				total += ref.tokens
+			}
+			fmt.Printf("%-8s   %-40s %13s ~%5d tokens\n", "", "(total)", "", total)
 		}
 		usage, err := r.run(work, prompt)
 		os.RemoveAll(work)

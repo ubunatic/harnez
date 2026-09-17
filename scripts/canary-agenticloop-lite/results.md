@@ -119,6 +119,30 @@ measured cost, but of agy's actual global context, not of the `hello` fixture
 against `docs/AgenticLoop.md` specifically; treat the `claude` baseline as the
 more meaningful of the two until agy's isolation gap is fixed.
 
+**Doc-context trace — which docs are pulled into context, and their token cost.**
+`measure-cost` now also traces the copied `AGENTS.md` for eager `@path.md`
+include directives (recursively, resolved relative to repo root) and reports
+each pulled-in file's byte size and a rough token estimate (`bytes / 4` — not
+a real tokenizer count, just enough to compare doc weight at a glance):
+
+```
+claude   docs pulled into context:
+           docs/AgenticLoop.md                       29277 bytes  ~ 7319 tokens
+           (total)                                                ~ 7319 tokens
+claude   1 unit = 60278 tokens (input=4 output=83 cache_read=38093 cache_creation=22098 thinking=0)
+```
+
+For the `hello` fixture's `docs/AgenticLoop.md` variant, only one file is
+pulled in — the doc has no `@docs/...` includes of its own (its own text
+explicitly warns against eager includes in global instruction templates,
+Invariant 1 note). The ~7.3K token doc estimate is well under the real
+60278-token `claude -p` total, confirming most of that total is Claude Code's
+own baseline session overhead (tool schemas, system prompt, etc.), not the
+doc content itself. Docs with real `@`-include chains (e.g. this repo's own
+top-level `CLAUDE.md`, which pulls in `AGENTS.local.md`) will show multiple
+rows and a larger total — worth a follow-up run once a fixture targets one of
+those files directly.
+
 **Piece 2 — this session's own live token/context usage: not available.**
 No tool exposed in this Claude Code session reports live cumulative token
 usage or current context size on request; there is no `claude` slash command,
@@ -130,3 +154,72 @@ session's live total. This is recorded as an explicit known limitation per the
 ticket's own instructions, rather than silently dropped: "N canary-agenticloop-lite
 units" can be computed for any *completed* `-p` call, but this host session
 cannot currently quote its own live total against that baseline.
+
+---
+
+## Doc-compliance smoke check — `hello` fixture, both agents (2026-09-17)
+
+Cheapest real-invocation check available: the `hello` fixture is a single
+low-cost prompt/response pair used to confirm an agent actually reads its
+`AGENTS.md` and follows the instruction inside it, without paying for the
+full 7-fixture x 2-variant x 2-agent cross product.
+
+`canary-agenticloop-lite run --fixture hello`:
+
+| agent | full | lite |
+|---|---|---|
+| claude | PASS | PASS |
+
+(`agy` excluded from this table per the standing cwd-isolation caveat above —
+it never reads the isolated per-fixture `AGENTS.md`, so a doc-variant PASS/FAIL
+for `agy` here would not be a valid signal.)
+
+`canary-agenticloop-lite measure-cost` (real per-agent unit cost + doc-context
+trace, `docs/AgenticLoop.md` variant):
+
+| agent | 1 unit (total tokens) | docs pulled into context | doc tokens (est.) |
+|---|---|---|---|
+| claude | 60272 | `docs/AgenticLoop.md` | ~7319 |
+| agy | 42800 | `docs/AgenticLoop.md`* | ~7319 |
+
+*agy's number is subject to the same cwd-isolation caveat — real cost of
+answering from its actual global `~/AGENTS.md`, not this repo's
+`docs/AgenticLoop.md`, even though the doc-context tracer (which walks
+whatever file the harness *intended* to copy in) reports the same path/size
+for both rows.
+
+Full session usage runs well above the raw doc token estimate for both agents
+(60272 vs ~7319 for claude, 42800 vs ~7319 for agy) — most of the 1-unit cost
+is baseline session/tool overhead, not the doc content itself.
+
+---
+
+## Guide: running the suite/units yourself
+
+Binary: `canary-agenticloop-lite` (installed via `make install-tools` from this
+repo root; source in this directory).
+
+- **List available fixtures** (no agent invocation, free):
+  `canary-agenticloop-lite fixtures list`
+- **Show one fixture's full definition**:
+  `canary-agenticloop-lite fixtures show <id>`
+- **Cheap smoke check** — run just `hello` (recommended default; do not run
+  the full unfiltered suite casually, it fans out to every fixture x every
+  agent x both doc variants and is expensive):
+  `canary-agenticloop-lite run --fixture hello`
+- **Scope further** with repeatable flags, e.g. one agent only:
+  `canary-agenticloop-lite run --fixture hello --agent claude`
+  or one doc variant only: `--variant full`
+- **Run a specific behavioral fixture on demand** once `hello` looks healthy,
+  e.g.: `canary-agenticloop-lite run --fixture blocking-sleep --agent claude`
+- **1-unit token cost baseline** (real `-p --output-format json` usage,
+  now including the doc-context trace — which files get pulled into context
+  and their estimated token size):
+  `canary-agenticloop-lite measure-cost` (or `--agent claude` / `--agent agy`
+  to scope to one CLI)
+- **Override the fixtures file** (e.g. testing a fork/variant) with the global
+  `--fixtures-file <path>` flag on any subcommand.
+
+Cost note: every `run`/`measure-cost` invocation spawns a real non-interactive
+`claude -p` and/or `agy -p` subprocess per (fixture x variant x agent) —
+treat this as a metered external call, not a free local check.
