@@ -1,6 +1,6 @@
 # 400 — Embed retro pixel font engine into internal/readcard as default across read, docs cards, init, and apply
 
-**Status**: Open
+**Status**: Closed — Embedded retro pixel font engine (Font5x8, Font3x5, Font6x12) natively into internal/readcard and set as default across read and docs cards
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: CLI & Tooling / Context Optimization
