@@ -219,7 +219,7 @@ func main() {
 		var completions []string
 		for _, fx := range fixtures {
 			if strings.HasPrefix(fx.ID, toComplete) {
-				completions = append(completions, fx.ID)
+				completions = append(completions, fmt.Sprintf("%s\t%s", fx.ID, fx.Rule))
 			}
 		}
 		return completions, cobra.ShellCompDirectiveNoFileComp
