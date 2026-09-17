@@ -392,13 +392,15 @@ func run() error {
 		}
 		defer cleanup()
 	}
-	if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err != nil {
-		// fall back: fixturesAbs is scripts/canary-agenticloop-lite/fixtures.yaml relative to cwd==repoRoot
-		selfDir, err := os.Getwd()
-		if err != nil {
-			return err
+	if fixturesAbs != "" {
+		if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err != nil {
+			// fall back: fixturesAbs is scripts/canary-agenticloop-lite/fixtures.yaml relative to cwd==repoRoot
+			selfDir, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			repoRoot = selfDir
 		}
-		repoRoot = selfDir
 	}
 
 	if !validLinkModes[flagLink] {
