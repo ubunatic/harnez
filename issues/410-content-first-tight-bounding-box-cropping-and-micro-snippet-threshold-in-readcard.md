@@ -53,19 +53,24 @@ For micro-snippets (1–5 lines, e.g. `echo "123"`, single error traces, 3-line 
   - `cardWidth := max(contentWidth, headerMinWidth)` (clamped to `MaxDimension`).
 
 ### 2.2 Micro-Snippet Threshold in `--auto` Routing (Issue 409 Integration)
-- Define thresholds:
-  - `MicroSnippetLineThreshold = 5`
-  - `MicroSnippetTokenThreshold = 100`
+- Define thresholds: `MicroSnippetLineThreshold = 5`, `MicroSnippetTokenThreshold = 100`.
 - When `--auto` (or `--doc-mode=auto`) is active:
   - If `totalLines <= 5` and `rawTokens < 100`: route directly to text stream (`harnez read -n`) rather than rendering an image.
   - If `-I` is explicitly passed by the user/agent, continue rendering the tightly-cropped image.
+
+### 2.3 Make 3-Column Packing (`cols = 3`) the Default
+- Empirical benchmarks across OpenAI, Claude 3.7, and Gemini proved that **3-column packing is the global token optimum** (achieving 1.98x compression on OpenAI and 1.50x on Claude) by cutting card height below the $512\text{px}$ tile threshold.
+- Combined with content-first dynamic active column pruning (Section 2.1), setting default `cols = 3`:
+  - Automatically packs medium/large files (60–300 lines) into 3 dense columns with soft-wrapping.
+  - Automatically collapses short snippets to 1 or 2 columns with zero empty column gaps.
 
 ---
 
 ## 3. Acceptance Criteria
 
-- [ ] Unused columns are automatically pruned (`usedCols = 1` for 1 row on a 3-column request).
+- [ ] Make `cols = 3` the default in `internal/readcard/` and `harnez read -I` (while allowing `--columns=N` overrides).
+- [ ] Unused columns are automatically pruned (`usedCols = 1` for 1 row on a 3-column default/request).
 - [ ] Card width is tightly cropped to the actual content bounding box + header minimum.
-- [ ] Running `echo "123" | harnez read -I --columns=3` generates a compact ~300–350px card with zero empty column gaps.
+- [ ] Running `echo "123" | harnez read -I` generates a compact ~300–350px card with 1 used column and zero empty space.
 - [ ] Micro-snippet threshold policy defined for integration with `--auto` provider routing.
-- [ ] Unit tests in `internal/readcard/read_test.go` verifying active column pruning and tight width cropping.
+- [ ] Unit tests in `internal/readcard/read_test.go` verifying 3-column default, active column pruning, and tight width cropping.
