@@ -58,6 +58,7 @@ var (
 	flagCostDryRun   bool
 	flagWorkspaceDir string
 	flagDryRun       bool
+	flagMeasureCost  bool
 )
 
 // validDeliveryModes are the supported --delivery values controlling whether
@@ -140,6 +141,19 @@ func main() {
 		Use:   "run",
 		Short: "Invoke agent CLIs against fixtures and score real replies",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if flagMeasureCost {
+				if len(flagFixtures) > 1 || len(flagVariants) > 1 {
+					return fmt.Errorf("--measure-cost accepts one --fixture and one --variant")
+				}
+				if len(flagFixtures) == 1 {
+					flagCostFixture = flagFixtures[0]
+				}
+				if len(flagVariants) == 1 {
+					flagCostVariant = flagVariants[0]
+				}
+				flagCostLink, flagCostDelivery, flagCostDryRun = flagLink, flagDelivery, flagDryRun
+				return measureCost()
+			}
 			return run()
 		},
 	}
@@ -149,6 +163,7 @@ func main() {
 	runCmd.Flags().StringVar(&flagLink, "link", "soft", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
 	runCmd.Flags().StringVar(&flagDelivery, "delivery", "native", "doc delivery mode: native (text/markdown as-is) or png (rendered via `harnez read -I` context card; not valid with --link=embed)")
 	runCmd.Flags().BoolVar(&flagDryRun, "dry-run", false, "prepare and print fixture workspaces without invoking agents")
+	runCmd.Flags().BoolVar(&flagMeasureCost, "measure-cost", false, "measure one fixture's agent token usage instead of scoring the normal run")
 
 	fixturesCmd := &cobra.Command{
 		Use:   "fixtures",
@@ -171,26 +186,12 @@ func main() {
 	}
 	fixturesCmd.AddCommand(fixturesListCmd, fixturesShowCmd)
 
-	measureCostCmd := &cobra.Command{
-		Use:   "measure-cost",
-		Short: "Run one fixture (default: hello) once per agent and print its parsed token usage plus doc-context trace",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return measureCost()
-		},
-	}
-	measureCostCmd.Flags().StringSliceVar(&flagAgents, "agent", nil, "only measure this agent CLI, one of: claude, agy (repeatable); default: all agents")
-	measureCostCmd.Flags().StringVar(&flagCostFixture, "fixture", "hello", "fixture id to run for the cost measurement")
-	measureCostCmd.Flags().StringVar(&flagCostVariant, "variant", "full", "doc variant to use, one of: full, lite")
-	measureCostCmd.Flags().StringVar(&flagCostLink, "link", "soft", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
-	measureCostCmd.Flags().StringVar(&flagCostDelivery, "delivery", "native", "doc delivery mode: native (text/markdown as-is) or png (rendered via `harnez read -I` context card; not valid with --link=embed)")
-	measureCostCmd.Flags().BoolVar(&flagCostDryRun, "dry-run", false, "prepare and print the workspace without invoking agents")
-
 	workspaceCmd := &cobra.Command{Use: "workspace", Short: "Manage clean manual experiment workspaces"}
 	workspaceInitCmd := &cobra.Command{Use: "init", Short: "Create a clean temporary workspace from embedded assets", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error { return initWorkspace() }}
 	workspaceInitCmd.Flags().StringVar(&flagWorkspaceDir, "dir", "", "destination directory (default: a temporary directory)")
 	workspaceCmd.AddCommand(workspaceInitCmd)
 
-	root.AddCommand(runCmd, fixturesCmd, measureCostCmd, workspaceCmd)
+	root.AddCommand(runCmd, fixturesCmd, workspaceCmd)
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR:", err)
