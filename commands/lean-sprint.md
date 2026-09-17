@@ -34,10 +34,12 @@ For focused, well-defined tasks, bypass the full 5-phase ceremony in favor of a 
   - Concise problem statement & target ticket/spec references.
   - Concrete target files/packages and acceptance/verification criteria.
 - **Trust the Base Framework**: Do not duplicate or micromanage standard workspace rules, tool descriptions, or formatting conventions already present in the base system prompt.
+- **Context & Reading Discipline**: When the task requires inspecting or exploring medium/large source files (>100 lines or multiple slices), instruct the subagent to run `harnez read -I <file>` (visual PNG context card) or `harnez read -L <range>` / `harnez read -n` via command execution instead of issuing repeated native file view calls.
 - **Stay Responsive**: Dispatching the subagent must not block the main chat. Report the handoff and return control to the user, or continue only with non-overlapping local work. Do not wait for the subagent unless the user explicitly asks or integration is immediately blocked on its result.
 
 ### 2. Autonomous Execution & Self-Verification
 - The dev subagent executes the implementation autonomously and reports back to you.
+- **Token-Bounded Inspection**: Avoid repetitive built-in file view slices on large files; use `harnez read -I` or `harnez read -L <range>` to inspect code.
 - Enforce strict self-verification using repo-native commands (`go test ./...`, `make test`, `make check`, canary probes) — real assertions, not just a clean exit code.
 - For defect-shaped tasks (bug/timing/race): establish a concrete reproduction baseline *before* the fix, and verify against that, not just green tests (see `@docs/AgenticLoop.md` Phase 2, "Repro-before-fix").
 
