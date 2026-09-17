@@ -113,6 +113,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-09-16-quota-1-guardrail-architecture-and-multi-agent-concurrency.md](studies/2026-09-16-quota-1-guardrail-architecture-and-multi-agent-concurrency.md) | Quota-1 Guardrail Architecture, Multi-Agent Concurrency, and Lite Doc Optimization |
 | [studies/2026-09-16-ramp-levels-and-go-repository-init.md](studies/2026-09-16-ramp-levels-and-go-repository-init.md) | Go libraries and Go CLI applications; TUI support in the MVP, systemd services as a later extension |
 | [studies/2026-09-16-skilloverrides-live-verification.md](studies/2026-09-16-skilloverrides-live-verification.md) | live verification of Claude Code's skillOverrides settings.json field against an installed version, resolving issue 347's unverified GitHub-issue claims |
+| [studies/2026-09-17-multi-agent-issue-specification-benchmarking-and-remote-inference.md](studies/2026-09-17-multi-agent-issue-specification-benchmarking-and-remote-inference.md) | Multi-Agent Issue Specification Benchmarking & Remote Inference Architecture |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
 | [studies/MacOSContainerAMD.md](studies/MacOSContainerAMD.md) | macOS Containers on AMD KVM & Podman: Architecture, Quirks, and Diagnostic Guide |
 | [studies/Quota1Approach.md](studies/Quota1Approach.md) | Research Study: Quota-1 Guardrails for LLM Agent Loops |
