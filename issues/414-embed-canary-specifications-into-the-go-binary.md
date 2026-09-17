@@ -34,6 +34,9 @@ checkout and can silently use the wrong or stale specification.
 
 - An installed canary runs from outside the repository without a source-tree
   `fixtures.yaml` or any linkable document.
+- From an arbitrary working directory, with no knowledge of the Harnez checkout,
+  the installed canary creates a temporary workspace containing the correct
+  `AGENTS.md` and all required linked document assets.
 - All supported `@<file>`, `See <file>`, `@<image>`, and `See <image>` targets
   resolve from embedded assets when running installed binaries.
 - Development runs can still select an explicit YAML file for rapid iteration.
