@@ -949,23 +949,7 @@ func measureCost() error {
 			anyErr = true
 			continue
 		}
-		if refs, err := traceDocContext(work, filepath.Join(work, "AGENTS.md"), r.name); err == nil {
-			fmt.Println("  context docs")
-			total := 0
-			for _, ref := range refs {
-				if ref.tokens < 0 {
-					fmt.Printf("    %-38s %7d B  image tokens: unavailable\n", ref.path, ref.bytes)
-					continue
-				}
-				if strings.HasSuffix(ref.path, ".png") {
-					fmt.Printf("    %-38s %7d B  ~%6d image tok\n", ref.path, ref.bytes, ref.tokens)
-					continue
-				}
-				fmt.Printf("    %-38s %7d B  ~%6d tok\n", ref.path, ref.bytes, ref.tokens)
-				total += ref.tokens
-			}
-			fmt.Printf("    %-38s %10s  ~%6d tok\n", "total", "", total)
-		}
+		printCompactContextStats(work, r.name)
 		if r.context != nil {
 			if ctxOut, err := r.context(work); err == nil {
 				fmt.Println("  /context (real, before fixture prompt)")
@@ -1071,6 +1055,22 @@ func printEstimatedContextTokens(work string, docs []string, delivery string, ag
 			fmt.Printf("      %-32s ~%d image/text tok\n", ref, refs[0].tokens)
 		}
 	}
+}
+
+func printCompactContextStats(work, agent string) {
+	refs, err := traceDocContext(work, filepath.Join(work, "AGENTS.md"), agent)
+	if err != nil {
+		return
+	}
+	var parts []string
+	for _, ref := range refs {
+		if ref.tokens >= 0 {
+			parts = append(parts, fmt.Sprintf("%s ~%d", ref.path, ref.tokens))
+		} else {
+			parts = append(parts, ref.path+" ~?")
+		}
+	}
+	fmt.Printf("  context: %s\n", strings.Join(parts, ", "))
 }
 
 func imageTokenEstimate(path, agent string) int {
