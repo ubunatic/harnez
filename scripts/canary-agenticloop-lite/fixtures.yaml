@@ -7,20 +7,37 @@
 # the follow-up that would automate this).
 preamble: |
     **IMPORTANT** This is a project uses token-optimized docs formats and the latest AGENTS.md link formats.
+
     - `@link-to-file` *must* always be read and contain key instructions, diagrams, and critical agent memory
     - `See links-to-file` or regular MD links *should* be read when working on corresponding units
     - Allowed file formats: MD (Markdown text), PNG (Markdown as compressed images)
+
+    ## Agent Instructions
+
 fixtures:
   - id: hello
     rule: "harness smoke check (not an AgenticLoop rule) — verifies agent invocation, doc copy-in, and regex scoring plumbing cheaply"
     prompt: "Reply with exactly the word: ready"
     pattern: 'ready'
 
+  - id: docloc
+    rule: "check where docs are"
+    prompt: |
+      1. How many and global AGENTS.md or similar agent-specific instructions roots did you preload in this session?
+         Where are these located and in which order are they loaded?
+      2. Do you see the Bash rules and did you read them initially or would you have to load them when needed?
+      3. Which other docs do you see and did you load them initally or would load them on demand?
+      4. How many and which DON'TS do you see in the Bash guiide.
+
+    docs:
+      - docs/lang/Bash.md
+    pattern: 'AGENTS\.md|CLAUDE\.md'
+
   - id: shell-conditional
     rule: "cd-scoped commands / Bash conventions cross-reference"
     docs:
       - docs/lang/Bash.md
-    prompt: "Write a one-line shell check for whether a file exists, to use in a script."
+    prompt: "Write a short shell statement to test if a file exists, so I can use it in a script."
     pattern: 'if test '
     forbid_pattern: '\[\[ |\[ '
 

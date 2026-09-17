@@ -78,7 +78,7 @@ Examples:
 					res.Lines, res.SourceLines = compact.Lines, compact.SourceLines
 					res.TokenStats = readcard.ComputeTextTokens(strings.Join(res.Lines, "\n"))
 				}
-				renderOpts := readcard.RenderOptions{Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine}
+				renderOpts := readcard.RenderOptions{Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine, SourceTokens: res.TokenStats.TextTokens}
 				render := imageMode
 				var measured *readcard.RenderResult
 				if adaptive && !(len(res.Lines) <= readcard.MicroSnippetLineThreshold && res.TokenStats.TextTokens < readcard.MicroSnippetTokenThreshold) {
@@ -100,7 +100,7 @@ Examples:
 					}
 					results = append(results, rendered)
 					if !jsonOutput {
-						if err := outputRenderResult(cmd, rendered, false); err != nil {
+						if err := outputRenderResult(cmd, rendered, false, showTokens); err != nil {
 							return err
 						}
 					}
@@ -168,7 +168,7 @@ Examples:
 	return cmd
 }
 
-func outputRenderResult(cmd *cobra.Command, res *readcard.RenderResult, jsonFmt bool) error {
+func outputRenderResult(cmd *cobra.Command, res *readcard.RenderResult, jsonFmt, showTokens bool) error {
 	if jsonFmt {
 		enc := json.NewEncoder(cmd.OutOrStdout())
 		enc.SetIndent("", "  ")
@@ -176,7 +176,11 @@ func outputRenderResult(cmd *cobra.Command, res *readcard.RenderResult, jsonFmt 
 	}
 
 	for _, f := range res.Files {
-		fmt.Fprintf(cmd.OutOrStdout(), "🖼️ Rendered: %s (%dx%d px, %d col, %d lines)\n", f, res.Width, res.Height, res.Columns, res.TotalLines)
+		fmt.Fprintf(cmd.OutOrStdout(), "See @%s (%dx%d px, %d col, %d lines)\n", f, res.Width, res.Height, res.Columns, res.TotalLines)
+	}
+
+	if !showTokens {
+		return nil
 	}
 
 	stats := res.TokenStats

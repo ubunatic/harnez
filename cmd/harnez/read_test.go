@@ -103,11 +103,23 @@ func Add(a, b int) int {
 	}
 
 	out := buf.String()
-	if !strings.Contains(out, "Rendered:") || !strings.Contains(out, imgOut) {
+	if !strings.Contains(out, "See @") || !strings.Contains(out, imgOut) {
 		t.Errorf("expected render notification, got:\n%s", out)
 	}
-	if !strings.Contains(out, "Token Breakdown:") {
-		t.Errorf("expected token breakdown, got:\n%s", out)
+	if strings.Contains(out, "Token Breakdown:") {
+		t.Errorf("token breakdown should be hidden by default, got:\n%s", out)
+	}
+
+	cmd = newReadCmd()
+	buf.Reset()
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"-I", "--tokens", "-o", imgOut, "--columns=1", testFile})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("read -I --tokens failed: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Token Breakdown:") {
+		t.Errorf("expected token breakdown with --tokens, got:\n%s", buf.String())
 	}
 
 	if _, err := os.Stat(imgOut); err != nil {
@@ -207,5 +219,3 @@ func main() {
 		}
 	}
 }
-
-

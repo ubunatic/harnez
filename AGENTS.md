@@ -1,6 +1,13 @@
 <!-- Keep this file token-efficient: use bullet lists, not tables; no redundant prose. -->
 <!-- AGENTS.md is the canonical source; CLAUDE.md is a symlink to it. Edit AGENTS.md only. -->
 
+## Local Context Links
+
+- Read local `@<file>` links immediately.
+- Read local `See <file>` links before working on their corresponding tasks.
+- Local `@<image>` and `See <image>` links are cheat sheets containing the full
+  document content as token-efficient PNG cards; inspect them as documentation.
+
 <!-- harnez:begin Local Overlays -->
 - Local ephemeral overrides: @AGENTS.local.md
 <!-- harnez:end Local Overlays -->

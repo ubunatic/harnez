@@ -22,6 +22,7 @@ type RenderOptions struct {
 	MaxDimension    int    // Max width/height constraint (default: 1568)
 	ShowLineNumbers bool   // Print line numbers in gutter (default: true)
 	OutputPath      string // Custom output PNG path (or directory)
+	SourceTokens    int    // Source text token count used in generated default names
 	Title           string // Card title / filename
 	StartLine       int    // Starting line number (1-indexed, default 1)
 	LineNumbers     string // all, off, or positive cadence; overrides ShowLineNumbers when set
@@ -469,7 +470,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		}
 
 		// Determine target file path
-		outPath, err := resolveOutPath(opts.OutputPath, filename, page, totalPages)
+		outPath, err := resolveOutPath(opts.OutputPath, filename, opts.SourceTokens, page, totalPages)
 		if err != nil {
 			return nil, fmt.Errorf("resolve output path: %w", err)
 		}
@@ -542,7 +543,7 @@ func tokenColor(t TokenType, theme ColorTheme) color.RGBA {
 	}
 }
 
-func resolveOutPath(customOut string, sourceFile string, page, totalPages int) (string, error) {
+func resolveOutPath(customOut string, sourceFile string, sourceTokens, page, totalPages int) (string, error) {
 	if customOut != "" {
 		if fi, err := os.Stat(customOut); err == nil && fi.IsDir() {
 			base := filepath.Base(sourceFile)
@@ -564,16 +565,15 @@ func resolveOutPath(customOut string, sourceFile string, page, totalPages int) (
 	}
 
 	// Default to OS Temp Dir with deterministic / readable name
-	stem := filepath.Base(sourceFile)
-	stem = strings.TrimSuffix(stem, filepath.Ext(stem))
+	base := filepath.Base(sourceFile)
 	h := sha256.Sum256([]byte(sourceFile))
 	shortHash := hex.EncodeToString(h[:4])
 
 	tmpDir := os.TempDir()
 	if totalPages > 1 {
-		return filepath.Join(tmpDir, fmt.Sprintf("harnez_read_%s_%s_p%d.png", stem, shortHash, page+1)), nil
+		return filepath.Join(tmpDir, fmt.Sprintf("harnez_read_%s_%d-tokens_%s_p%d.png", base, sourceTokens, shortHash, page+1)), nil
 	}
-	return filepath.Join(tmpDir, fmt.Sprintf("harnez_read_%s_%s.png", stem, shortHash)), nil
+	return filepath.Join(tmpDir, fmt.Sprintf("harnez_read_%s_%d-tokens_%s.png", base, sourceTokens, shortHash)), nil
 }
 
 func drawRect(img *image.RGBA, x, y, w, h int, col color.RGBA) {
