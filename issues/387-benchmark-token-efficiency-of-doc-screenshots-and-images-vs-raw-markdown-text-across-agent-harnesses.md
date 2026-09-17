@@ -1,6 +1,6 @@
 # 387 — Benchmark token efficiency of doc screenshots and images vs raw markdown text across agent harnesses
 
-**Status**: Open
+**Status**: Closed — completed doc vision benchmark study and automated renderer
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Research & Canary / Context Optimization
@@ -43,7 +43,8 @@ Evaluate across the three active agent CLIs (`agy`, `codex`, `claude`):
 
 ## 3. Acceptance Criteria
 
-- [ ] Automated rendering harness script in `scripts/` or `scratch/` generating standard, compact, and dense image variants from markdown.
-- [ ] Empirical token benchmark table across `agy`, `codex`, and `claude`.
-- [ ] Accuracy/fidelity evaluation report documenting OCR error rates and edge-case syntax retention.
-- [ ] Synthesis report in `docs/studies/` recommending whether vision-based doc injection is viable for specific doc types.
+- [x] Automated rendering harness script in `scripts/canary-doc-vision/render.py` generating standard (1col), compact (2col), and dense (3col) image variants from markdown.
+- [x] Empirical token benchmark table across `agy`, `codex`, and `claude` (documented in `docs/studies/2026-09-17-doc-screenshots-and-vision-token-efficiency-benchmark.md`).
+- [x] Accuracy/fidelity evaluation report documenting OCR error rates (100% fidelity / 0 errors across Claude and Antigravity probes).
+- [x] Synthesis report in `docs/studies/2026-09-17-doc-screenshots-and-vision-token-efficiency-benchmark.md` recommending vision vs prompt-caching strategies.
+
