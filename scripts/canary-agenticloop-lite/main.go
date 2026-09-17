@@ -887,30 +887,49 @@ func measureCost() error {
 		}
 		docs := []string{docPath}
 		docs = append(docs, fixtureDocs(repoRoot, flagCostVariant, *target)...)
-		fmt.Println("  expected context docs")
-		fmt.Println("    AGENTS.md")
-		for _, ref := range expectedContextDocs(docs, flagCostDelivery) {
-			fmt.Printf("    %s\n", ref)
-		}
-		fmt.Println("  expected workspace tree")
-		for _, ref := range expectedWorkspaceFiles(docs, flagCostLink, flagCostDelivery) {
-			fmt.Printf("    %s\n", ref)
-		}
 		if flagCostDryRun {
 			if err := setupLinkedWorkspace(work, repoRoot, docs, flagCostLink, flagCostDelivery); err != nil {
 				os.RemoveAll(work)
 				return fmt.Errorf("dry-run setup workspace: %w", err)
 			}
-			fmt.Printf("  PASS (dry-run) workspace: %s\n  files:\n", work)
+			expected := expectedWorkspaceFiles(docs, flagCostLink, flagCostDelivery)
+			actual := map[string]bool{}
 			entries, err := os.ReadDir(work)
 			if err != nil {
 				os.RemoveAll(work)
 				return err
 			}
 			for _, entry := range entries {
-				fmt.Printf("    %s\n", entry.Name())
+				actual[entry.Name()] = true
+			}
+			fmt.Printf("  workspace: %s\n  files: ", work)
+			for i, ref := range expected {
+				if i > 0 {
+					fmt.Print(", ")
+				}
+				fmt.Print(ref)
+			}
+			fmt.Println()
+			missing := []string{}
+			for _, ref := range expected {
+				if !actual[ref] {
+					missing = append(missing, ref)
+				}
+			}
+			if len(missing) > 0 {
+				return fmt.Errorf("dry-run %s/%s: missing files: %s", flagCostVariant, target.ID, strings.Join(missing, ", "))
 			}
 			printEstimatedContextTokens(work, docs, flagCostDelivery, flagAgents)
+			fmt.Println("  actual: all expected files present")
+			fmt.Println("  $ tree")
+			if tree, treeErr := exec.Command("tree", work).CombinedOutput(); treeErr == nil {
+				fmt.Print(string(tree))
+			} else {
+				for _, entry := range entries {
+					fmt.Printf("%s\n", entry.Name())
+				}
+			}
+			fmt.Println("  PASS (dry-run)")
 			continue
 		}
 		if err := setupLinkedWorkspace(work, repoRoot, docs, flagCostLink, flagCostDelivery); err != nil {
