@@ -863,7 +863,7 @@ func measureCost() error {
 	const rule = "────────────────────────────────────────────────────────────────"
 	fmt.Println(rule)
 	fmt.Printf("fixture   %s\n", target.ID)
-	fmt.Printf("variant   %s  (%s)\n", flagCostVariant, docPath)
+	fmt.Printf("variant   %s\n", flagCostVariant)
 	fmt.Printf("link      %s\n", flagCostLink)
 	fmt.Printf("delivery  %s\n", flagCostDelivery)
 	fmt.Printf("prompt    %s\n", target.Prompt)
