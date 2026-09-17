@@ -223,3 +223,46 @@ repo root; source in this directory).
 Cost note: every `run`/`measure-cost` invocation spawns a real non-interactive
 `claude -p` and/or `agy -p` subprocess per (fixture x variant x agent) —
 treat this as a metered external call, not a free local check.
+
+---
+
+## Output rework + first-turn baseline (2026-09-17, user follow-up)
+
+Two follow-ups from a live pairing session after the doc-context trace above:
+
+**1. Cleaner `measure-cost` output.** Generalized `measure-cost` to accept
+`--fixture`/`--variant` (previously hardcoded to `hello`/full), print the real
+response text, and reformat the report as a bordered header (fixture/variant/
+prompt) plus a per-agent block: context-docs table, PASS/FAIL score against
+the fixture's `pattern`/`forbid_pattern`, response text, then a token-use
+table.
+
+**2. First-turn baseline instead of guessing.** The doc-context token estimate
+(~7,319 for `docs/AgenticLoop.md`) didn't explain the real gap to the total
+session cost (~60K) — user asked "where does all the context come from."
+Considered asking the agent to reply "START" immediately as an instrumentation
+trick, but `claude -p --output-format json`'s `usage.iterations` array already
+exposes a real per-turn breakdown for free, so that trick was unnecessary.
+`measure-cost` now reports `first-turn` (iterations[0]'s token cost — before
+any tool-call round trip) alongside `total` and `turns`:
+
+```
+token use
+    first-turn          36265
+    total               60272
+    turns                   2
+```
+
+Root cause of the 60K vs 7.3K gap: `hello` costs 2 turns, not 1 — claude
+issues a real `Read` tool call to open `AGENTS.md` rather than getting it
+inlined, so the fixed session overhead (system prompt + full tool schema
+definitions, independent of doc content, measured at 23,872 tokens for an
+empty directory with no `AGENTS.md` at all) gets billed twice: once for the
+tool-call turn, once for the final-answer turn. The doc's own ~7.3K tokens is
+a real but comparatively small piece of the total; most of the cost is
+Claude Code's own multi-turn bootstrapping, not the doc.
+
+`agy`'s JSON output has a top-level `num_turns` but no per-turn breakdown, so
+its `first-turn` value falls back to the run's total (`firstTurnTokens()` in
+`main.go`) — a known asymmetry between the two agents' introspection, not a
+bug in this harness.

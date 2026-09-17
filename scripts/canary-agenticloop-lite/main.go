@@ -39,6 +39,8 @@ var (
 	flagAgents       []string
 	flagVariants     []string
 	flagFixturesYAML string
+	flagCostFixture  string
+	flagCostVariant  string
 )
 
 type fixture struct {
@@ -128,12 +130,14 @@ func main() {
 
 	measureCostCmd := &cobra.Command{
 		Use:   "measure-cost",
-		Short: "Run the hello fixture once per agent and print its parsed token usage as the 1-unit baseline",
+		Short: "Run one fixture (default: hello) once per agent and print its parsed token usage plus doc-context trace",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return measureCost()
 		},
 	}
 	measureCostCmd.Flags().StringSliceVar(&flagAgents, "agent", nil, "only measure this agent CLI, one of: claude, agy (repeatable); default: all agents")
+	measureCostCmd.Flags().StringVar(&flagCostFixture, "fixture", "hello", "fixture id to run for the cost measurement")
+	measureCostCmd.Flags().StringVar(&flagCostVariant, "variant", "full", "doc variant to use, one of: full, lite")
 
 	root.AddCommand(runCmd, fixturesCmd, measureCostCmd)
 
@@ -393,13 +397,31 @@ func runAgy(dir, prompt string) (string, error) {
 // fresh input tokens and omits a precomputed total; agy reports a flat
 // total_tokens); totalTokens() normalizes both to one comparable number.
 type tokenUsage struct {
+	InputTokens              int         `json:"input_tokens"`
+	OutputTokens             int         `json:"output_tokens"`
+	CacheReadInputTokens     int         `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int         `json:"cache_creation_input_tokens"`
+	CacheReadTokens          int         `json:"cache_read_tokens"`
+	ThinkingTokens           int         `json:"thinking_tokens"`
+	TotalTokens              int         `json:"total_tokens"`
+	Iterations               []turnUsage `json:"iterations"`
+	NumTurns                 int         `json:"-"` // filled from the response's top-level num_turns, when reported
+}
+
+// turnUsage is one entry of claude's usage.iterations — the per-turn
+// breakdown (one tool-call round trip, or the final message). Its first
+// entry is the cheapest available "first turn" baseline: whatever the model
+// billed before doing any tool calls (e.g. Read-ing AGENTS.md), as opposed
+// to the accumulated multi-turn total.
+type turnUsage struct {
 	InputTokens              int `json:"input_tokens"`
 	OutputTokens             int `json:"output_tokens"`
 	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
-	CacheReadTokens          int `json:"cache_read_tokens"`
-	ThinkingTokens           int `json:"thinking_tokens"`
-	TotalTokens              int `json:"total_tokens"`
+}
+
+func (t turnUsage) total() int {
+	return t.InputTokens + t.OutputTokens + t.CacheReadInputTokens + t.CacheCreationInputTokens
 }
 
 func (u tokenUsage) totalTokens() int {
@@ -409,36 +431,53 @@ func (u tokenUsage) totalTokens() int {
 	return u.InputTokens + u.OutputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
 }
 
-func runClaudeJSON(dir, prompt string) (tokenUsage, error) {
+// firstTurnTokens returns the token cost of the first turn only — the
+// cheapest available proxy for "context loaded before any tool-call work
+// started" — falling back to the run's total when no per-turn breakdown is
+// available (e.g. agy, or a single-turn claude response).
+func (u tokenUsage) firstTurnTokens() int {
+	if len(u.Iterations) > 0 {
+		return u.Iterations[0].total()
+	}
+	return u.totalTokens()
+}
+
+func runClaudeJSON(dir, prompt string) (tokenUsage, string, error) {
 	cmd := exec.Command("claude", "-p", "--permission-mode", "bypassPermissions", "--output-format", "json", prompt)
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
-		return tokenUsage{}, fmt.Errorf("claude -p --output-format json: %w", err)
+		return tokenUsage{}, "", fmt.Errorf("claude -p --output-format json: %w", err)
 	}
 	var parsed struct {
-		Usage tokenUsage `json:"usage"`
+		Usage    tokenUsage `json:"usage"`
+		Result   string     `json:"result"`
+		NumTurns int        `json:"num_turns"`
 	}
 	if err := json.Unmarshal(out, &parsed); err != nil {
-		return tokenUsage{}, fmt.Errorf("parse claude json output: %w", err)
+		return tokenUsage{}, "", fmt.Errorf("parse claude json output: %w", err)
 	}
-	return parsed.Usage, nil
+	parsed.Usage.NumTurns = parsed.NumTurns
+	return parsed.Usage, parsed.Result, nil
 }
 
-func runAgyJSON(dir, prompt string) (tokenUsage, error) {
+func runAgyJSON(dir, prompt string) (tokenUsage, string, error) {
 	cmd := exec.Command("agy", "-p", prompt, "--output-format", "json")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
-		return tokenUsage{}, fmt.Errorf("agy -p --output-format json: %w", err)
+		return tokenUsage{}, "", fmt.Errorf("agy -p --output-format json: %w", err)
 	}
 	var parsed struct {
-		Usage tokenUsage `json:"usage"`
+		Usage    tokenUsage `json:"usage"`
+		Response string     `json:"response"`
+		NumTurns int        `json:"num_turns"`
 	}
 	if err := json.Unmarshal(out, &parsed); err != nil {
-		return tokenUsage{}, fmt.Errorf("parse agy json output: %w", err)
+		return tokenUsage{}, "", fmt.Errorf("parse agy json output: %w", err)
 	}
-	return parsed.Usage, nil
+	parsed.Usage.NumTurns = parsed.NumTurns
+	return parsed.Usage, parsed.Response, nil
 }
 
 // docRef is one file pulled into context, directly or via @include chain.
@@ -512,20 +551,29 @@ func measureCost() error {
 	if err != nil {
 		return err
 	}
-	var hello *fixture
+	var target *fixture
 	for i := range fixtures {
-		if fixtures[i].ID == "hello" {
-			hello = &fixtures[i]
+		if fixtures[i].ID == flagCostFixture {
+			target = &fixtures[i]
 			break
 		}
 	}
-	if hello == nil {
-		return fmt.Errorf("no fixture with id %q found in fixtures.yaml", "hello")
+	if target == nil {
+		return fmt.Errorf("no fixture with id %q found in fixtures.yaml (known ids: %s)", flagCostFixture, knownIDs(fixtures))
+	}
+
+	variantPaths := map[string]string{
+		"full": filepath.Join(repoRoot, "docs", "AgenticLoop.md"),
+		"lite": filepath.Join(repoRoot, "docs", "practices", "AgenticLoop.lite.md"),
+	}
+	docPath, ok := variantPaths[flagCostVariant]
+	if !ok {
+		return fmt.Errorf("unknown --variant=%q (known: full, lite)", flagCostVariant)
 	}
 
 	type jsonRunner struct {
 		name string
-		run  func(dir, prompt string) (tokenUsage, error)
+		run  func(dir, prompt string) (tokenUsage, string, error)
 	}
 	allRunners := []jsonRunner{
 		{name: "claude", run: runClaudeJSON},
@@ -548,51 +596,88 @@ func measureCost() error {
 only instructions/context for this session. Read AGENTS.md, then respond to
 this request:
 
-%s`, hello.Prompt)
+%s`, target.Prompt)
 
-	fmt.Println("=== canary-agenticloop-lite unit baseline (hello fixture) ===")
+	const rule = "────────────────────────────────────────────────────────────────"
+	fmt.Println(rule)
+	fmt.Printf("fixture   %s\n", target.ID)
+	fmt.Printf("variant   %s  (%s)\n", flagCostVariant, docPath)
+	fmt.Printf("prompt    %s\n", target.Prompt)
+	fmt.Println(rule)
+
 	anyErr := false
-	for _, r := range runners {
+	for i, r := range runners {
+		if i > 0 {
+			fmt.Println()
+		}
+		fmt.Printf("[%s]\n", r.name)
 		if _, err := exec.LookPath(r.name); err != nil {
-			fmt.Printf("%-8s SKIP %s not on PATH\n", r.name, r.name)
+			fmt.Printf("  SKIP  %s not on PATH\n", r.name)
 			continue
 		}
 		work, err := os.MkdirTemp("", "canary-agenticloop-lite-measure.*")
 		if err != nil {
-			fmt.Printf("%-8s FAIL mkdtemp: %v\n", r.name, err)
+			fmt.Printf("  FAIL  mkdtemp: %v\n", err)
 			anyErr = true
 			continue
 		}
-		// Reuse the full AgenticLoop.md doc variant; the baseline is a
-		// concrete real-world cost, not variant-agnostic, so pin one variant
-		// rather than average across both.
-		docPath := filepath.Join(repoRoot, "docs", "AgenticLoop.md")
 		if err := copyFile(docPath, filepath.Join(work, "AGENTS.md")); err != nil {
-			fmt.Printf("%-8s FAIL copy doc: %v\n", r.name, err)
+			fmt.Printf("  FAIL  copy doc: %v\n", err)
 			os.RemoveAll(work)
 			anyErr = true
 			continue
 		}
 		if refs, err := traceDocContext(repoRoot, docPath); err == nil {
+			fmt.Println("  context docs")
 			total := 0
-			fmt.Printf("%-8s docs pulled into context:\n", r.name)
 			for _, ref := range refs {
-				fmt.Printf("%-8s   %-40s %6d bytes  ~%5d tokens\n", "", ref.path, ref.bytes, ref.tokens)
+				fmt.Printf("    %-38s %7d B  ~%6d tok\n", ref.path, ref.bytes, ref.tokens)
 				total += ref.tokens
 			}
-			fmt.Printf("%-8s   %-40s %13s ~%5d tokens\n", "", "(total)", "", total)
+			fmt.Printf("    %-38s %10s  ~%6d tok\n", "total", "", total)
 		}
-		usage, err := r.run(work, prompt)
+		usage, response, err := r.run(work, prompt)
 		os.RemoveAll(work)
 		if err != nil {
-			fmt.Printf("%-8s FAIL %v\n", r.name, err)
+			fmt.Printf("  FAIL  %v\n", err)
 			anyErr = true
 			continue
 		}
-		fmt.Printf("%-8s 1 unit = %d tokens (input=%d output=%d cache_read=%d cache_creation=%d thinking=%d)\n",
-			r.name, usage.totalTokens(), usage.InputTokens, usage.OutputTokens,
-			usage.CacheReadInputTokens+usage.CacheReadTokens, usage.CacheCreationInputTokens, usage.ThinkingTokens)
+
+		status := "n/a"
+		clean := strings.TrimSpace(response)
+		if target.Pattern != "" {
+			if ok, err := regexp.MatchString(target.Pattern, clean); err == nil {
+				if ok {
+					status = "PASS"
+				} else {
+					status = "FAIL (pattern not matched)"
+				}
+			}
+		}
+		if target.ForbidPattern != "" {
+			if ok, err := regexp.MatchString(target.ForbidPattern, clean); err == nil && ok {
+				status = "FAIL (forbid_pattern matched)"
+			}
+		}
+
+		fmt.Printf("  score        %s\n", status)
+		fmt.Printf("  response     %s\n", truncate(clean, 300))
+		fmt.Println("  token use")
+		fmt.Printf("    %-16s %8d\n", "first-turn", usage.firstTurnTokens())
+		fmt.Printf("    %-16s %8d\n", "total", usage.totalTokens())
+		if usage.NumTurns > 0 {
+			fmt.Printf("    %-16s %8d\n", "turns", usage.NumTurns)
+		} else if len(usage.Iterations) > 0 {
+			fmt.Printf("    %-16s %8d\n", "turns", len(usage.Iterations))
+		}
+		fmt.Printf("    %-16s %8d\n", "input", usage.InputTokens)
+		fmt.Printf("    %-16s %8d\n", "output", usage.OutputTokens)
+		fmt.Printf("    %-16s %8d\n", "cache_read", usage.CacheReadInputTokens+usage.CacheReadTokens)
+		fmt.Printf("    %-16s %8d\n", "cache_creation", usage.CacheCreationInputTokens)
+		fmt.Printf("    %-16s %8d\n", "thinking", usage.ThinkingTokens)
 	}
+	fmt.Println(rule)
 	if anyErr {
 		return fmt.Errorf("one or more agents failed to report a cost baseline")
 	}
