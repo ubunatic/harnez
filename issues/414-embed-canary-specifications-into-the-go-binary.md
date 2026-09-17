@@ -1,6 +1,6 @@
 # 414 — Embed canary specifications into the Go binary
 
-**Status**: Open
+**Status**: Closed — implemented embedded specs, standalone fallback, and workspace init
 
 ---
 
