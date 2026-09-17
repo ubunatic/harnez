@@ -21,6 +21,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -34,18 +35,18 @@ import (
 )
 
 var (
-	flagFixtures    []string
-	flagAgents      []string
-	flagVariants    []string
+	flagFixtures     []string
+	flagAgents       []string
+	flagVariants     []string
 	flagFixturesYAML string
 )
 
 type fixture struct {
-	ID             string `yaml:"id"`
-	Rule           string `yaml:"rule"`
-	Prompt         string `yaml:"prompt"`
-	Pattern        string `yaml:"pattern"`
-	ForbidPattern  string `yaml:"forbid_pattern"`
+	ID            string `yaml:"id"`
+	Rule          string `yaml:"rule"`
+	Prompt        string `yaml:"prompt"`
+	Pattern       string `yaml:"pattern"`
+	ForbidPattern string `yaml:"forbid_pattern"`
 }
 
 type docVariant struct {
@@ -125,7 +126,16 @@ func main() {
 	}
 	fixturesCmd.AddCommand(fixturesListCmd, fixturesShowCmd)
 
-	root.AddCommand(runCmd, fixturesCmd)
+	measureCostCmd := &cobra.Command{
+		Use:   "measure-cost",
+		Short: "Run the hello fixture once per agent and print its parsed token usage as the 1-unit baseline",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return measureCost()
+		},
+	}
+	measureCostCmd.Flags().StringSliceVar(&flagAgents, "agent", nil, "only measure this agent CLI, one of: claude, agy (repeatable); default: all agents")
+
+	root.AddCommand(runCmd, fixturesCmd, measureCostCmd)
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR:", err)
@@ -375,6 +385,156 @@ func runAgy(dir, prompt string) (string, error) {
 	out, err := cmd.CombinedOutput()
 	cleaned := strings.ReplaceAll(string(out), "*", "")
 	return cleaned, err
+}
+
+// tokenUsage is the subset of each CLI's --output-format json usage fields
+// this harness cares about for a "1 canary-agenticloop-lite unit" baseline.
+// claude and agy report different field sets (claude splits cache reads from
+// fresh input tokens and omits a precomputed total; agy reports a flat
+// total_tokens); totalTokens() normalizes both to one comparable number.
+type tokenUsage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadTokens          int `json:"cache_read_tokens"`
+	ThinkingTokens           int `json:"thinking_tokens"`
+	TotalTokens              int `json:"total_tokens"`
+}
+
+func (u tokenUsage) totalTokens() int {
+	if u.TotalTokens > 0 {
+		return u.TotalTokens
+	}
+	return u.InputTokens + u.OutputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
+}
+
+func runClaudeJSON(dir, prompt string) (tokenUsage, error) {
+	cmd := exec.Command("claude", "-p", "--permission-mode", "bypassPermissions", "--output-format", "json", prompt)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return tokenUsage{}, fmt.Errorf("claude -p --output-format json: %w", err)
+	}
+	var parsed struct {
+		Usage tokenUsage `json:"usage"`
+	}
+	if err := json.Unmarshal(out, &parsed); err != nil {
+		return tokenUsage{}, fmt.Errorf("parse claude json output: %w", err)
+	}
+	return parsed.Usage, nil
+}
+
+func runAgyJSON(dir, prompt string) (tokenUsage, error) {
+	cmd := exec.Command("agy", "-p", prompt, "--output-format", "json")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return tokenUsage{}, fmt.Errorf("agy -p --output-format json: %w", err)
+	}
+	var parsed struct {
+		Usage tokenUsage `json:"usage"`
+	}
+	if err := json.Unmarshal(out, &parsed); err != nil {
+		return tokenUsage{}, fmt.Errorf("parse agy json output: %w", err)
+	}
+	return parsed.Usage, nil
+}
+
+func measureCost() error {
+	fixturesAbs, err := resolveFixturesPath()
+	if err != nil {
+		return err
+	}
+	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(fixturesAbs))) // scripts/canary-agenticloop-lite/fixtures.yaml -> repo root
+	if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err != nil {
+		selfDir, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		repoRoot = selfDir
+	}
+
+	fixtures, err := loadFixtures()
+	if err != nil {
+		return err
+	}
+	var hello *fixture
+	for i := range fixtures {
+		if fixtures[i].ID == "hello" {
+			hello = &fixtures[i]
+			break
+		}
+	}
+	if hello == nil {
+		return fmt.Errorf("no fixture with id %q found in fixtures.yaml", "hello")
+	}
+
+	type jsonRunner struct {
+		name string
+		run  func(dir, prompt string) (tokenUsage, error)
+	}
+	allRunners := []jsonRunner{
+		{name: "claude", run: runClaudeJSON},
+		{name: "agy", run: runAgyJSON},
+	}
+	runners := allRunners
+	if len(flagAgents) > 0 {
+		runners = nil
+		for _, r := range allRunners {
+			if contains(flagAgents, r.name) {
+				runners = append(runners, r)
+			}
+		}
+		if len(runners) == 0 {
+			return fmt.Errorf("no agents matched --agent=%v (known: claude, agy)", flagAgents)
+		}
+	}
+
+	prompt := fmt.Sprintf(`You are in an empty directory with one file, AGENTS.md — that is your
+only instructions/context for this session. Read AGENTS.md, then respond to
+this request:
+
+%s`, hello.Prompt)
+
+	fmt.Println("=== canary-agenticloop-lite unit baseline (hello fixture) ===")
+	anyErr := false
+	for _, r := range runners {
+		if _, err := exec.LookPath(r.name); err != nil {
+			fmt.Printf("%-8s SKIP %s not on PATH\n", r.name, r.name)
+			continue
+		}
+		work, err := os.MkdirTemp("", "canary-agenticloop-lite-measure.*")
+		if err != nil {
+			fmt.Printf("%-8s FAIL mkdtemp: %v\n", r.name, err)
+			anyErr = true
+			continue
+		}
+		// Reuse the full AgenticLoop.md doc variant; the baseline is a
+		// concrete real-world cost, not variant-agnostic, so pin one variant
+		// rather than average across both.
+		docPath := filepath.Join(repoRoot, "docs", "AgenticLoop.md")
+		if err := copyFile(docPath, filepath.Join(work, "AGENTS.md")); err != nil {
+			fmt.Printf("%-8s FAIL copy doc: %v\n", r.name, err)
+			os.RemoveAll(work)
+			anyErr = true
+			continue
+		}
+		usage, err := r.run(work, prompt)
+		os.RemoveAll(work)
+		if err != nil {
+			fmt.Printf("%-8s FAIL %v\n", r.name, err)
+			anyErr = true
+			continue
+		}
+		fmt.Printf("%-8s 1 unit = %d tokens (input=%d output=%d cache_read=%d cache_creation=%d thinking=%d)\n",
+			r.name, usage.totalTokens(), usage.InputTokens, usage.OutputTokens,
+			usage.CacheReadInputTokens+usage.CacheReadTokens, usage.CacheCreationInputTokens, usage.ThinkingTokens)
+	}
+	if anyErr {
+		return fmt.Errorf("one or more agents failed to report a cost baseline")
+	}
+	return nil
 }
 
 func copyFile(src, dst string) error {

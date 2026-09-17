@@ -87,3 +87,46 @@ cross-reference doc present too, not just AgenticLoop.md/lite.md in isolation,
 to reliably reproduce `if test`. Scope was intentionally cut short here (per
 user token-budget request) after two consistent, confirmatory real runs;
 further reruns would not change these conclusions.
+
+---
+
+## Token-cost baseline: 1 canary-agenticloop-lite unit (issue 411, 2026-09-17)
+
+Issue 411 asked for the session's total token use and final context size
+expressed as a multiple of "1 canary-agenticloop-lite unit" — the cost of one
+`hello` fixture run. Two independent pieces were needed; only one turned out
+to be available.
+
+**Piece 1 — per-fixture-run token cost, now measurable.** Canary-first probe
+confirmed both CLIs expose parsed usage under `--output-format json`:
+`claude -p --output-format json` returns a `usage` object (`input_tokens`,
+`output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`,
+etc.); `agy -p --output-format json` returns a flatter `usage` object
+(`input_tokens`, `output_tokens`, `thinking_tokens`, `cache_read_tokens`,
+`total_tokens`). Added `canary-agenticloop-lite measure-cost`, which runs the
+`hello` fixture once per agent (against the full `docs/AgenticLoop.md` variant)
+using the JSON output mode and prints the parsed usage. Measured baseline:
+
+| agent | 1 unit (total tokens) | input | output | cache_read | cache_creation | thinking |
+|---|---|---|---|---|---|---|
+| claude | 60278 | 4 | 83 | 38093 | 22098 | 0 |
+| agy | 40685 | 40351 | 334 | 0 | 0 | 199 |
+
+Caveat: per the `agy` cwd-isolation limitation documented above, `agy -p`
+does not actually read the harness's isolated per-fixture `AGENTS.md` copy —
+it reads the real `~/AGENTS.md`. The agy baseline above is therefore a real
+measured cost, but of agy's actual global context, not of the `hello` fixture
+against `docs/AgenticLoop.md` specifically; treat the `claude` baseline as the
+more meaningful of the two until agy's isolation gap is fixed.
+
+**Piece 2 — this session's own live token/context usage: not available.**
+No tool exposed in this Claude Code session reports live cumulative token
+usage or current context size on request; there is no `claude` slash command,
+CLI flag, or tool call surfaced here for a running interactive session to
+introspect its own consumption mid-session. Only a completed `-p` invocation's
+`--output-format json` (as used above) exposes usage, and that is a per-call
+number for a *separate, non-interactive* subprocess invocation, not a running
+session's live total. This is recorded as an explicit known limitation per the
+ticket's own instructions, rather than silently dropped: "N canary-agenticloop-lite
+units" can be computed for any *completed* `-p` call, but this host session
+cannot currently quote its own live total against that baseline.
