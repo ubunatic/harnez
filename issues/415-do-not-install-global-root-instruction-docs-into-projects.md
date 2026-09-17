@@ -1,6 +1,6 @@
 # 415 — Do not install global root instruction docs into projects
 
-**Status**: Open
+**Status**: Closed — Do not install global root instruction docs into projects
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
