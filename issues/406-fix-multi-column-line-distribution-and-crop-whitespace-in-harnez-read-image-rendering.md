@@ -1,6 +1,6 @@
 # 406 — Fix multi-column line distribution and crop whitespace in harnez read image rendering
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug / Multimodal Context & Readcard
