@@ -746,7 +746,7 @@ func measureCost() error {
 		return fmt.Errorf("--delivery=png is not valid with --link=embed (embed inlines text; a PNG has no text form to inline)")
 	}
 
-	prompt := fmt.Sprintf("%s\n\nTask:\n%s", fixturePreamble, target.Prompt)
+	prompt := fmt.Sprintf("Task:\n%s", target.Prompt)
 
 	const rule = "────────────────────────────────────────────────────────────────"
 	fmt.Println(rule)
