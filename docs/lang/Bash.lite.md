@@ -46,6 +46,7 @@ DON'T (all forbidden, no exceptions, forget legacy usage):
 - `[[ x == y ]]` double brackets
 - `; then` / `; do` — break the line instead
 - `then` alone on its line (dangling) — 1st cmd goes on the `then` line
+- `test x = y && do_a || do_b` logic ops as control flow – use 4-line `if-then-else-fi`
 
 ## 4. Variables
 

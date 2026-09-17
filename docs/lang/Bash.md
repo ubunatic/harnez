@@ -13,6 +13,7 @@ weight: 61
 > **Takeaways**
 > 1. `set -euo pipefail`, always, on line two.
 > 2. `if test …` — never `[ … ]`, never `[[ … ]]`, no `;`, 3-line `if-then-fi` (`then <cmd>` on same line).
+     Never abuse `&&`/`||`, use 4-line `if-then-else-fi` (`else <cmd>` on same line).
 > 3. Always use `source`, never `.` for scripts and dotfiles (`~/.bashrc`, `~/.zshrc`).
 > 4. Quote every expansion; declare `local` separately for command substitutions.
 > 5. Writing awk? Default is mawk, not gawk — see the optional Appendix before using gawk extensions.
@@ -88,6 +89,7 @@ done
 | **Legacy Bracket** | `if [ "$x" = "$y" ]; then`<br>`  do_work`<br>`fi` | ❌ **DON'T** | Single brackets `[ ... ]` are forbidden. |
 | **Bash Extension** | `if [[ "$x" == "$y" ]]; then`<br>`  do_work`<br>`fi` | ❌ **DON'T** | Double brackets `[[ ... ]]` are forbidden. |
 | **Semicolon Suffix** | `if test "$x" = "$y"; then`<br>`  do_work`<br>`fi` | ❌ **DON'T** | Semicolons before `then`/`do` are forbidden; break lines instead. |
+| **Logic Operator Abuse** | `test "$x" = "$y" && do_a \|\| do_b` | ❌ **DON'T** | Logic operators are not control flow statements. |
 | **Dangling Then (POSIX)** | `if test "$x" = "$y"`<br>`then`<br>`  do_work`<br>`fi` | ❌ **DON'T** | Avoid empty `then` line; place 1st command directly after `then`. |
 | **Ambiguous Dot Sourcing** | `. ~/.bashrc`<br>`. "$lib"` | ❌ **DON'T** | Standalone `.` for sourcing is forbidden; use `source`. |
 
