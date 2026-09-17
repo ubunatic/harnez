@@ -910,6 +910,7 @@ func measureCost() error {
 			for _, entry := range entries {
 				fmt.Printf("    %s\n", entry.Name())
 			}
+			printEstimatedContextTokens(work, docs, flagCostDelivery, flagAgents)
 			continue
 		}
 		if err := setupLinkedWorkspace(work, repoRoot, docs, flagCostLink, flagCostDelivery); err != nil {
@@ -1019,6 +1020,27 @@ func expectedWorkspaceFiles(docs []string, link, delivery string) []string {
 		files = append(files, expectedContextDocs(docs, delivery)...)
 	}
 	return files
+}
+
+func printEstimatedContextTokens(work string, docs []string, delivery string, agents []string) {
+	if len(agents) == 0 {
+		agents = []string{"claude"}
+	}
+	fmt.Println("  estimated context tokens")
+	for _, agent := range agents {
+		fmt.Printf("    [%s]\n", agent)
+		for _, ref := range expectedContextDocs(docs, delivery) {
+			if ref == "AGENTS.md" {
+				continue
+			}
+			refs, err := traceDocContext(work, filepath.Join(work, ref), agent)
+			if err != nil || len(refs) == 0 {
+				fmt.Printf("      %-32s unavailable\n", ref)
+				continue
+			}
+			fmt.Printf("      %-32s ~%d image/text tok\n", ref, refs[0].tokens)
+		}
+	}
 }
 
 func imageTokenEstimate(path, agent string) int {
