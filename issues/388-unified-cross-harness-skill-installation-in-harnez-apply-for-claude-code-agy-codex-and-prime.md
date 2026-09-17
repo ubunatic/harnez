@@ -1,6 +1,6 @@
 # 388 — Unified cross-harness skill installation in harnez apply for Claude Code, AGY, Codex, and Prime
 
-**Status**: Open
+**Status**: Closed — verified unified cross-harness skill deployment across all 4 targets
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -26,9 +26,10 @@ To achieve unified skill distribution across all harnesses on `harnez apply`:
 
 ## 2. Scope & Acceptance Criteria
 
-- [ ] Add `claude_skills_target` (defaulting to `~/.claude/skills`) to `config.yaml` / `internal/claude` skill targets.
-- [ ] Ensure `skillTargets()` in `internal/claude/apply.go` and `internal/claude/diff.go` includes Claude skills target when active.
-- [ ] Verify `harnez apply` cleanly writes skills to `~/.claude/skills/`, `~/.gemini/skills/`, `~/.codex/skills/`, and `~/.prime/agent/skills/`.
-- [ ] Verify `harnez diff` and `harnez clean` correctly track `~/.claude/skills/`.
-- [ ] Add unit tests in `internal/claude/` verifying all agent skill targets are returned and properly populated.
-- [ ] Pass `make test-q1`.
+- [x] Add `claude_skills_target` (defaulting to `~/.claude/skills`) to `config.yaml` / `internal/claude` skill targets.
+- [x] Ensure `skillTargets()` in `internal/claude/apply.go` and `internal/claude/diff.go` includes Claude skills target when active.
+- [x] Verify `harnez apply` cleanly writes skills to `~/.claude/skills/`, `~/.gemini/skills/`, `~/.codex/skills/`, and `~/.prime/agent/skills/`.
+- [x] Verify `harnez diff` and `harnez clean` correctly track `~/.claude/skills/`.
+- [x] Add unit tests in `internal/claude/` verifying all agent skill targets are returned and properly populated.
+- [x] Pass `make test-q1`.
+
