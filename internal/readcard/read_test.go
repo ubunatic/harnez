@@ -302,4 +302,39 @@ func TestRenderFileToCards_FontVariants(t *testing.T) {
 	}
 }
 
+func TestRenderIssuesMatrixCard(t *testing.T) {
+	tmpDir := t.TempDir()
+	outPath := filepath.Join(tmpDir, "matrix_issues.png")
+
+	items := []IssueCardItem{
+		{Number: "100", RawStatus: "Open", PlainTitle: "VRAM Load Panel", Path: "issues/100-vram.md"},
+		{Number: "101", RawStatus: "Closed", PlainTitle: "GTT Cleanup", Path: "issues/101-gtt.md"},
+		{Number: "102", RawStatus: "Blocked", PlainTitle: "Upstream Dependency", Path: "issues/102-dep.md"},
+	}
+
+	res, err := RenderIssuesMatrixCard(items, IssueMatrixOptions{
+		Title:      "Found 3 Issues",
+		OutputPath: outPath,
+		FontName:   "pixel",
+	})
+	if err != nil {
+		t.Fatalf("RenderIssuesMatrixCard failed: %v", err)
+	}
+	if len(res.Files) == 0 || res.Files[0] != outPath {
+		t.Errorf("expected outpath %s, got %+v", outPath, res.Files)
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		t.Errorf("expected matrix card on disk: %v", err)
+	}
+
+	checkRes, err := CheckCard(outPath, 1568)
+	if err != nil {
+		t.Fatalf("CheckCard failed: %v", err)
+	}
+	if !checkRes.Passed {
+		t.Errorf("expected CheckCard to pass on issues matrix card: %v", checkRes.Error)
+	}
+}
+
+
 

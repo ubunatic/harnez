@@ -916,4 +916,97 @@ func TestIssuesCmd_MvArgsValidation(t *testing.T) {
 	}
 }
 
+func TestRunIssuesShow(t *testing.T) {
+	sample := "# 042 — Example Ticket\n\n**Status**: Open\n**Priority**: P1\n\n---\n\nTicket body here.\n"
+	dir, _ := issuesFixtureRepo(t, sample)
+
+	t.Run("raw text output", func(t *testing.T) {
+		var out bytes.Buffer
+		err := runIssuesShow(&out, dir, "42", false, true, false, false)
+		if err != nil {
+			t.Fatalf("runIssuesShow raw: %v", err)
+		}
+		if !strings.Contains(out.String(), "Ticket body here.") {
+			t.Errorf("expected ticket body in output, got: %s", out.String())
+		}
+	})
+
+	t.Run("json output", func(t *testing.T) {
+		var out bytes.Buffer
+		err := runIssuesShow(&out, dir, "42", true, false, false, false)
+		if err != nil {
+			t.Fatalf("runIssuesShow json: %v", err)
+		}
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(out.Bytes(), &parsed); err != nil {
+			t.Fatalf("failed to parse JSON: %v, raw: %s", err, out.String())
+		}
+		if parsed["number"] != "042" && parsed["number"] != float64(42) {
+			t.Errorf("expected number 042 or 42, got %v", parsed["number"])
+		}
+		if parsed["title"] != "042 — Example Ticket" {
+			t.Errorf("expected title '042 — Example Ticket', got %v", parsed["title"])
+		}
+		if parsed["raw_status"] != "Open" && parsed["canonical_status"] != "Open" {
+			t.Errorf("expected status 'Open', got raw_status=%v canonical_status=%v", parsed["raw_status"], parsed["canonical_status"])
+		}
+	})
+
+	t.Run("image output", func(t *testing.T) {
+		var out bytes.Buffer
+		err := runIssuesShow(&out, dir, "42", false, false, false, true)
+		if err != nil {
+			t.Fatalf("runIssuesShow image: %v", err)
+		}
+		// Expect card rendered message
+		if !strings.Contains(out.String(), "Rendered:") {
+			t.Errorf("expected card output, got %s", out.String())
+		}
+	})
+
+	t.Run("not found error", func(t *testing.T) {
+		var out bytes.Buffer
+		err := runIssuesShow(&out, dir, "999", false, false, false, false)
+		if err == nil {
+			t.Fatalf("expected error for nonexistent ticket, got nil")
+		}
+	})
+}
+
+func TestRunIssuesList_FormattingOptions(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+
+	t.Run("json flag", func(t *testing.T) {
+		var out bytes.Buffer
+		var errOut bytes.Buffer
+		err := runIssuesList(&out, &errOut, dir, nil, true, false, false, false, 0, false)
+		if err != nil {
+			t.Fatalf("runIssuesList json: %v", err)
+		}
+		var parsed []map[string]interface{}
+		if err := json.Unmarshal(out.Bytes(), &parsed); err != nil {
+			t.Fatalf("failed to parse JSON: %v, raw: %s", err, out.String())
+		}
+		if len(parsed) != 1 {
+			t.Fatalf("expected 1 issue, got %d", len(parsed))
+		}
+		if parsed[0]["number"] != "042" {
+			t.Errorf("expected issue 042, got %v", parsed[0]["number"])
+		}
+	})
+
+	t.Run("image flag", func(t *testing.T) {
+		var out bytes.Buffer
+		var errOut bytes.Buffer
+		err := runIssuesList(&out, &errOut, dir, nil, false, false, false, true, 0, false)
+		if err != nil {
+			t.Fatalf("runIssuesList image: %v", err)
+		}
+		if !strings.Contains(out.String(), "Rendered:") {
+			t.Errorf("expected Rendered: in output, got: %s", out.String())
+		}
+	})
+}
+
+
 

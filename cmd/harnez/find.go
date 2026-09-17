@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -21,6 +22,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/find"
 	"ubunatic.com/harnez/internal/issues"
+	"ubunatic.com/harnez/internal/readcard"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -35,6 +37,9 @@ func newFindCmd() *cobra.Command {
 	var dir string
 	var nextFlag bool
 	var jsonFlag bool
+	var rawFlag bool
+	var textFlag bool
+	var imageFlag bool
 	var historyProjectFlag string
 	var limitFlag int
 	var allFlag bool
@@ -117,31 +122,57 @@ token-prefix, (6) body fuzzy -- and ranked by worst group class, then the
 sum of all group classes, then ticket number, then path. This never
 silently relaxes an AND query to OR on zero results.
 
-Output is deterministic, tab-separated, one result per line, no header, no
-ANSI:
-
-  NUMBER<TAB>RAW_STATUS<TAB>PLAIN_TITLE<TAB>PATH
-
-Zero matches exits 0 and prints nothing. An invalid entity, an invalid
-query, or unreadable/malformed tracker data exits non-zero with an
-actionable stderr message.`,
+Output formatting:
+  Default: in interactive terminal / TTY sessions or with -I/--image,
+           renders a bounded visual overview card (using internal/readcard)
+           or compact bounded summaries.
+  --raw / --text: outputs deterministic TSV lines (one per result).
+  --json: outputs structured JSON.
+  In non-TTY pipes/scripts without -I, automatically defaults to TSV text.`,
 		Args:         cobra.MinimumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if limitFlag <= 0 {
 				return fmt.Errorf("find: --limit must be greater than zero")
 			}
-			return runFindWithOptions(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, args, nextFlag, jsonFlag, historyProjectFlag, limitFlag, allFlag)
+			opts := findRunOptions{
+				Dir:            dir,
+				Next:           nextFlag,
+				JSON:           jsonFlag,
+				Raw:            rawFlag,
+				Text:           textFlag,
+				Image:          imageFlag,
+				HistoryProject: historyProjectFlag,
+				Limit:          limitFlag,
+				All:            allFlag,
+			}
+			return runFindWithOptions(cmd.OutOrStdout(), cmd.ErrOrStderr(), args, opts)
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
 	cmd.Flags().BoolVar(&nextFlag, "next", false, "report the next free issue number")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "output in JSON format")
+	cmd.Flags().BoolVarP(&rawFlag, "raw", "r", false, "output raw TSV text directly to stdout")
+	cmd.Flags().BoolVarP(&textFlag, "text", "t", false, "output raw TSV text directly to stdout (alias for --raw)")
+	cmd.Flags().BoolVarP(&imageFlag, "image", "I", false, "render results as a visual PNG overview card")
 	cmd.Flags().StringVar(&historyProjectFlag, "project", "", "with 'history': filter to one project_name")
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 10, "limit issue results (default: newest 10 for listings)")
 	cmd.Flags().BoolVarP(&allFlag, "all", "a", false, "show all matching issue results")
 
 	return cmd
+}
+
+// findRunOptions bundles inputs for runFindWithOptions.
+type findRunOptions struct {
+	Dir            string
+	Next           bool
+	JSON           bool
+	Raw            bool
+	Text           bool
+	Image          bool
+	HistoryProject string
+	Limit          int
+	All            bool
 }
 
 // findHistoryOptions bundles runFindHistory's inputs. DBPath is a telemetry
@@ -232,10 +263,28 @@ func runFind(w io.Writer, dir string, args []string, nextFlag, jsonOutput bool, 
 	if len(args) > 1 && strings.TrimSpace(strings.Join(args[1:], " ")) == "" {
 		return fmt.Errorf("find: query must not be empty")
 	}
-	return runFindWithOptions(w, io.Discard, dir, args, nextFlag, jsonOutput, historyProject, 0, true)
+	return runFindWithOptions(w, io.Discard, args, findRunOptions{
+		Dir:            dir,
+		Next:           nextFlag,
+		JSON:           jsonOutput,
+		Raw:            true,
+		HistoryProject: historyProject,
+		All:            true,
+	})
 }
 
-func runFindWithOptions(w, errW io.Writer, dir string, args []string, nextFlag, jsonOutput bool, historyProject string, limit int, all bool) error {
+// isTerminalWriter detects if w is an interactive terminal TTY.
+func isTerminalWriter(w io.Writer) bool {
+	if f, ok := w.(*os.File); ok {
+		fi, err := f.Stat()
+		if err == nil && (fi.Mode()&os.ModeCharDevice) != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func runFindWithOptions(w, errW io.Writer, args []string, opts findRunOptions) error {
 	entity := args[0]
 	if entity != "issues" {
 		return fmt.Errorf("find: unsupported entity %q (only \"issues\" is supported)", entity)
@@ -243,17 +292,17 @@ func runFindWithOptions(w, errW io.Writer, dir string, args []string, nextFlag, 
 
 	// Handle `harnez find issues history ...` subcommand syntax
 	if len(args) > 1 && args[1] == "history" {
-		return runFindHistory(w, findHistoryOptions{Project: historyProject, JSON: jsonOutput})
+		return runFindHistory(w, findHistoryOptions{Project: opts.HistoryProject, JSON: opts.JSON})
 	}
 
 	// Handle `harnez find issues next` subcommand syntax
 	if len(args) > 1 && args[1] == "next" {
-		return runFindNext(w, dir, jsonOutput)
+		return runFindNext(w, opts.Dir, opts.JSON)
 	}
 
 	// Handle flag form: `harnez find issues --next`
-	if nextFlag {
-		return runFindNext(w, dir, jsonOutput)
+	if opts.Next {
+		return runFindNext(w, opts.Dir, opts.JSON)
 	}
 
 	query := strings.TrimSpace(strings.Join(args[1:], " "))
@@ -268,7 +317,7 @@ func runFindWithOptions(w, errW io.Writer, dir string, args []string, nextFlag, 
 		}
 	}
 
-	issuesDir := filepath.Join(dir, "issues")
+	issuesDir := filepath.Join(opts.Dir, "issues")
 	files, err := issues.Scan(issuesDir)
 	if err != nil {
 		return fmt.Errorf("find: %w", err)
@@ -279,7 +328,8 @@ func runFindWithOptions(w, errW io.Writer, dir string, args []string, nextFlag, 
 
 	results := find.Search(files, q)
 	total := len(results)
-	if !all && limit > 0 && total > limit {
+	limit := opts.Limit
+	if !opts.All && limit > 0 && total > limit {
 		if len(q.Groups) == 0 {
 			results = results[total-limit:]
 			if errW != nil {
@@ -292,6 +342,47 @@ func runFindWithOptions(w, errW io.Writer, dir string, args []string, nextFlag, 
 			}
 		}
 	}
+
+	if opts.JSON {
+		if results == nil {
+			results = []find.Result{}
+		}
+		data, err := json.MarshalIndent(results, "", "  ")
+		if err != nil {
+			return fmt.Errorf("render json: %w", err)
+		}
+		fmt.Fprintln(w, string(data))
+		return nil
+	}
+
+	// Check if visual card output is desired:
+	// Explicit --image/-I, or default when in interactive TTY and not opted out with --raw/--text.
+	useVisualCard := opts.Image || (!opts.Raw && !opts.Text && isTerminalWriter(w))
+	if useVisualCard && len(results) > 0 {
+		var items []readcard.IssueCardItem
+		for _, r := range results {
+			items = append(items, readcard.IssueCardItem{
+				Number:     r.Number,
+				RawStatus:  r.RawStatus,
+				PlainTitle: r.PlainTitle,
+				Path:       r.Path,
+			})
+		}
+		title := "Issue Tracker Discovery"
+		if query != "" {
+			title = fmt.Sprintf("Issues matching: %s", query)
+		}
+		renderRes, err := readcard.RenderIssuesMatrixCard(items, readcard.IssueMatrixOptions{
+			Title:    title,
+			FontName: "pixel",
+		})
+		if err == nil {
+			fmt.Fprintf(w, "🖼️ Rendered: %s (%dx%d px, %d issues)\n", renderRes.PrimaryPath, renderRes.Width, renderRes.Height, len(items))
+			fmt.Fprintf(w, "Token Breakdown: ~%d ViT tokens (Claude) vs ~%d text tokens\n", renderRes.TokenStats.ClaudeTokens, renderRes.TokenStats.TextTokens)
+			return nil
+		}
+	}
+
 	for _, r := range results {
 		fmt.Fprintln(w, find.FormatTSV(r))
 	}

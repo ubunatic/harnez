@@ -1,6 +1,6 @@
 # 401 — Default visual/bounded card output in harnez find and harnez issues with --raw opt-out
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: CLI & Tooling / Context Optimization
@@ -31,9 +31,9 @@ With the delivery of `harnez read` and the embedded retro pixel font engine (`in
 
 ## 3. Acceptance Criteria
 
-- [ ] Support `--raw`, `--text`, and `--json` flags on `harnez find issues` and `harnez issues`.
-- [ ] Connect `internal/readcard` rendering to `harnez find issues` and `harnez issues show`.
-- [ ] Implement multi-issue matrix/bundle rendering for search results.
-- [ ] Maintain pipe/non-TTY detection for script backwards compatibility.
-- [ ] Add unit and CLI tests in `cmd/harnez/find_test.go` and `cmd/harnez/issues_test.go`.
-- [ ] Update documentation and AGENTS.md conventions.
+- [x] Support `--raw`, `--text`, and `--json` flags on `harnez find issues` and `harnez issues`.
+- [x] Connect `internal/readcard` rendering to `harnez find issues` and `harnez issues show`.
+- [x] Implement multi-issue matrix/bundle rendering for search results.
+- [x] Maintain pipe/non-TTY detection for script backwards compatibility.
+- [x] Add unit and CLI tests in `cmd/harnez/find_test.go` and `cmd/harnez/issues_test.go`.
+- [x] Update documentation and AGENTS.md conventions.

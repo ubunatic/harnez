@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -125,7 +126,7 @@ func TestRunFind_DefaultListingTakesNewestTen(t *testing.T) {
 		}
 	}
 	var out, errOut bytes.Buffer
-	if err := runFindWithOptions(&out, &errOut, dir, []string{"issues"}, false, false, "", 10, false); err != nil {
+	if err := runFindWithOptions(&out, &errOut, []string{"issues"}, findRunOptions{Dir: dir, Limit: 10, Raw: true}); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
@@ -141,7 +142,7 @@ func TestRunFind_DefaultListingTakesNewestTen(t *testing.T) {
 func TestRunFind_TextSearchKeepsBestMatches(t *testing.T) {
 	dir := findFixtureDir(t)
 	var out, errOut bytes.Buffer
-	if err := runFindWithOptions(&out, &errOut, dir, []string{"issues", "vram"}, false, false, "", 1, false); err != nil {
+	if err := runFindWithOptions(&out, &errOut, []string{"issues", "vram"}, findRunOptions{Dir: dir, Limit: 1, Raw: true}); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasPrefix(out.String(), "050\t") {
@@ -156,7 +157,7 @@ func TestRunFind_TextSearchKeepsBestMatches(t *testing.T) {
 func TestRunFind_BareQueryCanBeUncapped(t *testing.T) {
 	dir := findFixtureDir(t)
 	var out, errOut bytes.Buffer
-	if err := runFindWithOptions(&out, &errOut, dir, []string{"issues"}, false, false, "", 1, true); err != nil {
+	if err := runFindWithOptions(&out, &errOut, []string{"issues"}, findRunOptions{Dir: dir, Limit: 1, All: true, Raw: true}); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Count(out.String(), "\n"); got != 3 {
@@ -164,6 +165,33 @@ func TestRunFind_BareQueryCanBeUncapped(t *testing.T) {
 	}
 	if errOut.String() != "" {
 		t.Fatalf("expected no truncation notice when --all is set, got %q", errOut.String())
+	}
+}
+
+func TestRunFind_JSONOutput(t *testing.T) {
+	dir := findFixtureDir(t)
+	var out bytes.Buffer
+	if err := runFindWithOptions(&out, io.Discard, []string{"issues", "vram"}, findRunOptions{Dir: dir, JSON: true, All: true}); err != nil {
+		t.Fatalf("runFindWithOptions json: %v", err)
+	}
+	var res []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal json: %v\noutput was:\n%s", err, out.String())
+	}
+	if len(res) != 2 {
+		t.Fatalf("expected 2 results in JSON, got %d", len(res))
+	}
+}
+
+func TestRunFind_ImageMode(t *testing.T) {
+	dir := findFixtureDir(t)
+	var out bytes.Buffer
+	if err := runFindWithOptions(&out, io.Discard, []string{"issues", "vram"}, findRunOptions{Dir: dir, Image: true, All: true}); err != nil {
+		t.Fatalf("runFindWithOptions image: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "🖼️ Rendered:") || !strings.Contains(got, ".png") {
+		t.Errorf("expected rendered card output, got:\n%s", got)
 	}
 }
 

@@ -11,10 +11,10 @@ import (
 // Result is one matched ticket, carrying only the fields `harnez find`
 // prints plus what's needed to sort them.
 type Result struct {
-	Number     string
-	RawStatus  string
-	PlainTitle string
-	Path       string
+	Number     string `json:"number"`
+	RawStatus  string `json:"raw_status"`
+	PlainTitle string `json:"title"`
+	Path       string `json:"path"`
 
 	worstClass int
 	sumClasses int

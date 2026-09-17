@@ -34,6 +34,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/issues"
+	"ubunatic.com/harnez/internal/readcard"
 )
 
 // issuesResult is the structured shape `harnez issues <verb>` reports, both
@@ -65,6 +66,9 @@ func newIssuesCmd() *cobra.Command {
 	var checkFlag bool
 	var dryRunFlag bool
 	var jsonFlag bool
+	var rawFlag bool
+	var textFlag bool
+	var imageFlag bool
 	var noCommitFlag bool
 	var commitMsgFlag string
 	var cachedFlag bool
@@ -99,6 +103,9 @@ Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
                     placeholder behind, see issue 202). Unlike every other
                     verb, 'new' takes no ticket number (there isn't one yet)
                     and never commits.
+  show <number>    Inspect a ticket. In interactive terminal / TTY or with
+                    -I/--image, renders a bounded visual card (using
+                    internal/readcard). Supports --raw/--text and --json.
   mv <old> [new]   Renumber a ticket to [new] (default: next free number
                     from scanning issuesDir). Renames the file keeping the
                     same slug, rewrites the '# <new> — <title>' header line,
@@ -140,13 +147,19 @@ exit, actionable stderr) -- unlike 'harnez find', where zero matches is a
 valid, exit-0 answer.`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, new, mv, rebase, lint, list)")
+				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, new, show, mv, rebase, lint, list)")
 			}
 			if args[0] == "new" {
 				return nil // [title] is optional, no ticket-number argument exists yet
 			}
 			if args[0] == "list" {
 				return nil // [filter] is optional, defaults to "is:open"
+			}
+			if args[0] == "show" {
+				if len(args) != 2 {
+					return fmt.Errorf("issues show: requires exactly 1 ticket number argument")
+				}
+				return nil
 			}
 			if args[0] == "mv" {
 				if len(args) < 2 || len(args) > 3 {
@@ -196,11 +209,17 @@ valid, exit-0 answer.`,
 				title := strings.TrimSpace(strings.Join(args[1:], " "))
 				return runIssuesNew(cmd.OutOrStdout(), dir, title, jsonFlag)
 			}
+			if args[0] == "show" {
+				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
+					return fmt.Errorf("issues show: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
+				}
+				return runIssuesShow(cmd.OutOrStdout(), dir, args[1], jsonFlag, rawFlag, textFlag, imageFlag)
+			}
 			if args[0] == "list" {
 				if cmd.Flags().Changed("no-commit") || cmd.Flags().Changed("commit") || checkFlag || dryRunFlag {
 					return fmt.Errorf("issues list: read-only verb, does not accept --check/--dry-run/--commit/--no-commit")
 				}
-				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, args[1:], jsonFlag, limitFlag, allFlag)
+				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, args[1:], jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
 			}
 			opts := issuesRunOptions{
 				Dir:       dir,
@@ -241,6 +260,9 @@ valid, exit-0 answer.`,
 	cmd.Flags().BoolVar(&checkFlag, "check", false, "report what would change without writing or committing; exit 1 on drift")
 	cmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "alias for --check")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "output a single JSON object instead of a text line")
+	cmd.Flags().BoolVarP(&rawFlag, "raw", "r", false, "output raw text directly to stdout")
+	cmd.Flags().BoolVarP(&textFlag, "text", "t", false, "output raw text directly to stdout (alias for --raw)")
+	cmd.Flags().BoolVarP(&imageFlag, "image", "I", false, "render visual PNG card context")
 	cmd.Flags().BoolVar(&noCommitFlag, "no-commit", false, "rewrite the ticket file and README but do not git add/commit")
 	cmd.Flags().StringVar(&commitMsgFlag, "commit", "", `override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")`)
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 10, "with 'list': limit results (default: newest 10)")
@@ -249,18 +271,88 @@ valid, exit-0 answer.`,
 	return cmd
 }
 
+// issueShowJSON represents structured JSON output for `harnez issues show`.
+type issueShowJSON struct {
+	Number     string `json:"number"`
+	Title      string `json:"title"`
+	RawStatus  string `json:"raw_status"`
+	Canonical  string `json:"canonical_status"`
+	Path       string `json:"path"`
+	Body       string `json:"body"`
+	FullSource string `json:"full_source"`
+}
+
+// runIssuesShow implements `harnez issues show <ticket-number>`.
+func runIssuesShow(w io.Writer, dir, ticketArg string, jsonOutput, rawOutput, textOutput, imageOutput bool) error {
+	issuesDir := filepath.Join(dir, "issues")
+	f, err := findTicketFile(issuesDir, ticketArg)
+	if err != nil {
+		return err
+	}
+	fullPath := filepath.Join(issuesDir, f.RelPath)
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return fmt.Errorf("issues show: read %s: %w", fullPath, err)
+	}
+
+	if jsonOutput {
+		data, err := json.MarshalIndent(issueShowJSON{
+			Number:     f.Number,
+			Title:      f.Title,
+			RawStatus:  f.RawStatus,
+			Canonical:  string(f.Canonical),
+			Path:       filepath.ToSlash(filepath.Join("issues", f.RelPath)),
+			Body:       f.Body,
+			FullSource: string(content),
+		}, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(w, string(data))
+		return nil
+	}
+
+	useVisualCard := imageOutput || (!rawOutput && !textOutput && isTerminalWriter(w))
+	if useVisualCard {
+		lines := strings.Split(string(content), "\n")
+		renderRes, err := readcard.RenderFileToCards(lines, filepath.Base(f.RelPath), readcard.RenderOptions{
+			Title:           f.Title,
+			FontName:        "pixel",
+			ShowLineNumbers: true,
+		})
+		if err == nil {
+			for _, p := range renderRes.Files {
+				fmt.Fprintf(w, "🖼️ Rendered: %s (%dx%d px, %d col, %d lines)\n", p, renderRes.Width, renderRes.Height, renderRes.Columns, renderRes.TotalLines)
+			}
+			fmt.Fprintf(w, "Token Breakdown: ~%d ViT tokens (Claude) vs ~%d text tokens\n", renderRes.TokenStats.ClaudeTokens, renderRes.TokenStats.TextTokens)
+			return nil
+		}
+	}
+
+	fmt.Fprint(w, string(content))
+	return nil
+}
+
 // runIssuesList implements the read-only `harnez issues list [filter]`
 // verb (issue 318): a thin wrapper over find's existing issues-query engine
 // rather than a second, diverging filter/limit implementation, so the two
 // commands never drift on ranking/filtering semantics. Defaults to the
 // "is:open" filter when no filter text is given; an explicit filter always
 // replaces the default rather than being ANDed with it.
-func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutput bool, limit int, all bool) error {
+func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutput, rawOutput, textOutput, imageOutput bool, limit int, all bool) error {
 	filter := strings.TrimSpace(strings.Join(filterArgs, " "))
 	if filter == "" {
 		filter = "is:open"
 	}
-	return runFindWithOptions(w, errW, dir, []string{"issues", filter}, false, jsonOutput, "", limit, all)
+	return runFindWithOptions(w, errW, []string{"issues", filter}, findRunOptions{
+		Dir:   dir,
+		JSON:  jsonOutput,
+		Raw:   rawOutput,
+		Text:  textOutput,
+		Image: imageOutput,
+		Limit: limit,
+		All:   all,
+	})
 }
 
 // composeNewStatus renders the "**Status**:" value a verb+reason pair
