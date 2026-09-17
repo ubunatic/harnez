@@ -1,6 +1,6 @@
 # 408 — Add soft-wrapping and ellipsis to harnez read image rendering to eliminate line truncation
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Feature / Multimodal Context & Readcard
