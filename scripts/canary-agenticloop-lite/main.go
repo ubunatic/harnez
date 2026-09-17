@@ -682,12 +682,14 @@ func measureCost() error {
 		}
 		defer cleanup()
 	}
-	if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err != nil {
-		selfDir, err := os.Getwd()
-		if err != nil {
-			return err
+	if fixturesAbs != "" {
+		if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err != nil {
+			selfDir, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			repoRoot = selfDir
 		}
-		repoRoot = selfDir
 	}
 
 	fixtures, err := loadFixtures()
