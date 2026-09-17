@@ -902,12 +902,21 @@ func measureCost() error {
 			for _, entry := range entries {
 				actual[entry.Name()] = true
 			}
-			fmt.Printf("  workspace: %s\n  files: ", work)
+			fmt.Printf("[%s] %s · %s · %s · %s · workspace: %s\n", r.name, target.ID, flagCostVariant, flagCostDelivery, flagCostLink, work)
+			fmt.Printf("  files: ")
 			for i, ref := range expected {
 				if i > 0 {
 					fmt.Print(", ")
 				}
-				fmt.Print(ref)
+				label := ref
+				if info, statErr := os.Stat(filepath.Join(work, ref)); statErr == nil {
+					tokens := info.Size() / 4
+					if refs, traceErr := traceDocContext(work, filepath.Join(work, ref), "claude"); traceErr == nil && len(refs) > 0 {
+						tokens = int64(refs[0].tokens)
+					}
+					label = fmt.Sprintf("%s ~%d", ref, tokens)
+				}
+				fmt.Print(label)
 			}
 			fmt.Println()
 			missing := []string{}
@@ -919,7 +928,6 @@ func measureCost() error {
 			if len(missing) > 0 {
 				return fmt.Errorf("dry-run %s/%s: missing files: %s", flagCostVariant, target.ID, strings.Join(missing, ", "))
 			}
-			printEstimatedContextTokens(work, docs, flagCostDelivery, flagAgents)
 			fmt.Println("  actual: all expected files present")
 			fmt.Println("  $ tree")
 			if tree, treeErr := exec.Command("tree", work).CombinedOutput(); treeErr == nil {
