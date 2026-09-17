@@ -35,13 +35,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+	projectdocs "ubunatic.com/harnez/docs"
 	"ubunatic.com/harnez/internal/readcard"
 )
 
 // embeddedAssets is the release-time fallback for canary specifications and
 // their linked documents. The source tree remains the development authority.
 //
-//go:embed embedded/fixtures.yaml embedded/docs/AgenticLoop.md embedded/docs/practices/AgenticLoop.lite.md embedded/docs/lang/Bash.md embedded/docs/lang/Bash.lite.md
+//go:embed embedded/fixtures.yaml
 var embeddedAssets embed.FS
 
 var (
@@ -305,12 +306,12 @@ func embeddedRepo() (string, func(), error) {
 	}
 	cleanup := func() { _ = os.RemoveAll(root) }
 	for name, target := range map[string]string{
-		"embedded/docs/AgenticLoop.md":                "docs/AgenticLoop.md",
-		"embedded/docs/practices/AgenticLoop.lite.md": "docs/practices/AgenticLoop.lite.md",
-		"embedded/docs/lang/Bash.md":                  "docs/lang/Bash.md",
-		"embedded/docs/lang/Bash.lite.md":             "docs/lang/Bash.lite.md",
+		"AgenticLoop.md":                "docs/AgenticLoop.md",
+		"practices/AgenticLoop.lite.md": "docs/practices/AgenticLoop.lite.md",
+		"lang/Bash.md":                  "docs/lang/Bash.md",
+		"lang/Bash.lite.md":             "docs/lang/Bash.lite.md",
 	} {
-		data, readErr := embeddedAssets.ReadFile(name)
+		data, readErr := projectdocs.FS.ReadFile(name)
 		if readErr != nil {
 			cleanup()
 			return "", func() {}, readErr
@@ -326,6 +327,13 @@ func embeddedRepo() (string, func(), error) {
 		}
 	}
 	return root, cleanup, nil
+}
+
+func embeddedRead(name string) ([]byte, error) {
+	if name == "embedded/fixtures.yaml" {
+		return embeddedAssets.ReadFile(name)
+	}
+	return projectdocs.FS.ReadFile(strings.TrimPrefix(name, "embedded/"))
 }
 
 func loadFixtures() ([]fixture, error) {
@@ -1232,13 +1240,13 @@ func initWorkspace() error {
 		return fmt.Errorf("create workspace: %w", err)
 	}
 	for name, target := range map[string]string{
-		"embedded/fixtures.yaml":                      "fixtures.yaml",
-		"embedded/docs/AgenticLoop.md":                "docs/AgenticLoop.md",
-		"embedded/docs/practices/AgenticLoop.lite.md": "docs/practices/AgenticLoop.lite.md",
-		"embedded/docs/lang/Bash.md":                  "docs/lang/Bash.md",
-		"embedded/docs/lang/Bash.lite.md":             "docs/lang/Bash.lite.md",
+		"embedded/fixtures.yaml":        "fixtures.yaml",
+		"AgenticLoop.md":                "docs/AgenticLoop.md",
+		"practices/AgenticLoop.lite.md": "docs/practices/AgenticLoop.lite.md",
+		"lang/Bash.md":                  "docs/lang/Bash.md",
+		"lang/Bash.lite.md":             "docs/lang/Bash.lite.md",
 	} {
-		data, err := embeddedAssets.ReadFile(name)
+		data, err := embeddedRead(name)
 		if err != nil {
 			return fmt.Errorf("read embedded %s: %w", name, err)
 		}
