@@ -663,6 +663,131 @@ func TestRenderFileToCards_AutoColumnLongLines(t *testing.T) {
 	}
 }
 
+func TestRenderFileToCards_OneColumnWidthExpansion(t *testing.T) {
+	tmpDir := t.TempDir()
+	outPath := filepath.Join(tmpDir, "wide_1col.png")
 
+	// 10 lines with 200 characters
+	longLine := "// " + strings.Repeat("A_very_long_code_identifier_sequence_that_spans_broadly_", 3) + "END"
+	lines := make([]string, 10)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("%s_%02d", longLine, i+1)
+	}
 
+	res, err := RenderFileToCards(lines, "wide.go", RenderOptions{
+		OutputPath:      outPath,
+		Columns:         1,
+		FontSize:        11,
+		ShowLineNumbers: true,
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+
+	if res.Columns != 1 {
+		t.Errorf("expected 1 column, got %d", res.Columns)
+	}
+	// With 200 chars and Font5x8 (cw=6), width should expand to > 1100px (not clamped to 120 chars ~800px)
+	if res.Width < 1100 {
+		t.Errorf("expected expanded width > 1100px for 200-char line, got %d px", res.Width)
+	}
+	if res.Width > 1568 {
+		t.Errorf("expected width within 1568 bound, got %d px", res.Width)
+	}
+	if len(res.Files) == 0 {
+		t.Fatalf("expected generated file")
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		t.Errorf("expected output file on disk: %v", err)
+	}
+}
+
+func TestRenderFileToCards_SoftWrappingAndContinuation(t *testing.T) {
+	tmpDir := t.TempDir()
+	outPath := filepath.Join(tmpDir, "soft_wrapped.png")
+
+	// Create a line of 220 chars in a 2-column layout (each column capacity ~110 chars)
+	lines := []string{
+		"const FirstLine = 1",
+		"const VeryLongLine = \"" + strings.Repeat("ABCDEFGHIJ", 20) + "\"",
+		"const ThirdLine = 3",
+	}
+
+	res, err := RenderFileToCards(lines, "wrap.go", RenderOptions{
+		OutputPath:      outPath,
+		Columns:         2,
+		Wrap:            "soft",
+		FontSize:        11,
+		ShowLineNumbers: true,
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards with soft wrap failed: %v", err)
+	}
+
+	if res.TotalLines != 3 {
+		t.Errorf("expected TotalLines to report 3 source lines, got %d", res.TotalLines)
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		t.Errorf("expected rendered card at %s: %v", outPath, err)
+	}
+}
+
+func TestRenderFileToCards_TruncateEllipsis(t *testing.T) {
+	tmpDir := t.TempDir()
+	outPath := filepath.Join(tmpDir, "truncated.png")
+
+	lines := []string{
+		"const FirstLine = 1",
+		"const VeryLongLine = \"" + strings.Repeat("ABCDEFGHIJ", 20) + "\"",
+		"const ThirdLine = 3",
+	}
+
+	res, err := RenderFileToCards(lines, "trunc.go", RenderOptions{
+		OutputPath:      outPath,
+		Columns:         2,
+		Wrap:            "truncate",
+		FontSize:        11,
+		ShowLineNumbers: true,
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards with truncate failed: %v", err)
+	}
+
+	if res.TotalLines != 3 {
+		t.Errorf("expected TotalLines = 3, got %d", res.TotalLines)
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		t.Errorf("expected file %s to exist: %v", outPath, err)
+	}
+}
+
+func TestSplitTokensByLength(t *testing.T) {
+	tokens := []Token{
+		{Type: TokenKeyword, Text: "func"},
+		{Type: TokenText, Text: " "},
+		{Type: TokenTypeIdent, Text: "processLongIdentifier"},
+	}
+
+	// Split at 10 chars: "func " (5) + "proce" (5)
+	head, tail := splitTokensByLength(tokens, 10)
+	if len(head) != 3 {
+		t.Fatalf("expected 3 head tokens, got %d: %+v", len(head), head)
+	}
+	if head[0].Text != "func" || head[1].Text != " " || head[2].Text != "proce" {
+		t.Errorf("unexpected head tokens: %+v", head)
+	}
+	if head[2].Type != TokenTypeIdent {
+		t.Errorf("expected head token type preserved as TokenTypeIdent, got %v", head[2].Type)
+	}
+
+	if len(tail) != 1 {
+		t.Fatalf("expected 1 tail token, got %d: %+v", len(tail), tail)
+	}
+	if tail[0].Text != "ssLongIdentifier" {
+		t.Errorf("expected tail text 'ssLongIdentifier', got %q", tail[0].Text)
+	}
+	if tail[0].Type != TokenTypeIdent {
+		t.Errorf("expected tail token type preserved as TokenTypeIdent, got %v", tail[0].Type)
+	}
+}
 

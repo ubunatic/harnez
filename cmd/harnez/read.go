@@ -17,6 +17,7 @@ func newReadCmd() *cobra.Command {
 		fontName        string
 		fontSize        int
 		theme           string
+		wrapMode        string
 		maxDim          int
 		showLineNumbers bool
 		lineRange       string
@@ -72,6 +73,7 @@ Examples:
 						FontName:        fontName,
 						FontSize:        fontSize,
 						Theme:           theme,
+						Wrap:            wrapMode,
 						MaxDimension:    maxDim,
 						ShowLineNumbers: true,
 						OutputPath:      outputPath,
@@ -113,6 +115,7 @@ Examples:
 						FontName:        fontName,
 						FontSize:        fontSize,
 						Theme:           theme,
+						Wrap:            wrapMode,
 						MaxDimension:    maxDim,
 						ShowLineNumbers: true,
 						OutputPath:      outputPath,
@@ -180,6 +183,7 @@ Examples:
 	cmd.Flags().StringVar(&fontName, "font", "pixel", "font family: pixel, retro, 5x8, 3x5, micro, 6x12, standard, 8x16, 7x13 (default: pixel)")
 	cmd.Flags().IntVar(&fontSize, "font-size", 11, "font size in pixels (default: 11)")
 	cmd.Flags().StringVar(&theme, "theme", "dark", "color theme: dark, light")
+	cmd.Flags().StringVar(&wrapMode, "wrap", "soft", "line wrapping mode for visual cards: soft, truncate (default: soft)")
 	cmd.Flags().IntVar(&maxDim, "max-dim", 1568, "maximum image dimension in pixels (default: 1568)")
 	cmd.Flags().BoolVarP(&showLineNumbers, "number", "n", false, "display line numbers in text output")
 	cmd.Flags().StringVarP(&lineRange, "lines", "L", "", "line range to read/render (e.g. 10:50, 100:, :30)")

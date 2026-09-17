@@ -179,3 +179,33 @@ func main() {
 	}
 }
 
+func TestReadCmd_WrapFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "wrap_test.go")
+	content := `package main
+func main() {
+	println("` + strings.Repeat("A_very_long_string_literal_sequence_", 5) + `")
+}`
+	if err := os.WriteFile(testFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	for _, wrapMode := range []string{"soft", "truncate"} {
+		imgOut := filepath.Join(tmpDir, "out_wrap_"+wrapMode+".png")
+		cmd := newReadCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"-I", "--wrap", wrapMode, "-o", imgOut, testFile})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("read -I --wrap=%s failed: %v", wrapMode, err)
+		}
+
+		if _, err := os.Stat(imgOut); err != nil {
+			t.Errorf("expected generated image at %s for --wrap=%s: %v", imgOut, wrapMode, err)
+		}
+	}
+}
+
+

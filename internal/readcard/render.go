@@ -18,6 +18,7 @@ type RenderOptions struct {
 	FontName        string // Font name: "pixel", "retro", "5x8", "3x5", "standard", "8x16", "7x13" (default: "pixel")
 	FontSize        int    // Font size in pixels (default: 8 or 11)
 	Theme           string // "dark" (default) or "light"
+	Wrap            string // "soft" (default) or "truncate"
 	MaxDimension    int    // Max width/height constraint (default: 1568)
 	ShowLineNumbers bool   // Print line numbers in gutter (default: true)
 	OutputPath      string // Custom output PNG path (or directory)
@@ -135,19 +136,14 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		totalLines = 1
 	}
 
-	// Calculate max line length
-	maxLineLen := 0
+	// Calculate raw longest line
+	rawMaxLineLen := 0
 	for _, l := range lines {
 		l = strings.ReplaceAll(l, "\t", "    ")
-		if len(l) > maxLineLen {
-			maxLineLen = len(l)
+		rCount := len([]rune(l))
+		if rCount > rawMaxLineLen {
+			rawMaxLineLen = rCount
 		}
-	}
-	if maxLineLen < 35 {
-		maxLineLen = 35
-	}
-	if maxLineLen > 120 {
-		maxLineLen = 120 // wrap line column visually at 120 chars
 	}
 
 	// Gutter width: digits of (startLine + totalLines)
@@ -173,11 +169,16 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		linesPerCol = 10
 	}
 
+	maxColChars1Col := (opts.MaxDimension - (paddingX * 2) - gutterWidth - 16) / cw
+	if maxColChars1Col < 35 {
+		maxColChars1Col = 35
+	}
+
 	// Determine column count
 	cols := opts.Columns
 	if cols <= 0 {
 		// Auto choose columns
-		if maxLineLen > 85 {
+		if rawMaxLineLen > 85 {
 			cols = 1
 		} else {
 			switch {
@@ -194,6 +195,25 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		cols = 4
 	}
 
+	maxLineLen := rawMaxLineLen
+	if maxLineLen < 35 {
+		maxLineLen = 35
+	}
+	if cols == 1 {
+		// In 1-column mode, expand up to available canvas width (~240 chars at 1568px)
+		if maxLineLen > maxColChars1Col {
+			maxLineLen = maxColChars1Col
+		}
+	} else {
+		maxColCharsMulti := ((opts.MaxDimension - (paddingX * 2) - ((cols - 1) * colGap)) / cols - gutterWidth - 16) / cw
+		if maxColCharsMulti < 35 {
+			maxColCharsMulti = 35
+		}
+		if maxLineLen > maxColCharsMulti {
+			maxLineLen = maxColCharsMulti
+		}
+	}
+
 	colWidth := gutterWidth + (maxLineLen * cw) + 16
 	totalContentWidth := (cols * colWidth) + ((cols - 1) * colGap)
 	cardWidth := totalContentWidth + (paddingX * 2)
@@ -202,34 +222,110 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		colWidth = (cardWidth - (paddingX * 2) - ((cols - 1) * colGap)) / cols
 	}
 
+	// Available character capacity in each column
+	availCodeChars := (colWidth - gutterWidth - 16) / cw
+	if availCodeChars < 10 {
+		availCodeChars = 10
+	}
+
+	wrapMode := strings.ToLower(strings.TrimSpace(opts.Wrap))
+	isTruncate := wrapMode == "truncate"
+
+	ext := filepath.Ext(filename)
+	lang := DetectLanguage(filename)
+	var inMultiComment bool
+	var allRows []renderRow
+
+	for i, rawLine := range lines {
+		actualLineNum := opts.StartLine + i
+		expandedLine := strings.ReplaceAll(rawLine, "\t", "    ")
+		tokens := HighlightLine(expandedLine, ext, &inMultiComment)
+
+		if isTruncate {
+			totalRunes := 0
+			for _, tok := range tokens {
+				totalRunes += len([]rune(tok.Text))
+			}
+			if totalRunes > availCodeChars {
+				headTokens, _ := splitTokensByLength(tokens, availCodeChars-1)
+				headTokens = append(headTokens, Token{Type: TokenComment, Text: "…"})
+				allRows = append(allRows, renderRow{
+					lineNum:        actualLineNum,
+					isContinuation: false,
+					tokens:         headTokens,
+				})
+			} else {
+				allRows = append(allRows, renderRow{
+					lineNum:        actualLineNum,
+					isContinuation: false,
+					tokens:         tokens,
+				})
+			}
+		} else {
+			// Soft-wrap mode (default)
+			remainingTokens := tokens
+			totalRunes := 0
+			for _, tok := range remainingTokens {
+				totalRunes += len([]rune(tok.Text))
+			}
+
+			if totalRunes <= availCodeChars {
+				allRows = append(allRows, renderRow{
+					lineNum:        actualLineNum,
+					isContinuation: false,
+					tokens:         tokens,
+				})
+			} else {
+				head, rest := splitTokensByLength(remainingTokens, availCodeChars)
+				allRows = append(allRows, renderRow{
+					lineNum:        actualLineNum,
+					isContinuation: false,
+					tokens:         head,
+				})
+				remainingTokens = rest
+
+				contBudget := availCodeChars - 2
+				if contBudget < 5 {
+					contBudget = 5
+				}
+				for len(remainingTokens) > 0 {
+					contHead, contRest := splitTokensByLength(remainingTokens, contBudget)
+					chunkTokens := append([]Token{{Type: TokenComment, Text: "↳ "}}, contHead...)
+					allRows = append(allRows, renderRow{
+						lineNum:        0, // blank gutter for continuation
+						isContinuation: true,
+						tokens:         chunkTokens,
+					})
+					remainingTokens = contRest
+				}
+			}
+		}
+	}
+
 	linesPerPage := linesPerCol * cols
-	totalPages := (totalLines + linesPerPage - 1) / linesPerPage
+	totalPages := (len(allRows) + linesPerPage - 1) / linesPerPage
 	if totalPages == 0 {
 		totalPages = 1
 	}
 
 	var outputPaths []string
-	ext := filepath.Ext(filename)
-	lang := DetectLanguage(filename)
-
-	var inMultiComment bool
 	firstCardHeight := 0
 
 	for page := 0; page < totalPages; page++ {
-		pageStartLineIdx := page * linesPerPage
-		pageEndLineIdx := pageStartLineIdx + linesPerPage
-		if pageEndLineIdx > totalLines {
-			pageEndLineIdx = totalLines
+		pageStartIdx := page * linesPerPage
+		pageEndIdx := pageStartIdx + linesPerPage
+		if pageEndIdx > len(allRows) {
+			pageEndIdx = len(allRows)
 		}
-		pageLines := lines[pageStartLineIdx:pageEndLineIdx]
+		pageRows := allRows[pageStartIdx:pageEndIdx]
 
 		// Calculate dynamic card height for this page
-		pageLinesCount := len(pageLines)
+		pageRowsCount := len(pageRows)
 		var pageColLines int
 		if cols == 1 {
-			pageColLines = pageLinesCount
+			pageColLines = pageRowsCount
 		} else {
-			pageColLines = (pageLinesCount + cols - 1) / cols
+			pageColLines = (pageRowsCount + cols - 1) / cols
 		}
 		cardHeight := headerHeight + (paddingY * 2) + (pageColLines * lineHeight) + 8
 		if cardHeight > opts.MaxDimension {
@@ -273,14 +369,14 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		}
 		for c := 0; c < cols; c++ {
 			cStartIdx := c * stride
-			if cStartIdx >= len(pageLines) {
+			if cStartIdx >= len(pageRows) {
 				break
 			}
 			cEndIdx := cStartIdx + stride
-			if cEndIdx > len(pageLines) {
-				cEndIdx = len(pageLines)
+			if cEndIdx > len(pageRows) {
+				cEndIdx = len(pageRows)
 			}
-			colLines := pageLines[cStartIdx:cEndIdx]
+			colRows := pageRows[cStartIdx:cEndIdx]
 
 			colX := paddingX + c*(colWidth+colGap)
 			colY := headerHeight + paddingY
@@ -293,30 +389,28 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 
 			// Gutter Background
 			if opts.ShowLineNumbers && gutterWidth > 0 {
-				drawRect(img, colX, colY, gutterWidth-4, len(colLines)*lineHeight, theme.GutterBg)
-				drawVerticalLine(img, colX+gutterWidth-4, colY, colY+(len(colLines)*lineHeight), theme.GutterBorder)
+				drawRect(img, colX, colY, gutterWidth-4, len(colRows)*lineHeight, theme.GutterBg)
+				drawVerticalLine(img, colX+gutterWidth-4, colY, colY+(len(colRows)*lineHeight), theme.GutterBorder)
 			}
 
 			// Render lines in column
-			for lineIdx, rawLine := range colLines {
-				actualLineNum := opts.StartLine + pageStartLineIdx + cStartIdx + lineIdx
-				curY := colY + (lineIdx * lineHeight) + 2
+			for rowIdx, rrow := range colRows {
+				curY := colY + (rowIdx * lineHeight) + 2
 
-				// Draw Line Number
-				if opts.ShowLineNumbers {
-					numStr := fmt.Sprintf("%*d", digits, actualLineNum)
+				// Draw Line Number if not continuation
+				if opts.ShowLineNumbers && !rrow.isContinuation && rrow.lineNum > 0 {
+					numStr := fmt.Sprintf("%*d", digits, rrow.lineNum)
 					font.DrawString(img, numStr, colX+4, curY, theme.GutterFg)
 				}
 
 				// Draw Code
 				codeX := colX + gutterWidth
-				tokens := HighlightLine(rawLine, ext, &inMultiComment)
 				tokenX := codeX
 				maxColX := colX + colWidth - 4
 				if c == cols-1 {
 					maxColX = cardWidth - paddingX
 				}
-				for _, tok := range tokens {
+				for _, tok := range rrow.tokens {
 					tokCol := tokenColor(tok.Type, theme)
 					tokenX += font.DrawStringBounded(img, tok.Text, tokenX, curY, maxColX, tokCol)
 					if tokenX >= maxColX {
@@ -470,4 +564,46 @@ func drawVerticalLine(img *image.RGBA, x, y0, y1 int, col color.RGBA) {
 			img.SetRGBA(x, py, col)
 		}
 	}
+}
+
+type renderRow struct {
+	lineNum        int
+	isContinuation bool
+	tokens         []Token
+}
+
+func splitTokensByLength(tokens []Token, maxLen int) (head []Token, tail []Token) {
+	if maxLen <= 0 {
+		return nil, tokens
+	}
+	curLen := 0
+	for i, tok := range tokens {
+		tokRunes := []rune(tok.Text)
+		tokLen := len(tokRunes)
+		if curLen+tokLen <= maxLen {
+			head = append(head, tok)
+			curLen += tokLen
+			if curLen == maxLen {
+				if i+1 < len(tokens) {
+					tail = tokens[i+1:]
+				}
+				return head, tail
+			}
+		} else {
+			needed := maxLen - curLen
+			headTok := Token{
+				Type: tok.Type,
+				Text: string(tokRunes[:needed]),
+			}
+			head = append(head, headTok)
+
+			tailTok := Token{
+				Type: tok.Type,
+				Text: string(tokRunes[needed:]),
+			}
+			tail = append([]Token{tailTok}, tokens[i+1:]...)
+			return head, tail
+		}
+	}
+	return head, nil
 }
