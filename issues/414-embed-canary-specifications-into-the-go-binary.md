@@ -20,9 +20,11 @@ checkout and can silently use the wrong or stale specification.
 
 - Embed `scripts/canary-agenticloop-lite/fixtures.yaml` into the binary with
   `go:embed`.
+- Embed every document addressable through the link mechanism, including
+  linkable Markdown documents and their PNG cheat-sheet variants, so installed
+  commands do not depend on source-checkout paths.
 - Identify and embed other runtime specification files that installed commands
-  require, rather than embedding ordinary editable documentation or fixtures
-  unnecessarily.
+  require.
 - Keep an explicit development override/path mechanism where useful, with clear
   precedence over the embedded defaults.
 - Ensure embedded YAML remains the single source of truth and is not duplicated
@@ -31,7 +33,9 @@ checkout and can silently use the wrong or stale specification.
 ## Acceptance Criteria
 
 - An installed canary runs from outside the repository without a source-tree
-  `fixtures.yaml`.
+  `fixtures.yaml` or any linkable document.
+- All supported `@<file>`, `See <file>`, `@<image>`, and `See <image>` targets
+  resolve from embedded assets when running installed binaries.
 - Development runs can still select an explicit YAML file for rapid iteration.
 - Missing, malformed, or overridden specs produce clear errors.
 - Tests cover embedded loading, override precedence, and installed-style use.
