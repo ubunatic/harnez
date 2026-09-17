@@ -1,6 +1,6 @@
 # 410 — Content-first tight bounding box cropping and micro-snippet threshold in readcard
 
-**Status**: Open
+**Status**: Closed — implemented and verified: cols=3 default, content-first usedCols pruning, tight cardWidth cropping, and micro-snippet routing thresholds all present and tested (TestRenderFileToCards_MultiColumnDistribution/CroppedWidth/NoBleedAcrossColumns/AutoColumnLongLines/OneColumnWidthExpansion pass; manual echo/file checks confirm 292x120px 1-col micro card and 1552x768px 3-col medium card)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Multimodal Context & Readcard
