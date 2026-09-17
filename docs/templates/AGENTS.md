@@ -18,6 +18,9 @@ Put project-specific rules outside this block.
   narrow string substitution edits.
 - When making multi-line edits, ensure sufficient surrounding context lines to
   avoid ambiguous pattern matches.
+- When inspecting files or expecting more than 1–2 smaller slice reads, use
+  `harnez read -I <file>` (visual context card) or `harnez read -L <range>` /
+  `harnez read -n` instead of multiple unbounded tool reads.
 
 ### Issue Tracker Discovery (harnez find)
 Applies when this project has an `issues/` tracker. To search existing issues,

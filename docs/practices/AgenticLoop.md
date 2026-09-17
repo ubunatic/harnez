@@ -46,6 +46,7 @@ Agentic software engineering scales effectively when concurrency is structured a
 6. **Context Discipline & Range-Bounded Ingestion**:
    - Never execute whole-file reads on files already present in the active system prompt (`AGENTS.md`, `CLAUDE.md`, system rules).
    - Prefer index consultation, `grep_search`, and range-bounded reads (`StartLine`/`EndLine`) over bulk document ingestion. In-file warning banners are ineffective once returned into message history.
+   - When inspecting files or expecting more than 1–2 smaller slice reads on a file, use `harnez read -I <file>` (visual PNG context card) or `harnez read -L <range>` / `harnez read -n` instead of multiple unbounded tool reads to prevent context bloat and rate-limit exhaustion.
    - **Lazy Reference Pointers vs. Eager Include Directives in Global Prompts**: Global instruction templates (`~/.claude/CLAUDE.md`, `~/.prime/agent/AGENTS.md`) must use plain-text citations (`(see docs/Bash.md §8)`, `(AgenticLoop Invariant 6)`) and **never** naked `@docs/...` includes. Claude Code treats `@path` in `CLAUDE.md` as an eager macro-include, inlining full doc files into every session across all projects globally (~12.6 KB / ~3,250 tokens burned before turn 1). Reserve eager `@docs/...` includes strictly for project-local `AGENTS.md` language/practice opt-ins.
 
 7. **Media & Demo Verification Gate**:
