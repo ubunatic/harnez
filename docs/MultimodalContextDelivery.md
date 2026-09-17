@@ -70,15 +70,20 @@ flowchart TD
 
 ## 3. Provider ViT Economics & Resolution Matrix
 
-| Model / Harness | Vision Token Formula | 3-in-1 Card Tokens *(1440×1400px)* | Raw Text Equiv | Compression Ratio | Downsampling Bound |
-| :--- | :--- | :---: | :---: | :---: | :--- |
-| **OpenAI / Codex** | $85 + 170 \times \lceil W/512 \rceil \times \lceil H/512 \rceil$ | **765** | 6,473 | **8.46x** | Max 2048px |
-| **Google Gemini** | $258 \times \lceil W/384 \rceil \times \lceil H/384 \rceil$ | **1,032** | 6,473 | **6.27x** | Patch 384px |
-| **Anthropic Claude**| $\approx (W \times H) / 750$ | **2,688** | 6,473 | **2.41x** | Max 1568px |
+| Model / Harness | Vision Token Formula | 3-in-1 Card Tokens *(1440×1400px)* | Typical File (70–150 lines, 3-col) | Raw Text Equiv | Compression Ratio | Downsampling Bound |
+| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| **OpenAI / Codex** | $85 + 170 \times \lceil W/512 \rceil \times \lceil H/512 \rceil$ | **765** *(3×3 tiles)* | **765** *(3×1 tiles, H ≤ 512px)* | ~1,514 | **~2.0x – 8.5x** | Max 2048px |
+| **Google Gemini** | $258 \times \lceil W/384 \rceil \times \lceil H/384 \rceil$ | **1,032** *(4×4 tiles)* | **2,580** *(5×2 tiles)* | ~1,514 | Flat per tile | Patch 384px |
+| **Anthropic Claude**| $\approx (W \times H) / 750$ | **2,688** | **1,010** *(1520×498px)* | ~1,514 | **~1.5x – 2.4x** | Max 1568px |
 
-### ViT Resolution & Rasterization Rules:
+### 3.1 Provider Architectural Nuances & Routing
+- **OpenAI Step-Function Tiles ($512\times 512\text{px}$)**: OpenAI costs jump in discrete $170$-token increments per $512\times 512$ tile. Packing height below $512\text{px}$ via 3 columns (`--columns=3`) keeps the vertical tile count at 1, halving the token cost compared to tall 1-column cards ($H > 512\text{px}$).
+- **Anthropic Claude Continuous Area Integration ($(W \times H)/750$)**: Claude tokenization scales smoothly with total pixel area. Dynamic canvas cropping and tight column bounding boxes directly reduce Claude token burn.
+- **Google Gemini Grid Tiles ($384\times 384\text{px}$)**: Gemini evaluates $258$ tokens per $384\text{px}$ patch. For short micro-snippets (<50 lines), compact 1-column layouts or raw text routing are preferred over wide multi-column canvases.
+
+### 3.2 ViT Resolution & Rasterization Rules
 - **Vector Anti-Aliased Fonts**: Below 9px, anti-aliasing gray-bleed degrades `{` vs `[`, `:=` vs `!=`.
-- **Pure 1-Bit Retro Pixel Fonts (`Font5x8`)**: Pure binary contrast eliminates gray-bleed entirely, delivering 100% OCR fidelity down to 7px/8px cells.
+- **Pure 1-Bit Retro Pixel Fonts (`Font5x8`, `Font3x5`)**: Pure binary contrast eliminates gray-bleed entirely, delivering 100% OCR fidelity down to 7px/8px cells.
 - **Canvas Boundaries**:
   - $256 \times 256\text{px}$: 87 tokens on Claude, 255 on OpenAI $\to$ **$7.6\times$ compression** in $3\times5$ font.
   - $512 \times 512\text{px}$: 255 tokens on OpenAI, 258 on Gemini $\to$ **$10.5\times$ compression** in $3\times5$ font.
@@ -86,19 +91,44 @@ flowchart TD
 
 ---
 
-## 4. CLI Implementation & Operational Commands
+## 4. Visual Layout Engine & Geometry (`internal/readcard`)
 
-### 4.1 Visual File Inspection (`harnez read -I`)
+### 4.1 Multi-Column Line Balancing & Height Optimization
+To minimize vertical tile count, lines are distributed across $N$ columns using ceiling division:
+$$\text{linesPerCol} = \left\lceil \frac{\text{totalLines}}{N} \right\rceil$$
+Distributing lines evenly ensures the canvas height stays under the critical $512\text{px}$ ViT threshold for typical file lengths (70–150 lines), preventing single-column vertical ballooning.
+
+### 4.2 Horizontal Boundary Safety (`DrawStringBounded`)
+When rendering code lines into column slots, text must never spill across column gutters. The `DrawStringBounded(img, font, x, y, col, str, minX, maxX)` primitive strictly clips pixel drawing to the column's assigned bounding box:
+- Characters exceeding `maxX` are safely suppressed.
+- Gutters and adjacent column text remain 100% clean and uncorrupted.
+
+### 4.3 Dynamic Auto-Width Scaling & Continuation Soft-Wrapping
+Code lines frequently exceed standard column widths (e.g. 80 chars):
+1. **Dynamic Single-Column Expansion**: In single-column mode (`--columns=1`), canvas width dynamically scales with the maximum line length (up to ~240 characters) before wrapping.
+2. **Continuation Soft-Wrapping**: Lines exceeding column capacity are cleanly soft-wrapped onto indented continuation rows prefixed with `↳ ` in muted syntax styling.
+3. **Ellipsis Truncation Marker**: If a deeply nested line exceeds maximum continuation depth, an ellipsis (`…`) indicates bounded truncation without silent data dropping.
+
+### 4.4 Content-First Dynamic Bounding Box Cropping
+Canvases are sized content-first:
+- Trailing empty columns (when total lines are fewer than the column count) are actively pruned.
+- The bounding box wraps strictly around the populated text columns, gutter, and headers, eliminating empty margin waste.
+
+---
+
+## 5. CLI Implementation & Operational Commands
+
+### 5.1 Visual File Inspection (`harnez read -I`)
 Render source files directly into bounded, syntax-highlighted visual cards:
 ```bash
-# Render file with default 5x8 retro pixel font and multi-column packing:
+# Render file with default 5x8 retro pixel font and optimal 3-column packing:
 harnez read -I internal/lint/lint.go
 
-# Read specific line ranges with column wrapping:
-harnez read -I --lines 1:120 --columns 2 cmd/harnez/main.go
+# Read specific line ranges with custom column wrapping:
+harnez read -I --lines 1:120 --columns 3 cmd/harnez/main.go
 ```
 
-### 4.2 Automated Cheatsheet Builder (`harnez docs cards`)
+### 5.2 Automated Cheatsheet Builder (`harnez docs cards`)
 Compile repository markdown documentation into bounded visual PNG cards:
 ```bash
 # Compile standard 3-in-1 bundle (Bash + Make + Git) into docs/vision/:
@@ -108,14 +138,23 @@ harnez docs cards build --bundle=dev-3in1 --out=docs/vision/
 harnez docs cards check docs/vision/*.png
 ```
 
-### 4.3 Subagent Dispatch & Doc Modes
+### 5.3 Subagent Dispatch & Doc Modes
 Coordinate context delivery across agent harnesses:
 - `harnez mode vision` (or `harnez mode 4`): Activates visual documentation tier.
 - Subagent launcher stages `STYLE_GUIDE.png` and provides multimodal context headers with zero text injection.
 
 ---
 
-## 5. Mechanical Verification Invariants
+## 6. Pre-Tool Enforcement & Reading Discipline
+
+To prevent token fatigue and preserve rate quotas, harnez provides automated PreToolUse hooks (`harnez hook pre-tool`):
+1. **Unconstrained Read Guard**: Native IDE file-view tool calls (`view_file`, `View`, `ReadMultipleFiles`) on files $>100$ lines are blocked by the pre-tool hook with an actionable directive to run `harnez read -I` (visual card) or `harnez read -L <range> -n` (bounded line range).
+2. **Binary Media Exemption**: Rendered image artifacts (`.png`, `.jpg`, `.svg`) are exempted, allowing native image viewers to inspect visual cards without restriction.
+3. **Session Rate & Activity Feedback**: The hook provides real-time tool rate feedback (`Summary: N tool calls in Xm`), encouraging efficient tool usage.
+
+---
+
+## 7. Mechanical Verification Invariants
 
 All multimodal instruction delivery adheres to three verification principles:
 1. **Isolated Scratch Execution**: Canaries and subagent tasks execute in clean scratch workspaces without ambient text rules.
