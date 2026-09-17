@@ -1,6 +1,6 @@
 # 398 — Trial ultra-compact pixel and bitmap fonts from retro games for extreme ViT token compression
 
-**Status**: Open
+**Status**: Closed — Completed retro pixel font trial in scripts/canary-pixel-fonts and study report in docs/studies/
 **Priority**: P3 (Low)
 **Severity**: Low
 **Category**: Research & Canary / Context Optimization
