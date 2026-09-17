@@ -20,11 +20,12 @@ type TextOptions struct {
 
 // ReadResult holds read text content, sliced lines, and line metadata.
 type ReadResult struct {
-	SourceFile string     `json:"source_file"`
-	Lines      []string   `json:"lines"`
-	StartLine  int        `json:"start_line"`
-	TotalLines int        `json:"total_lines"`
-	TokenStats TokenStats `json:"token_stats"`
+	SourceFile  string     `json:"source_file"`
+	Lines       []string   `json:"lines"`
+	StartLine   int        `json:"start_line"`
+	TotalLines  int        `json:"total_lines"`
+	TokenStats  TokenStats `json:"token_stats"`
+	SourceLines []int      `json:"source_lines,omitempty"`
 }
 
 // ReadSource reads lines from a file path or reader, applying line-range and head/tail filtering.
@@ -104,12 +105,29 @@ func ReadFile(path string, opts TextOptions) (*ReadResult, error) {
 
 // FormatText formats lines for stdout, optionally prefixing line numbers.
 func FormatText(res *ReadResult, showLineNumbers bool) string {
-	if !showLineNumbers {
-		return strings.Join(res.Lines, "\n")
+	mode := "off"
+	if showLineNumbers {
+		mode = "all"
+	}
+	text, _ := FormatTextCadence(res, mode)
+	return text
+}
+
+// FormatTextCadence formats original source anchors with an optional gutter cadence.
+func FormatTextCadence(res *ReadResult, mode string) (string, error) {
+	cadence, err := ParseLineNumbers(mode)
+	if err != nil {
+		return "", err
+	}
+	if cadence == 0 {
+		return strings.Join(res.Lines, "\n"), nil
 	}
 
 	var sb strings.Builder
 	maxLineNum := res.StartLine + len(res.Lines) - 1
+	if len(res.SourceLines) > 0 {
+		maxLineNum = res.SourceLines[len(res.SourceLines)-1]
+	}
 	digits := len(fmt.Sprintf("%d", maxLineNum))
 	if digits < 3 {
 		digits = 3
@@ -117,10 +135,17 @@ func FormatText(res *ReadResult, showLineNumbers bool) string {
 
 	for i, l := range res.Lines {
 		lineNum := res.StartLine + i
-		sb.WriteString(fmt.Sprintf("%*d │ %s\n", digits, lineNum, l))
+		if len(res.SourceLines) > i {
+			lineNum = res.SourceLines[i]
+		}
+		label := fmt.Sprintf("%d", lineNum)
+		if i != 0 && lineNum%cadence != 0 {
+			label = "."
+		}
+		sb.WriteString(fmt.Sprintf("%*s │ %s\n", digits, label, l))
 	}
 
-	return strings.TrimRight(sb.String(), "\n")
+	return strings.TrimRight(sb.String(), "\n"), nil
 }
 
 // ParseLineRange parses range strings like "10:50", "10-50", "10..50", ":50", "100:", "15".

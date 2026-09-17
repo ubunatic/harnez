@@ -329,7 +329,7 @@ func TestRunClaudeReadHook_ReadingDiscipline(t *testing.T) {
 				"tool_name": "View",
 				"tool_input": {"file_path": %q}
 			}`, smallFile),
-			wantDecision: "allow",
+			wantDecision: "",
 		},
 		{
 			name: "View large file unbounded deny",
@@ -348,7 +348,7 @@ func TestRunClaudeReadHook_ReadingDiscipline(t *testing.T) {
 				"tool_name": "View",
 				"tool_input": {"file_path": %q, "view_range": [10, 40]}
 			}`, largeFile),
-			wantDecision: "allow",
+			wantDecision: "",
 		},
 		{
 			name: "View large file slice >= 100 lines deny",
@@ -367,7 +367,7 @@ func TestRunClaudeReadHook_ReadingDiscipline(t *testing.T) {
 				"tool_name": "ReadMultipleFiles",
 				"tool_input": {"paths": [%q, %q]}
 			}`, smallFile, smallFile),
-			wantDecision: "allow",
+			wantDecision: "",
 		},
 		{
 			name: "ReadMultipleFiles containing large file deny",
@@ -386,7 +386,7 @@ func TestRunClaudeReadHook_ReadingDiscipline(t *testing.T) {
 				"tool_name": "Bash",
 				"tool_input": {"command": "ls -l"}
 			}`,
-			wantDecision: "allow",
+			wantDecision: "",
 		},
 	}
 
@@ -430,8 +430,8 @@ func TestRunClaudeReadHook_EmptyAndInvalidInput(t *testing.T) {
 		if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if resp.HookSpecificOutput.PermissionDecision != "allow" {
-			t.Errorf("empty input decision = %q, want allow", resp.HookSpecificOutput.PermissionDecision)
+		if resp.HookSpecificOutput.PermissionDecision != "" {
+			t.Errorf("empty input decision = %q, want native permission passthrough", resp.HookSpecificOutput.PermissionDecision)
 		}
 	}
 
@@ -445,8 +445,8 @@ func TestRunClaudeReadHook_EmptyAndInvalidInput(t *testing.T) {
 		if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if resp.HookSpecificOutput.PermissionDecision != "allow" {
-			t.Errorf("invalid json decision = %q, want allow", resp.HookSpecificOutput.PermissionDecision)
+		if resp.HookSpecificOutput.PermissionDecision != "" {
+			t.Errorf("invalid json decision = %q, want native permission passthrough", resp.HookSpecificOutput.PermissionDecision)
 		}
 	}
 }

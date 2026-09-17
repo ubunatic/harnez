@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -184,7 +185,7 @@ const readingDisciplineDenyReason = "harnez guard: native view_file on large fil
 // should be intercepted under Reading & Context Discipline.
 func isReadTool(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "view_file", "view", "read_file", "readfile", "readmultiplefiles", "read_multiple_files":
+	case "read", "view_file", "view", "read_file", "readfile", "readmultiplefiles", "read_multiple_files":
 		return true
 	default:
 		return false
@@ -258,6 +259,16 @@ func extractReadRange(args map[string]any) readRange {
 		return readRange{}
 	}
 	var r readRange
+	if offset, ok := parseLineNumber(args["offset"]); ok && offset > 0 {
+		r = readRange{hasRange: true, startLine: offset}
+		if limit, ok := parseLineNumber(args["limit"]); ok && limit > 0 && limit <= int(^uint(0)>>1)-offset {
+			r.endLine = offset + limit - 1
+		}
+		return r
+	}
+	if limit, ok := parseLineNumber(args["limit"]); ok && limit > 0 {
+		return readRange{hasRange: true, startLine: 1, endLine: limit}
+	}
 	for _, k := range []string{"view_range", "viewRange"} {
 		if v, ok := args[k]; ok {
 			switch arr := v.(type) {
@@ -411,7 +422,9 @@ type claudeHookOutput struct {
 }
 
 type claudeHookSpecificOutput struct {
-	PermissionDecision string `json:"permissionDecision"`
+	HookEventName            string `json:"hookEventName,omitempty"`
+	PermissionDecision       string `json:"permissionDecision,omitempty"`
+	PermissionDecisionReason string `json:"permissionDecisionReason,omitempty"`
 }
 
 type readHookOptions struct {
@@ -440,18 +453,18 @@ with guidance to use 'harnez read'. Small files (<100 lines) and bounded slices 
 func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error {
 	raw, err := io.ReadAll(in)
 	if err != nil {
-		fmt.Fprintln(out, `{"hookSpecificOutput":{"permissionDecision":"allow"}}`)
+		fmt.Fprintln(out, `{}`)
 		return fmt.Errorf("read claude read hook payload: %w", err)
 	}
 
 	if len(strings.TrimSpace(string(raw))) == 0 {
-		fmt.Fprintln(out, `{"hookSpecificOutput":{"permissionDecision":"allow"}}`)
+		fmt.Fprintln(out, `{}`)
 		return nil
 	}
 
 	var payload claudePreToolUseInput
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		fmt.Fprintln(out, `{"hookSpecificOutput":{"permissionDecision":"allow"}}`)
+		fmt.Fprintln(out, `{}`)
 		return fmt.Errorf("decode claude read hook payload: %w", err)
 	}
 
@@ -465,10 +478,46 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 	}
 
 	deny, reason := evaluateReadToolDiscipline(payload.ToolName, payload.ToolInput, baseDir)
+	if isReadTool(payload.ToolName) {
+		stateDir := opts.StateDir
+		if stateDir == "" {
+			stateDir = filepath.Join(resolve.DefaultStateDir(), "read-hooks")
+		}
+		seen := map[string]bool{}
+		for _, path := range extractFilePaths(payload.ToolInput) {
+			if !filepath.IsAbs(path) {
+				path = filepath.Join(baseDir, path)
+			}
+			if canonical, err := filepath.EvalSymlinks(path); err == nil {
+				path = canonical
+			}
+			if isBinaryMedia(path) || seen[path] {
+				continue
+			}
+			seen[path] = true
+			info, err := os.Stat(path)
+			if err != nil || !info.Mode().IsRegular() {
+				continue
+			}
+			if strings.EqualFold(payload.ToolName, "read") {
+				if lines, err := countFileLines(path); err == nil && lines > 100 {
+					deny = true
+				}
+			}
+			if repeatedRead(stateDir, payload.SessionID, path) {
+				deny = true
+			}
+		}
+		if deny {
+			reason = readingDisciplineDenyReason + "\n" + readRedirect(payload.ToolInput, baseDir)
+		}
+	}
 	if deny {
 		resp := claudeHookOutput{
 			HookSpecificOutput: claudeHookSpecificOutput{
-				PermissionDecision: "deny",
+				HookEventName:            "PreToolUse",
+				PermissionDecision:       "deny",
+				PermissionDecisionReason: reason,
 			},
 			SystemMessage: reason,
 		}
@@ -477,6 +526,45 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 		return nil
 	}
 
-	fmt.Fprintln(out, `{"hookSpecificOutput":{"permissionDecision":"allow"}}`)
+	fmt.Fprintln(out, `{}`)
 	return nil
+}
+
+// A create-exclusive marker makes repeated reads deterministic across hook
+// processes without a lost-update race. Session hashes cannot traverse paths.
+func repeatedRead(stateDir, session, path string) bool {
+	if session == "" || stateDir == "" {
+		return false
+	}
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		return false
+	}
+	key := fmt.Sprintf("%x", sha256.Sum256([]byte(session+"\x00"+path)))
+	f, err := os.OpenFile(filepath.Join(stateDir, key), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err == nil {
+		f.Close()
+		return false
+	}
+	return os.IsExist(err)
+}
+
+func readRedirect(args map[string]any, baseDir string) string {
+	command := "harnez read --auto"
+	rng := extractReadRange(args)
+	if rng.hasRange {
+		start := max(1, rng.startLine)
+		end := ""
+		if rng.endLine >= start {
+			end = strconv.Itoa(rng.endLine)
+		}
+		command = "harnez read -n -L " + strconv.Itoa(start) + ":" + end
+	}
+	command += " --"
+	for _, path := range extractFilePaths(args) {
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(baseDir, path)
+		}
+		command += " '" + strings.ReplaceAll(path, "'", "'\"'\"'") + "'"
+	}
+	return command
 }

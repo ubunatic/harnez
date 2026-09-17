@@ -24,18 +24,30 @@ type RenderOptions struct {
 	OutputPath      string // Custom output PNG path (or directory)
 	Title           string // Card title / filename
 	StartLine       int    // Starting line number (1-indexed, default 1)
+	LineNumbers     string // all, off, or positive cadence; overrides ShowLineNumbers when set
+	SourceLines     []int  // Optional original source anchors after compression
+	MeasureOnly     bool   // Compute exact page geometry and costs without creating PNGs
 }
 
 // RenderResult contains the generated image paths and token statistics.
 type RenderResult struct {
-	Files       []string   `json:"files"`
-	Width       int        `json:"width"`
-	Height      int        `json:"height"`
-	Columns     int        `json:"columns"`
-	TotalLines  int        `json:"total_lines"`
-	TotalPages  int        `json:"total_pages"`
-	TokenStats  TokenStats `json:"token_stats"`
-	PrimaryPath string     `json:"primary_path"`
+	Files              []string       `json:"files"`
+	Width              int            `json:"width"`
+	Height             int            `json:"height"`
+	Columns            int            `json:"columns"`
+	TotalLines         int            `json:"total_lines"`
+	TotalPages         int            `json:"total_pages"`
+	TokenStats         TokenStats     `json:"token_stats"`
+	PrimaryPath        string         `json:"primary_path"`
+	Pages              []PageGeometry `json:"pages"`
+	OriginalTokenStats *TokenStats    `json:"original_token_stats,omitempty"`
+}
+
+// PageGeometry describes a single tightly cropped page.
+type PageGeometry struct {
+	Width   int `json:"width"`
+	Height  int `json:"height"`
+	Columns int `json:"columns"`
 }
 
 // ColorTheme defines the palette for syntax highlighting and card canvas.
@@ -107,11 +119,24 @@ var LightTheme = ColorTheme{
 
 // RenderFileToCards renders source code lines into styled PNG card(s) bounded within max dimension.
 func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*RenderResult, error) {
+	cadence, err := ParseLineNumbers(opts.LineNumbers)
+	if err != nil {
+		return nil, err
+	}
+	if opts.LineNumbers != "" {
+		opts.ShowLineNumbers = cadence != 0
+	}
 	if opts.FontSize <= 0 {
 		opts.FontSize = 11
 	}
 	if opts.MaxDimension <= 0 {
 		opts.MaxDimension = 1568
+	}
+	if opts.MaxDimension < 160 {
+		return nil, fmt.Errorf("max dimension must be at least 160")
+	}
+	if len(opts.SourceLines) != 0 && len(opts.SourceLines) != len(lines) {
+		return nil, fmt.Errorf("source line mapping length does not match input")
 	}
 	if opts.StartLine <= 0 {
 		opts.StartLine = 1
@@ -148,6 +173,9 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 
 	// Gutter width: digits of (startLine + totalLines)
 	maxLineNum := opts.StartLine + totalLines - 1
+	if len(opts.SourceLines) > 0 {
+		maxLineNum = opts.SourceLines[len(opts.SourceLines)-1]
+	}
 	digits := len(fmt.Sprintf("%d", maxLineNum))
 	if digits < 3 {
 		digits = 3
@@ -164,9 +192,12 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	colGap := 16
 
 	availableHeight := opts.MaxDimension - headerHeight - (paddingY * 2) - 4
+	if availableHeight < lineHeight {
+		return nil, fmt.Errorf("max dimension too small for selected font")
+	}
 	linesPerCol := availableHeight / lineHeight
-	if linesPerCol < 10 {
-		linesPerCol = 10
+	if linesPerCol < 1 {
+		linesPerCol = 1
 	}
 
 	maxColChars1Col := (opts.MaxDimension - (paddingX * 2) - gutterWidth - 16) / cw
@@ -177,22 +208,15 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	// Determine column count
 	cols := opts.Columns
 	if cols <= 0 {
-		// Auto choose columns
-		if rawMaxLineLen > 85 {
-			cols = 1
-		} else {
-			switch {
-			case totalLines <= 65:
-				cols = 1
-			case totalLines <= 160:
-				cols = 2
-			default:
-				cols = 2
-			}
-		}
+		cols = 3
 	}
 	if cols > 4 {
 		cols = 4
+	}
+	// A column must fit a gutter and at least three code glyphs, including
+	// continuation markers. Reduce columns before wrapping, never clip rows.
+	for cols > 1 && (opts.MaxDimension-2*paddingX-(cols-1)*colGap)/cols < gutterWidth+16+3*cw {
+		cols--
 	}
 
 	maxLineLen := rawMaxLineLen
@@ -205,7 +229,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 			maxLineLen = maxColChars1Col
 		}
 	} else {
-		maxColCharsMulti := ((opts.MaxDimension - (paddingX * 2) - ((cols - 1) * colGap)) / cols - gutterWidth - 16) / cw
+		maxColCharsMulti := ((opts.MaxDimension-(paddingX*2)-((cols-1)*colGap))/cols - gutterWidth - 16) / cw
 		if maxColCharsMulti < 35 {
 			maxColCharsMulti = 35
 		}
@@ -224,8 +248,8 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 
 	// Available character capacity in each column
 	availCodeChars := (colWidth - gutterWidth - 16) / cw
-	if availCodeChars < 10 {
-		availCodeChars = 10
+	if availCodeChars < 3 {
+		return nil, fmt.Errorf("max dimension too small for selected font and gutter")
 	}
 
 	wrapMode := strings.ToLower(strings.TrimSpace(opts.Wrap))
@@ -238,6 +262,9 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 
 	for i, rawLine := range lines {
 		actualLineNum := opts.StartLine + i
+		if len(opts.SourceLines) > 0 {
+			actualLineNum = opts.SourceLines[i]
+		}
 		expandedLine := strings.ReplaceAll(rawLine, "\t", "    ")
 		tokens := HighlightLine(expandedLine, ext, &inMultiComment)
 
@@ -285,9 +312,6 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 				remainingTokens = rest
 
 				contBudget := availCodeChars - 2
-				if contBudget < 5 {
-					contBudget = 5
-				}
 				for len(remainingTokens) > 0 {
 					contHead, contRest := splitTokensByLength(remainingTokens, contBudget)
 					chunkTokens := append([]Token{{Type: TokenComment, Text: "↳ "}}, contHead...)
@@ -310,6 +334,9 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 
 	var outputPaths []string
 	firstCardHeight := 0
+	firstCardWidth, firstColumns := 0, 0
+	var pages []PageGeometry
+	imageStats := ComputeTextTokens(strings.Join(lines, "\n"))
 
 	for page := 0; page < totalPages; page++ {
 		pageStartIdx := page * linesPerPage
@@ -321,12 +348,26 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 
 		// Calculate dynamic card height for this page
 		pageRowsCount := len(pageRows)
-		var pageColLines int
-		if cols == 1 {
-			pageColLines = pageRowsCount
-		} else {
-			pageColLines = (pageRowsCount + cols - 1) / cols
+		// Short pages need one column; larger pages are balanced across up to
+		// three default columns. Twenty rows is a density target, not a limit.
+		usedCols := max((pageRowsCount+linesPerCol-1)/linesPerCol, min(cols, max(1, (pageRowsCount+19)/20)))
+		pageColLines := (pageRowsCount + usedCols - 1) / usedCols
+		actualMax := 0
+		for _, row := range pageRows {
+			width := 0
+			for _, tok := range row.tokens {
+				width += len([]rune(tok.Text))
+			}
+			actualMax = max(actualMax, width)
 		}
+		colWidth := gutterWidth + actualMax*cw + 16
+		titleText := opts.Title
+		if totalPages > 1 {
+			titleText = fmt.Sprintf("%s (Page %d/%d)", opts.Title, page+1, totalPages)
+		}
+		badgeText := fmt.Sprintf("[%s] %d lines | %d col | page %d/%d", lang, totalLines, usedCols, page+1, totalPages)
+		headerMin := (len([]rune(titleText))+len([]rune(badgeText)))*cw + 2*paddingX + 32
+		cardWidth := min(opts.MaxDimension, max(usedCols*colWidth+(usedCols-1)*colGap+2*paddingX, headerMin))
 		cardHeight := headerHeight + (paddingY * 2) + (pageColLines * lineHeight) + 8
 		if cardHeight > opts.MaxDimension {
 			cardHeight = opts.MaxDimension
@@ -336,6 +377,15 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		}
 		if page == 0 {
 			firstCardHeight = cardHeight
+			firstCardWidth, firstColumns = cardWidth, usedCols
+		}
+		pages = append(pages, PageGeometry{Width: cardWidth, Height: cardHeight, Columns: usedCols})
+		pageStats := ComputeImageTokens(0, 0, cardWidth, cardHeight, 1)
+		imageStats.ClaudeTokens += pageStats.ClaudeTokens
+		imageStats.OpenAITokens += pageStats.OpenAITokens
+		imageStats.GeminiTokens += pageStats.GeminiTokens
+		if opts.MeasureOnly {
+			continue
 		}
 
 		img := image.NewRGBA(image.Rect(0, 0, cardWidth, cardHeight))
@@ -349,16 +399,11 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		drawHorizontalLine(img, 1, cardWidth-2, headerHeight, theme.Border)
 
 		// Header Title
-		titleText := opts.Title
-		if totalPages > 1 {
-			titleText = fmt.Sprintf("%s (Page %d/%d)", opts.Title, page+1, totalPages)
-		}
-		font.DrawString(img, titleText, paddingX, 10, theme.HeaderFg)
+		font.DrawStringBounded(img, titleText, paddingX, 10, cardWidth-paddingX, theme.HeaderFg)
 
 		// Header Badges
-		badgeText := fmt.Sprintf("[%s] %d lines | %d col | %dx%d px", lang, totalLines, cols, cardWidth, cardHeight)
-		badgeX := cardWidth - paddingX - (len(badgeText) * cw)
-		if badgeX > paddingX+(len(titleText)*cw)+10 {
+		badgeX := cardWidth - paddingX - (len([]rune(badgeText)) * cw)
+		if badgeX > paddingX+(len([]rune(titleText))*cw)+10 {
 			font.DrawString(img, badgeText, badgeX, 10, theme.BadgeFg)
 		}
 
@@ -367,7 +412,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		if stride < 1 {
 			stride = 1
 		}
-		for c := 0; c < cols; c++ {
+		for c := 0; c < usedCols; c++ {
 			cStartIdx := c * stride
 			if cStartIdx >= len(pageRows) {
 				break
@@ -400,6 +445,9 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 				// Draw Line Number if not continuation
 				if opts.ShowLineNumbers && !rrow.isContinuation && rrow.lineNum > 0 {
 					numStr := fmt.Sprintf("%*d", digits, rrow.lineNum)
+					if cadence > 1 && rrow.lineNum != opts.StartLine && rrow.lineNum%cadence != 0 {
+						numStr = fmt.Sprintf("%*s", digits, ".")
+					}
 					font.DrawString(img, numStr, colX+4, curY, theme.GutterFg)
 				}
 
@@ -407,7 +455,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 				codeX := colX + gutterWidth
 				tokenX := codeX
 				maxColX := colX + colWidth - 4
-				if c == cols-1 {
+				if c == usedCols-1 {
 					maxColX = cardWidth - paddingX
 				}
 				for _, tok := range rrow.tokens {
@@ -440,9 +488,16 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	}
 
 	// Compute token stats
-	allText := strings.Join(lines, "\n")
-	textStats := ComputeTextTokens(allText)
-	imageStats := ComputeImageTokens(textStats.TextTokens, textStats.TextBytes, cardWidth, firstCardHeight, totalPages)
+	imageStats.ImageWidth, imageStats.ImageHeight, imageStats.TotalPages = firstCardWidth, firstCardHeight, totalPages
+	if imageStats.ClaudeTokens > 0 {
+		imageStats.ClaudeRatio = round2(float64(imageStats.TextTokens) / float64(imageStats.ClaudeTokens))
+	}
+	if imageStats.OpenAITokens > 0 {
+		imageStats.OpenAIRatio = round2(float64(imageStats.TextTokens) / float64(imageStats.OpenAITokens))
+	}
+	if imageStats.GeminiTokens > 0 {
+		imageStats.GeminiRatio = round2(float64(imageStats.TextTokens) / float64(imageStats.GeminiTokens))
+	}
 
 	primary := ""
 	if len(outputPaths) > 0 {
@@ -451,13 +506,14 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 
 	return &RenderResult{
 		Files:       outputPaths,
-		Width:       cardWidth,
+		Width:       firstCardWidth,
 		Height:      firstCardHeight,
-		Columns:     cols,
+		Columns:     firstColumns,
 		TotalLines:  totalLines,
 		TotalPages:  totalPages,
 		TokenStats:  imageStats,
 		PrimaryPath: primary,
+		Pages:       pages,
 	}, nil
 }
 

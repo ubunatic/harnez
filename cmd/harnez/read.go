@@ -4,195 +4,167 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/readcard"
 )
 
 func newReadCmd() *cobra.Command {
-	var (
-		imageMode       bool
-		outputPath      string
-		columns         int
-		fontName        string
-		fontSize        int
-		theme           string
-		wrapMode        string
-		maxDim          int
-		showLineNumbers bool
-		lineRange       string
-		head            int
-		tail            int
-		jsonOutput      bool
-		showTokens      bool
-	)
-
+	var imageMode, autoMode, textMode, rawMode, number, jsonOutput, showTokens bool
+	var outputPath, fontName, theme, wrapMode, lineRange, lineNumbers, compression string
+	var columns, fontSize, maxDim, head, tail int
 	cmd := &cobra.Command{
 		Use:   "read [flags] [files...]",
-		Short: "Read files as token-bounded text or styled visual PNG context cards (-I/--image)",
-		Long: `read inspects files with line-range bounding, or renders dense, syntax-highlighted
-visual PNG cards when -I/--image is passed for multimodal agent context injection.
+		Short: "Read bounded text or dense visual PNG cards with provider-adaptive routing",
+		Long: `Read files or stdin as text, or PNG context cards with -I.
+--auto compares actual page geometry against the active provider's estimated vision
+cost. Unknown/local providers and micro-snippets (<=5 lines, <100 tokens) use text.
+Set HARNEZ_AGENT_HARNESS to claude, codex, or gemini to select a profile.
+Explicit -I forces images; --text, --raw, and -n force text even with --auto.
+Images pack up to three columns, pruning unused columns and cropping to content.
 
-Visual image mode (-I/--image) renders monospace cards bounded within 1568px to
-prevent ViT downscaling cliffs, packing tall files into multiple columns and
-reporting token compression across Claude, OpenAI, and Gemini.
+--line-numbers=all|off|N controls the gutter cadence and preserves source anchors.
+--compress=ws|ast safely compacts Go and JSON. Shell uses conservative lexical
+compaction in both modes; complex expansions and heredocs remain verbatim.
+Compression requires complete valid Go/JSON input; source files are never changed.
 
 Examples:
-  # Read a file with line numbers:
-  harnez read -n internal/lint/lint.go
-
-  # Read a specific line range:
-  harnez read --lines 10:50 internal/lint/lint.go
-
-  # Render a source file into a visual PNG card:
-  harnez read -I internal/lint/lint.go
-
-  # Render with 2 columns, custom font size and output path:
-  harnez read -I --columns=2 --font-size=11 -o /tmp/lint.png internal/lint/lint.go
-
-  # Render multiple files with JSON metadata:
-  harnez read -I --json cmd/harnez/main.go cmd/harnez/apply.go`,
+  harnez read -n -L 10:50 internal/lint/lint.go
+  harnez read -I --line-numbers=10 --compress=ws internal/lint/lint.go
+  harnez read --auto --head=100 internal/lint/lint.go
+  harnez read -I --columns=2 --json source.go`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			textOpts := readcard.TextOptions{
-				ShowLineNumbers: showLineNumbers,
-				LineRange:       lineRange,
-				Head:            head,
-				Tail:            tail,
-				ShowStats:       showTokens,
+			if _, err := readcard.ParseLineNumbers(lineNumbers); err != nil {
+				return err
 			}
-
-			// If no args provided, read from Stdin
-			if len(args) == 0 {
-				res, err := readcard.ReadSource(os.Stdin, "stdin", textOpts)
+			if compression != "off" && compression != "ws" && compression != "ast" {
+				return fmt.Errorf("invalid compression %q", compression)
+			}
+			if imageMode && (textMode || rawMode) {
+				return fmt.Errorf("--image cannot be combined with --text or --raw")
+			}
+			explicitText := textMode || rawMode || cmd.Flags().Changed("number")
+			adaptive := autoMode && !imageMode && !explicitText && !cmd.Flags().Changed("image")
+			textOpts := readcard.TextOptions{ShowLineNumbers: number, LineRange: lineRange, Head: head, Tail: tail}
+			var results []any
+			paths := args
+			if len(paths) == 0 {
+				paths = []string{"-"}
+			}
+			if len(paths) > 1 && outputPath != "" {
+				info, err := os.Stat(outputPath)
+				if err != nil || !info.IsDir() {
+					return fmt.Errorf("--out must be an existing directory for multiple inputs")
+				}
+			}
+			for i, file := range paths {
+				var res *readcard.ReadResult
+				var err error
+				if file == "-" {
+					res, err = readcard.ReadSource(cmd.InOrStdin(), "stdin", textOpts)
+				} else {
+					res, err = readcard.ReadFile(file, textOpts)
+				}
 				if err != nil {
 					return err
 				}
-				if imageMode {
-					renderOpts := readcard.RenderOptions{
-						Columns:         columns,
-						FontName:        fontName,
-						FontSize:        fontSize,
-						Theme:           theme,
-						Wrap:            wrapMode,
-						MaxDimension:    maxDim,
-						ShowLineNumbers: true,
-						OutputPath:      outputPath,
-						Title:           "stdin",
-						StartLine:       res.StartLine,
-					}
-					renderRes, err := readcard.RenderFileToCards(res.Lines, "stdin.txt", renderOpts)
+				originalStats := res.TokenStats
+				if compression != "off" {
+					compact, err := readcard.Compress(res.Lines, file, compression, res.StartLine)
 					if err != nil {
 						return err
 					}
-					return outputRenderResult(cmd, renderRes, jsonOutput)
+					res.Lines, res.SourceLines = compact.Lines, compact.SourceLines
+					res.TokenStats = readcard.ComputeTextTokens(strings.Join(res.Lines, "\n"))
 				}
-
-				if jsonOutput {
-					enc := json.NewEncoder(cmd.OutOrStdout())
-					enc.SetIndent("", "  ")
-					return enc.Encode(res)
-				}
-				fmt.Fprintln(cmd.OutOrStdout(), readcard.FormatText(res, showLineNumbers))
-				if showTokens {
-					printTextTokens(cmd, res.TokenStats)
-				}
-				return nil
-			}
-
-			// Process file arguments
-			var allRenderResults []*readcard.RenderResult
-			var allTextResults []*readcard.ReadResult
-
-			for _, file := range args {
-				res, err := readcard.ReadFile(file, textOpts)
-				if err != nil {
-					return fmt.Errorf("read file %s: %w", file, err)
-				}
-
-				if imageMode {
-					renderOpts := readcard.RenderOptions{
-						Columns:         columns,
-						FontName:        fontName,
-						FontSize:        fontSize,
-						Theme:           theme,
-						Wrap:            wrapMode,
-						MaxDimension:    maxDim,
-						ShowLineNumbers: true,
-						OutputPath:      outputPath,
-						Title:           file,
-						StartLine:       res.StartLine,
-					}
-					renderRes, err := readcard.RenderFileToCards(res.Lines, file, renderOpts)
+				renderOpts := readcard.RenderOptions{Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine}
+				render := imageMode
+				var measured *readcard.RenderResult
+				if adaptive && !(len(res.Lines) <= readcard.MicroSnippetLineThreshold && res.TokenStats.TextTokens < readcard.MicroSnippetTokenThreshold) {
+					renderOpts.MeasureOnly = true
+					measured, err = readcard.RenderFileToCards(res.Lines, file, renderOpts)
 					if err != nil {
-						return fmt.Errorf("render image for %s: %w", file, err)
+						return err
 					}
-					allRenderResults = append(allRenderResults, renderRes)
+					render = readcard.PreferImage(readcard.DetectProvider(os.Getenv), len(res.Lines), measured.TokenStats)
+					renderOpts.MeasureOnly = false
+				}
+				if render {
+					rendered, err := readcard.RenderFileToCards(res.Lines, file, renderOpts)
+					if err != nil {
+						return err
+					}
+					if compression != "off" {
+						rendered.OriginalTokenStats = &originalStats
+					}
+					results = append(results, rendered)
+					if !jsonOutput {
+						if err := outputRenderResult(cmd, rendered, false); err != nil {
+							return err
+						}
+					}
 				} else {
-					allTextResults = append(allTextResults, res)
+					results = append(results, res)
+					if !jsonOutput {
+						if len(paths) > 1 {
+							fmt.Fprintf(cmd.OutOrStdout(), "=== %s (%d lines) ===\n", res.SourceFile, len(res.Lines))
+						}
+						mode := "off"
+						if number || adaptive {
+							mode = "all"
+						}
+						if cmd.Flags().Changed("line-numbers") {
+							mode = lineNumbers
+						}
+						if rawMode {
+							mode = "off"
+						}
+						formatted, err := readcard.FormatTextCadence(res, mode)
+						if err != nil {
+							return err
+						}
+						fmt.Fprintln(cmd.OutOrStdout(), formatted)
+						if showTokens {
+							printTextTokens(cmd, res.TokenStats)
+						}
+						if i < len(paths)-1 {
+							fmt.Fprintln(cmd.OutOrStdout())
+						}
+					}
 				}
 			}
-
-			if imageMode {
-				if jsonOutput {
-					enc := json.NewEncoder(cmd.OutOrStdout())
-					enc.SetIndent("", "  ")
-					if len(allRenderResults) == 1 {
-						return enc.Encode(allRenderResults[0])
-					}
-					return enc.Encode(allRenderResults)
-				}
-
-				for _, r := range allRenderResults {
-					if err := outputRenderResult(cmd, r, false); err != nil {
-						return err
-					}
-				}
-				return nil
-			}
-
-			// Text mode output
 			if jsonOutput {
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
-				if len(allTextResults) == 1 {
-					return enc.Encode(allTextResults[0])
+				if len(results) == 1 {
+					return enc.Encode(results[0])
 				}
-				return enc.Encode(allTextResults)
+				return enc.Encode(results)
 			}
-
-			for i, res := range allTextResults {
-				if len(allTextResults) > 1 {
-					fmt.Fprintf(cmd.OutOrStdout(), "=== %s (%d lines) ===\n", res.SourceFile, len(res.Lines))
-				}
-				fmt.Fprintln(cmd.OutOrStdout(), readcard.FormatText(res, showLineNumbers))
-				if showTokens {
-					printTextTokens(cmd, res.TokenStats)
-				}
-				if i < len(allTextResults)-1 {
-					fmt.Fprintln(cmd.OutOrStdout())
-				}
-			}
-
 			return nil
 		},
 	}
-
-	cmd.Flags().BoolVarP(&imageMode, "image", "I", false, "render file(s) as styled visual PNG cards")
-	cmd.Flags().StringVarP(&outputPath, "out", "o", "", "custom output PNG file or directory")
-	cmd.Flags().IntVarP(&columns, "columns", "c", 0, "number of columns (1-4, default: auto)")
-	cmd.Flags().StringVar(&fontName, "font", "pixel", "font family: pixel, retro, 5x8, 3x5, micro, 6x12, standard, 8x16, 7x13 (default: pixel)")
-	cmd.Flags().IntVar(&fontSize, "font-size", 11, "font size in pixels (default: 11)")
+	cmd.Flags().BoolVarP(&imageMode, "image", "I", false, "force styled PNG output")
+	cmd.Flags().BoolVar(&autoMode, "auto", false, "choose images or text by provider token estimates")
+	cmd.Flags().BoolVar(&textMode, "text", false, "force text output")
+	cmd.Flags().BoolVar(&rawMode, "raw", false, "force text without line numbers")
+	cmd.Flags().StringVarP(&outputPath, "out", "o", "", "output PNG file or existing directory")
+	cmd.Flags().IntVarP(&columns, "columns", "c", 3, "maximum columns (1-4; unused columns pruned)")
+	cmd.Flags().StringVar(&fontName, "font", "pixel", "font: pixel, retro, 5x8, 3x5, micro, 6x12, standard, 8x16, 7x13")
+	cmd.Flags().IntVar(&fontSize, "font-size", 11, "font size in pixels")
 	cmd.Flags().StringVar(&theme, "theme", "dark", "color theme: dark, light")
-	cmd.Flags().StringVar(&wrapMode, "wrap", "soft", "line wrapping mode for visual cards: soft, truncate (default: soft)")
-	cmd.Flags().IntVar(&maxDim, "max-dim", 1568, "maximum image dimension in pixels (default: 1568)")
-	cmd.Flags().BoolVarP(&showLineNumbers, "number", "n", false, "display line numbers in text output")
-	cmd.Flags().StringVarP(&lineRange, "lines", "L", "", "line range to read/render (e.g. 10:50, 100:, :30)")
+	cmd.Flags().StringVar(&wrapMode, "wrap", "soft", "line wrapping: soft, truncate")
+	cmd.Flags().IntVar(&maxDim, "max-dim", 1568, "maximum image dimension in pixels")
+	cmd.Flags().BoolVarP(&number, "number", "n", false, "force text output with line numbers (unless -I)")
+	cmd.Flags().StringVar(&lineNumbers, "line-numbers", "all", "gutter: all, off, none, or positive cadence N")
+	cmd.Flags().StringVar(&compression, "compress", "off", "safe source compression: off, ws, ast")
+	cmd.Flags().StringVarP(&lineRange, "lines", "L", "", "source line range, e.g. 10:50")
 	cmd.Flags().IntVar(&head, "head", 0, "read only the first N lines")
 	cmd.Flags().IntVar(&tail, "tail", 0, "read only the last N lines")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "output structured JSON metadata")
-	cmd.Flags().BoolVar(&showTokens, "tokens", false, "print token cost estimate and metrics")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "structured JSON metadata")
+	cmd.Flags().BoolVar(&showTokens, "tokens", false, "show token estimates")
 	cmd.Flags().BoolVar(&showTokens, "stats", false, "alias for --tokens")
-
 	return cmd
 }
 

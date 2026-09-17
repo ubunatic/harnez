@@ -13,11 +13,11 @@ import (
 
 func TestParseLineRange(t *testing.T) {
 	tests := []struct {
-		input      string
-		total      int
-		wantStart  int
-		wantEnd    int
-		wantErr    bool
+		input     string
+		total     int
+		wantStart int
+		wantEnd   int
+		wantErr   bool
 	}{
 		{"", 100, 1, 100, false},
 		{"10:50", 100, 10, 50, false},
@@ -622,7 +622,7 @@ func TestRenderFileToCards_AutoColumnLongLines(t *testing.T) {
 		longLines[i] = fmt.Sprintf("const ConfigEntry%03d = \"value_%s\"", i+1, strings.Repeat("x", 65))
 	}
 
-	// Auto columns (Columns: 0) with maxLineLen > 85 should keep cols = 1
+	// Default three-column packing applies to long lines with soft wrapping.
 	res1, err := RenderFileToCards(longLines, "config.go", RenderOptions{
 		OutputPath: filepath.Join(tmpDir, "auto.png"),
 		Columns:    0,
@@ -630,8 +630,8 @@ func TestRenderFileToCards_AutoColumnLongLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderFileToCards failed: %v", err)
 	}
-	if res1.Columns != 1 {
-		t.Errorf("expected auto column selection to choose 1 column for long lines (>85 chars), got %d", res1.Columns)
+	if res1.Columns != 3 {
+		t.Errorf("expected default 3 columns for wrapped long lines, got %d", res1.Columns)
 	}
 
 	// Explicit Columns: 2 should still be respected even for long lines
@@ -646,7 +646,7 @@ func TestRenderFileToCards_AutoColumnLongLines(t *testing.T) {
 		t.Errorf("expected explicit Columns=2 to be respected, got %d", res2.Columns)
 	}
 
-	// Moderate length lines (<= 85 chars) with 100 lines should auto-select 2 columns
+	// Moderate lines use the same default three-column packing.
 	shortLines := make([]string, 100)
 	for i := range shortLines {
 		shortLines[i] = fmt.Sprintf("const Item%03d = %d", i+1, i+1)
@@ -658,8 +658,8 @@ func TestRenderFileToCards_AutoColumnLongLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RenderFileToCards failed: %v", err)
 	}
-	if res3.Columns != 2 {
-		t.Errorf("expected auto column selection to choose 2 columns for normal lines, got %d", res3.Columns)
+	if res3.Columns != 3 {
+		t.Errorf("expected default 3 columns for normal lines, got %d", res3.Columns)
 	}
 }
 
@@ -790,4 +790,3 @@ func TestSplitTokensByLength(t *testing.T) {
 		t.Errorf("expected tail token type preserved as TokenTypeIdent, got %v", tail[0].Type)
 	}
 }
-

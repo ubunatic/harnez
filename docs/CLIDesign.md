@@ -49,6 +49,46 @@ Commands designed for exploratory use in agentic loops or interactive terminals 
 
 ## Exit codes: never `os.Exit` inside `RunE`
 
+## Read output selection and compression
+
+`harnez read` reads files or stdin. Text selection (`-L`, `--head`, `--tail`) happens
+before display conversion. `-I` forces PNG output. `--auto` compares the selected
+text's estimated token count with the sum of actual page geometry costs from
+`internal/readcard/tokens.go`. `--text`, `--raw`, and `-n` force text under `--auto`;
+`-I` takes precedence over `-n`. Combining `-I` with `--text` or `--raw` is an error.
+Explicit `--image=false` also disables adaptive image output.
+
+- `--line-numbers=all|off|none|N|every:N` controls image and explicit text gutters.
+  Cadences mark the first selected line and original source multiples of N;
+  intermediate lines have a dot. Compression retains original source anchors.
+- `--compress=ws|ast` currently selects the same conservative token compaction.
+  Go requires a complete parseable file and verifies the resulting token stream,
+  preserving comments, literals, and implicit semicolons. JSON uses `json.Compact`,
+  preserving numeric spelling and strings; its single output line anchors to the
+  beginning of the selection. Shell preserves newlines and quotes while collapsing
+  unquoted horizontal whitespace; heredocs, escapes, and complex expansions are
+  left verbatim. Unsupported languages and incomplete Go/JSON return errors.
+  Original files are never rewritten. JSON image metadata includes original text
+  costs alongside compacted text/image costs.
+- Image packing defaults to at most three columns. Each page is cropped after
+  wrapping; up to 20 rows use one column, larger pages balance across available
+  columns. `--columns=N` changes the maximum. JSON `pages` reports each page's
+  dimensions; aggregate token estimates sum those pages rather than assuming
+  that the last page is full.
+- Auto mode selects text for micro-snippets (at most five lines and fewer than
+  100 estimated tokens), unknown providers, and local models. Provider detection
+  honors `HARNEZ_AGENT_HARNESS` first, then Claude/Codex/Gemini markers; ambiguous
+  markers choose text. These are approximate provider profiles, not model billing
+  guarantees. See [MultimodalContextDelivery.md](MultimodalContextDelivery.md).
+
+`harnez subagent --doc-mode=auto --task '...' --dir DIR` stages documentation and
+prints JSON. Optional `-- launcher args...` runs the explicit launcher with the
+prompt on stdin and `HARNEZ_STYLE_GUIDE` pointing to the staged PNG. It does not
+attach an image through a provider API; the launcher/agent opens that asset.
+Explicit `full`, `lite`, and `vision` modes override provider defaults.
+
+## Exit codes: never `os.Exit` inside `RunE`
+
 `os.Exit` terminates the process immediately, so nothing after it in the call stack ever
 runs — including `main()`'s `executeAndRecord` (issue 326), the one place that writes a
 `cli_invocations` row for `harnez log`. Every command that called `os.Exit` directly from
@@ -247,4 +287,3 @@ at a scratch directory for the whole test process, not just `-t`.
 
 - `diff` and `clean` are global-only and have no awareness of project Makefiles — see issue #009.
 - `status` does not check whether the project Makefile targets block is present.
-

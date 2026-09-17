@@ -242,6 +242,9 @@ hooks:
     matcher: View
     command: "harnez hook read"
   - event: PreToolUse
+    matcher: Read
+    command: "harnez hook read"
+  - event: PreToolUse
     matcher: ReadMultipleFiles
     command: "harnez hook read"
 

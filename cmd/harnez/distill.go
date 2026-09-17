@@ -59,7 +59,7 @@ the wrapped command's exit code:
 	cmd.Flags().IntVar(&maxBytes, "max-bytes", 200_000, "hard byte cap on output; truncates head+tail with a note when exceeded (0 disables)")
 	cmd.Flags().BoolVar(&noDedup, "no-dedup", false, "skip collapsing repeated lines")
 
-	cmd.AddCommand(newDistillHookCmd())
+	cmd.AddCommand(newDistillHookCmd(), newDistillReadCmd())
 	return cmd
 }
 

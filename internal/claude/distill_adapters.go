@@ -10,6 +10,8 @@ import (
 const piDistillAdapter = `// Managed by harnez. Keep rewrite policy in 'harnez distill hook'.
 import { spawnSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
+import { readFileSync, unlinkSync, rmdirSync } from "node:fs";
+import { dirname } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const AUTOPIPE_ENV = "HARNEZ_DISTILL_AUTOPIPE";
@@ -66,6 +68,29 @@ export default function harnezDistill(pi: ExtensionAPI) {
     if (typeof event.input?.command !== "string") return;
 
     event.input.command = rewriteWithHarnez("pi", event.input.command);
+  });
+  pi.on("tool_result", async (event) => {
+    if (process.env.HARNEZ_READ_AUTOPIPE !== "1" || event.toolName !== "read" || event.isError) return;
+    if (!event.content.every((item) => item.type === "text")) return;
+    const text = event.content.map((item) => item.type === "text" ? item.text : "").join("\n");
+    const result = spawnSync("harnez", ["distill", "read"], {
+      input: JSON.stringify({ text, path: event.input?.path || "read.txt", start_line: event.input?.offset || 1,
+        provider: process.env.HARNEZ_READ_PROVIDER || "unknown", vision: process.env.HARNEZ_READ_VISION === "1" }),
+      encoding: "utf8", timeout: 10000, maxBuffer: 16 * 1024 * 1024,
+    });
+    if (result.error || result.status !== 0) return;
+    let decoded;
+    try { decoded = JSON.parse(result.stdout); } catch { return; }
+    const content: any[] = [];
+    try {
+      if (decoded.text) content.push({ type: "text", text: decoded.text });
+      for (const path of decoded.images || []) content.push({ type: "image", mimeType: "image/png", data: readFileSync(path).toString("base64") });
+      return { content };
+    } catch { return; }
+    finally {
+      for (const path of decoded.images || []) { try { unlinkSync(path); } catch {} }
+      if (decoded.images?.length) { try { rmdirSync(dirname(decoded.images[0])); } catch {} }
+    }
   });
 }
 `
@@ -129,6 +154,16 @@ export const HarnezDistillPlugin: Plugin = async () => ({
     if (typeof output.args?.command !== "string") return;
 
     output.args.command = rewriteWithHarnez("opencode", output.args.command);
+  },
+  "tool.execute.after": async (input, output) => {
+    if (process.env.HARNEZ_READ_AUTOPIPE !== "1" || input.tool !== "read" || typeof output.output !== "string") return;
+    const result = spawnSync("harnez", ["distill", "read"], {
+      input: JSON.stringify({ text: output.output, path: input.args?.filePath || "read.txt", start_line: input.args?.offset || 1,
+        provider: "unknown", vision: false }),
+      encoding: "utf8", timeout: 10000, maxBuffer: 16 * 1024 * 1024,
+    });
+    if (result.error || result.status !== 0) return;
+    try { const decoded = JSON.parse(result.stdout); if (typeof decoded.text === "string") output.output = decoded.text; } catch {}
   },
 });
 `
