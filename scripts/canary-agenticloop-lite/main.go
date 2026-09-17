@@ -66,6 +66,9 @@ var (
 	flagLite         bool
 	flagFull         bool
 	flagMeasure      bool
+	flagSoft         bool
+	flagHard         bool
+	flagEmbed        bool
 )
 
 // validDeliveryModes are the supported --delivery values controlling whether
@@ -159,6 +162,15 @@ func main() {
 			if flagText {
 				flagDelivery = "native"
 			}
+			if flagSoft {
+				flagLink = "soft"
+			}
+			if flagHard {
+				flagLink = "hard"
+			}
+			if flagEmbed {
+				flagLink = "embed"
+			}
 			if flagClaude {
 				flagAgents = []string{"claude"}
 			}
@@ -203,6 +215,9 @@ func main() {
 	runCmd.Flags().BoolVar(&flagLite, "lite", false, "use the lite variant")
 	runCmd.Flags().BoolVar(&flagFull, "full", false, "use the full variant")
 	runCmd.Flags().BoolVar(&flagMeasure, "measure", false, "alias for --measure-cost")
+	runCmd.Flags().BoolVar(&flagSoft, "soft", false, "use soft document links")
+	runCmd.Flags().BoolVar(&flagHard, "hard", false, "use eager document links")
+	runCmd.Flags().BoolVar(&flagEmbed, "embed", false, "embed document text directly")
 
 	fixturesCmd := &cobra.Command{
 		Use:   "fixtures",
