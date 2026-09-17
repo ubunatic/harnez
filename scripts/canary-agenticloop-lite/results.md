@@ -219,6 +219,9 @@ repo root; source in this directory).
   to scope to one CLI)
 - **Override the fixtures file** (e.g. testing a fork/variant) with the global
   `--fixtures-file <path>` flag on any subcommand.
+- **Compare doc-delivery modes** with `--link soft|hard|embed` (default
+  `soft`) on `run` or `measure-cost`, e.g.:
+  `canary-agenticloop-lite measure-cost --fixture hello --link embed`
 
 Cost note: every `run`/`measure-cost` invocation spawns a real non-interactive
 `claude -p` and/or `agy -p` subprocess per (fixture x variant x agent) —
@@ -266,3 +269,45 @@ Claude Code's own multi-turn bootstrapping, not the doc.
 its `first-turn` value falls back to the run's total (`firstTurnTokens()` in
 `main.go`) — a known asymmetry between the two agents' introspection, not a
 bug in this harness.
+
+---
+
+## --link flag: soft/hard/embed doc-delivery comparison (2026-09-17, issue 412 follow-up)
+
+Added `--link` (soft|hard|embed, default soft) to both `run` and `measure-cost`,
+controlling how the doc variant is exposed inside the isolated workspace's
+`AGENTS.md`, per issue 412:
+
+- **soft**: `AGENTS.md` holds a bare-prose citation ("See AgenticLoop.md for
+  your instructions/context for this session."); the doc is copied in
+  alongside it but nothing forces the agent to open it.
+- **hard**: `AGENTS.md` holds a single eager-include line, `@AgenticLoop.md`
+  — this repo's own `harnez/CLAUDE.md` convention (`@AGENTS.local.md`).
+- **embed**: the doc's full text is inlined directly into `AGENTS.md` under
+  a `# AgenticLoop.md` heading (text docs only).
+
+Real `hello`-fixture, claude/full results for each mode:
+
+| link | turns | total tokens | first-turn |
+|---|---|---|---|
+| soft | 3 | 73227 | 31837 |
+| hard | 3 | 73831 | 32439 |
+| embed | 2 | 51696 | 31685 |
+
+All three PASS (response "ready" in each case).
+
+**Finding**: `hard` (`@AgenticLoop.md`) did **not** behave as an eager include
+in `AGENTS.md` — it cost the same 3 turns as `soft`, meaning claude still
+issued a separate `Read` tool call rather than auto-inlining the referenced
+file. This contradicts the assumption written in `docs/AgenticLoop.md`'s own
+Invariant-1 note ("Claude Code treats `@path` in `CLAUDE.md` as an eager
+macro-include... inlining full doc files into every session") if read as
+applying to `AGENTS.md` generally — the eager-include behavior that doc
+describes appears to be specific to `CLAUDE.md`, not `AGENTS.md`. `embed` is
+the only mode of the three that actually avoids the extra tool-call turn.
+
+Traced doc-context accounting was generalized to walk from the workspace's
+real `AGENTS.md` entry point (not the raw doc file), resolving `@path`
+includes relative to the referencing file's own directory — matching this
+repo's real convention (sibling references, not always repo-root-relative)
+and correctly reflecting what's actually reachable from each link mode.

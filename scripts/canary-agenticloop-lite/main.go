@@ -41,7 +41,16 @@ var (
 	flagFixturesYAML string
 	flagCostFixture  string
 	flagCostVariant  string
+	flagLink         string
+	flagCostLink     string
 )
+
+// validLinkModes are the supported --link values controlling how a doc is
+// exposed to the agent inside the isolated workspace (issue 412 follow-up):
+// soft (plain-text citation, agent must choose to open it), hard (an eager
+// "@path" include macro), or embed (the doc's full text inlined directly
+// into AGENTS.md; text docs only).
+var validLinkModes = map[string]bool{"soft": true, "hard": true, "embed": true}
 
 type fixture struct {
 	ID            string `yaml:"id"`
@@ -106,6 +115,7 @@ func main() {
 	runCmd.Flags().StringSliceVar(&flagFixtures, "fixture", nil, "run only fixtures with this id (repeatable); default: all fixtures")
 	runCmd.Flags().StringSliceVar(&flagAgents, "agent", nil, "run only this agent CLI, one of: claude, agy (repeatable); default: all agents")
 	runCmd.Flags().StringSliceVar(&flagVariants, "variant", nil, "run only this doc variant, one of: full, lite (repeatable); default: both variants")
+	runCmd.Flags().StringVar(&flagLink, "link", "soft", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
 
 	fixturesCmd := &cobra.Command{
 		Use:   "fixtures",
@@ -138,6 +148,7 @@ func main() {
 	measureCostCmd.Flags().StringSliceVar(&flagAgents, "agent", nil, "only measure this agent CLI, one of: claude, agy (repeatable); default: all agents")
 	measureCostCmd.Flags().StringVar(&flagCostFixture, "fixture", "hello", "fixture id to run for the cost measurement")
 	measureCostCmd.Flags().StringVar(&flagCostVariant, "variant", "full", "doc variant to use, one of: full, lite")
+	measureCostCmd.Flags().StringVar(&flagCostLink, "link", "soft", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
 
 	root.AddCommand(runCmd, fixturesCmd, measureCostCmd)
 
@@ -224,6 +235,10 @@ func run() error {
 		repoRoot = selfDir
 	}
 
+	if !validLinkModes[flagLink] {
+		return fmt.Errorf("unknown --link=%q (known: soft, hard, embed)", flagLink)
+	}
+
 	allFixtures, err := loadFixtures()
 	if err != nil {
 		return err
@@ -299,7 +314,7 @@ func run() error {
 				continue
 			}
 			for _, fx := range fixtures {
-				res := runFixture(ag, v, fx)
+				res := runFixture(ag, v, fx, flagLink)
 				if res.status == fail {
 					anyFail = true
 				}
@@ -322,20 +337,20 @@ func run() error {
 	return nil
 }
 
-func runFixture(ag agentCLI, v docVariant, fx fixture) result {
+func runFixture(ag agentCLI, v docVariant, fx fixture, link string) result {
 	work, err := os.MkdirTemp("", "canary-agenticloop-lite.*")
 	if err != nil {
 		return result{agent: ag.name, variant: v.name, id: fx.ID, status: fail, detail: "mkdtemp: " + err.Error()}
 	}
 	defer os.RemoveAll(work)
 
-	if err := copyFile(v.path, filepath.Join(work, "AGENTS.md")); err != nil {
-		return result{agent: ag.name, variant: v.name, id: fx.ID, status: fail, detail: "copy doc: " + err.Error()}
+	if err := setupLinkedWorkspace(work, v.path, link); err != nil {
+		return result{agent: ag.name, variant: v.name, id: fx.ID, status: fail, detail: "setup workspace: " + err.Error()}
 	}
 
-	prompt := fmt.Sprintf(`You are in an empty directory with one file, AGENTS.md — that is your
-only instructions/context for this session. Read AGENTS.md, then respond to
-this request:
+	prompt := fmt.Sprintf(`You are in a directory whose only files are your instructions and
+context for this session, starting with AGENTS.md. Read AGENTS.md first,
+then respond to this request:
 
 %s`, fx.Prompt)
 
@@ -509,10 +524,16 @@ type docRef struct {
 var includeRefPattern = regexp.MustCompile(`@([A-Za-z0-9_./-]+\.md)`)
 
 // traceDocContext walks entryPath and recursively follows @path include
-// directives (resolved relative to repoRoot), returning one docRef per
-// unique file actually found on disk, entryPath first. Missing referenced
-// files are silently skipped — this traces what the harness's own doc
-// variants actually pull in, not a strict-include validator.
+// directives, returning one docRef per unique file actually found on disk,
+// entryPath first. Each include is resolved relative to the directory of
+// the file that referenced it (matching this repo's own convention, e.g.
+// harnez/CLAUDE.md's sibling "@AGENTS.local.md"), not a fixed root — this
+// lets it trace both real repo docs and an isolated workspace's AGENTS.md
+// referencing a sibling doc copied in next to it. Display paths are shown
+// relative to repoRoot when the file is under it, else as a bare basename.
+// Missing referenced files are silently skipped — this traces what the
+// harness's own doc variants actually pull in, not a strict-include
+// validator.
 func traceDocContext(repoRoot, entryPath string) ([]docRef, error) {
 	var refs []docRef
 	seen := map[string]bool{}
@@ -530,13 +551,20 @@ func traceDocContext(repoRoot, entryPath string) ([]docRef, error) {
 		if err != nil {
 			return nil // referenced doc not present — skip, not fatal
 		}
-		rel, err := filepath.Rel(repoRoot, abs)
-		if err != nil {
-			rel = abs
+		disp := abs
+		if rel, err := filepath.Rel(repoRoot, abs); err == nil && !strings.HasPrefix(rel, "..") {
+			disp = rel
+		} else {
+			disp = filepath.Base(abs)
 		}
-		refs = append(refs, docRef{path: rel, bytes: len(data), tokens: len(data) / 4})
+		refs = append(refs, docRef{path: disp, bytes: len(data), tokens: len(data) / 4})
+		base := filepath.Dir(abs)
 		for _, m := range includeRefPattern.FindAllStringSubmatch(string(data), -1) {
-			if err := walk(m[1]); err != nil {
+			next := m[1]
+			if !filepath.IsAbs(next) {
+				next = filepath.Join(base, next)
+			}
+			if err := walk(next); err != nil {
 				return err
 			}
 		}
@@ -608,9 +636,13 @@ func measureCost() error {
 		}
 	}
 
-	prompt := fmt.Sprintf(`You are in an empty directory with one file, AGENTS.md — that is your
-only instructions/context for this session. Read AGENTS.md, then respond to
-this request:
+	if !validLinkModes[flagCostLink] {
+		return fmt.Errorf("unknown --link=%q (known: soft, hard, embed)", flagCostLink)
+	}
+
+	prompt := fmt.Sprintf(`You are in a directory whose only files are your instructions and
+context for this session, starting with AGENTS.md. Read AGENTS.md first,
+then respond to this request:
 
 %s`, target.Prompt)
 
@@ -618,6 +650,7 @@ this request:
 	fmt.Println(rule)
 	fmt.Printf("fixture   %s\n", target.ID)
 	fmt.Printf("variant   %s  (%s)\n", flagCostVariant, docPath)
+	fmt.Printf("link      %s\n", flagCostLink)
 	fmt.Printf("prompt    %s\n", target.Prompt)
 	fmt.Println(rule)
 
@@ -637,13 +670,13 @@ this request:
 			anyErr = true
 			continue
 		}
-		if err := copyFile(docPath, filepath.Join(work, "AGENTS.md")); err != nil {
-			fmt.Printf("  FAIL  copy doc: %v\n", err)
+		if err := setupLinkedWorkspace(work, docPath, flagCostLink); err != nil {
+			fmt.Printf("  FAIL  setup workspace: %v\n", err)
 			os.RemoveAll(work)
 			anyErr = true
 			continue
 		}
-		if refs, err := traceDocContext(repoRoot, docPath); err == nil {
+		if refs, err := traceDocContext(work, filepath.Join(work, "AGENTS.md")); err == nil {
 			fmt.Println("  context docs")
 			total := 0
 			for _, ref := range refs {
@@ -716,6 +749,43 @@ this request:
 		return fmt.Errorf("one or more agents failed to report a cost baseline")
 	}
 	return nil
+}
+
+// setupLinkedWorkspace prepares an isolated workspace's AGENTS.md per
+// --link (issue 412 follow-up), always returning work/AGENTS.md as the
+// agent's entry point:
+//   - "soft": AGENTS.md holds a bare-prose citation ("See Doc.md ...");
+//     the doc is copied in alongside it but nothing forces the agent to
+//     open it.
+//   - "hard": AGENTS.md holds a single "@Doc.md" eager-include directive
+//     (this repo's own harnez/CLAUDE.md convention, e.g. "@AGENTS.local.md").
+//   - "embed": the doc's full text is inlined directly into AGENTS.md
+//     under a "# Doc.md" heading; text docs only.
+func setupLinkedWorkspace(work, docPath, link string) error {
+	if !validLinkModes[link] {
+		return fmt.Errorf("unknown --link=%q (known: soft, hard, embed)", link)
+	}
+	agentsPath := filepath.Join(work, "AGENTS.md")
+	base := filepath.Base(docPath)
+	switch link {
+	case "embed":
+		data, err := os.ReadFile(docPath)
+		if err != nil {
+			return fmt.Errorf("read doc for embed: %w", err)
+		}
+		content := fmt.Sprintf("# %s\n\n%s", base, string(data))
+		return os.WriteFile(agentsPath, []byte(content), 0o644)
+	case "hard":
+		if err := copyFile(docPath, filepath.Join(work, base)); err != nil {
+			return fmt.Errorf("copy doc: %w", err)
+		}
+		return os.WriteFile(agentsPath, []byte(fmt.Sprintf("@%s\n", base)), 0o644)
+	default: // "soft"
+		if err := copyFile(docPath, filepath.Join(work, base)); err != nil {
+			return fmt.Errorf("copy doc: %w", err)
+		}
+		return os.WriteFile(agentsPath, []byte(fmt.Sprintf("See %s for your instructions/context for this session.\n", base)), 0o644)
+	}
 }
 
 func copyFile(src, dst string) error {

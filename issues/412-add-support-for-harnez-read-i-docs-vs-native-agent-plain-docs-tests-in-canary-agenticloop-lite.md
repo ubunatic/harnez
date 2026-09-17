@@ -72,3 +72,20 @@ Scope for this ticket, informed by the existing harness structure in
    comparison.
 4. Update `results.md`'s "Guide: running the suite/units yourself" section
    with the new flag/mode once implemented.
+
+## 4. Progress (2026-09-17)
+
+Implemented the text-doc half of this ticket ahead of the PNG/`harnez read -I`
+half: `--link soft|hard|embed` on `run`/`measure-cost`, controlling how the
+doc variant is exposed in `AGENTS.md` — bare citation, `@path` eager-include,
+or full inline text. Real `hello`-fixture results logged in `results.md`
+("--link flag: soft/hard/embed doc-delivery comparison"): `embed` is the only
+mode of the three that avoids an extra `Read` tool-call turn; `hard`
+(`@AgenticLoop.md`) surprisingly does **not** get eagerly inlined the way
+`docs/AgenticLoop.md`'s own Invariant-1 note claims for `CLAUDE.md` — that
+eager-include behavior appears specific to `CLAUDE.md`, not `AGENTS.md`.
+
+Remaining scope: the PNG/`harnez read -I` delivery mode (soft/hard pointing at
+a rendered PNG instead of a `.md` file; `embed` is text-only and N/A there),
+gated on the canary-first probe in step 1 above (whether `claude -p`/`agy -p`
+can view images non-interactively at all).
