@@ -464,7 +464,7 @@ agents_md:
             Resolve local @docs or @rules refs to ./docs or ./rules first,
             then to the active harness directory (~/.claude or ~/.prime/agent).
           - Context Discipline: avoid whole-file reads on active system-prompt files (AGENTS.md,
-            CLAUDE.md); use grep or range-bounded reads — see @docs/AgenticLoop.md Invariant 6.
+            CLAUDE.md); use grep or range-bounded reads (AgenticLoop Invariant 6).
           - Editing Discipline & Issue Tracker Discovery: for a harnez-tracked project
             (`issues/` present), see that project's AGENTS.md "Harnez Managed Conventions"
             block for `apply_patch`-preferred editing and `harnez find`/`harnez issues` usage.
@@ -476,8 +476,7 @@ agents_md:
             steering the agentic setup rather than carrying project-specific content.
           - Working-Directory Hygiene: prefer `make -C`/`git -C`/absolute paths or a subshell
             `(cd dir && cmd)` over bare `cd`; if you must `cd`, return to the starting directory
-            before the tool call ends — the shell may be shared with the user's own terminal.
-            See @docs/Bash.md §8.
+            before the tool call ends — the shell may be shared with the user's own terminal (see docs/Bash.md §8).
       - name: Tool Feedback Protocol
         rate_feedback: true
         content: |
