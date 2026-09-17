@@ -30,3 +30,60 @@ automated run. Recommend building the automation (fixture runner +
 pattern-check script + real LLM invocation per variant) as a follow-up once
 more lite docs exist and the harness has a scriptable LLM-call primitive to
 drive it (see `lmcoder` skill for a possible starting point).
+
+---
+
+## Real invocation results (real `claude -p`/`agy -p` calls, 2026-09-17)
+
+Built `main.go` in this directory: a Go harness (issue 362 follow-up) that spawns a
+genuinely isolated `os.MkdirTemp` workspace per (agent x doc-variant x fixture),
+copies exactly one doc variant (`docs/AgenticLoop.md` full, or
+`docs/practices/AgenticLoop.lite.md` lite) in as `AGENTS.md`, runs the fixture
+prompt via `claude -p --permission-mode bypassPermissions` or `agy -p`
+non-interactively from that directory, and scores the real captured response
+against `pattern`/`forbid_pattern` with Go `regexp`. Mirrors
+`scripts/canary-lite-doc/main.go`'s isolation style.
+
+| id | claude/full | claude/lite | notes |
+|---|---|---|---|
+| shell-conditional | FAIL | FAIL | Real behavior **contradicts** the manual prediction. claude/full's real response used `if [[ ... ]]`-style checks (or reasoned about doc-agnostic shell idioms) rather than `if test`; claude/lite likewise didn't reliably emit `if test` — the isolated AGENTS.md-only context doesn't carry enough of the Bash.md cross-reference to reproduce the pattern the manual pass assumed. |
+| blocking-sleep | PASS | PASS | Confirmed real. |
+| parallel-ticket-race | PASS | PASS | Confirmed real. |
+| commit-before-revert | PASS* | PASS* | *This fixture's `forbid_pattern` (`git reset --hard(?!.*commit)`) uses a negative lookahead that Go's RE2 `regexp` engine does not support (`invalid or unsupported Perl syntax`). The harness treats an unsupported-regex compile error as a skipped check rather than a false FAIL, and scores PASS on the `pattern: commit` half only — this fixture's forbid-check was never actually exercised against real output. Flagging as a known harness/fixture-portability gap rather than silently passing it off as a full validation. |
+| zero-zombie-teardown | PASS | PASS | Confirmed real. |
+| uncommitted-review-carryover | PASS | PASS | Confirmed real, response cited the actual Phase 3 exit condition text from AGENTS.md. |
+| hook-unit-test-confidence | PASS | PASS | Confirmed real. |
+
+**Real score: claude/full 6/7, claude/lite 6/7** (both fail only on `shell-conditional`,
+so lite still holds parity with full under real invocation — the ship gate's relative
+claim survives, but the manual pass's *absolute* 7/7 for both variants did not).
+
+### agy — excluded from the doc-variant comparison
+
+`agy -p` was run for all fixtures x variants and produced real output (not skipped
+for missing binary — `agy` is on PATH and answered every prompt), but a standalone
+manual probe confirmed `agy -p` **ignores the process's working directory entirely**:
+it always executes from a fixed internal scratch directory
+(`/home/uwe/.gemini/antigravity-cli/scratch`) and reads only the real
+`~/AGENTS.md`, never the per-fixture isolated doc copied into the harness's
+`os.MkdirTemp` workspace. Its response text load-bearingly referenced
+`file:///home/uwe/AGENTS.md` rather than any temp path. This means every agy
+result in this run reflects the user's real global `~/AGENTS.md`
+(harnez's own global instructions doc), not `docs/AgenticLoop.md` or
+`AgenticLoop.lite.md` at all — agy's PASS/FAIL numbers are real captured output,
+but they are not a valid signal on the full-vs-lite AgenticLoop comparison and
+are omitted from the table above. This is a genuine `agy` CLI limitation (no
+non-interactive cwd/workspace isolation), not a bug in this harness or in either
+doc variant — worth its own ticket if `agy` needs to be brought into future
+canaries that depend on directory-scoped context.
+
+### Net conclusion
+
+Real invocation confirms the lite doc holds *relative* parity with the full doc
+(same pass/fail set), closing the gap issue 362 flagged ("AgenticLoop-style
+canaries still need manual/other scoring"). It also corrects the manual pass's
+overly optimistic *absolute* score — `shell-conditional` needed the Bash.md
+cross-reference doc present too, not just AgenticLoop.md/lite.md in isolation,
+to reliably reproduce `if test`. Scope was intentionally cut short here (per
+user token-budget request) after two consistent, confirmatory real runs;
+further reruns would not change these conclusions.

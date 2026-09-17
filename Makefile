@@ -29,6 +29,9 @@ install: ⚙️ build  # install binary to ~/go/bin (user)
 	go install ./cmd/harnez
 	@ln -sf harnez $$(go env GOPATH)/bin/⚙ 2>/dev/null || ln -sf harnez $(HOME)/go/bin/⚙
 
+install-tools: ⚙️  # install scripts/*/main.go canary CLIs to ~/go/bin
+	go install ./scripts/canary-agenticloop-lite
+
 install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wide)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
 	sudo ln -sf $(BINARY) $(PREFIX)/bin/⚙

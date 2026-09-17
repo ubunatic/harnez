@@ -77,3 +77,14 @@ reason through what a response "would" say — the harness actually runs it.
       (Bash, Make, Go, Markdown) for now; AgenticLoop-style canaries still need manual/other
       scoring.
 - [x] No `go test`/`smoke-test.sh` impact — pure shell script addition, no Go code changed.
+
+## 4. Addendum (2026-09-17)
+
+The "AgenticLoop-style canaries still need manual/other scoring" gap noted above is now closed:
+`scripts/canary-agenticloop-lite/main.go` runs real `claude -p`/`agy -p` invocations against
+isolated `docs/AgenticLoop.md`/`AgenticLoop.lite.md` copies and scores the real responses against
+`fixtures.yaml`'s `pattern`/`forbid_pattern`, replacing the manual/hand-reasoned pass. See
+`scripts/canary-agenticloop-lite/results.md` for the real-run results (lite holds relative parity
+with full: both 6/7, both fail only `shell-conditional`) and a documented `agy -p` limitation
+(ignores cwd, always reads the real `~/AGENTS.md`, so its results are excluded from the
+doc-variant comparison). This is a follow-through note, not a reopening — Status remains Closed.

@@ -5,6 +5,11 @@
 # See results.md for this pilot's scored run (manual — no LLM-invocation
 # harness exists yet to automate the two context runs; see issue tracker for
 # the follow-up that would automate this).
+- id: hello
+  rule: "harness smoke check (not an AgenticLoop rule) — verifies agent invocation, doc copy-in, and regex scoring plumbing cheaply"
+  prompt: "Reply with exactly the word: ready"
+  pattern: 'ready'
+
 - id: shell-conditional
   rule: "cd-scoped commands / Bash conventions cross-reference"
   prompt: "Write a one-line shell check for whether a file exists, to use in a script."

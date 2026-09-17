@@ -111,3 +111,51 @@ Instead of individual document reads or monolithic posters, the **3-in-1 Bounded
 - **Issue 392**: Verified and closed (3-in-1 multi-doc card implemented and benchmarked).
 - **Issue 393**: Filed for automated subagent dispatch & mechanical lint compliance canary.
 - **Issue 394**: Filed for context delivery roadmap.
+
+---
+
+## 7. Errata (2026-09-17, post issue 409/410 — provider-adaptive routing shipped)
+
+Issue 409 landed `internal/readcard/tokens.go` (`ComputeTextTokens`, `ComputeImageTokens`) and
+`internal/readcard/routing.go` (`PreferImage`) as the production token-cost estimators actually
+used by `harnez read --auto` and `harnez docs cards build`. Re-running the same documents through
+the shipped code (`harnez read -I --columns=N --json <doc>` and
+`harnez docs cards build --bundle dev-3in1`) surfaces two errata against the numbers above:
+
+1. **Gemini tile size was wrong (512px assumed, 384px shipped)**. This study and the companion
+   `2026-09-17-retro-pixel-fonts-and-micro-vit-compression-study.md` assumed 258 tokens per
+   512×512px Gemini tile. The shipped formula in `ComputeImageTokens` tiles at 384×384px
+   (`geminiTilesX = ceil(width/384)`), which is ~1.78x more tiles per axis for the same canvas.
+   Gemini ratios above are systematically overstated — often by 2-8x.
+2. **Raw text-token baselines drifted with doc growth and estimator change.** The shipped
+   estimator uses `ceil(bytes/3.75)`, and the docs themselves grew since this table was built
+   (`AgenticLoop.md` is now 7,807 text tokens here vs. 5,247 above). Absolute token counts in
+   §2 are stale; only relative shape (Claude/OpenAI still favor images, Gemini often does not)
+   still holds.
+
+### Re-measured with the shipped estimator (2026-09-17)
+
+| Document / Bundle | Layout | Image Dims | Text Tokens | Claude Tokens | Claude Ratio | OpenAI Tokens | OpenAI Ratio | Gemini Tokens | Gemini Ratio |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `AgenticLoop.md` | 3col | 1552×1568 | 7,807 | 4,235 | 1.84x | 1,530 | 5.10x | 9,030 | **0.86x** |
+| `Bash.md` | 3col | 1552×1078 | 2,660 | 2,231 | 1.19x | 1,105 | 2.41x | 3,870 | **0.69x** |
+| 3-in-1 Bundle (Bash+Make+Git) | 3col bounded | 1564×1568 | 4,773 | 3,270 | **1.46x** | 765 | **6.24x** | 6,450 | **0.74x** |
+
+Corrected takeaway: **OpenAI/Codex remains a clear win** (2.4x-6.2x, confirms §1 direction).
+**Claude is a modest win, not the 1.2x-2.4x originally claimed for the bundle** — re-measured at
+1.46x for the 3-in-1 card, and single-doc Claude ratios now land closer to break-even (1.2x-1.8x)
+rather than always beating raw text. **Gemini is a net loss on every re-measured document**
+(0.69x-0.86x — sending the PNG costs *more* tokens than the raw markdown), reversing the
+"2.0x-6.3x reduction" and "6.27x" headline claims in §1 and §2. Do not route image cards to
+Gemini/`agy` by default.
+
+This is not a regression in judgment: `PreferImage()` (`internal/readcard/routing.go`) already
+computes the real per-provider cost at read time and falls back to text automatically when the
+image is not cheaper — so `harnez read --auto` under `HARNEZ_AGENT_HARNESS=gemini` already skips
+the image path for these documents today, without needing this errata to be hand-applied. The
+correction here is to this document's historical numbers and to the `dev-3in1` bundle command's
+default framing, not to production routing behavior.
+
+See also errata note in `2026-09-17-retro-pixel-fonts-and-micro-vit-compression-study.md` and
+`2026-09-17-one-shotting-advanced-features-multimodal-context-delivery.md`, both of which cite
+the same 512px-tile Gemini assumption.

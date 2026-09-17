@@ -141,3 +141,11 @@ Stress-testing critical programming syntax tokens across candidate fonts:
 - **Python Multimodal Probe**: `scripts/canary-pixel-fonts/probe.py`
 - **Runner Script**: `scripts/canary-pixel-fonts/run.sh`
 - **Test Artifacts**: `scratch/pixel-fonts/*.png` and `scratch/pixel-fonts/pixel_font_benchmark_results.json`
+
+## Errata (2026-09-17, post issue 409)
+
+All "258/tile" Gemini figures in this study assume 512×512px tiles. The provider-adaptive
+routing shipped in issue 409 (`internal/readcard/tokens.go`) tiles Gemini at 384×384px instead,
+~1.78x more tiles per axis for the same canvas. Gemini ratios in this study are overstated;
+Claude/OpenAI ratios are unaffected. See the full re-measurement and corrected numbers in
+`2026-09-17-doc-screenshots-and-vision-token-efficiency-benchmark.md` §7.

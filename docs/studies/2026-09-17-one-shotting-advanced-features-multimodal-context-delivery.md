@@ -94,3 +94,12 @@ Using `/lean-sprint` and the host-orchestrator pattern:
 - **Canary Probes**: [`scripts/canary-doc-vision/`](file:///home/uwe/projects/harnez/scripts/canary-doc-vision/), [`scripts/canary-visual-doc/`](file:///home/uwe/projects/harnez/scripts/canary-visual-doc/), [`scripts/canary-pixel-fonts/`](file:///home/uwe/projects/harnez/scripts/canary-pixel-fonts/)
 - **Production Cards**: [`docs/vision/dev-3in1.png`](file:///home/uwe/projects/harnez/docs/vision/dev-3in1.png)
 - **Associated Tickets**: Closed tickets 387, 391, 392, 393, 394, 395, 396, 397, 398, 400.
+
+## Errata (2026-09-17, post issue 409)
+
+The §82 line's "1,032 (Gemini)" / "6.3x-8.5x" figure for the 3-in-1 dev card used a 512×512px
+Gemini tile assumption. The shipped `ComputeImageTokens` (issue 409, `internal/readcard/tokens.go`)
+tiles Gemini at 384×384px, and a re-run against the current `dev-3in1` bundle measures 6,450
+Gemini tokens against 4,773 raw text tokens — a **net loss (0.74x)**, not a 6.3x win. Claude
+lands at 1.46x (not the "$1.2x-2.4x$" range implied by §1), OpenAI is confirmed strong at 6.24x.
+Full corrected table: `2026-09-17-doc-screenshots-and-vision-token-efficiency-benchmark.md` §7.
