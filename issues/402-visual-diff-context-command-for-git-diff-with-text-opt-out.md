@@ -1,4 +1,4 @@
-# 402 — Visual diff context command for git diff with text opt-out
+# 402 — Move config diff below status and free top-level harnez diff for visual git diff
 
 **Status**: Open
 **Priority**: P2 (Medium)
@@ -12,45 +12,44 @@
 
 During development sprints and pre-commit review gates (Phase 3 of AgenticLoop), reviewer subagents and orchestrators frequently inspect `git diff` or `git show` outputs. When diffs span multiple files or hundreds of lines, printing raw text diffs consumes huge amounts of token quota, risks truncation, and accelerates context window fatigue.
 
-With the retro-pixel multimodal engine in `internal/readcard`, diffs can be rendered as crisp, 2-column or 3-column syntax-highlighted visual cards (with green additions, red deletions, and context lines). This compresses large diffs by 2x to 8x while preserving complete line and symbol fidelity.
+Currently, the top-level `harnez diff` verb is reserved exclusively for global config drift against `~/.claude` (showing what `harnez apply` would change). This causes cognitive friction:
+1. Developers and agents naturally expect `harnez diff` to show repository code changes (like `git diff`).
+2. Global config drift is more logically a sub-concern of `harnez status` (e.g. `harnez status diff` or `harnez status --diff`).
 
-We need to establish the canonical place/verb in the Harnez CLI for agents to invoke visual git diffs, defaulting to visual/bounded presentation with clean text opt-outs.
-
----
-
-## 2. Verb & Placement Tradeoff Analysis
-
-| Option | Invocations | Pros | Cons |
-| :--- | :--- | :--- | :--- |
-| **A. `harnez read --diff` / `-D`** | `harnez read -D`<br>`harnez read --diff=HEAD~1`<br>`harnez read --diff --cached` | Directly leverages `harnez read`'s existing flags (`-I`, `--columns`, `--lines`, `--font`, `--tokens`). Natural mental model for "reading a diff". | Overloads `read` flag surface slightly. |
-| **B. Pipeline `git diff \| harnez read -I`** | `git diff \| harnez read -I`<br>`git diff --cached \| harnez read -I` | Zero new CLI verbs needed; pure Unix composability. Works with any git command (`git show`, `git log -p`). | Requires two sub-processes in shell instead of a single atomic tool call; agents might not remember to pipe. |
-| **C. `harnez diff --git`** | `harnez diff --git [ref]`<br>`harnez diff [ref/file]` | Uses intuitive `diff` noun. | Collides with existing `harnez diff` (which checks `apply` config drift against `~/.claude`; see `docs/CLIDesign.md` on keeping global apply/diff separate from repo concerns). |
-| **D. `harnez review diff` / `harnez git diff`** | `harnez review diff`<br>`harnez git diff` | Explicit domain namespace for review workflows. | Adds a new subcommand tree. |
-
-**Recommendation**: Support **Option A (`harnez read --diff` / `-D`)** as the primary direct command, while also ensuring **Option B (`git diff | harnez read -I`)** has full unified diff syntax highlighting and auto-detection in `internal/readcard/lexer.go`.
+By moving global config drift inspection under `harnez status diff` (with alias/flag `harnez status --diff`), we **free the top-level `harnez diff` verb**. `harnez diff` can then become the dedicated command for repository/git diffs, rendering dense visual cards by default with clean `--raw` / `--text` / `--json` opt-outs.
 
 ---
 
-## 3. Proposed Behavior & Opt-Outs
+## 2. Architectural Design
 
-1. **Default Presentation**:
-   - `harnez read --diff` (or `-D`): Inspects working tree diff against HEAD (supporting `--cached`/`--staged` or specific revisions/files).
-   - In interactive / agent sessions with vision enabled, emits a dense, bounded retro-pixel PNG card (`-I` behavior by default).
-2. **Opt-Out Mechanics**:
-   - `--raw` / `--text`: Output raw unified diff text.
-   - `--json`: Output structured JSON metadata with per-file hunks and token stats.
-3. **Syntax Highlighting & Formatting**:
-   - Add unified diff lexing support (`+` green, `-` red, `@@` cyan/magenta headers) to `internal/readcard/lexer.go`.
-4. **Pipe / Non-TTY Auto-Fallback**:
-   - When piped to a file or downstream command, default to standard text output.
+### 2.1 Moving Global Config Drift to `harnez status diff`
+- `harnez status diff` (and `harnez status -d / --diff`): Shows what `harnez apply` would change in managed blocks across `~/.claude`, hooks, commands, settings, and docs.
+- Preserves all existing flags: `--exit-code` (`-e`), `--capture-docs`, `--out`, `-c`, `-t`.
+- Deprecate / migrate the old `harnez diff` config command cleanly.
+
+### 2.2 Top-Level `harnez diff` for Code & Git Diffs
+- **Signature**: `harnez diff [flags] [git-ref / files...]`
+- **Default Output**: Dense, syntax-highlighted visual card (`-I`) using retro pixel fonts (`Font5x8`), bounded within ViT dimensions, with column wrapping.
+- **Flags Supported**:
+  - `--cached` / `--staged`: Show staged changes.
+  - `--raw` / `--text`: Opt out of visual cards and print standard unified diff text.
+  - `--json`: Emit structured JSON metadata with hunks, affected files, and token stats.
+  - `-c, --columns`: Column count for visual layout (1-4, auto).
+  - `--font`, `--font-size`, `--theme`, `--tokens`.
+- **Pipeline & Non-TTY Detection**:
+  - When stdout is piped to a file or Unix command, automatically defaults to text output unless `-I` is explicitly passed.
+
+### 2.3 Syntax Highlighting in `internal/readcard/lexer.go`
+- Add unified diff lexer to colorize additions (`+` green), deletions (`-` red), hunk headers (`@@` cyan), and file metadata headers.
 
 ---
 
-## 4. Acceptance Criteria
+## 3. Acceptance Criteria
 
-- [ ] Add unified diff lexer/highlighter to `internal/readcard/lexer.go`.
-- [ ] Add `--diff` / `-D` flag (and `--cached` / `--staged` support) to `harnez read`.
-- [ ] Ensure piped stdin (`git diff | harnez read -I`) correctly detects diff syntax and renders visual cards.
-- [ ] Provide `--raw`, `--text`, and `--json` opt-outs.
-- [ ] Add unit and CLI tests in `internal/readcard/` and `cmd/harnez/read_test.go`.
-- [ ] Update `AGENTS.md` and `docs/practices/AgenticLoop.md` Phase 3 (Pre-Commit Review Gate) with guidance to use visual diffs during reviews.
+- [ ] Move global apply drift command to `harnez status diff` (and support `harnez status --diff`).
+- [ ] Implement top-level `harnez diff` wrapping git diff with visual card default.
+- [ ] Support `--cached`, `--staged`, `--raw`, `--text`, `--json`, and file/ref arguments.
+- [ ] Add unified diff syntax highlighting in `internal/readcard/lexer.go`.
+- [ ] Auto-fallback to text mode when stdout is non-TTY / piped.
+- [ ] Add unit and CLI tests in `cmd/harnez/diff_test.go` and `cmd/harnez/status_test.go`.
+- [ ] Update documentation (`docs/CLIDesign.md`, `AGENTS.md`, `docs/practices/AgenticLoop.md`).
