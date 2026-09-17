@@ -384,3 +384,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 383 | [383-disable-queued-question-tool-prompts-in-codex-sessions.md](383-disable-queued-question-tool-prompts-in-codex-sessions.md) | Disable queued question tool prompts in Codex sessions | Open |
 | 384 | [384-harnez-assess-directory-validation-and-d-dir-flag-support.md](384-harnez-assess-directory-validation-and-d-dir-flag-support.md) | harnez assess directory validation and -d/--dir flag support | Open |
 | 385 | [385-tokens-command-to-count-tokens-in-files-and-directories.md](385-tokens-command-to-count-tokens-in-files-and-directories.md) | Tokens command to count tokens in files and directories | Open |
+| 386 | [386-strip-eager-global-doc-includes-from-global-claude-md-template.md](386-strip-eager-global-doc-includes-from-global-claude-md-template.md) | Strip eager global doc includes from global CLAUDE.md template | Open |
