@@ -748,7 +748,7 @@ func measureCost() error {
 		return fmt.Errorf("--delivery=png is not valid with --link=embed (embed inlines text; a PNG has no text form to inline)")
 	}
 
-	prompt := fmt.Sprintf("Task:\n%s", target.Prompt)
+	prompt := fmt.Sprintf("Read AGENTS.md first, then complete this task:\n%s", target.Prompt)
 
 	const rule = "────────────────────────────────────────────────────────────────"
 	fmt.Println(rule)
@@ -777,6 +777,11 @@ func measureCost() error {
 		}
 		docs := []string{docPath}
 		docs = append(docs, fixtureDocs(repoRoot, flagCostVariant, *target)...)
+		fmt.Println("  expected context docs")
+		fmt.Println("    AGENTS.md")
+		for _, ref := range expectedContextDocs(docs, flagCostDelivery) {
+			fmt.Printf("    %s\n", ref)
+		}
 		if err := setupLinkedWorkspace(work, repoRoot, docs, flagCostLink, flagCostDelivery); err != nil {
 			fmt.Printf("  FAIL  setup workspace: %v\n", err)
 			os.RemoveAll(work)
@@ -864,6 +869,18 @@ func measureCost() error {
 		return fmt.Errorf("one or more agents failed to report a cost baseline")
 	}
 	return nil
+}
+
+func expectedContextDocs(docs []string, delivery string) []string {
+	refs := make([]string, 0, len(docs))
+	for _, doc := range docs {
+		name := filepath.Base(doc)
+		if delivery == "png" {
+			name = strings.TrimSuffix(name, filepath.Ext(name)) + ".png"
+		}
+		refs = append(refs, name)
+	}
+	return refs
 }
 
 func imageTokenEstimate(path, agent string) int {
