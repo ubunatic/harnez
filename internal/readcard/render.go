@@ -143,8 +143,8 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 			maxLineLen = len(l)
 		}
 	}
-	if maxLineLen < 40 {
-		maxLineLen = 40
+	if maxLineLen < 35 {
+		maxLineLen = 35
 	}
 	if maxLineLen > 120 {
 		maxLineLen = 120 // wrap line column visually at 120 chars
@@ -209,6 +209,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	lang := DetectLanguage(filename)
 
 	var inMultiComment bool
+	firstCardHeight := 0
 
 	for page := 0; page < totalPages; page++ {
 		pageStartLineIdx := page * linesPerPage
@@ -232,6 +233,9 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		}
 		if cardHeight < 120 {
 			cardHeight = 120
+		}
+		if page == 0 {
+			firstCardHeight = cardHeight
 		}
 
 		img := image.NewRGBA(image.Rect(0, 0, cardWidth, cardHeight))
@@ -259,12 +263,16 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		}
 
 		// Render Columns
+		stride := pageColLines
+		if stride < 1 {
+			stride = 1
+		}
 		for c := 0; c < cols; c++ {
-			cStartIdx := c * linesPerCol
+			cStartIdx := c * stride
 			if cStartIdx >= len(pageLines) {
 				break
 			}
-			cEndIdx := cStartIdx + linesPerCol
+			cEndIdx := cStartIdx + stride
 			if cEndIdx > len(pageLines) {
 				cEndIdx = len(pageLines)
 			}
@@ -332,7 +340,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	// Compute token stats
 	allText := strings.Join(lines, "\n")
 	textStats := ComputeTextTokens(allText)
-	imageStats := ComputeImageTokens(textStats.TextTokens, textStats.TextBytes, cardWidth, headerHeight+(paddingY*2)+(linesPerCol*lineHeight), totalPages)
+	imageStats := ComputeImageTokens(textStats.TextTokens, textStats.TextBytes, cardWidth, firstCardHeight, totalPages)
 
 	primary := ""
 	if len(outputPaths) > 0 {
@@ -342,7 +350,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	return &RenderResult{
 		Files:       outputPaths,
 		Width:       cardWidth,
-		Height:      headerHeight + (paddingY * 2) + (linesPerCol * lineHeight),
+		Height:      firstCardHeight,
 		Columns:     cols,
 		TotalLines:  totalLines,
 		TotalPages:  totalPages,

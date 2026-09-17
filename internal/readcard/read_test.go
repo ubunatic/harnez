@@ -1,8 +1,10 @@
 package readcard
 
 import (
+	"fmt"
 	"image"
 	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -335,6 +337,117 @@ func TestRenderIssuesMatrixCard(t *testing.T) {
 		t.Errorf("expected CheckCard to pass on issues matrix card: %v", checkRes.Error)
 	}
 }
+
+func TestRenderFileToCards_MultiColumnDistribution(t *testing.T) {
+	testCases := []struct {
+		name      string
+		lineCount int
+		cols      int
+	}{
+		{"85 lines 2 cols", 85, 2},
+		{"133 lines 2 cols", 133, 2},
+		{"250 lines 3 cols", 250, 3},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			outPath := filepath.Join(tmpDir, "card.png")
+
+			lines := make([]string, tc.lineCount)
+			for i := 0; i < tc.lineCount; i++ {
+				lines[i] = fmt.Sprintf("const Item%03d = %d // sample value", i+1, i+1)
+			}
+
+			res, err := RenderFileToCards(lines, "items.go", RenderOptions{
+				OutputPath:      outPath,
+				Columns:         tc.cols,
+				FontSize:        11,
+				ShowLineNumbers: true,
+			})
+			if err != nil {
+				t.Fatalf("RenderFileToCards failed: %v", err)
+			}
+
+			if len(res.Files) == 0 {
+				t.Fatalf("expected generated files")
+			}
+
+			// Open first page
+			f, err := os.Open(res.Files[0])
+			if err != nil {
+				t.Fatalf("failed to open generated card %s: %v", res.Files[0], err)
+			}
+			defer f.Close()
+
+			img, err := png.Decode(f)
+			if err != nil {
+				t.Fatalf("failed to decode png %s: %v", res.Files[0], err)
+			}
+
+			bounds := img.Bounds()
+			if bounds.Dx() != res.Width || bounds.Dy() != res.Height {
+				t.Errorf("decoded image bounds (%dx%d) != result (%dx%d)", bounds.Dx(), bounds.Dy(), res.Width, res.Height)
+			}
+
+			// Check column 1 (second column) contains non-background pixels (rendered text)
+			col1StartX := (res.Width / tc.cols) + 10
+			col1EndX := res.Width - 16
+			col1StartY := 45
+			col1EndY := res.Height - 10
+
+			bg := DarkTheme.Bg
+			foundTextInCol1 := false
+			for y := col1StartY; y < col1EndY; y++ {
+				for x := col1StartX; x < col1EndX; x++ {
+					r, g, b, _ := img.At(x, y).RGBA()
+					r8, g8, b8 := uint8(r>>8), uint8(g>>8), uint8(b>>8)
+					if r8 != bg.R || g8 != bg.G || b8 != bg.B {
+						foundTextInCol1 = true
+						break
+					}
+				}
+				if foundTextInCol1 {
+					break
+				}
+			}
+
+			if !foundTextInCol1 {
+				t.Errorf("expected rendered text in column 1, but area was completely empty/background")
+			}
+		})
+	}
+}
+
+func TestRenderFileToCards_CroppedWidth(t *testing.T) {
+	tmpDir := t.TempDir()
+	outPath := filepath.Join(tmpDir, "short.png")
+
+	lines := []string{
+		"a = 1",
+		"b = 2",
+		"c = 3",
+	}
+
+	res, err := RenderFileToCards(lines, "short.py", RenderOptions{
+		OutputPath:      outPath,
+		Columns:         1,
+		FontSize:        11,
+		ShowLineNumbers: true,
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+
+	// Should be tightly cropped, well under 600px, not 1568px
+	if res.Width > 600 {
+		t.Errorf("expected tightly cropped card width < 600px for short lines, got %d px", res.Width)
+	}
+	if res.Height > 300 {
+		t.Errorf("expected tightly cropped card height < 300px for 3 lines, got %d px", res.Height)
+	}
+}
+
 
 
 

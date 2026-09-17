@@ -326,6 +326,18 @@ func countFileLines(path string) (int, error) {
 	return lines, nil
 }
 
+// isBinaryMedia reports whether path is a binary media file (image/video/audio/pdf)
+// that is intended to be inspected by visual multimodal tools without line counts.
+func isBinaryMedia(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".ico", ".svg", ".pdf", ".mp4", ".webm", ".mp3", ".wav":
+		return true
+	default:
+		return false
+	}
+}
+
 // evaluateReadToolDiscipline checks if a tool invocation on a target file violates
 // Reading & Context Discipline (file >= 100 lines or range >= 100 lines or unconstrained whole-file read of a >=100 line file).
 func evaluateReadToolDiscipline(toolName string, args map[string]any, baseDir string) (bool, string) {
@@ -345,6 +357,10 @@ func evaluateReadToolDiscipline(toolName string, args map[string]any, baseDir st
 		target := p
 		if !filepath.IsAbs(target) && baseDir != "" {
 			target = filepath.Join(baseDir, target)
+		}
+		if isBinaryMedia(target) {
+			// Binary media (e.g. PNG context cards) are visual inputs, not text files.
+			continue
 		}
 		totalLines, err := countFileLines(target)
 		if err != nil {
