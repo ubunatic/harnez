@@ -42,6 +42,14 @@ func commitIssueIndex(t *testing.T, dir, message string) {
 
 func TestIssuesRebaseRepairsIndependentTicketCollisions(t *testing.T) {
 	dir := t.TempDir()
+	t.Cleanup(func() {
+		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err == nil {
+				_ = os.Chmod(path, 0o777)
+			}
+			return nil
+		})
+	})
 	gitTestRun(t, dir, "init", "-b", "main")
 	gitTestRun(t, dir, "config", "user.name", "Test")
 	gitTestRun(t, dir, "config", "user.email", "test@example.invalid")
