@@ -71,6 +71,7 @@ var (
 	flagHard         bool
 	flagEmbed        bool
 	flagRM           bool
+	flagVerbose      bool
 )
 
 // validDeliveryModes are the supported --delivery values controlling whether
@@ -243,6 +244,7 @@ func main() {
 	runCmd.Flags().BoolVar(&flagHard, "hard", false, "use eager document links")
 	runCmd.Flags().BoolVar(&flagEmbed, "embed", false, "embed document text directly")
 	runCmd.Flags().BoolVar(&flagRM, "rm", false, "remove the temporary workspace after the run")
+	runCmd.Flags().BoolVar(&flagVerbose, "verbose", false, "show the full agent response")
 
 	fixturesCmd := &cobra.Command{
 		Use:   "fixtures",
@@ -572,6 +574,9 @@ func runFixture(repoRoot string, ag agentCLI, v docVariant, fx fixture, link, de
 	}
 	if strings.TrimSpace(out) == "" {
 		return result{agent: ag.name, variant: v.name, id: fx.ID, status: skip, detail: "empty response from " + ag.name}
+	}
+	if flagVerbose {
+		fmt.Printf("[%s/%s/%s] response:\n%s\n", ag.name, v.name, fx.ID, out)
 	}
 
 	var notes []string
@@ -1013,7 +1018,11 @@ func measureCost() error {
 		}
 
 		fmt.Printf("  score        %s\n", status)
-		fmt.Printf("  response     %s\n", truncate(clean, 300))
+		if flagVerbose {
+			fmt.Printf("  response:\n%s\n", clean)
+		} else {
+			fmt.Printf("  response     %s\n", truncate(clean, 300))
+		}
 		fmt.Println("  token use")
 		fmt.Printf("    %-16s %8d\n", "first-turn", usage.firstTurnTokens())
 		fmt.Printf("    %-16s %8d\n", "total", usage.totalTokens())
