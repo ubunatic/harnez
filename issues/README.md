@@ -383,3 +383,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 382 | [382-make-user-shell-shortcuts-available-to-codex-claude-agy-and-other-agents.md](382-make-user-shell-shortcuts-available-to-codex-claude-agy-and-other-agents.md) | Make user shell shortcuts available to Codex, Claude, AGY, and other agents | Open |
 | 383 | [383-disable-queued-question-tool-prompts-in-codex-sessions.md](383-disable-queued-question-tool-prompts-in-codex-sessions.md) | Disable queued question tool prompts in Codex sessions | Open |
 | 384 | [384-harnez-assess-directory-validation-and-d-dir-flag-support.md](384-harnez-assess-directory-validation-and-d-dir-flag-support.md) | harnez assess directory validation and -d/--dir flag support | Open |
+| 385 | [385-tokens-command-to-count-tokens-in-files-and-directories.md](385-tokens-command-to-count-tokens-in-files-and-directories.md) | Tokens command to count tokens in files and directories | Open |
