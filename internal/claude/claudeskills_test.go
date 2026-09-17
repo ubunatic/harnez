@@ -265,3 +265,90 @@ func TestSafeSkillPathRejectsSymlinkComponents(t *testing.T) {
 		t.Fatalf("safeSkillPath error = %v, want symlink rejection", err)
 	}
 }
+
+func TestUnifiedCrossHarnessSkillTargets(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	claudeSkills := filepath.Join(home, ".claude", "skills")
+	geminiSkills := filepath.Join(home, ".gemini", "skills")
+	codexSkills := filepath.Join(home, ".codex", "skills")
+	primeSkills := filepath.Join(home, ".prime", "agent", "skills")
+
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	targets := skillTargets(cfg)
+	expectedTargets := []string{
+		geminiSkills,
+		codexSkills,
+		claudeSkills,
+		primeSkills,
+	}
+	if len(targets) != len(expectedTargets) {
+		t.Fatalf("skillTargets() returned %d targets, want %d: %v", len(targets), len(expectedTargets), targets)
+	}
+	for i, expected := range expectedTargets {
+		if targets[i] != expected {
+			t.Errorf("skillTargets()[%d] = %q, want %q", i, targets[i], expected)
+		}
+	}
+
+	targetDir := filepath.Join(home, ".claude")
+	cfg.AgentsMD.Global.Target = filepath.Join(targetDir, "CLAUDE.md")
+	cfg.AgentsMD.Global.Symlink = ""
+	cfg.AgentsMD.Agents = nil
+	cfg.CodexHooksTarget = filepath.Join(home, ".codex", "config.toml")
+	cfg.AgyHooksTarget = filepath.Join(home, ".gemini", "config", "hooks.json")
+	cfg.DistillAutopipe.PiExtensionTarget = filepath.Join(home, ".pi", "agent", "extensions", "harnez-distill.ts")
+	cfg.DistillAutopipe.OpenCodePluginTarget = filepath.Join(home, ".config", "opencode", "plugins", "harnez-distill.ts")
+
+	if err := ApplyAll(targetDir, cfg, nil, false, false); err != nil {
+		t.Fatalf("ApplyAll failed: %v", err)
+	}
+
+	// Verify all skills exist across all 4 targets
+	for _, target := range expectedTargets {
+		for _, skill := range cfg.Skills {
+			skillMd := filepath.Join(target, skill.Name, "SKILL.md")
+			data, err := os.ReadFile(skillMd)
+			if err != nil {
+				t.Fatalf("target %s missing skill %s: %v", target, skill.Name, err)
+			}
+			content := string(data)
+			if !strings.HasPrefix(content, "---\nname: \""+skill.Name+"\"\n") {
+				t.Errorf("skill %s in %s missing proper frontmatter: %s", skill.Name, target, content)
+			}
+		}
+		// Check docup resources in all targets
+		docupRes := filepath.Join(target, "docup", "references", "DocupTesting.md")
+		if _, err := os.Stat(docupRes); err != nil {
+			t.Errorf("target %s missing DocupTesting resource: %v", target, err)
+		}
+	}
+
+	// Diff immediately after apply should show no changes
+	changed, err := DiffAll(targetDir, cfg)
+	if err != nil {
+		t.Fatalf("DiffAll failed: %v", err)
+	}
+	if changed {
+		t.Errorf("DiffAll reported changes immediately after ApplyAll")
+	}
+
+	// CleanAll removes all skills across all 4 targets
+	if err := CleanAll(targetDir, cfg); err != nil {
+		t.Fatalf("CleanAll failed: %v", err)
+	}
+	for _, target := range expectedTargets {
+		for _, skill := range cfg.Skills {
+			skillMd := filepath.Join(target, skill.Name, "SKILL.md")
+			if _, err := os.Stat(skillMd); err == nil || !os.IsNotExist(err) {
+				t.Errorf("skill %s in %s still exists after CleanAll", skill.Name, target)
+			}
+		}
+	}
+}
+
