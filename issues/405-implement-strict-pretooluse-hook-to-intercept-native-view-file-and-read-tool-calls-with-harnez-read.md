@@ -1,6 +1,6 @@
 # 405 — Implement strict PreToolUse hook to intercept native view_file and Read tool calls with harnez read
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Hooks & PreToolUse / Reading Discipline
@@ -46,9 +46,9 @@ Prompt-only instructions in `AGENTS.md` and system prompts provide essential gui
 
 ## 3. Acceptance Criteria
 
-- [ ] Proactive reading discipline tip integrated into `internal/sessionstate/` for `harnez find` and `harnez issues`.
-- [ ] PreToolUse hook definition implemented in `internal/claude/` (and corresponding cross-harness definitions in `internal/agy/`).
-- [ ] Hook intercepts native file-read tools when target files exceed line threshold or when unbounded reads occur.
-- [ ] Clear error/redirect feedback guiding the agent to `harnez read -I` or `harnez read -L -n`.
-- [ ] Unit tests in `cmd/harnez/` and `internal/claude/` verifying hook generation, matchers, and session tips.
-- [ ] End-to-end verification proving that agents attempting `view_file` on large files are redirected to `harnez read`.
+- [x] Proactive reading discipline tip integrated into `internal/sessionstate/` for `harnez find` and `harnez issues`.
+- [x] PreToolUse hook definition implemented in `internal/claude/` (and corresponding cross-harness definitions in `internal/agy/`).
+- [x] Hook intercepts native file-read tools when target files exceed line threshold or when unbounded reads occur.
+- [x] Clear error/redirect feedback guiding the agent to `harnez read -I` or `harnez read -L -n`.
+- [x] Unit tests in `cmd/harnez/` and `internal/claude/` verifying hook generation, matchers, and session tips.
+- [x] End-to-end verification proving that agents attempting `view_file` on large files are redirected to `harnez read`.
