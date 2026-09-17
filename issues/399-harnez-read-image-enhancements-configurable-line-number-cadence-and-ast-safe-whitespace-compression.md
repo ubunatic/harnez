@@ -1,6 +1,6 @@
 # 399 — harnez read image enhancements: configurable line-number cadence and AST-safe whitespace compression
 
-**Status**: Open
+**Status**: Closed — implemented and tested: line-numbers cadence and ws/ast compression verified manually and via TestCompressionPreservesSyntaxAndAnchors, TestCadenceOriginalLines
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: CLI & Tooling / Context Optimization
