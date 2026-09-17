@@ -471,55 +471,6 @@ skills:
 
 agents_md:
   # config for local md file
-  global:
-    target: ~/.claude/CLAUDE.md
-    symlink: ~/AGENTS.md
-    sections:
-      - name: Instructions Hierarchy
-        content: |
-          - This is the global agent instructions file.
-          - Every project must have a local AGENTS.md that defines its rules.
-            Claude Code also discovers it through a local CLAUDE.md symlink.
-            If the local instructions file is missing, report this to the user.
-          - If local AGENTS.md does not define language rules, report it to the user.
-          - Local rules may refer to global docs managed by harnez.
-            Resolve local @docs or @rules refs to ./docs or ./rules first,
-            then to the active harness directory (~/.claude or ~/.prime/agent).
-          - Context Discipline: avoid whole-file reads on active system-prompt files (AGENTS.md,
-            CLAUDE.md); use grep or range-bounded reads (AgenticLoop Invariant 6).
-          - Editing Discipline & Issue Tracker Discovery: for a harnez-tracked project
-            (`issues/` present), see that project's AGENTS.md "Harnez Managed Conventions"
-            block for `apply_patch`-preferred editing and `harnez find`/`harnez issues` usage.
-          - Voice Input: the user may use speech-to-text (ASR); interpret phonetic homophones and transcription anomalies with context awareness.
-          - Always use absolute file paths for global instructions.
-            Always use relative file paths for local instructions.
-          - Minimal Global Docs: keep this global file free of anything not relevant to every
-            project — it applies everywhere and is glue between local and global docs only,
-            steering the agentic setup rather than carrying project-specific content.
-          - Working-Directory Hygiene: prefer `make -C`/`git -C`/absolute paths or a subshell
-            `(cd dir && cmd)` over bare `cd`; if you must `cd`, return to the starting directory
-            before the tool call ends — the shell may be shared with the user's own terminal (see docs/Bash.md §8).
-      - name: Tool Feedback Protocol
-        rate_feedback: true
-        content: |
-          ### Tool Feedback Protocol
-          Harnez-tracked projects only (`issues/` present); omit ticket or skip otherwise.
-          Rate a call only when it failed or produced an unexpected outcome — not routine successes:
-          `harnez rate <tool_name> <1-5> "<1-line outcome summary>" "<project_folder>/<ticket_name>"`
-          Example: `harnez rate Grep 1 "missed target, wrong file" harnez/117-harnez-rate-command`
-          Score 5 flawless, 3 partial, 1 useless.
-          If prompted after a long quiet stretch and nothing has failed, confirm with
-          `harnez rate --ok` instead of staying silent — no tool name, score, or ticket required.
-      - name: Agent-Filed Feedback
-        content: |
-          ### Agent-Filed Feedback (harnez feedback)
-          Harnez-tracked projects only. When you observe a genuine harnez bug or a
-          broken/contradictory instruction — not routine friction, uncertainty, or
-          anything you could resolve by asking — record it:
-          `harnez feedback issue "<description>" [--severity bug|instruction]`
-          Do not call this for routine friction; see `harnez feedback list` to review past entries.
-
-  # config for local md file
   local:
     target: AGENTS.md
     symlink: CLAUDE.md
@@ -567,29 +518,6 @@ agents_md:
           reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads), and Invariant 7
           (Media & Demo Verification Gate: explicit user confirmation before publishing
           recordings or screenshots).
-
-  # agent-specific instruction profiles (issue 149): each key is an agent id
-  # with its own owned target file, scoped to exactly that agent. Nothing
-  # here reaches ~/.claude/CLAUDE.md, AGENTS.md, or ~/.prime/agent/AGENTS.md.
-  # Rule: shared behavior goes in `global`; a correction that would be inert
-  # or wrong for another agent goes here under `agents.<id>`.
-  agents:
-    codex:
-      target: ~/.codex/AGENTS.md
-      sections:
-        - name: Background Job Waiting
-          content: |
-            ### Background Job Waiting
-            Codex has no host-notified subagent/background-job completion callback like
-            Claude Code's. `codex agents` only lets you browse agent sessions on the shared
-            local app-server daemon, and `codex queue` only queues a message into an existing
-            session — neither is an event-driven completion notification. Verified against
-            codex-cli 0.153.4: no such primitive exists yet.
-            Do not spin a tight polling loop waiting on a background task or subagent. If you
-            must wait on one, use a bounded/backoff poll (increasing delay between checks, with
-            a maximum number of attempts or a maximum wait time) against `codex agents` rather
-            than a fixed tight loop, and prefer surfacing the wait to the user instead of
-            blocking silently.
 
   # available language docs — always installed to ~/.claude/docs/ on apply
   # use --docs <name>,<name> to copy into a project and update its AGENTS.md

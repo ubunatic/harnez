@@ -533,6 +533,29 @@ var codeSubdirectories = map[string]struct{}{
 }
 
 func isEligibleProjectDir(dir string) bool {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		abs = dir
+	}
+	if home, herr := os.UserHomeDir(); herr == nil {
+		if homeAbs, aerr := filepath.Abs(home); aerr == nil {
+			if abs == homeAbs {
+				return false
+			}
+			globalRoots := []string{
+				filepath.Join(homeAbs, ".claude"),
+				filepath.Join(homeAbs, ".prime"),
+				filepath.Join(homeAbs, ".codex"),
+				filepath.Join(homeAbs, ".gemini"),
+			}
+			for _, root := range globalRoots {
+				if abs == root || strings.HasPrefix(abs, root+string(filepath.Separator)) {
+					return false
+				}
+			}
+		}
+	}
+
 	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
 		return true
 	}
@@ -582,25 +605,38 @@ func isEligibleProjectDir(dir string) bool {
 }
 
 // ValidateInitTarget checks whether dir is safe to initialize.
-// It refuses the user's home directory, root directory, or non-coding directory unless force is true.
+// It refuses the user's home directory, root directory, global agent config roots, or non-coding directory unless force is true.
 func ValidateInitTarget(dir string, force bool) error {
-	if force {
-		return nil
-	}
-
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return fmt.Errorf("resolve directory: %w", err)
 	}
 
 	if home, herr := os.UserHomeDir(); herr == nil {
-		if homeAbs, aerr := filepath.Abs(home); aerr == nil && abs == homeAbs {
-			return fmt.Errorf("refusing to run init directly on home directory %s; use --force to override", abs)
+		if homeAbs, aerr := filepath.Abs(home); aerr == nil {
+			if abs == homeAbs {
+				return fmt.Errorf("refusing to run init directly on home directory %s; use --force to override", abs)
+			}
+			globalRoots := []string{
+				filepath.Join(homeAbs, ".claude"),
+				filepath.Join(homeAbs, ".prime"),
+				filepath.Join(homeAbs, ".codex"),
+				filepath.Join(homeAbs, ".gemini"),
+			}
+			for _, root := range globalRoots {
+				if abs == root || strings.HasPrefix(abs, root+string(filepath.Separator)) {
+					return fmt.Errorf("refusing to run init on global agent directory %s: global agent roots are user-owned instruction locations and must not be initialized as projects", abs)
+				}
+			}
 		}
 	}
 
 	if abs == "/" || filepath.Dir(abs) == abs {
 		return fmt.Errorf("refusing to run init directly on root directory %s; use --force to override", abs)
+	}
+
+	if force {
+		return nil
 	}
 
 	if !isEligibleProjectDir(abs) {

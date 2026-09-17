@@ -110,8 +110,8 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(primeAgentDir, "prompts", "review.md")); err != nil {
 		t.Fatalf("Expected Prime Agent review prompt to be written: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(primeAgentDir, "AGENTS.md")); err != nil {
-		t.Fatalf("Expected Prime Agent rules to be written: %v", err)
+	if _, err := os.Stat(filepath.Join(primeAgentDir, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("Expected Prime Agent AGENTS.md to NOT be written: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(primeAgentDir, "docs", "Go.md")); !os.IsNotExist(err) {
 		t.Fatalf("Expected Prime Agent doc to NOT be written by default bare ApplyAll: %v", err)
@@ -233,8 +233,8 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if !strings.Contains(out, filepath.Join(primeAgentDir, "prompts", "standup.md")) {
 		t.Errorf("Expected RunStatus to list Prime Agent prompt target, got:\n%s", out)
 	}
-	if !strings.Contains(out, filepath.Join(primeAgentDir, "AGENTS.md")) {
-		t.Errorf("Expected RunStatus to list Prime Agent rules target, got:\n%s", out)
+	if strings.Contains(out, filepath.Join(primeAgentDir, "AGENTS.md")) {
+		t.Errorf("Expected RunStatus to NOT list Prime Agent rules target, got:\n%s", out)
 	}
 	if strings.Contains(out, filepath.Join(primeAgentDir, "docs", "Go.md")) {
 		t.Errorf("Expected RunStatus to NOT list Prime Agent docs target by default, got:\n%s", out)

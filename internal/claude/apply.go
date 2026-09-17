@@ -920,112 +920,6 @@ func ApplyAllVariant(target string, cfg *Config, docs []string, forceDocs bool, 
 
 	disableRateFeedback := RateFeedbackDisabled(cfg, nil)
 
-	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
-		gTarget := fsutil.ExpandHome(g.Target)
-		ruleTargets := []string{gTarget}
-		if root := primeAgentRoot(cfg); root != "" {
-			ruleTargets = appendUniquePath(ruleTargets, filepath.Join(root, "AGENTS.md"))
-		}
-		for _, ruleTarget := range ruleTargets {
-			gr := applyResult{}
-			var presentNames []string
-			for _, s := range g.Sections {
-				// issue 142: a rate_feedback-gated section is actively
-				// removed (not merely skipped) when disabled, so toggling
-				// the flag off cleans up a previously-installed instruction
-				// rather than leaving it stale on the next apply.
-				if s.RateFeedback && disableRateFeedback {
-					removed, cleaned, err := markdown.Clean(ruleTarget, s.Name)
-					if err != nil {
-						return fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
-					}
-					if removed || cleaned {
-						gr.changed = true
-						gr.notes = append(gr.notes, s.Name+": removed (rate feedback disabled)")
-					}
-					continue
-				}
-				r, err := applySectionMD(ruleTarget, s.Name, s.Content)
-				if err != nil {
-					return fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
-				}
-				if r.changed {
-					gr.changed = true
-					gr.notes = append(gr.notes, r.notes...)
-				} else {
-					presentNames = append(presentNames, s.Name)
-				}
-			}
-			if gr.changed {
-				changes++
-			}
-			printResult("wrote", ruleTarget, gr)
-			addStat(fsutil.ContractHome(ruleTarget), strings.Join(presentNames, ", "))
-		}
-
-		if g.Symlink != "" {
-			link := fsutil.ExpandHome(g.Symlink)
-			lr, err := ensureSymlink(link, gTarget)
-			if err != nil {
-				return fmt.Errorf("agents_md.global symlink: %w", err)
-			}
-			if lr.changed {
-				changes++
-				fmt.Printf("  symlink %s → %s\n", link, gTarget)
-			}
-		}
-	}
-
-	// agents_md.agents (issue 149): agent-specific instruction profiles, one
-	// owned file per agent id, scoped to exactly that agent. Skip an entry
-	// whose parent dir does not exist — same soft-skip posture as
-	// primeAgentRoot returning "" — so we never create ~/.codex (or similar)
-	// for a user who does not run that agent.
-	for _, id := range sortedAgentIDs(cfg.AgentsMD.Agents) {
-		a := cfg.AgentsMD.Agents[id]
-		if len(a.Sections) == 0 {
-			continue
-		}
-		aTarget := fsutil.ExpandHome(a.Target)
-		if aTarget == "" {
-			continue
-		}
-		if _, err := os.Stat(filepath.Dir(aTarget)); err != nil {
-			continue
-		}
-		errCtx := fmt.Sprintf("agents_md.agents[%s]", id)
-		ar := applyResult{}
-		var presentNames []string
-		for _, s := range a.Sections {
-			if s.RateFeedback && disableRateFeedback {
-				removed, cleaned, err := markdown.Clean(aTarget, s.Name)
-				if err != nil {
-					return fmt.Errorf("%s %s [%s]: %w", errCtx, aTarget, s.Name, err)
-				}
-				if removed || cleaned {
-					ar.changed = true
-					ar.notes = append(ar.notes, s.Name+": removed (rate feedback disabled)")
-				}
-				continue
-			}
-			r, err := applySectionMD(aTarget, s.Name, s.Content)
-			if err != nil {
-				return fmt.Errorf("%s %s [%s]: %w", errCtx, aTarget, s.Name, err)
-			}
-			if r.changed {
-				ar.changed = true
-				ar.notes = append(ar.notes, r.notes...)
-			} else {
-				presentNames = append(presentNames, s.Name)
-			}
-		}
-		if ar.changed {
-			changes++
-		}
-		printResult("wrote", aTarget, ar)
-		addStat(fsutil.ContractHome(aTarget), strings.Join(presentNames, ", "))
-	}
-
 	if len(cfg.Commands) > 0 {
 		cmdDirs := commandTargets(target, cfg)
 		for _, cmdDir := range cmdDirs {
@@ -1332,57 +1226,6 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 	}
 	disableRateFeedback := RateFeedbackDisabled(cfg, nil)
 
-	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
-		ruleTargets := []string{fsutil.ExpandHome(g.Target)}
-		if root := primeAgentRoot(cfg); root != "" {
-			ruleTargets = appendUniquePath(ruleTargets, filepath.Join(root, "AGENTS.md"))
-		}
-		for _, ruleTarget := range ruleTargets {
-			for _, s := range g.Sections {
-				if s.RateFeedback && disableRateFeedback {
-					// Disabled: drift means the gated section is still
-					// present and needs removal, not a content mismatch
-					// against s.Content.
-					if markdown.ContainsSection(ruleTarget, s.Name) {
-						anyChanged = true
-					}
-					continue
-				}
-				if err := report(diffSectionMD(ruleTarget, s.Name, s.Content)); err != nil {
-					return false, fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
-				}
-			}
-		}
-	}
-	// agents_md.local.Sections are applied by `init` (project scaffolding),
-	// never by ApplyAll (global apply) — see buildAgentProfileTestConfig's doc comment.
-	// DiffAll must not report drift here: it would be drift ApplyAll can
-	// never resolve, since it doesn't write this target at all.
-	for _, id := range sortedAgentIDs(cfg.AgentsMD.Agents) {
-		a := cfg.AgentsMD.Agents[id]
-		if len(a.Sections) == 0 {
-			continue
-		}
-		aTarget := fsutil.ExpandHome(a.Target)
-		if aTarget == "" {
-			continue
-		}
-		if _, err := os.Stat(filepath.Dir(aTarget)); err != nil {
-			continue
-		}
-		errCtx := fmt.Sprintf("agents_md.agents[%s]", id)
-		for _, s := range a.Sections {
-			if s.RateFeedback && disableRateFeedback {
-				if markdown.ContainsSection(aTarget, s.Name) {
-					anyChanged = true
-				}
-				continue
-			}
-			if err := report(diffSectionMD(aTarget, s.Name, s.Content)); err != nil {
-				return false, fmt.Errorf("%s %s [%s]: %w", errCtx, aTarget, s.Name, err)
-			}
-		}
-	}
 	if len(cfg.Skills) > 0 {
 		for _, skill := range cfg.Skills {
 			if skill.RateFeedback && disableRateFeedback {
@@ -1537,40 +1380,12 @@ func CleanAll(target string, cfg *Config) error {
 			}
 		}
 	}
-	if g := cfg.AgentsMD.Global; len(g.Sections) > 0 {
-		ruleTargets := []string{fsutil.ExpandHome(g.Target)}
-		if root := primeAgentRoot(cfg); root != "" {
-			ruleTargets = appendUniquePath(ruleTargets, filepath.Join(root, "AGENTS.md"))
-		}
-		for _, ruleTarget := range ruleTargets {
-			for _, s := range g.Sections {
-				if err := cleanSectionMD(ruleTarget, s.Name); err != nil {
-					return fmt.Errorf("agents_md.global %s [%s]: %w", ruleTarget, s.Name, err)
-				}
-			}
-		}
-	}
 	if l := cfg.AgentsMD.Local; l.Target != "" {
 		sections := append([]MDSection(nil), l.Sections...)
 		sections = append(sections, MDSection{Name: "Language Conventions"})
 		for _, s := range sections {
 			if err := cleanSectionMD(l.Target, s.Name); err != nil {
 				return fmt.Errorf("agents_md.local [%s]: %w", s.Name, err)
-			}
-		}
-	}
-	for _, id := range sortedAgentIDs(cfg.AgentsMD.Agents) {
-		a := cfg.AgentsMD.Agents[id]
-		if len(a.Sections) == 0 {
-			continue
-		}
-		aTarget := fsutil.ExpandHome(a.Target)
-		if aTarget == "" {
-			continue
-		}
-		for _, s := range a.Sections {
-			if err := cleanSectionMD(aTarget, s.Name); err != nil {
-				return fmt.Errorf("agents_md.agents[%s] %s [%s]: %w", id, aTarget, s.Name, err)
 			}
 		}
 	}
