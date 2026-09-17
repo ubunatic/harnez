@@ -43,7 +43,17 @@ var (
 	flagCostVariant  string
 	flagLink         string
 	flagCostLink     string
+	flagDelivery     string
+	flagCostDelivery string
 )
+
+// validDeliveryModes are the supported --delivery values controlling whether
+// the linked doc is exposed as its native text file or as a PNG context card
+// rendered via `harnez read -I` (issue 412): "native" (default) copies/embeds
+// the doc's own text/markdown; "png" renders it to a PNG first and points
+// AGENTS.md at that image instead. "png" is not valid with --link=embed,
+// since embed inlines text and a PNG has no text form to inline.
+var validDeliveryModes = map[string]bool{"native": true, "png": true}
 
 // validLinkModes are the supported --link values controlling how a doc is
 // exposed to the agent inside the isolated workspace (issue 412 follow-up):
@@ -116,6 +126,7 @@ func main() {
 	runCmd.Flags().StringSliceVar(&flagAgents, "agent", nil, "run only this agent CLI, one of: claude, agy (repeatable); default: all agents")
 	runCmd.Flags().StringSliceVar(&flagVariants, "variant", nil, "run only this doc variant, one of: full, lite (repeatable); default: both variants")
 	runCmd.Flags().StringVar(&flagLink, "link", "soft", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
+	runCmd.Flags().StringVar(&flagDelivery, "delivery", "native", "doc delivery mode: native (text/markdown as-is) or png (rendered via `harnez read -I` context card; not valid with --link=embed)")
 
 	fixturesCmd := &cobra.Command{
 		Use:   "fixtures",
@@ -149,6 +160,7 @@ func main() {
 	measureCostCmd.Flags().StringVar(&flagCostFixture, "fixture", "hello", "fixture id to run for the cost measurement")
 	measureCostCmd.Flags().StringVar(&flagCostVariant, "variant", "full", "doc variant to use, one of: full, lite")
 	measureCostCmd.Flags().StringVar(&flagCostLink, "link", "soft", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
+	measureCostCmd.Flags().StringVar(&flagCostDelivery, "delivery", "native", "doc delivery mode: native (text/markdown as-is) or png (rendered via `harnez read -I` context card; not valid with --link=embed)")
 
 	root.AddCommand(runCmd, fixturesCmd, measureCostCmd)
 
@@ -238,6 +250,12 @@ func run() error {
 	if !validLinkModes[flagLink] {
 		return fmt.Errorf("unknown --link=%q (known: soft, hard, embed)", flagLink)
 	}
+	if !validDeliveryModes[flagDelivery] {
+		return fmt.Errorf("unknown --delivery=%q (known: native, png)", flagDelivery)
+	}
+	if flagDelivery == "png" && flagLink == "embed" {
+		return fmt.Errorf("--delivery=png is not valid with --link=embed (embed inlines text; a PNG has no text form to inline)")
+	}
 
 	allFixtures, err := loadFixtures()
 	if err != nil {
@@ -314,7 +332,7 @@ func run() error {
 				continue
 			}
 			for _, fx := range fixtures {
-				res := runFixture(ag, v, fx, flagLink)
+				res := runFixture(ag, v, fx, flagLink, flagDelivery)
 				if res.status == fail {
 					anyFail = true
 				}
@@ -337,14 +355,14 @@ func run() error {
 	return nil
 }
 
-func runFixture(ag agentCLI, v docVariant, fx fixture, link string) result {
+func runFixture(ag agentCLI, v docVariant, fx fixture, link, delivery string) result {
 	work, err := os.MkdirTemp("", "canary-agenticloop-lite.*")
 	if err != nil {
 		return result{agent: ag.name, variant: v.name, id: fx.ID, status: fail, detail: "mkdtemp: " + err.Error()}
 	}
 	defer os.RemoveAll(work)
 
-	if err := setupLinkedWorkspace(work, v.path, link); err != nil {
+	if err := setupLinkedWorkspace(work, v.path, link, delivery); err != nil {
 		return result{agent: ag.name, variant: v.name, id: fx.ID, status: fail, detail: "setup workspace: " + err.Error()}
 	}
 
@@ -639,6 +657,12 @@ func measureCost() error {
 	if !validLinkModes[flagCostLink] {
 		return fmt.Errorf("unknown --link=%q (known: soft, hard, embed)", flagCostLink)
 	}
+	if !validDeliveryModes[flagCostDelivery] {
+		return fmt.Errorf("unknown --delivery=%q (known: native, png)", flagCostDelivery)
+	}
+	if flagCostDelivery == "png" && flagCostLink == "embed" {
+		return fmt.Errorf("--delivery=png is not valid with --link=embed (embed inlines text; a PNG has no text form to inline)")
+	}
 
 	prompt := fmt.Sprintf(`You are in a directory whose only files are your instructions and
 context for this session, starting with AGENTS.md. Read AGENTS.md first,
@@ -651,6 +675,7 @@ then respond to this request:
 	fmt.Printf("fixture   %s\n", target.ID)
 	fmt.Printf("variant   %s  (%s)\n", flagCostVariant, docPath)
 	fmt.Printf("link      %s\n", flagCostLink)
+	fmt.Printf("delivery  %s\n", flagCostDelivery)
 	fmt.Printf("prompt    %s\n", target.Prompt)
 	fmt.Println(rule)
 
@@ -670,7 +695,7 @@ then respond to this request:
 			anyErr = true
 			continue
 		}
-		if err := setupLinkedWorkspace(work, docPath, flagCostLink); err != nil {
+		if err := setupLinkedWorkspace(work, docPath, flagCostLink, flagCostDelivery); err != nil {
 			fmt.Printf("  FAIL  setup workspace: %v\n", err)
 			os.RemoveAll(work)
 			anyErr = true
@@ -752,21 +777,54 @@ then respond to this request:
 }
 
 // setupLinkedWorkspace prepares an isolated workspace's AGENTS.md per
-// --link (issue 412 follow-up), always returning work/AGENTS.md as the
-// agent's entry point:
+// --link (issue 412) and --delivery (issue 412 follow-up), always returning
+// work/AGENTS.md as the agent's entry point.
+//
+// --link controls how the doc is *referenced*:
 //   - "soft": AGENTS.md holds a bare-prose citation ("See Doc.md ...");
 //     the doc is copied in alongside it but nothing forces the agent to
 //     open it.
 //   - "hard": AGENTS.md holds a single "@Doc.md" eager-include directive
 //     (this repo's own harnez/CLAUDE.md convention, e.g. "@AGENTS.local.md").
 //   - "embed": the doc's full text is inlined directly into AGENTS.md
-//     under a "# Doc.md" heading; text docs only.
-func setupLinkedWorkspace(work, docPath, link string) error {
+//     under a "# Doc.md" heading; text docs only, incompatible with
+//     --delivery=png (validated by callers before this is reached).
+//
+// --delivery controls what form the referenced doc takes:
+//   - "native" (default): the doc's own text/markdown file, as above.
+//   - "png": the doc is first rendered to a PNG context card via
+//     `harnez read -I -o <work>/<base>.png <docPath>` (this repo's own
+//     Harnez Managed Conventions doc-delivery mode), and "soft"/"hard"
+//     reference that PNG's path instead of the source doc.
+func setupLinkedWorkspace(work, docPath, link, delivery string) error {
 	if !validLinkModes[link] {
 		return fmt.Errorf("unknown --link=%q (known: soft, hard, embed)", link)
 	}
+	if !validDeliveryModes[delivery] {
+		return fmt.Errorf("unknown --delivery=%q (known: native, png)", delivery)
+	}
+	if delivery == "png" && link == "embed" {
+		return fmt.Errorf("--delivery=png is not valid with --link=embed (embed inlines text; a PNG has no text form to inline)")
+	}
+
 	agentsPath := filepath.Join(work, "AGENTS.md")
 	base := filepath.Base(docPath)
+
+	if delivery == "png" {
+		pngBase := strings.TrimSuffix(base, filepath.Ext(base)) + ".png"
+		pngPath := filepath.Join(work, pngBase)
+		cmd := exec.Command("harnez", "read", "-I", "-o", pngPath, docPath)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("harnez read -I render doc to png: %w: %s", err, truncate(string(out), 200))
+		}
+		switch link {
+		case "hard":
+			return os.WriteFile(agentsPath, []byte(fmt.Sprintf("@%s\n", pngBase)), 0o644)
+		default: // "soft"
+			return os.WriteFile(agentsPath, []byte(fmt.Sprintf("See %s (a rendered PNG context card) for your instructions/context for this session.\n", pngBase)), 0o644)
+		}
+	}
+
 	switch link {
 	case "embed":
 		data, err := os.ReadFile(docPath)

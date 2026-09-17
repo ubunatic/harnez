@@ -222,6 +222,9 @@ repo root; source in this directory).
 - **Compare doc-delivery modes** with `--link soft|hard|embed` (default
   `soft`) on `run` or `measure-cost`, e.g.:
   `canary-agenticloop-lite measure-cost --fixture hello --link embed`
+- **Compare doc-delivery format** with `--delivery native|png` (default
+  `native`), orthogonal to `--link` (rejected with `--link=embed`), e.g.:
+  `canary-agenticloop-lite measure-cost --fixture hello --link soft --delivery png`
 
 Cost note: every `run`/`measure-cost` invocation spawns a real non-interactive
 `claude -p` and/or `agy -p` subprocess per (fixture x variant x agent) —
@@ -311,3 +314,57 @@ real `AGENTS.md` entry point (not the raw doc file), resolving `@path`
 includes relative to the referencing file's own directory — matching this
 repo's real convention (sibling references, not always repo-root-relative)
 and correctly reflecting what's actually reachable from each link mode.
+
+---
+
+## --delivery flag: native vs png (`harnez read -I`) doc-delivery comparison (2026-09-17, issue 412 completion)
+
+Added `--delivery native|png` (default `native`) to both `run` and
+`measure-cost`, orthogonal to `--link`: `native` is the existing text/markdown
+doc as-is; `png` first renders the doc to a PNG context card via
+`harnez read -I -o <work>/<base>.png <docPath>` (this repo's own Harnez
+Managed Conventions doc-delivery mode) and points `AGENTS.md` (`soft`/`hard`)
+at that PNG instead of the source doc. `--delivery=png` is rejected with
+`--link=embed`, since embed inlines text and a PNG has no text form to
+inline.
+
+This completes issue 412 without the originally-scoped canary-first probe
+step: rather than probing headless `claude -p`/`agy -p` image-tool
+availability first, this run proceeded on the assumption (given directly by
+the user) that `-p` sessions can read images, and let a real `hello`-fixture
+invocation confirm or refute it directly.
+
+Real `hello`-fixture, claude/lite, `--link soft` results for each delivery
+mode:
+
+| delivery | turns | total tokens | first-turn |
+|---|---|---|---|
+| native | 3 | 73357 | 31882 |
+| png    | 6 | 111445 | 26274 |
+
+Both PASS (response "ready" in each case) — **confirming the assumption**:
+`claude -p` in this non-interactive/headless mode does have image-read tool
+access and can act on a PNG context card referenced from `AGENTS.md`. It is
+not a viability blocker, but it is also not a free win: the `png` run took
+double the turns (6 vs 3) and ~52% more total tokens than `native` for the
+same `soft`-link doc, for this single-doc `hello` fixture. The extra turns
+come from the agent needing an image-view tool call in addition to (or
+instead of) the plain `Read` it would otherwise issue.
+
+`agy` was also probed (`--agent agy`) and PASSed under both `native` and
+`png` delivery, but its cost was flat across the two (55306 vs 55628 total
+tokens, both 1 turn) — consistent with the `agy` cwd-isolation/instrumentation
+caveats already noted elsewhere in this file; treat its `png` numbers as
+inconclusive rather than as evidence the PNG delivery is free for that agent.
+
+**Conclusion**: `harnez read -I`'s "reduce token cost and context fatigue"
+convention (this repo's own Harnez Managed Conventions block) is aimed at
+*interactive* sessions reading large files with a native IDE/plain-read tool
+as the alternative cost baseline. It does not translate into a token win in
+this harness's headless single-small-doc `hello` scenario — here, `native`
+(and specifically `--link embed`, per the prior section) remains the
+cheapest delivery mode measured. A doc large enough to make `harnez read -I`
+undercut plain-text reading — the scenario the convention is actually
+targeting — is out of scope for the `hello` fixture and would need a
+larger/real fixture doc to measure, left as a follow-up rather than blocking
+closure of this ticket.
