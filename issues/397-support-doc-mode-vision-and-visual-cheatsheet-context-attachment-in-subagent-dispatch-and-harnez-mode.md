@@ -1,6 +1,6 @@
 # 397 — Support --doc-mode=vision and visual cheatsheet context attachment in subagent dispatch and harnez mode
 
-**Status**: Open
+**Status**: Closed — Added harnez mode vision and subagent StageSubagentContext supporting --doc-mode=vision
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Multi-Agent Dispatch / Context Optimization
