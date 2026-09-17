@@ -149,3 +149,33 @@ func TestReadCmd_JSONOutput(t *testing.T) {
 		t.Errorf("expected 2 total lines, got %d", res.TotalLines)
 	}
 }
+
+func TestReadCmd_FontFlags(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "font_test.go")
+	content := `package main
+func main() {
+	println("testing retro pixel fonts")
+}`
+	if err := os.WriteFile(testFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	for _, fontName := range []string{"pixel", "3x5", "5x8", "6x12", "standard", "8x16", "7x13"} {
+		imgOut := filepath.Join(tmpDir, "out_"+fontName+".png")
+		cmd := newReadCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+		cmd.SetArgs([]string{"-I", "--font", fontName, "-o", imgOut, testFile})
+
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("read -I --font=%s failed: %v", fontName, err)
+		}
+
+		if _, err := os.Stat(imgOut); err != nil {
+			t.Errorf("expected generated image at %s for font %s: %v", imgOut, fontName, err)
+		}
+	}
+}
+

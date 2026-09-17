@@ -159,6 +159,61 @@ func TestTokenStatsFormulas(t *testing.T) {
 	}
 }
 
+func TestParseFont(t *testing.T) {
+	tests := []struct {
+		name      string
+		wantFont  *MonospaceFont
+		wantWidth int
+		wantErr   bool
+	}{
+		{"", Font5x8, 6, false},
+		{"pixel", Font5x8, 6, false},
+		{"retro", Font5x8, 6, false},
+		{"5x8", Font5x8, 6, false},
+		{"3x5", Font3x5, 4, false},
+		{"micro", Font3x5, 4, false},
+		{"6x12", Font6x12, 7, false},
+		{"standard", DefaultFont8x16, 8, false},
+		{"8x16", DefaultFont8x16, 8, false},
+		{"7x13", DefaultFont7x13, 7, false},
+		{"unknown-font", nil, 0, true},
+	}
+
+	for _, tt := range tests {
+		f, err := ParseFont(tt.name)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("ParseFont(%q) error = %v, wantErr %v", tt.name, err, tt.wantErr)
+			continue
+		}
+		if !tt.wantErr {
+			if f != tt.wantFont {
+				t.Errorf("ParseFont(%q) = %v, want %v", tt.name, f.Name, tt.wantFont.Name)
+			}
+			if f.CharWidth != tt.wantWidth {
+				t.Errorf("ParseFont(%q) width = %d, want %d", tt.name, f.CharWidth, tt.wantWidth)
+			}
+		}
+	}
+}
+
+func TestGetFontDefaults(t *testing.T) {
+	if GetFont() != Font5x8 {
+		t.Errorf("GetFont() should default to Font5x8 retro pixel font, got %v", GetFont().Name)
+	}
+	if GetFont(11) != Font5x8 {
+		t.Errorf("GetFont(11) should resolve to Font5x8 retro pixel font, got %v", GetFont(11).Name)
+	}
+	if GetFont(5) != Font3x5 {
+		t.Errorf("GetFont(5) should resolve to Font3x5 micro font, got %v", GetFont(5).Name)
+	}
+	if GetFont(13) != DefaultFont7x13 {
+		t.Errorf("GetFont(13) should resolve to DefaultFont7x13, got %v", GetFont(13).Name)
+	}
+	if GetFont(16) != DefaultFont8x16 {
+		t.Errorf("GetFont(16) should resolve to DefaultFont8x16, got %v", GetFont(16).Name)
+	}
+}
+
 func TestRenderBundleCardAndCheckCard(t *testing.T) {
 	tmpDir := t.TempDir()
 	outPath := filepath.Join(tmpDir, "dev_3in1.png")
@@ -196,7 +251,7 @@ func TestRenderBundleCardAndCheckCard(t *testing.T) {
 	res, err := RenderBundleCard(sections, BundleOptions{
 		Title:        "Harnez Core Developer Cheatsheet (3-in-1)",
 		Columns:      3,
-		FontSize:     11,
+		FontName:     "pixel",
 		OutputPath:   outPath,
 		MaxDimension: 1568,
 	})
@@ -219,4 +274,32 @@ func TestRenderBundleCardAndCheckCard(t *testing.T) {
 		t.Errorf("expected CheckCard to pass, got %+v", checkRes)
 	}
 }
+
+func TestRenderFileToCards_FontVariants(t *testing.T) {
+	tmpDir := t.TempDir()
+	lines := []string{
+		"package main",
+		"func main() {",
+		"    println(\"pixel font test\")",
+		"}",
+	}
+
+	for _, fontName := range []string{"pixel", "3x5", "6x12", "8x16"} {
+		outPath := filepath.Join(tmpDir, "card_"+fontName+".png")
+		res, err := RenderFileToCards(lines, "main.go", RenderOptions{
+			FontName:   fontName,
+			OutputPath: outPath,
+		})
+		if err != nil {
+			t.Fatalf("RenderFileToCards with font %s failed: %v", fontName, err)
+		}
+		if len(res.Files) == 0 {
+			t.Fatalf("expected output file for font %s", fontName)
+		}
+		if _, err := os.Stat(outPath); err != nil {
+			t.Errorf("file %s not created: %v", outPath, err)
+		}
+	}
+}
+
 

@@ -30,6 +30,7 @@ func newDocsCardsBuildCmd() *cobra.Command {
 	var (
 		outDir     string
 		bundleName string
+		fontName   string
 		fontSize   int
 		theme      string
 		maxDim     int
@@ -70,7 +71,7 @@ individual doc compilation, or building all standard doc cards into docs/vision/
 
 			// Handle specific bundle
 			if bundleName != "" {
-				return buildBundle(cmd, cfg, dir, bundleName, outDir, fontSize, theme, maxDim)
+				return buildBundle(cmd, cfg, dir, bundleName, outDir, fontName, fontSize, theme, maxDim)
 			}
 
 			// Default behavior: build all standard doc cards + built-in bundles
@@ -78,7 +79,7 @@ individual doc compilation, or building all standard doc cards into docs/vision/
 
 			// Build dev-3in1 bundle
 			dev3in1Out := filepath.Join(outDir, "dev_3in1.png")
-			if err := buildBundle(cmd, cfg, dir, "dev-3in1", dev3in1Out, fontSize, theme, maxDim); err != nil {
+			if err := buildBundle(cmd, cfg, dir, "dev-3in1", dev3in1Out, fontName, fontSize, theme, maxDim); err != nil {
 				// if individual files don't exist locally, still proceed with available docs
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: bundle dev-3in1: %v\n", err)
 			} else {
@@ -104,6 +105,7 @@ individual doc compilation, or building all standard doc cards into docs/vision/
 
 				renderRes, err := readcard.RenderFileToCards(lines, filepath.Base(lang.Source), readcard.RenderOptions{
 					Columns:         2,
+					FontName:        fontName,
 					FontSize:        fontSize,
 					Theme:           theme,
 					MaxDimension:    maxDim,
@@ -129,6 +131,7 @@ individual doc compilation, or building all standard doc cards into docs/vision/
 
 	cmd.Flags().StringVarP(&outDir, "out", "o", "", "output directory or file path for generated card PNGs (default: ./docs/vision/)")
 	cmd.Flags().StringVarP(&bundleName, "bundle", "b", "", "named card bundle to build (e.g. dev-3in1)")
+	cmd.Flags().StringVar(&fontName, "font", "pixel", "font family: pixel, retro, 5x8, 3x5, micro, 6x12, standard, 8x16, 7x13 (default: pixel)")
 	cmd.Flags().IntVar(&fontSize, "font-size", 11, "font size in pixels (default: 11)")
 	cmd.Flags().StringVar(&theme, "theme", "dark", "color theme (dark or light)")
 	cmd.Flags().IntVar(&maxDim, "max-dim", 1568, "maximum dimension bounds (default: 1568)")
@@ -138,7 +141,7 @@ individual doc compilation, or building all standard doc cards into docs/vision/
 	return cmd
 }
 
-func buildBundle(cmd *cobra.Command, cfg *claude.Config, dir, bundleName, targetOut string, fontSize int, theme string, maxDim int) error {
+func buildBundle(cmd *cobra.Command, cfg *claude.Config, dir, bundleName, targetOut string, fontName string, fontSize int, theme string, maxDim int) error {
 	var sections []readcard.CardSection
 	var title, badge string
 
@@ -193,6 +196,7 @@ func buildBundle(cmd *cobra.Command, cfg *claude.Config, dir, bundleName, target
 		Title:        title,
 		Badge:        badge,
 		Columns:      len(sections),
+		FontName:     fontName,
 		FontSize:     fontSize,
 		Theme:        theme,
 		MaxDimension: maxDim,

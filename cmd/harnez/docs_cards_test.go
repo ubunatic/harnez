@@ -43,4 +43,17 @@ func TestDocsCardsCmd_BuildAndCheck(t *testing.T) {
 	if !strings.Contains(stdout.String(), "passed validation") {
 		t.Errorf("expected validation success message, got:\n%s", stdout.String())
 	}
+
+	// 3. Build with explicit --font=3x5 micro font
+	stdout.Reset()
+	stderr.Reset()
+	cmd = newRootCmd()
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"docs", "cards", "build", "--bundle=dev-3in1", "--font=3x5", "-o", outDir})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("docs cards build with --font=3x5 failed: %v", err)
+	}
 }
+

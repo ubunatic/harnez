@@ -14,6 +14,7 @@ func newReadCmd() *cobra.Command {
 		imageMode       bool
 		outputPath      string
 		columns         int
+		fontName        string
 		fontSize        int
 		theme           string
 		maxDim          int
@@ -68,6 +69,7 @@ Examples:
 				if imageMode {
 					renderOpts := readcard.RenderOptions{
 						Columns:         columns,
+						FontName:        fontName,
 						FontSize:        fontSize,
 						Theme:           theme,
 						MaxDimension:    maxDim,
@@ -108,6 +110,7 @@ Examples:
 				if imageMode {
 					renderOpts := readcard.RenderOptions{
 						Columns:         columns,
+						FontName:        fontName,
 						FontSize:        fontSize,
 						Theme:           theme,
 						MaxDimension:    maxDim,
@@ -174,6 +177,7 @@ Examples:
 	cmd.Flags().BoolVarP(&imageMode, "image", "I", false, "render file(s) as styled visual PNG cards")
 	cmd.Flags().StringVarP(&outputPath, "out", "o", "", "custom output PNG file or directory")
 	cmd.Flags().IntVarP(&columns, "columns", "c", 0, "number of columns (1-4, default: auto)")
+	cmd.Flags().StringVar(&fontName, "font", "pixel", "font family: pixel, retro, 5x8, 3x5, micro, 6x12, standard, 8x16, 7x13 (default: pixel)")
 	cmd.Flags().IntVar(&fontSize, "font-size", 11, "font size in pixels (default: 11)")
 	cmd.Flags().StringVar(&theme, "theme", "dark", "color theme: dark, light")
 	cmd.Flags().IntVar(&maxDim, "max-dim", 1568, "maximum image dimension in pixels (default: 1568)")

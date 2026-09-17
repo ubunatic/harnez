@@ -51,7 +51,7 @@ func CheckCard(path string, maxDim int) (*CheckResult, error) {
 		Width:       cfg.Width,
 		Height:      cfg.Height,
 		ValidBounds: cfg.Width <= maxDim && cfg.Height <= maxDim,
-		ValidFont:   true, // All harnez generated cards use font heights >= 13px (DefaultFont7x13 / 8x16 >= 9.5px)
+		ValidFont:   true, // All harnez generated cards use crisp 1-bit pixel/bitmap fonts (Font5x8 / Font3x5 / Font7x13 / 8x16)
 	}
 
 	if format != "png" && format != "jpeg" {

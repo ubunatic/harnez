@@ -1,8 +1,10 @@
 package readcard
 
 import (
+	"fmt"
 	"image"
 	"image/color"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -69,16 +71,73 @@ func (f *MonospaceFont) DrawString(img *image.RGBA, s string, x, y int, col colo
 	return curX - x
 }
 
+// Font5x8 provides the canonical 5x8 retro pixel font (6x8 cell) for maximum density and 1-bit crisp contrast.
+var Font5x8 = buildFont5x8()
+
+// Font3x5 provides the ultra-dense 3x5 micro pixel font (4x6 cell) for extreme token compression.
+var Font3x5 = buildFont3x5()
+
+// Font6x12 provides the 6x12 retro console font (7x12 cell).
+var Font6x12 = buildFont6x12()
+
 // DefaultFont8x16 provides a crisp 8x16 monospace font.
 var DefaultFont8x16 = buildFont8x16()
 
 // DefaultFont7x13 provides a dense 7x13 monospace font.
 var DefaultFont7x13 = buildFont7x13()
 
-// GetFont returns the best font matching the target font size (e.g. 10-16px).
-func GetFont(fontSize int) *MonospaceFont {
-	if fontSize <= 11 {
-		return DefaultFont7x13
+// DefaultFont is the default font used across harnez visual cards (Font5x8 retro pixel font).
+var DefaultFont = Font5x8
+
+// ParseFont resolves a font by name (e.g. "pixel", "retro", "5x8", "3x5", "micro", "6x12", "standard", "8x16", "7x13").
+func ParseFont(name string) (*MonospaceFont, error) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "", "pixel", "retro", "5x8", "default":
+		return Font5x8, nil
+	case "3x5", "micro", "thumb":
+		return Font3x5, nil
+	case "6x12":
+		return Font6x12, nil
+	case "7x13":
+		return DefaultFont7x13, nil
+	case "8x16", "standard", "vga":
+		return DefaultFont8x16, nil
+	default:
+		return nil, fmt.Errorf("unknown font %q: valid options are pixel, retro, 5x8, 3x5, micro, 6x12, standard, 8x16, 7x13", name)
 	}
-	return DefaultFont8x16
+}
+
+// ParseFontName is an alias for ParseFont.
+func ParseFontName(name string) (*MonospaceFont, error) {
+	return ParseFont(name)
+}
+
+// GetFont returns the best font matching the target font size (defaulting to Font5x8 retro pixel font).
+func GetFont(fontSize ...int) *MonospaceFont {
+	if len(fontSize) > 0 && fontSize[0] > 0 {
+		switch {
+		case fontSize[0] <= 6:
+			return Font3x5
+		case fontSize[0] <= 11:
+			return Font5x8
+		case fontSize[0] <= 13:
+			return DefaultFont7x13
+		default:
+			return DefaultFont8x16
+		}
+	}
+	return Font5x8
+}
+
+// ResolveFont resolves a font from name and fontSize, defaulting to Font5x8.
+func ResolveFont(name string, fontSize int) *MonospaceFont {
+	if name != "" {
+		if f, err := ParseFont(name); err == nil {
+			return f
+		}
+	}
+	if fontSize > 0 && fontSize != 11 {
+		return GetFont(fontSize)
+	}
+	return Font5x8
 }

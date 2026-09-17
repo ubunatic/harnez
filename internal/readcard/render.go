@@ -15,7 +15,8 @@ import (
 // RenderOptions configures visual image card generation.
 type RenderOptions struct {
 	Columns         int    // Number of columns (1, 2, 3, 4, or 0 for auto)
-	FontSize        int    // Font size in pixels (default: 11)
+	FontName        string // Font name: "pixel", "retro", "5x8", "3x5", "standard", "8x16", "7x13" (default: "pixel")
+	FontSize        int    // Font size in pixels (default: 8 or 11)
 	Theme           string // "dark" (default) or "light"
 	MaxDimension    int    // Max width/height constraint (default: 1568)
 	ShowLineNumbers bool   // Print line numbers in gutter (default: true)
@@ -123,7 +124,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		theme = LightTheme
 	}
 
-	font := GetFont(opts.FontSize)
+	font := ResolveFont(opts.FontName, opts.FontSize)
 	cw := font.CharWidth
 	ch := font.CharHeight
 	lineHeight := ch + 2
