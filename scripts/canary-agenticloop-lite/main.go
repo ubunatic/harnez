@@ -14,15 +14,18 @@
 //
 // Mirrors the isolation/spawning style of scripts/canary-lite-doc/main.go
 // (os.MkdirTemp scratch dir, single doc file copied in, claude -p
-// --permission-mode bypassPermissions) and the agy -p invocation pattern
+// --dangerously-skip-permissions) and the agy -p invocation pattern
 // from scripts/canary-clean-workspace-docs.sh (agy's replies may include
 // markdown bold markers that don't affect regex scoring here, so they are
 // left as-is).
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/png"
 	"io"
 	"os"
 	"os/exec"
@@ -32,7 +35,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+	"ubunatic.com/harnez/internal/readcard"
 )
+
+// embeddedAssets is the release-time fallback for canary specifications and
+// their linked documents. The source tree remains the development authority.
+//
+//go:embed embedded/fixtures.yaml embedded/docs/AgenticLoop.md embedded/docs/practices/AgenticLoop.lite.md embedded/docs/lang/Bash.md embedded/docs/lang/Bash.lite.md
+var embeddedAssets embed.FS
 
 var (
 	flagFixtures     []string
@@ -45,6 +55,7 @@ var (
 	flagCostLink     string
 	flagDelivery     string
 	flagCostDelivery string
+	flagWorkspaceDir string
 )
 
 // validDeliveryModes are the supported --delivery values controlling whether
@@ -63,12 +74,20 @@ var validDeliveryModes = map[string]bool{"native": true, "png": true}
 var validLinkModes = map[string]bool{"soft": true, "hard": true, "embed": true}
 
 type fixture struct {
-	ID            string `yaml:"id"`
-	Rule          string `yaml:"rule"`
-	Prompt        string `yaml:"prompt"`
-	Pattern       string `yaml:"pattern"`
-	ForbidPattern string `yaml:"forbid_pattern"`
+	ID            string   `yaml:"id"`
+	Rule          string   `yaml:"rule"`
+	Prompt        string   `yaml:"prompt"`
+	Pattern       string   `yaml:"pattern"`
+	ForbidPattern string   `yaml:"forbid_pattern"`
+	Docs          []string `yaml:"docs"`
 }
+
+type fixtureConfig struct {
+	Preamble string    `yaml:"preamble"`
+	Fixtures []fixture `yaml:"fixtures"`
+}
+
+var fixturePreamble string
 
 type docVariant struct {
 	name string
@@ -162,7 +181,12 @@ func main() {
 	measureCostCmd.Flags().StringVar(&flagCostLink, "link", "soft", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
 	measureCostCmd.Flags().StringVar(&flagCostDelivery, "delivery", "native", "doc delivery mode: native (text/markdown as-is) or png (rendered via `harnez read -I` context card; not valid with --link=embed)")
 
-	root.AddCommand(runCmd, fixturesCmd, measureCostCmd)
+	workspaceCmd := &cobra.Command{Use: "workspace", Short: "Manage clean manual experiment workspaces"}
+	workspaceInitCmd := &cobra.Command{Use: "init", Short: "Create a clean temporary workspace from embedded assets", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error { return initWorkspace() }}
+	workspaceInitCmd.Flags().StringVar(&flagWorkspaceDir, "dir", "", "destination directory (default: a temporary directory)")
+	workspaceCmd.AddCommand(workspaceInitCmd)
+
+	root.AddCommand(runCmd, fixturesCmd, measureCostCmd, workspaceCmd)
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR:", err)
@@ -182,8 +206,43 @@ func resolveFixturesPath() (string, error) {
 		if _, err := os.Stat(fixturesPath); err != nil {
 			fixturesPath = filepath.Join(selfDir, "fixtures.yaml")
 		}
+	} else if _, err := os.Stat(fixturesPath); err != nil {
+		return "", fmt.Errorf("fixtures override %q: %w", fixturesPath, err)
+	}
+	if _, err := os.Stat(fixturesPath); err != nil {
+		return "", nil
 	}
 	return filepath.Abs(fixturesPath)
+}
+
+func embeddedRepo() (string, func(), error) {
+	root, err := os.MkdirTemp("", "canary-agenticloop-lite-assets.*")
+	if err != nil {
+		return "", func() {}, err
+	}
+	cleanup := func() { _ = os.RemoveAll(root) }
+	for name, target := range map[string]string{
+		"embedded/docs/AgenticLoop.md":                "docs/AgenticLoop.md",
+		"embedded/docs/practices/AgenticLoop.lite.md": "docs/practices/AgenticLoop.lite.md",
+		"embedded/docs/lang/Bash.md":                  "docs/lang/Bash.md",
+		"embedded/docs/lang/Bash.lite.md":             "docs/lang/Bash.lite.md",
+	} {
+		data, readErr := embeddedAssets.ReadFile(name)
+		if readErr != nil {
+			cleanup()
+			return "", func() {}, readErr
+		}
+		path := filepath.Join(root, target)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			cleanup()
+			return "", func() {}, err
+		}
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			cleanup()
+			return "", func() {}, err
+		}
+	}
+	return root, cleanup, nil
 }
 
 func loadFixtures() ([]fixture, error) {
@@ -191,15 +250,21 @@ func loadFixtures() ([]fixture, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(fixturesAbs)
+	var data []byte
+	if fixturesAbs == "" {
+		data, err = embeddedAssets.ReadFile("embedded/fixtures.yaml")
+	} else {
+		data, err = os.ReadFile(fixturesAbs)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("read fixtures.yaml: %w", err)
 	}
-	var fixtures []fixture
-	if err := yaml.Unmarshal(data, &fixtures); err != nil {
+	var config fixtureConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("parse fixtures.yaml: %w", err)
 	}
-	return fixtures, nil
+	fixturePreamble = strings.TrimSpace(config.Preamble)
+	return config.Fixtures, nil
 }
 
 func fixturesList() error {
@@ -237,7 +302,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(fixturesAbs))) // scripts/canary-agenticloop-lite/fixtures.yaml -> repo root
+	var cleanup func()
+	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(fixturesAbs)))
+	if fixturesAbs == "" {
+		repoRoot, cleanup, err = embeddedRepo()
+		if err != nil {
+			return fmt.Errorf("materialize embedded assets: %w", err)
+		}
+		defer cleanup()
+	}
 	if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err != nil {
 		// fall back: fixturesAbs is scripts/canary-agenticloop-lite/fixtures.yaml relative to cwd==repoRoot
 		selfDir, err := os.Getwd()
@@ -332,7 +405,7 @@ func run() error {
 				continue
 			}
 			for _, fx := range fixtures {
-				res := runFixture(ag, v, fx, flagLink, flagDelivery)
+				res := runFixture(repoRoot, ag, v, fx, flagLink, flagDelivery)
 				if res.status == fail {
 					anyFail = true
 				}
@@ -355,22 +428,19 @@ func run() error {
 	return nil
 }
 
-func runFixture(ag agentCLI, v docVariant, fx fixture, link, delivery string) result {
+func runFixture(repoRoot string, ag agentCLI, v docVariant, fx fixture, link, delivery string) result {
 	work, err := os.MkdirTemp("", "canary-agenticloop-lite.*")
 	if err != nil {
 		return result{agent: ag.name, variant: v.name, id: fx.ID, status: fail, detail: "mkdtemp: " + err.Error()}
 	}
 	defer os.RemoveAll(work)
 
-	if err := setupLinkedWorkspace(work, v.path, link, delivery); err != nil {
+	docs := append([]string{v.path}, fixtureDocs(repoRoot, v.name, fx)...)
+	if err := setupLinkedWorkspace(work, repoRoot, docs, link, delivery); err != nil {
 		return result{agent: ag.name, variant: v.name, id: fx.ID, status: fail, detail: "setup workspace: " + err.Error()}
 	}
 
-	prompt := fmt.Sprintf(`You are in a directory whose only files are your instructions and
-context for this session, starting with AGENTS.md. Read AGENTS.md first,
-then respond to this request:
-
-%s`, fx.Prompt)
+	prompt := fmt.Sprintf("Task:\n%s", fx.Prompt)
 
 	out, err := ag.run(work, prompt)
 	if err != nil {
@@ -410,7 +480,7 @@ then respond to this request:
 }
 
 func runClaude(dir, prompt string) (string, error) {
-	cmd := exec.Command("claude", "-p", "--permission-mode", "bypassPermissions", prompt)
+	cmd := exec.Command("claude", "-p", "--dangerously-skip-permissions", prompt)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	return string(out), err
@@ -476,7 +546,7 @@ func (u tokenUsage) firstTurnTokens() int {
 }
 
 func runClaudeJSON(dir, prompt string) (tokenUsage, string, error) {
-	cmd := exec.Command("claude", "-p", "--permission-mode", "bypassPermissions", "--output-format", "json", prompt)
+	cmd := exec.Command("claude", "-p", "--dangerously-skip-permissions", "--output-format", "json", prompt)
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
@@ -500,7 +570,7 @@ func runClaudeJSON(dir, prompt string) (tokenUsage, string, error) {
 // skills, memory files) as claude itself measures it — more accurate than
 // this harness's own bytes/4 doc-size estimate.
 func runClaudeContext(dir string) (string, error) {
-	cmd := exec.Command("claude", "-p", "--permission-mode", "bypassPermissions", "/context")
+	cmd := exec.Command("claude", "-p", "--dangerously-skip-permissions", "/context")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
@@ -532,14 +602,14 @@ func runAgyJSON(dir, prompt string) (tokenUsage, string, error) {
 type docRef struct {
 	path   string // relative to repoRoot for display
 	bytes  int
-	tokens int // rough estimate: bytes / 4
+	tokens int // rough estimate for text; -1 when image-token cost is provider-specific
 }
 
 // includeRefPattern matches an eager @path include directive on its own
-// reference point in a doc line, e.g. "@docs/Foo.md" or "@AGENTS.local.md".
+// reference point in a doc line, e.g. "@docs/Foo.md" or "@AgenticLoop.png".
 // Deliberately conservative (word-boundary + path-like charset) since this
 // is a best-effort trace, not a full markdown/CLAUDE.md macro parser.
-var includeRefPattern = regexp.MustCompile(`@([A-Za-z0-9_./-]+\.md)`)
+var includeRefPattern = regexp.MustCompile(`@([A-Za-z0-9_./-]+\.(?:md|png))`)
 
 // traceDocContext walks entryPath and recursively follows @path include
 // directives, returning one docRef per unique file actually found on disk,
@@ -552,7 +622,7 @@ var includeRefPattern = regexp.MustCompile(`@([A-Za-z0-9_./-]+\.md)`)
 // Missing referenced files are silently skipped — this traces what the
 // harness's own doc variants actually pull in, not a strict-include
 // validator.
-func traceDocContext(repoRoot, entryPath string) ([]docRef, error) {
+func traceDocContext(repoRoot, entryPath, agent string) ([]docRef, error) {
 	var refs []docRef
 	seen := map[string]bool{}
 	var walk func(path string) error
@@ -575,7 +645,11 @@ func traceDocContext(repoRoot, entryPath string) ([]docRef, error) {
 		} else {
 			disp = filepath.Base(abs)
 		}
-		refs = append(refs, docRef{path: disp, bytes: len(data), tokens: len(data) / 4})
+		tokens := len(data) / 4
+		if strings.EqualFold(filepath.Ext(abs), ".png") {
+			tokens = imageTokenEstimate(abs, agent)
+		}
+		refs = append(refs, docRef{path: disp, bytes: len(data), tokens: tokens})
 		base := filepath.Dir(abs)
 		for _, m := range includeRefPattern.FindAllStringSubmatch(string(data), -1) {
 			next := m[1]
@@ -599,7 +673,15 @@ func measureCost() error {
 	if err != nil {
 		return err
 	}
-	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(fixturesAbs))) // scripts/canary-agenticloop-lite/fixtures.yaml -> repo root
+	var cleanup func()
+	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(fixturesAbs)))
+	if fixturesAbs == "" {
+		repoRoot, cleanup, err = embeddedRepo()
+		if err != nil {
+			return fmt.Errorf("materialize embedded assets: %w", err)
+		}
+		defer cleanup()
+	}
 	if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err != nil {
 		selfDir, err := os.Getwd()
 		if err != nil {
@@ -664,11 +746,7 @@ func measureCost() error {
 		return fmt.Errorf("--delivery=png is not valid with --link=embed (embed inlines text; a PNG has no text form to inline)")
 	}
 
-	prompt := fmt.Sprintf(`You are in a directory whose only files are your instructions and
-context for this session, starting with AGENTS.md. Read AGENTS.md first,
-then respond to this request:
-
-%s`, target.Prompt)
+	prompt := fmt.Sprintf("%s\n\nTask:\n%s", fixturePreamble, target.Prompt)
 
 	const rule = "────────────────────────────────────────────────────────────────"
 	fmt.Println(rule)
@@ -695,16 +773,26 @@ then respond to this request:
 			anyErr = true
 			continue
 		}
-		if err := setupLinkedWorkspace(work, docPath, flagCostLink, flagCostDelivery); err != nil {
+		docs := []string{docPath}
+		docs = append(docs, fixtureDocs(repoRoot, flagCostVariant, *target)...)
+		if err := setupLinkedWorkspace(work, repoRoot, docs, flagCostLink, flagCostDelivery); err != nil {
 			fmt.Printf("  FAIL  setup workspace: %v\n", err)
 			os.RemoveAll(work)
 			anyErr = true
 			continue
 		}
-		if refs, err := traceDocContext(work, filepath.Join(work, "AGENTS.md")); err == nil {
+		if refs, err := traceDocContext(work, filepath.Join(work, "AGENTS.md"), r.name); err == nil {
 			fmt.Println("  context docs")
 			total := 0
 			for _, ref := range refs {
+				if ref.tokens < 0 {
+					fmt.Printf("    %-38s %7d B  image tokens: unavailable\n", ref.path, ref.bytes)
+					continue
+				}
+				if strings.HasSuffix(ref.path, ".png") {
+					fmt.Printf("    %-38s %7d B  ~%6d image tok\n", ref.path, ref.bytes, ref.tokens)
+					continue
+				}
 				fmt.Printf("    %-38s %7d B  ~%6d tok\n", ref.path, ref.bytes, ref.tokens)
 				total += ref.tokens
 			}
@@ -776,6 +864,23 @@ then respond to this request:
 	return nil
 }
 
+func imageTokenEstimate(path, agent string) int {
+	f, err := os.Open(path)
+	if err != nil {
+		return -1
+	}
+	defer f.Close()
+	c, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return -1
+	}
+	stats := readcard.ComputeImageTokens(0, 0, c.Width, c.Height, 1)
+	if agent == "claude" {
+		return stats.ClaudeTokens
+	}
+	return stats.OpenAITokens
+}
+
 // setupLinkedWorkspace prepares an isolated workspace's AGENTS.md per
 // --link (issue 412) and --delivery (issue 412 follow-up), always returning
 // work/AGENTS.md as the agent's entry point.
@@ -796,7 +901,21 @@ then respond to this request:
 //     `harnez read -I -o <work>/<base>.png <docPath>` (this repo's own
 //     Harnez Managed Conventions doc-delivery mode), and "soft"/"hard"
 //     reference that PNG's path instead of the source doc.
-func setupLinkedWorkspace(work, docPath, link, delivery string) error {
+func fixtureDocs(repoRoot, variant string, fx fixture) []string {
+	var docs []string
+	for _, path := range fx.Docs {
+		if variant == "lite" {
+			candidate := strings.TrimSuffix(path, filepath.Ext(path)) + ".lite" + filepath.Ext(path)
+			if _, err := os.Stat(filepath.Join(repoRoot, filepath.FromSlash(candidate))); err == nil {
+				path = candidate
+			}
+		}
+		docs = append(docs, filepath.Join(repoRoot, filepath.FromSlash(path)))
+	}
+	return docs
+}
+
+func setupLinkedWorkspace(work, repoRoot string, docPaths []string, link, delivery string) error {
 	if !validLinkModes[link] {
 		return fmt.Errorf("unknown --link=%q (known: soft, hard, embed)", link)
 	}
@@ -808,42 +927,60 @@ func setupLinkedWorkspace(work, docPath, link, delivery string) error {
 	}
 
 	agentsPath := filepath.Join(work, "AGENTS.md")
-	base := filepath.Base(docPath)
-
-	if delivery == "png" {
-		pngBase := strings.TrimSuffix(base, filepath.Ext(base)) + ".png"
-		pngPath := filepath.Join(work, pngBase)
-		cmd := exec.Command("harnez", "read", "-I", "-o", pngPath, docPath)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("harnez read -I render doc to png: %w: %s", err, truncate(string(out), 200))
-		}
-		switch link {
-		case "hard":
-			return os.WriteFile(agentsPath, []byte(fmt.Sprintf("@%s\n", pngBase)), 0o644)
-		default: // "soft"
-			return os.WriteFile(agentsPath, []byte(fmt.Sprintf("See %s (a rendered PNG context card) for your instructions/context for this session.\n", pngBase)), 0o644)
-		}
+	linkPolicy := fixturePreamble + "\n\n"
+	if len(docPaths) == 0 {
+		return fmt.Errorf("no documents configured")
 	}
 
-	switch link {
-	case "embed":
+	var refs []string
+	for _, docPath := range docPaths {
+		base := filepath.Base(docPath)
+
+		if delivery == "png" {
+			pngBase := strings.TrimSuffix(base, filepath.Ext(base)) + ".png"
+			pngPath := filepath.Join(work, pngBase)
+			cmd := exec.Command("harnez", "read", "-I", "-o", pngPath, docPath)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("harnez read -I render doc to png: %w: %s", err, truncate(string(out), 200))
+			}
+			refs = append(refs, pngBase)
+			continue
+		}
+		if link == "hard" {
+			if err := copyFile(docPath, filepath.Join(work, base)); err != nil {
+				return fmt.Errorf("copy doc: %w", err)
+			}
+		}
+		refs = append(refs, base)
+	}
+
+	if link == "hard" {
+		var b strings.Builder
+		for _, ref := range refs {
+			fmt.Fprintf(&b, "@%s\n", ref)
+		}
+		return os.WriteFile(agentsPath, []byte(linkPolicy+b.String()), 0o644)
+	}
+	if link == "soft" {
+		var b strings.Builder
+		for _, ref := range refs {
+			fmt.Fprintf(&b, "See %s for your instructions/context for this session.\n", ref)
+		}
+		return os.WriteFile(agentsPath, []byte(linkPolicy+b.String()), 0o644)
+	}
+
+	// embed is text-only and inlines every configured document.
+	var b strings.Builder
+	for _, docPath := range docPaths {
+		base := filepath.Base(docPath)
 		data, err := os.ReadFile(docPath)
 		if err != nil {
 			return fmt.Errorf("read doc for embed: %w", err)
 		}
-		content := fmt.Sprintf("# %s\n\n%s", base, string(data))
-		return os.WriteFile(agentsPath, []byte(content), 0o644)
-	case "hard":
-		if err := copyFile(docPath, filepath.Join(work, base)); err != nil {
-			return fmt.Errorf("copy doc: %w", err)
-		}
-		return os.WriteFile(agentsPath, []byte(fmt.Sprintf("@%s\n", base)), 0o644)
-	default: // "soft"
-		if err := copyFile(docPath, filepath.Join(work, base)); err != nil {
-			return fmt.Errorf("copy doc: %w", err)
-		}
-		return os.WriteFile(agentsPath, []byte(fmt.Sprintf("See %s for your instructions/context for this session.\n", base)), 0o644)
+		fmt.Fprintf(&b, "# %s\n\n%s\n", base, data)
 	}
+	return os.WriteFile(agentsPath, []byte(linkPolicy+b.String()), 0o644)
+
 }
 
 func copyFile(src, dst string) error {
@@ -859,6 +996,46 @@ func copyFile(src, dst string) error {
 	defer out.Close()
 	_, err = io.Copy(out, in)
 	return err
+}
+
+func initWorkspace() error {
+	work := flagWorkspaceDir
+	created := false
+	if work == "" {
+		var err error
+		work, err = os.MkdirTemp("", "canary-agenticloop-lite-experiment.*")
+		if err != nil {
+			return fmt.Errorf("create workspace: %w", err)
+		}
+		created = true
+	} else if err := os.MkdirAll(work, 0o755); err != nil {
+		return fmt.Errorf("create workspace: %w", err)
+	}
+	for name, target := range map[string]string{
+		"embedded/fixtures.yaml":                      "fixtures.yaml",
+		"embedded/docs/AgenticLoop.md":                "docs/AgenticLoop.md",
+		"embedded/docs/practices/AgenticLoop.lite.md": "docs/practices/AgenticLoop.lite.md",
+		"embedded/docs/lang/Bash.md":                  "docs/lang/Bash.md",
+		"embedded/docs/lang/Bash.lite.md":             "docs/lang/Bash.lite.md",
+	} {
+		data, err := embeddedAssets.ReadFile(name)
+		if err != nil {
+			return fmt.Errorf("read embedded %s: %w", name, err)
+		}
+		path := filepath.Join(work, target)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			return err
+		}
+	}
+	fmt.Printf("workspace initialized: %s\n", work)
+	fmt.Println("  lifecycle: created; cleanup: remove this directory when finished")
+	if created {
+		fmt.Println("  lifecycle: temporary workspace is not removed automatically")
+	}
+	return nil
 }
 
 func contains(list []string, s string) bool {
