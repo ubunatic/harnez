@@ -1,6 +1,6 @@
 # 396 — Automated visual cheatsheet builder command to compile markdown docs into bounded image cards
 
-**Status**: Open
+**Status**: Closed — Implemented harnez docs cards build and check with multi-doc bundle support and dimension bounds validation
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Tooling & Build / Context Optimization
