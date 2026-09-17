@@ -1,6 +1,6 @@
 # 390 — Add named docs_profiles in config.yaml with CLI expansion across apply and init
 
-**Status**: Open
+**Status**: Closed — added docs_profiles (core, dev, full) with CLI expansion
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
