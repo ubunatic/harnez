@@ -146,7 +146,7 @@ The lock-file rule is local to each clone and leaves the project's shared
 ## apply flow
 
 ```
-harnez apply [-t <dir>] [-d <name>...] [--force-docs] [--debloat] [--codex-target <file>]
+harnez apply [-t <dir>] [-d <name|profile>...] [--clean-docs] [--force-docs] [--debloat] [--codex-target <file>]
         │
         ├── merge managed keys into settings.json
         ├── write ~/.claude/CLAUDE.md managed sections
@@ -160,7 +160,8 @@ harnez apply [-t <dir>] [-d <name>...] [--force-docs] [--debloat] [--codex-targe
         ├── write ~/.prime/agent/prompts/<name>.md and skills/<name>/SKILL.md
         ├── write agents_md.agents[<id>] managed sections into that agent's own target
         │       (e.g. ~/.codex/AGENTS.md) — skipped if the target's parent dir is absent
-        ├── install docs to ~/.claude/docs/ and ~/.prime/agent/docs/
+        ├── install opt-in docs to ~/.claude/docs/ and ~/.prime/agent/docs/ if specified via -d/--docs (default: 0 global docs; profiles: core, dev, full)
+        ├── if --clean-docs / --no-docs: prune unmanaged docs from ~/.claude/docs/ and ~/.prime/agent/docs/
         └── if --debloat: merge the Claude preset and spec-listed Codex features
 ```
 
