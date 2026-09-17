@@ -211,6 +211,19 @@ func main() {
 			return run()
 		},
 	}
+	runCmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		fixtures, err := loadFixtures()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		var completions []string
+		for _, fx := range fixtures {
+			if strings.HasPrefix(fx.ID, toComplete) {
+				completions = append(completions, fx.ID)
+			}
+		}
+		return completions, cobra.ShellCompDirectiveNoFileComp
+	}
 	runCmd.Flags().StringSliceVar(&flagAgents, "agent", nil, "run only this agent CLI, one of: claude, agy (repeatable); default: all agents")
 	runCmd.Flags().StringSliceVar(&flagVariants, "variant", nil, "run only this doc variant, one of: full, lite (repeatable); default: both variants")
 	runCmd.Flags().StringVar(&flagLink, "link", "hard", "how the doc is exposed in AGENTS.md: soft (\"See Doc.md\" citation), hard (\"@Doc.md\" eager include), or embed (doc's full text inlined into AGENTS.md, text docs only)")
