@@ -119,10 +119,10 @@ type TokenUsage struct {
 }
 
 type PricingRates struct {
-	CachedInputMicrosPerMillion   *int64
-	UncachedInputMicrosPerMillion *int64
-	OutputMicrosPerMillion        *int64
-	ReasoningMicrosPerMillion     *int64
+	CachedInputMicrosPerMillion   *int64 `json:"cached_input_micros_per_million"`
+	UncachedInputMicrosPerMillion *int64 `json:"uncached_input_micros_per_million"`
+	OutputMicrosPerMillion        *int64 `json:"output_micros_per_million"`
+	ReasoningMicrosPerMillion     *int64 `json:"reasoning_micros_per_million"`
 }
 
 type ModelPricing struct {

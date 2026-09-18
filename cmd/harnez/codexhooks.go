@@ -172,7 +172,11 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 		if err != nil {
 			return err
 		}
-		if err := insertTokenSnapshot(db, e.SessionID, e.Kind, &boundaryID, e, transcriptUsage); err != nil {
+		source := e.Kind
+		if source == "session_end" {
+			source = "sessionend"
+		}
+		if err := insertTokenSnapshot(db, e.SessionID, source, &boundaryID, e, transcriptUsage); err != nil {
 			return err
 		}
 		if e.Kind == "sessionend" || e.Kind == "session_end" {

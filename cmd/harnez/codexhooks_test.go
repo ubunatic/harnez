@@ -209,8 +209,8 @@ func TestRunCodexTelemetry_ReconcilesTokenSnapshotsAcrossCompactions(t *testing.
 	if err := db.QueryRow(`SELECT model, pricing_revision, status, savings_micros, note FROM compaction_economics WHERE session_id = ?`, "fixture-session").Scan(&model, &revision, &status, &savings, &note); err != nil {
 		t.Fatalf("compaction economics: %v", err)
 	}
-	if model != "gpt-5" || revision != telemetry.RecordedPricingRevision || status != "insufficient_data" {
-		t.Fatalf("economics = %q %q %q %v %q, want recorded insufficient row", model, revision, status, savings, note)
+	if model != "gpt-5" || revision != telemetry.RecordedPricingRevision || status != "complete" || !savings.Valid || savings.Int64 <= 0 {
+		t.Fatalf("economics = %q %q %q %v %q, want complete row with positive savings", model, revision, status, savings, note)
 	}
 
 	noCompactPath := filepath.Join(t.TempDir(), "no-compaction.sqlite")

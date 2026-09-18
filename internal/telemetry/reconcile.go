@@ -47,6 +47,12 @@ func (d *DB) ReconcileCompactionEconomics(sessionID, model string, catalog Prici
 	if err != nil {
 		return err
 	}
+	if !okBase {
+		base, okBase, err = d.latestSnapshot(sessionID, "session_end")
+		if err != nil {
+			return err
+		}
+	}
 	pricing := catalog.PricingFor(model)
 	input := EconomicsInput{}
 	if !okPre {
@@ -76,10 +82,17 @@ func (d *DB) ReconcileCompactionEconomics(sessionID, model string, catalog Prici
 	economics := CalculateCompactionEconomics(model, pricing, input)
 	if existing > 0 {
 		persisted := persistedEconomics(sessionID, &eventID, pricing, economics)
-		_, err := d.sql.Exec(`UPDATE compaction_economics SET model = ?, pricing_revision = ?, cached_input_micros_per_million = ?, uncached_input_micros_per_million = ?, output_micros_per_million = ?, reasoning_micros_per_million = ?, status = ?, compaction_cost_micros = ?, post_compaction_cost_micros = ?, baseline_cost_micros = ?, savings_micros = ?, note = ? WHERE compaction_event_id = ?`, persisted.Model, persisted.PricingRevision, persisted.Rates.CachedInputMicrosPerMillion, persisted.Rates.UncachedInputMicrosPerMillion, persisted.Rates.OutputMicrosPerMillion, persisted.Rates.ReasoningMicrosPerMillion, persisted.Status, persisted.CompactionCostMicros, persisted.PostCompactionCostMicros, persisted.BaselineCostMicros, persisted.SavingsMicros, persisted.Note, eventID)
+		_, err := d.sql.Exec(`UPDATE compaction_economics SET model = ?, pricing_revision = ?, cached_input_micros_per_million = ?, uncached_input_micros_per_million = ?, output_micros_per_million = ?, reasoning_micros_per_million = ?, status = ?, compaction_cost_micros = ?, post_compaction_cost_micros = ?, baseline_cost_micros = ?, savings_micros = ?, note = ? WHERE session_id = ?`, persisted.Model, persisted.PricingRevision, persisted.Rates.CachedInputMicrosPerMillion, persisted.Rates.UncachedInputMicrosPerMillion, persisted.Rates.OutputMicrosPerMillion, persisted.Rates.ReasoningMicrosPerMillion, persisted.Status, persisted.CompactionCostMicros, persisted.PostCompactionCostMicros, persisted.BaselineCostMicros, persisted.SavingsMicros, persisted.Note, sessionID)
 		return err
 	}
-	return d.InsertCompactionEconomics(persistedEconomics(sessionID, &eventID, pricing, economics))
+	if err := d.InsertCompactionEconomics(persistedEconomics(sessionID, &eventID, pricing, economics)); err != nil {
+		return err
+	}
+	// A prior compaction may have been recorded before the session baseline
+	// existed. Refresh all rows so every boundary has the final session evidence.
+	persisted := persistedEconomics(sessionID, &eventID, pricing, economics)
+	_, err = d.sql.Exec(`UPDATE compaction_economics SET model = ?, pricing_revision = ?, cached_input_micros_per_million = ?, uncached_input_micros_per_million = ?, output_micros_per_million = ?, reasoning_micros_per_million = ?, status = ?, compaction_cost_micros = ?, post_compaction_cost_micros = ?, baseline_cost_micros = ?, savings_micros = ?, note = ? WHERE session_id = ?`, persisted.Model, persisted.PricingRevision, persisted.Rates.CachedInputMicrosPerMillion, persisted.Rates.UncachedInputMicrosPerMillion, persisted.Rates.OutputMicrosPerMillion, persisted.Rates.ReasoningMicrosPerMillion, persisted.Status, persisted.CompactionCostMicros, persisted.PostCompactionCostMicros, persisted.BaselineCostMicros, persisted.SavingsMicros, persisted.Note, sessionID)
+	return err
 }
 
 func (d *DB) latestEventSnapshot(sessionID, eventType string) (TokenSnapshot, bool, error) {

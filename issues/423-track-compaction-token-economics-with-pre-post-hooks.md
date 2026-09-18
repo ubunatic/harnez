@@ -1,6 +1,6 @@
 # 423 — Track compaction token economics with pre/post hooks
 
-**Status**: Open
+**Status**: Closed — M4 correction delivered and verified
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -191,7 +191,7 @@ unsupported claim of exact billing.
 - Should pricing be configured globally, per project, or per recorded model
   snapshot, and which provider price source is authoritative?
 
-**Status**: Draft
+**Status**: Closed — M4 correction delivered and verified
 
 ### M4 correction delivery
 
@@ -200,9 +200,14 @@ unsupported claim of exact billing.
   economics rows; added with- and without-compaction fixture assertions.
 - Preserved schema migration coverage and the existing estimate-vs-provider-
   billing documentation.
-- `make install` completed. `make test-q1` was run after the correction; the
-  repository suite remains blocked by the compaction fixture status assertion
-  (`no priced compaction components`) despite all other packages passing.
+- Root causes fixed: recorded snake_case pricing rates now deserialize into
+  priced usage; session-end snapshots use the canonical source (with legacy
+  source fallback); and final reconciliation refreshes every compaction row
+  after the session baseline is available.
+- The with-compaction fixture now requires `complete` status and positive
+  savings; the without-compaction fixture remains `insufficient_data`.
+- `make install` completed. Final `make test-q1` passed (`go vet ./...` and
+  `go test ./...`).
 
 ---
 
