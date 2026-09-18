@@ -186,29 +186,32 @@ Agentic software engineering scales effectively when concurrency is structured a
    (4) Fast Hygiene & Teardown (kill child agents, zero zombies, harnez rate --ok)
 ```
 
-For focused, day-to-day tickets, running the full 5-phase ceremony with separate advisor and reviewer subagents introduces unnecessary latency and token overhead. The **Lean Fresh-Handoff** pattern provides a lightweight, fast-path alternative:
+For focused, day-to-day tickets and milestone iterations, running the full 5-phase ceremony with separate advisor and reviewer subagents introduces unnecessary latency and token overhead. The **Lean Fresh-Handoff** pattern provides a lightweight, fast-path alternative:
 
-1. **Clean Goal Handoff**:
-   - The Orchestrator dispatches a fresh subagent with a single, clear objective: problem statement, target tickets/specs, and explicit verification criteria.
+1. **Clean Goal Handoff (Host Zero-Coding)**:
+   - The Host Orchestrator dispatches a fresh low-cost/fast developer subagent with a single, clear objective: problem statement, target tickets/specs, and explicit verification criteria.
+   - **Strict Zero-Coding Invariant**: The Host Orchestrator never writes code, edits source files, or applies direct "quick fixes". All coding and test implementation are executed by the worker.
    - **Trust the Base Framework**: Avoid micromanaging standard workspace rules, tool descriptions, or language conventions already provided by the base system prompt.
    - **Stay Responsive**: After dispatch, the Orchestrator returns control to the main chat or continues only with non-overlapping local work. Do not block on the dev subagent by default.
-2. **Autonomous Execution & Self-Verification**:
-   - The dev subagent implements changes and validates them using repo-native verification commands (`go test ./...`, `make check`, canary probes).
-3. **Confidence-Gated Inline Review**:
-   - If automated tests pass cleanly and confidence is high, skip dispatching an independent reviewer subagent.
-   - The primary orchestrator performs a rapid inline diff review before finalizing.
+2. **Autonomous Milestone Execution & Self-Verification**:
+   - The dev subagent implements changes, validates them using repo-native verification commands (`go test ./...`, `make check`, canary probes), and commits each milestone at the boundary.
+3. **Concise Inline Review & Direct Nuance Forwarding**:
+   - The Host Orchestrator reviews the latest commit diff and test output concisely.
+   - If defects, ambient leaks, or nuances are discovered, the orchestrator does **not** fix them in place, but immediately feeds them as prioritized requirements into the **next milestone prompt** for the developer.
    - Escalate to a formal reviewer agent only if there is cross-subsystem blast radius, missing automated test coverage, or unexpected complexity.
 4. **Fast Hygiene & Status Sync**:
    - Immediately terminate child subagents (`manage_subagents kill`) and clear background tasks.
+   - Update ticket status in `issues/*.md` and refresh `issues/README.md`.
    - Record an `--ok` heartbeat (`harnez rate --ok "<note>" [<ticket_id>]`) to confirm clean sprint completion in telemetry.
 
 ### Workflow Selection Matrix
 
 | Dimension | Formal 5-Phase Loop (`/sprint`) | Lean Fresh-Handoff (`/lean-sprint`) |
 |---|---|---|
-| **Scope** | Multi-ticket sprints, major features, broad refactors | Single focused ticket, bug fix, localized feature |
-| **Discovery** | Parallel read-only advisor subagents | Targeted orchestrator/dev grep & range-bounded reads |
-| **Review Gate** | Independent reviewer subagent mandatory | Confidence-gated inline review (escalate on risk) |
+| **Scope** | Multi-ticket sprints, major features, broad refactors | Single focused ticket, localized milestone iterations |
+| **Host Role** | Advisory planning, multi-subsystem coordination, follow-up scheduling | Strict Zero-Coding: dispatch worker, review diff, forward nuances |
+| **Review Gate** | Independent reviewer subagent mandatory | Concise inline milestone review (direct nuance injection) |
+| **Nuances & Debt** | Buffer into dedicated `#XXX-refinements` / follow-up tickets | Forward directly into subsequent milestone prompts |
 | **Overhead** | Higher compute/tokens, maximum verification depth | Minimal compute/latency, rapid turnaround |
 | **Host Responsiveness** | Host may coordinate multiple workers but remains user-responsive | Host dispatches and returns control; no default blocking wait |
 

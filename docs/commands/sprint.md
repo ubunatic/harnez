@@ -51,9 +51,10 @@ Follow these 5 phases sequentially:
    - Run tests (`go test -count=1 ./...`, `make test`) to verify each milestone before moving to the next.
    - Maintain codebase stability, ensuring clean compilation at every step.
    - For defect-shaped tickets: establish a concrete reproduction baseline *before* coding the fix (see `@docs/AgenticLoop.md` Phase 2, "Repro-before-fix").
-4. After each larger work item, persist its learnings in issues/docs/code and pass the Phase 3 review gate before committing implementation. Then the orchestrator must make an explicit final session-compaction call for that developer and confirm completion before handing it another item or parking it. Merely telling the developer to compact at the end does not satisfy this checkpoint.
+4. **Milestone-Boundary Atomic Commits**: Commit each verified milestone upon passing tests and review (`git commit -m "feat/fix(...): ... (issue XXX MX)"`). Never carry uncommitted working tree diffs across milestone transitions.
+5. After each larger work item, persist its learnings in issues/docs/code and pass the Phase 3 review gate before committing implementation. Then the orchestrator must make an explicit final session-compaction call for that developer and confirm completion before handing it another item or parking it. Merely telling the developer to compact at the end does not satisfy this checkpoint.
 
-### Phase 3: Pre-Commit Review Gate (Independent Reviewer)
+### Phase 3: Pre-Commit Review Gate & Nuance Follow-Up Tracking
 1. Spawn an independent reviewer subagent (or conduct a dedicated review pass).
 2. The reviewer audits the full git diff (`git diff`, `git status`) and verifies:
    - **Test Assertion Rigor**: Are assertions meaningful, robust, and verifying real behaviors?
@@ -62,8 +63,11 @@ Follow these 5 phases sequentially:
    - **Media & Demo Verification**: If reels, WebM files, or UI screenshots were produced, has explicit user confirmation been obtained before publishing?
    - **Code Cleanliness**: Is the code token-efficient, idiomatic, and minimal?
    - **Root Cause vs. Symptom**: For defensive/robustness fixes, ask whether the unexpected input's *source* can be fixed instead; verify any upstream fix against the real tool before treating it as done (see `@docs/AgenticLoop.md` Phase 3).
-3. Address any review findings before proceeding to commit.
-4. Apply this gate to intermediate implementation commits as well as the final sprint commit. After a larger work item is committed and its learnings documented, complete the developer compaction checkpoint from Phase 2; return to Phase 2 if more development remains.
+3. **Follow-Up Scheduling & Nuance Buffering**:
+   - *Blocking defects*: Must be corrected before committing the sprint.
+   - *Non-blocking nuances / architectural improvements*: File or buffer into a dedicated **Nuance Refinement Ticket** (`#XXX-refinements` or scheduled follow-up ticket) rather than stalling sprint velocity with endless micro-adjustments.
+4. Address any review findings before proceeding to commit.
+5. Apply this gate to intermediate implementation commits as well as the final sprint commit. After a larger work item is committed and its learnings documented, complete the developer compaction checkpoint from Phase 2; return to Phase 2 if more development remains.
 
 ### Phase 4: Process & Subagent Hygiene (Compact, Park & Drain)
 1. Inspect running background tasks using the available task/session tools.
