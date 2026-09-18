@@ -48,6 +48,22 @@ environment's tool events end to end.
 - Verification: the canary identifies the active session and records a complete
   event sequence without requiring a real model run.
 
+**M1 status (review 2026-09-18)**: `internal/codex/events.go` lands `ParseEvent`
+covering the hook envelope (`PostToolUse`) and the rollout `token_count`
+shape, plus malformed/unknown-kind safety. Review found and fixed:
+- `events.go`/`events_test.go` were not gofmt-clean (fixed).
+- Fixture coverage was missing `PreToolUse`, a `tool_call` rollout shape, and
+  session-boundary (`SessionStart`/`session_end`) kinds required by this
+  milestone's own scope; added in `events_test.go`.
+- A failure-shaped `PostToolUse` fixture was added, but `Success`/`ExitCode`
+  are still unpopulated by `ParseEvent` — that classification is explicitly
+  M2 scope ("map ... result, and failure fields"), not a regression.
+- Still open before M2: the "document the installed Codex hook/event
+  payloads and lifecycle guarantees" bullet has no doc yet — no
+  `docs/*Codex*Events*` or equivalent exists. Add a short doc (or a
+  `docs/studies/` note) enumerating the observed hook/rollout shapes before
+  building the M2 adapter on top of them.
+
 ### M2 — Hook adapter and attribution
 
 - Implement the Codex adapter and register it through the supported Codex
