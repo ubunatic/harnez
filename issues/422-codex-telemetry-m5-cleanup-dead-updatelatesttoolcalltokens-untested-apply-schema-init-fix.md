@@ -1,6 +1,6 @@
 # 422 — Codex telemetry M5 cleanup: dead UpdateLatestToolCallTokens, untested apply schema-init fix
 
-**Status**: Open
+**Status**: Closed — Completed dead-code cleanup and apply schema migration regression test
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Code Quality / Telemetry
