@@ -15,7 +15,7 @@ package telemetry
 //
 // 1: issue 116's original shape (distilled_bytes INTEGER NOT NULL DEFAULT 0).
 // 2: issue 118's fix (distilled_bytes made nullable) — the current shape.
-const schemaVersion = 3
+const schemaVersion = 4
 
 // schemaDDL is the single source of truth for the tool_calls table shape
 // (per docs/other/Spec.md's "spec files are the single source of truth"

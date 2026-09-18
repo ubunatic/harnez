@@ -153,7 +153,7 @@ func checkAndMigrateSchema(sqlDB *sql.DB, path string, preexisting bool) error {
 		return nil
 	}
 	if current < schemaVersion {
-		if current < 3 {
+		if current < 4 {
 			if err := migrateV2ToV3(sqlDB); err != nil {
 				return fmt.Errorf("telemetry: migrate schema to v3: %w", err)
 			}
