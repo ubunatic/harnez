@@ -112,6 +112,20 @@ unsupported claim of exact billing.
 - Verification: table-driven cost tests cover cached/uncached rates, output and
   reasoning rates, rounding, missing rates, and provider counter resets.
 
+#### M3 delivery
+
+- Added schema v7 `compaction_economics` persistence with immutable pricing
+  revision/rate inputs and integer micro-USD estimates.
+- Added configurable model pricing lookup, cached/uncached input, output, and
+  reasoning cost math with deterministic half-up rounding.
+- Added explicit complete, partial, and insufficient-data results. Missing
+  baselines and provider counter resets withhold savings instead of inferring
+  zero or negative savings.
+- Verification: the required `make test-q1` run reached the new economics
+  tests and exposed stale v6/test-fixture assertions, which were corrected;
+  `make install` then passed. The suite was not rerun under the repository's
+  single-test quota guardrail.
+
 ### M4 — Query/reporting and documentation
 
 - Add stats output (text and JSON) that reports compaction count, token deltas,

@@ -6,6 +6,18 @@ import (
 	"time"
 )
 
+func (d *DB) InsertCompactionEconomics(estimate PersistedEconomics) error {
+	createdAt := estimate.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	_, err := d.sql.Exec(`INSERT INTO compaction_economics (created_at, session_id, compaction_event_id, model, pricing_revision, cached_input_micros_per_million, uncached_input_micros_per_million, output_micros_per_million, reasoning_micros_per_million, status, compaction_cost_micros, post_compaction_cost_micros, baseline_cost_micros, savings_micros, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, createdAt.Format(time.RFC3339Nano), estimate.SessionID, estimate.CompactionEventID, estimate.Model, estimate.PricingRevision, estimate.Rates.CachedInputMicrosPerMillion, estimate.Rates.UncachedInputMicrosPerMillion, estimate.Rates.OutputMicrosPerMillion, estimate.Rates.ReasoningMicrosPerMillion, estimate.Status, estimate.CompactionCostMicros, estimate.PostCompactionCostMicros, estimate.BaselineCostMicros, estimate.SavingsMicros, estimate.Note)
+	if err != nil {
+		return fmt.Errorf("telemetry: insert compaction economics: %w", err)
+	}
+	return nil
+}
+
 func (d *DB) InsertCompactionEvent(event CompactionEvent) (int64, error) {
 	createdAt := event.CreatedAt
 	if createdAt.IsZero() {

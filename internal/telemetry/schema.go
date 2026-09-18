@@ -18,7 +18,8 @@ package telemetry
 // 3-4: additive provider token columns used by Codex telemetry.
 // 5: additive compaction_events and session_boundaries tables.
 // 6: ordered per-turn and cumulative provider token snapshots.
-const schemaVersion = 6
+// 7: versioned pricing inputs and immutable compaction economics results.
+const schemaVersion = 7
 
 // schemaDDL is the single source of truth for the tool_calls table shape
 // (per docs/other/Spec.md's "spec files are the single source of truth"
@@ -202,4 +203,28 @@ CREATE TABLE IF NOT EXISTS token_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_token_snapshots_session_id ON token_snapshots (session_id);
 CREATE INDEX IF NOT EXISTS idx_token_snapshots_created_at ON token_snapshots (created_at);
+
+-- compaction_economics preserves the exact pricing revision and rates used
+-- for each estimate. Values are integer micro-USD to avoid floating point
+-- drift when pricing or the report is recomputed later.
+CREATE TABLE IF NOT EXISTS compaction_economics (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	created_at TEXT NOT NULL,
+	session_id TEXT NOT NULL,
+	compaction_event_id INTEGER,
+	model TEXT NOT NULL DEFAULT '',
+	pricing_revision TEXT NOT NULL DEFAULT '',
+	cached_input_micros_per_million INTEGER,
+	uncached_input_micros_per_million INTEGER,
+	output_micros_per_million INTEGER,
+	reasoning_micros_per_million INTEGER,
+	status TEXT NOT NULL,
+	compaction_cost_micros INTEGER,
+	post_compaction_cost_micros INTEGER,
+	baseline_cost_micros INTEGER,
+	savings_micros INTEGER,
+	note TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_compaction_economics_session_id ON compaction_economics (session_id);
+CREATE INDEX IF NOT EXISTS idx_compaction_economics_created_at ON compaction_economics (created_at);
 `

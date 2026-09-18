@@ -94,3 +94,78 @@ type TokenSnapshot struct {
 	LastReasoningTokens   *int64
 	LastTotalTokens       *int64
 }
+
+// TokenUsage is a normalized usage vector. Values are cumulative when
+// obtained from a TokenSnapshot and deltas when returned by DeltaSnapshots.
+type TokenUsage struct {
+	InputTokens         *int64
+	CachedInputTokens   *int64
+	UncachedInputTokens *int64
+	OutputTokens        *int64
+	ReasoningTokens     *int64
+}
+
+type PricingRates struct {
+	CachedInputMicrosPerMillion   *int64
+	UncachedInputMicrosPerMillion *int64
+	OutputMicrosPerMillion        *int64
+	ReasoningMicrosPerMillion     *int64
+}
+
+type ModelPricing struct {
+	Model    string
+	Revision string
+	Rates    PricingRates
+}
+
+type PricingCatalog map[string]ModelPricing
+
+type EconomicsStatus string
+
+const (
+	EconomicsComplete     EconomicsStatus = "complete"
+	EconomicsPartial      EconomicsStatus = "partial"
+	EconomicsInsufficient EconomicsStatus = "insufficient_data"
+)
+
+type EconomicsInput struct {
+	Compaction       *TokenUsage
+	PostCompaction   *TokenUsage
+	NoCompactionBase *TokenUsage
+	CounterReset     bool
+}
+
+type CostEstimate struct {
+	CachedInputMicros   int64
+	UncachedInputMicros int64
+	OutputMicros        int64
+	ReasoningMicros     int64
+	TotalMicros         int64
+}
+
+type CompactionEconomics struct {
+	Model              string
+	PricingRevision    string
+	Status             EconomicsStatus
+	CounterReset       bool
+	CompactionCost     *CostEstimate
+	PostCompactionCost *CostEstimate
+	BaselineCost       *CostEstimate
+	SavingsMicros      *int64
+	Note               string
+}
+
+type PersistedEconomics struct {
+	CreatedAt                time.Time
+	SessionID                string
+	CompactionEventID        *int64
+	Model                    string
+	PricingRevision          string
+	Rates                    PricingRates
+	Status                   EconomicsStatus
+	CompactionCostMicros     *int64
+	PostCompactionCostMicros *int64
+	BaselineCostMicros       *int64
+	SavingsMicros            *int64
+	Note                     string
+}
