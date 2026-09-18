@@ -36,6 +36,14 @@ If the buffer of refinements reaches an architectural tipping point during the s
    - Duration is currently passed as `0`.
    - *Refinement*: Compute $\Delta t = \text{now} - t_{\text{created\_at}}$ (either in Go or SQLite `strftime`) to store true execution duration in `duration_ms`.
 
+### From Milestone 3 (Potential Opportunity Savings Evaluator for Native Reads)
+6. **Provider-Aware Opportunity Cost Evaluation**:
+   - In `runAgyPostToolHook`, `readcard.EstimateSavings` hardcodes `readcard.ProviderClaude`.
+   - *Refinement*: Infer the provider model profile from `calls[0].AgentID` (e.g. `agy` maps to Gemini ViT pricing, `claude` maps to Claude ViT pricing, `codex` maps to OpenAI ViT pricing).
+7. **Savings Calculation from Transcript Fallback**:
+   - If `payload.Output` is empty but `payload.TranscriptPath` is supplied, `EstimateSavings` is bypassed.
+   - *Refinement*: Extract the tool output text from the transcript step before passing to `EstimateSavings`.
+
 ---
 
 ## 3. Verification Target
