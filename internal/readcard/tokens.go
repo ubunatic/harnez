@@ -2,22 +2,59 @@ package readcard
 
 import (
 	"math"
+	"strings"
 )
+
+// SavingsEstimate compares native text input with a hypothetical readcard
+// image for the selected provider.
+type SavingsEstimate struct {
+	TextTokens    int64
+	VisualTokens  int64
+	SavingsTokens int64
+	SavingsBytes  int64
+}
+
+// EstimateSavings estimates the opportunity cost of sending textPayload as a
+// native read instead of a visual card. Unknown providers use Claude's profile.
+func EstimateSavings(textPayload string, provider Provider) SavingsEstimate {
+	text := ComputeTextTokens(textPayload)
+	lines := strings.Count(textPayload, "\n") + 1
+	pages := (lines + 239) / 240
+	if pages < 1 {
+		pages = 1
+	}
+	images := ComputeImageTokens(text.TextTokens, text.TextBytes, 1552, 600, pages)
+	visual := images.ClaudeTokens
+	switch provider {
+	case ProviderOpenAI:
+		visual = images.OpenAITokens
+	case ProviderGemini:
+		visual = images.GeminiTokens
+	}
+	savings := text.TextTokens - visual
+	if savings < 0 {
+		savings = 0
+	}
+	return SavingsEstimate{
+		TextTokens: int64(text.TextTokens), VisualTokens: int64(visual),
+		SavingsTokens: int64(savings), SavingsBytes: int64(math.Round(float64(savings) * 3.75)),
+	}
+}
 
 // TokenStats holds token cost metrics for both raw text and visual rendering.
 type TokenStats struct {
-	TextBytes     int     `json:"text_bytes"`
-	TextWords     int     `json:"text_words"`
-	TextTokens    int     `json:"text_tokens"`
-	ImageWidth    int     `json:"image_width,omitempty"`
-	ImageHeight   int     `json:"image_height,omitempty"`
-	TotalPages    int     `json:"total_pages,omitempty"`
-	ClaudeTokens  int     `json:"claude_vision_tokens,omitempty"`
-	ClaudeRatio   float64 `json:"claude_compression_ratio,omitempty"`
-	OpenAITokens  int     `json:"openai_vision_tokens,omitempty"`
-	OpenAIRatio   float64 `json:"openai_compression_ratio,omitempty"`
-	GeminiTokens  int     `json:"gemini_vision_tokens,omitempty"`
-	GeminiRatio   float64 `json:"gemini_compression_ratio,omitempty"`
+	TextBytes    int     `json:"text_bytes"`
+	TextWords    int     `json:"text_words"`
+	TextTokens   int     `json:"text_tokens"`
+	ImageWidth   int     `json:"image_width,omitempty"`
+	ImageHeight  int     `json:"image_height,omitempty"`
+	TotalPages   int     `json:"total_pages,omitempty"`
+	ClaudeTokens int     `json:"claude_vision_tokens,omitempty"`
+	ClaudeRatio  float64 `json:"claude_compression_ratio,omitempty"`
+	OpenAITokens int     `json:"openai_vision_tokens,omitempty"`
+	OpenAIRatio  float64 `json:"openai_compression_ratio,omitempty"`
+	GeminiTokens int     `json:"gemini_vision_tokens,omitempty"`
+	GeminiRatio  float64 `json:"gemini_compression_ratio,omitempty"`
 }
 
 // ComputeTextTokens estimates token count from raw text bytes and words.

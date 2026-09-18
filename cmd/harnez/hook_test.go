@@ -203,6 +203,36 @@ func TestRunAgyPostToolHookUpdatesPreToolCall(t *testing.T) {
 	}
 }
 
+func TestRunAgyPostToolHookEstimatesNativeReadSavings(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	var preOut bytes.Buffer
+	pre := `{"conversationId":"read-savings","toolCall":{"name":"view_file","args":{}}}`
+	if err := runAgyToolHook(strings.NewReader(pre), &preOut, agyHookOptions{DBPath: dbPath}); err != nil {
+		t.Fatal(err)
+	}
+	var output strings.Builder
+	for i := 0; i < 400; i++ {
+		fmt.Fprintf(&output, "line %03d: native read content\n", i)
+	}
+	var postOut bytes.Buffer
+	payload, _ := json.Marshal(map[string]any{"conversationId": "read-savings", "output": output.String()})
+	if err := runAgyPostToolHook(bytes.NewReader(payload), &postOut, agyPostHookOptions{DBPath: dbPath}); err != nil {
+		t.Fatal(err)
+	}
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{SessionID: "read-savings"})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("query rows: %d, %v", len(rows), err)
+	}
+	if rows[0].PotentialSavingsTokens == nil || *rows[0].PotentialSavingsTokens <= 0 {
+		t.Fatalf("potential savings = %v, want positive", rows[0].PotentialSavingsTokens)
+	}
+}
+
 func createTestFile(t *testing.T, dir, name string, lines int) string {
 	t.Helper()
 	path := filepath.Join(dir, name)

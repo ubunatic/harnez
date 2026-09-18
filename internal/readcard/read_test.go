@@ -161,6 +161,17 @@ func TestTokenStatsFormulas(t *testing.T) {
 	}
 }
 
+func TestEstimateSavingsLargePayload(t *testing.T) {
+	var b strings.Builder
+	for i := 0; i < 400; i++ {
+		fmt.Fprintf(&b, "line %03d: useful source content for the native read\n", i)
+	}
+	estimate := EstimateSavings(b.String(), ProviderClaude)
+	if estimate.SavingsTokens <= 0 || estimate.SavingsBytes <= 0 {
+		t.Fatalf("expected positive savings for large payload, got %+v", estimate)
+	}
+}
+
 func TestParseFont(t *testing.T) {
 	tests := []struct {
 		name      string

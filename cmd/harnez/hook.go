@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/readcard"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/telemetry"
 )
@@ -111,13 +112,29 @@ func runAgyPostToolHook(in io.Reader, out io.Writer, opts agyPostHookOptions) er
 		if err != nil {
 			return err
 		}
-		err = db.UpdateLatestToolCallOutput(payload.ConversationID, outputBytes, 0)
+		var savingsTokens, savingsBytes *int64
+		calls, queryErr := db.Query(telemetry.Filter{SessionID: payload.ConversationID})
+		if queryErr == nil && len(calls) > 0 && isNativeReadTool(calls[0].ToolName) {
+			estimate := readcard.EstimateSavings(payload.Output, readcard.ProviderClaude)
+			savingsTokens = &estimate.SavingsTokens
+			savingsBytes = &estimate.SavingsBytes
+		}
+		err = db.UpdateLatestToolCallMetrics(payload.ConversationID, outputBytes, 0, savingsTokens, savingsBytes)
 		_ = db.Close()
 		if err != nil {
 			return err
 		}
 	}
 	return json.NewEncoder(out).Encode(map[string]string{"status": "ok"})
+}
+
+func isNativeReadTool(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "view_file", "readmultiplefiles", "read_multiple_files", "cat":
+		return true
+	default:
+		return false
+	}
 }
 
 type agyHookOptions struct {
