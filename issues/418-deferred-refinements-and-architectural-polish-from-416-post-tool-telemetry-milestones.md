@@ -44,6 +44,11 @@ If the buffer of refinements reaches an architectural tipping point during the s
    - If `payload.Output` is empty but `payload.TranscriptPath` is supplied, `EstimateSavings` is bypassed.
    - *Refinement*: Extract the tool output text from the transcript step before passing to `EstimateSavings`.
 
+### Universal Tool Output Token Estimation
+8. **Always Compute Estimated Tokens Across All Tool Invocations**:
+   - In `runAgyPostToolHook`, calculate estimated output tokens for *every* tool invocation (`actual_tokens = ComputeTextTokens(payload.Output).TextTokens`) and record it in `tool_calls.actual_tokens`.
+   - *Value*: Allows benchmarking heuristic token estimates directly against ground-truth provider turn deltas for every command/tool execution in real-world workflows.
+
 ---
 
 ## 3. Verification Target
