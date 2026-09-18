@@ -8,21 +8,6 @@ func (d *DB) UpdateLatestToolCallOutput(sessionID string, outputBytes, durationM
 	return d.UpdateLatestToolCallMetrics(sessionID, outputBytes, durationMs, nil, nil, nil)
 }
 
-// UpdateLatestToolCallTokens attaches the latest provider-reported cumulative
-// token total to the newest tool call for sessionID.
-func (d *DB) UpdateLatestToolCallTokens(sessionID string, total *int64) error {
-	result, err := d.sql.Exec(`UPDATE tool_calls SET actual_tokens = ? WHERE id = (SELECT id FROM tool_calls WHERE session_id = ? ORDER BY id DESC LIMIT 1)`, total, sessionID)
-	if err != nil {
-		return fmt.Errorf("telemetry: update latest tool call tokens: %w", err)
-	}
-	if n, err := result.RowsAffected(); err != nil {
-		return fmt.Errorf("telemetry: check updated tool call tokens: %w", err)
-	} else if n == 0 {
-		return fmt.Errorf("telemetry: no tool call found for session %q", sessionID)
-	}
-	return nil
-}
-
 // UpdateLatestProviderUsage stores both the per-turn usage and cumulative
 // provider snapshot on the newest tool call for a session.
 func (d *DB) UpdateLatestProviderUsage(sessionID string, actual, input, cached, output, reasoning, total *int64) error {
