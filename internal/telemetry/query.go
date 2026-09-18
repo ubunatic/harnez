@@ -254,22 +254,22 @@ type Stats struct {
 // ungrouped Aggregate, so the two are kept as distinct types rather than
 // risking the same field name silently meaning two different things.
 type GroupStats struct {
-	Key         string
-	Count       int64
-	AvgScore    float64 // 0 if no scored rows
-	ScoredCount int64   // rows with a non-NULL score, denominator for AvgScore
+	Key                         string  `json:"key"`
+	Count                       int64   `json:"count"`
+	AvgScore                    float64 `json:"avg_score"`
+	ScoredCount                 int64   `json:"scored_count"`
 	// FailureCount counts rows with exit_code != 0 OR score <= 2, excluding
 	// rows with call_type == ExpectedFailureCallType (issue 226): a shell
 	// command an agent ran expecting it to fail is real telemetry (its true
 	// exit_code is still stored) but isn't "failed agent/tool behavior" for
 	// this quality signal's purposes.
-	FailureCount                int64
-	TotalRawBytes               int64
-	TotalDistilled              int64
-	AvgDurationMs               float64
-	AvgActualTokens             float64
-	TotalPotentialSavingsTokens int64
-	TotalPotentialSavingsBytes  int64
+	FailureCount                int64   `json:"failure_count"`
+	TotalRawBytes               int64   `json:"total_raw_bytes"`
+	TotalDistilled              int64   `json:"total_distilled"`
+	AvgDurationMs               float64 `json:"avg_duration_ms"`
+	AvgActualTokens             float64 `json:"avg_actual_tokens"`
+	TotalPotentialSavingsTokens int64   `json:"potential_savings_tokens"`
+	TotalPotentialSavingsBytes  int64   `json:"potential_savings_bytes"`
 }
 
 // aggregateGroupedBy summarizes tool_calls rows matching f, one row per
@@ -409,10 +409,10 @@ func (d *DB) Aggregate(f Filter) (Stats, error) {
 // (nothing to divide by — the caller, cmd/harnez/stats.go, is expected to
 // check Count before treating Ratio as meaningful).
 type DistillationSavings struct {
-	Count          int64
-	RawBytes       int64
-	DistilledBytes int64
-	Ratio          float64
+	Count          int64   `json:"count"`
+	RawBytes       int64   `json:"raw_bytes"`
+	DistilledBytes int64   `json:"distilled_bytes"`
+	Ratio          float64 `json:"ratio"`
 }
 
 // rateCallType is the call_type value a failure/unexpected-outcome
@@ -529,9 +529,9 @@ func (d *DB) DistillationSavings(f Filter) (DistillationSavings, error) {
 // for `harnez stats` to surface, since silence alone can't distinguish
 // "everything's been fine" from "the agent forgot the protocol."
 type HeartbeatInfo struct {
-	Count      int64
-	LastAt     time.Time // zero if Count == 0
-	CallsSince int64     // tool_calls rows (any call_type) matching f with created_at > LastAt; 0 if Count == 0
+	Count      int64     `json:"count"`
+	LastAt     time.Time `json:"last_at,omitempty"` // zero if Count == 0
+	CallsSince int64     `json:"calls_since"`       // tool_calls rows (any call_type) matching f with created_at > LastAt; 0 if Count == 0
 }
 
 // UnratedFailureCount computes issue 188's unrated-failure signal for f

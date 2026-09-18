@@ -81,10 +81,7 @@ func Open(path string) (*DB, error) {
 		} else if _, err := sqlDB.Exec(schemaDDL); err != nil {
 			sqlDB.Close()
 			lastErr = fmt.Errorf("telemetry: create schema: %w", err)
-		} else if err := migrateToolCalls(sqlDB); err != nil {
-			sqlDB.Close()
-			lastErr = fmt.Errorf("telemetry: migrate schema: %w", err)
-		} else if err := checkAndStampSchemaVersion(sqlDB, path, tableExisted); err != nil {
+		} else if err := checkAndMigrateSchema(sqlDB, path, tableExisted); err != nil {
 			sqlDB.Close()
 			return nil, err
 		} else {
@@ -95,7 +92,7 @@ func Open(path string) (*DB, error) {
 	return nil, fmt.Errorf("telemetry: open %s: %w", path, lastErr)
 }
 
-func migrateToolCalls(sqlDB *sql.DB) error {
+func migrateV2ToV3(sqlDB *sql.DB) error {
 	rows, err := sqlDB.Query("PRAGMA table_info(tool_calls)")
 	if err != nil {
 		return err
@@ -126,7 +123,7 @@ func migrateToolCalls(sqlDB *sql.DB) error {
 
 // tableExists reports whether name already exists in the database, checked
 // BEFORE running schemaDDL's CREATE TABLE IF NOT EXISTS — this is what lets
-// checkAndStampSchemaVersion tell "genuinely brand-new file, this Open call
+// checkAndMigrateSchema tell "genuinely brand-new file, this Open call
 // just created the table with the current shape" apart from "a table that
 // already existed, for any reason, before this call."
 func tableExists(sqlDB *sql.DB, name string) (bool, error) {
@@ -138,27 +135,10 @@ func tableExists(sqlDB *sql.DB, name string) (bool, error) {
 	return n > 0, nil
 }
 
-// checkAndStampSchemaVersion reads SQLite's built-in PRAGMA user_version
-// and decides whether this file's schema can be trusted to match the
-// current schemaDDL shape.
-//
-// preexisting is whether the tool_calls table already existed before this
-// Open call ran schemaDDL (see tableExists). This distinction matters
-// because PRAGMA user_version reads 0 for two very different cases that
-// look identical from the version number alone: (a) a genuinely brand-new
-// file, where THIS call's CREATE TABLE just made the table with the
-// current shape — safe to stamp; (b) a file that already existed before
-// this package's version-tracking mechanism itself was added (or before
-// any Open call happened to reach this code) — its column shape may be
-// arbitrarily stale, and CREATE TABLE IF NOT EXISTS is a no-op against it,
-// so treating a case-(b) 0 as "fresh" and stamping it would silently
-// paper over a real stale schema instead of catching it. This is not
-// hypothetical: it's exactly what happened to this repo's own real
-// ~/.harnez/tool_catalog.sqlite on 2026-08-31 — a file created before this
-// guard existed got auto-stamped to the current version despite still
-// having the old NOT NULL distilled_bytes column, and Insert failed with
-// a raw constraint error instead of Open failing with a clear one.
-func checkAndStampSchemaVersion(sqlDB *sql.DB, path string, preexisting bool) error {
+// checkAndMigrateSchema reads SQLite's built-in PRAGMA user_version,
+// applies version-guarded discrete migrations when current < schemaVersion,
+// and stamps user_version to current.
+func checkAndMigrateSchema(sqlDB *sql.DB, path string, preexisting bool) error {
 	var current int
 	if err := sqlDB.QueryRow("PRAGMA user_version").Scan(&current); err != nil {
 		return fmt.Errorf("telemetry: read schema version: %w", err)
@@ -173,6 +153,11 @@ func checkAndStampSchemaVersion(sqlDB *sql.DB, path string, preexisting bool) er
 		return nil
 	}
 	if current < schemaVersion {
+		if current < 3 {
+			if err := migrateV2ToV3(sqlDB); err != nil {
+				return fmt.Errorf("telemetry: migrate schema to v3: %w", err)
+			}
+		}
 		if _, err := sqlDB.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
 			return fmt.Errorf("telemetry: stamp migrated schema version: %w", err)
 		}

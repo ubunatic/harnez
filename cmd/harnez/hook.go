@@ -89,43 +89,84 @@ type agyPostHookOptions struct {
 }
 
 func runAgyPostToolHook(in io.Reader, out io.Writer, opts agyPostHookOptions) error {
+	defer fmt.Fprintln(out, `{}`)
+
 	var payload agyPostToolUseInput
 	if err := json.NewDecoder(in).Decode(&payload); err != nil {
-		return fmt.Errorf("decode agy post-tool payload: %w", err)
+		fmt.Fprintf(os.Stderr, "harnez post-tool hook: decode payload: %v\n", err)
+		return nil
 	}
-	outputBytes := int64(len([]byte(payload.Output)))
-	if outputBytes == 0 && payload.TranscriptPath != "" {
-		if data, err := os.ReadFile(payload.TranscriptPath); err == nil {
-			outputBytes = int64(len(data))
-		}
+
+	outputStr := payload.Output
+	if outputStr == "" && payload.TranscriptPath != "" {
+		outputStr = extractTranscriptOutput(payload.TranscriptPath)
 	}
+	outputBytes := int64(len([]byte(outputStr)))
+	actualTok := int64(readcard.ComputeTextTokens(outputStr).TextTokens)
+	var actualTokens *int64 = &actualTok
+
 	dbPath := opts.DBPath
 	if dbPath == "" {
 		dbPath, _ = telemetry.DefaultDBPath()
 	}
+
 	if opts.Update != nil {
 		if err := opts.Update(dbPath, payload.ConversationID, outputBytes, 0); err != nil {
-			return err
+			fmt.Fprintf(os.Stderr, "harnez post-tool hook: update: %v\n", err)
 		}
-	} else {
-		db, err := telemetry.Open(dbPath)
-		if err != nil {
-			return err
+		return nil
+	}
+
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez post-tool hook: open db: %v\n", err)
+		return nil
+	}
+	defer db.Close()
+
+	var durationMs int64
+	var savingsTokens, savingsBytes *int64
+	calls, queryErr := db.Query(telemetry.Filter{SessionID: payload.ConversationID})
+	if queryErr == nil && len(calls) > 0 {
+		if !calls[0].CreatedAt.IsZero() {
+			d := time.Since(calls[0].CreatedAt).Milliseconds()
+			if d > 0 {
+				durationMs = d
+			}
 		}
-		var savingsTokens, savingsBytes *int64
-		calls, queryErr := db.Query(telemetry.Filter{SessionID: payload.ConversationID})
-		if queryErr == nil && len(calls) > 0 && isNativeReadTool(calls[0].ToolName) {
-			estimate := readcard.EstimateSavings(payload.Output, readcard.ProviderClaude)
+		if isNativeReadTool(calls[0].ToolName) && outputStr != "" {
+			provider := readcard.ParseProvider(calls[0].AgentID)
+			estimate := readcard.EstimateSavings(outputStr, provider)
 			savingsTokens = &estimate.SavingsTokens
 			savingsBytes = &estimate.SavingsBytes
 		}
-		err = db.UpdateLatestToolCallMetrics(payload.ConversationID, outputBytes, 0, savingsTokens, savingsBytes)
-		_ = db.Close()
-		if err != nil {
-			return err
+	}
+
+	if err := db.UpdateLatestToolCallMetrics(payload.ConversationID, outputBytes, durationMs, actualTokens, savingsTokens, savingsBytes); err != nil {
+		fmt.Fprintf(os.Stderr, "harnez post-tool hook: update metrics: %v\n", err)
+	}
+	return nil
+}
+
+func extractTranscriptOutput(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		var step struct {
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal([]byte(line), &step); err == nil && step.Content != "" {
+			return step.Content
 		}
 	}
-	return json.NewEncoder(out).Encode(map[string]any{})
+	return string(data)
 }
 
 func isNativeReadTool(name string) bool {

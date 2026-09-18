@@ -183,6 +183,53 @@ func TestRunStatsJSON_ValidAndMatchesTable(t *testing.T) {
 	}
 }
 
+func TestRunStatsJSON_SnakeCaseFields(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	seedStatsFixture(t, dbPath)
+
+	var buf bytes.Buffer
+	if err := runStats(&buf, statsOptions{DBPath: dbPath, JSON: true}); err != nil {
+		t.Fatalf("runStats: %v", err)
+	}
+	out := buf.String()
+	for _, expectedKey := range []string{
+		`"avg_actual_tokens"`,
+		`"potential_savings_tokens"`,
+		`"potential_savings_bytes"`,
+		`"avg_score"`,
+		`"failure_count"`,
+		`"total_raw_bytes"`,
+		`"total_distilled"`,
+	} {
+		if !strings.Contains(out, expectedKey) {
+			t.Errorf("JSON output missing snake_case key %q, raw JSON:\n%s", expectedKey, out)
+		}
+	}
+}
+
+func TestRunStatsTable_ZeroSavingsDash(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Insert(telemetry.ToolCall{
+		SessionID: "sess-zero", AgentID: "agent-zero", ToolName: "test-zero", CallType: "internal",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	var buf bytes.Buffer
+	if err := runStats(&buf, statsOptions{DBPath: dbPath}); err != nil {
+		t.Fatalf("runStats: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "-") {
+		t.Errorf("expected table output to format zero savings as '-', got:\n%s", out)
+	}
+}
+
 func TestRunStatsFilters_ToolAgentTicket(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
 	seedStatsFixture(t, dbPath)

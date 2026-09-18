@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -282,20 +283,20 @@ func renderStatsTable(w io.Writer, report statsReport) error {
 
 	fmt.Fprintln(tw, "TOOL\tCALLS\tAVG SCORE\tAVG TOKENS\tSAVINGS TOKENS\tSAVINGS BYTES\tFAILURE RATE")
 	for _, g := range report.ByTool {
-		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%d\t%d\t%s\n",
-			g.Key, g.Count, formatAvgScore(g), formatAvgTokens(g), g.TotalPotentialSavingsTokens, g.TotalPotentialSavingsBytes, formatFailureRate(g))
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
+			g.Key, g.Count, formatAvgScore(g), formatAvgTokens(g), formatSavingsTokens(g), formatSavingsBytes(g), formatFailureRate(g))
 	}
 	fmt.Fprintln(tw)
 	fmt.Fprintln(tw, "AGENT\tCALLS\tAVG SCORE\tAVG TOKENS\tSAVINGS TOKENS\tSAVINGS BYTES\tFAILURE RATE")
 	for _, g := range report.ByAgent {
-		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%d\t%d\t%s\n",
-			g.Key, g.Count, formatAvgScore(g), formatAvgTokens(g), g.TotalPotentialSavingsTokens, g.TotalPotentialSavingsBytes, formatFailureRate(g))
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
+			g.Key, g.Count, formatAvgScore(g), formatAvgTokens(g), formatSavingsTokens(g), formatSavingsBytes(g), formatFailureRate(g))
 	}
 	fmt.Fprintln(tw)
 	fmt.Fprintln(tw, "PROJECT\tCALLS\tAVG SCORE\tAVG TOKENS\tSAVINGS TOKENS\tSAVINGS BYTES\tFAILURE RATE")
 	for _, g := range report.ByProject {
-		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%d\t%d\t%s\n",
-			g.Key, g.Count, formatAvgScore(g), formatAvgTokens(g), g.TotalPotentialSavingsTokens, g.TotalPotentialSavingsBytes, formatFailureRate(g))
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
+			g.Key, g.Count, formatAvgScore(g), formatAvgTokens(g), formatSavingsTokens(g), formatSavingsBytes(g), formatFailureRate(g))
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("render table: %w", err)
@@ -328,6 +329,20 @@ func renderStatsTable(w io.Writer, report statsReport) error {
 			o.EstimateMethod, o.EstimatedCallTokens, o.EstimatedInstructionTokens)
 	}
 	return nil
+}
+
+func formatSavingsTokens(g telemetry.GroupStats) string {
+	if g.TotalPotentialSavingsTokens == 0 {
+		return "-"
+	}
+	return strconv.FormatInt(g.TotalPotentialSavingsTokens, 10)
+}
+
+func formatSavingsBytes(g telemetry.GroupStats) string {
+	if g.TotalPotentialSavingsBytes == 0 {
+		return "-"
+	}
+	return strconv.FormatInt(g.TotalPotentialSavingsBytes, 10)
 }
 
 func formatAvgTokens(g telemetry.GroupStats) string {

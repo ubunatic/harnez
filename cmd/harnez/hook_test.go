@@ -212,7 +212,7 @@ func TestRunAgyPostToolHookEstimatesNativeReadSavings(t *testing.T) {
 	}
 	var output strings.Builder
 	for i := 0; i < 400; i++ {
-		fmt.Fprintf(&output, "line %03d: native read content\n", i)
+		fmt.Fprintf(&output, "line %03d: native read content with sufficient width to represent actual source code in repository\n", i)
 	}
 	var postOut bytes.Buffer
 	payload, _ := json.Marshal(map[string]any{"conversationId": "read-savings", "output": output.String()})
@@ -229,7 +229,81 @@ func TestRunAgyPostToolHookEstimatesNativeReadSavings(t *testing.T) {
 		t.Fatalf("query rows: %d, %v", len(rows), err)
 	}
 	if rows[0].PotentialSavingsTokens == nil || *rows[0].PotentialSavingsTokens <= 0 {
-		t.Fatalf("potential savings = %v, want positive", rows[0].PotentialSavingsTokens)
+		t.Fatalf("potential savings = %v, want positive", *rows[0].PotentialSavingsTokens)
+	}
+	if rows[0].ActualTokens == nil || *rows[0].ActualTokens <= 0 {
+		t.Fatalf("actual tokens = %v, want positive", *rows[0].ActualTokens)
+	}
+}
+
+func TestRunAgyPostToolHook_FailOpenResiliency(t *testing.T) {
+	// Invalid JSON input
+	var out bytes.Buffer
+	if err := runAgyPostToolHook(strings.NewReader("invalid-json"), &out, agyPostHookOptions{DBPath: "/nonexistent/db.sqlite"}); err != nil {
+		t.Fatalf("expected nil error on invalid json, got %v", err)
+	}
+	if strings.TrimSpace(out.String()) != `{}` {
+		t.Errorf("output = %q, want {}", out.String())
+	}
+
+	// Missing DB
+	out.Reset()
+	if err := runAgyPostToolHook(strings.NewReader(`{"conversationId":"missing"}`), &out, agyPostHookOptions{DBPath: "/proc/nonexistent/db.sqlite"}); err != nil {
+		t.Fatalf("expected nil error on DB error, got %v", err)
+	}
+	if strings.TrimSpace(out.String()) != `{}` {
+		t.Errorf("output = %q, want {}", out.String())
+	}
+}
+
+func TestRunAgyPostToolHook_TranscriptFallback(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	var preOut bytes.Buffer
+	pre := `{"conversationId":"transcript-sess","toolCall":{"name":"view_file","args":{}}}`
+	if err := runAgyToolHook(strings.NewReader(pre), &preOut, agyHookOptions{DBPath: dbPath}); err != nil {
+		t.Fatal(err)
+	}
+
+	transcriptDir := t.TempDir()
+	transcriptPath := filepath.Join(transcriptDir, "transcript.jsonl")
+	var contentBuilder strings.Builder
+	for i := 0; i < 400; i++ {
+		fmt.Fprintf(&contentBuilder, "line %03d: native read content with sufficient width to represent actual source code in repository\n", i)
+	}
+	stepJSON, _ := json.Marshal(map[string]any{
+		"step_index": 1,
+		"content":    contentBuilder.String(),
+	})
+	if err := os.WriteFile(transcriptPath, append(stepJSON, '\n'), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var postOut bytes.Buffer
+	payload, _ := json.Marshal(map[string]any{
+		"conversationId": "transcript-sess",
+		"transcriptPath": transcriptPath,
+	})
+	if err := runAgyPostToolHook(bytes.NewReader(payload), &postOut, agyPostHookOptions{DBPath: dbPath}); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{SessionID: "transcript-sess"})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("query: %v, rows: %d", err, len(rows))
+	}
+	if rows[0].OutputBytes == nil || *rows[0].OutputBytes != int64(len(contentBuilder.String())) {
+		t.Errorf("OutputBytes = %v, want %d", rows[0].OutputBytes, len(contentBuilder.String()))
+	}
+	if rows[0].ActualTokens == nil || *rows[0].ActualTokens <= 0 {
+		t.Errorf("ActualTokens = %v, want positive", *rows[0].ActualTokens)
+	}
+	if rows[0].PotentialSavingsTokens == nil || *rows[0].PotentialSavingsTokens <= 0 {
+		t.Errorf("PotentialSavingsTokens = %v, want positive", *rows[0].PotentialSavingsTokens)
 	}
 }
 

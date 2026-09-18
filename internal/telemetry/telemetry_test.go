@@ -198,6 +198,39 @@ func TestInsertQueryTelemetryRoundTrip(t *testing.T) {
 	}
 }
 
+func TestUpdateLatestToolCallMetrics_ActualTokensAndSavings(t *testing.T) {
+	db := openTestDB(t)
+	if err := db.Insert(ToolCall{SessionID: "update-sess", AgentID: "agy", ToolName: "view_file", CallType: "hook:rpc"}); err != nil {
+		t.Fatal(err)
+	}
+	actualTokens := int64(123)
+	savingsTokens := int64(456)
+	savingsBytes := int64(789)
+	if err := db.UpdateLatestToolCallMetrics("update-sess", 1000, 50, &actualTokens, &savingsTokens, &savingsBytes); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Query(Filter{SessionID: "update-sess"})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("query: %v, rows: %d", err, len(rows))
+	}
+	r := rows[0]
+	if r.OutputBytes == nil || *r.OutputBytes != 1000 {
+		t.Errorf("OutputBytes = %v, want 1000", r.OutputBytes)
+	}
+	if r.DurationMs != 50 {
+		t.Errorf("DurationMs = %d, want 50", r.DurationMs)
+	}
+	if r.ActualTokens == nil || *r.ActualTokens != 123 {
+		t.Errorf("ActualTokens = %v, want 123", r.ActualTokens)
+	}
+	if r.PotentialSavingsTokens == nil || *r.PotentialSavingsTokens != 456 {
+		t.Errorf("PotentialSavingsTokens = %v, want 456", r.PotentialSavingsTokens)
+	}
+	if r.PotentialSavingsBytes == nil || *r.PotentialSavingsBytes != 789 {
+		t.Errorf("PotentialSavingsBytes = %v, want 789", r.PotentialSavingsBytes)
+	}
+}
+
 func TestInsertAndQuery(t *testing.T) {
 	db := openTestDB(t)
 
