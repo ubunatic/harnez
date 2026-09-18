@@ -24,6 +24,11 @@ func TestApplyCreatesFile(t *testing.T) {
 		t.Fatalf("Status = installed=%v drifted=%v, want true/false", installed, drifted)
 	}
 
+	data, err := os.ReadFile(path)
+	if err != nil || !strings.Contains(string(data), "hooks = true") {
+		t.Fatalf("expected Codex lifecycle hooks feature enabled, got:\n%s", data)
+	}
+
 	// idempotent: second apply is a no-op.
 	changed, err = Apply(path)
 	if err != nil {
@@ -74,7 +79,10 @@ func TestStatusDetectsDrift(t *testing.T) {
 		t.Fatalf("Apply: %v", err)
 	}
 
-	drifted := `[hooks.harnez]
+	drifted := `[features]
+hooks = true
+
+[hooks.harnez]
 enabled = false
 `
 	if err := os.WriteFile(path, []byte(drifted), 0644); err != nil {
@@ -87,6 +95,27 @@ enabled = false
 	}
 	if !isDrifted {
 		t.Fatal("expected drifted=true after hand-editing the harnez entry")
+	}
+}
+
+func TestApplyPreservesOtherFeatures(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte("[features]\napps = false\nplugins = false\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(path); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	for _, want := range []string{"apps = false", "plugins = false", "hooks = true"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
 	}
 }
 

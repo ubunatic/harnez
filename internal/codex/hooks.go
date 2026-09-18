@@ -55,6 +55,7 @@ func HooksPath(home string) string {
 // necessary).
 func BuildHooksDoc() map[string]any {
 	return map[string]any{
+		"features": map[string]any{"hooks": true},
 		"hooks": map[string]any{
 			HookName: map[string]any{
 				"enabled": true,
@@ -130,6 +131,18 @@ func mergeHooksDoc(existing, incoming map[string]any) map[string]any {
 		}
 	}
 	out["hooks"] = mergedHooks
+	features := map[string]any{}
+	if existingFeatures, ok := out["features"].(map[string]any); ok {
+		for k, v := range existingFeatures {
+			features[k] = v
+		}
+	}
+	if incomingFeatures, ok := incoming["features"].(map[string]any); ok {
+		for k, v := range incomingFeatures {
+			features[k] = v
+		}
+	}
+	out["features"] = features
 	return out
 }
 
@@ -171,6 +184,10 @@ func Status(path string) (installed bool, drifted bool) {
 	if !ok {
 		return false, false
 	}
+	features, featuresOK := existing["features"].(map[string]any)
+	if !featuresOK || features["hooks"] != true {
+		return false, true
+	}
 	entry, ok := hooks[HookName]
 	if !ok {
 		return false, false
@@ -201,6 +218,12 @@ func Remove(path string) (changed bool, err error) {
 		delete(existing, "hooks")
 	} else {
 		existing["hooks"] = hooks
+	}
+	if features, ok := existing["features"].(map[string]any); ok {
+		delete(features, "hooks")
+		if len(features) == 0 {
+			delete(existing, "features")
+		}
 	}
 
 	if len(existing) == 0 {
