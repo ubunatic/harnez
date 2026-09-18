@@ -321,6 +321,7 @@ func createTestFile(t *testing.T, dir, name string, lines int) string {
 }
 
 func TestRunAgyToolHook_ReadingDiscipline(t *testing.T) {
+	enforceRead := true
 	tempDir := t.TempDir()
 	smallFile := createTestFile(t, tempDir, "small.txt", 50)
 	largeFile := createTestFile(t, tempDir, "large.txt", 150)
@@ -412,8 +413,9 @@ func TestRunAgyToolHook_ReadingDiscipline(t *testing.T) {
 			var out bytes.Buffer
 			var recorded telemetry.ToolCall
 			opts := agyHookOptions{
-				BaseDir: tempDir,
-				DBPath:  filepath.Join(tempDir, "test.sqlite"),
+				BaseDir:     tempDir,
+				DBPath:      filepath.Join(tempDir, "test.sqlite"),
+				EnforceRead: &enforceRead,
 				Insert: func(dbPath string, call telemetry.ToolCall) error {
 					recorded = call
 					return nil
@@ -446,6 +448,7 @@ func TestRunAgyToolHook_ReadingDiscipline(t *testing.T) {
 }
 
 func TestRunClaudeReadHook_ReadingDiscipline(t *testing.T) {
+	enforceRead := true
 	tempDir := t.TempDir()
 	smallFile := createTestFile(t, tempDir, "small.txt", 40)
 	largeFile := createTestFile(t, tempDir, "large.txt", 160)
@@ -529,7 +532,8 @@ func TestRunClaudeReadHook_ReadingDiscipline(t *testing.T) {
 			in := bytes.NewBufferString(tc.payloadJSON)
 			var out bytes.Buffer
 			opts := readHookOptions{
-				BaseDir: tempDir,
+				BaseDir:     tempDir,
+				EnforceRead: &enforceRead,
 			}
 
 			if err := runClaudeReadHook(in, &out, opts); err != nil {

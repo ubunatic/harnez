@@ -84,6 +84,7 @@ func TestReadCompressionCLIAndExplicitText(t *testing.T) {
 }
 
 func TestReadHookNativeProtocolAndRepeat(t *testing.T) {
+	enforceRead := true
 	dir := t.TempDir()
 	path := filepath.Join(dir, "file ' $x.txt")
 	if err := os.WriteFile(path, []byte(strings.Repeat("line\n", 110)), 0600); err != nil {
@@ -93,7 +94,7 @@ func TestReadHookNativeProtocolAndRepeat(t *testing.T) {
 		t.Helper()
 		payload, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "session_id": session, "tool_name": "Read", "tool_input": input, "cwd": dir})
 		var out bytes.Buffer
-		if err := runClaudeReadHook(bytes.NewReader(payload), &out, readHookOptions{StateDir: filepath.Join(dir, "state")}); err != nil {
+		if err := runClaudeReadHook(bytes.NewReader(payload), &out, readHookOptions{StateDir: filepath.Join(dir, "state"), EnforceRead: &enforceRead}); err != nil {
 			t.Fatal(err)
 		}
 		var decoded map[string]any
@@ -103,11 +104,17 @@ func TestReadHookNativeProtocolAndRepeat(t *testing.T) {
 		return decoded
 	}
 	resp := invoke("large", map[string]any{"file_path": path, "offset": 10, "limit": 5})
-	hook := resp["hookSpecificOutput"].(map[string]any)
+	hook, ok := resp["hookSpecificOutput"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing hookSpecificOutput in denied response: %v", resp)
+	}
 	if hook["hookEventName"] != "PreToolUse" || hook["permissionDecision"] != "deny" {
 		t.Fatalf("invalid hook contract %v", resp)
 	}
-	reason := hook["permissionDecisionReason"].(string)
+	reason, ok := hook["permissionDecisionReason"].(string)
+	if !ok {
+		t.Fatalf("missing permissionDecisionReason in denied response: %v", hook)
+	}
 	if !strings.Contains(reason, "harnez read -n -L 10:14 -- '") || !strings.Contains(reason, "'\"'\"'") {
 		t.Fatalf("unsafe/missing redirect: %s", reason)
 	}
