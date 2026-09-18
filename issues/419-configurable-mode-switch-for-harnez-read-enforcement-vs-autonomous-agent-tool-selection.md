@@ -1,6 +1,6 @@
 # 419 — Configurable mode switch for harnez read enforcement vs autonomous agent tool selection
 
-**Status**: Open — Milestone 1 complete
+**Status**: Open — Milestone 1 complete (Refinements in progress)
 **Priority**: P2 (Medium)
 **Severity**: Medium
 **Category**: Architecture / Context Optimization / Developer Experience
@@ -22,48 +22,50 @@ Furthermore, promotion of `harnez read` is currently embedded across multiple co
 
 ## 2. Requirements & Design Decisions
 
-1. **Simple Toggle Switch**:
-   - Provide a clear, persistent switch (e.g. `harnez mode [enforce-read|autonomous-read]` or configuration setting in `~/.harnez/config.yaml` / environment variable `HARNEZ_READ_ENFORCE=0|1` / hook setting) to toggle reading discipline enforcement.
-   - When **Enforcement is OFF**:
-     - PreToolUse hooks (`harnez hook agy`, `harnez hook read`) allow native read tools (`view_file`, `View`, `Read`, `ReadMultipleFiles`) without intercepting or denying.
-     - Telemetry continues to observe and record post-tool execution and opportunity cost metrics (`harnez hook agy-post`) for analytical comparison.
-     - Agents retain discretion to explicitly run `harnez read -I <file>` when desired for dense visual context cards.
-     - Prohibit `--auto` redirects when enforcement is disabled.
-   - When **Enforcement is ON**:
-     - Strict PreToolUse interception and redirection rules apply to large/unbounded reads.
+1. **System-Level & Declarative Configuration**:
+   - Primary configuration resides in `~/.harnez/config.yaml` (e.g. `reading_discipline.enforce: true|false`).
+   - `HARNEZ_READ_ENFORCE=0|1` is supported as an optional per-process override.
+   - CLI commands (`harnez mode autonomous-read` / `harnez config`) provide an ergonomic, persistent interface to toggle the switch.
 
-2. **Clean Separation of Prompt Recommendations vs Hard Rules**:
-   - Audit and clarify `AGENTS.md` and `docs/practices/AgenticLoop.md` so that the guidance establishes `harnez read -I` as the *recommended best practice for large/medium files* while making runtime enforcement conditional on the active mode switch.
-   - Ensure skills and command definitions do not break or fail when enforcement is toggled off.
+2. **Permanent Hook Registration & Traceability (Observer Mode)**:
+   - All lifecycle hooks (`PreToolUse`, `PostToolUse`) remain permanently registered in `~/.claude/settings.json` and Antigravity hook configs.
+   - Hooks are **not removed** when enforcement is turned off. Instead, they operate in **Observer / Passthrough Mode**:
+     - Pre-tool hooks log the invocation to telemetry and immediately permit native reads without issuing denials or redirects.
+     - Post-tool observation hooks continue capturing execution metrics, token footprints, and opportunity cost estimates.
+   - When enforcement is turned ON, pre-tool hooks actively intercept and redirect large/unbounded reads.
 
-3. **Comparative Evaluation & Benchmarking**:
+3. **Hermetic Test Isolation & Dependency Injection**:
+   - Hook options (`readHookOptions`, `agyHookOptions`) accept explicit configuration flags (`EnforceRead *bool`) so test suites remain fully isolated from ambient environment variables.
+
+4. **Clean Separation of Prompt Recommendations vs Hard Rules**:
+   - Audit and clarify `AGENTS.md` and `docs/practices/AgenticLoop.md` so that guidance establishes `harnez read -I` as the *recommended best practice for large/medium files* while making runtime enforcement conditional on the active mode switch.
+
+5. **Comparative Evaluation & Benchmarking**:
    - Enable direct measurement of token consumption, tool frequency, error rates, and completion velocity between autonomous agent runs and enforced runs via `harnez stats`.
 
 ---
 
 ## 3. Implementation Milestones
 
-### Milestone 1: Toggle Switch & Hook Passthrough Logic
-- Introduce a configuration option / environment flag (`HARNEZ_READ_ENFORCE` / `~/.harnez/config.yaml` setting) checked inside `evaluateReadToolDiscipline` and `runClaudeReadHook` / `runAgyToolHook`.
-- When disabled, bypass deny decisions and allow native read tools immediately.
+### Milestone 1: Toggle Switch, Passthrough Logic & Config-First Integration
+- Introduce `readEnforcementEnabled()` checking declarative config `~/.harnez/config.yaml` with fallback to `HARNEZ_READ_ENFORCE` env override and default-on behavior.
+- Support dependency injection (`EnforceRead *bool`) in `readHookOptions` / `agyHookOptions` to ensure test suite isolation.
+- When disabled, bypass deny decisions and allow native read tools immediately while logging telemetry.
 
-**Delivered (2026-09-18):** `HARNEZ_READ_ENFORCE` is default-on and accepts `0`,
-`false`, `off`, or `no` to select autonomous read mode. Claude and Antigravity
-pre-tool hooks allow native reads in that mode; Antigravity telemetry remains
-active. Unit coverage verifies disabled passthrough and default-on behavior.
+**Delivered (2026-09-18):** Initial passthrough logic added in `cmd/harnez/hook.go`. Refinement to support config-first lookup and test isolation in progress.
 
 ### Milestone 2: Telemetry & Opportunity Cost Observer Preservation
-- Ensure post-tool observation hooks (`runAgyPostToolHook`) continue capturing output metrics and estimating opportunity savings even when enforcement is OFF, providing ground-truth comparison data.
+- Decouple large read discipline detection from denial actions so that post-tool observation hooks (`runAgyPostToolHook`) and telemetry record candidate large-read opportunities even when enforcement is OFF, providing ground-truth comparison data.
 
 ### Milestone 3: Documentation, Prompts & Skills Decoupling
-- Review and refine `AGENTS.md`, `docs/templates/AGENTS.md`, `docs/practices/AgenticLoop.md`, and skills to distinguish between the visual context card recommendation and hook-level enforcement mechanics.
+- Review and refine `AGENTS.md`, `docs/templates/AGENTS.md`, `docs/practices/AgenticLoop.md`, and skills to distinguish between visual context card recommendations and hook-level enforcement mechanics.
 
 ### Milestone 4: Verification & CLI Mode Switch Control
-- Add unit and integration tests verifying both enabled and disabled switch states across Claude Code and Antigravity hooks.
-- Provide a convenient CLI command or flag to inspect and set the mode.
+- Add unit and integration tests verifying both enabled and disabled switch states across Claude Code and Antigravity hooks under isolated test conditions.
+- Provide a convenient CLI command (`harnez mode [enforce-read|autonomous-read]` or `harnez config`) to inspect and toggle the mode.
 
 ---
 
 ## 4. Verification & Acceptance Criteria
-- `go test ./...` verifies hook behavior under both `HARNEZ_READ_ENFORCE=1` (deny large reads) and `HARNEZ_READ_ENFORCE=0` (allow native reads).
-- Telemetry properly records invocations regardless of mode switch state.
+- `go test ./...` passes cleanly regardless of whether `HARNEZ_READ_ENFORCE=0` or `1` is present in the shell.
+- Telemetry properly records invocations and opportunity cost metrics regardless of mode switch state.
