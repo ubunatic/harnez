@@ -58,6 +58,14 @@ Entities:
            narrow lifecycle state.
 
 Subcommands / Allocation:
+  harnez find issues last [--json]
+           List the newest issues (the same deterministic ticket-number order
+           as an unfiltered listing). The default limit is 10.
+
+  harnez find issues open|blocked|closed|draft [query...]
+           Shorthand for the matching status filter, optionally combined with
+           ordinary fuzzy text terms.
+
   harnez find issues next [--json]
            Compute and report the next free ticket number (max+1, formatted
            with 3+ digits). Read-only: it does not create or reserve
@@ -288,6 +296,21 @@ func runFindWithOptions(w, errW io.Writer, args []string, opts findRunOptions) e
 	entity := args[0]
 	if entity != "issues" {
 		return fmt.Errorf("find: unsupported entity %q (only \"issues\" is supported)", entity)
+	}
+
+	// Keep these convenience verbs as read-only aliases over the existing
+	// query engine. `last` deliberately uses the normal unfiltered listing so
+	// its ordering and limit stay identical to the established default.
+	if len(args) > 1 {
+		switch args[1] {
+		case "last":
+			if len(args) > 2 {
+				return fmt.Errorf("find issues last: accepts no query terms")
+			}
+			args = args[:1]
+		case "open", "blocked", "closed", "draft":
+			args = append([]string{"issues", "status:" + args[1]}, args[2:]...)
+		}
 	}
 
 	// Handle `harnez find issues history ...` subcommand syntax

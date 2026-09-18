@@ -107,8 +107,8 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(primeAgentDir, "prompts", "standup.md")); err != nil {
 		t.Fatalf("Expected Prime Agent prompt to be written: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(primeAgentDir, "prompts", "review.md")); err != nil {
-		t.Fatalf("Expected Prime Agent review prompt to be written: %v", err)
+	if _, err := os.Stat(filepath.Join(primeAgentDir, "skills", "review", "SKILL.md")); err != nil {
+		t.Fatalf("Expected Prime Agent review skill to be written: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(primeAgentDir, "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("Expected Prime Agent AGENTS.md to NOT be written: %v", err)

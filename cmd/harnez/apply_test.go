@@ -52,8 +52,8 @@ func TestEnsureTelemetrySchemaMigratesBeforeApply(t *testing.T) {
 	if err := check.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 8 {
-		t.Fatalf("schema version = %d, want 8", version)
+	if version != 9 {
+		t.Fatalf("schema version = %d, want 9", version)
 	}
 	for _, column := range []string{"input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens"} {
 		var count int
@@ -75,6 +75,78 @@ func TestEnsureTelemetrySchemaMigratesBeforeApply(t *testing.T) {
 	}
 }
 
+func TestApplyCmdMigratesLegacyCompactionSchema(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	path := filepath.Join(home, ".harnez", "tool_catalog.sqlite")
+	db, err := telemetry.Open(path)
+	if err != nil {
+		t.Fatalf("create telemetry DB: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close telemetry DB: %v", err)
+	}
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("reopen telemetry DB: %v", err)
+	}
+	_, err = raw.Exec(`
+		ALTER TABLE compaction_events RENAME TO compaction_events_current;
+		CREATE TABLE compaction_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			created_at TEXT NOT NULL,
+			session_id TEXT NOT NULL,
+			event_type TEXT NOT NULL,
+			turn_id TEXT NOT NULL DEFAULT '',
+			trigger TEXT NOT NULL DEFAULT '',
+			reason TEXT NOT NULL DEFAULT '',
+			input_tokens INTEGER,
+			cached_input_tokens INTEGER,
+			output_tokens INTEGER,
+			reasoning_tokens INTEGER,
+			 total_tokens INTEGER
+		);
+		INSERT INTO compaction_events (created_at, session_id, event_type)
+			SELECT created_at, session_id, event_type FROM compaction_events_current;
+		DROP TABLE compaction_events_current;
+		PRAGMA user_version = 5;
+	`)
+	if err != nil {
+		raw.Close()
+		t.Fatalf("create legacy telemetry schema: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close legacy telemetry DB: %v", err)
+	}
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"apply", "-t", filepath.Join(home, ".claude")})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+
+	check, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("reopen migrated telemetry DB: %v", err)
+	}
+	defer check.Close()
+	var version int
+	if err := check.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatalf("read schema version: %v", err)
+	}
+	if version != 9 {
+		t.Fatalf("schema version = %d, want 9", version)
+	}
+	var modelPresent int
+	if err := check.QueryRow("SELECT count(*) FROM pragma_table_info('compaction_events') WHERE name = 'model'").Scan(&modelPresent); err != nil {
+		t.Fatalf("check compaction_events.model: %v", err)
+	}
+	if modelPresent != 1 {
+		t.Fatal("compaction_events.model was not added by apply")
+	}
+}
+
 func TestApplyCmd_ZeroDefaultDocs(t *testing.T) {
 	dir := t.TempDir()
 	cmd := newRootCmd()
@@ -86,7 +158,6 @@ func TestApplyCmd_ZeroDefaultDocs(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
-
 	goDoc := filepath.Join(dir, "docs", "Go.md")
 	if _, err := os.Stat(goDoc); !os.IsNotExist(err) {
 		t.Fatalf("expected Go.md not to be installed by default on bare apply")

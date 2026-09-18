@@ -19,7 +19,9 @@ package telemetry
 // 5: additive compaction_events and session_boundaries tables.
 // 6: ordered per-turn and cumulative provider token snapshots.
 // 7: versioned pricing inputs and immutable compaction economics results.
-const schemaVersion = 8
+// 8: compaction_events model column (initially omitted from the migration).
+// 9: current schema marker after the compaction_events model migration.
+const schemaVersion = 9
 
 // schemaDDL is the single source of truth for the tool_calls table shape
 // (per docs/other/Spec.md's "spec files are the single source of truth"

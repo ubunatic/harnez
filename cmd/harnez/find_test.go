@@ -95,6 +95,45 @@ func TestRunFind_StatusFilterAndTextCombo(t *testing.T) {
 	}
 }
 
+func TestRunFind_ConvenienceVerbs(t *testing.T) {
+	dir := findFixtureDir(t)
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"open", []string{"issues", "open"}, "100\tOpen\tVRAM Load Panel\tissues/100-open-vram.md\n"},
+		{"closed", []string{"issues", "closed"}, "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\n101\tClosed — resolved in abc123\tGTT Memory Cleanup\tissues/101-closed-gtt.md\n"},
+		{"blocked", []string{"issues", "blocked"}, ""},
+		{"draft", []string{"issues", "draft"}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			if err := testRunFind(&out, dir, tt.args...); err != nil {
+				t.Fatal(err)
+			}
+			if out.String() != tt.want {
+				t.Errorf("output = %q, want %q", out.String(), tt.want)
+			}
+		})
+	}
+}
+
+func TestRunFind_LastIsDefaultListing(t *testing.T) {
+	dir := findFixtureDir(t)
+	var out bytes.Buffer
+	if err := runFindWithOptions(&out, io.Discard, []string{"issues", "last"}, findRunOptions{Dir: dir, Limit: 10, Raw: true}); err != nil {
+		t.Fatal(err)
+	}
+	want := "050\tClosed\tArchived VRAM Ticket\tissues/archive/050-archived-vram.md\n" +
+		"100\tOpen\tVRAM Load Panel\tissues/100-open-vram.md\n" +
+		"101\tClosed — resolved in abc123\tGTT Memory Cleanup\tissues/101-closed-gtt.md\n"
+	if out.String() != want {
+		t.Errorf("output = %q, want %q", out.String(), want)
+	}
+}
+
 func TestRunFind_UnknownEntityIsUsageError(t *testing.T) {
 	dir := findFixtureDir(t)
 	var out bytes.Buffer

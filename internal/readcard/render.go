@@ -166,6 +166,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	rawMaxLineLen := 0
 	for _, l := range lines {
 		l = strings.ReplaceAll(l, "\t", "    ")
+		l = stripANSIEscapes(l)
 		rCount := len([]rune(l))
 		if rCount > rawMaxLineLen {
 			rawMaxLineLen = rCount
@@ -259,6 +260,8 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	ext := filepath.Ext(filename)
 	lang := DetectLanguage(filename)
 	var inMultiComment bool
+	var ansi ansiState
+	hasANSI := false
 	var allRows []renderRow
 
 	for i, rawLine := range lines {
@@ -267,7 +270,15 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 			actualLineNum = opts.SourceLines[i]
 		}
 		expandedLine := strings.ReplaceAll(rawLine, "\t", "    ")
-		tokens := HighlightLine(expandedLine, ext, &inMultiComment)
+		var tokens []Token
+		if strings.Contains(expandedLine, "\x1b[") {
+			hasANSI = true
+			tokens = parseANSILine(expandedLine, &ansi)
+		} else if hasANSI {
+			tokens = []Token{{Type: TokenText, Text: expandedLine, FG: ansi.fg, BG: ansi.bg}}
+		} else {
+			tokens = HighlightLine(expandedLine, ext, &inMultiComment)
+		}
 
 		if isTruncate {
 			totalRunes := 0
@@ -337,7 +348,11 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	firstCardHeight := 0
 	firstCardWidth, firstColumns := 0, 0
 	var pages []PageGeometry
-	imageStats := ComputeTextTokens(strings.Join(lines, "\n"))
+	imageText := strings.Join(lines, "\n")
+	if hasANSI {
+		imageText = stripANSIEscapes(imageText)
+	}
+	imageStats := ComputeTextTokens(imageText)
 
 	for page := 0; page < totalPages; page++ {
 		pageStartIdx := page * linesPerPage
@@ -461,6 +476,12 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 				}
 				for _, tok := range rrow.tokens {
 					tokCol := tokenColor(tok.Type, theme)
+					if tok.FG != nil {
+						tokCol = *tok.FG
+					}
+					if tok.BG != nil {
+						drawRect(img, tokenX, curY, tokenX+len([]rune(tok.Text))*cw, curY+ch, *tok.BG)
+					}
 					tokenX += font.DrawStringBounded(img, tok.Text, tokenX, curY, maxColX, tokCol)
 					if tokenX >= maxColX {
 						break // visually wrap/clip at column edge

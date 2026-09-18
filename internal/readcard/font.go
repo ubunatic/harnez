@@ -19,6 +19,22 @@ type MonospaceFont struct {
 
 // DrawRune draws a single rune onto img at pixel coordinate (x, y) using col.
 func (f *MonospaceFont) DrawRune(img *image.RGBA, r rune, x, y int, col color.RGBA) {
+	if r >= 0x2800 && r <= 0x28ff {
+		drawBrailleRune(img, r, x, y, col, f.CharWidth, f.CharHeight)
+		return
+	}
+	if r == '°' {
+		drawDegreeRune(img, x, y, col, f.CharWidth, f.CharHeight)
+		return
+	}
+	if r == '%' {
+		drawPercentRune(img, x, y, col, f.CharWidth, f.CharHeight)
+		return
+	}
+	if pattern, ok := unicodeGlyphs[r]; ok {
+		drawUnicodePattern(img, pattern, x, y, col, f.CharWidth, f.CharHeight)
+		return
+	}
 	glyph, ok := f.Glyphs[r]
 	if !ok {
 		// Fallback for unknown characters: box or question mark
@@ -50,6 +66,80 @@ func (f *MonospaceFont) DrawRune(img *image.RGBA, r rune, x, y int, col color.RG
 			if byteIdx < len(glyph) && (glyph[byteIdx]&(1<<bitIdx)) != 0 {
 				img.SetRGBA(px, py, col)
 			}
+		}
+	}
+}
+
+// drawPercentRune uses one normalized matrix for every font size. Keeping the
+// slash and the two counters in the same coordinate system avoids the visibly
+// lopsided result produced by independently scaled legacy byte glyphs.
+func drawPercentRune(img *image.RGBA, x, y int, col color.RGBA, width, height int) {
+	pattern := [7]string{
+		"01110",
+		"10001",
+		"00010",
+		"00100",
+		"01000",
+		"10001",
+		"01110",
+	}
+	for py, row := range pattern {
+		for px, bit := range row {
+			if bit != '1' {
+				continue
+			}
+			dx := x + px*width/5
+			dy := y + py*height/7
+			if dx >= img.Bounds().Min.X && dx < img.Bounds().Max.X && dy >= img.Bounds().Min.Y && dy < img.Bounds().Max.Y {
+				img.SetRGBA(dx, dy, col)
+			}
+		}
+	}
+}
+
+// drawDegreeRune keeps the common temperature symbol available in every
+// bitmap font, whose source tables intentionally cover mostly ASCII.
+func drawDegreeRune(img *image.RGBA, x, y int, col color.RGBA, width, height int) {
+	if width < 3 || height < 3 {
+		return
+	}
+	for _, p := range [][2]int{{1, 0}, {0, 1}, {2, 1}, {1, 2}} {
+		px, py := x+p[0], y+p[1]
+		if px >= img.Bounds().Min.X && px < img.Bounds().Max.X && py >= img.Bounds().Min.Y && py < img.Bounds().Max.Y {
+			img.SetRGBA(px, py, col)
+		}
+	}
+}
+
+// drawBrailleRune rasterizes a Unicode Braille cell directly. Bitmap fonts do
+// not have room for the entire Unicode glyph block, but Braille's dot layout
+// is simple enough to preserve at every card font size.
+func drawBrailleRune(img *image.RGBA, r rune, x, y int, col color.RGBA, width, height int) {
+	if r == 0x2800 {
+		return
+	}
+
+	bits := byte(r - 0x2800)
+	dotX := []int{0, 0, 0, 1, 1, 1, 0, 1}
+	dotY := []int{0, 1, 2, 0, 1, 2, 3, 3}
+	marginX := 0
+	if width > 2 {
+		marginX = 1
+	}
+	marginY := 0
+	if height > 2 {
+		marginY = 1
+	}
+	spanX := width - 1 - 2*marginX
+	spanY := height - 1 - 2*marginY
+	for dot := 0; dot < 8; dot++ {
+		if bits&(1<<dot) == 0 {
+			continue
+		}
+		px := x + marginX + dotX[dot]*spanX
+		py := y + marginY + dotY[dot]*spanY/3
+		if px >= img.Bounds().Min.X && px < img.Bounds().Max.X && py >= img.Bounds().Min.Y && py < img.Bounds().Max.Y {
+			img.SetRGBA(px, py, col)
 		}
 	}
 }

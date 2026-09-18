@@ -1,6 +1,7 @@
 package readcard
 
 import (
+	"image/color"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -26,6 +27,8 @@ const (
 type Token struct {
 	Type TokenType
 	Text string
+	FG   *color.RGBA
+	BG   *color.RGBA
 }
 
 // HighlightLine tokenizes a line of text for syntax highlighting based on file extension / language.

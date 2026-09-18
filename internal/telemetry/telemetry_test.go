@@ -63,6 +63,38 @@ func TestOpenIsIdempotent(t *testing.T) {
 	db2.Close()
 }
 
+func TestOpenDoesNotReportNoopCompactionMigration(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tool_catalog.sqlite")
+
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("first Open: %v", err)
+	}
+	db.Close()
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	if _, err := raw.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion-1)); err != nil {
+		raw.Close()
+		t.Fatalf("stamp stale version: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close stale database: %v", err)
+	}
+
+	db, err = Open(path)
+	if err != nil {
+		t.Fatalf("second Open: %v", err)
+	}
+	defer db.Close()
+	if migrations := db.Migrations(); len(migrations) != 0 {
+		t.Fatalf("no-op migration report = %v, want empty", migrations)
+	}
+}
+
 // TestOpenRejectsStaleSchemaVersion is the regression check for the gap
 // found reviewing issue 120: CREATE TABLE IF NOT EXISTS silently leaves an
 // existing file's older column shape untouched (this bit issue 118's
@@ -163,6 +195,44 @@ func TestOpenMigratesPreexistingTableWithUnstampedVersion(t *testing.T) {
 	}
 	if count != 4 {
 		t.Fatalf("migrated column count = %d, want 4", count)
+	}
+}
+
+func TestOpenMigratesLegacySchemaVersions(t *testing.T) {
+	for _, version := range []int{2, 5} {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+			raw, err := sql.Open("sqlite", path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = raw.Exec(`CREATE TABLE tool_calls (
+				id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL,
+				session_id TEXT NOT NULL, ticket_id TEXT NOT NULL DEFAULT '',
+				project_name TEXT NOT NULL DEFAULT '', working_dir TEXT NOT NULL DEFAULT '',
+				agent_id TEXT NOT NULL, tool_name TEXT NOT NULL, call_type TEXT NOT NULL,
+				score INTEGER, note TEXT NOT NULL DEFAULT '', exit_code INTEGER,
+				duration_ms INTEGER NOT NULL DEFAULT 0, raw_bytes INTEGER NOT NULL DEFAULT 0,
+				distilled_bytes INTEGER)`)
+			if err != nil {
+				raw.Close()
+				t.Fatal(err)
+			}
+			if _, err = raw.Exec(fmt.Sprintf("PRAGMA user_version = %d", version)); err != nil {
+				raw.Close()
+				t.Fatal(err)
+			}
+			raw.Close()
+
+			db, err := Open(path)
+			if err != nil {
+				t.Fatalf("Open v%d: %v", version, err)
+			}
+			defer db.Close()
+			if got, err := db.SchemaVersion(); err != nil || got != schemaVersion {
+				t.Fatalf("schema version = %d, err = %v; want %d", got, err, schemaVersion)
+			}
+		})
 	}
 }
 

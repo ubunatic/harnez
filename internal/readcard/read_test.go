@@ -115,6 +115,46 @@ func TestFontRasterizer(t *testing.T) {
 	}
 }
 
+func TestPercentGlyphRasterAlignment(t *testing.T) {
+	tests := []struct {
+		name string
+		font *MonospaceFont
+		want []int
+	}{
+		{"3x5", Font3x5, []int{4, 1, 1, 1, 2, 3}},
+		{"5x8", Font5x8, []int{3, 2, 1, 1, 1, 2, 3}},
+		{"6x12", Font6x12, []int{3, 2, 1, 1, 1, 2, 3}},
+		{"7x13", DefaultFont7x13, []int{3, 2, 1, 1, 1, 2, 3}},
+		{"8x16", DefaultFont8x16, []int{3, 2, 1, 1, 1, 2, 3}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			img := image.NewRGBA(image.Rect(0, 0, tt.font.CharWidth, tt.font.CharHeight))
+			tt.font.DrawRune(img, '%', 0, 0, color.RGBA{R: 255, A: 255})
+			rows := make([]int, 0, len(tt.want))
+			for y := 0; y < tt.font.CharHeight; y++ {
+				count := 0
+				for x := 0; x < tt.font.CharWidth; x++ {
+					if img.RGBAAt(x, y).A != 0 {
+						count++
+					}
+				}
+				if count > 0 {
+					rows = append(rows, count)
+				}
+			}
+			if len(rows) != len(tt.want) {
+				t.Fatalf("non-empty row counts = %v, want %v", rows, tt.want)
+			}
+			for i := range rows {
+				if rows[i] != tt.want[i] {
+					t.Fatalf("row %d pixel count = %d, want %d; rows = %v", i, rows[i], tt.want[i], rows)
+				}
+			}
+		})
+	}
+}
+
 func TestRenderFileToCards(t *testing.T) {
 	tmpDir := t.TempDir()
 	outPath := filepath.Join(tmpDir, "rendered_card.png")
@@ -224,6 +264,39 @@ func TestGetFontDefaults(t *testing.T) {
 	}
 	if GetFont(16) != DefaultFont8x16 {
 		t.Errorf("GetFont(16) should resolve to DefaultFont8x16, got %v", GetFont(16).Name)
+	}
+}
+
+func TestDrawRuneBrailleRasterizesDots(t *testing.T) {
+	fonts := []*MonospaceFont{Font3x5, Font5x8, Font6x12, DefaultFont7x13, DefaultFont8x16}
+	for _, font := range fonts {
+		img := image.NewRGBA(image.Rect(0, 0, font.CharWidth, font.CharHeight))
+		font.DrawRune(img, '⣿', 0, 0, color.RGBA{R: 255, A: 255})
+		pixels := 0
+		for y := 0; y < font.CharHeight; y++ {
+			for x := 0; x < font.CharWidth; x++ {
+				if img.RGBAAt(x, y).A != 0 {
+					pixels++
+				}
+			}
+		}
+		if pixels != 8 {
+			t.Errorf("%s rendered ⣿ with %d pixels, want 8", font.Name, pixels)
+		}
+		for _, x := range []int{0, font.CharWidth - 1} {
+			for y := 0; y < font.CharHeight; y++ {
+				if img.RGBAAt(x, y).A != 0 {
+					t.Errorf("%s rendered a Braille dot on horizontal cell edge at (%d, %d)", font.Name, x, y)
+				}
+			}
+		}
+		for _, y := range []int{0, font.CharHeight - 1} {
+			for x := 0; x < font.CharWidth; x++ {
+				if img.RGBAAt(x, y).A != 0 {
+					t.Errorf("%s rendered a Braille dot on vertical cell edge at (%d, %d)", font.Name, x, y)
+				}
+			}
+		}
 	}
 }
 

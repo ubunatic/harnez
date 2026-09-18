@@ -48,7 +48,8 @@ const (
 
 // DB wraps the underlying *sql.DB with the schema already ensured.
 type DB struct {
-	sql *sql.DB
+	sql        *sql.DB
+	migrations []string
 }
 
 // Open opens (creating parent directories and the schema if needed) the
@@ -81,11 +82,11 @@ func Open(path string) (*DB, error) {
 		} else if _, err := sqlDB.Exec(schemaDDL); err != nil {
 			sqlDB.Close()
 			lastErr = fmt.Errorf("telemetry: create schema: %w", err)
-		} else if err := checkAndMigrateSchema(sqlDB, path, tableExisted); err != nil {
+		} else if migrations, err := checkAndMigrateSchema(sqlDB, path, tableExisted); err != nil {
 			sqlDB.Close()
 			return nil, err
 		} else {
-			return &DB{sql: sqlDB}, nil
+			return &DB{sql: sqlDB, migrations: migrations}, nil
 		}
 		time.Sleep(openRetryDelay)
 	}
@@ -138,39 +139,128 @@ func tableExists(sqlDB *sql.DB, name string) (bool, error) {
 // checkAndMigrateSchema reads SQLite's built-in PRAGMA user_version,
 // applies version-guarded discrete migrations when current < schemaVersion,
 // and stamps user_version to current.
-func checkAndMigrateSchema(sqlDB *sql.DB, path string, preexisting bool) error {
+func checkAndMigrateSchema(sqlDB *sql.DB, path string, preexisting bool) ([]string, error) {
+	var migrations []string
 	var current int
 	if err := sqlDB.QueryRow("PRAGMA user_version").Scan(&current); err != nil {
-		return fmt.Errorf("telemetry: read schema version: %w", err)
+		return nil, fmt.Errorf("telemetry: read schema version: %w", err)
 	}
 	if !preexisting {
 		// This Open call itself just created the table via schemaDDL, so
 		// it's unconditionally current-shape — stamp regardless of
 		// whatever user_version happened to read (normally 0).
 		if _, err := sqlDB.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
-			return fmt.Errorf("telemetry: stamp schema version: %w", err)
+			return nil, fmt.Errorf("telemetry: stamp schema version: %w", err)
 		}
-		return nil
+		return migrations, nil
 	}
 	if current < schemaVersion {
 		if current < 4 {
 			if err := migrateV2ToV3(sqlDB); err != nil {
-				return fmt.Errorf("telemetry: migrate schema to v3: %w", err)
+				return nil, fmt.Errorf("telemetry: migrate schema to v3: %w", err)
 			}
+			migrations = append(migrations, "tool_calls token columns")
+		}
+		compactionEventsMigrated, err := migrateCompactionEvents(sqlDB)
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: migrate compaction events: %w", err)
+		}
+		if compactionEventsMigrated {
+			migrations = append(migrations, "compaction_events.model")
 		}
 		// Version 5 is additive: schemaDDL creates compaction_events and
 		// session_boundaries for existing databases before this check.
 		if _, err := sqlDB.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
-			return fmt.Errorf("telemetry: stamp migrated schema version: %w", err)
+			return nil, fmt.Errorf("telemetry: stamp migrated schema version: %w", err)
 		}
 	}
-	return nil
+	return migrations, nil
+}
+
+func migrateCompactionEvents(sqlDB *sql.DB) (bool, error) {
+	rows, err := sqlDB.Query("PRAGMA table_info(compaction_events)")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	modelPresent := false
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, typ string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if name == "model" {
+			modelPresent = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	if !modelPresent {
+		if _, err = sqlDB.Exec("ALTER TABLE compaction_events ADD COLUMN model TEXT NOT NULL DEFAULT ''"); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 // Close closes the underlying database connection.
 func (d *DB) Close() error {
 	return d.sql.Close()
 }
+
+// ValidateSchema confirms that the database has the current version and the
+// tables and columns required by telemetry writers.
+func (d *DB) ValidateSchema() error {
+	var version int
+	if err := d.sql.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		return fmt.Errorf("telemetry: read schema version: %w", err)
+	}
+	if version != schemaVersion {
+		return fmt.Errorf("telemetry: schema version = %d, want %d", version, schemaVersion)
+	}
+
+	required := map[string][]string{
+		"compaction_events":    {"model"},
+		"session_boundaries":   nil,
+		"token_snapshots":      nil,
+		"compaction_economics": {"model", "pricing_revision", "status"},
+	}
+	for table, columns := range required {
+		var present int
+		if err := d.sql.QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&present); err != nil {
+			return fmt.Errorf("telemetry: check table %s: %w", table, err)
+		}
+		if present != 1 {
+			return fmt.Errorf("telemetry: schema missing table %s", table)
+		}
+		for _, column := range columns {
+			if err := d.sql.QueryRow("SELECT count(*) FROM pragma_table_info(?) WHERE name = ?", table, column).Scan(&present); err != nil {
+				return fmt.Errorf("telemetry: check %s.%s: %w", table, column, err)
+			}
+			if present != 1 {
+				return fmt.Errorf("telemetry: schema missing column %s.%s", table, column)
+			}
+		}
+	}
+	return nil
+}
+
+// SchemaVersion returns the current telemetry schema version.
+func (d *DB) SchemaVersion() (int, error) {
+	var version int
+	if err := d.sql.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		return 0, fmt.Errorf("telemetry: read schema version: %w", err)
+	}
+	return version, nil
+}
+
+// Migrations returns the migrations applied while opening the database.
+func (d *DB) Migrations() []string { return append([]string(nil), d.migrations...) }
 
 // context is used for the query surface's default timeout when callers
 // don't supply their own context.Context.

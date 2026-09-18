@@ -913,5 +913,19 @@ func ensureTelemetrySchema() error {
 	if err != nil {
 		return err
 	}
-	return db.Close()
+	defer db.Close()
+	if err := db.ValidateSchema(); err != nil {
+		return err
+	}
+	version, err := db.SchemaVersion()
+	if err != nil {
+		return err
+	}
+	migrations := db.Migrations()
+	if len(migrations) == 0 {
+		fmt.Printf("  telemetry schema: v%d (no migrations)\n", version)
+	} else {
+		fmt.Printf("  telemetry schema: v%d (migrations: %s)\n", version, strings.Join(migrations, ", "))
+	}
+	return nil
 }

@@ -65,6 +65,7 @@ decommissioned:
     - publish
     - lmcoder
     - release
+    - review
     - grilling
     - grill-with-docs
     - make-spec
@@ -268,11 +269,6 @@ mcp_servers: []
 status_line: true
 
 commands:
-  - name: review
-    description: "Review current branch against main"
-    content: |
-      Review the diff vs main. Check for: correctness, security, tests, docs.
-
   - name: standup
     description: "Summarize today's git activity"
     content: |
@@ -326,6 +322,10 @@ skills:
   - name: issue
     description: "File a new repository issue or ticket when asked; do not trigger merely because work references an existing issue"
     file: docs/commands/issue.md
+
+  - name: review
+    description: "Review current changes, verify issue completion if specified, check code quality, apply small fixes directly, and file follow-up issues for larger findings"
+    file: docs/commands/review.md
 
   - name: story
     description: "Write a candid engineering retrospective and case study in docs/studies/"

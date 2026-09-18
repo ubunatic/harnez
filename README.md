@@ -319,6 +319,10 @@ OR, and `status:<value>`/`is:<value>` (alias) filters on lifecycle — accepted 
 `status:open vram|gtt` means `status:open AND (vram OR gtt)`. An unquoted `|` is a shell
 pipeline operator, so quote OR queries:
 
+Convenience verbs `last`, `open`, `blocked`, `closed`, and `draft` are shorthand for the
+corresponding read-only listings and status filters. For example, `find issues last` lists
+the newest ten tickets, while `find issues blocked vram` combines a status filter with text.
+
 ```sh
 harnez find issues status:open vram gtt
 harnez find issues "status:open vram|gtt"
