@@ -17,6 +17,7 @@ type Event struct {
 	Command                                                                    string
 	Success                                                                    *bool
 	ExitCode                                                                   *int
+	DurationMs                                                                 int64
 	InputTokens, CachedInputTokens, OutputTokens, ReasoningTokens, TotalTokens *int64
 }
 
@@ -39,6 +40,8 @@ func ParseEvent(raw []byte) Event {
 	if json.Unmarshal(raw, &envelope) != nil {
 		return Event{}
 	}
+	var fields map[string]any
+	_ = json.Unmarshal(raw, &fields)
 	e := Event{Kind: strings.ToLower(strings.TrimSpace(first(envelope.Hook, envelope.Event, envelope.Type))), SessionID: envelope.SessionID, TurnID: envelope.TurnID, ToolCallID: envelope.ToolCallID, ToolName: envelope.ToolName}
 	if e.Kind == "event_msg" && len(envelope.Payload) > 0 {
 		var p struct {
@@ -70,6 +73,22 @@ func ParseEvent(raw []byte) Event {
 		if json.Unmarshal(envelope.ToolInput, &input) == nil {
 			e.Command = input.Command
 		}
+	}
+	if value, ok := fields["success"].(bool); ok {
+		e.Success = &value
+	}
+	if value, ok := fields["is_error"].(bool); ok {
+		value = !value
+		e.Success = &value
+	}
+	if value, ok := fields["exit_code"].(float64); ok {
+		code := int(value)
+		e.ExitCode = &code
+		success := code == 0
+		e.Success = &success
+	}
+	if value, ok := fields["duration_ms"].(float64); ok && value >= 0 {
+		e.DurationMs = int64(value)
 	}
 	return e
 }

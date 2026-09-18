@@ -58,3 +58,10 @@ func TestParseEventMalformedAndUnknownAreSafe(t *testing.T) {
 		t.Fatalf("unknown event = %+v", got)
 	}
 }
+
+func TestParseEventResultFields(t *testing.T) {
+	e := ParseEvent([]byte(`{"hook_event_name":"PostToolUse","session_id":"s","tool_name":"Bash","success":false,"exit_code":2,"duration_ms":17}`))
+	if e.Success == nil || *e.Success || e.ExitCode == nil || *e.ExitCode != 2 || e.DurationMs != 17 {
+		t.Fatalf("unexpected result fields: %+v", e)
+	}
+}

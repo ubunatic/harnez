@@ -116,8 +116,20 @@ func runCodexTelemetry(in io.Reader) error {
 	}
 	defer db.Close()
 	note := "codex:" + e.ToolCallID
-	done := 5
-	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: "hook:post", Score: &done, Note: note}
+	if e.ToolCallID != "" {
+		if calls, queryErr := db.Query(telemetry.Filter{SessionID: e.SessionID}); queryErr == nil {
+			for _, prior := range calls {
+				if prior.Note == note {
+					return nil
+				}
+			}
+		}
+	}
+	callType := "hook:post"
+	if e.Success != nil && !*e.Success {
+		callType = "hook:failure"
+	}
+	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: callType, Note: note, DurationMs: e.DurationMs, ExitCode: e.ExitCode}
 	return db.Insert(call)
 }
 
