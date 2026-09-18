@@ -1,6 +1,6 @@
 # 419 — Configurable mode switch for harnez read enforcement vs autonomous agent tool selection
 
-**Status**: Open — Milestone 5 complete
+**Status**: Closed — Works as expected
 **Priority**: P2 (Medium)
 **Severity**: Medium
 **Category**: Architecture / Context Optimization / Developer Experience
