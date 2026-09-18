@@ -6,13 +6,18 @@
 # harness exists yet to automate the two context runs; see issue tracker for
 # the follow-up that would automate this).
 preamble: |
-    **IMPORTANT** This is a project uses token-optimized docs formats and the latest AGENTS.md link formats.
+    **IMPORTANT** This project uses token-optimized docs formats and the latest AGENTS.md link formats.
 
     - `@link-to-file` *must* always be read and contain key instructions, diagrams, and critical agent memory
     - `See links-to-file` or regular MD links *should* be read when working on corresponding units
     - Allowed file formats: MD (Markdown text), PNG (Markdown as compressed images)
 
     ## Agent Instructions
+
+links:
+  hard: "@{ref} {title}; INCLUDE NOW"
+  soft: "{ref} {title}; ON DEMAND"
+  embed: "# {title}\n\n{content}"
 
 fixtures:
   - id: hello
@@ -37,7 +42,9 @@ fixtures:
     rule: "cd-scoped commands / Bash conventions cross-reference"
     docs:
       - docs/lang/Bash.md
-    prompt: "Write a short shell statement to test if a file exists, so I can use it in a script."
+    prompt: |
+      1. List files in cwd
+      2. Write a short shell statement to test if a file exists, so I can use it in a script.
     pattern: 'if test '
     forbid_pattern: '\[\[ |\[ '
 

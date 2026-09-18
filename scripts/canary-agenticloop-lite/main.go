@@ -99,11 +99,19 @@ type fixture struct {
 }
 
 type fixtureConfig struct {
-	Preamble string    `yaml:"preamble"`
-	Fixtures []fixture `yaml:"fixtures"`
+	Preamble string            `yaml:"preamble"`
+	Links    map[string]string `yaml:"links"`
+	Fixtures []fixture         `yaml:"fixtures"`
 }
 
-var fixturePreamble string
+var (
+	fixturePreamble string
+	fixtureLinks    = map[string]string{
+		"hard":  "@%s",
+		"soft":  "See {ref} for {title}.",
+		"embed": "# {title}\n\n{content}",
+	}
+)
 
 type docVariant struct {
 	name string
@@ -357,6 +365,13 @@ func loadFixtures() ([]fixture, error) {
 		return nil, fmt.Errorf("parse fixtures.yaml: %w", err)
 	}
 	fixturePreamble = strings.TrimSpace(config.Preamble)
+	if config.Links != nil {
+		for k, v := range config.Links {
+			if strings.TrimSpace(v) != "" {
+				fixtureLinks[k] = strings.TrimRight(v, "\r\n")
+			}
+		}
+	}
 	return config.Fixtures, nil
 }
 
@@ -1152,6 +1167,38 @@ func fixtureDocs(repoRoot, variant string, fx fixture) []string {
 	return docs
 }
 
+func extractDocTitle(docPath string) string {
+	data, err := os.ReadFile(docPath)
+	if err != nil {
+		base := filepath.Base(docPath)
+		return strings.TrimSuffix(base, filepath.Ext(base))
+	}
+	content := string(data)
+	if idx := strings.Index(content, "---"); idx != -1 {
+		rest := content[idx+3:]
+		if endIdx := strings.Index(rest, "---"); endIdx != -1 {
+			fm := rest[:endIdx]
+			var meta struct {
+				Title string `yaml:"title"`
+			}
+			if err := yaml.Unmarshal([]byte(fm), &meta); err == nil && strings.TrimSpace(meta.Title) != "" {
+				return strings.TrimSpace(meta.Title)
+			}
+		}
+	}
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "# ") {
+			title := strings.TrimSpace(strings.TrimPrefix(line, "# "))
+			if title != "" {
+				return title
+			}
+		}
+	}
+	base := filepath.Base(docPath)
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
 func setupLinkedWorkspace(work, repoRoot string, docPaths []string, link, delivery string) error {
 	if !validLinkModes[link] {
 		return fmt.Errorf("unknown --link=%q (known: soft, hard, embed)", link)
@@ -1191,30 +1238,77 @@ func setupLinkedWorkspace(work, repoRoot string, docPaths []string, link, delive
 		refs = append(refs, base)
 	}
 
+	formatLink := func(mode, ref, docPath string, extra ...string) string {
+		tmpl, ok := fixtureLinks[mode]
+		if !ok || strings.TrimSpace(tmpl) == "" {
+			switch mode {
+			case "hard":
+				tmpl = "@%s"
+			case "soft":
+				tmpl = "See {ref} for {title}."
+			case "embed":
+				tmpl = "# {title}\n\n{content}"
+			}
+		}
+		title := extractDocTitle(docPath)
+		content := ""
+		if len(extra) > 0 {
+			content = extra[0]
+		}
+
+		result := tmpl
+		if strings.Contains(result, "{ref}") || strings.Contains(result, "{title}") || strings.Contains(result, "{doc}") || strings.Contains(result, "{content}") {
+			result = strings.ReplaceAll(result, "{ref}", ref)
+			result = strings.ReplaceAll(result, "{title}", title)
+			result = strings.ReplaceAll(result, "{doc}", filepath.Base(docPath))
+			result = strings.ReplaceAll(result, "{content}", content)
+		} else if strings.Contains(result, "%s") {
+			count := strings.Count(result, "%s")
+			if mode == "embed" {
+				if count >= 2 {
+					result = fmt.Sprintf(result, title, content)
+				} else {
+					result = fmt.Sprintf(result, ref)
+				}
+			} else {
+				if count >= 2 {
+					result = fmt.Sprintf(result, ref, title)
+				} else {
+					result = fmt.Sprintf(result, ref)
+				}
+			}
+		} else {
+			result = result + " " + ref
+		}
+		if !strings.HasSuffix(result, "\n") {
+			result += "\n"
+		}
+		return result
+	}
+
 	if link == "hard" {
 		var b strings.Builder
-		for _, ref := range refs {
-			fmt.Fprintf(&b, "@%s\n", ref)
+		for i, ref := range refs {
+			b.WriteString(formatLink("hard", ref, docPaths[i]))
 		}
 		return os.WriteFile(agentsPath, []byte(linkPolicy+b.String()), 0o644)
 	}
 	if link == "soft" {
 		var b strings.Builder
-		for _, ref := range refs {
-			fmt.Fprintf(&b, "See %s for your instructions/context for this session.\n", ref)
+		for i, ref := range refs {
+			b.WriteString(formatLink("soft", ref, docPaths[i]))
 		}
 		return os.WriteFile(agentsPath, []byte(linkPolicy+b.String()), 0o644)
 	}
 
 	// embed is text-only and inlines every configured document.
 	var b strings.Builder
-	for _, docPath := range docPaths {
-		base := filepath.Base(docPath)
+	for i, docPath := range docPaths {
 		data, err := os.ReadFile(docPath)
 		if err != nil {
 			return fmt.Errorf("read doc for embed: %w", err)
 		}
-		fmt.Fprintf(&b, "# %s\n\n%s\n", base, data)
+		b.WriteString(formatLink("embed", refs[i], docPath, string(data)))
 	}
 	return os.WriteFile(agentsPath, []byte(linkPolicy+b.String()), 0o644)
 
