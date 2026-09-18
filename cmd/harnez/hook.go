@@ -33,6 +33,12 @@ type agyPreToolUseInput struct {
 	StepIdx int `json:"stepIdx"`
 }
 
+type agyPostToolUseInput struct {
+	ConversationID string `json:"conversationId"`
+	TranscriptPath string `json:"transcriptPath"`
+	Output         string `json:"output"`
+}
+
 func newAgyHookCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:    "agy",
@@ -59,11 +65,59 @@ func newHookCmd() *cobra.Command {
 	agyCmd := newAgyHookCmd()
 	agyCmd.Aliases = []string{"agy-tool"}
 	cmd.AddCommand(agyCmd)
+	postCmd := &cobra.Command{
+		Use:          "post-tool",
+		Aliases:      []string{"agy-post"},
+		Short:        "Antigravity PostToolUse telemetry hook",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAgyPostToolHook(cmd.InOrStdin(), cmd.OutOrStdout(), agyPostHookOptions{})
+		},
+	}
+	cmd.AddCommand(postCmd)
 
 	readCmd := newReadHookCmd()
 	cmd.AddCommand(readCmd)
 
 	return cmd
+}
+
+type agyPostHookOptions struct {
+	DBPath string
+	Update func(dbPath, sessionID string, outputBytes, durationMs int64) error
+}
+
+func runAgyPostToolHook(in io.Reader, out io.Writer, opts agyPostHookOptions) error {
+	var payload agyPostToolUseInput
+	if err := json.NewDecoder(in).Decode(&payload); err != nil {
+		return fmt.Errorf("decode agy post-tool payload: %w", err)
+	}
+	outputBytes := int64(len([]byte(payload.Output)))
+	if outputBytes == 0 && payload.TranscriptPath != "" {
+		if data, err := os.ReadFile(payload.TranscriptPath); err == nil {
+			outputBytes = int64(len(data))
+		}
+	}
+	dbPath := opts.DBPath
+	if dbPath == "" {
+		dbPath, _ = telemetry.DefaultDBPath()
+	}
+	if opts.Update != nil {
+		if err := opts.Update(dbPath, payload.ConversationID, outputBytes, 0); err != nil {
+			return err
+		}
+	} else {
+		db, err := telemetry.Open(dbPath)
+		if err != nil {
+			return err
+		}
+		err = db.UpdateLatestToolCallOutput(payload.ConversationID, outputBytes, 0)
+		_ = db.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return json.NewEncoder(out).Encode(map[string]string{"status": "ok"})
 }
 
 type agyHookOptions struct {

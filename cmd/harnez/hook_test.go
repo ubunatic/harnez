@@ -173,6 +173,36 @@ func TestRunAgyToolHook_DBIntegration(t *testing.T) {
 	}
 }
 
+func TestRunAgyPostToolHookUpdatesPreToolCall(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	var preOut bytes.Buffer
+	if err := runAgyToolHook(bytes.NewBufferString(`{"conversationId":"post-session","toolCall":{"name":"run_command","args":{}}}`), &preOut, agyHookOptions{DBPath: dbPath}); err != nil {
+		t.Fatalf("pre-tool hook: %v", err)
+	}
+	var postOut bytes.Buffer
+	if err := runAgyPostToolHook(bytes.NewBufferString(`{"conversationId":"post-session","stepIdx":0,"output":"hello output"}`), &postOut, agyPostHookOptions{DBPath: dbPath}); err != nil {
+		t.Fatalf("post-tool hook: %v", err)
+	}
+	if strings.TrimSpace(postOut.String()) != `{"status":"ok"}` {
+		t.Fatalf("post-tool output = %q, want status ok", postOut.String())
+	}
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{SessionID: "post-session"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d telemetry rows, want 1", len(rows))
+	}
+	if rows[0].OutputBytes == nil || *rows[0].OutputBytes != int64(len("hello output")) {
+		t.Errorf("OutputBytes = %v", rows[0].OutputBytes)
+	}
+}
+
 func createTestFile(t *testing.T, dir, name string, lines int) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
