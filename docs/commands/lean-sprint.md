@@ -10,10 +10,18 @@ You, the agent that received this invocation, are the Host Orchestrator for this
 Run the complete lean workflow below yourself in this session: goal handoff, sequential
 milestone dispatch, concise pre-commit/milestone review, and teardown with status sync.
 
-### Strict Invariant: Zero Coding for the Host Orchestrator
-- **The Host Orchestrator NEVER writes code, edits source files, or applies "quick fixes" directly.**
-- All code implementation, file editing, test creation, and bug fixing are strictly executed by the dispatched developer agent.
-- The Host Orchestrator acts purely as the high-capability reviewer, tester, and milestone coordinator, preserving context and token quota for concise evaluation.
+### Strict Invariants for the Host Orchestrator
+
+1. **Zero Coding**:
+   - **The Host Orchestrator NEVER writes code, edits source files, or applies "quick fixes" directly.**
+   - All code implementation, file editing, test creation, and bug fixing are strictly executed by the dispatched developer agent.
+2. **Diff-First Inspection (No Exploratory Code Digging)**:
+   - **The Host Orchestrator NEVER performs whole-file exploratory reading, multi-file browsing, or deep call-graph tracing.**
+   - Orchestrator inspection is strictly bounded to:
+     - The target ticket / issue description.
+     - The developer agent's **commit diff** (`git log -n 1 --stat`, `git diff HEAD~1`).
+     - Test execution outputs (`go test ./...`, `make test`).
+   - Deep codebase exploration is the worker's job; the host conserves context and token budget for high-signal evaluation.
 
 ---
 
@@ -44,9 +52,9 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - Reports completion back to the Host Orchestrator.
 
 ### 3. Concise Milestone Review & Nuance Injection
-- Upon developer milestone completion, the Host Orchestrator performs a rapid, concise inspection:
+- Upon developer milestone completion, the Host Orchestrator performs a rapid, diff-only inspection:
   - Check `git log -n 1 --stat`, `git diff HEAD~1`, and run verification tests.
-  - Evaluate test assertion rigor, ambient environment leaks, and edge-case omissions.
+  - Evaluate test assertion rigor, ambient environment leaks, and edge-case omissions directly against the diff.
 - **Strictly No Direct Fixes**: If defects, gaps, or nuances are discovered:
   - Do **NOT** modify code files yourself.
   - Summarize the concrete issues, edge cases, and required adjustments concisely.

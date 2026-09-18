@@ -188,9 +188,11 @@ Agentic software engineering scales effectively when concurrency is structured a
 
 For focused, day-to-day tickets and milestone iterations, running the full 5-phase ceremony with separate advisor and reviewer subagents introduces unnecessary latency and token overhead. The **Lean Fresh-Handoff** pattern provides a lightweight, fast-path alternative:
 
-1. **Clean Goal Handoff (Host Zero-Coding)**:
+1. **Clean Goal Handoff (Host Zero-Coding & Diff-First)**:
    - The Host Orchestrator dispatches a fresh low-cost/fast developer subagent with a single, clear objective: problem statement, target tickets/specs, and explicit verification criteria.
-   - **Strict Zero-Coding Invariant**: The Host Orchestrator never writes code, edits source files, or applies direct "quick fixes". All coding and test implementation are executed by the worker.
+   - **Strict Invariants for Host Orchestrator**:
+     - *Zero Coding*: The host NEVER writes code, edits source files, or applies direct "quick fixes". All coding and test implementation are executed by the worker.
+     - *Diff-First / No Exploratory Digging*: The host NEVER performs wide exploratory codebase reads or deep call-graph tracing. The host limits inspection strictly to the ticket statement, `git diff HEAD~1`, and test execution output.
    - **Trust the Base Framework**: Avoid micromanaging standard workspace rules, tool descriptions, or language conventions already provided by the base system prompt.
    - **Stay Responsive**: After dispatch, the Orchestrator returns control to the main chat or continues only with non-overlapping local work. Do not block on the dev subagent by default.
 2. **Autonomous Milestone Execution & Self-Verification**:
