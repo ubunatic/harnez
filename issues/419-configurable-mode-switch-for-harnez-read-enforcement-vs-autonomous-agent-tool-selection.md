@@ -1,6 +1,6 @@
 # 419 — Configurable mode switch for harnez read enforcement vs autonomous agent tool selection
 
-**Status**: Open
+**Status**: Open — Milestone 1 complete
 **Priority**: P2 (Medium)
 **Severity**: Medium
 **Category**: Architecture / Context Optimization / Developer Experience
@@ -46,6 +46,11 @@ Furthermore, promotion of `harnez read` is currently embedded across multiple co
 ### Milestone 1: Toggle Switch & Hook Passthrough Logic
 - Introduce a configuration option / environment flag (`HARNEZ_READ_ENFORCE` / `~/.harnez/config.yaml` setting) checked inside `evaluateReadToolDiscipline` and `runClaudeReadHook` / `runAgyToolHook`.
 - When disabled, bypass deny decisions and allow native read tools immediately.
+
+**Delivered (2026-09-18):** `HARNEZ_READ_ENFORCE` is default-on and accepts `0`,
+`false`, `off`, or `no` to select autonomous read mode. Claude and Antigravity
+pre-tool hooks allow native reads in that mode; Antigravity telemetry remains
+active. Unit coverage verifies disabled passthrough and default-on behavior.
 
 ### Milestone 2: Telemetry & Opportunity Cost Observer Preservation
 - Ensure post-tool observation hooks (`runAgyPostToolHook`) continue capturing output metrics and estimating opportunity savings even when enforcement is OFF, providing ground-truth comparison data.

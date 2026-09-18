@@ -185,6 +185,19 @@ type agyHookOptions struct {
 	Insert   func(dbPath string, call telemetry.ToolCall) error
 }
 
+// readEnforcementEnabled reports whether native large-read interception is active.
+// Enforcement remains enabled by default so existing installations keep their
+// current behavior; HARNEZ_READ_ENFORCE=0 (or false/off/no) selects autonomous
+// read mode without removing the observation hooks.
+func readEnforcementEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("HARNEZ_READ_ENFORCE"))) {
+	case "0", "false", "off", "no":
+		return false
+	default:
+		return true
+	}
+}
+
 func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 	raw, err := io.ReadAll(in)
 	if err != nil {
@@ -464,6 +477,9 @@ func isBinaryMedia(path string) bool {
 // evaluateReadToolDiscipline checks if a tool invocation on a target file violates
 // Reading & Context Discipline (file >= 100 lines or range >= 100 lines or unconstrained whole-file read of a >=100 line file).
 func evaluateReadToolDiscipline(toolName string, args map[string]any, baseDir string) (bool, string) {
+	if !readEnforcementEnabled() {
+		return false, ""
+	}
 	if !isReadTool(toolName) {
 		return false, ""
 	}
@@ -578,6 +594,10 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		fmt.Fprintln(out, `{}`)
 		return fmt.Errorf("decode claude read hook payload: %w", err)
+	}
+	if !readEnforcementEnabled() {
+		fmt.Fprintln(out, `{}`)
+		return nil
 	}
 
 	baseDir := opts.BaseDir

@@ -584,3 +584,32 @@ func TestRunClaudeReadHook_EmptyAndInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+func TestReadEnforcementDisabledAllowsNativeLargeReads(t *testing.T) {
+	t.Setenv("HARNEZ_READ_ENFORCE", "0")
+	if deny, reason := evaluateReadToolDiscipline("View", map[string]any{"path": "large.md"}, t.TempDir()); deny || reason != "" {
+		t.Fatalf("disabled enforcement = deny %v, reason %q; want allow", deny, reason)
+	}
+
+	payload := `{"hookEventName":"PreToolUse","tool_name":"View","tool_input":{"path":"large.md"},"session_id":"s","cwd":"` + t.TempDir() + `"}`
+	var out bytes.Buffer
+	if err := runClaudeReadHook(bytes.NewBufferString(payload), &out, readHookOptions{}); err != nil {
+		t.Fatalf("runClaudeReadHook: %v", err)
+	}
+	if strings.Contains(out.String(), `"deny"`) {
+		t.Fatalf("disabled enforcement denied native read: %s", out.String())
+	}
+}
+
+func TestReadEnforcementDefaultsToEnabled(t *testing.T) {
+	t.Setenv("HARNEZ_READ_ENFORCE", "")
+	if !readEnforcementEnabled() {
+		t.Fatal("empty HARNEZ_READ_ENFORCE should preserve enforcement")
+	}
+	for _, value := range []string{"false", "off", "no"} {
+		t.Setenv("HARNEZ_READ_ENFORCE", value)
+		if readEnforcementEnabled() {
+			t.Errorf("HARNEZ_READ_ENFORCE=%q remained enabled", value)
+		}
+	}
+}
