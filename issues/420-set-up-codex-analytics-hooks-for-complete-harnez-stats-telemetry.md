@@ -1,6 +1,6 @@
 # 420 — Set up Codex analytics hooks for complete harnez stats telemetry
 
-**Status**: Closed — Implemented Codex lifecycle hooks, transcript token reconciliation, live smoke verification, and documentation
+**Status**: Open — M5 added: separate cumulative and per-turn provider token metrics
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics / Infrastructure
@@ -89,6 +89,24 @@ resulting Codex rows and the full repository test suite passed. A subprocess
 launched from an existing Harnez shell can have a different Codex thread ID;
 session-filtered reports must therefore be run from the Codex-owned environment
 when validating token reconciliation.
+
+### M5 — Separate cumulative and per-turn provider token metrics
+
+- Extend `tool_calls` with nullable provider usage fields for cumulative
+  `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_tokens`,
+  and `total_tokens` values.
+- Add nullable per-turn `last_*` counterparts for the same five metrics,
+  sourced from Codex's `last_token_usage` object.
+- Preserve `actual_tokens` for backward compatibility, but define it as the
+  per-call/per-turn total when provider data is available; do not store a
+  cumulative snapshot there.
+- Update Codex transcript reconciliation, insertion, querying, aggregation,
+  JSON output, and tests so `AVG TOKENS` uses `last_total_tokens`, while
+  cumulative totals remain available for session analysis.
+- Keep unavailable provider fields as `NULL`; never infer or fabricate token
+  values from byte counts.
+- Verification: fixture and live-session checks show distinct cumulative and
+  per-turn values, and existing Claude/AGY telemetry remains unchanged.
 
 The former open question (review 2026-09-18) stated that
 `internal/codex/events.go` parses
