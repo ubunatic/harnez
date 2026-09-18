@@ -43,9 +43,11 @@ For focused, well-defined tasks, bypass the full 5-phase ceremony in favor of a 
 - Enforce strict self-verification using repo-native commands (`go test ./...`, `make test`, `make check`, canary probes) — real assertions, not just a clean exit code.
 - For defect-shaped tasks (bug/timing/race): establish a concrete reproduction baseline *before* the fix, and verify against that, not just green tests (see `@docs/AgenticLoop.md` Phase 2, "Repro-before-fix").
 
-### 3. Confidence-Gated Inline Review
+### 3. Confidence-Gated Inline Review & Milestone-Boundary Commits
 - If automated tests pass cleanly and confidence is high (routine bug fix, small feature, internal refactor), skip spawning an independent reviewer subagent.
 - The Host Orchestrator performs a rapid inline diff review, including whether a defensive/robustness fix could instead fix its root cause (see `@docs/AgenticLoop.md` Phase 3, "Root Cause vs. Symptom").
+- **Milestone-Boundary Atomic Commits**: For multi-milestone sprints, the Host Orchestrator (or subagent) **must immediately commit** each verified milestone upon passing tests and inline review (`git commit -m "feat/fix(...): ... (issue XXX MX)"`). Never carry uncommitted working tree diffs across milestone transitions or session resumptions.
+- **Nuance Buffer & Deferred Refinements**: If non-blocking nuances, architectural enhancements, or minor edge cases are discovered during review, do not disrupt subagent momentum with micro-revisions. The Orchestrator immediately collects them into a dedicated follow-up refinement ticket (e.g. `#XXX-refinements`). If the nuance buffer reaches an architectural tipping point, intercept to sweep them before proceeding; otherwise resolve them in the sprint consolidation phase.
 - Escalate to a full Phase 3 Reviewer agent only if:
   - There is cross-subsystem blast radius or architectural ambiguity.
   - Automated tests cannot fully cover runtime behavioral contracts.
