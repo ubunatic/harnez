@@ -58,21 +58,18 @@ func BuildHooksDoc() map[string]any {
 	return map[string]any{
 		"features": map[string]any{"hooks": true},
 		"hooks": map[string]any{
-			HookName: map[string]any{
-				"enabled": true,
-				"PreToolUse": []map[string]any{
-					{
-						"matcher": "Bash",
-						"hooks": []map[string]any{
-							{"type": "command", "command": "harnez codex-hook"},
-						},
+			"PreToolUse": []map[string]any{
+				{
+					"matcher": "Bash",
+					"hooks": []map[string]any{
+						{"type": "command", "command": "harnez codex-hook"},
 					},
 				},
-				"PostToolUse": []map[string]any{
-					{
-						"matcher": "*",
-						"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
-					},
+			},
+			"PostToolUse": []map[string]any{
+				{
+					"matcher": "*",
+					"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
 				},
 			},
 		},
@@ -127,6 +124,7 @@ func mergeHooksDoc(existing, incoming map[string]any) map[string]any {
 		}
 	}
 	if incomingHooks, ok := incoming["hooks"].(map[string]any); ok {
+		delete(mergedHooks, HookName)
 		for k, v := range incomingHooks {
 			mergedHooks[k] = v
 		}
@@ -189,14 +187,12 @@ func Status(path string) (installed bool, drifted bool) {
 	if !featuresOK || features["hooks"] != true {
 		return false, true
 	}
-	entry, ok := hooks[HookName]
-	if !ok {
+	if _, ok := hooks["PreToolUse"]; !ok {
 		return false, false
 	}
 
-	want := BuildHooksDoc()["hooks"].(map[string]any)[HookName]
-	wantData, _ := json.Marshal(want)
-	gotData, _ := json.Marshal(entry)
+	wantData, _ := json.Marshal(BuildHooksDoc()["hooks"])
+	gotData, _ := json.Marshal(hooks)
 	return true, string(wantData) != string(gotData)
 }
 
@@ -205,7 +201,7 @@ func Summary(path string) string {
 	doc := readTOML(path)
 	features, _ := doc["features"].(map[string]any)
 	hooks, _ := doc["hooks"].(map[string]any)
-	entry, _ := hooks[HookName].(map[string]any)
+	entry := hooks
 	state := "disabled"
 	if features["hooks"] == true {
 		state = "enabled"
@@ -235,9 +231,16 @@ func Remove(path string) (changed bool, err error) {
 	if !ok {
 		return false, nil
 	}
-	if _, ok := hooks[HookName]; !ok {
+	_, direct := hooks["PreToolUse"]
+	_, legacy := hooks[HookName]
+	if !direct && !legacy {
 		return false, nil
 	}
+	delete(hooks, "PreToolUse")
+	delete(hooks, "PostToolUse")
+	delete(hooks, "SessionStart")
+	delete(hooks, "SessionEnd")
+	delete(hooks, HookName)
 	delete(hooks, HookName)
 	if len(hooks) == 0 {
 		delete(existing, "hooks")

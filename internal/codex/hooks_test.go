@@ -82,8 +82,8 @@ func TestStatusDetectsDrift(t *testing.T) {
 	drifted := `[features]
 hooks = true
 
-[hooks.harnez]
-enabled = false
+[[hooks.PreToolUse]]
+matcher = "Other"
 `
 	if err := os.WriteFile(path, []byte(drifted), 0644); err != nil {
 		t.Fatal(err)
