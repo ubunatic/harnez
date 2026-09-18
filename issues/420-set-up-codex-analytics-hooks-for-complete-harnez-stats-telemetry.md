@@ -163,6 +163,12 @@ the per-turn total for compatibility with existing stats. Codex
 and total values, while `total_token_usage` remains available for cumulative
 analysis. Migration, round-trip, parser, and full-suite verification pass.
 
+**Post-close regression fix (2026-09-18)**: A clean session exposed that the
+existing user database was still stamped schema v3, so the new token columns
+were absent and `codex-telemetry` exited 1 on PostToolUse. Schema v4 now runs
+the additive migration for existing databases. Verified the live database has
+all five provider columns and a representative PostToolUse payload exits 0.
+
 ## 4. Acceptance Criteria
 
 - A current Codex session with tool activity produces `tool_calls` rows visible
