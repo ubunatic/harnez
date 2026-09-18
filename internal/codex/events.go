@@ -51,11 +51,12 @@ func ParseEvent(raw []byte) Event {
 			Type      string `json:"type"`
 			Info      struct {
 				Total struct {
-					Input     int64 `json:"input_tokens"`
-					Cached    int64 `json:"cached_input_tokens"`
-					Output    int64 `json:"output_tokens"`
-					Reasoning int64 `json:"reasoning_tokens"`
-					Total     int64 `json:"total_tokens"`
+					Input           int64 `json:"input_tokens"`
+					Cached          int64 `json:"cached_input_tokens"`
+					Output          int64 `json:"output_tokens"`
+					Reasoning       int64 `json:"reasoning_tokens"`
+					ReasoningOutput int64 `json:"reasoning_output_tokens"`
+					Total           int64 `json:"total_tokens"`
 				} `json:"total_token_usage"`
 			} `json:"info"`
 		}
@@ -65,7 +66,11 @@ func ParseEvent(raw []byte) Event {
 				e.Kind = strings.ToLower(p.Type)
 			}
 			t := p.Info.Total
-			e.InputTokens, e.CachedInputTokens, e.OutputTokens, e.ReasoningTokens, e.TotalTokens = ptr(t.Input), ptr(t.Cached), ptr(t.Output), ptr(t.Reasoning), ptr(t.Total)
+			reasoning := t.Reasoning
+			if reasoning == 0 {
+				reasoning = t.ReasoningOutput
+			}
+			e.InputTokens, e.CachedInputTokens, e.OutputTokens, e.ReasoningTokens, e.TotalTokens = ptr(t.Input), ptr(t.Cached), ptr(t.Output), ptr(reasoning), ptr(t.Total)
 		}
 	}
 	if len(envelope.ToolInput) > 0 {

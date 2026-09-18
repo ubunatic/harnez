@@ -14,6 +14,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,8 +42,10 @@ import (
 // than agy's "args.CommandLine" shape. If a real Codex Bash tool_input
 // turns out to use a different field name, this is the one place to fix.
 type codexPreToolUseInput struct {
-	ToolName  string `json:"tool_name"`
-	ToolInput struct {
+	SessionID      string `json:"session_id"`
+	TranscriptPath string `json:"transcript_path"`
+	ToolName       string `json:"tool_name"`
+	ToolInput      struct {
 		Command string `json:"command"`
 	} `json:"tool_input"`
 }
@@ -106,7 +109,15 @@ func runCodexTelemetry(in io.Reader) error {
 		return nil
 	}
 	e := codex.ParseEvent(raw)
-	if e.ToolName == "" || e.SessionID == "" {
+	var hook struct {
+		SessionID      string `json:"session_id"`
+		TranscriptPath string `json:"transcript_path"`
+	}
+	_ = json.Unmarshal(raw, &hook)
+	if e.SessionID == "" {
+		e.SessionID = hook.SessionID
+	}
+	if e.SessionID == "" {
 		return nil
 	}
 	wd, _ := os.Getwd()
@@ -120,6 +131,14 @@ func runCodexTelemetry(in io.Reader) error {
 		return nil
 	}
 	defer db.Close()
+	if hook.TranscriptPath != "" {
+		if total := latestTranscriptTokens(hook.TranscriptPath, e.SessionID); total != nil {
+			_ = updateLatestCodexTokens(db, e.SessionID, total)
+		}
+	}
+	if e.ToolName == "" {
+		return nil
+	}
 	note := "codex:" + e.ToolCallID
 	if e.ToolCallID != "" {
 		if calls, queryErr := db.Query(telemetry.Filter{SessionID: e.SessionID}); queryErr == nil {
@@ -136,6 +155,32 @@ func runCodexTelemetry(in io.Reader) error {
 	}
 	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: callType, Note: note, DurationMs: e.DurationMs, ExitCode: e.ExitCode, OutputBytes: e.OutputBytes, ActualTokens: e.TotalTokens}
 	return db.Insert(call)
+}
+
+func latestTranscriptTokens(path, sessionID string) *int64 {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer file.Close()
+	var latest *int64
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		e := codex.ParseEvent(scanner.Bytes())
+		if e.SessionID != "" && e.SessionID != sessionID || e.TotalTokens == nil {
+			continue
+		}
+		value := *e.TotalTokens
+		latest = &value
+	}
+	return latest
+}
+
+func updateLatestCodexTokens(db *telemetry.DB, sessionID string, total *int64) error {
+	if total == nil {
+		return nil
+	}
+	return db.UpdateLatestToolCallTokens(sessionID, total)
 }
 
 func runCodexHooksHook(in io.Reader, out io.Writer) error {

@@ -72,6 +72,17 @@ func BuildHooksDoc() map[string]any {
 					"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
 				},
 			},
+			"SessionStart": []map[string]any{{
+				"matcher": "startup|resume|clear|compact",
+				"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
+			}},
+			"Stop": []map[string]any{{
+				"hooks": []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
+			}},
+			"SessionEnd": []map[string]any{{
+				"matcher": "other",
+				"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
+			}},
 		},
 	}
 }
@@ -231,16 +242,21 @@ func Remove(path string) (changed bool, err error) {
 	if !ok {
 		return false, nil
 	}
-	_, direct := hooks["PreToolUse"]
-	_, legacy := hooks[HookName]
-	if !direct && !legacy {
+	managed := false
+	for _, name := range []string{"PreToolUse", "PostToolUse", "SessionStart", "Stop", "SessionEnd", HookName} {
+		if _, ok := hooks[name]; ok {
+			managed = true
+			break
+		}
+	}
+	if !managed {
 		return false, nil
 	}
 	delete(hooks, "PreToolUse")
 	delete(hooks, "PostToolUse")
 	delete(hooks, "SessionStart")
+	delete(hooks, "Stop")
 	delete(hooks, "SessionEnd")
-	delete(hooks, HookName)
 	delete(hooks, HookName)
 	if len(hooks) == 0 {
 		delete(existing, "hooks")
