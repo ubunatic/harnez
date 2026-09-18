@@ -134,6 +134,15 @@ open question above.
 
 ### M5 — Separate cumulative and per-turn provider token metrics
 
+**Verification note (2026-09-18)**: Direct inspection of the local database
+shows Codex `hook:post` rows are present, but their `exit_code` and
+`duration_ms` are currently NULL/zero when Codex does not supply result fields.
+The routed `shell` rows contain the authoritative values from `harnez exec`.
+Added `TestRunCodexTelemetry_PersistsPostToolResult` to assert that when a
+PostToolUse payload does supply `success`, `exit_code`, `duration_ms`, and
+`tool_output`, those values land in the shared `tool_calls` table and failure
+classification is preserved. No permanent raw-payload logging is required.
+
 - Extend `tool_calls` with nullable provider usage fields for cumulative
   `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_tokens`,
   and `total_tokens` values.
