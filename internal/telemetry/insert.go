@@ -28,12 +28,14 @@ func (d *DB) Insert(tc ToolCall) error {
 			created_at, session_id, ticket_id, project_name, working_dir,
 			agent_id, tool_name, call_type, score, note, exit_code,
 			duration_ms, raw_bytes, distilled_bytes, output_bytes, actual_tokens,
+			input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens,
 			potential_savings_tokens, potential_savings_bytes
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		createdAt.Format(time.RFC3339Nano),
 		tc.SessionID, tc.TicketID, tc.ProjectName, tc.WorkingDir,
 		tc.AgentID, tc.ToolName, tc.CallType, tc.Score, tc.Note, tc.ExitCode,
 		tc.DurationMs, tc.RawBytes, tc.DistilledBytes, tc.OutputBytes, tc.ActualTokens,
+		tc.InputTokens, tc.CachedInputTokens, tc.OutputTokens, tc.ReasoningTokens, tc.TotalTokens,
 		tc.PotentialSavingsTokens, tc.PotentialSavingsBytes,
 	)
 	if err != nil {

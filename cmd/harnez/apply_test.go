@@ -5,10 +5,66 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
+
+	_ "modernc.org/sqlite"
+	"ubunatic.com/harnez/internal/telemetry"
 )
+
+func TestEnsureTelemetrySchemaMigratesBeforeApply(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	path := filepath.Join(home, ".harnez", "tool_catalog.sqlite")
+	db, err := telemetry.Open(path)
+	if err != nil {
+		t.Fatalf("create telemetry DB: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close telemetry DB: %v", err)
+	}
+
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("open stale telemetry DB: %v", err)
+	}
+	if _, err := raw.Exec("PRAGMA user_version = 3"); err != nil {
+		raw.Close()
+		t.Fatalf("stamp stale schema version: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close stale telemetry DB: %v", err)
+	}
+
+	if err := ensureTelemetrySchema(); err != nil {
+		t.Fatalf("ensureTelemetrySchema: %v", err)
+	}
+
+	check, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("reopen migrated telemetry DB: %v", err)
+	}
+	defer check.Close()
+	var version int
+	if err := check.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		t.Fatalf("read schema version: %v", err)
+	}
+	if version != 4 {
+		t.Fatalf("schema version = %d, want 4", version)
+	}
+	for _, column := range []string{"input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens"} {
+		var count int
+		if err := check.QueryRow("SELECT count(*) FROM pragma_table_info('tool_calls') WHERE name = ?", column).Scan(&count); err != nil {
+			t.Fatalf("check %s: %v", column, err)
+		}
+		if count != 1 {
+			t.Errorf("missing migrated column %s", column)
+		}
+	}
+}
 
 func TestApplyCmd_ZeroDefaultDocs(t *testing.T) {
 	dir := t.TempDir()

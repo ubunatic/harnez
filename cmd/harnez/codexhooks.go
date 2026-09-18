@@ -14,11 +14,18 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/codex"
+	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/telemetry"
 )
 
 // codexPreToolUseInput mirrors Codex's documented PreToolUse stdin
@@ -35,8 +42,10 @@ import (
 // than agy's "args.CommandLine" shape. If a real Codex Bash tool_input
 // turns out to use a different field name, this is the one place to fix.
 type codexPreToolUseInput struct {
-	ToolName  string `json:"tool_name"`
-	ToolInput struct {
+	SessionID      string `json:"session_id"`
+	TranscriptPath string `json:"transcript_path"`
+	ToolName       string `json:"tool_name"`
+	ToolInput      struct {
 		Command string `json:"command"`
 	} `json:"tool_input"`
 }
@@ -48,6 +57,11 @@ type codexPreToolUseInput struct {
 // Only the allow+rewrite shape is ever emitted here — this hook never
 // denies or asks, it only routes.
 type codexPreToolUseOutput struct {
+	HookSpecificOutput codexHookSpecificOutput `json:"hookSpecificOutput"`
+}
+
+type codexHookSpecificOutput struct {
+	HookEventName      string            `json:"hookEventName"`
 	PermissionDecision string            `json:"permissionDecision"`
 	UpdatedInput       map[string]string `json:"updatedInput,omitempty"`
 }
@@ -83,6 +97,88 @@ there is no separate 'codex-hooks apply/status' command group.`,
 	return cmd
 }
 
+func newCodexTelemetryCmd() *cobra.Command {
+	return &cobra.Command{Use: "codex-telemetry", Hidden: true, SilenceUsage: true, RunE: func(cmd *cobra.Command, _ []string) error {
+		return runCodexTelemetry(cmd.InOrStdin())
+	}}
+}
+
+func runCodexTelemetry(in io.Reader) error {
+	dbPath, err := telemetry.DefaultDBPath()
+	if err != nil {
+		return nil
+	}
+	return runCodexTelemetryAt(in, dbPath)
+}
+
+func runCodexTelemetryAt(in io.Reader, dbPath string) error {
+	raw, err := io.ReadAll(in)
+	if err != nil {
+		return nil
+	}
+	e := codex.ParseEvent(raw)
+	var hook struct {
+		SessionID      string `json:"session_id"`
+		TranscriptPath string `json:"transcript_path"`
+	}
+	_ = json.Unmarshal(raw, &hook)
+	if e.SessionID == "" {
+		e.SessionID = hook.SessionID
+	}
+	if e.SessionID == "" {
+		return nil
+	}
+	wd, _ := os.Getwd()
+	ticket, _ := resolve.Ticket(resolve.TicketOptions{SessionID: e.SessionID})
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		return nil
+	}
+	defer db.Close()
+	if hook.TranscriptPath != "" {
+		if usage := latestTranscriptTokens(hook.TranscriptPath, e.SessionID); usage.TotalTokens != nil {
+			_ = db.UpdateLatestProviderUsage(e.SessionID, usage.LastTotalTokens, usage.LastInputTokens, usage.LastCachedInputTokens, usage.LastOutputTokens, usage.LastReasoningTokens, usage.TotalTokens)
+		}
+	}
+	if e.ToolName == "" {
+		return nil
+	}
+	note := "codex:" + e.ToolCallID
+	if e.ToolCallID != "" {
+		if calls, queryErr := db.Query(telemetry.Filter{SessionID: e.SessionID}); queryErr == nil {
+			for _, prior := range calls {
+				if prior.Note == note {
+					return nil
+				}
+			}
+		}
+	}
+	callType := "hook:post"
+	if e.Success != nil && !*e.Success {
+		callType = "hook:failure"
+	}
+	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: callType, Note: note, DurationMs: e.DurationMs, ExitCode: e.ExitCode, OutputBytes: e.OutputBytes, ActualTokens: e.LastTotalTokens, InputTokens: e.LastInputTokens, CachedInputTokens: e.LastCachedInputTokens, OutputTokens: e.LastOutputTokens, ReasoningTokens: e.LastReasoningTokens, TotalTokens: e.TotalTokens}
+	return db.Insert(call)
+}
+
+func latestTranscriptTokens(path, sessionID string) codex.Event {
+	file, err := os.Open(path)
+	if err != nil {
+		return codex.Event{}
+	}
+	defer file.Close()
+	var latest codex.Event
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		e := codex.ParseEvent(scanner.Bytes())
+		if e.SessionID != "" && e.SessionID != sessionID || e.TotalTokens == nil {
+			continue
+		}
+		latest = e
+	}
+	return latest
+}
+
 func runCodexHooksHook(in io.Reader, out io.Writer) error {
 	raw, err := io.ReadAll(in)
 	if err != nil {
@@ -96,14 +192,17 @@ func runCodexHooksHook(in io.Reader, out io.Writer) error {
 
 	command := payload.ToolInput.Command
 	if command == "" || alreadyRoutedThroughExec(command) {
-		fmt.Fprintln(out, `{"permissionDecision":"allow"}`)
-		return nil
+		_, err := fmt.Fprintln(out, `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}`)
+		return err
 	}
 
 	resp := codexPreToolUseOutput{
-		PermissionDecision: "allow",
-		UpdatedInput: map[string]string{
-			"command": formatGearRewrite(command, ""),
+		HookSpecificOutput: codexHookSpecificOutput{
+			HookEventName:      "PreToolUse",
+			PermissionDecision: "allow",
+			UpdatedInput: map[string]string{
+				"command": formatGearRewrite(command, ""),
+			},
 		},
 	}
 	return json.NewEncoder(out).Encode(resp)

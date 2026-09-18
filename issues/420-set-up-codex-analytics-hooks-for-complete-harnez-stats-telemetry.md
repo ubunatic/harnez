@@ -1,6 +1,6 @@
 # 420 — Set up Codex analytics hooks for complete harnez stats telemetry
 
-**Status**: Open
+**Status**: Closed — Completed M5: separate cumulative and per-turn Codex token metrics with migration, parser, aggregation, and tests
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics / Infrastructure
@@ -48,6 +48,19 @@ environment's tool events end to end.
 - Verification: the canary identifies the active session and records a complete
   event sequence without requiring a real model run.
 
+**M1 status (completed 2026-09-18)**: `internal/codex/events.go` lands `ParseEvent`
+covering the hook envelope (`PostToolUse`) and the rollout `token_count`
+shape, plus malformed/unknown-kind safety. Review found and fixed:
+- `events.go`/`events_test.go` were not gofmt-clean (fixed).
+- Fixture coverage was missing `PreToolUse`, a `tool_call` rollout shape, and
+  session-boundary (`SessionStart`/`session_end`) kinds required by this
+  milestone's own scope; added in `events_test.go`.
+- A failure-shaped `PostToolUse` fixture was added, but `Success`/`ExitCode`
+  are still unpopulated by `ParseEvent` — that classification is explicitly
+  M2 scope ("map ... result, and failure fields"), not a regression.
+- `docs/CodexHooks.md` now records the documented hook keys, observed rollout
+  token schema, lifecycle guarantees, and compatibility caveats.
+
 ### M2 — Hook adapter and attribution
 
 - Implement the Codex adapter and register it through the supported Codex
@@ -56,6 +69,31 @@ environment's tool events end to end.
   fields into `tool_calls` and related telemetry tables.
 - Verification: isolated fixture tests cover success, failure, denial,
   interruption, duplicate delivery, and missing optional fields.
+
+**M2 status (completed 2026-09-18)**: Codex `PreToolUse`/`PostToolUse` hooks
+are installed through `config.toml`; the adapter records tool, agent, project,
+session, ticket, duration, exit, output, failure, and duplicate-delivery data.
+`SessionStart`, `Stop`, and `SessionEnd` now invoke the telemetry adapter for
+transcript reconciliation. The live Codex 0.154.0 smoke test confirmed the
+rewritten command and PostToolUse rows.
+
+**M2 open question — resolved, negative result (2026-09-18 live verification)**:
+`internal/codex/events.go` parses `success`/`exit_code`/`duration_ms` off the
+Codex `PostToolUse` payload (commit `dc8d248`), but these are not part of
+Codex's documented common keys (`docs/CodexHooks.md` "Lifecycle schemas"
+section lists only `session_id`, `transcript_path`, `cwd`, `hook_event_name`,
+`model`, `permission_mode`, `turn_id`). A live Codex session confirmed this
+by direct database inspection: real Codex `hook:post` rows have `exit_code`
+and `duration_ms` NULL/zero — Codex does not supply these result fields on
+its own `PostToolUse` calls in practice. `TestRunCodexTelemetry_PersistsPostToolResult`
+(`cmd/harnez/codexhooks_test.go`) now pins that *if* a payload ever does carry
+`success`/`exit_code`/`duration_ms`/`tool_output`, those values are parsed and
+stored correctly — but that fixture is synthetic, not what a real Codex
+session sends. **Conclusion**: the `PreToolUse` gear rewrite
+(`harnez codex-hook` routing through `harnez exec`) is not an interim
+workaround pending verification — it is the permanent, confirmed source of
+exit code and duration for Codex telemetry. Do not drop it or treat
+`PostToolUse` parsing as a substitute.
 
 ### M3 — Token and read analytics
 
@@ -66,6 +104,12 @@ environment's tool events end to end.
 - Verification: fixture data produces non-empty `harnez stats --auto --json`
   with expected counts, token fields, failure rates, and savings values.
 
+**M3 status (completed 2026-09-18)**: `event_msg`/`token_count` records are
+parsed for input, cached-input, output, reasoning, and cumulative totals.
+`reasoning_output_tokens` from the live rollout schema is supported. Lifecycle
+hooks attach the latest provider total to the session's latest tool row without
+fabricating values when no token record exists.
+
 ### M4 — Live Codex smoke test and operational documentation
 
 - Run a bounded real Codex session with at least one successful tool call and
@@ -74,6 +118,56 @@ environment's tool events end to end.
   diagnose a session that resolves but has no telemetry rows.
 - Verification: `harnez stats --auto` reports the live session and the full
   repository test/check targets pass.
+- Capture a real `PostToolUse` payload from that live session and check it
+  against the `success`/`exit_code`/`duration_ms` field names assumed in
+  `internal/codex/events.go` (see M2 open question above); update
+  `docs/CodexHooks.md` with the confirmed `PostToolUse` shape once verified,
+  the same way it already documents `PreToolUse`.
+
+**M4 status (completed 2026-09-18)**: A bounded real Codex session executed
+successfully through the installed hooks; `harnez stats --auto` showed the
+resulting Codex rows and the full repository test suite passed. A subprocess
+launched from an existing Harnez shell can have a different Codex thread ID;
+session-filtered reports must therefore be run from the Codex-owned
+environment when validating token reconciliation. The captured-payload
+verification bullet is now closed — see the M2 open question above for the
+negative result (Codex does not send `success`/`exit_code`/`duration_ms` in
+practice) and the routed `shell` rows from `harnez exec` as the authoritative
+source instead. `TestRunCodexTelemetry_PersistsPostToolResult`
+(`cmd/harnez/codexhooks_test.go`) pins correct handling of those fields for
+the rare case a payload does carry them; no permanent raw-payload logging is
+required.
+
+### M5 — Separate cumulative and per-turn provider token metrics
+
+- Extend `tool_calls` with nullable provider usage fields for cumulative
+  `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_tokens`,
+  and `total_tokens` values.
+- Add nullable per-turn `last_*` counterparts for the same five metrics,
+  sourced from Codex's `last_token_usage` object.
+- Preserve `actual_tokens` for backward compatibility, but define it as the
+  per-call/per-turn total when provider data is available; do not store a
+  cumulative snapshot there.
+- Update Codex transcript reconciliation, insertion, querying, aggregation,
+  JSON output, and tests so `AVG TOKENS` uses `last_total_tokens`, while
+  cumulative totals remain available for session analysis.
+- Keep unavailable provider fields as `NULL`; never infer or fabricate token
+  values from byte counts.
+- Verification: fixture and live-session checks show distinct cumulative and
+  per-turn values, and existing Claude/AGY telemetry remains unchanged.
+
+**M5 status (completed 2026-09-18)**: Added nullable cumulative provider
+columns and per-turn fields to `tool_calls`; `actual_tokens` now represents
+the per-turn total for compatibility with existing stats. Codex
+`last_token_usage` populates per-turn input, cached-input, output, reasoning,
+and total values, while `total_token_usage` remains available for cumulative
+analysis. Migration, round-trip, parser, and full-suite verification pass.
+
+**Post-close regression fix (2026-09-18)**: A clean session exposed that the
+existing user database was still stamped schema v3, so the new token columns
+were absent and `codex-telemetry` exited 1 on PostToolUse. Schema v4 now runs
+the additive migration for existing databases. Verified the live database has
+all five provider columns and a representative PostToolUse payload exits 0.
 
 ## 4. Acceptance Criteria
 

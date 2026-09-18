@@ -636,6 +636,10 @@ func TestReadEnforcementDisabledAllowsNativeLargeReads(t *testing.T) {
 }
 
 func TestReadEnforcementDefaultsToEnabled(t *testing.T) {
+	// The default contract must not depend on the developer's real
+	// ~/.harnez/config.yaml. Configuration precedence is covered separately
+	// by TestReadEnforcementConfigAndDependencyInjection below.
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("HARNEZ_READ_ENFORCE", "")
 	if !readEnforcementEnabled() {
 		t.Fatal("empty HARNEZ_READ_ENFORCE should preserve enforcement")

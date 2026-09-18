@@ -111,7 +111,15 @@ in managed agent environments / PATH (`~/.claude/bin/⚙`, `~/go/bin/⚙`, etc.)
 - **Response**: `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": {"command": "harnez exec --tool <tool> -- bash -c '<escaped>'"}}}`.
 - **Config**: Managed via `harnez apply`.
 
-### 2. Google Antigravity (`~/.harnez/shims/bash` & `hooks.json`)
+### 2. Codex (`~/.codex/config.toml`)
+- **Protocol**: `PreToolUse` on matcher `Bash`.
+- **Payload**: `{tool_name, tool_input: {command}}`.
+- **Response**: See [Codex Hooks — Reference Schema](CodexHooks.md). Codex
+  requires `hookSpecificOutput.hookEventName` and nests
+  `permissionDecision`/`updatedInput` inside `hookSpecificOutput`.
+- **Config**: `harnez apply` installs `harnez codex-hook`.
+
+### 3. Google Antigravity (`~/.harnez/shims/bash` & `hooks.json`)
 - **Shell Command Interception (Guarded `bash` PATH shim)**:
   - See [issues/195](../issues/195-agy-path-shim-vs-native-hooks-options-and-tradeoffs.md) and [issues/271](../issues/271-decommission-agy-hooks-pretooluse-interception-in-favor-of-guarded-bash-path-shim.md).
   - **Clean UI & Zero Overwrite Artifacts**: Antigravity's PreToolUse `overwrite.CommandLine` hook mechanism leaks wrapper plumbing (e.g. `Bash(⚙ ...)` or `Bash(harnez exec ...)`) into user-facing chat traces. The quiet PATH shim intercepts `run_command` transparently while preserving native, clean commands in the UI (e.g. `Bash(git status)`).
@@ -155,4 +163,3 @@ When the wrapped command executes under `harnez exec`, it resolves session and a
 4. If the wrapper stage's own telemetry/side-effect write can fail or block, make it
    best-effort and non-blocking relative to the wrapped command's exit — the hook
    protocol gives no way to retry or recover after the fact.
-

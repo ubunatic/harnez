@@ -12,6 +12,7 @@ package codex
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -55,18 +56,33 @@ func HooksPath(home string) string {
 // necessary).
 func BuildHooksDoc() map[string]any {
 	return map[string]any{
+		"features": map[string]any{"hooks": true},
 		"hooks": map[string]any{
-			HookName: map[string]any{
-				"enabled": true,
-				"PreToolUse": []map[string]any{
-					{
-						"matcher": "Bash",
-						"hooks": []map[string]any{
-							{"type": "command", "command": "harnez codex-hook"},
-						},
+			"PreToolUse": []map[string]any{
+				{
+					"matcher": "Bash",
+					"hooks": []map[string]any{
+						{"type": "command", "command": "harnez codex-hook"},
 					},
 				},
 			},
+			"PostToolUse": []map[string]any{
+				{
+					"matcher": "*",
+					"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
+				},
+			},
+			"SessionStart": []map[string]any{{
+				"matcher": "startup|resume|clear|compact",
+				"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
+			}},
+			"Stop": []map[string]any{{
+				"hooks": []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
+			}},
+			"SessionEnd": []map[string]any{{
+				"matcher": "other",
+				"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
+			}},
 		},
 	}
 }
@@ -119,11 +135,24 @@ func mergeHooksDoc(existing, incoming map[string]any) map[string]any {
 		}
 	}
 	if incomingHooks, ok := incoming["hooks"].(map[string]any); ok {
+		delete(mergedHooks, HookName)
 		for k, v := range incomingHooks {
 			mergedHooks[k] = v
 		}
 	}
 	out["hooks"] = mergedHooks
+	features := map[string]any{}
+	if existingFeatures, ok := out["features"].(map[string]any); ok {
+		for k, v := range existingFeatures {
+			features[k] = v
+		}
+	}
+	if incomingFeatures, ok := incoming["features"].(map[string]any); ok {
+		for k, v := range incomingFeatures {
+			features[k] = v
+		}
+	}
+	out["features"] = features
 	return out
 }
 
@@ -165,15 +194,48 @@ func Status(path string) (installed bool, drifted bool) {
 	if !ok {
 		return false, false
 	}
-	entry, ok := hooks[HookName]
-	if !ok {
+	features, featuresOK := existing["features"].(map[string]any)
+	if !featuresOK || features["hooks"] != true {
+		return false, true
+	}
+	if _, ok := hooks["PreToolUse"]; !ok {
 		return false, false
 	}
 
-	want := BuildHooksDoc()["hooks"].(map[string]any)[HookName]
-	wantData, _ := json.Marshal(want)
-	gotData, _ := json.Marshal(entry)
+	wantData, _ := json.Marshal(BuildHooksDoc()["hooks"])
+	gotData, _ := json.Marshal(hooks)
 	return true, string(wantData) != string(gotData)
+}
+
+// Summary returns a compact operator-facing description of the managed Codex hooks.
+func Summary(path string) string {
+	doc := readTOML(path)
+	features, _ := doc["features"].(map[string]any)
+	hooks, _ := doc["hooks"].(map[string]any)
+	entry := hooks
+	state := "disabled"
+	if features["hooks"] == true {
+		state = "enabled"
+	}
+	return fmt.Sprintf("%s (PreToolUse %d, PostToolUse %d, SessionStart %d, Stop %d, SessionEnd %d)",
+		state,
+		hookCount(entry, "PreToolUse"),
+		hookCount(entry, "PostToolUse"),
+		hookCount(entry, "SessionStart"),
+		hookCount(entry, "Stop"),
+		hookCount(entry, "SessionEnd"),
+	)
+}
+
+func hookCount(entry map[string]any, name string) int {
+	groups, _ := entry[name].([]map[string]any)
+	count := 0
+	for _, group := range groups {
+		if handlers, ok := group["hooks"].([]map[string]any); ok {
+			count += len(handlers)
+		}
+	}
+	return count
 }
 
 // Remove deletes the HookName entry from config.toml at path, leaving any
@@ -187,14 +249,32 @@ func Remove(path string) (changed bool, err error) {
 	if !ok {
 		return false, nil
 	}
-	if _, ok := hooks[HookName]; !ok {
+	managed := false
+	for _, name := range []string{"PreToolUse", "PostToolUse", "SessionStart", "Stop", "SessionEnd", HookName} {
+		if _, ok := hooks[name]; ok {
+			managed = true
+			break
+		}
+	}
+	if !managed {
 		return false, nil
 	}
+	delete(hooks, "PreToolUse")
+	delete(hooks, "PostToolUse")
+	delete(hooks, "SessionStart")
+	delete(hooks, "Stop")
+	delete(hooks, "SessionEnd")
 	delete(hooks, HookName)
 	if len(hooks) == 0 {
 		delete(existing, "hooks")
 	} else {
 		existing["hooks"] = hooks
+	}
+	if features, ok := existing["features"].(map[string]any); ok {
+		delete(features, "hooks")
+		if len(features) == 0 {
+			delete(existing, "features")
+		}
 	}
 
 	if len(existing) == 0 {

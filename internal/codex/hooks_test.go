@@ -24,6 +24,11 @@ func TestApplyCreatesFile(t *testing.T) {
 		t.Fatalf("Status = installed=%v drifted=%v, want true/false", installed, drifted)
 	}
 
+	data, err := os.ReadFile(path)
+	if err != nil || !strings.Contains(string(data), "hooks = true") {
+		t.Fatalf("expected Codex lifecycle hooks feature enabled, got:\n%s", data)
+	}
+
 	// idempotent: second apply is a no-op.
 	changed, err = Apply(path)
 	if err != nil {
@@ -31,6 +36,18 @@ func TestApplyCreatesFile(t *testing.T) {
 	}
 	if changed {
 		t.Fatal("expected changed=false on repeat apply")
+	}
+}
+
+func TestSummaryIncludesLifecycleHooks(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if _, err := Apply(path); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	want := "enabled (PreToolUse 1, PostToolUse 1, SessionStart 1, Stop 1, SessionEnd 1)"
+	if got := Summary(path); got != want {
+		t.Fatalf("Summary = %q, want %q", got, want)
 	}
 }
 
@@ -74,8 +91,11 @@ func TestStatusDetectsDrift(t *testing.T) {
 		t.Fatalf("Apply: %v", err)
 	}
 
-	drifted := `[hooks.harnez]
-enabled = false
+	drifted := `[features]
+hooks = true
+
+[[hooks.PreToolUse]]
+matcher = "Other"
 `
 	if err := os.WriteFile(path, []byte(drifted), 0644); err != nil {
 		t.Fatal(err)
@@ -87,6 +107,27 @@ enabled = false
 	}
 	if !isDrifted {
 		t.Fatal("expected drifted=true after hand-editing the harnez entry")
+	}
+}
+
+func TestApplyPreservesOtherFeatures(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte("[features]\napps = false\nplugins = false\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(path); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	for _, want := range []string{"apps = false", "plugins = false", "hooks = true"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
 	}
 }
 

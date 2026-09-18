@@ -501,6 +501,9 @@ func newRootCmd() *cobra.Command {
 		Use:   "apply",
 		Short: "Apply config.yaml to global Claude Code and agent harness directories",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := ensureTelemetrySchema(); err != nil {
+				return fmt.Errorf("initialize telemetry: %w", err)
+			}
 			cfg, name, err := claude.OpenConfig(configPath)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
@@ -895,6 +898,20 @@ func newRootCmd() *cobra.Command {
 	assessCmd.Flags().BoolVar(&assessHistory, "history", false, "display multi-track repository evolution history")
 	assessCmd.Flags().BoolVar(&assessRAMP, "ramp", false, "display RAMP repository AI maturity profile and evidence inventory")
 
-	root.AddCommand(apply, diff, scanDocs, clean, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newStatuslineCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newHookCmd(), newLintCmd(), newLogCmd(), newDocsCmd(), newReadCmd(), newSubagentCmd())
+	root.AddCommand(apply, diff, scanDocs, clean, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newCodexTelemetryCmd(), newHookCmd(), newLintCmd(), newLogCmd(), newDocsCmd(), newReadCmd(), newSubagentCmd())
 	return root
+}
+
+// ensureTelemetrySchema opens and closes the shared telemetry store so apply
+// performs pending additive migrations before installing hooks that write to it.
+func ensureTelemetrySchema() error {
+	path, err := telemetry.DefaultDBPath()
+	if err != nil {
+		return err
+	}
+	db, err := telemetry.Open(path)
+	if err != nil {
+		return err
+	}
+	return db.Close()
 }

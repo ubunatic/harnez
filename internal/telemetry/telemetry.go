@@ -111,7 +111,7 @@ func migrateV2ToV3(sqlDB *sql.DB) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	for _, column := range []string{"output_bytes", "actual_tokens", "potential_savings_tokens", "potential_savings_bytes"} {
+	for _, column := range []string{"output_bytes", "actual_tokens", "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens", "potential_savings_tokens", "potential_savings_bytes"} {
 		if !columns[column] {
 			if _, err := sqlDB.Exec("ALTER TABLE tool_calls ADD COLUMN " + column + " INTEGER"); err != nil {
 				return err
@@ -153,7 +153,7 @@ func checkAndMigrateSchema(sqlDB *sql.DB, path string, preexisting bool) error {
 		return nil
 	}
 	if current < schemaVersion {
-		if current < 3 {
+		if current < 4 {
 			if err := migrateV2ToV3(sqlDB); err != nil {
 				return fmt.Errorf("telemetry: migrate schema to v3: %w", err)
 			}

@@ -15,7 +15,7 @@ package telemetry
 //
 // 1: issue 116's original shape (distilled_bytes INTEGER NOT NULL DEFAULT 0).
 // 2: issue 118's fix (distilled_bytes made nullable) — the current shape.
-const schemaVersion = 3
+const schemaVersion = 4
 
 // schemaDDL is the single source of truth for the tool_calls table shape
 // (per docs/other/Spec.md's "spec files are the single source of truth"
@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS tool_calls (
 	distilled_bytes INTEGER CHECK (distilled_bytes IS NULL OR distilled_bytes >= 0),
 	output_bytes INTEGER,
 	actual_tokens INTEGER,
+	input_tokens INTEGER,
+	cached_input_tokens INTEGER,
+	output_tokens INTEGER,
+	reasoning_tokens INTEGER,
+	total_tokens INTEGER,
 	potential_savings_tokens INTEGER,
 	potential_savings_bytes INTEGER
 );
