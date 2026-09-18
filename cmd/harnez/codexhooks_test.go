@@ -3,7 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"path/filepath"
 	"testing"
+
+	"ubunatic.com/harnez/internal/telemetry"
 )
 
 func TestRunCodexHooksHook_RewritesCommand(t *testing.T) {
@@ -27,6 +30,39 @@ func TestRunCodexHooksHook_RewritesCommand(t *testing.T) {
 	want := "⚙ git status"
 	if got.HookSpecificOutput.UpdatedInput["command"] != want {
 		t.Errorf("UpdatedInput[command] = %q, want %q", got.HookSpecificOutput.UpdatedInput["command"], want)
+	}
+}
+
+func TestRunCodexTelemetry_PersistsPostToolResult(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	payload := `{"hook_event_name":"PostToolUse","session_id":"codex-session","tool_use_id":"call-1","tool_name":"Bash","tool_input":{"command":"false"},"tool_output":"failed","success":false,"exit_code":2,"duration_ms":17}`
+	if err := runCodexTelemetryAt(bytes.NewBufferString(payload), dbPath); err != nil {
+		t.Fatalf("runCodexTelemetryAt: %v", err)
+	}
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatalf("telemetry.Open: %v", err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{SessionID: "codex-session"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(rows))
+	}
+	row := rows[0]
+	if row.ExitCode == nil || *row.ExitCode != 2 {
+		t.Fatalf("ExitCode = %v, want 2", row.ExitCode)
+	}
+	if row.DurationMs != 17 {
+		t.Errorf("DurationMs = %d, want 17", row.DurationMs)
+	}
+	if row.OutputBytes == nil || *row.OutputBytes != int64(len("failed")) {
+		t.Errorf("OutputBytes = %v, want %d", row.OutputBytes, len("failed"))
+	}
+	if row.CallType != "hook:failure" {
+		t.Errorf("CallType = %q, want hook:failure", row.CallType)
 	}
 }
 

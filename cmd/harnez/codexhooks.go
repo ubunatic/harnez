@@ -104,6 +104,14 @@ func newCodexTelemetryCmd() *cobra.Command {
 }
 
 func runCodexTelemetry(in io.Reader) error {
+	dbPath, err := telemetry.DefaultDBPath()
+	if err != nil {
+		return nil
+	}
+	return runCodexTelemetryAt(in, dbPath)
+}
+
+func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 	raw, err := io.ReadAll(in)
 	if err != nil {
 		return nil
@@ -122,10 +130,6 @@ func runCodexTelemetry(in io.Reader) error {
 	}
 	wd, _ := os.Getwd()
 	ticket, _ := resolve.Ticket(resolve.TicketOptions{SessionID: e.SessionID})
-	dbPath, err := telemetry.DefaultDBPath()
-	if err != nil {
-		return nil
-	}
 	db, err := telemetry.Open(dbPath)
 	if err != nil {
 		return nil
