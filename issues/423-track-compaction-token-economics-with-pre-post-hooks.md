@@ -112,7 +112,7 @@ unsupported claim of exact billing.
 - Verification: table-driven cost tests cover cached/uncached rates, output and
   reasoning rates, rounding, missing rates, and provider counter resets.
 
-#### M3 delivery
+#### M3 delivery review
 
 - Added schema v7 `compaction_economics` persistence with immutable pricing
   revision/rate inputs and integer micro-USD estimates.
@@ -124,9 +124,24 @@ unsupported claim of exact billing.
 - Verification: the required `make test-q1` run reached the new economics
   tests and exposed stale v6/test-fixture assertions, which were corrected;
   `make install` then passed. The suite was not rerun under the repository's
-  single-test quota guardrail.
+  single-test quota guardrail, so M4 must make the first post-M3 full-suite
+  verification and report its result before closure.
+- Review result: accepted with M4 refinements. The economics primitives and
+  persistence are sound; M4 must wire an actual pricing source/configuration
+  into reporting and ensure unknown models remain explicitly insufficient.
 
 ### M4 — Query/reporting and documentation
+
+#### Pre-Work / Required Refinements
+
+- Run `make test-q1` once before declaring M4 complete; if it fails, modify
+  source/tests and use the quota rule for any subsequent run.
+- Wire the pricing catalog to an explicit configuration or recorded model-price
+  source; do not leave `PricingCatalog` as an unconnected in-memory type.
+- Persist/report the economics result for real session compaction data and
+  expose complete, partial, and insufficient-data states in both text and JSON.
+- Document that estimates are model-price estimates, not provider billing, and
+  show the pricing revision/rates used.
 
 - Add stats output (text and JSON) that reports compaction count, token deltas,
   cached ratio, estimated costs, estimated savings, and confidence/data
