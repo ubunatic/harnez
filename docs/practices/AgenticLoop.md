@@ -193,13 +193,15 @@ For focused, day-to-day tickets and milestone iterations, running the full 5-pha
    - **Strict Invariants for Host Orchestrator**:
      - *Zero Coding*: The host NEVER writes code, edits source files, or applies direct "quick fixes". All coding and test implementation are executed by the worker.
      - *Diff-First / No Exploratory Digging*: The host NEVER performs wide exploratory codebase reads or deep call-graph tracing. The host limits inspection strictly to the ticket statement, `git diff HEAD~1`, and test execution output.
+     - *Single-Ticket Medium (No Follow-Up Tickets)*: The single issue ticket is the sole communication medium. Never create separate refinement tickets (`#XXX-refinements`) for lean sprints.
    - **Trust the Base Framework**: Avoid micromanaging standard workspace rules, tool descriptions, or language conventions already provided by the base system prompt.
    - **Stay Responsive**: After dispatch, the Orchestrator returns control to the main chat or continues only with non-overlapping local work. Do not block on the dev subagent by default.
 2. **Autonomous Milestone Execution & Self-Verification**:
    - The dev subagent implements changes, validates them using repo-native verification commands (`go test ./...`, `make check`, canary probes), and commits each milestone at the boundary.
-3. **Concise Inline Review & Direct Nuance Forwarding**:
+3. **Concise Inline Review & In-Ticket Pre-Work Embedding**:
    - The Host Orchestrator reviews the latest commit diff and test output concisely.
-   - If defects, ambient leaks, or nuances are discovered, the orchestrator does **not** fix them in place, but immediately feeds them as prioritized requirements into the **next milestone prompt** for the developer.
+   - If defects, ambient leaks, or nuances are discovered, the orchestrator does **not** fix them in place or dispatch isolated micro-tasks.
+   - Instead, the host documents them directly in the ticket under the upcoming milestone as **"Pre-Work / Required Refinements"**. The developer executes this pre-work as part of starting the next milestone.
    - Escalate to a formal reviewer agent only if there is cross-subsystem blast radius, missing automated test coverage, or unexpected complexity.
 4. **Fast Hygiene & Status Sync**:
    - Immediately terminate child subagents (`manage_subagents kill`) and clear background tasks.
