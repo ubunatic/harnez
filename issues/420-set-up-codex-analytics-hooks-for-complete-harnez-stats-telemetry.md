@@ -77,18 +77,60 @@ session, ticket, duration, exit, output, failure, and duplicate-delivery data.
 transcript reconciliation. The live Codex 0.154.0 smoke test confirmed the
 rewritten command and PostToolUse rows.
 
+**M2 open question — still unresolved (review 2026-09-19)**:
+`internal/codex/events.go` parses `success`/`exit_code`/`duration_ms` off the
+Codex `PostToolUse` payload (commit `dc8d248`), but Codex's own documented
+hook contract (`docs/CodexHooks.md` "Lifecycle schemas" section) only lists
+`session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`,
+`permission_mode`, and `turn_id` as common keys — it does not confirm
+`success`/`exit_code`/`duration_ms` on a real `PostToolUse` payload. M4's
+verification step (added in the prior review) asked for a captured payload to
+settle this before closing the ticket; that capture never happened —
+`docs/CodexHooks.md`'s "Recommended telemetry design" section now claims
+`PostToolUse` is reliable for "failures, and durations" without that
+verification backing it. **This should not have been closed with that bullet
+unmet.** Until a real payload is captured and checked, the `PreToolUse` gear
+rewrite (`harnez codex-hook` routing through `harnez exec`) remains the only
+confirmed source of exit code and duration — do not drop or treat it as
+redundant with `PostToolUse` parsing.
+
+### M3 — Token and read analytics
+
+- Parse and persist Codex token metrics at the correct turn and cumulative
+  scopes, without fabricating provider values when unavailable.
+- Connect native read and `harnez read` observations to existing savings and
+  opportunity calculations.
+- Verification: fixture data produces non-empty `harnez stats --auto --json`
+  with expected counts, token fields, failure rates, and savings values.
+
 **M3 status (completed 2026-09-18)**: `event_msg`/`token_count` records are
 parsed for input, cached-input, output, reasoning, and cumulative totals.
 `reasoning_output_tokens` from the live rollout schema is supported. Lifecycle
 hooks attach the latest provider total to the session's latest tool row without
 fabricating values when no token record exists.
 
-**M4 status (completed 2026-09-18)**: A bounded real Codex session executed
-successfully through the installed hooks; `harnez stats --auto` showed the
-resulting Codex rows and the full repository test suite passed. A subprocess
-launched from an existing Harnez shell can have a different Codex thread ID;
-session-filtered reports must therefore be run from the Codex-owned environment
-when validating token reconciliation.
+### M4 — Live Codex smoke test and operational documentation
+
+- Run a bounded real Codex session with at least one successful tool call and
+  one controlled failure, then verify the session-filtered report.
+- Document installation, version compatibility, failure behavior, and how to
+  diagnose a session that resolves but has no telemetry rows.
+- Verification: `harnez stats --auto` reports the live session and the full
+  repository test/check targets pass.
+- Capture a real `PostToolUse` payload from that live session and check it
+  against the `success`/`exit_code`/`duration_ms` field names assumed in
+  `internal/codex/events.go` (see M2 open question above); update
+  `docs/CodexHooks.md` with the confirmed `PostToolUse` shape once verified,
+  the same way it already documents `PreToolUse`.
+
+**M4 status (completed 2026-09-18, verification bullet above still open)**: A
+bounded real Codex session executed successfully through the installed hooks;
+`harnez stats --auto` showed the resulting Codex rows and the full repository
+test suite passed. A subprocess launched from an existing Harnez shell can
+have a different Codex thread ID; session-filtered reports must therefore be
+run from the Codex-owned environment when validating token reconciliation.
+The captured-payload verification bullet was not carried out — see the M2
+open question above.
 
 ### M5 — Separate cumulative and per-turn provider token metrics
 
@@ -107,43 +149,6 @@ when validating token reconciliation.
   values from byte counts.
 - Verification: fixture and live-session checks show distinct cumulative and
   per-turn values, and existing Claude/AGY telemetry remains unchanged.
-
-The former open question (review 2026-09-18) stated that
-`internal/codex/events.go` parses
-`success`/`exit_code`/`duration_ms` off the Codex `PostToolUse` payload
-(commit `dc8d248`), but `docs/CodexHooks.md` — sourced from OpenAI's actual
-hooks docs — only documents the `PreToolUse` allow/deny envelope; it says
-nothing about `PostToolUse`'s payload shape. Those three field names are
-unconfirmed by analogy to Claude Code's schema, not by a real captured
-payload. Until M4's live session confirms (or corrects) them, the
-`PreToolUse` gear rewrite (`harnez codex-hook` routing through `harnez
-exec`) remains the only confirmed source of exit code and duration —
-`harnez exec` measures the command itself rather than trusting Codex's
-report — so do not drop or treat the rewrite as redundant with
-`PostToolUse` parsing before that's verified.
-
-### M3 — Token and read analytics
-
-- Parse and persist Codex token metrics at the correct turn and cumulative
-  scopes, without fabricating provider values when unavailable.
-- Connect native read and `harnez read` observations to existing savings and
-  opportunity calculations.
-- Verification: fixture data produces non-empty `harnez stats --auto --json`
-  with expected counts, token fields, failure rates, and savings values.
-
-### M4 — Live Codex smoke test and operational documentation
-
-- Run a bounded real Codex session with at least one successful tool call and
-  one controlled failure, then verify the session-filtered report.
-- Document installation, version compatibility, failure behavior, and how to
-  diagnose a session that resolves but has no telemetry rows.
-- Verification: `harnez stats --auto` reports the live session and the full
-  repository test/check targets pass.
-- Capture a real `PostToolUse` payload from that live session and check it
-  against the `success`/`exit_code`/`duration_ms` field names assumed in
-  `internal/codex/events.go` (see M2 open question above); update
-  `docs/CodexHooks.md` with the confirmed `PostToolUse` shape once verified,
-  the same way it already documents `PreToolUse`.
 
 ## 4. Acceptance Criteria
 
