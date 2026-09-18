@@ -66,6 +66,12 @@ func BuildHooksDoc() map[string]any {
 						},
 					},
 				},
+				"PostToolUse": []map[string]any{
+					{
+						"matcher": "*",
+						"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
+					},
+				},
 			},
 		},
 	}

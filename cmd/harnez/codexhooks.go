@@ -17,8 +17,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/codex"
+	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/telemetry"
 )
 
 // codexPreToolUseInput mirrors Codex's documented PreToolUse stdin
@@ -81,6 +87,38 @@ there is no separate 'codex-hooks apply/status' command group.`,
 		},
 	}
 	return cmd
+}
+
+func newCodexTelemetryCmd() *cobra.Command {
+	return &cobra.Command{Use: "codex-telemetry", Hidden: true, SilenceUsage: true, RunE: func(cmd *cobra.Command, _ []string) error {
+		return runCodexTelemetry(cmd.InOrStdin())
+	}}
+}
+
+func runCodexTelemetry(in io.Reader) error {
+	raw, err := io.ReadAll(in)
+	if err != nil {
+		return nil
+	}
+	e := codex.ParseEvent(raw)
+	if e.ToolName == "" || e.SessionID == "" {
+		return nil
+	}
+	wd, _ := os.Getwd()
+	ticket, _ := resolve.Ticket(resolve.TicketOptions{SessionID: e.SessionID})
+	dbPath, err := telemetry.DefaultDBPath()
+	if err != nil {
+		return nil
+	}
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		return nil
+	}
+	defer db.Close()
+	note := "codex:" + e.ToolCallID
+	done := 5
+	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: "hook:post", Score: &done, Note: note}
+	return db.Insert(call)
 }
 
 func runCodexHooksHook(in io.Reader, out io.Writer) error {
