@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez/internal/mode"
 )
 
@@ -105,6 +108,59 @@ Flags:
 		cmd.AddCommand(subCmd)
 	}
 
+	for _, setting := range []struct {
+		name    string
+		enforce bool
+		short   string
+	}{
+		{"enforce-read", true, "Enable native large-read enforcement"},
+		{"autonomous-read", false, "Allow native reads and observe their opportunity cost"},
+	} {
+		setting := setting
+		cmd.AddCommand(&cobra.Command{
+			Use:   setting.name,
+			Short: setting.short,
+			Args:  cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return fmt.Errorf("resolve home directory: %w", err)
+				}
+				path := filepath.Join(home, ".harnez", "config.yaml")
+				data, err := os.ReadFile(path)
+				if err != nil && !os.IsNotExist(err) {
+					return fmt.Errorf("read config: %w", err)
+				}
+				var cfg map[string]any
+				if len(data) > 0 {
+					if err := yaml.Unmarshal(data, &cfg); err != nil {
+						return fmt.Errorf("parse config: %w", err)
+					}
+				}
+				if cfg == nil {
+					cfg = map[string]any{}
+				}
+				discipline, _ := cfg["reading_discipline"].(map[string]any)
+				if discipline == nil {
+					discipline = map[string]any{}
+				}
+				discipline["enforce"] = setting.enforce
+				cfg["reading_discipline"] = discipline
+				encoded, err := yaml.Marshal(cfg)
+				if err != nil {
+					return fmt.Errorf("encode config: %w", err)
+				}
+				if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+					return fmt.Errorf("create config directory: %w", err)
+				}
+				if err := os.WriteFile(path, encoded, 0o600); err != nil {
+					return fmt.Errorf("write config: %w", err)
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "reading_discipline.enforce: %t\n", setting.enforce)
+				return nil
+			},
+		})
+	}
+
 	return cmd
 }
-

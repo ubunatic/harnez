@@ -1,6 +1,6 @@
 # 419 — Configurable mode switch for harnez read enforcement vs autonomous agent tool selection
 
-**Status**: Open — Milestone 3 complete
+**Status**: Open — Milestone 4 complete
 **Priority**: P2 (Medium)
 **Severity**: Medium
 **Category**: Architecture / Context Optimization / Developer Experience
@@ -80,8 +80,15 @@ separating prompt recommendations from runtime policy.
 - Add unit and integration tests verifying both enabled and disabled switch states across Claude Code and Antigravity hooks under isolated test conditions.
 - Provide a convenient CLI command (`harnez mode [enforce-read|autonomous-read]` or `harnez config`) to inspect and toggle the mode.
 
+**Delivered (2026-09-18):** Added persistent `harnez mode enforce-read` and
+`harnez mode autonomous-read` commands backed by
+`~/.harnez/config.yaml`. Synchronized the embedded config template and root
+guidance wording, and verified the complete suite under the autonomous-mode
+test environment.
+
 ---
 
 ## 4. Verification & Acceptance Criteria
 - `go test ./...` passes cleanly regardless of whether `HARNEZ_READ_ENFORCE=0` or `1` is present in the shell.
 - Telemetry properly records invocations and opportunity cost metrics regardless of mode switch state.
+- `harnez mode enforce-read` and `harnez mode autonomous-read` persist the selected mode.
