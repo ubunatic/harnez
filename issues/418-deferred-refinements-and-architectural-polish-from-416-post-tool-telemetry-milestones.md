@@ -49,6 +49,13 @@ If the buffer of refinements reaches an architectural tipping point during the s
    - In `runAgyPostToolHook`, calculate estimated output tokens for *every* tool invocation (`actual_tokens = ComputeTextTokens(payload.Output).TextTokens`) and record it in `tool_calls.actual_tokens`.
    - *Value*: Allows benchmarking heuristic token estimates directly against ground-truth provider turn deltas for every command/tool execution in real-world workflows.
 
+### From Milestone 5 (Analytical Reporting in `harnez stats`)
+9. **Zero vs N/A Table Formatting for Savings**:
+   - In `cmd/harnez/stats.go`, zero potential savings currently outputs `0`.
+   - *Refinement*: Render `-` or `n/a` when no savings data exists for cleaner terminal visual scanning.
+10. **JSON Field Tagging Consistency**:
+    - *Refinement*: Ensure `GroupStats` JSON export tags strictly match snake_case conventions (`avg_actual_tokens`, `potential_savings_tokens`).
+
 ---
 
 ## 3. Verification Target
