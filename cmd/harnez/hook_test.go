@@ -557,6 +557,36 @@ func TestRunClaudeReadHook_ReadingDiscipline(t *testing.T) {
 	}
 }
 
+func TestRunAgyToolHook_ObserverMarksLargeReadOpportunity(t *testing.T) {
+	tempDir := t.TempDir()
+	largeFile := createTestFile(t, tempDir, "large.txt", 150)
+	enforceRead := false
+	var recorded telemetry.ToolCall
+	var out bytes.Buffer
+	payload := fmt.Sprintf(`{"conversationId":"observer-sess","toolCall":{"name":"view_file","args":{"AbsolutePath":%q}}}`, largeFile)
+
+	err := runAgyToolHook(strings.NewReader(payload), &out, agyHookOptions{
+		BaseDir:     tempDir,
+		EnforceRead: &enforceRead,
+		Insert: func(_ string, call telemetry.ToolCall) error {
+			recorded = call
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("runAgyToolHook: %v", err)
+	}
+	if got := strings.TrimSpace(out.String()); got != `{"decision":"allow"}` {
+		t.Fatalf("response = %s, want allow", got)
+	}
+	if recorded.Note != "reading_discipline:opportunity" {
+		t.Fatalf("telemetry note = %q, want opportunity marker", recorded.Note)
+	}
+	if recorded.CallType != "hook:rpc" {
+		t.Fatalf("call type = %q, want hook:rpc", recorded.CallType)
+	}
+}
+
 func TestRunClaudeReadHook_EmptyAndInvalidInput(t *testing.T) {
 	// Empty input
 	{

@@ -278,10 +278,17 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 		}
 	}
 
+	// Evaluate the discipline independently of the active mode so observer-mode
+	// calls retain a ground-truth marker for comparative analysis. The second
+	// evaluation applies the configured enforcement decision.
+	enforce := true
+	opportunity, _ := evaluateReadToolDisciplineWithEnforcement(toolName, payload.ToolCall.Args, wd, &enforce)
 	deny, reason := evaluateReadToolDisciplineWithEnforcement(toolName, payload.ToolCall.Args, wd, opts.EnforceRead)
 	if deny {
 		callType = "hook:deny"
 		note = "reading_discipline:intercepted"
+	} else if opportunity {
+		note = "reading_discipline:opportunity"
 	}
 
 	scoreVal := 5

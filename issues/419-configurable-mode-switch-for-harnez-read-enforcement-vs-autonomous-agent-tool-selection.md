@@ -1,6 +1,6 @@
 # 419 — Configurable mode switch for harnez read enforcement vs autonomous agent tool selection
 
-**Status**: Open — Milestone 1 complete
+**Status**: Open — Milestone 2 complete
 **Priority**: P2 (Medium)
 **Severity**: Medium
 **Category**: Architecture / Context Optimization / Developer Experience
@@ -60,6 +60,12 @@ Antigravity pre-tool hooks preserve passthrough and telemetry behavior.
 
 ### Milestone 2: Telemetry & Opportunity Cost Observer Preservation
 - Decouple large read discipline detection from denial actions so that post-tool observation hooks (`runAgyPostToolHook`) and telemetry record candidate large-read opportunities even when enforcement is OFF, providing ground-truth comparison data.
+
+**Delivered (2026-09-18):** Antigravity pre-tool telemetry independently evaluates
+large native reads and marks allowed observer-mode calls with
+`reading_discipline:opportunity`. Enforcement denials retain their existing
+`reading_discipline:intercepted` marker, and post-tool hooks continue recording
+actual tokens plus estimated savings for native reads in either mode.
 
 ### Milestone 3: Documentation, Prompts & Skills Decoupling
 - Review and refine `AGENTS.md`, `docs/templates/AGENTS.md`, `docs/practices/AgenticLoop.md`, and skills to distinguish between visual context card recommendations and hook-level enforcement mechanics.
