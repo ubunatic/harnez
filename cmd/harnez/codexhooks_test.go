@@ -147,10 +147,10 @@ func TestRunCodexTelemetry_CompactionPayloadsArePartialAndMalformedSafe(t *testi
 func TestRunCodexTelemetry_ReconcilesTokenSnapshotsAcrossCompactions(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
 	fixtures := []string{
-		`{"hookEventName":"PreCompact","session_id":"fixture-session","token_usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":5,"reasoning_tokens":2,"total_tokens":107}}`,
-		`{"hookEventName":"PostCompact","session_id":"fixture-session","token_usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":1,"reasoning_tokens":0,"total_tokens":21}}`,
-		`{"hookEventName":"PreCompact","session_id":"fixture-session","token_usage":{"input_tokens":80,"cached_input_tokens":60,"output_tokens":3,"reasoning_tokens":1,"total_tokens":84}}`,
-		`{"hookEventName":"SessionEnd","session_id":"fixture-session","token_usage":{"input_tokens":4,"cached_input_tokens":0,"output_tokens":2,"reasoning_tokens":0,"total_tokens":6}}`,
+		`{"hookEventName":"PreCompact","session_id":"fixture-session","model":"gpt-5","token_usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":5,"reasoning_tokens":2,"total_tokens":107}}`,
+		`{"hookEventName":"PostCompact","session_id":"fixture-session","model":"gpt-5","token_usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":1,"reasoning_tokens":0,"total_tokens":21}}`,
+		`{"hookEventName":"PreCompact","session_id":"fixture-session","model":"gpt-5","token_usage":{"input_tokens":80,"cached_input_tokens":60,"output_tokens":3,"reasoning_tokens":1,"total_tokens":84}}`,
+		`{"hookEventName":"SessionEnd","session_id":"fixture-session","model":"gpt-5","token_usage":{"input_tokens":4,"cached_input_tokens":0,"output_tokens":2,"reasoning_tokens":0,"total_tokens":6}}`,
 	}
 	for _, fixture := range fixtures {
 		if err := runCodexTelemetryAt(bytes.NewBufferString(fixture), dbPath); err != nil {
@@ -203,6 +203,30 @@ func TestRunCodexTelemetry_ReconcilesTokenSnapshotsAcrossCompactions(t *testing.
 	}
 	if rows.Next() {
 		t.Fatal("unexpected extra snapshot")
+	}
+	var model, revision, status, note string
+	var savings sql.NullInt64
+	if err := db.QueryRow(`SELECT model, pricing_revision, status, savings_micros, note FROM compaction_economics WHERE session_id = ?`, "fixture-session").Scan(&model, &revision, &status, &savings, &note); err != nil {
+		t.Fatalf("compaction economics: %v", err)
+	}
+	if model != "gpt-5" || revision != telemetry.RecordedPricingRevision || status != "insufficient_data" {
+		t.Fatalf("economics = %q %q %q %v %q, want recorded insufficient row", model, revision, status, savings, note)
+	}
+
+	noCompactPath := filepath.Join(t.TempDir(), "no-compaction.sqlite")
+	if err := runCodexTelemetryAt(bytes.NewBufferString(`{"hookEventName":"SessionEnd","session_id":"no-compact","model":"gpt-5","token_usage":{"total_tokens":10}}`), noCompactPath); err != nil {
+		t.Fatal(err)
+	}
+	noCompact, err := sql.Open("sqlite", noCompactPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer noCompact.Close()
+	if err := noCompact.QueryRow(`SELECT model, pricing_revision, status FROM compaction_economics WHERE session_id = ?`, "no-compact").Scan(&model, &revision, &status); err != nil {
+		t.Fatalf("no-compaction economics: %v", err)
+	}
+	if model != "gpt-5" || revision != telemetry.RecordedPricingRevision || status != "insufficient_data" {
+		t.Fatalf("no-compaction economics = %q %q %q", model, revision, status)
 	}
 }
 

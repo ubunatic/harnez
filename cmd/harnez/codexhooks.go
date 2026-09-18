@@ -155,14 +155,34 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 		if err != nil {
 			return err
 		}
-		return insertTokenSnapshot(db, e.SessionID, e.Kind, &boundaryID, e, transcriptUsage)
+		if err := insertTokenSnapshot(db, e.SessionID, e.Kind, &boundaryID, e, transcriptUsage); err != nil {
+			return err
+		}
+		if e.Kind == "postcompact" {
+			catalog, err := telemetry.LoadPricingCatalog("")
+			if err != nil {
+				return err
+			}
+			return db.ReconcileCompactionEconomics(e.SessionID, e.Model, catalog)
+		}
+		return nil
 	}
 	if e.Kind == "sessionstart" || e.Kind == "session_end" || e.Kind == "sessionend" {
 		boundaryID, err := db.InsertSessionBoundary(telemetry.SessionBoundary{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, BoundaryType: e.Kind})
 		if err != nil {
 			return err
 		}
-		return insertTokenSnapshot(db, e.SessionID, e.Kind, &boundaryID, e, transcriptUsage)
+		if err := insertTokenSnapshot(db, e.SessionID, e.Kind, &boundaryID, e, transcriptUsage); err != nil {
+			return err
+		}
+		if e.Kind == "sessionend" || e.Kind == "session_end" {
+			catalog, err := telemetry.LoadPricingCatalog("")
+			if err != nil {
+				return err
+			}
+			return db.ReconcileCompactionEconomics(e.SessionID, e.Model, catalog)
+		}
+		return nil
 	}
 	if transcriptUsage.TotalTokens != nil {
 		_ = db.UpdateLatestProviderUsage(e.SessionID, transcriptUsage.LastTotalTokens, transcriptUsage.LastInputTokens, transcriptUsage.LastCachedInputTokens, transcriptUsage.LastOutputTokens, transcriptUsage.LastReasoningTokens, transcriptUsage.TotalTokens)
