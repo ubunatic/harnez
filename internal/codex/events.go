@@ -22,6 +22,7 @@ type Event struct {
 	InputTokens, CachedInputTokens, OutputTokens, ReasoningTokens, TotalTokens                     *int64
 	LastInputTokens, LastCachedInputTokens, LastOutputTokens, LastReasoningTokens, LastTotalTokens *int64
 	CompactionTrigger, CompactionReason                                                            string
+	Model                                                                                          string
 }
 
 // ParseEvent normalizes one Codex rollout JSON object. It accepts both the
@@ -55,6 +56,7 @@ func ParseEvent(raw []byte) Event {
 	var fields map[string]any
 	_ = json.Unmarshal(raw, &fields)
 	e := Event{Kind: strings.ToLower(strings.TrimSpace(first(envelope.Hook, envelope.HookCamel, envelope.Event, envelope.Type))), SessionID: envelope.SessionID, TurnID: envelope.TurnID, ToolCallID: envelope.ToolCallID, ToolName: envelope.ToolName}
+	e.Model = stringValue(fields, "model")
 	e.CompactionTrigger = first(envelope.Trigger, stringValue(fields, "compaction_trigger"))
 	e.CompactionReason = first(envelope.Reason, envelope.CompactionReason, stringValue(fields, "reason"))
 	if len(envelope.TokenUsage) == 0 {

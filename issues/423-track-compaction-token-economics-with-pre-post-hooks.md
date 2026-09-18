@@ -1,6 +1,6 @@
 # 423 — Track compaction token economics with pre/post hooks
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -131,6 +131,15 @@ unsupported claim of exact billing.
   into reporting and ensure unknown models remain explicitly insufficient.
 
 ### M4 — Query/reporting and documentation
+
+#### Delivered
+
+- Connected reporting to the recorded `harnez-2026-09-18` catalog with an
+  optional `HARNEZ_PRICING_FILE` override and persisted model metadata.
+- Added text/JSON compaction economics reporting with complete, partial, and
+  insufficient-data states and retained revision/rate assumptions.
+- Documented estimate-versus-provider-billing limitations and no-compaction
+  behavior in `docs/Telemetry.md`.
 
 #### Pre-Work / Required Refinements
 

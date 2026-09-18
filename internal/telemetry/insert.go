@@ -23,7 +23,7 @@ func (d *DB) InsertCompactionEvent(event CompactionEvent) (int64, error) {
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	result, err := d.sql.Exec(`INSERT INTO compaction_events (created_at, session_id, event_type, turn_id, trigger, reason, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, createdAt.Format(time.RFC3339Nano), event.SessionID, event.EventType, event.TurnID, event.Trigger, event.Reason, event.InputTokens, event.CachedInputTokens, event.OutputTokens, event.ReasoningTokens, event.TotalTokens)
+	result, err := d.sql.Exec(`INSERT INTO compaction_events (created_at, session_id, event_type, turn_id, trigger, reason, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens, model) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, createdAt.Format(time.RFC3339Nano), event.SessionID, event.EventType, event.TurnID, event.Trigger, event.Reason, event.InputTokens, event.CachedInputTokens, event.OutputTokens, event.ReasoningTokens, event.TotalTokens, event.Model)
 	if err != nil {
 		return 0, fmt.Errorf("telemetry: insert compaction event: %w", err)
 	}

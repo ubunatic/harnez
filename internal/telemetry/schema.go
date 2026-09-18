@@ -19,7 +19,7 @@ package telemetry
 // 5: additive compaction_events and session_boundaries tables.
 // 6: ordered per-turn and cumulative provider token snapshots.
 // 7: versioned pricing inputs and immutable compaction economics results.
-const schemaVersion = 7
+const schemaVersion = 8
 
 // schemaDDL is the single source of truth for the tool_calls table shape
 // (per docs/other/Spec.md's "spec files are the single source of truth"
@@ -163,7 +163,8 @@ CREATE TABLE IF NOT EXISTS compaction_events (
 	cached_input_tokens INTEGER,
 	output_tokens INTEGER,
 	reasoning_tokens INTEGER,
-	total_tokens INTEGER
+	total_tokens INTEGER,
+	model TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_compaction_events_session_id ON compaction_events (session_id);
 CREATE INDEX IF NOT EXISTS idx_compaction_events_created_at ON compaction_events (created_at);

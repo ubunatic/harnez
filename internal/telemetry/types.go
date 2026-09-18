@@ -67,6 +67,19 @@ type CompactionEvent struct {
 	OutputTokens      *int64
 	ReasoningTokens   *int64
 	TotalTokens       *int64
+	Model             string
+}
+
+type CompactionEconomicsStats struct {
+	CompactionCount          int    `json:"compaction_count"`
+	Status                   string `json:"status"`
+	Model                    string `json:"model,omitempty"`
+	PricingRevision          string `json:"pricing_revision,omitempty"`
+	CompactionCostMicros     *int64 `json:"compaction_cost_micros,omitempty"`
+	PostCompactionCostMicros *int64 `json:"post_compaction_cost_micros,omitempty"`
+	BaselineCostMicros       *int64 `json:"baseline_cost_micros,omitempty"`
+	SavingsMicros            *int64 `json:"savings_micros,omitempty"`
+	Note                     string `json:"note,omitempty"`
 }
 
 type SessionBoundary struct {

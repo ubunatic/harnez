@@ -110,14 +110,16 @@ type statsOptions struct {
 // renderers — kept as one Go value so --json is guaranteed to report the
 // same numbers the table does (they're built from the same struct).
 type statsReport struct {
-	Filter    telemetry.Filter              `json:"filter"`
-	Empty     bool                          `json:"empty"`
-	ByTool    []telemetry.GroupStats        `json:"by_tool,omitempty"`
-	ByAgent   []telemetry.GroupStats        `json:"by_agent,omitempty"`
-	ByProject []telemetry.GroupStats        `json:"by_project,omitempty"`
-	Savings   telemetry.DistillationSavings `json:"distillation_savings"`
-	Heartbeat telemetry.HeartbeatInfo       `json:"heartbeat"`
-	Overhead  *rateOverheadReport           `json:"rate_feedback_overhead,omitempty"`
+	Filter        telemetry.Filter                   `json:"filter"`
+	Empty         bool                               `json:"empty"`
+	ByTool        []telemetry.GroupStats             `json:"by_tool,omitempty"`
+	ByAgent       []telemetry.GroupStats             `json:"by_agent,omitempty"`
+	ByProject     []telemetry.GroupStats             `json:"by_project,omitempty"`
+	Savings       telemetry.DistillationSavings      `json:"distillation_savings"`
+	Heartbeat     telemetry.HeartbeatInfo            `json:"heartbeat"`
+	Overhead      *rateOverheadReport                `json:"rate_feedback_overhead,omitempty"`
+	Compaction    telemetry.CompactionEconomicsStats `json:"compaction_economics"`
+	PricingSource string                             `json:"pricing_source"`
 }
 
 // rateOverheadReport is the --overhead addendum (issue 142): real measured
@@ -214,15 +216,29 @@ func buildStatsReport(db *telemetry.DB, f telemetry.Filter) (statsReport, error)
 	if err != nil {
 		return statsReport{}, fmt.Errorf("heartbeat stats: %w", err)
 	}
+	compaction, err := db.CompactionEconomicsStats(f)
+	if err != nil {
+		return statsReport{}, fmt.Errorf("compaction economics: %w", err)
+	}
+	pricing, err := telemetry.LoadPricingCatalog("")
+	if err != nil {
+		return statsReport{}, fmt.Errorf("pricing catalog: %w", err)
+	}
+	pricingSource := telemetry.RecordedPricingRevision
+	if len(pricing) == 0 {
+		pricingSource = "empty"
+	}
 
 	return statsReport{
-		Filter:    f,
-		Empty:     len(byTool) == 0 && len(byAgent) == 0 && len(byProject) == 0,
-		ByTool:    byTool,
-		ByAgent:   byAgent,
-		ByProject: byProject,
-		Savings:   savings,
-		Heartbeat: heartbeat,
+		Filter:        f,
+		Empty:         len(byTool) == 0 && len(byAgent) == 0 && len(byProject) == 0,
+		ByTool:        byTool,
+		ByAgent:       byAgent,
+		ByProject:     byProject,
+		Savings:       savings,
+		Heartbeat:     heartbeat,
+		Compaction:    compaction,
+		PricingSource: pricingSource,
 	}, nil
 }
 
@@ -303,6 +319,14 @@ func renderStatsTable(w io.Writer, report statsReport) error {
 	}
 
 	fmt.Fprintln(w)
+	fmt.Fprintf(w, "compaction economics: %s (%d compaction(s))\n", report.Compaction.Status, report.Compaction.CompactionCount)
+	if report.Compaction.PricingRevision != "" {
+		fmt.Fprintf(w, "  pricing: %s, model: %s, estimated costs in micro-USD\n", report.Compaction.PricingRevision, report.Compaction.Model)
+	}
+	if report.Compaction.Note != "" {
+		fmt.Fprintf(w, "  note: %s\n", report.Compaction.Note)
+	}
+
 	if report.Savings.Count == 0 {
 		fmt.Fprintln(w, "distillation byte savings: no rows with distillation data")
 	} else {

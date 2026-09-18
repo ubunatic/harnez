@@ -136,3 +136,20 @@ Using Unicode Braille patterns (`\u2800`–`\u28FF`):
 2. **Plumbing over Checkout**: Git history inspection uses streaming object headers (`git cat-file --batch`), never checking out historical worktrees or disk commits.
 3. **Cross-Process Flock Coordination**: All append-only JSONL writers (`quota-history.jsonl`, `t14.jsonl`, `x600.jsonl`) acquire exclusive file locks to prevent multi-agent race corruption.
 4. **Baseline Zero Invariant**: Sparklines on absolute zero metrics must render baseline runes (`⣀` for Braille, ` ` for blocks), never mid-level glyphs.
+# Compaction economics (issue 423)
+
+`harnez stats` reports recorded Codex compaction economics in both text and
+`--json` output. The `compaction_economics` rows retain the model, pricing
+revision, component rates, integer micro-USD estimates, and a completeness
+status: `complete`, `partial`, or `insufficient_data`. `HARNEZ_PRICING_FILE`
+may point to a JSON `model -> {model, revision, rates}` catalog; otherwise the
+recorded `harnez-2026-09-18` catalog is used. Unknown models are explicitly
+insufficient data.
+
+These are model-price estimates, not provider billing or invoices. Cached,
+uncached, output, and reasoning rates are applied to provider-reported token
+counters where available; missing counters, missing rates, and counter resets
+remain nullable and prevent unsupported savings claims. Reproducibility comes
+from the pricing revision and rates stored with every result. A session with
+no compaction reports zero compactions and `insufficient_data`, rather than
+claiming a saving.

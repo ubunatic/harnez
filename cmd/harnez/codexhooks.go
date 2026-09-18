@@ -145,6 +145,7 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 			TurnID: e.TurnID, Trigger: e.CompactionTrigger, Reason: e.CompactionReason,
 			InputTokens: e.InputTokens, CachedInputTokens: e.CachedInputTokens,
 			OutputTokens: e.OutputTokens, ReasoningTokens: e.ReasoningTokens, TotalTokens: e.TotalTokens,
+			Model: e.Model,
 		})
 		if insertErr != nil {
 			return insertErr
