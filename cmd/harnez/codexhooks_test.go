@@ -144,6 +144,88 @@ func TestRunCodexTelemetry_CompactionPayloadsArePartialAndMalformedSafe(t *testi
 	}
 }
 
+func TestRunCodexTelemetry_ReconcilesTokenSnapshotsAcrossCompactions(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	fixtures := []string{
+		`{"hookEventName":"PreCompact","session_id":"fixture-session","token_usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":5,"reasoning_tokens":2,"total_tokens":107}}`,
+		`{"hookEventName":"PostCompact","session_id":"fixture-session","token_usage":{"input_tokens":20,"cached_input_tokens":10,"output_tokens":1,"reasoning_tokens":0,"total_tokens":21}}`,
+		`{"hookEventName":"PreCompact","session_id":"fixture-session","token_usage":{"input_tokens":80,"cached_input_tokens":60,"output_tokens":3,"reasoning_tokens":1,"total_tokens":84}}`,
+		`{"hookEventName":"SessionEnd","session_id":"fixture-session","token_usage":{"input_tokens":4,"cached_input_tokens":0,"output_tokens":2,"reasoning_tokens":0,"total_tokens":6}}`,
+	}
+	for _, fixture := range fixtures {
+		if err := runCodexTelemetryAt(bytes.NewBufferString(fixture), dbPath); err != nil {
+			t.Fatalf("run fixture %s: %v", fixture, err)
+		}
+	}
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	defer db.Close()
+	var events, snapshots, boundaries int
+	if err := db.QueryRow(`SELECT count(*) FROM compaction_events WHERE session_id = ?`, "fixture-session").Scan(&events); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT count(*) FROM token_snapshots WHERE session_id = ?`, "fixture-session").Scan(&snapshots); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT count(*) FROM session_boundaries WHERE session_id = ?`, "fixture-session").Scan(&boundaries); err != nil {
+		t.Fatal(err)
+	}
+	if events != 3 || snapshots != 4 || boundaries != 4 {
+		t.Fatalf("events=%d snapshots=%d boundaries=%d, want 3, 4, 4", events, snapshots, boundaries)
+	}
+	rows, err := db.Query(`SELECT source, input_tokens, cached_input_tokens, uncached_input_tokens, total_tokens FROM token_snapshots WHERE session_id = ? ORDER BY id`, "fixture-session")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	want := []struct {
+		source, input, cached, uncached, total any
+	}{
+		{"precompact", int64(100), int64(40), int64(60), int64(107)},
+		{"postcompact", int64(20), int64(10), int64(10), int64(21)},
+		{"precompact", int64(80), int64(60), int64(20), int64(84)},
+		{"sessionend", int64(4), int64(0), int64(4), int64(6)},
+	}
+	for i, expected := range want {
+		var source string
+		var input, cached, uncached, total any
+		if !rows.Next() {
+			t.Fatalf("snapshot %d missing", i)
+		}
+		if err := rows.Scan(&source, &input, &cached, &uncached, &total); err != nil {
+			t.Fatal(err)
+		}
+		if source != expected.source || input != expected.input || cached != expected.cached || uncached != expected.uncached || total != expected.total {
+			t.Fatalf("snapshot %d = %q %v %v %v %v, want %q %v %v %v %v", i, source, input, cached, uncached, total, expected.source, expected.input, expected.cached, expected.uncached, expected.total)
+		}
+	}
+	if rows.Next() {
+		t.Fatal("unexpected extra snapshot")
+	}
+}
+
+func TestRunCodexTelemetry_PreservesMissingSnapshotFields(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	payload := `{"hookEventName":"PostCompact","session_id":"nullable-session","token_usage":{"total_tokens":0}}`
+	if err := runCodexTelemetryAt(bytes.NewBufferString(payload), dbPath); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var input, cached, total any
+	if err := db.QueryRow(`SELECT input_tokens, cached_input_tokens, total_tokens FROM token_snapshots WHERE session_id = ?`, "nullable-session").Scan(&input, &cached, &total); err != nil {
+		t.Fatal(err)
+	}
+	if input != nil || cached != nil || total != int64(0) {
+		t.Fatalf("snapshot fields = %v %v %v, want NULL NULL 0", input, cached, total)
+	}
+}
+
 func TestRunCodexHooksHook_SkipsAlreadyRouted(t *testing.T) {
 	original := "⚙ git status"
 	payload, _ := json.Marshal(map[string]any{

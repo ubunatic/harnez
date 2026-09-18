@@ -45,6 +45,8 @@ func ParseEvent(raw []byte) Event {
 		Reason           string          `json:"reason"`
 		CompactionReason string          `json:"compaction_reason"`
 		TokenUsage       json.RawMessage `json:"token_usage"`
+		LastTokenUsage   json.RawMessage `json:"last_token_usage"`
+		TotalTokenUsage  json.RawMessage `json:"total_token_usage"`
 		Usage            json.RawMessage `json:"usage"`
 	}
 	if json.Unmarshal(raw, &envelope) != nil {
@@ -60,6 +62,12 @@ func ParseEvent(raw []byte) Event {
 	}
 	if len(envelope.TokenUsage) > 0 {
 		parseTokenSnapshot(envelope.TokenUsage, &e.InputTokens, &e.CachedInputTokens, &e.OutputTokens, &e.ReasoningTokens, &e.TotalTokens)
+	}
+	if len(envelope.TotalTokenUsage) > 0 {
+		parseTokenSnapshot(envelope.TotalTokenUsage, &e.InputTokens, &e.CachedInputTokens, &e.OutputTokens, &e.ReasoningTokens, &e.TotalTokens)
+	}
+	if len(envelope.LastTokenUsage) > 0 {
+		parseTokenSnapshot(envelope.LastTokenUsage, &e.LastInputTokens, &e.LastCachedInputTokens, &e.LastOutputTokens, &e.LastReasoningTokens, &e.LastTotalTokens)
 	}
 	if e.Kind == "event_msg" && len(envelope.Payload) > 0 {
 		var p struct {
@@ -145,21 +153,30 @@ func stringValue(fields map[string]any, key string) string {
 }
 
 func parseTokenSnapshot(raw []byte, input, cached, output, reasoning, total **int64) {
-	var usage struct {
-		Input           int64 `json:"input_tokens"`
-		Cached          int64 `json:"cached_input_tokens"`
-		Output          int64 `json:"output_tokens"`
-		Reasoning       int64 `json:"reasoning_tokens"`
-		ReasoningOutput int64 `json:"reasoning_output_tokens"`
-		Total           int64 `json:"total_tokens"`
-	}
-	if json.Unmarshal(raw, &usage) != nil {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
 		return
 	}
-	if usage.Reasoning == 0 {
-		usage.Reasoning = usage.ReasoningOutput
+	*input = optionalInt(fields, "input_tokens")
+	*cached = optionalInt(fields, "cached_input_tokens")
+	*output = optionalInt(fields, "output_tokens")
+	*reasoning = optionalInt(fields, "reasoning_tokens")
+	if *reasoning == nil {
+		*reasoning = optionalInt(fields, "reasoning_output_tokens")
 	}
-	*input, *cached, *output, *reasoning, *total = ptr(usage.Input), ptr(usage.Cached), ptr(usage.Output), ptr(usage.Reasoning), ptr(usage.Total)
+	*total = optionalInt(fields, "total_tokens")
+}
+
+func optionalInt(fields map[string]json.RawMessage, key string) *int64 {
+	raw, ok := fields[key]
+	if !ok {
+		return nil
+	}
+	var value int64
+	if json.Unmarshal(raw, &value) != nil {
+		return nil
+	}
+	return &value
 }
 
 func first(values ...string) string {

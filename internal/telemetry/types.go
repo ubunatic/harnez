@@ -76,3 +76,21 @@ type SessionBoundary struct {
 	BoundaryType      string
 	CompactionEventID *int64
 }
+
+type TokenSnapshot struct {
+	CreatedAt             time.Time
+	SessionID             string
+	Source                string
+	BoundaryID            *int64
+	InputTokens           *int64
+	CachedInputTokens     *int64
+	UncachedInputTokens   *int64
+	OutputTokens          *int64
+	ReasoningTokens       *int64
+	TotalTokens           *int64
+	LastInputTokens       *int64
+	LastCachedInputTokens *int64
+	LastOutputTokens      *int64
+	LastReasoningTokens   *int64
+	LastTotalTokens       *int64
+}

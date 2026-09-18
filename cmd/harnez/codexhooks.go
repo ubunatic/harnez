@@ -135,6 +135,10 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 		return nil
 	}
 	defer db.Close()
+	transcriptUsage := codex.Event{}
+	if hook.TranscriptPath != "" {
+		transcriptUsage = latestTranscriptTokens(hook.TranscriptPath, e.SessionID)
+	}
 	if e.Kind == "precompact" || e.Kind == "postcompact" {
 		id, insertErr := db.InsertCompactionEvent(telemetry.CompactionEvent{
 			CreatedAt: time.Now().UTC(), SessionID: e.SessionID, EventType: e.Kind,
@@ -146,15 +150,24 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 			return insertErr
 		}
 		boundaryType := e.Kind
-		return db.InsertSessionBoundary(telemetry.SessionBoundary{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, BoundaryType: boundaryType, CompactionEventID: &id})
+		boundaryID, err := db.InsertSessionBoundary(telemetry.SessionBoundary{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, BoundaryType: boundaryType, CompactionEventID: &id})
+		if err != nil {
+			return err
+		}
+		return insertTokenSnapshot(db, e.SessionID, e.Kind, &boundaryID, e, transcriptUsage)
 	}
 	if e.Kind == "sessionstart" || e.Kind == "session_end" || e.Kind == "sessionend" {
-		return db.InsertSessionBoundary(telemetry.SessionBoundary{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, BoundaryType: e.Kind})
-	}
-	if hook.TranscriptPath != "" {
-		if usage := latestTranscriptTokens(hook.TranscriptPath, e.SessionID); usage.TotalTokens != nil {
-			_ = db.UpdateLatestProviderUsage(e.SessionID, usage.LastTotalTokens, usage.LastInputTokens, usage.LastCachedInputTokens, usage.LastOutputTokens, usage.LastReasoningTokens, usage.TotalTokens)
+		boundaryID, err := db.InsertSessionBoundary(telemetry.SessionBoundary{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, BoundaryType: e.Kind})
+		if err != nil {
+			return err
 		}
+		return insertTokenSnapshot(db, e.SessionID, e.Kind, &boundaryID, e, transcriptUsage)
+	}
+	if transcriptUsage.TotalTokens != nil {
+		_ = db.UpdateLatestProviderUsage(e.SessionID, transcriptUsage.LastTotalTokens, transcriptUsage.LastInputTokens, transcriptUsage.LastCachedInputTokens, transcriptUsage.LastOutputTokens, transcriptUsage.LastReasoningTokens, transcriptUsage.TotalTokens)
+	}
+	if err := insertTokenSnapshot(db, e.SessionID, "tool", nil, e, transcriptUsage); err != nil {
+		return err
 	}
 	if e.ToolName == "" {
 		return nil
@@ -175,6 +188,25 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 	}
 	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: callType, Note: note, DurationMs: e.DurationMs, ExitCode: e.ExitCode, OutputBytes: e.OutputBytes, ActualTokens: e.LastTotalTokens, InputTokens: e.LastInputTokens, CachedInputTokens: e.LastCachedInputTokens, OutputTokens: e.LastOutputTokens, ReasoningTokens: e.LastReasoningTokens, TotalTokens: e.TotalTokens}
 	return db.Insert(call)
+}
+
+func insertTokenSnapshot(db *telemetry.DB, sessionID, source string, boundaryID *int64, event, transcript codex.Event) error {
+	if event.TotalTokens == nil && transcript.TotalTokens == nil && event.LastTotalTokens == nil && transcript.LastTotalTokens == nil {
+		return nil
+	}
+	if event.TotalTokens == nil {
+		event.InputTokens, event.CachedInputTokens, event.OutputTokens, event.ReasoningTokens, event.TotalTokens = transcript.InputTokens, transcript.CachedInputTokens, transcript.OutputTokens, transcript.ReasoningTokens, transcript.TotalTokens
+	}
+	if event.LastTotalTokens == nil {
+		event.LastInputTokens, event.LastCachedInputTokens, event.LastOutputTokens, event.LastReasoningTokens, event.LastTotalTokens = transcript.LastInputTokens, transcript.LastCachedInputTokens, transcript.LastOutputTokens, transcript.LastReasoningTokens, transcript.LastTotalTokens
+	}
+	return db.InsertTokenSnapshot(telemetry.TokenSnapshot{
+		CreatedAt: time.Now().UTC(), SessionID: sessionID, Source: source, BoundaryID: boundaryID,
+		InputTokens: event.InputTokens, CachedInputTokens: event.CachedInputTokens,
+		OutputTokens: event.OutputTokens, ReasoningTokens: event.ReasoningTokens, TotalTokens: event.TotalTokens,
+		LastInputTokens: event.LastInputTokens, LastCachedInputTokens: event.LastCachedInputTokens,
+		LastOutputTokens: event.LastOutputTokens, LastReasoningTokens: event.LastReasoningTokens, LastTotalTokens: event.LastTotalTokens,
+	})
 }
 
 func latestTranscriptTokens(path, sessionID string) codex.Event {

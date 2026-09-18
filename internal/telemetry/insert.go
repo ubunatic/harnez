@@ -22,14 +22,37 @@ func (d *DB) InsertCompactionEvent(event CompactionEvent) (int64, error) {
 	return id, nil
 }
 
-func (d *DB) InsertSessionBoundary(boundary SessionBoundary) error {
+func (d *DB) InsertSessionBoundary(boundary SessionBoundary) (int64, error) {
 	createdAt := boundary.CreatedAt
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
-	_, err := d.sql.Exec(`INSERT INTO session_boundaries (created_at, session_id, boundary_type, compaction_event_id) VALUES (?, ?, ?, ?)`, createdAt.Format(time.RFC3339Nano), boundary.SessionID, boundary.BoundaryType, boundary.CompactionEventID)
+	result, err := d.sql.Exec(`INSERT INTO session_boundaries (created_at, session_id, boundary_type, compaction_event_id) VALUES (?, ?, ?, ?)`, createdAt.Format(time.RFC3339Nano), boundary.SessionID, boundary.BoundaryType, boundary.CompactionEventID)
 	if err != nil {
-		return fmt.Errorf("telemetry: insert session boundary: %w", err)
+		return 0, fmt.Errorf("telemetry: insert session boundary: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("telemetry: session boundary id: %w", err)
+	}
+	return id, nil
+}
+
+func (d *DB) InsertTokenSnapshot(snapshot TokenSnapshot) error {
+	createdAt := snapshot.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	uncached := snapshot.UncachedInputTokens
+	if uncached == nil && snapshot.InputTokens != nil && snapshot.CachedInputTokens != nil {
+		value := *snapshot.InputTokens - *snapshot.CachedInputTokens
+		if value >= 0 {
+			uncached = &value
+		}
+	}
+	_, err := d.sql.Exec(`INSERT INTO token_snapshots (created_at, session_id, source, boundary_id, input_tokens, cached_input_tokens, uncached_input_tokens, output_tokens, reasoning_tokens, total_tokens, last_input_tokens, last_cached_input_tokens, last_output_tokens, last_reasoning_tokens, last_total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, createdAt.Format(time.RFC3339Nano), snapshot.SessionID, snapshot.Source, snapshot.BoundaryID, snapshot.InputTokens, snapshot.CachedInputTokens, uncached, snapshot.OutputTokens, snapshot.ReasoningTokens, snapshot.TotalTokens, snapshot.LastInputTokens, snapshot.LastCachedInputTokens, snapshot.LastOutputTokens, snapshot.LastReasoningTokens, snapshot.LastTotalTokens)
+	if err != nil {
+		return fmt.Errorf("telemetry: insert token snapshot: %w", err)
 	}
 	return nil
 }

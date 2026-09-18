@@ -17,7 +17,8 @@ package telemetry
 // 2: issue 118's fix (distilled_bytes made nullable).
 // 3-4: additive provider token columns used by Codex telemetry.
 // 5: additive compaction_events and session_boundaries tables.
-const schemaVersion = 5
+// 6: ordered per-turn and cumulative provider token snapshots.
+const schemaVersion = 6
 
 // schemaDDL is the single source of truth for the tool_calls table shape
 // (per docs/other/Spec.md's "spec files are the single source of truth"
@@ -177,4 +178,28 @@ CREATE TABLE IF NOT EXISTS session_boundaries (
 );
 CREATE INDEX IF NOT EXISTS idx_session_boundaries_session_id ON session_boundaries (session_id);
 CREATE INDEX IF NOT EXISTS idx_session_boundaries_created_at ON session_boundaries (created_at);
+
+-- token_snapshots preserves every provider snapshot observed around a
+-- boundary. This is append-only so a later tool event cannot overwrite the
+-- compaction or session-exit evidence needed for reconciliation.
+CREATE TABLE IF NOT EXISTS token_snapshots (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	created_at TEXT NOT NULL,
+	session_id TEXT NOT NULL,
+	source TEXT NOT NULL,
+	boundary_id INTEGER,
+	input_tokens INTEGER,
+	cached_input_tokens INTEGER,
+	uncached_input_tokens INTEGER,
+	output_tokens INTEGER,
+	reasoning_tokens INTEGER,
+	total_tokens INTEGER,
+	last_input_tokens INTEGER,
+	last_cached_input_tokens INTEGER,
+	last_output_tokens INTEGER,
+	last_reasoning_tokens INTEGER,
+	last_total_tokens INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_token_snapshots_session_id ON token_snapshots (session_id);
+CREATE INDEX IF NOT EXISTS idx_token_snapshots_created_at ON token_snapshots (created_at);
 `
