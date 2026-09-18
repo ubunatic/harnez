@@ -44,6 +44,7 @@ Through live smoke testing and empirical probe validation:
      session id: 01a0b369-f462-7741-8ced-8d97fd2f8bac
      ```
    - Running `codex -a never -s danger-full-access exec resume <session_id> "<prompt>"` successfully resumes the conversation thread, retaining full memory of prior variables, edits, and reasoning across sequential turns.
+   - **Empirical 5-Milestone Validation (Issue #416)**: Resuming session `01a0b370-6966-7640-8eae-3bfb0d7b14e2` across 5 consecutive milestones (M1 through M5) cleanly preserved codebase context and AST caches across turns, with cumulative tokens progressing from 68.4k -> 93.5k -> 143.6k -> 159.0k -> 187.3k tokens.
    - Tail of Codex run emits exact cumulative token metrics:
      ```
      tokens used

@@ -26,9 +26,9 @@ If the buffer of refinements reaches an architectural tipping point during the s
    - *Refinement*: Structure database schema migrations into discrete version transitions (e.g. `migrateV2ToV3(sqlDB)`) rather than checking an unstructured list of all historical columns on every version bump.
 
 ### From Milestone 2 (Post-Tool Hook Handler & Correlation Engine)
-3. **Hook Fail-Open Resiliency**:
-   - In `runAgyPostToolHook`, a decode or DB error returns a non-zero exit without writing `{"status":"ok"}`.
-   - *Refinement*: Always emit `{"status":"ok"}` to stdout even on non-critical decode/DB errors (logging to stderr instead) so agent harnesses never stall if telemetry fails.
+3. **Hook Fail-Open Resiliency & Protojson Contract**:
+   - In `runAgyPostToolHook`, a decode or DB error should never fail the process exit code or emit unmarshalable JSON.
+   - *Refinement*: Always emit `{}` on stdout even on non-critical decode/DB errors (logging to stderr instead) so Antigravity's protojson unmarshaler succeeds and agent harnesses never stall if telemetry write fails.
 4. **Transcript Step Parsing vs Whole-File Ingestion**:
    - When `payload.Output` is empty and `payload.TranscriptPath` is provided, `os.ReadFile(payload.TranscriptPath)` calculates bytes over the *entire conversation file* rather than the specific tool output step.
    - *Refinement*: Tail/parse the last step JSON from the transcript file (or use step index) rather than measuring the cumulative transcript file length.
