@@ -73,6 +73,19 @@ shape, plus malformed/unknown-kind safety. Review found and fixed:
 - Verification: isolated fixture tests cover success, failure, denial,
   interruption, duplicate delivery, and missing optional fields.
 
+**M2 open question (review 2026-09-18)**: `internal/codex/events.go` parses
+`success`/`exit_code`/`duration_ms` off the Codex `PostToolUse` payload
+(commit `dc8d248`), but `docs/CodexHooks.md` — sourced from OpenAI's actual
+hooks docs — only documents the `PreToolUse` allow/deny envelope; it says
+nothing about `PostToolUse`'s payload shape. Those three field names are
+unconfirmed by analogy to Claude Code's schema, not by a real captured
+payload. Until M4's live session confirms (or corrects) them, the
+`PreToolUse` gear rewrite (`harnez codex-hook` routing through `harnez
+exec`) remains the only confirmed source of exit code and duration —
+`harnez exec` measures the command itself rather than trusting Codex's
+report — so do not drop or treat the rewrite as redundant with
+`PostToolUse` parsing before that's verified.
+
 ### M3 — Token and read analytics
 
 - Parse and persist Codex token metrics at the correct turn and cumulative
@@ -90,6 +103,11 @@ shape, plus malformed/unknown-kind safety. Review found and fixed:
   diagnose a session that resolves but has no telemetry rows.
 - Verification: `harnez stats --auto` reports the live session and the full
   repository test/check targets pass.
+- Capture a real `PostToolUse` payload from that live session and check it
+  against the `success`/`exit_code`/`duration_ms` field names assumed in
+  `internal/codex/events.go` (see M2 open question above); update
+  `docs/CodexHooks.md` with the confirmed `PostToolUse` shape once verified,
+  the same way it already documents `PreToolUse`.
 
 ## 4. Acceptance Criteria
 
