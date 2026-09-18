@@ -134,7 +134,7 @@ func runCodexTelemetry(in io.Reader) error {
 	if e.Success != nil && !*e.Success {
 		callType = "hook:failure"
 	}
-	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: callType, Note: note, DurationMs: e.DurationMs, ExitCode: e.ExitCode}
+	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: callType, Note: note, DurationMs: e.DurationMs, ExitCode: e.ExitCode, OutputBytes: e.OutputBytes, ActualTokens: e.TotalTokens}
 	return db.Insert(call)
 }
 

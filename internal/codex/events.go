@@ -18,6 +18,7 @@ type Event struct {
 	Success                                                                    *bool
 	ExitCode                                                                   *int
 	DurationMs                                                                 int64
+	OutputBytes                                                                *int64
 	InputTokens, CachedInputTokens, OutputTokens, ReasoningTokens, TotalTokens *int64
 }
 
@@ -36,6 +37,7 @@ func ParseEvent(raw []byte) Event {
 		ToolName   string          `json:"tool_name"`
 		ToolInput  json.RawMessage `json:"tool_input"`
 		Payload    json.RawMessage `json:"payload"`
+		ToolOutput json.RawMessage `json:"tool_output"`
 	}
 	if json.Unmarshal(raw, &envelope) != nil {
 		return Event{}
@@ -89,6 +91,16 @@ func ParseEvent(raw []byte) Event {
 	}
 	if value, ok := fields["duration_ms"].(float64); ok && value >= 0 {
 		e.DurationMs = int64(value)
+	}
+	if len(envelope.ToolOutput) > 0 {
+		var output string
+		if json.Unmarshal(envelope.ToolOutput, &output) == nil {
+			bytes := int64(len(output))
+			e.OutputBytes = &bytes
+		} else if size := len(envelope.ToolOutput); size > 0 {
+			bytes := int64(size)
+			e.OutputBytes = &bytes
+		}
 	}
 	return e
 }
