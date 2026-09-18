@@ -263,10 +263,13 @@ type GroupStats struct {
 	// command an agent ran expecting it to fail is real telemetry (its true
 	// exit_code is still stored) but isn't "failed agent/tool behavior" for
 	// this quality signal's purposes.
-	FailureCount   int64
-	TotalRawBytes  int64
-	TotalDistilled int64
-	AvgDurationMs  float64
+	FailureCount                int64
+	TotalRawBytes               int64
+	TotalDistilled              int64
+	AvgDurationMs               float64
+	AvgActualTokens             float64
+	TotalPotentialSavingsTokens int64
+	TotalPotentialSavingsBytes  int64
 }
 
 // aggregateGroupedBy summarizes tool_calls rows matching f, one row per
@@ -297,7 +300,10 @@ func (d *DB) aggregateGroupedBy(column string, f Filter) ([]GroupStats, error) {
 			                OR (score IS NOT NULL AND score <= 2)) THEN 1 END),
 			COALESCE(SUM(raw_bytes), 0),
 			COALESCE(SUM(distilled_bytes), 0),
-			AVG(duration_ms)
+			AVG(duration_ms),
+			AVG(actual_tokens),
+			COALESCE(SUM(potential_savings_tokens), 0),
+			COALESCE(SUM(potential_savings_bytes), 0)
 		FROM tool_calls`+where+`
 		GROUP BY `+column+`
 		ORDER BY COUNT(*) DESC, `+column+` ASC`, queryArgs...)
@@ -309,10 +315,11 @@ func (d *DB) aggregateGroupedBy(column string, f Filter) ([]GroupStats, error) {
 	var out []GroupStats
 	for rows.Next() {
 		var g GroupStats
-		var avgScore, avgDuration *float64
+		var avgScore, avgDuration, avgActualTokens *float64
 		if err := rows.Scan(
 			&g.Key, &g.Count, &avgScore, &g.ScoredCount, &g.FailureCount,
-			&g.TotalRawBytes, &g.TotalDistilled, &avgDuration,
+			&g.TotalRawBytes, &g.TotalDistilled, &avgDuration, &avgActualTokens,
+			&g.TotalPotentialSavingsTokens, &g.TotalPotentialSavingsBytes,
 		); err != nil {
 			return nil, fmt.Errorf("telemetry: scan grouped row: %w", err)
 		}
@@ -321,6 +328,9 @@ func (d *DB) aggregateGroupedBy(column string, f Filter) ([]GroupStats, error) {
 		}
 		if avgDuration != nil {
 			g.AvgDurationMs = *avgDuration
+		}
+		if avgActualTokens != nil {
+			g.AvgActualTokens = *avgActualTokens
 		}
 		out = append(out, g)
 	}

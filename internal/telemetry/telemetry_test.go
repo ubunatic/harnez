@@ -284,8 +284,20 @@ func TestAggregateByTool(t *testing.T) {
 	db := openTestDB(t)
 
 	calls := []ToolCall{
-		sampleCall("sess-1", "Read", 5, 0),
-		sampleCall("sess-1", "Read", 3, 1),
+		func() ToolCall {
+			c := sampleCall("sess-1", "Read", 5, 0)
+			c.ActualTokens = int64Ptr(100)
+			c.PotentialSavingsTokens = int64Ptr(10)
+			c.PotentialSavingsBytes = int64Ptr(100)
+			return c
+		}(),
+		func() ToolCall {
+			c := sampleCall("sess-1", "Read", 3, 1)
+			c.ActualTokens = int64Ptr(200)
+			c.PotentialSavingsTokens = int64Ptr(20)
+			c.PotentialSavingsBytes = int64Ptr(200)
+			return c
+		}(),
 		sampleCall("sess-1", "Edit", 4, 0),
 	}
 	for _, c := range calls {
@@ -311,6 +323,9 @@ func TestAggregateByTool(t *testing.T) {
 	}
 	if groups[0].FailureCount != 1 {
 		t.Errorf("groups[0].FailureCount = %d, want 1", groups[0].FailureCount)
+	}
+	if groups[0].AvgActualTokens != 150 || groups[0].TotalPotentialSavingsTokens != 30 || groups[0].TotalPotentialSavingsBytes != 300 {
+		t.Errorf("groups[0] analytical metrics = %+v, want avg tokens 150 and savings 30/300", groups[0])
 	}
 	if groups[1].Key != "Edit" || groups[1].Count != 1 {
 		t.Errorf("groups[1] = %+v, want Key=Edit Count=1", groups[1])

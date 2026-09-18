@@ -280,22 +280,22 @@ func renderStatsTable(w io.Writer, report statsReport) error {
 
 	tw := tabwriter.NewWriter(w, 0, 2, 2, ' ', 0)
 
-	fmt.Fprintln(tw, "TOOL\tCALLS\tAVG SCORE\tFAILURE RATE")
+	fmt.Fprintln(tw, "TOOL\tCALLS\tAVG SCORE\tAVG TOKENS\tSAVINGS TOKENS\tSAVINGS BYTES\tFAILURE RATE")
 	for _, g := range report.ByTool {
-		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n",
-			g.Key, g.Count, formatAvgScore(g), formatFailureRate(g))
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%d\t%d\t%s\n",
+			g.Key, g.Count, formatAvgScore(g), formatAvgTokens(g), g.TotalPotentialSavingsTokens, g.TotalPotentialSavingsBytes, formatFailureRate(g))
 	}
 	fmt.Fprintln(tw)
-	fmt.Fprintln(tw, "AGENT\tCALLS\tAVG SCORE\tFAILURE RATE")
+	fmt.Fprintln(tw, "AGENT\tCALLS\tAVG SCORE\tAVG TOKENS\tSAVINGS TOKENS\tSAVINGS BYTES\tFAILURE RATE")
 	for _, g := range report.ByAgent {
-		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n",
-			g.Key, g.Count, formatAvgScore(g), formatFailureRate(g))
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%d\t%d\t%s\n",
+			g.Key, g.Count, formatAvgScore(g), formatAvgTokens(g), g.TotalPotentialSavingsTokens, g.TotalPotentialSavingsBytes, formatFailureRate(g))
 	}
 	fmt.Fprintln(tw)
-	fmt.Fprintln(tw, "PROJECT\tCALLS\tAVG SCORE\tFAILURE RATE")
+	fmt.Fprintln(tw, "PROJECT\tCALLS\tAVG SCORE\tAVG TOKENS\tSAVINGS TOKENS\tSAVINGS BYTES\tFAILURE RATE")
 	for _, g := range report.ByProject {
-		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\n",
-			g.Key, g.Count, formatAvgScore(g), formatFailureRate(g))
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%d\t%d\t%s\n",
+			g.Key, g.Count, formatAvgScore(g), formatAvgTokens(g), g.TotalPotentialSavingsTokens, g.TotalPotentialSavingsBytes, formatFailureRate(g))
 	}
 	if err := tw.Flush(); err != nil {
 		return fmt.Errorf("render table: %w", err)
@@ -328,6 +328,13 @@ func renderStatsTable(w io.Writer, report statsReport) error {
 			o.EstimateMethod, o.EstimatedCallTokens, o.EstimatedInstructionTokens)
 	}
 	return nil
+}
+
+func formatAvgTokens(g telemetry.GroupStats) string {
+	if g.AvgActualTokens == 0 {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.1f", g.AvgActualTokens)
 }
 
 // formatAvgScore renders a group's average score to 2 decimal places, or

@@ -49,14 +49,16 @@ func seedStatsFixture(t *testing.T, dbPath string) {
 			ProjectName: "harnez",
 			ToolName:    "Read", CallType: "internal",
 			Score: intPtr(5), ExitCode: intPtr(0),
-			RawBytes: 1000, DistilledBytes: int64Ptr(200),
+			RawBytes: 1000, DistilledBytes: int64Ptr(200), ActualTokens: int64Ptr(100),
+			PotentialSavingsTokens: int64Ptr(10), PotentialSavingsBytes: int64Ptr(100),
 		},
 		{
 			SessionID: "sess-1", TicketID: "harnez/120", AgentID: "claude",
 			ProjectName: "harnez",
 			ToolName:    "Read", CallType: "shell",
 			Score: intPtr(1), ExitCode: intPtr(1),
-			RawBytes: 500,
+			RawBytes:     500,
+			ActualTokens: int64Ptr(200), PotentialSavingsTokens: int64Ptr(20), PotentialSavingsBytes: int64Ptr(200),
 		},
 		{
 			SessionID: "sess-2", TicketID: "harnez/120", AgentID: "codex",
@@ -64,6 +66,7 @@ func seedStatsFixture(t *testing.T, dbPath string) {
 			ToolName:    "Edit", CallType: "internal",
 			Score: intPtr(4), ExitCode: intPtr(0),
 			RawBytes: 2000, DistilledBytes: int64Ptr(1000),
+			ActualTokens: int64Ptr(300), PotentialSavingsTokens: int64Ptr(30), PotentialSavingsBytes: int64Ptr(300),
 		},
 	}
 	for _, r := range rows {
@@ -94,6 +97,7 @@ func TestRunStatsTable_MatchesHandComputedFixture(t *testing.T) {
 		"harnez",
 		"voxi",
 		"60.00%",
+		"AVG TOKENS", "30", "300",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q; got:\n%s", want, out)
@@ -135,6 +139,9 @@ func TestRunStatsJSON_ValidAndMatchesTable(t *testing.T) {
 	if read.FailureCount != 1 {
 		t.Errorf("Read.FailureCount = %d, want 1", read.FailureCount)
 	}
+	if read.AvgActualTokens != 150 || read.TotalPotentialSavingsTokens != 30 || read.TotalPotentialSavingsBytes != 300 {
+		t.Errorf("Read analytical metrics = %+v, want avg tokens 150 and savings 30/300", read)
+	}
 
 	byProject := map[string]telemetry.GroupStats{}
 	for _, g := range report.ByProject {
@@ -146,6 +153,9 @@ func TestRunStatsJSON_ValidAndMatchesTable(t *testing.T) {
 	}
 	if harnezProj.Count != 2 {
 		t.Errorf("harnez.Count = %d, want 2", harnezProj.Count)
+	}
+	if harnezProj.TotalPotentialSavingsTokens != 30 || harnezProj.TotalPotentialSavingsBytes != 300 {
+		t.Errorf("harnez savings = %d/%d, want 30/300", harnezProj.TotalPotentialSavingsTokens, harnezProj.TotalPotentialSavingsBytes)
 	}
 	if diff := harnezProj.AvgScore - 3.0; diff < -0.0001 || diff > 0.0001 {
 		t.Errorf("harnez.AvgScore = %v, want 3.0", harnezProj.AvgScore)
