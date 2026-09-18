@@ -128,6 +128,7 @@ Agentic software engineering scales effectively when concurrency is structured a
     - **Test Assertion Rigor**: Are tests asserting specific outcomes or merely executing code without assertions?
     - **Docs & Ticket Sync**: Are all issue status tags, README indices, and docs updated in sync with code?
     - **Backward Compatibility & Invariants**: Does the change uphold project invariants and CLI design boundaries?
+    - **The "What Would I Have Done Differently?" Check**: Actively evaluate whether the worker agent introduced subtle edge-case omissions, runtime overheads, or future architectural debt. Distinguish blocking issues (which mandate immediate remediation) from non-blocking nuances (which are buffered into a `#XXX-refinements` follow-up ticket to preserve milestone flow).
     - **Token Efficiency & Code Clarity**: Is the code concise, readable, and free of redundant abstractions?
     - **Live/Real-Environment Verification for hooks & env-resolution features**: for any change that installs a live
       agent hook, writes global config (`apply`), or resolves state from the ambient environment (branch name,

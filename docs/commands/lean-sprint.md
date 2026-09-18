@@ -46,8 +46,11 @@ For focused, well-defined tasks, bypass the full 5-phase ceremony in favor of a 
 ### 3. Confidence-Gated Inline Review & Milestone-Boundary Commits
 - If automated tests pass cleanly and confidence is high (routine bug fix, small feature, internal refactor), skip spawning an independent reviewer subagent.
 - The Host Orchestrator performs a rapid inline diff review, including whether a defensive/robustness fix could instead fix its root cause (see `@docs/AgenticLoop.md` Phase 3, "Root Cause vs. Symptom").
+- **The "What Would I Have Done Differently?" Check**: The Host Orchestrator explicitly evaluates: *Did the subagent introduce subtle edge-case omissions, performance overheads, or future architectural debt?*
+  - *Blocking defects*: Fix or request an immediate correction before advancing.
+  - *Non-blocking nuances*: Immediately buffer into the dedicated **Nuance Refinement Ticket** (`#XXX-refinements`) rather than disrupting subagent momentum with iterative micro round-trips.
 - **Milestone-Boundary Atomic Commits**: For multi-milestone sprints, the Host Orchestrator (or subagent) **must immediately commit** each verified milestone upon passing tests and inline review (`git commit -m "feat/fix(...): ... (issue XXX MX)"`). Never carry uncommitted working tree diffs across milestone transitions or session resumptions.
-- **Nuance Buffer & Deferred Refinements**: If non-blocking nuances, architectural enhancements, or minor edge cases are discovered during review, do not disrupt subagent momentum with micro-revisions. The Orchestrator immediately collects them into a dedicated follow-up refinement ticket (e.g. `#XXX-refinements`). If the nuance buffer reaches an architectural tipping point, intercept to sweep them before proceeding; otherwise resolve them in the sprint consolidation phase.
+- **Adaptive Interception Gate**: If accumulated nuances cross an architectural threshold that impacts upcoming milestones, intercept to sweep them before proceeding; otherwise resolve them in the sprint consolidation phase.
 - Escalate to a full Phase 3 Reviewer agent only if:
   - There is cross-subsystem blast radius or architectural ambiguity.
   - Automated tests cannot fully cover runtime behavioral contracts.
