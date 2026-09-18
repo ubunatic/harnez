@@ -57,7 +57,8 @@ Leave the exploratory steps to the selected executor: duplicate
 search, inspecting nearby tickets for local conventions, choosing priority independently
 from severity, and drafting the ticket body (problem, scope, acceptance criteria,
 verification guidance; for exploratory requests, record uncertainties instead of
-inventing implementation details).
+inventing implementation details; for multi-step or non-trivial tickets, decompose
+Section 3 into numbered milestones M1, M2... with automated verification targets).
 
 On the delegated path, use a compatible, healthy named filer if explicitly selected
 or already assigned to this workflow; otherwise create a fresh filer. Freshness is

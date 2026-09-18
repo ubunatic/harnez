@@ -63,3 +63,4 @@ In-repo tracker in `issues/`, one file per ticket (`issues/NNN-kebab-case-title.
 3. **Immediate Tracker Commit** — Commit ticket updates and synced index immediately in their own small commit; do not batch behind code changes.
 4. **Traceability** — Link study notes, ADRs, tickets, commits in `**Related**:`.
 5. **Closing Is Part Of Done** — A task/session is NOT done until every touched ticket has `Status` closed and `issues/README.md` indexed.
+6. **Milestone Decomposition for Multi-Step Work** — Multi-step or architectural tickets MUST break implementation into numbered milestones (M1, M2...) with automated verification targets and concrete acceptance criteria.

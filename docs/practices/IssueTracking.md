@@ -117,6 +117,15 @@ The top of each ticket MUST contain the standardized metadata block:
 - **Severity**: `Critical`, `Major`, `Moderate`, `Minor`
 - **Category**: `Bug`, `Feature`, `Architecture`, `Documentation`, `Performance`, `Refactor`, `Agentic Ergonomics`, `Infrastructure`
 
+### 3.3 Milestone Decomposition for Non-Trivial Tickets
+
+When drafting non-trivial tickets (architectural changes, multi-component features, migrations, or work spanning $>1$ functional subsystem), the author **must structure Section 3 (Implementation & Verification Plan) into discrete, numbered milestones (`### Milestone 1: ...`, `### Milestone 2: ...`)**.
+
+Each milestone must define:
+1. **Deliverables & Scope**: Target packages/files and specific behavior to implement.
+2. **Automated Verification Target**: Concrete commands (`go test -v ./...`, canary scripts, CLI validations) that measure completion.
+3. **Acceptance Criteria**: Unambiguous pass/fail state so autonomous developer agents can verify progress independently without guessing.
+
 ---
 
 ## 4. Issues Index & Archive Conventions
@@ -176,3 +185,4 @@ When an issue is closed and verified, move it to `issues/archive/NNN-kebab-case.
    green build and a commit is not done until every ticket it touched has its `Status` flipped
    and `harnez index` has been run. Treat "did I close what I finished?" as an explicit
    end-of-session check, not an assumption that closing happens naturally alongside the code.
+6. **Milestone Decomposition for Multi-Step Work**: Non-trivial tickets (architectural changes, multi-component features, migrations) must decompose implementation plans into discrete, numbered milestones (`M1`, `M2`...) with explicit automated verification targets before handing off work to developer subagents.
