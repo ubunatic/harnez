@@ -54,6 +54,11 @@ type codexPreToolUseInput struct {
 // Only the allow+rewrite shape is ever emitted here — this hook never
 // denies or asks, it only routes.
 type codexPreToolUseOutput struct {
+	HookSpecificOutput codexHookSpecificOutput `json:"hookSpecificOutput"`
+}
+
+type codexHookSpecificOutput struct {
+	HookEventName      string            `json:"hookEventName"`
 	PermissionDecision string            `json:"permissionDecision"`
 	UpdatedInput       map[string]string `json:"updatedInput,omitempty"`
 }
@@ -146,14 +151,17 @@ func runCodexHooksHook(in io.Reader, out io.Writer) error {
 
 	command := payload.ToolInput.Command
 	if command == "" || alreadyRoutedThroughExec(command) {
-		fmt.Fprintln(out, `{"permissionDecision":"allow"}`)
-		return nil
+		_, err := fmt.Fprintln(out, `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}`)
+		return err
 	}
 
 	resp := codexPreToolUseOutput{
-		PermissionDecision: "allow",
-		UpdatedInput: map[string]string{
-			"command": formatGearRewrite(command, ""),
+		HookSpecificOutput: codexHookSpecificOutput{
+			HookEventName:      "PreToolUse",
+			PermissionDecision: "allow",
+			UpdatedInput: map[string]string{
+				"command": formatGearRewrite(command, ""),
+			},
 		},
 	}
 	return json.NewEncoder(out).Encode(resp)

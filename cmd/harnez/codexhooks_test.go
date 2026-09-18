@@ -18,12 +18,15 @@ func TestRunCodexHooksHook_RewritesCommand(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
 	}
-	if got.PermissionDecision != "allow" {
-		t.Errorf("PermissionDecision = %q, want allow", got.PermissionDecision)
+	if got.HookSpecificOutput.HookEventName != "PreToolUse" {
+		t.Errorf("HookEventName = %q, want PreToolUse", got.HookSpecificOutput.HookEventName)
+	}
+	if got.HookSpecificOutput.PermissionDecision != "allow" {
+		t.Errorf("PermissionDecision = %q, want allow", got.HookSpecificOutput.PermissionDecision)
 	}
 	want := "⚙ git status"
-	if got.UpdatedInput["command"] != want {
-		t.Errorf("UpdatedInput[command] = %q, want %q", got.UpdatedInput["command"], want)
+	if got.HookSpecificOutput.UpdatedInput["command"] != want {
+		t.Errorf("UpdatedInput[command] = %q, want %q", got.HookSpecificOutput.UpdatedInput["command"], want)
 	}
 }
 
@@ -42,11 +45,11 @@ func TestRunCodexHooksHook_SkipsAlreadyRouted(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
 	}
-	if got.PermissionDecision != "allow" {
-		t.Errorf("PermissionDecision = %q, want allow", got.PermissionDecision)
+	if got.HookSpecificOutput.PermissionDecision != "allow" {
+		t.Errorf("PermissionDecision = %q, want allow", got.HookSpecificOutput.PermissionDecision)
 	}
-	if len(got.UpdatedInput) != 0 {
-		t.Errorf("expected no rewrite for already-routed command, got %v", got.UpdatedInput)
+	if len(got.HookSpecificOutput.UpdatedInput) != 0 {
+		t.Errorf("expected no rewrite for already-routed command, got %v", got.HookSpecificOutput.UpdatedInput)
 	}
 }
 
@@ -56,7 +59,7 @@ func TestRunCodexHooksHook_SkipsEmptyCommand(t *testing.T) {
 	if err := runCodexHooksHook(in, &out); err != nil {
 		t.Fatalf("runCodexHooksHook: %v", err)
 	}
-	if got := out.String(); got != "{\"permissionDecision\":\"allow\"}\n" {
+	if got := out.String(); got != "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\"}}\n" {
 		t.Errorf("output = %q, want allow no-op envelope", got)
 	}
 }
@@ -73,8 +76,8 @@ func TestRunCodexHooksHook_PreservesShellMetacharacters(t *testing.T) {
 		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
 	}
 	want := "⚙ bash -c 'git status && echo done'"
-	if got.UpdatedInput["command"] != want {
-		t.Errorf("UpdatedInput[command] = %q, want %q", got.UpdatedInput["command"], want)
+	if got.HookSpecificOutput.UpdatedInput["command"] != want {
+		t.Errorf("UpdatedInput[command] = %q, want %q", got.HookSpecificOutput.UpdatedInput["command"], want)
 	}
 }
 
@@ -93,11 +96,10 @@ func TestRunCodexHooksHook_SkipsGearCommand(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
 	}
-	if got.PermissionDecision != "allow" {
-		t.Errorf("PermissionDecision = %q, want allow", got.PermissionDecision)
+	if got.HookSpecificOutput.PermissionDecision != "allow" {
+		t.Errorf("PermissionDecision = %q, want allow", got.HookSpecificOutput.PermissionDecision)
 	}
-	if len(got.UpdatedInput) != 0 {
-		t.Errorf("expected no rewrite for gear command, got %v", got.UpdatedInput)
+	if len(got.HookSpecificOutput.UpdatedInput) != 0 {
+		t.Errorf("expected no rewrite for gear command, got %v", got.HookSpecificOutput.UpdatedInput)
 	}
 }
-
