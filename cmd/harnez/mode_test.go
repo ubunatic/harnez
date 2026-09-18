@@ -199,3 +199,38 @@ func TestModeCmd_FlagsAndDefaults(t *testing.T) {
 	}
 }
 
+func TestModeCmd_ReadEnforcementSwitches(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cmd := newModeCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"autonomous-read"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("autonomous-read failed: %v", err)
+	}
+	configPath := filepath.Join(home, ".harnez", "config.yaml")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); !strings.Contains(got, "reading_discipline:") || !strings.Contains(got, "enforce: false") {
+		t.Fatalf("autonomous config = %s", got)
+	}
+
+	out.Reset()
+	cmd = newModeCmd()
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"enforce-read"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("enforce-read failed: %v", err)
+	}
+	data, err = os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "enforce: true") {
+		t.Fatalf("enforced config = %s", data)
+	}
+}

@@ -1,6 +1,6 @@
 # 419 — Configurable mode switch for harnez read enforcement vs autonomous agent tool selection
 
-**Status**: Open — Milestone 4 complete
+**Status**: Open — Milestone 5 complete
 **Priority**: P2 (Medium)
 **Severity**: Medium
 **Category**: Architecture / Context Optimization / Developer Experience
@@ -85,6 +85,12 @@ separating prompt recommendations from runtime policy.
 `~/.harnez/config.yaml`. Synchronized the embedded config template and root
 guidance wording, and verified the complete suite under the autonomous-mode
 test environment.
+
+### Milestone 5: Final Hardening
+
+**Delivered (2026-09-18):** Added hermetic CLI tests covering both persistent
+read-mode switches, confirmed the configuration output, and re-ran the full
+quota-1 suite successfully.
 
 ---
 
