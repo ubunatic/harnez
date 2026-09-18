@@ -1,6 +1,6 @@
 # 420 — Set up Codex analytics hooks for complete harnez stats telemetry
 
-**Status**: Open — M5 added: separate cumulative and per-turn provider token metrics
+**Status**: Closed — Completed M5: separate cumulative and per-turn Codex token metrics with migration, parser, aggregation, and tests
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics / Infrastructure
@@ -155,6 +155,13 @@ required.
   values from byte counts.
 - Verification: fixture and live-session checks show distinct cumulative and
   per-turn values, and existing Claude/AGY telemetry remains unchanged.
+
+**M5 status (completed 2026-09-18)**: Added nullable cumulative provider
+columns and per-turn fields to `tool_calls`; `actual_tokens` now represents
+the per-turn total for compatibility with existing stats. Codex
+`last_token_usage` populates per-turn input, cached-input, output, reasoning,
+and total values, while `total_token_usage` remains available for cumulative
+analysis. Migration, round-trip, parser, and full-suite verification pass.
 
 ## 4. Acceptance Criteria
 
