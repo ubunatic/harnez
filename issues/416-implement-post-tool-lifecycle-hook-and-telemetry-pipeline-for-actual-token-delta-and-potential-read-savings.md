@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Hooks & Telemetry / Observability
-**Related**: #405, #412, #296, #173, #120, #142
+**Related**: #405, #412, #296, #173, #120, #142, `docs/TokenMeasurementArchitecture.md`
 
 ---
 
@@ -16,65 +16,72 @@ Currently, Harnez relies exclusively on `PreToolUse` hooks (such as `harnez hook
 2. **Missing Ground-Truth Token Telemetry**: Real token costs for individual tool calls (including `harnez read -I`, `view_file`, `grep_search`, `run_command`) are neither measured nor stored in telemetry. `harnez stats` only reports text distillation byte savings from `harnez distill`, leaving vision and tool token deltas unrecorded.
 3. **No Native Tool Opportunity Cost Tracking**: When agents invoke native file-reading tools (e.g. `view_file`, `ReadMultipleFiles`, `cat`), Harnez does not quantify the *potential* token savings that would have been achieved had the agent used `harnez read -I` or `harnez read -L`.
 
-To evaluate agent tool efficiency and build data-driven policies for redirecting agents to optimized Harnez tools, Harnez needs a post-tool hook chain and telemetry pipeline that records real token deltas and potential savings.
+Architecture reference: [`docs/TokenMeasurementArchitecture.md`](../docs/TokenMeasurementArchitecture.md).
 
 ---
 
-## 2. Technical Scope & Architecture
+## 2. Measurable Development Milestones
 
-### 2.1 PostToolUse & PostInvocation Hook Manifests
-- **AGY / Antigravity**: Update `internal/agy/hooks.go` (`BuildHooksDoc`) to register `PostToolUse` (and `PostInvocation` where appropriate) targeting `*` or specific tool matchers, invoking `harnez hook post-tool` (or `harnez hook agy-post`).
-- **Claude Code**: Update `internal/claude/hooks.go` / `settings.json` to register `PostToolUse` hook handlers.
-- **Codex**: Wire corresponding post-tool notification hooks where available.
-
-### 2.2 Correlation & Step Tracking
-- Correlation key: `(session_id, stepIdx)` (with fallback to conversation timestamp / tool ID).
-- **PreToolUse (`step N`)**:
-  - Record initiation timestamp $t_0$, `tool_name`, args, and snapshot pre-call session/transcript token or byte offset $S_0$.
-- **PostToolUse (`step N`)**:
-  - Correlate with `(session_id, stepIdx)`.
-  - Read tool output payload from `transcript.jsonl` / stdin payload (bytes, lines, error status).
-  - Record execution duration $\Delta t = t_1 - t_0$.
-
-### 2.3 Actual Token Delta ($\Delta \text{Tokens}$) Measurement
-- **Turn-by-Turn Delta Attribution**:
-  - Measure the delta in billed session tokens / input tokens before and after the tool execution:
-    $$\Delta \text{InputTokens} = \text{SessionTokens}_{\text{turn } N+1} - \text{SessionTokens}_{\text{turn } N}$$
-  - Captures the complete real payload (tool output text / image tiles + prompt scaffolding + model thinking/noise).
-- **Tool Output Tokenization**:
-  - For text tools (e.g. `view_file`, `run_command` output): compute exact text tokens via tokenizer.
-  - For visual image cards (e.g. `harnez read -I` output): compute exact provider-specific ViT tile tokens from image dimensions.
-
-### 2.4 Potential Savings Computation for Native Tools
-- For watched native file-reading tools (e.g. `view_file`, `ReadMultipleFiles`, `cat`):
-  - Ingest the returned file content payload.
-  - Calculate actual tokens consumed by the native text representation.
-  - Compute hypothetical ViT tokens for the equivalent `harnez read -I` visual card (and `harnez read -L` line slice).
-  - Compute `potential_token_savings = actual_text_tokens - hypothetical_vit_tokens`.
-  - Record `potential_savings_bytes` and `potential_savings_tokens` in telemetry.
-
-### 2.5 Schema & Database Migration
-- Extend `tool_calls` table in `internal/telemetry/schema.go`:
-  - `actual_tokens INTEGER` (actual measured tokens consumed by this tool call / turn delta).
-  - `potential_savings_tokens INTEGER` (hypothetical token savings if optimized tool was used).
-  - `potential_savings_bytes INTEGER` (hypothetical byte savings).
-  - `output_bytes INTEGER` (raw bytes returned by tool result).
-- Add indices and migration handling for existing SQLite databases.
-
-### 2.6 Analytical Reporting in `harnez stats`
-- Update `harnez stats` to report:
-  - Average actual token cost per tool.
-  - Cumulative measured token savings from `harnez read -I` vs native `view_file`.
-  - Cumulative *opportunity loss / potential savings* from unredirected native tool calls.
+### Milestone 1: Database Schema & Telemetry Migration
+- **Goal**: Extend the telemetry schema to store execution metrics, output sizes, token costs, and potential savings.
+- **Scope**:
+  - `internal/telemetry/types.go`: Add `OutputBytes *int64`, `ActualTokens *int64`, `PotentialSavingsTokens *int64`, `PotentialSavingsBytes *int64` to `ToolCall` struct.
+  - `internal/telemetry/schema.go`: Update DDL to include the 4 new columns on `tool_calls`. Add automated migration in `Open` / `EnsureSchema` to execute `ALTER TABLE tool_calls ADD COLUMN ...` on existing databases without data loss.
+  - `internal/telemetry/insert.go` & `query.go`: Update insert statements, scan queries, and export filters.
+- **Verification Target**:
+  - `go test -v ./internal/telemetry/...` passes, including migration tests with legacy databases and insert/query roundtrips for all new columns.
 
 ---
 
-## 3. Implementation Checklist
+### Milestone 2: Post-Tool Hook Handler & Correlation Engine
+- **Goal**: Implement the `PostToolUse` CLI entrypoint in Harnez that correlates with the preceding `PreToolUse` record and captures execution duration and payload sizes.
+- **Scope**:
+  - `cmd/harnez/hook.go`: Add `harnez hook post-tool` (and alias `harnez hook agy-post`).
+  - Input: Stdin JSON with `conversationId`, `stepIdx`, `transcriptPath`, `error` (standard AGY/Antigravity payload).
+  - Correlation logic: Match the `tool_calls` row by `(session_id, stepIdx)` (or recent pending record).
+  - Output extraction: Read the tool output step from `transcriptPath` (or stdin payload), calculate `output_bytes` and duration $\Delta t = t_1 - t_0$.
+  - Update SQLite row with measured output metrics.
+  - Output: `{"status":"ok"}` or `{}` on stdout.
+- **Verification Target**:
+  - `go test -v ./cmd/harnez/hook_test.go` simulates sequential `PreToolUse` -> tool execution -> `PostToolUse` and confirms `output_bytes` and duration are persisted in the database.
 
-- [ ] Register `PostToolUse` and `PostInvocation` in `internal/agy/hooks.go` and `internal/claude/hooks.go`.
-- [ ] Implement `harnez hook post-tool` handler in `cmd/harnez/hook.go` with `(session_id, stepIdx)` correlation.
-- [ ] Add transcript step extractor for reading tool results and media attachments from `transcript.jsonl`.
-- [ ] Implement potential savings evaluator (tokenizing native `view_file` payloads vs `readcard` ViT estimates).
-- [ ] Update `internal/telemetry/schema.go`, `insert.go`, and `query.go` to store and query token deltas and potential savings.
-- [ ] Add analytical reporting in `cmd/harnez/stats.go` for actual token usage and potential savings breakdown.
-- [ ] Add unit tests in `internal/telemetry/` and `cmd/harnez/` verifying post-hook correlation and stats aggregation.
+---
+
+### Milestone 3: Potential Opportunity Savings Evaluator for Native Reads
+- **Goal**: Automatically calculate what a native read tool (`view_file`, `cat`, `ReadMultipleFiles`) would have cost if rendered with `harnez read -I`.
+- **Scope**:
+  - `internal/readcard/` / `internal/telemetry/`: Expose helper `EstimateSavings(textPayload string, provider string) (textTokens, vitTokens, savingsTokens, savingsBytes int)`.
+  - When `PostToolUse` processes a native file-reading tool, tokenize the returned text payload and compute hypothetical ViT tile tokens for an equivalent visual card.
+  - Set `potential_savings_tokens = max(0, textTokens - vitTokens)` and `potential_savings_bytes`.
+- **Verification Target**:
+  - Unit tests with known text fixtures (>300 lines) verifying positive `potential_savings_tokens` calculated against Claude and OpenAI ViT pricing.
+
+---
+
+### Milestone 4: Hook Manifests Generation & Agent Integration
+- **Goal**: Ensure `harnez init` and `harnez apply` register both `PreToolUse` and `PostToolUse` hooks in agent configuration files.
+- **Scope**:
+  - `internal/agy/hooks.go`: Update `BuildHooksDoc()` to include `PostToolUse` with matcher `*` calling `harnez hook agy-post` alongside `PreToolUse`.
+  - `internal/claude/hooks.go`: Register post-tool hooks for Claude Code settings.
+- **Verification Target**:
+  - `go test -v ./internal/agy/... ./internal/claude/...` passes.
+  - `harnez apply` (or running against a mock config) emits valid JSON matching `hooks.json` specifications.
+
+---
+
+### Milestone 5: Analytical Reporting in `harnez stats`
+- **Goal**: Display actual tokens, measured savings, and potential opportunity savings in terminal reports and JSON output.
+- **Scope**:
+  - `internal/telemetry/query.go`: Update `AggregateByTool` to compute average actual tokens, total measured savings, and total potential savings.
+  - `cmd/harnez/stats.go`: Render `AVG TOKENS`, `MEASURED SAVINGS`, and `POTENTIAL SAVINGS` columns in the terminal table.
+  - Support `--json` emitting all newly aggregated metrics.
+- **Verification Target**:
+  - `go test -v ./cmd/harnez/stats_test.go` passes.
+  - Running `harnez stats` renders a formatted table with new metrics and zero regression on existing output.
+
+---
+
+## 3. Sprint Success Criteria
+1. All 5 milestones pass unit tests via `make test-q1` / `go test ./...`.
+2. Existing tests and invariant guardrails remain 100% intact.
+3. Smoke test with real `harnez hook` invocations verifies SQLite records are properly updated with `output_bytes`, `actual_tokens`, and `potential_savings_tokens`.
