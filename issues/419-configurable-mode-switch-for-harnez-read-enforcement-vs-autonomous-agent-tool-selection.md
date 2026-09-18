@@ -1,6 +1,6 @@
 # 419 — Configurable mode switch for harnez read enforcement vs autonomous agent tool selection
 
-**Status**: Open — Milestone 1 complete (Refinements in progress)
+**Status**: Open — Milestone 1 complete
 **Priority**: P2 (Medium)
 **Severity**: Medium
 **Category**: Architecture / Context Optimization / Developer Experience
@@ -52,7 +52,11 @@ Furthermore, promotion of `harnez read` is currently embedded across multiple co
 - Support dependency injection (`EnforceRead *bool`) in `readHookOptions` / `agyHookOptions` to ensure test suite isolation.
 - When disabled, bypass deny decisions and allow native read tools immediately while logging telemetry.
 
-**Delivered (2026-09-18):** Initial passthrough logic added in `cmd/harnez/hook.go`. Refinement to support config-first lookup and test isolation in progress.
+**Delivered (2026-09-18):** `readEnforcementEnabled` now checks the optional
+`HARNEZ_READ_ENFORCE` per-process override, then `~/.harnez/config.yaml` at
+`reading_discipline.enforce`, with enforcement enabled by default. Hook options
+accept `EnforceRead *bool` for hermetic tests and explicit callers. Claude and
+Antigravity pre-tool hooks preserve passthrough and telemetry behavior.
 
 ### Milestone 2: Telemetry & Opportunity Cost Observer Preservation
 - Decouple large read discipline detection from denial actions so that post-tool observation hooks (`runAgyPostToolHook`) and telemetry record candidate large-read opportunities even when enforcement is OFF, providing ground-truth comparison data.

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez/internal/readcard"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/telemetry"
@@ -179,10 +180,11 @@ func isNativeReadTool(name string) bool {
 }
 
 type agyHookOptions struct {
-	BaseDir  string
-	DBPath   string
-	StateDir string
-	Insert   func(dbPath string, call telemetry.ToolCall) error
+	BaseDir     string
+	DBPath      string
+	StateDir    string
+	EnforceRead *bool
+	Insert      func(dbPath string, call telemetry.ToolCall) error
 }
 
 // readEnforcementEnabled reports whether native large-read interception is active.
@@ -190,12 +192,33 @@ type agyHookOptions struct {
 // current behavior; HARNEZ_READ_ENFORCE=0 (or false/off/no) selects autonomous
 // read mode without removing the observation hooks.
 func readEnforcementEnabled() bool {
+	return readEnforcementEnabledFor(nil)
+}
+
+func readEnforcementEnabledFor(explicit *bool) bool {
+	if explicit != nil {
+		return *explicit
+	}
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("HARNEZ_READ_ENFORCE"))) {
 	case "0", "false", "off", "no":
 		return false
-	default:
+	case "1", "true", "on", "yes":
 		return true
 	}
+	if home, err := os.UserHomeDir(); err == nil {
+		data, err := os.ReadFile(filepath.Join(home, ".harnez", "config.yaml"))
+		if err == nil {
+			var cfg struct {
+				ReadingDiscipline struct {
+					Enforce *bool `yaml:"enforce"`
+				} `yaml:"reading_discipline"`
+			}
+			if yaml.Unmarshal(data, &cfg) == nil && cfg.ReadingDiscipline.Enforce != nil {
+				return *cfg.ReadingDiscipline.Enforce
+			}
+		}
+	}
+	return true
 }
 
 func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
@@ -255,7 +278,7 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 		}
 	}
 
-	deny, reason := evaluateReadToolDiscipline(toolName, payload.ToolCall.Args, wd)
+	deny, reason := evaluateReadToolDisciplineWithEnforcement(toolName, payload.ToolCall.Args, wd, opts.EnforceRead)
 	if deny {
 		callType = "hook:deny"
 		note = "reading_discipline:intercepted"
@@ -477,7 +500,11 @@ func isBinaryMedia(path string) bool {
 // evaluateReadToolDiscipline checks if a tool invocation on a target file violates
 // Reading & Context Discipline (file >= 100 lines or range >= 100 lines or unconstrained whole-file read of a >=100 line file).
 func evaluateReadToolDiscipline(toolName string, args map[string]any, baseDir string) (bool, string) {
-	if !readEnforcementEnabled() {
+	return evaluateReadToolDisciplineWithEnforcement(toolName, args, baseDir, nil)
+}
+
+func evaluateReadToolDisciplineWithEnforcement(toolName string, args map[string]any, baseDir string, enforce *bool) (bool, string) {
+	if !readEnforcementEnabledFor(enforce) {
 		return false, ""
 	}
 	if !isReadTool(toolName) {
@@ -556,10 +583,11 @@ type claudeHookSpecificOutput struct {
 }
 
 type readHookOptions struct {
-	BaseDir  string
-	DBPath   string
-	StateDir string
-	Insert   func(dbPath string, call telemetry.ToolCall) error
+	BaseDir     string
+	DBPath      string
+	StateDir    string
+	EnforceRead *bool
+	Insert      func(dbPath string, call telemetry.ToolCall) error
 }
 
 func newReadHookCmd() *cobra.Command {
@@ -595,7 +623,7 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 		fmt.Fprintln(out, `{}`)
 		return fmt.Errorf("decode claude read hook payload: %w", err)
 	}
-	if !readEnforcementEnabled() {
+	if !readEnforcementEnabledFor(opts.EnforceRead) {
 		fmt.Fprintln(out, `{}`)
 		return nil
 	}
@@ -609,7 +637,7 @@ func runClaudeReadHook(in io.Reader, out io.Writer, opts readHookOptions) error 
 		}
 	}
 
-	deny, reason := evaluateReadToolDiscipline(payload.ToolName, payload.ToolInput, baseDir)
+	deny, reason := evaluateReadToolDisciplineWithEnforcement(payload.ToolName, payload.ToolInput, baseDir, opts.EnforceRead)
 	if isReadTool(payload.ToolName) {
 		stateDir := opts.StateDir
 		if stateDir == "" {

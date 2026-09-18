@@ -613,3 +613,22 @@ func TestReadEnforcementDefaultsToEnabled(t *testing.T) {
 		}
 	}
 }
+
+func TestReadEnforcementConfigAndDependencyInjection(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("HARNEZ_READ_ENFORCE", "")
+	if err := os.Mkdir(filepath.Join(home, ".harnez"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".harnez", "config.yaml"), []byte("reading_discipline:\n  enforce: false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if readEnforcementEnabled() {
+		t.Fatal("config.yaml enforce=false should disable enforcement")
+	}
+	forced := true
+	if !readEnforcementEnabledFor(&forced) {
+		t.Fatal("explicit hook option should override config")
+	}
+}
