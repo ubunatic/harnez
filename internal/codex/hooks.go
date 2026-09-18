@@ -12,6 +12,7 @@ package codex
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -197,6 +198,30 @@ func Status(path string) (installed bool, drifted bool) {
 	wantData, _ := json.Marshal(want)
 	gotData, _ := json.Marshal(entry)
 	return true, string(wantData) != string(gotData)
+}
+
+// Summary returns a compact operator-facing description of the managed Codex hooks.
+func Summary(path string) string {
+	doc := readTOML(path)
+	features, _ := doc["features"].(map[string]any)
+	hooks, _ := doc["hooks"].(map[string]any)
+	entry, _ := hooks[HookName].(map[string]any)
+	state := "disabled"
+	if features["hooks"] == true {
+		state = "enabled"
+	}
+	return fmt.Sprintf("%s (PreToolUse %d, PostToolUse %d)", state, hookCount(entry, "PreToolUse"), hookCount(entry, "PostToolUse"))
+}
+
+func hookCount(entry map[string]any, name string) int {
+	groups, _ := entry[name].([]map[string]any)
+	count := 0
+	for _, group := range groups {
+		if handlers, ok := group["hooks"].([]map[string]any); ok {
+			count += len(handlers)
+		}
+	}
+	return count
 }
 
 // Remove deletes the HookName entry from config.toml at path, leaving any

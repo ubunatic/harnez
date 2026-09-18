@@ -1059,9 +1059,8 @@ func ApplyAllVariant(target string, cfg *Config, docs []string, forceDocs bool, 
 			changes++
 			fmt.Printf("  wrote %s\n", hooksPath)
 			fmt.Println("  note: Codex will prompt for hook-trust review before this hook becomes active (see its /hooks panel).")
-		} else {
-			addStat("codex hooks", "up to date")
 		}
+		addStat("codex hooks", codex.Summary(hooksPath))
 	}
 
 	// Antigravity native tool observation hook (issue 373):
@@ -1077,9 +1076,8 @@ func ApplyAllVariant(target string, cfg *Config, docs []string, forceDocs bool, 
 			if changed {
 				changes++
 				fmt.Printf("  wrote %s\n", hooksPath)
-			} else {
-				addStat("agy hooks", "up to date")
 			}
+			addStat("agy hooks", agy.Summary(hooksPath))
 		}
 	}
 

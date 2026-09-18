@@ -8,11 +8,36 @@ package agy
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"ubunatic.com/harnez/internal/jsonc"
 )
+
+// Summary returns a compact operator-facing description of the managed AGY hooks.
+func Summary(path string) string {
+	doc := jsonc.Read(path)
+	entry, _ := doc[HookName].(map[string]any)
+	state := "disabled"
+	if entry["enabled"] == true {
+		state = "enabled"
+	}
+	return fmt.Sprintf("%s (PreToolUse %d, PostToolUse %d)", state, hookCount(entry, "PreToolUse"), hookCount(entry, "PostToolUse"))
+}
+
+func hookCount(entry map[string]any, name string) int {
+	groups, _ := entry[name].([]any)
+	count := 0
+	for _, raw := range groups {
+		if group, ok := raw.(map[string]any); ok {
+			if handlers, ok := group["hooks"].([]any); ok {
+				count += len(handlers)
+			}
+		}
+	}
+	return count
+}
 
 // HookName is the named hook entry harnez owns inside hooks.json. Only
 // this entry is ever written or deleted; any other named hooks a user has
