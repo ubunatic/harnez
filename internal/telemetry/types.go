@@ -6,21 +6,25 @@ import "time"
 // columns in schemaDDL (schema.go) exactly — see that file's comment for
 // why the shape lives there, not here.
 type ToolCall struct {
-	ID             int64 // assigned by SQLite (AUTOINCREMENT); ignored on Insert
-	CreatedAt      time.Time
-	SessionID      string
-	TicketID       string
-	ProjectName    string
-	WorkingDir     string
-	AgentID        string
-	ToolName       string
-	CallType       string // e.g. "internal" (117) or "shell" (118)
-	Score          *int   // 1-5, optional; range enforced by the DB CHECK constraint
-	Note           string
-	ExitCode       *int // optional; nil for call types without a process exit code
-	DurationMs     int64
-	RawBytes       int64
-	DistilledBytes *int64 // populated only when distillation ran; nil (SQL NULL) otherwise
+	ID                     int64 // assigned by SQLite (AUTOINCREMENT); ignored on Insert
+	CreatedAt              time.Time
+	SessionID              string
+	TicketID               string
+	ProjectName            string
+	WorkingDir             string
+	AgentID                string
+	ToolName               string
+	CallType               string // e.g. "internal" (117) or "shell" (118)
+	Score                  *int   // 1-5, optional; range enforced by the DB CHECK constraint
+	Note                   string
+	ExitCode               *int // optional; nil for call types without a process exit code
+	DurationMs             int64
+	RawBytes               int64
+	DistilledBytes         *int64 // populated only when distillation ran; nil (SQL NULL) otherwise
+	OutputBytes            *int64 `json:"output_bytes,omitempty"`
+	ActualTokens           *int64 `json:"actual_tokens,omitempty"`
+	PotentialSavingsTokens *int64 `json:"potential_savings_tokens,omitempty"`
+	PotentialSavingsBytes  *int64 `json:"potential_savings_bytes,omitempty"`
 }
 
 // CLIInvocation is one row of the cli_invocations table (issue 326): a

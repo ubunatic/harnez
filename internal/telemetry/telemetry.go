@@ -81,6 +81,9 @@ func Open(path string) (*DB, error) {
 		} else if _, err := sqlDB.Exec(schemaDDL); err != nil {
 			sqlDB.Close()
 			lastErr = fmt.Errorf("telemetry: create schema: %w", err)
+		} else if err := migrateToolCalls(sqlDB); err != nil {
+			sqlDB.Close()
+			lastErr = fmt.Errorf("telemetry: migrate schema: %w", err)
 		} else if err := checkAndStampSchemaVersion(sqlDB, path, tableExisted); err != nil {
 			sqlDB.Close()
 			return nil, err
@@ -90,6 +93,35 @@ func Open(path string) (*DB, error) {
 		time.Sleep(openRetryDelay)
 	}
 	return nil, fmt.Errorf("telemetry: open %s: %w", path, lastErr)
+}
+
+func migrateToolCalls(sqlDB *sql.DB) error {
+	rows, err := sqlDB.Query("PRAGMA table_info(tool_calls)")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, typ string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			return err
+		}
+		columns[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, column := range []string{"output_bytes", "actual_tokens", "potential_savings_tokens", "potential_savings_bytes"} {
+		if !columns[column] {
+			if _, err := sqlDB.Exec("ALTER TABLE tool_calls ADD COLUMN " + column + " INTEGER"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // tableExists reports whether name already exists in the database, checked
@@ -141,10 +173,9 @@ func checkAndStampSchemaVersion(sqlDB *sql.DB, path string, preexisting bool) er
 		return nil
 	}
 	if current < schemaVersion {
-		return fmt.Errorf(
-			"telemetry: %s has schema version %d, need %d, and this package has no migration framework — "+
-				"delete the file (it's a local telemetry cache, safe to lose) and it will be recreated on next use",
-			path, current, schemaVersion)
+		if _, err := sqlDB.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
+			return fmt.Errorf("telemetry: stamp migrated schema version: %w", err)
+		}
 	}
 	return nil
 }

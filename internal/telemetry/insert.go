@@ -27,12 +27,14 @@ func (d *DB) Insert(tc ToolCall) error {
 		INSERT INTO tool_calls (
 			created_at, session_id, ticket_id, project_name, working_dir,
 			agent_id, tool_name, call_type, score, note, exit_code,
-			duration_ms, raw_bytes, distilled_bytes
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			duration_ms, raw_bytes, distilled_bytes, output_bytes, actual_tokens,
+			potential_savings_tokens, potential_savings_bytes
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		createdAt.Format(time.RFC3339Nano),
 		tc.SessionID, tc.TicketID, tc.ProjectName, tc.WorkingDir,
 		tc.AgentID, tc.ToolName, tc.CallType, tc.Score, tc.Note, tc.ExitCode,
-		tc.DurationMs, tc.RawBytes, tc.DistilledBytes,
+		tc.DurationMs, tc.RawBytes, tc.DistilledBytes, tc.OutputBytes, tc.ActualTokens,
+		tc.PotentialSavingsTokens, tc.PotentialSavingsBytes,
 	)
 	if err != nil {
 		if isConstraintErr(err) {

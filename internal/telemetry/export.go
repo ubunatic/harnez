@@ -51,21 +51,25 @@ import (
 //     canonical closed enum ("test", "build", "edit", "inspection", "git",
 //     "debug", "workflow", "config", "other") safe for public dashboards.
 type ExportToolCall struct {
-	CreatedAt        time.Time        `json:"created_at"`
-	SessionID        string           `json:"session_id,omitempty"`
-	TicketID         string           `json:"ticket_id,omitempty"`
-	ProjectName      string           `json:"project_name,omitempty"`
-	ProjectDir       string           `json:"project_dir,omitempty"`
-	AgentID          string           `json:"agent_id"`
-	ToolName         string           `json:"tool_name"`
-	CallType         string           `json:"call_type"`
-	Score            *int             `json:"score,omitempty"`
-	Note             string           `json:"note,omitempty"`
-	ActivityCategory ActivityCategory `json:"activity_category"`
-	ExitCode         *int             `json:"exit_code,omitempty"`
-	DurationMs       int64            `json:"duration_ms"`
-	RawBytes         int64            `json:"raw_bytes"`
-	DistilledBytes   *int64           `json:"distilled_bytes,omitempty"`
+	CreatedAt              time.Time        `json:"created_at"`
+	SessionID              string           `json:"session_id,omitempty"`
+	TicketID               string           `json:"ticket_id,omitempty"`
+	ProjectName            string           `json:"project_name,omitempty"`
+	ProjectDir             string           `json:"project_dir,omitempty"`
+	AgentID                string           `json:"agent_id"`
+	ToolName               string           `json:"tool_name"`
+	CallType               string           `json:"call_type"`
+	Score                  *int             `json:"score,omitempty"`
+	Note                   string           `json:"note,omitempty"`
+	ActivityCategory       ActivityCategory `json:"activity_category"`
+	ExitCode               *int             `json:"exit_code,omitempty"`
+	DurationMs             int64            `json:"duration_ms"`
+	RawBytes               int64            `json:"raw_bytes"`
+	DistilledBytes         *int64           `json:"distilled_bytes,omitempty"`
+	OutputBytes            *int64           `json:"output_bytes,omitempty"`
+	ActualTokens           *int64           `json:"actual_tokens,omitempty"`
+	PotentialSavingsTokens *int64           `json:"potential_savings_tokens,omitempty"`
+	PotentialSavingsBytes  *int64           `json:"potential_savings_bytes,omitempty"`
 }
 
 // Export is the top-level JSON payload for `harnez usage export`'s
@@ -119,20 +123,24 @@ func BuildExportWithCategories(rows []ToolCall, now time.Time, level privacy.Lev
 		}
 
 		etc := ExportToolCall{
-			CreatedAt:        r.CreatedAt,
-			SessionID:        r.SessionID,
-			TicketID:         normalizeProjectPath(r.TicketID),
-			ProjectName:      normalizeProjectPath(r.ProjectName),
-			ProjectDir:       normalizeProjectPath(r.WorkingDir),
-			AgentID:          r.AgentID,
-			ToolName:         CanonicalToolName(r.ToolName),
-			CallType:         r.CallType,
-			Score:            r.Score,
-			ActivityCategory: cat,
-			ExitCode:         r.ExitCode,
-			DurationMs:       r.DurationMs,
-			RawBytes:         r.RawBytes,
-			DistilledBytes:   r.DistilledBytes,
+			CreatedAt:              r.CreatedAt,
+			SessionID:              r.SessionID,
+			TicketID:               normalizeProjectPath(r.TicketID),
+			ProjectName:            normalizeProjectPath(r.ProjectName),
+			ProjectDir:             normalizeProjectPath(r.WorkingDir),
+			AgentID:                r.AgentID,
+			ToolName:               CanonicalToolName(r.ToolName),
+			CallType:               r.CallType,
+			Score:                  r.Score,
+			ActivityCategory:       cat,
+			ExitCode:               r.ExitCode,
+			DurationMs:             r.DurationMs,
+			RawBytes:               r.RawBytes,
+			DistilledBytes:         r.DistilledBytes,
+			OutputBytes:            r.OutputBytes,
+			ActualTokens:           r.ActualTokens,
+			PotentialSavingsTokens: r.PotentialSavingsTokens,
+			PotentialSavingsBytes:  r.PotentialSavingsBytes,
 		}
 		switch level {
 		case privacy.LevelPublic:

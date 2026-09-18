@@ -196,7 +196,8 @@ func (d *DB) Query(f Filter) ([]ToolCall, error) {
 	rows, err := d.sql.QueryContext(ctx, `
 		SELECT id, created_at, session_id, ticket_id, project_name, working_dir,
 		       agent_id, tool_name, call_type, score, note, exit_code,
-		       duration_ms, raw_bytes, distilled_bytes
+		       duration_ms, raw_bytes, distilled_bytes, output_bytes, actual_tokens,
+		       potential_savings_tokens, potential_savings_bytes
 		FROM tool_calls`+where+`
 		ORDER BY created_at DESC`, args...)
 	if err != nil {
@@ -212,6 +213,8 @@ func (d *DB) Query(f Filter) ([]ToolCall, error) {
 			&tc.ID, &createdAt, &tc.SessionID, &tc.TicketID, &tc.ProjectName,
 			&tc.WorkingDir, &tc.AgentID, &tc.ToolName, &tc.CallType, &tc.Score,
 			&tc.Note, &tc.ExitCode, &tc.DurationMs, &tc.RawBytes, &tc.DistilledBytes,
+			&tc.OutputBytes, &tc.ActualTokens, &tc.PotentialSavingsTokens,
+			&tc.PotentialSavingsBytes,
 		); err != nil {
 			return nil, fmt.Errorf("telemetry: scan row: %w", err)
 		}

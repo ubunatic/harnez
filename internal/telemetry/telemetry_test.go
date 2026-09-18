@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 )
@@ -70,7 +69,7 @@ func TestOpenIsIdempotent(t *testing.T) {
 // distilled_bytes NOT NULL -> nullable change against a real pre-existing
 // db). Open must fail with a clear, actionable message instead of letting
 // a later Insert/Query hit a raw constraint or scan error.
-func TestOpenRejectsStaleSchemaVersion(t *testing.T) {
+func TestOpenMigratesStaleSchemaVersion(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "tool_catalog.sqlite")
 
@@ -95,12 +94,13 @@ func TestOpenRejectsStaleSchemaVersion(t *testing.T) {
 	}
 	raw.Close()
 
-	_, err = Open(path)
-	if err == nil {
-		t.Fatal("Open against a stale-schema-version file should have failed")
+	db, err = Open(path)
+	if err != nil {
+		t.Fatalf("Open should migrate stale schema: %v", err)
 	}
-	if !strings.Contains(err.Error(), "no migration framework") {
-		t.Errorf("error = %v, want it to explain there's no migration framework and to delete the file", err)
+	db.Close()
+	if _, err := sql.Open("sqlite", path); err != nil {
+		t.Fatalf("reopen migrated database: %v", err)
 	}
 }
 
@@ -116,7 +116,7 @@ func TestOpenRejectsStaleSchemaVersion(t *testing.T) {
 // Open must instead distinguish "this call's own CREATE TABLE just made
 // the table" from "the table already existed" (see tableExists) and
 // refuse to trust an unstamped-but-preexisting table.
-func TestOpenRejectsPreexistingTableWithUnstampedVersion(t *testing.T) {
+func TestOpenMigratesPreexistingTableWithUnstampedVersion(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "tool_catalog.sqlite")
 
@@ -152,12 +152,49 @@ func TestOpenRejectsPreexistingTableWithUnstampedVersion(t *testing.T) {
 	}
 	raw.Close()
 
-	_, err = Open(path)
-	if err == nil {
-		t.Fatal("Open against a preexisting table with unstamped (0) version should have failed, not silently trusted it")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open should migrate preexisting table: %v", err)
 	}
-	if !strings.Contains(err.Error(), "no migration framework") {
-		t.Errorf("error = %v, want it to explain there's no migration framework and to delete the file", err)
+	defer db.Close()
+	var count int
+	if err := db.sql.QueryRow("SELECT count(*) FROM pragma_table_info('tool_calls') WHERE name IN ('output_bytes', 'actual_tokens', 'potential_savings_tokens', 'potential_savings_bytes')").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 4 {
+		t.Fatalf("migrated column count = %d, want 4", count)
+	}
+}
+
+func TestInsertQueryTelemetryRoundTrip(t *testing.T) {
+	db := openTestDB(t)
+	values := ToolCall{SessionID: "roundtrip", AgentID: "agent", ToolName: "test", CallType: "internal", OutputBytes: int64Ptr(11), ActualTokens: int64Ptr(22), PotentialSavingsTokens: int64Ptr(33), PotentialSavingsBytes: int64Ptr(44)}
+	if err := db.Insert(values); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Insert(ToolCall{SessionID: "nil", AgentID: "agent", ToolName: "test", CallType: "internal"}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Query(Filter{ToolName: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows, want 2", len(rows))
+	}
+	var rich, empty ToolCall
+	for _, row := range rows {
+		if row.SessionID == "roundtrip" {
+			rich = row
+		} else {
+			empty = row
+		}
+	}
+	if *rich.OutputBytes != 11 || *rich.ActualTokens != 22 || *rich.PotentialSavingsTokens != 33 || *rich.PotentialSavingsBytes != 44 {
+		t.Errorf("rich fields did not round-trip: %+v", rich)
+	}
+	if empty.OutputBytes != nil || empty.ActualTokens != nil || empty.PotentialSavingsTokens != nil || empty.PotentialSavingsBytes != nil {
+		t.Errorf("nil fields became non-nil: %+v", empty)
 	}
 }
 
