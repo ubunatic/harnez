@@ -425,3 +425,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 424 | [424-fix-telemetry-compaction-event-insertion-for-model-column.md](424-fix-telemetry-compaction-event-insertion-for-model-column.md) | Fix telemetry compaction event insertion for model column | Open |
 | 425 | [425-code-review-follow-up-telemetry-migration-logging-schema-version-drift-and-braille-glyph-spacing.md](425-code-review-follow-up-telemetry-migration-logging-schema-version-drift-and-braille-glyph-spacing.md) | Code review follow-up: telemetry migration logging, schema version drift, and Braille glyph spacing | Open |
 | 426 | [426-make-find-output-text-first-for-human-users.md](426-make-find-output-text-first-for-human-users.md) | Make find output text-first for human users | Open |
+| 427 | [427-preserve-ansi-colors-in-stdin-render-path.md](427-preserve-ansi-colors-in-stdin-render-path.md) | Preserve ANSI colors in stdin render path | Open |
