@@ -82,7 +82,27 @@ unsupported claim of exact billing.
   cumulative-counter resets, missing `PostCompact`, and session exit after a
   compaction.
 
+#### M2 delivery review
+
+- Delivered in `c6585b7`: append-only token snapshots, cumulative and per-turn
+  fields, derived uncached input, nullable-field preservation, compaction
+  ordering, session-exit snapshots, and reset/missing-hook fixtures.
+- Verification reported by the developer: `make test-q1` and `make install`
+  passed; working tree clean.
+- Review result: accepted. M3 must calculate economics from these immutable
+  snapshots and retain the pricing inputs used for every estimate.
+
 ### M3 — Pricing and compaction economics
+
+#### Pre-Work / Required Refinements
+
+- Treat `token_snapshots` as append-only evidence; do not mutate prior rows when
+  calculating deltas or estimates.
+- Define how a missing baseline or provider counter reset affects savings: emit
+  a partial/insufficient-data result instead of inferring a negative or zero
+  saving.
+- Include cached input, uncached input, output, and reasoning components in the
+  calculation and preserve the exact pricing revision/rates with the result.
 
 - Define configurable model pricing with versioned pricing inputs and a safe
   default for unknown models.
