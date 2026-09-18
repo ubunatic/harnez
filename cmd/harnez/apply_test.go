@@ -52,8 +52,8 @@ func TestEnsureTelemetrySchemaMigratesBeforeApply(t *testing.T) {
 	if err := check.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 4 {
-		t.Fatalf("schema version = %d, want 4", version)
+	if version != 5 {
+		t.Fatalf("schema version = %d, want 5", version)
 	}
 	for _, column := range []string{"input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens"} {
 		var count int
@@ -62,6 +62,15 @@ func TestEnsureTelemetrySchemaMigratesBeforeApply(t *testing.T) {
 		}
 		if count != 1 {
 			t.Errorf("missing migrated column %s", column)
+		}
+	}
+	for _, table := range []string{"compaction_events", "session_boundaries"} {
+		var count int
+		if err := check.QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", table).Scan(&count); err != nil {
+			t.Fatalf("check %s table: %v", table, err)
+		}
+		if count != 1 {
+			t.Fatalf("missing migrated table %s", table)
 		}
 	}
 }

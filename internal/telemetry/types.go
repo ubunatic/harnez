@@ -53,3 +53,26 @@ type CLIInvocation struct {
 	DurationMs    int64     `json:"duration_ms"`
 	HarnezVersion string    `json:"harnez_version"`
 }
+
+type CompactionEvent struct {
+	ID                int64
+	CreatedAt         time.Time
+	SessionID         string
+	EventType         string
+	TurnID            string
+	Trigger           string
+	Reason            string
+	InputTokens       *int64
+	CachedInputTokens *int64
+	OutputTokens      *int64
+	ReasoningTokens   *int64
+	TotalTokens       *int64
+}
+
+type SessionBoundary struct {
+	ID                int64
+	CreatedAt         time.Time
+	SessionID         string
+	BoundaryType      string
+	CompactionEventID *int64
+}

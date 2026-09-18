@@ -158,6 +158,8 @@ func checkAndMigrateSchema(sqlDB *sql.DB, path string, preexisting bool) error {
 				return fmt.Errorf("telemetry: migrate schema to v3: %w", err)
 			}
 		}
+		// Version 5 is additive: schemaDDL creates compaction_events and
+		// session_boundaries for existing databases before this check.
 		if _, err := sqlDB.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
 			return fmt.Errorf("telemetry: stamp migrated schema version: %w", err)
 		}

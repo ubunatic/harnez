@@ -21,6 +21,7 @@ type Event struct {
 	OutputBytes                                                                                    *int64
 	InputTokens, CachedInputTokens, OutputTokens, ReasoningTokens, TotalTokens                     *int64
 	LastInputTokens, LastCachedInputTokens, LastOutputTokens, LastReasoningTokens, LastTotalTokens *int64
+	CompactionTrigger, CompactionReason                                                            string
 }
 
 // ParseEvent normalizes one Codex rollout JSON object. It accepts both the
@@ -29,23 +30,37 @@ type Event struct {
 // tailing adapter can safely process mixed-version transcripts.
 func ParseEvent(raw []byte) Event {
 	var envelope struct {
-		Type       string          `json:"type"`
-		Event      string          `json:"event"`
-		Hook       string          `json:"hook_event_name"`
-		SessionID  string          `json:"session_id"`
-		TurnID     string          `json:"turn_id"`
-		ToolCallID string          `json:"tool_use_id"`
-		ToolName   string          `json:"tool_name"`
-		ToolInput  json.RawMessage `json:"tool_input"`
-		Payload    json.RawMessage `json:"payload"`
-		ToolOutput json.RawMessage `json:"tool_output"`
+		Type             string          `json:"type"`
+		Event            string          `json:"event"`
+		Hook             string          `json:"hook_event_name"`
+		HookCamel        string          `json:"hookEventName"`
+		SessionID        string          `json:"session_id"`
+		TurnID           string          `json:"turn_id"`
+		ToolCallID       string          `json:"tool_use_id"`
+		ToolName         string          `json:"tool_name"`
+		ToolInput        json.RawMessage `json:"tool_input"`
+		Payload          json.RawMessage `json:"payload"`
+		ToolOutput       json.RawMessage `json:"tool_output"`
+		Trigger          string          `json:"trigger"`
+		Reason           string          `json:"reason"`
+		CompactionReason string          `json:"compaction_reason"`
+		TokenUsage       json.RawMessage `json:"token_usage"`
+		Usage            json.RawMessage `json:"usage"`
 	}
 	if json.Unmarshal(raw, &envelope) != nil {
 		return Event{}
 	}
 	var fields map[string]any
 	_ = json.Unmarshal(raw, &fields)
-	e := Event{Kind: strings.ToLower(strings.TrimSpace(first(envelope.Hook, envelope.Event, envelope.Type))), SessionID: envelope.SessionID, TurnID: envelope.TurnID, ToolCallID: envelope.ToolCallID, ToolName: envelope.ToolName}
+	e := Event{Kind: strings.ToLower(strings.TrimSpace(first(envelope.Hook, envelope.HookCamel, envelope.Event, envelope.Type))), SessionID: envelope.SessionID, TurnID: envelope.TurnID, ToolCallID: envelope.ToolCallID, ToolName: envelope.ToolName}
+	e.CompactionTrigger = first(envelope.Trigger, stringValue(fields, "compaction_trigger"))
+	e.CompactionReason = first(envelope.Reason, envelope.CompactionReason, stringValue(fields, "reason"))
+	if len(envelope.TokenUsage) == 0 {
+		envelope.TokenUsage = envelope.Usage
+	}
+	if len(envelope.TokenUsage) > 0 {
+		parseTokenSnapshot(envelope.TokenUsage, &e.InputTokens, &e.CachedInputTokens, &e.OutputTokens, &e.ReasoningTokens, &e.TotalTokens)
+	}
 	if e.Kind == "event_msg" && len(envelope.Payload) > 0 {
 		var p struct {
 			SessionID string `json:"session_id"`
@@ -122,6 +137,29 @@ func ParseEvent(raw []byte) Event {
 		}
 	}
 	return e
+}
+
+func stringValue(fields map[string]any, key string) string {
+	value, _ := fields[key].(string)
+	return value
+}
+
+func parseTokenSnapshot(raw []byte, input, cached, output, reasoning, total **int64) {
+	var usage struct {
+		Input           int64 `json:"input_tokens"`
+		Cached          int64 `json:"cached_input_tokens"`
+		Output          int64 `json:"output_tokens"`
+		Reasoning       int64 `json:"reasoning_tokens"`
+		ReasoningOutput int64 `json:"reasoning_output_tokens"`
+		Total           int64 `json:"total_tokens"`
+	}
+	if json.Unmarshal(raw, &usage) != nil {
+		return
+	}
+	if usage.Reasoning == 0 {
+		usage.Reasoning = usage.ReasoningOutput
+	}
+	*input, *cached, *output, *reasoning, *total = ptr(usage.Input), ptr(usage.Cached), ptr(usage.Output), ptr(usage.Reasoning), ptr(usage.Total)
 }
 
 func first(values ...string) string {

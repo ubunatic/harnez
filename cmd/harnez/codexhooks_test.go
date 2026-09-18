@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"path/filepath"
 	"testing"
 
+	_ "modernc.org/sqlite"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -63,6 +65,82 @@ func TestRunCodexTelemetry_PersistsPostToolResult(t *testing.T) {
 	}
 	if row.CallType != "hook:failure" {
 		t.Errorf("CallType = %q, want hook:failure", row.CallType)
+	}
+}
+
+func TestRunCodexTelemetry_PersistsCompactionAndBoundary(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	payload := `{"hookEventName":"PreCompact","session_id":"compact-session","turn_id":"turn-1","trigger":"auto","reason":"context_limit","token_usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":5,"reasoning_tokens":2,"total_tokens":107}}`
+	if err := runCodexTelemetryAt(bytes.NewBufferString(payload), dbPath); err != nil {
+		t.Fatalf("runCodexTelemetryAt: %v", err)
+	}
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatalf("telemetry.Open: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("telemetry.Close: %v", err)
+	}
+	rawDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	defer rawDB.Close()
+	var eventType, trigger, reason string
+	var total int64
+	if err := rawDB.QueryRow(`SELECT event_type, trigger, reason, total_tokens FROM compaction_events WHERE session_id = ?`, "compact-session").Scan(&eventType, &trigger, &reason, &total); err != nil {
+		t.Fatalf("compaction event: %v", err)
+	}
+	if eventType != "precompact" || trigger != "auto" || reason != "context_limit" || total != 107 {
+		t.Fatalf("unexpected compaction row: %q %q %q %d", eventType, trigger, reason, total)
+	}
+	var boundaryType string
+	if err := rawDB.QueryRow(`SELECT boundary_type FROM session_boundaries WHERE session_id = ?`, "compact-session").Scan(&boundaryType); err != nil {
+		t.Fatalf("session boundary: %v", err)
+	}
+	if boundaryType != "precompact" {
+		t.Fatalf("boundary_type = %q, want precompact", boundaryType)
+	}
+}
+
+func TestRunCodexTelemetry_CompactionPayloadsArePartialAndMalformedSafe(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	partial := `{"hook_event_name":"PostCompact","session_id":"partial-session","reason":"unknown"}`
+	if err := runCodexTelemetryAt(bytes.NewBufferString(partial), dbPath); err != nil {
+		t.Fatalf("partial payload: %v", err)
+	}
+	if err := runCodexTelemetryAt(bytes.NewBufferString("not json"), dbPath); err != nil {
+		t.Fatalf("malformed payload: %v", err)
+	}
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatalf("telemetry.Open: %v", err)
+	}
+	defer db.Close()
+	rawDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	defer rawDB.Close()
+	var count int
+	if err := rawDB.QueryRow(`SELECT count(*) FROM compaction_events WHERE session_id = ?`, "partial-session").Scan(&count); err != nil {
+		t.Fatalf("partial count: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("partial event count = %d, want 1", count)
+	}
+	var total any
+	if err := rawDB.QueryRow(`SELECT total_tokens FROM compaction_events WHERE session_id = ?`, "partial-session").Scan(&total); err != nil {
+		t.Fatalf("partial snapshot: %v", err)
+	}
+	if total != nil {
+		t.Fatalf("partial total_tokens = %v, want NULL", total)
+	}
+	if err := rawDB.QueryRow(`SELECT count(*) FROM compaction_events`).Scan(&count); err != nil {
+		t.Fatalf("total count: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("total event count = %d, want malformed payload ignored", count)
 	}
 }
 

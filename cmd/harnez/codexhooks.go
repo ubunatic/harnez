@@ -135,6 +135,22 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 		return nil
 	}
 	defer db.Close()
+	if e.Kind == "precompact" || e.Kind == "postcompact" {
+		id, insertErr := db.InsertCompactionEvent(telemetry.CompactionEvent{
+			CreatedAt: time.Now().UTC(), SessionID: e.SessionID, EventType: e.Kind,
+			TurnID: e.TurnID, Trigger: e.CompactionTrigger, Reason: e.CompactionReason,
+			InputTokens: e.InputTokens, CachedInputTokens: e.CachedInputTokens,
+			OutputTokens: e.OutputTokens, ReasoningTokens: e.ReasoningTokens, TotalTokens: e.TotalTokens,
+		})
+		if insertErr != nil {
+			return insertErr
+		}
+		boundaryType := e.Kind
+		return db.InsertSessionBoundary(telemetry.SessionBoundary{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, BoundaryType: boundaryType, CompactionEventID: &id})
+	}
+	if e.Kind == "sessionstart" || e.Kind == "session_end" || e.Kind == "sessionend" {
+		return db.InsertSessionBoundary(telemetry.SessionBoundary{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, BoundaryType: e.Kind})
+	}
 	if hook.TranscriptPath != "" {
 		if usage := latestTranscriptTokens(hook.TranscriptPath, e.SessionID); usage.TotalTokens != nil {
 			_ = db.UpdateLatestProviderUsage(e.SessionID, usage.LastTotalTokens, usage.LastInputTokens, usage.LastCachedInputTokens, usage.LastOutputTokens, usage.LastReasoningTokens, usage.TotalTokens)

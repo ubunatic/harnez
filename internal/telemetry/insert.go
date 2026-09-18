@@ -6,6 +6,34 @@ import (
 	"time"
 )
 
+func (d *DB) InsertCompactionEvent(event CompactionEvent) (int64, error) {
+	createdAt := event.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	result, err := d.sql.Exec(`INSERT INTO compaction_events (created_at, session_id, event_type, turn_id, trigger, reason, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, createdAt.Format(time.RFC3339Nano), event.SessionID, event.EventType, event.TurnID, event.Trigger, event.Reason, event.InputTokens, event.CachedInputTokens, event.OutputTokens, event.ReasoningTokens, event.TotalTokens)
+	if err != nil {
+		return 0, fmt.Errorf("telemetry: insert compaction event: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("telemetry: compaction event id: %w", err)
+	}
+	return id, nil
+}
+
+func (d *DB) InsertSessionBoundary(boundary SessionBoundary) error {
+	createdAt := boundary.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	_, err := d.sql.Exec(`INSERT INTO session_boundaries (created_at, session_id, boundary_type, compaction_event_id) VALUES (?, ?, ?, ?)`, createdAt.Format(time.RFC3339Nano), boundary.SessionID, boundary.BoundaryType, boundary.CompactionEventID)
+	if err != nil {
+		return fmt.Errorf("telemetry: insert session boundary: %w", err)
+	}
+	return nil
+}
+
 // Insert writes one ToolCall synchronously. It does not duplicate the
 // schema's constraints (e.g. the score 1-5 range) as a parallel Go
 // validation list — invalid values are rejected by the DB's own CHECK

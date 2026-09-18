@@ -14,8 +14,10 @@ package telemetry
 // telemetry cache has nothing worth an automated migration path for.
 //
 // 1: issue 116's original shape (distilled_bytes INTEGER NOT NULL DEFAULT 0).
-// 2: issue 118's fix (distilled_bytes made nullable) — the current shape.
-const schemaVersion = 4
+// 2: issue 118's fix (distilled_bytes made nullable).
+// 3-4: additive provider token columns used by Codex telemetry.
+// 5: additive compaction_events and session_boundaries tables.
+const schemaVersion = 5
 
 // schemaDDL is the single source of truth for the tool_calls table shape
 // (per docs/other/Spec.md's "spec files are the single source of truth"
@@ -144,4 +146,35 @@ CREATE INDEX IF NOT EXISTS idx_cli_invocations_created_at ON cli_invocations (cr
 CREATE INDEX IF NOT EXISTS idx_cli_invocations_project    ON cli_invocations (project_name);
 CREATE INDEX IF NOT EXISTS idx_cli_invocations_session_id ON cli_invocations (session_id);
 CREATE INDEX IF NOT EXISTS idx_cli_invocations_command    ON cli_invocations (command);
+
+-- compaction_events stores the provider-visible boundary and optional token
+-- snapshot for Codex PreCompact/PostCompact hooks (issue 423).
+CREATE TABLE IF NOT EXISTS compaction_events (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	created_at TEXT NOT NULL,
+	session_id TEXT NOT NULL,
+	event_type TEXT NOT NULL,
+	turn_id TEXT NOT NULL DEFAULT '',
+	trigger TEXT NOT NULL DEFAULT '',
+	reason TEXT NOT NULL DEFAULT '',
+	input_tokens INTEGER,
+	cached_input_tokens INTEGER,
+	output_tokens INTEGER,
+	reasoning_tokens INTEGER,
+	total_tokens INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_compaction_events_session_id ON compaction_events (session_id);
+CREATE INDEX IF NOT EXISTS idx_compaction_events_created_at ON compaction_events (created_at);
+
+-- session_boundaries records lifecycle and compaction boundaries independently
+-- of tool_calls so sessions remain queryable when no tool call was emitted.
+CREATE TABLE IF NOT EXISTS session_boundaries (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	created_at TEXT NOT NULL,
+	session_id TEXT NOT NULL,
+	boundary_type TEXT NOT NULL,
+	compaction_event_id INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_session_boundaries_session_id ON session_boundaries (session_id);
+CREATE INDEX IF NOT EXISTS idx_session_boundaries_created_at ON session_boundaries (created_at);
 `

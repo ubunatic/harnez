@@ -45,7 +45,7 @@ func TestSummaryIncludesLifecycleHooks(t *testing.T) {
 	if _, err := Apply(path); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
-	want := "enabled (PreToolUse 1, PostToolUse 1, SessionStart 1, Stop 1, SessionEnd 1)"
+	want := "enabled (PreToolUse 1, PostToolUse 1, PreCompact 1, PostCompact 1, SessionStart 1, Stop 1, SessionEnd 1)"
 	if got := Summary(path); got != want {
 		t.Fatalf("Summary = %q, want %q", got, want)
 	}

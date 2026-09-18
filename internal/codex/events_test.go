@@ -44,6 +44,13 @@ func TestParseEventSessionBoundaries(t *testing.T) {
 	}
 }
 
+func TestParseEventCompactionSnapshot(t *testing.T) {
+	e := ParseEvent([]byte(`{"hookEventName":"PreCompact","session_id":"s","turn_id":"t","trigger":"auto","reason":"context_limit","token_usage":{"input_tokens":100,"cached_input_tokens":40,"output_tokens":5,"reasoning_output_tokens":2,"total_tokens":107}}`))
+	if e.Kind != "precompact" || e.CompactionTrigger != "auto" || e.CompactionReason != "context_limit" || e.TotalTokens == nil || *e.TotalTokens != 107 || e.ReasoningTokens == nil || *e.ReasoningTokens != 2 {
+		t.Fatalf("unexpected compaction event: %+v", e)
+	}
+}
+
 func TestParseEventFailureHookEnvelope(t *testing.T) {
 	e := ParseEvent([]byte(`{"hook_event_name":"PostToolUse","session_id":"s","tool_use_id":"u","tool_name":"Bash","tool_input":{"command":"false"}}`))
 	if e.Kind != "posttooluse" || e.Command != "false" {

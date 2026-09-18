@@ -72,6 +72,12 @@ func BuildHooksDoc() map[string]any {
 					"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
 				},
 			},
+			"PreCompact": []map[string]any{{
+				"hooks": []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
+			}},
+			"PostCompact": []map[string]any{{
+				"hooks": []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
+			}},
 			"SessionStart": []map[string]any{{
 				"matcher": "startup|resume|clear|compact",
 				"hooks":   []map[string]any{{"type": "command", "command": "harnez codex-telemetry"}},
@@ -217,10 +223,12 @@ func Summary(path string) string {
 	if features["hooks"] == true {
 		state = "enabled"
 	}
-	return fmt.Sprintf("%s (PreToolUse %d, PostToolUse %d, SessionStart %d, Stop %d, SessionEnd %d)",
+	return fmt.Sprintf("%s (PreToolUse %d, PostToolUse %d, PreCompact %d, PostCompact %d, SessionStart %d, Stop %d, SessionEnd %d)",
 		state,
 		hookCount(entry, "PreToolUse"),
 		hookCount(entry, "PostToolUse"),
+		hookCount(entry, "PreCompact"),
+		hookCount(entry, "PostCompact"),
 		hookCount(entry, "SessionStart"),
 		hookCount(entry, "Stop"),
 		hookCount(entry, "SessionEnd"),
@@ -250,7 +258,7 @@ func Remove(path string) (changed bool, err error) {
 		return false, nil
 	}
 	managed := false
-	for _, name := range []string{"PreToolUse", "PostToolUse", "SessionStart", "Stop", "SessionEnd", HookName} {
+	for _, name := range []string{"PreToolUse", "PostToolUse", "PreCompact", "PostCompact", "SessionStart", "Stop", "SessionEnd", HookName} {
 		if _, ok := hooks[name]; ok {
 			managed = true
 			break
@@ -261,6 +269,8 @@ func Remove(path string) (changed bool, err error) {
 	}
 	delete(hooks, "PreToolUse")
 	delete(hooks, "PostToolUse")
+	delete(hooks, "PreCompact")
+	delete(hooks, "PostCompact")
 	delete(hooks, "SessionStart")
 	delete(hooks, "Stop")
 	delete(hooks, "SessionEnd")
