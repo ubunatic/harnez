@@ -1,6 +1,6 @@
 # 420 — Set up Codex analytics hooks for complete harnez stats telemetry
 
-**Status**: Open
+**Status**: Closed — Implemented Codex lifecycle hooks, transcript token reconciliation, live smoke verification, and documentation
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics / Infrastructure
@@ -48,7 +48,7 @@ environment's tool events end to end.
 - Verification: the canary identifies the active session and records a complete
   event sequence without requiring a real model run.
 
-**M1 status (review 2026-09-18)**: `internal/codex/events.go` lands `ParseEvent`
+**M1 status (completed 2026-09-18)**: `internal/codex/events.go` lands `ParseEvent`
 covering the hook envelope (`PostToolUse`) and the rollout `token_count`
 shape, plus malformed/unknown-kind safety. Review found and fixed:
 - `events.go`/`events_test.go` were not gofmt-clean (fixed).
@@ -58,11 +58,8 @@ shape, plus malformed/unknown-kind safety. Review found and fixed:
 - A failure-shaped `PostToolUse` fixture was added, but `Success`/`ExitCode`
   are still unpopulated by `ParseEvent` — that classification is explicitly
   M2 scope ("map ... result, and failure fields"), not a regression.
-- Still open before M2: the "document the installed Codex hook/event
-  payloads and lifecycle guarantees" bullet has no doc yet — no
-  `docs/*Codex*Events*` or equivalent exists. Add a short doc (or a
-  `docs/studies/` note) enumerating the observed hook/rollout shapes before
-  building the M2 adapter on top of them.
+- `docs/CodexHooks.md` now records the documented hook keys, observed rollout
+  token schema, lifecycle guarantees, and compatibility caveats.
 
 ### M2 — Hook adapter and attribution
 
@@ -73,7 +70,28 @@ shape, plus malformed/unknown-kind safety. Review found and fixed:
 - Verification: isolated fixture tests cover success, failure, denial,
   interruption, duplicate delivery, and missing optional fields.
 
-**M2 open question (review 2026-09-18)**: `internal/codex/events.go` parses
+**M2 status (completed 2026-09-18)**: Codex `PreToolUse`/`PostToolUse` hooks
+are installed through `config.toml`; the adapter records tool, agent, project,
+session, ticket, duration, exit, output, failure, and duplicate-delivery data.
+`SessionStart`, `Stop`, and `SessionEnd` now invoke the telemetry adapter for
+transcript reconciliation. The live Codex 0.154.0 smoke test confirmed the
+rewritten command and PostToolUse rows.
+
+**M3 status (completed 2026-09-18)**: `event_msg`/`token_count` records are
+parsed for input, cached-input, output, reasoning, and cumulative totals.
+`reasoning_output_tokens` from the live rollout schema is supported. Lifecycle
+hooks attach the latest provider total to the session's latest tool row without
+fabricating values when no token record exists.
+
+**M4 status (completed 2026-09-18)**: A bounded real Codex session executed
+successfully through the installed hooks; `harnez stats --auto` showed the
+resulting Codex rows and the full repository test suite passed. A subprocess
+launched from an existing Harnez shell can have a different Codex thread ID;
+session-filtered reports must therefore be run from the Codex-owned environment
+when validating token reconciliation.
+
+The former open question (review 2026-09-18) stated that
+`internal/codex/events.go` parses
 `success`/`exit_code`/`duration_ms` off the Codex `PostToolUse` payload
 (commit `dc8d248`), but `docs/CodexHooks.md` — sourced from OpenAI's actual
 hooks docs — only documents the `PreToolUse` allow/deny envelope; it says
