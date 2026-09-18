@@ -125,7 +125,7 @@ func runAgyPostToolHook(in io.Reader, out io.Writer, opts agyPostHookOptions) er
 			return err
 		}
 	}
-	return json.NewEncoder(out).Encode(map[string]string{"status": "ok"})
+	return json.NewEncoder(out).Encode(map[string]any{})
 }
 
 func isNativeReadTool(name string) bool {

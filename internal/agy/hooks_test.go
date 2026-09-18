@@ -34,6 +34,20 @@ func TestBuildHooksDoc(t *testing.T) {
 	if cmd, _ := hooks[0]["command"].(string); cmd != "harnez hook agy" {
 		t.Errorf("command = %q, want 'harnez hook agy'", cmd)
 	}
+	postToolUse, ok := entry["PostToolUse"].([]map[string]any)
+	if !ok || len(postToolUse) != 1 {
+		t.Fatalf("PostToolUse invalid: %v", entry["PostToolUse"])
+	}
+	if matcher, _ := postToolUse[0]["matcher"].(string); matcher != "*" {
+		t.Errorf("PostToolUse matcher = %q, want '*'", matcher)
+	}
+	postHooks, ok := postToolUse[0]["hooks"].([]map[string]any)
+	if !ok || len(postHooks) != 1 {
+		t.Fatalf("PostToolUse hooks invalid: %v", postToolUse[0]["hooks"])
+	}
+	if cmd, _ := postHooks[0]["command"].(string); cmd != "harnez hook agy-post" {
+		t.Errorf("PostToolUse command = %q, want 'harnez hook agy-post'", cmd)
+	}
 }
 
 func TestApplyCreatesFile(t *testing.T) {

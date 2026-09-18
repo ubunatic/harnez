@@ -183,8 +183,8 @@ func TestRunAgyPostToolHookUpdatesPreToolCall(t *testing.T) {
 	if err := runAgyPostToolHook(bytes.NewBufferString(`{"conversationId":"post-session","stepIdx":0,"output":"hello output"}`), &postOut, agyPostHookOptions{DBPath: dbPath}); err != nil {
 		t.Fatalf("post-tool hook: %v", err)
 	}
-	if strings.TrimSpace(postOut.String()) != `{"status":"ok"}` {
-		t.Fatalf("post-tool output = %q, want status ok", postOut.String())
+	if strings.TrimSpace(postOut.String()) != `{}` {
+		t.Fatalf("post-tool output = %q, want {}", postOut.String())
 	}
 	db, err := telemetry.Open(dbPath)
 	if err != nil {

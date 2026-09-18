@@ -29,9 +29,8 @@ func HooksPath(home string) string {
 	return filepath.Join(home, ".gemini", "config", "hooks.json")
 }
 
-// BuildHooksDoc returns the harnez-managed "harnez" named hook entry:
-// a PreToolUse hook matching all tools (matcher "*"), whose command handler is
-// `harnez hook agy` (the PreToolUse observation hook implemented in cmd/harnez/hook.go).
+// BuildHooksDoc returns the harnez-managed "harnez" named hook entry with
+// both PreToolUse and PostToolUse observation handlers.
 // This passively observes all client-native tools and run_command executions
 // and records telemetry into tool_catalog.sqlite without rewriting commands.
 //
@@ -47,6 +46,14 @@ func BuildHooksDoc() map[string]any {
 					"matcher": "*",
 					"hooks": []map[string]any{
 						{"type": "command", "command": "harnez hook agy"},
+					},
+				},
+			},
+			"PostToolUse": []map[string]any{
+				{
+					"matcher": "*",
+					"hooks": []map[string]any{
+						{"type": "command", "command": "harnez hook agy-post"},
 					},
 				},
 			},
