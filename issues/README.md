@@ -427,3 +427,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 426 | [426-make-find-output-text-first-for-human-users.md](426-make-find-output-text-first-for-human-users.md) | Make find output text-first for human users | Open |
 | 427 | [427-preserve-ansi-colors-in-stdin-render-path.md](427-preserve-ansi-colors-in-stdin-render-path.md) | Preserve ANSI colors in stdin render path | Open |
 | 428 | [428-code-review-follow-up-ansi-256-24-bit-color-extensions-and-telemetry-migration-test-coverage.md](428-code-review-follow-up-ansi-256-24-bit-color-extensions-and-telemetry-migration-test-coverage.md) | Code review follow-up: ANSI 256/24-bit color extensions and telemetry migration test coverage | Open |
+| 429 | [429-move-pixel-font-glyph-and-unicode-mappings-to-spec-yaml-files.md](429-move-pixel-font-glyph-and-unicode-mappings-to-spec-yaml-files.md) | Move pixel font glyph and unicode mappings to spec/ YAML files | Open |
