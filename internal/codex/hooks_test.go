@@ -39,6 +39,18 @@ func TestApplyCreatesFile(t *testing.T) {
 	}
 }
 
+func TestSummaryIncludesLifecycleHooks(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if _, err := Apply(path); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	want := "enabled (PreToolUse 1, PostToolUse 1, SessionStart 1, Stop 1, SessionEnd 1)"
+	if got := Summary(path); got != want {
+		t.Fatalf("Summary = %q, want %q", got, want)
+	}
+}
+
 func TestApplyPreservesOtherHooksAndKeys(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.toml")

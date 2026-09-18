@@ -217,7 +217,14 @@ func Summary(path string) string {
 	if features["hooks"] == true {
 		state = "enabled"
 	}
-	return fmt.Sprintf("%s (PreToolUse %d, PostToolUse %d)", state, hookCount(entry, "PreToolUse"), hookCount(entry, "PostToolUse"))
+	return fmt.Sprintf("%s (PreToolUse %d, PostToolUse %d, SessionStart %d, Stop %d, SessionEnd %d)",
+		state,
+		hookCount(entry, "PreToolUse"),
+		hookCount(entry, "PostToolUse"),
+		hookCount(entry, "SessionStart"),
+		hookCount(entry, "Stop"),
+		hookCount(entry, "SessionEnd"),
+	)
 }
 
 func hookCount(entry map[string]any, name string) int {
