@@ -120,11 +120,13 @@ unknown fields and future changes must be tolerated.
 ## Recommended telemetry design
 
 - Use `PreToolUse` and `PostToolUse` for reliable tool-call rows, tool names,
-  IDs, and commands. `harnez` also reads `success`/`exit_code`/`duration_ms`
-  off observed `PostToolUse` payloads, but these are not part of Codex's
-  documented common keys above — treat them as unconfirmed until a captured
-  live payload verifies them (see issue 420 M4), and rely on the `PreToolUse`
-  rewrite through `harnez exec` for exit code/duration in the meantime.
+  IDs, and commands. `harnez` also parses `success`/`exit_code`/`duration_ms`
+  off `PostToolUse` payloads (`internal/codex/events.go`), but a live session
+  confirmed these are not fields Codex actually sends: real `PostToolUse`
+  rows land with `exit_code`/`duration_ms` NULL/zero (issue 420 M4). The
+  parsing exists only in case a future Codex version starts sending them.
+  The `PreToolUse` rewrite through `harnez exec` is the permanent,
+  confirmed source of exit code and duration, not an interim one.
 - Use `SessionStart` to record the session ID and transcript path.
 - Use `Stop` for a turn boundary and `SessionEnd` for final reconciliation.
   `SessionEnd` is synchronous and can read the transcript while it runs.

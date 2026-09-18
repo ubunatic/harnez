@@ -77,22 +77,23 @@ session, ticket, duration, exit, output, failure, and duplicate-delivery data.
 transcript reconciliation. The live Codex 0.154.0 smoke test confirmed the
 rewritten command and PostToolUse rows.
 
-**M2 open question — still unresolved (review 2026-09-19)**:
+**M2 open question — resolved, negative result (2026-09-18 live verification)**:
 `internal/codex/events.go` parses `success`/`exit_code`/`duration_ms` off the
-Codex `PostToolUse` payload (commit `dc8d248`), but Codex's own documented
-hook contract (`docs/CodexHooks.md` "Lifecycle schemas" section) only lists
-`session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`,
-`permission_mode`, and `turn_id` as common keys — it does not confirm
-`success`/`exit_code`/`duration_ms` on a real `PostToolUse` payload. M4's
-verification step (added in the prior review) asked for a captured payload to
-settle this before closing the ticket; that capture never happened —
-`docs/CodexHooks.md`'s "Recommended telemetry design" section now claims
-`PostToolUse` is reliable for "failures, and durations" without that
-verification backing it. **This should not have been closed with that bullet
-unmet.** Until a real payload is captured and checked, the `PreToolUse` gear
-rewrite (`harnez codex-hook` routing through `harnez exec`) remains the only
-confirmed source of exit code and duration — do not drop or treat it as
-redundant with `PostToolUse` parsing.
+Codex `PostToolUse` payload (commit `dc8d248`), but these are not part of
+Codex's documented common keys (`docs/CodexHooks.md` "Lifecycle schemas"
+section lists only `session_id`, `transcript_path`, `cwd`, `hook_event_name`,
+`model`, `permission_mode`, `turn_id`). A live Codex session confirmed this
+by direct database inspection: real Codex `hook:post` rows have `exit_code`
+and `duration_ms` NULL/zero — Codex does not supply these result fields on
+its own `PostToolUse` calls in practice. `TestRunCodexTelemetry_PersistsPostToolResult`
+(`cmd/harnez/codexhooks_test.go`) now pins that *if* a payload ever does carry
+`success`/`exit_code`/`duration_ms`/`tool_output`, those values are parsed and
+stored correctly — but that fixture is synthetic, not what a real Codex
+session sends. **Conclusion**: the `PreToolUse` gear rewrite
+(`harnez codex-hook` routing through `harnez exec`) is not an interim
+workaround pending verification — it is the permanent, confirmed source of
+exit code and duration for Codex telemetry. Do not drop it or treat
+`PostToolUse` parsing as a substitute.
 
 ### M3 — Token and read analytics
 
@@ -123,25 +124,21 @@ fabricating values when no token record exists.
   `docs/CodexHooks.md` with the confirmed `PostToolUse` shape once verified,
   the same way it already documents `PreToolUse`.
 
-**M4 status (completed 2026-09-18, verification bullet above still open)**: A
-bounded real Codex session executed successfully through the installed hooks;
-`harnez stats --auto` showed the resulting Codex rows and the full repository
-test suite passed. A subprocess launched from an existing Harnez shell can
-have a different Codex thread ID; session-filtered reports must therefore be
-run from the Codex-owned environment when validating token reconciliation.
-The captured-payload verification bullet was not carried out — see the M2
-open question above.
+**M4 status (completed 2026-09-18)**: A bounded real Codex session executed
+successfully through the installed hooks; `harnez stats --auto` showed the
+resulting Codex rows and the full repository test suite passed. A subprocess
+launched from an existing Harnez shell can have a different Codex thread ID;
+session-filtered reports must therefore be run from the Codex-owned
+environment when validating token reconciliation. The captured-payload
+verification bullet is now closed — see the M2 open question above for the
+negative result (Codex does not send `success`/`exit_code`/`duration_ms` in
+practice) and the routed `shell` rows from `harnez exec` as the authoritative
+source instead. `TestRunCodexTelemetry_PersistsPostToolResult`
+(`cmd/harnez/codexhooks_test.go`) pins correct handling of those fields for
+the rare case a payload does carry them; no permanent raw-payload logging is
+required.
 
 ### M5 — Separate cumulative and per-turn provider token metrics
-
-**Verification note (2026-09-18)**: Direct inspection of the local database
-shows Codex `hook:post` rows are present, but their `exit_code` and
-`duration_ms` are currently NULL/zero when Codex does not supply result fields.
-The routed `shell` rows contain the authoritative values from `harnez exec`.
-Added `TestRunCodexTelemetry_PersistsPostToolResult` to assert that when a
-PostToolUse payload does supply `success`, `exit_code`, `duration_ms`, and
-`tool_output`, those values land in the shared `tool_calls` table and failure
-classification is preserved. No permanent raw-payload logging is required.
 
 - Extend `tool_calls` with nullable provider usage fields for cumulative
   `input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_tokens`,
