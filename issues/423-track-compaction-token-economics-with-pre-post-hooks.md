@@ -54,7 +54,26 @@ unsupported claim of exact billing.
 - Verification: unit tests prove idempotent installation/removal and persistence
   of complete, partial, and malformed-safe hook payloads.
 
+#### M1 delivery review
+
+- Delivered in `b6a0184`: Codex compaction hooks, parser support, schema v5,
+  `compaction_events`, `session_boundaries`, lifecycle boundary persistence, and
+  complete/partial/malformed payload tests.
+- Verification reported by the developer: `make test-q1` and `make install`
+  passed; working tree clean.
+- Review result: accepted. M2 must preserve nullable/partial snapshots and
+  distinguish compaction boundaries from ordinary lifecycle boundaries.
+
 ### M2 — Session token reconciliation
+
+#### Pre-Work / Required Refinements
+
+- Use the M1 compaction rows and boundaries as the source of ordering, rather
+  than assuming every compaction has a matching tool call.
+- Add explicit tests for both `PreCompact` and `PostCompact` in one session,
+  multiple compactions, missing `PostCompact`, and cumulative counter resets.
+- Ensure session-exit reconciliation cannot overwrite the boundary event with a
+  later tool-call snapshot and that absent provider fields remain NULL.
 
 - Reconcile transcript/provider token snapshots across compaction boundaries,
   retaining per-turn deltas and cumulative totals through `SessionEnd`.
