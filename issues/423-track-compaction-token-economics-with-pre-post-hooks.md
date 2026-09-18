@@ -1,6 +1,6 @@
 # 423 — Track compaction token economics with pre/post hooks
 
-**Status**: Closed
+**Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -134,12 +134,22 @@ unsupported claim of exact billing.
 
 #### Delivered
 
-- Connected reporting to the recorded `harnez-2026-09-18` catalog with an
-  optional `HARNEZ_PRICING_FILE` override and persisted model metadata.
-- Added text/JSON compaction economics reporting with complete, partial, and
-  insufficient-data states and retained revision/rate assumptions.
-- Documented estimate-versus-provider-billing limitations and no-compaction
-  behavior in `docs/Telemetry.md`.
+- Review of `48019ea` found the report reader and pricing loader, but no
+  production path that calculates and inserts `compaction_economics` rows from
+  real Codex compaction/session data, and no M4 end-to-end fixture tests.
+
+#### Pre-Work / Required Refinements (correction pass)
+
+- Wire the recorded/configured pricing catalog into the compaction/session
+  reconciliation path so real sessions create persisted economics rows with
+  model, revision, rates, costs, savings, and complete/partial/insufficient
+  status. Do not merely load pricing in `stats`.
+- Add end-to-end fixture tests for a session with compaction and a session
+  without compaction; assert database economics rows and text/JSON stats.
+- Preserve schema migration coverage for the model metadata column and ensure
+  the report's session/time filters query valid economics columns.
+- Keep the existing estimate-vs-provider-billing documentation and pricing
+  revision/rate disclosure.
 
 #### Pre-Work / Required Refinements
 
