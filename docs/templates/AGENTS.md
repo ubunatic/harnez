@@ -18,10 +18,13 @@ Put project-specific rules outside this block.
   narrow string substitution edits.
 - When making multi-line edits, ensure sufficient surrounding context lines to
   avoid ambiguous pattern matches.
-- **Reading & Context Discipline (Mandatory for Large Files)**: Do NOT use repetitive
-  native IDE file-read tool calls (`view_file`, `View`, `ReadMultipleFiles`) on medium/large
-  files (>100 lines). Always execute `harnez read -I <file>` (dense visual PNG context card)
-  or `harnez read -L <range>` / `harnez read -n` to preserve token quota and prevent context fatigue.
+- **Reading & Context Discipline (Recommended for Large Files)**: Prefer
+  `harnez read -I <file>` (dense visual PNG context card) or
+  `harnez read -L <range>` / `harnez read -n` for medium/large files (>100 lines)
+  to preserve token quota and prevent context fatigue. Native reads remain valid
+  for targeted inspection; hook-level blocking is conditional on the active
+  `reading_discipline.enforce` mode in `~/.harnez/config.yaml` (or
+  `HARNEZ_READ_ENFORCE`).
 
 ### Issue Tracker Discovery (harnez find)
 Applies when this project has an `issues/` tracker. To search existing issues,
@@ -64,4 +67,3 @@ Run from project root.
   worktrees have their own failure modes (e.g. branching from a stale base, or being unable to
   see a prior step's still-uncommitted changes) and add reconciliation overhead that isn't needed
   for normal one-after-another dev work.
-

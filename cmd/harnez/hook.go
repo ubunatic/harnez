@@ -278,12 +278,10 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 		}
 	}
 
-	// Evaluate the discipline independently of the active mode so observer-mode
-	// calls retain a ground-truth marker for comparative analysis. The second
-	// evaluation applies the configured enforcement decision.
-	enforce := true
-	opportunity, _ := evaluateReadToolDisciplineWithEnforcement(toolName, payload.ToolCall.Args, wd, &enforce)
-	deny, reason := evaluateReadToolDisciplineWithEnforcement(toolName, payload.ToolCall.Args, wd, opts.EnforceRead)
+	// Inspect once, then apply the configured mode to the result. This preserves
+	// ground-truth observer data without counting file lines twice.
+	opportunity, reason := evaluateReadToolViolation(toolName, payload.ToolCall.Args, wd)
+	deny := opportunity && readEnforcementEnabledFor(opts.EnforceRead)
 	if deny {
 		callType = "hook:deny"
 		note = "reading_discipline:intercepted"
@@ -514,6 +512,13 @@ func evaluateReadToolDisciplineWithEnforcement(toolName string, args map[string]
 	if !readEnforcementEnabledFor(enforce) {
 		return false, ""
 	}
+	return evaluateReadToolViolation(toolName, args, baseDir)
+}
+
+// evaluateReadToolViolation performs file/range inspection without applying
+// the mode switch, allowing enforcement and observer reporting to share one
+// file-line evaluation.
+func evaluateReadToolViolation(toolName string, args map[string]any, baseDir string) (bool, string) {
 	if !isReadTool(toolName) {
 		return false, ""
 	}

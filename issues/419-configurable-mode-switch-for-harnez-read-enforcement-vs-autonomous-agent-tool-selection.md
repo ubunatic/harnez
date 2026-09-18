@@ -1,6 +1,6 @@
 # 419 — Configurable mode switch for harnez read enforcement vs autonomous agent tool selection
 
-**Status**: Open — Milestone 2 complete
+**Status**: Open — Milestone 3 complete
 **Priority**: P2 (Medium)
 **Severity**: Medium
 **Category**: Architecture / Context Optimization / Developer Experience
@@ -69,6 +69,12 @@ actual tokens plus estimated savings for native reads in either mode.
 
 ### Milestone 3: Documentation, Prompts & Skills Decoupling
 - Review and refine `AGENTS.md`, `docs/templates/AGENTS.md`, `docs/practices/AgenticLoop.md`, and skills to distinguish between visual context card recommendations and hook-level enforcement mechanics.
+
+**Delivered (2026-09-18):** Agent guidance now presents `harnez read` as the
+recommended context-efficient workflow while documenting native reads as valid
+for targeted inspection. The template and AgenticLoop guidance identify hook
+blocking as conditional on `reading_discipline.enforce` / `HARNEZ_READ_ENFORCE`,
+separating prompt recommendations from runtime policy.
 
 ### Milestone 4: Verification & CLI Mode Switch Control
 - Add unit and integration tests verifying both enabled and disabled switch states across Claude Code and Antigravity hooks under isolated test conditions.
