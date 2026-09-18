@@ -197,6 +197,7 @@ func (d *DB) Query(f Filter) ([]ToolCall, error) {
 		SELECT id, created_at, session_id, ticket_id, project_name, working_dir,
 		       agent_id, tool_name, call_type, score, note, exit_code,
 		       duration_ms, raw_bytes, distilled_bytes, output_bytes, actual_tokens,
+		       input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens,
 		       potential_savings_tokens, potential_savings_bytes
 		FROM tool_calls`+where+`
 		ORDER BY created_at DESC`, args...)
@@ -213,7 +214,8 @@ func (d *DB) Query(f Filter) ([]ToolCall, error) {
 			&tc.ID, &createdAt, &tc.SessionID, &tc.TicketID, &tc.ProjectName,
 			&tc.WorkingDir, &tc.AgentID, &tc.ToolName, &tc.CallType, &tc.Score,
 			&tc.Note, &tc.ExitCode, &tc.DurationMs, &tc.RawBytes, &tc.DistilledBytes,
-			&tc.OutputBytes, &tc.ActualTokens, &tc.PotentialSavingsTokens,
+			&tc.OutputBytes, &tc.ActualTokens, &tc.InputTokens, &tc.CachedInputTokens,
+			&tc.OutputTokens, &tc.ReasoningTokens, &tc.TotalTokens, &tc.PotentialSavingsTokens,
 			&tc.PotentialSavingsBytes,
 		); err != nil {
 			return nil, fmt.Errorf("telemetry: scan row: %w", err)
@@ -254,10 +256,10 @@ type Stats struct {
 // ungrouped Aggregate, so the two are kept as distinct types rather than
 // risking the same field name silently meaning two different things.
 type GroupStats struct {
-	Key                         string  `json:"key"`
-	Count                       int64   `json:"count"`
-	AvgScore                    float64 `json:"avg_score"`
-	ScoredCount                 int64   `json:"scored_count"`
+	Key         string  `json:"key"`
+	Count       int64   `json:"count"`
+	AvgScore    float64 `json:"avg_score"`
+	ScoredCount int64   `json:"scored_count"`
 	// FailureCount counts rows with exit_code != 0 OR score <= 2, excluding
 	// rows with call_type == ExpectedFailureCallType (issue 226): a shell
 	// command an agent ran expecting it to fail is real telemetry (its true

@@ -10,9 +10,12 @@ func TestParseEventHookEnvelope(t *testing.T) {
 }
 
 func TestParseEventTokenCountRollout(t *testing.T) {
-	e := ParseEvent([]byte(`{"type":"event_msg","payload":{"session_id":"s","type":"token_count","info":{"total_token_usage":{"input_tokens":10,"cached_input_tokens":4,"output_tokens":3,"reasoning_output_tokens":2,"total_tokens":15}}}}`))
+	e := ParseEvent([]byte(`{"type":"event_msg","payload":{"session_id":"s","type":"token_count","info":{"total_token_usage":{"input_tokens":10,"cached_input_tokens":4,"output_tokens":3,"reasoning_output_tokens":2,"total_tokens":15},"last_token_usage":{"input_tokens":6,"cached_input_tokens":2,"output_tokens":3,"reasoning_output_tokens":1,"total_tokens":10}}}}`))
 	if e.Kind != "token_count" || e.SessionID != "s" || e.TotalTokens == nil || *e.TotalTokens != 15 || e.ReasoningTokens == nil || *e.ReasoningTokens != 2 {
 		t.Fatalf("unexpected token event: %+v", e)
+	}
+	if e.LastTotalTokens == nil || *e.LastTotalTokens != 10 || e.LastReasoningTokens == nil || *e.LastReasoningTokens != 1 {
+		t.Fatalf("unexpected per-turn token event: %+v", e)
 	}
 }
 

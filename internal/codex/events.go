@@ -9,17 +9,18 @@ import (
 // telemetry adapter. Codex has added fields to rollout records over time, so
 // parsing deliberately keeps unknown fields harmless and optional values nil.
 type Event struct {
-	Kind                                                                       string
-	SessionID                                                                  string
-	TurnID                                                                     string
-	ToolCallID                                                                 string
-	ToolName                                                                   string
-	Command                                                                    string
-	Success                                                                    *bool
-	ExitCode                                                                   *int
-	DurationMs                                                                 int64
-	OutputBytes                                                                *int64
-	InputTokens, CachedInputTokens, OutputTokens, ReasoningTokens, TotalTokens *int64
+	Kind                                                                                           string
+	SessionID                                                                                      string
+	TurnID                                                                                         string
+	ToolCallID                                                                                     string
+	ToolName                                                                                       string
+	Command                                                                                        string
+	Success                                                                                        *bool
+	ExitCode                                                                                       *int
+	DurationMs                                                                                     int64
+	OutputBytes                                                                                    *int64
+	InputTokens, CachedInputTokens, OutputTokens, ReasoningTokens, TotalTokens                     *int64
+	LastInputTokens, LastCachedInputTokens, LastOutputTokens, LastReasoningTokens, LastTotalTokens *int64
 }
 
 // ParseEvent normalizes one Codex rollout JSON object. It accepts both the
@@ -58,6 +59,14 @@ func ParseEvent(raw []byte) Event {
 					ReasoningOutput int64 `json:"reasoning_output_tokens"`
 					Total           int64 `json:"total_tokens"`
 				} `json:"total_token_usage"`
+				Last struct {
+					Input           int64 `json:"input_tokens"`
+					Cached          int64 `json:"cached_input_tokens"`
+					Output          int64 `json:"output_tokens"`
+					Reasoning       int64 `json:"reasoning_tokens"`
+					ReasoningOutput int64 `json:"reasoning_output_tokens"`
+					Total           int64 `json:"total_tokens"`
+				} `json:"last_token_usage"`
 			} `json:"info"`
 		}
 		if json.Unmarshal(envelope.Payload, &p) == nil {
@@ -71,6 +80,11 @@ func ParseEvent(raw []byte) Event {
 				reasoning = t.ReasoningOutput
 			}
 			e.InputTokens, e.CachedInputTokens, e.OutputTokens, e.ReasoningTokens, e.TotalTokens = ptr(t.Input), ptr(t.Cached), ptr(t.Output), ptr(reasoning), ptr(t.Total)
+			lastReasoning := p.Info.Last.Reasoning
+			if lastReasoning == 0 {
+				lastReasoning = p.Info.Last.ReasoningOutput
+			}
+			e.LastInputTokens, e.LastCachedInputTokens, e.LastOutputTokens, e.LastReasoningTokens, e.LastTotalTokens = ptr(p.Info.Last.Input), ptr(p.Info.Last.Cached), ptr(p.Info.Last.Output), ptr(lastReasoning), ptr(p.Info.Last.Total)
 		}
 	}
 	if len(envelope.ToolInput) > 0 {

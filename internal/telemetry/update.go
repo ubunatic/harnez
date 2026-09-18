@@ -23,6 +23,16 @@ func (d *DB) UpdateLatestToolCallTokens(sessionID string, total *int64) error {
 	return nil
 }
 
+// UpdateLatestProviderUsage stores both the per-turn usage and cumulative
+// provider snapshot on the newest tool call for a session.
+func (d *DB) UpdateLatestProviderUsage(sessionID string, actual, input, cached, output, reasoning, total *int64) error {
+	_, err := d.sql.Exec(`UPDATE tool_calls SET actual_tokens = ?, input_tokens = ?, cached_input_tokens = ?, output_tokens = ?, reasoning_tokens = ?, total_tokens = ? WHERE id = (SELECT id FROM tool_calls WHERE session_id = ? ORDER BY id DESC LIMIT 1)`, actual, input, cached, output, reasoning, total, sessionID)
+	if err != nil {
+		return fmt.Errorf("telemetry: update provider usage: %w", err)
+	}
+	return nil
+}
+
 // UpdateLatestToolCallMetrics attaches output, actual token estimates, and optional opportunity-savings
 // metrics to the newest tool call for sessionID.
 func (d *DB) UpdateLatestToolCallMetrics(sessionID string, outputBytes, durationMs int64, actualTokens, savingsTokens, savingsBytes *int64) error {

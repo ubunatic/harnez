@@ -168,7 +168,7 @@ func TestOpenMigratesPreexistingTableWithUnstampedVersion(t *testing.T) {
 
 func TestInsertQueryTelemetryRoundTrip(t *testing.T) {
 	db := openTestDB(t)
-	values := ToolCall{SessionID: "roundtrip", AgentID: "agent", ToolName: "test", CallType: "internal", OutputBytes: int64Ptr(11), ActualTokens: int64Ptr(22), PotentialSavingsTokens: int64Ptr(33), PotentialSavingsBytes: int64Ptr(44)}
+	values := ToolCall{SessionID: "roundtrip", AgentID: "agent", ToolName: "test", CallType: "internal", OutputBytes: int64Ptr(11), ActualTokens: int64Ptr(10), InputTokens: int64Ptr(6), CachedInputTokens: int64Ptr(2), OutputTokens: int64Ptr(3), ReasoningTokens: int64Ptr(1), TotalTokens: int64Ptr(15), PotentialSavingsTokens: int64Ptr(33), PotentialSavingsBytes: int64Ptr(44)}
 	if err := db.Insert(values); err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestInsertQueryTelemetryRoundTrip(t *testing.T) {
 			empty = row
 		}
 	}
-	if *rich.OutputBytes != 11 || *rich.ActualTokens != 22 || *rich.PotentialSavingsTokens != 33 || *rich.PotentialSavingsBytes != 44 {
+	if *rich.OutputBytes != 11 || *rich.ActualTokens != 10 || *rich.InputTokens != 6 || *rich.CachedInputTokens != 2 || *rich.OutputTokens != 3 || *rich.ReasoningTokens != 1 || *rich.TotalTokens != 15 || *rich.PotentialSavingsTokens != 33 || *rich.PotentialSavingsBytes != 44 {
 		t.Errorf("rich fields did not round-trip: %+v", rich)
 	}
 	if empty.OutputBytes != nil || empty.ActualTokens != nil || empty.PotentialSavingsTokens != nil || empty.PotentialSavingsBytes != nil {

@@ -23,6 +23,11 @@ type ToolCall struct {
 	DistilledBytes         *int64 // populated only when distillation ran; nil (SQL NULL) otherwise
 	OutputBytes            *int64 `json:"output_bytes,omitempty"`
 	ActualTokens           *int64 `json:"actual_tokens,omitempty"`
+	InputTokens            *int64 `json:"input_tokens,omitempty"`
+	CachedInputTokens      *int64 `json:"cached_input_tokens,omitempty"`
+	OutputTokens           *int64 `json:"output_tokens,omitempty"`
+	ReasoningTokens        *int64 `json:"reasoning_tokens,omitempty"`
+	TotalTokens            *int64 `json:"total_tokens,omitempty"`
 	PotentialSavingsTokens *int64 `json:"potential_savings_tokens,omitempty"`
 	PotentialSavingsBytes  *int64 `json:"potential_savings_bytes,omitempty"`
 }

@@ -136,8 +136,8 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 	}
 	defer db.Close()
 	if hook.TranscriptPath != "" {
-		if total := latestTranscriptTokens(hook.TranscriptPath, e.SessionID); total != nil {
-			_ = updateLatestCodexTokens(db, e.SessionID, total)
+		if usage := latestTranscriptTokens(hook.TranscriptPath, e.SessionID); usage.TotalTokens != nil {
+			_ = db.UpdateLatestProviderUsage(e.SessionID, usage.LastTotalTokens, usage.LastInputTokens, usage.LastCachedInputTokens, usage.LastOutputTokens, usage.LastReasoningTokens, usage.TotalTokens)
 		}
 	}
 	if e.ToolName == "" {
@@ -157,34 +157,26 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 	if e.Success != nil && !*e.Success {
 		callType = "hook:failure"
 	}
-	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: callType, Note: note, DurationMs: e.DurationMs, ExitCode: e.ExitCode, OutputBytes: e.OutputBytes, ActualTokens: e.TotalTokens}
+	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: callType, Note: note, DurationMs: e.DurationMs, ExitCode: e.ExitCode, OutputBytes: e.OutputBytes, ActualTokens: e.LastTotalTokens, InputTokens: e.LastInputTokens, CachedInputTokens: e.LastCachedInputTokens, OutputTokens: e.LastOutputTokens, ReasoningTokens: e.LastReasoningTokens, TotalTokens: e.TotalTokens}
 	return db.Insert(call)
 }
 
-func latestTranscriptTokens(path, sessionID string) *int64 {
+func latestTranscriptTokens(path, sessionID string) codex.Event {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil
+		return codex.Event{}
 	}
 	defer file.Close()
-	var latest *int64
+	var latest codex.Event
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		e := codex.ParseEvent(scanner.Bytes())
 		if e.SessionID != "" && e.SessionID != sessionID || e.TotalTokens == nil {
 			continue
 		}
-		value := *e.TotalTokens
-		latest = &value
+		latest = e
 	}
 	return latest
-}
-
-func updateLatestCodexTokens(db *telemetry.DB, sessionID string, total *int64) error {
-	if total == nil {
-		return nil
-	}
-	return db.UpdateLatestToolCallTokens(sessionID, total)
 }
 
 func runCodexHooksHook(in io.Reader, out io.Writer) error {

@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS tool_calls (
 	distilled_bytes INTEGER CHECK (distilled_bytes IS NULL OR distilled_bytes >= 0),
 	output_bytes INTEGER,
 	actual_tokens INTEGER,
+	input_tokens INTEGER,
+	cached_input_tokens INTEGER,
+	output_tokens INTEGER,
+	reasoning_tokens INTEGER,
+	total_tokens INTEGER,
 	potential_savings_tokens INTEGER,
 	potential_savings_bytes INTEGER
 );
