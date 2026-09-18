@@ -193,6 +193,17 @@ unsupported claim of exact billing.
 
 **Status**: Draft
 
+### M4 correction delivery
+
+- Wired Codex post-compaction and session-end lifecycle handling to persist
+  recorded pricing revision/rates and complete, partial, or insufficient
+  economics rows; added with- and without-compaction fixture assertions.
+- Preserved schema migration coverage and the existing estimate-vs-provider-
+  billing documentation.
+- `make install` completed. `make test-q1` was run after the correction; the
+  repository suite remains blocked by the compaction fixture status assertion
+  (`no priced compaction components`) despite all other packages passing.
+
 ---
 
 Reserved placeholder ticket.
