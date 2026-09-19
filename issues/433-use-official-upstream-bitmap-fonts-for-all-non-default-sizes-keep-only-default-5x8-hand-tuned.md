@@ -1,6 +1,6 @@
 # 433 — Use official upstream bitmap fonts for all non-default sizes; keep only the default 5x8 hand-tuned
 
-**Status**: Open
+**Status**: Closed — upstream fonts imported; remaining upstream glyph gaps documented in third_party/fonts/README.md
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactoring
