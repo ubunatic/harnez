@@ -1,6 +1,6 @@
 # 429 — Move pixel font glyph and unicode mappings to spec/ YAML files
 
-**Status**: Open
+**Status**: Closed — implemented in readcard spec YAML, 5x8 font tuning, golden assets
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Refactoring
