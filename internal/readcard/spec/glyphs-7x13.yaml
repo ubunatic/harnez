@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=../../../spec/schemas/glyphs.schema.json
-# Only glyphs absent from the embedded upstream font.
+# Only glyphs absent from the embedded upstream font, plus the editable fallback.
 glyphs:
   ⚠:
   - '  1    '
@@ -28,4 +28,18 @@ glyphs:
   - '1 1  1 '
   - '       '
   - '  1    '
+  - '       '
+  '?':
+  - '       '
+  - '       '
+  - ' 1111  '
+  - '1    1 '
+  - '1    1 '
+  - '     1 '
+  - '    1  '
+  - '   1   '
+  - '   1   '
+  - '       '
+  - '   1   '
+  - '       '
   - '       '

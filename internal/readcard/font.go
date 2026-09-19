@@ -29,7 +29,7 @@ func (f *MonospaceFont) DrawRune(img *image.RGBA, r rune, x, y int, col color.RG
 	f.glyphsOnce.Do(func() { f.Glyphs = f.loadGlyphs() })
 	glyph, ok := f.Glyphs[r]
 	if !ok {
-		// Fallback for unknown characters: box or question mark
+		// Fallback for unknown characters: upstream or spec question mark.
 		if glyph, ok = f.Glyphs['?']; !ok {
 			return
 		}
