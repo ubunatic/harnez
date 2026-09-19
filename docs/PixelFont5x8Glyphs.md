@@ -136,4 +136,4 @@ Vertical strokes on column 2 and horizontal strokes on row 3 in every glyph, so 
 - **Rounded corners are duplicates.** `╭ ╮ ╰ ╯` are pixel-identical to `┌ ┐ └ ┘`. That is a deliberate trade-off at this size, but it means rounded-vs-square information is lost.
 - **`↳` looks irregular** (see its row above). Compare against the import in `docs/data/golden-font-5x8-import.png` before treating it as final.
 - **Braille is procedural.** All `U+2800-28FF` cells are drawn by `drawBrailleRune`, so `⣿` has no entry in `glyphs.yaml`. The `height == 8` special case in `font.go` hits the rows `0, 2, 4, 6`.
-- **Other sizes are upstream fonts** (see `third_party/fonts/README.md`); only the default 5x8 is hand-tuned. Glyphs missing upstream render as `?`: 6x12 lacks `→ ← ✓ ✗`, 7x13 lacks `✓ ✗`.
+- **Other sizes are upstream fonts** (see `third_party/fonts/README.md`); only the default 5x8 is hand-tuned. Glyphs missing upstream get an editable copy of the `?` matrix in that size's `glyphs-<size>.yaml` (`scripts/fill-missing-glyphs.go`); replace it to hand-draw one: 6x12 lacks `→ ← ✓ ✗`, 7x13 lacks `✓ ✗`.

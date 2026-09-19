@@ -80,6 +80,9 @@ func fillFile(path, bdf, charset string, dryRun bool) (bool, error) {
 	}
 	var missing []string
 	for _, r := range []rune(charset) {
+		if r >= 0x2800 && r <= 0x28ff {
+			continue // Braille cells are drawn procedurally, never from a matrix.
+		}
 		key := string(r)
 		if _, inSpec := spec.Glyphs[key]; !inSpec && !upstream[r] {
 			spec.Glyphs[key] = append([]string(nil), fallback...)

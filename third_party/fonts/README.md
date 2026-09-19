@@ -23,4 +23,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 ## Coverage gaps
 
-Glyphs the upstream fonts lack render as `?`: 6x12 lacks `→ ← ✓ ✗`; 7x13 lacks `✓ ✗`.
+Glyphs the upstream fonts lack (for example `✓ ✗ ⚠ ✦`, `→ ←` in 6x12, box drawing in 3x5) are
+listed in `internal/readcard/spec/glyphs-<size>.yaml` as an editable copy of that size's `?` matrix.
+`scripts/fill-missing-glyphs.go` appends them; replace a matrix to hand-draw the glyph. Braille
+cells are drawn procedurally and never need an entry.
