@@ -2,6 +2,7 @@ package bench
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"image/png"
 	"os"
@@ -238,5 +239,129 @@ func TestSetupGatesBench(t *testing.T) {
 	}
 	if _, err := Setup(dir, look); err != nil {
 		t.Errorf("Setup not idempotent: %v", err)
+	}
+}
+
+func TestFixtureHoldsTheAnswersToReadTasks(t *testing.T) {
+	s, err := LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, _ := fixtureDoc("RUNBOOK.md")
+	if n := strings.Count(doc, "\n"); n < 500 {
+		t.Fatalf("fixture has %d lines, want a large doc", n)
+	}
+	// Each needle appears exactly once, so a correct answer is unambiguous.
+	for _, needle := range []string{"retry limit: 17 attempts", "port: 7431\n", "Team Bramble"} {
+		if c := strings.Count(doc, needle); c != 1 {
+			t.Errorf("%q appears %d times, want 1", needle, c)
+		}
+	}
+	cases := map[string][2]string{
+		"read-one-fact": {"17", "3"},
+		"read-two-hop":  {"tarnwick Bramble", "brindle Heron"},
+	}
+	for id, c := range cases {
+		task, err := s.Select([]string{id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok, d := task[0].Score(c[0]); !ok {
+			t.Errorf("%s rejects the right answer: %s", id, d)
+		}
+		if ok, _ := task[0].Score(c[1]); ok {
+			t.Errorf("%s accepts a wrong answer %q", id, c[1])
+		}
+	}
+}
+
+func TestReadConditionSelectsAndStagesOnlyFixtures(t *testing.T) {
+	s, _ := LoadSpec()
+	for _, mode := range ReadModes {
+		cond := Condition{Docs: "full", Read: mode}
+		tasks, err := s.SelectFor(nil, cond)
+		if err != nil || len(tasks) != 2 {
+			t.Fatalf("%s: SelectFor = %d tasks, %v", mode, len(tasks), err)
+		}
+		dir := t.TempDir()
+		got, err := StageWorkspace(dir, repoRoot(t), s, tasks[0], cond)
+		if err != nil || len(got) != 1 || got[0] != "docs/RUNBOOK.md" {
+			t.Fatalf("%s: staged %v, %v", mode, got, err)
+		}
+		agents, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+		if !strings.Contains(string(agents), s.ReadModes[mode][:20]) || !strings.Contains(string(agents), "docs/RUNBOOK.md") {
+			t.Errorf("%s: AGENTS.md lacks the read instruction or doc list:\n%s", mode, agents)
+		}
+		if strings.Contains(string(agents), "AgenticLoop") {
+			t.Errorf("%s: read workspace leaks project docs", mode)
+		}
+		if cond.Label() != "read:"+mode {
+			t.Errorf("label = %q", cond.Label())
+		}
+	}
+	docsTasks, _ := s.SelectFor(nil, Condition{Docs: "full"})
+	for _, task := range docsTasks {
+		if len(task.Fixtures) > 0 {
+			t.Errorf("docs condition selected fixture task %s", task.ID)
+		}
+	}
+	if _, err := s.SelectFor([]string{"hello"}, Condition{Read: "text"}); err == nil {
+		t.Error("explicit docs task under a read condition should error")
+	}
+	if _, err := ParseRead("bogus"); err == nil {
+		t.Error("ParseRead accepted bogus")
+	}
+}
+
+func TestTurnsAreParsedAndStored(t *testing.T) {
+	res, err := ParseClaude([]byte(`{"result":"x","num_turns":4,"usage":{}}`))
+	if err != nil || res.Turns != 4 {
+		t.Fatalf("claude turns = %d, %v", res.Turns, err)
+	}
+	codex := `{"type":"item.completed","item":{"type":"reasoning","text":"r"}}
+{"type":"item.completed","item":{"type":"command_execution"}}
+{"type":"item.completed","item":{"type":"command_execution"}}
+{"type":"item.completed","item":{"type":"agent_message","text":"17"}}
+{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}
+`
+	if res, err = ParseCodex([]byte(codex)); err != nil || res.Turns != 3 {
+		t.Fatalf("codex turns = %d, %v", res.Turns, err)
+	}
+	st, err := OpenStore(filepath.Join(t.TempDir(), "b.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	for _, turns := range []int{2, 4} {
+		if err := st.Insert(Run{Task: "read-one-fact", Agent: "codex", Model: "m", Docs: "full", ReadMode: "auto", Turns: turns, Pass: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sums, err := st.Summaries()
+	if err != nil || len(sums) != 1 || sums[0].Read != "auto" || sums[0].AvgTurns != 3 {
+		t.Fatalf("summaries = %+v, %v", sums, err)
+	}
+}
+
+func TestOpenStoreMigratesPreReadModeDatabase(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.sqlite")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`CREATE TABLE runs (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, task TEXT NOT NULL, agent TEXT NOT NULL, model TEXT NOT NULL, docs TEXT NOT NULL, cards INTEGER NOT NULL, pass INTEGER NOT NULL, detail TEXT NOT NULL DEFAULT '', input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, cost_usd REAL NOT NULL DEFAULT 0, duration_ms INTEGER NOT NULL DEFAULT 0, response TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '')`)
+	db.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ { // second open proves the migration is idempotent
+		st, err := OpenStore(path)
+		if err != nil {
+			t.Fatalf("open %d: %v", i, err)
+		}
+		if err := st.Insert(Run{Task: "t", Agent: "a", Model: "m", Docs: "full", ReadMode: "text", Turns: 1}); err != nil {
+			t.Fatal(err)
+		}
+		st.Close()
 	}
 }

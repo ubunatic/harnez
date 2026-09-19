@@ -31,7 +31,7 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 	model := ResolveModel(o.Agent, o.Model)
 	for _, task := range tasks {
 		for i := 0; i < o.Repeat; i++ {
-			run := Run{Task: task.ID, Agent: o.Agent, Model: model, Docs: o.Cond.Docs, Cards: o.Cond.Cards}
+			run := Run{Task: task.ID, Agent: o.Agent, Model: model, Docs: o.Cond.Docs, Cards: o.Cond.Cards, ReadMode: o.Cond.Read}
 			dir, err := os.MkdirTemp("", "harnez-bench.*")
 			if err != nil {
 				return err
@@ -44,6 +44,7 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 				run.Error = err.Error()
 			} else {
 				run.Response, run.InputTokens, run.OutputTokens, run.CostUSD = res.Text, res.InputTokens, res.OutputTokens, res.CostUSD
+				run.Turns = res.Turns
 				run.Pass, run.Detail = task.Score(res.Text)
 			}
 			cancel()

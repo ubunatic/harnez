@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -35,7 +36,9 @@ CREATE TABLE IF NOT EXISTS runs (
 	cost_usd REAL NOT NULL DEFAULT 0,
 	duration_ms INTEGER NOT NULL DEFAULT 0,
 	response TEXT NOT NULL DEFAULT '',
-	error TEXT NOT NULL DEFAULT ''
+	error TEXT NOT NULL DEFAULT '',
+	read_mode TEXT NOT NULL DEFAULT '',
+	turns INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS runs_cond ON runs(agent, model, docs, cards);
 `
@@ -55,6 +58,13 @@ func OpenStore(path string) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("bench: create schema: %w", err)
+	}
+	// Databases created before read mode existed lack these columns.
+	for _, col := range []string{"read_mode TEXT NOT NULL DEFAULT ''", "turns INTEGER NOT NULL DEFAULT 0"} {
+		if _, err := db.Exec("ALTER TABLE runs ADD COLUMN " + col); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			db.Close()
+			return nil, fmt.Errorf("bench: migrate schema: %w", err)
+		}
 	}
 	return &Store{db: db}, nil
 }
@@ -80,6 +90,8 @@ type Run struct {
 	DurationMS   int64
 	Response     string
 	Error        string
+	ReadMode     string
+	Turns        int
 }
 
 // Insert records a run.
@@ -87,32 +99,35 @@ func (s *Store) Insert(r Run) error {
 	if r.TS.IsZero() {
 		r.TS = time.Now().UTC()
 	}
-	_, err := s.db.Exec(`INSERT INTO runs (ts, task, agent, model, docs, cards, pass, detail, input_tokens, output_tokens, cost_usd, duration_ms, response, error)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	_, err := s.db.Exec(`INSERT INTO runs (ts, task, agent, model, docs, cards, pass, detail, input_tokens, output_tokens, cost_usd, duration_ms, response, error, read_mode, turns)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		r.TS.Format(time.RFC3339), r.Task, r.Agent, r.Model, r.Docs, b2i(r.Cards), b2i(r.Pass), r.Detail,
-		r.InputTokens, r.OutputTokens, r.CostUSD, r.DurationMS, r.Response, r.Error)
+		r.InputTokens, r.OutputTokens, r.CostUSD, r.DurationMS, r.Response, r.Error, r.ReadMode, r.Turns)
 	return err
 }
 
 // Summary aggregates scored runs (Error == ”) per condition.
 type Summary struct {
 	Agent, Model, Docs string
+	Read               string
 	Cards              bool
 	Runs, Passes       int
 	AvgInput, AvgOut   float64
+	AvgTurns           float64
 	AvgCostUSD         float64
 	Errors             int
 }
 
 // Summaries groups runs by agent, model, docs mode and cards.
 func (s *Store) Summaries() ([]Summary, error) {
-	rows, err := s.db.Query(`SELECT agent, model, docs, cards,
+	rows, err := s.db.Query(`SELECT agent, model, docs, read_mode, cards,
 		SUM(error = ''), SUM(error = '' AND pass = 1),
 		COALESCE(AVG(CASE WHEN error = '' THEN input_tokens END), 0),
 		COALESCE(AVG(CASE WHEN error = '' THEN output_tokens END), 0),
 		COALESCE(AVG(CASE WHEN error = '' THEN cost_usd END), 0),
-		SUM(error <> '')
-		FROM runs GROUP BY agent, model, docs, cards ORDER BY agent, model, docs, cards`)
+		SUM(error <> ''),
+		COALESCE(AVG(CASE WHEN error = '' THEN turns END), 0)
+		FROM runs GROUP BY agent, model, docs, read_mode, cards ORDER BY agent, model, docs, read_mode, cards`)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +136,7 @@ func (s *Store) Summaries() ([]Summary, error) {
 	for rows.Next() {
 		var s Summary
 		var cards int
-		if err := rows.Scan(&s.Agent, &s.Model, &s.Docs, &cards, &s.Runs, &s.Passes, &s.AvgInput, &s.AvgOut, &s.AvgCostUSD, &s.Errors); err != nil {
+		if err := rows.Scan(&s.Agent, &s.Model, &s.Docs, &s.Read, &cards, &s.Runs, &s.Passes, &s.AvgInput, &s.AvgOut, &s.AvgCostUSD, &s.Errors, &s.AvgTurns); err != nil {
 			return nil, err
 		}
 		s.Cards = cards == 1
@@ -132,7 +147,7 @@ func (s *Store) Summaries() ([]Summary, error) {
 
 // Recent returns the newest limit runs, newest first.
 func (s *Store) Recent(limit int) ([]Run, error) {
-	rows, err := s.db.Query(`SELECT id, ts, task, agent, model, docs, cards, pass, detail, input_tokens, output_tokens, cost_usd, duration_ms, response, error
+	rows, err := s.db.Query(`SELECT id, ts, task, agent, model, docs, cards, pass, detail, input_tokens, output_tokens, cost_usd, duration_ms, response, error, read_mode, turns
 		FROM runs ORDER BY id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
@@ -143,7 +158,7 @@ func (s *Store) Recent(limit int) ([]Run, error) {
 		var r Run
 		var ts string
 		var cards, pass int
-		if err := rows.Scan(&r.ID, &ts, &r.Task, &r.Agent, &r.Model, &r.Docs, &cards, &pass, &r.Detail, &r.InputTokens, &r.OutputTokens, &r.CostUSD, &r.DurationMS, &r.Response, &r.Error); err != nil {
+		if err := rows.Scan(&r.ID, &ts, &r.Task, &r.Agent, &r.Model, &r.Docs, &cards, &pass, &r.Detail, &r.InputTokens, &r.OutputTokens, &r.CostUSD, &r.DurationMS, &r.Response, &r.Error, &r.ReadMode, &r.Turns); err != nil {
 			return nil, err
 		}
 		r.TS, _ = time.Parse(time.RFC3339, ts)

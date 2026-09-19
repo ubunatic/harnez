@@ -4,6 +4,20 @@ preamble: |
   **IMPORTANT** Project docs below carry key instructions. Read them before answering.
   Allowed formats: MD (Markdown text) or PNG (the same Markdown as a context card image).
 
+# How the agent is taught to read fixtures under `bench run --read <mode>`.
+# These are the tunable instructions of the read tasks; keep them short.
+read_modes:
+  native: |
+    Answer from the docs listed below. Read them with your native file tools.
+    Locate lines with grep -n first, then read only the needed line range.
+  text: |
+    Answer from the docs listed below. Read them only with `harnez read` text mode:
+    `harnez read -n -L <from>:<to> <file>` for a line range. Locate lines with grep -n first.
+  auto: |
+    Answer from the docs listed below. Read them only with `harnez read --auto <file>`
+    (add `-L <from>:<to>` for a range). If it prints `See @<png>` lines, open each PNG
+    with your image-capable file reader and read the text from the image.
+
 base_docs:
   - docs/practices/AgenticLoop.md
 
@@ -66,3 +80,16 @@ tasks:
     prompt: "I just finished a feature that installs a git hook, and go test ./... is green. Is it done?"
     pattern: '(?i)live|real|restart|manual'
     forbid_pattern: '(?i)^yes,? (it.s )?done\.?$'
+
+  # Read tasks: run with `--read native|text|auto`; the agent sees only the fixture.
+  - id: read-one-fact
+    rule: "find one deep fact in a large doc with few turns"
+    fixtures: [RUNBOOK.md]
+    prompt: "What is the retry limit of the quillfox service? Reply with the number only."
+    pattern: '^\D*17\D*$'
+
+  - id: read-two-hop
+    rule: "follow a value across sections of a large doc with few turns"
+    fixtures: [RUNBOOK.md]
+    prompt: "Which service listens on port 7431, and which team holds its pager rotation? Reply as: <service> <team>."
+    pattern: 'tarnwick.*bramble'

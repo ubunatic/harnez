@@ -62,3 +62,29 @@ Caveats: n=1 per cell, so this shows the harness works, not a statistically vali
 signal worth following up is that every text condition passed while cards lost points, mostly on
 `shell-conditional` (the exact `if test` rule was not recovered from the card), and that cards cost
 more input tokens on codex. Lite text was the cheapest passing condition on both agents.
+
+## Read tasks (`--read native|text|auto`)
+
+Read tasks measure how an agent reads a large doc, with few turns. The agent sees
+only a bench-generated fixture (`docs/RUNBOOK.md`, 732 lines, invented values) and
+the instruction from `read_modes` in `tasks.yaml`, which is the tunable text:
+
+- `native`: the agent's own file tools with line ranges
+- `text`: `harnez read -n -L a:b`
+- `auto`: `harnez read --auto`, which returns PNG cards for big content
+
+`harnez bench run --agent claude --read auto --repeat 2` runs the two fixture
+tasks (`read-one-fact`, `read-two-hop`). Results show `turns` (tool calls plus the
+final answer) next to tokens. First results, 4 runs per cell:
+
+| Agent | Read | Pass | Avg turns | Avg input tokens |
+|---|---|---|---|---|
+| claude haiku | native | 4/4 | 2.8 | 46.5k |
+| claude haiku | text | 4/4 | 3.0 | 51.3k |
+| claude haiku | auto | 4/4 | 4.0 | 57.8k |
+| codex luna | native | 4/4 | 3.0 | 38.0k |
+| codex luna | text | 4/4 | 3.0 | 37.3k |
+| codex luna | auto | 3/4 | 3.0 | 62.6k |
+
+At this size native reads win on tokens; auto costs more, and one two-hop run took
+6 turns and failed. Tune the `auto` instruction and re-run before drawing conclusions.

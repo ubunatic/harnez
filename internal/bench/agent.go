@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -37,6 +38,7 @@ type Result struct {
 	InputTokens  int
 	OutputTokens int
 	CostUSD      float64
+	Turns        int // agent steps: tool calls plus the final answer
 }
 
 // CommandRunner runs name with args in dir and returns stdout. Tests fake it.
@@ -46,6 +48,8 @@ type CommandRunner func(ctx context.Context, dir, name string, args ...string) (
 func ExecRunner(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	// Select the agent's harnez read profile (image vs text cost estimates).
+	cmd.Env = append(os.Environ(), "HARNEZ_AGENT_HARNESS="+name)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -81,6 +85,7 @@ func ParseClaude(out []byte) (Result, error) {
 	var raw struct {
 		Result  string  `json:"result"`
 		IsError bool    `json:"is_error"`
+		Turns   int     `json:"num_turns"`
 		Cost    float64 `json:"total_cost_usd"`
 		Usage   struct {
 			Input       int `json:"input_tokens"`
@@ -100,6 +105,7 @@ func ParseClaude(out []byte) (Result, error) {
 		InputTokens:  raw.Usage.Input + raw.Usage.CacheRead + raw.Usage.CacheCreate,
 		OutputTokens: raw.Usage.Output,
 		CostUSD:      raw.Cost,
+		Turns:        raw.Turns,
 	}, nil
 }
 
@@ -131,11 +137,14 @@ func ParseCodex(out []byte) (Result, error) {
 		switch {
 		case ev.Type == "item.completed" && ev.Item.Type == "agent_message":
 			res.Text = ev.Item.Text
+		case ev.Type == "item.completed" && ev.Item.Type != "reasoning":
+			res.Turns++ // a tool call
 		case ev.Type == "turn.completed":
 			res.InputTokens += ev.Usage.Input
 			res.OutputTokens += ev.Usage.Output
 		}
 	}
+	res.Turns++ // the final answer
 	if res.Text == "" {
 		return Result{}, fmt.Errorf("bench: codex output has no agent_message")
 	}

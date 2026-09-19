@@ -13,10 +13,14 @@ import (
 type Condition struct {
 	Docs  string // "full" or "lite"
 	Cards bool   // deliver docs as PNG context cards instead of Markdown
+	Read  string // "", or how fixtures are read: native, text or auto
 }
 
 // Label is the stable text form recorded in the bench DB.
 func (c Condition) Label() string {
+	if c.Read != "" {
+		return "read:" + c.Read
+	}
 	if c.Cards {
 		return c.Docs + "+cards"
 	}
@@ -51,6 +55,9 @@ func docPath(repoRoot, rel, docs string) (string, error) {
 // Markdown or a `harnez read -I` style PNG card. It returns the delivered
 // file names so callers can record what the agent was given.
 func StageWorkspace(dir, repoRoot string, spec *Spec, task Task, cond Condition) ([]string, error) {
+	if cond.Read != "" {
+		return stageFixtures(dir, spec, task, cond.Read)
+	}
 	rels := append(append([]string{}, spec.BaseDocs...), task.Docs...)
 	var delivered []string
 	var refs strings.Builder
@@ -82,6 +89,34 @@ func StageWorkspace(dir, repoRoot string, spec *Spec, task Task, cond Condition)
 	body := strings.TrimRight(spec.Preamble, "\n") + "\n\n" + refs.String()
 	for _, f := range []string{"AGENTS.md", "CLAUDE.md"} {
 		if err := os.WriteFile(filepath.Join(dir, f), []byte(body), 0o644); err != nil {
+			return nil, err
+		}
+	}
+	return delivered, nil
+}
+
+// stageFixtures writes the task's fixtures to dir/docs and an AGENTS.md and
+// CLAUDE.md holding only the read-mode instruction: the agent sees no other docs.
+func stageFixtures(dir string, spec *Spec, task Task, mode string) ([]string, error) {
+	if len(task.Fixtures) == 0 {
+		return nil, fmt.Errorf("bench: task %q has no fixtures for read mode %q", task.ID, mode)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0o755); err != nil {
+		return nil, err
+	}
+	var delivered []string
+	var body strings.Builder
+	body.WriteString(strings.TrimRight(spec.ReadModes[mode], "\n") + "\n\nDocs:\n")
+	for _, name := range task.Fixtures {
+		text, _ := fixtureDoc(name)
+		if err := os.WriteFile(filepath.Join(dir, "docs", name), []byte(text), 0o644); err != nil {
+			return nil, err
+		}
+		delivered = append(delivered, "docs/"+name)
+		fmt.Fprintf(&body, "- docs/%s\n", name)
+	}
+	for _, f := range []string{"AGENTS.md", "CLAUDE.md"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte(body.String()), 0o644); err != nil {
 			return nil, err
 		}
 	}

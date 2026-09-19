@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -62,5 +63,33 @@ func TestBenchSetupRunResults(t *testing.T) {
 	}
 	if _, err := runBench(t, "run", "--task", "nope"); err == nil {
 		t.Error("unknown task accepted")
+	}
+}
+
+func TestBenchRunReadModeRunsFixtureTasksAndReportsTurns(t *testing.T) {
+	t.Setenv("HARNEZ_BENCH_DIR", filepath.Join(t.TempDir(), "bench"))
+	root, _ := filepath.Abs(filepath.Join("..", ".."))
+	benchRunner = func(_ context.Context, dir, _ string, _ ...string) ([]byte, error) {
+		if _, err := os.Stat(filepath.Join(dir, "docs", "RUNBOOK.md")); err != nil {
+			t.Errorf("fixture not staged: %v", err)
+		}
+		return []byte(`{"result":"17","num_turns":3,"usage":{}}`), nil
+	}
+	defer func() { benchRunner = nil }()
+	if _, err := runBench(t, "--setup"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runBench(t, "run", "--read", "auto", "--repo", root)
+	if err != nil || strings.Count(out, "read:auto") != 2 || !strings.Contains(out, "turns=3") {
+		t.Fatalf("read run: %q %v", out, err)
+	}
+	if out, err = runBench(t, "results"); err != nil || !strings.Contains(out, "auto") || !strings.Contains(out, "3.0") {
+		t.Fatalf("results lack read mode/turns: %q %v", out, err)
+	}
+	if _, err := runBench(t, "run", "--read", "auto", "--task", "hello", "--repo", root); err == nil {
+		t.Error("docs task accepted under --read")
+	}
+	if _, err := runBench(t, "run", "--read", "bogus"); err == nil {
+		t.Error("bad --read accepted")
 	}
 }

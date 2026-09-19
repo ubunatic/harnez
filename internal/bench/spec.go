@@ -21,13 +21,19 @@ type Task struct {
 	Pattern       string   `yaml:"pattern"`
 	ForbidPattern string   `yaml:"forbid_pattern"`
 	Docs          []string `yaml:"docs"`
+	// Fixtures are bench-owned documents for read tasks; such tasks run only
+	// under a read mode and see nothing but these files.
+	Fixtures []string `yaml:"fixtures"`
 }
 
 // Spec is the parsed task file.
 type Spec struct {
 	Preamble string   `yaml:"preamble"`
 	BaseDocs []string `yaml:"base_docs"`
-	Tasks    []Task   `yaml:"tasks"`
+	// ReadModes maps a read mode to the instruction that teaches the agent how
+	// to read the fixtures. Tuning these texts is the point of the read tasks.
+	ReadModes map[string]string `yaml:"read_modes"`
+	Tasks     []Task            `yaml:"tasks"`
 }
 
 //go:embed tasks.yaml
@@ -84,6 +90,41 @@ func (s *Spec) Select(ids []string) ([]Task, error) {
 			return nil, fmt.Errorf("bench: unknown task %q", id)
 		}
 		out = append(out, t)
+	}
+	return out, nil
+}
+
+// ReadModes are the supported ways to read fixtures.
+var ReadModes = []string{"native", "text", "auto"}
+
+// ParseRead validates a --read value; empty means docs-delivery mode.
+func ParseRead(s string) (string, error) {
+	if s == "" {
+		return "", nil
+	}
+	for _, m := range ReadModes {
+		if s == m {
+			return s, nil
+		}
+	}
+	return "", fmt.Errorf("bench: unknown read mode %q (expected native, text or auto)", s)
+}
+
+// SelectFor is Select restricted to tasks that fit the condition: read
+// conditions run fixture tasks, docs conditions run the others. Explicit IDs
+// that do not fit are an error rather than silently skipped.
+func (s *Spec) SelectFor(ids []string, cond Condition) ([]Task, error) {
+	all, err := s.Select(ids)
+	if err != nil {
+		return nil, err
+	}
+	var out []Task
+	for _, t := range all {
+		if (len(t.Fixtures) > 0) == (cond.Read != "") {
+			out = append(out, t)
+		} else if len(ids) > 0 {
+			return nil, fmt.Errorf("bench: task %q does not fit condition %s", t.ID, cond.Label())
+		}
 	}
 	return out, nil
 }
