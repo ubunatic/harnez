@@ -93,3 +93,37 @@ func TestBenchRunReadModeRunsFixtureTasksAndReportsTurns(t *testing.T) {
 		t.Error("bad --read accepted")
 	}
 }
+
+func TestBenchRunYamlAndMultiFlags(t *testing.T) {
+	t.Setenv("HARNEZ_BENCH_DIR", filepath.Join(t.TempDir(), "bench"))
+	root, _ := filepath.Abs(filepath.Join("..", ".."))
+	var files []string
+	benchRunner = func(_ context.Context, dir, _ string, _ ...string) ([]byte, error) {
+		entries, _ := os.ReadDir(filepath.Join(dir, "docs"))
+		files = files[:0]
+		for _, e := range entries {
+			files = append(files, e.Name())
+		}
+		return []byte(`{"result":"17","num_turns":2,"usage":{}}`), nil
+	}
+	defer func() { benchRunner = nil }()
+	if _, err := runBench(t, "--setup"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runBench(t, "run", "--read", "text", "--yaml", "--multi", "--task", "read-one-fact", "--repo", root)
+	if err != nil || !strings.Contains(out, "read:text+yaml+multi5") || len(files) != 5 || !strings.HasSuffix(files[0], ".yaml") {
+		t.Fatalf("bare --multi + --yaml: %q %v %v", out, err, files)
+	}
+	out, err = runBench(t, "run", "--read", "native", "--multi=3", "--task", "read-one-fact", "--repo", root)
+	if err != nil || !strings.Contains(out, "read:native+multi3") || len(files) != 3 {
+		t.Fatalf("--multi=3: %q %v %v", out, err, files)
+	}
+	if out, err = runBench(t, "results"); err != nil || !strings.Contains(out, "text+yaml+multi5") {
+		t.Fatalf("results lack variant: %q %v", out, err)
+	}
+	for _, args := range [][]string{{"run", "--yaml"}, {"run", "--multi=3"}, {"run", "--read", "text", "--multi=27"}} {
+		if _, err := runBench(t, args...); err == nil {
+			t.Errorf("%v accepted", args)
+		}
+	}
+}

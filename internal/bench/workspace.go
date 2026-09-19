@@ -14,17 +14,32 @@ type Condition struct {
 	Docs  string // "full" or "lite"
 	Cards bool   // deliver docs as PNG context cards instead of Markdown
 	Read  string // "", or how fixtures are read: native, text or auto
+	Yaml  bool   // read conditions: deliver the fixture as YAML instead of Markdown
+	Multi int    // read conditions: split the fixture into this many files (<2: one file)
 }
 
 // Label is the stable text form recorded in the bench DB.
 func (c Condition) Label() string {
 	if c.Read != "" {
-		return "read:" + c.Read
+		return "read:" + c.ReadVariant()
 	}
 	if c.Cards {
 		return c.Docs + "+cards"
 	}
 	return c.Docs
+}
+
+// ReadVariant names the read mode plus its fixture shape, e.g. "auto+yaml+multi5".
+// It is what the bench DB records in read_mode.
+func (c Condition) ReadVariant() string {
+	v := c.Read
+	if c.Yaml {
+		v += "+yaml"
+	}
+	if c.Multi >= 2 {
+		v += fmt.Sprintf("+multi%d", c.Multi)
+	}
+	return v
 }
 
 // ParseDocs validates a --docs value.
@@ -56,7 +71,7 @@ func docPath(repoRoot, rel, docs string) (string, error) {
 // file names so callers can record what the agent was given.
 func StageWorkspace(dir, repoRoot string, spec *Spec, task Task, cond Condition) ([]string, error) {
 	if cond.Read != "" {
-		return stageFixtures(dir, spec, task, cond.Read)
+		return stageFixtures(dir, spec, task, cond)
 	}
 	rels := append(append([]string{}, spec.BaseDocs...), task.Docs...)
 	var delivered []string
@@ -97,7 +112,8 @@ func StageWorkspace(dir, repoRoot string, spec *Spec, task Task, cond Condition)
 
 // stageFixtures writes the task's fixtures to dir/docs and an AGENTS.md and
 // CLAUDE.md holding only the read-mode instruction: the agent sees no other docs.
-func stageFixtures(dir string, spec *Spec, task Task, mode string) ([]string, error) {
+func stageFixtures(dir string, spec *Spec, task Task, cond Condition) ([]string, error) {
+	mode := cond.Read
 	if len(task.Fixtures) == 0 {
 		return nil, fmt.Errorf("bench: task %q has no fixtures for read mode %q", task.ID, mode)
 	}
@@ -108,12 +124,14 @@ func stageFixtures(dir string, spec *Spec, task Task, mode string) ([]string, er
 	var body strings.Builder
 	body.WriteString(strings.TrimRight(spec.ReadModes[mode], "\n") + "\n\nDocs:\n")
 	for _, name := range task.Fixtures {
-		text, _ := fixtureDoc(name)
-		if err := os.WriteFile(filepath.Join(dir, "docs", name), []byte(text), 0o644); err != nil {
-			return nil, err
+		files, _ := fixtureFiles(name, cond.Yaml, cond.Multi)
+		for _, f := range files {
+			if err := os.WriteFile(filepath.Join(dir, "docs", f.Name), []byte(f.Content), 0o644); err != nil {
+				return nil, err
+			}
+			delivered = append(delivered, "docs/"+f.Name)
+			fmt.Fprintf(&body, "- docs/%s\n", f.Name)
 		}
-		delivered = append(delivered, "docs/"+name)
-		fmt.Fprintf(&body, "- docs/%s\n", name)
 	}
 	for _, f := range []string{"AGENTS.md", "CLAUDE.md"} {
 		if err := os.WriteFile(filepath.Join(dir, f), []byte(body.String()), 0o644); err != nil {

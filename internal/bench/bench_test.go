@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 const claudeJSON = `{"result":"ready","is_error":false,"total_cost_usd":0.03,"usage":{"input_tokens":10,"output_tokens":48,"cache_read_input_tokens":5,"cache_creation_input_tokens":100}}`
@@ -363,5 +365,88 @@ func TestOpenStoreMigratesPreReadModeDatabase(t *testing.T) {
 			t.Fatal(err)
 		}
 		st.Close()
+	}
+}
+
+func TestFixtureYamlParsesAndMatchesMarkdown(t *testing.T) {
+	files, ok := fixtureFiles("RUNBOOK.md", true, 0)
+	if !ok || len(files) != 1 || files[0].Name != "RUNBOOK.yaml" {
+		t.Fatalf("yaml files = %v", files)
+	}
+	var doc struct {
+		Services map[string]map[string]any `yaml:"services"`
+	}
+	if err := yaml.Unmarshal([]byte(files[0].Content), &doc); err != nil {
+		t.Fatalf("fixture yaml does not parse: %v", err)
+	}
+	if len(doc.Services) != len(fixtureNames) {
+		t.Fatalf("yaml has %d services, want %d", len(doc.Services), len(fixtureNames))
+	}
+	if got := doc.Services[needleService]["retry_limit"]; got != "17 attempts before the message is parked" {
+		t.Errorf("quillfox retry_limit = %v", got)
+	}
+	if got := doc.Services[needlePortSvc]["port"]; got != needlePort {
+		t.Errorf("tarnwick port = %v (%T)", got, got)
+	}
+}
+
+func TestFixtureMultiSplitsByLetterGroups(t *testing.T) {
+	whole, _ := fixtureDoc("RUNBOOK.md")
+	for _, yamlOut := range []bool{false, true} {
+		files, _ := fixtureFiles("RUNBOOK.md", yamlOut, 5)
+		if len(files) != 5 {
+			t.Fatalf("multi 5 gave %d files: %v", len(files), files)
+		}
+		ext := map[bool]string{false: ".md", true: ".yaml"}[yamlOut]
+		want := []string{"RUNBOOK-a-f", "RUNBOOK-g-l", "RUNBOOK-m-r", "RUNBOOK-s-x", "RUNBOOK-y-z"}
+		services := 0
+		for i, f := range files {
+			if f.Name != want[i]+ext {
+				t.Errorf("file %d = %s, want %s%s", i, f.Name, want[i], ext)
+			}
+			services += strings.Count(f.Content, "ledger\n") + strings.Count(f.Content, "ledger\"\n")
+		}
+		if services != len(fixtureNames) {
+			t.Errorf("split files hold %d services, want %d", services, len(fixtureNames))
+		}
+	}
+	files, _ := fixtureFiles("RUNBOOK.md", false, 5)
+	var joined strings.Builder
+	for _, f := range files {
+		joined.WriteString(f.Content)
+	}
+	for _, needle := range []string{"retry limit: 17 attempts", "port: 7431\n", "Team Bramble"} {
+		if strings.Count(joined.String(), needle) != 1 || strings.Count(whole, needle) != 1 {
+			t.Errorf("needle %q not exactly once in both whole and split", needle)
+		}
+	}
+	if one, _ := fixtureFiles("RUNBOOK.md", false, 1); len(one) != 1 {
+		t.Errorf("multi 1 should stay one file, got %d", len(one))
+	}
+	if all, _ := fixtureFiles("RUNBOOK.md", false, 26); len(all) != 25 { // no service starts with x
+		t.Errorf("multi 26 gave %d files, want 25 (no x services)", len(all))
+	}
+}
+
+func TestVariantStagingAndLabel(t *testing.T) {
+	s, _ := LoadSpec()
+	tasks, _ := s.SelectFor(nil, Condition{Read: "text"})
+	cond := Condition{Docs: "full", Read: "text", Yaml: true, Multi: 5}
+	if cond.Label() != "read:text+yaml+multi5" {
+		t.Errorf("label = %q", cond.Label())
+	}
+	dir := t.TempDir()
+	got, err := StageWorkspace(dir, repoRoot(t), s, tasks[0], cond)
+	if err != nil || len(got) != 5 || got[0] != "docs/RUNBOOK-a-f.yaml" {
+		t.Fatalf("staged %v, %v", got, err)
+	}
+	agents, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	for _, name := range got {
+		if !strings.Contains(string(agents), name) {
+			t.Errorf("AGENTS.md does not list %s", name)
+		}
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Error(err)
+		}
 	}
 }

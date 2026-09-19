@@ -88,3 +88,20 @@ final answer) next to tokens. First results, 4 runs per cell:
 
 At this size native reads win on tokens; auto costs more, and one two-hop run took
 6 turns and failed. Tune the `auto` instruction and re-run before drawing conclusions.
+
+### Fixture shape: `--yaml` and `--multi`
+
+Both flags need `--read` and change only how the fixture is delivered, not how it is read:
+
+- `--yaml` delivers the whole runbook as one `RUNBOOK.yaml` (same data, `retry_limit:` style keys).
+- `--multi[=N]` splits it into N files by first letter, 26/N letters per file
+  (`RUNBOOK-a-f.md`, `RUNBOOK-g-l.md`, ...; empty groups are skipped). A bare `--multi`
+  means 5; use `--multi=3` for other values. The flags combine.
+
+The variant is recorded in `read_mode` (for example `auto+yaml+multi5`), so `bench results`
+keeps each shape separate. The fixture is sorted alphabetically since this change, so the
+whole-file `text`/`auto` cells recorded before it are not strictly comparable.
+
+Claude haiku, 4 runs per cell (all passed): `text` 2.8 turns / 47k input tokens,
+`text+yaml` 2.8 / 54k, `text+multi5` 3.0 / 50k, `auto+multi5` 4.5 / 47k. The `text`
+cell also includes 4 older-order runs. Splitting files did not reduce turns.
