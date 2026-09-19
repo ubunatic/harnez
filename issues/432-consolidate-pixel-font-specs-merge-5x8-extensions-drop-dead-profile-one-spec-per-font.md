@@ -1,6 +1,6 @@
 # 432 — Consolidate pixel font specs: merge 5x8 extensions, drop dead profile, one spec per font
 
-**Status**: Open
+**Status**: Closed — upstream fonts imported; remaining upstream glyph gaps documented in third_party/fonts/README.md
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Refactoring
