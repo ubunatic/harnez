@@ -18,16 +18,10 @@ Follow-up to 429 (glyphs to YAML spec). `font_5x8.yaml` is the hand-tuned author
 
 Other fonts cannot simply derive from the 5x8 glyphs: scaling is lossy and `glyphs.yaml` explicitly keeps size-specific matrices.
 
-## Scope
+## Outcome
 
-- **M1** (done, in `font_5x8.yaml` under `extensions:` so 6x12, which derives from the base glyphs, is unaffected): Merge the `retro_pixel_5x8` extension glyphs into `font_5x8.yaml` in its string-row format; remove the binary-row loader use for that font. Verify: `TestGoldenFontAssets` for 5x8 unchanged.
-- **M2**: Remove `profiles.default` and the `Font5x8` branch in `glyphPatternForFont`. Verify: full readcard tests plus golden assets unchanged.
-- **M3**: Decide on the `⣿` entry: remove it, or document it as reference only. Verify: golden 5x8 unchanged.
-- **M4** (larger): One spec file per font (`font_3x5.yaml`, `font_6x12.yaml`, ...), with `glyphs.yaml` reduced to the shared unicode fallback; move `charset` to its own file. Verify: all five golden PNGs byte-identical.
+Done via a simpler design than proposed: `internal/readcard/spec/glyphs.yaml` is now the single list of every glyph with one matrix per font size. `font_5x8.yaml`, `font_extensions.yaml`, `font_tables.yaml`, the scaled 5x7 fallback patterns, profiles and `unicode.go` are gone. Golden PNGs are byte-identical.
 
-## Acceptance Criteria
+## Remaining
 
-- `font_5x8.yaml` alone defines every glyph rendered by `Font5x8` (except procedural Braille).
-- No dead spec entries or dead branches remain; `spec/schemas/` updated to match.
-- All golden PNGs in `docs/data/` are unchanged and `make test-q1` passes.
-- `docs/PixelFont5x8Glyphs.md` reflects the new file layout.
+- Fill the coverage gaps (currently render as `?`): 5x8 lacks `\`, `` ` `` and `~`; 6x12 and 7x13 lack `┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼ → ← ✓ ✗`, and 6x12 also `\`, `` ` ``, `~`. Regenerate the goldens afterwards.

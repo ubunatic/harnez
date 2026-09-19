@@ -1,9 +1,9 @@
 # Pixel Font 5x8 — Non-Trivial Glyphs
 
 Design notes for the hand-tuned glyphs of `RetroPixel5x8` (`Font5x8`, 6x8 cell). Source of truth:
-`internal/readcard/spec/font_5x8.yaml` (string rows, `1` = lit) and
-`internal/readcard/spec/font_extensions.yaml` (8-bit binary rows; only the top 6 bits are inside the cell).
-Rendering in `internal/readcard/font.go`. Golden matrix: `docs/data/golden-font-5x8.png`.
+`internal/readcard/spec/glyphs.yaml`, the single list of every glyph with one pixel matrix per font size
+(`3x5`, `5x8`, `6x12`, `7x13`, `8x16`; rows are cell-sized strings, `1` = lit). Rendering in
+`internal/readcard/font.go`. Golden matrix: `docs/data/golden-font-5x8.png`.
 
 Excluded as trivial: `0-9`, `a-z`, `A-Z`, `! @ # ^ * ( ) { } [ ] - _ + = | < >`.
 Trailing empty rows are trimmed in the tables below; each glyph really has 8 rows.
@@ -69,7 +69,7 @@ Mostly 5-wide, centred on column 2. The vertical axis of symmetry is kept so ope
 
 | Glyph | Code | Pixels (6 cols) | Why it works at 5x8 |
 |---|---|---|---|
-| `°` | U+00B0 | `··#···`<br>`·#·#··`<br>`··#···` | A 3x3 diamond (`..#./.#.#/..#.`) on rows 0-2. The diamond is the smallest ring that still has a hole. `glyphs.yaml` (base, `micro` and `default` profiles) uses the same diamond, so every font agrees. |
+| `°` | U+00B0 | `··#···`<br>`·#·#··`<br>`··#···` | A 3x3 diamond (`..#./.#.#/..#.`) on rows 0-2. The diamond is the smallest ring that still has a hole. Every font size in `glyphs.yaml` uses a diamond. |
 | `±` | U+00B1 | `··#···`<br>`··#···`<br>`#####·`<br>`··#···`<br>`··#···`<br>`······`<br>`#####·` | A plus (rows 0-4) with a separated bar on row 6. The blank row 5 keeps the two parts distinguishable from a `+` over an `=`. |
 | `×` | U+00D7 | `······`<br>`#···#·`<br>`·#·#··`<br>`··#···`<br>`·#·#··`<br>`#···#·` | A full-width X across rows 1-5, centred on row 3 like the bars of `+`, `-` and `=`. It is smaller than a capital `X` (rows 0-6), so it reads as an operator. |
 | `÷` | U+00F7 | `······`<br>`··#···`<br>`······`<br>`#####·`<br>`······`<br>`··#···` | A 5-wide bar on row 3 with a dot above (row 1) and below (row 5). Dots share the stem column, and the symmetric spacing stops it from looking like `:` or `=`. |
@@ -131,5 +131,5 @@ Vertical strokes on column 2 and horizontal strokes on row 3 in every glyph, so 
 
 - **Rounded corners are duplicates.** `╭ ╮ ╰ ╯` are pixel-identical to `┌ ┐ └ ┘`. That is a deliberate trade-off at this size, but it means rounded-vs-square information is lost.
 - **`↳` looks irregular** (see its row above). Compare against the import in `docs/data/golden-font-5x8-import.png` before treating it as final.
-- **The `⣿` table entry is dead code for rendering** because the braille branch in `DrawRune` runs first. Keep it only if the golden matrix should document the intended pixels.
-- **Extension rows are 8 bits wide** while the cell is 6 wide, so the last 2 bits of every extension row are silently clipped. Keeping them at zero avoids surprises.
+- **Braille is procedural.** All `U+2800-28FF` cells are drawn by `drawBrailleRune`, so `⣿` has no entry in `glyphs.yaml`. The `height == 8` special case in `font.go` hits the rows `0, 2, 4, 6`.
+- **Coverage gaps** (these render as `?` today): 5x8 lacks `\`, `` ` `` and `~`; 6x12 also lacks the box junctions `┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼`, `→ ← ✓ ✗`; 7x13 lacks the same 13 symbols.

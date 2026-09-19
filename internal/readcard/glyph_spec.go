@@ -3,213 +3,63 @@ package readcard
 import (
 	_ "embed"
 	"fmt"
-	"image/color"
-	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
 
+// glyphSpecYAML is the single source of truth for every bitmap glyph: one
+// pixel matrix per font size, keyed by character.
+//
 //go:embed spec/glyphs.yaml
 var glyphSpecYAML []byte
 
-//go:embed spec/font_5x8.yaml
-var font5x8SpecYAML []byte
-
-//go:embed spec/font_tables.yaml
-var fontTablesSpecYAML []byte
-
-//go:embed spec/font_extensions.yaml
-var fontExtensionsSpecYAML []byte
-
 type glyphSpecFile struct {
-	Charset  string                         `yaml:"charset"`
-	Glyphs   map[string][]string            `yaml:"glyphs"`
-	Profiles map[string]map[string][]string `yaml:"profiles"`
+	Charset string                         `yaml:"charset"`
+	Glyphs  map[string]map[string][]string `yaml:"glyphs"`
 }
 
-func supportedGlyphCharset() string {
-	if specGlyphFileData.Charset == "" {
+var glyphSpec = parseGlyphSpec()
+
+func parseGlyphSpec() glyphSpecFile {
+	var file glyphSpecFile
+	if err := yaml.Unmarshal(glyphSpecYAML, &file); err != nil {
+		panic(fmt.Sprintf("readcard glyph spec: %v", err))
+	}
+	if file.Charset == "" {
 		panic("readcard glyph spec: empty charset")
 	}
-	return specGlyphFileData.Charset
+	return file
 }
 
-// SupportedGlyphCharset returns the ordered set of glyphs covered by the spec.
-func SupportedGlyphCharset() string { return supportedGlyphCharset() }
+// SupportedGlyphCharset returns the ordered set of glyphs shown in the golden matrices.
+func SupportedGlyphCharset() string { return glyphSpec.Charset }
 
-type font5x8SpecFile struct {
-	Fonts map[string]struct {
-		Glyphs     map[string][]string `yaml:"glyphs"`
-		Extensions map[string][]string `yaml:"extensions"`
-	} `yaml:"fonts"`
-}
+func supportedGlyphCharset() string { return glyphSpec.Charset }
 
-type fontTableSpecFile struct {
-	Fonts map[string]struct {
-		Glyphs map[string][]string `yaml:"glyphs"`
-	} `yaml:"fonts"`
-}
-
-type fontExtensionSpecFile struct {
-	Fonts map[string]struct {
-		Glyphs map[string][]string `yaml:"glyphs"`
-	} `yaml:"fonts"`
-}
-
-var specGlyphs = loadGlyphSpec()
-var specGlyphProfiles = loadGlyphProfiles()
-var specFont5x8 = loadFont5x8(false)
-var specFont5x8Extensions = loadFont5x8(true)
-var specFontTables = loadFontTables()
-var specFontExtensions = loadFontExtensions()
-
-func loadFontExtensions() map[string]map[rune][]byte {
-	var file fontExtensionSpecFile
-	if err := yaml.Unmarshal(fontExtensionsSpecYAML, &file); err != nil {
-		panic(fmt.Sprintf("readcard font extension spec: %v", err))
-	}
-	result := make(map[string]map[rune][]byte, len(file.Fonts))
-	for name, font := range file.Fonts {
-		glyphs := make(map[rune][]byte, len(font.Glyphs))
-		for key, rows := range font.Glyphs {
-			runes := []rune(key)
-			if len(runes) != 1 || len(rows) == 0 {
-				panic(fmt.Sprintf("readcard font extension spec: invalid %s glyph %q", name, key))
-			}
-			bits := make([]byte, len(rows))
-			for i, row := range rows {
-				value, err := strconv.ParseUint(row, 2, 8)
-				if err != nil {
-					panic(fmt.Sprintf("readcard font extension spec: invalid %s glyph %q row %q", name, key, row))
-				}
-				bits[i] = byte(value)
-			}
-			glyphs[runes[0]] = bits
+// glyphBitmaps packs the spec matrices of one font size into MSB-first row bytes.
+func glyphBitmaps(size string, width, height int) map[rune][]byte {
+	result := make(map[rune][]byte, len(glyphSpec.Glyphs))
+	for key, sizes := range glyphSpec.Glyphs {
+		rows, ok := sizes[size]
+		if !ok {
+			continue
 		}
-		result[name] = glyphs
-	}
-	return result
-}
-
-func loadFontTables() map[string]map[rune][]string {
-	var file fontTableSpecFile
-	if err := yaml.Unmarshal(fontTablesSpecYAML, &file); err != nil {
-		panic(fmt.Sprintf("readcard font table spec: %v", err))
-	}
-	result := make(map[string]map[rune][]string, len(file.Fonts))
-	for name, font := range file.Fonts {
-		result[name] = parseGlyphs(name, font.Glyphs)
-	}
-	return result
-}
-
-// loadFont5x8 parses the base glyphs, or the 5x8-only extensions when extensions is true.
-func loadFont5x8(extensions bool) map[rune][]uint8 {
-	var file font5x8SpecFile
-	if err := yaml.Unmarshal(font5x8SpecYAML, &file); err != nil {
-		panic(fmt.Sprintf("readcard 5x8 font spec: %v", err))
-	}
-	font := file.Fonts["retro_pixel_5x8"]
-	glyphs := font.Glyphs
-	if extensions {
-		glyphs = font.Extensions
-	}
-	result := make(map[rune][]uint8, len(glyphs))
-	for key, rows := range glyphs {
 		runes := []rune(key)
-		if len(runes) != 1 || len(rows) != 8 {
-			panic(fmt.Sprintf("readcard 5x8 font spec: invalid glyph %q", key))
+		if len(runes) != 1 || len(rows) != height {
+			panic(fmt.Sprintf("readcard glyph spec: invalid %s glyph %q", size, key))
 		}
-		bits := make([]uint8, 8)
+		bits := make([]byte, height)
 		for y, row := range rows {
-			if len([]rune(row)) != 6 {
-				panic(fmt.Sprintf("readcard 5x8 font spec: invalid row for %q", key))
+			if len([]rune(row)) != width {
+				panic(fmt.Sprintf("readcard glyph spec: invalid %s row %d for %q", size, y, key))
 			}
 			for x, bit := range row {
 				if bit == '1' {
-					bits[y] |= 1 << (5 - x)
+					bits[y] |= 1 << (7 - x)
 				}
 			}
 		}
 		result[runes[0]] = bits
 	}
 	return result
-}
-
-func loadGlyphSpec() map[rune][]string {
-	return parseGlyphs("base", specGlyphFileData.Glyphs)
-}
-
-func loadGlyphProfiles() map[string]map[rune][]string {
-	result := make(map[string]map[rune][]string, len(specGlyphFileData.Profiles))
-	for profile, glyphs := range specGlyphFileData.Profiles {
-		result[profile] = parseGlyphs(profile, glyphs)
-	}
-	return result
-}
-
-var specGlyphFileData = parseGlyphSpecFile()
-
-func parseGlyphSpecFile() glyphSpecFile {
-	var file glyphSpecFile
-	if err := yaml.Unmarshal(glyphSpecYAML, &file); err != nil {
-		panic(fmt.Sprintf("readcard glyph spec: %v", err))
-	}
-	return file
-}
-
-func parseGlyphs(name string, glyphs map[string][]string) map[rune][]string {
-	result := make(map[rune][]string, len(glyphs))
-	for key, pattern := range glyphs {
-		runes := []rune(key)
-		if len(runes) != 1 || len(pattern) == 0 {
-			panic(fmt.Sprintf("readcard glyph spec: invalid %s glyph %q", name, key))
-		}
-		rowWidth := len([]rune(pattern[0]))
-		for _, row := range pattern {
-			if len([]rune(row)) != rowWidth {
-				panic(fmt.Sprintf("readcard glyph spec: uneven %s pattern for %q", name, key))
-			}
-		}
-		result[runes[0]] = pattern
-	}
-	return result
-}
-
-func glyphPattern(r rune) ([]string, bool) {
-	pattern, ok := specGlyphs[r]
-	return pattern, ok
-}
-
-func glyphPatternForFont(f *MonospaceFont, r rune) ([]string, bool) {
-	profile := ""
-	if f == Font3x5 {
-		profile = "micro"
-	} else if f == Font5x8 {
-		profile = "default"
-	}
-	if pattern, ok := specGlyphProfiles[profile][r]; ok {
-		return pattern, true
-	}
-	return glyphPattern(r)
-}
-
-func drawGlyphPattern(img interface{ SetRGBA(x, y int, c color.RGBA) }, pattern []string, x, y int, col color.RGBA, width, height int) {
-	if len(pattern) == 0 {
-		return
-	}
-	gridWidth := len([]rune(pattern[0]))
-	if gridWidth == 0 {
-		return
-	}
-	for py, row := range pattern {
-		for px, bit := range row {
-			if bit != '1' {
-				continue
-			}
-			dx := x + px*width/gridWidth
-			dy := y + py*height/len(pattern)
-			img.SetRGBA(dx, dy, col)
-		}
-	}
 }

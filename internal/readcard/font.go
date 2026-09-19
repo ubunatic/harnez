@@ -23,16 +23,6 @@ func (f *MonospaceFont) DrawRune(img *image.RGBA, r rune, x, y int, col color.RG
 		drawBrailleRune(img, r, x, y, col, f.CharWidth, f.CharHeight)
 		return
 	}
-	if f == Font5x8 {
-		if glyph, ok := f.Glyphs[r]; ok {
-			drawBitmapGlyph(img, glyph, x, y, col, f.CharWidth, f.CharHeight)
-			return
-		}
-	}
-	if pattern, ok := glyphPatternForFont(f, r); ok {
-		drawUnicodePattern(img, pattern, x, y, col, f.CharWidth, f.CharHeight)
-		return
-	}
 	glyph, ok := f.Glyphs[r]
 	if !ok {
 		// Fallback for unknown characters: box or question mark
