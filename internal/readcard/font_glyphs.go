@@ -6,7 +6,9 @@ func newSpecFont(name, size string, width, height, ascent int) *MonospaceFont {
 		CharWidth:  width,
 		CharHeight: height,
 		Ascent:     ascent,
-		Glyphs:     glyphBitmaps(size, width, height),
+		loadGlyphs: func() map[rune][]byte {
+			return glyphBitmaps(size, width, height)
+		},
 	}
 }
 

@@ -116,8 +116,9 @@ func embeddedMatrix(g bdfBitmap, font bdfFont, width, height int) []byte {
 		if err != nil {
 			panic(err)
 		}
-		for x := 0; x < g.width && x < 8; x++ {
-			if bits&(1<<uint(7-x)) != 0 {
+		for x := 0; x < g.width && x < width; x++ {
+			shift := len(encoded)*4 - 1 - x
+			if shift >= 0 && bits&(1<<uint(shift)) != 0 {
 				dx := g.xoff - font.xoff + x
 				dy := top + y
 				if dx >= 0 && dx < width && dy >= 0 && dy < height {

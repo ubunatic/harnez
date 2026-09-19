@@ -1,14 +1,14 @@
 # Bundled bitmap fonts
 
-Source BDF files used by `scripts/import-bdf-font.go` to fill `internal/readcard/spec/glyphs.yaml`.
-Only glyphs listed in the spec charset are imported. The default 5x8 font is hand-tuned and is not derived from these files.
+The upstream BDF files are embedded in `internal/readcard/upstream/` and parsed lazily by
+`internal/readcard`. The default 5x8 font is hand-tuned and is not derived from them.
 
 | Size | Font | Source file | Licence |
 |---|---|---|---|
-| 3x5 (4x6 cell) | Tom Thumb by Robey Pointer | `tom-thumb/tom-thumb.bdf` | MIT (BDF `COPYRIGHT` field; upstream README in `tom-thumb/`) |
-| 6x12 (7x12 cell) | Spleen 6x12 2.2.0 | `spleen/spleen-6x12.bdf` | BSD-2-Clause |
-| 7x13 | X11 misc-fixed 7x13 | `x11-misc-fixed/7x13.bdf` | Public domain (BDF `COPYRIGHT` field) |
-| 8x16 | Spleen 8x16 2.2.0 | `spleen/spleen-8x16.bdf` | BSD-2-Clause |
+| 3x5 (4x6 cell) | Tom Thumb by Robey Pointer | `internal/readcard/upstream/tom-thumb.bdf` | MIT |
+| 6x12 (7x12 cell) | Spleen 6x12 2.2.0 | `internal/readcard/upstream/spleen-6x12.bdf` | BSD-2-Clause |
+| 7x13 | X11 misc-fixed 7x13 | `internal/readcard/upstream/7x13.bdf` | Public domain |
+| 8x16 | Spleen 8x16 2.2.0 | `internal/readcard/upstream/spleen-8x16.bdf` | BSD-2-Clause |
 
 ## Spleen (BSD-2-Clause)
 

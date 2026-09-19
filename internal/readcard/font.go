@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -15,6 +16,8 @@ type MonospaceFont struct {
 	CharHeight int
 	Ascent     int
 	Glyphs     map[rune][]byte
+	loadGlyphs func() map[rune][]byte
+	glyphsOnce sync.Once
 }
 
 // DrawRune draws a single rune onto img at pixel coordinate (x, y) using col.
@@ -23,6 +26,7 @@ func (f *MonospaceFont) DrawRune(img *image.RGBA, r rune, x, y int, col color.RG
 		drawBrailleRune(img, r, x, y, col, f.CharWidth, f.CharHeight)
 		return
 	}
+	f.glyphsOnce.Do(func() { f.Glyphs = f.loadGlyphs() })
 	glyph, ok := f.Glyphs[r]
 	if !ok {
 		// Fallback for unknown characters: box or question mark

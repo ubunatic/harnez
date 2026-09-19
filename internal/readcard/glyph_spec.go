@@ -1,7 +1,7 @@
 package readcard
 
 import (
-	_ "embed"
+	"embed"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
@@ -10,40 +10,52 @@ import (
 // glyphSpecYAML is the single source of truth for every bitmap glyph: one
 // pixel matrix per font size, keyed by character.
 //
-//go:embed spec/glyphs.yaml
-var glyphSpecYAML []byte
+//go:embed spec/charset.yaml
+var glyphCharsetYAML []byte
+
+//go:embed spec/glyphs-*.yaml
+var glyphSpecYAML embed.FS
 
 type glyphSpecFile struct {
-	Charset string                         `yaml:"charset"`
-	Glyphs  map[string]map[string][]string `yaml:"glyphs"`
+	Charset string              `yaml:"charset"`
+	Glyphs  map[string][]string `yaml:"glyphs"`
 }
 
-var glyphSpec = parseGlyphSpec()
+var glyphCharset = parseGlyphCharset()
 
-func parseGlyphSpec() glyphSpecFile {
+func parseGlyphCharset() string {
 	var file glyphSpecFile
-	if err := yaml.Unmarshal(glyphSpecYAML, &file); err != nil {
+	if err := yaml.Unmarshal(glyphCharsetYAML, &file); err != nil {
 		panic(fmt.Sprintf("readcard glyph spec: %v", err))
 	}
 	if file.Charset == "" {
 		panic("readcard glyph spec: empty charset")
 	}
+	return file.Charset
+}
+
+func parseGlyphSpec(size string) glyphSpecFile {
+	b, err := glyphSpecYAML.ReadFile("spec/glyphs-" + size + ".yaml")
+	if err != nil {
+		panic(fmt.Sprintf("readcard glyph spec %s: %v", size, err))
+	}
+	var file glyphSpecFile
+	if err := yaml.Unmarshal(b, &file); err != nil {
+		panic(fmt.Sprintf("readcard glyph spec %s: %v", size, err))
+	}
 	return file
 }
 
 // SupportedGlyphCharset returns the ordered set of glyphs shown in the golden matrices.
-func SupportedGlyphCharset() string { return glyphSpec.Charset }
+func SupportedGlyphCharset() string { return glyphCharset }
 
-func supportedGlyphCharset() string { return glyphSpec.Charset }
+func supportedGlyphCharset() string { return glyphCharset }
 
 // glyphBitmaps packs the spec matrices of one font size into MSB-first row bytes.
 func glyphBitmaps(size string, width, height int) map[rune][]byte {
-	result := make(map[rune][]byte, len(glyphSpec.Glyphs))
-	for key, sizes := range glyphSpec.Glyphs {
-		rows, ok := sizes[size]
-		if !ok {
-			continue
-		}
+	spec := parseGlyphSpec(size)
+	result := make(map[rune][]byte, len(spec.Glyphs))
+	for key, rows := range spec.Glyphs {
 		runes := []rune(key)
 		if len(runes) != 1 || len(rows) != height {
 			panic(fmt.Sprintf("readcard glyph spec: invalid %s glyph %q", size, key))
@@ -61,8 +73,7 @@ func glyphBitmaps(size string, width, height int) map[rune][]byte {
 		}
 		result[runes[0]] = bits
 	}
-	// For non-default sizes the embedded upstream font is authoritative; YAML
-	// remains the small, explicit fill-in layer for code points it lacks.
+	// Upstream is authoritative; YAML contains only its missing glyphs.
 	for r, bits := range upstreamBitmaps(size, width, height) {
 		result[r] = bits
 	}

@@ -33,8 +33,8 @@ Direction: embed the upstream BDFs and read them directly, so their full coverag
 
 ## Milestones
 
-- **M1** (done in 363d2c9, lazy loading of the spec font pending commit): Embed the BDFs and add a BDF reader in `internal/readcard` (reuse the baseline and bounding-box logic from `scripts/import-bdf-font.go`), loaded lazily per size. Verify: unit tests on a fixture BDF; `harnez --version` timing unchanged.
-- **M2**: Split the spec into one YAML file per size and remove upstream copies and leftover derived entries from the non-default files, keeping only glyphs the BDF lacks. Update `spec/schemas/`. Verify: a test asserts no overlap between a size's YAML and its BDF.
+- **M1** (done in 363d2c9): Embed the BDFs and add a BDF reader in `internal/readcard` (reuse the baseline and bounding-box logic from `scripts/import-bdf-font.go`), loaded lazily per size. Verify: unit tests on a fixture BDF; `harnez --version` timing unchanged.
+- **M2** (done, reviewed): Split the spec into one YAML file per size and remove upstream copies and leftover derived entries from the non-default files, keeping only glyphs the BDF lacks. Update `spec/schemas/`. Verify: a test asserts no overlap between a size's YAML and its BDF.
 - **M3**: Implement the chosen fallback for glyphs missing everywhere. Verify: tests for a glyph present only in YAML and one present in neither.
 - **M4**: Remove `scripts/import-bdf-font.go` and its test, update `third_party/fonts/README.md` and `docs/PixelFont5x8Glyphs.md`, regenerate the goldens. Verify: `make test-q1`; the 5x8 golden stays byte-identical.
 
