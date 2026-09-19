@@ -32,7 +32,7 @@ var (
 // — one surviving word is nearly free to satisfy and proves nothing about
 // whether the section's actual rule content survived, only that its name
 // wasn't fully erased. Real content fidelity is carried almost entirely by
-// the behavioral canary (scripts/canary-lite-doc/), which actually runs an
+// the behavioral bench (`harnez bench run --docs lite`), which actually runs an
 // isolated agent against the doc and lints its output; this test is a
 // last-resort tripwire for the one failure mode the canary can't see
 // (a section silently deleted rather than reworded), not a fidelity check.
