@@ -16,6 +16,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [MacOSPortability.md](MacOSPortability.md) | macOS/Darwin portability architecture: OS-gating, CI, dev-deps, and the standalone podmac boundary (consult before platform-specific code, CI, or guest tooling changes) |
 | [MicIndicators.md](MicIndicators.md) | Linux desktop microphone privacy-indicator survey (consult when building mic-activity detection or indicators) |
 | [PixelFont5x8Glyphs.md](PixelFont5x8Glyphs.md) | Design notes for the hand-tuned non-trivial 5x8 glyphs (grid rules, per-glyph tables) |
+| [PixelFontArchitecture.md](PixelFontArchitecture.md) | Bitmap font pipeline in readcard: single glyph spec, embedded upstream BDFs, lazy loading, goldens, lessons learned |
 | [Models.md](Models.md) | Model assessment: comparison notes across Claude/Gemini/GPT generations (consult when picking a model tier for a subagent or workflow) |
 | [Permissions.md](Permissions.md) | Claude Code permission model; Bash vs Read layers; grow-only caveat (consult when updating permission schemas) |
 | [Roadmap.md](Roadmap.md) | Working roadmap synthesized from the open issue backlog (consult before prioritizing new work; regenerate via `/roadmap`) |

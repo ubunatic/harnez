@@ -1,5 +1,6 @@
 # Pixel Font 5x8 — Non-Trivial Glyphs
 
+Architecture and lessons: [PixelFontArchitecture.md](PixelFontArchitecture.md).
 Design notes for the hand-tuned glyphs of `RetroPixel5x8` (`Font5x8`, 6x8 cell). Source of truth:
 `internal/readcard/spec/glyphs.yaml`, the single list of every glyph with one pixel matrix per font size
 (`3x5`, `5x8`, `6x12`, `7x13`, `8x16`; rows are cell-sized strings, `1` = lit). Rendering in
