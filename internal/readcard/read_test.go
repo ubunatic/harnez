@@ -115,40 +115,59 @@ func TestFontRasterizer(t *testing.T) {
 	}
 }
 
+// TestPercentGlyphRasterAlignment pins the hand-tuned 5x8 percent exactly. The
+// other sizes are upstream fonts, so only the layout is checked: ink in the
+// top-left and bottom-right quadrants (the two counters) and in both other
+// quadrants (the slash).
 func TestPercentGlyphRasterAlignment(t *testing.T) {
-	tests := []struct {
-		name string
-		font *MonospaceFont
-		want []int
-	}{
-		{"3x5", Font3x5, []int{2, 1, 1, 1, 2}},
-		{"5x8", Font5x8, []int{2, 3, 1, 1, 1, 3, 2}},
-		{"6x12", Font6x12, []int{3, 2, 1, 1, 1, 2, 3}},
-		{"7x13", DefaultFont7x13, []int{3, 2, 1, 1, 1, 2, 3}},
-		{"8x16", DefaultFont8x16, []int{3, 2, 1, 1, 1, 2, 3}},
+	render := func(font *MonospaceFont) *image.RGBA {
+		img := image.NewRGBA(image.Rect(0, 0, font.CharWidth, font.CharHeight))
+		font.DrawRune(img, '%', 0, 0, color.RGBA{R: 255, A: 255})
+		return img
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			img := image.NewRGBA(image.Rect(0, 0, tt.font.CharWidth, tt.font.CharHeight))
-			tt.font.DrawRune(img, '%', 0, 0, color.RGBA{R: 255, A: 255})
-			rows := make([]int, 0, len(tt.want))
-			for y := 0; y < tt.font.CharHeight; y++ {
+	t.Run("5x8", func(t *testing.T) {
+		img := render(Font5x8)
+		want := []int{2, 3, 1, 1, 1, 3, 2}
+		rows := make([]int, 0, len(want))
+		for y := 0; y < Font5x8.CharHeight; y++ {
+			count := 0
+			for x := 0; x < Font5x8.CharWidth; x++ {
+				if img.RGBAAt(x, y).A != 0 {
+					count++
+				}
+			}
+			if count > 0 {
+				rows = append(rows, count)
+			}
+		}
+		if len(rows) != len(want) {
+			t.Fatalf("non-empty row counts = %v, want %v", rows, want)
+		}
+		for i := range rows {
+			if rows[i] != want[i] {
+				t.Fatalf("row %d pixel count = %d, want %d; rows = %v", i, rows[i], want[i], rows)
+			}
+		}
+	})
+	for _, font := range []*MonospaceFont{Font3x5, Font6x12, DefaultFont7x13, DefaultFont8x16} {
+		t.Run(font.Name, func(t *testing.T) {
+			img := render(font)
+			quadrant := func(qx, qy int) int {
 				count := 0
-				for x := 0; x < tt.font.CharWidth; x++ {
-					if img.RGBAAt(x, y).A != 0 {
-						count++
+				for y := qy * font.CharHeight / 2; y < (qy+1)*font.CharHeight/2; y++ {
+					for x := qx * font.CharWidth / 2; x < (qx+1)*font.CharWidth/2; x++ {
+						if img.RGBAAt(x, y).A != 0 {
+							count++
+						}
 					}
 				}
-				if count > 0 {
-					rows = append(rows, count)
-				}
+				return count
 			}
-			if len(rows) != len(tt.want) {
-				t.Fatalf("non-empty row counts = %v, want %v", rows, tt.want)
-			}
-			for i := range rows {
-				if rows[i] != tt.want[i] {
-					t.Fatalf("row %d pixel count = %d, want %d; rows = %v", i, rows[i], tt.want[i], rows)
+			for qy := 0; qy < 2; qy++ {
+				for qx := 0; qx < 2; qx++ {
+					if quadrant(qx, qy) == 0 {
+						t.Errorf("percent has no ink in quadrant (%d,%d)", qx, qy)
+					}
 				}
 			}
 		})

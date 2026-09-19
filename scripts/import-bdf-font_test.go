@@ -12,7 +12,7 @@ import (
 func TestImportBDF(t *testing.T) {
 	dir := t.TempDir()
 	spec := "charset: AB\nglyphs:\n  A:\n    3x5:\n      - old\n  B:\n    3x5:\n      - old\n"
-	bdf := "STARTFONT 2.1\nCHARS 2\nSTARTCHAR A\nENCODING 65\nBBX 3 3 0 2\nBITMAP\n80\nA0\nE0\nENDCHAR\nSTARTCHAR B\nENCODING 66\nBBX 3 2 0 3\nBITMAP\nE0\nA0\nENDCHAR\nENDFONT\n"
+	bdf := "STARTFONT 2.1\nCHARS 3\nSTARTCHAR A\nENCODING 65\nBBX 3 3 0 2\nBITMAP\n80\nA0\nE0\nENDCHAR\nSTARTCHAR B\nENCODING 66\nBBX 3 2 0 3\nBITMAP\nE0\nA0\nENDCHAR\nSTARTCHAR C\nENCODING 67\nBBX 3 1 0 0\nBITMAP\nE0\nENDCHAR\nENDFONT\n"
 	specPath := filepath.Join(dir, "glyphs.yaml")
 	bdfPath := filepath.Join(dir, "fixture.bdf")
 	if err := os.WriteFile(specPath, []byte(spec), 0o644); err != nil {
@@ -35,6 +35,9 @@ func TestImportBDF(t *testing.T) {
 	}
 	if err := yaml.Unmarshal(got, &parsed); err != nil {
 		t.Fatal(err)
+	}
+	if _, ok := parsed.Glyphs["C"]; ok {
+		t.Error("glyph C is outside the spec charset and must not be imported")
 	}
 	want := map[string][]string{
 		"A": {"1  ", "1 1", "111", "   ", "   "},

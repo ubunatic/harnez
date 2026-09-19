@@ -33,21 +33,33 @@ func main() {
 	input := flag.String("input", "", "input BDF file")
 	output := flag.String("output", "", "glyphs.yaml to update")
 	size := flag.String("size", "", "target cell size, for example 7x13")
+	cellWidth := flag.Int("cell-width", 0, "target matrix width; defaults to the width in -size")
+	cellHeight := flag.Int("cell-height", 0, "target matrix height; defaults to the height in -size")
 	flag.Parse()
 	if *input == "" || *output == "" || *size == "" {
 		flag.Usage()
 		os.Exit(2)
 	}
-	if err := importBDF(*input, *output, *size); err != nil {
+	if err := importBDFWithCellSize(*input, *output, *size, *cellWidth, *cellHeight); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
 func importBDF(inputPath, outputPath, size string) error {
+	return importBDFWithCellSize(inputPath, outputPath, size, 0, 0)
+}
+
+func importBDFWithCellSize(inputPath, outputPath, size string, requestedWidth, requestedHeight int) error {
 	cellWidth, cellHeight, err := parseSize(size)
 	if err != nil {
 		return err
+	}
+	if requestedWidth > 0 {
+		cellWidth = requestedWidth
+	}
+	if requestedHeight > 0 {
+		cellHeight = requestedHeight
 	}
 	data, err := os.ReadFile(outputPath)
 	if err != nil {
@@ -62,12 +74,25 @@ func importBDF(inputPath, outputPath, size string) error {
 	if glyphs == nil {
 		return errors.New("glyph spec has no glyphs")
 	}
+	// Import only glyphs the spec already lists: real BDFs hold thousands of
+	// code points, and the spec is parsed on every harnez start.
+	wanted := make(map[rune]bool)
+	if charset := mapValue(doc.Content[0], "charset"); charset != nil {
+		for _, r := range charset.Value {
+			wanted[r] = true
+		}
+	}
+	for i := 0; i+1 < len(glyphs.Content); i += 2 {
+		for _, r := range glyphs.Content[i].Value {
+			wanted[r] = true
+		}
+	}
 	font, err := parseBDF(inputPath, cellHeight)
 	if err != nil {
 		return err
 	}
 	for _, glyph := range font.glyphs {
-		if glyph.code < 0 || glyph.code > 0x10ffff {
+		if !wanted[rune(glyph.code)] {
 			continue
 		}
 		rows, err := matrix(glyph, font, cellWidth, cellHeight)
