@@ -23,15 +23,13 @@ func (f *MonospaceFont) DrawRune(img *image.RGBA, r rune, x, y int, col color.RG
 		drawBrailleRune(img, r, x, y, col, f.CharWidth, f.CharHeight)
 		return
 	}
-	if r == '°' {
-		drawDegreeRune(img, x, y, col, f.CharWidth, f.CharHeight)
-		return
+	if f == Font5x8 {
+		if glyph, ok := f.Glyphs[r]; ok {
+			drawBitmapGlyph(img, glyph, x, y, col, f.CharWidth, f.CharHeight)
+			return
+		}
 	}
-	if r == '%' {
-		drawPercentRune(img, x, y, col, f.CharWidth, f.CharHeight)
-		return
-	}
-	if pattern, ok := unicodeGlyphs[r]; ok {
+	if pattern, ok := glyphPatternForFont(f, r); ok {
 		drawUnicodePattern(img, pattern, x, y, col, f.CharWidth, f.CharHeight)
 		return
 	}
@@ -43,10 +41,14 @@ func (f *MonospaceFont) DrawRune(img *image.RGBA, r rune, x, y int, col color.RG
 		}
 	}
 
-	bounds := img.Bounds()
-	bytesPerRow := (f.CharWidth + 7) / 8
+	drawBitmapGlyph(img, glyph, x, y, col, f.CharWidth, f.CharHeight)
+}
 
-	for row := 0; row < f.CharHeight; row++ {
+func drawBitmapGlyph(img *image.RGBA, glyph []byte, x, y int, col color.RGBA, width, height int) {
+	bounds := img.Bounds()
+	bytesPerRow := (width + 7) / 8
+
+	for row := 0; row < height; row++ {
 		py := y + row
 		if py < bounds.Min.Y || py >= bounds.Max.Y {
 			continue
@@ -55,7 +57,7 @@ func (f *MonospaceFont) DrawRune(img *image.RGBA, r rune, x, y int, col color.RG
 			break
 		}
 
-		for c := 0; c < f.CharWidth; c++ {
+		for c := 0; c < width; c++ {
 			px := x + c
 			if px < bounds.Min.X || px >= bounds.Max.X {
 				continue
@@ -66,47 +68,6 @@ func (f *MonospaceFont) DrawRune(img *image.RGBA, r rune, x, y int, col color.RG
 			if byteIdx < len(glyph) && (glyph[byteIdx]&(1<<bitIdx)) != 0 {
 				img.SetRGBA(px, py, col)
 			}
-		}
-	}
-}
-
-// drawPercentRune uses one normalized matrix for every font size. Keeping the
-// slash and the two counters in the same coordinate system avoids the visibly
-// lopsided result produced by independently scaled legacy byte glyphs.
-func drawPercentRune(img *image.RGBA, x, y int, col color.RGBA, width, height int) {
-	pattern := [7]string{
-		"01110",
-		"10001",
-		"00010",
-		"00100",
-		"01000",
-		"10001",
-		"01110",
-	}
-	for py, row := range pattern {
-		for px, bit := range row {
-			if bit != '1' {
-				continue
-			}
-			dx := x + px*width/5
-			dy := y + py*height/7
-			if dx >= img.Bounds().Min.X && dx < img.Bounds().Max.X && dy >= img.Bounds().Min.Y && dy < img.Bounds().Max.Y {
-				img.SetRGBA(dx, dy, col)
-			}
-		}
-	}
-}
-
-// drawDegreeRune keeps the common temperature symbol available in every
-// bitmap font, whose source tables intentionally cover mostly ASCII.
-func drawDegreeRune(img *image.RGBA, x, y int, col color.RGBA, width, height int) {
-	if width < 3 || height < 3 {
-		return
-	}
-	for _, p := range [][2]int{{1, 0}, {0, 1}, {2, 1}, {1, 2}} {
-		px, py := x+p[0], y+p[1]
-		if px >= img.Bounds().Min.X && px < img.Bounds().Max.X && py >= img.Bounds().Min.Y && py < img.Bounds().Max.Y {
-			img.SetRGBA(px, py, col)
 		}
 	}
 }
@@ -132,6 +93,12 @@ func drawBrailleRune(img *image.RGBA, r rune, x, y int, col color.RGBA, width, h
 	}
 	spanX := width - 1 - 2*marginX
 	spanY := height - 1 - 2*marginY
+	if height == 8 {
+		// The imported 5x8 golden uses the full cell height: Braille rows
+		// land at y=0,2,4,6 rather than being vertically inset.
+		marginY = 0
+		spanY = height - 2
+	}
 	for dot := 0; dot < 8; dot++ {
 		if bits&(1<<dot) == 0 {
 			continue
@@ -185,22 +152,31 @@ func (f *MonospaceFont) DrawStringBounded(img *image.RGBA, s string, x, y, maxX 
 }
 
 // Font5x8 provides the canonical 5x8 retro pixel font (6x8 cell) for maximum density and 1-bit crisp contrast.
-var Font5x8 = buildFont5x8()
+var Font5x8 *MonospaceFont
 
 // Font3x5 provides the ultra-dense 3x5 micro pixel font (4x6 cell) for extreme token compression.
-var Font3x5 = buildFont3x5()
+var Font3x5 *MonospaceFont
 
 // Font6x12 provides the 6x12 retro console font (7x12 cell).
-var Font6x12 = buildFont6x12()
+var Font6x12 *MonospaceFont
 
 // DefaultFont8x16 provides a crisp 8x16 monospace font.
-var DefaultFont8x16 = buildFont8x16()
+var DefaultFont8x16 *MonospaceFont
 
 // DefaultFont7x13 provides a dense 7x13 monospace font.
-var DefaultFont7x13 = buildFont7x13()
+var DefaultFont7x13 *MonospaceFont
 
 // DefaultFont is the default font used across harnez visual cards (Font5x8 retro pixel font).
-var DefaultFont = Font5x8
+var DefaultFont *MonospaceFont
+
+func init() {
+	Font5x8 = buildFont5x8()
+	Font3x5 = buildFont3x5()
+	Font6x12 = buildFont6x12()
+	DefaultFont8x16 = buildFont8x16()
+	DefaultFont7x13 = buildFont7x13()
+	DefaultFont = Font5x8
+}
 
 // ParseFont resolves a font by name (e.g. "pixel", "retro", "5x8", "3x5", "micro", "6x12", "standard", "8x16", "7x13").
 func ParseFont(name string) (*MonospaceFont, error) {

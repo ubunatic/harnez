@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["fonts"],
+  "properties": {
+    "fonts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["glyphs"],
+        "properties": {
+          "glyphs": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {"type": "string", "pattern": "^[01]{8}$"},
+              "minItems": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}
