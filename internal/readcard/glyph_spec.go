@@ -61,5 +61,10 @@ func glyphBitmaps(size string, width, height int) map[rune][]byte {
 		}
 		result[runes[0]] = bits
 	}
+	// For non-default sizes the embedded upstream font is authoritative; YAML
+	// remains the small, explicit fill-in layer for code points it lacks.
+	for r, bits := range upstreamBitmaps(size, width, height) {
+		result[r] = bits
+	}
 	return result
 }
