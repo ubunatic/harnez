@@ -297,7 +297,7 @@ value, not cosmetics. The 429–433 pixel-font cluster shipped this cycle; 434 i
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 434 — one glyph spec per font size, spec only glyphs missing upstream | M1 (embedded BDFs + lazy reader) and M2 (per-size YAML, no upstream duplication) are done and reviewed. **M3** — fallback for glyphs present in neither source; a question-mark fill landed in `560b844`, so what remains is confirming that against the ticket's 5x8-glyph recommendation and recording the decision. **M4** — remove `scripts/import-bdf-font.go` and its test, update `third_party/fonts/README.md` and `docs/PixelFont5x8Glyphs.md`, regenerate goldens (5x8 golden must stay byte-identical). | **Now** |
+| 434 — one glyph spec per font size | ✅ closed: M1–M4 done, importer removed, text→PNG pipeline tests added | **Done** |
 | 426 — make `find` output text-first for human users | S — the tracker's own CLI is read many times a day; visual-first output costs humans a step | **Now** |
 | 427 — preserve ANSI colors in the stdin render path | S — colors are dropped today, which silently degrades piped render output | **Next** |
 | 428 — code review follow-up: ANSI 256/24-bit color extensions and telemetry migration test coverage | S/M — follows 427; pairs with 425 for the telemetry half | **Next** |

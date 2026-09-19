@@ -1,6 +1,6 @@
 # 434 — One glyph spec per font size; spec only glyphs missing from the embedded upstream fonts
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactoring
@@ -35,8 +35,8 @@ Direction: embed the upstream BDFs and read them directly, so their full coverag
 
 - **M1** (done in 363d2c9): Embed the BDFs and add a BDF reader in `internal/readcard` (reuse the baseline and bounding-box logic from `scripts/import-bdf-font.go`), loaded lazily per size. Verify: unit tests on a fixture BDF; `harnez --version` timing unchanged.
 - **M2** (done, reviewed): Split the spec into one YAML file per size and remove upstream copies and leftover derived entries from the non-default files, keeping only glyphs the BDF lacks. Update `spec/schemas/`. Verify: a test asserts no overlap between a size's YAML and its BDF.
-- **M3**: Implement the chosen fallback for glyphs missing everywhere. Verify: tests for a glyph present only in YAML and one present in neither.
-- **M4**: Remove `scripts/import-bdf-font.go` and its test, update `third_party/fonts/README.md` and `docs/PixelFont5x8Glyphs.md`, regenerate the goldens. Verify: `make test-q1`; the 5x8 golden stays byte-identical.
+- **M3** (done): Decision: glyphs in neither source get an editable copy of the size's `?` matrix in that size's YAML (`scripts/fill-missing-glyphs.go`), so status marks can be hand-drawn later without code changes; braille is procedural and skipped. Implement the chosen fallback for glyphs missing everywhere. Verify: tests for a glyph present only in YAML and one present in neither.
+- **M4** (done): Remove `scripts/import-bdf-font.go` and its test, update `third_party/fonts/README.md` and `docs/PixelFont5x8Glyphs.md`, regenerate the goldens. Verify: `make test-q1`; the 5x8 golden stays byte-identical.
 
 ## Acceptance Criteria
 
@@ -45,3 +45,7 @@ Direction: embed the upstream BDFs and read them directly, so their full coverag
 - No duplicated upstream data or leftover hand-crafted entries remain in non-default specs.
 - Startup time is not measurably worse than today (about 28 ms for `harnez --version`).
 - The 5x8 glyphs and golden are unchanged.
+
+## Verification
+
+`internal/readcard/text_png_test.go` drives text -> PNG -> pixels for all five fonts (spec matrices, upstream bitmaps, fallback, braille, full card render). Golden PNGs unchanged.
