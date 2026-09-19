@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../../spec/schemas/glyphs.schema.json
 # Single source of truth for every bitmap glyph, one pixel matrix per font size.
 # Rows are cell-sized strings: `1` = lit pixel, space = unlit. Braille (U+2800-28FF) is drawn procedurally.
-charset: "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*()_+-=[]{}|;':\",.<>/?°±×÷≤≥↑↓↔┈┄╭╮╰╯⚠✦⣿⁰¹²³⁴⁵⁶⁷⁸⁹•│─┌┐└┘├┤┬┴┼→←✓✗…↳"
+charset: "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*()_+-=[]{}|;':\",.<>/?°±×÷≤≥↑↓↔┈┄╭╮╰╯⚠✦⣿⁰¹²³⁴⁵⁶⁷⁸⁹•│─┌┐└┘├┤┬┴┼→←✓✗…↳\\`~"
 glyphs:
   "0":
     3x5:
@@ -8017,6 +8017,15 @@ glyphs:
       - "  1 "
       - "  1 "
       - "    "
+    5x8:
+      - "1     "
+      - " 1    "
+      - "  1   "
+      - "   1  "
+      - "    1 "
+      - "      "
+      - "      "
+      - "      "
     7x13:
       - "       "
       - "1      "
@@ -8056,6 +8065,15 @@ glyphs:
       - "    "
       - "    "
       - "    "
+    5x8:
+      - " 1    "
+      - "  1   "
+      - "   1  "
+      - "      "
+      - "      "
+      - "      "
+      - "      "
+      - "      "
     7x13:
       - "   11  "
       - "   11  "
@@ -8095,6 +8113,15 @@ glyphs:
       - "    "
       - "    "
       - "    "
+    5x8:
+      - "      "
+      - "      "
+      - " 11 1 "
+      - "1 11  "
+      - "      "
+      - "      "
+      - "      "
+      - "      "
     7x13:
       - "       "
       - " 111 11"

@@ -24,4 +24,4 @@ Done via a simpler design than proposed: `internal/readcard/spec/glyphs.yaml` is
 
 ## Remaining
 
-- Fill the coverage gaps (currently render as `?`): 5x8 lacks `\`, `` ` `` and `~`; 6x12 and 7x13 lack `┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼ → ← ✓ ✗`, and 6x12 also `\`, `` ` ``, `~`. Regenerate the goldens afterwards.
+- Fill the remaining coverage gaps (currently render as `?`): 6x12 lacks `\`, `` ` ``, `~` and `┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼ → ← ✓ ✗`; 7x13 lacks the 13 box/arrow symbols. 5x8 is complete. Regenerate the goldens afterwards.

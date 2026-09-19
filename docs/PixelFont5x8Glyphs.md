@@ -35,6 +35,9 @@ Two-pixel-wide marks that are vertically centred in the 7-row body (rows 0-6) or
 | `"` | U+0022 | `·#·#··`<br>`·#·#··`<br>`·#·#··` | Two vertical 3-px bars (columns 1 and 3) on rows 0-2. Bars stay legible where two slanted ticks would merge into a smear; the gap column keeps them as a pair. |
 | `/` | U+002F | `····#·`<br>`···#··`<br>`··#···`<br>`·#····`<br>`#·····` | A clean 5-row diagonal from (4,0) to (0,4). It stops at row 4 so it does not read as a descender or collide with `\` or `1` in mixed text. |
 | `?` | U+003F | `·###··`<br>`#···#·`<br>`····#·`<br>`···#··`<br>`··#···`<br>`······`<br>`··#···` | Hook on rows 0-4 (`.###.`, `#...#`, then a diagonal back to the stem), a blank row 5, and the dot on row 6. The gap is what makes it `?` and not an odd `2` or `7`. |
+| `\` | U+005C | `#·····`<br>`·#····`<br>`··#···`<br>`···#··`<br>`····#·` | The exact mirror of `/`, a 5-row diagonal from (0,0) to (4,4), so the pair reads as a matched set. |
+| `` ` `` | U+0060 | `·#····`<br>`··#···`<br>`···#··` | A 3-px diagonal in the same direction as `\`, on rows 0-2 and centred on the stem column. It is a short accent, distinct from the `'` tick. |
+| `~` | U+007E | `······`<br>`······`<br>`·##·#·`<br>`#·##··`| A two-row wave (`.##.#` over `#.##.`) centred on row 3 with the other operators. Two rows are the minimum for a visible wave. |
 
 ## Symbols and currency
 
@@ -132,4 +135,4 @@ Vertical strokes on column 2 and horizontal strokes on row 3 in every glyph, so 
 - **Rounded corners are duplicates.** `╭ ╮ ╰ ╯` are pixel-identical to `┌ ┐ └ ┘`. That is a deliberate trade-off at this size, but it means rounded-vs-square information is lost.
 - **`↳` looks irregular** (see its row above). Compare against the import in `docs/data/golden-font-5x8-import.png` before treating it as final.
 - **Braille is procedural.** All `U+2800-28FF` cells are drawn by `drawBrailleRune`, so `⣿` has no entry in `glyphs.yaml`. The `height == 8` special case in `font.go` hits the rows `0, 2, 4, 6`.
-- **Coverage gaps** (these render as `?` today): 5x8 lacks `\`, `` ` `` and `~`; 6x12 also lacks the box junctions `┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼`, `→ ← ✓ ✗`; 7x13 lacks the same 13 symbols.
+- **Coverage gaps** (these render as `?` today): 6x12 lacks `\`, `` ` ``, `~` and the box junctions `┌ ┐ └ ┘ ├ ┤ ┬ ┴ ┼`, `→ ← ✓ ✗`; 7x13 lacks the same 13 symbols. 5x8 is complete.
