@@ -39,7 +39,8 @@ func SupportedGlyphCharset() string { return supportedGlyphCharset() }
 
 type font5x8SpecFile struct {
 	Fonts map[string]struct {
-		Glyphs map[string][]string `yaml:"glyphs"`
+		Glyphs     map[string][]string `yaml:"glyphs"`
+		Extensions map[string][]string `yaml:"extensions"`
 	} `yaml:"fonts"`
 }
 
@@ -57,7 +58,8 @@ type fontExtensionSpecFile struct {
 
 var specGlyphs = loadGlyphSpec()
 var specGlyphProfiles = loadGlyphProfiles()
-var specFont5x8 = loadFont5x8()
+var specFont5x8 = loadFont5x8(false)
+var specFont5x8Extensions = loadFont5x8(true)
 var specFontTables = loadFontTables()
 var specFontExtensions = loadFontExtensions()
 
@@ -101,14 +103,19 @@ func loadFontTables() map[string]map[rune][]string {
 	return result
 }
 
-func loadFont5x8() map[rune][]uint8 {
+// loadFont5x8 parses the base glyphs, or the 5x8-only extensions when extensions is true.
+func loadFont5x8(extensions bool) map[rune][]uint8 {
 	var file font5x8SpecFile
 	if err := yaml.Unmarshal(font5x8SpecYAML, &file); err != nil {
 		panic(fmt.Sprintf("readcard 5x8 font spec: %v", err))
 	}
 	font := file.Fonts["retro_pixel_5x8"]
-	result := make(map[rune][]uint8, len(font.Glyphs))
-	for key, rows := range font.Glyphs {
+	glyphs := font.Glyphs
+	if extensions {
+		glyphs = font.Extensions
+	}
+	result := make(map[rune][]uint8, len(glyphs))
+	for key, rows := range glyphs {
 		runes := []rune(key)
 		if len(runes) != 1 || len(rows) != 8 {
 			panic(fmt.Sprintf("readcard 5x8 font spec: invalid glyph %q", key))

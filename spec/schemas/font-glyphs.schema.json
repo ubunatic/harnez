@@ -17,6 +17,14 @@
               "minItems": 1,
               "items": { "type": "string" }
             }
+          },
+          "extensions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string" }
+            }
           }
         },
         "additionalProperties": false

@@ -3,19 +3,16 @@ package readcard
 // buildFont5x8 builds the 5x8 retro pixel font (6x8 cell: 5x7 glyph + 1px spacing).
 func buildFont5x8() *MonospaceFont {
 	m := make(map[rune][]byte, 128)
-	for r, rows := range specFont5x8 {
-		glyph := make([]byte, 8)
-		for i, rowBits := range rows {
-			if i < 8 {
-				glyph[i] = byte(rowBits << 2)
+	for _, table := range []map[rune][]uint8{specFont5x8, specFont5x8Extensions} {
+		for r, rows := range table {
+			glyph := make([]byte, 8)
+			for i, rowBits := range rows {
+				if i < 8 {
+					glyph[i] = byte(rowBits << 2)
+				}
 			}
+			m[r] = glyph
 		}
-		m[r] = glyph
-	}
-	// Box drawing and symbol extensions
-
-	for r, glyph := range specFontExtensions["retro_pixel_5x8"] {
-		m[r] = glyph
 	}
 	return &MonospaceFont{
 		Name:       "RetroPixel5x8",

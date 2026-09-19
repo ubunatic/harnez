@@ -20,7 +20,7 @@ Other fonts cannot simply derive from the 5x8 glyphs: scaling is lossy and `glyp
 
 ## Scope
 
-- **M1**: Merge the `retro_pixel_5x8` extension glyphs into `font_5x8.yaml` in its string-row format; remove the binary-row loader use for that font. Verify: `TestGoldenFontAssets` for 5x8 unchanged.
+- **M1** (done, in `font_5x8.yaml` under `extensions:` so 6x12, which derives from the base glyphs, is unaffected): Merge the `retro_pixel_5x8` extension glyphs into `font_5x8.yaml` in its string-row format; remove the binary-row loader use for that font. Verify: `TestGoldenFontAssets` for 5x8 unchanged.
 - **M2**: Remove `profiles.default` and the `Font5x8` branch in `glyphPatternForFont`. Verify: full readcard tests plus golden assets unchanged.
 - **M3**: Decide on the `⣿` entry: remove it, or document it as reference only. Verify: golden 5x8 unchanged.
 - **M4** (larger): One spec file per font (`font_3x5.yaml`, `font_6x12.yaml`, ...), with `glyphs.yaml` reduced to the shared unicode fallback; move `charset` to its own file. Verify: all five golden PNGs byte-identical.
