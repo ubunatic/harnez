@@ -1,6 +1,6 @@
 # 431 — Generate golden visual test assets for characters, numbers, and symbols
 
-**Status**: Open
+**Status**: Closed — implemented in readcard spec YAML, 5x8 font tuning, golden assets
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Testing
