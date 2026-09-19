@@ -75,7 +75,7 @@ func fillFile(path, bdf, charset string, dryRun bool) (bool, error) {
 		return false, fmt.Errorf("%s: missing ? matrix", path)
 	}
 	upstream, err := bdfCodes(bdf)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil {
 		return false, err
 	}
 	var missing []string
@@ -89,11 +89,21 @@ func fillFile(path, bdf, charset string, dryRun bool) (bool, error) {
 	if len(missing) == 0 || dryRun {
 		return len(missing) > 0, nil
 	}
-	encoded, err := yaml.Marshal(spec)
-	if err != nil {
-		return false, fmt.Errorf("write %s: %w", path, err)
+	var additions strings.Builder
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		additions.WriteByte('\n')
 	}
-	return true, os.WriteFile(path, append([]byte("# Only glyphs absent from the embedded upstream font, plus editable fallbacks.\n"), encoded...), 0644)
+	for _, key := range missing {
+		additions.WriteString("  '")
+		additions.WriteString(strings.ReplaceAll(key, "'", "''"))
+		additions.WriteString("':\n")
+		for _, row := range fallback {
+			additions.WriteString("  - '")
+			additions.WriteString(strings.ReplaceAll(row, "'", "''"))
+			additions.WriteString("'\n")
+		}
+	}
+	return true, os.WriteFile(path, append(data, []byte(additions.String())...), 0644)
 }
 
 func bdfPath(dir, size string) string {
