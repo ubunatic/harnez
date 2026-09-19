@@ -1,6 +1,6 @@
 # 430 — Fix percent (%) symbol glyph rendering in bitmap fonts
 
-**Status**: Open
+**Status**: Closed — implemented in readcard spec YAML, 5x8 font tuning, golden assets
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
