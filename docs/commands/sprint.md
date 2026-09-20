@@ -30,8 +30,8 @@ Follow these 5 phases sequentially:
 
 ### Phase 1: Sequential Advisory Discovery (One Reusable Advisor)
 1. Parse the target tickets or goals from the prompt.
-2. Reuse the current advisor session if available; a closed or parked advisor remains eligible for native reuse. Start a new reusable advisor with a frontier model only when no compatible session exists or the existing one has an explicit health/compatibility failure, such as the Codex usage-limit dead-session behavior. Record its session ID and model. Use this same advisor for every ticket, one at a time; never dispatch the next ticket before the previous ticket's compaction completes.
-3. Hand the advisor one ticket or bounded goal at a time. Instruct it to:
+2. Reuse the current advisor session if available; a closed or parked advisor remains eligible for native reuse. Start a new reusable advisor (via `harnez agent start <model> --name sprint-advisor "<prompt>"` or native advisor session) with a frontier model only when no compatible session exists or the existing one has an explicit health/compatibility failure, such as the Codex usage-limit dead-session behavior. Record its session ID and model. Use this same advisor for every ticket, one at a time; never dispatch the next ticket before the previous ticket's compaction completes.
+3. Hand the advisor one ticket or bounded goal at a time (e.g. `harnez agent resume <advisor_session_id> "<task>"`). Instruct it to:
    - Audit problem statements in `issues/` and related code paths using targeted `grep_search` and range-bounded reads (avoid whole-file reads on `AGENTS.md` or active prompt rules).
    - Check whether work is already completed or if prior assumptions changed.
    - Identify target files, exact line ranges, and test requirements.
@@ -39,23 +39,23 @@ Follow these 5 phases sequentially:
    - Recommend broader subsystem/work categories, short technical developer names (e.g. `cli`, `spec`, `docs`), and a suitable model for each. Explicitly justify any recommendation to use the top frontier model for development.
    - Work within the requested advice scope: it may edit tickets, create documents under `docs/` or `issues/`, and make tiny 3–4 line fixes only when the build stays clean. Verify the build for such fixes. Do not perform normal coding or split a larger change into tiny fixes to bypass this limit; hand normal implementation to developers.
    - Make intermediate commits when reasoning locks in substeps of the requested advice, committing only its scoped changes and observing the applicable review requirements. Persist conclusions, decisions, and handoff details in tickets/docs before compaction.
-4. Collect each ticket's findings and durable references into the orchestrator's sprint plan. After each ticket, the orchestrator must explicitly call the available session-compaction operation on the advisor session and confirm completion. This includes an explicit call after the last ticket, even if no further work is queued. An instruction to the advisor to compact itself is not a substitute. Keep the same session for clean-but-cached reuse, including hours later; do not replace it with a fresh advisor per ticket.
+4. Collect each ticket's findings and durable references into the orchestrator's sprint plan. After each ticket, the orchestrator must explicitly call the available session-compaction operation (`harnez agent compact <session_id>`) on the advisor session and confirm completion. This includes an explicit call after the last ticket, even if no further work is queued. An instruction to the advisor to compact itself is not a substitute. Keep the same session for clean-but-cached reuse, including hours later; do not replace it with a fresh advisor per ticket.
 5. Present the synthesized plan and task sequence to the user.
 6. Keep the host orchestrator responsive throughout delegation. Do not block the main chat on subagent waits unless the user explicitly asked to wait or the next integration step is blocked on a child result.
 
 ### Phase 2: Sequential Development & Test Verification (Reusable Developers)
-1. Create or reuse one developer agent per broader subsystem/work category from the advisor's plan, rather than one per ticket. Give each a short technical name users can refer to, and record its name, session ID, category, and model. Select a suitable lower-cost model; use the top frontier model only when the advisor explicitly recommends it.
-2. Process tasks one by one in sequence through the matching named developer (avoid concurrent edits to the same codebase/worktree). Reuse that session for later work in its category, supplying bounded tasks and durable references.
+1. Create or reuse one developer agent per broader subsystem/work category from the advisor's plan (via `harnez agent start <model> --name <category> "<prompt>"` or native subagent), rather than one per ticket. Give each a short technical name users can refer to, and record its name, session ID, category, and model. Select a suitable lower-cost model; use the top frontier model only when the advisor explicitly recommends it.
+2. Process tasks one by one in sequence through the matching named developer (resumed via `harnez agent resume <session_id> "<task>"` to avoid concurrent edits to the same codebase/worktree). Reuse that session for later work in its category, supplying bounded tasks and durable references.
 3. Follow Test-Driven Development (TDD):
    - Add or update unit tests alongside or before modifying implementation code.
    - Run tests (`go test -count=1 ./...`, `make test`) to verify each milestone before moving to the next.
    - Maintain codebase stability, ensuring clean compilation at every step.
    - For defect-shaped tickets: establish a concrete reproduction baseline *before* coding the fix (see `@docs/AgenticLoop.md` Phase 2, "Repro-before-fix").
 4. **Milestone-Boundary Atomic Commits**: Commit each verified milestone upon passing tests and review (`git commit -m "feat/fix(...): ... (issue XXX MX)"`). Never carry uncommitted working tree diffs across milestone transitions.
-5. After each larger work item, persist its learnings in issues/docs/code and pass the Phase 3 review gate before committing implementation. Then the orchestrator must make an explicit final session-compaction call for that developer and confirm completion before handing it another item or parking it. Merely telling the developer to compact at the end does not satisfy this checkpoint.
+5. After each larger work item, persist its learnings in issues/docs/code and pass the Phase 3 review gate before committing implementation. Then the orchestrator must make an explicit final session-compaction call (`harnez agent compact <session_id>`) for that developer and confirm completion before handing it another item or parking it. Merely telling the developer to compact at the end does not satisfy this checkpoint.
 
 ### Phase 3: Pre-Commit Review Gate & Nuance Follow-Up Tracking
-1. Spawn an independent reviewer subagent (or conduct a dedicated review pass).
+1. Spawn an independent reviewer subagent (via `harnez agent start codex:sol:low "Review diff HEAD~1"` or dedicated review pass).
 2. The reviewer audits the full git diff (`git diff`, `git status`) and verifies:
    - **Test Assertion Rigor**: Are assertions meaningful, robust, and verifying real behaviors?
    - **Documentation & Tracker Sync**: Are `issues/*.md` statuses, `issues/README.md`, `docs/README.md`, and `AGENTS.md` updated?
@@ -70,11 +70,11 @@ Follow these 5 phases sequentially:
 5. Apply this gate to intermediate implementation commits as well as the final sprint commit. After a larger work item is committed and its learnings documented, complete the developer compaction checkpoint from Phase 2; return to Phase 2 if more development remains.
 
 ### Phase 4: Process & Subagent Hygiene (Compact, Park & Drain)
-1. Inspect running background tasks using the available task/session tools.
-2. Explicitly terminate completed, idle, or zombie background jobs, schedule timers, and watch subprocesses. Drain outstanding delegated work before parking sessions.
-3. Preserve the reusable advisor and named developer sessions for later reuse; do not blanket-kill them. Confirm the advisor's post-last-ticket compaction and each developer's post-larger-item compaction completed. If a session received additional work afterward, persist its conclusions and have the orchestrator explicitly compact it again as the final call before parking. End disposable reviewer sessions with targeted cleanup.
+1. Inspect running background tasks using `harnez agent list` and available task/session tools.
+2. Explicitly terminate completed, idle, or zombie background jobs, schedule timers, and watch subprocesses (`harnez agent stop <id>` or `harnez agent delete <id>`). Drain outstanding delegated work before parking sessions.
+3. Preserve the reusable advisor and named developer sessions for later reuse; do not blanket-kill them. Confirm the advisor's post-last-ticket compaction and each developer's post-larger-item compaction completed. If a session received additional work afterward, persist its conclusions and have the orchestrator explicitly compact it again as the final call before parking. End disposable reviewer sessions with targeted cleanup (`harnez agent delete <session_id>`).
 4. Ensure no background processes are left running unmonitored. A parked reusable session retains its identity without an active job or polling loop.
-5. Use actual supported session-compaction operations, not invented commands or self-compaction prompts. If explicit compaction is unavailable or fails, report the affected session and limitation; do not claim it is compacted or ready for clean reuse. Same-session reuse is intended to retain useful cache while clearing ticket context, but cache retention, expiry, and billing depend on the backend and cannot be guaranteed.
+5. Use actual supported session-compaction operations (`harnez agent compact`), not invented commands or self-compaction prompts. If explicit compaction is unavailable or fails, report the affected session and limitation; do not claim it is compacted or ready for clean reuse. Same-session reuse is intended to retain useful cache while clearing ticket context, but cache retention, expiry, and billing depend on the backend and cannot be guaranteed.
 
 ### Phase 5: Agentic Flow Quality Retrospective (Feedback & Tracker Sync)
 1. Record session flow learnings, tooling friction, or agent harness feedback:

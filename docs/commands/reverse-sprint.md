@@ -60,25 +60,26 @@ You execute all coding, testing, and ticket management directly while maintainin
 - Ensure all tests pass with robust assertions.
 
 ### 3. Milestone Review Gate (Reviewer Tier)
-- Invoke a reviewer subagent (model: `sol:low`, `sonnet:low`, or `gemini3.8flash:low`).
-- Provide diff summary and test results.
+- Invoke a reviewer subagent (e.g. `harnez agent start codex:sol:low -d <dir> "Review diff HEAD~1 against ticket criteria"` or `gemini3.8flash:low`).
+- Provide diff summary and test results. Note the emitted Reconnect Banner.
 - Reviewer checks test assertion rigor, regression risks, and invariant compliance.
 - Once green, commit the milestone: `git commit -m "feat/fix(...): ... (issue XXX)"`.
 
 ### 4. Proactive Auto-Compaction
 - Check current context token usage.
-- If approaching 100–150k tokens or transitioning between major milestones, persist working notes and trigger session compaction.
+- If approaching 100–150k tokens or transitioning between major milestones, persist working notes and trigger session compaction via `harnez agent compact <session_id>` or automated runner compaction.
 
 ### 5. Advisor Escalation (If Stuck / Challenging Blockers)
 - If stuck on a complex architectural decision or subtle bug:
   - Isolate the problem to specific files and line numbers.
-  - Dispatch a single advisor subagent (model: `astra:low`, `opus:low`, or `gemini3.8flash:med`).
-  - Pass bounded prompt:
-    > "Review lines 45-80 of `pkg/service/handler.go` for the race condition described below. Do not explore unrelated files."
+  - Dispatch a single advisor subagent:
+    ```bash
+    harnez agent start codex:astra:low "Review lines 45-80 of pkg/service/handler.go for the race condition described below. Do not explore unrelated files."
+    ```
   - Integrate advisor recommendations and resume direct execution.
 
 ### 6. Teardown & Status Sync
-- Terminate all child reviewer/advisor subagents (`manage_subagents kill`).
+- Terminate all child reviewer/advisor subagents (`harnez agent delete <session_id>` or `harnez agent stop --all` / `manage_subagents kill`).
 - Update ticket status in `issues/*.md` (e.g. `Status: Closed — resolved`) and resync tracker (`harnez index`).
 - Commit the ticket update and tracker sync immediately.
 - Summarize delivered results and verification status.

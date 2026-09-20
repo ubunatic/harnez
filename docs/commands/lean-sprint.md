@@ -41,13 +41,13 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 For focused, milestone-based tasks, execute this fast-path, token-efficient loop:
 
 ### 1. Goal Handoff to Low-Cost Developer
-- The Host Orchestrator dispatches a developer worker (selecting a fast/low-cost model, e.g. Codex Luna or lightweight model).
+- The Host Orchestrator dispatches a developer worker (e.g. `codex:luna:low` or `gemini3.7flash:low`) using `harnez agent start <provider>:<model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method).
 - Provide:
   - Scoped milestone objective, target files, and acceptance criteria from the ticket.
   - Test requirements (reproduction test first for bugs, unit tests for features).
 - **Trust the Base Framework**: Do not duplicate system prompts or micromanage formatting conventions.
 - **Reading Discipline**: Instruct the developer to use `harnez read -I <file>` or line-bounded reads (`-L`) for medium/large files.
-- **Stay Responsive**: Dispatching the worker must not block the chat; return control or proceed with review preparation.
+- **Stay Responsive**: Dispatching the worker must not block the chat; note the emitted Reconnect Banner and return control or proceed with review preparation.
 
 ### 2. Autonomous Milestone Execution & Commit
 - The developer agent implements the milestone autonomously.
@@ -66,11 +66,11 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
   - Commit the ticket update immediately.
 
 ### 4. Milestone Advance or Completion
-- The developer agent picks up the updated ticket for Milestone $N+1$, executes the embedded pre-work first, and then proceeds with Milestone $N+1$ implementation.
+- The developer agent picks up the updated ticket for Milestone $N+1$ (resumed via `harnez agent resume <session_id> "<pre_work_and_milestone_prompt>"` or native subagent message), executes the embedded pre-work first, and then proceeds with Milestone $N+1$ implementation.
 - Repeat Steps 1–3 for each milestone.
 - Once the final milestone passes concise review and tests are 100% green, confirm completion.
 
 ### 5. Teardown & Status Sync
-- Terminate the developer subagent and drain background jobs.
+- Terminate the developer subagent (`harnez agent delete <session_id>` or `manage_subagents kill`) and drain background jobs.
 - Update ticket status in `issues/*.md` (e.g. `Status: Closed`) and refresh `issues/README.md` (`harnez index -d .`).
 - Output a brief, high-level summary of delivered milestones and verification status.
