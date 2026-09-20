@@ -43,7 +43,7 @@ type TurnResult struct {
 
 var modelAliases = map[string]Model{
 	"codex:luna": {"codex", "gpt-5.6-luna", "low"}, "codex:sol": {"codex", "gpt-5.6-sol", "low"}, "codex:astra": {"codex", "gpt-5.6-astra", "low"},
-	"claude:haiku": {"claude", "claude-3-5-haiku-20241022", "low"}, "claude:sonnet": {"claude", "claude-3-7-sonnet-20250219", "low"}, "claude:opus": {"claude", "claude-3-opus-20240229", "low"},
+	"claude:haiku": {"claude", "haiku", "low"}, "claude:sonnet": {"claude", "claude-3-7-sonnet-20250219", "low"}, "claude:opus": {"claude", "claude-3-opus-20240229", "low"},
 	"agy:flash": {"agy", "gemini-3.7-flash", "low"},
 }
 
@@ -58,6 +58,9 @@ func ResolveModel(spec string) (Model, error) {
 		return Model{}, fmt.Errorf("unknown model %q", spec)
 	}
 	if len(parts) == 3 {
+		if parts[0] == "claude" && parts[1] == "haiku" && parts[2] == "latest" {
+			return m, nil
+		}
 		if parts[2] != "low" && parts[2] != "med" && parts[2] != "high" {
 			return Model{}, fmt.Errorf("unknown model tier %q", parts[2])
 		}
