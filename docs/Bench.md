@@ -146,3 +146,12 @@ First card-style sweep (claude haiku, `--read auto`, 2 runs per task, so only a 
 | `--style=max` | 2/4 | both `read-one-fact` runs failed, two-hop 6 turns |
 
 `read-one-fact` failed in every style, so the fixture read itself is unreliable at n=2; repeat with `--repeat 4` or more before ranking styles.
+
+Font sweep (claude haiku, `--read auto`, 4 runs per task; `--card=--font=3x5` is the Tom Thumb font for all card text):
+
+| Font | Pass | `read-one-fact` turns / avg input | `read-two-hop` turns / avg input |
+|---|---|---|---|
+| default 5x8 | 7/8 | 2-5 / 46k | 7-8 / 107k |
+| `--font=3x5` | 8/8 | 5-6 / 87k | 6-7 / 102k |
+
+The small font did not hurt accuracy, but the one-fact task cost about twice the input tokens and turns, so the smaller card did not turn into cheaper reads at this size. Still n=4 per cell.
