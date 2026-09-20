@@ -82,3 +82,36 @@ func TestQuestionMarkFallbackUsesUpstreamOrSpec(t *testing.T) {
 		}
 	}
 }
+
+func TestDot8Editable3x5SpecCoversCharset(t *testing.T) {
+	spec := parseGlyphSpec("3x5")
+	if _, ok := spec.Glyphs["?"]; !ok {
+		t.Fatal("3x5 spec is missing the editable '?' fallback")
+	}
+	for _, r := range []rune(glyphCharset) {
+		if r >= 0x2800 && r <= 0x28ff {
+			if _, ok := spec.Glyphs[string(r)]; ok {
+				t.Errorf("procedural Braille cell %q must not be in 3x5 YAML", r)
+			}
+			continue
+		}
+		rows, ok := spec.Glyphs[string(r)]
+		if !ok {
+			t.Errorf("3x5 YAML is missing charset glyph %q", r)
+			continue
+		}
+		if len(rows) != 6 {
+			t.Errorf("3x5 glyph %q has %d rows, want 6", r, len(rows))
+		}
+		for y, row := range rows {
+			if len([]rune(row)) != 4 {
+				t.Errorf("3x5 glyph %q row %d has width %d, want 4", r, y, len([]rune(row)))
+			}
+			for _, bit := range row {
+				if bit != '1' && bit != ' ' {
+					t.Errorf("3x5 glyph %q row %d contains invalid pixel %q", r, y, bit)
+				}
+			}
+		}
+	}
+}
