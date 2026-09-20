@@ -448,3 +448,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 447 | [447-use-b-and-hash-as-matrix-color-symbols.md](447-use-b-and-hash-as-matrix-color-symbols.md) | Use B and hash as matrix color symbols | Open |
 | 448 | [448-add-a-command-to-list-the-latest-known-agent-models.md](448-add-a-command-to-list-the-latest-known-agent-models.md) | Add a command to list the latest known agent models | Closed — implemented in cf9e94c |
 | 449 | [449-add-spec-driven-agent-chat-model-selection-and-aliases.md](449-add-spec-driven-agent-chat-model-selection-and-aliases.md) | Add spec-driven agent chat model selection and aliases | Open |
+| 450 | [450-fix-hosted-agent-chat-input-line-after-terminal-resize.md](450-fix-hosted-agent-chat-input-line-after-terminal-resize.md) | Fix hosted agent chat input line after terminal resize | Open |
