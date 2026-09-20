@@ -30,13 +30,31 @@ Implement the underlying `Driver` engine for headless Codex, Claude, and AGY ses
 
 ## 3. Implementation & Verification Plan
 
-### 3.1 Subagent Driver Backend (`internal/subagent/`)
-- Implement `Driver` interface and provider drivers (`codex.go`, `claude.go`).
-- Parse stdout/stderr and JSON stream payloads for token telemetry.
+#### Milestone 1: Subagent Driver Engine & Provider Parsers (`internal/subagent/driver.go`, `codex.go`, `claude.go`)
+- Define `Driver` interface: `Run(ctx, opts) (*TurnResult, error)`, `Resume(ctx, sessionID, prompt) (*TurnResult, error)`.
+- Implement `CodexDriver`: invoke `codex exec -m <model> --dangerously-bypass-approvals-and-sandbox`, stream/parse session id, tokens used (input, output, cached), response.
+- Implement `ClaudeDriver`: invoke `claude -p "<prompt>" --dangerously-skip-permissions --model <model>`, parse tokens and response.
+- Add unit tests in `internal/subagent/driver_test.go` with mock output fixtures.
 
-### 3.2 Auto-Compaction & KV-Cache Guard
-- Check token thresholds before dispatching turns in resumed sessions.
-- Invalidate stale sessions if idle beyond provider KV cache limits (~5-10m).
+#### Milestone 2: Session Lifecycle Manager, Ancestry Tracking & Compaction Guard (`internal/subagent/session.go`)
+- Implement `SessionStore` persisting active session metadata in `~/.harnez/agents/<session_id>.json`.
+- Track `parent_session_id`, `caller_pid`, `harness_type`, `tokens_cumulative`, `last_active_at`.
+- Enforce lineage invariant: an agent session can only stop or delete its own child descendants.
+- Implement auto-compaction trigger when `tokens_cumulative >= 100k`.
+- Add unit tests in `internal/subagent/session_test.go`.
 
-### 3.3 Automated Verification Target
-- `go test -v ./internal/subagent/...` with mock CLI streams and integration checks.
+#### Milestone 3: CLI Command Surface (`cmd/harnez/agent.go`)
+- Implement `harnez agent start <provider>:<model>[:<tier>] "<prompt>"`, `resume`, `list`, `status`, `compact`, `stop`, `delete`.
+- Print Reconnect Banner on start.
+- Provide `--json` flag for machine consumption.
+- Register `agent` command in `cmd/harnez/root.go`.
+
+#### Milestone 4: End-to-End Test Suite & Verification
+- Comprehensive tests for `harnez agent` commands, mock runners, and failure modes.
+- Verify `make test` / `go test ./...`.
+
+### 4. Milestone Progress & Execution Log
+- [ ] Milestone 1: Core Driver Engine & Provider Parsers
+- [ ] Milestone 2: Session Manager & Lineage Hygiene
+- [ ] Milestone 3: CLI Command Surface & Reconnect Banner
+- [ ] Milestone 4: End-to-End Verification & Documentation
