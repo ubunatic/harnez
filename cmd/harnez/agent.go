@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,11 +15,17 @@ import (
 )
 
 var agentDriver = func(m subagent.Model) subagent.Driver {
-	if m.Provider == "claude" {
+	switch m.Provider {
+	case "claude":
 		return subagent.ClaudeDriver{}
+	case "codex":
+		return subagent.CodexDriver{}
+	default:
+		return subagent.UnsupportedDriver{Provider: m.Provider}
 	}
-	return subagent.CodexDriver{}
 }
+
+var agentInteractiveRunner subagent.InteractiveRunner = subagent.CLIInteractiveRunner{}
 
 type agentOutput struct {
 	*subagent.Session
@@ -39,19 +46,7 @@ func newAgentCmd() *cobra.Command {
 		return os.Getenv("AGY_CONVERSATION_ID")
 	}
 	find := func(s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
-		if x, err := s.Get(id); err == nil {
-			return x, nil
-		}
-		all, err := s.List("", true)
-		if err != nil {
-			return nil, err
-		}
-		for _, x := range all {
-			if x.Name == id {
-				return x, nil
-			}
-		}
-		return nil, fmt.Errorf("session %q not found", id)
+		return s.Find(id)
 	}
 	write := func(cmd *cobra.Command, v any) error {
 		if jsonOut {
@@ -102,6 +97,141 @@ func newAgentCmd() *cobra.Command {
 	start.Flags().StringVar(&name, "name", "", "session name")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 
+	var chatDir, chatName string
+	chat := &cobra.Command{Use: "chat <provider:model[:tier]>", Short: "Launch an interactive agent session", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		m, err := subagent.ResolveModel(args[0])
+		if err != nil {
+			return err
+		}
+		s, err := store()
+		if err != nil {
+			return err
+		}
+		canonicalWorkDir, err := filepath.Abs(chatDir)
+		if err != nil {
+			return fmt.Errorf("resolve working directory: %w", err)
+		}
+		sessions, err := s.List("", true)
+		if err != nil {
+			return err
+		}
+		taken := make(map[string]bool, len(sessions)*2)
+		for _, existing := range sessions {
+			taken[existing.Name] = true
+			taken[existing.ID] = true
+		}
+		if chatName != "" && taken[chatName] {
+			return fmt.Errorf("session name %q is already in use", chatName)
+		}
+		var sess *subagent.Session
+		for {
+			sessName := chatName
+			if sessName == "" {
+				sessName, err = subagent.GenerateSessionName(func(candidate string) bool { return taken[candidate] })
+				if err != nil {
+					return err
+				}
+			}
+			now := time.Now()
+			sess = &subagent.Session{
+				ID: uuid.NewString(), Name: sessName, Provider: m.Provider, Model: m.Name, Tier: m.Tier,
+				WorkingDir: canonicalWorkDir, ParentSessionID: parent(), CallerPID: os.Getpid(),
+				HarnessType: "interactive", Status: "active", CreatedAt: now, LastActiveAt: now,
+			}
+			sess.ControlSocket = filepath.Join(storeDir, sess.ID+".sock")
+			if m.Provider == "claude" {
+				sess.ProviderSessionID = sess.ID
+			}
+			err = s.Create(sess)
+			if err == nil {
+				break
+			}
+			if chatName != "" || !errors.Is(err, subagent.ErrSessionNameInUse) {
+				return err
+			}
+			taken[sessName] = true
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Chat: %s (%s)\n", sess.Name, sess.ID)
+		opts := subagent.InteractiveOptions{Model: m, SessionID: sess.ID, Name: sess.Name, Dir: canonicalWorkDir, Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), ControlSocket: sess.ControlSocket, Started: func(pid int) error {
+			sess.ProcessPID = pid
+			return s.Save(sess)
+		}}
+		err = agentInteractiveRunner.Chat(cmd.Context(), opts)
+		current, getErr := s.Get(sess.ID)
+		if getErr != nil {
+			return err
+		}
+		sess = current
+		sess.LastActiveAt = time.Now()
+		sess.ControlSocket = ""
+		sess.ProcessPID = 0
+		if sess.Status != "stopped" {
+			if err != nil {
+				sess.Status = "failed"
+			} else {
+				sess.Status = "completed"
+			}
+		}
+		if saveErr := s.Save(sess); saveErr != nil {
+			if err != nil {
+				return fmt.Errorf("%v; save session state: %w", err, saveErr)
+			}
+			return saveErr
+		}
+		return err
+	}}
+	chat.Flags().StringVar(&chatName, "name", "", "memorable session name")
+	chat.Flags().StringVarP(&chatDir, "dir", "d", ".", "working directory")
+
+	attach := &cobra.Command{Use: "attach <session>", Short: "Attach to an interactive agent session", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		s, err := store()
+		if err != nil {
+			return err
+		}
+		sess, err := find(s, args[0])
+		if err != nil {
+			return err
+		}
+		if !subagent.CanManage(parent(), sess) {
+			return fmt.Errorf("session %q is outside caller lineage", sess.ID)
+		}
+		if sess.ProviderSessionID == "" {
+			return fmt.Errorf("session %q cannot be attached: %s does not expose a provider session ID for foreground launches", sess.Name, sess.Provider)
+		}
+		sess.Status = "active"
+		sess.ControlSocket = filepath.Join(storeDir, sess.ID+".sock")
+		sess.LastActiveAt = time.Now()
+		if err := s.Save(sess); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Attached: %s (%s)\n", sess.Name, sess.ID)
+		opts := subagent.InteractiveOptions{Model: subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, SessionID: sess.ID, Name: sess.Name, Dir: sess.WorkingDir, Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), ControlSocket: sess.ControlSocket, Started: func(pid int) error {
+			sess.ProcessPID = pid
+			return s.Save(sess)
+		}}
+		err = agentInteractiveRunner.Attach(cmd.Context(), opts, sess.ProviderID())
+		current, getErr := s.Get(sess.ID)
+		if getErr != nil {
+			return err
+		}
+		sess = current
+		sess.LastActiveAt = time.Now()
+		sess.ControlSocket = ""
+		sess.ProcessPID = 0
+		if sess.Status != "stopped" {
+			if err != nil {
+				sess.Status = "failed"
+			} else {
+				sess.Status = "completed"
+			}
+		}
+		if saveErr := s.Save(sess); saveErr != nil && err == nil {
+			return saveErr
+		}
+		return err
+	}}
+	chat.AddCommand(attach)
+
 	resume := &cobra.Command{Use: "resume <session> <prompt>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		s, err := store()
 		if err != nil {
@@ -114,13 +244,26 @@ func newAgentCmd() *cobra.Command {
 		if !subagent.CanManage(parent(), sess) {
 			return fmt.Errorf("session %q is outside caller lineage", sess.ID)
 		}
+		if sess.Status == "active" && sess.HarnessType == "interactive" {
+			if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "prompt", args[1]); err != nil {
+				return err
+			}
+			sess.LastActiveAt = time.Now()
+			if err := s.Save(sess); err != nil {
+				return err
+			}
+			return write(cmd, agentOutput{Session: sess, Response: "prompt delivered"})
+		}
+		if sess.HarnessType == "interactive" && sess.ProviderSessionID == "" {
+			return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)
+		}
 		d := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
 		if subagent.ShouldCompact(sess.TokensCumulative) {
-			if _, err = d.Compact(cmd.Context(), sess.ID); err != nil {
+			if _, err = d.Compact(cmd.Context(), sess.ProviderID()); err != nil {
 				return err
 			}
 		}
-		r, err := d.Resume(cmd.Context(), sess.ID, args[1])
+		r, err := d.Resume(cmd.Context(), sess.ProviderID(), args[1])
 		if err != nil {
 			return err
 		}
@@ -179,7 +322,7 @@ func newAgentCmd() *cobra.Command {
 		if jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(x)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%s\nStatus: %s\nProvider: %s:%s\nTokens: %d (turn %d)\nCached: %d\n", x.Name, x.Status, x.Provider, x.Model, x.TokensCumulative, x.TokensTurn, x.CachedTokens)
+		fmt.Fprintf(cmd.OutOrStdout(), "ID: %s\nName: %s\nStatus: %s\nProvider: %s:%s\nTokens: %d (turn %d)\nCached: %d\n", x.ID, x.Name, x.Status, x.Provider, x.Model, x.TokensCumulative, x.TokensTurn, x.CachedTokens)
 		return nil
 	}}
 	status.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
@@ -220,7 +363,17 @@ func newAgentCmd() *cobra.Command {
 		if e != nil {
 			return e
 		}
-		_, e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}).Compact(cmd.Context(), x.ID)
+		if x.Status == "active" && x.HarnessType == "interactive" {
+			if e := subagent.SendControl(cmd.Context(), x.ControlSocket, "compact", ""); e != nil {
+				return e
+			}
+			x.LastActiveAt = time.Now()
+			return s.Save(x)
+		}
+		if x.HarnessType == "interactive" && x.ProviderSessionID == "" {
+			return fmt.Errorf("session %q cannot be compacted: %s did not expose a provider session ID", x.Name, x.Provider)
+		}
+		_, e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}).Compact(cmd.Context(), x.ProviderID())
 		return e
 	}}
 	stop := &cobra.Command{Use: "stop [session]", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
@@ -231,7 +384,18 @@ func newAgentCmd() *cobra.Command {
 		if children && len(a) == 0 {
 			xs, _ := s.List(parent(), false)
 			for _, x := range xs {
-				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Stop(cmd.Context(), x.ID); e != nil {
+				if x.HarnessType == "interactive" {
+					if x.Status != "active" {
+						continue
+					}
+					if e = subagent.SendControl(cmd.Context(), x.ControlSocket, "stop", ""); e != nil {
+						return e
+					}
+					x.Status = "stopped"
+					_ = s.Save(x)
+					continue
+				}
+				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Stop(cmd.Context(), x.ProviderID()); e != nil {
 					return e
 				}
 				x.Status = "stopped"
@@ -249,7 +413,18 @@ func newAgentCmd() *cobra.Command {
 		if !subagent.CanManage(parent(), x) {
 			return fmt.Errorf("session %q is outside caller lineage", x.ID)
 		}
-		e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Stop(cmd.Context(), x.ID)
+		if x.HarnessType == "interactive" {
+			if x.Status != "active" {
+				return fmt.Errorf("session %q is not active", x.Name)
+			}
+			if e = subagent.SendControl(cmd.Context(), x.ControlSocket, "stop", ""); e != nil {
+				return e
+			}
+			x.Status = "stopped"
+			x.LastActiveAt = time.Now()
+			return s.Save(x)
+		}
+		e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Stop(cmd.Context(), x.ProviderID())
 		x.Status = "stopped"
 		if e == nil {
 			e = s.Save(x)
@@ -269,12 +444,18 @@ func newAgentCmd() *cobra.Command {
 		if !subagent.CanManage(parent(), x) {
 			return fmt.Errorf("session %q is outside caller lineage", x.ID)
 		}
-		if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Delete(cmd.Context(), x.ID); e != nil {
+		if x.HarnessType == "interactive" {
+			if x.Status == "active" {
+				return fmt.Errorf("session %q is active; stop it before deletion", x.Name)
+			}
+			return s.Delete(x.ID)
+		}
+		if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Delete(cmd.Context(), x.ProviderID()); e != nil {
 			return e
 		}
 		return s.Delete(x.ID)
 	}}
-	root.AddCommand(start, resume, list, status, compact, stop, remove)
+	root.AddCommand(start, chat, resume, list, status, compact, stop, remove)
 	return root
 }
 

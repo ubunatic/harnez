@@ -33,13 +33,21 @@ func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error
 	return r, nil
 }
 func (d ClaudeDriver) Resume(ctx context.Context, id, prompt string) (*TurnResult, error) {
-	return d.Run(ctx, RunOptions{Prompt: prompt, Model: Model{Provider: "claude", Name: id}})
+	b, err := d.command(ctx, "-p", "--resume", id, "--output-format", "json", prompt)
+	if err != nil {
+		return nil, fmt.Errorf("claude resume: %w", err)
+	}
+	return parseClaude(b)
 }
-func (d ClaudeDriver) Compact(context.Context, string) (*TurnResult, error) {
-	return nil, fmt.Errorf("claude compaction is managed by the session lifecycle")
+func (d ClaudeDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
+	return d.Resume(ctx, id, "/compact")
 }
-func (d ClaudeDriver) Stop(context.Context, string) error   { return nil }
-func (d ClaudeDriver) Delete(context.Context, string) error { return nil }
+func (d ClaudeDriver) Stop(ctx context.Context, id string) error {
+	return nil
+}
+func (d ClaudeDriver) Delete(ctx context.Context, id string) error {
+	return nil
+}
 func parseClaude(data []byte) (*TurnResult, error) {
 	var v struct {
 		Result  string `json:"result"`

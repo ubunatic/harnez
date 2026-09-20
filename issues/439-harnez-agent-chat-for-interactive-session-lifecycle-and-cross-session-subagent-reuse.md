@@ -1,6 +1,6 @@
 # 439 — harnez agent chat for interactive session lifecycle and cross-session subagent reuse
 
-**Status**: Open
+**Status**: Closed — implemented interactive chat session lifecycle, memorable session naming, and unified control (#439)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agent Orchestration / Interactive CLI

@@ -91,7 +91,18 @@ harnez agent start <provider>:<model>[:<tier>] [-d <working_dir>] [--name <sessi
   }
   ```
 
-### 2.2 `harnez agent resume` (Reconnect to Session)
+### 2.2 `harnez agent chat` (Interactive Sessions & Memorable Naming)
+Launches an interactive foreground terminal chat session with the target agent backend (`codex`, `claude`, `agy`), automatically assigning a memorable short name (e.g. `calm-otter`, `swift-falcon`, `bold-fox`) and registering lifecycle state.
+
+```bash
+harnez agent chat <provider:model[:tier]> [--name <session_name>] [-d <working_dir>]
+harnez agent chat attach <session_id|name>
+```
+
+- **Interactive Control Socket**: Live interactive sessions expose a Unix control socket (`~/.harnez/agents/<session_id>.sock`), enabling host orchestrators and peer agents to inject prompts (`harnez agent resume`), request compaction (`harnez agent compact`), or stop (`harnez agent stop`) without killing the user terminal.
+- **Detached Reattach**: Detached or completed interactive sessions can be resumed via `harnez agent chat attach <session_id|name>`.
+
+### 2.3 `harnez agent resume` (Reconnect to Session)
 Resumes an existing session with full conversational memory and KV-cache continuity.
 
 ```bash
@@ -101,7 +112,7 @@ harnez agent resume <session_id|name> "<next_prompt>"
 - If cumulative token usage exceeds the compaction threshold (100–150k tokens), `harnez agent` automatically executes context compaction before executing the turn.
 - Returns turn response and updated cumulative token telemetry.
 
-### 2.3 `harnez agent list`
+### 2.4 `harnez agent list`
 Lists active, idle, and parked subagent sessions. By default filters to the current caller session and its child lineage. Use `--all-sessions` to view all agents running across external tools.
 
 ```bash
@@ -115,27 +126,27 @@ ID                                    NAME              PROVIDER  PARENT     MOD
 01a0b370-6966-7640-8eae-3bfb0d7b14e2  reviewer-sol      codex     agy-77a1   gpt-5.6-sol   parked     112.1k   45m00s   EXPIRED
 ```
 
-### 2.4 `harnez agent status`
+### 2.5 `harnez agent status`
 Provides detailed inspection of a session's health, token growth trajectory, and cache freshness.
 
 ```bash
 harnez agent status <session_id|name> [--json]
 ```
 
-### 2.5 `harnez agent compact`
+### 2.6 `harnez agent compact`
 Explicitly invokes context compaction for a session.
 
 ```bash
 harnez agent compact <session_id|name>
 ```
 
-### 2.6 `harnez agent stop` & `delete` (alias `rm`)
+### 2.7 `harnez agent stop` & `delete` (alias `rm`)
 - `harnez agent stop <session_id|name>`: Gracefully stops running tasks and parks the session (only permitted for own session or direct child agents).
 - `harnez agent stop --children`: Gracefully stops and parks all child agents spawned by the current caller session.
 - `harnez agent delete <session_id|name>`: Terminates the process, clears ephemeral working files, and purges state.
 - External sessions' agents cannot be stopped or deleted by foreign sessions without explicit human/global flags (e.g. `--global --force`), preventing cross-tool collisions.
 
-### 2.7 Multi-Session Concurrency & Lineage Isolation Invariant
+### 2.8 Multi-Session Concurrency & Lineage Isolation Invariant
 When multiple developer harnesses (e.g., AGY IDE, independent Claude CLI sessions, Codex CLI terminals, background CI jobs) run concurrently on the same host:
 1. **Ownership & Ancestry Tracking**: Every agent session record persisted under `~/.harnez/agents/<session_id>.json` contains its `parent_session_id`, `caller_pid`, `harness_type`, and workspace directory.
 2. **Strict Lineage Boundary**: An agent session or automated sprint workflow **MUST ONLY** inspect, resume, stop, or delete agents belonging to its own session subtree (itself and its descendants).

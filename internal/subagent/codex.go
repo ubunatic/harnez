@@ -46,11 +46,21 @@ func (d CodexDriver) runResume(ctx context.Context, id, prompt string) (*TurnRes
 	}
 	return parseCodex(b)
 }
-func (d CodexDriver) Compact(context.Context, string) (*TurnResult, error) {
-	return nil, fmt.Errorf("codex compaction is managed by the session lifecycle")
+func (d CodexDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
+	if _, err := d.command(ctx, "queue", "--thread", id, "--message", "/compact"); err != nil {
+		return nil, fmt.Errorf("codex compact: %w", err)
+	}
+	return &TurnResult{Response: "compaction queued"}, nil
 }
-func (d CodexDriver) Stop(context.Context, string) error   { return nil }
-func (d CodexDriver) Delete(context.Context, string) error { return nil }
+func (d CodexDriver) Stop(context.Context, string) error {
+	return nil
+}
+func (d CodexDriver) Delete(ctx context.Context, id string) error {
+	if _, err := d.command(ctx, "delete", "--force", id); err != nil {
+		return fmt.Errorf("codex delete: %w", err)
+	}
+	return nil
+}
 
 func parseCodex(data []byte) (*TurnResult, error) {
 	r := &TurnResult{}

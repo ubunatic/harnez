@@ -1,6 +1,7 @@
 package subagent
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -218,6 +219,77 @@ func TestFileSessionStore_DeleteNotFound(t *testing.T) {
 	}
 }
 
+func TestFileSessionStore_FindByNameAndProviderID(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &Session{ID: "registry-id", ProviderSessionID: "provider-id", Name: "calm-otter"}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Find("calm-otter")
+	if err != nil || got.ID != sess.ID {
+		t.Fatalf("Find by name = %#v, %v", got, err)
+	}
+	if got.ProviderID() != "provider-id" {
+		t.Fatalf("ProviderID = %q, want provider-id", got.ProviderID())
+	}
+	legacy := &Session{ID: "legacy-id"}
+	if legacy.ProviderID() != legacy.ID {
+		t.Fatalf("legacy ProviderID = %q, want %q", legacy.ProviderID(), legacy.ID)
+	}
+}
+
+func TestFileSessionStore_CreateRejectsNameIDCollisions(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Create(&Session{ID: "registry-id", Name: "calm-otter"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, sess := range []*Session{
+		{ID: "other-id", Name: "calm-otter"},
+		{ID: "other-id", Name: "registry-id"},
+		{ID: "calm-otter", Name: "other-name"},
+	} {
+		if err := store.Create(sess); !errors.Is(err, ErrSessionNameInUse) {
+			t.Errorf("Create(%#v) error = %v, want ErrSessionNameInUse", sess, err)
+		}
+	}
+}
+
+func TestFileSessionStore_CreateConcurrentNameReservation(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := make(chan error, 2)
+	start := make(chan struct{})
+	for _, id := range []string{"one", "two"} {
+		go func(id string) {
+			<-start
+			results <- store.Create(&Session{ID: id, Name: "swift-falcon"})
+		}(id)
+	}
+	close(start)
+	successes, collisions := 0, 0
+	for range 2 {
+		err := <-results
+		if err == nil {
+			successes++
+		} else if errors.Is(err, ErrSessionNameInUse) {
+			collisions++
+		} else {
+			t.Fatalf("unexpected Create error: %v", err)
+		}
+	}
+	if successes != 1 || collisions != 1 {
+		t.Fatalf("successes=%d collisions=%d", successes, collisions)
+	}
+}
+
 func TestCanManage_RootCaller(t *testing.T) {
 	target := &Session{
 		ID:              "sess-1",
@@ -245,6 +317,17 @@ func TestCanManage_Self(t *testing.T) {
 	}
 	if !CanManage("sess-1", target) {
 		t.Fatal("Session should be able to manage itself")
+	}
+}
+
+func TestCanManage_SelfByName(t *testing.T) {
+	target := &Session{
+		ID:              "sess-1",
+		Name:            "swift-falcon",
+		ParentSessionID: "parent-1",
+	}
+	if !CanManage("swift-falcon", target) {
+		t.Fatal("Session should be able to manage itself by name")
 	}
 }
 

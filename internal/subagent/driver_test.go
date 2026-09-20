@@ -2,6 +2,8 @@ package subagent
 
 import (
 	"context"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -14,6 +16,43 @@ func TestResolveModel(t *testing.T) {
 		if m.Provider != tc.provider || m.Name != tc.name || m.Tier != tc.tier {
 			t.Fatalf("%s resolved to %#v", tc.spec, m)
 		}
+	}
+}
+
+func TestCodexDeleteUsesNonInteractiveCommand(t *testing.T) {
+	var command string
+	var args []string
+	d := CodexDriver{Command: func(_ context.Context, gotCommand string, gotArgs ...string) ([]byte, error) {
+		command, args = gotCommand, gotArgs
+		return nil, nil
+	}}
+	if err := d.Delete(context.Background(), "thread-id"); err != nil {
+		t.Fatal(err)
+	}
+	if command != "codex" || !reflect.DeepEqual(args, []string{"delete", "--force", "thread-id"}) {
+		t.Fatalf("command = %q %#v", command, args)
+	}
+}
+
+func TestClaudeResumeUsesProviderSessionID(t *testing.T) {
+	var args []string
+	d := ClaudeDriver{Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
+		args = gotArgs
+		return []byte(`{"result":"done"}`), nil
+	}}
+	if _, err := d.Resume(context.Background(), "provider-id", "continue"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"-p", "--resume", "provider-id", "--output-format", "json", "continue"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+}
+
+func TestUnsupportedDriverCapabilityError(t *testing.T) {
+	_, err := (UnsupportedDriver{Provider: "agy"}).Run(context.Background(), RunOptions{})
+	if err == nil || !strings.Contains(err.Error(), `not supported for provider "agy"`) {
+		t.Fatalf("error = %v", err)
 	}
 }
 

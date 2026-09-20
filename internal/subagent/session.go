@@ -2,35 +2,71 @@ package subagent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
+// ErrSessionNameInUse indicates that a registry name or ID is already reserved.
+var ErrSessionNameInUse = errors.New("session name or ID is already in use")
+
 // Session represents an active subagent session with metadata and telemetry.
 type Session struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	Provider        string    `json:"provider"`
-	Model           string    `json:"model"`
-	Tier            string    `json:"tier"`
-	WorkingDir      string    `json:"working_dir"`
-	ParentSessionID string    `json:"parent_session_id,omitempty"`
-	CallerPID       int       `json:"caller_pid"`
-	HarnessType     string    `json:"harness_type"`
-	Status          string    `json:"status"`
-	TokensCumulative int      `json:"tokens_cumulative"`
-	TokensTurn      int       `json:"tokens_turn"`
-	CachedTokens    int       `json:"cached_tokens"`
-	CreatedAt       time.Time `json:"created_at"`
-	LastActiveAt    time.Time `json:"last_active_at"`
+	ID                string    `json:"id"`
+	ProviderSessionID string    `json:"provider_session_id,omitempty"`
+	Name              string    `json:"name"`
+	Provider          string    `json:"provider"`
+	Model             string    `json:"model"`
+	Tier              string    `json:"tier"`
+	WorkingDir        string    `json:"working_dir"`
+	ParentSessionID   string    `json:"parent_session_id,omitempty"`
+	CallerPID         int       `json:"caller_pid"`
+	ProcessPID        int       `json:"process_pid,omitempty"`
+	ControlSocket     string    `json:"control_socket,omitempty"`
+	HarnessType       string    `json:"harness_type"`
+	Status            string    `json:"status"`
+	TokensCumulative  int       `json:"tokens_cumulative"`
+	TokensTurn        int       `json:"tokens_turn"`
+	CachedTokens      int       `json:"cached_tokens"`
+	CreatedAt         time.Time `json:"created_at"`
+	LastActiveAt      time.Time `json:"last_active_at"`
+}
+
+// ProviderID returns the provider-side identifier used for lifecycle commands.
+// Older registry entries used ID for both the registry and provider identifiers.
+func (s *Session) ProviderID() string {
+	if s.ProviderSessionID != "" {
+		return s.ProviderSessionID
+	}
+	return s.ID
+}
+
+// Find resolves a session by registry ID or short name.
+func (s *FileSessionStore) Find(identifier string) (*Session, error) {
+	if sess, err := s.Get(identifier); err == nil {
+		return sess, nil
+	}
+	sessions, err := s.List("", true)
+	if err != nil {
+		return nil, err
+	}
+	for _, sess := range sessions {
+		if sess.Name == identifier {
+			return sess, nil
+		}
+	}
+	return nil, fmt.Errorf("session %q not found", identifier)
 }
 
 // SessionStore manages persistent session metadata.
 type SessionStore interface {
 	Save(s *Session) error
+	Create(s *Session) error
 	Get(id string) (*Session, error)
+	Find(identifier string) (*Session, error)
 	List(parentID string, allSessions bool) ([]*Session, error)
 	Delete(id string) error
 }
@@ -69,6 +105,53 @@ func (s *FileSessionStore) Save(sess *Session) error {
 	}
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write session file: %w", err)
+	}
+	return nil
+}
+
+// Create atomically reserves a session name and creates its initial registry entry.
+func (s *FileSessionStore) Create(sess *Session) error {
+	if sess.ID == "" || sess.Name == "" {
+		return fmt.Errorf("session must have an ID and name")
+	}
+	lock, err := os.OpenFile(filepath.Join(s.dir, ".registry.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return fmt.Errorf("open session registry lock: %w", err)
+	}
+	defer lock.Close()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return fmt.Errorf("lock session registry: %w", err)
+	}
+	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) //nolint:errcheck
+	sessions, err := s.List("", true)
+	if err != nil {
+		return err
+	}
+	for _, existing := range sessions {
+		if existing.ID == sess.ID || existing.Name == sess.Name || existing.ID == sess.Name || existing.Name == sess.ID {
+			return fmt.Errorf("%w: %q", ErrSessionNameInUse, sess.Name)
+		}
+	}
+	data, err := json.MarshalIndent(sess, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal session: %w", err)
+	}
+	path := filepath.Join(s.dir, sess.ID+".json")
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		if os.IsExist(err) {
+			return fmt.Errorf("%w: %q", ErrSessionNameInUse, sess.ID)
+		}
+		return fmt.Errorf("create session file: %w", err)
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return fmt.Errorf("write session file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return fmt.Errorf("close session file: %w", err)
 	}
 	return nil
 }
@@ -135,7 +218,7 @@ func CanManage(callerParentID string, target *Session) bool {
 	if callerParentID == "" {
 		return true
 	}
-	if target.ID == callerParentID {
+	if target.ID == callerParentID || target.Name == callerParentID {
 		return true
 	}
 	if target.ParentSessionID == callerParentID {

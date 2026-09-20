@@ -15,6 +15,24 @@ type Driver interface {
 	Delete(context.Context, string) error
 }
 
+// UnsupportedDriver reports a provider capability error without misrouting it.
+type UnsupportedDriver struct{ Provider string }
+
+func (d UnsupportedDriver) unsupported() error {
+	return fmt.Errorf("batch agent lifecycle is not supported for provider %q", d.Provider)
+}
+func (d UnsupportedDriver) Run(context.Context, RunOptions) (*TurnResult, error) {
+	return nil, d.unsupported()
+}
+func (d UnsupportedDriver) Resume(context.Context, string, string) (*TurnResult, error) {
+	return nil, d.unsupported()
+}
+func (d UnsupportedDriver) Compact(context.Context, string) (*TurnResult, error) {
+	return nil, d.unsupported()
+}
+func (d UnsupportedDriver) Stop(context.Context, string) error   { return d.unsupported() }
+func (d UnsupportedDriver) Delete(context.Context, string) error { return d.unsupported() }
+
 // RunOptions describes a new provider turn.
 type RunOptions struct {
 	Prompt string
