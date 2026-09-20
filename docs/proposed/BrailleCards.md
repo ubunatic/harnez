@@ -1,7 +1,7 @@
 # Braille Cards: dot8 text as dense PNG cards
 
-Status: proposed. Nothing here is implemented or benched.
-Related: `docs/BrailleDot8.md` (the encoding), `docs/Bench.md` (micro-font path shelved).
+Status: **3x4 geometry implemented** (issue 436 M1 & M2). Awaiting bench results on codex and agy (M3).
+5x7 geometry dropped. Related: `docs/BrailleDot8.md` (the encoding), `docs/Bench.md` (micro-font path shelved).
 
 ## Problem
 
@@ -89,16 +89,18 @@ harnez read -I --dot8=native file.braille.md   # already-encoded input, skip the
 - **Token accounting.** Image tokens depend on pixel area, so the win is real only if
   the card gets smaller at equal legibility. Compare bytes and card dimensions first.
 
-## Plan (canary first)
+## Implemented (Issue 436 M1–M2)
 
-1. Canary: hand-render one 3x4-dot card of the RUNBOOK fixture and ask agy and codex (not claude)
-   to answer the `read-one-fact` task from it. Stop if both fail.
-2. Implement `dot8.go` encoder and decoder with round-trip tests, plus a golden card.
-3. Implement the dot renderer (option B), colour accents and the legend strip.
-4. Bench with the existing harness: add read mode variants via
-   `bench run --read auto --card=--dot8`, fixtures unchanged, then `--dot8 --style=compact`.
-5. Success bar: pass rate no worse than the default card on haiku and luna, with lower
-   image tokens or card area. Otherwise record it in `docs/Bench.md` and shelve it.
+✅ M1. `internal/readcard/dot8.go` encoder and decoder with round-trip tests.
+✅ M2. Dot renderer (option B): 3x4 native dots, colour accents for dots 7 and 8, legend strip in header.
+  - `harnez read -I --dot8 file.md` — encode and render
+  - `harnez read -I --dot8=native file.braille.md` — input already encoded
+  - Text mode: source untouched (encode) vs decoded (native)
+  - Composable with `--chrome/--gutter/--frame/--meta/--style`
+
+Awaiting M3. Bench with the existing harness: `bench run --read auto --card=--dot8` on codex and agy.
+Success bar: pass rate no worse than the default card, with lower image tokens or card area.
+Otherwise record in `docs/Bench.md` and shelve.
 
 ## Open questions
 
