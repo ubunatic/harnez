@@ -166,3 +166,12 @@ Card style and font sweep on codex gpt-5.6-luna (`--read auto`, 4 runs per cell;
 | `--font=3x5` | 3/4, 2.3, 41k | 0/4, 10.5, 285k |
 
 Luna does read the PNG in the compact and max styles (2 turns, the service names come out right) but answered `12` instead of `17` for the retry limit in all 8 `read-one-fact` runs, so the slim or tight cards cost it digit accuracy. The 3x5 font made two-hop reads much more expensive (10 turns, 285k input) and failed all four. Claude haiku did not show these failures, so card style effects are agent-specific; keep the default card until a style beats it on both agents.
+
+## Status: micro (3x5 / Tom Thumb) path shelved
+
+Decision (2026-09-20): stop pursuing the micro font path for now. It is not the default and is not
+being tuned. Evidence: `--font=3x5` doubled `read-one-fact` cost on claude haiku and failed all
+`read-two-hop` runs on codex luna (10 turns, 285k input); compact/max styles (which use the micro
+gutter) made luna misread `17` as `12`. The flags (`--font=3x5`, `--gutter=tight|sup`, `--style`)
+stay available as opt-in experiments; the Tom Thumb digits also remain in the 5x8 superscripts.
+Reopen only with a new hypothesis, for example digit-safe spacing, and re-bench on both agents.
