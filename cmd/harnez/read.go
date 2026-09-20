@@ -13,6 +13,8 @@ import (
 func newReadCmd() *cobra.Command {
 	var imageMode, autoMode, textMode, rawMode, number, jsonOutput, showTokens bool
 	var outputPath, fontName, theme, wrapMode, lineRange, lineNumbers, compression string
+	var style string
+	var styleOpts readcard.RenderOptions
 	var columns, fontSize, maxDim, head, tail int
 	cmd := &cobra.Command{
 		Use:   "read [flags] [files...]",
@@ -38,6 +40,10 @@ Examples:
 			if _, err := readcard.ParseLineNumbers(lineNumbers); err != nil {
 				return err
 			}
+			if err := readcard.ApplyStylePreset(&styleOpts, style); err != nil {
+				return err
+			}
+			chrome, gutter, frame, meta := styleOpts.Chrome, styleOpts.Gutter, styleOpts.Frame, styleOpts.Meta
 			if compression != "off" && compression != "ws" && compression != "ast" {
 				return fmt.Errorf("invalid compression %q", compression)
 			}
@@ -78,7 +84,7 @@ Examples:
 					res.Lines, res.SourceLines = compact.Lines, compact.SourceLines
 					res.TokenStats = readcard.ComputeTextTokens(strings.Join(res.Lines, "\n"))
 				}
-				renderOpts := readcard.RenderOptions{Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine, SourceTokens: res.TokenStats.TextTokens}
+				renderOpts := readcard.RenderOptions{Chrome: chrome, Gutter: gutter, Frame: frame, Meta: meta, Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine, SourceTokens: res.TokenStats.TextTokens}
 				render := imageMode
 				var measured *readcard.RenderResult
 				if adaptive && !(len(res.Lines) <= readcard.MicroSnippetLineThreshold && res.TokenStats.TextTokens < readcard.MicroSnippetTokenThreshold) {
@@ -162,6 +168,11 @@ Examples:
 	cmd.Flags().StringVarP(&lineRange, "lines", "L", "", "source line range, e.g. 10:50")
 	cmd.Flags().IntVar(&head, "head", 0, "read only the first N lines")
 	cmd.Flags().IntVar(&tail, "tail", 0, "read only the last N lines")
+	cmd.Flags().StringVar(&style, "style", "default", "card style preset: default, compact (slim, tight, sep, box) or max (none, sup, box, box)")
+	cmd.Flags().StringVar(&styleOpts.Chrome, "chrome", "", "card decoration: full, slim or none (title moves into the meta box)")
+	cmd.Flags().StringVar(&styleOpts.Gutter, "gutter", "", "line numbers: normal, tight (micro font) or sup (micro font, top-aligned)")
+	cmd.Flags().StringVar(&styleOpts.Frame, "frame", "", "sections (diff hunks, headings, Go funcs): off, sep (lines) or box")
+	cmd.Flags().StringVar(&styleOpts.Meta, "meta", "", "info box in free top-right space: off or box (red dotted)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "structured JSON metadata")
 	cmd.Flags().BoolVar(&showTokens, "tokens", false, "show token estimates")
 	cmd.Flags().BoolVar(&showTokens, "stats", false, "alias for --tokens")

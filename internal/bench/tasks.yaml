@@ -14,7 +14,7 @@ read_modes:
     Answer from the docs listed below. Read them only with `harnez read` text mode:
     `harnez read -n -L <from>:<to> <file>` for a line range. Locate lines with grep -n first.
   auto: |
-    Answer from the docs listed below. Read them only with `harnez read --auto <file>`
+    Answer from the docs listed below. Read them only with `harnez read --auto{{card}} <file>`
     (add `-L <from>:<to>` for a range). If it prints `See @<png>` lines, open each PNG
     with your image-capable file reader and read the text from the image.
 

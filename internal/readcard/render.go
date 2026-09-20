@@ -28,6 +28,10 @@ type RenderOptions struct {
 	LineNumbers     string // all, off, or positive cadence; overrides ShowLineNumbers when set
 	SourceLines     []int  // Optional original source anchors after compression
 	MeasureOnly     bool   // Compute exact page geometry and costs without creating PNGs
+	Chrome          string // full (default), slim or none; see style.go
+	Gutter          string // normal (default), tight or sup
+	Frame           string // off (default), sep or box around sections
+	Meta            string // off (default) or box: info box in free top-right space
 }
 
 // RenderResult contains the generated image paths and token statistics.
@@ -124,6 +128,9 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	if err != nil {
 		return nil, err
 	}
+	if err := validateStyle(opts); err != nil {
+		return nil, err
+	}
 	if opts.LineNumbers != "" {
 		opts.ShowLineNumbers = cadence != 0
 	}
@@ -182,9 +189,17 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	if digits < 3 {
 		digits = 3
 	}
+	numFont := font
+	tightGutter := opts.Gutter == GutterTight || opts.Gutter == GutterSup
+	if tightGutter {
+		numFont = Font3x5
+	}
 	gutterWidth := 0
 	if opts.ShowLineNumbers {
 		gutterWidth = (digits+1)*cw + 12
+		if tightGutter {
+			gutterWidth = digits*numFont.CharWidth + 8
+		}
 	}
 
 	// Layout geometry
@@ -192,6 +207,10 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	paddingX := 16
 	paddingY := 12
 	colGap := 16
+	if opts.Chrome == ChromeSlim || opts.Chrome == ChromeNone {
+		headerHeight, paddingX, paddingY, colGap = 14, 8, 4, 10
+	}
+	sections := sectionStarts(lines, filename)
 
 	availableHeight := opts.MaxDimension - headerHeight - (paddingY * 2) - 4
 	if availableHeight < lineHeight {
@@ -263,6 +282,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 	var ansi ansiState
 	hasANSI := false
 	var allRows []renderRow
+	rowSection := func(i int) bool { return opts.Frame != "" && opts.Frame != FrameOff && sections[i] }
 
 	for i, rawLine := range lines {
 		actualLineNum := opts.StartLine + i
@@ -291,12 +311,14 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 				allRows = append(allRows, renderRow{
 					lineNum:        actualLineNum,
 					isContinuation: false,
+					section:        rowSection(i),
 					tokens:         headTokens,
 				})
 			} else {
 				allRows = append(allRows, renderRow{
 					lineNum:        actualLineNum,
 					isContinuation: false,
+					section:        rowSection(i),
 					tokens:         tokens,
 				})
 			}
@@ -312,6 +334,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 				allRows = append(allRows, renderRow{
 					lineNum:        actualLineNum,
 					isContinuation: false,
+					section:        rowSection(i),
 					tokens:         tokens,
 				})
 			} else {
@@ -319,6 +342,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 				allRows = append(allRows, renderRow{
 					lineNum:        actualLineNum,
 					isContinuation: false,
+					section:        rowSection(i),
 					tokens:         head,
 				})
 				remainingTokens = rest
@@ -383,8 +407,26 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		}
 		badgeText := fmt.Sprintf("[%s] %d lines | %d col | page %d/%d", lang, totalLines, usedCols, page+1, totalPages)
 		headerMin := (len([]rune(titleText))+len([]rune(badgeText)))*cw + 2*paddingX + 32
-		cardWidth := min(opts.MaxDimension, max(usedCols*colWidth+(usedCols-1)*colGap+2*paddingX, headerMin))
-		cardHeight := headerHeight + (paddingY * 2) + (pageColLines * lineHeight) + 8
+		bodyWidth := usedCols*colWidth + (usedCols-1)*colGap + 2*paddingX
+		cardWidth := min(opts.MaxDimension, max(bodyWidth, headerMin))
+		pageHeader := headerHeight
+		var meta *metaPlan
+		if opts.Meta == MetaBox || opts.Chrome == ChromeNone {
+			last, first := pageRows[len(pageRows)-1], pageRows[0]
+			lastNum, firstNum := last.lineNum, first.lineNum
+			for i := len(pageRows) - 1; i > 0 && lastNum == 0; i-- {
+				lastNum = pageRows[i].lineNum
+			}
+			meta = planMeta(metaLines(titleText, opts.Chrome == ChromeNone, firstNum, lastNum, totalLines, imageStats.TextTokens),
+				pageRows[min((usedCols-1)*pageColLines, len(pageRows)):], paddingX+(usedCols-1)*(colWidth+colGap), gutterWidth, cw, lineHeight, cardWidth-paddingX)
+		}
+		hideHeader := opts.Chrome == ChromeNone && meta != nil
+		if hideHeader {
+			pageHeader = 0
+			cardWidth = min(opts.MaxDimension, bodyWidth)
+			meta.x = cardWidth - paddingX - meta.w
+		}
+		cardHeight := pageHeader + (paddingY * 2) + (pageColLines * lineHeight) + 8
 		if cardHeight > opts.MaxDimension {
 			cardHeight = opts.MaxDimension
 		}
@@ -411,16 +453,18 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 		drawStrokeRect(img, 0, 0, cardWidth-1, cardHeight-1, theme.Border)
 
 		// Header Bar
-		drawRect(img, 1, 1, cardWidth-2, headerHeight, theme.HeaderBg)
-		drawHorizontalLine(img, 1, cardWidth-2, headerHeight, theme.Border)
-
-		// Header Title
-		font.DrawStringBounded(img, titleText, paddingX, 10, cardWidth-paddingX, theme.HeaderFg)
-
-		// Header Badges
-		badgeX := cardWidth - paddingX - (len([]rune(badgeText)) * cw)
-		if badgeX > paddingX+(len([]rune(titleText))*cw)+10 {
-			font.DrawString(img, badgeText, badgeX, 10, theme.BadgeFg)
+		if !hideHeader {
+			textY := (headerHeight - ch) / 2
+			if headerHeight == 36 {
+				textY = 10
+			}
+			drawRect(img, 1, 1, cardWidth-2, headerHeight, theme.HeaderBg)
+			drawHorizontalLine(img, 1, cardWidth-2, headerHeight, theme.Border)
+			font.DrawStringBounded(img, titleText, paddingX, textY, cardWidth-paddingX, theme.HeaderFg)
+			badgeX := cardWidth - paddingX - (len([]rune(badgeText)) * cw)
+			if badgeX > paddingX+(len([]rune(titleText))*cw)+10 {
+				font.DrawString(img, badgeText, badgeX, textY, theme.BadgeFg)
+			}
 		}
 
 		// Render Columns
@@ -440,7 +484,7 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 			colRows := pageRows[cStartIdx:cEndIdx]
 
 			colX := paddingX + c*(colWidth+colGap)
-			colY := headerHeight + paddingY
+			colY := pageHeader + paddingY
 
 			// Column Separator
 			if c > 0 {
@@ -464,7 +508,11 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 					if cadence > 1 && rrow.lineNum != opts.StartLine && rrow.lineNum%cadence != 0 {
 						numStr = fmt.Sprintf("%*s", digits, ".")
 					}
-					font.DrawString(img, numStr, colX+4, curY, theme.GutterFg)
+					numY := curY
+					if opts.Gutter == GutterTight {
+						numY += (ch - numFont.CharHeight) / 2
+					}
+					numFont.DrawString(img, numStr, colX+3, numY, theme.GutterFg)
 				}
 
 				// Draw Code
@@ -488,6 +536,11 @@ func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*Re
 					}
 				}
 			}
+			drawFrames(img, colRows, opts.Frame, colX+gutterWidth-2, colX+colWidth-3, colY, lineHeight, theme)
+		}
+
+		if meta != nil {
+			meta.draw(img, font, theme, pageHeader+paddingY)
 		}
 
 		// Determine target file path
@@ -646,6 +699,7 @@ func drawVerticalLine(img *image.RGBA, x, y0, y1 int, col color.RGBA) {
 type renderRow struct {
 	lineNum        int
 	isContinuation bool
+	section        bool // first row of a section (diff hunk, heading, func ...)
 	tokens         []Token
 }
 

@@ -105,3 +105,44 @@ whole-file `text`/`auto` cells recorded before it are not strictly comparable.
 Claude haiku, 4 runs per cell (all passed): `text` 2.8 turns / 47k input tokens,
 `text+yaml` 2.8 / 54k, `text+multi5` 3.0 / 50k, `auto+multi5` 4.5 / 47k. The `text`
 cell also includes 4 older-order runs. Splitting files did not reduce turns.
+
+### Card style: `--card`
+
+`bench run --read auto --card=<flags>` tells the agent, in its `AGENTS.md`, to run
+`harnez read --auto <flags> <file>` (the `{{card}}` slot in the `auto` read mode of
+`tasks.yaml`). The flags are the card style axes of `harnez read -I` (see below), so the same
+task measures instruction following (does the agent still find and read the PNG?) and token
+use (`avg_in`, `turns`). The variant is recorded in `read_mode`, e.g. `auto+style=compact`.
+
+```
+harnez bench run --agent claude --read auto --card=--style=compact --repeat 4
+harnez bench run --agent claude --read auto --card="--chrome=slim --gutter=sup" --repeat 4
+```
+
+## Card style axes (`harnez read -I`)
+
+Defaults are unchanged. Every axis is a `--flag=<mode>`; `--style=<preset>` sets several at once
+and explicit axis flags override the preset.
+
+| Flag | Modes | Effect |
+|---|---|---|
+| `--chrome` | `full`, `slim`, `none` | `slim`: 14px title strip and tight padding. `none`: no header, title moves into the meta box (slim strip if the box does not fit) |
+| `--gutter` | `normal`, `tight`, `sup` | line numbers in the 3x5 micro font (about 16px narrower per column); `sup` top-aligns them like a superscript |
+| `--frame` | `off`, `sep`, `box` | separator line above, or a box around, each section: diff files and hunks, Markdown `#`/`##` headings, Go `func`/`type`, `=== file ===` markers |
+| `--meta` | `off`, `box` | red dotted info box (line range, text-token cost) in free space at the top right of the last column; only drawn when the first rows leave room |
+| `--style` | `default`, `compact`, `max` | compact = slim + tight + sep + box; max = none + sup + box + box |
+
+More ideas, not built yet: fill trailing empty space at the bottom of the last column with the
+info box (next page hint, symbol index); a per-page "continues in p2 at line N" footer; dim
+or collapse blank runs; a mini outline (function names) in free space; color-coded page tabs for
+multi-page cards; frames for `RenderBundleCard` multi-file bundles.
+
+First card-style sweep (claude haiku, `--read auto`, 2 runs per task, so only a smoke signal):
+
+| Style | Pass | Notes |
+|---|---|---|
+| default | 3/4 | one `read-one-fact` failure |
+| `--style=compact` | 3/4 | one `read-one-fact` failure, two-hop 6-8 turns |
+| `--style=max` | 2/4 | both `read-one-fact` runs failed, two-hop 6 turns |
+
+`read-one-fact` failed in every style, so the fixture read itself is unreliable at n=2; repeat with `--repeat 4` or more before ranking styles.

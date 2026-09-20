@@ -16,6 +16,7 @@ type Condition struct {
 	Read  string // "", or how fixtures are read: native, text or auto
 	Yaml  bool   // read conditions: deliver the fixture as YAML instead of Markdown
 	Multi int    // read conditions: split the fixture into this many files (<2: one file)
+	Card  string // auto read: extra `harnez read` card flags the agent is told to use, e.g. "--style=compact"
 }
 
 // Label is the stable text form recorded in the bench DB.
@@ -38,6 +39,9 @@ func (c Condition) ReadVariant() string {
 	}
 	if c.Multi >= 2 {
 		v += fmt.Sprintf("+multi%d", c.Multi)
+	}
+	if c.Card != "" {
+		v += "+" + strings.ReplaceAll(strings.ReplaceAll(c.Card, "--", ""), " ", ",")
 	}
 	return v
 }
@@ -122,7 +126,12 @@ func stageFixtures(dir string, spec *Spec, task Task, cond Condition) ([]string,
 	}
 	var delivered []string
 	var body strings.Builder
-	body.WriteString(strings.TrimRight(spec.ReadModes[mode], "\n") + "\n\nDocs:\n")
+	card := ""
+	if cond.Card != "" {
+		card = " " + cond.Card
+	}
+	instr := strings.ReplaceAll(spec.ReadModes[mode], "{{card}}", card)
+	body.WriteString(strings.TrimRight(instr, "\n") + "\n\nDocs:\n")
 	for _, name := range task.Fixtures {
 		files, _ := fixtureFiles(name, cond.Yaml, cond.Multi)
 		for _, f := range files {

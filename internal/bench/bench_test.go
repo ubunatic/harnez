@@ -450,3 +450,26 @@ func TestVariantStagingAndLabel(t *testing.T) {
 		}
 	}
 }
+
+func TestCardFlagsReachTheAutoInstructionAndLabel(t *testing.T) {
+	s, _ := LoadSpec()
+	tasks, _ := s.SelectFor(nil, Condition{Read: "auto"})
+	cond := Condition{Docs: "full", Read: "auto", Card: "--style=compact --frame=box"}
+	if got := cond.Label(); got != "read:auto+style=compact,frame=box" {
+		t.Errorf("label = %q", got)
+	}
+	dir := t.TempDir()
+	if _, err := StageWorkspace(dir, repoRoot(t), s, tasks[0], cond); err != nil {
+		t.Fatal(err)
+	}
+	agents, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if !strings.Contains(string(agents), "harnez read --auto --style=compact --frame=box <file>") || strings.Contains(string(agents), "{{card}}") {
+		t.Errorf("instruction: %s", agents)
+	}
+	plain := t.TempDir()
+	_, _ = StageWorkspace(plain, repoRoot(t), s, tasks[0], Condition{Docs: "full", Read: "auto"})
+	agents, _ = os.ReadFile(filepath.Join(plain, "AGENTS.md"))
+	if !strings.Contains(string(agents), "harnez read --auto <file>") {
+		t.Errorf("plain instruction changed: %s", agents)
+	}
+}

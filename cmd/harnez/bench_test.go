@@ -127,3 +127,15 @@ func TestBenchRunYamlAndMultiFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestBenchCardFlagNeedsReadAuto(t *testing.T) {
+	t.Setenv("HARNEZ_BENCH_DIR", filepath.Join(t.TempDir(), "bench"))
+	if _, err := runBench(t, "--setup"); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"run", "--card=--style=compact"}, {"run", "--read", "text", "--card=--style=compact"}} {
+		if _, err := runBench(t, args...); err == nil {
+			t.Errorf("%v accepted", args)
+		}
+	}
+}

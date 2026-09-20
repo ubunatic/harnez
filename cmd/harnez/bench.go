@@ -92,7 +92,7 @@ func newBenchTasksCmd() *cobra.Command {
 }
 
 func newBenchRunCmd() *cobra.Command {
-	var agent, model, docs, repo, read string
+	var agent, model, docs, repo, read, card string
 	var cards, yamlDocs bool
 	var multi int
 	var repeat int
@@ -125,7 +125,10 @@ func newBenchRunCmd() *cobra.Command {
 			if multi < 0 || multi > bench.MaxMulti {
 				return fmt.Errorf("bench: --multi must be 1-%d", bench.MaxMulti)
 			}
-			cond := bench.Condition{Docs: mode, Cards: cards, Read: readMode, Yaml: yamlDocs, Multi: multi}
+			if card != "" && readMode != "auto" {
+				return fmt.Errorf("bench: --card needs --read auto")
+			}
+			cond := bench.Condition{Docs: mode, Cards: cards, Read: readMode, Yaml: yamlDocs, Multi: multi, Card: strings.TrimSpace(card)}
 			selected, err := spec.SelectFor(tasks, cond)
 			if err != nil {
 				return err
@@ -152,6 +155,7 @@ func newBenchRunCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&yamlDocs, "yaml", false, "with --read: deliver the fixture as one YAML file instead of Markdown")
 	cmd.Flags().IntVar(&multi, "multi", 0, "with --read: split the fixture into N files by first letter (26/N letters each); bare --multi means 5, use --multi=N otherwise")
 	cmd.Flags().Lookup("multi").NoOptDefVal = "5"
+	cmd.Flags().StringVar(&card, "card", "", "with --read auto: card flags the agent is told to add to harnez read, e.g. --card=--style=compact")
 	cmd.Flags().StringSliceVar(&tasks, "task", nil, "task IDs to run (default: all)")
 	cmd.Flags().IntVar(&repeat, "repeat", 1, "runs per task")
 	cmd.Flags().StringVar(&repo, "repo", ".", "repository root holding the docs")
@@ -175,9 +179,9 @@ func newBenchResultsCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "%-7s %-14s %-5s %-6s %-18s %5s %5s %9s %8s %6s %9s %4s\n", "agent", "model", "docs", "cards", "read", "runs", "pass", "avg_in", "avg_out", "turns", "avg_usd", "err")
+			fmt.Fprintf(out, "%-7s %-14s %-5s %-6s %-30s %5s %5s %9s %8s %6s %9s %4s\n", "agent", "model", "docs", "cards", "read", "runs", "pass", "avg_in", "avg_out", "turns", "avg_usd", "err")
 			for _, s := range sums {
-				fmt.Fprintf(out, "%-7s %-14s %-5s %-6v %-18s %5d %5d %9.0f %8.0f %6.1f %9.4f %4d\n", s.Agent, s.Model, s.Docs, s.Cards, s.Read, s.Runs, s.Passes, s.AvgInput, s.AvgOut, s.AvgTurns, s.AvgCostUSD, s.Errors)
+				fmt.Fprintf(out, "%-7s %-14s %-5s %-6v %-30s %5d %5d %9.0f %8.0f %6.1f %9.4f %4d\n", s.Agent, s.Model, s.Docs, s.Cards, s.Read, s.Runs, s.Passes, s.AvgInput, s.AvgOut, s.AvgTurns, s.AvgCostUSD, s.Errors)
 			}
 			if recent > 0 {
 				runs, err := store.Recent(recent)
