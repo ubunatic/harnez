@@ -54,7 +54,19 @@ Implement the underlying `Driver` engine for headless Codex, Claude, and AGY ses
 - Verify `make test` / `go test ./...`.
 
 ### 4. Milestone Progress & Execution Log
-- [ ] Milestone 1: Core Driver Engine & Provider Parsers
-- [ ] Milestone 2: Session Manager & Lineage Hygiene
-- [ ] Milestone 3: CLI Command Surface & Reconnect Banner
-- [ ] Milestone 4: End-to-End Verification & Documentation
+- [x] **Milestone 1: Core Driver Engine & Provider Parsers** (Delivered in commit `0b1b6d6`)
+  - Universal `Driver` interface, `Model` resolver, and `TurnResult` telemetry types in `internal/subagent/driver.go`.
+  - `CodexDriver` with JSON stream parsing and session/token extraction in `internal/subagent/codex.go`.
+  - `ClaudeDriver` with JSON output extraction in `internal/subagent/claude.go`.
+  - Complete unit test suite in `internal/subagent/driver_test.go`.
+
+- [ ] **Milestone 2: Session Manager & Lineage Hygiene**
+  - **Pre-Work / Refinement Instructions**:
+    1. Implement `internal/subagent/session.go` and `internal/subagent/session_test.go`.
+    2. Manage session records in JSON files under `~/.harnez/agents/<session_id>.json` (or customizable store directory).
+    3. `Session` struct fields: `ID`, `Name`, `Provider`, `Model`, `Tier`, `WorkingDir`, `ParentSessionID`, `CallerPID`, `HarnessType`, `Status` (running, idle, parked, completed), `TokensCumulative`, `TokensTurn`, `CachedTokens`, `CreatedAt`, `LastActiveAt`.
+    4. Provide methods: `Save(s)`, `Get(id)`, `List(opts)`, `Delete(id)`.
+    5. Enforce Lineage Invariant: `CanManage(callerParentID, targetSession)` returns true only if `callerParentID == ""` (human/root) or target session is direct/indirect child of `callerParentID`.
+    6. Implement Compaction Guard: `ShouldCompact(tokensCumulative)` (returns true when >= 100,000 tokens).
+    7. Unit tests with full test coverage for store, lineage checks, and compaction triggers.
+
