@@ -91,7 +91,7 @@ harnez read -I --dot8=native file.braille.md   # already-encoded input, skip the
 
 ## Plan (canary first)
 
-1. Canary: hand-render one 3x4-dot card of the RUNBOOK fixture and ask claude and codex
+1. Canary: hand-render one 3x4-dot card of the RUNBOOK fixture and ask agy and codex (not claude)
    to answer the `read-one-fact` task from it. Stop if both fail.
 2. Implement `dot8.go` encoder and decoder with round-trip tests, plus a golden card.
 3. Implement the dot renderer (option B), colour accents and the legend strip.
