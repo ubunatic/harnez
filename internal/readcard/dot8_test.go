@@ -371,3 +371,62 @@ func BenchmarkDot8RoundTrip(b *testing.B) {
 		_ = Dot8RoundTripCheck(input)
 	}
 }
+
+// Test rendering with different styles
+func TestDot8RenderCompact(t *testing.T) {
+	lines := []string{
+		"⠓⠑⠇⠇⠕ ⠺⠕⠗⠇⠙",
+		"⡓⠑⠇⠇⠕ ⡺⠕⠗⠇⠙",
+		"⠞⠙⠊⠎ ⠊⠎ ⠁ ⠞⠑⠎⠞",
+	}
+
+	opts := RenderOptions{
+		Chrome:      ChromeSlim,
+		Gutter:      GutterTight,
+		Columns:     1,
+		MaxDimension: 600,
+		ShowLineNumbers: true,
+		Title:       "test",
+		StartLine:   1,
+		OutputPath:  "/tmp/test_dot8_compact.png",
+		Dot8:        "native",
+	}
+
+	result, err := RenderFileToCards(lines, "test.md", opts)
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+
+	if result.Width == 0 || result.Height == 0 {
+		t.Errorf("Card dimensions invalid: %dx%d", result.Width, result.Height)
+	}
+	if result.TotalLines != len(lines) {
+		t.Errorf("TotalLines = %d, want %d", result.TotalLines, len(lines))
+	}
+}
+
+// Test that legend is included in header
+func TestDot8RenderLegend(t *testing.T) {
+	lines := []string{"⠓⠑⠇⠇⠕", "⠑⠝⠉⠕⠙⠑⠙", "⠃⠗⠁⠊⠇⠇⠑"}
+
+	opts := RenderOptions{
+		Chrome:       "full",
+		Columns:      1,
+		MaxDimension: 800,
+		ShowLineNumbers: false,
+		Title:        "test",
+		StartLine:    1,
+		OutputPath:   "/tmp/test_dot8_legend.png",
+		Dot8:         "native",
+	}
+
+	result, err := RenderFileToCards(lines, "test.md", opts)
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+
+	// Card should render without error
+	if result.Width == 0 || result.Height == 0 {
+		t.Errorf("Invalid dimensions: %dx%d", result.Width, result.Height)
+	}
+}

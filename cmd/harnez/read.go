@@ -85,19 +85,24 @@ Examples:
 					res.TokenStats = readcard.ComputeTextTokens(strings.Join(res.Lines, "\n"))
 				}
 
-				// Handle dot8 encoding
+				// Validate dot8 flag
 				dot8Mode := ""
 				if dot8 != "" {
-					if dot8 == "encode" || dot8 == "true" || dot8 == "1" {
+					if dot8 == "encode" {
 						dot8Mode = "encode"
-						// Encode lines in-process
-						for j := range res.Lines {
-							res.Lines[j] = readcard.Dot8Encode(res.Lines[j])
-						}
 					} else if dot8 == "native" {
 						dot8Mode = "native"
 					} else {
-						return fmt.Errorf("invalid --dot8 value %q (use empty string, 'encode', or 'native')", dot8)
+						return fmt.Errorf("invalid --dot8 value %q (use --dot8 or --dot8=native)", dot8)
+					}
+				}
+
+				// For image rendering, encode the lines if needed
+				renderLines := res.Lines
+				if imageMode && dot8Mode == "encode" {
+					renderLines = make([]string, len(res.Lines))
+					for j := range res.Lines {
+						renderLines[j] = readcard.Dot8Encode(res.Lines[j])
 					}
 				}
 
@@ -106,7 +111,7 @@ Examples:
 				var measured *readcard.RenderResult
 				if adaptive && !(len(res.Lines) <= readcard.MicroSnippetLineThreshold && res.TokenStats.TextTokens < readcard.MicroSnippetTokenThreshold) {
 					renderOpts.MeasureOnly = true
-					measured, err = readcard.RenderFileToCards(res.Lines, file, renderOpts)
+					measured, err = readcard.RenderFileToCards(renderLines, file, renderOpts)
 					if err != nil {
 						return err
 					}
@@ -114,7 +119,7 @@ Examples:
 					renderOpts.MeasureOnly = false
 				}
 				if render {
-					rendered, err := readcard.RenderFileToCards(res.Lines, file, renderOpts)
+					rendered, err := readcard.RenderFileToCards(renderLines, file, renderOpts)
 					if err != nil {
 						return err
 					}
@@ -128,8 +133,8 @@ Examples:
 						}
 					}
 				} else {
-					// Handle dot8 decoding for text output
-					if dot8Mode != "" {
+					// Handle dot8 in text mode: native means decode, encode means return source untouched
+					if dot8Mode == "native" {
 						for j := range res.Lines {
 							decoded, err := readcard.Dot8Decode(res.Lines[j])
 							if err != nil {
@@ -138,6 +143,7 @@ Examples:
 							res.Lines[j] = decoded
 						}
 					}
+					// If dot8Mode == "encode", return source as-is (already encoded)
 
 					results = append(results, res)
 					if !jsonOutput {
@@ -193,7 +199,11 @@ Examples:
 	cmd.Flags().BoolVarP(&number, "number", "n", false, "force text output with line numbers (unless -I)")
 	cmd.Flags().StringVar(&lineNumbers, "line-numbers", "all", "gutter: all, off, none, or positive cadence N")
 	cmd.Flags().StringVar(&compression, "compress", "off", "safe source compression: off, ws, ast")
-	cmd.Flags().StringVar(&dot8, "dot8", "", "encode as 8-dot Braille for dense cards: empty string, 'encode', or 'native' (already encoded)")
+	cmd.Flags().StringVar(&dot8, "dot8", "", "encode as 8-dot Braille for dense cards: bare flag or --dot8=native (already encoded)")
+	dot8Lookup := cmd.Flags().Lookup("dot8")
+	if dot8Lookup != nil {
+		dot8Lookup.NoOptDefVal = "encode"
+	}
 	cmd.Flags().StringVarP(&lineRange, "lines", "L", "", "source line range, e.g. 10:50")
 	cmd.Flags().IntVar(&head, "head", 0, "read only the first N lines")
 	cmd.Flags().IntVar(&tail, "tail", 0, "read only the last N lines")

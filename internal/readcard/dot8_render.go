@@ -45,13 +45,12 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 		theme = LightTheme
 	}
 
-	// Dot8 uses 3x4 cells for Braille and 3x5 for text
-	brailleCellWidth := 3
+	// Dot8 uses 3px cells for both Braille and text (3x5 font character width is 3px)
+	cellWidth := 3
 	brailleCellHeight := 4
 	textFont := Font3x5
-	textCellWidth := textFont.CharWidth
 
-	// Line height must accommodate both (max height + spacing)
+	// Line height to fit content
 	lineHeight := brailleCellHeight + 2
 
 	totalLines := len(lines)
@@ -60,7 +59,7 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 		totalLines = 1
 	}
 
-	// Calculate gutter width
+	// Calculate gutter width for line numbers
 	maxLineNum := opts.StartLine + totalLines - 1
 	if len(opts.SourceLines) > 0 {
 		maxLineNum = opts.SourceLines[len(opts.SourceLines)-1]
@@ -69,10 +68,14 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 	if digits < 3 {
 		digits = 3
 	}
-	gutterWidth := digits*textCellWidth + 8
+	gutterWidth := 0
+	if opts.ShowLineNumbers {
+		gutterWidth = digits*textFont.CharWidth + 8
+	}
 
-	// Layout constants
+	// Layout constants (match default card)
 	headerHeight := 36
+	legendHeight := 8 // height of legend strip
 	paddingX := 16
 	paddingY := 12
 	colGap := 16
@@ -89,17 +92,17 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 		cols = 4
 	}
 
-	availableHeight := opts.MaxDimension - headerHeight - (paddingY * 2) - 4
+	availableHeight := opts.MaxDimension - headerHeight - legendHeight - (paddingY * 2) - 4
 	linesPerCol := availableHeight / lineHeight
 	if linesPerCol < 1 {
 		linesPerCol = 1
 	}
 
-	// Calculate max line width (in Braille cells)
-	// Each Braille cell is 3px wide, non-Braille chars are 3px (Font3x5)
+	// Calculate max line width (in characters, all 3px wide)
 	maxLineLen := 0
 	for _, l := range lines {
-		rCount := len([]rune(strings.ReplaceAll(l, "\t", "    ")))
+		l = strings.ReplaceAll(l, "\t", "    ")
+		rCount := len([]rune(l))
 		if rCount > maxLineLen {
 			maxLineLen = rCount
 		}
@@ -109,12 +112,12 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 	}
 
 	// Reduce columns if needed
-	for cols > 1 && (opts.MaxDimension-2*paddingX-(cols-1)*colGap)/cols < gutterWidth+16+3*brailleCellWidth {
+	for cols > 1 && (opts.MaxDimension-2*paddingX-(cols-1)*colGap)/cols < gutterWidth+16+3*cellWidth {
 		cols--
 	}
 
 	// Column width in pixels
-	colWidth := gutterWidth + (maxLineLen * brailleCellWidth) + 16
+	colWidth := gutterWidth + (maxLineLen * cellWidth) + 16
 	totalContentWidth := (cols * colWidth) + ((cols - 1) * colGap)
 	cardWidth := totalContentWidth + (paddingX * 2)
 	if cardWidth > opts.MaxDimension {
@@ -122,8 +125,15 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 		colWidth = (cardWidth - (paddingX * 2) - ((cols - 1) * colGap)) / cols
 	}
 
-	// Create header
-	headerImg := image.NewRGBA(image.Rect(0, 0, cardWidth, headerHeight))
+	// Calculate actual content height (don't over-allocate)
+	// With cols columns, we need ceil(totalLines / cols) rows per column
+	actualLinesPerCol := (totalLines + cols - 1) / cols
+	contentHeight := actualLinesPerCol * lineHeight
+
+	cardHeight := headerHeight + legendHeight + paddingY*2 + contentHeight
+
+	// Create header with legend
+	headerImg := image.NewRGBA(image.Rect(0, 0, cardWidth, headerHeight+legendHeight))
 	draw.Draw(headerImg, headerImg.Bounds(), image.NewUniform(theme.HeaderBg), image.Point{}, draw.Src)
 
 	// Draw title in header
@@ -136,56 +146,102 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 		}
 	}
 
+	// Draw legend strip in header: "a=⠁ b=⠃ ... z=⠵ A=⡁ 1=⢀⠁ docs/BrailleDot8.md"
+	legendX := paddingX
+	legendY := headerHeight + 1
+
+	// Draw sample Braille legend
+	legendFont := ResolveFont("pixel", 6)
+	legendSamples := []struct {
+		label string
+		cell  rune
+	}{
+		{"a", rune(0x2800 + 0b000001)},
+		{"z", rune(0x2800 + 0b110101)},
+		{"A", rune(0x2800 + 0b000001 + (1 << 6))},
+		{"1", rune(0x2800 + (1 << 7))}, // dot 8 prefix
+	}
+
+	for _, sample := range legendSamples {
+		// Draw label
+		for _, r := range sample.label {
+			legendFont.DrawRune(headerImg, r, legendX, legendY, theme.Punctuation)
+			legendX += legendFont.CharWidth
+		}
+		// Draw "="
+		legendFont.DrawRune(headerImg, '=', legendX, legendY, theme.Punctuation)
+		legendX += legendFont.CharWidth
+		// Draw cell (as 3x4 dots)
+		drawDot8BraillCell(headerImg, sample.cell, legendX, legendY, theme.Text, theme.Keyword, theme.Type)
+		legendX += 3 + 2 // cell width + gap
+	}
+
+	// Draw docs pointer
+	docsText := "docs/BrailleDot8.md"
+	for _, r := range docsText {
+		legendFont.DrawRune(headerImg, r, legendX, legendY, theme.Comment)
+		legendX += legendFont.CharWidth
+	}
+
 	// Create main content image
-	contentHeight := paddingY + linesPerCol*lineHeight + paddingY
-	contentImg := image.NewRGBA(image.Rect(0, 0, cardWidth, contentHeight))
+	contentImg := image.NewRGBA(image.Rect(0, 0, cardWidth, paddingY+contentHeight+paddingY))
 	draw.Draw(contentImg, contentImg.Bounds(), image.NewUniform(theme.Bg), image.Point{}, draw.Src)
 
-	// Render lines
+	// Render lines in columns
 	y := paddingY
-	for i := 0; i < linesPerCol && i < len(lines); i++ {
-		line := lines[i]
-		lineNum := opts.StartLine + i
-		if len(opts.SourceLines) > i {
-			lineNum = opts.SourceLines[i]
-		}
+	lineIdx := 0
 
-		// Draw line number
-		numStr := fmt.Sprintf("%d", lineNum)
-		if opts.ShowLineNumbers {
-			x := paddingX
-			for _, r := range numStr {
-				textFont.DrawRune(contentImg, r, x, y, theme.GutterFg)
-				x += textFont.CharWidth
+	for col := 0; col < cols && lineIdx < len(lines); col++ {
+		x := paddingX + col*(colWidth+colGap)
+		colY := y
+
+		for row := 0; row < linesPerCol && lineIdx < len(lines); row++ {
+			line := lines[lineIdx]
+			lineNum := opts.StartLine + lineIdx
+			if len(opts.SourceLines) > lineIdx {
+				lineNum = opts.SourceLines[lineIdx]
 			}
-		}
+			lineIdx++
 
-		// Draw content
-		x := paddingX + gutterWidth
-		for _, r := range line {
-			if r >= 0x2800 && r <= 0x2800+0xFF {
-				// Braille cell: draw as 3x4 dots with special colors for dots 7 and 8
-				drawDot8BraillCell(contentImg, r, x, y, theme.Text, theme.Keyword, theme.Type)
-			} else {
-				// Regular character
-				textFont.DrawRune(contentImg, r, x, y, theme.Text)
+			// Draw line number
+			if opts.ShowLineNumbers {
+				numStr := fmt.Sprintf("%d", lineNum)
+				numX := x
+				for _, r := range numStr {
+					textFont.DrawRune(contentImg, r, numX, colY, theme.GutterFg)
+					numX += textFont.CharWidth
+				}
 			}
-			x += brailleCellWidth
-		}
 
-		y += lineHeight
+			// Draw content
+			contentX := x + gutterWidth
+			for _, r := range line {
+				if r >= 0x2800 && r <= 0x2800+0xFF {
+					// Braille cell: draw as 3x4 dots with special colors for dots 7 and 8
+					drawDot8BraillCell(contentImg, r, contentX, colY, theme.Text, theme.Keyword, theme.Type)
+				} else {
+					// Regular character
+					textFont.DrawRune(contentImg, r, contentX, colY, theme.Text)
+				}
+				contentX += cellWidth
+			}
+
+			colY += lineHeight
+		}
 	}
 
 	// Combine header and content
-	fullImg := image.NewRGBA(image.Rect(0, 0, cardWidth, headerHeight+contentHeight))
-	draw.Draw(fullImg, image.Rect(0, 0, cardWidth, headerHeight), headerImg, image.Point{}, draw.Src)
-	draw.Draw(fullImg, image.Rect(0, headerHeight, cardWidth, headerHeight+contentHeight), contentImg, image.Point{}, draw.Src)
+	fullImg := image.NewRGBA(image.Rect(0, 0, cardWidth, cardHeight))
+	draw.Draw(fullImg, image.Rect(0, 0, cardWidth, headerHeight+legendHeight), headerImg, image.Point{}, draw.Src)
+	draw.Draw(fullImg, image.Rect(0, headerHeight+legendHeight, cardWidth, cardHeight), contentImg, image.Point{}, draw.Src)
 
 	// Save image
-	filepath.Base(opts.OutputPath)
 	outPath := opts.OutputPath
 	if outPath == "" {
-		outPath = fmt.Sprintf("read_%s_%dx%d.png", strings.TrimSuffix(filepath.Base(opts.Title), filepath.Ext(opts.Title)), cardWidth, headerHeight+contentHeight)
+		outPath = fmt.Sprintf("harnez_read_%s_%d-tokens_%s.png",
+			strings.TrimSuffix(filepath.Base(opts.Title), filepath.Ext(opts.Title)),
+			opts.SourceTokens,
+			"dot8card")
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
@@ -209,7 +265,7 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 	return &RenderResult{
 		Files:      []string{outPath},
 		Width:      cardWidth,
-		Height:     headerHeight + contentHeight,
+		Height:     cardHeight,
 		Columns:    cols,
 		TotalLines: totalLines,
 		TotalPages: 1,
@@ -218,7 +274,7 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 		Pages: []PageGeometry{
 			{
 				Width:   cardWidth,
-				Height:  headerHeight + contentHeight,
+				Height:  cardHeight,
 				Columns: cols,
 			},
 		},
