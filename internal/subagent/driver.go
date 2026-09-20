@@ -3,6 +3,7 @@ package subagent
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -63,6 +64,63 @@ var modelAliases = map[string]Model{
 	"codex:luna": {"codex", "gpt-5.6-luna", "low"}, "codex:sol": {"codex", "gpt-5.6-sol", "low"}, "codex:astra": {"codex", "gpt-5.6-astra", "low"},
 	"claude:haiku": {"claude", "haiku", "low"}, "claude:sonnet": {"claude", "claude-3-7-sonnet-20250219", "low"}, "claude:opus": {"claude", "claude-3-opus-20240229", "low"},
 	"agy:flash": {"agy", "gemini-3.7-flash", "low"},
+}
+
+// KnownModels returns the configured shorthand specifications in stable order.
+func KnownModels() []Model {
+	keys := make([]string, 0, len(modelAliases))
+	for key := range modelAliases {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	models := make([]Model, 0, len(keys))
+	for _, key := range keys {
+		models = append(models, modelAliases[key])
+	}
+	return models
+}
+
+func (m Model) Spec() string {
+	return m.Provider + ":" + modelAliasName(m) + ":" + m.Tier
+}
+
+func modelAliasName(m Model) string {
+	for key, candidate := range modelAliases {
+		if candidate == m {
+			return strings.TrimPrefix(key, m.Provider+":")
+		}
+	}
+	return m.Name
+}
+
+// ResolveModelWithFallback resolves a model and lowers an unsupported tier to low.
+func ResolveModelWithFallback(spec string) (Model, string, error) {
+	m, err := ResolveModel(spec)
+	if err == nil {
+		return m, "", nil
+	}
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(spec)), ":")
+	if len(parts) < 2 || len(parts) > 3 {
+		return Model{}, "", err
+	}
+	known := make([]string, 0, len(modelAliases))
+	for key := range modelAliases {
+		known = append(known, key+":low")
+	}
+	sort.Strings(known)
+	base, baseErr := ResolveModel(parts[0] + ":" + parts[1])
+	if baseErr != nil {
+		for _, candidate := range KnownModels() {
+			if candidate.Provider == parts[0] {
+				return candidate, fmt.Sprintf("warning: unknown model %q; using %s; known models/tiers: %s", parts[1], candidate.Spec(), strings.Join(known, ", ")), nil
+			}
+		}
+		return Model{}, "", err
+	}
+	if len(parts) == 3 && (parts[2] != "low" && parts[2] != "med" && parts[2] != "high") {
+		return base, fmt.Sprintf("warning: unknown tier %q; using %s; known models/tiers: %s", parts[2], base.String(), strings.Join(known, ", ")), nil
+	}
+	return Model{}, "", err
 }
 
 // ResolveModel expands provider:model[:tier] shorthand.

@@ -57,9 +57,12 @@ func newAgentCmd() *cobra.Command {
 	}
 
 	start := &cobra.Command{Use: "start <provider:model[:tier]> <prompt>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
-		m, err := subagent.ResolveModel(args[0])
+		m, warning, err := subagent.ResolveModelWithFallback(args[0])
 		if err != nil {
 			return err
+		}
+		if warning != "" {
+			fmt.Fprintln(cmd.ErrOrStderr(), warning)
 		}
 		s, err := store()
 		if err != nil {
@@ -97,11 +100,21 @@ func newAgentCmd() *cobra.Command {
 	start.Flags().StringVar(&name, "name", "", "session name")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 
+	models := &cobra.Command{Use: "models", Short: "List known agent models and tiers", RunE: func(cmd *cobra.Command, _ []string) error {
+		for _, m := range subagent.KnownModels() {
+			fmt.Fprintln(cmd.OutOrStdout(), m.Spec())
+		}
+		return nil
+	}}
+
 	var chatDir, chatName string
 	chat := &cobra.Command{Use: "chat <provider:model[:tier]>", Short: "Launch an interactive agent session", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		m, err := subagent.ResolveModel(args[0])
+		m, warning, err := subagent.ResolveModelWithFallback(args[0])
 		if err != nil {
 			return err
+		}
+		if warning != "" {
+			fmt.Fprintln(cmd.ErrOrStderr(), warning)
 		}
 		s, err := store()
 		if err != nil {
@@ -455,7 +468,7 @@ func newAgentCmd() *cobra.Command {
 		}
 		return s.Delete(x.ID)
 	}}
-	root.AddCommand(start, chat, resume, list, status, compact, stop, remove)
+	root.AddCommand(start, models, chat, resume, list, status, compact, stop, remove)
 	return root
 }
 

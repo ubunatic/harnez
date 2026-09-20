@@ -20,7 +20,7 @@ func TestAgentCommandSurface(t *testing.T) {
 	if len(c.Commands()) == 0 {
 		t.Fatal("agent command has no children")
 	}
-	for _, name := range []string{"start", "chat", "resume", "list", "status", "compact", "stop", "delete", "enable", "disable"} {
+	for _, name := range []string{"start", "models", "chat", "resume", "list", "status", "compact", "stop", "delete", "enable", "disable"} {
 		found := false
 		for _, child := range c.Commands() {
 			if child.Name() == name {
@@ -30,6 +30,19 @@ func TestAgentCommandSurface(t *testing.T) {
 		if !found {
 			t.Errorf("missing agent subcommand %q", name)
 		}
+	}
+}
+
+func TestAgentModelsListsKnownSpecs(t *testing.T) {
+	cmd := newAgentCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"models"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "codex:luna:low") || !strings.Contains(out.String(), "agy:flash:low") {
+		t.Fatalf("known models output = %q", out.String())
 	}
 }
 

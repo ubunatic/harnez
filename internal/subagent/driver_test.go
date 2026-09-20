@@ -19,6 +19,24 @@ func TestResolveModel(t *testing.T) {
 	}
 }
 
+func TestKnownModelsAndFallback(t *testing.T) {
+	models := KnownModels()
+	if len(models) == 0 || models[0].Spec() == "" {
+		t.Fatal("known model registry is empty")
+	}
+	m, warning, err := ResolveModelWithFallback("codex:luna:invalid")
+	if err != nil || m.String() != "codex:gpt-5.6-luna:low" || !strings.Contains(warning, "known") {
+		t.Fatalf("fallback = %#v, warning %q, err %v", m, warning, err)
+	}
+	if _, _, err := ResolveModelWithFallback("unknown:model:high"); err == nil {
+		t.Fatal("unknown provider/model should remain an error")
+	}
+	m, warning, err = ResolveModelWithFallback("codex:missing:low")
+	if err != nil || m.Spec() != "codex:astra:low" || !strings.Contains(warning, "unknown model") {
+		t.Fatalf("model fallback = %#v, warning %q, err %v", m, warning, err)
+	}
+}
+
 func TestCodexDeleteUsesNonInteractiveCommand(t *testing.T) {
 	var command string
 	var args []string
