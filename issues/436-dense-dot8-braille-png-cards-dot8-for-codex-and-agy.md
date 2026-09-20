@@ -69,6 +69,18 @@ Review (diff, tests, sample card `docs/CodexHooks.md`): encoder and its tests lo
 6. **Commit hygiene.** The renderer landed inside another agent's commit ("docs(issues): add ticket 438") via a staging race. Do not rewrite history. From now on: `git add <explicit paths>`, check `git diff --cached --stat`, and `git commit -- <paths>` so only your files go in.
 7. Decoding in text mode currently decodes lines that the same command encoded; simplify so `--dot8` without `-I` returns the plain source lines unchanged (and `native` decodes).
 
+### M2 delivered (36cd9ff, f808d55), review: content is clipped
+
+Flags, legend, tests and `make install` are in and `go test ./internal/readcard ./cmd/harnez` passes. But the sample card of `docs/CodexHooks.md` (1234x368) shows only source lines 1-52 in the left column and is cut at the bottom edge; the other two columns are blank, although `harnez read` reports "3 col, 149 lines". The claimed "47% area" is therefore invalid: content is lost, not compressed.
+
+### Pre-Work / Required Refinements (M2b)
+
+1. Reproduce first: a test that renders `docs/CodexHooks.md`-like input (149 lines) with `--dot8` and asserts that the last source line number appears in the image (for example by checking that ink exists near the bottom of each column and that all three columns contain content), and that no line is clipped. It must fail on the current code.
+2. Fix the column layout and canvas height so all source lines are drawn across the columns like the default card.
+3. Re-measure against the default card of the same file (1552x628, 54 KB) and report honest dimensions and bytes.
+4. Existing tests are green despite the clipping, so tighten the render tests (item 1) rather than only adding new ones.
+5. Commit with `git add <paths>` and `git commit -- <paths>`; `make install`.
+
 ## 5. Notes for whoever picks this up
 
 - Re-verify against live code and recent commits first; this ticket may sit for a while.
