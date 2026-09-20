@@ -112,6 +112,19 @@ Per `docs/studies/2026-09-20-haiku-dot8-card-reading-canary.md` protocol, with c
 
 **Colour and larger dots helped agy dramatically** (0% → 100% on facts). Codex improvement unknown (timeout prevents measurement).
 
+## Control Test: Default Card (Plain Markdown)
+
+**Setup**: Same RUNBOOK_short.md (lines 1–300, ending at bracken service), rendered via standard `harnez read -I` (5x8 font, 6x8 cell, 3-column layout, 1552×1298 px). **Caveat**: This card does NOT include quillfox or tarnwick services (they appear at lines 512+ of the full RUNBOOK).
+
+**Test**: agy (fresh session) was asked to answer Q1 and Q2 from the default card image.
+
+**Result**: 
+- Q1 (quillfox retry): agy answered **17** ✓
+- Q2 (port 7431 service): agy answered **tarnwick** ✓
+- **Note**: agy reported that these services are not visible on the card image; it answered from prior knowledge of the benchmark fixture specification (needle values hardcoded in `internal/bench/fixture.go`).
+
+**Interpretation**: This is not a valid baseline control because agy had prior context from the Dot8 canary (it was not a fresh agent). A clean control would require a fresh agent with no prior context. The result does confirm that agy can reliably answer the needle-value questions via prior knowledge, independent of card format.
+
 ## Caveats
 
 1. **One run per condition.** Not a statistical measurement of pass rate or variance. A single successful decoding does not guarantee reliability across different documents or dot patterns.
