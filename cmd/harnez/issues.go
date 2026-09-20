@@ -74,6 +74,7 @@ func newIssuesCmd() *cobra.Command {
 	var cachedFlag bool
 	var limitFlag int
 	var allFlag bool
+	var listFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "issues <verb> <ticket-number> [reason...]",
@@ -146,6 +147,12 @@ A nonexistent or ambiguous ticket number is a caller-bug error (non-zero
 exit, actionable stderr) -- unlike 'harnez find', where zero matches is a
 valid, exit-0 answer.`,
 		Args: func(cmd *cobra.Command, args []string) error {
+			if listFlag {
+				if len(args) != 0 {
+					return fmt.Errorf("issues -l: does not accept positional arguments")
+				}
+				return nil
+			}
 			if len(args) == 0 {
 				return fmt.Errorf("issues: requires a verb (open, start, block, close, done, draft, new, show, mv, rebase, lint, list)")
 			}
@@ -189,6 +196,9 @@ valid, exit-0 answer.`,
 		},
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if listFlag {
+				return runIssuesList(cmd.OutOrStdout(), cmd.ErrOrStderr(), dir, nil, jsonFlag, rawFlag, textFlag, imageFlag, limitFlag, allFlag)
+			}
 			if args[0] == "merge-driver" {
 				return runIssuesMergeDriver(args[2])
 			}
@@ -254,6 +264,7 @@ valid, exit-0 answer.`,
 			}
 			return nil
 		},
+		ValidArgsFunction: issuesCompletion,
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
 	cmd.Flags().BoolVar(&cachedFlag, "cached", false, "validate the staged Git snapshot (issues lint only)")
@@ -267,6 +278,7 @@ valid, exit-0 answer.`,
 	cmd.Flags().StringVar(&commitMsgFlag, "commit", "", `override the default commit message (default: "docs(issues): <verb> <ticket-number>[, <reason>]")`)
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 10, "with 'list': limit results (default: newest 10)")
 	cmd.Flags().BoolVarP(&allFlag, "all", "a", false, "with 'list': show all matching results")
+	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list open issues (alias for the list verb)")
 
 	return cmd
 }
@@ -344,6 +356,9 @@ func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutpu
 	if filter == "" {
 		filter = "is:open"
 	}
+	if !jsonOutput && !rawOutput && !textOutput && !imageOutput && isTerminalWriter(w) {
+		textOutput = true
+	}
 	return runFindWithOptions(w, errW, []string{"issues", filter}, findRunOptions{
 		Dir:   dir,
 		JSON:  jsonOutput,
@@ -353,6 +368,48 @@ func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutpu
 		Limit: limit,
 		All:   all,
 	})
+}
+
+func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) == 0 {
+		return []string{
+			"open\tmark a ticket open",
+			"start\tmark a ticket in progress",
+			"block\tblock a ticket",
+			"close\tclose a ticket",
+			"done\tclose a ticket (alias for close)",
+			"draft\tmark a ticket draft",
+			"new\tcreate a ticket placeholder",
+			"show\tinspect a ticket",
+			"mv\trenumber a ticket",
+			"rebase\treplay local issue commits",
+			"lint\tvalidate the issue tracker",
+			"list\tlist matching tickets",
+		}, cobra.ShellCompDirectiveNoFileComp
+	}
+	if args[0] != "list" {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	dir, err := cmd.Flags().GetString("dir")
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	files, err := issues.Scan(filepath.Join(dir, "issues"))
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	completions := []string{
+		"is:open\topen and unresolved tickets",
+		"is:in-progress\ttickets in progress",
+		"is:blocked\tblocked tickets",
+		"is:closed\tclosed tickets",
+		"is:draft\tdraft tickets",
+	}
+	for _, f := range files {
+		completions = append(completions, f.Number+"\t"+issues.PlainTitle(f.Title))
+	}
+	return completions, cobra.ShellCompDirectiveNoFileComp
 }
 
 // composeNewStatus renders the "**Status**:" value a verb+reason pair

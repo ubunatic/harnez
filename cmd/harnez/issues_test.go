@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"ubunatic.com/harnez/internal/issues"
 )
 
@@ -916,6 +918,80 @@ func TestIssuesCmd_MvArgsValidation(t *testing.T) {
 	}
 }
 
+func TestIssuesCmd_ListAliasAndCompletion(t *testing.T) {
+	cmd := newIssuesCmd()
+	if err := cmd.ParseFlags([]string{"-l"}); err != nil {
+		t.Fatalf("parse -l: %v", err)
+	}
+	if err := cmd.Args(cmd, nil); err != nil {
+		t.Fatalf("issues -l args: %v", err)
+	}
+	if err := cmd.Args(cmd, []string{"list"}); err == nil {
+		t.Fatal("issues -l should reject positional arguments")
+	}
+
+	verbs, directive := issuesCompletion(cmd, nil, "")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Fatalf("verb completion directive = %v, want no-file", directive)
+	}
+	wantVerbs := []string{"open", "start", "block", "close", "done", "draft", "new", "show", "mv", "rebase", "lint", "list"}
+	for _, want := range wantVerbs {
+		if !containsCompletion(verbs, want) {
+			t.Errorf("verb completion missing %q: %v", want, verbs)
+		}
+	}
+
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+	if err := cmd.Flags().Set("dir", dir); err != nil {
+		t.Fatalf("set completion dir: %v", err)
+	}
+	filters, directive := issuesCompletion(cmd, []string{"list"}, "")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Fatalf("list completion directive = %v, want no-file", directive)
+	}
+	wantFilters := []string{"is:open", "is:in-progress", "is:blocked", "is:closed", "is:draft"}
+	for _, want := range wantFilters {
+		if !containsCompletion(filters, want) {
+			t.Errorf("list completion missing filter %q: %v", want, filters)
+		}
+	}
+	if !containsExactCompletion(filters, "042\tExample Ticket") {
+		t.Errorf("list completion missing exact ticket number/title: %v", filters)
+	}
+}
+
+func containsCompletion(completions []string, want string) bool {
+	for _, completion := range completions {
+		if completion == want || strings.HasPrefix(completion, want+"\t") {
+			return true
+		}
+	}
+	return false
+}
+
+func containsExactCompletion(completions []string, want string) bool {
+	for _, completion := range completions {
+		if completion == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestRunIssuesList_DefaultOutputIsText(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+	var out, errOut bytes.Buffer
+	if err := runIssuesList(&out, &errOut, dir, nil, false, false, false, false, 0, false); err != nil {
+		t.Fatalf("runIssuesList default: %v", err)
+	}
+	if strings.Contains(out.String(), "Rendered:") {
+		t.Fatalf("default list output unexpectedly rendered a card: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "042") {
+		t.Fatalf("default list output missing ticket number: %s", out.String())
+	}
+}
+
 func TestRunIssuesShow(t *testing.T) {
 	sample := "# 042 — Example Ticket\n\n**Status**: Open\n**Priority**: P1\n\n---\n\nTicket body here.\n"
 	dir, _ := issuesFixtureRepo(t, sample)
@@ -1007,6 +1083,3 @@ func TestRunIssuesList_FormattingOptions(t *testing.T) {
 		}
 	})
 }
-
-
-
