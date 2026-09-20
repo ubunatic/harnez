@@ -144,3 +144,20 @@ func TestTightGutterNarrowsTheCard(t *testing.T) {
 		t.Errorf("tight width %d, want < %d", tight.Width, def.Width)
 	}
 }
+
+func TestPagedOutputNamesArePaddedFromOne(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ out, want string }{
+		{dir, "doc_page001.png"},
+		{filepath.Join(dir, "x.png"), "x_page001.png"},
+	} {
+		got, err := resolveOutPath(tc.out, "doc.md", 10, 0, 3)
+		if err != nil || filepath.Base(got) != tc.want {
+			t.Errorf("%s: got %q, %v want %s", tc.out, got, err, tc.want)
+		}
+	}
+	got, _ := resolveOutPath("", "doc.md", 10, 11, 12)
+	if !strings.HasSuffix(got, "_p012.png") {
+		t.Errorf("default path %q", got)
+	}
+}

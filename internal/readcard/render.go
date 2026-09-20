@@ -623,7 +623,7 @@ func resolveOutPath(customOut string, sourceFile string, sourceTokens, page, tot
 			base := filepath.Base(sourceFile)
 			stem := strings.TrimSuffix(base, filepath.Ext(base))
 			if totalPages > 1 {
-				return filepath.Join(customOut, fmt.Sprintf("%s_page%d.png", stem, page+1)), nil
+				return filepath.Join(customOut, fmt.Sprintf("%s_page%03d.png", stem, page+1)), nil
 			}
 			return filepath.Join(customOut, fmt.Sprintf("%s.png", stem)), nil
 		}
@@ -633,7 +633,7 @@ func resolveOutPath(customOut string, sourceFile string, sourceTokens, page, tot
 			if ext == "" {
 				ext = ".png"
 			}
-			return fmt.Sprintf("%s_page%d%s", stem, page+1, ext), nil
+			return fmt.Sprintf("%s_page%03d%s", stem, page+1, ext), nil
 		}
 		return customOut, nil
 	}
@@ -645,7 +645,7 @@ func resolveOutPath(customOut string, sourceFile string, sourceTokens, page, tot
 
 	tmpDir := os.TempDir()
 	if totalPages > 1 {
-		return filepath.Join(tmpDir, fmt.Sprintf("harnez_read_%s_%d-tokens_%s_p%d.png", base, sourceTokens, shortHash, page+1)), nil
+		return filepath.Join(tmpDir, fmt.Sprintf("harnez_read_%s_%d-tokens_%s_p%03d.png", base, sourceTokens, shortHash, page+1)), nil
 	}
 	return filepath.Join(tmpDir, fmt.Sprintf("harnez_read_%s_%d-tokens_%s.png", base, sourceTokens, shortHash)), nil
 }
