@@ -24,9 +24,12 @@ Decide by measurement whether a `--dot8` card mode of `harnez read -I` is worth 
 
 ## 4. Milestones
 
-- **M1 Canary**: hand-render a larger-dot card of the RUNBOOK fixture with colour accents and a legend. Run the four-step canary protocol from the study on codex and agy. Stop and shelve if both fail.
-- **M2 Implement**: Go port of `scripts/md-to-braille8.py` with round-trip tests, then the dot renderer and `--dot8` flag.
-- **M3 Bench**: `bench run --read auto --card=--dot8` on codex (luna) and agy, with `--repeat` for stable numbers. Record in `docs/Bench.md`.
+**Rescoped by the project owner (supersedes the canary-first plan):** skip further canaries, drop the 5x7 (2px-dot) path entirely, implement `harnez read -I --dot8` with the 3x4 geometry only, then hand it to the owner for manual testing. Benching (old M3) waits for that manual test.
+
+- ~~M1 Canary~~ dropped; the invalid partial runs are in the study docs.
+- **M1 Encoder**: Go port of `scripts/md-to-braille8.py` in `internal/readcard/dot8.go` (encode, decode, lossless round-trip check), tests incl. golden comparison with the Python output on a fixture with digits, capitals, Braille escapes and emoji.
+- **M2 Renderer and flag**: 3x4 native dot cells (1px dots, columns 0 and 2, 1px gap column; dots 1-6 in text colour, dot 7 and dot 8 in accent colours), non-Braille characters in the shelved 3x5 Tom Thumb font, legend strip in the header, source line numbers, `--dot8` (encode in-process) and `--dot8=native` (input already encoded) on `harnez read -I`, composing with `--chrome/--gutter/--frame/--meta/--style`. `-L` with `--dot8` returns decoded text. Tests, one golden card, docs updated (`docs/BrailleCards.md` status, read docs), `make install`.
+- **M3 Bench** (later, after the owner's manual test): `bench run --read auto --card=--dot8` on codex (luna) and agy, with `--repeat`. Record in `docs/Bench.md`.
 
 ## 4a. Milestone log
 
