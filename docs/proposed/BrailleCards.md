@@ -17,6 +17,16 @@ as-is. Rendered today by `harnez read -I`, it uses the normal 5x8 font (6x8 cell
 The 3323-token doc fits one 3-column page, but the pixel area is spent on blank space
 instead of information.
 
+## Agent support (note)
+
+- **claude cannot handle Dot8 cards today.** A haiku canary, primed with
+  `docs/BrailleDot8.md`, could not read the current card and answered 0 of 3 questions
+  from it. See `docs/studies/2026-09-20-haiku-dot8-card-reading-canary.md`.
+- **codex and agy can**, per the project owner. That has not been verified with the bench
+  harness or this canary protocol; re-run it on both before relying on it.
+- Consequence: a Dot8 card mode would be agent-specific, so the choice may need to depend
+  on the target agent.
+
 ## Idea
 
 Give Dot8 text its own card mode that draws each Braille cell natively as a dot block
