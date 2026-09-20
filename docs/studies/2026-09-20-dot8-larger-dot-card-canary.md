@@ -1,6 +1,6 @@
 # Dot8 Larger-Dot Card Canary (2026-09-20)
 
-**Status**: M1 canary incomplete; requires re-run per section "4a. Pre-Work" in issue 436.
+**Status**: Superseded. The canary and the 5x7 geometry were dropped by the project owner (issue 436); the 3x4 card is implemented and awaits manual testing, then bench (M3). The results below stay void for legibility.
 
 Related: `docs/BrailleDot8.md`, `docs/proposed/BrailleCards.md`, `docs/studies/2026-09-20-haiku-dot8-card-reading-canary.md`.
 
