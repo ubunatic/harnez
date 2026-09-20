@@ -441,3 +441,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 440 | [440-png-card-header-in-metadata-instead-of-image-pixels.md](440-png-card-header-in-metadata-instead-of-image-pixels.md) | PNG card header in metadata instead of image pixels | Open |
 | 441 | [441-dot8-png-card-reader-decode-card-content-back-to-text.md](441-dot8-png-card-reader-decode-card-content-back-to-text.md) | Dot8 PNG card reader: decode card content back to text | Open |
 | 442 | [442-harnez-issues-open-no-commit-for-newly-created-ticket.md](442-harnez-issues-open-no-commit-for-newly-created-ticket.md) | harnez issues open: no commit for newly created ticket | Open |
+| 443 | [443-polish-issues-list-aliases-terminal-output-and-completion.md](443-polish-issues-list-aliases-terminal-output-and-completion.md) | Polish issues list aliases, terminal output, and completion | Open |
