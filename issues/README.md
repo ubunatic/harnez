@@ -451,3 +451,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 450 | [450-fix-hosted-agent-chat-input-line-after-terminal-resize.md](450-fix-hosted-agent-chat-input-line-after-terminal-resize.md) | Fix hosted agent chat input line after terminal resize | Open |
 | 451 | [451-roadmap-skill-should-default-to-low-cost-models-when-unspecified.md](451-roadmap-skill-should-default-to-low-cost-models-when-unspecified.md) | Roadmap skill should default to low-cost models when unspecified | Open |
 | 452 | [452-allow-harnez-agent-stop-all-and-harnez-agent-delete-all.md](452-allow-harnez-agent-stop-all-and-harnez-agent-delete-all.md) | Allow harnez agent stop --all and harnez agent delete --all | Open |
+| 453 | [453-clarify-opus-low-versus-astra-low-cost-guidance-in-sprint-documentation.md](453-clarify-opus-low-versus-astra-low-cost-guidance-in-sprint-documentation.md) | Clarify Opus:low versus Astra:low cost guidance in sprint documentation | Open |
