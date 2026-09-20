@@ -511,6 +511,59 @@ func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
 	}
 }
 
+func TestRunInit_BackfillsLocalOverlaysSection(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/localoverlays\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	initialAgentsMD := `# Legacy Project Working Agreement
+
+- Preamble: hand-authored, must survive init.
+
+## Custom Downstream Section
+- Project-specific rule that must survive init.
+`
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	if err := os.WriteFile(agentsPath, []byte(initialAgentsMD), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		t.Fatalf("first RunInit failed: %v", err)
+	}
+	first, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(first)
+	wantBlock := "<!-- harnez:begin Local Overlays -->\n- Local ephemeral overrides: @AGENTS.local.md\n<!-- harnez:end Local Overlays -->"
+	if strings.Count(content, "<!-- harnez:begin Local Overlays -->") != 1 {
+		t.Errorf("expected exactly one Local Overlays section, got:\n%s", content)
+	}
+	if !strings.Contains(content, wantBlock) {
+		t.Errorf("expected Local Overlays block, got:\n%s", content)
+	}
+	if !strings.Contains(content, "# Legacy Project Working Agreement") || !strings.Contains(content, "Project-specific rule that must survive init.") {
+		t.Errorf("expected existing content to survive, got:\n%s", content)
+	}
+
+	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		t.Fatalf("second RunInit failed: %v", err)
+	}
+	second, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(second) != content {
+		t.Errorf("expected RunInit to be idempotent, got a diff between runs:\nfirst:\n%s\nsecond:\n%s", content, second)
+	}
+}
+
 // TestRunInit_PreservesOptInDocOnPlainReinit guards against a regression where
 // a plain re-init (no --docs flag) silently dropped a previously opted-in
 // optional (default: false) doc, because doc selection was recomputed purely

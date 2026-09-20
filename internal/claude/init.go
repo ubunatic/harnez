@@ -453,6 +453,25 @@ func initialAgentsMD(cfg *Config) string {
 	return "Adhere to the following conventions.\n"
 }
 
+const localOverlaysSection = "<!-- harnez:begin Local Overlays -->\n- Local ephemeral overrides: @AGENTS.local.md\n<!-- harnez:end Local Overlays -->\n"
+
+func backfillLocalOverlays(path string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	content := string(data)
+	if strings.Contains(content, "<!-- harnez:begin Local Overlays -->") {
+		return false, nil
+	}
+
+	updated := localOverlaysSection + "\n" + content
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 var projectManifestNames = map[string]struct{}{
 	"go.mod":              {},
 	"go.work":             {},
@@ -745,6 +764,12 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		} else {
 			fmt.Printf("  exists  %s (unchanged)\n", agentsPath)
 		}
+	}
+	if backfilled, err := backfillLocalOverlays(agentsPath); err != nil {
+		return fmt.Errorf("backfill Local Overlays %s: %w", agentsPath, err)
+	} else if backfilled {
+		fmt.Printf("  backfilled Local Overlays %s\n", agentsPath)
+		changes++
 	}
 
 	symlinkChanged, err := fsutil.EnsureSymlink(claudePath, agentsPath)
