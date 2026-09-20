@@ -340,7 +340,11 @@ func TestAgentRepoStatusUnsetJSONAndSingleSession(t *testing.T) {
 	}
 }
 
-type recordingAgentDriver struct{ dir string }
+type recordingAgentDriver struct {
+	dir     string
+	stopped []string
+	deleted []string
+}
 
 func (d *recordingAgentDriver) Run(_ context.Context, opts subagent.RunOptions) (*subagent.TurnResult, error) {
 	d.dir = opts.Dir
@@ -352,8 +356,77 @@ func (d *recordingAgentDriver) Resume(context.Context, string, string) (*subagen
 func (d *recordingAgentDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
 	return &subagent.TurnResult{}, nil
 }
-func (d *recordingAgentDriver) Stop(context.Context, string) error   { return nil }
-func (d *recordingAgentDriver) Delete(context.Context, string) error { return nil }
+func (d *recordingAgentDriver) Stop(_ context.Context, id string) error {
+	d.stopped = append(d.stopped, id)
+	return nil
+}
+func (d *recordingAgentDriver) Delete(_ context.Context, id string) error {
+	d.deleted = append(d.deleted, id)
+	return nil
+}
+
+func TestAgentStopAndDeleteAllManageableSessions(t *testing.T) {
+	storeDir := t.TempDir()
+	oldSessionID := os.Getenv("HARNEZ_SESSION_ID")
+	if err := os.Setenv("HARNEZ_SESSION_ID", "caller"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Setenv("HARNEZ_SESSION_ID", oldSessionID) }()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sess := range []*subagent.Session{
+		{ID: "one", Name: "one", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller"},
+		{ID: "two", Name: "two", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "foreign"},
+	} {
+		if err := store.Save(sess); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old := agentDriver
+	recorder := &recordingAgentDriver{}
+	agentDriver = func(subagent.Model) subagent.Driver { return recorder }
+	defer func() { agentDriver = old }()
+
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetArgs([]string{"stop", "--all", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if len(recorder.stopped) != 1 || recorder.stopped[0] != "one" {
+		t.Fatalf("stopped sessions = %#v", recorder.stopped)
+	}
+
+	cmd = newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetArgs([]string{"delete", "--all", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if len(recorder.deleted) != 1 || recorder.deleted[0] != "one" {
+		t.Fatalf("deleted sessions = %#v", recorder.deleted)
+	}
+	if _, err := store.Get("one"); err == nil {
+		t.Fatal("manageable session was not deleted")
+	}
+	if _, err := store.Get("two"); err != nil {
+		t.Fatalf("foreign session was deleted: %v", err)
+	}
+}
+
+func TestAgentStopAndDeleteAllWithNoSessions(t *testing.T) {
+	storeDir := t.TempDir()
+	for _, args := range [][]string{{"stop", "--all"}, {"delete", "--all"}} {
+		cmd := newAgentCmd()
+		cmd.SetOut(new(bytes.Buffer))
+		cmd.SetArgs(append(args, "--store-dir", storeDir))
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+	}
+}
 
 func TestAgentStartStoresCanonicalWorkingDir(t *testing.T) {
 	old := agentDriver

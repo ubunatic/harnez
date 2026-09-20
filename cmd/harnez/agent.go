@@ -394,6 +394,35 @@ func newAgentCmd() *cobra.Command {
 		if e != nil {
 			return e
 		}
+		if all {
+			xs, err := s.List("", true)
+			if err != nil {
+				return err
+			}
+			for _, x := range xs {
+				if !subagent.CanManage(parent(), x) {
+					continue
+				}
+				if x.HarnessType == "interactive" {
+					if x.Status != "active" {
+						continue
+					}
+					if e = subagent.SendControl(cmd.Context(), x.ControlSocket, "stop", ""); e != nil {
+						return e
+					}
+					x.Status = "stopped"
+				} else {
+					if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Stop(cmd.Context(), x.ProviderID()); e != nil {
+						return e
+					}
+					x.Status = "stopped"
+				}
+				if e = s.Save(x); e != nil {
+					return e
+				}
+			}
+			return nil
+		}
 		if children && len(a) == 0 {
 			xs, _ := s.List(parent(), false)
 			for _, x := range xs {
@@ -445,10 +474,41 @@ func newAgentCmd() *cobra.Command {
 		return e
 	}}
 	stop.Flags().BoolVar(&children, "children", false, "stop child sessions")
-	remove := &cobra.Command{Use: "delete <session>", Aliases: []string{"rm"}, Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
+	stop.Flags().BoolVar(&all, "all", false, "stop all manageable sessions")
+	remove := &cobra.Command{Use: "delete [session]", Aliases: []string{"rm"}, Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
 			return e
+		}
+		if all {
+			xs, err := s.List("", true)
+			if err != nil {
+				return err
+			}
+			for _, x := range xs {
+				if !subagent.CanManage(parent(), x) {
+					continue
+				}
+				if x.HarnessType == "interactive" {
+					if x.Status == "active" {
+						return fmt.Errorf("session %q is active; stop it before deletion", x.Name)
+					}
+					if e = s.Delete(x.ID); e != nil {
+						return e
+					}
+					continue
+				}
+				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Delete(cmd.Context(), x.ProviderID()); e != nil {
+					return e
+				}
+				if e = s.Delete(x.ID); e != nil {
+					return e
+				}
+			}
+			return nil
+		}
+		if len(a) == 0 {
+			return fmt.Errorf("session is required")
 		}
 		x, e := find(s, a[0])
 		if e != nil {
@@ -468,6 +528,7 @@ func newAgentCmd() *cobra.Command {
 		}
 		return s.Delete(x.ID)
 	}}
+	remove.Flags().BoolVar(&all, "all", false, "delete all manageable sessions")
 	root.AddCommand(start, models, chat, resume, list, status, compact, stop, remove)
 	return root
 }

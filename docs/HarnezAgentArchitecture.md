@@ -143,7 +143,9 @@ harnez agent compact <session_id|name>
 ### 2.7 `harnez agent stop` & `delete` (alias `rm`)
 - `harnez agent stop <session_id|name>`: Gracefully stops running tasks and parks the session (only permitted for own session or direct child agents).
 - `harnez agent stop --children`: Gracefully stops and parks all child agents spawned by the current caller session.
+- `harnez agent stop --all`: Gracefully stops and parks all sessions manageable by the caller; foreign sessions are ignored.
 - `harnez agent delete <session_id|name>`: Terminates the process, clears ephemeral working files, and purges state.
+- `harnez agent delete --all`: Applies deletion to every manageable session; active interactive sessions must be stopped first.
 - External sessions' agents cannot be stopped or deleted by foreign sessions without explicit human/global flags (e.g. `--global --force`), preventing cross-tool collisions.
 
 ### 2.8 Multi-Session Concurrency & Lineage Isolation Invariant
@@ -259,4 +261,3 @@ All sprint skills are updated to natively orchestrate via `harnez agent`:
    - Phase 2 Devs: `harnez agent start codex:luna:low --name dev-cli "<dev_task>"`.
    - Phase 3 Reviewer: `harnez agent start codex:sol:low "<review_task>"`.
    - Phase 4 Hygiene: `harnez agent stop --children` (terminates only subagents spawned by this session, preserving foreign sessions).
-
