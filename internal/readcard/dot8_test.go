@@ -1,6 +1,8 @@
 package readcard
 
 import (
+	"image/png"
+	"os"
 	"strings"
 	"testing"
 )
@@ -428,5 +430,60 @@ func TestDot8RenderLegend(t *testing.T) {
 	// Card should render without error
 	if result.Width == 0 || result.Height == 0 {
 		t.Errorf("Invalid dimensions: %dx%d", result.Width, result.Height)
+	}
+}
+
+func TestDot8RenderAllColumnsContainUnclippedContent(t *testing.T) {
+	const lineCount = 149
+	lines := make([]string, lineCount)
+	sourceLines := make([]int, lineCount)
+	for i := range lines {
+		lines[i] = Dot8Encode("line content")
+		sourceLines[i] = i + 1
+	}
+
+	path := t.TempDir() + "/dot8-columns.png"
+	result, err := RenderFileToCards(lines, "CodexHooks.md", RenderOptions{
+		Columns:         3,
+		MaxDimension:    1568,
+		ShowLineNumbers: true,
+		SourceLines:     sourceLines,
+		Title:           "CodexHooks.md",
+		OutputPath:      path,
+		Dot8:            "native",
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+	if result.Columns != 3 || result.TotalLines != lineCount {
+		t.Fatalf("result geometry = %d columns, %d lines; want 3 columns, %d lines", result.Columns, result.TotalLines, lineCount)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open rendered card: %v", err)
+	}
+	defer f.Close()
+	img, err := png.Decode(f)
+	if err != nil {
+		t.Fatalf("decode rendered card: %v", err)
+	}
+
+	bg := img.At(0, img.Bounds().Max.Y-1)
+	bandTop := img.Bounds().Max.Y - 32
+	for col := 0; col < 3; col++ {
+		x0 := 16 + col*(img.Bounds().Max.X-32)/3
+		x1 := 16 + (col+1)*(img.Bounds().Max.X-32)/3
+		ink := 0
+		for y := bandTop; y < img.Bounds().Max.Y; y++ {
+			for x := x0; x < x1; x++ {
+				if img.At(x, y) != bg {
+					ink++
+				}
+			}
+		}
+		if ink == 0 {
+			t.Errorf("column %d has no ink near the bottom; content is clipped or missing", col+1)
+		}
 	}
 }

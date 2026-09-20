@@ -195,7 +195,7 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 		x := paddingX + col*(colWidth+colGap)
 		colY := y
 
-		for row := 0; row < linesPerCol && lineIdx < len(lines); row++ {
+		for row := 0; row < actualLinesPerCol && lineIdx < len(lines); row++ {
 			line := lines[lineIdx]
 			lineNum := opts.StartLine + lineIdx
 			if len(opts.SourceLines) > lineIdx {
