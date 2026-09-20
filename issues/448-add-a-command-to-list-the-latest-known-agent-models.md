@@ -1,6 +1,6 @@
 # 448 — Add a command to list the latest known agent models
 
-**Status**: Open
+**Status**: Closed — implemented in cf9e94c
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Usability
