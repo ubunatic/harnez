@@ -1,6 +1,6 @@
 # 437 — harnez init should backfill missing Local Overlays section in existing AGENTS.md files
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Project Initialization / Configuration Drift
