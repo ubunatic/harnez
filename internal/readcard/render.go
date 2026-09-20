@@ -32,6 +32,7 @@ type RenderOptions struct {
 	Gutter          string // normal (default), tight or sup
 	Frame           string // off (default), sep or box around sections
 	Meta            string // off (default) or box: info box in free top-right space
+	Dot8            string // "" (off), "encode" (encode in-process), or "native" (already encoded)
 }
 
 // RenderResult contains the generated image paths and token statistics.
@@ -124,6 +125,10 @@ var LightTheme = ColorTheme{
 
 // RenderFileToCards renders source code lines into styled PNG card(s) bounded within max dimension.
 func RenderFileToCards(lines []string, filename string, opts RenderOptions) (*RenderResult, error) {
+	if opts.Dot8 != "" {
+		return dot8RenderFileToCards(lines, filename, opts)
+	}
+
 	cadence, err := ParseLineNumbers(opts.LineNumbers)
 	if err != nil {
 		return nil, err

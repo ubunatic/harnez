@@ -12,7 +12,7 @@ import (
 
 func newReadCmd() *cobra.Command {
 	var imageMode, autoMode, textMode, rawMode, number, jsonOutput, showTokens bool
-	var outputPath, fontName, theme, wrapMode, lineRange, lineNumbers, compression string
+	var outputPath, fontName, theme, wrapMode, lineRange, lineNumbers, compression, dot8 string
 	var style string
 	var styleOpts readcard.RenderOptions
 	var columns, fontSize, maxDim, head, tail int
@@ -84,7 +84,24 @@ Examples:
 					res.Lines, res.SourceLines = compact.Lines, compact.SourceLines
 					res.TokenStats = readcard.ComputeTextTokens(strings.Join(res.Lines, "\n"))
 				}
-				renderOpts := readcard.RenderOptions{Chrome: chrome, Gutter: gutter, Frame: frame, Meta: meta, Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine, SourceTokens: res.TokenStats.TextTokens}
+
+				// Handle dot8 encoding
+				dot8Mode := ""
+				if dot8 != "" {
+					if dot8 == "encode" || dot8 == "true" || dot8 == "1" {
+						dot8Mode = "encode"
+						// Encode lines in-process
+						for j := range res.Lines {
+							res.Lines[j] = readcard.Dot8Encode(res.Lines[j])
+						}
+					} else if dot8 == "native" {
+						dot8Mode = "native"
+					} else {
+						return fmt.Errorf("invalid --dot8 value %q (use empty string, 'encode', or 'native')", dot8)
+					}
+				}
+
+				renderOpts := readcard.RenderOptions{Chrome: chrome, Gutter: gutter, Frame: frame, Meta: meta, Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine, SourceTokens: res.TokenStats.TextTokens, Dot8: dot8Mode}
 				render := imageMode
 				var measured *readcard.RenderResult
 				if adaptive && !(len(res.Lines) <= readcard.MicroSnippetLineThreshold && res.TokenStats.TextTokens < readcard.MicroSnippetTokenThreshold) {
@@ -111,6 +128,17 @@ Examples:
 						}
 					}
 				} else {
+					// Handle dot8 decoding for text output
+					if dot8Mode != "" {
+						for j := range res.Lines {
+							decoded, err := readcard.Dot8Decode(res.Lines[j])
+							if err != nil {
+								return fmt.Errorf("decode line %d: %v", res.StartLine+j, err)
+							}
+							res.Lines[j] = decoded
+						}
+					}
+
 					results = append(results, res)
 					if !jsonOutput {
 						if len(paths) > 1 {
@@ -165,6 +193,7 @@ Examples:
 	cmd.Flags().BoolVarP(&number, "number", "n", false, "force text output with line numbers (unless -I)")
 	cmd.Flags().StringVar(&lineNumbers, "line-numbers", "all", "gutter: all, off, none, or positive cadence N")
 	cmd.Flags().StringVar(&compression, "compress", "off", "safe source compression: off, ws, ast")
+	cmd.Flags().StringVar(&dot8, "dot8", "", "encode as 8-dot Braille for dense cards: empty string, 'encode', or 'native' (already encoded)")
 	cmd.Flags().StringVarP(&lineRange, "lines", "L", "", "source line range, e.g. 10:50")
 	cmd.Flags().IntVar(&head, "head", 0, "read only the first N lines")
 	cmd.Flags().IntVar(&tail, "tail", 0, "read only the last N lines")
