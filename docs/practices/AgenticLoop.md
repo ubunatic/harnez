@@ -208,16 +208,51 @@ For focused, day-to-day tickets and milestone iterations, running the full 5-pha
    - Update ticket status in `issues/*.md` and refresh `issues/README.md`.
    - Record an `--ok` heartbeat (`harnez rate --ok "<note>" [<ticket_id>]`) to confirm clean sprint completion in telemetry.
 
+---
+
+## 3. The Reverse Sprint Loop (Bottom-Up Low-Cost Dev Lead)
+
+```
+   Low-Cost Dev Lead (Coder: luna:low, haiku, gemini3.7flash:low)
+          |
+   (1) Verify Live Codebase & Ticket /goal
+          |
+   (2) Implement & Self-Verify (TDD, go test, make check)
+          |
+   (3) Milestone Review (sol:low, sonnet:low, gemini3.8flash:low)
+          ├── Passing Tests & Clean Diff ──> Commit milestone
+          └── Blocking Regressions        ──> Dev fixes directly
+          |
+   (4) Proactive Auto-Compaction (Trigger every 100–150k tokens)
+          |
+   (5) Advisor Escalation ONLY when stuck (astra:low, opus:low, gemini3.8flash:med)
+          └── Strict bounded context: direct line pointers, zero deep repo scans
+          |
+   (6) Fast Hygiene & Status Sync (close ticket, harnez index)
+```
+
+The **Reverse Sprint** (`/reverse-sprint`) inverts the top-down orchestrator architecture. The session executes directly in a **low-cost developer agent** to maximize budget and token efficiency on routine coding, utilizing higher-tier models only for targeted review or when genuinely blocked:
+
+1. **Low-Cost Dev Lead**:
+   - The developer model (`luna:low`, `luna:medium`, `haiku`, `gemini3.7flash:low`) drives the session directly, authoring code and tests.
+2. **Frequent Auto-Compaction (100–150k Tokens)**:
+   - Low-tier models need frequent compaction to prevent context degradation and memory decay. Proactively compact every 100–150k tokens or at milestone boundaries after persisting critical notes to tickets.
+3. **Milestone Review Gates**:
+   - Dispatches a reviewer subagent (`sol:low`, `sonnet:low`, `gemini3.8flash:low`) with diff-only inspection (`git diff HEAD~1`).
+4. **Advisor Escalation (Strict Limited Context)**:
+   - When encountering challenging problems or architectural blockers, calls an advisor (`astra:low`, `opus:low`, `gemini3.8flash:med`).
+   - **Critical guardrail**: The advisor is given strictly bounded context (specific file paths, exact line ranges, bounded questions) and instructed not to explore the repo deeply, protecting the frontier token budget.
+
 ### Workflow Selection Matrix
 
-| Dimension | Formal 5-Phase Loop (`/sprint`) | Lean Fresh-Handoff (`/lean-sprint`) |
-|---|---|---|
-| **Scope** | Multi-ticket sprints, major features, broad refactors | Single focused ticket, localized milestone iterations |
-| **Host Role** | Advisory planning, multi-subsystem coordination, follow-up scheduling | Strict Zero-Coding: dispatch worker, review diff, forward nuances |
-| **Review Gate** | Independent reviewer subagent mandatory | Concise inline milestone review (direct nuance injection) |
-| **Nuances & Debt** | Buffer into dedicated `#XXX-refinements` / follow-up tickets | Forward directly into subsequent milestone prompts |
-| **Overhead** | Higher compute/tokens, maximum verification depth | Minimal compute/latency, rapid turnaround |
-| **Host Responsiveness** | Host may coordinate multiple workers but remains user-responsive | Host dispatches and returns control; no default blocking wait |
+| Dimension | Formal 5-Phase Loop (`/sprint`) | Lean Fresh-Handoff (`/lean-sprint`) | Reverse Sprint (`/reverse-sprint`) |
+|---|---|---|---|
+| **Scope** | Multi-ticket sprints, major features, broad refactors | Single focused ticket, localized milestone iterations | Routine coding, cost-sensitive implementation, focused features |
+| **Host Role** | Advisory planning, multi-subsystem coordination | Strict Zero-Coding: dispatch worker, review diff | Dev Lead: direct coding, testing, commits on low model |
+| **Model Strategy** | Frontier Host + Reusable Advisor + Lower Dev | Frontier/Med Host + Low Dev Subagent | Low Dev Lead + Low/Med Reviewer + Frontier Advisor (when stuck only) |
+| **Compaction Rule**| Post-ticket advisor/dev compaction | Ephemeral dev teardown | Frequent proactive auto-compact (every 100–150k tokens) |
+| **Advisor Role** | Mandatory Phase 1 architectural discovery | Optional on complex regressions | **On-demand only when stuck** with strictly bounded line-range context |
+| **Overhead** | Higher compute/tokens, maximum verification depth | Minimal compute/latency, rapid turnaround | Ultra-low compute/cost, maximum token savings |
 
 ---
 

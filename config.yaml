@@ -347,6 +347,14 @@ skills:
     description: "Delegate a lean fresh-handoff sprint to a user-selected-model subagent that reads and executes the lean-sprint skill"
     file: docs/commands/LeanSprinter.md
 
+  - name: reverse-sprint
+    description: "Execute a reverse sprint (Low-Cost Dev Lead -> Frequent Auto-Compact -> Milestone Reviews -> Bounded Advisor Escalation)"
+    file: docs/commands/reverse-sprint.md
+
+  - name: reverse-sprinter
+    description: "Delegate a reverse sprint to a low-cost developer agent that reads and executes the reverse-sprint skill"
+    file: docs/commands/ReverseSprinter.md
+
   - name: mode
     description: "Switch ConciseMode terseness level (lite, std, ultra, off) and sync AGENTS.md"
     file: docs/commands/mode.md
