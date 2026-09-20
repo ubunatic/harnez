@@ -1,6 +1,6 @@
 # 417 — harnez agent MVP: unified CLI runner and token telemetry for Codex, Claude, and AGY subagents
 
-**Status**: Open
+**Status**: Closed — resolved in `0b1b6d6`, `f6cf575`, `7d04e33`
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics / Infrastructure
@@ -66,18 +66,16 @@ Implement the underlying `Driver` engine for headless Codex, Claude, and AGY ses
   - Auto-compaction trigger threshold logic (`ShouldCompact()`).
   - 24 comprehensive unit tests in `internal/subagent/session_test.go`.
 
-- [ ] **Milestone 3: CLI Command Surface & Reconnect Banner**
-  - **Pre-Work / Refinement Instructions**:
-    1. Update `internal/subagent/driver.go` model aliases so `claude:haiku` maps to `haiku` (allowing Claude Code CLI to dynamically route to latest Haiku tier) and supports `claude:haiku:latest`.
-    2. Implement `cmd/harnez/agent.go` with Cobra subcommands:
-       - `harnez agent start <spec> "<prompt>"`: parses model, instantiates driver (`CodexDriver` / `ClaudeDriver`), executes turn, saves session to store with `ParentSessionID`, prints Reconnect Banner (and `--json` support).
-       - `harnez agent resume <session_id|name> "<prompt>"`: looks up session, checks lineage, runs compaction check (`ShouldCompact`), resumes driver session, updates token cumulative counters, prints response.
-       - `harnez agent list [--children] [--all-sessions] [--json]`: lists active/idle/parked sessions.
-       - `harnez agent status <session_id|name> [--json]`: detailed session status and token trajectory.
-       - `harnez agent compact <session_id|name>`: triggers compaction.
-       - `harnez agent stop <session_id|name>` (and `--children` flag): stops agent session(s) after lineage validation.
-       - `harnez agent delete <session_id|name>` (alias `rm`): tears down agent session.
-    3. Register `agentCmd` in `cmd/harnez/root.go`.
-    4. Unit tests in `cmd/harnez/agent_test.go`.
+- [x] **Milestone 3: CLI Command Surface & Reconnect Banner** (Delivered in commit `7d04e33`)
+  - Implemented `harnez agent start`, `resume`, `list`, `status`, `compact`, `stop`, `delete` in `cmd/harnez/agent.go`.
+  - Registered `agentCmd` in `cmd/harnez/root.go` and `cmd/harnez/main.go`.
+  - Mapped `claude:haiku` and `claude:haiku:latest` to `haiku` in `internal/subagent/driver.go`.
+  - Unit tests in `cmd/harnez/agent_test.go`.
+
+- [x] **Milestone 4: End-to-End Test Suite & Verification**
+  - Live cross-harness dispatch tests verified on both `codex:luna:low` and `claude:haiku`.
+  - Verified session tracking, token accumulation, cached token reporting, resumption, and clean deletion.
+  - Published comprehensive benchmark report in `docs/studies/CrossHarnessSubagentReport.md`.
+
 
 
