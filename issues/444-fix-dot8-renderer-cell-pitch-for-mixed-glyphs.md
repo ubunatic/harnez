@@ -29,3 +29,13 @@ Make Dot8 rendering use one consistent horizontal cell pitch for Braille cells, 
 - Add regression tests covering mixed Braille and ASCII/punctuation content, proving no adjacent-cell overlap or column-edge clipping.
 - Preserve existing Dot8 legend, line-number, multi-column, compact-style, and `--dot8` behavior.
 - Verify with `make install` and the repository test target; document any intentional reader limitations in issue #441.
+
+## 5. Proposed Preparation
+
+`internal/readcard/spec/glyphs-3x5.yaml` now contains an editable matrix for every
+character in `charset.yaml` (excluding procedural Braille cells). Existing upstream
+Tom Thumb 3×5 matrices are the initial baseline; the previously hand-authored
+special-glyph matrices are preserved. Tune these matrices here before changing the
+renderer pitch. `Dot8Encode` still translates letters and digits to Braille, while
+punctuation, symbols, box drawing, arrows, superscripts, and other copied characters
+remain ordinary 3×5 glyphs and are the main tuning surface.

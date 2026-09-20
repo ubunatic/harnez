@@ -43,6 +43,9 @@ func TestGlyphSpecsHaveNoUpstreamOverlap(t *testing.T) {
 			if key == "?" {
 				continue // ? is intentionally editable as the fallback glyph.
 			}
+			if tc.size == "3x5" {
+				continue // 3x5 is an editable full baseline for Dot8 tuning.
+			}
 			r := []rune(key)
 			if len(r) == 1 {
 				if _, ok := upstream[r[0]]; ok {
