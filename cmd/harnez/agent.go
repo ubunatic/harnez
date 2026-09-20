@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/agentpolicy"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -73,7 +75,11 @@ func newAgentCmd() *cobra.Command {
 		if sessName == "" {
 			sessName = "agent-" + m.Provider + "-" + id[:8]
 		}
-		r, err := agentDriver(m).Run(cmd.Context(), subagent.RunOptions{Prompt: args[1], Model: m, Dir: workDir})
+		canonicalWorkDir, err := filepath.Abs(workDir)
+		if err != nil {
+			return fmt.Errorf("resolve working directory: %w", err)
+		}
+		r, err := agentDriver(m).Run(cmd.Context(), subagent.RunOptions{Prompt: args[1], Model: m, Dir: canonicalWorkDir})
 		if err != nil {
 			return err
 		}
@@ -81,7 +87,7 @@ func newAgentCmd() *cobra.Command {
 			id = r.SessionID
 		}
 		now := time.Now()
-		sess := &subagent.Session{ID: id, Name: sessName, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: workDir, ParentSessionID: parent(), CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
+		sess := &subagent.Session{ID: id, Name: sessName, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parent(), CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
 		if err := s.Save(sess); err != nil {
 			return err
 		}
@@ -157,10 +163,14 @@ func newAgentCmd() *cobra.Command {
 	list.Flags().BoolVar(&all, "all-sessions", false, "list all sessions")
 	list.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 
-	status := &cobra.Command{Use: "status <session>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
+	var statusDir string
+	status := &cobra.Command{Use: "status [session]", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
 			return e
+		}
+		if len(a) == 0 {
+			return runAgentRepoStatus(cmd, s, statusDir, jsonOut)
 		}
 		x, e := find(s, a[0])
 		if e != nil {
@@ -173,6 +183,34 @@ func newAgentCmd() *cobra.Command {
 		return nil
 	}}
 	status.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	status.Flags().StringVarP(&statusDir, "dir", "d", ".", "repository directory")
+
+	var policyDir string
+	var persist bool
+	for _, spec := range []struct {
+		name string
+		mode string
+	}{
+		{"enable", "harnez"},
+		{"disable", "native"},
+	} {
+		mode := spec.mode
+		policyCmd := &cobra.Command{Use: spec.name, Short: "Set subagent dispatch policy to " + mode, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+			path, changed, err := agentpolicy.Configure(policyDir, mode, persist)
+			if err != nil {
+				return err
+			}
+			if changed {
+				fmt.Fprintf(cmd.OutOrStdout(), "  updated %s\n", path)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "  unchanged %s\n", path)
+			}
+			return nil
+		}}
+		policyCmd.Flags().StringVarP(&policyDir, "dir", "d", ".", "repository directory")
+		policyCmd.Flags().BoolVar(&persist, "persist", false, "write the policy to AGENTS.md")
+		root.AddCommand(policyCmd)
+	}
 	compact := &cobra.Command{Use: "compact <session>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
@@ -238,4 +276,48 @@ func newAgentCmd() *cobra.Command {
 	}}
 	root.AddCommand(start, resume, list, status, compact, stop, remove)
 	return root
+}
+
+type agentRepoStatus struct {
+	Policy   agentpolicy.State   `json:"policy"`
+	Sessions []*subagent.Session `json:"sessions"`
+}
+
+func runAgentRepoStatus(cmd *cobra.Command, store *subagent.FileSessionStore, dir string, jsonOut bool) error {
+	if dir == "" {
+		dir = "."
+	}
+	policy, err := agentpolicy.Resolve(dir)
+	if err != nil {
+		return err
+	}
+	all, err := store.List("", true)
+	if err != nil {
+		return err
+	}
+	result := agentRepoStatus{Policy: policy, Sessions: agentpolicy.RepoSessions(dir, all)}
+	if jsonOut {
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(result)
+	}
+	label := map[string]string{"harnez": "Enabled", "native": "Disabled", "unset": "Unset"}[policy.Mode]
+	if label == "" {
+		label = "Unset"
+	}
+	if policy.Source != "" {
+		label += " (" + policy.Source + ")"
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Subagent Policy State: %s\n", label)
+	if policy.Conflict {
+		fmt.Fprintf(cmd.OutOrStdout(), "Policy note: local %s overrides main %s\n", policy.LocalMode, policy.MainMode)
+	}
+	fmt.Fprintln(cmd.OutOrStdout(), "Repository Agent Sessions:")
+	if len(result.Sessions) == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "  (none)")
+		return nil
+	}
+	for _, sess := range result.Sessions {
+		work, _ := filepath.Abs(sess.WorkingDir)
+		fmt.Fprintf(cmd.OutOrStdout(), "  %s\t%s\t%s\t%s\t%s\n", sess.ID, sess.Name, sess.Provider, sess.Status, work)
+	}
+	return nil
 }

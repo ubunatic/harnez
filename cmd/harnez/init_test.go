@@ -96,3 +96,23 @@ func TestInitCmd_RAMPJSON(t *testing.T) {
 	}
 }
 
+func TestInitCmdPreservesSubagentPolicy(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	policy := newAgentCmd()
+	policy.SetArgs([]string{"enable", "-d", dir})
+	if err := policy.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	initCmd := newInitCmd()
+	initCmd.SetArgs([]string{"-d", dir})
+	if err := initCmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "AGENTS.local.md"))
+	if err != nil || !strings.Contains(string(data), "subagent_mode: harnez") {
+		t.Fatalf("init changed local policy: %v\n%s", err, data)
+	}
+}

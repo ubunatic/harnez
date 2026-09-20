@@ -1,6 +1,6 @@
 # 438 — harnez agent enable and disable commands to toggle subagent dispatch policy in AGENTS.local.md and coordinate with init
 
-**Status**: Open
+**Status**: Closed — implemented repository subagent policy commands, status reporting, and init-safe overlay coordination
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agent Orchestration / Configuration Management
@@ -43,3 +43,12 @@ Add `harnez agent enable` and `harnez agent disable` commands to declaratively c
    - `harnez init` ensures `Local Overlays` exists in `AGENTS.md` so that the local policy is read by agent sessions.
 5. **Unit Tests**:
    - Add test coverage in `cmd/harnez/agent_test.go` and/or `internal/subagent/` testing enable, disable, no-arg status reporting, persistence, and non-destructive overlay updates.
+
+---
+
+## 3. Delivery
+
+- Added `harnez agent enable` and `disable` with local and persistent managed policy targets.
+- Added repository policy and session summaries to zero-argument `harnez agent status` while preserving session detail mode.
+- Preserved unrelated overlay content, canonicalized stored working directories, and kept `harnez init` idempotent.
+- Verified with `make test-q1`, `make install`, `git diff --check`, and an independent review pass.
