@@ -1,6 +1,6 @@
 # 452 — Allow harnez agent stop --all and harnez agent delete --all
 
-**Status**: Open
+**Status**: Closed — implemented stop --all and delete --all with lineage-safe behavior and tests
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
