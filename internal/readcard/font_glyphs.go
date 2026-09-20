@@ -18,6 +18,9 @@ func buildFont5x8() *MonospaceFont { return newSpecFont("RetroPixel5x8", "5x8", 
 // buildFont3x5 builds the 3x5 micro pixel font (4x6 cell: 3x5 glyph + 1px spacing).
 func buildFont3x5() *MonospaceFont { return newSpecFont("MicroPixel3x5", "3x5", 4, 6, 5) }
 
+// buildFontDot8 builds the dedicated 3x6 Dot8 font for 3px cell rendering.
+func buildFontDot8() *MonospaceFont { return newSpecFont("Dot8_3x6", "dot8", 3, 6, 5) }
+
 // buildFont6x12 builds the 6x12 retro console font (7x12 cell).
 func buildFont6x12() *MonospaceFont { return newSpecFont("RetroPixel6x12", "6x12", 7, 12, 9) }
 

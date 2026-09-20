@@ -45,10 +45,10 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 		theme = LightTheme
 	}
 
-	// Dot8 uses 3px cells for both Braille and text (3x5 font character width is 3px)
+	// Dot8 uses 3px cells for both Braille and text (dedicated 3x6 Dot8 font)
 	cellWidth := 3
 	brailleCellHeight := 4
-	textFont := Font3x5
+	textFont := FontDot8
 
 	// Line height to fit content
 	lineHeight := brailleCellHeight + 2

@@ -151,6 +151,9 @@ var Font5x8 *MonospaceFont
 // Font3x5 provides the ultra-dense 3x5 micro pixel font (4x6 cell) for extreme token compression.
 var Font3x5 *MonospaceFont
 
+// FontDot8 provides the dedicated 3x6 pixel font (3x6 cell) for Dot8 3px rendering.
+var FontDot8 *MonospaceFont
+
 // Font6x12 provides the 6x12 retro console font (7x12 cell).
 var Font6x12 *MonospaceFont
 
@@ -166,6 +169,7 @@ var DefaultFont *MonospaceFont
 func init() {
 	Font5x8 = buildFont5x8()
 	Font3x5 = buildFont3x5()
+	FontDot8 = buildFontDot8()
 	Font6x12 = buildFont6x12()
 	DefaultFont8x16 = buildFont8x16()
 	DefaultFont7x13 = buildFont7x13()
