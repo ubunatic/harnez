@@ -89,6 +89,21 @@ func TestParseClaudeAndCodex(t *testing.T) {
 	}
 }
 
+const agyJSON = `{"conversation_id":"c1","status":"SUCCESS","response":"ready\n","duration_seconds":1.5,"num_turns":3,"usage":{"input_tokens":100,"output_tokens":20,"thinking_tokens":5,"cache_read_tokens":40,"total_tokens":165}}`
+
+func TestParseAgy(t *testing.T) {
+	r, err := ParseAgy([]byte(agyJSON))
+	if err != nil || r.Text != "ready\n" || r.InputTokens != 140 || r.OutputTokens != 25 || r.Turns != 3 {
+		t.Fatalf("agy = %+v, %v", r, err)
+	}
+	if _, err := ParseAgy([]byte(`{"status":"ERROR","response":"boom"}`)); err == nil {
+		t.Fatal("non-SUCCESS status accepted")
+	}
+	if _, err := ParseAgy([]byte("not json")); err == nil {
+		t.Fatal("garbage accepted")
+	}
+}
+
 func TestInvokeBuildsAgentCommands(t *testing.T) {
 	var name string
 	var args []string
@@ -110,7 +125,13 @@ func TestInvokeBuildsAgentCommands(t *testing.T) {
 	if name != "codex" || !contains(args, "-m", "gpt-5.6-luna") || args[0] != "exec" {
 		t.Errorf("codex cmd = %s %v", name, args)
 	}
-	if _, err := Invoke(context.Background(), fake(""), "agy", "", t.TempDir(), "hi"); err == nil {
+	if _, err := Invoke(context.Background(), fake(agyJSON), AgentAgy, "flash", t.TempDir(), "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if name != "agy" || !contains(args, "--model", "gemini-3.8-flash-low") || args[1] != "hi" || !contains(args, "--output-format", "json") {
+		t.Errorf("agy cmd = %s %v", name, args)
+	}
+	if _, err := Invoke(context.Background(), fake(""), "gemini", "", t.TempDir(), "hi"); err == nil {
 		t.Error("unsupported agent accepted")
 	}
 }

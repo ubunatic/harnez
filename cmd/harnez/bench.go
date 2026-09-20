@@ -46,7 +46,7 @@ cheap models haiku (claude) and gpt-5.6-luna (codex).`,
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "bench ready: %s\n", bench.DBPath(dir))
-			for _, a := range []string{bench.AgentClaude, bench.AgentCodex} {
+			for _, a := range []string{bench.AgentClaude, bench.AgentCodex, bench.AgentAgy} {
 				if p, ok := found[a]; ok {
 					fmt.Fprintf(cmd.OutOrStdout(), "  %-6s %s\n", a, p)
 				} else {
@@ -147,8 +147,8 @@ func newBenchRunCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&agent, "agent", bench.AgentClaude, "agent CLI: claude or codex")
-	cmd.Flags().StringVar(&model, "model", "", "model (default: haiku for claude, gpt-5.6-luna for codex; 'luna' is an alias)")
+	cmd.Flags().StringVar(&agent, "agent", bench.AgentClaude, "agent CLI: claude, codex or agy")
+	cmd.Flags().StringVar(&model, "model", "", "model (default: haiku for claude, gpt-5.6-luna for codex, gemini-3.8-flash-low for agy; 'luna' and 'flash' are aliases)")
 	cmd.Flags().StringVar(&docs, "docs", "full", "doc variant: full or lite")
 	cmd.Flags().BoolVar(&cards, "cards", false, "deliver docs as PNG context cards instead of Markdown")
 	cmd.Flags().StringVar(&read, "read", "", "run the fixture read tasks instead: native, text (harnez read) or auto (harnez read --auto)")

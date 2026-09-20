@@ -15,10 +15,11 @@ import (
 const (
 	AgentClaude = "claude"
 	AgentCodex  = "codex"
+	AgentAgy    = "agy"
 )
 
-// Default cheap models per agent; "luna" and "haiku" are accepted aliases.
-var defaultModels = map[string]string{AgentClaude: "haiku", AgentCodex: "gpt-5.6-luna"}
+// Default cheap models per agent; "luna" and "flash" are accepted aliases.
+var defaultModels = map[string]string{AgentClaude: "haiku", AgentCodex: "gpt-5.6-luna", AgentAgy: "gemini-3.8-flash-low"}
 
 // ResolveModel maps an empty model or alias to the agent's concrete model flag value.
 func ResolveModel(agent, model string) string {
@@ -26,8 +27,11 @@ func ResolveModel(agent, model string) string {
 	if model == "" {
 		return defaultModels[agent]
 	}
-	if model == "luna" {
+	switch {
+	case model == "luna":
 		return "gpt-5.6-luna"
+	case model == "flash" && agent == AgentAgy:
+		return defaultModels[AgentAgy]
 	}
 	return model
 }
@@ -75,8 +79,14 @@ func Invoke(ctx context.Context, run CommandRunner, agent, model, dir, prompt st
 			return Result{}, err
 		}
 		return ParseCodex(out)
+	case AgentAgy:
+		out, err := run(ctx, dir, "agy", "-p", prompt, "--model", model, "--dangerously-skip-permissions", "--output-format", "json")
+		if err != nil {
+			return Result{}, err
+		}
+		return ParseAgy(out)
 	}
-	return Result{}, fmt.Errorf("bench: unsupported agent %q (supported: claude, codex)", agent)
+	return Result{}, fmt.Errorf("bench: unsupported agent %q (supported: claude, codex, agy)", agent)
 }
 
 // ParseClaude reads `claude -p --output-format json` output. Input tokens
@@ -149,4 +159,32 @@ func ParseCodex(out []byte) (Result, error) {
 		return Result{}, fmt.Errorf("bench: codex output has no agent_message")
 	}
 	return res, nil
+}
+
+// ParseAgy reads `agy -p --output-format json` output. Input tokens include
+// cache reads and output tokens include thinking, so runs compare on totals.
+func ParseAgy(out []byte) (Result, error) {
+	var raw struct {
+		Status   string `json:"status"`
+		Response string `json:"response"`
+		Turns    int    `json:"num_turns"`
+		Usage    struct {
+			Input     int `json:"input_tokens"`
+			Output    int `json:"output_tokens"`
+			Thinking  int `json:"thinking_tokens"`
+			CacheRead int `json:"cache_read_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(out), &raw); err != nil {
+		return Result{}, fmt.Errorf("bench: parse agy json: %w", err)
+	}
+	if raw.Status != "SUCCESS" {
+		return Result{}, fmt.Errorf("bench: agy status %q: %s", raw.Status, raw.Response)
+	}
+	return Result{
+		Text:         raw.Response,
+		InputTokens:  raw.Usage.Input + raw.Usage.CacheRead,
+		OutputTokens: raw.Usage.Output + raw.Usage.Thinking,
+		Turns:        raw.Turns,
+	}, nil
 }

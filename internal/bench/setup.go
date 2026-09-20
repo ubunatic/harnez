@@ -33,7 +33,7 @@ func Setup(dir string, lookPath func(string) (string, error)) (found map[string]
 		return nil, fmt.Errorf("bench: write marker: %w", err)
 	}
 	found = map[string]string{}
-	for _, a := range []string{AgentClaude, AgentCodex} {
+	for _, a := range []string{AgentClaude, AgentCodex, AgentAgy} {
 		if p, err := lookPath(a); err == nil {
 			found[a] = p
 		}
