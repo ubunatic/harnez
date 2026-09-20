@@ -81,6 +81,10 @@ Flags, legend, tests and `make install` are in and `go test ./internal/readcard 
 4. Existing tests are green despite the clipping, so tighten the render tests (item 1) rather than only adding new ones.
 5. Commit with `git add <paths>` and `git commit -- <paths>`; `make install`.
 
+### M2b delivered (7f84585): ready for owner manual test
+
+Clipping fixed (regression test `TestDot8RenderAllColumnsContainUnclippedContent`). `docs/CodexHooks.md`: Dot8 card 1234x368, 20.9 KB, all 149 lines across 3 columns; default card 1552x628, 54 KB (about -53% area, -61% bytes). Legibility to agents is unmeasured; that is M3, after the owner's manual test. Note: developer reported two unrelated `TestRunExecHook_*` failures in `make test-q1` (not touched by this work; check separately).
+
 ## 5. Notes for whoever picks this up
 
 - Re-verify against live code and recent commits first; this ticket may sit for a while.
