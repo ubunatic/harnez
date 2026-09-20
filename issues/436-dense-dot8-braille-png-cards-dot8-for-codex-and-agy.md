@@ -49,6 +49,7 @@ Review findings (diff/doc only):
 3. Render the default control card (`harnez read -I`) from the same encoded text and compare area/bytes on identical content. Fix the numbers in the study.
 4. Run both geometries (5x7 and 3x4) on both agents. For codex use the bench-style invocation from `internal/bench/agent.go` with a longer timeout; record wall time and whether the timeout was image-related (try a tiny card first).
 5. Use `--repeat`-style repetition (3 runs per cell) for the fact questions, and use a fixture answer that the agent cannot guess (check the quillfox retry limit differs from a default).
+7. **New (57902b1 control):** agy answered "17"/"tarnwick" from a card that does not contain those services, using the needle values hardcoded in `internal/bench/fixture.go`. So the M1 canary is void: the bench needles are findable in the repo and the 300-line subset lacked quillfox. Do not use the bench fixture for the canary. Generate a small synthetic Dot8 doc with novel random facts (service names, numbers) that appear nowhere in the repo, and put the ground truth outside the agent's cwd.
 6. Update the study doc and commit it. Decision rule unchanged: if both agents fail on a clean run, shelve.
 
 ## 5. Notes for whoever picks this up
