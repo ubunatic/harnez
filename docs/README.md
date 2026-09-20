@@ -124,6 +124,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-09-17-retro-pixel-fonts-and-micro-vit-compression-study.md](studies/2026-09-17-retro-pixel-fonts-and-micro-vit-compression-study.md) | Claude 3.7 (`claude`), Gemini 2.0 / Flash (`agy`), OpenAI / Codex (GPT-4o/o1/o3) |
 | [studies/2026-09-17-visual-issue-discovery-and-multimodal-agent-trajectories.md](studies/2026-09-17-visual-issue-discovery-and-multimodal-agent-trajectories.md) | Case study on multimodal issue discovery, token compression via visual cards, and autonomous subagent trajectory verification |
 | [studies/2026-09-18-codex-multimodal-context-reading-and-visual-card-economics.md](studies/2026-09-18-codex-multimodal-context-reading-and-visual-card-economics.md) | Codex Multimodal Context Reading, Visual Cards, and Telemetry Economics |
+| [studies/2026-09-20-dot8-braille-vs-markdown-and-multimodal-context-card-token-benchmarks.md](studies/2026-09-20-dot8-braille-vs-markdown-and-multimodal-context-card-token-benchmarks.md) | Dot8 Braille vs. Markdown and Multimodal Context Card Token Benchmarks |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
 | [studies/MacOSContainerAMD.md](studies/MacOSContainerAMD.md) | macOS Containers on AMD KVM & Podman: Architecture, Quirks, and Diagnostic Guide |
 | [studies/Quota1Approach.md](studies/Quota1Approach.md) | Research Study: Quota-1 Guardrails for LLM Agent Loops |
