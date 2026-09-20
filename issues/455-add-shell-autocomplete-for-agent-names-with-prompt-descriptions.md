@@ -1,6 +1,6 @@
 # 455 — Add shell autocomplete for agent names with prompt descriptions
 
-**Status**: Open
+**Status**: Closed — implemented shell completion with privacy-safe prompt descriptions
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
