@@ -1,6 +1,6 @@
 # 443 — Polish issues list aliases, terminal output, and completion
 
-**Status**: Open
+**Status**: Closed — resolved list alias, terminal output, and completion
 **Priority**: P2
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
