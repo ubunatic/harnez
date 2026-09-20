@@ -155,3 +155,14 @@ Font sweep (claude haiku, `--read auto`, 4 runs per task; `--card=--font=3x5` is
 | `--font=3x5` | 8/8 | 5-6 / 87k | 6-7 / 102k |
 
 The small font did not hurt accuracy, but the one-fact task cost about twice the input tokens and turns, so the smaller card did not turn into cheaper reads at this size. Still n=4 per cell.
+
+Card style and font sweep on codex gpt-5.6-luna (`--read auto`, 4 runs per cell; the default cell also holds 2 earlier runs):
+
+| Card | `read-one-fact` pass / turns / input | `read-two-hop` pass / turns / input |
+|---|---|---|
+| default | 6/6, 2.0, 39k | 4/6, 3.3, 76k |
+| `--style=compact` | 0/4, 2.0, 39k | 4/4, 2.0, 39k |
+| `--style=max` | 0/4, 2.0, 39k | 3/4, 2.0, 39k |
+| `--font=3x5` | 3/4, 2.3, 41k | 0/4, 10.5, 285k |
+
+Luna does read the PNG in the compact and max styles (2 turns, the service names come out right) but answered `12` instead of `17` for the retry limit in all 8 `read-one-fact` runs, so the slim or tight cards cost it digit accuracy. The 3x5 font made two-hop reads much more expensive (10 turns, 285k input) and failed all four. Claude haiku did not show these failures, so card style effects are agent-specific; keep the default card until a style beats it on both agents.
