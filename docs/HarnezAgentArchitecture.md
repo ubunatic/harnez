@@ -13,9 +13,10 @@ Without a unified layer, orchestrators cannot reliably invoke low-cost models ac
 `harnez agent` provides a **single, universal CLI command surface** and **cross-harness subagent lifecycle manager** that:
 1. Dispatches and resumes developer subagents across all providers (`codex`, `claude`, `agy`, `local`).
 2. Provides explicit, first-class reconnectability with a concise **Reconnect Banner** emitted on agent start.
-3. Enforces **automatic context compaction** (threshold-based at 100–150k tokens or milestone boundaries) and detects idle KV-cache expiration.
-4. Integrates seamlessly into all **Sprint Skills** (`sprint`, `lean-sprint`, `reverse-sprint`).
-5. Supports an **Opt-In/Out Feature Switch** (`subagent_mode: harnez|native`) allowing native tool interception/replacement and side-by-side A/B effectiveness/token-usage comparisons.
+3. Enforces **session isolation and ancestry-scoped process hygiene**: agents only manage and terminate their own child agents; external sessions running concurrently in other tools/windows are strictly protected from cross-session interference.
+4. Enforces **automatic context compaction** (threshold-based at 100–150k tokens or milestone boundaries) and detects idle KV-cache expiration.
+5. Integrates seamlessly into all **Sprint Skills** (`sprint`, `lean-sprint`, `reverse-sprint`).
+6. Supports an **Opt-In/Out Feature Switch** (`subagent_mode: harnez|native`) allowing native tool interception/replacement and side-by-side A/B effectiveness/token-usage comparisons.
 
 ---
 
@@ -27,12 +28,16 @@ harnez agent <verb> [flags] [args...]
 
 ```mermaid
 flowchart TD
-    A["Caller (agy / codex / claude / shell)"] -->|"harnez agent start"| B["Agent Lifecycle Manager"]
-    B -->|"Allocate Session ID & Workspace"| C["Session Tracker (~/.harnez/agents/)"]
+    A["Caller Session (agy / codex / claude / shell)"] -->|"harnez agent start (records parent_id)"| B["Agent Lifecycle Manager"]
+    B -->|"Allocate Session ID & Ancestry"| C["Session Tracker (~/.harnez/agents/)"]
     B -->|"Dispatch CLI Driver"| D["Provider Driver (codex / claude / agy)"]
     D -->|"Output & Token Metrics"| B
     B -->|"Print Reconnect Banner (once) & Response"| A
     A -->|"harnez agent resume"| B
+    A -->|"harnez agent stop --children"| B
+    B -->|"Validate Ownership / Lineage"| H{"Owns Target?"}
+    H -->|"Yes (Own / Child)"| I["Stop / Teardown Session"]
+    H -->|"No (External Session)"| J["Reject / Protect Foreign Agent"]
     B -->|"Auto-Compact Check (100-150k tokens)"| E{"Token Threshold?"}
     E -->|"Tokens > 100k"| F["Execute Compaction"]
     E -->|"Tokens <= 100k"| G["Preserve KV Cache"]
@@ -41,7 +46,7 @@ flowchart TD
 ```
 
 ### 2.1 `harnez agent start` (Spawn a Subagent)
-Starts a new agent session on the specified target provider/model.
+Starts a new agent session on the specified target provider/model, capturing caller lineage (`parent_session_id`).
 
 ```bash
 harnez agent start <provider>:<model>[:<tier>] [-d <working_dir>] [--name <session_name>] "<task_prompt>"
@@ -59,6 +64,7 @@ harnez agent start <provider>:<model>[:<tier>] [-d <working_dir>] [--name <sessi
   ┌────────────────────────────────────────────────────────────────────────┐
   │ Harnez Agent Started: agent-codex-luna-01a0b369                       │
   │ Model: gpt-5.6-luna (effort: low) | PID: 48192 | WorkingDir: /home/uwe │
+  │ Parent Session: agy-session-77a1                                       │
   │                                                                        │
   │ Reconnect / Resume: harnez agent resume agent-codex-luna-01a0b369 "..."│
   │ Check Status:       harnez agent status agent-codex-luna-01a0b369      │
@@ -70,6 +76,7 @@ harnez agent start <provider>:<model>[:<tier>] [-d <working_dir>] [--name <sessi
   ```json
   {
     "session_id": "01a0b369-f462-7741-8ced-8d97fd2f8bac",
+    "parent_session_id": "agy-session-77a1",
     "name": "agent-codex-luna-01a0b369",
     "provider": "codex",
     "model": "gpt-5.6-luna",
@@ -95,17 +102,17 @@ harnez agent resume <session_id|name> "<next_prompt>"
 - Returns turn response and updated cumulative token telemetry.
 
 ### 2.3 `harnez agent list`
-Lists active, idle, and parked subagent sessions.
+Lists active, idle, and parked subagent sessions. By default filters to the current caller session and its child lineage. Use `--all-sessions` to view all agents running across external tools.
 
 ```bash
-harnez agent list [--all] [--json]
+harnez agent list [--children] [--all-sessions] [--json]
 ```
 
 Output:
 ```
-ID                                    NAME              PROVIDER  MODEL         STATUS     TOKENS   IDLE     CACHED
-01a0b369-f462-7741-8ced-8d97fd2f8bac  dev-linter        codex     gpt-5.6-luna  idle       18.4k    2m10s    YES (94%)
-01a0b370-6966-7640-8eae-3bfb0d7b14e2  reviewer-sol      codex     gpt-5.6-sol   parked     112.1k   45m00s   EXPIRED
+ID                                    NAME              PROVIDER  PARENT     MODEL         STATUS     TOKENS   IDLE     CACHED
+01a0b369-f462-7741-8ced-8d97fd2f8bac  dev-linter        codex     agy-77a1   gpt-5.6-luna  idle       18.4k    2m10s    YES (94%)
+01a0b370-6966-7640-8eae-3bfb0d7b14e2  reviewer-sol      codex     agy-77a1   gpt-5.6-sol   parked     112.1k   45m00s   EXPIRED
 ```
 
 ### 2.4 `harnez agent status`
@@ -123,8 +130,20 @@ harnez agent compact <session_id|name>
 ```
 
 ### 2.6 `harnez agent stop` & `delete` (alias `rm`)
-- `harnez agent stop <session_id|name>`: Gracefully stops running tasks and parks the session.
+- `harnez agent stop <session_id|name>`: Gracefully stops running tasks and parks the session (only permitted for own session or direct child agents).
+- `harnez agent stop --children`: Gracefully stops and parks all child agents spawned by the current caller session.
 - `harnez agent delete <session_id|name>`: Terminates the process, clears ephemeral working files, and purges state.
+- External sessions' agents cannot be stopped or deleted by foreign sessions without explicit human/global flags (e.g. `--global --force`), preventing cross-tool collisions.
+
+### 2.7 Multi-Session Concurrency & Lineage Isolation Invariant
+When multiple developer harnesses (e.g., AGY IDE, independent Claude CLI sessions, Codex CLI terminals, background CI jobs) run concurrently on the same host:
+1. **Ownership & Ancestry Tracking**: Every agent session record persisted under `~/.harnez/agents/<session_id>.json` contains its `parent_session_id`, `caller_pid`, `harness_type`, and workspace directory.
+2. **Strict Lineage Boundary**: An agent session or automated sprint workflow **MUST ONLY** inspect, resume, stop, or delete agents belonging to its own session subtree (itself and its descendants).
+3. **Protection of Foreign Agents**: Global operations (`stop`, `delete`, `clean`) never sweep or kill processes belonging to other sessions. Any attempt to modify or terminate an agent belonging to a different parent session without an explicit administrative flag is rejected with an error:
+   ```
+   [ERROR]: Session 'agent-claude-91f2' belongs to parent session 'codex-cli-3382' (PID 91204).
+   Cross-session teardown rejected. Only the owning session or a human administrator (--global) can terminate foreign agents.
+   ```
 
 ---
 
@@ -228,4 +247,5 @@ All sprint skills are updated to natively orchestrate via `harnez agent`:
    - Phase 1 Advisor: `harnez agent start agy:flash:med --name sprint-advisor "<audit_task>"`.
    - Phase 2 Devs: `harnez agent start codex:luna:low --name dev-cli "<dev_task>"`.
    - Phase 3 Reviewer: `harnez agent start codex:sol:low "<review_task>"`.
-   - Phase 4 Hygiene: `harnez agent stop --all`.
+   - Phase 4 Hygiene: `harnez agent stop --children` (terminates only subagents spawned by this session, preserving foreign sessions).
+
