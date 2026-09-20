@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/agentpolicy"
+	"ubunatic.com/harnez/internal/privacy"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -85,7 +88,7 @@ func newAgentCmd() *cobra.Command {
 			id = r.SessionID
 		}
 		now := time.Now()
-		sess := &subagent.Session{ID: id, Name: sessName, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parent(), CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
+		sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: args[1], Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parent(), CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
 		if err := s.Save(sess); err != nil {
 			return err
 		}
@@ -147,7 +150,7 @@ func newAgentCmd() *cobra.Command {
 			}
 			now := time.Now()
 			sess = &subagent.Session{
-				ID: uuid.NewString(), Name: sessName, Provider: m.Provider, Model: m.Name, Tier: m.Tier,
+				ID: uuid.NewString(), Name: sessName, Provider: m.Provider, Model: m.Name, Tier: m.Tier, StartPrompt: "",
 				WorkingDir: canonicalWorkDir, ParentSessionID: parent(), CallerPID: os.Getpid(),
 				HarnessType: "interactive", Status: "active", CreatedAt: now, LastActiveAt: now,
 			}
@@ -243,6 +246,7 @@ func newAgentCmd() *cobra.Command {
 		}
 		return err
 	}}
+	attach.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	chat.AddCommand(attach)
 
 	resume := &cobra.Command{Use: "resume <session> <prompt>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
@@ -289,6 +293,7 @@ func newAgentCmd() *cobra.Command {
 		}
 		return write(cmd, agentOutput{Session: sess, Response: r.Response})
 	}}
+	resume.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	resume.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 
 	list := &cobra.Command{Use: "list", RunE: func(cmd *cobra.Command, _ []string) error {
@@ -338,6 +343,7 @@ func newAgentCmd() *cobra.Command {
 		fmt.Fprintf(cmd.OutOrStdout(), "ID: %s\nName: %s\nStatus: %s\nProvider: %s:%s\nTokens: %d (turn %d)\nCached: %d\n", x.ID, x.Name, x.Status, x.Provider, x.Model, x.TokensCumulative, x.TokensTurn, x.CachedTokens)
 		return nil
 	}}
+	status.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	status.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 	status.Flags().StringVarP(&statusDir, "dir", "d", ".", "repository directory")
 
@@ -389,6 +395,7 @@ func newAgentCmd() *cobra.Command {
 		_, e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}).Compact(cmd.Context(), x.ProviderID())
 		return e
 	}}
+	compact.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	stop := &cobra.Command{Use: "stop [session]", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
@@ -475,6 +482,7 @@ func newAgentCmd() *cobra.Command {
 	}}
 	stop.Flags().BoolVar(&children, "children", false, "stop child sessions")
 	stop.Flags().BoolVar(&all, "all", false, "stop all manageable sessions")
+	stop.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	remove := &cobra.Command{Use: "delete [session]", Aliases: []string{"rm"}, Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
@@ -529,8 +537,51 @@ func newAgentCmd() *cobra.Command {
 		return s.Delete(x.ID)
 	}}
 	remove.Flags().BoolVar(&all, "all", false, "delete all manageable sessions")
+	remove.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	root.AddCommand(start, models, chat, resume, list, status, compact, stop, remove)
 	return root
+}
+
+// agentSessionCompletion returns names visible to the current caller. Cobra
+// displays the text after the tab as a completion description.
+func agentSessionCompletion(storeDir string, parent func() string) cobra.CompletionFunc {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		activeStoreDir := storeDir
+		if value, err := cmd.InheritedFlags().GetString("store-dir"); err == nil && value != "" {
+			activeStoreDir = value
+		}
+		store, err := subagent.NewSessionStore(activeStoreDir)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		sessions, err := store.List("", true)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		completions := make([]string, 0, len(sessions))
+		for _, session := range sessions {
+			if !subagent.CanManage(parent(), session) || !strings.HasPrefix(session.Name, toComplete) {
+				continue
+			}
+			completions = append(completions, session.Name+"\t"+sessionPromptDescription(session.StartPrompt))
+		}
+		sort.Strings(completions)
+		return completions, cobra.ShellCompDirectiveNoFileComp
+	}
+}
+
+func sessionPromptDescription(prompt string) string {
+	description := strings.Join(strings.Fields(privacy.ScrubText(prompt)), " ")
+	if description == "" {
+		return "agent prompt unavailable"
+	}
+	if len([]rune(description)) > 100 {
+		description = string([]rune(description)[:97]) + "..."
+	}
+	return description
 }
 
 type agentRepoStatus struct {

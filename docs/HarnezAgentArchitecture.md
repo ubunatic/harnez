@@ -145,6 +145,7 @@ harnez agent compact <session_id|name>
 - `harnez agent stop --children`: Gracefully stops and parks all child agents spawned by the current caller session.
 - `harnez agent stop --all`: Gracefully stops and parks all sessions manageable by the caller; foreign sessions are ignored.
 - `harnez agent delete <session_id|name>`: Terminates the process, clears ephemeral working files, and purges state.
+- Session-reference lifecycle commands provide shell completion for registered names; descriptions show a normalized, privacy-scrubbed excerpt of the start prompt.
 - `harnez agent delete --all`: Applies deletion to every manageable session; active interactive sessions must be stopped first.
 - External sessions' agents cannot be stopped or deleted by foreign sessions without explicit human/global flags (e.g. `--global --force`), preventing cross-tool collisions.
 

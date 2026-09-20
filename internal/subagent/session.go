@@ -18,6 +18,7 @@ type Session struct {
 	ID                string    `json:"id"`
 	ProviderSessionID string    `json:"provider_session_id,omitempty"`
 	Name              string    `json:"name"`
+	StartPrompt       string    `json:"start_prompt,omitempty"`
 	Provider          string    `json:"provider"`
 	Model             string    `json:"model"`
 	Tier              string    `json:"tier"`

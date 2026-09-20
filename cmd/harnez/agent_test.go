@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -30,6 +31,57 @@ func TestAgentCommandSurface(t *testing.T) {
 		if !found {
 			t.Errorf("missing agent subcommand %q", name)
 		}
+	}
+}
+
+func TestAgentCompletionDescription(t *testing.T) {
+	long := strings.Repeat("prompt ", 30)
+	tests := []struct {
+		name, prompt, want string
+	}{
+		{name: "missing", want: "agent prompt unavailable"},
+		{name: "short", prompt: "fix the build", want: "fix the build"},
+		{name: "multiline", prompt: "first line\nsecond\tline", want: "first line second line"},
+		{name: "sensitive", prompt: "email me at user@example.com", want: "email me at [redacted-email]"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sessionPromptDescription(tt.prompt); got != tt.want {
+				t.Fatalf("description = %q, want %q", got, tt.want)
+			}
+		})
+	}
+	if got := sessionPromptDescription(long); len([]rune(got)) != 100 || !strings.HasSuffix(got, "...") {
+		t.Fatalf("long description = %q, want 100 runes with ellipsis", got)
+	}
+}
+
+func TestAgentReferenceCommandCompletionCoverage(t *testing.T) {
+	root := newAgentCmd()
+	for _, path := range [][]string{{"resume"}, {"status"}, {"compact"}, {"stop"}, {"delete"}, {"chat", "attach"}} {
+		cmd, _, err := root.Find(path)
+		if err != nil {
+			t.Fatalf("find %v: %v", path, err)
+		}
+		if cmd.ValidArgsFunction == nil {
+			t.Errorf("%s has no session completion", strings.Join(path, " "))
+		}
+	}
+}
+
+func TestAgentNameCompletion(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "one", Name: "calm-otter", StartPrompt: "Investigate the release process"}); err != nil {
+		t.Fatal(err)
+	}
+	completer := agentSessionCompletion(storeDir, func() string { return "" })
+	completions, directive := completer(newAgentCmd(), nil, "cal")
+	if directive != cobra.ShellCompDirectiveNoFileComp || len(completions) != 1 || completions[0] != "calm-otter\tInvestigate the release process" {
+		t.Fatalf("completion = %#v, directive = %v", completions, directive)
 	}
 }
 
