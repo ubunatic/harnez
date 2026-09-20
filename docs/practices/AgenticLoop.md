@@ -13,6 +13,22 @@ means tools such as `grep_search`, bounded reads mean line-range reads,
 background-task inspection means commands such as `manage_task list`, and
 subagent lifecycle control means commands such as `manage_subagents kill`.
 
+### Agent command execution
+
+`harnez agent start` and `harnez agent resume` are synchronous, low-noise
+commands. They wait for the agent turn and include the agent reply in their
+output. Use them directly for sequential work. If parallel work is wanted,
+invoke each command through the invoking agent's visible host-session
+background-job facility. Keep those jobs visible and user-stoppable so users
+can inspect or stop them manually; do not hide lifecycle work behind opaque
+polling or detached processes.
+
+Tickets are the primary durable communication channel. When reusing an agent,
+refer to the ticket and send only a short prompt describing the immediate
+follow-up. Existing async-wait guidance still applies to genuinely asynchronous
+external work: use the harness-tracked completion signal or scheduled wakeup,
+and avoid chat-visible empty polling.
+
 ---
 
 ## 1. Core Philosophy & Invariants
