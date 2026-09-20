@@ -1,6 +1,6 @@
 # 456 — Document synchronous agent lifecycle usage and ticket-oriented communication
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
