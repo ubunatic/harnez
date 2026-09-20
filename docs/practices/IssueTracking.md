@@ -117,14 +117,12 @@ The top of each ticket MUST contain the standardized metadata block:
 - **Severity**: `Critical`, `Major`, `Moderate`, `Minor`
 - **Category**: `Bug`, `Feature`, `Architecture`, `Documentation`, `Performance`, `Refactor`, `Agentic Ergonomics`, `Infrastructure`
 
-### 3.3 Milestone Decomposition for Non-Trivial Tickets
+### 3.3 Lean Specifications, /goal Definition, and As-Needed Milestones
 
-When drafting non-trivial tickets (architectural changes, multi-component features, migrations, or work spanning $>1$ functional subsystem), the author **must structure Section 3 (Implementation & Verification Plan) into discrete, numbered milestones (`### Milestone 1: ...`, `### Milestone 2: ...`)**.
-
-Each milestone must define:
-1. **Deliverables & Scope**: Target packages/files and specific behavior to implement.
-2. **Automated Verification Target**: Concrete commands (`go test -v ./...`, canary scripts, CLI validations) that measure completion.
-3. **Acceptance Criteria**: Unambiguous pass/fail state so autonomous developer agents can verify progress independently without guessing.
+- **Explicit Goal Definition**: Every ticket must define an explicit `/goal` (or clear Goal statement and acceptance criteria) specifying what the agent should work toward and achieve (the desired end-state and definition of done).
+- **Keep Issues Short & Brief by Default**: When the goal is clear, keep tickets lean without over-specifying low-level implementation details or hypothetical steps.
+- **Milestones Only When Truly Needed**: Only decompose Section 3 into discrete, numbered milestones (`### Milestone 1: ...`, `### Milestone 2: ...`) when the task genuinely requires staged execution, distinct review gates, or multi-phase handoffs (e.g., complex multi-subsystem migrations). When used, each milestone defines deliverables, automated verification targets, and acceptance criteria.
+- **Issue Handling & Live Codebase Verification**: Because issues may sit in the backlog for days or weeks as the project evolves, any agent picking up a ticket must always check the live project/code status and recent commit history before starting work, re-verifying assumptions against current code rather than blindly following stale references. The ticket's `/goal` serves as the durable north star.
 
 ---
 
@@ -185,4 +183,4 @@ When an issue is closed and verified, move it to `issues/archive/NNN-kebab-case.
    green build and a commit is not done until every ticket it touched has its `Status` flipped
    and `harnez index` has been run. Treat "did I close what I finished?" as an explicit
    end-of-session check, not an assumption that closing happens naturally alongside the code.
-6. **Milestone Decomposition for Multi-Step Work**: Non-trivial tickets (architectural changes, multi-component features, migrations) must decompose implementation plans into discrete, numbered milestones (`M1`, `M2`...) with explicit automated verification targets before handing off work to developer subagents.
+6. **Goal-Centric & As-Needed Milestones**: Every ticket must define a `/goal` for the agent. Only decompose into numbered milestones (`M1`, `M2`...) when multi-step staged execution is truly needed; otherwise keep issues lean and brief. Agents picking up an issue must check live code status before beginning work.
