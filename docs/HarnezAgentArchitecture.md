@@ -143,7 +143,7 @@ The model resolution engine standardizes aliases across providers:
 | `claude:opus:low` / `claude:opus` | Claude Code | `claude -p --model claude-3-opus-20240229` | Deep advisor |
 | `agy:flash:low` / `agy:flash` | Gemini / AGY | `agy -m gemini-3.7-flash --effort low` | Fast coder / research |
 | `agy:flash:med` | Gemini / AGY | `agy -m gemini-3.8-flash --effort medium` | Mid-tier advisor |
-| `local:lmcoder` | Local GPU / Podman | `lmcoder agent exec --model qwen2.5-coder-32b` | Offline sandbox coder |
+| `local:lmcoder` | Local GPU / Podman | `lmcoder agent exec --model qwen38-q5 --host x600` | Offline sandbox coder |
 
 ---
 

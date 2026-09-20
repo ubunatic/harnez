@@ -15,3 +15,5 @@
 /scripts/macos-hello/hello_*
 downloads
 /scratch/
+/.dot8/
+.dot8/

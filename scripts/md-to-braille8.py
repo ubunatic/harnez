@@ -144,15 +144,19 @@ def translate_back(text: str) -> str:
 
 
 def output_path(input_path: Path) -> Path:
+    directory = input_path.parent / ".dot8"
     if input_path.suffix == ".md":
-        return input_path.with_name(f"{input_path.stem}.braille.md")
-    return input_path.with_name(f"{input_path.name}.braille.md")
+        return directory / f"{input_path.stem}.braille.md"
+    return directory / f"{input_path.name}.braille.md"
 
 
 def reverse_output_path(input_path: Path) -> Path:
     suffix = ".braille.md"
     if input_path.name.endswith(suffix):
-        return input_path.with_name(input_path.name[:-len(suffix)] + ".md")
+        directory = input_path.parent
+        if directory.name == ".dot8":
+            directory = directory.parent
+        return directory / (input_path.name[:-len(suffix)] + ".md")
     return input_path.with_name(f"{input_path.stem}.md")
 
 
@@ -206,7 +210,7 @@ def main() -> int:
         "output",
         type=Path,
         nargs="?",
-        help="output path (default: INPUT with .braille.md suffix)",
+        help="output path (default: INPUT/.dot8/<name>.braille.md)",
     )
     args = parser.parse_args()
 
@@ -229,6 +233,7 @@ def main() -> int:
         converted = translate(source)
         if translate_back(converted) != source:
             raise ValueError("self-check failed: decoding changed input")
+    destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(
         converted, encoding="utf-8"
     )
