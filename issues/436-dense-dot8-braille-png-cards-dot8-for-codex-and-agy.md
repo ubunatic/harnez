@@ -55,6 +55,20 @@ Review findings (diff/doc only):
 7. **New (57902b1 control):** agy answered "17"/"tarnwick" from a card that does not contain those services, using the needle values hardcoded in `internal/bench/fixture.go`. So the M1 canary is void: the bench needles are findable in the repo and the 300-line subset lacked quillfox. Do not use the bench fixture for the canary. Generate a small synthetic Dot8 doc with novel random facts (service names, numbers) that appear nowhere in the repo, and put the ground truth outside the agent's cwd.
 6. Update the study doc and commit it. Decision rule unchanged: if both agents fail on a clean run, shelve.
 
+### M1 encoder delivered (db3cd96), M2 renderer partly delivered (inside 5359046)
+
+Review (diff, tests, sample card `docs/CodexHooks.md`): encoder and its tests look fine; `go test ./internal/readcard ./cmd/harnez` passes. M2 is incomplete.
+
+### Pre-Work / Required Refinements for M2
+
+1. **Bare `--dot8` is broken.** `harnez read -I --dot8 file.md` takes the path as the flag value and fails with "invalid --dot8 value". Make bare `--dot8` mean encode (`NoOptDefVal`, like `--multi`), keep `--dot8=native`, reject other values. Test all three plus the invalid case.
+2. **Canvas is not sized to content.** The sample card is 1234x1560 (1.92M px), but the content fills only about 380x900 px in the top-left; the rest is empty. The default card of the same file is 1552x628 (0.97M px). Size the canvas to the content, use the same column layout as the default card (`--columns`, `--max-dim`), and check the result is smaller than the default card; if not, report the numbers honestly.
+3. **Legend strip missing** (required by M2). Add the one-line dot legend and the `docs/BrailleDot8.md` pointer in the header.
+4. **No tests for `dot8_render.go`.** Add pixel-level assertions (dot positions, accent colours of dot 7 and 8), a composition test with `--style=compact`, and the golden card. Add flag tests in `cmd/harnez` (bare, native, invalid, `-L` returns decoded text, source line numbers in the gutter).
+5. **Docs.** Update `docs/proposed/BrailleCards.md` status (3x4 implemented, 5x7 dropped) and the doc listing `harnez read` flags. Run `make install`.
+6. **Commit hygiene.** The renderer landed inside another agent's commit ("docs(issues): add ticket 438") via a staging race. Do not rewrite history. From now on: `git add <explicit paths>`, check `git diff --cached --stat`, and `git commit -- <paths>` so only your files go in.
+7. Decoding in text mode currently decodes lines that the same command encoded; simplify so `--dot8` without `-I` returns the plain source lines unchanged (and `native` decodes).
+
 ## 5. Notes for whoever picks this up
 
 - Re-verify against live code and recent commits first; this ticket may sit for a while.
