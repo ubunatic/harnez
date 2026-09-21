@@ -98,6 +98,30 @@ func TestAgentModelsListsKnownSpecs(t *testing.T) {
 	}
 }
 
+func TestAgentStartRejectsUnknownModelWithoutCreatingSession(t *testing.T) {
+	storeDir := t.TempDir()
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"start", "codex:missing:low", "x", "--store-dir", storeDir})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "codex:missing:low") || !strings.Contains(err.Error(), "ask for guidance") {
+		t.Fatalf("start error = %v, want requested spec and guidance", err)
+	}
+	store, storeErr := subagent.NewSessionStore(storeDir)
+	if storeErr != nil {
+		t.Fatal(storeErr)
+	}
+	sessions, listErr := store.List("", true)
+	if listErr != nil {
+		t.Fatal(listErr)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("sessions after rejected start = %#v, want none", sessions)
+	}
+}
+
 type recordingInteractiveRunner struct {
 	storeDir string
 	opts     subagent.InteractiveOptions

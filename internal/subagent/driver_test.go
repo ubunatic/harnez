@@ -25,8 +25,12 @@ func TestKnownModelsAndExplicitSpecsFailClosed(t *testing.T) {
 		t.Fatal("known model registry is empty")
 	}
 	for _, spec := range []string{"codex:luna:invalid", "codex:missing:low", "unknown:model:high"} {
-		if _, err := ResolveModel(spec); err == nil || !strings.Contains(err.Error(), spec) {
+		_, err := ResolveModel(spec)
+		if err == nil || !strings.Contains(err.Error(), spec) {
 			t.Fatalf("spec %q unexpectedly resolved: %v", spec, err)
+		}
+		if !strings.Contains(err.Error(), "codex:luna:low") {
+			t.Fatalf("spec %q error = %v, want known specs", spec, err)
 		}
 	}
 }

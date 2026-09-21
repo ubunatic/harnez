@@ -97,22 +97,30 @@ func modelAliasName(m Model) string {
 func ResolveModel(spec string) (Model, error) {
 	parts := strings.Split(strings.ToLower(strings.TrimSpace(spec)), ":")
 	if len(parts) < 2 || len(parts) > 3 || parts[0] == "" || parts[1] == "" {
-		return Model{}, fmt.Errorf("invalid model %q: expected provider:model[:tier]", spec)
+		return Model{}, fmt.Errorf("invalid model %q: expected provider:model[:tier]; known specs: %s", spec, knownModelSpecs())
 	}
 	m, ok := modelAliases[parts[0]+":"+parts[1]]
 	if !ok {
-		return Model{}, fmt.Errorf("unknown model %q", spec)
+		return Model{}, fmt.Errorf("unknown model %q; known specs: %s", spec, knownModelSpecs())
 	}
 	if len(parts) == 3 {
 		if parts[0] == "claude" && parts[1] == "haiku" && parts[2] == "latest" {
 			return m, nil
 		}
 		if parts[2] != "low" && parts[2] != "med" && parts[2] != "high" {
-			return Model{}, fmt.Errorf("unknown model tier in requested spec %q", spec)
+			return Model{}, fmt.Errorf("unknown model tier in requested spec %q; known specs: %s", spec, knownModelSpecs())
 		}
 		m.Tier = parts[2]
 	}
 	return m, nil
+}
+
+func knownModelSpecs() string {
+	known := make([]string, 0, len(modelAliases))
+	for _, model := range KnownModels() {
+		known = append(known, model.Spec())
+	}
+	return strings.Join(known, ", ")
 }
 
 func (m Model) String() string { return m.Provider + ":" + m.Name + ":" + m.Tier }
