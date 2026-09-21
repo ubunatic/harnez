@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -177,10 +178,26 @@ func startProcess(ctx context.Context, name string, args ...string) (io.Reader, 
 	if err != nil {
 		return nil, nil, err
 	}
+	var stderr bytes.Buffer
+	c.Stderr = &stderr
 	if err := c.Start(); err != nil {
 		return nil, nil, err
 	}
-	return out, c.Wait, nil
+	return out, func() error {
+		err := c.Wait()
+		if msg := strings.TrimSpace(stderr.String()); err != nil && msg != "" {
+			return fmt.Errorf("%w: %s", err, lastLines(msg, 3))
+		}
+		return err
+	}, nil
+}
+
+func lastLines(s string, n int) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "; ")
 }
 
 func (d CodexDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) (*TurnResult, error) {
