@@ -1,6 +1,6 @@
 # 315 — init drops previously opted-in docs on re-run; Canary.md hard-references opt-in PrototypingFeatures.md
 
-**Status**: Open
+**Status**: Closed — opt-in docs preserved on re-run (verified); Canary hard reference removed
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Bug
