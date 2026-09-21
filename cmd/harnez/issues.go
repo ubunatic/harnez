@@ -746,9 +746,38 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 	}
 
 	if oldStatus == newStatus {
-		// Idempotent no-op (issue 232 §3): exact status+reason text already
-		// matches -- skip the rewrite, README resync, and commit entirely.
-		result.Noop = true
+		// A newly created ticket is already Open, but --commit still needs to
+		// publish its filled-in file and regenerated README.
+		if opts.Check || opts.NoCommit {
+			result.Noop = true
+			return result, false, nil
+		}
+		readmePath := filepath.Join(issuesDir, "README.md")
+		readmeChanged, err := index.UpdateIssuesReadme(readmePath, issuesDir)
+		if err != nil {
+			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
+		}
+		result.ReadmeUpdated = readmeChanged
+		readmeRelPath := filepath.ToSlash(filepath.Join("issues", "README.md"))
+		paths := []string{relPath, readmeRelPath}
+		changed, err := gitPathsChanged(opts.Dir, paths)
+		if err != nil {
+			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
+		}
+		if !changed {
+			result.Noop = true
+			return result, false, nil
+		}
+		msg := opts.CommitMsg
+		if msg == "" {
+			msg = defaultCommitMessage(verb, f.Number, reason)
+		}
+		sha, err := gitAddAndCommit(opts.Dir, paths, msg)
+		if err != nil {
+			return issuesResult{}, false, fmt.Errorf("issues: %w", err)
+		}
+		result.Committed = true
+		result.CommitSHA = sha
 		return result, false, nil
 	}
 
@@ -854,6 +883,18 @@ func gitAddAndCommit(dir string, paths []string, message string) (string, error)
 		return "", fmt.Errorf("git rev-parse --short HEAD: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func gitPathsChanged(dir string, paths []string) (bool, error) {
+	args := []string{"status", "--porcelain", "--untracked-files=all", "--"}
+	args = append(args, paths...)
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("git status: %w", err)
+	}
+	return len(strings.TrimSpace(string(out))) > 0, nil
 }
 
 // printIssuesResult writes result either as one JSON object (--json) or as

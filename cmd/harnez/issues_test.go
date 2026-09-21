@@ -219,6 +219,38 @@ func TestRunIssuesVerb_IdempotentNoopSkipsWriteReadmeAndCommit(t *testing.T) {
 	}
 }
 
+func TestRunIssuesVerb_OpenCommitsNewTicketAlreadyOpen(t *testing.T) {
+	dir := repoInit(t)
+	var out bytes.Buffer
+	if err := runIssuesNew(&out, dir, "New Ticket", false); err != nil {
+		t.Fatalf("runIssuesNew: %v", err)
+	}
+	ticketPath := filepath.Join(dir, "issues", "001-new-ticket.md")
+	content, err := os.ReadFile(ticketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content = append(content, []byte("\nFilled in after creation.\n")...)
+	if err := os.WriteFile(ticketPath, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, _, err := runIssuesVerb(&out, "open", "1", nil, issuesRunOptions{Dir: dir, CommitMsg: "file new ticket"})
+	if err != nil {
+		t.Fatalf("runIssuesVerb: %v", err)
+	}
+	if !result.Committed || result.CommitSHA == "" {
+		t.Fatalf("expected commit for newly created ticket, got %+v", result)
+	}
+	files := repoRunGitOutput(t, dir, "show", "--format=", "--name-only", "HEAD")
+	if !strings.Contains(files, "issues/001-new-ticket.md") || !strings.Contains(files, "issues/README.md") {
+		t.Fatalf("commit did not contain ticket and README: %s", files)
+	}
+	if strings.Contains(files, "Filled") {
+		t.Fatalf("unexpected unrelated file in commit: %s", files)
+	}
+}
+
 // TestRunIssuesVerb_ReasonChangeOnAlreadyClosedIsNotIdempotent covers issue
 // 232's distinction: correcting the reason text on an already-Closed
 // ticket (e.g. filling in a real commit sha per issue 126 option A) is a
