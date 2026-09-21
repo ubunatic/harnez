@@ -1,6 +1,6 @@
 # 467 — Recommend a read-only plan-first initial prompt in sprint skills and docs, without a template
 
-**Status**: Open
+**Status**: Closed — delivered in lean-sprint, sprint and AgenticLoop docs
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Workflow / Docs
