@@ -12,12 +12,21 @@ harnez is preparing to become fully OS-agnostic, targeting macOS (Darwin) as the
 docs that every agent session loads. Work that makes that daily loop more correct, more
 legible, and OS-agnostic outranks work that adds new capability surface.
 
-**New this pass — the daily surface grew.** With 417 closed, `harnez agent`
-(`start`/`resume`/`chat`/`stop`/`list`/`models`/`enable`/`disable`) is a shipped, in-use command,
-not a proposal. Cross-agent dispatch has therefore moved from "future capability" to "daily
-surface", and the same bias now applies to it: its three P1 defects (449, 450, 454) outrank every
-remaining feature ticket in that cluster. This is the single biggest structural change since the
-2026-09-19 pass; it is why §1a is a new section and why it heads the suggested order of attack.
+**New this pass — telemetry data management leads.** The dispatch-correctness cluster that led the
+previous pass has largely landed (454, 315, 442, 374, 424 all closed; see §0), and the stated focus
+is now **better, cleaner, more robust telemetry data management**. §3 therefore moves to the front
+of the suggested order of attack: the store is the substrate every cost, efficiency and A/B number
+in this backlog is read from, and 424 demonstrated that a schema defect can sit in it unnoticed
+until somebody happens to look. The ordering inside §3 is deliberately *reproduce-first*: 341
+(concurrent writers losing rows) before any new column, because a store that silently drops rows
+invalidates every query written against it; then 127 (SQL into `spec/`) so the queries have one
+home; then 457, which turns those queries into tests plus a live data-quality check so the next
+424-class defect is reported rather than discovered.
+
+**Previous lead, now mostly delivered.** `harnez agent`
+(`start`/`resume`/`chat`/`stop`/`list`/`models`/`enable`/`disable`) is shipped and in use, and 454's
+explicit-selection rule is enforced. §1a's remaining P1 (450) is blocked on external work in
+`../loom`, so the cluster no longer heads the order.
 
 Sequencing buckets:
 
@@ -30,6 +39,35 @@ Sequencing buckets:
 
 
 ## 0. Shipped Recently
+
+**Closed since the 2026-09-21 pass (this pass's shipped set):**
+
+- **454** — explicit `luna` selection is enforced; no silent host-provider fallback. The
+  cost-substitution bug that led §1a last pass is fixed, which is why that section no longer
+  heads the order of attack.
+- **315** — `init` no longer drops previously opted-in docs on re-run. The destructive half of
+  the `apply`/`init` family is closed; 289 and 355 remain.
+- **442** — `harnez issues open --commit` now commits a newly created ticket, so the documented
+  `/issue` workflow ends in a commit instead of leaving the tracker dirty.
+- **374** — README CLI coverage and the website link are refreshed against the current command
+  surface, including the `harnez agent` tree.
+- **424** — telemetry compaction events insert with the model column; fresh, legacy and
+  current-version DBs all self-heal, with regression tests (a1ade4a). This was the **Now** item
+  at the head of §3 and it is the reason §3's remaining work is now about *keeping* the store
+  honest rather than repairing it.
+
+**Partially delivered — telemetry halves shipped, remainder still open:**
+
+- **425** — the migration-logging and schema-version-drift work landed with 235d7da (multi-version
+  upgrade fixtures, quiet no-op apply schema report). **Milestone 2, the Braille glyph spacing
+  half, is still open** and now tracks in §12 with the rest of the Dot8 work.
+- **428** — the telemetry migration test-coverage half landed in the same commit. **The ANSI
+  256-color / 24-bit truecolor extensions remain open** and stay in §12 behind 427.
+
+**Filed this pass:**
+
+- **457** — canonical telemetry analytics queries as tests plus live data-quality checks. New,
+  and it is the keystone of the reordered §3 (see the rationale there).
 
 - **030, 071, 096, 105, 108, 126, 139, 149, 201, 209, 210, 217, 261, 262, 290, 292, 299** — shipped/closed
 - **006** — `fix(status): check all managed settings keys`
@@ -93,30 +131,29 @@ Rationale: 286 is immediate, high-leverage low-hanging fruit — it updates the 
 ## 1a. Cross-agent dispatch & hosted agent chat (`harnez agent`) — new section
 
 `harnez agent` shipped with 417 and is now how work is handed to a cheaper or different model.
-An orchestrator that dispatches to the wrong model silently spends the user's quota in the wrong
-place, and a chat surface whose input line desynchronises is unusable for the interactive half.
-Both are correctness defects on a daily surface, which is exactly the class this roadmap has been
-putting in **Now** all along.
+**454 closed this pass**, so the highest-cost failure mode here — silently substituting the
+expensive host model for the low-cost tier the user asked for — is fixed. What remains is one
+blocked P1 and a set of follow-ons, which is why this cluster no longer leads the order of attack.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 454 — enforce explicit `luna` selection, no silent host-provider fallback | S/M — a substitution bug with a direct cost consequence: the user asks for a low-cost worker tier and gets the expensive host model. Highest value per line of change in this cluster | **Now** |
-| 450 — hosted chat input line breaks after terminal resize | S/M — P1; the cursor lands on an output row and keyboard input becomes visually misleading. Pair the fix with 286's `x/term` work, which owns resize/raw-mode handling | **Now** |
-| 449 — spec-driven chat model selection and aliases | M — P1; provider-only/tier-only/no-arg forms resolved through an editable spec, with quota-aware selection (skip agents ≥80% of their 5h window). Depends on the same spec surface 445 touches; do after 454 so the "explicit selection wins" rule is already enforced before defaults are added | **Now** |
+| 450 — hosted chat input line breaks after terminal resize | S/M — P1, **blocked on `../loom`**: the resize/raw-mode handling this needs lives in that external dependency, so no amount of work here closes it. Revisit when loom lands; pair it with 286's `x/term` work at that point | **Park** (blocked) |
+| 449 — spec-driven chat model selection and aliases | M — P1; provider-only/tier-only/no-arg forms resolved through an editable spec, with quota-aware selection (skip agents ≥80% of their 5h window). **Unblocked by 454**: the "explicit selection wins" rule is now enforced, so defaults can be layered on top of it safely. Shares the spec surface 445 touches | **Now** |
 | 451 — roadmap skill defaults to low-cost models when unspecified | S — docs/skill-only; the same cost-discipline defect as 454, one layer up in the skill rather than the CLI | **Next** |
 | 453 — clarify `opus:low` vs `astra:low` cost guidance in sprint docs | S — docs-only; land together with 451 as one cost-discipline pass | **Next** |
-| 435 — native-subagent interception + A/B telemetry switch | **rescoped by 417**: the `subagent_mode` switch now exists as `harnez agent enable`/`disable`. What remains is the interception/redirection hooks for native `invoke_subagent`/`spawn_agent` and the comparative telemetry. Do the telemetry half only after §3's schema hygiene (424/425) lands, or the A/B numbers inherit a known-bad store | **Next** |
+| 435 — native-subagent interception + A/B telemetry switch | **rescoped by 417**: the `subagent_mode` switch now exists as `harnez agent enable`/`disable`. What remains is the interception/redirection hooks for native `invoke_subagent`/`spawn_agent` and the comparative telemetry. Do the telemetry half only after §3's hardening chain (341 → 127 → 457) lands, or the A/B numbers inherit a store that is not yet known-good | **Next** |
 | 306 — quarantine Codex subagents unusable after usage limits | S/M — P1; a dispatcher that keeps routing to a dead session wastes a whole turn per attempt. Follows 449, which introduces the eligibility notion this would extend | **Next** |
 | 383 — disable queued question-tool prompts in Codex sessions | S — moved up from §14; it is a dispatch-surface papercut, not misc | **Next** |
 | 144 — Codex subagent model-selection policy | S — **unblocked by 149**; its content now migrates into a real profile instead of waiting for one | **Next** |
 | 288 / 291 / 342 — external-agent handoff, standardized dispatch, cross-agent MVP | largely delivered by 417; see §9 for the close/rescope call | **Close / rescope** |
 
-Rationale: this cluster is ordered by *what a wrong answer costs the user*. 454 and 449 are about
-sending work to the model the user actually asked for — getting that wrong spends real quota on the
-wrong tier, which is the most expensive failure mode in the whole backlog. 450 is the interactive
-half of the same surface. 435's A/B telemetry is deliberately held behind §3: measuring dispatch
-modes against a store with a known model-column bug (424) would produce confident wrong numbers,
-the exact failure the §2 chain spent five tickets eliminating.
+Rationale: this cluster is ordered by *what a wrong answer costs the user*. With 454 closed, 449 is
+the remaining piece of "send work to the model the user actually asked for" and stays **Now**. 450
+is the interactive half of the same surface but is externally blocked, so it moves to **Park**
+rather than sitting in **Now** as an item nobody can start. 435's A/B telemetry is still held
+behind §3 — and the reason is stronger this pass, not weaker: 424 proved the store can carry an
+unnoticed column defect, so an A/B comparison run before 341/457 land would produce confident
+wrong numbers.
 
 383 and 144 remain behind 451/453 and 306 deliberately: 451/453 are a small documentation batch
 that fixes current cost guidance, while 306 prevents repeated dispatch to a known-dead session.
@@ -169,27 +206,40 @@ and the status-bar work follow once the numbers are trustworthy.
 Rationale: doing the Codex half of 030 first is nearly free and unblocks the token column for a
 second agent. 113 before 111 — you want the measurements before tuning the cadence they'd inform.
 
-## 3. Telemetry data layer & analytics
+## 3. Telemetry data layer & analytics — **leading section this pass**
+
+The stated focus is better, cleaner, more robust telemetry data management. This section is
+therefore promoted ahead of every other cluster, and its internal order is **reproduce-first, then
+consolidate, then keep honest, then extend**. The principle: do not add a column, a cost field or a
+new event family to a store whose write path and query surface are not yet trustworthy — 424 is the
+worked example of what that costs.
+
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 424 — telemetry compaction events insert without the model column | S — a live data-correctness bug in the store every other analytics ticket reads from; do it first | **Now** |
-| 425 — review follow-up: migration logging, schema version drift, Braille glyph spacing | S/M — schema-drift detection protects 424's fix from regressing | **Next** |
-| 421 — extend telemetry to harnez commands and feature-usage analytics | M — new event family; land after the schema hygiene of 424/425/127 | **Later** |
-| 127 — move `internal/telemetry` SQL into `spec/` | M — 10 statements, not the 5 the ticket lists; needs a clean tree | **Next** |
-| 215 — LLM backfill/reclassification of tool notes | M — new `activity_category` column + migration + CLI | **Next** |
-| 225 — local SLM classifier reliability/accuracy | S — cache versioning first, then an accuracy baseline | **Next** |
+| 341 — concurrent SQLite telemetry writers lose rows (macOS) | M — **first, and reproduce before fixing**. `TestConcurrentWriters` sees 25 of 50 rows on macOS-14 with writerB failing on a schema-version race at first-open. This is silent data loss in the write path: every ticket below writes to or reads from this store, so a fix landed on top of it inherits an unknown loss rate. Get a deterministic local reproduction first — the failure is filesystem-dependent (APFS), so a Linux-only fix attempt is guesswork | **Now** |
+| 127 — move `internal/telemetry` SQL into `spec/` | M — 10 statements, not the 5 the ticket lists. Second, because 457 defines a canonical query set and those queries want one home, not two: doing 457 first would write the canonical queries into Go and then immediately move them. Follows the Spec.md rule that spec values must not be duplicated in Go. Needs a clean tree | **Now** |
+| 457 — canonical analytics queries as tests + live data-quality checks | M — **new this pass, and the keystone**. A named query set (calls per tool/agent/model, sessions per day, NULL/empty rate per key column, orphaned/duplicate events, token distributions) that runs against fixtures in the test suite *and* against the live store as a data-quality report. This is what converts "telemetry bugs surface when someone happens to look" into "the store tells you where it looks wrong". 424, 425 and 341 were all found by accident; 457 is the mechanism that stops that being the discovery method | **Now** |
+| 446 — persist cost fields reported by agents | S/M — capture `cost`/`total_cost`/`currency` where a provider already reports them rather than discarding them. **Before 445**: a measured number is worth more than a modelled one, and it gives 445's estimates something to be checked against | **Next** |
+| 445 — counterfactual API rate cards in `spec/`, surfaced in `usage`/`stats` | M — rate cards per model in `spec/`, then estimated pay-as-you-go spend and cache savings. Lands on top of 446's measured values and 127's spec surface | **Next** |
+| 124 — PostToolUse auto-capture of tool-call counts | M — canary-gated: run the payload probe before writing code. Moved up from §7; it is a telemetry *ingestion* ticket, and pairing it with 296 makes the efficiency numbers complete at the same time | **Next** |
+| 296 — always compute distill savings for stats | S/M — pairs with 124: together they close the "efficiency reporting is only partly populated" gap, and 457's data-quality checks will flag exactly these columns as sparse until they do | **Next** |
+| 225 — local SLM classifier reliability/accuracy | S — cache versioning first, then an accuracy baseline. **Before 215**: a backfill run against an unversioned cache cannot be evaluated, so the baseline has to exist before rows are rewritten at scale | **Next** |
+| 215 — LLM backfill/reclassification of tool notes | M — new `activity_category` column + migration + CLI. Follows 225's baseline, and follows 457 so the backfill's effect is measurable as a data-quality delta rather than an assertion | **Next** |
 | 178 — distill smart mode, error-pattern preservation | M — key constraint: do not import `internal/telemetry` from `internal/distill` | **Next** |
-| 208 — SQLite export format | S/M — depends on 204's scrubbed record slices | **Later** |
-| 446 — persist cost fields reported by agents | S/M — new this pass; capture `cost`/`total_cost`/`currency` where a provider already reports them rather than discarding them. Do this before 445: a measured number is worth more than a modelled one, and it gives 445's estimates something to be checked against | **Next** |
-| 445 — counterfactual API rate cards in `spec/`, surfaced in `usage`/`stats` | M — new this pass; rate cards per model in `spec/`, then estimated pay-as-you-go spend and cache savings. Follows the Spec.md rule that spec values must not be duplicated in Go | **Next** |
+| 421 — extend telemetry to harnez commands and feature-usage analytics | M — new event family. Deliberately **later**: adding an event family before 341/127/457 means the new family inherits the same unverified write path and has no canonical queries covering it | **Later** |
+| 208 — SQLite export format | S/M — depends on 204's scrubbed record slices, and exporting a store is only worth doing once its contents are known-good | **Later** |
+| 425 (M2) / 428 (ANSI half) | telemetry halves shipped in 235d7da; the Braille-spacing and 256/truecolor remainders track in §12 | **→ §12** |
 
-Rationale: 225's cache versioning is a prerequisite for any honest accuracy experiment, so it
-precedes 215's backfill. 127 is pure architecture hygiene — schedule it into a quiet slot, on a
-clean tree. 446 and 445 are new and form a pair: subscription-tier sessions report `$0` direct
-spend, so today nothing in harnez can answer "what did that dispatch actually cost". That question
-is now load-bearing, because §1a's whole premise is routing work to cheaper tiers — a cost-routing
-policy with no cost readout is unfalsifiable. Reported cost (446) before modelled cost (445), and
-both after 424/425 so the numbers land in a store whose schema is trusted.
+Rationale: the ordering answers "what makes the *next* telemetry bug cheap to find" rather than
+"what adds the most data". 341 is first because row loss is the one defect that cannot be detected
+after the fact — a missing row leaves no trace to query. 127 is second and is not merely hygiene
+this pass: it is the prerequisite that stops 457 writing canonical queries into a location it would
+then have to vacate. 457 is third and is the durable payoff — it is the only ticket in the backlog
+that makes data quality a reported property instead of an incidental discovery. Everything that
+*adds* to the store (446/445 cost, 124/296 efficiency, 215 classification, 421 command analytics)
+queues behind that chain, in each case pairing a measurement with the thing that validates it.
+446 before 445 (measured before modelled), 225 before 215 (baseline before backfill), 124 with 296
+(both halves of one efficiency number).
 
 ## 4. Issue tracking & tracker tooling
 | Ticket | Scope | Bucket |
@@ -199,15 +249,14 @@ both after 424/425 so the numbers land in a store whose schema is trusted.
 | 241 — session-tree tool-call efficiency audit command and skill | M — needs the telemetry of §3 to be trustworthy before its numbers mean anything | **Later** |
 | 246 — add /commit and /publish Skills | M — multi-project staged commit ownership | **Next** |
 | 340 — label/project/category query filters in `harnez find issues` | S/M — moved up from §14; roadmap synthesis and triage both re-scan the whole backlog today | **Next** |
-| 442 — `harnez issues open --commit` does not commit a newly created ticket | S — new this pass; when the placeholder is already `Open`, the verb short-circuits and the filled-in ticket plus `issues/README.md` stay uncommitted. Observed on 440 and 441, both of which had to be committed by hand. The documented `/issue` workflow does not end in a commit today | **Now** |
+| ~~442~~ — `issues open --commit` does not commit a newly created ticket | ✅ **closed** this pass; the `/issue` workflow now ends in a commit. See §0 | **Done** |
 | 426 — make `find` output text-first for human users | S — tracked in §12; listed here because the tracker CLI is its heaviest consumer | **Now** (see §12) |
 
 Rationale: 108 and 217 are shipped (§0). Of the remaining work, 279 and 283 are cheap and remove
 friction from the filing loop itself, while 246 extends the skill set. 340 moves up from **Later**
 because every planning pass (including this one) currently re-reads the full open list for want of
-a category filter. 442 goes straight to **Now**: the tracker is used many times a day and a filing
-workflow that silently ends without a commit is the same trust defect as a dashboard showing a
-stale number.
+a category filter. 442 shipped this pass, so the filing workflow now ends in a commit; 279 is the
+last remaining tracker-hygiene defect and keeps its **Now** slot.
 
 ## 5. Agent instructions & practice docs
 
@@ -267,7 +316,7 @@ permission the user approved interactively.
 | 010 — smoke-test that agents see installed skills/commands | **unblocked** — wayreel#11 landed, `verifyContains` exists | **Next** |
 | 007 — thin test coverage | M — one test file per package; `stripComments` genuinely lacks `/* */` support, which silently yields an empty map | **Next** |
 | 177 — lean post-edit build check for control-flow edits | M — hook option chosen; prototype the heuristic against real past edits first | **Later** |
-| 124 — PostToolUse auto-capture of tool-call counts | canary-gated: run the payload probe before writing code | **Later** |
+| 124 — PostToolUse auto-capture of tool-call counts | moved to §3 — it is telemetry ingestion, and it pairs with 296 there | **Next** (→ §3) |
 | 073 — credentialed cloud-agent canary | blocked on a user decision about credential-mounting posture | **Park** (§9) |
 
 Rationale: 007's `/* */` gap is the sharp edge — a hand-written JSONC config with block comments
@@ -290,6 +339,12 @@ overturned: the mechanism now exists, so the profile can be written once. 165 an
 tracking-only on their own terms, not on 149's.
 
 ## 9. Close, park, or split
+
+**Still open in the tracker as of this pass.** 291, 342, 288, 435 and 302 were all named as
+close/rescope candidates last pass and all five are still `Open`. They remain the cheapest items in
+the backlog — five tickets leave it without writing a line of code — and 302 in particular only
+needs its delivered study verified against its acceptance criteria before closing. This roadmap is
+read-only against `issues/`, so the tracker actions below are recommendations for a separate pass.
 
 **Close now — work is done or the premise is disproven:**
 
@@ -325,6 +380,10 @@ tracking-only on their own terms, not on 149's.
 
 **Park — blocked on something no amount of work here resolves:**
 
+- **450** — P1, but blocked on external work in `../loom`, which owns the resize/raw-mode handling
+  the fix needs. Moved out of §1a's **Now** this pass so the bucket reflects what can actually be
+  started. **Tracker action:** set the status reason to name the `../loom` dependency, and revisit
+  alongside 286's `x/term` work once loom lands.
 - **073** — needs a user decision on credential-mounting posture. Cheap pre-work: confirm that
   AGY/Codex have no pre-exec rewrite hook, which would collapse this to Claude-Code-only and make
   the decision much easier. **Tracker action:** keep it `Blocked` and name that user decision in
@@ -365,7 +424,7 @@ workflow work.
 | 285 — durable-note wording contract | S, closes a trust gap in normal agent conversations | **Next** |
 | 293 — recoverable roadmap synthesis | M, improves this planning workflow; depends on an explicit safe recovery location | **Next** |
 | 295 — actionable startup splash status | M, makes usage failures legible after the core dashboard fixes | **Next** |
-| 296 — always compute distill savings | S/M, improves honest efficiency reporting; follow the existing telemetry model | **Next** |
+| 296 — always compute distill savings | moved to §3 and paired with 124 — the two are halves of one efficiency number | **Next** (→ §3) |
 | 297 — linked language subdocuments | M, extends the proven copyable-doc pipeline without bloating core docs | **Next** |
 | 298 — commit checkpoint/file-granularity guidance | S, documentation first; split any hook enforcement into a separate design | **Next** |
 | 300 — raw-mode and PTY input guidance | S, verified documentation gap with a low implementation cost | **Next** |
@@ -387,7 +446,7 @@ the completed 302 research are handled only in §9 rather than scheduled here.
 | 337 — Research macOS system permissions and CLI whitelist for config template | - | **Next** |
 | 338 — macOS CI verification via GitHub mirror | - | **Next** |
 | 339 — Graceful degradation and gating of hardware telemetry and mic probes on macOS | - | **Next** |
-| 341 — Concurrent SQLite telemetry writers lose rows on macOS | - | **Next** |
+| 341 — Concurrent SQLite telemetry writers lose rows on macOS | **moved to §3 and promoted to Now** — it reproduces on macOS but it is telemetry data loss, not a porting task, and it gates the whole §3 chain | **Now** (→ §3) |
 
 ## 12. Multimodal & Visual Context
 
@@ -401,10 +460,11 @@ separate follow-through rather than unfinished 434 milestones.
 | 434 — one glyph spec per font size | ✅ closed: M1–M4 done, importer removed, text→PNG pipeline tests added | **Done** |
 | 426 — make `find` output text-first for human users | S — the tracker's own CLI is read many times a day; visual-first output costs humans a step | **Now** |
 | 427 — preserve ANSI colors in the stdin render path | S — colors are dropped today, which silently degrades piped render output | **Next** |
-| 428 — code review follow-up: ANSI 256/24-bit color extensions and telemetry migration test coverage | S/M — follows 427; pairs with 425 for the telemetry half | **Next** |
+| 428 — ANSI 256/24-bit color extensions | S/M — **rescoped by 235d7da**: the telemetry migration test-coverage half is delivered, so only the ANSI 256-color/truecolor extension remains. Follows 427, which must first stop dropping colors at all | **Next** |
+| 425 (M2) — Braille glyph spacing | S — **rescoped by 235d7da**: migration logging and schema-drift detection shipped; only the glyph-spacing milestone is left, and it belongs with the Dot8 pitch work below rather than with telemetry | **Next** (with 444) |
 | 403 — transparent hook interception and distill adapter for multi-slice `harnez read` | M — makes the distill path apply to the read surface agents actually use | **Next** |
 | 402 — move config diff below status, free top-level `harnez diff` for visual git diff | M — CLI surface change; do after 426 settles find/read output conventions | **Next** |
-| 374 — refresh README CLI coverage and website link | S — docs drift, and now materially wrong: the README predates the whole `harnez agent` command tree. Moves **Next → Now** | **Now** |
+| ~~374~~ — refresh README CLI coverage and website link | ✅ **closed** this pass; the README now covers the current command surface including `harnez agent`. See §0 | **Done** |
 
 **Dot8 experimental cluster (new this pass).** 436, 440, 441, 444 and 447 all landed after the
 previous roadmap and form one dependency chain around the Braille/Dot8 card encoding.
@@ -431,7 +491,7 @@ one that will work; do the inline note, measure, and shelve the rest.
 | 273 — restore the old AGY PreToolUse hook as an opt-in configuration option | S — a regression for AGY users; opt-in keeps the default surface unchanged | **Next** |
 | 294 — investigate cross-agent post-edit success hooks for the `harnez rate` pipeline | S — research; today the feedback pipeline only sees failures, which biases every stat built on it | **Next** |
 | 306 — Detect and quarantine Codex subagents that remain unusable after usage limits | moved to §1a — it is a dispatch-surface concern now that dispatch is shipped | **Next** (→ §1a) |
-| 315 — init drops previously opted-in docs on re-run; Canary.md hard-references opt-in PrototypingFeatures.md | **Next → Now**: P1, and it is destructive — a re-run of `init` silently removes docs the user opted into, in the exact command the README sells as safe to run as often as you like. Same family as 289 and 355, all three in `apply`/`init` | **Now** |
+| ~~315~~ — init drops previously opted-in docs on re-run | ✅ **closed** this pass — the destructive `init` re-run is fixed. Its siblings 289 and 355 remain open in §6 | **Done** |
 | 322 — Evolve /story skill with optional focus areas, tooling fit, and human-steering divergence analysis | - | **Next** |
 | 323 — docs/lang/Bash.md hard-references docs/practices/AgenticLoop.md instead of @docs/AgenticLoop.md alias | - | **Next** |
 | 342 — MVP: /harnez-agent skill and CLI dispatch for agy host to codex:sol subagent | superseded by 417 — close candidate, see §9 | **Close** |
@@ -468,10 +528,15 @@ one that will work; do the inline note, measure, and shelve the rest.
 
 
 Rationale for newer backlog sequencing:
-- Cross-agent dispatch (Section 1a) is new and leads, because 417 turned it from a proposal into a
-  daily surface and its open defects mis-spend the user's quota rather than merely annoying them.
-- Cost telemetry (446/445 in Section 3) follows dispatch directly: routing work to cheaper tiers is
-  the premise of Section 1a, and today nothing measures whether that routing saved anything.
+- Telemetry data management (Section 3) leads this pass by explicit focus: the store is the
+  substrate every cost, efficiency and A/B number depends on, and 424 showed a defect can sit in it
+  undetected. 341 → 127 → 457 makes the write path verified, the query surface single-homed, and
+  data quality a reported property rather than an accident of someone looking.
+- Cost telemetry (446/445) follows immediately, because cheap-tier routing is only a policy if
+  something measures what it saved — and those measurements are only worth taking once the store
+  they land in is trusted.
+- Cross-agent dispatch (Section 1a) drops from the lead: 454 shipped and 450 is blocked on
+  `../loom`, leaving 449 as the actionable remainder.
 - macOS Porting (Section 11) is elevated to Next to fulfill the primary OS-Agnostic Readiness objective.
 - Multimodal/Visual Context (Section 12) is Next because visual context cards are now a routine
   agent reading path under Context Discipline, not just a debugging aid — an unreadable glyph in a
@@ -481,40 +546,51 @@ Rationale for newer backlog sequencing:
 
 ## Suggested order of attack
 
-Reordered this pass. The previous list opened with the visual-context cluster; 434 closed, so that
-work is no longer the shortest path to closing anything, and 417's landing put a higher-value
-surface in front of it.
+Reordered this pass. The previous list opened with dispatch correctness; 454 closed and 450 turned
+out to be blocked externally, so that lead is spent. Telemetry data management is the stated focus
+and now heads the list.
 
-1. **Make dispatch send work where it was asked to** (new lead): 454 → 450 → 449 → 306.
-   Every one of these is a defect on a surface that spends the user's quota, and 454 in particular
-   is the difference between a cost-routing policy and a cost-routing *suggestion*.
-2. **Close the delivered-feature tickets first** (nearly free, and it shrinks everything below):
-   291, 342 → close as superseded; 288 and 435 → rescope to what 417 did not deliver; 302 → close
-   on its study. Five tickets leave the backlog without writing code.
-3. **Live correctness bugs**: 424 (telemetry model column) → 315 (`init` drops opted-in docs) →
-   289 (`init` go.work hard-fail) → 442 (tracker filing ends without a commit) → 279 (lock
-   sidecar) → 255 (finish collector key decoding and diagnostics tests). Small, independent, all
-   on surfaces touched many times a day; 315 follows the store bug because 424 can corrupt every
-   later analytics result, while 315 is destructive but confined to an explicit `init` rerun.
-4. **OS-agnostic terminal foundation**: 286 (Go conventions + `x/term` `watch.go` refactor) →
-   the OS build-tag split → portable process detection → 334/336/337 research → 338/339/341.
-   Sequence 450 alongside 286: resize and raw-mode handling is the same code.
-5. **Give the cost story numbers**: 425 (schema drift) → 446 (reported cost) → 445 (rate cards)
-   → 435's A/B telemetry half. In that order, so the A/B comparison lands on a store that has
-   already been repaired.
-6. **Finish the visual-context and public-doc surface**: 444 (P1 pitch bug) + 447 → 426 → 374 →
-   427 → 428 → 441 → 436.
-   444 first, because it is what makes the rest of the Dot8 chain measurable instead of
-   speculative; 440 stays out until the inline-note channel has been tried.
-7. **Cash in the 149 dividend**: 144 (→ §1a) → 151 → 231 → 176 → 145. These were all blocked on
-   the profile mechanism; it exists now, and 145 in particular has waited two passes.
-8. **Harden agent execution and planning**: 268 → 274 → 281 → 285 → 293 → 295, plus the
-   cost-discipline docs pass 451 + 453 as one small batch.
-9. **Tracker ergonomics**: 340 (query filters) → 283 → 246, so the next planning pass costs less
-   than this one did. 340 is still unbuilt, and this pass again read the whole open list for want
-   of it.
-10. **Mic indicators and audio UX**: 250 → 251 → 264 → 253 → 278.
-11. **Collector depth and efficiency evidence**: 113 → 111 → 034 → 296 → 294. Note 034 now also
-    gates 084, since 030 closed with only the Codex half.
-12. Revisit **Later** items after 160 has a decision attached, and keep any plugin implementation
+1. **Make the telemetry store trustworthy** (new lead): 341 (reproduce the concurrent-writer row
+   loss *before* fixing it) → 127 (SQL into `spec/`, so the canonical queries have one home) →
+   457 (canonical queries as tests + a live data-quality check). This order is deliberate: row
+   loss is the only telemetry defect that leaves no trace to query afterwards, and 127 before 457
+   avoids writing the canonical query set into a location it would immediately have to leave.
+2. **Give the cost story measured numbers**: 446 (cost fields agents already report) → 445
+   (counterfactual rate cards in `spec/`) → 435's A/B telemetry half. Measured before modelled,
+   and all of it after step 1 so the numbers land in a store that has been verified rather than
+   assumed.
+3. **Complete the efficiency numbers**: 124 (PostToolUse tool-call capture, canary-gated) + 296
+   (always compute distill savings) as one pair — they are two halves of the same reporting gap,
+   and 457's data-quality check will flag both columns as sparse until they land.
+4. **Classification quality**: 225 (cache versioning, then an accuracy baseline) → 215 (LLM
+   backfill/reclassification). Baseline before backfill, or the backfill's effect is unmeasurable.
+   Then 421 and 208 last in this theme — a new event family and an export format are only worth
+   adding once the store beneath them is known-good.
+5. **Close the delivered-feature tickets** (nearly free, and it shrinks everything below): 291,
+   342 → close as superseded by 417; 288 and 435 → rescope to what 417 did not deliver; 302 →
+   verify the delivered study against its acceptance criteria, then close. Five tickets leave the
+   backlog without writing code.
+6. **Remaining live correctness bugs**: 289 (`init` go.work hard-fail) → 279 (tracker lock
+   sidecar) → 255 (finish collector key decoding and diagnostics tests). 424, 315 and 442 all
+   closed this pass, so this chain is three items shorter than last pass.
+7. **Dispatch follow-ons**: 449 (spec-driven chat model selection, now unblocked by 454) → 306
+   (quarantine dead Codex sessions) → 383 → 144. 450 is excluded until `../loom` lands.
+8. **OS-agnostic terminal foundation**: 286 (Go conventions + `x/term` `watch.go` refactor) →
+   the OS build-tag split → portable process detection → 334/336/337 research → 338/339. Note 341
+   has moved out of this theme into step 1: it is a data-loss bug that happens to reproduce on
+   macOS, not a porting task.
+9. **Finish the visual-context and public-doc surface**: 444 (P1 pitch bug) + 447 + 425's Braille
+   glyph-spacing milestone → 426 → 427 → 428 (ANSI 256/truecolor half only) → 441 → 436. 374 is
+   done; 440 stays out until the inline-note channel has been tried.
+10. **Cash in the 149 dividend**: 144 (→ §1a) → 151 → 231 → 176 → 145. All were blocked on the
+    profile mechanism; it exists now, and 145 has waited three passes.
+11. **Harden agent execution and planning**: 268 → 274 → 281 → 285 → 293 → 295, plus the
+    cost-discipline docs pass 451 + 453 as one small batch.
+12. **Tracker ergonomics**: 340 (query filters) → 283 → 246, so the next planning pass costs less
+    than this one did. 340 is still unbuilt, and this pass again read the whole open list for want
+    of it.
+13. **Mic indicators and audio UX**: 250 → 251 → 264 → 253 → 278.
+14. **Collector depth**: 113 → 111 → 034 → 294. Note 034 now also gates 084, since 030 closed with
+    only the Codex half; 296 has moved up into step 3.
+15. Revisit **Later** items after 160 has a decision attached, and keep any plugin implementation
     outside this roadmap until separately scoped.
