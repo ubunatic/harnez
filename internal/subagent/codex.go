@@ -88,6 +88,7 @@ func parseCodex(data []byte) (*TurnResult, error) {
 		}
 		if e.Item.Type == "agent_message" {
 			r.Response = e.Item.Text
+			r.Messages = append(r.Messages, e.Item.Text)
 		}
 		if e.Type == "turn.completed" {
 			r.InputTokens += e.Usage.Input

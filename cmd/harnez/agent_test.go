@@ -553,11 +553,11 @@ func TestAgentResumePrintsReplyNotStructDump(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if got := out.String(); strings.Contains(got, "{0x") || !strings.Contains(got, "[harnez session] Resumed: sid") || !strings.Contains(got, "[agent response]\nthe reply text") {
+	if got := out.String(); strings.Contains(got, "{0x") || !strings.Contains(got, "[agent messages]\n[msg 1]\nthe reply text") {
 		t.Fatalf("stdout = %q, want plain reply without struct dump", got)
 	}
-	if !strings.Contains(errOut.String(), "caller must wait") {
-		t.Fatalf("stderr = %q, want wait notice", errOut.String())
+	if e := errOut.String(); !strings.HasPrefix(e, "[session timeline]\n") || !strings.Contains(e, "caller must wait") || !strings.Contains(e, " done] ") {
+		t.Fatalf("stderr = %q, want timeline with wait notice", e)
 	}
 }
 

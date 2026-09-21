@@ -65,7 +65,7 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	if v.IsError {
 		return nil, fmt.Errorf("claude reported an error: %s", v.Result)
 	}
-	r := &TurnResult{Response: v.Result, InputTokens: v.Usage.Input, OutputTokens: v.Usage.Output, CachedTokens: v.Usage.CacheRead + v.Usage.CacheCreate}
+	r := &TurnResult{Response: v.Result, Messages: []string{v.Result}, InputTokens: v.Usage.Input, OutputTokens: v.Usage.Output, CachedTokens: v.Usage.CacheRead + v.Usage.CacheCreate}
 	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens
 	r.TokensCumulative = r.TokensTurn
 	return r, nil

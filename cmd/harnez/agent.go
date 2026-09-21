@@ -32,8 +32,9 @@ var agentInteractiveRunner subagent.InteractiveRunner = subagent.CLIInteractiveR
 
 type agentOutput struct {
 	*subagent.Session
-	Response     string `json:"response,omitempty"`
-	ReconnectCmd string `json:"reconnect_cmd,omitempty"`
+	Response     string   `json:"response,omitempty"`
+	Messages     []string `json:"messages,omitempty"`
+	ReconnectCmd string   `json:"reconnect_cmd,omitempty"`
 }
 
 func newAgentCmd() *cobra.Command {
@@ -56,7 +57,7 @@ func newAgentCmd() *cobra.Command {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(v)
 		}
 		if o, ok := v.(agentOutput); ok && o.Session != nil {
-			return printAgentTurn(cmd, "Resumed", o.ID, "harnez agent resume "+o.ID+" \"<prompt>\"", o.Response)
+			return printAgentMessages(cmd, o.Messages, o.Response)
 		}
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), v)
 		return err
@@ -80,7 +81,8 @@ func newAgentCmd() *cobra.Command {
 		if err != nil {
 			return fmt.Errorf("resolve working directory: %w", err)
 		}
-		announceAgentTurn(cmd, "start", m.Provider+":"+m.Name, sessName)
+		tl := newTimeline(cmd)
+		tl.announceTurn("start", m.Provider+":"+m.Name, sessName)
 		r, err := agentDriver(m).Run(cmd.Context(), subagent.RunOptions{Prompt: args[1], Model: m, Dir: canonicalWorkDir})
 		if err != nil {
 			return fmt.Errorf("agent start %q failed: %w; verify the provider/model configuration or ask for guidance", args[0], err)
@@ -93,11 +95,12 @@ func newAgentCmd() *cobra.Command {
 		if err := s.Save(sess); err != nil {
 			return err
 		}
-		out := agentOutput{Session: sess, Response: r.Response, ReconnectCmd: "harnez agent resume " + id + " \"<prompt>\""}
+		out := agentOutput{Session: sess, Response: r.Response, Messages: r.Messages, ReconnectCmd: "harnez agent resume " + id + " \"<prompt>\""}
+		tl.finishTurn(r, id, out.ReconnectCmd)
 		if jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 		}
-		return printAgentTurn(cmd, "Started", id, out.ReconnectCmd, r.Response)
+		return printAgentMessages(cmd, r.Messages, r.Response)
 	}}
 	start.Flags().StringVarP(&workDir, "dir", "d", ".", "working directory")
 	start.Flags().StringVar(&name, "name", "", "session name")
@@ -277,7 +280,8 @@ func newAgentCmd() *cobra.Command {
 				return err
 			}
 		}
-		announceAgentTurn(cmd, "resume", sess.Provider+":"+sess.Model, sess.Name)
+		tl := newTimeline(cmd)
+		tl.announceTurn("resume", sess.Provider+":"+sess.Model, sess.Name)
 		r, err := d.Resume(cmd.Context(), sess.ProviderID(), args[1])
 		if err != nil {
 			return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
@@ -289,7 +293,8 @@ func newAgentCmd() *cobra.Command {
 		if err = s.Save(sess); err != nil {
 			return err
 		}
-		return write(cmd, agentOutput{Session: sess, Response: r.Response})
+		tl.finishTurn(r, sess.ID, "harnez agent resume "+sess.ID+" \"<prompt>\"")
+		return write(cmd, agentOutput{Session: sess, Response: r.Response, Messages: r.Messages})
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	resume.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
@@ -542,18 +547,50 @@ func newAgentCmd() *cobra.Command {
 
 // agentSessionCompletion returns names visible to the current caller. Cobra
 // displays the text after the tab as a completion description.
-// announceAgentTurn tells the calling agent, on stderr, what the synchronous
-// start/resume is about to do so it waits instead of polling or re-sending.
-func announceAgentTurn(cmd *cobra.Command, verb, target, session string) {
-	fmt.Fprintf(cmd.ErrOrStderr(), "harnez agent %s: running one synchronous turn on %s (session %q) via the provider CLI.\n"+
-		"harnez agent %s: the reply is printed on stdout when the turn finishes; caller must wait for it (no polling, no re-sending the prompt).\n", verb, target, session, verb)
+// timeline reports what start/resume technically did on stderr as
+// "[HH:MM:SS label] description" lines under a "[session timeline]" header.
+type timeline struct {
+	cmd     *cobra.Command
+	began   time.Time
+	printed bool
 }
 
-// printAgentTurn writes the technical session block and the agent reply under
-// separate labels so callers can tell harnez metadata from the agent's words.
-func printAgentTurn(cmd *cobra.Command, verb, id, reconnect, response string) error {
-	_, err := fmt.Fprintf(cmd.OutOrStdout(), "[harnez session] %s: %s\n[harnez session] Reconnect / Resume: %s\n[agent response]\n%s\n", verb, id, reconnect, response)
-	return err
+func newTimeline(cmd *cobra.Command) *timeline { return &timeline{cmd: cmd, began: time.Now()} }
+
+func (t *timeline) log(label, format string, args ...any) {
+	w := t.cmd.ErrOrStderr()
+	if !t.printed {
+		fmt.Fprintln(w, "[session timeline]")
+		t.printed = true
+	}
+	fmt.Fprintf(w, "[%s %s] %s\n", time.Now().Format("15:04:05"), label, fmt.Sprintf(format, args...))
+}
+
+// announceTurn tells the calling agent what is about to happen and that it must wait.
+func (t *timeline) announceTurn(verb, target, session string) {
+	t.log(verb, "one synchronous turn on %s (session %q) via the provider CLI", target, session)
+	t.log("wait", "caller must wait for the agent messages on stdout; no polling, no re-sending the prompt")
+}
+
+func (t *timeline) finishTurn(r *subagent.TurnResult, id, reconnect string) {
+	t.log("done", "turn finished in %s, %d messages, %d tokens", time.Since(t.began).Round(time.Second), max(len(r.Messages), 1), r.TokensTurn)
+	t.log("session", "%s; reconnect: %s", id, reconnect)
+}
+
+// printAgentMessages writes the agent's messages verbatim to stdout, each
+// under its own "[msg N]" label line.
+func printAgentMessages(cmd *cobra.Command, msgs []string, fallback string) error {
+	if len(msgs) == 0 {
+		msgs = []string{fallback}
+	}
+	w := cmd.OutOrStdout()
+	fmt.Fprintln(w, "[agent messages]")
+	for i, m := range msgs {
+		if _, err := fmt.Fprintf(w, "[msg %d]\n%s\n", i+1, m); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func agentSessionCompletion(storeDir string, parent func() string) cobra.CompletionFunc {

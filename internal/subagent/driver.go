@@ -50,14 +50,17 @@ type Model struct {
 
 // TurnResult is the normalized result of a provider turn.
 type TurnResult struct {
-	SessionID        string `json:"session_id,omitempty"`
-	Response         string `json:"response"`
-	InputTokens      int    `json:"input_tokens"`
-	OutputTokens     int    `json:"output_tokens"`
-	CachedTokens     int    `json:"cached_tokens"`
-	TokensTurn       int    `json:"tokens_turn"`
-	TokensCumulative int    `json:"tokens_cumulative"`
-	DurationMS       int64  `json:"duration_ms"`
+	SessionID string `json:"session_id,omitempty"`
+	Response  string `json:"response"`
+	// Messages holds every agent message of the turn in arrival order;
+	// Response is the last one.
+	Messages         []string `json:"messages,omitempty"`
+	InputTokens      int      `json:"input_tokens"`
+	OutputTokens     int      `json:"output_tokens"`
+	CachedTokens     int      `json:"cached_tokens"`
+	TokensTurn       int      `json:"tokens_turn"`
+	TokensCumulative int      `json:"tokens_cumulative"`
+	DurationMS       int64    `json:"duration_ms"`
 }
 
 var modelAliases = map[string]Model{

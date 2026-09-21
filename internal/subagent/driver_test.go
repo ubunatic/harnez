@@ -99,3 +99,16 @@ func TestClaudeDriver(t *testing.T) {
 		t.Fatalf("unexpected result %#v", r)
 	}
 }
+
+func TestParseCodexKeepsAllAgentMessages(t *testing.T) {
+	data := []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"first"}}
+{"type":"item.completed","item":{"type":"agent_message","text":"second"}}
+`)
+	r, err := parseCodex(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Response != "second" || len(r.Messages) != 2 || r.Messages[0] != "first" {
+		t.Fatalf("response=%q messages=%q", r.Response, r.Messages)
+	}
+}
