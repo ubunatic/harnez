@@ -102,7 +102,22 @@ func modelAliasName(m Model) string {
 
 // ResolveModel expands provider:model[:tier] shorthand.
 func ResolveModel(spec string) (Model, error) {
-	parts := strings.Split(strings.ToLower(strings.TrimSpace(spec)), ":")
+	clean := strings.ToLower(strings.TrimSpace(spec))
+	if !strings.Contains(clean, ":") {
+		var match Model
+		count := 0
+		for key, candidate := range modelAliases {
+			parts := strings.Split(key, ":")
+			if len(parts) == 2 && parts[1] == clean {
+				match, count = candidate, count+1
+			}
+		}
+		if count == 1 {
+			return match, nil
+		}
+		return Model{}, fmt.Errorf("unknown or ambiguous model %q; known specs: %s", spec, knownModelSpecs())
+	}
+	parts := strings.Split(clean, ":")
 	if len(parts) < 2 || len(parts) > 3 || parts[0] == "" || parts[1] == "" {
 		return Model{}, fmt.Errorf("invalid model %q: expected provider:model[:tier]; known specs: %s", spec, knownModelSpecs())
 	}

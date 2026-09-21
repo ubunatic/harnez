@@ -83,7 +83,11 @@ func newAgentCmd() *cobra.Command {
 			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
 		}
 		if spec == "" {
-			spec = "codex:luna:low"
+			var defaultErr error
+			spec, defaultErr = subagent.DefaultModelSpec()
+			if defaultErr != nil {
+				return defaultErr
+			}
 		}
 		prompt, err := assemblePrompt(startFiles, words, tail, cmd.InOrStdin())
 		if err != nil {
@@ -140,7 +144,11 @@ func newAgentCmd() *cobra.Command {
 			ts.watch()
 			r, err = sd.RunStream(cmd.Context(), opts, func(ev subagent.Event) {
 				if ev.Kind == "session" {
-					ts.info(ev.Text, m.Provider+":"+m.Name, "start", "new", fmt.Sprintf("name=%s dir=%s", sessName, canonicalWorkDir), "reconnect: harnez agent resume "+ev.Text+" \"<prompt>\"")
+					extra := []string{fmt.Sprintf("name=%s dir=%s", sessName, canonicalWorkDir)}
+					if modelSpec == "" {
+						extra = append(extra, "model: "+spec+" (default)")
+					}
+					ts.info(ev.Text, m.Provider+":"+m.Name, "start", "new", append(extra, "reconnect: harnez agent resume "+ev.Text+" \"<prompt>\"")...)
 				}
 				ts.onEvent(ev)
 			})
@@ -179,8 +187,16 @@ func newAgentCmd() *cobra.Command {
 	start.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 
 	models := &cobra.Command{Use: "models", Short: "List known agent models and tiers", RunE: func(cmd *cobra.Command, _ []string) error {
+		defaultSpec, err := subagent.DefaultModelSpec()
+		if err != nil {
+			return err
+		}
 		for _, m := range subagent.KnownModels() {
-			fmt.Fprintln(cmd.OutOrStdout(), m.Spec())
+			line := m.Spec()
+			if line == defaultSpec {
+				line += "  (default)"
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), line)
 		}
 		return nil
 	}}
@@ -189,7 +205,11 @@ func newAgentCmd() *cobra.Command {
 	chat := &cobra.Command{Use: "chat", Short: "Launch an interactive agent session", Args: noArgs("model is now --model <spec>"), RunE: func(cmd *cobra.Command, args []string) error {
 		spec := modelSpec
 		if spec == "" {
-			spec = "codex:luna:low"
+			var defaultErr error
+			spec, defaultErr = subagent.DefaultModelSpec()
+			if defaultErr != nil {
+				return defaultErr
+			}
 		}
 		m, err := subagent.ResolveModel(spec)
 		if err != nil {

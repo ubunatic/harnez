@@ -1,0 +1,3 @@
+# yaml-language-server: $schema=schemas/agent.schema.json
+# Agent model defaults are part of the application artifact.
+default_model: codex:luna:low
