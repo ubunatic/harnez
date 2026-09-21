@@ -28,7 +28,17 @@ var confirmTimeout = 10 * time.Second
 const protocolPreamble = "Harnez dispatch protocol: before any tool call, file read or other work, your very first message must be one line starting with `CONFIRM:` that states what you will do. " +
 	"If your task asks you to plan first, send the plan as a message starting with `PLAN:`. Then continue with your task.\n\n"
 
-func withProtocol(prompt string) string { return protocolPreamble + prompt }
+// planFirstPreamble turns the turn into a review gate: the intervention window
+// is the turn boundary, not a sleep inside the agent.
+const planFirstPreamble = "This is a plan-first turn: after your `CONFIRM:` message, inspect read-only if you must, send your plan as a message starting with `PLAN:`, and then end your turn. " +
+	"Do not modify anything or start executing; the caller reviews the plan and resumes you with the go-ahead.\n\n"
+
+func withProtocol(prompt string, planFirst bool) string {
+	if planFirst {
+		return protocolPreamble + planFirstPreamble + prompt
+	}
+	return protocolPreamble + prompt
+}
 
 // heartbeatSchedule lists the elapsed times of the first heartbeats; after the
 // last one a heartbeat follows every heartbeatRepeat.
@@ -61,6 +71,8 @@ type turnStream struct {
 	mode      string
 	compacted bool   // the first message acknowledges a queued /compact
 	stopCmd   string // shown when the agent violates the confirmation rule
+	name      string // session name for the plan-first go-ahead hint
+	planFirst bool
 
 	mu       sync.Mutex
 	bytes    int
@@ -69,9 +81,9 @@ type turnStream struct {
 	last     string
 	// confirmed is set by the first non-ack message; violated and warned make
 	// the protocol notices fire once.
-	confirmed, violated, warned bool
-	stop                        chan struct{}
-	done                        sync.WaitGroup
+	confirmed, violated, warned, planSeen bool
+	stop                                  chan struct{}
+	done                                  sync.WaitGroup
 }
 
 func newTurnStream(cmd *cobra.Command, mode string, compacted bool) *turnStream {
@@ -132,6 +144,7 @@ func (t *turnStream) onEvent(ev subagent.Event) {
 			label, text = "confirmation", strings.TrimSpace(strings.TrimPrefix(text, "CONFIRM:"))
 		case strings.HasPrefix(text, "PLAN:"):
 			label, text = "plan", strings.TrimSpace(strings.TrimPrefix(text, "PLAN:"))
+			t.planSeen = true
 		}
 		if label != "compaction ack" {
 			t.confirmed = true
@@ -196,6 +209,10 @@ func (t *turnStream) watch() {
 func (t *turnStream) finish(r *subagent.TurnResult) {
 	close(t.stop)
 	t.done.Wait()
+	if t.planFirst {
+		t.finishPlanFirst(r)
+		return
+	}
 	size := 0
 	for _, m := range r.Messages {
 		size += len(m)
@@ -217,4 +234,14 @@ func (t *turnStream) abort() {
 // provider cache, so long-context sessions do not look expensive.
 func tokenSummary(r *subagent.TurnResult) string {
 	return fmt.Sprintf("tokens: %s new (%s out), %s cached", humanCount(subagent.CompactionTokens(r)), humanCount(r.OutputTokens), humanCount(r.CachedTokens))
+}
+
+// finishPlanFirst ends a plan-first turn: the plan was already printed live,
+// so only the gate hint (or a missing-plan warning) and the totals follow.
+func (t *turnStream) finishPlanFirst(r *subagent.TurnResult) {
+	if !t.planSeen {
+		t.printf("[warning: plan-first turn ended without a PLAN: message; the last message was: %s]\n", firstLine(r.Response))
+	}
+	t.printf("[gate: plan-first turn ended, nothing was executed; to proceed: harnez agent resume %s \"go ahead\"]\n", t.name)
+	t.printf("[done: %d messages, %s, %s]\n", len(r.Messages), tokenSummary(r), shortDur(time.Since(t.began)))
 }

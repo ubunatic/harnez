@@ -862,3 +862,35 @@ func TestPromptGetsProtocolButStoredPromptStaysOriginal(t *testing.T) {
 		t.Fatalf("stored prompt = %q, err=%v", sess.StartPrompt, err)
 	}
 }
+
+func TestPlanFirstAddsGateAndPrompt(t *testing.T) {
+	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: will plan")}, {0, msg("PLAN: 1) read 2) count")}}}
+	got := runScripted(t, d, "start", "codex:luna", "count files", "--name", "w", "--plan-first")
+	if !strings.Contains(d.prompt, "plan-first turn") || !strings.HasSuffix(d.prompt, "\n\ncount files") {
+		t.Fatalf("driver prompt = %q", d.prompt)
+	}
+	for _, want := range []string{"[plan: 0s]\n1) read 2) count\n", `[gate: plan-first turn ended, nothing was executed; to proceed: harnez agent resume w "go ahead"]`, "[done: 2 messages, tokens:"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "warning") {
+		t.Fatalf("unexpected warning:\n%s", got)
+	}
+}
+
+func TestPlanFirstWithoutPlanWarns(t *testing.T) {
+	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("I just did it")}}}
+	got := runScripted(t, d, "start", "codex:luna", "task", "--name", "w", "--plan-first")
+	if !strings.Contains(got, "[warning: plan-first turn ended without a PLAN: message; the last message was: I just did it]") {
+		t.Fatalf("stdout:\n%s", got)
+	}
+}
+
+func TestNormalTurnHasNoPlanFirstText(t *testing.T) {
+	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+	got := runScripted(t, d, "start", "codex:luna", "task", "--name", "w")
+	if strings.Contains(d.prompt, "plan-first") || strings.Contains(got, "[gate:") {
+		t.Fatalf("prompt=%q\nstdout:\n%s", d.prompt, got)
+	}
+}

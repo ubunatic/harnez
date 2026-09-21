@@ -40,6 +40,7 @@ type agentOutput struct {
 func newAgentCmd() *cobra.Command {
 	var jsonOut, children, all bool
 	var storeDir, workDir, name, streamMode string
+	var planFirst bool
 	root := &cobra.Command{Use: "agent", Short: "Manage subagent sessions"}
 	root.PersistentFlags().StringVar(&storeDir, "store-dir", subagent.DefaultStoreDir(), "session store directory")
 	store := func() (*subagent.FileSessionStore, error) { return subagent.NewSessionStore(storeDir) }
@@ -93,8 +94,8 @@ func newAgentCmd() *cobra.Command {
 		var r *subagent.TurnResult
 		if streaming {
 			ts = newTurnStream(cmd, streamMode, false)
-			ts.stopCmd = "harnez agent stop " + sessName
-			opts.Prompt = withProtocol(args[1])
+			ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sessName, sessName, planFirst
+			opts.Prompt = withProtocol(args[1], planFirst)
 			ts.watch()
 			r, err = sd.RunStream(cmd.Context(), opts, func(ev subagent.Event) {
 				if ev.Kind == "session" {
@@ -134,6 +135,7 @@ func newAgentCmd() *cobra.Command {
 	start.Flags().StringVarP(&workDir, "dir", "d", ".", "working directory")
 	start.Flags().StringVar(&name, "name", "", "session name")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	start.Flags().BoolVar(&planFirst, "plan-first", false, "agent confirms and plans, then ends its turn without executing; resume to give the go-ahead")
 	start.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 
 	models := &cobra.Command{Use: "models", Short: "List known agent models and tiers", RunE: func(cmd *cobra.Command, _ []string) error {
@@ -328,9 +330,9 @@ func newAgentCmd() *cobra.Command {
 			if compacted {
 				ts.printf("[compact: %s]\n", compactNote)
 			}
-			ts.stopCmd = "harnez agent stop " + sess.Name
+			ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sess.Name, sess.Name, planFirst
 			ts.watch()
-			r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), withProtocol(args[1]), ts.onEvent)
+			r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), withProtocol(args[1], planFirst), ts.onEvent)
 			if err != nil {
 				ts.abort()
 			}
@@ -367,6 +369,7 @@ func newAgentCmd() *cobra.Command {
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	resume.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	resume.Flags().BoolVar(&planFirst, "plan-first", false, "agent confirms and plans, then ends its turn without executing; resume to give the go-ahead")
 	resume.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 
 	list := &cobra.Command{Use: "list", RunE: func(cmd *cobra.Command, _ []string) error {
