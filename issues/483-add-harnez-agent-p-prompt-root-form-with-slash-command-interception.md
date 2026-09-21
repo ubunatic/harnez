@@ -1,6 +1,6 @@
 # 483 — Add harnez agent -p/--prompt root form with slash-command interception
 
-**Status**: Open
+**Status**: Closed — root agent form: -p, -c, --name upsert, -f, -d; /compact /stop /status intercepted, unknown /x rejected with a literal-send hint, -- /x sent as prompt; shares runStart/runResume with the verbs
 
 **Priority**: P2 (Medium)
 **Severity**: Minor
