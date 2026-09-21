@@ -119,8 +119,10 @@ func (t *turnStream) printf(format string, args ...any) {
 	fmt.Fprintf(t.w, format, args...)
 }
 
-func (t *turnStream) info(id, agent, action string, extra ...string) {
-	t.printf("[session info: id=%s agent=%s action=%s]\n", id, agent, action)
+// info prints the session header; resolved says how the session was chosen
+// (new, name, dir or continue).
+func (t *turnStream) info(id, agent, action, resolved string, extra ...string) {
+	t.printf("[session info: id=%s agent=%s action=%s resolved=%s]\n", id, agent, action, resolved)
 	for _, e := range extra {
 		t.printf("%s\n", e)
 	}

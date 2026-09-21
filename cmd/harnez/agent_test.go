@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -164,20 +165,13 @@ func TestAgentOldModelSpecGuard(t *testing.T) {
 }
 
 func TestAgentResumeRequiresName(t *testing.T) {
-	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { return &replyDriver{} }
-	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
-	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed"}); err != nil {
-		t.Fatal(err)
-	}
 	var errOut bytes.Buffer
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(&errOut)
 	cmd.SetArgs([]string{"resume", "worker", "prompt", "--store-dir", storeDir})
-	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "resume: --name <session> is required") {
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "multiple resumable agents") && !strings.Contains(err.Error(), "no resumable agent") {
 		t.Fatalf("error = %v", err)
 	}
 }
@@ -724,6 +718,59 @@ func TestAgentResumeMissingIdentifier(t *testing.T) {
 	}
 }
 
+func TestAttributableOrderingAndFilters(t *testing.T) {
+	old := agentDriver
+	agentDriver = func(m subagent.Model) subagent.Driver {
+		d := &resumeOutcomeDriver{}
+		d.terminal = m.Provider == "terminal"
+		return d
+	}
+	defer func() { agentDriver = old }()
+	now := time.Now()
+	sessions := []*subagent.Session{
+		{ID: "old", Name: "old", Provider: "fake", WorkingDir: ".", Status: "completed", LastActiveAt: now.Add(-time.Hour)},
+		{ID: "new", Name: "new", Provider: "fake", WorkingDir: ".", Status: "completed", LastActiveAt: now},
+		{ID: "other-dir", Name: "other-dir", Provider: "fake", WorkingDir: "/else", Status: "completed", LastActiveAt: now.Add(time.Hour)},
+		{ID: "other-caller", Name: "other-caller", Provider: "fake", WorkingDir: ".", ParentSessionID: "else", Status: "completed", LastActiveAt: now.Add(time.Hour)},
+		{ID: "terminal", Name: "terminal", Provider: "terminal", WorkingDir: ".", Status: "completed", LastActiveAt: now.Add(time.Hour)},
+	}
+	for _, sess := range sessions[:2] {
+		sess.ParentSessionID = "caller"
+	}
+	got := attributable(sessions, ".", "caller")
+	if len(got) != 2 || got[0].Name != "new" || got[1].Name != "old" {
+		t.Fatalf("attributable = %#v", got)
+	}
+}
+
+func TestAgentResumeAttributionAndContinue(t *testing.T) {
+	old := agentDriver
+	d := &resumeOutcomeDriver{}
+	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store, _ := subagent.NewSessionStore(storeDir)
+	now := time.Now()
+	for _, sess := range []*subagent.Session{{ID: "one", Name: "one", Provider: "fake", Model: "model", WorkingDir: ".", Status: "completed", LastActiveAt: now.Add(-time.Hour)}, {ID: "two", Name: "two", Provider: "fake", Model: "model", WorkingDir: ".", Status: "completed", LastActiveAt: now}} {
+		_ = store.Save(sess)
+	}
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"resume", "--continue", "hi", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if d.resumes != 1 {
+		t.Fatalf("resumes=%d", d.resumes)
+	}
+	cmd = newAgentCmd()
+	cmd.SetArgs([]string{"resume", "--name", "one", "--continue", "hi", "--store-dir", storeDir})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "cannot be combined") {
+		t.Fatalf("error=%v", err)
+	}
+}
+
 func (d *recordingAgentDriver) Run(_ context.Context, opts subagent.RunOptions) (*subagent.TurnResult, error) {
 	d.dir = opts.Dir
 	return &subagent.TurnResult{SessionID: "recorded", Response: "ok"}, nil
@@ -938,7 +985,7 @@ func TestAgentStartStreamsLabeledBlocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	order := []string{"[session info: id=thread-1 agent=codex:gpt-5.6-luna action=start]", "name=w", "reconnect: harnez agent resume thread-1", "[wait:", "[message: 0s]\non it", "[heartbeat: 0s, ~", "last: running sleep]", "[message: 0s]\nall done", "[done: 2 messages, last message is the reply"}
+	order := []string{"[session info: id=thread-1 agent=codex:gpt-5.6-luna action=start resolved=new]", "name=w", "reconnect: harnez agent resume thread-1", "[wait:", "[message: 0s]\non it", "[heartbeat: 0s, ~", "last: running sleep]", "[message: 0s]\nall done", "[done: 2 messages, last message is the reply"}
 	pos := 0
 	for _, want := range order {
 		i := strings.Index(got[pos:], want)
@@ -970,7 +1017,7 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume]\n[wait: ") || !strings.Contains(got, "[compact: queued /compact at 150.0k new tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
+	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume resolved=name]\n[wait: ") || !strings.Contains(got, "[compact: queued /compact at 150.0k new tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
 		t.Fatalf("stdout:\n%s", got)
 	}
 }
@@ -1068,8 +1115,10 @@ type step struct {
 
 type scriptDriver struct {
 	recordingAgentDriver
-	steps  []step
-	prompt string
+	steps   []step
+	prompt  string
+	sid     string   // session id returned by a turn; "thread-1" when empty
+	resumed []string // provider ids passed to ResumeStream
 }
 
 func (d *scriptDriver) play(fn subagent.EventFunc) *subagent.TurnResult {
@@ -1081,14 +1130,19 @@ func (d *scriptDriver) play(fn subagent.EventFunc) *subagent.TurnResult {
 			msgs = append(msgs, s.ev.Text)
 		}
 	}
-	return &subagent.TurnResult{SessionID: "thread-1", Response: msgs[len(msgs)-1], Messages: msgs}
+	sid := d.sid
+	if sid == "" {
+		sid = "thread-1"
+	}
+	return &subagent.TurnResult{SessionID: sid, Response: msgs[len(msgs)-1], Messages: msgs}
 }
 func (d *scriptDriver) RunStream(_ context.Context, o subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
 	d.prompt = o.Prompt
 	return d.play(fn), nil
 }
-func (d *scriptDriver) ResumeStream(_ context.Context, _, p string, fn subagent.EventFunc) (*subagent.TurnResult, error) {
+func (d *scriptDriver) ResumeStream(_ context.Context, id, p string, fn subagent.EventFunc) (*subagent.TurnResult, error) {
 	d.prompt = p
+	d.resumed = append(d.resumed, id)
 	return d.play(fn), nil
 }
 
@@ -1194,5 +1248,123 @@ func TestNormalTurnHasNoPlanFirstText(t *testing.T) {
 	got := runScripted(t, d, "start", "--model", "codex:luna", "task", "--name", "w")
 	if strings.Contains(d.prompt, "plan-first") || strings.Contains(got, "[gate:") {
 		t.Fatalf("prompt=%q\nstdout:\n%s", d.prompt, got)
+	}
+}
+
+// runWithStore runs an agent command against a preloaded store directory.
+func runWithStore(t *testing.T, d subagent.Driver, storeDir string, args ...string) (string, error) {
+	t.Helper()
+	old := agentDriver
+	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	defer func() { agentDriver = old }()
+	var out bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs(append(args, "--store-dir", storeDir))
+	err := cmd.Execute()
+	return out.String(), err
+}
+
+func saveSessions(t *testing.T, storeDir string, sessions ...*subagent.Session) {
+	t.Helper()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range sessions {
+		if s.Provider == "" {
+			s.Provider, s.Model = "codex", "gpt-5.6-luna"
+		}
+		if s.Status == "" {
+			s.Status = "completed"
+		}
+		if s.WorkingDir == "" {
+			s.WorkingDir = "."
+		}
+		if err := store.Save(s); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestAgentResumeWithoutNameResolution(t *testing.T) {
+	now := time.Now()
+	older := &subagent.Session{ID: "id-old", Name: "old", LastActiveAt: now.Add(-time.Hour)}
+	newer := &subagent.Session{ID: "id-new", Name: "new", LastActiveAt: now}
+	other := &subagent.Session{ID: "id-else", Name: "elsewhere", WorkingDir: "/somewhere/else", LastActiveAt: now}
+	for _, tc := range []struct {
+		name     string
+		sessions []*subagent.Session
+		args     []string
+		wantID   string
+		header   string
+		wantErr  []string
+	}{
+		{"unique in dir", []*subagent.Session{older, other}, []string{"resume", "go"}, "id-old", "resolved=dir]", nil},
+		{"unique with -c", []*subagent.Session{older}, []string{"resume", "-c", "go"}, "id-old", "resolved=continue]", nil},
+		{"-c picks most recent", []*subagent.Session{older, newer, other}, []string{"resume", "-c", "go"}, "id-new", "resolved=continue]", nil},
+		{"several without -c", []*subagent.Session{older, newer}, []string{"resume", "go"}, "", "", []string{"multiple resumable agents", "old (", "new (", "pass --name"}},
+		{"none", []*subagent.Session{other}, []string{"resume", "go"}, "", "", []string{"no resumable agent in .", "harnez agent start --name"}},
+		{"none with -c", nil, []string{"resume", "-c", "go"}, "", "", []string{"no resumable agent in ."}},
+		{"by name", []*subagent.Session{older, newer}, []string{"resume", "--name", "old", "go"}, "id-old", "resolved=name]", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			storeDir := t.TempDir()
+			saveSessions(t, storeDir, tc.sessions...)
+			d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+			out, err := runWithStore(t, d, storeDir, tc.args...)
+			if tc.wantErr != nil {
+				for _, w := range tc.wantErr {
+					if err == nil || !strings.Contains(err.Error(), w) {
+						t.Fatalf("err = %v, want %q", err, w)
+					}
+				}
+				if len(d.resumed) != 0 {
+					t.Fatalf("provider resumed despite error: %v", d.resumed)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(d.resumed) != 1 || d.resumed[0] != tc.wantID || !strings.Contains(out, tc.header) {
+				t.Fatalf("resumed=%v want %s; header %q missing in:\n%s", d.resumed, tc.wantID, tc.header, out)
+			}
+		})
+	}
+}
+
+func TestAgentDestructiveVerbsRejectContinue(t *testing.T) {
+	for _, verb := range []string{"stop", "delete", "compact", "status"} {
+		for _, flag := range []string{"-c", "--continue"} {
+			_, err := runWithStore(t, &recordingAgentDriver{}, t.TempDir(), verb, flag)
+			if err == nil || !strings.Contains(err.Error(), "unknown") {
+				t.Fatalf("%s %s: err = %v, want unknown flag", verb, flag, err)
+			}
+		}
+	}
+}
+
+func TestAgentStartGeneratesMemorableUniqueNames(t *testing.T) {
+	storeDir := t.TempDir()
+	seen := map[string]bool{}
+	for i := 0; i < 3; i++ {
+		sid := fmt.Sprintf("thread-%d", i)
+		d := &scriptDriver{sid: sid, steps: []step{{0, subagent.Event{Kind: "session", Text: sid}}, {0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+		out, err := runWithStore(t, d, storeDir, "start", "task")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var name string
+		for _, line := range strings.Split(out, "\n") {
+			if strings.HasPrefix(line, "name=") {
+				name = strings.Fields(strings.TrimPrefix(line, "name="))[0]
+			}
+		}
+		if name == "" || strings.HasPrefix(name, "agent-") || !strings.Contains(name, "-") || seen[name] {
+			t.Fatalf("run %d: generated name %q (seen %v)\n%s", i, name, seen, out)
+		}
+		seen[name] = true
 	}
 }

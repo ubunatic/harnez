@@ -103,7 +103,19 @@ func newAgentCmd() *cobra.Command {
 		id := uuid.NewString()
 		sessName := name
 		if sessName == "" {
-			sessName = "agent-" + m.Provider + "-" + id[:8]
+			sessions, listErr := s.List("", true)
+			if listErr != nil {
+				return listErr
+			}
+			taken := make(map[string]bool, len(sessions)*2)
+			for _, existing := range sessions {
+				taken[existing.Name] = true
+				taken[existing.ID] = true
+			}
+			sessName, err = subagent.GenerateSessionName(func(candidate string) bool { return taken[candidate] })
+			if err != nil {
+				return err
+			}
 		}
 		if name != "" {
 			if existing, findErr := resolveSession(s, name, ""); findErr == nil {
@@ -128,7 +140,7 @@ func newAgentCmd() *cobra.Command {
 			ts.watch()
 			r, err = sd.RunStream(cmd.Context(), opts, func(ev subagent.Event) {
 				if ev.Kind == "session" {
-					ts.info(ev.Text, m.Provider+":"+m.Name, "start", fmt.Sprintf("name=%s dir=%s", sessName, canonicalWorkDir), "reconnect: harnez agent resume "+ev.Text+" \"<prompt>\"")
+					ts.info(ev.Text, m.Provider+":"+m.Name, "start", "new", fmt.Sprintf("name=%s dir=%s", sessName, canonicalWorkDir), "reconnect: harnez agent resume "+ev.Text+" \"<prompt>\"")
 				}
 				ts.onEvent(ev)
 			})
@@ -316,11 +328,14 @@ func newAgentCmd() *cobra.Command {
 	chat.AddCommand(attach)
 
 	var resumeFiles []string
+	var continueResume bool
 	resume := &cobra.Command{Use: "resume [prompt...]", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
 		sessionName := name
-		if sessionName == "" {
-			return fmt.Errorf("resume: --name <session> is required")
+		resolved := "name"
+		var sess *subagent.Session
+		if continueResume && sessionName != "" {
+			return fmt.Errorf("resume: --continue cannot be combined with --name")
 		}
 		if len(words) >= 2 && oldStyleModelWord(words[0]) {
 			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
@@ -336,9 +351,29 @@ func newAgentCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		sess, err := find(cmd, s, sessionName)
-		if err != nil {
-			return err
+		if sessionName == "" {
+			xs, listErr := s.List("", true)
+			if listErr != nil {
+				return listErr
+			}
+			candidates := attributable(xs, workDir, parent())
+			if len(candidates) == 0 {
+				return fmt.Errorf("no resumable agent in %s; start one with: harnez agent start --name <name> ...", workDir)
+			}
+			if !continueResume && len(candidates) != 1 {
+				return fmt.Errorf("multiple resumable agents in %s; pass --name (candidates: %s)", workDir, candidateSummary(candidates))
+			}
+			sess = candidates[0]
+			if continueResume {
+				resolved = "continue"
+			} else {
+				resolved = "dir"
+			}
+		} else {
+			sess, err = find(cmd, s, sessionName)
+			if err != nil {
+				return err
+			}
 		}
 		if !subagent.CanManage(parent(), sess) {
 			return fmt.Errorf("session %q is outside caller lineage", sess.ID)
@@ -384,7 +419,7 @@ func newAgentCmd() *cobra.Command {
 		streaming = streaming && !jsonOut
 		if streaming {
 			ts = newTurnStream(cmd, streamMode, compacted)
-			ts.info(sess.ID, sess.Provider+":"+sess.Model, "resume")
+			ts.info(sess.ID, sess.Provider+":"+sess.Model, "resume", resolved)
 			if compacted {
 				ts.printf("[compact: %s]\n", compactNote)
 			}
@@ -433,6 +468,7 @@ func newAgentCmd() *cobra.Command {
 	resume.Flags().BoolVar(&planFirst, "plan-first", false, "agent confirms and plans, then ends its turn without executing; resume to give the go-ahead")
 	resume.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 	resume.Flags().StringSliceVarP(&resumeFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
+	resume.Flags().BoolVarP(&continueResume, "continue", "c", false, "resume the most recently active attributable session")
 
 	list := &cobra.Command{Use: "list", RunE: func(cmd *cobra.Command, _ []string) error {
 		s, err := store()
@@ -808,6 +844,37 @@ func resumeState(sess *subagent.Session) string {
 		}
 	}
 	return "ok"
+}
+
+func attributable(sessions []*subagent.Session, dir, callerParent string) []*subagent.Session {
+	want, _ := filepath.Abs(dir)
+	result := make([]*subagent.Session, 0, len(sessions))
+	for _, sess := range sessions {
+		if sess.Status != "completed" && !(sess.Status == "active" && sess.HarnessType == "interactive") {
+			continue
+		}
+		have, _ := filepath.Abs(sess.WorkingDir)
+		if have != want || !subagent.CanManage(callerParent, sess) || resumeState(sess) == "terminal" {
+			continue
+		}
+		// Quarantined sessions will be excluded here when #306 lands.
+		result = append(result, sess)
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		if result[i].LastActiveAt.Equal(result[j].LastActiveAt) {
+			return result[i].Name < result[j].Name
+		}
+		return result[i].LastActiveAt.After(result[j].LastActiveAt)
+	})
+	return result
+}
+
+func candidateSummary(sessions []*subagent.Session) string {
+	items := make([]string, len(sessions))
+	for i, sess := range sessions {
+		items[i] = fmt.Sprintf("%s (%s, %s)", sess.Name, sess.LastActiveAt.Format(time.RFC3339), sess.Provider+":"+sess.Model)
+	}
+	return strings.Join(items, ", ")
 }
 
 type agentRepoStatus struct {
