@@ -1,6 +1,6 @@
 # 291 — Add `harnez agent`: standardized non-interactive dispatch to external coding-agent CLIs (codex, agy)
 
-**Status**: Open
+**Status**: Closed — absorbed by 481 and 484: unified --name/--model/-d flags and the spec default model
 **Priority**: P3 (Low)
 **Severity**: Enhancement
 **Category**: Feature
