@@ -246,3 +246,8 @@ plus a docs update) — and largest in review cost, not in line count.
 - **Remaining scope after M2 (decide, don't assume)**: `telemetry.go` migrations/introspection
   SQL and independent SQL in `classify.go`, `sanitize_cache.go`, `issuesnapshot.go`, `export.go`,
   `economics_query.go`. 457's canonical queries must live in the same spec file.
+
+- **M2 delivered**: all `query.go` SELECTs, named filter predicates, and the grouped-query column
+  allowlist are in `spec/telemetry.yaml`; AST tests cover `schema.go`, `insert.go`, `query.go` and
+  fail on dead spec entries. Still outside the spec: `telemetry.go` migration/introspection SQL and
+  SQL in other files (see above). Ticket stays open until that scope is decided.
