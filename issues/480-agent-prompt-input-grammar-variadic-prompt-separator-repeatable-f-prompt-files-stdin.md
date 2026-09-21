@@ -36,5 +36,5 @@ prompts that begin with `-` or `/` are awkward or impossible to pass safely.
   helper with table tests: order, blank-line joining, `--` handling, stdin,
   missing file, empty prompt.
 - CLI tests for `start` and `resume`, including a prompt starting with `-`.
-- Keep the legacy two-argument forms working (see #481 for the compatibility rule).
+- The old two-argument positional forms are gone (see #481): positional words are always prompt text.
 - Update `agent start --help`/`resume --help` examples and the architecture doc.

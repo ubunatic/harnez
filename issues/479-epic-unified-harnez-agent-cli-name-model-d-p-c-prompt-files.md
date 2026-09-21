@@ -93,20 +93,22 @@ quarantined (#306), in the same canonical `-d`, and manageable by the caller
 `/status`, initially). An unknown `/x` is an error ("send it literally with
 `-- /x`") so a typo is never forwarded to the model as prompt text.
 
-### 2.6 Compatibility
+### 2.6 No legacy forms
 
-Legacy positionals keep working with a stderr deprecation note:
-`start <provider:model> <prompt>` when the first argument is exactly a known
-model spec and at least one more argument follows; `resume <session> <prompt>`
-when the first argument names an existing session and at least one more follows.
-Shell completion and `docs/HarnezAgentArchitecture.md` move to the new forms.
+The old positional design is dropped, not deprecated (decision recorded in this
+epic): there is no `start <provider:model> <prompt>`, no `<verb> <session>`
+positional and no `chat <provider:model>`. Sessions are selected only by
+`--name` (or by attribution, #482), models only by `--model`, and positional
+words are always prompt text. Old invocations fail with a usage error that shows
+the new form. Shell completion, `--help`, the man page and
+`docs/HarnezAgentArchitecture.md` describe only the new forms.
 
 ## 3. Child Tickets and Order
 
 | # | Ticket | Prio | Depends on |
 |---|--------|------|-----------|
 | 480 | Prompt input grammar (variadic, `--`, `-f`, stdin) | P2 | — |
-| 481 | Unified `--name`/`--model`/`-d` with legacy compat | P2 | — |
+| 481 | Unified `--name`/`--model`/`-d`, old positional forms removed | P2 | — |
 | 484 | Default model from one spec value; autodetect later | P3 | 481 |
 | 478 | Listed sessions resumable or clearly terminal (existing) | P1 | — |
 | 482 | Attribution, bare `resume`, `-c`, upsert | P2 | 481, 478 |
@@ -128,8 +130,8 @@ from the reply. See `git log -- cmd/harnez/agent_stream.go`.
 
 ## 5. Implementation & Verification Plan
 
-1. Land #480 and #481 first (pure CLI surface, no behavior risk), with legacy
-   compatibility tests for both old positional forms.
+1. Land #480 and #481 first (pure CLI surface), including tests that the old
+   positional forms are rejected with a usage error showing the new form.
 2. Land #478, then #482 so attribution never selects a dead session.
 3. Land #483 on top of the three.
 4. Update `docs/HarnezAgentArchitecture.md`, `harnez agent --help`, shell

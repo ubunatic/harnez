@@ -149,4 +149,4 @@ and `agy`), not speculatively for tools nobody has actually driven yet.
 
 ## Epic note (#479)
 
-Model alias, CLI flag and dispatch normalization is now covered by #481 (unified `--name`/`--model`/`-d`, legacy compatibility) and #484 (default model). Keep this open until those land, then close as absorbed.
+Model alias, CLI flag and dispatch normalization is now covered by #481 (unified `--name`/`--model`/`-d`) and #484 (default model). Keep this open until those land, then close as absorbed.

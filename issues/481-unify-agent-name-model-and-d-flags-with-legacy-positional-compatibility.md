@@ -1,4 +1,4 @@
-# 481 — Unify agent --name, --model and -d flags with legacy positional compatibility
+# 481 — Unify agent --name, --model and -d flags and remove the old positional forms
 
 **Status**: Open
 
@@ -29,21 +29,22 @@ scope `list`/`status` to a repo and cannot use one flag set across verbs.
 - `-d, --dir` becomes a persistent flag of `agent`: agent working directory for
   `start`, attribution/filter scope for `resume`, `list`, `status`, `stop`,
   `delete` (folds in the `-d` item of #476).
-- Legacy positionals keep working with a one-line stderr deprecation note:
-  - `start <provider:model> <prompt…>` when the first argument is exactly a
-    known model spec and at least one more argument follows;
-  - `resume|stop|delete|status|compact <session> …` when the first argument
-    names an existing session (name or ID).
-  Ambiguity (an argument that is both a session name and prompt text) resolves
-  to the legacy meaning only when `--name` is absent.
+- The old positional forms are removed (no deprecation period): no
+  `start <provider:model> <prompt…>`, no `<verb> <session>`, no
+  `chat <provider:model>`, no `attach <session>`. Positional words are always
+  prompt text. Session selection is `--name` (or attribution, #482); model
+  selection is `--model` (`chat --model`, `attach --name`).
+- Old-style invocations fail with a usage error that shows the new form, for
+  example `start: model is now --model <spec>; positional words are prompt text`.
+  A mistyped `--model` value is rejected before any provider process starts.
 - Shell completion covers `--name` (session names) and `--model` (known specs).
 
 ## 3. Implementation & Verification Plan
 
 - Shared `resolveSession(name, dir)` helper used by every verb, so #482 adds
   attribution in one place.
-- Tests: each verb with `--name`; legacy forms with the deprecation note;
-  `--model` conflict on an existing session; name collision message; `-d`
+- Tests: each verb with `--name`; old positional forms rejected with the usage
+  hint; `--model` conflict on an existing session; name collision message; `-d`
   scoping of `list` and `status`.
 - Update `docs/HarnezAgentArchitecture.md`, `--help` text and the man page.
 - Close #291 as absorbed once this and #484 land (model alias and flag
