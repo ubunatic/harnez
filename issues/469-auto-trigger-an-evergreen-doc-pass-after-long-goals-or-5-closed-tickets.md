@@ -1,6 +1,6 @@
 # 469 — Auto-trigger an evergreen doc pass after long goals or 5+ closed tickets
 
-**Status**: Open
+**Status**: Closed — delivered as an AgenticLoop Phase 5 rule
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Workflow / Docs
