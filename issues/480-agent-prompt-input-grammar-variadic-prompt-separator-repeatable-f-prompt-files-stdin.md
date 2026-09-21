@@ -1,6 +1,6 @@
 # 480 — Agent prompt input grammar: variadic prompt, -- separator, repeatable -f prompt files, stdin
 
-**Status**: Open
+**Status**: Closed — assemblePrompt with variadic words, -- tail, repeatable -f and stdin implemented and tested
 
 **Priority**: P2 (Medium)
 **Severity**: Moderate
