@@ -1,6 +1,6 @@
 # 454 — Enforce explicit luna agent model selection without falling back to host provider
 
-**Status**: Open
+**Status**: Closed — explicit model specs fail closed; docs rule added
 
 ---
 
