@@ -173,6 +173,16 @@ func checkAndMigrateSchema(sqlDB *sql.DB, path string, preexisting bool) ([]stri
 		if _, err := sqlDB.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
 			return nil, fmt.Errorf("telemetry: stamp migrated schema version: %w", err)
 		}
+	} else {
+		// Repair additive columns even when the version marker was stamped
+		// before the column was added. This is cheap and idempotent.
+		compactionEventsMigrated, err := migrateCompactionEvents(sqlDB)
+		if err != nil {
+			return nil, fmt.Errorf("telemetry: repair compaction events: %w", err)
+		}
+		if compactionEventsMigrated {
+			migrations = append(migrations, "compaction_events.model")
+		}
 	}
 	return migrations, nil
 }

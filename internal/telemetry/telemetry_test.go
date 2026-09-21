@@ -95,6 +95,92 @@ func TestOpenDoesNotReportNoopCompactionMigration(t *testing.T) {
 	}
 }
 
+func createLegacyCompactionDB(t *testing.T, path string, version int) {
+	t.Helper()
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = raw.Exec(`CREATE TABLE tool_calls (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL,
+		session_id TEXT NOT NULL, ticket_id TEXT NOT NULL DEFAULT '',
+		project_name TEXT NOT NULL DEFAULT '', working_dir TEXT NOT NULL DEFAULT '',
+		agent_id TEXT NOT NULL, tool_name TEXT NOT NULL, call_type TEXT NOT NULL,
+		score INTEGER, note TEXT NOT NULL DEFAULT '', exit_code INTEGER,
+		duration_ms INTEGER NOT NULL DEFAULT 0, raw_bytes INTEGER NOT NULL DEFAULT 0,
+		distilled_bytes INTEGER, output_bytes INTEGER, actual_tokens INTEGER,
+		input_tokens INTEGER, cached_input_tokens INTEGER, output_tokens INTEGER,
+		reasoning_tokens INTEGER, total_tokens INTEGER,
+		potential_savings_tokens INTEGER, potential_savings_bytes INTEGER);
+	CREATE TABLE compaction_events (id INTEGER PRIMARY KEY AUTOINCREMENT,
+		created_at TEXT NOT NULL, session_id TEXT NOT NULL, event_type TEXT NOT NULL,
+		turn_id TEXT NOT NULL DEFAULT '', trigger TEXT NOT NULL DEFAULT '',
+		reason TEXT NOT NULL DEFAULT '', input_tokens INTEGER, cached_input_tokens INTEGER,
+		output_tokens INTEGER, reasoning_tokens INTEGER, total_tokens INTEGER)`)
+	if err != nil {
+		raw.Close()
+		t.Fatal(err)
+	}
+	if _, err := raw.Exec(fmt.Sprintf("PRAGMA user_version = %d", version)); err != nil {
+		raw.Close()
+		t.Fatal(err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFreshDBCompactionEventHasModel(t *testing.T) {
+	db := openTestDB(t)
+	id, err := db.InsertCompactionEvent(CompactionEvent{SessionID: "fresh", Model: "gpt-5"})
+	if err != nil {
+		t.Fatalf("InsertCompactionEvent: %v", err)
+	}
+	var model string
+	if err := db.sql.QueryRow("SELECT model FROM compaction_events WHERE id = ?", id).Scan(&model); err != nil {
+		t.Fatal(err)
+	}
+	if model != "gpt-5" {
+		t.Fatalf("model = %q, want gpt-5", model)
+	}
+}
+
+func TestOpenMigratesLegacyCompactionEventModel(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	createLegacyCompactionDB(t, path, schemaVersion-1)
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open legacy database: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.InsertCompactionEvent(CompactionEvent{SessionID: "legacy", Model: "gpt-5"}); err != nil {
+		t.Fatalf("InsertCompactionEvent after migration: %v", err)
+	}
+}
+
+func TestOpenRepairsCurrentCompactionEventModelIdempotently(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+	createLegacyCompactionDB(t, path, schemaVersion)
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open current database: %v", err)
+	}
+	if _, err := db.InsertCompactionEvent(CompactionEvent{SessionID: "repaired", Model: "gpt-5"}); err != nil {
+		db.Close()
+		t.Fatalf("InsertCompactionEvent after repair: %v", err)
+	}
+	db.Close()
+
+	db, err = Open(path)
+	if err != nil {
+		t.Fatalf("reopen repaired database: %v", err)
+	}
+	defer db.Close()
+	if migrations := db.Migrations(); len(migrations) != 0 {
+		t.Fatalf("second open migrations = %v, want empty", migrations)
+	}
+}
+
 // TestOpenRejectsStaleSchemaVersion is the regression check for the gap
 // found reviewing issue 120: CREATE TABLE IF NOT EXISTS silently leaves an
 // existing file's older column shape untouched (this bit issue 118's
