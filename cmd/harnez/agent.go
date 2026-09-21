@@ -41,11 +41,20 @@ func newAgentCmd() *cobra.Command {
 	var jsonOut, children, all bool
 	var storeDir, workDir, name, modelSpec, streamMode string
 	var planFirst bool
-	root := &cobra.Command{Use: "agent", Short: "Manage subagent sessions"}
+	var rootPrompt string
+	var rootFiles []string
+	var rootContinue bool
+	root := &cobra.Command{Use: "agent", Short: "Manage subagent sessions", Args: cobra.ArbitraryArgs}
 	root.PersistentFlags().StringVar(&storeDir, "store-dir", subagent.DefaultStoreDir(), "session store directory")
 	root.PersistentFlags().StringVarP(&workDir, "dir", "d", ".", "working directory or session scope")
 	root.PersistentFlags().StringVar(&name, "name", "", "session name")
 	root.PersistentFlags().StringVar(&modelSpec, "model", "", "provider:model[:tier]")
+	root.Flags().StringVarP(&rootPrompt, "prompt", "p", "", "prompt text")
+	root.Flags().BoolVarP(&rootContinue, "continue", "c", false, "resume the most recently active attributable session")
+	root.Flags().StringSliceVarP(&rootFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
+	root.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
+	root.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	root.Flags().BoolVar(&planFirst, "plan-first", false, "agent confirms and plans, then ends its turn without executing; resume to give the go-ahead")
 	store := func() (*subagent.FileSessionStore, error) { return subagent.NewSessionStore(storeDir) }
 	parent := func() string {
 		if v := os.Getenv("HARNEZ_SESSION_ID"); v != "" {
@@ -63,6 +72,81 @@ func newAgentCmd() *cobra.Command {
 			dir = workDir
 		}
 		return resolveSession(s, id, dir)
+	}
+	root.RunE = func(cmd *cobra.Command, args []string) error {
+		if workDir == "" {
+			workDir = "."
+		}
+		dash := cmd.Flags().ArgsLenAtDash()
+		words, tail := promptArgs(args, dash)
+		if rootPrompt == "" && len(rootFiles) == 0 && len(words) == 0 && len(tail) == 0 && !rootContinue {
+			return cmd.Help()
+		}
+		if modelSpec == "" && len(words) >= 2 && oldStyleModelWord(words[0]) {
+			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
+		}
+		promptWords := words
+		if rootPrompt != "" {
+			promptWords = append([]string{rootPrompt}, promptWords...)
+		}
+		prompt, err := assemblePrompt(rootFiles, promptWords, tail, cmd.InOrStdin())
+		if err != nil {
+			return err
+		}
+		deps := agentDeps{store: store, parent: parent, find: find}
+		if rootContinue && name != "" {
+			return fmt.Errorf("agent: --continue cannot be combined with --name")
+		}
+		trimmed := strings.TrimSpace(prompt)
+		if len(tail) == 0 && strings.Count(trimmed, "\n") == 0 && strings.HasPrefix(trimmed, "/") {
+			// Typos are rejected before any session is resolved.
+			if !knownSlashCommands[trimmed] {
+				return fmt.Errorf("unknown agent command %q; send it literally with: -- %s", trimmed, trimmed)
+			}
+			s, e := store()
+			if e != nil {
+				return e
+			}
+			x, _, e := resolveResumeSession(cmd, deps, s, resumeRequest{Dir: workDir, Name: name, Continue: rootContinue})
+			if e != nil {
+				return e
+			}
+			switch trimmed {
+			case "/compact":
+				return compactSession(cmd, s, x)
+			case "/stop":
+				return stopSession(cmd, s, x)
+			default: // "/status"
+				return statusSession(cmd, x, jsonOut)
+			}
+		}
+		if name != "" {
+			s, e := store()
+			if e != nil {
+				return e
+			}
+			if _, findErr := find(cmd, s, name); findErr == nil {
+				return runResume(cmd, deps, resumeRequest{Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+			} else if !strings.Contains(findErr.Error(), "not found") {
+				return findErr
+			}
+			return runStart(cmd, deps, startRequest{Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+		}
+		if rootContinue {
+			s, e := store()
+			if e != nil {
+				return e
+			}
+			xs, e := s.List("", true)
+			if e != nil {
+				return e
+			}
+			candidates := attributable(xs, workDir, parent())
+			if len(candidates) > 0 {
+				return runResume(cmd, deps, resumeRequest{Prompt: prompt, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: true, JSON: jsonOut, PlanFirst: planFirst})
+			}
+		}
+		return runStart(cmd, deps, startRequest{Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
 	}
 	var startFiles []string
 	start := &cobra.Command{Use: "start [prompt...]", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
@@ -305,14 +389,7 @@ func newAgentCmd() *cobra.Command {
 		if e != nil {
 			return e
 		}
-		if jsonOut {
-			return json.NewEncoder(cmd.OutOrStdout()).Encode(x)
-		}
-		fmt.Fprintf(cmd.OutOrStdout(), "ID: %s\nName: %s\nStatus: %s\nProvider: %s:%s\nTokens: %d (turn %d)\nCached: %d\n", x.ID, x.Name, x.Status, x.Provider, x.Model, x.TokensCumulative, x.TokensTurn, x.CachedTokens)
-		if x.LastError != "" {
-			fmt.Fprintf(cmd.OutOrStdout(), "Last error: %s\nResume failures: %d\n", x.LastError, x.ResumeFailures)
-		}
-		return nil
+		return statusSession(cmd, x, jsonOut)
 	}}
 	status.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	status.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
@@ -353,18 +430,7 @@ func newAgentCmd() *cobra.Command {
 		if e != nil {
 			return e
 		}
-		if x.Status == "active" && x.HarnessType == "interactive" {
-			if e := subagent.SendControl(cmd.Context(), x.ControlSocket, "compact", ""); e != nil {
-				return e
-			}
-			x.LastActiveAt = time.Now()
-			return s.Save(x)
-		}
-		if x.HarnessType == "interactive" && x.ProviderSessionID == "" {
-			return fmt.Errorf("session %q cannot be compacted: %s did not expose a provider session ID", x.Name, x.Provider)
-		}
-		_, e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}).Compact(cmd.Context(), x.ProviderID())
-		return e
+		return compactSession(cmd, s, x)
 	}}
 	compact.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	stop := &cobra.Command{Use: "stop", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
@@ -433,23 +499,7 @@ func newAgentCmd() *cobra.Command {
 		if !subagent.CanManage(parent(), x) {
 			return fmt.Errorf("session %q is outside caller lineage", x.ID)
 		}
-		if x.HarnessType == "interactive" {
-			if x.Status != "active" {
-				return fmt.Errorf("session %q is not active", x.Name)
-			}
-			if e = subagent.SendControl(cmd.Context(), x.ControlSocket, "stop", ""); e != nil {
-				return e
-			}
-			x.Status = "stopped"
-			x.LastActiveAt = time.Now()
-			return s.Save(x)
-		}
-		e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Stop(cmd.Context(), x.ProviderID())
-		x.Status = "stopped"
-		if e == nil {
-			e = s.Save(x)
-		}
-		return e
+		return stopSession(cmd, s, x)
 	}}
 	stop.Flags().BoolVar(&children, "children", false, "stop child sessions")
 	stop.Flags().BoolVar(&all, "all", false, "stop all manageable sessions")

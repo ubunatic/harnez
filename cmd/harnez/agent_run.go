@@ -277,3 +277,52 @@ func writeAgentOutput(cmd *cobra.Command, jsonOut bool, v agentOutput) error {
 	}
 	return printAgentMessages(cmd, v.Messages, v.Response)
 }
+
+// knownSlashCommands are intercepted by the root form and never sent to the model.
+var knownSlashCommands = map[string]bool{"/compact": true, "/stop": true, "/status": true}
+
+func compactSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagent.Session) error {
+	if x.Status == "active" && x.HarnessType == "interactive" {
+		if err := subagent.SendControl(cmd.Context(), x.ControlSocket, "compact", ""); err != nil {
+			return err
+		}
+		x.LastActiveAt = time.Now()
+		return s.Save(x)
+	}
+	if x.HarnessType == "interactive" && x.ProviderSessionID == "" {
+		return fmt.Errorf("session %q cannot be compacted: %s did not expose a provider session ID", x.Name, x.Provider)
+	}
+	_, err := agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}).Compact(cmd.Context(), x.ProviderID())
+	return err
+}
+
+func stopSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagent.Session) error {
+	if x.HarnessType == "interactive" {
+		if x.Status != "active" {
+			return fmt.Errorf("session %q is not active", x.Name)
+		}
+		if err := subagent.SendControl(cmd.Context(), x.ControlSocket, "stop", ""); err != nil {
+			return err
+		}
+		x.Status = "stopped"
+		x.LastActiveAt = time.Now()
+		return s.Save(x)
+	}
+	err := agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Stop(cmd.Context(), x.ProviderID())
+	x.Status = "stopped"
+	if err == nil {
+		err = s.Save(x)
+	}
+	return err
+}
+
+func statusSession(cmd *cobra.Command, x *subagent.Session, jsonOut bool) error {
+	if jsonOut {
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(x)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "ID: %s\nName: %s\nStatus: %s\nProvider: %s:%s\nTokens: %d (turn %d)\nCached: %d\n", x.ID, x.Name, x.Status, x.Provider, x.Model, x.TokensCumulative, x.TokensTurn, x.CachedTokens)
+	if x.LastError != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "Last error: %s\nResume failures: %d\n", x.LastError, x.ResumeFailures)
+	}
+	return nil
+}
