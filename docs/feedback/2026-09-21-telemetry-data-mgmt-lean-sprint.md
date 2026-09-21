@@ -45,7 +45,36 @@ Open in 425: Braille layout (M2). Open in 428: ANSI 256/truecolor.
   tip hook cannot open the DB ahead of the migration. Behavior looks intended, but the ticket
   did not ask for it.
 
+## Sprint 3: Store hardening and canonical checks
+
+| Ticket | Result | Commit |
+|--------|--------|--------|
+| 341 | Reproduced on Linux with a 32-process cold-start test (`duplicate column name: model`, one lost row). Fixed by running schema init and migration in one `BEGIN IMMEDIATE` transaction. Ticket stays open until a real macOS CI run passes | `fbaa511` |
+| 127 M1 | Schema DDL and every `INSERT` moved to `spec/telemetry.yaml`, with a loader, JSON schema and an AST test that forbids SQL literals | `c812720` |
+| 127 M2 | All `query.go` SELECTs, named filter predicates and a grouped-column allowlist moved to the spec; a test fails on dead spec entries | `d5178e1` |
+| 457 | Six spec-defined quality checks with fixture tests, plus `harnez stats --quality` (`--json`, `--strict`), read-only. Live run over 32,208 tool calls: all PASS. Closed | `9bedd31`, `206e9d6` |
+
+127 stays open for the remaining SQL (`telemetry.go` migrations, `classify.go`, `sanitize_cache.go`,
+`issuesnapshot.go`, `export.go`, `economics_query.go`).
+
+**Finding from 457:** `tool_calls` has no `model` column, so "calls per model" analytics are
+impossible today. It belongs next to the 446/445 cost work.
+
+## Ladder notes for sprint 3
+
+- Still no escalation beyond luna:low. Every miss was a small, fixable defect that luna fixed after
+  a resume with the exact error: an incomplete test fixture (341), a `const` that became a runtime
+  value (127), a test matching doc comments (127), a wrong relative path (127), and two spec
+  entries that were never wired into Go (127 M2, caught by review of the diff).
+- Recurring pattern: workers cannot run the full suite, and their filtered `-run` patterns missed
+  tests they had just added. The host's single `make test-q1` per change caught all of these.
+  Worth putting into the worker prompt: "verify with the whole package, not a filtered run".
+- Plan-first paid off again: the 341 plan flagged that `Open()` already had retries, and the 127
+  plan found the ticket's inventory was stale (8 query statements, not 5) and other files with SQL.
+- A pre-existing uncommitted edit to `docs/AgenticLoop.md` (steered escalation and session-record
+  rules) was left out of every commit; it is not part of this sprint's work.
+
 ## Next
 
-Recommended order: 341 (reproduce first), 127 (SQL to `spec/`), then 457 built on 127,
-then 446 before 445. See `docs/Roadmap.md`.
+341 needs a macOS CI run to close; 127 needs a scope decision on the remaining SQL. Then 446
+before 445, then 124 with 296. See `docs/Roadmap.md`.
