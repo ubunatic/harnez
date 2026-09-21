@@ -14,7 +14,21 @@ type telemetrySQLSpec struct {
 	Predicates map[string]struct {
 		SQL string `yaml:"sql"`
 	} `yaml:"predicates"`
-	GroupColumns []string `yaml:"group_columns"`
+	GroupColumns  []string           `yaml:"group_columns"`
+	QualityChecks []qualityCheckSpec `yaml:"quality_checks"`
+}
+
+type qualityCheckSpec struct {
+	Name             string  `yaml:"name"`
+	SQL              string  `yaml:"sql"`
+	Description      string  `yaml:"description"`
+	WarnCondition    string  `yaml:"warn_condition"`
+	WarnAbovePercent float64 `yaml:"warn_above_percent"`
+	Result           struct {
+		Checked    string `yaml:"checked"`
+		Offending  string `yaml:"offending"`
+		Percentage string `yaml:"percentage"`
+	} `yaml:"result"`
 }
 
 func (s *telemetrySQLSpec) groupColumnAllowed(column string) bool {
@@ -41,6 +55,11 @@ func loadTelemetrySQL() (*telemetrySQLSpec, error) {
 	for k, v := range s.Statements {
 		if v == "" {
 			return nil, fmt.Errorf("empty statement %q", k)
+		}
+	}
+	for _, q := range s.QualityChecks {
+		if q.Name == "" || q.SQL == "" || q.Result.Checked == "" || q.Result.Offending == "" || q.Result.Percentage == "" {
+			return nil, fmt.Errorf("incomplete quality check %q", q.Name)
 		}
 	}
 	return &s, nil

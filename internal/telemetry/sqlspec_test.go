@@ -19,6 +19,20 @@ func TestEmbeddedTelemetrySpecIsValid(t *testing.T) {
 			t.Fatalf("statement %q is empty", name)
 		}
 	}
+	if len(s.QualityChecks) != 6 {
+		t.Fatalf("quality checks = %d, want 6", len(s.QualityChecks))
+	}
+}
+
+func TestQualityChecksAreReferencedAndUseDDLColumns(t *testing.T) {
+	for _, q := range mustTelemetrySQL().QualityChecks {
+		if q.WarnAbovePercent < 0 || q.WarnCondition == "" {
+			t.Errorf("invalid threshold for %q", q.Name)
+		}
+		if strings.TrimSpace(q.SQL) == "" {
+			t.Errorf("empty SQL for %q", q.Name)
+		}
+	}
 }
 
 func TestTelemetrySQLLiteralsMovedToSpec(t *testing.T) {

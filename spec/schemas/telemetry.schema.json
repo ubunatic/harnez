@@ -5,7 +5,8 @@
     "schema",
     "statements",
     "predicates",
-    "group_columns"
+    "group_columns",
+    "quality_checks"
   ],
   "additionalProperties": false,
   "properties": {
@@ -48,6 +49,32 @@
         ]
       },
       "minItems": 1
+    },
+    "quality_checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "sql", "description", "warn_condition", "warn_above_percent", "result"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "sql": {"type": "string", "minLength": 1},
+          "description": {"type": "string", "minLength": 1},
+          "warn_condition": {"type": "string", "minLength": 1},
+          "warn_above_percent": {"type": "number", "minimum": 0},
+          "result": {
+            "type": "object",
+            "required": ["checked", "offending", "percentage"],
+            "additionalProperties": false,
+            "properties": {
+              "checked": {"type": "string", "const": "checked"},
+              "offending": {"type": "string", "const": "offending"},
+              "percentage": {"type": "string", "const": "percentage"}
+            }
+          }
+        }
+      }
     }
   }
 }
