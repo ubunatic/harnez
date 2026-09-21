@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -17,6 +19,23 @@ type CodexDriver struct {
 	Command func(context.Context, string, ...string) ([]byte, error)
 	// Start launches a process for streaming turns; nil uses os/exec.
 	Start func(context.Context, string, ...string) (io.Reader, func() error, error)
+}
+
+func (d CodexDriver) CheckResumable(providerID string) (bool, string) {
+	home := os.Getenv("CODEX_HOME")
+	if home == "" {
+		home, _ = os.UserHomeDir()
+		home = filepath.Join(home, ".codex")
+	}
+	sessions := filepath.Join(home, "sessions")
+	if _, err := os.Stat(sessions); os.IsNotExist(err) {
+		return true, "Codex session state is unknown"
+	}
+	matches, err := filepath.Glob(filepath.Join(sessions, "*", "*", "*", "rollout-*"+providerID+".jsonl"))
+	if err == nil && len(matches) > 0 {
+		return true, ""
+	}
+	return false, "Codex session file is missing"
 }
 
 func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error) {

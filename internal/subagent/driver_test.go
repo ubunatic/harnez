@@ -3,10 +3,41 @@ package subagent
 import (
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestCodexCheckResumable(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	tests := []struct {
+		name     string
+		sessions bool
+		file     bool
+		want     bool
+	}{
+		{"missing sessions directory", false, false, true},
+		{"missing rollout", true, false, false},
+		{"matching rollout", true, true, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.sessions && os.MkdirAll(filepath.Join(home, "sessions", "2026", "01", "02"), 0700) != nil {
+				t.Fatal("mkdir")
+			}
+			if tt.file && os.WriteFile(filepath.Join(home, "sessions", "2026", "01", "02", "rollout-prefix-thread.jsonl"), nil, 0600) != nil {
+				t.Fatal("write")
+			}
+			ok, _ := (CodexDriver{}).CheckResumable("thread")
+			if ok != tt.want {
+				t.Fatalf("ok=%v, want %v", ok, tt.want)
+			}
+		})
+	}
+}
 
 func TestResolveModel(t *testing.T) {
 	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-5.6-luna", "low"}, {"claude:haiku", "claude", "haiku", "low"}, {"claude:haiku:latest", "claude", "haiku", "low"}, {"agy:flash:low", "agy", "gemini-3.7-flash", "low"}} {

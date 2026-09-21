@@ -16,6 +16,10 @@ type Driver interface {
 	Delete(context.Context, string) error
 }
 
+type ResumeChecker interface {
+	CheckResumable(providerID string) (ok bool, reason string)
+}
+
 // UnsupportedDriver reports a provider capability error without misrouting it.
 type UnsupportedDriver struct{ Provider string }
 

@@ -37,6 +37,8 @@ type Session struct {
 	CachedTokens       int       `json:"cached_tokens"`
 	CreatedAt          time.Time `json:"created_at"`
 	LastActiveAt       time.Time `json:"last_active_at"`
+	LastError          string    `json:"last_error,omitempty"`
+	ResumeFailures     int       `json:"resume_failures,omitempty"`
 }
 
 // ProviderID returns the provider-side identifier used for lifecycle commands.

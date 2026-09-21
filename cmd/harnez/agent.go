@@ -363,6 +363,11 @@ func newAgentCmd() *cobra.Command {
 			return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)
 		}
 		d := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
+		if checker, ok := d.(subagent.ResumeChecker); ok {
+			if resumable, reason := checker.CheckResumable(sess.ProviderID()); !resumable {
+				return fmt.Errorf("session %q cannot be resumed: %s; start a new session with: harnez agent start --name <new-name> ...", sess.Name, reason)
+			}
+		}
 		tl := newTimeline(cmd)
 		compacted, compactNote := false, ""
 		if subagent.ShouldCompact(sess.TokensSinceCompact) {
@@ -397,8 +402,11 @@ func newAgentCmd() *cobra.Command {
 			r, err = d.Resume(cmd.Context(), sess.ProviderID(), prompt)
 		}
 		if err != nil {
+			recordResumeFailure(s, sess, err)
 			return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
 		}
+		sess.LastError = ""
+		sess.ResumeFailures = 0
 		sess.TokensTurn = r.TokensTurn
 		sess.TokensCumulative += r.TokensTurn
 		sess.TokensSinceCompact += subagent.CompactionTokens(r)
@@ -444,9 +452,9 @@ func newAgentCmd() *cobra.Command {
 		if jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(xs)
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), "ID\tNAME\tPROVIDER\tSTATUS\tTOKENS\tCACHED")
+		fmt.Fprintln(cmd.OutOrStdout(), "ID\tNAME\tPROVIDER\tSTATUS\tRESUME\tTOKENS\tCACHED")
 		for _, x := range xs {
-			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%d\t%d\n", x.ID, x.Name, x.Provider, x.Status, x.TokensCumulative, x.CachedTokens)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%d\t%d\n", x.ID, x.Name, x.Provider, x.Status, resumeState(x), x.TokensCumulative, x.CachedTokens)
 		}
 		return nil
 	}}
@@ -470,6 +478,9 @@ func newAgentCmd() *cobra.Command {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(x)
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "ID: %s\nName: %s\nStatus: %s\nProvider: %s:%s\nTokens: %d (turn %d)\nCached: %d\n", x.ID, x.Name, x.Status, x.Provider, x.Model, x.TokensCumulative, x.TokensTurn, x.CachedTokens)
+		if x.LastError != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Last error: %s\nResume failures: %d\n", x.LastError, x.ResumeFailures)
+		}
 		return nil
 	}}
 	status.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
@@ -775,6 +786,28 @@ func sessionPromptDescription(prompt string) string {
 		description = string([]rune(description)[:97]) + "..."
 	}
 	return description
+}
+
+func recordResumeFailure(store *subagent.FileSessionStore, sess *subagent.Session, err error) {
+	sess.LastError = firstLine(err.Error())
+	if len([]rune(sess.LastError)) > 300 {
+		sess.LastError = string([]rune(sess.LastError)[:300])
+	}
+	sess.ResumeFailures++
+	_ = store.Save(sess)
+}
+
+func resumeState(sess *subagent.Session) string {
+	if sess.LastError != "" {
+		return "failed"
+	}
+	d := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
+	if checker, ok := d.(subagent.ResumeChecker); ok {
+		if resumable, _ := checker.CheckResumable(sess.ProviderID()); !resumable {
+			return "terminal"
+		}
+	}
+	return "ok"
 }
 
 type agentRepoStatus struct {

@@ -532,6 +532,198 @@ type recordingAgentDriver struct {
 	deleted []string
 }
 
+type resumeOutcomeDriver struct {
+	recordingAgentDriver
+	err      error
+	resumes  int
+	terminal bool
+}
+
+func (d *resumeOutcomeDriver) Resume(context.Context, string, string) (*subagent.TurnResult, error) {
+	d.resumes++
+	if d.err != nil {
+		return nil, d.err
+	}
+	return &subagent.TurnResult{Response: "resumed"}, nil
+}
+
+func (d *resumeOutcomeDriver) CheckResumable(string) (bool, string) {
+	if d.terminal {
+		return false, "session record is terminal"
+	}
+	return true, ""
+}
+
+func saveResumeSession(t *testing.T, dir, id, name, provider string) *subagent.FileSessionStore {
+	t.Helper()
+	store, err := subagent.NewSessionStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: id, Name: name, Provider: provider, Model: "model", Tier: "low", Status: "completed"}); err != nil {
+		t.Fatal(err)
+	}
+	return store
+}
+
+func TestAgentListThenResumeByDisplayedIDAndName(t *testing.T) {
+	for _, identifier := range []string{"sid", "worker"} {
+		t.Run(identifier, func(t *testing.T) {
+			old := agentDriver
+			d := &resumeOutcomeDriver{}
+			agentDriver = func(subagent.Model) subagent.Driver { return d }
+			defer func() { agentDriver = old }()
+			storeDir := t.TempDir()
+			saveResumeSession(t, storeDir, "sid", "worker", "fake")
+			var listed bytes.Buffer
+			cmd := newAgentCmd()
+			cmd.SetOut(&listed)
+			cmd.SetArgs([]string{"list", "--all-sessions", "--store-dir", storeDir})
+			if err := cmd.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(listed.String(), "sid\tworker") {
+				t.Fatalf("list = %q", listed.String())
+			}
+			cmd = newAgentCmd()
+			cmd.SetOut(new(bytes.Buffer))
+			cmd.SetErr(new(bytes.Buffer))
+			cmd.SetArgs([]string{"resume", "--name", identifier, "hi", "--store-dir", storeDir})
+			if err := cmd.Execute(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestAgentResumeFailureRecordedAndCleared(t *testing.T) {
+	old := agentDriver
+	d := &resumeOutcomeDriver{err: errors.New("provider failed\nwith detail")}
+	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store := saveResumeSession(t, storeDir, "sid", "worker", "fake")
+	for want := 1; want <= 2; want++ {
+		cmd := newAgentCmd()
+		cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
+		if err := cmd.Execute(); err == nil {
+			t.Fatal("resume unexpectedly succeeded")
+		}
+		sess, _ := store.Get("sid")
+		if sess.ResumeFailures != want || sess.LastError != "provider failed" {
+			t.Fatalf("session = %#v", sess)
+		}
+		if len([]rune(sess.LastError)) > 300 {
+			t.Fatal("last error too long")
+		}
+	}
+	d.err = nil
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	sess, _ := store.Get("sid")
+	if sess.LastError != "" || sess.ResumeFailures != 0 {
+		t.Fatalf("success did not clear failure: %#v", sess)
+	}
+}
+
+func TestAgentListResumeColumnStates(t *testing.T) {
+	old := agentDriver
+	agentDriver = func(m subagent.Model) subagent.Driver {
+		d := &resumeOutcomeDriver{}
+		if m.Provider == "terminal" {
+			d.terminal = true
+		}
+		return d
+	}
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store, _ := subagent.NewSessionStore(storeDir)
+	for _, sess := range []*subagent.Session{
+		{ID: "ok", Name: "okay", Provider: "fake", Model: "model", Status: "completed"},
+		{ID: "bad", Name: "failed", Provider: "fake", Model: "model", LastError: "provider failed", Status: "completed"},
+		{ID: "term", Name: "terminal", Provider: "terminal", Model: "model", Status: "completed"},
+	} {
+		if err := store.Save(sess); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"list", "--all-sessions", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"okay\tfake\tcompleted\tok", "failed\tfake\tcompleted\tfailed", "terminal\tterminal\tcompleted\tterminal"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("list = %q, missing %q", out.String(), want)
+		}
+	}
+}
+
+func TestAgentTerminalResumeRefusal(t *testing.T) {
+	old := agentDriver
+	d := &resumeOutcomeDriver{terminal: true}
+	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store := saveResumeSession(t, storeDir, "sid", "worker", "fake")
+	cmd := newAgentCmd()
+	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "cannot be resumed") || !strings.Contains(err.Error(), "harnez agent start --name") {
+		t.Fatalf("error = %v", err)
+	}
+	sess, _ := store.Get("sid")
+	if d.resumes != 0 || sess.ResumeFailures != 0 {
+		t.Fatalf("terminal attempt changed state: resumes=%d session=%#v", d.resumes, sess)
+	}
+}
+
+func TestAgentStatusResumeDiagnostics(t *testing.T) {
+	storeDir := t.TempDir()
+	store := saveResumeSession(t, storeDir, "sid", "worker", "fake")
+	sess, _ := store.Get("sid")
+	sess.LastError = "provider failed"
+	sess.ResumeFailures = 2
+	_ = store.Save(sess)
+	var out bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"status", "--name", "worker", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Last error: provider failed") || !strings.Contains(out.String(), "Resume failures: 2") {
+		t.Fatalf("status = %q", out.String())
+	}
+	sess.LastError = ""
+	_ = store.Save(sess)
+	out.Reset()
+	cmd = newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"status", "--name", "worker", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "Last error:") || strings.Contains(out.String(), "Resume failures:") {
+		t.Fatalf("clean status = %q", out.String())
+	}
+}
+
+func TestAgentResumeMissingIdentifier(t *testing.T) {
+	cmd := newAgentCmd()
+	cmd.SetArgs([]string{"resume", "--name", "nope", "hi", "--store-dir", t.TempDir()})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func (d *recordingAgentDriver) Run(_ context.Context, opts subagent.RunOptions) (*subagent.TurnResult, error) {
 	d.dir = opts.Dir
 	return &subagent.TurnResult{SessionID: "recorded", Response: "ok"}, nil
