@@ -133,3 +133,18 @@ func TestCodexStreamEmitsEventsInOrder(t *testing.T) {
 		t.Fatalf("events=%q result=%+v", kinds, r)
 	}
 }
+
+func TestCodexResumeUsesSameSandboxAsRun(t *testing.T) {
+	var got []string
+	d := CodexDriver{Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		got = args
+		return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}` + "\n"), nil
+	}}
+	if _, err := d.Resume(context.Background(), "t1", "go"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "go"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("resume args = %q, want %q", got, want)
+	}
+}
