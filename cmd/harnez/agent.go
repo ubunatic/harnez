@@ -64,122 +64,17 @@ func newAgentCmd() *cobra.Command {
 		}
 		return resolveSession(s, id, dir)
 	}
-	write := func(cmd *cobra.Command, v any) error {
-		if jsonOut {
-			return json.NewEncoder(cmd.OutOrStdout()).Encode(v)
-		}
-		if o, ok := v.(agentOutput); ok && o.Session != nil {
-			return printAgentMessages(cmd, o.Messages, o.Response)
-		}
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), v)
-		return err
-	}
-
 	var startFiles []string
 	start := &cobra.Command{Use: "start [prompt...]", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
-		spec := modelSpec
-		if spec == "" && len(words) >= 2 && oldStyleModelWord(words[0]) {
+		if modelSpec == "" && len(words) >= 2 && oldStyleModelWord(words[0]) {
 			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
-		}
-		if spec == "" {
-			var defaultErr error
-			spec, defaultErr = subagent.DefaultModelSpec()
-			if defaultErr != nil {
-				return defaultErr
-			}
 		}
 		prompt, err := assemblePrompt(startFiles, words, tail, cmd.InOrStdin())
 		if err != nil {
 			return err
 		}
-		if err := checkStreamMode(streamMode); err != nil {
-			return err
-		}
-		m, err := subagent.ResolveModel(spec)
-		if err != nil {
-			return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
-		}
-		s, err := store()
-		if err != nil {
-			return err
-		}
-		id := uuid.NewString()
-		sessName := name
-		if sessName == "" {
-			sessions, listErr := s.List("", true)
-			if listErr != nil {
-				return listErr
-			}
-			taken := make(map[string]bool, len(sessions)*2)
-			for _, existing := range sessions {
-				taken[existing.Name] = true
-				taken[existing.ID] = true
-			}
-			sessName, err = subagent.GenerateSessionName(func(candidate string) bool { return taken[candidate] })
-			if err != nil {
-				return err
-			}
-		}
-		if name != "" {
-			if existing, findErr := resolveSession(s, name, ""); findErr == nil {
-				return fmt.Errorf("session name %q is already in use by %s in %s", name, existing.ID, existing.WorkingDir)
-			}
-		}
-		canonicalWorkDir, err := filepath.Abs(workDir)
-		if err != nil {
-			return fmt.Errorf("resolve working directory: %w", err)
-		}
-		tl := newTimeline(cmd)
-		opts := subagent.RunOptions{Prompt: prompt, Model: m, Dir: canonicalWorkDir}
-		d := agentDriver(m)
-		sd, streaming := d.(subagent.StreamingDriver)
-		streaming = streaming && !jsonOut
-		var ts *turnStream
-		var r *subagent.TurnResult
-		if streaming {
-			ts = newTurnStream(cmd, streamMode, false)
-			ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sessName, sessName, planFirst
-			opts.Prompt = withProtocol(prompt, planFirst)
-			ts.watch()
-			r, err = sd.RunStream(cmd.Context(), opts, func(ev subagent.Event) {
-				if ev.Kind == "session" {
-					extra := []string{fmt.Sprintf("name=%s dir=%s", sessName, canonicalWorkDir)}
-					if modelSpec == "" {
-						extra = append(extra, "model: "+spec+" (default)")
-					}
-					ts.info(ev.Text, m.Provider+":"+m.Name, "start", "new", append(extra, "reconnect: harnez agent resume "+ev.Text+" \"<prompt>\"")...)
-				}
-				ts.onEvent(ev)
-			})
-			if err != nil {
-				ts.abort()
-			}
-		} else {
-			tl.announceTurn("start", m.Provider+":"+m.Name, sessName)
-			r, err = d.Run(cmd.Context(), opts)
-		}
-		if err != nil {
-			return fmt.Errorf("agent start %q failed: %w; verify the provider/model configuration or ask for guidance", spec, err)
-		}
-		if r.SessionID != "" {
-			id = r.SessionID
-		}
-		now := time.Now()
-		sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: promptStorage(startFiles, words, tail, prompt), Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parent(), CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
-		if err := s.Save(sess); err != nil {
-			return err
-		}
-		out := agentOutput{Session: sess, Response: r.Response, Messages: r.Messages, ReconnectCmd: "harnez agent resume " + id + " \"<prompt>\""}
-		if streaming {
-			ts.finish(r)
-			return nil
-		}
-		tl.finishTurn(r, id, out.ReconnectCmd)
-		if jsonOut {
-			return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
-		}
-		return printAgentMessages(cmd, r.Messages, r.Response)
+		return runStart(cmd, agentDeps{store: store, parent: parent, find: find}, startRequest{Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
 	}}
 	start.Flags().StringSliceVarP(&startFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
@@ -351,10 +246,7 @@ func newAgentCmd() *cobra.Command {
 	var continueResume bool
 	resume := &cobra.Command{Use: "resume [prompt...]", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
-		sessionName := name
-		resolved := "name"
-		var sess *subagent.Session
-		if continueResume && sessionName != "" {
+		if continueResume && name != "" {
 			return fmt.Errorf("resume: --continue cannot be combined with --name")
 		}
 		if len(words) >= 2 && oldStyleModelWord(words[0]) {
@@ -364,124 +256,7 @@ func newAgentCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if err := checkStreamMode(streamMode); err != nil {
-			return err
-		}
-		s, err := store()
-		if err != nil {
-			return err
-		}
-		if sessionName == "" {
-			xs, listErr := s.List("", true)
-			if listErr != nil {
-				return listErr
-			}
-			candidates := attributable(xs, workDir, parent())
-			if len(candidates) == 0 {
-				return fmt.Errorf("no resumable agent in %s; start one with: harnez agent start --name <name> ...", workDir)
-			}
-			if !continueResume && len(candidates) != 1 {
-				return fmt.Errorf("multiple resumable agents in %s; pass --name (candidates: %s)", workDir, candidateSummary(candidates))
-			}
-			sess = candidates[0]
-			if continueResume {
-				resolved = "continue"
-			} else {
-				resolved = "dir"
-			}
-		} else {
-			sess, err = find(cmd, s, sessionName)
-			if err != nil {
-				return err
-			}
-		}
-		if !subagent.CanManage(parent(), sess) {
-			return fmt.Errorf("session %q is outside caller lineage", sess.ID)
-		}
-		if modelSpec != "" {
-			m, modelErr := subagent.ResolveModel(modelSpec)
-			if modelErr != nil || m.Provider != sess.Provider || m.Name != sess.Model || m.Tier != sess.Tier {
-				return fmt.Errorf("--model %q conflicts with session %q model %s:%s:%s", modelSpec, sess.Name, sess.Provider, sess.Model, sess.Tier)
-			}
-		}
-		if sess.Status == "active" && sess.HarnessType == "interactive" {
-			if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "prompt", prompt); err != nil {
-				return err
-			}
-			sess.LastActiveAt = time.Now()
-			if err := s.Save(sess); err != nil {
-				return err
-			}
-			return write(cmd, agentOutput{Session: sess, Response: "prompt delivered"})
-		}
-		if sess.HarnessType == "interactive" && sess.ProviderSessionID == "" {
-			return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)
-		}
-		d := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
-		if checker, ok := d.(subagent.ResumeChecker); ok {
-			if resumable, reason := checker.CheckResumable(sess.ProviderID()); !resumable {
-				return fmt.Errorf("session %q cannot be resumed: %s; start a new session with: harnez agent start --name <new-name> ...", sess.Name, reason)
-			}
-		}
-		tl := newTimeline(cmd)
-		compacted, compactNote := false, ""
-		if subagent.ShouldCompact(sess.TokensSinceCompact) {
-			if _, err = d.Compact(cmd.Context(), sess.ProviderID()); err != nil {
-				return err
-			}
-			compactNote = fmt.Sprintf("queued /compact at %s new tokens since the last compaction; the agent acknowledges it before its reply", humanCount(sess.TokensSinceCompact))
-			sess.TokensSinceCompact = 0
-			compacted = true
-		}
-		var ts *turnStream
-		var r *subagent.TurnResult
-		sd, streaming := d.(subagent.StreamingDriver)
-		streaming = streaming && !jsonOut
-		if streaming {
-			ts = newTurnStream(cmd, streamMode, compacted)
-			ts.info(sess.ID, sess.Provider+":"+sess.Model, "resume", resolved)
-			if compacted {
-				ts.printf("[compact: %s]\n", compactNote)
-			}
-			ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sess.Name, sess.Name, planFirst
-			ts.watch()
-			r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), withProtocol(prompt, planFirst), ts.onEvent)
-			if err != nil {
-				ts.abort()
-			}
-		} else {
-			if compacted {
-				tl.log("compact", "%s", compactNote)
-			}
-			tl.announceTurn("resume", sess.Provider+":"+sess.Model, sess.Name)
-			r, err = d.Resume(cmd.Context(), sess.ProviderID(), prompt)
-		}
-		if err != nil {
-			recordResumeFailure(s, sess, err)
-			return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
-		}
-		sess.LastError = ""
-		sess.ResumeFailures = 0
-		sess.TokensTurn = r.TokensTurn
-		sess.TokensCumulative += r.TokensTurn
-		sess.TokensSinceCompact += subagent.CompactionTokens(r)
-		sess.CachedTokens = r.CachedTokens
-		sess.LastActiveAt = time.Now()
-		if err = s.Save(sess); err != nil {
-			return err
-		}
-		if streaming {
-			ts.finish(r)
-			return nil
-		}
-		if compacted {
-			var ack string
-			if r.Messages, ack = subagent.SplitCompactionAck(r.Messages); ack != "" {
-				tl.log("compact", "agent acknowledged: %s", firstLine(ack))
-			}
-		}
-		tl.finishTurn(r, sess.ID, "harnez agent resume "+sess.ID+" \"<prompt>\"")
-		return write(cmd, agentOutput{Session: sess, Response: r.Response, Messages: r.Messages})
+		return runResume(cmd, agentDeps{store: store, parent: parent, find: find}, resumeRequest{Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: continueResume, JSON: jsonOut, PlanFirst: planFirst})
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	resume.Flags().BoolVar(&jsonOut, "json", false, "JSON output")

@@ -1368,3 +1368,61 @@ func TestAgentStartGeneratesMemorableUniqueNames(t *testing.T) {
 		seen[name] = true
 	}
 }
+
+func TestRunStartWithoutCobraFlags(t *testing.T) {
+	storeDir := t.TempDir()
+	driver := &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "direct-start"}}, {ev: msg("CONFIRM: ready")}, {ev: msg("done")}}}
+	old := agentDriver
+	agentDriver = func(subagent.Model) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = runStart(cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }}, startRequest{Prompt: "direct", StoredPrompt: "direct", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "name=") {
+		t.Fatalf("stream header missing: %s", out.String())
+	}
+	sessions, err := store.List("", true)
+	if err != nil || len(sessions) != 1 {
+		t.Fatalf("saved sessions = %v, err=%v", sessions, err)
+	}
+}
+
+func TestRunResumeWithoutCobraFlags(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "direct-resume", Name: "direct", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: ".", Status: "completed"}); err != nil {
+		t.Fatal(err)
+	}
+	driver := &scriptDriver{steps: []step{{ev: msg("CONFIRM: resumed")}, {ev: msg("done")}}}
+	old := agentDriver
+	agentDriver = func(subagent.Model) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+	var out bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+		return resolveSession(s, id, "")
+	}}
+	if err := runResume(cmd, deps, resumeRequest{Prompt: "continue", Name: "direct", Dir: ".", StreamMode: streamFull}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "resolved=name") {
+		t.Fatalf("stream header missing: %s", out.String())
+	}
+	if len(driver.resumed) != 1 || driver.resumed[0] != "direct-resume" {
+		t.Fatalf("resumed = %v", driver.resumed)
+	}
+}
