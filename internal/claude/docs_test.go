@@ -484,6 +484,20 @@ func TestAllConfigDeclaredCopyableDocsHaveBundledMarker(t *testing.T) {
 	}
 }
 
+func TestCanaryDoesNotHardReferenceOptionalPrototypingDoc(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("load embedded config: %v", err)
+	}
+	data, err := fs.ReadFile(cfg.FS, "docs/other/Canary.md")
+	if err != nil {
+		t.Fatalf("read bundled Canary.md: %v", err)
+	}
+	if strings.Contains(string(data), "@docs/PrototypingFeatures.md") {
+		t.Fatal("bundled Canary.md must not hard-reference optional PrototypingFeatures.md")
+	}
+}
+
 func TestConfigDefaultZeroDocs(t *testing.T) {
 	cfg, err := LoadConfigEmbedded()
 	if err != nil {
