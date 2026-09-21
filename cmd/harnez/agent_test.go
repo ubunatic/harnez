@@ -757,3 +757,108 @@ func TestStreamingResumeKeepsStderrQuiet(t *testing.T) {
 		t.Fatalf("stderr = %q, want empty while streaming", errOut.String())
 	}
 }
+
+// step is one scripted event, emitted after wait.
+type step struct {
+	wait time.Duration
+	ev   subagent.Event
+}
+
+type scriptDriver struct {
+	recordingAgentDriver
+	steps  []step
+	prompt string
+}
+
+func (d *scriptDriver) play(fn subagent.EventFunc) *subagent.TurnResult {
+	var msgs []string
+	for _, s := range d.steps {
+		time.Sleep(s.wait)
+		fn(s.ev)
+		if s.ev.Kind == "message" {
+			msgs = append(msgs, s.ev.Text)
+		}
+	}
+	return &subagent.TurnResult{SessionID: "thread-1", Response: msgs[len(msgs)-1], Messages: msgs}
+}
+func (d *scriptDriver) RunStream(_ context.Context, o subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
+	d.prompt = o.Prompt
+	return d.play(fn), nil
+}
+func (d *scriptDriver) ResumeStream(_ context.Context, _, p string, fn subagent.EventFunc) (*subagent.TurnResult, error) {
+	d.prompt = p
+	return d.play(fn), nil
+}
+
+func runScripted(t *testing.T, d *scriptDriver, args ...string) string {
+	t.Helper()
+	old, oldTimeout := agentDriver, confirmTimeout
+	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	confirmTimeout = 30 * time.Millisecond
+	defer func() { agentDriver, confirmTimeout = old, oldTimeout }()
+	var out bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs(append(args, "--store-dir", t.TempDir()))
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	return out.String()
+}
+
+func msg(text string) subagent.Event  { return subagent.Event{Kind: "message", Text: text, Bytes: 10} }
+func tool(text string) subagent.Event { return subagent.Event{Kind: "activity", Text: text, Bytes: 10} }
+
+func TestConfirmationAndPlanShowInStatsMode(t *testing.T) {
+	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: will count files")}, {0, tool("running ls")}, {0, msg("PLAN: ls then sort")}, {0, msg("interim chatter")}, {0, msg("9 files")}}}
+	got := runScripted(t, d, "start", "codex:luna", "orig task", "--name", "w", "--stream", "stats")
+	for _, want := range []string{"[confirmation: 0s]\nwill count files\n", "[plan: 0s]\nls then sort\n", "[reply: 0s]\n9 files\n"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "interim chatter") || strings.Contains(got, "violation") || strings.Contains(got, "warning") {
+		t.Fatalf("unexpected output:\n%s", got)
+	}
+}
+
+func TestToolBeforeConfirmationIsAViolation(t *testing.T) {
+	d := &scriptDriver{steps: []step{{0, tool("running rg foo")}, {0, msg("CONFIRM: late")}, {0, msg("done")}}}
+	got := runScripted(t, d, "start", "codex:luna", "task", "--name", "w")
+	want := "[violation: running rg foo before any confirmation; caller may stop the agent: harnez agent stop w]"
+	if !strings.Contains(got, want) || strings.Count(got, "[violation:") != 1 {
+		t.Fatalf("stdout:\n%s", got)
+	}
+}
+
+func TestSilentAgentGetsWarning(t *testing.T) {
+	d := &scriptDriver{steps: []step{{100 * time.Millisecond, msg("late reply")}}}
+	got := runScripted(t, d, "start", "codex:luna", "task", "--name", "w")
+	if !strings.Contains(got, "[warning: no confirmation after 0s; caller may stop the agent: harnez agent stop w]") || strings.Count(got, "[warning:") != 1 {
+		t.Fatalf("stdout:\n%s", got)
+	}
+}
+
+func TestPromptGetsProtocolButStoredPromptStaysOriginal(t *testing.T) {
+	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+	storeDir := t.TempDir()
+	old := agentDriver
+	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	defer func() { agentDriver = old }()
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"start", "codex:luna", "orig task", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(d.prompt, "Harnez dispatch protocol:") || !strings.HasSuffix(d.prompt, "\n\norig task") || !strings.Contains(d.prompt, "CONFIRM:") {
+		t.Fatalf("driver prompt = %q", d.prompt)
+	}
+	store, _ := subagent.NewSessionStore(storeDir)
+	sess, err := store.Get("thread-1")
+	if err != nil || sess.StartPrompt != "orig task" {
+		t.Fatalf("stored prompt = %q, err=%v", sess.StartPrompt, err)
+	}
+}

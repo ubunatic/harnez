@@ -19,6 +19,17 @@ const (
 	streamStats = "stats"
 )
 
+// confirmTimeout is how long an agent may stay silent before harnez warns that
+// the early confirmation is missing.
+var confirmTimeout = 10 * time.Second
+
+// protocolPreamble is prepended to every streamed turn so the agent confirms
+// before working and marks its plan; harnez maps the tags to labels.
+const protocolPreamble = "Harnez dispatch protocol: before any tool call, file read or other work, your very first message must be one line starting with `CONFIRM:` that states what you will do. " +
+	"If your task asks you to plan first, send the plan as a message starting with `PLAN:`. Then continue with your task.\n\n"
+
+func withProtocol(prompt string) string { return protocolPreamble + prompt }
+
 // heartbeatSchedule lists the elapsed times of the first heartbeats; after the
 // last one a heartbeat follows every heartbeatRepeat.
 var (
@@ -48,15 +59,19 @@ type turnStream struct {
 	w         io.Writer
 	began     time.Time
 	mode      string
-	compacted bool // the first message acknowledges a queued /compact
+	compacted bool   // the first message acknowledges a queued /compact
+	stopCmd   string // shown when the agent violates the confirmation rule
 
 	mu       sync.Mutex
 	bytes    int
 	messages int
 	commands int
 	last     string
-	stop     chan struct{}
-	done     sync.WaitGroup
+	// confirmed is set by the first non-ack message; violated and warned make
+	// the protocol notices fire once.
+	confirmed, violated, warned bool
+	stop                        chan struct{}
+	done                        sync.WaitGroup
 }
 
 func newTurnStream(cmd *cobra.Command, mode string, compacted bool) *turnStream {
@@ -107,26 +122,61 @@ func (t *turnStream) onEvent(ev subagent.Event) {
 	switch ev.Kind {
 	case "message":
 		t.mu.Lock()
+		defer t.mu.Unlock()
 		t.messages++
-		label := "message"
-		if t.compacted && t.messages == 1 {
+		text, label := ev.Text, "message"
+		switch {
+		case t.compacted && t.messages == 1:
 			label = "compaction ack"
+		case strings.HasPrefix(text, "CONFIRM:"):
+			label, text = "confirmation", strings.TrimSpace(strings.TrimPrefix(text, "CONFIRM:"))
+		case strings.HasPrefix(text, "PLAN:"):
+			label, text = "plan", strings.TrimSpace(strings.TrimPrefix(text, "PLAN:"))
+		}
+		if label != "compaction ack" {
+			t.confirmed = true
 		}
 		t.last = "message"
-		if t.mode == streamFull {
-			fmt.Fprintf(t.w, "[%s: %s]\n%s\n", label, shortDur(time.Since(t.began)), ev.Text)
+		// Confirmation and plan are the caller's chance to intervene, so they
+		// print in every mode.
+		if t.mode == streamFull || label == "confirmation" || label == "plan" {
+			fmt.Fprintf(t.w, "[%s: %s]\n%s\n", label, shortDur(time.Since(t.began)), text)
 		}
-		t.mu.Unlock()
 	case "activity":
 		t.mu.Lock()
+		defer t.mu.Unlock()
 		t.last = ev.Text
 		t.commands++
-		t.mu.Unlock()
+		if !t.confirmed && !t.violated {
+			t.violated = true
+			fmt.Fprintf(t.w, "[violation: %s before any confirmation; caller may stop the agent: %s]\n", ev.Text, t.stopCmd)
+		}
 	}
 }
 
-// startHeartbeats prints progress summaries on the schedule until finish is called.
-func (t *turnStream) startHeartbeats() {
+// watchConfirmation warns once when the agent is still silent after confirmTimeout.
+func (t *turnStream) watchConfirmation() {
+	t.done.Add(1)
+	go func() {
+		defer t.done.Done()
+		select {
+		case <-t.stop:
+			return
+		case <-time.After(confirmTimeout):
+		}
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		if !t.confirmed && !t.warned && !t.violated {
+			t.warned = true
+			fmt.Fprintf(t.w, "[warning: no confirmation after %s; caller may stop the agent: %s]\n", shortDur(confirmTimeout), t.stopCmd)
+		}
+	}()
+}
+
+// watch starts the confirmation watchdog and prints progress summaries on the
+// heartbeat schedule until finish or abort is called.
+func (t *turnStream) watch() {
+	t.watchConfirmation()
 	t.done.Add(1)
 	go func() {
 		defer t.done.Done()

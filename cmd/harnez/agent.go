@@ -93,7 +93,9 @@ func newAgentCmd() *cobra.Command {
 		var r *subagent.TurnResult
 		if streaming {
 			ts = newTurnStream(cmd, streamMode, false)
-			ts.startHeartbeats()
+			ts.stopCmd = "harnez agent stop " + sessName
+			opts.Prompt = withProtocol(args[1])
+			ts.watch()
 			r, err = sd.RunStream(cmd.Context(), opts, func(ev subagent.Event) {
 				if ev.Kind == "session" {
 					ts.info(ev.Text, m.Provider+":"+m.Name, "start", fmt.Sprintf("name=%s dir=%s", sessName, canonicalWorkDir), "reconnect: harnez agent resume "+ev.Text+" \"<prompt>\"")
@@ -326,8 +328,9 @@ func newAgentCmd() *cobra.Command {
 			if compacted {
 				ts.printf("[compact: %s]\n", compactNote)
 			}
-			ts.startHeartbeats()
-			r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), args[1], ts.onEvent)
+			ts.stopCmd = "harnez agent stop " + sess.Name
+			ts.watch()
+			r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), withProtocol(args[1]), ts.onEvent)
 			if err != nil {
 				ts.abort()
 			}
