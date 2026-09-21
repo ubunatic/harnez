@@ -1,6 +1,6 @@
 # 457 — Telemetry canonical analytics queries as tests and live data-quality checks
 
-**Status**: Open
+**Status**: Closed — delivered in 9bedd31 and the M2 commit: spec-defined checks, fixture tests, harnez stats --quality (--json, --strict); live run all PASS; model gaps recorded in the ticket
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Telemetry / Data quality
