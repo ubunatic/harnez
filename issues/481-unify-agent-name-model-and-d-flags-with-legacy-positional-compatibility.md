@@ -1,6 +1,6 @@
 # 481 — Unify agent --name, --model and -d flags and remove the old positional forms
 
-**Status**: Open
+**Status**: In Progress
 
 **Priority**: P2 (Medium)
 **Severity**: Moderate
