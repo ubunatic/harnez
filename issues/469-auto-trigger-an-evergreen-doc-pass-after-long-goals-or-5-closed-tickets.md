@@ -27,3 +27,7 @@ skills/AgenticLoop Phase 5, or a session-state counter surfaced by the session-t
   proves useful.
 - Must not trigger when the user already asked for an evergreen or doc update.
 - Re-verify against live code before starting.
+
+## Delivered (2026-09-21)
+
+Docs-only mechanism chosen: an "Evergreen trigger" rule in AgenticLoop Phase 5 (`docs/AgenticLoop.md`, `docs/practices/AgenticLoop.md`). A session-state counter in the tip hook stays a possible later step.

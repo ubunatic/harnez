@@ -181,6 +181,7 @@ Agentic software engineering scales effectively when concurrency is structured a
     green build and a commit stand in for closing the ticket. See
     [IssueTracking.md](IssueTracking.md) §5 ("Closing Is Part Of Done").
   - Run `git status` before writing the retro or session story — uncommitted reviewed work is itself a retro finding, not a background condition.
+  - **Evergreen trigger**: after a long-running goal, or once 5+ tickets were closed in the session, run `/evergreen` (or propose it before declaring the goal done) unless the user already requested an evergreen or comparable broader doc update this session. Learnings otherwise stay in tickets and the roadmap and never reach the evergreen docs.
   - Prepare clean, conventional commit messages.
 
 ---

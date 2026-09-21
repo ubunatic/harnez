@@ -52,7 +52,7 @@ Where `@docs/AgenticLoop.md` is present in this project, follow it rather than
 restating it here — in particular Invariant 1 (Parallel Read, Sequential Write:
 one writer per workspace), Invariant 3 (Zero Zombie Guarantee: track and terminate
 every background task and subagent), Invariant 6 (Context Discipline: no whole-file
-reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads), and Invariant 7
+reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads), and Invariant 10
 (Media & Demo Verification Gate: explicit user confirmation before publishing
 recordings or screenshots).
 <!-- harnez:end Harnez Managed Conventions -->
@@ -137,7 +137,7 @@ Global Voice Input rule applies (`~/.claude/CLAUDE.md`); project-specific homoph
 example: "Southern Exploration" → "start an exploration agent", "harness" → "harnez".
 
 ## Demo Recordings & Media Verification
-See `@docs/AgenticLoop.md` Invariant 7 (Media & Demo Verification Gate).
+See `@docs/AgenticLoop.md` Invariant 10 (Media & Demo Verification Gate).
 
 <!-- harnez:begin Repo Setup -->
 ## Repo Setup
