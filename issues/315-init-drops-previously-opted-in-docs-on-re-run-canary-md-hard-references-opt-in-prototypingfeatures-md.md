@@ -94,3 +94,17 @@ given how easily and repeatedly this actually fires in practice.
       installed does not remove that doc or its AGENTS.md entry.
 - [ ] No bundled (`default: true`) doc contains an `@docs/` reference to a doc
       that isn't guaranteed installed alongside it.
+
+## Milestones (lean-sprint)
+
+Other sessions share `~/.harnez/agents`; never stop, delete, or resume sessions you did not start.
+The host commits your work (your git may be read-only): leave changes uncommitted and say so.
+
+### M1 — Preserve opted-in docs on plain `init` (code + tests)
+- Reproduction test first: in a temp project, run `init --docs prototyping-features`, then a plain
+  `init`; assert the AGENTS.md line and `docs/PrototypingFeatures.md` are both still present.
+- Fix `init` so previously installed opt-in docs are detected (installed file present and/or existing
+  AGENTS.md entry) and kept across re-runs. Do not merge `apply` and `init` concerns (docs/CLIDesign.md).
+- Address the Canary.md hard-reference: make the reference safe when PrototypingFeatures.md is not
+  installed (conditional/soft wording or drop the `@` link), with a test if feasible.
+- Use `harnez read -I`/`-L` for large files. Run `make test-q1` after code changes.
