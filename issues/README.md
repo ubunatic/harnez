@@ -154,7 +154,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 153 | [153-command-tree-placement-spec-assessment.md](153-command-tree-placement-spec-assessment.md) | Assess whether command-tree placement should be spec-driven | Closed — assessed, not building (see Assessment below) |
 | 154 | [154-brief-git-repo-status-command.md](154-brief-git-repo-status-command.md) | `harnez repo-status`: brief, quiet-by-default git repo state summary | Closed — resolved in 9f16839 |
 | 155 | [155-braille-snake-timeout-indicator-spec.md](155-braille-snake-timeout-indicator-spec.md) | Define a spec-driven braille snake timeout indicator for the time gauge | Closed — resolved in 2286b1e |
-| 156 | [156-document-codex-agents-view-spawn-agent-effect.md](156-document-codex-agents-view-spawn-agent-effect.md) | Document how `collaboration.spawn_agent` appears in Codex Agents | Open |
+| 156 | [156-document-codex-agents-view-spawn-agent-effect.md](156-document-codex-agents-view-spawn-agent-effect.md) | Document how `collaboration.spawn_agent` appears in Codex Agents | Closed |
 | 157 | [157-spec-driven-usage-watch-chart-glyphs.md](157-spec-driven-usage-watch-chart-glyphs.md) | Specify every `usage --watch` chart glyph | Closed — resolved in 2787da7; absent chart backgrounds supported in 7da5720 and 9649600 |
 | 158 | [158-find-entity-query-command.md](158-find-entity-query-command.md) | Add a `harnez find <entity> <query>` query command | Closed — resolved in 6924a6b |
 | 159 | [159-spec-driven-bar-bracket-toggle.md](159-spec-driven-bar-bracket-toggle.md) | Spec-Driven Enable/Disable of Bar/Graph `[]` Brackets | Closed — resolved in aff9b98 (bar bracket wrapper only; see scope note below) |

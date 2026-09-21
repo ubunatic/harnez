@@ -1,6 +1,6 @@
 # 156 — Document how `collaboration.spawn_agent` appears in Codex Agents
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation

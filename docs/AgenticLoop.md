@@ -339,6 +339,23 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 
 ## 6. Practical Recipes & Anti-Patterns
 
+### Harness-Specific Delegation Surfaces
+
+Delegation surfaces differ by harness, but the host remains responsible for the
+whole handoff. In Claude Code, subagent dispatch keeps the host responsive and
+reports completion back to it. In Codex, `collaboration.spawn_agent` starts a
+named child and creates the corresponding entry in the Codex Agents view, where
+users can observe that delegated work. This is a status surface, not a transfer
+of responsibility: the host still owns status reporting, review, integration,
+and termination (see the Zero Zombie Guarantee and Blocking Handoff Waits
+below).
+
+Use names for the work, such as `implement_155`, so the Agents view is scannable
+independently of model or role. Keep the verbs distinct: spawn creates the
+child/entry, message or follow-up updates an existing child, and terminate ends
+it. See [[144-codex-subagent-model-selection-policy]] for model selection; any
+Codex-specific imperative belongs in the Codex agent profile when that lands.
+
 ### Anti-Patterns to Avoid
 - ❌ **Parallel Writing**: Spawning multiple subagents with write permissions on the same workspace simultaneously.
 - ❌ **Blocking Handoff Waits**: Treating "hand this to a subagent" as permission to block the main chat while waiting for the child. The host is always the responsive orchestrator.
