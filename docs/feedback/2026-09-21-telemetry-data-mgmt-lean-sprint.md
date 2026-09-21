@@ -7,8 +7,8 @@ Host wrote no code; it reviewed diffs, ran `make test-q1` once per change, and c
 
 | Ticket | Result | Commit |
 |--------|--------|--------|
-| 454 | Explicit `provider:model:tier` dispatched exactly; unknown specs fail with the known list, no silent fallback | see git log |
-| 315 | Canary doc no longer hard-references the optional PrototypingFeatures doc | see git log |
+| 454 | Explicit `provider:model:tier` dispatched exactly; unknown specs fail with the known list, no silent fallback | `0e82504`, `cd4286b`, `430df7c` |
+| 315 | Canary doc no longer hard-references the optional PrototypingFeatures doc | `52d7363` |
 | 442 | `issues open --commit` also publishes already-Open new tickets | `6073807` |
 | 374 | README refreshed against current CLI help | `2d14641` |
 
