@@ -24,12 +24,14 @@ type agentDeps struct {
 	parent func() string
 	find   func(*cobra.Command, *subagent.FileSessionStore, string) (*subagent.Session, error)
 }
+
 // startRequest describes one new agent turn. Prompt is sent to the agent;
 // StoredPrompt is what the session records (files as "path (N bytes)").
 type startRequest struct {
 	Prompt, StoredPrompt, Name, ModelSpec, Dir, StreamMode string
 	JSON, PlanFirst                                        bool
 }
+
 // resumeRequest describes one turn on an existing session: chosen by Name,
 // else by attribution in Dir (Continue picks the most recent).
 type resumeRequest struct {
@@ -59,6 +61,7 @@ func resolveResumeSession(cmd *cobra.Command, d agentDeps, s *subagent.FileSessi
 	}
 	return c[0], "dir", nil
 }
+
 // runStart starts a new session, streams or prints the turn and saves the session.
 func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	spec := req.ModelSpec
@@ -157,6 +160,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	}
 	return printAgentMessages(cmd, r.Messages, r.Response)
 }
+
 // runResume runs one more turn on an existing session.
 func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 
