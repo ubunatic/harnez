@@ -39,7 +39,7 @@ func captureApplyStdout(t *testing.T, fn func()) string {
 	return string(out)
 }
 
-func TestEnsureTelemetrySchemaMigratesBeforeApply(t *testing.T) {
+func TestEnsureTelemetrySchemaNoOpBeforeApply(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -138,6 +138,8 @@ func TestApplyCmdMigratesLegacyCompactionSchema(t *testing.T) {
 		t.Fatalf("close legacy telemetry DB: %v", err)
 	}
 
+	// The apply session-tip hook must not open this legacy DB before apply
+	// migrates it, or the hook would observe the stale schema first.
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"apply", "-t", filepath.Join(home, ".claude")})
 	output := captureApplyStdout(t, func() {

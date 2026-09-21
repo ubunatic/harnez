@@ -58,6 +58,8 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 	// body returns. A nil map (no DB, unreadable DB, empty table) means the
 	// JSON file's own counts stand and the tips keep working unchanged.
 	if cmd.Name() != "apply" {
+		// apply migrates the telemetry DB in its command body; the session-tip
+		// hook must not open it before that migration runs.
 		if dbPath, err := telemetry.DefaultDBPath(); err == nil {
 			sessionstate.ApplyCounts(&s, sessionCallCounts(dbPath, sessionID))
 		}

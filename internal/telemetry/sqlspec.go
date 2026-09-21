@@ -22,7 +22,6 @@ type qualityCheckSpec struct {
 	Name             string  `yaml:"name"`
 	SQL              string  `yaml:"sql"`
 	Description      string  `yaml:"description"`
-	WarnCondition    string  `yaml:"warn_condition"`
 	WarnAbovePercent float64 `yaml:"warn_above_percent"`
 	Result           struct {
 		Checked    string `yaml:"checked"`

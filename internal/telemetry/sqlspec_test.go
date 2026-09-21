@@ -26,7 +26,7 @@ func TestEmbeddedTelemetrySpecIsValid(t *testing.T) {
 
 func TestQualityChecksAreReferencedAndUseDDLColumns(t *testing.T) {
 	for _, q := range mustTelemetrySQL().QualityChecks {
-		if q.WarnAbovePercent < 0 || q.WarnCondition == "" {
+		if q.WarnAbovePercent < 0 {
 			t.Errorf("invalid threshold for %q", q.Name)
 		}
 		if strings.TrimSpace(q.SQL) == "" {
