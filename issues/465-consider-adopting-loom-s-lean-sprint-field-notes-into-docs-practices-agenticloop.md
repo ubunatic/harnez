@@ -1,6 +1,6 @@
 # 465 — Consider adopting loom's lean-sprint field notes into docs/practices AgenticLoop
 
-**Status**: Open
+**Status**: Open — filed from loom session
 **Priority**: P3
 **Severity**: Minor
 **Category**: Docs / Practice
