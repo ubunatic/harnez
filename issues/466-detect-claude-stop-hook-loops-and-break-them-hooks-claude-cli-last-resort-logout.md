@@ -1,6 +1,6 @@
 # 466 — Detect Claude Stop-hook loops and break them (hooks, claude CLI, last resort logout)
 
-**Status**: Open
+**Status**: Open — filed from loom session
 **Priority**: P2
 **Severity**: Moderate
 **Category**: Feature / Discovery
