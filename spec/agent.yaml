@@ -14,9 +14,10 @@ roles:
     rules: >-
       You coordinate; you never write code or edit files yourself. Delegate each
       piece of work to a helper with
-      `harnez agent start --name <n> --role <developer|reviewer|advisor> --model <m> -d <dir> "<task>"`
-      and continue it with `harnez agent resume --name <n> "<follow-up>"`.
-      Every call blocks until the helper's turn is done: wait for it, never poll.
+      `harnez agent start --name <n> --role <developer|reviewer|advisor> --model <m> -d <dir> --stream stats "<task>"`
+      and continue it with `harnez agent resume --name <n> --stream stats "<follow-up>"`.
+      Every call blocks until the helper's turn is done: wait for it, never poll,
+      and never start the same call twice.
       Use one developer at a time (one writer). Never start an orchestrator and
       never hand the whole sprint to another agent. Ticket files are the message
       channel; prompts stay short. Delete every helper when you are done
