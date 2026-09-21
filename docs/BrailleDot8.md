@@ -33,6 +33,44 @@ Unicode Braille dots are arranged as follows:
 There is no word-capitalization mode. Existing unescaped Braille in an input is
 ambiguous; lossless decoding requires input produced by this encoder.
 
+## 3px PNG cards
+
+`harnez read -I --dot8 file.md` renders each encoded Braille cell on a fixed
+3px horizontal pitch with the same four-pixel height:
+
+```text
+1 . 4
+2 . 5
+3 . 6
+7 . 8
+```
+
+Each active dot is one pixel at columns 0 and 2. The text font for copied
+non-Braille characters is also constrained to the cell pitch, so punctuation,
+symbols, and box drawing stay aligned with the Braille stream. The card
+renderer may pack several columns, but it does not scale individual cells to
+make them larger.
+
+By default, dots 1–6 use the theme text color, dot 7 uses the keyword accent,
+and dot 8 uses the type accent. For a diagnostic card, use
+`--dot8-colors=red-white` applies to dots 1–6: positions 0, 3, 4, and 7 in
+the 2×4 matrix are white; positions 1, 2, 5, and 6 are red. Dot 7 and dot 8
+keep their special keyword and type accent colors, respectively. This is a
+visual aid, not part of the encoded data, and it applies to the legend and
+content cells alike.
+
+The intended visual pattern is:
+
+```text
+W R
+R W
+W R
+R W
+```
+
+Here `W` is white and `R` is red. The right Braille column is physical pixel
+column 2.
+
 ## Commands
 
 Encode:
@@ -41,6 +79,9 @@ Encode:
 python3 scripts/md-to-braille8.py input.md
 # writes .dot8/input.braille.md beside input.md
 python3 scripts/md-to-braille8.py input.md output.braille.md
+
+# Render a native 3px Dot8 card with diagnostic dot colors
+harnez read -I --dot8 --dot8-colors=red-white input.md
 ```
 
 Decode:

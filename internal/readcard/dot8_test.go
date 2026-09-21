@@ -1,17 +1,115 @@
 package readcard
 
 import (
+	"image/color"
 	"image/png"
 	"os"
 	"strings"
 	"testing"
 )
 
+func hasRenderedColor(path string, want color.RGBA, minY int) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	img, err := png.Decode(f)
+	if err != nil {
+		return false
+	}
+	for y := minY; y < img.Bounds().Dy(); y++ {
+		for x := 0; x < img.Bounds().Dx(); x++ {
+			r, g, b, a := img.At(x, y).RGBA()
+			got := color.RGBA{uint8(r >> 8), uint8(g >> 8), uint8(b >> 8), uint8(a >> 8)}
+			if got == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestDot8NonBrailleTextAlternatesColors(t *testing.T) {
+	path := t.TempDir() + "/dot8-colors.png"
+	_, err := RenderFileToCards([]string{"AB"}, "test.txt", RenderOptions{
+		Columns:         1,
+		MaxDimension:    400,
+		ShowLineNumbers: false,
+		Chrome:          ChromeNone,
+		Title:           "test.txt",
+		OutputPath:      path,
+		Dot8:            "native",
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+	if !hasRenderedColor(path, DarkTheme.Keyword, 0) {
+		t.Error("first non-Braille glyph did not use the keyword color")
+	}
+	if !hasRenderedColor(path, DarkTheme.Type, 0) {
+		t.Error("second non-Braille glyph did not use the type color")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open rendered card: %v", err)
+	}
+	defer f.Close()
+	img, err := png.Decode(f)
+	if err != nil {
+		t.Fatalf("decode rendered card: %v", err)
+	}
+	if got := img.At(0, 0); got != DarkTheme.Bg {
+		t.Errorf("chrome=none top-left pixel = %v, want background %v", got, DarkTheme.Bg)
+	}
+}
+
+func TestDot8RedWhiteDotColors(t *testing.T) {
+	path := t.TempDir() + "/dot8-red-white.png"
+	_, err := RenderFileToCards([]string{"⣿"}, "test.txt", RenderOptions{
+		Columns:         1,
+		MaxDimension:    400,
+		ShowLineNumbers: false,
+		Chrome:          ChromeNone,
+		OutputPath:      path,
+		Dot8:            "native",
+		Dot8Colors:      "red-white",
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+	if !hasRenderedColor(path, color.RGBA{R: 0xef, G: 0x44, B: 0x44, A: 0xff}, 0) {
+		t.Error("odd Braille dots did not use red")
+	}
+	if !hasRenderedColor(path, color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}, 0) {
+		t.Error("even Braille dots did not use white")
+	}
+	markerPath := t.TempDir() + "/dot8-markers.png"
+	_, err = RenderFileToCards([]string{"⣀"}, "test.txt", RenderOptions{
+		Columns:         1,
+		MaxDimension:    400,
+		ShowLineNumbers: false,
+		Chrome:          ChromeNone,
+		OutputPath:      markerPath,
+		Dot8:            "native",
+		Dot8Colors:      "red-white",
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards marker failed: %v", err)
+	}
+	if !hasRenderedColor(markerPath, DarkTheme.Keyword, 0) {
+		t.Error("dot 7 lost its keyword accent")
+	}
+	if !hasRenderedColor(markerPath, DarkTheme.Type, 0) {
+		t.Error("dot 8 lost its type accent")
+	}
+}
+
 func TestDot8EncodeBasic(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		want    string
+		name  string
+		input string
+		want  string
 	}{
 		{
 			name:  "lowercase letters",
@@ -312,9 +410,9 @@ func TestDot8DecodeErrors(t *testing.T) {
 func TestDot8PythonReference(t *testing.T) {
 	// Test against known outputs from the Python reference implementation
 	tests := []struct {
-		name    string
-		input   string
-		want    string
+		name  string
+		input string
+		want  string
 	}{
 		{
 			name:  "reference: hello world",
@@ -383,15 +481,15 @@ func TestDot8RenderCompact(t *testing.T) {
 	}
 
 	opts := RenderOptions{
-		Chrome:      ChromeSlim,
-		Gutter:      GutterTight,
-		Columns:     1,
-		MaxDimension: 600,
+		Chrome:          ChromeSlim,
+		Gutter:          GutterTight,
+		Columns:         1,
+		MaxDimension:    600,
 		ShowLineNumbers: true,
-		Title:       "test",
-		StartLine:   1,
-		OutputPath:  "/tmp/test_dot8_compact.png",
-		Dot8:        "native",
+		Title:           "test",
+		StartLine:       1,
+		OutputPath:      "/tmp/test_dot8_compact.png",
+		Dot8:            "native",
 	}
 
 	result, err := RenderFileToCards(lines, "test.md", opts)
@@ -412,14 +510,14 @@ func TestDot8RenderLegend(t *testing.T) {
 	lines := []string{"⠓⠑⠇⠇⠕", "⠑⠝⠉⠕⠙⠑⠙", "⠃⠗⠁⠊⠇⠇⠑"}
 
 	opts := RenderOptions{
-		Chrome:       "full",
-		Columns:      1,
-		MaxDimension: 800,
+		Chrome:          "full",
+		Columns:         1,
+		MaxDimension:    800,
 		ShowLineNumbers: false,
-		Title:        "test",
-		StartLine:    1,
-		OutputPath:   "/tmp/test_dot8_legend.png",
-		Dot8:         "native",
+		Title:           "test",
+		StartLine:       1,
+		OutputPath:      "/tmp/test_dot8_legend.png",
+		Dot8:            "native",
 	}
 
 	result, err := RenderFileToCards(lines, "test.md", opts)

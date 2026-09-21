@@ -12,10 +12,10 @@ import (
 
 func newReadCmd() *cobra.Command {
 	var imageMode, autoMode, textMode, rawMode, number, jsonOutput, showTokens bool
-	var outputPath, fontName, theme, wrapMode, lineRange, lineNumbers, compression, dot8 string
+	var outputPath, fontName, theme, wrapMode, lineRange, lineNumbers, compression, dot8, dot8Colors string
 	var style string
 	var styleOpts readcard.RenderOptions
-	var columns, fontSize, maxDim, head, tail int
+	var columns, fontSize, maxDim, head, tail, dot8Pitch int
 	cmd := &cobra.Command{
 		Use:   "read [flags] [files...]",
 		Short: "Read bounded text or dense visual PNG cards with provider-adaptive routing",
@@ -106,7 +106,7 @@ Examples:
 					}
 				}
 
-				renderOpts := readcard.RenderOptions{Chrome: chrome, Gutter: gutter, Frame: frame, Meta: meta, Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine, SourceTokens: res.TokenStats.TextTokens, Dot8: dot8Mode}
+				renderOpts := readcard.RenderOptions{Chrome: chrome, Gutter: gutter, Frame: frame, Meta: meta, Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine, SourceTokens: res.TokenStats.TextTokens, Dot8: dot8Mode, Dot8Colors: dot8Colors, Dot8Pitch: dot8Pitch}
 				render := imageMode
 				var measured *readcard.RenderResult
 				if adaptive && !(len(res.Lines) <= readcard.MicroSnippetLineThreshold && res.TokenStats.TextTokens < readcard.MicroSnippetTokenThreshold) {
@@ -200,6 +200,8 @@ Examples:
 	cmd.Flags().StringVar(&lineNumbers, "line-numbers", "all", "gutter: all, off, none, or positive cadence N")
 	cmd.Flags().StringVar(&compression, "compress", "off", "safe source compression: off, ws, ast")
 	cmd.Flags().StringVar(&dot8, "dot8", "", "encode as 8-dot Braille for dense cards: bare flag or --dot8=native (already encoded)")
+	cmd.Flags().StringVar(&dot8Colors, "dot8-colors", "", "Dot8 Braille colors: default or red-white (odd/even dots)")
+	cmd.Flags().IntVar(&dot8Pitch, "dot8-pitch", 3, "Dot8 cell pitch in pixels: 3 or 4")
 	dot8Lookup := cmd.Flags().Lookup("dot8")
 	if dot8Lookup != nil {
 		dot8Lookup.NoOptDefVal = "encode"

@@ -14,10 +14,17 @@ import (
 // dot8RenderFileToCards renders Dot8-encoded text as native 3x4 Braille dot cards.
 // Braille cells are drawn as 1px dots in columns 0 and 2 (with gap in column 1).
 // Non-Braille characters use the 3x5 Tom Thumb font.
-// Dots 7 and 8 use accent colors for better readability.
+// Dots 7 and 8 use accent colors for better readability. Dot8Colors can opt
+// into red/white checkerboard coloring for the 2x4 dot matrix.
 func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) (*RenderResult, error) {
 	if err := validateStyle(opts); err != nil {
 		return nil, err
+	}
+	if opts.Dot8Colors != "" && opts.Dot8Colors != "red-white" {
+		return nil, fmt.Errorf("invalid dot8 colors %q (use red-white)", opts.Dot8Colors)
+	}
+	if opts.Dot8Pitch != 0 && opts.Dot8Pitch != 3 && opts.Dot8Pitch != 4 {
+		return nil, fmt.Errorf("invalid dot8 pitch %d (use 3 or 4)", opts.Dot8Pitch)
 	}
 
 	// Validate and set defaults
@@ -46,9 +53,15 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 	}
 
 	// Dot8 uses 3px cells for both Braille and text (dedicated 3x6 Dot8 font)
-	cellWidth := 3
+	cellWidth := opts.Dot8Pitch
+	if cellWidth == 0 {
+		cellWidth = 3
+	}
 	brailleCellHeight := 4
 	textFont := FontDot8
+	if cellWidth == 4 {
+		textFont = Font3x5
+	}
 
 	// Line height to fit content
 	lineHeight := brailleCellHeight + 2
@@ -79,7 +92,9 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 	paddingX := 16
 	paddingY := 12
 	colGap := 16
-	if opts.Chrome == ChromeSlim || opts.Chrome == ChromeNone {
+	if opts.Chrome == ChromeNone {
+		headerHeight, legendHeight, paddingX, paddingY, colGap = 0, 0, 8, 4, 10
+	} else if opts.Chrome == ChromeSlim {
 		headerHeight, paddingX, paddingY, colGap = 14, 8, 4, 10
 	}
 
@@ -146,41 +161,43 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 		}
 	}
 
-	// Draw legend strip in header: "a=⠁ b=⠃ ... z=⠵ A=⡁ 1=⢀⠁ docs/BrailleDot8.md"
-	legendX := paddingX
-	legendY := headerHeight + 1
+	if legendHeight > 0 {
+		// Draw legend strip in header: "a=⠁ b=⠃ ... z=⠵ A=⡁ 1=⢀⠁ docs/BrailleDot8.md"
+		legendX := paddingX
+		legendY := headerHeight + 1
 
-	// Draw sample Braille legend
-	legendFont := ResolveFont("pixel", 6)
-	legendSamples := []struct {
-		label string
-		cell  rune
-	}{
-		{"a", rune(0x2800 + 0b000001)},
-		{"z", rune(0x2800 + 0b110101)},
-		{"A", rune(0x2800 + 0b000001 + (1 << 6))},
-		{"1", rune(0x2800 + (1 << 7))}, // dot 8 prefix
-	}
+		// Draw sample Braille legend
+		legendFont := ResolveFont("pixel", 6)
+		legendSamples := []struct {
+			label string
+			cell  rune
+		}{
+			{"a", rune(0x2800 + 0b000001)},
+			{"z", rune(0x2800 + 0b110101)},
+			{"A", rune(0x2800 + 0b000001 + (1 << 6))},
+			{"1", rune(0x2800 + (1 << 7))}, // dot 8 prefix
+		}
 
-	for _, sample := range legendSamples {
-		// Draw label
-		for _, r := range sample.label {
-			legendFont.DrawRune(headerImg, r, legendX, legendY, theme.Punctuation)
+		for _, sample := range legendSamples {
+			// Draw label
+			for _, r := range sample.label {
+				legendFont.DrawRune(headerImg, r, legendX, legendY, theme.Punctuation)
+				legendX += legendFont.CharWidth
+			}
+			// Draw "="
+			legendFont.DrawRune(headerImg, '=', legendX, legendY, theme.Punctuation)
+			legendX += legendFont.CharWidth
+			// Draw cell (as 3x4 dots)
+			drawDot8BraillCell(headerImg, sample.cell, legendX, legendY, theme.Text, theme.Keyword, theme.Type, opts.Dot8Colors, cellWidth)
+			legendX += 3 + 2 // cell width + gap
+		}
+
+		// Draw docs pointer
+		docsText := "docs/BrailleDot8.md"
+		for _, r := range docsText {
+			legendFont.DrawRune(headerImg, r, legendX, legendY, theme.Comment)
 			legendX += legendFont.CharWidth
 		}
-		// Draw "="
-		legendFont.DrawRune(headerImg, '=', legendX, legendY, theme.Punctuation)
-		legendX += legendFont.CharWidth
-		// Draw cell (as 3x4 dots)
-		drawDot8BraillCell(headerImg, sample.cell, legendX, legendY, theme.Text, theme.Keyword, theme.Type)
-		legendX += 3 + 2 // cell width + gap
-	}
-
-	// Draw docs pointer
-	docsText := "docs/BrailleDot8.md"
-	for _, r := range docsText {
-		legendFont.DrawRune(headerImg, r, legendX, legendY, theme.Comment)
-		legendX += legendFont.CharWidth
 	}
 
 	// Create main content image
@@ -215,13 +232,19 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 
 			// Draw content
 			contentX := x + gutterWidth
-			for _, r := range line {
+			for cellIndex, r := range line {
 				if r >= 0x2800 && r <= 0x2800+0xFF {
 					// Braille cell: draw as 3x4 dots with special colors for dots 7 and 8
-					drawDot8BraillCell(contentImg, r, contentX, colY, theme.Text, theme.Keyword, theme.Type)
+					drawDot8BraillCell(contentImg, r, contentX, colY, theme.Text, theme.Keyword, theme.Type, opts.Dot8Colors, cellWidth)
 				} else {
-					// Regular character
-					textFont.DrawRune(contentImg, r, contentX, colY, theme.Text)
+					// Non-Braille characters alternate between the marker colors so
+					// copied punctuation and symbols remain visually distinguishable
+					// from the Braille stream at the compact Dot8 cell pitch.
+					textColor := theme.Keyword
+					if cellIndex%2 == 1 {
+						textColor = theme.Type
+					}
+					textFont.DrawRune(contentImg, r, contentX, colY, textColor)
 				}
 				contentX += cellWidth
 			}
@@ -263,13 +286,13 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 	stats := ComputeTextTokens(fullText)
 
 	return &RenderResult{
-		Files:      []string{outPath},
-		Width:      cardWidth,
-		Height:     cardHeight,
-		Columns:    cols,
-		TotalLines: totalLines,
-		TotalPages: 1,
-		TokenStats: stats,
+		Files:       []string{outPath},
+		Width:       cardWidth,
+		Height:      cardHeight,
+		Columns:     cols,
+		TotalLines:  totalLines,
+		TotalPages:  1,
+		TokenStats:  stats,
 		PrimaryPath: outPath,
 		Pages: []PageGeometry{
 			{
@@ -285,14 +308,15 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 // Dots 1-6 are drawn in the base color, dot 7 (uppercase) in dot7Color, dot 8 (digit prefix) in dot8Color.
 // Layout: column 0 (dots 1,2,3), gap, column 2 (dots 4,5,6), row 3 (dots 7,8 combined).
 // Each dot is 1 pixel.
-func drawDot8BraillCell(img *image.RGBA, r rune, x, y int, baseColor, dot7Color, dot8Color color.RGBA) {
+func drawDot8BraillCell(img *image.RGBA, r rune, x, y int, baseColor, dot7Color, dot8Color color.RGBA, colorMode string, cellWidth int) {
 	if r == 0x2800 {
 		return // Empty cell
 	}
 
 	bits := byte(r - 0x2800)
 
-	// Dot positions: col 0 for dots 1,2,3; col 2 for dots 4,5,6; row 3 for dots 7,8
+	// Dot positions: col 0 for dots 1,2,3; col 2 for dots 4,5,6; row 3 for dots 7,8.
+	// A 4px text pitch adds one trailing pixel; Braille geometry remains 3px.
 	dotPositions := []struct {
 		dot int
 		col int
@@ -308,7 +332,15 @@ func drawDot8BraillCell(img *image.RGBA, r rune, x, y int, baseColor, dot7Color,
 			px := x + pos.col
 			py := y + pos.row
 			col := baseColor
-			if pos.dot == 7 {
+			if colorMode == "red-white" && pos.dot <= 6 {
+				// Use logical Braille columns (left=0, right=1). The
+				// physical columns are 0 and 2 to preserve the 3px cell.
+				if (pos.row+(pos.col/2))%2 == 0 {
+					col = color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
+				} else {
+					col = color.RGBA{R: 0xef, G: 0x44, B: 0x44, A: 0xff}
+				}
+			} else if pos.dot == 7 {
 				col = dot7Color
 			} else if pos.dot == 8 {
 				col = dot8Color

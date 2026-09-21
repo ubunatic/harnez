@@ -33,6 +33,8 @@ type RenderOptions struct {
 	Frame           string // off (default), sep or box around sections
 	Meta            string // off (default) or box: info box in free top-right space
 	Dot8            string // "" (off), "encode" (encode in-process), or "native" (already encoded)
+	Dot8Colors      string // "" (theme accents) or "red-white" (odd/even dot colors)
+	Dot8Pitch       int    // 3 (default) or 4 pixels per Dot8 cell
 }
 
 // RenderResult contains the generated image paths and token statistics.
