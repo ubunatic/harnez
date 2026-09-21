@@ -1,6 +1,6 @@
 # 486 — Agent roles: enforced leaf workers, role rules in spec/agent.yaml, concise role guidance for subagents
 
-**Status**: Open
+**Status**: Closed — roles in spec/agent.yaml, --role flag, env handoff with correct parent, leaf-worker guard for all mutating verbs and root forms, role rules in the turn preamble, guidance in AgenticLoop and the sprint commands
 
 **Priority**: P1 (High)
 **Severity**: Major
