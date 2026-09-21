@@ -1,6 +1,6 @@
 # 428 — Code review follow-up: ANSI 256/24-bit color extensions and telemetry migration test coverage
 
-**Status**: Open
+**Status**: Closed — telemetry coverage delivered in 235d7da; ANSI 256/truecolor moved to 460
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Enhancement
@@ -35,3 +35,7 @@ During the review of the recent multimodal reading card and telemetry schema mig
 
 Telemetry migration coverage is delivered (`235d7da`): authentic v2 and v5 upgrade fixtures with
 column assertions, plus apply logging tests. Remaining: ANSI 256/24-bit color support.
+
+## Closed (2026-09-21)
+
+Telemetry migration coverage delivered. ANSI 256/truecolor moved to [460](460-ansi-256-color-and-24-bit-truecolor-sgr-support-in-readcard-428-follow-up.md).
