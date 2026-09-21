@@ -1,6 +1,6 @@
 # 425 — Code review follow-up: telemetry migration logging, schema version drift, and Braille glyph spacing
 
-**Status**: Open
+**Status**: Closed — telemetry parts delivered in 235d7da; Braille layout moved to 459, leftovers to 462
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Bug
@@ -58,3 +58,7 @@ A code review of recent changes (commits `c917eb6`, `7f960d2`, `aeedb20` and unc
 Telemetry parts (M1) are delivered: migration reporting is accurate, `apply` is quiet on no-op
 (`235d7da`), `defer db.Close()` and v9 comments were already in place. Remaining: M2 Braille
 layout and the docs/data tracking decision.
+
+## Closed (2026-09-21)
+
+Telemetry parts delivered. Braille layout and the docs/data decision moved to [459](459-braille-glyph-cell-margins-in-readcard-font-go-and-docs-data-tracking-decision-425-follow-up.md); the review leftovers to [462](462-telemetry-leftovers-redundant-warn-condition-misleading-apply-test-name-apply-session-tip-skip.md).
