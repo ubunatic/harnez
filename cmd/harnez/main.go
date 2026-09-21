@@ -95,13 +95,26 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	if tip, ok := sessionstate.GapTip(s, feedbackDisabled, now, unratedFailures); ok {
+	// `harnez agent` output is read by host agents as the worker's reply
+	// channel, so proactive tips stay out of it; the tip is left pending for
+	// the next non-agent command.
+	if tip, ok := sessionstate.GapTip(s, feedbackDisabled, now, unratedFailures); ok && !underAgentCommand(cmd) {
 		fmt.Fprintln(cmd.ErrOrStderr(), tip)
 		s.TotalAtLastTip = s.Total
 	}
 
 	_ = sessionstate.Save(stateDir, s) // best-effort; a lost tick isn't worth surfacing an error for
 	return nil
+}
+
+// underAgentCommand reports whether cmd is `harnez agent` or one of its subcommands.
+func underAgentCommand(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Name() == "agent" && c.Parent() != nil && !c.Parent().HasParent() {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveUsageHost decides the effective --host value for `harnez usage`:
