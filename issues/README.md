@@ -474,3 +474,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 473 | [473-study-minimax-cli-harness-efficiency-and-adopt-the-best-harnez-practices.md](473-study-minimax-cli-harness-efficiency-and-adopt-the-best-harnez-practices.md) | Study MiniMax CLI harness efficiency and adopt the best Harnez practices | Open |
 | 474 | [474-add-manpage-support-to-init-docs.md](474-add-manpage-support-to-init-docs.md) | Add manpage support to init --docs | Open |
 | 475 | [475-use-png-card-wording-in-harnez-find-output.md](475-use-png-card-wording-in-harnez-find-output.md) | Use PNG card wording in harnez find output | Open |
+| 476 | [476-improve-agent-start-resume-ux-with-explicit-sync-async-workdir-and-planning-controls.md](476-improve-agent-start-resume-ux-with-explicit-sync-async-workdir-and-planning-controls.md) | Improve agent start/resume UX with explicit sync, async, workdir, and planning controls | Open |
