@@ -39,7 +39,7 @@ type agentOutput struct {
 
 func newAgentCmd() *cobra.Command {
 	var jsonOut, children, all bool
-	var storeDir, workDir, name string
+	var storeDir, workDir, name, streamMode string
 	root := &cobra.Command{Use: "agent", Short: "Manage subagent sessions"}
 	root.PersistentFlags().StringVar(&storeDir, "store-dir", subagent.DefaultStoreDir(), "session store directory")
 	store := func() (*subagent.FileSessionStore, error) { return subagent.NewSessionStore(storeDir) }
@@ -64,6 +64,9 @@ func newAgentCmd() *cobra.Command {
 	}
 
 	start := &cobra.Command{Use: "start <provider:model[:tier]> <prompt>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		if err := checkStreamMode(streamMode); err != nil {
+			return err
+		}
 		m, err := subagent.ResolveModel(args[0])
 		if err != nil {
 			return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", args[0], err)
@@ -89,7 +92,7 @@ func newAgentCmd() *cobra.Command {
 		var ts *turnStream
 		var r *subagent.TurnResult
 		if streaming {
-			ts = newTurnStream(cmd, false)
+			ts = newTurnStream(cmd, streamMode, false)
 			ts.startHeartbeats()
 			r, err = sd.RunStream(cmd.Context(), opts, func(ev subagent.Event) {
 				if ev.Kind == "session" {
@@ -129,6 +132,7 @@ func newAgentCmd() *cobra.Command {
 	start.Flags().StringVarP(&workDir, "dir", "d", ".", "working directory")
 	start.Flags().StringVar(&name, "name", "", "session name")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	start.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 
 	models := &cobra.Command{Use: "models", Short: "List known agent models and tiers", RunE: func(cmd *cobra.Command, _ []string) error {
 		for _, m := range subagent.KnownModels() {
@@ -274,6 +278,9 @@ func newAgentCmd() *cobra.Command {
 	chat.AddCommand(attach)
 
 	resume := &cobra.Command{Use: "resume <session> <prompt>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		if err := checkStreamMode(streamMode); err != nil {
+			return err
+		}
 		s, err := store()
 		if err != nil {
 			return err
@@ -314,7 +321,7 @@ func newAgentCmd() *cobra.Command {
 		sd, streaming := d.(subagent.StreamingDriver)
 		streaming = streaming && !jsonOut
 		if streaming {
-			ts = newTurnStream(cmd, compacted)
+			ts = newTurnStream(cmd, streamMode, compacted)
 			ts.info(sess.ID, sess.Provider+":"+sess.Model, "resume")
 			ts.startHeartbeats()
 			r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), args[1], ts.onEvent)
@@ -351,6 +358,7 @@ func newAgentCmd() *cobra.Command {
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	resume.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	resume.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 
 	list := &cobra.Command{Use: "list", RunE: func(cmd *cobra.Command, _ []string) error {
 		s, err := store()

@@ -11,27 +11,55 @@ import (
 	"ubunatic.com/harnez/internal/subagent"
 )
 
-// heartbeatSchedule is the gap before each heartbeat; the last gap repeats.
-var heartbeatSchedule = []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute, 10 * time.Minute}
+// Stream modes: "full" prints every agent message as it arrives, "stats"
+// prints only heartbeats and the final reply.
+const (
+	streamFull  = "full"
+	streamStats = "stats"
+)
+
+// heartbeatSchedule lists the elapsed times of the first heartbeats; after the
+// last one a heartbeat follows every heartbeatRepeat.
+var (
+	heartbeatSchedule = []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute, 6 * time.Minute, 10 * time.Minute}
+	heartbeatRepeat   = 5 * time.Minute
+)
+
+// heartbeatAt returns the elapsed time of heartbeat i (0-based).
+func heartbeatAt(i int) time.Duration {
+	if i < len(heartbeatSchedule) {
+		return heartbeatSchedule[i]
+	}
+	return heartbeatSchedule[len(heartbeatSchedule)-1] + time.Duration(i-len(heartbeatSchedule)+1)*heartbeatRepeat
+}
+
+func checkStreamMode(mode string) error {
+	if mode != streamFull && mode != streamStats {
+		return fmt.Errorf("invalid --stream %q: want %q or %q", mode, streamFull, streamStats)
+	}
+	return nil
+}
 
 // turnStream prints a running turn to stdout as labeled blocks:
-// [session info], [message]/[compaction ack], [heartbeat] and [done].
+// [session info], [message]/[compaction ack] (full mode only), [heartbeat],
+// [reply] (stats mode only) and [done].
 type turnStream struct {
 	w         io.Writer
 	began     time.Time
-	schedule  []time.Duration
+	mode      string
 	compacted bool // the first message acknowledges a queued /compact
 
 	mu       sync.Mutex
 	bytes    int
 	messages int
+	commands int
 	last     string
 	stop     chan struct{}
 	done     sync.WaitGroup
 }
 
-func newTurnStream(cmd *cobra.Command, compacted bool) *turnStream {
-	return &turnStream{w: cmd.OutOrStdout(), began: time.Now(), schedule: heartbeatSchedule, compacted: compacted, stop: make(chan struct{})}
+func newTurnStream(cmd *cobra.Command, mode string, compacted bool) *turnStream {
+	return &turnStream{w: cmd.OutOrStdout(), began: time.Now(), mode: mode, compacted: compacted, stop: make(chan struct{})}
 }
 
 func shortDur(d time.Duration) string { return d.Round(time.Second).String() }
@@ -63,30 +91,31 @@ func (t *turnStream) onEvent(ev subagent.Event) {
 			label = "compaction ack"
 		}
 		t.last = "message"
-		fmt.Fprintf(t.w, "[%s: %s]\n%s\n", label, shortDur(time.Since(t.began)), ev.Text)
+		if t.mode == streamFull {
+			fmt.Fprintf(t.w, "[%s: %s]\n%s\n", label, shortDur(time.Since(t.began)), ev.Text)
+		}
 		t.mu.Unlock()
 	case "activity":
 		t.mu.Lock()
 		t.last = ev.Text
+		t.commands++
 		t.mu.Unlock()
 	}
 }
 
-// startHeartbeats prints progress lines on the schedule until finish is called.
+// startHeartbeats prints progress summaries on the schedule until finish is called.
 func (t *turnStream) startHeartbeats() {
 	t.done.Add(1)
 	go func() {
 		defer t.done.Done()
 		for i := 0; ; i++ {
-			gap := t.schedule[min(i, len(t.schedule)-1)]
-			next := t.schedule[min(i+1, len(t.schedule)-1)]
 			select {
 			case <-t.stop:
 				return
-			case <-time.After(gap):
+			case <-time.After(time.Until(t.began.Add(heartbeatAt(i)))):
 			}
 			t.mu.Lock()
-			fmt.Fprintf(t.w, "[heartbeat: ~%d tokens, %s, next: %s, last: %s]\n", t.bytes/4, shortDur(time.Since(t.began)), next, t.last)
+			fmt.Fprintf(t.w, "[heartbeat: %s, ~%d tokens, %d messages, %d commands, next: %s, last: %s]\n", shortDur(time.Since(t.began)), t.bytes/4, t.messages, t.commands, shortDur(heartbeatAt(i+1)), t.last)
 			t.mu.Unlock()
 		}
 	}()
@@ -98,6 +127,10 @@ func (t *turnStream) finish(r *subagent.TurnResult) {
 	size := 0
 	for _, m := range r.Messages {
 		size += len(m)
+	}
+	if t.mode == streamStats {
+		t.printf("[reply: %s]\n%s\n[done: %d messages (only the reply is shown), %d bytes, %d tokens, %s]\n", shortDur(time.Since(t.began)), r.Response, len(r.Messages), size, r.TokensTurn, shortDur(time.Since(t.began)))
+		return
 	}
 	t.printf("[done: %d messages, last message is the reply, %d bytes, %d tokens, %s]\n", len(r.Messages), size, r.TokensTurn, shortDur(time.Since(t.began)))
 }

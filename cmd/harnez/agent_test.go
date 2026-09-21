@@ -623,10 +623,10 @@ func (d *streamDriver) ResumeStream(_ context.Context, _, _ string, fn subagent.
 }
 
 func TestAgentStartStreamsLabeledBlocks(t *testing.T) {
-	old, oldSched := agentDriver, heartbeatSchedule
+	old, oldSched, oldRepeat := agentDriver, heartbeatSchedule, heartbeatRepeat
 	agentDriver = func(subagent.Model) subagent.Driver { return &streamDriver{} }
-	heartbeatSchedule = []time.Duration{20 * time.Millisecond}
-	defer func() { agentDriver, heartbeatSchedule = old, oldSched }()
+	heartbeatSchedule, heartbeatRepeat = []time.Duration{20 * time.Millisecond}, 20*time.Millisecond
+	defer func() { agentDriver, heartbeatSchedule, heartbeatRepeat = old, oldSched, oldRepeat }()
 	var out bytes.Buffer
 	cmd := newAgentCmd()
 	cmd.SetOut(&out)
@@ -636,7 +636,7 @@ func TestAgentStartStreamsLabeledBlocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	order := []string{"[session info: id=thread-1 agent=codex:gpt-5.6-luna action=start]", "name=w", "reconnect: harnez agent resume thread-1", "[wait:", "[message: 0s]\non it", "[heartbeat: ~", "last: running sleep]", "[message: 0s]\nall done", "[done: 2 messages, last message is the reply"}
+	order := []string{"[session info: id=thread-1 agent=codex:gpt-5.6-luna action=start]", "name=w", "reconnect: harnez agent resume thread-1", "[wait:", "[message: 0s]\non it", "[heartbeat: 0s, ~", "last: running sleep]", "[message: 0s]\nall done", "[done: 2 messages, last message is the reply"}
 	pos := 0
 	for _, want := range order {
 		i := strings.Index(got[pos:], want)
@@ -670,5 +670,48 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 	got := out.String()
 	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume]\n") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
 		t.Fatalf("stdout:\n%s", got)
+	}
+}
+
+func TestHeartbeatSchedule(t *testing.T) {
+	want := []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute, 6 * time.Minute, 10 * time.Minute, 15 * time.Minute, 20 * time.Minute}
+	for i, w := range want {
+		if got := heartbeatAt(i); got != w {
+			t.Fatalf("heartbeatAt(%d) = %s, want %s", i, got, w)
+		}
+	}
+}
+
+func TestAgentStartStatsModeShowsOnlyHeartbeatsAndReply(t *testing.T) {
+	old, oldSched, oldRepeat := agentDriver, heartbeatSchedule, heartbeatRepeat
+	agentDriver = func(subagent.Model) subagent.Driver { return &streamDriver{} }
+	heartbeatSchedule, heartbeatRepeat = []time.Duration{20 * time.Millisecond}, 20*time.Millisecond
+	defer func() { agentDriver, heartbeatSchedule, heartbeatRepeat = old, oldSched, oldRepeat }()
+	var out bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"start", "codex:luna", "prompt", "--stream", "stats", "--store-dir", t.TempDir()})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if strings.Contains(got, "on it") || strings.Contains(got, "[message:") {
+		t.Fatalf("intermediate message leaked in stats mode:\n%s", got)
+	}
+	for _, want := range []string{"[heartbeat: ", "1 messages, 1 commands", "[reply: 0s]\nall done\n", "[done: 2 messages (only the reply is shown)"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestAgentRejectsUnknownStreamMode(t *testing.T) {
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"start", "codex:luna", "prompt", "--stream", "loud", "--store-dir", t.TempDir()})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "invalid --stream") {
+		t.Fatalf("err = %v", err)
 	}
 }
