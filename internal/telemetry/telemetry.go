@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -76,24 +77,62 @@ func Open(path string) (*DB, error) {
 		sqlDB, err := sql.Open("sqlite", dsn)
 		if err != nil {
 			lastErr = err
-		} else if tableExisted, err := tableExists(sqlDB, "tool_calls"); err != nil {
-			sqlDB.Close()
-			lastErr = fmt.Errorf("telemetry: check existing schema: %w", err)
-		} else if _, err := sqlDB.Exec(schemaDDL); err != nil {
-			sqlDB.Close()
-			lastErr = fmt.Errorf("telemetry: create schema: %w", err)
-		} else if migrations, err := checkAndMigrateSchema(sqlDB, path, tableExisted); err != nil {
-			sqlDB.Close()
-			return nil, err
 		} else {
-			return &DB{sql: sqlDB, migrations: migrations}, nil
+			conn, connErr := sqlDB.Conn(context.Background())
+			if connErr != nil {
+				sqlDB.Close()
+				lastErr = connErr
+			} else if _, connErr = conn.ExecContext(context.Background(), "BEGIN IMMEDIATE"); connErr != nil {
+				conn.Close()
+				sqlDB.Close()
+				lastErr = connErr
+			} else {
+				exec := schemaConn{conn: conn}
+				tableExisted, stepErr := tableExists(exec, "tool_calls")
+				if stepErr == nil {
+					_, stepErr = exec.Exec(schemaDDL)
+				}
+				var migrations []string
+				if stepErr == nil {
+					migrations, stepErr = checkAndMigrateSchema(exec, path, tableExisted)
+				}
+				if stepErr == nil {
+					_, stepErr = conn.ExecContext(context.Background(), "COMMIT")
+				} else {
+					_, _ = conn.ExecContext(context.Background(), "ROLLBACK")
+				}
+				conn.Close()
+				if stepErr == nil {
+					return &DB{sql: sqlDB, migrations: migrations}, nil
+				}
+				sqlDB.Close()
+				lastErr = fmt.Errorf("telemetry: initialize schema: %w", stepErr)
+			}
 		}
 		time.Sleep(openRetryDelay)
 	}
 	return nil, fmt.Errorf("telemetry: open %s: %w", path, lastErr)
 }
 
-func migrateV2ToV3(sqlDB *sql.DB) error {
+type schemaExecutor interface {
+	Exec(string, ...any) (sql.Result, error)
+	Query(string, ...any) (*sql.Rows, error)
+	QueryRow(string, ...any) *sql.Row
+}
+
+type schemaConn struct{ conn *sql.Conn }
+
+func (c schemaConn) Exec(q string, args ...any) (sql.Result, error) {
+	return c.conn.ExecContext(context.Background(), q, args...)
+}
+func (c schemaConn) Query(q string, args ...any) (*sql.Rows, error) {
+	return c.conn.QueryContext(context.Background(), q, args...)
+}
+func (c schemaConn) QueryRow(q string, args ...any) *sql.Row {
+	return c.conn.QueryRowContext(context.Background(), q, args...)
+}
+
+func migrateV2ToV3(sqlDB schemaExecutor) error {
 	rows, err := sqlDB.Query("PRAGMA table_info(tool_calls)")
 	if err != nil {
 		return err
@@ -127,7 +166,7 @@ func migrateV2ToV3(sqlDB *sql.DB) error {
 // checkAndMigrateSchema tell "genuinely brand-new file, this Open call
 // just created the table with the current shape" apart from "a table that
 // already existed, for any reason, before this call."
-func tableExists(sqlDB *sql.DB, name string) (bool, error) {
+func tableExists(sqlDB schemaExecutor, name string) (bool, error) {
 	var n int
 	err := sqlDB.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&n)
 	if err != nil {
@@ -139,7 +178,7 @@ func tableExists(sqlDB *sql.DB, name string) (bool, error) {
 // checkAndMigrateSchema reads SQLite's built-in PRAGMA user_version,
 // applies version-guarded discrete migrations when current < schemaVersion,
 // and stamps user_version to current.
-func checkAndMigrateSchema(sqlDB *sql.DB, path string, preexisting bool) ([]string, error) {
+func checkAndMigrateSchema(sqlDB schemaExecutor, path string, preexisting bool) ([]string, error) {
 	var migrations []string
 	var current int
 	if err := sqlDB.QueryRow("PRAGMA user_version").Scan(&current); err != nil {
@@ -187,7 +226,7 @@ func checkAndMigrateSchema(sqlDB *sql.DB, path string, preexisting bool) ([]stri
 	return migrations, nil
 }
 
-func migrateCompactionEvents(sqlDB *sql.DB) (bool, error) {
+func migrateCompactionEvents(sqlDB schemaExecutor) (bool, error) {
 	rows, err := sqlDB.Query("PRAGMA table_info(compaction_events)")
 	if err != nil {
 		return false, err
@@ -211,6 +250,9 @@ func migrateCompactionEvents(sqlDB *sql.DB) (bool, error) {
 	}
 	if !modelPresent {
 		if _, err = sqlDB.Exec("ALTER TABLE compaction_events ADD COLUMN model TEXT NOT NULL DEFAULT ''"); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				return false, nil
+			}
 			return false, err
 		}
 		return true, nil

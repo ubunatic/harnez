@@ -903,6 +903,60 @@ func TestConcurrentWriters(t *testing.T) {
 	}
 }
 
+// TestConcurrentMigrationMany is a high-contention regression test for
+// concurrent schema initialization/migration. Each helper is a separate
+// process so the test covers SQLite's file locking, not just scheduling.
+func TestConcurrentMigrationMany(t *testing.T) {
+	if os.Getenv("TELEMETRY_WRITER_HELPER") == "1" {
+		runWriterHelper(t)
+		return
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tool_catalog.sqlite")
+	const nProcs = 32
+	results := make(chan error, nProcs)
+	start := make(chan struct{})
+	for i := 0; i < nProcs; i++ {
+		tag := "cold" + itoa(i)
+		go func(tag string) {
+			<-start
+			cmd := exec.Command(os.Args[0], "-test.run=TestConcurrentMigrationMany")
+			cmd.Env = append(os.Environ(),
+				"TELEMETRY_WRITER_HELPER=1",
+				"TELEMETRY_WRITER_PATH="+path,
+				"TELEMETRY_WRITER_N=1",
+				"TELEMETRY_WRITER_TAG="+tag,
+			)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				err = &writerErr{tag: tag, err: err, out: string(out)}
+			}
+			results <- err
+		}(tag)
+	}
+	createLegacyCompactionDB(t, path, 8)
+	close(start)
+	for i := 0; i < nProcs; i++ {
+		if err := <-results; err != nil {
+			t.Errorf("cold start failed: %v", err)
+		}
+	}
+
+	db, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query(Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != nProcs {
+		t.Fatalf("got %d rows after cold start, want %d", len(rows), nProcs)
+	}
+}
+
 type writerErr struct {
 	tag string
 	err error
