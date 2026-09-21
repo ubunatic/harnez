@@ -55,6 +55,9 @@ func newAgentCmd() *cobra.Command {
 		if jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(v)
 		}
+		if o, ok := v.(agentOutput); ok && o.Session != nil {
+			return printAgentTurn(cmd, "Resumed", o.ID, "harnez agent resume "+o.ID+" \"<prompt>\"", o.Response)
+		}
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), v)
 		return err
 	}
@@ -77,6 +80,7 @@ func newAgentCmd() *cobra.Command {
 		if err != nil {
 			return fmt.Errorf("resolve working directory: %w", err)
 		}
+		announceAgentTurn(cmd, "start", m.Provider+":"+m.Name, sessName)
 		r, err := agentDriver(m).Run(cmd.Context(), subagent.RunOptions{Prompt: args[1], Model: m, Dir: canonicalWorkDir})
 		if err != nil {
 			return fmt.Errorf("agent start %q failed: %w; verify the provider/model configuration or ask for guidance", args[0], err)
@@ -93,8 +97,7 @@ func newAgentCmd() *cobra.Command {
 		if jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Harnez Agent Started: %s\nReconnect / Resume: %s\n\n%s\n", id, out.ReconnectCmd, r.Response)
-		return nil
+		return printAgentTurn(cmd, "Started", id, out.ReconnectCmd, r.Response)
 	}}
 	start.Flags().StringVarP(&workDir, "dir", "d", ".", "working directory")
 	start.Flags().StringVar(&name, "name", "", "session name")
@@ -274,6 +277,7 @@ func newAgentCmd() *cobra.Command {
 				return err
 			}
 		}
+		announceAgentTurn(cmd, "resume", sess.Provider+":"+sess.Model, sess.Name)
 		r, err := d.Resume(cmd.Context(), sess.ProviderID(), args[1])
 		if err != nil {
 			return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
@@ -538,6 +542,20 @@ func newAgentCmd() *cobra.Command {
 
 // agentSessionCompletion returns names visible to the current caller. Cobra
 // displays the text after the tab as a completion description.
+// announceAgentTurn tells the calling agent, on stderr, what the synchronous
+// start/resume is about to do so it waits instead of polling or re-sending.
+func announceAgentTurn(cmd *cobra.Command, verb, target, session string) {
+	fmt.Fprintf(cmd.ErrOrStderr(), "harnez agent %s: running one synchronous turn on %s (session %q) via the provider CLI.\n"+
+		"harnez agent %s: the reply is printed on stdout when the turn finishes; caller must wait for it (no polling, no re-sending the prompt).\n", verb, target, session, verb)
+}
+
+// printAgentTurn writes the technical session block and the agent reply under
+// separate labels so callers can tell harnez metadata from the agent's words.
+func printAgentTurn(cmd *cobra.Command, verb, id, reconnect, response string) error {
+	_, err := fmt.Fprintf(cmd.OutOrStdout(), "[harnez session] %s: %s\n[harnez session] Reconnect / Resume: %s\n[agent response]\n%s\n", verb, id, reconnect, response)
+	return err
+}
+
 func agentSessionCompletion(storeDir string, parent func() string) cobra.CompletionFunc {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) > 0 {

@@ -535,3 +535,34 @@ func TestAgentHaikuAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentResumePrintsReplyNotStructDump(t *testing.T) {
+	old := agentDriver
+	agentDriver = func(subagent.Model) subagent.Driver { return &replyDriver{} }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store, _ := subagent.NewSessionStore(storeDir)
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed"}); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"resume", "worker", "prompt", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); strings.Contains(got, "{0x") || !strings.Contains(got, "[harnez session] Resumed: sid") || !strings.Contains(got, "[agent response]\nthe reply text") {
+		t.Fatalf("stdout = %q, want plain reply without struct dump", got)
+	}
+	if !strings.Contains(errOut.String(), "caller must wait") {
+		t.Fatalf("stderr = %q, want wait notice", errOut.String())
+	}
+}
+
+type replyDriver struct{ recordingAgentDriver }
+
+func (*replyDriver) Resume(context.Context, string, string) (*subagent.TurnResult, error) {
+	return &subagent.TurnResult{Response: "the reply text"}, nil
+}
