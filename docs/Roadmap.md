@@ -19,8 +19,8 @@ of the suggested order of attack: the store is the substrate every cost, efficie
 in this backlog is read from, and 424 demonstrated that a schema defect can sit in it unnoticed
 until somebody happens to look. The ordering inside §3 was deliberately *reproduce-first*: 341
 (concurrent writers losing rows), then 127 (SQL into `spec/`), then 457 (queries as tests plus a
-live data-quality check). **That chain has now largely landed**: 457 is closed, 127 has delivered
-M1 and M2, and 341 is fixed on Linux. What is left in §3 is the *extend* half (446, 445, 124+296,
+live data-quality check). **That chain has landed**: 457 is closed, 127 is closed (remainder: 458),
+and 341 is closed (fixed on Linux, macOS unverified). What is left in §3 is the *extend* half (446, 445, 124+296,
 225, 215).
 
 **Previous lead, now mostly delivered.** `harnez agent`
@@ -49,13 +49,13 @@ Sequencing buckets:
   (no ticket filed).
 - **424** — confirmed closed earlier (see below).
 
-**Delivered in part, ticket stays open:**
+**Closed, remainders split into follow-up tickets:**
 
-- **127** — M1 and M2 delivered: all schema, insert and query SQL now lives in
-  `spec/telemetry.yaml`. Remaining scope: `telemetry.go` migration SQL, `classify.go`,
-  `sanitize_cache.go`, `issuesnapshot.go`, `export.go`, `economics_query.go`.
-- **341** — fixed on Linux (fbaa511, `BEGIN IMMEDIATE` serialization). Stays open awaiting macOS CI
-  confirmation (APFS was where it reproduced).
+- **127** — closed: all schema, insert and query SQL lives in `spec/telemetry.yaml`. The rest
+  (`telemetry.go` migration SQL, `classify.go`, `sanitize_cache.go`, `issuesnapshot.go`,
+  `export.go`, `economics_query.go`) is now **458**.
+- **341** — closed: fixed and regression-tested on Linux (fbaa511, `BEGIN IMMEDIATE`
+  serialization). macOS is not tested soon; reopen if 338's CI shows lost rows.
 
 **Closed since the 2026-09-21 pass:**
 
@@ -73,13 +73,12 @@ Sequencing buckets:
   at the head of §3 and it is the reason §3's remaining work is now about *keeping* the store
   honest rather than repairing it.
 
-**Partially delivered — telemetry halves shipped, remainder still open:**
+**Closed, remainders split into follow-up tickets:**
 
-- **425** — the migration-logging and schema-version-drift work landed with 235d7da (multi-version
-  upgrade fixtures, quiet no-op apply schema report). **Milestone 2, the Braille glyph spacing
-  half, is still open** and now tracks in §12 with the rest of the Dot8 work.
-- **428** — the telemetry migration test-coverage half landed in the same commit. **The ANSI
-  256-color / 24-bit truecolor extensions remain open** and stay in §12 behind 427.
+- **425** — closed: migration logging and schema-version drift landed with 235d7da. The Braille
+  glyph-spacing half is now **459** (§12, with 444); review leftovers are **462**.
+- **428** — closed: the telemetry migration test coverage landed in the same commit. The ANSI
+  256-color / 24-bit truecolor half is now **460** (§12, behind 427).
 
 - **030, 071, 096, 105, 108, 126, 139, 149, 201, 209, 210, 217, 261, 262, 290, 292, 299** — shipped/closed
 - **006** — `fix(status): check all managed settings keys`
@@ -163,7 +162,7 @@ Rationale: this cluster is ordered by *what a wrong answer costs the user*. With
 the remaining piece of "send work to the model the user actually asked for" and stays **Now**. 450
 is the interactive half of the same surface but is externally blocked, so it moves to **Park**
 rather than sitting in **Now** as an item nobody can start. 435's A/B telemetry is still held
-behind §3's cost work (446/445) and 341's macOS confirmation; 457's live checks now guard the
+behind §3's cost work (446/445); 457's live checks now guard the
 store, so the earlier reason for holding it is largely gone.
 
 383 and 144 remain behind 451/453 and 306 deliberately: 451/453 are a small documentation batch
@@ -226,10 +225,11 @@ with 457's `stats --quality` as the guard that flags regressions.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 341 — concurrent SQLite telemetry writers lose rows (macOS) | M — **fixed on Linux** (fbaa511, `BEGIN IMMEDIATE` serialization); ticket stays open until macOS CI confirms, since the original failure was APFS-specific | **Awaiting CI** |
-| 127 — move `internal/telemetry` SQL into `spec/` | M — **M1 and M2 delivered**: all schema/insert/query SQL is in `spec/telemetry.yaml`. Remaining: `telemetry.go` migration SQL, `classify.go`, `sanitize_cache.go`, `issuesnapshot.go`, `export.go`, `economics_query.go`. Finish opportunistically alongside 446/445, which touch the same spec surface | **Next** |
+| ~~341~~ — concurrent SQLite telemetry writers lose rows (macOS) | ✅ **closed**: fixed and tested on Linux (fbaa511); macOS unverified, reopen if 338 CI shows lost rows | **Done** |
+| ~~127~~ — move `internal/telemetry` SQL into `spec/` | ✅ **closed**: schema/insert/query SQL is in `spec/telemetry.yaml`. Remainder is **458**; finish opportunistically alongside 446/445, which touch the same spec surface | **Done** (458 **Later**) |
 | ~~457~~ — canonical analytics queries as tests + live data-quality checks | ✅ **closed**: spec-defined checks, fixture tests, `harnez stats --quality`; live run all PASS. See §0 | **Done** |
-| model attribution for `tool_calls` (no ticket yet) | finding from 457: `tool_calls` has no `model` column, so per-model call analytics are impossible. Candidate item to file next to 446/445, since all three are about attributing cost and usage to a model | **Note** |
+| 461 — `model` column on `tool_calls` | S/M — finding from 457: per-model call analytics are impossible today. Sequence with 446/445, which need the same attribution | **Next** (with 446/445) |
+| 462 — telemetry leftovers (`warn_condition`, test name, apply tip skip) | S — review cleanups from the sprints | **Later** |
 | 446 — persist cost fields reported by agents | S/M — capture `cost`/`total_cost`/`currency` where a provider already reports them rather than discarding them. **Before 445**: a measured number is worth more than a modelled one, and it gives 445's estimates something to be checked against | **Now** |
 | 445 — counterfactual API rate cards in `spec/`, surfaced in `usage`/`stats` | M — rate cards per model in `spec/`, then estimated pay-as-you-go spend and cache savings. Lands on top of 446's measured values and 127's spec surface | **Now** (after 446) |
 | 124 — PostToolUse auto-capture of tool-call counts | M — canary-gated: run the payload probe before writing code. Moved up from §7; it is a telemetry *ingestion* ticket, and pairing it with 296 makes the efficiency numbers complete at the same time | **Next** |
@@ -239,11 +239,11 @@ with 457's `stats --quality` as the guard that flags regressions.
 | 178 — distill smart mode, error-pattern preservation | M — key constraint: do not import `internal/telemetry` from `internal/distill` | **Next** |
 | 421 — extend telemetry to harnez commands and feature-usage analytics | M — new event family. Deliberately **later**: adding an event family before 341/127/457 means the new family inherits the same unverified write path and has no canonical queries covering it | **Later** |
 | 208 — SQLite export format | S/M — depends on 204's scrubbed record slices, and exporting a store is only worth doing once its contents are known-good | **Later** |
-| 425 (M2) / 428 (ANSI half) | telemetry halves shipped in 235d7da; the Braille-spacing and 256/truecolor remainders track in §12 | **→ §12** |
+| 459 / 460 (from 425 / 428) | telemetry halves shipped in 235d7da; the Braille-spacing (459) and 256/truecolor (460) follow-ups track in §12 | **→ §12** |
 
 Rationale: the hardening chain did its job. 457 now makes data quality a reported property
 (`harnez stats --quality`, all PASS live), 127's SQL is single-homed in `spec/telemetry.yaml`, and
-341 is fixed on Linux pending macOS CI. Its own finding is the next gap: `tool_calls` has no model
+341 is closed (fixed on Linux, macOS unverified). Its own finding is the next gap: `tool_calls` has no model
 column, so per-model call analytics are impossible; that belongs with 446/445 as one
 model-attribution theme. Everything that *adds* to the store (446/445 cost, 124/296 efficiency, 215 classification, 421 command analytics)
 queues behind that chain, in each case pairing a measurement with the thing that validates it.
@@ -455,7 +455,7 @@ the completed 302 research are handled only in §9 rather than scheduled here.
 | 337 — Research macOS system permissions and CLI whitelist for config template | - | **Next** |
 | 338 — macOS CI verification via GitHub mirror | - | **Next** |
 | 339 — Graceful degradation and gating of hardware telemetry and mic probes on macOS | - | **Next** |
-| 341 — Concurrent SQLite telemetry writers lose rows on macOS | fixed on Linux; only macOS CI confirmation remains. Tracked in §3 | **Awaiting CI** (→ §3) |
+| ~~341~~ — Concurrent SQLite telemetry writers lose rows on macOS | closed; fixed on Linux, macOS unverified. See §3 | **Done** (→ §3) |
 
 ## 12. Multimodal & Visual Context
 
@@ -469,8 +469,8 @@ separate follow-through rather than unfinished 434 milestones.
 | 434 — one glyph spec per font size | ✅ closed: M1–M4 done, importer removed, text→PNG pipeline tests added | **Done** |
 | 426 — make `find` output text-first for human users | S — the tracker's own CLI is read many times a day; visual-first output costs humans a step | **Now** |
 | 427 — preserve ANSI colors in the stdin render path | S — colors are dropped today, which silently degrades piped render output | **Next** |
-| 428 — ANSI 256/24-bit color extensions | S/M — **rescoped by 235d7da**: the telemetry migration test-coverage half is delivered, so only the ANSI 256-color/truecolor extension remains. Follows 427, which must first stop dropping colors at all | **Next** |
-| 425 (M2) — Braille glyph spacing | S — **rescoped by 235d7da**: migration logging and schema-drift detection shipped; only the glyph-spacing milestone is left, and it belongs with the Dot8 pitch work below rather than with telemetry | **Next** (with 444) |
+| 460 — ANSI 256-color/truecolor SGR support (from 428) | S/M — the telemetry half of 428 shipped in 235d7da; this is the ANSI remainder. Follows 427, which must first stop dropping colors at all | **Next** |
+| 459 — Braille glyph cell margins (from 425) | S — the telemetry half of 425 shipped; this is the glyph-spacing remainder and belongs with the Dot8 pitch work below | **Next** (with 444) |
 | 403 — transparent hook interception and distill adapter for multi-slice `harnez read` | M — makes the distill path apply to the read surface agents actually use | **Next** |
 | 402 — move config diff below status, free top-level `harnez diff` for visual git diff | M — CLI surface change; do after 426 settles find/read output conventions | **Next** |
 | ~~374~~ — refresh README CLI coverage and website link | ✅ **closed** this pass; the README now covers the current command surface including `harnez agent`. See §0 | **Done** |
@@ -558,12 +558,11 @@ Rationale for newer backlog sequencing:
 Refreshed this pass. The telemetry hardening chain landed (457 closed, 127 M1/M2, 341 fixed on
 Linux), so the lead moves from hardening to extension.
 
-1. **Close out the telemetry hardening chain**: confirm 341 on macOS CI (then close), and finish
-   127's remaining files (`telemetry.go` migration SQL, `classify.go`, `sanitize_cache.go`,
-   `issuesnapshot.go`, `export.go`, `economics_query.go`) as they are touched by later items.
+1. **Telemetry hardening chain is closed** (341, 127, 424, 457 done; 341 unverified on macOS).
+   Remaining SQL-to-spec work is 458, picked up opportunistically as later items touch those files.
 2. **Give the cost story measured numbers**: 446 (cost fields agents already report) → 445
-   (counterfactual rate cards in `spec/`), plus the model-attribution gap from 457 (`tool_calls` has
-   no `model` column; note only, no ticket yet) → 435's A/B telemetry half.
+   (counterfactual rate cards in `spec/`), plus 461, the model-attribution gap from 457 (`tool_calls` has
+   no `model` column) → 435's A/B telemetry half.
 3. **Complete the efficiency numbers**: 124 (PostToolUse tool-call capture, canary-gated) + 296
    (always compute distill savings) as one pair; `stats --quality` will show when the columns fill.
 4. **Classification quality**: 225 (cache versioning, then an accuracy baseline) → 215 (LLM
@@ -578,11 +577,10 @@ Linux), so the lead moves from hardening to extension.
 7. **Dispatch follow-ons**: 449 (spec-driven chat model selection, now unblocked by 454) → 306
    (quarantine dead Codex sessions) → 383 → 144. 450 is excluded until `../loom` lands.
 8. **OS-agnostic terminal foundation**: 286 (Go conventions + `x/term` `watch.go` refactor) →
-   the OS build-tag split → portable process detection → 334/336/337 research → 338/339. Note 341
-   has moved out of this theme into step 1: it is a data-loss bug that happens to reproduce on
-   macOS, not a porting task.
-9. **Finish the visual-context and public-doc surface**: 444 (P1 pitch bug) + 447 + 425's Braille
-   glyph-spacing milestone → 426 → 427 → 428 (ANSI 256/truecolor half only) → 441 → 436. 374 is
+   the OS build-tag split → portable process detection → 334/336/337 research → 338/339. 341 is
+   closed (fixed on Linux); macOS remains unverified until 338's CI runs.
+9. **Finish the visual-context and public-doc surface**: 444 (P1 pitch bug) + 447 + 459 (Braille
+   glyph spacing) → 426 → 427 → 460 (ANSI 256/truecolor) → 441 → 436. 374 is
    done; 440 stays out until the inline-note channel has been tried.
 10. **Cash in the 149 dividend**: 144 (→ §1a) → 151 → 231 → 176 → 145. All were blocked on the
     profile mechanism; it exists now, and 145 has waited three passes.
