@@ -45,6 +45,7 @@ Follow these 5 phases sequentially:
 
 ### Phase 2: Sequential Development & Test Verification (Reusable Developers)
 1. Create or reuse one developer agent per broader subsystem/work category from the advisor's plan (via `harnez agent start <model> --name <category> "<prompt>"` or native subagent), rather than one per ticket. Give each a short technical name users can refer to, and record its name, session ID, category, and model. Select a suitable lower-cost model; use the top frontier model only when the advisor explicitly recommends it. An explicitly named `provider:model:tier` must be dispatched exactly through `harnez agent start`; on failure, report it and ask for guidance rather than substituting the host model or a native subagent.
+   - **Plan first (read-only)**: recommended: the developer's initial prompt asks for a read-only plan ("read-only: plan ...", no edits yet); the host reviews it, then `resume` grants write authority. No prompt template: agents have their own best practices, and stored first prompts are how we observe them.
 2. Process tasks one by one in sequence through the matching named developer (resumed via `harnez agent resume <session_id> "<task>"` to avoid concurrent edits to the same codebase/worktree). Reuse that session for later work in its category, supplying bounded tasks and durable references.
 3. Follow Test-Driven Development (TDD):
    - Add or update unit tests alongside or before modifying implementation code.

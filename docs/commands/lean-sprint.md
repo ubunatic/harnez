@@ -46,6 +46,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - Provide:
   - Scoped milestone objective, target files, and acceptance criteria from the ticket.
   - Test requirements (reproduction test first for bugs, unit tests for features).
+- **Plan First (read-only)**: Recommended: start the worker's initial prompt with a read-only planning step ("read-only: plan ..."; no edits until the host has seen the plan), then `resume` to grant write authority. Give no prompt template: agents have their own best practices, and the stored first prompts (telemetry DB) are how we observe and compare them. In one-shot mode a plan request alone is not enforced, so a plan-only first prompt is the reliable form.
 - **Trust the Base Framework**: Do not duplicate system prompts or micromanage formatting conventions.
 - **Reading Discipline**: Instruct the developer to use `harnez read -I <file>` or line-bounded reads (`-L`) for medium/large files.
 - **Stay Responsive**: Dispatching the worker must not block the chat; note the emitted Reconnect Banner and return control or proceed with review preparation.

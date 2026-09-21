@@ -60,6 +60,7 @@ Agentic software engineering scales effectively when concurrency is structured a
      `luna:low`, escalate only on struggle, failed verification, or ambiguity,
      then reset the next step to `luna:low`.
    - Steer each subagent's rough plan before granting write authority.
+   - Recommended form: the initial prompt asks for a read-only plan ("read-only: plan ..."), then `resume` grants write authority. Recommend only; no prompt template, so stored first prompts show each agent's own best practice.
 
 8. **Durable Session Record**:
    - Start `docs/studies/` session notes at kickoff; update them after major work

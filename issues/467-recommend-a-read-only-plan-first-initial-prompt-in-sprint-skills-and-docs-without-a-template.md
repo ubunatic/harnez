@@ -28,3 +28,7 @@ user wants to observe and compare them: first prompts are already stored in the 
 - Optional follow-up: a stats view of stored first prompts per agent and whether they asked for a
   plan, to observe what works.
 - Re-verify against live code and docs before starting.
+
+## Delivered (2026-09-21)
+
+Recommendation added, without a template, to `docs/commands/lean-sprint.md`, `docs/commands/sprint.md` and `docs/AgenticLoop.md` (Invariant 7). The optional stats view of stored first prompts is not built; file separately if wanted.
