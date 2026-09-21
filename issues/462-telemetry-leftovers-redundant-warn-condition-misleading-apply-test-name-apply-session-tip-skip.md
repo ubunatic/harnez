@@ -1,6 +1,6 @@
 # 462 — Telemetry leftovers: redundant `warn_condition`, misleading apply test name, apply session-tip skip
 
-**Status**: Open
+**Status**: Closed — delivered: warn_condition dropped, tip skip documented, test renamed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Cleanup
