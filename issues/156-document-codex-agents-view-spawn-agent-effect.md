@@ -1,6 +1,6 @@
 # 156 — Document how `collaboration.spawn_agent` appears in Codex Agents
 
-**Status**: Closed
+**Status**: Closed — Documented Codex spawn_agent Agents view delegation and lifecycle responsibilities
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation
