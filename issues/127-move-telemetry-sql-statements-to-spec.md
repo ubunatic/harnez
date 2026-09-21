@@ -1,6 +1,6 @@
 # 127 — Move `internal/telemetry` SQL statements into `spec/`
 
-**Status**: Open
+**Status**: Closed — delivered in c812720 and d5178e1; remaining SQL scope moved to 458
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Architecture
@@ -251,3 +251,7 @@ plus a docs update) — and largest in review cost, not in line count.
   allowlist are in `spec/telemetry.yaml`; AST tests cover `schema.go`, `insert.go`, `query.go` and
   fail on dead spec entries. Still outside the spec: `telemetry.go` migration/introspection SQL and
   SQL in other files (see above). Ticket stays open until that scope is decided.
+
+## Closed (2026-09-21)
+
+M1 and M2 delivered. Remaining SQL scope moved to [458](458-move-remaining-telemetry-sql-into-spec-127-follow-up.md).
