@@ -1,6 +1,6 @@
 # 478 — Make listed agent sessions resumable or accurately report terminal state
 
-**Status**: In Progress
+**Status**: Closed — resume sandbox root cause fixed; last resume outcome recorded, RESUME column in list, provider-terminal sessions refused with an actionable message, list-to-resume covered by ID and name
 
 **Priority**: P1 (High)
 **Severity**: Major
