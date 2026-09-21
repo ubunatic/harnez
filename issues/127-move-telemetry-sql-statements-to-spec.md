@@ -234,3 +234,15 @@ worse than either extreme.
 
 ### Scope: **large** (10 statements, a new loader + schema, three commits,
 plus a docs update) — and largest in review cost, not in line count.
+
+## Milestones (lean-sprint, 2026-09-21)
+
+- **M1 delivered**: `spec/telemetry.yaml` + `spec/schemas/telemetry.schema.json`, `sync.OnceValues`
+  loader (`internal/telemetry/sqlspec.go`), schema DDL and every `INSERT` in `insert.go` moved;
+  AST-based test forbids SQL literals in `schema.go`/`insert.go`; `Spec.md` references it.
+- **M2 (next)**: the 8 `query.go` statements plus `Filter.whereClause()` as named predicate
+  fragments; grouped query as one template with an internal allowlist for the column
+  (`tool_name`, `agent_id`, `project_name`).
+- **Remaining scope after M2 (decide, don't assume)**: `telemetry.go` migrations/introspection
+  SQL and independent SQL in `classify.go`, `sanitize_cache.go`, `issuesnapshot.go`, `export.go`,
+  `economics_query.go`. 457's canonical queries must live in the same spec file.
