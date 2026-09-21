@@ -10,7 +10,7 @@ This document establishes the canonical practice for orchestrating multi-agent d
 
 Capability names vary by harness. With Harnez, the core lifecycle is
 `harnez agent start <model> --name <name> "<prompt>"`,
-`harnez agent resume <id> "<task>"`, explicit `harnez agent compact <id>`, then
+`harnez agent resume --name <id> "<task>"`, explicit `harnez agent compact --name <id>`, then
 `harnez agent list` and targeted `stop`/`delete` cleanup.
 
 ### Agent command execution
@@ -83,8 +83,8 @@ Agentic software engineering scales effectively when concurrency is structured a
    - Recommended form: the initial prompt asks for a read-only plan ("read-only: plan ..."), then `resume` grants write authority. Recommend only; no prompt template, so stored first prompts show each agent's own best practice.
 
 8. **Durable Session Record**:
-   - Start `docs/studies/` session notes at kickoff; update them after major work
-     and workflow friction or failure.
+   - Start session notes at kickoff in `docs/studies/` when present, otherwise in the project's ticket or notes location;
+     update them after major work and workflow friction or failure.
 
 9. **Immediate Product-Issue Capture**:
    - File larger obvious product issues immediately (high priority when
@@ -358,3 +358,5 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 - ❌ **Buffered Long-Running Output**: Piping a long-running build/test/canary command through `tail`, `grep`, `sort`, `wc`, `head`, or any other filter that buffers stdout — the filter emits nothing until the whole pipeline exits, so a multi-minute command looks silent/stuck with zero progress visibility. Run it plain (letting the harness's background-task mechanism handle it past its timeout) or use `cmd 2>&1 | tee /tmp/x.log` if a trimmed final summary is also wanted. See also: `Blocking sleep Waits` (same symptom, different cause).
 - ❌ **`cd`-scoped commands**: prefer `git -C <dir> status` over `cd <dir> && git status` — the shell tool's cwd persists into later, unrelated calls and silently targets the wrong repo. Use the tool's directory flag (`git -C`, `make -C`, `go -C`, `npm --prefix`, `cargo --manifest-path`); when no flag exists, use a subshell `(cd <dir> && cmd)` so cwd is restored automatically. See `docs/lang/Bash.md §8` for the full flag table and restore-cwd convention.
 - ❌ **Chatty Watch Wrappers**: Wrapping a poll-and-redraw CLI (`gh run watch`, `docker logs -f`-style tools) in a `make` target an agent calls routinely, without quieting it first. These tools redraw full state on every tick for a human terminal; called repeatedly by an agent they flood context with no added signal. Poll the tool's own status query (e.g. `gh run view --json status`) on a matched interval instead, and print one summary line on completion.
+
+<!-- harnez:stop -->

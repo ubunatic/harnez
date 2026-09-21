@@ -10,7 +10,7 @@ This document establishes the canonical practice for orchestrating multi-agent d
 
 Capability names vary by harness. With Harnez, the core lifecycle is
 `harnez agent start <model> --name <name> "<prompt>"`,
-`harnez agent resume <id> "<task>"`, explicit `harnez agent compact <id>`, then
+`harnez agent resume --name <id> "<task>"`, explicit `harnez agent compact --name <id>`, then
 `harnez agent list` and targeted `stop`/`delete` cleanup.
 
 ### Agent command execution
@@ -83,8 +83,8 @@ Agentic software engineering scales effectively when concurrency is structured a
    - Recommended form: the initial prompt asks for a read-only plan ("read-only: plan ..."), then `resume` grants write authority. Recommend only; no prompt template, so stored first prompts show each agent's own best practice.
 
 8. **Durable Session Record**:
-   - Start `docs/studies/` session notes at kickoff; update them after major work
-     and workflow friction or failure.
+   - Start session notes at kickoff in `docs/studies/` when present, otherwise in the project's ticket or notes location;
+     update them after major work and workflow friction or failure.
 
 9. **Immediate Product-Issue Capture**:
    - File larger obvious product issues immediately (high priority when

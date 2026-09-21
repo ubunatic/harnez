@@ -1222,7 +1222,7 @@ func TestPromptGetsProtocolButStoredPromptStaysOriginal(t *testing.T) {
 
 func TestPlanFirstAddsGateAndPrompt(t *testing.T) {
 	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: will plan")}, {0, msg("PLAN: 1) read 2) count")}}}
-	got := runScripted(t, d, "start", "--model", "codex:luna", "count files", "--name", "w", "--plan-first")
+	got := runScripted(t, d, "start", "--model", "codex:luna", "count files", "--name", "w", "--plan", "yes")
 	if !strings.Contains(d.prompt, "plan-first turn") || !strings.HasSuffix(d.prompt, "\n\ncount files") {
 		t.Fatalf("driver prompt = %q", d.prompt)
 	}
@@ -1238,9 +1238,61 @@ func TestPlanFirstAddsGateAndPrompt(t *testing.T) {
 
 func TestPlanFirstWithoutPlanWarns(t *testing.T) {
 	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("I just did it")}}}
-	got := runScripted(t, d, "start", "--model", "codex:luna", "task", "--name", "w", "--plan-first")
+	got := runScripted(t, d, "start", "--model", "codex:luna", "task", "--name", "w", "--plan", "yes")
 	if !strings.Contains(got, "[warning: plan-first turn ended without a PLAN: message; the last message was: I just did it]") {
 		t.Fatalf("stdout:\n%s", got)
+	}
+}
+
+func TestAgentPlanFlagValidationAndCompatibility(t *testing.T) {
+	if _, err := runWithStore(t, &scriptDriver{steps: []step{{ev: msg("ok")}}}, t.TempDir(), "start", "--model", "luna", "--plan", "maybe", "task"); err == nil || err.Error() != `invalid --plan "maybe": want "yes" or "no"` {
+		t.Fatalf("invalid plan error = %v", err)
+	}
+	if _, err := runWithStore(t, &scriptDriver{steps: []step{{ev: msg("ok")}}}, t.TempDir(), "start", "--model", "luna", "--plan-first", "task"); err == nil || !strings.Contains(err.Error(), "unknown flag") {
+		t.Fatalf("old flag error = %v", err)
+	}
+}
+
+func TestAgentPlanNoEqualsDefault(t *testing.T) {
+	for _, args := range [][]string{{"task"}, {"--plan", "no", "task"}} {
+		d := &scriptDriver{steps: []step{{ev: msg("ok")}}}
+		if _, err := runWithStore(t, d, t.TempDir(), append([]string{"start", "--model", "luna"}, args...)...); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(d.prompt, "plan-first") {
+			t.Fatalf("unexpected plan preamble: %q", d.prompt)
+		}
+	}
+}
+
+func TestAgentRootPlanYes(t *testing.T) {
+	d := &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "root"}}, {ev: msg("CONFIRM: ok")}, {ev: msg("PLAN: wait")}}}
+	out, err := runWithStore(t, d, t.TempDir(), "--plan", "yes", "-p", "task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(d.prompt, "plan-first turn") || !strings.Contains(out, "[gate: plan-first turn ended") {
+		t.Fatalf("plan output=%q prompt=%q", out, d.prompt)
+	}
+}
+
+func TestAgentHelpUsesNewForms(t *testing.T) {
+	cmd := newAgentCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--help"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "--name") || strings.Contains(out.String(), "start codex:") || strings.Contains(out.String(), "resume <session>") {
+		t.Fatalf("root help=%q", out.String())
+	}
+	start, _, err := newAgentCmd().Find([]string{"start"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(start.Example, "--name") || strings.Contains(start.Example, "start codex:") || strings.Contains(start.Example, "resume <session>") {
+		t.Fatalf("start example=%q", start.Example)
 	}
 }
 

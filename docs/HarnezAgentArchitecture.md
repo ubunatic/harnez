@@ -45,135 +45,113 @@ flowchart TD
     G --> D
 ```
 
-### 2.1 `harnez agent start` (Spawn a Subagent)
-Starts a new agent session on the specified target provider/model, capturing caller lineage (`parent_session_id`).
+### 2.1 Command forms and handles
 
-This command is synchronous and intentionally low-noise: it waits for the turn to
-finish and prints the agent's reply (including the session details needed for a
-later resume). Do not wrap it in a polling loop or detach it into an opaque
-process. When parallel work is wanted, run the command through the host agent's
-visible background-job facility so the job and its child session remain visible
-and the user can inspect or stop them manually.
+The root command accepts the compact prompt form:
 
-```bash
-harnez agent start <provider>:<model>[:<tier>] [-d <working_dir>] [--name <session_name>] "<task_prompt>"
+```text
+harnez agent -p "summarise the open tickets"
+harnez agent --name docs -d ~/projects/x "update the changelog"
+harnez agent -c -p "continue"
+harnez agent --name w -p "/compact"
 ```
 
-- **Examples**:
-  ```bash
-  harnez agent start codex:luna:low "Implement reproducing test for issue 417"
-  harnez agent start codex:sol:low -d /path/to/repo --name dev-linter "Fix lint warnings"
-  harnez agent start claude:sonnet:low "Review commit diff"
-  harnez agent start agy:flash:med "Explore AST parser structure"
-  ```
-- **Lifecycle Reconnect Banner (Emitted ONLY ONCE on start)**:
-  ```
-  ┌────────────────────────────────────────────────────────────────────────┐
-  │ Harnez Agent Started: agent-codex-luna-01a0b369                       │
-  │ Model: gpt-5.6-luna (effort: low) | PID: 48192 | WorkingDir: /home/uwe │
-  │ Parent Session: agy-session-77a1                                       │
-  │                                                                        │
-  │ Reconnect / Resume: harnez agent resume agent-codex-luna-01a0b369 "..."│
-  │ Check Status:       harnez agent status agent-codex-luna-01a0b369      │
-  │ Stop Session:       harnez agent stop agent-codex-luna-01a0b369        │
-  │ Delete / Teardown:  harnez agent delete agent-codex-luna-01a0b369      │
-  └────────────────────────────────────────────────────────────────────────┘
-  ```
-- **Structured JSON Output (`--json`)**:
-  ```json
-  {
-    "session_id": "01a0b369-f462-7741-8ced-8d97fd2f8bac",
-    "parent_session_id": "agy-session-77a1",
-    "name": "agent-codex-luna-01a0b369",
-    "provider": "codex",
-    "model": "gpt-5.6-luna",
-    "tier": "low",
-    "status": "completed",
-    "tokens_turn": 4210,
-    "tokens_cumulative": 4210,
-    "cached_tokens": 0,
-    "duration_ms": 6120,
-    "reconnect_cmd": "harnez agent resume 01a0b369-f462-7741-8ced-8d97fd2f8bac \"<prompt>\"",
-    "response": "PASS: Reproduction test created in internal/subagent/driver_test.go"
-  }
-  ```
+The explicit verbs are:
 
-### 2.2 `harnez agent chat` (Interactive Sessions & Memorable Naming)
-Launches an interactive foreground terminal chat session with the target agent backend (`codex`, `claude`, `agy`), automatically assigning a memorable short name (e.g. `calm-otter`, `swift-falcon`, `bold-fox`) and registering lifecycle state.
-
-```bash
-harnez agent chat <provider:model[:tier]> [--name <session_name>] [-d <working_dir>]
-harnez agent chat attach <session_id|name>
+```text
+harnez agent start --name w --model luna -f task.md -- "extra instructions"
+harnez agent resume --name w "next step"
+harnez agent chat
+harnez agent chat attach --name w
+harnez agent list [--children|--all-sessions]
+harnez agent status --name w
+harnez agent compact --name w
+harnez agent stop --name w
+harnez agent delete --name w
+harnez agent models
 ```
 
-- **Interactive Control Socket**: Live interactive sessions expose a Unix control socket (`~/.harnez/agents/<session_id>.sock`), enabling host orchestrators and peer agents to inject prompts (`harnez agent resume`), request compaction (`harnez agent compact`), or stop (`harnez agent stop`) without killing the user terminal.
-- **Detached Reattach**: Detached or completed interactive sessions can be resumed via `harnez agent chat attach <session_id|name>`.
+`--name` selects a session, `--model` selects a provider/model/tier, and `-d`
+selects the working-directory or attribution scope. A missing model uses the
+specification in `spec/agent.yaml`; bare aliases such as `luna` are accepted.
+Root prompt forms also provide `-p/--prompt`, repeatable `-f/--file`, `-c/--continue`,
+`--stream full|stats`, `--plan yes|no`, and `--json`. `--` sends following text
+literally. There are no legacy provider-first or positional-session forms.
 
-### 2.3 `harnez agent resume` (Reconnect to Session)
-Resumes an existing session with full conversational memory and KV-cache continuity.
+### 2.2 Prompt assembly
 
-Resume is synchronous and low-noise as well: it waits for the requested turn and
-includes the agent's reply in its output. Use a short prompt for follow-up work
-after consulting the durable ticket or other repository record; do not use
-opaque polling or a detached process to wait for the response. For parallel
-follow-ups, invoke each resume through the host agent's visible background-job
-facility so users can see and manually stop the jobs/subagents.
+Prompt parts are joined with one blank line, in this order: prompt files in
+flag order (`-f -` reads stdin), `-p` text, positional words, and the text after
+`--`. The protocol preamble is added only when sending the prompt. A stored
+start prompt records file paths and byte sizes rather than file contents.
 
-```bash
-harnez agent resume <session_id|name> "<next_prompt>"
-```
+### 2.3 Session selection and attribution
 
-- If cumulative token usage exceeds the compaction threshold (100–150k tokens), `harnez agent` automatically executes context compaction before executing the turn.
-- Returns turn response and updated cumulative token telemetry.
+A named root session is an upsert: an existing name resumes and an unknown name
+starts. `-c` resumes the most recent attributable session in `-d`, or starts a
+new session when none exists. Bare `resume` requires exactly one attributable
+session; zero and multiple candidates are errors. Attribution requires a
+resumable, manageable session in the canonical directory and caller lineage.
+Destructive verbs never accept `-c`; they require `--name` or their existing
+explicit scope options. Output reports `resolved=name`, `resolved=dir`,
+`resolved=continue`, or `resolved=new` in the session-info line.
 
-### 2.4 `harnez agent list`
-Lists active, idle, and parked subagent sessions. By default filters to the current caller session and its child lineage. Use `--all-sessions` to view all agents running across external tools.
+New sessions receive generated memorable names, avoiding names and IDs already
+in the store. The list `RESUME` column reports whether a session is resumable;
+resume failures are retained as last-error diagnostics.
 
-```bash
-harnez agent list [--children] [--all-sessions] [--json]
-```
+### 2.4 Interactive sessions
 
-Output:
-```
-ID                                    NAME              PROVIDER  PARENT     MODEL         STATUS     TOKENS   IDLE     CACHED
-01a0b369-f462-7741-8ced-8d97fd2f8bac  dev-linter        codex     agy-77a1   gpt-5.6-luna  idle       18.4k    2m10s    YES (94%)
-01a0b370-6966-7640-8eae-3bfb0d7b14e2  reviewer-sol      codex     agy-77a1   gpt-5.6-sol   parked     112.1k   45m00s   EXPIRED
-```
+`chat` launches an interactive session, and `chat attach --name` attaches to
+one with a provider session ID. Interactive sessions may receive prompt,
+compact, and stop control messages through their control socket.
 
-### 2.5 `harnez agent status`
-Provides detailed inspection of a session's health, token growth trajectory, and cache freshness.
+### 2.5 Lifecycle verbs
 
-```bash
-harnez agent status <session_id|name> [--json]
-```
+`list`, `status`, `compact`, `stop`, and `delete` operate on sessions selected
+by `--name` and the configured directory/lineage rules. `status` can report a
+repository-wide view when no name is supplied. `stop --children` and
+`stop --all` retain their explicit bulk behavior; delete refuses active
+interactive sessions until they are stopped.
 
-### 2.6 `harnez agent compact`
-Explicitly invokes context compaction for a session.
+### 2.6 Slash commands
 
-```bash
-harnez agent compact <session_id|name>
-```
+A single-line root prompt beginning with `/` is intercepted unless it came from
+after `--`. `/compact`, `/stop`, and `/status` act on the named session, the
+most recent `-c` session, or the unique attributable session in `-d`.
+Unknown commands fail with an instruction to send them literally using `--`.
 
-### 2.7 `harnez agent stop` & `delete` (alias `rm`)
-- `harnez agent stop <session_id|name>`: Gracefully stops running tasks and parks the session (only permitted for own session or direct child agents).
-- `harnez agent stop --children`: Gracefully stops and parks all child agents spawned by the current caller session.
-- `harnez agent stop --all`: Gracefully stops and parks all sessions manageable by the caller; foreign sessions are ignored.
-- `harnez agent delete <session_id|name>`: Terminates the process, clears ephemeral working files, and purges state.
-- Session-reference lifecycle commands provide shell completion for registered names; descriptions show a normalized, privacy-scrubbed excerpt of the start prompt.
-- `harnez agent delete --all`: Applies deletion to every manageable session; active interactive sessions must be stopped first.
-- External sessions' agents cannot be stopped or deleted by foreign sessions without explicit human/global flags (e.g. `--global --force`), preventing cross-tool collisions.
+### 2.7 Model and session records
 
-### 2.8 Multi-Session Concurrency & Lineage Isolation Invariant
-When multiple developer harnesses (e.g., AGY IDE, independent Claude CLI sessions, Codex CLI terminals, background CI jobs) run concurrently on the same host:
-1. **Ownership & Ancestry Tracking**: Every agent session record persisted under `~/.harnez/agents/<session_id>.json` contains its `parent_session_id`, `caller_pid`, `harness_type`, and workspace directory.
-2. **Strict Lineage Boundary**: An agent session or automated sprint workflow **MUST ONLY** inspect, resume, stop, or delete agents belonging to its own session subtree (itself and its descendants).
-3. **Protection of Foreign Agents**: Global operations (`stop`, `delete`, `clean`) never sweep or kill processes belonging to other sessions. Any attempt to modify or terminate an agent belonging to a different parent session without an explicit administrative flag is rejected with an error:
-   ```
-   [ERROR]: Session 'agent-claude-91f2' belongs to parent session 'codex-cli-3382' (PID 91204).
-   Cross-session teardown rejected. Only the owning session or a human administrator (--global) can terminate foreign agents.
-   ```
+Model aliases resolve through the configured model specification and the
+provider driver. Session records retain provider/model/tier, working directory,
+parent lineage, status, token counters, cached tokens, and last-error data.
+Provider/model selection on resume must match the existing session.
 
----
+### 2.8 Concurrency and lineage isolation
+
+Every session records its parent session, caller PID, harness type, and working
+directory. Operations only manage sessions in the caller's lineage; foreign
+sessions are rejected or ignored according to the operation's scope.
+
+### 2.9 Output protocol
+
+Streaming output is written to stdout using labeled blocks. A turn begins with
+`[session info ...]` and `[wait]`. Message events are labeled
+`[confirmation]`, `[plan]`, `[message]`, or `[compaction ack]`. Both stream
+modes emit `[heartbeat]` at 30s, 1m, 2m, 4m, 6m, 10m, then every 5m. In
+`--stream stats` mode only the confirmation and plan are shown live and the
+final message is printed as `[reply]` (a final message that was already shown
+live is not repeated). A plan turn ends with `[gate]`; malformed plans may
+produce `[warning]`, and protocol violations produce `[violation]`. Every turn
+ends with `[done]`, including new-versus-cached token counts.
+
+The provider prompt starts with the `CONFIRM:`/`PLAN:` protocol preamble. The
+confirmation watchdog waits 10 seconds for the first confirmation and reports
+violations without changing the provider prompt. While streaming, stderr stays
+empty and every block goes to stdout; failures are returned as the command
+error, without a usage dump. Without streaming (`--json`, providers that do
+not stream) a `[session timeline]` is written to stderr instead.
 
 ## 3. Model Shorthand & Vendor Mapping
 
@@ -238,7 +216,7 @@ When `subagent_mode: harnez` is enabled:
      Please dispatch subagents using:
        harnez agent start <tool>:<model> "<prompt>"
      To resume an existing agent:
-       harnez agent resume <session_id> "<prompt>"
+       harnez agent resume --name <session_id> "<prompt>"
      Refer to docs/HarnezAgentArchitecture.md for complete details.
      ```
 2. **Seamless Tool Replacement (Phase 2)**:
@@ -267,18 +245,18 @@ background-job facility when parallel dispatch is appropriate.
 All sprint skills are updated to natively orchestrate via `harnez agent`:
 
 1. **`/lean-sprint`**:
-   - Host dispatches the worker: `harnez agent start codex:luna:low -d <repo> "<milestone_prompt>"`.
-   - Host inspects diff and resumes: `harnez agent resume <session_id> "Pre-work & Milestone 2..."`.
-   - Host terminates upon completion: `harnez agent delete <session_id>`.
+   - Host dispatches the worker: `harnez agent start --model luna -d <repo> "<milestone_prompt>"`.
+   - Host inspects diff and resumes: `harnez agent resume --name <session_id> "Pre-work & Milestone 2..."`.
+   - Host terminates upon completion: `harnez agent delete --name <session_id>`.
 
 2. **`/reverse-sprint`**:
    - Dev lead starts directly in low tier (`luna:low`).
-   - Dev lead calls reviewer: `harnez agent start codex:sol:low "Review diff HEAD~1"`.
-   - Dev lead calls advisor only when stuck: `harnez agent start codex:astra:low "Inspect lines 40-60 in handler.go"`.
+   - Dev lead calls reviewer: `harnez agent start --model sol "Review diff HEAD~1"`.
+   - Dev lead calls advisor only when stuck: `harnez agent start --model astra "Inspect lines 40-60 in handler.go"`.
    - Auto-compacts every 100–150k tokens via `harnez agent compact`.
 
 3. **`/sprint`**:
-   - Phase 1 Advisor: `harnez agent start agy:flash:med --name sprint-advisor "<audit_task>"`.
-   - Phase 2 Devs: `harnez agent start codex:luna:low --name dev-cli "<dev_task>"`.
-   - Phase 3 Reviewer: `harnez agent start codex:sol:low "<review_task>"`.
+   - Phase 1 Advisor: `harnez agent start --model agy:flash:med --name sprint-advisor "<audit_task>"`.
+   - Phase 2 Devs: `harnez agent start --model luna --name dev-cli "<dev_task>"`.
+   - Phase 3 Reviewer: `harnez agent start --model sol "<review_task>"`.
    - Phase 4 Hygiene: `harnez agent stop --children` (terminates only subagents spawned by this session, preserving foreign sessions).

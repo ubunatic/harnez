@@ -40,11 +40,24 @@ type agentOutput struct {
 func newAgentCmd() *cobra.Command {
 	var jsonOut, children, all bool
 	var storeDir, workDir, name, modelSpec, streamMode string
-	var planFirst bool
+	var planSpec string
 	var rootPrompt string
 	var rootFiles []string
 	var rootContinue bool
-	root := &cobra.Command{Use: "agent", Short: "Manage subagent sessions", Args: cobra.ArbitraryArgs}
+	root := &cobra.Command{Use: "agent", Short: "Manage subagent sessions", Args: cobra.ArbitraryArgs,
+		Long: `Manage subagent sessions across supported providers.
+
+Short forms:
+  harnez agent -p "summarise the open tickets"
+  harnez agent --name docs -d ~/projects/x "update the changelog"
+  harnez agent -c -p "continue"
+  harnez agent start --name w --model luna -f task.md -- "extra instructions"
+  harnez agent resume --name w "next step"
+  harnez agent --name w -p "/compact"
+
+The model default comes from spec/agent.yaml. Sessions are chosen by --name,
+attribution in -d, or -c. Use -- to send text literally. Slash commands are
+/compact, /stop, and /status.`}
 	root.PersistentFlags().StringVar(&storeDir, "store-dir", subagent.DefaultStoreDir(), "session store directory")
 	root.PersistentFlags().StringVarP(&workDir, "dir", "d", ".", "working directory or session scope")
 	root.PersistentFlags().StringVar(&name, "name", "", "session name")
@@ -54,7 +67,7 @@ func newAgentCmd() *cobra.Command {
 	root.Flags().StringSliceVarP(&rootFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	root.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 	root.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
-	root.Flags().BoolVar(&planFirst, "plan-first", false, "agent confirms and plans, then ends its turn without executing; resume to give the go-ahead")
+	root.Flags().StringVar(&planSpec, "plan", "no", "planning gate: yes or no")
 	store := func() (*subagent.FileSessionStore, error) { return subagent.NewSessionStore(storeDir) }
 	parent := func() string {
 		if v := os.Getenv("HARNEZ_SESSION_ID"); v != "" {
@@ -66,6 +79,8 @@ func newAgentCmd() *cobra.Command {
 		return agentSessionCompletion(storeDir, parent)(cmd, args, toComplete)
 	})
 	_ = root.RegisterFlagCompletionFunc("model", agentModelCompletion)
+	_ = root.RegisterFlagCompletionFunc("plan", flagValueCompletion("yes", "no"))
+	_ = root.RegisterFlagCompletionFunc("stream", flagValueCompletion(streamFull, streamStats))
 	find := func(cmd *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
 		dir := ""
 		if cmd.Flags().Changed("dir") {
@@ -74,6 +89,10 @@ func newAgentCmd() *cobra.Command {
 		return resolveSession(s, id, dir)
 	}
 	root.RunE = func(cmd *cobra.Command, args []string) error {
+		planFirst, err := parsePlanSpec(planSpec)
+		if err != nil {
+			return err
+		}
 		if workDir == "" {
 			workDir = "."
 		}
@@ -149,7 +168,11 @@ func newAgentCmd() *cobra.Command {
 		return runStart(cmd, deps, startRequest{Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
 	}
 	var startFiles []string
-	start := &cobra.Command{Use: "start [prompt...]", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+	start := &cobra.Command{Use: "start [prompt...]", Short: "Start a new agent session", Example: "  harnez agent start --name w --model luna -f task.md -- \"extra instructions\"", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+		planFirst, err := parsePlanSpec(planSpec)
+		if err != nil {
+			return err
+		}
 		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
 		if modelSpec == "" && len(words) >= 2 && oldStyleModelWord(words[0]) {
 			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
@@ -162,7 +185,9 @@ func newAgentCmd() *cobra.Command {
 	}}
 	start.Flags().StringSliceVarP(&startFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
-	start.Flags().BoolVar(&planFirst, "plan-first", false, "agent confirms and plans, then ends its turn without executing; resume to give the go-ahead")
+	start.Flags().StringVar(&planSpec, "plan", "no", "planning gate: yes or no")
+	_ = start.RegisterFlagCompletionFunc("plan", flagValueCompletion("yes", "no"))
+	_ = start.RegisterFlagCompletionFunc("stream", flagValueCompletion(streamFull, streamStats))
 	start.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 
 	models := &cobra.Command{Use: "models", Short: "List known agent models and tiers", RunE: func(cmd *cobra.Command, _ []string) error {
@@ -328,7 +353,11 @@ func newAgentCmd() *cobra.Command {
 
 	var resumeFiles []string
 	var continueResume bool
-	resume := &cobra.Command{Use: "resume [prompt...]", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+	resume := &cobra.Command{Use: "resume [prompt...]", Short: "Resume an existing agent session", Example: "  harnez agent resume --name w \"next step\"", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+		planFirst, err := parsePlanSpec(planSpec)
+		if err != nil {
+			return err
+		}
 		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
 		if continueResume && name != "" {
 			return fmt.Errorf("resume: --continue cannot be combined with --name")
@@ -344,12 +373,14 @@ func newAgentCmd() *cobra.Command {
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	resume.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
-	resume.Flags().BoolVar(&planFirst, "plan-first", false, "agent confirms and plans, then ends its turn without executing; resume to give the go-ahead")
+	resume.Flags().StringVar(&planSpec, "plan", "no", "planning gate: yes or no")
+	_ = resume.RegisterFlagCompletionFunc("plan", flagValueCompletion("yes", "no"))
+	_ = resume.RegisterFlagCompletionFunc("stream", flagValueCompletion(streamFull, streamStats))
 	resume.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 	resume.Flags().StringSliceVarP(&resumeFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	resume.Flags().BoolVarP(&continueResume, "continue", "c", false, "resume the most recently active attributable session")
 
-	list := &cobra.Command{Use: "list", RunE: func(cmd *cobra.Command, _ []string) error {
+	list := &cobra.Command{Use: "list", Short: "List agent sessions", RunE: func(cmd *cobra.Command, _ []string) error {
 		s, err := store()
 		if err != nil {
 			return err
@@ -377,7 +408,7 @@ func newAgentCmd() *cobra.Command {
 	list.Flags().BoolVar(&all, "all-sessions", false, "list all sessions")
 	list.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 
-	status := &cobra.Command{Use: "status", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
+	status := &cobra.Command{Use: "status", Short: "Show agent session status", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
 			return e
@@ -418,7 +449,7 @@ func newAgentCmd() *cobra.Command {
 		policyCmd.Flags().BoolVar(&persist, "persist", false, "write the policy to AGENTS.md")
 		root.AddCommand(policyCmd)
 	}
-	compact := &cobra.Command{Use: "compact", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
+	compact := &cobra.Command{Use: "compact", Short: "Compact an agent session", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		if name == "" {
 			return fmt.Errorf("compact: --name <session> is required")
 		}
@@ -433,7 +464,7 @@ func newAgentCmd() *cobra.Command {
 		return compactSession(cmd, s, x)
 	}}
 	compact.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
-	stop := &cobra.Command{Use: "stop", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
+	stop := &cobra.Command{Use: "stop", Short: "Stop an agent session", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
 			return e
@@ -504,7 +535,7 @@ func newAgentCmd() *cobra.Command {
 	stop.Flags().BoolVar(&children, "children", false, "stop child sessions")
 	stop.Flags().BoolVar(&all, "all", false, "stop all manageable sessions")
 	stop.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
-	remove := &cobra.Command{Use: "delete", Aliases: []string{"rm"}, Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
+	remove := &cobra.Command{Use: "delete", Short: "Delete an agent session", Aliases: []string{"rm"}, Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
 			return e
@@ -654,6 +685,29 @@ func agentModelCompletion(_ *cobra.Command, _ []string, toComplete string) ([]st
 		}
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp
+}
+
+func flagValueCompletion(values ...string) cobra.CompletionFunc {
+	return func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		var result []string
+		for _, value := range values {
+			if strings.HasPrefix(value, toComplete) {
+				result = append(result, value)
+			}
+		}
+		return result, cobra.ShellCompDirectiveNoFileComp
+	}
+}
+
+func parsePlanSpec(value string) (bool, error) {
+	switch value {
+	case "yes":
+		return true, nil
+	case "no":
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid --plan %q: want \"yes\" or \"no\"", value)
+	}
 }
 
 func sessionPromptDescription(prompt string) string {
