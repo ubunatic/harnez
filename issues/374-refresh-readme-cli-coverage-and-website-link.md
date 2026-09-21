@@ -1,6 +1,6 @@
 # 374 — Refresh README CLI coverage and website link
 
-**Status**: Open
+**Status**: Closed — README refreshed against current CLI help
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Documentation
