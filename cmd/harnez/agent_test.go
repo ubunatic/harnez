@@ -604,3 +604,71 @@ func TestAgentResumeCompactsOnceAndSeparatesAck(t *testing.T) {
 		t.Fatal("next resume must not compact again")
 	}
 }
+
+type streamDriver struct{ recordingAgentDriver }
+
+func (*streamDriver) emit(fn subagent.EventFunc) *subagent.TurnResult {
+	fn(subagent.Event{Kind: "session", Text: "thread-1", Bytes: 40})
+	fn(subagent.Event{Kind: "message", Text: "on it", Bytes: 80})
+	fn(subagent.Event{Kind: "activity", Text: "running sleep", Bytes: 80})
+	time.Sleep(60 * time.Millisecond)
+	fn(subagent.Event{Kind: "message", Text: "all done", Bytes: 80})
+	return &subagent.TurnResult{SessionID: "thread-1", Response: "all done", Messages: []string{"on it", "all done"}, TokensTurn: 500}
+}
+func (d *streamDriver) RunStream(_ context.Context, _ subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
+	return d.emit(fn), nil
+}
+func (d *streamDriver) ResumeStream(_ context.Context, _, _ string, fn subagent.EventFunc) (*subagent.TurnResult, error) {
+	return d.emit(fn), nil
+}
+
+func TestAgentStartStreamsLabeledBlocks(t *testing.T) {
+	old, oldSched := agentDriver, heartbeatSchedule
+	agentDriver = func(subagent.Model) subagent.Driver { return &streamDriver{} }
+	heartbeatSchedule = []time.Duration{20 * time.Millisecond}
+	defer func() { agentDriver, heartbeatSchedule = old, oldSched }()
+	var out bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"start", "codex:luna", "prompt", "--name", "w", "--store-dir", t.TempDir()})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	order := []string{"[session info: id=thread-1 agent=codex:gpt-5.6-luna action=start]", "name=w", "reconnect: harnez agent resume thread-1", "[wait:", "[message: 0s]\non it", "[heartbeat: ~", "last: running sleep]", "[message: 0s]\nall done", "[done: 2 messages, last message is the reply"}
+	pos := 0
+	for _, want := range order {
+		i := strings.Index(got[pos:], want)
+		if i < 0 {
+			t.Fatalf("missing %q (in order) in:\n%s", want, got)
+		}
+		pos += i + len(want)
+	}
+	if strings.Contains(got, "[agent messages]") || strings.Contains(got, "[msg ") {
+		t.Fatalf("old labels present:\n%s", got)
+	}
+}
+
+func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
+	old := agentDriver
+	agentDriver = func(subagent.Model) subagent.Driver { return &streamDriver{} }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store, _ := subagent.NewSessionStore(storeDir)
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 150000}); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"resume", "worker", "prompt", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume]\n") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
+		t.Fatalf("stdout:\n%s", got)
+	}
+}

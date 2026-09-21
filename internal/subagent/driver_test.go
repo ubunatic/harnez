@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"context"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -110,5 +111,25 @@ func TestParseCodexKeepsAllAgentMessages(t *testing.T) {
 	}
 	if r.Response != "second" || len(r.Messages) != 2 || r.Messages[0] != "first" {
 		t.Fatalf("response=%q messages=%q", r.Response, r.Messages)
+	}
+}
+
+func TestCodexStreamEmitsEventsInOrder(t *testing.T) {
+	lines := `{"type":"thread.started","thread_id":"t1"}
+{"type":"item.completed","item":{"type":"agent_message","text":"hi"}}
+{"type":"item.started","item":{"type":"command_execution","command":"sleep 3"}}
+{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5,"cached_input_tokens":4}}
+`
+	d := CodexDriver{Start: func(context.Context, string, ...string) (io.Reader, func() error, error) {
+		return strings.NewReader(lines), func() error { return nil }, nil
+	}}
+	var kinds []string
+	r, err := d.ResumeStream(context.Background(), "t1", "p", func(e Event) { kinds = append(kinds, e.Kind+":"+e.Text) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"session:t1", "message:hi", "activity:running sleep 3", "other:"}
+	if !reflect.DeepEqual(kinds, want) || r.Response != "hi" || r.TokensTurn != 15 || r.CachedTokens != 4 {
+		t.Fatalf("events=%q result=%+v", kinds, r)
 	}
 }

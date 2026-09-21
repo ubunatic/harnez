@@ -82,8 +82,28 @@ func newAgentCmd() *cobra.Command {
 			return fmt.Errorf("resolve working directory: %w", err)
 		}
 		tl := newTimeline(cmd)
-		tl.announceTurn("start", m.Provider+":"+m.Name, sessName)
-		r, err := agentDriver(m).Run(cmd.Context(), subagent.RunOptions{Prompt: args[1], Model: m, Dir: canonicalWorkDir})
+		opts := subagent.RunOptions{Prompt: args[1], Model: m, Dir: canonicalWorkDir}
+		d := agentDriver(m)
+		sd, streaming := d.(subagent.StreamingDriver)
+		streaming = streaming && !jsonOut
+		var ts *turnStream
+		var r *subagent.TurnResult
+		if streaming {
+			ts = newTurnStream(cmd, false)
+			ts.startHeartbeats()
+			r, err = sd.RunStream(cmd.Context(), opts, func(ev subagent.Event) {
+				if ev.Kind == "session" {
+					ts.info(ev.Text, m.Provider+":"+m.Name, "start", fmt.Sprintf("name=%s dir=%s parent=%s\nreconnect: harnez agent resume %s \"<prompt>\"", sessName, canonicalWorkDir, parent(), ev.Text))
+				}
+				ts.onEvent(ev)
+			})
+			if err != nil {
+				ts.abort()
+			}
+		} else {
+			tl.announceTurn("start", m.Provider+":"+m.Name, sessName)
+			r, err = d.Run(cmd.Context(), opts)
+		}
 		if err != nil {
 			return fmt.Errorf("agent start %q failed: %w; verify the provider/model configuration or ask for guidance", args[0], err)
 		}
@@ -96,6 +116,10 @@ func newAgentCmd() *cobra.Command {
 			return err
 		}
 		out := agentOutput{Session: sess, Response: r.Response, Messages: r.Messages, ReconnectCmd: "harnez agent resume " + id + " \"<prompt>\""}
+		if streaming {
+			ts.finish(r)
+			return nil
+		}
 		tl.finishTurn(r, id, out.ReconnectCmd)
 		if jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
@@ -285,8 +309,22 @@ func newAgentCmd() *cobra.Command {
 			sess.TokensSinceCompact = 0
 			compacted = true
 		}
-		tl.announceTurn("resume", sess.Provider+":"+sess.Model, sess.Name)
-		r, err := d.Resume(cmd.Context(), sess.ProviderID(), args[1])
+		var ts *turnStream
+		var r *subagent.TurnResult
+		sd, streaming := d.(subagent.StreamingDriver)
+		streaming = streaming && !jsonOut
+		if streaming {
+			ts = newTurnStream(cmd, compacted)
+			ts.info(sess.ID, sess.Provider+":"+sess.Model, "resume")
+			ts.startHeartbeats()
+			r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), args[1], ts.onEvent)
+			if err != nil {
+				ts.abort()
+			}
+		} else {
+			tl.announceTurn("resume", sess.Provider+":"+sess.Model, sess.Name)
+			r, err = d.Resume(cmd.Context(), sess.ProviderID(), args[1])
+		}
 		if err != nil {
 			return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
 		}
@@ -297,6 +335,10 @@ func newAgentCmd() *cobra.Command {
 		sess.LastActiveAt = time.Now()
 		if err = s.Save(sess); err != nil {
 			return err
+		}
+		if streaming {
+			ts.finish(r)
+			return nil
 		}
 		if compacted {
 			var ack string

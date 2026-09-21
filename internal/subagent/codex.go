@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os/exec"
 	"time"
 )
@@ -13,6 +14,8 @@ import (
 // CodexDriver runs codex in non-interactive JSONL mode.
 type CodexDriver struct {
 	Command func(context.Context, string, ...string) ([]byte, error)
+	// Start launches a process for streaming turns; nil uses os/exec.
+	Start func(context.Context, string, ...string) (io.Reader, func() error, error)
 }
 
 func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error) {
@@ -62,49 +65,140 @@ func (d CodexDriver) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func parseCodex(data []byte) (*TurnResult, error) {
-	r := &TurnResult{}
-	s := bufio.NewScanner(bytes.NewReader(data))
-	s.Buffer(make([]byte, 4096), 8<<20)
-	for s.Scan() {
-		var e struct {
-			Type     string                      `json:"type"`
-			ThreadID string                      `json:"thread_id"`
-			Item     struct{ Type, Text string } `json:"item"`
-			Usage    struct {
-				Input   int `json:"input_tokens"`
-				Output  int `json:"output_tokens"`
-				Cached  int `json:"cached_input_tokens"`
-				Details struct {
-					Cached int `json:"cached_input_tokens"`
-				} `json:"input_token_details"`
-			} `json:"usage"`
-		}
-		if json.Unmarshal(s.Bytes(), &e) != nil {
-			continue
-		}
-		if e.ThreadID != "" {
-			r.SessionID = e.ThreadID
-		}
-		if e.Item.Type == "agent_message" {
-			r.Response = e.Item.Text
-			r.Messages = append(r.Messages, e.Item.Text)
-		}
-		if e.Type == "turn.completed" {
-			r.InputTokens += e.Usage.Input
-			r.OutputTokens += e.Usage.Output
-			r.CachedTokens += e.Usage.Cached
-			if e.Usage.Details.Cached > r.CachedTokens {
-				r.CachedTokens = e.Usage.Details.Cached
-			}
+// Event is one live occurrence in a streaming turn.
+type Event struct {
+	Kind  string // "session", "message", "activity" or "other"
+	Text  string // thread id, message text or activity description
+	Bytes int    // raw size of the provider event, for token estimates
+}
+
+// EventFunc receives events while a turn is running.
+type EventFunc func(Event)
+
+// StreamingDriver is implemented by drivers that report events as they happen.
+type StreamingDriver interface {
+	Driver
+	RunStream(context.Context, RunOptions, EventFunc) (*TurnResult, error)
+	ResumeStream(ctx context.Context, id, prompt string, fn EventFunc) (*TurnResult, error)
+}
+
+// codexParser folds Codex JSONL lines into a TurnResult and live events.
+type codexParser struct{ r TurnResult }
+
+func (p *codexParser) feed(line []byte) (Event, bool) {
+	var e struct {
+		Type     string                               `json:"type"`
+		ThreadID string                               `json:"thread_id"`
+		Item     struct{ Type, Text, Command string } `json:"item"`
+		Usage    struct {
+			Input   int `json:"input_tokens"`
+			Output  int `json:"output_tokens"`
+			Cached  int `json:"cached_input_tokens"`
+			Details struct {
+				Cached int `json:"cached_input_tokens"`
+			} `json:"input_token_details"`
+		} `json:"usage"`
+	}
+	if json.Unmarshal(line, &e) != nil {
+		return Event{}, false
+	}
+	ev := Event{Kind: "other", Bytes: len(line)}
+	if e.ThreadID != "" {
+		p.r.SessionID = e.ThreadID
+		ev.Kind, ev.Text = "session", e.ThreadID
+	}
+	switch {
+	case e.Item.Type == "agent_message":
+		p.r.Response = e.Item.Text
+		p.r.Messages = append(p.r.Messages, e.Item.Text)
+		ev.Kind, ev.Text = "message", e.Item.Text
+	case e.Type == "item.started" && e.Item.Type == "command_execution":
+		ev.Kind, ev.Text = "activity", "running "+e.Item.Command
+	}
+	if e.Type == "turn.completed" {
+		p.r.InputTokens += e.Usage.Input
+		p.r.OutputTokens += e.Usage.Output
+		p.r.CachedTokens += e.Usage.Cached
+		if e.Usage.Details.Cached > p.r.CachedTokens {
+			p.r.CachedTokens = e.Usage.Details.Cached
 		}
 	}
-	if r.Response == "" {
+	return ev, true
+}
+
+func (p *codexParser) result() (*TurnResult, error) {
+	if p.r.Response == "" {
 		return nil, fmt.Errorf("codex output has no agent_message")
 	}
-	r.TokensTurn = r.InputTokens + r.OutputTokens
-	r.TokensCumulative = r.TokensTurn
+	p.r.TokensTurn = p.r.InputTokens + p.r.OutputTokens
+	p.r.TokensCumulative = p.r.TokensTurn
+	return &p.r, nil
+}
+
+func parseCodexStream(rd io.Reader, fn EventFunc) (*TurnResult, error) {
+	p := &codexParser{}
+	s := bufio.NewScanner(rd)
+	s.Buffer(make([]byte, 4096), 8<<20)
+	for s.Scan() {
+		if ev, ok := p.feed(s.Bytes()); ok && fn != nil {
+			fn(ev)
+		}
+	}
+	if err := s.Err(); err != nil {
+		return nil, err
+	}
+	return p.result()
+}
+
+func parseCodex(data []byte) (*TurnResult, error) {
+	return parseCodexStream(bytes.NewReader(data), nil)
+}
+
+// stream runs codex and parses its JSONL output while the process is running.
+func (d CodexDriver) stream(ctx context.Context, fn EventFunc, args ...string) (*TurnResult, error) {
+	start := d.Start
+	if start == nil {
+		start = startProcess
+	}
+	rd, wait, err := start(ctx, "codex", args...)
+	if err != nil {
+		return nil, err
+	}
+	r, perr := parseCodexStream(rd, fn)
+	if werr := wait(); werr != nil {
+		return nil, werr
+	}
+	return r, perr
+}
+
+func startProcess(ctx context.Context, name string, args ...string) (io.Reader, func() error, error) {
+	c := exec.CommandContext(ctx, name, args...)
+	out, err := c.StdoutPipe()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := c.Start(); err != nil {
+		return nil, nil, err
+	}
+	return out, c.Wait, nil
+}
+
+func (d CodexDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) (*TurnResult, error) {
+	start := time.Now()
+	r, err := d.stream(ctx, fn, "exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "-m", o.Model.Name, o.Prompt)
+	if err != nil {
+		return nil, fmt.Errorf("codex exec: %w", err)
+	}
+	r.DurationMS = time.Since(start).Milliseconds()
 	return r, nil
 }
 
-var _ Driver = CodexDriver{}
+func (d CodexDriver) ResumeStream(ctx context.Context, id, prompt string, fn EventFunc) (*TurnResult, error) {
+	r, err := d.stream(ctx, fn, "exec", "resume", id, "--json", prompt)
+	if err != nil {
+		return nil, fmt.Errorf("codex resume: %w", err)
+	}
+	return r, nil
+}
+
+var _ StreamingDriver = CodexDriver{}
