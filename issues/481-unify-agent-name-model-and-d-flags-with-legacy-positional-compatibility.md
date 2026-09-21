@@ -1,6 +1,6 @@
 # 481 — Unify agent --name, --model and -d flags and remove the old positional forms
 
-**Status**: In Progress
+**Status**: Closed — all flags unified, old positional forms removed with usage hints, completion added, docs and help text updated
 
 **Priority**: P2 (Medium)
 **Severity**: Moderate
