@@ -5,6 +5,7 @@
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics
+**Related**: #479
 
 ---
 
@@ -51,3 +52,7 @@ notification.
 Provide a reliable event-driven background-task lifecycle for Codex hosts so
 completion is reported automatically and agents never need hard polling to
 discover that work is done.
+
+## Epic note (#479)
+
+Prerequisite for the `--async` mode in #476: detached workers need an event-driven completion channel so hosts never poll and no zombie worker is left behind.

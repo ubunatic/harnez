@@ -4,7 +4,7 @@
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics
-**Related**: [293 — Make roadmap synthesis recoverable across quota interruptions](293-make-roadmap-synthesis-recoverable-across-quota-interruptions.md), `docs/AgenticLoop.md`
+**Related**: [293 — Make roadmap synthesis recoverable across quota interruptions](293-make-roadmap-synthesis-recoverable-across-quota-interruptions.md), `docs/AgenticLoop.md`, #479
 
 ---
 
@@ -106,3 +106,7 @@ generic quota handling, or the behavior of the underlying usage service.
   become usable later.
 - Changing non-Codex agent providers, their prompts, their session lifecycle,
   or their dispatch instructions.
+
+## Epic note (#479)
+
+Quarantined sessions must be excluded from attribution in #482 (bare `resume`, `-c`), so a dead Codex session is never selected implicitly.

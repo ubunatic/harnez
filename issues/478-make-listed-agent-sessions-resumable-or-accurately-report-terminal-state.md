@@ -5,6 +5,7 @@
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
+**Related**: #479
 
 ---
 
@@ -52,3 +53,7 @@ difference between a worker's completed state and a resumable conversation.
 Make agent lifecycle state truthful and recoverable: every listed resumable
 session can actually be resumed, while non-resumable sessions are explicitly
 identified with actionable diagnostics.
+
+## Epic note (#479)
+
+Prerequisite for #482: session attribution must only select sessions that are actually resumable, so a reliable resumable/terminal state is needed first.

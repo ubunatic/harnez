@@ -4,7 +4,7 @@
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics / Infrastructure
-**Related**: #417, #435, `docs/HarnezAgentArchitecture.md`, `docs/practices/AgenticLoop.md`
+**Related**: #417, #435, `docs/HarnezAgentArchitecture.md`, `docs/practices/AgenticLoop.md`, #479
 
 ---
 
@@ -43,3 +43,7 @@ Implement `harnez agent start`, `harnez agent resume`, `harnez agent stop`, and 
 ### 3.3 Automated Verification Target
 - `go test -v ./internal/agent/... ./cmd/harnez/...`
 - Live smoke test verifying start -> reconnect banner -> resume -> teardown loop.
+
+## Epic note (#479)
+
+The CLI surface introduced here is being unified under epic #479 (`--name`, `--model`, `-d`, `-p`, `-c`, prompt files). Lifecycle, compaction and telemetry scope stays in this ticket.

@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: [[108-subagent-dispatch-sequential-default-and-issue-number-race-guard]], [[149-agent-specific-profiles-codex-async-wait-instruction]] (establishes the per-agent profile mechanism this policy's content likely migrates into), `AGENTS.md`, Codex subagent dispatch configuration
+**Related**: [[108-subagent-dispatch-sequential-default-and-issue-number-race-guard]], [[149-agent-specific-profiles-codex-async-wait-instruction]] (establishes the per-agent profile mechanism this policy's content likely migrates into), `AGENTS.md`, Codex subagent dispatch configuration, #479
 
 ---
 
@@ -96,3 +96,7 @@ useful regardless.
 
 Small (content only) once 149 lands; Medium including the step-1 investigation.
 Blocked on 149 for steps 3–5.
+
+## Epic note (#479)
+
+#484 supplies the fallback default model (`codex:luna:low`) when `--model` is omitted; this ticket still decides which model fits which task type.

@@ -4,7 +4,7 @@
 **Priority**: P3 (Low)
 **Severity**: Enhancement
 **Category**: Feature
-**Related**: [288 `/harnez-agent` skill](288-add-fresh-codex-skill-lean-fresh-handoff-sprint-using-codex-cli-instead-of-a-claude-subagent.md)
+**Related**: [288 `/harnez-agent` skill](288-add-fresh-codex-skill-lean-fresh-handoff-sprint-using-codex-cli-instead-of-a-claude-subagent.md), #479
 (consumer of this command — the skill should shell out to `harnez agent`, not hand-construct raw
 `codex`/`agy` invocations itself, per the `commands/harnez-sync.md` precedent of skills driving
 existing CLI subcommands rather than reimplementing logic inline), `cmd/harnez/exec.go` (closest
@@ -146,3 +146,7 @@ and `agy`), not speculatively for tools nobody has actually driven yet.
   constructed invocation actually behaves as intended before considering an adapter done. For
   Claude Code, include a bounded timeout/teardown probe and verify that issue/feedback artifacts
   written before termination are retained and reported.
+
+## Epic note (#479)
+
+Model alias, CLI flag and dispatch normalization is now covered by #481 (unified `--name`/`--model`/`-d`, legacy compatibility) and #484 (default model). Keep this open until those land, then close as absorbed.

@@ -5,6 +5,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
+**Related**: #479
 
 ---
 
@@ -57,3 +58,9 @@ immediate launch identity, can choose sync or async execution, can scope the
 working directory consistently, and can select an explicit planning mode
 without losing existing argument-order compatibility or creating zombie
 workers.
+
+## Epic note (#479, rescoped)
+
+- `-d` on every verb moved to #481; immediate launch identity is delivered by the streaming `[session info]` header.
+- Planning: the delivered `--plan-first` gate becomes `--plan=yes|no`. `inline` (print the plan, then work after a short wait) is dropped: a blocked caller cannot intervene during an in-agent sleep, and the turn boundary is the real review window.
+- Still open here: explicit `--sync`/`--async` modes and the first-use tip. Async depends on #477 (hook-driven completion) so no zombie workers are created.
