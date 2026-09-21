@@ -17,11 +17,11 @@ previous pass has largely landed (454, 315, 442, 374, 424 all closed; see §0), 
 is now **better, cleaner, more robust telemetry data management**. §3 therefore moves to the front
 of the suggested order of attack: the store is the substrate every cost, efficiency and A/B number
 in this backlog is read from, and 424 demonstrated that a schema defect can sit in it unnoticed
-until somebody happens to look. The ordering inside §3 is deliberately *reproduce-first*: 341
-(concurrent writers losing rows) before any new column, because a store that silently drops rows
-invalidates every query written against it; then 127 (SQL into `spec/`) so the queries have one
-home; then 457, which turns those queries into tests plus a live data-quality check so the next
-424-class defect is reported rather than discovered.
+until somebody happens to look. The ordering inside §3 was deliberately *reproduce-first*: 341
+(concurrent writers losing rows), then 127 (SQL into `spec/`), then 457 (queries as tests plus a
+live data-quality check). **That chain has now largely landed**: 457 is closed, 127 has delivered
+M1 and M2, and 341 is fixed on Linux. What is left in §3 is the *extend* half (446, 445, 124+296,
+225, 215).
 
 **Previous lead, now mostly delivered.** `harnez agent`
 (`start`/`resume`/`chat`/`stop`/`list`/`models`/`enable`/`disable`) is shipped and in use, and 454's
@@ -40,7 +40,24 @@ Sequencing buckets:
 
 ## 0. Shipped Recently
 
-**Closed since the 2026-09-21 pass (this pass's shipped set):**
+**Closed since the a600641 pass (latest shipped set):**
+
+- **457** — canonical telemetry analytics queries and live data-quality checks: spec-defined checks
+  with fixture tests (9bedd31) and `harnez stats --quality` (`--json`, `--strict`, 19e0895). The live
+  run is all PASS. **Model gap recorded in the ticket:** `tool_calls` has no `model` column, so
+  per-model call analytics are impossible; noted in §3 as a model-attribution item next to 446/445
+  (no ticket filed).
+- **424** — confirmed closed earlier (see below).
+
+**Delivered in part, ticket stays open:**
+
+- **127** — M1 and M2 delivered: all schema, insert and query SQL now lives in
+  `spec/telemetry.yaml`. Remaining scope: `telemetry.go` migration SQL, `classify.go`,
+  `sanitize_cache.go`, `issuesnapshot.go`, `export.go`, `economics_query.go`.
+- **341** — fixed on Linux (fbaa511, `BEGIN IMMEDIATE` serialization). Stays open awaiting macOS CI
+  confirmation (APFS was where it reproduced).
+
+**Closed since the 2026-09-21 pass:**
 
 - **454** — explicit `luna` selection is enforced; no silent host-provider fallback. The
   cost-substitution bug that led §1a last pass is fixed, which is why that section no longer
@@ -63,11 +80,6 @@ Sequencing buckets:
   half, is still open** and now tracks in §12 with the rest of the Dot8 work.
 - **428** — the telemetry migration test-coverage half landed in the same commit. **The ANSI
   256-color / 24-bit truecolor extensions remain open** and stay in §12 behind 427.
-
-**Filed this pass:**
-
-- **457** — canonical telemetry analytics queries as tests plus live data-quality checks. New,
-  and it is the keystone of the reordered §3 (see the rationale there).
 
 - **030, 071, 096, 105, 108, 126, 139, 149, 201, 209, 210, 217, 261, 262, 290, 292, 299** — shipped/closed
 - **006** — `fix(status): check all managed settings keys`
@@ -141,7 +153,7 @@ blocked P1 and a set of follow-ons, which is why this cluster no longer leads th
 | 449 — spec-driven chat model selection and aliases | M — P1; provider-only/tier-only/no-arg forms resolved through an editable spec, with quota-aware selection (skip agents ≥80% of their 5h window). **Unblocked by 454**: the "explicit selection wins" rule is now enforced, so defaults can be layered on top of it safely. Shares the spec surface 445 touches | **Now** |
 | 451 — roadmap skill defaults to low-cost models when unspecified | S — docs/skill-only; the same cost-discipline defect as 454, one layer up in the skill rather than the CLI | **Next** |
 | 453 — clarify `opus:low` vs `astra:low` cost guidance in sprint docs | S — docs-only; land together with 451 as one cost-discipline pass | **Next** |
-| 435 — native-subagent interception + A/B telemetry switch | **rescoped by 417**: the `subagent_mode` switch now exists as `harnez agent enable`/`disable`. What remains is the interception/redirection hooks for native `invoke_subagent`/`spawn_agent` and the comparative telemetry. Do the telemetry half only after §3's hardening chain (341 → 127 → 457) lands, or the A/B numbers inherit a store that is not yet known-good | **Next** |
+| 435 — native-subagent interception + A/B telemetry switch | **rescoped by 417**: the `subagent_mode` switch now exists as `harnez agent enable`/`disable`. What remains is the interception/redirection hooks for native `invoke_subagent`/`spawn_agent` and the comparative telemetry. The hardening chain (341 → 127 → 457) has largely landed, so the telemetry half is now unblocked once 341's macOS CI confirmation arrives and 446/445 supply cost numbers | **Next** |
 | 306 — quarantine Codex subagents unusable after usage limits | S/M — P1; a dispatcher that keeps routing to a dead session wastes a whole turn per attempt. Follows 449, which introduces the eligibility notion this would extend | **Next** |
 | 383 — disable queued question-tool prompts in Codex sessions | S — moved up from §14; it is a dispatch-surface papercut, not misc | **Next** |
 | 144 — Codex subagent model-selection policy | S — **unblocked by 149**; its content now migrates into a real profile instead of waiting for one | **Next** |
@@ -151,9 +163,8 @@ Rationale: this cluster is ordered by *what a wrong answer costs the user*. With
 the remaining piece of "send work to the model the user actually asked for" and stays **Now**. 450
 is the interactive half of the same surface but is externally blocked, so it moves to **Park**
 rather than sitting in **Now** as an item nobody can start. 435's A/B telemetry is still held
-behind §3 — and the reason is stronger this pass, not weaker: 424 proved the store can carry an
-unnoticed column defect, so an A/B comparison run before 341/457 land would produce confident
-wrong numbers.
+behind §3's cost work (446/445) and 341's macOS confirmation; 457's live checks now guard the
+store, so the earlier reason for holding it is largely gone.
 
 383 and 144 remain behind 451/453 and 306 deliberately: 451/453 are a small documentation batch
 that fixes current cost guidance, while 306 prevents repeated dispatch to a known-dead session.
@@ -206,21 +217,21 @@ and the status-bar work follow once the numbers are trustworthy.
 Rationale: doing the Codex half of 030 first is nearly free and unblocks the token column for a
 second agent. 113 before 111 — you want the measurements before tuning the cadence they'd inform.
 
-## 3. Telemetry data layer & analytics — **leading section this pass**
+## 3. Telemetry data layer & analytics
 
-The stated focus is better, cleaner, more robust telemetry data management. This section is
-therefore promoted ahead of every other cluster, and its internal order is **reproduce-first, then
-consolidate, then keep honest, then extend**. The principle: do not add a column, a cost field or a
-new event family to a store whose write path and query surface are not yet trustworthy — 424 is the
-worked example of what that costs.
+The stated focus is better, cleaner, more robust telemetry data management. The order was
+**reproduce-first, then consolidate, then keep honest, then extend**. The first three steps have
+landed (341 fixed on Linux, 127 M1/M2, 457 closed), so the section now moves to the *extend* half,
+with 457's `stats --quality` as the guard that flags regressions.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 341 — concurrent SQLite telemetry writers lose rows (macOS) | M — **first, and reproduce before fixing**. `TestConcurrentWriters` sees 25 of 50 rows on macOS-14 with writerB failing on a schema-version race at first-open. This is silent data loss in the write path: every ticket below writes to or reads from this store, so a fix landed on top of it inherits an unknown loss rate. Get a deterministic local reproduction first — the failure is filesystem-dependent (APFS), so a Linux-only fix attempt is guesswork | **Now** |
-| 127 — move `internal/telemetry` SQL into `spec/` | M — 10 statements, not the 5 the ticket lists. Second, because 457 defines a canonical query set and those queries want one home, not two: doing 457 first would write the canonical queries into Go and then immediately move them. Follows the Spec.md rule that spec values must not be duplicated in Go. Needs a clean tree | **Now** |
-| 457 — canonical analytics queries as tests + live data-quality checks | M — **new this pass, and the keystone**. A named query set (calls per tool/agent/model, sessions per day, NULL/empty rate per key column, orphaned/duplicate events, token distributions) that runs against fixtures in the test suite *and* against the live store as a data-quality report. This is what converts "telemetry bugs surface when someone happens to look" into "the store tells you where it looks wrong". 424, 425 and 341 were all found by accident; 457 is the mechanism that stops that being the discovery method | **Now** |
-| 446 — persist cost fields reported by agents | S/M — capture `cost`/`total_cost`/`currency` where a provider already reports them rather than discarding them. **Before 445**: a measured number is worth more than a modelled one, and it gives 445's estimates something to be checked against | **Next** |
-| 445 — counterfactual API rate cards in `spec/`, surfaced in `usage`/`stats` | M — rate cards per model in `spec/`, then estimated pay-as-you-go spend and cache savings. Lands on top of 446's measured values and 127's spec surface | **Next** |
+| 341 — concurrent SQLite telemetry writers lose rows (macOS) | M — **fixed on Linux** (fbaa511, `BEGIN IMMEDIATE` serialization); ticket stays open until macOS CI confirms, since the original failure was APFS-specific | **Awaiting CI** |
+| 127 — move `internal/telemetry` SQL into `spec/` | M — **M1 and M2 delivered**: all schema/insert/query SQL is in `spec/telemetry.yaml`. Remaining: `telemetry.go` migration SQL, `classify.go`, `sanitize_cache.go`, `issuesnapshot.go`, `export.go`, `economics_query.go`. Finish opportunistically alongside 446/445, which touch the same spec surface | **Next** |
+| ~~457~~ — canonical analytics queries as tests + live data-quality checks | ✅ **closed**: spec-defined checks, fixture tests, `harnez stats --quality`; live run all PASS. See §0 | **Done** |
+| model attribution for `tool_calls` (no ticket yet) | finding from 457: `tool_calls` has no `model` column, so per-model call analytics are impossible. Candidate item to file next to 446/445, since all three are about attributing cost and usage to a model | **Note** |
+| 446 — persist cost fields reported by agents | S/M — capture `cost`/`total_cost`/`currency` where a provider already reports them rather than discarding them. **Before 445**: a measured number is worth more than a modelled one, and it gives 445's estimates something to be checked against | **Now** |
+| 445 — counterfactual API rate cards in `spec/`, surfaced in `usage`/`stats` | M — rate cards per model in `spec/`, then estimated pay-as-you-go spend and cache savings. Lands on top of 446's measured values and 127's spec surface | **Now** (after 446) |
 | 124 — PostToolUse auto-capture of tool-call counts | M — canary-gated: run the payload probe before writing code. Moved up from §7; it is a telemetry *ingestion* ticket, and pairing it with 296 makes the efficiency numbers complete at the same time | **Next** |
 | 296 — always compute distill savings for stats | S/M — pairs with 124: together they close the "efficiency reporting is only partly populated" gap, and 457's data-quality checks will flag exactly these columns as sparse until they do | **Next** |
 | 225 — local SLM classifier reliability/accuracy | S — cache versioning first, then an accuracy baseline. **Before 215**: a backfill run against an unversioned cache cannot be evaluated, so the baseline has to exist before rows are rewritten at scale | **Next** |
@@ -230,13 +241,11 @@ worked example of what that costs.
 | 208 — SQLite export format | S/M — depends on 204's scrubbed record slices, and exporting a store is only worth doing once its contents are known-good | **Later** |
 | 425 (M2) / 428 (ANSI half) | telemetry halves shipped in 235d7da; the Braille-spacing and 256/truecolor remainders track in §12 | **→ §12** |
 
-Rationale: the ordering answers "what makes the *next* telemetry bug cheap to find" rather than
-"what adds the most data". 341 is first because row loss is the one defect that cannot be detected
-after the fact — a missing row leaves no trace to query. 127 is second and is not merely hygiene
-this pass: it is the prerequisite that stops 457 writing canonical queries into a location it would
-then have to vacate. 457 is third and is the durable payoff — it is the only ticket in the backlog
-that makes data quality a reported property instead of an incidental discovery. Everything that
-*adds* to the store (446/445 cost, 124/296 efficiency, 215 classification, 421 command analytics)
+Rationale: the hardening chain did its job. 457 now makes data quality a reported property
+(`harnez stats --quality`, all PASS live), 127's SQL is single-homed in `spec/telemetry.yaml`, and
+341 is fixed on Linux pending macOS CI. Its own finding is the next gap: `tool_calls` has no model
+column, so per-model call analytics are impossible; that belongs with 446/445 as one
+model-attribution theme. Everything that *adds* to the store (446/445 cost, 124/296 efficiency, 215 classification, 421 command analytics)
 queues behind that chain, in each case pairing a measurement with the thing that validates it.
 446 before 445 (measured before modelled), 225 before 215 (baseline before backfill), 124 with 296
 (both halves of one efficiency number).
@@ -446,7 +455,7 @@ the completed 302 research are handled only in §9 rather than scheduled here.
 | 337 — Research macOS system permissions and CLI whitelist for config template | - | **Next** |
 | 338 — macOS CI verification via GitHub mirror | - | **Next** |
 | 339 — Graceful degradation and gating of hardware telemetry and mic probes on macOS | - | **Next** |
-| 341 — Concurrent SQLite telemetry writers lose rows on macOS | **moved to §3 and promoted to Now** — it reproduces on macOS but it is telemetry data loss, not a porting task, and it gates the whole §3 chain | **Now** (→ §3) |
+| 341 — Concurrent SQLite telemetry writers lose rows on macOS | fixed on Linux; only macOS CI confirmation remains. Tracked in §3 | **Awaiting CI** (→ §3) |
 
 ## 12. Multimodal & Visual Context
 
@@ -530,8 +539,8 @@ one that will work; do the inline note, measure, and shelve the rest.
 Rationale for newer backlog sequencing:
 - Telemetry data management (Section 3) leads this pass by explicit focus: the store is the
   substrate every cost, efficiency and A/B number depends on, and 424 showed a defect can sit in it
-  undetected. 341 → 127 → 457 makes the write path verified, the query surface single-homed, and
-  data quality a reported property rather than an accident of someone looking.
+  undetected. 341 → 127 → 457 has largely landed: write path fixed on Linux, SQL single-homed in
+  `spec/`, data quality a reported property via `stats --quality`. The remaining work is extension.
 - Cost telemetry (446/445) follows immediately, because cheap-tier routing is only a policy if
   something measures what it saved — and those measurements are only worth taking once the store
   they land in is trusted.
@@ -546,33 +555,26 @@ Rationale for newer backlog sequencing:
 
 ## Suggested order of attack
 
-Reordered this pass. The previous list opened with dispatch correctness; 454 closed and 450 turned
-out to be blocked externally, so that lead is spent. Telemetry data management is the stated focus
-and now heads the list.
+Refreshed this pass. The telemetry hardening chain landed (457 closed, 127 M1/M2, 341 fixed on
+Linux), so the lead moves from hardening to extension.
 
-1. **Make the telemetry store trustworthy** (new lead): 341 (reproduce the concurrent-writer row
-   loss *before* fixing it) → 127 (SQL into `spec/`, so the canonical queries have one home) →
-   457 (canonical queries as tests + a live data-quality check). This order is deliberate: row
-   loss is the only telemetry defect that leaves no trace to query afterwards, and 127 before 457
-   avoids writing the canonical query set into a location it would immediately have to leave.
+1. **Close out the telemetry hardening chain**: confirm 341 on macOS CI (then close), and finish
+   127's remaining files (`telemetry.go` migration SQL, `classify.go`, `sanitize_cache.go`,
+   `issuesnapshot.go`, `export.go`, `economics_query.go`) as they are touched by later items.
 2. **Give the cost story measured numbers**: 446 (cost fields agents already report) → 445
-   (counterfactual rate cards in `spec/`) → 435's A/B telemetry half. Measured before modelled,
-   and all of it after step 1 so the numbers land in a store that has been verified rather than
-   assumed.
+   (counterfactual rate cards in `spec/`), plus the model-attribution gap from 457 (`tool_calls` has
+   no `model` column; note only, no ticket yet) → 435's A/B telemetry half.
 3. **Complete the efficiency numbers**: 124 (PostToolUse tool-call capture, canary-gated) + 296
-   (always compute distill savings) as one pair — they are two halves of the same reporting gap,
-   and 457's data-quality check will flag both columns as sparse until they land.
+   (always compute distill savings) as one pair; `stats --quality` will show when the columns fill.
 4. **Classification quality**: 225 (cache versioning, then an accuracy baseline) → 215 (LLM
-   backfill/reclassification). Baseline before backfill, or the backfill's effect is unmeasurable.
-   Then 421 and 208 last in this theme — a new event family and an export format are only worth
-   adding once the store beneath them is known-good.
+   backfill/reclassification), so the backfill's effect is measurable as a `stats --quality` delta.
+   Then 421 and 208 last in this theme.
 5. **Close the delivered-feature tickets** (nearly free, and it shrinks everything below): 291,
    342 → close as superseded by 417; 288 and 435 → rescope to what 417 did not deliver; 302 →
    verify the delivered study against its acceptance criteria, then close. Five tickets leave the
    backlog without writing code.
 6. **Remaining live correctness bugs**: 289 (`init` go.work hard-fail) → 279 (tracker lock
-   sidecar) → 255 (finish collector key decoding and diagnostics tests). 424, 315 and 442 all
-   closed this pass, so this chain is three items shorter than last pass.
+   sidecar) → 255 (finish collector key decoding and diagnostics tests). 424, 315 and 442 are closed.
 7. **Dispatch follow-ons**: 449 (spec-driven chat model selection, now unblocked by 454) → 306
    (quarantine dead Codex sessions) → 383 → 144. 450 is excluded until `../loom` lands.
 8. **OS-agnostic terminal foundation**: 286 (Go conventions + `x/term` `watch.go` refactor) →
