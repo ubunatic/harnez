@@ -715,3 +715,11 @@ func TestAgentRejectsUnknownStreamMode(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestShortDur(t *testing.T) {
+	for in, want := range map[time.Duration]string{0: "0s", 30 * time.Second: "30s", time.Minute: "1m", 150 * time.Second: "2m30s", time.Hour: "1h", time.Hour + 5*time.Minute: "1h5m"} {
+		if got := shortDur(in); got != want {
+			t.Fatalf("shortDur(%s) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,7 +63,17 @@ func newTurnStream(cmd *cobra.Command, mode string, compacted bool) *turnStream 
 	return &turnStream{w: cmd.OutOrStdout(), began: time.Now(), mode: mode, compacted: compacted, stop: make(chan struct{})}
 }
 
-func shortDur(d time.Duration) string { return d.Round(time.Second).String() }
+// shortDur renders 1m0s as 1m and 1h0m0s as 1h.
+func shortDur(d time.Duration) string {
+	s := d.Round(time.Second).String()
+	if strings.HasSuffix(s, "m0s") {
+		s = strings.TrimSuffix(s, "0s")
+	}
+	if strings.HasSuffix(s, "h0m") {
+		s = strings.TrimSuffix(s, "0m")
+	}
+	return s
+}
 
 func (t *turnStream) printf(format string, args ...any) {
 	t.mu.Lock()
