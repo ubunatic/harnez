@@ -114,6 +114,21 @@ func Open(path string) (*DB, error) {
 	return nil, fmt.Errorf("telemetry: open %s: %w", path, lastErr)
 }
 
+// OpenReadOnly opens an existing telemetry database without schema setup or
+// write-capable pragmas. It is used by analytical checks that must not create
+// or modify a live store.
+func OpenReadOnly(path string) (*DB, error) {
+	sqlDB, err := sql.Open("sqlite", path+"?mode=ro")
+	if err != nil {
+		return nil, fmt.Errorf("telemetry: open read-only %s: %w", path, err)
+	}
+	if err := sqlDB.Ping(); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("telemetry: open read-only %s: %w", path, err)
+	}
+	return &DB{sql: sqlDB}, nil
+}
+
 type schemaExecutor interface {
 	Exec(string, ...any) (sql.Result, error)
 	Query(string, ...any) (*sql.Rows, error)

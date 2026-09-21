@@ -9,6 +9,13 @@ type QualityResult struct {
 	Warn               bool
 }
 
+func (r QualityResult) Status() string {
+	if r.Warn {
+		return "WARN"
+	}
+	return "PASS"
+}
+
 func (d *DB) QualityChecks() ([]QualityResult, error) {
 	spec := mustTelemetrySQL()
 	out := make([]QualityResult, 0, len(spec.QualityChecks))

@@ -517,9 +517,31 @@ func TestStatsCmdHelp_DocumentsFlags(t *testing.T) {
 		t.Fatalf("--help: %v", err)
 	}
 	out := buf.String()
-	for _, flag := range []string{"--tool", "--agent", "--ticket", "--project", "--json"} {
+	for _, flag := range []string{"--tool", "--agent", "--ticket", "--project", "--json", "--quality", "--strict"} {
 		if !strings.Contains(out, flag) {
 			t.Errorf("--help output missing %q; got:\n%s", flag, out)
 		}
+	}
+}
+
+func TestStatsQualityStrict(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "quality.sqlite")
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Insert(telemetry.ToolCall{SessionID: "", AgentID: "a", ToolName: "Read", CallType: "internal"}); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	var out bytes.Buffer
+	if err := runStats(&out, statsOptions{DBPath: dbPath, Quality: true}); err != nil {
+		t.Fatalf("non-strict: %v", err)
+	}
+	if !strings.Contains(out.String(), "WARN tool_calls_required_fields") {
+		t.Fatalf("output = %q", out.String())
+	}
+	if err := runStats(&out, statsOptions{DBPath: dbPath, Quality: true, Strict: true}); err == nil {
+		t.Fatal("strict quality expected warning error")
 	}
 }

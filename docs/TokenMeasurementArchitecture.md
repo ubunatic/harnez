@@ -132,6 +132,10 @@ ALTER TABLE tool_calls ADD COLUMN potential_savings_bytes  INTEGER; -- Hypotheti
 
 `harnez stats` aggregates both measured and potential token metrics alongside call frequencies and failure rates:
 
+`harnez stats --quality` runs the canonical telemetry data-quality checks
+read-only; use `--json` for automation and `--strict` to return nonzero when a
+check warns. The default quality mode reports warnings without failing.
+
 ```
 TOOL                   CALLS  AVG SCORE  FAILURE RATE  AVG TOKENS  MEASURED SAVINGS  POTENTIAL SAVINGS
 view_file               2204   5.00       0.0%         4,820       —                 1.42M tokens (68%)

@@ -33,9 +33,11 @@ func newStatsCmd() *cobra.Command {
 	var autoFlag bool
 	var jsonOut bool
 	var overheadFlag bool
+	var qualityFlag bool
+	var strictFlag bool
 
 	cmd := &cobra.Command{
-		Use:   "stats [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--project <name>] [--auto]",
+		Use:   "stats [--quality] [--json] [--strict] [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--project <name>] [--auto]",
 		Short: "Report call frequency, average score, failure rate, and byte savings from tool_calls telemetry",
 		Long: `stats renders an analytical report over the tool_calls telemetry table
 (internal/telemetry, issue 116, populated by 'harnez rate' and 'harnez exec'):
@@ -73,6 +75,8 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 				Auto:     autoFlag,
 				JSON:     jsonOut,
 				Overhead: overheadFlag,
+				Quality:  qualityFlag,
+				Strict:   strictFlag,
 			})
 		},
 	}
@@ -84,6 +88,8 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output the report as JSON instead of a formatted table")
 	cmd.Flags().BoolVar(&overheadFlag, "overhead", false,
 		"also report the harnez rate feedback overhead (issue 142): call count/bytes from telemetry plus an ESTIMATED token cost, clearly labeled as an estimate, not provider-reported")
+	cmd.Flags().BoolVar(&qualityFlag, "quality", false, "run read-only telemetry data-quality checks")
+	cmd.Flags().BoolVar(&strictFlag, "strict", false, "with --quality, exit nonzero when any check warns")
 	return cmd
 }
 
@@ -99,6 +105,8 @@ type statsOptions struct {
 	Auto     bool
 	JSON     bool
 	Overhead bool
+	Quality  bool
+	Strict   bool
 
 	DBPath   string              // telemetry DB path override; empty means telemetry.DefaultDBPath()
 	Getenv   func(string) string // nil means os.Getenv; only consulted when Auto is set
@@ -149,6 +157,31 @@ func runStats(w io.Writer, opts statsOptions) error {
 		dbPath = p
 	}
 
+	if opts.Quality {
+		db, err := telemetry.OpenReadOnly(dbPath)
+		if err != nil {
+			return fmt.Errorf("stats: telemetry database unavailable (read-only): %w", err)
+		}
+		defer db.Close()
+		results, err := db.QualityChecks()
+		if err != nil {
+			return fmt.Errorf("stats: quality: %w", err)
+		}
+		if opts.JSON {
+			if err := renderQualityJSON(w, results); err != nil {
+				return err
+			}
+		} else {
+			renderQualityTable(w, results)
+		}
+		for _, result := range results {
+			if result.Warn && opts.Strict {
+				return fmt.Errorf("stats: quality checks reported warnings")
+			}
+		}
+		return nil
+	}
+
 	db, err := telemetry.Open(dbPath)
 	if err != nil {
 		return fmt.Errorf("stats: open telemetry db: %w", err)
@@ -190,6 +223,28 @@ func runStats(w io.Writer, opts statsOptions) error {
 		return renderStatsJSON(w, report)
 	}
 	return renderStatsTable(w, report)
+}
+
+func renderQualityTable(w io.Writer, results []telemetry.QualityResult) {
+	for _, r := range results {
+		fmt.Fprintf(w, "%s %s %d/%d (%.2f%%)\n", r.Status(), r.Name, r.Offending, r.Checked, r.Percentage)
+	}
+}
+
+func renderQualityJSON(w io.Writer, results []telemetry.QualityResult) error {
+	type qualityJSON struct {
+		Name        string  `json:"name"`
+		Description string  `json:"description"`
+		Checked     int64   `json:"checked"`
+		Offending   int64   `json:"offending"`
+		Percentage  float64 `json:"percentage"`
+		Status      string  `json:"status"`
+	}
+	out := make([]qualityJSON, 0, len(results))
+	for _, r := range results {
+		out = append(out, qualityJSON{r.Name, r.Description, r.Checked, r.Offending, r.Percentage, r.Status()})
+	}
+	return json.NewEncoder(w).Encode(out)
 }
 
 // buildStatsReport runs the three telemetry queries stats needs and
