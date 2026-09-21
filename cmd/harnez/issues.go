@@ -334,7 +334,7 @@ func runIssuesShow(w io.Writer, dir, ticketArg string, jsonOutput, rawOutput, te
 		})
 		if err == nil {
 			for _, p := range renderRes.Files {
-				fmt.Fprintf(w, "🖼️ Rendered: %s (%dx%d px, %d col, %d lines)\n", p, renderRes.Width, renderRes.Height, renderRes.Columns, renderRes.TotalLines)
+				fmt.Fprintf(w, "See PNG card: %s (%dx%d px, %d col, %d lines)\n", p, renderRes.Width, renderRes.Height, renderRes.Columns, renderRes.TotalLines)
 			}
 			fmt.Fprintf(w, "Token Breakdown: ~%d ViT tokens (Claude) vs ~%d text tokens\n", renderRes.TokenStats.ClaudeTokens, renderRes.TokenStats.TextTokens)
 			return nil

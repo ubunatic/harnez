@@ -25,7 +25,7 @@ remove the stale `Rendered:` output, and provide useful shell completion.
 - `harnez issues -l` behaves exactly like `harnez issues list`.
 - Interactive `harnez issues list` defaults to text output; explicit output flags
   retain their existing behavior.
-- `harnez issues list` no longer prints the obsolete `Rendered:` test line.
+- `harnez issues show -I` labels the generated image with `See PNG card:`.
 - `harnez issues <TAB>` offers issue verbs rather than repository files.
 - `harnez issues list <TAB>` offers supported flags and predefined filters.
 - `harnez issues list <TAB>` also offers current-repository ticket numbers with

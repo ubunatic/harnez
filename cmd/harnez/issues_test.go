@@ -1066,8 +1066,8 @@ func TestRunIssuesShow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("runIssuesShow image: %v", err)
 		}
-		// Expect card rendered message
-		if !strings.Contains(out.String(), "Rendered:") {
+		// Expect card path guidance
+		if !strings.Contains(out.String(), "See PNG card:") {
 			t.Errorf("expected card output, got %s", out.String())
 		}
 	})
