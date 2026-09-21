@@ -21,9 +21,14 @@ Three small review findings from the 2026-09-21 telemetry sprints:
 
 ## /goal
 
-Derive or drop `warn_condition` so only one source states the threshold; rename the test to
-match what it covers; confirm or revert the session-tip skip, with a test or comment that
-states why.
+Decided 2026-09-21:
+
+- Drop `warn_condition` from `spec/telemetry.yaml`, the loader (`sqlspec.go`), the JSON schema and
+  the `sqlspec_test.go` check; `warn_above_percent` is the single source. Keep the human-readable
+  wording in the check's `description` or a `#` comment.
+- Rename the test to match what it covers (no-op path).
+- Keep the `apply` session-tip skip in `cmd/harnez/main.go`. Add a comment saying why (the hook
+  must not open the DB before `apply` migrates it) and a test that pins it.
 
 ## Notes
 
