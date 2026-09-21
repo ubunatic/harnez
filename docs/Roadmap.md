@@ -85,9 +85,8 @@ Laying the foundation to run seamlessly across operating systems (macOS / Darwin
 | Ticket | Scope | Bucket |
 |---|---|---|
 | 286 — promote `golang.org/x/term` for terminal operations in Go conventions & watch.go | S — add `x/term` carve-out to `docs/lang/Go.md`, replace `stty` subprocesses & raw-mode ioctls in `internal/usage/watch.go` with `x/term` | **Now** |
-| (Architecture) — OS build-tag split for system telemetry (`/proc` vs Darwin `sysctl`/`mach_vm`) | M — decouple Linux `/proc/stat`, `/proc/meminfo`, `/proc/loadavg` behind OS-specific collectors | **Next** |
-| (Architecture) — Cross-platform process detection (`ps` vs Darwin API/`sysctl`) | S/M — replace GNU-specific `ps -eo comm=` with portable detection | **Next** |
-| (Architecture) — macOS CoreAudio / microphone level probe backend | M — platform backend counterpart to PipeWire/Pulse/ALSA | **Later** |
+| 339 — gate hardware telemetry and mic probes on macOS | M — owns the OS build-tag split, Darwin/fallback collectors, graceful TUI degradation, and acceptance checks | **Next** |
+| 334 — research OS-agnostic process inspection | S/M — owns the `ps -eo comm=` replacement research and the follow-up implementation-ticket decision | **Next** |
 
 Rationale: 286 is immediate, high-leverage low-hanging fruit — it updates the Go convention docs, eliminates the `stty` dependency from `watch.go`, and cuts subprocess CPU overhead in one clean step. It directly unlocks running the watch TUI reliably on macOS and non-GNU environments without requiring coreutils `stty`.
 
@@ -118,6 +117,11 @@ wrong tier, which is the most expensive failure mode in the whole backlog. 450 i
 half of the same surface. 435's A/B telemetry is deliberately held behind §3: measuring dispatch
 modes against a store with a known model-column bug (424) would produce confident wrong numbers,
 the exact failure the §2 chain spent five tickets eliminating.
+
+383 and 144 remain behind 451/453 and 306 deliberately: 451/453 are a small documentation batch
+that fixes current cost guidance, while 306 prevents repeated dispatch to a known-dead session.
+383 is a lower-impact prompt-queue papercut, and 144 is policy work whose empirical model-selection
+check can follow the live dispatch correctness and cost-default fixes.
 
 ## 2. Usage watch TUI — correctness & legibility
 
@@ -160,7 +164,7 @@ and the status-bar work follow once the numbers are trustworthy.
 | 113 — per-collector roundtrip times, `usage --meta` | S/M — extend existing `internal/usage/fetchdurations.go`, do not build a second timing store | **Next** |
 | 111 — per-agent cadence/timeout/cancellation | premise corrected: collection is already concurrent; reduced to cadence + timeout + cancel | **Next** |
 | 035 — transparent HTTPS proxy sidecar | superseded in most of its value; only rate-limit headers remain unique | **Park** (§9) |
-| 084 — aggregate quota-window box | blocked: `QuotaWindow` has no capacity field, and 030's token data is missing for 2 of 3 agents | **Later** (after 030) |
+| 084 — aggregate quota-window box | blocked: `QuotaWindow` has no capacity field, and AGY token extraction remains in 034 | **Park** (after 034; §9) |
 
 Rationale: doing the Codex half of 030 first is nearly free and unblocks the token column for a
 second agent. 113 before 111 — you want the measurements before tuning the cadence they'd inform.
@@ -198,13 +202,12 @@ both after 424/425 so the numbers land in a store whose schema is trusted.
 | 442 — `harnez issues open --commit` does not commit a newly created ticket | S — new this pass; when the placeholder is already `Open`, the verb short-circuits and the filled-in ticket plus `issues/README.md` stay uncommitted. Observed on 440 and 441, both of which had to be committed by hand. The documented `/issue` workflow does not end in a commit today | **Now** |
 | 426 — make `find` output text-first for human users | S — tracked in §12; listed here because the tracker CLI is its heaviest consumer | **Now** (see §12) |
 
-Rationale: 108 is a live data-integrity bug in the tracker — duplicate ticket numbers have
-already happened twice. 217 is small and directly reduces daily friction. 246 extends the skill
-set. 279 and 283 are new this pass: both are cheap and both remove friction from the filing loop
-itself. 340 moves up from **Later** because every planning pass (including this one) currently
-re-reads the full open list for want of a category filter. 442 goes straight to **Now**: the
-tracker is used many times a day and a filing workflow that silently ends without a commit is the
-same trust defect as a dashboard showing a stale number.
+Rationale: 108 and 217 are shipped (§0). Of the remaining work, 279 and 283 are cheap and remove
+friction from the filing loop itself, while 246 extends the skill set. 340 moves up from **Later**
+because every planning pass (including this one) currently re-reads the full open list for want of
+a category filter. 442 goes straight to **Now**: the tracker is used many times a day and a filing
+workflow that silently ends without a commit is the same trust defect as a dashboard showing a
+stale number.
 
 ## 5. Agent instructions & practice docs
 
@@ -292,16 +295,18 @@ tracking-only on their own terms, not on 149's.
 
 - **071**, **123**, **201** — ✅ resolved since the last pass; the tracker records all three as
   closed. Moved to §0.
-- **302** — the requested comparison study now exists at `docs/studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md`; close after confirming the tracker record reflects that deliverable. Carried over from the previous pass, still open.
+- **302** — the requested comparison study now exists at `docs/studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md`. **Tracker action:** set `Status` to `Closed — research study delivered`; retain the study in `Related` as the acceptance artifact.
 - **291** — "add `harnez agent`: standardized non-interactive dispatch to external coding-agent
   CLIs". `harnez agent start`/`resume`/`chat` exist and ship today; this ticket asks for the
   command that 417 delivered. **Close as superseded**, after confirming the acceptance criteria
-  against the live `harnez agent --help` surface. Anything genuinely missing belongs in a new,
+  against the live `harnez agent --help` surface. **Tracker action:** set `Status` to `Closed — superseded by 417`; record any genuinely missing acceptance criterion in a new,
   narrow ticket rather than keeping a delivered feature request open.
 - **342** — "MVP: `harnez agent` command and cross-agent dispatch from agy/claude host to
   codex/claude subagents". Same finding: the MVP it describes is the thing 417 shipped.
   **Close as superseded**, or — if the agy-host half is genuinely unverified — reduce it to a
-  single verification canary and say so in the ticket. Do not leave it open as a feature request
+  single verification canary and say so in the ticket. **Tracker action:** either set `Status` to
+  `Closed — superseded by 417`, or replace the goal and acceptance criteria with that one AGY-host
+  canary while keeping it `Open`. Do not leave it open as a feature request
   for a feature that exists.
 
 **Rescope — the premise moved under the ticket:**
@@ -310,40 +315,42 @@ tracking-only on their own terms, not on 149's.
   CLI". The CLI half is done (417) and the skill surface has since grown `harnez-advisor`,
   `reverse-sprinter` and the documented synchronous lifecycle (456). What is left is narrower than
   the ticket describes: a handoff *contract*, not a dispatcher. Rewrite the scope before
-  scheduling it, or it will be implemented twice.
+  scheduling it, or it will be implemented twice. **Tracker action:** keep `Status: Open`, rename
+  the ticket around the handoff contract, remove the stale dependency on 291, and replace the CLI
+  acceptance criteria with the remaining skill/contract checks.
 - **435** — the `subagent_mode: harnez|native` switch it asks for now exists as
   `harnez agent enable`/`disable`. Remaining real scope: native-tool interception/redirection
-  hooks, and A/B telemetry. Tracked with that reduced scope in §1a.
-- **084** — its stated blocker was "revisit after 030 fills tokens for all three agents". 030 is
-  now closed, but only the Codex half landed; AGY protobuf extraction was explicitly deferred into
-  **034**. The gate is therefore now 034, not 030 — an honest aggregate still cannot be computed.
-  Stays parked, with the dependency corrected.
+  hooks, and A/B telemetry. **Tracker action:** keep `Status: Open`, remove the delivered switch
+  from the goal/acceptance criteria, and retain only interception/redirection plus A/B telemetry.
 
 **Park — blocked on something no amount of work here resolves:**
 
 - **073** — needs a user decision on credential-mounting posture. Cheap pre-work: confirm that
   AGY/Codex have no pre-exec rewrite hook, which would collapse this to Claude-Code-only and make
-  the decision much easier.
+  the decision much easier. **Tracker action:** keep it `Blocked` and name that user decision in
+  the status reason.
 - **172** — the rendering half is fixed; the remainder needs a live 100%-capped AGY account (or a
-  captured fixture) to verify against.
+  captured fixture) to verify against. **Tracker action:** keep it `Open — deferred` and replace
+  the completed rendering acceptance criteria with the capped-account verification only.
 - **035** — reduce to a scoped canary rather than building it. Token counts no longer need a
   proxy (Claude aggregates; Codex now writes plain-JSON rollouts). The only unique remaining
   capability is rate-limit response headers — a narrow payoff for a MITM CA plus TLS trust
-  injection into three runtimes.
+  injection into three runtimes. **Tracker action:** keep it `Open — deferred` and reduce its goal
+  and acceptance criteria to the rate-limit-header canary.
 - **084** — cannot produce an honest aggregate: `QuotaWindow` has no capacity field, and
   percentages of unknown unequal denominators don't sum. Gate corrected this pass: revisit after
-  **034** (AGY tokens), not 030, which closed with only the Codex half delivered.
+  **034** (AGY tokens), not 030, which closed with only the Codex half delivered. **Tracker action:**
+  keep it `Open — deferred`, replace the 030 dependency with 034, and state the missing-capacity
+  decision as an acceptance prerequisite.
 - **141** — Codex's status line is a closed item picker with no command hook; parked until an
-  upstream customization path exists.
+  upstream customization path exists. **Tracker action:** keep it `Blocked` and name the missing
+  upstream customization hook in the status reason.
 
 **Split:**
 
 - **224** — website-rules auto-install is a two-line change against existing machinery; the
   direct Android release scaffold shares no code path with it and deserves its own ticket.
 - **166** — ✅ both parts closed; the local-LLM doc-profile thread continues as 231 (§8).
-- **434** — the ticket carries four milestones and M1/M2 are already merged. Treat M3 (fallback
-  decision) and M4 (remove `scripts/import-bdf-font.go`, refresh docs and goldens) as the two
-  remaining units of work rather than reopening the whole scope.
 
 ## 10. Newer backlog: build, harness, and documentation follow-through
 
@@ -356,20 +363,16 @@ workflow work.
 | 274 — session-start harness health checks | M, depends on stable cross-agent hook/shim status semantics | **Next** |
 | 281 — opt-in advisor discovery | S, reduces routine context and quota cost; coordinate with the shipped advisor skill | **Next** |
 | 285 — durable-note wording contract | S, closes a trust gap in normal agent conversations | **Next** |
-| 288 → 291 — external-agent handoff, then standardized CLI dispatch | M/L combined; settle the prose handoff before adding the command/adapters | **Next** |
 | 293 — recoverable roadmap synthesis | M, improves this planning workflow; depends on an explicit safe recovery location | **Next** |
 | 295 — actionable startup splash status | M, makes usage failures legible after the core dashboard fixes | **Next** |
 | 296 — always compute distill savings | S/M, improves honest efficiency reporting; follow the existing telemetry model | **Next** |
 | 297 — linked language subdocuments | M, extends the proven copyable-doc pipeline without bloating core docs | **Next** |
 | 298 — commit checkpoint/file-granularity guidance | S, documentation first; split any hook enforcement into a separate design | **Next** |
 | 300 — raw-mode and PTY input guidance | S, verified documentation gap with a low implementation cost | **Next** |
-| 302 — plugin/self-modification research | study complete; close candidate in §9, with any Harnez design as a separately reviewed follow-up | **Close candidate** |
 
 Rationale: 290, 292 and 299 have shipped, so this section is now purely forward-looking. The group
-hardens the agent-facing execution and planning loop; 288 and 291 stay together because a handoff
-contract without a tested dispatch surface, or a dispatcher without that contract, would create
-another incompatible workflow. 302 remains outside implementation sequencing until its research
-recommendations have been reviewed.
+hardens the agent-facing execution and planning loop. The delivered or superseded 288/291 work and
+the completed 302 research are handled only in §9 rather than scheduled here.
 
 ---
 
@@ -390,7 +393,8 @@ recommendations have been reviewed.
 
 Visual context cards (`harnez read -I`, `harnez find -I`, `harnez issues show -I`) are now a
 first-class reading path for agents under Context Discipline, so their legibility is daily-loop
-value, not cosmetics. The 429–433 pixel-font cluster shipped this cycle; 434 is the last piece.
+value, not cosmetics. The 429–434 pixel-font cluster shipped this cycle; the remaining rows are
+separate follow-through rather than unfinished 434 milestones.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
@@ -489,14 +493,17 @@ surface in front of it.
    on its study. Five tickets leave the backlog without writing code.
 3. **Live correctness bugs**: 424 (telemetry model column) → 315 (`init` drops opted-in docs) →
    289 (`init` go.work hard-fail) → 442 (tracker filing ends without a commit) → 279 (lock
-   sidecar). Small, independent, all on surfaces touched many times a day.
+   sidecar) → 255 (finish collector key decoding and diagnostics tests). Small, independent, all
+   on surfaces touched many times a day; 315 follows the store bug because 424 can corrupt every
+   later analytics result, while 315 is destructive but confined to an explicit `init` rerun.
 4. **OS-agnostic terminal foundation**: 286 (Go conventions + `x/term` `watch.go` refactor) →
    the OS build-tag split → portable process detection → 334/336/337 research → 338/339/341.
    Sequence 450 alongside 286: resize and raw-mode handling is the same code.
 5. **Give the cost story numbers**: 425 (schema drift) → 446 (reported cost) → 445 (rate cards)
    → 435's A/B telemetry half. In that order, so the A/B comparison lands on a store that has
    already been repaired.
-6. **Finish the visual-context cluster**: 444 (P1 pitch bug) + 447 → 426 → 427 → 428 → 441 → 436.
+6. **Finish the visual-context and public-doc surface**: 444 (P1 pitch bug) + 447 → 426 → 374 →
+   427 → 428 → 441 → 436.
    444 first, because it is what makes the rest of the Dot8 chain measurable instead of
    speculative; 440 stays out until the inline-note channel has been tried.
 7. **Cash in the 149 dividend**: 144 (→ §1a) → 151 → 231 → 176 → 145. These were all blocked on
