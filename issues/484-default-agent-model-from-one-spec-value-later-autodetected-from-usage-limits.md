@@ -1,6 +1,6 @@
 # 484 — Default agent model from one spec value, later autodetected from usage limits
 
-**Status**: Open
+**Status**: Closed — phase 1 delivered: default_model in spec/agent.yaml, bare aliases, default marker in agent models and the start header; autodetect moved to 485
 
 **Priority**: P3 (Low)
 **Severity**: Minor
