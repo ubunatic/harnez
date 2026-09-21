@@ -6,13 +6,38 @@ package main
 import (
 	"bytes"
 	"database/sql"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
 	"ubunatic.com/harnez/internal/telemetry"
 )
+
+func captureApplyStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = write
+	fn()
+	if err := write.Close(); err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = old
+	out, err := io.ReadAll(read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := read.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
 
 func TestEnsureTelemetrySchemaMigratesBeforeApply(t *testing.T) {
 	home := t.TempDir()
@@ -27,20 +52,13 @@ func TestEnsureTelemetrySchemaMigratesBeforeApply(t *testing.T) {
 		t.Fatalf("close telemetry DB: %v", err)
 	}
 
-	raw, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatalf("open stale telemetry DB: %v", err)
-	}
-	if _, err := raw.Exec("PRAGMA user_version = 3"); err != nil {
-		raw.Close()
-		t.Fatalf("stamp stale schema version: %v", err)
-	}
-	if err := raw.Close(); err != nil {
-		t.Fatalf("close stale telemetry DB: %v", err)
-	}
-
-	if err := ensureTelemetrySchema(); err != nil {
-		t.Fatalf("ensureTelemetrySchema: %v", err)
+	output := captureApplyStdout(t, func() {
+		if err := ensureTelemetrySchema(); err != nil {
+			t.Fatalf("ensureTelemetrySchema: %v", err)
+		}
+	})
+	if strings.Contains(output, "telemetry schema:") {
+		t.Fatalf("no-op schema initialization printed telemetry report: %q", output)
 	}
 
 	check, err := sql.Open("sqlite", path)
@@ -122,8 +140,13 @@ func TestApplyCmdMigratesLegacyCompactionSchema(t *testing.T) {
 
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"apply", "-t", filepath.Join(home, ".claude")})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("apply failed: %v", err)
+	output := captureApplyStdout(t, func() {
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+	})
+	if !bytes.Contains([]byte(output), []byte("telemetry schema: v9 (migrations:")) {
+		t.Fatalf("migration output missing telemetry report: %q", output)
 	}
 
 	check, err := sql.Open("sqlite", path)

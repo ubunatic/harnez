@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -127,6 +128,112 @@ func createLegacyCompactionDB(t *testing.T, path string, version int) {
 	}
 	if err := raw.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func createHistoricalTelemetryDB(t *testing.T, path string, version int) {
+	t.Helper()
+	raw, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	toolCalls := `CREATE TABLE tool_calls (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL,
+		session_id TEXT NOT NULL, ticket_id TEXT NOT NULL DEFAULT '',
+		project_name TEXT NOT NULL DEFAULT '', working_dir TEXT NOT NULL DEFAULT '',
+		agent_id TEXT NOT NULL, tool_name TEXT NOT NULL, call_type TEXT NOT NULL,
+		score INTEGER CHECK (score IS NULL OR (score BETWEEN 1 AND 5)),
+		note TEXT NOT NULL DEFAULT '', exit_code INTEGER,
+		duration_ms INTEGER NOT NULL DEFAULT 0, raw_bytes INTEGER NOT NULL DEFAULT 0,
+		distilled_bytes INTEGER CHECK (distilled_bytes IS NULL OR distilled_bytes >= 0)`
+	if version >= 3 {
+		toolCalls += `, output_bytes INTEGER, actual_tokens INTEGER,
+		potential_savings_tokens INTEGER, potential_savings_bytes INTEGER`
+	}
+	if version >= 5 {
+		toolCalls += `, input_tokens INTEGER, cached_input_tokens INTEGER,
+		output_tokens INTEGER, reasoning_tokens INTEGER, total_tokens INTEGER`
+	}
+	toolCalls += `);`
+	if _, err := raw.Exec(toolCalls); err != nil {
+		raw.Close()
+		t.Fatal(err)
+	}
+	if version >= 5 {
+		_, err = raw.Exec(`CREATE TABLE compaction_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL,
+			session_id TEXT NOT NULL, event_type TEXT NOT NULL,
+			turn_id TEXT NOT NULL DEFAULT '', trigger TEXT NOT NULL DEFAULT '',
+			reason TEXT NOT NULL DEFAULT '', input_tokens INTEGER,
+			cached_input_tokens INTEGER, output_tokens INTEGER,
+			reasoning_tokens INTEGER, total_tokens INTEGER);
+		CREATE TABLE session_boundaries (
+			id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL,
+			session_id TEXT NOT NULL, boundary_type TEXT NOT NULL,
+			compaction_event_id INTEGER);`)
+		if err != nil {
+			raw.Close()
+			t.Fatal(err)
+		}
+	}
+	if _, err := raw.Exec(fmt.Sprintf("PRAGMA user_version = %d", version)); err != nil {
+		raw.Close()
+		t.Fatal(err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func tableColumns(t *testing.T, db *DB, table string) map[string]bool {
+	t.Helper()
+	rows, err := db.sql.Query("SELECT name FROM pragma_table_info(?)", table)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		columns[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return columns
+}
+
+func TestOpenMigratesHistoricalTelemetrySchemas(t *testing.T) {
+	currentToolCalls := map[string]bool{}
+	for _, name := range []string{"id", "created_at", "session_id", "ticket_id", "project_name", "working_dir", "agent_id", "tool_name", "call_type", "score", "note", "exit_code", "duration_ms", "raw_bytes", "distilled_bytes", "output_bytes", "actual_tokens", "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens", "potential_savings_tokens", "potential_savings_bytes"} {
+		currentToolCalls[name] = true
+	}
+	currentCompaction := map[string]bool{}
+	for _, name := range []string{"id", "created_at", "session_id", "event_type", "turn_id", "trigger", "reason", "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens", "model"} {
+		currentCompaction[name] = true
+	}
+	for _, version := range []int{2, 5} {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "tool_catalog.sqlite")
+			createHistoricalTelemetryDB(t, path, version)
+			db, err := Open(path)
+			if err != nil {
+				t.Fatalf("Open v%d database: %v", version, err)
+			}
+			defer db.Close()
+			if got, err := db.SchemaVersion(); err != nil || got != schemaVersion {
+				t.Fatalf("schema version = %d, err = %v; want %d", got, err, schemaVersion)
+			}
+			if got := tableColumns(t, db, "tool_calls"); !reflect.DeepEqual(got, currentToolCalls) {
+				t.Fatalf("tool_calls columns = %v, want %v", got, currentToolCalls)
+			}
+			if got := tableColumns(t, db, "compaction_events"); !reflect.DeepEqual(got, currentCompaction) {
+				t.Fatalf("compaction_events columns = %v, want %v", got, currentCompaction)
+			}
+		})
 	}
 }
 

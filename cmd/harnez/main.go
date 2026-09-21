@@ -57,8 +57,10 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 	// in-flight invocation, whose own row is only written after the command
 	// body returns. A nil map (no DB, unreadable DB, empty table) means the
 	// JSON file's own counts stand and the tips keep working unchanged.
-	if dbPath, err := telemetry.DefaultDBPath(); err == nil {
-		sessionstate.ApplyCounts(&s, sessionCallCounts(dbPath, sessionID))
+	if cmd.Name() != "apply" {
+		if dbPath, err := telemetry.DefaultDBPath(); err == nil {
+			sessionstate.ApplyCounts(&s, sessionCallCounts(dbPath, sessionID))
+		}
 	}
 	sessionstate.Record(&s, cmd.Name(), now)
 
@@ -80,7 +82,7 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 	// missing/unopenable DB just means the sharper nudge can't fire this
 	// call, falling back to GapTip's plain count/time-based tips.
 	unratedFailures := 0
-	if !feedbackDisabled {
+	if !feedbackDisabled && cmd.Name() != "apply" {
 		if dbPath, err := telemetry.DefaultDBPath(); err == nil {
 			if db, err := telemetry.Open(dbPath); err == nil {
 				if n, err := db.UnratedFailureCount(telemetry.Filter{SessionID: sessionID}); err == nil {
@@ -922,9 +924,7 @@ func ensureTelemetrySchema() error {
 		return err
 	}
 	migrations := db.Migrations()
-	if len(migrations) == 0 {
-		fmt.Printf("  telemetry schema: v%d (no migrations)\n", version)
-	} else {
+	if len(migrations) > 0 {
 		fmt.Printf("  telemetry schema: v%d (migrations: %s)\n", version, strings.Join(migrations, ", "))
 	}
 	return nil
