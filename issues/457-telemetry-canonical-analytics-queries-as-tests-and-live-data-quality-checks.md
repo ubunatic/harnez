@@ -40,3 +40,14 @@ cleaner or more complete data model.
   rather than fixing it inline.
 - Re-verify against live code and recent history before starting; the goal is the durable
   north star.
+
+## Milestones (lean-sprint, 2026-09-21)
+
+- **M1 delivered**: six checks in `spec/telemetry.yaml` (`quality_checks`), runner in
+  `internal/telemetry/quality.go`; tests cover empty store, clean fixture (all pass) and
+  deliberately odd rows (exact warnings). Thresholds live in the spec.
+- **Model gaps found** (per the ticket, recorded not fixed): `tool_calls` has no `model` column, so
+  "calls per model" cannot be checked. It is the case for 424-style model-attribution work and
+  for 446/445 cost fields. Orphan detection relies on `session_boundaries.compaction_event_id`.
+- Minor cleanup for later: `warn_condition` text and `warn_above_percent` are redundant in the spec.
+- **M2 (next)**: `stats --quality` wiring, read-only live run, short pass/warn report.
