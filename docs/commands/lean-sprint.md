@@ -42,6 +42,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 
 ### 1. Goal Handoff to Low-Cost Developer
 - The Host Orchestrator dispatches a developer worker (e.g. `codex:luna:low` or `gemini3.7flash:low`) using `harnez agent start <provider>:<model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method).
+- An explicitly named `provider:model:tier` must be dispatched exactly through `harnez agent start`; on failure, report it and ask for guidance rather than substituting the host model or a native subagent.
 - Provide:
   - Scoped milestone objective, target files, and acceptance criteria from the ticket.
   - Test requirements (reproduction test first for bugs, unit tests for features).

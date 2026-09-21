@@ -23,6 +23,10 @@ background-job facility. Keep those jobs visible and user-stoppable so users
 can inspect or stop them manually; do not hide lifecycle work behind opaque
 polling or detached processes.
 
+An explicitly named `provider:model:tier` is dispatched exactly through
+`harnez agent start`; if it is unavailable or fails, report the requested spec
+and ask for guidance. Never substitute the host model or a native subagent.
+
 Tickets are the primary durable communication channel. When reusing an agent,
 refer to the ticket and send only a short prompt describing the immediate
 follow-up. Existing async-wait guidance still applies to genuinely asynchronous
