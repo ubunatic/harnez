@@ -50,3 +50,13 @@ Other sessions (../loom, ../lmcoder) share `~/.harnez/agents`; never stop, delet
   state dispatch behaviour): an explicitly named provider:model:tier is dispatched exactly via
   `harnez agent start`; on failure report and ask, never substitute the host model or a native subagent.
 - Commit: `docs(agentic-loop): forbid silent model fallback (issue 454 M2)`.
+
+### M1 delivery (0e82504)
+Removed `ResolveModelWithFallback`; `start`/`chat` fail closed, `resume` errors carry guidance. Full `make test-q1` green on host review.
+
+### M2 Pre-Work / Required Refinements
+- The removed fallback printed the list of known models/tiers. The new `ResolveModel` error should
+  still list known `provider:model:tier` specs (use `KnownModels()`) so the "ask for guidance" message
+  is actionable. Add an assertion in `driver_test.go`, and commit it as part of M2.
+- Add a CLI-level test (in `cmd/harnez`) that `agent start codex:missing:low "x"` exits with an error and
+  creates no session in a temp `--store-dir`.
