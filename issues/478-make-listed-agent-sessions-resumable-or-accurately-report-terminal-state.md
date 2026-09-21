@@ -1,6 +1,6 @@
 # 478 — Make listed agent sessions resumable or accurately report terminal state
 
-**Status**: Open
+**Status**: In Progress
 
 **Priority**: P1 (High)
 **Severity**: Major
@@ -53,6 +53,19 @@ difference between a worker's completed state and a resumable conversation.
 Make agent lifecycle state truthful and recoverable: every listed resumable
 session can actually be resumed, while non-resumable sessions are explicitly
 identified with actionable diagnostics.
+
+## Findings (epic #479 sprint)
+
+- Root cause of the reported failure: `codex exec resume` ran without
+  `--dangerously-bypass-approvals-and-sandbox` and `--skip-git-repo-check`, so it
+  failed in untrusted directories and under the default sandbox. Fixed in the
+  Codex driver; the ticket's example session now resumes.
+- Codex persists each thread as `~/.codex/sessions/YYYY/MM/DD/rollout-*-<thread id>.jsonl`
+  (`$CODEX_HOME` overrides the root). A missing file means the conversation is
+  gone, which makes "terminal" detectable without spawning a process.
+- Remaining scope: record the last resume outcome per session, show it in
+  `agent list`/`status`, refuse a resume of a provider-terminal session with an
+  actionable message, and add list-to-resume regression coverage by ID and name.
 
 ## Epic note (#479)
 
