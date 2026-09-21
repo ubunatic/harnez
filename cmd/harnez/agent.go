@@ -60,12 +60,9 @@ func newAgentCmd() *cobra.Command {
 	}
 
 	start := &cobra.Command{Use: "start <provider:model[:tier]> <prompt>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
-		m, warning, err := subagent.ResolveModelWithFallback(args[0])
+		m, err := subagent.ResolveModel(args[0])
 		if err != nil {
-			return err
-		}
-		if warning != "" {
-			fmt.Fprintln(cmd.ErrOrStderr(), warning)
+			return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", args[0], err)
 		}
 		s, err := store()
 		if err != nil {
@@ -82,7 +79,7 @@ func newAgentCmd() *cobra.Command {
 		}
 		r, err := agentDriver(m).Run(cmd.Context(), subagent.RunOptions{Prompt: args[1], Model: m, Dir: canonicalWorkDir})
 		if err != nil {
-			return err
+			return fmt.Errorf("agent start %q failed: %w; verify the provider/model configuration or ask for guidance", args[0], err)
 		}
 		if r.SessionID != "" {
 			id = r.SessionID
@@ -112,12 +109,9 @@ func newAgentCmd() *cobra.Command {
 
 	var chatDir, chatName string
 	chat := &cobra.Command{Use: "chat <provider:model[:tier]>", Short: "Launch an interactive agent session", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		m, warning, err := subagent.ResolveModelWithFallback(args[0])
+		m, err := subagent.ResolveModel(args[0])
 		if err != nil {
-			return err
-		}
-		if warning != "" {
-			fmt.Fprintln(cmd.ErrOrStderr(), warning)
+			return fmt.Errorf("agent chat %q rejected: %w; ask for guidance rather than using a different model", args[0], err)
 		}
 		s, err := store()
 		if err != nil {
@@ -282,7 +276,7 @@ func newAgentCmd() *cobra.Command {
 		}
 		r, err := d.Resume(cmd.Context(), sess.ProviderID(), args[1])
 		if err != nil {
-			return err
+			return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
 		}
 		sess.TokensTurn = r.TokensTurn
 		sess.TokensCumulative += r.TokensTurn
