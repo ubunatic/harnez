@@ -105,20 +105,25 @@ the new form. Shell completion, `--help`, the man page and
 
 ## 3. Child Tickets and Order
 
-| # | Ticket | Prio | Depends on |
-|---|--------|------|-----------|
-| 480 | Prompt input grammar (variadic, `--`, `-f`, stdin) | P2 | — |
-| 481 | Unified `--name`/`--model`/`-d`, old positional forms removed | P2 | — |
-| 484 | Default model from one spec value (phase 1, closed) | P3 | 481 |
-| 485 | Autodetect the default model from usage limits (phase 2, follow-up) | P3 | 484 |
-| 478 | Listed sessions resumable or clearly terminal (existing) | P1 | — |
-| 482 | Attribution, bare `resume`, `-c`, upsert | P2 | 481, 478 |
-| 483 | `agent -p` root form and slash commands | P2 | 480, 481, 482 |
-| 476 | Sync/async and plan modes (existing, rescoped) | P2 | 477 |
-| 477 | Hook-driven completion instead of polling (existing) | P1 | — |
+| # | Ticket | Prio | State |
+|---|--------|------|-------|
+| 480 | Prompt input grammar (variadic, `--`, `-f`, stdin) | P2 | closed |
+| 481 | Unified `--name`/`--model`/`-d`, old positional forms removed | P2 | closed |
+| 484 | Default model from one spec value (phase 1) | P3 | closed |
+| 478 | Listed sessions resumable or clearly terminal | P1 | closed |
+| 482 | Attribution, bare `resume`, `-c` | P2 | closed |
+| 483 | `agent -p` root form, upsert, slash commands | P2 | closed |
+
+Follow-ups outside this epic (explicitly split out, not blocking closure):
+
+| # | Ticket | Why it is not part of the epic |
+|---|--------|-------------------------------|
+| 485 | Autodetect the default model from usage limits | phase 2 of #484, needs a stable usage source |
+| 476 | `--sync`/`--async` modes and first-use tip | async needs #477 first; `-d` and planning parts were delivered here |
+| 477 | Hook-driven completion instead of polling | Codex hook investigation, independent research task |
 
 Existing related tickets updated with a pointer to this epic: #476 (rescoped),
-#291 (absorbed by #481/#484), #342, #306, #144, #477, #478.
+#291 (absorbed by #481/#484, closed), #342, #306, #144, #477, #478.
 
 ## 4. Delivered so far (before this epic)
 
@@ -128,6 +133,17 @@ Streaming Codex turns with labeled `[session info]`, `[message]`,
 `CONFIRM:`/`PLAN:` labels, confirmation watchdog and violation notice;
 `--plan-first` gate; compaction driven by uncached tokens with the ack split
 from the reply. See `git log -- cmd/harnez/agent_stream.go`.
+
+### 4.1 Delivered by the epic
+
+`--name`/`--model`/`-d` on every verb; old positional forms removed with usage
+hints; prompt files, `--` tail and stdin; default model from `spec/agent.yaml`;
+bare `resume` and `-c` attribution with `resolved=` in the header; runnable
+`agent` root form with `--name` upsert; `/compact`, `/stop`, `/status`;
+`--plan yes|no`; truthful resume state (`RESUME` column, last error, Codex
+terminal detection); memorable generated names; quiet stderr and no usage
+dumps on errors; `harnez` session tips kept out of agent output; Codex resume
+uses the same sandbox settings as start.
 
 ## 5. Implementation & Verification Plan
 

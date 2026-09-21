@@ -63,4 +63,5 @@ workers.
 
 - `-d` on every verb moved to #481; immediate launch identity is delivered by the streaming `[session info]` header.
 - Planning: the delivered `--plan-first` gate becomes `--plan=yes|no`. `inline` (print the plan, then work after a short wait) is dropped: a blocked caller cannot intervene during an in-agent sleep, and the turn boundary is the real review window.
-- Still open here: explicit `--sync`/`--async` modes and the first-use tip. Async depends on #477 (hook-driven completion) so no zombie workers are created.
+- Delivered by epic #479: `-d` on every verb (#481), immediate launch identity in the stream header, `--plan yes|no` (the review gate; `inline` was dropped).
+- Still open here, and deliberately outside the epic: explicit `--sync`/`--async` modes and the first-use tip. Async depends on #477 (hook-driven completion) so no zombie workers are created; start it only after #477 identified the Codex hook surface.
