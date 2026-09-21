@@ -87,6 +87,17 @@ Installed to `~/.claude/docs/` on `apply`; copied into projects with `init --doc
 Rule: if a doc applies to many projects → `docs/lang/`, `docs/practices/`, or `docs/other/`. If it describes this codebase → `docs/` root.
 A category dir forms once 3+ docs share a theme.
 
+## Where Repo Rules Go, and Copyable-Doc Sources
+
+- Repo-specific rules live in this file, **outside** the `harnez:begin/end` blocks, which
+  `harnez init` overwrites. `AGENTS.local.md` is git-excluded and only for ephemeral local
+  overrides; never put durable rules there.
+- Copyable docs (`docs/practices/`, `docs/lang/`, `docs/other/`) are the **source**. Their copies
+  in `docs/*.md` (also in this repo), `~/.claude/docs/` and other projects only follow via
+  `harnez init`/`apply`. Edit the source file, never the root copy alone: a root-only edit is
+  silently overwritten by the next `harnez init`. After editing a source, sync the root copy
+  (`harnez init -d .`, then `git checkout --` any unrelated file it rewrites) and commit both.
+
 ## Issue Tracking & Priority Standards
 
 Adhere to `@docs/IssueTracking.md` for issue tracking conventions across `issues/*.md`

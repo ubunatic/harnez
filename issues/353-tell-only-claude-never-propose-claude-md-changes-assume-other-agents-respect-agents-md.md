@@ -118,3 +118,31 @@ into `AGENTS.md` for other agents too — along these lines:
 - `/evergreen` skill — already encodes docs-first discipline for session recaps; this
   ticket's extension generalizes that ordering to any instruction-file proposal, not only
   explicit evergreen passes.
+
+## Update (2026-09-21): unbreakable rule, spelling, hook, placement
+
+**Decisions from the user:**
+
+- "We never talk about C***E.md!" is an **unbreakable rule for Claude only**. Other agents work
+  fine with `AGENTS.md`, so the rule must not land in content they also read.
+- Claude always edits `AGENTS.md` and assumes the C***E.md symlink exists (it does at project
+  level; `init` creates it). Claude may still know the global `~/.claude` file is real.
+- When Claude MUST mention the file, it writes it as **`C***E.md`**, because this project works on
+  Claude's own logic and the literal name pollutes searches and tickets. Use this spelling in this
+  ticket and everywhere from now on.
+- **Hook**: a Claude hook counts mentions of the literal filename in Claude's own messages; every
+  5 mentions, emit a `harnez tip` warning that re-teaches the rule. Open question for planning:
+  which hook event exposes the assistant's message text (Stop or a transcript read) and where the
+  counter lives (session-state file, like the session-tip hook).
+
+**Placement (settled in the same session):** the root `AGENTS.md` is not a pure template. It holds
+authored rules outside the managed blocks, so *repo-wide* rules go there (now documented in
+`AGENTS.md` under "Where Repo Rules Go"). `AGENTS.local.md` is git-excluded (`.git/info/exclude`),
+so it is not a place for durable rules. The Claude-only rule cannot go in `AGENTS.md`; use an
+agent-scoped instruction profile (see 149) or a Claude-only hook message, and confirm during
+planning which Claude-only channel already exists.
+
+**/goal (updated):** Claude sessions in harnez-managed repos never propose or edit the literal
+C***E.md, always target `AGENTS.md`, spell the file `C***E.md` when unavoidable, and get a
+`harnez tip` every 5 mentions. Verified by a hook test and a Claude-only instruction that Codex/agy
+profiles do not receive.
