@@ -504,3 +504,39 @@ func TestFileSessionStore_Roundtrip(t *testing.T) {
 		t.Fatal("Roundtrip failed: fields do not match")
 	}
 }
+
+func TestFileSessionStore_PreservesStartPrompt(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Investigate the release process"
+	if err := store.Save(&Session{ID: "prompt", Name: "prompt-agent", StartPrompt: want}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Get("prompt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.StartPrompt != want {
+		t.Fatalf("StartPrompt = %q, want %q", got.StartPrompt, want)
+	}
+}
+
+func TestOpenSessionStoreDoesNotCreateDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "missing")
+	store, err := OpenSessionStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := store.List("", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("sessions = %d, want 0", len(sessions))
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("store directory exists after read-only open: %v", err)
+	}
+}

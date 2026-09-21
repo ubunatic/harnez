@@ -85,6 +85,12 @@ func NewSessionStore(dir string) (*FileSessionStore, error) {
 	return &FileSessionStore{dir: dir}, nil
 }
 
+// OpenSessionStore opens an existing store without creating directories. It is
+// intended for read-only callers such as shell completion.
+func OpenSessionStore(dir string) (*FileSessionStore, error) {
+	return &FileSessionStore{dir: dir}, nil
+}
+
 // DefaultStoreDir returns the default session store directory.
 func DefaultStoreDir() string {
 	home, err := os.UserHomeDir()

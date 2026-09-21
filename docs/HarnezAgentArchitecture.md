@@ -48,6 +48,13 @@ flowchart TD
 ### 2.1 `harnez agent start` (Spawn a Subagent)
 Starts a new agent session on the specified target provider/model, capturing caller lineage (`parent_session_id`).
 
+This command is synchronous and intentionally low-noise: it waits for the turn to
+finish and prints the agent's reply (including the session details needed for a
+later resume). Do not wrap it in a polling loop or detach it into an opaque
+process. When parallel work is wanted, run the command through the host agent's
+visible background-job facility so the job and its child session remain visible
+and the user can inspect or stop them manually.
+
 ```bash
 harnez agent start <provider>:<model>[:<tier>] [-d <working_dir>] [--name <session_name>] "<task_prompt>"
 ```
@@ -104,6 +111,13 @@ harnez agent chat attach <session_id|name>
 
 ### 2.3 `harnez agent resume` (Reconnect to Session)
 Resumes an existing session with full conversational memory and KV-cache continuity.
+
+Resume is synchronous and low-noise as well: it waits for the requested turn and
+includes the agent's reply in its output. Use a short prompt for follow-up work
+after consulting the durable ticket or other repository record; do not use
+opaque polling or a detached process to wait for the response. For parallel
+follow-ups, invoke each resume through the host agent's visible background-job
+facility so users can see and manually stop the jobs/subagents.
 
 ```bash
 harnez agent resume <session_id|name> "<next_prompt>"
@@ -243,6 +257,12 @@ Both execution modes log telemetry to `~/.harnez/tool_catalog.sqlite`:
 ---
 
 ## 6. Sprint Skills Integration
+
+Tickets are the primary durable communication channel between the host and
+agents. Prompts should point to the ticket and carry only the short, immediate
+follow-up needed to continue the work. The synchronous `start` and `resume`
+commands make the reply available directly to the host; use the host's visible
+background-job facility when parallel dispatch is appropriate.
 
 All sprint skills are updated to natively orchestrate via `harnez agent`:
 

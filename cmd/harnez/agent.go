@@ -553,7 +553,7 @@ func agentSessionCompletion(storeDir string, parent func() string) cobra.Complet
 		if value, err := cmd.InheritedFlags().GetString("store-dir"); err == nil && value != "" {
 			activeStoreDir = value
 		}
-		store, err := subagent.NewSessionStore(activeStoreDir)
+		store, err := subagent.OpenSessionStore(activeStoreDir)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -574,6 +574,8 @@ func agentSessionCompletion(storeDir string, parent func() string) cobra.Complet
 }
 
 func sessionPromptDescription(prompt string) string {
+	// Scrubbing is best-effort: completion descriptions are a convenience,
+	// not a guarantee that arbitrary confidential prose is detected.
 	description := strings.Join(strings.Fields(privacy.ScrubText(prompt)), " ")
 	if description == "" {
 		return "agent prompt unavailable"

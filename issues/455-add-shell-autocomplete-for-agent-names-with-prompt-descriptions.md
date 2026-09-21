@@ -1,6 +1,6 @@
 # 455 — Add shell autocomplete for agent names with prompt descriptions
 
-**Status**: Closed — implemented shell completion with privacy-safe prompt descriptions
+**Status**: Closed — implemented shell completion with best-effort prompt scrubbing
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -32,8 +32,6 @@ prompt description that helps select the intended session.
   lineage and privacy behavior.
 - Test names, descriptions, truncation, missing prompts, and each applicable
   command.
-
-**Status**: Draft
 
 ---
 

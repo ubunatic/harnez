@@ -30,8 +30,8 @@ Follow these 5 phases sequentially:
 
 ### Phase 1: Sequential Advisory Discovery (One Reusable Advisor)
 1. Parse the target tickets or goals from the prompt.
-2. Reuse the current advisor session if available; a closed or parked advisor remains eligible for native reuse. Start a new reusable advisor (via `harnez agent start <model> --name sprint-advisor "<prompt>"` or native advisor session) with a frontier model only when no compatible session exists or the existing one has an explicit health/compatibility failure, such as the Codex usage-limit dead-session behavior. Record its session ID and model. Use this same advisor for every ticket, one at a time; never dispatch the next ticket before the previous ticket's compaction completes.
-3. Hand the advisor one ticket or bounded goal at a time (e.g. `harnez agent resume <advisor_session_id> "<task>"`). Instruct it to:
+2. Reuse the current advisor session if available; a closed or parked advisor remains eligible for native reuse. Start a new reusable advisor (via synchronous `harnez agent start <model> --name sprint-advisor "<short ticket-referencing prompt>"` or native advisor session) with a frontier model only when no compatible session exists or the existing one has an explicit health/compatibility failure, such as the Codex usage-limit dead-session behavior. Record its session ID and model. Use this same advisor for every ticket, one at a time; never dispatch the next ticket before the previous ticket's compaction completes. The command prints the reply directly; if parallel work is explicitly wanted, run it through the host's visible background-job facility so the user can see and stop it.
+3. Hand the advisor one ticket or bounded goal at a time (e.g. synchronous `harnez agent resume <advisor_session_id> "<short follow-up>"`). Instruct it to:
    - Audit problem statements in `issues/` and related code paths using targeted `grep_search` and range-bounded reads (avoid whole-file reads on `AGENTS.md` or active prompt rules).
    - Check whether work is already completed or if prior assumptions changed.
    - Identify target files, exact line ranges, and test requirements.
