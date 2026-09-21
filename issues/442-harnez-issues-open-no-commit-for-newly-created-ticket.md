@@ -1,6 +1,6 @@
 # 442 — harnez issues open: no commit for newly created ticket
 
-**Status**: Open
+**Status**: Closed — open --commit now commits ticket and index when scoped files differ
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: CLI / Issue tracker
