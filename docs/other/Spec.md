@@ -45,6 +45,9 @@ Every YAML file references its schema at the top:
 # yaml-language-server: $schema=schemas/actions.schema.json
 ```
 
+`spec/telemetry.yaml` is a non-UI example: it owns embedded SQL statements and
+DDL, while its JSON Schema validates the YAML structure rather than SQL syntax.
+
 ---
 
 ## 3. Architecture & Data Flow
