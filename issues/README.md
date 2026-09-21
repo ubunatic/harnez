@@ -473,3 +473,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 472 | [472-investigate-dream-rsi-inspired-replay-and-exploration-practices-for-harnez.md](472-investigate-dream-rsi-inspired-replay-and-exploration-practices-for-harnez.md) | Investigate Dream-RSI-inspired replay and exploration practices for harnez | Open |
 | 473 | [473-study-minimax-cli-harness-efficiency-and-adopt-the-best-harnez-practices.md](473-study-minimax-cli-harness-efficiency-and-adopt-the-best-harnez-practices.md) | Study MiniMax CLI harness efficiency and adopt the best Harnez practices | Open |
 | 474 | [474-add-manpage-support-to-init-docs.md](474-add-manpage-support-to-init-docs.md) | Add manpage support to init --docs | Open |
+| 475 | [475-use-png-card-wording-in-harnez-find-output.md](475-use-png-card-wording-in-harnez-find-output.md) | Use PNG card wording in harnez find output | Open |
