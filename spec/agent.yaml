@@ -1,3 +1,42 @@
 # yaml-language-server: $schema=schemas/agent.schema.json
-# Agent model defaults are part of the application artifact.
+# Agent model and role defaults are part of the application artifact.
 default_model: codex:luna:low
+
+# Roles keep delegation one level deep. `spawns` lists the roles a session of
+# that role may start through `harnez agent`; an empty list makes it a leaf
+# worker that harnez refuses to let start, resume or manage other agents.
+# `rules` is added to the protocol preamble of every turn of that role.
+# A session started without --role gets default_role.
+default_role: developer
+roles:
+  orchestrator:
+    spawns: [developer, reviewer, advisor]
+    rules: >-
+      You coordinate; you never write code or edit files yourself. Delegate each
+      piece of work to a helper with
+      `harnez agent start --name <n> --role <developer|reviewer|advisor> --model <m> -d <dir> "<task>"`
+      and continue it with `harnez agent resume --name <n> "<follow-up>"`.
+      Every call blocks until the helper's turn is done: wait for it, never poll.
+      Use one developer at a time (one writer). Never start an orchestrator and
+      never hand the whole sprint to another agent. Ticket files are the message
+      channel; prompts stay short. Delete every helper when you are done
+      (`harnez agent delete --name <n>`).
+  developer:
+    spawns: []
+    rules: >-
+      You are a leaf worker. Do the assigned ticket or milestone yourself: read,
+      edit, test and commit. Never run `harnez agent` and never start native
+      subagents, background agents or delegating skills. Report in at most 10
+      lines: files changed, tests run and their result, open problems.
+  reviewer:
+    spawns: []
+    rules: >-
+      You are a leaf, read-only reviewer. Inspect the diff and test output you
+      are given; never edit files and never run `harnez agent`. Report findings
+      by severity in at most 15 lines.
+  advisor:
+    spawns: []
+    rules: >-
+      You are a leaf, read-only advisor. Audit the ticket and code paths you are
+      given and return a short implementation plan; never edit code and never run
+      `harnez agent`. Report in at most 15 lines.

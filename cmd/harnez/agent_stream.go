@@ -33,11 +33,17 @@ const protocolPreamble = "Harnez dispatch protocol: before any tool call, file r
 const planFirstPreamble = "This is a plan-first turn: after your `CONFIRM:` message, inspect read-only if you must, send your plan as a message starting with `PLAN:`, and then end your turn. " +
 	"Do not modify anything or start executing; the caller reviews the plan and resumes you with the go-ahead.\n\n"
 
-func withProtocol(prompt string, planFirst bool) string {
-	if planFirst {
-		return protocolPreamble + planFirstPreamble + prompt
+// withProtocol prepends the dispatch protocol, the rules of the session's role
+// (spec/agent.yaml) and, for plan-first turns, the review gate to the prompt.
+func withProtocol(prompt string, planFirst bool, role string) string {
+	pre := protocolPreamble
+	if rules, err := subagent.RoleRules(role); err == nil && rules != "" {
+		pre += "Harnez role: " + role + ". " + rules + "\n\n"
 	}
-	return protocolPreamble + prompt
+	if planFirst {
+		pre += planFirstPreamble
+	}
+	return pre + prompt
 }
 
 // heartbeatSchedule lists the elapsed times of the first heartbeats; after the

@@ -28,13 +28,14 @@ type agentDeps struct {
 // startRequest describes one new agent turn. Prompt is sent to the agent;
 // StoredPrompt is what the session records (files as "path (N bytes)").
 type startRequest struct {
-	Prompt, StoredPrompt, Name, ModelSpec, Dir, StreamMode string
-	JSON, PlanFirst                                        bool
+	Prompt, StoredPrompt, Name, ModelSpec, Dir, StreamMode, Role string
+	JSON, PlanFirst                                              bool
 }
 
 // resumeRequest describes one turn on an existing session: chosen by Name,
 // else by attribution in Dir (Continue picks the most recent).
 type resumeRequest struct {
+	Role                                     string // must match the stored role when given
 	Prompt, Name, ModelSpec, Dir, StreamMode string
 	Continue, JSON, PlanFirst                bool
 }
@@ -79,6 +80,10 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	if err != nil {
 		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
 	}
+	role, err := startRole(req.Role)
+	if err != nil {
+		return err
+	}
 	s, err := d.store()
 	if err != nil {
 		return err
@@ -111,6 +116,8 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	}
 	tl := newTimeline(cmd)
 	opts := subagent.RunOptions{Prompt: req.Prompt, Model: m, Dir: canonicalWorkDir}
+	parentID := d.parent() // read before the child's environment replaces it
+	defer setAgentEnv(role, sessName)()
 	driver := agentDriver(m)
 	sd, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
@@ -119,7 +126,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	if streaming {
 		ts = newTurnStream(cmd, req.StreamMode, false)
 		ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sessName, sessName, req.PlanFirst
-		opts.Prompt = withProtocol(req.Prompt, req.PlanFirst)
+		opts.Prompt = withProtocol(req.Prompt, req.PlanFirst, role)
 		ts.watch()
 		r, err = sd.RunStream(cmd.Context(), opts, func(ev subagent.Event) {
 			if ev.Kind == "session" {
@@ -145,7 +152,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		id = r.SessionID
 	}
 	now := time.Now()
-	sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: d.parent(), CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
+	sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
 	if err := s.Save(sess); err != nil {
 		return err
 	}
@@ -191,6 +198,11 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 			return fmt.Errorf("--model %q conflicts with session %q model %s:%s:%s", req.ModelSpec, sess.Name, sess.Provider, sess.Model, sess.Tier)
 		}
 	}
+	role, err := resumeRole(req.Role, sess)
+	if err != nil {
+		return err
+	}
+	defer setAgentEnv(role, sess.Name)()
 	if sess.Status == "active" && sess.HarnessType == "interactive" {
 		if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "prompt", req.Prompt); err != nil {
 			return err
@@ -232,7 +244,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		}
 		ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sess.Name, sess.Name, req.PlanFirst
 		ts.watch()
-		r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), withProtocol(req.Prompt, req.PlanFirst), ts.onEvent)
+		r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), withProtocol(req.Prompt, req.PlanFirst, role), ts.onEvent)
 		if err != nil {
 			ts.abort()
 		}
@@ -321,8 +333,89 @@ func statusSession(cmd *cobra.Command, x *subagent.Session, jsonOut bool) error 
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(x)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "ID: %s\nName: %s\nStatus: %s\nProvider: %s:%s\nTokens: %d (turn %d)\nCached: %d\n", x.ID, x.Name, x.Status, x.Provider, x.Model, x.TokensCumulative, x.TokensTurn, x.CachedTokens)
+	if x.Role != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "Role: %s\n", x.Role)
+	}
 	if x.LastError != "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "Last error: %s\nResume failures: %d\n", x.LastError, x.ResumeFailures)
 	}
 	return nil
+}
+
+const (
+	agentRoleEnv    = "HARNEZ_AGENT_ROLE"
+	agentSessionEnv = "HARNEZ_SESSION_ID"
+)
+
+// startRole picks the role of a new session and checks that the caller's own
+// role (from the environment harnez gave it) may start it.
+func startRole(requested string) (string, error) {
+	role := requested
+	if role == "" {
+		var err error
+		if role, err = subagent.DefaultRole(); err != nil {
+			return "", err
+		}
+	}
+	if err := subagent.CheckSpawn(os.Getenv(agentRoleEnv), role); err != nil {
+		return "", err
+	}
+	return role, nil
+}
+
+// resumeRole returns the stored role of sess (default role for old records),
+// rejects a conflicting --role and checks the caller may manage that role.
+func resumeRole(requested string, sess *subagent.Session) (string, error) {
+	role := sess.Role
+	if role == "" {
+		var err error
+		if role, err = subagent.DefaultRole(); err != nil {
+			return "", err
+		}
+	}
+	if requested != "" && requested != role {
+		return "", fmt.Errorf("--role %q conflicts with session %q role %s", requested, sess.Name, role)
+	}
+	if err := subagent.CheckSpawn(os.Getenv(agentRoleEnv), role); err != nil {
+		return "", err
+	}
+	return role, nil
+}
+
+// setAgentEnv gives the provider process it is about to spawn its role and its
+// session name (the parent id of anything it starts) and returns a restore func.
+func setAgentEnv(role, name string) func() {
+	prev := map[string]*string{}
+	for _, kv := range [][2]string{{agentRoleEnv, role}, {agentSessionEnv, name}} {
+		if v, ok := os.LookupEnv(kv[0]); ok {
+			old := v
+			prev[kv[0]] = &old
+		} else {
+			prev[kv[0]] = nil
+		}
+		_ = os.Setenv(kv[0], kv[1])
+	}
+	return func() {
+		for k, v := range prev {
+			if v == nil {
+				_ = os.Unsetenv(k)
+			} else {
+				_ = os.Setenv(k, *v)
+			}
+		}
+	}
+}
+
+// guardLeafRole refuses mutating agent verbs when the caller is a leaf worker.
+// list, status and models stay available for diagnosis.
+func guardLeafRole(verb string) error {
+	role := os.Getenv(agentRoleEnv)
+	if !subagent.IsLeafRole(role) {
+		return nil
+	}
+	switch verb {
+	case "list", "status", "models", "help", "agent":
+		return nil // the root form checks each start/resume/slash itself
+	}
+	return subagent.CheckSpawn(role, "developer")
 }

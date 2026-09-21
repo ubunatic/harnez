@@ -1120,6 +1120,8 @@ type scriptDriver struct {
 	prompt  string
 	sid     string   // session id returned by a turn; "thread-1" when empty
 	resumed []string // provider ids passed to ResumeStream
+	// environment the provider process would inherit during the turn
+	envRole, envSession string
 }
 
 func (d *scriptDriver) play(fn subagent.EventFunc) *subagent.TurnResult {
@@ -1139,10 +1141,12 @@ func (d *scriptDriver) play(fn subagent.EventFunc) *subagent.TurnResult {
 }
 func (d *scriptDriver) RunStream(_ context.Context, o subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
 	d.prompt = o.Prompt
+	d.envRole, d.envSession = os.Getenv(agentRoleEnv), os.Getenv(agentSessionEnv)
 	return d.play(fn), nil
 }
 func (d *scriptDriver) ResumeStream(_ context.Context, id, p string, fn subagent.EventFunc) (*subagent.TurnResult, error) {
 	d.prompt = p
+	d.envRole, d.envSession = os.Getenv(agentRoleEnv), os.Getenv(agentSessionEnv)
 	d.resumed = append(d.resumed, id)
 	return d.play(fn), nil
 }
@@ -1685,5 +1689,110 @@ func TestStatsModeDoesNotRepeatAnAlreadyShownFinalMessage(t *testing.T) {
 	}
 	if !strings.Contains(got, "[reply: 0s]\n(the final message was already shown above)\n") {
 		t.Fatalf("missing reply marker:\n%s", got)
+	}
+}
+
+func TestAgentRoleStoredEnvAndPreamble(t *testing.T) {
+	t.Setenv(agentRoleEnv, "")
+	t.Setenv(agentSessionEnv, "")
+	storeDir := t.TempDir()
+	d := &scriptDriver{steps: []step{{0, subagent.Event{Kind: "session", Text: "thread-1"}}, {0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+	if _, err := runWithStore(t, d, storeDir, "start", "--name", "boss", "--role", "orchestrator", "run the sprint"); err != nil {
+		t.Fatal(err)
+	}
+	if d.envRole != "orchestrator" || d.envSession != "boss" {
+		t.Fatalf("child env role=%q session=%q", d.envRole, d.envSession)
+	}
+	if !strings.Contains(d.prompt, "Harnez role: orchestrator. You coordinate; you never write code") {
+		t.Fatalf("preamble lacks orchestrator rules:\n%s", d.prompt)
+	}
+	if os.Getenv(agentRoleEnv) != "" || os.Getenv(agentSessionEnv) != "" {
+		t.Fatal("agent environment leaked out of the command")
+	}
+	store, _ := subagent.NewSessionStore(storeDir)
+	sess, err := store.Get("thread-1")
+	if err != nil || sess.Role != "orchestrator" {
+		t.Fatalf("stored role = %q, err=%v", sess.Role, err)
+	}
+	// resume keeps the stored role and rejects a conflicting one
+	if _, err := runWithStore(t, d, storeDir, "resume", "--name", "boss", "go on"); err != nil {
+		t.Fatal(err)
+	}
+	if d.envRole != "orchestrator" || !strings.Contains(d.prompt, "Harnez role: orchestrator.") {
+		t.Fatalf("resume env role=%q prompt:\n%s", d.envRole, d.prompt)
+	}
+	if _, err := runWithStore(t, d, storeDir, "resume", "--name", "boss", "--role", "developer", "x"); err == nil || !strings.Contains(err.Error(), "conflicts with session") {
+		t.Fatalf("conflicting --role err = %v", err)
+	}
+}
+
+func TestAgentStartDefaultsToDeveloperRole(t *testing.T) {
+	t.Setenv(agentRoleEnv, "")
+	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+	if _, err := runWithStore(t, d, t.TempDir(), "start", "task"); err != nil {
+		t.Fatal(err)
+	}
+	if d.envRole != "developer" || !strings.Contains(d.prompt, "You are a leaf worker") || !strings.Contains(d.prompt, "Never run `harnez agent`") {
+		t.Fatalf("env=%q prompt:\n%s", d.envRole, d.prompt)
+	}
+	if _, err := runWithStore(t, d, t.TempDir(), "start", "--role", "wizard", "task"); err == nil || !strings.Contains(err.Error(), "unknown agent role") {
+		t.Fatalf("unknown role err = %v", err)
+	}
+}
+
+func TestLeafRolesCannotStartOrManageAgents(t *testing.T) {
+	storeDir := t.TempDir()
+	saveSessions(t, storeDir, &subagent.Session{ID: "id-a", Name: "a"})
+	for _, role := range []string{"developer", "reviewer", "advisor"} {
+		t.Setenv(agentRoleEnv, role)
+		for _, args := range [][]string{
+			{"start", "task"}, {"resume", "--name", "a", "x"}, {"-p", "hello"}, {"--name", "a", "hello"}, {"-p", "/stop", "--name", "a"},
+			{"compact", "--name", "a"}, {"stop", "--name", "a"}, {"delete", "--name", "a"}, {"chat"}, {"enable"},
+		} {
+			d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+			_, err := runWithStore(t, d, storeDir, args...)
+			if err == nil || !strings.Contains(err.Error(), "is a leaf worker") {
+				t.Fatalf("%s %v: err = %v, want leaf-worker refusal", role, args, err)
+			}
+			if len(d.resumed) != 0 || d.prompt != "" {
+				t.Fatalf("%s %v reached the provider", role, args)
+			}
+		}
+		for _, args := range [][]string{{"list"}, {"status"}, {"status", "--name", "a"}, {"models"}} {
+			if _, err := runWithStore(t, &recordingAgentDriver{}, storeDir, args...); err != nil {
+				t.Fatalf("%s %v must stay available: %v", role, args, err)
+			}
+		}
+	}
+}
+
+func TestOrchestratorMayStartHelpersButNotOrchestrators(t *testing.T) {
+	t.Setenv(agentRoleEnv, "orchestrator")
+	t.Setenv(agentSessionEnv, "boss")
+	storeDir := t.TempDir()
+	for _, role := range []string{"", "developer", "reviewer", "advisor"} {
+		d := &scriptDriver{sid: "thread-" + role, steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+		args := []string{"start", "task"}
+		if role != "" {
+			args = append(args, "--role", role)
+		}
+		if _, err := runWithStore(t, d, storeDir, args...); err != nil {
+			t.Fatalf("role %q: %v", role, err)
+		}
+		if d.envSession == "boss" {
+			t.Fatal("helper must get its own session name as parent id, not the orchestrator's")
+		}
+	}
+	d := &scriptDriver{steps: []step{{0, msg("done")}}}
+	_, err := runWithStore(t, d, storeDir, "start", "--role", "orchestrator", "task")
+	if err == nil || !strings.Contains(err.Error(), "may only start developer, reviewer, advisor sessions") || d.prompt != "" {
+		t.Fatalf("nested orchestrator err = %v", err)
+	}
+	store, _ := subagent.NewSessionStore(storeDir)
+	sessions, _ := store.List("", true)
+	for _, s := range sessions {
+		if s.ParentSessionID != "boss" {
+			t.Fatalf("session %s parent = %q, want boss", s.Name, s.ParentSessionID)
+		}
 	}
 }

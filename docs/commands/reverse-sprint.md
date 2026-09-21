@@ -60,7 +60,7 @@ You execute all coding, testing, and ticket management directly while maintainin
 - Ensure all tests pass with robust assertions.
 
 ### 3. Milestone Review Gate (Reviewer Tier)
-- Invoke a reviewer subagent (e.g. `harnez agent start --model sol -d <dir> "Review diff HEAD~1 against ticket criteria"` or `gemini3.8flash:low`).
+- Invoke a reviewer subagent (e.g. `harnez agent start --role reviewer --model sol -d <dir> "Review diff HEAD~1 against ticket criteria"` or `gemini3.8flash:low`).
 - Provide diff summary and test results. Note the emitted Reconnect Banner.
 - Reviewer checks test assertion rigor, regression risks, and invariant compliance.
 - Once green, commit the milestone: `git commit -m "feat/fix(...): ... (issue XXX)"`.
@@ -74,7 +74,7 @@ You execute all coding, testing, and ticket management directly while maintainin
   - Isolate the problem to specific files and line numbers.
   - Dispatch a single advisor subagent:
     ```bash
-    harnez agent start --model astra "Review lines 45-80 of pkg/service/handler.go for the race condition described below. Do not explore unrelated files."
+    harnez agent start --role advisor --model astra "Review lines 45-80 of pkg/service/handler.go for the race condition described below. Do not explore unrelated files."
     ```
   - Integrate advisor recommendations and resume direct execution.
 

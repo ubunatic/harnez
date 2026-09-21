@@ -39,7 +39,7 @@ type agentOutput struct {
 
 func newAgentCmd() *cobra.Command {
 	var jsonOut, children, all bool
-	var storeDir, workDir, name, modelSpec, streamMode string
+	var storeDir, workDir, name, modelSpec, streamMode, roleSpec string
 	var planSpec string
 	var rootPrompt string
 	var rootFiles []string
@@ -62,6 +62,17 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 	root.PersistentFlags().StringVarP(&workDir, "dir", "d", ".", "working directory or session scope")
 	root.PersistentFlags().StringVar(&name, "name", "", "session name")
 	root.PersistentFlags().StringVar(&modelSpec, "model", "", "provider:model[:tier]")
+	root.PersistentFlags().StringVar(&roleSpec, "role", "", "agent role for a new session: orchestrator, developer, reviewer or advisor (default from spec/agent.yaml)")
+	_ = root.RegisterFlagCompletionFunc("role", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		names, _ := subagent.RoleNames()
+		return names, cobra.ShellCompDirectiveNoFileComp
+	})
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if err := sessionTipHook(cmd, args); err != nil {
+			return err
+		}
+		return guardLeafRole(cmd.Name())
+	}
 	root.Flags().StringVarP(&rootPrompt, "prompt", "p", "", "prompt text")
 	root.Flags().BoolVarP(&rootContinue, "continue", "c", false, "resume the most recently active attributable session")
 	root.Flags().StringSliceVarP(&rootFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
@@ -122,11 +133,14 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 			if !knownSlashCommands[trimmed] {
 				return fmt.Errorf("unknown agent command %q; send it literally with: -- %s", trimmed, trimmed)
 			}
+			if e := guardLeafRole(strings.TrimPrefix(trimmed, "/")); e != nil {
+				return e
+			}
 			s, e := store()
 			if e != nil {
 				return e
 			}
-			x, _, e := resolveResumeSession(cmd, deps, s, resumeRequest{Dir: workDir, Name: name, Continue: rootContinue})
+			x, _, e := resolveResumeSession(cmd, deps, s, resumeRequest{Role: roleSpec, Dir: workDir, Name: name, Continue: rootContinue})
 			if e != nil {
 				return e
 			}
@@ -145,11 +159,11 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 				return e
 			}
 			if _, findErr := find(cmd, s, name); findErr == nil {
-				return runResume(cmd, deps, resumeRequest{Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+				return runResume(cmd, deps, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
 			} else if !strings.Contains(findErr.Error(), "not found") {
 				return findErr
 			}
-			return runStart(cmd, deps, startRequest{Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+			return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
 		}
 		if rootContinue {
 			s, e := store()
@@ -162,10 +176,10 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 			}
 			candidates := attributable(xs, workDir, parent())
 			if len(candidates) > 0 {
-				return runResume(cmd, deps, resumeRequest{Prompt: prompt, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: true, JSON: jsonOut, PlanFirst: planFirst})
+				return runResume(cmd, deps, resumeRequest{Role: roleSpec, Prompt: prompt, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: true, JSON: jsonOut, PlanFirst: planFirst})
 			}
 		}
-		return runStart(cmd, deps, startRequest{Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+		return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
 	}
 	var startFiles []string
 	start := &cobra.Command{Use: "start [prompt...]", Short: "Start a new agent session", Example: "  harnez agent start --name w --model luna -f task.md -- \"extra instructions\"", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
@@ -181,7 +195,7 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 		if err != nil {
 			return err
 		}
-		return runStart(cmd, agentDeps{store: store, parent: parent, find: find}, startRequest{Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+		return runStart(cmd, agentDeps{store: store, parent: parent, find: find}, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
 	}}
 	start.Flags().StringSliceVarP(&startFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
@@ -369,7 +383,7 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 		if err != nil {
 			return err
 		}
-		return runResume(cmd, agentDeps{store: store, parent: parent, find: find}, resumeRequest{Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: continueResume, JSON: jsonOut, PlanFirst: planFirst})
+		return runResume(cmd, agentDeps{store: store, parent: parent, find: find}, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: continueResume, JSON: jsonOut, PlanFirst: planFirst})
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	resume.Flags().BoolVar(&jsonOut, "json", false, "JSON output")

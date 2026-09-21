@@ -37,6 +37,7 @@ type Session struct {
 	CachedTokens       int       `json:"cached_tokens"`
 	CreatedAt          time.Time `json:"created_at"`
 	LastActiveAt       time.Time `json:"last_active_at"`
+	Role               string    `json:"role,omitempty"`
 	LastError          string    `json:"last_error,omitempty"`
 	ResumeFailures     int       `json:"resume_failures,omitempty"`
 }

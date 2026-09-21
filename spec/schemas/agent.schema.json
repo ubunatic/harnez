@@ -1,9 +1,23 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["default_model"],
+  "required": ["default_model", "default_role", "roles"],
   "properties": {
-    "default_model": { "type": "string", "minLength": 1 }
+    "default_model": { "type": "string", "minLength": 1 },
+    "default_role": { "type": "string", "minLength": 1 },
+    "roles": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["spawns", "rules"],
+        "properties": {
+          "spawns": { "type": "array", "items": { "type": "string" } },
+          "rules": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
   },
   "additionalProperties": false
 }

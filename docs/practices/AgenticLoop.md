@@ -9,7 +9,7 @@ weight: 40
 This document establishes the canonical practice for orchestrating multi-agent development loops. It defines the lifecycle, synchronization invariants, role archetypes, and quality gates required to conduct rapid, collision-free agentic sprints.
 
 Capability names vary by harness. With Harnez, the core lifecycle is
-`harnez agent start <model> --name <name> "<prompt>"`,
+`harnez agent start --name <name> --model <model> --role <role> "<prompt>"`,
 `harnez agent resume --name <id> "<task>"`, explicit `harnez agent compact --name <id>`, then
 `harnez agent list` and targeted `stop`/`delete` cleanup.
 
@@ -22,6 +22,25 @@ invoke each command through the invoking agent's visible host-session
 background-job facility. Keep those jobs visible and user-stoppable so users
 can inspect or stop them manually; do not hide lifecycle work behind opaque
 polling or detached processes.
+
+### Roles and delegation depth
+
+Delegation is exactly one level deep. Every `harnez agent` session has a role
+(`--role orchestrator|developer|reviewer|advisor`, default `developer`); harnez
+adds the role's rules to each turn and exports it to the agent as
+`HARNEZ_AGENT_ROLE`.
+
+- **orchestrator**: coordinates and never codes. It starts developer, reviewer
+  or advisor helpers (one writer at a time), waits for each call, and deletes
+  the helpers when done. It never starts another orchestrator and never hands
+  the whole sprint to another agent.
+- **developer, reviewer, advisor**: leaf workers. They do the work themselves
+  and never run `harnez agent`, native subagents or delegating skills. harnez
+  refuses `start`, `resume`, `stop`, `delete`, `compact` and `chat` for them;
+  `list`, `status` and `models` stay available.
+
+A human or a host agent without a role starts sessions unrestricted. The rules
+are defined once in harnez's embedded agent spec.
 
 An explicitly named `provider:model:tier` is dispatched exactly through
 `harnez agent start`; if it is unavailable or fails, report the requested spec
@@ -313,6 +332,8 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 | **Ephemeral Advisor** | Read-only repository search and retrieval | Audits tickets, performs feasibility research, identifies code paths | Ephemeral (terminated after Phase 1) |
 | **Dev Worker** | Write Tools, Compiler, Test Runner | Implements concrete changes, writes unit tests, ensures compilation | Single-threaded per workspace |
 | **Independent Reviewer** | Read-Only Tools, Diff Inspection | Audits git diff against acceptance criteria, verifies test rigor | Ephemeral (spawned in Phase 3) |
+
+`harnez agent --role` maps to this table: orchestrator = Host Orchestrator, advisor = Ephemeral Advisor, developer = Dev Worker, reviewer = Independent Reviewer. Only the orchestrator may start the others.
 
 ---
 

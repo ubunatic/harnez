@@ -12,6 +12,8 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 
 ### Strict Invariants for the Host Orchestrator
 
+0. **One-Level Delegation**: start helpers only as `--role developer|reviewer|advisor`; they are leaf workers and never call `harnez agent`. Never start another orchestrator or hand the sprint to another agent.
+
 1. **Zero Coding**:
    - **The Host Orchestrator NEVER writes code, edits source files, or applies "quick fixes" directly.**
    - All code implementation, file editing, test creation, and bug fixing are strictly executed by the dispatched developer agent.
@@ -41,7 +43,7 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 For focused, milestone-based tasks, execute this fast-path, token-efficient loop:
 
 ### 1. Goal Handoff to Low-Cost Developer
-- The Host Orchestrator dispatches a developer worker (e.g. `--model luna`) using `harnez agent start --name <worker> --model <model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method).
+- The Host Orchestrator dispatches a developer worker (e.g. `--model luna`) using `harnez agent start --role developer --name <worker> --model <model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method).
 - An explicitly named `provider:model:tier` must be dispatched exactly through `harnez agent start`; on failure, report it and ask for guidance rather than substituting the host model or a native subagent.
 - Provide:
   - Scoped milestone objective, target files, and acceptance criteria from the ticket.

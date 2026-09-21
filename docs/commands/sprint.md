@@ -9,7 +9,7 @@ Reference Practice: `@docs/AgenticLoop.md`
 You, the agent that received this invocation, are the sprint orchestrator for this
 task. Execute all five phases below yourself, in this session. Do not hand the sprint
 as a whole to another agent, subagent, or external CLI, and do not spawn a second
-sprint orchestrator. Delegation inside the workflow is still required where each phase
+sprint orchestrator. Delegation is exactly one level deep: helpers are started with `--role advisor|developer|reviewer` and are leaf workers that never run `harnez agent` themselves. Delegation inside the workflow is still required where each phase
 says so — the reusable advisor (Phase 1), the named developers (Phase 2), and the
 independent reviewer (Phase 3) are delegated by you and report back to you. This is
 not a choice: direct invocation always means inline execution. To make a different
@@ -30,7 +30,7 @@ Follow these 5 phases sequentially:
 
 ### Phase 1: Sequential Advisory Discovery (One Reusable Advisor)
 1. Parse the target tickets or goals from the prompt.
-2. Reuse the current advisor session if available; a closed or parked advisor remains eligible for native reuse. Start a new reusable advisor (via synchronous `harnez agent start <model> --name sprint-advisor "<short ticket-referencing prompt>"` or native advisor session) with a frontier model only when no compatible session exists or the existing one has an explicit health/compatibility failure, such as the Codex usage-limit dead-session behavior. Record its session ID and model. Use this same advisor for every ticket, one at a time; never dispatch the next ticket before the previous ticket's compaction completes. The command prints the reply directly; if parallel work is explicitly wanted, run it through the host's visible background-job facility so the user can see and stop it.
+2. Reuse the current advisor session if available; a closed or parked advisor remains eligible for native reuse. Start a new reusable advisor (via synchronous `harnez agent start --role advisor --model <model> --name sprint-advisor "<short ticket-referencing prompt>"` or native advisor session) with a frontier model only when no compatible session exists or the existing one has an explicit health/compatibility failure, such as the Codex usage-limit dead-session behavior. Record its session ID and model. Use this same advisor for every ticket, one at a time; never dispatch the next ticket before the previous ticket's compaction completes. The command prints the reply directly; if parallel work is explicitly wanted, run it through the host's visible background-job facility so the user can see and stop it.
 3. Hand the advisor one ticket or bounded goal at a time (e.g. synchronous `harnez agent resume --name <advisor_session_id> "<short follow-up>"`). Instruct it to:
    - Audit problem statements in `issues/` and related code paths using targeted `grep_search` and range-bounded reads (avoid whole-file reads on `AGENTS.md` or active prompt rules).
    - Check whether work is already completed or if prior assumptions changed.
@@ -44,7 +44,7 @@ Follow these 5 phases sequentially:
 6. Keep the host orchestrator responsive throughout delegation. Do not block the main chat on subagent waits unless the user explicitly asked to wait or the next integration step is blocked on a child result.
 
 ### Phase 2: Sequential Development & Test Verification (Reusable Developers)
-1. Create or reuse one developer agent per broader subsystem/work category from the advisor's plan (via `harnez agent start <model> --name <category> "<prompt>"` or native subagent), rather than one per ticket. Give each a short technical name users can refer to, and record its name, session ID, category, and model. Select a suitable lower-cost model; use the top frontier model only when the advisor explicitly recommends it. An explicitly named `provider:model:tier` must be dispatched exactly through `harnez agent start`; on failure, report it and ask for guidance rather than substituting the host model or a native subagent.
+1. Create or reuse one developer agent per broader subsystem/work category from the advisor's plan (via `harnez agent start --role developer --model <model> --name <category> "<prompt>"` or native subagent), rather than one per ticket. Give each a short technical name users can refer to, and record its name, session ID, category, and model. Select a suitable lower-cost model; use the top frontier model only when the advisor explicitly recommends it. An explicitly named `provider:model:tier` must be dispatched exactly through `harnez agent start`; on failure, report it and ask for guidance rather than substituting the host model or a native subagent.
    - **Plan first (read-only)**: recommended: the developer's initial prompt asks for a read-only plan ("read-only: plan ...", no edits yet); the host reviews it, then `resume` grants write authority. No prompt template: agents have their own best practices, and stored first prompts are how we observe them.
 2. Process tasks one by one in sequence through the matching named developer (resumed via `harnez agent resume --name <session_id> "<task>"` to avoid concurrent edits to the same codebase/worktree). Reuse that session for later work in its category, supplying bounded tasks and durable references.
 3. Follow Test-Driven Development (TDD):
@@ -56,7 +56,7 @@ Follow these 5 phases sequentially:
 5. After each larger work item, persist its learnings in issues/docs/code and pass the Phase 3 review gate before committing implementation. Then the orchestrator must make an explicit final session-compaction call (`harnez agent compact --name <session_id>`) for that developer and confirm completion before handing it another item or parking it. Merely telling the developer to compact at the end does not satisfy this checkpoint.
 
 ### Phase 3: Pre-Commit Review Gate & Nuance Follow-Up Tracking
-1. Spawn an independent reviewer subagent (via `harnez agent start --model sol "Review diff HEAD~1"` or dedicated review pass).
+1. Spawn an independent reviewer subagent (via `harnez agent start --role reviewer --model sol "Review diff HEAD~1"` or dedicated review pass).
 2. The reviewer audits the full git diff (`git diff`, `git status`) and verifies:
    - **Test Assertion Rigor**: Are assertions meaningful, robust, and verifying real behaviors?
    - **Documentation & Tracker Sync**: Are `issues/*.md` statuses, `issues/README.md`, `docs/README.md`, and `AGENTS.md` updated?
