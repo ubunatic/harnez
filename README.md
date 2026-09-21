@@ -1,12 +1,13 @@
 # harnez
 
-Manage your [Claude Code](https://claude.ai/code) and Prime Agent harnesses declaratively from a
+Manage your [Claude Code](https://claude.ai/code), [Antigravity](https://antigravity.google/), Codex,
+and Prime Agent harnesses declaratively from a
 single `config.yaml`. One source of truth drives everything Claude Code and coding agents read:
 permissions, effort levels, optional model overrides, hooks, AGENTS.md instructions, custom slash
 commands, skills, and language doc copies. Apply is idempotent — run it as often as
 you like; user-managed keys and unmanaged sections are never touched.
 
-**Website:** <https://ubunatic.com/harnez> · **Repo:** <https://codeberg.org/ubunatic/harnez>
+**Website:** <https://harnez.org/> · **Repo:** <https://codeberg.org/ubunatic/harnez>
 
 ## What it manages
 
@@ -50,7 +51,7 @@ command files, so `harnez apply` (no flags) applies the built-in config.
 ## Quick start
 
 ```sh
-harnez apply           # apply embedded config to Claude, Gemini, Codex, and Prime Agent
+harnez apply           # apply embedded config to Claude, Antigravity, Codex, and Prime Agent
 harnez status          # show what is and isn't applied
 harnez diff            # preview changes without writing
 harnez usage           # show unified token, session, and quota status across agents
@@ -249,21 +250,35 @@ Every ticket in `issues/NNN-kebab-case.md` begins with standard metadata headers
 
 | Command | Flags | What it does |
 |---|---|---|
-| `apply` | `-c` `-t` `-d` `--force-docs` `--debloat` | Sync global Claude, Gemini, Codex, and Prime Agent rules, prompts, skills, and docs |
+| `apply` | `-c` `-t` `-d` `--force-docs` `--debloat` | Sync global Claude, Antigravity, Codex, and Prime Agent rules, prompts, skills, and docs |
 | `init` | `-c` `-d` `-f` `--docs` `-m` `--summary` `--update` `--replace` `-y` | Set up a project: AGENTS.md, doc copies, Makefile targets |
-| `diff` | `-c` `-t` `-e` `--capture-docs` `--out` | Preview changes without writing (`-e, --exit-code` exits with 1 on drift; `--capture-docs` writes report to inbox) |
-| `scan-docs` | `-c <dir>` | Read-only scan of child projects for managed doc drift |
-| `clean` | `-c` `-t` | Remove managed keys from `settings.json`; strip MD sections |
-| `status` | `-c` `-t` `--debloat` | Print config summary and check which items are present on disk |
-| `revert` | `--debloat` | Restore Claude and Codex settings recorded before debloat |
-| `assess` | `[path]` `--json` | Fast code/doc metrics, token estimation, and repo feasibility report |
-| `mode` | `[level]` `--status` `--clear` | Switch ConciseMode terseness level and sync AGENTS.local.md overlay |
-| `distill` | `[hook|filter]` | Distill verbose command outputs for agent context conservation |
-| `release` | `--bump` `--continue` `--dry-run` `-s` | Language-agnostic version bump, build, minisign signing, and forge publishing |
-| `usage` | `--json` `--agent` `--offline` `-w` `-s` `--interval` | Show unified token, session, and quota status across AI coding agents (aliases: `quota`, `tokens`, `stats`) |
-| `find <entity> <query…>` | `-d` | Fuzzy-text/filter query over repository-data entities (`issues` only in v1) |
+| `diff` | `-c` `-t` `-e` `--capture-docs` `--out` | Preview changes without writing |
+| `scan-docs <dir>` | `-c` | Read-only scan of child projects for managed doc drift |
+| `clean` | `-c` `-t` | Remove managed keys from settings and managed Markdown sections |
+| `status` | `-c` `-t` `--debloat` | Print config summary and applied state |
+| `revert` | `-c` `-t` `--debloat` | Restore Claude, Codex, and Antigravity settings recorded before debloat |
+| `assess [path]` | `--json` | Fast code/doc metrics, token estimation, and repo feasibility report |
+| `mode [level]` | `--status` `--clear` | Switch ConciseMode terseness level and sync the local overlay |
+| `distill` | `[hook|read]` | Distill verbose command output for agent context conservation |
+| `release` | `--bump` `--continue` `--dry-run` `-s` | Version, build, sign, and publish a release |
+| `usage` | `--json` `--agent` `--offline` `-w` `-s` `--interval` | Show unified token, session, and quota status |
+| `docs variant` | `--help` | Swap an installed copyable doc between lite and full variants |
+| `exec` | command-specific | Run a command while recording shell-call telemetry |
+| `rate` | `<tool> <score> <description>` | Record an internal tool-call quality rating |
+| `stats` | `--tool` `--agent` `--ticket` `--project` `--json` `--auto` | Analyze tool-call telemetry |
+| `find issues <query…>` | `-d` | Fuzzy search repository issues |
+| `issues` | status verb | Change a ticket’s status, resync the index, and commit |
+| `agent` | `--store-dir` | Manage subagent sessions; see the command tree below |
 
-All commands accept `-c <path>` (config file, default: embedded).
+The table reflects the current CLI source and installed development build. Check
+`harnez <command> --help` for the exact flags available in your release.
+
+All applicable config commands accept `-c <path>` (config file, default: embedded).
+
+`agent` manages the subagent session tree. Its current subcommands are:
+`chat`, `compact`, `delete`, `disable`, `enable`, `list`, `models`, `resume`,
+`start`, `status`, and `stop`. These commands are available in the current
+development build; published binaries may expose a smaller command set.
 
 `apply` also accepts:
 
