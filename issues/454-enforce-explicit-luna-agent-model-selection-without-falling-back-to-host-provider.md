@@ -30,3 +30,23 @@ than silently substituting a host model.
 The implementation must preserve strict mapping for specifications such as
 `codex:luna:low`, and must include coverage for the unavailable-provider and
 no-silent-fallback cases.
+
+## Milestones (lean-sprint)
+
+Other sessions (../loom, ../lmcoder) share `~/.harnez/agents`; never stop, delete, or resume sessions you did not start.
+
+### M1 — CLI no-silent-fallback (code + tests)
+- Reproduction test first: `harnez agent start <spec> <prompt>` and `resume` with an unknown provider,
+  unknown model, or unavailable/unconfigured provider must return a clear non-zero error naming the
+  requested spec and asking for guidance. It must never dispatch a different provider/model.
+- Known-good specs (e.g. `codex:luna:low`) must map exactly to the requested provider/model/tier
+  (assert the resolved provider, model, tier).
+- Fix the resolution path so there is no fallback branch; cover unavailable-provider and
+  no-silent-fallback cases. Use `harnez read -I`/`-L` for large files. Run `make test-q1` once per code change.
+- Commit at the boundary: `feat(agent): fail closed on unavailable explicit model (issue 454 M1)`.
+
+### M2 — Instruction/doc rule
+- Add a short rule to `docs/practices/AgenticLoop.md` (and the sprint/lean-sprint command docs if they
+  state dispatch behaviour): an explicitly named provider:model:tier is dispatched exactly via
+  `harnez agent start`; on failure report and ask, never substitute the host model or a native subagent.
+- Commit: `docs(agentic-loop): forbid silent model fallback (issue 454 M2)`.
