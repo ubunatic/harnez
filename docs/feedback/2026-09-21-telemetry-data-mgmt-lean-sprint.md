@@ -78,3 +78,23 @@ impossible today. It belongs next to the 446/445 cost work.
 
 341 needs a macOS CI run to close; 127 needs a scope decision on the remaining SQL. Then 446
 before 445, then 124 with 296. See `docs/Roadmap.md`.
+
+## Hygiene and 462 (later in the session)
+
+- Closed 341 (Linux-verified only), 127, 425 and 428, and filed follow-ups 458-462. 462 was decided
+  by the user (drop `warn_condition`, keep the `apply` tip skip) and delivered by luna:low in one
+  pass (`1aa05ed` closes it).
+- The 462 worker skipped the plan-first step and reported only after finishing. The diff was small
+  and matched the ticket, so nothing was lost, but the prompt's "reply with a plan before editing"
+  is not enforced by `agent start` in one-shot mode. Plan-first needs a two-step start (plan-only
+  prompt, then `resume` to grant write authority) to be real.
+- The worker reported two failing `exec_test.go` tests as pre-existing. They passed under the
+  host's `make test-q1`, so they are sandbox artifacts (read-only quota/cache state), not repo bugs.
+
+## Learnings for the evergreen docs
+
+- Store internals (serialized migration, spec-defined SQL, quality checks) now live in
+  `docs/Telemetry.md` section 5, items 5-7.
+- Worker-loop lessons (resume with the exact error, whole-package verification, host runs tests and
+  commits) are recorded here only; `docs/AgenticLoop.md` has an uncommitted user edit and was not
+  touched.
