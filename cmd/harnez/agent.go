@@ -96,7 +96,7 @@ func newAgentCmd() *cobra.Command {
 			ts.startHeartbeats()
 			r, err = sd.RunStream(cmd.Context(), opts, func(ev subagent.Event) {
 				if ev.Kind == "session" {
-					ts.info(ev.Text, m.Provider+":"+m.Name, "start", fmt.Sprintf("name=%s dir=%s parent=%s\nreconnect: harnez agent resume %s \"<prompt>\"", sessName, canonicalWorkDir, parent(), ev.Text))
+					ts.info(ev.Text, m.Provider+":"+m.Name, "start", fmt.Sprintf("name=%s dir=%s", sessName, canonicalWorkDir), "reconnect: harnez agent resume "+ev.Text+" \"<prompt>\"")
 				}
 				ts.onEvent(ev)
 			})
@@ -307,12 +307,12 @@ func newAgentCmd() *cobra.Command {
 		}
 		d := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
 		tl := newTimeline(cmd)
-		compacted := false
+		compacted, compactNote := false, ""
 		if subagent.ShouldCompact(sess.TokensSinceCompact) {
 			if _, err = d.Compact(cmd.Context(), sess.ProviderID()); err != nil {
 				return err
 			}
-			tl.log("compact", "queued /compact at %d tokens since last compaction; the agent acknowledges it before your reply", sess.TokensSinceCompact)
+			compactNote = fmt.Sprintf("queued /compact at %s new tokens since the last compaction; the agent acknowledges it before its reply", humanCount(sess.TokensSinceCompact))
 			sess.TokensSinceCompact = 0
 			compacted = true
 		}
@@ -323,12 +323,18 @@ func newAgentCmd() *cobra.Command {
 		if streaming {
 			ts = newTurnStream(cmd, streamMode, compacted)
 			ts.info(sess.ID, sess.Provider+":"+sess.Model, "resume")
+			if compacted {
+				ts.printf("[compact: %s]\n", compactNote)
+			}
 			ts.startHeartbeats()
 			r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), args[1], ts.onEvent)
 			if err != nil {
 				ts.abort()
 			}
 		} else {
+			if compacted {
+				tl.log("compact", "%s", compactNote)
+			}
 			tl.announceTurn("resume", sess.Provider+":"+sess.Model, sess.Name)
 			r, err = d.Resume(cmd.Context(), sess.ProviderID(), args[1])
 		}

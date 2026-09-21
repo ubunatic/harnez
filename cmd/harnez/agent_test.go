@@ -668,7 +668,7 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume]\n") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
+	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume]\n[wait: ") || !strings.Contains(got, "[compact: queued /compact at 150.0k new tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
 		t.Fatalf("stdout:\n%s", got)
 	}
 }
@@ -721,5 +721,39 @@ func TestShortDur(t *testing.T) {
 		if got := shortDur(in); got != want {
 			t.Fatalf("shortDur(%s) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestTokenSummarySeparatesNewFromCached(t *testing.T) {
+	r := &subagent.TurnResult{InputTokens: 1230000, OutputTokens: 1200, CachedTokens: 1198000, TokensTurn: 1231200}
+	if got, want := tokenSummary(r), "tokens: 33.2k new (1200 out), 1.2M cached"; got != want {
+		t.Fatalf("tokenSummary = %q, want %q", got, want)
+	}
+	for in, want := range map[int]string{999: "999", 12300: "12.3k", 1230742: "1.2M"} {
+		if got := humanCount(in); got != want {
+			t.Fatalf("humanCount(%d) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestStreamingResumeKeepsStderrQuiet(t *testing.T) {
+	old := agentDriver
+	agentDriver = func(subagent.Model) subagent.Driver { return &streamDriver{} }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store, _ := subagent.NewSessionStore(storeDir)
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 150000}); err != nil {
+		t.Fatal(err)
+	}
+	var errOut bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"resume", "worker", "prompt", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty while streaming", errOut.String())
 	}
 }

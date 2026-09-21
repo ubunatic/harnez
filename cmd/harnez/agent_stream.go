@@ -63,6 +63,17 @@ func newTurnStream(cmd *cobra.Command, mode string, compacted bool) *turnStream 
 	return &turnStream{w: cmd.OutOrStdout(), began: time.Now(), mode: mode, compacted: compacted, stop: make(chan struct{})}
 }
 
+// humanCount renders 1230742 as 1.2M and 32700 as 32.7k.
+func humanCount(n int) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(n)/1e6)
+	case n >= 10_000:
+		return fmt.Sprintf("%.1fk", float64(n)/1e3)
+	}
+	return fmt.Sprint(n)
+}
+
 // shortDur renders 1m0s as 1m and 1h0m0s as 1h.
 func shortDur(d time.Duration) string {
 	s := d.Round(time.Second).String()
@@ -86,7 +97,7 @@ func (t *turnStream) info(id, agent, action string, extra ...string) {
 	for _, e := range extra {
 		t.printf("%s\n", e)
 	}
-	t.printf("[wait: one synchronous turn; caller must wait for [done], no polling, no re-sending the prompt]\n")
+	t.printf("[wait: synchronous turn, wait for [done]; no polling, no re-sending the prompt]\n")
 }
 
 func (t *turnStream) onEvent(ev subagent.Event) {
@@ -126,7 +137,7 @@ func (t *turnStream) startHeartbeats() {
 			case <-time.After(time.Until(t.began.Add(heartbeatAt(i)))):
 			}
 			t.mu.Lock()
-			fmt.Fprintf(t.w, "[heartbeat: %s, ~%d tokens, %d messages, %d commands, next: %s, last: %s]\n", shortDur(time.Since(t.began)), t.bytes/4, t.messages, t.commands, shortDur(heartbeatAt(i+1)), t.last)
+			fmt.Fprintf(t.w, "[heartbeat: %s, ~%s tokens, %d messages, %d commands, next: %s, last: %s]\n", shortDur(time.Since(t.began)), humanCount(t.bytes/4), t.messages, t.commands, shortDur(heartbeatAt(i+1)), t.last)
 			t.mu.Unlock()
 		}
 	}()
@@ -140,14 +151,20 @@ func (t *turnStream) finish(r *subagent.TurnResult) {
 		size += len(m)
 	}
 	if t.mode == streamStats {
-		t.printf("[reply: %s]\n%s\n[done: %d messages (only the reply is shown), %d bytes, %d tokens, %s]\n", shortDur(time.Since(t.began)), r.Response, len(r.Messages), size, r.TokensTurn, shortDur(time.Since(t.began)))
+		t.printf("[reply: %s]\n%s\n[done: %d messages (only the reply is shown), %d bytes, %s, %s]\n", shortDur(time.Since(t.began)), r.Response, len(r.Messages), size, tokenSummary(r), shortDur(time.Since(t.began)))
 		return
 	}
-	t.printf("[done: %d messages, last message is the reply, %d bytes, %d tokens, %s]\n", len(r.Messages), size, r.TokensTurn, shortDur(time.Since(t.began)))
+	t.printf("[done: %d messages, last message is the reply, %d bytes, %s, %s]\n", len(r.Messages), size, tokenSummary(r), shortDur(time.Since(t.began)))
 }
 
 // abort stops the heartbeat goroutine when the turn failed.
 func (t *turnStream) abort() {
 	close(t.stop)
 	t.done.Wait()
+}
+
+// tokenSummary separates tokens the turn added from input re-read from the
+// provider cache, so long-context sessions do not look expensive.
+func tokenSummary(r *subagent.TurnResult) string {
+	return fmt.Sprintf("tokens: %s new (%s out), %s cached", humanCount(subagent.CompactionTokens(r)), humanCount(r.OutputTokens), humanCount(r.CachedTokens))
 }
