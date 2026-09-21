@@ -30,3 +30,8 @@ During the review of the recent multimodal reading card and telemetry schema mig
 - Extended ANSI SGR codes are handled safely without dropping or breaking text layout in rendered PNG cards.
 - Multi-step telemetry schema migrations are covered by regression tests.
 - All tests pass under Quota-1 rules (`make test-q1`).
+
+## Sprint Status (lean-sprint, 2026-09-21)
+
+Telemetry migration coverage is delivered (`235d7da`): authentic v2 and v5 upgrade fixtures with
+column assertions, plus apply logging tests. Remaining: ANSI 256/24-bit color support.

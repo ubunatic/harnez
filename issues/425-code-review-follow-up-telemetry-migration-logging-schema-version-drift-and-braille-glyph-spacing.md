@@ -52,3 +52,9 @@ A code review of recent changes (commits `c917eb6`, `7f960d2`, `aeedb20` and unc
 1. **M1 — Telemetry Logging and Migration Cleanup**: Fix `db.Migrations()` accuracy, remove stdout noise from `ensureTelemetrySchema()`, and update `schema.go` documentation.
 2. **M2 — Braille Layout Corrections**: Adjust dot positioning and margins in `drawBrailleRune()` and update tests in `read_test.go` to assert correct bounding margins.
 3. **M3 — Verification**: Run `make test-q1` and verify clean output for `harnez apply`.
+
+## Sprint Status (lean-sprint, 2026-09-21)
+
+Telemetry parts (M1) are delivered: migration reporting is accurate, `apply` is quiet on no-op
+(`235d7da`), `defer db.Close()` and v9 comments were already in place. Remaining: M2 Braille
+layout and the docs/data tracking decision.
