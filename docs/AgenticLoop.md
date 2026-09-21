@@ -8,10 +8,10 @@ weight: 40
 
 This document establishes the canonical practice for orchestrating multi-agent development loops. It defines the lifecycle, synchronization invariants, role archetypes, and quality gates required to conduct rapid, collision-free agentic sprints.
 
-Capability names vary by agent harness. In the examples below, repository search
-means tools such as `grep_search`, bounded reads mean line-range reads,
-background-task inspection means commands such as `manage_task list`, and
-subagent lifecycle control means commands such as `manage_subagents kill`.
+Capability names vary by harness. With Harnez, the core lifecycle is
+`harnez agent start <model> --name <name> "<prompt>"`,
+`harnez agent resume <id> "<task>"`, explicit `harnez agent compact <id>`, then
+`harnez agent list` and targeted `stop`/`delete` cleanup.
 
 ---
 
@@ -54,7 +54,22 @@ Agentic software engineering scales effectively when concurrency is structured a
      3. *Subagent Visual Attachment*: In isolated subagent dispatches (`--doc-mode=vision`), language cheatsheets are attached directly as pre-rendered 1-bit pixel font PNG bundles (`docs/cards/bundle.png`), ensuring 100% mechanical compliance with zero text context bloat.
      4. *Execution & Verification*: Files are created with structured tools (`write_to_file`) and verified under Quota-1 single-test boundaries.
 
-7. **Media & Demo Verification Gate**:
+7. **Steered Model Escalation**:
+   - For each development step use
+     `luna:low -> haiku -> sol:low -> sonnet -> opus -> astra:low`: start at
+     `luna:low`, escalate only on struggle, failed verification, or ambiguity,
+     then reset the next step to `luna:low`.
+   - Steer each subagent's rough plan before granting write authority.
+
+8. **Durable Session Record**:
+   - Start `docs/studies/` session notes at kickoff; update them after major work
+     and workflow friction or failure.
+
+9. **Immediate Product-Issue Capture**:
+   - File larger obvious product issues immediately (high priority when
+     sprint-blocking); agents may fix small localized issues directly.
+
+10. **Media & Demo Verification Gate**:
    - When creating, updating, or adding media assets (e.g. reels, WebM demos, terminal recordings, screenshots) intended for documentation or websites, **always ask the user for explicit confirmation** that the recorded visual output matches their exact expectations before publishing or embedding it.
    - Never automatically publish or embed unverified recordings (guarding against invisible typing, missing UI frames, or unexpected rendering artifacts).
 
@@ -96,6 +111,7 @@ Agentic software engineering scales effectively when concurrency is structured a
 
 ### Phase 1: Parallel Advisory Discovery (Read-Only)
 - **Goal**: Rapidly audit requirements, discover existing implementations, identify affected files, and evaluate technical feasibility without code collisions.
+- Apply Invariant 8 before dispatch and at major boundaries.
 - **Mechanics**:
   - The Host Orchestrator spawns concurrent read-only advisor subagents (e.g. one per ticket or feature area).
   - Advisors perform focused repository searches and bounded reads, evaluate whether requirements are already partially or fully met, and identify exact line ranges for changes.
@@ -107,6 +123,7 @@ Agentic software engineering scales effectively when concurrency is structured a
 
 ### Phase 2: Sequential Development & Test Verification (Single-Threaded)
 - **Goal**: Implement planned changes cleanly, incrementally, and with continuous test verification.
+- Apply Invariant 7 before implementation.
 - **Mechanics**:
   - The Host Orchestrator (or a dedicated dev subagent executing sequentially) addresses tasks one ticket at a time.
   - Test-Driven Verification: Write or adapt unit tests alongside or prior to code changes.
@@ -117,7 +134,7 @@ Agentic software engineering scales effectively when concurrency is structured a
   - **Repro-before-fix for defect-shaped tickets**: For bug/timing/deadlock/race tickets, construct (or reuse) a reproduction that asserts a concrete numeric baseline *before* writing the fix. Verify the implementation against that number, not just `go test` exiting 0 — a fix can pass every pre-existing gate and still not address the defect if the existing gates weren't built to catch it.
   - **Commit stale/failed work before discarding it**: When an implementation attempt is abandoned — because it regressed a gate, because a cleaner strategy was found, or because it was simply wrong — do not `git checkout --`/`git reset --hard`/`git stash drop` it away as the first move. Commit it first, on the current branch or a throwaway one (e.g. `git commit -m "wip: attempt N, reverted — see issue NNN" --no-verify` only if hooks block a WIP commit, otherwise a normal commit), *then* revert the working tree with `git revert` or by checking out the prior commit. This keeps the failed attempt in `git log`/`git reflog` as a real, diffable artifact instead of only as prose in a ticket. A short-lived local branch (`git branch attempt-2-endpoint-cone`) pointing at the WIP commit is even better when more than one attempt is worth preserving side-by-side. Only skip this for genuinely trivial, single-line experiments where the narrative description *is* the diff (e.g. "tried threshold=50, tried threshold=25, both failed" needs no commit) — the bar is "would a future reader want to `git diff` this," not "is this attempt tidy."
 
-**Model selection:** Use a fast capable model for clear, bounded, testable subagent tasks. Use a more capable model for ambiguity, architecture, security, deep debugging, broad changes, or final review. Escalate on uncertainty, failed checks, or scope growth; never trade away verification for speed.
+Never trade away verification for speed when applying Invariant 7.
 
 ### Phase 3: Pre-Commit Review Gate (Independent Reviewer)
 - **Goal**: Enforce quality standards and catch regressions before changes are committed.
