@@ -1,6 +1,6 @@
 # 424 — Fix telemetry compaction event insertion for model column
 
-**Status**: Open
+**Status**: Closed — fixed in a1ade4a: fresh, legacy and current-version DBs all get compaction_events.model, with regression tests
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
