@@ -1,6 +1,6 @@
 # 482 — Agent session attribution: bare resume, -c/--continue and start-or-resume upsert
 
-**Status**: Open
+**Status**: Closed — bare resume resolves exactly one attributable session in -d, -c picks the most recent, resolved= shown in the stream header, destructive verbs reject -c; upsert stays with 483; quarantine hook point left for 306
 
 **Priority**: P2 (Medium)
 **Severity**: Moderate
