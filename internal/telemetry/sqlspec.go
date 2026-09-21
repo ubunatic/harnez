@@ -11,6 +11,19 @@ import (
 type telemetrySQLSpec struct {
 	Schema     string            `yaml:"schema"`
 	Statements map[string]string `yaml:"statements"`
+	Predicates map[string]struct {
+		SQL string `yaml:"sql"`
+	} `yaml:"predicates"`
+	GroupColumns []string `yaml:"group_columns"`
+}
+
+func (s *telemetrySQLSpec) groupColumnAllowed(column string) bool {
+	for _, allowed := range s.GroupColumns {
+		if allowed == column {
+			return true
+		}
+	}
+	return false
 }
 
 func loadTelemetrySQL() (*telemetrySQLSpec, error) {

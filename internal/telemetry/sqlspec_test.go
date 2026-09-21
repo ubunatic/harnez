@@ -22,7 +22,7 @@ func TestEmbeddedTelemetrySpecIsValid(t *testing.T) {
 }
 
 func TestTelemetrySQLLiteralsMovedToSpec(t *testing.T) {
-	for _, name := range []string{"schema.go", "insert.go"} {
+	for _, name := range []string{"schema.go", "insert.go", "query.go"} {
 		data, err := os.ReadFile(name)
 		if err != nil {
 			data, err = os.ReadFile("internal/telemetry/" + name)
@@ -40,7 +40,7 @@ func TestTelemetrySQLLiteralsMovedToSpec(t *testing.T) {
 				return true
 			}
 			value := strings.ToUpper(literal.Value)
-			for _, keyword := range []string{"INSERT INTO", "CREATE TABLE", "CREATE INDEX"} {
+			for _, keyword := range []string{"INSERT INTO", "CREATE TABLE", "CREATE INDEX", "SELECT "} {
 				if strings.Contains(value, keyword) {
 					t.Errorf("%s still contains moved SQL literal %q", name, keyword)
 				}
@@ -50,5 +50,30 @@ func TestTelemetrySQLLiteralsMovedToSpec(t *testing.T) {
 		if t.Failed() {
 			return
 		}
+	}
+}
+
+func TestTelemetrySpecStatementsAreReferenced(t *testing.T) {
+	for name := range mustTelemetrySQL().Statements {
+		found := false
+		for _, source := range []string{"schema.go", "insert.go", "query.go"} {
+			data, err := os.ReadFile(source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(data), name) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("statement %q is not referenced by telemetry Go", name)
+		}
+	}
+}
+
+func TestAggregateGroupedByRejectsUnknownColumn(t *testing.T) {
+	if _, err := (&DB{}).aggregateGroupedBy("not_allowed", Filter{}); err == nil {
+		t.Fatal("expected unsupported grouping column error")
 	}
 }

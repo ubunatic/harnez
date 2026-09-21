@@ -1,1 +1,53 @@
-{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","required":["schema","statements"],"additionalProperties":false,"properties":{"schema":{"type":"string","minLength":1},"statements":{"type":"object","minProperties":6,"additionalProperties":{"type":"string","minLength":1}}}}
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "schema",
+    "statements",
+    "predicates",
+    "group_columns"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "statements": {
+      "type": "object",
+      "minProperties": 6,
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "predicates": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "sql"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "sql": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "group_columns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "tool_name",
+          "agent_id",
+          "project_name"
+        ]
+      },
+      "minItems": 1
+    }
+  }
+}

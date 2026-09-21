@@ -34,30 +34,22 @@ type Filter struct {
 // whereClause builds a "WHERE ..." SQL fragment (or "" if unfiltered) and
 // its bound args, shared by Query and Aggregate.
 func (f Filter) whereClause() (string, []any) {
+	pairs := []struct {
+		name    string
+		value   any
+		present bool
+	}{
+		{"tool_name", f.ToolName, f.ToolName != ""}, {"agent_id", f.AgentID, f.AgentID != ""}, {"ticket_id", f.TicketID, f.TicketID != ""}, {"session_id", f.SessionID, f.SessionID != ""}, {"call_type", f.CallType, f.CallType != ""}, {"project", f.Project, f.Project != ""},
+		{"since", f.Since.Format(time.RFC3339Nano), !f.Since.IsZero()}, {"until", f.Until.Format(time.RFC3339Nano), !f.Until.IsZero()},
+	}
 	var clauses []string
 	var args []any
-
-	add := func(col, val string) {
-		if val != "" {
-			clauses = append(clauses, col+" = ?")
-			args = append(args, val)
+	for _, pair := range pairs {
+		if pair.present {
+			clauses = append(clauses, mustTelemetrySQL().Predicates[pair.name].SQL)
+			args = append(args, pair.value)
 		}
 	}
-	add("tool_name", f.ToolName)
-	add("agent_id", f.AgentID)
-	add("ticket_id", f.TicketID)
-	add("session_id", f.SessionID)
-	add("call_type", f.CallType)
-	add("project_name", f.Project)
-	if !f.Since.IsZero() {
-		clauses = append(clauses, "created_at >= ?")
-		args = append(args, f.Since.Format(time.RFC3339Nano))
-	}
-	if !f.Until.IsZero() {
-		clauses = append(clauses, "created_at < ?")
-		args = append(args, f.Until.Format(time.RFC3339Nano))
-	}
-
 	if len(clauses) == 0 {
 		return "", nil
 	}
@@ -110,11 +102,7 @@ func (f Filter) cliWhereClause() (string, []any) {
 // an unbounded result set and post-filtering it in Go.
 func (d *DB) QueryCLIInvocations(f Filter, limit int) ([]CLIInvocation, error) {
 	where, args := f.cliWhereClause()
-	query := `
-		SELECT id, created_at, session_id, agent_id, command, args, project_name,
-		       working_dir, ticket_id, exit_code, duration_ms, harnez_version
-		FROM cli_invocations` + where + `
-		ORDER BY created_at DESC, id DESC`
+	query := strings.ReplaceAll(mustTelemetrySQL().Statements["query_cli_invocations"], "{{where}}", where)
 	if limit > 0 {
 		query += ` LIMIT ?`
 		args = append(args, limit)
@@ -163,10 +151,8 @@ func (d *DB) CLIInvocationCounts(f Filter) (map[string]int, error) {
 	ctx, cancel := defaultContext()
 	defer cancel()
 
-	rows, err := d.sql.QueryContext(ctx, `
-		SELECT command, COUNT(*)
-		FROM cli_invocations`+where+`
-		GROUP BY command`, args...)
+	query := strings.ReplaceAll(mustTelemetrySQL().Statements["cli_invocation_counts"], "{{where}}", where)
+	rows, err := d.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: cli invocation counts: %w", err)
 	}
@@ -193,14 +179,8 @@ func (d *DB) Query(f Filter) ([]ToolCall, error) {
 	ctx, cancel := defaultContext()
 	defer cancel()
 
-	rows, err := d.sql.QueryContext(ctx, `
-		SELECT id, created_at, session_id, ticket_id, project_name, working_dir,
-		       agent_id, tool_name, call_type, score, note, exit_code,
-		       duration_ms, raw_bytes, distilled_bytes, output_bytes, actual_tokens,
-		       input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens,
-		       potential_savings_tokens, potential_savings_bytes
-		FROM tool_calls`+where+`
-		ORDER BY created_at DESC`, args...)
+	query := strings.ReplaceAll(mustTelemetrySQL().Statements["query"], "{{where}}", where)
+	rows, err := d.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: query: %w", err)
 	}
@@ -280,6 +260,9 @@ type GroupStats struct {
 // internal literal (not caller input) — see AggregateByTool/AggregateByAgent,
 // the only callers — so it's safe to splice directly into the query.
 func (d *DB) aggregateGroupedBy(column string, f Filter) ([]GroupStats, error) {
+	if !mustTelemetrySQL().groupColumnAllowed(column) {
+		return nil, fmt.Errorf("telemetry: unsupported grouped column %q", column)
+	}
 	where, args := f.whereClause()
 	ctx, cancel := defaultContext()
 	defer cancel()
@@ -291,24 +274,9 @@ func (d *DB) aggregateGroupedBy(column string, f Filter) ([]GroupStats, error) {
 	// spliced in before the shared where args, matching the CASE's position
 	// in the SQL text.
 	queryArgs := append([]any{ExpectedFailureCallType}, args...)
-	rows, err := d.sql.QueryContext(ctx, `
-		SELECT
-			`+column+`,
-			COUNT(*),
-			AVG(score),
-			COUNT(score),
-			COUNT(CASE WHEN call_type != ?
-			           AND ((exit_code IS NOT NULL AND exit_code != 0)
-			                OR (score IS NOT NULL AND score <= 2)) THEN 1 END),
-			COALESCE(SUM(raw_bytes), 0),
-			COALESCE(SUM(distilled_bytes), 0),
-			AVG(duration_ms),
-			AVG(actual_tokens),
-			COALESCE(SUM(potential_savings_tokens), 0),
-			COALESCE(SUM(potential_savings_bytes), 0)
-		FROM tool_calls`+where+`
-		GROUP BY `+column+`
-		ORDER BY COUNT(*) DESC, `+column+` ASC`, queryArgs...)
+	query := strings.ReplaceAll(mustTelemetrySQL().Statements["aggregate_grouped"], "{{group_column}}", column)
+	query = strings.ReplaceAll(query, "{{where}}", where)
+	rows, err := d.sql.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("telemetry: aggregate grouped by %s: %w", column, err)
 	}
@@ -376,17 +344,8 @@ func (d *DB) Aggregate(f Filter) (Stats, error) {
 
 	var s Stats
 	var avgScore, avgDuration *float64
-	row := d.sql.QueryRowContext(ctx, `
-		SELECT
-			COUNT(*),
-			AVG(score),
-			COUNT(score),
-			COUNT(CASE WHEN exit_code IS NOT NULL AND exit_code != 0 THEN 1 END),
-			COUNT(exit_code),
-			COALESCE(SUM(raw_bytes), 0),
-			COALESCE(SUM(distilled_bytes), 0),
-			AVG(duration_ms)
-		FROM tool_calls`+where, args...)
+	query := strings.ReplaceAll(mustTelemetrySQL().Statements["aggregate"], "{{where}}", where)
+	row := d.sql.QueryRowContext(ctx, query, args...)
 	if err := row.Scan(
 		&s.Count, &avgScore, &s.ScoredCount, &s.FailureCount, &s.ExitCodedCount,
 		&s.TotalRawBytes, &s.TotalDistilled, &avgDuration,
@@ -509,12 +468,8 @@ func (d *DB) DistillationSavings(f Filter) (DistillationSavings, error) {
 	defer cancel()
 
 	var ds DistillationSavings
-	row := d.sql.QueryRowContext(ctx, `
-		SELECT
-			COUNT(*),
-			COALESCE(SUM(raw_bytes), 0),
-			COALESCE(SUM(distilled_bytes), 0)
-		FROM tool_calls`+restrict, args...)
+	query := strings.ReplaceAll(mustTelemetrySQL().Statements["distillation_savings"], "{{where}}", restrict)
+	row := d.sql.QueryRowContext(ctx, query, args...)
 	if err := row.Scan(&ds.Count, &ds.RawBytes, &ds.DistilledBytes); err != nil {
 		return DistillationSavings{}, fmt.Errorf("telemetry: distillation savings: %w", err)
 	}
@@ -567,7 +522,7 @@ func (d *DB) UnratedFailureCount(f Filter) (int64, error) {
 	defer cancel()
 
 	var lastRateAt *string
-	row := d.sql.QueryRowContext(ctx, `SELECT MAX(created_at) FROM tool_calls`+where, args...)
+	row := d.sql.QueryRowContext(ctx, strings.ReplaceAll(mustTelemetrySQL().Statements["unrated_last_rate"], "{{where}}", where), args...)
 	if err := row.Scan(&lastRateAt); err != nil {
 		return 0, fmt.Errorf("telemetry: unrated failure count: last rate call: %w", err)
 	}
@@ -594,7 +549,7 @@ func (d *DB) UnratedFailureCount(f Filter) (int64, error) {
 	defer cancel2()
 
 	var count int64
-	err := d.sql.QueryRowContext(ctx2, `SELECT COUNT(*) FROM tool_calls`+fWhere, fArgs...).Scan(&count)
+	err := d.sql.QueryRowContext(ctx2, strings.ReplaceAll(mustTelemetrySQL().Statements["unrated_count"], "{{where}}", fWhere), fArgs...).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("telemetry: unrated failure count: %w", err)
 	}
@@ -615,9 +570,7 @@ func (d *DB) HeartbeatStats(f Filter) (HeartbeatInfo, error) {
 
 	var info HeartbeatInfo
 	var lastAt *string
-	row := d.sql.QueryRowContext(ctx, `
-		SELECT COUNT(*), MAX(created_at)
-		FROM tool_calls`+where, args...)
+	row := d.sql.QueryRowContext(ctx, strings.ReplaceAll(mustTelemetrySQL().Statements["heartbeat_stats"], "{{where}}", where), args...)
 	if err := row.Scan(&info.Count, &lastAt); err != nil {
 		return HeartbeatInfo{}, fmt.Errorf("telemetry: heartbeat stats: %w", err)
 	}
@@ -637,7 +590,7 @@ func (d *DB) HeartbeatStats(f Filter) (HeartbeatInfo, error) {
 	ctx2, cancel2 := defaultContext()
 	defer cancel2()
 	var callsSince int64
-	if err := d.sql.QueryRowContext(ctx2, `SELECT COUNT(*) FROM tool_calls`+sinceWhere, sinceArgs...).Scan(&callsSince); err != nil {
+	if err := d.sql.QueryRowContext(ctx2, strings.ReplaceAll(mustTelemetrySQL().Statements["heartbeat_calls_since"], "{{where}}", sinceWhere), sinceArgs...).Scan(&callsSince); err != nil {
 		return HeartbeatInfo{}, fmt.Errorf("telemetry: heartbeat calls-since: %w", err)
 	}
 	// Since.whereClause() uses ">=", so the heartbeat row itself (created_at

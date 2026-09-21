@@ -160,9 +160,7 @@ func (d *DB) pruneCLIInvocations(rowCap int64) error {
 	ctx, cancel := defaultContext()
 	defer cancel()
 
-	_, err := d.sql.ExecContext(ctx, `
-		DELETE FROM cli_invocations
-		WHERE id <= (SELECT MAX(id) - ? FROM cli_invocations)`, rowCap)
+	_, err := d.sql.ExecContext(ctx, mustTelemetrySQL().Statements["prune_cli_invocations"], rowCap)
 	if err != nil {
 		return fmt.Errorf("telemetry: prune cli invocations: %w", err)
 	}

@@ -209,3 +209,31 @@ statements:
   insert_cli_invocation: |
     INSERT INTO cli_invocations (created_at, session_id, agent_id, command, args, project_name, working_dir, ticket_id, exit_code, duration_ms, harnez_version)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  query: |
+    SELECT id, created_at, session_id, ticket_id, project_name, working_dir, agent_id, tool_name, call_type, score, note, exit_code, duration_ms, raw_bytes, distilled_bytes, output_bytes, actual_tokens, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens, potential_savings_tokens, potential_savings_bytes FROM tool_calls{{where}} ORDER BY created_at DESC
+  aggregate_grouped: |
+    SELECT {{group_column}}, COUNT(*), AVG(score), COUNT(score), COUNT(CASE WHEN call_type != ? AND ((exit_code IS NOT NULL AND exit_code != 0) OR (score IS NOT NULL AND score <= 2)) THEN 1 END), COALESCE(SUM(raw_bytes), 0), COALESCE(SUM(distilled_bytes), 0), AVG(duration_ms), AVG(actual_tokens), COALESCE(SUM(potential_savings_tokens), 0), COALESCE(SUM(potential_savings_bytes), 0) FROM tool_calls{{where}} GROUP BY {{group_column}} ORDER BY COUNT(*) DESC, {{group_column}} ASC
+  aggregate: |
+    SELECT COUNT(*), AVG(score), COUNT(score), COUNT(CASE WHEN exit_code IS NOT NULL AND exit_code != 0 THEN 1 END), COUNT(exit_code), COALESCE(SUM(raw_bytes), 0), COALESCE(SUM(distilled_bytes), 0), AVG(duration_ms) FROM tool_calls{{where}}
+  distillation_savings: |
+    SELECT COUNT(*), COALESCE(SUM(raw_bytes), 0), COALESCE(SUM(distilled_bytes), 0) FROM tool_calls{{where}}
+  unrated_last_rate: 'SELECT MAX(created_at) FROM tool_calls{{where}}'
+  unrated_count: 'SELECT COUNT(*) FROM tool_calls{{where}}'
+  heartbeat_stats: 'SELECT COUNT(*), MAX(created_at) FROM tool_calls{{where}}'
+  heartbeat_calls_since: 'SELECT COUNT(*) FROM tool_calls{{where}}'
+# Fetch CLI invocation rows in stable newest-first order.
+  query_cli_invocations: |
+    SELECT id, created_at, session_id, agent_id, command, args, project_name, working_dir, ticket_id, exit_code, duration_ms, harnez_version FROM cli_invocations{{where}} ORDER BY created_at DESC, id DESC
+# Count CLI invocations grouped by command.
+  cli_invocation_counts: 'SELECT command, COUNT(*) FROM cli_invocations{{where}} GROUP BY command'
+  prune_cli_invocations: 'DELETE FROM cli_invocations WHERE id <= (SELECT MAX(id) - ? FROM cli_invocations)'
+predicates:
+  tool_name: {sql: 'tool_name = ?'}
+  agent_id: {sql: 'agent_id = ?'}
+  ticket_id: {sql: 'ticket_id = ?'}
+  session_id: {sql: 'session_id = ?'}
+  call_type: {sql: 'call_type = ?'}
+  project: {sql: 'project_name = ?'}
+  since: {sql: 'created_at >= ?'}
+  until: {sql: 'created_at < ?'}
+group_columns: [tool_name, agent_id, project_name]
