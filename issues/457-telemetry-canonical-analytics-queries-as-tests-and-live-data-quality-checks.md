@@ -51,3 +51,7 @@ cleaner or more complete data model.
   for 446/445 cost fields. Orphan detection relies on `session_boundaries.compaction_event_id`.
 - Minor cleanup for later: `warn_condition` text and `warn_above_percent` are redundant in the spec.
 - **M2 (next)**: `stats --quality` wiring, read-only live run, short pass/warn report.
+
+## Follow-up (2026-09-21)
+
+The missing `tool_calls.model` column is now [461](461-add-model-column-to-tool-calls-for-per-model-call-analytics-457-finding.md); the `warn_condition` cleanup is in [462](462-telemetry-leftovers-redundant-warn-condition-misleading-apply-test-name-apply-session-tip-skip.md).
