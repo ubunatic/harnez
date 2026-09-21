@@ -31,4 +31,4 @@ duplicate spec values), and later it should adapt to remaining quota.
 
 - Tests: omitted `--model` resolves to the default; explicit value wins; bare
   alias resolution and ambiguity error; `models` output marks the default.
-- Phase 2 gets its own ticket when the usage-limit source is stable.
+- Phase 2 is tracked in #485.

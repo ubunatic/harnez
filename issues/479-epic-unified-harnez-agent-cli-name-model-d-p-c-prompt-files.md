@@ -5,7 +5,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
-**Related**: #480, #481, #482, #483, #484, #476, #477, #478, #291, #342, #306, #144, `docs/HarnezAgentArchitecture.md`
+**Related**: #480, #481, #482, #483, #484, #485, #476, #477, #478, #291, #342, #306, #144, `docs/HarnezAgentArchitecture.md`
 
 ---
 
@@ -109,7 +109,8 @@ the new form. Shell completion, `--help`, the man page and
 |---|--------|------|-----------|
 | 480 | Prompt input grammar (variadic, `--`, `-f`, stdin) | P2 | — |
 | 481 | Unified `--name`/`--model`/`-d`, old positional forms removed | P2 | — |
-| 484 | Default model from one spec value; autodetect later | P3 | 481 |
+| 484 | Default model from one spec value (phase 1, closed) | P3 | 481 |
+| 485 | Autodetect the default model from usage limits (phase 2, follow-up) | P3 | 484 |
 | 478 | Listed sessions resumable or clearly terminal (existing) | P1 | — |
 | 482 | Attribution, bare `resume`, `-c`, upsert | P2 | 481, 478 |
 | 483 | `agent -p` root form and slash commands | P2 | 480, 481, 482 |
