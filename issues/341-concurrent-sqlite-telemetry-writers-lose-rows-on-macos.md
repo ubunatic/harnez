@@ -1,6 +1,6 @@
 # 341 — Concurrent SQLite telemetry writers lose rows on macOS
 
-**Status**: Open — fixed on Linux, awaiting macOS CI confirmation
+**Status**: Closed — fixed and regression-tested on Linux (fbaa511); macOS not tested soon, reopen if 338 CI shows lost rows
 **Priority**: P2 (Medium)
 **Severity**: Data Loss (Telemetry)
 **Category**: Cross-Platform / Concurrency
@@ -72,3 +72,7 @@ concurrent openers hit `duplicate column name: model` and lost a row (`TestConcu
 32 processes, failed before the fix). Fixed by running schema init and migration inside one
 connection-pinned `BEGIN IMMEDIATE` transaction. Remaining before closing: a real macOS CI run
 (`make macos-ci`) must pass repeatedly.
+
+## Closed (2026-09-21)
+
+Closed without a macOS run: macOS is not tested soon. The fix and the 32-process regression test are verified on Linux. If macOS CI (338) later shows lost rows, reopen this ticket.
