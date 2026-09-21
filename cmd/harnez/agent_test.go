@@ -99,6 +99,9 @@ func TestAgentModelsListsKnownSpecs(t *testing.T) {
 }
 
 func TestAgentStartRejectsUnknownModelWithoutCreatingSession(t *testing.T) {
+	old := agentDriver
+	agentDriver = func(subagent.Model) subagent.Driver { t.Fatal("provider driver must not be called"); return nil }
+	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
@@ -106,8 +109,8 @@ func TestAgentStartRejectsUnknownModelWithoutCreatingSession(t *testing.T) {
 	cmd.SetArgs([]string{"start", "codex:missing:low", "x", "--store-dir", storeDir})
 
 	err := cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "codex:missing:low") || !strings.Contains(err.Error(), "ask for guidance") {
-		t.Fatalf("start error = %v, want requested spec and guidance", err)
+	if err == nil || !strings.Contains(err.Error(), "model is now --model") {
+		t.Fatalf("start error = %v, want model flag guidance", err)
 	}
 	store, storeErr := subagent.NewSessionStore(storeDir)
 	if storeErr != nil {
@@ -119,6 +122,113 @@ func TestAgentStartRejectsUnknownModelWithoutCreatingSession(t *testing.T) {
 	}
 	if len(sessions) != 0 {
 		t.Fatalf("sessions after rejected start = %#v, want none", sessions)
+	}
+}
+
+func TestAgentOldModelSpecGuard(t *testing.T) {
+	tests := []struct {
+		name, first string
+		reject      bool
+	}{
+		{"known", "codex:luna:low", false},
+		{"mistyped known provider", "codex:missing:low", true},
+		{"unknown provider remains prompt", "note:fix", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			old := agentDriver
+			d := &recordingAgentDriver{}
+			agentDriver = func(subagent.Model) subagent.Driver { return d }
+			defer func() { agentDriver = old }()
+			cmd := newAgentCmd()
+			var errOut bytes.Buffer
+			cmd.SetOut(new(bytes.Buffer))
+			cmd.SetErr(&errOut)
+			args := []string{"start", tt.first, "prompt", "--store-dir", t.TempDir()}
+			if tt.first == "codex:luna:low" {
+				args = []string{"start", "--model", tt.first, "prompt", "--store-dir", t.TempDir()}
+			}
+			cmd.SetArgs(args)
+			err := cmd.Execute()
+			if tt.reject {
+				if err == nil || !strings.Contains(err.Error(), "model is now --model") {
+					t.Fatalf("error = %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestAgentResumeRequiresName(t *testing.T) {
+	old := agentDriver
+	agentDriver = func(subagent.Model) subagent.Driver { return &replyDriver{} }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store, _ := subagent.NewSessionStore(storeDir)
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed"}); err != nil {
+		t.Fatal(err)
+	}
+	var errOut bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"resume", "worker", "prompt", "--store-dir", storeDir})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "resume: --name <session> is required") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestAgentStartFileOnlyAndNameCollision(t *testing.T) {
+	old := agentDriver
+	d := &recordingAgentDriver{}
+	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	file := filepath.Join(t.TempDir(), "prompt.md")
+	if err := os.WriteFile(file, []byte("full file prompt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetIn(strings.NewReader(""))
+	cmd.SetArgs([]string{"start", "--model", "codex:luna", "--name", "named", "-f", file, "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	store, _ := subagent.NewSessionStore(storeDir)
+	sess, err := store.Find("named")
+	if err != nil || !strings.Contains(sess.StartPrompt, file+" (16 bytes)") || strings.Contains(sess.StartPrompt, "full file prompt") {
+		t.Fatalf("stored prompt = %#v, err=%v", sess, err)
+	}
+	cmd = newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"start", "--model", "codex:luna", "--name", "named", "again", "--store-dir", storeDir})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "recorded") || !strings.Contains(err.Error(), sess.WorkingDir) {
+		t.Fatalf("collision error = %v", err)
+	}
+}
+
+func TestAgentResumeModelConflict(t *testing.T) {
+	old := agentDriver
+	agentDriver = func(subagent.Model) subagent.Driver { t.Fatal("provider driver must not be called"); return nil }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store, _ := subagent.NewSessionStore(storeDir)
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Tier: "low", Status: "completed"}); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"resume", "--name", "worker", "--model", "codex:luna:latest", "prompt", "--store-dir", storeDir})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "conflicts") {
+		t.Fatalf("conflict error = %v", err)
 	}
 }
 
@@ -152,7 +262,7 @@ func TestAgentChatFailureTransition(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"chat", "claude:haiku", "--name", "bold-fox", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"chat", "--model", "claude:haiku", "--name", "bold-fox", "--store-dir", storeDir})
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "provider exited") {
 		t.Fatalf("chat error = %v", err)
 	}
@@ -202,7 +312,7 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
-	for _, args := range [][]string{{"resume", "active", "orchestrator prompt"}, {"compact", "active"}, {"stop", "active"}} {
+	for _, args := range [][]string{{"resume", "--name", "active", "orchestrator prompt"}, {"compact", "--name", "active"}, {"stop", "--name", "active"}} {
 		cmd := newAgentCmd()
 		cmd.SetOut(new(bytes.Buffer))
 		cmd.SetErr(new(bytes.Buffer))
@@ -224,7 +334,7 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"delete", "active", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"delete", "--name", "active", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +348,7 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 	cmd = newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"delete", "completed", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"delete", "--name", "completed", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +366,7 @@ func TestAgentInteractiveMissingProviderIDLimitsPostExitOnly(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"chat", "attach", "codex-chat", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"chat", "attach", "--name", "codex-chat", "--store-dir", storeDir})
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "does not expose a provider session ID") {
 		t.Fatalf("attach error = %v", err)
 	}
@@ -280,7 +390,7 @@ func TestAgentChatRegistersBeforeLaunchAndTransitions(t *testing.T) {
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
 	cmd.SetIn(bytes.NewBufferString("input"))
-	cmd.SetArgs([]string{"chat", "claude:haiku", "--name", "calm-otter", "-d", dir, "--store-dir", storeDir})
+	cmd.SetArgs([]string{"chat", "--model", "claude:haiku", "--name", "calm-otter", "-d", dir, "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +412,7 @@ func TestAgentChatRegistersBeforeLaunchAndTransitions(t *testing.T) {
 	cmd = newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"chat", "attach", "calm-otter", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"chat", "attach", "--name", "calm-otter", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +430,7 @@ func TestAgentChatGeneratesUniqueNameAndRejectsDuplicate(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"chat", "claude:haiku", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"chat", "--model", "claude:haiku", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +442,7 @@ func TestAgentChatGeneratesUniqueNameAndRejectsDuplicate(t *testing.T) {
 	cmd = newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"chat", "claude:haiku", "--name", sessions[0].Name, "--store-dir", storeDir})
+	cmd.SetArgs([]string{"chat", "--model", "claude:haiku", "--name", sessions[0].Name, "--store-dir", storeDir})
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("expected duplicate name error")
 	}
@@ -410,7 +520,7 @@ func TestAgentRepoStatusUnsetJSONAndSingleSession(t *testing.T) {
 	out.Reset()
 	cmd = newAgentCmd()
 	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"status", "inside", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"status", "--name", "inside", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil || !bytes.Contains(out.Bytes(), []byte("ID: inside\nName: demo\nStatus: completed")) {
 		t.Fatalf("single session status: err=%v output=%s", err, out.String())
 	}
@@ -512,7 +622,7 @@ func TestAgentStartStoresCanonicalWorkingDir(t *testing.T) {
 	storeDir := t.TempDir()
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "codex:luna", "prompt", "-d", ".", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"start", "--model", "codex:luna", "prompt", "-d", ".", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -549,7 +659,7 @@ func TestAgentResumePrintsReplyNotStructDump(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&errOut)
-	cmd.SetArgs([]string{"resume", "worker", "prompt", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"resume", "--name", "worker", "prompt", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -586,7 +696,7 @@ func TestAgentResumeCompactsOnceAndSeparatesAck(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(&errOut)
-	cmd.SetArgs([]string{"resume", "worker", "prompt", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"resume", "--name", "worker", "prompt", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -631,7 +741,7 @@ func TestAgentStartStreamsLabeledBlocks(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "codex:luna", "prompt", "--name", "w", "--store-dir", t.TempDir()})
+	cmd.SetArgs([]string{"start", "--model", "codex:luna", "prompt", "--name", "w", "--store-dir", t.TempDir()})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -663,7 +773,7 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"resume", "worker", "prompt", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"resume", "--name", "worker", "prompt", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -691,7 +801,7 @@ func TestAgentStartStatsModeShowsOnlyHeartbeatsAndReply(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(&out)
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "codex:luna", "prompt", "--stream", "stats", "--store-dir", t.TempDir()})
+	cmd.SetArgs([]string{"start", "--model", "codex:luna", "prompt", "--stream", "stats", "--store-dir", t.TempDir()})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -710,7 +820,7 @@ func TestAgentRejectsUnknownStreamMode(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "codex:luna", "prompt", "--stream", "loud", "--store-dir", t.TempDir()})
+	cmd.SetArgs([]string{"start", "--model", "codex:luna", "prompt", "--stream", "loud", "--store-dir", t.TempDir()})
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "invalid --stream") {
 		t.Fatalf("err = %v", err)
 	}
@@ -749,7 +859,7 @@ func TestStreamingResumeKeepsStderrQuiet(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(&errOut)
-	cmd.SetArgs([]string{"resume", "worker", "prompt", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"resume", "--name", "worker", "prompt", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -812,7 +922,7 @@ func tool(text string) subagent.Event { return subagent.Event{Kind: "activity", 
 
 func TestConfirmationAndPlanShowInStatsMode(t *testing.T) {
 	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: will count files")}, {0, tool("running ls")}, {0, msg("PLAN: ls then sort")}, {0, msg("interim chatter")}, {0, msg("9 files")}}}
-	got := runScripted(t, d, "start", "codex:luna", "orig task", "--name", "w", "--stream", "stats")
+	got := runScripted(t, d, "start", "--model", "codex:luna", "orig task", "--name", "w", "--stream", "stats")
 	for _, want := range []string{"[confirmation: 0s]\nwill count files\n", "[plan: 0s]\nls then sort\n", "[reply: 0s]\n9 files\n"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
@@ -825,7 +935,7 @@ func TestConfirmationAndPlanShowInStatsMode(t *testing.T) {
 
 func TestToolBeforeConfirmationIsAViolation(t *testing.T) {
 	d := &scriptDriver{steps: []step{{0, tool("running rg foo")}, {0, msg("CONFIRM: late")}, {0, msg("done")}}}
-	got := runScripted(t, d, "start", "codex:luna", "task", "--name", "w")
+	got := runScripted(t, d, "start", "--model", "codex:luna", "task", "--name", "w")
 	want := "[violation: running rg foo before any confirmation; caller may stop the agent: harnez agent stop w]"
 	if !strings.Contains(got, want) || strings.Count(got, "[violation:") != 1 {
 		t.Fatalf("stdout:\n%s", got)
@@ -834,7 +944,7 @@ func TestToolBeforeConfirmationIsAViolation(t *testing.T) {
 
 func TestSilentAgentGetsWarning(t *testing.T) {
 	d := &scriptDriver{steps: []step{{100 * time.Millisecond, msg("late reply")}}}
-	got := runScripted(t, d, "start", "codex:luna", "task", "--name", "w")
+	got := runScripted(t, d, "start", "--model", "codex:luna", "task", "--name", "w")
 	if !strings.Contains(got, "[warning: no confirmation after 0s; caller may stop the agent: harnez agent stop w]") || strings.Count(got, "[warning:") != 1 {
 		t.Fatalf("stdout:\n%s", got)
 	}
@@ -849,7 +959,7 @@ func TestPromptGetsProtocolButStoredPromptStaysOriginal(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"start", "codex:luna", "orig task", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"start", "--model", "codex:luna", "orig task", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -865,7 +975,7 @@ func TestPromptGetsProtocolButStoredPromptStaysOriginal(t *testing.T) {
 
 func TestPlanFirstAddsGateAndPrompt(t *testing.T) {
 	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: will plan")}, {0, msg("PLAN: 1) read 2) count")}}}
-	got := runScripted(t, d, "start", "codex:luna", "count files", "--name", "w", "--plan-first")
+	got := runScripted(t, d, "start", "--model", "codex:luna", "count files", "--name", "w", "--plan-first")
 	if !strings.Contains(d.prompt, "plan-first turn") || !strings.HasSuffix(d.prompt, "\n\ncount files") {
 		t.Fatalf("driver prompt = %q", d.prompt)
 	}
@@ -881,7 +991,7 @@ func TestPlanFirstAddsGateAndPrompt(t *testing.T) {
 
 func TestPlanFirstWithoutPlanWarns(t *testing.T) {
 	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("I just did it")}}}
-	got := runScripted(t, d, "start", "codex:luna", "task", "--name", "w", "--plan-first")
+	got := runScripted(t, d, "start", "--model", "codex:luna", "task", "--name", "w", "--plan-first")
 	if !strings.Contains(got, "[warning: plan-first turn ended without a PLAN: message; the last message was: I just did it]") {
 		t.Fatalf("stdout:\n%s", got)
 	}
@@ -889,7 +999,7 @@ func TestPlanFirstWithoutPlanWarns(t *testing.T) {
 
 func TestNormalTurnHasNoPlanFirstText(t *testing.T) {
 	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
-	got := runScripted(t, d, "start", "codex:luna", "task", "--name", "w")
+	got := runScripted(t, d, "start", "--model", "codex:luna", "task", "--name", "w")
 	if strings.Contains(d.prompt, "plan-first") || strings.Contains(got, "[gate:") {
 		t.Fatalf("prompt=%q\nstdout:\n%s", d.prompt, got)
 	}

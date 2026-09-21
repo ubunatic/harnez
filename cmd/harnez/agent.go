@@ -39,10 +39,13 @@ type agentOutput struct {
 
 func newAgentCmd() *cobra.Command {
 	var jsonOut, children, all bool
-	var storeDir, workDir, name, streamMode string
+	var storeDir, workDir, name, modelSpec, streamMode string
 	var planFirst bool
 	root := &cobra.Command{Use: "agent", Short: "Manage subagent sessions"}
 	root.PersistentFlags().StringVar(&storeDir, "store-dir", subagent.DefaultStoreDir(), "session store directory")
+	root.PersistentFlags().StringVarP(&workDir, "dir", "d", ".", "working directory or session scope")
+	root.PersistentFlags().StringVar(&name, "name", "", "session name")
+	root.PersistentFlags().StringVar(&modelSpec, "model", "", "provider:model[:tier]")
 	store := func() (*subagent.FileSessionStore, error) { return subagent.NewSessionStore(storeDir) }
 	parent := func() string {
 		if v := os.Getenv("HARNEZ_SESSION_ID"); v != "" {
@@ -50,8 +53,16 @@ func newAgentCmd() *cobra.Command {
 		}
 		return os.Getenv("AGY_CONVERSATION_ID")
 	}
-	find := func(s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
-		return s.Find(id)
+	_ = root.RegisterFlagCompletionFunc("name", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return agentSessionCompletion(storeDir, parent)(cmd, args, toComplete)
+	})
+	_ = root.RegisterFlagCompletionFunc("model", agentModelCompletion)
+	find := func(cmd *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+		dir := ""
+		if cmd.Flags().Changed("dir") {
+			dir = workDir
+		}
+		return resolveSession(s, id, dir)
 	}
 	write := func(cmd *cobra.Command, v any) error {
 		if jsonOut {
@@ -64,13 +75,26 @@ func newAgentCmd() *cobra.Command {
 		return err
 	}
 
-	start := &cobra.Command{Use: "start <provider:model[:tier]> <prompt>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	var startFiles []string
+	start := &cobra.Command{Use: "start [prompt...]", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
+		spec := modelSpec
+		if spec == "" && len(words) >= 2 && oldStyleModelWord(words[0]) {
+			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
+		}
+		if spec == "" {
+			spec = "codex:luna:low"
+		}
+		prompt, err := assemblePrompt(startFiles, words, tail, cmd.InOrStdin())
+		if err != nil {
+			return err
+		}
 		if err := checkStreamMode(streamMode); err != nil {
 			return err
 		}
-		m, err := subagent.ResolveModel(args[0])
+		m, err := subagent.ResolveModel(spec)
 		if err != nil {
-			return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", args[0], err)
+			return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
 		}
 		s, err := store()
 		if err != nil {
@@ -81,12 +105,17 @@ func newAgentCmd() *cobra.Command {
 		if sessName == "" {
 			sessName = "agent-" + m.Provider + "-" + id[:8]
 		}
+		if name != "" {
+			if existing, findErr := resolveSession(s, name, ""); findErr == nil {
+				return fmt.Errorf("session name %q is already in use by %s in %s", name, existing.ID, existing.WorkingDir)
+			}
+		}
 		canonicalWorkDir, err := filepath.Abs(workDir)
 		if err != nil {
 			return fmt.Errorf("resolve working directory: %w", err)
 		}
 		tl := newTimeline(cmd)
-		opts := subagent.RunOptions{Prompt: args[1], Model: m, Dir: canonicalWorkDir}
+		opts := subagent.RunOptions{Prompt: prompt, Model: m, Dir: canonicalWorkDir}
 		d := agentDriver(m)
 		sd, streaming := d.(subagent.StreamingDriver)
 		streaming = streaming && !jsonOut
@@ -95,7 +124,7 @@ func newAgentCmd() *cobra.Command {
 		if streaming {
 			ts = newTurnStream(cmd, streamMode, false)
 			ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sessName, sessName, planFirst
-			opts.Prompt = withProtocol(args[1], planFirst)
+			opts.Prompt = withProtocol(prompt, planFirst)
 			ts.watch()
 			r, err = sd.RunStream(cmd.Context(), opts, func(ev subagent.Event) {
 				if ev.Kind == "session" {
@@ -111,13 +140,13 @@ func newAgentCmd() *cobra.Command {
 			r, err = d.Run(cmd.Context(), opts)
 		}
 		if err != nil {
-			return fmt.Errorf("agent start %q failed: %w; verify the provider/model configuration or ask for guidance", args[0], err)
+			return fmt.Errorf("agent start %q failed: %w; verify the provider/model configuration or ask for guidance", spec, err)
 		}
 		if r.SessionID != "" {
 			id = r.SessionID
 		}
 		now := time.Now()
-		sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: args[1], Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parent(), CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
+		sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: promptStorage(startFiles, words, tail, prompt), Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parent(), CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
 		if err := s.Save(sess); err != nil {
 			return err
 		}
@@ -132,8 +161,7 @@ func newAgentCmd() *cobra.Command {
 		}
 		return printAgentMessages(cmd, r.Messages, r.Response)
 	}}
-	start.Flags().StringVarP(&workDir, "dir", "d", ".", "working directory")
-	start.Flags().StringVar(&name, "name", "", "session name")
+	start.Flags().StringSliceVarP(&startFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 	start.Flags().BoolVar(&planFirst, "plan-first", false, "agent confirms and plans, then ends its turn without executing; resume to give the go-ahead")
 	start.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
@@ -145,17 +173,22 @@ func newAgentCmd() *cobra.Command {
 		return nil
 	}}
 
-	var chatDir, chatName string
-	chat := &cobra.Command{Use: "chat <provider:model[:tier]>", Short: "Launch an interactive agent session", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		m, err := subagent.ResolveModel(args[0])
+	var chatName string
+	chat := &cobra.Command{Use: "chat", Short: "Launch an interactive agent session", Args: noArgs("model is now --model <spec>"), RunE: func(cmd *cobra.Command, args []string) error {
+		spec := modelSpec
+		if spec == "" {
+			spec = "codex:luna:low"
+		}
+		m, err := subagent.ResolveModel(spec)
 		if err != nil {
-			return fmt.Errorf("agent chat %q rejected: %w; ask for guidance rather than using a different model", args[0], err)
+			return fmt.Errorf("agent chat %q rejected: %w; ask for guidance rather than using a different model", spec, err)
 		}
 		s, err := store()
 		if err != nil {
 			return err
 		}
-		canonicalWorkDir, err := filepath.Abs(chatDir)
+		chatName = name
+		canonicalWorkDir, err := filepath.Abs(workDir)
 		if err != nil {
 			return fmt.Errorf("resolve working directory: %w", err)
 		}
@@ -228,15 +261,16 @@ func newAgentCmd() *cobra.Command {
 		}
 		return err
 	}}
-	chat.Flags().StringVar(&chatName, "name", "", "memorable session name")
-	chat.Flags().StringVarP(&chatDir, "dir", "d", ".", "working directory")
 
-	attach := &cobra.Command{Use: "attach <session>", Short: "Attach to an interactive agent session", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	attach := &cobra.Command{Use: "attach", Short: "Attach to an interactive agent session", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, args []string) error {
 		s, err := store()
 		if err != nil {
 			return err
 		}
-		sess, err := find(s, args[0])
+		if name == "" {
+			return fmt.Errorf("attach: --name <session> is required")
+		}
+		sess, err := find(cmd, s, name)
 		if err != nil {
 			return err
 		}
@@ -281,7 +315,20 @@ func newAgentCmd() *cobra.Command {
 	attach.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	chat.AddCommand(attach)
 
-	resume := &cobra.Command{Use: "resume <session> <prompt>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	var resumeFiles []string
+	resume := &cobra.Command{Use: "resume [prompt...]", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
+		sessionName := name
+		if sessionName == "" {
+			return fmt.Errorf("resume: --name <session> is required")
+		}
+		if len(words) >= 2 && oldStyleModelWord(words[0]) {
+			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
+		}
+		prompt, err := assemblePrompt(resumeFiles, words, tail, cmd.InOrStdin())
+		if err != nil {
+			return err
+		}
 		if err := checkStreamMode(streamMode); err != nil {
 			return err
 		}
@@ -289,15 +336,21 @@ func newAgentCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		sess, err := find(s, args[0])
+		sess, err := find(cmd, s, sessionName)
 		if err != nil {
 			return err
 		}
 		if !subagent.CanManage(parent(), sess) {
 			return fmt.Errorf("session %q is outside caller lineage", sess.ID)
 		}
+		if modelSpec != "" {
+			m, modelErr := subagent.ResolveModel(modelSpec)
+			if modelErr != nil || m.Provider != sess.Provider || m.Name != sess.Model || m.Tier != sess.Tier {
+				return fmt.Errorf("--model %q conflicts with session %q model %s:%s:%s", modelSpec, sess.Name, sess.Provider, sess.Model, sess.Tier)
+			}
+		}
 		if sess.Status == "active" && sess.HarnessType == "interactive" {
-			if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "prompt", args[1]); err != nil {
+			if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "prompt", prompt); err != nil {
 				return err
 			}
 			sess.LastActiveAt = time.Now()
@@ -332,7 +385,7 @@ func newAgentCmd() *cobra.Command {
 			}
 			ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sess.Name, sess.Name, planFirst
 			ts.watch()
-			r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), withProtocol(args[1], planFirst), ts.onEvent)
+			r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), withProtocol(prompt, planFirst), ts.onEvent)
 			if err != nil {
 				ts.abort()
 			}
@@ -341,7 +394,7 @@ func newAgentCmd() *cobra.Command {
 				tl.log("compact", "%s", compactNote)
 			}
 			tl.announceTurn("resume", sess.Provider+":"+sess.Model, sess.Name)
-			r, err = d.Resume(cmd.Context(), sess.ProviderID(), args[1])
+			r, err = d.Resume(cmd.Context(), sess.ProviderID(), prompt)
 		}
 		if err != nil {
 			return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
@@ -371,6 +424,7 @@ func newAgentCmd() *cobra.Command {
 	resume.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 	resume.Flags().BoolVar(&planFirst, "plan-first", false, "agent confirms and plans, then ends its turn without executing; resume to give the go-ahead")
 	resume.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
+	resume.Flags().StringSliceVarP(&resumeFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 
 	list := &cobra.Command{Use: "list", RunE: func(cmd *cobra.Command, _ []string) error {
 		s, err := store()
@@ -400,16 +454,15 @@ func newAgentCmd() *cobra.Command {
 	list.Flags().BoolVar(&all, "all-sessions", false, "list all sessions")
 	list.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 
-	var statusDir string
-	status := &cobra.Command{Use: "status [session]", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
+	status := &cobra.Command{Use: "status", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
 			return e
 		}
-		if len(a) == 0 {
-			return runAgentRepoStatus(cmd, s, statusDir, jsonOut)
+		if name == "" {
+			return runAgentRepoStatus(cmd, s, workDir, jsonOut)
 		}
-		x, e := find(s, a[0])
+		x, e := find(cmd, s, name)
 		if e != nil {
 			return e
 		}
@@ -421,9 +474,7 @@ func newAgentCmd() *cobra.Command {
 	}}
 	status.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	status.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
-	status.Flags().StringVarP(&statusDir, "dir", "d", ".", "repository directory")
 
-	var policyDir string
 	var persist bool
 	for _, spec := range []struct {
 		name string
@@ -434,7 +485,7 @@ func newAgentCmd() *cobra.Command {
 	} {
 		mode := spec.mode
 		policyCmd := &cobra.Command{Use: spec.name, Short: "Set subagent dispatch policy to " + mode, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-			path, changed, err := agentpolicy.Configure(policyDir, mode, persist)
+			path, changed, err := agentpolicy.Configure(workDir, mode, persist)
 			if err != nil {
 				return err
 			}
@@ -445,16 +496,18 @@ func newAgentCmd() *cobra.Command {
 			}
 			return nil
 		}}
-		policyCmd.Flags().StringVarP(&policyDir, "dir", "d", ".", "repository directory")
 		policyCmd.Flags().BoolVar(&persist, "persist", false, "write the policy to AGENTS.md")
 		root.AddCommand(policyCmd)
 	}
-	compact := &cobra.Command{Use: "compact <session>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
+	compact := &cobra.Command{Use: "compact", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
+		if name == "" {
+			return fmt.Errorf("compact: --name <session> is required")
+		}
 		s, e := store()
 		if e != nil {
 			return e
 		}
-		x, e := find(s, a[0])
+		x, e := find(cmd, s, name)
 		if e != nil {
 			return e
 		}
@@ -472,7 +525,7 @@ func newAgentCmd() *cobra.Command {
 		return e
 	}}
 	compact.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
-	stop := &cobra.Command{Use: "stop [session]", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
+	stop := &cobra.Command{Use: "stop", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
 			return e
@@ -528,10 +581,10 @@ func newAgentCmd() *cobra.Command {
 			}
 			return nil
 		}
-		if len(a) == 0 {
-			return fmt.Errorf("session is required")
+		if name == "" {
+			return fmt.Errorf("stop: --name <session> is required")
 		}
-		x, e := find(s, a[0])
+		x, e := find(cmd, s, name)
 		if e != nil {
 			return e
 		}
@@ -559,7 +612,7 @@ func newAgentCmd() *cobra.Command {
 	stop.Flags().BoolVar(&children, "children", false, "stop child sessions")
 	stop.Flags().BoolVar(&all, "all", false, "stop all manageable sessions")
 	stop.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
-	remove := &cobra.Command{Use: "delete [session]", Aliases: []string{"rm"}, Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, a []string) error {
+	remove := &cobra.Command{Use: "delete", Aliases: []string{"rm"}, Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
 			return e
@@ -591,10 +644,10 @@ func newAgentCmd() *cobra.Command {
 			}
 			return nil
 		}
-		if len(a) == 0 {
-			return fmt.Errorf("session is required")
+		if name == "" {
+			return fmt.Errorf("delete: --name <session> is required")
 		}
-		x, e := find(s, a[0])
+		x, e := find(cmd, s, name)
 		if e != nil {
 			return e
 		}
@@ -615,6 +668,7 @@ func newAgentCmd() *cobra.Command {
 	remove.Flags().BoolVar(&all, "all", false, "delete all manageable sessions")
 	remove.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	root.AddCommand(start, models, chat, resume, list, status, compact, stop, remove)
+	silenceUsage(root)
 	return root
 }
 
@@ -698,6 +752,16 @@ func agentSessionCompletion(storeDir string, parent func() string) cobra.Complet
 		sort.Strings(completions)
 		return completions, cobra.ShellCompDirectiveNoFileComp
 	}
+}
+
+func agentModelCompletion(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	var out []string
+	for _, model := range subagent.KnownModels() {
+		if strings.HasPrefix(model.Spec(), toComplete) {
+			out = append(out, model.Spec())
+		}
+	}
+	return out, cobra.ShellCompDirectiveNoFileComp
 }
 
 func sessionPromptDescription(prompt string) string {
