@@ -1,6 +1,6 @@
 # 341 — Concurrent SQLite telemetry writers lose rows on macOS
 
-**Status**: Open — filed, not yet started
+**Status**: Open — fixed on Linux, awaiting macOS CI confirmation
 **Priority**: P2 (Medium)
 **Severity**: Data Loss (Telemetry)
 **Category**: Cross-Platform / Concurrency
@@ -64,3 +64,11 @@ fixed.
    until the 50-row assertion passes reliably (not just once — race conditions can
    pass by luck).
 4. Close only after a real macOS CI run (not just local Linux) confirms the fix.
+
+## Sprint Status (lean-sprint, 2026-09-21)
+
+Root cause reproduced on Linux: the check-then-`ALTER TABLE` migration was not serialized, so
+concurrent openers hit `duplicate column name: model` and lost a row (`TestConcurrentMigrationMany`,
+32 processes, failed before the fix). Fixed by running schema init and migration inside one
+connection-pinned `BEGIN IMMEDIATE` transaction. Remaining before closing: a real macOS CI run
+(`make macos-ci`) must pass repeatedly.
