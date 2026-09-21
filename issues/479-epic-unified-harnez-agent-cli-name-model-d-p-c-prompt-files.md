@@ -1,6 +1,6 @@
 # 479 — Epic: unified harnez agent CLI (--name, --model, -d, -p, -c, prompt files)
 
-**Status**: Open
+**Status**: Closed — children 480-484 closed; unified agent CLI, truthful resume state, quiet stream output and memorable names delivered; 476 (sync/async), 477 (hook completion) and 485 (usage-limit model autodetect) split out as follow-ups
 
 **Priority**: P2 (Medium)
 **Severity**: Moderate
