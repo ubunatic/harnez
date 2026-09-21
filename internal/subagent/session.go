@@ -15,25 +15,28 @@ var ErrSessionNameInUse = errors.New("session name or ID is already in use")
 
 // Session represents an active subagent session with metadata and telemetry.
 type Session struct {
-	ID                string    `json:"id"`
-	ProviderSessionID string    `json:"provider_session_id,omitempty"`
-	Name              string    `json:"name"`
-	StartPrompt       string    `json:"start_prompt,omitempty"`
-	Provider          string    `json:"provider"`
-	Model             string    `json:"model"`
-	Tier              string    `json:"tier"`
-	WorkingDir        string    `json:"working_dir"`
-	ParentSessionID   string    `json:"parent_session_id,omitempty"`
-	CallerPID         int       `json:"caller_pid"`
-	ProcessPID        int       `json:"process_pid,omitempty"`
-	ControlSocket     string    `json:"control_socket,omitempty"`
-	HarnessType       string    `json:"harness_type"`
-	Status            string    `json:"status"`
-	TokensCumulative  int       `json:"tokens_cumulative"`
-	TokensTurn        int       `json:"tokens_turn"`
-	CachedTokens      int       `json:"cached_tokens"`
-	CreatedAt         time.Time `json:"created_at"`
-	LastActiveAt      time.Time `json:"last_active_at"`
+	ID                string `json:"id"`
+	ProviderSessionID string `json:"provider_session_id,omitempty"`
+	Name              string `json:"name"`
+	StartPrompt       string `json:"start_prompt,omitempty"`
+	Provider          string `json:"provider"`
+	Model             string `json:"model"`
+	Tier              string `json:"tier"`
+	WorkingDir        string `json:"working_dir"`
+	ParentSessionID   string `json:"parent_session_id,omitempty"`
+	CallerPID         int    `json:"caller_pid"`
+	ProcessPID        int    `json:"process_pid,omitempty"`
+	ControlSocket     string `json:"control_socket,omitempty"`
+	HarnessType       string `json:"harness_type"`
+	Status            string `json:"status"`
+	TokensCumulative  int    `json:"tokens_cumulative"`
+	// TokensSinceCompact counts uncached tokens since the last compaction and
+	// drives ShouldCompact; TokensCumulative stays a lifetime telemetry total.
+	TokensSinceCompact int       `json:"tokens_since_compact,omitempty"`
+	TokensTurn         int       `json:"tokens_turn"`
+	CachedTokens       int       `json:"cached_tokens"`
+	CreatedAt          time.Time `json:"created_at"`
+	LastActiveAt       time.Time `json:"last_active_at"`
 }
 
 // ProviderID returns the provider-side identifier used for lifecycle commands.
@@ -234,7 +237,23 @@ func CanManage(callerParentID string, target *Session) bool {
 	return false
 }
 
-// ShouldCompact returns true when cumulative tokens >= 100,000.
-func ShouldCompact(tokensCumulative int) bool {
-	return tokensCumulative >= 100000
+// ShouldCompact returns true when tokens since the last compaction >= 100,000.
+func ShouldCompact(tokensSinceCompact int) bool {
+	return tokensSinceCompact >= 100000
+}
+
+// CompactionTokens is the part of a turn that grows context: input re-read
+// from the provider cache does not count.
+func CompactionTokens(r *TurnResult) int {
+	return max(r.TokensTurn-r.CachedTokens, 0)
+}
+
+// SplitCompactionAck removes the leading message that acknowledges a queued
+// compaction from a turn's messages. It returns the remaining messages and the
+// acknowledgement ("" when there was nothing to split off).
+func SplitCompactionAck(msgs []string) ([]string, string) {
+	if len(msgs) < 2 {
+		return msgs, ""
+	}
+	return msgs[1:], msgs[0]
 }

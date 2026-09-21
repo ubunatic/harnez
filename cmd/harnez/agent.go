@@ -91,7 +91,7 @@ func newAgentCmd() *cobra.Command {
 			id = r.SessionID
 		}
 		now := time.Now()
-		sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: args[1], Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parent(), CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
+		sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: args[1], Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parent(), CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
 		if err := s.Save(sess); err != nil {
 			return err
 		}
@@ -275,12 +275,16 @@ func newAgentCmd() *cobra.Command {
 			return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)
 		}
 		d := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
-		if subagent.ShouldCompact(sess.TokensCumulative) {
+		tl := newTimeline(cmd)
+		compacted := false
+		if subagent.ShouldCompact(sess.TokensSinceCompact) {
 			if _, err = d.Compact(cmd.Context(), sess.ProviderID()); err != nil {
 				return err
 			}
+			tl.log("compact", "queued /compact at %d tokens since last compaction; the agent acknowledges it before your reply", sess.TokensSinceCompact)
+			sess.TokensSinceCompact = 0
+			compacted = true
 		}
-		tl := newTimeline(cmd)
 		tl.announceTurn("resume", sess.Provider+":"+sess.Model, sess.Name)
 		r, err := d.Resume(cmd.Context(), sess.ProviderID(), args[1])
 		if err != nil {
@@ -288,10 +292,17 @@ func newAgentCmd() *cobra.Command {
 		}
 		sess.TokensTurn = r.TokensTurn
 		sess.TokensCumulative += r.TokensTurn
+		sess.TokensSinceCompact += subagent.CompactionTokens(r)
 		sess.CachedTokens = r.CachedTokens
 		sess.LastActiveAt = time.Now()
 		if err = s.Save(sess); err != nil {
 			return err
+		}
+		if compacted {
+			var ack string
+			if r.Messages, ack = subagent.SplitCompactionAck(r.Messages); ack != "" {
+				tl.log("compact", "agent acknowledged: %s", firstLine(ack))
+			}
 		}
 		tl.finishTurn(r, sess.ID, "harnez agent resume "+sess.ID+" \"<prompt>\"")
 		return write(cmd, agentOutput{Session: sess, Response: r.Response, Messages: r.Messages})
@@ -591,6 +602,11 @@ func printAgentMessages(cmd *cobra.Command, msgs []string, fallback string) erro
 		}
 	}
 	return nil
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+	return line
 }
 
 func agentSessionCompletion(storeDir string, parent func() string) cobra.CompletionFunc {

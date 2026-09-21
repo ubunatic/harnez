@@ -566,3 +566,41 @@ type replyDriver struct{ recordingAgentDriver }
 func (*replyDriver) Resume(context.Context, string, string) (*subagent.TurnResult, error) {
 	return &subagent.TurnResult{Response: "the reply text"}, nil
 }
+
+type ackDriver struct{ recordingAgentDriver }
+
+func (*ackDriver) Resume(context.Context, string, string) (*subagent.TurnResult, error) {
+	return &subagent.TurnResult{Response: "real reply", Messages: []string{"Context compacted.", "real reply"}, TokensTurn: 900000, CachedTokens: 890000}, nil
+}
+
+func TestAgentResumeCompactsOnceAndSeparatesAck(t *testing.T) {
+	old := agentDriver
+	agentDriver = func(subagent.Model) subagent.Driver { return &ackDriver{} }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store, _ := subagent.NewSessionStore(storeDir)
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensCumulative: 7000000, TokensSinceCompact: 150000}); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"resume", "worker", "prompt", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "[agent messages]\n[msg 1]\nreal reply\n" {
+		t.Fatalf("stdout = %q", got)
+	}
+	if e := errOut.String(); !strings.Contains(e, " compact] queued /compact") || !strings.Contains(e, "agent acknowledged: Context compacted.") {
+		t.Fatalf("stderr = %q", e)
+	}
+	sess, err := store.Get("sid")
+	if err != nil || sess.TokensSinceCompact != 10000 || sess.TokensCumulative != 7900000 {
+		t.Fatalf("since=%d cumulative=%d err=%v", sess.TokensSinceCompact, sess.TokensCumulative, err)
+	}
+	if subagent.ShouldCompact(sess.TokensSinceCompact) {
+		t.Fatal("next resume must not compact again")
+	}
+}
