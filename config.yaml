@@ -664,6 +664,16 @@ agents_md:
       target: ~/.claude/docs/ConciseMode.md
       local: ./docs/ConciseMode.md
       default: false
+    model-roles:
+      name: "Model Roles Practices"
+      ref: "@docs/ModelRoles.md"
+      hint: |
+        host reviews diffs and writes no code, two cross-vendor cheap advisors, dev tier by ticket risk,
+        host review checklist, model eval via fact-check grid, reading quota in whole points
+      source: docs/practices/ModelRoles.md
+      target: ~/.claude/docs/ModelRoles.md
+      local: ./docs/ModelRoles.md
+      default: false
     website:
       name: "Website Building Rules"
       ref: "@docs/Website.md"

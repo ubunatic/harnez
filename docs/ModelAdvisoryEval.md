@@ -3,6 +3,8 @@
 What five cheap and mid-tier models got right and wrong when each one planned the same sprint.
 Use this to decide which model gets which role in a harnez sprint. For general model traits, see
 [Models.md](Models.md). For doc-delivery benchmarks, see [Bench.md](Bench.md).
+The repo-independent practice distilled from it is
+[practices/ModelRoles.md](practices/ModelRoles.md) (copy with `harnez init --docs model-roles`).
 
 ## Setup (2026-09-22)
 
