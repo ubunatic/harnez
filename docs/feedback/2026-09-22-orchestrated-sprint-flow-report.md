@@ -72,3 +72,52 @@ Probe with a throwaway developer confirmed the lineage: inside the worker
 which becomes the parent id of anything it starts.
 
 Flow stability so far: 3 `harnez agent` calls by the orchestrator, 0 rejected, 0 retries.
+
+### M2 - Ticket 268, `harnez exec` timeout (done, 2 orchestrator rounds)
+
+Code plus tests. The orchestrator used the plan gate (`--plan yes`), reviewed the plan and
+the commit, and rejected the first result. Total: 3 orchestrator turns for the two
+tickets so far, 5 developer sessions, no host code.
+
+What went wrong, and why it matters for the flow:
+
+- The ticket was implemented as specified, and its 60s default then **killed the flow
+  itself**: `harnez exec` wraps every agent shell command, so the developer's `go test` and
+  its agent turn ran into the new deadline (exit 137, `timeout kill after 1m0s`), leaving
+  partial uncommitted edits. The orchestrator refused to accept them, correctly.
+- Host action: `exec.timeout: 30m` in the repo `config.yaml` (commit `bad6b76`), using the
+  feature's own override. Round 2 added the missing pieces the orchestrator's review
+  asked for: a process-group kill test, tests that never wait for the real 60s, and an
+  exemption of `harnez agent` (blocking by design) from the implicit default, also for the
+  ⚙ alias. Verified by the host: `go vet` and the full suite are clean.
+
+### Analytics: what the agents actually ran
+
+Read-only advisor `analyst` (`luna:med`, role advisor) plus the host's own check of the raw
+Codex rollout logs. The rollouts are the authoritative source.
+
+| Thread | Role | Tool calls | `harnez agent` calls | Native subagent spawns |
+|--------|------|-----------:|---------------------:|-----------------------:|
+| `sprint-orch` | orchestrator | 36 | 12 | 0 |
+| six developer helpers | developer | 5-10 each | 0 | 0 |
+| `analyst` | advisor | 21 | 0 | 0 |
+
+- **Delegation depth held:** exactly one level. Only the orchestrator called `harnez agent`
+  (5 starts, 3 resumes, deletes, all with `--role developer --model luna --stream stats`;
+  `--plan yes` on the code ticket). No leaf-guard refusal was ever triggered, and there was
+  no native subagent use.
+- **Zero-coding held:** the orchestrator ran only `harnez agent`, `git log/diff`, `sed -n`,
+  `harnez issues done` and `harnez rate`; no `apply_patch`, no `sed -i`, no commit.
+  Developers used shell reads (`sed -n`, `rg`), `git diff/add/commit`, `gofmt`, `go`, `make`
+  and `apply_patch`.
+- **Interaction friction:** one malformed call (`exec: no command given`) that the
+  orchestrator fixed itself; timeout kills from the 60s default (fixed above); Quota-1 blocks
+  read as test failures by two workers (now covered in the prompts).
+- **Two analyst errors, both traced to the host:** it was given a wrong DB path (an empty
+  stale file) and its first report was cut by the host's own `cut`. Its claim that telemetry
+  session ids do not map to Codex thread ids was wrong: `tool_calls` uses the thread id.
+- **Telemetry gap (ticket 487):** no role or parent column, and nested `harnez` subcommands
+  of workers are not recorded, so "which commands did agent X run" needs the rollouts.
+
+Flow stability so far: 2 tickets closed, 0 rejected `harnez agent` calls, 0 loops, 1 systemic
+hazard found and fixed (the timeout default).
