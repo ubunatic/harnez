@@ -93,3 +93,13 @@ Advisors terra:low and sonnet agreed on the cut; code claims below were checked 
 **Out of scope:** dispatch-mode clamping (493), project-level selection (494), persisting the
 selection to local config (§8.10, needs `LoadLocalConfig` moved). The MVP's "open" comment
 about `requires: [agents]` on sprint skills is stale (§8.9): don't add it.
+
+## M1 delivered (f9ef081) — M2 Pre-Work / Required Refinements
+
+M1 added `components:`/`requires:`, set `requires: [telemetry]` on `tool-feedback-protocol`,
+and replaced `SkillRequires` with `requiredComponents(s.Requires)`. No assertions changed.
+
+1. **Validate `requires:` names.** An unknown name (typo `telemtry`) becomes a component that
+   no set contains, so the skill silently disappears under every selection, including `full`.
+   Reject unknown `requires:` and `components:` names once, where the selection is resolved,
+   with an error naming the skill and the bad value. Test both.
