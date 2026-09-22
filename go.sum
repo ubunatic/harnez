@@ -1,3 +1,5 @@
+codeberg.org/ubunatic/loom v0.2.5 h1:KFMJC0y2qu+k8pXsg3jqSifRSHfQtT/cg7J5U7FOAhY=
+codeberg.org/ubunatic/loom v0.2.5/go.mod h1:Ek+Uvb4LL9Hgij3qx3P0AzxwplJIm/eZARgQxAgH3yo=
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/clipperhouse/uax29/v2 v2.2.0 h1:ChwIKnQN3kcZteTXMgb1wztSgaU+ZemkgWdohwgs8tY=
