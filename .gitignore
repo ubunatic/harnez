@@ -5,6 +5,7 @@
 /dist/
 /issues/README.md.lock
 *.lock
+.harnez/
 
 # local Go workspace (untracked; see go.work.example)
 /go.work
