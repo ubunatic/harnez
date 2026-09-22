@@ -370,12 +370,22 @@ func TestResolveExecTimeout_DefaultFlagAndAgentExemption(t *testing.T) {
 	if got := resolveExecTimeout(execOptions{Timeout: 25 * time.Millisecond}, []string{"sleep", "1"}); got != 25*time.Millisecond {
 		t.Fatalf("flag timeout = %v", got)
 	}
-	for _, subcommand := range []string{"start", "resume"} {
-		if got := resolveExecTimeout(execOptions{ConfigPath: missing}, []string{"harnez", "agent", subcommand}); got != 0 {
-			t.Fatalf("agent %s timeout = %v, want disabled implicit default", subcommand, got)
-		}
-		if got := resolveExecTimeout(execOptions{Timeout: time.Second, ConfigPath: missing}, []string{"harnez", "agent", subcommand}); got != time.Second {
-			t.Fatalf("agent %s explicit timeout = %v", subcommand, got)
+	for _, tc := range []struct {
+		name  string
+		argv0 string
+	}{
+		{"binary", "harnez"},
+		{"gear alias", "⚙"},
+		{"gear alias with variation selector", "⚙️"},
+	} {
+		for _, subcommand := range []string{"start", "resume"} {
+			args := []string{tc.argv0, "agent", subcommand}
+			if got := resolveExecTimeout(execOptions{ConfigPath: missing}, args); got != 0 {
+				t.Fatalf("%s agent %s timeout = %v, want disabled implicit default", tc.name, subcommand, got)
+			}
+			if got := resolveExecTimeout(execOptions{Timeout: time.Second, ConfigPath: missing}, args); got != time.Second {
+				t.Fatalf("%s agent %s explicit timeout = %v", tc.name, subcommand, got)
+			}
 		}
 	}
 }

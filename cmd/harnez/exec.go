@@ -481,10 +481,18 @@ func resolveExecTimeout(opts execOptions, args []string) time.Duration {
 }
 
 func isAgentLongRunningCommand(args []string) bool {
-	if len(args) < 3 || filepath.Base(args[0]) != "harnez" || args[1] != "agent" {
+	if len(args) < 3 || !isHarnezInvocation(args[0]) || args[1] != "agent" {
 		return false
 	}
 	return args[2] == "start" || args[2] == "resume"
+}
+
+// isHarnezInvocation recognizes the executable names used by the normal
+// binary and its multicall gear alias. Keep this table in sync with main's
+// argv[0] dispatch so wrapped agent turns receive the same timeout policy.
+func isHarnezInvocation(arg0 string) bool {
+	base := filepath.Base(arg0)
+	return base == "harnez" || isGearInvocation(base)
 }
 
 // exitCodeFromError extracts a shell-convention exit code from the result
