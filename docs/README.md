@@ -19,7 +19,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [TokenMeasurementArchitecture.md](TokenMeasurementArchitecture.md) | Lifecycle-hook token measurement across AGY, Claude Code and Codex (consult when changing hooks or token accounting) |
 | [MultimodalContextDelivery.md](MultimodalContextDelivery.md) | Context-delivery architecture and token-economics roadmap (consult when changing how docs and context reach agents) |
 | [AntigravityDebloatAssessment.md](AntigravityDebloatAssessment.md) | AGY context usage and how `apply --debloat` ports to it (consult when changing AGY debloat) |
-| [BrailleDot8.md](BrailleDot8.md) | Braille 8 text convention and `scripts/md-to-braille8.py` |
+| [BrailleDot8.md](BrailleDot8.md) | Braille 8 text convention and `scripts/md-to-braille8.py` (Dot8 card experiment on hold, see issue 444) |
 | [InitialRAMPAssessment.md](InitialRAMPAssessment.md) | Sibling-repository assessment of 2026-09-17 |
 | [HookRewritePattern.md](HookRewritePattern.md) | Two-stage PreToolUse hook pattern (rewrite now, capture later): `<feature> hook` vs. `<feature>` wrapper, `harnez distill hook` as reference implementation, plus two hard-won constraints — hooks on the same matcher don't compose (last-to-finish wins) and a rewritten command must stay one shell token (consult before adding any new agent-hook-driven feature) |
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |

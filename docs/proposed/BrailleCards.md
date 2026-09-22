@@ -1,5 +1,16 @@
 # Braille Cards: dot8 text as dense PNG cards
 
+> **Proposal on hold (2026-09-22).** Token benchmarks found Braille characters
+> split under the tokenizer so the compression doesn't pay, the larger-dot
+> canary's results were invalidated by fixture contamination (only the 3x4
+> geometry saves anything), and no agent has passed a clean reading canary yet
+> (haiku failed, codex timed out) while issue 444, an unfixed P1 in the
+> renderer, blocks further work. The `--dot8`/`--dot8-colors`/`--dot8-pitch`
+> CLI flags are hidden and error out unless `HARNEZ_DOT8=1` is set, and the
+> exported `Dot8*` functions in `internal/readcard/dot8.go` are marked
+> Deprecated. Resume condition: fix issue 444, then a clean 3x4 readability
+> canary passing 3/3 on at least two agents.
+
 Status: **3x4 geometry implemented** (issue 436 M1 & M2). Awaiting bench results on codex and agy (M3).
 5x7 geometry dropped. Related: `docs/BrailleDot8.md` (the encoding), `docs/Bench.md` (micro-font path shelved).
 

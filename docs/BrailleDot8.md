@@ -4,6 +4,18 @@ title: Harnez Braille 8 Convention
 
 # Harnez Braille 8 Convention
 
+> **Dot8 card experiment on hold (2026-09-22).** Token benchmarks found Braille
+> characters split under the tokenizer so the compression doesn't pay, the
+> larger-dot canary's results were invalidated by fixture contamination (only
+> the 3x4 geometry saves anything), and no agent has passed a clean reading
+> canary yet (haiku failed, codex timed out) while issue 444, an unfixed P1 in
+> the renderer, blocks further work. The `--dot8`/`--dot8-colors`/`--dot8-pitch`
+> CLI flags are hidden and error out unless `HARNEZ_DOT8=1` is set, and the
+> exported `Dot8*` functions in `internal/readcard/dot8.go` are marked
+> Deprecated. Resume condition: fix issue 444, then a clean 3x4 readability
+> canary passing 3/3 on at least two agents. This encoding convention below
+> remains the reference for the encoding itself.
+
 `scripts/md-to-braille8.py` performs a deliberately simple, reversible Unicode
 conversion. It is a project convention, not a universal literary- or
 computer-Braille table.
