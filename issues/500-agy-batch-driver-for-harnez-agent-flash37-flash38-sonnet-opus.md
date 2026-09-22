@@ -1,6 +1,6 @@
 # 500 — agy batch driver for harnez agent (flash37, flash38, sonnet, opus)
 
-**Status**: Open
+**Status**: Closed — agy driver live-tested on flash37/flash38/sonnet/opus (6d65bf3, bccb0b6)
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Feature
