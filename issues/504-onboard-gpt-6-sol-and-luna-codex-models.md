@@ -1,6 +1,6 @@
 # 504 — Onboard GPT-6 Sol and Luna Codex models
 
-**Status**: In Progress — updating model registry and docs
+**Status**: Closed — GPT-6 models onboarded and verified
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
