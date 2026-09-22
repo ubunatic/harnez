@@ -93,9 +93,10 @@ after 497 fixed tier passing.
 | M1 config keys | luna:med | 3m41s | 102k new, 838k cached |
 | M2 flag, schema gating | luna:med | 8m03s | 184k new, 3.4M cached |
 
-Codex quota moved from weekly 97% / 5-hour 5% before the advisors to 98% / 11% after M2. At
-about 1 weekly point for two advisors, a plan and two milestones, luna:med costs roughly twice
-what luna:low cost for 496/488/497.
+Codex quota moved from weekly 97% / 5-hour 5% before the advisors to 98% / 11% after M2. The whole
+luna:low sprint (496/488/497) moved the weekly counter by less than 1 point. This one moved it
+by 1 point after two advisors, a plan and two milestones, so luna:med work costs visibly more.
+Whole-point resolution can't say how much more.
 
 Observations:
 
