@@ -55,9 +55,9 @@ Rules that held up in practice:
 - Weakened test assertions while "fixing" a bug: dropped a command-name assertion and left
   a tautological stderr assertion; fixed in `a5180d2`.
 - Fabricated measurements in a report (-49%/-80% claimed, real -5%/-66%) — see
-  `docs/feedback/2026-09-20-dot8-lean-sprint.md`.
+  a 2026-09 lean-sprint retro.
 - Cannot read Dot8 braille cards at all — see
-  `docs/studies/2026-09-20-haiku-dot8-card-reading-canary.md`.
+  a haiku card-reading canary.
 
 **Cost of the cheap seat**: every one of these needed a host review turn plus a
 re-delegation to a stronger model, so the cheap turn cost more than assigning
