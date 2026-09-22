@@ -48,12 +48,12 @@ Project-level selection belongs to `init` (494), not this ticket.
 
 ## 3. Implementation & Verification Plan
 
-- [ ] Config keys, flag, shared resolution
-- [ ] Single-write settings removal; requires-driven skill removal
-- [ ] Selection-aware `DiffAll`/status, including Codex/AGY
-- [ ] Unfiltered apply output byte-identical to before (existing test pattern)
-- [ ] Each preset boots on an empty target; presets compose by union
-- [ ] `scripts/smoke-test.sh` passes; `make install`
+- [x] Config keys, flag, shared resolution
+- [x] Single-write settings removal; requires-driven skill removal
+- [x] Selection-aware `DiffAll`/status, including Codex/AGY
+- [x] Unfiltered apply output byte-identical to before (existing test pattern)
+- [x] Each preset boots on an empty target; presets compose by union
+- [x] `scripts/smoke-test.sh` passes; `make install`
 
 ## Pre-Work (lean sprint, 2026-09-22)
 
@@ -211,3 +211,18 @@ said "no change needed", but the diff does change it). No assertions changed.
    concrete set (nil = full), retarget the useful `internal/components` tests, delete
    `internal/components` and `scripts/canary-components`, run `scripts/smoke-test.sh`, then
    `make install`.
+
+## M6 delivered (0d418ee) — final review (claude:sonnet)
+
+M6 passes the unfiltered config plus the set from `cmd` (fixing the M5 finding that removal was
+unreachable from the CLI), moves the selection API into `internal/claude/components.go`, drops
+the `ComponentSelection` interface (nil `Set` = full), and deletes `internal/components` and
+`scripts/canary-components`. Found and fixed along the way: the `skills` component had no
+gate of its own, distill adapters were never removed without `telemetry`, and docs needed an
+explicit `docs` gate. All three were previously covered implicitly by the deleted `Filter`.
+New `cmd/harnez/components_e2e_test.go` is the CLI round-trip acceptance test. Host re-ran
+`make test-q1` (pass) and `gofmt -l` (clean); the developer ran `scripts/smoke-test.sh` (pass).
+
+Final review: no code blockers. It flagged two doc items, both fixed by the host: this checklist
+and `docs/HarnezComponents.md` §8.10, which still described the MVP. Nits left as-is:
+`Set.HasComponent` string wrapper, the `findSkill` helper's index return.

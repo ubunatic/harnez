@@ -441,48 +441,42 @@ records to it (auto opt-in); when it is not, agents keep their own state only (a
 opt-out, fallback). This replaces the one-way "telemetry imports agent records" rule in
 §8.6 with a shared contract, and turns 446 into one consumer of the shared package.
 
-### 8.10 MVP and verification
+### 8.10 Implementation and verification
 
-The MVP backs this design without changing `internal/claude`, `cmd/harnez`, or
-`config.yaml`. It lives in a new package and a canary:
+Integrated by issue 491, replacing the 490 MVP (`internal/components`,
+`scripts/canary-components`, both deleted):
 
-- `internal/components` — component names, presets, `Parse`, `Resolve` (flag > config >
-  local precedence), `Filter` (narrows a copy of `claude.Config`), `Apply` (runs
-  `claude.ApplyAllVariant` on the filtered config, then the §8.4 removal pass),
-  `PruneSettings` (removes harnez-owned hooks and status line only), and `Plan` (a
-  read-only view of §8.7).
-- `SkillRequires` stands in for a `requires:` key on skills. It lists only
-  `tool-feedback-protocol → telemetry`; the sprint skills wait on §8.9.
-- `scripts/canary-components` prints the plan for a selection:
-  `go run ./scripts/canary-components docs-only`.
+- `internal/claude/components.go`: component names, presets, `Set` (nil means full),
+  `Parse`, `Resolve` (flag > config > local precedence), and `ValidateConfig`, which rejects
+  unknown `components:` and `requires:` names.
+- Config keys: `components:` (`Config.ComponentNames`) and `requires:` on skills
+  (`Command.Requires`). `tool-feedback-protocol` declares `requires: [telemetry]`.
+- `harnez apply|diff|status --components <names>`: resolved once in `cmd/harnez`. The
+  **unfiltered** config and the set go into `ApplyAllVariant`/`DiffAll`/`RunStatus`, and all
+  selection happens inside `internal/claude`. Pre-filtering the config hid the entries that
+  apply must remove.
+- `ensureTelemetrySchema` runs after config load, only when `telemetry` is selected.
+- One `settings.json` write: `buildSettingsDoc` marks deselected hooks and status line with a
+  nil value, and `applyMerge` removes only harnez-owned entries of managed keys. Hooks are
+  stripped per command, and malformed values are left untouched. `diffSettingsJSON` uses the
+  same merge.
+- Removal (§8.4): `skillDisabled` covers rate-feedback-disabled skills and unmet
+  `requires:`, removing `SKILL.md` and resources. Codex/AGY hooks and distill adapters get
+  `Apply` with `telemetry` and ownership-aware `Remove` without. Docs, commands and other
+  skills of a disabled component are skipped.
 
-Tests in `internal/components/components_test.go`, each on an isolated `HOME`:
+Tests:
 
-- parsing, presets, unknown names, nil set means full, precedence;
-- `PruneSettings` keeps non-harnez and mixed hooks and a user status line;
-- no selection writes a `settings.json` byte-identical to plain `ApplyAll`;
-- `full` → `docs-only` removes harnez hooks, the status line, the harnez Codex and AGY
-  hooks, and the rate skill; keeps the Stop hook, a user Codex hook on a harnez event, and
-  the other skills; `DiffAll` under the same selection reports no drift; switching back to
-  `full` reinstalls everything;
-- `full` → `agents-only` removes the same entry points and leaves other skills in place
-  (skip semantics);
-- a config whose only hooks are harnez-owned leaves no stale `hooks` key;
-- `telemetry-only` installs hooks without skills, docs, or status line;
-- `docs-only,telemetry-only` composes by union.
+- `internal/claude/components_test.go`: parsing, presets, precedence, validation, each
+  preset on an empty target, union of presets, full → docs-only → full round trip.
+- `internal/claude/apply_settings_test.go`: user keys survive, and harnez-only, mixed and
+  status-line entries are removed. Unfiltered `settings.json` is pinned by a SHA-256 golden on
+  `testdata/m3-settings.yaml`, verified against pre-integration code.
+- `internal/claude/requires_selection_test.go`: resource-bearing skill removal, Codex/AGY by
+  `telemetry`, `DiffAll` under a selection.
+- `cmd/harnez/components_e2e_test.go`: through the CLI, full → `--components docs-only`
+  (hooks, Codex/AGY, rate skill gone; `diff --components docs-only` clean) → full (`diff`
+  clean).
 
-What the MVP cannot do from outside `internal/claude`, and the integration step fixes:
-
-| Gap | Integration fix |
-|---|---|
-| `components:` and `requires:` keys are not parsed | add `Config.ComponentNames`, `Command.Requires` |
-| `apply` has no `--components` flag; telemetry schema init runs unconditionally | flag in `cmd/harnez/main.go`, gate `ensureTelemetrySchema` |
-| removal is a second pass that rewrites `settings.json` after apply | fold into `buildSettingsDoc`/`applyMerge` so one write does both |
-| `SkillTargets` duplicates the unexported `skillTargets` | use the real one |
-| skill removal for unmet `requires:` deletes `SKILL.md` only; resource files stay (the rate skill already goes through apply's own removal branch) | generalize that branch to `requires:` |
-| `DiffAll` does not check Codex/AGY files under a selection (the filtered config blanks their targets) | selection-aware Codex/AGY status |
-| `diff`/`status` do not know the selection | resolve the selection once, shared by `apply`, `diff`, `status` |
-| `--save` to `~/.config/harnez/local.yaml` | after moving `LoadLocalConfig` out of `internal/usage` |
-
-Review checklist for the integration: each preset boots on an empty target; presets
-compose by union; unfiltered output is byte-identical to today's apply.
+Still open: `--save` to `~/.config/harnez/local.yaml` (needs `LoadLocalConfig` moved out of
+`internal/usage`), dispatch-mode clamping (493), project-level selection (494).
