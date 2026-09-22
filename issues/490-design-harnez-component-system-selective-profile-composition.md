@@ -1,6 +1,6 @@
 # 490 — Design harnez component system: selective profile composition
 
-**Status**: Draft
+**Status**: Closed — design in docs/HarnezComponents.md §8, MVP in internal/components; integration tracked in 491, persistence in 492
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
