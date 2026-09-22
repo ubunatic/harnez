@@ -32,7 +32,7 @@ func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error
 	r.DurationMS = time.Since(start).Milliseconds()
 	return r, nil
 }
-func (d ClaudeDriver) Resume(ctx context.Context, id, prompt string) (*TurnResult, error) {
+func (d ClaudeDriver) Resume(ctx context.Context, id, prompt string, _ Model) (*TurnResult, error) {
 	b, err := d.command(ctx, "-p", "--resume", id, "--output-format", "json", prompt)
 	if err != nil {
 		return nil, fmt.Errorf("claude resume: %w", err)
@@ -40,7 +40,7 @@ func (d ClaudeDriver) Resume(ctx context.Context, id, prompt string) (*TurnResul
 	return parseClaude(b)
 }
 func (d ClaudeDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
-	return d.Resume(ctx, id, "/compact")
+	return d.Resume(ctx, id, "/compact", Model{})
 }
 func (d ClaudeDriver) Stop(ctx context.Context, id string) error {
 	return nil

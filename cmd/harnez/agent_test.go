@@ -535,7 +535,7 @@ type resumeOutcomeDriver struct {
 	terminal bool
 }
 
-func (d *resumeOutcomeDriver) Resume(context.Context, string, string) (*subagent.TurnResult, error) {
+func (d *resumeOutcomeDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
 	d.resumes++
 	if d.err != nil {
 		return nil, d.err
@@ -777,7 +777,7 @@ func (d *recordingAgentDriver) Run(_ context.Context, opts subagent.RunOptions) 
 	d.dir = opts.Dir
 	return &subagent.TurnResult{SessionID: "recorded", Response: "ok"}, nil
 }
-func (d *recordingAgentDriver) Resume(context.Context, string, string) (*subagent.TurnResult, error) {
+func (d *recordingAgentDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
 	return &subagent.TurnResult{}, nil
 }
 func (d *recordingAgentDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
@@ -920,13 +920,13 @@ func TestAgentResumePrintsReplyNotStructDump(t *testing.T) {
 
 type replyDriver struct{ recordingAgentDriver }
 
-func (*replyDriver) Resume(context.Context, string, string) (*subagent.TurnResult, error) {
+func (*replyDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
 	return &subagent.TurnResult{Response: "the reply text"}, nil
 }
 
 type ackDriver struct{ recordingAgentDriver }
 
-func (*ackDriver) Resume(context.Context, string, string) (*subagent.TurnResult, error) {
+func (*ackDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
 	return &subagent.TurnResult{Response: "real reply", Messages: []string{"Context compacted.", "real reply"}, TokensTurn: 900000, CachedTokens: 890000}, nil
 }
 
@@ -975,7 +975,7 @@ func (*streamDriver) emit(fn subagent.EventFunc) *subagent.TurnResult {
 func (d *streamDriver) RunStream(_ context.Context, _ subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
 	return d.emit(fn), nil
 }
-func (d *streamDriver) ResumeStream(_ context.Context, _, _ string, fn subagent.EventFunc) (*subagent.TurnResult, error) {
+func (d *streamDriver) ResumeStream(_ context.Context, _, _ string, _ subagent.Model, fn subagent.EventFunc) (*subagent.TurnResult, error) {
 	return d.emit(fn), nil
 }
 
@@ -1151,7 +1151,7 @@ func (d *scriptDriver) RunStream(_ context.Context, o subagent.RunOptions, fn su
 	d.envRole, d.envSession = os.Getenv(agentRoleEnv), os.Getenv(agentSessionEnv)
 	return d.play(fn), nil
 }
-func (d *scriptDriver) ResumeStream(_ context.Context, id, p string, fn subagent.EventFunc) (*subagent.TurnResult, error) {
+func (d *scriptDriver) ResumeStream(_ context.Context, id, p string, _ subagent.Model, fn subagent.EventFunc) (*subagent.TurnResult, error) {
 	d.prompt = p
 	d.envRole, d.envSession = os.Getenv(agentRoleEnv), os.Getenv(agentSessionEnv)
 	d.resumed = append(d.resumed, id)
@@ -1594,7 +1594,7 @@ type slashDriver struct{ compacted, stopped []string }
 func (d *slashDriver) Run(context.Context, subagent.RunOptions) (*subagent.TurnResult, error) {
 	return nil, errors.New("provider Run called")
 }
-func (d *slashDriver) Resume(context.Context, string, string) (*subagent.TurnResult, error) {
+func (d *slashDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
 	return nil, errors.New("provider Resume called")
 }
 func (d *slashDriver) Compact(_ context.Context, id string) (*subagent.TurnResult, error) {

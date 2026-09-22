@@ -10,7 +10,7 @@ import (
 // Driver executes and manages a provider session.
 type Driver interface {
 	Run(context.Context, RunOptions) (*TurnResult, error)
-	Resume(context.Context, string, string) (*TurnResult, error)
+	Resume(context.Context, string, string, Model) (*TurnResult, error)
 	Compact(context.Context, string) (*TurnResult, error)
 	Stop(context.Context, string) error
 	Delete(context.Context, string) error
@@ -29,7 +29,7 @@ func (d UnsupportedDriver) unsupported() error {
 func (d UnsupportedDriver) Run(context.Context, RunOptions) (*TurnResult, error) {
 	return nil, d.unsupported()
 }
-func (d UnsupportedDriver) Resume(context.Context, string, string) (*TurnResult, error) {
+func (d UnsupportedDriver) Resume(context.Context, string, string, Model) (*TurnResult, error) {
 	return nil, d.unsupported()
 }
 func (d UnsupportedDriver) Compact(context.Context, string) (*TurnResult, error) {
@@ -107,11 +107,15 @@ func ResolveModel(spec string) (Model, error) {
 	if err := ensureModelAliases(); err != nil {
 		return Model{}, err
 	}
+	return resolveModelIn(modelAliases, spec)
+}
+
+func resolveModelIn(aliases map[string]Model, spec string) (Model, error) {
 	clean := strings.ToLower(strings.TrimSpace(spec))
 	if !strings.Contains(clean, ":") {
 		var match Model
 		count := 0
-		for key, candidate := range modelAliases {
+		for key, candidate := range aliases {
 			parts := strings.Split(key, ":")
 			if len(parts) == 2 && parts[1] == clean {
 				match, count = candidate, count+1
@@ -126,7 +130,7 @@ func ResolveModel(spec string) (Model, error) {
 	if len(parts) < 2 || len(parts) > 3 || parts[0] == "" || parts[1] == "" {
 		return Model{}, fmt.Errorf("invalid model %q: expected provider:model[:tier]; known specs: %s", spec, knownModelSpecs())
 	}
-	m, ok := modelAliases[parts[0]+":"+parts[1]]
+	m, ok := aliases[parts[0]+":"+parts[1]]
 	if !ok {
 		return Model{}, fmt.Errorf("unknown model %q; known specs: %s", spec, knownModelSpecs())
 	}

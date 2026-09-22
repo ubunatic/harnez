@@ -65,7 +65,7 @@ func TestCodexPassesReasoningEffort(t *testing.T) {
 		t.Fatalf("run args = %q, want %q", got, want)
 	}
 
-	if _, err := d.ResumeWithModel(context.Background(), "t1", "continue", Model{Tier: "low"}); err != nil {
+	if _, err := d.Resume(context.Background(), "t1", "continue", Model{Tier: "low"}); err != nil {
 		t.Fatal(err)
 	}
 	want = []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_reasoning_effort=low", "continue"}
@@ -87,7 +87,7 @@ func TestCodexResumeEffortTiersAndUnknown(t *testing.T) {
 			got = args
 			return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}` + "\n"), nil
 		}}
-		if _, err := d.ResumeWithModel(context.Background(), "t1", "continue", Model{Tier: tc.tier}); err != nil {
+		if _, err := d.Resume(context.Background(), "t1", "continue", Model{Tier: tc.tier}); err != nil {
 			t.Fatal(err)
 		}
 		has := strings.Contains(strings.Join(got, " "), "model_reasoning_effort=")
@@ -134,7 +134,7 @@ func TestClaudeResumeUsesProviderSessionID(t *testing.T) {
 		args = gotArgs
 		return []byte(`{"result":"done"}`), nil
 	}}
-	if _, err := d.Resume(context.Background(), "provider-id", "continue"); err != nil {
+	if _, err := d.Resume(context.Background(), "provider-id", "continue", Model{}); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"-p", "--resume", "provider-id", "--output-format", "json", "continue"}
@@ -201,7 +201,7 @@ func TestCodexStreamEmitsEventsInOrder(t *testing.T) {
 		return strings.NewReader(lines), func() error { return nil }, nil
 	}}
 	var kinds []string
-	r, err := d.ResumeStream(context.Background(), "t1", "p", func(e Event) { kinds = append(kinds, e.Kind+":"+e.Text) })
+	r, err := d.ResumeStream(context.Background(), "t1", "p", Model{}, func(e Event) { kinds = append(kinds, e.Kind+":"+e.Text) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestCodexResumeUsesSameSandboxAsRun(t *testing.T) {
 		got = args
 		return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}` + "\n"), nil
 	}}
-	if _, err := d.Resume(context.Background(), "t1", "go"); err != nil {
+	if _, err := d.Resume(context.Background(), "t1", "go", Model{}); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "go"}

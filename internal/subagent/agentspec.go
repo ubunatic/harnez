@@ -34,19 +34,16 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	if strings.TrimSpace(spec.DefaultModel) == "" {
 		return agentSpec{}, fmt.Errorf("agent spec: default_model is required")
 	}
-	parts := strings.Split(spec.DefaultModel, ":")
 	models := spec.Models
 	if len(models) == 0 {
-		if err := ensureModelAliases(); err != nil {
+		var err error
+		models, err = loadModelAliases()
+		if err != nil {
 			return agentSpec{}, err
 		}
-		models = modelAliases
 	}
-	if len(parts) < 2 || models[parts[0]+":"+parts[1]].Name == "" {
-		return agentSpec{}, fmt.Errorf("agent spec: default_model: unknown model %q", spec.DefaultModel)
-	}
-	if len(parts) == 3 && parts[2] != "low" && parts[2] != "med" && parts[2] != "high" {
-		return agentSpec{}, fmt.Errorf("agent spec: default_model: unknown tier %q", parts[2])
+	if _, err := resolveModelIn(models, spec.DefaultModel); err != nil {
+		return agentSpec{}, fmt.Errorf("agent spec: default_model: %w", err)
 	}
 	if err := validateRoles(spec); err != nil {
 		return agentSpec{}, err
@@ -54,22 +51,26 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	return spec, nil
 }
 
-func ensureModelAliases() error {
-	if modelAliases != nil {
-		return nil
-	}
+func loadModelAliases() (map[string]Model, error) {
 	data, err := fs.ReadFile(harnez.DefaultFS, agentSpecPath)
 	if err != nil {
-		return fmt.Errorf("agent spec: read %s: %w", agentSpecPath, err)
+		return nil, fmt.Errorf("agent spec: read %s: %w", agentSpecPath, err)
 	}
 	var spec struct {
 		Models map[string]Model `yaml:"models"`
 	}
 	if err := yaml.Unmarshal(data, &spec); err != nil {
-		return fmt.Errorf("agent spec: parse models: %w", err)
+		return nil, fmt.Errorf("agent spec: parse models: %w", err)
 	}
-	modelAliases = spec.Models
-	return nil
+	return spec.Models, nil
+}
+
+var modelAliasesOnce = sync.OnceValues(loadModelAliases)
+
+func ensureModelAliases() error {
+	var err error
+	modelAliases, err = modelAliasesOnce()
+	return err
 }
 
 func loadAgentSpec() (agentSpec, error) {
@@ -77,11 +78,7 @@ func loadAgentSpec() (agentSpec, error) {
 	if err != nil {
 		return agentSpec{}, fmt.Errorf("agent spec: read %s: %w", agentSpecPath, err)
 	}
-	spec, err := parseAgentSpec(data)
-	if err == nil {
-		modelAliases = spec.Models
-	}
-	return spec, err
+	return parseAgentSpec(data)
 }
 
 var agentSpecOnce = sync.OnceValues(loadAgentSpec)

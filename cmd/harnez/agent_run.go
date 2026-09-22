@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -245,13 +244,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		}
 		ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sess.Name, sess.Name, req.PlanFirst
 		ts.watch()
-		if ms, ok := sd.(interface {
-			ResumeStreamWithModel(context.Context, string, string, subagent.Model, subagent.EventFunc) (*subagent.TurnResult, error)
-		}); ok {
-			r, err = ms.ResumeStreamWithModel(cmd.Context(), sess.ProviderID(), withProtocol(req.Prompt, req.PlanFirst, role), subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, ts.onEvent)
-		} else {
-			r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), withProtocol(req.Prompt, req.PlanFirst, role), ts.onEvent)
-		}
+		r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), withProtocol(req.Prompt, req.PlanFirst, role), subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, ts.onEvent)
 		if err != nil {
 			ts.abort()
 		}
@@ -260,13 +253,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 			tl.log("compact", "%s", compactNote)
 		}
 		tl.announceTurn("resume", sess.Provider+":"+sess.Model, sess.Name)
-		if mr, ok := driver.(interface {
-			ResumeWithModel(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error)
-		}); ok {
-			r, err = mr.ResumeWithModel(cmd.Context(), sess.ProviderID(), req.Prompt, subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
-		} else {
-			r, err = driver.Resume(cmd.Context(), sess.ProviderID(), req.Prompt)
-		}
+		r, err = driver.Resume(cmd.Context(), sess.ProviderID(), req.Prompt, subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
 	}
 	if err != nil {
 		recordResumeFailure(s, sess, err)
