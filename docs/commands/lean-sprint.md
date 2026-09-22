@@ -2,6 +2,8 @@
 
 Orchestrate a lean, milestone-driven developer handoff with strict zero-coding review loops and single-ticket pre-work batching.
 
+- Preflight: confirm task scope, acceptance criteria, and verification commands before dispatch.
+
 Reference Practice: `@docs/AgenticLoop.md`
 
 ## Role Contract — Direct Execution
