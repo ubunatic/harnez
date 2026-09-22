@@ -94,6 +94,13 @@ after 497 fixed tier passing.
 | Plan (read-only) | luna:med | 1m39s | 75k new, 136k cached |
 | M1 config keys | luna:med | 3m41s | 102k new, 838k cached |
 | M2 flag, schema gating | luna:med | 8m03s | 184k new, 3.4M cached |
+| M3 single-write removal | luna:med | 9m40s | 375k new, 7.7M cached |
+| Review of M1–M3 | sonnet | about 1m | not recorded |
+| M4 review fixes | luna:med | 8m02s | 486k new, 15.0M cached |
+| Plan M5 (read-only) | sonnet | 59s | 120k total |
+| M5 requires removal, Codex/AGY | sonnet | 7m11s | 4.2M total |
+| M6 unfiltered config, MVP deletion | sonnet | 10m02s | 12.1M total |
+| Final review | sonnet | about 1m | not recorded |
 
 Codex quota moved from weekly 97% / 5-hour 5% before the advisors to 98% / 11% after M2. The whole
 luna:low sprint (496/488/497) moved the weekly counter by less than 1 point. This one moved it
@@ -116,6 +123,24 @@ Observations:
 - **luna:med skips a listed acceptance test and still reports "open problems: none".** M2
   omitted the byte-identity test from its milestone. The host must check each listed
   acceptance item against the diff, not trust the report. The same applies to luna:low.
+- **Per-turn quota from the developer's rollout** (read before deleting the session): the
+  Codex 5-hour window went 8% → 15% over the luna:med plan and M1–M4, about 1–2 points per
+  milestone. The weekly window went 97% → 99%, crossing to 99% during M4. After that the sprint
+  switched to `claude:sonnet` developers, and ended with Claude at 50% weekly and 67% of the
+  5-hour window (host Opus plus sonnet workers).
+- **The vendor switch mid-ticket cost nothing.** Because every finding lived in the ticket, a
+  fresh sonnet session picked up M5 with no hand-over beyond the ticket. It had to be fresh anyway:
+  `claude:*` sessions can't be resumed from inside Claude Code (issue 498).
+- **sonnet reports don't always match their diffs.** M5 said the malformed-entry nit needed "no
+  change", but its diff changed that line. The code was right; the report was wrong.
+- **Unit tests passed while the feature was dead from the CLI.** M5's removal worked inside
+  `internal/claude`, but `cmd` pre-filtered the config and hid everything that needed removing.
+  All tests called the internal API. The host caught it by tracing the CLI path, and M6 added
+  a CLI end-to-end test. Lesson: a feature ticket's acceptance test must go through the real
+  entry point.
+- **Independent reviewers help, but check their "blocking" items.** The M3 review found a real
+  leak (per-entry hook stripping) and one wrong blocker (`mcpServers` gating, which the design
+  says is always applied).
 - **Host review adds what advisors miss.** Neither advisor saw that a typo in `requires:`
   silently removes the skill under every selection. The host caught it while reviewing M1,
   and it became M2 pre-work.
