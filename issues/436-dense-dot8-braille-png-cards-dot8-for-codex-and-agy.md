@@ -1,6 +1,6 @@
 # 436 — Dense Dot8 Braille PNG cards (--dot8) for codex and agy
 
-**Status**: Open
+**Status**: Blocked — Dot8 experiment on hold; see 444
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Reading / Token Efficiency (experimental)
@@ -89,3 +89,14 @@ Clipping fixed (regression test `TestDot8RenderAllColumnsContainUnclippedContent
 
 - Re-verify against live code and recent commits first; this ticket may sit for a while.
 - An agy smoke run on the default card failed once with 772k input tokens and turns=1. Check whether that is normal for agy before trusting agy numbers.
+
+## On hold (2026-09-22)
+
+Parked with the rest of the Dot8 chain. The token benchmark that this ticket's
+premise (dense Dot8 for token efficiency) depends on concluded the opposite: braille
+characters split under the tokenizer and the penalty outweighs the compression, so
+Dot8 must not be the primary LLM input format
+(`docs/studies/2026-09-20-dot8-braille-vs-markdown-and-multimodal-context-card-token-benchmarks.md`).
+codex and agy legibility remain unverified by a clean canary. Resume once 444's
+renderer-pitch fix lands and a clean 3x4 readability canary passes 3/3 on at least
+two agents.
