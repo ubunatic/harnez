@@ -1,6 +1,6 @@
 # 496 — Clean up pre-existing gofmt drift across the repo
 
-**Status**: Closed — gofmt -w on the 30 drifted files and a gofmt -l gate in make check (046a904)
+**Status**: Closed — gofmt -w on the 30 drifted files and a gofmt -l gate in make check (e5eb397)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Chore

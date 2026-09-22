@@ -1,6 +1,6 @@
 # 497 — harnez agent ignores Codex tier and maps Claude aliases to stale model IDs
 
-**Status**: Closed — tier passed on exec and resume (session tier), aliases in spec/agent.yaml incl. terra and current Claude aliases, single validation path; live canary luna:med shows effort=medium on start and resume (7204a93, 039709b, 1d8b8de)
+**Status**: Closed — tier passed on exec and resume (session tier), aliases in spec/agent.yaml incl. terra and current Claude aliases, single validation path; live canary luna:med shows effort=medium on start and resume (25f2687, 6d0e353, 18b4ae0)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
@@ -51,7 +51,7 @@ Found on 2026-09-22 while setting up the model advisory eval:
 - The developer skips the live canary (leaf workers never run `harnez agent`); the host runs
   it after the commit.
 
-## M1 delivered (7204a93) — review findings, M2 Pre-Work / Required Refinements
+## M1 delivered (25f2687) — review findings, M2 Pre-Work / Required Refinements
 
 M1 moved aliases to `spec/agent.yaml` (+schema), added `codex:terra` and current Claude aliases,
 and passes `-c model_reasoning_effort` on `exec`. Review found:
@@ -72,7 +72,7 @@ and passes `-c model_reasoning_effort` on `exec`. Review found:
    `sync.Once` an embedded-spec failure should panic at init or surface once, not yield an
    empty list silently.
 
-## M2 delivered (039709b) — M3 Pre-Work / Required Refinements
+## M2 delivered (6d0e353) — M3 Pre-Work / Required Refinements
 
 M2 fixed the blocking bug: resume uses the session's stored tier, an unknown tier omits the flag,
 and tests cover low/med/unknown. Remaining structure debt, to settle before closing:
