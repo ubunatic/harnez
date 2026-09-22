@@ -37,3 +37,10 @@ failures" that passed everywhere else; this class of shared-`/tmp` state is a li
 - Tests: a junk `.git` directory without `HEAD` above the start directory is ignored; a
   real repository is still found; nothing creates a `.git` directory; both existing tests
   pass with a junk `/tmp/.git` present.
+
+## Pre-Work (lean sprint, 2026-09-22)
+
+- Keep the existing worktree/submodule branch (`.git` is a *file*, `quota.go:55`): it must still
+  resolve to `.harnez` in the worktree root. Add a test for it next to the new junk-`.git` case.
+- Tests must not depend on the real `/tmp`: build the junk `.git` inside `t.TempDir()` above the
+  start dir, and set `GIT_CEILING_DIRECTORIES` where a test relies on "not a repo".
