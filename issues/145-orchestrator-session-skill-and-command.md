@@ -110,3 +110,15 @@ role for a session that is not running a full sprint. That is the gap.
 ### Scope
 
 Small (one new command doc, one config entry, one cross-reference, one test).
+
+## Findings from the first orchestrated sprint (2026-09-22)
+
+A `luna:med` orchestrator followed `docs/commands/lean-sprint.md` through `harnez agent` and
+drove a `luna:low` developer through three tickets; see `docs/OrchestratedAgentFlow.md` and
+`docs/feedback/2026-09-22-orchestrated-sprint-flow-report.md`. What a skill or command for
+this must encode: the role start command (`--role developer --model luna --stream stats`,
+`--plan yes` for code), the preflight premise check, at most two follow-up turns, the review
+checklist (premise on HEAD, copyable-doc rules, direct test evidence, side effects of
+`make install`), delete the helper afterwards, and a final reply of at most 10 lines with the
+exact `harnez agent` commands run. Roles are already enforced by harnez (#486); blocking
+`harnez agent` calls worked without polling.

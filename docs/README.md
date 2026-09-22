@@ -11,6 +11,15 @@ Not needed for routine coding; reach for these during investigations or design w
 | [CLIDesign.md](CLIDesign.md) | apply vs init separation: scope, rationale, footgun avoided, design evolution (consult before modifying CLI command flags) |
 | [CodexSettings.md](CodexSettings.md) | Codex config ownership, spec-driven debloat, status/revert, and isolation limits (consult before changing Codex settings management) |
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent (consult when changing command pipelines) |
+| [HarnezAgentArchitecture.md](HarnezAgentArchitecture.md) | `harnez agent`: command forms, prompt assembly, session attribution, roles, stream output protocol, compaction, dispatch policy (consult before changing agent dispatch or its output) |
+| [OrchestratedAgentFlow.md](OrchestratedAgentFlow.md) | Orchestrator + leaf developer sprint flow: enforced roles, per-ticket loop, review checklist, pitfalls found, how to find out what agents ran (consult before an orchestrated run or when an agent misuses `harnez agent`) |
+| [CodexEvents.md](CodexEvents.md) | Codex event shapes used by the analytics adapter (consult when changing Codex telemetry parsing) |
+| [CodexHooks.md](CodexHooks.md) | Codex lifecycle hook reference schema (consult when changing Codex hook wiring) |
+| [TokenMeasurementArchitecture.md](TokenMeasurementArchitecture.md) | Lifecycle-hook token measurement across AGY, Claude Code and Codex (consult when changing hooks or token accounting) |
+| [MultimodalContextDelivery.md](MultimodalContextDelivery.md) | Context-delivery architecture and token-economics roadmap (consult when changing how docs and context reach agents) |
+| [AntigravityDebloatAssessment.md](AntigravityDebloatAssessment.md) | AGY context usage and how `apply --debloat` ports to it (consult when changing AGY debloat) |
+| [BrailleDot8.md](BrailleDot8.md) | Braille 8 text convention and `scripts/md-to-braille8.py` |
+| [InitialRAMPAssessment.md](InitialRAMPAssessment.md) | Sibling-repository assessment of 2026-09-17 |
 | [HookRewritePattern.md](HookRewritePattern.md) | Two-stage PreToolUse hook pattern (rewrite now, capture later): `<feature> hook` vs. `<feature>` wrapper, `harnez distill hook` as reference implementation, plus two hard-won constraints — hooks on the same matcher don't compose (last-to-finish wins) and a rewritten command must stay one shell token (consult before adding any new agent-hook-driven feature) |
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
 | [MacOSPortability.md](MacOSPortability.md) | macOS/Darwin portability architecture: OS-gating, CI, dev-deps, and the standalone podmac boundary (consult before platform-specific code, CI, or guest tooling changes) |

@@ -100,3 +100,10 @@ Blocked on 149 for steps 3–5.
 ## Epic note (#479)
 
 #484 supplies the fallback default model (`codex:luna:low`) when `--model` is omitted; this ticket still decides which model fits which task type.
+
+## Findings from the first orchestrated sprint (2026-09-22)
+
+`codex:luna:med` as orchestrator and `codex:luna:low` as developers handled a documentation
+ticket, a code ticket with tests, and a config ticket. Every failure was review depth (obsolete
+premise, environment side effect), not model capability. The fallback default model now comes
+from `spec/agent.yaml` (#484); the per-task choice this ticket asks for is still open.

@@ -153,6 +153,20 @@ empty and every block goes to stdout; failures are returned as the command
 error, without a usage dump. Without streaming (`--json`, providers that do
 not stream) a `[session timeline]` is written to stderr instead.
 
+### 2.10 Roles and delegation depth
+
+Every session has a role: `orchestrator`, `developer`, `reviewer` or `advisor` (`--role`,
+default `developer`). Roles, the roles each may start (`spawns`) and their rules text are
+defined in `spec/agent.yaml`. The role is stored on the session, exported to the provider
+process as `HARNEZ_AGENT_ROLE` together with `HARNEZ_SESSION_ID` (the session name, the
+parent id of anything the worker starts), and its rules are added to every turn. A leaf
+role (empty `spawns`) is refused by `start`, `resume`, `stop`, `delete`, `compact`, `chat`,
+`enable`/`disable`, root prompts and slash commands; `list`, `status` and `models` stay
+available. An orchestrator may start developer, reviewer and advisor sessions, never
+another orchestrator. A caller without a role (a human or an untracked host) is
+unrestricted. Tests must not depend on these variables (`TestMain` clears them). Operating
+guide and pitfalls: `docs/OrchestratedAgentFlow.md`.
+
 ## 3. Model Shorthand & Vendor Mapping
 
 The model resolution engine standardizes aliases across providers:

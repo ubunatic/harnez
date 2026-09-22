@@ -56,3 +56,11 @@ discover that work is done.
 ## Epic note (#479)
 
 Prerequisite for the `--async` mode in #476: detached workers need an event-driven completion channel so hosts never poll and no zombie worker is left behind.
+
+## Findings from the first orchestrated sprint (2026-09-22)
+
+Synchronous `harnez agent` calls inside a Codex tool call waited 2-6 minutes each; the
+orchestrator never polled and never repeated a call, across 12 calls. Not tested: an
+`--async` mode and waking the host. One hazard: the `harnez exec` wrapper's default 60s
+timeout kills long shell commands (ticket 268 exempts `harnez agent` from the implicit
+default; other long waits need `exec.timeout`).

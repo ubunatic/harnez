@@ -165,3 +165,11 @@ ticket. One trial is enough to tell whether the phrasing lands; it is not a stat
 ### Scope
 
 **Small** — one ~60-line doc, one config entry, four reference edits, one live validation run.
+
+## Findings from the first orchestrated sprint (2026-09-22)
+
+Per-prompt caps worked: orchestrator replies of 8-12 lines with named fields (ticket, commits,
+tests, verdict, commands, friction) stayed at 1.8-2.9 KB, and developers stayed within 10
+lines. Gaps: the cap and the field list lived in each prompt instead of the role rules
+(`spec/agent.yaml`), and "tests passed" was accepted twice without an exact command and
+result. A contract in the role rules should require an exact test result field.
