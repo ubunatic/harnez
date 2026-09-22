@@ -40,7 +40,7 @@ func TestCodexCheckResumable(t *testing.T) {
 }
 
 func TestResolveModel(t *testing.T) {
-	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-5.6-luna", "low"}, {"claude:haiku", "claude", "haiku", "low"}, {"claude:haiku:latest", "claude", "haiku", "low"}, {"agy:flash:low", "agy", "gemini-3.7-flash", "low"}} {
+	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-5.6-luna", "low"}, {"codex:terra", "codex", "gpt-5.6-terra", "low"}, {"claude:haiku", "claude", "haiku", "low"}, {"claude:sonnet", "claude", "sonnet", "low"}, {"claude:opus", "claude", "opus", "low"}, {"claude:haiku:latest", "claude", "haiku", "low"}, {"agy:flash:low", "agy", "gemini-3.7-flash", "low"}} {
 		m, err := ResolveModel(tc.spec)
 		if err != nil {
 			t.Fatal(err)
@@ -48,6 +48,29 @@ func TestResolveModel(t *testing.T) {
 		if m.Provider != tc.provider || m.Name != tc.name || m.Tier != tc.tier {
 			t.Fatalf("%s resolved to %#v", tc.spec, m)
 		}
+	}
+}
+
+func TestCodexPassesReasoningEffort(t *testing.T) {
+	var got []string
+	d := CodexDriver{Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		got = args
+		return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}` + "\n"), nil
+	}}
+	if _, err := d.Run(context.Background(), RunOptions{Model: Model{Name: "gpt-5.6-luna", Tier: "med"}, Prompt: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "-m", "gpt-5.6-luna", "-c", "model_reasoning_effort=medium", "go"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("run args = %q, want %q", got, want)
+	}
+
+	if _, err := d.Resume(context.Background(), "t1", "continue"); err != nil {
+		t.Fatal(err)
+	}
+	want = []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_reasoning_effort=medium", "continue"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("resume args = %q, want %q", got, want)
 	}
 }
 
@@ -174,7 +197,7 @@ func TestCodexResumeUsesSameSandboxAsRun(t *testing.T) {
 	if _, err := d.Resume(context.Background(), "t1", "go"); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "go"}
+	want := []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_reasoning_effort=medium", "go"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("resume args = %q, want %q", got, want)
 	}

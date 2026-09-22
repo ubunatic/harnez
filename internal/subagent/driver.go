@@ -67,14 +67,11 @@ type TurnResult struct {
 	DurationMS       int64    `json:"duration_ms"`
 }
 
-var modelAliases = map[string]Model{
-	"codex:luna": {"codex", "gpt-5.6-luna", "low"}, "codex:sol": {"codex", "gpt-5.6-sol", "low"}, "codex:astra": {"codex", "gpt-5.6-astra", "low"},
-	"claude:haiku": {"claude", "haiku", "low"}, "claude:sonnet": {"claude", "claude-3-7-sonnet-20250219", "low"}, "claude:opus": {"claude", "claude-3-opus-20240229", "low"},
-	"agy:flash": {"agy", "gemini-3.7-flash", "low"},
-}
+var modelAliases map[string]Model
 
 // KnownModels returns the configured shorthand specifications in stable order.
 func KnownModels() []Model {
+	_ = ensureModelAliases()
 	keys := make([]string, 0, len(modelAliases))
 	for key := range modelAliases {
 		keys = append(keys, key)
@@ -92,6 +89,7 @@ func (m Model) Spec() string {
 }
 
 func modelAliasName(m Model) string {
+	_ = ensureModelAliases()
 	for key, candidate := range modelAliases {
 		if candidate == m {
 			return strings.TrimPrefix(key, m.Provider+":")
@@ -102,6 +100,9 @@ func modelAliasName(m Model) string {
 
 // ResolveModel expands provider:model[:tier] shorthand.
 func ResolveModel(spec string) (Model, error) {
+	if err := ensureModelAliases(); err != nil {
+		return Model{}, err
+	}
 	clean := strings.ToLower(strings.TrimSpace(spec))
 	if !strings.Contains(clean, ":") {
 		var match Model

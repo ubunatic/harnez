@@ -16,6 +16,7 @@ const agentSpecPath = "spec/agent.yaml"
 type agentSpec struct {
 	DefaultModel string              `yaml:"default_model"`
 	DefaultRole  string              `yaml:"default_role"`
+	Models       map[string]Model    `yaml:"models"`
 	Roles        map[string]RoleSpec `yaml:"roles"`
 }
 
@@ -33,6 +34,11 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	if strings.TrimSpace(spec.DefaultModel) == "" {
 		return agentSpec{}, fmt.Errorf("agent spec: default_model is required")
 	}
+	if len(spec.Models) > 0 {
+		modelAliases = spec.Models
+	} else if err := ensureModelAliases(); err != nil {
+		return agentSpec{}, err
+	}
 	if _, err := ResolveModel(spec.DefaultModel); err != nil {
 		return agentSpec{}, fmt.Errorf("agent spec: default_model: %w", err)
 	}
@@ -40,6 +46,24 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 		return agentSpec{}, err
 	}
 	return spec, nil
+}
+
+func ensureModelAliases() error {
+	if modelAliases != nil {
+		return nil
+	}
+	data, err := fs.ReadFile(harnez.DefaultFS, agentSpecPath)
+	if err != nil {
+		return fmt.Errorf("agent spec: read %s: %w", agentSpecPath, err)
+	}
+	var spec struct {
+		Models map[string]Model `yaml:"models"`
+	}
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return fmt.Errorf("agent spec: parse models: %w", err)
+	}
+	modelAliases = spec.Models
+	return nil
 }
 
 func loadAgentSpec() (agentSpec, error) {

@@ -177,9 +177,10 @@ The model resolution engine standardizes aliases across providers:
 | `codex:luna:med` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-5.6-luna --effort medium` | Standard development |
 | `codex:sol:low` / `codex:sol` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-5.6-sol --effort low` | Fast code review / linting |
 | `codex:astra:low` / `codex:astra` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-5.6-astra --effort low` | Frontier advisor (stuck only) |
+| `codex:terra:low` / `codex:terra` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-5.6-terra --effort low` | Terra evaluation model |
 | `claude:haiku:low` / `claude:haiku` | Claude Code | `claude -p --model claude-3-5-haiku-20241022` | Lightweight coder |
-| `claude:sonnet:low` / `claude:sonnet` | Claude Code | `claude -p --model claude-3-7-sonnet-20250219 --effort low` | Mid-tier reviewer |
-| `claude:opus:low` / `claude:opus` | Claude Code | `claude -p --model claude-3-opus-20240229` | Deep advisor |
+| `claude:sonnet:low` / `claude:sonnet` | Claude Code | `claude -p --model sonnet --effort low` | Mid-tier reviewer |
+| `claude:opus:low` / `claude:opus` | Claude Code | `claude -p --model opus` | Deep advisor |
 | `agy:flash:low` / `agy:flash` | Gemini / AGY | `agy -m gemini-3.7-flash --effort low` | Fast coder / research |
 | `agy:flash:med` | Gemini / AGY | `agy -m gemini-3.8-flash --effort medium` | Mid-tier advisor |
 | `local:lmcoder` | Local GPU / Podman | `lmcoder agent exec --model qwen38-q5 --host x600` | Offline sandbox coder |

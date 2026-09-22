@@ -47,7 +47,7 @@ func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error
 }
 func (d CodexDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 	start := time.Now()
-	args := []string{"exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "-m", o.Model.Name, o.Prompt}
+	args := codexRunArgs(o.Model, o.Prompt)
 	b, err := d.command(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("codex exec: %w", err)
@@ -60,11 +60,22 @@ func (d CodexDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error)
 	return r, nil
 }
 
+func codexEffort(tier string) string {
+	if tier == "med" {
+		return "medium"
+	}
+	return tier
+}
+
+func codexRunArgs(model Model, prompt string) []string {
+	return []string{"exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "-m", model.Name, "-c", "model_reasoning_effort=" + codexEffort(model.Tier), prompt}
+}
+
 // codexResumeArgs mirrors the sandbox settings of Run: a resumed worker must
 // not fall back to Codex's default sandbox (read-only tool caches, no sockets,
 // no git writes) and must work outside a trusted git directory.
 func codexResumeArgs(id, prompt string) []string {
-	return []string{"exec", "resume", id, "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", prompt}
+	return []string{"exec", "resume", id, "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_reasoning_effort=medium", prompt}
 }
 
 func (d CodexDriver) Resume(ctx context.Context, id, prompt string) (*TurnResult, error) {
@@ -229,7 +240,7 @@ func lastLines(s string, n int) string {
 
 func (d CodexDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) (*TurnResult, error) {
 	start := time.Now()
-	r, err := d.stream(ctx, fn, "exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "-m", o.Model.Name, o.Prompt)
+	r, err := d.stream(ctx, fn, codexRunArgs(o.Model, o.Prompt)...)
 	if err != nil {
 		return nil, fmt.Errorf("codex exec: %w", err)
 	}

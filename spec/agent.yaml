@@ -2,6 +2,16 @@
 # Agent model and role defaults are part of the application artifact.
 default_model: codex:luna:low
 
+models:
+  codex:luna: {provider: codex, name: gpt-5.6-luna, tier: low}
+  codex:sol: {provider: codex, name: gpt-5.6-sol, tier: low}
+  codex:astra: {provider: codex, name: gpt-5.6-astra, tier: low}
+  codex:terra: {provider: codex, name: gpt-5.6-terra, tier: low}
+  claude:haiku: {provider: claude, name: haiku, tier: low}
+  claude:sonnet: {provider: claude, name: sonnet, tier: low}
+  claude:opus: {provider: claude, name: opus, tier: low}
+  agy:flash: {provider: agy, name: gemini-3.7-flash, tier: low}
+
 # Roles keep delegation one level deep. `spawns` lists the roles a session of
 # that role may start through `harnez agent`; an empty list makes it a leaf
 # worker that harnez refuses to let start, resume or manage other agents.
