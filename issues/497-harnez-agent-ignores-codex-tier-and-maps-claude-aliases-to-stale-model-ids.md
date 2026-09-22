@@ -1,7 +1,7 @@
 # 497 — harnez agent ignores Codex tier and maps Claude aliases to stale model IDs
 
 **Status**: Open
-**Priority**: P1 (High)
+**Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
 **Related**: `docs/ModelAdvisoryEval.md`, `docs/HarnezAgentArchitecture.md` (model table), `spec/agent.yaml`
@@ -17,7 +17,10 @@ Found on 2026-09-22 while setting up the model advisory eval:
 
 1. **The tier is dropped for Codex.** `internal/subagent/codex.go:50` and `:232` build
    `codex exec --json --dangerously-bypass-approvals-and-sandbox -m <name> <prompt>` without
-   the tier. `luna:low`, `luna:med` and `luna:high` all run at Codex's default effort. Only the
+   the tier, so every tier runs at the user's `~/.codex/config.toml` `model_reasoning_effort`
+   (`low` on the reference machine). `luna:low` therefore happens to work there, but `luna:med`
+   and `luna:high` silently run at low, and on a machine with a different default `luna:low`
+   runs at that default instead. Only the
    interactive path (`interactive.go:84`) passes `--effort`. `docs/HarnezAgentArchitecture.md`
    claims `--effort low|medium`, and the whole escalation ladder in `docs/AgenticLoop.md` relies
    on the tier.

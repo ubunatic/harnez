@@ -13,7 +13,8 @@ Use this to decide which model gets which role in a harnez sprint. For general m
   The limit was 60 lines, and the models could not edit files, run tests or spawn agents.
 - **Codex models** ran through `codex -a never -s read-only exec -m gpt-5.6-<m> -c
   model_reasoning_effort=<e>`, not `harnez agent`. `harnez agent` does not pass the tier to
-  Codex (issue 497), so it would have run `luna:low` and `luna:med` identically.
+  Codex (issue 497): every tier falls back to `~/.codex/config.toml` (`low` here), so it
+  would have run `luna:med` at low.
 - **Claude models** ran as native Claude Code subagents (`general-purpose`, `model: haiku` or
   `sonnet`). `harnez agent` maps `claude:sonnet` to a stale 3.7 model ID (issue 497).
 - **Grading:** every answer was checked against the repo by the Opus orchestrator. Trap claims
