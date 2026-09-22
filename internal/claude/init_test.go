@@ -200,6 +200,9 @@ func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
 		t.Fatalf("git init: %v", err)
 	}
+	if err := exec.Command("git", "-C", dir, "config", "--local", "core.hooksPath", filepath.Join(dir, ".git", "hooks")).Run(); err != nil {
+		t.Fatalf("git config core.hooksPath: %v", err)
+	}
 	if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -265,6 +268,9 @@ func TestRunInit_IssuesGitIsExplicitAndRemovable(t *testing.T) {
 	dir := t.TempDir()
 	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
 		t.Fatalf("git init: %v", err)
+	}
+	if err := exec.Command("git", "-C", dir, "config", "--local", "core.hooksPath", filepath.Join(dir, ".git", "hooks")).Run(); err != nil {
+		t.Fatalf("git config core.hooksPath: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "issues"), 0o755); err != nil {
 		t.Fatal(err)
