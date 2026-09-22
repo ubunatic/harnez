@@ -102,49 +102,6 @@ func hookEntry(cmds ...string) map[string]any {
 	return map[string]any{"hooks": hs}
 }
 
-func TestPruneSettings(t *testing.T) {
-	doc := map[string]any{
-		"model": "x",
-		"hooks": map[string]any{
-			"PreToolUse":  []any{hookEntry("harnez exec hook"), hookEntry("my-linter")},
-			"Stop":        []any{hookEntry("ffplay ding")},
-			"PostToolUse": []any{hookEntry("harnez hook read")},
-			// mixed entries are not harnez-owned and survive
-			"SessionStart": []any{hookEntry("harnez x", "user-tool")},
-		},
-		"statusLine": map[string]any{"type": "command", "command": "harnez statusline"},
-	}
-	set, _ := Parse("docs-only")
-	out, notes := PruneSettings(doc, set)
-	if len(notes) != 3 {
-		t.Errorf("notes = %v, want 3 removals", notes)
-	}
-	if _, ok := out["statusLine"]; ok {
-		t.Error("harnez statusLine should be removed")
-	}
-	hooks := out["hooks"].(map[string]any)
-	if _, ok := hooks["PostToolUse"]; ok {
-		t.Error("event with only harnez hooks should be dropped")
-	}
-	if n := len(hooks["PreToolUse"].([]any)); n != 1 {
-		t.Errorf("PreToolUse entries = %d, want 1 (my-linter)", n)
-	}
-	for _, ev := range []string{"Stop", "SessionStart"} {
-		if _, ok := hooks[ev]; !ok {
-			t.Errorf("%s hook should survive", ev)
-		}
-	}
-	if _, ok := doc["statusLine"]; !ok {
-		t.Error("input doc must not be modified")
-	}
-
-	userLine := map[string]any{"statusLine": map[string]any{"command": "starship"}}
-	out, notes = PruneSettings(userLine, set)
-	if len(notes) != 0 || out["statusLine"] == nil {
-		t.Error("non-harnez statusLine must survive")
-	}
-}
-
 // setupHome isolates HOME and redirects every apply target into it.
 func setupHome(t *testing.T) (target string, cfg *claude.Config) {
 	t.Helper()

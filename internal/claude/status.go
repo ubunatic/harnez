@@ -22,7 +22,11 @@ func hasSettingsKey(path, key string) bool {
 }
 
 // RunStatus prints the current applied status of configuration parameters.
-func RunStatus(configPath string, cfg *Config, target string) error {
+func RunStatus(configPath string, cfg *Config, target string, selections ...ComponentSelection) error {
+	selection := ComponentSelection(fullComponentSelection{})
+	if len(selections) > 0 {
+		selection = selections[0]
+	}
 	fmt.Println("Config:")
 	fmt.Printf("  %-14s %s\n", "file:", configPath)
 	fmt.Printf("  %-14s %s\n", "target:", target)
@@ -64,7 +68,7 @@ func RunStatus(configPath string, cfg *Config, target string) error {
 	}
 
 	settingsPath := filepath.Join(target, "settings.json")
-	settingsDoc := buildSettingsDoc(cfg)
+	settingsDoc := buildSettingsDoc(cfg, selection)
 	applied := jsonc.Read(settingsPath)
 	var checks []entry
 	for _, k := range managedSettingsKeys {

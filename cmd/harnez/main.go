@@ -673,7 +673,7 @@ func newRootCmd() *cobra.Command {
 				return nil
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
-			changed, err := claude.DiffAll(t, components.Filter(cfg, set))
+			changed, err := claude.DiffAll(t, components.Filter(cfg, set), set)
 			if err != nil {
 				return err
 			}
@@ -766,7 +766,7 @@ func newRootCmd() *cobra.Command {
 				}
 				return nil
 			}
-			return claude.RunStatus(name, components.Filter(cfg, set), t)
+			return claude.RunStatus(name, components.Filter(cfg, set), t, set)
 		},
 	}
 	status.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")

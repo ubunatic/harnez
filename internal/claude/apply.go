@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -75,13 +76,35 @@ func mergePermissions(existing, incoming map[string]any) map[string]any {
 }
 
 // applyMerge merges doc into a copy of existing. The permissions.allow and
-// permissions.deny arrays are union-merged; all other top-level keys replace.
+// permissions.deny arrays are union-merged; mcpServers are merged by name.
+// A nil value removes only managed, Harnez-owned settings.
 func applyMerge(existing, doc map[string]any) map[string]any {
 	out := make(map[string]any, len(existing)+len(doc))
 	for k, v := range existing {
 		out[k] = v
 	}
 	for k, v := range doc {
+		if v == nil {
+			if !isManagedSettingsKey(k) {
+				continue
+			}
+			switch k {
+			case "hooks":
+				keptHooks := removeHarnezHooks(out[k])
+				if len(keptHooks) == 0 {
+					delete(out, k)
+				} else {
+					out[k] = keptHooks
+				}
+			case "statusLine":
+				if statusLine, ok := out[k].(map[string]any); ok {
+					if command, _ := statusLine["command"].(string); isHarnezCommand(command) {
+						delete(out, k)
+					}
+				}
+			}
+			continue
+		}
 		if k == "permissions" {
 			if ep, ok := out[k].(map[string]any); ok {
 				if ip, ok := v.(map[string]any); ok {
@@ -90,9 +113,75 @@ func applyMerge(existing, doc map[string]any) map[string]any {
 				}
 			}
 		}
+		if k == "mcpServers" {
+			if existingServers, ok := out[k].(map[string]any); ok {
+				if incomingServers, ok := v.(map[string]any); ok {
+					mergedServers := make(map[string]any, len(existingServers)+len(incomingServers))
+					for name, server := range existingServers {
+						mergedServers[name] = server
+					}
+					for name, server := range incomingServers {
+						mergedServers[name] = server
+					}
+					out[k] = mergedServers
+					continue
+				}
+			}
+		}
 		out[k] = v
 	}
 	return out
+}
+
+func isManagedSettingsKey(key string) bool {
+	return slices.Contains(managedSettingsKeys, key)
+}
+
+func isHarnezCommand(command string) bool {
+	command = strings.TrimSpace(command)
+	return command == "harnez" || strings.HasPrefix(command, "harnez ")
+}
+
+func removeHarnezHooks(value any) map[string]any {
+	hooks, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	keptHooks := make(map[string]any, len(hooks))
+	for event, rawEntries := range hooks {
+		entries, _ := rawEntries.([]any)
+		kept := make([]any, 0, len(entries))
+		for _, entry := range entries {
+			commands := hookEntryCommands(entry)
+			allHarnez := len(commands) > 0
+			for _, command := range commands {
+				if !isHarnezCommand(command) {
+					allHarnez = false
+					break
+				}
+			}
+			if !allHarnez {
+				kept = append(kept, entry)
+			}
+		}
+		if len(kept) > 0 {
+			keptHooks[event] = kept
+		}
+	}
+	return keptHooks
+}
+
+func hookEntryCommands(entry any) []string {
+	m, _ := entry.(map[string]any)
+	list, _ := m["hooks"].([]any)
+	var commands []string
+	for _, rawHook := range list {
+		hook, _ := rawHook.(map[string]any)
+		if command, ok := hook["command"].(string); ok {
+			commands = append(commands, command)
+		}
+	}
+	return commands
 }
 
 // managedSettingsKeys are the top-level keys harnez writes to settings.json.
@@ -115,11 +204,14 @@ func resolveModel(s string) string {
 }
 
 // buildSettingsDoc creates the settings JSON document from the YAML config.
-func buildSettingsDoc(cfg *Config) map[string]any {
+func buildSettingsDoc(cfg *Config, selection ComponentSelection) map[string]any {
 	// Use map[string]any throughout so json.Marshal always sorts keys alphabetically,
 	// matching what json.Unmarshal produces on read-back (round-trip stable).
 	eventMap := map[string][]map[string]any{}
 	for _, h := range cfg.Hooks {
+		if !selection.HasComponent("telemetry") && isHarnezCommand(h.Command) {
+			continue
+		}
 		m := map[string]any{
 			"hooks": []map[string]any{{"command": h.Command, "type": "command"}},
 		}
@@ -149,6 +241,8 @@ func buildSettingsDoc(cfg *Config) map[string]any {
 	}
 	if len(eventMap) > 0 {
 		doc["hooks"] = eventMap
+	} else if !selection.HasComponent("telemetry") {
+		doc["hooks"] = nil
 	}
 	if len(cfg.Env) > 0 {
 		doc["env"] = cfg.Env
@@ -170,13 +264,15 @@ func buildSettingsDoc(cfg *Config) map[string]any {
 		}
 		doc["mcpServers"] = servers
 	}
-	if cfg.StatusLine {
+	if cfg.StatusLine && selection.HasComponent("usage") {
 		// cwd-only MVP; Claude Code renders this on its own row above the
 		// built-in footer badges, it cannot share that row (see issue 095).
 		doc["statusLine"] = map[string]any{
 			"type":    "command",
 			"command": "harnez statusline",
 		}
+	} else if !selection.HasComponent("usage") {
+		doc["statusLine"] = nil
 	}
 	return doc
 }
@@ -860,7 +956,7 @@ func mergeDocs(fromConfig, fromFlag []string) []string {
 // ApplyAll installs the managed configuration into target, always using the
 // full doc source. See ApplyAllVariant to select a lite_source variant.
 func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool, installShell ...bool) error {
-	return ApplyAllVariant(target, cfg, nil, docs, forceDocs, installSystemd, "", installShell...)
+	return ApplyAllVariant(target, cfg, fullComponentSelection{}, docs, forceDocs, installSystemd, "", installShell...)
 }
 
 // ComponentSelection is the resolved component set for an apply operation.
@@ -870,10 +966,14 @@ type ComponentSelection interface {
 	HasComponent(string) bool
 }
 
+type fullComponentSelection struct{}
+
+func (fullComponentSelection) HasComponent(string) bool { return true }
+
 // ApplyAllVariant is ApplyAll with an explicit doc variant ("" or "lite")
 // selecting which source (Language.SourceFor) is installed for docs that
 // declare a lite_source.
-func ApplyAllVariant(target string, cfg *Config, _ ComponentSelection, docs []string, forceDocs bool, installSystemd bool, docVariant string, installShell ...bool) error {
+func ApplyAllVariant(target string, cfg *Config, selection ComponentSelection, docs []string, forceDocs bool, installSystemd bool, docVariant string, installShell ...bool) error {
 	shellOpt := len(installShell) > 0 && installShell[0]
 	docs = expandDocNames(cfg, docs)
 	if err := validateDocNames(cfg, docs); err != nil {
@@ -896,7 +996,7 @@ func ApplyAllVariant(target string, cfg *Config, _ ComponentSelection, docs []st
 	}
 
 	settingsPath := filepath.Join(target, "settings.json")
-	settingsDoc := buildSettingsDoc(cfg)
+	settingsDoc := buildSettingsDoc(cfg, selection)
 	sr, err := applySettingsJSON(settingsPath, settingsDoc)
 	if err != nil {
 		return fmt.Errorf("settings: %w", err)
@@ -1214,7 +1314,11 @@ func ApplyAllVariant(target string, cfg *Config, _ ComponentSelection, docs []st
 }
 
 // DiffAll diffs the config and reports whether changes/drift were detected.
-func DiffAll(target string, cfg *Config) (bool, error) {
+func DiffAll(target string, cfg *Config, selections ...ComponentSelection) (bool, error) {
+	selection := ComponentSelection(fullComponentSelection{})
+	if len(selections) > 0 {
+		selection = selections[0]
+	}
 	anyChanged := false
 	report := func(changed bool, err error) error {
 		if err != nil {
@@ -1226,7 +1330,7 @@ func DiffAll(target string, cfg *Config) (bool, error) {
 		return nil
 	}
 
-	if err := report(diffSettingsJSON(filepath.Join(target, "settings.json"), buildSettingsDoc(cfg))); err != nil {
+	if err := report(diffSettingsJSON(filepath.Join(target, "settings.json"), buildSettingsDoc(cfg, selection))); err != nil {
 		return false, fmt.Errorf("settings: %w", err)
 	}
 	disableRateFeedback := RateFeedbackDisabled(cfg, nil)

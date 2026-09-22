@@ -13,7 +13,6 @@ import (
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/codex"
 	"ubunatic.com/harnez/internal/fsutil"
-	"ubunatic.com/harnez/internal/jsonc"
 )
 
 // Filter returns a copy of cfg narrowed to what set enables. Disabled docs,
@@ -89,21 +88,6 @@ func Apply(target string, cfg *claude.Config, set Set, opts Options) ([]string, 
 func removeDisabled(target string, cfg *claude.Config, set Set) ([]string, error) {
 	var removed []string
 
-	settingsPath := filepath.Join(target, "settings.json")
-	if _, err := os.Stat(settingsPath); err == nil {
-		existing := jsonc.Read(settingsPath)
-		pruned, notes := PruneSettings(existing, set)
-		if len(notes) > 0 {
-			data := append(jsonc.MarshalPretty(pruned), '\n')
-			if err := os.WriteFile(settingsPath, data, 0644); err != nil {
-				return removed, fmt.Errorf("settings: %w", err)
-			}
-			for _, n := range notes {
-				removed = append(removed, settingsPath+": "+n)
-			}
-		}
-	}
-
 	if !set.Has(Telemetry) {
 		if cfg.CodexHooksTarget != "" {
 			p := fsutil.ExpandHome(cfg.CodexHooksTarget)
@@ -156,53 +140,6 @@ func removeDisabled(target string, cfg *claude.Config, set Set) ([]string, error
 		}
 	}
 	return removed, nil
-}
-
-// PruneSettings removes harnez-owned hooks (telemetry off) and a harnez-owned
-// status line (usage off) from a settings.json document. Hook entries whose
-// commands are not all harnez-owned are kept. It returns the new document and
-// one note per removal; the input is not modified.
-func PruneSettings(doc map[string]any, set Set) (map[string]any, []string) {
-	out := make(map[string]any, len(doc))
-	for k, v := range doc {
-		out[k] = v
-	}
-	var notes []string
-
-	if !set.Has(Usage) {
-		if sl, ok := out["statusLine"].(map[string]any); ok {
-			if cmd, _ := sl["command"].(string); IsHarnezCommand(cmd) {
-				delete(out, "statusLine")
-				notes = append(notes, "statusLine "+cmd)
-			}
-		}
-	}
-
-	if !set.Has(Telemetry) {
-		if hooks, ok := out["hooks"].(map[string]any); ok {
-			newHooks := map[string]any{}
-			for event, v := range hooks {
-				entries, _ := v.([]any)
-				var kept []any
-				for _, e := range entries {
-					if cmds := entryCommands(e); len(cmds) > 0 && allHarnez(cmds) {
-						notes = append(notes, fmt.Sprintf("hook %s %s", event, cmds[0]))
-						continue
-					}
-					kept = append(kept, e)
-				}
-				if len(kept) > 0 {
-					newHooks[event] = kept
-				}
-			}
-			if len(newHooks) == 0 {
-				delete(out, "hooks")
-			} else {
-				out["hooks"] = newHooks
-			}
-		}
-	}
-	return out, notes
 }
 
 func entryCommands(entry any) []string {
