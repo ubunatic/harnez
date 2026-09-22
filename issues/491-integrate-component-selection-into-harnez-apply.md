@@ -183,3 +183,31 @@ only (nit, requires-driven skill removal including resources, Codex/AGY by `tele
 `sessionstate.go` as they are, because rate feedback can also be disabled by env or config: add the
 unmet-`requires:` removal next to it, don't replace it. Claude resumes are broken (498), so
 each milestone runs in a fresh session with this ticket as its context.
+
+## M5 delivered (8918864) — M6 Pre-Work / Required Refinements
+
+M5 added `skillDisabled` (rate-feedback-disabled or unmet `requires:`, reusing the SKILL.md +
+resource removal), Codex/AGY `Apply` with `telemetry` / ownership-aware `Remove` without, and
+`DiffAll` checks for Codex/AGY under the selection. The malformed-entry nit is fixed (the report
+said "no change needed", but the diff does change it). No assertions changed.
+
+1. **Blocking: M5's removal is unreachable from the CLI.** `cmd/harnez/main.go` passes
+   `components.Filter(cfg, set)` into `ApplyAllVariant`/`DiffAll`/`RunStatus`. Without
+   `telemetry`, `Filter` blanks `CodexHooksTarget`/`AgyHooksTarget`
+   (`internal/components/apply.go:46-47`), and it drops unmet-`requires:` skills from
+   `cfg.Skills`. So the new `Remove` branches (`apply.go:1173`, `:1200`), the `DiffAll` checks
+   (`:1431`, `:1442`) and `skillDisabled` never see them. The M5 tests pass because they call
+   `ApplyAllVariant` with an unfiltered config. Fix it as part of the move: `cmd` passes the
+   **unfiltered** config plus the set, and selection happens only inside `internal/claude`.
+   Keep a filter step only for pure install-only content (docs, statusLine flag, distill), and
+   never drop anything that apply must actively remove.
+2. **End-to-end CLI test (acceptance for 491):** through `newRootCmd()` with a temp HOME:
+   `apply` (full), then `apply --components docs-only`, then assert the Codex/AGY harnez hooks
+   are removed, `tool-feedback-protocol` `SKILL.md` *and* its resources are gone, and
+   `diff --components docs-only` reports no drift. Then `apply` (full) again reinstalls
+   everything, and `diff` is clean.
+3. Then **M6** as planned: move `Set`/`Parse`/`Resolve`/`ValidateConfig`/(reduced) `Filter`
+   into `internal/claude`, replace `ComponentSelection`/`FullComponentSelection` with the
+   concrete set (nil = full), retarget the useful `internal/components` tests, delete
+   `internal/components` and `scripts/canary-components`, run `scripts/smoke-test.sh`, then
+   `make install`.
