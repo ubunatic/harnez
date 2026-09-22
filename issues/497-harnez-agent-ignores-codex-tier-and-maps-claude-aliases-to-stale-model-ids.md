@@ -50,3 +50,24 @@ Found on 2026-09-22 while setting up the model advisory eval:
   `docs/HarnezAgentArchitecture.md`.
 - The developer skips the live canary (leaf workers never run `harnez agent`); the host runs
   it after the commit.
+
+## M1 delivered (7204a93) — review findings, M2 Pre-Work / Required Refinements
+
+M1 moved aliases to `spec/agent.yaml` (+schema), added `codex:terra` and current Claude aliases,
+and passes `-c model_reasoning_effort` on `exec`. Review found:
+
+1. **Blocking — resume hard-codes medium.** `codexResumeArgs` always appends
+   `model_reasoning_effort=medium`, so every resumed `luna:low` session now runs at medium
+   (more quota), and `luna:high` resumes at medium. Resume must use the session's own tier:
+   thread the stored session model into the Codex resume path. If the tier is unknown (old
+   session records), omit the flag so Codex falls back to `config.toml`. Tests: resume of a
+   `low` session passes `low`, `med` passes `medium`, unknown passes no `-c` flag. Restore
+   `TestCodexResumeUsesSameSandboxAsRun` to assert the sandbox flags only (its intent), and
+   put the effort assertions in their own test.
+2. **`parseAgentSpec` mutates the package global** `modelAliases` as a side effect of parsing,
+   so parsing a test spec changes model resolution for everything after it. Load aliases once
+   (`sync.Once` from the embedded spec) and keep `parseAgentSpec` pure (return the models in
+   `agentSpec`; the loader assigns them).
+3. **Swallowed errors.** `KnownModels` and `modelAliasName` ignore the load error; with
+   `sync.Once` an embedded-spec failure should panic at init or surface once, not yield an
+   empty list silently.
