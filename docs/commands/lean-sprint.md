@@ -2,7 +2,8 @@
 
 Orchestrate a lean, milestone-driven developer handoff with strict zero-coding review loops and single-ticket pre-work batching.
 
-- Preflight: confirm task scope, acceptance criteria, and verification commands before dispatch.
+- Preflight: confirm the ticket premise still holds on HEAD by grepping named files/strings and using `harnez read`.
+  If already done or obsolete, close the ticket with the finding and dispatch no developer.
 
 Reference Practice: `@docs/AgenticLoop.md`
 
