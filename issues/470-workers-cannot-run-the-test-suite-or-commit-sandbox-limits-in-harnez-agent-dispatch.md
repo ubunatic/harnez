@@ -1,6 +1,6 @@
 # 470 — Workers cannot run the test suite or commit: sandbox limits in `harnez agent` dispatch
 
-**Status**: Open
+**Status**: Closed — resumed workers now run with the same sandbox bypass as start (1c3f49a); developers ran go test, make install and committed; Quota-1 stays enforced and is documented in OrchestratedAgentFlow.md
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agent dispatch / Workflow
