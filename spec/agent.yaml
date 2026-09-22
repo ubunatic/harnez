@@ -37,8 +37,6 @@ roles:
       (`harnez agent delete --name <n>`).
       If resuming a helper fails, write the follow-up into the ticket and start a fresh helper instead of retrying.
       When codex has no quota, use agy:flash38 as the cross-vendor reviewer.
-      If resuming a helper fails, write the follow-up into the ticket and start a fresh helper instead of retrying.
-      When codex has no quota, use agy:flash38 as the cross-vendor reviewer.
   developer:
     spawns: []
     rules: >-

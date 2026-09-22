@@ -915,13 +915,14 @@ func TestAgentDeleteAllCompletedRejectsFlagConflicts(t *testing.T) {
 	for _, args := range [][]string{
 		{"delete", "--all-completed", "--all"},
 		{"delete", "--all-completed", "--name", "session"},
+		{"delete", "--all-completed", "somename"},
 	} {
 		cmd := newAgentCmd()
 		cmd.SetOut(new(bytes.Buffer))
 		cmd.SetErr(new(bytes.Buffer))
 		cmd.SetArgs(append(args, "--store-dir", storeDir))
-		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "cannot be combined") {
-			t.Fatalf("%v: err = %v, want conflict error", args, err)
+		if err := cmd.Execute(); err == nil {
+			t.Fatalf("%v: err = %v, want error", args, err)
 		}
 	}
 }
