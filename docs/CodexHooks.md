@@ -69,6 +69,16 @@ Codex also accepts the legacy blocking form:
 rewritten command is routed through `harnez exec`; the hook itself does not
 execute the command or write telemetry.
 
+**Ownership.** `~/.codex/hooks.json` is shared with the user. A matcher group
+is harnez-owned only when every handler command is `harnez` or starts with
+`harnez `. `codex.Apply` keeps user groups per event and replaces only the
+harnez groups; `codex.Remove` deletes only harnez groups (and the legacy
+`HookName` entry), drops `features.hooks` only when no hooks remain, and
+deletes the file only when it is empty; `codex.Status` compares a harnez-only
+projection, so user groups never count as drift. Before commit `02c9a0b`,
+Remove deleted whole event tables, including user hooks. The same ownership
+rule drives component removal (docs/HarnezComponents.md §8.4).
+
 ## Lifecycle schemas and telemetry findings
 
 The official Codex hook contract documents these common input keys for command
