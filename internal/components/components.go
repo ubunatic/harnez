@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"ubunatic.com/harnez/internal/claude"
 )
 
 // Component names one separable part of what `harnez apply` installs.
@@ -128,6 +130,21 @@ func Resolve(flag, config, local []string) (Set, error) {
 	return nil, nil
 }
 
+// ValidateConfig rejects component names that cannot be resolved by apply.
+func ValidateConfig(cfg *claude.Config) error {
+	if _, err := Parse(cfg.ComponentNames...); err != nil {
+		return fmt.Errorf("config components: %w", err)
+	}
+	for _, skill := range cfg.Skills {
+		for _, name := range skill.Requires {
+			if !slices.Contains(All, Component(name)) {
+				return fmt.Errorf("skill %q requires unknown component %q", skill.Name, name)
+			}
+		}
+	}
+	return nil
+}
+
 // IsHarnezCommand reports whether a hook or status line command invokes the
 // harnez binary. Only such entries are harnez-owned and may be removed.
 func IsHarnezCommand(cmd string) bool {
@@ -141,4 +158,10 @@ func requiredComponents(names []string) []Component {
 		components[i] = Component(name)
 	}
 	return components
+}
+
+// HasComponent lets internal/claude consume a resolved selection without
+// importing this package and creating an import cycle.
+func (s Set) HasComponent(name string) bool {
+	return s.Has(Component(name))
 }

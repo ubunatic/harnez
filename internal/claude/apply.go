@@ -860,13 +860,20 @@ func mergeDocs(fromConfig, fromFlag []string) []string {
 // ApplyAll installs the managed configuration into target, always using the
 // full doc source. See ApplyAllVariant to select a lite_source variant.
 func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool, installShell ...bool) error {
-	return ApplyAllVariant(target, cfg, docs, forceDocs, installSystemd, "", installShell...)
+	return ApplyAllVariant(target, cfg, nil, docs, forceDocs, installSystemd, "", installShell...)
+}
+
+// ComponentSelection is the resolved component set for an apply operation.
+// It is deliberately an interface so the component resolver can remain
+// outside this package without creating an import cycle.
+type ComponentSelection interface {
+	HasComponent(string) bool
 }
 
 // ApplyAllVariant is ApplyAll with an explicit doc variant ("" or "lite")
 // selecting which source (Language.SourceFor) is installed for docs that
 // declare a lite_source.
-func ApplyAllVariant(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool, docVariant string, installShell ...bool) error {
+func ApplyAllVariant(target string, cfg *Config, _ ComponentSelection, docs []string, forceDocs bool, installSystemd bool, docVariant string, installShell ...bool) error {
 	shellOpt := len(installShell) > 0 && installShell[0]
 	docs = expandDocNames(cfg, docs)
 	if err := validateDocNames(cfg, docs); err != nil {

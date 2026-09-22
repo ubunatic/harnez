@@ -93,6 +93,22 @@ func TestEnsureTelemetrySchemaNoOpBeforeApply(t *testing.T) {
 	}
 }
 
+func TestApplyComponentsDocsOnlySkipsTelemetrySchema(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("HARNEZ_DISABLE_RATE_FEEDBACK", "")
+	target := filepath.Join(home, ".claude")
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"apply", "--components", "docs-only", "--target", target})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("apply --components docs-only: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".harnez", "tool_catalog.sqlite")); !os.IsNotExist(err) {
+		t.Fatalf("docs-only created telemetry DB, stat error = %v", err)
+	}
+}
+
 func TestApplyCmdMigratesLegacyCompactionSchema(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -17,6 +17,7 @@ import (
 	"ubunatic.com/harnez/internal/assess"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/codex"
+	"ubunatic.com/harnez/internal/components"
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/sessionstate"
@@ -115,6 +116,13 @@ func underAgentCommand(cmd *cobra.Command) bool {
 		}
 	}
 	return false
+}
+
+func resolveComponentSelection(cfg *claude.Config, flag []string) (components.Set, error) {
+	if err := components.ValidateConfig(cfg); err != nil {
+		return nil, err
+	}
+	return components.Resolve(flag, cfg.ComponentNames, nil)
 }
 
 // resolveUsageHost decides the effective --host value for `harnez usage`:
@@ -503,6 +511,7 @@ func newRootCmd() *cobra.Command {
 	var applySystemd bool
 	var applyShell bool
 	var applyVariant string
+	var componentNames []string
 	var debloat bool
 	var debloatPreset string
 	var debloatNotebookEdit bool
@@ -518,12 +527,18 @@ func newRootCmd() *cobra.Command {
 		Use:   "apply",
 		Short: "Apply config.yaml to global Claude Code and agent harness directories",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := ensureTelemetrySchema(); err != nil {
-				return fmt.Errorf("initialize telemetry: %w", err)
-			}
 			cfg, name, err := claude.OpenConfig(configPath)
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
+			}
+			set, err := resolveComponentSelection(cfg, componentNames)
+			if err != nil {
+				return err
+			}
+			if set.Has(components.Telemetry) {
+				if err := ensureTelemetrySchema(); err != nil {
+					return fmt.Errorf("initialize telemetry: %w", err)
+				}
 			}
 			if codexTarget != "" {
 				cfg.CodexHooksTarget = codexTarget
@@ -531,6 +546,7 @@ func newRootCmd() *cobra.Command {
 			if agyTarget != "" {
 				cfg.AgyTarget = agyTarget
 			}
+			filtered := components.Filter(cfg, set)
 			if (debloat || debloatPreset != "") && len(cfg.Debloat.CodexFeatures) > 0 && cfg.CodexHooksTarget == "" {
 				return fmt.Errorf("codex_hooks_target is required for Codex debloat")
 			}
@@ -545,7 +561,7 @@ func newRootCmd() *cobra.Command {
 					return err
 				}
 			}
-			if err := claude.ApplyAllVariant(t, cfg, applyDocs, forceDocs, applySystemd, applyVariant, applyShell); err != nil {
+			if err := claude.ApplyAllVariant(t, filtered, set, applyDocs, forceDocs, applySystemd, applyVariant, applyShell); err != nil {
 				return err
 			}
 			opts := claude.DebloatOptions{
@@ -598,6 +614,7 @@ func newRootCmd() *cobra.Command {
 	}
 	apply.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	apply.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
+	apply.Flags().StringSliceVar(&componentNames, "components", nil, "component(s) to install, comma-separated or repeated (e.g. docs-only,telemetry)")
 	apply.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
 	apply.Flags().StringVar(&agyTarget, "agy-target", "", "Antigravity config directory (default: agy_target from config.yaml)")
 	apply.Flags().StringSliceVarP(&applyDocs, "docs", "d", nil, "doc(s) to install globally, comma-separated or repeated (e.g. golang,canary,all)")
@@ -633,6 +650,10 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
+			set, err := resolveComponentSelection(cfg, componentNames)
+			if err != nil {
+				return err
+			}
 			if captureOutput != "" && !captureDocs {
 				return fmt.Errorf("--out requires --capture-docs")
 			}
@@ -652,7 +673,7 @@ func newRootCmd() *cobra.Command {
 				return nil
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
-			changed, err := claude.DiffAll(t, cfg)
+			changed, err := claude.DiffAll(t, components.Filter(cfg, set))
 			if err != nil {
 				return err
 			}
@@ -664,6 +685,7 @@ func newRootCmd() *cobra.Command {
 	}
 	diff.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	diff.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
+	diff.Flags().StringSliceVar(&componentNames, "components", nil, "component(s) to inspect, comma-separated or repeated (e.g. docs-only,telemetry)")
 	diff.Flags().BoolVarP(&diffExitCode, "exit-code", "e", false, "exit with status 1 if drift/changes are found")
 	diff.Flags().BoolVar(&captureDocs, "capture-docs", false, "write configured project-doc drift to an inbox Markdown report")
 	diff.Flags().StringVar(&captureOutput, "out", "", "output path for --capture-docs (default: issues/inbox/managed-docs-drift-<timestamp>.md)")
@@ -714,6 +736,10 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
+			set, err := resolveComponentSelection(cfg, componentNames)
+			if err != nil {
+				return err
+			}
 			if codexTarget != "" {
 				cfg.CodexHooksTarget = codexTarget
 			}
@@ -740,11 +766,12 @@ func newRootCmd() *cobra.Command {
 				}
 				return nil
 			}
-			return claude.RunStatus(name, cfg, t)
+			return claude.RunStatus(name, components.Filter(cfg, set), t)
 		},
 	}
 	status.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	status.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
+	status.Flags().StringSliceVar(&componentNames, "components", nil, "component(s) to inspect, comma-separated or repeated (e.g. docs-only,telemetry)")
 	status.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
 	status.Flags().StringVar(&agyTarget, "agy-target", "", "Antigravity config directory (default: agy_target from config.yaml)")
 	status.Flags().BoolVar(&statusDebloat, "debloat", false, "show debloat-managed deny entries and toggles instead of full status (issue 316)")

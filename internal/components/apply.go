@@ -74,7 +74,7 @@ func Apply(target string, cfg *claude.Config, set Set, opts Options) ([]string, 
 		variant = "full"
 	}
 	filtered := Filter(cfg, set)
-	if err := claude.ApplyAllVariant(target, filtered, docs, opts.ForceDocs,
+	if err := claude.ApplyAllVariant(target, filtered, set, docs, opts.ForceDocs,
 		opts.InstallSystemd && set.Has(Usage), variant, opts.InstallShell); err != nil {
 		return nil, err
 	}

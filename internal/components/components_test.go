@@ -75,6 +75,25 @@ func TestResolvePrecedence(t *testing.T) {
 	}
 }
 
+func TestValidateConfigRejectsUnknownComponents(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  *claude.Config
+		want string
+	}{
+		{"config", &claude.Config{ComponentNames: []string{"telemtry"}}, "telemtry"},
+		{"requirement", &claude.Config{Skills: []claude.Command{{Name: "broken", Requires: []string{"telemtry"}}}}, "skill \"broken\""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateConfig(tc.cfg)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("ValidateConfig() error = %v, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func hookEntry(cmds ...string) map[string]any {
 	var hs []any
 	for _, c := range cmds {
