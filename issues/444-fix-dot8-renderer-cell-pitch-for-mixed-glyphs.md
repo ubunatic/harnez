@@ -1,6 +1,6 @@
 # 444 — Fix Dot8 renderer cell pitch for mixed glyphs
 
-**Status**: Open
+**Status**: Blocked — Dot8 experiment on hold; see 444
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -39,3 +39,17 @@ special-glyph matrices are preserved. Tune these matrices here before changing t
 renderer pitch. `Dot8Encode` still translates letters and digits to Braille, while
 punctuation, symbols, box drawing, arrows, superscripts, and other copied characters
 remain ordinary 3×5 glyphs and are the main tuning surface.
+
+## On hold (2026-09-22)
+
+The Dot8 experiment is parked: the token benchmark found braille characters split
+under the tokenizer, so the compression is not worth the tokenizer penalty (see
+`docs/studies/2026-09-20-dot8-braille-vs-markdown-and-multimodal-context-card-token-benchmarks.md`),
+and no agent has passed a clean reading canary (haiku failed outright, codex timed
+out). This ticket is the unfixed P1 at the root of the whole chain — nothing below it
+(447, 459, 441, 436, 440) should move until it lands. The CLI surface is disabled in
+the meantime: `--dot8`, `--dot8-colors`, and `--dot8-pitch` are hidden and error out
+unless `HARNEZ_DOT8=1` is set (`cmd/harnez/read.go`), and the exported `Dot8Encode`,
+`Dot8Decode`, `Dot8RoundTripCheck`, and `Dot8CheckDocument` functions in
+`internal/readcard/dot8.go` are marked `Deprecated:`. Resume once this pitch fix
+lands and a clean 3x4 readability canary passes 3/3 on at least two agents.
