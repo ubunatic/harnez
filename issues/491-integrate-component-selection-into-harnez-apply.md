@@ -1,6 +1,6 @@
 # 491 — Integrate component selection into harnez apply
 
-**Status**: Open
+**Status**: Closed — component selection integrated into apply/diff/status: config keys, --components, single settings write, requires-driven removal, Codex/AGY by telemetry, MVP deleted; CLI e2e test (f9ef081, f7feb46, 62dfa3d, 3e4822f, 8918864, 0d418ee)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
