@@ -54,3 +54,42 @@ Project-level selection belongs to `init` (494), not this ticket.
 - [ ] Unfiltered apply output byte-identical to before (existing test pattern)
 - [ ] Each preset boots on an empty target; presets compose by union
 - [ ] `scripts/smoke-test.sh` passes; `make install`
+
+## Pre-Work (lean sprint, 2026-09-22)
+
+Advisors terra:low and sonnet agreed on the cut; code claims below were checked on HEAD.
+
+**Milestones** (one commit each, `(issue 491 M<n>)`):
+
+1. **M1 — config keys, no behavior change.** `Config.ComponentNames` (`components:`),
+   `Command.Requires` (`requires:`) in `internal/claude/config.go`; `requires: [telemetry]` on
+   `tool-feedback-protocol` in `config.yaml`; retarget `internal/components` to read them and
+   drop `components.SkillRequires` (`internal/components/components.go:138`). Existing
+   `internal/components` tests stay green; add a config round-trip test.
+2. **M2 — flag and schema gating.** `apply --components <names>` (presets and names mix),
+   resolved once and shared by `apply`/`diff`/`status`. `ensureTelemetrySchema()` runs before
+   `claude.OpenConfig` today (`cmd/harnez/main.go:521-523`): reorder so the selection exists
+   first, then gate it on `telemetry`. `ApplyAllVariant` (`internal/claude/apply.go:869`) takes
+   the resolved set. Tests: unfiltered `settings.json` byte-identical to before;
+   `--components docs-only` on an empty target creates no telemetry DB.
+3. **M3 — single-write settings removal (review seam).** Fold removal into
+   `buildSettingsDoc` (`apply.go:118`) / `applyMerge` (`apply.go:79`): a key is removed only if it
+   is in `managedSettingsKeys` (`apply.go:98`), never because a value is nil alone; strip any
+   sentinel before marshal so no `null` lands in the file. `buildSettingsDoc` omits `hooks`
+   when empty: under a selection, write `hooks` explicitly so managed hooks get removed.
+   `diffSettingsJSON` (`apply.go:203`) must apply the same removal. Delete
+   `components.PruneSettings`. Tests: full → docs-only → full equals a fresh full apply
+   byte for byte; user keys (permissions entries, `mcpServers`, a user hook, a user status
+   line) survive docs-only; `DiffAll` is clean after a selected apply.
+4. **M4 — skills, Codex/AGY, retire the MVP.** Generalize the rate-feedback removal branch
+   (`apply.go:921`) to unmet `requires:`, removing `SKILL.md` *and* the skill's resource files
+   (reuse `skillTargets`). Codex/AGY: `Apply` with `telemetry`, `Remove` without; their
+   `Remove` is already ownership-aware (02c9a0b), don't re-implement it. `DiffAll`
+   (`apply.go:1210`) must check Codex/AGY under a selection with the same resolved set, not
+   skip them because the filtered config blanked their targets. Move the `internal/components`
+   tests onto `claude.ApplyAll*`/`DiffAll`, delete the package and `scripts/canary-components`.
+   `scripts/smoke-test.sh` passes; `make install`.
+
+**Out of scope:** dispatch-mode clamping (493), project-level selection (494), persisting the
+selection to local config (§8.10, needs `LoadLocalConfig` moved). The MVP's "open" comment
+about `requires: [agents]` on sprint skills is stale (§8.9): don't add it.
