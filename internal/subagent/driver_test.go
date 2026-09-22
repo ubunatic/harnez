@@ -65,12 +65,35 @@ func TestCodexPassesReasoningEffort(t *testing.T) {
 		t.Fatalf("run args = %q, want %q", got, want)
 	}
 
-	if _, err := d.Resume(context.Background(), "t1", "continue"); err != nil {
+	if _, err := d.ResumeWithModel(context.Background(), "t1", "continue", Model{Tier: "low"}); err != nil {
 		t.Fatal(err)
 	}
-	want = []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_reasoning_effort=medium", "continue"}
+	want = []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_reasoning_effort=low", "continue"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("resume args = %q, want %q", got, want)
+	}
+}
+
+func TestCodexResumeEffortTiersAndUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		tier   string
+		want   bool
+		effort string
+	}{
+		{"low", true, "low"}, {"med", true, "medium"}, {"high", true, "high"}, {"", false, ""},
+	} {
+		var got []string
+		d := CodexDriver{Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+			got = args
+			return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}` + "\n"), nil
+		}}
+		if _, err := d.ResumeWithModel(context.Background(), "t1", "continue", Model{Tier: tc.tier}); err != nil {
+			t.Fatal(err)
+		}
+		has := strings.Contains(strings.Join(got, " "), "model_reasoning_effort=")
+		if has != tc.want || has && !strings.Contains(strings.Join(got, " "), "model_reasoning_effort="+tc.effort) {
+			t.Fatalf("tier %q args=%q", tc.tier, got)
+		}
 	}
 }
 
@@ -197,7 +220,7 @@ func TestCodexResumeUsesSameSandboxAsRun(t *testing.T) {
 	if _, err := d.Resume(context.Background(), "t1", "go"); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_reasoning_effort=medium", "go"}
+	want := []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "go"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("resume args = %q, want %q", got, want)
 	}

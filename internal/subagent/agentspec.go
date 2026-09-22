@@ -34,13 +34,19 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	if strings.TrimSpace(spec.DefaultModel) == "" {
 		return agentSpec{}, fmt.Errorf("agent spec: default_model is required")
 	}
-	if len(spec.Models) > 0 {
-		modelAliases = spec.Models
-	} else if err := ensureModelAliases(); err != nil {
-		return agentSpec{}, err
+	parts := strings.Split(spec.DefaultModel, ":")
+	models := spec.Models
+	if len(models) == 0 {
+		if err := ensureModelAliases(); err != nil {
+			return agentSpec{}, err
+		}
+		models = modelAliases
 	}
-	if _, err := ResolveModel(spec.DefaultModel); err != nil {
-		return agentSpec{}, fmt.Errorf("agent spec: default_model: %w", err)
+	if len(parts) < 2 || models[parts[0]+":"+parts[1]].Name == "" {
+		return agentSpec{}, fmt.Errorf("agent spec: default_model: unknown model %q", spec.DefaultModel)
+	}
+	if len(parts) == 3 && parts[2] != "low" && parts[2] != "med" && parts[2] != "high" {
+		return agentSpec{}, fmt.Errorf("agent spec: default_model: unknown tier %q", parts[2])
 	}
 	if err := validateRoles(spec); err != nil {
 		return agentSpec{}, err
@@ -71,7 +77,11 @@ func loadAgentSpec() (agentSpec, error) {
 	if err != nil {
 		return agentSpec{}, fmt.Errorf("agent spec: read %s: %w", agentSpecPath, err)
 	}
-	return parseAgentSpec(data)
+	spec, err := parseAgentSpec(data)
+	if err == nil {
+		modelAliases = spec.Models
+	}
+	return spec, err
 }
 
 var agentSpecOnce = sync.OnceValues(loadAgentSpec)

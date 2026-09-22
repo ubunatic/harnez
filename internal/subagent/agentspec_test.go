@@ -86,3 +86,14 @@ func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestParseAgentSpecDoesNotMutateModelAliases(t *testing.T) {
+	before := KnownModels()
+	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\ndefault_role: a\nmodels:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {spawns: [], rules: fine}\n")); err != nil {
+		t.Fatal(err)
+	}
+	after := KnownModels()
+	if len(before) != len(after) {
+		t.Fatalf("parse mutated aliases: before=%d after=%d", len(before), len(after))
+	}
+}

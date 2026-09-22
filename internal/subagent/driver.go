@@ -71,7 +71,9 @@ var modelAliases map[string]Model
 
 // KnownModels returns the configured shorthand specifications in stable order.
 func KnownModels() []Model {
-	_ = ensureModelAliases()
+	if err := ensureModelAliases(); err != nil {
+		panic(err)
+	}
 	keys := make([]string, 0, len(modelAliases))
 	for key := range modelAliases {
 		keys = append(keys, key)
@@ -89,7 +91,9 @@ func (m Model) Spec() string {
 }
 
 func modelAliasName(m Model) string {
-	_ = ensureModelAliases()
+	if err := ensureModelAliases(); err != nil {
+		panic(err)
+	}
 	for key, candidate := range modelAliases {
 		if candidate == m {
 			return strings.TrimPrefix(key, m.Provider+":")

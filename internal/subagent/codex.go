@@ -74,15 +74,22 @@ func codexRunArgs(model Model, prompt string) []string {
 // codexResumeArgs mirrors the sandbox settings of Run: a resumed worker must
 // not fall back to Codex's default sandbox (read-only tool caches, no sockets,
 // no git writes) and must work outside a trusted git directory.
-func codexResumeArgs(id, prompt string) []string {
-	return []string{"exec", "resume", id, "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_reasoning_effort=medium", prompt}
+func codexResumeArgs(id, prompt string, tier ...string) []string {
+	args := []string{"exec", "resume", id, "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check"}
+	if len(tier) > 0 && codexEffort(tier[0]) != "" {
+		args = append(args, "-c", "model_reasoning_effort="+codexEffort(tier[0]))
+	}
+	return append(args, prompt)
 }
 
 func (d CodexDriver) Resume(ctx context.Context, id, prompt string) (*TurnResult, error) {
 	return d.runResume(ctx, id, prompt)
 }
-func (d CodexDriver) runResume(ctx context.Context, id, prompt string) (*TurnResult, error) {
-	b, err := d.command(ctx, codexResumeArgs(id, prompt)...)
+func (d CodexDriver) ResumeWithModel(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
+	return d.runResume(ctx, id, prompt, model.Tier)
+}
+func (d CodexDriver) runResume(ctx context.Context, id, prompt string, tier ...string) (*TurnResult, error) {
+	b, err := d.command(ctx, codexResumeArgs(id, prompt, tier...)...)
 	if err != nil {
 		return nil, fmt.Errorf("codex resume: %w", err)
 	}
@@ -250,6 +257,13 @@ func (d CodexDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) 
 
 func (d CodexDriver) ResumeStream(ctx context.Context, id, prompt string, fn EventFunc) (*TurnResult, error) {
 	r, err := d.stream(ctx, fn, codexResumeArgs(id, prompt)...)
+	if err != nil {
+		return nil, fmt.Errorf("codex resume: %w", err)
+	}
+	return r, nil
+}
+func (d CodexDriver) ResumeStreamWithModel(ctx context.Context, id, prompt string, model Model, fn EventFunc) (*TurnResult, error) {
+	r, err := d.stream(ctx, fn, codexResumeArgs(id, prompt, model.Tier)...)
 	if err != nil {
 		return nil, fmt.Errorf("codex resume: %w", err)
 	}
