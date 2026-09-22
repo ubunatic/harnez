@@ -32,31 +32,6 @@ func TestToolFeedbackProtocolConfigEntry(t *testing.T) {
 	}
 }
 
-func TestToolFeedbackProtocolGlobalIsCompactPointer(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
-	var found *MDSection
-	for i := range cfg.AgentsMD.Global.Sections {
-		if cfg.AgentsMD.Global.Sections[i].Name == "Tool Feedback Protocol" {
-			found = &cfg.AgentsMD.Global.Sections[i]
-			break
-		}
-	}
-	if found == nil {
-		t.Fatal("expected global Tool Feedback Protocol section")
-	}
-	for _, want := range []string{"harnez rate <tool_name> <1-5>", "Score 5", "harnez rate --ok", "tool-feedback-protocol` Skill", "Prime Agent"} {
-		if !strings.Contains(found.Content, want) {
-			t.Errorf("global protocol missing %q: %s", want, found.Content)
-		}
-	}
-	if strings.Contains(found.Content, "harnez rate Grep 1") || strings.Contains(found.Content, "HARNEZ_EXPECT_FAILURE") {
-		t.Errorf("global protocol contains Skill-only worked-example detail: %s", found.Content)
-	}
-}
-
 func TestApplyInstallsToolFeedbackProtocol(t *testing.T) {
 	targetDir := t.TempDir()
 

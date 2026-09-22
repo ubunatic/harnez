@@ -456,21 +456,6 @@ skills:
       than inventing a ticket path.
 
 agents_md:
-  global:
-    sections:
-      - name: Tool Feedback Protocol
-        rate_feedback: true
-        content: |
-          ## Tool Feedback Protocol
-
-          In a harnez-tracked project, rate only failed or unexpectedly ineffective tool calls:
-          `harnez rate <tool_name> <1-5> "<1-line outcome summary>" "<project_folder>/<ticket_name>"`.
-          Score 5 = flawless, 3 = partial success / adjustment needed, 1 = total failure.
-          If a harnez tip asks for confirmation after a quiet stretch and nothing failed, use
-          `harnez rate --ok`. The full worked example and expected-failure rules live in the
-          `tool-feedback-protocol` Skill; this compact section remains self-sufficient for
-          Prime Agent, which has no Skill delivery.
-
   # config for local md file
   local:
     target: AGENTS.md
