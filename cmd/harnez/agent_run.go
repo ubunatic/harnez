@@ -118,7 +118,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	opts := subagent.RunOptions{Prompt: req.Prompt, Model: m, Dir: canonicalWorkDir}
 	parentID := d.parent() // read before the child's environment replaces it
 	defer setAgentEnv(role, sessName)()
-	driver := agentDriver(m)
+	driver := agentDriver(m, canonicalWorkDir)
 	sd, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
 	var ts *turnStream
@@ -216,7 +216,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if sess.HarnessType == "interactive" && sess.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)
 	}
-	driver := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
+	driver := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir)
 	if checker, ok := driver.(subagent.ResumeChecker); ok {
 		if resumable, reason := checker.CheckResumable(sess.ProviderID()); !resumable {
 			return fmt.Errorf("session %q cannot be resumed: %s; start a new session with: harnez agent start --name <new-name> ...", sess.Name, reason)
@@ -304,7 +304,7 @@ func compactSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagen
 	if x.HarnessType == "interactive" && x.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be compacted: %s did not expose a provider session ID", x.Name, x.Provider)
 	}
-	_, err := agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}).Compact(cmd.Context(), x.ProviderID())
+	_, err := agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}, x.WorkingDir).Compact(cmd.Context(), x.ProviderID())
 	return err
 }
 
@@ -320,7 +320,7 @@ func stopSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagent.S
 		x.LastActiveAt = time.Now()
 		return s.Save(x)
 	}
-	err := agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Stop(cmd.Context(), x.ProviderID())
+	err := agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Stop(cmd.Context(), x.ProviderID())
 	x.Status = "stopped"
 	if err == nil {
 		err = s.Save(x)

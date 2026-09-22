@@ -17,12 +17,14 @@ import (
 	"ubunatic.com/harnez/internal/subagent"
 )
 
-var agentDriver = func(m subagent.Model) subagent.Driver {
+var agentDriver = func(m subagent.Model, dir string) subagent.Driver {
 	switch m.Provider {
 	case "claude":
 		return subagent.ClaudeDriver{}
 	case "codex":
 		return subagent.CodexDriver{}
+	case "agy":
+		return subagent.AgyDriver{Dir: dir}
 	default:
 		return subagent.UnsupportedDriver{Provider: m.Provider}
 	}
@@ -501,7 +503,7 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 					}
 					x.Status = "stopped"
 				} else {
-					if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Stop(cmd.Context(), x.ProviderID()); e != nil {
+					if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Stop(cmd.Context(), x.ProviderID()); e != nil {
 						return e
 					}
 					x.Status = "stopped"
@@ -526,7 +528,7 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 					_ = s.Save(x)
 					continue
 				}
-				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Stop(cmd.Context(), x.ProviderID()); e != nil {
+				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Stop(cmd.Context(), x.ProviderID()); e != nil {
 					return e
 				}
 				x.Status = "stopped"
@@ -572,7 +574,7 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 					}
 					continue
 				}
-				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Delete(cmd.Context(), x.ProviderID()); e != nil {
+				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Delete(cmd.Context(), x.ProviderID()); e != nil {
 					return e
 				}
 				if e = s.Delete(x.ID); e != nil {
@@ -597,7 +599,7 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 			}
 			return s.Delete(x.ID)
 		}
-		if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}).Delete(cmd.Context(), x.ProviderID()); e != nil {
+		if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Delete(cmd.Context(), x.ProviderID()); e != nil {
 			return e
 		}
 		return s.Delete(x.ID)
@@ -750,7 +752,7 @@ func resumeState(sess *subagent.Session) string {
 	if sess.LastError != "" {
 		return "failed"
 	}
-	d := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
+	d := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir)
 	if checker, ok := d.(subagent.ResumeChecker); ok {
 		if resumable, _ := checker.CheckResumable(sess.ProviderID()); !resumable {
 			return "terminal"

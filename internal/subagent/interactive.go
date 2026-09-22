@@ -81,7 +81,7 @@ func interactiveCommand(opts InteractiveOptions, providerID string) (string, []s
 			args = []string{"--conversation", providerID, "--model", opts.Model.Name}
 		}
 		if opts.Model.Tier != "" {
-			args = append(args, "--effort", opts.Model.Tier)
+			args = append(args, "--effort", agyEffort(opts.Model.Tier))
 		}
 	default:
 		return "", nil, fmt.Errorf("interactive chat is not supported for provider %q", opts.Model.Provider)

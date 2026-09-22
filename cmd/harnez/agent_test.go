@@ -96,14 +96,17 @@ func TestAgentModelsListsKnownSpecs(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "codex:luna:low") || !strings.Contains(out.String(), "agy:flash:low") {
+	if !strings.Contains(out.String(), "codex:luna:low") || !strings.Contains(out.String(), "agy:flash37:low") {
 		t.Fatalf("known models output = %q", out.String())
 	}
 }
 
 func TestAgentStartRejectsUnknownModelWithoutCreatingSession(t *testing.T) {
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { t.Fatal("provider driver must not be called"); return nil }
+	agentDriver = func(subagent.Model, string) subagent.Driver {
+		t.Fatal("provider driver must not be called")
+		return nil
+	}
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	cmd := newAgentCmd()
@@ -141,7 +144,7 @@ func TestAgentOldModelSpecGuard(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			old := agentDriver
 			d := &recordingAgentDriver{}
-			agentDriver = func(subagent.Model) subagent.Driver { return d }
+			agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 			defer func() { agentDriver = old }()
 			cmd := newAgentCmd()
 			var errOut bytes.Buffer
@@ -181,7 +184,7 @@ func TestAgentResumeRequiresName(t *testing.T) {
 func TestAgentStartFileOnlyAndNameCollision(t *testing.T) {
 	old := agentDriver
 	d := &recordingAgentDriver{}
-	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	file := filepath.Join(t.TempDir(), "prompt.md")
@@ -212,7 +215,10 @@ func TestAgentStartFileOnlyAndNameCollision(t *testing.T) {
 
 func TestAgentResumeModelConflict(t *testing.T) {
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { t.Fatal("provider driver must not be called"); return nil }
+	agentDriver = func(subagent.Model, string) subagent.Driver {
+		t.Fatal("provider driver must not be called")
+		return nil
+	}
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
@@ -271,7 +277,7 @@ func TestAgentChatFailureTransition(t *testing.T) {
 
 func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver {
+	agentDriver = func(subagent.Model, string) subagent.Driver {
 		t.Fatal("provider driver must not be called")
 		return nil
 	}
@@ -567,7 +573,7 @@ func TestAgentListThenResumeByDisplayedIDAndName(t *testing.T) {
 		t.Run(identifier, func(t *testing.T) {
 			old := agentDriver
 			d := &resumeOutcomeDriver{}
-			agentDriver = func(subagent.Model) subagent.Driver { return d }
+			agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 			defer func() { agentDriver = old }()
 			storeDir := t.TempDir()
 			saveResumeSession(t, storeDir, "sid", "worker", "fake")
@@ -595,7 +601,7 @@ func TestAgentListThenResumeByDisplayedIDAndName(t *testing.T) {
 func TestAgentResumeFailureRecordedAndCleared(t *testing.T) {
 	old := agentDriver
 	d := &resumeOutcomeDriver{err: errors.New("provider failed\nwith detail")}
-	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store := saveResumeSession(t, storeDir, "sid", "worker", "fake")
@@ -629,7 +635,7 @@ func TestAgentResumeFailureRecordedAndCleared(t *testing.T) {
 
 func TestAgentListResumeColumnStates(t *testing.T) {
 	old := agentDriver
-	agentDriver = func(m subagent.Model) subagent.Driver {
+	agentDriver = func(m subagent.Model, _ string) subagent.Driver {
 		d := &resumeOutcomeDriver{}
 		if m.Provider == "terminal" {
 			d.terminal = true
@@ -665,7 +671,7 @@ func TestAgentListResumeColumnStates(t *testing.T) {
 func TestAgentTerminalResumeRefusal(t *testing.T) {
 	old := agentDriver
 	d := &resumeOutcomeDriver{terminal: true}
-	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store := saveResumeSession(t, storeDir, "sid", "worker", "fake")
@@ -722,7 +728,7 @@ func TestAgentResumeMissingIdentifier(t *testing.T) {
 
 func TestAttributableOrderingAndFilters(t *testing.T) {
 	old := agentDriver
-	agentDriver = func(m subagent.Model) subagent.Driver {
+	agentDriver = func(m subagent.Model, _ string) subagent.Driver {
 		d := &resumeOutcomeDriver{}
 		d.terminal = m.Provider == "terminal"
 		return d
@@ -748,7 +754,7 @@ func TestAttributableOrderingAndFilters(t *testing.T) {
 func TestAgentResumeAttributionAndContinue(t *testing.T) {
 	old := agentDriver
 	d := &resumeOutcomeDriver{}
-	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
@@ -813,7 +819,7 @@ func TestAgentStopAndDeleteAllManageableSessions(t *testing.T) {
 	}
 	old := agentDriver
 	recorder := &recordingAgentDriver{}
-	agentDriver = func(subagent.Model) subagent.Driver { return recorder }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return recorder }
 	defer func() { agentDriver = old }()
 
 	cmd := newAgentCmd()
@@ -858,7 +864,7 @@ func TestAgentStopAndDeleteAllWithNoSessions(t *testing.T) {
 func TestAgentStartStoresCanonicalWorkingDir(t *testing.T) {
 	old := agentDriver
 	recorder := &recordingAgentDriver{}
-	agentDriver = func(subagent.Model) subagent.Driver { return recorder }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return recorder }
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	cmd := newAgentCmd()
@@ -895,7 +901,7 @@ func TestAgentResumePrintsReplyNotStructDump(t *testing.T) {
 		t.Setenv(name, "")
 	}
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { return &replyDriver{} }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return &replyDriver{} }
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
@@ -932,7 +938,7 @@ func (*ackDriver) Resume(context.Context, string, string, subagent.Model) (*suba
 
 func TestAgentResumeCompactsOnceAndSeparatesAck(t *testing.T) {
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { return &ackDriver{} }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return &ackDriver{} }
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
@@ -981,7 +987,7 @@ func (d *streamDriver) ResumeStream(_ context.Context, _, _ string, _ subagent.M
 
 func TestAgentStartStreamsLabeledBlocks(t *testing.T) {
 	old, oldSched, oldRepeat := agentDriver, heartbeatSchedule, heartbeatRepeat
-	agentDriver = func(subagent.Model) subagent.Driver { return &streamDriver{} }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return &streamDriver{} }
 	heartbeatSchedule, heartbeatRepeat = []time.Duration{20 * time.Millisecond}, 20*time.Millisecond
 	defer func() { agentDriver, heartbeatSchedule, heartbeatRepeat = old, oldSched, oldRepeat }()
 	var out bytes.Buffer
@@ -1009,7 +1015,7 @@ func TestAgentStartStreamsLabeledBlocks(t *testing.T) {
 
 func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { return &streamDriver{} }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return &streamDriver{} }
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
@@ -1041,7 +1047,7 @@ func TestHeartbeatSchedule(t *testing.T) {
 
 func TestAgentStartStatsModeShowsOnlyHeartbeatsAndReply(t *testing.T) {
 	old, oldSched, oldRepeat := agentDriver, heartbeatSchedule, heartbeatRepeat
-	agentDriver = func(subagent.Model) subagent.Driver { return &streamDriver{} }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return &streamDriver{} }
 	heartbeatSchedule, heartbeatRepeat = []time.Duration{20 * time.Millisecond}, 20*time.Millisecond
 	defer func() { agentDriver, heartbeatSchedule, heartbeatRepeat = old, oldSched, oldRepeat }()
 	var out bytes.Buffer
@@ -1095,7 +1101,7 @@ func TestTokenSummarySeparatesNewFromCached(t *testing.T) {
 
 func TestStreamingResumeKeepsStderrQuiet(t *testing.T) {
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { return &streamDriver{} }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return &streamDriver{} }
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
@@ -1161,7 +1167,7 @@ func (d *scriptDriver) ResumeStream(_ context.Context, id, p string, _ subagent.
 func runScripted(t *testing.T, d *scriptDriver, args ...string) string {
 	t.Helper()
 	old, oldTimeout := agentDriver, confirmTimeout
-	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 	confirmTimeout = 30 * time.Millisecond
 	defer func() { agentDriver, confirmTimeout = old, oldTimeout }()
 	var out bytes.Buffer
@@ -1212,7 +1218,7 @@ func TestPromptGetsProtocolButStoredPromptStaysOriginal(t *testing.T) {
 	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
 	storeDir := t.TempDir()
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 	defer func() { agentDriver = old }()
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
@@ -1319,7 +1325,7 @@ func TestNormalTurnHasNoPlanFirstText(t *testing.T) {
 func runWithStore(t *testing.T, d subagent.Driver, storeDir string, args ...string) (string, error) {
 	t.Helper()
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 	defer func() { agentDriver = old }()
 	var out bytes.Buffer
 	cmd := newAgentCmd()
@@ -1437,7 +1443,7 @@ func TestRunStartWithoutCobraFlags(t *testing.T) {
 	storeDir := t.TempDir()
 	driver := &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "direct-start"}}, {ev: msg("CONFIRM: ready")}, {ev: msg("done")}}}
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { return driver }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
 	defer func() { agentDriver = old }()
 	store, err := subagent.NewSessionStore(storeDir)
 	if err != nil {
@@ -1471,7 +1477,7 @@ func TestRunResumeWithoutCobraFlags(t *testing.T) {
 	}
 	driver := &scriptDriver{steps: []step{{ev: msg("CONFIRM: resumed")}, {ev: msg("done")}}}
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { return driver }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
 	defer func() { agentDriver = old }()
 	var out bytes.Buffer
 	cmd := &cobra.Command{}
@@ -1612,7 +1618,7 @@ func TestAgentRootSlashCompactIntercepts(t *testing.T) {
 	saveSessions(t, dir, &subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: "."})
 	d := &slashDriver{}
 	old := agentDriver
-	agentDriver = func(subagent.Model) subagent.Driver { return d }
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 	defer func() { agentDriver = old }()
 	if _, err := runWithStore(t, d, dir, "-p", "/compact"); err != nil {
 		t.Fatal(err)
@@ -1629,7 +1635,7 @@ func TestAgentRootSlashStatusAndStop(t *testing.T) {
 			saveSessions(t, dir, &subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: "."})
 			d := &slashDriver{}
 			old := agentDriver
-			agentDriver = func(subagent.Model) subagent.Driver { return d }
+			agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 			defer func() { agentDriver = old }()
 			out, err := runWithStore(t, d, dir, "-p", command)
 			if err != nil {

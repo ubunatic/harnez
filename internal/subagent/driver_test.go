@@ -40,7 +40,7 @@ func TestCodexCheckResumable(t *testing.T) {
 }
 
 func TestResolveModel(t *testing.T) {
-	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-5.6-luna", "low"}, {"codex:terra", "codex", "gpt-5.6-terra", "low"}, {"claude:haiku", "claude", "haiku", "low"}, {"claude:sonnet", "claude", "sonnet", "low"}, {"claude:opus", "claude", "opus", "low"}, {"claude:haiku:latest", "claude", "haiku", "low"}, {"agy:flash:low", "agy", "gemini-3.7-flash", "low"}} {
+	for _, tc := range []struct{ spec, provider, name, tier string }{{"codex:luna:low", "codex", "gpt-5.6-luna", "low"}, {"codex:terra", "codex", "gpt-5.6-terra", "low"}, {"claude:haiku", "claude", "haiku", "low"}, {"claude:sonnet", "claude", "sonnet", "low"}, {"claude:opus", "claude", "opus", "low"}, {"claude:haiku:latest", "claude", "haiku", "low"}, {"agy:flash37:low", "agy", "gemini-3.7-flash", "low"}} {
 		m, err := ResolveModel(tc.spec)
 		if err != nil {
 			t.Fatal(err)

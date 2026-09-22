@@ -28,13 +28,28 @@ func TestParseAgentSpecRejectsBadDefault(t *testing.T) {
 }
 
 func TestResolveModelBareAliases(t *testing.T) {
-	for _, alias := range []string{"luna", "sol", "astra", "haiku", "sonnet", "opus", "flash"} {
+	for _, alias := range []string{"luna", "sol", "astra", "haiku", "flash37", "flash38"} {
 		if _, err := ResolveModel(alias); err != nil {
 			t.Errorf("alias %q: %v", alias, err)
 		}
 	}
 	if _, err := ResolveModel("unknown"); err == nil {
 		t.Fatal("unknown alias unexpectedly resolved")
+	}
+}
+
+func TestResolveModelBareSonnetOpusAmbiguous(t *testing.T) {
+	// claude:sonnet/claude:opus and agy:sonnet/agy:opus share the same bare
+	// alias, so it must require the provider prefix.
+	for _, alias := range []string{"sonnet", "opus"} {
+		if _, err := ResolveModel(alias); err == nil {
+			t.Errorf("alias %q: expected ambiguity error, got none", alias)
+		}
+	}
+	for _, spec := range []string{"claude:sonnet", "claude:opus", "agy:sonnet", "agy:opus"} {
+		if _, err := ResolveModel(spec); err != nil {
+			t.Errorf("spec %q: %v", spec, err)
+		}
 	}
 }
 
