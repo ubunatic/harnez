@@ -41,3 +41,4 @@ Triggered by `/review [issue-number|issue-path]`.
      - **Quality Findings**: Notes on code hygiene, invariants, and test rigor.
      - **Fixes Applied**: Direct minor edits made during review.
      - **Follow-Up Tickets Filed**: New issue numbers and titles (if any).
+   - Name every ticket or milestone at least once with a short label ("498 (Claude resume)"), not a bare number (`@docs/AgenticLoop.md` §4, Status reports).

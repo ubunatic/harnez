@@ -61,7 +61,7 @@ You execute all coding, testing, and ticket management directly while maintainin
 
 ### 3. Milestone Review Gate (Reviewer Tier)
 - Invoke a reviewer subagent (e.g. `harnez agent start --role reviewer --model sol -d <dir> "Review diff HEAD~1 against ticket criteria"` or `gemini3.8flash:low`).
-- Provide diff summary and test results. Note the emitted Reconnect Banner.
+- Provide diff summary and test results, naming the milestone (short label, not bare "M2"). Note the emitted Reconnect Banner.
 - Reviewer checks test assertion rigor, regression risks, and invariant compliance.
 - Once green, commit the milestone: `git commit -m "feat/fix(...): ... (issue XXX)"`.
 
@@ -82,4 +82,4 @@ You execute all coding, testing, and ticket management directly while maintainin
 - Terminate all child reviewer/advisor subagents (`harnez agent delete --name <session_id>` or `harnez agent stop --all` / `manage_subagents kill`).
 - Update ticket status in `issues/*.md` (e.g. `Status: Closed — resolved`) and resync tracker (`harnez index`).
 - Commit the ticket update and tracker sync immediately.
-- Summarize delivered results and verification status.
+- Summarize delivered results and verification status. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).

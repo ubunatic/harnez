@@ -60,7 +60,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - The developer agent implements the milestone autonomously.
 - Follows Test-Driven Development (TDD) and executes repo-native verification (`go test ./...`, `make test`).
 - Immediately commits the verified milestone at the boundary (`git commit -m "... (issue XXX MX)"`).
-- Reports completion back to the Host Orchestrator.
+- Reports completion back to the Host Orchestrator. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).
 
 ### 3. Concise Milestone Review & In-Ticket Pre-Work Embedding
 - Upon developer milestone completion, the Host Orchestrator performs a rapid, diff-only inspection:
@@ -68,7 +68,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
   - Evaluate test assertion rigor, ambient environment leaks, and edge-case omissions directly against the diff.
 - **Strictly No Direct Fixes & No Micro-Task Rounds**:
   - The host does **NOT** modify code files.
-  - The host updates the ticket: records milestone $N$ delivery summary.
+  - The host updates the ticket: records milestone $N$ delivery summary, naming the milestone ("M2 delivered: flag and schema gating").
   - If adjustments, test hardenings, or nuances are required, the host documents them directly in the ticket under Milestone $N+1$ as **"Pre-Work / Required Refinements"**.
   - Commit the ticket update immediately.
 
@@ -80,4 +80,4 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 ### 5. Teardown & Status Sync
 - Terminate the developer subagent (`harnez agent delete --name <session_id>` or `manage_subagents kill`) and drain background jobs.
 - Update ticket status in `issues/*.md` (e.g. `Status: Closed`) and refresh `issues/README.md` (`harnez index -d .`).
-- Output a brief, high-level summary of delivered milestones and verification status.
+- Output a brief, high-level summary of delivered milestones and verification status. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).

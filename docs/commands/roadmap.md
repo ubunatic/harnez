@@ -96,4 +96,4 @@ With that value axis established:
 
 Report back to the operator: the roadmap path written or updated, a one-line summary of the
 sequencing rationale, and — on an update — what moved (shipped/closed/reprioritized) since the
-prior version.
+prior version. Name moved tickets with a short label, not a bare number ("289 (go.work testdata)").

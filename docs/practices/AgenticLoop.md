@@ -322,6 +322,10 @@ Agentic retrospectives and tooling feedback are vital for evolving harnesses, bu
 2. **Zero Repetitive Noise**: Do not emit repetitive boilerplate or complain about known, trivial environment quirks on routine, fast iterations.
 3. **Actionable Root Causes**: When reporting friction in a durable project doc or ticket, state the concrete blocker, failure mode, attempted workaround, and a recommended harness or tooling fix.
 
+### Status reports
+
+**Name every item in reports**: in intermediate and final reports, give each milestone, ticket or sub-step a short name at least once, next to its label: "M3 (single-write settings removal)", "498 (Claude resume inside Claude Code)", not bare "M3" or "498". The name is shorter than the ticket title. Bare labels are fine after the first mention. This applies to every report, from host to user, from a worker to the host, and in a ticket's delivery notes. The reader is often not holding the ticket's milestone list in their head.
+
 ---
 
 ## 5. Role Taxonomy & Constraints

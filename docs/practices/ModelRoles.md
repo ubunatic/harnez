@@ -77,6 +77,8 @@ milestone diff, check:
 
 Write findings into the ticket as the next milestone's pre-work, not as new tickets.
 
+Ask workers to name each milestone in their reports ("M4 (review fixes)", not bare "M4"), and do the same in your reports to the user. A bare label forces the reader to look up the ticket.
+
 ## Plan before writing
 
 Start a developer with a read-only planning turn ("read-only: plan milestone M1, no edits"),

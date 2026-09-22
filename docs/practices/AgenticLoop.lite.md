@@ -34,6 +34,8 @@ For a single focused ticket: **Clean Goal Handoff** (one objective; **Trust the 
 ## 4. Calibrated Friction Reporting
 **Substantive Sessions Only** (real hurdles, not routine) · **Zero Repetitive Noise** (no boilerplate on known quirks) · **Actionable Root Causes** (blocker, failure mode, workaround tried, recommended fix).
 
+**Name items in reports**: give each milestone/ticket a short name at least once ("M3 (single-write removal)", "498 (Claude resume)"), not a bare "M3" or "498".
+
 ## 5. Role Taxonomy
 | Role | Tools | Job | Lifecycle |
 |---|---|---|---|

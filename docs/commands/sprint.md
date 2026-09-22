@@ -85,4 +85,4 @@ Follow these 5 phases sequentially:
    - Update `issues/README.md` table.
    - Run `harnez status` to ensure all issue statuses are clean and validated.
    - When closing a ticket, check the whole file for multiple status-bearing fields and update all (see `@docs/AgenticLoop.md` Phase 5, "Single Status field").
-3. Present a clear, concise summary of completed tickets and accomplishments to the user.
+3. Present a clear, concise summary of completed tickets and accomplishments to the user. Name each ticket or milestone at least once with a short label, e.g. "491 (component selection in apply)", not bare "491" (`@docs/AgenticLoop.md` §4, Status reports).
