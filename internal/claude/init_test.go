@@ -500,6 +500,9 @@ func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
 	if !strings.Contains(content, "### Editing Discipline") {
 		t.Errorf("expected Editing Discipline inside the managed section, got:\n%s", content)
 	}
+	if !strings.Contains(content, "go install ubunatic.com/harnez/cmd/harnez@latest") {
+		t.Errorf("expected go install ubunatic.com/harnez/cmd/harnez@latest inside the managed section, got:\n%s", content)
+	}
 	if !strings.Contains(content, "# Custom Project Working Agreement") ||
 		!strings.Contains(content, "## Custom Downstream Section") {
 		t.Errorf("expected hand-authored custom content to survive, got:\n%s", content)

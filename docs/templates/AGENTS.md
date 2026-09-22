@@ -13,6 +13,12 @@ Adhere to the following conventions.
 Managed by harnez — local edits here are overwritten on the next `harnez init`.
 Put project-specific rules outside this block.
 
+### Tool Availability
+If `harnez` is not installed or available in PATH, install it via:
+```bash
+go install ubunatic.com/harnez/cmd/harnez@latest
+```
+
 ### Editing Discipline
 - Prefer structured patch tools (`apply_patch`) or whole-block replacements over
   narrow string substitution edits.
