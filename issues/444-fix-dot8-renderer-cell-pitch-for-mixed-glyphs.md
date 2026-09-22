@@ -1,6 +1,6 @@
 # 444 — Fix Dot8 renderer cell pitch for mixed glyphs
 
-**Status**: Blocked — Dot8 experiment on hold; see 444
+**Status**: Blocked — Dot8 experiment on hold; root P1 of the chain, see the On hold section
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
