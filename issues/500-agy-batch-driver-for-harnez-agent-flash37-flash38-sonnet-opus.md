@@ -54,6 +54,17 @@ M1 (agy driver):
    dir, effort mapping, resume args, JSON parse incl. tokens (input/output/cached/thinking counted
    sensibly), non-SUCCESS status → error, malformed JSON → error.
 
+M2 (live-test fixes) — M1 landed in 6d65bf3; live test: flash37/flash38 OK, agy:sonnet/opus fail
+because agy rejects `--effort` for `claude-*` models ("--effort is not supported for model
+claude-sonnet-4-6"); without `--effort` they work. All with unit tests:
+1. Optional per-model flag in `spec/agent.yaml` (e.g. `effort: false` on `agy:sonnet`/`agy:opus`,
+   plus schema); omit `--effort` when false, in batch AND interactive agy args. No name-prefix hack.
+2. On exit 1 agy still prints JSON `{"status":"ERROR","error":"…"}` on stdout: parse stdout on a
+   non-zero exit and surface `error` in the Go error (stderr from `exec.ExitError` as fallback);
+   also use `error` in the non-SUCCESS parse path.
+3. Refuse an empty `Dir` in `AgyDriver` Run/Resume (agy would write to `~/.gemini` scratch).
+4. `Compact` passes `Model{}` → `--model ""`: omit `--model` when the name is empty.
+
 ## Acceptance
 
 - [ ] `make test-q1` green; `make install` run.
