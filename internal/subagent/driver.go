@@ -50,6 +50,15 @@ type Model struct {
 	Provider string
 	Name     string
 	Tier     string
+	// Effort is nil (supported, the default) or false for models that
+	// reject an effort/reasoning flag (e.g. agy:sonnet, agy:opus).
+	Effort *bool
+}
+
+// SupportsEffort reports whether an effort/reasoning-tier flag should be
+// passed for this model. Unset (nil) means supported.
+func (m Model) SupportsEffort() bool {
+	return m.Effort == nil || *m.Effort
 }
 
 // TurnResult is the normalized result of a provider turn.

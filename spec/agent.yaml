@@ -12,8 +12,8 @@ models:
   claude:opus: {provider: claude, name: opus, tier: low}
   agy:flash37: {provider: agy, name: gemini-3.7-flash, tier: low}
   agy:flash38: {provider: agy, name: gemini-3.8-flash, tier: low}
-  agy:sonnet: {provider: agy, name: claude-sonnet-4-6, tier: low}
-  agy:opus: {provider: agy, name: claude-opus-4-6-thinking, tier: low}
+  agy:sonnet: {provider: agy, name: claude-sonnet-4-6, tier: low, effort: false}
+  agy:opus: {provider: agy, name: claude-opus-4-6-thinking, tier: low, effort: false}
 
 # Roles keep delegation one level deep. `spawns` lists the roles a session of
 # that role may start through `harnez agent`; an empty list makes it a leaf

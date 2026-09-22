@@ -3,6 +3,7 @@ package subagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"time"
@@ -31,11 +32,21 @@ func agyEffort(tier string) string {
 }
 
 func (d AgyDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
+	if d.Dir == "" {
+		return nil, errors.New("agy: refusing to run with an empty Dir (agy would write to ~/.gemini scratch)")
+	}
 	start := time.Now()
-	args := []string{"--add-dir", d.Dir, "--model", o.Model.Name, "--effort", agyEffort(o.Model.Tier), "--output-format", "json", "-p", o.Prompt}
+	args := []string{"--add-dir", d.Dir}
+	if o.Model.Name != "" {
+		args = append(args, "--model", o.Model.Name)
+		if o.Model.SupportsEffort() && o.Model.Tier != "" {
+			args = append(args, "--effort", agyEffort(o.Model.Tier))
+		}
+	}
+	args = append(args, "--output-format", "json", "-p", o.Prompt)
 	b, err := d.command(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("agy: %w", err)
+		return nil, agyRunError("agy", b, err)
 	}
 	r, err := parseAgy(b)
 	if err != nil {
@@ -46,10 +57,20 @@ func (d AgyDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 }
 
 func (d AgyDriver) Resume(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
-	args := []string{"--conversation", id, "--add-dir", d.Dir, "--model", model.Name, "--effort", agyEffort(model.Tier), "--output-format", "json", "-p", prompt}
+	if d.Dir == "" {
+		return nil, errors.New("agy: refusing to resume with an empty Dir (agy would write to ~/.gemini scratch)")
+	}
+	args := []string{"--conversation", id, "--add-dir", d.Dir}
+	if model.Name != "" {
+		args = append(args, "--model", model.Name)
+		if model.SupportsEffort() && model.Tier != "" {
+			args = append(args, "--effort", agyEffort(model.Tier))
+		}
+	}
+	args = append(args, "--output-format", "json", "-p", prompt)
 	b, err := d.command(ctx, args...)
 	if err != nil {
-		return nil, fmt.Errorf("agy resume: %w", err)
+		return nil, agyRunError("agy resume", b, err)
 	}
 	return parseAgy(b)
 }
@@ -66,26 +87,48 @@ func (d AgyDriver) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func parseAgy(data []byte) (*TurnResult, error) {
-	var v struct {
-		ConversationID string  `json:"conversation_id"`
-		Status         string  `json:"status"`
-		Response       string  `json:"response"`
-		DurationSecs   float64 `json:"duration_seconds"`
-		NumTurns       int     `json:"num_turns"`
-		Usage          struct {
-			Input  int `json:"input_tokens"`
-			Output int `json:"output_tokens"`
-			Think  int `json:"thinking_tokens"`
-			Cache  int `json:"cache_read_tokens"`
-			Total  int `json:"total_tokens"`
-		} `json:"usage"`
+type agyResult struct {
+	ConversationID string  `json:"conversation_id"`
+	Status         string  `json:"status"`
+	Response       string  `json:"response"`
+	Error          string  `json:"error"`
+	DurationSecs   float64 `json:"duration_seconds"`
+	NumTurns       int     `json:"num_turns"`
+	Usage          struct {
+		Input  int `json:"input_tokens"`
+		Output int `json:"output_tokens"`
+		Think  int `json:"thinking_tokens"`
+		Cache  int `json:"cache_read_tokens"`
+		Total  int `json:"total_tokens"`
+	} `json:"usage"`
+}
+
+// agyRunError builds the error for a non-zero agy exit: agy prints
+// {"status":"ERROR","error":"…"} on stdout even on exit 1, so parse it before
+// falling back to stderr from the exec error.
+func agyRunError(op string, b []byte, err error) error {
+	var v agyResult
+	if len(b) > 0 && json.Unmarshal(b, &v) == nil && v.Error != "" {
+		return fmt.Errorf("%s: %s", op, v.Error)
 	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+		return fmt.Errorf("%s: %w: %s", op, err, ee.Stderr)
+	}
+	return fmt.Errorf("%s: %w", op, err)
+}
+
+func parseAgy(data []byte) (*TurnResult, error) {
+	var v agyResult
 	if err := json.Unmarshal(data, &v); err != nil {
 		return nil, fmt.Errorf("parse agy json: %w", err)
 	}
 	if v.Status != "SUCCESS" {
-		return nil, fmt.Errorf("agy reported status %q: %s", v.Status, v.Response)
+		msg := v.Response
+		if v.Error != "" {
+			msg = v.Error
+		}
+		return nil, fmt.Errorf("agy reported status %q: %s", v.Status, msg)
 	}
 	r := &TurnResult{
 		SessionID:    v.ConversationID,

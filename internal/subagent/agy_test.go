@@ -2,10 +2,13 @@ package subagent
 
 import (
 	"context"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func boolPtr(b bool) *bool { return &b }
 
 func TestAgyRunArgOrderAndAddDir(t *testing.T) {
 	var args []string
@@ -116,6 +119,57 @@ func TestAgyCompactUsesResumeWithSlashCompact(t *testing.T) {
 	}
 	if args[len(args)-1] != "/compact" {
 		t.Fatalf("args = %#v, want last element /compact", args)
+	}
+	for _, a := range args {
+		if a == "--model" {
+			t.Fatalf("args = %#v, --model must be omitted for an empty Model", args)
+		}
+	}
+}
+
+func TestAgyOmitsEffortWhenUnsupported(t *testing.T) {
+	var args []string
+	d := AgyDriver{Dir: "/d", Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
+		args = gotArgs
+		return []byte(`{"status":"SUCCESS","response":"ok"}`), nil
+	}}
+	m := Model{Name: "claude-sonnet-4-6", Tier: "low", Effort: boolPtr(false)}
+	if _, err := d.Run(context.Background(), RunOptions{Prompt: "p", Model: m}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"--add-dir", "/d", "--model", "claude-sonnet-4-6", "--output-format", "json", "-p", "p"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+}
+
+func TestAgyExitOneParsesStdoutErrorJSON(t *testing.T) {
+	d := AgyDriver{Dir: "/d", Command: func(context.Context, string, ...string) ([]byte, error) {
+		return []byte(`{"status":"ERROR","error":"--effort is not supported for model claude-sonnet-4-6"}`), &exec.ExitError{}
+	}}
+	_, err := d.Run(context.Background(), RunOptions{Prompt: "p", Model: Model{Name: "claude-sonnet-4-6"}})
+	if err == nil || !strings.Contains(err.Error(), "--effort is not supported") {
+		t.Fatalf("error = %v, want the stdout error field surfaced", err)
+	}
+}
+
+func TestAgyRunRefusesEmptyDir(t *testing.T) {
+	d := AgyDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
+		t.Fatal("command must not run with an empty Dir")
+		return nil, nil
+	}}
+	if _, err := d.Run(context.Background(), RunOptions{Prompt: "p", Model: Model{Name: "m"}}); err == nil {
+		t.Fatal("expected error for empty Dir")
+	}
+}
+
+func TestAgyResumeRefusesEmptyDir(t *testing.T) {
+	d := AgyDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
+		t.Fatal("command must not run with an empty Dir")
+		return nil, nil
+	}}
+	if _, err := d.Resume(context.Background(), "id", "p", Model{Name: "m"}); err == nil {
+		t.Fatal("expected error for empty Dir")
 	}
 }
 

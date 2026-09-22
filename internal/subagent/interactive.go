@@ -80,7 +80,7 @@ func interactiveCommand(opts InteractiveOptions, providerID string) (string, []s
 		} else {
 			args = []string{"--conversation", providerID, "--model", opts.Model.Name}
 		}
-		if opts.Model.Tier != "" {
+		if opts.Model.SupportsEffort() && opts.Model.Tier != "" {
 			args = append(args, "--effort", agyEffort(opts.Model.Tier))
 		}
 	default:
