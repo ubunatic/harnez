@@ -42,9 +42,9 @@ docs_profiles:
     - website
     - gorelease
 
-# Repo-local `harnez exec` runtime limit (built-in default: 60s). This repo builds,
-# runs test suites and drives long blocking `harnez agent` turns through the exec
-# wrapper, so it allows more. Overridable per call with `harnez exec --timeout`.
+# Repo-local `harnez exec` runtime limit (built-in default: 60s). Precedence is
+# --timeout > this exec.timeout > the built-in default. The implicit 60s default
+# is exempt for `harnez agent start/resume`; this setting explicitly bounds them.
 exec:
   timeout: 30m
 

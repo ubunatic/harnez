@@ -164,6 +164,11 @@ The telemetry write is best-effort and bounded: it never delays the
 wrapped command's own execution, and gives up waiting on a slow/hung DB
 write after a short bound rather than hanging the caller.
 
+Runtime precedence is --timeout, then repo config exec.timeout, then the
+built-in 60s default. The implicit default is exempt for 'harnez agent
+start' and 'harnez agent resume', since those turns can legitimately run
+longer; either explicit setting restores a bound.
+
 See 'harnez exec hook' for the separate PreToolUse rewrite stage that
 points an agent's Bash tool calls at this command.`,
 		SilenceUsage: true,
@@ -367,25 +372,16 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	counter := &byteCounter{}
 	var capturedOutput bytes.Buffer
 
-	timeout := opts.Timeout
-	if timeout <= 0 {
-		wd, _ := os.Getwd()
-		configPath := opts.ConfigPath
-		if configPath == "" {
-			configPath = filepath.Join(wd, "config.yaml")
-		}
-		if cfg, _, err := claude.OpenConfig(configPath); err == nil && cfg.Exec.Timeout != "" {
-			if parsed, parseErr := time.ParseDuration(cfg.Exec.Timeout); parseErr == nil {
-				timeout = parsed
-			}
-		}
+	timeout := resolveExecTimeout(opts, args)
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		cancel = func() {}
 	}
-	if timeout <= 0 {
-		timeout = defaultExecTimeout
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	c := exec.CommandContext(ctx, args[0], args[1:]...)
+	c := exec.Command(args[0], args[1:]...)
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Stdin = in
 
@@ -405,7 +401,19 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 
 	start := time.Now()
-	runErr := c.Run()
+	if err := c.Start(); err != nil {
+		return 1, fmt.Errorf("exec: run %v: %w", args, err)
+	}
+	groupDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+		case <-groupDone:
+		}
+	}()
+	runErr := c.Wait()
+	close(groupDone)
 	timedOut := ctx.Err() == context.DeadlineExceeded
 	if timedOut {
 		_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
@@ -450,6 +458,33 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	})
 
 	return exitCode, nil
+}
+
+func resolveExecTimeout(opts execOptions, args []string) time.Duration {
+	if opts.Timeout > 0 {
+		return opts.Timeout
+	}
+	wd, _ := os.Getwd()
+	configPath := opts.ConfigPath
+	if configPath == "" {
+		configPath = filepath.Join(wd, "config.yaml")
+	}
+	if cfg, _, err := claude.OpenConfig(configPath); err == nil && cfg.Exec.Timeout != "" {
+		if parsed, parseErr := time.ParseDuration(cfg.Exec.Timeout); parseErr == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	if isAgentLongRunningCommand(args) {
+		return 0
+	}
+	return defaultExecTimeout
+}
+
+func isAgentLongRunningCommand(args []string) bool {
+	if len(args) < 3 || filepath.Base(args[0]) != "harnez" || args[1] != "agent" {
+		return false
+	}
+	return args[2] == "start" || args[2] == "resume"
 }
 
 // exitCodeFromError extracts a shell-convention exit code from the result

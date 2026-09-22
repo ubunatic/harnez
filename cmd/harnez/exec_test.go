@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -361,6 +362,61 @@ func TestRunExecWrapper_RepoSettingAndFlagPrecedence(t *testing.T) {
 	}
 }
 
+func TestResolveExecTimeout_DefaultFlagAndAgentExemption(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing.yaml")
+	if got := resolveExecTimeout(execOptions{ConfigPath: missing}, []string{"sleep", "1"}); got != defaultExecTimeout {
+		t.Fatalf("default timeout = %v, want %v", got, defaultExecTimeout)
+	}
+	if got := resolveExecTimeout(execOptions{Timeout: 25 * time.Millisecond}, []string{"sleep", "1"}); got != 25*time.Millisecond {
+		t.Fatalf("flag timeout = %v", got)
+	}
+	for _, subcommand := range []string{"start", "resume"} {
+		if got := resolveExecTimeout(execOptions{ConfigPath: missing}, []string{"harnez", "agent", subcommand}); got != 0 {
+			t.Fatalf("agent %s timeout = %v, want disabled implicit default", subcommand, got)
+		}
+		if got := resolveExecTimeout(execOptions{Timeout: time.Second, ConfigPath: missing}, []string{"harnez", "agent", subcommand}); got != time.Second {
+			t.Fatalf("agent %s explicit timeout = %v", subcommand, got)
+		}
+	}
+}
+
+func TestRunExecWrapper_TimeoutKillsProcessGroupDescendant(t *testing.T) {
+	opts := testExecOptions(t)
+	opts.Timeout = 80 * time.Millisecond
+	pidFile := filepath.Join(t.TempDir(), "child.pid")
+	var out, errOut bytes.Buffer
+	_, err := runExecWrapper([]string{"sh", "-c", `sleep 5 & echo $! > "$1"; wait`, "sh", pidFile}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(pid, 0); err != nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("descendant process %d still exists after timeout", pid)
+}
+
+func TestRunExecWrapper_FastCommandUnaffected(t *testing.T) {
+	opts := testExecOptions(t)
+	opts.Timeout = time.Second
+	var out, errOut bytes.Buffer
+	code, err := runExecWrapper([]string{"printf", "fast"}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil || code != 0 || out.String() != "fast" || strings.Contains(errOut.String(), "timeout") {
+		t.Fatalf("fast command: code=%d err=%v stdout=%q stderr=%q", code, err, out.String(), errOut.String())
+	}
+}
+
 // TestRunExecWrapper_ExpectFailureRecordsExpectedCallTypeAndTrueExitCode
 // covers issue 226 direction 2 end-to-end: a command whose text carries a
 // leading HARNEZ_EXPECT_FAILURE=1 assignment (the shape the PreToolUse
@@ -532,6 +588,7 @@ func TestRunExecWrapper_NoCommand(t *testing.T) {
 // --- harnez exec hook ---
 
 func TestRunExecHook_RewritesBashCommand(t *testing.T) {
+	t.Setenv(distillAutopipeEnv, "")
 	in := strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"git status"}}`)
 	var out bytes.Buffer
 	if err := runExecHook(in, &out); err != nil {
@@ -559,6 +616,7 @@ func TestRunExecHook_RewritesBashCommand(t *testing.T) {
 // them as part of one wrapped command. Wrapping in a quoted 'bash -c'
 // argument must keep the whole original command intact.
 func TestRunExecHook_PreservesShellMetacharacters(t *testing.T) {
+	t.Setenv(distillAutopipeEnv, "")
 	original := `make build && make test | grep -v ok; echo "done"`
 	in := strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":` + strconvQuote(original) + `}}`)
 	var out bytes.Buffer
