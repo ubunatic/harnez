@@ -103,3 +103,19 @@ and replaced `SkillRequires` with `requiredComponents(s.Requires)`. No assertion
    no set contains, so the skill silently disappears under every selection, including `full`.
    Reject unknown `requires:` and `components:` names once, where the selection is resolved,
    with an error naming the skill and the bad value. Test both.
+
+## M2 delivered (f7feb46) — M3 Pre-Work / Required Refinements
+
+M2 added `--components` on `apply`/`diff`/`status` with one resolver
+(`resolveComponentSelection`), validates `components:`/`requires:` names, and moves
+`ensureTelemetrySchema` after config load, gated on `telemetry`. A nil set still means full.
+
+1. **Missing M2 acceptance test.** Add the byte-identity test before touching the merge: a plain
+   `apply` (no selection) writes the same `settings.json` bytes as before M2. Pin the
+   bytes against a golden file or a pre-change build of the same fixture, not against itself.
+2. **The `ComponentSelection` parameter is unused (`_`) and passes a nil `components.Set` as a
+   non-nil interface.** When M3 starts using it inside `internal/claude`, never test
+   `sel == nil`; call `HasComponent`. M4 moves `Set`/`Parse`/`Resolve` into `internal/claude`
+   and removes the interface (the MVP package is deleted, so the cycle goes away).
+3. Then M3 as listed in the Pre-Work milestones (single-write removal, `managedSettingsKeys`
+   ownership, explicit `hooks`, `diffSettingsJSON` in step, user-key survival tests).
