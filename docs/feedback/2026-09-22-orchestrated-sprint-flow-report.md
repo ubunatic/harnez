@@ -121,3 +121,47 @@ Codex rollout logs. The rollouts are the authoritative source.
 
 Flow stability so far: 2 tickets closed, 0 rejected `harnez agent` calls, 0 loops, 1 systemic
 hazard found and fixed (the timeout default).
+
+### M3 - Ticket 135, and the correction that followed (done, hands-off run plus one correction)
+
+Hands-off run: one orchestrator turn (3m05s), one developer, no failed or retried
+`harnez agent` call, tests green. The result was wrong: the ticket's premise was already
+obsolete (an earlier change had removed the global section the ticket wanted to split),
+and the developer re-added it as dead config that recreated the duplication. The
+orchestrator accepted it because it reviewed the diff against the ticket text, never
+against the current code.
+
+The host found it by reading the config history and sent it back. The second turn (4m26s,
+`dev-135b`) reverted the change, reopened and re-closed the ticket as "obsolete", and
+added a preflight step to the lean-sprint skill: confirm the ticket's premise on HEAD
+(grep, `harnez read`, `git log -S`) before dispatching anyone, and close obsolete tickets
+without a developer. The orchestrator accepted the first version of that text although it
+noted itself that it omitted `git log -S`; the host added the clause (`5e0e7fc`).
+
+Two more findings:
+
+- **Shared `/tmp` state broke tests** (ticket 488): a worker's Quota-1 command created a
+  junk `/tmp/.git`, which made two `internal/quota1` tests fail for everyone until it was
+  removed. This is also the most plausible cause of the workers' unreproducible "exec-hook
+  assertion failures" reported earlier.
+- **Review depth is the weak point, not the mechanics.** Three of three tickets needed a
+  host review finding: a copyable-doc link (156), a timeout default that broke the flow
+  itself (268), an obsolete premise (135). Each time the orchestrator's review matched the
+  diff to the ticket text but not to the state of the code and environment. The preflight
+  step and the review checklist in the prompts address this; whether they are enough needs
+  a run without host findings.
+
+## Result
+
+| Criterion | Outcome |
+|-----------|---------|
+| Orchestrator `luna:med` via `harnez agent`, developer `luna:low` | yes, same orchestrator session for all tickets, one developer per ticket, deleted after use |
+| Roles defined and enforced, no agents calling agents calling agents | yes: roles in the spec, leaf guard, preamble rules; verified from the raw Codex logs: only the orchestrator ever called `harnez agent`, developers 0, no native subagent |
+| Concise guidance for subagents | role rules injected into every turn; one short section in `AgenticLoop.md`; `--role` and the preflight step in the sprint skill |
+| 2-3 tickets done | 156, 268, 135 (135 needed a correction round) |
+| Fail-stop conditions | none hit: no loop (max 2 rounds per ticket), no repeated failing `harnez agent` calls, no leaf-guard refusal |
+| Stable flow | mechanics stable; result quality still needed host review on every ticket |
+
+Follow-ups filed: 487 (telemetry role and parent attribution), 488 (Quota-1 hermeticity).
+The installed Codex skill copies predate the doc changes; `harnez apply` (global config)
+was not run.
