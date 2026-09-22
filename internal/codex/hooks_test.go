@@ -91,11 +91,16 @@ func TestStatusDetectsDrift(t *testing.T) {
 		t.Fatalf("Apply: %v", err)
 	}
 
+	// Hand-edit the harnez group (matcher changed, still harnez-owned).
 	drifted := `[features]
 hooks = true
 
 [[hooks.PreToolUse]]
 matcher = "Other"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "harnez codex-hook"
 `
 	if err := os.WriteFile(path, []byte(drifted), 0644); err != nil {
 		t.Fatal(err)
@@ -200,4 +205,76 @@ func TestRemoveDeletesEmptyFile(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("expected file removed once empty, stat err=%v", err)
 	}
+}
+
+const userGroupTOML = `
+[[hooks.PreToolUse]]
+matcher = "Edit"
+
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = "my-lint"
+`
+
+func TestApplyPreservesUserGroupsOnHarnezEvents(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte(userGroupTOML), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(path); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "my-lint") {
+		t.Fatalf("user PreToolUse group lost:\n%s", data)
+	}
+	if installed, drifted := Status(path); !installed || drifted {
+		t.Errorf("Status = installed %v, drifted %v; want true, false with a user group present", installed, drifted)
+	}
+	changed, err := Apply(path)
+	if err != nil {
+		t.Fatalf("Apply (2nd): %v", err)
+	}
+	if changed {
+		t.Error("second Apply changed the file; want idempotent")
+	}
+	if n := strings.Count(mustRead(t, path), "harnez codex-hook"); n != 1 {
+		t.Errorf("harnez codex-hook appears %d times, want 1", n)
+	}
+}
+
+func TestRemoveKeepsUserGroupsAndFeature(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte(userGroupTOML), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(path); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	changed, err := Remove(path)
+	if err != nil || !changed {
+		t.Fatalf("Remove = %v, %v", changed, err)
+	}
+	got := mustRead(t, path)
+	if strings.Contains(got, "harnez ") {
+		t.Errorf("harnez groups left:\n%s", got)
+	}
+	if !strings.Contains(got, "my-lint") {
+		t.Errorf("user group removed:\n%s", got)
+	}
+	if !strings.Contains(got, "hooks = true") {
+		t.Errorf("features.hooks dropped although user hooks remain:\n%s", got)
+	}
+	if installed, _ := Status(path); installed {
+		t.Error("Status reports harnez installed after Remove")
+	}
+}
+
+func mustRead(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

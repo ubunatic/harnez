@@ -313,10 +313,8 @@ Two behaviours, chosen by how harmful a leftover is:
 
 Ownership rule: harnez owns a hook or status line when its command is `harnez` or starts
 with `harnez `; for Codex, a hook group whose handlers all run harnez. Nothing else is
-removed. `codex.Remove` does not follow this rule (it deletes every event table harnez
-uses, which suits the full uninstall path only), so the removal pass prunes Codex hook
-groups itself. Note that `codex.Apply` has the same issue in the other direction: it
-replaces the user's tables on the seven events harnez uses, contrary to its doc comment. The Stop sound hook in the default config is not
+removed. `internal/codex` applies the same rule: `Apply`, `Remove` and `Status` act on
+harnez-owned groups only, so user groups on the same Codex events survive. The Stop sound hook in the default config is not
 harnez-owned and survives every selection.
 
 ### 8.5 Selection and persistence
@@ -445,7 +443,6 @@ What the MVP cannot do from outside `internal/claude`, and the integration step 
 | `SkillTargets` duplicates the unexported `skillTargets` | use the real one |
 | skill removal for unmet `requires:` deletes `SKILL.md` only; resource files stay (the rate skill already goes through apply's own removal branch) | generalize that branch to `requires:` |
 | `DiffAll` does not check Codex/AGY files under a selection (the filtered config blanks their targets) | selection-aware Codex/AGY status |
-| `codex.Apply` replaces user tables on harnez's seven Codex events (pre-existing) | merge per group, like `PruneCodexHooks` |
 | `diff`/`status` do not know the selection | resolve the selection once, shared by `apply`, `diff`, `status` |
 | `--save` to `~/.harnez/config.yaml` | after moving `LoadLocalConfig` out of `internal/usage` |
 

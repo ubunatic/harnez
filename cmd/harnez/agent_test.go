@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -887,6 +888,12 @@ func TestAgentHaikuAliases(t *testing.T) {
 }
 
 func TestAgentResumePrintsReplyNotStructDump(t *testing.T) {
+	// The agent command runs sessionTipHook; isolate HOME and the session
+	// env so the caller's own session tips cannot leak into stderr.
+	t.Setenv("HOME", t.TempDir())
+	for _, name := range resolve.SessionEnvVars {
+		t.Setenv(name, "")
+	}
 	old := agentDriver
 	agentDriver = func(subagent.Model) subagent.Driver { return &replyDriver{} }
 	defer func() { agentDriver = old }()

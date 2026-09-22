@@ -11,6 +11,7 @@ import (
 
 	"ubunatic.com/harnez/internal/agy"
 	"ubunatic.com/harnez/internal/claude"
+	"ubunatic.com/harnez/internal/codex"
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/jsonc"
 )
@@ -106,7 +107,7 @@ func removeDisabled(target string, cfg *claude.Config, set Set) ([]string, error
 	if !set.Has(Telemetry) {
 		if cfg.CodexHooksTarget != "" {
 			p := fsutil.ExpandHome(cfg.CodexHooksTarget)
-			changed, err := PruneCodexHooks(p)
+			changed, err := codex.Remove(p)
 			if err != nil {
 				return removed, fmt.Errorf("codex hooks: %w", err)
 			}

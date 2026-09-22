@@ -15,15 +15,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
 
-// HookName is the named hook entry harnez owns inside config.toml's
-// [hooks.<name>] tables. Only this entry is ever written or deleted; any
-// other named hook (hand-authored or plugin-installed) and any other
-// top-level config.toml key are preserved untouched, mirroring
-// internal/agy's mergeHooksDoc contract.
+// HookName is the legacy named hook entry ([hooks.harnez]) earlier harnez
+// versions wrote; Apply and Remove delete it. Current hooks live in the
+// per-event arrays ([[hooks.PreToolUse]] etc.), where harnez owns exactly
+// the groups whose handlers all run `harnez ...` (see isHarnezGroup). User
+// groups on the same events, other named hooks, and other top-level keys are
+// preserved.
 const HookName = "harnez"
 
 // HooksPath returns the global Codex config.toml path (~/.codex/config.toml
@@ -125,10 +127,12 @@ func encodeTOML(doc map[string]any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// mergeHooksDoc replaces only the HookName entry under "hooks", leaving
-// every other top-level key and every other named hook in existing intact.
-// This is the TOML analog of internal/agy's mergeHooksDoc — same
-// preserve-everything-else contract, different serialization.
+// mergeHooksDoc replaces harnez-owned groups in each event array that
+// incoming defines and deletes the legacy HookName entry. User groups on
+// the same events, every other named hook, and every other top-level key in
+// existing stay intact. This is the TOML analog of internal/agy's
+// mergeHooksDoc — same preserve-everything-else contract, different
+// serialization.
 func mergeHooksDoc(existing, incoming map[string]any) map[string]any {
 	out := make(map[string]any, len(existing)+1)
 	for k, v := range existing {
@@ -142,8 +146,9 @@ func mergeHooksDoc(existing, incoming map[string]any) map[string]any {
 	}
 	if incomingHooks, ok := incoming["hooks"].(map[string]any); ok {
 		delete(mergedHooks, HookName)
-		for k, v := range incomingHooks {
-			mergedHooks[k] = v
+		for event, v := range incomingHooks {
+			groups := userGroups(mergedHooks[event])
+			mergedHooks[event] = append(groups, tableArray(v)...)
 		}
 	}
 	out["hooks"] = mergedHooks
@@ -164,9 +169,9 @@ func mergeHooksDoc(existing, incoming map[string]any) map[string]any {
 
 // Apply merges BuildHooksDoc into the config.toml file at path, creating
 // the file and its parent directory if absent, and reports whether the
-// file's contents changed. Any hand-authored named hooks other than
-// HookName, and any other top-level config.toml keys (model settings,
-// MCP server entries, etc.), are preserved verbatim.
+// file's contents changed. User hook groups on the events harnez uses,
+// hand-authored named hooks, and any other top-level config.toml keys
+// (model settings, MCP server entries, etc.) are preserved.
 func Apply(path string) (changed bool, err error) {
 	existing := readTOML(path)
 	merged := mergeHooksDoc(existing, BuildHooksDoc())
@@ -204,12 +209,13 @@ func Status(path string) (installed bool, drifted bool) {
 	if !featuresOK || features["hooks"] != true {
 		return false, true
 	}
-	if _, ok := hooks["PreToolUse"]; !ok {
+	owned := harnezHooks(hooks)
+	if len(owned) == 0 {
 		return false, false
 	}
 
 	wantData, _ := json.Marshal(BuildHooksDoc()["hooks"])
-	gotData, _ := json.Marshal(hooks)
+	gotData, _ := json.Marshal(owned)
 	return true, string(wantData) != string(gotData)
 }
 
@@ -246,44 +252,48 @@ func hookCount(entry map[string]any, name string) int {
 	return count
 }
 
-// Remove deletes the HookName entry from config.toml at path, leaving any
-// other named hooks and top-level keys intact. If the file ends up with
-// no remaining top-level keys, it is removed entirely (mirroring
-// internal/agy's Remove/internal/claude's cleanSettingsJSON). A missing
-// file or missing entry is a no-op, not an error.
+// Remove deletes harnez-owned groups from every event array and the legacy
+// HookName entry, leaving user groups, other named hooks and top-level keys
+// intact. features.hooks is dropped only when no hooks remain. If the file
+// ends up with no remaining top-level keys, it is removed entirely
+// (mirroring internal/agy's Remove/internal/claude's cleanSettingsJSON). A
+// missing file or missing entry is a no-op, not an error.
 func Remove(path string) (changed bool, err error) {
 	existing := readTOML(path)
 	hooks, ok := existing["hooks"].(map[string]any)
 	if !ok {
 		return false, nil
 	}
-	managed := false
-	for _, name := range []string{"PreToolUse", "PostToolUse", "PreCompact", "PostCompact", "SessionStart", "Stop", "SessionEnd", HookName} {
-		if _, ok := hooks[name]; ok {
-			managed = true
-			break
+	if _, ok := hooks[HookName]; ok {
+		delete(hooks, HookName)
+		changed = true
+	}
+	for event, v := range hooks {
+		all := tableArray(v)
+		if all == nil {
+			continue
+		}
+		kept := userGroups(v)
+		if len(kept) == len(all) {
+			continue
+		}
+		changed = true
+		if len(kept) == 0 {
+			delete(hooks, event)
+		} else {
+			hooks[event] = kept
 		}
 	}
-	if !managed {
+	if !changed {
 		return false, nil
 	}
-	delete(hooks, "PreToolUse")
-	delete(hooks, "PostToolUse")
-	delete(hooks, "PreCompact")
-	delete(hooks, "PostCompact")
-	delete(hooks, "SessionStart")
-	delete(hooks, "Stop")
-	delete(hooks, "SessionEnd")
-	delete(hooks, HookName)
 	if len(hooks) == 0 {
 		delete(existing, "hooks")
-	} else {
-		existing["hooks"] = hooks
-	}
-	if features, ok := existing["features"].(map[string]any); ok {
-		delete(features, "hooks")
-		if len(features) == 0 {
-			delete(existing, "features")
+		if features, ok := existing["features"].(map[string]any); ok {
+			delete(features, "hooks")
+			if len(features) == 0 {
+				delete(existing, "features")
+			}
 		}
 	}
 
@@ -295,4 +305,69 @@ func Remove(path string) (changed bool, err error) {
 		return true, err
 	}
 	return true, os.WriteFile(path, data, 0644)
+}
+
+// tableArray normalizes a decoded TOML array of tables (BurntSushi returns
+// []map[string]any) or a built one; any other value yields nil.
+func tableArray(v any) []map[string]any {
+	switch t := v.(type) {
+	case []map[string]any:
+		return t
+	case []any:
+		out := make([]map[string]any, 0, len(t))
+		for _, e := range t {
+			m, ok := e.(map[string]any)
+			if !ok {
+				return nil
+			}
+			out = append(out, m)
+		}
+		return out
+	}
+	return nil
+}
+
+// isHarnezGroup reports whether every handler in a hook group runs harnez.
+func isHarnezGroup(group map[string]any) bool {
+	handlers := tableArray(group["hooks"])
+	if len(handlers) == 0 {
+		return false
+	}
+	for _, h := range handlers {
+		cmd, _ := h["command"].(string)
+		cmd = strings.TrimSpace(cmd)
+		if cmd != "harnez" && !strings.HasPrefix(cmd, "harnez ") {
+			return false
+		}
+	}
+	return true
+}
+
+// userGroups returns the groups of an event array that harnez does not own.
+func userGroups(v any) []map[string]any {
+	var out []map[string]any
+	for _, g := range tableArray(v) {
+		if !isHarnezGroup(g) {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+// harnezHooks projects a hooks table onto the harnez-owned groups, dropping
+// events without any, so it compares equal to BuildHooksDoc()["hooks"].
+func harnezHooks(hooks map[string]any) map[string]any {
+	out := map[string]any{}
+	for event, v := range hooks {
+		var owned []map[string]any
+		for _, g := range tableArray(v) {
+			if isHarnezGroup(g) {
+				owned = append(owned, g)
+			}
+		}
+		if len(owned) > 0 {
+			out[event] = owned
+		}
+	}
+	return out
 }
