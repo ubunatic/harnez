@@ -37,6 +37,9 @@ Examples:
   harnez read --auto --head=100 internal/lint/lint.go
   harnez read -I --columns=2 --json source.go`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if (cmd.Flags().Changed("dot8") || cmd.Flags().Changed("dot8-colors") || cmd.Flags().Changed("dot8-pitch")) && os.Getenv("HARNEZ_DOT8") != "1" {
+				return fmt.Errorf("--dot8 is on hold: the Dot8 card format is not usable (see issue 444); set HARNEZ_DOT8=1 to override")
+			}
 			if _, err := readcard.ParseLineNumbers(lineNumbers); err != nil {
 				return err
 			}
@@ -206,6 +209,9 @@ Examples:
 	if dot8Lookup != nil {
 		dot8Lookup.NoOptDefVal = "encode"
 	}
+	cmd.Flags().MarkHidden("dot8")
+	cmd.Flags().MarkHidden("dot8-colors")
+	cmd.Flags().MarkHidden("dot8-pitch")
 	cmd.Flags().StringVarP(&lineRange, "lines", "L", "", "source line range, e.g. 10:50")
 	cmd.Flags().IntVar(&head, "head", 0, "read only the first N lines")
 	cmd.Flags().IntVar(&tail, "tail", 0, "read only the last N lines")
