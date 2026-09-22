@@ -111,6 +111,9 @@ func TestSelectedApplyRemovesOnlyHarnezOwnedSettings(t *testing.T) {
 	for _, existing := range []map[string]any{
 		{"hooks": "malformed"},
 		{"hooks": map[string]any{"PreToolUse": "malformed"}},
+		// issue 491 M5 nit: an entry whose "hooks" value isn't a list must be
+		// kept unchanged rather than dropped, like the other malformed cases.
+		{"hooks": map[string]any{"PreToolUse": []any{map[string]any{"hooks": "not-a-list"}}}},
 	} {
 		got := applyMerge(existing, map[string]any{"hooks": nil})
 		if !reflect.DeepEqual(got, existing) {

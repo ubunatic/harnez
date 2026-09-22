@@ -677,6 +677,21 @@ func appendUniquePath(paths []string, path string) []string {
 	return append(paths, path)
 }
 
+// skillDisabled reports whether skill must be actively removed rather than
+// installed: rate_feedback-gated and disabled, or its `requires:` component
+// isn't in the resolved selection (issue 142, generalized for issue 491 M5).
+func skillDisabled(skill Command, selection ComponentSelection, disableRateFeedback bool) bool {
+	if skill.RateFeedback && disableRateFeedback {
+		return true
+	}
+	for _, req := range skill.Requires {
+		if !selection.HasComponent(req) {
+			return true
+		}
+	}
+	return false
+}
+
 func skillTargets(cfg *Config) []string {
 	var targets []string
 
@@ -1054,10 +1069,11 @@ func ApplyAllVariant(target string, cfg *Config, selection ComponentSelection, d
 		targets := skillTargets(cfg)
 		var skillNames []string
 		for _, skill := range cfg.Skills {
-			// issue 142: a rate_feedback-gated skill is actively removed
-			// (not merely skipped) when disabled — same rationale as the
+			// issue 142/491: a skill that is rate_feedback-gated and disabled,
+			// or whose `requires:` component isn't selected, is actively
+			// removed (not merely skipped) — same rationale as the
 			// section-clean branch above.
-			if skill.RateFeedback && disableRateFeedback {
+			if skillDisabled(skill, selection, disableRateFeedback) {
 				for _, skillsRoot := range targets {
 					skillDir := filepath.Join(skillsRoot, skill.Name)
 					path, err := safeSkillPath(skillDir, "SKILL.md")
@@ -1150,18 +1166,33 @@ func ApplyAllVariant(target string, cfg *Config, selection ComponentSelection, d
 	// issues/199 (research) and issues/200 (this wiring, originally a
 	// standalone `harnez codex-hooks apply` command, folded into `apply`
 	// per user direction rather than staying a separate command).
+	// issue 491 M5: Codex/AGY hooks are installed only under the telemetry
+	// component; without it they're actively removed (ownership-aware,
+	// 02c9a0b), not merely skipped, so a selected apply that drops telemetry
+	// leaves no dangling harnez-owned hook behind.
 	if cfg.CodexHooksTarget != "" {
 		hooksPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
-		changed, err := codex.Apply(hooksPath)
-		if err != nil {
-			return fmt.Errorf("codex hooks: %w", err)
+		if selection.HasComponent("telemetry") {
+			changed, err := codex.Apply(hooksPath)
+			if err != nil {
+				return fmt.Errorf("codex hooks: %w", err)
+			}
+			if changed {
+				changes++
+				fmt.Printf("  wrote %s\n", hooksPath)
+				fmt.Println("  note: Codex will prompt for hook-trust review before this hook becomes active (see its /hooks panel).")
+			}
+			addStat("codex hooks", codex.Summary(hooksPath))
+		} else {
+			changed, err := codex.Remove(hooksPath)
+			if err != nil {
+				return fmt.Errorf("codex hooks: %w", err)
+			}
+			if changed {
+				changes++
+				fmt.Printf("  removed %s\n", hooksPath)
+			}
 		}
-		if changed {
-			changes++
-			fmt.Printf("  wrote %s\n", hooksPath)
-			fmt.Println("  note: Codex will prompt for hook-trust review before this hook becomes active (see its /hooks panel).")
-		}
-		addStat("codex hooks", codex.Summary(hooksPath))
 	}
 
 	// Antigravity native tool observation hook (issue 373):
@@ -1170,15 +1201,26 @@ func ApplyAllVariant(target string, cfg *Config, selection ComponentSelection, d
 		hooksPath := fsutil.ExpandHome(cfg.AgyHooksTarget)
 		agentHome := filepath.Dir(filepath.Dir(hooksPath))
 		if _, err := os.Stat(agentHome); err == nil {
-			changed, err := agy.Apply(hooksPath)
-			if err != nil {
-				return fmt.Errorf("agy hooks: %w", err)
+			if selection.HasComponent("telemetry") {
+				changed, err := agy.Apply(hooksPath)
+				if err != nil {
+					return fmt.Errorf("agy hooks: %w", err)
+				}
+				if changed {
+					changes++
+					fmt.Printf("  wrote %s\n", hooksPath)
+				}
+				addStat("agy hooks", agy.Summary(hooksPath))
+			} else {
+				changed, err := agy.Remove(hooksPath)
+				if err != nil {
+					return fmt.Errorf("agy hooks: %w", err)
+				}
+				if changed {
+					changes++
+					fmt.Printf("  removed %s\n", hooksPath)
+				}
 			}
-			if changed {
-				changes++
-				fmt.Printf("  wrote %s\n", hooksPath)
-			}
-			addStat("agy hooks", agy.Summary(hooksPath))
 		}
 	}
 
@@ -1327,7 +1369,7 @@ func DiffAll(target string, cfg *Config, selection ComponentSelection) (bool, er
 
 	if len(cfg.Skills) > 0 {
 		for _, skill := range cfg.Skills {
-			if skill.RateFeedback && disableRateFeedback {
+			if skillDisabled(skill, selection, disableRateFeedback) {
 				for _, skillsRoot := range skillTargets(cfg) {
 					path := filepath.Join(skillsRoot, skill.Name, "SKILL.md")
 					if _, err := os.Stat(path); err == nil {
@@ -1383,10 +1425,17 @@ func DiffAll(target string, cfg *Config, selection ComponentSelection) (bool, er
 			}
 		}
 	}
+	// issue 491 M5: check Codex/AGY under the resolved selection directly
+	// rather than skipping them because a filtered config blanked their
+	// targets — without telemetry, drift means a stale hook still installed.
 	if cfg.CodexHooksTarget != "" {
 		hooksPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
 		installed, drifted := codex.Status(hooksPath)
-		if !installed || drifted {
+		if selection.HasComponent("telemetry") {
+			if !installed || drifted {
+				anyChanged = true
+			}
+		} else if installed {
 			anyChanged = true
 		}
 	}
@@ -1395,7 +1444,11 @@ func DiffAll(target string, cfg *Config, selection ComponentSelection) (bool, er
 		agentHome := filepath.Dir(filepath.Dir(hooksPath))
 		if _, err := os.Stat(agentHome); err == nil {
 			installed, drifted := agy.Status(hooksPath)
-			if !installed || drifted {
+			if selection.HasComponent("telemetry") {
+				if !installed || drifted {
+					anyChanged = true
+				}
+			} else if installed {
 				anyChanged = true
 			}
 		}
