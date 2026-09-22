@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"testing"
 
 	"ubunatic.com/harnez/internal/usage"
@@ -44,7 +45,7 @@ func TestResolveUsageHost_EmptyLocalDefault(t *testing.T) {
 // one-shot dashboard, formerly gated behind a since-removed --summary flag)
 // must not be rejected.
 func TestValidateUsageFlags_NoFlagsOK(t *testing.T) {
-	if err := validateUsageFlags(false, false, false, false); err != nil {
+	if err := validateUsageFlags(false, false, false, false, false); err != nil {
 		t.Fatalf("expected no flags to be valid, got error: %v", err)
 	}
 }
@@ -53,44 +54,62 @@ func TestValidateUsageFlags_NoFlagsOK(t *testing.T) {
 // reduced panel set on the now-default compact dashboard; it is not an error
 // on its own the way it used to require --watch or --summary.
 func TestValidateUsageFlags_CompactAloneOK(t *testing.T) {
-	if err := validateUsageFlags(false, false, false, true); err != nil {
+	if err := validateUsageFlags(false, false, false, true, false); err != nil {
 		t.Fatalf("--compact alone should be allowed, got error: %v", err)
 	}
 }
 
 func TestValidateUsageFlags_CompactAllowedWithWatch(t *testing.T) {
-	if err := validateUsageFlags(true, false, false, true); err != nil {
+	if err := validateUsageFlags(true, false, false, true, false); err != nil {
 		t.Fatalf("--watch --compact should be allowed, got error: %v", err)
 	}
 }
 
 func TestValidateUsageFlags_WatchAndJSONRejected(t *testing.T) {
-	if err := validateUsageFlags(true, false, true, false); err == nil {
+	if err := validateUsageFlags(true, false, true, false, false); err == nil {
 		t.Fatalf("expected --watch and --json together to be rejected")
 	}
 }
 
 func TestValidateUsageFlags_WatchAndRawRejected(t *testing.T) {
-	if err := validateUsageFlags(true, true, false, false); err == nil {
+	if err := validateUsageFlags(true, true, false, false, false); err == nil {
 		t.Fatalf("expected --watch and --raw together to be rejected")
 	}
 }
 
 func TestValidateUsageFlags_RawAndJSONRejected(t *testing.T) {
-	if err := validateUsageFlags(false, true, true, false); err == nil {
+	if err := validateUsageFlags(false, true, true, false, false); err == nil {
 		t.Fatalf("expected --raw and --json together to be rejected")
 	}
 }
 
 func TestValidateUsageFlags_CompactWithRawRejected(t *testing.T) {
-	if err := validateUsageFlags(false, true, false, true); err == nil {
+	if err := validateUsageFlags(false, true, false, true, false); err == nil {
 		t.Fatalf("expected --compact and --raw together to be rejected (--raw has no panel concept)")
 	}
 }
 
 func TestValidateUsageFlags_RawAlone_OK(t *testing.T) {
-	if err := validateUsageFlags(false, true, false, false); err != nil {
+	if err := validateUsageFlags(false, true, false, false, false); err != nil {
 		t.Fatalf("--raw alone should be allowed, got error: %v", err)
+	}
+}
+
+func TestValidateUsageFlags_LoomAlone_OK(t *testing.T) {
+	if err := validateUsageFlags(false, false, false, false, true); err != nil {
+		t.Fatalf("--loom alone should be allowed, got error: %v", err)
+	}
+}
+
+func TestValidateUsageFlags_LoomWithRawRejected(t *testing.T) {
+	if err := validateUsageFlags(false, true, false, false, true); err == nil {
+		t.Fatalf("expected --loom and --raw together to be rejected")
+	}
+}
+
+func TestValidateUsageFlags_LoomWithJSONRejected(t *testing.T) {
+	if err := validateUsageFlags(false, false, true, false, true); err == nil {
+		t.Fatalf("expected --loom and --json together to be rejected")
 	}
 }
 
@@ -105,6 +124,9 @@ func TestUsageProjectFlag_CobraRegistered(t *testing.T) {
 				if c.Flags().Lookup("cwd") == nil {
 					t.Errorf("missing --cwd flag on usage command")
 				}
+				if c.Flags().Lookup("loom") == nil {
+					t.Errorf("missing --loom flag on usage command")
+				}
 			}
 			if c.Name() == "assess" {
 				if c.Flags().Lookup("tokens") == nil {
@@ -118,5 +140,21 @@ func TestUsageProjectFlag_CobraRegistered(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestUsageCmd_LoomFlagExecution(t *testing.T) {
+	root := newRootCmd()
+	buf := new(bytes.Buffer)
+	root.SetOut(buf)
+	root.SetArgs([]string{"usage", "--loom", "--offline"})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("harnez usage --loom failed: %v", err)
+	}
+
+	out := buf.String()
+	if !bytes.Contains(buf.Bytes(), []byte("Agentic usage")) {
+		t.Errorf("expected output to contain 'Agentic usage', got:\n%s", out)
 	}
 }
