@@ -39,3 +39,14 @@ Found on 2026-09-22 while setting up the model advisory eval:
   aliases. Keep `KnownModels` output stable.
 - Canary: run one `harnez agent start --model codex:luna:med` turn and confirm the effort in the
   Codex session log.
+
+## Pre-Work (lean sprint, 2026-09-22)
+
+- Tier mapping: `low`→`low`, `med`→`medium`, `high`→`high`, passed as
+  `-c model_reasoning_effort=<v>` on both `exec` paths (`codex.go:50`, `:232`) and on
+  `exec resume` (`codexResumeArgs`). Assert the exact args in a driver test.
+- If aliases move to `spec/agent.yaml`, update `spec/schemas/agent.schema.json` and keep Go
+  free of duplicated values (`docs/Spec.md`). Update the model table in
+  `docs/HarnezAgentArchitecture.md`.
+- The developer skips the live canary (leaf workers never run `harnez agent`); the host runs
+  it after the commit.
