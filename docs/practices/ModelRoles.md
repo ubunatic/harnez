@@ -102,6 +102,10 @@ milestone diff, check:
   accepting.
 - **The tests actually ran.** Under a one-test-run budget a developer may commit unverified
   work. Run the suite yourself when in doubt.
+- **A "pre-existing failure" claim needs a pre-session commit, not the branch tip.** A worker
+  once confirmed a failure was already on main and was technically right, but an earlier commit
+  in that same session had introduced it — "not mine" isn't "not ours." Check against a commit
+  from before the whole session started.
 - **Check reviewer findings against the design.** An independent reviewer can be confidently
   wrong. Before acting on a "blocking" finding, verify it against the spec.
 
