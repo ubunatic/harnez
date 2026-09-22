@@ -149,3 +149,30 @@ Then M4 as listed in the Pre-Work milestones (requires-driven skill removal incl
 Codex/AGY apply/remove by `telemetry`, `DiffAll` checking Codex/AGY under a selection, move
 `Set`/`Parse`/`Resolve` into `internal/claude`, delete `internal/components` and
 `scripts/canary-components`, `scripts/smoke-test.sh`, `make install`).
+
+## M4 delivered (3e4822f) — M5 Pre-Work / Required Refinements
+
+M4 fixed all six M3 findings: per-command hook stripping, negative assertions (harnez-only entry,
+mixed entry, `harnez …` statusLine), `mcpServers` wholesale replace restored, malformed `hooks`
+left untouched, golden on a fixed fixture (`internal/claude/testdata/m3-settings.yaml`; the
+host verified the same hash on pre-M3 code 51375c8), plain selection parameter on
+`DiffAll`/`RunStatus`.
+
+Developer switch: Codex weekly quota hit the 99% stop threshold, so M5 moves to a
+`claude:sonnet` developer. Everything it needs is in this ticket.
+
+1. **Nit first:** `removeHarnezHooks` drops an entry whose `hooks` value is not a list; keep
+   such an entry unchanged, like the other malformed cases.
+2. Then **M5** = the remaining milestone from the Pre-Work list:
+   - Generalize the rate-feedback skill removal branch (`ApplyAllVariant`, `RateFeedbackDisabled`)
+     to any skill with an unmet `requires:`, removing `SKILL.md` *and* its resource files
+     (reuse `skillTargets`). Test with a resource-bearing skill.
+   - Codex/AGY: `Apply` when `telemetry` is selected, `Remove` otherwise (both `Remove`s are
+     already ownership-aware, 02c9a0b). `DiffAll` must check Codex/AGY under a selection
+     instead of skipping them because the filtered config blanked their targets.
+   - Move `Set`/`Parse`/`Resolve`/`ValidateConfig`/`Filter` into `internal/claude`, drop the
+     `ComponentSelection` interface and `FullComponentSelection` in favour of the concrete set
+     (nil = full), and delete `internal/components` and `scripts/canary-components`. Retarget
+     the useful `internal/components` tests (preset boot on an empty target, preset union,
+     full → docs-only → full round trip) onto `claude.ApplyAll*`/`DiffAll`.
+   - `scripts/smoke-test.sh` passes; `make install`.
