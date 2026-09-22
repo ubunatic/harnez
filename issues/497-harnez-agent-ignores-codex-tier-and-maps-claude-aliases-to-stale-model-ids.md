@@ -1,6 +1,6 @@
 # 497 — harnez agent ignores Codex tier and maps Claude aliases to stale model IDs
 
-**Status**: Open
+**Status**: Closed — tier passed on exec and resume (session tier), aliases in spec/agent.yaml incl. terra and current Claude aliases, single validation path; live canary luna:med shows effort=medium on start and resume (7204a93, 039709b, 1d8b8de)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
