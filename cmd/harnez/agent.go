@@ -551,10 +551,47 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 	stop.Flags().BoolVar(&children, "children", false, "stop child sessions")
 	stop.Flags().BoolVar(&all, "all", false, "stop all manageable sessions")
 	stop.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
+	var allCompleted bool
 	remove := &cobra.Command{Use: "delete", Short: "Delete an agent session", Aliases: []string{"rm"}, Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
 			return e
+		}
+		if allCompleted {
+			if all || name != "" {
+				return fmt.Errorf("delete --all-completed cannot be combined with --all or --name")
+			}
+			xs, err := s.List("", true)
+			if err != nil {
+				return err
+			}
+			var deleted []string
+			for _, x := range xs {
+				if !subagent.CanManage(parent(), x) {
+					continue
+				}
+				if x.Status != "completed" {
+					continue
+				}
+				if x.HarnessType == "interactive" {
+					if e = s.Delete(x.ID); e != nil {
+						return e
+					}
+					deleted = append(deleted, x.Name)
+					continue
+				}
+				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Delete(cmd.Context(), x.ProviderID()); e != nil {
+					return e
+				}
+				if e = s.Delete(x.ID); e != nil {
+					return e
+				}
+				deleted = append(deleted, x.Name)
+			}
+			for _, name := range deleted {
+				fmt.Fprintln(cmd.OutOrStdout(), name)
+			}
+			return nil
 		}
 		if all {
 			xs, err := s.List("", true)
@@ -605,6 +642,7 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 		return s.Delete(x.ID)
 	}}
 	remove.Flags().BoolVar(&all, "all", false, "delete all manageable sessions")
+	remove.Flags().BoolVar(&allCompleted, "all-completed", false, "delete all completed sessions")
 	remove.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	root.AddCommand(start, models, chat, resume, list, status, compact, stop, remove)
 	silenceUsage(root)

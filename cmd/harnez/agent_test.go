@@ -861,6 +861,71 @@ func TestAgentStopAndDeleteAllWithNoSessions(t *testing.T) {
 	}
 }
 
+func TestAgentDeleteAllCompleted(t *testing.T) {
+	storeDir := t.TempDir()
+	oldSessionID := os.Getenv("HARNEZ_SESSION_ID")
+	if err := os.Setenv("HARNEZ_SESSION_ID", "caller"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Setenv("HARNEZ_SESSION_ID", oldSessionID) }()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sess := range []*subagent.Session{
+		{ID: "completed1", Name: "done1", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller"},
+		{ID: "completed2", Name: "done2", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller"},
+		{ID: "running", Name: "active", Provider: "codex", Model: "model", Status: "active", HarnessType: "batch", ParentSessionID: "caller"},
+	} {
+		if err := store.Save(sess); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old := agentDriver
+	recorder := &recordingAgentDriver{}
+	agentDriver = func(subagent.Model, string) subagent.Driver { return recorder }
+	defer func() { agentDriver = old }()
+	var out bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"delete", "--all-completed", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	output := out.String()
+	if !strings.Contains(output, "done1") || !strings.Contains(output, "done2") || strings.Contains(output, "active") {
+		t.Fatalf("output = %q, want done1 and done2, not active", output)
+	}
+	if len(recorder.deleted) != 2 {
+		t.Fatalf("deleted sessions = %#v, want 2", recorder.deleted)
+	}
+	if _, err := store.Get("completed1"); err == nil {
+		t.Fatal("completed1 was not deleted")
+	}
+	if _, err := store.Get("completed2"); err == nil {
+		t.Fatal("completed2 was not deleted")
+	}
+	if _, err := store.Get("running"); err != nil {
+		t.Fatalf("active session was deleted: %v", err)
+	}
+}
+
+func TestAgentDeleteAllCompletedRejectsFlagConflicts(t *testing.T) {
+	storeDir := t.TempDir()
+	for _, args := range [][]string{
+		{"delete", "--all-completed", "--all"},
+		{"delete", "--all-completed", "--name", "session"},
+	} {
+		cmd := newAgentCmd()
+		cmd.SetOut(new(bytes.Buffer))
+		cmd.SetErr(new(bytes.Buffer))
+		cmd.SetArgs(append(args, "--store-dir", storeDir))
+		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "cannot be combined") {
+			t.Fatalf("%v: err = %v, want conflict error", args, err)
+		}
+	}
+}
+
 func TestAgentStartStoresCanonicalWorkingDir(t *testing.T) {
 	old := agentDriver
 	recorder := &recordingAgentDriver{}
