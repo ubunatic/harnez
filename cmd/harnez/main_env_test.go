@@ -30,5 +30,6 @@ func TestMain(m *testing.M) {
 		}
 	}()
 
-	os.Exit(m.Run())
+	code := m.Run()
+	os.Exit(code)
 }
