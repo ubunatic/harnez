@@ -42,28 +42,28 @@ Rules that held up in practice:
    ticket forbids, and make weak cuts. Give them mechanical work with an explicit acceptance
    test only.
 
-   ### Known weak-model failure modes (claude haiku, 2026-09)
+### Known weak-model failure modes (claude haiku, 2026-09)
 
-   - Non-fix reported as a fix: asked to make `TestMain` clean up its temp `HOME`, it only
-     changed `os.Exit(m.Run())` into `code := m.Run(); os.Exit(code)`, which still skips
-     defers, and reported "allowing defer cleanup to execute". Commit `932bb24`; real fix
-     `92c4b9e` by `claude:sonnet:low`.
-   - Reused the previous commit's subject line verbatim for a different change (`932bb24`
-     vs `090078f`).
-   - Duplicated pasted content: appended the same two orchestrator rule lines twice to
-     `spec/agent.yaml`; found by an `agy:flash38` reviewer, fixed in `0f0c0ef`.
-   - Weakened test assertions while "fixing" a bug: dropped a command-name assertion and left
-     a tautological stderr assertion; fixed in `a5180d2`.
-   - Fabricated measurements in a report (-49%/-80% claimed, real -5%/-66%) — see
-     `docs/feedback/2026-09-20-dot8-lean-sprint.md`.
-   - Cannot read Dot8 braille cards at all — see
-     `docs/studies/2026-09-20-haiku-dot8-card-reading-canary.md`.
+- Non-fix reported as a fix: asked to make `TestMain` clean up its temp `HOME`, it only
+  changed `os.Exit(m.Run())` into `code := m.Run(); os.Exit(code)`, which still skips
+  defers, and reported "allowing defer cleanup to execute". Commit `932bb24`; real fix
+  `92c4b9e` by `claude:sonnet:low`.
+- Reused the previous commit's subject line verbatim for a different change (`932bb24`
+  vs `090078f`).
+- Duplicated pasted content: appended the same two orchestrator rule lines twice to
+  `spec/agent.yaml`; found by an `agy:flash38` reviewer, fixed in `0f0c0ef`.
+- Weakened test assertions while "fixing" a bug: dropped a command-name assertion and left
+  a tautological stderr assertion; fixed in `a5180d2`.
+- Fabricated measurements in a report (-49%/-80% claimed, real -5%/-66%) — see
+  `docs/feedback/2026-09-20-dot8-lean-sprint.md`.
+- Cannot read Dot8 braille cards at all — see
+  `docs/studies/2026-09-20-haiku-dot8-card-reading-canary.md`.
 
-   **Cost of the cheap seat**: every one of these needed a host review turn plus a
-   re-delegation to a stronger model, so the cheap turn cost more than assigning
-   `claude:sonnet:low` from the start. Use haiku only for mechanical edits with an explicit,
-   machine-checkable acceptance test (a command whose output decides pass/fail); anything
-   requiring judgment about whether a fix is correct goes to sonnet or better.
+**Cost of the cheap seat**: every one of these needed a host review turn plus a
+re-delegation to a stronger model, so the cheap turn cost more than assigning
+`claude:sonnet:low` from the start. Use haiku only for mechanical edits with an explicit,
+machine-checkable acceptance test (a command whose output decides pass/fail); anything
+requiring judgment about whether a fix is correct goes to sonnet or better.
 
 Example assignment (2026-09, Codex and Claude subscriptions):
 
