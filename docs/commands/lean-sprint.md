@@ -1,9 +1,9 @@
 # Lean Fresh-Handoff Sprint
 
-Orchestrate a lean, milestone-driven developer handoff with strict zero-coding review loops and single-ticket pre-work batching.
-
-- Preflight: confirm the ticket premise still holds on HEAD by grepping named files/strings and using `harnez read`.
+- Preflight: grep the files/strings named by the ticket and use `harnez read` to verify its premise still holds on HEAD.
   If already done or obsolete, close the ticket with the finding and dispatch no developer.
+
+Orchestrate a lean, milestone-driven developer handoff with strict zero-coding review loops and single-ticket pre-work batching.
 
 Reference Practice: `@docs/AgenticLoop.md`
 
