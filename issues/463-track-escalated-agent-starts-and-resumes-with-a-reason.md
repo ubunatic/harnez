@@ -27,9 +27,3 @@ and why it happened.
 - Record the escalation marker and reason in the existing agent/session tracking path.
 - Add tests for accepted flags, missing/invalid reasons, and normal non-escalated starts/resumes.
 - Verify the recorded data is visible through the relevant status/history output.
-
-**Status**: Draft
-
----
-
-Reserved placeholder ticket.
