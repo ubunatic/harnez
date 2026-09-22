@@ -1,7 +1,7 @@
 # Lean Fresh-Handoff Sprint
 
-- Preflight: grep the files/strings named by the ticket and use `harnez read` to verify its premise still holds on HEAD.
-  If already done or obsolete, close the ticket with the finding and dispatch no developer.
+- Preflight: grep the files/strings named by the ticket, use `harnez read` and `git log -S` on what it says exists, and
+  verify its premise still holds on HEAD. If already done or obsolete, close the ticket with the finding and dispatch no developer.
 
 Orchestrate a lean, milestone-driven developer handoff with strict zero-coding review loops and single-ticket pre-work batching.
 
