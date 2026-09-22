@@ -32,6 +32,15 @@ Use this to decide which model gets which role in a harnez sprint. For general m
 The Codex and Claude token counts are not comparable. Codex reports cumulative input per turn,
 while Claude Code reports a subagent total. Compare within each vendor only.
 
+**Subscription cost is not measured yet.**
+
+- Uncached Codex input was 45k for luna:low, 59k for luna:med and 68k for terra:low.
+- `harnez usage --json` shows quota only as whole percentages per window, so a single advisory
+  run doesn't move it.
+- There are no rate cards yet (issue 445).
+- To calibrate: run each model N times at the start of a fresh 5-hour window and read the
+  change in `used_percent`, one model per window.
+
 ## Fact checks
 
 Each check is a claim you can verify in the repo. ✓ means the model caught it, ✗ means it missed
