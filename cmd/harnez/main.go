@@ -17,7 +17,6 @@ import (
 	"ubunatic.com/harnez/internal/assess"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/codex"
-	"ubunatic.com/harnez/internal/components"
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/sessionstate"
@@ -118,11 +117,11 @@ func underAgentCommand(cmd *cobra.Command) bool {
 	return false
 }
 
-func resolveComponentSelection(cfg *claude.Config, flag []string) (components.Set, error) {
-	if err := components.ValidateConfig(cfg); err != nil {
+func resolveComponentSelection(cfg *claude.Config, flag []string) (claude.Set, error) {
+	if err := claude.ValidateConfig(cfg); err != nil {
 		return nil, err
 	}
-	return components.Resolve(flag, cfg.ComponentNames, nil)
+	return claude.Resolve(flag, cfg.ComponentNames, nil)
 }
 
 // resolveUsageHost decides the effective --host value for `harnez usage`:
@@ -535,7 +534,7 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if set.Has(components.Telemetry) {
+			if set.Has(claude.Telemetry) {
 				if err := ensureTelemetrySchema(); err != nil {
 					return fmt.Errorf("initialize telemetry: %w", err)
 				}
@@ -546,7 +545,6 @@ func newRootCmd() *cobra.Command {
 			if agyTarget != "" {
 				cfg.AgyTarget = agyTarget
 			}
-			filtered := components.Filter(cfg, set)
 			if (debloat || debloatPreset != "") && len(cfg.Debloat.CodexFeatures) > 0 && cfg.CodexHooksTarget == "" {
 				return fmt.Errorf("codex_hooks_target is required for Codex debloat")
 			}
@@ -561,7 +559,7 @@ func newRootCmd() *cobra.Command {
 					return err
 				}
 			}
-			if err := claude.ApplyAllVariant(t, filtered, set, applyDocs, forceDocs, applySystemd, applyVariant, applyShell); err != nil {
+			if err := claude.ApplyAllVariant(t, cfg, set, applyDocs, forceDocs, applySystemd, applyVariant, applyShell); err != nil {
 				return err
 			}
 			opts := claude.DebloatOptions{
@@ -673,7 +671,7 @@ func newRootCmd() *cobra.Command {
 				return nil
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
-			changed, err := claude.DiffAll(t, components.Filter(cfg, set), set)
+			changed, err := claude.DiffAll(t, cfg, set)
 			if err != nil {
 				return err
 			}
@@ -766,7 +764,7 @@ func newRootCmd() *cobra.Command {
 				}
 				return nil
 			}
-			return claude.RunStatus(name, components.Filter(cfg, set), t, set)
+			return claude.RunStatus(name, cfg, t, set)
 		},
 	}
 	status.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")

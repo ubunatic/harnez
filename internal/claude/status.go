@@ -22,7 +22,7 @@ func hasSettingsKey(path, key string) bool {
 }
 
 // RunStatus prints the current applied status of configuration parameters.
-func RunStatus(configPath string, cfg *Config, target string, selection ComponentSelection) error {
+func RunStatus(configPath string, cfg *Config, target string, selection Set) error {
 	fmt.Println("Config:")
 	fmt.Printf("  %-14s %s\n", "file:", configPath)
 	fmt.Printf("  %-14s %s\n", "target:", target)

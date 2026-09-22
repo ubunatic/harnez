@@ -88,7 +88,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 		}
 	}
 	// diff must report no drift immediately after apply.
-	changed, err := DiffAll(targetDir, cfg, FullComponentSelection{})
+	changed, err := DiffAll(targetDir, cfg, nil)
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 
 	// status must report the new target as ok.
 	statusOut, err := captureStdoutClaudeSkills(func() error {
-		return RunStatus("(embedded)", cfg, targetDir, FullComponentSelection{})
+		return RunStatus("(embedded)", cfg, targetDir, nil)
 	})
 	if err != nil {
 		t.Fatalf("RunStatus failed: %v", err)
@@ -111,7 +111,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 	if err := os.WriteFile(skillPath, []byte("drifted"), 0644); err != nil {
 		t.Fatalf("failed to simulate drift: %v", err)
 	}
-	changed, err = DiffAll(targetDir, cfg, FullComponentSelection{})
+	changed, err = DiffAll(targetDir, cfg, nil)
 	if err != nil {
 		t.Fatalf("DiffAll after drift failed: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 	if err := os.WriteFile(docupResourcePath, []byte("drifted resource"), 0644); err != nil {
 		t.Fatalf("failed to simulate resource drift: %v", err)
 	}
-	changed, err = DiffAll(targetDir, cfg, FullComponentSelection{})
+	changed, err = DiffAll(targetDir, cfg, nil)
 	if err != nil {
 		t.Fatalf("DiffAll after resource drift failed: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 		t.Errorf("expected DiffAll to report drift after hand-editing %s", docupResourcePath)
 	}
 	statusOut, err = captureStdoutClaudeSkills(func() error {
-		return RunStatus("(embedded)", cfg, targetDir, FullComponentSelection{})
+		return RunStatus("(embedded)", cfg, targetDir, nil)
 	})
 	if err != nil {
 		t.Fatalf("RunStatus after resource drift failed: %v", err)
@@ -330,7 +330,7 @@ func TestUnifiedCrossHarnessSkillTargets(t *testing.T) {
 	}
 
 	// Diff immediately after apply should show no changes
-	changed, err := DiffAll(targetDir, cfg, FullComponentSelection{})
+	changed, err := DiffAll(targetDir, cfg, nil)
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
 	}

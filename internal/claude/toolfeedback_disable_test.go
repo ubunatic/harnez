@@ -88,7 +88,7 @@ func TestApplyOmitsToolFeedbackProtocolWhenDisabled(t *testing.T) {
 	}
 
 	// DiffAll while disabled must report no drift (fully cleaned already).
-	changed, err := DiffAll(targetDir, cfg, FullComponentSelection{})
+	changed, err := DiffAll(targetDir, cfg, nil)
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
 	}

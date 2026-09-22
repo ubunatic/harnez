@@ -35,12 +35,6 @@ func TestUnfilteredApplySettingsMatchesFixedGolden(t *testing.T) {
 	}
 }
 
-type testComponentSelection map[string]bool
-
-func (s testComponentSelection) HasComponent(name string) bool {
-	return s[name]
-}
-
 func TestSelectedApplyRemovesOnlyHarnezOwnedSettings(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -67,7 +61,7 @@ func TestSelectedApplyRemovesOnlyHarnezOwnedSettings(t *testing.T) {
 		MCPServers: []MCPServer{{Name: "harnez-server", Command: "harnez-mcp"}},
 		StatusLine: true,
 	}
-	docsOnly := testComponentSelection{"docs": true, "skills": true}
+	docsOnly := Set{Docs: true, Skills: true}
 	if err := ApplyAllVariant(target, cfg, docsOnly, nil, false, false, "", false); err != nil {
 		t.Fatalf("selected apply: %v", err)
 	}

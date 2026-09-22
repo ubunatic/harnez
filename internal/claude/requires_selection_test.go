@@ -7,12 +7,6 @@ import (
 	"testing"
 )
 
-// requiresSelection is a minimal ComponentSelection for tests, mirroring the
-// selection shape used by internal/components.Set (issue 491).
-type requiresSelection map[string]bool
-
-func (s requiresSelection) HasComponent(name string) bool { return s[name] }
-
 // findSkill returns a copy of the named skill from an embedded config,
 // letting a test attach `Requires` without touching config.yaml.
 func findSkill(t *testing.T, cfg *Config, name string) (Command, int) {
@@ -58,7 +52,7 @@ func TestApplyRemovesResourceBearingSkillWithUnmetRequires(t *testing.T) {
 	}
 
 	target := t.TempDir()
-	full := requiresSelection{"docs": true, "skills": true, "telemetry": true, "agents": true, "usage": true}
+	full := Set{Docs: true, Skills: true, Telemetry: true, Agents: true, Usage: true}
 	if err := ApplyAllVariant(target, cfg, full, nil, false, false, "", false); err != nil {
 		t.Fatalf("apply with telemetry selected: %v", err)
 	}
@@ -71,7 +65,7 @@ func TestApplyRemovesResourceBearingSkillWithUnmetRequires(t *testing.T) {
 		}
 	}
 
-	withoutTelemetry := requiresSelection{"docs": true, "skills": true, "agents": true, "usage": true}
+	withoutTelemetry := Set{Docs: true, Skills: true, Agents: true, Usage: true}
 	if err := ApplyAllVariant(target, cfg, withoutTelemetry, nil, false, false, "", false); err != nil {
 		t.Fatalf("apply without telemetry: %v", err)
 	}
@@ -112,7 +106,7 @@ func TestCodexAgyAppliedByTelemetrySelection(t *testing.T) {
 	cfg.AgyHooksTarget = ""
 
 	target := t.TempDir()
-	withTelemetry := requiresSelection{"docs": true, "skills": true, "telemetry": true, "agents": true, "usage": true}
+	withTelemetry := Set{Docs: true, Skills: true, Telemetry: true, Agents: true, Usage: true}
 	if err := ApplyAllVariant(target, cfg, withTelemetry, nil, false, false, "", false); err != nil {
 		t.Fatalf("apply with telemetry selected: %v", err)
 	}
@@ -123,7 +117,7 @@ func TestCodexAgyAppliedByTelemetrySelection(t *testing.T) {
 		t.Fatalf("DiffAll with telemetry selected: changed=%v err=%v, want clean", changed, err)
 	}
 
-	withoutTelemetry := requiresSelection{"docs": true, "skills": true, "agents": true, "usage": true}
+	withoutTelemetry := Set{Docs: true, Skills: true, Agents: true, Usage: true}
 	if changed, err := DiffAll(target, cfg, withoutTelemetry); err != nil {
 		t.Fatalf("DiffAll without telemetry: %v", err)
 	} else if !changed {
@@ -142,8 +136,8 @@ func TestCodexAgyAppliedByTelemetrySelection(t *testing.T) {
 }
 
 func TestSkillDisabledHelper(t *testing.T) {
-	full := requiresSelection{"telemetry": true}
-	none := requiresSelection{}
+	full := Set{Telemetry: true}
+	none := Set{}
 
 	rateFeedbackSkill := Command{Name: "tool-feedback-protocol", RateFeedback: true}
 	if skillDisabled(rateFeedbackSkill, full, false) {

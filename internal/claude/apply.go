@@ -198,7 +198,7 @@ func resolveModel(s string) string {
 }
 
 // buildSettingsDoc creates the settings JSON document from the YAML config.
-func buildSettingsDoc(cfg *Config, selection ComponentSelection) map[string]any {
+func buildSettingsDoc(cfg *Config, selection Set) map[string]any {
 	// Use map[string]any throughout so json.Marshal always sorts keys alphabetically,
 	// matching what json.Unmarshal produces on read-back (round-trip stable).
 	eventMap := map[string][]map[string]any{}
@@ -680,7 +680,7 @@ func appendUniquePath(paths []string, path string) []string {
 // skillDisabled reports whether skill must be actively removed rather than
 // installed: rate_feedback-gated and disabled, or its `requires:` component
 // isn't in the resolved selection (issue 142, generalized for issue 491 M5).
-func skillDisabled(skill Command, selection ComponentSelection, disableRateFeedback bool) bool {
+func skillDisabled(skill Command, selection Set, disableRateFeedback bool) bool {
 	if skill.RateFeedback && disableRateFeedback {
 		return true
 	}
@@ -965,24 +965,17 @@ func mergeDocs(fromConfig, fromFlag []string) []string {
 // ApplyAll installs the managed configuration into target, always using the
 // full doc source. See ApplyAllVariant to select a lite_source variant.
 func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool, installShell ...bool) error {
-	return ApplyAllVariant(target, cfg, FullComponentSelection{}, docs, forceDocs, installSystemd, "", installShell...)
+	return ApplyAllVariant(target, cfg, nil, docs, forceDocs, installSystemd, "", installShell...)
 }
-
-// ComponentSelection is the resolved component set for an apply operation.
-// It is deliberately an interface so the component resolver can remain
-// outside this package without creating an import cycle.
-type ComponentSelection interface {
-	HasComponent(string) bool
-}
-
-type FullComponentSelection struct{}
-
-func (FullComponentSelection) HasComponent(string) bool { return true }
 
 // ApplyAllVariant is ApplyAll with an explicit doc variant ("" or "lite")
 // selecting which source (Language.SourceFor) is installed for docs that
-// declare a lite_source.
-func ApplyAllVariant(target string, cfg *Config, selection ComponentSelection, docs []string, forceDocs bool, installSystemd bool, docVariant string, installShell ...bool) error {
+// declare a lite_source. selection is the resolved component set for this
+// apply operation (nil = full, issue 491 M6); cfg is passed unfiltered —
+// selection narrows what gets installed and drives the active-removal
+// branches (Codex/AGY hooks, distill adapters, skills with unmet requires)
+// entirely inside this package now.
+func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, forceDocs bool, installSystemd bool, docVariant string, installShell ...bool) error {
 	shellOpt := len(installShell) > 0 && installShell[0]
 	docs = expandDocNames(cfg, docs)
 	if err := validateDocNames(cfg, docs); err != nil {
@@ -1036,7 +1029,11 @@ func ApplyAllVariant(target string, cfg *Config, selection ComponentSelection, d
 
 	disableRateFeedback := RateFeedbackDisabled(cfg, nil)
 
-	if len(cfg.Commands) > 0 {
+	// issue 491 M6: with cfg unfiltered, the "skills" component itself (as
+	// opposed to a skill's own `requires:`) only gates installing new
+	// content — skip semantics, matching a disabled skill's own requires
+	// check below, which still actively removes it regardless of this gate.
+	if len(cfg.Commands) > 0 && selection.HasComponent("skills") {
 		cmdDirs := commandTargets(target, cfg)
 		for _, cmdDir := range cmdDirs {
 			if err := os.MkdirAll(cmdDir, 0755); err != nil {
@@ -1107,6 +1104,12 @@ func ApplyAllVariant(target string, cfg *Config, selection ComponentSelection, d
 					_ = os.Remove(skillDir)
 				}
 				skillNames = append(skillNames, skill.Name+" (disabled)")
+				continue
+			}
+			if !selection.HasComponent("skills") {
+				// skip semantics: skills component off, but this skill's own
+				// requires: (if any) are met, so an existing install is left
+				// untouched rather than updated or removed.
 				continue
 			}
 			content, err := genSkillContent(skill, cfg.FS)
@@ -1224,21 +1227,41 @@ func ApplyAllVariant(target string, cfg *Config, selection ComponentSelection, d
 		}
 	}
 
+	// issue 491 M6: like Codex/AGY hooks above, distill adapters are only
+	// installed under the telemetry component; without it they're actively
+	// removed, since cfg is unfiltered here (selection decides, not Filter).
 	if adapters := distillAdapters(cfg); len(adapters) > 0 {
-		for _, adapter := range adapters {
-			ar, err := writeFileIfChanged(adapter.path, []byte(adapter.content))
-			if err != nil {
-				return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+		if selection.HasComponent("telemetry") {
+			for _, adapter := range adapters {
+				ar, err := writeFileIfChanged(adapter.path, []byte(adapter.content))
+				if err != nil {
+					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+				}
+				if ar.changed {
+					changes++
+				}
+				printResult("wrote", adapter.path, ar)
 			}
-			if ar.changed {
-				changes++
+			addStat("distill", distillAdapterSummary(cfg))
+		} else {
+			for _, adapter := range adapters {
+				if err := os.Remove(adapter.path); err == nil {
+					changes++
+					fmt.Printf("  removed %s\n", adapter.path)
+				} else if !os.IsNotExist(err) {
+					return fmt.Errorf("%s %s: %w", adapter.label, adapter.path, err)
+				}
 			}
-			printResult("wrote", adapter.path, ar)
 		}
-		addStat("distill", distillAdapterSummary(cfg))
 	}
 
-	globalDocs := mergeDocs(cfg.Docs, docs)
+	docNames := docs
+	configDocs := cfg.Docs
+	if !selection.HasComponent("docs") {
+		docNames = nil
+		configDocs = nil
+	}
+	globalDocs := mergeDocs(configDocs, docNames)
 	for _, name := range globalDocs {
 		lang, ok := cfg.AgentsMD.Languages[name]
 		if !ok {
@@ -1350,7 +1373,7 @@ func ApplyAllVariant(target string, cfg *Config, selection ComponentSelection, d
 }
 
 // DiffAll diffs the config and reports whether changes/drift were detected.
-func DiffAll(target string, cfg *Config, selection ComponentSelection) (bool, error) {
+func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 	anyChanged := false
 	report := func(changed bool, err error) error {
 		if err != nil {
@@ -1379,6 +1402,9 @@ func DiffAll(target string, cfg *Config, selection ComponentSelection) (bool, er
 					}
 				}
 				continue
+			}
+			if !selection.HasComponent("skills") {
+				continue // skip semantics: not managed, so never drifted
 			}
 			content, err := genSkillContent(skill, cfg.FS)
 			if err != nil {
@@ -1500,7 +1526,11 @@ func DiffAll(target string, cfg *Config, selection ComponentSelection) (bool, er
 		}
 	}
 
-	for _, name := range cfg.Docs {
+	docsForDiff := cfg.Docs
+	if !selection.HasComponent("docs") {
+		docsForDiff = nil
+	}
+	for _, name := range docsForDiff {
 		lang, ok := cfg.AgentsMD.Languages[name]
 		if !ok {
 			continue

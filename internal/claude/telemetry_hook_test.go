@@ -129,7 +129,7 @@ func TestApplyInstallsTelemetryHook(t *testing.T) {
 	// status must report the hook via the same generic "hooks:" count
 	// counter it already uses for distill's hook (issue 119 AC).
 	out, err := captureStdoutTelemetry(func() error {
-		return RunStatus("(embedded)", cfg, targetDir, FullComponentSelection{})
+		return RunStatus("(embedded)", cfg, targetDir, nil)
 	})
 	if err != nil {
 		t.Fatalf("RunStatus failed: %v", err)

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Uwe Jugel
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-package components
+package claude
 
 import (
 	"os"
@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"ubunatic.com/harnez/internal/agy"
-	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/codex"
 	"ubunatic.com/harnez/internal/jsonc"
 )
@@ -78,11 +77,11 @@ func TestResolvePrecedence(t *testing.T) {
 func TestValidateConfigRejectsUnknownComponents(t *testing.T) {
 	cases := []struct {
 		name string
-		cfg  *claude.Config
+		cfg  *Config
 		want string
 	}{
-		{"config", &claude.Config{ComponentNames: []string{"telemtry"}}, "telemtry"},
-		{"requirement", &claude.Config{Skills: []claude.Command{{Name: "broken", Requires: []string{"telemtry"}}}}, "skill \"broken\""},
+		{"config", &Config{ComponentNames: []string{"telemtry"}}, "telemtry"},
+		{"requirement", &Config{Skills: []Command{{Name: "broken", Requires: []string{"telemtry"}}}}, "skill \"broken\""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -94,16 +93,23 @@ func TestValidateConfigRejectsUnknownComponents(t *testing.T) {
 	}
 }
 
-func hookEntry(cmds ...string) map[string]any {
-	var hs []any
-	for _, c := range cmds {
-		hs = append(hs, map[string]any{"type": "command", "command": c})
+func TestPresetNamesMatchPresets(t *testing.T) {
+	names := PresetNames()
+	if len(names) != len(presets) {
+		t.Fatalf("PresetNames %v out of sync with presets", names)
 	}
-	return map[string]any{"hooks": hs}
+	for _, n := range names {
+		if _, ok := presets[n]; !ok {
+			t.Errorf("PresetNames lists %q, not in presets", n)
+		}
+	}
 }
 
-// setupHome isolates HOME and redirects every apply target into it.
-func setupHome(t *testing.T) (target string, cfg *claude.Config) {
+// setupComponentsHome isolates HOME and redirects every apply target into
+// it, mirroring the internal/components package's test fixture (issue 491
+// M6: these tests moved here once selection lives entirely in this
+// package and internal/components was deleted).
+func setupComponentsHome(t *testing.T) (target string, cfg *Config) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -112,7 +118,7 @@ func setupHome(t *testing.T) (target string, cfg *claude.Config) {
 	if err := os.MkdirAll(filepath.Join(home, ".gemini"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := claude.LoadConfigEmbedded()
+	cfg, err := LoadConfigEmbedded()
 	if err != nil {
 		t.Fatalf("LoadConfigEmbedded: %v", err)
 	}
@@ -130,7 +136,14 @@ func settingsCommands(t *testing.T, target string) (hooks []string, statusLine s
 	for _, v := range hm {
 		entries, _ := v.([]any)
 		for _, e := range entries {
-			hooks = append(hooks, entryCommands(e)...)
+			m, _ := e.(map[string]any)
+			list, _ := m["hooks"].([]any)
+			for _, h := range list {
+				hm2, _ := h.(map[string]any)
+				if cmd, ok := hm2["command"].(string); ok {
+					hooks = append(hooks, cmd)
+				}
+			}
 		}
 	}
 	if sl, ok := doc["statusLine"].(map[string]any); ok {
@@ -139,42 +152,35 @@ func settingsCommands(t *testing.T, target string) (hooks []string, statusLine s
 	return hooks, statusLine
 }
 
-func mustApply(t *testing.T, target string, cfg *claude.Config, names ...string) []string {
-	t.Helper()
-	return mustApplyOpts(t, target, cfg, Options{}, names...)
-}
-
-func mustApplyOpts(t *testing.T, target string, cfg *claude.Config, opts Options, names ...string) []string {
+func mustApplyComponents(t *testing.T, target string, cfg *Config, docs []string, names ...string) {
 	t.Helper()
 	set, err := Parse(names...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	removed, err := Apply(target, cfg, set, opts)
-	if err != nil {
-		t.Fatalf("Apply(%v): %v", names, err)
+	if err := ApplyAllVariant(target, cfg, set, docs, false, false, "", false); err != nil {
+		t.Fatalf("ApplyAllVariant(%v): %v", names, err)
 	}
-	return removed
 }
 
 func TestApply_FullMatchesPlainApply(t *testing.T) {
-	target, cfg := setupHome(t)
-	if err := claude.ApplyAll(target, cfg, nil, false, false); err != nil {
+	target, cfg := setupComponentsHome(t)
+	if err := ApplyAll(target, cfg, nil, false, false); err != nil {
 		t.Fatalf("ApplyAll: %v", err)
 	}
 	want, _ := os.ReadFile(filepath.Join(target, "settings.json"))
 
-	target2, cfg2 := setupHome(t)
-	mustApply(t, target2, cfg2) // no selection = full
+	target2, cfg2 := setupComponentsHome(t)
+	mustApplyComponents(t, target2, cfg2, nil) // no selection = full
 	got, _ := os.ReadFile(filepath.Join(target2, "settings.json"))
 	if string(got) != string(want) {
-		t.Errorf("unfiltered Apply settings differ from plain apply:\n%s\nvs\n%s", got, want)
+		t.Errorf("unfiltered selected apply settings differ from plain apply:\n%s\nvs\n%s", got, want)
 	}
 }
 
 func TestApply_FullThenDocsOnly(t *testing.T) {
-	target, cfg := setupHome(t)
-	mustApply(t, target, cfg, "full")
+	target, cfg := setupComponentsHome(t)
+	mustApplyComponents(t, target, cfg, nil, "full")
 
 	hooks, statusLine := settingsCommands(t, target)
 	if !slices.Contains(hooks, "harnez exec hook") || statusLine != "harnez statusline" {
@@ -206,12 +212,11 @@ func TestApply_FullThenDocsOnly(t *testing.T) {
 		}
 	}
 
-	removed := mustApply(t, target, cfg, "docs-only")
-	t.Logf("removed: %v", removed)
+	mustApplyComponents(t, target, cfg, nil, "docs-only")
 
 	hooks, statusLine = settingsCommands(t, target)
 	for _, h := range hooks {
-		if IsHarnezCommand(h) {
+		if isHarnezCommand(h) {
 			t.Errorf("docs-only: harnez hook %q left in settings", h)
 		}
 	}
@@ -239,7 +244,7 @@ func TestApply_FullThenDocsOnly(t *testing.T) {
 	}
 
 	set, _ := Parse("docs-only")
-	drift, err := claude.DiffAll(target, Filter(cfg, set), set)
+	drift, err := DiffAll(target, cfg, set)
 	if err != nil {
 		t.Fatalf("DiffAll: %v", err)
 	}
@@ -248,7 +253,7 @@ func TestApply_FullThenDocsOnly(t *testing.T) {
 	}
 
 	// Switching back reinstalls everything.
-	mustApply(t, target, cfg, "full")
+	mustApplyComponents(t, target, cfg, nil, "full")
 	hooks, statusLine = settingsCommands(t, target)
 	if !slices.Contains(hooks, "harnez exec hook") || statusLine == "" {
 		t.Errorf("back to full: hooks=%v statusLine=%q", hooks, statusLine)
@@ -259,8 +264,8 @@ func TestApply_FullThenDocsOnly(t *testing.T) {
 }
 
 func TestApply_TelemetryOnly(t *testing.T) {
-	target, cfg := setupHome(t)
-	mustApplyOpts(t, target, cfg, Options{Docs: []string{"git"}}, "telemetry-only")
+	target, cfg := setupComponentsHome(t)
+	mustApplyComponents(t, target, cfg, []string{"git"}, "telemetry-only")
 	if entries, _ := os.ReadDir(filepath.Join(target, "docs")); len(entries) > 0 {
 		t.Errorf("telemetry-only: docs installed: %v", entries)
 	}
@@ -278,8 +283,8 @@ func TestApply_TelemetryOnly(t *testing.T) {
 }
 
 func TestApply_PresetsComposeByUnion(t *testing.T) {
-	target, cfg := setupHome(t)
-	mustApply(t, target, cfg, "docs-only,telemetry-only")
+	target, cfg := setupComponentsHome(t)
+	mustApplyComponents(t, target, cfg, nil, "docs-only,telemetry-only")
 	hooks, _ := settingsCommands(t, target)
 	if !slices.Contains(hooks, "harnez exec hook") {
 		t.Error("union: telemetry hooks missing")
@@ -289,59 +294,14 @@ func TestApply_PresetsComposeByUnion(t *testing.T) {
 	}
 }
 
-func TestPlan(t *testing.T) {
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatal(err)
-	}
-	set, _ := Parse("docs-only")
-	actions := map[string]string{}
-	for _, s := range Plan(cfg, set) {
-		actions[s.Phase] = s.Action
-	}
-	want := map[string]string{
-		"settings: harnez hooks": "remove",
-		"settings: statusLine":   "remove",
-		"codex hooks":            "remove",
-		"skills":                 "install",
-		"global docs":            "install",
-		"telemetry schema init":  "skip",
-		"distill adapters":       "remove",
-		"skills: unmet requires": "remove",
-	}
-	for phase, a := range want {
-		if actions[phase] != a {
-			t.Errorf("%s: %q, want %q", phase, actions[phase], a)
-		}
-	}
-}
-
-func TestSkillRequirementsComeFromConfig(t *testing.T) {
-	cfg := &claude.Config{
-		Skills: []claude.Command{{Name: "agent-skill", Requires: []string{"agents"}}},
-	}
-	set, _ := Parse("docs-only")
-	filtered := Filter(cfg, set)
-	if len(filtered.Skills) != 0 {
-		t.Fatalf("filtered skills = %v, want unmet requirement removed", filtered.Skills)
-	}
-	steps := Plan(cfg, set)
-	for _, step := range steps {
-		if step.Phase == "skills: unmet requires" && step.Detail == "agent-skill" {
-			return
-		}
-	}
-	t.Fatal("plan did not report skill with unmet configured requirement")
-}
-
 func TestApply_AgentsOnlyAfterFull(t *testing.T) {
-	target, cfg := setupHome(t)
-	mustApply(t, target, cfg, "full")
-	mustApply(t, target, cfg, "agents-only")
+	target, cfg := setupComponentsHome(t)
+	mustApplyComponents(t, target, cfg, nil, "full")
+	mustApplyComponents(t, target, cfg, nil, "agents-only")
 
 	hooks, statusLine := settingsCommands(t, target)
 	for _, h := range hooks {
-		if IsHarnezCommand(h) {
+		if isHarnezCommand(h) {
 			t.Errorf("agents-only: harnez hook %q left", h)
 		}
 	}
@@ -358,26 +318,14 @@ func TestApply_AgentsOnlyAfterFull(t *testing.T) {
 }
 
 func TestApply_OnlyHarnezHooksLeavesNoHooksKey(t *testing.T) {
-	target, cfg := setupHome(t)
-	cfg.Hooks = slices.DeleteFunc(slices.Clone(cfg.Hooks), func(h claude.Hook) bool {
-		return !IsHarnezCommand(h.Command)
+	target, cfg := setupComponentsHome(t)
+	cfg.Hooks = slices.DeleteFunc(slices.Clone(cfg.Hooks), func(h Hook) bool {
+		return !isHarnezCommand(h.Command)
 	})
-	mustApply(t, target, cfg, "full")
-	mustApply(t, target, cfg, "docs-only")
+	mustApplyComponents(t, target, cfg, nil, "full")
+	mustApplyComponents(t, target, cfg, nil, "docs-only")
 	doc := jsonc.Read(filepath.Join(target, "settings.json"))
 	if _, ok := doc["hooks"]; ok {
 		t.Errorf("docs-only without user hooks: stale hooks key %v", doc["hooks"])
-	}
-}
-
-func TestPresetNamesMatchPresets(t *testing.T) {
-	names := PresetNames()
-	if len(names) != len(presets) {
-		t.Fatalf("PresetNames %v out of sync with presets", names)
-	}
-	for _, n := range names {
-		if _, ok := presets[n]; !ok {
-			t.Errorf("PresetNames lists %q, not in presets", n)
-		}
 	}
 }

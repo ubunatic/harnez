@@ -1,23 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Uwe Jugel
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package components is the MVP of the harnez component system (issue 490,
-// docs/HarnezComponents.md §8). It selects which parts of `harnez apply`
-// run, without changing internal/claude: Filter narrows a copy of the
-// config before claude.ApplyAllVariant runs, and Apply adds the removal pass
-// for harness entry points of disabled components. Once the design is
-// accepted, this logic moves into internal/claude and the apply command.
-package components
+package claude
 
 import (
 	"fmt"
 	"slices"
 	"strings"
-
-	"ubunatic.com/harnez/internal/claude"
 )
 
-// Component names one separable part of what `harnez apply` installs.
+// Component names one separable part of what `harnez apply` installs
+// (issue 490, docs/HarnezComponents.md §8; moved from internal/components
+// into internal/claude, issue 491 M6).
 type Component string
 
 const (
@@ -44,13 +38,20 @@ func PresetNames() []string {
 	return []string{"full", "docs-only", "telemetry-only", "agents-only"}
 }
 
-// Set is a resolved selection. A nil Set means no selection was made and
-// enables everything, so a config without `components:` behaves as today.
+// Set is a resolved component selection. A nil Set means no selection was
+// made and enables everything, so a config without `components:` behaves as
+// today (nil = full).
 type Set map[Component]bool
 
 // Has reports whether c is enabled.
 func (s Set) Has(c Component) bool {
 	return s == nil || s[c]
+}
+
+// HasComponent is Has by string name, for call sites (skillDisabled,
+// buildSettingsDoc) that only have a `requires:` name, not a typed Component.
+func (s Set) HasComponent(name string) bool {
+	return s.Has(Component(name))
 }
 
 // Allows reports whether every required component is enabled.
@@ -131,7 +132,7 @@ func Resolve(flag, config, local []string) (Set, error) {
 }
 
 // ValidateConfig rejects component names that cannot be resolved by apply.
-func ValidateConfig(cfg *claude.Config) error {
+func ValidateConfig(cfg *Config) error {
 	if _, err := Parse(cfg.ComponentNames...); err != nil {
 		return fmt.Errorf("config components: %w", err)
 	}
@@ -143,25 +144,4 @@ func ValidateConfig(cfg *claude.Config) error {
 		}
 	}
 	return nil
-}
-
-// IsHarnezCommand reports whether a hook or status line command invokes the
-// harnez binary. Only such entries are harnez-owned and may be removed.
-func IsHarnezCommand(cmd string) bool {
-	cmd = strings.TrimSpace(cmd)
-	return cmd == "harnez" || strings.HasPrefix(cmd, "harnez ")
-}
-
-func requiredComponents(names []string) []Component {
-	components := make([]Component, len(names))
-	for i, name := range names {
-		components[i] = Component(name)
-	}
-	return components
-}
-
-// HasComponent lets internal/claude consume a resolved selection without
-// importing this package and creating an import cycle.
-func (s Set) HasComponent(name string) bool {
-	return s.Has(Component(name))
 }
