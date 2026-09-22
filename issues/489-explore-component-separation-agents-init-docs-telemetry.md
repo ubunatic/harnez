@@ -1,6 +1,6 @@
 # 489 — Explore component separation: agents, init/docs, telemetry
 
-**Status**: Open
+**Status**: Closed — harnez component separation analysis in docs/HarnezComponents.md
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
