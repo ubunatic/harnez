@@ -1,6 +1,6 @@
 # 268 — harnez exec: add default 60s timeout with kill and stderr signal, overridable via --timeout flag and repo settings
 
-**Status**: Open
+**Status**: Closed — Added configurable exec timeouts with process-group kills, telemetry, repo precedence, and agent-turn exemptions
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
