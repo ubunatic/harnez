@@ -20,16 +20,16 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(fmt.Sprintf("failed to create temp HOME: %v", err))
 	}
-	defer os.RemoveAll(tmpHome)
 	if err := os.Setenv("HOME", tmpHome); err != nil {
 		panic(fmt.Sprintf("failed to set HOME: %v", err))
 	}
-	defer func() {
-		if oldHome != "" {
-			os.Setenv("HOME", oldHome)
-		}
-	}()
 
 	code := m.Run()
+
+	os.RemoveAll(tmpHome)
+	if oldHome != "" {
+		os.Setenv("HOME", oldHome)
+	}
+
 	os.Exit(code)
 }
