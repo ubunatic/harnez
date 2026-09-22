@@ -150,7 +150,7 @@ func resolveUsageHost(flagHost string, cfg *usage.LocalConfig) string {
 // targets, so --watch/--raw/--json pairwise conflicts are rejected here, and
 // --compact (a panel-selection toggle, not a render target) is rejected
 // alongside --raw since --raw has no panel concept to toggle.
-func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact bool) error {
+func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom bool) error {
 	if usageWatch && usageJSON {
 		return fmt.Errorf("--watch and --json cannot be combined")
 	}
@@ -162,6 +162,12 @@ func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact bool) erro
 	}
 	if usageCompact && usageRaw {
 		return fmt.Errorf("--compact has no effect with --raw")
+	}
+	if usageLoom && usageRaw {
+		return fmt.Errorf("--loom has no effect with --raw")
+	}
+	if usageLoom && usageJSON {
+		return fmt.Errorf("--loom and --json cannot be combined")
 	}
 	return nil
 }
@@ -199,6 +205,7 @@ func newRootCmd() *cobra.Command {
 	var usageProcesses bool
 	var usageMic bool
 	var usageCompact bool
+	var usageLoom bool
 	var usageInterval time.Duration
 	var usageHost string
 	var usageProject string
@@ -213,7 +220,7 @@ func newRootCmd() *cobra.Command {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 
-			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact); err != nil {
+			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom); err != nil {
 				return err
 			}
 
@@ -230,6 +237,20 @@ func newRootCmd() *cobra.Command {
 			loadWatchHost := ""
 			if localCfg != nil {
 				loadWatchHost = strings.TrimSpace(localCfg.Load.WatchHost)
+			}
+
+			if usageLoom {
+				loadOpt := usage.WatchOptions{
+					Compact:        true,
+					ShowProcesses:  usageProcesses,
+					ShowMic:        usageMic,
+					RemoteLoadHost: loadWatchHost,
+					Host:           usageHost,
+				}
+				if usageWatch {
+					return usage.RunLoomWatch(ctx, "", client, cmd.OutOrStdout(), usageInterval, "", loadOpt)
+				}
+				return usage.RenderLoomPrint(ctx, "", client, cmd.OutOrStdout(), loadOpt)
 			}
 
 			if usageWatch {
@@ -343,6 +364,7 @@ func newRootCmd() *cobra.Command {
 	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
 	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the dashboard in place with a tokens/min trend")
 	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "show only the all-usage and load panels (default view and --watch)")
+	usageCmd.Flags().BoolVar(&usageLoom, "loom", false, "start usage monitor as loom app (compact view)")
 	usageCmd.Flags().BoolVarP(&usageRaw, "raw", "r", false, "print the detailed per-field usage report instead of the compact dashboard")
 	usageCmd.Flags().BoolVarP(&usageProcesses, "proc", "p", false, "show running agent processes panel in the default view / --watch")
 	usageCmd.Flags().BoolVar(&usageProcesses, "processes", false, "show running agent processes panel in the default view / --watch")
