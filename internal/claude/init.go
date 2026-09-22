@@ -1061,6 +1061,9 @@ func installIssuesGitIntegration(dir string) (int, error) {
 		return 0, fmt.Errorf("locate Git hooks: %w", err)
 	}
 	hooksDir := strings.TrimSpace(string(hooksDirOut))
+	if hooksDir == "/dev/null" {
+		return changes, nil
+	}
 	if !filepath.IsAbs(hooksDir) {
 		hooksDir = filepath.Join(dir, hooksDir)
 	}
