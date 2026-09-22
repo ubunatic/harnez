@@ -33,7 +33,8 @@ All cross-subsystem coupling is concentrated in three places:
 
 The ticket's four-way split misses two subsystems that are as large as the ones it names:
 the usage/quota monitor (`internal/usage`, 55 files, the largest package) and the issue
-tracker. Any separation plan has to place them.
+tracker. Any separation plan has to place them. The usage TUI is already slated to move out
+of harnez into a `../loom` app, which settles its placement (see §4, item 3).
 
 ## 2. Coupling Analysis
 
@@ -141,8 +142,12 @@ Ordered by how cheap each extraction is:
 2. **Issue tracker.** `issues`/`find`/`index`/`feedback` are self-contained. Seam: the
    optional snapshot write into the telemetry store, and `claude → issues.Lint`.
    Make both optional (store absent → skip; lint via subprocess or dropped from apply).
-3. **Usage monitor.** Largest package, own deps (`voxi`, runewidth), own spec files.
-   Seams: `claude → usage.LoadLocalConfig` and the systemd unit apply installs.
+3. **Usage monitor — leaving harnez.** The `usage` TUI is planned to become a `../loom` app,
+   so it is not a harnez component at all. Largest package, own deps (`voxi`, runewidth),
+   own spec files (`actions/colors/indicators.yaml`). Seams to cut when it moves:
+   `claude → usage.LoadLocalConfig`, the `harnez-agent-collector` systemd unit apply installs,
+   and `statusline`/`assess` if they go along. Keep collector snapshots (`harnez usage --json`
+   schema) as the contract if harnez still needs quota data, e.g. for agent dispatch.
 4. **Telemetry.** The hardest. `exec hook` must stay one process that composes distill,
    quota1, and recording; `hook read` must compose read discipline and recording. So the
    telemetry tool owns distill, quota1, and the read-discipline hook — i.e. it is the
@@ -164,7 +169,7 @@ graph TD
   tel --> store[(tool_catalog.sqlite)]
   issues[harnez-issues: find, issues, index] -.optional snapshots.-> store
   agents[harnez-agents: agent, subagent] --> sessions[(agent session records)]
-  usage[harnez-usage: usage, statusline, collector] --> quota[(usage cache)]
+  usage[loom app: usage TUI, collector] --> quota[(usage cache)]
   core -->|skills text references| tel
   core -->|skills text references| issues
   core -->|skills text references| agents
@@ -204,8 +209,8 @@ graph TD
 
 - Package-level coupling is low; the split is mostly a `cmd/` and runtime-contract
   problem, not an `internal/` refactor.
-- Extraction order by cost: agents, issue tracker, usage monitor, then telemetry.
-  Init stays with core.
+- Extraction order by cost: agents, issue tracker, then telemetry. The usage monitor leaves
+  harnez entirely for a `../loom` app. Init stays with core.
 - The telemetry tool is really the "hooks" tool: distill, quota1, and read discipline
   live in the same hook processes and must move together.
 - The lowest-risk path to user-visible composability is a git-style dispatcher in core
