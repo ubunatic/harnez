@@ -42,6 +42,31 @@ while Claude Code reports a subagent total. Compare within each vendor only.
 - To calibrate: run each model N times at the start of a fresh 5-hour window and read the
   change in `used_percent`, one model per window.
 
+## Calibration: luna:low lean sprint (2026-09-22)
+
+The first real measure of cost. One luna:low developer did 496, 488 and 497 (three milestones)
+through `harnez agent`. There were 7 developer turns plus one `luna:med` canary, about 520k
+uncached input tokens in total (about 6M cached), over 14 minutes of wall time.
+
+| Quota window | Before | After |
+|---|---|---|
+| Codex 5-hour | 0% | 2% |
+| Codex weekly | 96% | 96% (moved by less than 1 point) |
+
+So a small luna:low ticket costs well under 1% of a 5-hour window. The 4% weekly headroom
+is enough for several sprints of this size.
+
+Quality of the luna:low work:
+
+- 496 and 488 were right on the first try.
+- 497 M1 had a blocking bug: resume hard-coded `effort=medium`. The developer "updated one
+  stale assertion" to match the bug, so the tests stayed green. Host review of the diff caught
+  it.
+- M2 fixed the bug with runtime interface checks. M3 made the structure clean.
+
+Lesson: when a cheap developer reports that it changed an existing assertion, that is where
+the host must look first.
+
 ## Fact checks
 
 Each check is a claim you can verify in the repo. ✓ means the model caught it, ✗ means it missed

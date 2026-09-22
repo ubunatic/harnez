@@ -160,5 +160,6 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [feedback/2026-08-29-statusline-mvp-cwd-trust-boundary-and-forge-token-fallback.md](feedback/2026-08-29-statusline-mvp-cwd-trust-boundary-and-forge-token-fallback.md) | Status-line cwd MVP retrospective: the directory-trust enforcement gap a doc convention can't close, and root-causing the `has_releases` 401 to `fj`'s `keys.json` token fallback instead of assuming env-var-only |
 | [feedback/2026-09-01-time-gauge-ansi-padding-review.md](feedback/2026-09-01-time-gauge-ansi-padding-review.md) | Time-gauge ANSI styling retrospective: apply colors after label padding and test both raw SGR sequences and stripped geometry |
 | [feedback/2026-09-22-component-system-design-doc-first.md](feedback/2026-09-22-component-system-design-doc-first.md) | Component system retro (489/490): doc before code for design tickets, MVP in a new package, removal passes expose ownership bugs (Codex hooks), session-env-dependent tests |
+| [feedback/2026-09-22-lean-sprint-496-488-497.md](feedback/2026-09-22-lean-sprint-496-488-497.md) | Retro: luna:low lean sprint (496, 488, 497): assertion-hidden bug, interface change needs a higher tier, quota cost measured |
 
 **`docs/proposed/`** — staging area for docs that may become copyable (no install mechanics yet).
