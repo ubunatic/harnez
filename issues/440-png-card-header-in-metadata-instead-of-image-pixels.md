@@ -1,6 +1,6 @@
 # 440 — PNG card header in metadata instead of image pixels
 
-**Status**: Open
+**Status**: Blocked — Dot8 experiment on hold; see 444
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Reading / Token Efficiency (experimental)
@@ -38,3 +38,13 @@ The test compares all four channels (image header, PNG metadata, sidecar file, i
 
 - Re-verify against live code (`internal/readcard`) and recent commits before starting.
 - Compare card area and bytes with and without the header on identical content.
+
+## On hold (2026-09-22)
+
+Parked with the rest of the Dot8 chain. This is a pixel-budget optimization for
+`--dot8` cards, but the token benchmark showed Dot8 already loses on tokens overall
+(braille characters split under the tokenizer, penalty outweighs compression; see
+`docs/studies/2026-09-20-dot8-braille-vs-markdown-and-multimodal-context-card-token-benchmarks.md`),
+and no agent has passed a clean reading canary yet. Optimizing header placement on a
+format that is not yet legible or token-competitive is premature. Resume once 444
+lands and a clean 3x4 readability canary passes 3/3 on at least two agents.
