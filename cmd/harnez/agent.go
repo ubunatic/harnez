@@ -677,7 +677,7 @@ func (t *timeline) announceTurn(verb, target, session string) {
 }
 
 func (t *timeline) finishTurn(r *subagent.TurnResult, id, reconnect string) {
-	t.log("done", "turn finished in %s, %d messages, %d tokens", time.Since(t.began).Round(time.Second), max(len(r.Messages), 1), r.TokensTurn)
+	t.log("done", "turn finished in %s, %d messages, %d tokens (incl. cached)", time.Since(t.began).Round(time.Second), max(len(r.Messages), 1), r.TokensTurn)
 	t.log("session", "%s; reconnect: %s", id, reconnect)
 }
 
