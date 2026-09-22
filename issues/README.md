@@ -503,3 +503,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 502 | [502-strengthen-agents-md-documentation-and-constant-uniqueness-guidance.md](502-strengthen-agents-md-documentation-and-constant-uniqueness-guidance.md) | Strengthen AGENTS.md documentation and constant-uniqueness guidance | Open |
 | 503 | [503-release-publishes-stale-versioned-source-archive.md](503-release-publishes-stale-versioned-source-archive.md) | Release publishes stale versioned source archive | Open |
 | 504 | [504-onboard-gpt-6-sol-and-luna-codex-models.md](504-onboard-gpt-6-sol-and-luna-codex-models.md) | Onboard GPT-6 Sol and Luna Codex models | Closed — GPT-6 models onboarded and verified |
+| 505 | [505-copyable-doc-reference-rule-is-undiscoverable-in-clidesign.md](505-copyable-doc-reference-rule-is-undiscoverable-in-clidesign.md) | Copyable-doc reference rule is undiscoverable in CLIDesign | Open |
