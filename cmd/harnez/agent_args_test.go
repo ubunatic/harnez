@@ -2,9 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"ubunatic.com/harnez/internal/subagent"
 )
 
 func TestAssemblePrompt(t *testing.T) {
@@ -85,4 +90,88 @@ func TestAgentErrorsNameTheFixWithoutUsageDump(t *testing.T) {
 			t.Fatalf("%v: usage dump in output:\n%s%s", tc.args, out.String(), errOut.String())
 		}
 	}
+}
+
+func TestAgentDeleteAllCompletedContinuesOnFailure(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	sessions := []*subagent.Session{
+		{ID: "s1", Name: "success", Provider: "codex", Model: "luna", Status: "completed", CreatedAt: now, LastActiveAt: now, WorkingDir: "."},
+		{ID: "s2", Name: "fail", Provider: "codex", Model: "luna", Status: "completed", CreatedAt: now, LastActiveAt: now, WorkingDir: ".", ProviderSessionID: "550e8400-e29b-41d4-a716-446655440000"},
+		{ID: "s3", Name: "also-success", Provider: "codex", Model: "luna", Status: "completed", CreatedAt: now, LastActiveAt: now, WorkingDir: "."},
+	}
+	for _, sess := range sessions {
+		if err := store.Create(sess); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	deleteCount := 0
+	originalDriver := agentDriver
+	agentDriver = func(m subagent.Model, dir string) subagent.Driver {
+		return mockDriver{deleteFunc: func(ctx context.Context, id string) error {
+			deleteCount++
+			if id == "550e8400-e29b-41d4-a716-446655440000" {
+				return fmt.Errorf("codex delete: exit status 1: --force requires a session UUID")
+			}
+			return nil
+		}}
+	}
+	defer func() { agentDriver = originalDriver }()
+
+	var out, errOut bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"delete", "--all-completed", "--store-dir", storeDir})
+	err = cmd.Execute()
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "some sessions failed to delete") {
+		t.Fatalf("error = %v, want 'some sessions failed to delete'", err)
+	}
+
+	// Check that 3 delete attempts were made (success, fail, also-success)
+	if deleteCount != 3 {
+		t.Fatalf("delete count = %d, want 3", deleteCount)
+	}
+
+	// Check that successful deletions are printed
+	outStr := out.String()
+	if !strings.Contains(outStr, "success") || !strings.Contains(outStr, "also-success") {
+		t.Fatalf("stdout missing successful deletions:\n%s", outStr)
+	}
+
+	// Check that failure is printed to stderr
+	errStr := errOut.String()
+	if !strings.Contains(errStr, "fail") || !strings.Contains(errStr, "delete failed") {
+		t.Fatalf("stderr missing failure message:\n%s", errStr)
+	}
+}
+
+type mockDriver struct {
+	deleteFunc func(context.Context, string) error
+}
+
+func (m mockDriver) Run(ctx context.Context, o subagent.RunOptions) (*subagent.TurnResult, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m mockDriver) Resume(ctx context.Context, id, prompt string, model subagent.Model) (*subagent.TurnResult, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m mockDriver) Compact(ctx context.Context, id string) (*subagent.TurnResult, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m mockDriver) Stop(ctx context.Context, id string) error {
+	return fmt.Errorf("not implemented")
+}
+func (m mockDriver) Delete(ctx context.Context, id string) error {
+	return m.deleteFunc(ctx, id)
 }

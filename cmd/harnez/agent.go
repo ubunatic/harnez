@@ -566,6 +566,7 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 				return err
 			}
 			var deleted []string
+			var failures []error
 			for _, x := range xs {
 				if !subagent.CanManage(parent(), x) {
 					continue
@@ -575,21 +576,30 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 				}
 				if x.HarnessType == "interactive" {
 					if e = s.Delete(x.ID); e != nil {
-						return e
+						failures = append(failures, fmt.Errorf("%s: %w", x.Name, e))
+						continue
 					}
 					deleted = append(deleted, x.Name)
 					continue
 				}
 				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Delete(cmd.Context(), x.ProviderID()); e != nil {
-					return e
+					failures = append(failures, fmt.Errorf("%s: %w", x.Name, e))
+					continue
 				}
 				if e = s.Delete(x.ID); e != nil {
-					return e
+					failures = append(failures, fmt.Errorf("%s: %w", x.Name, e))
+					continue
 				}
 				deleted = append(deleted, x.Name)
 			}
 			for _, name := range deleted {
 				fmt.Fprintln(cmd.OutOrStdout(), name)
+			}
+			for _, err := range failures {
+				fmt.Fprintln(cmd.ErrOrStderr(), "delete failed:", err)
+			}
+			if len(failures) > 0 {
+				return errors.New("some sessions failed to delete")
 			}
 			return nil
 		}

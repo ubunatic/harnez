@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -113,18 +114,43 @@ func TestKnownModelsAndExplicitSpecsFailClosed(t *testing.T) {
 	}
 }
 
-func TestCodexDeleteUsesNonInteractiveCommand(t *testing.T) {
-	var command string
-	var args []string
-	d := CodexDriver{Command: func(_ context.Context, gotCommand string, gotArgs ...string) ([]byte, error) {
-		command, args = gotCommand, gotArgs
-		return nil, nil
+func TestCodexDeleteSkipsNonUUIDIDs(t *testing.T) {
+	callCount := 0
+	d := CodexDriver{Start: func(_ context.Context, _ string, _ ...string) (io.Reader, func() error, error) {
+		callCount++
+		return nil, nil, nil
 	}}
-	if err := d.Delete(context.Background(), "thread-id"); err != nil {
+	if err := d.Delete(context.Background(), "thread-1"); err != nil {
 		t.Fatal(err)
 	}
-	if command != "codex" || !reflect.DeepEqual(args, []string{"delete", "--force", "thread-id"}) {
-		t.Fatalf("command = %q %#v", command, args)
+	if callCount != 0 {
+		t.Fatalf("expected no codex call for non-UUID ID, but was called %d times", callCount)
+	}
+}
+
+func TestCodexDeleteIncludesStderr(t *testing.T) {
+	d := CodexDriver{Start: func(_ context.Context, _ string, _ ...string) (io.Reader, func() error, error) {
+		return strings.NewReader(""), func() error {
+			return fmt.Errorf("exit status 1: --force requires a session UUID")
+		}, nil
+	}}
+	err := d.Delete(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	if err == nil || !strings.Contains(err.Error(), "--force requires a session UUID") {
+		t.Fatalf("error = %v, want stderr included", err)
+	}
+}
+
+func TestCodexDeleteUsesNonInteractiveCommand(t *testing.T) {
+	var args []string
+	d := CodexDriver{Start: func(_ context.Context, _ string, gotArgs ...string) (io.Reader, func() error, error) {
+		args = gotArgs
+		return strings.NewReader(""), func() error { return nil }, nil
+	}}
+	if err := d.Delete(context.Background(), "550e8400-e29b-41d4-a716-446655440000"); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(args, []string{"delete", "--force", "550e8400-e29b-41d4-a716-446655440000"}) {
+		t.Fatalf("args = %#v", args)
 	}
 }
 

@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // CodexDriver runs codex in non-interactive JSONL mode.
@@ -102,10 +104,20 @@ func (d CodexDriver) Stop(context.Context, string) error {
 	return nil
 }
 func (d CodexDriver) Delete(ctx context.Context, id string) error {
-	if _, err := d.command(ctx, "delete", "--force", id); err != nil {
+	// Skip codex call for non-UUID IDs (e.g., thread-1); nothing to delete provider-side.
+	if _, err := uuid.Parse(id); err != nil {
+		return nil
+	}
+	start := d.Start
+	if start == nil {
+		start = startProcess
+	}
+	rd, wait, err := start(ctx, "codex", "delete", "--force", id)
+	if err != nil {
 		return fmt.Errorf("codex delete: %w", err)
 	}
-	return nil
+	io.Copy(io.Discard, rd)
+	return wait()
 }
 
 // Event is one live occurrence in a streaming turn.
