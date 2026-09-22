@@ -119,3 +119,33 @@ M2 added `--components` on `apply`/`diff`/`status` with one resolver
    and removes the interface (the MVP package is deleted, so the cycle goes away).
 3. Then M3 as listed in the Pre-Work milestones (single-write removal, `managedSettingsKeys`
    ownership, explicit `hooks`, `diffSettingsJSON` in step, user-key survival tests).
+
+## M3 delivered (62dfa3d) — review (host + claude:sonnet), M4 Pre-Work / Required Refinements
+
+M3 folded removal into `applyMerge` (nil value removes only harnez-owned entries of managed
+keys), gated hooks on `telemetry` and `statusLine` on `usage`, and made `DiffAll`/`RunStatus`
+use the same selection. Unfiltered output is pinned by a SHA-256 golden. Do these first:
+
+1. **Blocking — strip harnez commands per command, not per entry.** `removeHarnezHooks` keeps a
+   hook entry whole when it mixes a `harnez …` command with a user command, so the harnez
+   command leaks (the fixture in `apply_settings_test.go` has exactly this case). §8.4 defines
+   ownership per command: drop harnez commands from an entry's `hooks` list, drop the entry when
+   its list becomes empty, drop the event when no entries remain.
+2. **Blocking — negative assertions.** The ownership test never asserts that `harnez old hook`
+   is gone, never covers a harnez-only entry, and never covers a `harnez …` `statusLine` being
+   removed. Add all three.
+3. **Revert the `mcpServers` merge-by-name.** Out of scope, and it changes unfiltered apply:
+   servers removed from `config.yaml` are never pruned anymore. `mcpServers` is always applied
+   (§8.3), so restore the wholesale replace and drop the `user-server` survival assertion.
+   (The M3 pre-work wrongly listed `mcpServers` among user keys to preserve.)
+4. **Malformed `hooks` must be left alone.** If the existing `hooks` value is not a map (or an
+   event is not a list), return it unchanged instead of deleting the key.
+5. **Golden should not track `config.yaml`.** The hash is taken from the embedded config, so
+   every config edit breaks it. Pin it on a fixed fixture config instead.
+6. **Nit:** `DiffAll`/`RunStatus` take a variadic selection; make it a plain parameter when the
+   interface goes away in M4.
+
+Then M4 as listed in the Pre-Work milestones (requires-driven skill removal including resources,
+Codex/AGY apply/remove by `telemetry`, `DiffAll` checking Codex/AGY under a selection, move
+`Set`/`Parse`/`Resolve` into `internal/claude`, delete `internal/components` and
+`scripts/canary-components`, `scripts/smoke-test.sh`, `make install`).
