@@ -15,6 +15,7 @@ type Config struct {
 	Dir                string               `yaml:"-"`
 	FS                 fs.FS                `yaml:"-"`
 	TargetDir          string               `yaml:"target_dir"`
+	ComponentNames     []string             `yaml:"components,omitempty"`
 	Docs               []string             `yaml:"docs"`
 	DocsProfiles       map[string][]string  `yaml:"docs_profiles"`
 	Model              string               `yaml:"model"`
@@ -174,6 +175,7 @@ type Command struct {
 	Content     string          `yaml:"content"`
 	File        string          `yaml:"file"` // path relative to config dir; overrides content if set
 	Resources   []SkillResource `yaml:"resources,omitempty"`
+	Requires    []string        `yaml:"requires,omitempty"`
 	// RateFeedback marks this skill as part of the Tool Feedback Protocol
 	// instruction (issue 142): `harnez apply` omits/removes it when
 	// RateFeedbackDisabled(cfg) is true.

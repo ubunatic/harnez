@@ -49,7 +49,7 @@ func Plan(cfg *claude.Config, set Set) []Step {
 	}
 	var removedSkills []string
 	for _, s := range cfg.Skills {
-		if !set.Allows(SkillRequires[s.Name]) || (s.RateFeedback && f.Feedback.DisableRateProtocol) {
+		if !set.Allows(requiredComponents(s.Requires)) || (s.RateFeedback && f.Feedback.DisableRateProtocol) {
 			removedSkills = append(removedSkills, s.Name)
 		}
 	}

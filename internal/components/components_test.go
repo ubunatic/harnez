@@ -340,6 +340,24 @@ func TestPlan(t *testing.T) {
 	}
 }
 
+func TestSkillRequirementsComeFromConfig(t *testing.T) {
+	cfg := &claude.Config{
+		Skills: []claude.Command{{Name: "agent-skill", Requires: []string{"agents"}}},
+	}
+	set, _ := Parse("docs-only")
+	filtered := Filter(cfg, set)
+	if len(filtered.Skills) != 0 {
+		t.Fatalf("filtered skills = %v, want unmet requirement removed", filtered.Skills)
+	}
+	steps := Plan(cfg, set)
+	for _, step := range steps {
+		if step.Phase == "skills: unmet requires" && step.Detail == "agent-skill" {
+			return
+		}
+	}
+	t.Fatal("plan did not report skill with unmet configured requirement")
+}
+
 func TestApply_AgentsOnlyAfterFull(t *testing.T) {
 	target, cfg := setupHome(t)
 	mustApply(t, target, cfg, "full")

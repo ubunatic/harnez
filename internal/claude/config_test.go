@@ -3,7 +3,12 @@
 
 package claude
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+
+	"gopkg.in/yaml.v3"
+)
 
 func TestLanguageSourceFor(t *testing.T) {
 	cases := []struct {
@@ -26,4 +31,42 @@ func TestLanguageSourceFor(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfigComponentSelectionRoundTrip(t *testing.T) {
+	want := Config{
+		ComponentNames: []string{"docs-only", "telemetry"},
+		Skills:         []Command{{Name: "example", Requires: []string{"agents", "telemetry"}}},
+	}
+
+	data, err := yaml.Marshal(want)
+	if err != nil {
+		t.Fatalf("yaml.Marshal: %v", err)
+	}
+	var got Config
+	if err := yaml.Unmarshal(data, &got); err != nil {
+		t.Fatalf("yaml.Unmarshal: %v", err)
+	}
+	if !reflect.DeepEqual(got.ComponentNames, want.ComponentNames) {
+		t.Fatalf("component names = %v, want %v", got.ComponentNames, want.ComponentNames)
+	}
+	if !reflect.DeepEqual(got.Skills[0].Requires, want.Skills[0].Requires) {
+		t.Fatalf("skill requirements = %v, want %v", got.Skills[0].Requires, want.Skills[0].Requires)
+	}
+}
+
+func TestEmbeddedConfigToolFeedbackRequiresTelemetry(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded: %v", err)
+	}
+	for _, skill := range cfg.Skills {
+		if skill.Name == "tool-feedback-protocol" {
+			if !reflect.DeepEqual(skill.Requires, []string{"telemetry"}) {
+				t.Fatalf("tool-feedback-protocol requires = %v, want [telemetry]", skill.Requires)
+			}
+			return
+		}
+	}
+	t.Fatal("tool-feedback-protocol skill not found")
 }

@@ -388,6 +388,7 @@ skills:
 
   - name: tool-feedback-protocol
     description: "Use after an internal tool call (Read, Edit, Bash, etc.) in a harnez-tracked project (issues/ present) failed or didn't produce the expected outcome — record it via harnez rate before moving to the next step. Also use if a harnez tip nudges you after a long quiet stretch and nothing has failed — confirm with harnez rate --ok. Skip both for routine successful calls."
+    requires: [telemetry]
     rate_feedback: true
     content: |
       # Tool Feedback Protocol

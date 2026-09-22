@@ -135,10 +135,10 @@ func IsHarnezCommand(cmd string) bool {
 	return cmd == "harnez" || strings.HasPrefix(cmd, "harnez ")
 }
 
-// SkillRequires maps skill names to the components they need. It stands in
-// for a `requires:` key on config.yaml skills until that key exists. Sprint
-// skills are deliberately absent: whether they require `agents` is open
-// (docs/HarnezComponents.md §8.9).
-var SkillRequires = map[string][]Component{
-	"tool-feedback-protocol": {Telemetry},
+func requiredComponents(names []string) []Component {
+	components := make([]Component, len(names))
+	for i, name := range names {
+		components[i] = Component(name)
+	}
+	return components
 }

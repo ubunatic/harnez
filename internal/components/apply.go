@@ -35,7 +35,7 @@ func Filter(cfg *claude.Config, set Set) *claude.Config {
 		// Rate-feedback skills stay: DisableRateProtocol (below) makes apply
 		// remove them itself, resources included.
 		out.Skills = slices.DeleteFunc(slices.Clone(cfg.Skills), func(s claude.Command) bool {
-			return !s.RateFeedback && !set.Allows(SkillRequires[s.Name])
+			return !s.RateFeedback && !set.Allows(requiredComponents(s.Requires))
 		})
 	}
 	if !set.Has(Telemetry) {
@@ -141,7 +141,7 @@ func removeDisabled(target string, cfg *claude.Config, set Set) ([]string, error
 	}
 
 	for _, skill := range cfg.Skills {
-		if set.Allows(SkillRequires[skill.Name]) {
+		if set.Allows(requiredComponents(skill.Requires)) {
 			continue
 		}
 		for _, root := range SkillTargets(cfg) {
