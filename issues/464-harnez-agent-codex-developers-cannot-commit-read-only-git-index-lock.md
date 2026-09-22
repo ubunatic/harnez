@@ -1,6 +1,6 @@
 # 464 — harnez agent: codex developers cannot commit, read-only .git/index.lock
 
-**Status**: Open — filed from loom session
+**Status**: Closed — fixed by the codex resume sandbox settings (1c3f49a); developers committed in the orchestrated sprint (39d7659, 26261ce, 736e6a4, 75941bd)
 **Priority**: P2
 **Severity**: Moderate
 **Category**: Bug
