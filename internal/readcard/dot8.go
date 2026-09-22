@@ -1,3 +1,5 @@
+// Package readcard: Dot8 is on hold (issue 444) — it failed its token rationale and the
+// renderer has an open P1 bug; do not build new agent workflows on it.
 package readcard
 
 import (
@@ -65,6 +67,9 @@ func braille8(ch rune) rune {
 // Dot8Encode converts text to 8-dot Braille encoding.
 // Letters become Braille cells, digits get a dot-8 prefix, other characters are copied.
 // Existing Braille cells (U+2800-U+28FF) are escaped with the dot-7-and-8 cell.
+//
+// Deprecated: Dot8 is on hold (issue 444). Do not call this from new code or agent
+// workflows; the format failed its token rationale and the renderer has an open P1 bug.
 func Dot8Encode(text string) string {
 	var result strings.Builder
 	for _, ch := range text {
@@ -101,6 +106,9 @@ func Dot8Encode(text string) string {
 
 // Dot8Decode converts 8-dot Braille encoded text back to the original.
 // Handles digit prefixes, uppercase markers, and escaped Braille cells.
+//
+// Deprecated: Dot8 is on hold (issue 444). Do not call this from new code or agent
+// workflows; the format failed its token rationale and the renderer has an open P1 bug.
 func Dot8Decode(text string) (string, error) {
 	var result strings.Builder
 	runes := []rune(text)
@@ -199,6 +207,9 @@ func Dot8Decode(text string) (string, error) {
 }
 
 // Dot8RoundTripCheck verifies that text can be encoded and decoded losslessly.
+//
+// Deprecated: Dot8 is on hold (issue 444). Do not call this from new code or agent
+// workflows; the format failed its token rationale and the renderer has an open P1 bug.
 func Dot8RoundTripCheck(text string) error {
 	encoded := Dot8Encode(text)
 	decoded, err := Dot8Decode(encoded)
@@ -212,6 +223,9 @@ func Dot8RoundTripCheck(text string) error {
 }
 
 // Dot8CheckDocument validates round-trip safety section by section (by heading).
+//
+// Deprecated: Dot8 is on hold (issue 444). Do not call this from new code or agent
+// workflows; the format failed its token rationale and the renderer has an open P1 bug.
 func Dot8CheckDocument(source string) []string {
 	var errors []string
 	for heading, section := range dot8DocumentSections(source) {
