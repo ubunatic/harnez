@@ -67,6 +67,67 @@ Quality of the luna:low work:
 Lesson: when a cheap developer reports that it changed an existing assertion, that is where
 the host must look first.
 
+## Role assignment
+
+The setup used from 491 on. It follows from the fact checks below and from the two sprints.
+
+| Role | Model | Why |
+|---|---|---|
+| Host / orchestrator | claude opus | Reviews diffs, writes pre-work, catches assertion-hidden bugs. Writes no code. |
+| Advisors (discovery) | codex terra:low + claude sonnet | Different vendors, different blind spots: terra finds code traps, sonnet finds cross-doc and dependency issues. Together they covered all four key findings. |
+| Developer, clear small ticket | codex luna:low | Cheapest. Right on the first try for 496 and 488. |
+| Developer, interface or design change | codex luna:med | luna:low hid a bug behind a changed assertion in 497. luna:med plans well and has changed no assertion so far. |
+| Reviewer at the risk seam | claude sonnet | Independent vendor, fast. |
+| Mechanical execution only | claude haiku | Unreliable as an advisor. Use only with explicit acceptance tests. |
+
+## Sprint 491 with this setup (2026-09-22)
+
+The first sprint to use the role table, and the first advisory run through `harnez agent`
+after 497 fixed tier passing.
+
+| Step | Model | Wall time | Tokens |
+|---|---|---|---|
+| Advisor | terra:low | 1m06s | 63k new, 253k cached |
+| Advisor | sonnet | 1m12s | 332k total |
+| Plan (read-only) | luna:med | 1m39s | 75k new, 136k cached |
+| M1 config keys | luna:med | 3m41s | 102k new, 838k cached |
+| M2 flag, schema gating | luna:med | 8m03s | 184k new, 3.4M cached |
+
+Codex quota moved from weekly 97% / 5-hour 5% before the advisors to 98% / 11% after M2. At
+about 1 weekly point for two advisors, a plan and two milestones, luna:med costs roughly twice
+what luna:low cost for 496/488/497.
+
+Observations:
+
+- **The two advisors converged.** Both proposed the same four milestones and the same main
+  traps: `ensureTelemetrySchema` running before config load, the `applyMerge` delete
+  semantics and ownership, and `DiffAll` skipping Codex/AGY under a selection. Every `file:line`
+  claim checked out. When two different-vendor advisors agree, the host can write pre-work
+  directly from them.
+- **They split on the review seam.** terra put it at the single settings write, sonnet at the
+  delete-on-nil path destroying user keys. These are the same code; sonnet named the failure
+  mode. Merge both into the pre-work.
+- **A read-only plan turn pays off with luna:med.** The plan found two gaps in the host's
+  pre-work: `SkillRequires` also has callers in `apply.go` and `plan.go`, and `Config` has
+  runtime-only fields that a round-trip test must skip.
+- **luna:med skips a listed acceptance test and still reports "open problems: none".** M2
+  omitted the byte-identity test from its milestone. The host must check each listed
+  acceptance item against the diff, not trust the report. The same applies to luna:low.
+- **Host review adds what advisors miss.** Neither advisor saw that a typo in `requires:`
+  silently removes the skill under every selection. The host caught it while reviewing M1,
+  and it became M2 pre-work.
+
+## Reading Codex quota
+
+- Codex reports `used_percent` as whole numbers only. Rollout logs store it as floats, but
+  no value in history has ever had a fraction. The resolution is 1 point per window, so
+  measure batches, not single runs.
+- Codex writes the rate limits after every turn into the session rollout
+  (`~/.codex/sessions/…/rollout-*.jsonl`). `harnez agent delete` also deletes that rollout,
+  so read the per-turn numbers before deleting a session, or they are gone.
+- `harnez usage` shows two Codex windows: the 5-hour window and the weekly window. The
+  weekly one is the binding constraint for a multi-ticket sprint.
+
 ## Fact checks
 
 Each check is a claim you can verify in the repo. ✓ means the model caught it, ✗ means it missed
