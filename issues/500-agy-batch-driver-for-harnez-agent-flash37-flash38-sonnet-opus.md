@@ -67,7 +67,13 @@ claude-sonnet-4-6"); without `--effort` they work. All with unit tests:
 
 ## Acceptance
 
-- [ ] `make test-q1` green; `make install` run.
-- [ ] `harnez agent models` lists the four agy models.
-- [ ] Live test (host, in an empty scratch dir without AGENTS.md): one tiny prompt per model via
+- [x] `make test-q1` green; `make install` run.
+- [x] `harnez agent models` lists the four agy models.
+- [x] Live test (host, in an empty scratch dir without AGENTS.md): one tiny prompt per model via
       `harnez agent start`, plus one `resume`; a file write lands in the scratch dir.
+
+## Result (2026-09-22)
+
+Live test in empty scratch dirs: flash37 (8s), flash38 (12s), sonnet (24s), opus (18s) each wrote
+`ok.txt` into their own dir; `resume` on flash37 recalled the word. Non-existent `-d` fails cleanly.
+Commits: 6d65bf3 (M1), bccb0b6 (M2).
