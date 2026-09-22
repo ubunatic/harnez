@@ -24,6 +24,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,6 +39,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/distill"
 	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/resolve"
@@ -50,6 +52,7 @@ import (
 // comment: the wrapped command's own execution/exit must never be at the
 // mercy of a slow or hung DB write.
 const defaultExecInsertTimeout = 200 * time.Millisecond
+const defaultExecTimeout = 60 * time.Second
 
 // expectFailureEnv is issue 226's direction-2 convention: an agent that
 // runs a shell command it deliberately expects to fail (probing whether a
@@ -138,6 +141,7 @@ func newExecCmd() *cobra.Command {
 	var distillFlag string
 	var expectFailureFlag bool
 	var quota1Flag bool
+	var timeoutFlag time.Duration
 
 	cmd := &cobra.Command{
 		Use:     "exec [--tool <tool_name>] [--ticket <ticket_id>] [--distill[=<mode>]] [--expect-failure] [--quota-1] -- <command...>",
@@ -176,6 +180,7 @@ points an agent's Bash tool calls at this command.`,
 				Distill:       distillFlag,
 				ExpectFailure: expectFailureFlag,
 				Quota1:        quota1Flag,
+				Timeout:       timeoutFlag,
 			}, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
 			if err != nil {
 				return err
@@ -192,6 +197,7 @@ points an agent's Bash tool calls at this command.`,
 	cmd.Flags().StringVar(&distillFlag, "distill", "", "distillation filter mode (auto, gotest, git, raw)")
 	cmd.Flags().BoolVar(&expectFailureFlag, "expect-failure", false, "record telemetry row with call_type=shell-expected")
 	cmd.Flags().BoolVar(&quota1Flag, "quota-1", false, "enforce Quota-1 single-test boundary (require code edits between runs)")
+	cmd.Flags().DurationVar(&timeoutFlag, "timeout", 0, "maximum command runtime (default: 60s or repo config exec.timeout)")
 	cmd.Flags().Lookup("distill").NoOptDefVal = "auto"
 
 	cmd.AddCommand(newExecHookCmd())
@@ -244,6 +250,8 @@ type execOptions struct {
 	DBPath        string                                             // telemetry DB path override; empty means telemetry.DefaultDBPath()
 	InsertTimeout time.Duration                                      // bound on waiting for the telemetry write; <=0 means defaultExecInsertTimeout
 	Insert        func(dbPath string, call telemetry.ToolCall) error // nil means defaultInsertExecRow
+	Timeout       time.Duration
+	ConfigPath    string
 }
 
 // byteCounter is an io.Writer that only counts bytes written to it,
@@ -359,7 +367,26 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	counter := &byteCounter{}
 	var capturedOutput bytes.Buffer
 
-	c := exec.Command(args[0], args[1:]...)
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		wd, _ := os.Getwd()
+		configPath := opts.ConfigPath
+		if configPath == "" {
+			configPath = filepath.Join(wd, "config.yaml")
+		}
+		if cfg, _, err := claude.OpenConfig(configPath); err == nil && cfg.Exec.Timeout != "" {
+			if parsed, parseErr := time.ParseDuration(cfg.Exec.Timeout); parseErr == nil {
+				timeout = parsed
+			}
+		}
+	}
+	if timeout <= 0 {
+		timeout = defaultExecTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	c := exec.CommandContext(ctx, args[0], args[1:]...)
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Stdin = in
 
 	var distOpts distill.Options
@@ -379,6 +406,11 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 
 	start := time.Now()
 	runErr := c.Run()
+	timedOut := ctx.Err() == context.DeadlineExceeded
+	if timedOut {
+		_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
+		fmt.Fprintf(errOut, "harnez exec: timeout kill after %s\n", timeout)
+	}
 	duration := time.Since(start)
 
 	var exitErr *exec.ExitError
@@ -414,6 +446,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		Score:          &score,
 		Note:           note,
 		ExpectFailure:  opts.ExpectFailure || detectExpectFailure(opts, args),
+		Timeout:        timedOut,
 	})
 
 	return exitCode, nil
@@ -457,6 +490,7 @@ type execCall struct {
 	// row's ExitCode is never altered by this flag; only the call_type
 	// classification changes.
 	ExpectFailure bool
+	Timeout       bool
 }
 
 // recordExecTelemetry makes the single best-effort, bounded attempt at
@@ -505,6 +539,9 @@ func recordExecTelemetry(opts execOptions, call execCall) {
 
 		exitCode := call.ExitCode
 		callType := "shell"
+		if call.Timeout {
+			callType = "shell-timeout"
+		}
 		if call.ExpectFailure {
 			callType = telemetry.ExpectedFailureCallType
 		}

@@ -284,6 +284,83 @@ func TestRunExecWrapper_TelemetryWriteNeverBlocksCommand(t *testing.T) {
 	}
 }
 
+func TestRunExecWrapper_TimeoutKillsAndRecordsDistinctTelemetry(t *testing.T) {
+	opts := testExecOptions(t)
+	opts.Timeout = 80 * time.Millisecond
+	opts.InsertTimeout = 2 * time.Second
+	var out, errOut bytes.Buffer
+	start := time.Now()
+	code, err := runExecWrapper([]string{"sh", "-c", "sleep 5"}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil {
+		t.Fatalf("runExecWrapper: %v", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Fatalf("timeout took too long: %v", time.Since(start))
+	}
+	if code == 0 {
+		t.Fatal("timeout returned success")
+	}
+	if !strings.Contains(errOut.String(), "timeout kill") {
+		t.Fatalf("stderr = %q, want timeout kill", errOut.String())
+	}
+	db, err := telemetry.Open(opts.DBPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{CallType: "shell-timeout"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("timeout rows = %d, want 1", len(rows))
+	}
+}
+
+func TestRunExecWrapper_ExplicitTimeoutOverridesConfiguredValue(t *testing.T) {
+	opts := testExecOptions(t)
+	opts.Timeout = 50 * time.Millisecond
+	var out, errOut bytes.Buffer
+	start := time.Now()
+	_, err := runExecWrapper([]string{"sleep", "1"}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(start) > 500*time.Millisecond {
+		t.Fatalf("explicit timeout was not applied: %v", time.Since(start))
+	}
+}
+
+func TestRunExecWrapper_RepoSettingAndFlagPrecedence(t *testing.T) {
+	dir := t.TempDir()
+	config := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(config, []byte("exec:\n  timeout: 50ms\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opts := testExecOptions(t)
+	opts.ConfigPath = config
+	var out, errOut bytes.Buffer
+	start := time.Now()
+	_, err := runExecWrapper([]string{"sleep", "1"}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(start) > 500*time.Millisecond {
+		t.Fatalf("repo timeout was not applied: %v", time.Since(start))
+	}
+	opts.Timeout = 200 * time.Millisecond
+	out.Reset()
+	errOut.Reset()
+	start = time.Now()
+	_, err = runExecWrapper([]string{"sleep", "1"}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed < 150*time.Millisecond || elapsed > 700*time.Millisecond {
+		t.Fatalf("flag did not override repo timeout: %v", elapsed)
+	}
+}
+
 // TestRunExecWrapper_ExpectFailureRecordsExpectedCallTypeAndTrueExitCode
 // covers issue 226 direction 2 end-to-end: a command whose text carries a
 // leading HARNEZ_EXPECT_FAILURE=1 assignment (the shape the PreToolUse

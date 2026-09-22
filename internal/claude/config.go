@@ -38,8 +38,13 @@ type Config struct {
 	AgentsMD           AgentsMD             `yaml:"agents_md"`
 	Make               MakeConfig           `yaml:"make"`
 	Feedback           FeedbackConfig       `yaml:"feedback"`
+	Exec               ExecConfig           `yaml:"exec"`
 	Debloat            DebloatConfig        `yaml:"debloat"`
 	Decommissioned     DecommissionedConfig `yaml:"decommissioned"`
+}
+
+type ExecConfig struct {
+	Timeout string `yaml:"timeout"`
 }
 
 // DecommissionedConfig lists artifacts that older harnez versions installed
