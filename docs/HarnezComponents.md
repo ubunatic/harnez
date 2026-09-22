@@ -326,7 +326,7 @@ and `harnez diff`/`status` would report the deselected parts as drift. Options:
 
 1. **Require a custom config** for persistent selection. Simple, but pushes users back to
    path E for a one-line choice.
-2. **Persist to the user-local config** `~/.harnez/config.yaml` (`components: [...]`),
+2. **Persist to the user-local config** `~/.config/harnez/local.yaml` (issue 109; `components: [...]`),
    written by `apply --components … --save`. It is a machine-local choice ("no telemetry
    on this box"), which is what that file is for.
 3. **Record the last selection** in a state file under `~/.harnez/` and reuse it silently.
@@ -356,7 +356,9 @@ files and command lines, which is what makes B and C possible later:
 "Agents in isolation with direct token cost tracking" (490 use case 3): agent sessions
 already keep token counters in their own records (`subagent.Session`), so agents-only
 works without the telemetry store. When both components are enabled, telemetry imports
-agent session records; agents do not write into the store. This keeps the dependency
+agent session records; agents do not write into the store. Issue 446 currently plans the
+opposite (agents persisting reported cost into the telemetry database); resolve that
+before implementing either. This keeps the dependency
 one-way (telemetry reads agents' contract), and agents stay free of sqlite.
 
 ### 8.7 Initialization order
@@ -444,7 +446,7 @@ What the MVP cannot do from outside `internal/claude`, and the integration step 
 | skill removal for unmet `requires:` deletes `SKILL.md` only; resource files stay (the rate skill already goes through apply's own removal branch) | generalize that branch to `requires:` |
 | `DiffAll` does not check Codex/AGY files under a selection (the filtered config blanks their targets) | selection-aware Codex/AGY status |
 | `diff`/`status` do not know the selection | resolve the selection once, shared by `apply`, `diff`, `status` |
-| `--save` to `~/.harnez/config.yaml` | after moving `LoadLocalConfig` out of `internal/usage` |
+| `--save` to `~/.config/harnez/local.yaml` | after moving `LoadLocalConfig` out of `internal/usage` |
 
 Review checklist for the integration: each preset boots on an empty target; presets
 compose by union; unfiltered output is byte-identical to today's apply.
