@@ -1,6 +1,6 @@
 # 441 — Dot8 PNG card reader: decode card content back to text
 
-**Status**: Open
+**Status**: Blocked — Dot8 experiment on hold; see 444
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Reading / Tooling (experimental)
@@ -29,3 +29,14 @@ Add a "Dot8 PNG card reader" (for example `harnez read --card-decode <card.png>`
 
 - Re-verify against live code and recent commits before starting.
 - Keep the reader in Go with no new dependencies (`image/png` from the standard library).
+
+## On hold (2026-09-22)
+
+Parked with the rest of the Dot8 chain. A deterministic decoder is still useless
+without a legible card: no agent has passed a clean reading canary yet (haiku failed
+outright, codex timed out), and the token benchmark found the braille format's
+tokenizer penalty outweighs its compression
+(`docs/studies/2026-09-20-dot8-braille-vs-markdown-and-multimodal-context-card-token-benchmarks.md`).
+Building the reader before 444's pitch fix would target a geometry that is still
+moving. Resume once 444 lands and a clean 3x4 readability canary passes 3/3 on at
+least two agents.
