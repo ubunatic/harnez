@@ -71,3 +71,22 @@ and passes `-c model_reasoning_effort` on `exec`. Review found:
 3. **Swallowed errors.** `KnownModels` and `modelAliasName` ignore the load error; with
    `sync.Once` an embedded-spec failure should panic at init or surface once, not yield an
    empty list silently.
+
+## M2 delivered (039709b) — M3 Pre-Work / Required Refinements
+
+M2 fixed the blocking bug: resume uses the session's stored tier, an unknown tier omits the flag,
+and tests cover low/med/unknown. Remaining structure debt, to settle before closing:
+
+1. **Put the model on the interface, drop the type assertions.** `cmd/harnez/agent_run.go`
+   probes for ad-hoc `ResumeWithModel`/`ResumeStreamWithModel` interfaces. Change the
+   `Driver.Resume` and `StreamingDriver.ResumeStream` signatures to take the session `Model`
+   (all drivers; Claude/AGY ignore it where they have no tier), and remove the variadic
+   `tier ...string` from `codexResumeArgs`/`runResume`.
+2. **One validation path.** `parseAgentSpec` re-implements `ResolveModel`'s alias/tier checks.
+   Factor a `resolveModelIn(models map[string]Model, spec string)` used by both, so the rules
+   cannot drift.
+3. **Load aliases once.** Replace the lazy nil-check in `ensureModelAliases` and the assignment
+   in `loadAgentSpec` with a single `sync.OnceValues` over the embedded spec; no package-level
+   writes elsewhere.
+
+Behaviour must not change; existing tests stay as they are, except where a signature changes.
