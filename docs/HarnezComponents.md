@@ -216,4 +216,207 @@ graph TD
 - The lowest-risk path to user-visible composability is a git-style dispatcher in core
   plus per-component binaries built from the same module, before any repo or version split.
 
-Follow-up design work is tracked in issue 490.
+Follow-up design work is tracked in issue 490; the design is §8.
+
+## 8. Component System Design (issue 490)
+
+Goal from 490: let users adopt parts of harnez — docs/skills without hooks, hooks and
+telemetry without docs, agents alone — instead of all or nothing. This section compares
+the paths forward, recommends one, and specifies it.
+
+### 8.1 Paths considered
+
+| Path | What it is | Solves | Costs | Reversible |
+|---|---|---|---|---|
+| **E. Status quo** | Users hand-write a `config.yaml` (`hooks: []`, `status_line: false`, no skills) and pass `-c` | selection, today, zero code | no removal of already installed hooks; users fork the whole config and miss upstream changes; embedded config stays all-or-nothing | — |
+| **A. Component selection in the monolith** | `components:` key + `apply --components`; apply phases gated per component | all four 490 use cases at install time | small: one filter in `internal/claude`; no binary or release change | yes, config-only |
+| **B. Multi-binary, one module** | `cmd/harnez-agents`, `cmd/harnez-telemetry` …; `harnez <cmd>` git-style dispatch to `harnez-<cmd>` on PATH | binary size and deps (sqlite, pty), per-component install | release pipeline builds N binaries; hook/skill strings need forwarding shims; smoke tests go multi-binary | mostly; forwarding shims stay |
+| **C. Separate repos/modules** | each component its own repo and version, like `usage` → `../loom` | independent cadence and ownership | cross-repo contracts for spec, config, store; N release pipelines; uman coordination | costly |
+| **D. Component manifests (plugin protocol)** | core `apply` becomes a generic installer; each component ships a manifest declaring its hooks, skills, docs, status line, units | third-party components (loom's collector, uman) plug into apply without code in harnez | a new public contract to design and version; over-engineered while all components live here | costly once others depend on it |
+
+Evaluation against the 490 use cases:
+
+| Use case | E | A | B | C | D |
+|---|---|---|---|---|---|
+| Docs/skills, no hooks or agents | partial (no removal) | yes | yes | yes | yes |
+| Hooks + telemetry only | partial | yes | yes | yes | yes |
+| Agents alone with own cost tracking | runtime already works | yes | yes, smaller binary | yes | yes |
+| Different versions per subsystem | no | no | no (one release) | yes | yes |
+| Smaller install footprint | no | no | yes | yes | depends |
+
+### 8.2 Recommendation
+
+Take **A now**, and treat B, C, D as later steps with explicit triggers rather than as the
+plan of record:
+
+- **A first** because every 490 use case is about *what gets installed into the harness*,
+  and that is decided by `apply`, not by how many binaries exist. A is config-only,
+  default-preserving, and its component names become the binary or repo names if B or C
+  follow, so no work is thrown away.
+- **B when** binary size or a heavy dependency becomes a user complaint, or a component
+  needs to be installable without the rest (e.g. telemetry hooks on a machine that must
+  not carry agent PTY code). Precondition: `harnez release` supports multiple binaries.
+- **C only** for components with a different owner, audience, or cadence. `usage` already
+  qualifies and is moving to `../loom`; nothing else does today.
+- **D when** a component outside this repo needs to install into harnesses through
+  `apply` (the loom collector's systemd unit is the first candidate). Until then, the
+  per-component gating in A is the manifest, just compiled in.
+
+E remains the fallback for one-off setups and costs nothing to keep.
+
+### 8.3 Components
+
+| Component | Apply installs | Runtime commands (unchanged by selection) |
+|---|---|---|
+| `docs` | global copyable docs (`docs:`, `apply --docs`), managed CLAUDE.md/AGENTS.md convention sections | `docs`, `mode`, `read` |
+| `skills` | commands and skills into Claude, Codex, Gemini, Prime targets | — |
+| `telemetry` | harnez hooks in Claude `settings.json` (`exec hook`, `hook read`), Codex and AGY hooks, distill adapters, the Tool Feedback Protocol section and skill, telemetry schema init | `exec`, `hook`, `rate`, `log`, `stats`, `export`, `distill` |
+| `agents` | skills that declare `requires: [agents]` | `agent`, `subagent`, `compact-check` |
+| `usage` (transitional) | `statusLine`, `harnez-agent-collector` systemd unit | `usage`, `statusline`, … until moved to loom |
+
+Always applied regardless of selection: `model`, `effortLevel`, `permissions`, `env`,
+`spinnerVerbs`, `mcpServers`, decommissioned-artifact cleanup, bash shims. These are
+harness settings, not component features.
+
+The issue tracker (`issues`, `find`, `index`) stays in core: it installs nothing into
+harnesses, and the docs and skills that name its commands ship with it.
+
+Presets, from 490:
+
+| Preset | Components |
+|---|---|
+| `full` (default) | all |
+| `docs-only` | `docs`, `skills` |
+| `telemetry-only` | `telemetry` |
+| `agents-only` | `agents` |
+
+Presets and component names mix freely: `--components docs-only,telemetry`.
+
+**Naming:** 490 proposed `apply --profile=<name>`. `profile` is already taken by
+`docs_profiles` (`core`, `dev`, `full` sets of docs), and `full` exists in both. Reusing
+the word would make `--profile full` ambiguous. The design uses `components:` and
+`--components`; presets are values of it.
+
+### 8.4 Semantics of a disabled component
+
+Two behaviours, chosen by how harmful a leftover is:
+
+- **Remove** harness entry points that call harnez: hooks whose command starts with
+  `harnez `, Codex and AGY harnez hooks, a `statusLine` whose command is `harnez …`, the
+  Tool Feedback Protocol section and skill, and skills whose `requires:` names a disabled
+  component. A leftover hook calling an unwanted or missing binary breaks or slows every
+  tool call; a leftover skill tells agents to run commands that are not wanted. This
+  extends the existing precedent of `feedback.disable_rate_protocol` (issue 142), which
+  already removes rather than skips.
+- **Skip** docs, commands, and skills of a disabled component: apply stops managing them
+  but does not delete them. A stale doc is harmless and may belong to another tool.
+
+Ownership rule: harnez owns a hook or status line when its command is `harnez` or starts
+with `harnez `. Nothing else is removed. The Stop sound hook in the default config is not
+harnez-owned and survives every selection.
+
+### 8.5 Selection and persistence
+
+Resolution order: `apply --components` > `components:` in the loaded config > `full`.
+
+A flag alone is not persistent: the next plain `harnez apply` would reinstall everything,
+and `harnez diff`/`status` would report the deselected parts as drift. Options:
+
+1. **Require a custom config** for persistent selection. Simple, but pushes users back to
+   path E for a one-line choice.
+2. **Persist to the user-local config** `~/.harnez/config.yaml` (`components: [...]`),
+   written by `apply --components … --save`. It is a machine-local choice ("no telemetry
+   on this box"), which is what that file is for.
+3. **Record the last selection** in a state file under `~/.harnez/` and reuse it silently.
+   Surprising; rejected.
+
+Recommended: 2. The loader for that file lives in `internal/usage` today
+(`usage.LoadLocalConfig`), which is moving to loom, so it moves to a neutral package
+first. That also removes the `claude → usage` edge from §2.1.
+
+`diff`, `status`, and `apply` resolve the selection through one function, so all three
+agree on what counts as drift.
+
+### 8.6 Composition contracts
+
+Components never call each other's Go code across the boundary. They compose through
+files and command lines, which is what makes B and C possible later:
+
+| Contract | Producer | Consumers | Defined in |
+|---|---|---|---|
+| Hook command strings (`harnez exec hook`, `harnez hook read`, `harnez codex-hook`) | `telemetry` via apply | Claude, Codex, AGY | `config.yaml` `hooks:`, `internal/codex`, `internal/agy` |
+| `~/.harnez/tool_catalog.sqlite` | `telemetry` | `stats`, `export`, issue snapshots | `spec/telemetry.yaml` |
+| Agent session records (`~/.harnez/agents/`) | `agents` | `agent list/status`, a future telemetry import | `internal/subagent` (to be specced) |
+| Usage snapshots (`harnez usage --json` schema) | `usage` collector (→ loom) | `usage`, statusline, agent dispatch | `internal/usage` (to be specced) |
+| `config.yaml` sections | user | every component | `claude.Config` |
+| `requires:` on skills | skill authors | apply | `config.yaml` `skills:` |
+
+"Agents in isolation with direct token cost tracking" (490 use case 3): agent sessions
+already keep token counters in their own records (`subagent.Session`), so agents-only
+works without the telemetry store. When both components are enabled, telemetry imports
+agent session records; agents do not write into the store. This keeps the dependency
+one-way (telemetry reads agents' contract), and agents stay free of sqlite.
+
+### 8.7 Initialization order
+
+`apply` phases, each gated by the selection and depending only on config, not on another
+phase's output:
+
+1. Resolve selection (flag > config > local config > full); filter config.
+2. Telemetry schema init — only with `telemetry` (today it runs unconditionally).
+3. Decommissioned-artifact cleanup — always.
+4. `settings.json` — one merged write: always-on settings, hooks of enabled components
+   (the `hooks` key is written even when empty, so hooks of disabled components are
+   replaced away), `statusLine` set or removed.
+5. Commands and skills — `skills`; per-skill removal when `requires:` is unmet.
+6. Codex and AGY hooks — apply with `telemetry`, remove without.
+7. Distill adapters — `telemetry`.
+8. Global docs — `docs`.
+9. Shims and shell rc — always (unchanged).
+10. systemd collector unit — `usage` and `--systemd`.
+
+Because settings are written in one merge (step 4) and no later step reads them, each
+preset boots independently, and presets compose by union.
+
+### 8.8 Migration
+
+- Default is `full`, so existing users see no change.
+- Switching `full` → `docs-only` removes harnez hooks, the status line, and the Tool
+  Feedback Protocol, and keeps docs and skills. Switching back reinstalls them.
+- If B follows, each component maps 1:1 to a binary and the selection also decides which
+  binaries a `harnez install` fetches. Hook strings keep working through the dispatcher.
+- `usage` drops out of the component list when it moves to loom; a saved selection that
+  names it is accepted with a deprecation note for one release.
+
+### 8.9 Open questions
+
+- **Sprint skills and `agents`.** `sprint`, `lean-sprint`, and `reverse-sprint` name
+  `harnez agent start`, but repos can run them with `subagent_mode: native`. Should they
+  declare `requires: [agents]` (removed in docs-only) or stay unconditional and rely on the
+  native fallback text?
+- **Project-level selection.** `init` writes managed AGENTS.md blocks that name
+  `harnez find`, `harnez read`, and the rate protocol. Should `init` honour a selection
+  too? Per `docs/CLIDesign.md`, that would be a separate project-local setting, not the
+  global one.
+- **Telemetry import of agent sessions.** It does not exist yet and is not required for
+  the prototype.
+
+### 8.10 Prototype and verification plan
+
+Prototype scope (path A, phases 1–10 above, without `--save` persistence):
+
+- `internal/claude/components.go`: component names, presets, `ParseComponents`,
+  `Config.SelectComponents(override)`.
+- `Config.ComponentNames` (`components:`) and `Command.Requires` (`requires:`).
+- Gates in `ApplyAllVariant`, the `hooks`/`statusLine` handling in `buildSettingsDoc`, and
+  a nil-means-remove-if-harnez-owned rule in `applyMerge`; the same gates in `DiffAll`.
+- `apply --components` flag; skip the telemetry schema init without `telemetry`.
+
+Verification:
+
+- Unit: preset and name parsing, unknown names rejected, nil set means full.
+- Integration: apply `telemetry-only` into a temp target, then `docs-only`; assert harnez
+  hooks, status line, and the rate skill are gone, the Stop hook and user keys survive,
+  and `diff` reports no drift under the same selection.
+- Review checklist: each preset boots on an empty target; presets compose by union;
+  `full` output is byte-identical to today's apply.
