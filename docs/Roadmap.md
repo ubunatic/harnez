@@ -1,596 +1,416 @@
 # Roadmap
 
-Working roadmap for the open backlog (updated 2026-09-21). Derived from each ticket's
-appended `## Implementation Plan`, so scope calls here reflect the planning pass, not a fresh
-re-derivation.
+Working roadmap for the open backlog (updated 2026-09-22, reconciled against e61f74c). Derived
+from each ticket's appended `## Implementation Plan` or its `/goal` and specification sections,
+so scope calls here reflect the planning pass, not a fresh re-derivation.
 
-**Strategic Goal — OS-Agnostic & Cross-Platform Readiness (macOS first)**:
-harnez is preparing to become fully OS-agnostic, targeting macOS (Darwin) as the primary non-Linux platform. This requires eliminating hardcoded GNU/Linux CLI tool dependencies (`stty`, `pactl`, `amixer`, `/proc/*`) in favor of standard Go cross-platform libraries (such as `golang.org/x/term`), OS build-tag splits for system telemetry, and platform audio/process abstractions.
+**Value axis.** harnez is the single source of truth for everything a coding agent reads:
+`config.yaml` drives settings, hooks, instructions, skills and doc copies across Claude Code,
+Codex, AGY and Prime Agent, and `apply` must stay idempotent and never touch user-managed
+keys (README). On top of that core sit three surfaces used every day: `harnez agent` dispatch
+(cheap developer agents driven by an orchestrator), the issue tracker, and the telemetry that
+measures whether the harness actually saves tokens and turns. Work that makes those surfaces
+more correct, more composable and cheaper per session outranks work that adds new surface.
 
-**Guiding bias for ordering**: harnez's primary daily surface is a single workstation with
-`harnez usage --watch` open in a terminal split, plus the issue tracker and the instruction
-docs that every agent session loads. Work that makes that daily loop more correct, more
-legible, and OS-agnostic outranks work that adds new capability surface.
+**What changed the axis this pass — two decisions from the component-system work (489, 490):**
 
-**New this pass — telemetry data management leads.** The dispatch-correctness cluster that led the
-previous pass has largely landed (454, 315, 442, 374, 424 all closed; see §0), and the stated focus
-is now **better, cleaner, more robust telemetry data management**. §3 therefore moves to the front
-of the suggested order of attack: the store is the substrate every cost, efficiency and A/B number
-in this backlog is read from, and 424 demonstrated that a schema defect can sit in it unnoticed
-until somebody happens to look. The ordering inside §3 was deliberately *reproduce-first*: 341
-(concurrent writers losing rows), then 127 (SQL into `spec/`), then 457 (queries as tests plus a
-live data-quality check). **That chain has landed**: 457 is closed, 127 is closed (remainder: 458),
-and 341 is closed (fixed on Linux, macOS unverified). What is left in §3 is the *extend* half (446, 445, 124+296,
-225, 215).
+1. **harnez becomes composable.** `docs/HarnezComponents.md` §8 designs a component selection
+   (`full`, `docs-only`, …) so a user can take harnez's docs without its hooks, telemetry or
+   dispatcher. That widens who harnez is useful for, and it forces a boundary between
+   *capture* and *storage* of token data (495) that reshapes the cost-telemetry chain in §3.
+2. **The `usage` TUI is leaving harnez for a `../loom` app** (`HarnezComponents.md` §4 item 3,
+   §8.2). The previous passes' guiding bias ("the primary daily surface is `harnez usage
+   --watch` in a terminal split") is therefore retired. The watch-dashboard backlog in §2/§2b
+   stops competing for harnez's **Now** slots and becomes a move-to-loom set (§9). The contract
+   harnez keeps is the `harnez usage --json` snapshot schema, which agent dispatch still needs
+   for quota-aware model choice (449/485).
 
-**Previous lead, now mostly delivered.** `harnez agent`
-(`start`/`resume`/`chat`/`stop`/`list`/`models`/`enable`/`disable`) is shipped and in use, and 454's
-explicit-selection rule is enforced. §1a's remaining P1 (450) is blocked on external work in
-`../loom`, so the cluster no longer heads the order.
+**Strategic goal kept — OS-agnostic readiness (macOS first).** Still valid for the harnez core
+(hooks, shims, `exec`, CI). Most of the Linux-specific probes it named (`pactl`, `amixer`,
+`/proc/*`, `ps -eo comm=`) live in `internal/usage` and move with loom, so §1/§11 shrink to the
+core half.
 
 Sequencing buckets:
 
-- **Now** — actionable today, no blockers, high daily-loop value or already in flight.
-- **Next** — actionable but either larger, lower daily value, or waiting on a Now item.
+- **Now** — actionable today, no blockers, high daily-loop value, or a prerequisite for other
+  work.
+- **Next** — actionable but larger, lower daily value, or waiting on a Now item.
 - **Later** — real but speculative, large, or dependent on decisions not yet made.
-- **Close / Park** — should not be scheduled; see §9.
+- **Close / Park / Move** — should not be scheduled here; see §9.
 
 ---
-
 
 ## 0. Shipped Recently
 
-**Closed since the a600641 pass (latest shipped set):**
+**Closed since the e61f74c pass (this pass):**
 
-- **457** — canonical telemetry analytics queries and live data-quality checks: spec-defined checks
-  with fixture tests (9bedd31) and `harnez stats --quality` (`--json`, `--strict`, 19e0895). The live
-  run is all PASS. **Model gap recorded in the ticket:** `tool_calls` has no `model` column, so
-  per-model call analytics are impossible; noted in §3 as a model-attribution item next to 446/445
-  (no ticket filed).
-- **424** — confirmed closed earlier (see below).
+- **489** — component separation analysis: coupling, use-case coverage, boundaries and
+  independent deployability in `docs/HarnezComponents.md` §1–7. Concluded that coupling is a
+  `cmd/` and runtime-contract problem, not an `internal/` refactor, and that `usage` leaves for
+  `../loom`.
+- **490** — component system design (`HarnezComponents.md` §8, paths A–E, recommendation A
+  now with B/C/D triggers) and an MVP in `internal/components` that wraps `apply` from the
+  outside. Integration split to **491**, persistence to **492**; the design's decisions filed
+  **493** (dispatch mode), **494** (init selection) and **495** (shared token capture).
+- **Unified agent CLI epic 479** with children **480–484** and **478**, **486**: one flag set
+  (`--name`/`--model`/`-d`, prompt files, `--` tail), a runnable root form with slash
+  commands, truthful resume state and a RESUME column, attributable bare `resume`/`-c`,
+  `default_model` and bare aliases in `spec/agent.yaml`, and enforced roles
+  (orchestrator/developer/reviewer/advisor). Follow-ups split out as **476**, **477**, **485**.
+- **464**, **470** — Codex resume runs with the same sandbox bypass as start (1c3f49a); the
+  first orchestrated sprint (`docs/OrchestratedAgentFlow.md`) ran end to end on it.
+- **467**, **469** — plan-first initial prompt guidance and the evergreen trigger rule, in the
+  sprint and AgenticLoop docs.
+- **268** — bounded `harnez exec` timeouts with process-group kills, repo precedence and
+  agent-turn exemptions. Was **Next** in §10.
+- **156** — Codex `spawn_agent` Agents-view delegation documented. Was **Next** in §5.
+- **135** — closed as obsolete: since 415 the Tool Feedback Protocol is delivered only by its
+  skill, so there is nothing to split. Was **Next** in §5.
+- **291** — closed as absorbed by 481/484. It was a §9 close candidate; the tracker now agrees.
+- **462** — telemetry review leftovers delivered (`warn_condition` dropped, tip skip
+  documented, test renamed). Was **Later** in §3.
 
-**Closed, remainders split into follow-up tickets:**
+**Earlier passes (kept for reference):**
 
-- **127** — closed: all schema, insert and query SQL lives in `spec/telemetry.yaml`. The rest
-  (`telemetry.go` migration SQL, `classify.go`, `sanitize_cache.go`, `issuesnapshot.go`,
-  `export.go`, `economics_query.go`) is now **458**.
-- **341** — closed: fixed and regression-tested on Linux (fbaa511, `BEGIN IMMEDIATE`
-  serialization). macOS is not tested soon; reopen if 338's CI shows lost rows.
+- **457** — canonical telemetry analytics queries and `harnez stats --quality`; live run all
+  PASS. Its finding (no `model` column on `tool_calls`) is **461**.
+- **127** (remainder **458**), **341** (fixed on Linux, macOS unverified; reopen if 338's CI
+  shows lost rows), **424**, **425** (remainder **459**), **428** (remainder **460**).
+- **454**, **315**, **442**, **374**, **149**, **417**, **030** (AGY half deferred to 034),
+  **114**, **429–434**, **166**, **399**, **443**, **448**, **452**, **455**, **456**.
+- **006, 018, 030, 042, 045, 046, 056, 070, 071, 072, 095 pt.1, 096, 105, 108, 123, 125, 126,
+  139, 201, 209, 210, 216, 217, 222, 229, 249, 261, 262, 263, 290, 292, 299, 301, 303**.
 
-**Closed since the 2026-09-21 pass:**
+## 1. Component system (`apply` composability) — new section, leads this pass
 
-- **454** — explicit `luna` selection is enforced; no silent host-provider fallback. The
-  cost-substitution bug that led §1a last pass is fixed, which is why that section no longer
-  heads the order of attack.
-- **315** — `init` no longer drops previously opted-in docs on re-run. The destructive half of
-  the `apply`/`init` family is closed; 289 and 355 remain.
-- **442** — `harnez issues open --commit` now commits a newly created ticket, so the documented
-  `/issue` workflow ends in a commit instead of leaving the tracker dirty.
-- **374** — README CLI coverage and the website link are refreshed against the current command
-  surface, including the `harnez agent` tree.
-- **424** — telemetry compaction events insert with the model column; fresh, legacy and
-  current-version DBs all self-heal, with regression tests (a1ade4a). This was the **Now** item
-  at the head of §3 and it is the reason §3's remaining work is now about *keeping* the store
-  honest rather than repairing it.
-
-**Closed, remainders split into follow-up tickets:**
-
-- **425** — closed: migration logging and schema-version drift landed with 235d7da. The Braille
-  glyph-spacing half is now **459** (§12, with 444); review leftovers are **462**.
-- **428** — closed: the telemetry migration test coverage landed in the same commit. The ANSI
-  256-color / 24-bit truecolor half is now **460** (§12, behind 427).
-
-- **030, 071, 096, 105, 108, 126, 139, 149, 201, 209, 210, 217, 261, 262, 290, 292, 299** — shipped/closed
-- **006** — `fix(status): check all managed settings keys`
-- **018** — bundled marker backfill + guard test
-- **042**, **045**, **046**, **056**, **125**, **222**, **095 pt.1** — AgenticLoop & practice docs improvements
-- **229** — `/issue` skill
-- **249** — portable copyable-doc contract
-- **070**, **072** — local-agent canary and cross-agent distill research/verification
-- **216** — local SLM telemetry classifier endpoint
-- **301** — cross-agent Docup testing skill
-- **303** — prose-first reusable advisor skill with four-target distribution
-
-**Closed since the 2026-09-17 pass:**
-
-- **429, 430, 431, 432, 433** — the pixel-font cluster behind `harnez read -I` visual context
-  cards: glyph/unicode mappings moved into `internal/readcard/spec/` YAML, the `%` glyph fixed,
-  golden visual assets generated, dead profiles dropped, and official upstream BDFs (Tom Thumb
-  3x5, Spleen 6x12/8x16, X11 misc-fixed 7x13) adopted for every non-default size with only the
-  5x8 font staying hand-tuned. Remaining upstream gaps are documented in
-  `third_party/fonts/README.md`; the follow-through is 434 (see §12).
-- **166** — both parts are now closed, not just Part A: the Go rune/display-width invariants
-  landed in `docs/lang/Go.md`, and the compact local-LLM doc profile no longer tracks here
-  (see §8).
-- **399** — `harnez read` image enhancements (configurable line-number cadence, AST-safe
-  whitespace compression); removed from §12.
-- **071**, **123**, **201** — previously listed in §9 as "close now"; the tracker now records
-  them closed, so they are no longer close candidates.
-
-**Closed since the 2026-09-19 pass:**
-
-- **149** — agent-specific profiles + the Codex async-wait instruction. This was named the
-  "keystone" of §5 in the last two passes; the profile mechanism and its Codex content are
-  shipped, reviewed, and committed. Everything that was written as **Next (after 149)** —
-  144, 151, 231 — is now unblocked, and 145 no longer has to wait for a convention that does
-  not exist yet.
-- **417** — `harnez subagent` MVP, delivered as the `harnez agent` command tree. It carries
-  `start`, `resume`, `chat`, `stop`, `delete`, `compact`, `status`, `list`, `models`, and the
-  `enable`/`disable` pair that sets `subagent_mode`. This closure supersedes most of 291 and 342
-  and shrinks 435 (see §9).
-- **030** — Codex rollout token aggregation is wired. The AGY protobuf half is explicitly
-  deferred into 034, so 084's gate is now "034", not "030".
-- **114** — remote-load stream stdin-EOF false trigger; recorded Resolved.
-- **434** — closed, as the previous pass predicted; the glyph-spec-per-font-size work and the
-  `scripts/import-bdf-font.go` removal are both done.
-- **443**, **448**, **452**, **455**, **456** — filed and closed inside this cycle: `issues list`
-  aliases and completion, the known-agent-models listing, `agent stop --all`/`delete --all` with
-  lineage-safe behaviour, agent-name shell completion with prompt descriptions, and the
-  synchronous agent-lifecycle documentation.
-
-## 1. OS-Agnostic Readiness (macOS first) & Terminal Modernization
-
-Laying the foundation to run seamlessly across operating systems (macOS / Darwin at first), eliminating brittle Linux-only subprocess forks in the interactive TUI and establishing portable system abstraction layers.
-| Ticket | Scope | Bucket |
-|---|---|---|
-| 286 — promote `golang.org/x/term` for terminal operations in Go conventions & watch.go | S — add `x/term` carve-out to `docs/lang/Go.md`, replace `stty` subprocesses & raw-mode ioctls in `internal/usage/watch.go` with `x/term` | **Now** |
-| 339 — gate hardware telemetry and mic probes on macOS | M — owns the OS build-tag split, Darwin/fallback collectors, graceful TUI degradation, and acceptance checks | **Next** |
-| 334 — research OS-agnostic process inspection | S/M — owns the `ps -eo comm=` replacement research and the follow-up implementation-ticket decision | **Next** |
-
-Rationale: 286 is immediate, high-leverage low-hanging fruit — it updates the Go convention docs, eliminates the `stty` dependency from `watch.go`, and cuts subprocess CPU overhead in one clean step. It directly unlocks running the watch TUI reliably on macOS and non-GNU environments without requiring coreutils `stty`.
-
-## 1a. Cross-agent dispatch & hosted agent chat (`harnez agent`) — new section
-
-`harnez agent` shipped with 417 and is now how work is handed to a cheaper or different model.
-**454 closed this pass**, so the highest-cost failure mode here — silently substituting the
-expensive host model for the low-cost tier the user asked for — is fixed. What remains is one
-blocked P1 and a set of follow-ons, which is why this cluster no longer leads the order of attack.
+The design is done and an MVP exists; what remains is putting it where users can reach it.
+491 is the keystone: 492, 493's clamp, 495's peer detection and (through 495) 446 all consume
+its resolved selection.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 450 — hosted chat input line breaks after terminal resize | S/M — P1, **blocked on `../loom`**: the resize/raw-mode handling this needs lives in that external dependency, so no amount of work here closes it. Revisit when loom lands; pair it with 286's `x/term` work at that point | **Park** (blocked) |
-| 449 — spec-driven chat model selection and aliases | M — P1; provider-only/tier-only/no-arg forms resolved through an editable spec, with quota-aware selection (skip agents ≥80% of their 5h window). **Unblocked by 454**: the "explicit selection wins" rule is now enforced, so defaults can be layered on top of it safely. Shares the spec surface 445 touches | **Now** |
-| 451 — roadmap skill defaults to low-cost models when unspecified | S — docs/skill-only; the same cost-discipline defect as 454, one layer up in the skill rather than the CLI | **Next** |
-| 453 — clarify `opus:low` vs `astra:low` cost guidance in sprint docs | S — docs-only; land together with 451 as one cost-discipline pass | **Next** |
-| 435 — native-subagent interception + A/B telemetry switch | **rescoped by 417**: the `subagent_mode` switch now exists as `harnez agent enable`/`disable`. What remains is the interception/redirection hooks for native `invoke_subagent`/`spawn_agent` and the comparative telemetry. The hardening chain (341 → 127 → 457) has largely landed, so the telemetry half is now unblocked once 341's macOS CI confirmation arrives and 446/445 supply cost numbers | **Next** |
-| 306 — quarantine Codex subagents unusable after usage limits | S/M — P1; a dispatcher that keeps routing to a dead session wastes a whole turn per attempt. Follows 449, which introduces the eligibility notion this would extend | **Next** |
-| 383 — disable queued question-tool prompts in Codex sessions | S — moved up from §14; it is a dispatch-surface papercut, not misc | **Next** |
-| 144 — Codex subagent model-selection policy | S — **unblocked by 149**; its content now migrates into a real profile instead of waiting for one | **Next** |
-| 288 / 291 / 342 — external-agent handoff, standardized dispatch, cross-agent MVP | largely delivered by 417; see §9 for the close/rescope call | **Close / rescope** |
+| 491 — integrate component selection into `apply` | M — `components:`/`requires:` keys, `apply --components`, one settings write instead of a second removal pass, selection-aware `diff`/`status`, telemetry schema gated on `telemetry`, Codex/AGY apply-or-remove. Retarget the MVP tests at `claude.ApplyAll*`, then delete `internal/components` | **Now** |
+| 493 — `mixed` subagent dispatch mode, dispatch-mode-aware sprint skills | M — `mixed` in `agentpolicy` (native for the host's vendor, `harnez agent` for others), interception honours it, sprint skills stop hard-coding `harnez agent start`. The `agents`-disabled ⇒ `native` clamp needs 491 | **Next** (parallel with 495, after 491) |
+| 495 — shared token-capture package with stable API and `spec/` schemas | M — capture/parse per provider, a versioned `Record` in `spec/`, no storage; peer detection needs 491. 446 becomes its first consumer | **Next** (parallel with 493, after 491) |
+| 492 — persist selection in `~/.config/harnez/local.yaml` | S/M — move the local-config loader out of `internal/usage` into a neutral package, add `components:` and `apply --save`. Do it before the loom move lands, because the loader currently lives in the package that is leaving | **Next** (after 491) |
+| 494 — project-level selection in `init` with `*.harnez.md` / `*.local.md` | M/L — repo-type commit policy, move harnez-specific managed blocks out of AGENTS.md. Independent of 491 (init is not apply, see `docs/CLIDesign.md`), but it rewrites managed blocks, so it should follow 355 (pruning) and absorb the layout question in 413 | **Next** (independent; after 355) |
 
-Rationale: this cluster is ordered by *what a wrong answer costs the user*. With 454 closed, 449 is
-the remaining piece of "send work to the model the user actually asked for" and stays **Now**. 450
-is the interactive half of the same surface but is externally blocked, so it moves to **Park**
-rather than sitting in **Now** as an item nobody can start. 435's A/B telemetry is still held
-behind §3's cost work (446/445); 457's live checks now guard the
-store, so the earlier reason for holding it is largely gone.
+Rationale: this is the only cluster that changes *who* harnez is useful for, and its design
+decisions are fresh. 491 goes first because four tickets read its output; shipping any of
+them against the MVP wrapper would mean doing the settings-write and `diff`/`status` work
+twice. 493 and 495 have no dependency on each other and can run in parallel once 491 lands.
+492 is P3 but time-boxed by the loom move. 494 is independent of `apply` and can start any
+time, but it is the larger migration and is best done once 355 has settled how managed blocks
+are removed.
 
-383 and 144 remain behind 451/453 and 306 deliberately: 451/453 are a small documentation batch
-that fixes current cost guidance, while 306 prevents repeated dispatch to a known-dead session.
-383 is a lower-impact prompt-queue papercut, and 144 is policy work whose empirical model-selection
-check can follow the live dispatch correctness and cost-default fixes.
+## 1a. Cross-agent dispatch (`harnez agent`)
 
-## 2. Usage watch TUI — correctness & legibility
+The 479 epic shipped this pass, and the first orchestrated sprint (luna:med orchestrator,
+luna:low developers, three tickets) ran on it. Its findings reorder this section: blocking
+`harnez agent` calls worked for 2–6 minutes without the host ever polling, every failure was
+review depth rather than model capability, and the open gaps are async mode, attribution and
+report contracts.
 
-The `--watch` dashboard is the tool's front door. Everything that makes it lie, misalign, or
-hide a failed collector belongs at the front of the queue.
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 255 — collector resilience: retries & TUI logs | retry, structured details, and basic scrolling shipped; full key decoding/tests remain | **Now** |
-| 085 — show collector-daemon status in watch | S — no plan written yet; small sibling of 105, land with it | **Next** |
-| 264 — ALSA/arecord live-mic-level backend | M — follows 262 for amixer systems | **Next** |
-| 250 — research desktop mic indicators | S, in progress — solves cross-desktop privacy UX | **Next** |
-| 251 — suppress desktop mic indicators | M — depends on 250 | **Next** |
-| 253 — mic view triggers desktop privacy indicator | S/M | **Next** |
-| 256 — persist watch & collector launch logs | M — follows 255 | **Next** |
-| 172 — AGY single-window row alignment | rendering bug fixed; remainder needs a live capped account | **Park** (§9) |
-| 278 — mic box "recording n/a" wording + real recording-active probe | S/M — the box currently states something it cannot know; wording fix first, probe investigation second | **Next** |
-| 404 — HDD/SSD storage and I/O metrics in the watch TUI | M — new metric family; land after the existing boxes are trustworthy | **Later** |
-| 219 — subtler usage-bar colors vs Braille charts | S — spec/colors.yaml ramp split | **Next** |
-| 214 — 256-color heat palette option | M — third value for two existing presentation enums | **Next** |
-| 143 — Git status in all agent status bars | M — shared collector + per-agent wiring | **Next** |
-| 141 — running-agent count in Codex status bar | blocked: Codex status line is a closed item picker, not a command hook | **Later** |
-| 146 — recent-subagent-activity watch box | L — needs a per-tool feasibility matrix first | **Later** |
-| 247 — third mic graph (amplitude-over-time audiogram) | M/L — visual addition, evaluate after 262 | **Later** |
-| 051 — multi-host monitoring + host navigation | L — introduces an "active host" concept the watch state has never had | **Later** |
-| 160 — extract watch layout/UI into renderer-agnostic module | feasibility done; only the user's proceed/stage call remains | **Later** |
-| 161 — collector absorbs remote-load host + Prometheus | M, but only pays off after 160/051 direction is set | **Later** |
+| 476 — explicit `--sync`/`--async`, immediate start feedback, `--plan yes\|no\|inline` | M — `--plan yes\|no` and `-d` shipped in 479; the remainder is async mode, the first-call tip and `inline` planning. Prerequisite for 477: there is no async path to notify from yet | **Next** |
+| 477 — hook-driven background task completion instead of polling | M/L — P1 in the tracker, **placed Next behind 476**: the sprint showed synchronous calls do not poll, so the hazard this fixes only appears once 476 adds async mode. Design both together | **Next** (after 476) |
+| 449 — spec-driven chat model selection and aliases | **partially delivered by 484** (`default_model`, bare aliases). The remainder is provider-only/tier-only resolution and quota-aware eligibility, which is the same concern as 485. **Moved Now → Next** and merged with 485 in intent; both read quota through the `usage --json` contract that survives the loom move | **Next** |
+| 485 — autodetect the default model from 5h and weekly usage | S/M — spec-driven preference list plus demotion thresholds; explicit `--model` always wins. Land as one change with 449's quota half | **Next** (with 449) |
+| 306 — quarantine Codex sessions unusable after usage limits | S/M — P1; 482 left the quarantine hook point in bare `resume`/`-c` attribution, so this is now a small, well-placed change | **Next** |
+| 463 — `--escalated --reason` on start/resume | S — P2; same flag surface as 476, land together. The ticket file carries a stray `Status: Draft / Reserved placeholder` trailer that a tracker pass should remove | **Next** (with 476) |
+| 144 — Codex subagent model-selection policy | S — the sprint recorded that luna:low handled docs, code and config tickets; the fallback default now lives in `spec/agent.yaml`. The per-task-type choice remains | **Next** |
+| 383 — disable queued question-tool prompts in Codex sessions | S — dispatch papercut | **Next** |
+| 435 — native-subagent interception + A/B telemetry | **rescope again**: 493 now defines interception semantics (`mixed` passes same-vendor requests back to native). What stays unique is the A/B telemetry, which needs 487's role attribution and 495/446's cost records | **Later** (after 493, 487, 495) |
+| 450 — hosted chat input line after terminal resize | P1, blocked on `../loom` | **Park** (§9) |
+| 288 / 342 — external-agent handoff skill, cross-agent MVP | delivered by 417 + 479; see §9 | **Close / rescope** |
 
-Rationale: 210 → 201 → 139 → 105 → 262 all shipped, so the "never show a wrong or silently stale
-number" chain is complete except for 255, which finishes the opaque-error half and is the one
-remaining **Now** item here. 105 was the one that stopped the recurring class of incident
-(086, 103/104) where a dead collector was only caught by hand-digging on disk. 278 is next
-because the mic box currently asserts a recording state it cannot actually observe — the same
-category of defect the chain above just closed. Cosmetics (219, 214), new metric families (404),
-and the status-bar work follow once the numbers are trustworthy.
+Rationale: ordered by what a wrong dispatch costs. 306 and 449/485 decide *where* work goes;
+476 → 477 decide *how the host waits*. 449 leaves **Now** because its core promise (explicit
+selection wins, a spec default exists) shipped in 484, and its remaining half is a duplicate of
+485. 477 keeps its P1 label in the tracker, but its trigger (async workers) does not exist
+until 476, so it cannot be verified before then.
+
+## 2. Usage watch TUI — moving to `../loom`
+
+The watch dashboard, its collector and the mic/hardware boxes are leaving harnez
+(`HarnezComponents.md` §4 item 3). Scheduling them here would build features into a package
+that is about to be extracted. They are listed in §9 as **Move to loom**, with the one
+exception that still matters to harnez:
+
+| Ticket | Scope | Bucket |
+|---|---|---|
+| 143 — Git status in all agent status bars | M — `internal/statusline` is installed by `apply` and may stay in harnez even if the usage TUI leaves; decide its owner as part of the loom split before building | **Later** (owner decision first) |
+| 152 — move `agent-collector` under `usage` | moot: the collector moves with loom, and its systemd unit becomes loom's (the first manifest candidate in §8.2 path D) | **Close** (§9) |
+| 255, 256, 085, 295, 264, 250, 251, 253, 278, 404, 219, 214, 146, 247, 051, 160, 161, 330, 172, 141 | watch/collector/mic/splash/status features | **Move to loom** (§9) |
+
+Rationale: 255 was the last **Now** item here last pass. It moves out not because it lost
+value but because its value now accrues to loom. The previous "never show a wrong number"
+chain (210 → 201 → 139 → 105 → 262) shipped, so the dashboard leaves in a trustworthy state.
 
 ## 2b. Collector pipeline & token sources
+
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 034 — hook-triggered token extraction | plan revised: hook infra now exists (`agy-hooks`, `codex-hook`), scope shrank | **Next** |
-| 113 — per-collector roundtrip times, `usage --meta` | S/M — extend existing `internal/usage/fetchdurations.go`, do not build a second timing store | **Next** |
-| 111 — per-agent cadence/timeout/cancellation | premise corrected: collection is already concurrent; reduced to cadence + timeout + cancel | **Next** |
-| 035 — transparent HTTPS proxy sidecar | superseded in most of its value; only rate-limit headers remain unique | **Park** (§9) |
-| 084 — aggregate quota-window box | blocked: `QuotaWindow` has no capacity field, and AGY token extraction remains in 034 | **Park** (after 034; §9) |
-
-Rationale: doing the Codex half of 030 first is nearly free and unblocks the token column for a
-second agent. 113 before 111 — you want the measurements before tuning the cadence they'd inform.
+| 034 — hook-triggered token extraction (AGY, Claude) | **rescope into 495**: the capture half is exactly what 495's shared package inventories; the display half goes with loom. Keep the AGY-protobuf research, drop the watch-specific plumbing | **Next** (as a 495 consumer) |
+| 111 — per-agent collector cadence/timeout/cancellation | collector internals | **Move to loom** (§9) |
+| 113 — per-collector roundtrip times, `usage --meta` | collector internals | **Move to loom** (§9) |
+| 084 — aggregate quota-window box | blocked (no capacity field) and a watch box | **Move to loom** (§9) |
+| 035 — transparent HTTPS proxy sidecar | only rate-limit headers remain unique | **Park** (§9) |
 
 ## 3. Telemetry data layer & analytics
 
-The stated focus is better, cleaner, more robust telemetry data management. The order was
-**reproduce-first, then consolidate, then keep honest, then extend**. The first three steps have
-landed (341 fixed on Linux, 127 M1/M2, 457 closed), so the section now moves to the *extend* half,
-with 457's `stats --quality` as the guard that flags regressions.
+The hardening chain (341 → 127 → 457) landed in earlier passes and `harnez stats --quality`
+guards the store. This pass changes the *extend* half: 490's design separates capture from
+storage (495), and the orchestrated sprint showed that the store cannot say which agent role
+issued which call (487).
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| ~~341~~ — concurrent SQLite telemetry writers lose rows (macOS) | ✅ **closed**: fixed and tested on Linux (fbaa511); macOS unverified, reopen if 338 CI shows lost rows | **Done** |
-| ~~127~~ — move `internal/telemetry` SQL into `spec/` | ✅ **closed**: schema/insert/query SQL is in `spec/telemetry.yaml`. Remainder is **458**; finish opportunistically alongside 446/445, which touch the same spec surface | **Done** (458 **Later**) |
-| ~~457~~ — canonical analytics queries as tests + live data-quality checks | ✅ **closed**: spec-defined checks, fixture tests, `harnez stats --quality`; live run all PASS. See §0 | **Done** |
-| 461 — `model` column on `tool_calls` | S/M — finding from 457: per-model call analytics are impossible today. Sequence with 446/445, which need the same attribution | **Next** (with 446/445) |
-| 462 — telemetry leftovers (`warn_condition`, test name, apply tip skip) | S — review cleanups from the sprints | **Later** |
-| 446 — persist cost fields reported by agents | S/M — capture `cost`/`total_cost`/`currency` where a provider already reports them rather than discarding them. **Before 445**: a measured number is worth more than a modelled one, and it gives 445's estimates something to be checked against | **Now** |
-| 445 — counterfactual API rate cards in `spec/`, surfaced in `usage`/`stats` | M — rate cards per model in `spec/`, then estimated pay-as-you-go spend and cache savings. Lands on top of 446's measured values and 127's spec surface | **Now** (after 446) |
-| 124 — PostToolUse auto-capture of tool-call counts | M — canary-gated: run the payload probe before writing code. Moved up from §7; it is a telemetry *ingestion* ticket, and pairing it with 296 makes the efficiency numbers complete at the same time | **Next** |
-| 296 — always compute distill savings for stats | S/M — pairs with 124: together they close the "efficiency reporting is only partly populated" gap, and 457's data-quality checks will flag exactly these columns as sparse until they do | **Next** |
-| 225 — local SLM classifier reliability/accuracy | S — cache versioning first, then an accuracy baseline. **Before 215**: a backfill run against an unversioned cache cannot be evaluated, so the baseline has to exist before rows are rewritten at scale | **Next** |
-| 215 — LLM backfill/reclassification of tool notes | M — new `activity_category` column + migration + CLI. Follows 225's baseline, and follows 457 so the backfill's effect is measurable as a data-quality delta rather than an assertion | **Next** |
-| 178 — distill smart mode, error-pattern preservation | M — key constraint: do not import `internal/telemetry` from `internal/distill` | **Next** |
-| 421 — extend telemetry to harnez commands and feature-usage analytics | M — new event family. Deliberately **later**: adding an event family before 341/127/457 means the new family inherits the same unverified write path and has no canonical queries covering it | **Later** |
-| 208 — SQLite export format | S/M — depends on 204's scrubbed record slices, and exporting a store is only worth doing once its contents are known-good | **Later** |
-| 459 / 460 (from 425 / 428) | telemetry halves shipped in 235d7da; the Braille-spacing (459) and 256/truecolor (460) follow-ups track in §12 | **→ §12** |
+| 446 — persist cost fields reported by agents | S/M — **moved Now → Next (after 495)**: the ticket now records that capture moves to the shared package, agents store cost in their own session records, and telemetry receives it only when active. Building it before 495 would couple agents to sqlite, which the component design forbids | **Next** (after 495) |
+| 445 — counterfactual API rate cards in `spec/` | M — still after 446 (measured before modelled) | **Next** (after 446) |
+| 487 — record agent role and parent; attribute nested `harnez` subcommands | M — `agent_role`/`parent_session_id` columns, the real subcommand behind `exec`, `stats --role`, and one canonical DB path (the empty `~/.local/share/harnez/telemetry.db` misled the first analysis). **New and Next-high**: every orchestrated-sprint question ("which commands did each agent run?") is unanswerable without it | **Next** |
+| 461 — `model` column on `tool_calls` | S/M — same migration shape as 487; do them as one attribution change | **Next** (with 487) |
+| 124 + 296 — PostToolUse tool-call capture + always compute distill savings | M + S/M — the two halves of one efficiency number; 124 is canary-gated | **Next** |
+| 468 — compact `make test-q1` output via `harnez distill` | S/M — new, P2. Quota-1 allows one run, and hosts truncate the output and miss late failures. Grows distill with a Go-test mode, so it belongs with 178 and 296 | **Next** |
+| 178 — distill smart mode, error-pattern preservation | M — pairs with 468 (same distill growth); keep `internal/distill` free of `internal/telemetry` | **Next** (after 468) |
+| 225 → 215 — classifier baseline, then LLM backfill | S → M — baseline before backfill, unchanged | **Next** |
+| 458 — remaining telemetry SQL into `spec/` | S/M — opportunistic, alongside 487/461 which touch the same migrations | **Later** |
+| 421 — telemetry for harnez commands and feature usage | M — partly subsumed by 487's subcommand attribution; re-read after 487 lands and reduce to what is left | **Later** |
+| 208 — SQLite format for `harnez usage export` | S/M — the export builders live in `internal/telemetry`, but the command is under `usage`; decide which binary owns `export` in the loom split | **Later** |
 
-Rationale: the hardening chain did its job. 457 now makes data quality a reported property
-(`harnez stats --quality`, all PASS live), 127's SQL is single-homed in `spec/telemetry.yaml`, and
-341 is closed (fixed on Linux, macOS unverified). Its own finding is the next gap: `tool_calls` has no model
-column, so per-model call analytics are impossible; that belongs with 446/445 as one
-model-attribution theme. Everything that *adds* to the store (446/445 cost, 124/296 efficiency, 215 classification, 421 command analytics)
-queues behind that chain, in each case pairing a measurement with the thing that validates it.
-446 before 445 (measured before modelled), 225 before 215 (baseline before backfill), 124 with 296
-(both halves of one efficiency number).
+Rationale: 446 was **Now** and now waits on 495, which the component design made a
+prerequisite; the reason is architectural, not a priority drop. 487 enters high because the
+first real multi-agent run exposed an attribution gap the quality checks cannot see: rows are
+present, only unattributable. 468 is the cheapest way to finally put distill to use and
+removes a real Quota-1 failure mode.
 
 ## 4. Issue tracking & tracker tooling
+
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 279 — persistent `issues/README.md` lock sidecar left in working trees | S — a stray file in every tree is visible friction in `git status` on a tracker used many times a day | **Now** |
-| 283 — reassess mandatory fresh-subagent issue filing vs. direct host filing | S — a policy decision, not code; the current rule costs a full subagent spawn per ticket | **Next** |
-| 241 — session-tree tool-call efficiency audit command and skill | M — needs the telemetry of §3 to be trustworthy before its numbers mean anything | **Later** |
-| 246 — add /commit and /publish Skills | M — multi-project staged commit ownership | **Next** |
-| 340 — label/project/category query filters in `harnez find issues` | S/M — moved up from §14; roadmap synthesis and triage both re-scan the whole backlog today | **Next** |
-| ~~442~~ — `issues open --commit` does not commit a newly created ticket | ✅ **closed** this pass; the `/issue` workflow now ends in a commit. See §0 | **Done** |
-| 426 — make `find` output text-first for human users | S — tracked in §12; listed here because the tracker CLI is its heaviest consumer | **Now** (see §12) |
-
-Rationale: 108 and 217 are shipped (§0). Of the remaining work, 279 and 283 are cheap and remove
-friction from the filing loop itself, while 246 extends the skill set. 340 moves up from **Later**
-because every planning pass (including this one) currently re-reads the full open list for want of
-a category filter. 442 shipped this pass, so the filing workflow now ends in a commit; 279 is the
-last remaining tracker-hygiene defect and keeps its **Now** slot.
+| 279 — persistent `issues/README.md` lock sidecar in working trees | S — visible friction in every `git status` | **Now** |
+| 426 + 475 — text-first `find` output; "PNG card" wording | S + S — one pass over `find` output; 475 is new and a string change | **Now** |
+| 340 — label/project/category filters in `harnez find issues` | S/M — this pass again read the full open list (≈170 tickets) for want of it | **Next** |
+| 283 — reassess mandatory fresh-subagent issue filing | S — policy decision | **Next** |
+| 246 — `/commit` and `/publish` skills | M | **Next** |
+| 241 — session-tree tool-call efficiency audit | M — needs 487's attribution to mean anything | **Later** (after 487) |
 
 ## 5. Agent instructions & practice docs
 
-Two sub-clusters: a batch of small `AgenticLoop.md` edits, and a larger question about how
-instructions are delivered at all.
-
-**Docs batch — New** (Previous batch shipped: 042, 045, 046, 056, 125, 222, 095 part 1):
-
-- 263 — `docs/practices/PrototypingFeatures.md`: ✅ shipped; tracker closed
-
-→ **Now.** High per-session value.
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 221 — Go-first for scripts, demote ad-hoc Python | S — do *not* add a new `docs/practices/Languages.md` (130's precedent) | **Next** |
-| 176 — capped subagent completion-report contract | S — new `docs/practices/SubagentReporting.md` + skill refs | **Next** |
-| 156 — document `collaboration.spawn_agent` in Codex Agents | S, docs-only | **Next** |
-| 144 — Codex subagent model selection policy | **unblocked — 149 shipped**; its content migrates into the profile mechanism that now exists. Tracked in §1a, where its cost-discipline siblings live | **Next** (→ §1a) |
-| 151 — on-demand lookup vs. materialized instructions (research) | **unblocked — 149 shipped**; item 4's dependency on 149's design is satisfied, so the research can now be written against a real mechanism instead of a hypothetical one | **Next** |
-| 128 — full system-prompt self-audit for repetition | research; 2 of 4 ACs met, needs the with-project-docs pass | **Next** |
-| 135 — Tool Feedback Protocol delivered twice | S — measure with `harnez stats --overhead` first, differentiate only if warranted | **Next** |
-| 134 — ConciseMode trigger Skill | S — the `mode` skill already exists; only its *description* needs to become trigger-shaped | **Next** |
-| 145 — orchestrator-session skill/command | M — 149 and 417 have now settled two of the three conventions it would encode; 176's report contract is the last one outstanding, so this moves **Later → Next (after 176)** | **Next** (after 176) |
-| 053 — stale LSP diagnostics detect/toggle | research first (is the toggle even exposed?); disagreement-detector explicitly rejected — harnez has no observation point | **Later** |
+| 471 — root doc copies drift from copyable sources (Bash, Make, IssueTracking, Spec, GoRelease) | S/M — new, P2. Every `harnez init` in this repo rewrites ~1000 lines of root docs, so any agent following the repo rules has to revert them by hand. Per-hunk reconcile with the source-wins rule; find GoRelease's source first | **Next** (high) |
+| 176 — capped subagent completion-report contract | S — the sprint supplied the content: 8–12-line replies with named fields worked; the cap belongs in the role rules in `spec/agent.yaml`, with a mandatory exact-test-result field | **Next** |
+| 145 — orchestrator-session skill/command | M — the sprint recorded exactly what it must encode (role start command, preflight, two follow-up turns max, review checklist, helper cleanup). Its last prerequisite is 176. Absorbs the remaining scope of 288 | **Next** (after 176) |
+| 465 — adopt loom's lean-sprint field notes into AgenticLoop | S — decision ticket; do it with 176/145 so the practice docs change once | **Next** (with 176) |
+| 221 — Go-first for scripts, demote ad-hoc Python | S | **Next** |
+| 151 — on-demand lookup vs. materialized instructions (research) | S/M — also informs 494's split into AGENTS.md vs `*.harnez.md` | **Next** |
+| 128 — full system-prompt self-audit for repetition | research, 2 of 4 ACs met | **Next** |
+| 134 — ConciseMode trigger Skill | S | **Next** |
+| 473 — study MiniMax CLI harness efficiency | M research, P2 | **Later** |
+| 472 — Dream-RSI replay and exploration practices | research, P3; needs 487's attributable history to replay | **Later** |
+| 053 — stale LSP diagnostics detect/toggle | research first | **Later** |
 
-Rationale: **149 shipped, so this section's keystone is gone and its dependents are released.**
-144 moves to §1a (it is model-selection policy, which is now a live cost concern, not a docs
-concern). 151 can be written against the profile mechanism as built. 145 moves up a bucket because
-two of its three prerequisites now exist — only 176's report contract remains, so it is sequenced
-directly behind it rather than parked indefinitely. 128 and 135 stay the measurement side of the
-same problem and are now the cheapest way to check whether 149's profiles actually reduced the
-per-session instruction load they were built to reduce.
+Rationale: 471 leads because it is a live defect in the doc pipeline that is harnez's core
+promise, and 494 will change the same `init` paths. 176 and 145 moved from "waiting on a
+convention" to "content known": the orchestrated sprint is their acceptance evidence.
 
 ## 6. Config & doc management (`apply` / `init` core)
+
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 289 — `init` go.work reconciliation hard-fails on testdata/fixture `go.mod` files | S — a hard failure that blocks `init` in any repo with Go fixtures; bug, not polish | **Now** |
-| 005 — permissions are grow-only | M — needs a managed-permission state sidecar so user/Claude-Code additions survive | **Next** |
-| 355 — `apply`/`init` don't prune AGENTS.md sections removed from `config.yaml` | S/M — moved up from §13; orphaned managed blocks break the "single source of truth" promise the README makes | **Next** |
-| 413 — manage local context-link policy through `init` | M — extends the managed-section mechanism; do after 355 settles pruning semantics | **Next** |
-| 230 — Android direct-release scaffold (Makefile template, signing, checksums) | M — the split-out half of 224; independent of the website-rules work | **Later** |
-| 152 — move `agent-collector` under `usage` | S, **but** the systemd unit hardcodes `ExecStart … agent-collector`; needs an alias + migration, not a rename | **Next** |
-| 015 — teach AGENTS.md about `uman` | S — mirror the `repo_modes` opt-in mechanism, not a global section | **Next** |
-| 016 — `make smoke` convention in Make.md | S, docs + template | **Next** |
-| 224 — website rules auto-install | S — `Website.md` is *already* copyable; make it self-install for website-capable projects. **Split the Android release scaffold into its own ticket.** | **Next** |
-| 092 — latest-release links / README install | S — Option B (linter probe) only; explicitly reject the managed-README-block option | **Next** |
-| 170 — modularize `cmd/harnez/main.go` | M refactor — every command closes over two shared vars | **Later** |
-| 009 — `diff`/`clean` don't cover Makefile targets | scope corrected: belongs on `init --dry-run`, not on the global-only `DiffAll`/`CleanAll` | **Later** |
-| 013 — `promote` command | L, new command with an agent-invocation surface | **Later** |
+| 289 — `init` go.work reconciliation hard-fails on fixture `go.mod` files | S — hard failure in any repo with Go fixtures | **Now** |
+| 355 — `apply`/`init` don't prune removed AGENTS.md sections | S/M — **raised in importance**: 491 (component removal) and 494 (moving blocks to `AGENTS.harnez.md`) both need a correct prune | **Next** (high; before 494) |
+| 005 — permissions are grow-only | M — needs a managed-permission state sidecar. 491's "nil value = remove if harnez-owned" in `applyMerge` is the same ownership idea; design them together | **Next** (with/after 491) |
+| 474 — `init --docs man` alias for `manpages` | S — new; small, test-covered alias | **Next** |
+| 413 — manage local context-link policy through `init` | M — re-read against 494's file layout before building; it may become one of 494's topic files | **Next** (after 494 decides layout) |
+| 015 — teach AGENTS.md about `uman` | S — under 494 this is a `*.harnez.md`/`*.local.md` candidate, not an AGENTS.md block | **Next** |
+| 016 — `make smoke` convention in Make.md | S | **Next** |
+| 224 — website rules auto-install | S; split the Android scaffold to 230 | **Next** |
+| 092 — latest-release links / README install | S — linter probe only | **Next** |
+| 369 / 370 / 371 — Go init profile: shape detection, agent capabilities, systemd guidance | S–M each | **Next** |
+| 230 — Android direct-release scaffold | M | **Later** |
+| 170 — modularize `cmd/harnez/main.go` | M — `HarnezComponents.md` §7 names `cmd/` as the real coupling point; revisit once 491 shows which command files need to split | **Later** |
+| 009 — `diff`/`clean` for Makefile targets | belongs on `init --dry-run` | **Later** |
+| 013 — `promote` command | L | **Later** |
 
-Rationale: With 006 and 018 shipped, 209 moves up to fix a missing piece in `apply` (agy-hooks). 005 is
-the real one but needs the state sidecar designed carefully so `apply` never deletes a
-permission the user approved interactively.
+## 7. Testing, canary & build hygiene
 
-## 7. Testing, canary & agent visibility
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 010 — smoke-test that agents see installed skills/commands | **unblocked** — wayreel#11 landed, `verifyContains` exists | **Next** |
-| 007 — thin test coverage | M — one test file per package; `stripComments` genuinely lacks `/* */` support, which silently yields an empty map | **Next** |
-| 177 — lean post-edit build check for control-flow edits | M — hook option chosen; prototype the heuristic against real past edits first | **Later** |
-| 124 — PostToolUse auto-capture of tool-call counts | moved to §3 — it is telemetry ingestion, and it pairs with 296 there | **Next** (→ §3) |
-| 073 — credentialed cloud-agent canary | blocked on a user decision about credential-mounting posture | **Park** (§9) |
+| 496 — clean up gofmt drift across the repo | S — new. One mechanical `gofmt -w` commit plus a `gofmt -l` gate in `make check`. **Now, and before 491**: 491 edits `internal/claude` and `cmd/harnez`, both on the drift list, and every review has to filter formatting noise by hand | **Now** |
+| 488 — Quota-1 state trusts any ancestor `.git`; tests not hermetic | S — new, P3 but high leverage: a stray `/tmp/.git` broke two tests for every developer on the machine and likely explains the unexplained exec-hook failures workers reported | **Now** |
+| 010 — smoke-test that agents see installed skills/commands | unblocked | **Next** |
+| 007 — thin test coverage, `stripComments` `/* */` gap | M | **Next** |
+| 177 — lean post-edit build check | M | **Later** |
+| 073 — credentialed cloud-agent canary | blocked on a user decision | **Park** (§9) |
 
-Rationale: 007's `/* */` gap is the sharp edge — a hand-written JSONC config with block comments
-currently parses to nothing and `apply` treats that as "nothing applied." Worth doing even if the
-rest of 007's table-test sweep waits.
+Rationale: 496 and 488 are both small and both remove noise from every sprint that follows;
+cheap work that de-risks the Now keystone (491) goes first.
 
 ## 8. Local-LLM support
 
-Coherent cluster, all P3, all gated on §5's profile mechanism.
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 231 — local-compact doc profile for small local models | **unblocked — 149 shipped**; the profile mechanism it was waiting for exists, so this is now ordinary work rather than tracking-only. Still behind §1a and §3, because a doc profile for local models pays off only once dispatch actually routes to them | **Next** |
-| 165 — two-phase architect/patch harness | tracking-only by the ticket's own instruction; decide "profile or workflow?" on paper first | **Later** |
-| 167 — local runtime targets & telemetry (Ollama, llama.cpp, vLLM) | design skeleton; register runtimes as ordinary agent IDs, **do not ship `--agent local`** | **Later** |
+| 231 — local-compact doc profile | unblocked since 149; still pays off only once dispatch routes to local models | **Next** |
+| 165 — two-phase architect/patch harness | tracking-only | **Later** |
+| 167 — local runtime targets & telemetry | register runtimes as agent IDs; no `--agent local` | **Later** |
 
-Rationale (revised): 149 shipped, so this cluster is no longer fully blocked — 231 is released and
-is the one actionable item here. The previous pass's reasoning ("building a local-model doc profile
-before 149 defines the profile mechanism means building it twice") has been satisfied rather than
-overturned: the mechanism now exists, so the profile can be written once. 165 and 167 remain
-tracking-only on their own terms, not on 149's.
+## 9. Close, park, move, or split
 
-## 9. Close, park, or split
+This roadmap is read-only against `issues/`; the tracker actions below are recommendations for a
+separate pass.
 
-**Still open in the tracker as of this pass.** 291, 342, 288, 435 and 302 were all named as
-close/rescope candidates last pass and all five are still `Open`. They remain the cheapest items in
-the backlog — five tickets leave it without writing a line of code — and 302 in particular only
-needs its delivered study verified against its acceptance criteria before closing. This roadmap is
-read-only against `issues/`, so the tracker actions below are recommendations for a separate pass.
+**Close — work is done or the premise is gone:**
 
-**Close now — work is done or the premise is disproven:**
-
-- **071**, **123**, **201** — ✅ resolved since the last pass; the tracker records all three as
-  closed. Moved to §0.
-- **302** — the requested comparison study now exists at `docs/studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md`. **Tracker action:** set `Status` to `Closed — research study delivered`; retain the study in `Related` as the acceptance artifact.
-- **291** — "add `harnez agent`: standardized non-interactive dispatch to external coding-agent
-  CLIs". `harnez agent start`/`resume`/`chat` exist and ship today; this ticket asks for the
-  command that 417 delivered. **Close as superseded**, after confirming the acceptance criteria
-  against the live `harnez agent --help` surface. **Tracker action:** set `Status` to `Closed — superseded by 417`; record any genuinely missing acceptance criterion in a new,
-  narrow ticket rather than keeping a delivered feature request open.
-- **342** — "MVP: `harnez agent` command and cross-agent dispatch from agy/claude host to
-  codex/claude subagents". Same finding: the MVP it describes is the thing 417 shipped.
-  **Close as superseded**, or — if the agy-host half is genuinely unverified — reduce it to a
-  single verification canary and say so in the ticket. **Tracker action:** either set `Status` to
-  `Closed — superseded by 417`, or replace the goal and acceptance criteria with that one AGY-host
-  canary while keeping it `Open`. Do not leave it open as a feature request
-  for a feature that exists.
+- **291** — ✅ closed by the tracker this pass (absorbed by 481/484). Removed from this list.
+- **302** — the comparison study exists at
+  `docs/studies/2026-09-10-agent-harness-plugin-systems-and-self-modification.md`. Still open
+  after three passes. **Tracker action:** close as delivered, study in `Related`.
+- **342** — the MVP it describes is 417 plus the 479 epic. **Tracker action:** close as
+  superseded, or reduce it to one AGY-host dispatch canary if that half is unverified.
+- **152** — moving `agent-collector` under `usage` is moot once the collector moves to loom.
+  **Tracker action:** close as superseded by the loom move, or transfer to loom.
 
 **Rescope — the premise moved under the ticket:**
 
-- **288** — "`/harnez-agent` skill: lean fresh-handoff sprint dispatching to an external agent
-  CLI". The CLI half is done (417) and the skill surface has since grown `harnez-advisor`,
-  `reverse-sprinter` and the documented synchronous lifecycle (456). What is left is narrower than
-  the ticket describes: a handoff *contract*, not a dispatcher. Rewrite the scope before
-  scheduling it, or it will be implemented twice. **Tracker action:** keep `Status: Open`, rename
-  the ticket around the handoff contract, remove the stale dependency on 291, and replace the CLI
-  acceptance criteria with the remaining skill/contract checks.
-- **435** — the `subagent_mode: harnez|native` switch it asks for now exists as
-  `harnez agent enable`/`disable`. Remaining real scope: native-tool interception/redirection
-  hooks, and A/B telemetry. **Tracker action:** keep `Status: Open`, remove the delivered switch
-  from the goal/acceptance criteria, and retain only interception/redirection plus A/B telemetry.
+- **288** — the CLI half is done (417, 479), and 145 now carries the handoff contract with
+  evidence from the orchestrated sprint. **Tracker action:** fold into 145 and close, or rename
+  around the remaining skill contract only.
+- **435** — interception semantics move to 493's `mixed` mode. **Tracker action:** keep open,
+  reduce to A/B telemetry, depend on 493, 487 and 495.
+- **034** — the capture half is 495's inventory; the display half goes to loom. **Tracker
+  action:** relate to 495 and drop the watch-specific plumbing.
+- **449** — the default-model and alias half shipped in 484; the quota half duplicates 485.
+  **Tracker action:** mark 484 as delivering part of it and merge or cross-link with 485.
 
-**Park — blocked on something no amount of work here resolves:**
+**Move to `../loom` — the usage TUI leaves harnez (`HarnezComponents.md` §4 item 3):**
 
-- **450** — P1, but blocked on external work in `../loom`, which owns the resize/raw-mode handling
-  the fix needs. Moved out of §1a's **Now** this pass so the bucket reflects what can actually be
-  started. **Tracker action:** set the status reason to name the `../loom` dependency, and revisit
-  alongside 286's `x/term` work once loom lands.
-- **073** — needs a user decision on credential-mounting posture. Cheap pre-work: confirm that
-  AGY/Codex have no pre-exec rewrite hook, which would collapse this to Claude-Code-only and make
-  the decision much easier. **Tracker action:** keep it `Blocked` and name that user decision in
-  the status reason.
-- **172** — the rendering half is fixed; the remainder needs a live 100%-capped AGY account (or a
-  captured fixture) to verify against. **Tracker action:** keep it `Open — deferred` and replace
-  the completed rendering acceptance criteria with the capped-account verification only.
-- **035** — reduce to a scoped canary rather than building it. Token counts no longer need a
-  proxy (Claude aggregates; Codex now writes plain-JSON rollouts). The only unique remaining
-  capability is rate-limit response headers — a narrow payoff for a MITM CA plus TLS trust
-  injection into three runtimes. **Tracker action:** keep it `Open — deferred` and reduce its goal
-  and acceptance criteria to the rate-limit-header canary.
-- **084** — cannot produce an honest aggregate: `QuotaWindow` has no capacity field, and
-  percentages of unknown unequal denominators don't sum. Gate corrected this pass: revisit after
-  **034** (AGY tokens), not 030, which closed with only the Codex half delivered. **Tracker action:**
-  keep it `Open — deferred`, replace the 030 dependency with 034, and state the missing-capacity
-  decision as an acceptance prerequisite.
-- **141** — Codex's status line is a closed item picker with no command hook; parked until an
-  upstream customization path exists. **Tracker action:** keep it `Blocked` and name the missing
-  upstream customization hook in the status reason.
+- Watch/collector: **255** (partial: retries and a basic `l` overlay shipped), **256**,
+  **085**, **111**, **113**, **160**, **161**, **051**, **146**, **295** (splash).
+- Boxes and presentation: **404**, **219**, **214**, **084**, **172**.
+- Mic and audio: **250** (research done, canaries pending), **251**, **253**, **264**,
+  **278**, **247**, **330**.
+- Platform probes that live in `internal/usage`: **339** (hardware/mic gating on macOS),
+  **334** (`ps -eo comm=` in `internal/usage/process.go`), and the `watch.go` half of **286**.
+- **141** (Codex status-bar agent count) — blocked upstream either way; moves if the status
+  line goes with loom, see 143 in §2.
 
-**Split:**
+**Tracker action for the move set:** file them in loom (or tag them `move: loom`) when the
+extraction starts, then close here with a pointer. Until then they stay open but unscheduled.
+Note the loom-side dependencies harnez must keep: 492 extracts the local-config loader first,
+and the `usage --json` snapshot schema stays the contract for 449/485.
 
-- **224** — website-rules auto-install is a two-line change against existing machinery; the
-  direct Android release scaffold shares no code path with it and deserves its own ticket.
-- **166** — ✅ both parts closed; the local-LLM doc-profile thread continues as 231 (§8).
+**Park — blocked on something outside this repo:**
 
-## 10. Newer backlog: build, harness, and documentation follow-through
+- **450** — P1, blocked on `../loom`'s resize/raw-mode handling. With the usage TUI moving
+  there too, loom is now the natural owner of terminal input for both.
+- **073** — needs a user decision on credential-mounting posture.
+- **035** — reduce to a rate-limit-header canary.
+- **231** is not parked (§8); **165**/**167** stay tracking-only on their own terms.
 
-These tickets were filed or materially clarified after the previous roadmap. They are ordered by
-their effect on a working harnez session, then by the dependency they create for later agent
-workflow work.
-| Ticket | Scope | Bucket |
-|---|---|---|
-| 268 — bounded `harnez exec` timeout | M, protects the hook and agent command path from indefinite hangs | **Next** |
-| 274 — session-start harness health checks | M, depends on stable cross-agent hook/shim status semantics | **Next** |
-| 281 — opt-in advisor discovery | S, reduces routine context and quota cost; coordinate with the shipped advisor skill | **Next** |
-| 285 — durable-note wording contract | S, closes a trust gap in normal agent conversations | **Next** |
-| 293 — recoverable roadmap synthesis | M, improves this planning workflow; depends on an explicit safe recovery location | **Next** |
-| 295 — actionable startup splash status | M, makes usage failures legible after the core dashboard fixes | **Next** |
-| 296 — always compute distill savings | moved to §3 and paired with 124 — the two are halves of one efficiency number | **Next** (→ §3) |
-| 297 — linked language subdocuments | M, extends the proven copyable-doc pipeline without bloating core docs | **Next** |
-| 298 — commit checkpoint/file-granularity guidance | S, documentation first; split any hook enforcement into a separate design | **Next** |
-| 300 — raw-mode and PTY input guidance | S, verified documentation gap with a low implementation cost | **Next** |
+**Split (unchanged):** **224** — the Android scaffold is **230**.
 
-Rationale: 290, 292 and 299 have shipped, so this section is now purely forward-looking. The group
-hardens the agent-facing execution and planning loop. The delivered or superseded 288/291 work and
-the completed 302 research are handled only in §9 rather than scheduled here.
-
----
-
-
-## 11. macOS Porting & OS-Agnostic Execution
+## 10. Agent execution & planning hardening
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 334 — Research OS-agnostic process inspection across macOS and Linux | - | **Next** |
-| 335 — Support afplay audio notifications on macOS in default hooks | - | **Next** |
-| 336 — Research cross-platform shell shim patterns for macOS and Linux | - | **Next** |
-| 337 — Research macOS system permissions and CLI whitelist for config template | - | **Next** |
-| 338 — macOS CI verification via GitHub mirror | - | **Next** |
-| 339 — Graceful degradation and gating of hardware telemetry and mic probes on macOS | - | **Next** |
-| ~~341~~ — Concurrent SQLite telemetry writers lose rows on macOS | closed; fixed on Linux, macOS unverified. See §3 | **Done** (→ §3) |
+| ~~268~~ — bounded `harnez exec` timeout | ✅ closed this pass; see §0 | **Done** |
+| 466 — detect and break Claude Stop-hook loops | M — new, P2. A `/goal` judge loop burned 10–20 full-transcript turns in a loom session; harnez already owns the hook layer where detection belongs | **Next** |
+| 274 — session-start harness health checks | M — should report the component selection once 491 lands | **Next** (after 491) |
+| 281 — opt-in advisor discovery | S | **Next** |
+| 285 — durable-note wording contract | S | **Next** |
+| 293 — recoverable roadmap synthesis | M | **Next** |
+| 297 — linked language subdocuments | M | **Next** |
+| 298 — commit checkpoint/file-granularity guidance | S | **Next** |
+| 300 — raw-mode and PTY input guidance | S — pairs with 286's `x/term` convention | **Next** |
+| 451 + 453 — low-cost roadmap-skill default; `opus:low` vs `astra:low` guidance | S + S — one cost-discipline docs batch | **Next** |
 
-## 12. Multimodal & Visual Context
+## 11. macOS & OS-agnostic core
 
-Visual context cards (`harnez read -I`, `harnez find -I`, `harnez issues show -I`) are now a
-first-class reading path for agents under Context Discipline, so their legibility is daily-loop
-value, not cosmetics. The 429–434 pixel-font cluster shipped this cycle; the remaining rows are
-separate follow-through rather than unfinished 434 milestones.
-
-| Ticket | Scope | Bucket |
-|---|---|---|
-| 434 — one glyph spec per font size | ✅ closed: M1–M4 done, importer removed, text→PNG pipeline tests added | **Done** |
-| 426 — make `find` output text-first for human users | S — the tracker's own CLI is read many times a day; visual-first output costs humans a step | **Now** |
-| 427 — preserve ANSI colors in the stdin render path | S — colors are dropped today, which silently degrades piped render output | **Next** |
-| 460 — ANSI 256-color/truecolor SGR support (from 428) | S/M — the telemetry half of 428 shipped in 235d7da; this is the ANSI remainder. Follows 427, which must first stop dropping colors at all | **Next** |
-| 459 — Braille glyph cell margins (from 425) | S — the telemetry half of 425 shipped; this is the glyph-spacing remainder and belongs with the Dot8 pitch work below | **Next** (with 444) |
-| 403 — transparent hook interception and distill adapter for multi-slice `harnez read` | M — makes the distill path apply to the read surface agents actually use | **Next** |
-| 402 — move config diff below status, free top-level `harnez diff` for visual git diff | M — CLI surface change; do after 426 settles find/read output conventions | **Next** |
-| ~~374~~ — refresh README CLI coverage and website link | ✅ **closed** this pass; the README now covers the current command surface including `harnez agent`. See §0 | **Done** |
-
-**Dot8 experimental cluster (new this pass).** 436, 440, 441, 444 and 447 all landed after the
-previous roadmap and form one dependency chain around the Braille/Dot8 card encoding.
+Reduced to the harnez-core half; the usage probes move to loom (§9).
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 444 — Dot8 renderer cell pitch for mixed glyphs | S — P1 and the chain's root: the renderer advances 3px per rune while the `Font3x5` fallback is 4px wide, so mixed lines overlap and clip. Nothing downstream can be measured honestly until the pixels are correct | **Now** |
-| 436 — `--dot8` dense Braille cards for codex and agy | M — owner-rescoped to "implement the 3x4 geometry, then hand it over for manual testing"; the canary-first plan is explicitly superseded. Blocked in practice by 444 | **Next** |
-| 441 — Dot8 PNG card reader (decode a card back to text) | M — the deterministic ground truth for legibility: if a program can decode the card, any agent failure is a vision limit, not a rendering bug. Its own ticket names 444 as the blocker | **Next** (after 444) |
-| 440 — card header in PNG metadata instead of pixels | S/M — four candidate header channels (image band, PNG `tEXt`, sidecar file, inline note); the ticket's own analysis expects the *inline note* to be the one that actually works on codex and agy. Do the cheap channel first and only build the metadata path if measurement justifies it | **Later** |
-| 447 — `B`/`#` as glyph-matrix colour symbols | S — naming-only groundwork for future colour channels, with an explicit "do not add colours now" constraint. Land it with 444 while the renderer is already open | **Next** |
+| 286 — `golang.org/x/term` convention in `docs/lang/Go.md` | S — **moved Now → Next**: the `watch.go` `stty` refactor that made it urgent is loom's now; the doc convention is still useful for `harnez agent chat` and any core TUI | **Next** |
+| 338 — macOS CI via the GitHub mirror | push/PR trigger and CLI smoke test remain; also the only way to verify 341 on macOS | **Next** |
+| 335 — `afplay` audio notifications in default hooks | S | **Next** |
+| 336 — cross-platform shell shim patterns | research | **Next** |
+| 337 — macOS permissions and CLI whitelist for the config template | research | **Next** |
+| 310 / 313 — ambient `go.work` checks in status/lint; canary `GOWORK` probe | S each | **Later** |
 
-Rationale: this cluster is explicitly experimental (three of its five tickets are P3) and does not
-outrank §1a or the correctness bugs, with one exception — 444 is P1 and is the root of the chain,
-so fixing it is what makes the rest of the cluster *decidable* rather than speculative. 440 drops
-to **Later** despite being cheap, because its own ticket predicts the expensive channel is not the
-one that will work; do the inline note, measure, and shelve the rest.
+## 12. Multimodal & visual context
 
-## 13. Agent Instructions & Tooling (Newer)
+`harnez read -I` / `find -I` / `issues show -I` cards stay in harnez (`readcard` is core), so
+this section is unaffected by the loom move.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| ~~417~~ — harnez subagent MVP | ✅ **closed** — shipped as the `harnez agent` command tree; see §0 and §1a | **Done** |
-| 273 — restore the old AGY PreToolUse hook as an opt-in configuration option | S — a regression for AGY users; opt-in keeps the default surface unchanged | **Next** |
-| 294 — investigate cross-agent post-edit success hooks for the `harnez rate` pipeline | S — research; today the feedback pipeline only sees failures, which biases every stat built on it | **Next** |
-| 306 — Detect and quarantine Codex subagents that remain unusable after usage limits | moved to §1a — it is a dispatch-surface concern now that dispatch is shipped | **Next** (→ §1a) |
-| ~~315~~ — init drops previously opted-in docs on re-run | ✅ **closed** this pass — the destructive `init` re-run is fixed. Its siblings 289 and 355 remain open in §6 | **Done** |
-| 322 — Evolve /story skill with optional focus areas, tooling fit, and human-steering divergence analysis | - | **Next** |
-| 323 — docs/lang/Bash.md hard-references docs/practices/AgenticLoop.md instead of @docs/AgenticLoop.md alias | - | **Next** |
-| 342 — MVP: /harnez-agent skill and CLI dispatch for agy host to codex:sol subagent | superseded by 417 — close candidate, see §9 | **Close** |
-| 351 — Add AGENTS.md pointer: check config.yaml/Spec.md before hardcoding named business-value lists in Go | - | **Next** |
-| 352 — Tell agents unrelated untracked files from parallel sessions are expected, not a fabrication concern | - | **Next** |
-| 353 — Tell only Claude: never propose CLAUDE.md changes; check repo docs/AGENTS.md before any instruction-file change | - | **Next** |
-| 365 — Add harnez release --init=<lang|mode> to bootstrap release scaffolding | - | **Next** |
-| 366 — Automated doc compression command/skill with LLM canary evaluation loop | - | **Next** |
-| 369 — Detect Go library CLI and TUI shape for init guidance | - | **Next** |
-| 370 — Offer useful Go agent capabilities through harnez init | - | **Next** |
-| 371 — Add optional systemd service guidance to Go init profile | - | **Next** |
-| 382 — Make user shell shortcuts available to Codex, Claude, AGY, and other agents | - | **Next** |
+| 444 — Dot8 renderer cell pitch for mixed glyphs | S — P1 and the root of the Dot8 chain | **Now** |
+| 447 — `B`/`#` as matrix colour symbols | S — land with 444 | **Next** |
+| 459 — Braille glyph cell margins | S — with 444 | **Next** |
+| 427 → 460 — preserve ANSI colours in stdin render; 256/truecolor SGR | S → S/M | **Next** |
+| 441 — Dot8 PNG card reader | M — after 444 | **Next** |
+| 436 — `--dot8` dense cards for codex and agy | M — after 444 | **Next** |
+| 403 — hook interception and distill adapter for multi-slice `harnez read` | M | **Next** |
+| 402 — move config diff below status, free `harnez diff` | M — after 426 | **Next** |
+| 440 — card header in PNG metadata | S/M — try the inline-note channel first | **Later** |
 
-## 14. Telemetry & Misc (Newer)
+## 13. Agent instructions & tooling (newer)
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 304 — Advisor lifecycle CLI and metadata tracking | - | **Later** |
-| 305 — Investigate stats --auto failure rates disagreeing with observed tool outcomes | - | **Later** |
-| 310 — Check for ambient enclosing go.work in harnez status and lint | - | **Later** |
-| 313 — Canary convention: require go.work/GOWORK probe before trusting scratch-module dependency checks | - | **Later** |
-| 314 — harnez release: auto-create minisign key if missing and no repo key defined | - | **Later** |
-| 317 — split harnez-advisor per-harness guidance into resources/ reference files | - | **Later** |
-| 321 — harnez release --login flag to authenticate or refresh forge credentials via fj auth login | - | **Later** |
-| 324 — docs/lang/Go.md canonical-pattern reference to internal/usage is dangling in consumer repos | - | **Later** |
-| 329 — Gate harnez release on REUSE Compliance, with --no-reuse and a Global Opt-Out | - | **Later** |
-| 330 — Adopt voxi audiolevel's Rolling Braille Timeline Alongside the Existing Live Mic-Level Bar | - | **Later** |
-| 333 — Retire docs/feedback/, consolidate into docs/studies/ with labels/categories for grouping and filtering | - | **Later** |
-| 361 — harnez docs variant --check CLI verb for lite-doc structural gate | - | **Later** |
-| 378 — Fleet-wide multi-repo git history sparks and token attribution matrix for uman | - | **Later** |
-| 383 — Disable queued question tool prompts in Codex sessions | moved to §1a (dispatch-surface papercut) | **Next** (→ §1a) |
-| 384 — harnez assess directory validation and -d/--dir flag support | - | **Later** |
-| 385 — Tokens command to count tokens in files and directories | - | **Later** |
+| 351 / 352 / 353 — AGENTS.md pointers: spec before hardcoding; parallel-session untracked files; Claude-only CLAUDE.md rule | S each — under 494, these are candidates for `AGENTS.harnez.md` rather than AGENTS.md | **Next** |
+| 273 — opt-in old AGY PreToolUse hook | S | **Next** |
+| 294 — cross-agent post-edit success hooks for `harnez rate` | S research | **Next** |
+| 322 — evolve `/story` skill | S/M | **Next** |
+| 323 / 324 — dangling doc references in copyable docs (Bash.md, Go.md) | S each — fix with 471's reconcile pass | **Next** (with 471) |
+| 365 — `harnez release --init` | M | **Next** |
+| 366 — automated doc compression with canary evaluation | M | **Later** |
+| 382 — user shell shortcuts for all agents | M | **Next** |
 
+## 14. Misc (later)
 
-Rationale for newer backlog sequencing:
-- Telemetry data management (Section 3) leads this pass by explicit focus: the store is the
-  substrate every cost, efficiency and A/B number depends on, and 424 showed a defect can sit in it
-  undetected. 341 → 127 → 457 has largely landed: write path fixed on Linux, SQL single-homed in
-  `spec/`, data quality a reported property via `stats --quality`. The remaining work is extension.
-- Cost telemetry (446/445) follows immediately, because cheap-tier routing is only a policy if
-  something measures what it saved — and those measurements are only worth taking once the store
-  they land in is trusted.
-- Cross-agent dispatch (Section 1a) drops from the lead: 454 shipped and 450 is blocked on
-  `../loom`, leaving 449 as the actionable remainder.
-- macOS Porting (Section 11) is elevated to Next to fulfill the primary OS-Agnostic Readiness objective.
-- Multimodal/Visual Context (Section 12) is Next because visual context cards are now a routine
-  agent reading path under Context Discipline, not just a debugging aid — an unreadable glyph in a
-  card is a wrong number on the daily surface.
-- Agent Instructions (Section 13) are scheduled as Next because they prevent context leaks and improve the daily agentic workflow correctness.
-- Telemetry/Misc (Section 14) are placed in Later to ensure the core execution loops are hardened first.
+| Ticket | Scope | Bucket |
+|---|---|---|
+| 304 — advisor lifecycle CLI | M | **Later** |
+| 305 — `stats --auto` failure rates vs observed outcomes | research; revisit after 487 | **Later** |
+| 314 / 321 / 329 — release: auto-create minisign key, `--login`, REUSE gate | S–M each | **Later** |
+| 317 — split `harnez-advisor` guidance into resources/ | S | **Later** |
+| 333 — retire `docs/feedback/` into `docs/studies/` with labels | S/M | **Later** |
+| 361 — `harnez docs variant --check` | S | **Later** |
+| 378 — fleet-wide git history sparks for uman | M | **Later** |
+| 384 — `harnez assess -d` | S | **Later** |
+| 385 — `tokens` command | S — could reuse 495's parsers | **Later** |
 
 ## Suggested order of attack
 
-Refreshed this pass. The telemetry hardening chain landed (457 closed, 127 M1/M2, 341 fixed on
-Linux), so the lead moves from hardening to extension.
+Refreshed this pass. The component design landed and the usage TUI is leaving, so the lead
+moves from telemetry extension to **making `apply` composable**, with telemetry extension
+re-sequenced behind the shared capture package it now depends on.
 
-1. **Telemetry hardening chain is closed** (341, 127, 424, 457 done; 341 unverified on macOS).
-   Remaining SQL-to-spec work is 458, picked up opportunistically as later items touch those files.
-2. **Give the cost story measured numbers**: 446 (cost fields agents already report) → 445
-   (counterfactual rate cards in `spec/`), plus 461, the model-attribution gap from 457 (`tool_calls` has
-   no `model` column) → 435's A/B telemetry half.
-3. **Complete the efficiency numbers**: 124 (PostToolUse tool-call capture, canary-gated) + 296
-   (always compute distill savings) as one pair; `stats --quality` will show when the columns fill.
-4. **Classification quality**: 225 (cache versioning, then an accuracy baseline) → 215 (LLM
-   backfill/reclassification), so the backfill's effect is measurable as a `stats --quality` delta.
-   Then 421 and 208 last in this theme.
-5. **Close the delivered-feature tickets** (nearly free, and it shrinks everything below): 291,
-   342 → close as superseded by 417; 288 and 435 → rescope to what 417 did not deliver; 302 →
-   verify the delivered study against its acceptance criteria, then close. Five tickets leave the
-   backlog without writing code.
-6. **Remaining live correctness bugs**: 289 (`init` go.work hard-fail) → 279 (tracker lock
-   sidecar) → 255 (finish collector key decoding and diagnostics tests). 424, 315 and 442 are closed.
-7. **Dispatch follow-ons**: 449 (spec-driven chat model selection, now unblocked by 454) → 306
-   (quarantine dead Codex sessions) → 383 → 144. 450 is excluded until `../loom` lands.
-8. **OS-agnostic terminal foundation**: 286 (Go conventions + `x/term` `watch.go` refactor) →
-   the OS build-tag split → portable process detection → 334/336/337 research → 338/339. 341 is
-   closed (fixed on Linux); macOS remains unverified until 338's CI runs.
-9. **Finish the visual-context and public-doc surface**: 444 (P1 pitch bug) + 447 + 459 (Braille
-   glyph spacing) → 426 → 427 → 460 (ANSI 256/truecolor) → 441 → 436. 374 is
-   done; 440 stays out until the inline-note channel has been tried.
-10. **Cash in the 149 dividend**: 144 (→ §1a) → 151 → 231 → 176 → 145. All were blocked on the
-    profile mechanism; it exists now, and 145 has waited three passes.
-11. **Harden agent execution and planning**: 268 → 274 → 281 → 285 → 293 → 295, plus the
-    cost-discipline docs pass 451 + 453 as one small batch.
-12. **Tracker ergonomics**: 340 (query filters) → 283 → 246, so the next planning pass costs less
-    than this one did. 340 is still unbuilt, and this pass again read the whole open list for want
-    of it.
-13. **Mic indicators and audio UX**: 250 → 251 → 264 → 253 → 278.
-14. **Collector depth**: 113 → 111 → 034 → 294. Note 034 now also gates 084, since 030 closed with
-    only the Codex half; 296 has moved up into step 3.
-15. Revisit **Later** items after 160 has a decision attached, and keep any plugin implementation
-    outside this roadmap until separately scoped.
+1. **Clear the ground (small, Now):** 496 (gofmt, before 491 touches the same files) and
+   488 (hermetic Quota-1 tests), then 289 and 279.
+2. **Component keystone:** 491 — selection in `apply`, one settings write, selection-aware
+   `diff`/`status`.
+3. **In parallel after 491:** 493 (`mixed` dispatch mode, mode-aware sprint skills) and 495
+   (shared token capture). 492 alongside, before the loom extraction starts.
+4. **Cost numbers on the new substrate:** 446 as 495's first consumer → 445 rate cards.
+   487 + 461 attribution as one migration in the same window.
+5. **Independent track:** 355 (prune) → 494 (init selection, `*.harnez.md`/`*.local.md`),
+   with 413, 015, 351–353 re-read against the new file layout; 471 (+323/324) reconciles the
+   root doc copies first.
+6. **Dispatch follow-ons:** 306 → 449 + 485 (quota-aware default) → 476 (+463) → 477 → 144,
+   383. 435 last, reduced to A/B telemetry.
+7. **Report and orchestration contract:** 176 (+465) → 145 (absorbing 288).
+8. **Visual context:** 444 + 447 + 459 → 426 + 475 → 427 → 460 → 441 → 436.
+9. **Distill and efficiency:** 468 → 178; 124 + 296; 225 → 215.
+10. **Execution hardening:** 466, then 274 (after 491), 281, 285, 293, 297, 298, 300, and the
+    451 + 453 docs batch.
+11. **Tracker ergonomics:** 340 → 283 → 246.
+12. **macOS core:** 338 → 335 → 286 (doc) → 336/337.
+13. **Tracker pass (no code):** close 302, 342, 152; fold 288 into 145; rescope 435, 034,
+    449; tag the §9 move set for loom.
+14. Revisit **Later** items once 491 has shown where `cmd/` needs to split (170) and once the
+    loom extraction has settled what stays behind (143, 208).
