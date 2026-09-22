@@ -1,6 +1,6 @@
 # 135 — Claude Code gets Tool Feedback Protocol content twice (global section + Skill)
 
-**Status**: Open
+**Status**: Closed — Obsolete since #415: the global Tool Feedback Protocol section no longer exists; the tool-feedback-protocol Skill is the only delivery, nothing to split
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
