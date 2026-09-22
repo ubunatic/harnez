@@ -1,6 +1,6 @@
 # 135 — Claude Code gets Tool Feedback Protocol content twice (global section + Skill)
 
-**Status**: Open
+**Status**: Closed — Split Tool Feedback Protocol into compact global guidance and full Skill detail
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
