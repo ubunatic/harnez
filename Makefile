@@ -78,6 +78,7 @@ macos-ci: ⚙️  # trigger and watch macos-hello CI workflow on the GitHub mirr
 	bash scripts/macos-ci.sh
 
 check: ⚙️  # run static analysis and tests (GOWORK=off: catch go.mod pin drift behind a local workspace override)
+	gofmt -l . | awk 'BEGIN {found = 0} {print; found = 1} END {exit found}'
 	GOWORK=off go vet ./...
 	GOWORK=off go test ./...
 

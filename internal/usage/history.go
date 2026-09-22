@@ -612,4 +612,3 @@ func FetchRemoteHistory(ctx context.Context, sshHost string, localDir string, ou
 
 	return fetched, nil
 }
-

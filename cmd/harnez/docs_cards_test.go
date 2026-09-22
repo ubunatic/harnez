@@ -56,4 +56,3 @@ func TestDocsCardsCmd_BuildAndCheck(t *testing.T) {
 		t.Fatalf("docs cards build with --font=3x5 failed: %v", err)
 	}
 }
-

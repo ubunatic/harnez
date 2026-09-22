@@ -191,4 +191,3 @@ func SetMode(tier Tier, opts Options) (Result, error) {
 
 	return res, nil
 }
-

@@ -231,9 +231,9 @@ Lines 123.`
 	}
 
 	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
+		name      string
+		args      []string
+		wantErr   bool
 		checkFunc func(t *testing.T, out string)
 	}{
 		{

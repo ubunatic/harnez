@@ -699,4 +699,3 @@ func TestEmbeddedIndicatorsSpecMicLive(t *testing.T) {
 		t.Errorf("offSpec.DecayDuration = %v, want 0", got)
 	}
 }
-

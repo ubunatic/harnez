@@ -139,7 +139,6 @@ func TestMarkdownDiff_ExecError(t *testing.T) {
 	}
 }
 
-
 func TestParseVariantMarker(t *testing.T) {
 	cases := []struct {
 		name    string

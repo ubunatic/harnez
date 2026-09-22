@@ -174,4 +174,3 @@ func EnsureGitExclude(startDir string, pattern string) (bool, error) {
 	}
 	return true, nil
 }
-

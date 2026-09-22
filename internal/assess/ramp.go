@@ -33,8 +33,8 @@ const (
 	RAMPCatUnconfigured RAMPCategory = "unconfigured"
 
 	// Level 2 (3 categories)
-	RAMPCatAIRules       RAMPCategory = "ai_rules"
-	RAMPCatToolConfig    RAMPCategory = "tool_config"
+	RAMPCatAIRules        RAMPCategory = "ai_rules"
+	RAMPCatToolConfig     RAMPCategory = "tool_config"
 	RAMPCatAgentStandards RAMPCategory = "agent_standards"
 
 	// Level 3 (3 categories)

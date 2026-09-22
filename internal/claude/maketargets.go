@@ -207,10 +207,10 @@ func ReconcileMakeTargets(dest, oursContent string, cfg MakeConfig, assumeYes bo
 
 		if isManual {
 			// Upgrade path: if diff is small (drift or migration), or if it is the legacy help target, upgrade from ⚙️ to 🤖
-			isLegacyHelp := t.name == "help" && 
-				strings.Contains(existing, "grep") && 
-				strings.Contains(existing, "awk") && 
-				strings.Contains(existing, "$$1") && 
+			isLegacyHelp := t.name == "help" &&
+				strings.Contains(existing, "grep") &&
+				strings.Contains(existing, "awk") &&
+				strings.Contains(existing, "$$1") &&
 				strings.Contains(existing, "$$2")
 			if diff <= smallDiffThreshold || isLegacyHelp {
 				content = content[:loc[0]] + t.block + content[loc[1]:]

@@ -392,4 +392,3 @@ func TestCollectAGYAppendsQuotaHistory(t *testing.T) {
 		}
 	}
 }
-

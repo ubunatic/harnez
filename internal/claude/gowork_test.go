@@ -190,5 +190,3 @@ func TestFindGoModules_IgnoresDotDirsAndTestData(t *testing.T) {
 		t.Fatalf("unexpected module args: %v", args)
 	}
 }
-
-

@@ -814,5 +814,3 @@ func TestBuildEnvGOWORK(t *testing.T) {
 		}
 	}
 }
-
-

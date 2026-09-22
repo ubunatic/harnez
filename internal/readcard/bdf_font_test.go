@@ -181,4 +181,3 @@ func TestDot8Custom3x5SpecCoversCharset(t *testing.T) {
 		}
 	}
 }
-

@@ -444,4 +444,3 @@ func TestFetchRemoteHistory_NonExistentHost(t *testing.T) {
 		t.Errorf("expected error connecting to non-existent host, got nil")
 	}
 }
-

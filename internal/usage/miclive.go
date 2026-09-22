@@ -83,7 +83,9 @@ func startMicLiveManager(parent context.Context, onSample func(micLiveReading)) 
 		}
 	case micBackendPipeWire:
 		if _, err := exec.LookPath("pw-record"); err == nil {
-			buildCmd = func(ctx context.Context) *exec.Cmd { return audiolevel.PwRecordCommand(ctx, audiolevel.DefaultSampleRate) }
+			buildCmd = func(ctx context.Context) *exec.Cmd {
+				return audiolevel.PwRecordCommand(ctx, audiolevel.DefaultSampleRate)
+			}
 		}
 	}
 

@@ -246,4 +246,3 @@ func RenderSparklineInt64Width(values []int64, width int) string {
 func RenderSparklineInt64(values []int64) string {
 	return RenderSparklineInt64Width(values, 0)
 }
-

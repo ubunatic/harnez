@@ -16,11 +16,11 @@ import (
 
 // AgentProjectAttribution holds the token totals and model breakdown attributed to a repository for a single agent.
 type AgentProjectAttribution struct {
-	AgentID          string           `json:"agent_id"` // "claude", "agy", "codex"
-	Name             string           `json:"name"`     // "Claude Code", "Antigravity", "OpenAI Codex"
-	Tokens           TokenBreakdown   `json:"tokens"`
-	ModelTokens      map[string]int64 `json:"model_tokens,omitempty"`
-	MatchedSessions  int              `json:"matched_sessions"`
+	AgentID         string           `json:"agent_id"` // "claude", "agy", "codex"
+	Name            string           `json:"name"`     // "Claude Code", "Antigravity", "OpenAI Codex"
+	Tokens          TokenBreakdown   `json:"tokens"`
+	ModelTokens     map[string]int64 `json:"model_tokens,omitempty"`
+	MatchedSessions int              `json:"matched_sessions"`
 }
 
 // CostOfChangeMetrics holds efficiency and generative ROI derivations.
@@ -34,12 +34,12 @@ type CostOfChangeMetrics struct {
 
 // ProjectUsageResult is the complete telemetry summary attributed to a project/repository path.
 type ProjectUsageResult struct {
-	RepoDir        string                             `json:"repo_dir"`
-	RepoName       string                             `json:"repo_name"`
-	LifetimeTokens int64                              `json:"lifetime_tokens"`
-	TotalTokens    TokenBreakdown                     `json:"total_tokens"`
+	RepoDir        string                              `json:"repo_dir"`
+	RepoName       string                              `json:"repo_name"`
+	LifetimeTokens int64                               `json:"lifetime_tokens"`
+	TotalTokens    TokenBreakdown                      `json:"total_tokens"`
 	Agents         map[string]*AgentProjectAttribution `json:"agents"`
-	CostOfChange   *CostOfChangeMetrics               `json:"cost_of_change,omitempty"`
+	CostOfChange   *CostOfChangeMetrics                `json:"cost_of_change,omitempty"`
 }
 
 // CollectProjectUsage scans Claude Code, AGY, and Codex sessions and computes token attribution and cost-of-change metrics for repoPath.
@@ -288,7 +288,7 @@ func parseAGYTranscript(filePath, targetRepo string, alreadyMatched bool) (bool,
 				Content   string `json:"content"`
 				StepIndex int    `json:"step_index"`
 				ToolCalls []struct {
-					Name string `json:"name"`
+					Name string         `json:"name"`
 					Args map[string]any `json:"args"`
 				} `json:"tool_calls"`
 			}

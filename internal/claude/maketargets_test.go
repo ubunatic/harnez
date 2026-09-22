@@ -19,10 +19,10 @@ help: ## 🤖 Print help for targets
 `
 
 	tests := []struct {
-		name          string
-		initial       string
-		phonyFix      string
-		wantContains  []string
+		name           string
+		initial        string
+		phonyFix       string
+		wantContains   []string
 		wantNotContain []string
 	}{
 		{

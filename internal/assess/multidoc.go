@@ -562,14 +562,14 @@ type CategoryStyle struct {
 
 // CategoryPalette assigns visually distinct colors and glyphs for categories.
 var CategoryPalette = []CategoryStyle{
-	{Key: "lang", Label: "lang", Block: "█", ANSIColor: "36"},            // Cyan
-	{Key: "practices", Label: "practices", Block: "▓", ANSIColor: "32"},  // Green
-	{Key: "studies", Label: "studies", Block: "▒", ANSIColor: "35"},      // Magenta
-	{Key: "feedback", Label: "feedback", Block: "░", ANSIColor: "33"},    // Yellow
-	{Key: "issues", Label: "issues", Block: "◈", ANSIColor: "38;5;208"},  // Orange
-	{Key: "root", Label: "root (AGENTS.md)", Block: "■", ANSIColor: "34"},// Blue
-	{Key: "docs", Label: "docs", Block: "◆", ANSIColor: "37"},            // White
-	{Key: "other", Label: "other", Block: "▲", ANSIColor: "31"},          // Red
+	{Key: "lang", Label: "lang", Block: "█", ANSIColor: "36"},             // Cyan
+	{Key: "practices", Label: "practices", Block: "▓", ANSIColor: "32"},   // Green
+	{Key: "studies", Label: "studies", Block: "▒", ANSIColor: "35"},       // Magenta
+	{Key: "feedback", Label: "feedback", Block: "░", ANSIColor: "33"},     // Yellow
+	{Key: "issues", Label: "issues", Block: "◈", ANSIColor: "38;5;208"},   // Orange
+	{Key: "root", Label: "root (AGENTS.md)", Block: "■", ANSIColor: "34"}, // Blue
+	{Key: "docs", Label: "docs", Block: "◆", ANSIColor: "37"},             // White
+	{Key: "other", Label: "other", Block: "▲", ANSIColor: "31"},           // Red
 }
 
 // RenderStackedBar creates a stacked bar representing category token proportions.

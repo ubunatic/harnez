@@ -7,13 +7,13 @@ import (
 )
 
 const (
-	brailleBase     = 0x2800
-	dotMask7uint8   = uint8(1 << 6) // Dot 7 for uppercase
-	dotMask8uint8   = uint8(1 << 7) // Dot 8 for digit prefix / escape
-	dotMask7        = 1 << 6 // Dot 7 for uppercase (as int for brailleEscape calc)
-	dotMask8        = 1 << 7 // Dot 8 for digit prefix / escape (as int for brailleEscape calc)
-	brailleEscape   = brailleBase + dotMask7 + dotMask8
-	brailleMaxCell  = 0xFF
+	brailleBase    = 0x2800
+	dotMask7uint8  = uint8(1 << 6) // Dot 7 for uppercase
+	dotMask8uint8  = uint8(1 << 7) // Dot 8 for digit prefix / escape
+	dotMask7       = 1 << 6        // Dot 7 for uppercase (as int for brailleEscape calc)
+	dotMask8       = 1 << 7        // Dot 8 for digit prefix / escape (as int for brailleEscape calc)
+	brailleEscape  = brailleBase + dotMask7 + dotMask8
+	brailleMaxCell = 0xFF
 )
 
 // letterMasks defines the six-dot Braille patterns for a-z (standard English Braille).

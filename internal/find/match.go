@@ -185,7 +185,7 @@ func damerauLevenshteinBounded(a, b string, maxDist int) int {
 			del := d[i][j+1] + 1
 			ins := d[i+1][j] + 1
 			sub := d[i][j] + cost
-			trans := d[i2][j2] + (i-i2-1) + 1 + (j-j2-1)
+			trans := d[i2][j2] + (i - i2 - 1) + 1 + (j - j2 - 1)
 			best := del
 			if ins < best {
 				best = ins

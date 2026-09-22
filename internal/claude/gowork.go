@@ -276,4 +276,3 @@ func ignoredModuleScanDir(name string) bool {
 		return false
 	}
 }
-

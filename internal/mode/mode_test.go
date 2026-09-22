@@ -276,4 +276,3 @@ func TestSetMode_Persist(t *testing.T) {
 		t.Errorf("Persist mode should not touch AGENTS.local.md")
 	}
 }
-

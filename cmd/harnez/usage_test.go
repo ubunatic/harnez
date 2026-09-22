@@ -120,4 +120,3 @@ func TestUsageProjectFlag_CobraRegistered(t *testing.T) {
 		}
 	}
 }
-

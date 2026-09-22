@@ -14,9 +14,9 @@
 //     harnez load-stream process treats stdin-EOF as "parent tore down the
 //     ControlMaster", so it exits within milliseconds — causing the UI to
 //     immediately drop from "streaming" to "batch". This section:
-//       (a) reproduces the bug: load-stream exits within 2s when stdin is nil
-//       (b) validates the fix: load-stream stays alive when stdin is a live
-//           io.Pipe() whose write end is held open for the stream's lifetime
+//     (a) reproduces the bug: load-stream exits within 2s when stdin is nil
+//     (b) validates the fix: load-stream stays alive when stdin is a live
+//     io.Pipe() whose write end is held open for the stream's lifetime
 //
 // Usage:
 //

@@ -35,14 +35,14 @@ var AllTrackTypes = []TrackType{
 
 // TrackMetrics holds aggregate volume and size for a specific track.
 type TrackMetrics struct {
-	Track        TrackType `json:"track"`
-	Files        int       `json:"files"`
-	Lines        int       `json:"lines"`
-	Words        int       `json:"words"`
-	Tokens       int       `json:"tokens"`
-	Bytes        int64     `json:"bytes"`
-	OpenTickets  int       `json:"open_tickets,omitempty"`
-	ClosedTickets int      `json:"closed_tickets,omitempty"`
+	Track         TrackType `json:"track"`
+	Files         int       `json:"files"`
+	Lines         int       `json:"lines"`
+	Words         int       `json:"words"`
+	Tokens        int       `json:"tokens"`
+	Bytes         int64     `json:"bytes"`
+	OpenTickets   int       `json:"open_tickets,omitempty"`
+	ClosedTickets int       `json:"closed_tickets,omitempty"`
 }
 
 // TrackPoint represents metrics for a track at a specific commit snapshot.
@@ -78,16 +78,16 @@ type TrackEvolution struct {
 
 // MultiTrackHistoryResult is the complete multi-track repository evolution report.
 type MultiTrackHistoryResult struct {
-	RepoDir       string                    `json:"repo_dir"`
-	RepoName      string                    `json:"repo_name"`
-	TotalCommits  int                       `json:"total_commits"`
-	SampleCommits int                       `json:"sample_commits"`
-	DaysSpan      int                       `json:"days_span"`
-	FirstCommit   time.Time                 `json:"first_commit"`
-	LastCommit    time.Time                 `json:"last_commit"`
-	TestCodeRatio float64                   `json:"test_code_ratio"`
+	RepoDir       string                        `json:"repo_dir"`
+	RepoName      string                        `json:"repo_name"`
+	TotalCommits  int                           `json:"total_commits"`
+	SampleCommits int                           `json:"sample_commits"`
+	DaysSpan      int                           `json:"days_span"`
+	FirstCommit   time.Time                     `json:"first_commit"`
+	LastCommit    time.Time                     `json:"last_commit"`
+	TestCodeRatio float64                       `json:"test_code_ratio"`
 	Tracks        map[TrackType]*TrackEvolution `json:"tracks"`
-	Duration      time.Duration             `json:"duration"`
+	Duration      time.Duration                 `json:"duration"`
 }
 
 // ClassifyTrack categorizes a git-relative file path into one of the 5 functional tracks.

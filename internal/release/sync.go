@@ -16,13 +16,13 @@ type SyncResult struct {
 }
 
 var (
-	goVersionVarRegex   = regexp.MustCompile(`(?m)^(var|const)\s+Version\s*=\s*"[^"]*"`)
-	pyVersionVarRegex   = regexp.MustCompile(`(?m)^(__version__|VERSION|version)\s*=\s*["'][^"']+["']`)
-	pyprojectVerRegex   = regexp.MustCompile(`(?m)^(version\s*=\s*)["'][^"']+["']`)
-	zigZonVerRegex      = regexp.MustCompile(`(?m)(\.version\s*=\s*)["'][^"']+["']`)
-	zigVersionVarRegex  = regexp.MustCompile(`(?m)^(pub\s+const\s+version\s*=\s*)["'][^"']+["']`)
-	cargoVersionRegex   = regexp.MustCompile(`(?m)(^\[package\][\s\S]*?^version\s*=\s*)["'][^"']+["']`)
-	jsonVersionRegex    = regexp.MustCompile(`(?m)("version"\s*:\s*)"([^"]*)"`)
+	goVersionVarRegex  = regexp.MustCompile(`(?m)^(var|const)\s+Version\s*=\s*"[^"]*"`)
+	pyVersionVarRegex  = regexp.MustCompile(`(?m)^(__version__|VERSION|version)\s*=\s*["'][^"']+["']`)
+	pyprojectVerRegex  = regexp.MustCompile(`(?m)^(version\s*=\s*)["'][^"']+["']`)
+	zigZonVerRegex     = regexp.MustCompile(`(?m)(\.version\s*=\s*)["'][^"']+["']`)
+	zigVersionVarRegex = regexp.MustCompile(`(?m)^(pub\s+const\s+version\s*=\s*)["'][^"']+["']`)
+	cargoVersionRegex  = regexp.MustCompile(`(?m)(^\[package\][\s\S]*?^version\s*=\s*)["'][^"']+["']`)
+	jsonVersionRegex   = regexp.MustCompile(`(?m)("version"\s*:\s*)"([^"]*)"`)
 )
 
 // AutoDetectCurrentVersion inspects the repo files or git tags to find the latest version.
@@ -501,4 +501,3 @@ func updateJSONVersion(path string, version string, res *SyncResult) error {
 	}
 	return nil
 }
-

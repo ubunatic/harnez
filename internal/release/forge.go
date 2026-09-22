@@ -138,9 +138,6 @@ func DetectForgeInfo(dir string) (*ForgeInfo, error) {
 	return DetectPrioritizedForgeInfo(dir)
 }
 
-
-
-
 // PublishForgejoRelease creates or updates a release using fj.
 func PublishForgejoRelease(dir string, tagName string, title string, attachments []string, remoteName string, dryRun, isContinue bool) error {
 	if dryRun {
