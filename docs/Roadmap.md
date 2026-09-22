@@ -363,15 +363,18 @@ this section is unaffected by the loom move.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 444 — Dot8 renderer cell pitch for mixed glyphs | S — P1 and the root of the Dot8 chain | **Now** |
-| 447 — `B`/`#` as matrix colour symbols | S — land with 444 | **Next** |
-| 459 — Braille glyph cell margins | S — with 444 | **Next** |
+| 444 — Dot8 renderer cell pitch for mixed glyphs | S — P1 and the root of the Dot8 chain | **Hold** |
+| 447 — `B`/`#` as matrix colour symbols | S — land with 444 | **Hold** |
+| 459 — Braille glyph cell margins | S — with 444 | **Hold** |
 | 427 → 460 — preserve ANSI colours in stdin render; 256/truecolor SGR | S → S/M | **Next** |
-| 441 — Dot8 PNG card reader | M — after 444 | **Next** |
-| 436 — `--dot8` dense cards for codex and agy | M — after 444 | **Next** |
+| 441 — Dot8 PNG card reader | M — after 444 | **Hold** |
+| 436 — `--dot8` dense cards for codex and agy | M — after 444 | **Hold** |
 | 403 — hook interception and distill adapter for multi-slice `harnez read` | M | **Next** |
 | 402 — move config diff below status, free `harnez diff` | M — after 426 | **Next** |
-| 440 — card header in PNG metadata | S/M — try the inline-note channel first | **Later** |
+| 440 — card header in PNG metadata | S/M — try the inline-note channel first | **Hold** |
+
+The Dot8 chain (444, 447, 459, 441, 436, 440) is on hold; see issue 444 for why and the
+condition to resume.
 
 ## 13. Agent instructions & tooling (newer)
 
