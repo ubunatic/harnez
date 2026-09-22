@@ -51,14 +51,15 @@ Based on 489 findings in `docs/HarnezComponents.md`:
 - [x] Design component lifecycle and initialization contract (§8.4, §8.7)
 - [x] Define profile YAML structure and selection logic (§8.3, §8.5; named `components`, not `profile`)
 - [x] Draft API signatures for cross-component communication (§8.6: file/CLI contracts)
-- [ ] Prototype profile system with small integration test
+- [x] Prototype profile system with small integration test (MVP: `internal/components`, `scripts/canary-components`; main files unchanged)
 - [x] Update `docs/HarnezComponents.md` with design details (§8, incl. alternatives §8.1)
-- [ ] Design review checklist: can each profile boot independently? Can they compose safely?
+- [x] Design review checklist: can each profile boot independently? Can they compose safely? (MVP tests apply every preset and a preset union, §8.10)
 - [ ] Commit changes to docs and prototype code
 
 ## Design status
 
 Design written in `docs/HarnezComponents.md` §8: five paths compared (status quo, component
 selection in the monolith, multi-binary, separate repos, component manifests); recommended
-path A now with triggers for B/C/D. Prototype pending review of the design and the open
-questions in §8.9.
+path A now with triggers for B/C/D. MVP in `internal/components` backs the design without
+touching `internal/claude` or `cmd/harnez`; integration into apply is pending review of
+the design and the open questions in §8.9 (gap table in §8.10).

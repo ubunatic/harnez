@@ -270,7 +270,7 @@ E remains the fallback for one-off setups and costs nothing to keep.
 |---|---|---|
 | `docs` | global copyable docs (`docs:`, `apply --docs`), managed CLAUDE.md/AGENTS.md convention sections | `docs`, `mode`, `read` |
 | `skills` | commands and skills into Claude, Codex, Gemini, Prime targets | — |
-| `telemetry` | harnez hooks in Claude `settings.json` (`exec hook`, `hook read`), Codex and AGY hooks, distill adapters, the Tool Feedback Protocol section and skill, telemetry schema init | `exec`, `hook`, `rate`, `log`, `stats`, `export`, `distill` |
+| `telemetry` | harnez hooks in Claude `settings.json` (`exec hook`, `hook read`), Codex and AGY hooks, distill adapters, the Tool Feedback Protocol skill, telemetry schema init | `exec`, `hook`, `rate`, `log`, `stats`, `export`, `distill` |
 | `agents` | skills that declare `requires: [agents]` | `agent`, `subagent`, `compact-check` |
 | `usage` (transitional) | `statusLine`, `harnez-agent-collector` systemd unit | `usage`, `statusline`, … until moved to loom |
 
@@ -302,9 +302,9 @@ the word would make `--profile full` ambiguous. The design uses `components:` an
 Two behaviours, chosen by how harmful a leftover is:
 
 - **Remove** harness entry points that call harnez: hooks whose command starts with
-  `harnez `, Codex and AGY harnez hooks, a `statusLine` whose command is `harnez …`, the
-  Tool Feedback Protocol section and skill, and skills whose `requires:` names a disabled
-  component. A leftover hook calling an unwanted or missing binary breaks or slows every
+  `harnez `, Codex and AGY harnez hooks, a `statusLine` whose command is `harnez …`,
+  generated distill adapters, the Tool Feedback Protocol skill, and skills whose
+  `requires:` names a disabled component. A leftover hook calling an unwanted or missing binary breaks or slows every
   tool call; a leftover skill tells agents to run commands that are not wanted. This
   extends the existing precedent of `feedback.disable_rate_protocol` (issue 142), which
   already removes rather than skips.
@@ -312,7 +312,11 @@ Two behaviours, chosen by how harmful a leftover is:
   but does not delete them. A stale doc is harmless and may belong to another tool.
 
 Ownership rule: harnez owns a hook or status line when its command is `harnez` or starts
-with `harnez `. Nothing else is removed. The Stop sound hook in the default config is not
+with `harnez `; for Codex, a hook group whose handlers all run harnez. Nothing else is
+removed. `codex.Remove` does not follow this rule (it deletes every event table harnez
+uses, which suits the full uninstall path only), so the removal pass prunes Codex hook
+groups itself. Note that `codex.Apply` has the same issue in the other direction: it
+replaces the user's tables on the seven events harnez uses, contrary to its doc comment. The Stop sound hook in the default config is not
 harnez-owned and survives every selection.
 
 ### 8.5 Selection and persistence
@@ -382,7 +386,7 @@ preset boots independently, and presets compose by union.
 
 - Default is `full`, so existing users see no change.
 - Switching `full` → `docs-only` removes harnez hooks, the status line, and the Tool
-  Feedback Protocol, and keeps docs and skills. Switching back reinstalls them.
+  Feedback Protocol skill, and keeps docs and the other skills. Switching back reinstalls them.
 - If B follows, each component maps 1:1 to a binary and the selection also decides which
   binaries a `harnez install` fetches. Hook strings keep working through the dispatcher.
 - `usage` drops out of the component list when it moves to loom; a saved selection that
@@ -401,22 +405,49 @@ preset boots independently, and presets compose by union.
 - **Telemetry import of agent sessions.** It does not exist yet and is not required for
   the prototype.
 
-### 8.10 Prototype and verification plan
+### 8.10 MVP and verification
 
-Prototype scope (path A, phases 1–10 above, without `--save` persistence):
+The MVP backs this design without changing `internal/claude`, `cmd/harnez`, or
+`config.yaml`. It lives in a new package and a canary:
 
-- `internal/claude/components.go`: component names, presets, `ParseComponents`,
-  `Config.SelectComponents(override)`.
-- `Config.ComponentNames` (`components:`) and `Command.Requires` (`requires:`).
-- Gates in `ApplyAllVariant`, the `hooks`/`statusLine` handling in `buildSettingsDoc`, and
-  a nil-means-remove-if-harnez-owned rule in `applyMerge`; the same gates in `DiffAll`.
-- `apply --components` flag; skip the telemetry schema init without `telemetry`.
+- `internal/components` — component names, presets, `Parse`, `Resolve` (flag > config >
+  local precedence), `Filter` (narrows a copy of `claude.Config`), `Apply` (runs
+  `claude.ApplyAllVariant` on the filtered config, then the §8.4 removal pass),
+  `PruneSettings` (removes harnez-owned hooks and status line only), and `Plan` (a
+  read-only view of §8.7).
+- `SkillRequires` stands in for a `requires:` key on skills. It lists only
+  `tool-feedback-protocol → telemetry`; the sprint skills wait on §8.9.
+- `scripts/canary-components` prints the plan for a selection:
+  `go run ./scripts/canary-components docs-only`.
 
-Verification:
+Tests in `internal/components/components_test.go`, each on an isolated `HOME`:
 
-- Unit: preset and name parsing, unknown names rejected, nil set means full.
-- Integration: apply `telemetry-only` into a temp target, then `docs-only`; assert harnez
-  hooks, status line, and the rate skill are gone, the Stop hook and user keys survive,
-  and `diff` reports no drift under the same selection.
-- Review checklist: each preset boots on an empty target; presets compose by union;
-  `full` output is byte-identical to today's apply.
+- parsing, presets, unknown names, nil set means full, precedence;
+- `PruneSettings` keeps non-harnez and mixed hooks and a user status line;
+- no selection writes a `settings.json` byte-identical to plain `ApplyAll`;
+- `full` → `docs-only` removes harnez hooks, the status line, the harnez Codex and AGY
+  hooks, and the rate skill; keeps the Stop hook, a user Codex hook on a harnez event, and
+  the other skills; `DiffAll` under the same selection reports no drift; switching back to
+  `full` reinstalls everything;
+- `full` → `agents-only` removes the same entry points and leaves other skills in place
+  (skip semantics);
+- a config whose only hooks are harnez-owned leaves no stale `hooks` key;
+- `telemetry-only` installs hooks without skills, docs, or status line;
+- `docs-only,telemetry-only` composes by union.
+
+What the MVP cannot do from outside `internal/claude`, and the integration step fixes:
+
+| Gap | Integration fix |
+|---|---|
+| `components:` and `requires:` keys are not parsed | add `Config.ComponentNames`, `Command.Requires` |
+| `apply` has no `--components` flag; telemetry schema init runs unconditionally | flag in `cmd/harnez/main.go`, gate `ensureTelemetrySchema` |
+| removal is a second pass that rewrites `settings.json` after apply | fold into `buildSettingsDoc`/`applyMerge` so one write does both |
+| `SkillTargets` duplicates the unexported `skillTargets` | use the real one |
+| skill removal for unmet `requires:` deletes `SKILL.md` only; resource files stay (the rate skill already goes through apply's own removal branch) | generalize that branch to `requires:` |
+| `DiffAll` does not check Codex/AGY files under a selection (the filtered config blanks their targets) | selection-aware Codex/AGY status |
+| `codex.Apply` replaces user tables on harnez's seven Codex events (pre-existing) | merge per group, like `PruneCodexHooks` |
+| `diff`/`status` do not know the selection | resolve the selection once, shared by `apply`, `diff`, `status` |
+| `--save` to `~/.harnez/config.yaml` | after moving `LoadLocalConfig` out of `internal/usage` |
+
+Review checklist for the integration: each preset boots on an empty target; presets
+compose by union; unfiltered output is byte-identical to today's apply.
