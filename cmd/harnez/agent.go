@@ -608,25 +608,38 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 			if err != nil {
 				return err
 			}
+			var failures []error
 			for _, x := range xs {
 				if !subagent.CanManage(parent(), x) {
 					continue
 				}
 				if x.HarnessType == "interactive" {
 					if x.Status == "active" {
-						return fmt.Errorf("session %q is active; stop it before deletion", x.Name)
+						failures = append(failures, fmt.Errorf("%s: session is active; stop it before deletion", x.Name))
+						continue
 					}
 					if e = s.Delete(x.ID); e != nil {
-						return e
+						failures = append(failures, fmt.Errorf("%s: %w", x.Name, e))
+						continue
 					}
+					fmt.Fprintln(cmd.OutOrStdout(), x.Name)
 					continue
 				}
 				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Delete(cmd.Context(), x.ProviderID()); e != nil {
-					return e
+					failures = append(failures, fmt.Errorf("%s: %w", x.Name, e))
+					continue
 				}
 				if e = s.Delete(x.ID); e != nil {
-					return e
+					failures = append(failures, fmt.Errorf("%s: %w", x.Name, e))
+					continue
 				}
+				fmt.Fprintln(cmd.OutOrStdout(), x.Name)
+			}
+			for _, err := range failures {
+				fmt.Fprintln(cmd.ErrOrStderr(), "delete failed:", err)
+			}
+			if len(failures) > 0 {
+				return errors.New("some sessions failed to delete")
 			}
 			return nil
 		}

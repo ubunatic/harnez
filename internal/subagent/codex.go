@@ -19,7 +19,7 @@ import (
 // CodexDriver runs codex in non-interactive JSONL mode.
 type CodexDriver struct {
 	Command func(context.Context, string, ...string) ([]byte, error)
-	// Start launches a process for streaming turns; nil uses os/exec.
+	// Start launches a process; nil uses os/exec. Used for streaming turns and Delete.
 	Start func(context.Context, string, ...string) (io.Reader, func() error, error)
 }
 
@@ -117,7 +117,10 @@ func (d CodexDriver) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("codex delete: %w", err)
 	}
 	io.Copy(io.Discard, rd)
-	return wait()
+	if err := wait(); err != nil {
+		return fmt.Errorf("codex delete: %w", err)
+	}
+	return nil
 }
 
 // Event is one live occurrence in a streaming turn.

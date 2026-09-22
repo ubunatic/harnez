@@ -135,19 +135,24 @@ func TestCodexDeleteIncludesStderr(t *testing.T) {
 		}, nil
 	}}
 	err := d.Delete(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
-	if err == nil || !strings.Contains(err.Error(), "--force requires a session UUID") {
-		t.Fatalf("error = %v, want stderr included", err)
+	if err == nil || !strings.Contains(err.Error(), "codex delete:") || !strings.Contains(err.Error(), "--force requires a session UUID") {
+		t.Fatalf("error = %v, want 'codex delete:' wrapper with stderr", err)
 	}
 }
 
 func TestCodexDeleteUsesNonInteractiveCommand(t *testing.T) {
+	var cmd string
 	var args []string
-	d := CodexDriver{Start: func(_ context.Context, _ string, gotArgs ...string) (io.Reader, func() error, error) {
+	d := CodexDriver{Start: func(_ context.Context, gotCmd string, gotArgs ...string) (io.Reader, func() error, error) {
+		cmd = gotCmd
 		args = gotArgs
 		return strings.NewReader(""), func() error { return nil }, nil
 	}}
 	if err := d.Delete(context.Background(), "550e8400-e29b-41d4-a716-446655440000"); err != nil {
 		t.Fatal(err)
+	}
+	if cmd != "codex" {
+		t.Fatalf("cmd = %q, want codex", cmd)
 	}
 	if !reflect.DeepEqual(args, []string{"delete", "--force", "550e8400-e29b-41d4-a716-446655440000"}) {
 		t.Fatalf("args = %#v", args)
