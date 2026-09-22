@@ -1,6 +1,6 @@
 # 289 — harnez init go.work reconciliation hard-fails on testdata/fixture go.mod files
 
-**Status**: Open
+**Status**: Closed — already fixed: ignoredModuleScanDir skips testdata (d602096), regression test gowork_test.go:178
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
