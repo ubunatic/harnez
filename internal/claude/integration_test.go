@@ -148,7 +148,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	var diffChanged bool
 	out, err = captureStdout(func() error {
 		var dErr error
-		diffChanged, dErr = claude.DiffAll(targetDir, cfg)
+		diffChanged, dErr = claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 		return dErr
 	})
 	if err != nil {
@@ -181,7 +181,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	// 7. Diff under drift: must output changes and changed == true
 	out, err = captureStdout(func() error {
 		var dErr error
-		diffChanged, dErr = claude.DiffAll(targetDir, cfg)
+		diffChanged, dErr = claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 		return dErr
 	})
 	if err != nil {
@@ -207,7 +207,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 
 	// 9. Run status checking
 	out, err = captureStdout(func() error {
-		return claude.RunStatus("(embedded)", cfg, targetDir)
+		return claude.RunStatus("(embedded)", cfg, targetDir, claude.FullComponentSelection{})
 	})
 	if err != nil {
 		t.Fatalf("RunStatus failed: %v", err)
@@ -304,7 +304,7 @@ func TestDiffAll_ExecError(t *testing.T) {
 	// Set PATH to empty temp dir so 'diff' binary is not found
 	t.Setenv("PATH", t.TempDir())
 
-	_, err = claude.DiffAll(targetDir, cfg)
+	_, err = claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 	if err == nil {
 		t.Fatalf("Expected DiffAll to return error when diff binary is missing, got nil")
 	}

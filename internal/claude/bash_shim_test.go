@@ -55,7 +55,7 @@ func TestBashShimProvisioningAndLifecycle(t *testing.T) {
 	}
 
 	// 2. DiffAll should report no changes when aligned
-	changed, err := claude.DiffAll(targetDir, cfg)
+	changed, err := claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestBashShimProvisioningAndLifecycle(t *testing.T) {
 	if err := os.Remove(shimPath); err != nil {
 		t.Fatalf("remove shim: %v", err)
 	}
-	changed, err = claude.DiffAll(targetDir, cfg)
+	changed, err = claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestBashShimProvisioningAndLifecycle(t *testing.T) {
 	if err := os.WriteFile(shimPath, []byte("#!/bin/sh\necho wrong\n"), 0755); err != nil {
 		t.Fatalf("write modified shim: %v", err)
 	}
-	changed, err = claude.DiffAll(targetDir, cfg)
+	changed, err = claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestBashShimProvisioningAndLifecycle(t *testing.T) {
 	if err := os.Chmod(shimPath, 0644); err != nil {
 		t.Fatalf("write non-executable shim: %v", err)
 	}
-	changed, err = claude.DiffAll(targetDir, cfg)
+	changed, err = claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestApplyInstallsAgyObservationHooks(t *testing.T) {
 	cfg.AgentsMD.Agents = nil
 
 	// DiffAll should detect that hooks.json is missing the harnez observer hook
-	changed, err := claude.DiffAll(targetDir, cfg)
+	changed, err := claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 	if err != nil {
 		t.Fatalf("DiffAll: %v", err)
 	}

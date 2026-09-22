@@ -84,7 +84,7 @@ func TestHarnezEnvScriptAndShellIntegration(t *testing.T) {
 	}
 
 	// 3. DiffAll should report no changes when aligned
-	changed, err := claude.DiffAll(targetDir, cfg)
+	changed, err := claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestHarnezEnvScriptAndShellIntegration(t *testing.T) {
 	if err := os.WriteFile(envPath, []byte("# corrupted\n"), 0644); err != nil {
 		t.Fatalf("write corrupted env.sh: %v", err)
 	}
-	changed, err = claude.DiffAll(targetDir, cfg)
+	changed, err = claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 	if err != nil {
 		t.Fatalf("DiffAll on drift: %v", err)
 	}

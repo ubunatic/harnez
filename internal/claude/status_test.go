@@ -52,7 +52,7 @@ func TestRunStatus_ChecksAllManagedSettingsKeys(t *testing.T) {
 	}
 
 	out, err := captureStdoutStatus(func() error {
-		return RunStatus("(test)", cfg, dir)
+		return RunStatus("(test)", cfg, dir, FullComponentSelection{})
 	})
 	if err != nil {
 		t.Fatalf("RunStatus failed: %v", err)
@@ -88,7 +88,7 @@ func TestRunStatus_ReportsRemovedManagedKey(t *testing.T) {
 
 	// confirm hooks is present after apply
 	out, err := captureStdoutStatus(func() error {
-		return RunStatus("(test)", cfg, dir)
+		return RunStatus("(test)", cfg, dir, FullComponentSelection{})
 	})
 	if err != nil {
 		t.Fatalf("RunStatus (pre-removal) failed: %v", err)
@@ -117,7 +117,7 @@ func TestRunStatus_ReportsRemovedManagedKey(t *testing.T) {
 
 	// now status must report hooks as missing
 	out, err = captureStdoutStatus(func() error {
-		return RunStatus("(test)", cfg, dir)
+		return RunStatus("(test)", cfg, dir, FullComponentSelection{})
 	})
 	if err != nil {
 		t.Fatalf("RunStatus (post-removal) failed: %v", err)
@@ -159,7 +159,7 @@ func TestRunStatus_BashShimCodexAndAgyHooks(t *testing.T) {
 
 	// Before apply -> missing
 	out, err := captureStdoutStatus(func() error {
-		return RunStatus("(test)", cfg, dir)
+		return RunStatus("(test)", cfg, dir, FullComponentSelection{})
 	})
 	if err != nil {
 		t.Fatalf("RunStatus failed: %v", err)
@@ -181,7 +181,7 @@ func TestRunStatus_BashShimCodexAndAgyHooks(t *testing.T) {
 
 	// After apply -> ok
 	out, err = captureStdoutStatus(func() error {
-		return RunStatus("(test)", cfg, dir)
+		return RunStatus("(test)", cfg, dir, FullComponentSelection{})
 	})
 	if err != nil {
 		t.Fatalf("RunStatus post-apply failed: %v", err)

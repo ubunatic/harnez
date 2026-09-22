@@ -239,7 +239,7 @@ func TestApply_FullThenDocsOnly(t *testing.T) {
 	}
 
 	set, _ := Parse("docs-only")
-	drift, err := claude.DiffAll(target, Filter(cfg, set))
+	drift, err := claude.DiffAll(target, Filter(cfg, set), set)
 	if err != nil {
 		t.Fatalf("DiffAll: %v", err)
 	}

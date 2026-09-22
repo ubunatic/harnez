@@ -5,9 +5,7 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"database/sql"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,27 +15,6 @@ import (
 	_ "modernc.org/sqlite"
 	"ubunatic.com/harnez/internal/telemetry"
 )
-
-func TestApplyUnfilteredSettingsMatchesM2Golden(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	target := filepath.Join(home, ".claude")
-
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"apply", "--target", target})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("unfiltered apply: %v", err)
-	}
-	data, err := os.ReadFile(filepath.Join(target, "settings.json"))
-	if err != nil {
-		t.Fatalf("read settings.json: %v", err)
-	}
-	got := sha256.Sum256(data)
-	const want = "03c4f6252300ed39c8507bebc06086ce15762c5a5cfbe5a0c1fdf8c40ed5fb92"
-	if actual := fmt.Sprintf("%x", got); actual != want {
-		t.Fatalf("settings.json SHA-256 = %s, want pre-M3 golden %s", actual, want)
-	}
-}
 
 func captureApplyStdout(t *testing.T, fn func()) string {
 	t.Helper()

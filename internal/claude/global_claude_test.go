@@ -81,7 +81,7 @@ func TestApplyAll_DoesNotManageGlobalRootInstructionDocs(t *testing.T) {
 	}
 
 	// Verify DiffAll does not report drift on applied configuration
-	changed, err := DiffAll(targetDir, cfg)
+	changed, err := DiffAll(targetDir, cfg, FullComponentSelection{})
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
 	}

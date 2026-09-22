@@ -41,7 +41,7 @@ func TestGearSymlinkProvisioning(t *testing.T) {
 	}
 
 	// 2. DiffAll should report no changes when aligned
-	changed, err := claude.DiffAll(targetDir, cfg)
+	changed, err := claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestGearSymlinkProvisioning(t *testing.T) {
 	if err := os.Remove(gearLink); err != nil {
 		t.Fatalf("remove gearLink: %v", err)
 	}
-	changed, err = claude.DiffAll(targetDir, cfg)
+	changed, err = claude.DiffAll(targetDir, cfg, claude.FullComponentSelection{})
 	if err != nil {
 		t.Fatalf("DiffAll failed: %v", err)
 	}

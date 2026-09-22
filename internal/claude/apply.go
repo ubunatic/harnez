@@ -76,7 +76,7 @@ func mergePermissions(existing, incoming map[string]any) map[string]any {
 }
 
 // applyMerge merges doc into a copy of existing. The permissions.allow and
-// permissions.deny arrays are union-merged; mcpServers are merged by name.
+// permissions.deny arrays are union-merged; all other top-level keys replace.
 // A nil value removes only managed, Harnez-owned settings.
 func applyMerge(existing, doc map[string]any) map[string]any {
 	out := make(map[string]any, len(existing)+len(doc))
@@ -90,7 +90,10 @@ func applyMerge(existing, doc map[string]any) map[string]any {
 			}
 			switch k {
 			case "hooks":
-				keptHooks := removeHarnezHooks(out[k])
+				keptHooks, valid := removeHarnezHooks(out[k])
+				if !valid {
+					continue
+				}
 				if len(keptHooks) == 0 {
 					delete(out, k)
 				} else {
@@ -113,21 +116,6 @@ func applyMerge(existing, doc map[string]any) map[string]any {
 				}
 			}
 		}
-		if k == "mcpServers" {
-			if existingServers, ok := out[k].(map[string]any); ok {
-				if incomingServers, ok := v.(map[string]any); ok {
-					mergedServers := make(map[string]any, len(existingServers)+len(incomingServers))
-					for name, server := range existingServers {
-						mergedServers[name] = server
-					}
-					for name, server := range incomingServers {
-						mergedServers[name] = server
-					}
-					out[k] = mergedServers
-					continue
-				}
-			}
-		}
 		out[k] = v
 	}
 	return out
@@ -142,46 +130,52 @@ func isHarnezCommand(command string) bool {
 	return command == "harnez" || strings.HasPrefix(command, "harnez ")
 }
 
-func removeHarnezHooks(value any) map[string]any {
+func removeHarnezHooks(value any) (map[string]any, bool) {
 	hooks, ok := value.(map[string]any)
 	if !ok {
-		return nil
+		return nil, false
 	}
 	keptHooks := make(map[string]any, len(hooks))
 	for event, rawEntries := range hooks {
-		entries, _ := rawEntries.([]any)
+		entries, ok := rawEntries.([]any)
+		if !ok {
+			return nil, false
+		}
 		kept := make([]any, 0, len(entries))
 		for _, entry := range entries {
-			commands := hookEntryCommands(entry)
-			allHarnez := len(commands) > 0
-			for _, command := range commands {
-				if !isHarnezCommand(command) {
-					allHarnez = false
-					break
-				}
-			}
-			if !allHarnez {
+			entryMap, ok := entry.(map[string]any)
+			if !ok {
 				kept = append(kept, entry)
+				continue
+			}
+			rawHooks, ok := entryMap["hooks"].([]any)
+			if !ok {
+				kept = append(kept, entry)
+				continue
+			}
+			entryCopy := make(map[string]any, len(entryMap))
+			for key, value := range entryMap {
+				entryCopy[key] = value
+			}
+			keptCommands := make([]any, 0, len(rawHooks))
+			for _, rawHook := range rawHooks {
+				hook, ok := rawHook.(map[string]any)
+				command, commandOK := hook["command"].(string)
+				if ok && commandOK && isHarnezCommand(command) {
+					continue
+				}
+				keptCommands = append(keptCommands, rawHook)
+			}
+			if len(keptCommands) > 0 {
+				entryCopy["hooks"] = keptCommands
+				kept = append(kept, entryCopy)
 			}
 		}
 		if len(kept) > 0 {
 			keptHooks[event] = kept
 		}
 	}
-	return keptHooks
-}
-
-func hookEntryCommands(entry any) []string {
-	m, _ := entry.(map[string]any)
-	list, _ := m["hooks"].([]any)
-	var commands []string
-	for _, rawHook := range list {
-		hook, _ := rawHook.(map[string]any)
-		if command, ok := hook["command"].(string); ok {
-			commands = append(commands, command)
-		}
-	}
-	return commands
+	return keptHooks, true
 }
 
 // managedSettingsKeys are the top-level keys harnez writes to settings.json.
@@ -956,7 +950,7 @@ func mergeDocs(fromConfig, fromFlag []string) []string {
 // ApplyAll installs the managed configuration into target, always using the
 // full doc source. See ApplyAllVariant to select a lite_source variant.
 func ApplyAll(target string, cfg *Config, docs []string, forceDocs bool, installSystemd bool, installShell ...bool) error {
-	return ApplyAllVariant(target, cfg, fullComponentSelection{}, docs, forceDocs, installSystemd, "", installShell...)
+	return ApplyAllVariant(target, cfg, FullComponentSelection{}, docs, forceDocs, installSystemd, "", installShell...)
 }
 
 // ComponentSelection is the resolved component set for an apply operation.
@@ -966,9 +960,9 @@ type ComponentSelection interface {
 	HasComponent(string) bool
 }
 
-type fullComponentSelection struct{}
+type FullComponentSelection struct{}
 
-func (fullComponentSelection) HasComponent(string) bool { return true }
+func (FullComponentSelection) HasComponent(string) bool { return true }
 
 // ApplyAllVariant is ApplyAll with an explicit doc variant ("" or "lite")
 // selecting which source (Language.SourceFor) is installed for docs that
@@ -1314,11 +1308,7 @@ func ApplyAllVariant(target string, cfg *Config, selection ComponentSelection, d
 }
 
 // DiffAll diffs the config and reports whether changes/drift were detected.
-func DiffAll(target string, cfg *Config, selections ...ComponentSelection) (bool, error) {
-	selection := ComponentSelection(fullComponentSelection{})
-	if len(selections) > 0 {
-		selection = selections[0]
-	}
+func DiffAll(target string, cfg *Config, selection ComponentSelection) (bool, error) {
 	anyChanged := false
 	report := func(changed bool, err error) error {
 		if err != nil {
