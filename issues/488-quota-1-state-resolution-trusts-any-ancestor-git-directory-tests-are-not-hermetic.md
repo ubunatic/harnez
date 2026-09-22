@@ -1,6 +1,6 @@
 # 488 — Quota-1 state resolution trusts any ancestor .git directory; tests are not hermetic
 
-**Status**: Open
+**Status**: Closed — a .git dir counts only with HEAD; junk-ancestor and worktree tests (a7d34a6)
 
 **Priority**: P3 (Low)
 **Severity**: Minor
