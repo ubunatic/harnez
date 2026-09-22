@@ -11,7 +11,7 @@ Modern AI coding environments (`Antigravity/AGY`, `OpenAI Codex`, `Claude Code`,
 Without a unified layer, orchestrators cannot reliably invoke low-cost models across harness boundaries, measure real token velocity per milestone, or maintain predictable auto-compaction and cache-affinity policies.
 
 `harnez agent` provides a **single, universal CLI command surface** and **cross-harness subagent lifecycle manager** that:
-1. Dispatches and resumes developer subagents across all providers (`codex`, `claude`, `agy`, `local`).
+1. Dispatches and resumes developer subagents across all providers (`codex`, `claude`, `agy`, `local`). Known limit: a `claude:*` session started from inside Claude Code can't be resumed yet, because the child doesn't save its transcript (issue 498). Use one fresh session per milestone, with the ticket as context.
 2. Provides explicit, first-class reconnectability with a concise **Reconnect Banner** emitted on agent start.
 3. Enforces **session isolation and ancestry-scoped process hygiene**: agents only manage and terminate their own child agents; external sessions running concurrently in other tools/windows are strictly protected from cross-session interference.
 4. Enforces **automatic context compaction** (threshold-based at 100–150k tokens or milestone boundaries) and detects idle KV-cache expiration.

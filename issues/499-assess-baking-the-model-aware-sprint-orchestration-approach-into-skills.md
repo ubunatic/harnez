@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Design
-**Related**: `docs/practices/ModelRoles.md`, `docs/ModelAdvisoryEval.md`, `docs/feedback/2026-09-22-lean-sprint-491.md`, `docs/feedback/2026-09-22-lean-sprint-496-488-497.md`, `docs/commands/{lean-sprint,sprint,reverse-sprint}.md`, 485 (quota-aware default model), 445/446 (cost data), 498 (Claude resume), 493 (dispatch mode)
+**Related**: 145 (orchestrator-session skill; likely home for several techniques), 176 (report contract), `docs/practices/ModelRoles.md`, `docs/ModelAdvisoryEval.md`, `docs/feedback/2026-09-22-lean-sprint-491.md`, `docs/feedback/2026-09-22-lean-sprint-496-488-497.md`, `docs/commands/{lean-sprint,sprint,reverse-sprint}.md`, 485 (quota-aware default model), 445/446 (cost data), 498 (Claude resume), 493 (dispatch mode)
 
 ## /goal
 

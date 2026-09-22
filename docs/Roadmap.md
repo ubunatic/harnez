@@ -42,6 +42,21 @@ Sequencing buckets:
 
 ## 0. Shipped Recently
 
+**Closed on 2026-09-22 (lean sprints, after this pass):**
+
+- **496** (gofmt cleanup) and **488** (hermetic Quota-1 state): the 30 files formatted, a
+  `gofmt -l` gate in `make check`, and a `.git` dir counts as a repo only with `HEAD`.
+- **289** (go.work fixture `go.mod`): already fixed in d602096; closed after a stale-ticket
+  check.
+- **497** (`harnez agent` model tiers): the Codex tier reaches `exec` and resume, and aliases
+  moved to `spec/agent.yaml` with `terra` and the current Claude aliases.
+- **491** (component selection in `apply`): `--components`, `components:`/`requires:`, one
+  settings write, removal driven by `requires:`, Codex/AGY by `telemetry`, a CLI e2e test,
+  and the MVP deleted. §1's keystone is done; 492, 493 and 495 are unblocked.
+- New: **498** (Claude sessions can't resume inside Claude Code, P1) and **499** (bake the
+  model-aware orchestration approach into skills). Model data: `docs/ModelAdvisoryEval.md`,
+  practice: `docs/practices/ModelRoles.md`.
+
 **Closed since the e61f74c pass (this pass):**
 
 - **489** — component separation analysis: coupling, use-case coverage, boundaries and
@@ -202,6 +217,7 @@ removes a real Quota-1 failure mode.
 |---|---|---|
 | 471 — root doc copies drift from copyable sources (Bash, Make, IssueTracking, Spec, GoRelease) | S/M — new, P2. Every `harnez init` in this repo rewrites ~1000 lines of root docs, so any agent following the repo rules has to revert them by hand. Per-hunk reconcile with the source-wins rule; find GoRelease's source first | **Next** (high) |
 | 176 — capped subagent completion-report contract | S — the sprint supplied the content: 8–12-line replies with named fields worked; the cap belongs in the role rules in `spec/agent.yaml`, with a mandatory exact-test-result field | **Next** |
+| 499 — assess baking the model-aware orchestration approach (model eval, role assignment by capability and cost, quota watching, strong host) into skills | S/M — new. Decide per technique: skill, doc, code (485) or drop. Feeds 145 | **Next** (before 145) |
 | 145 — orchestrator-session skill/command | M — the sprint recorded exactly what it must encode (role start command, preflight, two follow-up turns max, review checklist, helper cleanup). Its last prerequisite is 176. Absorbs the remaining scope of 288 | **Next** (after 176) |
 | 465 — adopt loom's lean-sprint field notes into AgenticLoop | S — decision ticket; do it with 176/145 so the practice docs change once | **Next** (with 176) |
 | 221 — Go-first for scripts, demote ad-hoc Python | S | **Next** |
@@ -390,9 +406,10 @@ Refreshed this pass. The component design landed and the usage TUI is leaving, s
 moves from telemetry extension to **making `apply` composable**, with telemetry extension
 re-sequenced behind the shared capture package it now depends on.
 
-1. **Clear the ground (small, Now):** 496 (gofmt, before 491 touches the same files) and
-   488 (hermetic Quota-1 tests), then 289 and 279.
-2. **Component keystone:** 491 — selection in `apply`, one settings write, selection-aware
+1. **Clear the ground (small, Now):** ~~496, 488, 289~~ done 2026-09-22. 279 remains, and
+   the model advisors recommended cutting it (design-heavy, low value). Add **498** (Claude
+   resume inside Claude Code) first: every Claude-developer sprint needs it.
+2. **Component keystone:** ~~491~~ done 2026-09-22 — selection in `apply`, one settings write, selection-aware
    `diff`/`status`.
 3. **In parallel after 491:** 493 (`mixed` dispatch mode, mode-aware sprint skills) and 495
    (shared token capture). 492 alongside, before the loom extraction starts.
