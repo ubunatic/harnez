@@ -228,7 +228,7 @@ When `subagent_mode: harnez` is enabled:
      [HARNEZ SUBAGENT INTERCEPTION]:
      Native 'invoke_subagent' is replaced by 'harnez agent'.
      Please dispatch subagents using:
-       harnez agent start <tool>:<model> "<prompt>"
+       harnez agent start --name <name> --model <model> "<prompt>"
      To resume an existing agent:
        harnez agent resume --name <session_id> "<prompt>"
      Refer to docs/HarnezAgentArchitecture.md for complete details.
