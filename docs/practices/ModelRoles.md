@@ -56,6 +56,13 @@ Example assignment (2026-09, Codex and Claude subscriptions):
 Model lineups change every few months. Rerun the evaluation below when they do, instead of
 trusting an old table.
 
+Lineup note (2026-09-22, ticket 500): with Codex out of quota, the only available lineup was
+host `claude:opus` plus a `claude:sonnet` developer — no cross-vendor reviewer. `harnez agent`
+now supports `agy:flash37`/`agy:flash38` (Gemini, cheap) alongside `agy:sonnet`/`agy:opus`
+(Claude via agy), giving a second vendor for advisor/reviewer roles even when Codex is
+unavailable. Have the host delegate even a quick canary probe to a cheap worker with a small
+hint, rather than probing it directly — that keeps the pattern consistent and leaves a record.
+
 ## Host review checklist
 
 A cheap developer's report ("tests pass, open problems: none") is not evidence. On every
@@ -116,3 +123,6 @@ catch it.
   delete them, so read them first.
 - When one vendor nears its stop threshold, move the remaining milestones to another vendor's
   developer. This works because the ticket carries all the context.
+- Cost data point (ticket 500, a ~300-line change with driver code plus tests): two developer
+  turns used 2.78M and 1.33M tokens, mostly cache reads. Use figures like this to judge whether
+  a milestone's scope matches its model tier, not as a target to hit.

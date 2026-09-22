@@ -67,6 +67,11 @@ code and the environment in all three tickets. Check:
 | Agent report seems cut off | the host piped it through `cut -c1-N` | never truncate agent output when reading it |
 | Workers report the host's session id | they inherit `CLAUDE_CODE_SESSION_ID` and similar variables | parent lineage uses `HARNEZ_SESSION_ID`; telemetry gap in ticket 487 |
 | `harnez init` rewrites unrelated `docs/*.md` copies | root copies drift behind their sources | `git checkout --` the unrelated ones |
+| `agy -p "…"` grabs the wrong token as its prompt | `-p` consumes the next argv token as its value | put `-p "<prompt>"` last, after every other flag |
+| `agy` writes output files into `~/.gemini/antigravity-cli/scratch/` instead of the working dir | agy defaults to its own scratch dir unless told otherwise | pass both `cmd.Dir = <dir>` and `--add-dir <dir>` |
+| `agy --model claude-sonnet-4-6 --effort low` fails | agy rejects `--effort` for `claude-*` models, only for `gemini-*` | mark the model `effort: false` in `spec/agent.yaml` and omit the flag |
+| `agy` exits 1 with no useful error | it still prints a JSON `{"status":"ERROR","error":"…"}` object on stdout even on a non-zero exit | parse stdout on failure before falling back to stderr (see also `claude`'s opaque `exit status 1`, ticket 498) |
+| Live-testing a batch of agy models felt slow and left stray state | one `--conversation` resume took 118s; leftover named sessions persist after the run | use empty scratch dirs with no `AGENTS.md`, one tiny prompt plus one resume per model, unique session names, `harnez agent delete` afterward (ticket 500) |
 
 ## 5. Finding out what agents ran
 
