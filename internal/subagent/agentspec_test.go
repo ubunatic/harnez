@@ -38,6 +38,28 @@ func TestResolveModelBareAliases(t *testing.T) {
 	}
 }
 
+func TestCodexSolAndLunaResolveToGPT6(t *testing.T) {
+	for alias, want := range map[string]string{
+		"sol":            "gpt-6-sol",
+		"codex:sol":      "gpt-6-sol",
+		"codex:sol:low":  "gpt-6-sol",
+		"luna":           "gpt-6-luna",
+		"codex:luna":     "gpt-6-luna",
+		"codex:luna:med": "gpt-6-luna",
+	} {
+		model, err := ResolveModel(alias)
+		if err != nil {
+			t.Fatalf("ResolveModel(%q): %v", alias, err)
+		}
+		if model.Name != want {
+			t.Errorf("ResolveModel(%q).Name = %q, want %q", alias, model.Name, want)
+		}
+		if model.Provider != "codex" {
+			t.Errorf("ResolveModel(%q).Provider = %q, want codex", alias, model.Provider)
+		}
+	}
+}
+
 func TestResolveModelBareSonnetOpusAmbiguous(t *testing.T) {
 	// claude:sonnet/claude:opus and agy:sonnet/agy:opus share the same bare
 	// alias, so it must require the provider prefix.

@@ -119,10 +119,16 @@ func TestInvokeBuildsAgentCommands(t *testing.T) {
 	if name != "claude" || !contains(args, "--model", "haiku") || args[len(args)-1] != "hi" {
 		t.Errorf("claude cmd = %s %v", name, args)
 	}
+	if _, err := Invoke(context.Background(), fake(codexJSONL), AgentCodex, "", t.TempDir(), "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if name != "codex" || !contains(args, "-m", "gpt-6-luna") {
+		t.Errorf("codex default cmd = %s %v", name, args)
+	}
 	if _, err := Invoke(context.Background(), fake(codexJSONL), AgentCodex, "luna", t.TempDir(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	if name != "codex" || !contains(args, "-m", "gpt-5.6-luna") || args[0] != "exec" {
+	if name != "codex" || !contains(args, "-m", "gpt-6-luna") || args[0] != "exec" {
 		t.Errorf("codex cmd = %s %v", name, args)
 	}
 	if _, err := Invoke(context.Background(), fake(agyJSON), AgentAgy, "flash", t.TempDir(), "hi"); err != nil {

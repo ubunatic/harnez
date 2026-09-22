@@ -19,7 +19,7 @@ const (
 )
 
 // Default cheap models per agent; "luna" and "flash" are accepted aliases.
-var defaultModels = map[string]string{AgentClaude: "haiku", AgentCodex: "gpt-5.6-luna", AgentAgy: "gemini-3.8-flash-low"}
+var defaultModels = map[string]string{AgentClaude: "haiku", AgentCodex: "gpt-6-luna", AgentAgy: "gemini-3.8-flash-low"}
 
 // ResolveModel maps an empty model or alias to the agent's concrete model flag value.
 func ResolveModel(agent, model string) string {
@@ -29,7 +29,7 @@ func ResolveModel(agent, model string) string {
 	}
 	switch {
 	case model == "luna":
-		return "gpt-5.6-luna"
+		return "gpt-6-luna"
 	case model == "flash" && agent == AgentAgy:
 		return defaultModels[AgentAgy]
 	}

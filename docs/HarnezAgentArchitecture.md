@@ -173,9 +173,9 @@ The model resolution engine standardizes aliases across providers:
 
 | Alias Shorthand | Target Provider | Fully-Qualified CLI Invocations & Flags | Default Use Case |
 |---|---|---|---|
-| `codex:luna:low` / `codex:luna` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-5.6-luna --effort low` | Ultra-cheap coder / dev lead |
-| `codex:luna:med` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-5.6-luna --effort medium` | Standard development |
-| `codex:sol:low` / `codex:sol` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-5.6-sol --effort low` | Fast code review / linting |
+| `codex:luna:low` / `codex:luna` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-6-luna --effort low` | Ultra-cheap coder / dev lead |
+| `codex:luna:med` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-6-luna --effort medium` | Standard development |
+| `codex:sol:low` / `codex:sol` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-6-sol --effort low` | Fast code review / linting |
 | `codex:astra:low` / `codex:astra` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-5.6-astra --effort low` | Frontier advisor (stuck only) |
 | `codex:terra:low` / `codex:terra` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-5.6-terra --effort low` | Terra evaluation model |
 | `claude:haiku:low` / `claude:haiku` | Claude Code | `claude -p --model claude-3-5-haiku-20241022` | Lightweight coder |

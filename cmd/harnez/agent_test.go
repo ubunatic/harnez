@@ -1065,7 +1065,7 @@ func TestAgentStartStreamsLabeledBlocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	order := []string{"[session info: id=thread-1 agent=codex:gpt-5.6-luna action=start resolved=new]", "name=w", "reconnect: harnez agent resume thread-1", "[wait:", "[message: 0s]\non it", "[heartbeat: 0s, ~", "last: running sleep]", "[message: 0s]\nall done", "[done: 2 messages, last message is the reply"}
+	order := []string{"[session info: id=thread-1 agent=codex:gpt-6-luna action=start resolved=new]", "name=w", "reconnect: harnez agent resume thread-1", "[wait:", "[message: 0s]\non it", "[heartbeat: 0s, ~", "last: running sleep]", "[message: 0s]\nall done", "[done: 2 messages, last message is the reply"}
 	pos := 0
 	for _, want := range order {
 		i := strings.Index(got[pos:], want)

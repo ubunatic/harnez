@@ -3,8 +3,8 @@
 default_model: codex:luna:low
 
 models:
-  codex:luna: {provider: codex, name: gpt-5.6-luna, tier: low}
-  codex:sol: {provider: codex, name: gpt-5.6-sol, tier: low}
+  codex:luna: {provider: codex, name: gpt-6-luna, tier: low}
+  codex:sol: {provider: codex, name: gpt-6-sol, tier: low}
   codex:astra: {provider: codex, name: gpt-5.6-astra, tier: low}
   codex:terra: {provider: codex, name: gpt-5.6-terra, tier: low}
   claude:haiku: {provider: claude, name: haiku, tier: low}

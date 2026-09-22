@@ -17,7 +17,7 @@ reports which agent CLIs are on `PATH`. Until then `bench run` and `bench result
 - `harnez bench run --agent claude|codex [--model M] [--docs full|lite] [--cards] [--task a,b] [--repeat N]`
 - `harnez bench results [--recent N]` — per-condition pass rate, average tokens and cost.
 
-Defaults use the cheap models: `haiku` for claude, `gpt-5.6-luna` for codex (`luna` is an alias).
+Defaults use the cheap models: `haiku` for claude, `gpt-6-luna` for codex (`luna` is an alias).
 Real runs spend agent tokens; keep task sets and `--repeat` small.
 
 ## Conditions
