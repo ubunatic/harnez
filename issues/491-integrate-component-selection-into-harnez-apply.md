@@ -176,3 +176,10 @@ Developer switch: Codex weekly quota hit the 99% stop threshold, so M5 moves to 
      the useful `internal/components` tests (preset boot on an empty target, preset union,
      full → docs-only → full round trip) onto `claude.ApplyAll*`/`DiffAll`.
    - `scripts/smoke-test.sh` passes; `make install`.
+
+**M5 plan decisions (claude:sonnet plan, host-approved):** M5 = items 1–2's first two bullets
+only (nit, requires-driven skill removal including resources, Codex/AGY by `telemetry` plus
+`DiffAll`). The package move and deletion becomes **M6**. Keep `RateFeedbackDisabled` and
+`sessionstate.go` as they are, because rate feedback can also be disabled by env or config: add the
+unmet-`requires:` removal next to it, don't replace it. Claude resumes are broken (498), so
+each milestone runs in a fresh session with this ticket as its context.
