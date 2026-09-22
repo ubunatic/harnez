@@ -16,6 +16,9 @@ func TestCheckAndRecord_Lifecycle(t *testing.T) {
 	if err := os.MkdirAll(gitDir, 0755); err != nil {
 		t.Fatalf("mkdir .git: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("ref: refs/heads/main\n"), 0644); err != nil {
+		t.Fatalf("write .git/HEAD: %v", err)
+	}
 
 	// Create a dummy source file with initial timestamp t0
 	baseTime := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
@@ -176,6 +179,46 @@ func TestCheckAndRecord_NonGitDir(t *testing.T) {
 	expectedStateFile := filepath.Join(nonGitDir, ".harnez", "quota_1.state")
 	if res.StateFile != expectedStateFile {
 		t.Errorf("state file = %q, want %q", res.StateFile, expectedStateFile)
+	}
+}
+
+func TestResolveStateFile_IgnoresJunkGitAncestor(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0755); err != nil {
+		t.Fatalf("mkdir junk .git: %v", err)
+	}
+	start := filepath.Join(root, "nested")
+	if err := os.Mkdir(start, 0755); err != nil {
+		t.Fatalf("mkdir start: %v", err)
+	}
+
+	stateFile, resolvedRoot, err := ResolveStateFile(start)
+	if err != nil {
+		t.Fatalf("resolve state file: %v", err)
+	}
+	wantStateFile := filepath.Join(start, ".harnez", "quota_1.state")
+	if stateFile != wantStateFile || resolvedRoot != start {
+		t.Fatalf("resolved state = %q, root = %q; want %q, %q", stateFile, resolvedRoot, wantStateFile, start)
+	}
+}
+
+func TestResolveStateFile_WorktreeGitFileUsesHarnezRoot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".git"), []byte("gitdir: /tmp/real-worktree/.git\n"), 0644); err != nil {
+		t.Fatalf("write .git file: %v", err)
+	}
+	start := filepath.Join(root, "nested")
+	if err := os.Mkdir(start, 0755); err != nil {
+		t.Fatalf("mkdir start: %v", err)
+	}
+
+	stateFile, resolvedRoot, err := ResolveStateFile(start)
+	if err != nil {
+		t.Fatalf("resolve state file: %v", err)
+	}
+	wantStateFile := filepath.Join(root, ".harnez", "quota_1.state")
+	if stateFile != wantStateFile || resolvedRoot != root {
+		t.Fatalf("resolved state = %q, root = %q; want %q, %q", stateFile, resolvedRoot, wantStateFile, root)
 	}
 }
 

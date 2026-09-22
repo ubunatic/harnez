@@ -34,7 +34,7 @@ type Result struct {
 }
 
 // ResolveStateFile returns the path to the Quota-1 state file and root directory.
-// If .git is found as a directory in dir or any ancestor, it returns .git/harnez/quota_1.state.
+// If .git is found as a repository directory in dir or any ancestor, it returns .git/harnez/quota_1.state.
 // Otherwise, it returns .harnez/quota_1.state in dir.
 func ResolveStateFile(dir string) (stateFile string, root string, err error) {
 	if dir == "" {
@@ -50,10 +50,14 @@ func ResolveStateFile(dir string) (stateFile string, root string, err error) {
 		gitPath := filepath.Join(cur, ".git")
 		if fi, err := os.Stat(gitPath); err == nil {
 			if fi.IsDir() {
-				return filepath.Join(gitPath, "harnez", "quota_1.state"), cur, nil
+				if _, err := os.Stat(filepath.Join(gitPath, "HEAD")); err == nil {
+					return filepath.Join(gitPath, "harnez", "quota_1.state"), cur, nil
+				}
+				// Ignore directories that only happen to be named .git.
+			} else {
+				// In git worktrees or submodules, .git is a file. Use .harnez in the worktree root.
+				return filepath.Join(cur, ".harnez", "quota_1.state"), cur, nil
 			}
-			// In git worktrees or submodules, .git is a file. Use .harnez in the worktree root.
-			return filepath.Join(cur, ".harnez", "quota_1.state"), cur, nil
 		}
 		parent := filepath.Dir(cur)
 		if parent == cur {
