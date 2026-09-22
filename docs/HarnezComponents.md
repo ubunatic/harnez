@@ -355,11 +355,10 @@ files and command lines, which is what makes B and C possible later:
 
 "Agents in isolation with direct token cost tracking" (490 use case 3): agent sessions
 already keep token counters in their own records (`subagent.Session`), so agents-only
-works without the telemetry store. When both components are enabled, telemetry imports
-agent session records; agents do not write into the store. Issue 446 currently plans the
-opposite (agents persisting reported cost into the telemetry database); resolve that
-before implementing either. This keeps the dependency
-one-way (telemetry reads agents' contract), and agents stay free of sqlite.
+works without the telemetry store. Token capture follows the shared-package decision in
+§8.9: capture and schemas are shared (`spec/`), storage is per component, and a component
+auto opts in to an active peer (e.g. agents hand records to telemetry) and falls back to
+its own state otherwise. Agents stay free of sqlite either way.
 
 ### 8.7 Initialization order
 
@@ -392,18 +391,55 @@ preset boots independently, and presets compose by union.
 - `usage` drops out of the component list when it moves to loom; a saved selection that
   names it is accepted with a deprecation note for one release.
 
-### 8.9 Open questions
+### 8.9 Decisions (formerly open questions)
 
-- **Sprint skills and `agents`.** `sprint`, `lean-sprint`, and `reverse-sprint` name
-  `harnez agent start`, but repos can run them with `subagent_mode: native`. Should they
-  declare `requires: [agents]` (removed in docs-only) or stay unconditional and rely on the
-  native fallback text?
-- **Project-level selection.** `init` writes managed AGENTS.md blocks that name
-  `harnez find`, `harnez read`, and the rate protocol. Should `init` honour a selection
-  too? Per `docs/CLIDesign.md`, that would be a separate project-local setting, not the
-  global one.
-- **Telemetry import of agent sessions.** It does not exist yet and is not required for
-  the prototype.
+**Sprint skills and `agents`: dispatch mode, not `requires:`.** Sprint skills
+(`sprint`, `lean-sprint`, `reverse-sprint`) stay installed with `skills` and do not declare
+`requires: [agents]`. Which dispatcher they use is an opt-in dispatch mode, extending
+today's `subagent_mode: harnez|native` (`internal/agentpolicy`) with a third value:
+
+| Mode | Dispatch |
+|---|---|
+| `native` | the harness's own subagents only |
+| `harnez` | every subagent through `harnez agent` |
+| `mixed` | native for the host's own vendor (Claude spawns Claude natively), `harnez agent` for other vendors (Claude spawns Codex through harnez) |
+
+The component selection bounds the mode: with `agents` disabled, the effective mode is
+`native` whatever the policy says, so no skill tells agents to run a command that is not
+installed. Skill text reads the effective mode instead of hard-coding `harnez agent start`.
+
+**Project-level selection: yes, through `init`, focused on docs.** `apply` keeps the
+global component selection; `init` gets its own project-level selection (separate
+concern, per `docs/CLIDesign.md`) that is mostly agent-agnostic: docs profiles and doc
+subsets. Per-project steering of component use lives in topic files next to AGENTS.md:
+
+- `<topic>.local.md` — machine- or developer-local overrides, never committed (the
+  `AGENTS.local.md` pattern: git-excluded by `init`).
+- `<topic>.harnez.md` — harnez-specific steering (dispatch mode, which components the
+  project expects), committed or not depending on the repo type.
+
+Whether these files are committed is a per-repo policy chosen at `init` time:
+
+| Repo type | `<topic>.harnez.md` | `<topic>.local.md` |
+|---|---|---|
+| solo | committed | excluded |
+| team | committed (shared expectations) | excluded |
+| public | excluded or kept out of the tree (contributors may not use harnez) | excluded |
+| custom | explicit per-file choice | excluded |
+
+The separation rule: AGENTS.md and committed docs stay agent- and tool-agnostic; anything
+that names harnez components or harnez commands goes into `*.harnez.md`; anything personal
+goes into `*.local.md`.
+
+**Token capture (resolves the 446 conflict): shared capture package, component-owned
+storage.** Any component may capture token and cost data it needs. A shared Go package
+provides capture and parsing with a stable API, and `spec/` defines the record schemas.
+Each component decides how to store and keep what it captures for its own use (agents in
+their session records, telemetry in `tool_catalog.sqlite`). Components detect whether a
+peer is active and use it automatically: when telemetry is enabled, agents also hand their
+records to it (auto opt-in); when it is not, agents keep their own state only (auto
+opt-out, fallback). This replaces the one-way "telemetry imports agent records" rule in
+§8.6 with a shared contract, and turns 446 into one consumer of the shared package.
 
 ### 8.10 MVP and verification
 

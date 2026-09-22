@@ -5,6 +5,7 @@
 **Severity**: Minor
 **Category**: Feature
 **Related**: `pkg/telemetry/`, `pkg/agent/`, `harnez usage`
+**Note**: capture moves to the shared package in 495; agents store in their own records and hand to telemetry only when it is active (`docs/HarnezComponents.md` §8.9).
 
 ---
 

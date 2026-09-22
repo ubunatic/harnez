@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
-**Related**: 490 (design, MVP in `internal/components`), 489, 492, `docs/HarnezComponents.md` §8
+**Related**: 490 (design, MVP in `internal/components`), 489, 492, 493, 494, 495, `docs/HarnezComponents.md` §8
 
 ## /goal
 
@@ -42,15 +42,12 @@ limits. That leaves gaps listed in `docs/HarnezComponents.md` §8.10:
   then delete the MVP package and `scripts/canary-components` (or turn the canary into
   `harnez apply --components … --plan`).
 
-Open questions to settle first (§8.9):
-
-1. Do `sprint`, `lean-sprint`, `reverse-sprint` get `requires: [agents]`, or stay
-   unconditional and rely on `subagent_mode: native`?
-2. Does `init` get a separate project-local selection (per `docs/CLIDesign.md`)?
+Decisions (§8.9): sprint skills do not get `requires: [agents]`; dispatch is an opt-in
+mode (493), and a disabled `agents` component clamps the effective mode to `native`.
+Project-level selection belongs to `init` (494), not this ticket.
 
 ## 3. Implementation & Verification Plan
 
-- [ ] Settle the open questions
 - [ ] Config keys, flag, shared resolution
 - [ ] Single-write settings removal; requires-driven skill removal
 - [ ] Selection-aware `DiffAll`/status, including Codex/AGY
