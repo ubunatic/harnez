@@ -1,6 +1,6 @@
 # 447 — Use B and hash as matrix color symbols
 
-**Status**: Open
+**Status**: Blocked — Dot8 experiment on hold; see 444
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Architecture
@@ -30,3 +30,12 @@ Make `B` and `#` valid matrix symbols and make `B` the canonical symbol written 
 - `B` and `#` produce identical current PNG pixels and use the theme-dependent default text color.
 - Serialization writes `B` for default lit pixels and preserves spaces for unlit pixels.
 - Existing glyph specs and tests remain compatible; add focused parser/serializer/render tests.
+
+## On hold (2026-09-22)
+
+Parked with the rest of the Dot8 chain: this glyph-matrix work only matters if Dot8
+cards stay in play, and the token benchmark showed braille characters split under the
+tokenizer badly enough that Dot8 must not be the primary input format (see
+`docs/studies/2026-09-20-dot8-braille-vs-markdown-and-multimodal-context-card-token-benchmarks.md`).
+It also depends on 444's renderer-pitch fix landing first. Resume once 444 lands and a
+clean 3x4 readability canary passes 3/3 on at least two agents.
