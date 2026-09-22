@@ -11,6 +11,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [CLIDesign.md](CLIDesign.md) | apply vs init separation: scope, rationale, footgun avoided, design evolution (consult before modifying CLI command flags) |
 | [CodexSettings.md](CodexSettings.md) | Codex config ownership, spec-driven debloat, status/revert, and isolation limits (consult before changing Codex settings management) |
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent (consult when changing command pipelines) |
+| [HarnezComponents.md](HarnezComponents.md) | Component coupling analysis: subsystem map, package and runtime-contract coupling, use-case coverage, proposed separation boundaries and migration notes (consult before splitting harnez into separate tools) |
 | [HarnezAgentArchitecture.md](HarnezAgentArchitecture.md) | `harnez agent`: command forms, prompt assembly, session attribution, roles, stream output protocol, compaction, dispatch policy (consult before changing agent dispatch or its output) |
 | [OrchestratedAgentFlow.md](OrchestratedAgentFlow.md) | Orchestrator + leaf developer sprint flow: enforced roles, per-ticket loop, review checklist, pitfalls found, how to find out what agents ran (consult before an orchestrated run or when an agent misuses `harnez agent`) |
 | [CodexEvents.md](CodexEvents.md) | Codex event shapes used by the analytics adapter (consult when changing Codex telemetry parsing) |

@@ -43,10 +43,26 @@ Explore the codebase to:
 
 ## 3. Implementation & Verification Plan
 
-- [ ] Read existing architecture docs (`docs/`, `docs/lang/`, internal subsystem boundaries)
-- [ ] Grep/explore codebase for cross-subsystem imports and data flow
-- [ ] Draft component dependency matrix (which subsystems call which)
-- [ ] Identify integration points (CLI flags, config files, environment variables)
-- [ ] Write findings report in `docs/HarnezComponents.md`
-- [ ] (No code changes in this ticket; findings-only)
-- [ ] Commit: `docs(issues): close 489, harnez component separation analysis`
+- [x] Read existing architecture docs (`docs/`, `docs/lang/`, internal subsystem boundaries)
+- [x] Grep/explore codebase for cross-subsystem imports and data flow
+- [x] Draft component dependency matrix (which subsystems call which)
+- [x] Identify integration points (CLI flags, config files, environment variables)
+- [x] Write findings report in `docs/HarnezComponents.md`
+- [x] (No code changes in this ticket; findings-only)
+- [x] Commit: `docs(issues): close 489, harnez component separation analysis`
+
+## Findings
+
+Report: `docs/HarnezComponents.md`. Summary:
+
+- `internal/` coupling is low; the only cross-subsystem package edges are `claude → issues.Lint`,
+  `claude → usage.LoadLocalConfig`, `subagent → readcard`, and shared `harnez.DefaultFS` spec files.
+- Real coupling sits in `cmd/harnez` (single `main` package) and runtime contracts: hook command
+  strings written by `apply`, skill text naming other components' CLIs, the shared
+  `~/.harnez/tool_catalog.sqlite` store, and the single `config.yaml`.
+- The proposed four-way split omits two large subsystems: the usage/quota monitor and the issue tracker.
+- Extraction order by cost: agents, issue tracker, usage monitor, telemetry. Init stays with core
+  (it shares apply's config and doc machinery).
+- Telemetry is effectively the "hooks" tool: distill, quota1, and read discipline must move with it
+  because each hook is a single composed process.
+- Lowest-risk path: git-style `harnez <cmd>` dispatcher plus per-component binaries from the same module.
