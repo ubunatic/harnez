@@ -58,3 +58,15 @@ empty and harnez resumes with its own session UUID, which Claude never saw
 `session_id` into `TurnResult.SessionID` (as agy/codex do). The transcript is
 stored under the child's cwd project dir, so resume must also run in the
 same `-d`.
+
+## Handoff 2026-09-24 (519 sprint)
+
+flash37 (agy) planned the fix, then hit "Individual quota reached … Resets in 90h" on
+resume; nothing was written. Moved to `codex:luna`. Fix, per the finding above (do not
+strip environment variables, the canary refuted that):
+
+- `parseClaude` reads `session_id` into `TurnResult.SessionID`.
+- `ClaudeDriver` gets a `Dir`, set in `agentDriver`, so resume runs in the start `-d`.
+- A non-zero exit includes the child's stderr (`exec.ExitError.Stderr`).
+- `Resume` passes `--model` and `--dangerously-skip-permissions`, like `Run`.
+- Tests for each, then an end-to-end `claude:haiku` start + resume from a Claude Code shell.
