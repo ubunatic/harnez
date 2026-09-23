@@ -80,3 +80,12 @@ Scope: read the stores where they live today. Moving stores into one home is 515
 
 - M1–M4 delivered, `make test-q1` green except known 509, `docs/Telemetry.md` documents
   the command and the measured vs fitted distinction.
+  - **M4 pre-work delivered (a860bf0)**: new input = input − cached, rate on any session,
+    records survive `agent delete`, host model from rollouts.
+  - **M4 proof (host, 2026-09-24)**: the pipeline works end to end. Rows `measured`:
+    luna:med 65.2k new → 0.0% (expected ≈ 0.4), haiku 2.2k new + 60k cached → 1.0%.
+    Ratings stored (proofluna 2/5, proofhaiku 3/5). The band check is **not** conclusive:
+    provider quota is whole percent, so a single short turn reads 0 or 1 point, and the
+    haiku reading shares the Claude Pro window with the Opus host session. Per-model
+    drain per 100k tokens needs sums over many turns; the per-model totals should show
+    summed drain and `points / 100k new` once enough turns exist (docs item below).
