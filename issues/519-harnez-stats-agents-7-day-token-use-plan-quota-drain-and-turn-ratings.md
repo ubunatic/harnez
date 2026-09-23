@@ -43,7 +43,22 @@ Scope: read the stores where they live today. Moving stores into one home is 515
       than ~60 s. The report marks a turn `unreliable` when a reading's cache age exceeds
       that.
     - Check that `runResume` records the same before/after pair and increments `Turn`.
+  - **M2 delivered (67c80f4)**: `harnez stats --agents --days N [--json]`, before-readings
+    forced fresh, resume increments `Turn`. The resume test was fixed after the single
+    test run and is still unverified.
 - **M3 (turn rating)**: `harnez agent rate` stores a rating per turn; shown in M2's report.
+  - **Pre-Work / Required Refinements** (from the M2 output review):
+    - The QUALITY column holds the drain source (`measured`/`fitted`/`unavailable`). Move
+      that to its own `SRC` column; QUALITY is for M3 ratings.
+    - The dev519 terra row shows TURNS 1 and tokens `—`, although the driver printed
+      per-turn tokens (e.g. "368.8k new, 60.3k out"). Store the driver's per-turn tokens
+      on every start/resume turn and sum them.
+    - Host rows have an empty MODEL; fill it from hook/rollout data where available.
+    - One fitted host row shows 43% drain. Fitting must not give a window's full drain to
+      every overlapping session: split it (e.g. by new tokens) or mark it `shared`.
+    - 718 rows is unreadable: default to per-model totals plus the newest 20 sessions;
+      `--all` lists every session.
+    - Verify the resume test fixed after M2's test run.
 - **M4 (proof)**: one short luna and one short haiku turn; reported drain per 100k new
   tokens is in the band of the hand measurement (luna ≈ 0.65, haiku ≈ 5 points).
 
