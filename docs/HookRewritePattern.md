@@ -9,7 +9,7 @@ execution themselves. Established by `harnez distill hook`; reused by the planne
 
 A Claude Code `PreToolUse` hook is not a process wrapper. Claude Code invokes the hook's
 `command:` binary and feeds it JSON on stdin describing the tool call about to run
-(`{tool_name, tool_input: {command}}`). The hook does not get to spawn or supervise that
+(`{tool_name, tool_input: {command, ...}}`). The hook does not get to spawn or supervise that
 command — it can only respond with a JSON envelope telling Claude Code to substitute a
 different command, which Claude Code's own Bash tool then executes:
 
@@ -107,9 +107,19 @@ in managed agent environments / PATH (`~/.claude/bin/⚙`, `~/go/bin/⚙`, etc.)
 
 ### 1. Claude Code (`~/.claude/settings.json`)
 - **Protocol**: `PreToolUse` on matcher `Bash`.
-- **Payload**: `{tool_name, tool_input: {command}}`.
-- **Response**: `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": {"command": "harnez exec --tool <tool> -- bash -c '<escaped>'"}}}`.
+- **Payload**: `{tool_name, tool_input: {command, ...}}`.
+- **Response**: preserves all `tool_input` fields and replaces only `command`.
+  Claude Bash's native `timeout` is forwarded to `harnez exec --timeout`;
+  `run_in_background: true` removes the implicit timeout.
 - **Config**: Managed via `harnez apply`.
+
+`harnez exec` timeout precedence is `HTO=<duration|0>` (alias:
+`HARNEZ_TIMEOUT=<duration|0>`) on the command,
+Claude Bash's native timeout/background intent, repo `exec.timeout`, then the 60s
+default. `HTO=0` removes the limit; a duration such as `HTO=10m` sets it. The prefix is
+recognized in direct wrapper environments and at the start of
+quoted `bash -c` scripts, including compound and piped commands. Timeout-kill output
+names the opt-out.
 
 ### 2. Codex (`~/.codex/config.toml`)
 - **Protocol**: `PreToolUse` on matcher `Bash`.

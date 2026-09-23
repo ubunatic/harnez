@@ -53,6 +53,10 @@ import (
 // mercy of a slow or hung DB write.
 const defaultExecInsertTimeout = 200 * time.Millisecond
 const defaultExecTimeout = 60 * time.Second
+const execTimeoutEnv = "HARNEZ_TIMEOUT"
+const execTimeoutShortEnv = "HTO"
+
+var execTimeoutPrefixRE = regexp.MustCompile(`^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:` + execTimeoutEnv + `|` + execTimeoutShortEnv + `)=(\S+)\s+`)
 
 // expectFailureEnv is issue 226's direction-2 convention: an agent that
 // runs a shell command it deliberately expects to fail (probing whether a
@@ -164,10 +168,10 @@ The telemetry write is best-effort and bounded: it never delays the
 wrapped command's own execution, and gives up waiting on a slow/hung DB
 write after a short bound rather than hanging the caller.
 
-Runtime precedence is --timeout, then repo config exec.timeout, then the
-built-in 60s default. The implicit default is exempt for 'harnez agent
-start' and 'harnez agent resume', since those turns can legitimately run
-longer; either explicit setting restores a bound.
+Timeout precedence is an explicit HARNEZ_TIMEOUT=<duration|0> or HTO=<duration|0> prefix, then
+the Bash tool's native timeout/background intent, then repo config
+exec.timeout, then the built-in 60s default. HTO=0 disables the limit;
+for example, HTO=10m make build. HARNEZ_TIMEOUT remains supported.
 
 See 'harnez exec hook' for the separate PreToolUse rewrite stage that
 points an agent's Bash tool calls at this command.`,
@@ -202,7 +206,7 @@ points an agent's Bash tool calls at this command.`,
 	cmd.Flags().StringVar(&distillFlag, "distill", "", "distillation filter mode (auto, gotest, git, raw)")
 	cmd.Flags().BoolVar(&expectFailureFlag, "expect-failure", false, "record telemetry row with call_type=shell-expected")
 	cmd.Flags().BoolVar(&quota1Flag, "quota-1", false, "enforce Quota-1 single-test boundary (require code edits between runs)")
-	cmd.Flags().DurationVar(&timeoutFlag, "timeout", 0, "maximum command runtime (default: 60s or repo config exec.timeout)")
+	cmd.Flags().DurationVar(&timeoutFlag, "timeout", 0, "maximum command runtime (default: HTO/HARNEZ_TIMEOUT, tool intent, repo config, then 60s)")
 	cmd.Flags().Lookup("distill").NoOptDefVal = "auto"
 
 	cmd.AddCommand(newExecHookCmd())
@@ -417,7 +421,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	timedOut := ctx.Err() == context.DeadlineExceeded
 	if timedOut {
 		_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)
-		fmt.Fprintf(errOut, "harnez exec: timeout kill after %s\n", timeout)
+		fmt.Fprintf(errOut, "harnez exec: timeout kill after %s; rerun with HTO=0 to lift\n", timeout)
 	}
 	duration := time.Since(start)
 
@@ -461,6 +465,28 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 }
 
 func resolveExecTimeout(opts execOptions, args []string) time.Duration {
+	if value := explicitTimeoutPrefix(args); value != "" {
+		if value == "0" {
+			return 0
+		}
+		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	getenv := opts.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	for _, name := range []string{execTimeoutShortEnv, execTimeoutEnv} {
+		if value := getenv(name); value != "" {
+			if value == "0" {
+				return 0
+			}
+			if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+				return parsed
+			}
+		}
+	}
 	if opts.Timeout > 0 {
 		return opts.Timeout
 	}
@@ -474,25 +500,16 @@ func resolveExecTimeout(opts execOptions, args []string) time.Duration {
 			return parsed
 		}
 	}
-	if isAgentLongRunningCommand(args) {
-		return 0
-	}
 	return defaultExecTimeout
 }
 
-func isAgentLongRunningCommand(args []string) bool {
-	if len(args) < 3 || !isHarnezInvocation(args[0]) || args[1] != "agent" {
-		return false
+func explicitTimeoutPrefix(args []string) string {
+	for _, arg := range args {
+		if match := execTimeoutPrefixRE.FindStringSubmatch(arg); len(match) == 2 {
+			return match[1]
+		}
 	}
-	return args[2] == "start" || args[2] == "resume"
-}
-
-// isHarnezInvocation recognizes the executable names used by the normal
-// binary and its multicall gear alias. Keep this table in sync with main's
-// argv[0] dispatch so wrapped agent turns receive the same timeout policy.
-func isHarnezInvocation(arg0 string) bool {
-	base := filepath.Base(arg0)
-	return base == "harnez" || isGearInvocation(base)
+	return ""
 }
 
 // exitCodeFromError extracts a shell-convention exit code from the result
@@ -754,7 +771,10 @@ func runExecHook(in io.Reader, out io.Writer) error {
 	}
 	debugLog("exec hook: invoked, payload=%s", string(raw))
 
-	var payload hookInput
+	var payload struct {
+		ToolName  string                     `json:"tool_name"`
+		ToolInput map[string]json.RawMessage `json:"tool_input"`
+	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return fmt.Errorf("decode hook payload: %w", err)
 	}
@@ -762,7 +782,14 @@ func runExecHook(in io.Reader, out io.Writer) error {
 		debugLog("exec hook: skip, tool_name=%q != Bash", payload.ToolName)
 		return nil
 	}
-	command := payload.ToolInput.Command
+	var command string
+	commandRaw, hasCommand := payload.ToolInput["command"]
+	if !hasCommand || len(commandRaw) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(commandRaw, &command); err != nil {
+		return fmt.Errorf("decode hook command: %w", err)
+	}
 	if command == "" || alreadyRoutedThroughExec(command) {
 		debugLog("exec hook: skip, command empty or already routed: %q", command)
 		return nil
@@ -774,14 +801,44 @@ func runExecHook(in io.Reader, out io.Writer) error {
 		distillFlag = " --distill"
 	}
 
+	wrapperFlags := ""
+	prefix := ""
+	if timeoutRaw := payload.ToolInput["timeout"]; len(timeoutRaw) > 0 {
+		var milliseconds int64
+		if err := json.Unmarshal(timeoutRaw, &milliseconds); err == nil && milliseconds > 0 {
+			wrapperFlags = fmt.Sprintf("--timeout=%s", time.Duration(milliseconds)*time.Millisecond)
+		}
+	}
+	if backgroundRaw := payload.ToolInput["run_in_background"]; len(backgroundRaw) > 0 {
+		var background bool
+		if json.Unmarshal(backgroundRaw, &background) == nil && background && wrapperFlags == "" {
+			prefix = "HTO=0 "
+		}
+	}
 	rewritten := formatGearRewrite(effective, distillFlag)
+	if wrapperFlags != "" {
+		if before, after, ok := strings.Cut(rewritten, " -- "); ok {
+			rewritten = "⚙ " + wrapperFlags + strings.TrimPrefix(before, "⚙") + " -- " + after
+		} else {
+			rewritten = "⚙ " + wrapperFlags + " -- " + strings.TrimPrefix(rewritten, "⚙ ")
+		}
+	}
+	rewritten = prefix + rewritten
 	debugLog("exec hook: rewriting %q -> %q", command, rewritten)
-	return json.NewEncoder(out).Encode(hookOutput{
-		HookSpecificOutput: hookSpecificOutput{
-			HookEventName: "PreToolUse",
-			UpdatedInput:  map[string]string{"command": rewritten},
-		},
-	})
+	updated := make(map[string]json.RawMessage, len(payload.ToolInput))
+	for key, value := range payload.ToolInput {
+		updated[key] = value
+	}
+	updated["command"], _ = json.Marshal(rewritten)
+	return json.NewEncoder(out).Encode(struct {
+		HookSpecificOutput struct {
+			HookEventName string                     `json:"hookEventName"`
+			UpdatedInput  map[string]json.RawMessage `json:"updatedInput"`
+		} `json:"hookSpecificOutput"`
+	}{HookSpecificOutput: struct {
+		HookEventName string                     `json:"hookEventName"`
+		UpdatedInput  map[string]json.RawMessage `json:"updatedInput"`
+	}{HookEventName: "PreToolUse", UpdatedInput: updated}})
 }
 
 func isDistillAutopipeEnabled() bool {

@@ -301,8 +301,8 @@ func TestRunExecWrapper_TimeoutKillsAndRecordsDistinctTelemetry(t *testing.T) {
 	if code == 0 {
 		t.Fatal("timeout returned success")
 	}
-	if !strings.Contains(errOut.String(), "timeout kill") {
-		t.Fatalf("stderr = %q, want timeout kill", errOut.String())
+	if !strings.Contains(errOut.String(), "timeout kill") || !strings.Contains(errOut.String(), "HTO=0") {
+		t.Fatalf("stderr = %q, want timeout kill and HTO=0 guidance", errOut.String())
 	}
 	db, err := telemetry.Open(opts.DBPath)
 	if err != nil {
@@ -362,7 +362,7 @@ func TestRunExecWrapper_RepoSettingAndFlagPrecedence(t *testing.T) {
 	}
 }
 
-func TestResolveExecTimeout_DefaultFlagAndAgentExemption(t *testing.T) {
+func TestResolveExecTimeout_DefaultFlagAndExplicitPrefix(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing.yaml")
 	if got := resolveExecTimeout(execOptions{ConfigPath: missing}, []string{"sleep", "1"}); got != defaultExecTimeout {
 		t.Fatalf("default timeout = %v, want %v", got, defaultExecTimeout)
@@ -370,23 +370,77 @@ func TestResolveExecTimeout_DefaultFlagAndAgentExemption(t *testing.T) {
 	if got := resolveExecTimeout(execOptions{Timeout: 25 * time.Millisecond}, []string{"sleep", "1"}); got != 25*time.Millisecond {
 		t.Fatalf("flag timeout = %v", got)
 	}
-	for _, tc := range []struct {
-		name  string
-		argv0 string
+	cases := []struct {
+		name   string
+		args   []string
+		envKey string
+		env    string
+		want   time.Duration
 	}{
-		{"binary", "harnez"},
-		{"gear alias", "⚙"},
-		{"gear alias with variation selector", "⚙️"},
-	} {
-		for _, subcommand := range []string{"start", "resume"} {
-			args := []string{tc.argv0, "agent", subcommand}
-			if got := resolveExecTimeout(execOptions{ConfigPath: missing}, args); got != 0 {
-				t.Fatalf("%s agent %s timeout = %v, want disabled implicit default", tc.name, subcommand, got)
+		{"wrapped opt-out", []string{"bash", "-c", "HARNEZ_TIMEOUT=0 harnez agent start"}, "", "", 0},
+		{"wrapped duration", []string{"bash", "-c", "HARNEZ_TIMEOUT=10m harnez agent resume"}, "", "", 10 * time.Minute},
+		{"short wrapped duration", []string{"bash", "-c", "HTO=3m make build && make test"}, "", "", 3 * time.Minute},
+		{"compound pipeline prefix", []string{"bash", "-c", "HARNEZ_TIMEOUT=5m make build && make test | cat"}, "", "", 5 * time.Minute},
+		{"environment opt-out", []string{"sleep", "1"}, execTimeoutEnv, "0", 0},
+		{"short environment opt-out", []string{"sleep", "1"}, execTimeoutShortEnv, "0", 0},
+	}
+	for _, tc := range cases {
+		if got := resolveExecTimeout(execOptions{ConfigPath: missing, Getenv: func(key string) string {
+			if key == tc.envKey {
+				return tc.env
 			}
-			if got := resolveExecTimeout(execOptions{Timeout: time.Second, ConfigPath: missing}, args); got != time.Second {
-				t.Fatalf("%s agent %s explicit timeout = %v", tc.name, subcommand, got)
-			}
+			return ""
+		}}, tc.args); got != tc.want {
+			t.Errorf("%s timeout = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestRunExecHookPreservesInputAndForwardsNativeIntent(t *testing.T) {
+	t.Setenv(distillAutopipeEnv, "")
+	in := strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"sleep 5","timeout":2000,"run_in_background":false,"custom":"keep"}}`)
+	var out bytes.Buffer
+	if err := runExecHook(in, &out); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		HookSpecificOutput struct {
+			UpdatedInput map[string]json.RawMessage `json:"updatedInput"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	var command string
+	if err := json.Unmarshal(got.HookSpecificOutput.UpdatedInput["command"], &command); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(command, "⚙ --timeout=2s -- ") {
+		t.Errorf("rewritten command = %q", command)
+	}
+	if string(got.HookSpecificOutput.UpdatedInput["timeout"]) != "2000" || string(got.HookSpecificOutput.UpdatedInput["custom"]) != `"keep"` {
+		t.Errorf("updatedInput did not preserve native/unknown fields: %s", out.String())
+	}
+	in = strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"sleep 5","run_in_background":true}}`)
+	out.Reset()
+	if err := runExecHook(in, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `HTO=0 ⚙ sleep 5`) {
+		t.Errorf("background rewrite = %s", out.String())
+	}
+	in = strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"sleep 5","timeout":2000,"run_in_background":true}}`)
+	out.Reset()
+	if err := runExecHook(in, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "HTO=0") || !strings.Contains(out.String(), "--timeout=2s") {
+		t.Errorf("explicit native timeout/background rewrite = %s", out.String())
+	}
+	in = strings.NewReader(`{"tool_name":"Bash","tool_input":{"timeout":2000}}`)
+	out.Reset()
+	if err := runExecHook(in, &out); err != nil || out.Len() != 0 {
+		t.Errorf("missing command should be skipped: output=%s err=%v", out.String(), err)
 	}
 }
 

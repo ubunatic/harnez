@@ -445,6 +445,14 @@ skills:
         true exit code is still returned to you and stored in telemetry, only the
         failure-signal classification changes.
 
+      Commands run through `harnez exec` have a 60s default timeout. Set intent on the
+      command when it needs a different bound: `HTO=0 <command>` removes the limit,
+      and `HTO=10m <command>` sets one. The longer `HARNEZ_TIMEOUT` name also works.
+      Use it at the start of compound and piped `bash -c` commands as well. Timeout
+      precedence is explicit prefix, the Bash tool's native timeout/background setting,
+      repo `exec.timeout`, then 60s.
+      A timeout message shows the `HTO=0` opt-out.
+
       Why this, and why now (not at session end): the score is a judgment only the acting
       agent can make in the moment — a mechanized PostToolUse hook can log that a call
       happened, but not whether it helped. Rating right after the call, while the outcome is
