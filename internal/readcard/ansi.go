@@ -9,6 +9,9 @@ import (
 type ansiState struct{ fg, bg *color.RGBA }
 
 func stripANSIEscapes(s string) string {
+	if !strings.Contains(s, "\x1b") {
+		return s
+	}
 	var b strings.Builder
 	for i := 0; i < len(s); {
 		if s[i] == 0x1b && i+1 < len(s) && s[i+1] == '[' {
@@ -30,6 +33,9 @@ func stripANSIEscapes(s string) string {
 // parseANSILine consumes SGR controls and preserves their colors on text spans.
 // Incomplete or unsupported controls are discarded so they cannot corrupt layout.
 func parseANSILine(line string, state *ansiState) []Token {
+	if !strings.Contains(line, "\x1b") {
+		return []Token{{Type: TokenText, Text: line, FG: state.fg, BG: state.bg}}
+	}
 	var out []Token
 	start := 0
 	for i := 0; i < len(line); {
