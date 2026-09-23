@@ -512,4 +512,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 511 | [511-make-test-q1-keeps-the-full-test-log-and-prints-its-path-on-failure.md](511-make-test-q1-keeps-the-full-test-log-and-prints-its-path-on-failure.md) | make test-q1 keeps the full test log and prints its path on failure | Open |
 | 512 | [512-check-that-docs-list-only-model-aliases-defined-in-spec-agent-yaml.md](512-check-that-docs-list-only-model-aliases-defined-in-spec-agent-yaml.md) | Check that docs list only model aliases defined in spec/agent.yaml | Open |
 | 513 | [513-real-terminal-tty-run-before-a-cli-feature-is-called-done.md](513-real-terminal-tty-run-before-a-cli-feature-is-called-done.md) | Real-terminal (TTY) run before a CLI feature is called done | Open |
-| 514 | [514-repeatable-model-research-plan-in-docs.md](514-repeatable-model-research-plan-in-docs.md) | Repeatable model research plan in docs/ | Open |
+| 514 | [514-repeatable-model-research-plan-in-docs.md](514-repeatable-model-research-plan-in-docs.md) | Repeatable model research plan in docs/ | Closed — docs/ModelResearch.md added and linked; dry run of steps 1-2 pending |

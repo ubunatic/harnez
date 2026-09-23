@@ -1,6 +1,6 @@
 # 514 — Repeatable model research plan in docs/
 
-**Status**: Open
+**Status**: Closed — docs/ModelResearch.md added and linked; dry run of steps 1-2 pending
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Documentation
