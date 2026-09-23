@@ -36,15 +36,26 @@ type Session struct {
 	TokenTotalsKnown  bool   `json:"token_totals_known,omitempty"`
 	// TokensSinceCompact counts uncached tokens since the last compaction and
 	// drives ShouldCompact; TokensCumulative stays a lifetime telemetry total.
-	TokensSinceCompact int       `json:"tokens_since_compact,omitempty"`
-	TokensTurn         int       `json:"tokens_turn"`
-	CachedTokens       int       `json:"cached_tokens"`
-	CreatedAt          time.Time `json:"created_at"`
-	LastActiveAt       time.Time `json:"last_active_at"`
-	Role               string    `json:"role,omitempty"`
-	LastError          string    `json:"last_error,omitempty"`
-	ResumeFailures     int       `json:"resume_failures,omitempty"`
-	Turn               int       `json:"turn,omitempty"`
+	TokensSinceCompact int          `json:"tokens_since_compact,omitempty"`
+	TokensTurn         int          `json:"tokens_turn"`
+	CachedTokens       int          `json:"cached_tokens"`
+	CreatedAt          time.Time    `json:"created_at"`
+	LastActiveAt       time.Time    `json:"last_active_at"`
+	Role               string       `json:"role,omitempty"`
+	LastError          string       `json:"last_error,omitempty"`
+	ResumeFailures     int          `json:"resume_failures,omitempty"`
+	Turn               int          `json:"turn,omitempty"`
+	TurnRecords        []TurnRecord `json:"turn_records,omitempty"`
+}
+
+// TurnRecord stores the usage and optional human rating for one provider turn.
+type TurnRecord struct {
+	Turn              int    `json:"turn"`
+	NewInputTokens    int    `json:"new_input_tokens"`
+	CachedInputTokens int    `json:"cached_input_tokens"`
+	OutputTokens      int    `json:"output_tokens"`
+	Rating            *int   `json:"rating,omitempty"`
+	RatingReason      string `json:"rating_reason,omitempty"`
 }
 
 // ProviderID returns the provider-side identifier used for lifecycle commands.

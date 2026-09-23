@@ -23,13 +23,16 @@ type agentStatsOptions struct {
 	HomeDir  string
 	DBPath   string
 	StoreDir string
+	All      bool
 }
 
 type agentStatsReport struct {
-	Days     int                `json:"days"`
-	Since    time.Time          `json:"since"`
-	Sessions []agentSessionRow  `json:"sessions"`
-	Models   []agentModelTotals `json:"models"`
+	Days            int                `json:"days"`
+	Since           time.Time          `json:"since"`
+	Sessions        []agentSessionRow  `json:"sessions"`
+	SessionsShown   int                `json:"sessions_shown"`
+	SessionsOmitted int                `json:"sessions_omitted"`
+	Models          []agentModelTotals `json:"models"`
 }
 
 type agentSessionRow struct {
@@ -47,19 +50,24 @@ type agentSessionRow struct {
 	QuotaDrainPercent *float64  `json:"quota_drain_percent,omitempty"`
 	QuotaSource       string    `json:"quota_source"`
 	Unreliable        bool      `json:"unreliable,omitempty"`
+	DrainShared       bool      `json:"drain_shared,omitempty"`
+	Rating            *float64  `json:"rating,omitempty"`
+	Ratings           int       `json:"ratings"`
 	StartedAt         time.Time `json:"started_at"`
 	LastActiveAt      time.Time `json:"last_active_at"`
 }
 
 type agentModelTotals struct {
-	Model                      string `json:"model"`
-	Sessions                   int    `json:"sessions"`
-	SessionsWithCompleteTokens int    `json:"sessions_with_complete_tokens"`
-	SessionsWithKnownTurns     int    `json:"sessions_with_known_turns"`
-	Turns                      int    `json:"turns"`
-	NewInputTokens             int64  `json:"new_input_tokens"`
-	CachedInputTokens          int64  `json:"cached_input_tokens"`
-	OutputTokens               int64  `json:"output_tokens"`
+	Model                      string   `json:"model"`
+	Sessions                   int      `json:"sessions"`
+	SessionsWithCompleteTokens int      `json:"sessions_with_complete_tokens"`
+	SessionsWithKnownTurns     int      `json:"sessions_with_known_turns"`
+	Turns                      int      `json:"turns"`
+	NewInputTokens             int64    `json:"new_input_tokens"`
+	CachedInputTokens          int64    `json:"cached_input_tokens"`
+	OutputTokens               int64    `json:"output_tokens"`
+	RatingAverage              *float64 `json:"rating_average,omitempty"`
+	Ratings                    int      `json:"ratings"`
 }
 
 type quotaTurnPair struct {
@@ -112,20 +120,79 @@ func runAgentStats(w io.Writer, opts agentStatsOptions) error {
 		}
 		known[s.ID] = true
 		row := agentSessionRow{SessionID: s.ID, Name: s.Name, Source: "harnez", Provider: s.Provider, Model: s.Provider + ":" + s.Model + ":" + s.Tier, Turns: s.Turn, TurnsKnown: s.Turn > 0, NewInputTokens: int64(s.InputTokensTotal), CachedInputTokens: int64(s.CachedTokensTotal), OutputTokens: int64(s.OutputTokensTotal), TokensComplete: s.TokenTotalsKnown, StartedAt: s.CreatedAt, LastActiveAt: s.LastActiveAt, QuotaSource: "measured"}
+		if len(s.TurnRecords) == s.Turn && len(s.TurnRecords) > 0 {
+			row.NewInputTokens, row.CachedInputTokens, row.OutputTokens = 0, 0, 0
+		}
+		if len(s.TurnRecords) > 0 {
+			var scoreTotal float64
+			for _, turn := range s.TurnRecords {
+				if len(s.TurnRecords) == s.Turn {
+					row.NewInputTokens += int64(turn.NewInputTokens)
+					row.CachedInputTokens += int64(turn.CachedInputTokens)
+					row.OutputTokens += int64(turn.OutputTokens)
+				}
+				if turn.Rating != nil {
+					scoreTotal += float64(*turn.Rating)
+					row.Ratings++
+				}
+			}
+			if row.Ratings > 0 {
+				avg := scoreTotal / float64(row.Ratings)
+				row.Rating = &avg
+			}
+		}
 		row.QuotaDrainPercent, row.Unreliable = measuredTurnDrain(s.ID, quotaEvents)
 		if row.QuotaDrainPercent == nil {
 			row.QuotaSource = "unavailable"
 		}
 		rows = append(rows, row)
 	}
-	rows = append(rows, hostSessionRows(calls, known, history)...)
+	hostRows := hostSessionRows(calls, known, history)
+	shareFittedDrain(hostRows)
+	rows = append(rows, hostRows...)
 	sort.Slice(rows, func(i, j int) bool { return rows[i].LastActiveAt.After(rows[j].LastActiveAt) })
 	models := modelTotals(rows)
-	report := agentStatsReport{Days: opts.Days, Since: since, Sessions: rows, Models: models}
+	shown := rows
+	if !opts.All && len(shown) > 20 {
+		shown = shown[:20]
+	}
+	report := agentStatsReport{Days: opts.Days, Since: since, Sessions: shown, SessionsShown: len(shown), SessionsOmitted: len(rows) - len(shown), Models: models}
 	if opts.JSON {
 		return json.NewEncoder(w).Encode(report)
 	}
 	return renderAgentStatsTable(w, report)
+}
+
+// shareFittedDrain prevents the same quota-history interval being attributed
+// in full to multiple overlapping host sessions from one provider.
+func shareFittedDrain(rows []agentSessionRow) {
+	for i := range rows {
+		if rows[i].QuotaDrainPercent == nil {
+			continue
+		}
+		weight, peers := 0.0, 0
+		for j := range rows {
+			if rows[j].Provider != rows[i].Provider || rows[j].SessionID == rows[i].SessionID || rows[j].StartedAt.After(rows[i].LastActiveAt) || rows[j].LastActiveAt.Before(rows[i].StartedAt) {
+				continue
+			}
+			peers++
+			w := float64(rows[j].NewInputTokens)
+			if w <= 0 {
+				w = 1
+			}
+			weight += w
+		}
+		if peers == 0 {
+			continue
+		}
+		self := float64(rows[i].NewInputTokens)
+		if self <= 0 {
+			self = 1
+		}
+		v := *rows[i].QuotaDrainPercent * self / (weight + self)
+		rows[i].QuotaDrainPercent = &v
+		rows[i].DrainShared = true
+	}
 }
 
 func readTurnQuotaEvents(path string) map[string]map[int]*quotaTurnPair {
@@ -341,9 +408,20 @@ func modelTotals(rows []agentSessionRow) []agentModelTotals {
 			t.CachedInputTokens += row.CachedInputTokens
 			t.OutputTokens += row.OutputTokens
 		}
+		if row.Rating != nil {
+			t.Ratings += row.Ratings
+			if t.RatingAverage == nil {
+				v := 0.0
+				t.RatingAverage = &v
+			}
+			*t.RatingAverage += *row.Rating * float64(row.Ratings)
+		}
 	}
 	out := make([]agentModelTotals, 0, len(byModel))
 	for _, t := range byModel {
+		if t.Ratings > 0 {
+			*t.RatingAverage /= float64(t.Ratings)
+		}
 		out = append(out, *t)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Model < out[j].Model })
@@ -353,13 +431,16 @@ func modelTotals(rows []agentSessionRow) []agentModelTotals {
 func renderAgentStatsTable(w io.Writer, report agentStatsReport) error {
 	fmt.Fprintf(w, "Agent sessions in last %d days (since %s)\n", report.Days, report.Since.Format("2006-01-02"))
 	tw := tabwriter.NewWriter(w, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(tw, "SESSION\tSOURCE\tPROVIDER\tMODEL\tTURNS\tNEW INPUT\tCACHED\tOUTPUT\t5H DRAIN\tQUALITY")
+	fmt.Fprintln(tw, "SESSION\tSOURCE\tPROVIDER\tMODEL\tTURNS\tNEW INPUT\tCACHED\tOUTPUT\t5H DRAIN\tSRC\tQUALITY")
 	for _, row := range report.Sessions {
 		drain := "—"
 		if row.QuotaDrainPercent != nil {
 			drain = fmt.Sprintf("%.1f%%", *row.QuotaDrainPercent)
 		}
-		quality := row.QuotaSource
+		quality := "—"
+		if row.Rating != nil {
+			quality = fmt.Sprintf("%.1f/5", *row.Rating)
+		}
 		if row.Unreliable {
 			quality += " (unreliable)"
 		}
@@ -370,12 +451,23 @@ func renderAgentStatsTable(w io.Writer, report agentStatsReport) error {
 		if !row.TokensComplete {
 			input, cached, output = "—", "—", "—"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", row.SessionID, row.Source, row.Provider, row.Model, turns, input, cached, output, drain, quality)
+		drainSource := row.QuotaSource
+		if row.DrainShared {
+			drainSource += "/shared"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", row.SessionID, row.Source, row.Provider, row.Model, turns, input, cached, output, drain, drainSource, quality)
+	}
+	if report.SessionsOmitted > 0 {
+		fmt.Fprintf(tw, "... %d older sessions omitted; pass --all to list every session.\n", report.SessionsOmitted)
 	}
 	fmt.Fprintln(tw, "\nPer-model totals:")
-	fmt.Fprintln(tw, "MODEL\tSESSIONS (TOKEN COMPLETE)\tTURNS (KNOWN)\tNEW INPUT\tCACHED\tOUTPUT")
+	fmt.Fprintln(tw, "MODEL\tSESSIONS (TOKEN COMPLETE)\tTURNS (KNOWN)\tNEW INPUT\tCACHED\tOUTPUT\tRATING")
 	for _, model := range report.Models {
-		fmt.Fprintf(tw, "%s\t%d/%d\t%d/%d\t%d\t%d\t%d\n", model.Model, model.SessionsWithCompleteTokens, model.Sessions, model.Turns, model.SessionsWithKnownTurns, model.NewInputTokens, model.CachedInputTokens, model.OutputTokens)
+		rating := "—"
+		if model.RatingAverage != nil {
+			rating = fmt.Sprintf("%.2f/5 (%d)", *model.RatingAverage, model.Ratings)
+		}
+		fmt.Fprintf(tw, "%s\t%d/%d\t%d/%d\t%d\t%d\t%d\t%s\n", model.Model, model.SessionsWithCompleteTokens, model.Sessions, model.Turns, model.SessionsWithKnownTurns, model.NewInputTokens, model.CachedInputTokens, model.OutputTokens, rating)
 	}
 	return tw.Flush()
 }

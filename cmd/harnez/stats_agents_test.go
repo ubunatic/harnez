@@ -38,7 +38,7 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(&subagent.Session{ID: "agent-1", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", HarnessType: "harnez", Status: "completed", CreatedAt: now.Add(-2 * time.Hour), LastActiveAt: now.Add(-time.Hour), Turn: 2, InputTokensTotal: 100, CachedTokensTotal: 40, OutputTokensTotal: 20, TokenTotalsKnown: true, TokensCumulative: 160}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "agent-1", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", HarnessType: "harnez", Status: "completed", CreatedAt: now.Add(-2 * time.Hour), LastActiveAt: now.Add(-time.Hour), Turn: 2, InputTokensTotal: 100, CachedTokensTotal: 40, OutputTokensTotal: 20, TokenTotalsKnown: true, TokensCumulative: 160, TurnRecords: []subagent.TurnRecord{{Turn: 1, NewInputTokens: 40, CachedInputTokens: 15, OutputTokens: 8, Rating: ptrScore(4)}, {Turn: 2, NewInputTokens: 60, CachedInputTokens: 25, OutputTokens: 12, Rating: ptrScore(2)}}}); err != nil {
 		t.Fatal(err)
 	}
 	for turn, bounds := range [][2]float64{{10, 12}, {12, 15}} {
@@ -84,12 +84,15 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 	if len(report.Models) != 1 || report.Models[0].Model != "codex:gpt-5.6-luna:low" || report.Models[0].Turns != 2 || report.Models[0].NewInputTokens != 100 {
 		t.Fatalf("model totals=%+v", report.Models)
 	}
+	if agent.Rating == nil || *agent.Rating != 3 || report.Models[0].RatingAverage == nil || *report.Models[0].RatingAverage != 3 || report.Models[0].Ratings != 2 {
+		t.Fatalf("rating aggregation row=%+v models=%+v", agent, report.Models)
+	}
 
 	var table bytes.Buffer
 	if err := runAgentStats(&table, agentStatsOptions{Days: 7, HomeDir: home, DBPath: dbPath}); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"agent-1", "host-1", "measured", "fitted", "gpt-5.6-luna"} {
+	for _, want := range []string{"agent-1", "host-1", "measured", "fitted", "gpt-5.6-luna", "SRC", "QUALITY", "3.0/5"} {
 		if !strings.Contains(table.String(), want) {
 			t.Errorf("table missing %q:\n%s", want, table.String())
 		}
@@ -97,3 +100,17 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 }
 
 func ptr64(v int64) *int64 { return &v }
+func ptrScore(v int) *int  { return &v }
+
+func TestShareFittedDrainApportionsOverlappingSessionsByTokens(t *testing.T) {
+	rows := []agentSessionRow{
+		{SessionID: "host-a", Provider: "codex", StartedAt: time.Unix(1, 0), LastActiveAt: time.Unix(3, 0), NewInputTokens: 30, QuotaDrainPercent: ptrFloat(12), QuotaSource: "fitted"},
+		{SessionID: "host-b", Provider: "codex", StartedAt: time.Unix(2, 0), LastActiveAt: time.Unix(4, 0), NewInputTokens: 10, QuotaDrainPercent: ptrFloat(8), QuotaSource: "fitted"},
+	}
+	shareFittedDrain(rows)
+	if *rows[0].QuotaDrainPercent != 9 || *rows[1].QuotaDrainPercent != 2 || !rows[0].DrainShared || !rows[1].DrainShared || rows[0].QuotaSource != "fitted" {
+		t.Fatalf("shared fitted rows = %+v", rows)
+	}
+}
+
+func ptrFloat(v float64) *float64 { return &v }

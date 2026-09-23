@@ -187,7 +187,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	storeTurnQuota(s, id, m.Provider, turn, "before", before)
 	recordTurnQuota(s, d.quota, id, m.Provider, turn, "after", true, &subagent.TurnTokenUsage{NewInputTokens: r.InputTokens, CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens})
 	now := time.Now()
-	sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn}
+	sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}}}
 	if err := s.Save(sess); err != nil {
 		return err
 	}
@@ -310,6 +310,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	sess.TokenTotalsKnown = true
 	sess.LastActiveAt = time.Now()
 	sess.Turn = turn
+	sess.TurnRecords = append(sess.TurnRecords, subagent.TurnRecord{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens})
 	storeTurnQuota(s, sess.ID, sess.Provider, turn, "before", before)
 	recordTurnQuota(s, d.quota, sess.ID, sess.Provider, turn, "after", true, &subagent.TurnTokenUsage{NewInputTokens: r.InputTokens, CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens})
 	if err = s.Save(sess); err != nil {

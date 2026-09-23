@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -692,9 +693,45 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 	remove.Flags().BoolVar(&all, "all", false, "delete all manageable sessions")
 	remove.Flags().BoolVar(&allCompleted, "all-completed", false, "delete all completed sessions")
 	remove.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
-	root.AddCommand(start, models, chat, resume, list, status, compact, stop, remove)
+	rate := &cobra.Command{Use: "rate <1-5> <reason>", Short: "Rate the latest turn of an agent session", Args: cobra.MinimumNArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		if name == "" {
+			return fmt.Errorf("rate: --name <session> is required")
+		}
+		s, err := store()
+		if err != nil {
+			return err
+		}
+		sess, err := find(cmd, s, name)
+		if err != nil {
+			return err
+		}
+		score, err := strconv.Atoi(args[0])
+		if err != nil || score < 1 || score > 5 {
+			return fmt.Errorf("rate: score must be an integer from 1 to 5")
+		}
+		if err := rateLatestSessionTurn(s, sess, score, strings.Join(args[1:], " ")); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Rated %s turn %d: %d/5\n", sess.Name, sess.TurnRecords[len(sess.TurnRecords)-1].Turn, score)
+		return nil
+	}}
+	rate.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
+	root.AddCommand(start, models, chat, resume, list, status, compact, stop, remove, rate)
 	silenceUsage(root)
 	return root
+}
+
+func rateLatestSessionTurn(store *subagent.FileSessionStore, sess *subagent.Session, score int, reason string) error {
+	if score < 1 || score > 5 {
+		return fmt.Errorf("rate: score must be an integer from 1 to 5")
+	}
+	if sess.Turn < 1 || len(sess.TurnRecords) == 0 {
+		return fmt.Errorf("rate: session %q has no recorded turn", sess.Name)
+	}
+	latest := &sess.TurnRecords[len(sess.TurnRecords)-1]
+	rating := score
+	latest.Rating, latest.RatingReason = &rating, reason
+	return store.Save(sess)
 }
 
 // agentSessionCompletion returns names visible to the current caller. Cobra

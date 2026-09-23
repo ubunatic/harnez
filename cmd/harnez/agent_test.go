@@ -2038,3 +2038,27 @@ func TestOrchestratorMayStartHelpersButNotOrchestrators(t *testing.T) {
 		}
 	}
 }
+
+func TestRateLatestSessionTurnPersistsRatingAndReason(t *testing.T) {
+	store, err := subagent.NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &subagent.Session{ID: "session-1", Name: "worker", Turn: 2, TurnRecords: []subagent.TurnRecord{{Turn: 1}, {Turn: 2}}}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	if err := rateLatestSessionTurn(store, sess, 4, "tests green"); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Get(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.TurnRecords[1].Rating == nil || *loaded.TurnRecords[1].Rating != 4 || loaded.TurnRecords[1].RatingReason != "tests green" {
+		t.Fatalf("latest turn rating = %+v", loaded.TurnRecords[1])
+	}
+	if err := rateLatestSessionTurn(store, loaded, 6, "invalid"); err == nil {
+		t.Fatal("out-of-range score accepted")
+	}
+}

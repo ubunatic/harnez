@@ -35,7 +35,7 @@ func newStatsCmd() *cobra.Command {
 	var overheadFlag bool
 	var qualityFlag bool
 	var strictFlag bool
-	var agentsFlag bool
+	var agentsFlag, agentsAll bool
 	var daysFlag int
 
 	cmd := &cobra.Command{
@@ -71,7 +71,7 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if agentsFlag {
-				return runAgentStats(cmd.OutOrStdout(), agentStatsOptions{Days: daysFlag, JSON: jsonOut})
+				return runAgentStats(cmd.OutOrStdout(), agentStatsOptions{Days: daysFlag, JSON: jsonOut, All: agentsAll})
 			}
 			return runStats(cmd.OutOrStdout(), statsOptions{
 				Tool:     toolFlag,
@@ -97,6 +97,7 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 	cmd.Flags().BoolVar(&qualityFlag, "quality", false, "run read-only telemetry data-quality checks")
 	cmd.Flags().BoolVar(&strictFlag, "strict", false, "with --quality, exit nonzero when any check warns")
 	cmd.Flags().BoolVar(&agentsFlag, "agents", false, "report recent agent sessions, tokens, quota drain, and per-model totals")
+	cmd.Flags().BoolVar(&agentsAll, "all", false, "with --agents, show every session instead of the newest 20")
 	cmd.Flags().IntVar(&daysFlag, "days", 7, "with --agents, include sessions active in the last N days")
 	return cmd
 }
