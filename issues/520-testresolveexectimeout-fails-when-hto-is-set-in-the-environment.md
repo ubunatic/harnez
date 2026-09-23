@@ -1,6 +1,6 @@
 # 520 — TestResolveExecTimeout fails when HTO is set in the environment
 
-**Status**: Open
+**Status**: Closed — Timeout test clears ambient variables and covers ambient HTO; test-q1 has only known 509 failure.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Testing
