@@ -18,6 +18,13 @@ type TurnQuotaEvent struct {
 	Boundary  string                 `json:"boundary"`
 	Provider  string                 `json:"provider"`
 	Reading   usage.TurnQuotaReading `json:"reading"`
+	Tokens    *TurnTokenUsage        `json:"tokens,omitempty"`
+}
+
+type TurnTokenUsage struct {
+	NewInputTokens    int `json:"new_input_tokens"`
+	CachedInputTokens int `json:"cached_input_tokens"`
+	OutputTokens      int `json:"output_tokens"`
 }
 
 // RecordTurnQuota appends one boundary observation in the session store.

@@ -128,7 +128,7 @@ func (d *DB) QueryCLIInvocations(f Filter, limit int) ([]CLIInvocation, error) {
 		); err != nil {
 			return nil, fmt.Errorf("telemetry: scan cli invocation row: %w", err)
 		}
-		parsed, err := time.Parse(time.RFC3339Nano, createdAt)
+		parsed, err := parseTelemetryTimestamp(createdAt)
 		if err != nil {
 			return nil, fmt.Errorf("telemetry: parse created_at %q: %w", createdAt, err)
 		}
@@ -139,6 +139,18 @@ func (d *DB) QueryCLIInvocations(f Filter, limit int) ([]CLIInvocation, error) {
 		return nil, fmt.Errorf("telemetry: query cli invocation rows: %w", err)
 	}
 	return out, nil
+}
+
+func parseTelemetryTimestamp(value string) (time.Time, error) {
+	if parsed, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return parsed, nil
+	}
+	for _, layout := range []string{"2006-01-02 15:04:05.999999999", "2006-01-02 15:04:05"} {
+		if parsed, err := time.ParseInLocation(layout, value, time.UTC); err == nil {
+			return parsed, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unsupported timestamp format")
 }
 
 // CLIInvocationCounts returns how many cli_invocations rows match f,
@@ -200,7 +212,7 @@ func (d *DB) Query(f Filter) ([]ToolCall, error) {
 		); err != nil {
 			return nil, fmt.Errorf("telemetry: scan row: %w", err)
 		}
-		parsed, err := time.Parse(time.RFC3339Nano, createdAt)
+		parsed, err := parseTelemetryTimestamp(createdAt)
 		if err != nil {
 			return nil, fmt.Errorf("telemetry: parse created_at %q: %w", createdAt, err)
 		}

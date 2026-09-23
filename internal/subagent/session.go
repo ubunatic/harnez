@@ -30,6 +30,10 @@ type Session struct {
 	HarnessType       string `json:"harness_type"`
 	Status            string `json:"status"`
 	TokensCumulative  int    `json:"tokens_cumulative"`
+	InputTokensTotal  int    `json:"input_tokens_total,omitempty"`
+	CachedTokensTotal int    `json:"cached_tokens_total,omitempty"`
+	OutputTokensTotal int    `json:"output_tokens_total,omitempty"`
+	TokenTotalsKnown  bool   `json:"token_totals_known,omitempty"`
 	// TokensSinceCompact counts uncached tokens since the last compaction and
 	// drives ShouldCompact; TokensCumulative stays a lifetime telemetry total.
 	TokensSinceCompact int       `json:"tokens_since_compact,omitempty"`

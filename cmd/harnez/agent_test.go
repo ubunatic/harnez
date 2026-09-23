@@ -1612,8 +1612,8 @@ func TestRunStartRecordsQuotaBoundariesForTurn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(calls, []bool{false, true}) {
-		t.Fatalf("quota capture force flags=%v, want [false true]", calls)
+	if !reflect.DeepEqual(calls, []bool{true, true}) {
+		t.Fatalf("quota capture force flags=%v, want [true true]", calls)
 	}
 	data, err := os.ReadFile(filepath.Join(storeDir, "quota-readings.jsonl"))
 	if err != nil {
@@ -1632,6 +1632,66 @@ func TestRunStartRecordsQuotaBoundariesForTurn(t *testing.T) {
 	}
 	if before.SessionID != after.SessionID || before.Turn != 1 || after.Turn != 1 || before.Boundary != "before" || after.Boundary != "after" || after.Reading.CacheAgeMS != 123 {
 		t.Fatalf("recorded quota events=%+v %+v", before, after)
+	}
+}
+
+func TestRunResumeRecordsFreshQuotaPairAndAdvancesTurn(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "resume-1", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: ".", Status: "completed", Turn: 4}); err != nil {
+		t.Fatal(err)
+	}
+	driver := &recordingAgentDriver{}
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+	var calls []bool
+	capture := func(_ context.Context, _ string, force bool) usage.TurnQuotaReading {
+		calls = append(calls, force)
+		return usage.TurnQuotaReading{CapturedAt: time.Now().UTC(), HasCache: true, CacheAgeMS: 10}
+	}
+	cmd := &cobra.Command{}
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, quota: capture, find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+		return s.Find(id)
+	}}
+	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "continue", JSON: true, StreamMode: streamFull}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(calls, []bool{true, true}) {
+		t.Fatalf("quota capture force flags=%v, want [true true]", calls)
+	}
+	sess, err := store.Get("resume-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.Turn != 5 {
+		t.Fatalf("persisted turn=%d, want 5", sess.Turn)
+	}
+	data, err := os.ReadFile(filepath.Join(storeDir, "quota-readings.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("quota event count=%d, want 2", len(lines))
+	}
+	for i, line := range lines {
+		var event subagent.TurnQuotaEvent
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatal(err)
+		}
+		boundary := "before"
+		if i == 1 {
+			boundary = "after"
+		}
+		if event.SessionID != "resume-1" || event.Turn != 5 || event.Boundary != boundary {
+			t.Fatalf("event[%d]=%+v", i, event)
+		}
 	}
 }
 

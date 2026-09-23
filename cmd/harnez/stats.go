@@ -35,6 +35,8 @@ func newStatsCmd() *cobra.Command {
 	var overheadFlag bool
 	var qualityFlag bool
 	var strictFlag bool
+	var agentsFlag bool
+	var daysFlag int
 
 	cmd := &cobra.Command{
 		Use:   "stats [--quality] [--json] [--strict] [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--project <name>] [--auto]",
@@ -53,6 +55,7 @@ func newStatsCmd() *cobra.Command {
   harnez stats --ticket harnez/120-harnez-stats-analytical-reporting --json
   harnez stats --project harnez
   harnez stats --auto
+  harnez stats --agents --days 7 [--json]
 
 --auto resolves session_id from the current environment (internal/resolve,
 same resolution harnez rate/harnez exec use) and filters to just this
@@ -67,6 +70,9 @@ formatted terminal table; --json emits the same numbers unformatted for
 scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if agentsFlag {
+				return runAgentStats(cmd.OutOrStdout(), agentStatsOptions{Days: daysFlag, JSON: jsonOut})
+			}
 			return runStats(cmd.OutOrStdout(), statsOptions{
 				Tool:     toolFlag,
 				Agent:    agentFlag,
@@ -90,6 +96,8 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 		"also report the harnez rate feedback overhead (issue 142): call count/bytes from telemetry plus an ESTIMATED token cost, clearly labeled as an estimate, not provider-reported")
 	cmd.Flags().BoolVar(&qualityFlag, "quality", false, "run read-only telemetry data-quality checks")
 	cmd.Flags().BoolVar(&strictFlag, "strict", false, "with --quality, exit nonzero when any check warns")
+	cmd.Flags().BoolVar(&agentsFlag, "agents", false, "report recent agent sessions, tokens, quota drain, and per-model totals")
+	cmd.Flags().IntVar(&daysFlag, "days", 7, "with --agents, include sessions active in the last N days")
 	return cmd
 }
 
