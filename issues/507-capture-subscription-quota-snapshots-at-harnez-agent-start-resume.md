@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
-**Related**: [[087]] (shared live-fetch cache), [[111-per-agent-collector-pipelines-independent-cadence-and-timeout]], [[112-agy-usage-poll-may-trigger-google-reauth-bot-detection]], [[113-record-collector-roundtrip-times-usage-meta]], `internal/usage/livefetchcache.go`, `internal/usage/fetchdurations.go`, `cmd/harnez/agent.go`
+**Related**: [[087-generalize-flock-freshness-gate-to-codex-agy]] (shared live-fetch cache), [[111-per-agent-collector-pipelines-independent-cadence-and-timeout]], [[112-agy-usage-poll-may-trigger-google-reauth-bot-detection]], [[113-record-collector-roundtrip-times-usage-meta]], `internal/usage/livefetchcache.go`, `internal/usage/fetchdurations.go`, `cmd/harnez/agent.go`
 
 ## Problem
 
