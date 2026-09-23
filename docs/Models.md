@@ -40,6 +40,38 @@ Findings:
   the advisor role preamble invites repo exploration, so research prompts should say
   "web research only, do not inspect the repository".
 
+## 2026-09-23 SQL research snapshot (SQLite, SQL analytics, making the right choices)
+
+Same method, prompts marked "web research only" and run from a scratch dir. No agent
+drifted into a repository this time. Python/pandas excluded.
+
+| Model | SQLite | SQL analytics | Right choices (schema, metrics, ambiguity) | Tag |
+|---|---|---|---|---|
+| claude:opus | ok | strong (Spider 2.0 70%, BIRD ~69–70%) | ok | SQL+ |
+| agy:opus (4.6) | thin | ok (BIRD ~69–70%, LiveSQLBench #2) | weak/thin | SQL~ |
+| codex:astra | thin | ok (BIRD subset 66%) | ok, indirect (asks when underspecified) | SQL~ |
+| codex:terra | thin | ok (Tinybird, many first-try exact) | thin | SQL~ |
+| claude:sonnet | thin | ok (Tinybird leader, exactness only ~56/100) | weak (literal-assumption errors) | SQL~ |
+| agy:sonnet (4.6) | thin | ok, agent-based scores only | thin | SQL~ |
+| claude:haiku | ok (Anthropic SQLite guide) | ok (BIRD 51%) | weak/thin | SQL~ |
+| agy:flash37 | thin | ok, Gemini 3 (not 3.7) data | thin | SQL~ |
+| agy:flash38 | thin | ok (small practitioner test 76/100) | thin | SQL~ |
+| codex:sol | no data | no data | no data | SQL~ (provisional) |
+| codex:luna | no data | no data | no data | SQL- (unmeasured) |
+
+Findings:
+
+- **No model has SQLite-specific evidence** (type affinity, JSON1, `EXPLAIN QUERY PLAN`,
+  indexing). Benchmarks use SQLite as a runtime, but don't score its quirks.
+- **"Making the right choices" is unmeasured everywhere.** Benchmarks assume one gold
+  query; ambiguity handling, metric choice and double counting from fan-out joins are not
+  scored. Even top models reach only ~56–65% exactness on analytics prompts, so every model
+  needs review against a known result.
+- **Only opus has strong evidence.** Luna's SQL- means "no data", not "proven weak"; since
+  luna is the `try` model, a small repo-local SQLite canary (known schema, known answers,
+  a fan-out trap) is the cheapest way to get real evidence for luna, sol and flash.
+- Research cost: ~11 × 30–50k new tokens, 24–49s each.
+
 ## Earlier assessment (pre-GPT-6 lineup, user notes)
 
   Comparing the latest generation—Claude Sonnet 5, Gemini 3.7 Flash, and OpenAI’s GPT-5.5 / 5.6 tier   
