@@ -35,9 +35,16 @@ Done when:
 
 ## Open questions
 
-- Does Claude Code's `updatedInput` replace the whole tool input? The hook
-  currently returns only `{command}`; if it replaces, `timeout` and
-  `run_in_background` are dropped today. Canary this first (docs/Canary.md).
+- ~~Does Claude Code's `updatedInput` replace the whole tool input?~~
+  **Yes — canary 2026-09-23 (Claude Code, cati session):** with the hook
+  rewriting, a `sleep 5` Bash call with `timeout: 2000` ran to completion,
+  and a `run_in_background: true` call ran in the foreground. Control: the
+  same calls prefixed `harnez exec -- …` (hook skips already-routed commands)
+  timed out at 2s and backgrounded correctly. So the hook currently **drops
+  `timeout` and `run_in_background`** for every rewritten Bash call. Fix:
+  echo back the full `tool_input` with only `command` replaced (and forward
+  the timeout to `harnez exec --timeout`). This is the likely root cause of
+  the original kill, independent of the argv-shape exemption.
 - Should the implicit 60s default apply at all to `run_in_background` calls?
 
 ## Observed
