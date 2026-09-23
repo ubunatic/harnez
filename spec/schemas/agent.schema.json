@@ -18,7 +18,7 @@
           "tier": { "type": "string", "enum": ["low", "med", "high"] },
           "effort": { "type": "boolean" },
           "roles": { "type": "string" },
-          "cost": { "type": "integer", "minimum": 1, "maximum": 9 },
+          "cost": { "type": "integer", "minimum": 1, "maximum": 100 },
           "eff": { "type": "string", "enum": ["+", "~", "-", "?"] },
           "skills": { "type": "string", "pattern": "^(Go|TUI|SQL)[-+~?]( (Go|TUI|SQL)[-+~?])*$" },
           "use": { "type": "string" },

@@ -58,7 +58,7 @@ type Model struct {
 // ModelGuide is the listing guidance of a spec/agent.yaml model entry; it
 // stays out of Model so session records do not carry it.
 type ModelGuide struct {
-	Cost   int    `yaml:"cost"`   // price level 1-9, each step ~2x
+	Cost   int    `yaml:"cost"`   // relative cost, luna = 1, astra = 100
 	Eff    string `yaml:"eff"`    // tokens per goal: + ~ - ?
 	Skills string `yaml:"skills"` // e.g. "Go+ TUI~ SQL?"
 	Roles  string `yaml:"roles"`

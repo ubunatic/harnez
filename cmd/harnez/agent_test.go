@@ -138,7 +138,7 @@ func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
 	if !strings.Contains(haiku, " no ") {
 		t.Fatalf("claude rows must report no effort flag: %q", haiku)
 	}
-	if !strings.Contains(out.String(), "\nCOST 1-9") {
+	if !strings.Contains(out.String(), "\nCOST × luna") {
 		t.Fatalf("legend line missing: %q", out.String())
 	}
 }
