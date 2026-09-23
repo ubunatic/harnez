@@ -16,6 +16,7 @@ const agentSpecPath = "spec/agent.yaml"
 type agentSpec struct {
 	DefaultModel string              `yaml:"default_model"`
 	DefaultRole  string              `yaml:"default_role"`
+	ModelsLegend string              `yaml:"models_legend"`
 	Models       map[string]Model    `yaml:"models"`
 	Roles        map[string]RoleSpec `yaml:"roles"`
 }
@@ -98,6 +99,15 @@ func loadAgentSpec() (agentSpec, error) {
 }
 
 var agentSpecOnce = sync.OnceValues(loadAgentSpec)
+
+// ModelsLegend is the one-line key printed under `harnez agent models`.
+func ModelsLegend() (string, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return "", err
+	}
+	return spec.ModelsLegend, nil
+}
 
 func DefaultModelSpec() (string, error) {
 	spec, err := agentSpecOnce()

@@ -58,6 +58,9 @@ type Model struct {
 // ModelGuide is the listing guidance of a spec/agent.yaml model entry; it
 // stays out of Model so session records do not carry it.
 type ModelGuide struct {
+	Cost   int    `yaml:"cost"`   // price level 1-9, each step ~2x
+	Eff    string `yaml:"eff"`    // tokens per goal: + ~ - ?
+	Skills string `yaml:"skills"` // e.g. "Go+ TUI~ SQL?"
 	Roles  string `yaml:"roles"`
 	Use    string `yaml:"use"`
 	UseMed string `yaml:"use_med"` // replaces Use for the :med variant
@@ -120,6 +123,9 @@ type ModelEntry struct {
 	// Effort reports whether the batch driver passes a tier flag; the
 	// claude driver never does, so claude tiers are labels only.
 	Effort bool
+	Cost   int
+	Eff    string
+	Skills string
 	Roles  string
 	Use    string
 }
@@ -134,13 +140,13 @@ func KnownModelEntries() []ModelEntry {
 	for _, m := range KnownModels() {
 		g := guides[m.Provider+":"+modelAliasName(m)]
 		effort := m.Provider != "claude" && m.SupportsEffort()
-		entries = append(entries, ModelEntry{Spec: m.Spec(), Model: m, Effort: effort, Roles: g.Roles, Use: g.Use})
+		entries = append(entries, ModelEntry{Spec: m.Spec(), Model: m, Effort: effort, Cost: g.Cost, Eff: g.Eff, Skills: g.Skills, Roles: g.Roles, Use: g.Use})
 		if m.Tier != "med" && effort {
 			use := g.Use
 			if g.UseMed != "" {
 				use = g.UseMed
 			}
-			entries = append(entries, ModelEntry{Spec: m.Provider + ":" + modelAliasName(m) + ":med", Model: m, Effort: effort, Roles: g.Roles, Use: use})
+			entries = append(entries, ModelEntry{Spec: m.Provider + ":" + modelAliasName(m) + ":med", Model: m, Effort: effort, Cost: g.Cost, Eff: g.Eff, Skills: g.Skills, Roles: g.Roles, Use: use})
 		}
 	}
 	return entries

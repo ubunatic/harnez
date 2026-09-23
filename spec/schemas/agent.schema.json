@@ -5,6 +5,7 @@
   "properties": {
     "default_model": { "type": "string", "minLength": 1 },
     "default_role": { "type": "string", "minLength": 1 },
+    "models_legend": { "type": "string" },
     "models": {
       "type": "object",
       "minProperties": 1,
@@ -17,6 +18,9 @@
           "tier": { "type": "string", "enum": ["low", "med", "high"] },
           "effort": { "type": "boolean" },
           "roles": { "type": "string" },
+          "cost": { "type": "integer", "minimum": 1, "maximum": 9 },
+          "eff": { "type": "string", "enum": ["+", "~", "-", "?"] },
+          "skills": { "type": "string", "pattern": "^(Go|TUI|SQL)[-+~?]( (Go|TUI|SQL)[-+~?])*$" },
           "use": { "type": "string" },
           "use_med": { "type": "string" }
         },

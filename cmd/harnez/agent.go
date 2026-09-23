@@ -220,7 +220,7 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 			return nil
 		}
 		tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
-		fmt.Fprintln(tw, "SPEC\tMODEL\tEFFORT\tROLES\tUSE")
+		fmt.Fprintln(tw, "SPEC\tMODEL\tEFFORT\tCOST\tEFF\tSKILLS\tROLES\tUSE")
 		for _, e := range subagent.KnownModelEntries() {
 			spec := e.Spec
 			if spec == defaultSpec {
@@ -230,9 +230,19 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 			if !e.Effort {
 				effort = "no"
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", spec, e.Model.Name, effort, e.Roles, e.Use)
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", spec, e.Model.Name, effort, e.Cost, e.Eff, e.Skills, e.Roles, e.Use)
 		}
-		return tw.Flush()
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		legend, err := subagent.ModelsLegend()
+		if err != nil {
+			return err
+		}
+		if legend != "" {
+			fmt.Fprintln(cmd.OutOrStdout(), "\n"+legend)
+		}
+		return nil
 	}}
 	models.Flags().BoolVar(&modelNamesOnly, "names", false, "print only the model specs, one per line")
 

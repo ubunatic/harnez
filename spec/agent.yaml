@@ -2,63 +2,96 @@
 # Agent model and role defaults are part of the application artifact.
 default_model: codex:luna:low
 
-# `roles` and `use` are shown by `harnez agent models`; `use_med` replaces `use`
-# for the model's :med variant. Guidance source: docs/practices/ModelRoles.md.
+# Listing guidance for `harnez agent models` (legend printed below the table):
+#   cost   price level 1-9, each step ~2x the previous, luna = 1 (list price and
+#          subscription feel; vendors have separate quota pools)
+#   eff    tokens needed to reach a goal: + few, ~ average, - many, ? unmeasured
+#   skills Go/TUI/SQL: + strong, ~ ok, - weak, ? no data
+#   use    when to pick it; use_med replaces use for the :med variant
+# Evidence: docs/Models.md.
+models_legend: "COST 1-9, each step ~2x (luna=1) · EFF tokens per goal: + few ~ avg - many · skills: + strong ~ ok - weak · ? = no data"
 models:
   codex:luna:
     provider: codex
     name: gpt-6-luna
     tier: low
     roles: developer, mechanical
-    use: clear, bounded tickets; cheapest; weak on long terminal loops
+    cost: 1
+    eff: "~"
+    skills: Go~ TUI- SQL?
+    use: clear bounded tickets; try first, weak on long terminal loops
     use_med: interface or design changes; less prone to bending tests
   codex:sol:
     provider: codex
     name: gpt-6-sol
     tier: low
     roles: developer, advisor, reviewer
-    use: capable coding and tool use below Astra cost; milestone reviewer
+    cost: 6
+    eff: "-"
+    skills: Go~ TUI~ SQL?
+    use: capable coding and tool use; milestone reviewer; tends to over-refactor
   codex:astra:
     provider: codex
     name: gpt-5.6-astra
     tier: low
     roles: advisor, developer
-    use: hardest multi-step coding and terminal automation; flagship cost
+    cost: 8
+    eff: "?"
+    skills: Go+ TUI~ SQL~
+    use: hardest multi-step coding and terminal automation; escalation only
   codex:terra:
     provider: codex
     name: gpt-5.6-terra
     tier: low
     roles: advisor, reviewer, developer
-    use: best-value auditor; finds code-level traps with file:line
+    cost: 5
+    eff: "+"
+    skills: Go~ TUI~ SQL~
+    use: best-value auditor; finds code traps with file:line
   claude:haiku:
     provider: claude
     name: haiku
     tier: low
     roles: mechanical
-    use: narrow edits with a machine-checkable acceptance test only
+    cost: 3
+    eff: "-"
+    skills: Go~ TUI- SQL~
+    use: narrow edits with a machine-checkable test only
   claude:sonnet:
     provider: claude
     name: sonnet
     tier: low
     roles: advisor, reviewer, developer
-    use: cross-vendor advisor or reviewer; strong tool use at mid cost
+    cost: 5
+    eff: "~"
+    skills: Go~ TUI~ SQL~
+    use: cross-vendor advisor or reviewer; strong tool use
   claude:opus:
     provider: claude
     name: opus
     tier: low
     roles: orchestrator, reviewer
-    use: host seat; complex repo judgment, pre-work and diff review
+    cost: 6
+    eff: "+"
+    skills: Go+ TUI? SQL+
+    use: host seat for repo judgment, pre-work, diff review
   agy:flash37:
     provider: agy
     name: gemini-3.7-flash
     tier: low
     roles: developer, advisor, reviewer
+    cost: 3
+    eff: "?"
+    skills: Go~ TUI~ SQL~
     use: fast bounded implementation or review with clear checks
   agy:flash38:
     provider: agy
     name: gemini-3.8-flash
     tier: low
     roles: reviewer, advisor, developer
+    cost: 3
+    eff: "~"
+    skills: Go~ TUI~ SQL~
     use: cross-vendor reviewer; strong terminal coding, slow first token
     use_med: escalation advisor on a budget
   agy:sonnet:
@@ -67,14 +100,20 @@ models:
     tier: low
     effort: false
     roles: reviewer, developer
-    use: Sonnet 4.6 via agy; reviewer or developer when Claude quota is out
+    cost: 5
+    eff: "?"
+    skills: Go~ TUI~ SQL~
+    use: Sonnet 4.6; reviewer or developer when Claude quota is out
   agy:opus:
     provider: agy
     name: claude-opus-4-6-thinking
     tier: low
     effort: false
     roles: advisor, reviewer
-    use: Opus 4.6 via agy; careful analysis of hard problems
+    cost: 6
+    eff: "?"
+    skills: Go+ TUI~ SQL~
+    use: Opus 4.6; careful analysis of hard problems
 
 # Roles keep delegation one level deep. `spawns` lists the roles a session of
 # that role may start through `harnez agent`; an empty list makes it a leaf
