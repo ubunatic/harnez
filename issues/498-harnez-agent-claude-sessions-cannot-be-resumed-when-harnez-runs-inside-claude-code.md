@@ -70,3 +70,5 @@ strip environment variables, the canary refuted that):
 - A non-zero exit includes the child's stderr (`exec.ExitError.Stderr`).
 - `Resume` passes `--model` and `--dangerously-skip-permissions`, like `Run`.
 - Tests for each, then an end-to-end `claude:haiku` start + resume from a Claude Code shell.
+
+**E2E verified 2026-09-24** by the host (leaf roles cannot run `harnez agent`): `claude:haiku` start "Reply with exactly: hi", then resume "What did you reply last turn?" answered "hi" (session 15e1b384…).
