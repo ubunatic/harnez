@@ -204,6 +204,10 @@ func TestFileSessionStore_Delete(t *testing.T) {
 	if err == nil {
 		t.Fatal("Session should not exist after deletion")
 	}
+	deleted, err := store.ListDeleted()
+	if err != nil || len(deleted) != 1 || deleted[0].ID != "test-session-1" {
+		t.Fatalf("deleted-session archive = %+v, %v", deleted, err)
+	}
 }
 
 func TestFileSessionStore_DeleteNotFound(t *testing.T) {

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -78,7 +79,7 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 		t.Fatalf("agent row=%+v", agent)
 	}
 	host := byID["host-1"]
-	if host.QuotaSource != "fitted" || host.NewInputTokens != 18 || host.CachedInputTokens != 6 || host.OutputTokens != 8 {
+	if host.QuotaSource != "fitted" || host.NewInputTokens != 12 || host.CachedInputTokens != 6 || host.OutputTokens != 8 {
 		t.Fatalf("host row=%+v", host)
 	}
 	if len(report.Models) != 1 || report.Models[0].Model != "codex:gpt-5.6-luna:low" || report.Models[0].Turns != 2 || report.Models[0].NewInputTokens != 100 {
@@ -96,6 +97,61 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 		if !strings.Contains(table.String(), want) {
 			t.Errorf("table missing %q:\n%s", want, table.String())
 		}
+	}
+}
+
+func TestAgentStatsLegacyNewInputSubtractsCachedAndRetainsDeletedSessions(t *testing.T) {
+	home := t.TempDir()
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	storeDir := filepath.Join(home, ".harnez", "agents")
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &subagent.Session{ID: "old-session", Name: "dev519", Provider: "codex", Model: "gpt-test", Tier: "low", HarnessType: "harnez", Status: "completed", CreatedAt: time.Now().Add(-time.Hour), LastActiveAt: time.Now(), Turn: 2, InputTokensTotal: 1000, CachedTokensTotal: 800, OutputTokensTotal: 50, TokenTotalsKnown: true}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Delete(sess.ID); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runAgentStats(&out, agentStatsOptions{Days: 7, JSON: true, HomeDir: home, DBPath: dbPath}); err != nil {
+		t.Fatal(err)
+	}
+	var report agentStatsReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Sessions) != 1 || report.Sessions[0].NewInputTokens != 200 || report.Sessions[0].CachedInputTokens != 800 {
+		t.Fatalf("deleted legacy session report = %+v", report.Sessions)
+	}
+}
+
+func TestCodexRolloutModelBySession(t *testing.T) {
+	home := t.TempDir()
+	root := filepath.Join(home, ".codex", "sessions", "2026", "09")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	data := "{\"type\":\"session_meta\",\"payload\":{\"session_id\":\"host-codex\"}}\n{\"type\":\"turn_context\",\"payload\":{\"model\":\"gpt-6-luna\"}}\n"
+	if err := os.WriteFile(filepath.Join(root, "rollout-host.jsonl"), []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	models := codexRolloutModels(home)
+	if models["host-codex"] != "gpt-6-luna" {
+		t.Fatalf("rollout model map = %#v", models)
+	}
+	rows := hostSessionRows([]telemetry.ToolCall{{SessionID: "host-codex", AgentID: "codex", ToolName: "Read", CreatedAt: time.Now()}}, map[string]bool{}, nil, models)
+	if len(rows) != 1 || rows[0].Model != "codex:gpt-6-luna" || len(modelTotals(rows)) != 1 {
+		t.Fatalf("host model attribution = rows:%+v totals:%+v", rows, modelTotals(rows))
 	}
 }
 

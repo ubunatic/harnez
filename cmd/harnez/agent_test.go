@@ -2062,3 +2062,24 @@ func TestRateLatestSessionTurnPersistsRatingAndReason(t *testing.T) {
 		t.Fatal("out-of-range score accepted")
 	}
 }
+
+func TestRateLatestSessionTurnCreatesRecordForPreM1Session(t *testing.T) {
+	store, err := subagent.NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &subagent.Session{ID: "legacy", Name: "dev519", Turn: 2}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	if err := rateLatestSessionTurn(store, sess, 4, "good run"); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Get(sess.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.TurnRecords) != 1 || loaded.TurnRecords[0].Turn != 2 || loaded.TurnRecords[0].Rating == nil || *loaded.TurnRecords[0].Rating != 4 {
+		t.Fatalf("legacy session turn records = %+v", loaded.TurnRecords)
+	}
+}

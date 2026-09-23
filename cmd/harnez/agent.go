@@ -725,10 +725,20 @@ func rateLatestSessionTurn(store *subagent.FileSessionStore, sess *subagent.Sess
 	if score < 1 || score > 5 {
 		return fmt.Errorf("rate: score must be an integer from 1 to 5")
 	}
-	if sess.Turn < 1 || len(sess.TurnRecords) == 0 {
+	if sess.Turn < 1 {
 		return fmt.Errorf("rate: session %q has no recorded turn", sess.Name)
 	}
-	latest := &sess.TurnRecords[len(sess.TurnRecords)-1]
+	latestIndex := -1
+	for i := range sess.TurnRecords {
+		if sess.TurnRecords[i].Turn == sess.Turn {
+			latestIndex = i
+		}
+	}
+	if latestIndex < 0 {
+		sess.TurnRecords = append(sess.TurnRecords, subagent.TurnRecord{Turn: sess.Turn})
+		latestIndex = len(sess.TurnRecords) - 1
+	}
+	latest := &sess.TurnRecords[latestIndex]
 	rating := score
 	latest.Rating, latest.RatingReason = &rating, reason
 	return store.Save(sess)

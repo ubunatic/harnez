@@ -101,6 +101,20 @@ func runAgentStats(w io.Writer, opts agentStatsOptions) error {
 	if err != nil {
 		return fmt.Errorf("stats --agents: list agent sessions: %w", err)
 	}
+	deleted, err := store.ListDeleted()
+	if err != nil {
+		return fmt.Errorf("stats --agents: list deleted sessions: %w", err)
+	}
+	seen := make(map[string]bool, len(sessions))
+	for _, s := range sessions {
+		seen[s.ID] = true
+	}
+	for _, s := range deleted {
+		if !seen[s.ID] {
+			sessions = append(sessions, s)
+			seen[s.ID] = true
+		}
+	}
 	db, err := telemetry.OpenReadOnly(opts.DBPath)
 	if err != nil {
 		return fmt.Errorf("stats --agents: open telemetry database: %w", err)
@@ -119,7 +133,11 @@ func runAgentStats(w io.Writer, opts agentStatsOptions) error {
 			continue
 		}
 		known[s.ID] = true
-		row := agentSessionRow{SessionID: s.ID, Name: s.Name, Source: "harnez", Provider: s.Provider, Model: s.Provider + ":" + s.Model + ":" + s.Tier, Turns: s.Turn, TurnsKnown: s.Turn > 0, NewInputTokens: int64(s.InputTokensTotal), CachedInputTokens: int64(s.CachedTokensTotal), OutputTokens: int64(s.OutputTokensTotal), TokensComplete: s.TokenTotalsKnown, StartedAt: s.CreatedAt, LastActiveAt: s.LastActiveAt, QuotaSource: "measured"}
+		legacyNewInput := s.InputTokensTotal - s.CachedTokensTotal
+		if legacyNewInput < 0 {
+			legacyNewInput = 0
+		}
+		row := agentSessionRow{SessionID: s.ID, Name: s.Name, Source: "harnez", Provider: s.Provider, Model: s.Provider + ":" + s.Model + ":" + s.Tier, Turns: s.Turn, TurnsKnown: s.Turn > 0, NewInputTokens: int64(legacyNewInput), CachedInputTokens: int64(s.CachedTokensTotal), OutputTokens: int64(s.OutputTokensTotal), TokensComplete: s.TokenTotalsKnown, StartedAt: s.CreatedAt, LastActiveAt: s.LastActiveAt, QuotaSource: "measured"}
 		if len(s.TurnRecords) == s.Turn && len(s.TurnRecords) > 0 {
 			row.NewInputTokens, row.CachedInputTokens, row.OutputTokens = 0, 0, 0
 		}
@@ -147,7 +165,7 @@ func runAgentStats(w io.Writer, opts agentStatsOptions) error {
 		}
 		rows = append(rows, row)
 	}
-	hostRows := hostSessionRows(calls, known, history)
+	hostRows := hostSessionRows(calls, known, history, codexRolloutModels(opts.HomeDir))
 	shareFittedDrain(hostRows)
 	rows = append(rows, hostRows...)
 	sort.Slice(rows, func(i, j int) bool { return rows[i].LastActiveAt.After(rows[j].LastActiveAt) })
@@ -294,7 +312,7 @@ func quotaWindowDelta(before, after []usage.QuotaHistoryEntry) (*float64, bool) 
 	return &total, reset
 }
 
-func hostSessionRows(calls []telemetry.ToolCall, known map[string]bool, history []usage.QuotaHistoryEntry) []agentSessionRow {
+func hostSessionRows(calls []telemetry.ToolCall, known map[string]bool, history []usage.QuotaHistoryEntry, codexModels map[string]string) []agentSessionRow {
 	byID := map[string]*agentSessionRow{}
 	tokenFields := map[string][3]bool{}
 	for _, call := range calls {
@@ -335,10 +353,58 @@ func hostSessionRows(calls []telemetry.ToolCall, known map[string]bool, history 
 	for _, row := range byID {
 		fields := tokenFields[row.SessionID]
 		row.TokensComplete = fields[0] && fields[1] && fields[2]
+		if row.Provider == "codex" && codexModels[row.SessionID] != "" {
+			row.Model = "codex:" + codexModels[row.SessionID]
+		}
+		row.NewInputTokens -= row.CachedInputTokens
+		if row.NewInputTokens < 0 {
+			row.NewInputTokens = 0
+		}
 		row.QuotaDrainPercent = fittedDrain(*row, history)
 		rows = append(rows, *row)
 	}
 	return rows
+}
+
+func codexRolloutModels(home string) map[string]string {
+	models := map[string]string{}
+	root := filepath.Join(home, ".codex", "sessions")
+	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil || entry == nil || entry.IsDir() || !strings.HasPrefix(entry.Name(), "rollout-") || !strings.HasSuffix(entry.Name(), ".jsonl") {
+			return nil
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+		var sessionID, model string
+		scanner := bufio.NewScanner(f)
+		scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+		for scanner.Scan() {
+			var record struct {
+				Type    string `json:"type"`
+				Payload struct {
+					SessionID string `json:"session_id"`
+					Model     string `json:"model"`
+				} `json:"payload"`
+			}
+			if json.Unmarshal(scanner.Bytes(), &record) != nil {
+				continue
+			}
+			if record.Type == "session_meta" && record.Payload.SessionID != "" {
+				sessionID = record.Payload.SessionID
+			}
+			if record.Type == "turn_context" && record.Payload.Model != "" {
+				model = record.Payload.Model
+			}
+		}
+		if sessionID != "" && model != "" {
+			models[sessionID] = model
+		}
+		return nil
+	})
+	return models
 }
 
 func fittedDrain(session agentSessionRow, history []usage.QuotaHistoryEntry) *float64 {
@@ -389,7 +455,7 @@ func readAgentQuotaHistory(home string) []usage.QuotaHistoryEntry {
 func modelTotals(rows []agentSessionRow) []agentModelTotals {
 	byModel := map[string]*agentModelTotals{}
 	for _, row := range rows {
-		if row.Source != "harnez" || row.Model == "" {
+		if row.Model == "" {
 			continue
 		}
 		t := byModel[row.Model]

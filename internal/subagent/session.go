@@ -204,7 +204,16 @@ func (s *FileSessionStore) Get(id string) (*Session, error) {
 
 // List returns all sessions, optionally filtered by parentID.
 func (s *FileSessionStore) List(parentID string, allSessions bool) ([]*Session, error) {
-	entries, err := os.ReadDir(s.dir)
+	return s.listFrom(s.dir, parentID, allSessions)
+}
+
+// ListDeleted returns archived session records kept for long-term stats.
+func (s *FileSessionStore) ListDeleted() ([]*Session, error) {
+	return s.listFrom(filepath.Join(s.dir, "deleted"), "", true)
+}
+
+func (s *FileSessionStore) listFrom(dir, parentID string, allSessions bool) ([]*Session, error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []*Session{}, nil
@@ -215,10 +224,15 @@ func (s *FileSessionStore) List(parentID string, allSessions bool) ([]*Session, 
 	for _, entry := range entries {
 		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
 			id := entry.Name()[:len(entry.Name())-5]
-			sess, err := s.Get(id)
+			data, err := os.ReadFile(filepath.Join(dir, id+".json"))
 			if err != nil {
 				continue
 			}
+			var decoded Session
+			if err := json.Unmarshal(data, &decoded); err != nil {
+				continue
+			}
+			sess := &decoded
 			if allSessions || parentID == "" || sess.ParentSessionID == parentID {
 				sessions = append(sessions, sess)
 			}
@@ -230,6 +244,21 @@ func (s *FileSessionStore) List(parentID string, allSessions bool) ([]*Session, 
 // Delete removes a session file.
 func (s *FileSessionStore) Delete(id string) error {
 	path := filepath.Join(s.dir, id+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("session %q not found", id)
+		}
+		return fmt.Errorf("failed to read session before deletion: %w", err)
+	}
+	archiveDir := filepath.Join(s.dir, "deleted")
+	if err := os.MkdirAll(archiveDir, 0700); err != nil {
+		return fmt.Errorf("failed to create deleted-session archive: %w", err)
+	}
+	archivePath := filepath.Join(archiveDir, id+".json")
+	if err := os.WriteFile(archivePath, data, 0600); err != nil {
+		return fmt.Errorf("failed to archive session before deletion: %w", err)
+	}
 	if err := os.Remove(path); err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("session %q not found", id)
