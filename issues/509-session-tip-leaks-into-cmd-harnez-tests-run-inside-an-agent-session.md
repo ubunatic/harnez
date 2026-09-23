@@ -36,3 +36,10 @@ one explicitly.
 - The root cause is confirmed and fixed in test isolation, not by loosening the stderr
   assertion.
 - A test proves the tip hook is silent under `TestMain` defaults.
+
+## Also consider
+
+The "harnez tip" message goes to stderr from the root `PersistentPreRunE`, so it can also
+land in the output of any nested `harnez agent` call, not only in tests. Consider not
+printing it for commands whose stderr is part of a protocol (`agent` streaming), or when
+running under `go test`, in addition to fixing the test isolation.
