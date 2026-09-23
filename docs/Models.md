@@ -49,6 +49,12 @@ Findings:
   than sonnet, likely because cached tokens dominate. Codex and agy attribution was not
   defensible (overlapping account-wide readings).
 - **COST reverted (same day):** list prices mislead across vendors (terra > sol, opus 60 vs astra 100 contradict measured quota); COST is now plan quota per turn, see ModelResearch.md step 3.
+- **COST from plan quota (applied):** 5h points per 100k new tokens on ChatGPT Plus /
+  Claude Pro, × luna, stretched × 1.6 so the measured astra ratio (62) lands on 100:
+  luna 1, haiku 12, sonnet 15, opus 20, terra 26, sol 50 (gpt-5.6-sol data, gpt-6-sol
+  unmeasured), astra 100. agy (Google Pro) unmeasured, kept at 4/16/32. Opus is only
+  ~1.3× sonnet per token (user's 2× estimate likely includes turn counts, i.e. EFF).
+  Details: [plan-quota study](studies/2026-09-24-model-research-plan-quota.md).
 - **Process:** all six agents wrote their studies (run from a scratch dir, writing into the
   repo worked). The quota agent first read "read-only" as forbidding the study file; say
   "read-only except the study file".

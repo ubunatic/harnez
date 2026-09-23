@@ -26,7 +26,7 @@ models:
     name: gpt-6-sol
     tier: low
     roles: developer, advisor, reviewer
-    cost: 20
+    cost: 50
     eff: "-"
     skills: Go~ TUI~ SQL?
     use: capable coding and tool use; milestone reviewer; tends to over-refactor
@@ -44,7 +44,7 @@ models:
     name: gpt-5.6-terra
     tier: low
     roles: advisor, reviewer, developer
-    cost: 16
+    cost: 26
     eff: "+"
     skills: Go~ TUI~ SQL~
     use: best-value auditor; finds code traps with file:line
@@ -53,7 +53,7 @@ models:
     name: haiku
     tier: low
     roles: mechanical
-    cost: 4
+    cost: 12
     eff: "-"
     skills: Go~ TUI- SQL~
     use: narrow edits with a machine-checkable test only
@@ -62,7 +62,7 @@ models:
     name: sonnet
     tier: low
     roles: advisor, reviewer, developer
-    cost: 16
+    cost: 15
     eff: "~"
     skills: Go~ TUI~ SQL~
     use: cross-vendor advisor or reviewer; strong tool use
@@ -71,7 +71,7 @@ models:
     name: opus
     tier: low
     roles: orchestrator, reviewer
-    cost: 32
+    cost: 20
     eff: "+"
     skills: Go+ TUI? SQL+
     use: host seat for repo judgment, pre-work, diff review
