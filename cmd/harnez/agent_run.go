@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"ubunatic.com/harnez/internal/subagent"
+	"ubunatic.com/harnez/internal/usage"
 )
 
 // This file holds the turn logic behind `agent start` and `agent resume`.
@@ -23,6 +25,33 @@ type agentDeps struct {
 	store  func() (*subagent.FileSessionStore, error)
 	parent func() string
 	find   func(*cobra.Command, *subagent.FileSessionStore, string) (*subagent.Session, error)
+	quota  func(context.Context, string, bool) usage.TurnQuotaReading
+}
+
+func recordTurnQuota(s *subagent.FileSessionStore, capture func(context.Context, string, bool) usage.TurnQuotaReading, sessionID, provider string, turn int, boundary string, force bool) {
+	if capture == nil {
+		capture = usage.CaptureTurnQuota
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), usage.TurnQuotaTimeout)
+	defer cancel()
+	reading := capture(ctx, provider, force)
+	_ = s.RecordTurnQuota(subagent.TurnQuotaEvent{SessionID: sessionID, Turn: turn, Boundary: boundary, Provider: provider, Reading: reading})
+}
+
+func captureTurnQuota(parent context.Context, capture func(context.Context, string, bool) usage.TurnQuotaReading, provider string, force bool) usage.TurnQuotaReading {
+	if capture == nil {
+		capture = usage.CaptureTurnQuota
+	}
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parent, usage.TurnQuotaTimeout)
+	defer cancel()
+	return capture(ctx, provider, force)
+}
+
+func storeTurnQuota(s *subagent.FileSessionStore, sessionID, provider string, turn int, boundary string, reading usage.TurnQuotaReading) {
+	_ = s.RecordTurnQuota(subagent.TurnQuotaEvent{SessionID: sessionID, Turn: turn, Boundary: boundary, Provider: provider, Reading: reading})
 }
 
 // startRequest describes one new agent turn. Prompt is sent to the agent;
@@ -121,6 +150,8 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	driver := agentDriver(m, canonicalWorkDir)
 	sd, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
+	turn := 1
+	before := captureTurnQuota(cmd.Context(), d.quota, m.Provider, false)
 	var ts *turnStream
 	var r *subagent.TurnResult
 	if streaming {
@@ -146,13 +177,17 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		r, err = driver.Run(cmd.Context(), opts)
 	}
 	if err != nil {
+		storeTurnQuota(s, id, m.Provider, turn, "before", before)
+		recordTurnQuota(s, d.quota, id, m.Provider, turn, "after", true)
 		return fmt.Errorf("agent start %q failed: %w; verify the provider/model configuration or ask for guidance", spec, err)
 	}
 	if r.SessionID != "" {
 		id = r.SessionID
 	}
+	storeTurnQuota(s, id, m.Provider, turn, "before", before)
+	recordTurnQuota(s, d.quota, id, m.Provider, turn, "after", true)
 	now := time.Now()
-	sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now}
+	sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn}
 	if err := s.Save(sess); err != nil {
 		return err
 	}
@@ -236,6 +271,8 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	var r *subagent.TurnResult
 	sd, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
+	turn := sess.Turn + 1
+	before := captureTurnQuota(cmd.Context(), d.quota, sess.Provider, false)
 	if streaming {
 		ts = newTurnStream(cmd, req.StreamMode, compacted)
 		ts.info(sess.ID, sess.Provider+":"+sess.Model, "resume", resolved)
@@ -256,6 +293,8 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		r, err = driver.Resume(cmd.Context(), sess.ProviderID(), req.Prompt, subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
 	}
 	if err != nil {
+		storeTurnQuota(s, sess.ID, sess.Provider, turn, "before", before)
+		recordTurnQuota(s, d.quota, sess.ID, sess.Provider, turn, "after", true)
 		recordResumeFailure(s, sess, err)
 		return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
 	}
@@ -266,6 +305,9 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	sess.TokensSinceCompact += subagent.CompactionTokens(r)
 	sess.CachedTokens = r.CachedTokens
 	sess.LastActiveAt = time.Now()
+	sess.Turn = turn
+	storeTurnQuota(s, sess.ID, sess.Provider, turn, "before", before)
+	recordTurnQuota(s, d.quota, sess.ID, sess.Provider, turn, "after", true)
 	if err = s.Save(sess); err != nil {
 		return err
 	}

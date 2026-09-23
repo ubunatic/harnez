@@ -40,6 +40,7 @@ type Session struct {
 	Role               string    `json:"role,omitempty"`
 	LastError          string    `json:"last_error,omitempty"`
 	ResumeFailures     int       `json:"resume_failures,omitempty"`
+	Turn               int       `json:"turn,omitempty"`
 }
 
 // ProviderID returns the provider-side identifier used for lifecycle commands.

@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,10 @@ import (
 	"testing"
 	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 // TestQuotaCacheReadWriteRoundTrip checks the atomic write-then-rename helper
 // produces a file readLiveFetchCache can parse back unchanged.
@@ -158,6 +163,26 @@ func TestCollectClaudeUsesWarmDiskCache(t *testing.T) {
 	}
 	if usage.Weekly == nil || usage.Weekly.UsedPercent != 11 {
 		t.Errorf("Weekly = %+v, want UsedPercent 11 from cache", usage.Weekly)
+	}
+}
+
+func TestCollectClaudeForcedRefreshBypassesWarmCache(t *testing.T) {
+	dir := claudeFixtureDir(t)
+	cache := liveFetchCache[claudeQuotaPayload]{FetchedAt: time.Now(), Payload: claudeQuotaPayload{Session: &QuotaWindow{Name: "5h", UsedPercent: 12}}}
+	if err := writeLiveFetchCache(liveFetchCachePath(dir), cache); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		called = true
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"five_hour":{"utilization":71}}`)), Request: r}, nil
+	})}
+	u := CollectClaude(ForceQuotaFetch(context.Background()), dir, client)
+	if !called {
+		t.Fatal("forced refresh reused warm cache without querying the endpoint")
+	}
+	if u.Session == nil || u.Session.UsedPercent != 71 {
+		t.Fatalf("Session=%+v, want fresh 71%%", u.Session)
 	}
 }
 

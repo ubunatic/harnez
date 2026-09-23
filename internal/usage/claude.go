@@ -312,7 +312,7 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 		defer lockLiveFetchInProcess(cachePath)()
 		cache := readLiveFetchCache[claudeQuotaPayload](cachePath)
 
-		if cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval {
+		if !quotaFetchForced(ctx) && cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval {
 			usage.Session = cache.Payload.Session
 			usage.Weekly = cache.Payload.Weekly
 			usage.Sources = append(usage.Sources, "~/.claude/harnez-quota-cache.json")

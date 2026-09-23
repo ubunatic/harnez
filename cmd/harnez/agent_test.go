@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/subagent"
+	"ubunatic.com/harnez/internal/usage"
 )
 
 func TestAgentCommandSurface(t *testing.T) {
@@ -1585,6 +1586,52 @@ func TestRunStartWithoutCobraFlags(t *testing.T) {
 	sessions, err := store.List("", true)
 	if err != nil || len(sessions) != 1 {
 		t.Fatalf("saved sessions = %v, err=%v", sessions, err)
+	}
+}
+
+func TestRunStartRecordsQuotaBoundariesForTurn(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	driver := &recordingAgentDriver{}
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+	var calls []bool
+	capture := func(_ context.Context, _ string, force bool) usage.TurnQuotaReading {
+		calls = append(calls, force)
+		return usage.TurnQuotaReading{CapturedAt: time.Now().UTC(), HasCache: true, CacheAgeMS: 123}
+	}
+	cmd := &cobra.Command{}
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = runStart(cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, quota: capture}, startRequest{Prompt: "p", StoredPrompt: "p", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull, JSON: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(calls, []bool{false, true}) {
+		t.Fatalf("quota capture force flags=%v, want [false true]", calls)
+	}
+	data, err := os.ReadFile(filepath.Join(storeDir, "quota-readings.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("quota event count=%d, want 2", len(lines))
+	}
+	var before, after subagent.TurnQuotaEvent
+	if err := json.Unmarshal([]byte(lines[0]), &before); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &after); err != nil {
+		t.Fatal(err)
+	}
+	if before.SessionID != after.SessionID || before.Turn != 1 || after.Turn != 1 || before.Boundary != "before" || after.Boundary != "after" || after.Reading.CacheAgeMS != 123 {
+		t.Fatalf("recorded quota events=%+v %+v", before, after)
 	}
 }
 

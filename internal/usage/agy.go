@@ -380,7 +380,7 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 		defer lockLiveFetchInProcess(cachePath)()
 		cache := readLiveFetchCache[agyQuotaPayload](cachePath)
 
-		if cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval {
+		if !quotaFetchForced(ctx) && cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval {
 			usage.ModelGroups = cache.Payload.ModelGroups
 			usage.Sources = append(usage.Sources, "~/.gemini/antigravity-cli/harnez-quota-cache.json")
 		} else {

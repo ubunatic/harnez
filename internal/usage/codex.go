@@ -301,7 +301,7 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 		defer lockLiveFetchInProcess(cachePath)()
 		cache := readLiveFetchCache[codexQuotaPayload](cachePath)
 
-		if cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval && !codexQuotaCacheExpired(cache.Payload, time.Now()) {
+		if !quotaFetchForced(ctx) && cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval && !codexQuotaCacheExpired(cache.Payload, time.Now()) {
 			usage.Session = cache.Payload.Session
 			usage.Weekly = cache.Payload.Weekly
 			usage.Sources = append(usage.Sources, "~/.codex/harnez-quota-cache.json")

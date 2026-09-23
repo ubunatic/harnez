@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -8,6 +9,19 @@ import (
 	"syscall"
 	"time"
 )
+
+type forceQuotaFetchKey struct{}
+
+// ForceQuotaFetch marks a quota collection as requiring an upstream refresh.
+// The shared live cache is still updated and used as an error fallback.
+func ForceQuotaFetch(ctx context.Context) context.Context {
+	return context.WithValue(ctx, forceQuotaFetchKey{}, true)
+}
+
+func quotaFetchForced(ctx context.Context) bool {
+	forced, _ := ctx.Value(forceQuotaFetchKey{}).(bool)
+	return forced
+}
 
 // liveFetchCacheFilename is the shared cross-process cache written next to
 // each agent's own local cache/auth files (~/.claude, ~/.codex,
