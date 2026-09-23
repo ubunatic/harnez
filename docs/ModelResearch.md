@@ -16,7 +16,7 @@ role practice: [practices/ModelRoles.md](practices/ModelRoles.md).
 ## Scope rule
 
 Re-run only the new or changed models. Re-run all models only when an anchor changes:
-`codex:luna` (COST 1) or `codex:astra` (COST ~100× luna, level 8).
+`codex:luna` (COST 1) or `codex:astra` (COST 100).
 
 ## Steps, cheapest first
 
@@ -57,8 +57,8 @@ Prompt template (swap the column block for EFF):
 ```text
 Web research only. Do not inspect any repository or local files.
 Models: <list provider ids from spec/agent.yaml, e.g. gpt-6-luna, gpt-6-sol, ...>.
-Column: COST. Rate every model on one scale: level 1-9, each step ~2x the previous,
-anchors gpt-6-luna = 1 and gpt-6-astra = 8 (~100x luna). Give list price per 1M
+Column: COST. Rate every model on one scale as a multiple of gpt-6-luna,
+anchors gpt-6-luna = 1 and gpt-6-astra = 100. Give list price per 1M
 input/output tokens and, separately, any subscription/quota evidence; list price is
 not subscription cost.
 [EFF: tokens needed to reach a coding goal: + few, ~ average, - many, ? no data.]
