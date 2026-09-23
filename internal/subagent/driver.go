@@ -55,6 +55,14 @@ type Model struct {
 	Effort *bool
 }
 
+// ModelGuide is the listing guidance of a spec/agent.yaml model entry; it
+// stays out of Model so session records do not carry it.
+type ModelGuide struct {
+	Roles  string `yaml:"roles"`
+	Use    string `yaml:"use"`
+	UseMed string `yaml:"use_med"` // replaces Use for the :med variant
+}
+
 // SupportsEffort reports whether an effort/reasoning-tier flag should be
 // passed for this model. Unset (nil) means supported.
 func (m Model) SupportsEffort() bool {
@@ -99,13 +107,43 @@ func KnownModels() []Model {
 // default tier, plus a :med variant for effort-aware codex and agy models.
 func KnownModelSpecs() []string {
 	var specs []string
-	for _, m := range KnownModels() {
-		specs = append(specs, m.Spec())
-		if m.Tier != "med" && m.Provider != "claude" && m.SupportsEffort() {
-			specs = append(specs, m.Provider+":"+modelAliasName(m)+":med")
-		}
+	for _, e := range KnownModelEntries() {
+		specs = append(specs, e.Spec)
 	}
 	return specs
+}
+
+// ModelEntry is one selectable spec with its listing guidance.
+type ModelEntry struct {
+	Spec  string
+	Model Model
+	// Effort reports whether the batch driver passes a tier flag; the
+	// claude driver never does, so claude tiers are labels only.
+	Effort bool
+	Roles  string
+	Use    string
+}
+
+// KnownModelEntries backs KnownModelSpecs and `harnez agent models`.
+func KnownModelEntries() []ModelEntry {
+	guides, err := modelGuidesOnce()
+	if err != nil {
+		panic(err)
+	}
+	var entries []ModelEntry
+	for _, m := range KnownModels() {
+		g := guides[m.Provider+":"+modelAliasName(m)]
+		effort := m.Provider != "claude" && m.SupportsEffort()
+		entries = append(entries, ModelEntry{Spec: m.Spec(), Model: m, Effort: effort, Roles: g.Roles, Use: g.Use})
+		if m.Tier != "med" && effort {
+			use := g.Use
+			if g.UseMed != "" {
+				use = g.UseMed
+			}
+			entries = append(entries, ModelEntry{Spec: m.Provider + ":" + modelAliasName(m) + ":med", Model: m, Effort: effort, Roles: g.Roles, Use: use})
+		}
+	}
+	return entries
 }
 
 func (m Model) Spec() string {

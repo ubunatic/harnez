@@ -67,6 +67,22 @@ func loadModelAliases() (map[string]Model, error) {
 
 var modelAliasesOnce = sync.OnceValues(loadModelAliases)
 
+func loadModelGuides() (map[string]ModelGuide, error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, agentSpecPath)
+	if err != nil {
+		return nil, fmt.Errorf("agent spec: read %s: %w", agentSpecPath, err)
+	}
+	var spec struct {
+		Models map[string]ModelGuide `yaml:"models"`
+	}
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		return nil, fmt.Errorf("agent spec: parse model guides: %w", err)
+	}
+	return spec.Models, nil
+}
+
+var modelGuidesOnce = sync.OnceValues(loadModelGuides)
+
 func ensureModelAliases() error {
 	var err error
 	modelAliases, err = modelAliasesOnce()

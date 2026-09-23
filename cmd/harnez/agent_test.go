@@ -101,6 +101,59 @@ func TestAgentModelsListsKnownSpecs(t *testing.T) {
 	}
 }
 
+func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
+	cmd := newAgentCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"models"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(out.String(), "\n")
+	if !strings.HasPrefix(lines[0], "SPEC") || !strings.Contains(lines[0], "ROLES") || !strings.Contains(lines[0], "USE") {
+		t.Fatalf("header = %q", lines[0])
+	}
+	var low, med, opus, haiku string
+	for _, line := range lines {
+		switch {
+		case strings.HasPrefix(line, "claude:haiku:low"):
+			haiku = line
+		case strings.HasPrefix(line, "codex:luna:low"):
+			low = line
+		case strings.HasPrefix(line, "codex:luna:med"):
+			med = line
+		case strings.HasPrefix(line, "agy:opus:low"):
+			opus = line
+		}
+	}
+	if !strings.Contains(low, "developer") || !strings.Contains(low, "clear, bounded tickets") {
+		t.Fatalf("luna:low row = %q", low)
+	}
+	if !strings.Contains(med, "interface or design changes") {
+		t.Fatalf("luna:med row must use use_med: %q", med)
+	}
+	if !strings.Contains(opus, " no ") {
+		t.Fatalf("agy:opus row must report no effort support: %q", opus)
+	}
+	if !strings.Contains(haiku, " no ") {
+		t.Fatalf("claude rows must report no effort flag: %q", haiku)
+	}
+}
+
+func TestAgentModelsNamesPrintsBareSpecs(t *testing.T) {
+	cmd := newAgentCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"models", "--names"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Fields(out.String())
+	if strings.Join(got, "\n") != strings.Join(subagent.KnownModelSpecs(), "\n") {
+		t.Fatalf("--names output = %q", out.String())
+	}
+}
+
 func TestAgentStartRejectsUnknownModelWithoutCreatingSession(t *testing.T) {
 	old := agentDriver
 	agentDriver = func(subagent.Model, string) subagent.Driver {

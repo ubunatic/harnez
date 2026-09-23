@@ -15,7 +15,10 @@
           "provider": { "type": "string", "minLength": 1 },
           "name": { "type": "string", "minLength": 1 },
           "tier": { "type": "string", "enum": ["low", "med", "high"] },
-          "effort": { "type": "boolean" }
+          "effort": { "type": "boolean" },
+          "roles": { "type": "string" },
+          "use": { "type": "string" },
+          "use_med": { "type": "string" }
         },
         "additionalProperties": false
       }

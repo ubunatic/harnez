@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/google/uuid"
@@ -206,20 +207,34 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 	_ = start.RegisterFlagCompletionFunc("stream", flagValueCompletion(streamFull, streamStats))
 	start.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 
-	models := &cobra.Command{Use: "models", Short: "List known agent models and tiers", RunE: func(cmd *cobra.Command, _ []string) error {
+	var modelNamesOnly bool
+	models := &cobra.Command{Use: "models", Short: "List known agent models with roles and when to use them", RunE: func(cmd *cobra.Command, _ []string) error {
 		defaultSpec, err := subagent.DefaultModelSpec()
 		if err != nil {
 			return err
 		}
-		for _, spec := range subagent.KnownModelSpecs() {
-			line := spec
-			if line == defaultSpec {
-				line += "  (default)"
+		if modelNamesOnly {
+			for _, spec := range subagent.KnownModelSpecs() {
+				fmt.Fprintln(cmd.OutOrStdout(), spec)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), line)
+			return nil
 		}
-		return nil
+		tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
+		fmt.Fprintln(tw, "SPEC\tMODEL\tEFFORT\tROLES\tUSE")
+		for _, e := range subagent.KnownModelEntries() {
+			spec := e.Spec
+			if spec == defaultSpec {
+				spec += " (default)"
+			}
+			effort := "yes"
+			if !e.Effort {
+				effort = "no"
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", spec, e.Model.Name, effort, e.Roles, e.Use)
+		}
+		return tw.Flush()
 	}}
+	models.Flags().BoolVar(&modelNamesOnly, "names", false, "print only the model specs, one per line")
 
 	var chatName string
 	chat := &cobra.Command{Use: "chat", Short: "Launch an interactive agent session", Args: noArgs("model is now --model <spec>"), RunE: func(cmd *cobra.Command, args []string) error {

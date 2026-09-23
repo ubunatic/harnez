@@ -2,18 +2,79 @@
 # Agent model and role defaults are part of the application artifact.
 default_model: codex:luna:low
 
+# `roles` and `use` are shown by `harnez agent models`; `use_med` replaces `use`
+# for the model's :med variant. Guidance source: docs/practices/ModelRoles.md.
 models:
-  codex:luna: {provider: codex, name: gpt-6-luna, tier: low}
-  codex:sol: {provider: codex, name: gpt-6-sol, tier: low}
-  codex:astra: {provider: codex, name: gpt-5.6-astra, tier: low}
-  codex:terra: {provider: codex, name: gpt-5.6-terra, tier: low}
-  claude:haiku: {provider: claude, name: haiku, tier: low}
-  claude:sonnet: {provider: claude, name: sonnet, tier: low}
-  claude:opus: {provider: claude, name: opus, tier: low}
-  agy:flash37: {provider: agy, name: gemini-3.7-flash, tier: low}
-  agy:flash38: {provider: agy, name: gemini-3.8-flash, tier: low}
-  agy:sonnet: {provider: agy, name: claude-sonnet-4-6, tier: low, effort: false}
-  agy:opus: {provider: agy, name: claude-opus-4-6-thinking, tier: low, effort: false}
+  codex:luna:
+    provider: codex
+    name: gpt-6-luna
+    tier: low
+    roles: developer, mechanical
+    use: clear, bounded tickets; cheapest; weak on long terminal loops
+    use_med: interface or design changes; less prone to bending tests
+  codex:sol:
+    provider: codex
+    name: gpt-6-sol
+    tier: low
+    roles: developer, advisor, reviewer
+    use: capable coding and tool use below Astra cost; milestone reviewer
+  codex:astra:
+    provider: codex
+    name: gpt-5.6-astra
+    tier: low
+    roles: advisor, developer
+    use: hardest multi-step coding and terminal automation; flagship cost
+  codex:terra:
+    provider: codex
+    name: gpt-5.6-terra
+    tier: low
+    roles: advisor, reviewer, developer
+    use: best-value auditor; finds code-level traps with file:line
+  claude:haiku:
+    provider: claude
+    name: haiku
+    tier: low
+    roles: mechanical
+    use: narrow edits with a machine-checkable acceptance test only
+  claude:sonnet:
+    provider: claude
+    name: sonnet
+    tier: low
+    roles: advisor, reviewer, developer
+    use: cross-vendor advisor or reviewer; strong tool use at mid cost
+  claude:opus:
+    provider: claude
+    name: opus
+    tier: low
+    roles: orchestrator, reviewer
+    use: host seat; complex repo judgment, pre-work and diff review
+  agy:flash37:
+    provider: agy
+    name: gemini-3.7-flash
+    tier: low
+    roles: developer, advisor, reviewer
+    use: fast bounded implementation or review with clear checks
+  agy:flash38:
+    provider: agy
+    name: gemini-3.8-flash
+    tier: low
+    roles: reviewer, advisor, developer
+    use: cross-vendor reviewer; strong terminal coding, slow first token
+    use_med: escalation advisor on a budget
+  agy:sonnet:
+    provider: agy
+    name: claude-sonnet-4-6
+    tier: low
+    effort: false
+    roles: reviewer, developer
+    use: Sonnet 4.6 via agy; reviewer or developer when Claude quota is out
+  agy:opus:
+    provider: agy
+    name: claude-opus-4-6-thinking
+    tier: low
+    effort: false
+    roles: advisor, reviewer
+    use: Opus 4.6 via agy; careful analysis of hard problems
 
 # Roles keep delegation one level deep. `spawns` lists the roles a session of
 # that role may start through `harnez agent`; an empty list makes it a leaf
