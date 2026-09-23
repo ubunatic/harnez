@@ -152,6 +152,23 @@ func TestFilterHeadTail_UnderLimit(t *testing.T) {
 	}
 }
 
+func TestFilterHeadTailString(t *testing.T) {
+	in := "line0\nline1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9"
+	got := FilterHeadTailString(in, 4)
+	want := "line0\nline1\n[... 6 lines omitted ...]\nline8\nline9"
+	if got != want {
+		t.Errorf("FilterHeadTailString() = %q, want %q", got, want)
+	}
+}
+
+func TestFilterHeadTailString_UnderLimit(t *testing.T) {
+	in := "a\nb\nc"
+	got := FilterHeadTailString(in, 10)
+	if got != in {
+		t.Errorf("FilterHeadTailString() = %q, want unchanged %q", got, in)
+	}
+}
+
 func TestFilterHeadTailBytes(t *testing.T) {
 	var lines []string
 	for i := 0; i < 500; i++ {
