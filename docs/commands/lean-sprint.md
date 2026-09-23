@@ -46,7 +46,7 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 For focused, milestone-based tasks, execute this fast-path, token-efficient loop:
 
 ### 1. Goal Handoff to Low-Cost Developer
-- The Host Orchestrator dispatches a developer worker (e.g. `--model luna`) using `harnez agent start --role developer --name <worker> --model <model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method).
+- The Host Orchestrator dispatches a developer worker (pick the model from `harnez agent models`; e.g. `--model luna`) using `harnez agent start --role developer --name <worker> --model <model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method).
 - An explicitly named `provider:model:tier` must be dispatched exactly through `harnez agent start`; on failure, report it and ask for guidance rather than substituting the host model or a native subagent.
 - Provide:
   - Scoped milestone objective, target files, and acceptance criteria from the ticket.
@@ -59,6 +59,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 ### 2. Autonomous Milestone Execution & Commit
 - The developer agent implements the milestone autonomously.
 - Follows Test-Driven Development (TDD) and executes repo-native verification (`go test ./...`, `make test`).
+- Under a one-run test budget (`make test-q1`), writes the full output to a file and greps it for `--- FAIL`; never pipes it into `tail`. A failure in an untouched test gets its own ticket instead of a loosened assertion.
 - Immediately commits the verified milestone at the boundary (`git commit -m "... (issue XXX MX)"`).
 - Reports completion back to the Host Orchestrator. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).
 
@@ -78,6 +79,6 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - Once the final milestone passes concise review and tests are 100% green, confirm completion.
 
 ### 5. Teardown & Status Sync
-- Terminate the developer subagent (`harnez agent delete --name <session_id>` or `manage_subagents kill`) and drain background jobs.
+- Terminate the developer subagent and every research or probe helper (`harnez agent delete --name <session_id>` or `manage_subagents kill`) and drain background jobs; `harnez agent list` should show none left.
 - Update ticket status in `issues/*.md` (e.g. `Status: Closed`) and refresh `issues/README.md` (`harnez index -d .`).
 - Output a brief, high-level summary of delivered milestones and verification status. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).

@@ -4,13 +4,17 @@ Orchestrate a bottom-up, cost-efficient sprint where a **low-cost developer agen
 
 Reference Practice: `@docs/AgenticLoop.md`
 
-## Model Selection Matrix
+## Role Matrix
 
-| Role | Permitted Models | Usage Trigger | Context & Exploration Rules |
+Pick each role's model from `harnez agent models`: its ROLES and USE columns are the
+current assignment. Don't copy model names into this skill, because lineups change.
+Prefer a reviewer from a different vendor than the coder.
+
+| Role | Model pick | Usage Trigger | Context & Exploration Rules |
 |---|---|---|---|
-| **Coder / Main Session** | `luna:low`, `luna:medium`, `haiku`, `gemini3.7flash:low` | Primary executor (all coding, tests, commits) | Leads session; compacts every 100–150k tokens |
-| **Reviewer Subagent** | `sol:low`, `sonnet:low`, `gemini3.8flash:low` | After milestone completion or before commit | Diff-first inspection (`git diff HEAD~1`, test results) |
-| **Advisor Subagent** | `astra:low`, `opus:low`, `gemini3.8flash:med` | **Use only when stuck** or solving challenging problems | **Strict limited context**: direct file pointers, exact lines, zero deep crawling |
+| **Coder / Main Session** | cheapest `developer` row fitting the ticket (`:med` for interface/design changes) | Primary executor (all coding, tests, commits) | Leads session; compacts every 100–150k tokens |
+| **Reviewer Subagent** | a `reviewer` row, other vendor than the coder | After milestone completion or before commit | Diff-first inspection (`git diff HEAD~1`, test results) |
+| **Advisor Subagent** | an `advisor` row whose USE says escalation | **Use only when stuck** or solving challenging problems | **Strict limited context**: direct file pointers, exact lines, zero deep crawling |
 
 ---
 
@@ -29,12 +33,12 @@ You execute all coding, testing, and ticket management directly while maintainin
    - Persist critical learnings, ticket status, and decisions to ticket/doc files *before* compacting.
 
 3. **On-Demand Milestone Code Reviews**:
-   - After completing a milestone and before committing, spawn or reuse a **Reviewer subagent** (`sol:low`, `sonnet:low`, or `gemini3.8flash:low`).
+   - After completing a milestone and before committing, spawn or reuse a **Reviewer subagent** (a `reviewer` row of `harnez agent models`, other vendor than yours).
    - Supply only the commit diff (`git log -n 1 --stat`, `git diff HEAD~1`) and test output.
    - Address any identified regressions, missing test assertions, or ambient leaks before advancing.
 
 4. **Advisor Escalation — Strict Context Bounding (Use Only When Stuck)**:
-   - When encountering architectural ambiguity, tough edge cases, or blocking bugs, consult an **Advisor subagent** (`astra:low`, `opus:low`, or `gemini3.8flash:med`).
+   - When encountering architectural ambiguity, tough edge cases, or blocking bugs, consult an **Advisor subagent** (an escalation `advisor` row of `harnez agent models`).
    - **Crucial Cost Guardrail**: Provide *strictly limited context* — direct file pointers, exact line ranges (`path/to/file.ext#L20-L50`), and concrete questions.
    - Explicitly instruct the advisor **NOT to perform whole-repo exploratory browsing or multi-file deep scans** to avoid exhausting frontier token budgets (especially on Astra/Opus).
 
@@ -58,9 +62,10 @@ You execute all coding, testing, and ticket management directly while maintainin
 - Implement the scoped changes using Test-Driven Development (TDD).
 - Run repo-native verification commands (`go test ./...`, `make test`, `make check`).
 - Ensure all tests pass with robust assertions.
+- Under a one-run test budget (`make test-q1`), write the full output to a file and grep it for `--- FAIL`; never pipe it into `tail`. A failure in an untouched test gets its own ticket instead of a loosened assertion or a retry loop.
 
 ### 3. Milestone Review Gate (Reviewer Tier)
-- Invoke a reviewer subagent (e.g. `harnez agent start --role reviewer --model sol -d <dir> "Review diff HEAD~1 against ticket criteria"` or `gemini3.8flash:low`).
+- Invoke a reviewer subagent on a `reviewer` model from `harnez agent models`, from another vendor than yours (e.g. `harnez agent start --role reviewer --model sol -d <dir> "Review diff HEAD~1 against ticket criteria"`).
 - Provide diff summary and test results, naming the milestone (short label, not bare "M2"). Note the emitted Reconnect Banner.
 - Reviewer checks test assertion rigor, regression risks, and invariant compliance.
 - Once green, commit the milestone: `git commit -m "feat/fix(...): ... (issue XXX)"`.

@@ -15,7 +15,8 @@ noticed by chance during an evergreen pass.
 
 ## /goal
 
-A test or `make check` step fails when a doc under `docs/` (outside `studies/`, `feedback/`
+A test or `make check` step fails when a doc under `docs/` (including the skill sources in
+`docs/commands/`, but outside `studies/`, `feedback/`
 and other dated records) names a `provider:model[:tier]` alias for a known provider (codex,
 claude, agy) that `subagent.ResolveModel` rejects.
 

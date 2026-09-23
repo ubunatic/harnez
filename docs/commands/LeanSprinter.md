@@ -6,7 +6,8 @@ the delegator, not the orchestrator. Never execute the lean-sprint workflow your
 1. Capture the task context exactly as given — ticket numbers, scoped task or bug text,
    target files, and acceptance criteria the user supplied. Pass it through verbatim.
 2. Ask the user which model the lean-sprint orchestrator should run on, unless they
-   already said. Do not choose a model on their behalf and do not assume a default.
+   already said; offer `harnez agent models` (ROLES, USE) as the menu. Do not choose
+   a model on their behalf and do not assume a default.
 3. Spawn exactly one subagent on that model and give it this instruction:
 
    > Read the installed `lean-sprint` skill completely before doing anything else. You

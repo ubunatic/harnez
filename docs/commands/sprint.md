@@ -36,11 +36,12 @@ Follow these 5 phases sequentially:
    - Check whether work is already completed or if prior assumptions changed.
    - Identify target files, exact line ranges, and test requirements.
    - Formulate a clean, step-by-step implementation plan.
-   - Recommend broader subsystem/work categories, short technical developer names (e.g. `cli`, `spec`, `docs`), and a suitable model for each. Explicitly justify any recommendation to use the top frontier model for development.
+   - Recommend broader subsystem/work categories, short technical developer names (e.g. `cli`, `spec`, `docs`), and a suitable model for each, chosen from `harnez agent models` (ROLES, USE columns). Explicitly justify any recommendation to use the top frontier model for development.
    - Work within the requested advice scope: it may edit tickets, create documents under `docs/` or `issues/`, and make tiny 3–4 line fixes only when the build stays clean. Verify the build for such fixes. Do not perform normal coding or split a larger change into tiny fixes to bypass this limit; hand normal implementation to developers.
    - Make intermediate commits when reasoning locks in substeps of the requested advice, committing only its scoped changes and observing the applicable review requirements. Persist conclusions, decisions, and handoff details in tickets/docs before compaction.
 4. Collect each ticket's findings and durable references into the orchestrator's sprint plan. After each ticket, the orchestrator must explicitly call the available session-compaction operation (`harnez agent compact --name <session_id>`) on the advisor session and confirm completion. This includes an explicit call after the last ticket, even if no further work is queued. An instruction to the advisor to compact itself is not a substitute. Keep the same session for clean-but-cached reuse, including hours later; do not replace it with a fresh advisor per ticket.
 5. Present the synthesized plan and task sequence to the user.
+   - Outside research (model comparisons, library or API surveys) goes to separate helpers whose prompt says "web research only, do not inspect the repository"; otherwise the advisor rules pull them into repo audits. Delete them once their reply is collected.
 6. Keep the host orchestrator responsive throughout delegation. Do not block the main chat on subagent waits unless the user explicitly asked to wait or the next integration step is blocked on a child result.
 
 ### Phase 2: Sequential Development & Test Verification (Reusable Developers)
@@ -50,6 +51,8 @@ Follow these 5 phases sequentially:
 3. Follow Test-Driven Development (TDD):
    - Add or update unit tests alongside or before modifying implementation code.
    - Run tests (`go test -count=1 ./...`, `make test`) to verify each milestone before moving to the next.
+   - Under a one-run test budget (`make test-q1`), write the full output to a file and grep it for `--- FAIL`; piping into `tail` loses the failing test's name and the rerun needs a code change first.
+   - A failure in a test the milestone didn't touch gets its own ticket (with the failing output and a hypothesis); never loosen the assertion or retry until it passes.
    - Maintain codebase stability, ensuring clean compilation at every step.
    - For defect-shaped tickets: establish a concrete reproduction baseline *before* coding the fix (see `@docs/AgenticLoop.md` Phase 2, "Repro-before-fix").
 4. **Milestone-Boundary Atomic Commits**: Commit each verified milestone upon passing tests and review (`git commit -m "feat/fix(...): ... (issue XXX MX)"`). Never carry uncommitted working tree diffs across milestone transitions.
@@ -80,6 +83,7 @@ Follow these 5 phases sequentially:
 ### Phase 5: Agentic Flow Quality Retrospective (Feedback & Tracker Sync)
 1. Record session flow learnings, tooling friction, or agent harness feedback:
    - Add retrospective notes to `docs/feedback/<YYYY-MM-DD>-<topic>.md` or run `/story` if a major case study was produced.
+   - Record how each model did in its role in the project's model doc (harnez: `docs/Models.md`), and update the `roles`/`use` guidance behind `harnez agent models` when evidence shows a model fits another role.
 2. Synchronize the issue tracker:
    - Update issue status in `issues/*.md` (e.g. `Status: Closed`).
    - Update `issues/README.md` table.
