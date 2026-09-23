@@ -511,3 +511,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 510 | [510-add-a-web-only-researcher-role-for-harnez-agent.md](510-add-a-web-only-researcher-role-for-harnez-agent.md) | Add a web-only researcher role for harnez agent | Open |
 | 511 | [511-make-test-q1-keeps-the-full-test-log-and-prints-its-path-on-failure.md](511-make-test-q1-keeps-the-full-test-log-and-prints-its-path-on-failure.md) | make test-q1 keeps the full test log and prints its path on failure | Open |
 | 512 | [512-check-that-docs-list-only-model-aliases-defined-in-spec-agent-yaml.md](512-check-that-docs-list-only-model-aliases-defined-in-spec-agent-yaml.md) | Check that docs list only model aliases defined in spec/agent.yaml | Open |
+| 513 | [513-real-terminal-tty-run-before-a-cli-feature-is-called-done.md](513-real-terminal-tty-run-before-a-cli-feature-is-called-done.md) | Real-terminal (TTY) run before a CLI feature is called done | Open |
