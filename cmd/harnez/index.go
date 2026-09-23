@@ -1,6 +1,6 @@
 // index implements `harnez index`, which regenerates the hand-maintained
 // issues/README.md ticket table and docs/README.md docs/studies/ table from
-// their source files. See issues/148-harnez-index-command-for-issues-docs-studies.md.
+// their source files, and creates/updates .harnez/index.json for fast code discovery.
 package main
 
 import (
@@ -12,17 +12,11 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/find"
 	"ubunatic.com/harnez/internal/index"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
-// indexOptions bundles runIndex's inputs. DBPath is a telemetry DB path
-// override, consulted only by the issue-snapshot write path (issue 228);
-// it is not exposed as a CLI flag (production always uses
-// telemetry.DefaultDBPath()) -- it exists so tests can point snapshot
-// writes at a throwaway DB file instead of the user's real one, the same
-// override-for-tests-only pattern statsOptions.DBPath and execOptions.DBPath
-// already use elsewhere in this package.
 type indexOptions struct {
 	Dir    string
 	Check  bool
@@ -35,26 +29,16 @@ func newIndexCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "index",
-		Short: "Regenerate issues/README.md and docs/README.md's studies table from source files",
-		Long: `index regenerates two hand-maintained index tables from the files that are
-their actual source of truth, so they stop drifting:
+		Short: "Regenerate issues/README.md, docs/README.md, and .harnez/index.json from source files",
+		Long: `index regenerates hand-maintained index tables and builds .harnez/index.json:
 
   issues/README.md   <- issues/*.md + issues/archive/*.md metadata
   docs/README.md      <- docs/studies/*.md (docs/studies/ table only)
+  .harnez/index.json <- Go declarations, signatures, and Markdown documentation
 
 It is idempotent: run against unchanged sources, it reports no changes.
 Pass --check to fail (exit 1) instead of writing, for CI/pre-commit use --
-mirrors 'harnez diff --exit-code' (issue 037). --check also prints a unified
-diff of the drift, so the output is self-contained enough for an agent
-running the command directly in-session to see exactly what changed and
-fix the offending ticket(s) without a separate diff step.
-
-Each run that isn't --check also appends a dated open/closed/draft/unknown
-ticket count snapshot for this repo to the shared telemetry DB (issue 228),
-deduped against the project's most recently recorded snapshot so repeated
-no-op runs don't grow the history unboundedly. Snapshot-write failures are
-logged (DEBUG=1) and otherwise swallowed -- they never fail this command.
-View recorded snapshots with 'harnez find issues history'.`,
+mirrors 'harnez diff --exit-code'.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return silenceIfExitCode(cmd, runIndex(cmd.OutOrStdout(), indexOptions{Dir: dir, Check: check}))
@@ -85,8 +69,20 @@ func runIndex(w io.Writer, opts indexOptions) error {
 	hasIssues := dirExists(issuesDir) || pathExists(issuesReadme)
 	hasDocs := dirExists(filepath.Join(docsDir, "studies")) && pathExists(docsReadme)
 
+	// Always generate .harnez/index.json unless check mode is enabled
+	if !opts.Check {
+		chunks, scanErr := find.ScanRepo(dir)
+		if scanErr == nil {
+			if saveErr := find.SaveIndex(dir, chunks); saveErr == nil {
+				fmt.Fprintf(w, "updated %s (%d chunks)\n", filepath.Join(dir, ".harnez", "index.json"), len(chunks))
+			} else {
+				fmt.Fprintf(w, "warning: index .harnez/index.json: %v\n", saveErr)
+			}
+		}
+	}
+
 	if !hasIssues && !hasDocs {
-		return fmt.Errorf("index: no issues/ or docs/studies/ found in %s", dir)
+		return nil
 	}
 
 	if opts.Check {
@@ -111,12 +107,6 @@ func runIndex(w io.Writer, opts indexOptions) error {
 	return nil
 }
 
-// recordIssueSnapshot computes the current open/closed/draft/unknown ticket
-// counts under issuesDir and appends a deduped snapshot row to the
-// telemetry DB (issue 228). It is best-effort by design, per this ticket's
-// "snapshot writes must not fail index" requirement: every failure path
-// logs via debugLog (DEBUG=1) and returns without propagating an error to
-// runIndex's caller.
 func recordIssueSnapshot(issuesDir, dbPath string) {
 	open, closed, draft, unknown, err := index.StatusCounts(issuesDir)
 	if err != nil {
@@ -160,10 +150,6 @@ func recordIssueSnapshot(issuesDir, dbPath string) {
 	}
 }
 
-// projectNameForDir derives the stable project identity (issue 227's
-// project_name convention: filepath.Base of the repo directory) from
-// issuesDir, which is <repo>/issues -- so its parent is the repo root
-// regardless of what -d was passed as (relative, absolute, or ".").
 func projectNameForDir(issuesDir string) string {
 	repoRoot := filepath.Dir(issuesDir)
 	abs, err := filepath.Abs(repoRoot)
@@ -181,16 +167,6 @@ func printIndexResult(w io.Writer, path string, changed bool) {
 	}
 }
 
-// runIndexCheck regenerates each table into the real file, using its
-// returned changed bool to report drift, then restores the original bytes
-// so --check never has a side effect on disk (mirrors the compare-before-
-// write pattern; a temp-file compare would avoid the touch/restore
-// round-trip, but --check is not on any latency-sensitive path, and this
-// keeps the check path reusing the exact same write-and-compare logic
-// runIndex uses instead of a second, divergent implementation). On drift
-// it prints a unified diff of exactly what changed -- so an agent running
-// this command directly in a session sees the specifics inline and can act
-// on them -- then exits 1, mirroring `harnez diff --exit-code` (037).
 func runIndexCheck(w io.Writer, issuesReadme, issuesDir, docsReadme, docsDir string, hasIssues, hasDocs bool) error {
 	drift := false
 
@@ -252,9 +228,6 @@ func runIndexCheck(w io.Writer, issuesReadme, issuesDir, docsReadme, docsDir str
 	return nil
 }
 
-// printUnifiedDiff shells out to `diff -u`, matching the pattern
-// internal/markdown.diffSection already uses for `harnez diff`, so drift
-// output looks the same across both commands.
 func printUnifiedDiff(w io.Writer, label string, oldContent, newContent []byte) error {
 	writeTemp := func(b []byte) (string, error) {
 		f, err := os.CreateTemp("", "harnez-index-diff-*")

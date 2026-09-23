@@ -1,13 +1,6 @@
-// find implements `harnez find <entity> [options] <query...>`, a deliberate
-// query command over repository-data entities. The only entity in v1 is
-// "issues" (issues/*.md and issues/archive/*.md); see
-// issues/158-find-entity-query-command.md for the full query grammar,
-// ranking, and output contract.
-// It also provides `harnez find issues next` (issue 194) to calculate the
-// next free issue number, a pure read-only query. Reserving/creating that
-// number is `harnez issues new` (cmd/harnez/issues.go) -- find stays a pure
-// query surface, mirroring issues.go's own "find is read-only, issues is the
-// write-side counterpart" doc comment.
+// find implements `harnez find [options] <query...>`, supporting both
+// issue tracker discovery (`harnez find issues ...`) and token-efficient
+// architectural code discovery (`harnez find --broad "query"`).
 package main
 
 import (
@@ -35,6 +28,9 @@ type nextResultJSON struct {
 
 func newFindCmd() *cobra.Command {
 	var dir string
+	var broadFlag bool
+	var maxTokensFlag int
+	var noIndexFlag bool
 	var nextFlag bool
 	var jsonFlag bool
 	var rawFlag bool
@@ -45,98 +41,22 @@ func newFindCmd() *cobra.Command {
 	var allFlag bool
 
 	cmd := &cobra.Command{
-		Use:   "find <entity> [options] <query...>",
-		Short: "Query repository-data entities with a short fuzzy-text/filter grammar",
-		Long: `find searches a repository-data entity with a short query language that
-mixes Google/Gmail-style fuzzy text discovery with compact filters, instead
-of a formal Boolean/regex grammar.
+		Use:   "find [flags] <query...>",
+		Short: "Query repository issues or architectural code concepts (--broad)",
+		Long: `find searches repository-data entities or performs architectural code discovery.
 
-Entities:
-  issues   searches issues/*.md and issues/archive/*.md (excludes
-           issues/README.md and every other file/directory). Both active and
-           archived tickets are in scope by default; use a status filter to
-           narrow lifecycle state.
+Architectural Code Discovery (--broad):
+  harnez find -b "auth and login logic"
+  harnez find --broad --json "session management"
 
-Subcommands / Allocation:
-  harnez find issues last [--json]
-           List the newest issues (the same deterministic ticket-number order
-           as an unfiltered listing). The default limit is 10.
+  Searches Go declarations, signatures, package docs, Markdown docs, and infers
+  architectural patterns (JWT, cookies, SQL, etc.) using token-efficient indexing.
 
-  harnez find issues open|blocked|closed|draft [query...]
-           Shorthand for the matching status filter, optionally combined with
-           ordinary fuzzy text terms.
-
-  harnez find issues next [--json]
-           Compute and report the next free ticket number (max+1, formatted
-           with 3+ digits). Read-only: it does not create or reserve
-           anything. To atomically reserve that number and create a Draft
-           placeholder ticket file, use 'harnez issues new [title]' instead
-           (cmd/harnez/issues.go) -- find never mutates.
-
-  harnez find issues history [--project <name>] [--json]
-           Render the open/closed/draft/unknown ticket-count snapshot
-           history 'harnez index' records into the telemetry DB on each run
-           (issue 228), oldest first. --project narrows to one project_name
-           (the same identity 'harnez stats --project' filters on, issue
-           227); omitted shows every project's snapshots. Non-JSON output is
-           a formatted table: PROJECT, CREATED_AT, OPEN, CLOSED, DRAFT,
-           UNKNOWN.
-
-Query grammar:
-  whitespace         AND: 'vram gtt' requires both terms.
-  a|b                OR within one compact term: 'vram|gtt' means either.
-                     Precedence is fixed: filters and AND bind outside OR,
-                     so 'status:open vram|gtt' means
-                     'status:open AND (vram OR gtt)'.
-  status:VALUE       filter (alias 'is:VALUE'), ANDed with other terms.
-                     Accepted values: open, in-progress, blocked, closed,
-                     draft. 'open'/'is:open' match every unresolved issue
-                     whose leading raw status is Open, In Progress, or
-                     Blocked; 'in-progress'/'blocked' narrow to just that
-                     raw lifecycle stage; 'closed'/'draft' match their
-                     canonical category. Matching ignores case and
-                     explanatory status suffixes (e.g. "Blocked — waiting
-                     for upstream").
-
-An unquoted '|' is a shell pipeline operator, so an OR query needs shell
-quoting:
-
-  harnez find issues status:open vram gtt
-  harnez find issues "status:open vram|gtt"
-
-Not supported (usage error, not a guessed interpretation): parentheses,
-literal quote characters, negation, an empty filter, unknown fields, an
-unsupported status value, or a standalone/leading/trailing/doubled '|'.
-Regex-looking punctuation in ordinary text is normalized away, never
-executed.
-
-Matching: the H1 title (its leading ticket number stripped) and the ticket
-body (everything after the first metadata-closing horizontal rule) are
-searched; the metadata header itself is not. Both the searchable text and
-every query alternative are normalized by Unicode-lowercasing, replacing
-Markdown syntax/non-letter/non-number characters with spaces, and
-collapsing whitespace -- so punctuation-separated identifiers like
-"time-gauge" become adjacent searchable tokens. A bare alternative matches a
-field when its full normalized text is a substring of that field, or when
-every one of its normalized tokens matches a field token by prefix or
-bounded typo distance (Damerau-Levenshtein, transpositions counted as one
-edit): terms of 4 characters or fewer get no typo tolerance, 5-8 characters
-allow 1 edit, 9+ characters allow 2 edits -- this protects short
-identifiers like "gtt"/"vram" from noisy fuzzy expansion.
-
-Ranking: matches are classed, best to worst -- (1) exact title substring,
-(2) title token-prefix, (3) title fuzzy, (4) exact body substring, (5) body
-token-prefix, (6) body fuzzy -- and ranked by worst group class, then the
-sum of all group classes, then ticket number, then path. This never
-silently relaxes an AND query to OR on zero results.
-
-Output formatting:
-  Default: in interactive terminal / TTY sessions or with -I/--image,
-           renders a bounded visual overview card (using internal/readcard)
-           or compact bounded summaries.
-  --raw / --text: outputs deterministic TSV lines (one per result).
-  --json: outputs structured JSON.
-  In non-TTY pipes/scripts without -I, automatically defaults to TSV text.`,
+Issue Tracker Discovery:
+  harnez find issues [query...]
+  harnez find issues status:open "login"
+  harnez find issues next
+  harnez find issues history`,
 		Args:         cobra.MinimumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -145,6 +65,9 @@ Output formatting:
 			}
 			opts := findRunOptions{
 				Dir:            dir,
+				Broad:          broadFlag,
+				MaxTokens:      maxTokensFlag,
+				NoIndex:        noIndexFlag,
 				Next:           nextFlag,
 				JSON:           jsonFlag,
 				Raw:            rawFlag,
@@ -157,7 +80,10 @@ Output formatting:
 			return runFindWithOptions(cmd.OutOrStdout(), cmd.ErrOrStderr(), args, opts)
 		},
 	}
-	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/")
+	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/ or code")
+	cmd.Flags().BoolVarP(&broadFlag, "broad", "b", false, "enable architectural code discovery mode")
+	cmd.Flags().IntVarP(&maxTokensFlag, "max-tokens", "m", 800, "token budget limit for output")
+	cmd.Flags().BoolVar(&noIndexFlag, "no-index", false, "force on-the-fly scan bypassing .harnez/index.json")
 	cmd.Flags().BoolVar(&nextFlag, "next", false, "report the next free issue number")
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "output in JSON format")
 	cmd.Flags().BoolVarP(&rawFlag, "raw", "r", false, "output raw TSV text directly to stdout")
@@ -173,6 +99,9 @@ Output formatting:
 // findRunOptions bundles inputs for runFindWithOptions.
 type findRunOptions struct {
 	Dir            string
+	Broad          bool
+	MaxTokens      int
+	NoIndex        bool
 	Next           bool
 	JSON           bool
 	Raw            bool
@@ -183,21 +112,12 @@ type findRunOptions struct {
 	All            bool
 }
 
-// findHistoryOptions bundles runFindHistory's inputs. DBPath is a telemetry
-// DB path override (empty means telemetry.DefaultDBPath()) used only by
-// tests, the same test-only-override pattern as indexOptions.DBPath and
-// statsOptions.DBPath elsewhere in this package -- production callers
-// (runFind) always leave it empty.
 type findHistoryOptions struct {
 	Project string
 	JSON    bool
 	DBPath  string
 }
 
-// runFindHistory renders `harnez find issues history` (issue 228): the
-// open/closed/draft/unknown ticket-count snapshots 'harnez index' has
-// recorded into the telemetry DB, oldest first, optionally filtered to one
-// project_name.
 func runFindHistory(w io.Writer, opts findHistoryOptions) error {
 	dbPath := opts.DBPath
 	if dbPath == "" {
@@ -281,7 +201,6 @@ func runFind(w io.Writer, dir string, args []string, nextFlag, jsonOutput bool, 
 	})
 }
 
-// isTerminalWriter detects if w is an interactive terminal TTY.
 func isTerminalWriter(w io.Writer) bool {
 	if f, ok := w.(*os.File); ok {
 		fi, err := f.Stat()
@@ -293,14 +212,15 @@ func isTerminalWriter(w io.Writer) bool {
 }
 
 func runFindWithOptions(w, errW io.Writer, args []string, opts findRunOptions) error {
-	entity := args[0]
-	if entity != "issues" {
-		return fmt.Errorf("find: unsupported entity %q (only \"issues\" is supported)", entity)
+	if opts.Broad || (len(args) > 0 && args[0] != "issues") {
+		return runBroadFind(w, errW, args, opts)
 	}
 
-	// Keep these convenience verbs as read-only aliases over the existing
-	// query engine. `last` deliberately uses the normal unfiltered listing so
-	// its ordering and limit stay identical to the established default.
+	entity := args[0]
+	if entity != "issues" {
+		return fmt.Errorf("find: unsupported entity %q (only \"issues\" is supported, or use --broad)", entity)
+	}
+
 	if len(args) > 1 {
 		switch args[1] {
 		case "last":
@@ -313,17 +233,14 @@ func runFindWithOptions(w, errW io.Writer, args []string, opts findRunOptions) e
 		}
 	}
 
-	// Handle `harnez find issues history ...` subcommand syntax
 	if len(args) > 1 && args[1] == "history" {
 		return runFindHistory(w, findHistoryOptions{Project: opts.HistoryProject, JSON: opts.JSON})
 	}
 
-	// Handle `harnez find issues next` subcommand syntax
 	if len(args) > 1 && args[1] == "next" {
 		return runFindNext(w, opts.Dir, opts.JSON)
 	}
 
-	// Handle flag form: `harnez find issues --next`
 	if opts.Next {
 		return runFindNext(w, opts.Dir, opts.JSON)
 	}
@@ -378,8 +295,6 @@ func runFindWithOptions(w, errW io.Writer, args []string, opts findRunOptions) e
 		return nil
 	}
 
-	// Check if visual card output is desired:
-	// Explicit --image/-I, or default when in interactive TTY and not opted out with --raw/--text.
 	useVisualCard := opts.Image || (!opts.Raw && !opts.Text && isTerminalWriter(w))
 	if useVisualCard && len(results) > 0 {
 		var items []readcard.IssueCardItem
@@ -409,5 +324,146 @@ func runFindWithOptions(w, errW io.Writer, args []string, opts findRunOptions) e
 	for _, r := range results {
 		fmt.Fprintln(w, find.FormatTSV(r))
 	}
+	return nil
+}
+
+func runBroadFind(w, errW io.Writer, args []string, opts findRunOptions) error {
+	queryArgs := args
+	if len(args) > 0 && args[0] == "issues" {
+		queryArgs = args[1:]
+	}
+	query := strings.TrimSpace(strings.Join(queryArgs, " "))
+
+	var chunks []find.Chunk
+	var err error
+
+	if !opts.NoIndex {
+		payload, loadErr := find.LoadIndex(opts.Dir)
+		if loadErr == nil {
+			chunks = payload.Chunks
+		} else {
+			if errW != nil {
+				fmt.Fprintf(errW, "Warning: .harnez/index.json missing or invalid, falling back to on-the-fly scan (%v)\n", loadErr)
+			}
+		}
+	}
+
+	if len(chunks) == 0 {
+		chunks, err = find.ScanRepo(opts.Dir)
+		if err != nil {
+			return fmt.Errorf("scan repo: %w", err)
+		}
+	}
+
+	res := find.SearchChunks(chunks, query)
+
+	maxChars := opts.MaxTokens * 4
+	if maxChars <= 0 {
+		maxChars = 3200
+	}
+
+	if opts.JSON {
+		return renderBroadJSON(w, res, maxChars)
+	}
+
+	return renderBroadMarkdown(w, res, maxChars)
+}
+
+func renderBroadMarkdown(w io.Writer, res find.DiscoveryResult, maxChars int) error {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("# Architectural Discovery: %s\n\n", res.Query))
+
+	sb.WriteString("## Packages\n")
+	if len(res.Packages) == 0 {
+		sb.WriteString("- (none)\n")
+	} else {
+		for _, pkg := range res.Packages {
+			sb.WriteString(fmt.Sprintf("- %s\n", pkg))
+		}
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("## Detected Patterns\n")
+	if len(res.Patterns) == 0 {
+		sb.WriteString("- (none)\n")
+	} else {
+		for _, pat := range res.Patterns {
+			sb.WriteString(fmt.Sprintf("- %s\n", pat))
+		}
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("## Key Declarations\n")
+	omittedDecls := 0
+	if len(res.Declarations) == 0 {
+		sb.WriteString("- (none)\n")
+	} else {
+		for i, decl := range res.Declarations {
+			entry := fmt.Sprintf("- `%s` (%s:%d-%d)\n  %s\n",
+				decl.Identifier, decl.FilePath, decl.LineStart, decl.LineEnd,
+				strings.ReplaceAll(decl.Summary, "\n", "\n  "))
+			if sb.Len()+len(entry)+60 > maxChars {
+				omittedDecls = len(res.Declarations) - i
+				break
+			}
+			sb.WriteString(entry)
+		}
+		if omittedDecls > 0 {
+			sb.WriteString(fmt.Sprintf("[... %d additional entries omitted]\n", omittedDecls))
+		}
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("## Relevant Documentation\n")
+	omittedDocs := 0
+	if len(res.Docs) == 0 {
+		sb.WriteString("- (none)\n")
+	} else {
+		for i, doc := range res.Docs {
+			entry := fmt.Sprintf("- `%s` (%s:%d-%d)\n  %s\n",
+				doc.Identifier, doc.FilePath, doc.LineStart, doc.LineEnd,
+				strings.ReplaceAll(doc.Summary, "\n", "\n  "))
+			if sb.Len()+len(entry)+60 > maxChars {
+				omittedDocs = len(res.Docs) - i
+				break
+			}
+			sb.WriteString(entry)
+		}
+		if omittedDocs > 0 {
+			sb.WriteString(fmt.Sprintf("[... %d additional entries omitted]\n", omittedDocs))
+		}
+	}
+
+	output := sb.String()
+	if len(output) > maxChars {
+		output = output[:maxChars] + "\n[... additional entries omitted]\n"
+	}
+
+	fmt.Fprintln(w, output)
+	return nil
+}
+
+func renderBroadJSON(w io.Writer, res find.DiscoveryResult, maxChars int) error {
+	data, err := json.MarshalIndent(res, "", "  ")
+	if err != nil {
+		return fmt.Errorf("render json: %w", err)
+	}
+
+	if len(data) > maxChars {
+		// Truncate declarations and docs iteratively
+		for len(res.Declarations) > 0 || len(res.Docs) > 0 {
+			if len(res.Declarations) > len(res.Docs) && len(res.Declarations) > 0 {
+				res.Declarations = res.Declarations[:len(res.Declarations)-1]
+			} else if len(res.Docs) > 0 {
+				res.Docs = res.Docs[:len(res.Docs)-1]
+			}
+			data, _ = json.MarshalIndent(res, "", "  ")
+			if len(data) <= maxChars {
+				break
+			}
+		}
+	}
+
+	fmt.Fprintln(w, string(data))
 	return nil
 }
