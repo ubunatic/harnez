@@ -211,8 +211,8 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 		if err != nil {
 			return err
 		}
-		for _, m := range subagent.KnownModels() {
-			line := m.Spec()
+		for _, spec := range subagent.KnownModelSpecs() {
+			line := spec
 			if line == defaultSpec {
 				line += "  (default)"
 			}
@@ -756,9 +756,9 @@ func agentSessionCompletion(storeDir string, parent func() string) cobra.Complet
 
 func agentModelCompletion(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	var out []string
-	for _, model := range subagent.KnownModels() {
-		if strings.HasPrefix(model.Spec(), toComplete) {
-			out = append(out, model.Spec())
+	for _, spec := range subagent.KnownModelSpecs() {
+		if strings.HasPrefix(spec, toComplete) {
+			out = append(out, spec)
 		}
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp

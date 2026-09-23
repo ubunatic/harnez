@@ -95,6 +95,19 @@ func KnownModels() []Model {
 	return models
 }
 
+// KnownModelSpecs lists every selectable spec: each configured model at its
+// default tier, plus a :med variant for effort-aware codex and agy models.
+func KnownModelSpecs() []string {
+	var specs []string
+	for _, m := range KnownModels() {
+		specs = append(specs, m.Spec())
+		if m.Tier != "med" && m.Provider != "claude" && m.SupportsEffort() {
+			specs = append(specs, m.Provider+":"+modelAliasName(m)+":med")
+		}
+	}
+	return specs
+}
+
 func (m Model) Spec() string {
 	return m.Provider + ":" + modelAliasName(m) + ":" + m.Tier
 }
@@ -156,11 +169,7 @@ func resolveModelIn(aliases map[string]Model, spec string) (Model, error) {
 }
 
 func knownModelSpecs() string {
-	known := make([]string, 0, len(modelAliases))
-	for _, model := range KnownModels() {
-		known = append(known, model.Spec())
-	}
-	return strings.Join(known, ", ")
+	return strings.Join(KnownModelSpecs(), ", ")
 }
 
 func (m Model) String() string { return m.Provider + ":" + m.Name + ":" + m.Tier }

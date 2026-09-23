@@ -103,6 +103,15 @@ func TestKnownModelsAndExplicitSpecsFailClosed(t *testing.T) {
 	if len(models) == 0 || models[0].Spec() == "" {
 		t.Fatal("known model registry is empty")
 	}
+	specs := strings.Join(KnownModelSpecs(), " ")
+	for _, want := range []string{"codex:luna:med", "agy:flash38:med"} {
+		if !strings.Contains(specs, want) {
+			t.Fatalf("known specs %q missing %q", specs, want)
+		}
+	}
+	if strings.Contains(specs, "claude:opus:med") || strings.Contains(specs, "agy:opus:med") {
+		t.Fatalf("known specs %q list :med for a model without effort support", specs)
+	}
 	for _, spec := range []string{"codex:luna:invalid", "codex:missing:low", "unknown:model:high"} {
 		_, err := ResolveModel(spec)
 		if err == nil || !strings.Contains(err.Error(), spec) {
