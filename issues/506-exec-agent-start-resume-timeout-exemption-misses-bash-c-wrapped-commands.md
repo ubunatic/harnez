@@ -1,6 +1,6 @@
 # 506 — exec: agent start/resume timeout exemption misses bash -c wrapped commands
 
-**Status**: In Progress
+**Status**: Closed — Timeout intent parsing and hook forwarding implemented; make test-q1 passed
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
