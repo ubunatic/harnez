@@ -8,10 +8,37 @@
 
 ## /goal
 
-`harnez agent start` / `resume` launched from an agent's Bash tool is never
-killed by the implicit 60s `harnez exec` default, however the hook wraps the
-command — including compound commands (`cd x && harnez agent start … | tail`)
-rewritten to `bash -c '…'`.
+Any agent can deliberately lift or set the `harnez exec` timeout for **any**
+Bash command — not just `harnez agent start|resume` — in one documented,
+obvious way that survives the PreToolUse hook rewrite (including `bash -c`
+wrapping of compound commands). The implicit 60s default stays as a safety
+net only for commands where the agent expressed no intent.
+
+Done when:
+
+- **Explicit opt-out, agent-agnostic**: a documented command prefix works for
+  every harness (Claude, Codex, agy), mirroring the existing
+  `HARNEZ_EXPECT_FAILURE=1 <cmd>` convention, e.g. `HARNEZ_TIMEOUT=0 <cmd>`
+  (no limit) / `HARNEZ_TIMEOUT=10m <cmd>`. Recognized before and after
+  `bash -c` wrapping.
+- **Tool-native intent is honored**: when the harness passes its own intent
+  (Claude Code Bash `tool_input.timeout`, `run_in_background: true`), the hook
+  forwards it as `harnez exec --timeout <that>` (background → no implicit
+  limit) instead of silently imposing 60s.
+- The `agent start|resume` special case either falls out of the above or is
+  kept as one entry in the same mechanism — no separate argv-shape heuristics.
+- Precedence is documented in one place (`harnez exec --help` + the agent
+  instructions harnez installs): explicit prefix > tool-native timeout >
+  repo `exec.timeout` > 60s default.
+- The kill message names the opt-out (e.g. `timeout kill after 1m0s; rerun
+  with HARNEZ_TIMEOUT=0 to lift`), so an agent hitting it learns the fix.
+
+## Open questions
+
+- Does Claude Code's `updatedInput` replace the whole tool input? The hook
+  currently returns only `{command}`; if it replaces, `timeout` and
+  `run_in_background` are dropped today. Canary this first (docs/Canary.md).
+- Should the implicit 60s default apply at all to `run_in_background` calls?
 
 ## Observed
 
@@ -46,7 +73,7 @@ compound command `args[0]` is `bash`, so the exemption never matches and the
   report its id) so partial work is resumable.
 - Re-verify against current `exec.go` and hook rewrite before starting.
 
-## Plan
+## Plan (luna, 5ba246d — superseded in scope by the /goal above; revise)
 
 - Recognize `harnez`/gear `agent start|resume` invocations in the script argument of `bash -c`, using a quote-aware shell token scan so command boundaries and quoted arguments are respected. Keep timeout resolution order intact: explicit `--timeout`, then repo `exec.timeout`, then the long-running exemption, then the implicit 60s default. Avoid changing the hook rewrite contract.
 - Update `cmd/harnez/exec.go` (`isAgentLongRunningCommand`, with a small helper for `bash -c` script recognition if needed) and `cmd/harnez/exec_test.go`. Cover direct and wrapped start/resume; compound `cd … && harnez agent start …`; pipeline `harnez agent resume … | tail`; normal/variation-selector gear aliases in scripts; unrelated bash scripts; and explicit flag/config timeouts still applying to wrapped commands. Exercise `formatGearRewrite`/`runExecHook` to confirm the hook's compound-command rewrite reaches the same exempt path.
