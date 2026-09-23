@@ -39,53 +39,81 @@ model picker) and note it in the snapshot.
 A new model also needs a spec entry (provider, name, tier) and a check whether its CLI
 accepts an effort flag (`effort: false` otherwise, as for `agy:sonnet`/`agy:opus`).
 
-### 2. One researcher per column (~30–50k new tokens, 25–55 s each)
+### 2. Researchers: one per model family, plus one for price and efficiency (~30–50k new tokens, 25–55 s each)
 
-Give each column to its own researcher covering all models in scope, so one agent sets one
-scale. Per-model researchers produced ratings that didn't line up (conflicting sol/terra
-prices on 2026-09-23). Columns and what to ask for:
+Every cell of `harnez agent models` is a hypothesis to confirm or update. Split so that no
+researcher repeats another's identity work, and one researcher owns each cross-model scale
+(design reviewed by `codex:astra`, 2026-09-23):
 
-| Column | Ask for | Expect |
+| Researcher | Rows / columns | Owns |
 |---|---|---|
-| COST | list price per 1M input/output tokens, subscription/quota evidence, as a multiple of luna | good public data |
-| EFF | tokens or cost per solved task (e.g. Artificial Analysis, Terminal-Bench cost figures) | partial |
-| Go, TUI, SQL | language- or domain-specific benchmarks (e.g. BIRD, Spider 2.0 for SQL) | thin: keep `?` unless a source is model-specific |
+| `mr-gpt6` | luna, sol, astra | identity, effort controls, SKILLS, ROLES/USE claims |
+| `mr-gpt56` | terra | same |
+| `mr-claude` | haiku, sonnet, opus (claude and agy routes) | same |
+| `mr-gemini` | flash37, flash38 | same |
+| `mr-price` | all models | COST and EFF on one scale |
 
-Run all researchers in parallel from a scratch dir outside the repo, on `codex:luna:med`,
-role advisor (a web-only researcher role is issue 510):
+Per-model researchers (2026-09-23 first sweep) produced ratings that didn't line up;
+per-column researchers repeat the identity work for every column. Family researchers plus
+one scale owner avoid both. Skip families outside the trigger's scope.
+
+Run in parallel from a scratch dir outside the repo, on `codex:luna:med`, role advisor
+(a web-only researcher role is issue 510). Paste the current table into every prompt:
 
 ```bash
-d=$(mktemp -d)
-for col in cost eff go tui sql; do
-  harnez agent start --name mr-$col --role advisor --model codex:luna:med -d "$d" \
-    --stream stats "$(sed "s/<COLUMN>/$col/" prompt.txt)" > "$d/$col.txt" 2>&1 &
+d=$(mktemp -d); harnez agent models > "$d/models.txt"
+for r in gpt6 gpt56 claude gemini price; do
+  harnez agent start --name mr-$r --role advisor --model codex:luna:med -d "$d" \
+    --stream stats "$(cat "prompt-$r.txt" "$d/models.txt")" > "$d/$r.txt" 2>&1 &
 done
 wait
 ```
 
-Prompt template:
+Family prompt (`prompt-<family>.txt`):
 
 ```text
-WEB RESEARCH ONLY. Do not inspect any repository or local files; run no local commands
-except web search.
-Models (provider ids): <ids in scope, always including gpt-6-luna and gpt-6-astra>.
-Column: <COLUMN>. Rate every model on ONE shared scale:
-- cost: multiple of gpt-6-luna, anchors gpt-6-luna = 1, gpt-6-astra = 100; list price per
-  1M input/output tokens; subscription/quota evidence separately (list price is not
-  subscription cost).
-- eff: tokens needed to reach a coding goal: + few, ~ average, - many, ? no data.
-- go / tui / sql: + strong, ~ ok, - weak, ? no model-specific evidence. Ignore Python,
-  JS/TS and web results.
-Output: one table row per model: model | value | evidence | source URL.
-Mark ? when you found no source. Flag conflicting sources. At most 30 lines.
+WEB RESEARCH ONLY. Do not inspect any repository or local files.
+The table below guides model choice for agentic coding. Audit rows: <rows>.
+For each row: verify the model exists under that exact id, its version, provider route and
+effort controls (what low/med change; whether EFFORT "no" means unsupported). Then audit
+every SKILLS (Go, TUI, SQL; ignore Python, JS/TS, web), ROLES and USE claim: turn each
+phrase into a checkable statement ("slow first token" = measured first-token latency) and
+look for model-specific evidence. Never infer one route (e.g. agy vs claude) from another.
+Output a ledger, one line per claim: row | claim | verdict (confirmed/contradicted/?) |
+evidence with date | source URL | confidence. At most 40 lines.
+```
+
+Price and efficiency prompt (`prompt-price.txt`):
+
+```text
+WEB RESEARCH ONLY. Do not inspect any repository or local files.
+For every model in the table below:
+COST: official input/output/cached/reasoning token prices; subscription price, quota and
+reset rules and any overage. Price one fixed workload (100k input, 20k output, 50%
+cached) per model and report it as a multiple of gpt-6-luna = 1. Report astra's measured
+ratio; do not force it to 100. Keep cash price and quota consumption separate; do not
+invent cross-vendor quota conversions.
+EFF: tokens (including retries) per SUCCESSFUL task from a named harness and task suite
+(e.g. Terminal-Bench or SWE-bench cost figures). Reject leaderboard scores or speed as a
+substitute; "?" if no such measurement exists.
+Output one line per model: model | list price | workload ×luna | quota notes | EFF value
+| evidence | source URL. At most 40 lines.
 ```
 
 ### 3. Reconcile
 
-- Researchers' tables are agent-reported: spot-check the sources behind any value that
-  changes a spec rating.
-- User-stated cost ratios (e.g. opus ≈ 2× sonnet) outrank list prices; keep both anchors.
-- A `?` stays `?`: don't turn "no data" into `-`.
+- Source ranking: official pricing and model docs for facts, reproducible independent
+  evaluations for capability; marketing, anecdotes, affiliate posts and unsourced rankings
+  are leads only.
+- Reconcile conflicts by version, date, route, effort and harness; keep an unresolved
+  disagreement in the snapshot instead of averaging it.
+- `?` means insufficient evidence, never "average": don't turn it into `~` or `-`.
+- COST stays anchored at luna = 1 and astra = 100 as a policy scale. When the measured astra
+  ratio differs a lot, record it in the snapshot and ask the user whether to re-anchor.
+  User-stated ratios (e.g. opus ≈ 2× sonnet) outrank list prices.
+- Spot-check the sources behind every value that changes a spec rating; send only disputed
+  or consequential claims to a stronger reviewer (e.g. one `codex:terra` turn), not the
+  whole ledger.
 
 ### 4. Update spec and snapshot
 
@@ -107,7 +135,7 @@ Commit spec and snapshot together, e.g. `feat(agent): <date> model research refr
 ### 6. Cleanup
 
 ```bash
-for col in cost eff go tui sql; do harnez agent delete --name mr-$col -d "$d"; done
+for r in gpt6 gpt56 claude gemini price; do harnez agent delete --name mr-$r -d "$d"; done
 rm -rf "$d"
 ```
 
