@@ -111,6 +111,10 @@ key = spec key as in the table. At most 40 lines.
 
 ### 2b. Local quota analytics (one read-only turn, in parallel with step 2)
 
+**Light touch:** this is a basic look at our own data to confirm or complement the web
+research, not the main work. One turn, no tooling built, no deep dives; if the data is
+messy, report what was tried and move on. Proper per-turn measurement is issue 507.
+
 Web research gives list prices; our own quota history shows what a model really costs on
 our subscriptions and projects. One analytics agent (`codex:luna:med` or `claude:sonnet`,
 role advisor, run from the repo) correlates quota readings with agent turns:
@@ -120,6 +124,10 @@ role advisor, run from the repo) correlates quota readings with agent turns:
 | `~/.claude/harnez/usage-history/quota-history.jsonl` | 5h and weekly `used_percent` per provider, ~3 min cadence (the live store; per-host `*.jsonl` there may be stale) |
 | `~/.harnez/agents/*.json` | harnez agent sessions: `id`, provider, model, tier, role, cumulative tokens (cached split), `created_at`/`last_active_at` only; no per-turn times |
 | `~/.codex/sessions/YYYY/MM/DD/rollout-*-<id>.jsonl` | Codex rollouts: `turn_context` (model, effort), `token_count` events with per-call tokens incl. reasoning and the account's `rate_limits` (primary = 5h, secondary = weekly) |
+| `~/.claude/projects/*/*.jsonl` | Claude Code transcripts (host session and `claude:*` agents): every assistant message has a UTC `timestamp`, `message.model` and `message.usage` (input, output, cache read, cache write) |
+
+agy has no per-turn token record found yet and its quota readings are sparse (~20–30 min);
+treat agy numbers as rough session-level estimates.
 
 Format traps (checked 2026-09-24):
 
@@ -132,8 +140,9 @@ Format traps (checked 2026-09-24):
 - Some rollout `token_count` events have `rate_limits.primary`/`secondary` = null; skip
   those readings instead of treating them as 0.
 - Deleted agent records (step 6) leave rollouts without a model mapping; use the
-  rollout's own `turn_context.model` instead. Claude and agy have no per-turn record
-  here, so their attribution rests on agent-record time spans only.
+  rollout's own `turn_context.model` instead.
+- The host session runs on Claude and uses Claude quota continuously, so intervals with
+  only one Claude agent active are rare; its messages are in the same transcripts.
 
 Until issue 515 gives one discovery entry point, pass these paths explicitly; the empty
 `~/.harnez/telemetry.sqlite` and `~/.local/share/harnez/telemetry.db` are not the data.
@@ -145,10 +154,13 @@ Read-only analytics over local files; no web search, no edits. Sources: <paths a
 Normalise all timestamps to UTC and window labels to 5h/weekly (see format traps).
 Codex: use rollout token_count events; each carries the account-wide used_percent, so a
 step between two events of one rollout is attributable only if no other rollout has
-token_count events in that interval. Claude/agy: attribute quota-history steps to an
-agent session only if its created_at..last_active_at span is the sole activity of that
-provider in the interval. Skip steps overlapping the host session, unrecorded activity
-or a window reset, and say how many you skipped. Report per model:
+token_count events in that interval.
+Claude: don't wait for clean intervals. Sum transcript usage per model (all projects,
+host session included) between consecutive quota readings and fit the 5h used_percent
+steps against those per-model token sums (simple least squares, weights per model).
+agy: session-level estimate only (agent-record time span vs quota readings).
+Skip intervals with a window reset or unrecorded activity, and say how many you skipped.
+Report per model:
 turns, new/cached/reasoning tokens, quota points consumed, points per 100k new tokens,
 and a cost multiple vs gpt-6-luna within the same provider. Mark every estimate with
 its sample size and rounding caveat (used_percent is an integer). List clean
@@ -173,21 +185,37 @@ don't delete `~/.harnez/agents` records of research runs you may want to analyse
 - COST/EFF precedence: user-stated ratios (e.g. opus ≈ 2× sonnet) > measured trials and
   quota (step 2b, [ModelTrials.md](ModelTrials.md); within one provider only) > list
   prices (step 2). Cross-provider multiples stay list-price based.
-- COST stays anchored at luna = 1 and astra = 100 as a policy scale. When the measured astra
-  ratio differs a lot (e.g. > 2× off), record it in the snapshot and ask the user whether
-  to re-anchor.
+- COST stays anchored at luna = 1 and astra = 100 as a policy scale. Ask the user about
+  re-anchoring only when a measured astra ratio falls outside 50–200 (2× off) on more than
+  one clean measurement; record every measurement in the snapshot either way.
 - Merge ledgers by `key | column`; a cell changes only on a `contradicted` verdict with
   med/high confidence, else it stays (or becomes `?` if nothing supports it).
 - Spot-check the sources behind every value that changes a spec rating; send only disputed
   or consequential claims to a stronger reviewer (e.g. one `codex:terra` turn), not the
   whole ledger.
 
+### 3b. Each agent writes a short study
+
+More important than the numbers: every researcher (step 2) and the analytics agent (step
+2b) writes its own short study, so the findings and methods survive the session.
+
+- One file per agent: `docs/studies/<YYYY-MM-DD>-model-research-<r>.md` (e.g.
+  `...-model-research-gpt6.md`, `...-model-research-quota.md`).
+- Concise: at most ~40 lines. Question, method (sources, queries), findings with source
+  URLs or data paths, what was inconclusive, what to try next time.
+- Separate files, no merging; the host links them from the dated [Models.md](Models.md)
+  snapshot instead of copying them.
+- Add to every prompt: "Also write your findings as a short study (≤40 lines) to
+  <path>; that file is the only file you may create." Research agents run from `$d`, so
+  give the absolute repo path, and the host commits the studies with the snapshot.
+
 ### 4. Update spec and snapshot
 
 - Edit `cost`, `eff`, `skills` (and `use`/`roles` if the evidence changes a role) in
   `spec/agent.yaml`; keep the header comment and `models_legend` in sync if a scale changes.
 - Add a dated `## YYYY-MM-DD <topic> snapshot` section to [Models.md](Models.md): scope,
-  table, findings, research cost. Never rewrite older snapshots.
+  table, findings, research cost, links to the step 3b studies. Never rewrite older
+  snapshots.
 
 ### 5. Check and commit
 
@@ -197,7 +225,7 @@ script -qc 'harnez agent models' /dev/null            # real pseudo-terminal
 make test-q1 > "$d/q1.log" 2>&1; grep -- '--- FAIL' "$d/q1.log"
 ```
 
-Commit spec and snapshot together, e.g. `feat(agent): <date> model research refresh`.
+Commit spec, snapshot and studies together, e.g. `feat(agent): <date> model research refresh`.
 
 ### 6. Cleanup
 
