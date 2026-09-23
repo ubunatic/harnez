@@ -247,10 +247,7 @@ func newRootCmd() *cobra.Command {
 					RemoteLoadHost: loadWatchHost,
 					Host:           usageHost,
 				}
-				if usageWatch {
-					return usage.RunLoomWatch(ctx, "", client, cmd.OutOrStdout(), usageInterval, "", loadOpt)
-				}
-				return usage.RenderLoomPrint(ctx, "", client, cmd.OutOrStdout(), loadOpt)
+				return usage.RunLoom(ctx, "", client, cmd.OutOrStdout(), usageInterval, loadOpt)
 			}
 
 			if usageWatch {

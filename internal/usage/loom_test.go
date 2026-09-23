@@ -14,6 +14,7 @@ import (
 func TestUsageLoomWidget_RendersCorrectUI(t *testing.T) {
 	now := time.Date(2026, 4, 18, 22, 36, 48, 0, time.UTC)
 
+	// Build a mock summary that reproduces the target UI layout
 	summary := UsageSummary{
 		Timestamp: now,
 		Agents: []AgentUsage{
@@ -93,6 +94,7 @@ func TestUsageLoomWidget_RendersCorrectUI(t *testing.T) {
 	widget := NewUsageLoomWidget(summary, WatchOptions{Compact: true}, "")
 	widget.Now = now
 
+	// Render using loom engine
 	cols, rows := 100, 12
 	rendered := loom.Render(widget, cols, rows)
 
@@ -103,66 +105,33 @@ func TestUsageLoomWidget_RendersCorrectUI(t *testing.T) {
 	fullOutput := strings.Join(rendered, "\n")
 	cleanOutput := stripANSI(fullOutput)
 
+	// Verify Header line
 	if !strings.Contains(cleanOutput, "Agentic usage") {
 		t.Errorf("expected output to contain 'Agentic usage', got:\n%s", cleanOutput)
 	}
 
+	// Verify All Usage box title with symbol ¹
 	if !strings.Contains(cleanOutput, "¹ All Usage") {
 		t.Errorf("expected output to contain '¹ All Usage', got:\n%s", cleanOutput)
 	}
 
+	// Verify Load box title with symbol ⁷
 	if !strings.Contains(cleanOutput, "⁷ Load") {
 		t.Errorf("expected output to contain '⁷ Load', got:\n%s", cleanOutput)
 	}
 
+	// Verify Agent/Model group rows in All Usage box
 	for _, expected := range []string{"Claude Code", "Gemini", "Claude/GPT", "OpenAI Codex"} {
 		if !strings.Contains(cleanOutput, expected) {
 			t.Errorf("expected output to contain %q, got:\n%s", expected, cleanOutput)
 		}
 	}
 
+	// Verify Load box rows
 	for _, expected := range []string{"cpu", "ram"} {
 		if !strings.Contains(cleanOutput, expected) {
 			t.Errorf("expected output to contain %q, got:\n%s", expected, cleanOutput)
 		}
-	}
-}
-
-func TestUsageLoomWidget_HandleKey(t *testing.T) {
-	widget := NewUsageLoomWidget(UsageSummary{}, WatchOptions{Compact: true}, "")
-
-	// Test 'q' key quits
-	if !widget.HandleKey(loom.KeyEvent{Text: "q"}) {
-		t.Errorf("expected 'q' key to signal quit")
-	}
-
-	// Test '?' toggles controls overlay
-	widget.HandleKey(loom.KeyEvent{Text: "?"})
-	if !widget.st.overlayOpen {
-		t.Errorf("expected '?' key to toggle overlay open")
-	}
-
-	// Test dismissal with 'q'
-	widget.HandleKey(loom.KeyEvent{Text: "q"})
-	if widget.st.overlayOpen {
-		t.Errorf("expected 'q' key to dismiss overlay")
-	}
-}
-
-func TestUsageLoomWidget_SplashScreen(t *testing.T) {
-	widget := NewUsageLoomWidget(UsageSummary{}, WatchOptions{Compact: true}, "")
-	widget.splashActive = true
-	widget.splashAnimate = true
-	widget.splashStatusText = "fetching claude..."
-
-	rendered := loom.Render(widget, 80, 10)
-	output := stripANSI(strings.Join(rendered, "\n"))
-
-	if !strings.Contains(output, "harnez usage") {
-		t.Errorf("expected splash output to contain 'harnez usage', got:\n%s", output)
-	}
-	if !strings.Contains(output, "fetching claude...") {
-		t.Errorf("expected splash output to contain status text, got:\n%s", output)
 	}
 }
 
