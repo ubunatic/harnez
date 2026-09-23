@@ -32,3 +32,12 @@ with a canary, and fix the resume path if the recorded model is dropped.
 - Check whether the resume command fills `Model` from the stored session for
   agy, as it does for codex (497).
 - The quota error should name the model that hit the limit.
+
+## Update: explicit --model does not help
+
+- `harnez agent resume --name dev107f --model agy:flash37:med …` still fails
+  with the same message and the same reset time (`90h48m43s`).
+- A fresh `harnez agent start --model agy:flash37:low` answers right away.
+- So the quota belongs to the resumed conversation, not to flash37. That
+  conversation may be pinned to the model it was created on, or agy returns
+  a stale error. Check `agy --conversation <id> --model X` directly.
