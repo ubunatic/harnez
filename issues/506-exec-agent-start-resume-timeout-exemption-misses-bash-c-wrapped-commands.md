@@ -45,3 +45,9 @@ compound command `args[0]` is `bash`, so the exemption never matches and the
 - Secondary: a killed `agent start` should still persist the session (or
   report its id) so partial work is resumable.
 - Re-verify against current `exec.go` and hook rewrite before starting.
+
+## Plan
+
+- Recognize `harnez`/gear `agent start|resume` invocations in the script argument of `bash -c`, using a quote-aware shell token scan so command boundaries and quoted arguments are respected. Keep timeout resolution order intact: explicit `--timeout`, then repo `exec.timeout`, then the long-running exemption, then the implicit 60s default. Avoid changing the hook rewrite contract.
+- Update `cmd/harnez/exec.go` (`isAgentLongRunningCommand`, with a small helper for `bash -c` script recognition if needed) and `cmd/harnez/exec_test.go`. Cover direct and wrapped start/resume; compound `cd … && harnez agent start …`; pipeline `harnez agent resume … | tail`; normal/variation-selector gear aliases in scripts; unrelated bash scripts; and explicit flag/config timeouts still applying to wrapped commands. Exercise `formatGearRewrite`/`runExecHook` to confirm the hook's compound-command rewrite reaches the same exempt path.
+- Investigate the secondary killed-session loss separately in `cmd/harnez/agent_run.go` (`runStart`/`runResume`): session persistence currently follows a successful provider turn, so process-group SIGKILL prevents the final save. Specify a safe interruption/finalization path that persists a resumable session or reliably reports its provider/session ID, with tests for cancellation/kill semantics; do not conflate this lifecycle change with timeout detection if it needs a distinct design.
