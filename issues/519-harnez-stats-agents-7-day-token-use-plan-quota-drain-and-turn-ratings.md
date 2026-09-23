@@ -59,7 +59,21 @@ Scope: read the stores where they live today. Moving stores into one home is 515
     - 718 rows is unreadable: default to per-model totals plus the newest 20 sessions;
       `--all` lists every session.
     - Verify the resume test fixed after M2's test run.
-- **M4 (proof)**: one short luna and one short haiku turn; reported drain per 100k new
+  - **M3 delivered (564a3d7)**: SRC column, `fitted/shared` split, newest 20 + `--all`,
+    per-model totals, `harnez agent rate`.
+- **M4 (proof)** — **Pre-Work / Required Refinements** (host review of M3 output):
+  - NEW INPUT is wrong: terra shows 14 890 641 new and 14 481 408 cached, so "new" holds
+    total input. New = input − cached (≈ 409k here). Fix in storage or report and test it.
+  - `harnez agent rate --name dev519 4 "..."` fails: `session "dev519" has no recorded
+    turn`, although the report shows TURNS 2. Rating must work on any session with ≥ 1
+    turn, including sessions started before M1.
+  - Deleted sessions vanish from the report (dev520, dev498l luna sessions are gone).
+    `harnez agent delete` must keep the turn and token records for stats, or stats must
+    read them from a store that delete does not touch.
+  - Host MODEL is still empty and host rows are missing from per-model totals; fill the
+    model from hook/rollout data (Codex rollouts carry `turn_context.payload.model`).
+  - Proof runs are done by the host (leaf roles cannot run `harnez agent`).
+- **M4 proof**: one short luna and one short haiku turn; reported drain per 100k new
   tokens is in the band of the hand measurement (luna ≈ 0.65, haiku ≈ 5 points).
 
 ## Done when
