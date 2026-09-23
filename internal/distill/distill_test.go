@@ -152,6 +152,23 @@ func TestFilterHeadTail_UnderLimit(t *testing.T) {
 	}
 }
 
+func TestFilterHeadTailString(t *testing.T) {
+	in := "line0\nline1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9"
+	got := FilterHeadTailString(in, 4)
+	want := "line0\nline1\n[... 6 lines omitted ...]\nline8\nline9"
+	if got != want {
+		t.Errorf("FilterHeadTailString() = %q, want %q", got, want)
+	}
+}
+
+func TestFilterHeadTailString_UnderLimit(t *testing.T) {
+	in := "a\nb\nc"
+	got := FilterHeadTailString(in, 10)
+	if got != in {
+		t.Errorf("FilterHeadTailString() = %q, want unchanged %q", got, in)
+	}
+}
+
 func TestFilterHeadTailBytes(t *testing.T) {
 	var lines []string
 	for i := 0; i < 500; i++ {
@@ -277,5 +294,24 @@ func TestDistill_NoDedup(t *testing.T) {
 	got := Distill(in, Options{Mode: ModeRaw, NoDedup: true})
 	if got != in {
 		t.Errorf("Distill() with NoDedup = %q, want unchanged %q", got, in)
+	}
+}
+
+func TestDistill_SimplePathToggle(t *testing.T) {
+	lines := make([]string, 20)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line-%d", i)
+	}
+	in := strings.Join(lines, "\n")
+
+	fastGot := Distill(in, Options{Mode: ModeRaw, MaxLines: 10, SimplePath: false})
+	simpleGot := Distill(in, Options{Mode: ModeRaw, MaxLines: 10, SimplePath: true})
+
+	if fastGot != simpleGot {
+		t.Errorf("Distill() simple path output differs from fast path:\nFast:\n%s\nSimple:\n%s", fastGot, simpleGot)
+	}
+	wantOmission := "[... 10 lines omitted ...]"
+	if !strings.Contains(fastGot, wantOmission) {
+		t.Errorf("expected output to contain %q, got:\n%s", wantOmission, fastGot)
 	}
 }
