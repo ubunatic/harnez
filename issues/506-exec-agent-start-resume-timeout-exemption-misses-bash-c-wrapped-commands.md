@@ -62,6 +62,10 @@ The hook ran it as `⚙ bash -c '<command>'`. Both foreground (Bash tool
 edited files; no session was saved (`harnez agent list` empty), so the work
 could neither be resumed nor cleanly attributed.
 
+A plain `harnez agent resume` with pipe/parenthesis characters inside its
+quoted prompt was also rewritten through `bash -c` and killed at 60s, so the
+bug is not limited to shell compound commands outside the quoted prompt.
+
 ## Cause
 
 `isAgentLongRunningCommand` only inspects `args[0..2]`. For a hook-wrapped
@@ -80,8 +84,13 @@ compound command `args[0]` is `bash`, so the exemption never matches and the
   report its id) so partial work is resumable.
 - Re-verify against current `exec.go` and hook rewrite before starting.
 
-## Plan (luna, 5ba246d — superseded in scope by the /goal above; revise)
+## Plan
 
-- Recognize `harnez`/gear `agent start|resume` invocations in the script argument of `bash -c`, using a quote-aware shell token scan so command boundaries and quoted arguments are respected. Keep timeout resolution order intact: explicit `--timeout`, then repo `exec.timeout`, then the long-running exemption, then the implicit 60s default. Avoid changing the hook rewrite contract.
-- Update `cmd/harnez/exec.go` (`isAgentLongRunningCommand`, with a small helper for `bash -c` script recognition if needed) and `cmd/harnez/exec_test.go`. Cover direct and wrapped start/resume; compound `cd … && harnez agent start …`; pipeline `harnez agent resume … | tail`; normal/variation-selector gear aliases in scripts; unrelated bash scripts; and explicit flag/config timeouts still applying to wrapped commands. Exercise `formatGearRewrite`/`runExecHook` to confirm the hook's compound-command rewrite reaches the same exempt path.
-- Investigate the secondary killed-session loss separately in `cmd/harnez/agent_run.go` (`runStart`/`runResume`): session persistence currently follows a successful provider turn, so process-group SIGKILL prevents the final save. Specify a safe interruption/finalization path that persists a resumable session or reliably reports its provider/session ID, with tests for cancellation/kill semantics; do not conflate this lifecycle change with timeout detection if it needs a distinct design.
+1. Fix the Claude hook first: in `cmd/harnez/exec.go`, preserve the full `tool_input` map and replace only `command`; forward its native `timeout` as `harnez exec --timeout`, and map `run_in_background: true` to no implicit limit. Canary proved `updatedInput` replaces the whole input, dropping both fields on every rewrite.
+2. Add agent-agnostic `HARNEZ_TIMEOUT=0|<duration>` parsing to `cmd/harnez/exec.go`, both on direct argv/environment and in quote-aware `bash -c` scripts (including compound lists and pipelines). Document one precedence: explicit timeout prefix > forwarded tool-native timeout/background intent > repo `exec.timeout` > implicit 60s default. Make timeout-kill diagnostics name `HARNEZ_TIMEOUT=0` as the opt-out.
+3. Fold the `agent start|resume` exemption into this shared explicit-intent mechanism, or remove the special case if redundant; avoid a separate argv-shape policy.
+4. Update `harnez exec --help`, the installed agent instructions, and `docs/HookRewritePattern.md` with the syntax and precedence. Relevant code: `runExecHook`, its input/output types, `resolveExecTimeout`, timeout parsing, and timeout diagnostic in `cmd/harnez/exec.go`; likely tests in `cmd/harnez/exec_test.go` and instruction/template files under `internal/`.
+5. Test Claude hook JSON round-trip preserving unknown `tool_input` fields while changing only `command`; native timeout/background forwarding; prefixes before commands and inside compound/piped `bash -c`; prefix/native/config/default precedence; and kill text. Re-run the canary with rewritten `sleep 5` plus `timeout: 2000` and `run_in_background: true`, then compare against the pre-hook `harnez exec --` controls: rewritten calls must retain the 2s timeout and background mode.
+6. Keep session-persist-on-kill as a separate follow-up ticket or explicitly defer it; it is independent of timeout policy and needs its own lifecycle design/tests.
+
+Hook payload check (2026-09-23): Claude supplies `tool_input`, where this hook currently decodes a generic map and can preserve fields. Codex's handler uses the analogous `tool_input.command`, but its own source calls that schema inferred and does not confirm a per-call timeout/background field; only hook-level `timeoutSec` is documented in the research. AGY uses `toolCall.args.CommandLine` and the current hook is observational, with no timeout/background field in its payload struct. Do not assume equivalent native fields for Codex/AGY without a payload canary; the explicit prefix remains the cross-harness path.
