@@ -5,6 +5,53 @@ and prints with `harnez agent models`. This doc keeps the evidence behind it. Ro
 practice: `docs/practices/ModelRoles.md`; measured sprint eval: `ModelAdvisoryEval.md`.
 To refresh it, follow [ModelResearch.md](ModelResearch.md).
 
+## 2026-09-24 research refresh snapshot
+
+First full run of [ModelResearch.md](ModelResearch.md): 5 web researchers (family + price)
+and one local quota analyst, all `codex:luna:med`, in parallel, 52s–3m34s, ~30–54k new
+tokens each. Table before: [data/models-001.txt](data/models-001.txt); after:
+[data/models-002.txt](data/models-002.txt). Studies:
+[gpt6](studies/2026-09-24-model-research-gpt6.md),
+[gpt56](studies/2026-09-24-model-research-gpt56.md),
+[claude](studies/2026-09-24-model-research-claude.md),
+[gemini](studies/2026-09-24-model-research-gemini.md),
+[price](studies/2026-09-24-model-research-price.md),
+[quota](studies/2026-09-24-model-research-quota.md).
+
+COST (workload 100k in / 20k out / 50% cached, list price, × luna):
+
+| Model | List price in/cached/out USD per 1M | × luna | COST before → after |
+|---|---|---|---|
+| codex:luna | 0.10 / 0.01 / 0.50 | 1 | 1 |
+| agy:flash37, flash38 | 0.75 / 0.075 / 3.75 (flash38 introductory to 2026-12-31) | 7.5 | 4 → 8 |
+| claude:haiku | 1 / 0.10 / 5 (low confidence) | 10 | 4 → 10 |
+| codex:sol | 2 / 0.20 / 10 | 20 | 20 |
+| codex:terra | 2 / 0.20 / 12 | 22.6 | 16 → 22 |
+| claude:sonnet, agy:sonnet | 3 / 0.30 / 15 | 30 | 16 → 30 |
+| claude:opus, agy:opus | 5 / 0.50 / 25 | 45 | 32 → 60 (user-stated opus ≈ 2× sonnet wins) |
+| codex:astra | 10 / 1 / 50 | 100 | 100 (list ratio lands exactly on the anchor) |
+
+Findings:
+
+- **No cell except COST changed.** Every SKILLS, ROLES and USE claim came back `?`: no
+  model-specific public evidence for Go, TUI or SQL exists. Per the reconcile rule the
+  cells stay; only [ModelTrials.md](ModelTrials.md) canaries can settle them.
+- **Claude effort contradicted (high confidence):** Anthropic documents low/medium/high
+  effort for Sonnet 4.6 and Opus 4.6+, but `harnez agent` marks every `claude:*` row
+  EFFORT no. Needs a canary of the Claude CLI's effort flag before changing code.
+- **Claude aliases move:** `sonnet`/`opus`/`haiku` resolve to the newest model (Sonnet 5,
+  Opus 5.x, Haiku 4.5 today); the web evidence is partly for 4.6. Transcripts show
+  `claude-opus-5`, `claude-opus-5-5`, `claude-sonnet-5`, `claude-haiku-4-5`.
+- **EFF stays `?` everywhere:** no harness publishes tokens per successful task per model.
+- **Local quota (Claude only, rough least-squares fit, 884 intervals):** 5h points per 100k
+  new tokens: haiku 5.0, sonnet-5 6.0, opus-5-5 7.2, opus-5 8.4. Opus costs ~1.2–1.4×
+  sonnet per token on the subscription, less than the list ratio; haiku is barely cheaper
+  than sonnet, likely because cached tokens dominate. Codex and agy attribution was not
+  defensible (overlapping account-wide readings).
+- **Process:** all six agents wrote their studies (run from a scratch dir, writing into the
+  repo worked). The quota agent first read "read-only" as forbidding the study file; say
+  "read-only except the study file".
+
 ## 2026-09-23 web-research snapshot
 
 Method: one `codex:luna:low` advisor per configured model (11 in parallel, 27–55s each, ~40k

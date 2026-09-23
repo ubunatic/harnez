@@ -1,0 +1,9 @@
+SPEC                      MODEL                     EFFORT  COST  EFF  SKILLS         ROLES                         USE
+agy:flash37:low           gemini-3.7-flash          yes     8     ?    Go~ TUI~ SQL~  developer, advisor, reviewer  fast bounded implementation or review with clear checks
+agy:flash37:med           gemini-3.7-flash          yes     8     ?    Go~ TUI~ SQL~  developer, advisor, reviewer  fast bounded implementation or review with clear checks
+agy:flash38:low           gemini-3.8-flash          yes     8     ~    Go~ TUI~ SQL~  reviewer, advisor, developer  cross-vendor reviewer; strong terminal coding, slow first token
+agy:flash38:med           gemini-3.8-flash          yes     8     ~    Go~ TUI~ SQL~  reviewer, advisor, developer  escalation advisor on a budget
+agy:opus:low              claude-opus-4-6-thinking  no      60    ?    Go+ TUI~ SQL~  advisor, reviewer             Opus 4.6; careful analysis of hard problems
+agy:sonnet:low            claude-sonnet-4-6         no      30    ?    Go~ TUI~ SQL~  reviewer, developer           Sonnet 4.6; reviewer or developer when Claude quota is out
+claude:haiku:low          haiku                     no      10    -    Go~ TUI- SQL~  mechanical                    narrow edits with a machine-checkable test only
+claude:opus:low           opus                      no      60    

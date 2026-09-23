@@ -44,7 +44,7 @@ models:
     name: gpt-5.6-terra
     tier: low
     roles: advisor, reviewer, developer
-    cost: 16
+    cost: 22
     eff: "+"
     skills: Go~ TUI~ SQL~
     use: best-value auditor; finds code traps with file:line
@@ -53,7 +53,7 @@ models:
     name: haiku
     tier: low
     roles: mechanical
-    cost: 4
+    cost: 10
     eff: "-"
     skills: Go~ TUI- SQL~
     use: narrow edits with a machine-checkable test only
@@ -62,7 +62,7 @@ models:
     name: sonnet
     tier: low
     roles: advisor, reviewer, developer
-    cost: 16
+    cost: 30
     eff: "~"
     skills: Go~ TUI~ SQL~
     use: cross-vendor advisor or reviewer; strong tool use
@@ -71,7 +71,7 @@ models:
     name: opus
     tier: low
     roles: orchestrator, reviewer
-    cost: 32
+    cost: 60
     eff: "+"
     skills: Go+ TUI? SQL+
     use: host seat for repo judgment, pre-work, diff review
@@ -80,7 +80,7 @@ models:
     name: gemini-3.7-flash
     tier: low
     roles: developer, advisor, reviewer
-    cost: 4
+    cost: 8
     eff: "?"
     skills: Go~ TUI~ SQL~
     use: fast bounded implementation or review with clear checks
@@ -89,7 +89,7 @@ models:
     name: gemini-3.8-flash
     tier: low
     roles: reviewer, advisor, developer
-    cost: 4
+    cost: 8
     eff: "~"
     skills: Go~ TUI~ SQL~
     use: cross-vendor reviewer; strong terminal coding, slow first token
@@ -100,7 +100,7 @@ models:
     tier: low
     effort: false
     roles: reviewer, developer
-    cost: 16
+    cost: 30
     eff: "?"
     skills: Go~ TUI~ SQL~
     use: Sonnet 4.6; reviewer or developer when Claude quota is out
@@ -110,7 +110,7 @@ models:
     tier: low
     effort: false
     roles: advisor, reviewer
-    cost: 32
+    cost: 60
     eff: "?"
     skills: Go+ TUI~ SQL~
     use: Opus 4.6; careful analysis of hard problems
