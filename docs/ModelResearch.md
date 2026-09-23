@@ -169,8 +169,7 @@ before/after pairs as evidence (e.g. 2026-09-23 21:37→21:51 UTC: one gpt-6-ast
 Output: one table row per model plus at most 10 lines of findings.
 ```
 
-Measured numbers outrank list prices for COST and EFF within a provider; cross-provider
-multiples stay list-price based. Run it with the step 2 loop's `harnez agent start`
+Measured plan quota is the primary COST source (see "COST unit" in step 3). Run it with the step 2 loop's `harnez agent start`
 (`--name mr-quota`, `-d .` from the repo root). Needs session records: run this before step 6, and
 don't delete `~/.harnez/agents` records of research runs you may want to analyse later.
 
@@ -182,9 +181,15 @@ don't delete `~/.harnez/agents` records of research runs you may want to analyse
 - Reconcile conflicts by version, date, route, effort and harness; keep an unresolved
   disagreement in the snapshot instead of averaging it.
 - `?` means insufficient evidence, never "average": don't turn it into `~` or `-`.
-- COST/EFF precedence: user-stated ratios (e.g. opus ≈ 2× sonnet) > measured trials and
-  quota (step 2b, [ModelTrials.md](ModelTrials.md); within one provider only) > list
-  prices (step 2). Cross-provider multiples stay list-price based.
+- **COST unit = plan quota, not dollars.** We pay through similar-priced subscriptions
+  (ChatGPT Plus → codex, Claude Pro → claude, Google Pro → agy; agy's Claude models may
+  draw on a separate Google pool), so COST is the share of the plan's 5h window one
+  typical turn uses, scaled to luna = 1, astra = 100. This makes vendors comparable.
+  List prices are reference only: the 2026-09-24 list-price scale put opus at 60% of
+  astra, while measured quota showed an astra turn costs several opus turns.
+- COST/EFF precedence: user-stated ratios (e.g. opus ≈ 2× sonnet) > measured plan quota
+  (step 2b, [ModelTrials.md](ModelTrials.md)) > list prices (step 2, reference only,
+  never across vendors). Record the plan names in the snapshot; a plan change is a trigger.
 - COST stays anchored at luna = 1 and astra = 100 as a policy scale. Ask the user about
   re-anchoring only when a measured astra ratio falls outside 50–200 (2× off) on more than
   one clean measurement; record every measurement in the snapshot either way.

@@ -20,7 +20,7 @@ tokens each. Table before: [data/models-001.txt](data/models-001.txt); after:
 
 COST (workload 100k in / 20k out / 50% cached, list price, × luna):
 
-| Model | List price in/cached/out USD per 1M | × luna | COST before → after |
+| Model | List price in/cached/out USD per 1M | × luna | COST proposed (not kept) |
 |---|---|---|---|
 | codex:luna | 0.10 / 0.01 / 0.50 | 1 | 1 |
 | agy:flash37, flash38 | 0.75 / 0.075 / 3.75 (flash38 introductory to 2026-12-31) | 7.5 | 4 → 8 |
@@ -48,6 +48,7 @@ Findings:
   sonnet per token on the subscription, less than the list ratio; haiku is barely cheaper
   than sonnet, likely because cached tokens dominate. Codex and agy attribution was not
   defensible (overlapping account-wide readings).
+- **COST reverted (same day):** list prices mislead across vendors (terra > sol, opus 60 vs astra 100 contradict measured quota); COST is now plan quota per turn, see ModelResearch.md step 3.
 - **Process:** all six agents wrote their studies (run from a scratch dir, writing into the
   repo worked). The quota agent first read "read-only" as forbidding the study file; say
   "read-only except the study file".

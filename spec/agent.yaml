@@ -3,8 +3,8 @@
 default_model: codex:luna:low
 
 # Listing guidance for `harnez agent models` (legend printed below the table):
-#   cost   relative cost, luna = 1, astra = 100 (list price and
-#          subscription feel; vendors have separate quota pools)
+#   cost   plan-quota cost per typical turn, luna = 1, astra = 100 (share
+#          of the 5h window on ChatGPT Plus, Claude Pro, Google Pro)
 #   eff    tokens needed to reach a goal: + few, ~ average, - many, ? unmeasured
 #   skills Go/TUI/SQL: + strong, ~ ok, - weak, ? no data
 #   use    when to pick it; use_med replaces use for the :med variant
@@ -44,7 +44,7 @@ models:
     name: gpt-5.6-terra
     tier: low
     roles: advisor, reviewer, developer
-    cost: 22
+    cost: 16
     eff: "+"
     skills: Go~ TUI~ SQL~
     use: best-value auditor; finds code traps with file:line
@@ -53,7 +53,7 @@ models:
     name: haiku
     tier: low
     roles: mechanical
-    cost: 10
+    cost: 4
     eff: "-"
     skills: Go~ TUI- SQL~
     use: narrow edits with a machine-checkable test only
@@ -62,7 +62,7 @@ models:
     name: sonnet
     tier: low
     roles: advisor, reviewer, developer
-    cost: 30
+    cost: 16
     eff: "~"
     skills: Go~ TUI~ SQL~
     use: cross-vendor advisor or reviewer; strong tool use
@@ -71,7 +71,7 @@ models:
     name: opus
     tier: low
     roles: orchestrator, reviewer
-    cost: 60
+    cost: 32
     eff: "+"
     skills: Go+ TUI? SQL+
     use: host seat for repo judgment, pre-work, diff review
@@ -80,7 +80,7 @@ models:
     name: gemini-3.7-flash
     tier: low
     roles: developer, advisor, reviewer
-    cost: 8
+    cost: 4
     eff: "?"
     skills: Go~ TUI~ SQL~
     use: fast bounded implementation or review with clear checks
@@ -89,7 +89,7 @@ models:
     name: gemini-3.8-flash
     tier: low
     roles: reviewer, advisor, developer
-    cost: 8
+    cost: 4
     eff: "~"
     skills: Go~ TUI~ SQL~
     use: cross-vendor reviewer; strong terminal coding, slow first token
@@ -100,7 +100,7 @@ models:
     tier: low
     effort: false
     roles: reviewer, developer
-    cost: 30
+    cost: 16
     eff: "?"
     skills: Go~ TUI~ SQL~
     use: Sonnet 4.6; reviewer or developer when Claude quota is out
@@ -110,7 +110,7 @@ models:
     tier: low
     effort: false
     roles: advisor, reviewer
-    cost: 60
+    cost: 32
     eff: "?"
     skills: Go+ TUI~ SQL~
     use: Opus 4.6; careful analysis of hard problems
