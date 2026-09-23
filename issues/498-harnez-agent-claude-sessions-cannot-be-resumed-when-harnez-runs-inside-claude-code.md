@@ -46,3 +46,15 @@ workaround is a fresh session per milestone, with the context carried by the tic
 3. Capture stderr (`exec.ExitError.Stderr`) into the returned error.
 4. Make `Resume` pass the same permission flag and `--model` as `Run`. Test the args.
 5. Live check: start plus resume one `claude:haiku` turn from inside Claude Code.
+
+## Finding 2026-09-24 (loom 107 sprint, dev107 73deb143…)
+
+Canary refutes the inherited-env hypothesis: `claude -p --output-format json`
+from inside Claude Code persists its transcript with and without
+`CLAUDECODE`/`CLAUDE_CODE_*` unset. Root cause is in `ClaudeDriver`:
+`parseClaude` ignores the JSON `session_id`, so `TurnResult.SessionID` stays
+empty and harnez resumes with its own session UUID, which Claude never saw
+(`No conversation found with session ID: 73deb143…`). Fix: parse
+`session_id` into `TurnResult.SessionID` (as agy/codex do). The transcript is
+stored under the child's cwd project dir, so resume must also run in the
+same `-d`.
