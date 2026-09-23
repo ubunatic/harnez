@@ -513,3 +513,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 512 | [512-check-that-docs-list-only-model-aliases-defined-in-spec-agent-yaml.md](512-check-that-docs-list-only-model-aliases-defined-in-spec-agent-yaml.md) | Check that docs list only model aliases defined in spec/agent.yaml | Open |
 | 513 | [513-real-terminal-tty-run-before-a-cli-feature-is-called-done.md](513-real-terminal-tty-run-before-a-cli-feature-is-called-done.md) | Real-terminal (TTY) run before a CLI feature is called done | Open |
 | 514 | [514-repeatable-model-research-plan-in-docs.md](514-repeatable-model-research-plan-in-docs.md) | Repeatable model research plan in docs/ | Closed — docs/ModelResearch.md added and linked; dry run of steps 1-2 pending |
+| 515 | [515-one-discoverable-home-for-all-harnez-telemetry-data.md](515-one-discoverable-home-for-all-harnez-telemetry-data.md) | One discoverable home for all harnez telemetry data | Open |
