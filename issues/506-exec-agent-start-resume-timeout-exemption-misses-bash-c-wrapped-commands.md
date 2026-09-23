@@ -1,6 +1,6 @@
 # 506 — exec: agent start/resume timeout exemption misses bash -c wrapped commands
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
