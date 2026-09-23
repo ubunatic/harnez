@@ -25,10 +25,11 @@ const (
 
 // Options controls the distillation pipeline.
 type Options struct {
-	Mode     Mode
-	MaxLines int // 0 disables line-based head/tail truncation
-	MaxBytes int // 0 disables the byte-based hard cap (see FilterHeadTailBytes)
-	NoDedup  bool
+	Mode       Mode
+	MaxLines   int // 0 disables line-based head/tail truncation
+	MaxBytes   int // 0 disables the byte-based hard cap (see FilterHeadTailBytes)
+	NoDedup    bool
+	SimplePath bool // When true, forces simple slice-based processing rather than fast zero-alloc paths
 }
 
 var ansiRE = regexp.MustCompile("\x1b\\[[0-9;]*[a-zA-Z]")
@@ -394,7 +395,11 @@ func Distill(input string, opts Options) string {
 		s = FilterDeduplicate(strings.NewReader(s))
 	}
 	if opts.MaxLines > 0 {
-		s = FilterHeadTailString(s, opts.MaxLines)
+		if opts.SimplePath {
+			s = FilterHeadTail(strings.Split(s, "\n"), opts.MaxLines)
+		} else {
+			s = FilterHeadTailString(s, opts.MaxLines)
+		}
 	}
 	if opts.MaxBytes > 0 {
 		s = FilterHeadTailBytes(s, opts.MaxBytes)

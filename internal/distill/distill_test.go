@@ -296,3 +296,22 @@ func TestDistill_NoDedup(t *testing.T) {
 		t.Errorf("Distill() with NoDedup = %q, want unchanged %q", got, in)
 	}
 }
+
+func TestDistill_SimplePathToggle(t *testing.T) {
+	lines := make([]string, 20)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line-%d", i)
+	}
+	in := strings.Join(lines, "\n")
+
+	fastGot := Distill(in, Options{Mode: ModeRaw, MaxLines: 10, SimplePath: false})
+	simpleGot := Distill(in, Options{Mode: ModeRaw, MaxLines: 10, SimplePath: true})
+
+	if fastGot != simpleGot {
+		t.Errorf("Distill() simple path output differs from fast path:\nFast:\n%s\nSimple:\n%s", fastGot, simpleGot)
+	}
+	wantOmission := "[... 10 lines omitted ...]"
+	if !strings.Contains(fastGot, wantOmission) {
+		t.Errorf("expected output to contain %q, got:\n%s", wantOmission, fastGot)
+	}
+}
