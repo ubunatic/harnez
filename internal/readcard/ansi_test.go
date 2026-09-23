@@ -43,3 +43,37 @@ func TestStripANSIEscapesMalformed(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func BenchmarkStripANSIEscapes_Plain(b *testing.B) {
+	s := "func processStep(n int) error { return nil } // plain code line without ansi escapes"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = stripANSIEscapes(s)
+	}
+}
+
+func BenchmarkStripANSIEscapes_ANSI(b *testing.B) {
+	s := "\x1b[31mfunc\x1b[0m \x1b[32mprocessStep\x1b[0m(n int) error { return nil }"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = stripANSIEscapes(s)
+	}
+}
+
+func BenchmarkParseANSILine_Plain(b *testing.B) {
+	s := "func processStep(n int) error { return nil } // plain code line without ansi escapes"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var state ansiState
+		_ = parseANSILine(s, &state)
+	}
+}
+
+func BenchmarkParseANSILine_ANSI(b *testing.B) {
+	s := "\x1b[31mfunc\x1b[0m \x1b[32mprocessStep\x1b[0m(n int) error { return nil }"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var state ansiState
+		_ = parseANSILine(s, &state)
+	}
+}
