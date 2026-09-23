@@ -34,8 +34,10 @@ Findings:
   match terra/sol. List price is low, but subscription cost feels high in practice; ticket 507
   (quota snapshots per agent turn) is meant to measure real subscription cost.
 - **Research agents disagree on identity and price.** The astra agent found "GPT-6 Astra", not
-  `gpt-5.6-astra`; sol and terra agents gave conflicting prices. Recheck model names in
-  `spec/agent.yaml` against the provider CLIs.
+  `gpt-5.6-astra`; sol and terra agents gave conflicting prices. The agent was right: Codex's
+  `~/.codex/models_cache.json` offers only `gpt-6-astra`, and the spec was fixed on
+  2026-09-23. Check model names in `spec/agent.yaml` against the provider's own model list
+  (Codex: `slug` entries in `models_cache.json`), not against docs or web research.
 - **One agent drifted off task.** The agy:opus researcher also audited repo code and ticket 500:
   the advisor role preamble invites repo exploration, so research prompts should say
   "web research only, do not inspect the repository".

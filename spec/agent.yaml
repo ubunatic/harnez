@@ -32,7 +32,7 @@ models:
     use: capable coding and tool use; milestone reviewer; tends to over-refactor
   codex:astra:
     provider: codex
-    name: gpt-5.6-astra
+    name: gpt-6-astra
     tier: low
     roles: advisor, developer
     cost: 8
