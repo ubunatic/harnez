@@ -1,0 +1,20 @@
+SPEC                      MODEL                     EFFORT  COST  EFF  SKILLS         ROLES                         USE
+agy:flash37:low           gemini-3.7-flash          yes     4     ?    Go~ TUI~ SQL~  developer, advisor, reviewer  fast bounded implementation or review with clear checks
+agy:flash37:med           gemini-3.7-flash          yes     4     ?    Go~ TUI~ SQL~  developer, advisor, reviewer  fast bounded implementation or review with clear checks
+agy:flash38:low           gemini-3.8-flash          yes     4     ~    Go~ TUI~ SQL~  reviewer, advisor, developer  cross-vendor reviewer; strong terminal coding, slow first token
+agy:flash38:med           gemini-3.8-flash          yes     4     ~    Go~ TUI~ SQL~  reviewer, advisor, developer  escalation advisor on a budget
+agy:opus:low              claude-opus-4-6-thinking  no      32    ?    Go+ TUI~ SQL~  advisor, reviewer             Opus 4.6; careful analysis of hard problems
+agy:sonnet:low            claude-sonnet-4-6         no      16    ?    Go~ TUI~ SQL~  reviewer, developer           Sonnet 4.6; reviewer or developer when Claude quota is out
+claude:haiku:low          haiku                     no      4     -    Go~ TUI- SQL~  mechanical                    narrow edits with a machine-checkable test only
+claude:opus:low           opus                      no      32    +    Go+ TUI? SQL+  orchestrator, reviewer        host seat for repo judgment, pre-work, diff review
+claude:sonnet:low         sonnet                    no      16    ~    Go~ TUI~ SQL~  advisor, reviewer, developer  cross-vendor advisor or reviewer; strong tool use
+codex:astra:low           gpt-6-astra               yes     100   ?    Go+ TUI~ SQL~  advisor, developer            hardest multi-step coding and terminal automation; escalation only
+codex:astra:med           gpt-6-astra               yes     100   ?    Go+ TUI~ SQL~  advisor, developer            hardest multi-step coding and terminal automation; escalation only
+codex:luna:low (default)  gpt-6-luna                yes     1     ~    Go~ TUI- SQL?  developer, mechanical         clear bounded tickets; try first, weak on long terminal loops
+codex:luna:med            gpt-6-luna                yes     1     ~    Go~ TUI- SQL?  developer, mechanical         interface or design changes; less prone to bending tests
+codex:sol:low             gpt-6-sol                 yes     20    -    Go~ TUI~ SQL?  developer, advisor, reviewer  capable coding and tool use; milestone reviewer; tends to over-refactor
+codex:sol:med             gpt-6-sol                 yes     20    -    Go~ TUI~ SQL?  developer, advisor, reviewer  capable coding and tool use; milestone reviewer; tends to over-refactor
+codex:terra:low           gpt-5.6-terra             yes     16    +    Go~ TUI~ SQL~  advisor, reviewer, developer  best-value auditor; finds code traps with file:line
+codex:terra:med           gpt-5.6-terra             yes     16    +    Go~ TUI~ SQL~  advisor, reviewer, developer  best-value auditor; finds code traps with file:line
+
+COST × luna (luna=1, astra=100) · EFF tokens per goal: + few ~ avg - many · skills: + strong ~ ok - weak · ? = no data
