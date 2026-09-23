@@ -3,6 +3,7 @@
 Operational role guidance lives in `spec/agent.yaml` (`roles`, `use`, `use_med` per model)
 and prints with `harnez agent models`. This doc keeps the evidence behind it. Role
 practice: `docs/practices/ModelRoles.md`; measured sprint eval: `ModelAdvisoryEval.md`.
+To refresh it, follow [ModelResearch.md](ModelResearch.md).
 
 ## 2026-09-23 web-research snapshot
 

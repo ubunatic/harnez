@@ -132,7 +132,8 @@ the host's pre-work, such as more callers than the ticket names, or fields a tes
 
 ## Evaluating models
 
-Run this when choosing a lineup, or when a new model appears.
+Run this when choosing a lineup, or when a new model appears. For the full refresh
+procedure (id check, web research, canaries), see harnez: docs/ModelResearch.md.
 
 1. Write one read-only advisory prompt about a real upcoming sprint: order, per-ticket
    approach, delegation, traps with `file:line`, and a cut list, with a line limit.
