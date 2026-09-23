@@ -517,3 +517,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 516 | [516-measure-agy-plan-quota-cost-on-google-pro.md](516-measure-agy-plan-quota-cost-on-google-pro.md) | Measure agy plan-quota cost on Google Pro | Open |
 | 517 | [517-check-claude-effort-support-in-harnez-agent.md](517-check-claude-effort-support-in-harnez-agent.md) | Check claude:* effort support in harnez agent | Open |
 | 518 | [518-measure-gpt-6-sol-plan-quota-cost.md](518-measure-gpt-6-sol-plan-quota-cost.md) | Measure gpt-6-sol plan-quota cost | Open |
+| 519 | [519-harnez-stats-agents-7-day-token-use-plan-quota-drain-and-turn-ratings.md](519-harnez-stats-agents-7-day-token-use-plan-quota-drain-and-turn-ratings.md) | harnez stats --agents: 7-day token use, plan-quota drain and turn ratings | Open |
