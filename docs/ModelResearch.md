@@ -144,3 +144,4 @@ rm -rf "$d"
 Running models on known-answer tasks (skill canaries) or the repo-graded advisory eval
 ([practices/ModelRoles.md](practices/ModelRoles.md) "Evaluating models") gives stronger
 evidence but costs a turn per model; use them only when web research can't settle a role.
+The cheap, worthwhile trials are planned in [ModelTrials.md](ModelTrials.md).
