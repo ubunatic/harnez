@@ -100,6 +100,41 @@ Output one line per model: model | list price | workload ×luna | quota notes | 
 | evidence | source URL. At most 40 lines.
 ```
 
+### 2b. Local quota analytics (one read-only turn, in parallel with step 2)
+
+Web research gives list prices; our own quota history shows what a model really costs on
+our subscriptions and projects. One analytics agent (`codex:luna:med` or `claude:sonnet`,
+role advisor, run from the repo) correlates quota readings with agent turns:
+
+| Source | Holds |
+|---|---|
+| `~/.claude/harnez/usage-history/quota-history.jsonl` | 5h and weekly `used_percent` per provider, ~3 min cadence (the live store; per-host `*.jsonl` there may be stale) |
+| `~/.harnez/agents/*.json` | harnez agent sessions: provider, model, tier, role, token totals (cached split), `created_at` |
+| `~/.codex/sessions/YYYY/MM/DD/*.jsonl` | Codex rollouts: per-turn tokens incl. reasoning, `rate_limits` readings |
+
+Until issue 515 gives one discovery entry point, pass these paths explicitly; the empty
+`~/.harnez/telemetry.sqlite` and `~/.local/share/harnez/telemetry.db` are not the data.
+
+Prompt:
+
+```text
+Read-only analytics over local files; no web search, no edits. Sources: <paths above>.
+Timestamps: quota history is UTC, session records carry their offset.
+For each provider: find quota steps (5h and weekly used_percent changes) and attribute
+them to the agent turns that ran between the two readings; skip steps where other
+activity (the host session, turns without records) overlaps. Report per model:
+turns, new/cached/reasoning tokens, quota points consumed, points per 100k new tokens,
+and a cost multiple vs gpt-6-luna within the same provider. Mark every estimate with
+its sample size and rounding caveat (used_percent is an integer). List clean
+before/after pairs as evidence (e.g. 2026-09-23 21:37→21:51 UTC: one gpt-6-astra turn,
+18.7k new tokens, 5h 0→2%, while 11 earlier luna turns left it at 0%).
+Output: one table row per model plus at most 10 lines of findings.
+```
+
+Measured numbers outrank list prices for COST and EFF within a provider; cross-provider
+multiples stay list-price based. Needs session records: run this before cleanup, and
+don't delete `~/.harnez/agents` records of research runs you may want to analyse later.
+
 ### 3. Reconcile
 
 - Source ranking: official pricing and model docs for facts, reproducible independent
@@ -108,6 +143,7 @@ Output one line per model: model | list price | workload ×luna | quota notes | 
 - Reconcile conflicts by version, date, route, effort and harness; keep an unresolved
   disagreement in the snapshot instead of averaging it.
 - `?` means insufficient evidence, never "average": don't turn it into `~` or `-`.
+- Measured quota costs (step 2b) outrank list prices within a provider.
 - COST stays anchored at luna = 1 and astra = 100 as a policy scale. When the measured astra
   ratio differs a lot, record it in the snapshot and ask the user whether to re-anchor.
   User-stated ratios (e.g. opus ≈ 2× sonnet) outrank list prices.
