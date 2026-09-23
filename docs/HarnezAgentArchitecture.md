@@ -68,7 +68,7 @@ harnez agent status --name w
 harnez agent compact --name w
 harnez agent stop --name w
 harnez agent delete --name w
-harnez agent models
+harnez agent models [--names]
 ```
 
 `--name` selects a session, `--model` selects a provider/model/tier, and `-d`
@@ -169,21 +169,22 @@ guide and pitfalls: `docs/OrchestratedAgentFlow.md`.
 
 ## 3. Model Shorthand & Vendor Mapping
 
-The model resolution engine standardizes aliases across providers:
+`spec/agent.yaml` is the single source for aliases, provider model names, default tiers and
+per-model guidance (`roles`, `use`, `use_med`). `harnez agent models` prints them as a
+table (SPEC, MODEL, EFFORT, ROLES, USE); `--names` prints bare specs for scripts and
+completion. Each effort-capable codex/agy model also lists a `:med` variant. Evidence behind
+the guidance: `docs/Models.md`.
 
-| Alias Shorthand | Target Provider | Fully-Qualified CLI Invocations & Flags | Default Use Case |
-|---|---|---|---|
-| `codex:luna:low` / `codex:luna` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-6-luna --effort low` | Ultra-cheap coder / dev lead |
-| `codex:luna:med` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-6-luna --effort medium` | Standard development |
-| `codex:sol:low` / `codex:sol` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-6-sol --effort low` | Fast code review / linting |
-| `codex:astra:low` / `codex:astra` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-5.6-astra --effort low` | Frontier advisor (stuck only) |
-| `codex:terra:low` / `codex:terra` | OpenAI Codex | `codex -a never -s danger-full-access exec -m gpt-5.6-terra --effort low` | Terra evaluation model |
-| `claude:haiku:low` / `claude:haiku` | Claude Code | `claude -p --model claude-3-5-haiku-20241022` | Lightweight coder |
-| `claude:sonnet:low` / `claude:sonnet` | Claude Code | `claude -p --model sonnet --effort low` | Mid-tier reviewer |
-| `claude:opus:low` / `claude:opus` | Claude Code | `claude -p --model opus` | Deep advisor |
-| `agy:flash:low` / `agy:flash` | Gemini / AGY | `agy -m gemini-3.7-flash --effort low` | Fast coder / research |
-| `agy:flash:med` | Gemini / AGY | `agy -m gemini-3.8-flash --effort medium` | Mid-tier advisor |
-| `local:lmcoder` | Local GPU / Podman | `lmcoder agent exec --model qwen38-q5 --host x600` | Offline sandbox coder |
+The guidance is loaded separately from `subagent.Model` (`ModelGuide`) so session records
+never carry it and `Model` stays comparable.
+
+How a spec reaches the provider CLI (batch drivers):
+
+| Provider | Invocation | Tier handling |
+|---|---|---|
+| codex | `codex exec --json --dangerously-bypass-approvals-and-sandbox -m <name> -c model_reasoning_effort=<tier>` | `low`/`med`/`high` → reasoning effort |
+| claude | `claude -p --dangerously-skip-permissions --model <name> --output-format json` | no effort flag; the tier is a label only (no `:med` row listed) |
+| agy | `agy --model <name> --effort <tier>` | effort omitted for `effort: false` models (`agy:sonnet`, `agy:opus`) |
 
 ---
 

@@ -1,5 +1,47 @@
 # Model Assessment
 
+Operational role guidance lives in `spec/agent.yaml` (`roles`, `use`, `use_med` per model)
+and prints with `harnez agent models`. This doc keeps the evidence behind it. Role
+practice: `docs/practices/ModelRoles.md`; measured sprint eval: `ModelAdvisoryEval.md`.
+
+## 2026-09-23 web-research snapshot
+
+Method: one `codex:luna:low` advisor per configured model (11 in parallel, 27–55s each, ~40k
+new tokens each) web-searched Go, TUI, LLM tool/agent development and automation/CLI
+performance, ignoring web, JS/TS and Python. Sources were not opened by the host, so treat scores
+as agent-reported.
+
+| Model | Go | TUI | Tools/agents | Automation/CLI | List cost |
+|---|---|---|---|---|---|
+| codex:luna (gpt-6-luna) | ok | weak | ok | weak (Terminal-Bench 13%) | cheapest |
+| codex:sol (gpt-6-sol) | ok | ok | strong | strong (TB2.1 83%) | mid |
+| codex:astra | strong? | ok | strong | strong (tops TB4.0) | flagship |
+| codex:terra | ok | ok | strong | strong (TB2.1 87%) | mid |
+| claude:haiku | ok | weak | ok if bounded | weak on long runs | low |
+| claude:sonnet | ok | ok | strong | strong | mid |
+| claude:opus | strong | thin | ok | strong (TB4.0 66%) | premium |
+| agy:flash37 | ok | ok | ok | strong if bounded (TB2.1 86%) | listed low |
+| agy:flash38 | ok | ok | ok | strong (TB2.1 89%), >13s first token | listed low |
+| agy:sonnet (4.6) | ok | ok | strong | strong | mid |
+| agy:opus (4.6 thinking) | strong | ok | strong | strong | high |
+
+Findings:
+
+- **No Go- or TUI-specific benchmark exists for any model.** Those columns are inferred from
+  general coding and terminal benchmarks; our own sprint evidence (`ModelAdvisoryEval.md`)
+  outranks them.
+- **flash37/flash38 are frontier-grade, not mechanical workers.** Their Terminal-Bench 2.1 scores
+  match terra/sol. List price is low, but subscription cost feels high in practice; ticket 507
+  (quota snapshots per agent turn) is meant to measure real subscription cost.
+- **Research agents disagree on identity and price.** The astra agent found "GPT-6 Astra", not
+  `gpt-5.6-astra`; sol and terra agents gave conflicting prices. Recheck model names in
+  `spec/agent.yaml` against the provider CLIs.
+- **One agent drifted off task.** The agy:opus researcher also audited repo code and ticket 500:
+  the advisor role preamble invites repo exploration, so research prompts should say
+  "web research only, do not inspect the repository".
+
+## Earlier assessment (pre-GPT-6 lineup, user notes)
+
   Comparing the latest generation—Claude Sonnet 5, Gemini 3.7 Flash, and OpenAI’s GPT-5.5 / 5.6 tier   
   family (Sol, Terra, Luna)—explains why Sol often exhibits unexpected behavior compared to the other  
   two:                                                                                                 

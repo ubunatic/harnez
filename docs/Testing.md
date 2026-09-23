@@ -54,6 +54,9 @@ boundary or depends on the real environment.
   live observation such as `harnez usage --watch`. Tests prove invariants;
   they do not prove every terminal or desktop rendering outcome.
 - **Quota-1 enforced checks** — `make test-q1` runs the test suite wrapped in `harnez exec --quota-1 -- make test`. Under Quota-1 guardrails, test execution is gated: running tests consecutively without modifying workspace files is blocked with a non-zero exit code to prevent tight test-retry loops. Note that Quota-1 detects file `mtime` across the repository root; parallel doc/ticket edits in a shared workspace will update repo timestamps and satisfy the check.
+  Pitfall: the single run is the only evidence you get, so write the full output to a file
+  (`make test-q1 > <scratch>/q1.log 2>&1`) and grep it for `--- FAIL`. Piping into `tail`
+  loses the failing test's name, and a rerun needs a code change first.
 - **Remote-OS CI** — `make macos-ci` dispatches `.github/workflows/macos-hello.yaml`
   on the GitHub mirror's real `macos-14` runner and polls quietly for a
   PASS/FAIL result (no `gh run watch` job-tree spam — safe to call repeatedly

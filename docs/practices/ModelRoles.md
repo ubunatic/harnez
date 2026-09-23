@@ -79,6 +79,17 @@ Example assignment (2026-09, Codex and Claude subscriptions):
 Model lineups change every few months. Rerun the evaluation below when they do, instead of
 trusting an old table.
 
+Keep the current assignment where agents see it at dispatch time, next to the model
+aliases (harnez: `roles`/`use` in `spec/agent.yaml`, printed by `harnez agent models`),
+not only in a doc.
+
+Public benchmarks are a weak second source. A 2026-09 web sweep (one cheap researcher
+per model, in parallel) found no Go- or TUI-specific benchmark for any model, conflicting
+model names and prices between researchers, and list prices that didn't match how much
+subscription quota a model uses. Use such a sweep to find candidates, then decide with
+the repo-graded evaluation below. Don't label a model "mechanical" because it is cheap: a
+low-priced Flash model scored like mid-tier Codex models on terminal benchmarks.
+
 Lineup note (2026-09-22, ticket 500): with Codex out of quota, the only available lineup was
 host `claude:opus` plus a `claude:sonnet` developer — no cross-vendor reviewer. `harnez agent`
 now supports `agy:flash37`/`agy:flash38` (Gemini, cheap) alongside `agy:sonnet`/`agy:opus`
