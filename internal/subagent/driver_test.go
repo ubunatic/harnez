@@ -170,14 +170,18 @@ func TestCodexDeleteUsesNonInteractiveCommand(t *testing.T) {
 
 func TestClaudeResumeUsesProviderSessionID(t *testing.T) {
 	var args []string
-	d := ClaudeDriver{Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
+	d := ClaudeDriver{Dir: "/tmp/session-dir", Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
 		args = gotArgs
-		return []byte(`{"result":"done"}`), nil
+		return []byte(`{"session_id":"provider-session","result":"done"}`), nil
 	}}
-	if _, err := d.Resume(context.Background(), "provider-id", "continue", Model{}); err != nil {
+	r, err := d.Resume(context.Background(), "provider-id", "continue", Model{Name: "haiku"})
+	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"-p", "--resume", "provider-id", "--output-format", "json", "continue"}
+	if r.SessionID != "provider-session" {
+		t.Fatalf("session ID = %q, want provider-session", r.SessionID)
+	}
+	want := []string{"-p", "--resume", "provider-id", "--dangerously-skip-permissions", "--model", "haiku", "--output-format", "json", "continue"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args = %#v, want %#v", args, want)
 	}
@@ -207,14 +211,31 @@ func TestCodexDriver(t *testing.T) {
 
 func TestClaudeDriver(t *testing.T) {
 	d := ClaudeDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
-		return []byte(`{"result":"done","usage":{"input_tokens":10,"output_tokens":4,"cache_read_input_tokens":3,"cache_creation_input_tokens":2}}`), nil
+		return []byte(`{"session_id":"claude-id","result":"done","usage":{"input_tokens":10,"output_tokens":4,"cache_read_input_tokens":3,"cache_creation_input_tokens":2}}`), nil
 	}}
 	r, err := d.Run(context.Background(), RunOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Response != "done" || r.CachedTokens != 5 || r.TokensTurn != 19 {
+	if r.SessionID != "claude-id" || r.Response != "done" || r.CachedTokens != 5 || r.TokensTurn != 19 {
 		t.Fatalf("unexpected result %#v", r)
+	}
+}
+
+func TestClaudeCommandUsesDirAndReturnsStderr(t *testing.T) {
+	bin := t.TempDir()
+	work := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\npwd\necho deliberate-error >&2\nexit 7\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	d := ClaudeDriver{Dir: work}
+	out, err := d.command(context.Background(), "-p")
+	if err == nil || !strings.Contains(err.Error(), "deliberate-error") {
+		t.Fatalf("error = %v, want stderr", err)
+	}
+	if strings.TrimSpace(string(out)) != work {
+		t.Fatalf("working directory output = %q, want %q", strings.TrimSpace(string(out)), work)
 	}
 }
 

@@ -21,7 +21,7 @@ import (
 var agentDriver = func(m subagent.Model, dir string) subagent.Driver {
 	switch m.Provider {
 	case "claude":
-		return subagent.ClaudeDriver{}
+		return subagent.ClaudeDriver{Dir: dir}
 	case "codex":
 		return subagent.CodexDriver{}
 	case "agy":
