@@ -1,113 +1,118 @@
 # Model Research
 
 How to refresh the model guidance in `spec/agent.yaml` (`cost`, `eff`, `skills`, `roles`,
-`use`, `use_med`) when something changes. The result is an updated spec, a new dated
-snapshot in [Models.md](Models.md) and a checked `harnez agent models` table. Evidence
-from earlier runs: [Models.md](Models.md), [ModelAdvisoryEval.md](ModelAdvisoryEval.md);
-role practice: [practices/ModelRoles.md](practices/ModelRoles.md).
+`use`, `use_med`) by **web research** when something changes. No model is run on tasks
+here: cheap researchers read public benchmarks, vendor docs and practitioner reports. The
+result is an updated spec, a new dated snapshot in [Models.md](Models.md) and a checked
+`harnez agent models` table. Earlier snapshots: [Models.md](Models.md).
 
 ## Triggers
 
 - A new model or id appears in a provider's model list (Codex: `slug` in
   `~/.codex/models_cache.json`).
-- A price or subscription quota change.
-- Repeated role failures of one model in sprint retros.
+- A price or subscription change.
+- New benchmark results for a skill column (Go, TUI, SQL) or a sprint retro that
+  contradicts a rating.
 
 ## Scope rule
 
-Re-run only the new or changed models. Re-run all models only when an anchor changes:
-`codex:luna` (COST 1) or `codex:astra` (COST 100).
+Research only the new or changed models, plus the two anchors `codex:luna` (COST 1) and
+`codex:astra` (COST 100) so the new values land on the same scale. Research every model
+only when an anchor itself changes.
 
-## Steps, cheapest first
-
-Stop after the step that answers the trigger. Run from the harnez repo unless a step says
-otherwise.
+## Steps
 
 ### 1. Id check (no tokens)
 
 Compare every `name:` in `spec/agent.yaml` against the provider's own list, never against
-docs or web research.
+docs or web research. A wrong id makes the research describe the wrong model (`codex:astra`
+once pointed at a nonexistent `gpt-5.6-astra`).
 
 ```bash
-jq -r '.. | .slug? // empty' ~/.codex/models_cache.json | sort -u
+jq -r '.. | .slug? // empty' ~/.codex/models_cache.json | sort -u   # verified 2026-09-23
 grep -n 'name:' spec/agent.yaml
 ```
 
-For claude and agy, check the ids the CLI accepts (`claude --model <id>`, the agy model
-picker). Fix wrong ids first; a wrong id makes every later step measure the wrong model
-(`codex:astra` once pointed at a nonexistent `gpt-5.6-astra`).
+Claude and agy have no verified list command yet; check their ids by hand (their CLI's
+model picker) and note it in the snapshot.
 
-### 2. Column-wise web research (~30–50k new tokens and 25–55 s per researcher)
+A new model also needs a spec entry (provider, name, tier) and a check whether its CLI
+accepts an effort flag (`effort: false` otherwise, as for `agy:sonnet`/`agy:opus`).
 
-One researcher per **column**, covering all models on one scale; not one per model,
-because per-model agents produce ratings that don't line up (conflicting sol/terra
-prices). Columns: COST, EFF. Do not web-research Go, TUI or SQLite: there is no evidence
-for any model, so a rerun only re-labels guesses (use step 3).
+### 2. One researcher per column (~30–50k new tokens, 25–55 s each)
 
-Run from a scratch dir outside the repo, on `luna:med`:
+Give each column to its own researcher covering all models in scope, so one agent sets one
+scale. Per-model researchers produced ratings that didn't line up (conflicting sol/terra
+prices on 2026-09-23). Columns and what to ask for:
+
+| Column | Ask for | Expect |
+|---|---|---|
+| COST | list price per 1M input/output tokens, subscription/quota evidence, as a multiple of luna | good public data |
+| EFF | tokens or cost per solved task (e.g. Artificial Analysis, Terminal-Bench cost figures) | partial |
+| Go, TUI, SQL | language- or domain-specific benchmarks (e.g. BIRD, Spider 2.0 for SQL) | thin: keep `?` unless a source is model-specific |
+
+Run all researchers in parallel from a scratch dir outside the repo, on `codex:luna:med`,
+role advisor (a web-only researcher role is issue 510):
 
 ```bash
-mkdir -p /tmp/model-research
-harnez agent start --name mr-cost --role advisor --model codex:luna:med \
-  -d /tmp/model-research --stream stats "$(cat prompt-cost.txt)"
+d=$(mktemp -d)
+for col in cost eff go tui sql; do
+  harnez agent start --name mr-$col --role advisor --model codex:luna:med -d "$d" \
+    --stream stats "$(sed "s/<COLUMN>/$col/" prompt.txt)" > "$d/$col.txt" 2>&1 &
+done
+wait
 ```
 
-Prompt template (swap the column block for EFF):
+Prompt template:
 
 ```text
-Web research only. Do not inspect any repository or local files.
-Models: <list provider ids from spec/agent.yaml, e.g. gpt-6-luna, gpt-6-sol, ...>.
-Column: COST. Rate every model on one scale as a multiple of gpt-6-luna,
-anchors gpt-6-luna = 1 and gpt-6-astra = 100. Give list price per 1M
-input/output tokens and, separately, any subscription/quota evidence; list price is
-not subscription cost.
-[EFF: tokens needed to reach a coding goal: + few, ~ average, - many, ? no data.]
+WEB RESEARCH ONLY. Do not inspect any repository or local files; run no local commands
+except web search.
+Models (provider ids): <ids in scope, always including gpt-6-luna and gpt-6-astra>.
+Column: <COLUMN>. Rate every model on ONE shared scale:
+- cost: multiple of gpt-6-luna, anchors gpt-6-luna = 1, gpt-6-astra = 100; list price per
+  1M input/output tokens; subscription/quota evidence separately (list price is not
+  subscription cost).
+- eff: tokens needed to reach a coding goal: + few, ~ average, - many, ? no data.
+- go / tui / sql: + strong, ~ ok, - weak, ? no model-specific evidence. Ignore Python,
+  JS/TS and web results.
 Output: one table row per model: model | value | evidence | source URL.
-Mark ? when you found no source. At most 30 lines.
+Mark ? when you found no source. Flag conflicting sources. At most 30 lines.
 ```
 
-Then overlay user-stated cost ratios (they outrank list price) and keep both anchors.
+### 3. Reconcile
 
-### 3. Repo-local skill canaries (Go, TUI, SQLite)
+- Researchers' tables are agent-reported: spot-check the sources behind any value that
+  changes a spec rating.
+- User-stated cost ratios (e.g. opus ≈ 2× sonnet) outrank list prices; keep both anchors.
+- A `?` stays `?`: don't turn "no data" into `-`.
 
-Small tasks with known answers, run on each candidate at its configured tier, scored by
-accuracy and tokens per goal (read tokens with `--stream stats`; compare within one vendor
-only). SQLite canary: a known schema, known answers, and a fan-out join trap that
-double-counts. There is no canary script yet (open question in issue 514); write the task
-into a scratch ticket and grade by hand. Cost: one developer turn per model, roughly
-100–300k input tokens, mostly cached.
+### 4. Update spec and snapshot
 
-### 4. Advisory eval (role changes only)
-
-When a trigger may change `roles`, run "Evaluating models" from
-[practices/ModelRoles.md](practices/ModelRoles.md): one identical advisory prompt, graded
-against the repo with a fact-check grid. Cost per model: ~50–300k input tokens, 1–2 min
-([ModelAdvisoryEval.md](ModelAdvisoryEval.md) "Cost and speed").
-
-### 5. Update spec and snapshot
-
-- Edit `cost`, `eff`, `skills`, `roles`, `use`, `use_med` in `spec/agent.yaml`; keep the
-  header comment and `models_legend` in sync if a scale changes.
-- Add a dated `## YYYY-MM-DD <topic> snapshot` section to [Models.md](Models.md): method,
+- Edit `cost`, `eff`, `skills` (and `use`/`roles` if the evidence changes a role) in
+  `spec/agent.yaml`; keep the header comment and `models_legend` in sync if a scale changes.
+- Add a dated `## YYYY-MM-DD <topic> snapshot` section to [Models.md](Models.md): scope,
   table, findings, research cost. Never rewrite older snapshots.
 
-### 6. Check and commit
+### 5. Check and commit
 
 ```bash
 make install
-script -qc 'harnez agent models' /dev/null   # real pseudo-terminal: widths and colors
-make test-q1
+script -qc 'harnez agent models' /dev/null            # real pseudo-terminal
+make test-q1 > "$d/q1.log" 2>&1; grep -- '--- FAIL' "$d/q1.log"
 ```
 
-Commit spec and docs together, e.g. `docs(models): <date> COST refresh for <model>`.
+Commit spec and snapshot together, e.g. `feat(agent): <date> model research refresh`.
 
-## Cleanup
-
-Read quota numbers first (per-turn readings live in the session rollouts and are deleted
-with the session), then delete every research session and the scratch dir:
+### 6. Cleanup
 
 ```bash
-harnez agent delete --name mr-cost
-harnez agent delete --name mr-eff
-rm -rf /tmp/model-research
+for col in cost eff go tui sql; do harnez agent delete --name mr-$col -d "$d"; done
+rm -rf "$d"
 ```
+
+## Not part of this plan
+
+Running models on known-answer tasks (skill canaries) or the repo-graded advisory eval
+([practices/ModelRoles.md](practices/ModelRoles.md) "Evaluating models") gives stronger
+evidence but costs a turn per model; use them only when web research can't settle a role.
