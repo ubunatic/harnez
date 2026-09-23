@@ -1,6 +1,6 @@
 # Roadmap
 
-Working roadmap for the open backlog (updated 2026-09-22, reconciled against e61f74c). Derived
+Working roadmap for the open backlog (updated 2026-09-24, reconciled against b828dff). Derived
 from each ticket's appended `## Implementation Plan` or its `/goal` and specification sections,
 so scope calls here reflect the planning pass, not a fresh re-derivation.
 
@@ -25,6 +25,15 @@ more correct, more composable and cheaper per session outranks work that adds ne
    harnez keeps is the `harnez usage --json` snapshot schema, which agent dispatch still needs
    for quota-aware model choice (449/485).
 
+**What changed the axis this pass — model economics became measurable.** The 2026-09-24
+model research (`docs/ModelResearch.md`, issue 514) replaced list-price guesses with COST as
+*plan quota per turn* in `spec/agent.yaml` (luna = 1, astra = 100), measured from our own
+quota history for ChatGPT Plus and Claude Pro. That makes "which model for which role" a
+data question, and exposed the data gaps that now gate it: telemetry scattered across decoy
+stores (515), no per-turn quota snapshots (507), and unmeasured agy and gpt-6-sol rows
+(516, 518). These form the new §1b-q cluster and take one **Now** slot ahead of further
+dispatch UX work.
+
 **Strategic goal kept — OS-agnostic readiness (macOS first).** Still valid for the harnez core
 (hooks, shims, `exec`, CI). Most of the Linux-specific probes it named (`pactl`, `amixer`,
 `/proc/*`, `ps -eo comm=`) live in `internal/usage` and move with loom, so §1/§11 shrink to the
@@ -41,6 +50,21 @@ Sequencing buckets:
 ---
 
 ## 0. Shipped Recently
+
+**Closed since the 67f6c3a pass (2026-09-22 → 2026-09-24):**
+
+- **514** (repeatable model research plan): `docs/ModelResearch.md` with family researchers,
+  a claim ledger, local quota analytics (step 2b) and `docs/ModelTrials` for what web
+  research can't settle. Follow-up code: the `harnez agent models` table with roles, COST,
+  EFF and Go/TUI/SQL skill columns, then COST re-based on measured plan quota (663e619).
+  Its dry-run findings filed **510**, **512**, **515–518**.
+- **506** (exec agent-timeout exemption missed `bash -c`): widened to a general `HTO`/
+  `HARNEZ_TIMEOUT` timeout-intent prefix with hook forwarding.
+- **504** (onboard GPT-6 Codex models) and **500** (agy driver live-tested on
+  flash37/flash38/sonnet/opus).
+- Untracked but relevant: `harnez usage --loom` integration (PR #2, first step of the loom
+  move in §2), distill/readcard ANSI fast paths (PRs #5, #6), `:med` tier specs listed.
+- New tickets placed this pass: **501–503**, **505**, **507–513**, **515–518**.
 
 **Closed on 2026-09-22 (lean sprints, after this pass):**
 
@@ -146,6 +170,28 @@ selection wins, a spec default exists) shipped in 484, and its remaining half is
 485. 477 keeps its P1 label in the tracker, but its trigger (async workers) does not exist
 until 476, so it cannot be verified before then.
 
+## 1b-q. Quota & model economics — new section this pass
+
+The model table now drives role choice in every sprint skill, so a wrong COST row directly
+wastes plan quota. The chain is *find the data → record it per turn → measure the gaps →
+act on it*.
+
+| Ticket | Scope | Bucket |
+|---|---|---|
+| 515 — one discoverable home for all telemetry data | M — P1. One root with per-component stores, decoys (`telemetry.sqlite`, `~/.local/share/harnez/telemetry.db`) removed or migrated, `usage history timeline` reading `quota-history.jsonl`. Absorbs 487's "one canonical DB path" item; 495's storage side should target this layout | **Now** |
+| 517 — check `claude:` effort support | S — the table says EFFORT "no" for every Claude row while Anthropic documents low/medium/high; a spec/driver check with a live canary | **Now** (cheap, fixes a wrong row) |
+| 507 — quota snapshots at `agent start`/`resume` | M — before/after readings per turn via the shared cache (087) and collector, best-effort ≤ 2s. Replaces grepping `quota-history.jsonl` by hand | **Next** (high; after 515 fixes where it writes) |
+| 508 — reject agent calls on confirmed-exhausted quota | S/M — reads the same snapshot; the pre-flight twin of 306's quarantine | **Next** (after 507, with 306) |
+| 516 / 518 — measure agy (Google Pro) and gpt-6-sol plan-quota COST | S each — measurement, not code; needs 507's per-turn deltas to be cheap | **Next** (after 507) |
+| 501 — `agent models` marks interactive-only providers | S — stops hosts dispatching batch work to chat-only models | **Next** |
+| 512 — check docs list only aliases defined in `spec/agent.yaml` | S — a test gate; the drift it prevents already happened once | **Next** |
+| 510 — web-only researcher role | S — the advisor role misfit web research in the 514 sweep; belongs in the role rules next to 176 | **Next** (with 176) |
+
+Rationale: 515 leads because every later measurement (507, 516, 518, 485's demotion
+thresholds) reads telemetry, and the 514 run showed agents concluding "no data" from decoy
+stores. 485 and 449 in §1a now consume 507's snapshots instead of the `usage --json` poll
+alone, so 507 moves ahead of them.
+
 ## 2. Usage watch TUI — moving to `../loom`
 
 The watch dashboard, its collector and the mic/hardware boxes are leaving harnez
@@ -184,7 +230,7 @@ issued which call (487).
 |---|---|---|
 | 446 — persist cost fields reported by agents | S/M — **moved Now → Next (after 495)**: the ticket now records that capture moves to the shared package, agents store cost in their own session records, and telemetry receives it only when active. Building it before 495 would couple agents to sqlite, which the component design forbids | **Next** (after 495) |
 | 445 — counterfactual API rate cards in `spec/` | M — still after 446 (measured before modelled) | **Next** (after 446) |
-| 487 — record agent role and parent; attribute nested `harnez` subcommands | M — `agent_role`/`parent_session_id` columns, the real subcommand behind `exec`, `stats --role`, and one canonical DB path (the empty `~/.local/share/harnez/telemetry.db` misled the first analysis). **New and Next-high**: every orchestrated-sprint question ("which commands did each agent run?") is unanswerable without it | **Next** |
+| 487 — record agent role and parent; attribute nested `harnez` subcommands | M — `agent_role`/`parent_session_id` columns, the real subcommand behind `exec`, `stats --role`. The canonical-DB-path item moves to **515** (§1b-q), which generalises it to every store. **New and Next-high**: every orchestrated-sprint question ("which commands did each agent run?") is unanswerable without it | **Next** |
 | 461 — `model` column on `tool_calls` | S/M — same migration shape as 487; do them as one attribution change | **Next** (with 487) |
 | 124 + 296 — PostToolUse tool-call capture + always compute distill savings | M + S/M — the two halves of one efficiency number; 124 is canary-gated | **Next** |
 | 468 — compact `make test-q1` output via `harnez distill` | S/M — new, P2. Quota-1 allows one run, and hosts truncate the output and miss late failures. Grows distill with a Go-test mode, so it belongs with 178 and 296 | **Next** |
@@ -204,7 +250,7 @@ removes a real Quota-1 failure mode.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 279 — persistent `issues/README.md` lock sidecar in working trees | S — visible friction in every `git status` | **Now** |
+| 279 — persistent `issues/README.md` lock sidecar in working trees | S — **moved Now → Later**: the model advisors recommended cutting it (design-heavy, low value) and no new friction was reported | **Later** |
 | 426 + 475 — text-first `find` output; "PNG card" wording | S + S — one pass over `find` output; 475 is new and a string change | **Now** |
 | 340 — label/project/category filters in `harnez find issues` | S/M — this pass again read the full open list (≈170 tickets) for want of it | **Next** |
 | 283 — reassess mandatory fresh-subagent issue filing | S — policy decision | **Next** |
@@ -220,6 +266,8 @@ removes a real Quota-1 failure mode.
 | 499 — assess baking the model-aware orchestration approach (model eval, role assignment by capability and cost, quota watching, strong host) into skills | S/M — new. Decide per technique: skill, doc, code (485) or drop. Feeds 145 | **Next** (before 145) |
 | 145 — orchestrator-session skill/command | M — the sprint recorded exactly what it must encode (role start command, preflight, two follow-up turns max, review checklist, helper cleanup). Its last prerequisite is 176. Absorbs the remaining scope of 288 | **Next** (after 176) |
 | 465 — adopt loom's lean-sprint field notes into AgenticLoop | S — decision ticket; do it with 176/145 so the practice docs change once | **Next** (with 176) |
+| 502 — AGENTS.md documentation and constant-uniqueness guidance | S — new, P2; the missing-evergreen-doc gap it names recurs with low-tier developers | **Next** (with 176) |
+| 505 — copyable-doc reference rule undiscoverable in CLIDesign | S — new, P3; fold into 471's reconcile pass | **Next** (with 471) |
 | 221 — Go-first for scripts, demote ad-hoc Python | S | **Next** |
 | 151 — on-demand lookup vs. materialized instructions (research) | S/M — also informs 494's split into AGENTS.md vs `*.harnez.md` | **Next** |
 | 128 — full system-prompt self-audit for repetition | research, 2 of 4 ACs met | **Next** |
@@ -257,12 +305,17 @@ convention" to "content known": the orchestrated sprint is their acceptance evid
 |---|---|---|
 | 496 — clean up gofmt drift across the repo | S — new. One mechanical `gofmt -w` commit plus a `gofmt -l` gate in `make check`. **Now, and before 491**: 491 edits `internal/claude` and `cmd/harnez`, both on the drift list, and every review has to filter formatting noise by hand | **Now** |
 | 488 — Quota-1 state trusts any ancestor `.git`; tests not hermetic | S — new, P3 but high leverage: a stray `/tmp/.git` broke two tests for every developer on the machine and likely explains the unexplained exec-hook failures workers reported | **Now** |
+| 509 — session tip leaks into `cmd/harnez` tests run inside an agent session | S — new, P2. Makes `make test-q1` fail only for agents, which burns the single Quota-1 run | **Now** |
+| 511 — `make test-q1` keeps the full log and prints its path on failure | S — new, P2. Same failure class as 468 (truncated output wastes the one run); land first, 468 compacts on top | **Now** |
+| 513 — real-terminal (TTY) run before a CLI feature is done | S/M — practice plus a helper; catches display-width and pager bugs tests can't | **Next** |
+| 503 — release publishes a stale versioned source archive | S/M — new, P2, cause unknown; wrong artifacts on a public release are a correctness bug | **Next** (high) |
 | 010 — smoke-test that agents see installed skills/commands | unblocked | **Next** |
 | 007 — thin test coverage, `stripComments` `/* */` gap | M | **Next** |
 | 177 — lean post-edit build check | M | **Later** |
 | 073 — credentialed cloud-agent canary | blocked on a user decision | **Park** (§9) |
 
-Rationale: 496 and 488 are both small and both remove noise from every sprint that follows;
+Rationale: 509 and 511 are this pass's cheap noise removers, like 496/488 last pass: both
+make agents' single Quota-1 run fail for reasons unrelated to the change. 496 and 488 were both small and both remove noise from every sprint that follows;
 cheap work that de-risks the Now keystone (491) goes first.
 
 ## 8. Local-LLM support
@@ -409,9 +462,11 @@ Refreshed this pass. The component design landed and the usage TUI is leaving, s
 moves from telemetry extension to **making `apply` composable**, with telemetry extension
 re-sequenced behind the shared capture package it now depends on.
 
-1. **Clear the ground (small, Now):** ~~496, 488, 289~~ done 2026-09-22. 279 remains, and
-   the model advisors recommended cutting it (design-heavy, low value). Add **498** (Claude
-   resume inside Claude Code) first: every Claude-developer sprint needs it.
+1. **Clear the ground (small, Now):** ~~496, 488, 289~~ done 2026-09-22. **498** (Claude
+   resume inside Claude Code), **509** and **511** (Quota-1 runs wasted by tip leak and
+   truncated logs), **517** (wrong Claude effort rows). 279 moved to Later.
+1b. **Model economics:** **515** (one telemetry home) → 507 (per-turn quota snapshots) →
+   508, 516, 518; 501 and 512 alongside. 507 feeds 485 in step 6.
 2. **Component keystone:** ~~491~~ done 2026-09-22 — selection in `apply`, one settings write, selection-aware
    `diff`/`status`.
 3. **In parallel after 491:** 493 (`mixed` dispatch mode, mode-aware sprint skills) and 495
@@ -421,7 +476,7 @@ re-sequenced behind the shared capture package it now depends on.
 5. **Independent track:** 355 (prune) → 494 (init selection, `*.harnez.md`/`*.local.md`),
    with 413, 015, 351–353 re-read against the new file layout; 471 (+323/324) reconciles the
    root doc copies first.
-6. **Dispatch follow-ons:** 306 → 449 + 485 (quota-aware default) → 476 (+463) → 477 → 144,
+6. **Dispatch follow-ons:** 306 (+508) → 449 + 485 (on 507's snapshots) (quota-aware default) → 476 (+463) → 477 → 144,
    383. 435 last, reduced to A/B telemetry.
 7. **Report and orchestration contract:** 176 (+465) → 145 (absorbing 288).
 8. **Visual context:** 444 + 447 + 459 → 426 + 475 → 427 → 460 → 441 → 436.
