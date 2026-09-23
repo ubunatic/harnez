@@ -88,6 +88,34 @@ flowchart TD
   - **Tokens / Shipped Ticket**: Average AI compute cost per sprint task.
   - **Prompt Cache Leverage Ratio**: Cache read vs. raw write efficiency.
 
+### 2.3 Agent Turn Statistics (`harnez stats --agents`)
+
+`harnez stats --agents --days N [--json]` joins harnez agent session JSON in
+`~/.harnez/agents/`, the adjacent `quota-readings.jsonl` turn-boundary readings,
+the telemetry database's `tool_calls` rows, and provider quota history in
+`~/.claude/harnez/usage-history/quota-history.jsonl`. Deleted harnez sessions
+remain in the session store's `deleted/` archive for reporting. Codex host model
+names are recovered from `~/.codex/sessions/**/rollout-*.jsonl` where the rollout
+contains a `turn_context` model for that session.
+
+Harnez-launched turns use paired fresh quota readings and are labelled
+`measured`. Host sessions have no per-turn readings: quota-history change is
+fitted to the observed session interval and labelled `fitted`. When sessions
+overlap, the fitted value is apportioned by their new-input token totals (or
+equally when token counts are unavailable) and labelled `fitted/shared`; it is
+an estimate, not a per-session measurement. Provider quota utilization is
+reported in whole percentage points, so short turns can appear as 0 or 1 point
+and a single-turn drain-per-token comparison is too coarse for proof.
+
+Per-model `5H DRAIN` sums only complete, fresh, non-reset measured turn pairs.
+`PTS/100K NEW` divides those summed points by the corresponding measured new
+input tokens and scales to 100,000 tokens; it is `—` until at least five turns
+are measured. Host fitted drain is excluded from both figures. By default the
+report shows per-model totals and the newest 20 sessions; `--all` includes every
+session. `harnez agent rate --name <session> <1-5> "<reason>"` records a rating
+on that session's latest turn, and the QUALITY column and per-model average
+show recorded ratings.
+
 ---
 
 ## 3. Git Artifact Evolution & Braille Sparklines (`internal/assess/`)

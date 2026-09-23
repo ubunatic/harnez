@@ -85,6 +85,9 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 	if len(report.Models) != 1 || report.Models[0].Model != "codex:gpt-5.6-luna:low" || report.Models[0].Turns != 2 || report.Models[0].NewInputTokens != 100 {
 		t.Fatalf("model totals=%+v", report.Models)
 	}
+	if report.Models[0].MeasuredTurns != 2 || report.Models[0].MeasuredTurnsWithTokens != 2 || report.Models[0].MeasuredDrainPoints != 5 || report.Models[0].MeasuredNewInputTokens != 100 || report.Models[0].PointsPer100KNew != nil {
+		t.Fatalf("measured quota totals=%+v", report.Models[0])
+	}
 	if agent.Rating == nil || *agent.Rating != 3 || report.Models[0].RatingAverage == nil || *report.Models[0].RatingAverage != 3 || report.Models[0].Ratings != 2 {
 		t.Fatalf("rating aggregation row=%+v models=%+v", agent, report.Models)
 	}
@@ -93,7 +96,7 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 	if err := runAgentStats(&table, agentStatsOptions{Days: 7, HomeDir: home, DBPath: dbPath}); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"agent-1", "host-1", "measured", "fitted", "gpt-5.6-luna", "SRC", "QUALITY", "3.0/5"} {
+	for _, want := range []string{"agent-1", "host-1", "measured", "fitted", "gpt-5.6-luna", "SRC", "QUALITY", "3.0/5", "PTS/100K NEW", "MEASURED TURNS"} {
 		if !strings.Contains(table.String(), want) {
 			t.Errorf("table missing %q:\n%s", want, table.String())
 		}
@@ -166,6 +169,40 @@ func TestShareFittedDrainApportionsOverlappingSessionsByTokens(t *testing.T) {
 	shareFittedDrain(rows)
 	if *rows[0].QuotaDrainPercent != 9 || *rows[1].QuotaDrainPercent != 2 || !rows[0].DrainShared || !rows[1].DrainShared || rows[0].QuotaSource != "fitted" {
 		t.Fatalf("shared fitted rows = %+v", rows)
+	}
+}
+
+func TestModelTotalsMeasuredDrainAndRateThreshold(t *testing.T) {
+	rows := []agentSessionRow{
+		{Model: "model-a", Source: "harnez", MeasuredDrainPoints: 3, MeasuredTurns: 3, MeasuredTurnsWithTokens: 3, MeasuredNewInputTokens: 200000},
+		{Model: "model-a", Source: "harnez", MeasuredDrainPoints: 2, MeasuredTurns: 2, MeasuredTurnsWithTokens: 2, MeasuredNewInputTokens: 300000},
+		{Model: "model-b", Source: "harnez", MeasuredDrainPoints: 1, MeasuredTurns: 4, MeasuredTurnsWithTokens: 4, MeasuredNewInputTokens: 100000},
+		{Model: "model-a", Source: "host", MeasuredDrainPoints: 99, MeasuredTurns: 20, MeasuredTurnsWithTokens: 20, MeasuredNewInputTokens: 100000},
+	}
+	totals := modelTotals(rows)
+	if len(totals) != 2 {
+		t.Fatalf("model totals = %+v", totals)
+	}
+	if totals[0].Model != "model-a" || totals[0].MeasuredDrainPoints != 5 || totals[0].MeasuredTurns != 5 || totals[0].MeasuredNewInputTokens != 500000 || totals[0].PointsPer100KNew == nil || *totals[0].PointsPer100KNew != 1 {
+		t.Fatalf("model-a measured totals = %+v", totals[0])
+	}
+	if totals[1].Model != "model-b" || totals[1].MeasuredTurns != 4 || totals[1].PointsPer100KNew != nil {
+		t.Fatalf("model-b below-threshold totals = %+v", totals[1])
+	}
+}
+
+func TestMeasuredTurnMetricsSkipsStalePairsAndKeepsMatchingTurnTokens(t *testing.T) {
+	session := &subagent.Session{ID: "agent", TurnRecords: []subagent.TurnRecord{{Turn: 1, NewInputTokens: 10}, {Turn: 2, NewInputTokens: 20}}}
+	reading := func(age int64, used int) usage.TurnQuotaReading {
+		return usage.TurnQuotaReading{HasCache: true, CacheAgeMS: age, Windows: []usage.QuotaHistoryEntry{{Agent: "codex", Window: "5-hour", UsedPercent: used}}}
+	}
+	events := map[string]map[int]*quotaTurnPair{"agent": {
+		1: {Before: &subagent.TurnQuotaEvent{Reading: reading(100, 10)}, After: &subagent.TurnQuotaEvent{Reading: reading(100, 11), Tokens: &subagent.TurnTokenUsage{NewInputTokens: 100}}},
+		2: {Before: &subagent.TurnQuotaEvent{Reading: reading(61_000, 11)}, After: &subagent.TurnQuotaEvent{Reading: reading(100, 18), Tokens: &subagent.TurnTokenUsage{NewInputTokens: 20}}},
+	}}
+	points, measuredTurns, turnsWithTokens, newInput := measuredTurnMetrics(session, events)
+	if points != 1 || measuredTurns != 1 || turnsWithTokens != 1 || newInput != 10 {
+		t.Fatalf("measured metrics = points:%v turns:%d tokenTurns:%d new:%d", points, measuredTurns, turnsWithTokens, newInput)
 	}
 }
 
