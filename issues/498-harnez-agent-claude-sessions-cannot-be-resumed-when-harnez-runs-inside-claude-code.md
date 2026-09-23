@@ -1,6 +1,6 @@
 # 498 — harnez agent claude sessions cannot be resumed when harnez runs inside Claude Code
 
-**Status**: Open
+**Status**: Closed — Implemented Claude session ID persistence, working-directory resume, matching resume flags, and stderr reporting; live Claude check was blocked by the enforced developer leaf role.
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
