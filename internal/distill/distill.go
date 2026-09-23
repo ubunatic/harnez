@@ -5,6 +5,7 @@ package distill
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"regexp"
@@ -33,8 +34,22 @@ var ansiRE = regexp.MustCompile("\x1b\\[[0-9;]*[a-zA-Z]")
 
 // StripANSI removes terminal color and cursor-movement escape sequences.
 func StripANSI(s string) string {
+	// Fast path: avoid expensive regex evaluation if no escape sequences exist.
+	if !strings.Contains(s, "\x1b[") {
+		return s
+	}
 	return ansiRE.ReplaceAllString(s, "")
 }
+
+var (
+	prefixRun     = []byte("=== RUN")
+	prefixPass    = []byte("--- PASS")
+	prefixSkip    = []byte("--- SKIP")
+	prefixFail    = []byte("--- FAIL")
+	prefixOk      = []byte("ok ")
+	prefixPkgFail = []byte("FAIL")
+	prefixPkgPass = []byte("PASS")
+)
 
 // FilterGoTest drops "=== RUN" / "--- PASS" noise from `go test -v` output,
 // keeping failure blocks, panics, build errors, and package summary lines.
@@ -45,24 +60,26 @@ func FilterGoTest(r io.Reader) string {
 	var out []string
 	var pending []string
 	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
+		lineBytes := scanner.Bytes()
+		trimmedBytes := bytes.TrimSpace(lineBytes)
+
 		switch {
-		case strings.HasPrefix(trimmed, "=== RUN"):
-			pending = []string{line}
-		case strings.HasPrefix(trimmed, "--- PASS"), strings.HasPrefix(trimmed, "--- SKIP"):
+		case bytes.HasPrefix(trimmedBytes, prefixRun):
+			pending = append(pending[:0], string(lineBytes))
+		case bytes.HasPrefix(trimmedBytes, prefixPass) || bytes.HasPrefix(trimmedBytes, prefixSkip):
 			pending = nil
-		case strings.HasPrefix(trimmed, "--- FAIL"):
-			pending = append(pending, line)
+		case bytes.HasPrefix(trimmedBytes, prefixFail):
+			lineStr := string(lineBytes)
+			pending = append(pending, lineStr)
 			out = append(out, pending...)
 			pending = nil
-		case strings.HasPrefix(line, "ok ") || strings.HasPrefix(line, "FAIL") || strings.HasPrefix(line, "PASS"):
-			out = append(out, line)
+		case bytes.HasPrefix(lineBytes, prefixOk) || bytes.HasPrefix(lineBytes, prefixPkgFail) || bytes.HasPrefix(lineBytes, prefixPkgPass):
+			out = append(out, string(lineBytes))
 		default:
 			if pending != nil {
-				pending = append(pending, line)
+				pending = append(pending, string(lineBytes))
 			} else {
-				out = append(out, line)
+				out = append(out, string(lineBytes))
 			}
 		}
 	}
