@@ -363,6 +363,9 @@ func TestRunExecWrapper_RepoSettingAndFlagPrecedence(t *testing.T) {
 }
 
 func TestResolveExecTimeout_DefaultFlagAndExplicitPrefix(t *testing.T) {
+	t.Setenv(execTimeoutEnv, "")
+	t.Setenv(execTimeoutShortEnv, "")
+
 	missing := filepath.Join(t.TempDir(), "missing.yaml")
 	if got := resolveExecTimeout(execOptions{ConfigPath: missing}, []string{"sleep", "1"}); got != defaultExecTimeout {
 		t.Fatalf("default timeout = %v, want %v", got, defaultExecTimeout)
@@ -393,6 +396,11 @@ func TestResolveExecTimeout_DefaultFlagAndExplicitPrefix(t *testing.T) {
 		}}, tc.args); got != tc.want {
 			t.Errorf("%s timeout = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+
+	t.Setenv(execTimeoutShortEnv, "3m")
+	if got := resolveExecTimeout(execOptions{ConfigPath: missing}, []string{"sleep", "1"}); got != 3*time.Minute {
+		t.Errorf("ambient timeout = %v, want %v", got, 3*time.Minute)
 	}
 }
 
