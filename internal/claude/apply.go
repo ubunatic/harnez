@@ -906,12 +906,12 @@ then
 fi
 if test -n "$old_path"
 then
-	export PATH="$shim_dir:$old_path"
+    export PATH="$shim_dir:$old_path"
     export ANTIGRAVITY_AGENT=1
 fi
 if test -z "$old_path"
 then
-	export PATH="$shim_dir"
+    export PATH="$shim_dir"
     export ANTIGRAVITY_AGENT=1
 fi
 exec "$agy_path" "$@"
@@ -1387,6 +1387,8 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 		} else {
 			addStat("bash shim", fsutil.ContractHome(shimPath))
 		}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
 		launcherPath, changed, err := EnsureHarnezAgyLauncher(home)
 		if err != nil {
 			return err
@@ -1567,23 +1569,28 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 	}
 
 	if shimPath := BashShimPath(); shimPath != "" {
-		if fi, err := os.Stat(shimPath); err != nil {
-			anyChanged = true
-		} else {
-			data, readErr := os.ReadFile(shimPath)
-			if readErr != nil || string(data) != BashShimContent || fi.Mode().Perm() != 0755 {
+		if selection.HasComponent("telemetry") {
+			if fi, err := os.Stat(shimPath); err != nil {
 				anyChanged = true
+			} else {
+				data, readErr := os.ReadFile(shimPath)
+				if readErr != nil || string(data) != BashShimContent || fi.Mode().Perm() != 0755 {
+					anyChanged = true
+				}
 			}
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		launcherPath := HarnezAgyLauncherPath(home)
-		if fi, err := os.Stat(launcherPath); err != nil {
-			anyChanged = true
-		} else {
-			data, readErr := os.ReadFile(launcherPath)
-			if readErr != nil || string(data) != HarnezAgyLauncherContent || fi.Mode().Perm() != 0755 {
+		shimPath := filepath.Join(home, ".harnez", "shims", "bash")
+		if selection.HasComponent("telemetry") {
+			if fi, err := os.Stat(launcherPath); err != nil {
 				anyChanged = true
+			} else {
+				data, readErr := os.ReadFile(launcherPath)
+				if readErr != nil || string(data) != HarnezAgyLauncherContent || fi.Mode().Perm() != 0755 {
+					anyChanged = true
+				}
 			}
 		}
 	}
@@ -1712,17 +1719,16 @@ func CleanAll(target string, cfg *Config) error {
 			return fmt.Errorf("agy hooks [%s]: %w", hooksPath, err)
 		}
 	}
-	if shimPath := BashShimPath(); shimPath != "" {
-		if err := os.Remove(shimPath); err == nil {
-			fmt.Printf("  removed %s\n", shimPath)
-			_ = os.Remove(filepath.Dir(shimPath))
-		}
-	}
 	if home, err := os.UserHomeDir(); err == nil {
 		launcherPath := HarnezAgyLauncherPath(home)
 		if err := os.Remove(launcherPath); err == nil {
 			fmt.Printf("  removed %s\n", launcherPath)
-			_ = os.Remove(filepath.Dir(launcherPath))
+		}
+	}
+	if shimPath := BashShimPath(); shimPath != "" {
+		if err := os.Remove(shimPath); err == nil {
+			fmt.Printf("  removed %s\n", shimPath)
+			_ = os.Remove(filepath.Dir(shimPath))
 		}
 	}
 	if envPath := HarnezEnvPath(); envPath != "" {
