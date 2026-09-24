@@ -284,3 +284,19 @@ Pre-Work / Required Refinements (before M2):
 5. Add the missing tests: other-host blind tunnel, start-failure fallback runs child plainly.
 6. Host re-runs the live canary; M1 is accepted only when rows appear with plausible numbers
    (canary 2 saw ~99 and ~11.8k prompt tokens).
+
+### M1 round 2 (cf589cb) — review: not accepted yet
+
+`make test-q1` green. Live canary: 4 quota rows with plausible fractions (gemini-weekly
+0.7578633 vs 0.7592765 in canary 3). But **agy failed** (`error: context canceled`, no "hi"),
+and **no usage rows** were written. The proxy now breaks agy, which the /goal forbids.
+
+Pre-Work / Required Refinements:
+1. Fix the agy failure: the side-reader/close-wait must never delay, cancel or cut the response
+   to agy. Likely the observer blocks Close or the SSE stream until parsing ends; parsing must
+   be best-effort and detached from the passthrough path.
+2. Usage rows still missing: verify against a recorded SSE fixture shaped like the real stream
+   (`data: {"response": {..., "usageMetadata": {...}}}` nesting, gzip if the real one is).
+3. `remainingFraction` 0 is dropped by `omitempty` (3p-weekly row has none); 0 means exhausted
+   and must be written. Use a pointer or drop omitempty for quota fields.
+4. Add a test that a slow/failed parser still delivers the full stream and closes normally.
