@@ -62,6 +62,19 @@ func TestRunAgyToolHook_AllowOutput(t *testing.T) {
 	}
 }
 
+func TestRunAgyToolHookUsesMeteredHarnezSession(t *testing.T) {
+	t.Setenv("HARNEZ_AGY_METER_SESSION_ID", "agent-session-uuid")
+	in := bytes.NewBufferString(`{"conversationId":"provider-conversation","toolCall":{"name":"Read","args":{}}}`)
+	var recorded telemetry.ToolCall
+	err := runAgyToolHook(in, &bytes.Buffer{}, agyHookOptions{DBPath: "/tmp/dummy.db", Insert: func(_ string, row telemetry.ToolCall) error { recorded = row; return nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if recorded.SessionID != "agent-session-uuid" {
+		t.Fatalf("session ID %q", recorded.SessionID)
+	}
+}
+
 func TestRunAgyToolHook_RunCommandRewritesAndPrepsBash(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("PATH", "/usr/bin:/bin")

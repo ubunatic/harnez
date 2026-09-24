@@ -1,6 +1,7 @@
 package subagent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,13 +12,15 @@ import (
 	"strings"
 	"time"
 
+	"ubunatic.com/harnez/internal/agymeter"
 	"ubunatic.com/harnez/internal/claude"
 )
 
 // AgyDriver runs agy (Antigravity CLI) in print mode, pinned to Dir.
 type AgyDriver struct {
-	Command func(context.Context, string, ...string) ([]byte, error)
-	Dir     string
+	Command   func(context.Context, string, ...string) ([]byte, error)
+	Dir       string
+	SessionID string
 }
 
 func (d AgyDriver) command(ctx context.Context, args ...string) ([]byte, error) {
@@ -31,10 +34,17 @@ func (d AgyDriver) command(ctx context.Context, args ...string) ([]byte, error) 
 	if _, _, err := claude.EnsureBashShim(home); err != nil {
 		return nil, fmt.Errorf("agy: ensure bash shim: %w", err)
 	}
-	c := exec.CommandContext(ctx, "agy", args...)
-	c.Dir = d.Dir
-	c.Env = AgyLaunchEnv(os.Environ(), home)
-	return c.Output()
+	env := AgyLaunchEnv(os.Environ(), home)
+	if d.SessionID != "" {
+		env = replaceEnvironmentValue(env, "HARNEZ_SESSION_ID", d.SessionID)
+		env = replaceEnvironmentValue(env, "HARNEZ_AGY_METER_SESSION_ID", d.SessionID)
+	}
+	var stdout, stderr bytes.Buffer
+	err = agymeter.RunWithEnvDir(ctx, home, "agy", args, env, d.Dir, &stdout, &stderr)
+	if err != nil && stderr.Len() > 0 {
+		return stdout.Bytes(), fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.Bytes(), err
 }
 
 // AgyLaunchEnv prepares an environment for launching the real agy executable.

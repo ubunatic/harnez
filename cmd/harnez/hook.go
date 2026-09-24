@@ -264,7 +264,10 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 		toolName = "unknown"
 	}
 
-	sessionID := payload.ConversationID
+	sessionID := os.Getenv("HARNEZ_AGY_METER_SESSION_ID")
+	if sessionID == "" {
+		sessionID = payload.ConversationID
+	}
 	if sessionID == "" {
 		sessionID, _ = resolve.Session(resolve.SessionOptions{LockDir: opts.StateDir})
 	}

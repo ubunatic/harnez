@@ -37,9 +37,11 @@ func newStatsCmd() *cobra.Command {
 	var strictFlag bool
 	var agentsFlag, agentsAll bool
 	var daysFlag int
+	var sessionFlag string
+	var callsFlag bool
 
 	cmd := &cobra.Command{
-		Use:   "stats [--quality] [--json] [--strict] [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--project <name>] [--auto]",
+		Use:   "stats [--quality] [--json] [--strict] [--session <id> --calls] [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--project <name>] [--auto]",
 		Short: "Report call frequency, average score, failure rate, and byte savings from tool_calls telemetry",
 		Long: `stats renders an analytical report over the tool_calls telemetry table
 (internal/telemetry, issue 116, populated by 'harnez rate' and 'harnez exec'):
@@ -83,6 +85,8 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 				Overhead: overheadFlag,
 				Quality:  qualityFlag,
 				Strict:   strictFlag,
+				Session:  sessionFlag,
+				Calls:    callsFlag,
 			})
 		},
 	}
@@ -90,6 +94,8 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 	cmd.Flags().StringVar(&agentFlag, "agent", "", "filter to one agent_id")
 	cmd.Flags().StringVar(&ticketFlag, "ticket", "", "filter to one ticket_id")
 	cmd.Flags().StringVar(&projectFlag, "project", "", "filter to one project_name")
+	cmd.Flags().StringVar(&sessionFlag, "session", "", "filter to one agent session ID")
+	cmd.Flags().BoolVar(&callsFlag, "calls", false, "list provider model requests and merged tool calls for --session")
 	cmd.Flags().BoolVar(&autoFlag, "auto", false, "filter to the current session, resolved from the environment (like harnez rate/exec)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output the report as JSON instead of a formatted table")
 	cmd.Flags().BoolVar(&overheadFlag, "overhead", false,
@@ -116,11 +122,14 @@ type statsOptions struct {
 	Overhead bool
 	Quality  bool
 	Strict   bool
+	Session  string
+	Calls    bool
 
-	DBPath   string              // telemetry DB path override; empty means telemetry.DefaultDBPath()
-	Getenv   func(string) string // nil means os.Getenv; only consulted when Auto is set
-	StateDir string              // resolve.Session state/lock dir override; only consulted when Auto is set
-	Config   *claude.Config      // config override for the --overhead instruction-text size; nil means claude.LoadConfigEmbedded()
+	DBPath    string              // telemetry DB path override; empty means telemetry.DefaultDBPath()
+	Getenv    func(string) string // nil means os.Getenv; only consulted when Auto is set
+	StateDir  string              // resolve.Session state/lock dir override; only consulted when Auto is set
+	Config    *claude.Config      // config override for the --overhead instruction-text size; nil means claude.LoadConfigEmbedded()
+	MeterPath string              // test override for the AGY meter JSONL
 }
 
 // statsReport is the full shape rendered by both the table and JSON
@@ -157,6 +166,9 @@ type rateOverheadReport struct {
 // runStats resolves opts into a telemetry.Filter, queries the DB, and
 // writes the rendered report to w.
 func runStats(w io.Writer, opts statsOptions) error {
+	if opts.Calls {
+		return runStatsCalls(w, opts)
+	}
 	dbPath := opts.DBPath
 	if dbPath == "" {
 		p, err := telemetry.DefaultDBPath()
@@ -198,10 +210,11 @@ func runStats(w io.Writer, opts statsOptions) error {
 	defer db.Close()
 
 	f := telemetry.Filter{
-		ToolName: opts.Tool,
-		AgentID:  opts.Agent,
-		TicketID: opts.Ticket,
-		Project:  opts.Project,
+		ToolName:  opts.Tool,
+		AgentID:   opts.Agent,
+		TicketID:  opts.Ticket,
+		Project:   opts.Project,
+		SessionID: opts.Session,
 	}
 
 	if opts.Auto {

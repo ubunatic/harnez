@@ -48,13 +48,13 @@ func TestNewCAAndBundle(t *testing.T) {
 }
 
 func TestResponseObserverPassesSSEThroughAndKeepsLastUsage(t *testing.T) {
-	m, err := New(t.TempDir())
+	m, err := newMeter(t.TempDir(), "session-x", "prompt-x")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer m.Close()
 	input := []byte("data: {\"response\":{\"usageMetadata\":{\"promptTokenCount\":99,\"totalTokenCount\":102}}}\n\ndata: {\"response\":{\"usageMetadata\":{\"promptTokenCount\":11818,\"candidatesTokenCount\":1,\"thoughtsTokenCount\":22,\"totalTokenCount\":11841}}}\n\n")
-	body := newResponseObserver(io.NopCloser(bytes.NewReader(input)), m, "/v1internal:streamGenerateContent", "text/event-stream", "", "gemini-test", "session-x")
+	body := newResponseObserver(io.NopCloser(bytes.NewReader(input)), m, "/v1internal:streamGenerateContent", "text/event-stream", "", "gemini-test", "session-x", "provider-conversation")
 	var forwarded bytes.Buffer
 	if _, err = io.Copy(&forwarded, body); err != nil {
 		t.Fatal(err)
@@ -68,7 +68,7 @@ func TestResponseObserverPassesSSEThroughAndKeepsLastUsage(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("got %d records, want one", len(records))
 	}
-	if records[0].Prompt != 11818 || records[0].Total != 11841 || records[0].Model != "gemini-test" || records[0].Session != "session-x" {
+	if records[0].Prompt != 11818 || records[0].Total != 11841 || records[0].Model != "gemini-test" || records[0].Session != "session-x" || records[0].PromptID != "prompt-x" || records[0].Conversation != "provider-conversation" {
 		t.Fatalf("record: %+v", records[0])
 	}
 	raw, err := os.ReadFile(m.logPath)
@@ -94,7 +94,7 @@ func TestResponseObserverDecodesGzipQuotaJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	in := compressed.Bytes()
-	body := newResponseObserver(io.NopCloser(bytes.NewReader(in)), m, "/v1internal:retrieveUserQuotaSummary", "application/json", "gzip", "", "")
+	body := newResponseObserver(io.NopCloser(bytes.NewReader(in)), m, "/v1internal:retrieveUserQuotaSummary", "application/json", "gzip", "", "", "")
 	var forwarded bytes.Buffer
 	if _, err = io.Copy(&forwarded, body); err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func TestZeroQuotaFractionIsRecorded(t *testing.T) {
 	}
 	defer m.Close()
 	input := []byte(`{"groups":[{"buckets":[{"bucketId":"3p-weekly","remainingFraction":0}]}]}`)
-	body := newResponseObserver(io.NopCloser(bytes.NewReader(input)), m, "/v1internal:retrieveUserQuotaSummary", "application/json", "", "", "")
+	body := newResponseObserver(io.NopCloser(bytes.NewReader(input)), m, "/v1internal:retrieveUserQuotaSummary", "application/json", "", "", "", "")
 	_, _ = io.Copy(io.Discard, body)
 	_ = body.Close()
 	<-body.done
@@ -137,6 +137,46 @@ func TestZeroQuotaFractionIsRecorded(t *testing.T) {
 	}
 	if !bytes.Contains(raw, []byte(`"remainingFraction":0`)) {
 		t.Fatalf("zero field omitted: %s", raw)
+	}
+}
+
+func TestQuotaSnapshotsSkipUnchangedIncludingZero(t *testing.T) {
+	m, err := newMeter(t.TempDir(), "session", "prompt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	zero := float64(0)
+	changed := float64(0.25)
+	row := Record{Kind: "quota", Bucket: "3p-weekly", Remaining: &zero, Reset: "reset-a"}
+	m.record(row)
+	m.record(row)
+	row.Remaining = &changed
+	m.record(row)
+	records := readRecords(t, m.logPath)
+	if len(records) != 2 || records[0].Remaining == nil || *records[0].Remaining != 0 || records[1].Remaining == nil || *records[1].Remaining != 0.25 {
+		t.Fatalf("quota changes: %+v", records)
+	}
+}
+
+func TestReadUsageRecordsFiltersSession(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "usage.jsonl")
+	rows := []Record{{Kind: "usage", Session: "s1", Time: time.Unix(2, 0)}, {Kind: "usage", Session: "s2", Time: time.Unix(1, 0)}}
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		b, _ := json.Marshal(r)
+		_, _ = f.Write(append(b, '\n'))
+	}
+	_ = f.Close()
+	got, err := ReadUsageRecords(path, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Session != "s1" {
+		t.Fatalf("records: %+v", got)
 	}
 }
 

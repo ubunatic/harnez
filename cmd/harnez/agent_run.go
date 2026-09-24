@@ -178,7 +178,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	opts := subagent.RunOptions{Prompt: req.Prompt, Model: m, Dir: canonicalWorkDir}
 	parentID := d.parent() // read before the child's environment replaces it
 	defer setAgentEnv(role, sessName)()
-	driver := agentDriver(m, canonicalWorkDir)
+	driver := withAgyMeterSession(agentDriver(m, canonicalWorkDir), id)
 	sd, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
 	turn := 1
@@ -296,7 +296,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if sess.HarnessType == "interactive" && sess.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)
 	}
-	driver := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir)
+	driver := withAgyMeterSession(agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir), sess.ID)
 	if checker, ok := driver.(subagent.ResumeChecker); ok {
 		if resumable, reason := checker.CheckResumable(sess.ProviderID()); !resumable {
 			return fmt.Errorf("session %q cannot be resumed: %s; start a new session with: harnez agent start --name <new-name> ...", sess.Name, reason)
@@ -407,8 +407,23 @@ func compactSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagen
 	if x.HarnessType == "interactive" && x.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be compacted: %s did not expose a provider session ID", x.Name, x.Provider)
 	}
-	_, err := agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}, x.WorkingDir).Compact(cmd.Context(), x.ProviderID())
+	driver := withAgyMeterSession(agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}, x.WorkingDir), x.ID)
+	_, err := driver.Compact(cmd.Context(), x.ProviderID())
 	return err
+}
+
+func withAgyMeterSession(driver subagent.Driver, sessionID string) subagent.Driver {
+	switch d := driver.(type) {
+	case subagent.AgyDriver:
+		d.SessionID = sessionID
+		return d
+	case *subagent.AgyDriver:
+		copy := *d
+		copy.SessionID = sessionID
+		return &copy
+	default:
+		return driver
+	}
 }
 
 func stopSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagent.Session) error {

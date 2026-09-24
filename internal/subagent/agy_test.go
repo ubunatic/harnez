@@ -41,7 +41,8 @@ func TestAgyRunInstallsBashShimAndSetsLaunchEnvironment(t *testing.T) {
 	capturePath := filepath.Join(home, "agy-env.txt")
 	agyPath := filepath.Join(binDir, "agy")
 	agyScript := `#!/bin/sh
-printf '%s\n' "$PATH" "$ANTIGRAVITY_AGENT" > "$AGY_ENV_CAPTURE"
+	pwd > "$AGY_ENV_CAPTURE"
+	printf '%s\n' "$PATH" "$ANTIGRAVITY_AGENT" "$HARNEZ_SESSION_ID" "$HARNEZ_AGY_METER_SESSION_ID" "$HTTPS_PROXY" "$SSL_CERT_FILE" >> "$AGY_ENV_CAPTURE"
 printf '%s\n' '{"status":"SUCCESS","response":"ok"}'
 `
 	if err := os.WriteFile(agyPath, []byte(agyScript), 0755); err != nil {
@@ -52,7 +53,8 @@ printf '%s\n' '{"status":"SUCCESS","response":"ok"}'
 	t.Setenv("ANTIGRAVITY_AGENT", "0")
 	t.Setenv("AGY_ENV_CAPTURE", capturePath)
 
-	d := AgyDriver{Dir: t.TempDir()}
+	workDir := t.TempDir()
+	d := AgyDriver{Dir: workDir, SessionID: "agent-session-uuid"}
 	if _, err := d.Run(context.Background(), RunOptions{Prompt: "ping"}); err != nil {
 		t.Fatalf("AgyDriver.Run: %v", err)
 	}
@@ -62,19 +64,31 @@ printf '%s\n' '{"status":"SUCCESS","response":"ok"}'
 		t.Fatalf("read captured agy environment: %v", err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(captured)), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("captured environment = %q, want PATH and ANTIGRAVITY_AGENT", captured)
+	if len(lines) != 7 {
+		t.Fatalf("captured environment = %q, want cwd, PATH, agent marker, session IDs, proxy and CA bundle", captured)
+	}
+	if lines[0] != workDir {
+		t.Errorf("agy cwd = %q, want %q", lines[0], workDir)
 	}
 	shimDir := filepath.Join(home, ".harnez", "shims")
-	pathEntries := filepath.SplitList(lines[0])
+	pathEntries := filepath.SplitList(lines[1])
 	if len(pathEntries) == 0 || pathEntries[0] != shimDir {
-		t.Errorf("agy PATH = %q, want shim directory %q first", lines[0], shimDir)
+		t.Errorf("agy PATH = %q, want shim directory %q first", lines[1], shimDir)
 	}
 	if len(pathEntries) < 2 || pathEntries[1] != binDir {
 		t.Errorf("agy PATH = %#v, want inherited PATH after shim prefix", pathEntries)
 	}
-	if lines[1] != "1" {
-		t.Errorf("ANTIGRAVITY_AGENT = %q, want 1", lines[1])
+	if lines[2] != "1" {
+		t.Errorf("ANTIGRAVITY_AGENT = %q, want 1", lines[2])
+	}
+	if lines[3] != "agent-session-uuid" || lines[4] != "agent-session-uuid" {
+		t.Errorf("meter session IDs = %q, %q", lines[3], lines[4])
+	}
+	if !strings.HasPrefix(lines[5], "http://127.0.0.1:") {
+		t.Errorf("HTTPS_PROXY = %q", lines[5])
+	}
+	if !strings.HasSuffix(lines[6], ".harnez/agymeter/roots.pem") {
+		t.Errorf("SSL_CERT_FILE = %q", lines[6])
 	}
 
 	shimPath := filepath.Join(shimDir, "bash")

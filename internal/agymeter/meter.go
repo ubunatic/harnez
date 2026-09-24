@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -32,54 +34,77 @@ import (
 const host = "daily-cloudcode-pa.googleapis.com"
 
 type Record struct {
-	Time       time.Time `json:"time"`
-	Kind       string    `json:"kind"`
-	Session    string    `json:"session,omitempty"`
-	Model      string    `json:"model,omitempty"`
-	Prompt     int64     `json:"promptTokenCount,omitempty"`
-	Candidates int64     `json:"candidatesTokenCount,omitempty"`
-	Thoughts   int64     `json:"thoughtsTokenCount,omitempty"`
-	Cached     int64     `json:"cachedContentTokenCount,omitempty"`
-	Total      int64     `json:"totalTokenCount,omitempty"`
-	Bucket     string    `json:"bucketId,omitempty"`
-	Remaining  *float64  `json:"remainingFraction,omitempty"`
-	Reset      string    `json:"resetTime,omitempty"`
+	Time         time.Time `json:"time"`
+	Kind         string    `json:"kind"`
+	Session      string    `json:"session,omitempty"`
+	Conversation string    `json:"conversation,omitempty"`
+	PromptID     string    `json:"prompt_id,omitempty"`
+	Model        string    `json:"model,omitempty"`
+	Prompt       int64     `json:"promptTokenCount,omitempty"`
+	Candidates   int64     `json:"candidatesTokenCount,omitempty"`
+	Thoughts     int64     `json:"thoughtsTokenCount,omitempty"`
+	Cached       int64     `json:"cachedContentTokenCount,omitempty"`
+	Total        int64     `json:"totalTokenCount,omitempty"`
+	Bucket       string    `json:"bucketId,omitempty"`
+	Remaining    *float64  `json:"remainingFraction,omitempty"`
+	Reset        string    `json:"resetTime,omitempty"`
 }
 
 type Meter struct {
-	listener net.Listener
-	server   *http.Server
-	cert     tls.Certificate
-	logPath  string
-	mu       sync.Mutex
-	debug    bool
-	leaves   sync.Map
+	listener  net.Listener
+	server    *http.Server
+	cert      tls.Certificate
+	logPath   string
+	mu        sync.Mutex
+	debug     bool
+	leaves    sync.Map
+	sessionID string
+	promptID  string
+	lastQuota map[string]Record
 }
 
 // Run starts a private meter for the lifetime of the child command. Failure to
 // initialize metering is fail-open: the requested program still runs plainly.
 func Run(ctx context.Context, home string, command string, args []string, stdout, stderr io.Writer) error {
-	m, err := New(home)
+	return RunWithEnv(ctx, home, command, args, os.Environ(), stdout, stderr)
+}
+
+// RunWithEnv starts a per-command meter using an explicit child environment.
+func RunWithEnv(ctx context.Context, home, command string, args, environ []string, stdout, stderr io.Writer) error {
+	return RunWithEnvDir(ctx, home, command, args, environ, "", stdout, stderr)
+}
+
+// RunWithEnvDir is RunWithEnv with an explicit child working directory.
+func RunWithEnvDir(ctx context.Context, home, command string, args, environ []string, dir string, stdout, stderr io.Writer) error {
+	env := append([]string(nil), environ...)
+	sessionID := envValue(env, "HARNEZ_SESSION_ID")
+	promptID, idErr := newPromptID()
+	if idErr != nil {
+		fmt.Fprintln(stderr, "harnez-agy: metering ID unavailable; starting agy without metering")
+		return runChild(ctx, command, args, env, dir, stdout, stderr)
+	}
+	m, err := newMeter(home, sessionID, promptID)
 	if err != nil {
 		fmt.Fprintln(stderr, "harnez-agy: metering proxy unavailable; starting agy without metering")
-		return runChild(ctx, command, args, os.Environ(), stdout, stderr)
+		return runChild(ctx, command, args, env, dir, stdout, stderr)
 	}
 	defer m.Close()
 	bundle, err := m.Bundle()
 	if err != nil {
 		_ = m.Close()
 		fmt.Fprintln(stderr, "harnez-agy: metering proxy unavailable; starting agy without metering")
-		return runChild(ctx, command, args, os.Environ(), stdout, stderr)
+		return runChild(ctx, command, args, env, dir, stdout, stderr)
 	}
 	go m.Serve()
-	env := setEnv(os.Environ(), "HTTPS_PROXY", m.URL())
+	env = setEnv(env, "HTTPS_PROXY", m.URL())
 	env = setEnv(env, "https_proxy", m.URL())
 	env = setEnv(env, "SSL_CERT_FILE", bundle)
-	return runChild(ctx, command, args, env, stdout, stderr)
+	return runChild(ctx, command, args, env, dir, stdout, stderr)
 }
-func runChild(ctx context.Context, name string, args, env []string, out, errout io.Writer) error {
+func runChild(ctx context.Context, name string, args, env []string, dir string, out, errout io.Writer) error {
 	c := exec.CommandContext(ctx, name, args...)
 	c.Env = env
+	c.Dir = dir
 	c.Stdout = out
 	c.Stderr = errout
 	return c.Run()
@@ -95,6 +120,10 @@ func setEnv(env []string, key, value string) []string {
 }
 
 func New(home string) (*Meter, error) {
+	return newMeter(home, os.Getenv("HARNEZ_SESSION_ID"), "")
+}
+
+func newMeter(home, sessionID, promptID string) (*Meter, error) {
 	dir := filepath.Join(home, ".harnez", "agymeter")
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
@@ -107,9 +136,30 @@ func New(home string) (*Meter, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := &Meter{listener: ln, cert: cert, logPath: filepath.Join(dir, "usage.jsonl"), debug: os.Getenv("HARNEZ_AGY_METER_DEBUG") == "1"}
+	m := &Meter{listener: ln, cert: cert, logPath: filepath.Join(dir, "usage.jsonl"), debug: os.Getenv("HARNEZ_AGY_METER_DEBUG") == "1", sessionID: sessionID, promptID: promptID, lastQuota: make(map[string]Record)}
+	if err := m.loadLastQuota(); err != nil {
+		_ = ln.Close()
+		return nil, err
+	}
 	m.server = &http.Server{Handler: http.HandlerFunc(m.handle), ReadHeaderTimeout: 10 * time.Second}
 	return m, nil
+}
+
+func newPromptID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+func envValue(env []string, name string) string {
+	prefix := name + "="
+	for i := len(env) - 1; i >= 0; i-- {
+		if strings.HasPrefix(env[i], prefix) {
+			return strings.TrimPrefix(env[i], prefix)
+		}
+	}
+	return ""
 }
 
 func (m *Meter) URL() string  { return "http://" + m.listener.Addr().String() }
@@ -257,6 +307,8 @@ func (m *Meter) forward(w http.ResponseWriter, r *http.Request) {
 	if session == "" {
 		session, _ = request["conversationId"].(string)
 	}
+	conversation := session
+	session = m.sessionID
 	r.URL.Scheme = "https"
 	r.URL.Host = host
 	r.Host = host
@@ -265,7 +317,7 @@ func (m *Meter) forward(w http.ResponseWriter, r *http.Request) {
 	proxy.Transport = &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		m.debugf("upstream response status=%d", resp.StatusCode)
-		resp.Body = newResponseObserver(resp.Body, m, r.URL.Path, resp.Header.Get("Content-Type"), resp.Header.Get("Content-Encoding"), model, session)
+		resp.Body = newResponseObserver(resp.Body, m, r.URL.Path, resp.Header.Get("Content-Type"), resp.Header.Get("Content-Encoding"), model, session, conversation)
 		return nil
 	}
 	proxy.ServeHTTP(w, r)
@@ -277,12 +329,74 @@ func (m *Meter) record(r Record) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if r.Kind == "quota" {
+		if previous, ok := m.lastQuota[r.Bucket]; ok && sameQuota(previous, r) {
+			return
+		}
+	}
 	f, e := os.OpenFile(m.logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if e == nil {
 		_, _ = f.Write(append(b, '\n'))
 		_ = f.Close()
+		if r.Kind == "quota" {
+			m.lastQuota[r.Bucket] = r
+		}
 		m.debugf("record appended kind=%s", r.Kind)
 	}
+}
+
+func sameQuota(a, b Record) bool {
+	if a.Bucket != b.Bucket || a.Reset != b.Reset {
+		return false
+	}
+	if a.Remaining == nil || b.Remaining == nil {
+		return a.Remaining == nil && b.Remaining == nil
+	}
+	return *a.Remaining == *b.Remaining
+}
+
+func (m *Meter) loadLastQuota() error {
+	f, err := os.Open(m.logPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		var row Record
+		if json.Unmarshal(s.Bytes(), &row) == nil && row.Kind == "quota" && row.Bucket != "" {
+			m.lastQuota[row.Bucket] = row
+		}
+	}
+	return s.Err()
+}
+
+// ReadUsageRecords returns model-response rows recorded for session.
+func ReadUsageRecords(path, session string) ([]Record, error) {
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var out []Record
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		var row Record
+		if json.Unmarshal(s.Bytes(), &row) == nil && row.Kind == "usage" && row.Session == session {
+			out = append(out, row)
+		}
+	}
+	if err := s.Err(); err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
+	return out, nil
 }
 
 func (m *Meter) debugf(format string, args ...any) {
@@ -300,8 +414,8 @@ type responseObserver struct {
 	done   chan struct{}
 }
 
-func newResponseObserver(body io.ReadCloser, m *Meter, path, contentType, encoding, model, session string) *responseObserver {
-	return newObservedBody(body, func(src io.Reader) { m.parseResponse(src, path, contentType, encoding, model, session) }, func() { m.debugf("response side-reader dropped data after queue filled") })
+func newResponseObserver(body io.ReadCloser, m *Meter, path, contentType, encoding, model, session, conversation string) *responseObserver {
+	return newObservedBody(body, func(src io.Reader) { m.parseResponse(src, path, contentType, encoding, model, session, conversation) }, func() { m.debugf("response side-reader dropped data after queue filled") })
 }
 
 func newObservedBody(body io.ReadCloser, parser func(io.Reader), dropped func()) *responseObserver {
@@ -371,7 +485,7 @@ func (q *asyncChunks) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-func (m *Meter) parseResponse(raw io.Reader, path, contentType, encoding, model, session string) {
+func (m *Meter) parseResponse(raw io.Reader, path, contentType, encoding, model, session, conversation string) {
 	var src io.Reader = raw
 	if strings.EqualFold(strings.TrimSpace(encoding), "gzip") {
 		gz, err := gzip.NewReader(raw)
@@ -390,12 +504,12 @@ func (m *Meter) parseResponse(raw io.Reader, path, contentType, encoding, model,
 	consume := func(value any) {
 		if strings.Contains(path, "streamGenerateContent") {
 			walkUsage(value, func(u map[string]any) {
-				r := Record{Time: time.Now().UTC(), Kind: "usage", Model: model, Session: session, Prompt: num(u["promptTokenCount"]), Candidates: num(u["candidatesTokenCount"]), Thoughts: num(u["thoughtsTokenCount"]), Cached: num(u["cachedContentTokenCount"]), Total: num(u["totalTokenCount"])}
+				r := Record{Time: time.Now().UTC(), Kind: "usage", Session: session, Conversation: conversation, PromptID: m.promptID, Model: model, Prompt: num(u["promptTokenCount"]), Candidates: num(u["candidatesTokenCount"]), Thoughts: num(u["thoughtsTokenCount"]), Cached: num(u["cachedContentTokenCount"]), Total: num(u["totalTokenCount"])}
 				latest = &r
 			})
 		}
 		if strings.Contains(path, "retrieveUserQuotaSummary") {
-			walkQuota(value, func(r Record) { quotas[r.Bucket] = r })
+			walkQuota(value, func(r Record) { r.Session = m.sessionID; quotas[r.Bucket] = r })
 		}
 	}
 	if strings.Contains(strings.ToLower(contentType), "text/event-stream") {
