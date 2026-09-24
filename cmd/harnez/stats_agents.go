@@ -557,12 +557,12 @@ func renderAgentStatsTable(w io.Writer, report agentStatsReport) error {
 		if row.QuotaDrainPercent != nil {
 			drain = fmt.Sprintf("%.1f%%", *row.QuotaDrainPercent)
 		}
+		if row.Unreliable {
+			drain += " (unreliable)"
+		}
 		quality := "—"
 		if row.Rating != nil {
 			quality = fmt.Sprintf("%.1f/5", *row.Rating)
-		}
-		if row.Unreliable {
-			quality += " (unreliable)"
 		}
 		turns, input, cached, output := fmt.Sprint(row.Turns), fmt.Sprint(row.NewInputTokens), fmt.Sprint(row.CachedInputTokens), fmt.Sprint(row.OutputTokens)
 		if !row.TurnsKnown {
@@ -591,7 +591,11 @@ func renderAgentStatsTable(w io.Writer, report agentStatsReport) error {
 		if model.PointsPer100KNew != nil {
 			pointsPer100K = fmt.Sprintf("%.2f", *model.PointsPer100KNew)
 		}
-		fmt.Fprintf(tw, "%s\t%d/%d\t%d/%d\t%d\t%d\t%d\t%s\t%d\t%.1f pts\t%s\n", model.Model, model.SessionsWithCompleteTokens, model.Sessions, model.Turns, model.SessionsWithKnownTurns, model.NewInputTokens, model.CachedInputTokens, model.OutputTokens, rating, model.MeasuredTurns, model.MeasuredDrainPoints, pointsPer100K)
+		drain := "—"
+		if model.MeasuredTurns > 0 {
+			drain = fmt.Sprintf("%.1f pts", model.MeasuredDrainPoints)
+		}
+		fmt.Fprintf(tw, "%s\t%d/%d\t%d/%d\t%d\t%d\t%d\t%s\t%d\t%s\t%s\n", model.Model, model.SessionsWithCompleteTokens, model.Sessions, model.Turns, model.SessionsWithKnownTurns, model.NewInputTokens, model.CachedInputTokens, model.OutputTokens, rating, model.MeasuredTurns, drain, pointsPer100K)
 	}
 	return tw.Flush()
 }

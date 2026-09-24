@@ -246,6 +246,29 @@ func TestModelTotalsMeasuredDrainAndRateThreshold(t *testing.T) {
 	}
 }
 
+func TestRenderAgentStatsLabelsUnreliableDrainAndMissingModelDrain(t *testing.T) {
+	unreliableDrain := 2.0
+	var out bytes.Buffer
+	report := agentStatsReport{
+		Days:     1,
+		Sessions: []agentSessionRow{{SessionID: "agent", Source: "harnez", Provider: "agy", QuotaDrainPercent: &unreliableDrain, QuotaSource: "measured", Unreliable: true}},
+		Models:   []agentModelTotals{{Model: "agy:model", MeasuredTurns: 0, MeasuredDrainPoints: 0}},
+	}
+	if err := renderAgentStatsTable(&out, report); err != nil {
+		t.Fatal(err)
+	}
+	table := out.String()
+	if !strings.Contains(table, "2.0% (unreliable)") || !strings.Contains(table, "MEASURED TURNS  5H DRAIN") {
+		t.Fatalf("table missing drain qualification or unchanged columns:\n%s", table)
+	}
+	if strings.Contains(table, "0.0 pts") || !strings.Contains(table, "agy:model") {
+		t.Fatalf("zero-turn model drain should display em dash:\n%s", table)
+	}
+	if strings.Contains(table, "QUALITY\n") || strings.Contains(table, "— (unreliable)") {
+		t.Fatalf("unreliable marker should qualify drain, not quality:\n%s", table)
+	}
+}
+
 func TestMeasuredTurnMetricsSkipsStalePairsAndKeepsMatchingTurnTokens(t *testing.T) {
 	session := &subagent.Session{ID: "agent", TurnRecords: []subagent.TurnRecord{{Turn: 1, NewInputTokens: 10}, {Turn: 2, NewInputTokens: 20}}}
 	reading := func(age int64, used int) usage.TurnQuotaReading {
