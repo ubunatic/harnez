@@ -30,3 +30,5 @@ before `init` overwrites them.
 - Use a three-way merge with the last commit where root and source agreed as the base.
 - Never run `init` and commit blindly: check `git diff` for every rewritten doc.
 - Re-verify against live state before starting.
+
+- 2026-09-24 (519 sprint): `harnez init -d .` after `make install` also rewrote `docs/GoRelease.md`; the drift now covers Bash, GoRelease, IssueTracking, Make and Spec. Reverted each time with `git checkout --`.
