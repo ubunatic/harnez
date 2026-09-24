@@ -1,6 +1,6 @@
 # Roadmap
 
-Working roadmap for the open backlog (updated 2026-09-24, reconciled against b828dff). Derived
+Working roadmap for the open backlog (updated 2026-09-24, reconciled against 3840dd6). Derived
 from each ticket's appended `## Implementation Plan` or its `/goal` and specification sections,
 so scope calls here reflect the planning pass, not a fresh re-derivation.
 
@@ -30,7 +30,7 @@ model research (`docs/ModelResearch.md`, issue 514) replaced list-price guesses 
 *plan quota per turn* in `spec/agent.yaml` (luna = 1, astra = 100), measured from our own
 quota history for ChatGPT Plus and Claude Pro. That makes "which model for which role" a
 data question, and exposed the data gaps that now gate it: telemetry scattered across decoy
-stores (515), no per-turn quota snapshots (507), and unmeasured agy and gpt-6-sol rows
+stores (515), no per-turn quota snapshots (507, now delivered by 519), and unmeasured agy and gpt-6-sol rows
 (516, 518). These form the new §1b-q cluster and take one **Now** slot ahead of further
 dispatch UX work.
 
@@ -50,6 +50,19 @@ Sequencing buckets:
 ---
 
 ## 0. Shipped Recently
+
+**Closed since the 4239ecc pass (519 sprint, 2026-09-24):**
+
+- **519** (`harnez stats --agents`): quota readings around each `agent start`/`resume` turn
+  (M1), a 7-day token and plan-quota drain report (M2), turn ratings (M3) and a per-model
+  drain rate (M4). Per-model rates need ≥ 5 measured turns before they mean much.
+- **507** (per-turn quota snapshots): closed as covered by 519 M1. Was **Next** (high) in §1b-q.
+- **498** (Claude sessions resume): session ID persisted, working-directory resume, matching
+  resume flags. Was **Now** in step 1.
+- **520** (HTO env leak in the exec timeout test): test isolated.
+- **521** (agy resume ignoring the session model): not a bug; regression test added.
+- New: **522** (reuse fresh turn quota readings, §1b-q) and **523** (lean-sprint: host runs
+  live agent checks, §5). **471** now also names GoRelease drift, seen again in this sprint.
 
 **Closed since the 67f6c3a pass (2026-09-22 → 2026-09-24):**
 
@@ -180,17 +193,18 @@ act on it*.
 |---|---|---|
 | 515 — one discoverable home for all telemetry data | M — P1. One root with per-component stores, decoys (`telemetry.sqlite`, `~/.local/share/harnez/telemetry.db`) removed or migrated, `usage history timeline` reading `quota-history.jsonl`. Absorbs 487's "one canonical DB path" item; 495's storage side should target this layout | **Now** |
 | 517 — check `claude:` effort support | S — the table says EFFORT "no" for every Claude row while Anthropic documents low/medium/high; a spec/driver check with a live canary | **Now** (cheap, fixes a wrong row) |
-| 507 — quota snapshots at `agent start`/`resume` | M — before/after readings per turn via the shared cache (087) and collector, best-effort ≤ 2s. Replaces grepping `quota-history.jsonl` by hand | **Next** (high; after 515 fixes where it writes) |
-| 508 — reject agent calls on confirmed-exhausted quota | S/M — reads the same snapshot; the pre-flight twin of 306's quarantine | **Next** (after 507, with 306) |
-| 516 / 518 — measure agy (Google Pro) and gpt-6-sol plan-quota COST | S each — measurement, not code; needs 507's per-turn deltas to be cheap | **Next** (after 507) |
+| 522 — reuse fresh turn quota readings instead of two live fetches per turn | S/M — new, P2. 519 forces a fresh fetch at both turn boundaries, the opposite of 507's "reuse the cache" intent, and each extra agy poll adds reauth risk (112). Reuse the previous "after" and any reading younger than ~60 s | **Next** (high; before 516's agy measurements multiply polls) |
+| 508 — reject agent calls on confirmed-exhausted quota | S/M — reads the per-turn readings 519 now records; the pre-flight twin of 306's quarantine | **Next** (with 306; unblocked by 519) |
+| 516 / 518 — measure agy (Google Pro) and gpt-6-sol plan-quota COST | S each — measurement, not code; 519's `stats --agents` now gives per-turn deltas; ≥ 5 turns per model | **Next** (after 522 for agy) |
 | 501 — `agent models` marks interactive-only providers | S — stops hosts dispatching batch work to chat-only models | **Next** |
 | 512 — check docs list only aliases defined in `spec/agent.yaml` | S — a test gate; the drift it prevents already happened once | **Next** |
 | 510 — web-only researcher role | S — the advisor role misfit web research in the 514 sweep; belongs in the role rules next to 176 | **Next** (with 176) |
 
-Rationale: 515 leads because every later measurement (507, 516, 518, 485's demotion
+Rationale: 515 leads because every later measurement (516, 518, 485's demotion
 thresholds) reads telemetry, and the 514 run showed agents concluding "no data" from decoy
-stores. 485 and 449 in §1a now consume 507's snapshots instead of the `usage --json` poll
-alone, so 507 moves ahead of them.
+stores. 507 shipped as part of 519, so the measuring step is now open: 516/518 only need
+turns run. 522 goes first for agy, since measuring by running many agy turns would
+otherwise double its `/usage` polling. 485 and 449 in §1a consume 519's per-turn readings.
 
 ## 2. Usage watch TUI — moving to `../loom`
 
@@ -261,12 +275,13 @@ removes a real Quota-1 failure mode.
 
 | Ticket | Scope | Bucket |
 |---|---|---|
-| 471 — root doc copies drift from copyable sources (Bash, Make, IssueTracking, Spec, GoRelease) | S/M — new, P2. Every `harnez init` in this repo rewrites ~1000 lines of root docs, so any agent following the repo rules has to revert them by hand. Per-hunk reconcile with the source-wins rule; find GoRelease's source first | **Next** (high) |
+| 471 — root doc copies drift from copyable sources (Bash, Make, IssueTracking, Spec, GoRelease) | S/M — P2; GoRelease drift confirmed again in the 519 sprint. Every `harnez init` in this repo rewrites ~1000 lines of root docs, so any agent following the repo rules has to revert them by hand. Per-hunk reconcile with the source-wins rule; find GoRelease's source first | **Next** (high) |
 | 176 — capped subagent completion-report contract | S — the sprint supplied the content: 8–12-line replies with named fields worked; the cap belongs in the role rules in `spec/agent.yaml`, with a mandatory exact-test-result field | **Next** |
 | 499 — assess baking the model-aware orchestration approach (model eval, role assignment by capability and cost, quota watching, strong host) into skills | S/M — new. Decide per technique: skill, doc, code (485) or drop. Feeds 145 | **Next** (before 145) |
 | 145 — orchestrator-session skill/command | M — the sprint recorded exactly what it must encode (role start command, preflight, two follow-up turns max, review checklist, helper cleanup). Its last prerequisite is 176. Absorbs the remaining scope of 288 | **Next** (after 176) |
 | 465 — adopt loom's lean-sprint field notes into AgenticLoop | S — decision ticket; do it with 176/145 so the practice docs change once | **Next** (with 176) |
 | 502 — AGENTS.md documentation and constant-uniqueness guidance | S — new, P2; the missing-evergreen-doc gap it names recurs with low-tier developers | **Next** (with 176) |
+| 523 — lean-sprint: host runs live `harnez agent` checks, leaf workers cannot | S — new, P3. The 519 sprint lost two developer turns to checks the leaf role refuses; AgenticLoop.md already says it, the lean-sprint command doesn't | **Next** (with 176) |
 | 505 — copyable-doc reference rule undiscoverable in CLIDesign | S — new, P3; fold into 471's reconcile pass | **Next** (with 471) |
 | 221 — Go-first for scripts, demote ad-hoc Python | S | **Next** |
 | 151 — on-demand lookup vs. materialized instructions (research) | S/M — also informs 494's split into AGENTS.md vs `*.harnez.md` | **Next** |
@@ -462,11 +477,11 @@ Refreshed this pass. The component design landed and the usage TUI is leaving, s
 moves from telemetry extension to **making `apply` composable**, with telemetry extension
 re-sequenced behind the shared capture package it now depends on.
 
-1. **Clear the ground (small, Now):** ~~496, 488, 289~~ done 2026-09-22. **498** (Claude
-   resume inside Claude Code), **509** and **511** (Quota-1 runs wasted by tip leak and
+1. **Clear the ground (small, Now):** ~~496, 488, 289~~ done 2026-09-22; ~~498, 520~~ done
+   2026-09-24. **509** and **511** (Quota-1 runs wasted by tip leak and
    truncated logs), **517** (wrong Claude effort rows). 279 moved to Later.
-1b. **Model economics:** **515** (one telemetry home) → 507 (per-turn quota snapshots) →
-   508, 516, 518; 501 and 512 alongside. 507 feeds 485 in step 6.
+1b. **Model economics:** **515** (one telemetry home) → ~~507~~ (delivered by 519) → 522
+   (reuse fresh readings) → 508, 516, 518; 501 and 512 alongside. 519's readings feed 485 in step 6.
 2. **Component keystone:** ~~491~~ done 2026-09-22 — selection in `apply`, one settings write, selection-aware
    `diff`/`status`.
 3. **In parallel after 491:** 493 (`mixed` dispatch mode, mode-aware sprint skills) and 495
@@ -476,9 +491,9 @@ re-sequenced behind the shared capture package it now depends on.
 5. **Independent track:** 355 (prune) → 494 (init selection, `*.harnez.md`/`*.local.md`),
    with 413, 015, 351–353 re-read against the new file layout; 471 (+323/324) reconciles the
    root doc copies first.
-6. **Dispatch follow-ons:** 306 (+508) → 449 + 485 (on 507's snapshots) (quota-aware default) → 476 (+463) → 477 → 144,
+6. **Dispatch follow-ons:** 306 (+508) → 449 + 485 (on 519's per-turn readings) (quota-aware default) → 476 (+463) → 477 → 144,
    383. 435 last, reduced to A/B telemetry.
-7. **Report and orchestration contract:** 176 (+465) → 145 (absorbing 288).
+7. **Report and orchestration contract:** 176 (+465, 523) → 145 (absorbing 288).
 8. **Visual context:** 444 + 447 + 459 → 426 + 475 → 427 → 460 → 441 → 436.
 9. **Distill and efficiency:** 468 → 178; 124 + 296; 225 → 215.
 10. **Execution hardening:** 466, then 274 (after 491), 281, 285, 293, 297, 298, 300, and the
