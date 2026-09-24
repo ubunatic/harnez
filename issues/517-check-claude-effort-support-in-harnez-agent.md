@@ -1,6 +1,6 @@
 # 517 — Check claude:* effort support in harnez agent
 
-**Status**: Open
+**Status**: Closed — 978ce69: --effort passed only for explicit tiers (med->medium); live haiku/sonnet:low/sonnet:high OK; behaviour change not measured
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
