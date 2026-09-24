@@ -333,3 +333,13 @@ Not observed live: hook/exec merge (probe made no tool calls; covered by tests).
    index) so a human can tell prompts apart.
 2. M3 source order: latest meter quota row (with its age) → status-line data for interactive
    sessions if recorded → `agy -p "/usage"` fallback. Show fractions as percent with 2 decimals.
+
+### M3 delivered (7043ee4) — one refinement open
+
+Host: `make test-q1` green on 7043ee4. `harnez usage`: Gemini weekly 24.23% used (= 1 − 0.7578633,
+correct), 5h 36.35%, age shown. Gap: meter row `3p-weekly remainingFraction: 0` (quota exhausted)
+but the card shows only Claude/GPT 5h 0.00% and drops the weekly bucket.
+
+Pre-Work / Required Refinements:
+1. Show `3p-weekly` (Claude/GPT weekly); 0 remaining must render as 100.00% used, never be hidden.
+   Test with a fixture where one bucket is 0.
