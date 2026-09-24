@@ -51,3 +51,4 @@ with a canary, and fix the resume path if the recorded model is dropped.
   flash37:med) were not reproduced. Unverified: whether agy `--conversation` honours
   `--model`, since agy output does not name the serving model. Pooled Google Pro quota
   is the likelier cause (see 516).
+- User canary (same day): agy default switched to Sonnet (pool at 100%), then `agy:flash37:low` start "one" and resume without `--model` "two" both answered. A resume on the default model would have hit the quota error, so resume honours the session model. 521 confirmed not a harnez bug.
