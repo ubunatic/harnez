@@ -1,6 +1,6 @@
 # 536 — harnez statusline unregistered (exit 1 every render); show cwd and cwd drift
 
-**Status**: Open
+**Status**: Closed — c4b4b0f M1 register + guard test, e04a347 M2 cwd/drift, ee940cf M3 arrow order
 **Priority**: P1
 **Severity**: Medium
 **Category**: Bug / UX
