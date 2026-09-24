@@ -4,7 +4,7 @@
 **Priority**: P1
 **Severity**: Medium
 **Category**: Handoff
-**Related**: [[353-tell-only-claude-never-propose-claude-md-changes-assume-other-agents-respect-agents-md]], [[534-capture-agent-session-tokens-continuously-not-only-at-session-end]], [[535-review-agent-collector-lifecycle-automation-install-auto-start-keep-current]], [[538-harnez-agent-report-leftover-processes-at-turn-end-reap-only-stopped-ones]], [[539-agents-in-other-projects-don-t-know-harnez-agent-or-model-names-like-terra-low]], [[540-harnez-agent-short-model-aliases-opus-terra-low-and-a-correct-error-when-p-swallows-model]], [[542-reduce-idle-cpu-of-harnez-usage-compact-watch-8-of-a-core]], [[543-harnez-process-grew-to-15-16-gb-rss-and-was-oom-killed-twice-agent-resume-under-harnez-exec]]
+**Related**: [[ProcessHygiene]], [[353-tell-only-claude-never-propose-claude-md-changes-assume-other-agents-respect-agents-md]], [[534-capture-agent-session-tokens-continuously-not-only-at-session-end]], [[535-review-agent-collector-lifecycle-automation-install-auto-start-keep-current]], [[538-harnez-agent-report-leftover-processes-at-turn-end-reap-only-stopped-ones]], [[539-agents-in-other-projects-don-t-know-harnez-agent-or-model-names-like-terra-low]], [[540-harnez-agent-short-model-aliases-opus-terra-low-and-a-correct-error-when-p-swallows-model]], [[542-reduce-idle-cpu-of-harnez-usage-compact-watch-8-of-a-core]], [[543-harnez-process-grew-to-15-16-gb-rss-and-was-oom-killed-twice-agent-resume-under-harnez-exec]]
 
 ---
 

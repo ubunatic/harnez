@@ -173,3 +173,29 @@ When the wrapped command executes under `harnez exec`, it resolves session and a
 4. If the wrapper stage's own telemetry/side-effect write can fail or block, make it
    best-effort and non-blocking relative to the wrapped command's exit — the hook
    protocol gives no way to retry or recover after the fact.
+
+## Per-agent routing into `harnez exec` (agy: quiet shim, hook fallback)
+
+Every agent's shell commands must run under `harnez exec`. That gives them the timeout, a
+process group, stopped-child recovery and telemetry (see [ProcessHygiene.md](ProcessHygiene.md)).
+Claude and Codex are rewritten by their PreToolUse hooks. agy is the special case (issues 271, 537):
+
+- **agy's chat shows the rewritten command.** A PreToolUse rewrite leaks `harnez exec --tool agy -- …`
+  into the chat UI, which is why 271 retired the hook in favour of the guarded bash PATH shim
+  (`~/.harnez/shims/bash`, recursion guard `HARNEZ_INTERCEPTED=1`).
+- **The shim only works if it is first on agy's PATH.** Nothing ensured that for agy runs launched by
+  harnez, and the shim was not even installed. So agy commands bypassed `harnez exec` for weeks
+  unnoticed. That is how issue 532 happened (a stopped `go test` held a turn and quota-1 for 10h).
+- **The current design (537) combines both:** `harnez agent` (`-p`/`start` and `chat`) installs the shim
+  if missing and launches agy with `PATH=~/.harnez/shims:$PATH ANTIGRAVITY_AGENT=1`. The hook
+  (`harnez hook agy`) always records the command. It passes the command through unchanged when the shim is
+  executable and first on the hook's `PATH` (route `shim`), and otherwise rewrites it (route `hook`).
+  Commands that already start with `harnez exec` get route `direct`.
+- **Verify the route, don't assume it.** `harnez stats --agents` has an "AGY shell coverage" table per session
+  (VIA SHIM / VIA HOOK / VIA DIRECT / UNROUTED / DOUBLE-WRAPPED). Any UNROUTED or DOUBLE-WRAPPED count
+  is the alarm.
+- **Pitfall: env attribution.** agy launched from a Claude session inherits Claude's env markers, so exec rows
+  from the shim are labelled `claude`/`Bash`. The stats join compensates (537 M7). The source-level fix
+  (drop the markers in `agyLaunchEnv`) is still open.
+- Users start agy as `harnez agent chat --model agy:flash37:low`. Only harnez launches agy. A plain `agy`
+  still works through the hook fallback, with the visible rewrite.

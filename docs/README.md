@@ -21,7 +21,8 @@ Not needed for routine coding; reach for these during investigations or design w
 | [AntigravityDebloatAssessment.md](AntigravityDebloatAssessment.md) | AGY context usage and how `apply --debloat` ports to it (consult when changing AGY debloat) |
 | [BrailleDot8.md](BrailleDot8.md) | Braille 8 text convention and `scripts/md-to-braille8.py` (Dot8 card experiment on hold, see issue 444) |
 | [InitialRAMPAssessment.md](InitialRAMPAssessment.md) | Sibling-repository assessment of 2026-09-17 |
-| [HookRewritePattern.md](HookRewritePattern.md) | Two-stage PreToolUse hook pattern (rewrite now, capture later): `<feature> hook` vs. `<feature>` wrapper, `harnez distill hook` as reference implementation, plus two hard-won constraints — hooks on the same matcher don't compose (last-to-finish wins) and a rewritten command must stay one shell token (consult before adding any new agent-hook-driven feature) |
+| [HookRewritePattern.md](HookRewritePattern.md) | Per-agent routing into `harnez exec` (agy: quiet shim + hook fallback, coverage view) and the two-stage PreToolUse hook pattern (rewrite now, capture later): `<feature> hook` vs. `<feature>` wrapper, `harnez distill hook` as reference implementation, plus two hard-won constraints — hooks on the same matcher don't compose (last-to-finish wins) and a rewritten command must stay one shell token (consult before adding any new agent-hook-driven feature) |
+| [ProcessHygiene.md](ProcessHygiene.md) | Process hygiene for agent-launched commands: `harnez exec` process groups, timeouts and stopped-child recovery, quota-1 run records, `harnez clean procs q1`, the no-turn-limit decision, and pitfalls (stopped timers, /proc polling CPU, descendant stops) (consult before touching exec, quota-1 or clean) |
 | [LanguagePipeline.md](LanguagePipeline.md) | Language pipeline: docs install, template scaffolding, targets injection, Markers abstraction, lint |
 | [MacOSPortability.md](MacOSPortability.md) | macOS/Darwin portability architecture: OS-gating, CI, dev-deps, and the standalone podmac boundary (consult before platform-specific code, CI, or guest tooling changes) |
 | [MicIndicators.md](MicIndicators.md) | Linux desktop microphone privacy-indicator survey (consult when building mic-activity detection or indicators) |
@@ -160,6 +161,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 
 | File | Topic |
 |------|-------|
+| [feedback/2026-09-24-lean-sprints-clean-agy-exec.md](feedback/2026-09-24-lean-sprints-clean-agy-exec.md) | Lean sprints 533/536/537/541/353: host diff review caught defects tests missed; shipped CPU regression; missed history check (agy hook vs shim); stop-too-late, probe side effects |
 | [feedback/2026-09-15-podmac-extraction-and-live-verification.md](feedback/2026-09-15-podmac-extraction-and-live-verification.md) | Podmac extraction, live favicon verification, storage/mount boundaries, and missed physical-directory cleanup |
 | [feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md](feedback/2026-08-18-agentic-extraction-blindspots-and-harness-gaps.md) | Subagent domain extraction blindspots, wrapper traps, and proposed harnez features |
 | [feedback/2026-08-19-orchestrated-subagents-process-hygiene-and-review-loops.md](feedback/2026-08-19-orchestrated-subagents-process-hygiene-and-review-loops.md) | Parallel advisors, sequential dev orchestration, background zombie hygiene, and pre-commit review gates |
