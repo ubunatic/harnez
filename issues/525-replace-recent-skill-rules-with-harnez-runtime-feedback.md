@@ -23,3 +23,15 @@ Recent rule additions that harnez could enforce instead:
 Both behaviours come from harnez messages at the point of error, and the matching
 rule lines are removed from `lean-sprint.md` and the Quota-1 block. Net rule text shrinks.
 Future lessons default to a harnez message, a rule line only when no hook point exists.
+
+## M1 delivered (f0e0564): refusal hint + stderr warning at turn end; 3 rule lines removed
+
+Host check: suite passes, start/resume stdout and exit codes unchanged, loom `harnez usage` OK.
+
+## M2 Pre-Work / Required Refinements
+
+- The warning is noisy. A live run flagged `docs/README.md`, `issues/README.md` and the
+  git-ignored `harnez` binary built by `make install`. Count only code files that
+  git tracks or would track: skip ignored paths, `*.md` and `issues/`.
+- The warning fires even when the session didn't edit anything (the files came from the
+  host). Warn only for files changed during this turn (mtime after turn start and after the run).
