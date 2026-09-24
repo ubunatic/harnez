@@ -1,6 +1,6 @@
 # 524 — Cap retained quota-1 failure logs; don't create log dir on success
 
-**Status**: Open
+**Status**: Closed — 22595e3 + d40e522: logs capped, no dir on success; host suite passes
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Maintenance
