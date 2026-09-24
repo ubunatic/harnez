@@ -64,3 +64,13 @@ A waiting `harnez exec` uses about 0% CPU, and stopped-child detection still wor
   Keep the 1s interval. No full /proc scan.
 - Tests: grandchild-stop fixture → detected and recovered (exit 125). Keep the guard test.
 - Measure again: CPU while waiting on `sh -c 'sleep 30'` (grandchild) stays <1%.
+
+### M2 implementation & verification (2026-09-24)
+- The monitor now walks `/proc/<pid>/task/<tid>/children` recursively and reads stat only for
+  those descendants; it still polls every second and checks process-group membership.
+- The fixture covers a stopped grandchild and an unrelated stopped process. The full `/proc`
+  lister guard remains in place.
+- `make test-q1` passed with no `--- FAIL` marker; `make install` passed.
+- Live grandchild-stop repro returned exit `125` and printed `inner-done` after SIGCONT.
+- At two seconds into `harnez exec -- sh -c 'sleep 30'`, `ps -o %cpu` reported `0.0%`
+  (wrapper PID 1251710).

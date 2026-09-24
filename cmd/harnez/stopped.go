@@ -74,21 +74,77 @@ func processGroupStopped(pgid int) (bool, error) {
 	return processGroupStoppedAt("/proc", pgid)
 }
 
-// processGroupStoppedAt reports whether the process-group leader is stopped.
-// exec creates a new process group whose leader is its direct child, so reading
-// that one stat file detects the stopped-child failure mode without repeatedly
-// enumerating every process on the host while the child is simply waiting.
+// processGroupStoppedAt walks descendants through each known process's task
+// children files and reads stat only for that tree. exec creates a new process
+// group whose leader is pid, so stopped descendants are relevant when they
+// still belong to that group.
 func processGroupStoppedAt(procRoot string, pid int) (bool, error) {
-	stat, err := os.ReadFile(filepath.Join(procRoot, strconv.Itoa(pid), "stat"))
-	if err != nil {
-		return false, err
+	queue := []int{pid}
+	seen := make(map[int]struct{})
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if _, ok := seen[current]; ok {
+			continue
+		}
+		seen[current] = struct{}{}
+
+		processDir := filepath.Join(procRoot, strconv.Itoa(current))
+		stat, err := os.ReadFile(filepath.Join(processDir, "stat"))
+		if err != nil {
+			if current == pid || !os.IsNotExist(err) {
+				return false, err
+			}
+			continue
+		}
+		state, processGroup, ok := parseStoppedProcessStat(stat)
+		if ok && processGroup == pid && (state == 'T' || state == 't') {
+			return true, nil
+		}
+
+		tasks, err := os.ReadDir(filepath.Join(processDir, "task"))
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return false, err
+			}
+			continue
+		}
+		for _, task := range tasks {
+			if _, err := strconv.Atoi(task.Name()); err != nil || !task.IsDir() {
+				continue
+			}
+			children, err := os.ReadFile(filepath.Join(processDir, "task", task.Name(), "children"))
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return false, err
+			}
+			for _, child := range strings.Fields(string(children)) {
+				childPID, err := strconv.Atoi(child)
+				if err == nil && childPID > 0 {
+					queue = append(queue, childPID)
+				}
+			}
+		}
 	}
+	return false, nil
+}
+
+func parseStoppedProcessStat(stat []byte) (state byte, pgid int, ok bool) {
 	end := strings.LastIndex(string(stat), ")")
-	if end < 0 || end+2 >= len(stat) {
-		return false, nil
+	if end < 0 || end+1 >= len(stat) {
+		return 0, 0, false
 	}
-	state := stat[end+2]
-	return state == 'T' || state == 't', nil
+	fields := strings.Fields(string(stat[end+1:]))
+	if len(fields) < 3 || len(fields[0]) != 1 {
+		return 0, 0, false
+	}
+	pgid, err := strconv.Atoi(fields[2])
+	if err != nil {
+		return 0, 0, false
+	}
+	return fields[0][0], pgid, true
 }
 
 func signalProcessGroup(pgid int, signal syscall.Signal) error {
