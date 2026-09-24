@@ -72,6 +72,7 @@ Agentic software engineering scales effectively when concurrency is structured a
 3. **Zero Zombie Guarantee**:
    - Every spawned background process, schedule timer, or subagent must be tracked, accounted for, and explicitly terminated before concluding a session.
    - Orphaned processes, lingering watch commands, and abandoned poll loops degrade system resources and corrupt future test runs.
+   - For hung or killed quota-1 test processes, run `harnez clean procs q1 --kill`; quota state is released only after its process group is verified gone.
 
 4. **Responsive Host Orchestrator**:
    - The host remains the user's always-available coordination surface while child agents work.

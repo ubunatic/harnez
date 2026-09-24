@@ -8,7 +8,7 @@
 
 | File | Responsibility |
 |---|---|
-| `main.go` | Cobra command wiring; `apply`, `init`, `diff`, `status`, `revert` subcommands |
+| `main.go` | Cobra command wiring; `apply`, `init`, `diff`, `status`, `revert`, `clean` subcommands |
 | `config.go` | YAML structs; `loadConfig()` sets `cfg.Dir` and `cfg.FS`; `loadConfigEmbedded()` uses `//go:embed` |
 | `apply.go` | All generators, JSON helpers, MD block logic, and orchestrators |
 | `status.go` | `runStatus`, `hasSettingsKey`, `hasSectionMD` |
@@ -25,6 +25,7 @@ Source command files live in `commands/` (e.g. `commands/domain-modeling.md`) an
 | `init` | Project setup: creates AGENTS.md + CLAUDE.md symlink, applies config local sections, copies lang docs locally, scaffolds/injects Makefile targets. Defaults to cwd (`-d .`). |
 | `diff` | Shows what `apply` would change, without writing. Uses `diff -u` on temp files. |
 | `revert --managed` | Removes managed keys from `settings.json`; strips MD sections. |
+| `clean [procs] [q1]` | Inspects or removes stale process groups and verified incomplete quota-1 state. |
 | `status` | Prints config summary and checks which managed items are present on disk. |
 
 All subcommands accept `-c <config>` (default: embedded) and `-t <target>` (default: `~/.claude`).

@@ -39,11 +39,12 @@ func TestRateExecStats_UnaffectedByRateFeedbackDisableEnv(t *testing.T) {
 	// harnez exec still writes a call_type=shell row.
 	var out, errOut bytes.Buffer
 	exitCode, err := runExecWrapper([]string{"true"}, execOptions{
-		Tool:     "test-tool",
-		Ticket:   "harnez/142-toggle",
-		Getenv:   getenv,
-		StateDir: stateDir,
-		DBPath:   dbPath,
+		Tool:             "test-tool",
+		Ticket:           "harnez/142-toggle",
+		Getenv:           getenv,
+		StateDir:         stateDir,
+		ProcessRecordDir: filepath.Join(dir, "procs"),
+		DBPath:           dbPath,
 	}, os.Stdin, &out, &errOut)
 	if err != nil {
 		t.Fatalf("runExecWrapper: %v", err)

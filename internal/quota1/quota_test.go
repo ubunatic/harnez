@@ -169,6 +169,51 @@ func TestIncompleteRunAllowsRetryThenConsumesQuota(t *testing.T) {
 	}
 }
 
+func TestUnfinishedRunBlocksWithCleanupGuidance(t *testing.T) {
+	dir := t.TempDir()
+	stateFile := filepath.Join(dir, "quota.state")
+	started, err := CheckAndRecord(CheckOptions{Dir: dir, StateFile: stateFile})
+	if err != nil || !started.Allowed {
+		t.Fatalf("initial run = %+v, %v; want allowed", started, err)
+	}
+
+	blocked, err := CheckAndRecord(CheckOptions{Dir: dir, StateFile: stateFile})
+	if err != nil || blocked.Allowed || !strings.Contains(blocked.Message, "clean procs q1 --kill") {
+		t.Fatalf("active run check = %+v, %v; want cleanup guidance", blocked, err)
+	}
+	state, err := ReadRunRecord(stateFile)
+	if err != nil || state.Retry {
+		t.Fatalf("active run state = %+v, %v; blocked check must not mark retry", state, err)
+	}
+}
+
+func TestIncompleteRunOnlyGetsOneRetry(t *testing.T) {
+	dir := t.TempDir()
+	stateFile := filepath.Join(dir, "quota.state")
+	first, err := CheckAndRecord(CheckOptions{Dir: dir, StateFile: stateFile})
+	if err != nil || !first.Allowed {
+		t.Fatalf("initial run = %+v, %v; want allowed", first, err)
+	}
+	if err := FinishRun(first.StateFile, time.Now(), nil); err != nil {
+		t.Fatal(err)
+	}
+	retry, err := CheckAndRecord(CheckOptions{Dir: dir, StateFile: stateFile})
+	if err != nil || !retry.Allowed {
+		t.Fatalf("first retry = %+v, %v; want allowed", retry, err)
+	}
+	state, err := ReadRunRecord(stateFile)
+	if err != nil || !state.Retry {
+		t.Fatalf("retry state = %+v, %v; want retry marker", state, err)
+	}
+	if err := FinishRun(retry.StateFile, time.Now(), nil); err != nil {
+		t.Fatal(err)
+	}
+	secondRetry, err := CheckAndRecord(CheckOptions{Dir: dir, StateFile: stateFile})
+	if err != nil || secondRetry.Allowed || !strings.Contains(secondRetry.Message, "test execution blocked") {
+		t.Fatalf("second retry = %+v, %v; want source-change block", secondRetry, err)
+	}
+}
+
 func TestReadRunRecordSupportsLegacyTimestamp(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "quota.state")
 	legacyTime := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)

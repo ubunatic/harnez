@@ -57,6 +57,7 @@ harnez diff            # preview changes without writing
 harnez usage           # show unified token, session, and quota status across agents
 harnez usage --watch   # live TUI dashboard with real-time token velocity
 harnez revert --managed # remove all managed blocks/keys
+harnez clean procs q1  # inspect stale processes and quota state (dry-run)
 ```
 
 With a custom config file:
@@ -255,6 +256,7 @@ Every ticket in `issues/NNN-kebab-case.md` begins with standard metadata headers
 | `diff` | `-c` `-t` `-e` `--capture-docs` `--out` | Preview changes without writing |
 | `scan-docs <dir>` | `-c` | Read-only scan of child projects for managed doc drift |
 | `revert` | `-c` `-t` `--managed` `--debloat` | Remove managed blocks or restore pre-debloat settings |
+| `clean [procs] [q1]` | `-d` `--kill` `--json` | Inspect or remove stale process groups and release verified incomplete quota state |
 | `status` | `-c` `-t` `--debloat` | Print config summary and applied state |
 | `assess [path]` | `--json` | Fast code/doc metrics, token estimation, and repo feasibility report |
 | `mode [level]` | `--status` `--clear` | Switch ConciseMode terseness level and sync the local overlay |

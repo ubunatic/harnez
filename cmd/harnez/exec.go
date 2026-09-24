@@ -43,6 +43,7 @@ import (
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/distill"
+	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/telemetry"
@@ -249,12 +250,13 @@ func validateToolName(tool string) error {
 // from the caller's real environment/DB and to inject slow/failing
 // writers for the non-blocking-telemetry acceptance criterion.
 type execOptions struct {
-	Tool          string
-	Ticket        string
-	Distill       string
-	ExpectFailure bool
-	Quota1        bool
-	Quota1Dir     string
+	Tool             string
+	Ticket           string
+	Distill          string
+	ExpectFailure    bool
+	Quota1           bool
+	Quota1Dir        string
+	ProcessRecordDir string
 
 	Getenv        func(string) string                                // nil means os.Getenv
 	StateDir      string                                             // resolve.Session/Ticket state/lock dir override
@@ -422,6 +424,26 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	if err := c.Start(); err != nil {
 		return 1, fmt.Errorf("exec: run %v: %w", args, err)
 	}
+	processRecordDir := opts.ProcessRecordDir
+	if processRecordDir == "" {
+		var err error
+		processRecordDir, err = procs.RecordDir()
+		if err != nil {
+			fmt.Fprintf(errOut, "harnez exec: resolve process record directory: %v\n", err)
+		}
+	}
+	processRecordPath := ""
+	if processRecordDir != "" {
+		cwd, _ := os.Getwd()
+		var err error
+		processRecordPath, err = procs.WriteRecord(processRecordDir, procs.Record{
+			PGID: c.Process.Pid, PIDStarttime: quota1.ProcStarttime(c.Process.Pid), Argv: append([]string(nil), args...),
+			CWD: cwd, OwnerPID: os.Getpid(), Quota1: quota1Active, Started: start.UTC(),
+		})
+		if err != nil {
+			fmt.Fprintf(errOut, "harnez exec: record process group: %v\n", err)
+		}
+	}
 	if quota1Active {
 		if err := quota1.UpdateProcess(quotaStateFile, c.Process.Pid, c.Process.Pid); err != nil {
 			fmt.Fprintf(errOut, "harnez exec: record quota-1 process: %v\n", err)
@@ -437,6 +459,11 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}()
 	runErr := c.Wait()
 	close(groupDone)
+	if processRecordPath != "" {
+		if err := procs.RemoveRecord(processRecordPath); err != nil {
+			fmt.Fprintf(errOut, "harnez exec: remove process record: %v\n", err)
+		}
+	}
 	timedOut := ctx.Err() == context.DeadlineExceeded
 	if timedOut {
 		_ = syscall.Kill(-c.Process.Pid, syscall.SIGKILL)

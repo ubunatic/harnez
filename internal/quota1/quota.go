@@ -22,6 +22,7 @@ type RunRecord struct {
 	PIDStarttime uint64     `json:"pid_starttime"`
 	Finished     *time.Time `json:"finished"`
 	Exit         *int       `json:"exit"`
+	Retry        bool       `json:"retry,omitempty"`
 }
 
 // CheckOptions configures the Quota-1 check and state recording.
@@ -393,10 +394,18 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 	}
 
 	if previous.Exit == nil {
-		if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC()}); err != nil {
-			return Result{}, fmt.Errorf("update incomplete quota-1 state: %w", err)
+		if previous.Finished == nil {
+			return Result{
+				Message:   "Quota-1: previous run has no recorded result; verify or stop it with `harnez clean procs q1 --kill` before retrying",
+				StateFile: stateFile,
+			}, nil
 		}
-		return Result{Allowed: true, Message: "Quota-1: previous run was incomplete; one retry allowed", StateFile: stateFile}, nil
+		if !previous.Retry {
+			if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC(), Retry: true}); err != nil {
+				return Result{}, fmt.Errorf("update incomplete quota-1 state: %w", err)
+			}
+			return Result{Allowed: true, Message: "Quota-1: previous run was incomplete; one retry allowed", StateFile: stateFile}, nil
+		}
 	}
 
 	// 3. State file exists: check if any source files modified since last run.
@@ -420,7 +429,7 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 	// 4. No files modified: block!
 	return Result{
 		Allowed:   false,
-		Message:   fmt.Sprintf("Quota-1: test execution blocked because no repository source files have been modified since the last test run (%s).\nUnder Quota-1 rules, code must be modified before running tests again.\n(Bypass available via QUOTA_BYPASS=1 or HARNEZ_QUOTA_BYPASS=1 for emergency/manual overrides)", previous.Started.Format(time.RFC3339)),
+		Message:   fmt.Sprintf("Quota-1: test execution blocked because no repository source files have been modified since the last test run (%s).\nUnder Quota-1 rules, code must be modified before running tests again. If the previous run hung or was killed, run `harnez clean procs q1 --kill`.\n(Bypass available via QUOTA_BYPASS=1 or HARNEZ_QUOTA_BYPASS=1 for emergency/manual overrides)", previous.Started.Format(time.RFC3339)),
 		StateFile: stateFile,
 	}, nil
 }

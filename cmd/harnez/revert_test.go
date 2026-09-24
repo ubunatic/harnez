@@ -41,13 +41,17 @@ func TestRevertManagedRemovesManagedSettings(t *testing.T) {
 	}
 }
 
-func TestCleanCommandRemoved(t *testing.T) {
+func TestCleanCommandAvailableForProcessAndQuotaTargets(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	cmd := newRootCmd()
 	var stdout, stderr bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
-	cmd.SetArgs([]string{"clean"})
-	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "unknown command") {
-		t.Fatalf("clean command error = %v, want unknown command", err)
+	cmd.SetArgs([]string{"clean", "-d", t.TempDir()})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("clean command error = %v, want successful dry-run", err)
+	}
+	if !strings.Contains(stdout.String(), "procs: no recorded process groups") || !strings.Contains(stdout.String(), "q1: unchanged") {
+		t.Fatalf("clean output = %q; want process and quota dry-run results", stdout.String())
 	}
 }

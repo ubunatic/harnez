@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/telemetry"
 )
@@ -44,11 +45,12 @@ func testExecOptions(t *testing.T) execOptions {
 	t.Helper()
 	dir := t.TempDir()
 	return execOptions{
-		Tool:     "test-tool",
-		Ticket:   "harnez/118-test-ticket",
-		Getenv:   func(string) string { return "" },
-		StateDir: filepath.Join(dir, "state"),
-		DBPath:   filepath.Join(dir, "tool_catalog.sqlite"),
+		Tool:             "test-tool",
+		Ticket:           "harnez/118-test-ticket",
+		Getenv:           func(string) string { return "" },
+		StateDir:         filepath.Join(dir, "state"),
+		ProcessRecordDir: filepath.Join(dir, "procs"),
+		DBPath:           filepath.Join(dir, "tool_catalog.sqlite"),
 	}
 }
 
@@ -1290,6 +1292,59 @@ func TestRunExecWrapper_Quota1SuccessDoesNotCreateLogDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(repoDir, ".git", "harnez", "quota-1-logs")); !os.IsNotExist(err) {
 		t.Fatalf("quota log directory stat error = %v, want not-exist", err)
+	}
+}
+
+func TestRunExecWrapperTracksAndRemovesProcessRecord(t *testing.T) {
+	opts := testExecOptions(t)
+	result := make(chan struct {
+		code int
+		err  error
+	}, 1)
+	go func() {
+		var stdout, stderr bytes.Buffer
+		code, err := runExecWrapper([]string{"sh", "-c", "sleep 0.3"}, opts, strings.NewReader(""), &stdout, &stderr)
+		result <- struct {
+			code int
+			err  error
+		}{code: code, err: err}
+	}()
+
+	var entries []os.DirEntry
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		var err error
+		entries, err = os.ReadDir(opts.ProcessRecordDir)
+		if err == nil && len(entries) > 0 {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("process record entries = %v; want one live record", entries)
+	}
+	data, err := os.ReadFile(filepath.Join(opts.ProcessRecordDir, entries[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record procs.Record
+	if err := json.Unmarshal(data, &record); err != nil {
+		t.Fatalf("decode process record: %v", err)
+	}
+	if record.PGID <= 0 || record.OwnerPID != os.Getpid() || record.Quota1 || record.PIDStarttime == 0 || len(record.Argv) != 3 {
+		t.Fatalf("process record = %+v; want live non-quota process identity", record)
+	}
+
+	completed := <-result
+	if completed.err != nil || completed.code != 0 {
+		t.Fatalf("exec result = (%d, %v); want (0, nil)", completed.code, completed.err)
+	}
+	entries, err = os.ReadDir(opts.ProcessRecordDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("process record not removed after exit: %v", entries)
 	}
 }
 

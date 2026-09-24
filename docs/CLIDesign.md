@@ -16,6 +16,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `diff`  | Global / Project | Preview of what `apply` would change; `--capture-docs` writes project drift to inbox |
 | `scan-docs` | Workspace | Read-only scan of child projects for managed doc drift |
 | `revert --managed` | Global | Remove managed keys / strip MD sections |
+| `clean [procs] [q1]` | Runtime / Repository | Inspect or remove stale process groups and release verified incomplete quota-1 state |
 | `status`| Global | Config summary + applied-state checks |
 | `usage` | Multi-Agent (local/remote) | Zero-cost token counters, live quota tracking, project attribution (`--project`), procs (`-p`), remote host (`--host`) |
 | `usage history` | Analytical / Logs | Timeline, remote fetch, stats & sparklines across `~/.claude/harnez/usage-history/` |

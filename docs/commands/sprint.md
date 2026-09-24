@@ -74,6 +74,8 @@ Follow these 5 phases sequentially:
 5. Apply this gate to intermediate implementation commits as well as the final sprint commit. After a larger work item is committed and its learnings documented, complete the developer compaction checkpoint from Phase 2; return to Phase 2 if more development remains.
 
 ### Phase 4: Process & Subagent Hygiene (Compact, Park & Drain)
+For hung or killed quota-1 test runs, use `harnez clean procs q1 --kill`; it releases quota state only after verifying the recorded process group is gone.
+
 1. Inspect running background tasks using `harnez agent list` and available task/session tools.
 2. Explicitly terminate completed, idle, or zombie background jobs, schedule timers, and watch subprocesses (`harnez agent stop --name <id>` or `harnez agent delete --name <id>`). Drain outstanding delegated work before parking sessions.
 3. Preserve the reusable advisor and named developer sessions for later reuse; do not blanket-kill them. Confirm the advisor's post-last-ticket compaction and each developer's post-larger-item compaction completed. If a session received additional work afterward, persist its conclusions and have the orchestrator explicitly compact it again as the final call before parking. End disposable reviewer sessions with targeted cleanup (`harnez agent delete --name <session_id>`).
