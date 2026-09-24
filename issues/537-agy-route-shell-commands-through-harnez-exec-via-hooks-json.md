@@ -118,7 +118,12 @@ machine, and `harnez agent` never put it on agy's PATH, which is why 532 happene
   Install or refresh the shim if it is missing, using the same code as `apply`.
 - Tests: the launch env has the shims first, and a missing shim is created.
 
+**M4 delivered (shim provisioned for managed launches): 7f43412.**
+
 ### M5 — coverage check in `harnez stats`
+- Pre-Work (from the M4 review): M4 only covers the `-p` launch in `internal/subagent/agy.go`. Interactive
+  `harnez agent chat` with an agy model launches via `internal/subagent/interactive.go` and gets no
+  shim env. Apply the same `EnsureBashShim` + `agyLaunchEnv` there (for agy only), with a test.
 - Per agy session: commands the hook saw vs `harnez exec` rows, split into via-shim / via-hook /
   unrouted / double-wrapped. Unrouted or double-wrapped counts are the alarm.
 
