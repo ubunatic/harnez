@@ -51,6 +51,9 @@ func TestRunInitWithVariant_Quota1_Scaffolding(t *testing.T) {
 	if !strings.Contains(agentsContent, "Single-Test Boundary") {
 		t.Errorf("expected Single-Test Boundary rule in AGENTS.md")
 	}
+	if !strings.Contains(agentsContent, "Report Untested Edits") {
+		t.Errorf("expected Report Untested Edits rule in AGENTS.md")
+	}
 	if !strings.Contains(agentsContent, "make test-q1") {
 		t.Errorf("expected make test-q1 reference in AGENTS.md")
 	}
