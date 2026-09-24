@@ -69,7 +69,20 @@ whole output); 200M dies under a 3 GB cap. This is the prime suspect for the ~20
 - Test: a child producing e.g. 64 MB → the captured buffers stay ≤ cap, and the tail content is correct (last bytes kept).
 - Acceptance (host runs it): `harnez exec -- head -c 500M /dev/zero` maxrss < 100 MB, a few seconds.
 
+M1 delivered (bounded exec capture, 2fc5981): 1 MB `tailBuffer` for capture and quota log. Host check:
+`harnez exec -- head -c 500M /dev/zero` → maxrss 25.9 MB, 1.5s. Suite green (developer's q1 run).
+
 ### M2 (read range + dot8 clamp)
+
+**Pre-Work / Required Refinements (from M1 review):**
+- Distill mode: the child's output is not passed through, so a tail-only buffer loses early failures (e.g. an
+  early `--- FAIL` in a long `go test` log). Keep a bounded **head + tail** (e.g. 256 KB head + 1 MB tail, with a
+  "… N bytes omitted …" marker) for distill input; test it with a failure line in the dropped middle region's
+  neighbour (head) and assert it survives.
+- Quota-1 log: stream it straight to its file (`quotaLogPath`) instead of an in-memory buffer, so the log stays
+  complete and memory stays flat. Test: log file size == child output size for a >1 MB child.
+
+**Milestone work:**
 - `internal/readcard/read.go` `ReadSource`: stop scanning after the `-L`/head ceiling instead of loading the whole file
   (2M-line file, `-L 1:10` → 197 MB today).
 - `dot8RenderFileToCards`: clamp card height and paginate like the normal renderer.
