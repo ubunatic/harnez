@@ -1,12 +1,43 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
 )
+
+func TestProcessGroupStoppedReadsOnlyLeaderStat(t *testing.T) {
+	procRoot := t.TempDir()
+	pidDir := filepath.Join(procRoot, "321")
+	if err := os.Mkdir(pidDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pidDir, "stat"), []byte("321 (child) T 0 321 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stopped, err := processGroupStoppedAt(procRoot, 321)
+	if err != nil || !stopped {
+		t.Fatalf("processGroupStoppedAt() = (%t, %v), want (true, nil)", stopped, err)
+	}
+
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate stopped.go")
+	}
+	source, err := os.ReadFile(filepath.Join(filepath.Dir(testFile), "stopped.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(source), "LinuxProcReader{}.List") {
+		t.Fatal("stopped-group monitor must not use the full-/proc lister per tick")
+	}
+}
 
 func TestMonitorStoppedGroupContinuesOnceThenKills(t *testing.T) {
 	done := make(chan struct{})

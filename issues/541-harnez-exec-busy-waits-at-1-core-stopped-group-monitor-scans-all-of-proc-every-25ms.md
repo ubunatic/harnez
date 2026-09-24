@@ -1,6 +1,6 @@
 # 541 — harnez exec busy-waits at ~1 core: stopped-group monitor scans all of /proc every 25ms
 
-**Status**: Open
+**Status**: Closed — monitor reads only the direct child stat file at a one-second interval
 **Priority**: P0
 **Severity**: High
 **Category**: Bug / Performance (regression)
@@ -38,3 +38,15 @@ A waiting `harnez exec` uses about 0% CPU, and stopped-child detection still wor
   and there is a test asserting that the monitor does not use the full-/proc lister on each tick
   (or a benchmark guard).
 - Also check `harnez clean procs`: a one-shot full scan is fine there.
+
+## Resolution & Verification (2026-09-24)
+
+- `processGroupStopped` now reads only `/proc/<child-pid>/stat`; it no longer invokes the
+  full `/proc` lister while an exec child is waiting. The monitor polls once per second.
+- Guard test: `TestProcessGroupStoppedReadsOnlyLeaderStat` verifies the direct stat-file path
+  and rejects reintroducing `LinuxProcReader{}.List` to the stopped-group monitor.
+- `make test-q1` passed; its saved output contained no `--- FAIL` marker.
+- Stop repro: `harnez exec -- sh -c 'kill -STOP $$'` returned exit `125` after the monitor
+  continued the stopped child.
+- CPU measurement, `ps -o %cpu` at two seconds into `harnez exec -- sleep 30`:
+  before (reported observation) ~94%; after 0.4% (PID 1228331).

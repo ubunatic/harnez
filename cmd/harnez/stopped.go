@@ -1,15 +1,17 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
-
-	"ubunatic.com/harnez/internal/procs"
 )
 
 const (
 	stoppedGroupGrace    = 300 * time.Millisecond
-	stoppedPollInterval  = 25 * time.Millisecond
+	stoppedPollInterval  = time.Second
 	stoppedGroupExitCode = 125
 )
 
@@ -69,16 +71,24 @@ func monitorStoppedGroup(done <-chan struct{}, pgid int, grace, interval time.Du
 }
 
 func processGroupStopped(pgid int) (bool, error) {
-	processes, err := (procs.LinuxProcReader{}).List()
+	return processGroupStoppedAt("/proc", pgid)
+}
+
+// processGroupStoppedAt reports whether the process-group leader is stopped.
+// exec creates a new process group whose leader is its direct child, so reading
+// that one stat file detects the stopped-child failure mode without repeatedly
+// enumerating every process on the host while the child is simply waiting.
+func processGroupStoppedAt(procRoot string, pid int) (bool, error) {
+	stat, err := os.ReadFile(filepath.Join(procRoot, strconv.Itoa(pid), "stat"))
 	if err != nil {
 		return false, err
 	}
-	for _, process := range processes {
-		if process.PGID == pgid && (process.State == "T" || process.State == "t") {
-			return true, nil
-		}
+	end := strings.LastIndex(string(stat), ")")
+	if end < 0 || end+2 >= len(stat) {
+		return false, nil
 	}
-	return false, nil
+	state := stat[end+2]
+	return state == 'T' || state == 't', nil
 }
 
 func signalProcessGroup(pgid int, signal syscall.Signal) error {
