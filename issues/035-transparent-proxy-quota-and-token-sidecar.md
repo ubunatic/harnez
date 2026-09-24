@@ -265,3 +265,22 @@ them. agy must never break because of it.
 - A proxy bug cuts agy off mid-session; keep the proxy small and covered by tests.
 - The agy OAuth token passes through our process (in memory only). Google terms unverified.
 - Endpoint names are `v1internal` and may change; failures must degrade to "no data", not errors.
+
+### M1 delivery (2026-09-24, dbcc666) — review: not accepted yet
+
+Delivered: `internal/agymeter` (CA, bundle, CONNECT proxy, JSONL recorder), hidden
+`harnez agy-meter-run`, launcher `--meter`. `make test-q1` green. Live canary
+(`harnez agy-meter-run -- agy -p "Reply with the single word: hi"`): agy answered, but
+`~/.harnez/agymeter/usage.jsonl` was **never created** — no request was metered.
+
+Pre-Work / Required Refinements (before M2):
+1. Find why nothing is recorded (does agy's CONNECT reach the proxy? gzip-encoded bodies? ALPN/h2?
+   the language-server subprocess env?). Add a debug-only counter or env-gated log, no bodies.
+   Decode `Content-Encoding: gzip` before parsing; pass bytes through unchanged.
+2. Last chunk wins: record one usage row per response (the last `usageMetadata`), not per chunk.
+3. Parse the quota body as a whole JSON document, not per line; drop the `path == ""` test hack
+   and make the test pass a real request path.
+4. Remove dead code (`observed`, `requestSession`); cache leaf certs per host name.
+5. Add the missing tests: other-host blind tunnel, start-failure fallback runs child plainly.
+6. Host re-runs the live canary; M1 is accepted only when rows appear with plausible numbers
+   (canary 2 saw ~99 and ~11.8k prompt tokens).
