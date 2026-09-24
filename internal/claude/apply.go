@@ -1582,7 +1582,6 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		launcherPath := HarnezAgyLauncherPath(home)
-		shimPath := filepath.Join(home, ".harnez", "shims", "bash")
 		if selection.HasComponent("telemetry") {
 			if fi, err := os.Stat(launcherPath); err != nil {
 				anyChanged = true
