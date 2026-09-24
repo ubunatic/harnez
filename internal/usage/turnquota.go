@@ -11,14 +11,25 @@ import (
 
 // TurnQuotaReading is a bounded, best-effort quota observation for one agent turn.
 type TurnQuotaReading struct {
-	CapturedAt time.Time           `json:"captured_at"`
-	CacheAgeMS int64               `json:"cache_age_ms"`
-	HasCache   bool                `json:"has_cache"`
-	Windows    []QuotaHistoryEntry `json:"windows,omitempty"`
-	Error      string              `json:"error,omitempty"`
+	CapturedAt      time.Time           `json:"captured_at"`
+	CacheAgeMS      int64               `json:"cache_age_ms"`
+	HasCache        bool                `json:"has_cache"`
+	ProbeDurationMS int64               `json:"probe_duration_ms,omitempty"`
+	Windows         []QuotaHistoryEntry `json:"windows,omitempty"`
+	Error           string              `json:"error,omitempty"`
 }
 
 const TurnQuotaTimeout = 1800 * time.Millisecond
+const AGYTurnQuotaTimeout = agyUsageCmdTimeout + 2*time.Second
+
+// TurnQuotaTimeoutForProvider returns the bounded budget for a turn-boundary
+// quota reading. AGY's local /usage command has its own longer process bound.
+func TurnQuotaTimeoutForProvider(provider string) time.Duration {
+	if provider == "agy" {
+		return AGYTurnQuotaTimeout
+	}
+	return TurnQuotaTimeout
+}
 
 var turnQuotaHTTPClientFactory = func() *http.Client { return &http.Client{Timeout: TurnQuotaTimeout} }
 
@@ -40,7 +51,7 @@ func CaptureTurnQuotaSince(ctx context.Context, provider string, force bool, tur
 // before the provider turn started, preventing another process's later cache
 // write from being mistaken for a measurement made during this turn.
 func CaptureTurnQuotaSinceCache(ctx context.Context, provider string, force bool, turnStarted, baselineCacheAt time.Time) TurnQuotaReading {
-	ctx, cancel := context.WithTimeout(ctx, TurnQuotaTimeout)
+	ctx, cancel := context.WithTimeout(ctx, TurnQuotaTimeoutForProvider(provider))
 	defer cancel()
 	cachePath, err := providerQuotaCachePath(provider)
 	if err != nil {
@@ -75,7 +86,7 @@ func CaptureTurnQuotaSinceCache(ctx context.Context, provider string, force bool
 	}
 
 	now := time.Now().UTC()
-	reading := TurnQuotaReading{CapturedAt: now, Error: u.QuotaFetchError}
+	reading := TurnQuotaReading{CapturedAt: now, Error: u.QuotaFetchError, ProbeDurationMS: u.QuotaFetchDurationMS}
 	if cache := readProviderQuotaCache(provider, cachePath); !cache.IsZero() {
 		reading.HasCache = true
 		reading.CacheAgeMS = max(now.Sub(cache).Milliseconds(), 0)

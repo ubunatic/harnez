@@ -172,6 +172,24 @@ func TestCollectAGYFailedFetchPreservesDiskCache(t *testing.T) {
 	}
 }
 
+func TestCollectAGYRecordsProbeDurationAndDoesNotBackoffOnTimeout(t *testing.T) {
+	dir := t.TempDir()
+	prevFn := runAGYUsageCmdFn
+	runAGYUsageCmdFn = func(context.Context) ([]byte, error) {
+		time.Sleep(25 * time.Millisecond)
+		return nil, context.DeadlineExceeded
+	}
+	defer func() { runAGYUsageCmdFn = prevFn }()
+
+	got := CollectAGY(context.Background(), dir, http.DefaultClient)
+	if got.QuotaFetchDurationMS < 20 {
+		t.Fatalf("probe duration = %dms, want measured duration >= 20ms", got.QuotaFetchDurationMS)
+	}
+	if b := readAGYAuthBackoff(agyAuthBackoffPath(dir)); b != nil {
+		t.Fatalf("timeout created auth backoff: %+v", b)
+	}
+}
+
 // TestCollectAGYEmptyFetchPreservesDiskCache is the same guarantee as
 // above, but for the case where the exec call succeeds (no error) yet
 // returns no parseable quota lines — e.g. agy printed an unexpected

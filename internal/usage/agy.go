@@ -409,7 +409,9 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 				// any other failed fetch.
 				err = fmt.Errorf(`agy -p "/usage" requires reauthentication (login required); backing off live polling until %s`, backoff.Until.Format(time.RFC3339))
 			} else {
+				probeStarted := time.Now()
 				out, err = runAGYUsageCmdFn(ctx)
+				usage.QuotaFetchDurationMS = time.Since(probeStarted).Milliseconds()
 				if isAGYAuthRequired(out, err) {
 					until := time.Now().Add(agyAuthBackoffCooldown)
 					_ = writeAGYAuthBackoff(backoffPath, agyAuthBackoff{Until: until, DetectedAt: time.Now()})

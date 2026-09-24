@@ -75,7 +75,8 @@ type AgentUsage struct {
 	// QuotaFetchError is set whenever a live quota/rate-limit call was
 	// attempted but failed (transport error, non-2xx, decode error), so
 	// renderers can distinguish "fetch failed" from "no quota windows apply."
-	QuotaFetchError string `json:"quota_fetch_error,omitempty"`
+	QuotaFetchError      string `json:"quota_fetch_error,omitempty"`
+	QuotaFetchDurationMS int64  `json:"-"`
 	// LastRefreshed is when this AgentUsage's data was actually last known to
 	// be current — the collector-daemon cache snapshot's FetchedAt time when
 	// served from cache, or "now" when freshly live-collected. It is the

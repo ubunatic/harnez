@@ -31,7 +31,7 @@ type agentDeps struct {
 }
 
 func recordTurnQuota(s *subagent.FileSessionStore, capture func(context.Context, string, bool) usage.TurnQuotaReading, sessionID, provider string, turn int, boundary string, force bool, turnStarted, baselineCacheAt time.Time, tokens *subagent.TurnTokenUsage) {
-	ctx, cancel := context.WithTimeout(context.Background(), usage.TurnQuotaTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), usage.TurnQuotaTimeoutForProvider(provider))
 	defer cancel()
 	var reading usage.TurnQuotaReading
 	if capture != nil {
@@ -46,7 +46,7 @@ func captureTurnQuota(parent context.Context, capture func(context.Context, stri
 	if parent == nil {
 		parent = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(parent, usage.TurnQuotaTimeout)
+	ctx, cancel := context.WithTimeout(parent, usage.TurnQuotaTimeoutForProvider(provider))
 	defer cancel()
 	if capture != nil {
 		return capture(ctx, provider, force)
@@ -56,6 +56,13 @@ func captureTurnQuota(parent context.Context, capture func(context.Context, stri
 
 func storeTurnQuota(s *subagent.FileSessionStore, sessionID, provider string, turn int, boundary string, reading usage.TurnQuotaReading) {
 	_ = s.RecordTurnQuota(subagent.TurnQuotaEvent{SessionID: sessionID, Turn: turn, Boundary: boundary, Provider: provider, Reading: reading})
+}
+
+func turnQuotaBaseline(turnStarted time.Time, before usage.TurnQuotaReading) time.Time {
+	if !before.HasCache || before.CacheAgeMS >= int64(usage.MinWatchInterval/time.Millisecond) {
+		return time.Time{}
+	}
+	return turnStarted.Add(-time.Duration(before.CacheAgeMS) * time.Millisecond)
 }
 
 func warnQuota1Changes(cmd *cobra.Command, dir string, turnStarted time.Time) {
@@ -173,11 +180,10 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	streaming = streaming && !req.JSON
 	turn := 1
 	turnStarted := time.Now().UTC()
-	before := captureTurnQuota(cmd.Context(), d.quota, m.Provider, false, time.Time{})
-	baselineCacheAt := turnStarted.Add(-time.Duration(before.CacheAgeMS) * time.Millisecond)
-	if !before.HasCache || before.CacheAgeMS >= int64(usage.MinWatchInterval/time.Millisecond) {
-		baselineCacheAt = time.Time{}
-	}
+	beforeCapture := make(chan usage.TurnQuotaReading, 1)
+	go func() {
+		beforeCapture <- captureTurnQuota(cmd.Context(), d.quota, m.Provider, false, time.Time{})
+	}()
 	var ts *turnStream
 	var r *subagent.TurnResult
 	if streaming {
@@ -203,6 +209,8 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		r, err = driver.Run(cmd.Context(), opts)
 	}
 	if err != nil {
+		before := <-beforeCapture
+		baselineCacheAt := turnQuotaBaseline(turnStarted, before)
 		storeTurnQuota(s, id, m.Provider, turn, "before", before)
 		recordTurnQuota(s, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt, nil)
 		return fmt.Errorf("agent start %q failed: %w; verify the provider/model configuration or ask for guidance", spec, err)
@@ -210,6 +218,8 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	if r.SessionID != "" {
 		id = r.SessionID
 	}
+	before := <-beforeCapture
+	baselineCacheAt := turnQuotaBaseline(turnStarted, before)
 	storeTurnQuota(s, id, m.Provider, turn, "before", before)
 	recordTurnQuota(s, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt, &subagent.TurnTokenUsage{NewInputTokens: r.InputTokens, CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens})
 	now := time.Now()
@@ -305,11 +315,10 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	streaming = streaming && !req.JSON
 	turn := sess.Turn + 1
 	turnStarted := time.Now().UTC()
-	before := captureTurnQuota(cmd.Context(), d.quota, sess.Provider, false, time.Time{})
-	baselineCacheAt := turnStarted.Add(-time.Duration(before.CacheAgeMS) * time.Millisecond)
-	if !before.HasCache || before.CacheAgeMS >= int64(usage.MinWatchInterval/time.Millisecond) {
-		baselineCacheAt = time.Time{}
-	}
+	beforeCapture := make(chan usage.TurnQuotaReading, 1)
+	go func() {
+		beforeCapture <- captureTurnQuota(cmd.Context(), d.quota, sess.Provider, false, time.Time{})
+	}()
 	if streaming {
 		ts = newTurnStream(cmd, req.StreamMode, compacted)
 		ts.info(sess.ID, sess.Provider+":"+sess.Model, "resume", resolved)
@@ -330,6 +339,8 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		r, err = driver.Resume(cmd.Context(), sess.ProviderID(), req.Prompt, subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
 	}
 	if err != nil {
+		before := <-beforeCapture
+		baselineCacheAt := turnQuotaBaseline(turnStarted, before)
 		storeTurnQuota(s, sess.ID, sess.Provider, turn, "before", before)
 		recordTurnQuota(s, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt, nil)
 		recordResumeFailure(s, sess, err)
@@ -348,6 +359,8 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	sess.LastActiveAt = time.Now()
 	sess.Turn = turn
 	sess.TurnRecords = append(sess.TurnRecords, subagent.TurnRecord{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens})
+	before := <-beforeCapture
+	baselineCacheAt := turnQuotaBaseline(turnStarted, before)
 	storeTurnQuota(s, sess.ID, sess.Provider, turn, "before", before)
 	recordTurnQuota(s, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt, &subagent.TurnTokenUsage{NewInputTokens: r.InputTokens, CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens})
 	if err = s.Save(sess); err != nil {

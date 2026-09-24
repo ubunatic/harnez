@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -53,6 +54,54 @@ func TestQuotaCacheReadWriteRoundTrip(t *testing.T) {
 	}
 	if got.Payload.Weekly == nil || got.Payload.Weekly.UsedPercent != 7 {
 		t.Errorf("Weekly = %+v, want UsedPercent 7", got.Payload.Weekly)
+	}
+}
+
+func TestTurnQuotaTimeoutIsProviderSpecificAndJSONRemainsBackwardCompatible(t *testing.T) {
+	if TurnQuotaTimeoutForProvider("claude") != TurnQuotaTimeout || TurnQuotaTimeoutForProvider("codex") != TurnQuotaTimeout {
+		t.Fatal("HTTP providers must retain the 1.8s turn quota timeout")
+	}
+	if TurnQuotaTimeoutForProvider("agy") <= agyUsageCmdTimeout {
+		t.Fatalf("AGY turn quota timeout %s does not cover its %s probe", TurnQuotaTimeoutForProvider("agy"), agyUsageCmdTimeout)
+	}
+
+	var old TurnQuotaReading
+	if err := json.Unmarshal([]byte(`{"captured_at":"2026-09-24T00:00:00Z","has_cache":true}`), &old); err != nil {
+		t.Fatalf("decode old quota reading: %v", err)
+	}
+	if old.ProbeDurationMS != 0 {
+		t.Fatalf("old reading probe duration = %d, want zero", old.ProbeDurationMS)
+	}
+}
+
+func TestCaptureTurnQuotaIncludesAGYProbeDuration(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".gemini", "antigravity-cli")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	prevFn := runAGYUsageCmdFn
+	runAGYUsageCmdFn = func(context.Context) ([]byte, error) {
+		time.Sleep(25 * time.Millisecond)
+		return []byte(agyOKOutput), nil
+	}
+	defer func() { runAGYUsageCmdFn = prevFn }()
+
+	reading := CaptureTurnQuotaSinceCache(context.Background(), "agy", true, time.Time{}, time.Time{})
+	if reading.ProbeDurationMS < 20 {
+		t.Fatalf("reading probe duration = %dms, want >= 20ms", reading.ProbeDurationMS)
+	}
+	encoded, err := json.Marshal(reading)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var roundTrip TurnQuotaReading
+	if err := json.Unmarshal(encoded, &roundTrip); err != nil {
+		t.Fatal(err)
+	}
+	if roundTrip.ProbeDurationMS != reading.ProbeDurationMS {
+		t.Fatalf("serialized probe duration = %dms, want %dms", roundTrip.ProbeDurationMS, reading.ProbeDurationMS)
 	}
 }
 

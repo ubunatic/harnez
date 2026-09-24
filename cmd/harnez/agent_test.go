@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -591,6 +592,7 @@ type recordingAgentDriver struct {
 	prompt  string
 	stopped []string
 	deleted []string
+	runHook func()
 }
 
 type resumeOutcomeDriver struct {
@@ -839,6 +841,9 @@ func TestAgentResumeAttributionAndContinue(t *testing.T) {
 }
 
 func (d *recordingAgentDriver) Run(_ context.Context, opts subagent.RunOptions) (*subagent.TurnResult, error) {
+	if d.runHook != nil {
+		d.runHook()
+	}
 	d.dir = opts.Dir
 	d.prompt = opts.Prompt
 	return &subagent.TurnResult{SessionID: "recorded", Response: "ok"}, nil
@@ -1603,7 +1608,18 @@ func TestRunStartRecordsQuotaBoundariesForTurn(t *testing.T) {
 	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
 	defer func() { agentDriver = old }()
 	var calls []bool
+	var captureOnce sync.Once
+	captureStarted := make(chan struct{})
+	continueCapture := make(chan struct{})
+	driver.runHook = func() {
+		<-captureStarted
+		close(continueCapture)
+	}
 	capture := func(_ context.Context, _ string, force bool) usage.TurnQuotaReading {
+		captureOnce.Do(func() {
+			close(captureStarted)
+			<-continueCapture
+		})
 		calls = append(calls, force)
 		return usage.TurnQuotaReading{CapturedAt: time.Now().UTC(), HasCache: true, CacheAgeMS: 123}
 	}
