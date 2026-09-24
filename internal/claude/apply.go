@@ -1358,24 +1358,6 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 		}
 	}
 
-	gearExe := gearExecutable()
-	var gearStats []string
-	for _, link := range GearSymlinkTargets(target, cfg) {
-		lr, err := ensureSymlink(link, gearExe)
-		if err != nil {
-			return fmt.Errorf("gear symlink %s: %w", link, err)
-		}
-		if lr.changed {
-			changes++
-			fmt.Printf("  symlink %s → %s\n", link, gearExe)
-		} else {
-			gearStats = append(gearStats, fsutil.ContractHome(link))
-		}
-	}
-	if len(gearStats) > 0 {
-		addStat("⚙ symlink", strings.Join(gearStats, ", "))
-	}
-
 	if home, err := os.UserHomeDir(); err == nil {
 		shimPath, changed, err := EnsureBashShim(home)
 		if err != nil {
@@ -1399,6 +1381,24 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 		} else {
 			addStat("harnez-agy launcher", fsutil.ContractHome(launcherPath))
 		}
+	}
+
+	gearExe := gearExecutable()
+	var gearStats []string
+	for _, link := range GearSymlinkTargets(target, cfg) {
+		lr, err := ensureSymlink(link, gearExe)
+		if err != nil {
+			return fmt.Errorf("gear symlink %s: %w", link, err)
+		}
+		if lr.changed {
+			changes++
+			fmt.Printf("  symlink %s → %s\n", link, gearExe)
+		} else {
+			gearStats = append(gearStats, fsutil.ContractHome(link))
+		}
+	}
+	if len(gearStats) > 0 {
+		addStat("⚙ symlink", strings.Join(gearStats, ", "))
 	}
 
 	if envPath := HarnezEnvPath(); envPath != "" {
