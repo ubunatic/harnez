@@ -1,6 +1,6 @@
 # 511 — make test-q1 keeps the full test log and prints its path on failure
 
-**Status**: Open
+**Status**: Closed — 400397c: failure logs kept, path + FAIL lines printed; flash37 review accepted
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
