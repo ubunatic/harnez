@@ -35,6 +35,12 @@ type agyPreToolUseInput struct {
 	StepIdx int `json:"stepIdx"`
 }
 
+type agyPreToolUseOutput struct {
+	Decision  string            `json:"decision"`
+	Reason    string            `json:"reason,omitempty"`
+	Overwrite map[string]string `json:"overwrite,omitempty"`
+}
+
 type agyPostToolUseInput struct {
 	ConversationID string `json:"conversationId"`
 	TranscriptPath string `json:"transcriptPath"`
@@ -258,12 +264,13 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 		})
 	}
 
+	command, _ := payload.ToolCall.Args["CommandLine"].(string)
 	callType := "hook:rpc"
 	note := ""
 	if toolName == "run_command" {
 		callType = "hook:prep"
-		if cmdStr, ok := payload.ToolCall.Args["CommandLine"].(string); ok && cmdStr != "" {
-			note = "preps:Bash | " + cmdStr
+		if command != "" {
+			note = "preps:Bash | " + command
 		} else {
 			note = "preps:Bash"
 		}
@@ -317,17 +324,25 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 	}
 
 	if deny {
-		outObj := map[string]string{
-			"decision": "deny",
-			"reason":   reason,
-		}
-		data, _ := json.Marshal(outObj)
-		fmt.Fprintln(out, string(data))
-		return nil
+		return json.NewEncoder(out).Encode(agyPreToolUseOutput{
+			Decision: "deny",
+			Reason:   reason,
+		})
 	}
 
-	fmt.Fprintln(out, `{"decision":"allow"}`)
-	return nil
+	response := agyPreToolUseOutput{Decision: "allow"}
+	if toolName == "run_command" && command != "" && !alreadyRoutedThroughExec(command) {
+		response.Overwrite = map[string]string{
+			"CommandLine": formatAgyExecRewrite(command),
+		}
+	}
+	return json.NewEncoder(out).Encode(response)
+}
+
+// formatAgyExecRewrite routes one shell command through harnez exec while
+// keeping shell operators and quoting inside a single bash -c argument.
+func formatAgyExecRewrite(command string) string {
+	return "harnez exec --tool agy -- bash -c " + shellQuote(command)
 }
 
 // readingDisciplineDenyReason is the structured guidance message returned when an agent

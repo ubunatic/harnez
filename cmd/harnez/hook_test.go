@@ -62,7 +62,7 @@ func TestRunAgyToolHook_AllowOutput(t *testing.T) {
 	}
 }
 
-func TestRunAgyToolHook_RunCommandPrepsBash(t *testing.T) {
+func TestRunAgyToolHook_RunCommandRewritesAndPrepsBash(t *testing.T) {
 	in := bytes.NewBufferString(`{
 		"conversationId": "test-conv-456",
 		"toolCall": {
@@ -86,9 +86,16 @@ func TestRunAgyToolHook_RunCommandPrepsBash(t *testing.T) {
 		t.Fatalf("runAgyToolHook failed: %v", err)
 	}
 
-	gotOut := strings.TrimSpace(out.String())
-	if gotOut != `{"decision":"allow"}` {
-		t.Errorf("output = %q, want allow", gotOut)
+	var response agyPreToolUseOutput
+	if err := json.Unmarshal(out.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v (raw=%s)", err, out.String())
+	}
+	if response.Decision != "allow" {
+		t.Errorf("decision = %q, want allow", response.Decision)
+	}
+	wantRewrite := "harnez exec --tool agy -- bash -c 'git status'"
+	if got := response.Overwrite["CommandLine"]; got != wantRewrite {
+		t.Errorf("overwrite.CommandLine = %q, want %q", got, wantRewrite)
 	}
 
 	if recorded.ToolName != "run_command" {
@@ -99,6 +106,64 @@ func TestRunAgyToolHook_RunCommandPrepsBash(t *testing.T) {
 	}
 	if recorded.Note != "preps:Bash | git status" {
 		t.Errorf("recorded.Note = %q, want %q", recorded.Note, "preps:Bash | git status")
+	}
+}
+
+func TestRunAgyToolHook_RewriteFixtures(t *testing.T) {
+	tests := []struct {
+		name        string
+		payload     string
+		wantCommand string
+	}{
+		{
+			name:        "documented run_command payload",
+			payload:     `{"conversationId":"fixture-1","workspacePaths":["/tmp"],"transcriptPath":"/tmp/transcript","artifactDirectoryPath":"/tmp/artifacts","modelName":"auto","toolCall":{"name":"run_command","args":{"CommandLine":"git status"}},"stepIdx":19}`,
+			wantCommand: "harnez exec --tool agy -- bash -c 'git status'",
+		},
+		{
+			name:        "preserves shell operators and single quotes",
+			payload:     `{"conversationId":"fixture-2","toolCall":{"name":"run_command","args":{"CommandLine":"printf 'hello' && git status"}}}`,
+			wantCommand: `harnez exec --tool agy -- bash -c 'printf '\''hello'\'' && git status'`,
+		},
+		{
+			name:    "already routed command",
+			payload: `{"conversationId":"fixture-3","toolCall":{"name":"run_command","args":{"CommandLine":"harnez exec --tool agy -- bash -c 'git status'"}}}`,
+		},
+		{
+			name:    "non-shell tool",
+			payload: `{"conversationId":"fixture-4","toolCall":{"name":"generate_image","args":{"Prompt":"a cat"}}}`,
+		},
+		{
+			name:    "empty shell command",
+			payload: `{"conversationId":"fixture-5","toolCall":{"name":"run_command","args":{"CommandLine":""}}}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			err := runAgyToolHook(strings.NewReader(tc.payload), &out, agyHookOptions{
+				DBPath: "/tmp/dummy.db",
+				Insert: func(string, telemetry.ToolCall) error { return nil },
+			})
+			if err != nil {
+				t.Fatalf("runAgyToolHook: %v", err)
+			}
+
+			var response agyPreToolUseOutput
+			if err := json.Unmarshal(out.Bytes(), &response); err != nil {
+				t.Fatalf("decode response: %v (raw=%s)", err, out.String())
+			}
+			if response.Decision != "allow" {
+				t.Errorf("decision = %q, want allow", response.Decision)
+			}
+			if got := response.Overwrite["CommandLine"]; got != tc.wantCommand {
+				t.Errorf("overwrite.CommandLine = %q, want %q", got, tc.wantCommand)
+			}
+			if tc.wantCommand == "" && response.Overwrite != nil {
+				t.Errorf("overwrite = %#v, want omitted", response.Overwrite)
+			}
+		})
 	}
 }
 

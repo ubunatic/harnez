@@ -55,9 +55,8 @@ func HooksPath(home string) string {
 }
 
 // BuildHooksDoc returns the harnez-managed "harnez" named hook entry with
-// both PreToolUse and PostToolUse observation handlers.
-// This passively observes all client-native tools and run_command executions
-// and records telemetry into tool_catalog.sqlite without rewriting commands.
+// PreToolUse and PostToolUse handlers. PreToolUse routes run_command calls
+// through harnez exec; both handlers retain the existing telemetry capture.
 //
 // Per agy's hook schema specification (agy-customizations/docs/hooks.md),
 // named hooks are defined as top-level keys in hooks.json rather than
