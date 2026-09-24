@@ -59,6 +59,7 @@ type issuesRunOptions struct {
 	JSON      bool
 	NoCommit  bool
 	CommitMsg string // explicit --commit override; empty means "compose the default"
+	Stderr    io.Writer
 }
 
 func newIssuesCmd() *cobra.Command {
@@ -237,6 +238,7 @@ valid, exit-0 answer.`,
 				JSON:      jsonFlag,
 				NoCommit:  noCommitFlag,
 				CommitMsg: commitMsgFlag,
+				Stderr:    cmd.ErrOrStderr(),
 			}
 			if args[0] == "mv" {
 				oldArg := args[1]
@@ -733,6 +735,7 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 	if err != nil {
 		return issuesResult{}, false, fmt.Errorf("issues: read %s: %w", filePath, err)
 	}
+	warnIssueHeaderMismatch(opts.Stderr, relPath, f.Number, issues.ParseHeaderNumber(string(content)))
 	_, oldStatus, hasStatus := issues.ParseIssueFile(string(content))
 	if !hasStatus {
 		return issuesResult{}, false, fmt.Errorf("issues: %s has no '**Status**:' line to update", relPath)
@@ -841,6 +844,16 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 	}
 
 	return result, false, nil
+}
+
+func warnIssueHeaderMismatch(w io.Writer, relPath, fileNumber, headerNumber string) {
+	if headerNumber == "" || strings.TrimLeft(headerNumber, "0") == strings.TrimLeft(fileNumber, "0") {
+		return
+	}
+	if w == nil {
+		w = os.Stderr
+	}
+	fmt.Fprintf(w, "warning: issue file %s declares heading #%s (file number #%s)\n", relPath, headerNumber, fileNumber)
 }
 
 // defaultCommitMessage composes "docs(issues): <verb> <ticket-number>[,

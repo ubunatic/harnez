@@ -17,6 +17,7 @@ import (
 // IssueFile represents an individual issue markdown file on disk.
 type IssueFile struct {
 	Number       string         // e.g. "036"
+	HeaderNumber string         // number declared by the first numbered H1, if any
 	RelPath      string         // e.g. "036-harnez-status-issues-tracker-linter.md" or "archive/001-diff-clean-wrong-path.md"
 	Title        string         // e.g. "036 — `harnez status` Issues Tracker Status Linter"
 	RawStatus    string         // exact string after "**Status:**", e.g. "Closed — fixed in 444c29f"
@@ -180,6 +181,17 @@ func ParseIssueFile(content string) (title string, rawStatus string, hasStatus b
 		}
 	}
 	return title, rawStatus, hasStatus
+}
+
+// ParseHeaderNumber returns the number declared by the first numbered H1.
+func ParseHeaderNumber(content string) string {
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	for scanner.Scan() {
+		if matches := headerLineRegex.FindStringSubmatch(scanner.Text()); len(matches) > 2 {
+			return matches[2]
+		}
+	}
+	return ""
 }
 
 // RewriteStatus replaces the value portion of a ticket's "**Status**:" line
@@ -404,6 +416,7 @@ func ScanFS(sysFS fs.FS, root string) ([]IssueFile, error) {
 			title, rawStatus, hasStatus := ParseIssueFile(string(content))
 			issueFiles = append(issueFiles, IssueFile{
 				Number:       num,
+				HeaderNumber: ParseHeaderNumber(string(content)),
 				RelPath:      relSlash,
 				Title:        title,
 				RawStatus:    rawStatus,

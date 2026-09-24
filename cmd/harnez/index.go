@@ -10,9 +10,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/index"
+	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -27,6 +29,7 @@ type indexOptions struct {
 	Dir    string
 	Check  bool
 	DBPath string
+	Stderr io.Writer
 }
 
 func newIndexCmd() *cobra.Command {
@@ -57,7 +60,7 @@ logged (DEBUG=1) and otherwise swallowed -- they never fail this command.
 View recorded snapshots with 'harnez find issues history'.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return silenceIfExitCode(cmd, runIndex(cmd.OutOrStdout(), indexOptions{Dir: dir, Check: check}))
+			return silenceIfExitCode(cmd, runIndex(cmd.OutOrStdout(), indexOptions{Dir: dir, Check: check, Stderr: cmd.ErrOrStderr()}))
 		},
 	}
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "repo root containing issues/ and docs/")
@@ -75,6 +78,21 @@ func dirExists(p string) bool {
 	return err == nil && st.IsDir()
 }
 
+func warnIssueHeaderMismatches(w io.Writer, issuesDir string) {
+	if w == nil {
+		w = os.Stderr
+	}
+	files, err := issues.Scan(issuesDir)
+	if err != nil {
+		return
+	}
+	for _, f := range files {
+		if f.HeaderNumber != "" && strings.TrimLeft(f.HeaderNumber, "0") != strings.TrimLeft(f.Number, "0") {
+			fmt.Fprintf(w, "warning: issue file %s declares heading #%s (file number #%s)\n", filepath.ToSlash(filepath.Join("issues", f.RelPath)), f.HeaderNumber, f.Number)
+		}
+	}
+}
+
 func runIndex(w io.Writer, opts indexOptions) error {
 	dir := opts.Dir
 	issuesReadme := filepath.Join(dir, "issues", "README.md")
@@ -90,10 +108,12 @@ func runIndex(w io.Writer, opts indexOptions) error {
 	}
 
 	if opts.Check {
+		warnIssueHeaderMismatches(opts.Stderr, issuesDir)
 		return runIndexCheck(w, issuesReadme, issuesDir, docsReadme, docsDir, hasIssues, hasDocs)
 	}
 
 	if hasIssues {
+		warnIssueHeaderMismatches(opts.Stderr, issuesDir)
 		issuesChanged, err := index.UpdateIssuesReadme(issuesReadme, issuesDir)
 		if err != nil {
 			return fmt.Errorf("index: %w", err)

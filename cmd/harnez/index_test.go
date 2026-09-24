@@ -42,6 +42,25 @@ func TestPrintUnifiedDiff_NoChangesNoOutput(t *testing.T) {
 	}
 }
 
+func TestRunIndex_WarnsOnMismatchedIssueHeadingToStderr(t *testing.T) {
+	repoDir := indexSnapshotFixtureDir(t)
+	if err := os.WriteFile(filepath.Join(repoDir, "issues", "001-first.md"),
+		[]byte("# 002 — First\n\n**Status**: Open\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	err := runIndex(&out, indexOptions{Dir: repoDir, DBPath: filepath.Join(t.TempDir(), "telemetry.sqlite"), Stderr: &stderr})
+	if err != nil {
+		t.Fatalf("runIndex: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "heading #002 (file number #001)") {
+		t.Errorf("missing mismatch warning on stderr: %q", stderr.String())
+	}
+	if strings.Contains(out.String(), "warning:") {
+		t.Errorf("warning leaked to stdout: %q", out.String())
+	}
+}
+
 // indexSnapshotFixtureDir writes a minimal issues/ tree runIndex can index,
 // under a repo dir named "myrepo" so the derived project_name is
 // deterministic regardless of the enclosing t.TempDir() path.

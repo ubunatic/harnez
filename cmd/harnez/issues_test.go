@@ -357,6 +357,22 @@ func TestRunIssuesVerb_NoCommitSkipsGit(t *testing.T) {
 	}
 }
 
+func TestRunIssuesVerb_WarnsOnMismatchedHeaderOnStderrOnly(t *testing.T) {
+	content := strings.Replace(sampleTicket, "# 042", "# 043", 1)
+	dir, _ := issuesFixtureRepo(t, content)
+	var out, stderr bytes.Buffer
+	result, drift, err := runIssuesVerb(&out, "start", "42", nil, issuesRunOptions{Dir: dir, NoCommit: true, Stderr: &stderr})
+	if err != nil || drift {
+		t.Fatalf("runIssuesVerb: result=%+v drift=%v err=%v", result, drift, err)
+	}
+	if !strings.Contains(stderr.String(), "heading #043 (file number #042)") {
+		t.Errorf("missing mismatch warning on stderr: %q", stderr.String())
+	}
+	if strings.Contains(out.String(), "warning:") || result.Number != "042" {
+		t.Errorf("warning changed stdout/result: stdout=%q result=%+v", out.String(), result)
+	}
+}
+
 func TestRunIssuesVerb_CustomCommitMessage(t *testing.T) {
 	dir, _ := issuesFixtureRepo(t, sampleTicket)
 	var out bytes.Buffer
