@@ -87,3 +87,14 @@ M1 delivered (bounded exec capture, 2fc5981): 1 MB `tailBuffer` for capture and 
   (2M-line file, `-L 1:10` → 197 MB today).
 - `dot8RenderFileToCards`: clamp card height and paginate like the normal renderer.
 - Tests for both.
+
+M2 delivered (read range + exec head/tail, 1e8658b). Host check: `read -n -L 1:10` on 2M lines → 18.7 MB, 0.05s;
+`exec -- head -c 500M` → 24.8 MB, 1.6s. Quota-1 log streams to file, removed on success.
+
+### M3 (Dot8 behind a build tag)
+
+User decision: hide all Dot8 features behind `//go:build dot8`; default builds and `make install` exclude them.
+- Move the Dot8 renderer, the `--dot8*` flags / `HARNEZ_DOT8` handling and Dot8 tests into tagged files; add
+  `!dot8` stubs only where the default build needs a symbol.
+- `go build ./...`, `go vet ./...` and `go test ./...` pass with and without `-tags dot8`; add `make test-dot8`.
+- `harnez read --help` in a default build shows no dot8 flags.
