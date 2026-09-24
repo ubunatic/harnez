@@ -1,6 +1,6 @@
 # 529 — stats --agents: agy turns never "measured" and deleted check sessions missing
 
-**Status**: Open
+**Status**: Closed — AGY Five Hour quota pairs measure and deleted sessions retain stats rows
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
