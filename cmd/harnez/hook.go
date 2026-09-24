@@ -267,10 +267,13 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 	command, _ := payload.ToolCall.Args["CommandLine"].(string)
 	callType := "hook:rpc"
 	note := ""
+	route := ""
 	if toolName == "run_command" {
 		callType = "hook:prep"
 		if command != "" {
-			note = "preps:Bash | " + command
+			home, _ := os.UserHomeDir()
+			route = agyCommandRoute(command, os.Getenv("PATH"), home)
+			note = fmt.Sprintf("preps:Bash | agy-route=%s | %s", route, command)
 		} else {
 			note = "preps:Bash"
 		}
@@ -331,7 +334,7 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 	}
 
 	response := agyPreToolUseOutput{Decision: "allow"}
-	if toolName == "run_command" && command != "" && !alreadyRoutedThroughExec(command) {
+	if toolName == "run_command" && route == "hook" && !alreadyRoutedThroughExec(command) {
 		response.Overwrite = map[string]string{
 			"CommandLine": formatAgyExecRewrite(command),
 		}
@@ -343,6 +346,32 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 // keeping shell operators and quoting inside a single bash -c argument.
 func formatAgyExecRewrite(command string) string {
 	return "harnez exec --tool agy -- bash -c " + shellQuote(command)
+}
+
+func agyCommandRoute(command, path, home string) string {
+	if command == "" {
+		return ""
+	}
+	if alreadyRoutedThroughExec(command) {
+		return "hook"
+	}
+	if agyBashShimActive(home, path) {
+		return "shim"
+	}
+	return "hook"
+}
+
+func agyBashShimActive(home, path string) bool {
+	if home == "" {
+		return false
+	}
+	shimDir := filepath.Join(home, ".harnez", "shims")
+	pathEntries := filepath.SplitList(path)
+	if len(pathEntries) == 0 || filepath.Clean(pathEntries[0]) != filepath.Clean(shimDir) {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(shimDir, "bash"))
+	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0
 }
 
 // readingDisciplineDenyReason is the structured guidance message returned when an agent

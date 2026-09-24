@@ -63,6 +63,8 @@ func TestRunAgyToolHook_AllowOutput(t *testing.T) {
 }
 
 func TestRunAgyToolHook_RunCommandRewritesAndPrepsBash(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", "/usr/bin:/bin")
 	in := bytes.NewBufferString(`{
 		"conversationId": "test-conv-456",
 		"toolCall": {
@@ -104,47 +106,111 @@ func TestRunAgyToolHook_RunCommandRewritesAndPrepsBash(t *testing.T) {
 	if recorded.CallType != "hook:prep" {
 		t.Errorf("recorded.CallType = %q, want %q", recorded.CallType, "hook:prep")
 	}
-	if recorded.Note != "preps:Bash | git status" {
-		t.Errorf("recorded.Note = %q, want %q", recorded.Note, "preps:Bash | git status")
+	if recorded.Note != "preps:Bash | agy-route=hook | git status" {
+		t.Errorf("recorded.Note = %q, want route and command", recorded.Note)
 	}
 }
 
-func TestRunAgyToolHook_RewriteFixtures(t *testing.T) {
+func TestRunAgyToolHook_RouteFixtures(t *testing.T) {
 	tests := []struct {
-		name        string
-		payload     string
-		wantCommand string
+		name           string
+		payload        string
+		command        string
+		wantCommand    string
+		wantRoute      string
+		shimExists     bool
+		shimExecutable bool
+		shimPath       string
 	}{
 		{
-			name:        "documented run_command payload",
-			payload:     `{"conversationId":"fixture-1","workspacePaths":["/tmp"],"transcriptPath":"/tmp/transcript","artifactDirectoryPath":"/tmp/artifacts","modelName":"auto","toolCall":{"name":"run_command","args":{"CommandLine":"git status"}},"stepIdx":19}`,
-			wantCommand: "harnez exec --tool agy -- bash -c 'git status'",
+			name:           "shim active",
+			payload:        `{"conversationId":"fixture-1","workspacePaths":["/tmp"],"transcriptPath":"/tmp/transcript","artifactDirectoryPath":"/tmp/artifacts","modelName":"auto","toolCall":{"name":"run_command","args":{"CommandLine":"git status"}},"stepIdx":19}`,
+			command:        "git status",
+			wantRoute:      "shim",
+			shimExists:     true,
+			shimExecutable: true,
+			shimPath:       "first",
 		},
 		{
-			name:        "preserves shell operators and single quotes",
+			name:        "shim missing",
 			payload:     `{"conversationId":"fixture-2","toolCall":{"name":"run_command","args":{"CommandLine":"printf 'hello' && git status"}}}`,
+			command:     "printf 'hello' && git status",
 			wantCommand: `harnez exec --tool agy -- bash -c 'printf '\''hello'\'' && git status'`,
+			wantRoute:   "hook",
+			shimPath:    "first",
 		},
 		{
-			name:    "already routed command",
-			payload: `{"conversationId":"fixture-3","toolCall":{"name":"run_command","args":{"CommandLine":"harnez exec --tool agy -- bash -c 'git status'"}}}`,
+			name:           "shim not on PATH",
+			payload:        `{"conversationId":"fixture-3","toolCall":{"name":"run_command","args":{"CommandLine":"git status"}}}`,
+			command:        "git status",
+			wantCommand:    "harnez exec --tool agy -- bash -c 'git status'",
+			wantRoute:      "hook",
+			shimExists:     true,
+			shimExecutable: true,
+			shimPath:       "later",
+		},
+		{
+			name:        "shim not executable",
+			payload:     `{"conversationId":"fixture-4","toolCall":{"name":"run_command","args":{"CommandLine":"git status"}}}`,
+			command:     "git status",
+			wantCommand: "harnez exec --tool agy -- bash -c 'git status'",
+			wantRoute:   "hook",
+			shimExists:  true,
+			shimPath:    "first",
+		},
+		{
+			name:      "already routed command",
+			payload:   `{"conversationId":"fixture-5","toolCall":{"name":"run_command","args":{"CommandLine":"harnez exec --tool agy -- bash -c 'git status'"}}}`,
+			command:   "harnez exec --tool agy -- bash -c 'git status'",
+			wantRoute: "hook",
+			shimPath:  "none",
 		},
 		{
 			name:    "non-shell tool",
-			payload: `{"conversationId":"fixture-4","toolCall":{"name":"generate_image","args":{"Prompt":"a cat"}}}`,
+			payload: `{"conversationId":"fixture-6","toolCall":{"name":"generate_image","args":{"Prompt":"a cat"}}}`,
 		},
 		{
 			name:    "empty shell command",
-			payload: `{"conversationId":"fixture-5","toolCall":{"name":"run_command","args":{"CommandLine":""}}}`,
+			payload: `{"conversationId":"fixture-7","toolCall":{"name":"run_command","args":{"CommandLine":""}}}`,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			shimDir := filepath.Join(home, ".harnez", "shims")
+			if tc.shimExists {
+				if err := os.MkdirAll(shimDir, 0755); err != nil {
+					t.Fatalf("create shim directory: %v", err)
+				}
+				shimPath := filepath.Join(shimDir, "bash")
+				if err := os.WriteFile(shimPath, []byte("#!/bin/sh\n"), 0644); err != nil {
+					t.Fatalf("write shim fixture: %v", err)
+				}
+				if tc.shimExecutable {
+					if err := os.Chmod(shimPath, 0755); err != nil {
+						t.Fatalf("chmod shim fixture: %v", err)
+					}
+				}
+			}
+			path := "/usr/bin:/bin"
+			switch tc.shimPath {
+			case "first":
+				path = shimDir + string(os.PathListSeparator) + path
+			case "later":
+				path += string(os.PathListSeparator) + shimDir
+			}
+			t.Setenv("HOME", home)
+			t.Setenv("PATH", path)
+
 			var out bytes.Buffer
+			var recorded telemetry.ToolCall
 			err := runAgyToolHook(strings.NewReader(tc.payload), &out, agyHookOptions{
 				DBPath: "/tmp/dummy.db",
-				Insert: func(string, telemetry.ToolCall) error { return nil },
+				Insert: func(_ string, call telemetry.ToolCall) error {
+					recorded = call
+					return nil
+				},
 			})
 			if err != nil {
 				t.Fatalf("runAgyToolHook: %v", err)
@@ -162,6 +228,14 @@ func TestRunAgyToolHook_RewriteFixtures(t *testing.T) {
 			}
 			if tc.wantCommand == "" && response.Overwrite != nil {
 				t.Errorf("overwrite = %#v, want omitted", response.Overwrite)
+			}
+			if tc.wantRoute != "" {
+				wantNote := "preps:Bash | agy-route=" + tc.wantRoute + " | " + tc.command
+				if recorded.Note != wantNote {
+					t.Errorf("telemetry note = %q, want %q", recorded.Note, wantNote)
+				}
+			} else if strings.Contains(recorded.Note, "agy-route=") {
+				t.Errorf("unexpected route in telemetry note %q", recorded.Note)
 			}
 		})
 	}
