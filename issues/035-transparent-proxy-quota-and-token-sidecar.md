@@ -320,3 +320,16 @@ Host canary: agy printed "hi", exit 0. Usage rows: flash-lite 99+3+342=444 and f
 2. Skip a quota snapshot identical to the previous one for that bucket (only write changes).
 3. Per the scope note: `--calls` covers subagent runs from meter rows; interactive sessions keep
    status-line data.
+
+### M2 accepted (2cd9a77) — per-call cost view
+
+Host check: `harnez stats --session m2-035-20260925-a91f --calls` shows 2 model rows
+(flash-lite 99/4/281=384, flash-low 11818/1/18=11837); prompt totals 11917 in / 12221 total add up.
+agy subagents from `harnez agent start/resume/compact` are now always metered (session id passed).
+Not observed live: hook/exec merge (probe made no tool calls; covered by tests).
+
+### M3 Pre-Work / Required Refinements
+1. PROMPT TOTALS keys rows by a 32-hex hash; show a readable label (prompt time + first words or
+   index) so a human can tell prompts apart.
+2. M3 source order: latest meter quota row (with its age) → status-line data for interactive
+   sessions if recorded → `agy -p "/usage"` fallback. Show fractions as percent with 2 decimals.
