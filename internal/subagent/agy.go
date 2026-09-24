@@ -33,11 +33,13 @@ func (d AgyDriver) command(ctx context.Context, args ...string) ([]byte, error) 
 	}
 	c := exec.CommandContext(ctx, "agy", args...)
 	c.Dir = d.Dir
-	c.Env = agyLaunchEnv(os.Environ(), home)
+	c.Env = AgyLaunchEnv(os.Environ(), home)
 	return c.Output()
 }
 
-func agyLaunchEnv(environ []string, home string) []string {
+// AgyLaunchEnv prepares an environment for launching the real agy executable.
+// Keep this shared with the installed harnez-agy POSIX launcher.
+func AgyLaunchEnv(environ []string, home string) []string {
 	shimDir := filepath.Join(home, ".harnez", "shims")
 	path := environmentValue(environ, "PATH")
 	pathEntries := filepath.SplitList(path)

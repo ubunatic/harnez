@@ -215,6 +215,15 @@ func TestRunAgyToolHook_RouteFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("runAgyToolHook: %v", err)
 			}
+			if tc.name == "shim active" {
+				var response agyPreToolUseOutput
+				if err := json.Unmarshal(out.Bytes(), &response); err != nil {
+					t.Fatalf("decode hook response: %v", err)
+				}
+				if len(response.Overwrite) != 0 {
+					t.Fatalf("active shim caused command rewrite: %#v", response.Overwrite)
+				}
+			}
 
 			var response agyPreToolUseOutput
 			if err := json.Unmarshal(out.Bytes(), &response); err != nil {

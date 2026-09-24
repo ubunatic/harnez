@@ -873,6 +873,68 @@ func EnsureBashShim(home string) (path string, changed bool, err error) {
 	return path, changed, nil
 }
 
+// HarnezAgyLauncherContent installs harnez-agy, which resolves agy using the
+// caller's PATH before adding the guarded bash shim directory.
+const HarnezAgyLauncherContent = `#!/bin/sh
+set -f
+home=$HOME
+shim_dir="$home/.harnez/shims"
+old_path=${PATH-}
+agy_path=
+old_ifs=$IFS
+IFS=:
+for entry in $old_path
+do
+    test -n "$entry" || entry=.
+    candidate="$entry/agy"
+    if test -x "$candidate" && test ! -d "$candidate" && test "$candidate" != "$0"
+    then
+        agy_path=$candidate
+        break
+    fi
+done
+IFS=$old_ifs
+if test -z "$agy_path"
+then
+    printf '%s\n' 'harnez-agy: agy not found on the original PATH' >&2
+    exit 127
+fi
+if test "${old_path%%:*}" = "$shim_dir"
+then
+    export ANTIGRAVITY_AGENT=1
+    exec "$agy_path" "$@"
+fi
+if test -n "$old_path"
+then
+	export PATH="$shim_dir:$old_path"
+    export ANTIGRAVITY_AGENT=1
+fi
+if test -z "$old_path"
+then
+	export PATH="$shim_dir"
+    export ANTIGRAVITY_AGENT=1
+fi
+exec "$agy_path" "$@"
+`
+
+// HarnezAgyLauncherPath returns the managed harnez-agy launcher path.
+func HarnezAgyLauncherPath(home string) string {
+	return filepath.Join(home, ".local", "bin", "harnez-agy")
+}
+
+// EnsureHarnezAgyLauncher installs the managed harnez-agy launcher.
+func EnsureHarnezAgyLauncher(home string) (string, bool, error) {
+	if home == "" {
+		return "", false, errors.New("empty home directory")
+	}
+	path := HarnezAgyLauncherPath(home)
+	changed, err := fsutil.WriteExecutableIfChanged(path, []byte(HarnezAgyLauncherContent))
+	if err != nil {
+		return path, false, fmt.Errorf("harnez-agy launcher %s: %w", path, err)
+	}
+	return path, changed, nil
+}
+
 const HarnezEnvContent = `# harnez:begin env
 # Shell environment and helper functions for harnez-managed tools and agents.
 
@@ -1325,6 +1387,16 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 		} else {
 			addStat("bash shim", fsutil.ContractHome(shimPath))
 		}
+		launcherPath, changed, err := EnsureHarnezAgyLauncher(home)
+		if err != nil {
+			return err
+		}
+		if changed {
+			changes++
+			fmt.Printf("  wrote %s\n", launcherPath)
+		} else {
+			addStat("harnez-agy launcher", fsutil.ContractHome(launcherPath))
+		}
 	}
 
 	if envPath := HarnezEnvPath(); envPath != "" {
@@ -1504,6 +1576,17 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 			}
 		}
 	}
+	if home, err := os.UserHomeDir(); err == nil {
+		launcherPath := HarnezAgyLauncherPath(home)
+		if fi, err := os.Stat(launcherPath); err != nil {
+			anyChanged = true
+		} else {
+			data, readErr := os.ReadFile(launcherPath)
+			if readErr != nil || string(data) != HarnezAgyLauncherContent || fi.Mode().Perm() != 0755 {
+				anyChanged = true
+			}
+		}
+	}
 
 	if envPath := HarnezEnvPath(); envPath != "" {
 		if _, err := os.Stat(envPath); err != nil {
@@ -1633,6 +1716,13 @@ func CleanAll(target string, cfg *Config) error {
 		if err := os.Remove(shimPath); err == nil {
 			fmt.Printf("  removed %s\n", shimPath)
 			_ = os.Remove(filepath.Dir(shimPath))
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		launcherPath := HarnezAgyLauncherPath(home)
+		if err := os.Remove(launcherPath); err == nil {
+			fmt.Printf("  removed %s\n", launcherPath)
+			_ = os.Remove(filepath.Dir(launcherPath))
 		}
 	}
 	if envPath := HarnezEnvPath(); envPath != "" {

@@ -17,6 +17,7 @@ func TestBashShimProvisioningAndLifecycle(t *testing.T) {
 
 	targetDir := filepath.Join(tmpHome, ".claude")
 	shimPath := filepath.Join(tmpHome, ".harnez", "shims", "bash")
+	launcherPath := claude.HarnezAgyLauncherPath(tmpHome)
 
 	cfg, err := claude.LoadConfigEmbedded()
 	if err != nil {
@@ -52,6 +53,54 @@ func TestBashShimProvisioningAndLifecycle(t *testing.T) {
 	}
 	if string(content) != claude.BashShimContent {
 		t.Errorf("shim content mismatch: got:\n%s\nwant:\n%s", string(content), claude.BashShimContent)
+	}
+	launcher, err := os.ReadFile(launcherPath)
+	if err != nil {
+		t.Fatalf("read harnez-agy launcher: %v", err)
+	}
+	if string(launcher) != claude.HarnezAgyLauncherContent {
+		t.Fatalf("launcher content mismatch: got:\n%s\nwant:\n%s", launcher, claude.HarnezAgyLauncherContent)
+	}
+	launcherInfo, err := os.Stat(launcherPath)
+	if err != nil || launcherInfo.Mode().Perm() != 0755 {
+		t.Fatalf("launcher mode = %v, err = %v; want 0755", launcherInfo, err)
+	}
+	// The launcher resolves agy before adding the shim and excludes itself.
+	fakeBin := filepath.Join(tmpHome, "fake-bin")
+	if err := os.MkdirAll(fakeBin, 0755); err != nil {
+		t.Fatal(err)
+	}
+	capture := filepath.Join(tmpHome, "agy-launch-env")
+	fakeAgy := filepath.Join(fakeBin, "agy")
+	fakeAgyScript := "#!/bin/sh\nprintf '%s\\n' \"$PATH\" \"$ANTIGRAVITY_AGENT\" > \"$AGY_CAPTURE\"\n"
+	if err := os.WriteFile(fakeAgy, []byte(fakeAgyScript), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(launcherPath, filepath.Join(fakeBin, "harnez-agy")); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(launcherPath, "arg")
+	cmd.Env = append(os.Environ(), "PATH="+fakeBin+string(os.PathListSeparator)+"/usr/bin:/bin", "AGY_CAPTURE="+capture, "ANTIGRAVITY_AGENT=0")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("run launcher: %v: %s", err, output)
+	}
+	launchedEnv, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatalf("read launcher environment: %v", err)
+	}
+	wantEnv := filepath.Join(tmpHome, ".harnez", "shims") + string(os.PathListSeparator) + fakeBin + string(os.PathListSeparator) + "/usr/bin:/bin\n1\n"
+	if string(launchedEnv) != wantEnv {
+		t.Fatalf("launcher environment = %q, want %q", launchedEnv, wantEnv)
+	}
+	agyPath := filepath.Join(tmpHome, ".local", "bin", "agy")
+	if err := os.WriteFile(agyPath, []byte("real agy"), 0644); err != nil {
+		t.Fatalf("write real agy sentinel: %v", err)
+	}
+	if err := claude.ApplyAll(targetDir, cfg, nil, false, false); err != nil {
+		t.Fatalf("second ApplyAll: %v", err)
+	}
+	if data, err := os.ReadFile(agyPath); err != nil || string(data) != "real agy" {
+		t.Fatalf("real agy was changed: data=%q err=%v", data, err)
 	}
 
 	// 2. DiffAll should report no changes when aligned
@@ -121,6 +170,9 @@ func TestBashShimProvisioningAndLifecycle(t *testing.T) {
 	}
 	if _, err := os.Stat(shimPath); !os.IsNotExist(err) {
 		t.Errorf("expected bash shim to be removed by CleanAll, but err = %v", err)
+	}
+	if _, err := os.Stat(launcherPath); !os.IsNotExist(err) {
+		t.Errorf("expected launcher to be removed by CleanAll, but err = %v", err)
 	}
 }
 

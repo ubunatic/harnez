@@ -151,7 +151,7 @@ func agyInteractiveLaunchEnv(environ []string, home string) ([]string, error) {
 	if _, _, err := claude.EnsureBashShim(home); err != nil {
 		return nil, fmt.Errorf("agy: ensure bash shim: %w", err)
 	}
-	return agyLaunchEnv(environ, home), nil
+	return AgyLaunchEnv(environ, home), nil
 }
 
 type controlRequest struct {

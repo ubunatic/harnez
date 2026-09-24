@@ -102,7 +102,7 @@ func TestAgyLaunchEnvironmentDoesNotDuplicateShimPrefix(t *testing.T) {
 		"ANTIGRAVITY_AGENT=0",
 		"AGY_TEST_KEEP=preserved",
 	}
-	got := agyLaunchEnv(original, home)
+	got := AgyLaunchEnv(original, home)
 	wantPath := shimDir + string(os.PathListSeparator) + "/usr/bin:/bin"
 	if path := environmentValue(got, "PATH"); path != wantPath {
 		t.Errorf("PATH = %q, want %q", path, wantPath)
