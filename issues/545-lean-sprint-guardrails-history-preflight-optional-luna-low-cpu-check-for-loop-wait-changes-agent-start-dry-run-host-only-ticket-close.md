@@ -49,3 +49,12 @@ These come from the 2026-09-24 retro (`docs/feedback/2026-09-24-lean-sprints-cle
    was 0.7M new + 5.7M cached, and it drained 5% of the agy 5h window. In `harnez stats --agents` the drain
    follows new input (~25% for 2.6M new in oom543), and cached input barely counts. Show new input and the plan
    drain (when known) in the timeline and turn summary; keep cached as a secondary number.
+
+## Addition (2026-09-24): targeted test runs under quota-1
+
+7. **Allow a single named test next to the one full run.** Under quota-1 a developer may run
+   `make test-q1` once per change; after fixing a failure it must commit untested code. Sprint 550
+   took three extra review rounds this way (a compile error and a wrong fix were committed blind).
+   Allow `go test -run <TestName> ./<pkg>/` (one package, named tests only) without using up the
+   quota-1 run, so a developer can confirm a fix before committing. The full suite stays one run per
+   change, and the host still runs it after review.
