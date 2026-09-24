@@ -46,3 +46,17 @@ The /goal 1 test (every command that `apply` configures must be registered) woul
   `workspace.repo.{host,owner,name}`, plus top-level `cwd`, `session_id`, `session_name`, `transcript_path`.
 - In the sample `current_dir == project_dir`. The drift case (different values after a `cd`) is still
   unverified, so the code should compare the two fields rather than assume either one moves.
+
+## Milestones (lean sprint, 2026-09-24)
+
+### M1 — register the command again, plus a guard test
+- Add `newStatuslineCmd()` to `root.AddCommand` again.
+- Test: every `harnez <cmd>` that `apply` writes into managed settings or hooks (statusLine and hook
+  commands) resolves on the root command. It must fail on HEAD before the fix.
+- Test: `harnez statusline` with the captured payload shape (see Payload sample) exits 0.
+
+### M2 — show the cwd and cwd drift
+- Show the effective cwd (`workspace.current_dir`, falling back to `cwd`). When it differs from
+  `workspace.project_dir`, show both (`~/projects/voxi → /tmp`). Shorten `$HOME` to `~`.
+- Tests with a fixture payload for the same-dir and drift cases. The rendered width stays sensible
+  (rune/display width).
