@@ -43,3 +43,17 @@ The "harnez tip" message goes to stderr from the root `PersistentPreRunE`, so it
 land in the output of any nested `harnez agent` call, not only in tests. Consider not
 printing it for commands whose stderr is part of a protocol (`agent` streaming), or when
 running under `go test`, in addition to fixing the test isolation.
+
+## M1 delivered (d7307bb): tip hook skipped under `go test`
+
+Review (terra) rejected the approach. The fix checks `os.Args[0]` for `.test` in
+production `main.go`, and `resolve.Session` still falls back to the parent PID.
+
+## M2 Pre-Work / Required Refinements
+
+- Remove the `.test` check from `sessionTipHook`.
+- Isolate in `TestMain` or a scoped test hook in `internal/resolve`, so no session
+  resolves unless a test sets one (including the PPID fallback).
+- Keep the new regression test; it must still fail without the fix.
+- A test must still be able to exercise `sessionTipHook` tips by setting a session.
+- `TestMain`: restore `HOME` to unset when it was unset (it now points at a deleted temp dir).
