@@ -1,6 +1,6 @@
 # 543 — harnez process grew to 15-16 GB RSS and was OOM-killed twice (agent resume under harnez exec)
 
-**Status**: Open
+**Status**: Closed — M1 bounded exec capture (2fc5981), M2 read range + exec head/tail (1e8658b), M3 dot8 build tag (33dd977); installed. read -I re-enable is 546.
 **Priority**: P0
 **Severity**: Critical
 **Category**: Bug / Memory
