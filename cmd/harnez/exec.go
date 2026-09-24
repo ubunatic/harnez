@@ -24,7 +24,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -36,6 +35,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -267,6 +267,64 @@ type execOptions struct {
 	ConfigPath    string
 }
 
+// maxExecCaptureBytes is the maximum number of tail bytes retained for telemetry scoring,
+// Quota-1 failure logs, and distillation. Streams are proxied to stdout/stderr unbuffered and
+// uncapped; only in-memory post-run inspection buffers are bounded.
+const maxExecCaptureBytes = 1 * 1024 * 1024 // 1 MB tail cap
+
+// tailBuffer is a thread-safe io.Writer that retains only the last limit bytes written.
+type tailBuffer struct {
+	mu    sync.Mutex
+	buf   []byte
+	limit int
+}
+
+func newTailBuffer(limit int) *tailBuffer {
+	return &tailBuffer{limit: limit}
+}
+
+func (b *tailBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	n := len(p)
+	if b.limit <= 0 {
+		return n, nil
+	}
+	if len(p) >= b.limit {
+		b.buf = append(b.buf[:0], p[len(p)-b.limit:]...)
+		return n, nil
+	}
+
+	overflow := len(b.buf) + len(p) - b.limit
+	if overflow > 0 {
+		copy(b.buf, b.buf[overflow:])
+		b.buf = b.buf[:len(b.buf)-overflow]
+	}
+	b.buf = append(b.buf, p...)
+	return n, nil
+}
+
+func (b *tailBuffer) Bytes() []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]byte, len(b.buf))
+	copy(out, b.buf)
+	return out
+}
+
+func (b *tailBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return string(b.buf)
+}
+
+func (b *tailBuffer) Len() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.buf)
+}
+
 // byteCounter is an io.Writer that only counts bytes written to it,
 // safe for concurrent use since exec.Cmd copies a non-*os.File Stdout and
 // Stderr on separate goroutines.
@@ -381,8 +439,8 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 
 	counter := &byteCounter{}
-	var capturedOutput bytes.Buffer
-	var quotaLog bytes.Buffer
+	capturedOutput := newTailBuffer(maxExecCaptureBytes)
+	quotaLog := newTailBuffer(maxExecCaptureBytes)
 	quotaLogPath := ""
 	if quota1Active {
 		var pathErr error
@@ -413,11 +471,11 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 			mode = distill.DetectModeFromArgs(args)
 		}
 		distOpts = distill.Options{Mode: mode, MaxLines: 300}
-		c.Stdout = io.MultiWriter(&capturedOutput, counter, &quotaLog)
-		c.Stderr = io.MultiWriter(&capturedOutput, counter, &quotaLog)
+		c.Stdout = io.MultiWriter(capturedOutput, counter, quotaLog)
+		c.Stderr = io.MultiWriter(capturedOutput, counter, quotaLog)
 	} else {
-		c.Stdout = io.MultiWriter(out, counter, &capturedOutput, &quotaLog)
-		c.Stderr = io.MultiWriter(errOut, counter, &capturedOutput, &quotaLog)
+		c.Stdout = io.MultiWriter(out, counter, capturedOutput, quotaLog)
+		c.Stderr = io.MultiWriter(errOut, counter, capturedOutput, quotaLog)
 	}
 
 	start := time.Now()

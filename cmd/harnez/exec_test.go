@@ -1424,3 +1424,73 @@ func TestNewExecCmd_Quota1Flag(t *testing.T) {
 		t.Errorf("flag default = %q, want false", f.DefValue)
 	}
 }
+
+func TestTailBuffer_WriteAndCap(t *testing.T) {
+	buf := newTailBuffer(10)
+	if n, err := buf.Write([]byte("hello")); err != nil || n != 5 {
+		t.Fatalf("Write(hello) n=%d, err=%v", n, err)
+	}
+	if got := buf.String(); got != "hello" {
+		t.Fatalf("String() = %q, want hello", got)
+	}
+
+	// Write more, exceeding 10 bytes: "hello" + " world!" = 12 bytes -> "llo world!" (10 bytes)
+	if n, err := buf.Write([]byte(" world!")); err != nil || n != 7 {
+		t.Fatalf("Write( world!) n=%d, err=%v", n, err)
+	}
+	if got := buf.String(); got != "llo world!" {
+		t.Fatalf("String() = %q, want 'llo world!'", got)
+	}
+	if buf.Len() != 10 {
+		t.Fatalf("Len() = %d, want 10", buf.Len())
+	}
+
+	// Write a single chunk larger than limit: "0123456789abcdef" -> "6789abcdef"
+	if n, err := buf.Write([]byte("0123456789abcdef")); err != nil || n != 16 {
+		t.Fatalf("Write large chunk n=%d, err=%v", n, err)
+	}
+	if got := buf.String(); got != "6789abcdef" {
+		t.Fatalf("String() = %q, want '6789abcdef'", got)
+	}
+}
+
+func TestRunExecWrapper_BoundsCapturedOutputAndRetainsTail(t *testing.T) {
+	opts := testExecOptions(t)
+	opts.InsertTimeout = 2 * time.Second
+
+	var out, errOut bytes.Buffer
+	// Generate 3MB of 'A's followed by a distinct error tail
+	script := "head -c 3000000 /dev/zero | tr '\\0' 'A'; echo 'panic: runtime error: tail-marker'"
+	code, err := runExecWrapper([]string{"sh", "-c", script}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil {
+		t.Fatalf("runExecWrapper error = %v", err)
+	}
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	// Verify real stdout received all 3MB+
+	if out.Len() < 3000000 {
+		t.Fatalf("stdout len = %d, want >= 3000000", out.Len())
+	}
+
+	// Verify telemetry row was recorded with score 1 from the tail panic signature
+	db, err := telemetry.Open(opts.DBPath)
+	if err != nil {
+		t.Fatalf("Open telemetry db: %v", err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{CallType: "shell"})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("Query rows = %v, err = %v", rows, err)
+	}
+	if rows[0].RawBytes < 3000000 {
+		t.Errorf("raw_bytes = %d, want >= 3000000", rows[0].RawBytes)
+	}
+	if rows[0].Score == nil || *rows[0].Score != 1 {
+		t.Errorf("score = %v, want 1 (panic detected in tail)", rows[0].Score)
+	}
+	if rows[0].Note != "go runtime panic / fatal error" {
+		t.Errorf("note = %q, want 'go runtime panic / fatal error'", rows[0].Note)
+	}
+}
