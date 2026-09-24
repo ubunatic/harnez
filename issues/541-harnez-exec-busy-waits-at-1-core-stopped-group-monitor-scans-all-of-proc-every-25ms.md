@@ -1,6 +1,6 @@
 # 541 — harnez exec busy-waits at ~1 core: stopped-group monitor scans all of /proc every 25ms
 
-**Status**: Open
+**Status**: Closed — 662b100 M1 child-stat 1s poll (94%→0.3% CPU), 4a3973b M2 descendant stops; host: grandchild STOP→125 in 2s
 **Priority**: P0
 **Severity**: High
 **Category**: Bug / Performance (regression)
