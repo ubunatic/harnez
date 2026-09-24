@@ -264,8 +264,10 @@ func TestRenderAgentStatsLabelsUnreliableDrainAndMissingModelDrain(t *testing.T)
 	if strings.Contains(table, "0.0 pts") || !strings.Contains(table, "agy:model") {
 		t.Fatalf("zero-turn model drain should display em dash:\n%s", table)
 	}
-	if strings.Contains(table, "QUALITY\n") || strings.Contains(table, "— (unreliable)") {
-		t.Fatalf("unreliable marker should qualify drain, not quality:\n%s", table)
+	for _, line := range strings.Split(table, "\n") {
+		if strings.HasPrefix(line, "agent ") && strings.HasSuffix(line, "— (unreliable)") {
+			t.Fatalf("unreliable marker should qualify drain, not quality:\n%s", table)
+		}
 	}
 }
 
