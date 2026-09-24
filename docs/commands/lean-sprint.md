@@ -51,6 +51,8 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - Provide:
   - Scoped milestone objective, target files, and acceptance criteria from the ticket.
   - Test requirements (reproduction test first for bugs, unit tests for features).
+  - Never ask leaf workers to run live checks that need a harnez agent session;
+    the host runs those checks after the developer commits.
 - **Plan First (read-only)**: Recommended: start the worker's initial prompt with a read-only planning step ("read-only: plan ..."; no edits until the host has seen the plan), then `resume` to grant write authority. Give no prompt template: agents have their own best practices, and the stored first prompts (telemetry DB) are how we observe and compare them. In one-shot mode a plan request alone is not enforced, so a plan-only first prompt is the reliable form.
 - **Trust the Base Framework**: Do not duplicate system prompts or micromanage formatting conventions.
 - **Reading Discipline**: Instruct the developer to use `harnez read -I <file>` or line-bounded reads (`-L`) for medium/large files.
@@ -66,6 +68,8 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 ### 3. Concise Milestone Review & In-Ticket Pre-Work Embedding
 - Upon developer milestone completion, the Host Orchestrator performs a rapid, diff-only inspection:
   - Check `git log -n 1 --stat`, `git diff HEAD~1`, and run verification tests.
+  - After the developer commit, run live checks that need an agent session from
+    the host. Keep those checks out of developer dispatch prompts.
   - Evaluate test assertion rigor, ambient environment leaks, and edge-case omissions directly against the diff.
   - **Plausibility check for measurements**: when the milestone produces numbers (reports, stats,
     benchmarks, token or quota figures), run the real command and check the values make sense, not
