@@ -1,6 +1,6 @@
 # 525 — Replace recent skill rules with harnez runtime feedback
 
-**Status**: Open
+**Status**: Closed — M1 f0e0564 + M2 32c0dfa: refusal hint, quiet untested-edit warning at turn end; 3 rule lines removed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agent Instructions
