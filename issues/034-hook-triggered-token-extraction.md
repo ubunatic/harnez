@@ -153,3 +153,20 @@ is cheaper to reach than implementing against an assumed payload.
 
 **Small** for step 0 (a probe and a written-up answer).
 **Medium** for the full AGY path, conditional on step 0.
+
+## Findings 2026-09-24 (host, loom agy sessions)
+
+- The agy hooks already store per-call data in `~/.harnez/tool_catalog.sqlite` `tool_calls`: the
+  post-tool hook writes `output_bytes` and estimated `actual_tokens` (readcard counter) per result.
+  Session 35ecec0a: 348 rows, 580 KB, ~155k estimated result tokens. No command lists them per call.
+- Every shimmed shell command has two rows: the hook's `run_command` row stays empty (106 of 348),
+  the metrics land on the `harnez exec` row because it is the "latest". Pairing works by order only.
+- `input_tokens`/`output_tokens`/`reasoning_tokens` stay empty for agy; transcripts have no usage.
+- Calibration against agy `/context` (session 0cbaad85, Gemini 3.7 Flash Low, 142 steps): agy
+  counts 99.2k = 18.7k fixed (system prompt 5.5k, tools 11.9k, skills+subagents 1.3k) + 80.4k
+  conversation. Transcript bytes/4 gave 48k, so factor ~1.7 (≈2.4 bytes/token). The fixed part is
+  resent every step (142 × 19k ≈ 2.7M input tokens before caching).
+- Estimate per step: input ≈ 19k + 1.7 × (transcript bytes so far)/4; sum per prompt. Cache
+  discount unknown, so relative cost only.
+- Proposed next step: `harnez stats --session <id> --calls` per-call/per-prompt listing, and merge
+  hook and exec rows. See 035 for the network path to real counts.

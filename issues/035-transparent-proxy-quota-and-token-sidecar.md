@@ -187,3 +187,17 @@ Ordered so each stage is independently useful and independently abandonable:
 **Large** for the full sidecar — the biggest item in the telemetry cluster, and
 the one with the worst blast radius. Do 030 first, then 034's step 0, and only
 then revisit this.
+
+## Findings 2026-09-24 (host + luna advisor, read-only)
+
+- No earlier interception test exists (searched issues, git log, docs, ~/.harnez logs).
+- `agy` is a stripped Go ELF; no `usageMetadata` strings found in it. Proxy/CA support
+  (`HTTPS_PROXY`, `SSL_CERT_FILE`) and certificate pinning are untested. No configurable API URL.
+- Canary 1 (`agy -p "Reply with the single word: hi" --log-file`): the log has **no token counts**.
+  It shows the architecture: the CLI starts a local language server (gRPC over HTTPS and HTTP on
+  random localhost ports), which calls `https://daily-cloudcode-pa.googleapis.com/v1internal:`
+  `streamGenerateContent?alt=sse` (2 calls for one prompt), `loadCodeAssist`, `fetchAvailableModels`.
+  The log prints each URL with trace and response ID, and `Resolved proxyServerURL: ""`.
+- Next, canary 2: one throwaway prompt through a local mitmproxy with `HTTPS_PROXY` and
+  `SSL_CERT_FILE` set for that agy process only; check whether agy accepts it and whether the final
+  SSE chunk has `usageMetadata`. Risk: agy's OAuth token passes the proxy; store nothing; check terms.
