@@ -524,3 +524,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 523 | [523-lean-sprint-host-runs-live-harnez-agent-checks-leaf-workers-cannot.md](523-lean-sprint-host-runs-live-harnez-agent-checks-leaf-workers-cannot.md) | lean-sprint: host runs live harnez agent checks; leaf workers cannot | Closed — 86200d0: lean-sprint says host runs live agent checks |
 | 524 | [524-cap-retained-quota-1-failure-logs-don-t-create-log-dir-on-success.md](524-cap-retained-quota-1-failure-logs-don-t-create-log-dir-on-success.md) | Cap retained quota-1 failure logs; don't create log dir on success | Open |
 | 525 | [525-replace-recent-skill-rules-with-harnez-runtime-feedback.md](525-replace-recent-skill-rules-with-harnez-runtime-feedback.md) | Replace recent skill rules with harnez runtime feedback | Open |
+| 526 | [526-agent-delete-should-warn-about-unrated-sessions.md](526-agent-delete-should-warn-about-unrated-sessions.md) | agent delete should warn about unrated sessions | Open |
