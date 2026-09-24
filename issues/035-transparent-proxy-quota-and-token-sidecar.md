@@ -307,3 +307,16 @@ Interactive agy sessions already report quota and in/out tokens via the agy stat
 (`internal/agy/statusline.go`, other agent's work). The meter is needed only for headless
 subagent runs (`agy -p`, `harnez agent` dispatch). M2/M3 must not duplicate status-line data for
 interactive sessions; prefer status-line data there and use meter rows for subagents.
+
+### M1 accepted (32ae8d1) — metering proxy works
+
+Host canary: agy printed "hi", exit 0. Usage rows: flash-lite 99+3+342=444 and flash-low
+11822+1+21=11844 (sums check out; matches canary 2). 16 quota rows (4 buckets × 4 snapshots).
+
+### M2 Pre-Work / Required Refinements
+1. `session` is empty in all rows, so rows cannot be matched to a subagent session. Find the id
+   agy sends (request JSON or headers; record only the id), or have `agy-meter-run` tag rows with
+   the harnez agent session id (e.g. from env set by `harnez agent start`).
+2. Skip a quota snapshot identical to the previous one for that bucket (only write changes).
+3. Per the scope note: `--calls` covers subagent runs from meter rows; interactive sessions keep
+   status-line data.
