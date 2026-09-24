@@ -221,3 +221,47 @@ then revisit this.
   per-request cost must come from `usageMetadata`, the fraction from polling (drain over time).
 - Open: can harnez call `retrieveUserQuotaSummary` directly with agy's OAuth token (as
   `harnez usage` does for other endpoints), which would give fractions without a proxy?
+
+## Plan 2026-09-24 — per-session proxy in `harnez-agy` (supersedes Step 0 and "Steps" above)
+
+The canaries answered Step 0: agy accepts a proxy and a custom CA, and its responses carry data
+nothing else gives us (exact per-request tokens, 7-digit quota fractions). Scope is agy only, via
+the `harnez-agy` launcher (550), not a shared sidecar for all agents.
+
+### /goal
+
+An opt-in `harnez-agy` mode starts a localhost proxy for that agy session only. It records exact
+token counts per model request and agy's quota fractions, and `harnez stats` / `harnez usage` show
+them. agy must never break because of it.
+
+### M1 — metering proxy in the launcher
+
+- Opt-in switch (e.g. `harnez-agy --meter` or config key). Off: launcher unchanged.
+- Go, in harnez, no mitmproxy. Binds 127.0.0.1 on a random port; lives exactly as long as agy.
+- Decrypt only `daily-cloudcode-pa.googleapis.com`; tunnel every other host untouched.
+- Stream SSE through unbuffered; read `usageMetadata` on the side (last chunk wins).
+- Record per `streamGenerateContent`: time, agy session/conversation id if present in the request,
+  model, prompt/candidates/thoughts/cached/total tokens. Record `retrieveUserQuotaSummary`
+  buckets (`bucketId`, `remainingFraction`, `resetTime`). Never store headers, bodies or tokens.
+- Own CA in `~/.harnez/` (key 0600). `SSL_CERT_FILE` bundle = system roots + harnez CA.
+- Fallback: proxy fails to start → launch agy without it and say so once.
+- Acceptance: unit tests (host filter, SSE passthrough with usage extraction, bundle contents,
+  fallback); tests use a temp HOME and a fake upstream, no real Google calls; one live canary run
+  by the host.
+
+### M2 — per-call cost view (absorbs 034's listing idea)
+
+- `harnez stats --session <id> --calls`: one row per model request with exact tokens, matched to
+  the hook/exec tool-call rows by session and time; totals per user prompt. Merge the duplicate
+  hook `run_command` and exec rows (034 findings).
+
+### M3 — agy fractions in `harnez usage`
+
+- Prefer the latest recorded `remainingFraction` (with its age) over `agy -p "/usage"`; keep the
+  `/usage` path as fallback when no recent record exists.
+
+### Risks
+
+- A proxy bug cuts agy off mid-session; keep the proxy small and covered by tests.
+- The agy OAuth token passes through our process (in memory only). Google terms unverified.
+- Endpoint names are `v1internal` and may change; failures must degrade to "no data", not errors.
