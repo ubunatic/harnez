@@ -41,6 +41,13 @@ but it is observe-only ("without rewriting commands"), so the premise holds.
   `run_command` command line, and record the exact payload and response schema here. Use a throwaway
   hooks file or a scratch HOME, not the user's live hooks. If a rewrite is impossible, record that, stop, and report.
 
+- Pre-Work / Required Refinements (from the plan review):
+  1. Only harnez calls agy. Run the probe via `harnez agent -p --model agy:gemini-3.7-flash:low ...`, never `agy -p`.
+  2. Prefer a scratch HOME (copy only the oauth token into it) over editing the live
+     `~/.gemini/antigravity-cli/hooks.json`. If agy refuses a scratch HOME, you may edit the live file
+     with a byte-identical snapshot and restore it. Only do that when `harnez agent list` shows no active
+     agy session, and verify the restore with `cmp`.
+
 ### M2 — rewrite agy run_command to `harnez exec`
 - In `harnez hook agy`, rewrite `run_command` to `harnez exec --tool agy -- <cmd>`, using the same
   adapter as the Claude/Codex exec hook (look at `harnez exec hook` and `internal/codex/hooks.go`).
