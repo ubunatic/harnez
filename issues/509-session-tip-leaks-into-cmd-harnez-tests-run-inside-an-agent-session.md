@@ -1,6 +1,6 @@
 # 509 — Session tip leaks into cmd/harnez tests run inside an agent session
 
-**Status**: Open
+**Status**: Closed — M2 b6159e4: resolver DisableFallback set by tests; no production test check (terra review of M1 applied)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
