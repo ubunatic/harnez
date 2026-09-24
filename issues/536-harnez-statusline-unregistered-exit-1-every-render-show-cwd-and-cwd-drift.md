@@ -39,3 +39,10 @@ status line.
 `f282e45` (feat(codex): post-tool telemetry hook adapter, issue 420 M2, 2026-09-18) rewrote the
 `root.AddCommand(...)` line and dropped `newStatuslineCmd()`. That is a regression, not a missing wire-up.
 The /goal 1 test (every command that `apply` configures must be registered) would have caught it.
+
+## Payload sample (Claude Code 2.1.281, captured 2026-09-24 from lucky-fox)
+
+- Confirmed: `workspace.current_dir`, `workspace.project_dir`, `workspace.added_dirs`,
+  `workspace.repo.{host,owner,name}`, plus top-level `cwd`, `session_id`, `session_name`, `transcript_path`.
+- In the sample `current_dir == project_dir`. The drift case (different values after a `cd`) is still
+  unverified, so the code should compare the two fields rather than assume either one moves.

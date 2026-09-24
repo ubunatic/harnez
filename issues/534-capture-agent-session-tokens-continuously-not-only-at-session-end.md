@@ -28,3 +28,12 @@ session must not be the only point where counts are written.
 - First find out where session tokens are written today (at session end? by the collector?).
 - 034 (hook-triggered transcript seek) may be the mechanism for Claude and AGY.
 - Check the live code before starting; this ticket may be stale.
+
+## Finding (2026-09-24): the statusLine payload has live tokens
+
+The statusLine stdin payload (Claude Code 2.1.281) has `session_id`, `session_name` and
+`context_window.{total_input_tokens,total_output_tokens,current_usage.{input,output,cache_creation_input,cache_read_input}_tokens}`,
+plus `cost.total_cost_usd` and `rate_limits.*`. It updates every render. `harnez statusline` (once it is
+registered again, 536) could write these per-session counts, which gives Claude sessions continuous
+capture without the collector. Codex and agy still need their own path.
+Evidence for "written only at exit": lucky-fox showed 0/0 after about 15 tool calls while active.
