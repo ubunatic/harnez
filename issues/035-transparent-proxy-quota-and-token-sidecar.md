@@ -343,3 +343,16 @@ but the card shows only Claude/GPT 5h 0.00% and drops the weekly bucket.
 Pre-Work / Required Refinements:
 1. Show `3p-weekly` (Claude/GPT weekly); 0 remaining must render as 100.00% used, never be hidden.
    Test with a fixture where one bucket is 0.
+
+### M3 round 2 (1ed530c) — root cause of the missing weekly bucket
+
+1ed530c added only a test; the card still lacks Claude/GPT weekly. Cause: M2's dedupe writes a
+bucket only when it changes, so the constant `3p-weekly` (0 remaining, last written 21:55) ages past
+the 30-min freshness window while its siblings keep refreshing (22:22 rows). Note: Google omits
+`remainingFraction` when it is 0 (proto3 default), so a bucket without the field means 0.
+
+Pre-Work / Required Refinements:
+1. Freshness is per snapshot, not per row: a bucket's value holds until its `resetTime` passes,
+   and its age is the time of the latest quota response of any bucket. Test: two snapshots, the
+   second omits an unchanged bucket → the card still shows it, with the newer age.
+2. Missing `remainingFraction` in a bucket = 0 remaining.
