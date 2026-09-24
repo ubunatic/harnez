@@ -146,3 +146,21 @@ remains host-verifiable in M6.
 - A `harnez agent -p` agy run: `sh -c 'kill -STOP $$'` returns exit 125 within seconds, `sleep 120`
   hits the exec timeout, agy's chat shows plain commands (shim route), and the M5 view shows 0 unrouted.
 - Then mark 273 as superseded by 537 (the hook becomes the automatic fallback instead of an opt-in).
+
+**M5 delivered (coverage view + interactive chat env): f96d816.**
+
+**M6 live result (host, 2026-09-24, `agy:flash37:low` via `harnez agent start`, scratch repo):**
+- `sh -c 'kill -STOP $$'` → exit 125 in about 1s ("stopped process group detected; sent SIGCONT"). ✅
+- `sleep 120` → exit 137 after 60s ("harnez exec: timeout kill after 1m0s"). ✅
+- `~/.harnez/shims/bash` was created by the launch (15:39). ✅
+- ❌ Coverage view for that session `3e5fefeb…`: HOOK 2, EXEC 0, UNROUTED 2, which is false. Both commands
+  demonstrably ran under `harnez exec`. The exec rows written via the shim are likely not attributed to the
+  agy session/conversation id (M5's join assumed `ANTIGRAVITY_AGENT=1` + the conversation id resolve in both).
+
+### M7 — attribute shim exec rows to the agy session
+- Find why exec rows from the shim route don't join (missing or different session id, agent id,
+  or timestamp window), and fix the attribution or the join. Tests: the fixture reproduces a shim-route
+  pair and it counts as VIA SHIM.
+- Acceptance (host): rerun `harnez stats --agents --days 1`; session `3e5fefeb…` (or a fresh live
+  run) shows 0 UNROUTED and the commands under VIA SHIM (or VIA HOOK if the shim was not first on PATH;
+  the view must say which).
