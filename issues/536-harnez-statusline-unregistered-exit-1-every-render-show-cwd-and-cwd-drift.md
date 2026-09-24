@@ -33,3 +33,9 @@ status line.
 ## Notes
 
 - Check which fields the statusLine payload has in the current Claude Code version before relying on them.
+
+## Root cause (2026-09-24)
+
+`f282e45` (feat(codex): post-tool telemetry hook adapter, issue 420 M2, 2026-09-18) rewrote the
+`root.AddCommand(...)` line and dropped `newStatuslineCmd()`. That is a regression, not a missing wire-up.
+The /goal 1 test (every command that `apply` configures must be registered) would have caught it.
