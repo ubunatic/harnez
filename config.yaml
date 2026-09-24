@@ -489,8 +489,9 @@ agents_md:
 
           ### Always `make install`
           After every change to a project that has a `make install` target, run `make install` before
-          reporting or committing, so the user's installed binary always matches the code. This applies to
-          every agent and every repo, including developer subagents. Do not skip or postpone it.
+          reporting or committing, so the user's installed binary always matches the code. This applies in
+          every repo to solo developers, host sessions that talk to a human, and orchestrators. Leaf developer
+          subagents in a sprint skip it unless their skill requires it at the end; the host installs after review.
 
           ### Editing Discipline
           - Prefer structured patch tools (`apply_patch`) or whole-block replacements over
