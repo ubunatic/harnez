@@ -35,3 +35,12 @@ These come from the 2026-09-24 retro (`docs/feedback/2026-09-24-lean-sprints-cle
 - Items 1–2 are skill/doc text (`docs/commands/lean-sprint.md`, sync the installed copy via `apply`).
   Items 3–4 are code with tests.
 - Deferred by the user (handled after compaction via 544): 353 M2 and rolling out the managed block to other repos.
+
+## Addition (2026-09-24): retire agy sessions with a large context
+
+5. **`harnez agent resume` refuses agy sessions with a large context.** agy has no compact command
+   (Google says it compacts in the background, but a harnez-queued `/compact` does nothing there). In the 543
+   sprint one session reached 693k new tokens, and a single turn then used 21.5M tokens incl. cached.
+   Above a threshold (e.g. 300k tokens), `resume` refuses with a message to start a fresh session, and
+   `harnez agent` closes the old one. Lean sprints then use one fresh developer session per milestone,
+   with the ticket as the handoff.

@@ -1,7 +1,7 @@
 # 353 — Tell only Claude: never propose CLAUDE.md changes; check repo docs/AGENTS.md before any instruction-file change
 
 **Status**: Open
-**Priority**: P1
+**Priority**: P3
 **Severity**: Minor
 **Category**: Docs
 
@@ -168,3 +168,8 @@ literal name several times today without any warning.
   counter in the session-state file. Tests for counting and the every-5 cadence.
 
 **M1 delivered (Claude-only SessionStart rule): 746418b.** Not live until `harnez apply` runs. See handoff 544.
+
+## Update (2026-09-24, later): M1 verified, M2 parked
+
+- M1 is live: after `harnez apply`, the compacted session showed the rule through the SessionStart hook.
+- M2 (mention counter) is parked; priority lowered to P3. Pick it up only if the literal name keeps reappearing.
