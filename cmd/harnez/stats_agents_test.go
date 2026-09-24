@@ -150,15 +150,18 @@ func TestCollectAgyCoverageMatchesRoutesAndFlagsGaps(t *testing.T) {
 		calls = append(calls, call(at.Add(time.Second), "conversation-1", "shell", "agy", ""))
 	}
 	// One surplus exec row should be visible as a double-wrap alarm. An exec
-	// session with no hook observation is separately reported as unrouted.
+	// session with no hook observation is separately reported as unrouted;
+	// a shim row with a PPID-derived session joins its matching hook instead.
 	calls = append(calls,
 		call(base.Add(10*time.Second), "conversation-1", "shell", "agy", ""),
-		call(base.Add(12*time.Second), "conversation-2", "hook:prep", "run_command", "preps:Bash | agy-route=shim | command"),
+		call(base.Add(12*time.Second), "conversation-2", "hook:prep", "run_command", "preps:Bash | agy-route=direct | command"),
 		call(base.Add(13*time.Second), "conversation-3", "shell", "agy", ""),
+		call(base.Add(20*time.Second), "conversation-shim", "hook:prep", "run_command", "preps:Bash | agy-route=shim | command"),
+		telemetry.ToolCall{CreatedAt: base.Add(21 * time.Second), SessionID: "shim-host-session", AgentID: "claude", CallType: "shell", ToolName: "Bash"},
 	)
 	got := collectAgyCoverage(calls)
-	if len(got) != 3 {
-		t.Fatalf("coverage rows = %+v, want three sessions", got)
+	if len(got) != 4 {
+		t.Fatalf("coverage rows = %+v, want four sessions", got)
 	}
 	byID := map[string]agySessionCoverage{}
 	for _, row := range got {
@@ -175,6 +178,10 @@ func TestCollectAgyCoverageMatchesRoutesAndFlagsGaps(t *testing.T) {
 	third := byID["conversation-3"]
 	if third.HookCommands != 0 || third.ExecRows != 1 || third.Unrouted != 1 {
 		t.Fatalf("conversation-3 coverage = %+v", third)
+	}
+	shim := byID["conversation-shim"]
+	if shim.HookCommands != 1 || shim.ExecRows != 1 || shim.ViaShim != 1 || shim.Unrouted != 0 {
+		t.Fatalf("conversation-shim coverage = %+v", shim)
 	}
 	var rendered bytes.Buffer
 	if err := renderAgentStatsTable(&rendered, agentStatsReport{AgyCoverage: got}); err != nil {

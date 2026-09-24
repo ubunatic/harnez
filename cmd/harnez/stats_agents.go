@@ -48,6 +48,11 @@ type agySessionCoverage struct {
 	lastSeen      time.Time `json:"-"`
 }
 
+// agyShimAttributionWindow covers the gap between a PreToolUse observation
+// and the shim's exec row. The row is written when the command exits, so a
+// default 60-second exec timeout must still be attributable to its hook.
+const agyShimAttributionWindow = defaultExecTimeout + 15*time.Second
+
 type agentSessionRow struct {
 	SessionID               string    `json:"session_id"`
 	Name                    string    `json:"name,omitempty"`
@@ -213,13 +218,19 @@ func collectAgyCoverage(calls []telemetry.ToolCall) []agySessionCoverage {
 		at    time.Time
 		route string
 	}
+	type execObservation struct {
+		sessionID string
+		at        time.Time
+		counted   bool
+		used      bool
+	}
 	hooks := make(map[string][]hookObservation)
-	execs := make(map[string][]time.Time)
+	var execs []execObservation
 	for _, call := range calls {
-		if call.AgentID != "agy" || call.SessionID == "" {
+		if call.SessionID == "" {
 			continue
 		}
-		if call.CallType == "hook:prep" && call.ToolName == "run_command" {
+		if call.AgentID == "agy" && call.CallType == "hook:prep" && call.ToolName == "run_command" {
 			route := ""
 			if i := strings.Index(call.Note, "agy-route="); i >= 0 {
 				fields := strings.Fields(strings.TrimPrefix(call.Note[i:], "agy-route="))
@@ -230,8 +241,15 @@ func collectAgyCoverage(calls []telemetry.ToolCall) []agySessionCoverage {
 			hooks[call.SessionID] = append(hooks[call.SessionID], hookObservation{at: call.CreatedAt, route: route})
 			continue
 		}
-		if call.ToolName == "agy" && (call.CallType == "shell" || call.CallType == "shell-timeout" || call.CallType == telemetry.ExpectedFailureCallType) {
-			execs[call.SessionID] = append(execs[call.SessionID], call.CreatedAt)
+		if call.CallType == "shell" || call.CallType == "shell-timeout" || call.CallType == telemetry.ExpectedFailureCallType {
+			if call.AgentID == "agy" && call.ToolName == "agy" {
+				execs = append(execs, execObservation{sessionID: call.SessionID, at: call.CreatedAt, counted: true})
+			} else if call.ToolName == "Bash" {
+				// AGY's shim child can inherit the launching host's identity
+				// instead of ANTIGRAVITY_AGENT. Keep it join-only so unrelated
+				// host Bash calls never become standalone AGY coverage rows.
+				execs = append(execs, execObservation{sessionID: call.SessionID, at: call.CreatedAt})
+			}
 		}
 	}
 	bySession := make(map[string]agySessionCoverage, len(hooks)+len(execs))
@@ -241,34 +259,59 @@ func collectAgyCoverage(calls []telemetry.ToolCall) []agySessionCoverage {
 		coverage.HookCommands = len(observations)
 		bySession[sessionID] = coverage
 	}
-	for sessionID, rows := range execs {
-		coverage := bySession[sessionID]
-		coverage.SessionID = sessionID
-		coverage.ExecRows = len(rows)
-		bySession[sessionID] = coverage
+	sort.Slice(execs, func(i, j int) bool { return execs[i].at.Before(execs[j].at) })
+	for _, row := range execs {
+		if !row.counted {
+			continue
+		}
+		coverage := bySession[row.sessionID]
+		coverage.SessionID = row.sessionID
+		coverage.ExecRows++
+		if row.at.After(coverage.lastSeen) {
+			coverage.lastSeen = row.at
+		}
+		bySession[row.sessionID] = coverage
 	}
 	for sessionID, observations := range hooks {
-		rows := execs[sessionID]
-		used := make([]bool, len(rows))
 		sort.Slice(observations, func(i, j int) bool { return observations[i].at.Before(observations[j].at) })
-		sort.Slice(rows, func(i, j int) bool { return rows[i].Before(rows[j]) })
 		coverage := bySession[sessionID]
 		for _, observation := range observations {
 			if observation.at.After(coverage.lastSeen) {
 				coverage.lastSeen = observation.at
 			}
 			match := -1
-			for i, at := range rows {
-				if !used[i] && !at.Before(observation.at) {
+			for i := range execs {
+				if !execs[i].used && execs[i].counted && execs[i].sessionID == sessionID && !execs[i].at.Before(observation.at) {
 					match = i
 					break
+				}
+			}
+			// AGY does not pass its conversation ID into shell children. A shim
+			// row consequently gets a PPID fallback session ID; attribute only
+			// an unmatched shim observation to the next foreign AGY exec row.
+			if match < 0 && observation.route == "shim" {
+				deadline := observation.at.Add(agyShimAttributionWindow)
+				for i := range execs {
+					if !execs[i].used && execs[i].sessionID != sessionID &&
+						!execs[i].at.Before(observation.at) && !execs[i].at.After(deadline) {
+						match = i
+						break
+					}
 				}
 			}
 			if match < 0 {
 				coverage.Unrouted++
 				continue
 			}
-			used[match] = true
+			if execs[match].sessionID != sessionID {
+				if execs[match].counted {
+					foreign := bySession[execs[match].sessionID]
+					foreign.ExecRows--
+					bySession[execs[match].sessionID] = foreign
+				}
+				coverage.ExecRows++
+			}
+			execs[match].used = true
 			switch observation.route {
 			case "shim":
 				coverage.ViaShim++
@@ -280,27 +323,25 @@ func collectAgyCoverage(calls []telemetry.ToolCall) []agySessionCoverage {
 				coverage.Unrouted++
 			}
 		}
-		for i, at := range rows {
-			if !used[i] {
-				coverage.DoubleWrapped++
-				if at.After(coverage.lastSeen) {
-					coverage.lastSeen = at
-				}
-			}
-		}
 		bySession[sessionID] = coverage
 	}
-	for sessionID, coverage := range bySession {
-		if _, hasHooks := hooks[sessionID]; !hasHooks {
-			coverage.Unrouted = coverage.ExecRows
-			if rows := execs[sessionID]; len(rows) > 0 {
-				coverage.lastSeen = rows[len(rows)-1]
-			}
-			bySession[sessionID] = coverage
+	for _, row := range execs {
+		if row.used || !row.counted {
+			continue
 		}
+		coverage := bySession[row.sessionID]
+		if _, hasHooks := hooks[row.sessionID]; hasHooks {
+			coverage.DoubleWrapped++
+		} else {
+			coverage.Unrouted++
+		}
+		bySession[row.sessionID] = coverage
 	}
 	out := make([]agySessionCoverage, 0, len(bySession))
 	for _, coverage := range bySession {
+		if coverage.HookCommands == 0 && coverage.ExecRows == 0 {
+			continue
+		}
 		out = append(out, coverage)
 	}
 	sort.Slice(out, func(i, j int) bool {
