@@ -1,7 +1,7 @@
 # 353 — Tell only Claude: never propose CLAUDE.md changes; check repo docs/AGENTS.md before any instruction-file change
 
 **Status**: Open
-**Priority**: P3 (Low)
+**Priority**: P1
 **Severity**: Minor
 **Category**: Docs
 
@@ -146,3 +146,20 @@ planning which Claude-only channel already exists.
 CxxxE.md, always target `AGENTS.md`, spell the file `CxxxE.md` when unavoidable, and get a
 `harnez tip` every 5 mentions. Verified by a hook test and a Claude-only instruction that Codex/agy
 profiles do not receive.
+
+## Lean sprint (2026-09-24): raised to P1 by the user
+
+Preflight: no Claude-only instruction or hook for this exists yet. The host (a Claude session) used the
+literal name several times today without any warning.
+
+### M1 — Claude-only instruction channel + rule text
+- Find or create a channel that only Claude sessions load (e.g. an `apply`-managed block in the global
+  `~/.claude` instructions, or a Claude-only SessionStart hook message). Codex/agy/Pi must not receive it.
+- Rule text: never propose or edit the literal CxxxE.md; always edit `AGENTS.md`; write `CxxxE.md` when
+  the name is unavoidable.
+- Tests: the Claude channel contains the rule, and the Codex/agy outputs do not.
+
+### M2 — mention counter hook
+- A Claude hook counts literal-filename mentions in Claude's own messages and emits a `harnez tip`
+  every 5 mentions. Pick the event that exposes assistant text (Stop + transcript tail) and keep the
+  counter in the session-state file. Tests for counting and the every-5 cadence.
