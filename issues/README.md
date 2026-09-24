@@ -526,3 +526,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 525 | [525-replace-recent-skill-rules-with-harnez-runtime-feedback.md](525-replace-recent-skill-rules-with-harnez-runtime-feedback.md) | Replace recent skill rules with harnez runtime feedback | Open |
 | 526 | [526-agent-delete-should-warn-about-unrated-sessions.md](526-agent-delete-should-warn-about-unrated-sessions.md) | agent delete should warn about unrated sessions | Open |
 | 527 | [527-agy-live-quota-fetch-is-killed-on-most-agent-turn-boundaries.md](527-agy-live-quota-fetch-is-killed-on-most-agent-turn-boundaries.md) | agy live quota fetch is killed on most agent turn boundaries | Open |
+| 528 | [528-issues-open-verbs-warn-when-a-ticket-s-heading-number-differs-from-its-file-number.md](528-issues-open-verbs-warn-when-a-ticket-s-heading-number-differs-from-its-file-number.md) | issues open/verbs: warn when a ticket's heading number differs from its file number | Open |
