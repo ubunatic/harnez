@@ -201,3 +201,15 @@ then revisit this.
 - Next, canary 2: one throwaway prompt through a local mitmproxy with `HTTPS_PROXY` and
   `SSL_CERT_FILE` set for that agy process only; check whether agy accepts it and whether the final
   SSE chunk has `usageMetadata`. Risk: agy's OAuth token passes the proxy; store nothing; check terms.
+- **Canary 2 (2026-09-24, user-approved): works.** One `agy -p "Reply with the single word: hi"`
+  with `HTTPS_PROXY=http://127.0.0.1:18088` and `SSL_CERT_FILE=<mitmproxy CA>` (uvx mitmdump,
+  confdir in scratchpad, logger kept only URL, status and `usageMetadata`; CA deleted after).
+  agy honors the proxy and the custom CA; no pinning. Both `streamGenerateContent` SSE responses
+  carry `usageMetadata`:
+  - `{"promptTokenCount": 99, "candidatesTokenCount": 3, "thoughtsTokenCount": 303, "totalTokenCount": 405}`
+  - `{"promptTokenCount": 11818, "candidatesTokenCount": 1, "thoughtsTokenCount": 22, "totalTokenCount": 11841}`
+  No `cachedContentTokenCount` in either. 11.8k prompt tokens for a one-word prompt matches the
+  ~19k fixed part seen in `/context` (fewer tools/skills in print mode, unverified).
+- Also seen: `retrieveUserQuotaSummary` (called 3× per run; may hold finer quota values than the
+  whole-percent `/usage`, body not inspected), `play.googleapis.com/log`, `antigravity-unleash.goog`.
+- Caveat: mitmdump listened on 0.0.0.0; a sidecar must bind 127.0.0.1 only.
