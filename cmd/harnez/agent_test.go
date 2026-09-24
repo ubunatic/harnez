@@ -587,6 +587,7 @@ func TestAgentRepoStatusUnsetJSONAndSingleSession(t *testing.T) {
 
 type recordingAgentDriver struct {
 	dir     string
+	prompt  string
 	stopped []string
 	deleted []string
 }
@@ -838,6 +839,7 @@ func TestAgentResumeAttributionAndContinue(t *testing.T) {
 
 func (d *recordingAgentDriver) Run(_ context.Context, opts subagent.RunOptions) (*subagent.TurnResult, error) {
 	d.dir = opts.Dir
+	d.prompt = opts.Prompt
 	return &subagent.TurnResult{SessionID: "recorded", Response: "ok"}, nil
 }
 func (d *recordingAgentDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
@@ -1788,7 +1790,7 @@ func TestAgentRootNameUpsert(t *testing.T) {
 			if exists {
 				saveSessions(t, dir, &subagent.Session{ID: "named", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: "."})
 			}
-			args := []string{"--name", "worker", "words"}
+			args := []string{"--name", "worker", "--", "words"}
 			out, err := runWithStore(t, d, dir, args...)
 			if err != nil {
 				t.Fatal(err)
@@ -2021,7 +2023,7 @@ func TestLeafRolesCannotStartOrManageAgents(t *testing.T) {
 	for _, role := range []string{"developer", "reviewer", "advisor"} {
 		t.Setenv(agentRoleEnv, role)
 		for _, args := range [][]string{
-			{"start", "task"}, {"resume", "--name", "a", "x"}, {"-p", "hello"}, {"--name", "a", "hello"}, {"-p", "/stop", "--name", "a"},
+			{"start", "task"}, {"resume", "--name", "a", "x"}, {"-p", "hello"}, {"--name", "a", "--", "hello"}, {"-p", "/stop", "--name", "a"},
 			{"compact", "--name", "a"}, {"stop", "--name", "a"}, {"delete", "--name", "a"}, {"chat"}, {"enable"},
 		} {
 			d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}

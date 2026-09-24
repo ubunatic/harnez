@@ -53,6 +53,7 @@ func newAgentCmd() *cobra.Command {
 
 Short forms:
   harnez agent -p "summarise the open tickets"
+  harnez agent "update the changelog"
   harnez agent --name docs -d ~/projects/x "update the changelog"
   harnez agent -c -p "continue"
   harnez agent start --name w --model luna -f task.md -- "extra instructions"
@@ -113,6 +114,28 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 		}
 		dash := cmd.Flags().ArgsLenAtDash()
 		words, tail := promptArgs(args, dash)
+		if rootPrompt == "" && !rootContinue && dash < 0 && len(words) == 1 && !strings.ContainsAny(words[0], " \t\r\n") {
+			known := false
+			for _, child := range cmd.Commands() {
+				if child.Name() == words[0] {
+					known = true
+					break
+				}
+				for _, alias := range child.Aliases {
+					if alias == words[0] {
+						known = true
+						break
+					}
+				}
+			}
+			if !known {
+				message := fmt.Sprintf("unknown command %q for %q; use -p \"<prompt>\" or -- <prompt> to send a prompt", words[0], "harnez agent")
+				if suggestions := cmd.SuggestionsFor(words[0]); len(suggestions) > 0 {
+					message += fmt.Sprintf("\nDid you mean this?\n\t%s", strings.Join(suggestions, "\n\t"))
+				}
+				return errors.New(message)
+			}
+		}
 		if rootPrompt == "" && len(rootFiles) == 0 && len(words) == 0 && len(tail) == 0 && !rootContinue {
 			return cmd.Help()
 		}

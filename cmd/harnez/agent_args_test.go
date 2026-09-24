@@ -65,6 +65,42 @@ func TestAgentSessionVerbsRejectPositionalSessions(t *testing.T) {
 	}
 }
 
+func TestAgentRootVerbAndPromptDispatch(t *testing.T) {
+	old := agentDriver
+	driver := &recordingAgentDriver{}
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+
+	tests := []struct {
+		name, wantError, wantPrompt string
+		args                        []string
+	}{
+		{name: "unknown verb", args: []string{"foo"}, wantError: `unknown command "foo" for "harnez agent"`},
+		{name: "typo suggestion", args: []string{"resum"}, wantError: "resume"},
+		{name: "quoted multi-word prompt", args: []string{"update the changelog"}, wantPrompt: "update the changelog"},
+		{name: "dash prompt", args: []string{"--", "foo"}, wantPrompt: "foo"},
+		{name: "prompt flag", args: []string{"-p", "foo"}, wantPrompt: "foo"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := newAgentCmd()
+			cmd.SetOut(new(bytes.Buffer))
+			cmd.SetErr(new(bytes.Buffer))
+			cmd.SetArgs(append([]string{"--store-dir", t.TempDir()}, tc.args...))
+			err := cmd.Execute()
+			if tc.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantError) {
+					t.Fatalf("error = %v, want substring %q", err, tc.wantError)
+				}
+				return
+			}
+			if err != nil || driver.prompt != tc.wantPrompt {
+				t.Fatalf("prompt = %q, error = %v; want %q", driver.prompt, err, tc.wantPrompt)
+			}
+		})
+	}
+}
+
 func TestAgentErrorsNameTheFixWithoutUsageDump(t *testing.T) {
 	for _, tc := range []struct {
 		args []string
