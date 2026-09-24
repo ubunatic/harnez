@@ -213,3 +213,11 @@ then revisit this.
 - Also seen: `retrieveUserQuotaSummary` (called 3× per run; may hold finer quota values than the
   whole-percent `/usage`, body not inspected), `play.googleapis.com/log`, `antigravity-unleash.goog`.
 - Caveat: mitmdump listened on 0.0.0.0; a sidecar must bind 127.0.0.1 only.
+- **Canary 3 (2026-09-24, user-approved): quota as fractions.** Same setup, proxy bound to
+  127.0.0.1. `retrieveUserQuotaSummary` returns `groups[].buckets[]` with `bucketId`
+  (`gemini-weekly`, `gemini-5h`, `3p-weekly`, `3p-5h`), `window`, `resetTime`, `disabled` and
+  `remainingFraction` with 7 digits (e.g. `0.7592765`, `0.6458407`; `/usage` showed 76%/66%).
+  All 4 snapshots in one run were identical, so the value is not refreshed per request; the
+  per-request cost must come from `usageMetadata`, the fraction from polling (drain over time).
+- Open: can harnez call `retrieveUserQuotaSummary` directly with agy's OAuth token (as
+  `harnez usage` does for other endpoints), which would give fractions without a proxy?
