@@ -230,6 +230,8 @@ permissions:
   deny: []
 
 hooks:
+  - event: SessionStart
+    command: "harnez hook claude-instructions"
   - event: Stop
     command: "ffplay -nodisp -autoexit /usr/share/sounds/freedesktop/stereo/window-attention.oga 2>/dev/null || true"
   # telemetry (always-on) + distill autopipe (opt-in via

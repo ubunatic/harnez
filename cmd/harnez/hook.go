@@ -86,8 +86,21 @@ func newHookCmd() *cobra.Command {
 
 	readCmd := newReadHookCmd()
 	cmd.AddCommand(readCmd)
+	cmd.AddCommand(&cobra.Command{
+		Use:          "claude-instructions",
+		Short:        "Print Claude-only Harnez instruction reminders",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runClaudeInstructionsHook(cmd.OutOrStdout())
+		},
+	})
 
 	return cmd
+}
+
+func runClaudeInstructionsHook(out io.Writer) error {
+	_, err := fmt.Fprintln(out, `Harnez instruction rule: Never propose or edit the literal CxxxE.md. Always target AGENTS.md. When the filename is unavoidable, write it as CxxxE.md. Before proposing any instruction-file change, check the repository's docs/ and AGENTS.md for existing coverage; durable shared guidance belongs in docs/ or AGENTS.md, while instruction files are for agent-specific habits.`)
+	return err
 }
 
 type agyPostHookOptions struct {
