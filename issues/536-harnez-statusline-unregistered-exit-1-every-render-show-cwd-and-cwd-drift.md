@@ -75,3 +75,8 @@ The /goal 1 test (every command that `apply` configures must be registered) woul
 - Pre-Work / Required Refinements: M2 renders `current → project`. The spec above is
   `project_dir → current_dir` (start dir → where the session is now, e.g. `~/projects/voxi → /tmp`).
   Flip it and make the test assert the order.
+
+**M3 delivered (arrow order): ee940cf.** Live check: `~/projects/voxi → /tmp`.
+
+Finding: in this Claude Code setup, a Bash `cd` is reset after each call, so `workspace.current_dir`
+likely stays equal to `project_dir` in normal work, and the drift display only shows up in edge cases.
