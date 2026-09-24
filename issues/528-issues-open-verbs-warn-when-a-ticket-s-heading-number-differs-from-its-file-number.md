@@ -1,6 +1,6 @@
 # 528 — issues open/verbs: warn when a ticket's heading number differs from its file number
 
-**Status**: Open
+**Status**: Closed — 2069bb1: stderr warning on heading/file number mismatch
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Tooling
