@@ -122,7 +122,7 @@ func TestZeroQuotaFractionIsRecorded(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer m.Close()
-	input := []byte(`{"groups":[{"buckets":[{"bucketId":"3p-weekly","remainingFraction":0}]}]}`)
+	input := []byte(`{"groups":[{"buckets":[{"bucketId":"3p-weekly"}]}]}`)
 	body := newResponseObserver(io.NopCloser(bytes.NewReader(input)), m, "/v1internal:retrieveUserQuotaSummary", "application/json", "", "", "", "")
 	_, _ = io.Copy(io.Discard, body)
 	_ = body.Close()

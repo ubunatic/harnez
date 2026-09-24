@@ -47,12 +47,15 @@ func TestCollectAGYPrefersRecentMeterQuotaToUsageCommand(t *testing.T) {
 	}
 	now := time.Now().UTC().Truncate(time.Second)
 	reset := now.Add(3 * time.Hour).Format(time.RFC3339)
-	zero := 0.0
 	rows := []agymeter.Record{
-		{Time: now.Add(-2 * time.Minute), Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.70), Reset: reset},
+		// First snapshot includes every bucket; proto3 omits a zero fraction.
+		{Time: now.Add(-2 * time.Hour), Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.70), Reset: reset},
+		{Time: now.Add(-2 * time.Hour), Kind: "quota", Bucket: "gemini-5h", Remaining: floatPtr(0.6), Reset: reset},
+		{Time: now.Add(-2 * time.Hour), Kind: "quota", Bucket: "3p-weekly", Remaining: nil, Reset: reset},
+		{Time: now.Add(-2 * time.Hour), Kind: "quota", Bucket: "3p-5h", Remaining: floatPtr(0.5), Reset: reset},
+		// A later snapshot omits unchanged 3p-weekly, as the meter deduper does.
 		{Time: now.Add(-time.Minute), Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.7592765), Reset: reset},
 		{Time: now.Add(-time.Minute), Kind: "quota", Bucket: "gemini-5h", Remaining: floatPtr(0.6458407), Reset: reset},
-		{Time: now.Add(-time.Minute), Kind: "quota", Bucket: "3p-weekly", Remaining: &zero, Reset: reset},
 		{Time: now.Add(-time.Minute), Kind: "quota", Bucket: "3p-5h", Remaining: floatPtr(0.5), Reset: reset},
 	}
 	writeTestAGYMeterRows(t, home, rows)
@@ -84,7 +87,7 @@ func TestCollectAGYPrefersRecentMeterQuotaToUsageCommand(t *testing.T) {
 		t.Fatalf("meter percentages/source = %+v", w)
 	}
 	if got.LastRefreshed.IsZero() || time.Since(got.LastRefreshed) > 2*time.Minute {
-		t.Errorf("LastRefreshed = %s, want latest meter time", got.LastRefreshed)
+		t.Errorf("LastRefreshed = %s, want latest quota snapshot time, not older bucket time", got.LastRefreshed)
 	}
 	if !strings.Contains(got.Sources[len(got.Sources)-1], ".harnez/agymeter/usage.jsonl") {
 		t.Errorf("meter source missing from %v", got.Sources)
@@ -118,7 +121,7 @@ func TestCollectAGYFallsBackWhenMeterQuotaIsStale(t *testing.T) {
 	if err := os.MkdirAll(geminiDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	writeTestAGYMeterRows(t, home, []agymeter.Record{{Time: time.Now().Add(-DefaultCacheStaleness - time.Minute), Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.9)}})
+	writeTestAGYMeterRows(t, home, []agymeter.Record{{Time: time.Now().Add(-time.Minute), Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.9), Reset: time.Now().Add(-time.Second).Format(time.RFC3339)}})
 	calls, cleanup := agyStubUsageCmd(t, []byte(agyOKOutput), nil)
 	defer cleanup()
 

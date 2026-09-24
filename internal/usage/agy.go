@@ -518,8 +518,6 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 	return usage
 }
 
-const agyMeterQuotaMaxAge = DefaultCacheStaleness
-
 var agyMeterQuotaBuckets = []struct {
 	bucket string
 	group  string
@@ -541,18 +539,23 @@ func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (
 		return usage, false
 	}
 	latestByBucket := make(map[string]agymeter.Record)
-	var latest time.Time
+	var latestSnapshot time.Time
 	for _, row := range rows {
-		age := now.Sub(row.Time)
-		if row.Remaining == nil || age < 0 || age > agyMeterQuotaMaxAge {
-			continue
-		}
-		if reset, parseErr := time.Parse(time.RFC3339, row.Reset); parseErr == nil && !reset.After(now) {
-			continue
-		}
 		latestByBucket[row.Bucket] = row
-		if row.Time.After(latest) {
-			latest = row.Time
+		if row.Time.After(latestSnapshot) {
+			latestSnapshot = row.Time
+		}
+	}
+	if len(latestByBucket) == 0 || latestSnapshot.After(now) {
+		return usage, false
+	}
+	// Quota rows are a change-only stream, not full snapshots. Keep each
+	// bucket's last value until its own reset passes, while freshness and age
+	// are anchored to the latest row from any bucket.
+	for bucket, row := range latestByBucket {
+		reset, parseErr := time.Parse(time.RFC3339, row.Reset)
+		if parseErr != nil || !reset.After(now) {
+			delete(latestByBucket, bucket)
 		}
 	}
 	if len(latestByBucket) == 0 {
@@ -568,7 +571,10 @@ func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (
 			groupIndex[groupName] = idx
 			groups = append(groups, ModelGroup{Name: groupName})
 		}
-		fraction := *row.Remaining
+		fraction := 0.0
+		if row.Remaining != nil {
+			fraction = *row.Remaining
+		}
 		fraction = max(0, min(1, fraction))
 		window := QuotaWindow{
 			Name:             windowName,
@@ -604,7 +610,7 @@ func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (
 	usage.Installed = true
 	usage.Authenticated = true
 	usage.QuotaFetchError = ""
-	usage.LastRefreshed = latest
+	usage.LastRefreshed = latestSnapshot
 	meterSource := "~/.harnez/agymeter/usage.jsonl"
 	hasMeterSource := false
 	for _, source := range usage.Sources {
@@ -620,6 +626,6 @@ func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (
 		usage.Details = make(map[string]string)
 	}
 	usage.Details["quota_source"] = "agy-meter"
-	usage.Details["quota_age"] = FormatAgo(latest)
+	usage.Details["quota_age"] = FormatAgo(latestSnapshot)
 	return usage, true
 }

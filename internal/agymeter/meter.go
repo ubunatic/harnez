@@ -413,7 +413,7 @@ func ReadQuotaRecords(path string) ([]Record, error) {
 	s := bufio.NewScanner(f)
 	for s.Scan() {
 		var row Record
-		if json.Unmarshal(s.Bytes(), &row) == nil && row.Kind == "quota" && row.Bucket != "" && row.Remaining != nil {
+		if json.Unmarshal(s.Bytes(), &row) == nil && row.Kind == "quota" && row.Bucket != "" {
 			out = append(out, row)
 		}
 	}
