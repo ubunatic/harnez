@@ -57,7 +57,7 @@ diff: ⚙️ build  # show what apply would change in managed blocks
 	./$(BINARY) diff -c $(CONFIG) -t $(TARGET)
 
 clean: ⚙️ build  # remove managed blocks from the Claude Code config directory
-	./$(BINARY) clean -c $(CONFIG) -t $(TARGET)
+	./$(BINARY) revert --managed -c $(CONFIG) -t $(TARGET)
 
 status: ⚙️ build  # show config summary and applied state
 	./$(BINARY) status -c $(CONFIG) -t $(TARGET)

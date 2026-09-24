@@ -733,22 +733,6 @@ func newRootCmd() *cobra.Command {
 	}
 	scanDocs.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 
-	clean := &cobra.Command{
-		Use:   "clean",
-		Short: "Remove managed blocks written by apply",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, name, err := claude.OpenConfig(configPath)
-			if err != nil {
-				return fmt.Errorf("load config: %w", err)
-			}
-			t := claude.ExpandTarget(target, cfg.TargetDir)
-			fmt.Printf("Cleaning %s\n", name)
-			return claude.CleanAll(t, cfg)
-		},
-	}
-	clean.Flags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
-	clean.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
-
 	var statusDebloat bool
 	status := &cobra.Command{
 		Use:          "status",
@@ -800,9 +784,10 @@ func newRootCmd() *cobra.Command {
 	status.Flags().BoolVar(&statusDebloat, "debloat", false, "show debloat-managed deny entries and toggles instead of full status (issue 316)")
 
 	var revertDebloat bool
+	var revertManaged bool
 	revert := &cobra.Command{
 		Use:          "revert",
-		Short:        "Revert managed one-off changes (currently: --debloat)",
+		Short:        "Revert managed configuration or one-off changes",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, _, err := claude.OpenConfig(configPath)
@@ -816,8 +801,15 @@ func newRootCmd() *cobra.Command {
 				cfg.AgyTarget = agyTarget
 			}
 			t := claude.ExpandTarget(target, cfg.TargetDir)
+			if revertManaged && revertDebloat {
+				return fmt.Errorf("revert accepts only one of --managed or --debloat")
+			}
+			if revertManaged {
+				fmt.Printf("Cleaning managed configuration in %s\n", t)
+				return claude.CleanAll(t, cfg)
+			}
 			if !revertDebloat {
-				return fmt.Errorf("revert requires --debloat")
+				return fmt.Errorf("revert requires --managed or --debloat")
 			}
 			if agy.IsAgyTarget(t) {
 				reverted, err := agy.RevertDebloat(t)
@@ -877,6 +869,7 @@ func newRootCmd() *cobra.Command {
 	revert.Flags().StringVarP(&target, "target", "t", "", "Claude config directory (default: ~/.claude)")
 	revert.Flags().StringVar(&codexTarget, "codex-target", "", "Codex config.toml path (default: codex_hooks_target from config.yaml)")
 	revert.Flags().StringVar(&agyTarget, "agy-target", "", "Antigravity config directory (default: agy_target from config.yaml)")
+	revert.Flags().BoolVar(&revertManaged, "managed", false, "remove managed configuration blocks and keys")
 	revert.Flags().BoolVar(&revertDebloat, "debloat", false, "restore Claude, Codex, and Antigravity settings to their pre-debloat state")
 
 	var assessJSON bool
@@ -965,7 +958,7 @@ func newRootCmd() *cobra.Command {
 	assessCmd.Flags().BoolVar(&assessHistory, "history", false, "display multi-track repository evolution history")
 	assessCmd.Flags().BoolVar(&assessRAMP, "ramp", false, "display RAMP repository AI maturity profile and evidence inventory")
 
-	root.AddCommand(apply, diff, scanDocs, clean, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newCodexTelemetryCmd(), newHookCmd(), newLintCmd(), newLogCmd(), newDocsCmd(), newReadCmd(), newSubagentCmd(), newAgentCmd(), newBenchCmd())
+	root.AddCommand(apply, diff, scanDocs, status, revert, usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newCodexTelemetryCmd(), newHookCmd(), newLintCmd(), newLogCmd(), newDocsCmd(), newReadCmd(), newSubagentCmd(), newAgentCmd(), newBenchCmd())
 	return root
 }
 

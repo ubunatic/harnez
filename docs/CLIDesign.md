@@ -15,7 +15,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `init`  | Project (cwd / `-d`) | `AGENTS.md`, `CLAUDE.md` symlink, `docs/<name>.md` copy, `Makefile` |
 | `diff`  | Global / Project | Preview of what `apply` would change; `--capture-docs` writes project drift to inbox |
 | `scan-docs` | Workspace | Read-only scan of child projects for managed doc drift |
-| `clean` | Global | Remove managed keys / strip MD sections |
+| `revert --managed` | Global | Remove managed keys / strip MD sections |
 | `status`| Global | Config summary + applied-state checks |
 | `usage` | Multi-Agent (local/remote) | Zero-cost token counters, live quota tracking, project attribution (`--project`), procs (`-p`), remote host (`--host`) |
 | `usage history` | Analytical / Logs | Timeline, remote fetch, stats & sparklines across `~/.claude/harnez/usage-history/` |
@@ -225,7 +225,7 @@ already behave correctly.
 `target`, `symlink`, `template`, `content`, `sections`) keyed by agent id. Each entry owns
 a real file that only that agent reads; nothing here is filtered into a shared file. `apply`
 skips an entry whose target's parent directory doesn't exist on disk, so a user who
-doesn't run Codex never gets a `~/.codex` directory created for them. `diff`, `clean`, and
+doesn't run Codex never gets a `~/.codex` directory created for them. `diff`, `revert --managed`, and
 `status` all know about this map too — an agent profile is a fully managed target, not a
 one-off write.
 
@@ -285,5 +285,5 @@ at a scratch directory for the whole test process, not just `-t`.
 
 ## Known gaps
 
-- `diff` and `clean` are global-only and have no awareness of project Makefiles — see issue #009.
+- `diff` and `revert --managed` are global-only and have no awareness of project Makefiles — see issue #009.
 - `status` does not check whether the project Makefile targets block is present.

@@ -117,7 +117,7 @@ skills:
 ```
 
 Sources are read from the embedded/config filesystem. Targets are copied below
-the installed skill directory and are included in apply, diff, status, clean,
+the installed skill directory and are included in apply, diff, status, revert --managed,
 and idempotency checks. Keep resource targets relative to the skill directory;
 the installer rejects absolute paths and parent traversal.
 

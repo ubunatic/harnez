@@ -56,7 +56,7 @@ harnez status          # show what is and isn't applied
 harnez diff            # preview changes without writing
 harnez usage           # show unified token, session, and quota status across agents
 harnez usage --watch   # live TUI dashboard with real-time token velocity
-harnez clean           # remove all managed blocks/keys
+harnez revert --managed # remove all managed blocks/keys
 ```
 
 With a custom config file:
@@ -254,9 +254,8 @@ Every ticket in `issues/NNN-kebab-case.md` begins with standard metadata headers
 | `init` | `-c` `-d` `-f` `--docs` `-m` `--summary` `--update` `--replace` `-y` | Set up a project: AGENTS.md, doc copies, Makefile targets |
 | `diff` | `-c` `-t` `-e` `--capture-docs` `--out` | Preview changes without writing |
 | `scan-docs <dir>` | `-c` | Read-only scan of child projects for managed doc drift |
-| `clean` | `-c` `-t` | Remove managed keys from settings and managed Markdown sections |
+| `revert` | `-c` `-t` `--managed` `--debloat` | Remove managed blocks or restore pre-debloat settings |
 | `status` | `-c` `-t` `--debloat` | Print config summary and applied state |
-| `revert` | `-c` `-t` `--debloat` | Restore Claude, Codex, and Antigravity settings recorded before debloat |
 | `assess [path]` | `--json` | Fast code/doc metrics, token estimation, and repo feasibility report |
 | `mode [level]` | `--status` `--clear` | Switch ConciseMode terseness level and sync the local overlay |
 | `distill` | `[hook|read]` | Distill verbose command output for agent context conservation |

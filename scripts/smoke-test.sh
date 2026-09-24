@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke-test the apply/diff/clean workflow.
+# Smoke-test the apply/diff/repair workflow.
 # Run from the project root: scripts/smoke-test.sh
 
 set -euo pipefail
@@ -78,7 +78,7 @@ else fail "apply after repair made unexpected changes"
 fi
 
 echo ""
-echo "All apply/diff/clean smoke tests passed."
+echo "All apply/diff/repair smoke tests passed."
 
 echo ""
 echo "=== usage --compact: output and bar alignment ==="
