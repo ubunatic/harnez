@@ -202,6 +202,7 @@ func newRootCmd() *cobra.Command {
 		Version:           harnez.Version,
 		PersistentPreRunE: sessionTipHook,
 	}
+	root.AddCommand(newAgyMeterCmd())
 
 	var usageJSON bool
 	var usageAgent string
