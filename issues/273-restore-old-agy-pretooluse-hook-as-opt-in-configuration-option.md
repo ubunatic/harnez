@@ -1,6 +1,6 @@
 # 273 — Restore old AGY PreToolUse hook as opt-in configuration option
 
-**Status**: Open
+**Status**: Closed — superseded by 537 (hook is automatic fallback when shim inactive)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
