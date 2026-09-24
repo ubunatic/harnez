@@ -19,3 +19,12 @@ agy runs every command as `bash -c '<program>'`; the shim turns that into
 
 Tool names and quota-1 detection are the same for `bash -c X`, `/bin/bash -c X`, `sh -lc X` and a
 direct `X`. Check telemetry first to confirm the gap.
+
+## M1 delivered (498b6c4): shared unwrapShellCommand for tool name and quota-1
+
+## M2 — Pre-Work / Required Refinements (host review)
+
+- `unwrapShellCommand` panics when the `-c` group is the last arg (`bash -l -c`, `/bin/bash -lc`):
+  `args[i+1]` is out of range. Guard it (return args unchanged) and add both cases to a test that
+  asserts no panic and the fallback tool name.
+- Note: quota-1 detection already scanned every arg, so it was not broken before; keep the test.
