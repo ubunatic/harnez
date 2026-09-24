@@ -74,7 +74,11 @@ for an agent to recover.
 - Tests use fake `/proc` readers and injected signalling. No real kills in unit tests except one
   guarded integration test on a child the test itself spawns.
 
+**M3 delivered (process records, `clean procs q1`): 002945b.** The host reran `make test-q1` after the stale M1 assertion was fixed: green.
+
 ### M4 — `exec` detects a stopped child (532 Expected item 2)
+- Pre-Work (from the M3 review, minor): `cleanRecord`'s owner-alive check matches the owner PID only. Also record
+  the owner's start time in the proc record and compare it, so a reused owner PID does not keep a stale group.
 - While waiting, `exec` polls the child group state. When it is stopped (`T`) for longer than a
   short bound, send SIGCONT once. If it stays stopped, kill the group and report it clearly on
   stderr with a distinct exit code. Record the quota-1 run as incomplete (M2).
