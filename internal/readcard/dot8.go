@@ -1,3 +1,5 @@
+//go:build dot8
+
 // Package readcard: Dot8 is on hold (issue 444) — it failed its token rationale and the
 // renderer has an open P1 bug; do not build new agent workflows on it.
 package readcard

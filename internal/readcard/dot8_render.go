@@ -1,3 +1,5 @@
+//go:build dot8
+
 package readcard
 
 import (

@@ -12,10 +12,11 @@ import (
 
 func newReadCmd() *cobra.Command {
 	var imageMode, autoMode, textMode, rawMode, number, jsonOutput, showTokens bool
-	var outputPath, fontName, theme, wrapMode, lineRange, lineNumbers, compression, dot8, dot8Colors string
+	var outputPath, fontName, theme, wrapMode, lineRange, lineNumbers, compression string
 	var style string
 	var styleOpts readcard.RenderOptions
-	var columns, fontSize, maxDim, head, tail, dot8Pitch int
+	var columns, fontSize, maxDim, head, tail int
+	var dot8 dot8State
 	cmd := &cobra.Command{
 		Use:   "read [flags] [files...]",
 		Short: "Read bounded text or dense visual PNG cards with provider-adaptive routing",
@@ -37,8 +38,8 @@ Examples:
   harnez read --auto --head=100 internal/lint/lint.go
   harnez read -I --columns=2 --json source.go`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if (cmd.Flags().Changed("dot8") || cmd.Flags().Changed("dot8-colors") || cmd.Flags().Changed("dot8-pitch")) && os.Getenv("HARNEZ_DOT8") != "1" {
-				return fmt.Errorf("--dot8 is on hold: the Dot8 card format is not usable (see issue 444); set HARNEZ_DOT8=1 to override")
+			if err := checkDot8Hold(cmd); err != nil {
+				return err
 			}
 			if _, err := readcard.ParseLineNumbers(lineNumbers); err != nil {
 				return err
@@ -88,28 +89,13 @@ Examples:
 					res.TokenStats = readcard.ComputeTextTokens(strings.Join(res.Lines, "\n"))
 				}
 
-				// Validate dot8 flag
-				dot8Mode := ""
-				if dot8 != "" {
-					if dot8 == "encode" {
-						dot8Mode = "encode"
-					} else if dot8 == "native" {
-						dot8Mode = "native"
-					} else {
-						return fmt.Errorf("invalid --dot8 value %q (use --dot8 or --dot8=native)", dot8)
-					}
+				renderLines, dot8Mode, err := prepareDot8Render(&dot8, imageMode, res.Lines)
+				if err != nil {
+					return err
 				}
 
-				// For image rendering, encode the lines if needed
-				renderLines := res.Lines
-				if imageMode && dot8Mode == "encode" {
-					renderLines = make([]string, len(res.Lines))
-					for j := range res.Lines {
-						renderLines[j] = readcard.Dot8Encode(res.Lines[j])
-					}
-				}
-
-				renderOpts := readcard.RenderOptions{Chrome: chrome, Gutter: gutter, Frame: frame, Meta: meta, Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine, SourceTokens: res.TokenStats.TextTokens, Dot8: dot8Mode, Dot8Colors: dot8Colors, Dot8Pitch: dot8Pitch}
+				renderOpts := readcard.RenderOptions{Chrome: chrome, Gutter: gutter, Frame: frame, Meta: meta, Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine, SourceTokens: res.TokenStats.TextTokens}
+				applyDot8RenderOptions(&renderOpts, &dot8, dot8Mode)
 				render := imageMode
 				var measured *readcard.RenderResult
 				if adaptive && !(len(res.Lines) <= readcard.MicroSnippetLineThreshold && res.TokenStats.TextTokens < readcard.MicroSnippetTokenThreshold) {
@@ -136,17 +122,9 @@ Examples:
 						}
 					}
 				} else {
-					// Handle dot8 in text mode: native means decode, encode means return source untouched
-					if dot8Mode == "native" {
-						for j := range res.Lines {
-							decoded, err := readcard.Dot8Decode(res.Lines[j])
-							if err != nil {
-								return fmt.Errorf("decode line %d: %v", res.StartLine+j, err)
-							}
-							res.Lines[j] = decoded
-						}
+					if err := handleDot8TextMode(&dot8, dot8Mode, res); err != nil {
+						return err
 					}
-					// If dot8Mode == "encode", return source as-is (already encoded)
 
 					results = append(results, res)
 					if !jsonOutput {
@@ -202,16 +180,7 @@ Examples:
 	cmd.Flags().BoolVarP(&number, "number", "n", false, "force text output with line numbers (unless -I)")
 	cmd.Flags().StringVar(&lineNumbers, "line-numbers", "all", "gutter: all, off, none, or positive cadence N")
 	cmd.Flags().StringVar(&compression, "compress", "off", "safe source compression: off, ws, ast")
-	cmd.Flags().StringVar(&dot8, "dot8", "", "encode as 8-dot Braille for dense cards: bare flag or --dot8=native (already encoded)")
-	cmd.Flags().StringVar(&dot8Colors, "dot8-colors", "", "Dot8 Braille colors: default or red-white (odd/even dots)")
-	cmd.Flags().IntVar(&dot8Pitch, "dot8-pitch", 3, "Dot8 cell pitch in pixels: 3 or 4")
-	dot8Lookup := cmd.Flags().Lookup("dot8")
-	if dot8Lookup != nil {
-		dot8Lookup.NoOptDefVal = "encode"
-	}
-	cmd.Flags().MarkHidden("dot8")
-	cmd.Flags().MarkHidden("dot8-colors")
-	cmd.Flags().MarkHidden("dot8-pitch")
+	registerDot8Flags(cmd, &dot8)
 	cmd.Flags().StringVarP(&lineRange, "lines", "L", "", "source line range, e.g. 10:50")
 	cmd.Flags().IntVar(&head, "head", 0, "read only the first N lines")
 	cmd.Flags().IntVar(&tail, "tail", 0, "read only the last N lines")

@@ -90,6 +90,10 @@ smoke: ⚙️ build  # live smoke: apply/diff/repair + usage bar-alignment again
 
 test: ⚙️ check  # alias for check
 
+test-dot8: ⚙️  # run tests with dot8 build tag
+	GOWORK=off go test -tags dot8 ./...
+
+
 format: ⚙️  # format source code
 	go fmt ./...
 
