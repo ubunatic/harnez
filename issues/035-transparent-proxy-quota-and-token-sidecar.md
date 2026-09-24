@@ -300,3 +300,10 @@ Pre-Work / Required Refinements:
 3. `remainingFraction` 0 is dropped by `omitempty` (3p-weekly row has none); 0 means exhausted
    and must be written. Use a pointer or drop omitempty for quota fields.
 4. Add a test that a slow/failed parser still delivers the full stream and closes normally.
+
+### Scope note (2026-09-24, user)
+
+Interactive agy sessions already report quota and in/out tokens via the agy status line
+(`internal/agy/statusline.go`, other agent's work). The meter is needed only for headless
+subagent runs (`agy -p`, `harnez agent` dispatch). M2/M3 must not duplicate status-line data for
+interactive sessions; prefer status-line data there and use meter rows for subagents.
