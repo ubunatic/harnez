@@ -1,6 +1,6 @@
 # 554 — quota-1 test runs in a read-only sandbox (bwrap), no writes to the user's system
 
-**Status**: Open
+**Status**: Closed — M1 53a483f; quota-1 child runs in read-only bwrap, suite green inside sandbox
 **Priority**: P1
 **Severity**: High
 **Category**: Feature / Tests
