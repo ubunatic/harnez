@@ -48,7 +48,17 @@ for an agent to recover.
   record it as incomplete and allow one retry without a source change.
 - Repro test: `harnez exec --quota-1 -- sh -c 'kill -KILL $$'` must not consume the quota.
 
+**M2 delivered (quota-1 run records): cba35ac.** The state is JSON `{started,pgid,pid_starttime,finished,exit}`, and legacy timestamps are still read.
+
 ### M3 — process records + `harnez clean procs q1`
+- Pre-Work / Required Refinements (from the M2 review), in `CheckAndRecord` (`previous.Exit == nil` branch):
+  1. `Finished == nil` (run still active, or `exec` itself was killed, which is the 532 case) must NOT
+     auto-retry. Block, and point to `harnez clean procs q1 --kill`. `clean q1` releases the state
+     only after it has verified that the pgid is gone.
+  2. Automatic retry only when `Finished != nil && Exit == nil`, and only once: mark the retry run
+     (e.g. `retry: true`) so that a second incomplete run in a row falls back to the normal
+     "modify source" rule.
+  3. Tests for both cases, plus a test that a live-but-unfinished record blocks.
 - `exec` writes `$XDG_RUNTIME_DIR/harnez/procs/<pgid>.json` (pgid, pid start time, argv, cwd,
   owner pid, quota-1 marker, started) and removes it when the command exits. Fall back to
   `~/.harnez/run/procs` if `XDG_RUNTIME_DIR` is unset.
