@@ -1726,6 +1726,39 @@ func TestRunResumeWithoutCobraFlags(t *testing.T) {
 	}
 }
 
+func TestRunResumePassesStoredAgyModelAndTier(t *testing.T) {
+	workDir := t.TempDir()
+	store, err := subagent.NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "agy-session", Name: "worker", Provider: "agy", Model: "flash37", Tier: "med", WorkingDir: workDir, Status: "completed"}); err != nil {
+		t.Fatal(err)
+	}
+	var args []string
+	old := agentDriver
+	agentDriver = func(_ subagent.Model, dir string) subagent.Driver {
+		return subagent.AgyDriver{Dir: dir, Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
+			args = gotArgs
+			return []byte(`{"conversation_id":"agy-session","status":"SUCCESS","response":"done"}`), nil
+		}}
+	}
+	defer func() { agentDriver = old }()
+	cmd := &cobra.Command{}
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+		return s.Find(id)
+	}}
+	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "continue", StreamMode: streamFull}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"--conversation", "agy-session", "--add-dir", workDir, "--model", "flash37", "--effort", "medium", "--output-format", "json", "-p", "continue"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("agy resume args = %#v, want %#v", args, want)
+	}
+}
+
 func TestAgentRootPromptStartsGeneratedSession(t *testing.T) {
 	d := &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "root"}}, {ev: msg("CONFIRM: ok")}, {ev: msg("done")}}}
 	out, err := runWithStore(t, d, t.TempDir(), "-p", "hello")
