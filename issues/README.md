@@ -548,3 +548,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 547 | [547-set-hto-0-for-harnez-agent-sessions.md](547-set-hto-0-for-harnez-agent-sessions.md) | Set HTO=0 for harnez agent sessions | Open |
 | 548 | [548-require-direct-harnez-agent-commands.md](548-require-direct-harnez-agent-commands.md) | Require direct harnez agent commands | Open |
 | 549 | [549-keep-agent-bash-calls-short-and-manage-prompt-files.md](549-keep-agent-bash-calls-short-and-manage-prompt-files.md) | Keep agent Bash calls short and manage prompt files | Open |
+| 550 | [550-harnez-apply-installs-harnez-agy-launcher-in-local-bin-to-shim-agy.md](550-harnez-apply-installs-harnez-agy-launcher-in-local-bin-to-shim-agy.md) | harnez apply installs harnez-agy launcher in ~/.local/bin to shim agy | Open |
