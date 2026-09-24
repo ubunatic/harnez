@@ -58,7 +58,7 @@ func newInitCmd() *cobra.Command {
 	initCmd.Flags().BoolVar(&initAll, "all", false,
 		"treat --dir as a workspace directory and non-interactively init every eligible child (has AGENTS.md/CLAUDE.md); refuses $HOME (see issue 068)")
 	initCmd.Flags().StringSliceVar(&initDocs, "docs", nil, "docs to set up in the project, comma-separated or repeated (e.g. golang,canary)")
-	initCmd.Flags().StringVar(&initVariant, "variant", "full", "doc variant to install: lite or full (docs without a lite variant fall back to full)")
+	initCmd.Flags().StringVar(&initVariant, "variant", "", "doc variant to install: lite or full (default: keep each existing doc variant, else full)")
 	initCmd.Flags().StringVarP(&initRepoMode, "repo-mode", "m", "", "repo git setup to note in AGENTS.md (solo, fork, team)")
 	initCmd.Flags().BoolVarP(&initYes, "yes", "y", false, "assume yes when reconciling Makefile targets (no prompt)")
 	initCmd.Flags().BoolVar(&initSummary, "summary", false, "run claude -p to generate a project summary and add it to AGENTS.md")

@@ -51,6 +51,51 @@ func TestRunInitWithVariantLiteFallsBackSilentlyForDocsWithoutLiteSource(t *test
 	}
 }
 
+func TestRunInitDetectsExistingDocVariant(t *testing.T) {
+	tests := []struct {
+		name, existing, variant, liteSource, want string
+	}{
+		{"lite marker retained", "<!-- harnez:variant=lite -->\n# old\n", "", "loop-lite.md", "<!-- harnez:variant=lite -->"},
+		{"no marker defaults full", "# old\n", "", "loop-lite.md", "# full"},
+		{"explicit full overrides lite", "<!-- harnez:variant=lite -->\n# old\n", "full", "loop-lite.md", "# full"},
+		{"missing lite source falls back", "<!-- harnez:variant=lite -->\n# old\n", "", "missing-lite.md", "# full"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# project\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			local := filepath.Join(dir, "docs", "AgenticLoop.md")
+			if err := os.MkdirAll(filepath.Dir(local), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(local, []byte(tt.existing), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			files := fstest.MapFS{
+				"loop-full.md": &fstest.MapFile{Data: []byte("# full\n")},
+			}
+			if tt.liteSource == "loop-lite.md" {
+				files[tt.liteSource] = &fstest.MapFile{Data: []byte("<!-- harnez:variant=lite -->\n# lite\n")}
+			}
+			cfg := &Config{FS: files, AgentsMD: AgentsMD{Languages: map[string]Language{
+				"agentic-loop": {Source: "loop-full.md", LiteSource: tt.liteSource, Local: "docs/AgenticLoop.md"},
+			}}}
+			if err := RunInitWithVariant(dir, cfg, []string{"agentic-loop"}, "", true, false, false, false, nil, false, false, tt.variant); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(local)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(string(got), tt.want) {
+				t.Fatalf("doc content = %q, want prefix %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSwitchDocVariantSwapsToLiteAndBack(t *testing.T) {
 	sourceDir := t.TempDir()
 	repoDir := t.TempDir()
