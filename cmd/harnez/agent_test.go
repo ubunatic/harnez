@@ -1614,8 +1614,8 @@ func TestRunStartRecordsQuotaBoundariesForTurn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(calls, []bool{true, true}) {
-		t.Fatalf("quota capture force flags=%v, want [true true]", calls)
+	if !reflect.DeepEqual(calls, []bool{false, false}) {
+		t.Fatalf("quota capture force flags=%v, want [false false]", calls)
 	}
 	data, err := os.ReadFile(filepath.Join(storeDir, "quota-readings.jsonl"))
 	if err != nil {
@@ -1664,8 +1664,8 @@ func TestRunResumeRecordsFreshQuotaPairAndAdvancesTurn(t *testing.T) {
 	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "continue", JSON: true, StreamMode: streamFull}); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(calls, []bool{true, true}) {
-		t.Fatalf("quota capture force flags=%v, want [true true]", calls)
+	if !reflect.DeepEqual(calls, []bool{false, false}) {
+		t.Fatalf("quota capture force flags=%v, want [false false]", calls)
 	}
 	sess, err := store.Get("resume-1")
 	if err != nil {

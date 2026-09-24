@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -183,6 +184,73 @@ func TestCollectClaudeForcedRefreshBypassesWarmCache(t *testing.T) {
 	}
 	if u.Session == nil || u.Session.UsedPercent != 71 {
 		t.Fatalf("Session=%+v, want fresh 71%%", u.Session)
+	}
+}
+
+func TestCaptureTurnQuotaSinceReusesCacheRefreshedDuringTurn(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	claudeDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claudeDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(claudeDir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"token","subscriptionType":"max"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	turnStarted := time.Now().Add(-time.Second)
+	cache := liveFetchCache[claudeQuotaPayload]{FetchedAt: time.Now(), Payload: claudeQuotaPayload{Session: &QuotaWindow{Name: "5h", UsedPercent: 38}}}
+	if err := writeLiveFetchCache(liveFetchCachePath(claudeDir), cache); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		called = true
+		return nil, fmt.Errorf("unexpected quota fetch")
+	})}
+	oldFactory := turnQuotaHTTPClientFactory
+	turnQuotaHTTPClientFactory = func() *http.Client { return client }
+	defer func() { turnQuotaHTTPClientFactory = oldFactory }()
+
+	reading := CaptureTurnQuotaSinceCache(context.Background(), "claude", false, turnStarted, turnStarted)
+	if called {
+		t.Fatal("warm cache refreshed during this turn caused an upstream fetch")
+	}
+	if len(reading.Windows) == 0 || reading.Windows[0].UsedPercent != 38 {
+		t.Fatalf("reading=%+v, want cached 38%% window", reading)
+	}
+}
+
+func TestCaptureTurnQuotaSinceForcesPreTurnCache(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	claudeDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claudeDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(claudeDir, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"token","subscriptionType":"max"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cache := liveFetchCache[claudeQuotaPayload]{FetchedAt: time.Now().Add(-time.Minute), Payload: claudeQuotaPayload{Session: &QuotaWindow{Name: "5h", UsedPercent: 38}}}
+	if err := writeLiveFetchCache(liveFetchCachePath(claudeDir), cache); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		called = true
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"five_hour":{"utilization":39}}`)), Request: r}, nil
+	})}
+	oldFactory := turnQuotaHTTPClientFactory
+	turnQuotaHTTPClientFactory = func() *http.Client { return client }
+	defer func() { turnQuotaHTTPClientFactory = oldFactory }()
+
+	turnStarted := time.Now().Add(-time.Second)
+	reading := CaptureTurnQuotaSinceCache(context.Background(), "claude", false, turnStarted, cache.FetchedAt)
+	if !called {
+		t.Fatal("pre-turn cache did not trigger a live refresh")
+	}
+	if len(reading.Windows) == 0 || reading.Windows[0].UsedPercent != 39 {
+		t.Fatalf("reading=%+v, want refreshed 39%% window", reading)
 	}
 }
 

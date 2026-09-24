@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,12 +20,38 @@ type TurnQuotaReading struct {
 
 const TurnQuotaTimeout = 1800 * time.Millisecond
 
+var turnQuotaHTTPClientFactory = func() *http.Client { return &http.Client{Timeout: TurnQuotaTimeout} }
+
 // CaptureTurnQuota observes a provider's quota, using the regular shared cache
 // for ordinary captures and bypassing its freshness gate when force is true.
 // Errors are returned as data so a quota problem cannot fail the agent turn.
 func CaptureTurnQuota(ctx context.Context, provider string, force bool) TurnQuotaReading {
+	return CaptureTurnQuotaSince(ctx, provider, force, time.Time{})
+}
+
+// CaptureTurnQuotaSince observes quota and forces a provider fetch when its
+// shared cache predates turnStarted. Ordinary cache freshness rules still
+// apply when force is false and the cache was refreshed during this turn.
+func CaptureTurnQuotaSince(ctx context.Context, provider string, force bool, turnStarted time.Time) TurnQuotaReading {
+	return CaptureTurnQuotaSinceCache(ctx, provider, force, turnStarted, time.Time{})
+}
+
+// CaptureTurnQuotaSinceCache also receives the baseline cache timestamp taken
+// before the provider turn started, preventing another process's later cache
+// write from being mistaken for a measurement made during this turn.
+func CaptureTurnQuotaSinceCache(ctx context.Context, provider string, force bool, turnStarted, baselineCacheAt time.Time) TurnQuotaReading {
 	ctx, cancel := context.WithTimeout(ctx, TurnQuotaTimeout)
 	defer cancel()
+	cachePath, err := providerQuotaCachePath(provider)
+	if err != nil {
+		return TurnQuotaReading{CapturedAt: time.Now().UTC(), Error: err.Error()}
+	}
+	if !force && !turnStarted.IsZero() {
+		fetchedAt := readProviderQuotaCache(provider, cachePath)
+		if fetchedAt.Before(turnStarted) || (!baselineCacheAt.IsZero() && !fetchedAt.After(baselineCacheAt)) {
+			force = true
+		}
+	}
 	if force {
 		ctx = ForceQuotaFetch(ctx)
 	}
@@ -33,24 +60,18 @@ func CaptureTurnQuota(ctx context.Context, provider string, force bool) TurnQuot
 	if err != nil {
 		return TurnQuotaReading{CapturedAt: time.Now().UTC(), Error: err.Error()}
 	}
-	client := &http.Client{Timeout: TurnQuotaTimeout}
+	client := turnQuotaHTTPClientFactory()
 	var u AgentUsage
-	var cachePath string
 	switch provider {
 	case "claude":
 		dir := filepath.Join(home, ".claude")
-		cachePath = liveFetchCachePath(dir)
 		u = CollectClaude(ctx, dir, client)
 	case "codex":
 		dir := filepath.Join(home, ".codex")
-		cachePath = liveFetchCachePath(dir)
 		u = CollectCodex(ctx, dir, client)
 	case "agy":
 		dir := filepath.Join(home, ".gemini", "antigravity-cli")
-		cachePath = liveFetchCachePath(dir)
 		u = CollectAGY(ctx, dir, client)
-	default:
-		return TurnQuotaReading{CapturedAt: time.Now().UTC(), Error: "unsupported quota provider: " + provider}
 	}
 
 	now := time.Now().UTC()
@@ -64,6 +85,25 @@ func CaptureTurnQuota(ctx context.Context, provider string, force bool) TurnQuot
 		reading.Error = "no quota reading available"
 	}
 	return reading
+}
+
+func providerQuotaCachePath(provider string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	var dir string
+	switch provider {
+	case "claude":
+		dir = filepath.Join(home, ".claude")
+	case "codex":
+		dir = filepath.Join(home, ".codex")
+	case "agy":
+		dir = filepath.Join(home, ".gemini", "antigravity-cli")
+	default:
+		return "", fmt.Errorf("unsupported quota provider: %s", provider)
+	}
+	return liveFetchCachePath(dir), nil
 }
 
 func readProviderQuotaCache(provider, path string) time.Time {
