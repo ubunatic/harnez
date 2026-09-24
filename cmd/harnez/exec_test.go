@@ -1256,7 +1256,7 @@ func TestRunExecWrapper_Quota1SuccessDoesNotCreateLogDirectory(t *testing.T) {
 func TestWriteQuota1FailureLogRetainsLatestTen(t *testing.T) {
 	logDir := t.TempDir()
 	for i := 0; i < quota1LogRetention+2; i++ {
-		name := filepath.Join(logDir, fmt.Sprintf("test-20260101T00000%02dZ.log", i))
+		name := filepath.Join(logDir, fmt.Sprintf("test-20260101T0000%02dZ.log", i))
 		if err := writeQuota1FailureLog(name, []byte("failure")); err != nil {
 			t.Fatal(err)
 		}
