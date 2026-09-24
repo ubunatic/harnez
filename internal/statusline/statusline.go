@@ -22,11 +22,14 @@ type input struct {
 	CWD       string `json:"cwd"`
 	Workspace struct {
 		CurrentDir string `json:"current_dir"`
+		ProjectDir string `json:"project_dir"`
 	} `json:"workspace"`
 }
 
 // Render reads a Claude Code statusLine JSON payload from r and returns the
-// line to print. cwd is tilde-collapsed relative to home when possible.
+// line to print. workspace.current_dir is authoritative, with top-level cwd
+// as a fallback. If the effective directory differs from workspace.project_dir,
+// both are shown. Paths are tilde-collapsed relative to home when possible.
 func Render(r io.Reader, home string) (string, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -38,11 +41,16 @@ func Render(r io.Reader, home string) (string, error) {
 		return "", fmt.Errorf("statusline: parse stdin JSON: %w", err)
 	}
 
-	dir := in.CWD
+	dir := in.Workspace.CurrentDir
 	if dir == "" {
-		dir = in.Workspace.CurrentDir
+		dir = in.CWD
 	}
-	return collapseHome(dir, home), nil
+	dir = collapseHome(dir, home)
+	projectDir := collapseHome(in.Workspace.ProjectDir, home)
+	if dir != "" && projectDir != "" && dir != projectDir {
+		return dir + " → " + projectDir, nil
+	}
+	return dir, nil
 }
 
 // collapseHome replaces a leading home-directory prefix with "~".
