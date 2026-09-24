@@ -160,6 +160,9 @@ literal name several times today without any warning.
 - Tests: the Claude channel contains the rule, and the Codex/agy outputs do not.
 
 ### M2 — mention counter hook
+- Pre-Work (from the plan review): Stop-hook stdout usually does not reach the model. Count on Stop,
+  but deliver the tip where Claude actually sees it (e.g. `additionalContext` on the next
+  `UserPromptSubmit`). Verify live that the tip appears in Claude's context.
 - A Claude hook counts literal-filename mentions in Claude's own messages and emits a `harnez tip`
   every 5 mentions. Pick the event that exposes assistant text (Stop + transcript tail) and keep the
   counter in the session-state file. Tests for counting and the every-5 cadence.
