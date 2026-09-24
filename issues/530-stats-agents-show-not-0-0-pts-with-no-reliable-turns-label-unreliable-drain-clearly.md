@@ -1,6 +1,6 @@
 # 530 — stats --agents: show "—" not 0.0 pts with no reliable turns; label unreliable drain clearly
 
-**Status**: Open
+**Status**: Closed — 25a709b + 774e9f7: drain column carries (unreliable), totals show — without reliable turns
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: UX
