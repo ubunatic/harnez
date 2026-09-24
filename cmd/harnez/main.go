@@ -39,6 +39,11 @@ func isGearInvocation(arg0 string) bool {
 // file) is swallowed silently: this is a nice-to-have nudge, not something
 // that should ever block or fail a real command.
 func sessionTipHook(cmd *cobra.Command, _ []string) error {
+	// Tests run many CLI invocations in one process. Keep session reminders
+	// out of test command output, where they can corrupt stderr assertions.
+	if strings.HasSuffix(os.Args[0], ".test") {
+		return nil
+	}
 	sessionID, err := resolve.Session(resolve.SessionOptions{})
 	if err != nil || sessionID == "" {
 		return nil
