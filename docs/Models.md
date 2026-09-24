@@ -58,6 +58,11 @@ Findings:
 - **Process:** all six agents wrote their studies (run from a scratch dir, writing into the
   repo worked). The quota agent first read "read-only" as forbidding the study file; say
   "read-only except the study file".
+- **Sprint use, same day (519):** terra:med drained ~1 Codex 5h point per large turn
+  (up to 620k new tokens), so it stayed the developer for a full feature; luna turns
+  (40–65k new) stayed below 1 point. flash37 stopped on an agy quota error the usage
+  display did not predict (516). Measured drain per model is now in
+  `harnez stats --agents`. Details: [sprint 519 retro](studies/2026-09-24-sprint-519-agent-stats.md).
 
 ## 2026-09-23 web-research snapshot
 

@@ -37,7 +37,9 @@ adds the role's rules to each turn and exports it to the agent as
 - **developer, reviewer, advisor**: leaf workers. They do the work themselves
   and never run `harnez agent`, native subagents or delegating skills. harnez
   refuses `start`, `resume`, `stop`, `delete`, `compact` and `chat` for them;
-  `list`, `status` and `models` stay available.
+  `list`, `status` and `models` stay available. Live checks that need an agent
+  session (e.g. a start + resume canary) are run by the orchestrator; say so in
+  the dispatch prompt.
 
 A human or a host agent without a role starts sessions unrestricted. The rules
 are defined once in harnez's embedded agent spec.
