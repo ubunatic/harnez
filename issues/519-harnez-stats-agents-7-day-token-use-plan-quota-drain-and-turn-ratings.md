@@ -1,6 +1,6 @@
 # 519 — harnez stats --agents: 7-day token use, plan-quota drain and turn ratings
 
-**Status**: Open
+**Status**: Closed — M1-M4 delivered (47e78d1..fca647f); pipeline measured end to end, per-model drain rate needs >=5 measured turns
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Feature
