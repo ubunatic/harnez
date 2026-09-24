@@ -157,6 +157,9 @@ func unwrapShellCommand(args []string) []string {
 		arg := args[i]
 		if len(arg) > 1 && arg[0] == '-' && !strings.HasPrefix(arg, "--") {
 			if strings.Contains(arg[1:], "c") {
+				if i+1 >= len(args) {
+					return args
+				}
 				return []string{args[i+1]}
 			}
 			continue

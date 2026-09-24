@@ -960,6 +960,8 @@ func TestInferToolFromArgs(t *testing.T) {
 		{[]string{"/bin/bash", "-c", "go test ./..."}, "Bash", "go"},
 		{[]string{"sh", "-lc", "go test ./..."}, "Bash", "go"},
 		{[]string{"bash", "-l", "-c", "go test ./..."}, "Bash", "go"},
+		{[]string{"bash", "-l", "-c"}, "Bash", "Bash"},
+		{[]string{"/bin/bash", "-lc"}, "Bash", "Bash"},
 		{[]string{"go", "test", "./..."}, "Bash", "go"},
 		{[]string{"sh", "-c", "FOO=bar /usr/bin/go test ./..."}, "Bash", "go"},
 		{[]string{"bash", "-c", "sudo apt update"}, "Bash", "apt"},
