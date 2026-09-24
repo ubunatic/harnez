@@ -92,6 +92,32 @@ Live behaviour is unverified because developer leaf roles cannot launch `harnez 
   Keep the existing telemetry. Do not double-wrap commands that already start with `harnez exec`.
 - Tests: rewrite, no double-wrap, non-shell tools untouched.
 
-### M3 — live acceptance (host-run)
-- A real `harnez agent -p` agy run with `sh -c 'kill -STOP $$'` returns exit 125 within seconds,
-  and `sleep 120` hits the exec timeout.
+**M2 delivered (unconditional hook rewrite): 3566199.** This is live, and it brings back the UI leak that 271 retired.
+
+## Design change (2026-09-24, with the user): hook as a fallback, shim as the quiet path
+
+History: 271 retired the hook rewrite because agy's chat shows the rewritten command. The bash PATH
+shim (`~/.harnez/shims/bash`, 271/272) was meant to be the quiet path, but it is not installed on this
+machine, and `harnez agent` never put it on agy's PATH, which is why 532 happened.
+
+### M3 — rewrite only when the shim is inactive; record the chosen route
+- The hook always records the command (the existing telemetry).
+- If agy's `PATH` (the hook's own env) starts with `~/.harnez/shims` and `~/.harnez/shims/bash` is
+  executable, pass the command through unchanged (route `shim`). Otherwise rewrite to `harnez exec
+  --tool agy` (route `hook`). Record the route with the hook telemetry row.
+- Unknown: does agy pass its PATH to hooks? The fallback is to always rewrite (safe). M6 verifies it live.
+- Tests: shim active → unchanged; shim missing or not on PATH → rewrite; route recorded.
+
+### M4 — `harnez agent` sets up the shim for agy
+- Launch agy with `PATH=~/.harnez/shims:$PATH` and `ANTIGRAVITY_AGENT=1` (as `env.sh` does).
+  Install or refresh the shim if it is missing, using the same code as `apply`.
+- Tests: the launch env has the shims first, and a missing shim is created.
+
+### M5 — coverage check in `harnez stats`
+- Per agy session: commands the hook saw vs `harnez exec` rows, split into via-shim / via-hook /
+  unrouted / double-wrapped. Unrouted or double-wrapped counts are the alarm.
+
+### M6 — live acceptance (host-run)
+- A `harnez agent -p` agy run: `sh -c 'kill -STOP $$'` returns exit 125 within seconds, `sleep 120`
+  hits the exec timeout, agy's chat shows plain commands (shim route), and the M5 view shows 0 unrouted.
+- Then mark 273 as superseded by 537 (the hook becomes the automatic fallback instead of an opt-in).
