@@ -1,6 +1,6 @@
 # 523 — lean-sprint: host runs live harnez agent checks; leaf workers cannot
 
-**Status**: Open
+**Status**: Closed — 86200d0: lean-sprint says host runs live agent checks
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation
