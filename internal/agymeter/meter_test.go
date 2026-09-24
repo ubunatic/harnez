@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewCAAndBundle(t *testing.T) {
@@ -52,13 +53,14 @@ func TestResponseObserverPassesSSEThroughAndKeepsLastUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer m.Close()
-	input := []byte("data: {\"usageMetadata\":{\"promptTokenCount\":99,\"totalTokenCount\":102}}\n\ndata: {\"result\":{\"usageMetadata\":{\"promptTokenCount\":11818,\"candidatesTokenCount\":1,\"thoughtsTokenCount\":22,\"totalTokenCount\":11841}}}\n\n")
+	input := []byte("data: {\"response\":{\"usageMetadata\":{\"promptTokenCount\":99,\"totalTokenCount\":102}}}\n\ndata: {\"response\":{\"usageMetadata\":{\"promptTokenCount\":11818,\"candidatesTokenCount\":1,\"thoughtsTokenCount\":22,\"totalTokenCount\":11841}}}\n\n")
 	body := newResponseObserver(io.NopCloser(bytes.NewReader(input)), m, "/v1internal:streamGenerateContent", "text/event-stream", "", "gemini-test", "session-x")
 	var forwarded bytes.Buffer
 	if _, err = io.Copy(&forwarded, body); err != nil {
 		t.Fatal(err)
 	}
 	_ = body.Close()
+	<-body.done
 	if !bytes.Equal(input, forwarded.Bytes()) {
 		t.Fatal("response bytes changed")
 	}
@@ -98,6 +100,7 @@ func TestResponseObserverDecodesGzipQuotaJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = body.Close()
+	<-body.done
 	if !bytes.Equal(in, forwarded.Bytes()) {
 		t.Fatal("compressed response bytes changed")
 	}
@@ -106,11 +109,68 @@ func TestResponseObserverDecodesGzipQuotaJSON(t *testing.T) {
 		t.Fatalf("got %d quota records, want 2", len(records))
 	}
 	for _, record := range records {
-		if record.Bucket == "gemini-5h" && record.Remaining == 0.7592765 {
+		if record.Bucket == "gemini-5h" && record.Remaining != nil && *record.Remaining == 0.7592765 {
 			return
 		}
 	}
 	t.Fatalf("gemini-5h bucket missing: %+v", records)
+}
+
+func TestZeroQuotaFractionIsRecorded(t *testing.T) {
+	m, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	input := []byte(`{"groups":[{"buckets":[{"bucketId":"3p-weekly","remainingFraction":0}]}]}`)
+	body := newResponseObserver(io.NopCloser(bytes.NewReader(input)), m, "/v1internal:retrieveUserQuotaSummary", "application/json", "", "", "")
+	_, _ = io.Copy(io.Discard, body)
+	_ = body.Close()
+	<-body.done
+	records := readRecords(t, m.logPath)
+	if len(records) != 1 || records[0].Remaining == nil || *records[0].Remaining != 0 {
+		t.Fatalf("zero fraction missing: %+v", records)
+	}
+	raw, err := os.ReadFile(m.logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`"remainingFraction":0`)) {
+		t.Fatalf("zero field omitted: %s", raw)
+	}
+}
+
+func TestSlowParserDoesNotBlockPassthroughOrClose(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	parserDone := make(chan struct{})
+	body := newObservedBody(io.NopCloser(bytes.NewReader(bytes.Repeat([]byte("x"), 1<<20))), func(io.Reader) {
+		close(started)
+		<-release
+		close(parserDone)
+	}, nil)
+	<-started
+	var got bytes.Buffer
+	if _, err := io.Copy(&got, body); err != nil {
+		t.Fatal(err)
+	}
+	if got.Len() != 1<<20 {
+		t.Fatalf("forwarded %d bytes", got.Len())
+	}
+	closed := make(chan struct{})
+	go func() { _ = body.Close(); close(closed) }()
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("body Close waited for the side parser")
+	}
+	close(release)
+	select {
+	case <-parserDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("side parser did not exit")
+	}
+	<-body.done
 }
 
 func TestOtherHostIsBlindTunnel(t *testing.T) {

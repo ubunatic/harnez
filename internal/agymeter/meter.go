@@ -42,7 +42,7 @@ type Record struct {
 	Cached     int64     `json:"cachedContentTokenCount,omitempty"`
 	Total      int64     `json:"totalTokenCount,omitempty"`
 	Bucket     string    `json:"bucketId,omitempty"`
-	Remaining  float64   `json:"remainingFraction,omitempty"`
+	Remaining  *float64  `json:"remainingFraction,omitempty"`
 	Reset      string    `json:"resetTime,omitempty"`
 }
 
@@ -264,7 +264,7 @@ func (m *Meter) forward(w http.ResponseWriter, r *http.Request) {
 	proxy.FlushInterval = -1
 	proxy.Transport = &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
 	proxy.ModifyResponse = func(resp *http.Response) error {
-		m.debugf("upstream response status=%d content-type=%s content-encoding=%s", resp.StatusCode, resp.Header.Get("Content-Type"), resp.Header.Get("Content-Encoding"))
+		m.debugf("upstream response status=%d", resp.StatusCode)
 		resp.Body = newResponseObserver(resp.Body, m, r.URL.Path, resp.Header.Get("Content-Type"), resp.Header.Get("Content-Encoding"), model, session)
 		return nil
 	}
@@ -296,32 +296,79 @@ func stringVal(v any) string { s, _ := v.(string); return s }
 
 type responseObserver struct {
 	io.ReadCloser
-	writer *io.PipeWriter
-	once   sync.Once
+	chunks *asyncChunks
 	done   chan struct{}
 }
 
 func newResponseObserver(body io.ReadCloser, m *Meter, path, contentType, encoding, model, session string) *responseObserver {
-	r, w := io.Pipe()
-	o := &responseObserver{ReadCloser: body, writer: w, done: make(chan struct{})}
-	go func() { defer close(o.done); m.parseResponse(r, path, contentType, encoding, model, session) }()
+	return newObservedBody(body, func(src io.Reader) { m.parseResponse(src, path, contentType, encoding, model, session) }, func() { m.debugf("response side-reader dropped data after queue filled") })
+}
+
+func newObservedBody(body io.ReadCloser, parser func(io.Reader), dropped func()) *responseObserver {
+	chunks := &asyncChunks{queue: make(chan []byte, 16), dropped: dropped}
+	o := &responseObserver{ReadCloser: body, chunks: chunks, done: make(chan struct{})}
+	go func() { defer close(o.done); parser(chunks) }()
 	return o
 }
 func (o *responseObserver) Read(p []byte) (int, error) {
 	n, e := o.ReadCloser.Read(p)
 	if n > 0 {
-		_, _ = o.writer.Write(p[:n])
+		o.chunks.offer(p[:n])
 	}
 	if e != nil {
-		o.once.Do(func() { _ = o.writer.Close() })
+		o.chunks.finish()
 	}
 	return n, e
 }
 func (o *responseObserver) Close() error {
-	o.once.Do(func() { _ = o.writer.Close() })
-	err := o.ReadCloser.Close()
-	<-o.done
-	return err
+	o.chunks.finish()
+	return o.ReadCloser.Close()
+}
+
+type asyncChunks struct {
+	queue   chan []byte
+	mu      sync.Mutex
+	closed  bool
+	dropped func()
+	pending []byte
+}
+
+func (q *asyncChunks) offer(p []byte) {
+	data := append([]byte(nil), p...)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.closed {
+		return
+	}
+	select {
+	case q.queue <- data:
+	default:
+		q.closed = true
+		close(q.queue)
+		if q.dropped != nil {
+			q.dropped()
+		}
+	}
+}
+func (q *asyncChunks) finish() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if !q.closed {
+		q.closed = true
+		close(q.queue)
+	}
+}
+func (q *asyncChunks) Read(p []byte) (int, error) {
+	for len(q.pending) == 0 {
+		chunk, ok := <-q.queue
+		if !ok {
+			return 0, io.EOF
+		}
+		q.pending = chunk
+	}
+	n := copy(p, q.pending)
+	q.pending = q.pending[n:]
+	return n, nil
 }
 
 func (m *Meter) parseResponse(raw io.Reader, path, contentType, encoding, model, session string) {
@@ -415,7 +462,8 @@ func walkQuota(v any, found func(Record)) {
 	switch x := v.(type) {
 	case map[string]any:
 		if id, ok := x["bucketId"].(string); ok {
-			found(Record{Time: time.Now().UTC(), Kind: "quota", Bucket: id, Remaining: floatNum(x["remainingFraction"]), Reset: stringVal(x["resetTime"])})
+			remaining := floatNum(x["remainingFraction"])
+			found(Record{Time: time.Now().UTC(), Kind: "quota", Bucket: id, Remaining: &remaining, Reset: stringVal(x["resetTime"])})
 		}
 		for _, value := range x {
 			walkQuota(value, found)
