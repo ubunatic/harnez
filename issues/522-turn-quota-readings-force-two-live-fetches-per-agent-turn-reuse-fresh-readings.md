@@ -1,6 +1,6 @@
 # 522 — Turn quota readings force two live fetches per agent turn; reuse fresh readings
 
-**Status**: Open
+**Status**: Closed — c07ea58 (terra): readings reused within 30s; after-reading must postdate turn start; flash37 review accepted; live start/resume OK
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Performance
