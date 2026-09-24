@@ -1,6 +1,6 @@
 # 553 — Tests delete real ~/.local/bin/harnez-agy and ~/.harnez/shims via CleanAll without HOME isolation
 
-**Status**: Open
+**Status**: Closed — internal/claude TestMain sets temp HOME; make test-q1 green, real launcher and shim untouched
 **Priority**: P1
 **Severity**: High
 **Category**: Bug / Tests
