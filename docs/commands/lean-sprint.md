@@ -67,6 +67,13 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 - Upon developer milestone completion, the Host Orchestrator performs a rapid, diff-only inspection:
   - Check `git log -n 1 --stat`, `git diff HEAD~1`, and run verification tests.
   - Evaluate test assertion rigor, ambient environment leaks, and edge-case omissions directly against the diff.
+  - **Plausibility check for measurements**: when the milestone produces numbers (reports, stats,
+    benchmarks, token or quota figures), run the real command and check the values make sense, not
+    only that tests pass: units and magnitudes against a known reference or hand calculation, totals
+    that add up, parts that don't exceed the whole, no field holding another field's data, no silent
+    zeros for missing data, and no rows that vanish. Record implausible values as pre-work for the
+    next milestone. (Sprint 519: green tests hid "new input" holding total input and a 43% drain on
+    one session.)
 - **Strictly No Direct Fixes & No Micro-Task Rounds**:
   - The host does **NOT** modify code files.
   - The host updates the ticket: records milestone $N$ delivery summary, naming the milestone ("M2 delivered: flag and schema gating").
