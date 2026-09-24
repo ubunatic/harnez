@@ -2,10 +2,14 @@ package subagent
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"ubunatic.com/harnez/internal/claude"
 )
 
 func boolPtr(b bool) *bool { return &b }
@@ -25,6 +29,92 @@ func TestAgyRunArgOrderAndAddDir(t *testing.T) {
 	}
 	if args[len(args)-2] != "-p" {
 		t.Fatalf("-p must be the last flag, directly followed by the prompt: %#v", args)
+	}
+}
+
+func TestAgyRunInstallsBashShimAndSetsLaunchEnvironment(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatalf("create fake agy bin directory: %v", err)
+	}
+	capturePath := filepath.Join(home, "agy-env.txt")
+	agyPath := filepath.Join(binDir, "agy")
+	agyScript := `#!/bin/sh
+printf '%s\n' "$PATH" "$ANTIGRAVITY_AGENT" > "$AGY_ENV_CAPTURE"
+printf '%s\n' '{"status":"SUCCESS","response":"ok"}'
+`
+	if err := os.WriteFile(agyPath, []byte(agyScript), 0755); err != nil {
+		t.Fatalf("write fake agy executable: %v", err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+"/usr/bin:/bin")
+	t.Setenv("ANTIGRAVITY_AGENT", "0")
+	t.Setenv("AGY_ENV_CAPTURE", capturePath)
+
+	d := AgyDriver{Dir: t.TempDir()}
+	if _, err := d.Run(context.Background(), RunOptions{Prompt: "ping"}); err != nil {
+		t.Fatalf("AgyDriver.Run: %v", err)
+	}
+
+	captured, err := os.ReadFile(capturePath)
+	if err != nil {
+		t.Fatalf("read captured agy environment: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(captured)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("captured environment = %q, want PATH and ANTIGRAVITY_AGENT", captured)
+	}
+	shimDir := filepath.Join(home, ".harnez", "shims")
+	pathEntries := filepath.SplitList(lines[0])
+	if len(pathEntries) == 0 || pathEntries[0] != shimDir {
+		t.Errorf("agy PATH = %q, want shim directory %q first", lines[0], shimDir)
+	}
+	if len(pathEntries) < 2 || pathEntries[1] != binDir {
+		t.Errorf("agy PATH = %#v, want inherited PATH after shim prefix", pathEntries)
+	}
+	if lines[1] != "1" {
+		t.Errorf("ANTIGRAVITY_AGENT = %q, want 1", lines[1])
+	}
+
+	shimPath := filepath.Join(shimDir, "bash")
+	shim, err := os.ReadFile(shimPath)
+	if err != nil {
+		t.Fatalf("read installed bash shim: %v", err)
+	}
+	if string(shim) != claude.BashShimContent {
+		t.Errorf("bash shim content = %q, want managed shim", shim)
+	}
+	info, err := os.Stat(shimPath)
+	if err != nil {
+		t.Fatalf("stat installed bash shim: %v", err)
+	}
+	if info.Mode().Perm() != 0755 {
+		t.Errorf("bash shim mode = %o, want 755", info.Mode().Perm())
+	}
+}
+
+func TestAgyLaunchEnvironmentDoesNotDuplicateShimPrefix(t *testing.T) {
+	home := t.TempDir()
+	shimDir := filepath.Join(home, ".harnez", "shims")
+	original := []string{
+		"PATH=" + shimDir + string(os.PathListSeparator) + "/usr/bin:/bin",
+		"ANTIGRAVITY_AGENT=0",
+		"AGY_TEST_KEEP=preserved",
+	}
+	got := agyLaunchEnv(original, home)
+	wantPath := shimDir + string(os.PathListSeparator) + "/usr/bin:/bin"
+	if path := environmentValue(got, "PATH"); path != wantPath {
+		t.Errorf("PATH = %q, want %q", path, wantPath)
+	}
+	if flag := environmentValue(got, "ANTIGRAVITY_AGENT"); flag != "1" {
+		t.Errorf("ANTIGRAVITY_AGENT = %q, want 1", flag)
+	}
+	if kept := environmentValue(got, "AGY_TEST_KEEP"); kept != "preserved" {
+		t.Errorf("AGY_TEST_KEEP = %q, want preserved", kept)
+	}
+	if original[0] != "PATH="+wantPath {
+		t.Errorf("agyLaunchEnv modified input environment: %#v", original)
 	}
 }
 

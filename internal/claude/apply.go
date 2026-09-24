@@ -859,6 +859,20 @@ func BashShimPath() string {
 	return filepath.Join(home, ".harnez", "shims", "bash")
 }
 
+// EnsureBashShim writes or refreshes the managed guarded bash shim using the
+// same executable-file policy as `harnez apply`.
+func EnsureBashShim(home string) (path string, changed bool, err error) {
+	if home == "" {
+		return "", false, errors.New("empty home directory")
+	}
+	path = filepath.Join(home, ".harnez", "shims", "bash")
+	changed, err = fsutil.WriteExecutableIfChanged(path, []byte(BashShimContent))
+	if err != nil {
+		return path, false, fmt.Errorf("bash shim %s: %w", path, err)
+	}
+	return path, changed, nil
+}
+
 const HarnezEnvContent = `# harnez:begin env
 # Shell environment and helper functions for harnez-managed tools and agents.
 
@@ -1300,10 +1314,10 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 		addStat("⚙ symlink", strings.Join(gearStats, ", "))
 	}
 
-	if shimPath := BashShimPath(); shimPath != "" {
-		changed, err := fsutil.WriteExecutableIfChanged(shimPath, []byte(BashShimContent))
+	if home, err := os.UserHomeDir(); err == nil {
+		shimPath, changed, err := EnsureBashShim(home)
 		if err != nil {
-			return fmt.Errorf("bash shim %s: %w", shimPath, err)
+			return err
 		}
 		if changed {
 			changes++

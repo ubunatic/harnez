@@ -5,8 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
+
+	"ubunatic.com/harnez/internal/claude"
 )
 
 // AgyDriver runs agy (Antigravity CLI) in print mode, pinned to Dir.
@@ -19,9 +24,62 @@ func (d AgyDriver) command(ctx context.Context, args ...string) ([]byte, error) 
 	if d.Command != nil {
 		return d.Command(ctx, "agy", args...)
 	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("agy: resolve home directory: %w", err)
+	}
+	if _, _, err := claude.EnsureBashShim(home); err != nil {
+		return nil, fmt.Errorf("agy: ensure bash shim: %w", err)
+	}
 	c := exec.CommandContext(ctx, "agy", args...)
 	c.Dir = d.Dir
+	c.Env = agyLaunchEnv(os.Environ(), home)
 	return c.Output()
+}
+
+func agyLaunchEnv(environ []string, home string) []string {
+	shimDir := filepath.Join(home, ".harnez", "shims")
+	path := environmentValue(environ, "PATH")
+	pathEntries := filepath.SplitList(path)
+	if len(pathEntries) == 0 || filepath.Clean(pathEntries[0]) != filepath.Clean(shimDir) {
+		if path == "" {
+			path = shimDir
+		} else {
+			path = shimDir + string(os.PathListSeparator) + path
+		}
+	}
+	environ = replaceEnvironmentValue(environ, "PATH", path)
+	return replaceEnvironmentValue(environ, "ANTIGRAVITY_AGENT", "1")
+}
+
+func environmentValue(environ []string, name string) string {
+	prefix := name + "="
+	for i := len(environ) - 1; i >= 0; i-- {
+		if strings.HasPrefix(environ[i], prefix) {
+			return strings.TrimPrefix(environ[i], prefix)
+		}
+	}
+	return ""
+}
+
+func replaceEnvironmentValue(environ []string, name, value string) []string {
+	prefix := name + "="
+	updated := make([]string, 0, len(environ)+1)
+	replaced := false
+	for _, entry := range environ {
+		if strings.HasPrefix(entry, prefix) {
+			if !replaced {
+				updated = append(updated, prefix+value)
+				replaced = true
+			}
+			continue
+		}
+		updated = append(updated, entry)
+	}
+	if !replaced {
+		updated = append(updated, prefix+value)
+	}
+	return updated
 }
 
 func agyEffort(tier string) string {

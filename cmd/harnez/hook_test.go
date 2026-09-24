@@ -162,7 +162,7 @@ func TestRunAgyToolHook_RouteFixtures(t *testing.T) {
 			name:      "already routed command",
 			payload:   `{"conversationId":"fixture-5","toolCall":{"name":"run_command","args":{"CommandLine":"harnez exec --tool agy -- bash -c 'git status'"}}}`,
 			command:   "harnez exec --tool agy -- bash -c 'git status'",
-			wantRoute: "hook",
+			wantRoute: "direct",
 			shimPath:  "none",
 		},
 		{

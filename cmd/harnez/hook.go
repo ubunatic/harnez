@@ -353,7 +353,7 @@ func agyCommandRoute(command, path, home string) string {
 		return ""
 	}
 	if alreadyRoutedThroughExec(command) {
-		return "hook"
+		return "direct"
 	}
 	if agyBashShimActive(home, path) {
 		return "shim"
