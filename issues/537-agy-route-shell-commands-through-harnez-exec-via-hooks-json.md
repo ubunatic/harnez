@@ -30,3 +30,23 @@ Every agy shell command runs under `harnez exec`, just like Claude and Codex. On
   preserve/decommission behaviour).
 - Acceptance: an agy session that runs `sh -c 'kill -STOP $$'` gets exit 125 back within seconds,
   and a `sleep 120` hits the exec timeout.
+
+## Milestones (lean sprint, 2026-09-24)
+
+Preflight: `internal/agy/hooks.go` already installs PreToolUse/PostToolUse (`harnez hook agy`, `agy-post`),
+but it is observe-only ("without rewriting commands"), so the premise holds.
+
+### M1 — canary: can agy's PreToolUse rewrite run_command?
+- Probe the installed agy (`~/.local/bin/agy`): check whether a PreToolUse response can replace the
+  `run_command` command line, and record the exact payload and response schema here. Use a throwaway
+  hooks file or a scratch HOME, not the user's live hooks. If a rewrite is impossible, record that, stop, and report.
+
+### M2 — rewrite agy run_command to `harnez exec`
+- In `harnez hook agy`, rewrite `run_command` to `harnez exec --tool agy -- <cmd>`, using the same
+  adapter as the Claude/Codex exec hook (look at `harnez exec hook` and `internal/codex/hooks.go`).
+  Keep the existing telemetry. Do not double-wrap commands that already start with `harnez exec`.
+- Tests: rewrite, no double-wrap, non-shell tools untouched.
+
+### M3 — live acceptance
+- A real `harnez agent -p` agy run with `sh -c 'kill -STOP $$'` returns exit 125 within seconds,
+  and `sleep 120` hits the exec timeout.
