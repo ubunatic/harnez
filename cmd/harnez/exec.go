@@ -134,12 +134,36 @@ func detectQuota1(opts execOptions, args []string) bool {
 	if v := getenv(quota1Env); v == "1" || strings.EqualFold(v, "true") {
 		return true
 	}
-	for _, a := range args {
+	for _, a := range unwrapShellCommand(args) {
 		if quota1CmdRE.MatchString(a) {
 			return true
 		}
 	}
 	return false
+}
+
+// unwrapShellCommand returns the script argument for shell -c invocations,
+// recognizing shell paths and short option groups such as -lc. Other argv is
+// returned unchanged.
+func unwrapShellCommand(args []string) []string {
+	if len(args) < 3 {
+		return args
+	}
+	shell := filepath.Base(args[0])
+	if shell != "bash" && shell != "sh" {
+		return args
+	}
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		if len(arg) > 1 && arg[0] == '-' && !strings.HasPrefix(arg, "--") {
+			if strings.Contains(arg[1:], "c") {
+				return []string{args[i+1]}
+			}
+			continue
+		}
+		return args
+	}
+	return args
 }
 
 func newExecCmd() *cobra.Command {
@@ -431,11 +455,9 @@ func inferToolFromArgs(args []string, defaultTool string) string {
 	if len(args) == 0 {
 		return fallback
 	}
-	var tokens []string
-	if len(args) >= 3 && (args[0] == "bash" || args[0] == "sh") && args[1] == "-c" {
-		tokens = strings.Fields(args[2])
-	} else {
-		tokens = args
+	tokens := unwrapShellCommand(args)
+	if len(tokens) == 1 && tokens[0] != args[0] {
+		tokens = strings.Fields(tokens[0])
 	}
 
 	skipNext := false

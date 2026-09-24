@@ -957,6 +957,10 @@ func TestInferToolFromArgs(t *testing.T) {
 		{[]string{"git", "status"}, "Bash", "git"},
 		{[]string{"/usr/bin/npm", "test"}, "Bash", "npm"},
 		{[]string{"bash", "-c", "git status && echo done"}, "Bash", "git"},
+		{[]string{"/bin/bash", "-c", "go test ./..."}, "Bash", "go"},
+		{[]string{"sh", "-lc", "go test ./..."}, "Bash", "go"},
+		{[]string{"bash", "-l", "-c", "go test ./..."}, "Bash", "go"},
+		{[]string{"go", "test", "./..."}, "Bash", "go"},
 		{[]string{"sh", "-c", "FOO=bar /usr/bin/go test ./..."}, "Bash", "go"},
 		{[]string{"bash", "-c", "sudo apt update"}, "Bash", "apt"},
 		{[]string{"bash", "-c", "sudo -u root npm test"}, "Bash", "npm"},
@@ -975,6 +979,26 @@ func TestInferToolFromArgs(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("inferToolFromArgs(%v, %q) = %q, want %q", tc.args, tc.defaultTool, got, tc.want)
 		}
+	}
+}
+
+func TestDetectQuota1ShellUnwrap(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"bash -c", []string{"bash", "-c", "HARNEZ_QUOTA_1=1 go test ./..."}},
+		{"/bin/bash -c", []string{"/bin/bash", "-c", "HARNEZ_QUOTA_1=1 go test ./..."}},
+		{"sh -lc", []string{"sh", "-lc", "HARNEZ_QUOTA_1=1 go test ./..."}},
+		{"bash -l -c", []string{"bash", "-l", "-c", "HARNEZ_QUOTA_1=1 go test ./..."}},
+		{"direct", []string{"HARNEZ_QUOTA_1=1 go test ./..."}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !detectQuota1(execOptions{Getenv: func(string) string { return "" }}, tc.args) {
+				t.Errorf("detectQuota1(%v) = false, want true", tc.args)
+			}
+		})
 	}
 }
 
