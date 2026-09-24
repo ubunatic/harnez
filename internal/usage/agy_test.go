@@ -66,6 +66,19 @@ func TestCollectAGYPrefersRecentMeterQuotaToUsageCommand(t *testing.T) {
 	if len(got.ModelGroups) != 2 || got.ModelGroups[0].Name != "Gemini Models" || got.ModelGroups[1].Name != "Claude and GPT models" {
 		t.Fatalf("meter groups = %+v", got.ModelGroups)
 	}
+	var weekly3P *QuotaWindow
+	for i := range got.ModelGroups[1].Windows {
+		if got.ModelGroups[1].Windows[i].Name == "Weekly Limit Remaining" {
+			weekly3P = &got.ModelGroups[1].Windows[i]
+			break
+		}
+	}
+	if weekly3P == nil {
+		t.Fatalf("exhausted 3p-weekly bucket missing: %+v", got.ModelGroups[1].Windows)
+	}
+	if weekly3P.RemainingPercent != 0 || weekly3P.UsedPercent != 100 || weekly3P.Source != "agy-meter" {
+		t.Errorf("exhausted 3p-weekly bucket = %+v, want 0%% remaining and 100%% used", *weekly3P)
+	}
 	w := got.ModelGroups[0].Windows[0]
 	if w.Source != "agy-meter" || math.Abs(w.RemainingPercent-75.92765) > 1e-9 || math.Abs(w.UsedPercent-24.07235) > 1e-9 {
 		t.Fatalf("meter percentages/source = %+v", w)
@@ -83,6 +96,9 @@ func TestCollectAGYPrefersRecentMeterQuotaToUsageCommand(t *testing.T) {
 	raw := RenderText(UsageSummary{Agents: []AgentUsage{got}})
 	if !strings.Contains(raw, "24.07% used") || !strings.Contains(raw, "Updated:") {
 		t.Errorf("raw usage does not show meter percentages to 2 decimals:\n%s", raw)
+	}
+	if !strings.Contains(raw, "Weekly Limit Remaining:") || !strings.Contains(raw, "100.00% used") {
+		t.Errorf("raw usage does not show exhausted weekly bucket:\n%s", raw)
 	}
 	cached := AgentUsage{AgentID: "agy", ModelGroups: []ModelGroup{{Name: "Old cache"}}}
 	overridden, ok := applyRecentAGYMeterQuota(cached, home, now)
