@@ -325,7 +325,7 @@ func measuredTurnDrain(sessionID string, events map[string]map[int]*quotaTurnPai
 
 func isFiveHourWindow(name string) bool {
 	x := strings.ToLower(name)
-	return strings.Contains(x, "5-hour") || strings.Contains(x, "5h") || (strings.Contains(x, "session") && !strings.Contains(x, "weekly"))
+	return strings.Contains(x, "5-hour") || strings.Contains(x, "5h") || strings.Contains(x, "five hour") || (strings.Contains(x, "session") && !strings.Contains(x, "weekly"))
 }
 
 func quotaWindowDelta(before, after []usage.QuotaHistoryEntry) (*float64, bool) {

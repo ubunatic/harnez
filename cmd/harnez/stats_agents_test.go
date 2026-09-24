@@ -138,6 +138,61 @@ func TestAgentStatsLegacyNewInputSubtractsCachedAndRetainsDeletedSessions(t *tes
 	}
 }
 
+func TestAgentStatsMeasuresDeletedAGYFiveHourPairs(t *testing.T) {
+	home := t.TempDir()
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	storeDir := filepath.Join(home, ".harnez", "agents")
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	session := &subagent.Session{ID: "chk527", Name: "chk527", Provider: "agy", Model: "gemini-3.7-flash", Tier: "low", HarnessType: "harnez", Status: "completed", CreatedAt: now.Add(-time.Hour), LastActiveAt: now, Turn: 2}
+	if err := store.Save(session); err != nil {
+		t.Fatal(err)
+	}
+	reading := func() usage.TurnQuotaReading {
+		return usage.TurnQuotaReading{CapturedAt: now, HasCache: true, CacheAgeMS: 100, Windows: []usage.QuotaHistoryEntry{{Agent: "agy", Group: "Gemini Models", Window: "Five Hour Limit Remaining", UsedPercent: 27}}}
+	}
+	for turn := 1; turn <= 2; turn++ {
+		for _, boundary := range []string{"before", "after"} {
+			event := subagent.TurnQuotaEvent{SessionID: session.ID, Turn: turn, Boundary: boundary, Provider: "agy", Reading: reading()}
+			if boundary == "after" {
+				event.Tokens = &subagent.TurnTokenUsage{NewInputTokens: 10}
+			}
+			if err := store.RecordTurnQuota(event); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := store.Delete(session.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := runAgentStats(&out, agentStatsOptions{Days: 7, JSON: true, HomeDir: home, DBPath: dbPath}); err != nil {
+		t.Fatal(err)
+	}
+	var report agentStatsReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Sessions) != 1 {
+		t.Fatalf("sessions = %+v, want deleted chk527 row", report.Sessions)
+	}
+	row := report.Sessions[0]
+	if row.Name != "chk527" || row.QuotaSource != "measured" || row.QuotaDrainPercent == nil || *row.QuotaDrainPercent != 0 || row.MeasuredTurns != 2 || row.MeasuredTurnsWithTokens != 2 || row.MeasuredNewInputTokens != 20 {
+		t.Fatalf("deleted AGY row = %+v", row)
+	}
+}
+
 func TestCodexRolloutModelBySession(t *testing.T) {
 	home := t.TempDir()
 	root := filepath.Join(home, ".codex", "sessions", "2026", "09")
