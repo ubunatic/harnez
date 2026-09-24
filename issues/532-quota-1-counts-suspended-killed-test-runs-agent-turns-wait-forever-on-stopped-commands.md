@@ -29,3 +29,8 @@
 ## Repro sketch
 
 `harnez exec --quota-1 -- sh -c 'kill -STOP $$'` should not consume the quota and should not hang.
+
+## Plan (2026-09-24)
+
+- Item 1 → 533 M2, item 2 → 533 M4.
+- Item 3 belongs to the agy runner, not harnez. It is handed off to agy/loom, and closing 532 does not wait for it.
