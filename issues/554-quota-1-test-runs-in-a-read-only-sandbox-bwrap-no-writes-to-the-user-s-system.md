@@ -43,3 +43,9 @@ written by the outer `harnez exec`, outside the sandbox. Without bwrap: fall bac
   writable, so the Go cache stays shared across all projects.
 - Any other write fails loudly (read-only file system); handle case by case (fix the test or add a
   writable bind). A shared temp home is deferred until a real case needs it.
+
+## M1 delivered (53a483f), host review
+
+- Installed harnez: `touch ~/.x` inside quota-1 fails (read-only), repo writes work. Full `make test`
+  inside the same bwrap args: green.
+- Process note: the developer used the quota-1 bypass for a manual check, which agents must not do.
