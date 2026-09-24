@@ -141,6 +141,14 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-09-20-dot8-braille-vs-markdown-and-multimodal-context-card-token-benchmarks.md](studies/2026-09-20-dot8-braille-vs-markdown-and-multimodal-context-card-token-benchmarks.md) | Dot8 Braille vs. Markdown and Multimodal Context Card Token Benchmarks |
 | [studies/2026-09-20-dot8-larger-dot-card-canary.md](studies/2026-09-20-dot8-larger-dot-card-canary.md) | Dot8 Larger-Dot Card Canary (2026-09-20) |
 | [studies/2026-09-20-haiku-dot8-card-reading-canary.md](studies/2026-09-20-haiku-dot8-card-reading-canary.md) | Haiku Dot8 card reading canary (2026-09-20) |
+| [studies/2026-09-24-model-research-claude.md](studies/2026-09-24-model-research-claude.md) |  |
+| [studies/2026-09-24-model-research-gemini.md](studies/2026-09-24-model-research-gemini.md) | Gemini Model Row Audit (2026-09-24) |
+| [studies/2026-09-24-model-research-gpt56.md](studies/2026-09-24-model-research-gpt56.md) | GPT-5.6 Terra model row audit |
+| [studies/2026-09-24-model-research-gpt6.md](studies/2026-09-24-model-research-gpt6.md) | GPT-6 dispatch table research |
+| [studies/2026-09-24-model-research-plan-quota.md](studies/2026-09-24-model-research-plan-quota.md) | Plan quota cost per typical turn (2026-09-24) |
+| [studies/2026-09-24-model-research-price.md](studies/2026-09-24-model-research-price.md) | Model price and quota research — 2026-09-24 |
+| [studies/2026-09-24-model-research-quota.md](studies/2026-09-24-model-research-quota.md) | Model quota attribution research — 2026-09-24 |
+| [studies/2026-09-24-sprint-519-agent-stats.md](studies/2026-09-24-sprint-519-agent-stats.md) | Sprint 519 retro: agent stats, token use and plan-quota drain (2026-09-24) |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
 | [studies/MacOSContainerAMD.md](studies/MacOSContainerAMD.md) | macOS Containers on AMD KVM & Podman: Architecture, Quirks, and Diagnostic Guide |
