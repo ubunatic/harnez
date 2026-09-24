@@ -65,3 +65,8 @@ active, the agy hook stays out of the way (537's fallback rule). `revert --manag
 - Launcher script: indentation mixes tabs and spaces; use spaces only.
 - Round 2 (7add6b8): does not compile, `internal/claude/apply.go:1585: declared and not used: shimPath`.
   Remove the leftover variable. Build with `go vet ./internal/claude/` before the test run.
+- Round 3 (e7c74bf), root cause found by host: `gearSymlinkTargets` (apply.go ~831) adds
+  `~/.local/bin/⚙` only if `~/.local/bin` exists. ApplyAllVariant computes the ⚙ targets before
+  EnsureHarnezAgyLauncher creates `~/.local/bin`, so DiffAll then expects a ⚙ that apply never wrote.
+  Fix: in ApplyAllVariant, install the launcher (and shim) before the ⚙ symlink step. Verify with
+  `go test ./internal/claude/ -run TestUnifiedCrossHarnessSkillTargets -count=1` first.
