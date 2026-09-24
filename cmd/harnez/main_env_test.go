@@ -31,10 +31,18 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("HOME", tmpHome); err != nil {
 		panic(fmt.Sprintf("failed to set HOME: %v", err))
 	}
+	tmpRuntime, err := os.MkdirTemp("", "harnez-runtime-test-*")
+	if err != nil {
+		panic(fmt.Sprintf("failed to create temp XDG_RUNTIME_DIR: %v", err))
+	}
+	if err := os.Setenv("XDG_RUNTIME_DIR", tmpRuntime); err != nil {
+		panic(fmt.Sprintf("failed to set temp XDG_RUNTIME_DIR: %v", err))
+	}
 
 	code := m.Run()
 
 	os.RemoveAll(tmpHome)
+	os.RemoveAll(tmpRuntime)
 	if hadHome {
 		os.Setenv("HOME", oldHome)
 	} else {

@@ -169,6 +169,45 @@ func unwrapShellCommand(args []string) []string {
 	return args
 }
 
+// quota1SandboxArgs builds bwrap argv for a Quota-1 child. Empty cache paths
+// are omitted; the filesystem remains read-only outside the explicit binds.
+func quota1SandboxArgs(args []string, cwd, goCache, goModCache, runtimeDir string) []string {
+	bwrapArgs := []string{"--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"}
+	if cwd != "" {
+		bwrapArgs = append(bwrapArgs, "--bind", cwd, cwd)
+	}
+	for _, cache := range []string{goCache, goModCache} {
+		if cache != "" {
+			bwrapArgs = append(bwrapArgs, "--bind", cache, cache)
+		}
+	}
+	if runtimeDir != "" {
+		bwrapArgs = append(bwrapArgs, "--tmpfs", runtimeDir)
+	}
+	bwrapArgs = append(bwrapArgs, "--chdir", cwd, "--")
+	return append(bwrapArgs, args...)
+}
+
+func quota1SandboxCommand(args []string, cwd string) (string, []string, bool) {
+	bwrap, err := exec.LookPath("bwrap")
+	if err != nil {
+		return "", args, false
+	}
+	var goCache, goModCache string
+	if goPath, err := exec.LookPath("go"); err == nil {
+		if output, err := exec.Command(goPath, "env", "GOCACHE", "GOMODCACHE").Output(); err == nil {
+			paths := strings.Fields(string(output))
+			if len(paths) > 0 {
+				goCache = paths[0]
+			}
+			if len(paths) > 1 {
+				goModCache = paths[1]
+			}
+		}
+	}
+	return bwrap, quota1SandboxArgs(args, cwd, goCache, goModCache, os.Getenv("XDG_RUNTIME_DIR")), true
+}
+
 func newExecCmd() *cobra.Command {
 	var toolFlag string
 	var ticketFlag string
@@ -284,6 +323,7 @@ type execOptions struct {
 	Quota1           bool
 	Quota1Dir        string
 	ProcessRecordDir string
+	DisableSandbox   bool // test seam; production always enables Quota-1 sandboxing
 
 	Getenv        func(string) string                                // nil means os.Getenv
 	StateDir      string                                             // resolve.Session/Ticket state/lock dir override
@@ -577,6 +617,16 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 	defer cancel()
 	c := exec.Command(args[0], args[1:]...)
+	if quota1Active && !opts.DisableSandbox {
+		cwd, _ := os.Getwd()
+		if bwrap, wrappedArgs, ok := quota1SandboxCommand(args, cwd); ok {
+			c = exec.Command(bwrap, wrappedArgs...)
+			// Keep the wrapped command in the process group recorded by harnez.
+			c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		} else {
+			fmt.Fprintln(errOut, "harnez exec: warning: bwrap not found; running Quota-1 command unsandboxed")
+		}
+	}
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	c.Stdin = in
 

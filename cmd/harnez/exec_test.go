@@ -21,6 +21,33 @@ import (
 
 func strconvQuote(s string) string { return strconv.Quote(s) }
 
+func TestQuota1SandboxArgs(t *testing.T) {
+	got := quota1SandboxArgs([]string{"sh", "-c", "true"}, "/repo", "/cache/build", "/cache/mod", "")
+	want := []string{"--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--bind", "/repo", "/repo", "--bind", "/cache/build", "/cache/build", "--bind", "/cache/mod", "/cache/mod", "--chdir", "/repo", "--", "sh", "-c", "true"}
+	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("quota1SandboxArgs() = %q, want %q", got, want)
+	}
+}
+
+func TestQuota1SandboxBlocksHomeWrite(t *testing.T) {
+	bwrap, err := exec.LookPath("bwrap")
+	if err != nil {
+		t.Skip("bwrap not installed")
+	}
+	cwd := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	args := quota1SandboxArgs([]string{"sh", "-c", "touch \"$HOME/forbidden\""}, cwd, "", "", "")
+	cmd := exec.Command(bwrap, args...)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("HOME write succeeded in sandbox; output: %s", output)
+	}
+	if _, err := os.Stat(filepath.Join(home, "forbidden")); !os.IsNotExist(err) {
+		t.Fatalf("HOME write created file: stat error = %v", err)
+	}
+}
+
 // shlexSplitForTest tokenizes rewritten exactly as a real outer 'bash -c
 // <rewritten>' would (the same re-execution TestRunExecHook_* is guarding
 // against), by shadowing the 'harnez' command with a shell function that
@@ -45,6 +72,7 @@ func testExecOptions(t *testing.T) execOptions {
 	t.Helper()
 	dir := t.TempDir()
 	return execOptions{
+		DisableSandbox:   true,
 		Tool:             "test-tool",
 		Ticket:           "harnez/118-test-ticket",
 		Getenv:           func(string) string { return "" },
@@ -1222,12 +1250,19 @@ func TestRunExecWrapper_Quota1(t *testing.T) {
 
 func TestRunExecWrapper_Quota1SignalAllowsRetry(t *testing.T) {
 	repoDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repoDir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, ".git", "HEAD"), []byte("ref: refs/heads/test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(repoDir, "test.go"), []byte("package test\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	opts := testExecOptions(t)
 	opts.Quota1 = true
 	opts.Quota1Dir = repoDir
+	opts.DisableSandbox = true
 
 	var firstOut, firstErr bytes.Buffer
 	code, err := runExecWrapper([]string{"sh", "-c", "kill -KILL $$"}, opts, strings.NewReader(""), &firstOut, &firstErr)
