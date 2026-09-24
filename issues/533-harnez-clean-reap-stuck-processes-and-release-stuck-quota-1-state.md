@@ -1,6 +1,6 @@
 # 533 — harnez clean: reap stuck processes and release stuck quota-1 state
 
-**Status**: Open
+**Status**: Closed — f769fbf M1 revert --managed, cba35ac M2 run records, 002945b M3 clean procs/q1, ef0408b M4 stopped-child recovery; host repro: STOP returns in 0.4s exit 125, one retry
 **Priority**: P1
 **Severity**: Medium
 **Category**: Feature
