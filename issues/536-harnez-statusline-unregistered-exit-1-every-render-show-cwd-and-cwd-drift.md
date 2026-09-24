@@ -1,0 +1,35 @@
+# 536 — harnez statusline unregistered (exit 1 every render); show cwd and cwd drift
+
+**Status**: Open
+**Priority**: P1
+**Severity**: Medium
+**Category**: Bug / UX
+**Related**: [[143-show-git-status-in-all-agent-status-bars]]
+
+---
+
+## Problem
+
+`harnez apply` writes `"command": "harnez statusline"` into
+`~/.claude/settings.json`, but the binary does not have that command:
+
+    $ harnez statusline
+    Error: unknown command "statusline" for "harnez"
+
+`cmd/harnez/statusline.go` defines `newStatuslineCmd()` (added in 6b6c65d),
+but no code calls it, so the command is never added to the root command.
+`harnez log` shows `statusline  exit 1` on every render. Claude Code shows no
+status line.
+
+## /goal
+
+1. Register the command. Add a test that fails if any command `apply`
+   configures does not exist on the root command.
+2. The status line shows the current (effective) working directory.
+3. When the effective cwd differs from the session start directory
+   (`workspace.current_dir` != `workspace.project_dir` in the statusLine JSON),
+   show both, e.g. `~/projects/voxi → /tmp`.
+
+## Notes
+
+- Check which fields the statusLine payload has in the current Claude Code version before relying on them.
