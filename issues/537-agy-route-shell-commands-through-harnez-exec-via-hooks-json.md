@@ -127,6 +127,21 @@ machine, and `harnez agent` never put it on agy's PATH, which is why 532 happene
 - Per agy session: commands the hook saw vs `harnez exec` rows, split into via-shim / via-hook /
   unrouted / double-wrapped. Unrouted or double-wrapped counts are the alarm.
 
+**M5 Pre-Work (interactive launch):** `harnez agent chat` and attach both pass through
+`internal/subagent/interactive.go`; before this milestone they inherited the parent environment
+without ensuring the managed bash shim. The agy interactive child now calls the same
+`EnsureBashShim` helper as the print-mode driver and gets `agyLaunchEnv` (shim first on PATH and
+`ANTIGRAVITY_AGENT=1`). Other providers retain their prior environment.
+
+**M5 delivered (coverage + interactive launch):** `harnez stats --agents --days N` now emits a
+per-conversation AGY shell-coverage section, joining `hook:prep` observations to `agy` shell rows
+by Antigravity conversation ID and time. Matched routes are split into `via-shim`, `via-hook`, and
+`via-direct` (already-wrapped calls, kept distinct); observed commands without an exec row are
+`unrouted`, and surplus exec rows are `double-wrapped`. Exec rows without any hook observation are
+also shown as unrouted. JSON includes the same data as `agy_coverage`. Fixture tests cover route
+matching, absent/surplus rows, table rendering, and interactive shim provisioning. Live coverage
+remains host-verifiable in M6.
+
 ### M6 — live acceptance (host-run)
 - A `harnez agent -p` agy run: `sh -c 'kill -STOP $$'` returns exit 125 within seconds, `sleep 120`
   hits the exec timeout, agy's chat shows plain commands (shim route), and the M5 view shows 0 unrouted.

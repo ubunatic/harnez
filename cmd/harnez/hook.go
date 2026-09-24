@@ -296,7 +296,11 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 		callType = "hook:deny"
 		note = "reading_discipline:intercepted"
 	} else if opportunity {
-		note = "reading_discipline:opportunity"
+		if note == "" {
+			note = "reading_discipline:opportunity"
+		} else {
+			note += " | reading_discipline:opportunity"
+		}
 	}
 
 	scoreVal := 5

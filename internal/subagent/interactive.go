@@ -15,6 +15,7 @@ import (
 
 	"github.com/creack/pty"
 	"golang.org/x/term"
+	"ubunatic.com/harnez/internal/claude"
 )
 
 // InteractiveOptions configures a provider's foreground terminal session.
@@ -92,6 +93,16 @@ func interactiveCommand(opts InteractiveOptions, providerID string) (string, []s
 func runInteractiveCommand(ctx context.Context, command string, args []string, opts InteractiveOptions) error {
 	cmd := exec.CommandContext(ctx, command, args...)
 	cmd.Dir = opts.Dir
+	if command == "agy" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("agy: resolve home directory: %w", err)
+		}
+		cmd.Env, err = agyInteractiveLaunchEnv(os.Environ(), home)
+		if err != nil {
+			return err
+		}
+	}
 	listener, err := listenControl(opts.ControlSocket)
 	if err != nil {
 		return err
@@ -134,6 +145,13 @@ func runInteractiveCommand(ctx context.Context, command string, args []string, o
 		return fmt.Errorf("%s interactive session: %w", command, err)
 	}
 	return nil
+}
+
+func agyInteractiveLaunchEnv(environ []string, home string) ([]string, error) {
+	if _, _, err := claude.EnsureBashShim(home); err != nil {
+		return nil, fmt.Errorf("agy: ensure bash shim: %w", err)
+	}
+	return agyLaunchEnv(environ, home), nil
 }
 
 type controlRequest struct {

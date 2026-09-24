@@ -27,12 +27,25 @@ type agentStatsOptions struct {
 }
 
 type agentStatsReport struct {
-	Days            int                `json:"days"`
-	Since           time.Time          `json:"since"`
-	Sessions        []agentSessionRow  `json:"sessions"`
-	SessionsShown   int                `json:"sessions_shown"`
-	SessionsOmitted int                `json:"sessions_omitted"`
-	Models          []agentModelTotals `json:"models"`
+	Days            int                  `json:"days"`
+	Since           time.Time            `json:"since"`
+	Sessions        []agentSessionRow    `json:"sessions"`
+	AgyCoverage     []agySessionCoverage `json:"agy_coverage,omitempty"`
+	SessionsShown   int                  `json:"sessions_shown"`
+	SessionsOmitted int                  `json:"sessions_omitted"`
+	Models          []agentModelTotals   `json:"models"`
+}
+
+type agySessionCoverage struct {
+	SessionID     string    `json:"session_id"`
+	HookCommands  int       `json:"hook_commands"`
+	ExecRows      int       `json:"exec_rows"`
+	ViaShim       int       `json:"via_shim"`
+	ViaHook       int       `json:"via_hook"`
+	ViaDirect     int       `json:"via_direct"`
+	Unrouted      int       `json:"unrouted"`
+	DoubleWrapped int       `json:"double_wrapped"`
+	lastSeen      time.Time `json:"-"`
 }
 
 type agentSessionRow struct {
@@ -178,17 +191,125 @@ func runAgentStats(w io.Writer, opts agentStatsOptions) error {
 	hostRows := hostSessionRows(calls, known, history, codexRolloutModels(opts.HomeDir))
 	shareFittedDrain(hostRows)
 	rows = append(rows, hostRows...)
+	agyCoverage := collectAgyCoverage(calls)
 	sort.Slice(rows, func(i, j int) bool { return rows[i].LastActiveAt.After(rows[j].LastActiveAt) })
 	models := modelTotals(rows)
 	shown := rows
 	if !opts.All && len(shown) > 20 {
 		shown = shown[:20]
 	}
-	report := agentStatsReport{Days: opts.Days, Since: since, Sessions: shown, SessionsShown: len(shown), SessionsOmitted: len(rows) - len(shown), Models: models}
+	report := agentStatsReport{Days: opts.Days, Since: since, Sessions: shown, AgyCoverage: agyCoverage, SessionsShown: len(shown), SessionsOmitted: len(rows) - len(shown), Models: models}
 	if opts.JSON {
 		return json.NewEncoder(w).Encode(report)
 	}
 	return renderAgentStatsTable(w, report)
+}
+
+// collectAgyCoverage compares PreToolUse observations with exec telemetry by
+// Antigravity conversation ID. Missing exec rows are unrouted; extra rows are
+// counted as double-wrapped (or otherwise unexplained) calls.
+func collectAgyCoverage(calls []telemetry.ToolCall) []agySessionCoverage {
+	type hookObservation struct {
+		at    time.Time
+		route string
+	}
+	hooks := make(map[string][]hookObservation)
+	execs := make(map[string][]time.Time)
+	for _, call := range calls {
+		if call.AgentID != "agy" || call.SessionID == "" {
+			continue
+		}
+		if call.CallType == "hook:prep" && call.ToolName == "run_command" {
+			route := ""
+			if i := strings.Index(call.Note, "agy-route="); i >= 0 {
+				fields := strings.Fields(strings.TrimPrefix(call.Note[i:], "agy-route="))
+				if len(fields) > 0 {
+					route = fields[0]
+				}
+			}
+			hooks[call.SessionID] = append(hooks[call.SessionID], hookObservation{at: call.CreatedAt, route: route})
+			continue
+		}
+		if call.ToolName == "agy" && (call.CallType == "shell" || call.CallType == "shell-timeout" || call.CallType == telemetry.ExpectedFailureCallType) {
+			execs[call.SessionID] = append(execs[call.SessionID], call.CreatedAt)
+		}
+	}
+	bySession := make(map[string]agySessionCoverage, len(hooks)+len(execs))
+	for sessionID, observations := range hooks {
+		coverage := bySession[sessionID]
+		coverage.SessionID = sessionID
+		coverage.HookCommands = len(observations)
+		bySession[sessionID] = coverage
+	}
+	for sessionID, rows := range execs {
+		coverage := bySession[sessionID]
+		coverage.SessionID = sessionID
+		coverage.ExecRows = len(rows)
+		bySession[sessionID] = coverage
+	}
+	for sessionID, observations := range hooks {
+		rows := execs[sessionID]
+		used := make([]bool, len(rows))
+		sort.Slice(observations, func(i, j int) bool { return observations[i].at.Before(observations[j].at) })
+		sort.Slice(rows, func(i, j int) bool { return rows[i].Before(rows[j]) })
+		coverage := bySession[sessionID]
+		for _, observation := range observations {
+			if observation.at.After(coverage.lastSeen) {
+				coverage.lastSeen = observation.at
+			}
+			match := -1
+			for i, at := range rows {
+				if !used[i] && !at.Before(observation.at) {
+					match = i
+					break
+				}
+			}
+			if match < 0 {
+				coverage.Unrouted++
+				continue
+			}
+			used[match] = true
+			switch observation.route {
+			case "shim":
+				coverage.ViaShim++
+			case "hook":
+				coverage.ViaHook++
+			case "direct":
+				coverage.ViaDirect++
+			default:
+				coverage.Unrouted++
+			}
+		}
+		for i, at := range rows {
+			if !used[i] {
+				coverage.DoubleWrapped++
+				if at.After(coverage.lastSeen) {
+					coverage.lastSeen = at
+				}
+			}
+		}
+		bySession[sessionID] = coverage
+	}
+	for sessionID, coverage := range bySession {
+		if _, hasHooks := hooks[sessionID]; !hasHooks {
+			coverage.Unrouted = coverage.ExecRows
+			if rows := execs[sessionID]; len(rows) > 0 {
+				coverage.lastSeen = rows[len(rows)-1]
+			}
+			bySession[sessionID] = coverage
+		}
+	}
+	out := make([]agySessionCoverage, 0, len(bySession))
+	for _, coverage := range bySession {
+		out = append(out, coverage)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].lastSeen.Equal(out[j].lastSeen) {
+			return out[i].SessionID < out[j].SessionID
+		}
+		return out[i].lastSeen.After(out[j].lastSeen)
+	})
+	return out
 }
 
 func measuredTurnMetrics(session *subagent.Session, events map[string]map[int]*quotaTurnPair) (float64, int, int, int64) {
@@ -579,6 +700,13 @@ func renderAgentStatsTable(w io.Writer, report agentStatsReport) error {
 	}
 	if report.SessionsOmitted > 0 {
 		fmt.Fprintf(tw, "... %d older sessions omitted; pass --all to list every session.\n", report.SessionsOmitted)
+	}
+	if len(report.AgyCoverage) > 0 {
+		fmt.Fprintln(w, "\nAGY shell coverage (recent sessions):")
+		fmt.Fprintln(tw, "SESSION\tHOOK\tEXEC\tVIA SHIM\tVIA HOOK\tVIA DIRECT\tUNROUTED\tDOUBLE-WRAPPED")
+		for _, row := range report.AgyCoverage {
+			fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", row.SessionID, row.HookCommands, row.ExecRows, row.ViaShim, row.ViaHook, row.ViaDirect, row.Unrouted, row.DoubleWrapped)
+		}
 	}
 	fmt.Fprintln(tw, "\nPer-model totals:")
 	fmt.Fprintln(tw, "MODEL\tSESSIONS (TOKEN COMPLETE)\tTURNS (KNOWN)\tNEW INPUT\tCACHED\tOUTPUT\tRATING\tMEASURED TURNS\t5H DRAIN\tPTS/100K NEW")

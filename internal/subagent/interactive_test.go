@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
+
+	"ubunatic.com/harnez/internal/claude"
 )
 
 func TestInteractiveCommand(t *testing.T) {
@@ -43,6 +47,31 @@ func TestInteractiveCommandUnsupportedProvider(t *testing.T) {
 	_, _, err := interactiveCommand(InteractiveOptions{Model: Model{Provider: "local"}}, "")
 	if err == nil {
 		t.Fatal("expected unsupported provider error")
+	}
+}
+
+func TestAgyInteractiveLaunchEnvironmentInstallsShimAndSetsPath(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, "bin")
+	original := []string{"PATH=" + binDir + string(os.PathListSeparator) + "/usr/bin:/bin", "ANTIGRAVITY_AGENT=0"}
+	environ, err := agyInteractiveLaunchEnv(original, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := environmentValue(environ, "ANTIGRAVITY_AGENT"); got != "1" {
+		t.Fatalf("ANTIGRAVITY_AGENT = %q, want 1", got)
+	}
+	shimDir := filepath.Join(home, ".harnez", "shims")
+	paths := filepath.SplitList(environmentValue(environ, "PATH"))
+	if len(paths) < 2 || paths[0] != shimDir || paths[1] != binDir {
+		t.Fatalf("agy PATH = %#v, want shim first and original PATH after", paths)
+	}
+	shim, err := os.ReadFile(filepath.Join(shimDir, "bash"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(shim) != claude.BashShimContent {
+		t.Fatalf("installed shim content does not match managed bash shim")
 	}
 }
 

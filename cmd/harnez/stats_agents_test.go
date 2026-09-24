@@ -138,6 +138,55 @@ func TestAgentStatsLegacyNewInputSubtractsCachedAndRetainsDeletedSessions(t *tes
 	}
 }
 
+func TestCollectAgyCoverageMatchesRoutesAndFlagsGaps(t *testing.T) {
+	base := time.Now().UTC().Truncate(time.Second)
+	call := func(at time.Time, session, callType, tool, note string) telemetry.ToolCall {
+		return telemetry.ToolCall{CreatedAt: at, SessionID: session, AgentID: "agy", CallType: callType, ToolName: tool, Note: note}
+	}
+	var calls []telemetry.ToolCall
+	for i, route := range []string{"shim", "hook", "direct"} {
+		at := base.Add(time.Duration(i*2) * time.Second)
+		calls = append(calls, call(at, "conversation-1", "hook:prep", "run_command", "preps:Bash | agy-route="+route+" | command"))
+		calls = append(calls, call(at.Add(time.Second), "conversation-1", "shell", "agy", ""))
+	}
+	// One surplus exec row should be visible as a double-wrap alarm. An exec
+	// session with no hook observation is separately reported as unrouted.
+	calls = append(calls,
+		call(base.Add(10*time.Second), "conversation-1", "shell", "agy", ""),
+		call(base.Add(12*time.Second), "conversation-2", "hook:prep", "run_command", "preps:Bash | agy-route=shim | command"),
+		call(base.Add(13*time.Second), "conversation-3", "shell", "agy", ""),
+	)
+	got := collectAgyCoverage(calls)
+	if len(got) != 3 {
+		t.Fatalf("coverage rows = %+v, want three sessions", got)
+	}
+	byID := map[string]agySessionCoverage{}
+	for _, row := range got {
+		byID[row.SessionID] = row
+	}
+	first := byID["conversation-1"]
+	if first.HookCommands != 3 || first.ExecRows != 4 || first.ViaShim != 1 || first.ViaHook != 1 || first.ViaDirect != 1 || first.Unrouted != 0 || first.DoubleWrapped != 1 {
+		t.Fatalf("conversation-1 coverage = %+v", first)
+	}
+	second := byID["conversation-2"]
+	if second.HookCommands != 1 || second.ExecRows != 0 || second.Unrouted != 1 {
+		t.Fatalf("conversation-2 coverage = %+v", second)
+	}
+	third := byID["conversation-3"]
+	if third.HookCommands != 0 || third.ExecRows != 1 || third.Unrouted != 1 {
+		t.Fatalf("conversation-3 coverage = %+v", third)
+	}
+	var rendered bytes.Buffer
+	if err := renderAgentStatsTable(&rendered, agentStatsReport{AgyCoverage: got}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"AGY shell coverage", "VIA SHIM", "VIA HOOK", "VIA DIRECT", "UNROUTED", "DOUBLE-WRAPPED", "conversation-1"} {
+		if !strings.Contains(rendered.String(), want) {
+			t.Errorf("coverage output missing %q:\n%s", want, rendered.String())
+		}
+	}
+}
+
 func TestAgentStatsMeasuresDeletedAGYFiveHourPairs(t *testing.T) {
 	home := t.TempDir()
 	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
