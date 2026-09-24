@@ -47,3 +47,12 @@ Repro: run it on a few ~400-line Go files and watch the RSS.
 - Reproduce: run a long, chatty child under `harnez exec` (e.g. `yes | head -c 5G`) and a long agent
   resume, and watch RSS (`ps -o rss`). Check `pprof` heap if RSS grows.
 - Acceptance: RSS stays flat (e.g. <100 MB) for a multi-GB output stream and for a 10-minute agent turn.
+
+## Update: host preflight on HEAD (2026-09-24)
+
+- `harnez read -I -L 1:400` on 5–8 voxi files (`internal/tts`, `internal/shortcut`) peaked at 30–45 MB, whether
+  it wrote to a pipe or a file and whether it ran bare or under `harnez exec`. Not reproduced.
+- User: the 2.1 GB `read -I` sighting may have been the voice engine (voxi TTS), not harnez. Other memory spikes
+  near **20 GB** were seen. So `read -I` is **not confirmed** as the cause. Treat the earlier suspects (`harnez exec`
+  output capture, `harnez agent resume` streaming) as equal candidates again. Before blaming a process, check which
+  process actually holds the RSS (`ps`/`journalctl -k` pid → cmdline).
