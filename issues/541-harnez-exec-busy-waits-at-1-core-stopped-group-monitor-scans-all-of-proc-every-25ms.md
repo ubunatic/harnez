@@ -1,6 +1,6 @@
 # 541 — harnez exec busy-waits at ~1 core: stopped-group monitor scans all of /proc every 25ms
 
-**Status**: Closed — monitor reads only the direct child stat file at a one-second interval
+**Status**: Open
 **Priority**: P0
 **Severity**: High
 **Category**: Bug / Performance (regression)
@@ -50,3 +50,17 @@ A waiting `harnez exec` uses about 0% CPU, and stopped-child detection still wor
   continued the stopped child.
 - CPU measurement, `ps -o %cpu` at two seconds into `harnez exec -- sleep 30`:
   before (reported observation) ~94%; after 0.4% (PID 1228331).
+
+## Host review (2026-09-24): regression in descendant stops
+
+- Confirmed: CPU 0.0% while waiting (`harnez exec -- sleep 6`), direct stop → exit 125 in 2s.
+- ❌ `harnez exec -- sh -c 'sh -c "kill -STOP \$\$"; echo inner-done'` hangs: a stop that hits only a
+  grandchild (e.g. `go test` under `make`, the 532 shape) is no longer detected, because only the
+  direct child's stat is read.
+
+### M2 — detect descendant stops cheaply
+- Pre-Work / Required Refinements: walk the child's descendants via
+  `/proc/<pid>/task/<tid>/children` (recursive, only the tree) each tick and read only those stats.
+  Keep the 1s interval. No full /proc scan.
+- Tests: grandchild-stop fixture → detected and recovered (exit 125). Keep the guard test.
+- Measure again: CPU while waiting on `sh -c 'sleep 30'` (grandchild) stays <1%.

@@ -26,7 +26,15 @@
 Find which harnez process and code path grows without bound, fix it, and add a guard so that a
 long-running `harnez exec` / `harnez agent resume` keeps its memory bounded no matter how long it runs.
 
-## Suspects (unverified)
+## Update: caught live (lucky-fox, 2026-09-24)
+
+`harnez read -I -L 1:400 internal/tts/manager.go internal/tts/socket.go internal/tts/command.go internal/sh…`
+(several files, image mode) reached **2.1 GB RSS after 3s** and was killed by hand (pid 1229245). Developer
+agents call `harnez read -I` on multi-file sets because the lean-sprint skill tells them to. The 16 GB
+OOM kills fit this pattern. **Primary suspect: `harnez read -I` with multiple files and a line range.**
+Repro: run it on a few ~400-line Go files and watch the RSS.
+
+## Earlier suspects (now secondary)
 
 - `harnez exec` output capture: the quota-1 log, distill buffering, or an in-memory copy of the child
   output that grows with a verbose or long-streaming child.
