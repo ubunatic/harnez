@@ -36,9 +36,10 @@ Findings:
 - **No cell except COST changed.** Every SKILLS, ROLES and USE claim came back `?`: no
   model-specific public evidence for Go, TUI or SQL exists. Per the reconcile rule the
   cells stay; only [ModelTrials.md](ModelTrials.md) canaries can settle them.
-- **Claude effort contradicted (high confidence):** Anthropic documents low/medium/high
-  effort for Sonnet 4.6 and Opus 4.6+, but `harnez agent` marks every `claude:*` row
-  EFFORT no. Needs a canary of the Claude CLI's effort flag before changing code.
+- **Claude effort canary (2026-09-24):** the installed CLI accepts `--effort low` in
+  `-p` mode, and its help lists low/medium/high/xhigh/max. `harnez agent` passes the
+  explicit model tier for Claude turns; `:med` maps to `medium`, and the default no-tier
+  invocation remains unchanged.
 - **Claude aliases move:** `sonnet`/`opus`/`haiku` resolve to the newest model (Sonnet 5,
   Opus 5.x, Haiku 4.5 today); the web evidence is partly for 4.6. Transcripts show
   `claude-opus-5`, `claude-opus-5-5`, `claude-sonnet-5`, `claude-haiku-4-5`.
@@ -188,4 +189,3 @@ Findings:
   • Use GPT-5.5/5.6 Sol selectively: Reserved for isolated, difficult mathematical, cryptographic, or  
   algorithmic problems where extensive exploratory reasoning is explicitly desired. For standard daily 
   workflows, Terra provides a more stable experience than Sol.
-

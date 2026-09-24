@@ -109,7 +109,12 @@ func TestKnownModelsAndExplicitSpecsFailClosed(t *testing.T) {
 			t.Fatalf("known specs %q missing %q", specs, want)
 		}
 	}
-	if strings.Contains(specs, "claude:opus:med") || strings.Contains(specs, "agy:opus:med") {
+	for _, want := range []string{"claude:haiku:med", "claude:sonnet:med", "claude:opus:med"} {
+		if !strings.Contains(specs, want) {
+			t.Fatalf("known specs %q missing %q", specs, want)
+		}
+	}
+	if strings.Contains(specs, "agy:opus:med") {
 		t.Fatalf("known specs %q list :med for a model without effort support", specs)
 	}
 	for _, spec := range []string{"codex:luna:invalid", "codex:missing:low", "unknown:model:high"} {
@@ -184,6 +189,72 @@ func TestClaudeResumeUsesProviderSessionID(t *testing.T) {
 	want := []string{"-p", "--resume", "provider-id", "--dangerously-skip-permissions", "--model", "haiku", "--output-format", "json", "continue"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+}
+
+func TestClaudeDriverEffortTiers(t *testing.T) {
+	for _, tc := range []struct {
+		name, tier, effort string
+	}{
+		{"low", "low", "low"},
+		{"medium", "med", "medium"},
+		{"high", "high", "high"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var runArgs, resumeArgs []string
+			d := ClaudeDriver{Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
+				args := append([]string(nil), gotArgs...)
+				if len(args) > 1 && args[1] == "--resume" {
+					resumeArgs = args
+				} else {
+					runArgs = args
+				}
+				return []byte(`{"session_id":"s1","result":"done"}`), nil
+			}}
+			model := Model{Name: "sonnet", Tier: tc.tier}
+			if _, err := d.Run(context.Background(), RunOptions{Model: model, Prompt: "go"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := d.Resume(context.Background(), "s1", "continue", model); err != nil {
+				t.Fatal(err)
+			}
+			wantRun := []string{"-p", "--dangerously-skip-permissions", "--model", "sonnet", "--effort", tc.effort, "--output-format", "json", "go"}
+			wantResume := []string{"-p", "--resume", "s1", "--dangerously-skip-permissions", "--model", "sonnet", "--effort", tc.effort, "--output-format", "json", "continue"}
+			if !reflect.DeepEqual(runArgs, wantRun) {
+				t.Errorf("run args = %q, want %q", runArgs, wantRun)
+			}
+			if !reflect.DeepEqual(resumeArgs, wantResume) {
+				t.Errorf("resume args = %q, want %q", resumeArgs, wantResume)
+			}
+		})
+	}
+}
+
+func TestClaudeDriverOmitsEffortWithoutTier(t *testing.T) {
+	var runArgs, resumeArgs []string
+	d := ClaudeDriver{Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {
+		args := append([]string(nil), gotArgs...)
+		if len(args) > 1 && args[1] == "--resume" {
+			resumeArgs = args
+		} else {
+			runArgs = args
+		}
+		return []byte(`{"session_id":"s1","result":"done"}`), nil
+	}}
+	model := Model{Name: "sonnet"}
+	if _, err := d.Run(context.Background(), RunOptions{Model: model, Prompt: "go"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Resume(context.Background(), "s1", "continue", model); err != nil {
+		t.Fatal(err)
+	}
+	wantRun := []string{"-p", "--dangerously-skip-permissions", "--model", "sonnet", "--output-format", "json", "go"}
+	wantResume := []string{"-p", "--resume", "s1", "--dangerously-skip-permissions", "--model", "sonnet", "--output-format", "json", "continue"}
+	if !reflect.DeepEqual(runArgs, wantRun) {
+		t.Errorf("run args = %q, want %q", runArgs, wantRun)
+	}
+	if !reflect.DeepEqual(resumeArgs, wantResume) {
+		t.Errorf("resume args = %q, want %q", resumeArgs, wantResume)
 	}
 }
 

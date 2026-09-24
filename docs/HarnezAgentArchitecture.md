@@ -183,7 +183,7 @@ How a spec reaches the provider CLI (batch drivers):
 | Provider | Invocation | Tier handling |
 |---|---|---|
 | codex | `codex exec --json --dangerously-bypass-approvals-and-sandbox -m <name> -c model_reasoning_effort=<tier>` | `low`/`med`/`high` → reasoning effort |
-| claude | `claude -p --dangerously-skip-permissions --model <name> --output-format json` | no effort flag; the tier is a label only (no `:med` row listed) |
+| claude | `claude -p --dangerously-skip-permissions --model <name> [--effort <tier>] --output-format json` | explicit `low`/`med`/`high` tier passed as `low`/`medium`/`high`; omitted when no tier is set |
 | agy | `agy --model <name> --effort <tier>` | effort omitted for `effort: false` models (`agy:sonnet`, `agy:opus`) |
 
 ---

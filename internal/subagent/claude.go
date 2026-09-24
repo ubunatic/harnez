@@ -29,7 +29,12 @@ func (d ClaudeDriver) command(ctx context.Context, args ...string) ([]byte, erro
 }
 func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 	start := time.Now()
-	b, err := d.command(ctx, "-p", "--dangerously-skip-permissions", "--model", o.Model.Name, "--output-format", "json", o.Prompt)
+	args := []string{"-p", "--dangerously-skip-permissions", "--model", o.Model.Name}
+	if o.Model.Tier != "" {
+		args = append(args, "--effort", claudeEffort(o.Model.Tier))
+	}
+	args = append(args, "--output-format", "json", o.Prompt)
+	b, err := d.command(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("claude: %w", err)
 	}
@@ -41,12 +46,25 @@ func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error
 	return r, nil
 }
 func (d ClaudeDriver) Resume(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
-	b, err := d.command(ctx, "-p", "--resume", id, "--dangerously-skip-permissions", "--model", model.Name, "--output-format", "json", prompt)
+	args := []string{"-p", "--resume", id, "--dangerously-skip-permissions", "--model", model.Name}
+	if model.Tier != "" {
+		args = append(args, "--effort", claudeEffort(model.Tier))
+	}
+	args = append(args, "--output-format", "json", prompt)
+	b, err := d.command(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("claude resume: %w", err)
 	}
 	return parseClaude(b)
 }
+
+func claudeEffort(tier string) string {
+	if tier == "med" {
+		return "medium"
+	}
+	return tier
+}
+
 func (d ClaudeDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
 	return d.Resume(ctx, id, "/compact", Model{})
 }

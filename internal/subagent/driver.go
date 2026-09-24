@@ -107,7 +107,7 @@ func KnownModels() []Model {
 }
 
 // KnownModelSpecs lists every selectable spec: each configured model at its
-// default tier, plus a :med variant for effort-aware codex and agy models.
+// default tier, plus a :med variant for effort-aware models.
 func KnownModelSpecs() []string {
 	var specs []string
 	for _, e := range KnownModelEntries() {
@@ -120,8 +120,7 @@ func KnownModelSpecs() []string {
 type ModelEntry struct {
 	Spec  string
 	Model Model
-	// Effort reports whether the batch driver passes a tier flag; the
-	// claude driver never does, so claude tiers are labels only.
+	// Effort reports whether the batch driver passes a tier flag.
 	Effort bool
 	Cost   int
 	Eff    string
@@ -139,7 +138,7 @@ func KnownModelEntries() []ModelEntry {
 	var entries []ModelEntry
 	for _, m := range KnownModels() {
 		g := guides[m.Provider+":"+modelAliasName(m)]
-		effort := m.Provider != "claude" && m.SupportsEffort()
+		effort := m.SupportsEffort()
 		entries = append(entries, ModelEntry{Spec: m.Spec(), Model: m, Effort: effort, Cost: g.Cost, Eff: g.Eff, Skills: g.Skills, Roles: g.Roles, Use: g.Use})
 		if m.Tier != "med" && effort {
 			use := g.Use
