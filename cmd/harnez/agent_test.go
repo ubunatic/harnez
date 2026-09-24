@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
@@ -1637,6 +1638,111 @@ func TestRunStartRecordsQuotaBoundariesForTurn(t *testing.T) {
 	}
 }
 
+func TestWarnQuota1Changes(t *testing.T) {
+	dir := t.TempDir()
+	state, _, err := quota1.ResolveStateFile(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runAt := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	if err := os.MkdirAll(filepath.Dir(state), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(state, []byte(runAt.Format(time.RFC3339Nano)+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 7; i++ {
+		path := filepath.Join(dir, fmt.Sprintf("file-%d.go", i))
+		if err := os.WriteFile(path, []byte("package test\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(path, runAt.Add(time.Minute), runAt.Add(time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := &cobra.Command{}
+	var out, errOut bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	warnQuota1Changes(cmd, dir)
+	got := errOut.String()
+	if !strings.Contains(got, "7 file(s) changed after the last quota-1 run at "+runAt.Format(time.RFC3339)+":") || !strings.Contains(got, "— code is untested, run make test-q1") {
+		t.Fatalf("warning = %q", got)
+	}
+	if strings.Count(got, "file-") != 5 || out.Len() != 0 {
+		t.Fatalf("warning should list 5 files once on stderr; stderr=%q stdout=%q", got, out.String())
+	}
+}
+
+func TestAgentTurnsWarnAboutQuota1Changes(t *testing.T) {
+	for _, mode := range []string{"start", "resume"} {
+		t.Run(mode, func(t *testing.T) {
+			repoDir := t.TempDir()
+			store, err := subagent.NewSessionStore(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			runAt := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
+			state, _, err := quota1.ResolveStateFile(repoDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Dir(state), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(state, []byte(runAt.Format(time.RFC3339Nano)+"\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			source := filepath.Join(repoDir, "changed.go")
+			if err := os.WriteFile(source, []byte("package changed\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			future := runAt.Add(time.Minute)
+			if err := os.Chtimes(source, future, future); err != nil {
+				t.Fatal(err)
+			}
+			driver := &recordingAgentDriver{}
+			old := agentDriver
+			agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+			defer func() { agentDriver = old }()
+			cmd := &cobra.Command{}
+			var stdout, stderr bytes.Buffer
+			cmd.SetOut(&stdout)
+			cmd.SetErr(&stderr)
+			deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }}
+			if mode == "start" {
+				err = runStart(cmd, deps, startRequest{Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna", Dir: repoDir, StreamMode: streamFull, JSON: true})
+			} else {
+				if err := store.Save(&subagent.Session{ID: "resume-id", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: repoDir, Status: "completed"}); err != nil {
+					t.Fatal(err)
+				}
+				deps.find = func(_ *cobra.Command, s *subagent.FileSessionStore, name string) (*subagent.Session, error) {
+					sessions, err := s.List("", true)
+					if err != nil {
+						return nil, err
+					}
+					for _, session := range sessions {
+						if session.Name == name || session.ID == name {
+							return session, nil
+						}
+					}
+					return nil, fmt.Errorf("session %q not found", name)
+				}
+				err = runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "continue", StreamMode: streamFull, JSON: true})
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(stderr.String(), "1 file(s) changed after the last quota-1 run at "+runAt.Format(time.RFC3339)+": changed.go — code is untested, run make test-q1") {
+				t.Fatalf("stderr warning = %q", stderr.String())
+			}
+			if !strings.HasPrefix(stdout.String(), "{") {
+				t.Fatalf("stdout should remain JSON, got %q", stdout.String())
+			}
+		})
+	}
+}
+
 func TestRunResumeRecordsFreshQuotaPairAndAdvancesTurn(t *testing.T) {
 	storeDir := t.TempDir()
 	store, err := subagent.NewSessionStore(storeDir)
@@ -2009,7 +2115,7 @@ func TestAgentStartDefaultsToDeveloperRole(t *testing.T) {
 	if _, err := runWithStore(t, d, t.TempDir(), "start", "task"); err != nil {
 		t.Fatal(err)
 	}
-	if d.envRole != "developer" || !strings.Contains(d.prompt, "You are a leaf worker") || !strings.Contains(d.prompt, "Never run `harnez agent`") {
+	if d.envRole != "developer" || !strings.Contains(d.prompt, "You are a leaf worker") || strings.Contains(d.prompt, "Never run `harnez agent`") {
 		t.Fatalf("env=%q prompt:\n%s", d.envRole, d.prompt)
 	}
 	if _, err := runWithStore(t, d, t.TempDir(), "start", "--role", "wizard", "task"); err == nil || !strings.Contains(err.Error(), "unknown agent role") {

@@ -87,7 +87,7 @@ func TestAgentSpecRolesAndCheckSpawn(t *testing.T) {
 		{"", "orchestrator", ""}, {"", "developer", ""},
 		{"orchestrator", "developer", ""}, {"orchestrator", "reviewer", ""}, {"orchestrator", "advisor", ""},
 		{"orchestrator", "orchestrator", "may only start developer, reviewer, advisor"},
-		{"developer", "developer", "is a leaf worker"}, {"reviewer", "developer", "is a leaf worker"}, {"advisor", "reviewer", "is a leaf worker"},
+		{"developer", "developer", "the host runs live harnez agent checks after your commit"}, {"reviewer", "developer", "the host runs live harnez agent checks after your commit"}, {"advisor", "reviewer", "the host runs live harnez agent checks after your commit"},
 		{"", "wizard", "unknown agent role"}, {"wizard", "developer", "unknown agent role"},
 	} {
 		err := CheckSpawn(tc.caller, tc.target)

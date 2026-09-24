@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
 )
@@ -54,6 +56,22 @@ func captureTurnQuota(parent context.Context, capture func(context.Context, stri
 
 func storeTurnQuota(s *subagent.FileSessionStore, sessionID, provider string, turn int, boundary string, reading usage.TurnQuotaReading) {
 	_ = s.RecordTurnQuota(subagent.TurnQuotaEvent{SessionID: sessionID, Turn: turn, Boundary: boundary, Provider: provider, Reading: reading})
+}
+
+func warnQuota1Changes(cmd *cobra.Command, dir string) {
+	files, since, err := quota1.ChangesSinceLastRun(dir)
+	if err != nil || len(files) == 0 {
+		return
+	}
+	const shown = 5
+	names := files
+	if len(names) > shown {
+		names = names[:shown]
+	}
+	for i := range names {
+		names[i], _ = filepath.Rel(dir, names[i])
+	}
+	fmt.Fprintf(cmd.ErrOrStderr(), "harnez: %d file(s) changed after the last quota-1 run at %s: %s — code is untested, run make test-q1\n", len(files), since.Format(time.RFC3339), strings.Join(names, ", "))
 }
 
 // startRequest describes one new agent turn. Prompt is sent to the agent;
@@ -201,13 +219,18 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	out := agentOutput{Session: sess, Response: r.Response, Messages: r.Messages, ReconnectCmd: "harnez agent resume " + id + " \"<prompt>\""}
 	if streaming {
 		ts.finish(r)
+		warnQuota1Changes(cmd, canonicalWorkDir)
 		return nil
 	}
 	tl.finishTurn(r, id, out.ReconnectCmd)
 	if req.JSON {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
+		err := json.NewEncoder(cmd.OutOrStdout()).Encode(out)
+		warnQuota1Changes(cmd, canonicalWorkDir)
+		return err
 	}
-	return printAgentMessages(cmd, r.Messages, r.Response)
+	err = printAgentMessages(cmd, r.Messages, r.Response)
+	warnQuota1Changes(cmd, canonicalWorkDir)
+	return err
 }
 
 // runResume runs one more turn on an existing session.
@@ -330,6 +353,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	}
 	if streaming {
 		ts.finish(r)
+		warnQuota1Changes(cmd, sess.WorkingDir)
 		return nil
 	}
 	if compacted {
@@ -339,7 +363,9 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		}
 	}
 	tl.finishTurn(r, sess.ID, "harnez agent resume "+sess.ID+" \"<prompt>\"")
-	return writeAgentOutput(cmd, req.JSON, agentOutput{Session: sess, Response: r.Response, Messages: r.Messages})
+	err = writeAgentOutput(cmd, req.JSON, agentOutput{Session: sess, Response: r.Response, Messages: r.Messages})
+	warnQuota1Changes(cmd, sess.WorkingDir)
+	return err
 }
 
 func writeAgentOutput(cmd *cobra.Command, jsonOut bool, v agentOutput) error {

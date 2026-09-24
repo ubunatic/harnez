@@ -199,7 +199,7 @@ func CheckSpawn(callerRole, target string) error {
 		return unknownRoleError(spec, callerRole)
 	}
 	if len(caller.Spawns) == 0 {
-		return fmt.Errorf("agent role %q is a leaf worker: it must not start, resume or manage agents; do the work yourself and report back", callerRole)
+		return fmt.Errorf("agent role %q is a leaf worker: it must not start, resume or manage agents; do the work yourself and report back; the host runs live harnez agent checks after your commit", callerRole)
 	}
 	for _, allowed := range caller.Spawns {
 		if allowed == target {

@@ -141,7 +141,7 @@ roles:
     spawns: []
     rules: >-
       You are a leaf worker. Do the assigned ticket or milestone yourself: read,
-      edit, test and commit. Never run `harnez agent` and never start native
+      edit, test and commit. Never start native
       subagents, background agents or delegating skills. Report in at most 10
       lines: files changed, tests run and their result, open problems.
   reviewer:

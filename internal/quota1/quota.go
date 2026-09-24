@@ -96,6 +96,28 @@ func readState(path string) (time.Time, error) {
 	return time.Parse(time.RFC3339, str)
 }
 
+// ChangesSinceLastRun returns eligible source files modified after the last
+// Quota-1 run, along with that run's recorded time. Missing state is not an
+// error and returns no changes.
+func ChangesSinceLastRun(dir string) ([]string, time.Time, error) {
+	stateFile, root, err := ResolveStateFile(dir)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	since, err := readState(stateFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, time.Time{}, nil
+		}
+		return nil, time.Time{}, fmt.Errorf("read quota-1 state: %w", err)
+	}
+	files, err := findModifiedSourceFiles(root, stateFile, since)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	return files, since, nil
+}
+
 // writeState writes the timestamp to the state file.
 func writeState(path string, t time.Time) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -131,8 +153,16 @@ func isExcludedFile(name string) bool {
 
 // findModifiedSourceFile checks if any repository source file in root has ModTime > since.
 func findModifiedSourceFile(root, stateFilePath string, since time.Time) (string, error) {
+	files, err := findModifiedSourceFiles(root, stateFilePath, since)
+	if err != nil || len(files) == 0 {
+		return "", err
+	}
+	return files[0], nil
+}
+
+func findModifiedSourceFiles(root, stateFilePath string, since time.Time) ([]string, error) {
 	absStateFile, _ := filepath.Abs(stateFilePath)
-	var found string
+	var found []string
 
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -159,14 +189,13 @@ func findModifiedSourceFile(root, stateFilePath string, since time.Time) (string
 			return nil
 		}
 		if info.ModTime().After(since) {
-			found = path
-			return fs.SkipAll
+			found = append(found, path)
 		}
 		return nil
 	})
 
 	if err != nil && !errors.Is(err, fs.SkipAll) {
-		return "", err
+		return nil, err
 	}
 	return found, nil
 }

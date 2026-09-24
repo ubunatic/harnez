@@ -45,7 +45,6 @@ const quota1SectionContent = `## Quota-1 Guardrails
 
 - **Single-Test Boundary**: Under Quota-1 rules, the agent may only run the test suite once per step/turn.
 - **Code Modification Required**: If tests fail or complete, you MUST modify repository source files before running tests again. Repeated test runs without intermediate code modifications are blocked.
-- **Report Untested Edits**: If you edit code after your single test run, say in your report that the committed code is untested after that run and name the changed files, so the host runs the suite.
 - **Enforced Test Target**: Execute tests via ` + "`make test-q1`" + ` (or ` + "`harnez exec --quota-1 -- <test-cmd>`" + `).
 - **Unauthorized Bypass Forbidden**: Bypassing guardrails via ` + "`QUOTA_BYPASS=1`" + ` or ` + "`HARNEZ_QUOTA_BYPASS=1`" + ` is strictly reserved for human developers and CI environments. Agent loops must not set or pass bypass flags.`
 

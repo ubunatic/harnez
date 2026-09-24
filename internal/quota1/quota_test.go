@@ -165,6 +165,32 @@ func TestCheckAndRecord_Bypass(t *testing.T) {
 	}
 }
 
+func TestChangesSinceLastRun(t *testing.T) {
+	repoDir := t.TempDir()
+	source := filepath.Join(repoDir, "changed.go")
+	if err := os.WriteFile(source, []byte("package changed\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runAt := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	state, _, err := ResolveStateFile(repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeState(state, runAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(source, runAt.Add(time.Minute), runAt.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	files, gotAt, err := ChangesSinceLastRun(repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0] != source || !gotAt.Equal(runAt) {
+		t.Fatalf("ChangesSinceLastRun() = %v, %v; want [%s], %v", files, gotAt, source, runAt)
+	}
+}
+
 func TestCheckAndRecord_NonGitDir(t *testing.T) {
 	nonGitDir := t.TempDir()
 
