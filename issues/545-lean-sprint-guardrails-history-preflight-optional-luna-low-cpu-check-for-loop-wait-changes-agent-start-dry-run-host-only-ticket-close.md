@@ -44,3 +44,8 @@ These come from the 2026-09-24 retro (`docs/feedback/2026-09-24-lean-sprints-cle
    Above a threshold (e.g. 300k tokens), `resume` refuses with a message to start a fresh session, and
    `harnez agent` closes the old one. Lean sprints then use one fresh developer session per milestone,
    with the ticket as the handoff.
+6. **Report the real cost, not the combined token total.** The `harnez agent` session timeline prints
+   "N tokens (incl. cached)" (e.g. 6.4M for the 543 M3 turn), which looks alarming and hides the cost: that turn
+   was 0.7M new + 5.7M cached, and it drained 5% of the agy 5h window. In `harnez stats --agents` the drain
+   follows new input (~25% for 2.6M new in oom543), and cached input barely counts. Show new input and the plan
+   drain (when known) in the timeline and turn summary; keep cached as a secondary number.

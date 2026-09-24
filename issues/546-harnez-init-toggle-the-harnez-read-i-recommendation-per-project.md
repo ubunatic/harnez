@@ -26,3 +26,10 @@ render from that one setting; no text says "paused" by hand. Tests cover both st
 - Code touchpoints seen: `cmd/harnez/hook.go`, `cmd/harnez/read.go`, `internal/sessionstate`, templates in
   `docs/templates/AGENTS.md` and `config.yaml`. Global copies (`apply`) need a matching default.
 - Hold the multi-repo `harnez init` rollout (544 thread 3) until this lands, so repos get one rewrite.
+
+## Decision (2026-09-24): stays off until data shows it works
+
+543 is fixed (bounded exec capture, bounded `read` range), but `read -I` stays **off** by default everywhere until
+data shows it works: memory stays bounded in real agent use and agents actually benefit from the cards (usage and
+feedback in `harnez stats` / `harnez rate`). The toggle still gets built; switching the default on is a separate
+decision that needs that data.
