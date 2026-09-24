@@ -54,3 +54,12 @@ active, the agy hook stays out of the way (537's fallback rule). `revert --manag
   line disappears. Verify by test on the hook route decision.
 - `revert --managed` removes the launcher. Idempotent on re-apply.
 - Acceptance: unit tests for file content/mode, env equivalence with agyLaunchEnv, revert; `make test-q1` green.
+
+## M1 review (host) — cd667b5: fixes required
+
+- `make test-q1` (host): `TestUnifiedCrossHarnessSkillTargets` fails, "DiffAll reported changes
+  immediately after ApplyAll" (claudeskills_test.go:338). DiffAll checks the launcher unconditionally,
+  but ApplyAll installs it only inside the bash-shim condition. Guard the DiffAll check (and CleanAll)
+  with the same condition, or install unconditionally; apply and diff must agree.
+- CleanAll: do not `os.Remove(filepath.Dir(launcherPath))`; never try to remove `~/.local/bin`.
+- Launcher script: indentation mixes tabs and spaces; use spaces only.
