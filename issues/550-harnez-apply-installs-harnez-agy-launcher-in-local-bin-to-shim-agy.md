@@ -33,3 +33,24 @@ active, the agy hook stays out of the way (537's fallback rule). `revert --manag
   command? Measure new input tokens for a ~1 MB output command under hook vs shim vs neither. If
   neither path is truncated by agy, the byte cap on `harnez exec` output (context guard) is still needed.
 - `apply` vs `init` scope (docs/CLIDesign.md): this is a global `~/` install, so it belongs in `apply`.
+
+## Findings 2026-09-24 (host)
+
+- Measured plain agy session 7e5f6ea1 (hook active, no shim): agy still truncates hook-rewritten
+  command output (`<truncated 182 lines>`, `<truncated 707 lines>`), max ~8 KB per result; 69 KB of
+  tool results over 17 calls. The hook does not bypass agy's truncation.
+- Remaining cost of the hook: agy adds "A pre-tool hook changed the arguments of this tool call
+  before it ran. Changed: CommandLine." to every command result, and agy runs many single commands.
+  The shim avoids that line. This is the reason for the launcher (user, 2026-09-24).
+- Preflight: shim path code exists (`internal/claude/apply.go` BashShimPath, `internal/subagent/agy.go`
+  agyLaunchEnv, `cmd/harnez/hook.go` shim-aware route); no `harnez-agy` launcher exists.
+
+## M1 — harnez-agy launcher (single milestone)
+
+- `harnez apply` writes `~/.local/bin/harnez-agy` and provisions `~/.harnez/shims/bash`.
+- `harnez-agy "$@"` starts the real `agy` with the same env as `agyLaunchEnv` (shim PATH first,
+  agent marker). It must not find itself or recurse, and must not touch `~/.local/bin/agy`.
+- With the launcher, the hook must not rewrite (537 fallback rule), so the "pre-tool hook changed"
+  line disappears. Verify by test on the hook route decision.
+- `revert --managed` removes the launcher. Idempotent on re-apply.
+- Acceptance: unit tests for file content/mode, env equivalence with agyLaunchEnv, revert; `make test-q1` green.
