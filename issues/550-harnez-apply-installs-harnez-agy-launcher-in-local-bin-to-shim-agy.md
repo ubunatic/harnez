@@ -1,6 +1,6 @@
 # 550 — harnez apply installs harnez-agy launcher in ~/.local/bin to shim agy
 
-**Status**: Open
+**Status**: Closed — M1 cd667b5+7add6b8+e7c74bf+427592a; installed, live check: shim first on PATH, ANTIGRAVITY_AGENT=1
 **Priority**: P1
 **Severity**: Medium
 **Category**: Feature / Agents
