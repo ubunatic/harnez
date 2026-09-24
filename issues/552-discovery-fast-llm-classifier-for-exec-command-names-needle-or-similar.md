@@ -4,7 +4,7 @@
 **Priority**: P3
 **Severity**: Low
 **Category**: Discovery / Telemetry
-**Related**: [[551-exec-bash-c-unwrap-misses-bin-bash-and-lc]], [[215-llm-backfill-and-reclassification-mode-for-telemetry-tool-notes]]
+**Related**: [[551-exec-infer-tool-name-and-quota-1-detection-through-bin-bash-c-and-lc]], [[215-llm-backfill-and-reclassification-mode-for-telemetry-tool-notes]]
 
 ---
 
