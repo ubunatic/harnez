@@ -18,3 +18,15 @@ After 529 (2a7baf7), `harnez stats --agents --days 1 --all` on 2026-09-24:
 
 A model total with zero reliable turns shows "—" for drain. The row output makes clear
 which value is unreliable, without adding columns (narrow terminals).
+
+## M1 delivered (25a709b), untested: host suite fails
+
+The output is right ("2.0% (unreliable)" in 5H DRAIN, "—" in the totals), but
+`TestRenderAgentStatsLabelsUnreliableDrainAndMissingModelDrain` fails at
+stats_agents_test.go:268 ("unreliable marker should qualify drain, not quality").
+The developer's single run stopped at gofmt, so the test never ran.
+
+## M2 Pre-Work
+
+- Fix the assertion at line 268 so it checks the rendered output correctly; the behaviour is correct.
+- Run `gofmt` before `make test-q1`.
