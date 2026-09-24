@@ -38,13 +38,14 @@ func isGearInvocation(arg0 string) bool {
 // failure here (can't resolve a session id, can't read/write the state
 // file) is swallowed silently: this is a nice-to-have nudge, not something
 // that should ever block or fail a real command.
+var sessionTipSessionOptions = func() resolve.SessionOptions {
+	return resolve.SessionOptions{}
+}
+
+var sessionTipCounts = sessionCallCounts
+
 func sessionTipHook(cmd *cobra.Command, _ []string) error {
-	// Tests run many CLI invocations in one process. Keep session reminders
-	// out of test command output, where they can corrupt stderr assertions.
-	if strings.HasSuffix(os.Args[0], ".test") {
-		return nil
-	}
-	sessionID, err := resolve.Session(resolve.SessionOptions{})
+	sessionID, err := resolve.Session(sessionTipSessionOptions())
 	if err != nil || sessionID == "" {
 		return nil
 	}
@@ -66,7 +67,7 @@ func sessionTipHook(cmd *cobra.Command, _ []string) error {
 		// apply migrates the telemetry DB in its command body; the session-tip
 		// hook must not open it before that migration runs.
 		if dbPath, err := telemetry.DefaultDBPath(); err == nil {
-			sessionstate.ApplyCounts(&s, sessionCallCounts(dbPath, sessionID))
+			sessionstate.ApplyCounts(&s, sessionTipCounts(dbPath, sessionID))
 		}
 	}
 	sessionstate.Record(&s, cmd.Name(), now)

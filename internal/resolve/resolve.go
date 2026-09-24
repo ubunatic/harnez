@@ -41,6 +41,9 @@ type SessionOptions struct {
 	// Explicit is a caller-supplied session_id override. If non-empty it
 	// always wins and no implicit resolution happens.
 	Explicit string
+	// DisableFallback prevents a parent-process session from being created
+	// when no explicit or agent-provided session ID is available.
+	DisableFallback bool
 	// Getenv overrides os.Getenv, for tests. Optional.
 	Getenv func(string) string
 	// PPID overrides os.Getppid(), for tests. Optional.
@@ -69,6 +72,9 @@ func Session(opts SessionOptions) (string, error) {
 		if v := getenv(name); v != "" {
 			return v, nil
 		}
+	}
+	if opts.DisableFallback {
+		return "", nil
 	}
 
 	ppid := opts.PPID

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/sessionstate"
@@ -22,7 +23,7 @@ func TestMain(m *testing.M) {
 		os.Unsetenv(name)
 	}
 
-	oldHome := os.Getenv("HOME")
+	oldHome, hadHome := os.LookupEnv("HOME")
 	tmpHome, err := os.MkdirTemp("", "harnez-test-*")
 	if err != nil {
 		panic(fmt.Sprintf("failed to create temp HOME: %v", err))
@@ -34,25 +35,21 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	os.RemoveAll(tmpHome)
-	if oldHome != "" {
+	if hadHome {
 		os.Setenv("HOME", oldHome)
+	} else {
+		os.Unsetenv("HOME")
 	}
 
 	os.Exit(code)
 }
 
 func TestSessionTipHookSilentByDefault(t *testing.T) {
-	sessionID, err := resolve.Session(resolve.SessionOptions{})
-	if err != nil {
-		t.Fatal(err)
+	oldOptions := sessionTipSessionOptions
+	sessionTipSessionOptions = func() resolve.SessionOptions {
+		return resolve.SessionOptions{DisableFallback: true}
 	}
-	if err := sessionstate.Save(resolve.DefaultStateDir(), sessionstate.State{
-		SessionID: sessionID,
-		Total:     40,
-		Calls:     map[string]sessionstate.Invocation{},
-	}); err != nil {
-		t.Fatal(err)
-	}
+	t.Cleanup(func() { sessionTipSessionOptions = oldOptions })
 
 	var stderr strings.Builder
 	cmd := newRootCmd()
@@ -63,5 +60,41 @@ func TestSessionTipHookSilentByDefault(t *testing.T) {
 	}
 	if got := stderr.String(); got != "" {
 		t.Fatalf("session tip stderr = %q, want empty under TestMain defaults", got)
+	}
+}
+
+func TestSessionTipHookAllowsExplicitSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	const sessionID = "explicit-tip-test"
+	if err := sessionstate.Save(resolve.DefaultStateDir(), sessionstate.State{
+		SessionID:   sessionID,
+		Total:       40,
+		Calls:       map[string]sessionstate.Invocation{},
+		FirstCallAt: time.Now().Add(-24 * time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(resolve.SessionEnvVars[0], sessionID)
+	oldOptions := sessionTipSessionOptions
+	sessionTipSessionOptions = func() resolve.SessionOptions {
+		return resolve.SessionOptions{}
+	}
+	oldCounts := sessionTipCounts
+	sessionTipCounts = func(string, string) map[string]int { return nil }
+	t.Cleanup(func() {
+		sessionTipSessionOptions = oldOptions
+		sessionTipCounts = oldCounts
+	})
+
+	var stderr strings.Builder
+	cmd := newRootCmd()
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"status"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if got := stderr.String(); !strings.Contains(got, "harnez tip:") {
+		t.Fatalf("session tip stderr = %q, want a tip for explicit session", got)
 	}
 }
