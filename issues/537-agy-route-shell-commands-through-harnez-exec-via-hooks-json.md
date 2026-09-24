@@ -108,7 +108,12 @@ machine, and `harnez agent` never put it on agy's PATH, which is why 532 happene
 - Unknown: does agy pass its PATH to hooks? The fallback is to always rewrite (safe). M6 verifies it live.
 - Tests: shim active → unchanged; shim missing or not on PATH → rewrite; route recorded.
 
+**M3 delivered (shim-aware routing): 06494de.**
+
 ### M4 — `harnez agent` sets up the shim for agy
+- Pre-Work (from the M3 review): `agyCommandRoute` returns `hook` for commands that already start with
+  `harnez exec`, although the hook does not rewrite them. Give them their own route (e.g. `direct`) so
+  that M5 does not miscount them.
 - Launch agy with `PATH=~/.harnez/shims:$PATH` and `ANTIGRAVITY_AGENT=1` (as `env.sh` does).
   Install or refresh the shim if it is missing, using the same code as `apply`.
 - Tests: the launch env has the shims first, and a missing shim is created.
