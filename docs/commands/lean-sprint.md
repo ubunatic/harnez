@@ -59,7 +59,7 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 ### 2. Autonomous Milestone Execution & Commit
 - The developer agent implements the milestone autonomously.
 - Follows Test-Driven Development (TDD) and executes repo-native verification (`go test ./...`, `make test`).
-- Under a one-run test budget (`make test-q1`), writes the full output to a file and greps it for `--- FAIL`; never pipes it into `tail`. A failure in an untouched test gets its own ticket instead of a loosened assertion.
+- Under a one-run test budget (`make test-q1`), writes the full output to a file and greps it for `--- FAIL`; never pipes it into `tail`. A failure in an untouched test gets its own ticket instead of a loosened assertion. If it edits code after that single run, its report says the committed code is untested after the run and names the changed files, so the host runs the suite before accepting the milestone.
 - Immediately commits the verified milestone at the boundary (`git commit -m "... (issue XXX MX)"`).
 - Reports completion back to the Host Orchestrator. Name each milestone or ticket at least once with a short label, e.g. "M3 (single-write removal)", not bare "M3" (`@docs/AgenticLoop.md` §4, Status reports).
 
