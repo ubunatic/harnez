@@ -48,6 +48,41 @@ but it is observe-only ("without rewriting commands"), so the premise holds.
      with a byte-identical snapshot and restore it. Only do that when `harnez agent list` shows no active
      agy session, and verify the restore with `cmp`.
 
+#### M1 findings (2026-09-24)
+
+The installed agy customization guide documents this `PreToolUse` input shape for a shell call:
+
+```json
+{
+  "toolCall": {
+    "name": "run_command",
+    "args": { "CommandLine": "<command>" }
+  },
+  "stepIdx": 19,
+  "conversationId": "<id>",
+  "workspacePaths": ["<path>"],
+  "transcriptPath": "<path>",
+  "artifactDirectoryPath": "<path>",
+  "modelName": "auto"
+}
+```
+
+The documented rewrite response is:
+
+```json
+{
+  "decision": "allow",
+  "overwrite": { "CommandLine": "<replacement>" }
+}
+```
+
+`overwrite` is documented as a shallow merge into the tool-call arguments, so replacing
+`CommandLine` is supported by the documented contract. The live canary did not run: the required
+`harnez agent -p --model agy:flash37:low` invocation was rejected before agy launch because this
+worker has the developer leaf role; the CLI directs live agy checks to the host. Therefore the
+installed agy's runtime rewrite behavior and actual payload remain unverified. No live hooks were
+modified. The host must run the canary to complete M1.
+
 ### M2 — rewrite agy run_command to `harnez exec`
 - In `harnez hook agy`, rewrite `run_command` to `harnez exec --tool agy -- <cmd>`, using the same
   adapter as the Claude/Codex exec hook (look at `harnez exec hook` and `internal/codex/hooks.go`).
