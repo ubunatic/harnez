@@ -1,6 +1,6 @@
 # 527 — agy live quota fetch is killed on most agent turn boundaries
 
-**Status**: Open
+**Status**: Closed — 6ff686e + 0664974: agy probe 17s bound, concurrent before, fresh after; live probes 2.6-3.4s, no kills
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
