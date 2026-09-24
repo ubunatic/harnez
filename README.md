@@ -70,7 +70,7 @@ Or via Make (builds first, then runs):
 ```sh
 make apply
 make diff
-make clean
+make revert-managed
 make status
 ```
 

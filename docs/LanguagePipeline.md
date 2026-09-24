@@ -82,5 +82,5 @@ only a new `Markers` value — no logic changes.
 
 ## Known gaps
 
-- `diff` and `clean` do not yet handle the Makefile targets section — see issue #009.
+- `diff` and `revert --managed` do not handle the Makefile targets section — see issue #009.
 - `status` does not check whether the targets block is present in the project Makefile.

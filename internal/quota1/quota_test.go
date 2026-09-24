@@ -1,6 +1,7 @@
 package quota1
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,14 @@ import (
 	"testing"
 	"time"
 )
+
+func finishSuccessfulRun(t *testing.T, res Result, finished time.Time) {
+	t.Helper()
+	exit := 0
+	if err := FinishRun(res.StateFile, finished, &exit); err != nil {
+		t.Fatalf("finish quota-1 run: %v", err)
+	}
+}
 
 func TestCheckAndRecord_Lifecycle(t *testing.T) {
 	repoDir := t.TempDir()
@@ -41,6 +50,7 @@ func TestCheckAndRecord_Lifecycle(t *testing.T) {
 	if !res1.Allowed {
 		t.Errorf("first run should be allowed, got blocked: %s", res1.Message)
 	}
+	finishSuccessfulRun(t, res1, now.Add(time.Second))
 
 	expectedStateFile := filepath.Join(gitDir, "harnez", "quota_1.state")
 	if res1.StateFile != expectedStateFile {
@@ -104,6 +114,7 @@ func TestCheckAndRecord_Lifecycle(t *testing.T) {
 	if !res3.Allowed {
 		t.Errorf("run after edit should be allowed, got blocked: %s", res3.Message)
 	}
+	finishSuccessfulRun(t, res3, now.Add(time.Second))
 	if res3.ModifiedFile != srcFile {
 		t.Errorf("expected ModifiedFile=%q, got %q", srcFile, res3.ModifiedFile)
 	}
@@ -119,6 +130,69 @@ func TestCheckAndRecord_Lifecycle(t *testing.T) {
 	}
 	if res4.Allowed {
 		t.Errorf("subsequent run without edits should be blocked again")
+	}
+}
+
+func TestIncompleteRunAllowsRetryThenConsumesQuota(t *testing.T) {
+	dir := t.TempDir()
+	stateFile := filepath.Join(dir, "quota.state")
+	first, err := CheckAndRecord(CheckOptions{Dir: dir, StateFile: stateFile})
+	if err != nil || !first.Allowed {
+		t.Fatalf("initial run = %+v, %v; want allowed", first, err)
+	}
+	data, err := os.ReadFile(stateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatalf("decode run record: %v", err)
+	}
+	for _, key := range []string{"started", "pgid", "pid_starttime", "finished", "exit"} {
+		if _, ok := fields[key]; !ok {
+			t.Errorf("run record missing %q: %s", key, data)
+		}
+	}
+	if err := FinishRun(first.StateFile, time.Now(), nil); err != nil {
+		t.Fatalf("mark first run incomplete: %v", err)
+	}
+
+	retry, err := CheckAndRecord(CheckOptions{Dir: dir, StateFile: stateFile})
+	if err != nil || !retry.Allowed || !strings.Contains(retry.Message, "incomplete") {
+		t.Fatalf("retry = %+v, %v; want allowed incomplete retry", retry, err)
+	}
+	finishSuccessfulRun(t, retry, time.Now())
+
+	blocked, err := CheckAndRecord(CheckOptions{Dir: dir, StateFile: stateFile})
+	if err != nil || blocked.Allowed {
+		t.Fatalf("run after successful retry = %+v, %v; want quota block", blocked, err)
+	}
+}
+
+func TestReadRunRecordSupportsLegacyTimestamp(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "quota.state")
+	legacyTime := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	if err := writeState(path, legacyTime); err != nil {
+		t.Fatal(err)
+	}
+	record, err := ReadRunRecord(path)
+	if err != nil {
+		t.Fatalf("read legacy timestamp: %v", err)
+	}
+	if !record.Started.Equal(legacyTime) || record.Exit == nil || *record.Exit != 0 {
+		t.Fatalf("legacy record = %+v; want completed successful run at %s", record, legacyTime)
+	}
+}
+
+func TestParseProcStarttime(t *testing.T) {
+	fields := []string{"S"}
+	for field := 4; field <= 21; field++ {
+		fields = append(fields, "1")
+	}
+	fields = append(fields, "987654")
+	line := "123 (name with ) parens) " + strings.Join(fields, " ")
+	if got := parseProcStarttime(line); got != 987654 {
+		t.Fatalf("parseProcStarttime() = %d, want 987654", got)
 	}
 }
 

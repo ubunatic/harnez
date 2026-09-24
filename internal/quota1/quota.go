@@ -1,15 +1,28 @@
 package quota1
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
+
+// RunRecord is the persisted identity and outcome of the latest quota-1 run.
+// A nil Exit means the run did not complete with a normal process exit.
+type RunRecord struct {
+	Started      time.Time  `json:"started"`
+	PGID         int        `json:"pgid"`
+	PIDStarttime uint64     `json:"pid_starttime"`
+	Finished     *time.Time `json:"finished"`
+	Exit         *int       `json:"exit"`
+}
 
 // CheckOptions configures the Quota-1 check and state recording.
 type CheckOptions struct {
@@ -84,17 +97,34 @@ func isBypass(getenv func(string) string) bool {
 	return false
 }
 
-// readState reads the recorded timestamp from the state file.
-func readState(path string) (time.Time, error) {
+// ReadRunRecord reads either a current JSON run record or a legacy timestamp.
+// Legacy timestamps represent completed runs and continue to consume quota.
+func ReadRunRecord(path string) (RunRecord, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return time.Time{}, err
+		return RunRecord{}, err
 	}
 	str := strings.TrimSpace(string(data))
 	if t, err := time.Parse(time.RFC3339Nano, str); err == nil {
-		return t, nil
+		exit := 0
+		return RunRecord{Started: t, Finished: &t, Exit: &exit}, nil
 	}
-	return time.Parse(time.RFC3339, str)
+	var record RunRecord
+	if err := json.Unmarshal(data, &record); err != nil {
+		return RunRecord{}, err
+	}
+	if record.Started.IsZero() {
+		return RunRecord{}, fmt.Errorf("quota-1 state has no started time")
+	}
+	return record, nil
+}
+
+func readState(path string) (time.Time, error) {
+	record, err := ReadRunRecord(path)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return record.Started, nil
 }
 
 // ChangesSinceLastRun returns eligible source files modified after the last
@@ -151,6 +181,78 @@ func writeState(path string, t time.Time) error {
 		return err
 	}
 	return os.WriteFile(path, []byte(t.UTC().Format(time.RFC3339Nano)+"\n"), 0644)
+}
+
+func writeRunRecord(path string, record RunRecord) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	data, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(data, '\n'), 0644)
+}
+
+// UpdateProcess records the process group and Linux /proc start time for a run.
+// A zero start time means the platform does not expose a readable /proc stat.
+func UpdateProcess(path string, pgid, pid int) error {
+	record, err := ReadRunRecord(path)
+	if err != nil {
+		return err
+	}
+	record.PGID = pgid
+	record.PIDStarttime = ProcStarttime(pid)
+	return writeRunRecord(path, record)
+}
+
+// FinishRun records completion. A nil exit indicates a signal or other
+// abnormal termination and leaves the quota available for a retry.
+func FinishRun(path string, finished time.Time, exit *int) error {
+	record, err := ReadRunRecord(path)
+	if err != nil {
+		return err
+	}
+	finished = finished.UTC()
+	record.Finished = &finished
+	if exit == nil {
+		record.Exit = nil
+	} else {
+		value := *exit
+		record.Exit = &value
+	}
+	return writeRunRecord(path, record)
+}
+
+// ProcStarttime reads field 22 from /proc/<pid>/stat. It parses after the last
+// ')' because the process comm field may itself contain spaces or parentheses.
+func ProcStarttime(pid int) uint64 {
+	file, err := os.Open(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return 0
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	if !scanner.Scan() {
+		return 0
+	}
+	return parseProcStarttime(scanner.Text())
+}
+
+func parseProcStarttime(line string) uint64 {
+	end := strings.LastIndex(line, ")")
+	if end < 0 || end+1 >= len(line) {
+		return 0
+	}
+	fields := strings.Fields(line[end+1:])
+	if len(fields) <= 19 {
+		return 0
+	}
+	starttime, err := strconv.ParseUint(fields[19], 10, 64)
+	if err != nil {
+		return 0
+	}
+	return starttime
 }
 
 // isExcludedDir returns true for directories that should not be scanned for code changes.
@@ -228,7 +330,7 @@ func findModifiedSourceFiles(root, stateFilePath string, since time.Time) ([]str
 }
 
 // CheckAndRecord evaluates whether a test run is allowed under Quota-1 rules.
-// If allowed, it updates the state timestamp in the state file.
+// If allowed, it records the run's start in the state file.
 // If blocked, it returns Allowed=false with a descriptive error message without updating the state file.
 func CheckAndRecord(opts CheckOptions) (Result, error) {
 	now := time.Now()
@@ -256,7 +358,7 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 
 	// 1. Check bypass
 	if isBypass(opts.Getenv) {
-		if err := writeState(stateFile, now); err != nil {
+		if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC()}); err != nil {
 			return Result{}, fmt.Errorf("write quota-1 state: %w", err)
 		}
 		return Result{
@@ -266,11 +368,11 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 		}, nil
 	}
 
-	// 2. Check state file existence
-	lastTime, err := readState(stateFile)
+	// 2. Check state file existence and allow an incomplete run one retry.
+	previous, err := ReadRunRecord(stateFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			if err := writeState(stateFile, now); err != nil {
+			if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC()}); err != nil {
 				return Result{}, fmt.Errorf("write quota-1 state: %w", err)
 			}
 			return Result{
@@ -280,7 +382,7 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 			}, nil
 		}
 		// If unreadable or corrupted, overwrite and allow run
-		if err := writeState(stateFile, now); err != nil {
+		if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC()}); err != nil {
 			return Result{}, fmt.Errorf("rewrite corrupt quota-1 state: %w", err)
 		}
 		return Result{
@@ -290,14 +392,21 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 		}, nil
 	}
 
-	// 3. State file exists: check if any source files modified since lastTime
-	modifiedFile, err := findModifiedSourceFile(absRoot, stateFile, lastTime)
+	if previous.Exit == nil {
+		if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC()}); err != nil {
+			return Result{}, fmt.Errorf("update incomplete quota-1 state: %w", err)
+		}
+		return Result{Allowed: true, Message: "Quota-1: previous run was incomplete; one retry allowed", StateFile: stateFile}, nil
+	}
+
+	// 3. State file exists: check if any source files modified since last run.
+	modifiedFile, err := findModifiedSourceFile(absRoot, stateFile, previous.Started)
 	if err != nil {
 		return Result{}, fmt.Errorf("check modified source files: %w", err)
 	}
 
 	if modifiedFile != "" {
-		if err := writeState(stateFile, now); err != nil {
+		if err := writeRunRecord(stateFile, RunRecord{Started: now.UTC()}); err != nil {
 			return Result{}, fmt.Errorf("update quota-1 state: %w", err)
 		}
 		return Result{
@@ -311,7 +420,7 @@ func CheckAndRecord(opts CheckOptions) (Result, error) {
 	// 4. No files modified: block!
 	return Result{
 		Allowed:   false,
-		Message:   fmt.Sprintf("Quota-1: test execution blocked because no repository source files have been modified since the last test run (%s).\nUnder Quota-1 rules, code must be modified before running tests again.\n(Bypass available via QUOTA_BYPASS=1 or HARNEZ_QUOTA_BYPASS=1 for emergency/manual overrides)", lastTime.Format(time.RFC3339)),
+		Message:   fmt.Sprintf("Quota-1: test execution blocked because no repository source files have been modified since the last test run (%s).\nUnder Quota-1 rules, code must be modified before running tests again.\n(Bypass available via QUOTA_BYPASS=1 or HARNEZ_QUOTA_BYPASS=1 for emergency/manual overrides)", previous.Started.Format(time.RFC3339)),
 		StateFile: stateFile,
 	}, nil
 }

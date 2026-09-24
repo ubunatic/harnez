@@ -362,6 +362,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 
 	quota1Active := detectQuota1(opts, args)
+	quotaStateFile := ""
 	if quota1Active {
 		res, err := quota1.CheckAndRecord(quota1.CheckOptions{
 			Dir:    opts.Quota1Dir,
@@ -374,6 +375,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 			fmt.Fprintln(errOut, res.Message)
 			return 1, nil
 		}
+		quotaStateFile = res.StateFile
 	}
 
 	counter := &byteCounter{}
@@ -420,6 +422,11 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	if err := c.Start(); err != nil {
 		return 1, fmt.Errorf("exec: run %v: %w", args, err)
 	}
+	if quota1Active {
+		if err := quota1.UpdateProcess(quotaStateFile, c.Process.Pid, c.Process.Pid); err != nil {
+			fmt.Fprintf(errOut, "harnez exec: record quota-1 process: %v\n", err)
+		}
+	}
 	groupDone := make(chan struct{})
 	go func() {
 		select {
@@ -436,6 +443,22 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		fmt.Fprintf(errOut, "harnez exec: timeout kill after %s; rerun with HTO=0 to lift\n", timeout)
 	}
 	duration := time.Since(start)
+	if quota1Active {
+		var normalExit *int
+		if runErr == nil {
+			code := 0
+			normalExit = &code
+		} else {
+			var childExit *exec.ExitError
+			if errors.As(runErr, &childExit) && childExit.ProcessState != nil && childExit.ProcessState.Exited() {
+				code := childExit.ExitCode()
+				normalExit = &code
+			}
+		}
+		if err := quota1.FinishRun(quotaStateFile, time.Now(), normalExit); err != nil {
+			fmt.Fprintf(errOut, "harnez exec: record quota-1 result: %v\n", err)
+		}
+	}
 
 	var exitErr *exec.ExitError
 	if runErr != nil && !errors.As(runErr, &exitErr) {

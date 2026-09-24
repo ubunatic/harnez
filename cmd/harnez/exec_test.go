@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/telemetry"
 )
 
@@ -1188,6 +1189,45 @@ func TestRunExecWrapper_Quota1(t *testing.T) {
 	}
 	if !strings.Contains(out5.String(), "test5") {
 		t.Errorf("stdout = %q, want test5", out5.String())
+	}
+}
+
+func TestRunExecWrapper_Quota1SignalAllowsRetry(t *testing.T) {
+	repoDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repoDir, "test.go"), []byte("package test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	opts := testExecOptions(t)
+	opts.Quota1 = true
+	opts.Quota1Dir = repoDir
+
+	var firstOut, firstErr bytes.Buffer
+	code, err := runExecWrapper([]string{"sh", "-c", "kill -KILL $$"}, opts, strings.NewReader(""), &firstOut, &firstErr)
+	if err != nil || code != 128+int(syscall.SIGKILL) {
+		t.Fatalf("self-killed quota run = (%d, %v), want (%d, nil)", code, err, 128+int(syscall.SIGKILL))
+	}
+	statePath, _, err := quota1.ResolveStateFile(repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := quota1.ReadRunRecord(statePath)
+	if err != nil {
+		t.Fatalf("read self-killed run state: %v", err)
+	}
+	if record.Finished == nil || record.Exit != nil || record.PGID <= 0 {
+		t.Fatalf("self-killed run record = %+v; want finished incomplete run with pgid", record)
+	}
+
+	var retryOut, retryErr bytes.Buffer
+	code, err = runExecWrapper([]string{"true"}, opts, strings.NewReader(""), &retryOut, &retryErr)
+	if err != nil || code != 0 {
+		t.Fatalf("retry after self-killed run = (%d, %v), want (0, nil); stderr=%q", code, err, retryErr.String())
+	}
+
+	var blockedOut, blockedErr bytes.Buffer
+	code, err = runExecWrapper([]string{"true"}, opts, strings.NewReader(""), &blockedOut, &blockedErr)
+	if err != nil || code != 1 || !strings.Contains(blockedErr.String(), "test execution blocked") {
+		t.Fatalf("run after successful retry = (%d, %v), stderr=%q; want quota block", code, err, blockedErr.String())
 	}
 }
 

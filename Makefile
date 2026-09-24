@@ -56,7 +56,7 @@ init-siblings: ⚙️ build  # run harnez init across all sibling projects
 diff: ⚙️ build  # show what apply would change in managed blocks
 	./$(BINARY) diff -c $(CONFIG) -t $(TARGET)
 
-clean: ⚙️ build  # remove managed blocks from the Claude Code config directory
+revert-managed: ⚙️ build  # remove managed blocks from the Claude Code config directory
 	./$(BINARY) revert --managed -c $(CONFIG) -t $(TARGET)
 
 status: ⚙️ build  # show config summary and applied state

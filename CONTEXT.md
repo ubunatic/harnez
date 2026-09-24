@@ -29,7 +29,7 @@ Source command files live in `commands/` (e.g. `commands/domain-modeling.md`) an
 
 All subcommands accept `-c <config>` (default: embedded) and `-t <target>` (default: `~/.claude`).
 
-`make apply/diff/clean/status` build first then run with the repo `config.yaml` and `~/.claude` target.
+`make apply/diff/revert-managed/status` build first then run with the repo `config.yaml` and `~/.claude` target.
 
 ## Generated files
 
