@@ -1654,6 +1654,18 @@ func TestRunStartRecordsQuotaBoundariesForTurn(t *testing.T) {
 	}
 }
 
+func TestTurnQuotaBaselineUsesBeforeCaptureCompletion(t *testing.T) {
+	turnStarted := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
+	capturedAt := turnStarted.Add(5 * time.Second)
+	before := usage.TurnQuotaReading{CapturedAt: capturedAt, HasCache: true, CacheAgeMS: 40}
+
+	got := turnQuotaBaseline(turnStarted, before)
+	want := capturedAt.Add(-40 * time.Millisecond)
+	if !got.Equal(want) || !got.After(turnStarted) {
+		t.Fatalf("turnQuotaBaseline = %s, want %s after turn start", got, want)
+	}
+}
+
 func TestWarnQuota1Changes(t *testing.T) {
 	dir := t.TempDir()
 	state, _, err := quota1.ResolveStateFile(dir)

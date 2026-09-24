@@ -62,6 +62,9 @@ func turnQuotaBaseline(turnStarted time.Time, before usage.TurnQuotaReading) tim
 	if !before.HasCache || before.CacheAgeMS >= int64(usage.MinWatchInterval/time.Millisecond) {
 		return time.Time{}
 	}
+	if !before.CapturedAt.IsZero() {
+		return before.CapturedAt.Add(-time.Duration(before.CacheAgeMS) * time.Millisecond)
+	}
 	return turnStarted.Add(-time.Duration(before.CacheAgeMS) * time.Millisecond)
 }
 
