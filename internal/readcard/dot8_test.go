@@ -1,6 +1,7 @@
 package readcard
 
 import (
+	"fmt"
 	"image/color"
 	"image/png"
 	"os"
@@ -582,6 +583,44 @@ func TestDot8RenderAllColumnsContainUnclippedContent(t *testing.T) {
 		}
 		if ink == 0 {
 			t.Errorf("column %d has no ink near the bottom; content is clipped or missing", col+1)
+		}
+	}
+}
+
+func TestDot8RenderFileToCards_HeightClampedAndPaginated(t *testing.T) {
+	const lineCount = 2000
+	lines := make([]string, lineCount)
+	for i := range lines {
+		lines[i] = Dot8Encode(fmt.Sprintf("line %d code", i+1))
+	}
+
+	outDir := t.TempDir()
+	result, err := RenderFileToCards(lines, "huge.txt", RenderOptions{
+		Columns:         3,
+		MaxDimension:    1568,
+		ShowLineNumbers: true,
+		Title:           "huge.txt",
+		OutputPath:      outDir,
+		Dot8:            "native",
+	})
+	if err != nil {
+		t.Fatalf("RenderFileToCards failed: %v", err)
+	}
+
+	if result.TotalPages <= 1 {
+		t.Errorf("expected >1 pages for 2000 lines, got %d", result.TotalPages)
+	}
+	for i, page := range result.Pages {
+		if page.Height > 1568 {
+			t.Errorf("page %d height = %d, exceeds MaxDimension 1568", i+1, page.Height)
+		}
+	}
+	if len(result.Files) != result.TotalPages {
+		t.Errorf("files count = %d, want %d", len(result.Files), result.TotalPages)
+	}
+	for _, f := range result.Files {
+		if _, err := os.Stat(f); err != nil {
+			t.Errorf("expected generated page file %s to exist: %v", f, err)
 		}
 	}
 }

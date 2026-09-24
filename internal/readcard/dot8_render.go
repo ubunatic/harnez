@@ -140,167 +140,191 @@ func dot8RenderFileToCards(lines []string, filename string, opts RenderOptions) 
 		colWidth = (cardWidth - (paddingX * 2) - ((cols - 1) * colGap)) / cols
 	}
 
-	// Calculate actual content height (don't over-allocate)
-	// With cols columns, we need ceil(totalLines / cols) rows per column
-	actualLinesPerCol := (totalLines + cols - 1) / cols
-	contentHeight := actualLinesPerCol * lineHeight
-
-	cardHeight := headerHeight + legendHeight + paddingY*2 + contentHeight
-
-	// Create header with legend
-	headerImg := image.NewRGBA(image.Rect(0, 0, cardWidth, headerHeight+legendHeight))
-	draw.Draw(headerImg, headerImg.Bounds(), image.NewUniform(theme.HeaderBg), image.Point{}, draw.Src)
-
-	// Draw title in header
-	if opts.Chrome != ChromeNone {
-		titleFont := ResolveFont("pixel", 8)
-		x := paddingX
-		for _, r := range opts.Title {
-			titleFont.DrawRune(headerImg, r, x, 8, theme.HeaderFg)
-			x += titleFont.CharWidth
-		}
+	linesPerPage := linesPerCol * cols
+	totalPages := (totalLines + linesPerPage - 1) / linesPerPage
+	if totalPages == 0 {
+		totalPages = 1
 	}
 
-	if legendHeight > 0 {
-		// Draw legend strip in header: "a=⠁ b=⠃ ... z=⠵ A=⡁ 1=⢀⠁ docs/BrailleDot8.md"
-		legendX := paddingX
-		legendY := headerHeight + 1
+	var outputPaths []string
+	var pages []PageGeometry
+	firstCardHeight := 0
+	firstCardWidth := 0
 
-		// Draw sample Braille legend
-		legendFont := ResolveFont("pixel", 6)
-		legendSamples := []struct {
-			label string
-			cell  rune
-		}{
-			{"a", rune(0x2800 + 0b000001)},
-			{"z", rune(0x2800 + 0b110101)},
-			{"A", rune(0x2800 + 0b000001 + (1 << 6))},
-			{"1", rune(0x2800 + (1 << 7))}, // dot 8 prefix
+	for page := 0; page < totalPages; page++ {
+		pageStartIdx := page * linesPerPage
+		pageEndIdx := pageStartIdx + linesPerPage
+		if pageEndIdx > totalLines {
+			pageEndIdx = totalLines
+		}
+		pageLines := lines[pageStartIdx:pageEndIdx]
+
+		actualLinesPerCol := (len(pageLines) + cols - 1) / cols
+		contentHeight := actualLinesPerCol * lineHeight
+
+		cardHeight := headerHeight + legendHeight + paddingY*2 + contentHeight
+		if cardHeight > opts.MaxDimension {
+			cardHeight = opts.MaxDimension
 		}
 
-		for _, sample := range legendSamples {
-			// Draw label
-			for _, r := range sample.label {
-				legendFont.DrawRune(headerImg, r, legendX, legendY, theme.Punctuation)
+		if page == 0 {
+			firstCardHeight = cardHeight
+			firstCardWidth = cardWidth
+		}
+		pages = append(pages, PageGeometry{Width: cardWidth, Height: cardHeight, Columns: cols})
+
+		if opts.MeasureOnly {
+			continue
+		}
+
+		// Create header with legend
+		headerImg := image.NewRGBA(image.Rect(0, 0, cardWidth, headerHeight+legendHeight))
+		draw.Draw(headerImg, headerImg.Bounds(), image.NewUniform(theme.HeaderBg), image.Point{}, draw.Src)
+
+		// Draw title in header
+		if opts.Chrome != ChromeNone {
+			titleFont := ResolveFont("pixel", 8)
+			x := paddingX
+			titleText := opts.Title
+			if totalPages > 1 {
+				titleText = fmt.Sprintf("%s (Page %d/%d)", opts.Title, page+1, totalPages)
+			}
+			for _, r := range titleText {
+				titleFont.DrawRune(headerImg, r, x, 8, theme.HeaderFg)
+				x += titleFont.CharWidth
+			}
+		}
+
+		if legendHeight > 0 {
+			// Draw legend strip in header: "a=⠁ b=⠃ ... z=⠵ A=⡁ 1=⢀⠁ docs/BrailleDot8.md"
+			legendX := paddingX
+			legendY := headerHeight + 1
+
+			// Draw sample Braille legend
+			legendFont := ResolveFont("pixel", 6)
+			legendSamples := []struct {
+				label string
+				cell  rune
+			}{
+				{"a", rune(0x2800 + 0b000001)},
+				{"z", rune(0x2800 + 0b110101)},
+				{"A", rune(0x2800 + 0b000001 + (1 << 6))},
+				{"1", rune(0x2800 + (1 << 7))}, // dot 8 prefix
+			}
+
+			for _, sample := range legendSamples {
+				for _, r := range sample.label {
+					legendFont.DrawRune(headerImg, r, legendX, legendY, theme.Punctuation)
+					legendX += legendFont.CharWidth
+				}
+				legendFont.DrawRune(headerImg, '=', legendX, legendY, theme.Punctuation)
+				legendX += legendFont.CharWidth
+				drawDot8BraillCell(headerImg, sample.cell, legendX, legendY, theme.Text, theme.Keyword, theme.Type, opts.Dot8Colors, cellWidth)
+				legendX += 3 + 2 // cell width + gap
+			}
+
+			docsText := "docs/BrailleDot8.md"
+			for _, r := range docsText {
+				legendFont.DrawRune(headerImg, r, legendX, legendY, theme.Comment)
 				legendX += legendFont.CharWidth
 			}
-			// Draw "="
-			legendFont.DrawRune(headerImg, '=', legendX, legendY, theme.Punctuation)
-			legendX += legendFont.CharWidth
-			// Draw cell (as 3x4 dots)
-			drawDot8BraillCell(headerImg, sample.cell, legendX, legendY, theme.Text, theme.Keyword, theme.Type, opts.Dot8Colors, cellWidth)
-			legendX += 3 + 2 // cell width + gap
 		}
 
-		// Draw docs pointer
-		docsText := "docs/BrailleDot8.md"
-		for _, r := range docsText {
-			legendFont.DrawRune(headerImg, r, legendX, legendY, theme.Comment)
-			legendX += legendFont.CharWidth
-		}
-	}
+		// Create main content image
+		contentImg := image.NewRGBA(image.Rect(0, 0, cardWidth, paddingY+contentHeight+paddingY))
+		draw.Draw(contentImg, contentImg.Bounds(), image.NewUniform(theme.Bg), image.Point{}, draw.Src)
 
-	// Create main content image
-	contentImg := image.NewRGBA(image.Rect(0, 0, cardWidth, paddingY+contentHeight+paddingY))
-	draw.Draw(contentImg, contentImg.Bounds(), image.NewUniform(theme.Bg), image.Point{}, draw.Src)
+		// Render lines in columns
+		y := paddingY
+		lineIdx := 0
 
-	// Render lines in columns
-	y := paddingY
-	lineIdx := 0
+		for col := 0; col < cols && lineIdx < len(pageLines); col++ {
+			x := paddingX + col*(colWidth+colGap)
+			colY := y
 
-	for col := 0; col < cols && lineIdx < len(lines); col++ {
-		x := paddingX + col*(colWidth+colGap)
-		colY := y
-
-		for row := 0; row < actualLinesPerCol && lineIdx < len(lines); row++ {
-			line := lines[lineIdx]
-			lineNum := opts.StartLine + lineIdx
-			if len(opts.SourceLines) > lineIdx {
-				lineNum = opts.SourceLines[lineIdx]
-			}
-			lineIdx++
-
-			// Draw line number
-			if opts.ShowLineNumbers {
-				numStr := fmt.Sprintf("%d", lineNum)
-				numX := x
-				for _, r := range numStr {
-					textFont.DrawRune(contentImg, r, numX, colY, theme.GutterFg)
-					numX += textFont.CharWidth
+			for row := 0; row < actualLinesPerCol && lineIdx < len(pageLines); row++ {
+				line := pageLines[lineIdx]
+				lineNum := opts.StartLine + pageStartIdx + lineIdx
+				if len(opts.SourceLines) > pageStartIdx+lineIdx {
+					lineNum = opts.SourceLines[pageStartIdx+lineIdx]
 				}
-			}
+				lineIdx++
 
-			// Draw content
-			contentX := x + gutterWidth
-			for cellIndex, r := range line {
-				if r >= 0x2800 && r <= 0x2800+0xFF {
-					// Braille cell: draw as 3x4 dots with special colors for dots 7 and 8
-					drawDot8BraillCell(contentImg, r, contentX, colY, theme.Text, theme.Keyword, theme.Type, opts.Dot8Colors, cellWidth)
-				} else {
-					// Non-Braille characters alternate between the marker colors so
-					// copied punctuation and symbols remain visually distinguishable
-					// from the Braille stream at the compact Dot8 cell pitch.
-					textColor := theme.Keyword
-					if cellIndex%2 == 1 {
-						textColor = theme.Type
+				// Draw line number
+				if opts.ShowLineNumbers {
+					numStr := fmt.Sprintf("%d", lineNum)
+					numX := x
+					for _, r := range numStr {
+						textFont.DrawRune(contentImg, r, numX, colY, theme.GutterFg)
+						numX += textFont.CharWidth
 					}
-					textFont.DrawRune(contentImg, r, contentX, colY, textColor)
 				}
-				contentX += cellWidth
+
+				// Draw content
+				contentX := x + gutterWidth
+				for cellIndex, r := range line {
+					if r >= 0x2800 && r <= 0x2800+0xFF {
+						drawDot8BraillCell(contentImg, r, contentX, colY, theme.Text, theme.Keyword, theme.Type, opts.Dot8Colors, cellWidth)
+					} else {
+						textColor := theme.Keyword
+						if cellIndex%2 == 1 {
+							textColor = theme.Type
+						}
+						textFont.DrawRune(contentImg, r, contentX, colY, textColor)
+					}
+					contentX += cellWidth
+				}
+
+				colY += lineHeight
 			}
-
-			colY += lineHeight
 		}
-	}
 
-	// Combine header and content
-	fullImg := image.NewRGBA(image.Rect(0, 0, cardWidth, cardHeight))
-	draw.Draw(fullImg, image.Rect(0, 0, cardWidth, headerHeight+legendHeight), headerImg, image.Point{}, draw.Src)
-	draw.Draw(fullImg, image.Rect(0, headerHeight+legendHeight, cardWidth, cardHeight), contentImg, image.Point{}, draw.Src)
+		// Combine header and content
+		fullImg := image.NewRGBA(image.Rect(0, 0, cardWidth, cardHeight))
+		draw.Draw(fullImg, image.Rect(0, 0, cardWidth, headerHeight+legendHeight), headerImg, image.Point{}, draw.Src)
+		draw.Draw(fullImg, image.Rect(0, headerHeight+legendHeight, cardWidth, cardHeight), contentImg, image.Point{}, draw.Src)
 
-	// Save image
-	outPath := opts.OutputPath
-	if outPath == "" {
-		outPath = fmt.Sprintf("harnez_read_%s_%d-tokens_%s.png",
-			strings.TrimSuffix(filepath.Base(opts.Title), filepath.Ext(opts.Title)),
-			opts.SourceTokens,
-			"dot8card")
-	}
+		// Save image
+		outPath, err := resolveOutPath(opts.OutputPath, filename, opts.SourceTokens, page, totalPages)
+		if err != nil {
+			return nil, fmt.Errorf("resolve output path: %w", err)
+		}
 
-	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
-		return nil, fmt.Errorf("create output directory: %w", err)
-	}
+		if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+			return nil, fmt.Errorf("create output directory: %w", err)
+		}
 
-	f, err := os.Create(outPath)
-	if err != nil {
-		return nil, fmt.Errorf("create output file: %w", err)
-	}
-	defer f.Close()
+		f, err := os.Create(outPath)
+		if err != nil {
+			return nil, fmt.Errorf("create output file: %w", err)
+		}
 
-	if err := png.Encode(f, fullImg); err != nil {
-		return nil, fmt.Errorf("encode PNG: %w", err)
+		if err := png.Encode(f, fullImg); err != nil {
+			f.Close()
+			return nil, fmt.Errorf("encode PNG: %w", err)
+		}
+		f.Close()
+		outputPaths = append(outputPaths, outPath)
 	}
 
 	// Return result
 	fullText := strings.Join(lines, "\n")
 	stats := ComputeTextTokens(fullText)
+	primary := ""
+	if len(outputPaths) > 0 {
+		primary = outputPaths[0]
+	}
 
 	return &RenderResult{
-		Files:       []string{outPath},
-		Width:       cardWidth,
-		Height:      cardHeight,
+		Files:       outputPaths,
+		Width:       firstCardWidth,
+		Height:      firstCardHeight,
 		Columns:     cols,
 		TotalLines:  totalLines,
-		TotalPages:  1,
+		TotalPages:  totalPages,
 		TokenStats:  stats,
-		PrimaryPath: outPath,
-		Pages: []PageGeometry{
-			{
-				Width:   cardWidth,
-				Height:  cardHeight,
-				Columns: cols,
-			},
-		},
+		PrimaryPath: primary,
+		Pages:       pages,
 	}, nil
 }
 

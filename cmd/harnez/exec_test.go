@@ -1494,3 +1494,92 @@ func TestRunExecWrapper_BoundsCapturedOutputAndRetainsTail(t *testing.T) {
 		t.Errorf("note = %q, want 'go runtime panic / fatal error'", rows[0].Note)
 	}
 }
+
+func TestHeadTailBuffer_PreservesHeadAndTail(t *testing.T) {
+	buf := newHeadTailBuffer(10, 10)
+	// Write 5 bytes: "hello"
+	if n, err := buf.Write([]byte("hello")); err != nil || n != 5 {
+		t.Fatalf("Write(hello) n=%d, err=%v", n, err)
+	}
+	if got := buf.String(); got != "hello" {
+		t.Fatalf("String() = %q, want hello", got)
+	}
+
+	// Write more, exceeding head+tail: "hello" (5) + " MIDDLE_OMITTED " (16) + "world" (5) = 26 bytes
+	if n, err := buf.Write([]byte(" MIDDLE_OMITTED ")); err != nil || n != 16 {
+		t.Fatalf("Write middle n=%d, err=%v", n, err)
+	}
+	if n, err := buf.Write([]byte("world")); err != nil || n != 5 {
+		t.Fatalf("Write world n=%d, err=%v", n, err)
+	}
+
+	got := buf.String()
+	if !strings.HasPrefix(got, "hello MIDD") {
+		t.Errorf("head = %q, want prefix 'hello MIDD'", got)
+	}
+	if !strings.HasSuffix(got, "TTED world") {
+		t.Errorf("tail = %q, want suffix 'TTED world'", got)
+	}
+	if !strings.Contains(got, "omitted") {
+		t.Errorf("expected omitted indicator in %q", got)
+	}
+}
+
+func TestRunExecWrapper_DistillPreservesEarlyFailure(t *testing.T) {
+	opts := testExecOptions(t)
+	opts.Distill = "gotest"
+	opts.InsertTimeout = 2 * time.Second
+
+	var out, errOut bytes.Buffer
+	// Early failure in head, then 1MB filler, then PASS footer
+	script := "echo '--- FAIL: TestEarlyBug (0.01s)'; head -c 1000000 /dev/zero | tr '\\0' 'A'; echo 'FAIL'"
+	code, err := runExecWrapper([]string{"sh", "-c", script}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil {
+		t.Fatalf("runExecWrapper error = %v", err)
+	}
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	distilled := out.String()
+	if !strings.Contains(distilled, "--- FAIL: TestEarlyBug") {
+		t.Errorf("distilled output missing early failure in head:\n%s", distilled)
+	}
+}
+
+func TestRunExecWrapper_Quota1StreamsFullLogToFile(t *testing.T) {
+	dir := t.TempDir()
+	opts := testExecOptions(t)
+	opts.Quota1 = true
+	opts.Quota1Dir = dir
+	opts.InsertTimeout = 2 * time.Second
+
+	var out, errOut bytes.Buffer
+	// Failing command that writes 2MB
+	script := "head -c 2000000 /dev/zero | tr '\\0' 'X'; echo '--- FAIL: TestQuotaFail (0.01s)'; exit 1"
+	code, err := runExecWrapper([]string{"sh", "-c", script}, opts, strings.NewReader(""), &out, &errOut)
+	if err != nil {
+		t.Fatalf("runExecWrapper error = %v", err)
+	}
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+
+	// Verify the log file on disk exists and has full size >= 2MB
+	samplePath, err := quota1LogPath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logDir := filepath.Dir(samplePath)
+	entries, err := os.ReadDir(logDir)
+	if err != nil || len(entries) == 0 {
+		t.Fatalf("failed to read quota logs in %s: %v", logDir, err)
+	}
+	info, err := entries[0].Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() < 2000000 {
+		t.Errorf("quota log file size on disk = %d, want >= 2000000", info.Size())
+	}
+}

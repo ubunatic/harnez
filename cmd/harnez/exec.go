@@ -267,10 +267,93 @@ type execOptions struct {
 	ConfigPath    string
 }
 
-// maxExecCaptureBytes is the maximum number of tail bytes retained for telemetry scoring,
-// Quota-1 failure logs, and distillation. Streams are proxied to stdout/stderr unbuffered and
-// uncapped; only in-memory post-run inspection buffers are bounded.
-const maxExecCaptureBytes = 1 * 1024 * 1024 // 1 MB tail cap
+// maxExecHeadBytes and maxExecTailBytes bound in-memory capture for telemetry scoring,
+// Quota-1 failure logs, and distillation. Streams are proxied to stdout/stderr unbuffered
+// and uncapped; only in-memory post-run inspection buffers are bounded.
+const (
+	maxExecHeadBytes = 256 * 1024  // 256 KB head cap for distillation
+	maxExecTailBytes = 1024 * 1024 // 1 MB tail cap for telemetry scoring and distillation
+)
+
+// headTailBuffer is a thread-safe io.Writer that retains a bounded head and a bounded tail
+// of the stream, inserting an omission indicator if total bytes written exceeds head+tail.
+type headTailBuffer struct {
+	mu         sync.Mutex
+	head       []byte
+	tail       []byte
+	headLimit  int
+	tailLimit  int
+	totalBytes int64
+}
+
+func newHeadTailBuffer(headLimit, tailLimit int) *headTailBuffer {
+	return &headTailBuffer{
+		headLimit: headLimit,
+		tailLimit: tailLimit,
+	}
+}
+
+func (b *headTailBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	n := len(p)
+	b.totalBytes += int64(n)
+
+	// Fill head buffer up to headLimit
+	if len(b.head) < b.headLimit {
+		needed := b.headLimit - len(b.head)
+		if n <= needed {
+			b.head = append(b.head, p...)
+		} else {
+			b.head = append(b.head, p[:needed]...)
+		}
+	}
+
+	// Maintain tail rolling buffer
+	if b.tailLimit > 0 {
+		if n >= b.tailLimit {
+			b.tail = append(b.tail[:0], p[n-b.tailLimit:]...)
+		} else {
+			overflow := len(b.tail) + n - b.tailLimit
+			if overflow > 0 {
+				copy(b.tail, b.tail[overflow:])
+				b.tail = b.tail[:len(b.tail)-overflow]
+			}
+			b.tail = append(b.tail, p...)
+		}
+	}
+
+	return n, nil
+}
+
+func (b *headTailBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.totalBytes <= int64(b.headLimit) {
+		return string(b.head)
+	}
+	if b.totalBytes <= int64(len(b.head)+len(b.tail)) {
+		if b.totalBytes <= int64(len(b.head)) {
+			return string(b.head[:b.totalBytes])
+		}
+		overlap := int64(len(b.head)) + int64(len(b.tail)) - b.totalBytes
+		if overlap > 0 && overlap <= int64(len(b.tail)) {
+			return string(b.head) + string(b.tail[overlap:])
+		}
+		return string(b.head) + string(b.tail)
+	}
+
+	omitted := b.totalBytes - int64(len(b.head)) - int64(len(b.tail))
+	return string(b.head) + fmt.Sprintf("\n… [%d bytes omitted] …\n", omitted) + string(b.tail)
+}
+
+func (b *headTailBuffer) Len() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.head) + len(b.tail)
+}
 
 // tailBuffer is a thread-safe io.Writer that retains only the last limit bytes written.
 type tailBuffer struct {
@@ -439,15 +522,24 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 
 	counter := &byteCounter{}
-	capturedOutput := newTailBuffer(maxExecCaptureBytes)
-	quotaLog := newTailBuffer(maxExecCaptureBytes)
+	capturedOutput := newHeadTailBuffer(maxExecHeadBytes, maxExecTailBytes)
 	quotaLogPath := ""
+	var quotaLogFile *os.File
 	if quota1Active {
 		var pathErr error
 		quotaLogPath, pathErr = quota1LogPath(opts.Quota1Dir)
 		if pathErr != nil {
 			return 1, fmt.Errorf("exec: resolve Quota-1 test log: %w", pathErr)
 		}
+		if err := os.MkdirAll(filepath.Dir(quotaLogPath), 0755); err != nil {
+			return 1, fmt.Errorf("exec: create Quota-1 log directory: %w", err)
+		}
+		f, err := os.Create(quotaLogPath)
+		if err != nil {
+			return 1, fmt.Errorf("exec: create Quota-1 test log: %w", err)
+		}
+		quotaLogFile = f
+		defer quotaLogFile.Close()
 	}
 
 	timeout := resolveExecTimeout(opts, args)
@@ -471,12 +563,23 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 			mode = distill.DetectModeFromArgs(args)
 		}
 		distOpts = distill.Options{Mode: mode, MaxLines: 300}
-		c.Stdout = io.MultiWriter(capturedOutput, counter, quotaLog)
-		c.Stderr = io.MultiWriter(capturedOutput, counter, quotaLog)
-	} else {
-		c.Stdout = io.MultiWriter(out, counter, capturedOutput, quotaLog)
-		c.Stderr = io.MultiWriter(errOut, counter, capturedOutput, quotaLog)
 	}
+
+	var stdoutWriters []io.Writer
+	var stderrWriters []io.Writer
+	if distillActive {
+		stdoutWriters = []io.Writer{capturedOutput, counter}
+		stderrWriters = []io.Writer{capturedOutput, counter}
+	} else {
+		stdoutWriters = []io.Writer{out, counter, capturedOutput}
+		stderrWriters = []io.Writer{errOut, counter, capturedOutput}
+	}
+	if quotaLogFile != nil {
+		stdoutWriters = append(stdoutWriters, quotaLogFile)
+		stderrWriters = append(stderrWriters, quotaLogFile)
+	}
+	c.Stdout = io.MultiWriter(stdoutWriters...)
+	c.Stderr = io.MultiWriter(stderrWriters...)
 
 	start := time.Now()
 	if err := c.Start(); err != nil {
@@ -573,11 +676,18 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	if stopped.Detected {
 		exitCode = stoppedGroupExitCode
 	}
-	if quota1Active && exitCode != 0 {
-		if err := writeQuota1FailureLog(quotaLogPath, quotaLog.Bytes()); err != nil {
-			fmt.Fprintf(errOut, "harnez exec: write Quota-1 test log %s: %v\n", quotaLogPath, err)
+	if quota1Active {
+		if quotaLogFile != nil {
+			_ = quotaLogFile.Close()
 		}
-		fmt.Fprint(errOut, quota1FailureSummary(quotaLogPath, capturedOutput.String()))
+		if exitCode != 0 {
+			if err := pruneQuota1Logs(filepath.Dir(quotaLogPath)); err != nil {
+				fmt.Fprintf(errOut, "harnez exec: prune Quota-1 test logs: %v\n", err)
+			}
+			fmt.Fprint(errOut, quota1FailureSummary(quotaLogPath, capturedOutput.String()))
+		} else {
+			_ = os.Remove(quotaLogPath)
+		}
 	}
 
 	rawBytes := counter.total()
@@ -626,14 +736,8 @@ func quota1LogPath(dir string) (string, error) {
 
 const quota1LogRetention = 10
 
-func writeQuota1FailureLog(logPath string, output []byte) error {
-	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(logPath, output, 0644); err != nil {
-		return err
-	}
-	entries, err := os.ReadDir(filepath.Dir(logPath))
+func pruneQuota1Logs(logDir string) error {
+	entries, err := os.ReadDir(logDir)
 	if err != nil {
 		return err
 	}
@@ -648,11 +752,21 @@ func writeQuota1FailureLog(logPath string, output []byte) error {
 	}
 	sort.Slice(logs, func(i, j int) bool { return logs[i].Name() < logs[j].Name() })
 	for _, entry := range logs[:len(logs)-quota1LogRetention] {
-		if err := os.Remove(filepath.Join(filepath.Dir(logPath), entry.Name())); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(filepath.Join(logDir, entry.Name())); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}
 	return nil
+}
+
+func writeQuota1FailureLog(logPath string, output []byte) error {
+	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(logPath, output, 0644); err != nil {
+		return err
+	}
+	return pruneQuota1Logs(filepath.Dir(logPath))
 }
 
 func quota1FailureSummary(logPath, output string) string {

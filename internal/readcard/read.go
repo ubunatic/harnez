@@ -35,21 +35,11 @@ func ReadSource(r io.Reader, filename string, opts TextOptions) (*ReadResult, er
 	buf := make([]byte, 64*1024)
 	scanner.Buffer(buf, 10*1024*1024)
 
-	var allLines []string
-	for scanner.Scan() {
-		allLines = append(allLines, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read %s: %w", filename, err)
-	}
-
-	totalOriginal := len(allLines)
 	start := 1
-	end := totalOriginal
+	end := -1 // -1 means open-ended (read to EOF or until head limit)
 
-	// Parse line range if given
 	if opts.LineRange != "" {
-		s, e, err := ParseLineRange(opts.LineRange, totalOriginal)
+		s, e, err := parseLineRangeBounds(opts.LineRange)
 		if err != nil {
 			return nil, fmt.Errorf("invalid line range %q: %w", opts.LineRange, err)
 		}
@@ -57,28 +47,59 @@ func ReadSource(r io.Reader, filename string, opts TextOptions) (*ReadResult, er
 		end = e
 	}
 
-	// Apply start/end slice
-	var selected []string
-	if totalOriginal > 0 && start <= end && start <= totalOriginal {
-		sIdx := start - 1
-		if sIdx < 0 {
-			sIdx = 0
+	if opts.Head > 0 {
+		headCeiling := start + opts.Head - 1
+		if end < 0 || headCeiling < end {
+			end = headCeiling
 		}
-		eIdx := end
-		if eIdx > totalOriginal {
-			eIdx = totalOriginal
-		}
-		selected = allLines[sIdx:eIdx]
 	}
 
-	// Apply head/tail if set
-	if opts.Head > 0 && len(selected) > opts.Head {
-		selected = selected[:opts.Head]
-	}
-	if opts.Tail > 0 && len(selected) > opts.Tail {
-		offset := len(selected) - opts.Tail
-		start += offset
-		selected = selected[offset:]
+	var selected []string
+	totalOriginal := 0
+
+	if opts.Tail > 0 {
+		// Rolling ring buffer for tail
+		var ring []string
+		for scanner.Scan() {
+			totalOriginal++
+			ring = append(ring, scanner.Text())
+			if len(ring) > opts.Tail {
+				ring = ring[1:]
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, fmt.Errorf("read %s: %w", filename, err)
+		}
+		start = totalOriginal - len(ring) + 1
+		if start < 1 {
+			start = 1
+		}
+		selected = ring
+	} else if end > 0 {
+		// Stop scanning as soon as end line ceiling is reached!
+		for scanner.Scan() {
+			totalOriginal++
+			if totalOriginal >= start && totalOriginal <= end {
+				selected = append(selected, scanner.Text())
+			}
+			if totalOriginal >= end {
+				break
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, fmt.Errorf("read %s: %w", filename, err)
+		}
+	} else {
+		// Open-ended (e.g. 10: to EOF, or whole file)
+		for scanner.Scan() {
+			totalOriginal++
+			if totalOriginal >= start {
+				selected = append(selected, scanner.Text())
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, fmt.Errorf("read %s: %w", filename, err)
+		}
 	}
 
 	fullText := strings.Join(selected, "\n")
@@ -201,6 +222,63 @@ func ParseLineRange(s string, totalLines int) (int, int, error) {
 		start = 1
 	}
 	if end < start {
+		end = start
+	}
+
+	return start, end, nil
+}
+
+func parseLineRangeBounds(s string) (int, int, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 1, -1, nil
+	}
+
+	sep := ""
+	for _, candidate := range []string{":", "..", "-"} {
+		if strings.Contains(s, candidate) {
+			sep = candidate
+			break
+		}
+	}
+
+	if sep == "" {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid line number: %w", err)
+		}
+		if n <= 0 {
+			n = 1
+		}
+		return n, n, nil
+	}
+
+	parts := strings.SplitN(s, sep, 2)
+	startStr := strings.TrimSpace(parts[0])
+	endStr := strings.TrimSpace(parts[1])
+
+	start := 1
+	if startStr != "" {
+		n, err := strconv.Atoi(startStr)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid start line %q: %w", startStr, err)
+		}
+		start = n
+	}
+
+	end := -1
+	if endStr != "" {
+		n, err := strconv.Atoi(endStr)
+		if err != nil {
+			return 0, 0, fmt.Errorf("invalid end line %q: %w", endStr, err)
+		}
+		end = n
+	}
+
+	if start < 1 {
+		start = 1
+	}
+	if end > 0 && end < start {
 		end = start
 	}
 

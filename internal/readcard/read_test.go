@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -894,5 +895,62 @@ func TestSplitTokensByLength(t *testing.T) {
 	}
 	if tail[0].Type != TokenTypeIdent {
 		t.Errorf("expected tail token type preserved as TokenTypeIdent, got %v", tail[0].Type)
+	}
+}
+
+type infiniteLineReader struct {
+	linesEmitted int
+	maxLines     int
+}
+
+func (r *infiniteLineReader) Read(p []byte) (n int, err error) {
+	if r.linesEmitted >= r.maxLines {
+		return 0, io.EOF
+	}
+	line := fmt.Sprintf("line %d content\n", r.linesEmitted+1)
+	r.linesEmitted++
+	copy(p, line)
+	return len(line), nil
+}
+
+func TestReadSource_EarlyTerminationLargeInput(t *testing.T) {
+	reader := &infiniteLineReader{maxLines: 2000000}
+	res, err := ReadSource(reader, "huge.txt", TextOptions{
+		LineRange: "1:10",
+	})
+	if err != nil {
+		t.Fatalf("ReadSource failed: %v", err)
+	}
+	if len(res.Lines) != 10 {
+		t.Fatalf("len(res.Lines) = %d, want 10", len(res.Lines))
+	}
+	if res.Lines[0] != "line 1 content" || res.Lines[9] != "line 10 content" {
+		t.Fatalf("unexpected lines: %v", res.Lines)
+	}
+	// Verify scanner stopped early without reading all 2,000,000 lines
+	if reader.linesEmitted > 100 {
+		t.Errorf("linesEmitted = %d, want <= 100 (early termination)", reader.linesEmitted)
+	}
+}
+
+func TestReadSource_TailRollingWindow(t *testing.T) {
+	var sb strings.Builder
+	for i := 1; i <= 1000; i++ {
+		fmt.Fprintf(&sb, "item %d\n", i)
+	}
+	res, err := ReadSource(strings.NewReader(sb.String()), "list.txt", TextOptions{
+		Tail: 5,
+	})
+	if err != nil {
+		t.Fatalf("ReadSource failed: %v", err)
+	}
+	if len(res.Lines) != 5 {
+		t.Fatalf("len(res.Lines) = %d, want 5", len(res.Lines))
+	}
+	if res.StartLine != 996 {
+		t.Errorf("start_line = %d, want 996", res.StartLine)
+	}
+	if res.Lines[0] != "item 996" || res.Lines[4] != "item 1000" {
+		t.Errorf("unexpected lines: %v", res.Lines)
 	}
 }
