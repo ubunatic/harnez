@@ -15,3 +15,13 @@ directory before the run, so successful runs create it too (flash37 review).
 ## /goal
 
 Retained logs stay bounded (e.g. last 10), and a successful run touches no files.
+
+## M1 delivered (22595e3), untested: host suite fails
+
+`TestWriteQuota1FailureLogRetainsLatestTen` fails on HEAD. The developer used its
+single test run before editing. harnez's 525 turn-end warning flagged both files.
+
+## M2 Pre-Work / Required Refinements
+
+- Fix the retention test or the pruning (whichever is wrong); don't weaken the assertion.
+- Run the suite after the edit, not before.
