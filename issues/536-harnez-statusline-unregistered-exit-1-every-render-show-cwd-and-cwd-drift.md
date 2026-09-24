@@ -65,3 +65,13 @@ The /goal 1 test (every command that `apply` configures must be registered) woul
   `workspace.project_dir`, show both (`~/projects/voxi → /tmp`). Shorten `$HOME` to `~`.
 - Tests with a fixture payload for the same-dir and drift cases. The rendered width stays sensible
   (rune/display width).
+
+**M2 delivered (cwd + drift): e04a347.**
+- Correction by the host: the M2 pre-work observation was wrong. The captured sample had been
+  overwritten by the host session's own render, so it was a harnez payload. The command never
+  rendered the process cwd.
+
+### M3 — fix the drift arrow direction
+- Pre-Work / Required Refinements: M2 renders `current → project`. The spec above is
+  `project_dir → current_dir` (start dir → where the session is now, e.g. `~/projects/voxi → /tmp`).
+  Flip it and make the test assert the order.
