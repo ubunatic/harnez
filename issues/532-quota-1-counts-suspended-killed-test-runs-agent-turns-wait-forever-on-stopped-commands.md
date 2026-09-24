@@ -1,6 +1,6 @@
 # 532 — quota-1 counts suspended/killed test runs; agent turns wait forever on stopped commands
 
-**Status**: Open
+**Status**: Closed — items 1-2 fixed via 533 (cba35ac, 002945b, ef0408b); item 3 handed to agy/loom
 **Priority**: P2
 **Severity**: Medium
 **Category**: Bug
