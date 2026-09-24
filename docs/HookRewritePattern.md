@@ -197,5 +197,28 @@ Claude and Codex are rewritten by their PreToolUse hooks. agy is the special cas
 - **Pitfall: env attribution.** agy launched from a Claude session inherits Claude's env markers, so exec rows
   from the shim are labelled `claude`/`Bash`. The stats join compensates (537 M7). The source-level fix
   (drop the markers in `agyLaunchEnv`) is still open.
-- Users start agy as `harnez agent chat --model agy:flash37:low`. Only harnez launches agy. A plain `agy`
-  still works through the hook fallback, with the visible rewrite.
+- Users start agy as `harnez agent chat --model agy:flash37:low`, or in a terminal as `harnez-agy`
+  (issue 550): `harnez apply` writes `~/.local/bin/harnez-agy`, which finds the real `agy` on the
+  original PATH, then execs it with the shim dir first and `ANTIGRAVITY_AGENT=1`. A plain `agy` still
+  works through the hook fallback, with the visible rewrite.
+- **Cost of the hook fallback.** agy appends "A pre-tool hook changed the arguments of this tool call
+  before it ran. Changed: CommandLine." to every rewritten command's result. agy runs many single
+  commands, so this adds up; the shim adds nothing.
+- **agy calls `bash -c '<program>'` once per command.** The shim passes it through unchanged as one
+  `harnez exec -- /bin/bash -c '<program>'`; chains inside the program are one exec, nested bash calls
+  hit the `HARNEZ_INTERCEPTED` guard. Pitfall: `inferToolFromArgs` (cmd/harnez/exec.go) only unwraps
+  `bash`/`sh -c`, not `/bin/bash` or `-lc`, so shimmed rows may be named `bash` instead of `go`/`make`
+  (unverified).
+
+## Command output size (issue 543)
+
+- `harnez exec` keeps at most 256 KB head + 1 MB tail of a child's output in memory and passes that
+  on (marker `… [N bytes omitted] …`). The quota-1 log streams to a file and is deleted on success.
+  Before 543, capture was unbounded (50 MB output → 249 MB RSS).
+- agy truncates tool output itself, also for hook-rewritten commands: measured 2026-09-24, session
+  7e5f6ea1, results showed `<truncated N lines>` and stayed ≤ ~8 KB each (69 KB over 17 calls). So
+  exec's large pass-through does not inflate agy's context. Whether Claude and Codex truncate is unmeasured.
+- agy's token cost is dominated by re-reading the context on every model call (mostly cached), not by
+  command output; retire long agy sessions instead (issue 545 item 5).
+- Open idea: a small inline byte cap in `harnez exec` with the full output in a file and a search
+  command over saved outputs ("context guard"); not yet a ticket.
