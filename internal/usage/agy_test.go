@@ -2,14 +2,120 @@ package usage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"ubunatic.com/harnez/internal/agymeter"
 )
+
+func writeTestAGYMeterRows(t *testing.T, home string, rows []agymeter.Record) {
+	t.Helper()
+	path := filepath.Join(home, ".harnez", "agymeter", "usage.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if err := json.NewEncoder(f).Encode(row); err != nil {
+			_ = f.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCollectAGYPrefersRecentMeterQuotaToUsageCommand(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	geminiDir := filepath.Join(home, ".gemini", "antigravity-cli")
+	if err := os.MkdirAll(geminiDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	reset := now.Add(3 * time.Hour).Format(time.RFC3339)
+	zero := 0.0
+	rows := []agymeter.Record{
+		{Time: now.Add(-2 * time.Minute), Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.70), Reset: reset},
+		{Time: now.Add(-time.Minute), Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.7592765), Reset: reset},
+		{Time: now.Add(-time.Minute), Kind: "quota", Bucket: "gemini-5h", Remaining: floatPtr(0.6458407), Reset: reset},
+		{Time: now.Add(-time.Minute), Kind: "quota", Bucket: "3p-weekly", Remaining: &zero, Reset: reset},
+		{Time: now.Add(-time.Minute), Kind: "quota", Bucket: "3p-5h", Remaining: floatPtr(0.5), Reset: reset},
+	}
+	writeTestAGYMeterRows(t, home, rows)
+	calls, cleanup := agyStubUsageCmd(t, []byte(agyOKOutput), nil)
+	defer cleanup()
+
+	got := CollectAGY(context.Background(), geminiDir, http.DefaultClient)
+	if atomic.LoadInt32(calls) != 0 {
+		t.Fatalf("agy -p /usage called %d times despite fresh meter data", atomic.LoadInt32(calls))
+	}
+	if len(got.ModelGroups) != 2 || got.ModelGroups[0].Name != "Gemini Models" || got.ModelGroups[1].Name != "Claude and GPT models" {
+		t.Fatalf("meter groups = %+v", got.ModelGroups)
+	}
+	w := got.ModelGroups[0].Windows[0]
+	if w.Source != "agy-meter" || math.Abs(w.RemainingPercent-75.92765) > 1e-9 || math.Abs(w.UsedPercent-24.07235) > 1e-9 {
+		t.Fatalf("meter percentages/source = %+v", w)
+	}
+	if got.LastRefreshed.IsZero() || time.Since(got.LastRefreshed) > 2*time.Minute {
+		t.Errorf("LastRefreshed = %s, want latest meter time", got.LastRefreshed)
+	}
+	if !strings.Contains(got.Sources[len(got.Sources)-1], ".harnez/agymeter/usage.jsonl") {
+		t.Errorf("meter source missing from %v", got.Sources)
+	}
+	compact := formatCompactGroupLine("Gemini", got.ModelGroups[0].Windows, 100)
+	if !strings.Contains(compact, "24.07%") || !strings.Contains(compact, "35.42%") {
+		t.Errorf("compact meter percentages lack 2 decimals: %q", compact)
+	}
+	raw := RenderText(UsageSummary{Agents: []AgentUsage{got}})
+	if !strings.Contains(raw, "24.07% used") || !strings.Contains(raw, "Updated:") {
+		t.Errorf("raw usage does not show meter percentages to 2 decimals:\n%s", raw)
+	}
+	cached := AgentUsage{AgentID: "agy", ModelGroups: []ModelGroup{{Name: "Old cache"}}}
+	overridden, ok := applyRecentAGYMeterQuota(cached, home, now)
+	if !ok || len(overridden.ModelGroups) != 2 || overridden.ModelGroups[0].Name != "Gemini Models" {
+		t.Errorf("recent meter quota did not override cached quota: %+v, ok=%t", overridden.ModelGroups, ok)
+	}
+	again, ok := applyRecentAGYMeterQuota(got, home, now)
+	if !ok || strings.Count(strings.Join(again.Sources, " "), ".harnez/agymeter/usage.jsonl") != 1 {
+		t.Errorf("reapplying meter quota duplicated its source: %v", again.Sources)
+	}
+}
+
+func TestCollectAGYFallsBackWhenMeterQuotaIsStale(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	geminiDir := filepath.Join(home, ".gemini", "antigravity-cli")
+	if err := os.MkdirAll(geminiDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	writeTestAGYMeterRows(t, home, []agymeter.Record{{Time: time.Now().Add(-DefaultCacheStaleness - time.Minute), Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.9)}})
+	calls, cleanup := agyStubUsageCmd(t, []byte(agyOKOutput), nil)
+	defer cleanup()
+
+	got := CollectAGY(context.Background(), geminiDir, http.DefaultClient)
+	if atomic.LoadInt32(calls) != 1 {
+		t.Fatalf("agy -p /usage calls = %d, want 1 fallback", atomic.LoadInt32(calls))
+	}
+	if len(got.ModelGroups) != 2 || got.ModelGroups[0].Name != "Gemini Models" {
+		t.Fatalf("fallback groups = %+v", got.ModelGroups)
+	}
+}
+
+func floatPtr(value float64) *float64 { return &value }
 
 // agyStubUsageCmd stubs runAGYUsageCmdFn to return a fixed output/error
 // pair instead of shelling out to a real `agy` binary, counting how many

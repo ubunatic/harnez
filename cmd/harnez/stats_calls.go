@@ -33,6 +33,7 @@ type statsCallRow struct {
 
 type statsPromptTotal struct {
 	PromptID        string `json:"prompt_id"`
+	Label           string `json:"label"`
 	Requests        int    `json:"requests"`
 	PromptTokens    int64  `json:"prompt_tokens"`
 	CachedTokens    int64  `json:"cached_tokens"`
@@ -91,6 +92,7 @@ func runStatsCalls(w io.Writer, opts statsOptions) error {
 func assembleStatsCalls(session string, usageRows []agymeter.Record, tools []telemetry.ToolCall) statsCallsReport {
 	report := statsCallsReport{Session: session}
 	groups := map[string]*statsPromptTotal{}
+	firstSeen := map[string]time.Time{}
 	for _, u := range usageRows {
 		row := statsCallRow{Time: u.Time, Kind: "model", PromptID: u.PromptID, Model: u.Model, PromptTokens: u.Prompt, CachedTokens: u.Cached, CandidateTokens: u.Candidates, ThoughtTokens: u.Thoughts, TotalTokens: u.Total}
 		report.Rows = append(report.Rows, row)
@@ -99,6 +101,9 @@ func assembleStatsCalls(session string, usageRows []agymeter.Record, tools []tel
 			if g == nil {
 				g = &statsPromptTotal{PromptID: u.PromptID}
 				groups[u.PromptID] = g
+				firstSeen[u.PromptID] = u.Time
+			} else if u.Time.Before(firstSeen[u.PromptID]) {
+				firstSeen[u.PromptID] = u.Time
 			}
 			g.Requests++
 			g.PromptTokens += u.Prompt
@@ -151,7 +156,17 @@ func assembleStatsCalls(session string, usageRows []agymeter.Record, tools []tel
 	for _, g := range groups {
 		report.Prompts = append(report.Prompts, *g)
 	}
-	sort.Slice(report.Prompts, func(i, j int) bool { return report.Prompts[i].PromptID < report.Prompts[j].PromptID })
+	sort.Slice(report.Prompts, func(i, j int) bool {
+		left, right := firstSeen[report.Prompts[i].PromptID], firstSeen[report.Prompts[j].PromptID]
+		if left.Equal(right) {
+			return report.Prompts[i].PromptID < report.Prompts[j].PromptID
+		}
+		return left.Before(right)
+	})
+	for i := range report.Prompts {
+		at := firstSeen[report.Prompts[i].PromptID].Local().Format("15:04:05")
+		report.Prompts[i].Label = fmt.Sprintf("Prompt %d · %s", i+1, at)
+	}
 	return report
 }
 
@@ -202,7 +217,7 @@ func renderStatsCalls(w io.Writer, report statsCallsReport) error {
 	}
 	fmt.Fprintln(w, "\nPROMPT TOTALS")
 	for _, p := range report.Prompts {
-		fmt.Fprintf(w, "%s  requests=%d input=%d cached=%d candidates=%d thoughts=%d total=%d tool_calls=%d\n", p.PromptID, p.Requests, p.PromptTokens, p.CachedTokens, p.CandidateTokens, p.ThoughtTokens, p.TotalTokens, p.ToolCalls)
+		fmt.Fprintf(w, "%s  requests=%d input=%d cached=%d candidates=%d thoughts=%d total=%d tool_calls=%d\n", p.Label, p.Requests, p.PromptTokens, p.CachedTokens, p.CandidateTokens, p.ThoughtTokens, p.TotalTokens, p.ToolCalls)
 	}
 	return nil
 }

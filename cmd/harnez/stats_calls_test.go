@@ -64,6 +64,9 @@ func TestRunStatsCallsMergesToolsAndTotalsPrompt(t *testing.T) {
 	if report.Prompts[0].Requests != 2 || report.Prompts[0].PromptTokens != 110 || report.Prompts[0].TotalTokens != 117 || report.Prompts[0].ToolCalls != 2 {
 		t.Fatalf("prompt total: %+v", report.Prompts[0])
 	}
+	if report.Prompts[0].Label == "" || report.Prompts[0].Label == report.Prompts[0].PromptID || !strings.HasPrefix(report.Prompts[0].Label, "Prompt 1") {
+		t.Fatalf("prompt label = %q, want a readable index/time label", report.Prompts[0].Label)
+	}
 	merged := false
 	for _, row := range report.Rows {
 		if row.Sources == "hook+exec" {
@@ -83,7 +86,7 @@ func TestRunStatsCallsMergesToolsAndTotalsPrompt(t *testing.T) {
 	if err := runStats(&table, statsOptions{DBPath: dbPath, MeterPath: meterPath, Session: "agent-1", Calls: true}); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(table.String(), "%!(EXTRA") || !strings.Contains(table.String(), "hook+exec") {
+	if strings.Contains(table.String(), "%!(EXTRA") || !strings.Contains(table.String(), "hook+exec") || !strings.Contains(table.String(), "Prompt 1 ·") {
 		t.Fatalf("table output is malformed or missing merged source:\n%s", table.String())
 	}
 }

@@ -1612,9 +1612,9 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 		barOpts := watchUsageBarOptions(w.UsedPercent)
 		barOpts.Width = compactBarWidth
 		bar := rograph.RenderBar(w.UsedPercent, barOpts)
-		line := fmt.Sprintf("%s %s %s%s", lbl, bar, padWatchUsagePercent(w.UsedPercent, 3), resetStr)
+		line := fmt.Sprintf("%s %s %s%s", lbl, bar, padQuotaWindowPercent(w, 3), resetStr)
 		if visLen(line) > contentW {
-			line = fmt.Sprintf("%s %s %s", lbl, bar, padWatchUsagePercent(w.UsedPercent, 3))
+			line = fmt.Sprintf("%s %s %s", lbl, bar, padQuotaWindowPercent(w, 3))
 		}
 		return line
 	}
@@ -1649,8 +1649,8 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 	b1 := rograph.RenderBar(w1.UsedPercent, b1opts)
 	b2 := rograph.RenderBar(w2.UsedPercent, b2opts)
 
-	midStr := padWatchUsagePercentWithDuration(w1.UsedPercent, d1, 10)
-	endStr := watchUsagePercentWithDuration(w2.UsedPercent, d2)
+	midStr := padQuotaWindowPercentWithDuration(w1, d1, 10)
+	endStr := quotaWindowPercentWithDuration(w2, d2)
 
 	// Format: Label [b1] pct1 d1 [b2] pct2 d2 (e.g. Gemini [███░] 91% 2h [░░░░] 0% 3d)
 	line := fmt.Sprintf("%s %s %s %s %s", lbl, b1, midStr, b2, endStr)
@@ -1659,14 +1659,14 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 	}
 
 	// Drop d2 if too long
-	endStrNoD2 := watchUsagePercent(w2.UsedPercent)
+	endStrNoD2 := quotaWindowPercent(w2)
 	line = fmt.Sprintf("%s %s %s %s %s", lbl, b1, midStr, b2, endStrNoD2)
 	if visLen(line) <= contentW {
 		return line
 	}
 
 	// Drop d1 as well
-	midStrNoD1 := padWatchUsagePercentWithDuration(w1.UsedPercent, "", 5)
+	midStrNoD1 := padQuotaWindowPercentWithDuration(w1, "", 5)
 	line = fmt.Sprintf("%s %s %s %s %s", lbl, b1, midStrNoD1, b2, endStrNoD2)
 	if visLen(line) <= contentW {
 		return line
@@ -1675,7 +1675,7 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 	// If still too long in very narrow box, shrink label
 	for lw := labelWidth - 1; lw >= 6; lw-- {
 		lblShrunk := rograph.PadLabel(label, lw)
-		line = fmt.Sprintf("%s %s %s %s %s", lblShrunk, b1, watchUsagePercent(w1.UsedPercent), b2, watchUsagePercent(w2.UsedPercent))
+		line = fmt.Sprintf("%s %s %s %s %s", lblShrunk, b1, quotaWindowPercent(w1), b2, quotaWindowPercent(w2))
 		if visLen(line) <= contentW {
 			return line
 		}
@@ -1683,6 +1683,31 @@ func formatCompactGroupLineWithLabelWidth(label string, windows []QuotaWindow, c
 
 	// If still too long, shrink label to fit
 	return line
+}
+
+func quotaWindowPercent(w QuotaWindow) string {
+	if w.Source == "agy-meter" {
+		return fmt.Sprintf("%.2f%%", w.UsedPercent)
+	}
+	return watchUsagePercent(w.UsedPercent)
+}
+
+func padQuotaWindowPercent(w QuotaWindow, width int) string {
+	label := quotaWindowPercent(w)
+	return strings.Repeat(" ", max(0, width-visLen(label))) + label
+}
+
+func quotaWindowPercentWithDuration(w QuotaWindow, duration string) string {
+	label := quotaWindowPercent(w)
+	if duration != "" {
+		label += " " + duration
+	}
+	return label
+}
+
+func padQuotaWindowPercentWithDuration(w QuotaWindow, duration string, width int) string {
+	label := quotaWindowPercentWithDuration(w, duration)
+	return label + strings.Repeat(" ", max(0, width-visLen(label)))
 }
 
 // WatchOptions bundles optional customization for watch frame rendering.

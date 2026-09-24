@@ -12,9 +12,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"ubunatic.com/harnez/internal/agymeter"
 )
 
 // AGYOauthToken models ~/.gemini/antigravity-cli/antigravity-oauth-token
@@ -259,6 +262,28 @@ func parseAGYUsageOutput(out []byte) []ModelGroup {
 
 // CollectAGY inspects ~/.gemini/antigravity-cli for token, model settings, and session logs, and queries live quota pools.
 func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) AgentUsage {
+	homeDir, _ := os.UserHomeDir()
+	homeDir = agyHomeForConfig(homeDir, geminiDir)
+	return collectAGYWithHome(ctx, geminiDir, homeDir, client)
+}
+
+func agyHomeForConfig(homeDir, geminiDir string) string {
+	if geminiDir == "" {
+		return homeDir
+	}
+	clean := filepath.Clean(geminiDir)
+	if clean == filepath.Join(homeDir, ".gemini", "antigravity-cli") {
+		return homeDir
+	}
+	if filepath.Base(clean) == "antigravity-cli" && filepath.Base(filepath.Dir(clean)) == ".gemini" {
+		return filepath.Dir(filepath.Dir(clean))
+	}
+	// A nonstandard config directory is often used by callers and tests to
+	// isolate AGY state. Do not couple it to the process user's meter file.
+	return filepath.Dir(clean)
+}
+
+func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *http.Client) AgentUsage {
 	usage := AgentUsage{
 		AgentID:      "agy",
 		Name:         "Antigravity (AGY)",
@@ -266,15 +291,20 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 		ExtraWindows: make(map[string]QuotaWindow),
 	}
 
+	if homeDir == "" {
+		homeDir, _ = os.UserHomeDir()
+	}
 	if geminiDir == "" {
-		home, _ := os.UserHomeDir()
-		geminiDir = filepath.Join(home, ".gemini", "antigravity-cli")
+		geminiDir = filepath.Join(homeDir, ".gemini", "antigravity-cli")
 	}
 
 	if _, err := os.Stat(geminiDir); os.IsNotExist(err) {
+		if meterUsage, ok := applyRecentAGYMeterQuota(usage, homeDir, time.Now()); ok {
+			meterUsage.Installed = true
+			return meterUsage
+		}
 		// Try fallback ~/.gemini
-		home, _ := os.UserHomeDir()
-		fallbackDir := filepath.Join(home, ".gemini")
+		fallbackDir := filepath.Join(homeDir, ".gemini")
 		if _, err := os.Stat(fallbackDir); os.IsNotExist(err) {
 			usage.Installed = false
 			return usage
@@ -375,7 +405,9 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 	// on-disk cache first so a warm reading from a sibling `harnez`
 	// process (or this process's own last tick) short-circuits the exec
 	// call entirely (issue 033, generalized to AGY in issue 087).
-	if client != nil {
+	if meterUsage, ok := applyRecentAGYMeterQuota(usage, homeDir, time.Now()); ok {
+		usage = meterUsage
+	} else if client != nil {
 		cachePath := liveFetchCachePath(geminiDir)
 		defer lockLiveFetchInProcess(cachePath)()
 		cache := readLiveFetchCache[agyQuotaPayload](cachePath)
@@ -484,4 +516,110 @@ func CollectAGY(ctx context.Context, geminiDir string, client *http.Client) Agen
 	}
 
 	return usage
+}
+
+const agyMeterQuotaMaxAge = DefaultCacheStaleness
+
+var agyMeterQuotaBuckets = []struct {
+	bucket string
+	group  string
+	window string
+}{
+	{"gemini-weekly", "Gemini Models", "Weekly Limit Remaining"},
+	{"gemini-5h", "Gemini Models", "Five Hour Limit Remaining"},
+	{"3p-weekly", "Claude and GPT models", "Weekly Limit Remaining"},
+	{"3p-5h", "Claude and GPT models", "Five Hour Limit Remaining"},
+}
+
+func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (AgentUsage, bool) {
+	if homeDir == "" {
+		return usage, false
+	}
+	path := filepath.Join(homeDir, ".harnez", "agymeter", "usage.jsonl")
+	rows, err := agymeter.ReadQuotaRecords(path)
+	if err != nil {
+		return usage, false
+	}
+	latestByBucket := make(map[string]agymeter.Record)
+	var latest time.Time
+	for _, row := range rows {
+		age := now.Sub(row.Time)
+		if row.Remaining == nil || age < 0 || age > agyMeterQuotaMaxAge {
+			continue
+		}
+		if reset, parseErr := time.Parse(time.RFC3339, row.Reset); parseErr == nil && !reset.After(now) {
+			continue
+		}
+		latestByBucket[row.Bucket] = row
+		if row.Time.After(latest) {
+			latest = row.Time
+		}
+	}
+	if len(latestByBucket) == 0 {
+		return usage, false
+	}
+
+	groups := make([]ModelGroup, 0, 2)
+	groupIndex := make(map[string]int)
+	appendBucket := func(row agymeter.Record, groupName, windowName string) {
+		idx, ok := groupIndex[groupName]
+		if !ok {
+			idx = len(groups)
+			groupIndex[groupName] = idx
+			groups = append(groups, ModelGroup{Name: groupName})
+		}
+		fraction := *row.Remaining
+		fraction = max(0, min(1, fraction))
+		window := QuotaWindow{
+			Name:             windowName,
+			Source:           "agy-meter",
+			UsedPercent:      (1 - fraction) * 100,
+			RemainingPercent: fraction * 100,
+		}
+		if reset, parseErr := time.Parse(time.RFC3339, row.Reset); parseErr == nil {
+			window.ResetAt = &reset
+			window.DurationLeft = max(0, reset.Sub(now))
+		}
+		groups[idx].Windows = append(groups[idx].Windows, window)
+	}
+	known := make(map[string]bool, len(agyMeterQuotaBuckets))
+	for _, spec := range agyMeterQuotaBuckets {
+		known[spec.bucket] = true
+		if row, ok := latestByBucket[spec.bucket]; ok {
+			appendBucket(row, spec.group, spec.window)
+		}
+	}
+	unknown := make([]string, 0)
+	for bucket := range latestByBucket {
+		if !known[bucket] {
+			unknown = append(unknown, bucket)
+		}
+	}
+	sort.Strings(unknown)
+	for _, bucket := range unknown {
+		appendBucket(latestByBucket[bucket], "Other AGY Models", bucket)
+	}
+
+	usage.ModelGroups = groups
+	usage.Installed = true
+	usage.Authenticated = true
+	usage.QuotaFetchError = ""
+	usage.LastRefreshed = latest
+	meterSource := "~/.harnez/agymeter/usage.jsonl"
+	hasMeterSource := false
+	for _, source := range usage.Sources {
+		if source == meterSource {
+			hasMeterSource = true
+			break
+		}
+	}
+	if !hasMeterSource {
+		usage.Sources = append(usage.Sources, meterSource)
+	}
+	if usage.Details == nil {
+		usage.Details = make(map[string]string)
+	}
+	usage.Details["quota_source"] = "agy-meter"
+	usage.Details["quota_age"] = FormatAgo(latest)
+	return usage, true
 }

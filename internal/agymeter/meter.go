@@ -399,6 +399,31 @@ func ReadUsageRecords(path, session string) ([]Record, error) {
 	return out, nil
 }
 
+// ReadQuotaRecords returns quota snapshots ordered oldest to newest.
+func ReadQuotaRecords(path string) ([]Record, error) {
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var out []Record
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		var row Record
+		if json.Unmarshal(s.Bytes(), &row) == nil && row.Kind == "quota" && row.Bucket != "" && row.Remaining != nil {
+			out = append(out, row)
+		}
+	}
+	if err := s.Err(); err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
+	return out, nil
+}
+
 func (m *Meter) debugf(format string, args ...any) {
 	if m.debug {
 		log.Printf("agy-meter: "+format, args...)

@@ -8,6 +8,7 @@ import (
 // QuotaWindow represents a time-bound quota window (e.g. 5-hour session or 7-day rolling).
 type QuotaWindow struct {
 	Name             string        `json:"name,omitempty"`
+	Source           string        `json:"source,omitempty"`
 	UsedPercent      float64       `json:"used_percent"`
 	RemainingPercent float64       `json:"remaining_percent"`
 	ResetAt          *time.Time    `json:"reset_at,omitempty"`

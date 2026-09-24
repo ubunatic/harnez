@@ -157,7 +157,7 @@ func collectAllWithDiagnostics(ctx context.Context, homeDir string, client *http
 	collectAGY := func() AgentUsage {
 		reportStarted("agy")
 		started := time.Now()
-		u, _ := collectWithRetryInfo(ctx, func() AgentUsage { return CollectAGY(ctx, agyDir, client) })
+		u, _ := collectWithRetryInfo(ctx, func() AgentUsage { return collectAGYWithHome(ctx, agyDir, homeDir, client) })
 		reportDone("agy", started, u)
 		return u
 	}
@@ -219,6 +219,7 @@ func collectAllWithDiagnostics(ctx context.Context, homeDir string, client *http
 		wg.Wait()
 	}
 	now := time.Now()
+	agyUsage, _ = applyRecentAGYMeterQuota(agyUsage, homeDir, now)
 	if claudeUsage.LastRefreshed.IsZero() {
 		claudeUsage.LastRefreshed = now
 	}
@@ -378,7 +379,11 @@ func RenderText(summary UsageSummary, opts ...WatchOptions) string {
 							resetInfo = fmt.Sprintf(" · Resets %s", localTime)
 						}
 					}
-					line := fmt.Sprintf("  %-28s %s %5.1f%% used%s", w.Name+":", bar, w.UsedPercent, resetInfo)
+					percent := fmt.Sprintf("%5.1f%%", w.UsedPercent)
+					if w.Source == "agy-meter" {
+						percent = fmt.Sprintf("%5.2f%%", w.UsedPercent)
+					}
+					line := fmt.Sprintf("  %-28s %s %s used%s", w.Name+":", bar, percent, resetInfo)
 					if valueStale {
 						line = staleValueANSI(line)
 					}
