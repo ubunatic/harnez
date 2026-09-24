@@ -83,12 +83,15 @@ worker has the developer leaf role; the CLI directs live agy checks to the host.
 installed agy's runtime rewrite behavior and actual payload remain unverified. No live hooks were
 modified. The host must run the canary to complete M1.
 
+**M1 delivered (canary, docs only): d76e6a6.** The documented response is `decision` + `overwrite.CommandLine`.
+Live behaviour is unverified because developer leaf roles cannot launch `harnez agent`, so the host runs the live check in M3.
+
 ### M2 — rewrite agy run_command to `harnez exec`
 - In `harnez hook agy`, rewrite `run_command` to `harnez exec --tool agy -- <cmd>`, using the same
   adapter as the Claude/Codex exec hook (look at `harnez exec hook` and `internal/codex/hooks.go`).
   Keep the existing telemetry. Do not double-wrap commands that already start with `harnez exec`.
 - Tests: rewrite, no double-wrap, non-shell tools untouched.
 
-### M3 — live acceptance
+### M3 — live acceptance (host-run)
 - A real `harnez agent -p` agy run with `sh -c 'kill -STOP $$'` returns exit 125 within seconds,
   and `sleep 120` hits the exec timeout.
