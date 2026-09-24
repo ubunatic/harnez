@@ -11,13 +11,14 @@ import (
 
 // Record describes a process group started by harnez exec.
 type Record struct {
-	PGID         int       `json:"pgid"`
-	PIDStarttime uint64    `json:"pid_starttime"`
-	Argv         []string  `json:"argv"`
-	CWD          string    `json:"cwd"`
-	OwnerPID     int       `json:"owner_pid"`
-	Quota1       bool      `json:"quota_1"`
-	Started      time.Time `json:"started"`
+	PGID           int       `json:"pgid"`
+	PIDStarttime   uint64    `json:"pid_starttime"`
+	Argv           []string  `json:"argv"`
+	CWD            string    `json:"cwd"`
+	OwnerPID       int       `json:"owner_pid"`
+	OwnerStarttime uint64    `json:"owner_starttime"`
+	Quota1         bool      `json:"quota_1"`
+	Started        time.Time `json:"started"`
 }
 
 // RecordDir returns the runtime process-record directory.

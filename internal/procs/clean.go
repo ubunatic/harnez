@@ -252,7 +252,8 @@ func cleanRecord(opts CleanOptions, path string, record Record) (Action, error) 
 	}
 	ownerAlive := false
 	for _, process := range processes {
-		if process.PID == record.OwnerPID && process.UIDKnown && process.UID == opts.UID {
+		if process.PID == record.OwnerPID && process.UIDKnown && process.UID == opts.UID &&
+			(record.OwnerStarttime == 0 || process.Starttime == record.OwnerStarttime) {
 			ownerAlive = true
 			break
 		}

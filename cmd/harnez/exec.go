@@ -438,7 +438,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		var err error
 		processRecordPath, err = procs.WriteRecord(processRecordDir, procs.Record{
 			PGID: c.Process.Pid, PIDStarttime: quota1.ProcStarttime(c.Process.Pid), Argv: append([]string(nil), args...),
-			CWD: cwd, OwnerPID: os.Getpid(), Quota1: quota1Active, Started: start.UTC(),
+			CWD: cwd, OwnerPID: os.Getpid(), OwnerStarttime: quota1.ProcStarttime(os.Getpid()), Quota1: quota1Active, Started: start.UTC(),
 		})
 		if err != nil {
 			fmt.Fprintf(errOut, "harnez exec: record process group: %v\n", err)
@@ -457,8 +457,23 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		case <-groupDone:
 		}
 	}()
+	stoppedDone := make(chan struct{})
+	stoppedResult := make(chan stoppedGroupOutcome, 1)
+	go func() {
+		stoppedResult <- monitorStoppedGroup(stoppedDone, c.Process.Pid, stoppedGroupGrace, stoppedPollInterval,
+			processGroupStopped, signalProcessGroup)
+	}()
 	runErr := c.Wait()
 	close(groupDone)
+	close(stoppedDone)
+	stopped := <-stoppedResult
+	if stopped.Detected {
+		if stopped.Killed {
+			fmt.Fprintln(errOut, "harnez exec: process group remained stopped after SIGCONT; sent SIGKILL (exit 125); quota-1 run marked incomplete")
+		} else {
+			fmt.Fprintln(errOut, "harnez exec: stopped process group detected; sent SIGCONT (exit 125); quota-1 run marked incomplete")
+		}
+	}
 	if processRecordPath != "" {
 		if err := procs.RemoveRecord(processRecordPath); err != nil {
 			fmt.Fprintf(errOut, "harnez exec: remove process record: %v\n", err)
@@ -472,14 +487,16 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	duration := time.Since(start)
 	if quota1Active {
 		var normalExit *int
-		if runErr == nil {
-			code := 0
-			normalExit = &code
-		} else {
-			var childExit *exec.ExitError
-			if errors.As(runErr, &childExit) && childExit.ProcessState != nil && childExit.ProcessState.Exited() {
-				code := childExit.ExitCode()
+		if !stopped.Detected {
+			if runErr == nil {
+				code := 0
 				normalExit = &code
+			} else {
+				var childExit *exec.ExitError
+				if errors.As(runErr, &childExit) && childExit.ProcessState != nil && childExit.ProcessState.Exited() {
+					code := childExit.ExitCode()
+					normalExit = &code
+				}
 			}
 		}
 		if err := quota1.FinishRun(quotaStateFile, time.Now(), normalExit); err != nil {
@@ -495,6 +512,9 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		return 1, fmt.Errorf("exec: run %v: %w", args, runErr)
 	}
 	exitCode := exitCodeFromError(runErr)
+	if stopped.Detected {
+		exitCode = stoppedGroupExitCode
+	}
 	if quota1Active && exitCode != 0 {
 		if err := writeQuota1FailureLog(quotaLogPath, quotaLog.Bytes()); err != nil {
 			fmt.Fprintf(errOut, "harnez exec: write Quota-1 test log %s: %v\n", quotaLogPath, err)

@@ -139,6 +139,32 @@ func TestCleanProcsRemovesGoneRecord(t *testing.T) {
 	}
 }
 
+func TestCleanProcsDoesNotTrustReusedOwnerPID(t *testing.T) {
+	recordDir := t.TempDir()
+	record := Record{PGID: 82, PIDStarttime: 940, OwnerPID: 90, OwnerStarttime: 1200}
+	path := writeTestRecord(t, recordDir, record)
+	reader := &fakeProcReader{processes: []ProcInfo{
+		{PID: 82, PGID: 82, UID: 1001, UIDKnown: true, State: "S", Starttime: 940},
+		{PID: 90, PGID: 90, UID: 1001, UIDKnown: true, State: "S", Starttime: 2200},
+	}}
+	opts := CleanOptions{RecordDir: recordDir, ProcReader: reader, UID: 1001, GroupExists: func(int) bool { return true }}
+	actions, err := CleanProcs(opts)
+	if err != nil || len(actions) != 1 || actions[0].Status != "would-kill" || actions[0].Reason != "owner process is gone" {
+		t.Fatalf("reused owner cleanup = %+v, %v; want stale owner", actions, err)
+	}
+	record.OwnerStarttime = 2200
+	if _, err := WriteRecord(recordDir, record); err != nil {
+		t.Fatal(err)
+	}
+	actions, err = CleanProcs(opts)
+	if err != nil || len(actions) != 1 || actions[0].Status != "kept" {
+		t.Fatalf("matching owner cleanup = %+v, %v; want kept", actions, err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("matching owner record removed: %v", err)
+	}
+}
+
 func TestCleanProcsEscalatesToSIGKILL(t *testing.T) {
 	recordDir := t.TempDir()
 	path := writeTestRecord(t, recordDir, Record{PGID: 62, PIDStarttime: 931, OwnerPID: 999})

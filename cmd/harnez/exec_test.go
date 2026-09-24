@@ -1233,6 +1233,40 @@ func TestRunExecWrapper_Quota1SignalAllowsRetry(t *testing.T) {
 	}
 }
 
+func TestRunExecWrapperContinuesStoppedQuotaRunWithoutConsumingQuota(t *testing.T) {
+	repoDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repoDir, "test.go"), []byte("package test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	opts := testExecOptions(t)
+	opts.Quota1 = true
+	opts.Quota1Dir = repoDir
+
+	started := time.Now()
+	var stdout, stderr bytes.Buffer
+	code, err := runExecWrapper([]string{"sh", "-c", "kill -STOP $$"}, opts, strings.NewReader(""), &stdout, &stderr)
+	if err != nil || code != stoppedGroupExitCode {
+		t.Fatalf("stopped quota run = (%d, %v), want interrupted exit %d; stderr=%q", code, err, stoppedGroupExitCode, stderr.String())
+	}
+	if time.Since(started) > 3*time.Second {
+		t.Fatalf("stopped quota run took %s; want prompt completion", time.Since(started))
+	}
+	if !strings.Contains(stderr.String(), "stopped process group detected") || !strings.Contains(stderr.String(), "quota-1 run marked incomplete") {
+		t.Fatalf("stopped quota run stderr = %q; want interruption guidance", stderr.String())
+	}
+	statePath, _, err := quota1.ResolveStateFile(repoDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := quota1.ReadRunRecord(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Finished == nil || state.Exit != nil {
+		t.Fatalf("stopped quota run state = %+v; want finished incomplete run", state)
+	}
+}
+
 func TestRunExecWrapper_Quota1FailureSummary(t *testing.T) {
 	repoDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0755); err != nil {
@@ -1333,6 +1367,9 @@ func TestRunExecWrapperTracksAndRemovesProcessRecord(t *testing.T) {
 	}
 	if record.PGID <= 0 || record.OwnerPID != os.Getpid() || record.Quota1 || record.PIDStarttime == 0 || len(record.Argv) != 3 {
 		t.Fatalf("process record = %+v; want live non-quota process identity", record)
+	}
+	if record.OwnerStarttime == 0 || record.OwnerStarttime != quota1.ProcStarttime(os.Getpid()) {
+		t.Fatalf("process owner start time = %d; want current process start time", record.OwnerStarttime)
 	}
 
 	completed := <-result
