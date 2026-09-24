@@ -1,6 +1,6 @@
 # 556 — Show basic context numbers in the Claude status line
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P2
 **Severity**: Moderate
 **Category**: Feature
