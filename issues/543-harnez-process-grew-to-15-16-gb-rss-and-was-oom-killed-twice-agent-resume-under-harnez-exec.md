@@ -56,3 +56,21 @@ Repro: run it on a few ~400-line Go files and watch the RSS.
   near **20 GB** were seen. So `read -I` is **not confirmed** as the cause. Treat the earlier suspects (`harnez exec`
   output capture, `harnez agent resume` streaming) as equal candidates again. Before blaming a process, check which
   process actually holds the RSS (`ps`/`journalctl -k` pid → cmdline).
+
+## Plan (host-approved, developer oom543 on agy:flash37:med)
+
+Host measurement: `harnez exec -- head -c 50M /dev/zero` → **maxrss 249 MB, 36s** (ScoreShell regex over the
+whole output); 200M dies under a 3 GB cap. This is the prime suspect for the ~20 GB spikes.
+
+### M1 (bounded exec capture)
+- `cmd/harnez/exec.go` ~L384: `capturedOutput` and `quotaLog` keep only a bounded tail (e.g. 1 MB each);
+  still stream everything to the real stdout/stderr unchanged.
+- `telemetry.ScoreShell` gets only that bounded tail.
+- Test: a child producing e.g. 64 MB → the captured buffers stay ≤ cap, and the tail content is correct (last bytes kept).
+- Acceptance (host runs it): `harnez exec -- head -c 500M /dev/zero` maxrss < 100 MB, a few seconds.
+
+### M2 (read range + dot8 clamp)
+- `internal/readcard/read.go` `ReadSource`: stop scanning after the `-L`/head ceiling instead of loading the whole file
+  (2M-line file, `-L 1:10` → 197 MB today).
+- `dot8RenderFileToCards`: clamp card height and paginate like the normal renderer.
+- Tests for both.
