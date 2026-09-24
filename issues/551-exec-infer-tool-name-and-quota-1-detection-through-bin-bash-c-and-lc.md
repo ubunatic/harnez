@@ -1,6 +1,6 @@
 # 551 — exec: infer tool name and quota-1 detection through /bin/bash -c and -lc
 
-**Status**: Open
+**Status**: Closed — M1 498b6c4 + M2 00ce106; shared shell unwrap, trailing -c guarded
 **Priority**: P2
 **Severity**: Low
 **Category**: Bug / Telemetry
