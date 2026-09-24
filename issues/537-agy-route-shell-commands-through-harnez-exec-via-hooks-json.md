@@ -164,3 +164,10 @@ remains host-verifiable in M6.
 - Acceptance (host): rerun `harnez stats --agents --days 1`; session `3e5fefeb…` (or a fresh live
   run) shows 0 UNROUTED and the commands under VIA SHIM (or VIA HOOK if the shim was not first on PATH;
   the view must say which).
+
+**M7 delivered (shim row attribution): 24fcec9.** Host reran `make test-q1`: green. Live: `3e5fefeb…` shows
+HOOK 2 / EXEC 2 / VIA SHIM 2 / UNROUTED 0.
+
+Remaining note: the shim's exec rows were written as host `claude`/`Bash` rows, because agy launched
+from a Claude session inherits the Claude env markers. M7 compensates in the stats join. The cleaner fix
+is at the source: `agyLaunchEnv` should drop the inherited Claude markers so that exec labels the rows as agy.

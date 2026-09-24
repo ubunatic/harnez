@@ -36,3 +36,8 @@ The previous `agy-hooks` implementation suffered from complexity due to heuristi
 - [ ] When disabled (default), `harnez apply` does not install the hook (and cleans up stale entries as specified in Issue 271).
 - [ ] `harnez status` accurately reports whether AGY is configured via PATH shim or native `PreToolUse` hook.
 - [ ] Unit and smoke tests verify hook execution, configuration toggle, and clean removal.
+
+
+## Superseded (2026-09-24)
+
+Superseded by 537: the PreToolUse hook is now the automatic fallback when the bash shim is not active (06494de), instead of an opt-in.
