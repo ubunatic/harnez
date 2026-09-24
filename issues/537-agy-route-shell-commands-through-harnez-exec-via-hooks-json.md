@@ -1,6 +1,6 @@
 # 537 — agy: route shell commands through harnez exec via hooks.json
 
-**Status**: Open
+**Status**: Closed — 3566199 M2 hook rewrite, 06494de M3 shim-aware route, 7f43412 M4 shim on launch, f96d816 M5 coverage, 24fcec9 M7 attribution; live: STOP→125 in 1s, sleep 120→timeout 60s, 0 unrouted
 **Priority**: P1
 **Severity**: Medium
 **Category**: Bug / Agents
