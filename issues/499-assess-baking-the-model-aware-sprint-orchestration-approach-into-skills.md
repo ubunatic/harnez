@@ -65,3 +65,19 @@ Techniques used, to assess one by one:
 - The agreed skill and doc edits have landed, or are filed as tickets linked here.
 - Rerunning a lean sprint from the updated skills alone reproduces the role assignment and the
   quota check, without host improvisation.
+
+## Data point: loom 107/108 (2026-09-24, Claude opus host)
+
+- `claude:opus:low` developer: good read-only plan; resume impossible (498,
+  `session_id` not captured), so plan-first → write fails for claude workers.
+- `agy:flash37:med`: M1 (VT colour cells) right first time. M2 (hover probe)
+  needed 4 passes; each flaw (colour-search hit startup focus, settle before
+  redraw, probes placed where the offset is invisible) was caught only by the
+  host's diff review. Resume of an agy session hit a quota that a fresh
+  session didn't (521); fresh session per pass + ticket pre-work worked.
+- `codex:luna:med` (cost 1): root-caused and fixed 108 in ~2 min / 31k
+  tokens; changed tests after its single q1 run and didn't rerun, so the
+  host's own run was essential.
+- Lesson: for measurement tests, the host must sanity-check the *result
+  pattern* (all probes identical, previous probe's box), not just green/red.
+- Lesson: pass `--model` on every resume until 521 is resolved.
