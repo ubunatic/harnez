@@ -34,6 +34,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -445,7 +446,7 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	}
 	exitCode := exitCodeFromError(runErr)
 	if quota1Active && exitCode != 0 {
-		if err := os.WriteFile(quotaLogPath, quotaLog.Bytes(), 0644); err != nil {
+		if err := writeQuota1FailureLog(quotaLogPath, quotaLog.Bytes()); err != nil {
 			fmt.Fprintf(errOut, "harnez exec: write Quota-1 test log %s: %v\n", quotaLogPath, err)
 		}
 		fmt.Fprint(errOut, quota1FailureSummary(quotaLogPath, capturedOutput.String()))
@@ -492,10 +493,38 @@ func quota1LogPath(dir string) (string, error) {
 	// ResolveStateFile places state below .git/harnez for Git repositories,
 	// or .harnez otherwise. Retain output next to that ignored state.
 	logDir := filepath.Join(filepath.Dir(stateFile), "quota-1-logs")
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return "", err
-	}
 	return filepath.Join(logDir, "test-"+time.Now().UTC().Format("20060102T150405.000000000Z")+".log"), nil
+}
+
+const quota1LogRetention = 10
+
+func writeQuota1FailureLog(logPath string, output []byte) error {
+	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(logPath, output, 0644); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(filepath.Dir(logPath))
+	if err != nil {
+		return err
+	}
+	var logs []os.DirEntry
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "test-") && strings.HasSuffix(entry.Name(), ".log") {
+			logs = append(logs, entry)
+		}
+	}
+	if len(logs) <= quota1LogRetention {
+		return nil
+	}
+	sort.Slice(logs, func(i, j int) bool { return logs[i].Name() < logs[j].Name() })
+	for _, entry := range logs[:len(logs)-quota1LogRetention] {
+		if err := os.Remove(filepath.Join(filepath.Dir(logPath), entry.Name())); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 func quota1FailureSummary(logPath, output string) string {

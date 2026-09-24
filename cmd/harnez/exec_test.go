@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1228,6 +1229,47 @@ func TestRunExecWrapper_Quota1FailureSummary(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "detail") || !strings.Contains(string(data), "--- FAIL: TestSynthetic") {
 		t.Fatalf("log = %q, want full synthetic output", data)
+	}
+}
+
+func TestRunExecWrapper_Quota1SuccessDoesNotCreateLogDirectory(t *testing.T) {
+	repoDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, "test.go"), []byte("package test\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	opts := testExecOptions(t)
+	opts.Quota1 = true
+	opts.Quota1Dir = repoDir
+	var stdout, stderr bytes.Buffer
+	code, err := runExecWrapper([]string{"sh", "-c", "printf success"}, opts, strings.NewReader(""), &stdout, &stderr)
+	if err != nil || code != 0 {
+		t.Fatalf("runExecWrapper() = (%d, %v), want (0, nil)", code, err)
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, ".git", "harnez", "quota-1-logs")); !os.IsNotExist(err) {
+		t.Fatalf("quota log directory stat error = %v, want not-exist", err)
+	}
+}
+
+func TestWriteQuota1FailureLogRetainsLatestTen(t *testing.T) {
+	logDir := t.TempDir()
+	for i := 0; i < quota1LogRetention+2; i++ {
+		name := filepath.Join(logDir, fmt.Sprintf("test-20260101T00000%02dZ.log", i))
+		if err := writeQuota1FailureLog(name, []byte("failure")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != quota1LogRetention {
+		t.Fatalf("retained %d logs, want %d", len(entries), quota1LogRetention)
+	}
+	if entries[0].Name() != "test-20260101T000002Z.log" {
+		t.Errorf("oldest retained log = %q, want test-20260101T000002Z.log", entries[0].Name())
 	}
 }
 
