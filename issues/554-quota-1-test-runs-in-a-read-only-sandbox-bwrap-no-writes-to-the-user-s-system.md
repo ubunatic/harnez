@@ -36,3 +36,10 @@ written by the outer `harnez exec`, outside the sandbox. Without bwrap: fall bac
 - Other projects' tests may write caches (~/.cache, cargo, npm). Decide: extra writable binds via
   config, or a temp HOME inside the sandbox.
 - Network stays on (bwrap default); module downloads need GOMODCACHE writable or GOPROXY=off.
+
+## Decision (user, 2026-09-24)
+
+- No sandbox HOME for now. Real HOME stays mounted read-only; GOCACHE and GOMODCACHE are bound
+  writable, so the Go cache stays shared across all projects.
+- Any other write fails loudly (read-only file system); handle case by case (fix the test or add a
+  writable bind). A shared temp home is deferred until a real case needs it.
