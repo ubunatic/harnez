@@ -2,6 +2,7 @@ package quota1
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -167,8 +168,14 @@ func TestCheckAndRecord_Bypass(t *testing.T) {
 
 func TestChangesSinceLastRun(t *testing.T) {
 	repoDir := t.TempDir()
+	if err := exec.Command("git", "-C", repoDir, "init", "-q").Run(); err != nil {
+		t.Fatal(err)
+	}
 	source := filepath.Join(repoDir, "changed.go")
 	if err := os.WriteFile(source, []byte("package changed\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec.Command("git", "-C", repoDir, "add", "changed.go").Run(); err != nil {
 		t.Fatal(err)
 	}
 	runAt := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
@@ -188,6 +195,31 @@ func TestChangesSinceLastRun(t *testing.T) {
 	}
 	if len(files) != 1 || files[0] != source || !gotAt.Equal(runAt) {
 		t.Fatalf("ChangesSinceLastRun() = %v, %v; want [%s], %v", files, gotAt, source, runAt)
+	}
+	ignored := filepath.Join(repoDir, "ignored.go")
+	markdown := filepath.Join(repoDir, "docs.md")
+	issue := filepath.Join(repoDir, "issues", "525.md")
+	for _, path := range []string{ignored, markdown, issue} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("changed\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(path, runAt.Add(2*time.Minute), runAt.Add(2*time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte("ignored.go\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	turnStart := runAt.Add(90 * time.Second)
+	files, _, err = ChangesSinceLastRunAfter(repoDir, turnStart)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("filtered changes = %v, want none", files)
 	}
 }
 

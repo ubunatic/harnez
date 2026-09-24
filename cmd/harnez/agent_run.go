@@ -58,8 +58,8 @@ func storeTurnQuota(s *subagent.FileSessionStore, sessionID, provider string, tu
 	_ = s.RecordTurnQuota(subagent.TurnQuotaEvent{SessionID: sessionID, Turn: turn, Boundary: boundary, Provider: provider, Reading: reading})
 }
 
-func warnQuota1Changes(cmd *cobra.Command, dir string) {
-	files, since, err := quota1.ChangesSinceLastRun(dir)
+func warnQuota1Changes(cmd *cobra.Command, dir string, turnStarted time.Time) {
+	files, since, err := quota1.ChangesSinceLastRunAfter(dir, turnStarted)
 	if err != nil || len(files) == 0 {
 		return
 	}
@@ -114,6 +114,7 @@ func resolveResumeSession(cmd *cobra.Command, d agentDeps, s *subagent.FileSessi
 
 // runStart starts a new session, streams or prints the turn and saves the session.
 func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
+	quotaTurnStarted := time.Now().Add(-time.Hour)
 	spec := req.ModelSpec
 	if spec == "" {
 		var defaultErr error
@@ -219,22 +220,23 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	out := agentOutput{Session: sess, Response: r.Response, Messages: r.Messages, ReconnectCmd: "harnez agent resume " + id + " \"<prompt>\""}
 	if streaming {
 		ts.finish(r)
-		warnQuota1Changes(cmd, canonicalWorkDir)
+		warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
 		return nil
 	}
 	tl.finishTurn(r, id, out.ReconnectCmd)
 	if req.JSON {
 		err := json.NewEncoder(cmd.OutOrStdout()).Encode(out)
-		warnQuota1Changes(cmd, canonicalWorkDir)
+		warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
 		return err
 	}
 	err = printAgentMessages(cmd, r.Messages, r.Response)
-	warnQuota1Changes(cmd, canonicalWorkDir)
+	warnQuota1Changes(cmd, canonicalWorkDir, quotaTurnStarted)
 	return err
 }
 
 // runResume runs one more turn on an existing session.
 func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
+	quotaTurnStarted := time.Now().Add(-time.Hour)
 
 	sessionName := req.Name
 	resolved := "name"
@@ -353,7 +355,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	}
 	if streaming {
 		ts.finish(r)
-		warnQuota1Changes(cmd, sess.WorkingDir)
+		warnQuota1Changes(cmd, sess.WorkingDir, quotaTurnStarted)
 		return nil
 	}
 	if compacted {
@@ -364,7 +366,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	}
 	tl.finishTurn(r, sess.ID, "harnez agent resume "+sess.ID+" \"<prompt>\"")
 	err = writeAgentOutput(cmd, req.JSON, agentOutput{Session: sess, Response: r.Response, Messages: r.Messages})
-	warnQuota1Changes(cmd, sess.WorkingDir)
+	warnQuota1Changes(cmd, sess.WorkingDir, quotaTurnStarted)
 	return err
 }
 

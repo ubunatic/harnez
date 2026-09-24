@@ -1664,7 +1664,7 @@ func TestWarnQuota1Changes(t *testing.T) {
 	var out, errOut bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&errOut)
-	warnQuota1Changes(cmd, dir)
+	warnQuota1Changes(cmd, dir, runAt)
 	got := errOut.String()
 	if !strings.Contains(got, "7 file(s) changed after the last quota-1 run at "+runAt.Format(time.RFC3339)+":") || !strings.Contains(got, "— code is untested, run make test-q1") {
 		t.Fatalf("warning = %q", got)

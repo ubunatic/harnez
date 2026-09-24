@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -100,6 +101,12 @@ func readState(path string) (time.Time, error) {
 // Quota-1 run, along with that run's recorded time. Missing state is not an
 // error and returns no changes.
 func ChangesSinceLastRun(dir string) ([]string, time.Time, error) {
+	return ChangesSinceLastRunAfter(dir, time.Time{})
+}
+
+// ChangesSinceLastRunAfter returns code files changed since the last quota run
+// and modified after turnStarted. It excludes ignored, markdown and issue files.
+func ChangesSinceLastRunAfter(dir string, turnStarted time.Time) ([]string, time.Time, error) {
 	stateFile, root, err := ResolveStateFile(dir)
 	if err != nil {
 		return nil, time.Time{}, err
@@ -115,7 +122,27 @@ func ChangesSinceLastRun(dir string) ([]string, time.Time, error) {
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	return files, since, nil
+	filtered := files[:0]
+	for _, path := range files {
+		info, err := os.Stat(path)
+		if err != nil || (!turnStarted.IsZero() && !info.ModTime().After(turnStarted)) {
+			continue
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil || strings.EqualFold(filepath.Ext(path), ".md") || strings.HasPrefix(filepath.ToSlash(rel), "issues/") {
+			continue
+		}
+		tracked := exec.Command("git", "-C", root, "ls-files", "--error-unmatch", "--", rel)
+		if err := tracked.Run(); err == nil {
+			filtered = append(filtered, path)
+			continue
+		}
+		unignored := exec.Command("git", "-C", root, "check-ignore", "-q", "--", rel)
+		if err := unignored.Run(); err != nil {
+			filtered = append(filtered, path)
+		}
+	}
+	return filtered, since, nil
 }
 
 // writeState writes the timestamp to the state file.
