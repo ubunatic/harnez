@@ -1,6 +1,6 @@
 # 521 — agy resume without --model may fall back to the agy default model instead of the session model
 
-**Status**: Open
+**Status**: Closed — not reproduced: harnez passes session model on resume (regression test 2ede965); live flash37 resume works
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -41,3 +41,13 @@ with a canary, and fix the resume path if the recorded model is dropped.
 - So the quota belongs to the resumed conversation, not to flash37. That
   conversation may be pinned to the model it was created on, or agy returns
   a stale error. Check `agy --conversation <id> --model X` directly.
+
+## Result 2026-09-24 (519 sprint)
+
+- luna traced the path on HEAD: `runResume` already passes the stored model and tier, and
+  `AgyDriver.Resume` builds `--model`/`--effort`. Added a regression test (2ede965).
+- Host live check: `agy:flash37:low` start "one", then resume without `--model` "two";
+  both turns answered, no quota error. The earlier quota stops (dev107f, dev498 on
+  flash37:med) were not reproduced. Unverified: whether agy `--conversation` honours
+  `--model`, since agy output does not name the serving model. Pooled Google Pro quota
+  is the likelier cause (see 516).
