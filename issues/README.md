@@ -547,3 +547,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 546 | [546-harnez-init-toggle-the-harnez-read-i-recommendation-per-project.md](546-harnez-init-toggle-the-harnez-read-i-recommendation-per-project.md) | harnez init: toggle the harnez read -I recommendation per project | Open |
 | 547 | [547-set-hto-0-for-harnez-agent-sessions.md](547-set-hto-0-for-harnez-agent-sessions.md) | Set HTO=0 for harnez agent sessions | Open |
 | 548 | [548-require-direct-harnez-agent-commands.md](548-require-direct-harnez-agent-commands.md) | Require direct harnez agent commands | Open |
+| 549 | [549-keep-agent-bash-calls-short-and-manage-prompt-files.md](549-keep-agent-bash-calls-short-and-manage-prompt-files.md) | Keep agent Bash calls short and manage prompt files | Open |
