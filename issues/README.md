@@ -33,7 +33,7 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 032 | [032-usage-watch-no-stale-fallback-on-fetch-failure.md](032-usage-watch-no-stale-fallback-on-fetch-failure.md) | `--watch` blanks quota panels instead of keeping last-known-good data on a transient fetch failure | Closed — implemented 2026-08-18 |
 | 033 | [033-usage-shared-quota-cache.md](033-usage-shared-quota-cache.md) | Shared disk-backed quota cache to stop concurrent `harnez` instances from double-polling | Closed — implemented 2026-08-18 |
 | 034 | [034-hook-triggered-token-extraction.md](034-hook-triggered-token-extraction.md) | Hook-Triggered File Seek for Local Token Extraction (AGY & Claude) | Open |
-| 035 | [035-transparent-proxy-quota-and-token-sidecar.md](035-transparent-proxy-quota-and-token-sidecar.md) | Transparent Local HTTP_PROXY Sidecar for Zero-Wrap Rate Limit & Quota Interception | Open |
+| 035 | [035-transparent-proxy-quota-and-token-sidecar.md](035-transparent-proxy-quota-and-token-sidecar.md) | Transparent Local HTTP_PROXY Sidecar for Zero-Wrap Rate Limit & Quota Interception | Closed |
 | 036 | [036-harnez-status-issues-tracker-linter.md](036-harnez-status-issues-tracker-linter.md) | `harnez status` Issues Tracker Status Linter & Reconciliation | Closed (2026-08-19) |
 | 037 | [037-harnez-diff-exit-code-flag.md](037-harnez-diff-exit-code-flag.md) | `harnez diff --exit-code` for Drift Detection & CI Pipelines | Closed |
 | 038 | [038-research-subagent-lifecycle-and-cleanup-friction.md](038-research-subagent-lifecycle-and-cleanup-friction.md) | Research: Automated Subagent Lifecycle Hooks & Teardown Friction | Closed (Research Complete) |

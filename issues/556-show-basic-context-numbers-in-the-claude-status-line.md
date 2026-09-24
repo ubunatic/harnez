@@ -16,7 +16,6 @@ able to see how much context is in use while working.
 
 ## /goal
 
-Show useful, current context usage numbers in the Claude status line, using the
-available status-line data. The numbers update as context usage changes and fit
-the existing status-line layout.
-
+Show current context size as a compact token count (for example, `156k`) and
+include the cached percentage when cache usage is available. Values update from
+the status-line payload and fit the existing layout.

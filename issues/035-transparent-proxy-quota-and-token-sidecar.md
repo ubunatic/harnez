@@ -1,6 +1,6 @@
 # 035 — Transparent Local HTTP_PROXY Sidecar for Zero-Wrap Rate Limit & Quota Interception
 
-**Status**: Open  
+**Status**: Closed  
 **Category**: Architecture / Telemetry / Networking  
 **Related**: [Issue 023: `harnez usage`](023-usage-command-token-quota-tracking.md), [Issue 030: Missing Local Token Counts](030-agy-codex-missing-local-token-counts.md), [Issue 034: Hook-Triggered Token Extraction](034-hook-triggered-token-extraction.md), [Study: Agent Telemetry](../docs/studies/2026-08-19-agent-telemetry-hooks-proxies-and-log-extraction.md)  
 
@@ -356,3 +356,9 @@ Pre-Work / Required Refinements:
    and its age is the time of the latest quota response of any bucket. Test: two snapshots, the
    second omits an unchanged bucket → the card still shows it, with the newer age.
 2. Missing `remainingFraction` in a bucket = 0 remaining.
+
+### M3 accepted (d741fed) — ticket closed
+
+`harnez usage` agy card: Gemini weekly 24.23% / 5h 36.35%, Claude/GPT weekly 100.00% / 5h 0.00%,
+with reading age. All three milestones delivered: M1 metering proxy, M2 `stats --calls`,
+M3 metered quota fractions in `harnez usage`.
