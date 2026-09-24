@@ -1,6 +1,6 @@
 # 507 — Capture subscription quota snapshots at harnez agent start/resume
 
-**Status**: Open
+**Status**: Closed — covered by 519 M1: bounded before/after readings per start/resume turn (47e78d1, forced fresh in 67c80f4); shown in harnez stats --agents
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
