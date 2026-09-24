@@ -63,3 +63,5 @@ active, the agy hook stays out of the way (537's fallback rule). `revert --manag
   with the same condition, or install unconditionally; apply and diff must agree.
 - CleanAll: do not `os.Remove(filepath.Dir(launcherPath))`; never try to remove `~/.local/bin`.
 - Launcher script: indentation mixes tabs and spaces; use spaces only.
+- Round 2 (7add6b8): does not compile, `internal/claude/apply.go:1585: declared and not used: shimPath`.
+  Remove the leftover variable. Build with `go vet ./internal/claude/` before the test run.
