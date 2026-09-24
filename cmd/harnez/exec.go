@@ -23,6 +23,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -359,7 +360,8 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		opts.Tool = inferToolFromArgs(args, "Bash")
 	}
 
-	if detectQuota1(opts, args) {
+	quota1Active := detectQuota1(opts, args)
+	if quota1Active {
 		res, err := quota1.CheckAndRecord(quota1.CheckOptions{
 			Dir:    opts.Quota1Dir,
 			Getenv: opts.Getenv,
@@ -375,6 +377,15 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 
 	counter := &byteCounter{}
 	var capturedOutput bytes.Buffer
+	var quotaLog bytes.Buffer
+	quotaLogPath := ""
+	if quota1Active {
+		var pathErr error
+		quotaLogPath, pathErr = quota1LogPath(opts.Quota1Dir)
+		if pathErr != nil {
+			return 1, fmt.Errorf("exec: resolve Quota-1 test log: %w", pathErr)
+		}
+	}
 
 	timeout := resolveExecTimeout(opts, args)
 	ctx := context.Background()
@@ -397,11 +408,11 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 			mode = distill.DetectModeFromArgs(args)
 		}
 		distOpts = distill.Options{Mode: mode, MaxLines: 300}
-		c.Stdout = io.MultiWriter(&capturedOutput, counter)
-		c.Stderr = io.MultiWriter(&capturedOutput, counter)
+		c.Stdout = io.MultiWriter(&capturedOutput, counter, &quotaLog)
+		c.Stderr = io.MultiWriter(&capturedOutput, counter, &quotaLog)
 	} else {
-		c.Stdout = io.MultiWriter(out, counter, &capturedOutput)
-		c.Stderr = io.MultiWriter(errOut, counter, &capturedOutput)
+		c.Stdout = io.MultiWriter(out, counter, &capturedOutput, &quotaLog)
+		c.Stderr = io.MultiWriter(errOut, counter, &capturedOutput, &quotaLog)
 	}
 
 	start := time.Now()
@@ -433,6 +444,12 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		return 1, fmt.Errorf("exec: run %v: %w", args, runErr)
 	}
 	exitCode := exitCodeFromError(runErr)
+	if quota1Active && exitCode != 0 {
+		if err := os.WriteFile(quotaLogPath, quotaLog.Bytes(), 0644); err != nil {
+			fmt.Fprintf(errOut, "harnez exec: write Quota-1 test log %s: %v\n", quotaLogPath, err)
+		}
+		fmt.Fprint(errOut, quota1FailureSummary(quotaLogPath, capturedOutput.String()))
+	}
 
 	rawBytes := counter.total()
 	var distilledBytesPtr *int64
@@ -462,6 +479,45 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 	})
 
 	return exitCode, nil
+}
+
+func quota1LogPath(dir string) (string, error) {
+	if dir == "" {
+		dir, _ = os.Getwd()
+	}
+	stateFile, _, err := quota1.ResolveStateFile(dir)
+	if err != nil {
+		return "", err
+	}
+	// ResolveStateFile places state below .git/harnez for Git repositories,
+	// or .harnez otherwise. Retain output next to that ignored state.
+	logDir := filepath.Join(filepath.Dir(stateFile), "quota-1-logs")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return "", err
+	}
+	return filepath.Join(logDir, "test-"+time.Now().UTC().Format("20060102T150405.000000000Z")+".log"), nil
+}
+
+func quota1FailureSummary(logPath, output string) string {
+	var failures []string
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "--- FAIL") {
+			failures = append(failures, line)
+		}
+	}
+	var summary strings.Builder
+	fmt.Fprintf(&summary, "Quota-1 test log: %q\n", logPath)
+	if len(failures) == 0 {
+		fmt.Fprintln(&summary, "Quota-1 command failed; no '--- FAIL' lines were found in output.")
+	} else {
+		fmt.Fprintln(&summary, "Failing tests:")
+		for _, failure := range failures {
+			fmt.Fprintf(&summary, "  %s\n", failure)
+		}
+	}
+	return summary.String()
 }
 
 func resolveExecTimeout(opts execOptions, args []string) time.Duration {

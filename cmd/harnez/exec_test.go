@@ -1190,6 +1190,56 @@ func TestRunExecWrapper_Quota1(t *testing.T) {
 	}
 }
 
+func TestRunExecWrapper_Quota1FailureSummary(t *testing.T) {
+	repoDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(repoDir, "test.go")
+	if err := os.WriteFile(source, []byte("package test\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	opts := testExecOptions(t)
+	opts.Quota1 = true
+	opts.Quota1Dir = repoDir
+
+	var stdout, stderr bytes.Buffer
+	code, err := runExecWrapper([]string{"sh", "-c", "echo '--- FAIL: TestSynthetic (0.00s)' >&2; echo detail >&2; exit 1"}, opts, strings.NewReader(""), &stdout, &stderr)
+	if err != nil || code != 1 {
+		t.Fatalf("runExecWrapper() = (%d, %v), want (1, nil)", code, err)
+	}
+	output := stderr.String()
+	if !strings.Contains(output, "--- FAIL: TestSynthetic") || !strings.Contains(output, "Quota-1 test log:") {
+		t.Fatalf("stderr summary = %q, want failing test and log path", output)
+	}
+	var logPath string
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, "Quota-1 test log: ") {
+			logPath = strings.Trim(strings.TrimPrefix(line, "Quota-1 test log: "), "\"")
+			break
+		}
+	}
+	if logPath == "" {
+		t.Fatalf("stderr summary = %q, missing log path", output)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read quota log %q: %v", logPath, err)
+	}
+	if !strings.Contains(string(data), "detail") || !strings.Contains(string(data), "--- FAIL: TestSynthetic") {
+		t.Fatalf("log = %q, want full synthetic output", data)
+	}
+}
+
+func TestQuota1FailureSummaryListsAllFailLines(t *testing.T) {
+	got := quota1FailureSummary("/tmp/quota.log", "--- FAIL: TestOne (0.00s)\nother\n--- FAIL: TestTwo (0.00s)\n")
+	for _, want := range []string{"/tmp/quota.log", "--- FAIL: TestOne", "--- FAIL: TestTwo"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("quota1FailureSummary() = %q, want %q", got, want)
+		}
+	}
+}
+
 func TestNewExecCmd_Quota1Flag(t *testing.T) {
 	cmd := newExecCmd()
 	f := cmd.Flags().Lookup("quota-1")
