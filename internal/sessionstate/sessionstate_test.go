@@ -459,7 +459,7 @@ func TestGapTip_ReadingDisciplineTipForFindAndIssues(t *testing.T) {
 	// Call find: LastVerb becomes "find".
 	Record(&s, "find", now)
 
-	wantTip := "harnez tip: remember to use 'harnez read -I' (visual context cards) or 'harnez read -L <range> -n' for line-numbered editing anchors rather than native IDE file-read tools."
+	wantTip := "harnez tip: remember to use 'harnez read -L <range> -n' for line-numbered editing anchors rather than native IDE file-read tools."
 	tip, ok := GapTip(s, false, now, 0)
 	if !ok {
 		t.Fatalf("expected reading discipline tip to fire when LastVerb is find and cooldown elapsed")

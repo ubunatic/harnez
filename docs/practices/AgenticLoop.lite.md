@@ -15,7 +15,7 @@ Tagline-only variant. Same rules as the full doc, no prose/case-studies. See
 3. **Zero Zombie Guarantee** — track and terminate every background process, timer, and subagent before ending a session.
 4. **Responsive Host Orchestrator** — stay available to the user; delegating ≠ blocking on the child unless asked or truly required.
 5. **In-Repository Single Source of Truth** — tickets/decisions/retros live in git (`issues/`, `docs/feedback/`, `docs/studies/`), not just chat.
-6. **Context Discipline & Range-Bounded Ingestion** — never whole-file-read `AGENTS.md`/active system rules; avoid native tool slices on >100 line files; use `harnez read -I`/`-L` via CLI.
+6. **Context Discipline & Range-Bounded Ingestion** — never whole-file-read `AGENTS.md`/active system rules; avoid native tool slices on >100 line files; use `harnez read -L`/`-n` via CLI (`harnez read -I` is paused until issue 543, a memory blow-up, is fixed).
 7. **Media & Demo Verification Gate** — **always ask the user for explicit confirmation** of recorded output before publishing/embedding.
 8. **Deployment Transparency — 3-State Grounding (when applicable)** — **Local State**, **Deployed Artifact State**, and **Active Daemon State** are independent; local build/test proves nothing about the other two (remote-deploying projects only).
 9. **One-Level Delegation** — `harnez agent --role orchestrator|developer|reviewer|advisor`: only an orchestrator starts helpers (one writer at a time); developers, reviewers and advisors are leaf workers that never run `harnez agent`, native subagents or delegating skills. harnez enforces it. Live checks that need an agent session are run by the orchestrator.

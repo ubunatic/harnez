@@ -287,7 +287,7 @@ func GapTip(s State, feedbackDisabled bool, now time.Time, unratedFailures int) 
 	}
 
 	if !feedbackDisabled && (s.LastVerb == "find" || s.LastVerb == "issues") {
-		return "harnez tip: remember to use 'harnez read -I' (visual context cards) or 'harnez read -L <range> -n' for line-numbered editing anchors rather than native IDE file-read tools.", true
+		return "harnez tip: remember to use 'harnez read -L <range> -n' for line-numbered editing anchors rather than native IDE file-read tools.", true
 	}
 
 	if !feedbackDisabled {

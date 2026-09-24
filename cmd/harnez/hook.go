@@ -380,7 +380,7 @@ func agyBashShimActive(home, path string) bool {
 
 // readingDisciplineDenyReason is the structured guidance message returned when an agent
 // attempts native IDE file viewing on large files without using harnez read (issue 405).
-const readingDisciplineDenyReason = "harnez guard: native view_file on large files (>100 lines) violates Reading & Context Discipline. Execute 'harnez read -I <file>' for visual cards or 'harnez read -L <range> -n <file>' for line-bounded editing anchors."
+const readingDisciplineDenyReason = "harnez guard: native view_file on large files (>100 lines) violates Reading & Context Discipline. Execute 'harnez read -L <range> -n <file>' for line-bounded editing anchors ('harnez read -I' is paused, issue 543)."
 
 // isReadTool reports whether toolName is a client-native file reading tool that
 // should be intercepted under Reading & Context Discipline.

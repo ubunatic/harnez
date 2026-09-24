@@ -34,7 +34,7 @@ result unless the user explicitly asked to wait.
   from a prior planning pass — if present, use it for scope, dependencies, and blockers rather
   than re-deriving them from scratch. Fall back to the ticket's own problem statement and
   acceptance criteria only when no plan section exists.
-- Skim root-level `docs/*.md` briefly for architectural context if useful (e.g. using `harnez read -I <doc>` to inspect visual context cards), but don't do deep
+- Skim root-level `docs/*.md` briefly for architectural context if useful (e.g. using `harnez read -L <range> <doc>`), but don't do deep
   whole-file ingestion — Context Discipline norms apply (see `docs/AgenticLoop.md` Invariant 6):
   prefer targeted greps, image cards, and range-bounded reads over bulk document ingestion.
 

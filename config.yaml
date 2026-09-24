@@ -485,14 +485,19 @@ agents_md:
           go install ubunatic.com/harnez/cmd/harnez@latest
           ```
 
+          ### Always `make install`
+          After every change to a project that has a `make install` target, run `make install` before
+          reporting or committing, so the user's installed binary always matches the code. This applies to
+          every agent and every repo, including developer subagents. Do not skip or postpone it.
+
           ### Editing Discipline
           - Prefer structured patch tools (`apply_patch`) or whole-block replacements over
             narrow string substitution edits.
           - When making multi-line edits, ensure sufficient surrounding context lines to
             avoid ambiguous pattern matches.
           - **Reading & Context Discipline (Recommended for Large Files)**: Prefer
-            `harnez read -I <file>` (dense visual PNG context card) or
             `harnez read -L <range>` / `harnez read -n` for medium/large files (>100 lines)
+            (`harnez read -I` is paused until issue 543, a memory blow-up, is fixed)
             to preserve token quota and prevent context fatigue. Native reads remain valid
             for targeted inspection; hook-level blocking is conditional on the active
             `reading_discipline.enforce` mode in `~/.harnez/config.yaml` (or
