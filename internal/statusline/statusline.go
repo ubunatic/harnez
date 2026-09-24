@@ -29,7 +29,8 @@ type input struct {
 // Render reads a Claude Code statusLine JSON payload from r and returns the
 // line to print. workspace.current_dir is authoritative, with top-level cwd
 // as a fallback. If the effective directory differs from workspace.project_dir,
-// both are shown. Paths are tilde-collapsed relative to home when possible.
+// both are shown as project_dir → current_dir. Paths are tilde-collapsed
+// relative to home when possible.
 func Render(r io.Reader, home string) (string, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -48,7 +49,7 @@ func Render(r io.Reader, home string) (string, error) {
 	dir = collapseHome(dir, home)
 	projectDir := collapseHome(in.Workspace.ProjectDir, home)
 	if dir != "" && projectDir != "" && dir != projectDir {
-		return dir + " → " + projectDir, nil
+		return projectDir + " → " + dir, nil
 	}
 	return dir, nil
 }

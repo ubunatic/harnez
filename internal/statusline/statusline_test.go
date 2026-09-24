@@ -35,7 +35,7 @@ func TestRenderUnicodePathDisplayWidth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "~/项目/voxi → /tmp"; got != want {
+	if want := "/tmp → ~/项目/voxi"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 	if width := runewidth.StringWidth(got); width != 18 {
@@ -60,7 +60,7 @@ func TestRenderShowsProjectDrift(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "~/projects/voxi → /tmp"; got != want {
+	if want := "/tmp → ~/projects/voxi"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
@@ -71,7 +71,7 @@ func TestRenderFallsBackToCWDAndShowsProjectDrift(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "~/projects/harnez → /tmp"; got != want {
+	if want := "/tmp → ~/projects/harnez"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
