@@ -35,7 +35,12 @@ for an agent to recover.
   SEE ALSO), `scripts/smoke-test.sh` and any other callers (`grep -rn "harnez clean\|clean\b"`).
 - Tests: `revert --managed` removes managed blocks, as `clean` did.
 
+**M1 delivered (clean → revert --managed): f769fbf.** No man pages or `man` command exist, so there is no SEE ALSO to update.
+
 ### M2 — checkable quota-1 run records (fixes 532 Expected item 1)
+- Pre-Work / Required Refinements (from the M1 review): the Makefile `clean` target now runs
+  `revert --managed`, so `make clean` wipes the global config, which is a trap. Rename it to
+  `revert-managed` (keep the help comment) and update any docs that mention `make clean`.
 - The quota-1 state holds `{started, pgid, pid_starttime, finished, exit}` instead of a bare
   timestamp. It still reads the old timestamp-only format.
 - `exec --quota-1` records the start before running and the result after. Only a normal exit
