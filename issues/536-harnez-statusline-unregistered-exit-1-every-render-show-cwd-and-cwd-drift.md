@@ -55,7 +55,12 @@ The /goal 1 test (every command that `apply` configures must be registered) woul
   commands) resolves on the root command. It must fail on HEAD before the fix.
 - Test: `harnez statusline` with the captured payload shape (see Payload sample) exits 0.
 
+**M1 delivered (register the command again + guard test): c4b4b0f.**
+
 ### M2 — show the cwd and cwd drift
+- Pre-Work (from the M1 review): with the captured voxi payload on stdin, run from ~/projects/harnez,
+  `harnez statusline` prints `~/projects/harnez`, so it renders the process cwd, not the payload's.
+  Add a test that fails on this: payload dir != process cwd → the payload dir wins.
 - Show the effective cwd (`workspace.current_dir`, falling back to `cwd`). When it differs from
   `workspace.project_dir`, show both (`~/projects/voxi → /tmp`). Shorten `$HOME` to `~`.
 - Tests with a fixture payload for the same-dir and drift cases. The rendered width stays sensible
