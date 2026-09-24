@@ -166,3 +166,5 @@ literal name several times today without any warning.
 - A Claude hook counts literal-filename mentions in Claude's own messages and emits a `harnez tip`
   every 5 mentions. Pick the event that exposes assistant text (Stop + transcript tail) and keep the
   counter in the session-state file. Tests for counting and the every-5 cadence.
+
+**M1 delivered (Claude-only SessionStart rule): 746418b.** Not live until `harnez apply` runs. See handoff 544.
