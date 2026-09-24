@@ -2,7 +2,9 @@
 package agymeter
 
 import (
+	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -13,6 +15,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -49,6 +52,8 @@ type Meter struct {
 	cert     tls.Certificate
 	logPath  string
 	mu       sync.Mutex
+	debug    bool
+	leaves   sync.Map
 }
 
 // Run starts a private meter for the lifetime of the child command. Failure to
@@ -102,7 +107,7 @@ func New(home string) (*Meter, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := &Meter{listener: ln, cert: cert, logPath: filepath.Join(dir, "usage.jsonl")}
+	m := &Meter{listener: ln, cert: cert, logPath: filepath.Join(dir, "usage.jsonl"), debug: os.Getenv("HARNEZ_AGY_METER_DEBUG") == "1"}
 	m.server = &http.Server{Handler: http.HandlerFunc(m.handle), ReadHeaderTimeout: 10 * time.Second}
 	return m, nil
 }
@@ -172,9 +177,11 @@ func (m *Meter) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !strings.EqualFold(strings.Split(r.Host, ":")[0], host) {
+		m.debugf("CONNECT tunnel other host")
 		m.tunnel(w, r)
 		return
 	}
+	m.debugf("CONNECT allowlisted host")
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "hijacking unavailable", 500)
@@ -188,9 +195,11 @@ func (m *Meter) handle(w http.ResponseWriter, r *http.Request) {
 	_ = rw.Flush()
 	tlsConn := tls.Server(c, &tls.Config{Certificates: []tls.Certificate{m.cert}, GetCertificate: func(chi *tls.ClientHelloInfo) (*tls.Certificate, error) { return m.leaf(chi.ServerName) }})
 	if e = tlsConn.Handshake(); e != nil {
+		m.debugf("TLS handshake failed: %v", e)
 		_ = c.Close()
 		return
 	}
+	m.debugf("TLS handshake succeeded alpn=%s", tlsConn.ConnectionState().NegotiatedProtocol)
 	_ = http.Serve(&singleConnListener{Conn: tlsConn}, http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) { m.forward(w, q) }))
 }
 func (m *Meter) tunnel(w http.ResponseWriter, r *http.Request) {
@@ -219,6 +228,9 @@ func (m *Meter) leaf(name string) (*tls.Certificate, error) {
 	if name == "" {
 		name = host
 	}
+	if cached, ok := m.leaves.Load(name); ok {
+		return cached.(*tls.Certificate), nil
+	}
 	k, e := rsa.GenerateKey(rand.Reader, 2048)
 	if e != nil {
 		return nil, e
@@ -229,9 +241,12 @@ func (m *Meter) leaf(name string) (*tls.Certificate, error) {
 	if e != nil {
 		return nil, e
 	}
-	return &tls.Certificate{Certificate: [][]byte{der, m.cert.Certificate[0]}, PrivateKey: k}, nil
+	leaf := &tls.Certificate{Certificate: [][]byte{der, m.cert.Certificate[0]}, PrivateKey: k}
+	actual, _ := m.leaves.LoadOrStore(name, leaf)
+	return actual.(*tls.Certificate), nil
 }
 func (m *Meter) forward(w http.ResponseWriter, r *http.Request) {
+	m.debugf("intercepted request method=%s", r.Method)
 	body, _ := io.ReadAll(r.Body)
 	_ = r.Body.Close()
 	r.Body = io.NopCloser(bytes.NewReader(body))
@@ -249,49 +264,11 @@ func (m *Meter) forward(w http.ResponseWriter, r *http.Request) {
 	proxy.FlushInterval = -1
 	proxy.Transport = &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
 	proxy.ModifyResponse = func(resp *http.Response) error {
-		resp.Body = &responseObserver{ReadCloser: resp.Body, process: func(b []byte) { m.observe(r, b, model, session) }}
+		m.debugf("upstream response status=%d content-type=%s content-encoding=%s", resp.StatusCode, resp.Header.Get("Content-Type"), resp.Header.Get("Content-Encoding"))
+		resp.Body = newResponseObserver(resp.Body, m, r.URL.Path, resp.Header.Get("Content-Type"), resp.Header.Get("Content-Encoding"), model, session)
 		return nil
 	}
 	proxy.ServeHTTP(w, r)
-}
-func (m *Meter) observe(r *http.Request, b []byte, model, session string) {
-	path := ""
-	if r != nil && r.URL != nil {
-		path = r.URL.Path
-	}
-	for _, line := range bytes.Split(b, []byte("\n")) {
-		line = bytes.TrimSpace(line)
-		payload := line
-		if bytes.HasPrefix(line, []byte("data:")) {
-			payload = bytes.TrimSpace(line[5:])
-		}
-		var v map[string]any
-		if json.Unmarshal(payload, &v) != nil {
-			continue
-		}
-		if u, ok := v["usageMetadata"].(map[string]any); ok {
-			m.record(Record{Time: time.Now().UTC(), Kind: "usage", Model: model, Session: session, Prompt: num(u["promptTokenCount"]), Candidates: num(u["candidatesTokenCount"]), Thoughts: num(u["thoughtsTokenCount"]), Cached: num(u["cachedContentTokenCount"]), Total: num(u["totalTokenCount"])})
-		}
-		if strings.Contains(path, "retrieveUserQuotaSummary") || path == "" {
-			var walk func(any)
-			walk = func(x any) {
-				switch y := x.(type) {
-				case map[string]any:
-					if id, ok := y["bucketId"].(string); ok {
-						m.record(Record{Time: time.Now().UTC(), Kind: "quota", Bucket: id, Remaining: floatNum(y["remainingFraction"]), Reset: stringVal(y["resetTime"])})
-					}
-					for _, z := range y {
-						walk(z)
-					}
-				case []any:
-					for _, z := range y {
-						walk(z)
-					}
-				}
-			}
-			walk(v)
-		}
-	}
 }
 func (m *Meter) record(r Record) {
 	b, e := json.Marshal(r)
@@ -304,60 +281,151 @@ func (m *Meter) record(r Record) {
 	if e == nil {
 		_, _ = f.Write(append(b, '\n'))
 		_ = f.Close()
+		m.debugf("record appended kind=%s", r.Kind)
 	}
 }
-func requestSession(r *http.Request) string {
-	for _, k := range []string{"sessionId", "conversationId"} {
-		if s := r.URL.Query().Get(k); s != "" {
-			return s
-		}
+
+func (m *Meter) debugf(format string, args ...any) {
+	if m.debug {
+		log.Printf("agy-meter: "+format, args...)
 	}
-	return ""
 }
 func num(v any) int64        { f, _ := v.(float64); return int64(f) }
 func floatNum(v any) float64 { f, _ := v.(float64); return f }
 func stringVal(v any) string { s, _ := v.(string); return s }
 
-type observed struct {
-	io.ReadCloser
-	fn func([]byte)
-}
-
-func (o *observed) Read(p []byte) (int, error) {
-	n, e := o.ReadCloser.Read(p)
-	if n > 0 {
-		o.fn(append([]byte(nil), p[:n]...))
-	}
-	return n, e
-}
-
 type responseObserver struct {
 	io.ReadCloser
-	process func([]byte)
-	once    sync.Once
-	pending []byte
+	writer *io.PipeWriter
+	once   sync.Once
+	done   chan struct{}
 }
 
+func newResponseObserver(body io.ReadCloser, m *Meter, path, contentType, encoding, model, session string) *responseObserver {
+	r, w := io.Pipe()
+	o := &responseObserver{ReadCloser: body, writer: w, done: make(chan struct{})}
+	go func() { defer close(o.done); m.parseResponse(r, path, contentType, encoding, model, session) }()
+	return o
+}
 func (o *responseObserver) Read(p []byte) (int, error) {
 	n, e := o.ReadCloser.Read(p)
 	if n > 0 {
-		o.pending = append(o.pending, p[:n]...)
-		for {
-			i := bytes.IndexByte(o.pending, '\n')
-			if i < 0 {
-				break
-			}
-			o.process(append([]byte(nil), o.pending[:i+1]...))
-			o.pending = append(o.pending[:0], o.pending[i+1:]...)
-		}
+		_, _ = o.writer.Write(p[:n])
 	}
-	if e == io.EOF && len(o.pending) > 0 {
-		o.process(append([]byte(nil), o.pending...))
-		o.pending = nil
+	if e != nil {
+		o.once.Do(func() { _ = o.writer.Close() })
 	}
 	return n, e
 }
-func (o *responseObserver) Close() error { o.once.Do(func() { _ = o.ReadCloser.Close() }); return nil }
+func (o *responseObserver) Close() error {
+	o.once.Do(func() { _ = o.writer.Close() })
+	err := o.ReadCloser.Close()
+	<-o.done
+	return err
+}
+
+func (m *Meter) parseResponse(raw io.Reader, path, contentType, encoding, model, session string) {
+	var src io.Reader = raw
+	if strings.EqualFold(strings.TrimSpace(encoding), "gzip") {
+		gz, err := gzip.NewReader(raw)
+		if err != nil {
+			m.debugf("gzip side-reader failed: %v", err)
+			return
+		}
+		defer gz.Close()
+		src = gz
+	} else if encoding != "" && !strings.EqualFold(encoding, "identity") {
+		m.debugf("unsupported content encoding for side-reader")
+		return
+	}
+	var latest *Record
+	quotas := map[string]Record{}
+	consume := func(value any) {
+		if strings.Contains(path, "streamGenerateContent") {
+			walkUsage(value, func(u map[string]any) {
+				r := Record{Time: time.Now().UTC(), Kind: "usage", Model: model, Session: session, Prompt: num(u["promptTokenCount"]), Candidates: num(u["candidatesTokenCount"]), Thoughts: num(u["thoughtsTokenCount"]), Cached: num(u["cachedContentTokenCount"]), Total: num(u["totalTokenCount"])}
+				latest = &r
+			})
+		}
+		if strings.Contains(path, "retrieveUserQuotaSummary") {
+			walkQuota(value, func(r Record) { quotas[r.Bucket] = r })
+		}
+	}
+	if strings.Contains(strings.ToLower(contentType), "text/event-stream") {
+		reader := bufio.NewReader(src)
+		var event bytes.Buffer
+		for {
+			line, err := reader.ReadString('\n')
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "data:") {
+				event.WriteString(strings.TrimSpace(strings.TrimPrefix(trimmed, "data:")))
+			}
+			if trimmed == "" && event.Len() > 0 {
+				var v any
+				if json.Unmarshal(event.Bytes(), &v) == nil {
+					consume(v)
+				}
+				event.Reset()
+			}
+			if err != nil {
+				if event.Len() > 0 {
+					var v any
+					if json.Unmarshal(event.Bytes(), &v) == nil {
+						consume(v)
+					}
+				}
+				break
+			}
+		}
+	} else if strings.Contains(path, "retrieveUserQuotaSummary") {
+		var v any
+		if err := json.NewDecoder(src).Decode(&v); err == nil {
+			consume(v)
+		} else {
+			m.debugf("quota JSON parse failed: %v", err)
+		}
+	}
+	m.debugf("response parse complete usage=%t quota_buckets=%d", latest != nil, len(quotas))
+	if latest != nil {
+		m.record(*latest)
+	}
+	for _, r := range quotas {
+		m.record(r)
+	}
+}
+
+func walkUsage(v any, found func(map[string]any)) {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, value := range x {
+			if k == "usageMetadata" {
+				if u, ok := value.(map[string]any); ok {
+					found(u)
+				}
+			}
+			walkUsage(value, found)
+		}
+	case []any:
+		for _, value := range x {
+			walkUsage(value, found)
+		}
+	}
+}
+func walkQuota(v any, found func(Record)) {
+	switch x := v.(type) {
+	case map[string]any:
+		if id, ok := x["bucketId"].(string); ok {
+			found(Record{Time: time.Now().UTC(), Kind: "quota", Bucket: id, Remaining: floatNum(x["remainingFraction"]), Reset: stringVal(x["resetTime"])})
+		}
+		for _, value := range x {
+			walkQuota(value, found)
+		}
+	case []any:
+		for _, value := range x {
+			walkQuota(value, found)
+		}
+	}
+}
 
 type singleConnListener struct{ net.Conn }
 
