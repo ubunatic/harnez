@@ -1,6 +1,6 @@
 # 573 — harnez bench: batch vs sequential read prompts and cached vs new input tokens
 
-**Status**: Open
+**Status**: Closed — M1 (order + cached/new columns) and M2 (claude cache creation is new input) delivered, green, installed
 **Priority**: P2
 **Severity**: Medium
 **Category**: Bench / Tooling
