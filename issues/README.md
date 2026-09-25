@@ -556,3 +556,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 555 | [555-quota-1-failure-summary-shows-the-real-error-when-there-are-no-fail-lines.md](555-quota-1-failure-summary-shows-the-real-error-when-there-are-no-fail-lines.md) | quota-1 failure summary shows the real error when there are no FAIL lines | Open |
 | 556 | [556-show-basic-context-numbers-in-the-claude-status-line.md](556-show-basic-context-numbers-in-the-claude-status-line.md) | Show basic context numbers in the Claude status line | In Progress |
 | 557 | [557-clarify-agent-workflow-names-and-unsupported-commands-in-agent-docs.md](557-clarify-agent-workflow-names-and-unsupported-commands-in-agent-docs.md) | Clarify Agent Workflow Names and Unsupported Commands in Agent Docs | Open |
+| 558 | [558-agy-meter-run-shares-launch-env-with-agent-driver.md](558-agy-meter-run-shares-launch-env-with-agent-driver.md) | agy-meter-run shares launch env with agent driver | Unknown |
