@@ -51,6 +51,8 @@ when no harnez command runs.
 
 ## Leftovers
 
-- `~/.harnez/telemetry.db` and `telemetry.sqlite` are empty and no production code opens them;
-  only tests name them, so a test probably writes into the real home. Safe to delete.
+- `~/.harnez/telemetry.db` and `telemetry.sqlite` (both empty) were deleted on 2026-09-25 (issue
+  576). No code creates them: tests use `t.TempDir()` and `cmd/harnez` isolates `HOME`. Most likely
+  cause is a manual `sqlite3` call on a guessed name, which leaves an empty file. The real store is
+  `tool_catalog.sqlite`; if the files reappear, delete them.
 - `~/.harnez/tool_catalog.sqlite.bak-issue331-*` is a one-off backup from issue 331.
