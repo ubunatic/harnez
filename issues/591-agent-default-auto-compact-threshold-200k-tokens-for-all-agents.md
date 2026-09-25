@@ -3,7 +3,7 @@
 Status: Open
 Priority: P2
 Category: feature
-Related: 590, 581
+Related: 590, 581, 592
 
 ## Proposal (user request, 2026-09-25)
 
@@ -34,20 +34,6 @@ Telling an agent "please compact" does not help unless harnez verifies it. The t
 - Sending a compact instruction to the agent is fine only as the mechanism, when the check above
   confirms the agent actually compacted.
 
-## Mid-run violations: stop, compact, or kill (user addition)
-
-The pre-prompt check does not catch an agent that crosses the limit during a long turn. harnez must
-also watch running sessions:
-
-1. **Detect:** monitor token usage of every running agent (heartbeat data already has it). Crossing
-   the configured threshold is a violation, logged with session name, tokens and time.
-2. **Stop:** tell the agent to STOP its running task (interrupt the turn). This path must be
-   proven to work per agent type (canary test), not assumed.
-3. **Compact:** once stopped, trigger compaction and verify it as above; then resume the task with
-   a short handoff prompt.
-4. **Kill:** if the agent does not stop or compact within a bounded grace period, harnez kills it
-   (whole process group, no stray children) and reports the kill to the host.
-
 ## Acceptance
 
 - Global default 200k in harnez config for all agent types; documented in `harnez agent --help`.
@@ -55,5 +41,5 @@ also watch running sessions:
 - Compaction is verified before the next prompt is sent (fixes the 590 race); unverified
   compaction is an error or a fresh-session fallback, visible in the session info line.
 - Per-agent override possible, but the global default applies when unset.
-- Mid-run violation handling (detect, stop, compact, kill) with a canary test proving the stop
-  signal works for each supported agent type, and a test for the kill path.
+- Apply the pre-prompt check before every dispatch path, including CLI start/resume and MCP
+  spawn/resume; build on 590's wait-for-completion behavior (commits `1c4a460` and `f4cd844`).
