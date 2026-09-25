@@ -171,8 +171,15 @@ func TestIntegrationWorkflow(t *testing.T) {
 	if len(allow) == 0 {
 		t.Fatalf("permissions.allow list is empty in generated settings.json")
 	}
-	// Drop the first permission entry
-	perms["allow"] = allow[1:]
+	// Drop one known permission so config ordering changes do not change which
+	// entry is removed by this drift simulation.
+	driftedAllow := make([]string, 0, len(allow)-1)
+	for _, permission := range allow {
+		if permission != "Bash(journalctl *)" {
+			driftedAllow = append(driftedAllow, permission)
+		}
+	}
+	perms["allow"] = driftedAllow
 	err = os.WriteFile(settingsPath, append(jsonc.MarshalPretty(m), '\n'), 0644)
 	if err != nil {
 		t.Fatalf("Failed to write drifted settings.json: %v", err)
