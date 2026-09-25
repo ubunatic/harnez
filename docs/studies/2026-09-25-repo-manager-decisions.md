@@ -37,5 +37,6 @@ background wait loop hid the error and "finished" at once. Correct form:
   refused). It grepped its own redirect file; `make test-q1` also prints `Failing tests:` and keeps
   the full log under `.git/harnez/quota-1-logs/`. Host review of that log caught it. Lesson: the
   host always greps the q1 log, never trusts a "no FAIL found" report.
-- `harnez agent resume` has no `--detach` while `start` does; the host ran it as a background shell
+- `harnez agent resume` has no `--detach` while `start` does, and it needs `--name` (a positional
+  name is taken as the prompt) while `wait` needs the name positionally. The host ran it as a background shell
   job instead. Input for 578.
