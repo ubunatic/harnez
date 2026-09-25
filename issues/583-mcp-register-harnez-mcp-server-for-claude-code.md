@@ -1,6 +1,6 @@
 # 583 — mcp: register harnez MCP server for Claude Code
 
-**Status**: In Progress
+**Status**: Closed — Claude MCP registration documented (claude mcp add --scope user), apply allows mcp__harnez__*, dead settings.json mcp_servers path removed; tests pass
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
