@@ -75,3 +75,8 @@ test). But host `make test-q1` stops in `go vet`: `internal/bench/bench_test.go:
   check, not a test run), then the one `make test-q1`. Commit only if it is green; if red, report
   the failures and do not commit.
 - Commit `fix(bench): ... (issue 565 M3)`.
+
+## M3 delivered (52ae6cc)
+
+Test compile fix (codex effort assertion now checks `-c model_reasoning_effort=medium`). Host:
+diff OK, make test-q1 green, installed. With M2 (e60d239) and M1 (f5c7682) the matrix is done.
