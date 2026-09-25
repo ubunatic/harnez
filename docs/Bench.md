@@ -103,3 +103,27 @@ Real transcripts of hand runs live in `docs/data/codex-*.md` (Git LFS; the file 
 agent, task, read mode, model, result). Keyword checks are validated against them: the
 `read-lang-summary` test scores all six luna:med answers and skips when only LFS pointers are
 checked out. Save a new transcript there before tightening a task's `require_all`.
+
+Keyword checks fail on valid wording more often than on bad answers. Seen so far: "stdlib" for
+standard library, "`help` the default target" for help-first, `| :--- |` table separators, and
+"standard-library" with a hyphen. Read the stored `response` of a failed run
+(`~/.harnez/bench/bench.sqlite`, table `runs`) before judging the model, and widen the pattern
+with an alternative. `allow_missing` covers the rest.
+
+## Reading cost: turns, cache, and read order
+
+`input` sums the full context of every model call, so an agent that reads one file per call pays
+for the growing context again on each call: agy read six ~3k docs in 9 calls and summed 186k input
+for ~17k of doc text. Most of that repeat is served from the provider cache; compare `new`, not
+`input`. `--order batch,sequential` makes the read pattern explicit. codex luna:med, six lang docs
+(issue 573):
+
+| read | batch: turns / input / new | sequential: turns / input / new |
+|---|---|---|
+| native | 2 / 38.6k / 14.5k | 7 / 140.3k / 18.2k |
+| text | 3 / 53.5k / 16.3k | 7 / 134.8k / 22.9k |
+| card | 2 / 50.2k / 12.1k | 7 / 238.3k / 20.4k |
+
+Sequential reading multiplies `input` by 3–5 but adds only 4–8k `new` tokens. Card mode is not
+more expensive in new tokens. Claude cache creation counts as `new` (it is billed above normal input).
+
