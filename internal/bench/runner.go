@@ -147,18 +147,3 @@ func TaskPrompt(task Task, mode string, order ...string) string {
 	}
 	return prompt
 }
-
-func mainUsageModel(rows []agymeter.Record) string {
-	totals := map[string]int64{}
-	for _, row := range rows {
-		totals[row.Model] += row.Prompt
-	}
-	main := ""
-	var max int64 = -1
-	for model, total := range totals {
-		if total > max {
-			main, max = model, total
-		}
-	}
-	return main
-}

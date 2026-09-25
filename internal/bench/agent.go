@@ -188,17 +188,7 @@ func readAgyUsage(sessionID string) ([]agymeter.Record, error) {
 }
 
 func splitAgyUsage(rows []agymeter.Record) (input, total, turns int, calls []int64, helpers []HelperUsage) {
-	promptByModel := make(map[string]int64)
-	for _, row := range rows {
-		promptByModel[row.Model] += row.Prompt
-	}
-	main := ""
-	var maxPrompt int64 = -1
-	for _, row := range rows {
-		if promptByModel[row.Model] > maxPrompt {
-			main, maxPrompt = row.Model, promptByModel[row.Model]
-		}
-	}
+	main := mainUsageModel(rows)
 	helperMap := make(map[string]*HelperUsage)
 	for _, row := range rows {
 		if row.Model == main {
@@ -232,6 +222,21 @@ func splitAgyUsage(rows []agymeter.Record) (input, total, turns int, calls []int
 		}
 	}
 	return
+}
+
+func mainUsageModel(rows []agymeter.Record) string {
+	totals := map[string]int64{}
+	for _, row := range rows {
+		totals[row.Model] += row.Prompt
+	}
+	main := ""
+	var max int64 = -1
+	for model, total := range totals {
+		if total > max {
+			main, max = model, total
+		}
+	}
+	return main
 }
 
 // Invoke sends prompt to the agent in dir using model and parses its JSON output.
@@ -293,15 +298,10 @@ func ParseClaude(out []byte) (Result, error) {
 		CostUSD:      raw.Cost,
 		Turns:        raw.Turns,
 	}
-	if raw.Usage.CacheRead != nil || raw.Usage.CacheCreate != nil {
-		cached := 0
-		if raw.Usage.CacheRead != nil {
-			cached += *raw.Usage.CacheRead
-		}
-		if raw.Usage.CacheCreate != nil {
-			cached += *raw.Usage.CacheCreate
-		}
-		res.CachedInputTokens = &cached
+	if raw.Usage.CacheRead != nil {
+		res.CachedInputTokens = raw.Usage.CacheRead
+	} else if raw.Usage.CacheCreate != nil {
+		res.CachedInputTokens = intPointer(0)
 	}
 	if raw.Usage.CacheRead != nil {
 		res.InputTokens += *raw.Usage.CacheRead
@@ -309,7 +309,6 @@ func ParseClaude(out []byte) (Result, error) {
 	if raw.Usage.CacheCreate != nil {
 		res.InputTokens += *raw.Usage.CacheCreate
 	}
-	// Input is the provider's uncached input plus cache fields.
 	return res, nil
 }
 

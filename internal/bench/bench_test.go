@@ -158,8 +158,12 @@ func TestSelectAndScore(t *testing.T) {
 
 func TestParseClaudeAndCodex(t *testing.T) {
 	c, err := ParseClaude([]byte(claudeJSON))
-	if err != nil || c.Text != "ready" || c.InputTokens != 115 || c.CachedInputTokens == nil || *c.CachedInputTokens != 105 || c.OutputTokens != 48 || c.CostUSD != 0.03 {
+	if err != nil || c.Text != "ready" || c.InputTokens != 115 || c.CachedInputTokens == nil || *c.CachedInputTokens != 5 || c.OutputTokens != 48 || c.CostUSD != 0.03 {
 		t.Fatalf("claude = %+v, %v", c, err)
+	}
+	creation, err := ParseClaude([]byte(`{"result":"ready","usage":{"input_tokens":10,"cache_creation_input_tokens":50,"cache_read_input_tokens":100}}`))
+	if err != nil || creation.InputTokens != 160 || creation.CachedInputTokens == nil || *creation.CachedInputTokens != 100 {
+		t.Fatalf("claude cache creation = %+v, %v", creation, err)
 	}
 	if _, err := ParseClaude([]byte(`{"result":"boom","is_error":true}`)); err == nil {
 		t.Fatal("is_error accepted")
@@ -422,7 +426,7 @@ func TestStoreRunTasksAndSummaries(t *testing.T) {
 	if len(recent) != 6 || recent[0].Task != "broken" || recent[0].Error == "" {
 		t.Errorf("recent[0] = %+v", recent[0])
 	}
-	if recent[2].CachedInputTokens == nil || *recent[2].CachedInputTokens != 105 || recent[2].CachedEstimated {
+	if recent[2].CachedInputTokens == nil || *recent[2].CachedInputTokens != 5 || recent[2].CachedEstimated {
 		t.Errorf("stored cache metadata = %+v", recent[2])
 	}
 }
