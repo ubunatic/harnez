@@ -1,6 +1,6 @@
 # 571 — MCP server to run agents via harnez agent inside Codex
 
-**Status**: Open
+**Status**: Closed — harnez mcp stdio server implemented and verified end-to-end with Codex
 **Priority**: P2
 **Severity**: Minor
 **Category**: Feature
