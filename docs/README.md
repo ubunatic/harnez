@@ -152,6 +152,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-09-24-model-research-quota.md](studies/2026-09-24-model-research-quota.md) | Model quota attribution research — 2026-09-24 |
 | [studies/2026-09-24-sprint-519-agent-stats.md](studies/2026-09-24-sprint-519-agent-stats.md) | Sprint 519 retro: agent stats, token use and plan-quota drain (2026-09-24) |
 | [studies/2026-09-25-bench-read-conditions.md](studies/2026-09-25-bench-read-conditions.md) | Benchmark read conditions and card experiments |
+| [studies/2026-09-25-usage-system-advisor-handoff.md](studies/2026-09-25-usage-system-advisor-handoff.md) | Usage System: Advisor Handoff and Workflow Friction (2026-09-25) |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
 | [studies/MacOSContainerAMD.md](studies/MacOSContainerAMD.md) | macOS Containers on AMD KVM & Podman: Architecture, Quirks, and Diagnostic Guide |
