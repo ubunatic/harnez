@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"ubunatic.com/harnez/internal/agymeter"
@@ -53,7 +54,7 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 	}
 	for _, task := range tasks {
 		for i := 0; i < o.Repeat; i++ {
-			run := Run{Task: task.ID, Agent: o.Agent, Model: modelSpec, Docs: o.Cond.Docs, Cards: o.Cond.Cards, ReadMode: o.Cond.ReadVariant()}
+			run := Run{Task: task.ID, Agent: o.Agent, Model: modelSpec, Docs: o.Cond.Docs, Cards: o.Cond.Cards, ReadMode: o.Cond.ReadVariant(), Order: o.Cond.Order}
 			if o.Agent == AgentAgy {
 				run.SessionID = newMeterSessionID()
 			}
@@ -71,11 +72,12 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 			}
 			if _, err := StageWorkspace(dir, o.RepoRoot, spec, task, o.Cond); err != nil {
 				run.Error = err.Error()
-			} else if res, err := Invoke(callCtx, o.Run, o.Agent, modelSpec, dir, TaskPrompt(task, o.Cond.Read)); err != nil {
+			} else if res, err := Invoke(callCtx, o.Run, o.Agent, modelSpec, dir, TaskPrompt(task, o.Cond.Read, o.Cond.Order)); err != nil {
 				run.Error = err.Error()
 			} else {
 				run.Response, run.InputTokens, run.OutputTokens, run.CostUSD = res.Text, res.InputTokens, res.OutputTokens, res.CostUSD
 				run.Turns = res.Turns
+				run.CachedInputTokens, run.CachedEstimated = res.CachedInputTokens, res.CachedEstimated
 				run.TotalTokens = res.InputTokens + res.OutputTokens
 				if o.Agent == AgentAgy {
 					reader := o.ReadMeter
@@ -91,6 +93,20 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 						input, total, turns, calls, helpers := splitAgyUsage(rows)
 						run.InputTokens, run.TotalTokens, run.Turns = input, total, turns
 						run.MainCallTokens, run.HelperUsage = calls, helpers
+						cached := int64(0)
+						mainModel := mainUsageModel(rows)
+						for _, row := range rows {
+							if row.Model == mainModel {
+								cached += row.Cached
+							}
+						}
+						if cached > 0 {
+							run.CachedInputTokens = intPointer(int(cached))
+							run.CachedEstimated = false
+						} else if estimate, ok := estimateCached(calls); ok {
+							run.CachedInputTokens = intPointer(estimate)
+							run.CachedEstimated = true
+						}
 						run.OutputTokens = total - input
 						if run.OutputTokens < 0 {
 							run.OutputTokens = 0
@@ -119,9 +135,30 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 }
 
 // TaskPrompt returns the prompt for a read mode, or the task's generic prompt.
-func TaskPrompt(task Task, mode string) string {
-	if prompt, ok := task.ReadPrompts[mode]; ok {
-		return prompt
+func TaskPrompt(task Task, mode string, order ...string) string {
+	prompt := task.Prompt
+	if modePrompt, ok := task.ReadPrompts[mode]; ok {
+		prompt = modePrompt
 	}
-	return task.Prompt
+	if len(order) > 0 {
+		if sentence := task.ReadOrders[order[0]]; sentence != "" {
+			prompt = strings.TrimSpace(prompt + " " + sentence)
+		}
+	}
+	return prompt
+}
+
+func mainUsageModel(rows []agymeter.Record) string {
+	totals := map[string]int64{}
+	for _, row := range rows {
+		totals[row.Model] += row.Prompt
+	}
+	main := ""
+	var max int64 = -1
+	for model, total := range totals {
+		if total > max {
+			main, max = model, total
+		}
+	}
+	return main
 }

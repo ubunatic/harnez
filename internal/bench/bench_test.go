@@ -158,7 +158,7 @@ func TestSelectAndScore(t *testing.T) {
 
 func TestParseClaudeAndCodex(t *testing.T) {
 	c, err := ParseClaude([]byte(claudeJSON))
-	if err != nil || c.Text != "ready" || c.InputTokens != 115 || c.OutputTokens != 48 || c.CostUSD != 0.03 {
+	if err != nil || c.Text != "ready" || c.InputTokens != 115 || c.CachedInputTokens == nil || *c.CachedInputTokens != 105 || c.OutputTokens != 48 || c.CostUSD != 0.03 {
 		t.Fatalf("claude = %+v, %v", c, err)
 	}
 	if _, err := ParseClaude([]byte(`{"result":"boom","is_error":true}`)); err == nil {
@@ -177,7 +177,7 @@ const agyJSON = `{"conversation_id":"c1","status":"SUCCESS","response":"ready\n"
 
 func TestParseAgy(t *testing.T) {
 	r, err := ParseAgy([]byte(agyJSON))
-	if err != nil || r.Text != "ready\n" || r.InputTokens != 140 || r.OutputTokens != 25 || r.Turns != 3 {
+	if err != nil || r.Text != "ready\n" || r.InputTokens != 140 || r.CachedInputTokens == nil || *r.CachedInputTokens != 40 || r.OutputTokens != 25 || r.Turns != 3 {
 		t.Fatalf("agy = %+v, %v", r, err)
 	}
 	if _, err := ParseAgy([]byte(`{"status":"ERROR","response":"boom"}`)); err == nil {
@@ -185,6 +185,39 @@ func TestParseAgy(t *testing.T) {
 	}
 	if _, err := ParseAgy([]byte("not json")); err == nil {
 		t.Fatal("garbage accepted")
+	}
+}
+
+func TestReadOrderPromptAndParse(t *testing.T) {
+	task := Task{Prompt: "summarise", ReadPrompts: map[string]string{"native": "read docs"}, ReadOrders: map[string]string{"batch": "Read all files in one batch."}}
+	if got := TaskPrompt(task, "native", "batch"); got != "read docs Read all files in one batch." {
+		t.Fatalf("prompt = %q", got)
+	}
+	if got := TaskPrompt(task, "native"); got != "read docs" {
+		t.Fatalf("default prompt = %q", got)
+	}
+	orders, err := ParseOrderList(" batch, sequential ")
+	if err != nil || strings.Join(orders, ",") != "batch,sequential" {
+		t.Fatalf("orders = %v, %v", orders, err)
+	}
+	if _, err := ParseOrderList("bad"); err == nil {
+		t.Fatal("bad order accepted")
+	}
+	if got, ok := estimateCached([]int64{11, 25, 41}); !ok || got != 36 {
+		t.Fatalf("estimated cache = %d, %v", got, ok)
+	}
+	if _, ok := estimateCached([]int64{11}); ok {
+		t.Fatal("single call cache should be unknown")
+	}
+	spec, err := ParseSpec([]byte("tasks:\n- id: read\n  prompt: read\n  fixtures: [A.md]\n  pattern: x\n  read_orders: {batch: 'all at once', sequential: 'one by one'}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, order := range []string{"batch", "sequential"} {
+		selected, err := spec.SelectFor(nil, Condition{Read: "native", Order: order})
+		if err != nil || len(selected) != 1 || TaskPrompt(selected[0], "native", order) != "read "+selected[0].ReadOrders[order] {
+			t.Fatalf("order %s matrix = %v, %v", order, selected, err)
+		}
 	}
 }
 
@@ -388,6 +421,9 @@ func TestStoreRunTasksAndSummaries(t *testing.T) {
 	recent, _ := store.Recent(10)
 	if len(recent) != 6 || recent[0].Task != "broken" || recent[0].Error == "" {
 		t.Errorf("recent[0] = %+v", recent[0])
+	}
+	if recent[2].CachedInputTokens == nil || *recent[2].CachedInputTokens != 105 || recent[2].CachedEstimated {
+		t.Errorf("stored cache metadata = %+v", recent[2])
 	}
 }
 

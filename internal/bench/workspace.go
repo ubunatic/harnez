@@ -17,6 +17,16 @@ type Condition struct {
 	Yaml  bool   // read conditions: deliver the fixture as YAML instead of Markdown
 	Multi int    // read conditions: split the fixture into this many files (<2: one file)
 	Card  string // auto read: extra `harnez read` card flags the agent is told to use, e.g. "--style=compact"
+	Order string // read task ordering variant: batch or sequential
+}
+
+// ReadOrderVariant appends the selected order to the read-mode label.
+func (c Condition) ReadOrderVariant() string {
+	v := c.ReadVariant()
+	if c.Order != "" {
+		v += "+" + c.Order
+	}
+	return v
 }
 
 // Label is the stable text form recorded in the bench DB.

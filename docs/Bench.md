@@ -11,8 +11,9 @@ which agent CLIs are available. Set `HARNEZ_BENCH_DIR` to use another directory.
 database is separate from the telemetry store.
 
 - `harnez bench tasks` lists the tasks in `internal/bench/tasks.yaml`.
-- `harnez bench run [--model provider:model:tier,...] [--read mode,...] [--docs full|lite] [--cards] [--task a,b] [--repeat N]`
-  runs the selected model × read-mode × task × repeat matrix. Model specs use the same names as
+- `harnez bench run [--model provider:model:tier,...] [--read mode,...] [--order batch,sequential] [--docs full|lite] [--cards] [--task a,b] [--repeat N]`
+  runs the selected model × read-mode × order × task × repeat matrix. `--order` applies to read tasks
+  and defaults to today's prompt without an order sentence. Model specs use the same names as
   `harnez agent models`; `--agent` remains as a deprecated provider selector for default-model runs.
   `--docs` defaults to `lite`. One table summarizes only runs from this invocation.
 - `harnez bench results [--recent N]` summarizes pass rate, average tokens, and cost by condition.
@@ -33,11 +34,11 @@ example, `harnez bench run --task read-one-fact --read text,card --model agy:fla
 runs four combinations and prints one comparison table:
 
 ```
-model                    read     task                     pass        input   turns        helper  duration
-agy:flash37:low          text     read-one-fact            PASS         1200       2             40     3.20s
-agy:flash37:low          card     read-one-fact            PASS          900       2             40     3.10s
-claude:haiku:low         text     read-one-fact            PASS         1100       2              0     2.80s
-claude:haiku:low         card     read-one-fact            PASS          850       2              0     2.90s
+model                    read     order       task                     pass        input    cached       new   turns        helper  duration
+agy:flash37:low          text                 read-one-fact            PASS         1200         -         -       2             40     3.20s
+agy:flash37:low          card                 read-one-fact            PASS          900         -         -       2             40     3.10s
+claude:haiku:low         text                 read-one-fact            PASS         1100         -         -       2              0     2.80s
+claude:haiku:low         card                 read-one-fact            PASS          850         -         -       2              0     2.90s
 ```
 
 Each matrix cell and repeat gets a fresh temporary workspace. Agy runs also receive a unique
@@ -55,7 +56,9 @@ Read modes:
 - `auto` instructs it to use `harnez read --auto`, which can return PNG cards for large content.
 - `card` instructs it to use `harnez read -I`, which forces PNG output without falling back to text.
 
-Read tasks can also vary fixture shape. `--yaml` presents the same data as one YAML file, while
+Read tasks with a `read_orders` spec can compare `--order batch,sequential`; each sentence comes
+from `tasks.yaml`, is appended to the mode prompt, and appears in the result table. A `*` marks an
+estimated cached count. Unknown cached values display as `-`. Read tasks can also vary fixture shape. `--yaml` presents the same data as one YAML file, while
 `--multi[=N]` splits it into files by first letter (five groups by default). These options combine
 and are recorded with the read mode so results from different shapes remain distinct.
 `--card=<flags>` passes card style options to `harnez read --auto`; style axes and presets are
@@ -81,7 +84,7 @@ its all-keywords check requires a table, every document name, and a representati
 ## Providers and recorded results
 
 Provider invocations record the task, provider, model, documentation mode, card setting, read mode,
-pass/fail, input, output and total tokens, cost, duration, and response. Claude usage includes cache
+order, pass/fail, input, cached and new input, output and total tokens, cost, duration, and response. Claude usage includes cache
 reads and creation in input; Codex usage sums completed-turn input and output. Agy runs use the
 per-process agymeter, tag each run with a session ID, and read input, total tokens, and turns from
 that session's meter records. Meter data is the source of truth for Agy token and turn counts.

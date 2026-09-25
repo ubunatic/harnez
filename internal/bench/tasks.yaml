@@ -115,6 +115,9 @@ tasks:
       native: "Read only Go.md Make.md ManPages.md Bash.md Git.md Markdown.md in docs/lang and summarise as a table. (Use your native read tool for reading text files)"
       text: "Read only Go.md Make.md ManPages.md Bash.md Git.md Markdown.md in docs/lang and summarise as a table. (Use 'harnez read <file>' for reading text files)"
       card: "Read only Go.md Make.md ManPages.md Bash.md Git.md Markdown.md in docs/lang and summarise as a table. (Use 'harnez read -I <file>' for reading text files as PNG cards)"
+    read_orders:
+      batch: "Read all files in one batch."
+      sequential: "Read the files one after another."
     require_all:
       - '\bGo\b'
       - '\bMake\b'

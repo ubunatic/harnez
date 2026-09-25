@@ -113,11 +113,13 @@ func DefaultModelForProvider(provider string) (subagent.Model, error) {
 
 // Result is one agent invocation's outcome.
 type Result struct {
-	Text         string
-	InputTokens  int
-	OutputTokens int
-	CostUSD      float64
-	Turns        int // agent steps: tool calls plus the final answer
+	Text              string
+	InputTokens       int
+	OutputTokens      int
+	CostUSD           float64
+	Turns             int // agent steps: tool calls plus the final answer
+	CachedInputTokens *int
+	CachedEstimated   bool
 }
 
 // CommandRunner runs name with args in dir and returns stdout. Tests fake it.
@@ -272,10 +274,10 @@ func ParseClaude(out []byte) (Result, error) {
 		Turns   int     `json:"num_turns"`
 		Cost    float64 `json:"total_cost_usd"`
 		Usage   struct {
-			Input       int `json:"input_tokens"`
-			Output      int `json:"output_tokens"`
-			CacheRead   int `json:"cache_read_input_tokens"`
-			CacheCreate int `json:"cache_creation_input_tokens"`
+			Input       int  `json:"input_tokens"`
+			Output      int  `json:"output_tokens"`
+			CacheRead   *int `json:"cache_read_input_tokens"`
+			CacheCreate *int `json:"cache_creation_input_tokens"`
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(bytes.TrimSpace(out), &raw); err != nil {
@@ -284,19 +286,38 @@ func ParseClaude(out []byte) (Result, error) {
 	if raw.IsError {
 		return Result{}, fmt.Errorf("bench: claude reported an error: %s", raw.Result)
 	}
-	return Result{
+	res := Result{
 		Text:         raw.Result,
-		InputTokens:  raw.Usage.Input + raw.Usage.CacheRead + raw.Usage.CacheCreate,
+		InputTokens:  raw.Usage.Input,
 		OutputTokens: raw.Usage.Output,
 		CostUSD:      raw.Cost,
 		Turns:        raw.Turns,
-	}, nil
+	}
+	if raw.Usage.CacheRead != nil || raw.Usage.CacheCreate != nil {
+		cached := 0
+		if raw.Usage.CacheRead != nil {
+			cached += *raw.Usage.CacheRead
+		}
+		if raw.Usage.CacheCreate != nil {
+			cached += *raw.Usage.CacheCreate
+		}
+		res.CachedInputTokens = &cached
+	}
+	if raw.Usage.CacheRead != nil {
+		res.InputTokens += *raw.Usage.CacheRead
+	}
+	if raw.Usage.CacheCreate != nil {
+		res.InputTokens += *raw.Usage.CacheCreate
+	}
+	// Input is the provider's uncached input plus cache fields.
+	return res, nil
 }
 
 // ParseCodex reads `codex exec --json` JSONL: the last agent_message is the
 // answer, usage sums every turn.completed event.
 func ParseCodex(out []byte) (Result, error) {
 	var res Result
+	var callInputs []int64
 	sc := bufio.NewScanner(bytes.NewReader(out))
 	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	for sc.Scan() {
@@ -311,8 +332,10 @@ func ParseCodex(out []byte) (Result, error) {
 				Text string `json:"text"`
 			} `json:"item"`
 			Usage struct {
-				Input  int `json:"input_tokens"`
-				Output int `json:"output_tokens"`
+				Input     int `json:"input_tokens"`
+				Output    int `json:"output_tokens"`
+				Cached    int `json:"cached_input_tokens"`
+				CacheRead int `json:"cache_read_tokens"`
 			} `json:"usage"`
 		}
 		if json.Unmarshal([]byte(line), &ev) != nil {
@@ -326,11 +349,27 @@ func ParseCodex(out []byte) (Result, error) {
 		case ev.Type == "turn.completed":
 			res.InputTokens += ev.Usage.Input
 			res.OutputTokens += ev.Usage.Output
+			callInputs = append(callInputs, int64(ev.Usage.Input))
+			cached := ev.Usage.Cached + ev.Usage.CacheRead
+			if cached > 0 {
+				v := cached
+				if res.CachedInputTokens == nil {
+					res.CachedInputTokens = &v
+				} else {
+					*res.CachedInputTokens += v
+				}
+			}
 		}
 	}
 	res.Turns++ // the final answer
 	if res.Text == "" {
 		return Result{}, fmt.Errorf("bench: codex output has no agent_message")
+	}
+	if res.CachedInputTokens == nil {
+		if n, ok := estimateCached(callInputs); ok {
+			res.CachedInputTokens = &n
+			res.CachedEstimated = true
+		}
 	}
 	return res, nil
 }
@@ -343,10 +382,10 @@ func ParseAgy(out []byte) (Result, error) {
 		Response string `json:"response"`
 		Turns    int    `json:"num_turns"`
 		Usage    struct {
-			Input     int `json:"input_tokens"`
-			Output    int `json:"output_tokens"`
-			Thinking  int `json:"thinking_tokens"`
-			CacheRead int `json:"cache_read_tokens"`
+			Input     int  `json:"input_tokens"`
+			Output    int  `json:"output_tokens"`
+			Thinking  int  `json:"thinking_tokens"`
+			CacheRead *int `json:"cache_read_tokens"`
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(bytes.TrimSpace(out), &raw); err != nil {
@@ -355,10 +394,35 @@ func ParseAgy(out []byte) (Result, error) {
 	if raw.Status != "SUCCESS" {
 		return Result{}, fmt.Errorf("bench: agy status %q: %s", raw.Status, raw.Response)
 	}
-	return Result{
+	res := Result{
 		Text:         raw.Response,
-		InputTokens:  raw.Usage.Input + raw.Usage.CacheRead,
+		InputTokens:  raw.Usage.Input,
 		OutputTokens: raw.Usage.Output + raw.Usage.Thinking,
 		Turns:        raw.Turns,
-	}, nil
+	}
+	if raw.Usage.CacheRead != nil {
+		res.CachedInputTokens = raw.Usage.CacheRead
+		res.InputTokens += *raw.Usage.CacheRead
+	}
+	return res, nil
+}
+
+func intPointer(v int) *int { return &v }
+
+func estimateCached(calls []int64) (int, bool) {
+	if len(calls) < 2 {
+		return 0, false
+	}
+	var cached int64
+	var previous int64
+	for i, n := range calls {
+		if i > 0 {
+			cached += previous
+		}
+		previous = n
+	}
+	if cached <= 0 {
+		return 0, false
+	}
+	return int(cached), true
 }

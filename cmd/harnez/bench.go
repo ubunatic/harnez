@@ -59,7 +59,11 @@ func renderBenchCard(source, output string) (string, error) {
 
 func benchPreamble(spec *bench.Spec, task bench.Task, cond bench.Condition, root string) (string, error) {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s (%s) | read: %s\n", task.ID, task.Rule, cond.ReadVariant())
+	fmt.Fprintf(&b, "%s (%s) | read: %s", task.ID, task.Rule, cond.ReadVariant())
+	if cond.Order != "" {
+		fmt.Fprintf(&b, " | order: %s", cond.Order)
+	}
+	b.WriteString("\n")
 	if cond.Read == "" {
 		fmt.Fprintf(&b, "question: %s\n", task.Prompt)
 	} else {
@@ -100,7 +104,7 @@ func benchPreamble(spec *bench.Spec, task bench.Task, cond bench.Condition, root
 			}
 		}
 		_ = os.RemoveAll(dir)
-		fmt.Fprintf(&b, "question: %s\n", bench.TaskPrompt(task, cond.Read))
+		fmt.Fprintf(&b, "question: %s\n", bench.TaskPrompt(task, cond.Read, cond.Order))
 	}
 	if task.Info != "" {
 		fmt.Fprintf(&b, "info: %s\n", task.Info)
@@ -195,7 +199,7 @@ func newBenchTasksCmd() *cobra.Command {
 }
 
 func newBenchRunCmd() *cobra.Command {
-	var agent, model, docs, repo, readModeName, cardFlags string
+	var agent, model, docs, repo, readModeName, cardFlags, orderName string
 	var docCards, fixtureYAML, quiet bool
 	var multi int
 	var repeat int
@@ -248,6 +252,13 @@ func newBenchRunCmd() *cobra.Command {
 			if len(readModes) == 0 {
 				readModes = []string{""}
 			}
+			orders, err := bench.ParseOrderList(orderName)
+			if err != nil {
+				return err
+			}
+			if len(orders) == 0 {
+				orders = []string{""}
+			}
 			out := cmd.OutOrStdout()
 			errOut := cmd.ErrOrStderr()
 			var matrix []bench.Run
@@ -261,24 +272,29 @@ func newBenchRunCmd() *cobra.Command {
 			preambled := map[string]bool{}
 			for _, m := range models {
 				for _, readMode := range readModes {
-					cond := bench.Condition{Docs: mode, Cards: docCards, Read: readMode, Yaml: fixtureYAML, Multi: multi, Card: strings.TrimSpace(cardFlags)}
-					selected, err := spec.SelectFor(tasks, cond)
-					if err != nil {
-						return err
-					}
-					for _, task := range selected {
-						key := task.ID + "\x00" + cond.ReadVariant() + "\x00" + cond.Docs + fmt.Sprint(cond.Cards)
-						if !quiet && !preambled[key] {
-							preamble, err := benchPreamble(spec, task, cond, repo)
-							if err != nil {
-								return err
-							}
-							fmt.Fprint(errOut, preamble)
-							preambled[key] = true
+					for _, order := range orders {
+						if order != "" && readMode == "" {
+							return fmt.Errorf("bench: --order needs --read")
 						}
+						cond := bench.Condition{Docs: mode, Cards: docCards, Read: readMode, Yaml: fixtureYAML, Multi: multi, Card: strings.TrimSpace(cardFlags), Order: order}
+						selected, err := spec.SelectFor(tasks, cond)
+						if err != nil {
+							return err
+						}
+						for _, task := range selected {
+							key := task.ID + "\x00" + cond.ReadOrderVariant() + "\x00" + cond.Docs + fmt.Sprint(cond.Cards)
+							if !quiet && !preambled[key] {
+								preamble, err := benchPreamble(spec, task, cond, repo)
+								if err != nil {
+									return err
+								}
+								fmt.Fprint(errOut, preamble)
+								preambled[key] = true
+							}
+						}
+						plans = append(plans, benchPlan{model: m, cond: cond, selected: selected})
+						total += len(selected) * repeat
 					}
-					plans = append(plans, benchPlan{model: m, cond: cond, selected: selected})
-					total += len(selected) * repeat
 				}
 			}
 			current := 0
@@ -309,7 +325,7 @@ func newBenchRunCmd() *cobra.Command {
 					return err
 				}
 			}
-			fmt.Fprintf(out, "%-24s %-8s %-24s %-6s %10s %7s %13s %9s  %s\n", "model", "read", "task", "pass", "input", "turns", "helper", "duration", "reason")
+			fmt.Fprintf(out, "%-24s %-8s %-11s %-24s %-6s %10s %9s %9s %7s %13s %9s  %s\n", "model", "read", "order", "task", "pass", "input", "cached", "new", "turns", "helper", "duration", "reason")
 			for _, r := range matrix {
 				helpers := int64(0)
 				for _, h := range r.HelperUsage {
@@ -330,7 +346,15 @@ func newBenchRunCmd() *cobra.Command {
 				if reason == "" {
 					reason = r.Detail
 				}
-				fmt.Fprintf(out, "%-24s %-8s %-24s %-6s %10d %7d %13d %8.2fs  %s\n", r.Model, read, r.Task, status, r.InputTokens, r.Turns, helpers, float64(r.DurationMS)/1000, reason)
+				cached, fresh := "-", "-"
+				if r.CachedInputTokens != nil {
+					cached = fmt.Sprint(*r.CachedInputTokens)
+					fresh = fmt.Sprint(r.InputTokens - *r.CachedInputTokens)
+					if r.CachedEstimated {
+						cached += "*"
+					}
+				}
+				fmt.Fprintf(out, "%-24s %-8s %-11s %-24s %-6s %10d %9s %9s %7d %13d %8.2fs  %s\n", r.Model, read, r.Order, r.Task, status, r.InputTokens, cached, fresh, r.Turns, helpers, float64(r.DurationMS)/1000, reason)
 			}
 			return nil
 		},
@@ -340,6 +364,7 @@ func newBenchRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&docs, "docs", "lite", "doc variant: full or lite")
 	cmd.Flags().BoolVar(&docCards, "cards", false, "deliver docs as PNG context cards instead of Markdown")
 	cmd.Flags().StringVar(&readModeName, "read", "", "comma-separated fixture read modes: native, text, auto, card")
+	cmd.Flags().StringVar(&orderName, "order", "", "comma-separated read task order variants: batch, sequential")
 	cmd.Flags().BoolVar(&fixtureYAML, "yaml", false, "with --read: deliver the fixture as one YAML file instead of Markdown")
 	cmd.Flags().IntVar(&multi, "multi", 0, "with --read: split the fixture into N files by first letter (26/N letters each); bare --multi means 5, use --multi=N otherwise")
 	cmd.Flags().Lookup("multi").NoOptDefVal = "5"

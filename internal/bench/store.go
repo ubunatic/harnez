@@ -45,6 +45,9 @@ CREATE TABLE IF NOT EXISTS runs (
 	session_id TEXT NOT NULL DEFAULT '',
 	main_call_tokens TEXT NOT NULL DEFAULT '[]',
 	helper_usage TEXT NOT NULL DEFAULT '[]'
+	,read_order TEXT NOT NULL DEFAULT ''
+	,cached_input_tokens INTEGER
+	,cached_estimated INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS runs_cond ON runs(agent, model, docs, cards);
 `
@@ -66,7 +69,7 @@ func OpenStore(path string) (*Store, error) {
 		return nil, fmt.Errorf("bench: create schema: %w", err)
 	}
 	// Databases created before read mode existed lack these columns.
-	for _, col := range []string{"read_mode TEXT NOT NULL DEFAULT ''", "turns INTEGER NOT NULL DEFAULT 0", "total_tokens INTEGER NOT NULL DEFAULT 0", "session_id TEXT NOT NULL DEFAULT ''", "main_call_tokens TEXT NOT NULL DEFAULT '[]'", "helper_usage TEXT NOT NULL DEFAULT '[]'"} {
+	for _, col := range []string{"read_mode TEXT NOT NULL DEFAULT ''", "turns INTEGER NOT NULL DEFAULT 0", "total_tokens INTEGER NOT NULL DEFAULT 0", "session_id TEXT NOT NULL DEFAULT ''", "main_call_tokens TEXT NOT NULL DEFAULT '[]'", "helper_usage TEXT NOT NULL DEFAULT '[]'", "read_order TEXT NOT NULL DEFAULT ''", "cached_input_tokens INTEGER", "cached_estimated INTEGER NOT NULL DEFAULT 0"} {
 		if _, err := db.Exec("ALTER TABLE runs ADD COLUMN " + col); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			db.Close()
 			return nil, fmt.Errorf("bench: migrate schema: %w", err)
@@ -81,27 +84,30 @@ func (s *Store) Close() error { return s.db.Close() }
 // Run is one recorded task execution. Error marks an invocation failure
 // (not a scoring failure) so infra flakes stay out of pass rates.
 type Run struct {
-	ID             int64
-	TS             time.Time
-	Task           string
-	Agent          string
-	Model          string
-	Docs           string
-	Cards          bool
-	Pass           bool
-	Detail         string
-	InputTokens    int
-	OutputTokens   int
-	CostUSD        float64
-	DurationMS     int64
-	Response       string
-	Error          string
-	ReadMode       string
-	Turns          int
-	TotalTokens    int
-	SessionID      string
-	MainCallTokens []int64
-	HelperUsage    []HelperUsage
+	ID                int64
+	TS                time.Time
+	Task              string
+	Agent             string
+	Model             string
+	Docs              string
+	Cards             bool
+	Pass              bool
+	Detail            string
+	InputTokens       int
+	OutputTokens      int
+	CostUSD           float64
+	DurationMS        int64
+	Response          string
+	Error             string
+	ReadMode          string
+	Turns             int
+	TotalTokens       int
+	SessionID         string
+	MainCallTokens    []int64
+	HelperUsage       []HelperUsage
+	Order             string
+	CachedInputTokens *int
+	CachedEstimated   bool
 }
 
 // HelperUsage summarizes meter calls for one non-main model.
@@ -119,10 +125,10 @@ func (s *Store) Insert(r Run) error {
 	}
 	calls, _ := json.Marshal(r.MainCallTokens)
 	helpers, _ := json.Marshal(r.HelperUsage)
-	_, err := s.db.Exec(`INSERT INTO runs (ts, task, agent, model, docs, cards, pass, detail, input_tokens, output_tokens, cost_usd, duration_ms, response, error, read_mode, turns, total_tokens, session_id, main_call_tokens, helper_usage)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	_, err := s.db.Exec(`INSERT INTO runs (ts, task, agent, model, docs, cards, pass, detail, input_tokens, output_tokens, cost_usd, duration_ms, response, error, read_mode, turns, total_tokens, session_id, main_call_tokens, helper_usage, read_order, cached_input_tokens, cached_estimated)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		r.TS.Format(time.RFC3339), r.Task, r.Agent, r.Model, r.Docs, b2i(r.Cards), b2i(r.Pass), r.Detail,
-		r.InputTokens, r.OutputTokens, r.CostUSD, r.DurationMS, r.Response, r.Error, r.ReadMode, r.Turns, r.TotalTokens, r.SessionID, string(calls), string(helpers))
+		r.InputTokens, r.OutputTokens, r.CostUSD, r.DurationMS, r.Response, r.Error, r.ReadMode, r.Turns, r.TotalTokens, r.SessionID, string(calls), string(helpers), r.Order, r.CachedInputTokens, b2i(r.CachedEstimated))
 	return err
 }
 
@@ -130,6 +136,7 @@ func (s *Store) Insert(r Run) error {
 type Summary struct {
 	Agent, Model, Docs string
 	Read               string
+	Order              string
 	Cards              bool
 	Runs, Passes       int
 	AvgInput, AvgOut   float64
@@ -142,7 +149,7 @@ type Summary struct {
 
 // Summaries groups runs by agent, model, docs mode and cards.
 func (s *Store) Summaries() ([]Summary, error) {
-	rows, err := s.db.Query(`SELECT agent, model, docs, read_mode, cards,
+	rows, err := s.db.Query(`SELECT agent, model, docs, read_mode, read_order, cards,
 		SUM(error = ''), SUM(error = '' AND pass = 1),
 		COALESCE(AVG(CASE WHEN error = '' THEN input_tokens END), 0),
 		COALESCE(AVG(CASE WHEN error = '' THEN output_tokens END), 0),
@@ -150,7 +157,7 @@ func (s *Store) Summaries() ([]Summary, error) {
 		COALESCE(AVG(CASE WHEN error = '' THEN cost_usd END), 0),
 		SUM(error <> ''),
 		COALESCE(AVG(CASE WHEN error = '' THEN turns END), 0)
-		FROM runs GROUP BY agent, model, docs, read_mode, cards ORDER BY agent, model, docs, read_mode, cards`)
+		FROM runs GROUP BY agent, model, docs, read_mode, read_order, cards ORDER BY agent, model, docs, read_mode, read_order, cards`)
 	if err != nil {
 		return nil, err
 	}
@@ -159,11 +166,11 @@ func (s *Store) Summaries() ([]Summary, error) {
 	for rows.Next() {
 		var summary Summary
 		var cards int
-		if err := rows.Scan(&summary.Agent, &summary.Model, &summary.Docs, &summary.Read, &cards, &summary.Runs, &summary.Passes, &summary.AvgInput, &summary.AvgOut, &summary.AvgTotal, &summary.AvgCostUSD, &summary.Errors, &summary.AvgTurns); err != nil {
+		if err := rows.Scan(&summary.Agent, &summary.Model, &summary.Docs, &summary.Read, &summary.Order, &cards, &summary.Runs, &summary.Passes, &summary.AvgInput, &summary.AvgOut, &summary.AvgTotal, &summary.AvgCostUSD, &summary.Errors, &summary.AvgTurns); err != nil {
 			return nil, err
 		}
 		summary.Cards = cards == 1
-		helperRows, err := s.db.Query(`SELECT helper_usage FROM runs WHERE agent=? AND model=? AND docs=? AND read_mode=? AND cards=? AND error=''`, summary.Agent, summary.Model, summary.Docs, summary.Read, cards)
+		helperRows, err := s.db.Query(`SELECT helper_usage FROM runs WHERE agent=? AND model=? AND docs=? AND read_mode=? AND read_order=? AND cards=? AND error=''`, summary.Agent, summary.Model, summary.Docs, summary.Read, summary.Order, cards)
 		if err != nil {
 			return nil, err
 		}
@@ -207,7 +214,7 @@ func (s *Store) Summaries() ([]Summary, error) {
 
 // Recent returns the newest limit runs, newest first.
 func (s *Store) Recent(limit int) ([]Run, error) {
-	rows, err := s.db.Query(`SELECT id, ts, task, agent, model, docs, cards, pass, detail, input_tokens, output_tokens, cost_usd, duration_ms, response, error, read_mode, turns, total_tokens, session_id, main_call_tokens, helper_usage
+	rows, err := s.db.Query(`SELECT id, ts, task, agent, model, docs, cards, pass, detail, input_tokens, output_tokens, cost_usd, duration_ms, response, error, read_mode, turns, total_tokens, session_id, main_call_tokens, helper_usage, read_order, cached_input_tokens, cached_estimated
 		FROM runs ORDER BY id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
@@ -217,13 +224,19 @@ func (s *Store) Recent(limit int) ([]Run, error) {
 	for rows.Next() {
 		var r Run
 		var ts string
-		var cards, pass int
+		var cards, pass, estimated int
+		var cached sql.NullInt64
 		var calls, helpers string
-		if err := rows.Scan(&r.ID, &ts, &r.Task, &r.Agent, &r.Model, &r.Docs, &cards, &pass, &r.Detail, &r.InputTokens, &r.OutputTokens, &r.CostUSD, &r.DurationMS, &r.Response, &r.Error, &r.ReadMode, &r.Turns, &r.TotalTokens, &r.SessionID, &calls, &helpers); err != nil {
+		if err := rows.Scan(&r.ID, &ts, &r.Task, &r.Agent, &r.Model, &r.Docs, &cards, &pass, &r.Detail, &r.InputTokens, &r.OutputTokens, &r.CostUSD, &r.DurationMS, &r.Response, &r.Error, &r.ReadMode, &r.Turns, &r.TotalTokens, &r.SessionID, &calls, &helpers, &r.Order, &cached, &estimated); err != nil {
 			return nil, err
 		}
 		r.TS, _ = time.Parse(time.RFC3339, ts)
 		r.Cards, r.Pass = cards == 1, pass == 1
+		if cached.Valid {
+			v := int(cached.Int64)
+			r.CachedInputTokens = &v
+		}
+		r.CachedEstimated = estimated == 1
 		_ = json.Unmarshal([]byte(calls), &r.MainCallTokens)
 		_ = json.Unmarshal([]byte(helpers), &r.HelperUsage)
 		out = append(out, r)

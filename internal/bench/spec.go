@@ -21,6 +21,7 @@ type Task struct {
 	Info               string            `yaml:"info"`
 	Prompt             string            `yaml:"prompt"`
 	ReadPrompts        map[string]string `yaml:"read_prompts"`
+	ReadOrders         map[string]string `yaml:"read_orders"`
 	SupportedReadModes []string          `yaml:"supported_read_modes"`
 	Pattern            string            `yaml:"pattern"`
 	ForbidPattern      string            `yaml:"forbid_pattern"`
@@ -70,6 +71,11 @@ func ParseSpec(data []byte) (*Spec, error) {
 			}
 			if _, err := ParseRead(mode); err != nil {
 				return nil, fmt.Errorf("bench: task %q: %w", t.ID, err)
+			}
+		}
+		for order, sentence := range t.ReadOrders {
+			if order == "" || strings.TrimSpace(sentence) == "" {
+				return nil, fmt.Errorf("bench: task %q has invalid read order %q", t.ID, order)
 			}
 		}
 		for _, mode := range t.SupportedReadModes {
@@ -168,6 +174,12 @@ func (s *Spec) SelectFor(ids []string, cond Condition) ([]Task, error) {
 	var out []Task
 	for _, t := range all {
 		isReadTask := len(t.Fixtures) > 0
+		if cond.Order != "" && (t.ReadOrders == nil || t.ReadOrders[cond.Order] == "") {
+			if len(ids) > 0 {
+				return nil, fmt.Errorf("bench: task %q does not support read order %q", t.ID, cond.Order)
+			}
+			continue
+		}
 		if isReadTask && cond.Read != "" && len(t.SupportedReadModes) > 0 && !slices.Contains(t.SupportedReadModes, cond.Read) {
 			if len(ids) > 0 {
 				return nil, fmt.Errorf("bench: task %q does not support read mode %q", t.ID, cond.Read)
@@ -181,6 +193,30 @@ func (s *Spec) SelectFor(ids []string, cond Condition) ([]Task, error) {
 		}
 	}
 	return out, nil
+}
+
+// ParseOrderList parses comma-separated read-order variants.
+func ParseOrderList(value string) ([]string, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	var orders []string
+	seen := map[string]bool{}
+	for _, item := range strings.Split(value, ",") {
+		order := strings.TrimSpace(item)
+		if order == "" {
+			return nil, fmt.Errorf("bench: empty read order in --order list")
+		}
+		if order != "batch" && order != "sequential" {
+			return nil, fmt.Errorf("bench: unknown read order %q (expected batch or sequential)", order)
+		}
+		if seen[order] {
+			return nil, fmt.Errorf("bench: duplicate read order %q", order)
+		}
+		seen[order] = true
+		orders = append(orders, order)
+	}
+	return orders, nil
 }
 
 // Score checks a response against the task's patterns.
