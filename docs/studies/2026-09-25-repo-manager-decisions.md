@@ -14,3 +14,10 @@ host diff review and commit (lean-sprint rules).
 | 579 lite quota-1 init guidance | P2, clear doc/template bugs | Research, then fix sources |
 
 Order of developer work (one writer at a time): 579, 576, 577, 578.
+
+## Pitfall seen by the host
+
+`harnez agent wait --name res-576` fails with "accepts 1 arg(s), received 0": `wait` takes the
+session as a positional argument, although `--name` is shown as a global flag. The host's
+background wait loop hid the error and "finished" at once. Correct form:
+`harnez agent wait res-576 --timeout 30m`. Input for ticket 578 (discoverability).
