@@ -137,6 +137,10 @@ test:
 
 func TestRunInitWithVariant_LiteQuota1_ContentGuidance(t *testing.T) {
 	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/liteq1test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	cfg, err := claude.LoadConfigEmbedded()
 	if err != nil {
 		t.Fatalf("LoadConfigEmbedded failed: %v", err)
@@ -158,17 +162,18 @@ func TestRunInitWithVariant_LiteQuota1_ContentGuidance(t *testing.T) {
 	loop := read("docs/AgenticLoop.md")
 	spec := read("docs/Spec.md")
 	issues := read("docs/IssueTracking.md")
+	normalize := func(content string) string { return strings.Join(strings.Fields(content), " ") }
 
-	if !strings.Contains(agents, "Media & Demo Verification Gate") || strings.Contains(agents, "Invariant 10") {
+	if !strings.Contains(normalize(agents), "Media & Demo Verification Gate") || strings.Contains(normalize(agents), "Invariant 10") {
 		t.Errorf("AGENTS.md must refer to the media gate by name without a stale invariant number")
 	}
 	if !strings.Contains(loop, "7. **Media & Demo Verification Gate**") {
 		t.Errorf("lite AgenticLoop.md must include the numbered media gate")
 	}
-	if !strings.Contains(spec, "Harnez-specific example") || !strings.Contains(spec, "omit it when absent") {
+	if !strings.Contains(normalize(spec), "Harnez-specific non-UI example") || !strings.Contains(normalize(spec), "omit this example when absent") {
 		t.Errorf("Spec.md must label telemetry as an optional Harnez-specific example")
 	}
-	if !strings.Contains(issues, "`/goal` or a clear Goal statement and acceptance criteria") || !strings.Contains(issues, "new tickets only") || !strings.Contains(issues, "no backlog migration") {
+	if !strings.Contains(normalize(issues), "`/goal` or a clear Goal statement and acceptance criteria") || !strings.Contains(normalize(issues), "new tickets only") || !strings.Contains(normalize(issues), "no backlog migration") {
 		t.Errorf("IssueTracking.md must state accepted goal formats and new-ticket-only scope")
 	}
 }

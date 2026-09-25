@@ -527,8 +527,8 @@ agents_md:
           restating it here — in particular Invariant 1 (Parallel Read, Sequential Write:
           one writer per workspace), Invariant 3 (Zero Zombie Guarantee: track and terminate
           every background task and subagent), Invariant 6 (Context Discipline: no whole-file
-          reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads), and Invariant 10
-          (Media & Demo Verification Gate: explicit user confirmation before publishing
+          reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads), and the Media & Demo
+          Verification Gate (explicit user confirmation before publishing
           recordings or screenshots).
 
   # available language docs — always installed to ~/.claude/docs/ on apply
