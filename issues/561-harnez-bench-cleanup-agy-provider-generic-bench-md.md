@@ -51,3 +51,16 @@ meter (`~/.harnez/agymeter/usage.jsonl`, `harnez stats --session <id> --calls`).
 ## M1 delivered (ba735a8)
 
 Bench.md evergreen; dated results moved to docs/studies/2026-09-25-bench-read-conditions.md. Host review OK.
+
+## M2 delivered (54dd787)
+
+Provider table in internal/bench/agent.go, `--read card` added. Host: diff OK, make test-q1 green.
+
+### M3 Pre-Work / Required Refinements
+
+- `card` prompt in tasks.yaml lacks the "open each `See @<png>` with your image-capable file
+  reader and read the text from the image" instruction that `auto` has. Add it (shared wording).
+- An `agy` provider already exists (`agy -p ... --output-format json`, ParseAgy) but runs agy
+  unmetered. M3 = route that existing provider through agymeter (env via AgyLaunchEnv, session
+  id), and take tokens/turns from meter records; do not add a second agy provider. Say in the
+  report what ParseAgy reports today vs the meter and which wins.
