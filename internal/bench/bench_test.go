@@ -79,6 +79,7 @@ func TestReadLangSummaryScoringAndSavedSessions(t *testing.T) {
 	// Wordings from real passing-quality answers that earlier checks rejected.
 	for _, variant := range []string{
 		strings.Replace(good, "standard library", "stdlib first", 1),
+		strings.Replace(good, "standard library", "standard-library Go", 1),
 		strings.Replace(good, "help first", "`help` the default target", 1),
 		strings.Replace(good, "|---|---|", "| :--- | :--- |", 1),
 	} {

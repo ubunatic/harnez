@@ -125,7 +125,7 @@ tasks:
       - '\bBash\b'
       - '\bGit\b'
       - '\bMarkdown\b'
-      - 'standard librar|stdlib'
+      - 'standard[- ]librar|stdlib'
       - 'help.*(first|default)|(first|default).*help'
       - 'Cobra'
       - 'strict mode|set -euo|if test'
