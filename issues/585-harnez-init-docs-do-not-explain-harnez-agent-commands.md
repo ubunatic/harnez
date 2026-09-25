@@ -29,7 +29,21 @@ bundled doc referenced from it) that covers:
 - how they map to the `mcp__harnez__*` tools, and which one to prefer;
 - how this relates to the `harnez-advisor` and `reverse-sprinter` skills.
 
-## 3. Acceptance
+## 3. Technical Specification / Findings
+
+Ticket 578 already added a `Subagent Policy` block through `internal/agentpolicy`; it
+establishes preferring exposed Harnez MCP lifecycle tools and falling back to the CLI
+through Bash. The repo contains neither a `harnez-advisor` nor `reverse-sprinter`
+skill directory, so generated guidance will omit skill references. The compact
+managed subsection will link to the policy and give the six CLI forms explicitly.
+
+## 4. Implementation & Verification Plan
+
+Update the YAML source for the managed conventions and resync generated `AGENTS.md`
+with `harnez init -d .`. Verify the generated subsection remains short and contains
+the documented command forms.
+
+## 5. Acceptance
 
 A fresh session after `harnez init` can say how to spawn and wait for a harnez
 agent from the loaded instructions alone, without running `--help`.

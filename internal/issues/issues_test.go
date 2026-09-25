@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -516,6 +517,15 @@ func TestReserve_AtomicAndCollisionAvoidance(t *testing.T) {
 	title1, status1, has1 := ParseIssueFile(string(content1))
 	if !has1 || status1 != "Draft" || title1 != "001 — Reserved" {
 		t.Errorf("reserved file metadata mismatch: title=%q, status=%q, has=%v", title1, status1, has1)
+	}
+	for _, want := range []string{
+		"**Priority**: P2 (Medium)", "**Severity**: Minor", "**Category**: Bug",
+		"## 1. Problem & Motivation", "## 2. Technical Specification / Findings",
+		"## 3. Implementation & Verification Plan",
+	} {
+		if !strings.Contains(string(content1), want) {
+			t.Errorf("reserved ticket missing skeleton field %q:\n%s", want, content1)
+		}
 	}
 
 	// 2. Second reservation with custom title

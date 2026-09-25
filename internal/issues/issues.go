@@ -688,7 +688,24 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 			titleText = "Reserved"
 		}
 
-		content := fmt.Sprintf("# %s — %s\n\n**Status**: Draft\n\n---\n\nReserved placeholder ticket.\n", nextNum, titleText)
+		content := fmt.Sprintf(`# %s — %s
+
+**Status**: Draft
+**Priority**: P2 (Medium)
+**Severity**: Minor
+**Category**: Bug
+
+---
+
+## 1. Problem & Motivation
+Describe the problem and why it matters.
+
+## 2. Technical Specification / Findings
+Record relevant technical details and findings.
+
+## 3. Implementation & Verification Plan
+Describe the implementation and how it will be verified.
+`, nextNum, titleText)
 
 		targetPath := filepath.Join(issuesDir, baseName)
 		f, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)

@@ -36,7 +36,23 @@ In this session (harnez 585 and 586, created from voxi), the file
 sections. If the full template is meant to be written, check why it was not
 here, as a separate bug.
 
-## 4. Acceptance
+## 4. Technical Specification / Findings
+
+Confirmed in `internal/issues/issues.go`: `Reserve` writes only the title, Draft
+status, and placeholder sentence. Per `docs/IssueTracking.md`, the generated ticket
+must include Status, Priority, Severity, Category, and the numbered sections for
+Problem & Motivation, Technical Specification / Findings, and Implementation &
+Verification Plan. The reservation should choose editable defaults (P2, Minor, Bug)
+while preserving Draft status.
+
+## 5. Implementation & Verification Plan
+
+Change the reserve skeleton and add an assertion covering every required field and
+section. Update the managed YAML instructions to run `issues new` immediately,
+open and fill the printed file while preserving its schema, then index and commit.
+Resync generated `AGENTS.md` with `harnez init -d .`.
+
+## 6. Acceptance
 
 A fresh session after `harnez init` files an issue by running `issues new`
 and editing the created file, without searching for a template.
