@@ -1399,36 +1399,7 @@ func TestRunResumeBlocksPromptWhenCompactionIsUnverified(t *testing.T) {
 			}
 			sess := &subagent.Session{ID: "resume", ProviderSessionID: "provider", Name: "worker", Provider: "codex", Model: "model", Status: "completed", ContextTokens: 200}
 			if interactive {
-				listener, err := net.Listen("unix", filepath.Join(t.TempDir(), "control.sock"))
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer listener.Close()
-				sess.HarnessType, sess.Status, sess.ControlSocket = "interactive", "active", listener.Addr().String()
-				actions := make(chan string, 2)
-				go func() {
-					conn, err := listener.Accept()
-					if err != nil {
-						return
-					}
-					defer conn.Close()
-					var req struct {
-						Action string `json:"action"`
-					}
-					_ = json.NewDecoder(conn).Decode(&req)
-					actions <- req.Action
-					_ = json.NewEncoder(conn).Encode(map[string]string{"error": ""})
-				}()
-				defer func() {
-					select {
-					case action := <-actions:
-						if action != "compact" {
-							t.Errorf("interactive action = %q, want compact only", action)
-						}
-					case <-time.After(time.Second):
-						t.Error("interactive path sent no compact control")
-					}
-				}()
+				sess.HarnessType, sess.Status = "interactive", "active"
 			}
 			if err := store.Save(sess); err != nil {
 				t.Fatal(err)
@@ -1449,7 +1420,12 @@ func TestRunResumeBlocksPromptWhenCompactionIsUnverified(t *testing.T) {
 				},
 			}
 			err = runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "must not be sent", StreamMode: streamStats, JSON: true})
-			if err == nil || !strings.Contains(err.Error(), "refusing to send resume prompt") {
+			if interactive {
+				want := `session "worker" has 200 context tokens, over the limit 100 (setting agent.compact_threshold_tokens in ~/.harnez/config.yaml); an active interactive session cannot be compacted and verified from outside; next step: resume it non-interactively, or start a fresh session with harnez agent start`
+				if err == nil || err.Error() != want {
+					t.Fatalf("resume error = %v, want %q", err, want)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), "refusing to send resume prompt") {
 				t.Fatalf("resume error = %v, want unverified-compaction error", err)
 			}
 			if !interactive && driver.resumes != 0 {

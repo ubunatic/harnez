@@ -317,6 +317,9 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		return err
 	}
 	contextTokens := sess.LastContextTokens()
+	if interactive && contextTokens >= threshold {
+		return fmt.Errorf("session %q has %d context tokens, over the limit %d (setting agent.compact_threshold_tokens in ~/.harnez/config.yaml); an active interactive session cannot be compacted and verified from outside; next step: resume it non-interactively, or start a fresh session with harnez agent start", sess.Name, contextTokens, threshold)
+	}
 	compactFn := func() (*subagent.TurnResult, error) {
 		if interactive {
 			if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "compact", ""); err != nil {
