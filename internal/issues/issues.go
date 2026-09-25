@@ -694,6 +694,7 @@ func Reserve(issuesDir string, opts ReserveOptions) (num string, filename string
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
+**Related**:
 
 ---
 

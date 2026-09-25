@@ -519,7 +519,7 @@ func TestReserve_AtomicAndCollisionAvoidance(t *testing.T) {
 		t.Errorf("reserved file metadata mismatch: title=%q, status=%q, has=%v", title1, status1, has1)
 	}
 	for _, want := range []string{
-		"**Priority**: P2 (Medium)", "**Severity**: Minor", "**Category**: Bug",
+		"**Priority**: P2 (Medium)", "**Severity**: Minor", "**Category**: Bug", "**Related**:",
 		"## 1. Problem & Motivation", "## 2. Technical Specification / Findings",
 		"## 3. Implementation & Verification Plan",
 	} {
