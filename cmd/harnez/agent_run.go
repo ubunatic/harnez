@@ -231,7 +231,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	storeTurnQuota(s, id, m.Provider, turn, "before", before)
 	recordTurnQuota(s, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt, &subagent.TurnTokenUsage{NewInputTokens: r.InputTokens, CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens})
 	now := time.Now()
-	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}}}
+	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}}}
 	if req.SessionID != "" {
 		if current, getErr := s.Get(req.SessionID); getErr == nil {
 			sess.ProcessPID = current.ProcessPID
@@ -297,23 +297,17 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		return err
 	}
 	defer setAgentEnv(role, sess.Name)()
-	if sess.Status == "active" && sess.HarnessType == "interactive" {
-		if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "prompt", req.Prompt); err != nil {
-			return err
-		}
-		sess.LastActiveAt = time.Now()
-		if err := s.Save(sess); err != nil {
-			return err
-		}
-		return writeAgentOutput(cmd, req.JSON, agentOutput{Session: sess, Response: "prompt delivered"})
-	}
+	interactive := sess.Status == "active" && sess.HarnessType == "interactive"
 	if sess.HarnessType == "interactive" && sess.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)
 	}
-	driver := withAgyMeterSession(agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir), sess.ID)
-	if checker, ok := driver.(subagent.ResumeChecker); ok {
-		if resumable, reason := checker.CheckResumable(sess.ProviderID()); !resumable {
-			return fmt.Errorf("session %q cannot be resumed: %s; start a new session with: harnez agent start --name <new-name> ...", sess.Name, reason)
+	var driver subagent.Driver
+	if !interactive {
+		driver = withAgyMeterSession(agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir), sess.ID)
+		if checker, ok := driver.(subagent.ResumeChecker); ok {
+			if resumable, reason := checker.CheckResumable(sess.ProviderID()); !resumable {
+				return fmt.Errorf("session %q cannot be resumed: %s; start a new session with: harnez agent start --name <new-name> ...", sess.Name, reason)
+			}
 		}
 	}
 	tl := newTimeline(cmd)
@@ -322,18 +316,33 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if err != nil {
 		return err
 	}
-	if sess.TokensSinceCompact >= threshold {
-		beforeTokens := sess.TokensSinceCompact
-		var compactResult *subagent.TurnResult
-		if compactResult, err = driver.Compact(cmd.Context(), sess.ProviderID()); err != nil {
+	contextTokens := sess.LastContextTokens()
+	compactFn := func() (*subagent.TurnResult, error) {
+		if interactive {
+			if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "compact", ""); err != nil {
+				return nil, err
+			}
+			return nil, nil // interactive output has no verified completion/token signal
+		}
+		return driver.Compact(cmd.Context(), sess.ProviderID())
+	}
+	compacted, err = subagent.EnsureContextUnderThreshold(contextTokens, threshold, compactFn)
+	if err != nil {
+		return fmt.Errorf("refusing to send resume prompt: %w", err)
+	}
+	if compacted {
+		compactNote = fmt.Sprintf("verified /compact at %s context tokens", humanCount(contextTokens))
+		sess.TokensSinceCompact = 0
+	}
+	if interactive {
+		if err := subagent.SendControl(cmd.Context(), sess.ControlSocket, "prompt", req.Prompt); err != nil {
 			return err
 		}
-		if err = subagent.VerifyCompaction(beforeTokens, compactResult); err != nil {
-			return fmt.Errorf("refusing to send resume prompt: %w", err)
+		sess.LastActiveAt = time.Now()
+		if err := s.Save(sess); err != nil {
+			return err
 		}
-		compactNote = fmt.Sprintf("verified /compact at %s new tokens since the last compaction", humanCount(beforeTokens))
-		sess.TokensSinceCompact = 0
-		compacted = true
+		return writeAgentOutput(cmd, req.JSON, agentOutput{Session: sess, Response: "prompt delivered"})
 	}
 	var ts *turnStream
 	var r *subagent.TurnResult
@@ -377,6 +386,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	sess.TokensTurn = r.TokensTurn
 	sess.TokensCumulative += r.TokensTurn
 	sess.TokensSinceCompact += subagent.CompactionTokens(r)
+	sess.ContextTokens = r.ContextTokens
 	sess.CachedTokens = r.CachedTokens
 	sess.InputTokensTotal += r.InputTokens
 	sess.CachedTokensTotal += r.CachedTokens

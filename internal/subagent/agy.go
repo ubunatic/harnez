@@ -208,6 +208,7 @@ func parseAgy(data []byte) (*TurnResult, error) {
 		OutputTokens: v.Usage.Output + v.Usage.Think,
 		CachedTokens: v.Usage.Cache,
 	}
+	r.ContextTokens = r.InputTokens + r.CachedTokens
 	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens
 	r.TokensCumulative = r.TokensTurn
 	return r, nil

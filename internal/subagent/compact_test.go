@@ -38,14 +38,14 @@ func TestVerifyCompactionRequiresAckAndTokenDrop(t *testing.T) {
 		result  *TurnResult
 		wantErr string
 	}{
-		{name: "valid", result: &TurnResult{Response: "Compaction complete", InputTokens: 500}},
+		{name: "valid with cached input", result: &TurnResult{Response: "Compaction complete", InputTokens: 500, CachedTokens: 490, ContextTokens: 500}},
 		{name: "no acknowledgement", result: &TurnResult{InputTokens: 500}, wantErr: "acknowledgement"},
-		{name: "no token drop", result: &TurnResult{Response: "Compaction complete", InputTokens: 1000}, wantErr: "context drop"},
+		{name: "no token drop despite cache", result: &TurnResult{Response: "Compaction complete", InputTokens: 10, CachedTokens: 900, ContextTokens: 1200}, wantErr: "context drop"},
 		{name: "no token measurement", result: &TurnResult{Response: "Compaction complete"}, wantErr: "context drop"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := VerifyCompaction(1000, tc.result)
+			err := VerifyCompaction(1200, tc.result)
 			if tc.wantErr == "" && err != nil {
 				t.Fatal(err)
 			}
@@ -53,5 +53,21 @@ func TestVerifyCompactionRequiresAckAndTokenDrop(t *testing.T) {
 				t.Fatalf("error = %v, want %q", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+func TestEnsureContextUnderThreshold(t *testing.T) {
+	called := false
+	compact := func() (*TurnResult, error) {
+		called = true
+		return &TurnResult{Response: "Compaction complete", ContextTokens: 100}, nil
+	}
+	compacted, err := EnsureContextUnderThreshold(199, 200, compact)
+	if err != nil || compacted || called {
+		t.Fatalf("under threshold: compacted=%v called=%v err=%v", compacted, called, err)
+	}
+	compacted, err = EnsureContextUnderThreshold(200, 200, compact)
+	if err != nil || !compacted || !called {
+		t.Fatalf("at threshold: compacted=%v called=%v err=%v", compacted, called, err)
 	}
 }

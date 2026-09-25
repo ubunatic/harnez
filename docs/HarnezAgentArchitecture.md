@@ -80,12 +80,15 @@ Root prompt forms also provide `-p/--prompt`, repeatable `-f/--file`, `-c/--cont
 `--stream full|stats`, `--plan yes|no`, and `--json`. `--` sends following text
 literally. There are no legacy provider-first or positional-session forms.
 
-Automatic compaction reads `agent.compact_threshold_tokens` from the global
+A dispatch compares the provider's full input count from its most recent turn,
+including cached input, with the configured threshold. Automatic compaction reads
+`agent.compact_threshold_tokens` from the global
 `~/.harnez/config.yaml` (default `200000`). Optional
 `agent.compact_thresholds` entries override the value by provider,
 `provider:model`, or `provider:model:tier`. Harnez waits for compaction
 completion and requires an acknowledgement and a lower reported input-token
-count before sending a resume prompt.
+count before sending a resume prompt. Active interactive sessions with no
+completion and token signal are blocked from sending an over-threshold prompt.
 
 ### 2.11 MCP server for Codex
 

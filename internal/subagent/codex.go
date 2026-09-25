@@ -113,9 +113,20 @@ func (d CodexDriver) Compact(ctx context.Context, id string) (*TurnResult, error
 	s.Buffer(make([]byte, 4096), 8<<20)
 	for s.Scan() {
 		var e struct {
-			Type string `json:"type"`
+			Type    string `json:"type"`
+			Payload struct {
+				Type string `json:"type"`
+				Info struct {
+					LastTokenUsage struct {
+						Input int `json:"input_tokens"`
+					} `json:"last_token_usage"`
+				} `json:"info"`
+			} `json:"payload"`
 		}
 		_ = json.Unmarshal(s.Bytes(), &e)
+		if e.Payload.Type == "token_count" && e.Payload.Info.LastTokenUsage.Input > 0 {
+			p.r.ContextTokens = e.Payload.Info.LastTokenUsage.Input
+		}
 		if e.Type == "turn.completed" {
 			completed = true
 		}
@@ -178,7 +189,10 @@ type StreamingDriver interface {
 }
 
 // codexParser folds Codex JSONL lines into a TurnResult and live events.
-type codexParser struct{ r TurnResult }
+type codexParser struct {
+	r                 TurnResult
+	hasContextCounter bool
+}
 
 func (p *codexParser) feed(line []byte) (Event, bool) {
 	var e struct {
@@ -193,6 +207,14 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 				Cached int `json:"cached_input_tokens"`
 			} `json:"input_token_details"`
 		} `json:"usage"`
+		Payload struct {
+			Type string `json:"type"`
+			Info struct {
+				LastTokenUsage struct {
+					Input int `json:"input_tokens"`
+				} `json:"last_token_usage"`
+			} `json:"info"`
+		} `json:"payload"`
 	}
 	if json.Unmarshal(line, &e) != nil {
 		return Event{}, false
@@ -217,6 +239,13 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 		if e.Usage.Details.Cached > p.r.CachedTokens {
 			p.r.CachedTokens = e.Usage.Details.Cached
 		}
+		if !p.hasContextCounter {
+			p.r.ContextTokens = e.Usage.Input
+		}
+	}
+	if e.Payload.Type == "token_count" && e.Payload.Info.LastTokenUsage.Input > 0 {
+		p.r.ContextTokens = e.Payload.Info.LastTokenUsage.Input
+		p.hasContextCounter = true
 	}
 	return ev, true
 }

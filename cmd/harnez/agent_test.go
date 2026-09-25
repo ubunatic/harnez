@@ -484,7 +484,7 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 			_ = conn.Close()
 		}
 	}()
-	sess := &subagent.Session{ID: "active-id", ProviderSessionID: "provider-id", Name: "active", Provider: "claude", Model: "haiku", HarnessType: "interactive", Status: "active", ControlSocket: socket, ProcessPID: 123}
+	sess := &subagent.Session{ID: "active-id", ProviderSessionID: "provider-id", Name: "active", Provider: "claude", Model: "haiku", HarnessType: "interactive", Status: "active", ControlSocket: socket, ProcessPID: 123, ContextTokens: 100}
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
@@ -738,7 +738,7 @@ func saveResumeSession(t *testing.T, dir, id, name, provider string) *subagent.F
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(&subagent.Session{ID: id, Name: name, Provider: provider, Model: "model", Tier: "low", Status: "completed"}); err != nil {
+	if err := store.Save(&subagent.Session{ID: id, Name: name, Provider: provider, Model: "model", Tier: "low", Status: "completed", ContextTokens: 100}); err != nil {
 		t.Fatal(err)
 	}
 	return store
@@ -935,7 +935,7 @@ func TestAgentResumeAttributionAndContinue(t *testing.T) {
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
 	now := time.Now()
-	for _, sess := range []*subagent.Session{{ID: "one", Name: "one", Provider: "fake", Model: "model", WorkingDir: ".", Status: "completed", LastActiveAt: now.Add(-time.Hour)}, {ID: "two", Name: "two", Provider: "fake", Model: "model", WorkingDir: ".", Status: "completed", LastActiveAt: now}} {
+	for _, sess := range []*subagent.Session{{ID: "one", Name: "one", Provider: "fake", Model: "model", WorkingDir: ".", Status: "completed", ContextTokens: 100, LastActiveAt: now.Add(-time.Hour)}, {ID: "two", Name: "two", Provider: "fake", Model: "model", WorkingDir: ".", Status: "completed", ContextTokens: 100, LastActiveAt: now}} {
 		_ = store.Save(sess)
 	}
 	cmd := newAgentCmd()
@@ -967,7 +967,7 @@ func (d *recordingAgentDriver) Resume(context.Context, string, string, subagent.
 	return &subagent.TurnResult{}, nil
 }
 func (d *recordingAgentDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
-	return &subagent.TurnResult{Response: "Context compacted.", InputTokens: 1000}, nil
+	return &subagent.TurnResult{Response: "Context compacted.", InputTokens: 1000, ContextTokens: 1000}, nil
 }
 func (d *recordingAgentDriver) Stop(_ context.Context, id string) error {
 	d.stopped = append(d.stopped, id)
@@ -1151,7 +1151,7 @@ func TestAgentResumePrintsReplyNotStructDump(t *testing.T) {
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed"}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", ContextTokens: 100}); err != nil {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
@@ -1188,7 +1188,7 @@ func TestAgentResumeCompactsOnceAndSeparatesAck(t *testing.T) {
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensCumulative: 7000000, TokensSinceCompact: 250000}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensCumulative: 7000000, TokensSinceCompact: 250000, ContextTokens: 250000}); err != nil {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
@@ -1265,7 +1265,7 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 250000}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 250000, ContextTokens: 250000}); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
@@ -1277,7 +1277,7 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume resolved=name]\n[wait: ") || !strings.Contains(got, "[compact: verified /compact at 250.0k new tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
+	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume resolved=name]\n[wait: ") || !strings.Contains(got, "[compact: verified /compact at 250.0k context tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
 		t.Fatalf("stdout:\n%s", got)
 	}
 }
@@ -1351,7 +1351,7 @@ func TestStreamingResumeKeepsStderrQuiet(t *testing.T) {
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 250000}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 250000, ContextTokens: 250000}); err != nil {
 		t.Fatal(err)
 	}
 	var errOut bytes.Buffer
@@ -1364,6 +1364,98 @@ func TestStreamingResumeKeepsStderrQuiet(t *testing.T) {
 	}
 	if errOut.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty while streaming", errOut.String())
+	}
+}
+
+type unverifiedCompactDriver struct {
+	recordingAgentDriver
+	resumes int
+}
+
+func (d *unverifiedCompactDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
+	return &subagent.TurnResult{Response: "Context compacted.", ContextTokens: 200}, nil
+}
+
+func (d *unverifiedCompactDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
+	d.resumes++
+	return &subagent.TurnResult{Response: "should not be sent"}, nil
+}
+
+func TestRunResumeBlocksPromptWhenCompactionIsUnverified(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".harnez"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".harnez", "config.yaml"), []byte("agent:\n  compact_threshold_tokens: 100\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, interactive := range []bool{false, true} {
+		t.Run(map[bool]string{false: "batch", true: "interactive"}[interactive], func(t *testing.T) {
+			store, err := subagent.NewSessionStore(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			sess := &subagent.Session{ID: "resume", ProviderSessionID: "provider", Name: "worker", Provider: "codex", Model: "model", Status: "completed", ContextTokens: 200}
+			if interactive {
+				listener, err := net.Listen("unix", filepath.Join(t.TempDir(), "control.sock"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer listener.Close()
+				sess.HarnessType, sess.Status, sess.ControlSocket = "interactive", "active", listener.Addr().String()
+				actions := make(chan string, 2)
+				go func() {
+					conn, err := listener.Accept()
+					if err != nil {
+						return
+					}
+					defer conn.Close()
+					var req struct {
+						Action string `json:"action"`
+					}
+					_ = json.NewDecoder(conn).Decode(&req)
+					actions <- req.Action
+					_ = json.NewEncoder(conn).Encode(map[string]string{"error": ""})
+				}()
+				defer func() {
+					select {
+					case action := <-actions:
+						if action != "compact" {
+							t.Errorf("interactive action = %q, want compact only", action)
+						}
+					case <-time.After(time.Second):
+						t.Error("interactive path sent no compact control")
+					}
+				}()
+			}
+			if err := store.Save(sess); err != nil {
+				t.Fatal(err)
+			}
+			driver := &unverifiedCompactDriver{}
+			old := agentDriver
+			agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+			defer func() { agentDriver = old }()
+			cmd := &cobra.Command{}
+			cmd.SetContext(context.Background())
+			cmd.SetOut(new(bytes.Buffer))
+			cmd.SetErr(new(bytes.Buffer))
+			deps := agentDeps{
+				store:  func() (*subagent.FileSessionStore, error) { return store, nil },
+				parent: func() string { return "" },
+				find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+					return s.Find(id)
+				},
+			}
+			err = runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "must not be sent", StreamMode: streamStats, JSON: true})
+			if err == nil || !strings.Contains(err.Error(), "refusing to send resume prompt") {
+				t.Fatalf("resume error = %v, want unverified-compaction error", err)
+			}
+			if !interactive && driver.resumes != 0 {
+				t.Fatalf("resume prompt calls = %d, want none", driver.resumes)
+			}
+		})
 	}
 }
 
@@ -1396,7 +1488,7 @@ func (d *scriptDriver) play(fn subagent.EventFunc) *subagent.TurnResult {
 	if sid == "" {
 		sid = "thread-1"
 	}
-	return &subagent.TurnResult{SessionID: sid, Response: msgs[len(msgs)-1], Messages: msgs}
+	return &subagent.TurnResult{SessionID: sid, Response: msgs[len(msgs)-1], Messages: msgs, ContextTokens: 100}
 }
 func (d *scriptDriver) RunStream(_ context.Context, o subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
 	d.prompt = o.Prompt
@@ -1597,6 +1689,9 @@ func saveSessions(t *testing.T, storeDir string, sessions ...*subagent.Session) 
 		}
 		if s.WorkingDir == "" {
 			s.WorkingDir = "."
+		}
+		if s.ContextTokens == 0 {
+			s.ContextTokens = 100
 		}
 		if err := store.Save(s); err != nil {
 			t.Fatal(err)
@@ -1856,7 +1951,7 @@ func TestAgentTurnsWarnAboutQuota1Changes(t *testing.T) {
 			if mode == "start" {
 				err = runStart(cmd, deps, startRequest{Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna", Dir: repoDir, StreamMode: streamFull, JSON: true})
 			} else {
-				if err := store.Save(&subagent.Session{ID: "resume-id", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: repoDir, Status: "completed"}); err != nil {
+				if err := store.Save(&subagent.Session{ID: "resume-id", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: repoDir, Status: "completed", ContextTokens: 100}); err != nil {
 					t.Fatal(err)
 				}
 				deps.find = func(_ *cobra.Command, s *subagent.FileSessionStore, name string) (*subagent.Session, error) {
@@ -1892,7 +1987,7 @@ func TestRunResumeRecordsFreshQuotaPairAndAdvancesTurn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(&subagent.Session{ID: "resume-1", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: ".", Status: "completed", Turn: 4}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "resume-1", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: ".", Status: "completed", Turn: 4, ContextTokens: 100}); err != nil {
 		t.Fatal(err)
 	}
 	driver := &recordingAgentDriver{}
@@ -1952,7 +2047,7 @@ func TestRunResumeWithoutCobraFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(&subagent.Session{ID: "direct-resume", Name: "direct", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: ".", Status: "completed"}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "direct-resume", Name: "direct", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: ".", Status: "completed", ContextTokens: 100}); err != nil {
 		t.Fatal(err)
 	}
 	driver := &scriptDriver{steps: []step{{ev: msg("CONFIRM: resumed")}, {ev: msg("done")}}}
@@ -1983,7 +2078,7 @@ func TestRunResumePassesStoredAgyModelAndTier(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(&subagent.Session{ID: "agy-session", Name: "worker", Provider: "agy", Model: "flash37", Tier: "med", WorkingDir: workDir, Status: "completed"}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "agy-session", Name: "worker", Provider: "agy", Model: "flash37", Tier: "med", WorkingDir: workDir, Status: "completed", ContextTokens: 100}); err != nil {
 		t.Fatal(err)
 	}
 	var args []string

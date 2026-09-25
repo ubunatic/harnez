@@ -34,22 +34,24 @@ type Session struct {
 	CachedTokensTotal int    `json:"cached_tokens_total,omitempty"`
 	OutputTokensTotal int    `json:"output_tokens_total,omitempty"`
 	TokenTotalsKnown  bool   `json:"token_totals_known,omitempty"`
-	// TokensSinceCompact counts uncached tokens since the last compaction and
-	// drives ShouldCompact; TokensCumulative stays a lifetime telemetry total.
-	TokensSinceCompact int          `json:"tokens_since_compact,omitempty"`
-	TokensTurn         int          `json:"tokens_turn"`
-	CachedTokens       int          `json:"cached_tokens"`
-	CreatedAt          time.Time    `json:"created_at"`
-	LastActiveAt       time.Time    `json:"last_active_at"`
-	Role               string       `json:"role,omitempty"`
-	LastError          string       `json:"last_error,omitempty"`
-	Response           string       `json:"response,omitempty"`
-	Messages           []string     `json:"messages,omitempty"`
-	StdoutLog          string       `json:"stdout_log,omitempty"`
-	StderrLog          string       `json:"stderr_log,omitempty"`
-	ResumeFailures     int          `json:"resume_failures,omitempty"`
-	Turn               int          `json:"turn,omitempty"`
-	TurnRecords        []TurnRecord `json:"turn_records,omitempty"`
+	// TokensSinceCompact tracks accumulated new tokens for telemetry only.
+	TokensSinceCompact int `json:"tokens_since_compact,omitempty"`
+	// ContextTokens is the full input size of the last provider turn, including
+	// cached input; it is the source for pre-prompt compaction decisions.
+	ContextTokens  int          `json:"context_tokens,omitempty"`
+	TokensTurn     int          `json:"tokens_turn"`
+	CachedTokens   int          `json:"cached_tokens"`
+	CreatedAt      time.Time    `json:"created_at"`
+	LastActiveAt   time.Time    `json:"last_active_at"`
+	Role           string       `json:"role,omitempty"`
+	LastError      string       `json:"last_error,omitempty"`
+	Response       string       `json:"response,omitempty"`
+	Messages       []string     `json:"messages,omitempty"`
+	StdoutLog      string       `json:"stdout_log,omitempty"`
+	StderrLog      string       `json:"stderr_log,omitempty"`
+	ResumeFailures int          `json:"resume_failures,omitempty"`
+	Turn           int          `json:"turn,omitempty"`
+	TurnRecords    []TurnRecord `json:"turn_records,omitempty"`
 }
 
 // TurnRecord stores the usage and optional human rating for one provider turn.
@@ -69,6 +71,19 @@ func (s *Session) ProviderID() string {
 		return s.ProviderSessionID
 	}
 	return s.ID
+}
+
+// LastContextTokens reads the new full-context field or reconstructs it from
+// the most recent legacy turn record. Older records without either are unknown.
+func (s *Session) LastContextTokens() int {
+	if s.ContextTokens > 0 {
+		return s.ContextTokens
+	}
+	if n := len(s.TurnRecords); n > 0 {
+		r := s.TurnRecords[n-1]
+		return max(r.NewInputTokens+r.CachedInputTokens-r.OutputTokens, 0)
+	}
+	return 0
 }
 
 // Find resolves a session by registry ID or short name.
@@ -289,7 +304,8 @@ func CanManage(callerParentID string, target *Session) bool {
 	return false
 }
 
-// ShouldCompact returns true when tokens since the last compaction >= 100,000.
+// ShouldCompact is retained for legacy token-growth telemetry. Dispatch
+// decisions use LastContextTokens and EnsureContextUnderThreshold instead.
 func ShouldCompact(tokensSinceCompact int) bool {
 	return tokensSinceCompact >= 100000
 }

@@ -276,6 +276,7 @@ func TestUnsupportedDriverCapabilityError(t *testing.T) {
 func TestCodexDriver(t *testing.T) {
 	d := CodexDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
 		return []byte(`{"type":"thread.started","thread_id":"s1"}
+{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":13,"cached_input_tokens":3}}}}
 {"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":4,"cached_input_tokens":3}}
 {"type":"item.completed","item":{"type":"agent_message","text":"done"}}`), nil
 	}}
@@ -283,8 +284,15 @@ func TestCodexDriver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.SessionID != "s1" || r.Response != "done" || r.CachedTokens != 3 {
+	if r.SessionID != "s1" || r.Response != "done" || r.CachedTokens != 3 || r.ContextTokens != 13 {
 		t.Fatalf("unexpected result %#v", r)
+	}
+	called := false
+	if compacted, err := EnsureContextUnderThreshold(r.ContextTokens, 12, func() (*TurnResult, error) {
+		called = true
+		return &TurnResult{Response: "Context compacted.", ContextTokens: 1}, nil
+	}); err != nil || !compacted || !called {
+		t.Fatalf("cached input was not included in threshold decision: compacted=%v called=%v err=%v", compacted, called, err)
 	}
 }
 

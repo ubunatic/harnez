@@ -65,9 +65,29 @@ func VerifyCompaction(before int, result *TurnResult) error {
 	if !strings.Contains(strings.ToLower(ack), "compact") {
 		return fmt.Errorf("compaction completed without an acknowledgement")
 	}
-	after := max(result.InputTokens-result.CachedTokens, 0)
+	after := result.ContextTokens
 	if after <= 0 || after >= before {
-		return fmt.Errorf("compaction completed without a verified context drop (before %d, after %d uncached input tokens)", before, after)
+		return fmt.Errorf("compaction completed without a verified context drop (before %d, after %d full input tokens)", before, after)
 	}
 	return nil
+}
+
+// EnsureContextUnderThreshold compacts only when the provider-reported full
+// input size of the last turn exceeds the limit, and blocks dispatch unless
+// completion, acknowledgement and a lower full input size are verified.
+func EnsureContextUnderThreshold(contextTokens, threshold int, compact func() (*TurnResult, error)) (bool, error) {
+	if contextTokens <= 0 {
+		return false, fmt.Errorf("current context token count is unavailable; refusing to dispatch prompt")
+	}
+	if contextTokens < threshold {
+		return false, nil
+	}
+	result, err := compact()
+	if err != nil {
+		return false, err
+	}
+	if err := VerifyCompaction(contextTokens, result); err != nil {
+		return false, err
+	}
+	return true, nil
 }
