@@ -17,7 +17,10 @@ import (
 const Section = "Subagent Policy"
 
 const policyBody = `# subagent_mode: %s
-- Dispatch subagents through the configured harnez agent session when enabled.
+- native: spawn subagents of your own vendor natively. For another provider's model, or when
+  the user names a model (e.g. "ask luna:low"), run it through ` + "`harnez agent --model <spec> -p ...`" + `
+  (see ` + "`harnez agent models`" + `).
+- harnez: dispatch every subagent through ` + "`harnez agent`" + `.
 - Preserve the repository's instructions and report the provider and session used.`
 
 // State describes the effective policy and the files that contributed to it.
