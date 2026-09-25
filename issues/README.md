@@ -562,3 +562,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 561 | [561-harnez-bench-cleanup-agy-provider-generic-bench-md.md](561-harnez-bench-cleanup-agy-provider-generic-bench-md.md) | harnez bench cleanup, agy provider, generic Bench.md | Closed — M1-M3 delivered |
 | 562 | [562-harnez-bench-agy-main-vs-helper-model-split-read-benchmark.md](562-harnez-bench-agy-main-vs-helper-model-split-read-benchmark.md) | harnez bench: agy main vs helper model split, read benchmark | Open |
 | 563 | [563-meter-claude-and-codex-traffic-like-agy-proxy-incl-hidden-helper-calls.md](563-meter-claude-and-codex-traffic-like-agy-proxy-incl-hidden-helper-calls.md) | Meter claude and codex traffic like agy (proxy), incl. hidden helper calls | Open |
+| 564 | [564-capture-useful-session-status-line-usage-data.md](564-capture-useful-session-status-line-usage-data.md) | Capture Useful Session Status-Line Usage Data | Open |
