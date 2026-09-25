@@ -557,3 +557,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 556 | [556-show-basic-context-numbers-in-the-claude-status-line.md](556-show-basic-context-numbers-in-the-claude-status-line.md) | Show basic context numbers in the Claude status line | In Progress |
 | 557 | [557-clarify-agent-workflow-names-and-unsupported-commands-in-agent-docs.md](557-clarify-agent-workflow-names-and-unsupported-commands-in-agent-docs.md) | Clarify Agent Workflow Names and Unsupported Commands in Agent Docs | Open |
 | 558 | [558-agy-meter-run-shares-launch-env-with-agent-driver.md](558-agy-meter-run-shares-launch-env-with-agent-driver.md) | agy-meter-run shares launch env with agent driver | Closed — M1 delivered, single launch env |
+| 559 | [559-harnez-agy-meter-breaks-full-terminal-use-ctrl-g-editor.md](559-harnez-agy-meter-breaks-full-terminal-use-ctrl-g-editor.md) | harnez-agy --meter breaks full terminal use (Ctrl+G editor) | Open |
