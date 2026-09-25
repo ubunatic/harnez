@@ -63,6 +63,7 @@ code and the environment in all three tickets. Check:
 | About 20 agent tests fail only inside a worker | tests read `HARNEZ_AGENT_ROLE`/`HARNEZ_SESSION_ID` from the worker's environment | `TestMain` in `cmd/harnez` clears them; use `t.Setenv` |
 | Two `internal/quota1` tests fail for everyone | a worker's Quota-1 command created a junk `/tmp/.git`, which the temp-dir tests then resolve into | remove it; ticket 488 |
 | `make test-q1` "fails" in a worker | Quota-1 blocks a repeat run when no source changed | tell workers it is neither pass nor fail |
+| Worker never commits (570, 569) | It fixes after its one red run, so its final tree is untested | host runs the one q1 on that tree and commits if green |
 | Analyst finds no data | stale empty `~/.local/share/harnez/telemetry.db` | real DB is `~/.harnez/tool_catalog.sqlite` |
 | Agent report seems cut off | the host piped it through `cut -c1-N` | never truncate agent output when reading it |
 | Workers report the host's session id | they inherit `CLAUDE_CODE_SESSION_ID` and similar variables | parent lineage uses `HARNEZ_SESSION_ID`; telemetry gap in ticket 487 |

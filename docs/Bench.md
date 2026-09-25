@@ -43,6 +43,11 @@ claude:haiku:low         card     read-one-fact            PASS          850    
 Each matrix cell and repeat gets a fresh temporary workspace. Agy runs also receive a unique
 meter session. Tier flags are passed where the provider supports effort/reasoning tiers.
 
+Output: stdout holds only the final table. stderr gets a preamble per task and read mode (fixtures
+with line counts, the question, the task's `info:` line, and in `card` mode the rendered PNG path,
+size and pixels), then `[i/n] model read task ...` and a result line per run. `-q` silences stderr
+and skips the preamble. Card preamble temp dirs are kept on purpose so the PNGs can be opened.
+
 Read modes:
 
 - `native` lets the agent use its own file tools and line ranges.
@@ -87,3 +92,10 @@ Results are grouped by condition. Compare pass rate with token use, cost, and tu
 for sample size and task-level failures before drawing conclusions. The harness measures these
 tasks and conditions; it does not establish general model rankings. Historical measurements and
 their interpretations are recorded in the [benchmark study](studies/2026-09-25-bench-read-conditions.md).
+
+## Saved sessions as scoring corpus
+
+Real transcripts of hand runs live in `docs/data/codex-*.md` (Git LFS; the file name carries
+agent, task, read mode, model, result). Keyword checks are validated against them: the
+`read-lang-summary` test scores all six luna:med answers and skips when only LFS pointers are
+checked out. Save a new transcript there before tightening a task's `require_all`.
