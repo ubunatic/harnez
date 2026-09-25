@@ -38,3 +38,7 @@ Trace each generated statement to its managed source/template, correct the sourc
 ## Host decision (2026-09-25)
 
 The AGENTS.md template is shared by full and lite, so do not hard-code 7: refer to the gate by name (Media & Demo Verification Gate) without a number. Spec.md: mark `spec/telemetry.yaml` as a harnez example. IssueTracking.lite.md: use the full wording (`/goal` or clear Goal plus acceptance criteria), applies to new tickets only, no backlog migration. Add content assertions for lite init output. Sync root copies via `harnez init -d .`.
+
+## Verification in lmcoder (2026-09-25)
+
+The lmcoder session reran `harnez init --variant lite --quota-1` and confirmed all three fixes: AGENTS.md names the media gate without a number, Spec.md labels telemetry as a harnez example, and the /goal rule applies to new tickets only. No other diffs.
