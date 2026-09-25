@@ -1,6 +1,6 @@
 # 590 — Codex resume can replay prior task after queued compaction
 
-**Status**: Open
+**Status**: Closed — resume compacts as its own step and sends the prompt only after Codex confirms completion; unconfirmed -> clear error, prompt not sent (1c4a460, f4cd844); gated test; terra review PASS
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
