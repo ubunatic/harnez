@@ -1,6 +1,6 @@
 # 574 — Register harnez MCP server in AGY configuration
 
-**Status**: Open
+**Status**: Closed — harnez MCP server registered in AGY configuration and documented
 **Priority**: P2
 **Severity**: Minor
 **Category**: Feature
