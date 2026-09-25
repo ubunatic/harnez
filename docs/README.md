@@ -37,6 +37,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [Roadmap.md](Roadmap.md) | Working roadmap synthesized from the open issue backlog (consult before prioritizing new work; regenerate via `/roadmap`) |
 | [Telemetry.md](Telemetry.md) | Telemetry and evolution architecture: multi-agent usage tracking, quota history snapshotting, multi-track Git artifact evolution, and project token attribution, and the store (serialized migration, spec-defined SQL, `stats --quality`) (consult when modifying analytics or usage pipelines) |
 | [TUIDesign.md](TUIDesign.md) | Single-cell indicator semantics, panel visibility model invariants, and raw-mode hotkey contracts (consult when changing gauges, multi-panel layouts, or key dispatch) |
+| [Databases.md](Databases.md) | Every place harnez stores data: SQLite DBs, JSONL logs, state, caches, config, temp and leftovers | Read before touching or cleaning `~/.harnez` or adding a new store |
 | [Bench.md](Bench.md) | Optional `harnez bench` harness: specced agent tasks under lite/full docs and PNG cards, own DB | Read when benchmarking doc delivery across agents |
 | [Testing.md](Testing.md) | Test layers and verification entry points for package, integration, static, smoke, canary, and live checks |
 
