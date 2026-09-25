@@ -59,7 +59,10 @@ Short forms:
   harnez agent start --name w --model luna -f task.md -- "extra instructions"
   harnez agent resume --name w "next step"
   harnez agent --name w -p "/compact"
+  harnez agent --model luna:low --role advisor -p "how does X work?"
 
+Models: run "harnez agent models" for the known names. --model takes
+provider:name[:tier], a short alias (luna, opus) or alias:tier (luna:low).
 The model default comes from spec/agent.yaml. Sessions are chosen by --name,
 attribution in -d, or -c. Use -- to send text literally. Slash commands are
 /compact, /stop, and /status.`}
