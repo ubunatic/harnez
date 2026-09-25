@@ -26,4 +26,15 @@ Tokens are not the cost; plan quota (percentages with fractions, from `harnez us
 meter quota rows) is. Once helper calls are visible, analyse how much of the quota drain comes
 from the main session versus background helper calls, per provider.
 
+### Quota precision today (2026-09-25 check)
+
+- Claude: `GET /api/oauth/usage`, `five_hour.utilization` / `seven_day.utilization` (float64
+  type, observed values whole: 12 / 87). Display rounds to whole percent
+  (`internal/usage/indicatorsspec.go:619`).
+- Codex: `GET chatgpt.com/backend-api/wham/usage`, `primary_window.used_percent` /
+  `secondary_window.used_percent` (float64 type, observed 8.0 / 17.0; rollout files the same).
+- The servers send whole percents, so neither showing more decimals nor a proxy gives finer
+  quota for these two. Fine-grained cost needs token-based estimates or long runs that move a
+  whole percent.
+
 Parked until the read benchmark (562) is done.
