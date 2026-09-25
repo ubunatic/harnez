@@ -29,6 +29,16 @@ func TestParseIssueFile(t *testing.T) {
 			wantHas:    true,
 		},
 		{
+			name: "plain status header",
+			content: `# 043 — Plain Example
+
+Status: Open
+`,
+			wantTitle:  "043 — Plain Example",
+			wantStatus: "Open",
+			wantHas:    true,
+		},
+		{
 			name: "colon inside bold with comment",
 			content: `# 011 — autodetect nondeterministic order
 
@@ -597,6 +607,13 @@ func TestRewriteStatus(t *testing.T) {
 			content:     "# 042 — Example\n\n**Status**: Open\n**Priority**: P2 (Medium)\n**Related**: [[041-other-ticket]]\n",
 			newStatus:   "Closed — resolved",
 			wantContent: "# 042 — Example\n\n**Status**: Closed — resolved\n**Priority**: P2 (Medium)\n**Related**: [[041-other-ticket]]\n",
+			wantChanged: true,
+		},
+		{
+			name:        "plain status line preserves its form",
+			content:     "# 043 — Plain Example\n\nStatus: Open\nPriority: P2\n",
+			newStatus:   "Closed — resolved",
+			wantContent: "# 043 — Plain Example\n\nStatus: Closed — resolved\nPriority: P2\n",
 			wantChanged: true,
 		},
 		{

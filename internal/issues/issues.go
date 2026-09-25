@@ -73,7 +73,7 @@ type Report struct {
 
 var (
 	issueFileRegex        = regexp.MustCompile(`^(\d{3})-.*\.md$`)
-	statusLineRegex       = regexp.MustCompile(`(?i)^\s*[-*]?\s*\*\*status:?\*\*:?\s*(.+)$`)
+	statusLineRegex       = regexp.MustCompile(`(?i)^\s*[-*]?\s*(?:\*\*status:?\*\*|status):?\s*(.+)$`)
 	closedCommitOnlyRegex = regexp.MustCompile(`(?i)^(?:(?:in|resolved\s+in|fixed\s+in|completed\s+in|closed\s+in)\s+)?[\x60(]?[0-9a-f]{7,40}[\x60)]?[.,]?$`)
 	closedLifecycleRegex  = regexp.MustCompile(`(?i)^(closed|resolved|fixed|complete|completed|implemented|shipped)\b`)
 	// tableRowRegex splits a Markdown table row into its four cells. A cell
@@ -197,15 +197,15 @@ func ParseHeaderNumber(content string) string {
 	return ""
 }
 
-// RewriteStatus replaces the value portion of a ticket's "**Status**:" line
-// with newStatus, leaving every other line -- including the "**Status**:"
+// RewriteStatus replaces the value portion of a ticket's status line
+// with newStatus, leaving every other line -- including its "Status" label
 // label text itself, its original leading whitespace/list-bullet prefix,
 // and unrelated content such as `[[wikilink]]` references elsewhere in the
 // file -- byte-for-byte untouched. It shares statusLineRegex, the same
 // anchor ParseIssueFile uses to locate the line, so read and write agree on
 // exactly where the Status line is (issue 232). Returns the rewritten
 // content and whether it differs from content; an error is returned only
-// if no "**Status**:" line is found at all.
+// if no status line is found at all.
 func RewriteStatus(content, newStatus string) (string, bool, error) {
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
@@ -224,7 +224,7 @@ func RewriteStatus(content, newStatus string) (string, bool, error) {
 		lines[i] = newLine
 		return strings.Join(lines, "\n"), true, nil
 	}
-	return "", false, fmt.Errorf("no '**Status**:' line found")
+	return "", false, fmt.Errorf("no 'Status:' line found")
 }
 
 // RewriteHeaderNumber replaces the ticket number in the first H1 header line
