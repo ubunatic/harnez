@@ -129,7 +129,7 @@ func TestInvokeBuildsAgentCommands(t *testing.T) {
 	if _, err := Invoke(context.Background(), fake(codexJSONL), AgentCodex, "codex:luna:med", t.TempDir(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	if name != "codex" || !contains(args, "-m", "gpt-6-luna") || !contains(args, "model_reasoning_effort=medium") || args[0] != "exec" {
+	if name != "codex" || !contains(args, "-m", "gpt-6-luna") || !contains(args, "-c", "model_reasoning_effort=medium") || args[0] != "exec" {
 		t.Errorf("codex cmd = %s %v", name, args)
 	}
 	if _, err := Invoke(context.Background(), fake(agyJSON), AgentAgy, "agy:flash37:low", t.TempDir(), "hi"); err != nil {
