@@ -1,6 +1,6 @@
 # 579 — Fix inconsistencies in lite quota-1 init guidance
 
-**Status**: Open
+**Status**: Closed — lite guidance fixed: media gate named not numbered, telemetry spec labeled harnez example, /goal for new tickets only (591c70e, 299a08a)
 **Priority**: P2
 **Severity**: Moderate
 **Category**: Documentation
