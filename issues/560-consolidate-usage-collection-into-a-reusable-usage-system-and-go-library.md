@@ -131,7 +131,27 @@ Use the existing XDG state location as the canonical snapshot root for compatibi
 - Confirm no-controller usage still works; explicit controller startup works; optional systemd service works; stopping foreground owners and service leaves no collector or socket orphan.
 - Record which provider-local cache paths remain necessary and the condition for retiring old readers/writers. Do not remove legacy support without a demonstrated upgrade path.
 
-## 6. Risks and Open Questions
+## 6. Session Handoff (2026-09-25)
+
+### Delivered
+
+- M1 is implemented in commit `bf9e275` (`feat(usage): add public snapshot reader (issue 560)`). The standalone `usage` package provides versioned provider-neutral snapshot types and `ReadSnapshot`, including compatibility decoding for persisted legacy per-agent JSON.
+- Verification passed for the library alone: `go test -count=1 ./usage` and `go build ./usage`. The package is not imported by `cmd/harnez`; the current CLI, collector, and installed binary path were not changed for M1.
+- Claude session status-line observations are not part of this library yet. Follow-up issue 564 tracks capturing useful status-line data and should inform the public contract before M4 schema finalization.
+
+### Recommended sequence
+
+- Terra's read-only review recommends waiting until M2 and M3 are complete before integrating `harnez usage` one-shot, JSON, watch, and history paths (M4). M1 can support external read-only consumers of persisted snapshots, but it cannot start or share collection.
+- M2 must establish controller ownership/discovery and local IPC. M3 must put provider fetches and writes behind that owner, with cross-process check/fetch/write serialization, request coalescing, freshness/backoff, and foreground/service lifecycle rules. Do not run old and new collectors in parallel for comparison; if a CLI pilot is later approved, compare renderers against the same snapshot.
+- Before implementing M2, resolve the open runtime portability question (supported OSes and lock/socket mechanism), foreground owner/idle shutdown behavior, and the IPC contract for read, refresh, and subscription. Keep file-only snapshot reads available when runtime IPC is unavailable. Refresh requests must share the same rate-limit gate as direct one-shot collection.
+
+### Next work
+
+- Continue with M2 in the public `usage` package after those design choices are recorded. Keep the existing CLI and collector untouched until integration is explicitly planned; any proposal that changes their behavior or the `make install` output needs user review first.
+- Then implement M3's shared collection policy and safety tests before considering M4. Keep the 24/7 service opt-in.
+- No M2 code was started in the 2026-09-25 handoff session; its architecture questions remain open.
+
+## 7. Risks and Open Questions
 
 - **Runtime portability:** current flock implementation imports `syscall.Flock`; public-library consumers may use non-Linux platforms. Decide supported OSes and the lock/socket abstraction before making `Open` promise cross-platform controller startup. File-only reads should remain portable wherever possible.
 - **Foreground sharing lifetime:** choose an idle grace period and owner-exit behavior that lets concurrently launched apps share one controller without leaving it running forever. If robust process supervision cannot be implemented safely in-process, prefer explicit service start over detached spawning.
@@ -141,7 +161,7 @@ Use the existing XDG state location as the canonical snapshot root for compatibi
 - **Two candidate features overlap only partially:** 161's remote-load migration and optional Prometheus exposition are explicitly out of scope; coordinate controller ownership/lifecycle interfaces with it if either is implemented first. 152's CLI move is also independent; avoid coupling the public API to the top-level command name.
 - The API and IPC are durable compatibility surfaces. Keep the first contract small, version it before external adoption, and avoid promising arbitrary provider refresh/plugins in this milestone.
 
-## 7. References
+## 8. References
 
 - `internal/usage/usage.go:48-64, 86-166` — retry behavior, cache-first collection, current collectors.
 - `internal/usage/statecache.go:26-49, 77-180, 190-260` — XDG snapshots, freshness, atomic writes, lossy/offline protection, read fallback.
