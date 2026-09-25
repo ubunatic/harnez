@@ -1,6 +1,6 @@
 # 572 — Async subagent dispatch and harnez_wait_agent in harnez mcp and CLI
 
-**Status**: Open
+**Status**: Closed — Async subagent dispatch and harnez_wait_agent implemented and verified end-to-end with Codex
 **Priority**: P2
 **Severity**: Minor
 **Category**: Feature
