@@ -20,13 +20,12 @@ Provide a helper tool in the MCP server (`harnez_command`) and updated tool desc
     - Formats safe, shell-quoted `harnez agent <action> ...` invocation.
     - Returns `{ command: string, instruction: string }` explaining that running this command via the host's native `Bash` or `run_command` tool creates a visible background task in the chat UI with automatic completion wakeup.
     - Updated description on `harnez_spawn_agent` highlighting that `harnez_spawn_agent` runs directly inside MCP, whereas `harnez_command` prepares a command for shell-level background execution.
-- **M2 (Implementation & Tests)**:
-  - **Pre-Work / Implementation Details**:
-    - Add `harnez_command` tool schema and handler in `internal/mcp/server.go`.
-    - Update `harnez_spawn_agent` tool description.
-    - Add unit and protocol tests in `internal/mcp/server_test.go` verifying command formatting, argument escaping, and instruction output.
-    - Verify with `make test-q1` and `make install`.
+- **M2 (Implementation & Tests)**: Completed in commit `741b44c`.
+  - Implemented `harnez_command` in `internal/mcp/server.go`.
+  - Added robust POSIX shell argument quoting (`shellQuote`).
+  - Added unit/protocol tests covering all action mappings (`start`, `resume`, `wait`, `status`), escaping, validation, and JSON-RPC dispatch. Verified with `make test-q1` and `make install`.
 - **M3 (Verification & Documentation)**:
-  - Verify schema discovery and tool execution via MCP.
-  - Update `docs/HarnezAgentArchitecture.md`.
-  - Clean up test sessions, commit and close ticket.
+  - **Pre-Work / Implementation Details**:
+    - Update `docs/HarnezAgentArchitecture.md` documenting `harnez_command` and when to use it vs direct `harnez_spawn_agent`.
+    - Verify schema discovery and tool execution via MCP.
+    - Clean up developer session `dev-575-m1`, commit documentation, and close issue.
