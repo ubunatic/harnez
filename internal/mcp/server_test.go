@@ -36,7 +36,8 @@ func TestProtocolInitializeToolsAndNotifications(t *testing.T) {
 	var listing struct {
 		Result struct {
 			Tools []struct {
-				Name string `json:"name"`
+				Name        string         `json:"name"`
+				InputSchema map[string]any `json:"inputSchema"`
 			} `json:"tools"`
 		} `json:"result"`
 	}
@@ -50,6 +51,12 @@ func TestProtocolInitializeToolsAndNotifications(t *testing.T) {
 	for i, name := range want {
 		if listing.Result.Tools[i].Name != name {
 			t.Errorf("tool[%d] = %q, want %q", i, listing.Result.Tools[i].Name, name)
+		}
+		required, present := listing.Result.Tools[i].InputSchema["required"]
+		if present {
+			if _, ok := required.([]any); !ok {
+				t.Errorf("tool %q inputSchema.required has type %T, want JSON array", name, required)
+			}
 		}
 	}
 }

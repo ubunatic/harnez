@@ -44,21 +44,34 @@ type toolCall struct {
 	Arguments map[string]any `json:"arguments"`
 }
 
-var tools = []map[string]any{
-	{"name": "harnez_spawn_agent", "description": "Start a Harnez subagent through MCP and return its result and session record. Use async=true for a detached Harnez worker. For a host-visible background job with automatic reactive wakeups, use harnez_command and run its returned command with the host's Bash/run_command tool and backgrounding enabled.", "inputSchema": schema(map[string]any{"prompt": stringProp("Task prompt"), "model": stringProp("Optional provider:model[:tier] or model alias"), "role": stringProp("Optional role"), "dir": stringProp("Optional working directory"), "name": stringProp("Optional unique session name"), "async": map[string]string{"type": "boolean", "description": "Return immediately while the MCP-started agent runs detached"}}, "prompt")},
-	{"name": "harnez_command", "description": "Format a safely shell-quoted harnez agent command without executing it. Run the returned command with the host agent's Bash/run_command tool and backgrounding enabled to create a visible UI background task with automatic reactive wakeups. Use harnez_spawn_agent to start and manage the agent directly through MCP.", "inputSchema": schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"start", "resume", "wait", "status"}, "description": "Agent lifecycle action"}, "prompt": stringProp("Required for start and resume"), "model": stringProp("Optional provider:model[:tier] for start or resume"), "role": stringProp("Optional role for start or resume"), "dir": stringProp("Optional working directory"), "name": stringProp("Session name for start; may identify the session for resume, wait, or status"), "session_id": stringProp("Session ID or name for resume, wait, or status"), "stream": map[string]any{"type": "string", "enum": []string{"full", "stats"}, "description": "Output stream mode for start or resume (default: stats)"}}, "action")},
-	{"name": "harnez_wait_agent", "description": "Wait for an agent session and return its terminal result.", "inputSchema": schema(map[string]any{"session_id": stringProp("Session ID or name"), "timeout_seconds": map[string]string{"type": "integer", "description": "Maximum wait in seconds; omit to wait indefinitely"}}, "session_id")},
-	{"name": "harnez_list_agents", "description": "List agent sessions visible to the caller.", "inputSchema": schema(map[string]any{"dir": stringProp("Optional working directory filter")})},
-	{"name": "harnez_agent_status", "description": "Get the status record for a session in the caller's lineage.", "inputSchema": schema(map[string]any{"session_id": stringProp("Session ID or name")}, "session_id")},
-	{"name": "harnez_resume_agent", "description": "Resume a session in the caller's lineage with a prompt.", "inputSchema": schema(map[string]any{"session_id": stringProp("Session ID or name"), "prompt": stringProp("Prompt for the next turn")}, "session_id", "prompt")},
-	{"name": "harnez_stop_agent", "description": "Stop a session in the caller's lineage.", "inputSchema": schema(map[string]any{"session_id": stringProp("Session ID or name")}, "session_id")},
+type inputSchema struct {
+	Type                 string         `json:"type"`
+	Properties           map[string]any `json:"properties"`
+	Required             []string       `json:"required,omitempty"`
+	AdditionalProperties bool           `json:"additionalProperties"`
+}
+
+type toolDefinition struct {
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	InputSchema inputSchema `json:"inputSchema"`
+}
+
+var tools = []toolDefinition{
+	{"harnez_spawn_agent", "Start a Harnez subagent through MCP and return its result and session record. Use async=true for a detached Harnez worker. For a host-visible background job with automatic reactive wakeups, use harnez_command and run its returned command with the host's Bash/run_command tool and backgrounding enabled.", schema(map[string]any{"prompt": stringProp("Task prompt"), "model": stringProp("Optional provider:model[:tier] or model alias"), "role": stringProp("Optional role"), "dir": stringProp("Optional working directory"), "name": stringProp("Optional unique session name"), "async": map[string]string{"type": "boolean", "description": "Return immediately while the MCP-started agent runs detached"}}, "prompt")},
+	{"harnez_command", "Format a safely shell-quoted harnez agent command without executing it. Run the returned command with the host agent's Bash/run_command tool and backgrounding enabled to create a visible UI background task with automatic reactive wakeups. Use harnez_spawn_agent to start and manage the agent directly through MCP.", schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"start", "resume", "wait", "status"}, "description": "Agent lifecycle action"}, "prompt": stringProp("Required for start and resume"), "model": stringProp("Optional provider:model[:tier] for start or resume"), "role": stringProp("Optional role for start or resume"), "dir": stringProp("Optional working directory"), "name": stringProp("Session name for start; may identify the session for resume, wait, or status"), "session_id": stringProp("Session ID or name for resume, wait, or status"), "stream": map[string]any{"type": "string", "enum": []string{"full", "stats"}, "description": "Output stream mode for start or resume (default: stats)"}}, "action")},
+	{"harnez_wait_agent", "Wait for an agent session and return its terminal result.", schema(map[string]any{"session_id": stringProp("Session ID or name"), "timeout_seconds": map[string]string{"type": "integer", "description": "Maximum wait in seconds; omit to wait indefinitely"}}, "session_id")},
+	{"harnez_list_agents", "List agent sessions visible to the caller.", schema(map[string]any{"dir": stringProp("Optional working directory filter")})},
+	{"harnez_agent_status", "Get the status record for a session in the caller's lineage.", schema(map[string]any{"session_id": stringProp("Session ID or name")}, "session_id")},
+	{"harnez_resume_agent", "Resume a session in the caller's lineage with a prompt.", schema(map[string]any{"session_id": stringProp("Session ID or name"), "prompt": stringProp("Prompt for the next turn")}, "session_id", "prompt")},
+	{"harnez_stop_agent", "Stop a session in the caller's lineage.", schema(map[string]any{"session_id": stringProp("Session ID or name")}, "session_id")},
 }
 
 func stringProp(description string) map[string]string {
 	return map[string]string{"type": "string", "description": description}
 }
-func schema(props map[string]any, required ...string) map[string]any {
-	return map[string]any{"type": "object", "properties": props, "required": required, "additionalProperties": false}
+func schema(props map[string]any, required ...string) inputSchema {
+	return inputSchema{Type: "object", Properties: props, Required: required, AdditionalProperties: false}
 }
 
 // Run reads and writes newline-delimited JSON-RPC messages until EOF or cancellation.
