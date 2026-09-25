@@ -101,6 +101,8 @@ models:
     skills: Go~ TUI~ SQL~
     use: fast bounded implementation or review with clear checks
   agy:flash38:
+    aliases: [flash38, flash38:low]
+    preferred: true
     provider: agy
     name: gemini-3.8-flash
     tier: low

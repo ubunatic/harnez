@@ -185,9 +185,20 @@ func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 	clean := strings.ToLower(strings.TrimSpace(spec))
 	if strings.Contains(clean, ":") {
 		parts := strings.Split(clean, ":")
-		if len(parts) <= 2 {
-			if m, ok := aliases[clean]; ok {
-				return m.Model, nil
+		if len(parts) == 2 {
+			if entry, ok := aliases[clean]; ok {
+				m := entry.Model
+				m.Tier = parts[1]
+				return m, nil
+			}
+			if len(parts) == 2 && parts[1] != "" {
+				for _, candidate := range aliases {
+					if modelHasAlias(candidate, parts[0]+":"+parts[1]) {
+						m := candidate.Model
+						m.Tier = parts[1]
+						return m, nil
+					}
+				}
 			}
 		}
 	}
@@ -204,7 +215,7 @@ func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 		}
 		if count > 1 {
 			for _, candidate := range aliases {
-				if modelHasAlias(candidate, clean) && candidate.Preferred {
+				if candidate.Preferred && modelHasAlias(candidate, clean) {
 					return candidate.Model, nil
 				}
 			}
@@ -216,6 +227,18 @@ func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 		return Model{}, fmt.Errorf("invalid model %q: expected provider:model[:tier]; known specs: %s", spec, knownModelSpecs())
 	}
 	entry, ok := aliases[parts[0]+":"+parts[1]]
+	if !ok {
+		for _, candidate := range aliases {
+			if candidate.Model.Name == parts[1] || modelHasAlias(candidate, parts[1]) {
+				if entry.Model.Provider != "" {
+					entry = modelAlias{}
+					break
+				}
+				entry = candidate
+			}
+		}
+		ok = entry.Model.Provider != ""
+	}
 	if !ok && len(parts) == 2 {
 		for _, candidate := range aliases {
 			if modelHasAlias(candidate, parts[0]) {

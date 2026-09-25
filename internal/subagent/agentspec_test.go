@@ -61,11 +61,15 @@ func TestCodexSolAndLunaResolveToGPT6(t *testing.T) {
 }
 
 func TestResolveModelBareSonnetOpusAmbiguous(t *testing.T) {
-	// claude:sonnet/claude:opus and agy:sonnet/agy:opus share the same bare
-	// alias, so it must require the provider prefix.
-	for _, alias := range []string{"sonnet", "opus"} {
-		if _, err := ResolveModel(alias); err == nil {
-			t.Errorf("alias %q: expected ambiguity error, got none", alias)
+	// The spec selects the Claude model as preferred when provider aliases collide.
+	for alias, want := range map[string]string{"sonnet": "claude:sonnet", "opus": "claude:opus"} {
+		model, err := ResolveModel(alias)
+		if err != nil {
+			t.Errorf("alias %q: %v", alias, err)
+			continue
+		}
+		if got := model.Provider + ":" + model.Name; got != want {
+			t.Errorf("alias %q resolved to %q, want %q", alias, got, want)
 		}
 	}
 	for _, spec := range []string{"claude:sonnet", "claude:opus", "agy:sonnet", "agy:opus"} {
