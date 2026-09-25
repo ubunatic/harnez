@@ -43,6 +43,10 @@ type Session struct {
 	LastActiveAt       time.Time    `json:"last_active_at"`
 	Role               string       `json:"role,omitempty"`
 	LastError          string       `json:"last_error,omitempty"`
+	Response           string       `json:"response,omitempty"`
+	Messages           []string     `json:"messages,omitempty"`
+	StdoutLog          string       `json:"stdout_log,omitempty"`
+	StderrLog          string       `json:"stderr_log,omitempty"`
 	ResumeFailures     int          `json:"resume_failures,omitempty"`
 	Turn               int          `json:"turn,omitempty"`
 	TurnRecords        []TurnRecord `json:"turn_records,omitempty"`

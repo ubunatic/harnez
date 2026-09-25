@@ -89,6 +89,7 @@ func warnQuota1Changes(cmd *cobra.Command, dir string, turnStarted time.Time) {
 type startRequest struct {
 	Prompt, StoredPrompt, Name, ModelSpec, Dir, StreamMode, Role string
 	JSON, PlanFirst                                              bool
+	SessionID                                                    string
 }
 
 // resumeRequest describes one turn on an existing session: chosen by Name,
@@ -148,7 +149,10 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	if err != nil {
 		return err
 	}
-	id := uuid.NewString()
+	id := req.SessionID
+	if id == "" {
+		id = uuid.NewString()
+	}
 	sessName := req.Name
 	if sessName == "" {
 		sessions, listErr := s.List("", true)
@@ -165,7 +169,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 			return err
 		}
 	}
-	if req.Name != "" {
+	if req.Name != "" && req.SessionID == "" {
 		if existing, findErr := resolveSession(s, req.Name, ""); findErr == nil {
 			return fmt.Errorf("session name %q is already in use by %s in %s", req.Name, existing.ID, existing.WorkingDir)
 		}
@@ -218,7 +222,8 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		recordTurnQuota(s, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt, nil)
 		return fmt.Errorf("agent start %q failed: %w; verify the provider/model configuration or ask for guidance", spec, err)
 	}
-	if r.SessionID != "" {
+	providerSessionID := r.SessionID
+	if r.SessionID != "" && req.SessionID == "" {
 		id = r.SessionID
 	}
 	before := <-beforeCapture
@@ -226,7 +231,16 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	storeTurnQuota(s, id, m.Provider, turn, "before", before)
 	recordTurnQuota(s, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt, &subagent.TurnTokenUsage{NewInputTokens: r.InputTokens, CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens})
 	now := time.Now()
-	sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}}}
+	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}}}
+	if req.SessionID != "" {
+		if current, getErr := s.Get(req.SessionID); getErr == nil {
+			sess.ProcessPID = current.ProcessPID
+			sess.StdoutLog = current.StdoutLog
+			sess.StderrLog = current.StderrLog
+			sess.CallerPID = current.CallerPID
+			sess.CreatedAt = current.CreatedAt
+		}
+	}
 	if err := s.Save(sess); err != nil {
 		return err
 	}

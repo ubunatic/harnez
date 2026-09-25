@@ -43,7 +43,7 @@ func TestProtocolInitializeToolsAndNotifications(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[1]), &listing); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"harnez_spawn_agent", "harnez_list_agents", "harnez_agent_status", "harnez_resume_agent", "harnez_stop_agent"}
+	want := []string{"harnez_spawn_agent", "harnez_wait_agent", "harnez_list_agents", "harnez_agent_status", "harnez_resume_agent", "harnez_stop_agent"}
 	if len(listing.Result.Tools) != len(want) {
 		t.Fatalf("tools = %#v", listing.Result.Tools)
 	}
@@ -51,6 +51,25 @@ func TestProtocolInitializeToolsAndNotifications(t *testing.T) {
 		if listing.Result.Tools[i].Name != name {
 			t.Errorf("tool[%d] = %q, want %q", i, listing.Result.Tools[i].Name, name)
 		}
+	}
+}
+
+func TestAsyncSpawnAndWaitToolArguments(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "harnez")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf '%s\\n' \"$*\"\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	server := Server{Command: path}
+	got, err := server.call(context.Background(), toolCall{Name: "harnez_spawn_agent", Arguments: map[string]any{"prompt": "inspect", "async": true}})
+	if err != nil || !strings.Contains(got.(map[string]string)["result"], "--detach") {
+		t.Fatalf("async spawn = %#v, %v", got, err)
+	}
+	got, err = server.call(context.Background(), toolCall{Name: "harnez_wait_agent", Arguments: map[string]any{"session_id": "session-1", "timeout_seconds": 2.0}})
+	if err != nil || got.(map[string]string)["result"] != "agent wait --json session-1 --timeout 2s" {
+		t.Fatalf("wait tool = %#v, %v", got, err)
+	}
+	if _, err := server.call(context.Background(), toolCall{Name: "harnez_spawn_agent", Arguments: map[string]any{"prompt": "x", "async": "yes"}}); err == nil {
+		t.Fatal("non-boolean async accepted")
 	}
 }
 

@@ -27,7 +27,7 @@ func TestAgentCommandSurface(t *testing.T) {
 	if len(c.Commands()) == 0 {
 		t.Fatal("agent command has no children")
 	}
-	for _, name := range []string{"start", "models", "chat", "resume", "list", "status", "compact", "stop", "delete", "enable", "disable"} {
+	for _, name := range []string{"start", "models", "chat", "resume", "list", "status", "wait", "compact", "stop", "delete", "enable", "disable"} {
 		found := false
 		for _, child := range c.Commands() {
 			if child.Name() == name {
@@ -38,6 +38,110 @@ func TestAgentCommandSurface(t *testing.T) {
 			t.Errorf("missing agent subcommand %q", name)
 		}
 	}
+}
+
+func TestAgentWaitTimeoutAndCompletion(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &subagent.Session{ID: "wait-session", Name: "worker", Status: "running", HarnessType: "harnez", ProcessPID: os.Getpid()}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newAgentCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--store-dir", storeDir, "wait", "--timeout", "20ms", "--json", "wait-session"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"status":"running"`) {
+		t.Fatalf("timeout output = %s", out.String())
+	}
+	sess.Status = "completed"
+	sess.Response = "finished"
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	cmd = newAgentCmd()
+	out.Reset()
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--store-dir", storeDir, "wait", "--timeout", "1s", "--json", "wait-session"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"response":"finished"`) {
+		t.Fatalf("completion output = %s", out.String())
+	}
+}
+
+func TestAgentDetachedSpawnAndWait(t *testing.T) {
+	storeDir := t.TempDir()
+	helperBinary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	launcher := filepath.Join(t.TempDir(), "worker-launcher")
+	script := "#!/bin/sh\nstore=''\nid=''\nwhile test $# -gt 0; do\n case \"$1\" in\n --store-dir) store=$2; shift 2 ;;\n --worker-session) id=$2; shift 2 ;;\n *) shift ;;\n esac\ndone\nHARNEZ_TEST_WORKER_STORE=$store HARNEZ_TEST_WORKER_ID=$id HARNEZ_TEST_BINARY='" + helperBinary + "' exec '" + helperBinary + "' -test.run=TestDetachedLaunchHelper\n"
+	if err := os.WriteFile(launcher, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	old := agentExecutable
+	agentExecutable = func() (string, error) { return launcher, nil }
+	defer func() { agentExecutable = old }()
+	cmd := newAgentCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	err = launchDetached(cmd, startRequest{Name: "async-worker", Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna:low", Dir: t.TempDir(), JSON: true}, storeDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created subagent.Session
+	if err := json.Unmarshal(out.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Status != "running" || created.ProcessPID == 0 || created.StdoutLog == "" || created.StderrLog == "" {
+		t.Fatalf("created session = %#v", created)
+	}
+	store, _ := subagent.NewSessionStore(storeDir)
+	finished, err := waitForAgent(context.Background(), store, created.ID, 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finished.Status != "completed" || finished.Response != "helper done" {
+		t.Fatalf("finished session = %#v", finished)
+	}
+}
+
+func TestDetachedLaunchHelper(t *testing.T) {
+	storeDir, id := os.Getenv("HARNEZ_TEST_WORKER_STORE"), os.Getenv("HARNEZ_TEST_WORKER_ID")
+	if storeDir == "" || id == "" {
+		t.Skip("subprocess helper")
+	}
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 100; i++ {
+		sess, err := store.Get(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sess.ProcessPID == os.Getpid() {
+			sess.Status = "completed"
+			sess.ProcessPID = 0
+			sess.Response = "helper done"
+			if err := store.Save(sess); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("parent did not register worker PID")
 }
 
 func TestMCPCommandRegistered(t *testing.T) {

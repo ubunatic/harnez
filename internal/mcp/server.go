@@ -45,7 +45,8 @@ type toolCall struct {
 }
 
 var tools = []map[string]any{
-	{"name": "harnez_spawn_agent", "description": "Start a Harnez subagent and return its result and session record.", "inputSchema": schema(map[string]any{"prompt": stringProp("Task prompt"), "model": stringProp("Optional provider:model[:tier] or model alias"), "role": stringProp("Optional role"), "dir": stringProp("Optional working directory"), "name": stringProp("Optional unique session name")}, "prompt")},
+	{"name": "harnez_spawn_agent", "description": "Start a Harnez subagent and return its result and session record.", "inputSchema": schema(map[string]any{"prompt": stringProp("Task prompt"), "model": stringProp("Optional provider:model[:tier] or model alias"), "role": stringProp("Optional role"), "dir": stringProp("Optional working directory"), "name": stringProp("Optional unique session name"), "async": map[string]string{"type": "boolean", "description": "Return immediately while the agent runs"}}, "prompt")},
+	{"name": "harnez_wait_agent", "description": "Wait for an agent session and return its terminal result.", "inputSchema": schema(map[string]any{"session_id": stringProp("Session ID or name"), "timeout_seconds": map[string]string{"type": "integer", "description": "Maximum wait in seconds; omit to wait indefinitely"}}, "session_id")},
 	{"name": "harnez_list_agents", "description": "List agent sessions visible to the caller.", "inputSchema": schema(map[string]any{"dir": stringProp("Optional working directory filter")})},
 	{"name": "harnez_agent_status", "description": "Get the status record for a session in the caller's lineage.", "inputSchema": schema(map[string]any{"session_id": stringProp("Session ID or name")}, "session_id")},
 	{"name": "harnez_resume_agent", "description": "Resume a session in the caller's lineage with a prompt.", "inputSchema": schema(map[string]any{"session_id": stringProp("Session ID or name"), "prompt": stringProp("Prompt for the next turn")}, "session_id", "prompt")},
@@ -167,6 +168,15 @@ func (s Server) call(ctx context.Context, c toolCall) (any, error) {
 			return nil, e
 		}
 		base = append(base, "start", "--json", "--stream", "stats")
+		if raw, exists := a["async"]; exists {
+			async, ok := raw.(bool)
+			if !ok {
+				return nil, fmt.Errorf("async must be a boolean")
+			}
+			if async {
+				base = append(base, "--detach")
+			}
+		}
 		for _, key := range []string{"model", "role", "dir", "name"} {
 			v, _ := arg(key, false)
 			if v != "" {
@@ -175,6 +185,19 @@ func (s Server) call(ctx context.Context, c toolCall) (any, error) {
 			}
 		}
 		base = append(base, "--", prompt)
+	case "harnez_wait_agent":
+		id, e := arg("session_id", true)
+		if e != nil {
+			return nil, e
+		}
+		base = append(base, "wait", "--json", id)
+		if raw, exists := a["timeout_seconds"]; exists {
+			n, ok := raw.(float64)
+			if !ok || n < 0 || n != float64(int64(n)) {
+				return nil, fmt.Errorf("timeout_seconds must be a non-negative integer")
+			}
+			base = append(base, "--timeout", fmt.Sprintf("%ds", int64(n)))
+		}
 	case "harnez_list_agents":
 		base = append(base, "list", "--json")
 		if d, _ := arg("dir", false); d != "" {

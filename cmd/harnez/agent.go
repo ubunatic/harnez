@@ -42,7 +42,8 @@ type agentOutput struct {
 }
 
 func newAgentCmd() *cobra.Command {
-	var jsonOut, children, all bool
+	var jsonOut, children, all, detach bool
+	var workerID string
 	var storeDir, workDir, name, modelSpec, streamMode, roleSpec string
 	var planSpec string
 	var rootPrompt string
@@ -231,10 +232,20 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 		if err != nil {
 			return err
 		}
-		return runStart(cmd, agentDeps{store: store, parent: parent, find: find}, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+		req := startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, SessionID: workerID}
+		if workerID != "" {
+			return runDetachedWorker(cmd, req, storeDir)
+		}
+		if detach {
+			return launchDetached(cmd, req, storeDir, parent())
+		}
+		return runStart(cmd, agentDeps{store: store, parent: parent, find: find}, req)
 	}}
 	start.Flags().StringSliceVarP(&startFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	start.Flags().BoolVar(&detach, "detach", false, "run the agent in the background")
+	start.Flags().BoolVar(&detach, "async", false, "alias for --detach")
+	start.Flags().StringVar(&workerID, "worker-session", "", "internal detached worker session ID")
 	start.Flags().StringVar(&planSpec, "plan", "no", "planning gate: yes or no")
 	_ = start.RegisterFlagCompletionFunc("plan", flagValueCompletion("yes", "no"))
 	_ = start.RegisterFlagCompletionFunc("stream", flagValueCompletion(streamFull, streamStats))
@@ -498,6 +509,27 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 	}}
 	status.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	status.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	var waitTimeout time.Duration
+	wait := &cobra.Command{Use: "wait <session>", Short: "Wait for an agent session to finish", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		s, err := store()
+		if err != nil {
+			return err
+		}
+		sess, err := waitForAgent(cmd.Context(), s, args[0], waitTimeout)
+		if err != nil {
+			return err
+		}
+		if sess.Status == "running" {
+			if jsonOut {
+				return json.NewEncoder(cmd.OutOrStdout()).Encode(sess)
+			}
+			return fmt.Errorf("timed out waiting for session %q", sess.ID)
+		}
+		return writeAgentOutput(cmd, jsonOut, agentOutput{Session: sess, Response: sess.Response, Messages: sess.Messages})
+	}}
+	wait.Flags().DurationVar(&waitTimeout, "timeout", 0, "maximum wait duration (0 waits indefinitely)")
+	wait.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	wait.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 
 	var persist bool
 	for _, spec := range []struct {
@@ -748,7 +780,7 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 		return nil
 	}}
 	rate.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
-	root.AddCommand(start, models, chat, resume, list, status, compact, stop, remove, rate)
+	root.AddCommand(start, models, chat, resume, list, status, wait, compact, stop, remove, rate)
 	silenceUsage(root)
 	return root
 }
