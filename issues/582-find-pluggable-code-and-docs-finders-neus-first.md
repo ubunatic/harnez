@@ -31,3 +31,7 @@ Implement the registry, execution, result normalization/ranking, CLI targets, fa
 ## Blocked on
 
 neus ticket 009 (`--root`, `--kind`, `--timeout`). Full neus contract: see the design doc, section "neus finder contract".
+
+## Scope additions (host, 2026-09-25)
+
+- MCP tool `harnez_find` and agent practice `docs/practices/Search.md` are part of this ticket; see design doc sections "MCP tool" and "Agent practice".

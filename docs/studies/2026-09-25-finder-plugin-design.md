@@ -50,6 +50,20 @@ Project overrides take precedence over user-level definitions for a matching fin
 - Blocked on: neus ticket 009 landing (neus will notify).
 - Embedding server (lmcoder 132, commit 6a15120) is built but NOT started; start via `lmcoder service start --embed` after user go. Until then neus is keyword-only.
 
+## MCP tool
+
+- One tool, `harnez_find`, registered next to the existing harnez MCP tools (`internal/mcp/server.go`).
+- Params: `query` (required), `scope` (`code`|`docs`|`issues`), `via` (optional finder name), `k` (default 10), `root` (default: session repo).
+- Returns the shared result schema plus a `finders` list with per-finder status (ok, timeout, error, not-indexed), so agents see when results are partial.
+- Same code path as the CLI; the CLI and MCP must not diverge.
+
+## Agent practice
+
+- New copyable practice `docs/practices/Search.md` (installed via `apply`, copied via `init`), plus a lite variant.
+- Teaches: use `harnez find code|docs` (or the MCP tool) before raw `grep`/`find`; when to fall back to `rg` (exact string or regex, known file); how to read partial results; do not re-run the same query to "refresh" an index.
+- One line in the managed AGENTS.md "Harnez Managed Conventions" block and in the generated Subagent Policy (`internal/agentpolicy`), pointing to the practice.
+- Optional later: a hook hint when an agent runs broad `grep -r`/`find` in a harnez repo (hint only, no blocking).
+
 ## Acceptance outline
 
 - `find code` and `find docs` run applicable registered finders concurrently and produce stable merged results.
@@ -58,3 +72,5 @@ Project overrides take precedence over user-level definitions for a matching fin
 - The same search capabilities are available from one MCP tool.
 - `neus` is preferred when available; missing neus falls back to `rg` for code and fuzzy search for docs.
 - No harnez search index or cache is added.
+- MCP tool `harnez_find` with per-finder status is registered and tested.
+- `docs/practices/Search.md` (+ lite) exists, is referenced from the managed AGENTS.md block and the Subagent Policy.
