@@ -2,8 +2,11 @@ package bench
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
+
+	"ubunatic.com/harnez/internal/agymeter"
 )
 
 // Options selects one bench matrix cell to run over a set of tasks.
@@ -13,6 +16,7 @@ type Options struct {
 	RepoRoot     string
 	Repeat       int
 	Run          CommandRunner // defaults to ExecRunner
+	ReadMeter    func(sessionID string) ([]agymeter.Record, error)
 }
 
 // taskTimeout bounds one agent invocation.
@@ -32,12 +36,18 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 	for _, task := range tasks {
 		for i := 0; i < o.Repeat; i++ {
 			run := Run{Task: task.ID, Agent: o.Agent, Model: model, Docs: o.Cond.Docs, Cards: o.Cond.Cards, ReadMode: o.Cond.ReadVariant()}
+			if o.Agent == AgentAgy {
+				run.SessionID = newMeterSessionID()
+			}
 			dir, err := os.MkdirTemp("", "harnez-bench.*")
 			if err != nil {
 				return err
 			}
 			start := time.Now()
 			callCtx, cancel := context.WithTimeout(ctx, taskTimeout)
+			if run.SessionID != "" {
+				callCtx = context.WithValue(callCtx, agySessionContextKey{}, run.SessionID)
+			}
 			if _, err := StageWorkspace(dir, o.RepoRoot, spec, task, o.Cond); err != nil {
 				run.Error = err.Error()
 			} else if res, err := Invoke(callCtx, o.Run, o.Agent, model, dir, task.Prompt); err != nil {
@@ -45,7 +55,29 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 			} else {
 				run.Response, run.InputTokens, run.OutputTokens, run.CostUSD = res.Text, res.InputTokens, res.OutputTokens, res.CostUSD
 				run.Turns = res.Turns
-				run.Pass, run.Detail = task.Score(res.Text)
+				run.TotalTokens = res.InputTokens + res.OutputTokens
+				if o.Agent == AgentAgy {
+					reader := o.ReadMeter
+					if reader == nil {
+						reader = readAgyUsage
+					}
+					rows, err := reader(run.SessionID)
+					if err != nil {
+						run.Error = fmt.Sprintf("read agy meter: %v", err)
+					} else if len(rows) == 0 {
+						run.Error = "agy meter recorded no usage for this session"
+					} else {
+						input, total, turns := aggregateAgyUsage(rows)
+						run.InputTokens, run.TotalTokens, run.Turns = input, total, turns
+						run.OutputTokens = total - input
+						if run.OutputTokens < 0 {
+							run.OutputTokens = 0
+						}
+					}
+				}
+				if run.Error == "" {
+					run.Pass, run.Detail = task.Score(res.Text)
+				}
 			}
 			cancel()
 			run.DurationMS = time.Since(start).Milliseconds()

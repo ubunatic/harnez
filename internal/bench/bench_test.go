@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+	"ubunatic.com/harnez/internal/agymeter"
 )
 
 const claudeJSON = `{"result":"ready","is_error":false,"total_cost_usd":0.03,"usage":{"input_tokens":10,"output_tokens":48,"cache_read_input_tokens":5,"cache_creation_input_tokens":100}}`
@@ -134,11 +135,45 @@ func TestInvokeBuildsAgentCommands(t *testing.T) {
 	if _, err := Invoke(context.Background(), fake(agyJSON), AgentAgy, "flash", t.TempDir(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	if name != "agy" || !contains(args, "--model", "gemini-3.8-flash-low") || args[1] != "hi" || !contains(args, "--output-format", "json") {
+	if name != "agy" || !contains(args, "--model", "gemini-3.7-flash") || !contains(args, "--effort", "low") || args[1] != "hi" || !contains(args, "--output-format", "json") {
 		t.Errorf("agy cmd = %s %v", name, args)
 	}
 	if _, err := Invoke(context.Background(), fake(""), "gemini", "", t.TempDir(), "hi"); err == nil {
 		t.Error("unsupported agent accepted")
+	}
+}
+
+func TestRunTasksUsesMeterRecordsForAgy(t *testing.T) {
+	store, err := OpenStore(filepath.Join(t.TempDir(), "bench.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	spec := &Spec{Tasks: []Task{{ID: "smoke", Prompt: "Reply ready", Pattern: "ready"}}}
+	var meterSession string
+	fakeRunner := func(_ context.Context, _, name string, args ...string) ([]byte, error) {
+		if name != "agy" || len(args) < 2 || args[1] != "Reply ready" {
+			t.Fatalf("agy call = %s %v", name, args)
+		}
+		return []byte(agyJSON), nil
+	}
+	err = RunTasks(context.Background(), store, spec, spec.Tasks, Options{
+		Agent: AgentAgy, RepoRoot: t.TempDir(), Run: fakeRunner,
+		ReadMeter: func(sessionID string) ([]agymeter.Record, error) {
+			meterSession = sessionID
+			return []agymeter.Record{{Prompt: 30, Total: 50}, {Prompt: 8, Total: 10}}, nil
+		},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs, err := store.Recent(1)
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("recent runs = %v, %v", runs, err)
+	}
+	r := runs[0]
+	if meterSession == "" || r.SessionID != meterSession || r.InputTokens != 38 || r.TotalTokens != 60 || r.OutputTokens != 22 || r.Turns != 2 || !r.Pass {
+		t.Fatalf("metered run = %+v; meter session %q", r, meterSession)
 	}
 }
 

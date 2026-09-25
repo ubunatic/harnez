@@ -143,12 +143,12 @@ func newBenchRunCmd() *cobra.Command {
 				case !r.Pass:
 					status = "FAIL " + r.Detail
 				}
-				fmt.Fprintf(out, "%-28s %-6s %-14s %-10s in=%d out=%d turns=%d %s\n", r.Task, r.Agent, r.Model, opts.Cond.Label(), r.InputTokens, r.OutputTokens, r.Turns, status)
+				fmt.Fprintf(out, "%-28s %-6s %-14s %-10s in=%d out=%d total=%d turns=%d %s\n", r.Task, r.Agent, r.Model, opts.Cond.Label(), r.InputTokens, r.OutputTokens, r.TotalTokens, r.Turns, status)
 			})
 		},
 	}
 	cmd.Flags().StringVar(&agent, "agent", bench.AgentClaude, "agent CLI: claude, codex or agy")
-	cmd.Flags().StringVar(&model, "model", "", "model (default: haiku for claude, gpt-6-luna for codex, gemini-3.8-flash-low for agy; 'luna' and 'flash' are aliases)")
+	cmd.Flags().StringVar(&model, "model", "", "model (default: haiku for claude, gpt-6-luna for codex, gemini-3.7-flash at low effort for agy; 'luna', 'flash' and 'flash37' are aliases)")
 	cmd.Flags().StringVar(&docs, "docs", "full", "doc variant: full or lite")
 	cmd.Flags().BoolVar(&docCards, "cards", false, "deliver docs as PNG context cards instead of Markdown")
 	cmd.Flags().StringVar(&readModeName, "read", "", "run fixture read tasks: native, text, auto, or card (forced PNG)")
@@ -179,9 +179,9 @@ func newBenchResultsCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "%-7s %-14s %-5s %-6s %-30s %5s %5s %9s %8s %6s %9s %4s\n", "agent", "model", "docs", "cards", "read", "runs", "pass", "avg_in", "avg_out", "turns", "avg_usd", "err")
+			fmt.Fprintf(out, "%-7s %-14s %-5s %-6s %-30s %5s %5s %9s %8s %9s %6s %9s %4s\n", "agent", "model", "docs", "cards", "read", "runs", "pass", "avg_in", "avg_out", "avg_total", "turns", "avg_usd", "err")
 			for _, s := range sums {
-				fmt.Fprintf(out, "%-7s %-14s %-5s %-6v %-30s %5d %5d %9.0f %8.0f %6.1f %9.4f %4d\n", s.Agent, s.Model, s.Docs, s.Cards, s.Read, s.Runs, s.Passes, s.AvgInput, s.AvgOut, s.AvgTurns, s.AvgCostUSD, s.Errors)
+				fmt.Fprintf(out, "%-7s %-14s %-5s %-6v %-30s %5d %5d %9.0f %8.0f %9.0f %6.1f %9.4f %4d\n", s.Agent, s.Model, s.Docs, s.Cards, s.Read, s.Runs, s.Passes, s.AvgInput, s.AvgOut, s.AvgTotal, s.AvgTurns, s.AvgCostUSD, s.Errors)
 			}
 			if recent > 0 {
 				runs, err := store.Recent(recent)
@@ -189,7 +189,7 @@ func newBenchResultsCmd() *cobra.Command {
 					return err
 				}
 				for _, r := range runs {
-					fmt.Fprintf(out, "#%d %s %s/%s %s cards=%v pass=%v %s\n", r.ID, r.Task, r.Agent, r.Model, r.Docs, r.Cards, r.Pass, strings.TrimSpace(r.Detail+" "+r.Error))
+					fmt.Fprintf(out, "#%d %s %s/%s %s cards=%v pass=%v session=%s %s\n", r.ID, r.Task, r.Agent, r.Model, r.Docs, r.Cards, r.Pass, r.SessionID, strings.TrimSpace(r.Detail+" "+r.Error))
 				}
 			}
 			return nil

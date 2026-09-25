@@ -53,9 +53,13 @@ usage, which helps distinguish a correct answer that required more interaction f
 ## Providers and recorded results
 
 Provider invocations record the task, provider, model, documentation mode, card setting, read mode,
-pass/fail, token counts, cost, duration, and response. Token definitions follow each provider's
-usage data; for example, Claude input includes cache reads and cache creation. Invocation failures
-are stored with an error and excluded from pass-rate calculations.
+pass/fail, input, output and total tokens, cost, duration, and response. Claude usage includes cache
+reads and creation in input; Codex usage sums completed-turn input and output. Agy runs use the
+per-process agymeter, tag each run with a session ID, and read input, total tokens, and turns from
+that session's meter records. Meter data is the source of truth for Agy token and turn counts.
+Invocation failures, including Agy runs without meter usage, are stored with an error and excluded
+from pass-rate calculations. Agy's default model is Gemini 3.7 Flash at low effort; `--model`
+selects another model.
 
 Results are grouped by condition. Compare pass rate with token use, cost, and turns, and account
 for sample size and task-level failures before drawing conclusions. The harness measures these

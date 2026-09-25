@@ -8,7 +8,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+
+	"github.com/google/uuid"
+	"ubunatic.com/harnez/internal/agymeter"
+	"ubunatic.com/harnez/internal/subagent"
 )
 
 // Agent names supported by the runner.
@@ -41,9 +46,9 @@ var providers = map[string]provider{
 		},
 	},
 	AgentAgy: {
-		defaultModel: "gemini-3.8-flash-low", command: "agy", parse: ParseAgy,
+		defaultModel: "gemini-3.7-flash", command: "agy", parse: ParseAgy,
 		args: func(model, prompt string) []string {
-			return []string{"-p", prompt, "--model", model, "--dangerously-skip-permissions", "--output-format", "json"}
+			return []string{"-p", prompt, "--model", model, "--effort", "low", "--dangerously-skip-permissions", "--output-format", "json"}
 		},
 	},
 }
@@ -59,6 +64,10 @@ func ResolveModel(agent, model string) string {
 		return "gpt-6-luna"
 	case model == "flash" && agent == AgentAgy:
 		return providers[AgentAgy].defaultModel
+	case model == "flash37" && agent == AgentAgy:
+		return "gemini-3.7-flash"
+	case model == "flash38" && agent == AgentAgy:
+		return "gemini-3.8-flash"
 	}
 	return model
 }
@@ -77,6 +86,9 @@ type CommandRunner func(ctx context.Context, dir, name string, args ...string) (
 
 // ExecRunner is the real CommandRunner.
 func ExecRunner(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
+	if name == "agy" {
+		return execMeteredAgy(ctx, dir, args...)
+	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	// Select the agent's harnez read profile (image vs text cost estimates).
@@ -88,6 +100,59 @@ func ExecRunner(ctx context.Context, dir, name string, args ...string) ([]byte, 
 		return out, fmt.Errorf("%s: %w: %s", name, err, strings.TrimSpace(stderr.String()))
 	}
 	return out, nil
+}
+
+type agySessionContextKey struct{}
+
+func execMeteredAgy(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("bench: resolve home directory: %w", err)
+	}
+	sessionID, _ := ctx.Value(agySessionContextKey{}).(string)
+	if sessionID == "" {
+		return nil, fmt.Errorf("bench: agy invocation is missing its meter session id")
+	}
+	env := subagent.AgyLaunchEnv(os.Environ(), home)
+	env = setEnvValue(env, "HARNEZ_SESSION_ID", sessionID)
+	env = setEnvValue(env, "HARNEZ_AGY_METER_SESSION_ID", sessionID)
+	var stdout, stderr bytes.Buffer
+	err = agymeter.RunWithEnvDir(ctx, home, "agy", args, env, dir, nil, &stdout, &stderr)
+	if err != nil {
+		return stdout.Bytes(), fmt.Errorf("agy: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.Bytes(), nil
+}
+
+func setEnvValue(env []string, key, value string) []string {
+	prefix := key + "="
+	out := make([]string, 0, len(env)+1)
+	for _, entry := range env {
+		if !strings.HasPrefix(entry, prefix) {
+			out = append(out, entry)
+		}
+	}
+	return append(out, prefix+value)
+}
+
+func newMeterSessionID() string { return uuid.NewString() }
+
+func readAgyUsage(sessionID string) ([]agymeter.Record, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	path := filepath.Join(home, ".harnez", "agymeter", "usage.jsonl")
+	return agymeter.ReadUsageRecords(path, sessionID)
+}
+
+func aggregateAgyUsage(rows []agymeter.Record) (input, total, turns int) {
+	for _, row := range rows {
+		input += int(row.Prompt)
+		total += int(row.Total)
+		turns++
+	}
+	return input, total, turns
 }
 
 // Invoke sends prompt to the agent in dir using model and parses its JSON output.
