@@ -36,7 +36,11 @@ keeps helper calls as extra data where we have them.
 and shown in results. Host: diff OK, make test-q1 green, installed. Leftover:
 `aggregateAgyUsage` is now unused; remove it with the next code change.
 
-## M2 — read benchmark run (host runs it, after user go)
+## M2 — dropped (2026-09-25)
+
+The user runs small comparisons by hand instead of an 18-run sweep; see 565.
+
+## M2 (dropped) — read benchmark run
 
 - Conditions: `native`, `text`, `card` on agy `flash37` (low effort).
 - Fixture sizes: ~100, ~400, ~1,000 lines; 2 repeats each (18 runs).

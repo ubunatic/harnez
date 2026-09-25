@@ -563,3 +563,5 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 562 | [562-harnez-bench-agy-main-vs-helper-model-split-read-benchmark.md](562-harnez-bench-agy-main-vs-helper-model-split-read-benchmark.md) | harnez bench: agy main vs helper model split, read benchmark | Open |
 | 563 | [563-meter-claude-and-codex-traffic-like-agy-proxy-incl-hidden-helper-calls.md](563-meter-claude-and-codex-traffic-like-agy-proxy-incl-hidden-helper-calls.md) | Meter claude and codex traffic like agy (proxy), incl. hidden helper calls | Open |
 | 564 | [564-capture-useful-session-status-line-usage-data.md](564-capture-useful-session-status-line-usage-data.md) | Capture Useful Session Status-Line Usage Data | Open |
+| 565 | [565-harnez-bench-run-model-and-read-mode-matrix-lite-docs-default.md](565-harnez-bench-run-model-and-read-mode-matrix-lite-docs-default.md) | harnez bench run: model and read-mode matrix, lite docs default | Open |
+| 566 | [566-harnez-bench-optional-isolated-agent-config-per-run.md](566-harnez-bench-optional-isolated-agent-config-per-run.md) | harnez bench: optional isolated agent config per run | Open |
