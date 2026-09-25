@@ -20,8 +20,24 @@ but 200k is the default.
   competes with the new prompt.
 - 200k keeps sessions focused on the current sprint while preserving enough recent context.
 
+## Enforcement, not a request (user clarification)
+
+Telling an agent "please compact" does not help unless harnez verifies it. The threshold must be:
+
+- **Global:** in the harnez global settings (`~/.harnez/config.yaml`), default 200k, applied to
+  every agent type and every dispatch (start, resume, sprint), not per prompt.
+- **Programmatic:** harnez checks the session's token count before sending each prompt. Over the
+  threshold, harnez itself triggers compaction, then **verifies** it happened (compaction ack plus
+  a drop in context tokens) before sending the prompt. If it cannot verify, it fails loudly or
+  starts a fresh session with a handoff summary; it never sends the prompt into an uncompacted
+  session silently.
+- Sending a compact instruction to the agent is fine only as the mechanism, when the check above
+  confirms the agent actually compacted.
+
 ## Acceptance
 
-- Default threshold 200k for every agent type; documented in `harnez agent --help` and agent docs.
-- Override via config (and optionally a flag), shown in the session info line.
-- Compaction completes before the next prompt is sent (depends on 590).
+- Global default 200k in harnez config for all agent types; documented in `harnez agent --help`.
+- Pre-prompt check enforces it on every dispatch path; covered by tests.
+- Compaction is verified before the next prompt is sent (fixes the 590 race); unverified
+  compaction is an error or a fresh-session fallback, visible in the session info line.
+- Per-agent override possible, but the global default applies when unset.
