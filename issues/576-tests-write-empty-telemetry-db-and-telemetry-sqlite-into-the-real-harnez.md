@@ -1,6 +1,6 @@
 # 576 — empty telemetry.db and telemetry.sqlite in the real ~/.harnez
 
-**Status**: Open
+**Status**: Closed — no code source (manual sqlite3 likely); files deleted, Databases.md updated
 **Priority**: P3
 **Severity**: Low
 **Category**: Tests / Hygiene
