@@ -20,4 +20,10 @@ custom CA, or a documented base-URL override), and if so record every request th
 the agy meter: main and helper models separated, full token totals per session. Canary first:
 one tiny prompt per CLI, check that traffic goes through and nothing breaks.
 
+## Later: cost attribution analytics
+
+Tokens are not the cost; plan quota (percentages with fractions, from `harnez usage` and the agy
+meter quota rows) is. Once helper calls are visible, analyse how much of the quota drain comes
+from the main session versus background helper calls, per provider.
+
 Parked until the read benchmark (562) is done.

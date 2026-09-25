@@ -36,6 +36,8 @@ keeps helper calls as extra data where we have them.
 - Fixture sizes: ~100, ~400, ~1,000 lines; 2 repeats each (18 runs).
 - Report per condition: pass rate, main input tokens, context growth per call, helper tokens,
   peak harnez RSS during `card` runs (543 guard).
+- Real cost: record agy quota fractions (meter quota rows, `harnez usage`) before and after the
+  sweep and report the quota drained next to the token totals.
 - Stop after the first `card` run if its context did not grow by about the card's estimated
   tokens or the answer failed (model did not see the image).
 - Results go into a study under `docs/studies/`, not into `docs/Bench.md`.
