@@ -64,3 +64,16 @@ Provider table in internal/bench/agent.go, `--read card` added. Host: diff OK, m
   unmetered. M3 = route that existing provider through agymeter (env via AgyLaunchEnv, session
   id), and take tokens/turns from meter records; do not add a second agy provider. Say in the
   report what ParseAgy reports today vs the meter and which wins.
+
+## M3 delivered (a24f3fb)
+
+agy provider runs through agymeter with a per-run session id; input/total tokens and turns come
+from the meter. Live checks (one prompt each): haiku 19,880 in; luna 16,043 in; flash37 low meter
+15,614 in / 15,939 total over 2 requests (CLI JSON: 15,517 in, 1 turn). Host: diff OK,
+make test-q1 green, installed.
+
+## Carry-over for the read benchmark
+
+- Meter "turns" count every agy request, including agy's own helper-model calls (2 requests for
+  one answer in the live check). For context growth, filter meter rows to the benchmarked model
+  and report helper calls separately.
