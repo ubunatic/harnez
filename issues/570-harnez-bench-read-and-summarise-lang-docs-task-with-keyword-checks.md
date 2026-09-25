@@ -1,6 +1,6 @@
 # 570 — harnez bench: read-and-summarise lang docs task with keyword checks
 
-**Status**: Open
+**Status**: Closed — M1+M2 delivered
 **Priority**: P2
 **Severity**: Medium
 **Category**: Bench / Tooling
