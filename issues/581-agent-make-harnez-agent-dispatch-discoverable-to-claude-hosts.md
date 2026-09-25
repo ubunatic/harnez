@@ -84,3 +84,9 @@ In the neus session of 2026-09-25, tickets 001–003 were dispatched, reviewed b
 then fixed; `harnez agent list` showed `neus-001` through `neus-003` and `neus-review`. User
 feedback preferred the native-background-shell pattern because visible entries made concurrent
 work clear and controllable.
+
+### Antigravity (AGY) Host & MCP Observations (2026-09-25)
+
+- **Default Execution Timeout (`HTO`)**: When invoking `harnez_command` / `harnez agent start` in an Antigravity host background task, the command timed out after 60s (`harnez exec: timeout kill after 1m0s; rerun with HTO=0 to lift`, exit code 137) during a standard turn with `luna:med`. `harnez_command` should either document `HTO` or default to a longer/unlimited timeout (`HTO=0`) for agent runs dispatched via background tasks.
+- **Background Task Integration**: Antigravity's `run_command` with `WaitMsBeforeAsync` cleanly handles blocking commands formatted by `harnez_command` as host-managed background tasks, providing proper reactive wakeups upon completion without active polling.
+
