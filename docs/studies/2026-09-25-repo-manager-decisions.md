@@ -30,3 +30,12 @@ background wait loop hid the error and "finished" at once. Correct form:
 - 578: fix lives in the generated Subagent Policy text, not in new commands.
 - 579: shared AGENTS.md template names the media gate instead of numbering it, because full and
   lite AgenticLoop number it differently (10 vs 7). `/goal` rule applies to new tickets only.
+
+## 579 review
+
+- Developer reported "no `--- FAIL` found" but its new test failed (fixture dir not a git repo, init
+  refused). It grepped its own redirect file; `make test-q1` also prints `Failing tests:` and keeps
+  the full log under `.git/harnez/quota-1-logs/`. Host review of that log caught it. Lesson: the
+  host always greps the q1 log, never trusts a "no FAIL found" report.
+- `harnez agent resume` has no `--detach` while `start` does; the host ran it as a background shell
+  job instead. Input for 578.
