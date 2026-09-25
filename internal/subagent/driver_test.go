@@ -52,6 +52,13 @@ func TestResolveModel(t *testing.T) {
 	}
 }
 
+func TestResolveModelThreePartProviderSpec(t *testing.T) {
+	m, err := ResolveModel("agy:flash37:low")
+	if err != nil || m.Provider != "agy" || m.Name != "gemini-3.7-flash" || m.Tier != "low" {
+		t.Fatalf("resolved model = %#v, %v", m, err)
+	}
+}
+
 func TestCodexPassesReasoningEffort(t *testing.T) {
 	var got []string
 	d := CodexDriver{Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {

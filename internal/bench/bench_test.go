@@ -114,25 +114,25 @@ func TestInvokeBuildsAgentCommands(t *testing.T) {
 			return []byte(out), nil
 		}
 	}
-	if _, err := Invoke(context.Background(), fake(claudeJSON), AgentClaude, "", t.TempDir(), "hi"); err != nil {
+	if _, err := Invoke(context.Background(), fake(claudeJSON), AgentClaude, "claude:haiku:low", t.TempDir(), "hi"); err != nil {
 		t.Fatal(err)
 	}
 	if name != "claude" || !contains(args, "--model", "haiku") || args[len(args)-1] != "hi" {
 		t.Errorf("claude cmd = %s %v", name, args)
 	}
-	if _, err := Invoke(context.Background(), fake(codexJSONL), AgentCodex, "", t.TempDir(), "hi"); err != nil {
+	if _, err := Invoke(context.Background(), fake(codexJSONL), AgentCodex, "codex:luna:low", t.TempDir(), "hi"); err != nil {
 		t.Fatal(err)
 	}
 	if name != "codex" || !contains(args, "-m", "gpt-6-luna") {
 		t.Errorf("codex default cmd = %s %v", name, args)
 	}
-	if _, err := Invoke(context.Background(), fake(codexJSONL), AgentCodex, "luna", t.TempDir(), "hi"); err != nil {
+	if _, err := Invoke(context.Background(), fake(codexJSONL), AgentCodex, "codex:luna:med", t.TempDir(), "hi"); err != nil {
 		t.Fatal(err)
 	}
-	if name != "codex" || !contains(args, "-m", "gpt-6-luna") || args[0] != "exec" {
+	if name != "codex" || !contains(args, "-m", "gpt-6-luna") || !contains(args, "model_reasoning_effort=medium") || args[0] != "exec" {
 		t.Errorf("codex cmd = %s %v", name, args)
 	}
-	if _, err := Invoke(context.Background(), fake(agyJSON), AgentAgy, "flash", t.TempDir(), "hi"); err != nil {
+	if _, err := Invoke(context.Background(), fake(agyJSON), AgentAgy, "agy:flash37:low", t.TempDir(), "hi"); err != nil {
 		t.Fatal(err)
 	}
 	if name != "agy" || !contains(args, "--model", "gemini-3.7-flash") || !contains(args, "--effort", "low") || args[1] != "hi" || !contains(args, "--output-format", "json") {
@@ -299,7 +299,7 @@ func TestStoreRunTasksAndSummaries(t *testing.T) {
 		t.Fatalf("summaries = %+v, %v", sums, err)
 	}
 	s := sums[0]
-	if s.Runs != 4 || s.Passes != 2 || s.Errors != 2 || s.Model != "haiku" || s.AvgInput != 115 {
+	if s.Runs != 4 || s.Passes != 2 || s.Errors != 2 || s.Model != "claude:haiku:low" || s.AvgInput != 115 {
 		t.Errorf("summary = %+v", s)
 	}
 	recent, _ := store.Recent(10)

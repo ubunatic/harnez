@@ -26,50 +26,49 @@ const (
 // provider defines the command line and output parser for one agent CLI.
 // Adding a provider requires one entry here and its output parser.
 type provider struct {
-	defaultModel string
-	command      string
-	args         func(model, prompt string) []string
-	parse        func([]byte) (Result, error)
+	command string
+	args    func(model, tier, prompt string) []string
+	parse   func([]byte) (Result, error)
 }
 
 var providers = map[string]provider{
 	AgentClaude: {
-		defaultModel: "haiku", command: "claude", parse: ParseClaude,
-		args: func(model, prompt string) []string {
-			return []string{"-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json", prompt}
+		command: "claude", parse: ParseClaude,
+		args: func(model, tier, prompt string) []string {
+			args := []string{"-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json"}
+			if tier != "" {
+				args = append(args, "--effort", providerEffort(tier))
+			}
+			return append(args, prompt)
 		},
 	},
 	AgentCodex: {
-		defaultModel: "gpt-6-luna", command: "codex", parse: ParseCodex,
-		args: func(model, prompt string) []string {
-			return []string{"exec", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-m", model, "--json", prompt}
+		command: "codex", parse: ParseCodex,
+		args: func(model, tier, prompt string) []string {
+			args := []string{"exec", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-m", model, "--json"}
+			if tier != "" {
+				args = append(args, "-c", "model_reasoning_effort="+providerEffort(tier))
+			}
+			return append(args, prompt)
 		},
 	},
 	AgentAgy: {
-		defaultModel: "gemini-3.7-flash", command: "agy", parse: ParseAgy,
-		args: func(model, prompt string) []string {
-			return []string{"-p", prompt, "--model", model, "--dangerously-skip-permissions", "--output-format", "json"}
+		command: "agy", parse: ParseAgy,
+		args: func(model, tier, prompt string) []string {
+			args := []string{"-p", prompt, "--model", model}
+			if tier != "" {
+				args = append(args, "--effort", providerEffort(tier))
+			}
+			return append(args, "--dangerously-skip-permissions", "--output-format", "json")
 		},
 	},
 }
 
-// ResolveModel maps an empty model or alias to the agent's concrete model flag value.
-func ResolveModel(agent, model string) string {
-	model = strings.TrimSpace(model)
-	if model == "" {
-		return providers[agent].defaultModel
+func providerEffort(tier string) string {
+	if tier == "med" {
+		return "medium"
 	}
-	switch {
-	case model == "luna":
-		return "gpt-6-luna"
-	case model == "flash" && agent == AgentAgy:
-		return providers[AgentAgy].defaultModel
-	case model == "flash37" && agent == AgentAgy:
-		return "gemini-3.7-flash"
-	case model == "flash38" && agent == AgentAgy:
-		return "gemini-3.8-flash"
-	}
-	return model
+	return tier
 }
 
 // ParseModels resolves a comma-separated model list through the agent model spec.
@@ -93,6 +92,23 @@ func ParseModels(value string) ([]subagent.Model, error) {
 		models = append(models, m)
 	}
 	return models, nil
+}
+
+// DefaultModelForProvider uses the shared model spec to select a provider default.
+func DefaultModelForProvider(provider string) (subagent.Model, error) {
+	global, err := subagent.DefaultModel()
+	if err != nil {
+		return subagent.Model{}, err
+	}
+	if global.Provider == provider {
+		return global, nil
+	}
+	for _, model := range subagent.KnownModels() {
+		if model.Provider == provider {
+			return model, nil
+		}
+	}
+	return subagent.Model{}, fmt.Errorf("bench: no model configured for provider %q", provider)
 }
 
 // Result is one agent invocation's outcome.
@@ -222,34 +238,24 @@ func Invoke(ctx context.Context, run CommandRunner, agent, model, dir, prompt st
 	if !ok {
 		return Result{}, fmt.Errorf("bench: unsupported agent %q (supported: claude, codex, agy)", agent)
 	}
+	var resolved subagent.Model
+	var err error
 	if strings.TrimSpace(model) == "" {
-		switch agent {
-		case AgentClaude:
-			model = "claude:haiku:low"
-		case AgentCodex:
-			model = "codex:luna:low"
-		case AgentAgy:
-			model = "agy:flash37:low"
-		}
+		resolved, err = DefaultModelForProvider(agent)
+	} else {
+		resolved, err = subagent.ResolveModel(model)
 	}
-	resolved, err := subagent.ResolveModel(model)
 	if err != nil {
 		return Result{}, err
 	}
 	if resolved.Provider != agent {
 		return Result{}, fmt.Errorf("bench: model %q belongs to provider %q, not %q", model, resolved.Provider, agent)
 	}
-	args := p.args(resolved.Name, prompt)
-	if resolved.Tier != "" && resolved.SupportsEffort() {
-		switch agent {
-		case AgentClaude:
-			args = append(args[:len(args)-1], "--effort", resolved.Tier, args[len(args)-1])
-		case AgentAgy:
-			args = append(args[:4], append([]string{"--effort", resolved.Tier}, args[4:]...)...)
-		case AgentCodex:
-			args = append(args[:len(args)-1], "-c", "model_reasoning_effort="+resolved.Tier, args[len(args)-1])
-		}
+	tier := resolved.Tier
+	if !resolved.SupportsEffort() {
+		tier = ""
 	}
+	args := p.args(resolved.Name, tier, prompt)
 	out, err := run(ctx, dir, p.command, args...)
 	if err != nil {
 		return Result{}, err

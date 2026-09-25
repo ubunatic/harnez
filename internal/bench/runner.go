@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"ubunatic.com/harnez/internal/agymeter"
+	"ubunatic.com/harnez/internal/subagent"
 )
 
 // Options selects one bench matrix cell to run over a set of tasks.
@@ -33,14 +33,26 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 	if o.Repeat < 1 {
 		o.Repeat = 1
 	}
-	model := ResolveModel(o.Agent, o.Model)
-	invokeModel := o.Model
-	if strings.Contains(o.Model, ":") {
-		model = o.Model
+	var model subagent.Model
+	var err error
+	if o.Model == "" {
+		model, err = DefaultModelForProvider(o.Agent)
+	} else {
+		model, err = subagent.ResolveModel(o.Model)
+	}
+	if err != nil {
+		return err
+	}
+	if model.Provider != o.Agent {
+		return fmt.Errorf("bench: model %q belongs to provider %q, not %q", o.Model, model.Provider, o.Agent)
+	}
+	modelSpec := model.Spec()
+	if modelSpec == "" {
+		return fmt.Errorf("bench: unresolved model spec for %q", o.Model)
 	}
 	for _, task := range tasks {
 		for i := 0; i < o.Repeat; i++ {
-			run := Run{Task: task.ID, Agent: o.Agent, Model: model, Docs: o.Cond.Docs, Cards: o.Cond.Cards, ReadMode: o.Cond.ReadVariant()}
+			run := Run{Task: task.ID, Agent: o.Agent, Model: modelSpec, Docs: o.Cond.Docs, Cards: o.Cond.Cards, ReadMode: o.Cond.ReadVariant()}
 			if o.Agent == AgentAgy {
 				run.SessionID = newMeterSessionID()
 			}
@@ -55,7 +67,7 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 			}
 			if _, err := StageWorkspace(dir, o.RepoRoot, spec, task, o.Cond); err != nil {
 				run.Error = err.Error()
-			} else if res, err := Invoke(callCtx, o.Run, o.Agent, invokeModel, dir, task.Prompt); err != nil {
+			} else if res, err := Invoke(callCtx, o.Run, o.Agent, modelSpec, dir, task.Prompt); err != nil {
 				run.Error = err.Error()
 			} else {
 				run.Response, run.InputTokens, run.OutputTokens, run.CostUSD = res.Text, res.InputTokens, res.OutputTokens, res.CostUSD

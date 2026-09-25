@@ -133,11 +133,11 @@ func newBenchRunCmd() *cobra.Command {
 				return err
 			}
 			if len(models) == 0 {
-				defaultSpec := map[string]string{bench.AgentClaude: "claude:haiku:low", bench.AgentCodex: "codex:luna:low", bench.AgentAgy: "agy:flash37:low"}[agent]
-				if defaultSpec == "" {
-					return fmt.Errorf("bench: unsupported agent %q (supported: claude, codex, agy)", agent)
+				defaultModel, err := bench.DefaultModelForProvider(agent)
+				if err != nil {
+					return err
 				}
-				models, err = bench.ParseModels(defaultSpec)
+				models, err = bench.ParseModels(defaultModel.Spec())
 				if err != nil {
 					return err
 				}
