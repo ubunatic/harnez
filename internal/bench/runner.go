@@ -18,6 +18,7 @@ type Options struct {
 	Repeat       int
 	Run          CommandRunner // defaults to ExecRunner
 	ReadMeter    func(sessionID string) ([]agymeter.Record, error)
+	OnStart      func(Run)
 }
 
 // taskTimeout bounds one agent invocation.
@@ -64,6 +65,9 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 			callCtx, cancel := context.WithTimeout(ctx, taskTimeout)
 			if run.SessionID != "" {
 				callCtx = context.WithValue(callCtx, agySessionContextKey{}, run.SessionID)
+			}
+			if o.OnStart != nil {
+				o.OnStart(run)
 			}
 			if _, err := StageWorkspace(dir, o.RepoRoot, spec, task, o.Cond); err != nil {
 				run.Error = err.Error()

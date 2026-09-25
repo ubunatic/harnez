@@ -2,15 +2,130 @@ package main
 
 import (
 	"fmt"
+	"image/png"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/bench"
+	"ubunatic.com/harnez/internal/readcard"
+	"ubunatic.com/harnez/internal/subagent"
 )
 
 // benchRunner is swapped in tests so no real agent CLI is invoked.
 var benchRunner bench.CommandRunner
+
+var benchCardRenderer = renderBenchCard
+
+func renderBenchCard(source, output string) (string, error) {
+	res, err := readcard.ReadFile(source, readcard.TextOptions{})
+	if err != nil {
+		return "", err
+	}
+	rendered, err := readcard.RenderFileToCards(res.Lines, source, readcard.RenderOptions{
+		ShowLineNumbers: true, OutputPath: output, Title: filepath.Base(source),
+		SourceLines: res.SourceLines, StartLine: res.StartLine, SourceTokens: res.TokenStats.TextTokens,
+	})
+	if err != nil {
+		return "", err
+	}
+	var cards strings.Builder
+	for i, path := range rendered.Files {
+		info, err := os.Stat(path)
+		if err != nil {
+			return "", err
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return "", err
+		}
+		config, decodeErr := png.DecodeConfig(f)
+		closeErr := f.Close()
+		if decodeErr != nil {
+			return "", decodeErr
+		}
+		if closeErr != nil {
+			return "", closeErr
+		}
+		if i > 0 {
+			cards.WriteString("\n")
+		}
+		fmt.Fprintf(&cards, "card: %s (%d bytes, %dx%d px)", path, info.Size(), config.Width, config.Height)
+	}
+	return cards.String(), nil
+}
+
+func benchPreamble(spec *bench.Spec, task bench.Task, cond bench.Condition, root string) (string, error) {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s (%s) | read: %s\n", task.ID, task.Rule, cond.ReadVariant())
+	if cond.Read == "" {
+		fmt.Fprintf(&b, "question: %s\n", task.Prompt)
+	} else {
+		dir, err := os.MkdirTemp("", "harnez-bench-preamble.*")
+		if err != nil {
+			return "", err
+		}
+		if _, err := bench.StageWorkspace(dir, root, spec, task, cond); err != nil {
+			_ = os.RemoveAll(dir)
+			return "", err
+		}
+		for range task.Fixtures {
+			entries, err := os.ReadDir(filepath.Join(dir, "docs"))
+			if err != nil {
+				_ = os.RemoveAll(dir)
+				return "", err
+			}
+			files := make([]string, 0, len(entries))
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					files = append(files, entry.Name())
+				}
+			}
+			for _, file := range files {
+				path := filepath.Join(dir, "docs", file)
+				data, err := os.ReadFile(path)
+				if err != nil {
+					_ = os.RemoveAll(dir)
+					return "", err
+				}
+				lines := strings.Count(string(data), "\n")
+				if len(data) > 0 && !strings.HasSuffix(string(data), "\n") {
+					lines++
+				}
+				fmt.Fprintf(&b, "fixture: docs/%s (%d lines)\n", file, lines)
+				if cond.Read == "card" {
+					cardsDir, err := os.MkdirTemp("", "harnez-bench-cards.*")
+					if err != nil {
+						_ = os.RemoveAll(dir)
+						return "", err
+					}
+					cardPath := filepath.Join(cardsDir, strings.TrimSuffix(file, filepath.Ext(file))+".png")
+					cardInfo, err := benchCardRenderer(path, cardPath)
+					if err != nil {
+						_ = os.RemoveAll(dir)
+						return "", fmt.Errorf("bench: preamble card %s: %w", file, err)
+					}
+					fmt.Fprintf(&b, "%s\n", cardInfo)
+				}
+			}
+		}
+		_ = os.RemoveAll(dir)
+		fmt.Fprintf(&b, "question: %s\n", task.Prompt)
+	}
+	if task.Info != "" {
+		fmt.Fprintf(&b, "info: %s\n", task.Info)
+	}
+	return b.String(), nil
+}
+
+func compactBenchTokens(n int) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	return fmt.Sprintf("%.1fk", float64(n)/1000)
+}
 
 func benchDir() (string, error) {
 	if d := os.Getenv("HARNEZ_BENCH_DIR"); d != "" {
@@ -93,7 +208,7 @@ func newBenchTasksCmd() *cobra.Command {
 
 func newBenchRunCmd() *cobra.Command {
 	var agent, model, docs, repo, readModeName, cardFlags string
-	var docCards, fixtureYAML bool
+	var docCards, fixtureYAML, quiet bool
 	var multi int
 	var repeat int
 	var tasks []string
@@ -146,7 +261,16 @@ func newBenchRunCmd() *cobra.Command {
 				readModes = []string{""}
 			}
 			out := cmd.OutOrStdout()
+			errOut := cmd.ErrOrStderr()
 			var matrix []bench.Run
+			type benchPlan struct {
+				model    subagent.Model
+				cond     bench.Condition
+				selected []bench.Task
+			}
+			var plans []benchPlan
+			total := 0
+			preambled := map[string]bool{}
 			for _, m := range models {
 				for _, readMode := range readModes {
 					cond := bench.Condition{Docs: mode, Cards: docCards, Read: readMode, Yaml: fixtureYAML, Multi: multi, Card: strings.TrimSpace(cardFlags)}
@@ -154,10 +278,47 @@ func newBenchRunCmd() *cobra.Command {
 					if err != nil {
 						return err
 					}
-					opts := bench.Options{Agent: m.Provider, Model: m.Spec(), Cond: cond, RepoRoot: repo, Repeat: repeat, Run: benchRunner}
-					if err := bench.RunTasks(cmd.Context(), store, spec, selected, opts, func(r bench.Run) { matrix = append(matrix, r) }); err != nil {
-						return err
+					for _, task := range selected {
+						key := task.ID + "\x00" + cond.ReadVariant() + "\x00" + cond.Docs + fmt.Sprint(cond.Cards)
+						if !quiet && !preambled[key] {
+							preamble, err := benchPreamble(spec, task, cond, repo)
+							if err != nil {
+								return err
+							}
+							fmt.Fprint(errOut, preamble)
+							preambled[key] = true
+						}
 					}
+					plans = append(plans, benchPlan{model: m, cond: cond, selected: selected})
+					total += len(selected) * repeat
+				}
+			}
+			current := 0
+			for _, plan := range plans {
+				opts := bench.Options{Agent: plan.model.Provider, Model: plan.model.Spec(), Cond: plan.cond, RepoRoot: repo, Repeat: repeat, Run: benchRunner}
+				if !quiet {
+					opts.OnStart = func(r bench.Run) {
+						current++
+						read := r.ReadMode
+						if read == "" {
+							read = "docs"
+						}
+						fmt.Fprintf(errOut, "[%d/%d] %s:%s %s %s ...\n", current, total, r.Agent, strings.TrimPrefix(r.Model, r.Agent+":"), read, r.Task)
+					}
+				}
+				if err := bench.RunTasks(cmd.Context(), store, spec, plan.selected, opts, func(r bench.Run) {
+					matrix = append(matrix, r)
+					if !quiet {
+						result := "pass"
+						if r.Error != "" {
+							result = r.Error
+						} else if !r.Pass {
+							result = "fail: " + r.Detail
+						}
+						fmt.Fprintf(errOut, "%s, %s in, %d turns, %s\n", result, compactBenchTokens(r.InputTokens), r.Turns, time.Duration(r.DurationMS)*time.Millisecond)
+					}
+				}); err != nil {
+					return err
 				}
 			}
 			fmt.Fprintf(out, "%-24s %-8s %-24s %-6s %10s %7s %13s %9s\n", "model", "read", "task", "pass", "input", "turns", "helper", "duration")
@@ -193,6 +354,7 @@ func newBenchRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cardFlags, "card", "", "with --read auto: card flags the agent is told to add to harnez read, e.g. --card=--style=compact")
 	cmd.Flags().StringSliceVar(&tasks, "task", nil, "task IDs to run (default: all)")
 	cmd.Flags().IntVar(&repeat, "repeat", 1, "runs per task")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "suppress preamble and progress on stderr")
 	cmd.Flags().StringVar(&repo, "repo", ".", "repository root holding the docs")
 	return cmd
 }

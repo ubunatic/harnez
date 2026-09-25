@@ -88,6 +88,7 @@ tasks:
   # Read tasks: run with `--read native|text|auto`; the agent sees only the fixture.
   - id: read-one-fact
     rule: "find one deep fact in a large doc with few turns"
+    info: "The answer is a numeric retry limit."
     fixtures: [RUNBOOK.md]
     prompt: "What is the retry limit of the quillfox service? Reply with the number only."
     pattern: '^\D*17\D*$'

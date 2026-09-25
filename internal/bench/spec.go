@@ -17,6 +17,7 @@ import (
 type Task struct {
 	ID            string   `yaml:"id"`
 	Rule          string   `yaml:"rule"`
+	Info          string   `yaml:"info"`
 	Prompt        string   `yaml:"prompt"`
 	Pattern       string   `yaml:"pattern"`
 	ForbidPattern string   `yaml:"forbid_pattern"`

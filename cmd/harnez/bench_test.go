@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,13 +12,19 @@ import (
 
 func runBench(t *testing.T, args ...string) (string, error) {
 	t.Helper()
+	stdout, stderr, err := runBenchStreams(t, args...)
+	return stdout + stderr, err
+}
+
+func runBenchStreams(t *testing.T, args ...string) (string, string, error) {
+	t.Helper()
 	cmd := newBenchCmd()
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
 	cmd.SetArgs(args)
 	err := cmd.ExecuteContext(context.Background())
-	return buf.String(), err
+	return stdout.String(), stderr.String(), err
 }
 
 func TestBenchRequiresSetup(t *testing.T) {
@@ -80,7 +87,7 @@ func TestBenchRunReadModeRunsFixtureTasksAndReportsTurns(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := runBench(t, "run", "--read", "auto", "--repo", root)
-	if err != nil || strings.Count(out, "auto") != 2 || !strings.Contains(out, "3") {
+	if err != nil || strings.Count(out, "auto") != 6 || !strings.Contains(out, "3") {
 		t.Fatalf("read run: %q %v", out, err)
 	}
 	if out, err = runBench(t, "results"); err != nil || !strings.Contains(out, "auto") || !strings.Contains(out, "3.0") {
@@ -109,7 +116,7 @@ func TestBenchRunCardModeForcesImageRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := runBench(t, "run", "--read", "card", "--task", "read-one-fact", "--repo", root)
-	if err != nil || !strings.Contains(out, "card") || !strings.Contains(out, "PASS") {
+	if err != nil || !strings.Contains(out, "card:") || !strings.Contains(out, "PASS") {
 		t.Fatalf("card read run: %q %v", out, err)
 	}
 }
@@ -188,5 +195,64 @@ func TestBenchRunModelReadMatrixAndLiteDefault(t *testing.T) {
 	}
 	if !strings.Contains(calls[0], "--effort low") {
 		t.Errorf("model tier not passed: %q", calls[0])
+	}
+}
+
+func TestBenchRunSeparatesTableAndProgress(t *testing.T) {
+	t.Setenv("HARNEZ_BENCH_DIR", filepath.Join(t.TempDir(), "bench"))
+	root, _ := filepath.Abs(filepath.Join("..", ".."))
+	var calls int
+	benchRunner = func(_ context.Context, _, name string, _ ...string) ([]byte, error) {
+		calls++
+		if name == "codex" {
+			return []byte("{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"17\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":15600}}\n"), nil
+		}
+		return []byte(`{"result":"17","num_turns":2,"usage":{"input_tokens":15600}}`), nil
+	}
+	defer func() { benchRunner = nil }()
+	if _, err := runBench(t, "--setup"); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, err := runBenchStreams(t, "run", "--read", "text", "--task", "read-one-fact", "--model", "claude:haiku:low,codex:luna:low", "--repo", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(stdout, "model ") || strings.Contains(stdout, "fixture:") || strings.Contains(stdout, "[1/2]") {
+		t.Errorf("stdout is not table-only: %q", stdout)
+	}
+	if !strings.Contains(stderr, "read-one-fact (find one deep fact") || !strings.Contains(stderr, "fixture: docs/RUNBOOK.md (") || !strings.Contains(stderr, "question: What is the retry limit") {
+		t.Errorf("preamble missing details: %q", stderr)
+	}
+	if strings.Count(stderr, "fixture: docs/RUNBOOK.md") != 1 || strings.Count(stderr, "[1/2]") != 1 || strings.Count(stderr, "[2/2]") != 1 || strings.Count(stderr, " turns,") != 2 {
+		t.Errorf("progress/preamble counts wrong: %q", stderr)
+	}
+	if calls != 2 {
+		t.Errorf("fake runner calls = %d, want 2", calls)
+	}
+}
+
+func TestBenchCardPreambleFailureDoesNotCallAgent(t *testing.T) {
+	t.Setenv("HARNEZ_BENCH_DIR", filepath.Join(t.TempDir(), "bench"))
+	root, _ := filepath.Abs(filepath.Join("..", ".."))
+	var calls int
+	benchRunner = func(context.Context, string, string, ...string) ([]byte, error) {
+		calls++
+		return []byte(`{"result":"17"}`), nil
+	}
+	defer func() { benchRunner = nil }()
+	oldRenderer := benchCardRenderer
+	benchCardRenderer = func(string, string) (string, error) {
+		return "", fmt.Errorf("fake card failure")
+	}
+	defer func() { benchCardRenderer = oldRenderer }()
+	if _, err := runBench(t, "--setup"); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := runBenchStreams(t, "run", "--read", "card", "--task", "read-one-fact", "--repo", root)
+	if err == nil || !strings.Contains(err.Error(), "fake card failure") {
+		t.Fatalf("card failure = %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("runner called %d times after failed preamble", calls)
 	}
 }
