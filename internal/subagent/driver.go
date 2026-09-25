@@ -188,10 +188,16 @@ func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 		if len(parts) == 2 {
 			if entry, ok := aliases[clean]; ok {
 				m := entry.Model
-				m.Tier = parts[1]
+				if isTier(parts[1]) {
+					m.Tier = parts[1]
+				}
 				return m, nil
 			}
-			if len(parts) == 2 && parts[1] != "" {
+			if isTier(parts[1]) {
+				if m, err := resolveModelIn(aliases, parts[0]); err == nil {
+					m.Tier = parts[1]
+					return m, nil
+				}
 				for _, candidate := range aliases {
 					if modelHasAlias(candidate, parts[0]+":"+parts[1]) {
 						m := candidate.Model
@@ -281,3 +287,8 @@ func knownModelSpecs() string {
 }
 
 func (m Model) String() string { return m.Provider + ":" + m.Name + ":" + m.Tier }
+
+// isTier reports whether s is a reasoning tier rather than a model name.
+func isTier(s string) bool {
+	return s == "low" || s == "med" || s == "high"
+}
