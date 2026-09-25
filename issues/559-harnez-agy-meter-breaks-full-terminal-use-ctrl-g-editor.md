@@ -35,3 +35,7 @@ Ctrl+C, Ctrl+Z/fg, resize.
   SIGINT while the child runs and returns the child's exit code. Canary by hand if feasible
   (script(1) or a pty): a fake agy that runs `$EDITOR` gets a tty on stdin.
 - Verify: `make test-q1` once, then commit `fix(agymeter): ... (issue 559 M1)`.
+
+## M1 delivered (9eba2cc)
+
+stdin passed to interactive child; parent survives SIGINT/SIGQUIT, forwards TERM/HUP, propagates exit code. Host review: diff OK, make test-q1 green (host run), installed. Awaiting user Ctrl+G confirmation.
