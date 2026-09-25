@@ -39,8 +39,8 @@ Add a short "Delegation" section to the Harnez Managed Conventions block (AGENTS
 - Agent output goes to the session scratchpad, never into the repo.
 - `ListAgents` / peer sessions: ask them about their own repo before reading it cold.
 
-Consider also a `harnez agent start --background` that returns a session name at once, plus
-`harnez agent wait`, so hosts need no shell tricks.
+Do not steer Claude hosts to `harnez agent start --detach`/`--async`: it hides the run from
+the user's session view. The wanted pattern is the blocking call inside a native background shell.
 
 ## Evidence
 
