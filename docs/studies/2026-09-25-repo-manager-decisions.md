@@ -58,3 +58,16 @@ Ticket 591 now covers pre-prompt enforcement of the global 200k-token threshold 
 path. This is a direct extension of 590's wait-for-completion fix (commits `1c4a460` and `f4cd844`):
 compact, wait, verify, then send the prompt. Runtime monitoring and intervention moved to 592 because
 external stop and compact controls are unproven; run canaries for Codex, Claude, and agy first.
+
+## 590, 591, 594 and session close (2026-09-26)
+
+- 590 closed: resume waits for compaction completion. 591 closed: 200k pre-prompt gate on all
+  dispatch paths, but its Codex path was wrong (fake `/compact`, cumulative tokens); reopened as 594.
+- Lesson: a model's "Compacted." reply is not evidence. Verify side effects (rollout record,
+  context drop) with a canary before building on a mechanism.
+- 594 decision: Codex verifies after the turn, not before the prompt (Codex compacts inside the
+  turn). Unreadable rollout = unverified, never 0. Fix b0a4a83 is tested (q1 exit 0 before commit)
+  but **not reviewed or installed**: both terra reviewer starts failed with Codex 401 (595).
+- Until 594 is installed, over-limit Codex resumes fail; start fresh sessions instead.
+- Open for next session: 594 review, close, `make install`, tell neus; 592 canaries await the
+  user's go (Claude canary uses Claude plan); 593 untriaged; 581 not started; 595 new.

@@ -26,3 +26,16 @@ operation. Optional provider values remain absent when the provider does not
 report them. M2 owns mapping result and failure fields into the shared
 `tool_calls` schema; this document does not infer those values from missing
 payload fields.
+
+## Context size and compaction (pitfalls, 2026-09-26)
+
+- `turn.completed` usage is cumulative over the session. The real context size is
+  `last_token_usage.input_tokens` in the latest rollout `token_count` record
+  (`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`).
+- Sending `/compact` as a prompt to `codex exec resume` does **not** compact. The model replies
+  "Compacted." as plain text. Use `-c model_auto_compact_token_limit=N`; Codex then compacts at
+  turn start and writes a `compaction` record to the rollout (canary: context dropped to 13,937
+  while `turn.completed` showed 41,691). See issue 594.
+- Turn errors appear as rollout `task_complete.error.message` (e.g. `401 Unauthorized`); stderr may
+  only show the startup banner "Reading additional input from stdin". `codex login status` can say
+  "Logged in" while the token is rejected. See issue 595.
