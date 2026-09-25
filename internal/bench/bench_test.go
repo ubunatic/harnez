@@ -572,3 +572,27 @@ func TestCardFlagsReachTheAutoInstructionAndLabel(t *testing.T) {
 		t.Errorf("plain instruction changed: %s", agents)
 	}
 }
+
+func TestParseReadListOrderAndErrors(t *testing.T) {
+	got, err := ParseReadList(" text,card ")
+	if err != nil || len(got) != 2 || got[0] != "text" || got[1] != "card" {
+		t.Fatalf("got %v, %v", got, err)
+	}
+	for _, input := range []string{"text,,card", "unknown"} {
+		if _, err := ParseReadList(input); err == nil {
+			t.Errorf("accepted %q", input)
+		}
+	}
+}
+
+func TestParseModelsResolvesSpecsAndRejectsBadValues(t *testing.T) {
+	got, err := ParseModels("agy:flash37:low,claude:haiku:low")
+	if err != nil || len(got) != 2 || got[0].Provider != AgentAgy || got[0].Name != "gemini-3.7-flash" || got[0].Tier != "low" || got[1].Provider != AgentClaude {
+		t.Fatalf("got %#v, %v", got, err)
+	}
+	for _, input := range []string{"agy:flash37:low,", "madeup:model:low"} {
+		if _, err := ParseModels(input); err == nil {
+			t.Errorf("accepted %q", input)
+		}
+	}
+}

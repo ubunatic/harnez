@@ -11,8 +11,10 @@ which agent CLIs are available. Set `HARNEZ_BENCH_DIR` to use another directory.
 database is separate from the telemetry store.
 
 - `harnez bench tasks` lists the tasks in `internal/bench/tasks.yaml`.
-- `harnez bench run --agent <provider> [--model M] [--docs full|lite] [--cards] [--task a,b] [--repeat N]`
-  runs selected tasks and conditions.
+- `harnez bench run [--model provider:model:tier,...] [--read mode,...] [--docs full|lite] [--cards] [--task a,b] [--repeat N]`
+  runs the selected model × read-mode × task × repeat matrix. Model specs use the same names as
+  `harnez agent models`; `--agent` remains as a deprecated provider selector for default-model runs.
+  `--docs` defaults to `lite`. One table summarizes only runs from this invocation.
 - `harnez bench results [--recent N]` summarizes pass rate, average tokens, and cost by condition.
 
 Runs invoke real providers and spend provider tokens. Use small task sets and repeat counts when
@@ -26,7 +28,22 @@ documentation (`base_docs` plus task-specific `docs`). The `full` and `lite` doc
 select the corresponding document variants where available. Card delivery sends the documentation
 as PNG cards through `harnez read -I`; text delivery uses Markdown.
 
-Read tasks compare how an agent retrieves facts from a generated fixture, with few turns:
+Read tasks compare how an agent retrieves facts from a generated fixture, with few turns. For
+example, `harnez bench run --task read-one-fact --read text,card --model agy:flash37:low,claude:haiku:low`
+runs four combinations and prints one comparison table:
+
+```
+model                    read     task                     pass        input   turns        helper  duration
+agy:flash37:low          text     read-one-fact            PASS         1200       2             40     3.20s
+agy:flash37:low          card     read-one-fact            PASS          900       2             40     3.10s
+claude:haiku:low         text     read-one-fact            PASS         1100       2              0     2.80s
+claude:haiku:low         card     read-one-fact            PASS          850       2              0     2.90s
+```
+
+Each matrix cell and repeat gets a fresh temporary workspace. Agy runs also receive a unique
+meter session. Tier flags are passed where the provider supports effort/reasoning tiers.
+
+Read modes:
 
 - `native` lets the agent use its own file tools and line ranges.
 - `text` instructs it to use `harnez read -n -L a:b`.

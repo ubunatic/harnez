@@ -48,7 +48,7 @@ var providers = map[string]provider{
 	AgentAgy: {
 		defaultModel: "gemini-3.7-flash", command: "agy", parse: ParseAgy,
 		args: func(model, prompt string) []string {
-			return []string{"-p", prompt, "--model", model, "--effort", "low", "--dangerously-skip-permissions", "--output-format", "json"}
+			return []string{"-p", prompt, "--model", model, "--dangerously-skip-permissions", "--output-format", "json"}
 		},
 	},
 }
@@ -70,6 +70,29 @@ func ResolveModel(agent, model string) string {
 		return "gemini-3.8-flash"
 	}
 	return model
+}
+
+// ParseModels resolves a comma-separated model list through the agent model spec.
+func ParseModels(value string) ([]subagent.Model, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	var models []subagent.Model
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return nil, fmt.Errorf("bench: empty model in --model list")
+		}
+		m, err := subagent.ResolveModel(part)
+		if err != nil {
+			return nil, fmt.Errorf("bench: invalid model %q: %w", part, err)
+		}
+		if _, ok := providers[m.Provider]; !ok {
+			return nil, fmt.Errorf("bench: unsupported model provider %q", m.Provider)
+		}
+		models = append(models, m)
+	}
+	return models, nil
 }
 
 // Result is one agent invocation's outcome.
@@ -146,15 +169,6 @@ func readAgyUsage(sessionID string) ([]agymeter.Record, error) {
 	return agymeter.ReadUsageRecords(path, sessionID)
 }
 
-func aggregateAgyUsage(rows []agymeter.Record) (input, total, turns int) {
-	for _, row := range rows {
-		input += int(row.Prompt)
-		total += int(row.Total)
-		turns++
-	}
-	return input, total, turns
-}
-
 func splitAgyUsage(rows []agymeter.Record) (input, total, turns int, calls []int64, helpers []HelperUsage) {
 	promptByModel := make(map[string]int64)
 	for _, row := range rows {
@@ -208,8 +222,35 @@ func Invoke(ctx context.Context, run CommandRunner, agent, model, dir, prompt st
 	if !ok {
 		return Result{}, fmt.Errorf("bench: unsupported agent %q (supported: claude, codex, agy)", agent)
 	}
-	model = ResolveModel(agent, model)
-	out, err := run(ctx, dir, p.command, p.args(model, prompt)...)
+	if strings.TrimSpace(model) == "" {
+		switch agent {
+		case AgentClaude:
+			model = "claude:haiku:low"
+		case AgentCodex:
+			model = "codex:luna:low"
+		case AgentAgy:
+			model = "agy:flash37:low"
+		}
+	}
+	resolved, err := subagent.ResolveModel(model)
+	if err != nil {
+		return Result{}, err
+	}
+	if resolved.Provider != agent {
+		return Result{}, fmt.Errorf("bench: model %q belongs to provider %q, not %q", model, resolved.Provider, agent)
+	}
+	args := p.args(resolved.Name, prompt)
+	if resolved.Tier != "" && resolved.SupportsEffort() {
+		switch agent {
+		case AgentClaude:
+			args = append(args[:len(args)-1], "--effort", resolved.Tier, args[len(args)-1])
+		case AgentAgy:
+			args = append(args[:4], append([]string{"--effort", resolved.Tier}, args[4:]...)...)
+		case AgentCodex:
+			args = append(args[:len(args)-1], "-c", "model_reasoning_effort="+resolved.Tier, args[len(args)-1])
+		}
+	}
+	out, err := run(ctx, dir, p.command, args...)
 	if err != nil {
 		return Result{}, err
 	}

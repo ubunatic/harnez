@@ -110,6 +110,26 @@ func ParseRead(s string) (string, error) {
 	return "", fmt.Errorf("bench: unknown read mode %q (expected native, text, auto or card)", s)
 }
 
+// ParseReadList parses comma-separated read modes in user-specified order.
+func ParseReadList(value string) ([]string, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	var modes []string
+	for _, item := range strings.Split(value, ",") {
+		mode := strings.TrimSpace(item)
+		if mode == "" {
+			return nil, fmt.Errorf("bench: empty read mode in --read list")
+		}
+		parsed, err := ParseRead(mode)
+		if err != nil {
+			return nil, err
+		}
+		modes = append(modes, parsed)
+	}
+	return modes, nil
+}
+
 // SelectFor is Select restricted to tasks that fit the condition: read
 // conditions run fixture tasks, docs conditions run the others. Explicit IDs
 // that do not fit are an error rather than silently skipped.

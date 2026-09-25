@@ -185,6 +185,13 @@ func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 	clean := strings.ToLower(strings.TrimSpace(spec))
 	if strings.Contains(clean, ":") {
 		parts := strings.Split(clean, ":")
+		if len(parts) == 3 && isTier(parts[2]) {
+			m, err := resolveModelIn(aliases, parts[0]+":"+parts[1])
+			if err == nil {
+				m.Tier = parts[2]
+				return m, nil
+			}
+		}
 		if len(parts) == 2 {
 			if entry, ok := aliases[clean]; ok {
 				m := entry.Model

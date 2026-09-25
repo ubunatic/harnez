@@ -115,43 +115,78 @@ func newBenchRunCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			readMode, err := bench.ParseRead(readModeName)
+			readModes, err := bench.ParseReadList(readModeName)
 			if err != nil {
 				return err
 			}
-			if (fixtureYAML || multi != 0) && readMode == "" {
+			if (fixtureYAML || multi != 0) && len(readModes) == 0 {
 				return fmt.Errorf("bench: --yaml and --multi need --read")
 			}
 			if multi < 0 || multi > bench.MaxMulti {
 				return fmt.Errorf("bench: --multi must be 1-%d", bench.MaxMulti)
 			}
-			if cardFlags != "" && readMode != "auto" {
+			if cardFlags != "" && (len(readModes) != 1 || readModes[0] != "auto") {
 				return fmt.Errorf("bench: --card needs --read auto")
 			}
-			cond := bench.Condition{Docs: mode, Cards: docCards, Read: readMode, Yaml: fixtureYAML, Multi: multi, Card: strings.TrimSpace(cardFlags)}
-			selected, err := spec.SelectFor(tasks, cond)
+			models, err := bench.ParseModels(model)
 			if err != nil {
 				return err
 			}
-			opts := bench.Options{Agent: agent, Model: model, Cond: cond, RepoRoot: repo, Repeat: repeat, Run: benchRunner}
-			out := cmd.OutOrStdout()
-			return bench.RunTasks(cmd.Context(), store, spec, selected, opts, func(r bench.Run) {
-				status := "PASS"
-				switch {
-				case r.Error != "":
-					status = "ERROR " + truncateBench(r.Error, 80)
-				case !r.Pass:
-					status = "FAIL " + r.Detail
+			if len(models) == 0 {
+				defaultSpec := map[string]string{bench.AgentClaude: "claude:haiku:low", bench.AgentCodex: "codex:luna:low", bench.AgentAgy: "agy:flash37:low"}[agent]
+				if defaultSpec == "" {
+					return fmt.Errorf("bench: unsupported agent %q (supported: claude, codex, agy)", agent)
 				}
-				fmt.Fprintf(out, "%-28s %-6s %-14s %-10s in=%d out=%d total=%d turns=%d %s\n", r.Task, r.Agent, r.Model, opts.Cond.Label(), r.InputTokens, r.OutputTokens, r.TotalTokens, r.Turns, status)
-			})
+				models, err = bench.ParseModels(defaultSpec)
+				if err != nil {
+					return err
+				}
+			}
+			if len(readModes) == 0 {
+				readModes = []string{""}
+			}
+			out := cmd.OutOrStdout()
+			var matrix []bench.Run
+			for _, m := range models {
+				for _, readMode := range readModes {
+					cond := bench.Condition{Docs: mode, Cards: docCards, Read: readMode, Yaml: fixtureYAML, Multi: multi, Card: strings.TrimSpace(cardFlags)}
+					selected, err := spec.SelectFor(tasks, cond)
+					if err != nil {
+						return err
+					}
+					opts := bench.Options{Agent: m.Provider, Model: m.Spec(), Cond: cond, RepoRoot: repo, Repeat: repeat, Run: benchRunner}
+					if err := bench.RunTasks(cmd.Context(), store, spec, selected, opts, func(r bench.Run) { matrix = append(matrix, r) }); err != nil {
+						return err
+					}
+				}
+			}
+			fmt.Fprintf(out, "%-24s %-8s %-24s %-6s %10s %7s %13s %9s\n", "model", "read", "task", "pass", "input", "turns", "helper", "duration")
+			for _, r := range matrix {
+				helpers := int64(0)
+				for _, h := range r.HelperUsage {
+					helpers += h.InputTokens
+				}
+				read := r.ReadMode
+				if read == "" {
+					read = "docs"
+				}
+				status := "FAIL"
+				if r.Pass {
+					status = "PASS"
+				}
+				if r.Error != "" {
+					status = "ERROR"
+				}
+				fmt.Fprintf(out, "%-24s %-8s %-24s %-6s %10d %7d %13d %8.2fs\n", r.Model, read, r.Task, status, r.InputTokens, r.Turns, helpers, float64(r.DurationMS)/1000)
+			}
+			return nil
 		},
 	}
-	cmd.Flags().StringVar(&agent, "agent", bench.AgentClaude, "agent CLI: claude, codex or agy")
-	cmd.Flags().StringVar(&model, "model", "", "model (default: haiku for claude, gpt-6-luna for codex, gemini-3.7-flash at low effort for agy; 'luna', 'flash' and 'flash37' are aliases)")
-	cmd.Flags().StringVar(&docs, "docs", "full", "doc variant: full or lite")
+	cmd.Flags().StringVar(&agent, "agent", bench.AgentClaude, "deprecated provider selector (use --model)")
+	cmd.Flags().StringVar(&model, "model", "", "comma-separated provider:model:tier specs from 'harnez agent models'")
+	cmd.Flags().StringVar(&docs, "docs", "lite", "doc variant: full or lite")
 	cmd.Flags().BoolVar(&docCards, "cards", false, "deliver docs as PNG context cards instead of Markdown")
-	cmd.Flags().StringVar(&readModeName, "read", "", "run fixture read tasks: native, text, auto, or card (forced PNG)")
+	cmd.Flags().StringVar(&readModeName, "read", "", "comma-separated fixture read modes: native, text, auto, card")
 	cmd.Flags().BoolVar(&fixtureYAML, "yaml", false, "with --read: deliver the fixture as one YAML file instead of Markdown")
 	cmd.Flags().IntVar(&multi, "multi", 0, "with --read: split the fixture into N files by first letter (26/N letters each); bare --multi means 5, use --multi=N otherwise")
 	cmd.Flags().Lookup("multi").NoOptDefVal = "5"

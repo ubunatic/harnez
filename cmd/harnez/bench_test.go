@@ -80,7 +80,7 @@ func TestBenchRunReadModeRunsFixtureTasksAndReportsTurns(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := runBench(t, "run", "--read", "auto", "--repo", root)
-	if err != nil || strings.Count(out, "read:auto") != 2 || !strings.Contains(out, "turns=3") {
+	if err != nil || strings.Count(out, "auto") != 2 || !strings.Contains(out, "3") {
 		t.Fatalf("read run: %q %v", out, err)
 	}
 	if out, err = runBench(t, "results"); err != nil || !strings.Contains(out, "auto") || !strings.Contains(out, "3.0") {
@@ -109,7 +109,7 @@ func TestBenchRunCardModeForcesImageRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := runBench(t, "run", "--read", "card", "--task", "read-one-fact", "--repo", root)
-	if err != nil || !strings.Contains(out, "read:card") || !strings.Contains(out, "PASS") {
+	if err != nil || !strings.Contains(out, "card") || !strings.Contains(out, "PASS") {
 		t.Fatalf("card read run: %q %v", out, err)
 	}
 }
@@ -131,11 +131,11 @@ func TestBenchRunYamlAndMultiFlags(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := runBench(t, "run", "--read", "text", "--yaml", "--multi", "--task", "read-one-fact", "--repo", root)
-	if err != nil || !strings.Contains(out, "read:text+yaml+multi5") || len(files) != 5 || !strings.HasSuffix(files[0], ".yaml") {
+	if err != nil || !strings.Contains(out, "text+yaml+multi5") || len(files) != 5 || !strings.HasSuffix(files[0], ".yaml") {
 		t.Fatalf("bare --multi + --yaml: %q %v %v", out, err, files)
 	}
 	out, err = runBench(t, "run", "--read", "native", "--multi=3", "--task", "read-one-fact", "--repo", root)
-	if err != nil || !strings.Contains(out, "read:native+multi3") || len(files) != 3 {
+	if err != nil || !strings.Contains(out, "native+multi3") || len(files) != 3 {
 		t.Fatalf("--multi=3: %q %v %v", out, err, files)
 	}
 	if out, err = runBench(t, "results"); err != nil || !strings.Contains(out, "text+yaml+multi5") {
@@ -157,5 +157,36 @@ func TestBenchCardFlagNeedsReadAuto(t *testing.T) {
 		if _, err := runBench(t, args...); err == nil {
 			t.Errorf("%v accepted", args)
 		}
+	}
+}
+
+func TestBenchRunModelReadMatrixAndLiteDefault(t *testing.T) {
+	t.Setenv("HARNEZ_BENCH_DIR", filepath.Join(t.TempDir(), "bench"))
+	root, _ := filepath.Abs(filepath.Join("..", ".."))
+	var calls []string
+	benchRunner = func(_ context.Context, _, name string, args ...string) ([]byte, error) {
+		calls = append(calls, name+" "+strings.Join(args, " "))
+		if name == "codex" {
+			return []byte("{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"17\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":7,\"output_tokens\":1}}\n"), nil
+		}
+		return []byte(`{"result":"17","num_turns":2,"usage":{"input_tokens":7}}`), nil
+	}
+	defer func() { benchRunner = nil }()
+	if _, err := runBench(t, "--setup"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runBench(t, "run", "--task", "read-one-fact", "--read", "text,card", "--model", "claude:haiku:low,codex:luna:low", "--repo", root)
+	if err != nil {
+		t.Fatalf("matrix run: %v", err)
+	}
+	if len(calls) != 4 || !strings.Contains(out, "model") || strings.Count(out, "PASS") != 4 || !strings.Contains(out, "input") || !strings.Contains(out, "duration") {
+		t.Fatalf("matrix output/calls: %q %v", out, calls)
+	}
+	results, err := runBench(t, "results")
+	if err != nil || !strings.Contains(results, "lite") {
+		t.Errorf("--docs default is not lite: %q %v", results, err)
+	}
+	if !strings.Contains(calls[0], "--effort low") {
+		t.Errorf("model tier not passed: %q", calls[0])
 	}
 }
