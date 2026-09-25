@@ -1,6 +1,6 @@
 # 565 — harnez bench run: model and read-mode matrix, lite docs default
 
-**Status**: Open
+**Status**: Closed — M1-M3 delivered
 **Priority**: P2
 **Severity**: Medium
 **Category**: Bench / Tooling
