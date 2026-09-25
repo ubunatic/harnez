@@ -69,6 +69,20 @@ func TestReadLangSummaryScoringAndSavedSessions(t *testing.T) {
 	if pass, detail := task.Score(missing); pass || !strings.Contains(detail, "PascalCase") {
 		t.Errorf("missing keyword result = %v, %q", pass, detail)
 	}
+	twoMissing := strings.NewReplacer("PascalCase", "kebab-case", "Cobra", "roff").Replace(good)
+	if pass, detail := task.Score(twoMissing); pass || !strings.Contains(detail, "PascalCase") || !strings.Contains(detail, "Cobra") {
+		t.Errorf("two missing keywords result = %v, %q", pass, detail)
+	}
+	// Wordings from real passing-quality answers that earlier checks rejected.
+	for _, variant := range []string{
+		strings.Replace(good, "standard library", "stdlib first", 1),
+		strings.Replace(good, "help first", "`help` the default target", 1),
+		strings.Replace(good, "|---|---|", "| :--- | :--- |", 1),
+	} {
+		if pass, detail := task.Score(variant); !pass {
+			t.Errorf("valid wording rejected: %s\n%s", detail, variant)
+		}
+	}
 	noTable := strings.Replace(good, "|---|---|", "separator absent", 1)
 	if pass, detail := task.Score(noTable); pass || !strings.Contains(detail, "pattern") {
 		t.Errorf("missing table result = %v, %q", pass, detail)

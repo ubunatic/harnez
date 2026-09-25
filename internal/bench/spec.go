@@ -190,10 +190,14 @@ func (t Task) Score(response string) (pass bool, detail string) {
 	if t.ForbidPattern != "" && regexp.MustCompile("(?i)"+t.ForbidPattern).MatchString(response) {
 		return false, fmt.Sprintf("forbid_pattern %q matched", t.ForbidPattern)
 	}
+	var missing []string
 	for _, p := range t.RequireAll {
 		if !regexp.MustCompile("(?i)" + p).MatchString(response) {
-			return false, fmt.Sprintf("required keyword %q not found", p)
+			missing = append(missing, fmt.Sprintf("%q", p))
 		}
+	}
+	if len(missing) > 0 {
+		return false, "missing keywords: " + strings.Join(missing, ", ")
 	}
 	return true, ""
 }
