@@ -94,6 +94,26 @@ func TestBenchRunReadModeRunsFixtureTasksAndReportsTurns(t *testing.T) {
 	}
 }
 
+func TestBenchRunCardModeForcesImageRead(t *testing.T) {
+	t.Setenv("HARNEZ_BENCH_DIR", filepath.Join(t.TempDir(), "bench"))
+	root, _ := filepath.Abs(filepath.Join("..", ".."))
+	benchRunner = func(_ context.Context, dir, _ string, _ ...string) ([]byte, error) {
+		agents, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+		if err != nil || !strings.Contains(string(agents), "harnez read -I") {
+			t.Errorf("card instruction = %q, %v", agents, err)
+		}
+		return []byte(`{"result":"17","usage":{}}`), nil
+	}
+	defer func() { benchRunner = nil }()
+	if _, err := runBench(t, "--setup"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runBench(t, "run", "--read", "card", "--task", "read-one-fact", "--repo", root)
+	if err != nil || !strings.Contains(out, "read:card") || !strings.Contains(out, "PASS") {
+		t.Fatalf("card read run: %q %v", out, err)
+	}
+}
+
 func TestBenchRunYamlAndMultiFlags(t *testing.T) {
 	t.Setenv("HARNEZ_BENCH_DIR", filepath.Join(t.TempDir(), "bench"))
 	root, _ := filepath.Abs(filepath.Join("..", ".."))

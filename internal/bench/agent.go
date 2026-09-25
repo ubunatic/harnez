@@ -18,20 +18,47 @@ const (
 	AgentAgy    = "agy"
 )
 
-// Default cheap models per agent; "luna" and "flash" are accepted aliases.
-var defaultModels = map[string]string{AgentClaude: "haiku", AgentCodex: "gpt-6-luna", AgentAgy: "gemini-3.8-flash-low"}
+// provider defines the command line and output parser for one agent CLI.
+// Adding a provider requires one entry here and its output parser.
+type provider struct {
+	defaultModel string
+	command      string
+	args         func(model, prompt string) []string
+	parse        func([]byte) (Result, error)
+}
+
+var providers = map[string]provider{
+	AgentClaude: {
+		defaultModel: "haiku", command: "claude", parse: ParseClaude,
+		args: func(model, prompt string) []string {
+			return []string{"-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json", prompt}
+		},
+	},
+	AgentCodex: {
+		defaultModel: "gpt-6-luna", command: "codex", parse: ParseCodex,
+		args: func(model, prompt string) []string {
+			return []string{"exec", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-m", model, "--json", prompt}
+		},
+	},
+	AgentAgy: {
+		defaultModel: "gemini-3.8-flash-low", command: "agy", parse: ParseAgy,
+		args: func(model, prompt string) []string {
+			return []string{"-p", prompt, "--model", model, "--dangerously-skip-permissions", "--output-format", "json"}
+		},
+	},
+}
 
 // ResolveModel maps an empty model or alias to the agent's concrete model flag value.
 func ResolveModel(agent, model string) string {
 	model = strings.TrimSpace(model)
 	if model == "" {
-		return defaultModels[agent]
+		return providers[agent].defaultModel
 	}
 	switch {
 	case model == "luna":
 		return "gpt-6-luna"
 	case model == "flash" && agent == AgentAgy:
-		return defaultModels[AgentAgy]
+		return providers[AgentAgy].defaultModel
 	}
 	return model
 }
@@ -65,28 +92,16 @@ func ExecRunner(ctx context.Context, dir, name string, args ...string) ([]byte, 
 
 // Invoke sends prompt to the agent in dir using model and parses its JSON output.
 func Invoke(ctx context.Context, run CommandRunner, agent, model, dir, prompt string) (Result, error) {
-	model = ResolveModel(agent, model)
-	switch agent {
-	case AgentClaude:
-		out, err := run(ctx, dir, "claude", "-p", "--model", model, "--dangerously-skip-permissions", "--output-format", "json", prompt)
-		if err != nil {
-			return Result{}, err
-		}
-		return ParseClaude(out)
-	case AgentCodex:
-		out, err := run(ctx, dir, "codex", "exec", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-m", model, "--json", prompt)
-		if err != nil {
-			return Result{}, err
-		}
-		return ParseCodex(out)
-	case AgentAgy:
-		out, err := run(ctx, dir, "agy", "-p", prompt, "--model", model, "--dangerously-skip-permissions", "--output-format", "json")
-		if err != nil {
-			return Result{}, err
-		}
-		return ParseAgy(out)
+	p, ok := providers[agent]
+	if !ok {
+		return Result{}, fmt.Errorf("bench: unsupported agent %q (supported: claude, codex, agy)", agent)
 	}
-	return Result{}, fmt.Errorf("bench: unsupported agent %q (supported: claude, codex, agy)", agent)
+	model = ResolveModel(agent, model)
+	out, err := run(ctx, dir, p.command, p.args(model, prompt)...)
+	if err != nil {
+		return Result{}, err
+	}
+	return p.parse(out)
 }
 
 // ParseClaude reads `claude -p --output-format json` output. Input tokens

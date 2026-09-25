@@ -31,6 +31,7 @@ Read tasks compare how an agent retrieves facts from a generated fixture, with f
 - `native` lets the agent use its own file tools and line ranges.
 - `text` instructs it to use `harnez read -n -L a:b`.
 - `auto` instructs it to use `harnez read --auto`, which can return PNG cards for large content.
+- `card` instructs it to use `harnez read -I`, which forces PNG output without falling back to text.
 
 Read tasks can also vary fixture shape. `--yaml` presents the same data as one YAML file, while
 `--multi[=N]` splits it into files by first letter (five groups by default). These options combine

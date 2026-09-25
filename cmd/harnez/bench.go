@@ -92,8 +92,8 @@ func newBenchTasksCmd() *cobra.Command {
 }
 
 func newBenchRunCmd() *cobra.Command {
-	var agent, model, docs, repo, read, card string
-	var cards, yamlDocs bool
+	var agent, model, docs, repo, readModeName, cardFlags string
+	var docCards, fixtureYAML bool
 	var multi int
 	var repeat int
 	var tasks []string
@@ -115,20 +115,20 @@ func newBenchRunCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			readMode, err := bench.ParseRead(read)
+			readMode, err := bench.ParseRead(readModeName)
 			if err != nil {
 				return err
 			}
-			if (yamlDocs || multi != 0) && readMode == "" {
+			if (fixtureYAML || multi != 0) && readMode == "" {
 				return fmt.Errorf("bench: --yaml and --multi need --read")
 			}
 			if multi < 0 || multi > bench.MaxMulti {
 				return fmt.Errorf("bench: --multi must be 1-%d", bench.MaxMulti)
 			}
-			if card != "" && readMode != "auto" {
+			if cardFlags != "" && readMode != "auto" {
 				return fmt.Errorf("bench: --card needs --read auto")
 			}
-			cond := bench.Condition{Docs: mode, Cards: cards, Read: readMode, Yaml: yamlDocs, Multi: multi, Card: strings.TrimSpace(card)}
+			cond := bench.Condition{Docs: mode, Cards: docCards, Read: readMode, Yaml: fixtureYAML, Multi: multi, Card: strings.TrimSpace(cardFlags)}
 			selected, err := spec.SelectFor(tasks, cond)
 			if err != nil {
 				return err
@@ -150,12 +150,12 @@ func newBenchRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&agent, "agent", bench.AgentClaude, "agent CLI: claude, codex or agy")
 	cmd.Flags().StringVar(&model, "model", "", "model (default: haiku for claude, gpt-6-luna for codex, gemini-3.8-flash-low for agy; 'luna' and 'flash' are aliases)")
 	cmd.Flags().StringVar(&docs, "docs", "full", "doc variant: full or lite")
-	cmd.Flags().BoolVar(&cards, "cards", false, "deliver docs as PNG context cards instead of Markdown")
-	cmd.Flags().StringVar(&read, "read", "", "run the fixture read tasks instead: native, text (harnez read) or auto (harnez read --auto)")
-	cmd.Flags().BoolVar(&yamlDocs, "yaml", false, "with --read: deliver the fixture as one YAML file instead of Markdown")
+	cmd.Flags().BoolVar(&docCards, "cards", false, "deliver docs as PNG context cards instead of Markdown")
+	cmd.Flags().StringVar(&readModeName, "read", "", "run fixture read tasks: native, text, auto, or card (forced PNG)")
+	cmd.Flags().BoolVar(&fixtureYAML, "yaml", false, "with --read: deliver the fixture as one YAML file instead of Markdown")
 	cmd.Flags().IntVar(&multi, "multi", 0, "with --read: split the fixture into N files by first letter (26/N letters each); bare --multi means 5, use --multi=N otherwise")
 	cmd.Flags().Lookup("multi").NoOptDefVal = "5"
-	cmd.Flags().StringVar(&card, "card", "", "with --read auto: card flags the agent is told to add to harnez read, e.g. --card=--style=compact")
+	cmd.Flags().StringVar(&cardFlags, "card", "", "with --read auto: card flags the agent is told to add to harnez read, e.g. --card=--style=compact")
 	cmd.Flags().StringSliceVar(&tasks, "task", nil, "task IDs to run (default: all)")
 	cmd.Flags().IntVar(&repeat, "repeat", 1, "runs per task")
 	cmd.Flags().StringVar(&repo, "repo", ".", "repository root holding the docs")

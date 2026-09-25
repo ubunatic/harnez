@@ -95,7 +95,7 @@ func (s *Spec) Select(ids []string) ([]Task, error) {
 }
 
 // ReadModes are the supported ways to read fixtures.
-var ReadModes = []string{"native", "text", "auto"}
+var ReadModes = []string{"native", "text", "auto", "card"}
 
 // ParseRead validates a --read value; empty means docs-delivery mode.
 func ParseRead(s string) (string, error) {
@@ -107,7 +107,7 @@ func ParseRead(s string) (string, error) {
 			return s, nil
 		}
 	}
-	return "", fmt.Errorf("bench: unknown read mode %q (expected native, text or auto)", s)
+	return "", fmt.Errorf("bench: unknown read mode %q (expected native, text, auto or card)", s)
 }
 
 // SelectFor is Select restricted to tasks that fit the condition: read

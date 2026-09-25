@@ -17,6 +17,9 @@ read_modes:
     Answer from the docs listed below. Read them only with `harnez read --auto{{card}} <file>`
     (add `-L <from>:<to>` for a range). If it prints `See @<png>` lines, open each PNG
     with your image-capable file reader and read the text from the image.
+  card: |
+    Answer from the docs listed below. Read them only with `harnez read -I <file>`
+    (add `-L <from>:<to>` for a range). This forces PNG output and never falls back to text.
 
 base_docs:
   - docs/practices/AgenticLoop.md

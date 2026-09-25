@@ -324,6 +324,9 @@ func TestReadConditionSelectsAndStagesOnlyFixtures(t *testing.T) {
 		if strings.Contains(string(agents), "AgenticLoop") {
 			t.Errorf("%s: read workspace leaks project docs", mode)
 		}
+		if mode == "card" && !strings.Contains(string(agents), "harnez read -I") {
+			t.Errorf("card mode does not force image output:\n%s", agents)
+		}
 		if cond.Label() != "read:"+mode {
 			t.Errorf("label = %q", cond.Label())
 		}
@@ -339,6 +342,12 @@ func TestReadConditionSelectsAndStagesOnlyFixtures(t *testing.T) {
 	}
 	if _, err := ParseRead("bogus"); err == nil {
 		t.Error("ParseRead accepted bogus")
+	}
+}
+
+func TestParseReadAcceptsCard(t *testing.T) {
+	if got, err := ParseRead("card"); err != nil || got != "card" {
+		t.Fatalf("ParseRead(card) = %q, %v", got, err)
 	}
 }
 
