@@ -1,6 +1,6 @@
 # 578 — Make harnez agent safely discoverable and usable via Bash or MCP
 
-**Status**: Open
+**Status**: Closed — generated Subagent Policy names MCP vs Bash routes, lifecycle verbs, no 'harnez advisor' (ea5a485)
 **Priority**: P2
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
