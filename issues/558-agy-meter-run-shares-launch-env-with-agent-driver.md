@@ -1,6 +1,6 @@
 # 558 — agy-meter-run shares launch env with agent driver
 
-**Status**: Open
+**Status**: Closed — M1 delivered, single launch env
 **Priority**: P2
 **Severity**: Minor
 **Category**: Refactor
