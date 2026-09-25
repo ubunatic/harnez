@@ -27,3 +27,7 @@ Implement the design in [the finder plugin study](../docs/studies/2026-09-25-fin
 ## 3. Implementation & Verification Plan
 
 Implement the registry, execution, result normalization/ranking, CLI targets, fallbacks, and MCP surface. Add focused tests for configuration overrides, concurrent execution, timeout/failure isolation, deduplication, ranking, and output formats. Verify CLI and MCP behavior, then update relevant documentation.
+
+## Blocked on
+
+neus ticket 009 (`--root`, `--kind`, `--timeout`). Full neus contract: see the design doc, section "neus finder contract".
