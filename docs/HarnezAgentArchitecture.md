@@ -60,6 +60,8 @@ The explicit verbs are:
 
 ```text
 harnez agent start --name w --model luna -f task.md -- "extra instructions"
+harnez agent start --detach --name w --model luna -p "background task"
+harnez agent wait w --timeout 5m
 harnez agent resume --name w "next step"
 harnez agent chat
 harnez agent chat attach --name w
@@ -90,15 +92,28 @@ codex mcp list
 
 Codex starts the configured process and discovers `harnez_spawn_agent`,
 `harnez_list_agents`, `harnez_agent_status`, `harnez_resume_agent`, and
-`harnez_stop_agent`. These tools invoke the matching `harnez agent` commands,
-so the caller's Harnez role and lineage restrictions still apply. The server
-uses stdout only for MCP protocol messages; keep diagnostic output on stderr.
+`harnez_stop_agent`, and `harnez_wait_agent`. These tools invoke the matching
+`harnez agent` commands, so the caller's Harnez role and lineage restrictions
+still apply. The server uses stdout only for MCP protocol messages; keep
+diagnostic output on stderr.
+
+`harnez_spawn_agent` accepts `prompt` and optional `model`, `role`, `dir`,
+`name`, and `async` arguments. `async` defaults to `false`, preserving the
+original behavior of waiting for and returning the result. With `async: true`,
+the call starts a detached worker and promptly returns its session record with
+`status: "running"`, session ID, worker PID, and stdout/stderr log paths.
+`harnez_wait_agent` takes `session_id` (ID or name) and optional integer
+`timeout_seconds`. It waits for a terminal state and returns the session record
+including the captured response and messages. On timeout it returns the still
+running session record; callers may wait again. If the worker exits without
+recording a terminal state, wait marks the session failed with an error.
+Completed sessions stay in the registry until an authorized caller deletes
+them with `harnez agent delete --name <session>`.
 
 For a noninteractive Codex integration check that must call an MCP tool, use
 Codex's `--approve-for-me` option; the `never` approval policy rejects MCP tool
 calls that require approval. A successful spawn returns the Harnez session and
-agent response as structured tool output. Completed sessions remain in the
-Harnez registry until deleted by a caller authorized to manage them.
+agent response as structured tool output.
 
 ### 2.2 Prompt assembly
 
