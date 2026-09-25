@@ -30,6 +30,12 @@ keeps helper calls as extra data where we have them.
 - Unit tests with fake meter rows: main + helper, helper only between main calls, single model.
 - No live runs in this milestone. One `make test-q1`, commit `(issue 562 M1)`.
 
+### M1 delivered (7165ff5)
+
+`splitAgyUsage` picks the model with the most prompt tokens as main; helpers stored per model
+and shown in results. Host: diff OK, make test-q1 green, installed. Leftover:
+`aggregateAgyUsage` is now unused; remove it with the next code change.
+
 ## M2 — read benchmark run (host runs it, after user go)
 
 - Conditions: `native`, `text`, `card` on agy `flash37` (low effort).
