@@ -24,7 +24,6 @@ type Config struct {
 	Permissions        Permissions          `yaml:"permissions"`
 	Hooks              []Hook               `yaml:"hooks"`
 	Env                map[string]string    `yaml:"env"`
-	MCPServers         []MCPServer          `yaml:"mcp_servers"`
 	StatusLine         bool                 `yaml:"status_line"`
 	Commands           []Command            `yaml:"commands"`
 	Skills             []Command            `yaml:"skills"`
@@ -155,13 +154,6 @@ type Hook struct {
 	Event   string `yaml:"event"`
 	Matcher string `yaml:"matcher,omitempty"`
 	Command string `yaml:"command"`
-}
-
-type MCPServer struct {
-	Name    string            `yaml:"name"`
-	Command string            `yaml:"command"`
-	Args    []string          `yaml:"args"`
-	Env     map[string]string `yaml:"env"`
 }
 
 type DistillAutopipe struct {

@@ -116,7 +116,6 @@ env:
   DEBUG: "false"
 
 # MCP server definitions (empty = none)
-mcp_servers: []
 
 # Custom slash commands written to ~/.claude/commands/ and ~/.prime/agent/prompts/
 commands:
@@ -174,7 +173,7 @@ agents_md:
 
 Claude Code writes `settings.json` itself (theme, plugins, auth).
 `harnez` only touches the keys it owns (`effortLevel`, `permissions`, `hooks`,
-`env`, `spinnerVerbs`, `mcpServers`, and `model` if explicitly set). If `model`
+`env`, `spinnerVerbs`, and `model` if explicitly set). If `model`
 is omitted from `config.yaml`, user or client selection in `settings.json` is
 left unmanaged. All other unmanaged keys are preserved on every apply.
 

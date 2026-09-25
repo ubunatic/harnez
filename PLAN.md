@@ -91,12 +91,6 @@ keybindings:
   - key: "ctrl+y"
     action: acceptSuggestion
 
-mcp_servers:
-  - name: filesystem
-    command: npx
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/home/uwe"]
-    env: {}
-
 commands:
   - name: review
     description: "Review current branch against main"

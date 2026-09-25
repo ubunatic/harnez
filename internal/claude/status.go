@@ -38,7 +38,6 @@ func RunStatus(configPath string, cfg *Config, target string, selection Set) err
 	fmt.Printf("  %-14s %d allow, %d deny\n", "permissions:",
 		len(cfg.Permissions.Allow), len(cfg.Permissions.Deny))
 	fmt.Printf("  %-14s %d\n", "hooks:", len(cfg.Hooks))
-	fmt.Printf("  %-14s %d\n", "mcp_servers:", len(cfg.MCPServers))
 	fmt.Printf("  %-14s %d\n", "commands:", len(cfg.Commands))
 	fmt.Printf("  %-14s %d\n", "skills:", len(cfg.Skills))
 	fmt.Printf("  %-14s %d\n", "distill:", len(distillAdapters(cfg)))

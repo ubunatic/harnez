@@ -65,7 +65,7 @@ JSON files use **no markers** — keys are merged directly.
 
 `cleanSettingsJSON`: delete all `managedSettingsKeys` from the parsed map, write back (or remove file if empty).
 
-Managed keys: `model`, `effortLevel`, `permissions`, `hooks`, `env`, `spinnerVerbs`, `mcpServers`.
+Managed keys: `model`, `effortLevel`, `permissions`, `hooks`, `env`, `spinnerVerbs`.
 
 ## Round-trip stability
 

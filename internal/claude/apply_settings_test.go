@@ -1,7 +1,6 @@
 package claude
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,7 +12,7 @@ import (
 	"ubunatic.com/harnez/internal/jsonc"
 )
 
-func TestUnfilteredApplySettingsMatchesFixedGolden(t *testing.T) {
+func TestUnfilteredApplySettingsDoesNotWriteMCPServers(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cfg, err := LoadConfig("testdata/m3-settings.yaml")
@@ -28,10 +27,21 @@ func TestUnfilteredApplySettingsMatchesFixedGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read settings.json: %v", err)
 	}
-	got := sha256.Sum256(data)
-	const want = "104fe8958c49399cc9160624f1934dac0735d3cef8a0b801cf5db79c388c38e4"
-	if actual := fmt.Sprintf("%x", got); actual != want {
-		t.Fatalf("settings.json SHA-256 = %s, want fixed golden %s", actual, want)
+	doc := jsonc.Read(string(data))
+	if _, ok := doc["mcpServers"]; ok {
+		t.Fatal("settings.json contains mcpServers")
+	}
+}
+
+func TestConfiguredHarnezMCPPermissionIsApplied(t *testing.T) {
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded: %v", err)
+	}
+	doc := buildSettingsDoc(cfg, Set{})
+	permissions := doc["permissions"].(map[string]any)
+	if got := jsonc.ToStrings(permissions["allow"]); !slices.Contains(got, "mcp__harnez__*") {
+		t.Fatalf("configured permissions.allow = %v, want mcp__harnez__*", got)
 	}
 }
 
@@ -53,12 +63,11 @@ func TestSelectedApplyRemovesOnlyHarnezOwnedSettings(t *testing.T) {
 	}
 	cfg := &Config{
 		Model:       "sonnet",
-		Permissions: Permissions{Allow: []string{"harnez:permission"}},
+		Permissions: Permissions{Allow: []string{"harnez:permission", "mcp__harnez__*"}},
 		Hooks: []Hook{
 			{Event: "PreToolUse", Command: "harnez exec hook"},
 			{Event: "PostToolUse", Command: "harnez only hook"},
 		},
-		MCPServers: []MCPServer{{Name: "harnez-server", Command: "harnez-mcp"}},
 		StatusLine: true,
 	}
 	docsOnly := Set{Docs: true, Skills: true}
@@ -68,7 +77,7 @@ func TestSelectedApplyRemovesOnlyHarnezOwnedSettings(t *testing.T) {
 
 	doc := jsonc.Read(settingsPath)
 	permissions := doc["permissions"].(map[string]any)
-	if got := jsonc.ToStrings(permissions["allow"]); len(got) != 2 || !slices.Contains(got, "user:permission") || !slices.Contains(got, "harnez:permission") {
+	if got := jsonc.ToStrings(permissions["allow"]); len(got) != 3 || !slices.Contains(got, "user:permission") || !slices.Contains(got, "harnez:permission") || !slices.Contains(got, "mcp__harnez__*") {
 		t.Errorf("permissions.allow = %v, want existing and configured entries", got)
 	}
 	hooks := doc["hooks"].(map[string]any)

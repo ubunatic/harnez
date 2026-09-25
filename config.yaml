@@ -174,6 +174,7 @@ debloat:
 
 permissions:
   allow:
+    - "mcp__harnez__*"
     # system diagnostics
     - "Bash(journalctl *)"
     - "Bash(sudo smartctl *)"
@@ -268,8 +269,6 @@ env:
 distill_autopipe:
   pi_extension_target: ~/.pi/agent/extensions/harnez-distill.ts
   opencode_plugin_target: ~/.config/opencode/plugins/harnez-distill.ts
-
-mcp_servers: []
 
 # MVP: cwd only. Renders on its own row above Claude Code's built-in footer
 # badges (esc-to-interrupt / ? for shortcuts) — it cannot share that row.

@@ -9,7 +9,4 @@ hooks:
 env:
   M3_FIXTURE: stable
 verbs: [go, stop]
-mcp_servers:
-  - name: configured-server
-    command: configured-mcp
 status_line: true

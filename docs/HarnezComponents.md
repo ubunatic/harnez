@@ -275,7 +275,7 @@ E remains the fallback for one-off setups and costs nothing to keep.
 | `usage` (transitional) | `statusLine`, `harnez-agent-collector` systemd unit | `usage`, `statusline`, … until moved to loom |
 
 Always applied regardless of selection: `model`, `effortLevel`, `permissions`, `env`,
-`spinnerVerbs`, `mcpServers`, decommissioned-artifact cleanup, bash shims. These are
+`spinnerVerbs`, decommissioned-artifact cleanup, bash shims. These are
 harness settings, not component features.
 
 The issue tracker (`issues`, `find`, `index`) stays in core: it installs nothing into

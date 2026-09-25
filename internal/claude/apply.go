@@ -180,7 +180,7 @@ func removeHarnezHooks(value any) (map[string]any, bool) {
 
 // managedSettingsKeys are the top-level keys harnez writes to settings.json.
 var managedSettingsKeys = []string{
-	"model", "effortLevel", "permissions", "hooks", "env", "spinnerVerbs", "mcpServers", "statusLine",
+	"model", "effortLevel", "permissions", "hooks", "env", "spinnerVerbs", "statusLine",
 }
 
 // Model alias mappings.
@@ -243,20 +243,6 @@ func buildSettingsDoc(cfg *Config, selection Set) map[string]any {
 	}
 	if len(cfg.Verbs) > 0 {
 		doc["spinnerVerbs"] = map[string]any{"mode": "replace", "verbs": cfg.Verbs}
-	}
-	if len(cfg.MCPServers) > 0 {
-		servers := map[string]any{}
-		for _, s := range cfg.MCPServers {
-			srv := map[string]any{"command": s.Command}
-			if len(s.Args) > 0 {
-				srv["args"] = s.Args
-			}
-			if len(s.Env) > 0 {
-				srv["env"] = s.Env
-			}
-			servers[s.Name] = srv
-		}
-		doc["mcpServers"] = servers
 	}
 	if cfg.StatusLine && selection.HasComponent("usage") {
 		// cwd-only MVP; Claude Code renders this on its own row above the
