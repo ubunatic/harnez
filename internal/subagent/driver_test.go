@@ -1,7 +1,6 @@
 package subagent
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -10,7 +9,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestCodexCheckResumable(t *testing.T) {
@@ -62,6 +60,7 @@ func TestResolveModelThreePartProviderSpec(t *testing.T) {
 }
 
 func TestCodexPassesReasoningEffort(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	var got []string
 	d := CodexDriver{Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		got = args
@@ -70,7 +69,7 @@ func TestCodexPassesReasoningEffort(t *testing.T) {
 	if _, err := d.Run(context.Background(), RunOptions{Model: Model{Name: "gpt-5.6-luna", Tier: "med"}, Prompt: "go"}); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "-m", "gpt-5.6-luna", "-c", "model_reasoning_effort=medium", "go"}
+	want := []string{"exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "-m", "gpt-5.6-luna", "-c", "model_reasoning_effort=medium", "-c", "model_auto_compact_token_limit=200000", "go"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("run args = %q, want %q", got, want)
 	}
@@ -78,9 +77,28 @@ func TestCodexPassesReasoningEffort(t *testing.T) {
 	if _, err := d.Resume(context.Background(), "t1", "continue", Model{Tier: "low"}); err != nil {
 		t.Fatal(err)
 	}
-	want = []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_reasoning_effort=low", "continue"}
+	want = []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_reasoning_effort=low", "-c", "model_auto_compact_token_limit=200000", "continue"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("resume args = %q, want %q", got, want)
+	}
+}
+
+func TestCodexExecArgsUseConfiguredAutoCompactLimit(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".harnez"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".harnez", "config.yaml"), []byte("agent:\n  compact_threshold_tokens: 12345\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		codexRunArgs(Model{Name: "gpt"}, "prompt"),
+		codexResumeArgs("thread", "prompt", Model{Name: "gpt"}),
+	} {
+		if !strings.Contains(strings.Join(args, " "), "model_auto_compact_token_limit=12345") {
+			t.Fatalf("args = %q, want configured auto-compact limit", args)
+		}
 	}
 }
 
@@ -285,15 +303,8 @@ func TestCodexDriver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.SessionID != "s1" || r.Response != "done" || r.CachedTokens != 3 || r.ContextTokens != 13 {
+	if r.SessionID != "s1" || r.Response != "done" || r.CachedTokens != 3 || r.ContextTokens != 0 {
 		t.Fatalf("unexpected result %#v", r)
-	}
-	called := false
-	if compacted, err := EnsureContextUnderThreshold(r.ContextTokens, 12, func() (*TurnResult, error) {
-		called = true
-		return &TurnResult{Response: "Context compacted.", ContextTokens: 1}, nil
-	}); err != nil || !compacted || !called {
-		t.Fatalf("cached input was not included in threshold decision: compacted=%v called=%v err=%v", compacted, called, err)
 	}
 }
 
@@ -360,37 +371,20 @@ func TestCodexStreamEmitsEventsInOrder(t *testing.T) {
 	}
 }
 
-func TestCodexCompactCapturedEventSequence(t *testing.T) {
-	data, err := os.ReadFile("testdata/codex_compact_events.jsonl")
-	if err != nil {
+func TestCodexReadsLastTokenUsageFromRollout(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	path := filepath.Join(home, "sessions", "2026", "09", "26", "rollout-2026-09-26T00-26-57-session.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	d := CodexDriver{Start: func(context.Context, string, ...string) (io.Reader, func() error, error) {
-		return bytes.NewReader(data), func() error { return nil }, nil
-	}}
-	r, err := d.Compact(context.Background(), "captured-thread")
-	if err != nil {
+	const rollout = `{"timestamp":"2026-09-25T22:27:32.332Z","ordinal":55,"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":41691},"last_token_usage":{"input_tokens":13937,"cached_input_tokens":11008,"output_tokens":5}}}}` + "\n"
+	if err := os.WriteFile(path, []byte(rollout), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if r.Response != "Compacted." || r.ContextTokens != 34255 {
-		t.Fatalf("captured result = %+v", r)
-	}
-	if err := VerifyCompaction(40000, r); err != nil {
-		t.Fatalf("captured sequence should acknowledge and verify a lower context: %v", err)
-	}
-
-	// Some Codex versions omit the assistant message; turn.completed is the
-	// completion acknowledgement, while VerifyCompaction still gates dispatch.
-	withoutMessage := []byte(`{"type":"turn.completed","usage":{"input_tokens":100}}` + "\n")
-	d.Start = func(context.Context, string, ...string) (io.Reader, func() error, error) {
-		return bytes.NewReader(withoutMessage), func() error { return nil }, nil
-	}
-	r, err = d.Compact(context.Background(), "captured-thread")
-	if err != nil || r.Response == "" {
-		t.Fatalf("compact without assistant text: result=%+v err=%v", r, err)
-	}
-	if err := VerifyCompaction(200, r); err != nil {
-		t.Fatalf("completed compact turn with lower context should verify: %v", err)
+	got, err := codexRolloutContextTokens("session")
+	if err != nil || got != 13937 {
+		t.Fatalf("rollout context tokens = %d, %v", got, err)
 	}
 }
 
@@ -403,71 +397,15 @@ func TestCodexResumeUsesSameSandboxAsRun(t *testing.T) {
 	if _, err := d.Resume(context.Background(), "t1", "go", Model{}); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "go"}
+	want := []string{"exec", "resume", "t1", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "-c", "model_auto_compact_token_limit=200000", "go"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("resume args = %q, want %q", got, want)
 	}
 }
 
-func TestCodexCompactCompletesBeforeResumePrompt(t *testing.T) {
-	reader, writer := io.Pipe()
-	started := make(chan struct{})
-	promptSent := make(chan struct{})
-	d := CodexDriver{
-		Start: func(_ context.Context, _ string, args ...string) (io.Reader, func() error, error) {
-			if got := args[len(args)-1]; got != "/compact" {
-				t.Fatalf("compact prompt = %q", got)
-			}
-			close(started)
-			return reader, func() error { return nil }, nil
-		},
-		Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {
-			if got := args[len(args)-1]; got != "new task" {
-				t.Errorf("resume prompt = %q, want new task", got)
-			}
-			close(promptSent)
-			return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`), nil
-		},
-	}
-	result := make(chan error, 1)
-	go func() {
-		if _, err := d.Compact(context.Background(), "t1"); err != nil {
-			result <- err
-			return
-		}
-		_, err := d.Resume(context.Background(), "t1", "new task", Model{})
-		result <- err
-	}()
-	<-started
-	if _, err := writer.Write([]byte("{\"type\":\"turn.started\"}\n")); err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case <-promptSent:
-		t.Fatal("resume prompt was sent while compaction completion was held")
-	case <-time.After(50 * time.Millisecond):
-	}
-	if _, err := writer.Write([]byte("{\"type\":\"turn.completed\"}\n")); err != nil {
-		t.Fatal(err)
-	}
-	_ = writer.Close()
-	select {
-	case <-promptSent:
-	case err := <-result:
-		t.Fatalf("resume ended before sending prompt: %v", err)
-	case <-time.After(time.Second):
-		t.Fatal("resume prompt was not sent after compaction completed")
-	}
-	if err := <-result; err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestCodexCompactRequiresCompletionEvent(t *testing.T) {
-	d := CodexDriver{Start: func(context.Context, string, ...string) (io.Reader, func() error, error) {
-		return strings.NewReader("{\"type\":\"turn.started\"}\n"), func() error { return nil }, nil
-	}}
-	if _, err := d.Compact(context.Background(), "t1"); err == nil || !strings.Contains(err.Error(), "without turn.completed") {
-		t.Fatalf("error = %v, want missing completion error", err)
+func TestCodexCompactDoesNotSendPrompt(t *testing.T) {
+	d := CodexDriver{}
+	if _, err := d.Compact(context.Background(), "t1"); err == nil || !strings.Contains(err.Error(), "manual /compact is unsupported") {
+		t.Fatalf("error = %v, want unsupported manual compact", err)
 	}
 }

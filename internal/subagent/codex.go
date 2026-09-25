@@ -23,8 +23,6 @@ type CodexDriver struct {
 	Start func(context.Context, string, ...string) (io.Reader, func() error, error)
 }
 
-const codexCompactTimeout = 2 * time.Minute
-
 func (d CodexDriver) CheckResumable(providerID string) (bool, string) {
 	home := os.Getenv("CODEX_HOME")
 	if home == "" {
@@ -40,6 +38,64 @@ func (d CodexDriver) CheckResumable(providerID string) (bool, string) {
 		return true, ""
 	}
 	return false, "Codex session file is missing"
+}
+
+func codexRolloutContextTokens(providerID string) (int, error) {
+	home := os.Getenv("CODEX_HOME")
+	if home == "" {
+		var err error
+		home, err = os.UserHomeDir()
+		if err != nil {
+			return 0, err
+		}
+		home = filepath.Join(home, ".codex")
+	}
+	matches, err := filepath.Glob(filepath.Join(home, "sessions", "*", "*", "*", "rollout-*"+providerID+".jsonl"))
+	if err != nil {
+		return 0, err
+	}
+	if len(matches) == 0 {
+		return 0, fmt.Errorf("codex rollout for session %s not found", providerID)
+	}
+	latest := matches[0]
+	for _, candidate := range matches[1:] {
+		if a, aErr := os.Stat(candidate); aErr == nil {
+			if b, bErr := os.Stat(latest); bErr != nil || a.ModTime().After(b.ModTime()) {
+				latest = candidate
+			}
+		}
+	}
+	f, err := os.Open(latest)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	var tokens int
+	s := bufio.NewScanner(f)
+	s.Buffer(make([]byte, 4096), 8<<20)
+	for s.Scan() {
+		var event struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Type string `json:"type"`
+				Info struct {
+					LastTokenUsage struct {
+						Input int `json:"input_tokens"`
+					} `json:"last_token_usage"`
+				} `json:"info"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(s.Bytes(), &event) == nil && event.Type == "event_msg" && event.Payload.Type == "token_count" {
+			tokens = event.Payload.Info.LastTokenUsage.Input
+		}
+	}
+	if err := s.Err(); err != nil {
+		return 0, err
+	}
+	if tokens <= 0 {
+		return 0, fmt.Errorf("codex rollout for session %s has no last_token_usage input count", providerID)
+	}
+	return tokens, nil
 }
 
 func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error) {
@@ -60,6 +116,7 @@ func (d CodexDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error)
 	if err != nil {
 		return nil, err
 	}
+	setCodexRolloutContext(r, r.SessionID)
 	r.DurationMS = time.Since(start).Milliseconds()
 	return r, nil
 }
@@ -72,7 +129,15 @@ func codexEffort(tier string) string {
 }
 
 func codexRunArgs(model Model, prompt string) []string {
-	return []string{"exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "-m", model.Name, "-c", "model_reasoning_effort=" + codexEffort(model.Tier), prompt}
+	return []string{"exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "-m", model.Name, "-c", "model_reasoning_effort=" + codexEffort(model.Tier), "-c", fmt.Sprintf("model_auto_compact_token_limit=%d", codexCompactThreshold(model)), prompt}
+}
+
+func codexCompactThreshold(model Model) int {
+	n, err := CompactThreshold(model)
+	if err != nil || n <= 0 {
+		return DefaultCompactThresholdTokens
+	}
+	return n
 }
 
 // codexResumeArgs mirrors the sandbox settings of Run: a resumed worker must
@@ -83,6 +148,7 @@ func codexResumeArgs(id, prompt string, model Model) []string {
 	if codexEffort(model.Tier) != "" {
 		args = append(args, "-c", "model_reasoning_effort="+codexEffort(model.Tier))
 	}
+	args = append(args, "-c", fmt.Sprintf("model_auto_compact_token_limit=%d", codexCompactThreshold(model)))
 	return append(args, prompt)
 }
 
@@ -94,65 +160,22 @@ func (d CodexDriver) runResume(ctx context.Context, id, prompt string, model Mod
 	if err != nil {
 		return nil, fmt.Errorf("codex resume: %w", err)
 	}
-	return parseCodex(b)
+	r, err := parseCodex(b)
+	if err != nil {
+		return nil, err
+	}
+	setCodexRolloutContext(r, id)
+	return r, nil
+}
+
+func setCodexRolloutContext(result *TurnResult, providerID string) {
+	result.ContextTokens = 0
+	if tokens, err := codexRolloutContextTokens(providerID); err == nil {
+		result.ContextTokens = tokens
+	}
 }
 func (d CodexDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, codexCompactTimeout)
-	defer cancel()
-	start := d.Start
-	if start == nil {
-		start = startProcess
-	}
-	rd, wait, err := start(ctx, "codex", "exec", "resume", id, "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "/compact")
-	if err != nil {
-		return nil, fmt.Errorf("codex compact: %w", err)
-	}
-	p := &codexParser{}
-	completed := false
-	s := bufio.NewScanner(rd)
-	s.Buffer(make([]byte, 4096), 8<<20)
-	for s.Scan() {
-		var e struct {
-			Type    string `json:"type"`
-			Payload struct {
-				Type string `json:"type"`
-				Info struct {
-					LastTokenUsage struct {
-						Input int `json:"input_tokens"`
-					} `json:"last_token_usage"`
-				} `json:"info"`
-			} `json:"payload"`
-		}
-		_ = json.Unmarshal(s.Bytes(), &e)
-		if e.Payload.Type == "token_count" && e.Payload.Info.LastTokenUsage.Input > 0 {
-			p.r.ContextTokens = e.Payload.Info.LastTokenUsage.Input
-		}
-		if e.Type == "turn.completed" {
-			completed = true
-		}
-		p.feed(s.Bytes())
-	}
-	readErr := s.Err()
-	waitErr := wait()
-	if readErr != nil {
-		return nil, fmt.Errorf("codex compact: %w", readErr)
-	}
-	if ctx.Err() != nil {
-		return nil, fmt.Errorf("codex compact: timed out waiting for turn.completed after %s: %w", codexCompactTimeout, ctx.Err())
-	}
-	if waitErr != nil {
-		return nil, fmt.Errorf("codex compact: %w", waitErr)
-	}
-	if !completed {
-		return nil, fmt.Errorf("codex compact: Codex stream ended without turn.completed; resume prompt was not sent")
-	}
-	// Codex versions may complete the /compact turn without emitting an
-	// agent_message. A completed compact operation is the provider's ack; the
-	// caller still requires a verified context-token drop before dispatch.
-	if p.r.Response == "" {
-		p.r.Response = "Codex compact turn completed"
-	}
-	return &p.r, nil
+	return nil, fmt.Errorf("codex manages context automatically during exec; manual /compact is unsupported")
 }
 func (d CodexDriver) Stop(context.Context, string) error {
 	return nil
@@ -196,8 +219,7 @@ type StreamingDriver interface {
 
 // codexParser folds Codex JSONL lines into a TurnResult and live events.
 type codexParser struct {
-	r                 TurnResult
-	hasContextCounter bool
+	r TurnResult
 }
 
 func (p *codexParser) feed(line []byte) (Event, bool) {
@@ -245,13 +267,9 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 		if e.Usage.Details.Cached > p.r.CachedTokens {
 			p.r.CachedTokens = e.Usage.Details.Cached
 		}
-		if !p.hasContextCounter {
-			p.r.ContextTokens = e.Usage.Input
-		}
 	}
 	if e.Payload.Type == "token_count" && e.Payload.Info.LastTokenUsage.Input > 0 {
 		p.r.ContextTokens = e.Payload.Info.LastTokenUsage.Input
-		p.hasContextCounter = true
 	}
 	return ev, true
 }
@@ -335,6 +353,7 @@ func (d CodexDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) 
 	if err != nil {
 		return nil, fmt.Errorf("codex exec: %w", err)
 	}
+	setCodexRolloutContext(r, r.SessionID)
 	r.DurationMS = time.Since(start).Milliseconds()
 	return r, nil
 }
@@ -344,6 +363,7 @@ func (d CodexDriver) ResumeStream(ctx context.Context, id, prompt string, model 
 	if err != nil {
 		return nil, fmt.Errorf("codex resume: %w", err)
 	}
+	setCodexRolloutContext(r, id)
 	return r, nil
 }
 

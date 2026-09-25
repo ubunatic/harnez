@@ -329,9 +329,13 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		}
 		return driver.Compact(cmd.Context(), sess.ProviderID())
 	}
-	compacted, err = subagent.EnsureContextUnderThreshold(contextTokens, threshold, compactFn)
-	if err != nil {
-		return fmt.Errorf("refusing to send resume prompt: %w", err)
+	// Noninteractive Codex exec applies configured automatic compaction during
+	// resume; its updated context count is read from the rollout afterward.
+	if sess.Provider != "codex" || interactive {
+		compacted, err = subagent.EnsureContextUnderThreshold(contextTokens, threshold, compactFn)
+		if err != nil {
+			return fmt.Errorf("refusing to send resume prompt: %w", err)
+		}
 	}
 	if compacted {
 		compactNote = fmt.Sprintf("verified /compact at %s context tokens", humanCount(contextTokens))
@@ -442,6 +446,9 @@ func compactSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagen
 	}
 	if x.HarnessType == "interactive" && x.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be compacted: %s did not expose a provider session ID", x.Name, x.Provider)
+	}
+	if x.Provider == "codex" {
+		return fmt.Errorf("codex manages context automatically during exec; manual /compact is unsupported")
 	}
 	driver := withAgyMeterSession(agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model, Tier: x.Tier}, x.WorkingDir), x.ID)
 	_, err := driver.Compact(cmd.Context(), x.ProviderID())

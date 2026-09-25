@@ -1188,7 +1188,7 @@ func TestAgentResumeCompactsOnceAndSeparatesAck(t *testing.T) {
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensCumulative: 7000000, TokensSinceCompact: 250000, ContextTokens: 250000}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "claude", Model: "luna", Status: "completed", TokensCumulative: 7000000, TokensSinceCompact: 250000, ContextTokens: 250000}); err != nil {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
@@ -1211,6 +1211,51 @@ func TestAgentResumeCompactsOnceAndSeparatesAck(t *testing.T) {
 	}
 	if subagent.ShouldCompact(sess.TokensSinceCompact) {
 		t.Fatal("next resume must not compact again")
+	}
+}
+
+type codexAutoCompactDriver struct {
+	recordingAgentDriver
+	compactCalls int
+	resumeCalls  int
+}
+
+func (d *codexAutoCompactDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
+	d.compactCalls++
+	return nil, errors.New("manual compact must not be called")
+}
+
+func (d *codexAutoCompactDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
+	d.resumeCalls++
+	return &subagent.TurnResult{Response: "resumed", ContextTokens: 120000, TokensTurn: 5}, nil
+}
+
+func TestCodexOverThresholdResumeUsesProviderAutoCompact(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".harnez"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".harnez", "config.yaml"), []byte("agent:\n  compact_threshold_tokens: 100000\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", ContextTokens: 250000}); err != nil {
+		t.Fatal(err)
+	}
+	driver := &codexAutoCompactDriver{}
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+	if _, err := runWithStore(t, driver, storeDir, "resume", "--name", "worker", "prompt"); err != nil {
+		t.Fatal(err)
+	}
+	if driver.compactCalls != 0 || driver.resumeCalls != 1 {
+		t.Fatalf("compact calls=%d resume calls=%d", driver.compactCalls, driver.resumeCalls)
 	}
 }
 
@@ -1265,7 +1310,7 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 250000, ContextTokens: 250000}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "claude", Model: "luna", Status: "completed", TokensSinceCompact: 250000, ContextTokens: 250000}); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
@@ -1277,7 +1322,7 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume resolved=name]\n[wait: ") || !strings.Contains(got, "[compact: verified /compact at 250.0k context tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
+	if !strings.HasPrefix(got, "[session info: id=sid agent=claude:luna action=resume resolved=name]\n[wait: ") || !strings.Contains(got, "[compact: verified /compact at 250.0k context tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
 		t.Fatalf("stdout:\n%s", got)
 	}
 }
@@ -1397,7 +1442,11 @@ func TestRunResumeBlocksPromptWhenCompactionIsUnverified(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			sess := &subagent.Session{ID: "resume", ProviderSessionID: "provider", Name: "worker", Provider: "codex", Model: "model", Status: "completed", ContextTokens: 200}
+			provider := "claude"
+			if interactive {
+				provider = "codex"
+			}
+			sess := &subagent.Session{ID: "resume", ProviderSessionID: "provider", Name: "worker", Provider: provider, Model: "model", Status: "completed", ContextTokens: 200}
 			if interactive {
 				sess.HarnessType, sess.Status = "interactive", "active"
 			}
@@ -2204,11 +2253,11 @@ func TestAgentRootSlashCompactIntercepts(t *testing.T) {
 	old := agentDriver
 	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
 	defer func() { agentDriver = old }()
-	if _, err := runWithStore(t, d, dir, "-p", "/compact"); err != nil {
-		t.Fatal(err)
+	if _, err := runWithStore(t, d, dir, "-p", "/compact"); err == nil || !strings.Contains(err.Error(), "manual /compact is unsupported") {
+		t.Fatalf("compact error = %v, want unsupported Codex manual compact", err)
 	}
-	if !reflect.DeepEqual(d.compacted, []string{"sid"}) {
-		t.Fatalf("compacted = %v", d.compacted)
+	if len(d.compacted) != 0 {
+		t.Fatalf("manual Codex compact calls = %v, want none", d.compacted)
 	}
 }
 
