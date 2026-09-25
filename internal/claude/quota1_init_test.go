@@ -51,6 +51,9 @@ func TestRunInitWithVariant_Quota1_Scaffolding(t *testing.T) {
 	if !strings.Contains(agentsContent, "Single-Test Boundary") {
 		t.Errorf("expected Single-Test Boundary rule in AGENTS.md")
 	}
+	if !strings.Contains(agentsContent, "Clean Tree First") {
+		t.Errorf("expected Clean Tree First rule in AGENTS.md")
+	}
 	if strings.Contains(agentsContent, "Report Untested Edits") {
 		t.Errorf("unexpected Report Untested Edits rule in AGENTS.md")
 	}
