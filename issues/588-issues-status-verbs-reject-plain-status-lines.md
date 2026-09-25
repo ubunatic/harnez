@@ -1,6 +1,6 @@
 # 588 — issues: status verbs reject plain Status: lines
 
-**Status**: Draft
+**Status**: Closed — Status verb updates now support plain and bold headers.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
