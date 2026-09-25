@@ -31,3 +31,6 @@ No new commit was needed; the working tree is clean.
 
 ## 3. Implementation & Verification Plan
 Make Codex compaction a completed, observable turn before sending the caller's new prompt, or otherwise re-inject the prompt after compaction is confirmed. If the driver cannot verify that ordering, fail loudly instead of reporting a successful resume. Add a regression test that asserts the compaction completion barrier precedes prompt submission, then verify with the existing Codex driver and resume tests.
+
+## 4. Implementation Record
+Codex compaction now runs as its own `codex exec resume ... /compact` turn and waits for the JSONL `turn.completed` event, with a two-minute timeout. If the stream ends without completion or the timeout expires, resume fails before submitting the caller's prompt. Regression tests use a fake Codex event stream to check ordering and missing completion.

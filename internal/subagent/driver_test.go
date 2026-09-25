@@ -364,3 +364,38 @@ func TestCodexResumeUsesSameSandboxAsRun(t *testing.T) {
 		t.Fatalf("resume args = %q, want %q", got, want)
 	}
 }
+
+func TestCodexCompactCompletesBeforeResumePrompt(t *testing.T) {
+	var calls []string
+	d := CodexDriver{
+		Start: func(_ context.Context, _ string, args ...string) (io.Reader, func() error, error) {
+			calls = append(calls, "compact")
+			if got := args[len(args)-1]; got != "/compact" {
+				t.Fatalf("compact prompt = %q", got)
+			}
+			return strings.NewReader("{\"type\":\"turn.started\"}\n{\"type\":\"turn.completed\"}\n"), func() error { return nil }, nil
+		},
+		Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+			calls = append(calls, "resume:"+args[len(args)-1])
+			return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`), nil
+		},
+	}
+	if _, err := d.Compact(context.Background(), "t1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Resume(context.Background(), "t1", "new task", Model{}); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"compact", "resume:new task"}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("call order = %q, want %q", calls, want)
+	}
+}
+
+func TestCodexCompactRequiresCompletionEvent(t *testing.T) {
+	d := CodexDriver{Start: func(context.Context, string, ...string) (io.Reader, func() error, error) {
+		return strings.NewReader("{\"type\":\"turn.started\"}\n"), func() error { return nil }, nil
+	}}
+	if _, err := d.Compact(context.Background(), "t1"); err == nil || !strings.Contains(err.Error(), "without turn.completed") {
+		t.Fatalf("error = %v, want missing completion error", err)
+	}
+}

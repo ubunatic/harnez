@@ -1202,7 +1202,7 @@ func TestAgentResumeCompactsOnceAndSeparatesAck(t *testing.T) {
 	if got := out.String(); got != "[agent messages]\n[msg 1]\nreal reply\n" {
 		t.Fatalf("stdout = %q", got)
 	}
-	if e := errOut.String(); !strings.Contains(e, " compact] queued /compact") || !strings.Contains(e, "agent acknowledged: Context compacted.") {
+	if e := errOut.String(); !strings.Contains(e, " compact] completed /compact") || !strings.Contains(e, "agent acknowledged: Context compacted.") {
 		t.Fatalf("stderr = %q", e)
 	}
 	sess, err := store.Get("sid")
@@ -1277,7 +1277,7 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume resolved=name]\n[wait: ") || !strings.Contains(got, "[compact: queued /compact at 150.0k new tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
+	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume resolved=name]\n[wait: ") || !strings.Contains(got, "[compact: completed /compact at 150.0k new tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
 		t.Fatalf("stdout:\n%s", got)
 	}
 }

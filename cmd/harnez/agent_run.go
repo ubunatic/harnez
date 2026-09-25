@@ -322,7 +322,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		if _, err = driver.Compact(cmd.Context(), sess.ProviderID()); err != nil {
 			return err
 		}
-		compactNote = fmt.Sprintf("queued /compact at %s new tokens since the last compaction; the agent acknowledges it before its reply", humanCount(sess.TokensSinceCompact))
+		compactNote = fmt.Sprintf("completed /compact at %s new tokens since the last compaction", humanCount(sess.TokensSinceCompact))
 		sess.TokensSinceCompact = 0
 		compacted = true
 	}

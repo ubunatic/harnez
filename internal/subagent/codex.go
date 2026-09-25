@@ -23,6 +23,8 @@ type CodexDriver struct {
 	Start func(context.Context, string, ...string) (io.Reader, func() error, error)
 }
 
+const codexCompactTimeout = 2 * time.Minute
+
 func (d CodexDriver) CheckResumable(providerID string) (bool, string) {
 	home := os.Getenv("CODEX_HOME")
 	if home == "" {
@@ -95,10 +97,45 @@ func (d CodexDriver) runResume(ctx context.Context, id, prompt string, model Mod
 	return parseCodex(b)
 }
 func (d CodexDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
-	if _, err := d.command(ctx, "queue", "--thread", id, "--message", "/compact"); err != nil {
+	ctx, cancel := context.WithTimeout(ctx, codexCompactTimeout)
+	defer cancel()
+	start := d.Start
+	if start == nil {
+		start = startProcess
+	}
+	rd, wait, err := start(ctx, "codex", "exec", "resume", id, "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "/compact")
+	if err != nil {
 		return nil, fmt.Errorf("codex compact: %w", err)
 	}
-	return &TurnResult{Response: "compaction queued"}, nil
+	p := &codexParser{}
+	completed := false
+	s := bufio.NewScanner(rd)
+	s.Buffer(make([]byte, 4096), 8<<20)
+	for s.Scan() {
+		var e struct {
+			Type string `json:"type"`
+		}
+		_ = json.Unmarshal(s.Bytes(), &e)
+		if e.Type == "turn.completed" {
+			completed = true
+		}
+		p.feed(s.Bytes())
+	}
+	readErr := s.Err()
+	waitErr := wait()
+	if readErr != nil {
+		return nil, fmt.Errorf("codex compact: %w", readErr)
+	}
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("codex compact: timed out waiting for turn.completed after %s: %w", codexCompactTimeout, ctx.Err())
+	}
+	if waitErr != nil {
+		return nil, fmt.Errorf("codex compact: %w", waitErr)
+	}
+	if !completed {
+		return nil, fmt.Errorf("codex compact: Codex stream ended without turn.completed; resume prompt was not sent")
+	}
+	return &p.r, nil
 }
 func (d CodexDriver) Stop(context.Context, string) error {
 	return nil
