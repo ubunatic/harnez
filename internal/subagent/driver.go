@@ -55,6 +55,12 @@ type Model struct {
 	Effort *bool
 }
 
+type modelAlias struct {
+	Model     Model    `yaml:",inline"`
+	Aliases   []string `yaml:"aliases"`
+	Preferred bool     `yaml:"preferred"`
+}
+
 // ModelGuide is the listing guidance of a spec/agent.yaml model entry; it
 // stays out of Model so session records do not carry it.
 type ModelGuide struct {
@@ -87,7 +93,7 @@ type TurnResult struct {
 	DurationMS       int64    `json:"duration_ms"`
 }
 
-var modelAliases map[string]Model
+var modelAliases map[string]modelAlias
 
 // KnownModels returns the configured shorthand specifications in stable order.
 func KnownModels() []Model {
@@ -101,7 +107,7 @@ func KnownModels() []Model {
 	sort.Strings(keys)
 	models := make([]Model, 0, len(keys))
 	for _, key := range keys {
-		models = append(models, modelAliases[key])
+		models = append(models, modelAliases[key].Model)
 	}
 	return models
 }
@@ -160,7 +166,7 @@ func modelAliasName(m Model) string {
 		panic(err)
 	}
 	for key, candidate := range modelAliases {
-		if candidate == m {
+		if candidate.Model == m {
 			return strings.TrimPrefix(key, m.Provider+":")
 		}
 	}
@@ -175,19 +181,33 @@ func ResolveModel(spec string) (Model, error) {
 	return resolveModelIn(modelAliases, spec)
 }
 
-func resolveModelIn(aliases map[string]Model, spec string) (Model, error) {
+func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 	clean := strings.ToLower(strings.TrimSpace(spec))
+	if strings.Contains(clean, ":") {
+		parts := strings.Split(clean, ":")
+		if len(parts) <= 2 {
+			if m, ok := aliases[clean]; ok {
+				return m.Model, nil
+			}
+		}
+	}
 	if !strings.Contains(clean, ":") {
 		var match Model
 		count := 0
-		for key, candidate := range aliases {
-			parts := strings.Split(key, ":")
-			if len(parts) == 2 && parts[1] == clean {
-				match, count = candidate, count+1
+		for _, candidate := range aliases {
+			if modelHasAlias(candidate, clean) {
+				match, count = candidate.Model, count+1
 			}
 		}
 		if count == 1 {
 			return match, nil
+		}
+		if count > 1 {
+			for _, candidate := range aliases {
+				if modelHasAlias(candidate, clean) && candidate.Preferred {
+					return candidate.Model, nil
+				}
+			}
 		}
 		return Model{}, fmt.Errorf("unknown or ambiguous model %q; known specs: %s", spec, knownModelSpecs())
 	}
@@ -195,10 +215,23 @@ func resolveModelIn(aliases map[string]Model, spec string) (Model, error) {
 	if len(parts) < 2 || len(parts) > 3 || parts[0] == "" || parts[1] == "" {
 		return Model{}, fmt.Errorf("invalid model %q: expected provider:model[:tier]; known specs: %s", spec, knownModelSpecs())
 	}
-	m, ok := aliases[parts[0]+":"+parts[1]]
+	entry, ok := aliases[parts[0]+":"+parts[1]]
+	if !ok && len(parts) == 2 {
+		for _, candidate := range aliases {
+			if modelHasAlias(candidate, parts[0]) {
+				if entry.Model.Provider != "" {
+					entry = modelAlias{}
+					break
+				}
+				entry = candidate
+			}
+		}
+		ok = entry.Model.Provider != ""
+	}
 	if !ok {
 		return Model{}, fmt.Errorf("unknown model %q; known specs: %s", spec, knownModelSpecs())
 	}
+	m := entry.Model
 	if len(parts) == 3 {
 		if parts[0] == "claude" && parts[1] == "haiku" && parts[2] == "latest" {
 			return m, nil
@@ -209,6 +242,15 @@ func resolveModelIn(aliases map[string]Model, spec string) (Model, error) {
 		m.Tier = parts[2]
 	}
 	return m, nil
+}
+
+func modelHasAlias(m modelAlias, alias string) bool {
+	for _, candidate := range m.Aliases {
+		if candidate == alias {
+			return true
+		}
+	}
+	return false
 }
 
 func knownModelSpecs() string {

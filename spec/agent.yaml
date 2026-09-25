@@ -12,6 +12,8 @@ default_model: codex:luna:low
 models_legend: "COST × luna (luna=1, astra=100) · EFF tokens per goal: + few ~ avg - many · skills: + strong ~ ok - weak · ? = no data"
 models:
   codex:luna:
+    aliases: [luna, luna:low]
+    preferred: true
     provider: codex
     name: gpt-6-luna
     tier: low
@@ -22,6 +24,8 @@ models:
     use: clear bounded tickets; try first, weak on long terminal loops
     use_med: interface or design changes; less prone to bending tests
   codex:sol:
+    aliases: [sol, sol:low]
+    preferred: true
     provider: codex
     name: gpt-6-sol
     tier: low
@@ -31,6 +35,8 @@ models:
     skills: Go~ TUI~ SQL?
     use: capable coding and tool use; milestone reviewer; tends to over-refactor
   codex:astra:
+    aliases: [astra, astra:low]
+    preferred: true
     provider: codex
     name: gpt-6-astra
     tier: low
@@ -40,6 +46,8 @@ models:
     skills: Go+ TUI~ SQL~
     use: hardest multi-step coding and terminal automation; escalation only
   codex:terra:
+    aliases: [terra, terra:low]
+    preferred: true
     provider: codex
     name: gpt-5.6-terra
     tier: low
@@ -49,6 +57,8 @@ models:
     skills: Go~ TUI~ SQL~
     use: best-value auditor; finds code traps with file:line
   claude:haiku:
+    aliases: [haiku, haiku:low]
+    preferred: true
     provider: claude
     name: haiku
     tier: low
@@ -58,6 +68,8 @@ models:
     skills: Go~ TUI- SQL~
     use: narrow edits with a machine-checkable test only
   claude:sonnet:
+    aliases: [sonnet, sonnet:low]
+    preferred: true
     provider: claude
     name: sonnet
     tier: low
@@ -67,6 +79,8 @@ models:
     skills: Go~ TUI~ SQL~
     use: cross-vendor advisor or reviewer; strong tool use
   claude:opus:
+    aliases: [opus, opus:low]
+    preferred: true
     provider: claude
     name: opus
     tier: low
@@ -76,6 +90,8 @@ models:
     skills: Go+ TUI? SQL+
     use: host seat for repo judgment, pre-work, diff review
   agy:flash37:
+    aliases: [flash37, flash37:low]
+    preferred: true
     provider: agy
     name: gemini-3.7-flash
     tier: low

@@ -14,11 +14,11 @@ import (
 const agentSpecPath = "spec/agent.yaml"
 
 type agentSpec struct {
-	DefaultModel string              `yaml:"default_model"`
-	DefaultRole  string              `yaml:"default_role"`
-	ModelsLegend string              `yaml:"models_legend"`
-	Models       map[string]Model    `yaml:"models"`
-	Roles        map[string]RoleSpec `yaml:"roles"`
+	DefaultModel string                `yaml:"default_model"`
+	DefaultRole  string                `yaml:"default_role"`
+	ModelsLegend string                `yaml:"models_legend"`
+	Models       map[string]modelAlias `yaml:"models"`
+	Roles        map[string]RoleSpec   `yaml:"roles"`
 }
 
 // RoleSpec is one entry of the roles table in spec/agent.yaml.
@@ -35,7 +35,10 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	if strings.TrimSpace(spec.DefaultModel) == "" {
 		return agentSpec{}, fmt.Errorf("agent spec: default_model is required")
 	}
-	models := spec.Models
+	models := make(map[string]modelAlias, len(spec.Models))
+	for key, entry := range spec.Models {
+		models[key] = entry
+	}
 	if len(models) == 0 {
 		var err error
 		models, err = loadModelAliases()
@@ -52,13 +55,13 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	return spec, nil
 }
 
-func loadModelAliases() (map[string]Model, error) {
+func loadModelAliases() (map[string]modelAlias, error) {
 	data, err := fs.ReadFile(harnez.DefaultFS, agentSpecPath)
 	if err != nil {
 		return nil, fmt.Errorf("agent spec: read %s: %w", agentSpecPath, err)
 	}
 	var spec struct {
-		Models map[string]Model `yaml:"models"`
+		Models map[string]modelAlias `yaml:"models"`
 	}
 	if err := yaml.Unmarshal(data, &spec); err != nil {
 		return nil, fmt.Errorf("agent spec: parse models: %w", err)

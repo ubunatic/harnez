@@ -16,6 +16,8 @@
           "provider": { "type": "string", "minLength": 1 },
           "name": { "type": "string", "minLength": 1 },
           "tier": { "type": "string", "enum": ["low", "med", "high"] },
+          "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "preferred": { "type": "boolean" },
           "effort": { "type": "boolean" },
           "roles": { "type": "string" },
           "cost": { "type": "integer", "minimum": 1, "maximum": 100 },

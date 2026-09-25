@@ -80,6 +80,7 @@ func TestAgentRootVerbAndPromptDispatch(t *testing.T) {
 		{name: "quoted multi-word prompt", args: []string{"update the changelog"}, wantPrompt: "update the changelog"},
 		{name: "dash prompt", args: []string{"--", "foo"}, wantPrompt: "foo"},
 		{name: "prompt flag", args: []string{"-p", "foo"}, wantPrompt: "foo"},
+		{name: "prompt consumes flag", args: []string{"-p", "--model"}, wantError: `-p needs prompt text but got flag "--model"`},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

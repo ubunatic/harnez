@@ -139,6 +139,9 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 		if rootPrompt == "" && len(rootFiles) == 0 && len(words) == 0 && len(tail) == 0 && !rootContinue {
 			return cmd.Help()
 		}
+		if rootPrompt != "" && strings.HasPrefix(rootPrompt, "--") {
+			return fmt.Errorf("-p needs prompt text but got flag %q; put -p last or use -- \"<text>\"", rootPrompt)
+		}
 		if modelSpec == "" && len(words) >= 2 && oldStyleModelWord(words[0]) {
 			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
 		}
@@ -215,6 +218,9 @@ attribution in -d, or -c. Use -- to send text literally. Slash commands are
 			return err
 		}
 		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
+		if rootPrompt != "" && strings.HasPrefix(rootPrompt, "--") {
+			return fmt.Errorf("-p needs prompt text but got flag %q; put -p last or use -- \"<text>\"", rootPrompt)
+		}
 		if modelSpec == "" && len(words) >= 2 && oldStyleModelWord(words[0]) {
 			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
 		}
