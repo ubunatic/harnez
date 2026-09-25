@@ -44,7 +44,7 @@ func TestProtocolInitializeToolsAndNotifications(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[1]), &listing); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"harnez_spawn_agent", "harnez_command", "harnez_wait_agent", "harnez_list_agents", "harnez_agent_status", "harnez_resume_agent", "harnez_stop_agent"}
+	want := []string{"harnez_spawn_agent", "harnez_command", "harnez_wait_agent", "harnez_list_agents", "harnez_agent_status", "harnez_resume_agent", "harnez_stop_agent", "harnez_find"}
 	if len(listing.Result.Tools) != len(want) {
 		t.Fatalf("tools = %#v", listing.Result.Tools)
 	}

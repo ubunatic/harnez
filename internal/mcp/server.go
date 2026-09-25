@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
+	"ubunatic.com/harnez/internal/finder"
 )
 
 // Server implements the JSON-RPC subset required by MCP stdio clients.
@@ -65,6 +67,7 @@ var tools = []toolDefinition{
 	{"harnez_agent_status", "Get the status record for a session in the caller's lineage.", schema(map[string]any{"session_id": stringProp("Session ID or name")}, "session_id")},
 	{"harnez_resume_agent", "Resume a session in the caller's lineage with a prompt.", schema(map[string]any{"session_id": stringProp("Session ID or name"), "prompt": stringProp("Prompt for the next turn")}, "session_id", "prompt")},
 	{"harnez_stop_agent", "Stop a session in the caller's lineage.", schema(map[string]any{"session_id": stringProp("Session ID or name")}, "session_id")},
+	{"harnez_find", "Search code, documentation, or issues with registered finders.", schema(map[string]any{"query": stringProp("Search query"), "scope": map[string]any{"type": "string", "enum": []string{"code", "docs", "issues"}, "description": "Search scope (default code)"}, "via": stringProp("Optional finder name"), "k": map[string]string{"type": "integer", "description": "Maximum results (default 10)"}, "root": stringProp("Repository root (default current directory)")}, "query")},
 }
 
 func stringProp(description string) map[string]string {
@@ -176,6 +179,54 @@ func (s Server) call(ctx context.Context, c toolCall) (any, error) {
 	}
 	base := []string{"agent"}
 	switch c.Name {
+	case "harnez_find":
+		query, e := arg("query", true)
+		if e != nil {
+			return nil, e
+		}
+		scope, _ := arg("scope", false)
+		if scope == "" {
+			scope = "code"
+		}
+		via, _ := arg("via", false)
+		root, _ := arg("root", false)
+		if root == "" {
+			root = "."
+		}
+		k := 10
+		if raw, ok := a["k"]; ok {
+			n, valid := raw.(float64)
+			if !valid || n < 1 || n != float64(int(n)) {
+				return nil, fmt.Errorf("k must be a positive integer")
+			}
+			k = int(n)
+		}
+		if scope == "issues" {
+			cmd := exec.CommandContext(ctx, s.Command, "find", "--dir", root, "--json", "--all", "issues", query)
+			out, err := cmd.Output()
+			if err != nil {
+				return nil, fmt.Errorf("harnez find issues: %w", err)
+			}
+			var rows []struct {
+				Title  string `json:"title"`
+				Path   string `json:"path"`
+				Number string `json:"number"`
+			}
+			if err := json.Unmarshal(out, &rows); err != nil {
+				return nil, fmt.Errorf("decode harnez issues results: %w", err)
+			}
+			results := make([]finder.Result, 0, len(rows))
+			for i, row := range rows {
+				if i >= k {
+					break
+				}
+				results = append(results, finder.Result{Path: row.Path, Title: row.Title, Snippet: row.Number, Score: 1 / float64(i+1), Kind: "issues"})
+			}
+			return finder.Response{Results: results, Finders: []finder.Status{{Name: "issues", Status: "ok"}}}, nil
+		}
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		return finder.Search(ctx, root, scope, query, via, k, io.Discard)
 	case "harnez_spawn_agent":
 		prompt, e := arg("prompt", true)
 		if e != nil {

@@ -137,7 +137,7 @@ func TestRunFind_LastIsDefaultListing(t *testing.T) {
 func TestRunFind_UnknownEntityIsUsageError(t *testing.T) {
 	dir := findFixtureDir(t)
 	var out bytes.Buffer
-	err := testRunFind(&out, dir, "docs", "vram")
+	err := testRunFind(&out, dir, "unknown", "vram")
 	if err == nil {
 		t.Fatal("expected error for unsupported entity")
 	}

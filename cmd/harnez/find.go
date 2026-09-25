@@ -11,6 +11,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/find"
+	"ubunatic.com/harnez/internal/finder"
 	"ubunatic.com/harnez/internal/issues"
 	"ubunatic.com/harnez/internal/readcard"
 	"ubunatic.com/harnez/internal/telemetry"
@@ -43,6 +45,9 @@ func newFindCmd() *cobra.Command {
 	var historyProjectFlag string
 	var limitFlag int
 	var allFlag bool
+	var viaFlag string
+	var kFlag int
+	var jsonlFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "find <entity> [options] <query...>",
@@ -56,6 +61,10 @@ Entities:
            issues/README.md and every other file/directory). Both active and
            archived tickets are in scope by default; use a status filter to
            narrow lifecycle state.
+  code     searches source files through configured finders (neus first,
+           with rg as the code fallback when neus is unavailable).
+  docs     searches documentation through configured finders, with built-in
+           fuzzy text matching as a fallback.
 
 Subcommands / Allocation:
   harnez find issues last [--json]
@@ -153,6 +162,9 @@ Output formatting:
 				HistoryProject: historyProjectFlag,
 				Limit:          limitFlag,
 				All:            allFlag,
+				Via:            viaFlag,
+				K:              kFlag,
+				JSONL:          jsonlFlag,
 			}
 			return runFindWithOptions(cmd.OutOrStdout(), cmd.ErrOrStderr(), args, opts)
 		},
@@ -166,6 +178,9 @@ Output formatting:
 	cmd.Flags().StringVar(&historyProjectFlag, "project", "", "with 'history': filter to one project_name")
 	cmd.Flags().IntVarP(&limitFlag, "limit", "n", 10, "limit issue results (default: newest 10 for listings)")
 	cmd.Flags().BoolVarP(&allFlag, "all", "a", false, "show all matching issue results")
+	cmd.Flags().StringVar(&viaFlag, "via", "", "use only the named code/docs finder")
+	cmd.Flags().IntVarP(&kFlag, "count", "k", 10, "maximum code/docs results")
+	cmd.Flags().BoolVar(&jsonlFlag, "jsonl", false, "output JSON Lines (code/docs only)")
 
 	return cmd
 }
@@ -181,6 +196,9 @@ type findRunOptions struct {
 	HistoryProject string
 	Limit          int
 	All            bool
+	Via            string
+	K              int
+	JSONL          bool
 }
 
 // findHistoryOptions bundles runFindHistory's inputs. DBPath is a telemetry
@@ -294,8 +312,34 @@ func isTerminalWriter(w io.Writer) bool {
 
 func runFindWithOptions(w, errW io.Writer, args []string, opts findRunOptions) error {
 	entity := args[0]
+	if entity == "code" || entity == "docs" {
+		query := strings.TrimSpace(strings.Join(args[1:], " "))
+		if query == "" {
+			return fmt.Errorf("find %s: query must not be empty", entity)
+		}
+		resp, err := finder.Search(context.Background(), opts.Dir, entity, query, opts.Via, opts.K, errW)
+		if err != nil {
+			return err
+		}
+		if opts.JSON || opts.JSONL {
+			enc := json.NewEncoder(w)
+			if opts.JSONL {
+				for _, row := range resp.Results {
+					if err := enc.Encode(row); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			return enc.Encode(resp.Results)
+		}
+		for _, row := range resp.Results {
+			fmt.Fprintf(w, "%s:%d\t%s\t%s\t%.4f\t%s\n", row.Path, row.Line, row.Title, row.Snippet, row.Score, row.Kind)
+		}
+		return nil
+	}
 	if entity != "issues" {
-		return fmt.Errorf("find: unsupported entity %q (only \"issues\" is supported)", entity)
+		return fmt.Errorf("find: unsupported entity %q (supported: issues, code, docs)", entity)
 	}
 
 	// Keep these convenience verbs as read-only aliases over the existing
