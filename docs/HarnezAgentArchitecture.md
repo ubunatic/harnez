@@ -115,6 +115,35 @@ Codex's `--approve-for-me` option; the `never` approval policy rejects MCP tool
 calls that require approval. A successful spawn returns the Harnez session and
 agent response as structured tool output.
 
+### 2.12 MCP server for AGY (Antigravity CLI)
+
+Register the server once for the user account with AGY's MCP command:
+
+```sh
+agy mcp add harnez "$(command -v harnez)" mcp
+agy mcp list
+```
+
+AGY stores global MCP server configurations in
+`~/.gemini/config/mcp_config.json`. The equivalent stdio entry is:
+
+```json
+{
+  "mcpServers": {
+    "harnez": {
+      "command": "/absolute/path/to/harnez",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+`agy mcp list` should show `harnez` as enabled. Restart or reload AGY, then
+inspect **Additional Options (...) > MCP Servers** to confirm discovery of
+`harnez_spawn_agent`, `harnez_wait_agent`, `harnez_list_agents`,
+`harnez_agent_status`, `harnez_resume_agent`, and `harnez_stop_agent`. These
+tools use the same Harnez role and lineage restrictions described above.
+
 ### 2.2 Prompt assembly
 
 Prompt parts are joined with one blank line, in this order: prompt files in
