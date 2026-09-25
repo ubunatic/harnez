@@ -1,5 +1,6 @@
 # Bench tasks for `harnez bench`. Each task targets one rule with a mechanically
-# checkable response: `pattern` must match, `forbid_pattern` must not (RE2, case-insensitive).
+# checkable response: `pattern` must match, `forbid_pattern` must not, and every `require_all`
+# expression must match (RE2, case-insensitive).
 preamble: |
   **IMPORTANT** Project docs below carry key instructions. Read them before answering.
   Allowed formats: MD (Markdown text) or PNG (the same Markdown as a context card image).
@@ -98,3 +99,33 @@ tasks:
     fixtures: [RUNBOOK.md]
     prompt: "Which service listens on port 7431, and which team holds its pager rotation? Reply as: <service> <team>."
     pattern: 'tarnwick.*bramble'
+
+  - id: read-lang-summary
+    rule: "read and summarise six language docs with all key facts present"
+    fixtures:
+      - docs/lang/Go.md
+      - docs/lang/Make.md
+      - docs/lang/ManPages.md
+      - docs/lang/Bash.md
+      - docs/lang/Git.md
+      - docs/lang/Markdown.md
+    supported_read_modes: [native, text, card]
+    prompt: "Read the six listed docs and summarise them as a table."
+    read_prompts:
+      native: "Read only Go.md Make.md ManPages.md Bash.md Git.md Markdown.md in docs/lang and summarise as a table. (Use your native read tool for reading text files)"
+      text: "Read only Go.md Make.md ManPages.md Bash.md Git.md Markdown.md in docs/lang and summarise as a table. (Use 'harnez read <file>' for reading text files)"
+      card: "Read only Go.md Make.md ManPages.md Bash.md Git.md Markdown.md in docs/lang and summarise as a table. (Use 'harnez read -I <file>' for reading text files as PNG cards)"
+    require_all:
+      - '\bGo\b'
+      - '\bMake\b'
+      - '\bManPages\b|\bman pages\b'
+      - '\bBash\b'
+      - '\bGit\b'
+      - '\bMarkdown\b'
+      - 'standard librar'
+      - 'help.*first|first.*help'
+      - 'Cobra'
+      - 'strict mode|set -euo|if test'
+      - 'Conventional Commit'
+      - 'PascalCase'
+    pattern: '\|---'

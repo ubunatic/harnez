@@ -67,52 +67,40 @@ func benchPreamble(spec *bench.Spec, task bench.Task, cond bench.Condition, root
 		if err != nil {
 			return "", err
 		}
-		if _, err := bench.StageWorkspace(dir, root, spec, task, cond); err != nil {
+		fixtures, err := bench.StageWorkspace(dir, root, spec, task, cond)
+		if err != nil {
 			_ = os.RemoveAll(dir)
 			return "", err
 		}
-		for range task.Fixtures {
-			entries, err := os.ReadDir(filepath.Join(dir, "docs"))
+		for _, fixture := range fixtures {
+			path := filepath.Join(dir, filepath.FromSlash(fixture))
+			data, err := os.ReadFile(path)
 			if err != nil {
 				_ = os.RemoveAll(dir)
 				return "", err
 			}
-			files := make([]string, 0, len(entries))
-			for _, entry := range entries {
-				if !entry.IsDir() {
-					files = append(files, entry.Name())
-				}
+			lines := strings.Count(string(data), "\n")
+			if len(data) > 0 && !strings.HasSuffix(string(data), "\n") {
+				lines++
 			}
-			for _, file := range files {
-				path := filepath.Join(dir, "docs", file)
-				data, err := os.ReadFile(path)
+			fmt.Fprintf(&b, "fixture: %s (%d lines)\n", fixture, lines)
+			if cond.Read == "card" {
+				cardsDir, err := os.MkdirTemp("", "harnez-bench-cards.*")
 				if err != nil {
 					_ = os.RemoveAll(dir)
 					return "", err
 				}
-				lines := strings.Count(string(data), "\n")
-				if len(data) > 0 && !strings.HasSuffix(string(data), "\n") {
-					lines++
+				cardPath := filepath.Join(cardsDir, strings.TrimSuffix(filepath.Base(fixture), filepath.Ext(fixture))+".png")
+				cardInfo, err := benchCardRenderer(path, cardPath)
+				if err != nil {
+					_ = os.RemoveAll(dir)
+					return "", fmt.Errorf("bench: preamble card %s: %w", fixture, err)
 				}
-				fmt.Fprintf(&b, "fixture: docs/%s (%d lines)\n", file, lines)
-				if cond.Read == "card" {
-					cardsDir, err := os.MkdirTemp("", "harnez-bench-cards.*")
-					if err != nil {
-						_ = os.RemoveAll(dir)
-						return "", err
-					}
-					cardPath := filepath.Join(cardsDir, strings.TrimSuffix(file, filepath.Ext(file))+".png")
-					cardInfo, err := benchCardRenderer(path, cardPath)
-					if err != nil {
-						_ = os.RemoveAll(dir)
-						return "", fmt.Errorf("bench: preamble card %s: %w", file, err)
-					}
-					fmt.Fprintf(&b, "%s\n", cardInfo)
-				}
+				fmt.Fprintf(&b, "%s\n", cardInfo)
 			}
 		}
 		_ = os.RemoveAll(dir)
-		fmt.Fprintf(&b, "question: %s\n", task.Prompt)
+		fmt.Fprintf(&b, "question: %s\n", bench.TaskPrompt(task, cond.Read))
 	}
 	if task.Info != "" {
 		fmt.Fprintf(&b, "info: %s\n", task.Info)

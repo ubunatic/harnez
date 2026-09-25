@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"ubunatic.com/harnez/internal/bench"
 )
 
 func runBench(t *testing.T, args ...string) (string, error) {
@@ -228,6 +230,33 @@ func TestBenchRunSeparatesTableAndProgress(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Errorf("fake runner calls = %d, want 2", calls)
+	}
+}
+
+func TestReadLangSummaryPreambleShowsFixturesAndModePrompt(t *testing.T) {
+	root, _ := filepath.Abs(filepath.Join("..", ".."))
+	spec, err := bench.LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tasks, err := spec.Select([]string{"read-lang-summary"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preamble, err := benchPreamble(spec, tasks[0], bench.Condition{Read: "native"}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Go.md", "Make.md", "ManPages.md", "Bash.md", "Git.md", "Markdown.md"} {
+		if !strings.Contains(preamble, "fixture: docs/lang/"+name+" (") {
+			t.Errorf("preamble omits %s: %s", name, preamble)
+		}
+	}
+	if got := strings.Count(preamble, "fixture:"); got != 6 {
+		t.Errorf("preamble has %d fixture lines, want 6", got)
+	}
+	if !strings.Contains(preamble, "question: "+bench.TaskPrompt(tasks[0], "native")) {
+		t.Errorf("preamble omits native prompt: %s", preamble)
 	}
 }
 

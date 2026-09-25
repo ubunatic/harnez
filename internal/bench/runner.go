@@ -71,7 +71,7 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 			}
 			if _, err := StageWorkspace(dir, o.RepoRoot, spec, task, o.Cond); err != nil {
 				run.Error = err.Error()
-			} else if res, err := Invoke(callCtx, o.Run, o.Agent, modelSpec, dir, task.Prompt); err != nil {
+			} else if res, err := Invoke(callCtx, o.Run, o.Agent, modelSpec, dir, TaskPrompt(task, o.Cond.Read)); err != nil {
 				run.Error = err.Error()
 			} else {
 				run.Response, run.InputTokens, run.OutputTokens, run.CostUSD = res.Text, res.InputTokens, res.OutputTokens, res.CostUSD
@@ -116,4 +116,12 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 		}
 	}
 	return nil
+}
+
+// TaskPrompt returns the prompt for a read mode, or the task's generic prompt.
+func TaskPrompt(task Task, mode string) string {
+	if prompt, ok := task.ReadPrompts[mode]; ok {
+		return prompt
+	}
+	return task.Prompt
 }

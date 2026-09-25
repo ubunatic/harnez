@@ -58,14 +58,19 @@ described in `harnez read -I --help`.
 
 ## Tasks and scoring
 
-A task has an `id`, a prompt, optional documentation paths, and a mechanical check. The `pattern`
-must match the response and `forbid_pattern` must not match; both use case-insensitive RE2 regular
-expressions. Task specs are validated when loaded, including checks that referenced document
-variants exist.
+A task has an `id`, a prompt, optional documentation paths, and mechanical checks. The `pattern`
+must match, `forbid_pattern` must not match, and every expression in `require_all` must match the
+response. These are case-insensitive RE2 regular expressions; `require_all` entries can use
+alternation to accept equivalent wording. Read tasks may define `read_prompts` to supply a distinct
+prompt for each read mode. Fixture paths outside the generated `RUNBOOK.md` are copied from the
+repository into the temporary workspace at the same relative path. Task specs are validated when
+loaded, including checks that referenced document variants exist.
 
 The task list includes documentation fact-finding and read tasks. `harnez bench tasks` displays the
 available tasks. Read tasks report turns (tool calls plus the final answer) alongside provider
 usage, which helps distinguish a correct answer that required more interaction from a concise one.
+`read-lang-summary` exercises six language documents across native, text, and card reading prompts;
+its all-keywords check requires a table, every document name, and a representative fact from each.
 
 ## Providers and recorded results
 

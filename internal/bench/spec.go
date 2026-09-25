@@ -8,6 +8,7 @@ import (
 	_ "embed"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -15,13 +16,16 @@ import (
 
 // Task is one specced bench task with a mechanically checkable response.
 type Task struct {
-	ID            string   `yaml:"id"`
-	Rule          string   `yaml:"rule"`
-	Info          string   `yaml:"info"`
-	Prompt        string   `yaml:"prompt"`
-	Pattern       string   `yaml:"pattern"`
-	ForbidPattern string   `yaml:"forbid_pattern"`
-	Docs          []string `yaml:"docs"`
+	ID                 string            `yaml:"id"`
+	Rule               string            `yaml:"rule"`
+	Info               string            `yaml:"info"`
+	Prompt             string            `yaml:"prompt"`
+	ReadPrompts        map[string]string `yaml:"read_prompts"`
+	SupportedReadModes []string          `yaml:"supported_read_modes"`
+	Pattern            string            `yaml:"pattern"`
+	ForbidPattern      string            `yaml:"forbid_pattern"`
+	RequireAll         []string          `yaml:"require_all"`
+	Docs               []string          `yaml:"docs"`
 	// Fixtures are bench-owned documents for read tasks; such tasks run only
 	// under a read mode and see nothing but these files.
 	Fixtures []string `yaml:"fixtures"`
@@ -59,7 +63,20 @@ func ParseSpec(data []byte) (*Spec, error) {
 			return nil, fmt.Errorf("bench: duplicate task id %q", t.ID)
 		}
 		seen[t.ID] = true
-		if t.Pattern == "" && t.ForbidPattern == "" {
+		for mode, prompt := range t.ReadPrompts {
+			if strings.TrimSpace(prompt) == "" {
+				return nil, fmt.Errorf("bench: task %q has empty prompt for read mode %q", t.ID, mode)
+			}
+			if _, err := ParseRead(mode); err != nil {
+				return nil, fmt.Errorf("bench: task %q: %w", t.ID, err)
+			}
+		}
+		for _, mode := range t.SupportedReadModes {
+			if _, err := ParseRead(mode); err != nil || mode == "" {
+				return nil, fmt.Errorf("bench: task %q has invalid supported read mode %q", t.ID, mode)
+			}
+		}
+		if t.Pattern == "" && t.ForbidPattern == "" && len(t.RequireAll) == 0 {
 			return nil, fmt.Errorf("bench: task %q has no pattern or forbid_pattern", t.ID)
 		}
 		for _, p := range []string{t.Pattern, t.ForbidPattern} {
@@ -68,6 +85,11 @@ func ParseSpec(data []byte) (*Spec, error) {
 			}
 			if _, err := regexp.Compile("(?i)" + p); err != nil {
 				return nil, fmt.Errorf("bench: task %q pattern %q: %w", t.ID, p, err)
+			}
+		}
+		for _, p := range t.RequireAll {
+			if _, err := regexp.Compile("(?i)" + p); err != nil {
+				return nil, fmt.Errorf("bench: task %q required keyword %q: %w", t.ID, p, err)
 			}
 		}
 	}
@@ -141,7 +163,14 @@ func (s *Spec) SelectFor(ids []string, cond Condition) ([]Task, error) {
 	}
 	var out []Task
 	for _, t := range all {
-		if (len(t.Fixtures) > 0) == (cond.Read != "") {
+		isReadTask := len(t.Fixtures) > 0
+		if isReadTask && cond.Read != "" && len(t.SupportedReadModes) > 0 && !slices.Contains(t.SupportedReadModes, cond.Read) {
+			if len(ids) > 0 {
+				return nil, fmt.Errorf("bench: task %q does not support read mode %q", t.ID, cond.Read)
+			}
+			continue
+		}
+		if isReadTask == (cond.Read != "") {
 			out = append(out, t)
 		} else if len(ids) > 0 {
 			return nil, fmt.Errorf("bench: task %q does not fit condition %s", t.ID, cond.Label())
@@ -160,6 +189,11 @@ func (t Task) Score(response string) (pass bool, detail string) {
 	}
 	if t.ForbidPattern != "" && regexp.MustCompile("(?i)"+t.ForbidPattern).MatchString(response) {
 		return false, fmt.Sprintf("forbid_pattern %q matched", t.ForbidPattern)
+	}
+	for _, p := range t.RequireAll {
+		if !regexp.MustCompile("(?i)" + p).MatchString(response) {
+			return false, fmt.Sprintf("required keyword %q not found", p)
+		}
 	}
 	return true, ""
 }

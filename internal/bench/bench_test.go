@@ -44,6 +44,72 @@ func TestEmbeddedSpecIsValid(t *testing.T) {
 	}
 }
 
+func TestReadLangSummaryScoringAndSavedSessions(t *testing.T) {
+	spec, err := LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tasks, err := spec.Select([]string{"read-lang-summary"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := tasks[0]
+	good := `| Doc | Summary |
+|---|---|
+| Go | standard library |
+| Make | help first |
+| ManPages | Cobra |
+| Bash | if test |
+| Git | Conventional Commit |
+| Markdown | PascalCase |`
+	if pass, detail := task.Score(good); !pass {
+		t.Fatalf("complete answer rejected: %s", detail)
+	}
+	missing := strings.Replace(good, "PascalCase", "kebab-case", 1)
+	if pass, detail := task.Score(missing); pass || !strings.Contains(detail, "PascalCase") {
+		t.Errorf("missing keyword result = %v, %q", pass, detail)
+	}
+	noTable := strings.Replace(good, "|---|---|", "separator absent", 1)
+	if pass, detail := task.Score(noTable); pass || !strings.Contains(detail, "pattern") {
+		t.Errorf("missing table result = %v, %q", pass, detail)
+	}
+
+	sessions, err := filepath.Glob(filepath.Join(repoRoot(t), "docs/data/codex-bench-read-lang-docs-*-luna-med-pass-*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 6 {
+		t.Fatalf("found %d saved sessions, want 6", len(sessions))
+	}
+	for _, path := range sessions {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasPrefix(string(data), "version https://git-lfs.github.com/spec/v1") {
+			t.Skipf("%s is a Git LFS pointer; run git lfs pull to validate saved-session answers", filepath.Base(path))
+		}
+		at := strings.LastIndex(string(data), "## Assistant\n")
+		if at < 0 {
+			t.Errorf("%s has no final assistant answer", filepath.Base(path))
+			continue
+		}
+		if pass, detail := task.Score(string(data[at+len("## Assistant\n"):])); !pass {
+			t.Errorf("%s: %s", filepath.Base(path), detail)
+		}
+	}
+}
+
+func TestReadPromptByMode(t *testing.T) {
+	task := Task{Prompt: "default", ReadPrompts: map[string]string{"native": "native prompt"}}
+	if got := TaskPrompt(task, "native"); got != "native prompt" {
+		t.Fatalf("native prompt = %q", got)
+	}
+	if got := TaskPrompt(task, "card"); got != "default" {
+		t.Fatalf("fallback prompt = %q", got)
+	}
+}
+
 func TestParseSpecRejectsBadInput(t *testing.T) {
 	for name, y := range map[string]string{
 		"duplicate": "tasks:\n- {id: a, prompt: p, pattern: x}\n- {id: a, prompt: p, pattern: x}\n",
@@ -372,8 +438,12 @@ func TestReadConditionSelectsAndStagesOnlyFixtures(t *testing.T) {
 	for _, mode := range ReadModes {
 		cond := Condition{Docs: "full", Read: mode}
 		tasks, err := s.SelectFor(nil, cond)
-		if err != nil || len(tasks) != 2 {
-			t.Fatalf("%s: SelectFor = %d tasks, %v", mode, len(tasks), err)
+		want := 3
+		if mode == "auto" {
+			want = 2
+		}
+		if err != nil || len(tasks) != want {
+			t.Fatalf("%s: SelectFor = %d tasks, want %d, %v", mode, len(tasks), want, err)
 		}
 		dir := t.TempDir()
 		got, err := StageWorkspace(dir, repoRoot(t), s, tasks[0], cond)

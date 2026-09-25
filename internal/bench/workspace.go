@@ -75,7 +75,7 @@ func docPath(repoRoot, rel, docs string) (string, error) {
 // file names so callers can record what the agent was given.
 func StageWorkspace(dir, repoRoot string, spec *Spec, task Task, cond Condition) ([]string, error) {
 	if cond.Read != "" {
-		return stageFixtures(dir, spec, task, cond)
+		return stageFixtures(dir, repoRoot, spec, task, cond)
 	}
 	rels := append(append([]string{}, spec.BaseDocs...), task.Docs...)
 	var delivered []string
@@ -114,15 +114,12 @@ func StageWorkspace(dir, repoRoot string, spec *Spec, task Task, cond Condition)
 	return delivered, nil
 }
 
-// stageFixtures writes the task's fixtures to dir/docs and an AGENTS.md and
-// CLAUDE.md holding only the read-mode instruction: the agent sees no other docs.
-func stageFixtures(dir string, spec *Spec, task Task, cond Condition) ([]string, error) {
+// stageFixtures writes the task's fixtures at their relative paths and an
+// AGENTS.md and CLAUDE.md holding only the read-mode instruction.
+func stageFixtures(dir, repoRoot string, spec *Spec, task Task, cond Condition) ([]string, error) {
 	mode := cond.Read
 	if len(task.Fixtures) == 0 {
 		return nil, fmt.Errorf("bench: task %q has no fixtures for read mode %q", task.ID, mode)
-	}
-	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0o755); err != nil {
-		return nil, err
 	}
 	var delivered []string
 	var body strings.Builder
@@ -133,13 +130,31 @@ func stageFixtures(dir string, spec *Spec, task Task, cond Condition) ([]string,
 	instr := strings.ReplaceAll(spec.ReadModes[mode], "{{card}}", card)
 	body.WriteString(strings.TrimRight(instr, "\n") + "\n\nDocs:\n")
 	for _, name := range task.Fixtures {
-		files, _ := fixtureFiles(name, cond.Yaml, cond.Multi)
+		files, generated := fixtureFiles(name, cond.Yaml, cond.Multi)
+		if !generated {
+			if cond.Yaml || cond.Multi >= 2 {
+				return nil, fmt.Errorf("bench: fixture %q does not support yaml or multi mode", name)
+			}
+			data, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(name)))
+			if err != nil {
+				return nil, fmt.Errorf("bench: fixture %s: %w", name, err)
+			}
+			files = []fixtureFile{{Name: name, Content: string(data)}}
+		}
 		for _, f := range files {
-			if err := os.WriteFile(filepath.Join(dir, "docs", f.Name), []byte(f.Content), 0o644); err != nil {
+			name := f.Name
+			if generated {
+				name = filepath.ToSlash(filepath.Join("docs", f.Name))
+			}
+			dest := filepath.Join(dir, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 				return nil, err
 			}
-			delivered = append(delivered, "docs/"+f.Name)
-			fmt.Fprintf(&body, "- docs/%s\n", f.Name)
+			if err := os.WriteFile(dest, []byte(f.Content), 0o644); err != nil {
+				return nil, err
+			}
+			delivered = append(delivered, name)
+			fmt.Fprintf(&body, "- %s\n", name)
 		}
 	}
 	for _, f := range []string{"AGENTS.md", "CLAUDE.md"} {
