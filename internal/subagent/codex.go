@@ -146,6 +146,12 @@ func (d CodexDriver) Compact(ctx context.Context, id string) (*TurnResult, error
 	if !completed {
 		return nil, fmt.Errorf("codex compact: Codex stream ended without turn.completed; resume prompt was not sent")
 	}
+	// Codex versions may complete the /compact turn without emitting an
+	// agent_message. A completed compact operation is the provider's ack; the
+	// caller still requires a verified context-token drop before dispatch.
+	if p.r.Response == "" {
+		p.r.Response = "Codex compact turn completed"
+	}
 	return &p.r, nil
 }
 func (d CodexDriver) Stop(context.Context, string) error {

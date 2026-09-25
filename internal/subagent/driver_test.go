@@ -1,6 +1,7 @@
 package subagent
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -356,6 +357,40 @@ func TestCodexStreamEmitsEventsInOrder(t *testing.T) {
 	want := []string{"session:t1", "message:hi", "activity:running sleep 3", "other:"}
 	if !reflect.DeepEqual(kinds, want) || r.Response != "hi" || r.TokensTurn != 15 || r.CachedTokens != 4 {
 		t.Fatalf("events=%q result=%+v", kinds, r)
+	}
+}
+
+func TestCodexCompactCapturedEventSequence(t *testing.T) {
+	data, err := os.ReadFile("testdata/codex_compact_events.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := CodexDriver{Start: func(context.Context, string, ...string) (io.Reader, func() error, error) {
+		return bytes.NewReader(data), func() error { return nil }, nil
+	}}
+	r, err := d.Compact(context.Background(), "captured-thread")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Response != "Compacted." || r.ContextTokens != 34255 {
+		t.Fatalf("captured result = %+v", r)
+	}
+	if err := VerifyCompaction(40000, r); err != nil {
+		t.Fatalf("captured sequence should acknowledge and verify a lower context: %v", err)
+	}
+
+	// Some Codex versions omit the assistant message; turn.completed is the
+	// completion acknowledgement, while VerifyCompaction still gates dispatch.
+	withoutMessage := []byte(`{"type":"turn.completed","usage":{"input_tokens":100}}` + "\n")
+	d.Start = func(context.Context, string, ...string) (io.Reader, func() error, error) {
+		return bytes.NewReader(withoutMessage), func() error { return nil }, nil
+	}
+	r, err = d.Compact(context.Background(), "captured-thread")
+	if err != nil || r.Response == "" {
+		t.Fatalf("compact without assistant text: result=%+v err=%v", r, err)
+	}
+	if err := VerifyCompaction(200, r); err != nil {
+		t.Fatalf("completed compact turn with lower context should verify: %v", err)
 	}
 }
 
