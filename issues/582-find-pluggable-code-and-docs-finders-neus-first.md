@@ -1,6 +1,6 @@
 # 582 — find: pluggable code and docs finders, neus first
 
-**Status**: Open
+**Status**: Closed — find code|docs with pluggable external finders (neus first, rg/fuzzy fallback), rank merge, harnez_find MCP tool, Search practice (7e75613, bc865e1, d594728); terra review PASS, tests pass
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
