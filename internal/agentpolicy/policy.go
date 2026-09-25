@@ -32,6 +32,7 @@ const policyBody = `# subagent_mode: %s
   ` + "`wait <session>`" + ` takes its session positionally; resume requires ` + "`--name`" + ` because
   a positional name is treated as the prompt, and resume has no ` + "`--detach`" + ` flag.
 - There is no ` + "`harnez advisor`" + ` command.
+- Before broad shell searches, use ` + "`harnez find code|docs`" + ` or MCP ` + "`harnez_find`" + `; see ` + "`@docs/Search.md`" + `.
 - Preserve the repository's instructions and report the provider and session used.`
 
 // State describes the effective policy and the files that contributed to it.

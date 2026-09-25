@@ -521,6 +521,9 @@ agents_md:
           - Commit documentation and `issues/*.md` changes immediately; don't batch them behind
             pending code work.
 
+          ### Code and Documentation Search
+          - Before broad shell searches, use `harnez find code|docs` or MCP `harnez_find`; see `@docs/Search.md`.
+
           ### Agentic Loop Invariants
           Where `@docs/AgenticLoop.md` is present in this project, follow it rather than
           restating it here — in particular Invariant 1 (Parallel Read, Sequential Write:
@@ -675,6 +678,15 @@ agents_md:
       lite_source: docs/practices/IssueTracking.lite.md
       target: ~/.claude/docs/IssueTracking.md
       local: ./docs/IssueTracking.md
+      default: true
+    search:
+      name: "Search Practices"
+      ref: "@docs/Search.md"
+      hint: "harnez find code/docs, finder configuration, partial results, and rg fallback"
+      source: docs/practices/Search.md
+      lite_source: docs/practices/Search.lite.md
+      target: ~/.claude/docs/Search.md
+      local: ./docs/Search.md
       default: true
     concise-mode:
       name: "ConciseMode Practices"

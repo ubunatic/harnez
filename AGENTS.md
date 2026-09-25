@@ -60,13 +60,16 @@ instead of `ls issues/`, `find`, or raw grep:
 - Commit documentation and `issues/*.md` changes immediately; don't batch them behind
   pending code work.
 
+### Code and Documentation Search
+- Before broad shell searches, use `harnez find code|docs` or MCP `harnez_find`; see `@docs/Search.md`.
+
 ### Agentic Loop Invariants
 Where `@docs/AgenticLoop.md` is present in this project, follow it rather than
 restating it here — in particular Invariant 1 (Parallel Read, Sequential Write:
 one writer per workspace), Invariant 3 (Zero Zombie Guarantee: track and terminate
 every background task and subagent), Invariant 6 (Context Discipline: no whole-file
-reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads), and Invariant 10
-(Media & Demo Verification Gate: explicit user confirmation before publishing
+reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads), and the Media & Demo
+Verification Gate (explicit user confirmation before publishing
 recordings or screenshots).
 <!-- harnez:end Harnez Managed Conventions -->
 
@@ -173,6 +176,8 @@ Adhere to the following conventions.
 
 Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
+- Search Practices @docs/Search.md,
+  harnez find code/docs, finder configuration, partial results, and rg fallback
 - Issue Tracking Practices @docs/IssueTracking.md,
   P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
 - Agentic Loop Practices @docs/AgenticLoop.md,
