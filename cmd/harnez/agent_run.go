@@ -282,6 +282,9 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if err != nil {
 		return err
 	}
+	if sess.ResumeBlockedReason != "" {
+		return fmt.Errorf("session %q cannot be resumed: %s", sess.Name, sess.ResumeBlockedReason)
+	}
 
 	if !subagent.CanManage(d.parent(), sess) {
 		return fmt.Errorf("session %q is outside caller lineage", sess.ID)
@@ -387,6 +390,18 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		recordTurnQuota(s, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt, nil)
 		recordResumeFailure(s, sess, err)
 		return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
+	}
+	if sess.Provider == "codex" && contextTokens >= threshold && (!r.CompactionObserved || r.ContextTokens < 0 || r.ContextTokens >= threshold) {
+		context := fmt.Sprintf("%d", r.ContextTokens)
+		if r.ContextTokens < 0 {
+			context = "unknown"
+		}
+		reason := fmt.Sprintf("Codex did not auto-compact session %s: context %s, limit %d; start a fresh session with harnez agent start", sess.ProviderID(), context, threshold)
+		sess.ResumeBlockedReason = reason
+		if saveErr := s.Save(sess); saveErr != nil {
+			return fmt.Errorf("%s (also failed to save resume block: %w)", reason, saveErr)
+		}
+		return fmt.Errorf("%s", reason)
 	}
 	sess.LastError = ""
 	sess.ResumeFailures = 0

@@ -1218,6 +1218,7 @@ type codexAutoCompactDriver struct {
 	recordingAgentDriver
 	compactCalls int
 	resumeCalls  int
+	result       subagent.TurnResult
 }
 
 func (d *codexAutoCompactDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
@@ -1227,7 +1228,10 @@ func (d *codexAutoCompactDriver) Compact(context.Context, string) (*subagent.Tur
 
 func (d *codexAutoCompactDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
 	d.resumeCalls++
-	return &subagent.TurnResult{Response: "resumed", ContextTokens: 120000, TokensTurn: 5}, nil
+	r := d.result
+	r.Response = "resumed"
+	r.TokensTurn = 5
+	return &r, nil
 }
 
 func TestCodexOverThresholdResumeUsesProviderAutoCompact(t *testing.T) {
@@ -1247,15 +1251,51 @@ func TestCodexOverThresholdResumeUsesProviderAutoCompact(t *testing.T) {
 	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", ContextTokens: 250000}); err != nil {
 		t.Fatal(err)
 	}
-	driver := &codexAutoCompactDriver{}
-	old := agentDriver
-	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
-	defer func() { agentDriver = old }()
-	if _, err := runWithStore(t, driver, storeDir, "resume", "--name", "worker", "prompt"); err != nil {
-		t.Fatal(err)
-	}
-	if driver.compactCalls != 0 || driver.resumeCalls != 1 {
-		t.Fatalf("compact calls=%d resume calls=%d", driver.compactCalls, driver.resumeCalls)
+	for _, tc := range []struct {
+		name        string
+		result      subagent.TurnResult
+		wantErr     bool
+		wantContext string
+	}{
+		{name: "compaction verified", result: subagent.TurnResult{ContextTokens: 50000, CompactionObserved: true}},
+		{name: "missing compaction record", result: subagent.TurnResult{ContextTokens: 50000}, wantErr: true, wantContext: "context 50000"},
+		{name: "still over limit", result: subagent.TurnResult{ContextTokens: 120000, CompactionObserved: true}, wantErr: true, wantContext: "context 120000"},
+		{name: "unreadable rollout", result: subagent.TurnResult{ContextTokens: -1, CompactionObserved: true}, wantErr: true, wantContext: "context unknown"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", home)
+			dir := t.TempDir()
+			st, err := subagent.NewSessionStore(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := st.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", ContextTokens: 250000}); err != nil {
+				t.Fatal(err)
+			}
+			driver := &codexAutoCompactDriver{result: tc.result}
+			old := agentDriver
+			agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+			defer func() { agentDriver = old }()
+			_, err = runWithStore(t, driver, dir, "resume", "--name", "worker", "prompt")
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if tc.wantErr {
+				if !strings.Contains(err.Error(), "Codex did not auto-compact session sid") || !strings.Contains(err.Error(), tc.wantContext) || !strings.Contains(err.Error(), "start a fresh session with harnez agent start") {
+					t.Fatalf("error = %v", err)
+				}
+				stopped, getErr := st.Get("sid")
+				if getErr != nil || stopped.ResumeBlockedReason == "" {
+					t.Fatalf("resume block=%q err=%v", stopped.ResumeBlockedReason, getErr)
+				}
+				if _, nextErr := runWithStore(t, driver, dir, "resume", "--name", "worker", "again"); nextErr == nil || !strings.Contains(nextErr.Error(), "cannot be resumed") {
+					t.Fatalf("second resume error = %v", nextErr)
+				}
+			}
+			if driver.compactCalls != 0 || driver.resumeCalls != 1 {
+				t.Fatalf("compact calls=%d resume calls=%d", driver.compactCalls, driver.resumeCalls)
+			}
+		})
 	}
 }
 
@@ -1267,7 +1307,7 @@ func (*streamDriver) emit(fn subagent.EventFunc) *subagent.TurnResult {
 	fn(subagent.Event{Kind: "activity", Text: "running sleep", Bytes: 80})
 	time.Sleep(60 * time.Millisecond)
 	fn(subagent.Event{Kind: "message", Text: "all done", Bytes: 80})
-	return &subagent.TurnResult{SessionID: "thread-1", Response: "all done", Messages: []string{"on it", "all done"}, TokensTurn: 500}
+	return &subagent.TurnResult{SessionID: "thread-1", Response: "all done", Messages: []string{"on it", "all done"}, TokensTurn: 500, ContextTokens: 100000, CompactionObserved: true}
 }
 func (d *streamDriver) RunStream(_ context.Context, _ subagent.RunOptions, fn subagent.EventFunc) (*subagent.TurnResult, error) {
 	return d.emit(fn), nil

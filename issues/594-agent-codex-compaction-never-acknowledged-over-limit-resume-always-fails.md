@@ -24,4 +24,8 @@ Evidence excerpt (5 lines; encrypted compaction payload omitted):
 ```
 
 ## 3. Implementation & Verification Plan
-Set `model_auto_compact_token_limit` to `agent.compact_threshold_tokens` on every Codex exec and resume. Read `ContextTokens` from the latest rollout `last_token_usage.input_tokens` record; never infer it from cumulative `turn.completed` usage. Remove the Codex `/compact` prompt path and rely on Codex auto-compaction during exec. Test argument construction, rollout parsing using the real token-count excerpt, and the selected dispatch path. Verify with the single Quota-1 run (`make test-q1`).
+Set `model_auto_compact_token_limit` to `agent.compact_threshold_tokens` on every Codex exec and resume. Read `ContextTokens` from the latest rollout `last_token_usage.input_tokens` record; never infer it from cumulative `turn.completed` usage. Remove the Codex `/compact` prompt path and rely on Codex auto-compaction during exec.
+
+**Deviation from ticket 591:** Codex native auto-compaction runs inside the turn, at turn start before the model reads the prompt. Harnez cannot verify compaction before sending that prompt. For Codex, verify immediately after the turn instead: an over-limit resume passes only if the rollout has a new `compaction` record and its post-turn context is below threshold. Missing evidence, a still-over-limit context, or an unreadable rollout blocks later resumes until a fresh session is started.
+
+Test argument construction, rollout parsing using the real token-count excerpt, successful post-turn verification, missing-record and still-over-limit failures, and unreadable rollout handling. Verify with the single Quota-1 run (`make test-q1`).

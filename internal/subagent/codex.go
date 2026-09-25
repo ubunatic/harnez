@@ -41,21 +41,26 @@ func (d CodexDriver) CheckResumable(providerID string) (bool, string) {
 }
 
 func codexRolloutContextTokens(providerID string) (int, error) {
+	tokens, _, err := codexRolloutState(providerID)
+	return tokens, err
+}
+
+func codexRolloutPath(providerID string) (string, error) {
 	home := os.Getenv("CODEX_HOME")
 	if home == "" {
 		var err error
 		home, err = os.UserHomeDir()
 		if err != nil {
-			return 0, err
+			return "", err
 		}
 		home = filepath.Join(home, ".codex")
 	}
 	matches, err := filepath.Glob(filepath.Join(home, "sessions", "*", "*", "*", "rollout-*"+providerID+".jsonl"))
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 	if len(matches) == 0 {
-		return 0, fmt.Errorf("codex rollout for session %s not found", providerID)
+		return "", fmt.Errorf("codex rollout for session %s not found", providerID)
 	}
 	latest := matches[0]
 	for _, candidate := range matches[1:] {
@@ -65,37 +70,7 @@ func codexRolloutContextTokens(providerID string) (int, error) {
 			}
 		}
 	}
-	f, err := os.Open(latest)
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-	var tokens int
-	s := bufio.NewScanner(f)
-	s.Buffer(make([]byte, 4096), 8<<20)
-	for s.Scan() {
-		var event struct {
-			Type    string `json:"type"`
-			Payload struct {
-				Type string `json:"type"`
-				Info struct {
-					LastTokenUsage struct {
-						Input int `json:"input_tokens"`
-					} `json:"last_token_usage"`
-				} `json:"info"`
-			} `json:"payload"`
-		}
-		if json.Unmarshal(s.Bytes(), &event) == nil && event.Type == "event_msg" && event.Payload.Type == "token_count" {
-			tokens = event.Payload.Info.LastTokenUsage.Input
-		}
-	}
-	if err := s.Err(); err != nil {
-		return 0, err
-	}
-	if tokens <= 0 {
-		return 0, fmt.Errorf("codex rollout for session %s has no last_token_usage input count", providerID)
-	}
-	return tokens, nil
+	return latest, nil
 }
 
 func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error) {
@@ -156,6 +131,7 @@ func (d CodexDriver) Resume(ctx context.Context, id, prompt string, model Model)
 	return d.runResume(ctx, id, prompt, model)
 }
 func (d CodexDriver) runResume(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
+	beforeCompactions, beforeErr := codexRolloutCompactions(id)
 	b, err := d.command(ctx, codexResumeArgs(id, prompt, model)...)
 	if err != nil {
 		return nil, fmt.Errorf("codex resume: %w", err)
@@ -164,15 +140,73 @@ func (d CodexDriver) runResume(ctx context.Context, id, prompt string, model Mod
 	if err != nil {
 		return nil, err
 	}
-	setCodexRolloutContext(r, id)
+	setCodexResumeRolloutState(r, id, beforeCompactions, beforeErr)
 	return r, nil
 }
 
+func setCodexResumeRolloutState(result *TurnResult, providerID string, beforeCompactions int, beforeErr error) {
+	tokens, afterCompactions, stateErr := codexRolloutState(providerID)
+	if stateErr != nil {
+		result.ContextTokens = -1 // unknown is never treated as under the threshold
+		return
+	}
+	result.ContextTokens = tokens
+	result.CompactionObserved = beforeErr == nil && afterCompactions > beforeCompactions
+}
+
 func setCodexRolloutContext(result *TurnResult, providerID string) {
-	result.ContextTokens = 0
+	result.ContextTokens = -1 // a failed rollout read is unknown, not zero
 	if tokens, err := codexRolloutContextTokens(providerID); err == nil {
 		result.ContextTokens = tokens
 	}
+}
+
+func codexRolloutCompactions(providerID string) (int, error) {
+	_, count, err := codexRolloutState(providerID)
+	return count, err
+}
+
+func codexRolloutState(providerID string) (int, int, error) {
+	path, err := codexRolloutPath(providerID)
+	if err != nil {
+		return 0, 0, err
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer f.Close()
+	var tokens, compactions int
+	s := bufio.NewScanner(f)
+	s.Buffer(make([]byte, 4096), 8<<20)
+	for s.Scan() {
+		var event struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Type string `json:"type"`
+				Info struct {
+					LastTokenUsage struct {
+						Input int `json:"input_tokens"`
+					} `json:"last_token_usage"`
+				} `json:"info"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(s.Bytes(), &event) == nil {
+			if event.Type == "compaction" {
+				compactions++
+			}
+			if event.Type == "event_msg" && event.Payload.Type == "token_count" {
+				tokens = event.Payload.Info.LastTokenUsage.Input
+			}
+		}
+	}
+	if err := s.Err(); err != nil {
+		return 0, 0, err
+	}
+	if tokens <= 0 {
+		return 0, 0, fmt.Errorf("codex rollout for session %s has no last_token_usage input count", providerID)
+	}
+	return tokens, compactions, nil
 }
 func (d CodexDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
 	return nil, fmt.Errorf("codex manages context automatically during exec; manual /compact is unsupported")
@@ -359,11 +393,12 @@ func (d CodexDriver) RunStream(ctx context.Context, o RunOptions, fn EventFunc) 
 }
 
 func (d CodexDriver) ResumeStream(ctx context.Context, id, prompt string, model Model, fn EventFunc) (*TurnResult, error) {
+	beforeCompactions, beforeErr := codexRolloutCompactions(id)
 	r, err := d.stream(ctx, fn, codexResumeArgs(id, prompt, model)...)
 	if err != nil {
 		return nil, fmt.Errorf("codex resume: %w", err)
 	}
-	setCodexRolloutContext(r, id)
+	setCodexResumeRolloutState(r, id, beforeCompactions, beforeErr)
 	return r, nil
 }
 

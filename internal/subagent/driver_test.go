@@ -303,7 +303,7 @@ func TestCodexDriver(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.SessionID != "s1" || r.Response != "done" || r.CachedTokens != 3 || r.ContextTokens != 0 {
+	if r.SessionID != "s1" || r.Response != "done" || r.CachedTokens != 3 || r.ContextTokens != -1 {
 		t.Fatalf("unexpected result %#v", r)
 	}
 }
@@ -378,13 +378,32 @@ func TestCodexReadsLastTokenUsageFromRollout(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	const rollout = `{"timestamp":"2026-09-25T22:27:32.332Z","ordinal":55,"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":41691},"last_token_usage":{"input_tokens":13937,"cached_input_tokens":11008,"output_tokens":5}}}}` + "\n"
+	const rollout = `{"type":"turn.completed","usage":{"input_tokens":27754,"cached_input_tokens":24064,"output_tokens":10}}` + "\n" +
+		`{"type":"compaction","id":"cmp_06e964c86f3f6504016ab6f55168e487d2ad0aa932bea59e8a","encrypted_content":"<redacted>"}` + "\n" +
+		`{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":41691},"last_token_usage":{"input_tokens":13937,"cached_input_tokens":11008,"output_tokens":5}}}}` + "\n" +
+		`{"type":"turn.completed","usage":{"input_tokens":41691,"cached_input_tokens":35072,"output_tokens":15}}` + "\n"
 	if err := os.WriteFile(path, []byte(rollout), 0600); err != nil {
 		t.Fatal(err)
 	}
 	got, err := codexRolloutContextTokens("session")
 	if err != nil || got != 13937 {
 		t.Fatalf("rollout context tokens = %d, %v", got, err)
+	}
+	got, compactions, err := codexRolloutState("session")
+	if err != nil || got != 13937 || compactions != 1 {
+		t.Fatalf("rollout state = context %d compactions %d err %v", got, compactions, err)
+	}
+}
+
+func TestCodexResumeRolloutReadFailureIsUnknown(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	d := CodexDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
+		return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}` + "\n"), nil
+	}}
+	r, err := d.Resume(context.Background(), "missing", "continue", Model{Name: "model"})
+	if err != nil || r.ContextTokens != -1 {
+		t.Fatalf("resume result context=%d err=%v; want unknown context", r.ContextTokens, err)
 	}
 }
 

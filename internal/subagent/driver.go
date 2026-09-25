@@ -90,10 +90,12 @@ type TurnResult struct {
 	CachedTokens int      `json:"cached_tokens"`
 	// ContextTokens is the provider's input-token count for the last turn,
 	// including cached input. It measures the full context the model read.
-	ContextTokens    int   `json:"context_tokens"`
-	TokensTurn       int   `json:"tokens_turn"`
-	TokensCumulative int   `json:"tokens_cumulative"`
-	DurationMS       int64 `json:"duration_ms"`
+	ContextTokens int `json:"context_tokens"`
+	// CompactionObserved reports a new provider compaction record during this turn.
+	CompactionObserved bool  `json:"compaction_observed,omitempty"`
+	TokensTurn         int   `json:"tokens_turn"`
+	TokensCumulative   int   `json:"tokens_cumulative"`
+	DurationMS         int64 `json:"duration_ms"`
 }
 
 var modelAliases map[string]modelAlias
