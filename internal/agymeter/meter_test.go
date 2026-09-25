@@ -6,17 +6,72 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestRunChildProcessHelper(t *testing.T) {
+	if os.Getenv("AGYMETER_RUN_CHILD_HELPER") != "1" {
+		return
+	}
+	err := runChild(context.Background(), os.Getenv("AGYMETER_CHILD_COMMAND"), nil, os.Environ(), "", os.Stdin, os.Stdout, os.Stderr)
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		os.Exit(exitErr.ExitCode())
+	}
+	if err != nil {
+		os.Exit(125)
+	}
+	os.Exit(0)
+}
+
+func TestRunChildPassesStdinIgnoresInterruptAndReturnsExitCode(t *testing.T) {
+	child := filepath.Join(t.TempDir(), "fake-agy")
+	script := "#!/bin/sh\nsleep 0.2\nIFS= read -r line\nprintf '%s\\n' \"$line\"\nexit 7\n"
+	if err := os.WriteFile(child, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRunChildProcessHelper$")
+	cmd.Env = append(os.Environ(), "AGYMETER_RUN_CHILD_HELPER=1", "AGYMETER_CHILD_COMMAND="+child)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(350 * time.Millisecond)
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if _, err := io.WriteString(stdin, "terminal input\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := stdin.Close(); err != nil {
+		t.Fatal(err)
+	}
+	err = cmd.Wait()
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 7 {
+		t.Fatalf("helper error = %v, want exit code 7", err)
+	}
+	if got := strings.TrimSpace(stdout.String()); got != "terminal input" {
+		t.Fatalf("child stdout = %q, want stdin line", got)
+	}
+}
 
 func TestNewCAAndBundle(t *testing.T) {
 	home := t.TempDir()
@@ -266,7 +321,7 @@ func TestStartFailureRunsChildPlainly(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	err := Run(context.Background(), badHome, "/bin/sh", []string{"-c", "printf plain-child"}, &stdout, &stderr)
+	err := Run(context.Background(), badHome, "/bin/sh", []string{"-c", "printf plain-child"}, nil, &stdout, &stderr)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -40,7 +40,7 @@ func (d AgyDriver) command(ctx context.Context, args ...string) ([]byte, error) 
 		env = replaceEnvironmentValue(env, "HARNEZ_AGY_METER_SESSION_ID", d.SessionID)
 	}
 	var stdout, stderr bytes.Buffer
-	err = agymeter.RunWithEnvDir(ctx, home, "agy", args, env, d.Dir, &stdout, &stderr)
+	err = agymeter.RunWithEnvDir(ctx, home, "agy", args, env, d.Dir, nil, &stdout, &stderr)
 	if err != nil && stderr.Len() > 0 {
 		return stdout.Bytes(), fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
 	}

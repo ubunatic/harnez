@@ -16,7 +16,14 @@ func newAgyMeterCmd() *cobra.Command {
 		Args:   cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			env := subagent.AgyLaunchEnv(os.Environ(), os.Getenv("HOME"))
-			return agymeter.RunWithEnv(cmd.Context(), os.Getenv("HOME"), args[0], args[1:], env, os.Stdout, os.Stderr)
+			err := agymeter.RunWithEnv(cmd.Context(), os.Getenv("HOME"), args[0], args[1:], env, os.Stdin, os.Stdout, os.Stderr)
+			if err == nil {
+				return nil
+			}
+			if code := exitCodeFromError(err); code >= 0 {
+				return silenceIfExitCode(cmd, &exitCodeError{Code: code})
+			}
+			return err
 		},
 	}
 }

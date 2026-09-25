@@ -24,10 +24,12 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -65,49 +67,71 @@ type Meter struct {
 
 // Run starts a private meter for the lifetime of the child command. Failure to
 // initialize metering is fail-open: the requested program still runs plainly.
-func Run(ctx context.Context, home string, command string, args []string, stdout, stderr io.Writer) error {
-	return RunWithEnv(ctx, home, command, args, os.Environ(), stdout, stderr)
+func Run(ctx context.Context, home string, command string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	return RunWithEnv(ctx, home, command, args, os.Environ(), stdin, stdout, stderr)
 }
 
 // RunWithEnv starts a per-command meter using an explicit child environment.
-func RunWithEnv(ctx context.Context, home, command string, args, environ []string, stdout, stderr io.Writer) error {
-	return RunWithEnvDir(ctx, home, command, args, environ, "", stdout, stderr)
+func RunWithEnv(ctx context.Context, home, command string, args, environ []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	return RunWithEnvDir(ctx, home, command, args, environ, "", stdin, stdout, stderr)
 }
 
 // RunWithEnvDir is RunWithEnv with an explicit child working directory.
-func RunWithEnvDir(ctx context.Context, home, command string, args, environ []string, dir string, stdout, stderr io.Writer) error {
+func RunWithEnvDir(ctx context.Context, home, command string, args, environ []string, dir string, stdin io.Reader, stdout, stderr io.Writer) error {
 	env := append([]string(nil), environ...)
 	sessionID := envValue(env, "HARNEZ_SESSION_ID")
 	promptID, idErr := newPromptID()
 	if idErr != nil {
 		fmt.Fprintln(stderr, "harnez-agy: metering ID unavailable; starting agy without metering")
-		return runChild(ctx, command, args, env, dir, stdout, stderr)
+		return runChild(ctx, command, args, env, dir, stdin, stdout, stderr)
 	}
 	m, err := newMeter(home, sessionID, promptID)
 	if err != nil {
 		fmt.Fprintln(stderr, "harnez-agy: metering proxy unavailable; starting agy without metering")
-		return runChild(ctx, command, args, env, dir, stdout, stderr)
+		return runChild(ctx, command, args, env, dir, stdin, stdout, stderr)
 	}
 	defer m.Close()
 	bundle, err := m.Bundle()
 	if err != nil {
 		_ = m.Close()
 		fmt.Fprintln(stderr, "harnez-agy: metering proxy unavailable; starting agy without metering")
-		return runChild(ctx, command, args, env, dir, stdout, stderr)
+		return runChild(ctx, command, args, env, dir, stdin, stdout, stderr)
 	}
 	go m.Serve()
 	env = setEnv(env, "HTTPS_PROXY", m.URL())
 	env = setEnv(env, "https_proxy", m.URL())
 	env = setEnv(env, "SSL_CERT_FILE", bundle)
-	return runChild(ctx, command, args, env, dir, stdout, stderr)
+	return runChild(ctx, command, args, env, dir, stdin, stdout, stderr)
 }
-func runChild(ctx context.Context, name string, args, env []string, dir string, out, errout io.Writer) error {
-	c := exec.CommandContext(ctx, name, args...)
+func runChild(ctx context.Context, name string, args, env []string, dir string, in io.Reader, out, errout io.Writer) error {
+	c := exec.Command(name, args...)
 	c.Env = env
 	c.Dir = dir
+	c.Stdin = in
 	c.Stdout = out
 	c.Stderr = errout
-	return c.Run()
+	signals := make(chan os.Signal, 4)
+	signal.Notify(signals, os.Interrupt, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGHUP)
+	defer signal.Stop(signals)
+	if err := c.Start(); err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() { done <- c.Wait() }()
+	ctxDone := ctx.Done()
+	for {
+		select {
+		case <-ctxDone:
+			_ = c.Process.Signal(syscall.SIGTERM)
+			ctxDone = nil
+		case sig := <-signals:
+			if sig == syscall.SIGTERM || sig == syscall.SIGHUP {
+				_ = c.Process.Signal(sig)
+			}
+		case err := <-done:
+			return err
+		}
+	}
 }
 func setEnv(env []string, key, value string) []string {
 	out := env[:0]
