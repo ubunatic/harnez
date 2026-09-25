@@ -1,6 +1,6 @@
 # 575 — Add harnez_command MCP tool returning CLI command and backgrounding instructions
 
-**Status**: Open
+**Status**: Closed — M3 documentation and MCP verification completed
 **Priority**: P2
 **Severity**: Minor
 **Category**: Feature
