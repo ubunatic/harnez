@@ -16,8 +16,8 @@ meter (`~/.harnez/agymeter/usage.jsonl`, `harnez stats --session <id> --calls`).
 ## Hard limits for the developer
 
 - Do **not** run real benchmark sweeps. Live model calls only as a basic "can the provider be
-  called" check, one short prompt per provider, and only on low models: claude haiku, agy
-  Gemini Flash 3.7 (low), codex luna (low). Everything else is unit tests with fakes.
+  called" check, one short prompt per provider, and only on low models: `claude:haiku:low`, agy
+  `agy:flash37:low`, `codex:luna:low`. Everything else is unit tests with fakes.
 - One `make test-q1` per turn.
 
 ## M1 — generic Bench.md
