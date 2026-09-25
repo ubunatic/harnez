@@ -31,3 +31,15 @@ minutes without knowing what runs, which files the agents get, or what a card lo
 - Unit tests with fake runners: stdout holds only the table; stderr has the preamble before the
   first run and one start/end pair per run; card preamble failure calls no agent.
 - No live model calls needed. One `make test-q1`, commit `feat(bench): ... (issue 569 M1)`.
+
+## M1 delivered (host-committed)
+
+Dev's one q1 run was red; it fixed the causes but did not commit. Host q1 on the fixed tree: green;
+host committed and installed. Review notes for a possible M2:
+
+- `benchPreamble` loops `for range task.Fixtures` but lists every file in the staged `docs/` each
+  time: tasks with 2+ fixtures print the list twice, and non-fixture docs are listed too. List only
+  the task's fixtures, once.
+- Card preamble uses its own `readcard` render, not the agent's `harnez read -I` path.
+- `-q` skips the preamble, so card-failure-stops-before-agents no longer holds under `-q`.
+- Card temp dirs are kept on purpose (user opens them); say so in `docs/Bench.md`.
