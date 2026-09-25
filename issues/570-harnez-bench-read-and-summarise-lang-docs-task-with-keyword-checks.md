@@ -35,3 +35,18 @@ read modes. The six sessions are in `docs/data/codex-bench-read-lang-docs-*-luna
   reason. If a chosen keyword fails on a real session, pick a better one rather than dropping it.
 - Unit tests for the new check (all present, one missing, no table). Update `docs/Bench.md`.
 - No live model calls. One `make test-q1`, commit `feat(bench): ... (issue 570 M1)`.
+
+## M1 review (uncommitted tree) — not accepted
+
+Host `make test-q1`: 1 failure. The keyword check and the six-session validation test pass.
+
+- `TestBenchRunReadModeRunsFixtureTasksAndReportsTurns` (`cmd/harnez/bench_test.go:81`):
+  `docs/RUNBOOK.md` is no longer staged. The `stageFixtures` rewrite broke generated fixtures.
+
+## M2 — Pre-Work / Required Refinements (fix M1)
+
+- Fix the regression so generated fixtures stage at `docs/<name>` again; keep the test as is.
+- The preamble shows no `fixture:` lines for `read-lang-summary` and prints the generic `prompt`
+  instead of the per-mode question. Show the six fixtures and the prompt of the current read mode.
+- Unit test for `taskPrompt`: the per-mode prompt is used, and the generic one is the fallback.
+- One `make test-q1`, commit `feat(bench): ... (issue 570 M1+M2)` only if green.
