@@ -1,9 +1,9 @@
 # 558 — agy-meter-run shares launch env with agent driver
 
-Status: Open
-Priority: P2
-Severity: Minor
-Category: Refactor
+**Status**: Open
+**Priority**: P2
+**Severity**: Minor
+**Category**: Refactor
 
 ## Problem
 
