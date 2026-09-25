@@ -33,3 +33,17 @@ into `InputTokens`.
 - Unit tests with fake runners/usage: cached from provider field, estimate from the call series,
   `-` when unknown, matrix expansion with order, prompt sentence per order.
 - Update `docs/Bench.md`. No live model calls. One `make test-q1`, commit `(issue 573 M1)`.
+
+## M1 delivered (2b656ed)
+
+`--order batch,sequential` with sentences in `tasks.yaml`, `order`/`cached`/`new` columns, `*` for
+estimates, `-` when unknown. Codex (`input_tokens` includes cached) and agy (meter `Cached` of the
+main model) are right. Dev q1 green.
+
+## M2 — Pre-Work / Required Refinements
+
+- `ParseClaude`: `cache_creation_input_tokens` is counted as cached. Cache creation is newly
+  written input (billed above normal input), so it belongs in `new`; `cached` is
+  `cache_read_input_tokens` only. Test: read 100 + creation 50 + input 10 → input 160, cached 100.
+- `runner.go` `mainUsageModel` repeats the main-model pick of `splitAgyUsage`; reuse that instead.
+- One `make test-q1`, commit `fix(bench): ... (issue 573 M2)` only if green.
