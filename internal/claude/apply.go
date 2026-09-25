@@ -265,7 +265,7 @@ func buildSettingsDoc(cfg *Config, selection Set) map[string]any {
 			"type":    "command",
 			"command": "harnez statusline",
 		}
-	} else if !selection.HasComponent("usage") {
+	} else if !cfg.StatusLine || !selection.HasComponent("usage") {
 		doc["statusLine"] = nil
 	}
 	return doc

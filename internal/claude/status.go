@@ -176,6 +176,34 @@ func RunStatus(configPath string, cfg *Config, target string, selection Set) err
 			})
 		}
 	}
+	if selection.HasComponent("usage") && cfg.AgyTarget != "" {
+		settingsPath := agy.StatusLineSettingsPath(fsutil.ExpandHome(cfg.AgyTarget))
+		installed, drifted := agy.StatusLineStatus(settingsPath)
+		state := "missing"
+		if installed {
+			if drifted {
+				state = "drifted"
+			} else {
+				state = "ok"
+			}
+		}
+		checks = append(checks, entry{
+			label: settingsPath + " [statusLine]",
+			state: state,
+		})
+	}
+	if selection.HasComponent("usage") && cfg.CodexHooksTarget != "" {
+		settingsPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
+		installed, _ := codex.StatusLineStatus(settingsPath)
+		state := "missing"
+		if installed {
+			state = "ok"
+		}
+		checks = append(checks, entry{
+			label: settingsPath + " [tui.status_line]",
+			state: state,
+		})
+	}
 	if shimPath := BashShimPath(); shimPath != "" {
 		shimState := "missing"
 		if fi, err := os.Stat(shimPath); err == nil {

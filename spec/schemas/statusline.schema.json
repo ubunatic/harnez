@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Harnez status-line templates",
+  "type": "object",
+  "required": ["statusline"],
+  "properties": {
+    "statusline": {
+      "type": "object",
+      "required": ["claude", "agy"],
+      "properties": {
+        "claude": {"type": "string", "minLength": 1},
+        "agy": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

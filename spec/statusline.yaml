@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=schemas/statusline.schema.json
+statusline:
+  claude: >-
+    {{ .Directory }}
+    {{- if .Context.Available }} · {{ .Context.Size }}
+    {{- if .Context.HasCache }} ({{ .Context.CachePercent }}% cached){{end}}{{end}}
+    {{- range .RateLimits }} · {{ .Label }} {{ .RemainingPercent }}% left{{end}}
+  agy: >-
+    {{- if .Directory -}}{{.Directory}}{{end}}
+    {{- if or .Context.Available .Context.WindowAvailable}} · {{if .Context.Available}}{{.Context.Size}}{{else}}?{{end}}{{if .Context.WindowAvailable}}/{{.Context.WindowSize}}{{end}}
+    {{- if .Context.HasCache }} ({{ .Context.CachePercent }}% cached){{end}}{{end}}
+    {{- range .Quotas }} · {{.Name}} {{ .RemainingPercent }}% left{{end}}

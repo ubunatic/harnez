@@ -9,6 +9,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | File | Topic & Consultation Trigger |
 |------|------------------------------|
 | [CLIDesign.md](CLIDesign.md) | apply vs init separation: scope, rationale, footgun avoided, design evolution (consult before modifying CLI command flags) |
+| [AgentStatusLines.md](AgentStatusLines.md) | Claude Code and Antigravity CLI status-line payload fields and the subset Harnez renders |
 | [CodexSettings.md](CodexSettings.md) | Codex config ownership, spec-driven debloat, status/revert, and isolation limits (consult before changing Codex settings management) |
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent (consult when changing command pipelines) |
 | [HarnezComponents.md](HarnezComponents.md) | Component coupling analysis: subsystem map, package and runtime-contract coupling, use-case coverage, proposed separation boundaries, migration notes, and the component-selection design (§8: paths A–E, presets, removal semantics, dispatch modes, token capture; MVP in `internal/components`) (consult before splitting harnez or adding component selection) |

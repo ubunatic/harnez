@@ -588,6 +588,42 @@ func newRootCmd() *cobra.Command {
 			if err := claude.ApplyAllVariant(t, cfg, set, applyDocs, forceDocs, applySystemd, applyVariant, applyShell); err != nil {
 				return err
 			}
+			if cfg.AgyTarget != "" && set.Has(claude.Usage) {
+				agyStatusLinePath := agy.StatusLineSettingsPath(fsutil.ExpandHome(cfg.AgyTarget))
+				if cfg.StatusLine {
+					changed, err := agy.ApplyStatusLine(agyStatusLinePath)
+					if err != nil {
+						return fmt.Errorf("Antigravity status line: %w", err)
+					}
+					if changed {
+						fmt.Printf("  updated %s [statusLine]\n", agyStatusLinePath)
+					}
+				} else {
+					changed, err := agy.RemoveStatusLine(agyStatusLinePath)
+					if err != nil {
+						return fmt.Errorf("Antigravity status line: %w", err)
+					}
+					if changed {
+						fmt.Printf("  removed %s [statusLine]\n", agyStatusLinePath)
+					}
+				}
+			}
+			if cfg.CodexHooksTarget != "" && set.Has(claude.Usage) {
+				codexConfigPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
+				if cfg.StatusLine {
+					changed, err := codex.ApplyStatusLine(codexConfigPath)
+					if err != nil {
+						return fmt.Errorf("Codex status line: %w", err)
+					}
+					if changed {
+						fmt.Printf("  updated %s [tui.status_line]\n", codexConfigPath)
+					}
+				} else if changed, err := codex.RemoveStatusLine(codexConfigPath); err != nil {
+					return fmt.Errorf("Codex status line: %w", err)
+				} else if changed {
+					fmt.Printf("  removed Harnez status items from %s [tui.status_line]\n", codexConfigPath)
+				}
+			}
 			opts := claude.DebloatOptions{
 				NotebookEdit:              debloatNotebookEdit,
 				Cron:                      debloatCron,
@@ -772,6 +808,14 @@ func newRootCmd() *cobra.Command {
 						return err
 					}
 				}
+				if cfg.CodexHooksTarget != "" {
+					codexConfigPath := fsutil.ExpandHome(cfg.CodexHooksTarget)
+					if changed, err := codex.RemoveStatusLine(codexConfigPath); err != nil {
+						return fmt.Errorf("Codex status line: %w", err)
+					} else if changed {
+						fmt.Printf("  removed Harnez status items from %s [tui.status_line]\n", codexConfigPath)
+					}
+				}
 				return nil
 			}
 			return claude.RunStatus(name, cfg, t, set)
@@ -807,7 +851,18 @@ func newRootCmd() *cobra.Command {
 			}
 			if revertManaged {
 				fmt.Printf("Cleaning managed configuration in %s\n", t)
-				return claude.CleanAll(t, cfg)
+				if err := claude.CleanAll(t, cfg); err != nil {
+					return err
+				}
+				if cfg.AgyTarget != "" {
+					agyStatusLinePath := agy.StatusLineSettingsPath(fsutil.ExpandHome(cfg.AgyTarget))
+					if changed, err := agy.RemoveStatusLine(agyStatusLinePath); err != nil {
+						return fmt.Errorf("Antigravity status line: %w", err)
+					} else if changed {
+						fmt.Printf("  removed %s [statusLine]\n", agyStatusLinePath)
+					}
+				}
+				return nil
 			}
 			if !revertDebloat {
 				return fmt.Errorf("revert requires --managed or --debloat")
@@ -959,7 +1014,7 @@ func newRootCmd() *cobra.Command {
 	assessCmd.Flags().BoolVar(&assessHistory, "history", false, "display multi-track repository evolution history")
 	assessCmd.Flags().BoolVar(&assessRAMP, "ramp", false, "display RAMP repository AI maturity profile and evidence inventory")
 
-	root.AddCommand(apply, diff, scanDocs, status, revert, newCleanCmd(), usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newCodexTelemetryCmd(), newHookCmd(), newStatuslineCmd(), newLintCmd(), newLogCmd(), newDocsCmd(), newReadCmd(), newSubagentCmd(), newAgentCmd(), newBenchCmd())
+	root.AddCommand(apply, diff, scanDocs, status, revert, newCleanCmd(), usageCmd, loadStreamCmd, newInitCmd(), assessCmd, collectorCmd, newDistillCmd(), newModeCmd(), newReleaseCmd(), newRateCmd(), newExecCmd(), newStatsCmd(), newIndexCmd(), newRepoStatusCmd(), newFindCmd(), newIssuesCmd(), newCompactCheckCmd(), newFeedbackCmd(), newDocHistoryCmd(), newRepoHistoryCmd(), newCodexHookCmd(), newCodexTelemetryCmd(), newHookCmd(), newStatuslineCmd(), newAGYStatuslineCmd(), newLintCmd(), newLogCmd(), newDocsCmd(), newReadCmd(), newSubagentCmd(), newAgentCmd(), newBenchCmd())
 	return root
 }
 
