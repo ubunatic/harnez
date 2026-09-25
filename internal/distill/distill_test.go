@@ -33,6 +33,42 @@ func BenchmarkDistill_GoTest(b *testing.B) {
 	b.ReportMetric(float64(len(raw))/float64(len(distilled)), "reduction-x")
 }
 
+func BenchmarkFilterGoTest(b *testing.B) {
+	raw := syntheticGoTestOutput(500)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = FilterGoTest(strings.NewReader(raw))
+	}
+}
+
+func BenchmarkFilterGit(b *testing.B) {
+	var sb strings.Builder
+	sb.WriteString("On branch main\nUntracked files:\n  (use \"git add <file>...\" to include in what will be committed)\n")
+	for i := 0; i < 500; i++ {
+		fmt.Fprintf(&sb, "\tfile_%d.txt\n", i)
+	}
+	sb.WriteString("\nnothing added to commit\n")
+	raw := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = FilterGit(strings.NewReader(raw))
+	}
+}
+
+func BenchmarkFilterDeduplicate(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 100; i++ {
+		for j := 0; j < 10; j++ {
+			fmt.Fprintf(&sb, "warn: retry error %d\n", i)
+		}
+	}
+	raw := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = FilterDeduplicate(strings.NewReader(raw))
+	}
+}
+
 func TestStripANSI(t *testing.T) {
 	in := "\x1b[32mPASS\x1b[0m: \x1b[1mok\x1b[0m"
 	want := "PASS: ok"
