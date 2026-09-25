@@ -1,6 +1,6 @@
 # harnez-agy --meter breaks full terminal use (Ctrl+G editor)
 
-**Status**: Open
+**Status**: Closed — user confirmed Ctrl+G opens nvim
 **Priority**: P1
 **Severity**: Major
 **Category**: Bug
