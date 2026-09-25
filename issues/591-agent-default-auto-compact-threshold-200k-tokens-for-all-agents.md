@@ -1,6 +1,6 @@
 # 591 agent: default auto-compact threshold 200k tokens for all agents
 
-Status: Open
+Status: Closed — pre-prompt compaction gate: global agent.compact_threshold_tokens (200k) on all dispatch paths, context = last-turn full input tokens, compact then verify ack + drop, else error; interactive over-limit gives clear next step (52e769d, cd22fe2, dc279d5); terra review; tests pass. Runtime watchdog: 592
 Priority: P2
 Category: feature
 Related: 590, 581, 592
