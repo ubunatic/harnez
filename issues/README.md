@@ -559,3 +559,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 558 | [558-agy-meter-run-shares-launch-env-with-agent-driver.md](558-agy-meter-run-shares-launch-env-with-agent-driver.md) | agy-meter-run shares launch env with agent driver | Closed — M1 delivered, single launch env |
 | 559 | [559-harnez-agy-meter-breaks-full-terminal-use-ctrl-g-editor.md](559-harnez-agy-meter-breaks-full-terminal-use-ctrl-g-editor.md) | harnez-agy --meter breaks full terminal use (Ctrl+G editor) | Open |
 | 560 | [560-consolidate-usage-collection-into-a-reusable-usage-system-and-go-library.md](560-consolidate-usage-collection-into-a-reusable-usage-system-and-go-library.md) | Consolidate Usage Collection into a Reusable Usage System and Go Library | Open |
+| 561 | [561-harnez-bench-cleanup-agy-provider-generic-bench-md.md](561-harnez-bench-cleanup-agy-provider-generic-bench-md.md) | harnez bench cleanup, agy provider, generic Bench.md | Open |
