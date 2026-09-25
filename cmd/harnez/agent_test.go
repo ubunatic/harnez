@@ -40,6 +40,17 @@ func TestAgentCommandSurface(t *testing.T) {
 	}
 }
 
+func TestMCPCommandRegistered(t *testing.T) {
+	root := newRootCmd()
+	cmd, _, err := root.Find([]string{"mcp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd.Name() != "mcp" {
+		t.Fatalf("command = %q", cmd.Name())
+	}
+}
+
 func TestAgentCompletionDescription(t *testing.T) {
 	long := strings.Repeat("prompt ", 30)
 	tests := []struct {
