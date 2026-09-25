@@ -1,6 +1,6 @@
 # 584 — mcp: tools/list emits required:null, Claude Code rejects it
 
-**Status**: Open
+**Status**: Closed — Omitted nil required fields from all MCP tool schemas and added tools/list array validation; make test-q1 passed.
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
