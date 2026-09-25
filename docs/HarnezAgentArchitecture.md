@@ -91,11 +91,11 @@ codex mcp list
 ```
 
 Codex starts the configured process and discovers `harnez_spawn_agent`,
-`harnez_list_agents`, `harnez_agent_status`, `harnez_resume_agent`, and
-`harnez_stop_agent`, and `harnez_wait_agent`. These tools invoke the matching
-`harnez agent` commands, so the caller's Harnez role and lineage restrictions
-still apply. The server uses stdout only for MCP protocol messages; keep
-diagnostic output on stderr.
+`harnez_command`, `harnez_list_agents`, `harnez_agent_status`,
+`harnez_resume_agent`, `harnez_stop_agent`, and `harnez_wait_agent`. The
+lifecycle tools invoke the matching `harnez agent` commands, so the caller's
+Harnez role and lineage restrictions still apply. The server uses stdout only
+for MCP protocol messages; keep diagnostic output on stderr.
 
 `harnez_spawn_agent` accepts `prompt` and optional `model`, `role`, `dir`,
 `name`, and `async` arguments. `async` defaults to `false`, preserving the
@@ -109,6 +109,23 @@ running session record; callers may wait again. If the worker exits without
 recording a terminal state, wait marks the session failed with an error.
 Completed sessions stay in the registry until an authorized caller deletes
 them with `harnez agent delete --name <session>`.
+
+Use `harnez_spawn_agent` when the host should start the agent through MCP and
+receive a structured Harnez result. Its `async: true` option detaches the
+Harnez worker and returns its session record promptly, but the host sees an MCP
+tool call rather than a shell background task.
+
+Use `harnez_command` when the agent should appear as a visible, non-blocking
+background task in the host chat UI, with the host harness providing automatic
+completion wakeups. It accepts `action` (`start`, `resume`, `wait`, or
+`status`), and the relevant prompt, session ID or name, model, role, working
+directory, and stream mode. It does not execute the command: the result has a
+shell-quoted `command` and an `instruction` to run it using the host agent's
+native Bash or `run_command` tool with backgrounding enabled. For example,
+format a new agent command with `action: "start"` and a `prompt`, then pass the
+returned command unchanged to that host tool. Use `wait` or `status` the same
+way when shell-level visibility is useful; use the direct lifecycle MCP tools
+when structured tool results are preferred.
 
 For a noninteractive Codex integration check that must call an MCP tool, use
 Codex's `--approve-for-me` option; the `never` approval policy rejects MCP tool
@@ -140,9 +157,10 @@ AGY stores global MCP server configurations in
 
 `agy mcp list` should show `harnez` as enabled. Restart or reload AGY, then
 inspect **Additional Options (...) > MCP Servers** to confirm discovery of
-`harnez_spawn_agent`, `harnez_wait_agent`, `harnez_list_agents`,
-`harnez_agent_status`, `harnez_resume_agent`, and `harnez_stop_agent`. These
-tools use the same Harnez role and lineage restrictions described above.
+`harnez_spawn_agent`, `harnez_command`, `harnez_wait_agent`,
+`harnez_list_agents`, `harnez_agent_status`, `harnez_resume_agent`, and
+`harnez_stop_agent`. These tools use the same Harnez role and lineage
+restrictions described above.
 
 ### 2.2 Prompt assembly
 
