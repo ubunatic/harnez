@@ -1,6 +1,6 @@
 # 560 — Consolidate Usage Collection into a Reusable Usage System and Go Library
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Architecture
