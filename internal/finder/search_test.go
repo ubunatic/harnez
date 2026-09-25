@@ -18,6 +18,22 @@ func writeExecutable(t *testing.T, dir, name, body string) string {
 	return path
 }
 
+func fakeToolPath(t *testing.T) (string, string, string) {
+	t.Helper()
+	base := t.TempDir()
+	bin := filepath.Join(base, "bin")
+	root := filepath.Join(base, "repo")
+	home := filepath.Join(base, "home")
+	for _, dir := range []string{bin, root, home} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("HOME", home)
+	return bin, root, home
+}
+
 func TestRegistryProjectOverridesUserFinder(t *testing.T) {
 	base := t.TempDir()
 	home := filepath.Join(base, "home")
@@ -145,6 +161,142 @@ func TestSearchIsolatesTimeoutAndFinderFailures(t *testing.T) {
 	}
 	if !foundTimeout {
 		t.Fatalf("timeout status missing: %+v", got.Finders)
+	}
+}
+
+func TestNeusContractIndexesOnceAndRetriesWithExactArgv(t *testing.T) {
+	bin, root, _ := fakeToolPath(t)
+	logPath, countPath := filepath.Join(t.TempDir(), "calls"), filepath.Join(t.TempDir(), "count")
+	t.Setenv("CALL_LOG", logPath)
+	t.Setenv("CALL_COUNT", countPath)
+	writeExecutable(t, bin, "neus", `
+if [ "$1" = index ]; then printf 'index:%s\n' "$2" >> "$CALL_LOG"; exit 0; fi
+if [ "$1" != search ]; then exit 9; fi
+shift
+printf 'search\n' >> "$CALL_LOG"
+printf '<%s>\n' "$@" >> "$CALL_LOG"
+n=0
+if [ -f "$CALL_COUNT" ]; then read n < "$CALL_COUNT"; fi
+n=$((n+1)); printf '%s' "$n" > "$CALL_COUNT"
+if [ "$n" -eq 1 ]; then exit 3; fi
+	printf '%s' '[{"path":"result.go","line":8,"title":"result","snippet":"ok","score":0.25,"kind":"code"}]'
+`)
+	query := "agent resume; $(false)"
+	got, err := Search(context.Background(), root, "code", query, "", 3, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Results) != 1 || len(got.Finders) != 1 || got.Finders[0].Status != "ok" {
+		t.Fatalf("response=%+v", got)
+	}
+	want := "search\n<--json>\n<--root>\n<" + root + ">\n<--kind>\n<code>\n<-k>\n<3>\n<--timeout>\n<30s>\n<" + query + ">\nindex:" + root + "\nsearch\n<--json>\n<--root>\n<" + root + ">\n<--kind>\n<code>\n<-k>\n<3>\n<--timeout>\n<30s>\n<" + query + ">\n"
+	gotLog, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotLog) != want {
+		t.Fatalf("neus calls:\n%s\nwant:\n%s", gotLog, want)
+	}
+	count, err := os.ReadFile(countPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(count) != "2" {
+		t.Fatalf("search attempts=%s, want 2", count)
+	}
+}
+
+func TestNeusBackendErrorDoesNotHideRegisteredFinder(t *testing.T) {
+	bin, root, _ := fakeToolPath(t)
+	writeExecutable(t, bin, "neus", `if [ "$1" = search ]; then exit 4; fi; exit 0`)
+	good := writeExecutable(t, bin, "good", `printf '%s' '[{"path":"kept.go","line":2,"title":"kept","snippet":"yes","kind":"code"}]'`)
+	cfg := `finders:
+  - name: good
+    scope: code
+    command: ["` + good + `"]
+    timeout: 1s
+`
+	if err := os.WriteFile(filepath.Join(root, "config.yaml"), []byte(cfg), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Search(context.Background(), root, "code", "query", "", 10, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Results) != 1 || got.Results[0].Path != "kept.go" {
+		t.Fatalf("results=%+v", got.Results)
+	}
+	foundError := false
+	for _, s := range got.Finders {
+		if s.Name == "neus" && s.Status == "error" {
+			foundError = true
+		}
+	}
+	if !foundError {
+		t.Fatalf("neus exit 4 status missing: %+v", got.Finders)
+	}
+}
+
+func TestRGIsCodeFallbackWhenNeusIsMissing(t *testing.T) {
+	bin, root, _ := fakeToolPath(t)
+	logPath := filepath.Join(t.TempDir(), "rg.args")
+	t.Setenv("RG_LOG", logPath)
+	writeExecutable(t, bin, "rg", `printf '%s\n' "$@" > "$RG_LOG"; printf '%s\n' 'src/a.go:6:match'`)
+	query := "needle with spaces"
+	got, err := Search(context.Background(), root, "code", query, "", 5, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Results) != 1 || got.Results[0].Path != "src/a.go" || got.Results[0].Line != 6 {
+		t.Fatalf("results=%+v", got.Results)
+	}
+	args, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(args), "--\n"+query+"\n"+root+"\n") {
+		t.Fatalf("rg argv=%q", args)
+	}
+	if len(got.Finders) != 1 || got.Finders[0].Name != "rg" || got.Finders[0].Status != "ok" {
+		t.Fatalf("finders=%+v", got.Finders)
+	}
+}
+
+func TestDocsFuzzyFallbackSelectionDependsOnNeus(t *testing.T) {
+	t.Run("neus missing", func(t *testing.T) {
+		bin, root, _ := fakeToolPath(t)
+		_ = bin
+		if err := os.WriteFile(filepath.Join(root, "guide.md"), []byte("# Agent resume\nmatching documentation\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Search(context.Background(), root, "docs", "agent resume", "", 5, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Results) != 1 || got.Results[0].Path != "guide.md" || len(got.Finders) != 1 || got.Finders[0].Name != "fuzzy" {
+			t.Fatalf("response=%+v", got)
+		}
+	})
+	t.Run("neus present", func(t *testing.T) {
+		bin, root, _ := fakeToolPath(t)
+		writeExecutable(t, bin, "neus", `printf '%s' '[]'`)
+		got, err := Search(context.Background(), root, "docs", "agent resume", "", 5, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Finders) != 1 || got.Finders[0].Name != "neus" {
+			t.Fatalf("fuzzy must not run when neus is available: %+v", got.Finders)
+		}
+	})
+}
+
+func TestBuiltinDocsReportsCanceledContextAsTimeout(t *testing.T) {
+	_, root, _ := fakeToolPath(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, status := run(ctx, root, Definition{Name: "fuzzy", Scope: "docs", Timeout: "1s", builtin: true}, "query", 5)
+	if status.Status != "timeout" {
+		t.Fatalf("status=%+v", status)
 	}
 }
 

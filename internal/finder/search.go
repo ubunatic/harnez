@@ -172,6 +172,8 @@ func Search(ctx context.Context, root, scope, query, via string, k int, stderr i
 	}
 	// Defaults are independent fallback finders. neus is preferred where installed.
 	if via == "" {
+		_, neusErr := exec.LookPath("neus")
+		neusAvailable := neusErr == nil
 		has := func(name string) bool {
 			for _, d := range selected {
 				if d.Name == name {
@@ -180,14 +182,14 @@ func Search(ctx context.Context, root, scope, query, via string, k int, stderr i
 			}
 			return false
 		}
-		if _, err := exec.LookPath("neus"); err == nil && !has("neus") {
+		if neusAvailable && !has("neus") {
 			selected = append(selected, Definition{Name: "neus", Scope: scope, Timeout: "30s", builtin: true})
 		}
 		if scope == "code" {
-			if _, err := exec.LookPath("neus"); err != nil && !has("rg") {
+			if !neusAvailable && !has("rg") {
 				selected = append(selected, Definition{Name: "rg", Scope: scope, Timeout: "10s", builtin: true})
 			}
-		} else if !has("fuzzy") {
+		} else if !neusAvailable && !has("fuzzy") {
 			selected = append(selected, Definition{Name: "fuzzy", Scope: scope, Timeout: "10s", builtin: true})
 		}
 	}
@@ -271,19 +273,30 @@ func run(parent context.Context, root string, d Definition, q string, k int) ([]
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	if d.builtin && d.Name == "fuzzy" {
-		return BuiltinDocs(root, q, k), status
+		results, err := BuiltinDocs(ctx, root, q, k)
+		if err != nil {
+			if ctx.Err() != nil {
+				status.Status = "timeout"
+				status.Error = ctx.Err().Error()
+			} else {
+				status.Status = "error"
+				status.Error = err.Error()
+			}
+			return nil, status
+		}
+		return results, status
 	}
 	var argv []string
 	switch d.Name {
 	case "neus":
 		if d.builtin {
-			argv = []string{"search", "--json", "--root", root, "--kind", d.Scope, "-k", fmt.Sprint(k), "--timeout", timeout.String(), q}
+			argv = []string{"neus", "search", "--json", "--root", root, "--kind", d.Scope, "-k", fmt.Sprint(k), "--timeout", timeout.String(), q}
 		} else {
 			argv = expand(d.Command, q, root, k)
 		}
 	case "rg":
 		if d.builtin {
-			argv = []string{"--line-number", "--no-heading", "--color", "never", "--", q, root}
+			argv = []string{"rg", "--line-number", "--no-heading", "--color", "never", "--", q, root}
 		} else {
 			argv = expand(d.Command, q, root, k)
 		}
@@ -407,10 +420,13 @@ func parseRG(b []byte, root string) []Result {
 	}
 	return rs
 }
-func BuiltinDocs(root, q string, k int) []Result {
+func BuiltinDocs(ctx context.Context, root, q string, k int) ([]Result, error) {
 	terms := strings.Fields(strings.ToLower(q))
 	var out []Result
-	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, e error) error {
+	err := filepath.WalkDir(root, func(p string, d os.DirEntry, e error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if e != nil {
 			return nil
 		}
@@ -423,11 +439,18 @@ func BuiltinDocs(root, q string, k int) []Result {
 		if !strings.HasSuffix(strings.ToLower(p), ".md") {
 			return nil
 		}
-		b, e := os.ReadFile(p)
+		f, e := os.Open(p)
 		if e != nil {
 			return nil
 		}
-		for i, l := range strings.Split(string(b), "\n") {
+		defer f.Close()
+		scanner := bufio.NewScanner(f)
+		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+		for i := 1; scanner.Scan(); i++ {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			l := scanner.Text()
 			low := strings.ToLower(l)
 			matched := true
 			for _, term := range terms {
@@ -437,13 +460,20 @@ func BuiltinDocs(root, q string, k int) []Result {
 				}
 			}
 			if matched && len(terms) > 0 {
-				out = append(out, Result{Path: relative(p, root), Line: i + 1, Title: filepath.Base(p), Snippet: strings.TrimSpace(l), Kind: "docs"})
+				out = append(out, Result{Path: relative(p, root), Line: i, Title: filepath.Base(p), Snippet: strings.TrimSpace(l), Kind: "docs"})
+				if k > 0 && len(out) >= k {
+					f.Close()
+					return filepath.SkipAll
+				}
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			return err
 		}
 		return nil
 	})
-	if k > 0 && len(out) > k {
-		out = out[:k]
+	if err != nil && !errors.Is(err, filepath.SkipAll) {
+		return nil, err
 	}
-	return out
+	return out, nil
 }
