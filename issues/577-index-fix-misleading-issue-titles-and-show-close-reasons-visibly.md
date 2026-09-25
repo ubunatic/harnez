@@ -1,6 +1,6 @@
 # 577 — Index: fix misleading issue titles and show close reasons visibly
 
-**Status**: Open
+**Status**: Closed — lint warns on sha-only close reasons; 115/116 retitled to outcomes (d33cf14)
 **Priority**: P2
 **Severity**: Enhancement
 **Category**: Issue tracking / `harnez index`
