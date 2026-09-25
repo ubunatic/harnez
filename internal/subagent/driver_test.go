@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCodexCheckResumable(t *testing.T) {
@@ -366,28 +367,56 @@ func TestCodexResumeUsesSameSandboxAsRun(t *testing.T) {
 }
 
 func TestCodexCompactCompletesBeforeResumePrompt(t *testing.T) {
-	var calls []string
+	reader, writer := io.Pipe()
+	started := make(chan struct{})
+	promptSent := make(chan struct{})
 	d := CodexDriver{
 		Start: func(_ context.Context, _ string, args ...string) (io.Reader, func() error, error) {
-			calls = append(calls, "compact")
 			if got := args[len(args)-1]; got != "/compact" {
 				t.Fatalf("compact prompt = %q", got)
 			}
-			return strings.NewReader("{\"type\":\"turn.started\"}\n{\"type\":\"turn.completed\"}\n"), func() error { return nil }, nil
+			close(started)
+			return reader, func() error { return nil }, nil
 		},
 		Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {
-			calls = append(calls, "resume:"+args[len(args)-1])
+			if got := args[len(args)-1]; got != "new task" {
+				t.Errorf("resume prompt = %q, want new task", got)
+			}
+			close(promptSent)
 			return []byte(`{"type":"item.completed","item":{"type":"agent_message","text":"ok"}}`), nil
 		},
 	}
-	if _, err := d.Compact(context.Background(), "t1"); err != nil {
+	result := make(chan error, 1)
+	go func() {
+		if _, err := d.Compact(context.Background(), "t1"); err != nil {
+			result <- err
+			return
+		}
+		_, err := d.Resume(context.Background(), "t1", "new task", Model{})
+		result <- err
+	}()
+	<-started
+	if _, err := writer.Write([]byte("{\"type\":\"turn.started\"}\n")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Resume(context.Background(), "t1", "new task", Model{}); err != nil {
+	select {
+	case <-promptSent:
+		t.Fatal("resume prompt was sent while compaction completion was held")
+	case <-time.After(50 * time.Millisecond):
+	}
+	if _, err := writer.Write([]byte("{\"type\":\"turn.completed\"}\n")); err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"compact", "resume:new task"}; !reflect.DeepEqual(calls, want) {
-		t.Fatalf("call order = %q, want %q", calls, want)
+	_ = writer.Close()
+	select {
+	case <-promptSent:
+	case err := <-result:
+		t.Fatalf("resume ended before sending prompt: %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("resume prompt was not sent after compaction completed")
+	}
+	if err := <-result; err != nil {
+		t.Fatal(err)
 	}
 }
 
