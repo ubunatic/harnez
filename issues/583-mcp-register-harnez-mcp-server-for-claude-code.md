@@ -37,5 +37,9 @@ use its user-scope command so the server is available across projects.
 Verification note: the single `make test-q1` run exited 2 because an existing
 integration test removed the first allow-list entry when simulating drift; the
 new configured MCP permission changed that ordering. The test now removes its
-named `Bash(journalctl *)` entry instead, but that correction has not been
-tested after the quota run.
+named `Bash(journalctl *)` entry instead. Host reran `make test-q1` after 863a446: exit 0.
+
+## Host review
+
+terra:med review: only ticket-text findings. The remaining `mcp_servers` mention above is the historical finding, intended. Verification note corrected.
+
