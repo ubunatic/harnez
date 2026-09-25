@@ -1,6 +1,6 @@
 # 562 — harnez bench: agy main vs helper model split, read benchmark
 
-**Status**: Open
+**Status**: Closed — M1 delivered; M2 sweep dropped for 565
 **Priority**: P2
 **Severity**: Medium
 **Category**: Bench / Tooling
