@@ -45,7 +45,8 @@ type toolCall struct {
 }
 
 var tools = []map[string]any{
-	{"name": "harnez_spawn_agent", "description": "Start a Harnez subagent and return its result and session record.", "inputSchema": schema(map[string]any{"prompt": stringProp("Task prompt"), "model": stringProp("Optional provider:model[:tier] or model alias"), "role": stringProp("Optional role"), "dir": stringProp("Optional working directory"), "name": stringProp("Optional unique session name"), "async": map[string]string{"type": "boolean", "description": "Return immediately while the agent runs"}}, "prompt")},
+	{"name": "harnez_spawn_agent", "description": "Start a Harnez subagent through MCP and return its result and session record. Use async=true for a detached Harnez worker. For a host-visible background job with automatic reactive wakeups, use harnez_command and run its returned command with the host's Bash/run_command tool and backgrounding enabled.", "inputSchema": schema(map[string]any{"prompt": stringProp("Task prompt"), "model": stringProp("Optional provider:model[:tier] or model alias"), "role": stringProp("Optional role"), "dir": stringProp("Optional working directory"), "name": stringProp("Optional unique session name"), "async": map[string]string{"type": "boolean", "description": "Return immediately while the MCP-started agent runs detached"}}, "prompt")},
+	{"name": "harnez_command", "description": "Format a safely shell-quoted harnez agent command without executing it. Run the returned command with the host agent's Bash/run_command tool and backgrounding enabled to create a visible UI background task with automatic reactive wakeups. Use harnez_spawn_agent to start and manage the agent directly through MCP.", "inputSchema": schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"start", "resume", "wait", "status"}, "description": "Agent lifecycle action"}, "prompt": stringProp("Required for start and resume"), "model": stringProp("Optional provider:model[:tier] for start or resume"), "role": stringProp("Optional role for start or resume"), "dir": stringProp("Optional working directory"), "name": stringProp("Session name for start; may identify the session for resume, wait, or status"), "session_id": stringProp("Session ID or name for resume, wait, or status"), "stream": map[string]any{"type": "string", "enum": []string{"full", "stats"}, "description": "Output stream mode for start or resume (default: stats)"}}, "action")},
 	{"name": "harnez_wait_agent", "description": "Wait for an agent session and return its terminal result.", "inputSchema": schema(map[string]any{"session_id": stringProp("Session ID or name"), "timeout_seconds": map[string]string{"type": "integer", "description": "Maximum wait in seconds; omit to wait indefinitely"}}, "session_id")},
 	{"name": "harnez_list_agents", "description": "List agent sessions visible to the caller.", "inputSchema": schema(map[string]any{"dir": stringProp("Optional working directory filter")})},
 	{"name": "harnez_agent_status", "description": "Get the status record for a session in the caller's lineage.", "inputSchema": schema(map[string]any{"session_id": stringProp("Session ID or name")}, "session_id")},
@@ -185,6 +186,82 @@ func (s Server) call(ctx context.Context, c toolCall) (any, error) {
 			}
 		}
 		base = append(base, "--", prompt)
+	case "harnez_command":
+		action, e := arg("action", true)
+		if e != nil {
+			return nil, e
+		}
+		if action != "start" && action != "resume" && action != "wait" && action != "status" {
+			return nil, fmt.Errorf("action must be start, resume, wait, or status")
+		}
+		commandArgs := []string{"agent", action}
+		switch action {
+		case "start", "resume":
+			prompt, e := arg("prompt", true)
+			if e != nil {
+				return nil, e
+			}
+			stream, e := arg("stream", false)
+			if e != nil {
+				return nil, e
+			}
+			if stream == "" {
+				stream = "stats"
+			}
+			if stream != "full" && stream != "stats" {
+				return nil, fmt.Errorf("stream must be full or stats")
+			}
+			commandArgs = append(commandArgs, "--json", "--stream", stream)
+			for _, key := range []string{"model", "role", "dir"} {
+				v, _ := arg(key, false)
+				if v != "" {
+					flag := map[string]string{"model": "--model", "role": "--role", "dir": "--dir"}[key]
+					commandArgs = append(commandArgs, flag, v)
+				}
+			}
+			if action == "start" {
+				if name, _ := arg("name", false); name != "" {
+					commandArgs = append(commandArgs, "--name", name)
+				}
+			} else {
+				id, _ := arg("session_id", false)
+				if id == "" {
+					id, e = arg("name", false)
+				}
+				if strings.TrimSpace(id) == "" {
+					return nil, fmt.Errorf("session_id or name is required")
+				}
+				if e != nil {
+					return nil, e
+				}
+				commandArgs = append(commandArgs, "--name", id)
+			}
+			commandArgs = append(commandArgs, "--", prompt)
+		case "wait":
+			id, _ := arg("session_id", false)
+			if id == "" {
+				id, _ = arg("name", false)
+			}
+			if strings.TrimSpace(id) == "" {
+				return nil, fmt.Errorf("session_id or name is required")
+			}
+			commandArgs = append(commandArgs, "--json", id)
+		case "status":
+			id, _ := arg("session_id", false)
+			if id == "" {
+				id, _ = arg("name", false)
+			}
+			if strings.TrimSpace(id) == "" {
+				return nil, fmt.Errorf("session_id or name is required")
+			}
+			commandArgs = append(commandArgs, "--json", "--name", id)
+		}
+		words := append([]string{s.Command}, commandArgs...)
+		quoted := make([]string, len(words))
+		for i, word := range words {
+			quoted[i] = shellQuote(word)
+		}
+		return map[string]string{"command": strings.Join(quoted, " "), "instruction": "Run this command with the host agent's Bash/run_command tool and backgrounding enabled to create a visible UI background task with automatic reactive wakeups."}, nil
 	case "harnez_wait_agent":
 		id, e := arg("session_id", true)
 		if e != nil {
@@ -262,4 +339,9 @@ func (s Server) call(ctx context.Context, c toolCall) (any, error) {
 		return v, nil
 	}
 	return map[string]string{"result": strings.TrimSpace(string(out))}, nil
+}
+
+// shellQuote embeds one argument safely as a POSIX shell word.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

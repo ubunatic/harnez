@@ -43,7 +43,7 @@ func TestProtocolInitializeToolsAndNotifications(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[1]), &listing); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"harnez_spawn_agent", "harnez_wait_agent", "harnez_list_agents", "harnez_agent_status", "harnez_resume_agent", "harnez_stop_agent"}
+	want := []string{"harnez_spawn_agent", "harnez_command", "harnez_wait_agent", "harnez_list_agents", "harnez_agent_status", "harnez_resume_agent", "harnez_stop_agent"}
 	if len(listing.Result.Tools) != len(want) {
 		t.Fatalf("tools = %#v", listing.Result.Tools)
 	}
@@ -51,6 +51,69 @@ func TestProtocolInitializeToolsAndNotifications(t *testing.T) {
 		if listing.Result.Tools[i].Name != name {
 			t.Errorf("tool[%d] = %q, want %q", i, listing.Result.Tools[i].Name, name)
 		}
+	}
+}
+
+func TestHarnezCommandFormatsActionsAndQuotesShellArguments(t *testing.T) {
+	server := Server{Command: "/path/harnez tool's"}
+	tests := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{"start", map[string]any{"action": "start", "prompt": "inspect $(touch nope) 'quoted'", "model": "luna", "role": "advisor", "dir": "/tmp/work dir", "name": "worker"}, `'/path/harnez tool'\''s' 'agent' 'start' '--json' '--stream' 'stats' '--model' 'luna' '--role' 'advisor' '--dir' '/tmp/work dir' '--name' 'worker' '--' 'inspect $(touch nope) '\''quoted'\'''`},
+		{"resume", map[string]any{"action": "resume", "prompt": "continue", "session_id": "worker"}, `'/path/harnez tool'\''s' 'agent' 'resume' '--json' '--stream' 'stats' '--name' 'worker' '--' 'continue'`},
+		{"wait", map[string]any{"action": "wait", "session_id": "worker"}, `'/path/harnez tool'\''s' 'agent' 'wait' '--json' 'worker'`},
+		{"status", map[string]any{"action": "status", "session_id": "worker"}, `'/path/harnez tool'\''s' 'agent' 'status' '--json' '--name' 'worker'`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := server.call(context.Background(), toolCall{Name: "harnez_command", Arguments: tt.args})
+			if err != nil {
+				t.Fatal(err)
+			}
+			result := got.(map[string]string)
+			if result["command"] != tt.want {
+				t.Errorf("command = %q, want %q", result["command"], tt.want)
+			}
+			if !strings.Contains(result["instruction"], "backgrounding enabled") || !strings.Contains(result["instruction"], "reactive wakeups") {
+				t.Errorf("instruction lacks host background guidance: %q", result["instruction"])
+			}
+		})
+	}
+}
+
+func TestHarnezCommandValidationAndProtocol(t *testing.T) {
+	server := Server{Command: "harnez"}
+	for _, args := range []map[string]any{
+		{"action": "launch", "prompt": "x"},
+		{"action": "start"},
+		{"action": "resume", "prompt": "x"},
+		{"action": "wait"},
+		{"action": "start", "prompt": "x", "stream": "invalid"},
+	} {
+		if _, err := server.call(context.Background(), toolCall{Name: "harnez_command", Arguments: args}); err == nil {
+			t.Errorf("invalid arguments accepted: %#v", args)
+		}
+	}
+	input := `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"harnez_command","arguments":{"action":"start","prompt":"a ' b"}}}` + "\n"
+	var out bytes.Buffer
+	if err := (Server{In: strings.NewReader(input), Out: &out, Command: "harnez"}).Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var response struct {
+		Result struct {
+			Structured struct {
+				Command     string `json:"command"`
+				Instruction string `json:"instruction"`
+			} `json:"structuredContent"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(response.Result.Structured.Command, `'a '\'' b'`) || response.Result.Structured.Instruction == "" {
+		t.Fatalf("protocol result = %#v", response.Result.Structured)
 	}
 }
 
