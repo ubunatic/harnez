@@ -43,3 +43,7 @@ host committed and installed. Review notes for a possible M2:
 - Card preamble uses its own `readcard` render, not the agent's `harnez read -I` path.
 - `-q` skips the preamble, so card-failure-stops-before-agents no longer holds under `-q`.
 - Card temp dirs are kept on purpose (user opens them); say so in `docs/Bench.md`.
+
+Update 2026-09-25: the fixture-list note is done by 570 M2 (preamble lists only the task's
+fixtures), and the temp-dir note is in `docs/Bench.md`. Still open for M2: the card render path,
+and card failure under `-q`.
