@@ -1,6 +1,6 @@
 # 540 — harnez agent: short model aliases (opus, terra:low) and a correct error when -p swallows --model
 
-**Status**: Open
+**Status**: Closed — short aliases (luna:low, opus, opus:med, flash38) resolve via spec/agent.yaml; e20733e, 55ff94f, 7d6fa62
 **Priority**: P1
 **Severity**: Medium
 **Category**: Usability / Agents
