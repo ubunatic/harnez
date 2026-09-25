@@ -25,13 +25,13 @@ Finder definitions live in `~/.harnez/config.yaml`; project configuration may ov
 - `command`: argument-safe command template with a query placeholder.
 - `timeout`: maximum execution duration.
 
-Run matching finders in parallel with bounded timeouts. Parse each command's JSON array or JSON Lines records into the common result schema. A failing or timed-out finder should not discard successful results from other finders; report execution errors on stderr/diagnostics. Reject malformed records and never interpolate the query through a shell. Merge results, deduplicate by normalized path plus line, and rank deterministically using finder score with stable path/line tie-breaks. Preserve the source `kind` when supplied and identify the finder in diagnostics.
+Run matching finders in parallel with bounded timeouts. Parse each command's JSON array or JSON Lines records into the common result schema. A failing or timed-out finder should not discard successful results from other finders; report execution errors on stderr/diagnostics. Reject malformed records and never interpolate the query through a shell. Merge results, deduplicate by normalized path plus line, and rank by each finder's result order (reciprocal-rank merge; raw scores are not comparable across finders) with stable path/line tie-breaks. Preserve the source `kind` when supplied and identify the finder in diagnostics.
 
 No harnez-owned index or cache is introduced in this design. Finders own their indexing, freshness, and ranking internals.
 
 ## Initial finder set
 
-- **`neus`**: first external finder. Invocation contract: `neus search --json -k N <query>`. It returns records with `path`, `line`, `title`, `snippet`, and `score`; harnez supplies `kind` from the finder scope when absent.
+- **`neus`**: first external finder. Invocation: see "neus finder contract" below (`--root`, `--kind`, `--timeout`, exit code 3 = not indexed).
 - **`rg`**: code fallback when `neus` is unavailable. Adapt matching lines into the common result format; use a small snippet and deterministic score.
 - **Built-in fuzzy issue search**: first built-in finder, preserving existing issue matching and ranking. It supplies docs fallback results by searching documentation content when configured for docs scope.
 
