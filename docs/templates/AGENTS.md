@@ -1,7 +1,8 @@
 Adhere to the following conventions.
 
 <!-- harnez:begin Local Overlays -->
-- Local ephemeral overrides: @AGENTS.local.md
+- **Before any work, read `AGENTS.local.md` if it exists** (@AGENTS.local.md). It holds this
+  checkout's settings (subagent mode, output mode) and overrides this file where they differ.
 <!-- harnez:end Local Overlays -->
 
 <!-- harnez:begin Project Summary -->

@@ -453,7 +453,7 @@ func initialAgentsMD(cfg *Config) string {
 	return "Adhere to the following conventions.\n"
 }
 
-const localOverlaysSection = "<!-- harnez:begin Local Overlays -->\n- Local ephemeral overrides: @AGENTS.local.md\n<!-- harnez:end Local Overlays -->\n"
+const localOverlaysSection = "<!-- harnez:begin Local Overlays -->\n- **Before any work, read `AGENTS.local.md` if it exists** (@AGENTS.local.md). It holds this\n  checkout's settings (subagent mode, output mode) and overrides this file where they differ.\n<!-- harnez:end Local Overlays -->\n"
 
 func backfillLocalOverlays(path string) (bool, error) {
 	data, err := os.ReadFile(path)
@@ -461,11 +461,19 @@ func backfillLocalOverlays(path string) (bool, error) {
 		return false, err
 	}
 	content := string(data)
-	if strings.Contains(content, "<!-- harnez:begin Local Overlays -->") {
-		return false, nil
-	}
-
 	updated := localOverlaysSection + "\n" + content
+	const begin, end = "<!-- harnez:begin Local Overlays -->", "<!-- harnez:end Local Overlays -->\n"
+	if i := strings.Index(content, begin); i >= 0 {
+		j := strings.Index(content[i:], end)
+		if j < 0 {
+			return false, nil
+		}
+		// Refresh an existing managed block so wording changes reach every project.
+		updated = content[:i] + localOverlaysSection + content[i+j+len(end):]
+		if updated == content {
+			return false, nil
+		}
+	}
 	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
 		return false, err
 	}

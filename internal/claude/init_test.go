@@ -550,7 +550,7 @@ func TestRunInit_BackfillsLocalOverlaysSection(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := string(first)
-	wantBlock := "<!-- harnez:begin Local Overlays -->\n- Local ephemeral overrides: @AGENTS.local.md\n<!-- harnez:end Local Overlays -->"
+	wantBlock := "<!-- harnez:begin Local Overlays -->\n- **Before any work, read `AGENTS.local.md` if it exists** (@AGENTS.local.md). It holds this\n  checkout's settings (subagent mode, output mode) and overrides this file where they differ.\n<!-- harnez:end Local Overlays -->"
 	if strings.Count(content, "<!-- harnez:begin Local Overlays -->") != 1 {
 		t.Errorf("expected exactly one Local Overlays section, got:\n%s", content)
 	}
