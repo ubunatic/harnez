@@ -318,11 +318,20 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	}
 	tl := newTimeline(cmd)
 	compacted, compactNote := false, ""
-	if subagent.ShouldCompact(sess.TokensSinceCompact) {
-		if _, err = driver.Compact(cmd.Context(), sess.ProviderID()); err != nil {
+	threshold, err := subagent.CompactThreshold(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier})
+	if err != nil {
+		return err
+	}
+	if sess.TokensSinceCompact >= threshold {
+		beforeTokens := sess.TokensSinceCompact
+		var compactResult *subagent.TurnResult
+		if compactResult, err = driver.Compact(cmd.Context(), sess.ProviderID()); err != nil {
 			return err
 		}
-		compactNote = fmt.Sprintf("completed /compact at %s new tokens since the last compaction", humanCount(sess.TokensSinceCompact))
+		if err = subagent.VerifyCompaction(beforeTokens, compactResult); err != nil {
+			return fmt.Errorf("refusing to send resume prompt: %w", err)
+		}
+		compactNote = fmt.Sprintf("verified /compact at %s new tokens since the last compaction", humanCount(beforeTokens))
 		sess.TokensSinceCompact = 0
 		compacted = true
 	}

@@ -967,7 +967,7 @@ func (d *recordingAgentDriver) Resume(context.Context, string, string, subagent.
 	return &subagent.TurnResult{}, nil
 }
 func (d *recordingAgentDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
-	return &subagent.TurnResult{}, nil
+	return &subagent.TurnResult{Response: "Context compacted.", InputTokens: 1000}, nil
 }
 func (d *recordingAgentDriver) Stop(_ context.Context, id string) error {
 	d.stopped = append(d.stopped, id)
@@ -1188,7 +1188,7 @@ func TestAgentResumeCompactsOnceAndSeparatesAck(t *testing.T) {
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensCumulative: 7000000, TokensSinceCompact: 150000}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensCumulative: 7000000, TokensSinceCompact: 250000}); err != nil {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
@@ -1202,7 +1202,7 @@ func TestAgentResumeCompactsOnceAndSeparatesAck(t *testing.T) {
 	if got := out.String(); got != "[agent messages]\n[msg 1]\nreal reply\n" {
 		t.Fatalf("stdout = %q", got)
 	}
-	if e := errOut.String(); !strings.Contains(e, " compact] completed /compact") || !strings.Contains(e, "agent acknowledged: Context compacted.") {
+	if e := errOut.String(); !strings.Contains(e, " compact] verified /compact") || !strings.Contains(e, "agent acknowledged: Context compacted.") {
 		t.Fatalf("stderr = %q", e)
 	}
 	sess, err := store.Get("sid")
@@ -1265,7 +1265,7 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 150000}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 250000}); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
@@ -1277,7 +1277,7 @@ func TestAgentResumeStreamsCompactionAckLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := out.String()
-	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume resolved=name]\n[wait: ") || !strings.Contains(got, "[compact: completed /compact at 150.0k new tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
+	if !strings.HasPrefix(got, "[session info: id=sid agent=codex:luna action=resume resolved=name]\n[wait: ") || !strings.Contains(got, "[compact: verified /compact at 250.0k new tokens") || !strings.Contains(got, "[compaction ack: 0s]\non it") || !strings.Contains(got, "[message: 0s]\nall done") {
 		t.Fatalf("stdout:\n%s", got)
 	}
 }
@@ -1351,7 +1351,7 @@ func TestStreamingResumeKeepsStderrQuiet(t *testing.T) {
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 150000}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 250000}); err != nil {
 		t.Fatal(err)
 	}
 	var errOut bytes.Buffer

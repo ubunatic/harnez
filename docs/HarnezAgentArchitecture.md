@@ -14,7 +14,7 @@ Without a unified layer, orchestrators cannot reliably invoke low-cost models ac
 1. Dispatches and resumes developer subagents across all providers (`codex`, `claude`, `agy`, `local`). Known limit: a `claude:*` session started from inside Claude Code can't be resumed yet, because the child doesn't save its transcript (issue 498). Use one fresh session per milestone, with the ticket as context.
 2. Provides explicit, first-class reconnectability with a concise **Reconnect Banner** emitted on agent start.
 3. Enforces **session isolation and ancestry-scoped process hygiene**: agents only manage and terminate their own child agents; external sessions running concurrently in other tools/windows are strictly protected from cross-session interference.
-4. Enforces **automatic context compaction** (threshold-based at 100–150k tokens or milestone boundaries) and detects idle KV-cache expiration.
+4. Enforces **automatic context compaction** before resume prompts at the configured token threshold (default 200,000), and detects idle KV-cache expiration.
 5. Integrates seamlessly into all **Sprint Skills** (`sprint`, `lean-sprint`, `reverse-sprint`).
 6. Supports an **Opt-In/Out Feature Switch** (`subagent_mode: harnez|native`) allowing native tool interception/replacement and side-by-side A/B effectiveness/token-usage comparisons.
 
@@ -79,6 +79,13 @@ specification in `spec/agent.yaml`; bare aliases such as `luna` are accepted.
 Root prompt forms also provide `-p/--prompt`, repeatable `-f/--file`, `-c/--continue`,
 `--stream full|stats`, `--plan yes|no`, and `--json`. `--` sends following text
 literally. There are no legacy provider-first or positional-session forms.
+
+Automatic compaction reads `agent.compact_threshold_tokens` from the global
+`~/.harnez/config.yaml` (default `200000`). Optional
+`agent.compact_thresholds` entries override the value by provider,
+`provider:model`, or `provider:model:tier`. Harnez waits for compaction
+completion and requires an acknowledgement and a lower reported input-token
+count before sending a resume prompt.
 
 ### 2.11 MCP server for Codex
 
