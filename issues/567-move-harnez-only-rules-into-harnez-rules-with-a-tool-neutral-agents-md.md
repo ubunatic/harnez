@@ -51,11 +51,25 @@ Move clearly harnez-only content into rule files (PascalCase names):
 Out of scope: IssueTracking, AgenticLoop and GoRelease stay in `docs/` unchanged
 (they mix generic practice with harnez commands; split in 568).
 
+## Subagent modes
+
+Add the `mixed` mode designed in `docs/HarnezComponents.md` §8.9 and make it the default:
+
+| Mode | Dispatch |
+|---|---|
+| `native` | host's own subagents only |
+| `mixed` (default) | native for the host's vendor, `harnez agent --model <spec>` for other vendors or a named model ("ask luna:low") |
+| `harnez` | every subagent through `harnez agent` |
+
+Today (83e90bb) the `native` policy text already describes `mixed`; restore `native` to
+native-only once `mixed` exists. `Subagents.md` / `Local.md` carry the mode text; with the
+`agents` component disabled the effective mode is `native`.
+
 ## Tasks
 
 - `init` generates `.harnez/rules/` and the `AGENTS.md` header; `Local.md` added to
   `.git/info/exclude`.
-- `agent enable/disable` and `/mode` write `.harnez/rules/Local.md` instead of `AGENTS.local.md`.
+- `agent` gets a `mixed` setting (e.g. `harnez agent mode native|mixed|harnez`); `enable/disable` and `/mode` write `.harnez/rules/Local.md` instead of `AGENTS.local.md`.
 - Migration: `init` removes the old managed blocks from `AGENTS.md`, moves
   `AGENTS.local.md` blocks into `Local.md`, keeps owner text untouched.
 - Update `docs/CLIDesign.md` and the CLAUDE.md "Where Repo Rules Go" section.
