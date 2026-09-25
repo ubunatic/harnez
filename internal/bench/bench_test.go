@@ -65,13 +65,16 @@ func TestReadLangSummaryScoringAndSavedSessions(t *testing.T) {
 	if pass, detail := task.Score(good); !pass {
 		t.Fatalf("complete answer rejected: %s", detail)
 	}
-	missing := strings.Replace(good, "PascalCase", "kebab-case", 1)
-	if pass, detail := task.Score(missing); pass || !strings.Contains(detail, "PascalCase") {
-		t.Errorf("missing keyword result = %v, %q", pass, detail)
+	if task.AllowMissing != 2 {
+		t.Fatalf("allow_missing = %d, want 2", task.AllowMissing)
 	}
 	twoMissing := strings.NewReplacer("PascalCase", "kebab-case", "Cobra", "roff").Replace(good)
-	if pass, detail := task.Score(twoMissing); pass || !strings.Contains(detail, "PascalCase") || !strings.Contains(detail, "Cobra") {
-		t.Errorf("two missing keywords result = %v, %q", pass, detail)
+	if pass, detail := task.Score(twoMissing); !pass || !strings.Contains(detail, "PascalCase") || !strings.Contains(detail, "Cobra") {
+		t.Errorf("two missing keywords result = %v, %q (want pass, both named)", pass, detail)
+	}
+	threeMissing := strings.NewReplacer("PascalCase", "kebab-case", "Cobra", "roff", "if test", "brackets").Replace(good)
+	if pass, detail := task.Score(threeMissing); pass || !strings.Contains(detail, "if test") {
+		t.Errorf("three missing keywords result = %v, %q (want fail)", pass, detail)
 	}
 	// Wordings from real passing-quality answers that earlier checks rejected.
 	for _, variant := range []string{

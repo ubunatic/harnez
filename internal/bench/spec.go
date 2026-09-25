@@ -25,6 +25,7 @@ type Task struct {
 	Pattern            string            `yaml:"pattern"`
 	ForbidPattern      string            `yaml:"forbid_pattern"`
 	RequireAll         []string          `yaml:"require_all"`
+	AllowMissing       int               `yaml:"allow_missing"`
 	Docs               []string          `yaml:"docs"`
 	// Fixtures are bench-owned documents for read tasks; such tasks run only
 	// under a read mode and see nothing but these files.
@@ -86,6 +87,9 @@ func ParseSpec(data []byte) (*Spec, error) {
 			if _, err := regexp.Compile("(?i)" + p); err != nil {
 				return nil, fmt.Errorf("bench: task %q pattern %q: %w", t.ID, p, err)
 			}
+		}
+		if t.AllowMissing < 0 || t.AllowMissing >= max(len(t.RequireAll), 1) {
+			return nil, fmt.Errorf("bench: task %q allow_missing %d must be below the %d require_all entries", t.ID, t.AllowMissing, len(t.RequireAll))
 		}
 		for _, p := range t.RequireAll {
 			if _, err := regexp.Compile("(?i)" + p); err != nil {
@@ -197,7 +201,7 @@ func (t Task) Score(response string) (pass bool, detail string) {
 		}
 	}
 	if len(missing) > 0 {
-		return false, "missing keywords: " + strings.Join(missing, ", ")
+		return len(missing) <= t.AllowMissing, "missing keywords: " + strings.Join(missing, ", ")
 	}
 	return true, ""
 }

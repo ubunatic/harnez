@@ -327,7 +327,7 @@ func newBenchRunCmd() *cobra.Command {
 					status = "ERROR"
 				}
 				reason := r.Error
-				if reason == "" && !r.Pass {
+				if reason == "" {
 					reason = r.Detail
 				}
 				fmt.Fprintf(out, "%-24s %-8s %-24s %-6s %10d %7d %13d %8.2fs  %s\n", r.Model, read, r.Task, status, r.InputTokens, r.Turns, helpers, float64(r.DurationMS)/1000, reason)

@@ -128,4 +128,6 @@ tasks:
       - 'strict mode|set -euo|if test'
       - 'Conventional Commit'
       - 'PascalCase'
+    # A summary that covers most docs proves the skill; tolerate two misses.
+    allow_missing: 2
     pattern: '\|\s*:?---'

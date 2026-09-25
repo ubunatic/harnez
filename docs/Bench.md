@@ -66,7 +66,8 @@ described in `harnez read -I --help`.
 A task has an `id`, a prompt, optional documentation paths, and mechanical checks. The `pattern`
 must match, `forbid_pattern` must not match, and every expression in `require_all` must match the
 response. These are case-insensitive RE2 regular expressions; `require_all` entries can use
-alternation to accept equivalent wording. Read tasks may define `read_prompts` to supply a distinct
+alternation to accept equivalent wording. `allow_missing: N` lets up to N `require_all` entries miss
+and still pass; the missing ones are still named in the result's reason column. Read tasks may define `read_prompts` to supply a distinct
 prompt for each read mode. Fixture paths outside the generated `RUNBOOK.md` are copied from the
 repository into the temporary workspace at the same relative path. Task specs are validated when
 loaded, including checks that referenced document variants exist.
