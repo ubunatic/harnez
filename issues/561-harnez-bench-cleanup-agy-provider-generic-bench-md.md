@@ -1,6 +1,6 @@
 # harnez bench cleanup, agy provider, generic Bench.md
 
-**Status**: Open
+**Status**: Closed — M1-M3 delivered
 **Priority**: P2
 **Severity**: Medium
 **Category**: Bench / Tooling
