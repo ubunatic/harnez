@@ -25,3 +25,16 @@ An independent Terra review confirmed these findings.
 ## 3. Implementation & Verification Plan
 
 Trace each generated statement to its managed source/template, correct the sources, and verify `harnez init --variant lite --quota-1` produces consistent references and applicable tracker guidance. Confirm examples refer to files that exist in the target project or are clearly labeled optional.
+
+## Research findings (2026-09-25)
+
+- HEAD `6622488` confirms the guidance is copied from managed sources; `internal/claude/init.go:861–874` reads each selected doc’s configured source before copying it.
+- **Invariant reference:** confirmed. [`docs/templates/AGENTS.md`](/home/uwe/projects/harnez/docs/templates/AGENTS.md:58) refers to Invariant 10, while [`docs/practices/AgenticLoop.lite.md`](/home/uwe/projects/harnez/docs/practices/AgenticLoop.lite.md:12) numbers the media gate 7 and ends at 9. The full source numbers it 10.
+- **Spec example:** partly target-dependent. [`docs/other/Spec.md`](/home/uwe/projects/harnez/docs/other/Spec.md:48) presents `spec/telemetry.yaml` as a non-UI example. That file exists in this checkout (`spec/telemetry.yaml`), but a project initialized with the doc need not have it, so the example can mislead target readers.
+- **Goal requirement:** confirmed wording mismatch. [`docs/practices/IssueTracking.lite.md`](/home/uwe/projects/harnez/docs/practices/IssueTracking.lite.md:66) requires every ticket to define a literal `/goal`; the full source [`docs/practices/IssueTracking.md`](/home/uwe/projects/harnez/docs/practices/IssueTracking.md:122) accepts a clear Goal statement and acceptance criteria. The lite text also gives no migration scope for existing tickets.
+- **Minimal fix:** update the template’s Invariant number to 7; label the telemetry path as a Harnez-specific example and say to substitute an existing spec or omit it when absent; align lite ticket guidance with the full source’s “`/goal` or clear Goal statement and acceptance criteria” wording and state whether it applies to new tickets or requires backlog migration.
+- **Acceptance tests:** add assertions covering the generated lite `AGENTS.md`, `AgenticLoop.md`, `Spec.md`, and `IssueTracking.md`: the media reference matches the selected loop variant; the telemetry example is explicitly optional/project-specific; and tracker guidance states accepted goal formats and scope. Exercise `RunInitWithVariant(..., "lite", quota1=true)` against a fixture without `spec/telemetry.yaml`, and verify generated docs remain accurate. Existing `TestLiteDocStructuralGate` checks heading coverage only, so it would not catch these content mismatches.
+
+## Host decision (2026-09-25)
+
+The AGENTS.md template is shared by full and lite, so do not hard-code 7: refer to the gate by name (Media & Demo Verification Gate) without a number. Spec.md: mark `spec/telemetry.yaml` as a harnez example. IssueTracking.lite.md: use the full wording (`/goal` or clear Goal plus acceptance criteria), applies to new tickets only, no backlog migration. Add content assertions for lite init output. Sync root copies via `harnez init -d .`.

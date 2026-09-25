@@ -21,3 +21,12 @@ Order of developer work (one writer at a time): 579, 576, 577, 578.
 session as a positional argument, although `--name` is shown as a global flag. The host's
 background wait loop hid the error and "finished" at once. Correct form:
 `harnez agent wait res-576 --timeout 30m`. Input for ticket 578 (discoverability).
+
+## Decisions after research
+
+- 576: no code creates the files; docs-only fix and close (host does it, no developer).
+- 577: lint for sha-only close reasons plus backfill of 115/116; `issues close` keeps allowing no
+  reason, so agents are never forced to invent one.
+- 578: fix lives in the generated Subagent Policy text, not in new commands.
+- 579: shared AGENTS.md template names the media gate instead of numbering it, because full and
+  lite AgenticLoop number it differently (10 vs 7). `/goal` rule applies to new tickets only.
