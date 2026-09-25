@@ -45,8 +45,10 @@ Every YAML file references its schema at the top:
 # yaml-language-server: $schema=schemas/actions.schema.json
 ```
 
-`spec/telemetry.yaml` is a non-UI example: it owns embedded SQL statements and
-DDL, while its JSON Schema validates the YAML structure rather than SQL syntax.
+`spec/telemetry.yaml` is a Harnez-specific non-UI example: it owns embedded SQL
+statements and DDL, while its JSON Schema validates the YAML structure rather
+than SQL syntax. In another project, substitute an existing spec file or omit
+this example when absent.
 
 ---
 

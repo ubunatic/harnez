@@ -134,3 +134,41 @@ test:
 		t.Errorf("expected test-q1 target to be added to existing Makefile, got:\n%s", makeContent)
 	}
 }
+
+func TestRunInitWithVariant_LiteQuota1_ContentGuidance(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+
+	if err := claude.RunInitWithVariant(dir, cfg, []string{"agentic-loop", "issue-tracking", "spec"}, "", true, false, false, false, nil, false, false, "lite", true); err != nil {
+		t.Fatalf("RunInitWithVariant failed: %v", err)
+	}
+
+	read := func(name string) string {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		return string(data)
+	}
+	agents := read("AGENTS.md")
+	loop := read("docs/AgenticLoop.md")
+	spec := read("docs/Spec.md")
+	issues := read("docs/IssueTracking.md")
+
+	if !strings.Contains(agents, "Media & Demo Verification Gate") || strings.Contains(agents, "Invariant 10") {
+		t.Errorf("AGENTS.md must refer to the media gate by name without a stale invariant number")
+	}
+	if !strings.Contains(loop, "7. **Media & Demo Verification Gate**") {
+		t.Errorf("lite AgenticLoop.md must include the numbered media gate")
+	}
+	if !strings.Contains(spec, "Harnez-specific example") || !strings.Contains(spec, "omit it when absent") {
+		t.Errorf("Spec.md must label telemetry as an optional Harnez-specific example")
+	}
+	if !strings.Contains(issues, "`/goal` or a clear Goal statement and acceptance criteria") || !strings.Contains(issues, "new tickets only") || !strings.Contains(issues, "no backlog migration") {
+		t.Errorf("IssueTracking.md must state accepted goal formats and new-ticket-only scope")
+	}
+}

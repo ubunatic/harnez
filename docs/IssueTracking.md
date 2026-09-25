@@ -63,6 +63,6 @@ In-repo tracker in `issues/`, one file per ticket (`issues/NNN-kebab-case-title.
 3. **Immediate Tracker Commit** — Commit ticket updates and synced index immediately in their own small commit; do not batch behind code changes.
 4. **Traceability** — Link study notes, ADRs, tickets, commits in `**Related**:`.
 5. **Closing Is Part Of Done** — A task/session is NOT done until every touched ticket has `Status` closed and `issues/README.md` indexed.
-6. **Goal-Centric & As-Needed Milestones** — Every ticket must define a `/goal`. Only decompose into numbered milestones (M1, M2...) when multi-step staged execution is truly needed; otherwise keep issues lean and brief. Agents picking up an issue must check live code status before beginning work.
+6. **Goal-Centric & As-Needed Milestones** — For new tickets only, define a `/goal` or a clear Goal statement and acceptance criteria; no backlog migration is required. Only decompose into numbered milestones (M1, M2...) when multi-step staged execution is truly needed; otherwise keep issues lean and brief. Agents picking up an issue must check live code status before beginning work.
 
 <!-- harnez:stop -->
