@@ -50,3 +50,4 @@ background wait loop hid the error and "finished" at once. Correct form:
 
 Claude plan at 91%: host only manages and relays. Development and research go to `codex:luna:med`, reviews to `terra:med` (reviewer role). The host reads only the reviewer verdict and commits.
 - 577 closed: terra review P0 (untested commit) resolved by a green q1 run on unchanged d33cf14; P1 (pin 115/116 text in tests) declined, tests should cover code, not ticket wording.
+- 578 closed after terra PASS. The CLI quirks themselves were filed as 580 (P3) instead of fixed.
