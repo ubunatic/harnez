@@ -69,6 +69,35 @@ func TestConfigureEnsuresGitExclude(t *testing.T) {
 	}
 }
 
+func TestConfigureDocumentsHarnezAgentRoutesForBothModes(t *testing.T) {
+	for _, mode := range []string{"native", "harnez"} {
+		t.Run(mode, func(t *testing.T) {
+			dir := t.TempDir()
+			if _, _, err := Configure(dir, mode, false); err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(filepath.Join(dir, "AGENTS.local.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			content := strings.Join(strings.Fields(string(data)), " ")
+			for _, want := range []string{
+				"harnez_spawn_agent", "harnez_command", "harnez_wait_agent",
+				"harnez_list_agents", "harnez_agent_status", "harnez_resume_agent",
+				"harnez_stop_agent", "harnez agent --model <spec>",
+				"harnez agent list", "harnez agent status", "harnez agent wait <session>",
+				"harnez agent resume --name <session>", "harnez agent stop",
+				"`wait <session>` takes its session positionally", "resume has no `--detach` flag",
+				"There is no `harnez advisor` command",
+			} {
+				if !strings.Contains(content, want) {
+					t.Errorf("policy for %s missing %q:\n%s", mode, want, content)
+				}
+			}
+		})
+	}
+}
+
 func TestPersistMigratesSameModeToMainAndPreservesLocalProse(t *testing.T) {
 	dir := t.TempDir()
 	local := filepath.Join(dir, "AGENTS.local.md")

@@ -21,6 +21,17 @@ const policyBody = `# subagent_mode: %s
   the user names a model (e.g. "ask luna:low"), run it through ` + "`harnez agent --model <spec> -p ...`" + `
   (see ` + "`harnez agent models`" + `).
 - harnez: dispatch every subagent through ` + "`harnez agent`" + `.
+- When Harnez MCP tools are exposed, use ` + "`harnez_spawn_agent`" + ` for a structured result and
+  lifecycle, or ` + "`harnez_command`" + ` when the host should run the returned command in Bash.
+  Otherwise use ` + "`harnez agent --model <spec> --role advisor -p <prompt>`" + ` via Bash.
+- Supported lifecycle tools include ` + "`harnez_wait_agent`" + `, ` + "`harnez_list_agents`" + `,
+  ` + "`harnez_agent_status`" + `, ` + "`harnez_resume_agent`" + `, and ` + "`harnez_stop_agent`" + `.
+  The CLI forms are ` + "`harnez agent list`" + `, ` + "`harnez agent status --name <session>`" + `,
+  ` + "`harnez agent wait <session>`" + `, ` + "`harnez agent resume --name <session> <prompt>`" + `,
+  and ` + "`harnez agent stop --name <session>`" + `.
+  ` + "`wait <session>`" + ` takes its session positionally; resume requires ` + "`--name`" + ` because
+  a positional name is treated as the prompt, and resume has no ` + "`--detach`" + ` flag.
+- There is no ` + "`harnez advisor`" + ` command.
 - Preserve the repository's instructions and report the provider and session used.`
 
 // State describes the effective policy and the files that contributed to it.
