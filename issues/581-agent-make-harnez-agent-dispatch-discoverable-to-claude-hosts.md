@@ -1,48 +1,86 @@
-# 581 agent: make harnez agent dispatch discoverable to Claude hosts
+# 581 — Make Harnez agent dispatch discoverable and host-visible
 
-Status: Open
-Priority: P1
-Category: harness
+**Status**: Open
+**Priority**: P1
+**Severity**: Moderate
+**Category**: Agentic Ergonomics / CLI / Documentation
+**Related**: [#578](578-make-harnez-agent-safely-discoverable-and-usable-via-bash-or-mcp.md) (closed), [#585](585-harnez-init-docs-do-not-explain-harnez-agent-commands.md) (closed), [#580](580-harnez-agent-consistent-session-argument-and-detach-across-lifecycle-verbs.md) (merged), [#589](589-agent-recommend-one-native-background-shell-per-agent-run.md) (merged), `docs/studies/2026-09-25-repo-manager-decisions.md`
 
-## Problem
+---
 
-In a freshly `harnez init`-ed repo (`~/projects/search`, neus), a Claude host told to "delegate to
-luna:med, reviews to terra:med" did not know how. What the host did not know or did wrong:
+## Goal
 
-1. **Model names.** `luna:med` / `terra:med` appear nowhere in AGENTS.md or bundled docs. The host
-   searched its native agent types and model list, found nothing, and asked the user. Only
-   `harnez agent models` (run by the user) revealed them.
-2. **Dispatch command.** Nothing says "delegation means `harnez agent start --model <m> --role <r>`".
-   AgenticLoop.md Invariant 9 mentions `harnez agent --role`, but not as the way to delegate.
-3. **Blocking.** `harnez agent start` is synchronous. The host learned this by hitting the 120s tool
-   timeout, and ran 001-003 sequentially by accident.
-4. **Backgrounding.** To run agents in parallel, the host detached them with `( ... &)` inside one
-   shell call. That made them invisible to the user and unmanaged (a Zero Zombie risk). Correct: one
-   native background shell call per agent (Claude `run_in_background`), several calls in one message.
-5. **Logs.** The host wrote agent logs to the repo root instead of the session scratchpad.
-6. **Roles and writers.** Developer agents were started without `--role developer`, and three writers
-   ran in parallel on one workspace (Invariant 1, "Parallel Writing" anti-pattern). Separate ticket
-   files avoided conflicts, but the rule was not followed.
-7. **Peer sessions.** The user had told the harnez/lmcoder sessions to assist; nothing in the repo
-   tells the host that peer sessions exist or when to message them instead of reading their code.
+`/goal`: A host can discover, start, observe, and manage Harnez agent runs from its loaded
+instructions without probing CLI help or hiding work from the user; lifecycle CLI forms are
+consistent across verbs.
 
-## Proposal
+## 1. Discoverability problem and proposal (original #581)
 
-Add a short "Delegation" section to the Harnez Managed Conventions block (AGENTS.md):
+In a freshly `harnez init`-ed repository, a Claude host instructed to delegate to `luna:med`
+and use `terra:med` for review did not know the model aliases, dispatch command, synchronous
+behavior, proper backgrounding, scratchpad logging, role/writer rules, or when to ask a peer
+session. It consequently ran writers in parallel and detached work inside a shell, making runs
+unmanaged and invisible.
 
-- To delegate, use `harnez agent start --name <n> --model <alias:tier> --role <role> -d <repo>`;
-  `harnez agent models` lists aliases (luna, terra, ...) with their roles.
-- It blocks until done: run each call as its own native background shell (Claude:
-  `run_in_background`), never with `&`, `nohup` or subshell detach.
-- Parallel only for read-only roles (advisor, reviewer); developers write one at a time, or in
-  disjoint files with the user's OK.
-- Agent output goes to the session scratchpad, never into the repo.
-- `ListAgents` / peer sessions: ask them about their own repo before reading it cold.
+Add a concise delegation section to the managed conventions:
 
-Do not steer Claude hosts to `harnez agent start --detach`/`--async`: it hides the run from
-the user's session view. The wanted pattern is the blocking call inside a native background shell.
+- Delegate with `harnez agent start --name <name> --model <alias:tier> --role <role> -d <repo>`;
+  `harnez agent models` lists aliases and roles.
+- `start` blocks until completion. Dispatch every run in its own native host background shell
+  (Claude Code: `run_in_background`), with several host calls when parallelism is valid.
+- Advisors and reviewers may run in parallel; developers write sequentially unless the user
+  approves disjoint files.
+- Agent output belongs in the session scratchpad, never the repository root.
+- Use the host's agent/session listing and ask peer sessions about their own repository before
+  reading their code cold.
+
+## 2. CLI lifecycle consistency (merged from #580)
+
+The current lifecycle forms are inconsistent: `wait` takes a positional session while `status`,
+`stop`, and `resume` require `--name`; a positional value after `resume` is interpreted as the
+prompt. `start` has `--detach`, while `resume` does not.
+
+Make `wait`, `status`, `stop`, and `resume` consistently accept the session positionally and via
+`--name`; give `resume` the same `--detach` capability as `start`. Once implemented, remove the
+current-quirk caveats from the generated Subagent Policy.
+
+## 3. Host-visible native background dispatch (merged from #589)
+
+The recommended pattern for `harnez agent start` and `resume` is one native background shell per
+agent run, not `&`, `nohup`, `( … & )`, `--detach`, or `--async`. This keeps each run, tunnel, or
+build visible in the host UI, yields completion notification/output, and permits one-action
+process-group stopping. Hosts should stop the background shell rather than rely on Ctrl+C within
+an agent to stop its children.
+
+Document this recommendation in the agent guidance and next to `--detach` help. `--detach` must
+plainly say that it hides the run from the host UI.
+
+## 4. Work already completed
+
+- #578 added generated Subagent Policy guidance for MCP-versus-Bash routing, lifecycle discovery,
+  and the absence of a `harnez advisor` command.
+- #585 added the short Harnez Agent section to the managed conventions block, with MCP-first
+  guidance and the current CLI forms.
+
+These completed changes establish the baseline; this ticket extends it with host dispatch
+guidance and repairs the remaining CLI inconsistency.
+
+## 5. Acceptance criteria
+
+- A fresh Claude host can find model aliases, select the MCP or CLI route, start a named agent
+  with an explicit role, inspect it, wait/resume/stop it, and identify peer sessions without
+  running `--help`.
+- `wait`, `status`, `stop`, and `resume` accept a session both positionally and through `--name`;
+  `resume` supports `--detach`; generated policy no longer documents those quirks.
+- Managed guidance recommends one native host background shell per run and prohibits shell-level
+  detachment; it preserves sequential developer writes and scratchpad-only output.
+- `harnez agent start --help` and `resume --help` state that `--detach` hides the run from the
+  host UI, while the recommended dispatch remains the blocking command in a native background
+  shell.
 
 ## Evidence
 
-neus session 2026-09-25: tickets 001-003 dispatched, then review by terra:med, then fixes;
-`harnez agent list` shows neus-001..003 and neus-review.
+In the neus session of 2026-09-25, tickets 001–003 were dispatched, reviewed by `terra:med`, and
+then fixed; `harnez agent list` showed `neus-001` through `neus-003` and `neus-review`. User
+feedback preferred the native-background-shell pattern because visible entries made concurrent
+work clear and controllable.

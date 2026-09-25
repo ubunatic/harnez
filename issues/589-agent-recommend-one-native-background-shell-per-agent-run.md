@@ -1,6 +1,6 @@
 # 589 agent: recommend one native background shell per agent run
 
-Status: Open
+Status: Closed — merged into 581
 Priority: P2
 Category: docs
 Related: 581

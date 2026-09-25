@@ -1,6 +1,6 @@
 # 580 — harnez agent: consistent session argument and --detach across lifecycle verbs
 
-**Status**: Open
+**Status**: Closed — merged into 581
 **Priority**: P3
 **Severity**: Low
 **Category**: Agentic Ergonomics / CLI
