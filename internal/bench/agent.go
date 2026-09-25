@@ -155,6 +155,53 @@ func aggregateAgyUsage(rows []agymeter.Record) (input, total, turns int) {
 	return input, total, turns
 }
 
+func splitAgyUsage(rows []agymeter.Record) (input, total, turns int, calls []int64, helpers []HelperUsage) {
+	promptByModel := make(map[string]int64)
+	for _, row := range rows {
+		promptByModel[row.Model] += row.Prompt
+	}
+	main := ""
+	var maxPrompt int64 = -1
+	for _, row := range rows {
+		if promptByModel[row.Model] > maxPrompt {
+			main, maxPrompt = row.Model, promptByModel[row.Model]
+		}
+	}
+	helperMap := make(map[string]*HelperUsage)
+	for _, row := range rows {
+		if row.Model == main {
+			input += int(row.Prompt)
+			total += int(row.Total)
+			turns++
+			calls = append(calls, row.Prompt)
+			continue
+		}
+		h := helperMap[row.Model]
+		if h == nil {
+			h = &HelperUsage{Model: row.Model}
+			helperMap[row.Model] = h
+		}
+		h.Calls++
+		h.InputTokens += row.Prompt
+		h.TotalTokens += row.Total
+	}
+	for _, row := range rows {
+		if h := helperMap[row.Model]; h != nil {
+			found := false
+			for _, existing := range helpers {
+				if existing.Model == h.Model {
+					found = true
+					break
+				}
+			}
+			if !found {
+				helpers = append(helpers, *h)
+			}
+		}
+	}
+	return
+}
+
 // Invoke sends prompt to the agent in dir using model and parses its JSON output.
 func Invoke(ctx context.Context, run CommandRunner, agent, model, dir, prompt string) (Result, error) {
 	p, ok := providers[agent]

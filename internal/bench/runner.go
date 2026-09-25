@@ -67,8 +67,9 @@ func RunTasks(ctx context.Context, store *Store, spec *Spec, tasks []Task, o Opt
 					} else if len(rows) == 0 {
 						run.Error = "agy meter recorded no usage for this session"
 					} else {
-						input, total, turns := aggregateAgyUsage(rows)
+						input, total, turns, calls, helpers := splitAgyUsage(rows)
 						run.InputTokens, run.TotalTokens, run.Turns = input, total, turns
+						run.MainCallTokens, run.HelperUsage = calls, helpers
 						run.OutputTokens = total - input
 						if run.OutputTokens < 0 {
 							run.OutputTokens = 0

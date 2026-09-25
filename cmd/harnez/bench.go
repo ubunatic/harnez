@@ -179,9 +179,9 @@ func newBenchResultsCmd() *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "%-7s %-14s %-5s %-6s %-30s %5s %5s %9s %8s %9s %6s %9s %4s\n", "agent", "model", "docs", "cards", "read", "runs", "pass", "avg_in", "avg_out", "avg_total", "turns", "avg_usd", "err")
+			fmt.Fprintf(out, "%-7s %-14s %-5s %-6s %-30s %5s %5s %9s %8s %9s %6s %9s %4s %s\n", "agent", "model", "docs", "cards", "read", "runs", "pass", "avg_in", "avg_out", "avg_total", "turns", "avg_usd", "err", "helpers(calls/input/total)")
 			for _, s := range sums {
-				fmt.Fprintf(out, "%-7s %-14s %-5s %-6v %-30s %5d %5d %9.0f %8.0f %9.0f %6.1f %9.4f %4d\n", s.Agent, s.Model, s.Docs, s.Cards, s.Read, s.Runs, s.Passes, s.AvgInput, s.AvgOut, s.AvgTotal, s.AvgTurns, s.AvgCostUSD, s.Errors)
+				fmt.Fprintf(out, "%-7s %-14s %-5s %-6v %-30s %5d %5d %9.0f %8.0f %9.0f %6.1f %9.4f %4d %s\n", s.Agent, s.Model, s.Docs, s.Cards, s.Read, s.Runs, s.Passes, s.AvgInput, s.AvgOut, s.AvgTotal, s.AvgTurns, s.AvgCostUSD, s.Errors, s.Helpers)
 			}
 			if recent > 0 {
 				runs, err := store.Recent(recent)

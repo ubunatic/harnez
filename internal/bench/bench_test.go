@@ -177,6 +177,34 @@ func TestRunTasksUsesMeterRecordsForAgy(t *testing.T) {
 	}
 }
 
+func TestSplitAgyUsageMainAndHelpers(t *testing.T) {
+	rows := []agymeter.Record{
+		{Model: "main", Prompt: 100, Total: 110},
+		{Model: "helper", Prompt: 12, Total: 13},
+		{Model: "main", Prompt: 80, Total: 90},
+		{Model: "helper", Prompt: 9, Total: 10},
+	}
+	in, total, callsN, calls, helpers := splitAgyUsage(rows)
+	if in != 180 || total != 200 || callsN != 2 || len(calls) != 2 || calls[0] != 100 || calls[1] != 80 {
+		t.Fatalf("main usage = %d/%d calls=%d series=%v", in, total, callsN, calls)
+	}
+	if len(helpers) != 1 || helpers[0] != (HelperUsage{Model: "helper", Calls: 2, InputTokens: 21, TotalTokens: 23}) {
+		t.Fatalf("helpers = %+v", helpers)
+	}
+}
+
+func TestSplitAgyUsageSingleAndHelperOnly(t *testing.T) {
+	for _, rows := range [][]agymeter.Record{
+		{{Model: "only", Prompt: 40, Total: 44}},
+		{{Model: "helper", Prompt: 8, Total: 9}},
+	} {
+		in, total, turns, calls, helpers := splitAgyUsage(rows)
+		if in != int(rows[0].Prompt) || total != int(rows[0].Total) || turns != 1 || len(calls) != 1 || len(helpers) != 0 {
+			t.Fatalf("single-model split = %d/%d/%d %v %v", in, total, turns, calls, helpers)
+		}
+	}
+}
+
 func contains(args []string, flag, val string) bool {
 	for i := 0; i+1 < len(args); i++ {
 		if args[i] == flag && args[i+1] == val {
