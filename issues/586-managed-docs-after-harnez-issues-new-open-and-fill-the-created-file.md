@@ -1,6 +1,6 @@
 # 586 — Managed docs: after harnez issues new, open and fill the created file
 
-**Status**: Open
+**Status**: Closed — managed issue flow: issues new first, fill printed file, index, commit; issues new writes full skeleton incl. Related (e69f486, a2f43d2); tests pass
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Docs
