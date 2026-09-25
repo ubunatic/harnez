@@ -1,6 +1,6 @@
 # 585 — harnez init docs do not explain harnez agent commands
 
-**Status**: Open
+**Status**: Closed — managed block has a short harnez agent section (MCP first, CLI forms), consistent with agentpolicy (e69f486); terra review PASS
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Docs
