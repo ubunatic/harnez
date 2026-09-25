@@ -47,3 +47,7 @@ meter (`~/.harnez/agymeter/usage.jsonl`, `harnez stats --session <id> --calls`).
   recorded and non-zero. Report the numbers; do not run the task suite.
 - Update `docs/Bench.md` providers section.
 - Commit `feat(bench): agy provider (issue 561 M3)`.
+
+## M1 delivered (ba735a8)
+
+Bench.md evergreen; dated results moved to docs/studies/2026-09-25-bench-read-conditions.md. Host review OK.
