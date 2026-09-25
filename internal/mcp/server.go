@@ -205,7 +205,7 @@ func (s Server) call(ctx context.Context, c toolCall) (any, error) {
 	default:
 		return nil, fmt.Errorf("unknown tool %q", c.Name)
 	}
-	cmd := exec.CommandContext(ctx, s.Command, base[1:]...)
+	cmd := exec.CommandContext(ctx, s.Command, base...)
 	out, err := cmd.Output()
 	if err != nil {
 		var ee *exec.ExitError

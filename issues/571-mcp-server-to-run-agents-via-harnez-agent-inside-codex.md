@@ -25,3 +25,7 @@ Provide an MCP (Model Context Protocol) server subcommand or standalone capabili
     - Perform an end-to-end verification proving a Codex agent session can invoke subagent operations using the MCP server.
     - Ensure teardown/cleanup of any test sessions, and document usage in relevant docs or test notes.
     - Run tests, install binary if changed, and commit M3 completion.
+  - Registered the installed Harnez binary using `codex mcp add harnez -- /home/uwe/go/bin/harnez mcp`; `codex mcp list` reports it enabled and `codex mcp get harnez --json` confirms stdio transport and command arguments.
+  - Codex 0.156.1 discovered the five tools. With `codex exec --approve-for-me`, a real `harnez_spawn_agent` call returned `MCP_E2E_OK` from the requested `codex:luna:low` session (`mcp571-e2e`, ID `01a0d879-3f2a-7db2-aec7-46dff68b9744`).
+  - The end-to-end call exposed missing `agent` argument forwarding in the MCP subprocess. Fixed it and strengthened the subprocess test to assert `agent start`; `make test-q1` passed and `make install` completed.
+  - Cleanup remains blocked: this worker's enforced `developer` leaf role rejects `harnez agent delete` with “must not start, resume or manage agents.” The completed test record remains at `~/.harnez/agents/01a0d879-3f2a-7db2-aec7-46dff68b9744.json`; no child process remains running. Do not bypass the role guard to remove it; an authorized orchestrator can delete it.

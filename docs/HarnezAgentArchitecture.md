@@ -78,6 +78,28 @@ Root prompt forms also provide `-p/--prompt`, repeatable `-f/--file`, `-c/--cont
 `--stream full|stats`, `--plan yes|no`, and `--json`. `--` sends following text
 literally. There are no legacy provider-first or positional-session forms.
 
+### 2.11 MCP server for Codex
+
+`harnez mcp` serves the agent lifecycle tools over newline-delimited JSON-RPC
+stdio. Register it with Codex CLI once per user account:
+
+```sh
+codex mcp add harnez -- "$(command -v harnez)" mcp
+codex mcp list
+```
+
+Codex starts the configured process and discovers `harnez_spawn_agent`,
+`harnez_list_agents`, `harnez_agent_status`, `harnez_resume_agent`, and
+`harnez_stop_agent`. These tools invoke the matching `harnez agent` commands,
+so the caller's Harnez role and lineage restrictions still apply. The server
+uses stdout only for MCP protocol messages; keep diagnostic output on stderr.
+
+For a noninteractive Codex integration check that must call an MCP tool, use
+Codex's `--approve-for-me` option; the `never` approval policy rejects MCP tool
+calls that require approval. A successful spawn returns the Harnez session and
+agent response as structured tool output. Completed sessions remain in the
+Harnez registry until deleted by a caller authorized to manage them.
+
 ### 2.2 Prompt assembly
 
 Prompt parts are joined with one blank line, in this order: prompt files in

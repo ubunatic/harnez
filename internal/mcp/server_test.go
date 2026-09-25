@@ -56,7 +56,7 @@ func TestProtocolInitializeToolsAndNotifications(t *testing.T) {
 
 func TestToolCallInvokesAgentAndReturnsStructuredResult(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "harnez")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf '{\"id\":\"session-1\",\"name\":\"worker\"}'\n"), 0700); err != nil {
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n[ \"$1\" = agent ] && [ \"$2\" = start ] || { echo \"unexpected args: $*\" >&2; exit 9; }\nprintf '{\"id\":\"session-1\",\"name\":\"worker\"}'\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
