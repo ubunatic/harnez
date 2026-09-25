@@ -404,6 +404,12 @@ today's `subagent_mode: harnez|native` (`internal/agentpolicy`) with a third val
 | `harnez` | every subagent through `harnez agent` |
 | `mixed` | native for the host's own vendor (Claude spawns Claude natively), `harnez agent` for other vendors (Claude spawns Codex through harnez) |
 
+Status (2026-09-25): no `mixed` value yet, but the `native` policy text written by
+`harnez agent disable` already gives `mixed` guidance: native for the host's vendor,
+`harnez agent --model <spec>` for other vendors or a named model ("ask luna:low").
+`AGENTS.md` makes reading the local policy a mandatory first step, because only Claude
+auto-loads `@` links. Issue 567 moves this policy to `.harnez/rules/Local.md`.
+
 The component selection bounds the mode: with `agents` disabled, the effective mode is
 `native` whatever the policy says, so no skill tells agents to run a command that is not
 installed. Skill text reads the effective mode instead of hard-coding `harnez agent start`.

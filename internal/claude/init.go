@@ -776,7 +776,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 	if backfilled, err := backfillLocalOverlays(agentsPath); err != nil {
 		return fmt.Errorf("backfill Local Overlays %s: %w", agentsPath, err)
 	} else if backfilled {
-		fmt.Printf("  backfilled Local Overlays %s\n", agentsPath)
+		fmt.Printf("  updated Local Overlays %s\n", agentsPath)
 		changes++
 	}
 

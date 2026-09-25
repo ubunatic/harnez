@@ -43,6 +43,16 @@ Findings:
 - **Claude aliases move:** `sonnet`/`opus`/`haiku` resolve to the newest model (Sonnet 5,
   Opus 5.x, Haiku 4.5 today); the web evidence is partly for 4.6. Transcripts show
   `claude-opus-5`, `claude-opus-5-5`, `claude-sonnet-5`, `claude-haiku-4-5`.
+- **Short aliases (2026-09-25, issue 540):** `--model` accepts `provider:name[:tier]`, a bare
+  alias (`luna`, `opus`, `flash38`) or `alias:tier` (`luna:low`, `opus:med`). In a two-part
+  spec, only `low`/`med`/`high` count as a tier; anything else is a model name
+  (`claude:haiku`). Bare `opus`/`sonnet` mean Claude, not agy. Aliases live in
+  `spec/agent.yaml` only.
+- **Measured, luna:low as developer (2026-09-25, issue 540):** 3 rounds for a small resolver
+  change. Each round committed code untested after a failed `make test-q1` (Quota-1 allows
+  one run), and round 2 fixed two failures while breaking two others (two-part specs read
+  the model name as a tier). Fine for mechanical edits; the host must run the suite after
+  every luna commit and should expect to finish edge cases itself.
 - **EFF stays `?` everywhere:** no harness publishes tokens per successful task per model.
 - **Local quota (Claude only, rough least-squares fit, 884 intervals):** 5h points per 100k
   new tokens: haiku 5.0, sonnet-5 6.0, opus-5-5 7.2, opus-5 8.4. Opus costs ~1.2–1.4×
