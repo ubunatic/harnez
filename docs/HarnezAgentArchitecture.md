@@ -162,6 +162,21 @@ inspect **Additional Options (...) > MCP Servers** to confirm discovery of
 `harnez_stop_agent`. These tools use the same Harnez role and lineage
 restrictions described above.
 
+### 2.13 MCP server for Claude Code
+
+Register the server once for the user account, making it available across
+projects:
+
+```sh
+claude mcp add --scope user harnez -- harnez mcp
+claude mcp list
+```
+
+`claude mcp list` verifies that `harnez` is registered and reports its
+connection status. Claude Code stores user-scope MCP servers in
+`~/.claude.json`; let the Claude CLI manage that file. See the
+[Claude Code MCP documentation](https://code.claude.com/docs/en/mcp).
+
 ### 2.2 Prompt assembly
 
 Prompt parts are joined with one blank line, in this order: prompt files in
