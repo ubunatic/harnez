@@ -61,3 +61,17 @@ Host `make test-q1`: 2 failures.
 - `internal/subagent/driver.go` change (3-part spec with tier): add a subagent unit test for it
   and state in the report why the existing resolver needed it.
 - One `make test-q1`, commit `fix(bench): ... (issue 565 M2)`. No live calls needed.
+
+## M2 review (e60d239) — not accepted
+
+Design OK (tier in provider args, defaults from the model spec, alias table gone, 3-part resolver
+test). But host `make test-q1` stops in `go vet`: `internal/bench/bench_test.go:132` calls
+`contains` with 2 args, it wants 3. The test package does not compile, so no test ran.
+
+## M3 — Pre-Work / Required Refinements (fix M2)
+
+- Fix the `contains` call in `bench_test.go:132` (and any other compile error in the tests).
+- Before committing, run `go vet ./internal/bench/ ./internal/subagent/ ./cmd/harnez/` (compile
+  check, not a test run), then the one `make test-q1`. Commit only if it is green; if red, report
+  the failures and do not commit.
+- Commit `fix(bench): ... (issue 565 M3)`.
