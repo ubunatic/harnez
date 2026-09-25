@@ -34,3 +34,7 @@ One Go source of truth for agy's launch env on metered launches.
   `agy-meter-run` uses it (e.g. inject a fake command that dumps env). Update launcher script
   tests for the slimmer `--meter` branch.
 - Verify: `make test-q1` once, then commit `refactor(agy): ... (issue 558 M1)`.
+
+## M1 delivered (5b9a7fb)
+
+agy-meter-run builds env via subagent.AgyLaunchEnv; launcher --meter branch hands off before touching PATH/ANTIGRAVITY_AGENT. Host review: diff OK, make test-q1 green, installed.
