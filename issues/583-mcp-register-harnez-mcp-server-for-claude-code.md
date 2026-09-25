@@ -33,3 +33,9 @@ use its user-scope command so the server is available across projects.
 
 - Update config, settings generation, status reporting, tests, and stale docs.
 - Run `make test-q1` once after a clean-tree check.
+
+Verification note: the single `make test-q1` run exited 2 because an existing
+integration test removed the first allow-list entry when simulating drift; the
+new configured MCP permission changed that ordering. The test now removes its
+named `Bash(journalctl *)` entry instead, but that correction has not been
+tested after the quota run.
