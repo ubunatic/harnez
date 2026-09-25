@@ -1,6 +1,6 @@
-# 115 — Canary: evaluate DuckDB Go embedding for tool-call telemetry storage
+# 115 — DuckDB rejected; SQLite chosen for tool-call telemetry storage
 
-**Status**: Closed — resolved in 857ff99
+**Status**: Closed — rejected: SQLite chosen over DuckDB (857ff99)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture

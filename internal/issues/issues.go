@@ -49,12 +49,13 @@ const (
 type DiagnosticKind string
 
 const (
-	DiagStatusMismatch  DiagnosticKind = "status_mismatch"
-	DiagUnindexedFile   DiagnosticKind = "unindexed_file"
-	DiagBrokenLink      DiagnosticKind = "broken_link"
-	DiagMissingStatus   DiagnosticKind = "missing_status_tag"
-	DiagMalformedRow    DiagnosticKind = "malformed_table_row"
-	DiagDuplicateNumber DiagnosticKind = "duplicate_issue_number"
+	DiagStatusMismatch       DiagnosticKind = "status_mismatch"
+	DiagUnindexedFile        DiagnosticKind = "unindexed_file"
+	DiagBrokenLink           DiagnosticKind = "broken_link"
+	DiagMissingStatus        DiagnosticKind = "missing_status_tag"
+	DiagClosedWithoutOutcome DiagnosticKind = "closed_without_outcome"
+	DiagMalformedRow         DiagnosticKind = "malformed_table_row"
+	DiagDuplicateNumber      DiagnosticKind = "duplicate_issue_number"
 )
 
 type Diagnostic struct {
@@ -71,8 +72,10 @@ type Report struct {
 }
 
 var (
-	issueFileRegex  = regexp.MustCompile(`^(\d{3})-.*\.md$`)
-	statusLineRegex = regexp.MustCompile(`(?i)^\s*[-*]?\s*\*\*status:?\*\*:?\s*(.+)$`)
+	issueFileRegex        = regexp.MustCompile(`^(\d{3})-.*\.md$`)
+	statusLineRegex       = regexp.MustCompile(`(?i)^\s*[-*]?\s*\*\*status:?\*\*:?\s*(.+)$`)
+	closedCommitOnlyRegex = regexp.MustCompile(`(?i)^(?:(?:in|resolved\s+in|fixed\s+in|completed\s+in|closed\s+in)\s+)?[\x60(]?[0-9a-f]{7,40}[\x60)]?[.,]?$`)
+	closedLifecycleRegex  = regexp.MustCompile(`(?i)^(closed|resolved|fixed|complete|completed|implemented|shipped)\b`)
 	// tableRowRegex splits a Markdown table row into its four cells. A cell
 	// is any run of characters that are neither a bare "|" nor a backslash,
 	// or a backslash-escaped character (e.g. "\|" for a literal pipe inside
@@ -482,6 +485,14 @@ func LintFS(sysFS fs.FS, root string) (*Report, error) {
 				Message:  fmt.Sprintf("%s: ticket missing '**Status:**' header", f.RelPath),
 			})
 		}
+		if f.HasStatusTag && f.Canonical == StatusClosed && !hasClosedOutcome(f.RawStatus) {
+			diags = append(diags, Diagnostic{
+				Kind:     DiagClosedWithoutOutcome,
+				IssueNum: f.Number,
+				Path:     f.RelPath,
+				Message:  fmt.Sprintf("%s: closed status should include an outcome beyond a commit reference", f.RelPath),
+			})
+		}
 	}
 
 	tableNumCount := make(map[string]int)
@@ -581,6 +592,15 @@ func LintFS(sysFS fs.FS, root string) (*Report, error) {
 	}
 
 	return report, nil
+}
+
+func hasClosedOutcome(status string) bool {
+	reason := strings.TrimSpace(closedLifecycleRegex.ReplaceAllString(status, ""))
+	reason = strings.TrimLeft(reason, " \t—–-:;")
+	if reason == "" {
+		return false
+	}
+	return !closedCommitOnlyRegex.MatchString(reason)
 }
 
 // NextNumber scans issuesDir (and archive) and calculates the next free ticket

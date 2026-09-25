@@ -80,7 +80,7 @@ func TestIssuesTableReservedPlaceholder(t *testing.T) {
 // from the title's pipe being read back as a column separator).
 func TestIssuesTablePipeInTitleRoundTripsThroughLint(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "233-pipe-title.md"), "# 233 — docs/practices|lang|other source\n\n**Status**: Closed\n")
+	writeFile(t, filepath.Join(dir, "233-pipe-title.md"), "# 233 — docs/practices|lang|other source\n\n**Status**: Closed — migrated\n")
 
 	table, err := IssuesTable(dir)
 	if err != nil {

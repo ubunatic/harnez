@@ -1,6 +1,6 @@
-# 116 — Tool telemetry schema & storage layer (`tool_calls` table)
+# 116 — SQLite tool telemetry schema and storage layer implemented
 
-**Status**: Closed — resolved in 6cd33b0
+**Status**: Closed — implemented with SQLite (6cd33b0)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture

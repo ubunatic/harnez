@@ -290,6 +290,29 @@ func TestParseTrackerTable_PunctuationInTitle(t *testing.T) {
 }
 
 func TestLintFS_Scenarios(t *testing.T) {
+	t.Run("closed status must include an outcome beyond a commit reference", func(t *testing.T) {
+		fs := fstest.MapFS{
+			"README.md":      &fstest.MapFile{Data: []byte("\n| # | File | Title | Status |\n|---|------|-------|--------|\n| 001 | [001-bare.md](001-bare.md) | Bare | Closed |\n| 002 | [002-sha.md](002-sha.md) | SHA only | Closed — resolved in abc1234 |\n| 003 | [003-outcome.md](003-outcome.md) | Outcome | Closed — superseded: SQLite chosen (def5678) |\n")},
+			"001-bare.md":    &fstest.MapFile{Data: []byte("# 001 — Bare\n\n**Status**: Closed\n")},
+			"002-sha.md":     &fstest.MapFile{Data: []byte("# 002 — SHA only\n\n**Status**: Closed — resolved in abc1234\n")},
+			"003-outcome.md": &fstest.MapFile{Data: []byte("# 003 — Outcome\n\n**Status**: Closed — superseded: SQLite chosen (def5678)\n")},
+		}
+
+		report, err := LintFS(fs, ".")
+		if err != nil {
+			t.Fatalf("LintFS error: %v", err)
+		}
+		var warned []string
+		for _, diagnostic := range report.Diagnostics {
+			if diagnostic.Kind == DiagClosedWithoutOutcome {
+				warned = append(warned, diagnostic.IssueNum)
+			}
+		}
+		if fmt.Sprint(warned) != "[001 002]" {
+			t.Errorf("closed status warnings = %v, want [001 002]", warned)
+		}
+	})
+
 	t.Run("duplicate file numbers are diagnosed without duplicate table rows", func(t *testing.T) {
 		fs := fstest.MapFS{
 			"README.md": &fstest.MapFile{Data: []byte(`
@@ -323,12 +346,12 @@ func TestLintFS_Scenarios(t *testing.T) {
 				Data: []byte(`
 | # | File | Title | Status |
 |---|------|-------|--------|
-| 001 | [archive/001-diff.md](archive/001-diff.md) | Diff fix | Closed |
+| 001 | [archive/001-diff.md](archive/001-diff.md) | Diff fix | Closed — resolved |
 | 002 | [002-symlink.md](002-symlink.md) | Symlink | Open |
 `),
 			},
 			"archive/001-diff.md": &fstest.MapFile{
-				Data: []byte("# 001 — Diff\n\n**Status:** Closed\n"),
+				Data: []byte("# 001 — Diff\n\n**Status:** Closed — resolved\n"),
 			},
 			"002-symlink.md": &fstest.MapFile{
 				Data: []byte("# 002 — Symlink\n\n**Status:** Open\n"),
@@ -353,18 +376,18 @@ func TestLintFS_Scenarios(t *testing.T) {
 				Data: []byte(`
 | # | File | Title | Status |
 |---|------|-------|--------|
-| 001 | [001-diff.md](001-diff.md) | Diff fix | Closed |
+| 001 | [001-diff.md](001-diff.md) | Diff fix | Closed — resolved |
 | 002 | [002-symlink.md](002-symlink.md) | Symlink | Open |
 | 003 | [003-missing.md](003-missing.md) | Ghost | Open |
 `),
 			},
 			// 001 moved to archive without updating link
 			"archive/001-diff.md": &fstest.MapFile{
-				Data: []byte("# 001 — Diff\n\n**Status:** Closed\n"),
+				Data: []byte("# 001 — Diff\n\n**Status:** Closed — resolved\n"),
 			},
 			// 002 has status mismatch (ticket says Closed, table says Open)
 			"002-symlink.md": &fstest.MapFile{
-				Data: []byte("# 002 — Symlink\n\n**Status:** Closed\n"),
+				Data: []byte("# 002 — Symlink\n\n**Status:** Closed — resolved\n"),
 			},
 			// 004 is unindexed and missing status tag
 			"004-unindexed.md": &fstest.MapFile{
