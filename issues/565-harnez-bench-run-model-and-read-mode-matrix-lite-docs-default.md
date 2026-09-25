@@ -40,3 +40,24 @@ table for exactly these runs.
 - Unit tests with fake runners: matrix expansion and order, spec parsing errors, lite default,
   table output. Then the smoke check within the hard limits; report its table.
 - Commit `feat(bench): ... (issue 565 M1)`.
+
+## M1 review (f5c7682) — not accepted
+
+Host `make test-q1`: 2 failures.
+
+- `TestAgentDefaultLiteralIsNotShadowed` (`agent_spec_test.go:36`): default model literals are
+  hard-coded in `cmd/harnez/bench.go` (defaultSpec map) and `internal/bench/agent.go` (Invoke
+  switch). The spec-derived default must come from one place (the agent model spec), not two
+  copied literals.
+- `TestInvokeBuildsAgentCommands` (`bench_test.go:136`): still uses the old alias `flash`. Update
+  the test to spec names; do not re-add a bench alias table.
+
+## M2 — Pre-Work / Required Refinements (fix M1)
+
+- Fix both failures above without loosening `TestAgentDefaultLiteralIsNotShadowed`.
+- Effort flags: move the tier into the provider table (`args(model, tier, prompt)`), replacing
+  the index splicing in `Invoke` (`args[:4]`, `args[:len(args)-1]`).
+- Drop the now-redundant bench `ResolveModel` alias function if nothing else uses it.
+- `internal/subagent/driver.go` change (3-part spec with tier): add a subagent unit test for it
+  and state in the report why the existing resolver needed it.
+- One `make test-q1`, commit `fix(bench): ... (issue 565 M2)`. No live calls needed.
