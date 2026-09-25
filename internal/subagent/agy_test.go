@@ -132,6 +132,19 @@ func TestAgyLaunchEnvironmentDoesNotDuplicateShimPrefix(t *testing.T) {
 	}
 }
 
+func TestAgyLaunchEnvSetsMarkerAndPrependsShimToOriginalPath(t *testing.T) {
+	home := t.TempDir()
+	shimDir := filepath.Join(home, ".harnez", "shims")
+	got := AgyLaunchEnv([]string{"PATH=/first:/second", "ANTIGRAVITY_AGENT=0"}, home)
+	wantPath := shimDir + string(os.PathListSeparator) + "/first:/second"
+	if path := environmentValue(got, "PATH"); path != wantPath {
+		t.Errorf("PATH = %q, want %q", path, wantPath)
+	}
+	if marker := environmentValue(got, "ANTIGRAVITY_AGENT"); marker != "1" {
+		t.Errorf("ANTIGRAVITY_AGENT = %q, want 1", marker)
+	}
+}
+
 func TestAgyEffortMapping(t *testing.T) {
 	for _, tc := range []struct{ tier, want string }{{"low", "low"}, {"med", "medium"}, {"high", "high"}} {
 		var args []string

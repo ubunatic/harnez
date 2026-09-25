@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/agymeter"
+	"ubunatic.com/harnez/internal/subagent"
 )
 
 func newAgyMeterCmd() *cobra.Command {
@@ -14,7 +15,8 @@ func newAgyMeterCmd() *cobra.Command {
 		Hidden: true,
 		Args:   cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return agymeter.Run(cmd.Context(), os.Getenv("HOME"), args[0], args[1:], os.Stdout, os.Stderr)
+			env := subagent.AgyLaunchEnv(os.Environ(), os.Getenv("HOME"))
+			return agymeter.RunWithEnv(cmd.Context(), os.Getenv("HOME"), args[0], args[1:], env, os.Stdout, os.Stderr)
 		},
 	}
 }

@@ -905,18 +905,18 @@ then
     printf '%s\n' 'harnez-agy: agy not found on the original PATH' >&2
     exit 127
 fi
+if test "$meter" = 1
+then
+    harnez_bin=$(command -v harnez 2>/dev/null || true)
+    if test -n "$harnez_bin"
+    then
+        exec "$harnez_bin" agy-meter-run -- "$agy_path" "$@"
+    fi
+    printf '%s\n' 'harnez-agy: harnez not found; starting agy without metering' >&2
+fi
 if test "${old_path%%:*}" = "$shim_dir"
 then
     export ANTIGRAVITY_AGENT=1
-    if test "$meter" = 1
-    then
-        harnez_bin=$(command -v harnez 2>/dev/null || true)
-        if test -n "$harnez_bin"
-        then
-            exec "$harnez_bin" agy-meter-run -- "$agy_path" "$@"
-        fi
-        printf '%s\n' 'harnez-agy: harnez not found; starting agy without metering' >&2
-    fi
     exec "$agy_path" "$@"
 fi
 if test -n "$old_path"
@@ -928,15 +928,6 @@ if test -z "$old_path"
 then
     export PATH="$shim_dir"
     export ANTIGRAVITY_AGENT=1
-fi
-if test "$meter" = 1
-then
-    harnez_bin=$(command -v harnez 2>/dev/null || true)
-    if test -n "$harnez_bin"
-    then
-        exec "$harnez_bin" agy-meter-run -- "$agy_path" "$@"
-    fi
-    printf '%s\n' 'harnez-agy: harnez not found; starting agy without metering' >&2
 fi
 exec "$agy_path" "$@"
 `

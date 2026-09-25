@@ -255,3 +255,38 @@ func TestBashShimExecutionAndRecursionGuard(t *testing.T) {
 		t.Errorf("expected 'inside-subshell', got %q", string(out))
 	}
 }
+
+func TestHarnezAgyMeterLauncherDelegatesEnvironmentToHarnez(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	agyPath := filepath.Join(binDir, "agy")
+	if err := os.WriteFile(agyPath, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	capture := filepath.Join(home, "handoff")
+	harnezPath := filepath.Join(binDir, "harnez")
+	harnezScript := "#!/bin/sh\nprintf '%s\\n' \"$*\" \"$PATH\" \"$ANTIGRAVITY_AGENT\" > \"$HANDOFF_CAPTURE\"\n"
+	if err := os.WriteFile(harnezPath, []byte(harnezScript), 0755); err != nil {
+		t.Fatal(err)
+	}
+	launcher := filepath.Join(home, "harnez-agy")
+	if err := os.WriteFile(launcher, []byte(claude.HarnezAgyLauncherContent), 0755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(launcher, "--meter", "arg")
+	cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+binDir+string(os.PathListSeparator)+"/usr/bin:/bin", "HANDOFF_CAPTURE="+capture, "ANTIGRAVITY_AGENT=0")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("run launcher: %v: %s", err, output)
+	}
+	data, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "agy-meter-run -- " + agyPath + " arg\n" + binDir + string(os.PathListSeparator) + "/usr/bin:/bin\n0\n"
+	if string(data) != want {
+		t.Fatalf("handoff = %q, want %q", data, want)
+	}
+}
