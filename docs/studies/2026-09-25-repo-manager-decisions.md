@@ -45,3 +45,7 @@ background wait loop hid the error and "finished" at once. Correct form:
   `quota-1-logs/`, so the host briefly misread the newest *failing* log as the latest result.
   Lesson: check `quota_1.state` (`finished`, `exit`) against the commit time, then the log.
 - 579 closed. Note: the shared AGENTS.md text also lives in `config.yaml`; both were changed.
+
+## Budget rule (2026-09-25)
+
+Claude plan at 91%: host only manages and relays. Development and research go to `codex:luna:med`, reviews to `terra:med` (reviewer role). The host reads only the reviewer verdict and commits.
