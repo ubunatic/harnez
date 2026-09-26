@@ -8,28 +8,48 @@
 
 ---
 
+## Goal
+
+`/goal`: Implement a runtime token watchdog for running agent turns that detects threshold crossings in active sessions, requests task stopping and session compaction, and cleanly terminates the process group if recovery fails or exceeds grace limits.
+
 ## 1. Problem & Motivation
-Ticket [591](591-agent-default-auto-compact-threshold-200k-tokens-for-all-agents.md) enforces
-the configured token threshold before dispatching each prompt. An agent can still cross that
-threshold during a long-running turn. harnez needs a runtime watchdog that can stop and compact
-the session, or kill it cleanly if recovery fails.
 
-## 2. Technical Specification / Findings
-Use the global threshold and compaction verification contract defined in 591. Heartbeat data
-already reports token usage. Before building watchdog behavior, run a canary for each supported
-agent type (Codex, Claude, and agy) to prove that an external stop/interruption followed by a
-compact request works. The control path is unproven; record canary results and any per-agent
-limitations here.
+Ticket #591 enforces configured token limits before dispatching each prompt. However, long-running agent turns can generate massive context expansions or enter tool loops mid-turn, blowing past token budgets before the next turn starts.
 
-On a threshold crossing, log the session name, observed token count, and time. Ask the agent to
-stop its current task, then compact and verify compaction. Once verified, resume with a short
-handoff prompt. If stopping or compaction does not complete within a bounded grace period, kill
-the whole process group, ensure no child processes remain, and report the kill to the host.
+A runtime token watchdog is required to:
+- Monitor live running turn token metrics (via streaming heartbeat records and runtime token tracking).
+- On threshold crossing: trigger an interrupt/stop, compact the session context, verify the compaction drop, and resume.
+- If compaction or graceful stopping fails within a bounded grace period: cleanly terminate the entire process group (ensuring Zero Zombie guarantee) and report the kill reason to the orchestrator.
 
-## 3. Implementation & Verification Plan
-1. Complete and record the stop-plus-compact canary for Codex, Claude, and agy before implementing
-   the watchdog. Resolve or document any unsupported control path.
-2. Monitor running agents and detect threshold crossings using the configured threshold.
-3. Stop, compact, verify, and resume with a handoff; after the grace period, kill the process group
-   and report the outcome.
-4. Verify threshold detection, successful recovery, timeout/kill behavior, and process cleanup.
+## 2. Technical Specification & Findings
+
+### Control & Recovery Sequence
+1. **Canary & Control Probing**:
+   - Verify interrupt & compaction feasibility across supported providers (Claude, Codex, AGY). Note: Codex uses internal auto-compaction (`model_auto_compact_token_limit`), while Claude/AGY accept `/compact` commands.
+2. **Watchdog Runtime Monitor**:
+   - Track tokens accumulated during streaming turns.
+   - When `tokens >= compact_threshold_tokens`, trigger the watchdog intervention.
+3. **Graceful Recovery vs. Hard Termination**:
+   - Attempt graceful interrupt and compaction.
+   - If unresponsive after grace timeout (e.g. 15–30s), kill the child process group (`syscall.Kill(-pgid, syscall.SIGKILL)`).
+   - Record watchdog intervention events in telemetry.
+
+## 3. Sprint Milestones
+
+- **M1 — Canary Probing & Watchdog Interface**:
+  - Implement canary tests for mid-turn token monitoring and interruption control.
+  - Define `TokenWatchdog` struct with injectable process killer, token monitor, and clock in `internal/subagent/`.
+- **M2 — Runtime Watchdog Wiring & Graceful Recovery**:
+  - Wire `TokenWatchdog` into synchronous and streaming agent drivers.
+  - Implement graceful interrupt $\to$ compact $\to$ verify recovery loop with process group termination fallback.
+  - Add comprehensive unit and mock tests; verify with `make test-q1`.
+- **M3 — Verification & Sprint Teardown**:
+  - Verify clean tree and close ticket #592.
+
+## 4. Acceptance Criteria
+
+- Active turns exceeding the configured token limit are intercepted by the runtime watchdog.
+- Unresponsive sessions exceeding the grace period are cleanly killed with no orphaned child processes.
+- Watchdog events are logged with session name, token count, and outcome.
+- `make test-q1` passes across the repository.
+
