@@ -1,6 +1,6 @@
 # 592 — agent: runtime token watchdog stops, compacts or kills running agents
 
-**Status**: Open
+**Status**: Closed — Runtime token watchdog with mid-turn stream monitoring and process group kill escalation
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
