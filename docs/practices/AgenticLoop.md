@@ -64,6 +64,7 @@ Agentic software engineering scales effectively when concurrency is structured a
    - Only **one** agent may modify files, write code, or execute build mutations in a shared workspace at any given time.
    - Concurrent writes produce race conditions, broken intermediate states, git conflicts, and corrupt dependencies.
    - **Sequential dispatch is the default for every task type, not just file-overlapping code edits.** Two subagents each doing "read-only" investigation or ticket-filing work can still race on a shared, sequentially-allocated resource they both read and then write independently — e.g. two agents can independently select the same next ticket number from stale snapshots. File-level non-overlap is not sufficient evidence that parallel dispatch is safe. Dispatch one subagent at a time unless the user explicitly requests parallel execution for a specific task — and even then, verify the run actually was concurrent and check for this class of race afterward.
+   - For TUI layout work, use a checked-in `.ansi` mockup under `docs/data/` as the visual spec; have the host draft it and dispatch implementation against it. See `TUIDesign.md` for naming, review, and handoff details.
 
 2. **Canary & Test-Driven Verification**:
    - Every task must be verified with real test executions (`go test ./...`, `make smoke`, canary probes) before declaring completion.

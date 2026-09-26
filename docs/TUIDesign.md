@@ -60,6 +60,26 @@ not start at `⣿` or finish at a particular blank glyph.
   style after padding/positioning; permit foreground-only rendering when no
   background SGR is configured.
 
+## .ansi visual mockups
+
+For a new or substantially revised terminal layout, use a checked-in `.ansi`
+mockup as the visual design spec. The host orchestrator should draft the mockup,
+then dispatch implementation against that artifact.
+
+- Store whole-screen mockups under `docs/data/<app>-design-<nnn>.ansi`; use
+  `docs/data/<app>-<pane>-design-<nnn>.ansi` for a widget or sub-pane.
+- Choose a target terminal size for a whole screen (for example, 80×24 or
+  100×30) or explicit bounds for a sub-pane. Use ANSI SGR colors that match the
+  project theme, and check Unicode display widths and border alignment.
+- Review the rendering in a native terminal with `cat docs/data/<file>.ansi`,
+  then commit the mockup as a durable design reference.
+- The host orchestrator should create the visual spec; a lower-cost
+  implementation worker can receive a concise directive to match it and inspect
+  the same file.
+
+Example worker directive: “Implement the TUI layout to match
+`docs/data/<file>.ansi`. Inspect it with `cat docs/data/<file>.ansi`.”
+
 ## Panel visibility and keybinding invariants
 
 - **Every rendered panel must be backed by the view model**: Never append or render

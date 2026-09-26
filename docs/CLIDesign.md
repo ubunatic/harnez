@@ -40,6 +40,9 @@ It takes no subcommands by design, so it can never grow wrappers that duplicate
 `apply` and `init` operate on disjoint flag surfaces by design. `apply` takes `-t`
 (Claude config dir); `init` takes `-d` (project dir). They cannot be confused.
 
+For terminal layout mockups and implementation handoff, see
+[TUI Design — Indicators, Panels & Keybinding Invariants](TUIDesign.md#ansi-visual-mockups).
+
 ## Interactive discovery & bounded ingestion
 
 Commands designed for exploratory use in agentic loops or interactive terminals (e.g. `harnez find issues`) must respect context window budgets:
