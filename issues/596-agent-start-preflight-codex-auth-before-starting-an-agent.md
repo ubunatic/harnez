@@ -8,11 +8,39 @@
 
 ---
 
+## Goal
+
+`/goal`: Fast-preflight Codex authentication before `harnez agent start` and `resume`, caching the check briefly so invalid credentials or OpenAI auth outages fail immediately with actionable guidance (halt loop / switch provider) instead of burning tokens and hanging on broken sessions.
+
 ## 1. Problem & Motivation
-On 2026-09-26 two reviewer starts failed with Codex 401 Unauthorized while `codex login status` said "Logged in". Each start burned ~40s and showed a misleading error (595).
 
-## 2. Technical Specification / Findings
-`codex login status` only checks local credentials, not whether the server accepts them. A real preflight needs a cheap authenticated request.
+On 2026-09-26 two reviewer agent starts failed with Codex 401 Unauthorized while `codex login status` reported "Logged in". Each start burned ~40s, showed a misleading error (tracked in #595), and caused orchestrators to get stuck looping on dead goals.
 
-## 3. Implementation & Verification Plan
-Canary first: find the cheapest call that returns 401 on a rejected token. Then check once before `agent start`/`resume` for Codex (cache the result briefly) and fail with "Codex login rejected; run `codex login`". Test with a stubbed failing check.
+- `codex login status` only inspects local credential files on disk, not server-side token validity.
+- When OpenAI is experiencing an outage or tokens expire, agents repeatedly attempting to start Codex workers burn timeout budgets and loop endlessly.
+- Orchestrators need immediate, actionable failure signals: stop the goal loop, re-authenticate via `codex login`, or consciously escalate/switch to Claude/AGY (with explicit cost awareness).
+
+## 2. Technical Specification & Findings
+
+### Fast Canary Preflight
+- Perform a lightweight authenticated probe or check before spawning a Codex session:
+  - Cache the preflight result with a short TTL (e.g. 60s) so rapid successive starts do not spam the auth endpoint.
+  - If the probe returns 401 / Unauthorized or connectivity failure, abort immediately.
+- Clear error message:
+  ```
+  Error: Codex authentication rejected (401 Unauthorized). OpenAI auth service may be down or local credentials expired.
+  Run `codex login` to re-authenticate. If OpenAI is offline, halt the current goal loop or switch to an alternate provider (claude/agy, noting cost differences).
+  ```
+
+## 3. Sprint Milestones
+
+- **M1 — Preflight Canary & Fast Auth Check**:
+  - Implement the Codex auth preflight checker with short TTL caching in `internal/subagent/` or `cmd/harnez/`.
+  - Wire preflight into `agent start` and `agent resume` prior to process spawn.
+  - Fail fast with clear actionable error output.
+- **M2 — Unit & Mock Tests**:
+  - Add unit tests covering: valid cached auth, 401 rejection failure, network timeout handling, and bypassed checks for non-Codex providers.
+  - Verify with `make test-q1`.
+- **M3 — Verification & Sprint Close**:
+  - Verify clean tree and close ticket #596.
+
