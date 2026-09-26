@@ -56,7 +56,7 @@ func TestManagedAgentExamplesParseAgainstCobra(t *testing.T) {
 	}
 	section := string(config[sectionStart : sectionStart+sectionEnd])
 	for _, phrase := range []string{
-		"When setting a `/goal` without an exit clause, say so in the first reply",
+		"When a `/goal` without an exit clause is set (e.g. typed by the user), say so in the first reply",
 		"/goal ... or stop and report when blocked on a user decision or denied permission",
 		"once blocked on the user, suggest `/goal clear` instead of repeating the wait message",
 	} {
