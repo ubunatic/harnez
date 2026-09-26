@@ -26,3 +26,7 @@ table because its TUI rating (`~`) beat luna's (`-`) and its listed cost was low
 - State the developer preference (luna first, terra when stronger judgment is needed) in the
   lean-sprint skill and the `agent models` USE text.
 - Verify: `harnez agent models` shows the corrected cost/usage for flash38.
+
+## Fix 2026-09-27
+
+`34d79de`, `4497d91`: flash38 USE text says escalation-only/avoid for developer work, developer role removed (reviewer, advisor remain); lean-sprint skill prefers luna, then terra, no agy developers. Cost kept at 4: no measured agy cost data. `harnez apply` done. Awaiting neus feedback.
