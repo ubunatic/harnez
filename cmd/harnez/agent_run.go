@@ -24,10 +24,27 @@ import (
 
 // agentDeps are the session-store and caller-identity hooks the runners need.
 type agentDeps struct {
-	store  func() (*subagent.FileSessionStore, error)
-	parent func() string
-	find   func(*cobra.Command, *subagent.FileSessionStore, string) (*subagent.Session, error)
-	quota  func(context.Context, string, bool) usage.TurnQuotaReading
+	store     func() (*subagent.FileSessionStore, error)
+	parent    func() string
+	find      func(*cobra.Command, *subagent.FileSessionStore, string) (*subagent.Session, error)
+	quota     func(context.Context, string, bool) usage.TurnQuotaReading
+	preflight func(context.Context) error
+}
+
+func preflightCodex(ctx context.Context, provider string, driver subagent.Driver, check func(context.Context) error) error {
+	if provider != "codex" {
+		return nil
+	}
+	if check == nil {
+		if _, ok := driver.(subagent.CodexDriver); !ok {
+			return nil
+		}
+		check = subagent.CheckCodexAuth
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return check(ctx)
 }
 
 func recordTurnQuota(s *subagent.FileSessionStore, capture func(context.Context, string, bool) usage.TurnQuotaReading, sessionID, provider string, turn int, boundary string, force bool, turnStarted, baselineCacheAt time.Time, tokens *subagent.TurnTokenUsage) {
@@ -178,11 +195,15 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	if err != nil {
 		return fmt.Errorf("resolve working directory: %w", err)
 	}
+	baseDriver := agentDriver(m, canonicalWorkDir)
+	if err := preflightCodex(cmd.Context(), m.Provider, baseDriver, d.preflight); err != nil {
+		return fmt.Errorf("agent start %q preflight: %w", spec, err)
+	}
 	tl := newTimeline(cmd)
 	opts := subagent.RunOptions{Prompt: req.Prompt, Model: m, Dir: canonicalWorkDir}
 	parentID := d.parent() // read before the child's environment replaces it
 	defer setAgentEnv(role, sessName)()
-	driver := withAgyMeterSession(agentDriver(m, canonicalWorkDir), id)
+	driver := withAgyMeterSession(baseDriver, id)
 	sd, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
 	turn := 1
@@ -306,7 +327,11 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	}
 	var driver subagent.Driver
 	if !interactive {
-		driver = withAgyMeterSession(agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir), sess.ID)
+		baseDriver := agentDriver(subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, sess.WorkingDir)
+		if err := preflightCodex(cmd.Context(), sess.Provider, baseDriver, d.preflight); err != nil {
+			return fmt.Errorf("agent resume %q preflight: %w", sess.Name, err)
+		}
+		driver = withAgyMeterSession(baseDriver, sess.ID)
 		if checker, ok := driver.(subagent.ResumeChecker); ok {
 			if resumable, reason := checker.CheckResumable(sess.ProviderID()); !resumable {
 				return fmt.Errorf("session %q cannot be resumed: %s; start a new session with: harnez agent start --name <new-name> ...", sess.Name, reason)

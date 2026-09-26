@@ -18,7 +18,7 @@ import (
 
 var agentExecutable = os.Executable
 
-func launchDetached(cmd *cobra.Command, req startRequest, storeDir, parentID string) error {
+func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir, parentID string, check func(context.Context) error) error {
 	modelSpec := req.ModelSpec
 	if modelSpec == "" {
 		var err error
@@ -30,6 +30,9 @@ func launchDetached(cmd *cobra.Command, req startRequest, storeDir, parentID str
 	model, err := subagent.ResolveModel(modelSpec)
 	if err != nil {
 		return err
+	}
+	if err := preflightCodex(cmd.Context(), model.Provider, nil, check); err != nil {
+		return fmt.Errorf("agent start preflight: %w", err)
 	}
 	role, err := startRole(req.Role)
 	if err != nil {
@@ -136,7 +139,7 @@ func runDetachedWorker(cmd *cobra.Command, req startRequest, storeDir string) er
 		return fmt.Errorf("detached worker session %q was not registered", req.SessionID)
 	}
 	req.StoredPrompt = sess.StartPrompt
-	err = runStart(cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return sess.ParentSessionID }}, req)
+	err = runStart(cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return sess.ParentSessionID }, preflight: subagent.CheckCodexAuth}, req)
 	current, getErr := store.Get(sess.ID)
 	if getErr != nil {
 		return getErr

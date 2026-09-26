@@ -95,7 +95,7 @@ func TestAgentDetachedSpawnAndWait(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	err = launchDetached(cmd, startRequest{Name: "async-worker", Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna:low", Dir: t.TempDir(), JSON: true}, storeDir, "")
+	err = launchDetachedWithPreflight(cmd, startRequest{Name: "async-worker", Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna:low", Dir: t.TempDir(), JSON: true}, storeDir, "", func(context.Context) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}

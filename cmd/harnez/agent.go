@@ -239,7 +239,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			return runDetachedWorker(cmd, req, storeDir)
 		}
 		if detach {
-			return launchDetached(cmd, req, storeDir, parent())
+			return launchDetachedWithPreflight(cmd, req, storeDir, parent(), subagent.CheckCodexAuth)
 		}
 		return runStart(cmd, agentDeps{store: store, parent: parent, find: find}, req)
 	}}
