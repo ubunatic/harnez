@@ -40,6 +40,20 @@ is active.
   available and actually running. Otherwise check at each turn; claim active
   watching only while a scheduled check is running.
 
+## Peer-Reported Bugs
+
+Peers often report tool bugs as tickets instead of messages. Treat new bug
+tickets filed by other sessions as assist requests:
+
+1. Find them when watching: new tickets in `git log <checkpoint>..HEAD -- issues/`
+   that you did not file, and incident notes added to existing tickets.
+2. Verify the premise on HEAD, then fix through the assisting loop above.
+3. After the fix lands: `make install` and `harnez apply`, so the installed
+   binary, skills and docs carry it.
+4. If the reporting session is online, message it: ticket number, what changed,
+   and "run `harnez init` in your repo, then tell me if the fix works for you".
+   Record its feedback in the ticket before closing.
+
 ## Peer Communication
 
 - Reply to direct peer messages through the available native session

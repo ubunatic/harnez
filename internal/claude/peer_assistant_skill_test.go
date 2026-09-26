@@ -63,6 +63,8 @@ func TestPeerAssistantSkillInstallToEveryConfiguredTarget(t *testing.T) {
 		for _, marker := range []string{
 			"## Assisting Loop",
 			"## Watching",
+			"## Peer-Reported Bugs",
+			"run `harnez init` in your repo",
 			"## Peer Communication",
 			"harnez find -d <repo> issues -a status:open",
 			"git log <checkpoint>..HEAD -- issues/",
