@@ -56,3 +56,4 @@ Observed goal: `playback some demo texts with my "cloned" voice` (voxi). It was 
   repeating the same wait message.
 - Extend the managed-block test to assert the rule; `harnez init -d .` after `make install`.
 - **M2 delivered (always-loaded goal rule)** `b5feb5e`, wording fix `169c088` (covers user-typed goals). test-q1 green, `harnez apply` done. Awaiting voxi-75 feedback after `harnez init`.
+- voxi-75 (2026-09-27): the rule as worded would have covered its case; `harnez init` in voxi deferred until its developer dev-154 finishes (one writer). Close on its confirmation.
