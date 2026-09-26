@@ -47,7 +47,7 @@ func resolveQuotaHistoryDir(agentDir string) string {
 	}
 	base := filepath.Base(agentDir)
 	if base == ".claude" {
-		return filepath.Join(agentDir, "harnez", historyDirName)
+		return HistoryDir(filepath.Dir(agentDir))
 	}
 	if base == ".codex" {
 		homeDir := filepath.Dir(agentDir)
@@ -58,7 +58,7 @@ func resolveQuotaHistoryDir(agentDir string) string {
 		return HistoryDir(homeDir)
 	}
 	if _, err := os.Stat(filepath.Join(agentDir, ".claude")); err == nil {
-		return filepath.Join(agentDir, ".claude", "harnez", historyDirName)
+		return HistoryDir(agentDir)
 	}
 	return filepath.Join(agentDir, "harnez", historyDirName)
 }

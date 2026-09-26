@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"ubunatic.com/harnez/internal/xdgpath"
 )
 
 type forceQuotaFetchKey struct{}
@@ -52,10 +55,24 @@ type liveFetchCache[T any] struct {
 	Payload   T         `json:"payload"`
 }
 
-// liveFetchCachePath returns the shared cache path inside an agent's own
-// config/state directory (e.g. ~/.claude, ~/.codex,
-// ~/.gemini/antigravity-cli).
+// liveFetchCachePath returns Harnez's shared cache path. Temporary/custom
+// agent directories remain useful to callers and tests outside home.
 func liveFetchCachePath(agentDir string) string {
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		clean := filepath.Clean(agentDir)
+		if clean == filepath.Join(home, ".claude") || clean == filepath.Join(home, ".codex") || strings.HasPrefix(clean, filepath.Join(home, ".gemini")) {
+			legacy := filepath.Join(agentDir, liveFetchCacheFilename)
+			target := filepath.Join(xdgpath.CacheHome(), "harnez", "quota-cache.json")
+			if _, err := os.Stat(target); os.IsNotExist(err) {
+				if data, err := os.ReadFile(legacy); err == nil && json.Valid(data) {
+					_ = os.MkdirAll(filepath.Dir(target), 0o700)
+					_ = os.WriteFile(target, data, 0o600)
+				}
+			}
+			return target
+		}
+	}
 	return filepath.Join(agentDir, liveFetchCacheFilename)
 }
 
@@ -134,6 +151,9 @@ func lockLiveFetchInProcess(path string) func() {
 // atomic on the same filesystem, so this alone would be enough for readers
 // even without the lock — the lock exists to stop two writers interleaving.
 func writeLiveFetchCache[T any](path string, cache liveFetchCache[T]) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
 	data, err := json.Marshal(cache)
 	if err != nil {
 		return err

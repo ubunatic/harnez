@@ -23,16 +23,38 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+	"ubunatic.com/harnez/internal/xdgpath"
 )
 
-// DefaultDBPath returns the default tool_calls database location,
-// ~/.harnez/tool_catalog.sqlite.
+// DefaultDBPath returns the default shared telemetry database location and
+// migrates the legacy database on first use.
 func DefaultDBPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("telemetry: resolve home dir: %w", err)
 	}
-	return filepath.Join(home, ".harnez", "tool_catalog.sqlite"), nil
+	path := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.sqlite")
+	legacy := filepath.Join(home, ".harnez", "tool_catalog.sqlite")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if _, err := os.Stat(legacy); err == nil {
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				return "", err
+			}
+			source, err := sql.Open("sqlite", legacy)
+			if err != nil {
+				return "", fmt.Errorf("telemetry: open legacy database: %w", err)
+			}
+			_, copyErr := source.Exec("VACUUM INTO ?", path)
+			closeErr := source.Close()
+			if copyErr != nil {
+				return "", fmt.Errorf("telemetry: migrate legacy database: %w", copyErr)
+			}
+			if closeErr != nil {
+				return "", closeErr
+			}
+		}
+	}
+	return path, nil
 }
 
 // openRetries and openRetryDelay bound the cold-start retry loop in Open.

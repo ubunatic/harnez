@@ -71,14 +71,14 @@ flowchart TD
 
 ### 2.1 Live Quotas vs. Raw Token Accounting
 1. **Live Quotas (Rolling Capacity Windows)**:
-   - Polled periodically from upstream endpoints and cached in `harnez-quota-cache.json`.
+   - Polled periodically from upstream endpoints and cached in `$XDG_CACHE_HOME/harnez/quota-cache.json` (`~/.cache/harnez/quota-cache.json` by default).
    - Upstream providers disclose **utilization percentages** and `reset_at` timestamps (e.g. 5-hour session burst and 7-day rolling window).
    - Providers conceal raw capacity denominators (absolute token ceilings).
 2. **Time-Series Quota Snapshotter (`quota-history.jsonl`)**:
    - `AppendQuotaHistoryForAgent` records timestamped quota states upon cache refresh.
    - Enforces a 15-minute cross-process file lock (`flock`) and deduplication interval to prevent log spam during rapid `--watch` intervals.
 3. **Multi-Node Fleet Federation**:
-   - Per-host snapshot logs (`t14.jsonl`, `x600.jsonl`, `um760.jsonl`) in `~/.claude/harnez/usage-history/`.
+   - Per-host snapshot logs (`t14.jsonl`, `x600.jsonl`, `um760.jsonl`) in `$XDG_DATA_HOME/harnez/usage-history/` (`~/.local/share/harnez/usage-history/` by default).
    - Remote fetch via `harnez usage history fetch <host>` merges fleet-wide timelines and computing unified burn velocity.
 
 ### 2.2 Project-Level Token Attribution & Cost-of-Change
@@ -93,7 +93,7 @@ flowchart TD
 `harnez stats --agents --days N [--json]` joins harnez agent session JSON in
 `~/.harnez/agents/`, the adjacent `quota-readings.jsonl` turn-boundary readings,
 the telemetry database's `tool_calls` rows, and provider quota history in
-`~/.claude/harnez/usage-history/quota-history.jsonl`. Deleted harnez sessions
+`$XDG_DATA_HOME/harnez/usage-history/quota-history.jsonl`. Deleted harnez sessions
 remain in the session store's `deleted/` archive for reporting. Codex host model
 names are recovered from `~/.codex/sessions/**/rollout-*.jsonl` where the rollout
 contains a `turn_context` model for that session.
@@ -159,6 +159,14 @@ Using Unicode Braille patterns (`\u2800`–`\u28FF`):
 ---
 
 ## 5. Architectural Invariants & Pitfalls Avoided
+
+Harnez-owned persistent telemetry lives at `$XDG_DATA_HOME/harnez/telemetry.sqlite`
+and usage history at `$XDG_DATA_HOME/harnez/usage-history/`. Quota snapshots use
+`$XDG_CACHE_HOME/harnez/quota-cache.json`. Empty or unset XDG variables fall back
+to `~/.local/share` and `~/.cache`. Existing telemetry, history, and provider quota
+cache files are migrated on first access from their legacy Harnez paths; migration
+keeps the source files for recovery. `harnez usage export --db` and `--history-dir`
+continue to override their respective defaults.
 
 1. **Zero Context Overhead**: Telemetry inspection runs out-of-band; raw logs and large sqlite databases are never dumped into model context.
 2. **Plumbing over Checkout**: Git history inspection uses streaming object headers (`git cat-file --batch`), never checking out historical worktrees or disk commits.

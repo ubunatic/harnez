@@ -30,13 +30,79 @@ type HistoryEntry struct {
 }
 
 // HistoryDir resolves the directory that per-host history files live in:
-// ~/.claude/harnez/usage-history/. Copy another machine's *.jsonl file(s)
+// $XDG_DATA_HOME/harnez/usage-history/. Copy another machine's *.jsonl file(s)
 // into this directory to fold that machine's history into the local timeline.
 func HistoryDir(homeDir string) string {
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
-	return filepath.Join(homeDir, ".claude", "harnez", historyDirName)
+	base := os.Getenv("XDG_DATA_HOME")
+	if base == "" {
+		base = filepath.Join(homeDir, ".local", "share")
+	}
+	return filepath.Join(base, "harnez", historyDirName)
+}
+
+func migrateLegacyHistory(dir string) error {
+	if filepath.Clean(dir) != filepath.Clean(HistoryDir("")) {
+		return nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	legacy := filepath.Join(home, ".claude", "harnez", historyDirName)
+	if filepath.Clean(legacy) == filepath.Clean(dir) {
+		return nil
+	}
+	entries, err := os.ReadDir(legacy)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+			continue
+		}
+		src := filepath.Join(legacy, entry.Name())
+		dst := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(dst); os.IsNotExist(err) {
+			if err := os.WriteFile(dst, data, 0o600); err != nil {
+				return err
+			}
+			if err := os.Remove(src); err != nil {
+				return err
+			}
+			continue
+		}
+		lock, ok := lockHistoryFile(dst)
+		if !ok {
+			return fmt.Errorf("lock history file %s", dst)
+		}
+		f, err := os.OpenFile(dst, os.O_APPEND|os.O_WRONLY, 0o600)
+		if err == nil {
+			_, err = f.Write(data)
+			_ = f.Close()
+		}
+		unlockHistoryFile(lock)
+		if err != nil {
+			return err
+		}
+		if err := os.Remove(src); err != nil {
+			return err
+		}
+	}
+	_ = os.Remove(legacy)
+	return nil
 }
 
 // HistorySummaryData holds aggregated usage metrics across recorded history files.
@@ -227,6 +293,9 @@ func unlockHistoryFile(f *os.File) {
 // AppendHistory appends one snapshot as a JSON line to this machine's history
 // file under dir (see HistoryDir), tagging it with the local hostname.
 func AppendHistory(dir string, summary UsageSummary) error {
+	if err := migrateLegacyHistory(dir); err != nil {
+		return fmt.Errorf("migrate usage history: %w", err)
+	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("create history dir: %w", err)
 	}
@@ -263,6 +332,9 @@ func AppendHistory(dir string, summary UsageSummary) error {
 // Malformed lines are skipped rather than failing the whole read, since a
 // history file may have been copied in mid-write from another machine.
 func ReadHistory(dir string) ([]HistoryEntry, error) {
+	if err := migrateLegacyHistory(dir); err != nil {
+		return nil, fmt.Errorf("migrate usage history: %w", err)
+	}
 	matches, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
 	if err != nil {
 		return nil, fmt.Errorf("glob history dir: %w", err)
@@ -590,7 +662,7 @@ func FetchRemoteHistory(ctx context.Context, sshHost string, localDir string, ou
 	_ = cmdSnapshot.Run()
 
 	// 2. Copy remote *.jsonl files into localDir via scp
-	remoteSrc := fmt.Sprintf("%s:~/.claude/harnez/usage-history/*.jsonl", sshHost)
+	remoteSrc := fmt.Sprintf("%s:~/.local/share/harnez/usage-history/*.jsonl", sshHost)
 	cmdScp := exec.CommandContext(ctx, "scp", "-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", remoteSrc, localDir+"/")
 	var errBuf strings.Builder
 	cmdScp.Stderr = &errBuf

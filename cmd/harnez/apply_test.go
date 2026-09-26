@@ -43,7 +43,7 @@ func TestEnsureTelemetrySchemaNoOpBeforeApply(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	path := filepath.Join(home, ".harnez", "tool_catalog.sqlite")
+	path := filepath.Join(home, ".local", "share", "harnez", "telemetry.sqlite")
 	db, err := telemetry.Open(path)
 	if err != nil {
 		t.Fatalf("create telemetry DB: %v", err)
@@ -104,7 +104,7 @@ func TestApplyComponentsDocsOnlySkipsTelemetrySchema(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("apply --components docs-only: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".harnez", "tool_catalog.sqlite")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(home, ".local", "share", "harnez", "telemetry.sqlite")); !os.IsNotExist(err) {
 		t.Fatalf("docs-only created telemetry DB, stat error = %v", err)
 	}
 }
@@ -113,7 +113,7 @@ func TestApplyCmdMigratesLegacyCompactionSchema(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	path := filepath.Join(home, ".harnez", "tool_catalog.sqlite")
+	path := filepath.Join(home, ".local", "share", "harnez", "telemetry.sqlite")
 	db, err := telemetry.Open(path)
 	if err != nil {
 		t.Fatalf("create telemetry DB: %v", err)

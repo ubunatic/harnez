@@ -315,7 +315,7 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 		if !quotaFetchForced(ctx) && cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval {
 			usage.Session = cache.Payload.Session
 			usage.Weekly = cache.Payload.Weekly
-			usage.Sources = append(usage.Sources, "~/.claude/harnez-quota-cache.json")
+			usage.Sources = append(usage.Sources, cachePath)
 			return usage
 		}
 
@@ -403,7 +403,7 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 			if cache.Payload.Weekly != nil {
 				usage.Weekly = staleQuotaWindow(cache.Payload.Weekly)
 			}
-			usage.Sources = append(usage.Sources, "~/.claude/harnez-quota-cache.json (stale)")
+			usage.Sources = append(usage.Sources, cachePath+" (stale)")
 		}
 	}
 

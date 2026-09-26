@@ -57,6 +57,28 @@ func TestQuotaCacheReadWriteRoundTrip(t *testing.T) {
 	}
 }
 
+func TestQuotaCacheMigratesToXDGCache(t *testing.T) {
+	home, cache := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", cache)
+	legacyDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(legacyDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	payload := []byte(`{"fetched_at":"2026-09-01T00:00:00Z","payload":{"session":{"used_percent":12}}}`)
+	if err := os.WriteFile(filepath.Join(legacyDir, liveFetchCacheFilename), payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := liveFetchCachePath(legacyDir)
+	if want := filepath.Join(cache, "harnez", "quota-cache.json"); path != want {
+		t.Fatalf("cache path = %s, want %s", path, want)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != string(payload) {
+		t.Fatalf("migrated cache = %q, %v", got, err)
+	}
+}
+
 func TestTurnQuotaTimeoutIsProviderSpecificAndJSONRemainsBackwardCompatible(t *testing.T) {
 	if TurnQuotaTimeoutForProvider("claude") != TurnQuotaTimeout || TurnQuotaTimeoutForProvider("codex") != TurnQuotaTimeout {
 		t.Fatal("HTTP providers must retain the 1.8s turn quota timeout")

@@ -64,6 +64,34 @@ func TestOpenIsIdempotent(t *testing.T) {
 	db2.Close()
 }
 
+func TestDefaultDBPathUsesXDGAndBacksUpLegacyDB(t *testing.T) {
+	home, data := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", data)
+	legacy := filepath.Join(home, ".harnez", "tool_catalog.sqlite")
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	db, err := Open(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := DefaultDBPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(data, "harnez", "telemetry.sqlite")
+	if got != want {
+		t.Fatalf("DefaultDBPath = %s, want %s", got, want)
+	}
+	if _, err := os.Stat(got); err != nil {
+		t.Fatalf("migrated db missing: %v", err)
+	}
+}
+
 func TestOpenDoesNotReportNoopCompactionMigration(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "tool_catalog.sqlite")

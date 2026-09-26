@@ -87,6 +87,32 @@ func TestAppendAndReadHistory(t *testing.T) {
 	}
 }
 
+func TestHistoryDirUsesXDGAndMigratesLegacyFiles(t *testing.T) {
+	home, data := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", data)
+	dir := filepath.Join(home, ".claude", "harnez", historyDirName)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacy := filepath.Join(dir, "old.jsonl")
+	line := `{"hostname":"old","timestamp":"2026-09-01T00:00:00Z"}` + "\n"
+	if err := os.WriteFile(legacy, []byte(line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := HistoryDir(home)
+	if want := filepath.Join(data, "harnez", historyDirName); target != want {
+		t.Fatalf("HistoryDir = %s, want %s", target, want)
+	}
+	if _, err := ReadHistory(target); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(target, "old.jsonl"))
+	if err != nil || string(got) != line {
+		t.Fatalf("migrated history = %q, %v", got, err)
+	}
+}
+
 func TestRenderTimelineText_Empty(t *testing.T) {
 	got := RenderTimelineText(nil)
 	if !strings.Contains(got, "No usage history recorded yet") {

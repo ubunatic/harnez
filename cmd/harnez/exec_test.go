@@ -954,7 +954,7 @@ func TestGearMulticallExecution(t *testing.T) {
 
 	// Verify telemetry row, under the isolated fakeHome this test actually
 	// controls (there is no env-var override to point at a different path).
-	dbPath := filepath.Join(fakeHome, ".harnez", "tool_catalog.sqlite")
+	dbPath := filepath.Join(fakeHome, ".local", "share", "harnez", "telemetry.sqlite")
 	db, dbErr := telemetry.Open(dbPath)
 	if dbErr != nil {
 		t.Fatalf("open isolated telemetry db %s: %v", dbPath, dbErr)

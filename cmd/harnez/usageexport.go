@@ -51,11 +51,11 @@ func newUsageExportCmd() *cobra.Command {
 		Short: "Export sanitized telemetry and token-usage history as JSON for external visualization",
 		Long: `export writes a single scrubbed JSON file combining:
 
-  - Tool-call telemetry from internal/telemetry (~/.harnez/tool_catalog.sqlite):
+  - Tool-call telemetry from internal/telemetry ($XDG_DATA_HOME/harnez/telemetry.sqlite):
     call frequency, scores, exit codes, durations, byte savings, and
     taxonomic activity_category.
   - Token/session usage history from internal/usage
-    (~/.claude/harnez/usage-history/*.jsonl): per-agent token totals and
+    ($XDG_DATA_HOME/harnez/usage-history/*.jsonl): per-agent token totals and
     quota-window percentages over time.
 
 Privacy: absolute filesystem paths (working directories, ticket IDs,
@@ -100,8 +100,8 @@ yet implemented.
 		},
 	}
 	cmd.Flags().StringVar(&out, "out", "", "output file path for the sanitized JSON export (required)")
-	cmd.Flags().StringVar(&dbPath, "db", "", "override the telemetry database path (default: ~/.harnez/tool_catalog.sqlite)")
-	cmd.Flags().StringVar(&historyDir, "history-dir", "", "override the usage-history directory (default: ~/.claude/harnez/usage-history)")
+	cmd.Flags().StringVar(&dbPath, "db", "", "override the telemetry database path (default: $XDG_DATA_HOME/harnez/telemetry.sqlite)")
+	cmd.Flags().StringVar(&historyDir, "history-dir", "", "override the usage-history directory (default: $XDG_DATA_HOME/harnez/usage-history)")
 	cmd.Flags().StringVar(&privacyFlag, "privacy", "public", "privacy level: public|agent-sanitized|internal|raw")
 	cmd.Flags().BoolVar(&classify, "classify", false, "opt-in batch classification of notes using local model runner (issue 212)")
 	return cmd
