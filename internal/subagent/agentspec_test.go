@@ -30,6 +30,14 @@ func TestFlash38EscalationGuidanceAndLeanSprintDeveloperPreference(t *testing.T)
 	if !strings.Contains(flash38.Use, "escalation-only") || !strings.Contains(flash38.Use, "avoid for developer work") {
 		t.Errorf("agy:flash38 use = %q, want escalation-only and avoid developer work", flash38.Use)
 	}
+	for name, model := range spec.Models {
+		if strings.HasPrefix(name, "agy:") && strings.Contains(model.Roles, "developer") {
+			t.Errorf("%s roles = %q, want no developer role", name, model.Roles)
+		}
+	}
+	if sonnet := spec.Models["agy:sonnet"]; !strings.Contains(sonnet.Use, "reviewer when Claude quota is out") || strings.Contains(sonnet.Use, "developer") {
+		t.Errorf("agy:sonnet use = %q, want reviewer-only guidance when Claude quota is out", sonnet.Use)
+	}
 	skill, err := fs.ReadFile(harnez.DefaultFS, "docs/commands/lean-sprint.md")
 	if err != nil {
 		t.Fatal(err)

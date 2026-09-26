@@ -95,7 +95,7 @@ models:
     provider: agy
     name: gemini-3.7-flash
     tier: low
-    roles: developer, advisor, reviewer
+    roles: advisor, reviewer
     cost: 4
     eff: "?"
     skills: Go~ TUI~ SQL~
@@ -117,11 +117,11 @@ models:
     name: claude-sonnet-4-6
     tier: low
     effort: false
-    roles: reviewer, developer
+    roles: reviewer
     cost: 16
     eff: "?"
     skills: Go~ TUI~ SQL~
-    use: Sonnet 4.6; reviewer or developer when Claude quota is out
+    use: Sonnet 4.6; reviewer when Claude quota is out
   agy:opus:
     provider: agy
     name: claude-opus-4-6-thinking
