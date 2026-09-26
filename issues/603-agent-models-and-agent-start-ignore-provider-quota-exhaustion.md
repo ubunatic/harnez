@@ -47,3 +47,4 @@ stopped with 0 tokens used, so it never did any work. The user had to catch the 
 - Check the staleness threshold against the collector cadence: data that `usage` still shows as recent must not
   read as stale in `agent models`.
 - Verify again with pasted rows from both commands.
+- **M3 delivered (consistent age, any-window exhaustion)** `dc86ac5`. Live: all agy rows `stale (44m) exhausted`, matching `harnez usage` (Gemini 5h window 100%). Host test-q1 green. `harnez apply` done. Awaiting neus feedback.
