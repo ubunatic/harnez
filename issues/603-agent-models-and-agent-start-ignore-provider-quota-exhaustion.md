@@ -35,3 +35,15 @@ stopped with 0 tokens used, so it never did any work. The user had to catch the 
   (issue 598 moved caches to XDG paths); a reader on an abandoned path is the likely bug.
 - Old data must read `stale (28d)`, not `unknown`; reserve `unknown` for no data. Use a compact age (`4m`, `3h`, `28d`).
 - Verify against the live cache: agy must show `exhausted` when `harnez usage` shows it at 0 remaining.
+
+- **M1 delivered (column + start guard)** `e4ffc6c`; **M2 delivered (live cache, stale age)** `cb8a4de`.
+
+## M3 — Pre-Work / Required Refinements (host review of live output, 2026-09-27)
+
+- Age mismatch: `harnez usage` shows the agy row "updated 36m ago", `agent models` shows `stale (1d)` for the same
+  provider. Both must derive age from the same timestamp; find which one is wrong.
+- Exhaustion rule is wrong: agy Gemini 5h window is at 100% used, yet flash37/flash38 are not `exhausted`. A pool is
+  exhausted when **any** active (not yet reset) window it depends on is at 100%, not only when all are.
+- Check the staleness threshold against the collector cadence: data that `usage` still shows as recent must not
+  read as stale in `agent models`.
+- Verify again with pasted rows from both commands.
