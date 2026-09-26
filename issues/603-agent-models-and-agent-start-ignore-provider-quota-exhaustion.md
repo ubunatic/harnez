@@ -57,3 +57,4 @@ stopped with 0 tokens used, so it never did any work. The user had to catch the 
   downgrades to non-blocking once that reset time has passed (then show `stale (<age>)`, since usage may have reset).
 - Show the reset in the cell, e.g. `exhausted (resets 1h45m)`.
 - Test: stale snapshot with a future reset blocks; stale snapshot with a past reset does not.
+- **M4 delivered (block until reset)** `d47c3f1`. Live: agy rows `exhausted (resets 1h38m)` / `(resets 19h6m)`; `agent start --model agy:flash38:low` refused with override flag and `codex:luna:low` alternative (host-verified). flash37 USE wording fixed (604). Awaiting neus confirmation.
