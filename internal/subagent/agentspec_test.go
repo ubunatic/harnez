@@ -1,9 +1,42 @@
 package subagent
 
 import (
+	"io/fs"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
+	"ubunatic.com/harnez"
 )
+
+func TestFlash38EscalationGuidanceAndLeanSprintDeveloperPreference(t *testing.T) {
+	data, err := fs.ReadFile(harnez.DefaultFS, "spec/agent.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Models map[string]ModelGuide `yaml:"models"`
+	}
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
+	flash38 := spec.Models["agy:flash38"]
+	if flash38.Cost != 4 {
+		t.Errorf("agy:flash38 cost = %d, want 4 (agy quota cost remains unmeasured)", flash38.Cost)
+	}
+	if !strings.Contains(flash38.Use, "escalation-only") || !strings.Contains(flash38.Use, "avoid for developer work") {
+		t.Errorf("agy:flash38 use = %q, want escalation-only and avoid developer work", flash38.Use)
+	}
+	skill, err := fs.ReadFile(harnez.DefaultFS, "docs/commands/lean-sprint.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, phrase := range []string{"Prefer `luna` first", "use `terra` when stronger judgment is needed", "avoid `agy` models for developer work"} {
+		if !strings.Contains(string(skill), phrase) {
+			t.Errorf("lean-sprint skill missing %q", phrase)
+		}
+	}
+}
 
 func TestEmbeddedAgentSpecLoadsAndResolves(t *testing.T) {
 	spec, err := loadAgentSpec()

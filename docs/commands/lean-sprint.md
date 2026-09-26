@@ -46,7 +46,7 @@ milestone dispatch, concise pre-commit/milestone review, and teardown with statu
 For focused, milestone-based tasks, execute this fast-path, token-efficient loop:
 
 ### 1. Goal Handoff to Low-Cost Developer
-- The Host Orchestrator dispatches a developer worker (pick the model from `harnez agent models`; e.g. `--model luna`) using `harnez agent start --role developer --name <worker> --model <model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method).
+- The Host Orchestrator dispatches a developer worker using `harnez agent start --role developer --name <worker> --model <model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method). Prefer `luna` first; use `terra` when stronger judgment is needed; avoid `agy` models for developer work.
 - An explicitly named `provider:model:tier` must be dispatched exactly through `harnez agent start`; on failure, report it and ask for guidance rather than substituting the host model or a native subagent.
 - Provide:
   - Scoped milestone objective, target files, and acceptance criteria from the ticket.

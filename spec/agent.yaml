@@ -110,8 +110,8 @@ models:
     cost: 4
     eff: "~"
     skills: Go~ TUI~ SQL~
-    use: cross-vendor reviewer; strong terminal coding, slow first token
-    use_med: escalation advisor on a budget
+    use: escalation-only; avoid for developer work; cross-vendor reviewer when needed
+    use_med: escalation-only advisor; avoid for developer work
   agy:sonnet:
     provider: agy
     name: claude-sonnet-4-6
