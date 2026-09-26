@@ -43,14 +43,15 @@ A dedicated invoke-only `/harnez-status` skill provides a rapid self-check contr
 
 ## 3. Sprint Milestones
 
-- **M1 — Skill Definition & Registration**:
-  - Author `docs/commands/HarnezStatus.md` (invoked via `/harnez-status` or `/harnez status`).
-  - Register in `config.yaml` / `internal/claude/` skill bundling templates as invoke-only.
-- **M2 — Verification, Doc Sync & Smoke Tests**:
-  - Verify skill output adhering to the compact <15 lines contract.
-  - Run `harnez init -d .` and `make test-q1`.
+- **M1 Delivered (`4af7a70`)**:
+  - Authored `docs/commands/HarnezStatus.md` and registered in `config.yaml` as `user-invocable-only`.
+- **M2 — Pre-Work & Test Fixes**:
+  - Fix `internal/claude` skill list test assertions to include `harnez-status`.
+  - Fix `internal/usage/history.go` `migrateLegacyHistory`: avoid failing concurrent callers on lock contention (wait or gracefully proceed once migration finishes).
+  - Run `make test-q1` and verify full suite passes.
 - **M3 — Teardown & Ticket Close**:
   - Teardown subagents and close ticket #599.
+
 
 ## 4. Acceptance Criteria
 
