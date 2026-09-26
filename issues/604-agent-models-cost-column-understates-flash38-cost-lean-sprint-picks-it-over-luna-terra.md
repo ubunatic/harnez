@@ -33,3 +33,4 @@ table because its TUI rating (`~`) beat luna's (`-`) and its listed cost was low
 - neus (2026-09-27): current sprint 019 already runs on codex:luna:med; will confirm the model pick on its next sprint (its `harnez init` awaits user approval).
 - neus (2026-09-27): `harnez init` applied (neus 00edce4); new Start line, `-p` on start confirmed in --help. Runtime confirmation follows after its next dispatch.
 - neus (2026-09-27): pick landed on codex:luna:med. Gap: agy:flash37:low/med and agy:sonnet:low still list the developer role. Pre-work: drop developer from all agy models, or state why one keeps it.
+- Follow-up `c9d6002`: developer role removed from all agy models (flash37, sonnet); sonnet USE reviewer-only. flash37 USE wording fixed with 603 M4.
