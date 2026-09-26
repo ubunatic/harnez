@@ -134,6 +134,7 @@ debloat:
     sprinter: user-invocable-only
     standup: user-invocable-only
     story: user-invocable-only
+    harnez-status: user-invocable-only
   # These retain prose-triggering under the minimal preset and become
   # explicit-only under the deliberately stronger aggressive preset.
   aggressive_skill_overrides:
@@ -321,6 +322,10 @@ skills:
   - name: harnez-advisor
     description: "Reuse compatible advisor sessions across supported agent tools using prose requests"
     file: docs/commands/HarnezAdvisor.md
+
+  - name: harnez-status
+    description: "Briefly self-check Harnez CLI, model tiers, sprint workflow, and documentation navigation"
+    file: docs/commands/HarnezStatus.md
 
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
