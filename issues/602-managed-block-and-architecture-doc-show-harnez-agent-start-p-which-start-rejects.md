@@ -22,3 +22,7 @@ The "Harnez Agent" line in the managed block, which `harnez init` copies into ev
 1. Pick one fix: change the docs to the positional form (`... --model <model> "<prompt>"`), or accept `-p/--prompt` on `start` and `resume` as an alias, for consistency with the root form.
 2. Update `config.yaml` and `docs/HarnezAgentArchitecture.md`, then run `harnez init` so the harnez `AGENTS.md` is regenerated.
 3. Verification: add a test that runs every `harnez agent ...` example command in the managed block through Cobra's flag parsing, so the docs cannot drift from the CLI again.
+
+## Fix 2026-09-27
+
+`2824879`: `agent start`/`resume` accept `-p/--prompt`; managed Start line teaches a native background shell without `--detach`; test parses every managed-block `harnez agent` example through Cobra. `harnez apply` done. Awaiting reporter feedback after `harnez init`.

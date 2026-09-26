@@ -119,3 +119,7 @@ from a normal (foreground) Bash call. The run did not appear in the user's backg
   The generated conventions therefore teach the anti-pattern this ticket forbids.
 - Fix priority: change the managed block to "one native background shell per run" (Claude:
   `run_in_background`, no `--detach`), then add the Case 1 notice.
+
+## Fix 2026-09-27
+
+`2824879`: `agent start`/`resume` accept `-p/--prompt`; managed Start line teaches a native background shell without `--detach`; test parses every managed-block `harnez agent` example through Cobra. `harnez apply` done. Awaiting reporter feedback after `harnez init`.
