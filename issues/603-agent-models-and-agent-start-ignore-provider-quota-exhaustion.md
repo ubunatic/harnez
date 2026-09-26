@@ -1,6 +1,6 @@
 # 603 — agent models and agent start ignore provider quota exhaustion
 
-**Status**: Open — M4 test is time/ambient-dependent, fails now
+**Status**: Closed — M1-M5 delivered; M5 fixed stale-vs-unknown regression
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -66,3 +66,4 @@ stopped with 0 tokens used, so it never did any work. The user had to catch the 
   after `d47c3f1`: `stale_past_reset_becomes_stale` gets `unknown`, wanting `stale ... age 36m from usage meter`.
   It passed at commit time, so the test depends on wall-clock time or on ambient state (real cache / usage meter)
   instead of fixed fixtures. Inject the clock and isolate state (temp XDG dirs); keep the assertions.
+- **M5 delivered (regression)** `84de49d`: expired meter windows were discarded before the availability check, so past-reset data read `unknown` instead of `stale`; now kept for availability only; agent-models tests isolated from the real HOME meter. test-q1 green.
