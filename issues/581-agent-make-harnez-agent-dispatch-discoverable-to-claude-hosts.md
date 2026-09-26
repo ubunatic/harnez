@@ -126,3 +126,5 @@ from a normal (foreground) Bash call. The run did not appear in the user's backg
 - neus feedback (2026-09-27): since the incident it already runs `start`/`resume` without `--detach` in native background shells and the user sees them; `harnez init` there awaits user approval. Final confirmation follows after its next dispatch.
 - neus (2026-09-27): `harnez init` applied (neus 00edce4); new Start line, `-p` on start confirmed in --help. Runtime confirmation follows after its next dispatch.
 - neus (2026-09-27): confirmed at runtime: `start ... -p` under run_in_background is visible (neus-021-luna). Remaining 581 scope: the Case 1 notice.
+
+- loom (2026-09-27): after `harnez init`, the Start line has no `--detach` and uses `run_in_background` plus `-p` (loom b6e7402); `start --help` lists `-p`. A live `start -p` run is still to come.
