@@ -52,10 +52,18 @@ build visible in the host UI, yields completion notification/output, and permits
 process-group stopping. Hosts should stop the background shell rather than rely on Ctrl+C within
 an agent to stop its children.
 
-- **Implications Notice on `--detach`/`--async`**:
-  - Running with `--detach` or `--async` must output a short notice/warning about the implications (e.g. *“Agent started in internal background mode; process is hidden from host UI and will not emit completion wakeups. In interactive sessions, prefer running blocking agent commands inside a native host background task/shell so the user can monitor, terminate, and receive exit notifications.”*).
-- **Interactive Host Invariant**:
-  - In interactive sessions with a human user, all background jobs must be dispatched into real native host "Bash" / async tasks that appear in the task manager, allowing the user to observe live activity, ask *"why so many jobs?"*, and terminate them directly.
+- **Three-Tier Caller Context Detection**:
+  1. **Case 1: Interactive Host Session (Orchestrator)**:
+     - *Signal*: Agent env var present (`CLAUDE_CODE_SESSION_ID`, `ANTIGRAVITY_CONVERSATION_ID`, etc.) and top-level / orchestrator role.
+     - *Behavior on `--detach`/`--async`*: Emit an interactive warning/notice:
+       > *"Notice: Running with --detach hides this process from the host UI. In interactive sessions with a user, prefer launching blocking agent commands inside a native host background task/shell so the user can monitor, terminate, and receive exit notifications."*
+  2. **Case 2: Direct Human at CLI (Manual Terminal)**:
+     - *Signal*: `classifyInvoker() == "human"` (no agent env vars, interactive `stdinIsTTY() == true`).
+     - *Behavior on `--detach`/`--async`*: Detach quietly as requested by the user, printing the session info and resume command.
+  3. **Case 3: Non-Interactive Subagent / Delegator / Script**:
+     - *Signal*: Programmatic runner (e.g. non-interactive `sprinter` / `delegator` subagent or CI/script with no TTY).
+     - *Behavior on `--detach`/`--async`*: Programmatic detachment without interactive user warnings.
+
 - **Caller Notification Integration**:
   - Advise callers/hosts to route blocking commands through host tools (e.g. Claude `run_in_background`, Antigravity `run_command` with backgrounding) that securely wait and wake the orchestrator up on exit.
 
