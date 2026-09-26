@@ -107,3 +107,15 @@ work clear and controllable.
 - **Default Execution Timeout (`HTO`)**: When invoking `harnez_command` / `harnez agent start` in an Antigravity host background task, the command timed out after 60s (`harnez exec: timeout kill after 1m0s; rerun with HTO=0 to lift`, exit code 137) during a standard turn with `luna:med`. `harnez_command` should either document `HTO` or default to a longer/unlimited timeout (`HTO=0`) for agent runs dispatched via background tasks.
 - **Background Task Integration**: Antigravity's `run_command` with `WaitMsBeforeAsync` cleanly handles blocking commands formatted by `harnez_command` as host-managed background tasks, providing proper reactive wakeups upon completion without active polling.
 
+
+## Incident 2026-09-27 (neus `/lean-sprint 19`)
+
+A Claude host started a developer with `harnez agent start --detach --role developer --name neus-019-dev ...`
+from a normal (foreground) Bash call. The run did not appear in the user's background-shell list.
+- No §3 notice was emitted: the full output was only `Started agent neus-019-dev (<id>)`, even though
+  `CLAUDE_CODE_SESSION_ID` was set. The Case 1 warning is not implemented yet.
+- The host followed its loaded instructions: the managed "Harnez Agent" block written by `harnez init`
+  still says `Start: harnez agent start --detach --name ...`, and `harnez init` reported it "unchanged".
+  The generated conventions therefore teach the anti-pattern this ticket forbids.
+- Fix priority: change the managed block to "one native background shell per run" (Claude:
+  `run_in_background`, no `--detach`), then add the Case 1 notice.
