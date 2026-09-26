@@ -52,8 +52,8 @@ type ProviderQuotaAvailability struct {
 }
 
 // CachedProviderQuotaAvailability reports available, exhausted, stale, or
-// unknown from the provider-isolated live quota cache. Only a fresh, active
-// exhausted window confirms exhaustion; missing quota data stays unknown.
+// unknown from live provider quota evidence. AGY prefers the same meter
+// snapshot used by harnez usage; missing quota data stays unknown.
 func CachedProviderQuotaAvailability(provider, model string, now time.Time) ProviderQuotaAvailability {
 	state := ProviderQuotaAvailability{State: "unknown"}
 	home, err := os.UserHomeDir()
@@ -78,6 +78,22 @@ func CachedProviderQuotaAvailability(provider, model string, now time.Time) Prov
 		fetchedAt = cache.FetchedAt
 		windows = []*QuotaWindow{cache.Payload.Session, cache.Payload.Weekly}
 	case "agy":
+		meterUsage, ok := applyRecentAGYMeterQuota(AgentUsage{AgentID: "agy"}, home, now)
+		if ok {
+			fetchedAt = meterUsage.LastRefreshed
+			want := "Gemini Models"
+			if !strings.Contains(strings.ToLower(model), "gemini") && !strings.Contains(strings.ToLower(model), "flash") && !strings.Contains(strings.ToLower(model), "pro") {
+				want = "Claude and GPT models"
+			}
+			for _, group := range meterUsage.ModelGroups {
+				if strings.EqualFold(group.Name, want) {
+					for i := range group.Windows {
+						windows = append(windows, &group.Windows[i])
+					}
+				}
+			}
+			break
+		}
 		cache := readLiveFetchCache[agyQuotaPayload](liveFetchCachePath(filepath.Join(home, ".gemini", "antigravity-cli")))
 		if cache == nil {
 			return state

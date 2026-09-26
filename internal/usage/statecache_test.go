@@ -7,7 +7,47 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"ubunatic.com/harnez/internal/agymeter"
 )
+
+func TestCachedAGYAvailabilityUsesUsageMeterTimestampAndAnyActiveWindow(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	now := time.Now().UTC().Truncate(time.Second)
+	reset := now.Add(time.Hour).Format(time.RFC3339)
+	zero := 0.0
+	weekly := 0.8
+	rows := []agymeter.Record{
+		{Time: now.Add(-36 * time.Minute), Kind: "quota", Bucket: "gemini-weekly", Remaining: &weekly, Reset: reset},
+		{Time: now.Add(-36 * time.Minute), Kind: "quota", Bucket: "gemini-5h", Remaining: &zero, Reset: reset},
+	}
+	path := filepath.Join(home, ".harnez", "agymeter", "usage.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if err := json.NewEncoder(f).Encode(row); err != nil {
+			_ = f.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	got := CachedProviderQuotaAvailability("agy", "gemini-3.8-flash", now)
+	if got.State != "stale" || !got.Exhausted || got.Age != 36*time.Minute {
+		t.Fatalf("availability = %+v, want stale, exhausted, age 36m from usage meter", got)
+	}
+	if AgentQuotaAvailabilityMaxAge != 2*DefaultCollectorInterval {
+		t.Fatalf("availability max age = %s, want twice collector cadence (%s)", AgentQuotaAvailabilityMaxAge, 2*DefaultCollectorInterval)
+	}
+}
 
 // TestWriteReadAgentSnapshotRoundTrip checks the atomic write-tmp-then-rename
 // helper produces a file ReadAgentSnapshot can parse back unchanged, and
