@@ -1,6 +1,6 @@
 # 593 — Adopt .ansi file design mockup workflow for TUI design and review
 
-**Status**: Open
+**Status**: Closed — Adopted .ansi TUI mockup workflow in TUIDesign, CLIDesign, and AgenticLoop
 **Priority**: P2
 **Severity**: Minor
 **Category**: Practices / Documentation / TUI Design
