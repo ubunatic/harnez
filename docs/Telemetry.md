@@ -71,7 +71,7 @@ flowchart TD
 
 ### 2.1 Live Quotas vs. Raw Token Accounting
 1. **Live Quotas (Rolling Capacity Windows)**:
-   - Polled periodically from upstream endpoints and cached in `$XDG_CACHE_HOME/harnez/quota-cache.json` (`~/.cache/harnez/quota-cache.json` by default).
+   - Polled periodically from upstream endpoints and cached separately as `$XDG_CACHE_HOME/harnez/quota-cache-<provider>.json` (`~/.cache/harnez/` by default).
    - Upstream providers disclose **utilization percentages** and `reset_at` timestamps (e.g. 5-hour session burst and 7-day rolling window).
    - Providers conceal raw capacity denominators (absolute token ceilings).
 2. **Time-Series Quota Snapshotter (`quota-history.jsonl`)**:
@@ -162,7 +162,7 @@ Using Unicode Braille patterns (`\u2800`–`\u28FF`):
 
 Harnez-owned persistent telemetry lives at `$XDG_DATA_HOME/harnez/telemetry.sqlite`
 and usage history at `$XDG_DATA_HOME/harnez/usage-history/`. Quota snapshots use
-`$XDG_CACHE_HOME/harnez/quota-cache.json`. Empty or unset XDG variables fall back
+`$XDG_CACHE_HOME/harnez/quota-cache-<provider>.json`. Empty, relative, or unset XDG variables fall back
 to `~/.local/share` and `~/.cache`. Existing telemetry, history, and provider quota
 cache files are migrated on first access from their legacy Harnez paths; migration
 keeps the source files for recovery. `harnez usage export --db` and `--history-dir`

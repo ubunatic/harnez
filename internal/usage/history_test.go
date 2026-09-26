@@ -111,6 +111,26 @@ func TestHistoryDirUsesXDGAndMigratesLegacyFiles(t *testing.T) {
 	if err != nil || string(got) != line {
 		t.Fatalf("migrated history = %q, %v", got, err)
 	}
+	if _, err := os.Stat(legacy); err != nil {
+		t.Fatalf("legacy source should remain: %v", err)
+	}
+	if _, err := ReadHistory(target); err != nil {
+		t.Fatalf("repeat migration: %v", err)
+	}
+	got, err = os.ReadFile(filepath.Join(target, "old.jsonl"))
+	if err != nil || string(got) != line {
+		t.Fatalf("repeat migration duplicated or changed data: %q, %v", got, err)
+	}
+	const callers = 8
+	errs := make(chan error, callers)
+	for i := 0; i < callers; i++ {
+		go func() { _, err := ReadHistory(target); errs <- err }()
+	}
+	for i := 0; i < callers; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent migration/read: %v", err)
+		}
+	}
 }
 
 func TestRenderTimelineText_Empty(t *testing.T) {

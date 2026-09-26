@@ -76,6 +76,9 @@ func TestDefaultDBPathUsesXDGAndBacksUpLegacyDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Insert(sampleCall("legacy-session", "migration-check", 4, 0)); err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -89,6 +92,25 @@ func TestDefaultDBPathUsesXDGAndBacksUpLegacyDB(t *testing.T) {
 	}
 	if _, err := os.Stat(got); err != nil {
 		t.Fatalf("migrated db missing: %v", err)
+	}
+	legacyDB, err := sql.Open("sqlite", got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacyDB.Close()
+	var legacyTables int
+	if err := legacyDB.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='tool_calls'").Scan(&legacyTables); err != nil {
+		t.Fatal(err)
+	}
+	if legacyTables != 1 {
+		t.Fatalf("migrated tool_calls table count = %d", legacyTables)
+	}
+	var copiedRows int64
+	if err := legacyDB.QueryRow("SELECT count(*) FROM tool_calls WHERE tool_name='migration-check'").Scan(&copiedRows); err != nil {
+		t.Fatal(err)
+	}
+	if copiedRows != 1 {
+		t.Fatalf("migrated tool_calls rows = %d, want 1", copiedRows)
 	}
 }
 

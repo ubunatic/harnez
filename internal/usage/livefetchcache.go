@@ -61,9 +61,18 @@ func liveFetchCachePath(agentDir string) string {
 	home, _ := os.UserHomeDir()
 	if home != "" {
 		clean := filepath.Clean(agentDir)
-		if clean == filepath.Join(home, ".claude") || clean == filepath.Join(home, ".codex") || strings.HasPrefix(clean, filepath.Join(home, ".gemini")) {
+		provider := ""
+		switch {
+		case clean == filepath.Join(home, ".claude"):
+			provider = "claude"
+		case clean == filepath.Join(home, ".codex"):
+			provider = "codex"
+		case strings.HasPrefix(clean, filepath.Join(home, ".gemini")):
+			provider = "agy"
+		}
+		if provider != "" {
 			legacy := filepath.Join(agentDir, liveFetchCacheFilename)
-			target := filepath.Join(xdgpath.CacheHome(), "harnez", "quota-cache.json")
+			target := filepath.Join(xdgpath.CacheHome(), "harnez", "quota-cache-"+provider+".json")
 			if _, err := os.Stat(target); os.IsNotExist(err) {
 				if data, err := os.ReadFile(legacy); err == nil && json.Valid(data) {
 					_ = os.MkdirAll(filepath.Dir(target), 0o700)

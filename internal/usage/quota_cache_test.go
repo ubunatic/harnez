@@ -70,12 +70,36 @@ func TestQuotaCacheMigratesToXDGCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := liveFetchCachePath(legacyDir)
-	if want := filepath.Join(cache, "harnez", "quota-cache.json"); path != want {
+	if want := filepath.Join(cache, "harnez", "quota-cache-claude.json"); path != want {
 		t.Fatalf("cache path = %s, want %s", path, want)
 	}
 	got, err := os.ReadFile(path)
 	if err != nil || string(got) != string(payload) {
 		t.Fatalf("migrated cache = %q, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(legacyDir, liveFetchCacheFilename)); err != nil {
+		t.Fatalf("legacy cache should remain: %v", err)
+	}
+}
+
+func TestQuotaCachePathsAreProviderIsolated(t *testing.T) {
+	home, cache := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", cache)
+	paths := map[string]string{
+		"claude": liveFetchCachePath(filepath.Join(home, ".claude")),
+		"codex":  liveFetchCachePath(filepath.Join(home, ".codex")),
+		"agy":    liveFetchCachePath(filepath.Join(home, ".gemini", "antigravity-cli")),
+	}
+	seen := make(map[string]bool)
+	for provider, path := range paths {
+		if seen[path] {
+			t.Fatalf("%s shares cache path %s", provider, path)
+		}
+		seen[path] = true
+		if filepath.Base(path) != "quota-cache-"+provider+".json" {
+			t.Errorf("%s cache path = %s", provider, path)
+		}
 	}
 }
 

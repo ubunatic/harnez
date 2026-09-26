@@ -65,6 +65,11 @@ func migrateLegacyHistory(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
+	migrationLock, ok := lockHistoryFile(filepath.Join(dir, ".legacy-migration"))
+	if !ok {
+		return fmt.Errorf("lock legacy history migration in %s", dir)
+	}
+	defer unlockHistoryFile(migrationLock)
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
 			continue
@@ -75,33 +80,41 @@ func migrateLegacyHistory(dir string) error {
 		if err != nil {
 			return err
 		}
-		if _, err := os.Stat(dst); os.IsNotExist(err) {
-			if err := os.WriteFile(dst, data, 0o600); err != nil {
-				return err
-			}
-			if err := os.Remove(src); err != nil {
-				return err
-			}
-			continue
-		}
 		lock, ok := lockHistoryFile(dst)
 		if !ok {
 			return fmt.Errorf("lock history file %s", dst)
 		}
-		f, err := os.OpenFile(dst, os.O_APPEND|os.O_WRONLY, 0o600)
+		old, readErr := os.ReadFile(dst)
+		if readErr != nil && !os.IsNotExist(readErr) {
+			unlockHistoryFile(lock)
+			return readErr
+		}
+		seen := make(map[string]struct{})
+		var merged strings.Builder
+		for _, blob := range [][]byte{old, data} {
+			for _, line := range strings.Split(string(blob), "\n") {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				if _, exists := seen[line]; exists {
+					continue
+				}
+				seen[line] = struct{}{}
+				merged.WriteString(line)
+				merged.WriteByte('\n')
+			}
+		}
+		tmp := dst + ".migrate.tmp"
+		err = os.WriteFile(tmp, []byte(merged.String()), 0o600)
 		if err == nil {
-			_, err = f.Write(data)
-			_ = f.Close()
+			err = os.Rename(tmp, dst)
 		}
 		unlockHistoryFile(lock)
 		if err != nil {
 			return err
 		}
-		if err := os.Remove(src); err != nil {
-			return err
-		}
 	}
-	_ = os.Remove(legacy)
 	return nil
 }
 
