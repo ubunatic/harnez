@@ -27,3 +27,11 @@ stopped with 0 tokens used, so it never did any work. The user had to catch the 
   exhausted, and name cheaper available alternatives.
 - Tests: a fake quota cache with agy exhausted gives the marker in `agent models` and makes
   `agent start --model agy:...` refuse (or warn).
+
+## M2 — Pre-Work / Required Refinements (from neus feedback, 2026-09-27)
+
+- Real `harnez agent models` shows `unknown (681h47m)` on every row, agy included, although agy is exhausted.
+  The snapshot read is 28 days old. Check first that the resolver reads the cache the collectors write *now*
+  (issue 598 moved caches to XDG paths); a reader on an abandoned path is the likely bug.
+- Old data must read `stale (28d)`, not `unknown`; reserve `unknown` for no data. Use a compact age (`4m`, `3h`, `28d`).
+- Verify against the live cache: agy must show `exhausted` when `harnez usage` shows it at 0 remaining.

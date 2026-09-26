@@ -32,3 +32,4 @@ table because its TUI rating (`~`) beat luna's (`-`) and its listed cost was low
 `34d79de`, `4497d91`: flash38 USE text says escalation-only/avoid for developer work, developer role removed (reviewer, advisor remain); lean-sprint skill prefers luna, then terra, no agy developers. Cost kept at 4: no measured agy cost data. `harnez apply` done. Awaiting neus feedback.
 - neus (2026-09-27): current sprint 019 already runs on codex:luna:med; will confirm the model pick on its next sprint (its `harnez init` awaits user approval).
 - neus (2026-09-27): `harnez init` applied (neus 00edce4); new Start line, `-p` on start confirmed in --help. Runtime confirmation follows after its next dispatch.
+- neus (2026-09-27): pick landed on codex:luna:med. Gap: agy:flash37:low/med and agy:sonnet:low still list the developer role. Pre-work: drop developer from all agy models, or state why one keeps it.

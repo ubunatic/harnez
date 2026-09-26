@@ -125,3 +125,4 @@ from a normal (foreground) Bash call. The run did not appear in the user's backg
 `2824879`: `agent start`/`resume` accept `-p/--prompt`; managed Start line teaches a native background shell without `--detach`; test parses every managed-block `harnez agent` example through Cobra. `harnez apply` done. Awaiting reporter feedback after `harnez init`.
 - neus feedback (2026-09-27): since the incident it already runs `start`/`resume` without `--detach` in native background shells and the user sees them; `harnez init` there awaits user approval. Final confirmation follows after its next dispatch.
 - neus (2026-09-27): `harnez init` applied (neus 00edce4); new Start line, `-p` on start confirmed in --help. Runtime confirmation follows after its next dispatch.
+- neus (2026-09-27): confirmed at runtime: `start ... -p` under run_in_background is visible (neus-021-luna). Remaining 581 scope: the Case 1 notice.
