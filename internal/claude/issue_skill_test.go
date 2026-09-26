@@ -37,6 +37,7 @@ func TestIssueCommandAndSkillInstallToEveryConfiguredTarget(t *testing.T) {
 			t.Errorf("expected skill frontmatter in %s, got:\n%s", path, content)
 		}
 		assertIssueTLDR(t, path, content)
+		assertIssueGoalExitClause(t, path, content)
 	}
 
 	out, err := captureStdoutClaudeSkills(func() error {
@@ -47,6 +48,18 @@ func TestIssueCommandAndSkillInstallToEveryConfiguredTarget(t *testing.T) {
 	}
 	if !strings.Contains(out, "No changes.") {
 		t.Errorf("expected second ApplyAll to be idempotent, got:\n%s", out)
+	}
+}
+
+func assertIssueGoalExitClause(t *testing.T, path, content string) {
+	t.Helper()
+	for _, want := range []string{
+		"Always define a `/goal` with an exit clause",
+		"stop and report when blocked on a user decision or denied permission",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("expected %s to contain %q, got:\n%s", path, want, content)
+		}
 	}
 }
 

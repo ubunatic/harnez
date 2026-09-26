@@ -50,6 +50,7 @@ For a single focused ticket: **Clean Goal Handoff** (one objective; **Trust the 
 | Independent Reviewer | Read-only + diff | Audits diff vs. acceptance criteria | Spawned in Phase 3 |
 
 ## 6. Anti-Patterns to Avoid
+- **Goals Without Exit Clauses** — a `/goal` without an exit clause deadlocks the Stop hook when progress needs user input.
 - **Parallel Writing** — multiple write-permitted subagents on one workspace at once.
 - **Blocking Handoff Waits** — treating a handoff as license to block the main chat.
 - **Silent Verification** — assuming a fix works without running tests/canaries.

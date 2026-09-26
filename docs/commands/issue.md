@@ -56,7 +56,7 @@ Do not assume a child inherited these documents or conversation history.
 Leave the exploratory steps to the selected executor: duplicate
 search, inspecting nearby tickets for local conventions, choosing priority independently
 from severity, and drafting the ticket body:
-- **Always define a `/goal`**: Every issue must explicitly define a `/goal` (or clear Goal statement) that specifies what the agent should work toward and achieve (the desired end-state and definition of done).
+- **Always define a `/goal` with an exit clause**: Every issue must explicitly define a `/goal` (or clear Goal statement) that specifies the desired end-state, definition of done, and when to stop if blocked on user input or a denied permission. Example: `/goal Implement the fix and verify it, or stop and report when blocked on a user decision or denied permission.`
 - **Keep issues short and brief**: When the goal is clear, keep tickets lean without over-specifying low-level implementation details or hypothetical steps. Only add numbered Milestones (`M1`, `M2`...) when the task genuinely requires staged execution, distinct review gates, or multi-phase handoffs.
 - **Issue Handling & Live Status Verification**: Because issues may sit in the backlog for days or weeks as the project evolves, any agent picking up a ticket must always check the live project/code status and recent commit history before starting work, re-verifying assumptions against current code rather than blindly following stale references. The ticket's `/goal` serves as the durable north star.
 - For exploratory requests, record uncertainties instead of inventing implementation details.
