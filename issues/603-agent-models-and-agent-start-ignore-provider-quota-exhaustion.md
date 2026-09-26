@@ -48,3 +48,12 @@ stopped with 0 tokens used, so it never did any work. The user had to catch the 
   read as stale in `agent models`.
 - Verify again with pasted rows from both commands.
 - **M3 delivered (consistent age, any-window exhaustion)** `dc86ac5`. Live: all agy rows `stale (44m) exhausted`, matching `harnez usage` (Gemini 5h window 100%). Host test-q1 green. `harnez apply` done. Awaiting neus feedback.
+- neus (2026-09-27): M3 matches its view (agy `stale (45m) exhausted`, luna/terra `available`).
+
+## M4 — Pre-Work / Required Refinements (neus feedback)
+
+- A window at 100% cannot recover before its reset time. If the cached window has a reset timestamp still in the
+  future, treat the pool as `exhausted` and **block** `agent start`, however old the snapshot is. Staleness only
+  downgrades to non-blocking once that reset time has passed (then show `stale (<age>)`, since usage may have reset).
+- Show the reset in the cell, e.g. `exhausted (resets 1h45m)`.
+- Test: stale snapshot with a future reset blocks; stale snapshot with a past reset does not.
