@@ -41,8 +41,20 @@ A dedicated invoke-only `/harnez-status` skill provides a rapid self-check contr
 - Outputs a brief, compact confirmation table/checklist (under 15 lines).
 - Directly answers the 4 checklist categories without conversational filler.
 
-## 3. Acceptance Criteria
+## 3. Sprint Milestones
+
+- **M1 — Skill Definition & Registration**:
+  - Author `docs/commands/HarnezStatus.md` (invoked via `/harnez-status` or `/harnez status`).
+  - Register in `config.yaml` / `internal/claude/` skill bundling templates as invoke-only.
+- **M2 — Verification, Doc Sync & Smoke Tests**:
+  - Verify skill output adhering to the compact <15 lines contract.
+  - Run `harnez init -d .` and `make test-q1`.
+- **M3 — Teardown & Ticket Close**:
+  - Teardown subagents and close ticket #599.
+
+## 4. Acceptance Criteria
 
 - Skill definition added to `docs/commands/HarnezStatus.md` and registered in `config.yaml` / skill templates.
 - Invoking `/harnez status` produces a concise, structured confirmation of the four capability areas.
 - No side effects or file mutations on execution.
+
