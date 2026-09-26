@@ -33,3 +33,12 @@ Observed goal: `playback some demo texts with my "cloned" voice` (voxi). It was 
   the agent's reply is a question to the user, release the stop and tell the user the goal is paused.
 - **Verify:** reproduce with a goal that needs a denied permission; expect at most N re-fires,
   then a clean stop with a pause message.
+
+## Host premise check (peer-assistant, 2026-09-27)
+
+- The `/goal` Stop hook and its evaluator are Claude Code built-ins; harnez installs no goal hook (`harnez find code`).
+  Deadlock detection and re-fire limits (§3 bullets 1-2) are upstream, out of harnez's reach.
+- harnez-side fix: harnez guidance teaches agents to write `/goal` conditions (`docs/commands/issue.md`,
+  `docs/commands/reverse-sprint.md`). Every goal it teaches must carry an exit clause, e.g.
+  "... or stop and report when blocked on a user decision or a denied permission". Add that rule where goals are
+  written and to `docs/practices/AgenticLoop.md` anti-patterns, with a test on the skill text.
