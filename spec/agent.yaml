@@ -106,7 +106,7 @@ models:
     provider: agy
     name: gemini-3.8-flash
     tier: low
-    roles: reviewer, advisor, developer
+    roles: reviewer, advisor
     cost: 4
     eff: "~"
     skills: Go~ TUI~ SQL~

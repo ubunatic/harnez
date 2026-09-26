@@ -24,6 +24,9 @@ func TestFlash38EscalationGuidanceAndLeanSprintDeveloperPreference(t *testing.T)
 	if flash38.Cost != 4 {
 		t.Errorf("agy:flash38 cost = %d, want 4 (agy quota cost remains unmeasured)", flash38.Cost)
 	}
+	if flash38.Roles != "reviewer, advisor" {
+		t.Errorf("agy:flash38 roles = %q, want reviewer, advisor", flash38.Roles)
+	}
 	if !strings.Contains(flash38.Use, "escalation-only") || !strings.Contains(flash38.Use, "avoid for developer work") {
 		t.Errorf("agy:flash38 use = %q, want escalation-only and avoid developer work", flash38.Use)
 	}
