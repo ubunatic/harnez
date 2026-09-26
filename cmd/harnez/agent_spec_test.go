@@ -26,23 +26,20 @@ func TestAgentDefaultModelIsMarkedOnce(t *testing.T) {
 }
 
 func TestAgentModelsShowsCachedAvailabilityAndAge(t *testing.T) {
-	stateHome := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", stateHome)
+	cacheHome := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cacheHome)
 	now := time.Now()
 	reset := now.Add(time.Hour)
-	if err := usage.WriteAgentSnapshot(usage.StateDir(""), "agy", usage.AgentUsage{AgentID: "agy", ModelGroups: []usage.ModelGroup{{Name: "Gemini Models", Windows: []usage.QuotaWindow{{Name: "weekly", RemainingPercent: 0, ResetAt: &reset}, {Name: "5h", RemainingPercent: 0, ResetAt: &reset}}}}}); err != nil {
-		t.Fatal(err)
-	}
-	snapshot, err := usage.ReadAgentSnapshot(usage.StateDir(""), "agy")
-	if err != nil || snapshot == nil {
-		t.Fatalf("read seeded snapshot: snapshot=%v err=%v", snapshot, err)
-	}
-	snapshot.FetchedAt = now.Add(-4 * time.Minute)
-	data, err := json.Marshal(snapshot)
+	cache := liveQuotaFixture{FetchedAt: now.Add(-4 * time.Minute), Payload: agyQuotaFixture{ModelGroups: []agyModelGroupFixture{{Name: "Gemini Models", Windows: []usage.QuotaWindow{{Name: "weekly", RemainingPercent: 0, ResetAt: &reset}, {Name: "5h", RemainingPercent: 0, ResetAt: &reset}}}}}}
+	data, err := json.Marshal(cache)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(usage.StateDir(""), "agy.json"), data, 0600); err != nil {
+	quotaCacheDir := filepath.Join(cacheHome, "harnez")
+	if err := os.MkdirAll(quotaCacheDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(quotaCacheDir, "quota-cache-agy.json"), data, 0600); err != nil {
 		t.Fatal(err)
 	}
 	var out strings.Builder
@@ -55,6 +52,49 @@ func TestAgentModelsShowsCachedAvailabilityAndAge(t *testing.T) {
 	if !strings.Contains(out.String(), "AVAILABILITY") || !strings.Contains(out.String(), "exhausted (4m)") || !strings.Contains(out.String(), "unknown") {
 		t.Fatalf("models output lacks quota marker/age or unknown markers: %q", out.String())
 	}
+}
+
+func TestAgentModelsShowsStaleQuotaAge(t *testing.T) {
+	cacheHome := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cacheHome)
+	now := time.Now()
+	reset := now.Add(time.Hour)
+	cache := liveQuotaFixture{FetchedAt: now.Add(-28 * 24 * time.Hour), Payload: agyQuotaFixture{ModelGroups: []agyModelGroupFixture{{Name: "Gemini Models", Windows: []usage.QuotaWindow{{Name: "weekly", RemainingPercent: 0, ResetAt: &reset}}}}}}
+	data, err := json.Marshal(cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	quotaCacheDir := filepath.Join(cacheHome, "harnez")
+	if err := os.MkdirAll(quotaCacheDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(quotaCacheDir, "quota-cache-agy.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"models"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "stale (28d) exhausted") || !strings.Contains(out.String(), "unknown") {
+		t.Fatalf("models output lacks stale age or unknown for missing provider data: %q", out.String())
+	}
+}
+
+type liveQuotaFixture struct {
+	FetchedAt time.Time       `json:"fetched_at"`
+	Payload   agyQuotaFixture `json:"payload"`
+}
+
+type agyQuotaFixture struct {
+	ModelGroups []agyModelGroupFixture `json:"model_groups"`
+}
+
+type agyModelGroupFixture struct {
+	Name    string              `json:"name"`
+	Windows []usage.QuotaWindow `json:"windows"`
 }
 
 func TestAgentStartRejectsKnownExhaustedQuotaAndNamesOverrideAndAlternatives(t *testing.T) {

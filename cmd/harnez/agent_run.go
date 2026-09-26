@@ -126,6 +126,9 @@ func quotaAgeLabel(age time.Duration) string {
 	if age < time.Minute {
 		return age.Round(time.Second).String()
 	}
+	if age >= 24*time.Hour {
+		return fmt.Sprintf("%dd", int(age/(24*time.Hour)))
+	}
 	if age < time.Hour {
 		return fmt.Sprintf("%dm", int(age/time.Minute))
 	}

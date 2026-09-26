@@ -1464,6 +1464,12 @@ func TestTokenSummarySeparatesNewFromCached(t *testing.T) {
 }
 
 func TestStreamingResumeKeepsStderrQuiet(t *testing.T) {
+	// Isolate the caller's Harnez session state so a pending session tip
+	// cannot leak into this command's deliberately quiet stderr.
+	t.Setenv("HOME", t.TempDir())
+	for _, name := range resolve.SessionEnvVars {
+		t.Setenv(name, "")
+	}
 	old := agentDriver
 	agentDriver = func(subagent.Model, string) subagent.Driver { return &streamDriver{} }
 	defer func() { agentDriver = old }()

@@ -46,37 +46,48 @@ const AgentQuotaAvailabilityMaxAge = DefaultCacheStaleness
 
 // ProviderQuotaAvailability summarizes cached quota evidence for one model.
 type ProviderQuotaAvailability struct {
-	State string
-	Age   time.Duration
+	State     string
+	Age       time.Duration
+	Exhausted bool
 }
 
-// CachedProviderQuotaAvailability reports available, exhausted, or unknown
-// from a collector snapshot. Only a fresh, active exhausted window confirms
-// exhaustion; missing, partial, failed, expired, and stale data stays unknown.
+// CachedProviderQuotaAvailability reports available, exhausted, stale, or
+// unknown from the provider-isolated live quota cache. Only a fresh, active
+// exhausted window confirms exhaustion; missing quota data stays unknown.
 func CachedProviderQuotaAvailability(provider, model string, now time.Time) ProviderQuotaAvailability {
 	state := ProviderQuotaAvailability{State: "unknown"}
-	snap, err := ReadAgentSnapshot(StateDir(""), provider)
-	if err != nil || snap == nil {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
 		return state
 	}
-	state.Age = now.Sub(snap.FetchedAt)
-	if state.Age < 0 {
-		state.Age = 0
-	}
-	if state.Age > AgentQuotaAvailabilityMaxAge || snap.Usage.QuotaFetchError != "" {
-		return state
-	}
-
-	windows := []*QuotaWindow{}
+	var fetchedAt time.Time
+	var windows []*QuotaWindow
 	switch provider {
-	case "claude", "codex":
-		windows = append(windows, snap.Usage.Session, snap.Usage.Weekly)
+	case "claude":
+		cache := readLiveFetchCache[claudeQuotaPayload](liveFetchCachePath(filepath.Join(home, ".claude")))
+		if cache == nil {
+			return state
+		}
+		fetchedAt = cache.FetchedAt
+		windows = []*QuotaWindow{cache.Payload.Session, cache.Payload.Weekly}
+	case "codex":
+		cache := readLiveFetchCache[codexQuotaPayload](liveFetchCachePath(filepath.Join(home, ".codex")))
+		if cache == nil {
+			return state
+		}
+		fetchedAt = cache.FetchedAt
+		windows = []*QuotaWindow{cache.Payload.Session, cache.Payload.Weekly}
 	case "agy":
+		cache := readLiveFetchCache[agyQuotaPayload](liveFetchCachePath(filepath.Join(home, ".gemini", "antigravity-cli")))
+		if cache == nil {
+			return state
+		}
+		fetchedAt = cache.FetchedAt
 		want := "gemini models"
 		if !strings.Contains(strings.ToLower(model), "gemini") && !strings.Contains(strings.ToLower(model), "flash") && !strings.Contains(strings.ToLower(model), "pro") {
 			want = "claude and gpt models"
 		}
-		for _, group := range snap.Usage.ModelGroups {
+		for _, group := range cache.Payload.ModelGroups {
 			if strings.EqualFold(group.Name, want) {
 				for i := range group.Windows {
 					windows = append(windows, &group.Windows[i])
@@ -86,20 +97,33 @@ func CachedProviderQuotaAvailability(provider, model string, now time.Time) Prov
 	default:
 		return state
 	}
-
-	seen, exhausted := false, false
+	seen := false
 	for _, window := range windows {
-		if window == nil {
-			continue
-		}
-		seen = true
-		if window.RemainingPercent <= 0 && window.ResetAt != nil && window.ResetAt.After(now) {
-			exhausted = true
+		if window != nil {
+			seen = true
+			break
 		}
 	}
-	if exhausted {
+	if !seen {
+		return state
+	}
+	state.Age = now.Sub(fetchedAt)
+	if state.Age < 0 {
+		state.Age = 0
+	}
+	for _, window := range windows {
+		if window != nil && window.RemainingPercent <= 0 && window.ResetAt != nil && window.ResetAt.After(now) {
+			state.Exhausted = true
+		}
+	}
+	if state.Age > AgentQuotaAvailabilityMaxAge {
+		state.State = "stale"
+		return state
+	}
+
+	if state.Exhausted {
 		state.State = "exhausted"
-	} else if seen {
+	} else {
 		state.State = "available"
 	}
 	return state
