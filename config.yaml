@@ -351,6 +351,10 @@ skills:
     description: "Execute a lean fresh-handoff sprint (Goal Handoff -> Autonomous Dev -> Inline Review -> Hygiene)"
     file: docs/commands/lean-sprint.md
 
+  - name: next
+    description: "Continue the most recent workflow on its next actionable item"
+    file: docs/commands/Next.md
+
   - name: sprinter
     description: "Delegate a full 5-phase sprint to a user-selected-model subagent that reads and executes the sprint skill"
     file: docs/commands/Sprinter.md
