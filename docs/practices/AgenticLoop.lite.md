@@ -60,6 +60,7 @@ For a single focused ticket: **Clean Goal Handoff** (one objective; **Trust the 
 - **Narrow String-Substitution Edits Over Structured Patches** — prefer `apply_patch`/whole-block replacement; measured **11.1%** failure rate for `Edit` vs. **4.2%** for `apply_patch` (2.6×) in the same repo.
 - **Baking Real Credentials In For A Fast Dev Loop** — no real hostnames/MACs/credentials "temporarily"; use RFC-1918/example values + a secret scanner from commit one.
 - **Orphaned Background Tasks** — leftover `tail -f`/watch loops/timers after work is done.
+- **Shell `&` Detaching** — never `&`/`nohup`/`disown` a command; use the harness's tracked background facility.
 - **Lost Context / Ephemeral-Only Retrospectives** — friction/bugs discussed in chat but never written to a durable doc/ticket.
 - **Rubber-Stamp Reviews** — a review that doesn't actually inspect assertions or diffs.
 - **Unbounded Doc Ingestion** — whole-file-reading `AGENTS.md`/bundled docs already in the active prompt.
