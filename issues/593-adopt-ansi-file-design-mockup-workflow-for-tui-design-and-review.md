@@ -27,20 +27,40 @@ This approach proved fast, clear, and eliminated ambiguity in visual expectation
 
 ## 2. Proposed Practice & Guidance
 
-Integrate this pattern into Harnez bundled documentation (`docs/CLIDesign.md` or a new `docs/TUIDesign.md`):
+Integrate this pattern into Harnez bundled documentation (`docs/TUIDesign.md`, `docs/CLIDesign.md`, and core `docs/practices/AgenticLoop.md`):
 
 ### The .ansi Mockup Lifecycle
-1. **Design Proposal**: Outline conceptual changes (active focus styling, line gutters, badges, keycaps).
-2. **Artifact Creation**: Generate a dedicated `docs/data/<app>-design-<nnn>.ansi` file:
-   - Target standard terminal geometries (e.g. 80x24, 100x30).
-   - Use standard ANSI 16/256/RGB escape sequences matching project themes.
-   - Ensure proper unicode character width and border column alignment.
-3. **Interactive Human Review**: Provide a simple `cat docs/data/<file>.ansi` command for the developer to inspect in their live terminal.
-4. **Commit Design Artifact**: Check the `.ansi` file into git under `docs/data/` for durability and visual regression reference.
-5. **Issue & Task Dispatch**: File an issue citing the `.ansi` file, allowing implementation agents (e.g., `luna:med`, `terra:med`) to work against an explicit, verifiable visual target.
+1. **Host-Crafted Visual Spec (High-Tier Model)**:
+   - The host orchestrator (e.g. Opus, Flash 3.7) one-shots the visual mockup directly to `docs/data/<app>-design-<nnn>.ansi` (or `docs/data/<app>-<subpane>-design-<nnn>.ansi` for partial widgets/sub-panes).
+   - Target standard terminal geometries (e.g. 80x24, 100x30, or bounded sub-pane dimensions like 40x12, 24x4).
+   - Use standard ANSI 16/256/RGB escape sequences matching project themes, with proper unicode column width and border alignment.
+2. **Interactive Human Review**:
+   - Provide a simple `cat docs/data/<file>.ansi` command for immediate native terminal inspection by the human developer.
+3. **Commit Design Artifact**:
+   - Check the `.ansi` file into git under `docs/data/` as a persistent, durable design spec and visual regression reference.
+4. **Concise Worker Dispatch (Low-Tier Worker)**:
+   - The host passes a simple 2–3 line directive to the lower developer agent (e.g., `luna:med`, `terra:low`):
+     *"Implement the TUI layout to match the visual spec at `docs/data/<file>.ansi`. Inspect with `cat docs/data/<file>.ansi`."*
+   - Avoids lengthy prose, prompt bloat, and repeated review cycles.
+5. **Core Rule Integration**:
+   - Keep the rule core and token-efficient across `docs/TUIDesign.md`, `docs/CLIDesign.md`, and `docs/practices/AgenticLoop.md` without requiring deep discovery.
 
-## 3. Acceptance Criteria
+## 3. Sprint Milestones
 
-- `docs/CLIDesign.md` (or `docs/TUIDesign.md`) includes a dedicated section on `.ansi` visual mockup workflows for TUI development.
-- Conventions specify storing design mockups under `docs/data/<name>-design-<nnn>.ansi`.
-- Harnez documentation reflects this as a recommended design-first practice before large TUI changes.
+- **M1 — TUIDesign & CLIDesign Updates**:
+  - Add the `.ansi` mockup workflow section to `docs/TUIDesign.md` covering whole-app and sub-pane mockups, storage under `docs/data/`, `cat` inspection, and high-tier host / low-tier worker split.
+  - Add cross-reference in `docs/CLIDesign.md`.
+- **M2 — Core Rule in AgenticLoop & Source Sync**:
+  - Add concise rule bullet in `docs/practices/AgenticLoop.md` (and `docs/practices/AgenticLoop.lite.md`).
+  - Sync managed root docs (`harnez init -d .`).
+  - Run verification (`make test` or `go test ./...`).
+- **M3 — Verification & Sprint Teardown**:
+  - Verify clean tree and close ticket #593.
+
+## 4. Acceptance Criteria
+
+- `docs/TUIDesign.md` includes the `.ansi` visual mockup workflow section (full-screen and sub-panes).
+- `docs/CLIDesign.md` links to the TUI mockup practice.
+- `docs/practices/AgenticLoop.md` has the concise core rule.
+- `harnez init -d .` runs cleanly without unwanted drift.
+
