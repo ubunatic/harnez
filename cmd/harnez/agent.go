@@ -218,12 +218,16 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
 	}
 	var startFiles []string
+	var startPrompt string
 	start := &cobra.Command{Use: "start [prompt...]", Short: "Start a new agent session", Example: "  harnez agent start --name w --model luna -f task.md -- \"extra instructions\"", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(planSpec)
 		if err != nil {
 			return err
 		}
 		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
+		if startPrompt != "" {
+			words = append([]string{startPrompt}, words...)
+		}
 		if rootPrompt != "" && strings.HasPrefix(rootPrompt, "--") {
 			return fmt.Errorf("-p needs prompt text but got flag %q; put -p last or use -- \"<text>\"", rootPrompt)
 		}
@@ -244,6 +248,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		return runStart(cmd, agentDeps{store: store, parent: parent, find: find}, req)
 	}}
 	start.Flags().StringSliceVarP(&startFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
+	start.Flags().StringVarP(&startPrompt, "prompt", "p", "", "prompt text")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 	start.Flags().BoolVar(&detach, "detach", false, "run the agent in the background")
 	start.Flags().BoolVar(&detach, "async", false, "alias for --detach")
@@ -440,12 +445,16 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 
 	var resumeFiles []string
 	var continueResume bool
+	var resumePrompt string
 	resume := &cobra.Command{Use: "resume [prompt...]", Short: "Resume an existing agent session", Example: "  harnez agent resume --name w \"next step\"", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(planSpec)
 		if err != nil {
 			return err
 		}
 		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
+		if resumePrompt != "" {
+			words = append([]string{resumePrompt}, words...)
+		}
 		if continueResume && name != "" {
 			return fmt.Errorf("resume: --continue cannot be combined with --name")
 		}
@@ -465,6 +474,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	_ = resume.RegisterFlagCompletionFunc("stream", flagValueCompletion(streamFull, streamStats))
 	resume.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 	resume.Flags().StringSliceVarP(&resumeFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
+	resume.Flags().StringVarP(&resumePrompt, "prompt", "p", "", "prompt text")
 	resume.Flags().BoolVarP(&continueResume, "continue", "c", false, "resume the most recently active attributable session")
 
 	list := &cobra.Command{Use: "list", Short: "List agent sessions", RunE: func(cmd *cobra.Command, _ []string) error {

@@ -60,7 +60,7 @@ The explicit verbs are:
 
 ```text
 harnez agent start --name w --model luna -f task.md -- "extra instructions"
-harnez agent start --detach --name w --model luna -p "background task"
+harnez agent start --name w --model luna -p "background task"
 harnez agent wait w --timeout 5m
 harnez agent resume --name w "next step"
 harnez agent chat

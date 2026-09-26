@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -36,6 +37,38 @@ func TestAgentCommandSurface(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("missing agent subcommand %q", name)
+		}
+	}
+}
+
+func TestManagedAgentExamplesParseAgainstCobra(t *testing.T) {
+	config, err := os.ReadFile("../../config.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sectionStart := strings.Index(string(config), "### Harnez Agent")
+	if sectionStart < 0 {
+		t.Fatal("managed Harnez Agent section not found")
+	}
+	sectionEnd := strings.Index(string(config[sectionStart:]), "### Code and Documentation Search")
+	if sectionEnd < 0 {
+		t.Fatal("end of managed Harnez Agent section not found")
+	}
+	section := string(config[sectionStart : sectionStart+sectionEnd])
+	examples := regexp.MustCompile("`(harnez agent [^`]+)`").FindAllStringSubmatch(section, -1)
+	if len(examples) == 0 {
+		t.Fatal("no harnez agent examples found in managed section")
+	}
+	for _, example := range examples {
+		fields := strings.Fields(example[1])
+		cmd, remaining, err := newAgentCmd().Find(fields[2:])
+		if err != nil {
+			t.Errorf("%q: resolve Cobra command: %v", example[1], err)
+			continue
+		}
+		if err := cmd.ParseFlags(remaining); err != nil {
+			t.Errorf("%q: parse Cobra flags: %v", example[1], err)
+			continue
 		}
 	}
 }
