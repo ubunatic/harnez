@@ -26,3 +26,11 @@ A host that trusts `status` would start a conflicting second writer.
 - If it shows `completed`: status must report `running` while a turn's process is alive, and `resume` should refuse
   with a clear message (not the raw codex error) when a turn is active.
 - Test with a fake driver holding a turn open.
+
+## 4. Peer Report (loom, 2026-09-27)
+- loom ran `harnez agent resume` in a foreground Bash call; `harnez exec` killed it after 1m
+  ("timeout kill after 1m0s; rerun with HTO=0 to lift") mid-turn, partial edits left on disk, and
+  `agent status` then showed `completed`. Second trigger for the same bug: a turn that was killed or
+  interrupted must be reported as `interrupted`/`failed`, not `completed`.
+- Guidance given: run `resume` as a tracked background job (Claude `run_in_background`) with `HTO=0`;
+  check with `agent status` / `agent wait`. A `resume --detach` flag is not planned (581 removed detaching).
