@@ -1,6 +1,6 @@
 # 598 — Migrate harnez telemetry and usage history out of ~/.claude to XDG ~/.cache or ~/.local/share
 
-**Status**: Open
+**Status**: Closed — Migrated telemetry, usage history, and provider quota caches to XDG paths with locked auto-migration
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Architecture / Telemetry / Storage
