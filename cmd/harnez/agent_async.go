@@ -31,6 +31,9 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	if err != nil {
 		return err
 	}
+	if err := rejectExhaustedQuota(modelSpec, model, req.AllowExhaustedQuota, providerAvailability); err != nil {
+		return err
+	}
 	if err := preflightCodex(cmd.Context(), model.Provider, nil, check); err != nil {
 		return fmt.Errorf("agent start preflight: %w", err)
 	}
@@ -79,7 +82,11 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 		_ = store.Save(sess)
 		return err
 	}
-	args := []string{"--store-dir", storeDir, "agent", "start", "--worker-session", id, "--json", "--model", modelSpec, "--role", role, "--name", req.Name, "--dir", dir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst], "--", req.Prompt}
+	args := []string{"--store-dir", storeDir, "agent", "start", "--worker-session", id, "--json", "--model", modelSpec, "--role", role, "--name", req.Name, "--dir", dir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst]}
+	if req.AllowExhaustedQuota {
+		args = append(args, "--allow-exhausted-quota")
+	}
+	args = append(args, "--", req.Prompt)
 	worker := exec.Command(exe, args...)
 	worker.Env = os.Environ()
 	worker.Stdin = nil

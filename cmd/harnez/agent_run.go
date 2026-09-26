@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,11 +25,12 @@ import (
 
 // agentDeps are the session-store and caller-identity hooks the runners need.
 type agentDeps struct {
-	store     func() (*subagent.FileSessionStore, error)
-	parent    func() string
-	find      func(*cobra.Command, *subagent.FileSessionStore, string) (*subagent.Session, error)
-	quota     func(context.Context, string, bool) usage.TurnQuotaReading
-	preflight func(context.Context) error
+	store        func() (*subagent.FileSessionStore, error)
+	parent       func() string
+	find         func(*cobra.Command, *subagent.FileSessionStore, string) (*subagent.Session, error)
+	quota        func(context.Context, string, bool) usage.TurnQuotaReading
+	availability func(string, string) usage.ProviderQuotaAvailability
+	preflight    func(context.Context) error
 }
 
 func preflightCodex(ctx context.Context, provider string, driver subagent.Driver, check func(context.Context) error) error {
@@ -112,8 +114,84 @@ func warnQuota1Changes(cmd *cobra.Command, dir string, turnStarted time.Time) {
 // StoredPrompt is what the session records (files as "path (N bytes)").
 type startRequest struct {
 	Prompt, StoredPrompt, Name, ModelSpec, Dir, StreamMode, Role string
-	JSON, PlanFirst                                              bool
+	JSON, PlanFirst, AllowExhaustedQuota                         bool
 	SessionID                                                    string
+}
+
+func providerAvailability(provider, model string) usage.ProviderQuotaAvailability {
+	return usage.CachedProviderQuotaAvailability(provider, model, time.Now())
+}
+
+func quotaAgeLabel(age time.Duration) string {
+	if age < time.Minute {
+		return age.Round(time.Second).String()
+	}
+	if age < time.Hour {
+		return fmt.Sprintf("%dm", int(age/time.Minute))
+	}
+	return fmt.Sprintf("%dh%dm", int(age/time.Hour), int(age/time.Minute)%60)
+}
+
+func rejectExhaustedQuota(spec string, model subagent.Model, override bool, availability func(string, string) usage.ProviderQuotaAvailability) error {
+	if override {
+		return nil
+	}
+	if availability == nil {
+		availability = providerAvailability
+	}
+	quota := availability(model.Provider, model.Name)
+	if quota.State != "exhausted" {
+		return nil
+	}
+	message := fmt.Sprintf("agent start %q refused: provider %s quota is exhausted (snapshot %s old); pass --allow-exhausted-quota to override", spec, model.Provider, quotaAgeLabel(quota.Age))
+	if alternatives := quotaAlternatives(model, availability); len(alternatives) > 0 {
+		message += "; available cheaper alternatives: " + strings.Join(alternatives, ", ")
+	}
+	return fmt.Errorf("%s", message)
+}
+
+func quotaAlternatives(selected subagent.Model, availability func(string, string) usage.ProviderQuotaAvailability) []string {
+	if availability == nil {
+		availability = providerAvailability
+	}
+	type candidate struct {
+		spec string
+		cost int
+	}
+	var candidates []candidate
+	seen := map[string]bool{}
+	for _, entry := range subagent.KnownModelEntries() {
+		if entry.Model.Provider == selected.Provider || entry.Cost >= quotaModelCost(selected) || seen[entry.Model.Spec()] {
+			continue
+		}
+		if availability(entry.Model.Provider, entry.Model.Name).State == "available" {
+			seen[entry.Model.Spec()] = true
+			candidates = append(candidates, candidate{spec: entry.Model.Spec(), cost: entry.Cost})
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].cost == candidates[j].cost {
+			return candidates[i].spec < candidates[j].spec
+		}
+		return candidates[i].cost < candidates[j].cost
+	})
+	if len(candidates) > 3 {
+		candidates = candidates[:3]
+	}
+	out := make([]string, len(candidates))
+	for i := range candidates {
+		out[i] = candidates[i].spec
+	}
+	return out
+}
+
+func quotaModelCost(model subagent.Model) int {
+	for _, entry := range subagent.KnownModelEntries() {
+		if entry.Model.Provider == model.Provider && entry.Model.Name == model.Name {
+			return entry.Cost
+		}
+	}
+	return 0
 }
 
 // resumeRequest describes one turn on an existing session: chosen by Name,
@@ -164,6 +242,9 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	m, err := subagent.ResolveModel(spec)
 	if err != nil {
 		return fmt.Errorf("agent start %q rejected: %w; ask for guidance rather than using a different model", spec, err)
+	}
+	if err := rejectExhaustedQuota(spec, m, req.AllowExhaustedQuota, d.availability); err != nil {
+		return err
 	}
 	role, err := startRole(req.Role)
 	if err != nil {

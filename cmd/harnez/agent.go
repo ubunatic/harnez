@@ -42,7 +42,7 @@ type agentOutput struct {
 }
 
 func newAgentCmd() *cobra.Command {
-	var jsonOut, children, all, detach bool
+	var jsonOut, children, all, detach, allowExhaustedQuota bool
 	var workerID string
 	var storeDir, workDir, name, modelSpec, streamMode, roleSpec string
 	var planSpec string
@@ -73,6 +73,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	root.PersistentFlags().StringVarP(&workDir, "dir", "d", ".", "working directory or session scope")
 	root.PersistentFlags().StringVar(&name, "name", "", "session name")
 	root.PersistentFlags().StringVar(&modelSpec, "model", "", "provider:model[:tier]")
+	root.PersistentFlags().BoolVar(&allowExhaustedQuota, "allow-exhausted-quota", false, "start even when cached provider quota is exhausted")
 	root.PersistentFlags().StringVar(&roleSpec, "role", "", "agent role for a new session: orchestrator, developer, reviewer or advisor (default from spec/agent.yaml)")
 	_ = root.RegisterFlagCompletionFunc("role", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		names, _ := subagent.RoleNames()
@@ -199,7 +200,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			} else if !strings.Contains(findErr.Error(), "not found") {
 				return findErr
 			}
-			return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+			return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: allowExhaustedQuota})
 		}
 		if rootContinue {
 			s, e := store()
@@ -215,7 +216,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 				return runResume(cmd, deps, resumeRequest{Role: roleSpec, Prompt: prompt, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: true, JSON: jsonOut, PlanFirst: planFirst})
 			}
 		}
-		return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+		return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: allowExhaustedQuota})
 	}
 	var startFiles []string
 	var startPrompt string
@@ -238,7 +239,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if err != nil {
 			return err
 		}
-		req := startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, SessionID: workerID}
+		req := startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, SessionID: workerID, AllowExhaustedQuota: allowExhaustedQuota}
 		if workerID != "" {
 			return runDetachedWorker(cmd, req, storeDir)
 		}
@@ -252,6 +253,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 	start.Flags().BoolVar(&detach, "detach", false, "run the agent in the background")
 	start.Flags().BoolVar(&detach, "async", false, "alias for --detach")
+	start.Flags().BoolVar(&allowExhaustedQuota, "allow-exhausted-quota", false, "start even when cached provider quota is exhausted")
 	start.Flags().StringVar(&workerID, "worker-session", "", "internal detached worker session ID")
 	start.Flags().StringVar(&planSpec, "plan", "no", "planning gate: yes or no")
 	_ = start.RegisterFlagCompletionFunc("plan", flagValueCompletion("yes", "no"))
@@ -271,7 +273,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			return nil
 		}
 		tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
-		fmt.Fprintln(tw, "SPEC\tMODEL\tEFFORT\tCOST\tEFF\tSKILLS\tROLES\tUSE")
+		fmt.Fprintln(tw, "SPEC\tMODEL\tAVAILABILITY\tEFFORT\tCOST\tEFF\tSKILLS\tROLES\tUSE")
 		for _, e := range subagent.KnownModelEntries() {
 			spec := e.Spec
 			if spec == defaultSpec {
@@ -281,7 +283,14 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			if !e.Effort {
 				effort = "no"
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", spec, e.Model.Name, effort, e.Cost, e.Eff, e.Skills, e.Roles, e.Use)
+			availability := providerAvailability(e.Model.Provider, e.Model.Name)
+			marker := availability.State
+			if marker == "unknown" && availability.Age > 0 {
+				marker = fmt.Sprintf("unknown (%s)", quotaAgeLabel(availability.Age))
+			} else if marker == "exhausted" {
+				marker = fmt.Sprintf("exhausted (%s)", quotaAgeLabel(availability.Age))
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", spec, e.Model.Name, marker, effort, e.Cost, e.Eff, e.Skills, e.Roles, e.Use)
 		}
 		if err := tw.Flush(); err != nil {
 			return err

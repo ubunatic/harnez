@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -38,6 +39,71 @@ const DefaultCollectorInterval = 900 * time.Second
 // could blank out real quota numbers that were only 31 minutes old (issue
 // 101).
 const DefaultCacheStaleness = 2 * DefaultCollectorInterval
+
+// AgentQuotaAvailabilityMaxAge is the maximum age at which a collector
+// snapshot can confirm that an agent provider is exhausted.
+const AgentQuotaAvailabilityMaxAge = DefaultCacheStaleness
+
+// ProviderQuotaAvailability summarizes cached quota evidence for one model.
+type ProviderQuotaAvailability struct {
+	State string
+	Age   time.Duration
+}
+
+// CachedProviderQuotaAvailability reports available, exhausted, or unknown
+// from a collector snapshot. Only a fresh, active exhausted window confirms
+// exhaustion; missing, partial, failed, expired, and stale data stays unknown.
+func CachedProviderQuotaAvailability(provider, model string, now time.Time) ProviderQuotaAvailability {
+	state := ProviderQuotaAvailability{State: "unknown"}
+	snap, err := ReadAgentSnapshot(StateDir(""), provider)
+	if err != nil || snap == nil {
+		return state
+	}
+	state.Age = now.Sub(snap.FetchedAt)
+	if state.Age < 0 {
+		state.Age = 0
+	}
+	if state.Age > AgentQuotaAvailabilityMaxAge || snap.Usage.QuotaFetchError != "" {
+		return state
+	}
+
+	windows := []*QuotaWindow{}
+	switch provider {
+	case "claude", "codex":
+		windows = append(windows, snap.Usage.Session, snap.Usage.Weekly)
+	case "agy":
+		want := "gemini models"
+		if !strings.Contains(strings.ToLower(model), "gemini") && !strings.Contains(strings.ToLower(model), "flash") && !strings.Contains(strings.ToLower(model), "pro") {
+			want = "claude and gpt models"
+		}
+		for _, group := range snap.Usage.ModelGroups {
+			if strings.EqualFold(group.Name, want) {
+				for i := range group.Windows {
+					windows = append(windows, &group.Windows[i])
+				}
+			}
+		}
+	default:
+		return state
+	}
+
+	seen, exhausted := false, false
+	for _, window := range windows {
+		if window == nil {
+			continue
+		}
+		seen = true
+		if window.RemainingPercent <= 0 && window.ResetAt != nil && window.ResetAt.After(now) {
+			exhausted = true
+		}
+	}
+	if exhausted {
+		state.State = "exhausted"
+	} else if seen {
+		state.State = "available"
+	}
+	return state
+}
 
 // DefaultDisplayStaleness is how old an agent's last known snapshot may be
 // before renderers (RenderText, buildWatchFrame) auto-hide it entirely
