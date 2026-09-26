@@ -1,6 +1,6 @@
 # 603 — agent models and agent start ignore provider quota exhaustion
 
-**Status**: Closed — M1-M4 delivered, verified by neus
+**Status**: Open — M4 test is time/ambient-dependent, fails now
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -59,3 +59,10 @@ stopped with 0 tokens used, so it never did any work. The user had to catch the 
 - Test: stale snapshot with a future reset blocks; stale snapshot with a past reset does not.
 - **M4 delivered (block until reset)** `d47c3f1`. Live: agy rows `exhausted (resets 1h38m)` / `(resets 19h6m)`; `agent start --model agy:flash38:low` refused with override flag and `codex:luna:low` alternative (host-verified). flash37 USE wording fixed (604). Awaiting neus confirmation.
 - neus (2026-09-27): verified; agy rows exhausted with reset times, no agy developer role, `agent start --model agy:flash38:low` refused without creating a session.
+
+## M5 — Regression (host, 2026-09-27)
+
+- `go test ./internal/usage -run TestCachedAGYAvailabilityKeepsExhaustionUntilReset` fails consistently since shortly
+  after `d47c3f1`: `stale_past_reset_becomes_stale` gets `unknown`, wanting `stale ... age 36m from usage meter`.
+  It passed at commit time, so the test depends on wall-clock time or on ambient state (real cache / usage meter)
+  instead of fixed fixtures. Inject the clock and isolate state (temp XDG dirs); keep the assertions.
