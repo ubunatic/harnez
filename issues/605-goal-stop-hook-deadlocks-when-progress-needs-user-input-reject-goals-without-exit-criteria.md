@@ -55,3 +55,4 @@ Observed goal: `playback some demo texts with my "cloned" voice` (voxi). It was 
   on a user decision or denied permission` line; once blocked on the user, suggest `/goal clear` instead of
   repeating the same wait message.
 - Extend the managed-block test to assert the rule; `harnez init -d .` after `make install`.
+- **M2 delivered (always-loaded goal rule)** `b5feb5e`, wording fix `169c088` (covers user-typed goals). test-q1 green, `harnez apply` done. Awaiting voxi-75 feedback after `harnez init`.
