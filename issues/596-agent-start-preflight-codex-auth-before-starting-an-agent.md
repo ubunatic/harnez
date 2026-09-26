@@ -1,6 +1,6 @@
 # 596 — agent start: preflight Codex auth before starting an agent
 
-**Status**: Open
+**Status**: Closed — Preflight Codex auth before start/resume with 1m TTL cache and fail-fast goal guidance
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
