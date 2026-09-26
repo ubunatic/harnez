@@ -1,6 +1,6 @@
 # 602 — Managed block and architecture doc show 'harnez agent start ... -p', which start rejects
 
-**Status**: Open
+**Status**: Closed — fixed in 2824879, confirmed by lmcoder
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -26,3 +26,4 @@ The "Harnez Agent" line in the managed block, which `harnez init` copies into ev
 ## Fix 2026-09-27
 
 `2824879`: `agent start`/`resume` accept `-p/--prompt`; managed Start line teaches a native background shell without `--detach`; test parses every managed-block `harnez agent` example through Cobra. `harnez apply` done. Awaiting reporter feedback after `harnez init`.
+- lmcoder feedback (2026-09-27): `agent start ... -p` works; `harnez init` updated its AGENTS.md (lmcoder 004ab27). Its reported exit 1 is not from init (probe: init exits 0 with and without changes).
