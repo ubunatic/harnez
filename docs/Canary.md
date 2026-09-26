@@ -192,3 +192,5 @@ defeats its purpose as an isolated, stable probe of an environment mechanism.
 "Done." proves nothing about the mechanism. Assert the side effect instead:
 a record in a log, a file on disk, a measured number that changed. (harnez
 issue 594: `/compact` sent as a Codex prompt only produced the reply text.)
+
+<!-- harnez:stop -->

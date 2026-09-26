@@ -185,8 +185,6 @@ Adhere to the following conventions.
 
 Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
-- Search Practices @docs/Search.md,
-  harnez find code/docs, finder configuration, partial results, and rg fallback
 - Issue Tracking Practices @docs/IssueTracking.md,
   P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
 - Agentic Loop Practices @docs/AgenticLoop.md,
@@ -213,6 +211,8 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   PascalCase for evergreens, kebab-case for ephemeral docs; ASCII art in chat, Mermaid only in docs/
 - Feature prototyping @docs/PrototypingFeatures.md,
   canary-first is the feature-prototyping practice; separate runtime isolation and rollout flags
+- Search Practices @docs/Search.md,
+  harnez find code/docs, finder configuration, partial results, and rg fallback
 - Spec system @docs/Spec.md,
   YAML spec files as single source of truth; Go code must not duplicate spec values
 <!-- harnez:end Language Conventions -->
