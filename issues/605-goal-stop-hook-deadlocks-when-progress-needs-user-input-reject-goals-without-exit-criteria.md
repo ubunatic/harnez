@@ -1,6 +1,6 @@
 # 605 — goal stop hook deadlocks when progress needs user input; reject goals without exit criteria
 
-**Status**: Open
+**Status**: Closed — Confirmed by voxi-75 after harnez init: the exit-clause rule covers its case
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
