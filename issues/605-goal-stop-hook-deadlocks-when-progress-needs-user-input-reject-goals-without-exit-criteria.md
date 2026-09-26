@@ -42,3 +42,16 @@ Observed goal: `playback some demo texts with my "cloned" voice` (voxi). It was 
   `docs/commands/reverse-sprint.md`). Every goal it teaches must carry an exit clause, e.g.
   "... or stop and report when blocked on a user decision or a denied permission". Add that rule where goals are
   written and to `docs/practices/AgenticLoop.md` anti-patterns, with a test on the skill text.
+
+- **M1 delivered (exit-clause rule in issue skill + AgenticLoop)** `fbd7659`.
+- voxi-75 feedback (2026-09-27, voxi a9f76de): the clause works (evaluator judges strictly against the condition
+  text), but the rule never reached the failing goal: the user typed `/goal ...` directly, the issue skill never
+  ran, and AgenticLoop is read only after the goal is set.
+
+## M2 — Pre-Work / Required Refinements
+
+- Add an always-loaded agent-side rule to the managed AGENTS.md block (`config.yaml`): when a `/goal` without an
+  exit clause is set, the first reply says so and offers the corrected `/goal ... or stop and report when blocked
+  on a user decision or denied permission` line; once blocked on the user, suggest `/goal clear` instead of
+  repeating the same wait message.
+- Extend the managed-block test to assert the rule; `harnez init -d .` after `make install`.
