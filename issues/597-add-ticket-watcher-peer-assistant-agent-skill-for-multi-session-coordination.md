@@ -48,3 +48,17 @@ When incoming tickets or peer requests arrive:
 - Define clear invocation syntax (e.g. `/peer-assistant`, `/ticket-watcher`).
 - Include the 7-step loop and cross-session communication protocol.
 - Document in `docs/AgenticLoop.md` / `docs/practices/AgenticLoop.md` under multi-session coordination practices.
+
+## Milestones
+
+- **M1 delivered (skill + packaging)** — `4c478a0`: `docs/commands/PeerAssistant.md`, `config.yaml` registration,
+  install test for all skill targets, AgenticLoop multi-session section. `make test-q1` green (host run).
+
+### M2 — Ticket watching (Pre-Work / Required Refinements)
+
+- The ticket goal is a *ticket watcher*, but M1 only disclaims continuous monitoring and gives no way to watch.
+  Add a short "Watching" section to `docs/commands/PeerAssistant.md`: how to check for new or updated tickets
+  (`harnez find -d <repo> issues -a status:open`, plus `git log` on `issues/` since the last check), and how to
+  repeat that check with the harness's own scheduling/monitor facility when one exists. If none exists, check at
+  each turn. Keep it honest: it only claims watching when a scheduled check is actually running.
+- Extend the test markers to cover the new section.
