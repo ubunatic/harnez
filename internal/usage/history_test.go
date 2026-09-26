@@ -133,6 +133,46 @@ func TestHistoryDirUsesXDGAndMigratesLegacyFiles(t *testing.T) {
 	}
 }
 
+func TestMigrateLegacyHistoryWaitsForMigrationLock(t *testing.T) {
+	home, data := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", data)
+	dir := HistoryDir(home)
+	legacyDir := filepath.Join(home, ".claude", "harnez", historyDirName)
+	if err := os.MkdirAll(legacyDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "legacy.jsonl"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	lock, ok := lockHistoryFile(filepath.Join(dir, ".legacy-migration"))
+	if !ok {
+		t.Fatal("failed to acquire migration lock")
+	}
+	defer unlockHistoryFile(lock)
+
+	done := make(chan error, 1)
+	go func() { done <- migrateLegacyHistory(dir) }()
+	select {
+	case err := <-done:
+		t.Fatalf("migration returned before lock was released: %v", err)
+	case <-time.After(350 * time.Millisecond):
+	}
+
+	unlockHistoryFile(lock)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("migration after lock release: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("migration did not continue after lock release")
+	}
+}
+
 func TestRenderTimelineText_Empty(t *testing.T) {
 	got := RenderTimelineText(nil)
 	if !strings.Contains(got, "No usage history recorded yet") {

@@ -51,6 +51,18 @@ func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
 		t.Errorf("expected %s to carry Agent Skills frontmatter (name/description), got:\n%s", skillPath, content)
 	}
 
+	statusSkillPath := filepath.Join(claudeSkillsDir, "harnez-status", "SKILL.md")
+	statusSkill, err := os.ReadFile(statusSkillPath)
+	if err != nil {
+		t.Fatalf("expected %s to be written: %v", statusSkillPath, err)
+	}
+	if !strings.HasPrefix(string(statusSkill), "---\nname: \"harnez-status\"\ndescription:") {
+		t.Errorf("expected %s to carry Agent Skills frontmatter, got:\n%s", statusSkillPath, statusSkill)
+	}
+	if !strings.Contains(string(statusSkill), "disable-model-invocation: true") {
+		t.Errorf("expected %s to be invoke-only, got:\n%s", statusSkillPath, statusSkill)
+	}
+
 	publishPath := filepath.Join(claudeSkillsDir, "publish", "SKILL.md")
 	pubData, err := os.ReadFile(publishPath)
 	if err != nil {

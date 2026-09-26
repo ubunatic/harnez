@@ -65,7 +65,7 @@ func migrateLegacyHistory(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	migrationLock, ok := lockHistoryFile(filepath.Join(dir, ".legacy-migration"))
+	migrationLock, ok := lockHistoryFileWait(filepath.Join(dir, ".legacy-migration"))
 	if !ok {
 		return fmt.Errorf("lock legacy history migration in %s", dir)
 	}
@@ -296,6 +296,22 @@ func lockHistoryFile(path string) (f *os.File, ok bool) {
 	}
 	f.Close()
 	return nil, false
+}
+
+// lockHistoryFileWait takes an exclusive blocking flock on a sidecar lock.
+// Legacy migration may touch many files, so its lock must not fail just
+// because another usage process is still migrating.
+func lockHistoryFileWait(path string) (f *os.File, ok bool) {
+	lockPath := path + ".lock"
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, false
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		_ = f.Close()
+		return nil, false
+	}
+	return f, true
 }
 
 func unlockHistoryFile(f *os.File) {
