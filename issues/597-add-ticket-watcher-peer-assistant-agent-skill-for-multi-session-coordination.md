@@ -1,6 +1,6 @@
 # 597 — Add ticket-watcher / peer-assistant agent skill for multi-session coordination
 
-**Status**: Open
+**Status**: Closed — M1 skill+packaging, M2 ticket watching delivered; host-reviewed, tests green
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Skills / Multi-Agent Coordination / Practices
