@@ -1,6 +1,6 @@
 # 599 — Add invoke-only /harnez-status skill for fast model capability and convention self-check
 
-**Status**: Open
+**Status**: Closed — Add invoke-only harnez-status skill with compact checklist output and debloat override
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Skills / Workflow / Verification
