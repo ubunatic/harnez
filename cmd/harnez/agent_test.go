@@ -55,6 +55,15 @@ func TestManagedAgentExamplesParseAgainstCobra(t *testing.T) {
 		t.Fatal("end of managed Harnez Agent section not found")
 	}
 	section := string(config[sectionStart : sectionStart+sectionEnd])
+	for _, phrase := range []string{
+		"When setting a `/goal` without an exit clause, say so in the first reply",
+		"/goal ... or stop and report when blocked on a user decision or denied permission",
+		"once blocked on the user, suggest `/goal clear` instead of repeating the wait message",
+	} {
+		if !strings.Contains(section, phrase) {
+			t.Errorf("managed Harnez Agent section is missing goal rule %q", phrase)
+		}
+	}
 	examples := regexp.MustCompile("`(harnez agent [^`]+)`").FindAllStringSubmatch(section, -1)
 	if len(examples) == 0 {
 		t.Fatal("no harnez agent examples found in managed section")
