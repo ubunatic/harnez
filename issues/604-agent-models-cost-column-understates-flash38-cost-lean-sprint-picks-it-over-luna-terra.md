@@ -1,6 +1,6 @@
 # 604 — agent models cost column understates flash38 cost; lean-sprint picks it over luna/terra
 
-**Status**: Open
+**Status**: Closed — flash38 escalation-only, no agy developer roles, verified by neus
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
@@ -34,3 +34,4 @@ table because its TUI rating (`~`) beat luna's (`-`) and its listed cost was low
 - neus (2026-09-27): `harnez init` applied (neus 00edce4); new Start line, `-p` on start confirmed in --help. Runtime confirmation follows after its next dispatch.
 - neus (2026-09-27): pick landed on codex:luna:med. Gap: agy:flash37:low/med and agy:sonnet:low still list the developer role. Pre-work: drop developer from all agy models, or state why one keeps it.
 - Follow-up `c9d6002`: developer role removed from all agy models (flash37, sonnet); sonnet USE reviewer-only. flash37 USE wording fixed with 603 M4.
+- neus (2026-09-27): verified; agy rows exhausted with reset times, no agy developer role, `agent start --model agy:flash38:low` refused without creating a session.
