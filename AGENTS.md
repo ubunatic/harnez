@@ -62,7 +62,7 @@ instead of `ls issues/`, `find`, or raw grep:
 
 ### Harnez Agent
 - Prefer loaded `mcp__harnez__*` tools for lifecycle actions; otherwise use `harnez agent` via Bash (see the local Subagent Policy).
-- Start: `harnez agent start --detach --name <name> --role <role> --model <model> -p <prompt>`.
+- Start (run it in a background shell, e.g. Claude `run_in_background`): `harnez agent start --name <name> --role <role> --model <model> -p <prompt>`.
 - List: `harnez agent list`.
 - Status: `harnez agent status --name <session>`.
 - Wait: `harnez agent wait <session>` (session is positional).
