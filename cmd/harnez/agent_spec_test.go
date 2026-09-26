@@ -27,6 +27,7 @@ func TestAgentDefaultModelIsMarkedOnce(t *testing.T) {
 
 func TestAgentModelsShowsCachedAvailabilityAndAge(t *testing.T) {
 	cacheHome := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", cacheHome)
 	now := time.Now()
 	reset := now.Add(time.Hour)
@@ -56,6 +57,7 @@ func TestAgentModelsShowsCachedAvailabilityAndAge(t *testing.T) {
 
 func TestAgentModelsShowsStaleQuotaAge(t *testing.T) {
 	cacheHome := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", cacheHome)
 	now := time.Now()
 	reset := now.Add(time.Hour)

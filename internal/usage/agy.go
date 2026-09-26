@@ -530,6 +530,12 @@ var agyMeterQuotaBuckets = []struct {
 }
 
 func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (AgentUsage, bool) {
+	return applyAGYMeterQuota(usage, homeDir, now, false)
+}
+
+// applyAGYMeterQuota optionally retains expired windows so availability
+// readers can distinguish stale evidence from a missing meter cache.
+func applyAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time, includeExpired bool) (AgentUsage, bool) {
 	if homeDir == "" {
 		return usage, false
 	}
@@ -554,7 +560,7 @@ func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (
 	// are anchored to the latest row from any bucket.
 	for bucket, row := range latestByBucket {
 		reset, parseErr := time.Parse(time.RFC3339, row.Reset)
-		if parseErr != nil || !reset.After(now) {
+		if parseErr != nil || (!includeExpired && !reset.After(now)) {
 			delete(latestByBucket, bucket)
 		}
 	}

@@ -79,7 +79,7 @@ func CachedProviderQuotaAvailability(provider, model string, now time.Time) Prov
 		fetchedAt = cache.FetchedAt
 		windows = []*QuotaWindow{cache.Payload.Session, cache.Payload.Weekly}
 	case "agy":
-		meterUsage, ok := applyRecentAGYMeterQuota(AgentUsage{AgentID: "agy"}, home, now)
+		meterUsage, ok := applyAGYMeterQuota(AgentUsage{AgentID: "agy"}, home, now, true)
 		if ok {
 			fetchedAt = meterUsage.LastRefreshed
 			want := "Gemini Models"
