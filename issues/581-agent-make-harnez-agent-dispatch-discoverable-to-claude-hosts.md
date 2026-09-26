@@ -56,18 +56,17 @@ an agent to stop its children.
   1. **Case 1: Interactive Host Session (Orchestrator)**:
      - *Signal*: Agent env var present (`CLAUDE_CODE_SESSION_ID`, `ANTIGRAVITY_CONVERSATION_ID`, etc.) and top-level / orchestrator role.
      - *Behavior on `--detach`/`--async`*: Emit an interactive warning/notice:
-       > *"Notice: Running with --detach hides this process from the host UI. In interactive sessions with a user, prefer launching blocking agent commands inside a native host background task/shell so the user can monitor, terminate, and receive exit notifications."*
+       > *"Notice: Running with --detach hides this process from the host UI. In interactive sessions with a user, prefer launching agent runs inside a native host background task/shell (e.g. Antigravity task / Claude run_in_background) so the user can monitor, terminate, and receive exit notifications without blocking chat."*
   2. **Case 2: Direct Human at CLI (Manual Terminal)**:
      - *Signal*: `classifyInvoker() == "human"` (no agent env vars, interactive `stdinIsTTY() == true`).
      - *Behavior on `--detach`/`--async`*: Detach quietly as requested by the user, printing the session info and resume command.
   3. **Case 3: Non-Interactive Subagent / Delegator / Script**:
      - *Signal*: Programmatic runner (e.g. non-interactive `sprinter` / `delegator` subagent or CI/script with no TTY).
-     - *Behavior on `--detach`/`--async`*: Emit a concise operational notice reminding the calling agent that the job is backgrounded without an automatic completion hook, so it must actively track/wait for the result, accompanied by the exact command to wait or reattach:
-       > *"Notice: Agent detached without a completion hook. Active tracking required. Wait or reattach via: `harnez agent wait <session>` or `harnez agent resume <session> \"<prompt>\"`"*
+     - *Behavior on `--detach`/`--async`*: Emit a concise operational notice reminding the calling agent that the job is detached without an automatic completion notification, so active tracking is required, accompanied by the exact command to wait or reattach:
+       > *"Notice: Agent detached; no automatic completion notification will be delivered. Active tracking required. Wait or reattach via: `harnez agent wait <session>` or `harnez agent resume <session> \"<prompt>\"`"*
 
-
-- **Caller Notification Integration**:
-  - Advise callers/hosts to route blocking commands through host tools (e.g. Claude `run_in_background`, Antigravity `run_command` with backgrounding) that securely wait and wake the orchestrator up on exit.
+- **Host Task Integration**:
+  - Advise callers/hosts to dispatch agent runs through host background facilities (e.g. Claude `run_in_background`, Antigravity `run_command` with backgrounding) that preserve non-blocking chat while delivering reactive exit notifications.
 
 Document this recommendation in the agent guidance and next to `--detach` help. `--detach` must
 plainly state that it hides the run from the host UI.
