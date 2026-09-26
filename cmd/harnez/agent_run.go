@@ -75,6 +75,13 @@ func storeTurnQuota(s *subagent.FileSessionStore, sessionID, provider string, tu
 	_ = s.RecordTurnQuota(subagent.TurnQuotaEvent{SessionID: sessionID, Turn: turn, Boundary: boundary, Provider: provider, Reading: reading})
 }
 
+func agentCommandContext(cmd *cobra.Command) context.Context {
+	if cmd == nil || cmd.Context() == nil {
+		return context.Background()
+	}
+	return cmd.Context()
+}
+
 func turnQuotaBaseline(turnStarted time.Time, before usage.TurnQuotaReading) time.Time {
 	if !before.HasCache || before.CacheAgeMS >= int64(usage.MinWatchInterval/time.Millisecond) {
 		return time.Time{}
@@ -219,7 +226,23 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sessName, sessName, req.PlanFirst
 		opts.Prompt = withProtocol(req.Prompt, req.PlanFirst, role)
 		ts.watch()
-		r, err = sd.RunStream(cmd.Context(), opts, func(ev subagent.Event) {
+		watchCtx, cancelWatch := context.WithCancel(agentCommandContext(cmd))
+		defer cancelWatch()
+		threshold, thresholdErr := subagent.CompactThreshold(m)
+		watchdog := &subagent.TokenWatchdog{Threshold: threshold}
+		watchdogCrossed := false
+		observedTokens, observedSessionID := 0, ""
+		r, err = sd.RunStream(watchCtx, opts, func(ev subagent.Event) {
+			if ev.Kind == "session" {
+				observedSessionID = ev.Text
+			}
+			if thresholdErr == nil {
+				if tokens, crossed := watchdog.Observe(ev); crossed {
+					watchdogCrossed = true
+					observedTokens = tokens
+					cancelWatch()
+				}
+			}
 			if ev.Kind == "session" {
 				extra := []string{fmt.Sprintf("name=%s dir=%s", sessName, canonicalWorkDir)}
 				if req.ModelSpec == "" {
@@ -231,6 +254,20 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		})
 		if err != nil {
 			ts.abort()
+			if watchdogCrossed {
+				providerSessionID := observedSessionID
+				if providerSessionID != "" {
+					if req.SessionID != "" {
+						id = req.SessionID
+					}
+					now := time.Now()
+					sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "stopped", LastError: "runtime token watchdog interrupted the active turn", CreatedAt: now, LastActiveAt: now, Turn: turn}
+					if saveErr := s.Save(sess); saveErr != nil {
+						return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", spec, observedTokens, threshold, saveErr)
+					}
+				}
+				return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session %q can be resumed", spec, observedTokens, threshold, sessName)
+			}
 		}
 	} else {
 		tl.announceTurn("start", m.Provider+":"+m.Name, sessName)
@@ -397,9 +434,30 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		}
 		ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sess.Name, sess.Name, req.PlanFirst
 		ts.watch()
-		r, err = sd.ResumeStream(cmd.Context(), sess.ProviderID(), withProtocol(req.Prompt, req.PlanFirst, role), subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, ts.onEvent)
+		watchCtx, cancelWatch := context.WithCancel(agentCommandContext(cmd))
+		defer cancelWatch()
+		watchdog := &subagent.TokenWatchdog{Threshold: threshold}
+		watchdogCrossed := false
+		observedTokens := 0
+		r, err = sd.ResumeStream(watchCtx, sess.ProviderID(), withProtocol(req.Prompt, req.PlanFirst, role), subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, func(ev subagent.Event) {
+			if tokens, crossed := watchdog.Observe(ev); crossed {
+				watchdogCrossed = true
+				observedTokens = tokens
+				cancelWatch()
+			}
+			ts.onEvent(ev)
+		})
 		if err != nil {
 			ts.abort()
+			if watchdogCrossed {
+				sess.Status = "stopped"
+				sess.LastError = fmt.Sprintf("runtime token watchdog interrupted the active turn at %d tokens (limit %d)", observedTokens, threshold)
+				sess.LastActiveAt = time.Now()
+				if saveErr := s.Save(sess); saveErr != nil {
+					return fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", sess.Name, observedTokens, threshold, saveErr)
+				}
+				return fmt.Errorf("agent resume %q crossed live token threshold at %d tokens (limit %d); turn interrupted and session can be resumed", sess.Name, observedTokens, threshold)
+			}
 		}
 	} else {
 		if compacted {

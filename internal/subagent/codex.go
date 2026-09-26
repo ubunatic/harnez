@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -239,6 +240,8 @@ type Event struct {
 	Kind  string // "session", "message", "activity" or "other"
 	Text  string // thread id, message text or activity description
 	Bytes int    // raw size of the provider event, for token estimates
+	// ContextTokens is the latest provider-reported full input size, when present.
+	ContextTokens int
 }
 
 // EventFunc receives events while a turn is running.
@@ -304,6 +307,8 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 	}
 	if e.Payload.Type == "token_count" && e.Payload.Info.LastTokenUsage.Input > 0 {
 		p.r.ContextTokens = e.Payload.Info.LastTokenUsage.Input
+		ev.ContextTokens = p.r.ContextTokens
+		ev.Kind = "tokens"
 	}
 	return ev, true
 }
@@ -355,6 +360,11 @@ func (d CodexDriver) stream(ctx context.Context, fn EventFunc, args ...string) (
 
 func startProcess(ctx context.Context, name string, args ...string) (io.Reader, func() error, error) {
 	c := exec.CommandContext(ctx, name, args...)
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	c.Cancel = func() error {
+		return KillGroup(c.Process.Pid, syscall.SIGINT)
+	}
+	c.WaitDelay = 15 * time.Second
 	out, err := c.StdoutPipe()
 	if err != nil {
 		return nil, nil, err
@@ -366,6 +376,9 @@ func startProcess(ctx context.Context, name string, args ...string) (io.Reader, 
 	}
 	return out, func() error {
 		err := c.Wait()
+		if ctx.Err() != nil {
+			_ = KillGroup(c.Process.Pid, syscall.SIGKILL)
+		}
 		if msg := strings.TrimSpace(stderr.String()); err != nil && msg != "" {
 			return fmt.Errorf("%w: %s", err, lastLines(msg, 3))
 		}

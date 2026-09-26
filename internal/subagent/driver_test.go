@@ -371,6 +371,29 @@ func TestCodexStreamEmitsEventsInOrder(t *testing.T) {
 	}
 }
 
+func TestCodexStreamReportsMidTurnContextTokenCanary(t *testing.T) {
+	lines := `{"type":"thread.started","thread_id":"t1"}
+{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":205000}}}}
+{"type":"item.completed","item":{"type":"agent_message","text":"done"}}
+`
+	d := CodexDriver{Start: func(context.Context, string, ...string) (io.Reader, func() error, error) {
+		return strings.NewReader(lines), func() error { return nil }, nil
+	}}
+	watchdog := &TokenWatchdog{Threshold: 200000}
+	var crossed []int
+	_, err := d.ResumeStream(context.Background(), "t1", "p", Model{}, func(event Event) {
+		if tokens, ok := watchdog.Observe(event); ok {
+			crossed = append(crossed, tokens)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(crossed, []int{205000}) {
+		t.Fatalf("crossings = %v, want [205000]", crossed)
+	}
+}
+
 func TestCodexReadsLastTokenUsageFromRollout(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CODEX_HOME", home)
