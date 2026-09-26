@@ -1,6 +1,6 @@
 # 600 — Add /next skill to repeat prev workflow on next item
 
-**Status**: Open
+**Status**: Closed — Add /next skill to repeat workflow on next item
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Skills / Workflow / Automation
