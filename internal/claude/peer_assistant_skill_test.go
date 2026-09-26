@@ -62,7 +62,12 @@ func TestPeerAssistantSkillInstallToEveryConfiguredTarget(t *testing.T) {
 		}
 		for _, marker := range []string{
 			"## Assisting Loop",
+			"## Watching",
 			"## Peer Communication",
+			"harnez find -d <repo> issues -a status:open",
+			"git log <checkpoint>..HEAD -- issues/",
+			"Otherwise check at each turn",
+			"only while a scheduled check is running",
 			"available native messaging/session tools",
 			"writer per shared workspace",
 			"durable documentation",

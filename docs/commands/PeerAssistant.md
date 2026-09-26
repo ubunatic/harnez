@@ -31,6 +31,15 @@ is active.
 7. Sync durable learnings to the relevant evergreen documentation or
    `docs/studies/` when they apply beyond the ticket.
 
+## Watching
+
+- Check open tickets with `harnez find -d <repo> issues -a status:open`.
+- Record the current commit as a checkpoint; next time inspect
+  `git log <checkpoint>..HEAD -- issues/` for ticket changes, then advance it.
+- Repeat checks with the harness's scheduling or monitor facility when one is
+  available and actually running. Otherwise check at each turn; claim active
+  watching only while a scheduled check is running.
+
 ## Peer Communication
 
 - Reply to direct peer messages through the available native session
