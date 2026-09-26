@@ -52,8 +52,15 @@ build visible in the host UI, yields completion notification/output, and permits
 process-group stopping. Hosts should stop the background shell rather than rely on Ctrl+C within
 an agent to stop its children.
 
+- **Implications Notice on `--detach`/`--async`**:
+  - Running with `--detach` or `--async` must output a short notice/warning about the implications (e.g. *“Agent started in internal background mode; process is hidden from host UI and will not emit completion wakeups. In interactive sessions, prefer running blocking agent commands inside a native host background task/shell so the user can monitor, terminate, and receive exit notifications.”*).
+- **Interactive Host Invariant**:
+  - In interactive sessions with a human user, all background jobs must be dispatched into real native host "Bash" / async tasks that appear in the task manager, allowing the user to observe live activity, ask *"why so many jobs?"*, and terminate them directly.
+- **Caller Notification Integration**:
+  - Advise callers/hosts to route blocking commands through host tools (e.g. Claude `run_in_background`, Antigravity `run_command` with backgrounding) that securely wait and wake the orchestrator up on exit.
+
 Document this recommendation in the agent guidance and next to `--detach` help. `--detach` must
-plainly say that it hides the run from the host UI.
+plainly state that it hides the run from the host UI.
 
 ## 4. Work already completed
 
@@ -74,6 +81,7 @@ guidance and repairs the remaining CLI inconsistency.
   `resume` supports `--detach`; generated policy no longer documents those quirks.
 - Managed guidance recommends one native host background shell per run and prohibits shell-level
   detachment; it preserves sequential developer writes and scratchpad-only output.
+- `harnez agent start` and `resume` with `--detach` or `--async` output a short runtime notice explaining the detachment implications and recommending host native background tasks for interactive sessions.
 - `harnez agent start --help` and `resume --help` state that `--detach` hides the run from the
   host UI, while the recommended dispatch remains the blocking command in a native background
   shell.
