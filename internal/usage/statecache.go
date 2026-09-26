@@ -49,6 +49,7 @@ type ProviderQuotaAvailability struct {
 	State     string
 	Age       time.Duration
 	Exhausted bool
+	ResetIn   time.Duration
 }
 
 // CachedProviderQuotaAvailability reports available, exhausted, stale, or
@@ -129,19 +130,22 @@ func CachedProviderQuotaAvailability(provider, model string, now time.Time) Prov
 	}
 	for _, window := range windows {
 		if window != nil && window.RemainingPercent <= 0 && window.ResetAt != nil && window.ResetAt.After(now) {
+			resetIn := window.ResetAt.Sub(now)
+			if !state.Exhausted || resetIn < state.ResetIn {
+				state.ResetIn = resetIn
+			}
 			state.Exhausted = true
 		}
+	}
+	if state.Exhausted {
+		state.State = "exhausted"
+		return state
 	}
 	if state.Age > AgentQuotaAvailabilityMaxAge {
 		state.State = "stale"
 		return state
 	}
-
-	if state.Exhausted {
-		state.State = "exhausted"
-	} else {
-		state.State = "available"
-	}
+	state.State = "available"
 	return state
 }
 

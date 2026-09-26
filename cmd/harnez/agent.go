@@ -288,12 +288,9 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			if marker == "unknown" && availability.Age > 0 {
 				marker = fmt.Sprintf("unknown (%s)", quotaAgeLabel(availability.Age))
 			} else if marker == "exhausted" {
-				marker = fmt.Sprintf("exhausted (%s)", quotaAgeLabel(availability.Age))
+				marker = fmt.Sprintf("exhausted (resets %s)", quotaAgeLabel(availability.ResetIn))
 			} else if marker == "stale" {
 				marker = fmt.Sprintf("stale (%s)", quotaAgeLabel(availability.Age))
-				if availability.Exhausted {
-					marker = fmt.Sprintf("stale (%s) exhausted", quotaAgeLabel(availability.Age))
-				}
 			}
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n", spec, e.Model.Name, marker, effort, e.Cost, e.Eff, e.Skills, e.Roles, e.Use)
 		}

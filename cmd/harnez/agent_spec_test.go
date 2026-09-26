@@ -49,7 +49,7 @@ func TestAgentModelsShowsCachedAvailabilityAndAge(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "AVAILABILITY") || !strings.Contains(out.String(), "exhausted (4m)") || !strings.Contains(out.String(), "unknown") {
+	if !strings.Contains(out.String(), "AVAILABILITY") || !strings.Contains(out.String(), "exhausted (resets ") || !strings.Contains(out.String(), "unknown") {
 		t.Fatalf("models output lacks quota marker/age or unknown markers: %q", out.String())
 	}
 }
@@ -78,7 +78,7 @@ func TestAgentModelsShowsStaleQuotaAge(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "stale (28d) exhausted") || !strings.Contains(out.String(), "unknown") {
+	if !strings.Contains(out.String(), "exhausted (resets ") || !strings.Contains(out.String(), "unknown") {
 		t.Fatalf("models output lacks stale age or unknown for missing provider data: %q", out.String())
 	}
 }
@@ -122,6 +122,22 @@ func TestAgentStartRejectsKnownExhaustedQuotaAndNamesOverrideAndAlternatives(t *
 	}
 	if got := quotaAlternatives(subagent.Model{Provider: "agy", Name: "gemini-3.8-flash"}, availability); len(got) == 0 || len(got) > 3 {
 		t.Fatalf("available cheaper alternatives = %v", got)
+	}
+}
+
+func TestAgentStartOnlyRejectsActiveExhaustion(t *testing.T) {
+	model := subagent.Model{Provider: "agy", Name: "gemini-3.8-flash"}
+	active := func(string, string) usage.ProviderQuotaAvailability {
+		return usage.ProviderQuotaAvailability{State: "exhausted", Exhausted: true, Age: 36 * time.Minute, ResetIn: 105 * time.Minute}
+	}
+	if err := rejectExhaustedQuota("agy:flash38", model, false, active); err == nil {
+		t.Fatal("stale snapshot with a future reset did not block agent start")
+	}
+	pastReset := func(string, string) usage.ProviderQuotaAvailability {
+		return usage.ProviderQuotaAvailability{State: "stale", Age: 36 * time.Minute}
+	}
+	if err := rejectExhaustedQuota("agy:flash38", model, false, pastReset); err != nil {
+		t.Fatalf("stale snapshot with a past reset blocked agent start: %v", err)
 	}
 }
 
