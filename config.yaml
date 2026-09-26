@@ -335,6 +335,10 @@ skills:
     description: "Close the current work session, preserve its state, and prepare a concise handoff"
     file: docs/commands/Wrap.md
 
+  - name: peer-assistant
+    description: "Coordinate peer requests and ticket work across agent sessions"
+    file: docs/commands/PeerAssistant.md
+
   - name: issue
     description: "File a new repository issue or ticket when asked; do not trigger merely because work references an existing issue"
     file: docs/commands/issue.md

@@ -22,6 +22,9 @@ For TUI layout work, use a checked-in `.ansi` mockup under `docs/data/` as the v
 8. **Deployment Transparency — 3-State Grounding (when applicable)** — **Local State**, **Deployed Artifact State**, and **Active Daemon State** are independent; local build/test proves nothing about the other two (remote-deploying projects only).
 9. **One-Level Delegation** — `harnez agent --role orchestrator|developer|reviewer|advisor`: only an orchestrator starts helpers (one writer at a time); developers, reviewers and advisors are leaf workers that never run `harnez agent`, native subagents or delegating skills. harnez enforces it. Live checks that need an agent session are run by the orchestrator.
 
+### Multi-session peer assistance
+`/peer-assistant` uses available native session messaging for explicit peer requests; it does not imply an always-on watcher. Persist handoffs and findings in tickets/docs, keep one writer per workspace, and track/clean up helpers.
+
 ## 2. The 5-Phase Sprint Loop
 Each phase's **Mechanics** and **Constraints** are summarized inline below; see the full doc for step-by-step detail.
 - **### Phase 1: Parallel Advisory Discovery (Read-Only)** — concurrent read-only advisors find exact line ranges, return plans; never write or spawn side effects. **Kickoff & Commit Policy**: agree upfront whether subagents commit directly or return diffs.

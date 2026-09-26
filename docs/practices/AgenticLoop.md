@@ -53,6 +53,18 @@ follow-up. Existing async-wait guidance still applies to genuinely asynchronous
 external work: use the harness-tracked completion signal or scheduled wakeup,
 and avoid chat-visible empty polling.
 
+### Multi-session peer assistance
+
+Use `/peer-assistant` when a host session is explicitly asked to coordinate
+work for another active session. Communicate through the available native
+session messaging surface, and do not imply continuous inbox or ticket
+monitoring unless an actual watcher is running. Keep peer messages concise and
+task-focused; record decisions, plans, findings, and outcomes in the relevant
+ticket or durable docs. Apply the same one-writer-per-workspace and sequential
+dispatch rules as any other orchestration, track helper sessions you start,
+and clean them up when finished. A peer assistant coordinates and reports back;
+it does not create a second concurrent writer for shared files.
+
 ---
 
 ## 1. Core Philosophy & Invariants
