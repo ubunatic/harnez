@@ -40,17 +40,15 @@ As Harnez now orchestrates multiple independent agent harnesses (Claude, Antigra
 
 ## 3. Sprint Milestones
 
-- **M1 — Path Resolution & Auto-Migration**:
-  - Update `internal/telemetry.DefaultDBPath()` to resolve to `$XDG_DATA_HOME/harnez/telemetry.sqlite` (fallback `~/.local/share/harnez/telemetry.sqlite`).
-  - Update `internal/usage` history directory default from `~/.claude/harnez/usage-history` to `$XDG_DATA_HOME/harnez/usage-history`.
-  - Update quota cache path from `~/.claude/harnez-quota-cache.json` to `$XDG_CACHE_HOME/harnez/quota-cache.json`.
-  - Implement zero-loss auto-migration from legacy paths on first access.
-- **M2 — Callsite Updates, Verification & Docs**:
-  - Update all CLI defaults (`--history-dir`), docs (`docs/Telemetry.md`), and tests.
-  - Add regression/migration tests verifying automatic data transfer and XDG environment overrides.
-  - Verify with `make test-q1`.
+- **M1/M2 Delivered (`ba309ab`)**:
+  - Implemented XDG path resolution, DefaultDBPath, HistoryDir, and initial migration.
+- **M2b — Required Refinements (from Review-598 Audit)**:
+  - **P1: Provider-Isolated Quota Cache**: Split cache files by provider (e.g. `quota-cache-claude.json`, `quota-cache-codex.json`, `quota-cache-agy.json` under `$XDG_CACHE_HOME/harnez/`) so differing payload schemas (`claudeQuotaPayload`, `codexQuotaPayload`, `agyQuotaPayload`) do not overwrite each other or suppress quota fetches.
+  - **P1: Safe Concurrency & Preserved Legacy Sources**: In `history.go`, do not delete legacy sources on migration; merge safely without races or data loss.
+  - **P2: Strict XDG Relative Path Rejection**: In `internal/xdgpath`, ignore relative `XDG_DATA_HOME` / `XDG_CACHE_HOME` values per XDG spec (must begin with `/`).
+  - **P2: Comprehensive Tests**: Test provider cache isolation, SQLite record preservation (assert actual rows), relative XDG fallback, and safe migration without source deletion.
 - **M3 — Independent Review Gate**:
-  - Dispatched reviewer (`terra:med`) audits path resolution, migration safety, and test assertions.
+  - Re-verify fixes with `terra:med`.
 - **M4 — Teardown & Ticket Close**:
   - Final verification, subagent cleanup, and ticket closure.
 
@@ -58,6 +56,7 @@ As Harnez now orchestrates multiple independent agent harnesses (Claude, Antigra
 
 - No telemetry, usage history, or quota cache files are written to `~/.claude/harnez/`.
 - `internal/telemetry.DefaultDBPath()` resolves to standard `$XDG_DATA_HOME/harnez/telemetry.sqlite` (or `~/.local/share/harnez/telemetry.sqlite`).
+
 - `internal/usage/history.go` and `internal/usage/claude.go` read and write to the new location.
 - Automatic migration test ensures existing history and SQLite records transfer seamlessly.
 - Documentation in `docs/Telemetry.md` and CLI flags (`--history-dir`) reflect the updated default paths.
