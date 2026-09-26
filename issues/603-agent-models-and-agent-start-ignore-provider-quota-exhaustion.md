@@ -1,6 +1,6 @@
 # 603 — agent models and agent start ignore provider quota exhaustion
 
-**Status**: Open
+**Status**: Closed — M1-M4 delivered, verified by neus
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -58,3 +58,4 @@ stopped with 0 tokens used, so it never did any work. The user had to catch the 
 - Show the reset in the cell, e.g. `exhausted (resets 1h45m)`.
 - Test: stale snapshot with a future reset blocks; stale snapshot with a past reset does not.
 - **M4 delivered (block until reset)** `d47c3f1`. Live: agy rows `exhausted (resets 1h38m)` / `(resets 19h6m)`; `agent start --model agy:flash38:low` refused with override flag and `codex:luna:low` alternative (host-verified). flash37 USE wording fixed (604). Awaiting neus confirmation.
+- neus (2026-09-27): verified; agy rows exhausted with reset times, no agy developer role, `agent start --model agy:flash38:low` refused without creating a session.
