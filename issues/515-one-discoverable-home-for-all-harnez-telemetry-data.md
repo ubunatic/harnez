@@ -57,3 +57,20 @@ hard to look in the wrong place:
   known store path is empty while its component is active.
 - The 2026-09-23 question ("quota before/after one agent turn") is answerable by
   following the discovery output alone.
+
+## Rescope after 598 (product owner, 2026-09-27)
+
+598 moved telemetry, usage history and quota caches to XDG (`~/.local/share/harnez/`). Live state on the host
+today: `telemetry.sqlite` (live), `telemetry.db` (0 bytes, decoy), `usage-history/`, `voice-input/`; in
+`~/.harnez/`: `tool_catalog.sqlite` (30 MB, last write 09-27 00:05 — check whether anything still writes it),
+`tool_catalog.sqlite.bak-*`, `agents/`, `sessions/`, `agymeter/`, `bench/`.
+
+Remaining scope (the root stays `~/.local/share/harnez` for data; `~/.harnez` keeps config and session state):
+
+- **M1 — decoys and live readers.** Remove or migrate the zero-byte `telemetry.db` and stop any writer to
+  `~/.harnez/tool_catalog.sqlite` if one remains (migrate once, keep a `.bak`); `harnez usage history timeline`
+  reads the live quota history. Tests for both.
+- **M2 — discovery.** `harnez stats --where` (no new top-level command) lists each store: path, size, newest
+  record time, owning component and the question it answers; zero-byte stores are flagged. Test with temp XDG
+  roots.
+- **M3 — docs.** `docs/Telemetry.md` shows the layout and points at `harnez stats --where`.
