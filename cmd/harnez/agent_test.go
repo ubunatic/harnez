@@ -908,6 +908,8 @@ func TestAgentTerminalResumeRefusal(t *testing.T) {
 }
 
 func TestCodexResumeQuotaRecoveryQuarantinesAndExcludesSession(t *testing.T) {
+	t.Setenv(agentRoleEnv, "")
+	t.Setenv(agentSessionEnv, "")
 	old := agentDriver
 	d := &resumeOutcomeDriver{err: errors.New("usage limit reached")}
 	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
@@ -925,13 +927,13 @@ func TestCodexResumeQuotaRecoveryQuarantinesAndExcludesSession(t *testing.T) {
 	}
 	cmd := newAgentCmd()
 	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
-	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi"}); err == nil {
+	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull}); err == nil {
 		t.Fatal("expected exhausted quota failure")
 	}
 	availability = usage.ProviderQuotaAvailability{State: "available"}
 	cmd = newAgentCmd()
 	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
-	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi"}); err == nil {
+	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull}); err == nil {
 		t.Fatal("expected quarantine failure")
 	}
 	sess, _ := store.Get("sid")
@@ -943,13 +945,15 @@ func TestCodexResumeQuotaRecoveryQuarantinesAndExcludesSession(t *testing.T) {
 	}
 	cmd = newAgentCmd()
 	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
-	err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi"})
+	err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull})
 	if err == nil || !strings.Contains(err.Error(), "harnez agent start") || d.resumes != 2 {
 		t.Fatalf("repeat resume err=%v resumes=%d", err, d.resumes)
 	}
 }
 
 func TestCodexTransientRateLimitDoesNotQuarantine(t *testing.T) {
+	t.Setenv(agentRoleEnv, "")
+	t.Setenv(agentSessionEnv, "")
 	old := agentDriver
 	d := &resumeOutcomeDriver{err: errors.New("429 rate limit exceeded")}
 	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
@@ -968,7 +972,7 @@ func TestCodexTransientRateLimitDoesNotQuarantine(t *testing.T) {
 	}
 	for range 2 {
 		cmd := newAgentCmd()
-		if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi"}); err == nil {
+		if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi", StreamMode: streamFull}); err == nil {
 			t.Fatal("expected rate-limit failure")
 		}
 	}
