@@ -1,6 +1,6 @@
 # 114 — Remote Load stream drops to batch shortly after connecting: stdin-EOF false-triggers shutdown
 
-**Status**: Resolved
+**Status**: Closed — Status was Resolved; normalized to Closed
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
