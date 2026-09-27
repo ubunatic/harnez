@@ -112,6 +112,41 @@ func TestDefaultDBPathUsesXDGAndBacksUpLegacyDB(t *testing.T) {
 	if copiedRows != 1 {
 		t.Fatalf("migrated tool_calls rows = %d, want 1", copiedRows)
 	}
+	backups, err := filepath.Glob(legacy + ".bak-*")
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("legacy backups = %v, err = %v; want one timestamped backup", backups, err)
+	}
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Fatalf("legacy path still exists after migration: %v", err)
+	}
+}
+
+func TestDefaultDBPathRemovesOnlyEmptyLegacyDecoy(t *testing.T) {
+	home, data := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", data)
+	decoy := filepath.Join(data, "harnez", "telemetry.db")
+	if err := os.MkdirAll(filepath.Dir(decoy), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(decoy, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DefaultDBPath(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(decoy); !os.IsNotExist(err) {
+		t.Fatalf("empty decoy still exists: %v", err)
+	}
+	if err := os.WriteFile(decoy, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DefaultDBPath(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(decoy); err != nil || string(got) != "keep" {
+		t.Fatalf("non-empty decoy = %q, err = %v; want preserved", got, err)
+	}
 }
 
 func TestOpenDoesNotReportNoopCompactionMigration(t *testing.T) {

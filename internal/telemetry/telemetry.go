@@ -35,6 +35,12 @@ func DefaultDBPath() (string, error) {
 	}
 	path := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.sqlite")
 	legacy := filepath.Join(home, ".harnez", "tool_catalog.sqlite")
+	decoy := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.db")
+	if info, err := os.Stat(decoy); err == nil && info.Size() == 0 {
+		if err := os.Remove(decoy); err != nil && !os.IsNotExist(err) {
+			return "", fmt.Errorf("telemetry: remove empty legacy decoy: %w", err)
+		}
+	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		if _, err := os.Stat(legacy); err == nil {
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -51,6 +57,14 @@ func DefaultDBPath() (string, error) {
 			}
 			if closeErr != nil {
 				return "", closeErr
+			}
+		}
+	}
+	if _, err := os.Stat(path); err == nil {
+		if _, err := os.Stat(legacy); err == nil {
+			backup := legacy + ".bak-" + time.Now().UTC().Format("20060102T150405.000000000Z")
+			if err := os.Rename(legacy, backup); err != nil {
+				return "", fmt.Errorf("telemetry: preserve legacy database as %s: %w", backup, err)
 			}
 		}
 	}

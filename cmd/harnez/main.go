@@ -393,19 +393,11 @@ func newRootCmd() *cobra.Command {
 		Aliases: []string{"timeline"},
 		Short:   "Inspect and manage recorded usage history and timelines",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			entries, err := usage.ReadHistory(usage.HistoryDir(""))
+			out, err := renderUsageTimeline(usage.HistoryDir(""), historyJSON)
 			if err != nil {
 				return err
 			}
-			if historyJSON {
-				out, err := usage.RenderTimelineJSON(entries)
-				if err != nil {
-					return err
-				}
-				fmt.Println(out)
-				return nil
-			}
-			fmt.Print(usage.RenderTimelineText(entries))
+			fmt.Println(out)
 			return nil
 		},
 	}
@@ -413,21 +405,13 @@ func newRootCmd() *cobra.Command {
 
 	historyTimelineCmd := &cobra.Command{
 		Use:   "timeline",
-		Short: "Display the merged usage history timeline across all recorded machine logs",
+		Short: "Display snapshot and quota history across all recorded machine logs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			entries, err := usage.ReadHistory(usage.HistoryDir(""))
+			out, err := renderUsageTimeline(usage.HistoryDir(""), historyJSON)
 			if err != nil {
 				return err
 			}
-			if historyJSON {
-				out, err := usage.RenderTimelineJSON(entries)
-				if err != nil {
-					return err
-				}
-				fmt.Println(out)
-				return nil
-			}
-			fmt.Print(usage.RenderTimelineText(entries))
+			fmt.Println(out)
 			return nil
 		},
 	}
