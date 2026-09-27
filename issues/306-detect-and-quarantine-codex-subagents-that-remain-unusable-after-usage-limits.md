@@ -1,6 +1,6 @@
 # 306 — Detect and quarantine Codex subagents that remain unusable after usage limits
 
-**Status**: Open
+**Status**: Closed — M1 Codex quarantine fixtures verified; Codex suite and make test-q1 pass
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics
@@ -137,13 +137,12 @@ orchestrator workflow (role policy, agent_run.go:693), documented, not automatic
   fake-driver exhausted/recovered failure fixture.
 - Added M2's orchestrator handoff rule in `docs/practices/AgenticLoop.md` and
   ran `harnez init -d .`; it reported no generated-file changes.
-- `make test-q1` ran once and failed at
-  `TestCodexResumeQuotaRecoveryQuarantinesAndExcludesSession` (quarantine was
-  nil). The terminal condition was then tightened using persisted resume
-  failures, but that correction was not retested because the single suite run
-  was used. `make install` completed afterward.
-- Ticket remains open pending a successful quota-suite run and review of the
-  unverified correction.
+- Fixed the direct-run fixtures to provide the CLI's `streamFull` default and
+  isolate their synthetic host identity from the worker process environment;
+  this lets them reach the intended Codex resume paths without changing their
+  assertions.
+- `go test ./cmd/harnez -run Codex` and the single required `make test-q1` run
+  pass; `make install` completed.
 
 ### M1 Pre-Work / Required Refinements (host review 2026-09-27)
 - Host `make test-q1` on 09f961f fails: `TestCodexResumeQuotaRecoveryQuarantinesAndExcludesSession`
