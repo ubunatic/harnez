@@ -81,6 +81,42 @@ func TestMarkdownMarkers_HarnezAndLegacy(t *testing.T) {
 	}
 }
 
+func TestPruneSections_RemovesOrphansAndIsIdempotent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "AGENTS.md")
+	fixture := "Owner preamble\n\n<!-- harnez:begin Keep -->\nkeep me\n<!-- harnez:end Keep -->\n\n<!-- harnez:begin Orphan -->\nstale\n<!-- harnez:end Orphan -->\n\n<!-- claudeconfig:begin Legacy -->\nlegacy\n<!-- claudeconfig:end Legacy -->\n\nOwner tail\n"
+	if err := os.WriteFile(path, []byte(fixture), 0644); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := markdown.PruneSections(path, []string{"Keep"})
+	if err != nil || !changed {
+		t.Fatalf("PruneSections() = (%v, %v), want changed without error", changed, err)
+	}
+	afterFirst, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(afterFirst)
+	for _, want := range []string{"Owner preamble", "Owner tail", "keep me", "claudeconfig:begin Legacy", "legacy"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("pruning removed preserved content %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "Orphan") || strings.Contains(got, "stale") {
+		t.Errorf("orphaned Harnez section remains:\n%s", got)
+	}
+	changed, err = markdown.PruneSections(path, []string{"Keep"})
+	if err != nil || changed {
+		t.Fatalf("second PruneSections() = (%v, %v), want no change", changed, err)
+	}
+	afterSecond, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(afterSecond) != got {
+		t.Fatalf("pruning is not idempotent:\nfirst: %q\nsecond: %q", got, afterSecond)
+	}
+}
+
 func TestMarkdownDiff_Identical(t *testing.T) {
 	tmpDir := t.TempDir()
 	mdFile := filepath.Join(tmpDir, "AGENTS.md")

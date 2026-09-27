@@ -893,6 +893,26 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 					Content: mode.Content,
 				})
 			}
+			keepSections := make([]string, 0, len(sections)+4)
+			// These template/backfill blocks are managed by init outside the
+			// config-defined section list.
+			keepSections = append(keepSections, "Local Overlays", "Project Summary")
+			for _, s := range sections {
+				keepSections = append(keepSections, s.Name)
+			}
+			if len(docs) > 0 {
+				keepSections = append(keepSections, "Language Conventions")
+			}
+			if len(quota1) > 0 && quota1[0] {
+				keepSections = append(keepSections, quota1SectionName)
+			}
+			pruned, err := markdown.PruneSections(agentsPath, keepSections)
+			if err != nil {
+				return fmt.Errorf("agents_md.local prune: %w", err)
+			}
+			if pruned {
+				changes++
+			}
 			lr := applyResult{}
 			var presentNames []string
 			for _, s := range sections {

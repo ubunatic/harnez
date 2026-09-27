@@ -122,6 +122,69 @@ func SectionBounds(existing, begin, end string) (lineStart, lineEnd int, found b
 	return ls, le, true
 }
 
+// PruneSections removes well-formed Harnez-managed Markdown sections whose
+// names are not in keep. It leaves legacy markers, malformed blocks, and all
+// unmarked text untouched.
+func PruneSections(path string, keep []string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	content := string(data)
+	original := content
+	kept := make(map[string]bool, len(keep))
+	for _, name := range keep {
+		kept[name] = true
+	}
+	const beginPrefix = "<!-- harnez:begin "
+	for offset := 0; offset < len(content); {
+		relBegin := strings.Index(content[offset:], beginPrefix)
+		if relBegin < 0 {
+			break
+		}
+		bi := offset + relBegin
+		nameStart := bi + len(beginPrefix)
+		nameEnd := strings.Index(content[nameStart:], " -->")
+		if nameEnd < 0 {
+			break
+		}
+		nameEnd += nameStart
+		name := content[nameStart:nameEnd]
+		if name == "" {
+			offset = nameEnd + 4
+			continue
+		}
+		if kept[name] {
+			offset = nameEnd + 4
+			continue
+		}
+		endMarker := MDMarkers.End(name)
+		relEnd := strings.Index(content[nameEnd+4:], endMarker)
+		if relEnd < 0 {
+			offset = nameEnd + 4
+			continue
+		}
+		endStart := nameEnd + 4 + relEnd
+		lineStart := strings.LastIndex(content[:bi], "\n") + 1
+		lineEnd := endStart + len(endMarker)
+		if lineEnd < len(content) && content[lineEnd] == '\n' {
+			lineEnd++
+		}
+		content = content[:lineStart] + content[lineEnd:]
+		offset = lineStart
+	}
+	if content == original {
+		return false, nil
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func locateSection(existingContent, section string, m Markers) (lineStart, lineEnd int, found bool) {
 	if ls, le, ok := SectionBounds(existingContent, m.Begin(section), m.End(section)); ok {
 		return ls, le, true
