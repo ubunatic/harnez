@@ -54,6 +54,13 @@ func TestConcurrentStartPublishesOneSocketAndServesSnapshots(t *testing.T) {
 			t.Fatalf("concurrent Open: %v", err)
 		}
 	}
+	owner, err := Open(opts)
+	if err != nil {
+		t.Fatalf("Open owner: %v", err)
+	}
+	if info := owner.ControllerInfo(); info.SchemaVersion != ControllerInfoVersion || info.State != ControllerJoined || info.PID != os.Getpid() || info.SocketPath != filepath.Join(runtimeDir, "controller.sock") || info.ProtocolVersion != ProtocolVersion {
+		t.Fatalf("joined ControllerInfo = %+v", info)
+	}
 	client, err := Open(Options{StateDir: stateDir, RuntimeDir: runtimeDir})
 	if err != nil {
 		t.Fatalf("Open client: %v", err)
@@ -64,6 +71,9 @@ func TestConcurrentStartPublishesOneSocketAndServesSnapshots(t *testing.T) {
 	}
 	if snapshot == nil || snapshot.ProviderID != ProviderCodex {
 		t.Fatalf("controller Snapshot = %+v", snapshot)
+	}
+	if info := client.ControllerInfo(); info.State != ControllerJoined || info.PID != os.Getpid() {
+		t.Fatalf("attached ControllerInfo = %+v", info)
 	}
 	if info, err := os.Stat(filepath.Join(runtimeDir, "controller.sock")); err != nil || info.Mode().Perm() != 0600 {
 		t.Fatalf("controller socket permissions = %v, %v", info, err)
@@ -199,7 +209,7 @@ func TestRefreshPreservesStaleSnapshotAndPublishesSubscription(t *testing.T) {
 	}
 	select {
 	case event := <-events:
-		if event.Snapshot.Status != StatusStale || event.Snapshot.Error == nil || event.Snapshot.Error.RetryAfter == nil {
+		if event.Snapshot.Status != StatusStale || event.Snapshot.Error == nil || event.Snapshot.Error.RetryAfter == nil || event.RefreshingPID != os.Getpid() {
 			t.Fatalf("published event = %+v", event)
 		}
 	case <-time.After(time.Second):
@@ -209,15 +219,27 @@ func TestRefreshPreservesStaleSnapshotAndPublishesSubscription(t *testing.T) {
 
 func TestForegroundControllerShutsDownAfterIdleTimeout(t *testing.T) {
 	runtimeDir := t.TempDir()
-	client, err := Open(Options{StateDir: t.TempDir(), RuntimeDir: runtimeDir, StartIfAbsent: true, IdleTimeout: 30 * time.Millisecond})
+	idle := make(chan ControllerInfo, 1)
+	client, err := Open(Options{StateDir: t.TempDir(), RuntimeDir: runtimeDir, StartIfAbsent: true, IdleTimeout: 30 * time.Millisecond, OnIdleShutdown: func(info ControllerInfo) { idle <- info }})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
+	}
+	if info := client.ControllerInfo(); info.State != ControllerStarted || info.PID != os.Getpid() || info.SocketPath != filepath.Join(runtimeDir, "controller.sock") || info.ProtocolVersion != ProtocolVersion {
+		t.Fatalf("started ControllerInfo = %+v", info)
 	}
 	defer client.Close()
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
 		if _, err := os.Stat(filepath.Join(runtimeDir, "controller.sock")); os.IsNotExist(err) {
-			return
+			select {
+			case info := <-idle:
+				if info.State != ControllerStarted || info.SchemaVersion != ControllerInfoVersion {
+					t.Fatalf("idle ControllerInfo = %+v", info)
+				}
+				return
+			case <-time.After(time.Second):
+				t.Fatal("owner was not notified of idle shutdown")
+			}
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

@@ -196,3 +196,16 @@ Answers to §7, so M2 can start:
   other caches stay as they are. M5 records retirement conditions.
 - **Gate:** M2 and M3 stay inside `usage/` (+ internal adapters) and do not change `cmd/harnez` behavior or
   `make install` output. M4 (CLI migration) needs user review before it starts.
+
+## 10. Issue 560 demo and lifecycle contract (2026-09-27)
+
+- `examples/usage/main.go` demonstrates the public library rather than `harnez usage --compact`: it starts or joins
+  the in-process controller, reads persisted snapshots, requests a refresh, and displays subscription updates.
+  `--refresh` is the short second-client flow; its collector is a clearly labelled deterministic demo stub, not a
+  provider integration.
+- `Client.ControllerInfo` returns the versioned `ControllerInfo` contract: client relationship (`started`, `joined`,
+  or `unavailable`), controller PID, socket path, and IPC protocol version. `SnapshotEvent.RefreshingPID` identifies
+  the client process that requested a published refresh. `Options.OnIdleShutdown` notifies the in-process owner when
+  its idle controller exits.
+- This remains M2/M3 library-only work. `cmd/harnez` and installed-binary behavior are unchanged.
+- Verification: `make test-q1` passed on 2026-09-27; `/tmp/issue-560-demo-test.log` has no `--- FAIL` entries.

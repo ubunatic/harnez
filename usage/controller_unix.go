@@ -29,60 +29,75 @@ func runtimeDir(opts Options) string {
 
 func socketPath(opts Options) string { return filepath.Join(runtimeDir(opts), "controller.sock") }
 
-func startIfAbsent(opts Options) error {
-	if _, err := requestController(context.Background(), opts, wireRequest{Version: ProtocolVersion, Operation: "snapshot"}); err == nil {
-		return nil
+func startIfAbsent(opts Options) (ControllerInfo, error) {
+	if info, err := controllerInfo(context.Background(), opts); err == nil {
+		info.State = ControllerJoined
+		return info, nil
 	}
 	dir := runtimeDir(opts)
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("usage: create runtime directory: %w", err)
+		return ControllerInfo{}, fmt.Errorf("usage: create runtime directory: %w", err)
 	}
 	if err := os.Chmod(dir, 0700); err != nil {
-		return fmt.Errorf("usage: secure runtime directory: %w", err)
+		return ControllerInfo{}, fmt.Errorf("usage: secure runtime directory: %w", err)
 	}
 	lock, err := os.OpenFile(filepath.Join(dir, "controller.lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
-		return fmt.Errorf("usage: open controller lock: %w", err)
+		return ControllerInfo{}, fmt.Errorf("usage: open controller lock: %w", err)
 	}
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = lock.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil
+			return waitForController(opts)
 		}
-		return fmt.Errorf("usage: lock controller: %w", err)
+		return ControllerInfo{}, fmt.Errorf("usage: lock controller: %w", err)
 	}
 	path := socketPath(opts)
-	if _, err := requestController(context.Background(), opts, wireRequest{Version: ProtocolVersion, Operation: "snapshot"}); err == nil {
+	if info, err := controllerInfo(context.Background(), opts); err == nil {
 		_ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 		_ = lock.Close()
-		return nil
+		info.State = ControllerJoined
+		return info, nil
 	}
 	_ = os.Remove(path)
 	listener, err := net.Listen("unix", path)
 	if err != nil {
 		_ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 		_ = lock.Close()
-		return fmt.Errorf("usage: listen on controller socket: %w", err)
+		return ControllerInfo{}, fmt.Errorf("usage: listen on controller socket: %w", err)
 	}
 	if err := os.Chmod(path, 0600); err != nil {
 		_ = listener.Close()
 		_ = os.Remove(path)
 		_ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 		_ = lock.Close()
-		return fmt.Errorf("usage: secure controller socket: %w", err)
+		return ControllerInfo{}, fmt.Errorf("usage: secure controller socket: %w", err)
 	}
 	controller := &controller{
-		opts:        opts,
-		listener:    listener,
-		lock:        lock,
-		waiters:     make(map[uint64]chan SnapshotEvent),
-		closed:      make(chan struct{}),
-		lastRefresh: make(map[ProviderID]time.Time),
-		inFlight:    make(map[ProviderID]*refreshFlight),
+		opts:           opts,
+		listener:       listener,
+		lock:           lock,
+		waiters:        make(map[uint64]chan SnapshotEvent),
+		closed:         make(chan struct{}),
+		lastRefresh:    make(map[ProviderID]time.Time),
+		inFlight:       make(map[ProviderID]*refreshFlight),
+		onIdleShutdown: opts.OnIdleShutdown,
 	}
 	go controller.serve()
 	go controller.shutdownWhenIdle()
-	return nil
+	return controller.info(ControllerStarted), nil
+}
+
+func waitForController(opts Options) (ControllerInfo, error) {
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if info, err := controllerInfo(context.Background(), opts); err == nil {
+			info.State = ControllerJoined
+			return info, nil
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return ControllerInfo{}, errors.New("usage: controller did not publish its socket")
 }
 
 func closeController(controller *controller) {

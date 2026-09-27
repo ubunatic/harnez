@@ -39,6 +39,35 @@ type Options struct {
 	IdleTimeout        time.Duration
 	Collector          Collector
 	MinRefreshInterval time.Duration
+	// OnIdleShutdown is called by an in-process controller's owner after it
+	// shuts down because it has been idle for IdleTimeout. It is never called
+	// for a controller this client merely joined.
+	OnIdleShutdown func(ControllerInfo)
+}
+
+// ControllerInfoVersion is the version of the controller-discovery contract.
+// Fields may be added compatibly within this version.
+const ControllerInfoVersion = 1
+
+// ControllerState describes this client's relationship to a controller.
+type ControllerState string
+
+const (
+	ControllerUnavailable ControllerState = "unavailable"
+	ControllerStarted     ControllerState = "started"
+	ControllerJoined      ControllerState = "joined"
+)
+
+// ControllerInfo is versioned lifecycle information for the local controller.
+// PID is the controller process ID, SocketPath is its Unix-domain socket, and
+// ProtocolVersion is the local IPC protocol it serves.
+type ControllerInfo struct {
+	SchemaVersion   int             `json:"schema_version"`
+	State           ControllerState `json:"state"`
+	PID             int             `json:"pid,omitempty"`
+	SocketPath      string          `json:"socket_path,omitempty"`
+	ProtocolVersion int             `json:"protocol_version"`
+	IdleTimeout     time.Duration   `json:"idle_timeout,omitempty"`
 }
 
 // Collector performs one provider's live collection. The controller, rather
@@ -68,6 +97,7 @@ func (e ProviderError) Error() string { return "usage: provider collection faile
 // Close only releases this client's connection; it never stops a controller it
 // did not start.
 type Client interface {
+	ControllerInfo() ControllerInfo
 	Snapshot(context.Context, ProviderID) (*Snapshot, error)
 	Subscribe(context.Context, ProviderID) (<-chan SnapshotEvent, error)
 	Refresh(context.Context, ...ProviderID) ([]Snapshot, error)
@@ -76,11 +106,13 @@ type Client interface {
 
 // SnapshotEvent is emitted when a controller publishes a changed snapshot.
 type SnapshotEvent struct {
-	Snapshot Snapshot `json:"snapshot"`
+	Snapshot      Snapshot `json:"snapshot"`
+	RefreshingPID int      `json:"refreshing_pid,omitempty"`
 }
 
 type client struct {
-	opts Options
+	opts           Options
+	controllerInfo ControllerInfo
 }
 
 // Open opens a file-reading client and attaches to an already-running local
@@ -99,13 +131,24 @@ func Open(opts Options) (Client, error) {
 		opts.MinRefreshInterval = DefaultMinRefreshInterval
 	}
 	if !opts.StartIfAbsent {
-		return &client{opts: opts}, nil
+		info, err := controllerInfo(context.Background(), opts)
+		if err != nil {
+			info = unavailableControllerInfo(opts)
+		} else {
+			info.State = ControllerJoined
+		}
+		return &client{opts: opts, controllerInfo: info}, nil
 	}
-	if err := startIfAbsent(opts); err != nil {
+	info, err := startIfAbsent(opts)
+	if err != nil {
 		return nil, err
 	}
-	return &client{opts: opts}, nil
+	return &client{opts: opts, controllerInfo: info}, nil
 }
+
+// ControllerInfo reports whether this client started, joined, or could not
+// find a controller when it was opened.
+func (c *client) ControllerInfo() ControllerInfo { return c.controllerInfo }
 
 func (c *client) Snapshot(ctx context.Context, provider ProviderID) (*Snapshot, error) {
 	if err := ctx.Err(); err != nil {
@@ -123,7 +166,7 @@ func (c *client) Subscribe(ctx context.Context, provider ProviderID) (<-chan Sna
 }
 
 func (c *client) Refresh(ctx context.Context, providers ...ProviderID) ([]Snapshot, error) {
-	response, err := requestController(ctx, c.opts, wireRequest{Version: ProtocolVersion, Operation: "refresh", Providers: providers})
+	response, err := requestController(ctx, c.opts, wireRequest{Version: ProtocolVersion, Operation: "refresh", Providers: providers, ClientPID: os.Getpid()})
 	if err != nil {
 		return nil, err
 	}
@@ -139,12 +182,14 @@ type wireRequest struct {
 	Version   int          `json:"version"`
 	Operation string       `json:"operation"`
 	Providers []ProviderID `json:"providers,omitempty"`
+	ClientPID int          `json:"client_pid,omitempty"`
 }
 
 type wireResponse struct {
-	Version   int        `json:"version"`
-	Snapshots []Snapshot `json:"snapshots,omitempty"`
-	Error     string     `json:"error,omitempty"`
+	Version    int            `json:"version"`
+	Snapshots  []Snapshot     `json:"snapshots,omitempty"`
+	Error      string         `json:"error,omitempty"`
+	Controller ControllerInfo `json:"controller,omitempty"`
 }
 
 func (r wireResponse) snapshot(provider ProviderID) *Snapshot {
@@ -158,17 +203,18 @@ func (r wireResponse) snapshot(provider ProviderID) *Snapshot {
 }
 
 type controller struct {
-	opts        Options
-	listener    net.Listener
-	lock        *os.File
-	mu          sync.Mutex
-	clients     int
-	waiters     map[uint64]chan SnapshotEvent
-	nextID      uint64
-	closed      chan struct{}
-	close       sync.Once
-	lastRefresh map[ProviderID]time.Time
-	inFlight    map[ProviderID]*refreshFlight
+	opts           Options
+	listener       net.Listener
+	lock           *os.File
+	mu             sync.Mutex
+	clients        int
+	waiters        map[uint64]chan SnapshotEvent
+	nextID         uint64
+	closed         chan struct{}
+	close          sync.Once
+	lastRefresh    map[ProviderID]time.Time
+	inFlight       map[ProviderID]*refreshFlight
+	onIdleShutdown func(ControllerInfo)
 }
 
 type refreshFlight struct {
@@ -203,7 +249,11 @@ func (c *controller) shutdownWhenIdle() {
 			active := c.clients
 			c.mu.Unlock()
 			if active == 0 {
+				info := c.info(ControllerStarted)
 				c.shutdown()
+				if c.onIdleShutdown != nil {
+					c.onIdleShutdown(info)
+				}
 				return
 			}
 			timer.Reset(c.opts.IdleTimeout)
@@ -237,10 +287,12 @@ func (c *controller) handle(conn net.Conn) {
 		return
 	}
 	switch request.Operation {
+	case "info":
+		c.reply(conn, wireResponse{Version: ProtocolVersion, Controller: c.info(ControllerJoined)})
 	case "snapshot":
 		c.reply(conn, c.read(request.Providers))
 	case "refresh":
-		c.reply(conn, wireResponse{Version: ProtocolVersion, Snapshots: c.refresh(request.Providers)})
+		c.reply(conn, wireResponse{Version: ProtocolVersion, Snapshots: c.refresh(request.Providers, request.ClientPID)})
 	case "subscribe":
 		c.subscribe(conn, request.Providers)
 	default:
@@ -298,29 +350,29 @@ func (c *controller) writeEvent(conn net.Conn, event SnapshotEvent) bool {
 	return json.NewEncoder(conn).Encode(event) == nil
 }
 
-func (c *controller) publish(snapshot Snapshot) {
+func (c *controller) publish(snapshot Snapshot, refreshingPID int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, waiter := range c.waiters {
 		select {
-		case waiter <- SnapshotEvent{Snapshot: snapshot}:
+		case waiter <- SnapshotEvent{Snapshot: snapshot, RefreshingPID: refreshingPID}:
 		default:
 		}
 	}
 }
 
-func (c *controller) refresh(providers []ProviderID) []Snapshot {
+func (c *controller) refresh(providers []ProviderID, refreshingPID int) []Snapshot {
 	if len(providers) == 0 {
 		providers = []ProviderID{ProviderClaude, ProviderAGY, ProviderCodex}
 	}
 	result := make([]Snapshot, 0, len(providers))
 	for _, provider := range providers {
-		result = append(result, c.refreshProvider(provider))
+		result = append(result, c.refreshProvider(provider, refreshingPID))
 	}
 	return result
 }
 
-func (c *controller) refreshProvider(provider ProviderID) Snapshot {
+func (c *controller) refreshProvider(provider ProviderID, refreshingPID int) Snapshot {
 	if !validProviderID(provider) {
 		return c.failedSnapshot(provider, ErrorProviderFetch, time.Time{})
 	}
@@ -345,8 +397,24 @@ func (c *controller) refreshProvider(provider ProviderID) Snapshot {
 	delete(c.inFlight, provider)
 	close(flight.done)
 	c.mu.Unlock()
-	c.publish(snapshot)
+	c.publish(snapshot, refreshingPID)
 	return snapshot
+}
+
+func (c *controller) info(state ControllerState) ControllerInfo {
+	return ControllerInfo{SchemaVersion: ControllerInfoVersion, State: state, PID: os.Getpid(), SocketPath: socketPath(c.opts), ProtocolVersion: ProtocolVersion, IdleTimeout: c.opts.IdleTimeout}
+}
+
+func controllerInfo(ctx context.Context, opts Options) (ControllerInfo, error) {
+	response, err := requestController(ctx, opts, wireRequest{Version: ProtocolVersion, Operation: "info"})
+	if err != nil {
+		return ControllerInfo{}, err
+	}
+	return response.Controller, nil
+}
+
+func unavailableControllerInfo(opts Options) ControllerInfo {
+	return ControllerInfo{SchemaVersion: ControllerInfoVersion, State: ControllerUnavailable, SocketPath: socketPath(opts), ProtocolVersion: ProtocolVersion, IdleTimeout: opts.IdleTimeout}
 }
 
 func (c *controller) collectAndPersist(provider ProviderID) Snapshot {
