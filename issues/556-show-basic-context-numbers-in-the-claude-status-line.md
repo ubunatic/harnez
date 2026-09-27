@@ -1,6 +1,6 @@
 # 556 — Show basic context numbers in the Claude status line
 
-**Status**: In Progress
+**Status**: Closed — context size and cache percentage covered by statusline tests
 **Priority**: P2
 **Severity**: Moderate
 **Category**: Feature
