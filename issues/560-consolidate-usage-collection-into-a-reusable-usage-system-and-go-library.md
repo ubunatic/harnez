@@ -209,3 +209,22 @@ Answers to §7, so M2 can start:
   its idle controller exits.
 - This remains M2/M3 library-only work. `cmd/harnez` and installed-binary behavior are unchanged.
 - Verification: `make test-q1` passed on 2026-09-27; `/tmp/issue-560-demo-test.log` has no `--- FAIL` entries.
+
+## Demo Review (host, 2026-09-27, 0683096)
+Tests passed, but a real run of `examples/usage` failed the plausibility check:
+1. **Data corruption (critical):** the demo's stub collector wrote fake snapshots (claude and codex both 43%/18%,
+   status `live`, source `live`) into the real state dir `~/.local/state/harnez/agents/usage/`, which
+   `harnez usage` and the status line read. Host repaired it with `harnez agent-collector --once`.
+2. **Ctrl+C does not quit:** SIGINT (`timeout -s INT 4`) left the process running; needed `kill`.
+3. **Output differs from mockup:** no bars or colours in the table, statuses uncoloured, "OBSERVED" is a clock
+   time instead of "4m ago", agy shows `unknown legacy` instead of `skipped / not installed`.
+4. A stray earlier demo process kept the controller alive, so the next run "joined" it: the idle shutdown
+   did not happen while a subscriber was attached (expected), but the owner stayed after SIGINT (see 2).
+
+### Demo Fix Pre-Work / Required Refinements
+- The demo must never write to the real state dir: default to a temp StateDir/RuntimeDir (print it), and
+  label stub data `source: demo`, never `live`. Add a test that the demo's options never resolve to `usage.StateDir("")`.
+- Consider a library guard: a Collector-less or stub controller must not persist into the shared state dir.
+- Handle SIGINT/SIGTERM (signal.NotifyContext), close the client, exit 0. Test or manual proof.
+- Match the mockup: coloured status, bars, relative age, `skipped` for not-installed providers.
+- Host verifies with a real run under `timeout -s INT`, checking the real state dir's mtimes are unchanged.
