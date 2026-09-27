@@ -4,7 +4,7 @@
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Architecture
-**Related**:
+**Related**: #547 (turn detach and wait reattach), #611 (zero polling & scheduling)
 
 ---
 

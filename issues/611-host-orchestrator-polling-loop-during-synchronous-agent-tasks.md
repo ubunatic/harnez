@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Behavior / Experience
-**Related**: 572 (async subagent dispatch), 578 (safely discoverable agent workflow), 589 (background shell guidance)
+**Related**: #547 (clean 60s turn detach and HTO=0 wait reattach), 572 (async subagent dispatch), 578 (safely discoverable agent workflow), 589 (background shell guidance), 608 (CLI backgrounding)
 
 ---
 
@@ -13,12 +13,13 @@ When the Host Orchestrator in an interactive pair programming environment dispat
 
 In practice, agents often fall into tight polling patterns:
 - Checking task status via `manage_task status` or repeatedly reading the task log (`task-xxx.log`).
+- Setting recurring timers (`schedule` / cron) to poll child workers.
 - This causes high tool call volume, consumes unnecessary context tokens, and risks tripping rate warnings (`harnez rate`).
 
 ### Why the Host Chose to Poll (Root Cause Analysis)
 1. **Lack of Synchronous Execution Guarantee**: A short default timeout in tools (`WaitMsBeforeAsync` or execution timeouts) causes long-running agent starts to quickly drop into the background.
 2. **Ambiguity on Long-Running Agent State**: Without a dedicated event/stream notification protocol or clear detachment convention in the skill instructions, the host agent tries to actively observe the child worker's turn output (e.g. waiting for `[done]` / confirmation banners).
-3. **Execution Timeout Traps (`HTO`)**: Child agent turns can get killed by default execution timeouts (e.g. `HTO=1m` killing a resume turn with `exit status 137`), reinforcing the host's instinct to monitor process health closely to detect timeouts early.
+3. **Execution Timeout Traps (`HTO`)**: Child agent turns get killed by default execution timeouts (e.g. `HTO=1m` killing a resume turn with `exit status 137`), reinforcing the host's instinct to monitor process health closely to detect timeouts early.
 
 ---
 
@@ -28,20 +29,24 @@ In practice, agents often fall into tight polling patterns:
    - The hosting environment (e.g., Antigravity/AGY) already provides reactive wakeups: when the background process finishes, a high-priority notification message with output is delivered automatically into context.
    - Polling loops provide zero additional responsiveness because LLM turns are discrete; active tool loops only churn turns without accelerating worker completion.
 2. **Explicit Detachment vs Background Stream**:
-   - For interactive orchestrators, commands like `harnez agent start` and `harnez agent resume` either need clear detached semantics (e.g. `--detach` + waiting explicitly on a single wake event) or explicit guidance in `.harnez/rules/Subagents.md` / `LeanSprints.md` instructing the host to yield turns immediately rather than inspecting log files in loops.
+   - See issue #547: rather than killing agent turns at 60s or running into ambiguous states, `harnez agent start` and `resume` allow synchronous completion under 60s, but cleanly detach after 60s with explicit instructions to reattach via `harnez agent wait <session>` in a background task.
+   - Reattaching via `harnez agent wait` implies no timeout (`timeout = 0`), eliminating SIGKILL traps.
+   - The host instruction explicitly mandates: **Do NOT poll. Do NOT schedule timers or cron jobs.**
 
 ---
 
 ## 3. Proposed Improvements
 
-1. **Update Lean Sprint & Agentic Rules**:
-   - In `docs/practices/AgenticLoop.md` and `.harnez/rules/Subagents.md`, explicitly state the zero-polling invariant: once a subagent or background task is dispatched, the host must not poll logs or loop on status. The host must yield the turn immediately and wait for the reactive completion message.
-2. **Auto-set `HTO=0` for Subagent Commands**:
-   - Ensure subagent commands (`harnez agent start/resume`) automatically execute without default 1m timeouts, avoiding unexpected SIGKILLs (`exit status 137`) that trigger host panic-checking.
+1. **Consolidated with Issue #547**:
+   - Issue #547 defines the engine-level detach mechanism at 60s and the default `timeout = 0` for `harnez agent wait`.
+2. **Host Rule Guidance (Zero-Polling & Zero-Scheduling Invariant)**:
+   - In `docs/practices/AgenticLoop.md` and `.harnez/rules/Subagents.md`, explicitly state the zero-polling and zero-scheduling invariant: once a subagent or background task is dispatched, the host must not poll logs, loop on status, or set timers. The host must yield the turn immediately and wait for the reactive completion message.
 3. **Clear Stream / Progress Feedback**:
-   - When detached/backgrounded, provide a clear machine-friendly instruction: `"Agent is executing asynchronously in session <id>. Do not poll. Await completion signal."`
+   - When detached/backgrounded, emit the directive instruction:
+     `"Agent turn exceeded 60s and has been cleanly detached to the background. Do NOT poll. Do NOT schedule timers or cron jobs. Reattach by launching a background job: harnez agent wait <name>. When the background job finishes, your environment will automatically notify this session."`
 
 ---
+
 
 ## 4. Field Feedback from AGY Host Session (2026-09-27)
 
