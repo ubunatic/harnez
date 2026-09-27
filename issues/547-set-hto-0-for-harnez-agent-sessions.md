@@ -74,20 +74,8 @@ Rather than letting `harnez agent` turns be killed after 60 seconds:
 ## 4. Progress & Milestones
 
 - [x] **M1 (exec timeout exemption for wait)**: Delivered in `46610db`. Implemented `isHarnezAgentWait` in `cmd/harnez/exec.go` and comprehensive unit tests in `cmd/harnez/exec_test.go`. Direct and bash-wrapped `harnez agent wait` resolve to timeout 0 while explicit flags/HTO and regular commands are preserved.
-- [ ] **M2 (clean 60s foreground turn detach & reattach guidance)**:
-  - **Pre-Work / Required Refinements**:
-    - Account for explicit outer execution timeouts (e.g. `harnez exec --timeout` or `--timeout` flags passed to `harnez agent`) so explicit timeouts suppress foreground auto-detach.
-    - Worker process must run in its own session/process group from the outset so foreground parent detachment does not terminate the in-flight provider turn.
-    - Ensure both `harnez agent start` and `harnez agent resume` implement symmetric detach behavior.
-    - Standardized host output block on detachment must include: session info, directive to not poll or schedule timers/crons, and background `harnez agent wait <name>` instruction.
-    - Integration tests in `cmd/harnez/agent_test.go` verifying deadline detach, wait reattachment, and zero-polling directive output.
-    - **CRITICAL REFINEMENTS / BUG FIXES REQUIRED IN M2**:
-      1. **Subprocess leaf-worker guard collision**:
-         - In `launchForegroundWorker`, `worker.Env` inherits `HARNEZ_AGENT_ROLE=developer` (set by `setAgentEnv`). When the child executes `harnez agent resume --worker-session ...`, `guardLeafRole` rejects it with `Error: agent role "developer" is a leaf worker: it must not start, resume or manage agents`.
-         - Fix: Internal worker executions (`--worker-session`) are not leaf agents spawning new helpers. In `guardLeafRole`, exempt `--worker-session` invocations (or remove `HARNEZ_AGENT_ROLE` when launching internal worker subprocesses).
-      2. **Subprocess re-exec breaks in `go test` and bypasses mocks**:
-         - Under `make test-q1`, commands run via `harnez exec`, exporting `HARNEZ_EXEC_EFFECTIVE_TIMEOUT=60s`.
-         - Inside `go test`, `agentExecutable()` resolves to `os.Executable()`, which is `harnez.test` (the test binary). Passing `--store-dir`, `agent`, etc. crashes with `flag provided but not defined: -store-dir`.
-         - Additionally, unit tests inject in-memory mock drivers in `agentDeps`. Spawning an external binary bypasses in-process mock drivers entirely.
-         - Fix: Disable foreground detachment when running in unit test mode (e.g. if `strings.HasSuffix(exe, ".test")` or `flag.Lookup("test.v") != nil` or when mock drivers are injected without explicit detach test wiring). Foreground subprocess detachment must only activate for real CLI executions or tests specifically configured for detached worker verification.
+- [x] **M2 (clean 60s foreground turn detach & reattach guidance)**: Delivered in `2559134` and `355bec5`. Implemented foreground worker detachment, independent process groups via `Setsid`, zero-polling/scheduling guidance output, and test-mode guards.
+- [ ] **M2 Refinements (Pre-Commit Review Gate Findings)**:
+  - **JSON Detach Output**: When `--json` is specified, `writeDetachGuidance` must emit valid JSON (including session info, status `running`, detached flag, and wait command instructions) rather than plain text, preventing JSON parser breaks for callers.
+  - **Worker CLI Test Coverage**: Add unit/integration test in `cmd/harnez/agent_test.go` covering real CLI flag parsing for `--worker-session` under `agent start` and `agent resume` (verifying `runDetachedResumeWorker` executes and parses arguments cleanly).
 
