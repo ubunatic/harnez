@@ -39,9 +39,10 @@ func newStatsCmd() *cobra.Command {
 	var daysFlag int
 	var sessionFlag string
 	var callsFlag bool
+	var whereFlag bool
 
 	cmd := &cobra.Command{
-		Use:   "stats [--quality] [--json] [--strict] [--session <id> --calls] [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--project <name>] [--auto]",
+		Use:   "stats [--where] [--quality] [--json] [--strict] [--session <id> --calls] [--tool <name>] [--agent <name>] [--ticket <ticket_id>] [--project <name>] [--auto]",
 		Short: "Report call frequency, average score, failure rate, and byte savings from tool_calls telemetry",
 		Long: `stats renders an analytical report over the tool_calls telemetry table
 (internal/telemetry, issue 116, populated by 'harnez rate' and 'harnez exec'):
@@ -72,6 +73,9 @@ formatted terminal table; --json emits the same numbers unformatted for
 scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if whereFlag {
+				return runStatsWhere(cmd.OutOrStdout(), jsonOut)
+			}
 			if agentsFlag {
 				return runAgentStats(cmd.OutOrStdout(), agentStatsOptions{Days: daysFlag, JSON: jsonOut, All: agentsAll})
 			}
@@ -98,6 +102,7 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 	cmd.Flags().BoolVar(&callsFlag, "calls", false, "list provider model requests and merged tool calls for --session")
 	cmd.Flags().BoolVar(&autoFlag, "auto", false, "filter to the current session, resolved from the environment (like harnez rate/exec)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "output the report as JSON instead of a formatted table")
+	cmd.Flags().BoolVar(&whereFlag, "where", false, "list harnez data stores, paths, sizes, newest records, owners, and purposes")
 	cmd.Flags().BoolVar(&overheadFlag, "overhead", false,
 		"also report the harnez rate feedback overhead (issue 142): call count/bytes from telemetry plus an ESTIMATED token cost, clearly labeled as an estimate, not provider-reported")
 	cmd.Flags().BoolVar(&qualityFlag, "quality", false, "run read-only telemetry data-quality checks")
