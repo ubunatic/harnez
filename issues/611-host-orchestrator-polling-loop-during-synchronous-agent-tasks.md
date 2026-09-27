@@ -40,3 +40,25 @@ In practice, agents often fall into tight polling patterns:
    - Ensure subagent commands (`harnez agent start/resume`) automatically execute without default 1m timeouts, avoiding unexpected SIGKILLs (`exit status 137`) that trigger host panic-checking.
 3. **Clear Stream / Progress Feedback**:
    - When detached/backgrounded, provide a clear machine-friendly instruction: `"Agent is executing asynchronously in session <id>. Do not poll. Await completion signal."`
+
+---
+
+## 4. Field Feedback from AGY Host Session (2026-09-27)
+
+During lean sprints on Loom issues 138 and 140, an interactive AGY host orchestrator tested this workflow in practice. Key observations and working patterns:
+
+1. **Zero-Coding Invariant & Leaf Worker Delegation**:
+   - The host maintains context discipline: plans milestones in the issue ticket, reviews commit diffs (`git log -n 1 --stat`, `git diff HEAD~1`), and runs verification commands (`go test ./...`, `make install`).
+   - All source code edits, unit tests, and bug fixes are delegated to a low-cost leaf worker (`codex:luna:low`).
+
+2. **Crucial Role of `HTO=0` for Non-Trivial Sprints**:
+   - `harnez agent start` initially timed out on M1 after 1m0s with code 137.
+   - Setting `HTO=0` on all agent commands (`HTO=0 harnez agent start ...`, `HTO=0 harnez agent resume ...`) allowed long test runs and multi-file edits to complete reliably without hitting arbitrary kill boundaries.
+
+3. **Clean Reactive Wakeup without Busy Polling**:
+   - When `run_command` sends a long-running agent command into the background, the hosting environment automatically delivers the completion output as a high-priority system notification.
+   - Yielding the turn immediately without polling `manage_task` or reading `.log` files kept context small and token usage minimal across multi-milestone sprints.
+
+4. **CLI & Native Tool Synergy**:
+   - Combining Harnez CLI lifecycle commands (`harnez issues new/open/close`, `harnez agent start/resume/stop`, `harnez find`, `harnez apply`) with native shell (`run_command`), targeted file viewing (`view_file`), and ticket editing (`write_to_file`) provided a smooth, fully autonomous execution pipeline.
+
