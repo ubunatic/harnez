@@ -1,6 +1,6 @@
 # 555 — quota-1 failure summary shows the real error when there are no FAIL lines
 
-**Status**: Open
+**Status**: Closed — diagnostics summarized and covered by regression tests
 **Priority**: P2
 **Severity**: Low
 **Category**: Feature / Exec
@@ -26,3 +26,7 @@ the last ~10 lines of output. Unit tests cover vet error, build failure, panic a
 
 - Logs are written only on failure (`writeQuota1FailureLog`); a passing run has no log. Intended.
 - Idea, not in scope: run `go vet` before the one allowed test run so a vet error does not use it up.
+
+## Outcome
+
+Failure summaries now show matching vet/build/panic diagnostics, or the last ten output lines when no diagnostic matches. Regression cases cover vet errors, build failures, panics, and fallback output. `make test-q1` passed; `make install` completed.
