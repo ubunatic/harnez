@@ -258,3 +258,21 @@ Tests passed, but a real run of `examples/usage` failed the plausibility check:
   provider collector against a temporary home. `make test-q1` passed; output: `/tmp/issue-560-m4-test.log`.
 - A nil-map initialization correction in `cmd/harnez/usage_shared.go` followed that suite run; `go build ./cmd/harnez`
   and `make install` passed afterward. The corrected file needs a fresh suite run by the host.
+
+## M4 Review (host, 2026-09-27, 610842f)
+Suite green on 610842f; `--host`/`--project` errors OK. Real run failed condition (1) and corrupted real state again:
+- `harnez usage --shared --json` vs plain: `authenticated` false (plain: true); `name`, `plan_tier`, `active_model`,
+  `details`, `model_tokens`, window names and `duration_left` are dropped.
+- It persisted that lossy public `Snapshot` (≈320 B, `schema_version`/`provider_id` wrapper) into
+  `~/.local/state/harnez/agents/usage/*.json`, the same files `harnez agent-collector` writes in its full format
+  (`fetched_at` + `usage{agent_id,...}`, 1–2 KB). Two writers, two formats, one path: the lossy one clobbers the full
+  data read by `harnez usage` and the status line. Host repaired with `harnez agent-collector --once`.
+  The earlier "demo corruption" was likely the same controller persistence path, not only the stub.
+
+### M4 Fix Pre-Work / Required Refinements
+- One on-disk format per file. The controller must not write the public `Snapshot` over the collector's file:
+  either persist the full `AgentUsage` payload unchanged (public Snapshot as a view on read), or use its own
+  separate file/dir. Add a test: a collector-format file survives a `--shared` run byte-for-byte (except refresh).
+- The collector adapter must carry every field the renderers use; add a test comparing `--shared --json` with the
+  no-flag JSON for the same fixture (ignoring timestamps).
+- Tests may never touch `usage.StateDir("")`; host verifies with a real run and a before/after checksum of the real dir.
