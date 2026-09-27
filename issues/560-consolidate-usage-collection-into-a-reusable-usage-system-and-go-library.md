@@ -276,3 +276,11 @@ Suite green on 610842f; `--host`/`--project` errors OK. Real run failed conditio
 - The collector adapter must carry every field the renderers use; add a test comparing `--shared --json` with the
   no-flag JSON for the same fixture (ignoring timestamps).
 - Tests may never touch `usage.StateDir("")`; host verifies with a real run and a before/after checksum of the real dir.
+
+## Handoff (2026-09-27, session wrap)
+- State: M1–M4 committed; M4 (610842f) `--shared` is **broken** (lossy output, clobbers collector state). Do not use it.
+- Resume point: implement "M4 Fix Pre-Work" above. Chosen direction: controller writes to its own default dir,
+  `usage.StateDir` stays the collector's (controller read-only, legacy fallback).
+- Blocked: Codex quota exhausted (terra/luna refused). User to decide: wait for quota, or revert 610842f.
+- Verify with a real run: checksum `~/.local/state/harnez/agents/usage/` before/after `harnez usage --shared`,
+  and diff `--shared --json` vs plain JSON ignoring timestamps.
