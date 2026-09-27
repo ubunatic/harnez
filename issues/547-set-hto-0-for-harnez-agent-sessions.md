@@ -69,3 +69,16 @@ Rather than letting `harnez agent` turns be killed after 60 seconds:
    - Test that a simulated slow turn (exceeding foreground timeout) cleanly transitions to a detached session, emits the zero-polling / zero-scheduling background reattach instruction, and leaves a valid session resumable/waitable via `harnez agent wait`.
    - Verify `make test-q1` passes under full Quota-1 enforcement.
 
+---
+
+## 4. Progress & Milestones
+
+- [x] **M1 (exec timeout exemption for wait)**: Delivered in `46610db`. Implemented `isHarnezAgentWait` in `cmd/harnez/exec.go` and comprehensive unit tests in `cmd/harnez/exec_test.go`. Direct and bash-wrapped `harnez agent wait` resolve to timeout 0 while explicit flags/HTO and regular commands are preserved.
+- [ ] **M2 (clean 60s foreground turn detach & reattach guidance)**:
+  - **Pre-Work / Required Refinements**:
+    - Account for explicit outer execution timeouts (e.g. `harnez exec --timeout` or `--timeout` flags passed to `harnez agent`) so explicit timeouts suppress foreground auto-detach.
+    - Worker process must run in its own session/process group from the outset so foreground parent detachment does not terminate the in-flight provider turn.
+    - Ensure both `harnez agent start` and `harnez agent resume` implement symmetric detach behavior.
+    - Standardized host output block on detachment must include: session info, directive to not poll or schedule timers/crons, and background `harnez agent wait <name>` instruction.
+    - Integration tests in `cmd/harnez/agent_test.go` verifying deadline detach, wait reattachment, and zero-polling directive output.
+
