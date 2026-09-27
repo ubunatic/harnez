@@ -56,6 +56,8 @@ func TestManagedAgentExamplesParseAgainstCobra(t *testing.T) {
 	}
 	section := string(config[sectionStart : sectionStart+sectionEnd])
 	for _, phrase := range []string{
+		"A requested model such as `terra:low` or `luna` is a Harnez agent model",
+		"dispatch it with `harnez agent start --model <name>`, regardless of `subagent_mode`",
 		"When a `/goal` without an exit clause is set (e.g. typed by the user), say so in the first reply",
 		"/goal ... or stop and report when blocked on a user decision or denied permission",
 		"once blocked on the user, suggest `/goal clear` instead of repeating the wait message",

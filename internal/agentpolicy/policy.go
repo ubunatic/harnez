@@ -17,9 +17,9 @@ import (
 const Section = "Subagent Policy"
 
 const policyBody = `# subagent_mode: %s
-- native: spawn subagents of your own vendor natively. For another provider's model, or when
-  the user names a model (e.g. "ask luna:low"), run it through ` + "`harnez agent --model <spec> -p ...`" + `
-  (see ` + "`harnez agent models`" + `).
+- A requested model such as ` + "`terra:low`" + ` or ` + "`luna`" + ` is a Harnez agent model (see ` + "`harnez agent models`" + `);
+  dispatch it with ` + "`harnez agent start --model <name>`" + `, regardless of ` + "`subagent_mode`" + `.
+- native: spawn subagents of your own vendor natively; this mode governs only your own subagent choice.
 - harnez: dispatch every subagent through ` + "`harnez agent`" + `.
 - When Harnez MCP tools are exposed, use ` + "`harnez_spawn_agent`" + ` for a structured result and
   lifecycle, or ` + "`harnez_command`" + ` when the host should run the returned command in Bash.
