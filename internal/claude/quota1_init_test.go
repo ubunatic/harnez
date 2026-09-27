@@ -63,6 +63,9 @@ func TestRunInitWithVariant_Quota1_Scaffolding(t *testing.T) {
 	if !strings.Contains(agentsContent, "QUOTA_BYPASS=1") {
 		t.Errorf("expected QUOTA_BYPASS=1 reference in AGENTS.md")
 	}
+	if _, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Quota.md")); err != nil {
+		t.Errorf("expected Quota.md for Quota-1 opt-in: %v", err)
+	}
 
 	// 4. Check Makefile for test-q1 target
 	makePath := filepath.Join(dir, "Makefile")

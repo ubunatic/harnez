@@ -41,14 +41,6 @@ const summarySection = "Project Summary"
 
 const quota1SectionName = "Quota-1 Guardrails"
 
-const quota1SectionContent = `## Quota-1 Guardrails
-
-- **Single-Test Boundary**: Under Quota-1 rules, the agent may only run the test suite once per step/turn.
-- **Code Modification Required**: If tests fail or complete, you MUST modify repository source files before running tests again. Repeated test runs without intermediate code modifications are blocked.
-- **Clean Tree First**: Before the quota run, check ` + "`git status`" + ` for changes that are not yours. If there are any, wait or report; do not run.
-- **Enforced Test Target**: Execute tests via ` + "`make test-q1`" + ` (or ` + "`harnez exec --quota-1 -- <test-cmd>`" + `).
-- **Unauthorized Bypass Forbidden**: Bypassing guardrails via ` + "`QUOTA_BYPASS=1`" + ` or ` + "`HARNEZ_QUOTA_BYPASS=1`" + ` is strictly reserved for human developers and CI environments. Agent loops must not set or pass bypass flags.`
-
 const summaryPrompt = `Summarize this project for a coding agent in plain markdown.
 Cover: what it does, the main components and their roles, key conventions, and anything
 important to know before making changes.
@@ -456,6 +448,64 @@ func initialAgentsMD(cfg *Config) string {
 
 const localOverlaysSection = "<!-- harnez:begin Local Overlays -->\n- **Before any work, read `AGENTS.local.md` if it exists** (@AGENTS.local.md). It holds this\n  checkout's settings (subagent mode, output mode) and overrides this file where they differ.\n<!-- harnez:end Local Overlays -->\n"
 
+func backfillRulesHeader(path, header string) (bool, error) {
+	if header == "" {
+		return false, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	content := string(data)
+	if strings.HasPrefix(content, header+"\n\n") {
+		return false, nil
+	}
+	if err := os.WriteFile(path, []byte(header+"\n\n"+content), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func writeRules(dir string, rules RulesConfig, quota bool) (int, error) {
+	if rules.Index == "" {
+		return 0, nil
+	}
+	rulesDir := filepath.Join(dir, ".harnez", "rules")
+	if err := os.MkdirAll(rulesDir, 0o755); err != nil {
+		return 0, err
+	}
+	files := make([]RuleFile, 0, len(rules.Files))
+	for _, file := range rules.Files {
+		if file.Quota && !quota {
+			continue
+		}
+		files = append(files, file)
+	}
+	index := rules.Index
+	for _, file := range files {
+		index += "- [" + file.Name + "](" + file.Name + ")\n"
+	}
+	files = append([]RuleFile{{Name: "Index.md", Content: index}}, files...)
+	changes := 0
+	for _, file := range files {
+		content := strings.TrimSpace(file.Content) + "\n"
+		path := filepath.Join(rulesDir, file.Name)
+		existing, err := os.ReadFile(path)
+		if err == nil && string(existing) == content {
+			continue
+		}
+		if err != nil && !os.IsNotExist(err) {
+			return changes, err
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			return changes, err
+		}
+		changes++
+		fmt.Printf("  wrote   %s\n", path)
+	}
+	return changes, nil
+}
+
 func backfillLocalOverlays(path string) (bool, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -780,6 +830,14 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		fmt.Printf("  updated Local Overlays %s\n", agentsPath)
 		changes++
 	}
+	if cfg != nil {
+		if backfilled, err := backfillRulesHeader(agentsPath, cfg.AgentsMD.Rules.Header); err != nil {
+			return fmt.Errorf("backfill rules header %s: %w", agentsPath, err)
+		} else if backfilled {
+			fmt.Printf("  updated rules header %s\n", agentsPath)
+			changes++
+		}
+	}
 
 	symlinkChanged, err := fsutil.EnsureSymlink(claudePath, agentsPath)
 	if err != nil {
@@ -793,6 +851,12 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 	}
 
 	_, _ = fsutil.EnsureGitExclude(dir, "AGENTS.local.md")
+	if ignored, err := fsutil.EnsureGitExclude(dir, ".harnez/rules/Local.md"); err != nil {
+		return fmt.Errorf("ignore .harnez/rules/Local.md: %w", err)
+	} else if ignored {
+		fmt.Printf("  ignored .harnez/rules/Local.md in .git/info/exclude\n")
+		changes++
+	}
 	if fileExists(filepath.Join(dir, "issues")) {
 		const issuesReadmeLock = "/issues/README.md.lock"
 		ignored, err := fsutil.EnsureGitExclude(dir, issuesReadmeLock)
@@ -995,8 +1059,21 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 	}
 
 	quota1Active := len(quota1) > 0 && quota1[0]
-	if quota1Active {
-		r, err := applySectionMD(agentsPath, quota1SectionName, quota1SectionContent)
+	if !quota1Active {
+		quota1Active = markdown.ContainsSection(agentsPath, quota1SectionName)
+	}
+	if cfg != nil {
+		ruleChanges, err := writeRules(dir, cfg.AgentsMD.Rules, quota1Active)
+		if err != nil {
+			return fmt.Errorf("write .harnez/rules: %w", err)
+		}
+		changes += ruleChanges
+	}
+	if len(quota1) > 0 && quota1[0] {
+		if cfg == nil || cfg.AgentsMD.Rules.QuotaSection == "" {
+			return fmt.Errorf("quota-1 rules are not configured")
+		}
+		r, err := applySectionMD(agentsPath, quota1SectionName, cfg.AgentsMD.Rules.QuotaSection)
 		if err != nil {
 			return fmt.Errorf("agents_md [%s]: %w", quota1SectionName, err)
 		}

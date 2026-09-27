@@ -95,3 +95,5 @@ Code map: init creates/migrates AGENTS.md `internal/claude/init.go:742-764`, Loc
 - **M4** config/templates, `docs/CLIDesign.md`, CLAUDE.md "Where Repo Rules Go", self-init of this repo; canary
   `harnez init` on a temp copy of one other managed repo (not the live repo); assert no AGENTS.local.md
   dependency remains.
+
+M1 delivered

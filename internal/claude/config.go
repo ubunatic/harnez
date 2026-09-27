@@ -188,6 +188,22 @@ type AgentsMD struct {
 	Agents    map[string]AgentsMDTarget `yaml:"agents"`
 	Languages map[string]Language       `yaml:"languages"`
 	RepoModes map[string]RepoMode       `yaml:"repo_modes"`
+	Rules     RulesConfig               `yaml:"rules"`
+}
+
+// RulesConfig describes generated harnez-only project rules.
+type RulesConfig struct {
+	Header       string     `yaml:"header"`
+	Index        string     `yaml:"index"`
+	QuotaSection string     `yaml:"quota_section"`
+	Files        []RuleFile `yaml:"files"`
+}
+
+// RuleFile is one generated file below .harnez/rules.
+type RuleFile struct {
+	Name    string `yaml:"name"`
+	Content string `yaml:"content"`
+	Quota   bool   `yaml:"quota,omitempty"`
 }
 
 type AgentsMDTarget struct {
