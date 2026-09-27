@@ -60,8 +60,8 @@ The explicit verbs are:
 
 ```text
 harnez agent start --name w --model luna -f task.md -- "extra instructions"
-harnez agent start --name w --model luna -p "background task"
-harnez agent wait w --timeout 5m
+harnez agent wait w                    # reattach; defaults to timeout=0 (unlimited)
+harnez agent wait w --timeout 5m       # explicit timeout override
 harnez agent resume --name w "next step"
 harnez agent chat
 harnez agent chat attach --name w
@@ -275,6 +275,37 @@ available. An orchestrator may start developer, reviewer and advisor sessions, n
 another orchestrator. A caller without a role (a human or an untracked host) is
 unrestricted. Tests must not depend on these variables (`TestMain` clears them). Operating
 guide and pitfalls: `docs/OrchestratedAgentFlow.md`.
+ 
+### 2.14 Foreground Turn Detachment and Wait Reattachment
+
+Under `harnez exec`, commands execute with an ambient 60-second execution window (`defaultExecTimeout = 60s`). When a conversational turn in `harnez agent start` or `harnez agent resume` takes longer than 60s (common for complex multi-step reasoning, edits, or test execution), terminating the process group abruptly with `SIGKILL` (`exit status 137`) risks disrupting provider sessions or leaving inconsistent local work.
+
+To provide clean lifecycle continuity across all harnesses:
+1. **60s Foreground Window & Clean Detach**:
+   - `start` and `resume` run synchronously in the foreground up to the deadline to let fast turns return results directly.
+   - When running under `harnez exec` without an explicit timeout, reaching the deadline triggers clean detachment:
+     - The worker process continues running uninterrupted in an independent session/process group (`Setsid`).
+     - Session state persists in `~/.harnez/agents/` with status `running`, process PID, and stdout/stderr log paths.
+     - The foreground command exits cleanly (code 0) with a directive host instruction block:
+       ```text
+       [session info: id=<id> name=<name> status=running]
+       Agent turn exceeded 60s and has been cleanly detached to the background.
+       Do NOT poll. Do NOT schedule timers or cron jobs.
+       Reattach by launching a background job:
+         harnez agent wait <name>
+       When the background job finishes, your environment will automatically notify this session.
+       ```
+     - When `--json` is passed, the detach block emits valid JSON containing `status: "running"`, `detached: true`, `wait_command`, and instructions, preventing caller JSON parse failures.
+2. **`harnez agent wait` Defaults to No Timeout (`timeout = 0`)**:
+   - `resolveExecTimeout` recognizes `harnez agent wait` (direct argv, absolute binary path, or wrapped in `bash -c`/`-lc`) and defaults its timeout to `0` (`HTO=0`), bypassing the 60s kill limit.
+   - Explicit timeouts (`--timeout`, `HTO=<duration>`, `HARNEZ_TIMEOUT=<duration>`) override the default.
+3. **Zero-Polling & Zero-Scheduling Invariant**:
+   - Host orchestrators must NOT loop on `manage_task status`, `harnez agent status`, or log files.
+   - Host orchestrators must NOT create timers or cron schedules.
+   - The host launches `harnez agent wait <name>` as a native host background task and yields. The host harness (e.g. Antigravity, Claude Code) automatically wakes the orchestrator upon task completion.
+4. **Subprocess & Environment Isolation**:
+   - Child worker invocations (`--worker-session`) strip `HARNEZ_AGENT_ROLE` from the worker environment to prevent colliding with leaf-role restrictions in `guardLeafRole`.
+   - Detachment is automatically disabled in Go unit test environments (`flag.Lookup("test.v") != nil`) unless explicitly requested via `HARNEZ_TEST_FOREGROUND_DETACH=1`, safeguarding in-process mock drivers from unexpected subprocess execution.
 
 ## 3. Model Shorthand & Vendor Mapping
 
