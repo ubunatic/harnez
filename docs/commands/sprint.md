@@ -12,8 +12,8 @@ as a whole to another agent, subagent, or external CLI, and do not spawn a secon
 sprint orchestrator. Delegation is exactly one level deep: helpers are started with `--role advisor|developer|reviewer` and are leaf workers that never run `harnez agent` themselves. Delegation inside the workflow is still required where each phase
 says so — the reusable advisor (Phase 1), the named developers (Phase 2), and the
 independent reviewer (Phase 3) are delegated by you and report back to you. This is
-not a choice: direct invocation always means inline execution. To make a different
-agent run the sprint instead, the user invokes the `sprinter` delegator, not this skill.
+not a choice: direct invocation always means inline execution. To delegate sprint
+execution to a different agent, the user invokes the `sprinter` delegator, not this skill.
 
 ---
 
