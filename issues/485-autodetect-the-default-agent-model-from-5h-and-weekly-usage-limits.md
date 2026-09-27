@@ -37,3 +37,5 @@ dispatching to a provider that is about to refuse work.
 - Tests with a fake usage reader: below threshold keeps the spec default, above
   threshold demotes to the next entry, missing data falls back, explicit
   `--model` bypasses detection, the header reason text is exact.
+
+- 2026-09-27: absorbs the quota-ranked selection part of 449 (healthiest provider from 5h/weekly headroom, 80% policy, deterministic fallback/error, fixture tests). Explicit `--model` always wins.
