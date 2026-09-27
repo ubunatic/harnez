@@ -520,6 +520,51 @@ func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
 	}
 }
 
+func TestRunInit_PreservesOptInSectionsAndPrunesOrphans(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/stickysections\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	fixture := `# Project rules
+
+<!-- harnez:begin Quota-1 Guardrails -->
+quota settings
+<!-- harnez:end Quota-1 Guardrails -->
+
+<!-- harnez:begin Repo Setup -->
+repo settings
+<!-- harnez:end Repo Setup -->
+
+<!-- harnez:begin Removed Config Section -->
+stale config
+<!-- harnez:end Removed Config Section -->
+`
+	if err := os.WriteFile(agentsPath, []byte(fixture), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded failed: %v", err)
+	}
+	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		t.Fatalf("RunInit failed: %v", err)
+	}
+	data, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	for _, want := range []string{"Quota-1 Guardrails", "quota settings", "Repo Setup", "repo settings"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("plain init removed opt-in section content %q:\n%s", want, content)
+		}
+	}
+	if strings.Contains(content, "Removed Config Section") || strings.Contains(content, "stale config") {
+		t.Errorf("plain init retained orphaned config section:\n%s", content)
+	}
+}
+
 func TestRunInit_BackfillsLocalOverlaysSection(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/localoverlays\n"), 0o644); err != nil {
