@@ -74,3 +74,24 @@ native-only once `mixed` exists. `Subagents.md` / `Local.md` carry the mode text
   `AGENTS.local.md` blocks into `Local.md`, keeps owner text untouched.
 - Update `docs/CLIDesign.md` and the CLAUDE.md "Where Repo Rules Go" section.
 - Tests for migration idempotency; run on this repo and one other managed project.
+
+## Milestones (product owner, 2026-09-27, terra plan)
+
+Hard dependency: **355** (prune removed managed blocks) lands first. 471 is sequencing debt for 568, not a
+blocker here. The `mixed` subagent mode moves to **493**; 567 only migrates existing `native`/`harnez` values.
+
+Code map: init creates/migrates AGENTS.md `internal/claude/init.go:742-764`, Local Overlays `:457-480,
+:778-785`, configured sections `:878-905`, Quota `:980-986`; content `config.yaml:485-570`; section primitives
+`internal/claude/apply.go:30-45`, `internal/markdown/markdown.go:254-265`; agent policy
+`cmd/harnez/agent.go:559-581`, `internal/agentpolicy/policy.go:53-77`; `/mode` `internal/mode/mode.go:122-177`.
+
+- **M1** generate `.harnez/rules/{Index,Tools,Issues,Quota,Subagents,Output}.md` and the AGENTS.md header; add
+  `.harnez/rules/Local.md` to `.git/info/exclude` (skip cleanly outside git). Tests: clean init, idempotent.
+- **M2** lossless migration: move recognized managed blocks out of AGENTS.md and known AGENTS.local.md
+  sections into rules/Local.md, prune via 355; unmatched owner bytes unchanged. Fixture: two runs equal;
+  malformed or nested markers are left untouched with a warning.
+- **M3** `/mode` and `agent enable|disable` read/write `.harnez/rules/Local.md`, still read AGENTS.local.md once
+  to migrate. Tests for both writers.
+- **M4** config/templates, `docs/CLIDesign.md`, CLAUDE.md "Where Repo Rules Go", self-init of this repo; canary
+  `harnez init` on a temp copy of one other managed repo (not the live repo); assert no AGENTS.local.md
+  dependency remains.

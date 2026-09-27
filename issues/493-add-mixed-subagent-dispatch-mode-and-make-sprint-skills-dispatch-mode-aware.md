@@ -40,3 +40,5 @@ opt-in mode.
 - [ ] Interception behaviour for `mixed` (vendor of host vs. requested model)
 - [ ] Sprint skills rewritten mode-aware; docs in HarnezAgentArchitecture.md §5
 - [ ] Effective-mode clamp to `native` when `agents` is disabled (after 491)
+
+- 2026-09-27: absorbs the `mixed` subagent mode (native for own vendor, harnez agent for other vendors or named models, default) split out of 567.
