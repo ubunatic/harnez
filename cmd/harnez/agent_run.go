@@ -158,7 +158,20 @@ func isCodexUsageLimitError(err error) bool {
 		return false
 	}
 	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "usage limit") || strings.Contains(message, "rate limit") || strings.Contains(message, "quota exceeded")
+	return strings.Contains(message, "usage limit") || strings.Contains(message, "usage_limit")
+}
+
+func recordCodexResumeFailure(sess *subagent.Session, err error, quotaState string, now time.Time) bool {
+	if sess.Provider != "codex" || !isCodexUsageLimitError(err) {
+		return false
+	}
+	if sess.CodexQuotaResumePending && quotaState == "available" {
+		sess.CodexQuarantine = &subagent.CodexQuarantine{Reason: firstLine(err.Error()), At: now.UTC(), Attempts: 1}
+		sess.CodexQuotaResumePending = false
+		return true
+	}
+	sess.CodexQuotaResumePending = true
+	return true
 }
 
 func quotaAlternatives(selected subagent.Model, availability func(string, string) usage.ProviderQuotaAvailability) []string {
@@ -570,15 +583,12 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		storeTurnQuota(s, sess.ID, sess.Provider, turn, "before", before)
 		recordTurnQuota(s, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt, nil)
 		recordResumeFailure(s, sess, err)
-		if sess.Provider == "codex" && isCodexUsageLimitError(err) {
-			if (sess.CodexQuotaResumePending || sess.ResumeFailures >= 2) && (d.availability == nil || d.availability(sess.Provider, sess.Model).State != "exhausted") {
-				sess.CodexQuarantine = &subagent.CodexQuarantine{Reason: firstLine(err.Error()), At: time.Now().UTC(), Attempts: 1}
-				sess.CodexQuotaResumePending = false
-				_ = s.Save(sess)
-			} else {
-				sess.CodexQuotaResumePending = true
-				_ = s.Save(sess)
-			}
+		quotaState := "unknown"
+		if d.availability != nil {
+			quotaState = d.availability(sess.Provider, sess.Model).State
+		}
+		if recordCodexResumeFailure(sess, err, quotaState, time.Now()) {
+			_ = s.Save(sess)
 		}
 		return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
 	}

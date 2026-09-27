@@ -949,6 +949,35 @@ func TestCodexResumeQuotaRecoveryQuarantinesAndExcludesSession(t *testing.T) {
 	}
 }
 
+func TestCodexTransientRateLimitDoesNotQuarantine(t *testing.T) {
+	old := agentDriver
+	d := &resumeOutcomeDriver{err: errors.New("429 rate limit exceeded")}
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store := saveResumeSession(t, storeDir, "sid", "worker", "codex")
+	deps := agentDeps{
+		store:  func() (*subagent.FileSessionStore, error) { return store, nil },
+		parent: func() string { return "" },
+		find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+			return s.Find(id)
+		},
+		availability: func(string, string) usage.ProviderQuotaAvailability {
+			return usage.ProviderQuotaAvailability{State: "available"}
+		},
+	}
+	for range 2 {
+		cmd := newAgentCmd()
+		if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi"}); err == nil {
+			t.Fatal("expected rate-limit failure")
+		}
+	}
+	sess, _ := store.Get("sid")
+	if sess.CodexQuarantine != nil || sess.CodexQuotaResumePending || sess.ResumeFailures != 2 || d.resumes != 2 {
+		t.Fatalf("transient errors changed quarantine state: session=%#v resumes=%d", sess, d.resumes)
+	}
+}
+
 func TestAgentStatusResumeDiagnostics(t *testing.T) {
 	storeDir := t.TempDir()
 	store := saveResumeSession(t, storeDir, "sid", "worker", "fake")
