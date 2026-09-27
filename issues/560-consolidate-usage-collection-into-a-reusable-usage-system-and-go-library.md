@@ -138,6 +138,7 @@ Use the existing XDG state location as the canonical snapshot root for compatibi
 - M1 is implemented in commit `bf9e275` (`feat(usage): add public snapshot reader (issue 560)`). The standalone `usage` package provides versioned provider-neutral snapshot types and `ReadSnapshot`, including compatibility decoding for persisted legacy per-agent JSON.
 - Verification passed for the library alone: `go test -count=1 ./usage` and `go build ./usage`. The package is not imported by `cmd/harnez`; the current CLI, collector, and installed binary path were not changed for M1.
 - Claude session status-line observations are not part of this library yet. Follow-up issue 564 tracks capturing useful status-line data and should inform the public contract before M4 schema finalization.
+- M2 is implemented by the library-only Unix controller: a `flock`-guarded, user-only Unix socket serves versioned snapshot and subscription requests, removes stale sockets after acquiring the lock, and has a non-Unix unsupported-controller stub. `Open` remains file-only by default. The concurrent-start, persisted-read, malformed-request, and stale-socket tests passed under `make test-q1` (log: `/tmp/issue-560-m2-test.log`; no `--- FAIL`).
 
 ### Recommended sequence
 
