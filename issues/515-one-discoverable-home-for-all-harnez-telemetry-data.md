@@ -1,6 +1,6 @@
 # 515 — One discoverable home for all harnez telemetry data
 
-**Status**: Open
+**Status**: Closed — M1-M3 complete: legacy decoy handling, quota timeline, stats --where, telemetry docs, and quota-1 verification passed
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Architecture
@@ -89,4 +89,5 @@ Remaining scope (the root stays `~/.local/share/harnez` for data; `~/.harnez` ke
   command, migration behavior, and timestamp sources.
 - Production call-site inspection found no writer opening the legacy database
   directly; writers use `telemetry.DefaultDBPath()`.
-- Verification: pending the required `make test-q1` and `make install`.
+- Verification: `make test-q1` passed (`go vet ./...` and `go test ./...`);
+  the required `--- FAIL` grep found no failures. `make install` passed.
