@@ -64,3 +64,16 @@ orchestrator never polled and never repeated a call, across 12 calls. Not tested
 `--async` mode and waking the host. One hazard: the `harnez exec` wrapper's default 60s
 timeout kills long shell commands (ticket 268 exempts `harnez agent` from the implicit
 default; other long waits need `exec.timeout`).
+
+## Rescope (product owner, 2026-09-27, terra audit)
+
+Met: detached sessions with terminal state (agent_async.go:74,149), `--detach/--async` (agent.go:243), blocking
+`agent wait` and MCP `harnez_wait_agent` (agent.go:535, server.go:329), test for detached launch → result
+without host polling (agent_test.go:142). The host no longer polls; hosts use their background-task wakeups.
+
+Decision: keep the internal 100 ms session-file wait (agent_async.go:168); it is local and cheap. Drop the
+custom Codex hook/push requirement.
+
+- **M1 (last):** tests for `agent wait` with concurrent completions, timeout/cancellation, a worker that
+  crashes before writing a terminal state (must end as failed, not hang), and no orphan worker after wait.
+  Fix only what the tests expose.

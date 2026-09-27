@@ -57,3 +57,10 @@ when needed.
   thresholds without changing Go source.
 - Tests cover parsing, quota ordering, the 80% boundary, ties, fallback,
   provider-only defaults, aliases, and no-eligible-agent errors.
+
+## Close note (product owner, 2026-09-27, terra audit)
+
+Delivered: spec-backed default, models and aliases (spec/agent.yaml:3, agentspec.go:115, driver.go:181);
+`luna`, `terra:low` resolve (driver_test.go:43); no-arg `agent chat` uses the spec default (agent.go:311).
+Quota-ranked automatic selection (healthiest provider, 80% policy, fallback) moves to 485, which already
+tracks usage-limit model autodetect. Explicit `--model` always wins.
