@@ -110,3 +110,22 @@ generic quota handling, or the behavior of the underlying usage service.
 ## Epic note (#479)
 
 Quarantined sessions must be excluded from attribution in #482 (bare `resume`, `-c`), so a dead Codex session is never selected implicitly.
+
+## Rescope (product owner, 2026-09-27, terra audit)
+
+Groundwork on HEAD: quota-exhausted starts blocked (agent_run.go:138), Codex auth preflight
+(codex_preflight.go:16), persistent `ResumeBlockedReason` after failed compaction (agent_run.go:561) and
+refused explicit resume (agent_run.go:427). Gaps: failures only bump a generic counter (agent.go:962);
+implicit session selection ignores `ResumeBlockedReason` (TODO at agent.go:984); no bounded probe.
+
+Decision: harnez owns the quarantine primitive and the selection guard; creating a replacement agent is
+orchestrator workflow (role policy, agent_run.go:693), documented, not automatic CLI behavior.
+
+- **M1 (harnez, Codex-only):** after a Codex resume fails with a usage-limit error, and again fails once
+  quota is no longer exhausted, set a quarantine state on the session (reason, time, attempts); quarantined
+  or `ResumeBlockedReason` sessions are excluded from implicit selection and refused on explicit resume
+  with a message naming `harnez agent start` for a fresh session. Bounded: one probe resume, no retries loop.
+  Tests: exhausted→recovered-but-dead, healthy recovery, duplicate detection idempotent, stale listing,
+  non-Codex unaffected.
+- **M2 (docs):** AgenticLoop orchestrator note: on a quarantined worker, start one named replacement,
+  hand it the ticket state, never replay committed work.
