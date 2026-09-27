@@ -1,6 +1,6 @@
 # 508 — Reject harnez agent calls when provider quota is confirmed exhausted
 
-**Status**: Open
+**Status**: Closed — Delivered by 603: agent models/start honour cached quota exhaustion, --allow-exhausted-quota overrides; tests in 603
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
