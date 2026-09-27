@@ -122,6 +122,13 @@ type UsageData struct {
 	Weekly       *QuotaWindow           `json:"weekly,omitempty"`
 	ModelGroups  []ModelGroup           `json:"model_groups,omitempty"`
 	ExtraWindows map[string]QuotaWindow `json:"extra_windows,omitempty"`
+	// Display metadata retained for compatibility with Harnez's existing CLI
+	// renderers. Sources are stable labels only; local absolute paths are not
+	// part of the public snapshot contract.
+	Details         map[string]string `json:"details,omitempty"`
+	Sources         []string          `json:"sources,omitempty"`
+	Error           string            `json:"error,omitempty"`
+	QuotaFetchError string            `json:"quota_fetch_error,omitempty"`
 }
 
 // TokenUsage contains provider-reported token and cost totals when available.

@@ -1712,10 +1712,13 @@ func padQuotaWindowPercentWithDuration(w QuotaWindow, duration string, width int
 
 // WatchOptions bundles optional customization for watch frame rendering.
 type WatchOptions struct {
-	Host          string
-	ProcCounts    *AgentProcessCount
-	Compact       bool
-	ShowProcesses bool
+	Host string
+	// SharedUsageCollector optionally supplies usage from the public shared
+	// usage controller. Nil preserves the legacy collector path.
+	SharedUsageCollector func(context.Context) UsageSummary
+	ProcCounts           *AgentProcessCount
+	Compact              bool
+	ShowProcesses        bool
 	// ShowMic forces the Mic box on at startup (issue 244's `--mic` flag),
 	// the same "explicit request wins over the current preset" role
 	// ShowProcesses plays for Processes.
@@ -2196,9 +2199,14 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 // panel set --watch --compact uses (issue 102), and ShowProcesses forces the
 // Processes panel on regardless of Compact, matching initialWatchSections.
 func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out io.Writer, showProcesses bool, opts ...WatchOptions) {
-	summary := CollectAll(ctx, homeDir, client)
-	cols, rows := terminalSize(out)
 	opt := firstOpt(opts)
+	var summary UsageSummary
+	if opt.SharedUsageCollector != nil {
+		summary = opt.SharedUsageCollector(ctx)
+	} else {
+		summary = CollectAll(ctx, homeDir, client)
+	}
+	cols, rows := terminalSize(out)
 	opt.ShowProcesses = opt.ShowProcesses || showProcesses
 	sec := initialWatchSections(opt)
 	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, homeDir, "", opt)
@@ -3031,7 +3039,11 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				_ = CurrentMicStatus()
 				reportFetchStage("mic", FetchDone)
 			}()
-			fresh = CollectAllProgressDetailed(sigCtx, homeDir, client, reportFetchStage, reportFetchDiagnostic)
+			if opts.SharedUsageCollector != nil {
+				fresh = opts.SharedUsageCollector(sigCtx)
+			} else {
+				fresh = CollectAllProgressDetailed(sigCtx, homeDir, client, reportFetchStage, reportFetchDiagnostic)
+			}
 			micWg.Wait()
 			lastProcs = nil
 			if historyDir != "" {

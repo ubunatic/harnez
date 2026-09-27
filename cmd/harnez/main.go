@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"ubunatic.com/harnez/internal/sessionstate"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
+	sharedusage "ubunatic.com/harnez/usage"
 )
 
 // isGearInvocation reports whether the program was invoked under the ⚙ alias / multicall name.
@@ -216,6 +218,7 @@ func newRootCmd() *cobra.Command {
 	var usageInterval time.Duration
 	var usageHost string
 	var usageProject string
+	var usageShared bool
 	usageCmd := &cobra.Command{
 		Use:     "usage",
 		Aliases: []string{"quota", "tokens"},
@@ -229,6 +232,32 @@ func newRootCmd() *cobra.Command {
 
 			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom); err != nil {
 				return err
+			}
+			if usageShared && usageHost != "" {
+				return fmt.Errorf("--shared cannot be used with --host; shared usage is local-only")
+			}
+			if usageShared && usageProject != "" {
+				return fmt.Errorf("--shared cannot be used with --project; project attribution uses its own local data source")
+			}
+			var sharedClient sharedusage.Client
+			if usageShared {
+				var err error
+				sharedClient, err = sharedusage.Open(sharedusage.Options{
+					StartIfAbsent: !usageOffline,
+					Collector:     realUsageCollector{client: client},
+				})
+				if err != nil {
+					return fmt.Errorf("open shared usage controller: %w", err)
+				}
+				defer sharedClient.Close()
+				releaseShared, err := pinSharedClient(ctx, sharedClient)
+				if err != nil {
+					return err
+				}
+				defer releaseShared()
+			}
+			sharedCollect := func(ctx context.Context) usage.UsageSummary {
+				return collectSharedUsage(ctx, sharedClient, !usageOffline)
 			}
 
 			// The local config file is optional and this is a convenience
@@ -254,6 +283,9 @@ func newRootCmd() *cobra.Command {
 					RemoteLoadHost: loadWatchHost,
 					Host:           usageHost,
 				}
+				if sharedClient != nil {
+					loadOpt.SharedUsageCollector = sharedCollect
+				}
 				return usage.RunLoom(ctx, "", client, cmd.OutOrStdout(), usageInterval, loadOpt)
 			}
 
@@ -264,12 +296,17 @@ func newRootCmd() *cobra.Command {
 				// 110 Decision §2/§3), the same way it owns fetching
 				// summary/rates/procs internally rather than the caller
 				// pre-fetching a single snapshot up front.
+				var sharedWatchCollector func(context.Context) usage.UsageSummary
+				if sharedClient != nil {
+					sharedWatchCollector = sharedCollect
+				}
 				return usage.RunWatchWithOptions(ctx, "", client, cmd.OutOrStdout(), usageInterval, "", usage.WatchOptions{
-					Host:           usageHost,
-					Compact:        usageCompact,
-					ShowProcesses:  usageProcesses,
-					ShowMic:        usageMic,
-					RemoteLoadHost: loadWatchHost,
+					Host:                 usageHost,
+					SharedUsageCollector: sharedWatchCollector,
+					Compact:              usageCompact,
+					ShowProcesses:        usageProcesses,
+					ShowMic:              usageMic,
+					RemoteLoadHost:       loadWatchHost,
 				})
 			}
 
@@ -299,7 +336,11 @@ func newRootCmd() *cobra.Command {
 					}
 					summary = s
 				} else {
-					summary = usage.CollectAll(ctx, "", client)
+					if sharedClient != nil {
+						summary = sharedCollect(ctx)
+					} else {
+						summary = usage.CollectAll(ctx, "", client)
+					}
 				}
 				if usageAgent != "" {
 					var filtered []usage.AgentUsage
@@ -323,7 +364,7 @@ func newRootCmd() *cobra.Command {
 						snap := usage.CollectLoadSnapshot()
 						summary.Load = &snap
 					}
-					out, err := usage.RenderJSON(summary)
+					out, err := renderUsageOutput(summary, true, false)
 					if err != nil {
 						return err
 					}
@@ -338,7 +379,11 @@ func newRootCmd() *cobra.Command {
 				if loadWatchHost != "" {
 					remoteLoadSnap, _ = usage.CollectRemoteLoadSnapshot(ctx, loadWatchHost)
 				}
-				fmt.Print(usage.RenderText(summary, usage.WatchOptions{RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}))
+				out, err := renderUsageOutput(summary, false, true, usage.WatchOptions{RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap})
+				if err != nil {
+					return err
+				}
+				fmt.Print(out)
 				return nil
 			}
 
@@ -355,6 +400,9 @@ func newRootCmd() *cobra.Command {
 			if usageHost != "" {
 				usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
 			} else {
+				if sharedClient != nil {
+					loadOpt.SharedUsageCollector = sharedCollect
+				}
 				usage.RenderSummary(ctx, "", client, cmd.OutOrStdout(), usageProcesses, loadOpt)
 			}
 			return nil
@@ -362,6 +410,7 @@ func newRootCmd() *cobra.Command {
 	}
 	usageCmd.Flags().StringVar(&usageProject, "project", "", "attribute lifetime tokens and cost-of-change to a repository directory")
 	usageCmd.Flags().StringVar(&usageProject, "cwd", "", "alias for --project")
+	usageCmd.PersistentFlags().BoolVar(&usageShared, "shared", false, "use the shared local usage controller")
 	usageCmd.Flags().BoolVar(&usageJSON, "json", false, "output usage in JSON format")
 	usageCmd.Flags().StringVar(&usageAgent, "agent", "", "filter to a specific agent (claude, agy, codex)")
 	usageCmd.Flags().StringVar(&usageHost, "host", "", "query usage from a remote host via SSH")
@@ -440,7 +489,22 @@ func newRootCmd() *cobra.Command {
 			if !usageOffline {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
-			summary := usage.CollectAll(ctx, "", client)
+			var summary usage.UsageSummary
+			if usageShared {
+				sharedClient, err := sharedusage.Open(sharedusage.Options{StartIfAbsent: !usageOffline, Collector: realUsageCollector{client: client}})
+				if err != nil {
+					return fmt.Errorf("open shared usage controller: %w", err)
+				}
+				defer sharedClient.Close()
+				releaseShared, err := pinSharedClient(ctx, sharedClient)
+				if err != nil {
+					return err
+				}
+				defer releaseShared()
+				summary = collectSharedUsage(ctx, sharedClient, !usageOffline)
+			} else {
+				summary = usage.CollectAll(ctx, "", client)
+			}
 			historyDir := usage.HistoryDir("")
 			if err := usage.AppendHistory(historyDir, summary); err != nil {
 				return fmt.Errorf("record usage history: %w", err)

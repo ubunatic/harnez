@@ -246,3 +246,15 @@ Tests passed, but a real run of `examples/usage` failed the plausibility check:
   Default path (no flag) stays byte-identical to today. Status line and the other consumers are not migrated in M4.
 - Pre-work: the demo showed a stub/test collector can write into the real state dir; the real CLI path must only
   persist real collector data, and tests must use temp state/runtime dirs.
+
+### M4 Delivery (2026-09-27)
+- Added opt-in `harnez usage --shared`; local one-shot, JSON, raw text, watch/loom, and `usage history record`
+  now read/refresh through the public client/controller. `--host` and `--project` combinations fail clearly.
+- The CLI controller is wired only to the real internal Claude, AGY, and Codex collectors. Public snapshot
+  display metadata carries the fields needed to rebuild the existing `AgentUsage` renderer/JSON representation;
+  local absolute source paths are redacted before publication. The default path retains the existing renderer.
+- Watch/loom hold controller subscriptions while active so the in-process owner does not idle-shutdown during use.
+- Tests cover renderer byte identity for JSON/raw output, flag incompatibilities, field preservation, and a real
+  provider collector against a temporary home. `make test-q1` passed; output: `/tmp/issue-560-m4-test.log`.
+- A nil-map initialization correction in `cmd/harnez/usage_shared.go` followed that suite run; `go build ./cmd/harnez`
+  and `make install` passed afterward. The corrected file needs a fresh suite run by the host.
