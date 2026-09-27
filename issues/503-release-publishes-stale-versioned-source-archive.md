@@ -1,6 +1,6 @@
 # 503 — Release publishes stale versioned source archive
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Bug
