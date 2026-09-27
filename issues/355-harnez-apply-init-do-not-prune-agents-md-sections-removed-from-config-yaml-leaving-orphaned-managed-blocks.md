@@ -1,6 +1,6 @@
 # 355 — harnez apply/init do not prune agents_md sections removed from config.yaml, leaving orphaned managed blocks
 
-**Status**: Closed — init orphan pruning implemented; apply no longer manages global instruction sections
+**Status**: Open — Host canary: plain init prunes opt-in Quota-1 Guardrails and Repo Setup blocks in loom/voxi/neus/lmcoder
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: CLI / Templates
