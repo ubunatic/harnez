@@ -47,3 +47,5 @@ named harnez models.
 - Updated the native-mode overlay to clarify that native mode governs only the agent's own subagent choice.
 - Init always applies the configured Harnez Managed Conventions section when `agents_md.local.target` is set; there is no conditional that skips this block for cati. Its missing block indicates stale or removed managed content. Running init in cati should restore it; that repository was left untouched.
 - Added an assertion for the managed model rule. `make test-q1` passed.
+
+- Host review 2026-09-27: diff OK. cati acceptance pending: no cati session online; the block appears after `harnez init -d ~/projects/cati`.
