@@ -172,3 +172,25 @@ Use the existing XDG state location as the canonical snapshot root for compatibi
 - `internal/statusline/statusline.go:57-105`, `internal/agymeter/meter.go:38-50, 80-110, 146-171` — status-line and separate AGY metering paths.
 - `internal/claude/apply.go:429-470, 1452-1461`, `systemd/harnez-agent-collector.service:1-19` — optional service install/run lifecycle.
 - `issues/033-shared-quota-cache.md` (archived path/title may differ), archived issue 087, issues 082, 111, 152, 161, 208, and studies listed in Related — prior decisions and adjacent scope.
+
+## 9. Decisions for M2/M3 (product owner, 2026-09-27)
+
+Answers to §7, so M2 can start:
+
+- **Portability:** Linux and macOS (unix) are supported for the controller. Lock and socket sit behind a small
+  internal interface with a `//go:build unix` implementation (`flock` + unix socket in `$XDG_RUNTIME_DIR/harnez/`,
+  fallback `~/.harnez/run/`, mode 0700). Other OSes get a stub returning `ErrControllerUnsupported`; file-only
+  `ReadSnapshot` stays portable everywhere.
+- **Foreground lifetime:** no detached spawning. `StartIfAbsent` runs the controller in-process in the calling app;
+  other apps attach as clients. The owner shuts down when its process exits or after 60 s idle with no clients; a
+  surviving client that needs collection calls `StartIfAbsent` again and wins the lock. The systemd service is the
+  only long-lived mode.
+- **Forced refresh:** the IPC exposes `Refresh(provider)` as a *request*: it passes through the same per-provider
+  fetch gate, spacing, backoff, `Retry-After` and AGY reauth cooldown, and returns the cached result with a
+  `throttled` status when the gate refuses. No bypass.
+- **Schema:** independent versioned contract types in `usage` (already started in M1); internal `AgentUsage` maps to
+  them in one adapter function. No public aliases of internal types.
+- **Old caches:** until M5, the existing snapshot cache stays the source of truth and the controller writes it; the
+  other caches stay as they are. M5 records retirement conditions.
+- **Gate:** M2 and M3 stay inside `usage/` (+ internal adapters) and do not change `cmd/harnez` behavior or
+  `make install` output. M4 (CLI migration) needs user review before it starts.
