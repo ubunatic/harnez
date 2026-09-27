@@ -1,6 +1,6 @@
 # 557 — Clarify Agent Workflow Names and Unsupported Commands in Agent Docs
 
-**Status**: Open
+**Status**: Closed — clarified workflow terminology
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Documentation
@@ -21,3 +21,9 @@ Make the agent documentation unambiguous about supported Harnez agent commands v
 - Review current CLI commands and agent docs, including the historical context in #039 and #291.
 - Clarify terminology and link the CLI command list to the workflow sections; avoid describing a workflow as a CLI command.
 - Check canonical and copied docs for consistency and search for misleading `harnez agent run` / `harnez agent loop` references.
+
+## Outcome
+
+- Reworded the sprint command text so delegation is described as a workflow action, not “agent run the sprint.”
+- Searched `docs/practices`, `docs/lang`, `docs/other`, `docs/commands`, and `config.yaml`: no literal `harnez agent run` or `harnez agent loop` command usages were present. The remaining “agent loop” mention in the lmcoder comparison describes its workflow, not a Harnez CLI command.
+- `make test-q1` passed.
