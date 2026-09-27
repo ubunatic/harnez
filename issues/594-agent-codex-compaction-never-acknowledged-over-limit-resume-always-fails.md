@@ -1,6 +1,6 @@
 # 594 — agent: codex compaction never acknowledged, over-limit resume always fails
 
-**Status**: In Progress
+**Status**: Closed — Delivered in 18d93b5 and b0a4a83; host review matches plan; make test-q1 green
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -29,3 +29,9 @@ Set `model_auto_compact_token_limit` to `agent.compact_threshold_tokens` on ever
 **Deviation from ticket 591:** Codex native auto-compaction runs inside the turn, at turn start before the model reads the prompt. Harnez cannot verify compaction before sending that prompt. For Codex, verify immediately after the turn instead: an over-limit resume passes only if the rollout has a new `compaction` record and its post-turn context is below threshold. Missing evidence, a still-over-limit context, or an unreadable rollout blocks later resumes until a fresh session is started.
 
 Test argument construction, rollout parsing using the real token-count excerpt, successful post-turn verification, missing-record and still-over-limit failures, and unreadable rollout handling. Verify with the single Quota-1 run (`make test-q1`).
+
+## 4. Outcome (2026-09-27)
+Delivered in 18d93b5 (rollout `last_token_usage` context, `model_auto_compact_token_limit` on exec and resume,
+Codex `/compact` path removed) and b0a4a83 (post-turn compaction verification; a missing compaction record,
+still-over-limit or unknown context sets `ResumeBlockedReason` and blocks later resumes). Host diff review
+matches §3; full suite green with `make test-q1` on 1e04ccb.
