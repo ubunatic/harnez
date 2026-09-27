@@ -893,6 +893,76 @@ func TestRunSigningStepAndPublishOnlyCurrentVersion(t *testing.T) {
 	}
 }
 
+func TestArtifactMatchesVersionWithHyphenatedPlatformSuffixes(t *testing.T) {
+	target := "v0.1.17"
+	for _, name := range []string{
+		"harnez-0.1.17-x86_64-linux.tar.gz",
+		"harnez-0.1.17-aarch64-linux.rpm",
+		"harnez-0.1.17-x86_64-linux.deb",
+		"harnez-aarch64-linux",
+		"harnez-x86_64-linux",
+		"SHA256SUMS",
+	} {
+		if !artifactMatchesVersion(name, target) {
+			t.Errorf("artifactMatchesVersion(%q, %q) = false, want true", name, target)
+		}
+	}
+	for _, name := range []string{"harnez-0.1.16-x86_64-linux.tar.gz", "harnez-0.1.18-aarch64-linux.rpm"} {
+		if artifactMatchesVersion(name, target) {
+			t.Errorf("artifactMatchesVersion(%q, %q) = true, want false", name, target)
+		}
+	}
+}
+
+func TestRunSigningAndPublishGoReleaserArtifacts(t *testing.T) {
+	tmpDir := t.TempDir()
+	distDir := filepath.Join(tmpDir, "dist")
+	if err := os.MkdirAll(distDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	artifacts := []string{
+		"harnez-0.1.17-x86_64-linux.tar.gz",
+		"harnez-0.1.17-aarch64-linux.tar.gz",
+		"harnez-0.1.17-x86_64-linux.rpm",
+		"harnez-0.1.17-aarch64-linux.rpm",
+		"harnez-0.1.17-x86_64-linux.deb",
+		"harnez-0.1.17-aarch64-linux.deb",
+		"harnez-aarch64-linux",
+		"harnez-x86_64-linux",
+	}
+	var checksums strings.Builder
+	for _, name := range artifacts {
+		if err := os.WriteFile(filepath.Join(distDir, name), []byte("artifact"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		checksums.WriteString("deadbeef  " + name + "\n")
+	}
+	if err := os.WriteFile(filepath.Join(distDir, "SHA256SUMS"), []byte(checksums.String()), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(distDir, "SHA256SUMS.minisig"), []byte("signature"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := runSigningStep(Options{Dir: tmpDir, DryRun: true, Out: &out}, "harnez", "0.1.17", "unused"); err != nil {
+		t.Fatalf("runSigningStep error: %v", err)
+	}
+	if !strings.Contains(out.String(), "Signing "+filepath.Join(distDir, "SHA256SUMS")) {
+		t.Fatalf("expected current checksums to be signed, output: %s", out.String())
+	}
+
+	out.Reset()
+	if err := runPublishStep(Options{Dir: tmpDir, DryRun: true, Out: &out}, "harnez", "v0.1.17", nil); err != nil {
+		t.Fatalf("runPublishStep error: %v", err)
+	}
+	for _, name := range append(append([]string{}, artifacts...), "SHA256SUMS", "SHA256SUMS.minisig") {
+		if !strings.Contains(out.String(), filepath.Join("dist", name)) {
+			t.Errorf("expected %s to be published, output: %s", name, out.String())
+		}
+	}
+}
+
 func TestBuildEnvGOWORK(t *testing.T) {
 	t.Setenv("GOWORK", "/somewhere/go.work")
 
