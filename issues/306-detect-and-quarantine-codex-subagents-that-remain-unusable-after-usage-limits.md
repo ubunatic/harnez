@@ -129,3 +129,18 @@ orchestrator workflow (role policy, agent_run.go:693), documented, not automatic
   non-Codex unaffected.
 - **M2 (docs):** AgenticLoop orchestrator note: on a quarantined worker, start one named replacement,
   hand it the ticket state, never replay committed work.
+
+## Outcome
+
+- Implemented M1's Codex-only persisted quota-resume marker and quarantine
+  state, with explicit-resume refusal and implicit-selection exclusion. Added a
+  fake-driver exhausted/recovered failure fixture.
+- Added M2's orchestrator handoff rule in `docs/practices/AgenticLoop.md` and
+  ran `harnez init -d .`; it reported no generated-file changes.
+- `make test-q1` ran once and failed at
+  `TestCodexResumeQuotaRecoveryQuarantinesAndExcludesSession` (quarantine was
+  nil). The terminal condition was then tightened using persisted resume
+  failures, but that correction was not retested because the single suite run
+  was used. `make install` completed afterward.
+- Ticket remains open pending a successful quota-suite run and review of the
+  unverified correction.

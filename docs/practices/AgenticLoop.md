@@ -53,6 +53,12 @@ follow-up. Existing async-wait guidance still applies to genuinely asynchronous
 external work: use the harness-tracked completion signal or scheduled wakeup,
 and avoid chat-visible empty polling.
 
+When a Codex worker is quarantined after a usage-limit interruption, the
+orchestrator starts one named replacement and gives it the ticket state,
+including the last known handoff and any uncertain in-flight work. Treat
+committed work as complete and never replay it; resume only recoverable,
+uncommitted work, and surface uncertain work for operator review.
+
 ### Multi-session peer assistance
 
 Use `/peer-assistant` when a host session is explicitly asked to coordinate
