@@ -74,3 +74,19 @@ Remaining scope (the root stays `~/.local/share/harnez` for data; `~/.harnez` ke
   record time, owning component and the question it answers; zero-byte stores are flagged. Test with temp XDG
   roots.
 - **M3 — docs.** `docs/Telemetry.md` shows the layout and points at `harnez stats --where`.
+
+## Outcome
+
+- M1: telemetry writers resolve the XDG `telemetry.sqlite`; the retired
+  `~/.harnez/tool_catalog.sqlite` is migrated on first use and retained as a
+  timestamped `.bak-*`. Only the zero-byte `telemetry.db` decoy is removed.
+  `harnez usage history timeline` now includes quota-history JSONL in text and
+  JSON output.
+- M2: `harnez stats --where [--json]` inventories telemetry, usage history,
+  quota cache, usage snapshots, voice history, and Harnez-owned session, agent,
+  AGY meter, and benchmark stores. Empty files are marked `EMPTY`.
+- M3: `docs/Telemetry.md` documents the roots, stores, owners, discovery
+  command, migration behavior, and timestamp sources.
+- Production call-site inspection found no writer opening the legacy database
+  directly; writers use `telemetry.DefaultDBPath()`.
+- Verification: pending the required `make test-q1` and `make install`.

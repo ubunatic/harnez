@@ -163,10 +163,10 @@ Using Unicode Braille patterns (`\u2800`–`\u28FF`):
 Harnez-owned persistent telemetry lives at `$XDG_DATA_HOME/harnez/telemetry.sqlite`
 and usage history at `$XDG_DATA_HOME/harnez/usage-history/`. Quota snapshots use
 `$XDG_CACHE_HOME/harnez/quota-cache-<provider>.json`. Empty, relative, or unset XDG variables fall back
-to `~/.local/share` and `~/.cache`. Existing telemetry, history, and provider quota
-cache files are migrated on first access from their legacy Harnez paths; migration
-keeps the source files for recovery. `harnez usage export --db` and `--history-dir`
-continue to override their respective defaults.
+to `~/.local/share` and `~/.cache`. A migrated legacy telemetry database is retained as
+`~/.harnez/tool_catalog.sqlite.bak-*`; usage history and provider quota cache migration
+preserves the source files. `harnez usage export --db` and `--history-dir` continue to
+override their respective defaults.
 
 1. **Zero Context Overhead**: Telemetry inspection runs out-of-band; raw logs and large sqlite databases are never dumped into model context.
 2. **Plumbing over Checkout**: Git history inspection uses streaming object headers (`git cat-file --batch`), never checking out historical worktrees or disk commits.
@@ -193,3 +193,38 @@ remain nullable and prevent unsupported savings claims. Reproducibility comes
 from the pricing revision and rates stored with every result. A session with
 no compaction reports zero compactions and `insufficient_data`, rather than
 claiming a saving.
+
+## Harnez Data Store Map (issue 515)
+
+Start with `harnez stats --where` when locating Harnez telemetry. It lists the
+known stores with their paths, byte sizes, newest available timestamp, owning
+component, and the question each store can answer. `--json` emits the same
+inventory for scripts. Empty files are marked `EMPTY`; missing expected stores
+are marked `missing`.
+
+| Store | Default path | Owner and questions answered |
+|---|---|---|
+| Tool and command telemetry | `$XDG_DATA_HOME/harnez/telemetry.sqlite` | `telemetry`; tool calls, CLI invocations, agent requests, and compactions |
+| Quota snapshots and host usage history | `$XDG_DATA_HOME/harnez/usage-history/` | `usage collector`; quota-window changes and per-host token snapshots; view with `harnez usage history timeline` |
+| Provider quota cache | `$XDG_CACHE_HOME/harnez/quota-cache-<provider>.json` | `usage collector`; latest cached provider readings |
+| Agent usage snapshots | `$XDG_STATE_HOME/harnez/agents/usage/` (default `~/.local/state/harnez/agents/usage/`) | `usage collector`; cached agent usage state |
+| Voice history | `$XDG_DATA_HOME/harnez/voice-input/` | `voice input`; recording and transcription history |
+| Harnez session counts | `~/.harnez/sessions/` | `sessionstate`; commands run in the current Harnez session and reminders |
+| Harnez agent sessions | `~/.harnez/agents/` | `agent`; Harnez-launched agent session records |
+| AGY quota measurements | `~/.harnez/agymeter/` | `AGY meter`; Antigravity quota and usage measurements |
+| Benchmark results | `~/.harnez/bench/` | `benchmark`; local benchmark runs |
+
+Unset, empty, or relative XDG variables use their standard home defaults:
+`~/.local/share`, `~/.cache`, and `~/.local/state`. The legacy
+`~/.harnez/tool_catalog.sqlite` is no longer a live writer target. First access
+migrates it to the XDG telemetry database when needed, then renames the source
+to a timestamped `.bak-*` file so the old database remains recoverable. The
+zero-byte `$XDG_DATA_HOME/harnez/telemetry.db` decoy is removed on telemetry
+path resolution; a non-empty file is left intact and reported by `--where`.
+
+Newest times come from `tool_calls.created_at` for the telemetry database and
+JSONL record timestamps when available. For other state files, the inventory
+uses modification time as the best available indication. Quota history is
+included in `harnez usage history timeline` as a separate quota-window section;
+its records remain in JSONL rather than being mixed with per-host token
+snapshots.
