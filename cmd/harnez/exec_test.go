@@ -1475,6 +1475,54 @@ func TestQuota1FailureSummaryListsAllFailLines(t *testing.T) {
 	}
 }
 
+func TestQuota1FailureSummaryShowsErrorsWithoutFailLines(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   []string
+	}{
+		{name: "vet", output: "# example/pkg\nfile.go:12:3: unused variable x\n", want: []string{"file.go:12:3: unused variable x"}},
+		{name: "build", output: "FAIL example/pkg [build failed]\n", want: []string{"FAIL example/pkg [build failed]"}},
+		{name: "panic", output: "panic: unexpected state\n", want: []string{"panic: unexpected state"}},
+		{name: "fallback", output: "one\ntwo\nthree\n", want: []string{"one", "two", "three"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := quota1FailureSummary("/tmp/quota.log", tt.output)
+			for _, want := range tt.want {
+				if !strings.Contains(got, want) {
+					t.Errorf("quota1FailureSummary() = %q, want %q", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestRunExecWrapperAllowsRetryAfterGofmtOrVetStopsBeforeTests(t *testing.T) {
+	for _, output := range []string{"gofmt -l .\ncmd/harnez/bad.go\n", "GOWORK=off go vet ./...\ncmd/harnez/bad.go:1:2: issue\n"} {
+		t.Run(strings.Fields(output)[0], func(t *testing.T) {
+			repoDir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(repoDir, "test.go"), []byte("package test\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			opts := testExecOptions(t)
+			opts.Quota1 = true
+			opts.Quota1Dir = repoDir
+			command := fmt.Sprintf("printf '%s'; exit 2", strings.ReplaceAll(output, "'", "'\\''"))
+			var stdout, stderr bytes.Buffer
+			code, err := runExecWrapper([]string{"sh", "-c", command}, opts, strings.NewReader(""), &stdout, &stderr)
+			if err != nil || code != 2 {
+				t.Fatalf("precheck run = (%d, %v), want (2, nil); stderr=%q", code, err, stderr.String())
+			}
+			var retryOut, retryErr bytes.Buffer
+			code, err = runExecWrapper([]string{"true"}, opts, strings.NewReader(""), &retryOut, &retryErr)
+			if err != nil || code != 0 {
+				t.Fatalf("retry after precheck failure = (%d, %v), want (0, nil); stderr=%q", code, err, retryErr.String())
+			}
+		})
+	}
+}
+
 func TestNewExecCmd_Quota1Flag(t *testing.T) {
 	cmd := newExecCmd()
 	f := cmd.Flags().Lookup("quota-1")

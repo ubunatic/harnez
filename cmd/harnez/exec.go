@@ -727,6 +727,10 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 			if runErr == nil {
 				code := 0
 				normalExit = &code
+			} else if quota1PreTestFailure(capturedOutput.String()) {
+				// make's formatting and vet gates run before go test. Preserve
+				// the existing one-retry path for failures that never reached tests.
+				normalExit = nil
 			} else {
 				var childExit *exec.ExitError
 				if errors.As(runErr, &childExit) && childExit.ProcessState != nil && childExit.ProcessState.Exited() {
@@ -760,6 +764,9 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 				fmt.Fprintf(errOut, "harnez exec: prune Quota-1 test logs: %v\n", err)
 			}
 			fmt.Fprint(errOut, quota1FailureSummary(quotaLogPath, capturedOutput.String()))
+			if quota1PreTestFailure(capturedOutput.String()) {
+				fmt.Fprintln(errOut, "Quota-1: tests did not run; fix gofmt/vet, then rerun make test-q1.")
+			}
 		} else {
 			_ = os.Remove(quotaLogPath)
 		}
@@ -846,17 +853,34 @@ func writeQuota1FailureLog(logPath string, output []byte) error {
 
 func quota1FailureSummary(logPath, output string) string {
 	var failures []string
+	var diagnostic []string
+	var lines []string
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		line := scanner.Text()
+		lines = append(lines, line)
 		if strings.Contains(line, "--- FAIL") {
 			failures = append(failures, line)
+		}
+		if strings.HasPrefix(line, "FAIL ") || strings.HasPrefix(line, "panic:") || strings.Contains(line, ".go:") && strings.Contains(line, ": ") {
+			diagnostic = append(diagnostic, line)
 		}
 	}
 	var summary strings.Builder
 	fmt.Fprintf(&summary, "Quota-1 test log: %q\n", logPath)
 	if len(failures) == 0 {
-		fmt.Fprintln(&summary, "Quota-1 command failed; no '--- FAIL' lines were found in output.")
+		fmt.Fprintln(&summary, "Quota-1 command failed:")
+		if len(diagnostic) == 0 {
+			if len(lines) > 10 {
+				lines = lines[len(lines)-10:]
+			}
+			diagnostic = lines
+		} else if len(diagnostic) > 5 {
+			diagnostic = diagnostic[:5]
+		}
+		for _, line := range diagnostic {
+			fmt.Fprintf(&summary, "  %s\n", line)
+		}
 	} else {
 		fmt.Fprintln(&summary, "Failing tests:")
 		for _, failure := range failures {
@@ -864,6 +888,15 @@ func quota1FailureSummary(logPath, output string) string {
 		}
 	}
 	return summary.String()
+}
+
+// quota1PreTestFailure reports the known make test prechecks that can fail
+// before go test starts. Their output is captured by the Quota-1 wrapper.
+func quota1PreTestFailure(output string) bool {
+	if strings.Contains(output, "go test") {
+		return false
+	}
+	return strings.Contains(output, "gofmt -l .") || strings.Contains(output, "go vet ./...")
 }
 
 func resolveExecTimeout(opts execOptions, args []string) time.Duration {
