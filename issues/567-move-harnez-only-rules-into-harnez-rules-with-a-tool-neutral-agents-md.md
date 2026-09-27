@@ -97,3 +97,10 @@ Code map: init creates/migrates AGENTS.md `internal/claude/init.go:742-764`, Loc
   dependency remains.
 
 M1 delivered
+
+### M2 Pre-Work / Required Refinements (host review 2026-09-27)
+- This repo's `.gitignore` ignores `.harnez/`, so the committed rules needed a force-add. Narrow it so
+  `.harnez/rules/*.md` is tracked and `.harnez/rules/Local.md` stays excluded; init should warn (not edit
+  `.gitignore`) when a repo ignores `.harnez/rules/`.
+- M1 canary on clones of loom, voxi, neus, cati: no block removed, rules generated, not ignored. Re-run the
+  same canary for M2 (host does it at review): owner text byte-identical outside managed blocks.
