@@ -81,4 +81,9 @@ Rather than letting `harnez agent` turns be killed after 60 seconds:
     - Ensure both `harnez agent start` and `harnez agent resume` implement symmetric detach behavior.
     - Standardized host output block on detachment must include: session info, directive to not poll or schedule timers/crons, and background `harnez agent wait <name>` instruction.
     - Integration tests in `cmd/harnez/agent_test.go` verifying deadline detach, wait reattachment, and zero-polling directive output.
+    - **CRITICAL REFINEMENT / TEST INTEGRATION BUG**:
+      - `make test-q1` failed with dozens of failures in `cmd/harnez` (e.g. `TestAgentStartDefaultModelLine`, `TestAgentOldModelSpecGuard`, etc.).
+      - Root cause: `launchForegroundWorker` spawns `os.Executable()`, which under `go test` is `harnez.test` (the test runner), NOT the `harnez` CLI. Passing flags like `--store-dir` to `harnez.test` fails immediately with `flag provided but not defined: -store-dir`.
+      - Furthermore, unit tests inject mock drivers / stores via `agentDeps`. Spawning an external `os.Executable()` process bypasses mock drivers and crashes tests.
+      - Ensure foreground detach handles mock drivers or test environments gracefully (or only delegates to subprocess when not running under mock test drivers, or wires test helper properly), and verify that `make test-q1` passes with zero failures.
 
