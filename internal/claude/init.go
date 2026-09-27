@@ -2,6 +2,7 @@ package claude
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -446,8 +447,6 @@ func initialAgentsMD(cfg *Config) string {
 	return "Adhere to the following conventions.\n"
 }
 
-const localOverlaysSection = "<!-- harnez:begin Local Overlays -->\n- **Before any work, read `AGENTS.local.md` if it exists** (@AGENTS.local.md). It holds this\n  checkout's settings (subagent mode, output mode) and overrides this file where they differ.\n<!-- harnez:end Local Overlays -->\n"
-
 func backfillRulesHeader(path, header string) (bool, error) {
 	if header == "" {
 		return false, nil
@@ -491,6 +490,9 @@ func writeRules(dir string, rules RulesConfig, quota bool) (int, error) {
 		content := strings.TrimSpace(file.Content) + "\n"
 		path := filepath.Join(rulesDir, file.Name)
 		existing, err := os.ReadFile(path)
+		if err == nil && file.Quota {
+			continue
+		}
 		if err == nil && string(existing) == content {
 			continue
 		}
@@ -506,29 +508,146 @@ func writeRules(dir string, rules RulesConfig, quota bool) (int, error) {
 	return changes, nil
 }
 
-func backfillLocalOverlays(path string) (bool, error) {
+type managedBlock struct {
+	name                  string
+	start, bodyStart, end int
+	body                  string
+}
+
+var migratableAgentBlocks = []string{
+	"Local Overlays", "Harnez Managed Conventions", "Repo Setup", quota1SectionName,
+}
+
+var migratableLocalBlocks = []string{"Concise Mode", "Subagent Policy"}
+
+func parseManagedBlocks(content string, names []string) ([]managedBlock, bool) {
+	lines := strings.SplitAfter(content, "\n")
+	offsets := make([]int, len(lines)+1)
+	for i, line := range lines {
+		offsets[i+1] = offsets[i] + len(line)
+	}
+	blocks := make([]managedBlock, 0)
+	active := -1
+	for i, line := range lines {
+		text := strings.TrimSuffix(line, "\n")
+		text = strings.TrimSuffix(text, "\r")
+		if active >= 0 && (strings.Contains(text, "<!-- harnez:begin ") || strings.Contains(text, "<!-- harnez:end ")) {
+			wantEnd := "<!-- harnez:end " + blocks[active].name + " -->"
+			if text != wantEnd {
+				return nil, true
+			}
+		}
+		for _, name := range names {
+			begin := "<!-- harnez:begin " + name + " -->"
+			end := "<!-- harnez:end " + name + " -->"
+			if text == begin {
+				if active >= 0 {
+					return nil, true
+				}
+				blocks = append(blocks, managedBlock{name: name, start: offsets[i], bodyStart: offsets[i+1]})
+				active = len(blocks) - 1
+			} else if text == end {
+				if active < 0 || blocks[active].name != name {
+					return nil, true
+				}
+				blocks[active].end = offsets[i+1]
+				blocks[active].body = content[blocks[active].bodyStart:offsets[i]]
+				active = -1
+			} else if strings.Contains(text, "<!-- harnez:begin "+name) || strings.Contains(text, "<!-- harnez:end "+name) {
+				return nil, true
+			}
+		}
+	}
+	if active >= 0 {
+		return nil, true
+	}
+	return blocks, false
+}
+
+func migrateManagedBlocks(path string, names []string, destination func(string) string) (bool, error) {
 	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
 	content := string(data)
-	updated := localOverlaysSection + "\n" + content
-	const begin, end = "<!-- harnez:begin Local Overlays -->", "<!-- harnez:end Local Overlays -->\n"
-	if i := strings.Index(content, begin); i >= 0 {
-		j := strings.Index(content[i:], end)
-		if j < 0 {
-			return false, nil
-		}
-		// Refresh an existing managed block so wording changes reach every project.
-		updated = content[:i] + localOverlaysSection + content[i+j+len(end):]
-		if updated == content {
-			return false, nil
+	blocks, malformed := parseManagedBlocks(content, names)
+	if malformed {
+		fmt.Printf("  ⚠️  left malformed or nested managed markers untouched in %s\n", path)
+		return false, nil
+	}
+	if len(blocks) == 0 {
+		return false, nil
+	}
+	var out strings.Builder
+	last := 0
+	for _, block := range blocks {
+		out.WriteString(content[last:block.start])
+		last = block.end
+		if target := destination(block.name); target != "" && block.body != "" {
+			existing, err := os.ReadFile(target)
+			if err != nil && !os.IsNotExist(err) {
+				return false, err
+			}
+			prefix := string(existing)
+			if prefix != "" && !strings.HasSuffix(prefix, "\n") {
+				prefix += "\n"
+			}
+			if prefix != "" {
+				prefix += "\n"
+			}
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return false, err
+			}
+			if err := os.WriteFile(target, []byte(prefix+block.body), 0o644); err != nil {
+				return false, err
+			}
 		}
 	}
-	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+	out.WriteString(content[last:])
+	if err := os.WriteFile(path, []byte(out.String()), 0o644); err != nil {
 		return false, err
 	}
 	return true, nil
+}
+
+func migrateInitRules(dir, agentsPath string) (int, error) {
+	rulesDir := filepath.Join(dir, ".harnez", "rules")
+	agentTarget := func(name string) string {
+		switch name {
+		case "Harnez Managed Conventions":
+			return filepath.Join(rulesDir, "Tools.md")
+		case quota1SectionName:
+			return filepath.Join(rulesDir, "Quota.md")
+		case "Repo Setup":
+			return filepath.Join(rulesDir, "Local.md")
+		case "Local Overlays":
+			return "" // Superseded by the new AGENTS.md header.
+		default:
+			return ""
+		}
+	}
+	changed, err := migrateManagedBlocks(agentsPath, migratableAgentBlocks, agentTarget)
+	if err != nil {
+		return 0, fmt.Errorf("migrate managed blocks in %s: %w", agentsPath, err)
+	}
+	changes := 0
+	if changed {
+		changes++
+	}
+	localPath := filepath.Join(dir, "AGENTS.local.md")
+	changed, err = migrateManagedBlocks(localPath, migratableLocalBlocks, func(string) string {
+		return filepath.Join(rulesDir, "Local.md")
+	})
+	if err != nil {
+		return changes, fmt.Errorf("migrate managed blocks in %s: %w", localPath, err)
+	}
+	if changed {
+		changes++
+	}
+	return changes, nil
 }
 
 var projectManifestNames = map[string]struct{}{
@@ -824,12 +943,6 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			fmt.Printf("  exists  %s (unchanged)\n", agentsPath)
 		}
 	}
-	if backfilled, err := backfillLocalOverlays(agentsPath); err != nil {
-		return fmt.Errorf("backfill Local Overlays %s: %w", agentsPath, err)
-	} else if backfilled {
-		fmt.Printf("  updated Local Overlays %s\n", agentsPath)
-		changes++
-	}
 	if cfg != nil {
 		if backfilled, err := backfillRulesHeader(agentsPath, cfg.AgentsMD.Rules.Header); err != nil {
 			return fmt.Errorf("backfill rules header %s: %w", agentsPath, err)
@@ -837,6 +950,12 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			fmt.Printf("  updated rules header %s\n", agentsPath)
 			changes++
 		}
+	}
+	agentBlocksSafe := true
+	if data, err := os.ReadFile(agentsPath); err != nil {
+		return fmt.Errorf("read %s for managed block migration: %w", agentsPath, err)
+	} else if _, malformed := parseManagedBlocks(string(data), migratableAgentBlocks); malformed {
+		agentBlocksSafe = false
 	}
 
 	symlinkChanged, err := fsutil.EnsureSymlink(claudePath, agentsPath)
@@ -939,7 +1058,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		}
 
 		// Apply config-defined local AGENTS.md sections (e.g. Language Conventions).
-		if l := cfg.AgentsMD.Local; l.Target != "" {
+		if l := cfg.AgentsMD.Local; l.Target != "" && agentBlocksSafe {
 			sections := append([]MDSection(nil), l.Sections...)
 			if len(docs) > 0 {
 				sections = append(sections, MDSection{
@@ -1062,14 +1181,23 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 	if !quota1Active {
 		quota1Active = markdown.ContainsSection(agentsPath, quota1SectionName)
 	}
+	if !quota1Active {
+		_, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Quota.md"))
+		quota1Active = err == nil
+	}
 	if cfg != nil {
 		ruleChanges, err := writeRules(dir, cfg.AgentsMD.Rules, quota1Active)
 		if err != nil {
 			return fmt.Errorf("write .harnez/rules: %w", err)
 		}
 		changes += ruleChanges
+		if ignored, err := rulesAreGitIgnored(dir); err != nil {
+			return fmt.Errorf("check generated rules ignore status: %w", err)
+		} else if ignored {
+			fmt.Printf("  ⚠️  .harnez/rules is ignored by Git; generated rule files may not be tracked\n")
+		}
 	}
-	if len(quota1) > 0 && quota1[0] {
+	if len(quota1) > 0 && quota1[0] && agentBlocksSafe {
 		if cfg == nil || cfg.AgentsMD.Rules.QuotaSection == "" {
 			return fmt.Errorf("quota-1 rules are not configured")
 		}
@@ -1137,6 +1265,11 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			fmt.Printf("  exists  %s [%s] (unchanged)\n", agentsPath, summarySection)
 		}
 	}
+	migrated, err := migrateInitRules(dir, agentsPath)
+	if err != nil {
+		return err
+	}
+	changes += migrated
 
 	if changes == 0 {
 		fmt.Println("No changes.")
@@ -1144,6 +1277,25 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		fmt.Printf("%d change(s).\n", changes)
 	}
 	return nil
+}
+
+func rulesAreGitIgnored(dir string) (bool, error) {
+	if _, ok := fsutil.FindGitDir(dir); !ok {
+		return false, nil
+	}
+	cmd := exec.Command("git", "-C", dir, "check-ignore", "-q", "--", ".harnez/rules/Index.md")
+	err := cmd.Run()
+	if err == nil {
+		return true, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	if errors.As(err, &exitErr) {
+		return false, fmt.Errorf("git check-ignore exited %d", exitErr.ExitCode())
+	}
+	return false, err
 }
 
 const issuesAttributesLine = "issues/README.md merge=harnez-issues-index"

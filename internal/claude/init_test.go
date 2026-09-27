@@ -494,14 +494,15 @@ func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
 	}
 	content := string(first)
 
-	if n := strings.Count(content, "<!-- harnez:begin Harnez Managed Conventions -->"); n != 1 {
-		t.Errorf("expected exactly one Harnez Managed Conventions section, got %d in:\n%s", n, content)
+	if strings.Contains(content, "<!-- harnez:begin Harnez Managed Conventions -->") {
+		t.Errorf("Harnez Managed Conventions should migrate out of AGENTS.md:\n%s", content)
 	}
-	if !strings.Contains(content, "### Editing Discipline") {
-		t.Errorf("expected Editing Discipline inside the managed section, got:\n%s", content)
+	tools, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Tools.md"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(content, "go install ubunatic.com/harnez/cmd/harnez@latest") {
-		t.Errorf("expected go install ubunatic.com/harnez/cmd/harnez@latest inside the managed section, got:\n%s", content)
+	if !strings.Contains(string(tools), "### Editing Discipline") || !strings.Contains(string(tools), "go install ubunatic.com/harnez/cmd/harnez@latest") {
+		t.Errorf("Tools.md missing migrated managed convention content:\n%s", tools)
 	}
 	if !strings.Contains(content, "# Custom Project Working Agreement") ||
 		!strings.Contains(content, "## Custom Downstream Section") {
@@ -555,10 +556,22 @@ stale config
 		t.Fatal(err)
 	}
 	content := string(data)
-	for _, want := range []string{"Quota-1 Guardrails", "quota settings", "Repo Setup", "repo settings"} {
-		if !strings.Contains(content, want) {
-			t.Errorf("plain init removed opt-in section content %q:\n%s", want, content)
-		}
+	if strings.Contains(content, "quota settings") || strings.Contains(content, "repo settings") {
+		t.Errorf("migrated sticky content remains in AGENTS.md:\n%s", content)
+	}
+	quota, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Quota.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Local.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(quota), "Quota-1 Guardrails") || !strings.Contains(string(quota), "quota settings") {
+		t.Errorf("Quota.md missing sticky Quota-1 content:\n%s", quota)
+	}
+	if !strings.Contains(string(local), "repo settings") {
+		t.Errorf("Local.md missing sticky Repo Setup content:\n%s", local)
 	}
 	if strings.Contains(content, "Removed Config Section") || strings.Contains(content, "stale config") {
 		t.Errorf("plain init retained orphaned config section:\n%s", content)
@@ -595,12 +608,8 @@ func TestRunInit_BackfillsLocalOverlaysSection(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := string(first)
-	wantBlock := "<!-- harnez:begin Local Overlays -->\n- **Before any work, read `AGENTS.local.md` if it exists** (@AGENTS.local.md). It holds this\n  checkout's settings (subagent mode, output mode) and overrides this file where they differ.\n<!-- harnez:end Local Overlays -->"
-	if strings.Count(content, "<!-- harnez:begin Local Overlays -->") != 1 {
-		t.Errorf("expected exactly one Local Overlays section, got:\n%s", content)
-	}
-	if !strings.Contains(content, wantBlock) {
-		t.Errorf("expected Local Overlays block, got:\n%s", content)
+	if strings.Contains(content, "<!-- harnez:begin Local Overlays -->") || strings.Contains(content, "AGENTS.local.md") {
+		t.Errorf("superseded Local Overlays section remains in AGENTS.md:\n%s", content)
 	}
 	if !strings.Contains(content, "# Legacy Project Working Agreement") || !strings.Contains(content, "Project-specific rule that must survive init.") {
 		t.Errorf("expected existing content to survive, got:\n%s", content)

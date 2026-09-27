@@ -111,7 +111,7 @@ func TestInitCmdPreservesSubagentPolicy(t *testing.T) {
 	if err := initCmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "AGENTS.local.md"))
+	data, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Local.md"))
 	if err != nil || !strings.Contains(string(data), "subagent_mode: harnez") {
 		t.Fatalf("init changed local policy: %v\n%s", err, data)
 	}

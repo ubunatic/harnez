@@ -556,10 +556,8 @@ agents_md:
           Where `@docs/AgenticLoop.md` is present in this project, follow it rather than
           restating it here — in particular Invariant 1 (Parallel Read, Sequential Write:
           one writer per workspace), Invariant 3 (Zero Zombie Guarantee: track and terminate
-          every background task and subagent), Invariant 6 (Context Discipline: no whole-file
-          reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads), and the Media & Demo
-          Verification Gate (explicit user confirmation before publishing
-          recordings or screenshots).
+          every background task and subagent), and Invariant 6 (Context Discipline: no whole-file
+          reads of AGENTS.md/CLAUDE.md — grep or range-bounded reads).
 
   rules:
     header: "**Before any work, read `.harnez/rules/Index.md` if it exists, then `.harnez/rules/Local.md`; they are part of this file. Local.md overrides both.**"
@@ -609,6 +607,7 @@ agents_md:
           - **Clean Tree First**: Before the quota run, check `git status` for changes that are not yours. If there are any, wait or report; do not run.
           - **Enforced Test Target**: Execute tests via `make test-q1` (or `harnez exec --quota-1 -- <test-cmd>`).
           - **Unauthorized Bypass Forbidden**: Bypassing guardrails via `QUOTA_BYPASS=1` or `HARNEZ_QUOTA_BYPASS=1` is strictly reserved for human developers and CI environments. Agent loops must not set or pass bypass flags.
+          - **Media & Demo Verification Gate**: Get explicit user confirmation before publishing recordings or screenshots.
       - name: Subagents.md
         content: |
           # Harnez Subagents

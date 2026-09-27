@@ -98,6 +98,12 @@ Code map: init creates/migrates AGENTS.md `internal/claude/init.go:742-764`, Loc
 
 M1 delivered
 
+M2 policy choice: `Local Overlays` is removed because the new header supersedes its `AGENTS.local.md` instruction; `Project Summary` stays in `AGENTS.md` because it is project-specific context rather than a Harnez rule.
+
+M2 refinements: `Language Conventions` (the `docs/*.md` index) and opt-in doc references stay in `AGENTS.md` because they are tool-neutral. Lite Quota-1 media-gate guidance moves with the Quota-1 block into `.harnez/rules/Quota.md`. The Subagent Policy value is preserved exactly; only its location moves into `.harnez/rules/Local.md`.
+
+M2 delivered
+
 ### M2 Pre-Work / Required Refinements (host review 2026-09-27)
 - This repo's `.gitignore` ignores `.harnez/`, so the committed rules needed a force-add. Narrow it so
   `.harnez/rules/*.md` is tracked and `.harnez/rules/Local.md` stays excluded; init should warn (not edit

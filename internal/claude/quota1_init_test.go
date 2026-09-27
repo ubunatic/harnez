@@ -42,26 +42,18 @@ func TestRunInitWithVariant_Quota1_Scaffolding(t *testing.T) {
 	}
 	agentsContent := string(data)
 
-	if !strings.Contains(agentsContent, "<!-- harnez:begin Quota-1 Guardrails -->") {
-		t.Errorf("expected harnez:begin Quota-1 Guardrails in AGENTS.md, got:\n%s", agentsContent)
+	if strings.Contains(agentsContent, "Quota-1 Guardrails") {
+		t.Errorf("Quota-1 block should migrate out of AGENTS.md:\n%s", agentsContent)
 	}
-	if !strings.Contains(agentsContent, "<!-- harnez:end Quota-1 Guardrails -->") {
-		t.Errorf("expected harnez:end Quota-1 Guardrails in AGENTS.md, got:\n%s", agentsContent)
+	quotaData, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Quota.md"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(agentsContent, "Single-Test Boundary") {
-		t.Errorf("expected Single-Test Boundary rule in AGENTS.md")
-	}
-	if !strings.Contains(agentsContent, "Clean Tree First") {
-		t.Errorf("expected Clean Tree First rule in AGENTS.md")
-	}
-	if strings.Contains(agentsContent, "Report Untested Edits") {
-		t.Errorf("unexpected Report Untested Edits rule in AGENTS.md")
-	}
-	if !strings.Contains(agentsContent, "make test-q1") {
-		t.Errorf("expected make test-q1 reference in AGENTS.md")
-	}
-	if !strings.Contains(agentsContent, "QUOTA_BYPASS=1") {
-		t.Errorf("expected QUOTA_BYPASS=1 reference in AGENTS.md")
+	quotaContent := string(quotaData)
+	for _, want := range []string{"Single-Test Boundary", "Clean Tree First", "make test-q1", "QUOTA_BYPASS=1"} {
+		if !strings.Contains(quotaContent, want) {
+			t.Errorf("Quota.md missing %q:\n%s", want, quotaContent)
+		}
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Quota.md")); err != nil {
 		t.Errorf("expected Quota.md for Quota-1 opt-in: %v", err)
@@ -92,8 +84,8 @@ func TestRunInitWithVariant_Quota1_Scaffolding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read AGENTS.md (second run): %v", err)
 	}
-	if strings.Count(string(data2), "<!-- harnez:begin Quota-1 Guardrails -->") != 1 {
-		t.Errorf("expected exactly 1 Quota-1 Guardrails block in AGENTS.md, found %d", strings.Count(string(data2), "<!-- harnez:begin Quota-1 Guardrails -->"))
+	if strings.Contains(string(data2), "Quota-1 Guardrails") {
+		t.Errorf("Quota-1 block reappeared in AGENTS.md:\n%s", data2)
 	}
 }
 
@@ -161,14 +153,14 @@ func TestRunInitWithVariant_LiteQuota1_ContentGuidance(t *testing.T) {
 		}
 		return string(data)
 	}
-	agents := read("AGENTS.md")
+	quota := read(filepath.Join(".harnez", "rules", "Quota.md"))
 	loop := read("docs/AgenticLoop.md")
 	spec := read("docs/Spec.md")
 	issues := read("docs/IssueTracking.md")
 	normalize := func(content string) string { return strings.Join(strings.Fields(content), " ") }
 
-	if !strings.Contains(normalize(agents), "Media & Demo Verification Gate") || strings.Contains(normalize(agents), "Invariant 10") {
-		t.Errorf("AGENTS.md must refer to the media gate by name without a stale invariant number")
+	if !strings.Contains(normalize(quota), "Media & Demo Verification Gate") || strings.Contains(normalize(quota), "Invariant 10") {
+		t.Errorf("Quota.md must refer to the media gate by name without a stale invariant number")
 	}
 	if !strings.Contains(loop, "7. **Media & Demo Verification Gate**") {
 		t.Errorf("lite AgenticLoop.md must include the numbered media gate")
