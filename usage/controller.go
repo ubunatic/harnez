@@ -9,12 +9,17 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
 
 // ProtocolVersion is the version of the local controller protocol.
 const ProtocolVersion = 1
+
+// DefaultMinRefreshInterval is the smallest interval between live requests for
+// one provider. Refresh requests never bypass this protection.
+const DefaultMinRefreshInterval = 30 * time.Second
 
 // ErrControllerUnsupported reports that this platform has no local controller
 // transport. File-only reads remain available on every platform.
@@ -28,11 +33,36 @@ var ErrRefreshUnavailable = errors.New("usage: refresh is unavailable without a 
 // controller files; when empty it follows XDG_RUNTIME_DIR with a ~/.harnez/run
 // fallback. StateDir defaults to StateDir("").
 type Options struct {
-	StateDir      string
-	RuntimeDir    string
-	StartIfAbsent bool
-	IdleTimeout   time.Duration
+	StateDir           string
+	RuntimeDir         string
+	StartIfAbsent      bool
+	IdleTimeout        time.Duration
+	Collector          Collector
+	MinRefreshInterval time.Duration
 }
+
+// Collector performs one provider's live collection. The controller, rather
+// than the collector, serializes and persists returned snapshots.
+type Collector interface {
+	CollectUsage(context.Context, ProviderID) (Snapshot, error)
+}
+
+// CollectorFunc adapts a function to Collector.
+type CollectorFunc func(context.Context, ProviderID) (Snapshot, error)
+
+// CollectUsage implements Collector.
+func (f CollectorFunc) CollectUsage(ctx context.Context, provider ProviderID) (Snapshot, error) {
+	return f(ctx, provider)
+}
+
+// ProviderError carries safe retry metadata for a collector failure.
+type ProviderError struct {
+	Category   ErrorCategory
+	RetryAfter time.Time
+}
+
+// Error implements error without exposing provider diagnostics.
+func (e ProviderError) Error() string { return "usage: provider collection failed" }
 
 // Client reads persisted snapshots and, when available, uses a local controller.
 // Close only releases this client's connection; it never stops a controller it
@@ -64,6 +94,9 @@ func Open(opts Options) (Client, error) {
 	}
 	if opts.IdleTimeout == 0 {
 		opts.IdleTimeout = 60 * time.Second
+	}
+	if opts.MinRefreshInterval == 0 {
+		opts.MinRefreshInterval = DefaultMinRefreshInterval
 	}
 	if !opts.StartIfAbsent {
 		return &client{opts: opts}, nil
@@ -125,15 +158,22 @@ func (r wireResponse) snapshot(provider ProviderID) *Snapshot {
 }
 
 type controller struct {
-	opts     Options
-	listener net.Listener
-	lock     *os.File
-	mu       sync.Mutex
-	clients  int
-	waiters  map[uint64]chan SnapshotEvent
-	nextID   uint64
-	closed   chan struct{}
-	close    sync.Once
+	opts        Options
+	listener    net.Listener
+	lock        *os.File
+	mu          sync.Mutex
+	clients     int
+	waiters     map[uint64]chan SnapshotEvent
+	nextID      uint64
+	closed      chan struct{}
+	close       sync.Once
+	lastRefresh map[ProviderID]time.Time
+	inFlight    map[ProviderID]*refreshFlight
+}
+
+type refreshFlight struct {
+	done     chan struct{}
+	snapshot Snapshot
 }
 
 func (c *controller) serve() {
@@ -149,6 +189,39 @@ func (c *controller) serve() {
 		}
 		go c.handle(conn)
 	}
+}
+
+func (c *controller) shutdownWhenIdle() {
+	timer := time.NewTimer(c.opts.IdleTimeout)
+	defer timer.Stop()
+	for {
+		select {
+		case <-c.closed:
+			return
+		case <-timer.C:
+			c.mu.Lock()
+			active := c.clients
+			c.mu.Unlock()
+			if active == 0 {
+				c.shutdown()
+				return
+			}
+			timer.Reset(c.opts.IdleTimeout)
+		}
+	}
+}
+
+func (c *controller) shutdown() {
+	c.close.Do(func() {
+		close(c.closed)
+		c.mu.Lock()
+		for id, waiter := range c.waiters {
+			delete(c.waiters, id)
+			close(waiter)
+		}
+		c.mu.Unlock()
+		closeController(c)
+	})
 }
 
 func (c *controller) handle(conn net.Conn) {
@@ -167,7 +240,7 @@ func (c *controller) handle(conn net.Conn) {
 	case "snapshot":
 		c.reply(conn, c.read(request.Providers))
 	case "refresh":
-		c.reply(conn, wireResponse{Version: ProtocolVersion, Error: ErrRefreshUnavailable.Error()})
+		c.reply(conn, wireResponse{Version: ProtocolVersion, Snapshots: c.refresh(request.Providers)})
 	case "subscribe":
 		c.subscribe(conn, request.Providers)
 	default:
@@ -234,6 +307,126 @@ func (c *controller) publish(snapshot Snapshot) {
 		default:
 		}
 	}
+}
+
+func (c *controller) refresh(providers []ProviderID) []Snapshot {
+	if len(providers) == 0 {
+		providers = []ProviderID{ProviderClaude, ProviderAGY, ProviderCodex}
+	}
+	result := make([]Snapshot, 0, len(providers))
+	for _, provider := range providers {
+		result = append(result, c.refreshProvider(provider))
+	}
+	return result
+}
+
+func (c *controller) refreshProvider(provider ProviderID) Snapshot {
+	if !validProviderID(provider) {
+		return c.failedSnapshot(provider, ErrorProviderFetch, time.Time{})
+	}
+	c.mu.Lock()
+	if flight := c.inFlight[provider]; flight != nil {
+		c.mu.Unlock()
+		<-flight.done
+		return flight.snapshot
+	}
+	if last := c.lastRefresh[provider]; !last.IsZero() && time.Since(last) < c.opts.MinRefreshInterval {
+		c.mu.Unlock()
+		return c.throttledSnapshot(provider, last.Add(c.opts.MinRefreshInterval))
+	}
+	flight := &refreshFlight{done: make(chan struct{})}
+	c.inFlight[provider] = flight
+	c.mu.Unlock()
+
+	snapshot := c.collectAndPersist(provider)
+	c.mu.Lock()
+	c.lastRefresh[provider] = time.Now()
+	flight.snapshot = snapshot
+	delete(c.inFlight, provider)
+	close(flight.done)
+	c.mu.Unlock()
+	c.publish(snapshot)
+	return snapshot
+}
+
+func (c *controller) collectAndPersist(provider ProviderID) Snapshot {
+	if c.opts.Collector == nil {
+		return c.failedSnapshot(provider, ErrorProviderFetch, time.Time{})
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	snapshot, err := c.opts.Collector.CollectUsage(ctx, provider)
+	if err != nil {
+		category, retryAfter := providerFailure(err)
+		return c.failedSnapshot(provider, category, retryAfter)
+	}
+	snapshot.SchemaVersion = SnapshotSchemaVersion
+	snapshot.ProviderID = provider
+	snapshot.Status = StatusLive
+	snapshot.Source = SourceLive
+	snapshot.Error = nil
+	if snapshot.FetchedAt.IsZero() {
+		snapshot.FetchedAt = time.Now().UTC()
+	}
+	if snapshot.ObservedAt.IsZero() {
+		snapshot.ObservedAt = snapshot.FetchedAt
+	}
+	if err := writeSnapshot(c.opts.StateDir, snapshot); err != nil {
+		return c.failedSnapshot(provider, ErrorProviderFetch, time.Time{})
+	}
+	return snapshot
+}
+
+func providerFailure(err error) (ErrorCategory, time.Time) {
+	var providerErr ProviderError
+	if errors.As(err, &providerErr) {
+		return providerErr.Category, providerErr.RetryAfter
+	}
+	return ErrorProviderFetch, time.Time{}
+}
+
+func (c *controller) failedSnapshot(provider ProviderID, category ErrorCategory, retryAfter time.Time) Snapshot {
+	snapshot, err := ReadSnapshot(c.opts.StateDir, provider)
+	if err == nil && snapshot != nil {
+		snapshot.Status = StatusStale
+		snapshot.Error = &FetchError{Category: category}
+		if !retryAfter.IsZero() {
+			snapshot.Error.RetryAfter = &retryAfter
+		}
+		return *snapshot
+	}
+	now := time.Now().UTC()
+	return Snapshot{SchemaVersion: SnapshotSchemaVersion, ProviderID: provider, FetchedAt: now, Status: StatusError, Error: &FetchError{Category: category}}
+}
+
+func (c *controller) throttledSnapshot(provider ProviderID, retryAfter time.Time) Snapshot {
+	snapshot, err := ReadSnapshot(c.opts.StateDir, provider)
+	if err == nil && snapshot != nil {
+		snapshot.Status = StatusThrottled
+		snapshot.Error = &FetchError{Category: ErrorThrottled, RetryAfter: &retryAfter}
+		return *snapshot
+	}
+	now := time.Now().UTC()
+	return Snapshot{SchemaVersion: SnapshotSchemaVersion, ProviderID: provider, FetchedAt: now, Status: StatusThrottled, Error: &FetchError{Category: ErrorThrottled, RetryAfter: &retryAfter}}
+}
+
+func writeSnapshot(stateDir string, snapshot Snapshot) error {
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		return fmt.Errorf("usage: create state directory: %w", err)
+	}
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		return fmt.Errorf("usage: encode snapshot: %w", err)
+	}
+	path := filepath.Join(stateDir, string(snapshot.ProviderID)+".json")
+	temporary := path + ".tmp"
+	if err := os.WriteFile(temporary, data, 0600); err != nil {
+		return fmt.Errorf("usage: write snapshot: %w", err)
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		return fmt.Errorf("usage: publish snapshot: %w", err)
+	}
+	return nil
 }
 
 func ioLimitReader(conn net.Conn) *io.LimitedReader { return &io.LimitedReader{R: conn, N: 1 << 20} }

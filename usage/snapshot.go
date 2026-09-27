@@ -49,12 +49,13 @@ const (
 type SnapshotStatus string
 
 const (
-	StatusUnknown SnapshotStatus = "unknown"
-	StatusLive    SnapshotStatus = "live"
-	StatusCached  SnapshotStatus = "cached"
-	StatusStale   SnapshotStatus = "stale"
-	StatusSkipped SnapshotStatus = "skipped"
-	StatusError   SnapshotStatus = "error"
+	StatusUnknown   SnapshotStatus = "unknown"
+	StatusLive      SnapshotStatus = "live"
+	StatusCached    SnapshotStatus = "cached"
+	StatusStale     SnapshotStatus = "stale"
+	StatusSkipped   SnapshotStatus = "skipped"
+	StatusError     SnapshotStatus = "error"
+	StatusThrottled SnapshotStatus = "throttled"
 )
 
 // SnapshotSource identifies the kind of source that produced the snapshot.
@@ -77,6 +78,7 @@ type ErrorCategory string
 
 const (
 	ErrorProviderFetch ErrorCategory = "provider_fetch"
+	ErrorThrottled     ErrorCategory = "throttled"
 )
 
 // Snapshot is one provider's usage observation. FetchedAt is when the
@@ -259,7 +261,7 @@ func (s Snapshot) validate() error {
 		return fmt.Errorf("missing fetched_at")
 	}
 	switch s.Status {
-	case StatusUnknown, StatusLive, StatusCached, StatusStale, StatusSkipped, StatusError:
+	case StatusUnknown, StatusLive, StatusCached, StatusStale, StatusSkipped, StatusError, StatusThrottled:
 	default:
 		return fmt.Errorf("unknown status %q", s.Status)
 	}

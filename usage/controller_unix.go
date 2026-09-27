@@ -71,9 +71,25 @@ func startIfAbsent(opts Options) error {
 		_ = lock.Close()
 		return fmt.Errorf("usage: secure controller socket: %w", err)
 	}
-	controller := &controller{opts: opts, listener: listener, lock: lock, waiters: make(map[uint64]chan SnapshotEvent), closed: make(chan struct{})}
+	controller := &controller{
+		opts:        opts,
+		listener:    listener,
+		lock:        lock,
+		waiters:     make(map[uint64]chan SnapshotEvent),
+		closed:      make(chan struct{}),
+		lastRefresh: make(map[ProviderID]time.Time),
+		inFlight:    make(map[ProviderID]*refreshFlight),
+	}
 	go controller.serve()
+	go controller.shutdownWhenIdle()
 	return nil
+}
+
+func closeController(controller *controller) {
+	_ = controller.listener.Close()
+	_ = os.Remove(socketPath(controller.opts))
+	_ = syscall.Flock(int(controller.lock.Fd()), syscall.LOCK_UN)
+	_ = controller.lock.Close()
 }
 
 func requestController(ctx context.Context, opts Options, request wireRequest) (wireResponse, error) {
