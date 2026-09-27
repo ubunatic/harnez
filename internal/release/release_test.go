@@ -790,6 +790,65 @@ func TestBuildCmdMakefileFallback(t *testing.T) {
 	}
 }
 
+func TestRunPublishStepIncludesStaleVersionedArchive(t *testing.T) {
+	tmpDir := t.TempDir()
+	distDir := filepath.Join(tmpDir, "dist")
+	if err := os.MkdirAll(distDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	staleArchive := "loom-v0.2.2.tar.gz"
+	if err := os.WriteFile(filepath.Join(distDir, staleArchive), []byte("stale"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	opt := Options{Dir: tmpDir, DryRun: true, Out: &out}
+	if err := runPublishStep(opt, "loom", "v0.2.8", nil); err != nil {
+		t.Fatalf("runPublishStep error: %v", err)
+	}
+	if !strings.Contains(out.String(), filepath.Join("dist", staleArchive)) {
+		t.Fatalf("expected stale archive to be selected for v0.2.8 publication, output: %s", out.String())
+	}
+}
+
+func TestSkippedBuildLeavesStaleArtifactsForSigningAndPublishing(t *testing.T) {
+	tmpDir := t.TempDir()
+	distDir := filepath.Join(tmpDir, "dist")
+	if err := os.MkdirAll(distDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	staleArchive := "loom-v0.2.2.tar.gz"
+	for name, content := range map[string]string{
+		staleArchive: "stale archive",
+		"SHA256SUMS": staleArchive + "  " + staleArchive + "\n",
+	} {
+		if err := os.WriteFile(filepath.Join(distDir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var out bytes.Buffer
+	opt := Options{Dir: tmpDir, Out: &out}
+	if err := runBuildStep(opt, nil); err != nil {
+		t.Fatalf("runBuildStep error: %v", err)
+	}
+	if err := runSigningStep(Options{Dir: tmpDir, DryRun: true, Out: &out}, "loom", "0.2.8", "unused"); err != nil {
+		t.Fatalf("runSigningStep error: %v", err)
+	}
+	if err := runPublishStep(Options{Dir: tmpDir, DryRun: true, Out: &out}, "loom", "v0.2.8", nil); err != nil {
+		t.Fatalf("runPublishStep error: %v", err)
+	}
+	if !strings.Contains(out.String(), "No .goreleaser.yaml found") {
+		t.Errorf("expected build step to skip, output: %s", out.String())
+	}
+	if !strings.Contains(out.String(), "Signing "+filepath.Join(tmpDir, "dist", "SHA256SUMS")) {
+		t.Errorf("expected stale checksum file to be selected for signing, output: %s", out.String())
+	}
+	if !strings.Contains(out.String(), filepath.Join("dist", staleArchive)) {
+		t.Errorf("expected stale archive to be selected for publication, output: %s", out.String())
+	}
+}
+
 func TestBuildEnvGOWORK(t *testing.T) {
 	t.Setenv("GOWORK", "/somewhere/go.work")
 
