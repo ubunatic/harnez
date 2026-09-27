@@ -1,6 +1,6 @@
 # 477 — Replace hard polling with hook-driven background task completion
 
-**Status**: Open
+**Status**: Closed — M1 wait lifecycle coverage and worker cleanup verified
 
 **Priority**: P1 (High)
 **Severity**: Major
@@ -77,3 +77,12 @@ custom Codex hook/push requirement.
 - **M1 (last):** tests for `agent wait` with concurrent completions, timeout/cancellation, a worker that
   crashes before writing a terminal state (must end as failed, not hang), and no orphan worker after wait.
   Fix only what the tests expose.
+
+## Outcome (M1, 2026-09-27)
+
+- Added coverage for concurrent completions, timeout, cancellation, and a worker
+  that exits without recording terminal state; the latter is marked failed.
+- Added a detached-worker lifecycle assertion and fixed `agent wait` to wait until
+  the terminal worker process exits. Detached launchers now reap their child.
+- Verification: `go test ./cmd/harnez -run Wait` and `make test-q1` passed;
+  `make install` completed.
