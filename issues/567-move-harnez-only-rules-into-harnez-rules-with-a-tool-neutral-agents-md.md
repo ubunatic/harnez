@@ -1,6 +1,6 @@
 # 567 — Move harnez-only rules into .harnez/rules/ with a tool-neutral AGENTS.md
 
-**Status**: Open
+**Status**: Closed — M1-M4 delivered (48f43b9..a5b2d0d); clone canary clean on 5 repos, doc order idempotent
 **Priority**: P1
 **Severity**: Medium
 **Category**: Init / Agent Instructions
