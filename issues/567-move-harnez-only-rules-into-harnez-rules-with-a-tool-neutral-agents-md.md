@@ -110,3 +110,9 @@ M2 delivered
   `.gitignore`) when a repo ignores `.harnez/rules/`.
 - M1 canary on clones of loom, voxi, neus, cati: no block removed, rules generated, not ignored. Re-run the
   same canary for M2 (host does it at review): owner text byte-identical outside managed blocks.
+
+### M3 Pre-Work / Required Refinements (host canary 2026-09-27)
+- M2 canary on clones of loom, voxi, neus, cati, lmcoder: owner text byte-identical, second run idempotent,
+  Quota-1 content in Quota.md. **Bug:** voxi's `Repo Setup` block lands in `.harnez/rules/Local.md`, which is
+  git-excluded, so a durable repo rule drops out of version control. `Repo Setup` is tool-neutral (branch and
+  push policy): it stays in AGENTS.md like Language Conventions. Fix first, with a test.
