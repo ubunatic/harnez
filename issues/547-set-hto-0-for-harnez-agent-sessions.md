@@ -1,6 +1,6 @@
 # 547 — Clean 60s foreground turn detach and HTO=0 wait reattach for agent sessions
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics
@@ -75,7 +75,5 @@ Rather than letting `harnez agent` turns be killed after 60 seconds:
 
 - [x] **M1 (exec timeout exemption for wait)**: Delivered in `46610db`. Implemented `isHarnezAgentWait` in `cmd/harnez/exec.go` and comprehensive unit tests in `cmd/harnez/exec_test.go`. Direct and bash-wrapped `harnez agent wait` resolve to timeout 0 while explicit flags/HTO and regular commands are preserved.
 - [x] **M2 (clean 60s foreground turn detach & reattach guidance)**: Delivered in `2559134` and `355bec5`. Implemented foreground worker detachment, independent process groups via `Setsid`, zero-polling/scheduling guidance output, and test-mode guards.
-- [ ] **M2 Refinements (Pre-Commit Review Gate Findings)**:
-  - **JSON Detach Output**: When `--json` is specified, `writeDetachGuidance` must emit valid JSON (including session info, status `running`, detached flag, and wait command instructions) rather than plain text, preventing JSON parser breaks for callers.
-  - **Worker CLI Test Coverage**: Add unit/integration test in `cmd/harnez/agent_test.go` covering real CLI flag parsing for `--worker-session` under `agent start` and `agent resume` (verifying `runDetachedResumeWorker` executes and parses arguments cleanly).
+- [x] **M2 Refinements (Pre-Commit Review Gate Findings)**: Delivered in `e156192`. Implemented JSON detach guidance output and real CLI worker-session test coverage.
 
