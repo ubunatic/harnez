@@ -62,3 +62,8 @@ During lean sprints on Loom issues 138 and 140, an interactive AGY host orchestr
 4. **CLI & Native Tool Synergy**:
    - Combining Harnez CLI lifecycle commands (`harnez issues new/open/close`, `harnez agent start/resume/stop`, `harnez find`, `harnez apply`) with native shell (`run_command`), targeted file viewing (`view_file`), and ticket editing (`write_to_file`) provided a smooth, fully autonomous execution pipeline.
 
+5. **Verified Cross-Session Peer Messaging (`send_message`)**:
+   - Direct asynchronous peer messaging between separate host sessions (e.g. `loom` assistant and `cati` media browser) was proven end-to-end using native `send_message` targeting the peer's conversation ID (`fa46cc11-...`).
+   - The recipient session successfully received the handoff notice and replied with an instant reactive `pong`, proving that multi-session peer coordination works smoothly without shared polling loops or file locks.
+
+
