@@ -144,3 +144,12 @@ orchestrator workflow (role policy, agent_run.go:693), documented, not automatic
   was used. `make install` completed afterward.
 - Ticket remains open pending a successful quota-suite run and review of the
   unverified correction.
+
+### M1 Pre-Work / Required Refinements (host review 2026-09-27)
+- Host `make test-q1` on 09f961f fails: `TestCodexResumeQuotaRecoveryQuarantinesAndExcludesSession`
+  (agent_test.go:939: quarantine is nil). Fix the code path, not the assertion.
+- `isCodexUsageLimitError` must not match plain "rate limit": a transient 429 seen twice would permanently
+  quarantine a healthy session. Match Codex's usage-limit wording only, and add a test that two transient
+  rate-limit errors do not quarantine.
+- Quarantine only when quota availability is known and not exhausted; with unknown availability
+  (`d.availability == nil`) keep the session pending, and drop the `ResumeFailures >= 2` shortcut.
