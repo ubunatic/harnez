@@ -152,6 +152,27 @@ func TestFilterHeadTail_UnderLimit(t *testing.T) {
 	}
 }
 
+func TestFilterHeadTailString(t *testing.T) {
+	lines := make([]string, 20)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line %d", i)
+	}
+	in := strings.Join(lines, "\n")
+	got := FilterHeadTailString(in, 10)
+	want := FilterHeadTail(lines, 10)
+	if got != want {
+		t.Errorf("FilterHeadTailString() = %q, want %q", got, want)
+	}
+}
+
+func TestFilterHeadTailString_UnderLimit(t *testing.T) {
+	in := "a\nb\nc"
+	got := FilterHeadTailString(in, 10)
+	if got != in {
+		t.Errorf("FilterHeadTailString() = %q, want unchanged %q", got, in)
+	}
+}
+
 func TestFilterHeadTailBytes(t *testing.T) {
 	var lines []string
 	for i := 0; i < 500; i++ {
