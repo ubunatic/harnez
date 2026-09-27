@@ -430,8 +430,12 @@ func (c *controller) collectAndPersist(provider ProviderID) Snapshot {
 	}
 	snapshot.SchemaVersion = SnapshotSchemaVersion
 	snapshot.ProviderID = provider
-	snapshot.Status = StatusLive
-	snapshot.Source = SourceLive
+	if snapshot.Status != StatusDemo {
+		snapshot.Status = StatusLive
+	}
+	if snapshot.Source == "" {
+		snapshot.Source = SourceLive
+	}
 	snapshot.Error = nil
 	if snapshot.FetchedAt.IsZero() {
 		snapshot.FetchedAt = time.Now().UTC()

@@ -210,6 +210,18 @@ Answers to §7, so M2 can start:
 - This remains M2/M3 library-only work. `cmd/harnez` and installed-binary behavior are unchanged.
 - Verification: `make test-q1` passed on 2026-09-27; `/tmp/issue-560-demo-test.log` has no `--- FAIL` entries.
 
+## 11. Demo safety and mockup correction (2026-09-27)
+
+- The demo now reads and writes only under a dedicated per-user directory in the OS temp directory, shared by demo
+  processes so they can still attach to one controller. It prints the actual temporary state location.
+- Deterministic examples use both `status: demo` and `source: demo`; the controller preserves those labels. Cached and
+  stale sample rows, colored statuses, quota bars, relative ages, and skipped/uninstalled AGY output follow the ANSI
+  mockup. SIGINT/SIGTERM cancellation returns through normal cleanup and exits successfully.
+- Added tests that demo paths cannot resolve to the real usage state directory, sample snapshots carry demo labels,
+  the controller preserves demo status/source, and subscription returns when its signal context is cancelled.
+- Verification: `make test-q1` passed; `/tmp/issue-560-demo-fix-test.log` contains no `--- FAIL` entries. `make install`
+  completed. The demo was not run during this fix.
+
 ## Demo Review (host, 2026-09-27, 0683096)
 Tests passed, but a real run of `examples/usage` failed the plausibility check:
 1. **Data corruption (critical):** the demo's stub collector wrote fake snapshots (claude and codex both 43%/18%,

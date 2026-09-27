@@ -217,6 +217,35 @@ func TestRefreshPreservesStaleSnapshotAndPublishesSubscription(t *testing.T) {
 	}
 }
 
+func TestCollectorSourceLabelIsPreserved(t *testing.T) {
+	stateDir := t.TempDir()
+	runtimeDir := t.TempDir()
+	client, err := Open(Options{
+		StateDir: stateDir, RuntimeDir: runtimeDir, StartIfAbsent: true,
+		Collector: CollectorFunc(func(context.Context, ProviderID) (Snapshot, error) {
+			return Snapshot{Status: StatusDemo, Source: SourceDemo, Usage: UsageData{Installed: true}}, nil
+		}),
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer client.Close()
+	snapshots, err := client.Refresh(context.Background(), ProviderClaude)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if len(snapshots) != 1 || snapshots[0].Source != SourceDemo || snapshots[0].Status != StatusDemo {
+		t.Fatalf("demo collector snapshot = %+v, want demo result", snapshots)
+	}
+	stored, err := ReadSnapshot(stateDir, ProviderClaude)
+	if err != nil {
+		t.Fatalf("ReadSnapshot: %v", err)
+	}
+	if stored == nil || stored.Source != SourceDemo {
+		t.Fatalf("persisted demo snapshot = %+v", stored)
+	}
+}
+
 func TestForegroundControllerShutsDownAfterIdleTimeout(t *testing.T) {
 	runtimeDir := t.TempDir()
 	idle := make(chan ControllerInfo, 1)

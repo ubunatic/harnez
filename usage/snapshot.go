@@ -56,6 +56,7 @@ const (
 	StatusSkipped   SnapshotStatus = "skipped"
 	StatusError     SnapshotStatus = "error"
 	StatusThrottled SnapshotStatus = "throttled"
+	StatusDemo      SnapshotStatus = "demo"
 )
 
 // SnapshotSource identifies the kind of source that produced the snapshot.
@@ -69,6 +70,7 @@ const (
 	SourceStateCache SnapshotSource = "state_cache"
 	SourceHistory    SnapshotSource = "history"
 	SourceLegacy     SnapshotSource = "legacy"
+	SourceDemo       SnapshotSource = "demo"
 )
 
 // ErrorCategory classifies a refresh failure without exposing provider error
@@ -261,7 +263,7 @@ func (s Snapshot) validate() error {
 		return fmt.Errorf("missing fetched_at")
 	}
 	switch s.Status {
-	case StatusUnknown, StatusLive, StatusCached, StatusStale, StatusSkipped, StatusError, StatusThrottled:
+	case StatusUnknown, StatusLive, StatusCached, StatusStale, StatusSkipped, StatusError, StatusThrottled, StatusDemo:
 	default:
 		return fmt.Errorf("unknown status %q", s.Status)
 	}
