@@ -989,10 +989,9 @@ func attributable(sessions []*subagent.Session, dir, callerParent string) []*sub
 			continue
 		}
 		have, _ := filepath.Abs(sess.WorkingDir)
-		if have != want || !subagent.CanManage(callerParent, sess) || resumeState(sess) == "terminal" {
+		if have != want || !subagent.CanManage(callerParent, sess) || resumeState(sess) == "terminal" || sess.ResumeBlockedReason != "" || (sess.Provider == "codex" && sess.CodexQuarantine != nil) {
 			continue
 		}
-		// Quarantined sessions will be excluded here when #306 lands.
 		result = append(result, sess)
 	}
 	sort.SliceStable(result, func(i, j int) bool {

@@ -153,6 +153,14 @@ func rejectExhaustedQuota(spec string, model subagent.Model, override bool, avai
 	return fmt.Errorf("%s", message)
 }
 
+func isCodexUsageLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "usage limit") || strings.Contains(message, "rate limit") || strings.Contains(message, "quota exceeded")
+}
+
 func quotaAlternatives(selected subagent.Model, availability func(string, string) usage.ProviderQuotaAvailability) []string {
 	if availability == nil {
 		availability = providerAvailability
@@ -425,7 +433,13 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		return err
 	}
 	if sess.ResumeBlockedReason != "" {
-		return fmt.Errorf("session %q cannot be resumed: %s", sess.Name, sess.ResumeBlockedReason)
+		return fmt.Errorf("session %q cannot be resumed: %s; start a fresh session with harnez agent start --name", sess.Name, sess.ResumeBlockedReason)
+	}
+	if sess.CodexQuarantine != nil {
+		return fmt.Errorf("session %q is quarantined: %s; start a fresh session with harnez agent start --name", sess.Name, sess.CodexQuarantine.Reason)
+	}
+	if sess.Provider == "codex" && sess.CodexQuotaResumePending && d.availability != nil && d.availability(sess.Provider, sess.Model).State == "exhausted" {
+		return fmt.Errorf("session %q is waiting for Codex quota recovery; resume once quota is available", sess.Name)
 	}
 
 	if !subagent.CanManage(d.parent(), sess) {
@@ -556,6 +570,16 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		storeTurnQuota(s, sess.ID, sess.Provider, turn, "before", before)
 		recordTurnQuota(s, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt, nil)
 		recordResumeFailure(s, sess, err)
+		if sess.Provider == "codex" && isCodexUsageLimitError(err) {
+			if (sess.CodexQuotaResumePending || sess.ResumeFailures >= 2) && (d.availability == nil || d.availability(sess.Provider, sess.Model).State != "exhausted") {
+				sess.CodexQuarantine = &subagent.CodexQuarantine{Reason: firstLine(err.Error()), At: time.Now().UTC(), Attempts: 1}
+				sess.CodexQuotaResumePending = false
+				_ = s.Save(sess)
+			} else {
+				sess.CodexQuotaResumePending = true
+				_ = s.Save(sess)
+			}
+		}
 		return fmt.Errorf("agent resume %q (%s:%s:%s) failed: %w; verify the provider/model configuration or ask for guidance", sess.Name, sess.Provider, sess.Model, sess.Tier, err)
 	}
 	if sess.Provider == "codex" && contextTokens >= threshold && (!r.CompactionObserved || r.ContextTokens < 0 || r.ContextTokens >= threshold) {
@@ -571,6 +595,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		return fmt.Errorf("%s", reason)
 	}
 	sess.LastError = ""
+	sess.CodexQuotaResumePending = false
 	sess.ResumeFailures = 0
 	sess.TokensTurn = r.TokensTurn
 	sess.TokensCumulative += r.TokensTurn

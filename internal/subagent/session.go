@@ -38,21 +38,30 @@ type Session struct {
 	TokensSinceCompact int `json:"tokens_since_compact,omitempty"`
 	// ContextTokens is the full input size of the last provider turn, including
 	// cached input; it is the source for pre-prompt compaction decisions.
-	ContextTokens       int          `json:"context_tokens,omitempty"`
-	TokensTurn          int          `json:"tokens_turn"`
-	CachedTokens        int          `json:"cached_tokens"`
-	CreatedAt           time.Time    `json:"created_at"`
-	LastActiveAt        time.Time    `json:"last_active_at"`
-	Role                string       `json:"role,omitempty"`
-	LastError           string       `json:"last_error,omitempty"`
-	ResumeBlockedReason string       `json:"resume_blocked_reason,omitempty"`
-	Response            string       `json:"response,omitempty"`
-	Messages            []string     `json:"messages,omitempty"`
-	StdoutLog           string       `json:"stdout_log,omitempty"`
-	StderrLog           string       `json:"stderr_log,omitempty"`
-	ResumeFailures      int          `json:"resume_failures,omitempty"`
-	Turn                int          `json:"turn,omitempty"`
-	TurnRecords         []TurnRecord `json:"turn_records,omitempty"`
+	ContextTokens           int              `json:"context_tokens,omitempty"`
+	TokensTurn              int              `json:"tokens_turn"`
+	CachedTokens            int              `json:"cached_tokens"`
+	CreatedAt               time.Time        `json:"created_at"`
+	LastActiveAt            time.Time        `json:"last_active_at"`
+	Role                    string           `json:"role,omitempty"`
+	LastError               string           `json:"last_error,omitempty"`
+	ResumeBlockedReason     string           `json:"resume_blocked_reason,omitempty"`
+	CodexQuotaResumePending bool             `json:"codex_quota_resume_pending,omitempty"`
+	CodexQuarantine         *CodexQuarantine `json:"codex_quarantine,omitempty"`
+	Response                string           `json:"response,omitempty"`
+	Messages                []string         `json:"messages,omitempty"`
+	StdoutLog               string           `json:"stdout_log,omitempty"`
+	StderrLog               string           `json:"stderr_log,omitempty"`
+	ResumeFailures          int              `json:"resume_failures,omitempty"`
+	Turn                    int              `json:"turn,omitempty"`
+	TurnRecords             []TurnRecord     `json:"turn_records,omitempty"`
+}
+
+// CodexQuarantine records the bounded failed probe after a quota interruption.
+type CodexQuarantine struct {
+	Reason   string    `json:"reason"`
+	At       time.Time `json:"at"`
+	Attempts int       `json:"attempts"`
 }
 
 // TurnRecord stores the usage and optional human rating for one provider turn.

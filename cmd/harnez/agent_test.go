@@ -907,6 +907,48 @@ func TestAgentTerminalResumeRefusal(t *testing.T) {
 	}
 }
 
+func TestCodexResumeQuotaRecoveryQuarantinesAndExcludesSession(t *testing.T) {
+	old := agentDriver
+	d := &resumeOutcomeDriver{err: errors.New("usage limit reached")}
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store := saveResumeSession(t, storeDir, "sid", "worker", "codex")
+	availability := usage.ProviderQuotaAvailability{State: "exhausted"}
+	deps := agentDeps{
+		store:  func() (*subagent.FileSessionStore, error) { return store, nil },
+		parent: func() string { return "" },
+		find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+			return s.Find(id)
+		},
+		availability: func(string, string) usage.ProviderQuotaAvailability { return availability },
+	}
+	cmd := newAgentCmd()
+	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
+	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi"}); err == nil {
+		t.Fatal("expected exhausted quota failure")
+	}
+	availability = usage.ProviderQuotaAvailability{State: "available"}
+	cmd = newAgentCmd()
+	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
+	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi"}); err == nil {
+		t.Fatal("expected quarantine failure")
+	}
+	sess, _ := store.Get("sid")
+	if sess.CodexQuarantine == nil || sess.CodexQuarantine.Attempts != 1 {
+		t.Fatalf("quarantine = %#v", sess.CodexQuarantine)
+	}
+	if got := attributable([]*subagent.Session{sess}, ".", ""); len(got) != 0 {
+		t.Fatalf("quarantined session selected: %#v", got)
+	}
+	cmd = newAgentCmd()
+	cmd.SetArgs([]string{"resume", "--name", "worker", "hi", "--store-dir", storeDir})
+	err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "hi"})
+	if err == nil || !strings.Contains(err.Error(), "harnez agent start") || d.resumes != 2 {
+		t.Fatalf("repeat resume err=%v resumes=%d", err, d.resumes)
+	}
+}
+
 func TestAgentStatusResumeDiagnostics(t *testing.T) {
 	storeDir := t.TempDir()
 	store := saveResumeSession(t, storeDir, "sid", "worker", "fake")
