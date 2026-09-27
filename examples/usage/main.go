@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -17,19 +16,33 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/usage"
 )
 
-var refresh = flag.Bool("refresh", false, "request a demonstration refresh after connecting")
-
 func main() {
-	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := run(ctx, *refresh); err != nil && !errors.Is(err, context.Canceled) {
+	cmd := newRootCmd()
+	cmd.SetContext(ctx)
+	if err := cmd.Execute(); err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func newRootCmd() *cobra.Command {
+	var refresh bool
+	cmd := &cobra.Command{
+		Use:           "usage",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return run(cmd.Context(), refresh)
+		},
+	}
+	cmd.Flags().BoolVar(&refresh, "refresh", false, "request a demonstration refresh after connecting")
+	return cmd
 }
 
 func run(ctx context.Context, refreshOnly bool) error {
