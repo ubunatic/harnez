@@ -1,6 +1,6 @@
 # 342 — MVP: harnez agent command and cross-agent dispatch from agy/claude host to codex/claude subagents
 
-**Status**: Open
+**Status**: Closed — MVP delivered by 417 and epic 479; follow-ups 476, 477, 485 tracked separately
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Agentic Ergonomics / Infrastructure
