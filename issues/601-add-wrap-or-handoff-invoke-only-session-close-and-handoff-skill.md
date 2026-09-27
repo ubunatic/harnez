@@ -1,6 +1,6 @@
 # 601 — Add /wrap (or /handoff) invoke-only session close and handoff skill
 
-**Status**: Open
+**Status**: Closed — wrap skill shipped: docs/commands/Wrap.md registered in config.yaml as 'wrap'
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Skills / Workflow / Handoff
