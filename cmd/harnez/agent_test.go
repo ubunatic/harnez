@@ -376,6 +376,86 @@ func TestForegroundWorkerEnvironmentOmitsLeafRole(t *testing.T) {
 	}
 }
 
+func TestWriteDetachGuidanceJSON(t *testing.T) {
+	sess := &subagent.Session{ID: "session-id", Name: "calm-otter", Status: "running"}
+	var out bytes.Buffer
+	writeDetachGuidance(&out, sess, true)
+	var got struct {
+		Session      subagent.Session `json:"session"`
+		Status       string           `json:"status"`
+		Detached     bool             `json:"detached"`
+		Message      string           `json:"message"`
+		Instructions []string         `json:"instructions"`
+		WaitCommand  string           `json:"wait_command"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("detach guidance is not JSON: %v (%s)", err, out.String())
+	}
+	if got.Session.ID != sess.ID || got.Session.Name != sess.Name || got.Status != "running" || !got.Detached {
+		t.Fatalf("detach JSON = %#v", got)
+	}
+	if got.WaitCommand != "harnez agent wait calm-otter" || !strings.Contains(strings.Join(got.Instructions, " "), "Do NOT poll") || !strings.Contains(got.Message, "detached") {
+		t.Fatalf("detach instructions = %#v", got)
+	}
+}
+
+func TestAgentWorkerSessionCLIFlags(t *testing.T) {
+	t.Setenv(agentRoleEnv, "")
+	t.Setenv(agentSessionEnv, "")
+	driver := &recordingAgentDriver{}
+	oldDriver := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = oldDriver }()
+
+	for _, tc := range []struct {
+		name, verb, id, sessionName string
+	}{
+		{name: "start", verb: "start", id: "worker-start", sessionName: "start-worker"},
+		{name: "resume", verb: "resume", id: "worker-resume", sessionName: "resume-worker"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			storeDir := t.TempDir()
+			store, err := subagent.NewSessionStore(storeDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			initial := &subagent.Session{ID: tc.id, Name: tc.sessionName, Provider: "claude", Model: "haiku", Tier: "low", ProviderSessionID: "provider-session", WorkingDir: t.TempDir(), Role: "developer", HarnessType: "harnez", Status: "running", ProcessPID: os.Getpid(), ContextTokens: 10}
+			if tc.verb == "start" {
+				initial.StartPrompt = "stored prompt"
+			} else {
+				initial.Status = "completed"
+			}
+			if err := store.Save(initial); err != nil {
+				t.Fatal(err)
+			}
+			cmd := newAgentCmd()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(new(bytes.Buffer))
+			args := []string{"--store-dir", storeDir, tc.verb, "--worker-session", tc.id, "--json", "--name", tc.sessionName}
+			if tc.verb == "start" {
+				args = append(args, "--model", "claude:haiku:low", "--dir", initial.WorkingDir)
+			}
+			args = append(args, "--", "worker prompt")
+			cmd.SetArgs(args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute %s --worker-session: %v", tc.verb, err)
+			}
+			var result agentOutput
+			if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+				t.Fatalf("%s worker output is not JSON: %v (%s)", tc.verb, err, out.String())
+			}
+			finished, err := store.Get(tc.id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if finished.Status != "completed" || finished.ProcessPID != 0 || result.Session == nil {
+				t.Fatalf("%s worker result=%#v stored=%#v", tc.verb, result, finished)
+			}
+		})
+	}
+}
+
 func TestForegroundWorkerHelper(t *testing.T) {
 	storeDir, sessionID := os.Getenv("HARNEZ_TEST_FOREGROUND_STORE"), os.Getenv("HARNEZ_TEST_FOREGROUND_ID")
 	if storeDir == "" || sessionID == "" {

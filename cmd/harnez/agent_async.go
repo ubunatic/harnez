@@ -64,7 +64,23 @@ func foregroundDetachTimeout(cmd *cobra.Command) time.Duration {
 	return deadline - foregroundDetachGrace
 }
 
-func writeDetachGuidance(w io.Writer, sess *subagent.Session) {
+func writeDetachGuidance(w io.Writer, sess *subagent.Session, jsonOut bool) {
+	if jsonOut {
+		_ = json.NewEncoder(w).Encode(struct {
+			Session      *subagent.Session `json:"session"`
+			Status       string            `json:"status"`
+			Detached     bool              `json:"detached"`
+			Message      string            `json:"message"`
+			Instructions []string          `json:"instructions"`
+			WaitCommand  string            `json:"wait_command"`
+		}{
+			Session: sess, Status: "running", Detached: true,
+			Message:      "Agent turn exceeded 60s and has been cleanly detached to the background.",
+			Instructions: []string{"Do NOT poll.", "Do NOT schedule timers or cron jobs.", "Launch the wait command as a host background job; the environment will automatically notify this session when it finishes."},
+			WaitCommand:  "harnez agent wait " + sess.Name,
+		})
+		return
+	}
 	fmt.Fprintf(w, "[session info: id=%s name=%s status=running]\n", sess.ID, sess.Name)
 	fmt.Fprintln(w, "Agent turn exceeded 60s and has been cleanly detached to the background.")
 	fmt.Fprintln(w, "Do NOT poll. Do NOT schedule timers or cron jobs.")
@@ -109,7 +125,7 @@ func launchForegroundWorker(cmd *cobra.Command, store *subagent.FileSessionStore
 	defer timer.Stop()
 	select {
 	case <-timer.C:
-		writeDetachGuidance(cmd.OutOrStdout(), sess)
+		writeDetachGuidance(cmd.OutOrStdout(), sess, jsonOut)
 		return true, nil
 	case waitErr := <-done:
 		if waitErr != nil {
