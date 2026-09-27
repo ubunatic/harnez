@@ -1,6 +1,6 @@
 # 544 — Handoff 2026-09-24: open threads from the harnez-bf session (clean, agy routing, exec CPU, read -I OOM, CxxxE rule)
 
-**Status**: Open
+**Status**: Closed — Handoff done: 543, 540 closed; 353, 539, 538, 542, 534/535 are own tickets; managed-block rollout happens per repo via harnez init
 **Priority**: P1
 **Severity**: Medium
 **Category**: Handoff
