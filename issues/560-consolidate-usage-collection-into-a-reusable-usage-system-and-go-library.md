@@ -240,3 +240,9 @@ Tests passed, but a real run of `examples/usage` failed the plausibility check:
 - Handle SIGINT/SIGTERM (signal.NotifyContext), close the client, exit 0. Test or manual proof.
 - Match the mockup: coloured status, bars, relative age, `skipped` for not-installed providers.
 - Host verifies with a real run under `timeout -s INT`, checking the real state dir's mtimes are unchanged.
+
+## M4 Decision (user, 2026-09-27)
+- Approved: M4 goes ahead, but `harnez usage` uses the shared client/controller only behind an opt-in flag.
+  Default path (no flag) stays byte-identical to today. Status line and the other consumers are not migrated in M4.
+- Pre-work: the demo showed a stub/test collector can write into the real state dir; the real CLI path must only
+  persist real collector data, and tests must use temp state/runtime dirs.
