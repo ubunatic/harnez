@@ -26,6 +26,7 @@ import (
 // agentDeps are the session-store and caller-identity hooks the runners need.
 type agentDeps struct {
 	store        func() (*subagent.FileSessionStore, error)
+	storeDir     string
 	parent       func() string
 	find         func(*cobra.Command, *subagent.FileSessionStore, string) (*subagent.Session, error)
 	quota        func(context.Context, string, bool) usage.TurnQuotaReading
@@ -82,6 +83,18 @@ func agentCommandContext(cmd *cobra.Command) context.Context {
 		return context.Background()
 	}
 	return cmd.Context()
+}
+
+func withAgentTimeout(cmd *cobra.Command, timeout time.Duration, run func() error) error {
+	if timeout <= 0 || cmd == nil || (!cmd.Flags().Changed("timeout") && !cmd.InheritedFlags().Changed("timeout")) {
+		return run()
+	}
+	original := cmd.Context()
+	ctx, cancel := context.WithTimeout(agentCommandContext(cmd), timeout)
+	defer cancel()
+	cmd.SetContext(ctx)
+	defer cmd.SetContext(original)
+	return run()
 }
 
 func turnQuotaBaseline(turnStarted time.Time, before usage.TurnQuotaReading) time.Time {
@@ -223,6 +236,7 @@ func quotaModelCost(model subagent.Model) int {
 type resumeRequest struct {
 	Role                                     string // must match the stored role when given
 	Prompt, Name, ModelSpec, Dir, StreamMode string
+	SessionID                                string
 	Continue, JSON, PlanFirst                bool
 }
 
@@ -315,6 +329,29 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	opts := subagent.RunOptions{Prompt: req.Prompt, Model: m, Dir: canonicalWorkDir}
 	parentID := d.parent() // read before the child's environment replaces it
 	defer setAgentEnv(role, sessName)()
+	if req.SessionID == "" && d.storeDir != "" {
+		if timeout := foregroundDetachTimeout(cmd); timeout > 0 {
+			now := time.Now()
+			sess := &subagent.Session{ID: id, Name: sessName, StartPrompt: req.StoredPrompt, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "running", Role: role, CreatedAt: now, LastActiveAt: now}
+			sess.StdoutLog = filepath.Join(d.storeDir, id+".stdout.log")
+			sess.StderrLog = filepath.Join(d.storeDir, id+".stderr.log")
+			if err := s.Create(sess); err != nil {
+				return err
+			}
+			args := []string{"--store-dir", d.storeDir, "agent", "start", "--worker-session", id, "--json", "--model", spec, "--role", role, "--name", sessName, "--dir", canonicalWorkDir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst]}
+			if req.AllowExhaustedQuota {
+				args = append(args, "--allow-exhausted-quota")
+			}
+			args = append(args, "--", req.Prompt)
+			started, err := launchForegroundWorker(cmd, s, sess, args, timeout, req.JSON)
+			if !started && err != nil {
+				sess.Status = "failed"
+				sess.LastError = err.Error()
+				_ = s.Save(sess)
+			}
+			return err
+		}
+	}
 	driver := withAgyMeterSession(baseDriver, id)
 	sd, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
@@ -532,6 +569,26 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	sd, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
 	turn := sess.Turn + 1
+	if req.SessionID == "" && d.storeDir != "" {
+		if timeout := foregroundDetachTimeout(cmd); timeout > 0 {
+			previous := *sess
+			logID := uuid.NewString()
+			sess.StdoutLog = filepath.Join(d.storeDir, sess.ID+".resume-"+logID+".stdout.log")
+			sess.StderrLog = filepath.Join(d.storeDir, sess.ID+".resume-"+logID+".stderr.log")
+			sess.Status = "running"
+			sess.LastActiveAt = time.Now()
+			if err := s.Save(sess); err != nil {
+				return err
+			}
+			args := []string{"--store-dir", d.storeDir, "agent", "resume", "--worker-session", sess.ID, "--json", "--name", sess.Name, "--role", role, "--dir", sess.WorkingDir, "--plan", map[bool]string{true: "yes", false: "no"}[req.PlanFirst], "--", req.Prompt}
+			started, err := launchForegroundWorker(cmd, s, sess, args, timeout, req.JSON)
+			if !started && err != nil {
+				*sess = previous
+				_ = s.Save(sess)
+			}
+			return err
+		}
+	}
 	turnStarted := time.Now().UTC()
 	beforeCapture := make(chan usage.TurnQuotaReading, 1)
 	go func() {
@@ -617,6 +674,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	sess.OutputTokensTotal += r.OutputTokens
 	sess.TokenTotalsKnown = true
 	sess.LastActiveAt = time.Now()
+	sess.Status = "completed"
 	sess.Turn = turn
 	sess.TurnRecords = append(sess.TurnRecords, subagent.TurnRecord{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens})
 	before := <-beforeCapture

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +19,100 @@ import (
 )
 
 var agentExecutable = os.Executable
+var foregroundDetachGrace = time.Second
+
+func foregroundDetachTimeout(cmd *cobra.Command) time.Duration {
+	if cmd != nil && (cmd.Flags().Changed("timeout") || cmd.InheritedFlags().Changed("timeout")) {
+		return 0
+	}
+	if os.Getenv(execTimeoutExplicitEnv) == "1" || os.Getenv(execTimeoutShortEnv) != "" || os.Getenv(execTimeoutEnv) != "" {
+		return 0
+	}
+	outerTimeout, err := time.ParseDuration(os.Getenv(execTimeoutEffectiveEnv))
+	if err != nil || outerTimeout <= 0 {
+		return 0
+	}
+	deadline := min(outerTimeout, 60*time.Second)
+	if deadline <= foregroundDetachGrace {
+		return 0
+	}
+	return deadline - foregroundDetachGrace
+}
+
+func writeDetachGuidance(w io.Writer, sess *subagent.Session) {
+	fmt.Fprintf(w, "[session info: id=%s name=%s status=running]\n", sess.ID, sess.Name)
+	fmt.Fprintln(w, "Agent turn exceeded 60s and has been cleanly detached to the background.")
+	fmt.Fprintln(w, "Do NOT poll. Do NOT schedule timers or cron jobs.")
+	fmt.Fprintln(w, "Reattach by launching a background job:")
+	fmt.Fprintf(w, "  harnez agent wait %s\n", sess.Name)
+	fmt.Fprintln(w, "When the background job finishes, your environment will automatically notify this session.")
+}
+
+func launchForegroundWorker(cmd *cobra.Command, store *subagent.FileSessionStore, sess *subagent.Session, args []string, timeout time.Duration, jsonOut bool) (bool, error) {
+	exe, err := agentExecutable()
+	if err != nil {
+		return false, err
+	}
+	stdout, err := os.OpenFile(sess.StdoutLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		return false, err
+	}
+	defer stdout.Close()
+	stderr, err := os.OpenFile(sess.StderrLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
+		return false, err
+	}
+	defer stderr.Close()
+	worker := exec.Command(exe, args...)
+	worker.Env = os.Environ()
+	worker.Stdin = nil
+	worker.Stdout, worker.Stderr = stdout, stderr
+	worker.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := worker.Start(); err != nil {
+		return false, err
+	}
+	sess.Status = "running"
+	sess.ProcessPID = worker.Process.Pid
+	if err := store.Save(sess); err != nil {
+		_ = worker.Process.Kill()
+		_ = worker.Wait()
+		return true, err
+	}
+	done := make(chan error, 1)
+	go func() { done <- worker.Wait() }()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		writeDetachGuidance(cmd.OutOrStdout(), sess)
+		return true, nil
+	case waitErr := <-done:
+		if waitErr != nil {
+			log, _ := os.ReadFile(sess.StderrLog)
+			if len(bytes.TrimSpace(log)) > 0 {
+				return true, fmt.Errorf("agent turn failed: %s", bytes.TrimSpace(log))
+			}
+			return true, fmt.Errorf("agent turn failed: %w", waitErr)
+		}
+		if jsonOut {
+			output, err := os.ReadFile(sess.StdoutLog)
+			if err != nil {
+				return true, err
+			}
+			_, err = cmd.OutOrStdout().Write(output)
+			return true, err
+		}
+		output, err := os.ReadFile(sess.StdoutLog)
+		if err != nil {
+			return true, err
+		}
+		var result agentOutput
+		if err := json.Unmarshal(bytes.TrimSpace(output), &result); err != nil {
+			return true, fmt.Errorf("decode completed agent turn: %w", err)
+		}
+		return true, writeAgentOutput(cmd, false, result)
+	}
+}
 
 func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir, parentID string, check func(context.Context) error) error {
 	modelSpec := req.ModelSpec
@@ -149,6 +245,56 @@ func runDetachedWorker(cmd *cobra.Command, req startRequest, storeDir string) er
 	req.StoredPrompt = sess.StartPrompt
 	err = runStart(cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return sess.ParentSessionID }, preflight: subagent.CheckCodexAuth}, req)
 	current, getErr := store.Get(sess.ID)
+	if getErr != nil {
+		return getErr
+	}
+	current.ProcessPID = 0
+	current.LastActiveAt = time.Now()
+	if err != nil {
+		current.Status = "failed"
+		current.LastError = err.Error()
+	} else {
+		current.Status = "completed"
+	}
+	if saveErr := store.Save(current); saveErr != nil {
+		return saveErr
+	}
+	return err
+}
+
+func runDetachedResumeWorker(cmd *cobra.Command, sessionID string, req resumeRequest, storeDir string) error {
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		return err
+	}
+	var sess *subagent.Session
+	for i := 0; i < 100; i++ {
+		sess, err = store.Get(sessionID)
+		if err != nil {
+			return err
+		}
+		if sess.ProcessPID == os.Getpid() {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if sess == nil || sess.ProcessPID != os.Getpid() {
+		return fmt.Errorf("detached resume session %q was not registered", sessionID)
+	}
+	req.SessionID = sessionID
+	req.Name = sess.Name
+	req.JSON = true
+	deps := agentDeps{
+		store:    func() (*subagent.FileSessionStore, error) { return store, nil },
+		storeDir: storeDir,
+		parent:   func() string { return sess.ParentSessionID },
+		find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+			return s.Find(id)
+		},
+		preflight: subagent.CheckCodexAuth,
+	}
+	err = runResume(cmd, deps, req)
+	current, getErr := store.Get(sessionID)
 	if getErr != nil {
 		return getErr
 	}

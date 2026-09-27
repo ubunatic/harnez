@@ -434,6 +434,20 @@ func TestResolveExecTimeout_DefaultFlagAndExplicitPrefix(t *testing.T) {
 	if got := resolveExecTimeout(execOptions{ConfigPath: missing}, []string{"sleep", "1"}); got != 3*time.Minute {
 		t.Errorf("ambient timeout = %v, want %v", got, 3*time.Minute)
 	}
+	for _, tc := range []struct {
+		args []string
+		want time.Duration
+	}{
+		{args: []string{"harnez", "agent", "start", "--timeout", "7m"}, want: 7 * time.Minute},
+		{args: []string{"bash", "-c", "harnez agent resume --timeout=8m worker next"}, want: 8 * time.Minute},
+	} {
+		if got := resolveExecTimeout(execOptions{ConfigPath: missing, Getenv: func(string) string { return "" }}, tc.args); got != tc.want {
+			t.Errorf("agent timeout for %v = %v, want %v", tc.args, got, tc.want)
+		}
+		if !hasExplicitExecTimeout(execOptions{Getenv: func(string) string { return "" }}, tc.args) {
+			t.Errorf("agent timeout not treated as explicit for %v", tc.args)
+		}
+	}
 }
 
 func TestResolveExecTimeout_HarnezAgentWaitDefaultsUnlimited(t *testing.T) {

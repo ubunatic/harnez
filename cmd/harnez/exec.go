@@ -58,6 +58,8 @@ const defaultExecInsertTimeout = 200 * time.Millisecond
 const defaultExecTimeout = 60 * time.Second
 const execTimeoutEnv = "HARNEZ_TIMEOUT"
 const execTimeoutShortEnv = "HTO"
+const execTimeoutExplicitEnv = "HARNEZ_EXEC_TIMEOUT_EXPLICIT"
+const execTimeoutEffectiveEnv = "HARNEZ_EXEC_EFFECTIVE_TIMEOUT"
 
 var execTimeoutPrefixRE = regexp.MustCompile(`^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:` + execTimeoutEnv + `|` + execTimeoutShortEnv + `)=(\S+)\s+`)
 
@@ -189,6 +191,44 @@ func isHarnezAgentWait(args []string) bool {
 	return false
 }
 
+func harnezAgentTimeoutArg(args []string) (string, bool) {
+	tokens := unwrapShellCommand(args)
+	if len(tokens) == 1 && len(args) > 0 && tokens[0] != args[0] {
+		tokens = strings.Fields(tokens[0])
+	}
+	for i := 0; i+1 < len(tokens); i++ {
+		if filepath.Base(tokens[i]) != "harnez" || tokens[i+1] != "agent" {
+			continue
+		}
+		for j := i + 2; j < len(tokens); j++ {
+			if tokens[j] == "--" {
+				break
+			}
+			if strings.HasPrefix(tokens[j], "--timeout=") {
+				return strings.TrimPrefix(tokens[j], "--timeout="), true
+			}
+			if tokens[j] == "--timeout" && j+1 < len(tokens) {
+				return tokens[j+1], true
+			}
+		}
+	}
+	return "", false
+}
+
+func hasExplicitExecTimeout(opts execOptions, args []string) bool {
+	if opts.TimeoutSet || opts.Timeout > 0 || explicitTimeoutPrefix(args) != "" {
+		return true
+	}
+	if _, ok := harnezAgentTimeoutArg(args); ok {
+		return true
+	}
+	getenv := opts.Getenv
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	return getenv(execTimeoutShortEnv) != "" || getenv(execTimeoutEnv) != ""
+}
+
 // quota1SandboxArgs builds bwrap argv for a Quota-1 child. Empty cache paths
 // are omitted; the filesystem remains read-only outside the explicit binds.
 func quota1SandboxArgs(args []string, cwd, goCache, goModCache, runtimeDir string) []string {
@@ -279,6 +319,7 @@ points an agent's Bash tool calls at this command.`,
 				ExpectFailure: expectFailureFlag,
 				Quota1:        quota1Flag,
 				Timeout:       timeoutFlag,
+				TimeoutSet:    cmd.Flags().Changed("timeout"),
 			}, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr())
 			if err != nil {
 				return err
@@ -351,6 +392,7 @@ type execOptions struct {
 	InsertTimeout time.Duration                                      // bound on waiting for the telemetry write; <=0 means defaultExecInsertTimeout
 	Insert        func(dbPath string, call telemetry.ToolCall) error // nil means defaultInsertExecRow
 	Timeout       time.Duration
+	TimeoutSet    bool
 	ConfigPath    string
 }
 
@@ -648,6 +690,11 @@ func runExecWrapper(args []string, opts execOptions, in io.Reader, out, errOut i
 		}
 	}
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	c.Env = append(os.Environ(), execTimeoutEffectiveEnv+"="+timeout.String())
+	c.Env = append(c.Env, execTimeoutExplicitEnv+"=0")
+	if hasExplicitExecTimeout(opts, args) {
+		c.Env[len(c.Env)-1] = execTimeoutExplicitEnv + "=1"
+	}
 	c.Stdin = in
 
 	var distOpts distill.Options
@@ -944,6 +991,14 @@ func resolveExecTimeout(opts execOptions, args []string) time.Duration {
 	}
 	if opts.Timeout > 0 {
 		return opts.Timeout
+	}
+	if value, ok := harnezAgentTimeoutArg(args); ok {
+		if value == "0" {
+			return 0
+		}
+		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+			return parsed
+		}
 	}
 	if isHarnezAgentWait(args) {
 		return 0

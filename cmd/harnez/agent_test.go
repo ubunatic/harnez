@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -262,6 +263,131 @@ func TestAgentDetachedSpawnAndWait(t *testing.T) {
 	}
 	if processExists(created.ProcessPID) {
 		t.Fatalf("worker process %d remains after wait returned", created.ProcessPID)
+	}
+}
+
+func TestForegroundStartAndResumeDetachIntoWaitableWorkers(t *testing.T) {
+	t.Setenv(execTimeoutEffectiveEnv, "100ms")
+	t.Setenv(execTimeoutExplicitEnv, "0")
+	t.Setenv(execTimeoutShortEnv, "")
+	t.Setenv(execTimeoutEnv, "")
+	t.Setenv(agentRoleEnv, "")
+	t.Setenv(agentSessionEnv, "")
+	oldGrace := foregroundDetachGrace
+	foregroundDetachGrace = time.Millisecond
+	defer func() { foregroundDetachGrace = oldGrace }()
+
+	helperBinary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	launcher := filepath.Join(t.TempDir(), "foreground-worker-launcher")
+	script := "#!/bin/sh\nstore=''\nid=''\nwhile test $# -gt 0; do\n case \"$1\" in\n --store-dir) store=$2; shift 2 ;;\n --worker-session) id=$2; shift 2 ;;\n *) shift ;;\n esac\ndone\nHARNEZ_TEST_FOREGROUND_STORE=$store HARNEZ_TEST_FOREGROUND_ID=$id exec '" + helperBinary + "' -test.run=^TestForegroundWorkerHelper$\n"
+	if err := os.WriteFile(launcher, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	oldExecutable := agentExecutable
+	agentExecutable = func() (string, error) { return launcher, nil }
+	defer func() { agentExecutable = oldExecutable }()
+	oldDriver := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return &scriptDriver{} }
+	defer func() { agentDriver = oldDriver }()
+
+	for _, verb := range []string{"start", "resume"} {
+		t.Run(verb, func(t *testing.T) {
+			storeDir := t.TempDir()
+			store, err := subagent.NewSessionStore(storeDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := "foreground-" + verb
+			deps := agentDeps{
+				store:    func() (*subagent.FileSessionStore, error) { return store, nil },
+				storeDir: storeDir,
+				parent:   func() string { return "" },
+				find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+					return s.Find(id)
+				},
+			}
+			cmd := newAgentCmd()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			if verb == "start" {
+				err = runStart(cmd, deps, startRequest{Name: name, Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull})
+			} else {
+				if err := store.Save(&subagent.Session{ID: "resume-id", Name: name, Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: t.TempDir(), Status: "completed", ContextTokens: 10}); err != nil {
+					t.Fatal(err)
+				}
+				err = runResume(cmd, deps, resumeRequest{Name: name, Prompt: "continue", StreamMode: streamFull})
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, directive := range []string{"status=running", "cleanly detached", "Do NOT poll", "Do NOT schedule", "harnez agent wait " + name, "automatically notify"} {
+				if !strings.Contains(out.String(), directive) {
+					t.Errorf("detach output %q missing %q", out.String(), directive)
+				}
+			}
+			sess, err := store.Find(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if sess.Status != "running" || sess.ProcessPID <= 0 || sess.StdoutLog == "" || sess.StderrLog == "" {
+				t.Fatalf("detached session = %#v", sess)
+			}
+			pgid, err := syscall.Getpgid(sess.ProcessPID)
+			if err != nil || pgid != sess.ProcessPID {
+				t.Fatalf("worker process group = %d, err=%v; want independent group %d", pgid, err, sess.ProcessPID)
+			}
+
+			waitCmd := newAgentCmd()
+			var waitOut bytes.Buffer
+			waitCmd.SetOut(&waitOut)
+			waitCmd.SetArgs([]string{"--store-dir", storeDir, "wait", name})
+			if err := waitCmd.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(waitOut.String(), "finished "+name) {
+				t.Fatalf("wait output = %q", waitOut.String())
+			}
+		})
+	}
+}
+
+func TestForegroundWorkerHelper(t *testing.T) {
+	storeDir, sessionID := os.Getenv("HARNEZ_TEST_FOREGROUND_STORE"), os.Getenv("HARNEZ_TEST_FOREGROUND_ID")
+	if storeDir == "" || sessionID == "" {
+		t.Skip("foreground worker helper")
+	}
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sess *subagent.Session
+	for i := 0; i < 100; i++ {
+		sess, err = store.Get(sessionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sess.ProcessPID == os.Getpid() {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if sess.ProcessPID != os.Getpid() {
+		t.Fatal("parent did not register foreground worker PID")
+	}
+	time.Sleep(300 * time.Millisecond)
+	sess.Status = "completed"
+	sess.ProcessPID = 0
+	sess.Response = "finished " + sess.Name
+	sess.Messages = []string{sess.Response}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(agentOutput{Session: sess, Response: sess.Response, Messages: sess.Messages}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -1393,7 +1519,7 @@ func TestAgentResumePrintsReplyNotStructDump(t *testing.T) {
 	if got := out.String(); strings.Contains(got, "{0x") || !strings.Contains(got, "[agent messages]\n[msg 1]\nthe reply text") {
 		t.Fatalf("stdout = %q, want plain reply without struct dump", got)
 	}
-	if e := errOut.String(); !strings.HasPrefix(e, "[session timeline]\n") || !strings.Contains(e, "caller must wait") || !strings.Contains(e, " done] ") {
+	if e := errOut.String(); !strings.HasPrefix(e, "[session timeline]\n") || !strings.Contains(e, "host background job") || !strings.Contains(e, "do not poll") || !strings.Contains(e, " done] ") {
 		t.Fatalf("stderr = %q, want timeline with wait notice", e)
 	}
 }

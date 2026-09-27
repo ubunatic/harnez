@@ -45,6 +45,7 @@ func newAgentCmd() *cobra.Command {
 	var jsonOut, children, all, detach, allowExhaustedQuota bool
 	var workerID string
 	var storeDir, workDir, name, modelSpec, streamMode, roleSpec string
+	var agentTimeout time.Duration
 	var planSpec string
 	var rootPrompt string
 	var rootFiles []string
@@ -75,6 +76,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	root.PersistentFlags().StringVar(&modelSpec, "model", "", "provider:model[:tier]")
 	root.PersistentFlags().BoolVar(&allowExhaustedQuota, "allow-exhausted-quota", false, "start even when cached provider quota is exhausted")
 	root.PersistentFlags().StringVar(&roleSpec, "role", "", "agent role for a new session: orchestrator, developer, reviewer or advisor (default from spec/agent.yaml)")
+	root.PersistentFlags().DurationVar(&agentTimeout, "timeout", 0, "maximum foreground turn duration (0 waits without a limit)")
 	_ = root.RegisterFlagCompletionFunc("role", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		names, _ := subagent.RoleNames()
 		return names, cobra.ShellCompDirectiveNoFileComp
@@ -160,7 +162,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if err != nil {
 			return err
 		}
-		deps := agentDeps{store: store, parent: parent, find: find}
+		deps := agentDeps{store: store, parent: parent, find: find, storeDir: storeDir}
 		if rootContinue && name != "" {
 			return fmt.Errorf("agent: --continue cannot be combined with --name")
 		}
@@ -196,11 +198,15 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 				return e
 			}
 			if _, findErr := find(cmd, s, name); findErr == nil {
-				return runResume(cmd, deps, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+				return withAgentTimeout(cmd, agentTimeout, func() error {
+					return runResume(cmd, deps, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst})
+				})
 			} else if !strings.Contains(findErr.Error(), "not found") {
 				return findErr
 			}
-			return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: allowExhaustedQuota})
+			return withAgentTimeout(cmd, agentTimeout, func() error {
+				return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: allowExhaustedQuota})
+			})
 		}
 		if rootContinue {
 			s, e := store()
@@ -213,10 +219,14 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			}
 			candidates := attributable(xs, workDir, parent())
 			if len(candidates) > 0 {
-				return runResume(cmd, deps, resumeRequest{Role: roleSpec, Prompt: prompt, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: true, JSON: jsonOut, PlanFirst: planFirst})
+				return withAgentTimeout(cmd, agentTimeout, func() error {
+					return runResume(cmd, deps, resumeRequest{Role: roleSpec, Prompt: prompt, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: true, JSON: jsonOut, PlanFirst: planFirst})
+				})
 			}
 		}
-		return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: allowExhaustedQuota})
+		return withAgentTimeout(cmd, agentTimeout, func() error {
+			return runStart(cmd, deps, startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(rootFiles, promptWords, tail, prompt), ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, AllowExhaustedQuota: allowExhaustedQuota})
+		})
 	}
 	var startFiles []string
 	var startPrompt string
@@ -246,7 +256,9 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if detach {
 			return launchDetachedWithPreflight(cmd, req, storeDir, parent(), subagent.CheckCodexAuth)
 		}
-		return runStart(cmd, agentDeps{store: store, parent: parent, find: find}, req)
+		return withAgentTimeout(cmd, agentTimeout, func() error {
+			return runStart(cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir}, req)
+		})
 	}}
 	start.Flags().StringSliceVarP(&startFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	start.Flags().StringVarP(&startPrompt, "prompt", "p", "", "prompt text")
@@ -455,6 +467,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	chat.AddCommand(attach)
 
 	var resumeFiles []string
+	var resumeWorkerID string
 	var continueResume bool
 	var resumePrompt string
 	resume := &cobra.Command{Use: "resume [prompt...]", Short: "Resume an existing agent session", Example: "  harnez agent resume --name w \"next step\"", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
@@ -476,10 +489,16 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if err != nil {
 			return err
 		}
-		return runResume(cmd, agentDeps{store: store, parent: parent, find: find}, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: continueResume, JSON: jsonOut, PlanFirst: planFirst})
+		if resumeWorkerID != "" {
+			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: true, PlanFirst: planFirst}, storeDir)
+		}
+		return withAgentTimeout(cmd, agentTimeout, func() error {
+			return runResume(cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir}, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: continueResume, JSON: jsonOut, PlanFirst: planFirst})
+		})
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	resume.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	resume.Flags().StringVar(&resumeWorkerID, "worker-session", "", "internal detached worker session ID")
 	resume.Flags().StringVar(&planSpec, "plan", "no", "planning gate: yes or no")
 	_ = resume.RegisterFlagCompletionFunc("plan", flagValueCompletion("yes", "no"))
 	_ = resume.RegisterFlagCompletionFunc("stream", flagValueCompletion(streamFull, streamStats))
@@ -855,7 +874,7 @@ func (t *timeline) log(label, format string, args ...any) {
 // announceTurn tells the calling agent what is about to happen and that it must wait.
 func (t *timeline) announceTurn(verb, target, session string) {
 	t.log(verb, "one synchronous turn on %s (session %q) via the provider CLI", target, session)
-	t.log("wait", "caller must wait for the agent messages on stdout; no polling, no re-sending the prompt")
+	t.log("wait", "wait for the turn output; if it detaches after 60s, launch `harnez agent wait %s` as a host background job; do not poll or schedule timers/crons", session)
 }
 
 func (t *timeline) finishTurn(r *subagent.TurnResult, id, reconnect string) {
