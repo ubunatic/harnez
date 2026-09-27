@@ -128,6 +128,7 @@ debloat:
     mode: user-invocable-only
     pull: user-invocable-only
     release: user-invocable-only
+    respect: user-invocable-only
     review: user-invocable-only
     roadmap: user-invocable-only
     sprint: user-invocable-only
@@ -362,6 +363,10 @@ skills:
   - name: next
     description: "Continue the most recent workflow on its next actionable item"
     file: docs/commands/Next.md
+
+  - name: respect
+    description: "Move hardcoded values that belong in a repository's embedded YAML spec into the spec"
+    file: docs/commands/Respect.md
 
   - name: sprinter
     description: "Delegate a full 5-phase sprint to a user-selected-model subagent that reads and executes the sprint skill"
