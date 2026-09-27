@@ -1,0 +1,29 @@
+[2m# Mockup for examples/usage (issue 560). Target output of: go run ./examples/usage[0m
+[2m# Terminal A: first process starts the controller.[0m
+
+[1m$ go run ./examples/usage[0m
+[36m●[0m controller  [1mstarted[0m in-process  [2m(socket $XDG_RUNTIME_DIR/harnez/usage.sock, protocol v1, idle 60s)[0m
+[36m●[0m snapshot    read from state   [2m(~/.harnez/usage/)[0m
+
+  [1mPROVIDER  STATUS      SOURCE       SESSION           WEEKLY            OBSERVED[0m
+  claude    [33mcached[0m      state_cache  [32m████[2m░░░░░░[0m  41%  [32m██[2m░░░░░░░░[0m  18%  4m ago
+  codex     [33mstale[0m       state_cache  [33m███████[2m░░░[0m  72%  [32m███[2m░░░░░░░[0m  33%  2h ago
+  agy       [2mskipped[0m     -            -                 -                 [2mnot installed[0m
+
+[36m●[0m refresh     claude, codex …
+  claude    [32mlive[0m        live         [32m████[2m░░░░░░[0m  43%  [32m██[2m░░░░░░░░[0m  18%  now
+  codex     [31merror[0m       state_cache  [33m███████[2m░░░[0m  72%  [32m███[2m░░░░░░░[0m  33%  2h ago  [31mprovider_fetch[0m [2m(kept last good data)[0m
+
+[36m●[0m subscribe   waiting for updates [2m(ctrl+c to quit)[0m
+[2m13:42:10[0m  claude    [32mlive[0m   session 43% → [1m44%[0m   [2mpushed by refresh from pid 48213[0m
+
+[2m# Terminal B: second process joins the same controller.[0m
+
+[1m$ go run ./examples/usage --refresh[0m
+[36m●[0m controller  [1mjoined[0m pid 48190  [2m(protocol v1)[0m
+[36m●[0m refresh     claude, codex …
+  claude    [35mthrottled[0m   live         [32m████[2m░░░░░░[0m  44%  [32m██[2m░░░░░░░░[0m  18%  12s ago  [2mretry after 18s (min interval 30s)[0m
+  codex     [31merror[0m       state_cache  [33m███████[2m░░░[0m  72%  [32m███[2m░░░░░░░[0m  33%  2h ago   [31mprovider_fetch[0m
+
+[2m# Terminal A, 60s after the last client left:[0m
+[36m●[0m controller  [2midle 60s, shut down[0m
