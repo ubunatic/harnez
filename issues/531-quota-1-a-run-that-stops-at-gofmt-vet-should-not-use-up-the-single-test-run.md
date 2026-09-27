@@ -1,6 +1,6 @@
 # 531 — quota-1: a run that stops at gofmt/vet should not use up the single test run
 
-**Status**: Open
+**Status**: Closed — gofmt and vet precheck failures allow one retry
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Tooling
@@ -18,3 +18,7 @@ happened before any edit.
 A quota-1 run that fails in format/vet before tests start doesn't count as the test
 run (or harnez prints "tests did not run: fix gofmt, then rerun" and allows one
 rerun). Runtime feedback, not a new rule.
+
+## Outcome
+
+Quota-1 runs whose output shows the Makefile gofmt or vet gate failed before `go test` now report that tests did not run and allow the existing one incomplete-run retry. Regression coverage exercises both gates. `make test-q1` passed; `make install` completed.
