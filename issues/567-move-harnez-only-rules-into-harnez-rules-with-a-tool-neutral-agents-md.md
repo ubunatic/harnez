@@ -129,3 +129,7 @@ M3 delivered
 - cati is not idempotent: first `init` appends newly added opt-in docs (Make, Markdown, Spec) at the end of the
   Language Conventions list; the second run sorts them in. Emit the sorted order on the first write. Add a test:
   init twice on a repo gaining docs, second run is a no-op.
+
+M4 pre-work resolved: canonicalize selected docs to config order when writing `Language Conventions`; regression verifies a repo gaining Make, Markdown, and Spec has byte-identical `AGENTS.md` after its second init.
+
+M4 delivered

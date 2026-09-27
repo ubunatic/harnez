@@ -44,9 +44,9 @@ A category dir forms once 3+ docs share a theme.
 
 ## Where Repo Rules Go, and Copyable-Doc Sources
 
-- Repo-specific rules live in this file, **outside** the `harnez:begin/end` blocks, which
-  `harnez init` overwrites. `AGENTS.local.md` is git-excluded and only for ephemeral local
-  overrides; never put durable rules there.
+- Tool-neutral repo rules live in this file, **outside** the `harnez:begin/end` blocks. Harnez-only
+  rules live in `.harnez/rules/` and are linked from its `Index.md`; `Local.md` holds per-checkout
+  settings and is git-excluded. `AGENTS.local.md` is read only once as a legacy migration source.
 - Copyable docs (`docs/practices/`, `docs/lang/`, `docs/other/`) are the **source**. Their copies
   in `docs/*.md` (also in this repo), `~/.claude/docs/` and other projects only follow via
   `harnez init`/`apply`. Edit the source file, never the root copy alone: a root-only edit is
@@ -116,8 +116,6 @@ Adhere to the following conventions.
 
 Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
 
-- Issue Tracking Practices @docs/IssueTracking.md,
-  P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
 - Agentic Loop Practices @docs/AgenticLoop.md,
   5-phase loop (Advisory -> Dev -> Review -> Hygiene -> Retro), zero zombie guarantee
 - Bash/Shell @docs/Bash.md,
@@ -134,6 +132,8 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   Modern Go, avoid deps but use Cobra, add tests; use runes and display width for terminal layout
 - Release Pipeline @docs/GoRelease.md,
   harnez release, version.yaml spec, GoReleaser v2, non-interactive minisign (-W), Forgejo has_releases, language-agnostic (Go/Python/Zig/Rust/scripted)
+- Issue Tracking Practices @docs/IssueTracking.md,
+  P0-P3 priorities, metadata headers (Status, Priority, Severity, Category), tracker sync
 - Make/Makefile @docs/Make.md,
   ⚙️ phony sentinel, self-doc help, build dependency pattern
 - Man Pages for Go CLIs @docs/ManPages.md,

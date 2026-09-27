@@ -12,7 +12,7 @@ go install ubunatic.com/harnez/cmd/harnez@latest
 ## Harnez Managed Conventions
 
 Managed by harnez — local edits here are overwritten on the next `harnez init`.
-Put project-specific rules outside this block.
+Put tool-neutral project rules in AGENTS.md and Harnez-only rules in .harnez/rules/.
 
 ### Tool Availability
 If `harnez` is not installed or available in PATH, install it via:

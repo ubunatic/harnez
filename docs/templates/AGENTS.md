@@ -1,9 +1,6 @@
-Adhere to the following conventions.
+**Before any work, read `.harnez/rules/Index.md` if it exists, then `.harnez/rules/Local.md`; they are part of this file. Local.md overrides both.**
 
-<!-- harnez:begin Local Overlays -->
-- **Before any work, read `AGENTS.local.md` if it exists** (@AGENTS.local.md). It holds this
-  checkout's settings (subagent mode, output mode) and overrides this file where they differ.
-<!-- harnez:end Local Overlays -->
+Adhere to the following conventions.
 
 <!-- harnez:begin Project Summary -->
 <!-- harnez:end Project Summary -->

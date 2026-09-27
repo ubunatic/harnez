@@ -216,6 +216,30 @@ func docNamesInOrder(cfg *Config) []string {
 	return append(names, rest...)
 }
 
+// orderDocNames puts selected docs in the canonical config order used by
+// existingLangDocs and plain re-init, so the first generated list is stable.
+func orderDocNames(cfg *Config, selected []string) []string {
+	wanted := make(map[string]struct{}, len(selected))
+	for _, name := range selected {
+		wanted[name] = struct{}{}
+	}
+	ordered := make([]string, 0, len(selected))
+	for _, name := range docNamesInOrder(cfg) {
+		if _, ok := wanted[name]; ok {
+			ordered = append(ordered, name)
+			delete(wanted, name)
+		}
+	}
+	// Preserve unknown names defensively; validation normally rejects them.
+	for _, name := range selected {
+		if _, ok := wanted[name]; ok {
+			ordered = append(ordered, name)
+			delete(wanted, name)
+		}
+	}
+	return ordered
+}
+
 // expandDocNames expands profile names and "all" or "full" to their constituent doc lists,
 // and returns deduplicated names.
 func expandDocNames(cfg *Config, names []string) []string {
@@ -1083,7 +1107,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			if len(docs) > 0 {
 				sections = append(sections, MDSection{
 					Name:    "Language Conventions",
-					Content: buildLangConventions(docs, cfg),
+					Content: buildLangConventions(orderDocNames(cfg, docs), cfg),
 				})
 			}
 			if repoMode != "" {

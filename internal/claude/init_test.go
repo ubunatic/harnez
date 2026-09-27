@@ -4,6 +4,7 @@
 package claude_test
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -665,6 +666,37 @@ func TestRunInit_PreservesOptInDocOnPlainReinit(t *testing.T) {
 	}
 	if !strings.Contains(string(second), "@docs/PrototypingFeatures.md") {
 		t.Errorf("plain re-init dropped the previously opted-in optional doc, got:\n%s", second)
+	}
+}
+
+func TestRunInit_NewOptInDocsAreOrderedOnFirstWrite(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/catiorder\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a repo gaining optional docs in a different order from config.yaml.
+	docs := []string{"spec", "markdown", "make"}
+	if err := claude.RunInit(dir, cfg, docs, "", true, false, false, false); err != nil {
+		t.Fatalf("first RunInit failed: %v", err)
+	}
+	path := filepath.Join(dir, "AGENTS.md")
+	first, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		t.Fatalf("second RunInit failed: %v", err)
+	}
+	second, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatalf("second init reordered the Language Conventions section:\nfirst:\n%s\nsecond:\n%s", first, second)
 	}
 }
 

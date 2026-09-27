@@ -12,7 +12,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | Command | Scope | What it touches |
 |---------|-------|-----------------|
 | `apply` | Global harnesses | Claude settings/rules/commands plus Prime Agent rules/prompts/skills/docs |
-| `init`  | Project (cwd / `-d`) | `AGENTS.md`, `CLAUDE.md` symlink, `docs/<name>.md` copy, `Makefile` |
+| `init`  | Project (cwd / `-d`) | `AGENTS.md`, `CLAUDE.md` symlink, `.harnez/rules/*.md`, `docs/<name>.md` copy, `Makefile` |
 | `diff`  | Global / Project | Preview of what `apply` would change; `--capture-docs` writes project drift to inbox |
 | `scan-docs` | Workspace | Read-only scan of child projects for managed doc drift |
 | `revert --managed` | Global | Remove managed keys / strip MD sections |
@@ -22,7 +22,7 @@ Documents the command structure, the design decision behind it, and the pitfalls
 | `usage history` | Analytical / Logs | Timeline, remote fetch, stats & sparklines across `~/.claude/harnez/usage-history/` |
 | `assess`| Local / Repo | Fast code/doc metrics, token estimation, and feasibility report (`--json`) |
 | `dochistory` / `repo-history` | Local / Repo | Multi-track Git artifact evolution, Braille sparklines (`--tracks`), and diff breakdown (`--diff`) |
-| `mode`  | Local / Repo | Switch ConciseMode terseness level and sync AGENTS.local.md overlay |
+| `mode`  | Local / Repo | Switch ConciseMode terseness level in `.harnez/rules/Local.md` (migrating legacy `AGENTS.local.md` once) |
 | `distill` | Shell / Hooks | Distill verbose command outputs for context conservation |
 | `release` | Local / Repo | Language-agnostic version bump, build, minisign signing, and forge publishing |
 | `find`  | Local / Repo | Fast repository entity discovery with short fuzzy-filter grammar (`issues`) |
