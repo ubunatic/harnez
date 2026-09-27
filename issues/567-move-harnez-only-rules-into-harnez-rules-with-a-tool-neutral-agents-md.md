@@ -120,3 +120,12 @@ M2 delivered
 M3 refinement resolved: `Repo Setup` remains in `AGENTS.md`; it is tool-neutral branch/push policy, not a local toggle.
 
 M3 delivered
+
+## M3 Review (host, 2026-09-27)
+- M3 delivered (f02b602): Repo Setup stays in AGENTS.md, Local.md drives /mode and agent enable|disable.
+- Clone canary (loom, voxi, neus, cati, lmcoder): owner text byte-identical, voxi Repo Setup kept, idempotent except cati.
+
+### M4 Pre-Work / Required Refinements
+- cati is not idempotent: first `init` appends newly added opt-in docs (Make, Markdown, Spec) at the end of the
+  Language Conventions list; the second run sorts them in. Emit the sorted order on the first write. Add a test:
+  init twice on a repo gaining docs, second run is a no-op.
