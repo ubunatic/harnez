@@ -113,6 +113,7 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 		_ = store.Save(sess)
 		return err
 	}
+	go func() { _ = worker.Wait() }()
 	sess.ProcessPID = worker.Process.Pid
 	if err := store.Save(sess); err != nil {
 		_ = worker.Process.Kill()
@@ -181,10 +182,10 @@ func waitForAgent(ctx context.Context, store *subagent.FileSessionStore, identif
 		if err != nil {
 			return nil, err
 		}
-		if sess.Status != "running" {
+		if sess.Status != "running" && (sess.ProcessPID <= 0 || !processExists(sess.ProcessPID)) {
 			return sess, nil
 		}
-		if sess.ProcessPID > 0 && !processExists(sess.ProcessPID) {
+		if sess.Status == "running" && sess.ProcessPID > 0 && !processExists(sess.ProcessPID) {
 			sess.Status = "failed"
 			sess.ProcessPID = 0
 			sess.LastActiveAt = time.Now()

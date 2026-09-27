@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -85,6 +86,8 @@ func TestManagedAgentExamplesParseAgainstCobra(t *testing.T) {
 }
 
 func TestAgentWaitTimeoutAndCompletion(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
 	storeDir := t.TempDir()
 	store, err := subagent.NewSessionStore(storeDir)
 	if err != nil {
@@ -118,6 +121,105 @@ func TestAgentWaitTimeoutAndCompletion(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"response":"finished"`) {
 		t.Fatalf("completion output = %s", out.String())
+	}
+}
+
+func TestAgentWaitConcurrentCompletions(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	store, err := subagent.NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"wait-one", "wait-two"} {
+		if err := store.Save(&subagent.Session{ID: id, Name: id, Status: "running"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	results := make(chan *subagent.Session, 2)
+	errs := make(chan error, 2)
+	for _, id := range []string{"wait-one", "wait-two"} {
+		go func(id string) {
+			sess, err := waitForAgent(context.Background(), store, id, time.Second)
+			results <- sess
+			errs <- err
+		}(id)
+	}
+	for _, id := range []string{"wait-two", "wait-one"} {
+		sess, err := store.Get(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sess.Status = "completed"
+		sess.Response = id
+		if err := store.Save(sess); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := map[string]bool{}
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+		sess := <-results
+		if sess == nil || sess.Status != "completed" || sess.Response != sess.ID {
+			t.Fatalf("wait result = %#v", sess)
+		}
+		got[sess.ID] = true
+	}
+	if len(got) != 2 {
+		t.Fatalf("completed sessions = %#v", got)
+	}
+}
+
+func TestAgentWaitCancellation(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	store, err := subagent.NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "cancel-wait", Name: "cancel-wait", Status: "running"}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := waitForAgent(ctx, store, "cancel-wait", 0); !errors.Is(err, context.Canceled) {
+		t.Fatalf("wait error = %v, want context.Canceled", err)
+	}
+}
+
+func TestAgentWaitFailedWorkerIsNotOrphaned(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	store, err := subagent.NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker := exec.Command(os.Args[0], "-test.run=^TestWaitWorkerCrashHelper$")
+	worker.Env = append(os.Environ(), "HARNEZ_WAIT_CRASH_HELPER=1")
+	if err := worker.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "crashed-worker", Name: "crashed-worker", Status: "running", ProcessPID: worker.Process.Pid}); err != nil {
+		_ = worker.Process.Kill()
+		t.Fatal(err)
+	}
+	if err := worker.Wait(); err != nil {
+		t.Fatalf("crash helper: %v", err)
+	}
+	sess, err := waitForAgent(context.Background(), store, "crashed-worker", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.Status != "failed" || sess.ProcessPID != 0 {
+		t.Fatalf("crashed worker session = %#v", sess)
+	}
+}
+
+func TestWaitWorkerCrashHelper(t *testing.T) {
+	if os.Getenv("HARNEZ_WAIT_CRASH_HELPER") == "1" {
+		os.Exit(0)
 	}
 }
 
@@ -157,6 +259,9 @@ func TestAgentDetachedSpawnAndWait(t *testing.T) {
 	}
 	if finished.Status != "completed" || finished.Response != "helper done" {
 		t.Fatalf("finished session = %#v", finished)
+	}
+	if processExists(created.ProcessPID) {
+		t.Fatalf("worker process %d remains after wait returned", created.ProcessPID)
 	}
 }
 
