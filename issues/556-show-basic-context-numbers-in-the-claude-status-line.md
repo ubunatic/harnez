@@ -19,3 +19,9 @@ able to see how much context is in use while working.
 Show current context size as a compact token count (for example, `156k`) and
 include the cached percentage when cache usage is available. Values update from
 the status-line payload and fit the existing layout.
+
+## Outcome
+
+The Claude renderer already reads `context_window.current_usage` and displays
+the compact total plus cache-read share. Added regression tests covering the
+documented fields and absent/null current usage. `make test-q1` passed.

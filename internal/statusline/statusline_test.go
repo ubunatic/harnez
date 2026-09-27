@@ -104,3 +104,30 @@ func TestRenderInvalidJSON(t *testing.T) {
 		t.Fatal("expected error for invalid JSON")
 	}
 }
+
+func TestRenderClaudeContextUsageFromStatusLinePayload(t *testing.T) {
+	// Claude Code documents these fields under context_window.current_usage.
+	in := `{"workspace":{"current_dir":"/work","project_dir":"/work"},"context_window":{"context_window_size":200000,"total_input_tokens":156000,"current_usage":{"input_tokens":90000,"cache_creation_input_tokens":50000,"cache_read_input_tokens":16000}}}`
+	got, err := Render(strings.NewReader(in), "/home/uwe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "/work · 156k (10% cached)"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRenderClaudeContextUsageUnavailable(t *testing.T) {
+	for _, in := range []string{
+		`{"cwd":"/work","context_window":{"current_usage":null}}`,
+		`{"cwd":"/work","context_window":{}}`,
+	} {
+		got, err := Render(strings.NewReader(in), "/home/uwe")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "/work"; got != want {
+			t.Errorf("payload %s: got %q, want %q", in, got, want)
+		}
+	}
+}
