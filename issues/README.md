@@ -615,3 +615,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 614 | [614-support-batch-issue-status-updates-in-harnez-issues-verb.md](614-support-batch-issue-status-updates-in-harnez-issues-verb.md) | Support batch issue status updates in harnez issues verb | Open |
 | 615 | [615-auto-index-issues-readme-on-harnez-issues-new.md](615-auto-index-issues-readme-on-harnez-issues-new.md) | Auto-index issues README on harnez issues new | Open |
 | 616 | [616-clarify-supported-issue-verbs-and-rate-command-protocol-in-managed-rules.md](616-clarify-supported-issue-verbs-and-rate-command-protocol-in-managed-rules.md) | Clarify supported issue verbs and rate command protocol in managed rules | Open |
+| 617 | [617-create-respect-skill-for-spec-driven-implementation.md](617-create-respect-skill-for-spec-driven-implementation.md) | Create /respect skill for spec-driven implementation | Open |
