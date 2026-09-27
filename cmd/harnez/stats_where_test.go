@@ -25,8 +25,15 @@ func TestRunStatsWhereListsStoresAndFlagsEmptyFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	stamp := time.Date(2026, 9, 27, 11, 0, 0, 0, time.UTC)
-	call := sampleCall("s1", "Read", 5, 0)
-	call.CreatedAt = stamp
+	call := telemetry.ToolCall{
+		CreatedAt: stamp,
+		SessionID: "s1",
+		AgentID:   "claude",
+		ToolName:  "Read",
+		CallType:  "internal",
+		Score:     intPtr(5),
+		ExitCode:  intPtr(0),
+	}
 	if err := db.Insert(call); err != nil {
 		t.Fatal(err)
 	}
