@@ -81,9 +81,13 @@ Rather than letting `harnez agent` turns be killed after 60 seconds:
     - Ensure both `harnez agent start` and `harnez agent resume` implement symmetric detach behavior.
     - Standardized host output block on detachment must include: session info, directive to not poll or schedule timers/crons, and background `harnez agent wait <name>` instruction.
     - Integration tests in `cmd/harnez/agent_test.go` verifying deadline detach, wait reattachment, and zero-polling directive output.
-    - **CRITICAL REFINEMENT / TEST INTEGRATION BUG**:
-      - `make test-q1` failed with dozens of failures in `cmd/harnez` (e.g. `TestAgentStartDefaultModelLine`, `TestAgentOldModelSpecGuard`, etc.).
-      - Root cause: `launchForegroundWorker` spawns `os.Executable()`, which under `go test` is `harnez.test` (the test runner), NOT the `harnez` CLI. Passing flags like `--store-dir` to `harnez.test` fails immediately with `flag provided but not defined: -store-dir`.
-      - Furthermore, unit tests inject mock drivers / stores via `agentDeps`. Spawning an external `os.Executable()` process bypasses mock drivers and crashes tests.
-      - Ensure foreground detach handles mock drivers or test environments gracefully (or only delegates to subprocess when not running under mock test drivers, or wires test helper properly), and verify that `make test-q1` passes with zero failures.
+    - **CRITICAL REFINEMENTS / BUG FIXES REQUIRED IN M2**:
+      1. **Subprocess leaf-worker guard collision**:
+         - In `launchForegroundWorker`, `worker.Env` inherits `HARNEZ_AGENT_ROLE=developer` (set by `setAgentEnv`). When the child executes `harnez agent resume --worker-session ...`, `guardLeafRole` rejects it with `Error: agent role "developer" is a leaf worker: it must not start, resume or manage agents`.
+         - Fix: Internal worker executions (`--worker-session`) are not leaf agents spawning new helpers. In `guardLeafRole`, exempt `--worker-session` invocations (or remove `HARNEZ_AGENT_ROLE` when launching internal worker subprocesses).
+      2. **Subprocess re-exec breaks in `go test` and bypasses mocks**:
+         - Under `make test-q1`, commands run via `harnez exec`, exporting `HARNEZ_EXEC_EFFECTIVE_TIMEOUT=60s`.
+         - Inside `go test`, `agentExecutable()` resolves to `os.Executable()`, which is `harnez.test` (the test binary). Passing `--store-dir`, `agent`, etc. crashes with `flag provided but not defined: -store-dir`.
+         - Additionally, unit tests inject in-memory mock drivers in `agentDeps`. Spawning an external binary bypasses in-process mock drivers entirely.
+         - Fix: Disable foreground detachment when running in unit test mode (e.g. if `strings.HasSuffix(exe, ".test")` or `flag.Lookup("test.v") != nil` or when mock drivers are injected without explicit detach test wiring). Foreground subprocess detachment must only activate for real CLI executions or tests specifically configured for detached worker verification.
 
