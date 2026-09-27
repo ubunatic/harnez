@@ -1,6 +1,6 @@
 # 449 — Add spec-driven agent chat model selection and aliases
 
-**Status**: Open
+**Status**: Closed — Aliases and spec defaults delivered; quota-ranked selection moved to 485
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Usability
