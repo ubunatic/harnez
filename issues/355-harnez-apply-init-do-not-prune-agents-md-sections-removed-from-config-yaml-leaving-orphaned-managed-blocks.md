@@ -1,6 +1,6 @@
 # 355 — harnez apply/init do not prune agents_md sections removed from config.yaml, leaving orphaned managed blocks
 
-**Status**: Open — Host canary: plain init prunes opt-in Quota-1 Guardrails and Repo Setup blocks in loom/voxi/neus/lmcoder
+**Status**: Closed — sticky opt-in sections preserved across plain init; regression and quota tests pass
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: CLI / Templates
@@ -49,7 +49,16 @@ passed. The current `apply` path does not reconcile `agents_md.global.sections`;
 global instruction files are no longer managed by apply, so that portion of the
 original acceptance criteria remains unimplemented.
 
-### Pre-Work / Required Refinements (host canary 2026-09-27, blocks release)
+The 2026-09-27 host canary found that plain init also removed sticky opt-in blocks.
+Init now preserves `Quota-1 Guardrails`, `Repo Setup`, and `Language Conventions`
+when their enabling flags are absent, while continuing to prune orphaned
+config-defined sections. The new regression test exercises both behaviors.
+
+### Required Refinements (host canary 2026-09-27, resolved)
+- Resolved: init now preserves flag-only opt-in blocks (Quota-1 Guardrails, Repo Setup,
+  Language Conventions) on plain runs and prunes orphaned config sections. The regression
+  fixture covers both behaviors; targeted tests and final `make test-q1` passed. `make install`
+  and `harnez init -d .` completed.
 - Canary: plain `harnez init` on clones of loom, voxi, neus, lmcoder (025476c) removes **Quota-1 Guardrails**
   in all four and **Repo Setup** in voxi. Both are opt-in blocks written by `init --quota-1` /
   `init --repo-mode`; a plain run must keep them. The binary is installed, so fix before any peer runs init.
