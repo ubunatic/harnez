@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,7 +23,30 @@ import (
 var agentExecutable = os.Executable
 var foregroundDetachGrace = time.Second
 
+const foregroundDetachTestOverrideEnv = "HARNEZ_TEST_FOREGROUND_DETACH"
+
+func foregroundDetachEnabled() bool {
+	if os.Getenv(foregroundDetachTestOverrideEnv) == "1" {
+		return true
+	}
+	return flag.Lookup("test.v") == nil
+}
+
+func foregroundWorkerEnv() []string {
+	env := make([]string, 0, len(os.Environ()))
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		if key != agentRoleEnv {
+			env = append(env, entry)
+		}
+	}
+	return env
+}
+
 func foregroundDetachTimeout(cmd *cobra.Command) time.Duration {
+	if !foregroundDetachEnabled() {
+		return 0
+	}
 	if cmd != nil && (cmd.Flags().Changed("timeout") || cmd.InheritedFlags().Changed("timeout")) {
 		return 0
 	}
@@ -64,7 +89,7 @@ func launchForegroundWorker(cmd *cobra.Command, store *subagent.FileSessionStore
 	}
 	defer stderr.Close()
 	worker := exec.Command(exe, args...)
-	worker.Env = os.Environ()
+	worker.Env = foregroundWorkerEnv()
 	worker.Stdin = nil
 	worker.Stdout, worker.Stderr = stdout, stderr
 	worker.SysProcAttr = &syscall.SysProcAttr{Setsid: true}

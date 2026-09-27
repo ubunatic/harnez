@@ -267,6 +267,7 @@ func TestAgentDetachedSpawnAndWait(t *testing.T) {
 }
 
 func TestForegroundStartAndResumeDetachIntoWaitableWorkers(t *testing.T) {
+	t.Setenv(foregroundDetachTestOverrideEnv, "1")
 	t.Setenv(execTimeoutEffectiveEnv, "100ms")
 	t.Setenv(execTimeoutExplicitEnv, "0")
 	t.Setenv(execTimeoutShortEnv, "")
@@ -352,6 +353,26 @@ func TestForegroundStartAndResumeDetachIntoWaitableWorkers(t *testing.T) {
 				t.Fatalf("wait output = %q", waitOut.String())
 			}
 		})
+	}
+}
+
+func TestForegroundDetachDisabledInGoTestMode(t *testing.T) {
+	t.Setenv(foregroundDetachTestOverrideEnv, "")
+	t.Setenv(execTimeoutEffectiveEnv, "60s")
+	t.Setenv(execTimeoutExplicitEnv, "0")
+	t.Setenv(execTimeoutShortEnv, "")
+	t.Setenv(execTimeoutEnv, "")
+	if got := foregroundDetachTimeout(newAgentCmd()); got != 0 {
+		t.Fatalf("foreground detach timeout = %s, want disabled in test mode", got)
+	}
+}
+
+func TestForegroundWorkerEnvironmentOmitsLeafRole(t *testing.T) {
+	t.Setenv(agentRoleEnv, "developer")
+	for _, entry := range foregroundWorkerEnv() {
+		if strings.HasPrefix(entry, agentRoleEnv+"=") {
+			t.Fatalf("worker environment contains leaf role: %q", entry)
+		}
 	}
 }
 
