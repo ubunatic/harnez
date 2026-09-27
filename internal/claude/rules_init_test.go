@@ -108,8 +108,11 @@ func TestRunInit_MigratesManagedBlocksLosslessly(t *testing.T) {
 			t.Errorf("AGENTS.md owner bytes changed or disappeared: %q\n%s", ownerBytes, agentsAfter)
 		}
 	}
-	if bytes.Contains(agentsAfter, []byte("quota sticky payload")) || bytes.Contains(agentsAfter, []byte("repo sticky payload")) {
+	if bytes.Contains(agentsAfter, []byte("quota sticky payload")) {
 		t.Fatalf("managed payload remains in AGENTS.md:\n%s", agentsAfter)
+	}
+	if !bytes.Contains(agentsAfter, []byte("repo sticky payload")) {
+		t.Fatalf("Repo Setup is a durable tool-neutral rule and must remain in AGENTS.md:\n%s", agentsAfter)
 	}
 	localPath := filepath.Join(dir, "AGENTS.local.md")
 	localAfter, err := os.ReadFile(localPath)
@@ -132,13 +135,17 @@ func TestRunInit_MigratesManagedBlocksLosslessly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, got := range map[string]string{"Quota.md": string(quota), "Local.md": string(localRules)} {
-		for _, want := range []string{"quota sticky payload", "repo sticky payload", "concise sticky payload", "subagent sticky payload"} {
-			if name == "Quota.md" && want == "quota sticky payload" || name == "Local.md" && want != "quota sticky payload" {
-				if !strings.Contains(got, want) {
-					t.Errorf("%s missing migrated content %q:\n%s", name, want, got)
-				}
-			}
+	for _, want := range []string{"quota sticky payload"} {
+		if !strings.Contains(string(quota), want) {
+			t.Errorf("Quota.md missing migrated content %q:\n%s", want, quota)
+		}
+	}
+	if strings.Contains(string(localRules), "repo sticky payload") {
+		t.Errorf("Repo Setup incorrectly migrated into Local.md:\n%s", localRules)
+	}
+	for _, want := range []string{"concise sticky payload", "subagent sticky payload"} {
+		if !strings.Contains(string(localRules), want) {
+			t.Errorf("Local.md missing migrated content %q:\n%s", want, localRules)
 		}
 	}
 	firstAgents, firstLocal := append([]byte(nil), agentsAfter...), append([]byte(nil), localAfter...)

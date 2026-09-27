@@ -13,7 +13,7 @@ import (
 func TestConfigurePreservesLocalSectionsAndResolvesLocalFirst(t *testing.T) {
 	dir := t.TempDir()
 	local := filepath.Join(dir, "AGENTS.local.md")
-	if err := os.WriteFile(local, []byte("# notes\n\n<!-- harnez:begin Concise Mode -->\nkeep\n<!-- harnez:end Concise Mode -->\n"), 0644); err != nil {
+	if err := os.WriteFile(local, []byte("# notes\n\n<!-- harnez:begin Concise Mode -->\nkeep\n<!-- harnez:end Concise Mode -->\n\n<!-- harnez:begin Subagent Policy -->\n# subagent_mode: native\nlegacy policy\n<!-- harnez:end Subagent Policy -->\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := Configure(dir, "native", false); err != nil {
@@ -22,7 +22,7 @@ func TestConfigurePreservesLocalSectionsAndResolvesLocalFirst(t *testing.T) {
 	if _, _, err := Configure(dir, "native", false); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(local)
+	data, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Local.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,15 +37,15 @@ func TestConfigurePreservesLocalSectionsAndResolvesLocalFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.Mode != "harnez" || state.Source != "./AGENTS.md" || state.Conflict {
+	if state.Mode != "harnez" || state.Source != "./.harnez/rules/Local.md" || state.Conflict {
 		t.Fatalf("persist resolution = %#v", state)
 	}
 	data, err = os.ReadFile(local)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(data), "Subagent Policy") || !strings.Contains(string(data), "keep") {
-		t.Fatalf("persist should remove only conflicting local policy:\n%s", data)
+	if strings.Contains(string(data), "Subagent Policy") || strings.Contains(string(data), "keep") || !strings.Contains(string(data), "# notes") {
+		t.Fatalf("legacy file should retain only owner prose:\n%s", data)
 	}
 	if _, changed, err := Configure(dir, "harnez", true); err != nil || changed {
 		t.Fatalf("persist should be idempotent: changed=%v err=%v", changed, err)
@@ -64,7 +64,7 @@ func TestConfigureEnsuresGitExclude(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, ".git", "info", "exclude"))
-	if err != nil || !strings.Contains(string(data), "AGENTS.local.md\n") {
+	if err != nil || !strings.Contains(string(data), ".harnez/rules/Local.md\n") {
 		t.Fatalf("git exclude = %q (%v)", data, err)
 	}
 }
@@ -76,7 +76,7 @@ func TestConfigureDocumentsHarnezAgentRoutesForBothModes(t *testing.T) {
 			if _, _, err := Configure(dir, mode, false); err != nil {
 				t.Fatal(err)
 			}
-			data, err := os.ReadFile(filepath.Join(dir, "AGENTS.local.md"))
+			data, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Local.md"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -98,7 +98,29 @@ func TestConfigureDocumentsHarnezAgentRoutesForBothModes(t *testing.T) {
 	}
 }
 
-func TestPersistMigratesSameModeToMainAndPreservesLocalProse(t *testing.T) {
+func TestResolveMigratesLegacySubagentPolicy(t *testing.T) {
+	dir := t.TempDir()
+	legacy := filepath.Join(dir, "AGENTS.local.md")
+	content := "owner note\n\n<!-- harnez:begin Subagent Policy -->\n# subagent_mode: harnez\nlegacy policy\n<!-- harnez:end Subagent Policy -->\n"
+	if err := os.WriteFile(legacy, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	state, err := Resolve(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Mode != "harnez" || state.Source != "./.harnez/rules/Local.md" {
+		migrated, _ := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Local.md"))
+		left, _ := os.ReadFile(legacy)
+		t.Fatalf("resolved legacy policy = %#v; Local.md=%q; AGENTS.local.md=%q", state, migrated, left)
+	}
+	left, err := os.ReadFile(legacy)
+	if err != nil || string(left) != "owner note\n\n" {
+		t.Fatalf("legacy owner prose changed: %q (%v)", left, err)
+	}
+}
+
+func TestConfigureAlwaysUsesLocalRulesAndPreservesLegacyProse(t *testing.T) {
 	dir := t.TempDir()
 	local := filepath.Join(dir, "AGENTS.local.md")
 	if err := os.WriteFile(local, []byte("local developer note\n"), 0644); err != nil {
@@ -108,14 +130,14 @@ func TestPersistMigratesSameModeToMainAndPreservesLocalProse(t *testing.T) {
 		t.Fatal(err)
 	}
 	path, changed, err := Configure(dir, "harnez", true)
-	if err != nil || !changed || path != filepath.Join(dir, "AGENTS.md") {
+	if err != nil || changed || path != filepath.Join(dir, ".harnez", "rules", "Local.md") {
 		t.Fatalf("same-mode persist: path=%q changed=%v err=%v", path, changed, err)
 	}
 	state, err := Resolve(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.Mode != "harnez" || state.Source != "./AGENTS.md" || state.Conflict {
+	if state.Mode != "harnez" || state.Source != "./.harnez/rules/Local.md" || state.Conflict {
 		t.Fatalf("effective persisted state = %#v", state)
 	}
 	data, err := os.ReadFile(local)

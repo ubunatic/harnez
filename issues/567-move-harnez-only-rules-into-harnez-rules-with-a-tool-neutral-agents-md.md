@@ -116,3 +116,7 @@ M2 delivered
   Quota-1 content in Quota.md. **Bug:** voxi's `Repo Setup` block lands in `.harnez/rules/Local.md`, which is
   git-excluded, so a durable repo rule drops out of version control. `Repo Setup` is tool-neutral (branch and
   push policy): it stays in AGENTS.md like Language Conventions. Fix first, with a test.
+
+M3 refinement resolved: `Repo Setup` remains in `AGENTS.md`; it is tool-neutral branch/push policy, not a local toggle.
+
+M3 delivered

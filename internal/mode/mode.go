@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/markdown"
 )
@@ -133,11 +134,7 @@ func SetMode(tier Tier, opts Options) (Result, error) {
 
 	targetFile := opts.FilePath
 	if targetFile == "" {
-		if opts.Persist {
-			targetFile = "./AGENTS.md"
-		} else {
-			targetFile = "./AGENTS.local.md"
-		}
+		targetFile = "./.harnez/rules/Local.md"
 	}
 
 	if opts.DryRun {
@@ -147,6 +144,11 @@ func SetMode(tier Tier, opts Options) (Result, error) {
 			res.FileUpdate = fmt.Sprintf("would write %s to %s [%s]", info.Name, targetFile, ConciseModeSection)
 		}
 		return res, nil
+	}
+	if opts.FilePath == "" {
+		if _, err := claude.MigrateLegacyLocalRules("."); err != nil {
+			return res, fmt.Errorf("migrate legacy local rules: %w", err)
+		}
 	}
 
 	if tier == TierOff {
@@ -166,12 +168,8 @@ func SetMode(tier Tier, opts Options) (Result, error) {
 		return res, nil
 	}
 
-	if filepath.Base(targetFile) == "AGENTS.local.md" {
-		dir := filepath.Dir(targetFile)
-		if dir == "" {
-			dir = "."
-		}
-		_, _ = fsutil.EnsureGitExclude(dir, "AGENTS.local.md")
+	if filepath.ToSlash(targetFile) == "./.harnez/rules/Local.md" {
+		_, _ = fsutil.EnsureGitExclude(".", ".harnez/rules/Local.md")
 	}
 
 	changed, existed, err := markdown.Apply(targetFile, ConciseModeSection, info.AgentsLine+"\n")

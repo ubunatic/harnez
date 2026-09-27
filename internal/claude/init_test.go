@@ -556,22 +556,24 @@ stale config
 		t.Fatal(err)
 	}
 	content := string(data)
-	if strings.Contains(content, "quota settings") || strings.Contains(content, "repo settings") {
-		t.Errorf("migrated sticky content remains in AGENTS.md:\n%s", content)
+	if strings.Contains(content, "quota settings") {
+		t.Errorf("migrated Quota-1 content remains in AGENTS.md:\n%s", content)
+	}
+	if !strings.Contains(content, "repo settings") {
+		t.Errorf("tool-neutral Repo Setup content should stay in AGENTS.md:\n%s", content)
 	}
 	quota, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Quota.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	local, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Local.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(quota), "Quota-1 Guardrails") || !strings.Contains(string(quota), "quota settings") {
 		t.Errorf("Quota.md missing sticky Quota-1 content:\n%s", quota)
 	}
-	if !strings.Contains(string(local), "repo settings") {
-		t.Errorf("Local.md missing sticky Repo Setup content:\n%s", local)
+	local, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Local.md"))
+	if err == nil && strings.Contains(string(local), "repo settings") {
+		t.Errorf("Local.md must not contain durable Repo Setup content:\n%s", local)
+	} else if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
 	}
 	if strings.Contains(content, "Removed Config Section") || strings.Contains(content, "stale config") {
 		t.Errorf("plain init retained orphaned config section:\n%s", content)

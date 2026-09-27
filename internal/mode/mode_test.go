@@ -175,7 +175,7 @@ func TestSetMode_LocalOverlayAndGitExclude(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1. Default should write to AGENTS.local.md and add exclude
+	// 1. Default should write to Local.md and add exclude
 	res, err := mode.SetMode(mode.TierUltra, mode.Options{})
 	if err != nil {
 		t.Fatalf("SetMode(TierUltra) default failed: %v", err)
@@ -184,13 +184,13 @@ func TestSetMode_LocalOverlayAndGitExclude(t *testing.T) {
 		t.Errorf("Expected Changed=true on default local overlay creation")
 	}
 
-	localFile := filepath.Join(tmpDir, "AGENTS.local.md")
+	localFile := filepath.Join(tmpDir, ".harnez", "rules", "Local.md")
 	content, err := os.ReadFile(localFile)
 	if err != nil {
-		t.Fatalf("Failed to read AGENTS.local.md: %v", err)
+		t.Fatalf("Failed to read Local.md: %v", err)
 	}
 	if !strings.Contains(string(content), "Concise Ultra (Level 3)") {
-		t.Errorf("AGENTS.local.md missing ultra content: %s", string(content))
+		t.Errorf("Local.md missing ultra content: %s", string(content))
 	}
 
 	// Verify .git/info/exclude
@@ -198,11 +198,11 @@ func TestSetMode_LocalOverlayAndGitExclude(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read .git/info/exclude: %v", err)
 	}
-	if !strings.Contains(string(excludeContent), "AGENTS.local.md") {
-		t.Errorf(".git/info/exclude missing AGENTS.local.md: %s", string(excludeContent))
+	if !strings.Contains(string(excludeContent), ".harnez/rules/Local.md") {
+		t.Errorf(".git/info/exclude missing Local.md: %s", string(excludeContent))
 	}
 
-	// 2. Setting mode off removes AGENTS.local.md entirely if empty
+	// 2. Setting mode off removes Local.md entirely if empty
 	res, err = mode.SetMode(mode.TierOff, mode.Options{})
 	if err != nil {
 		t.Fatalf("SetMode(TierOff) failed: %v", err)
@@ -211,7 +211,7 @@ func TestSetMode_LocalOverlayAndGitExclude(t *testing.T) {
 		t.Errorf("Expected Changed=true when removing AGENTS.local.md")
 	}
 	if _, err := os.Stat(localFile); !os.IsNotExist(err) {
-		t.Errorf("AGENTS.local.md should have been deleted when empty, but still exists")
+		t.Errorf("Local.md should have been deleted when empty, but still exists")
 	}
 }
 
@@ -243,6 +243,34 @@ func TestSetMode_Ephemeral(t *testing.T) {
 	}
 }
 
+func TestSetModeMigratesLegacyLocalSection(t *testing.T) {
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(origWd) }()
+
+	legacy := "owner note\n\n<!-- harnez:begin Concise Mode -->\nold mode\n<!-- harnez:end Concise Mode -->\n"
+	if err := os.WriteFile("AGENTS.local.md", []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mode.SetMode(mode.TierStandard, mode.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	legacyAfter, err := os.ReadFile("AGENTS.local.md")
+	if err != nil || string(legacyAfter) != "owner note\n\n" {
+		t.Fatalf("legacy owner prose changed or managed section remained: %q (%v)", legacyAfter, err)
+	}
+	local, err := os.ReadFile(filepath.Join(".harnez", "rules", "Local.md"))
+	if err != nil || !strings.Contains(string(local), "Concise Standard (Level 2)") {
+		t.Fatalf("Local.md missing migrated and updated mode: %v\n%s", err, local)
+	}
+}
+
 func TestSetMode_Persist(t *testing.T) {
 	origWd, err := os.Getwd()
 	if err != nil {
@@ -264,15 +292,15 @@ func TestSetMode_Persist(t *testing.T) {
 		t.Errorf("Expected Changed=true for Persist")
 	}
 
-	mainFile := filepath.Join(tmpDir, "AGENTS.md")
+	mainFile := filepath.Join(tmpDir, ".harnez", "rules", "Local.md")
 	content, err := os.ReadFile(mainFile)
 	if err != nil {
-		t.Fatalf("Failed to read AGENTS.md: %v", err)
+		t.Fatalf("Failed to read Local.md: %v", err)
 	}
 	if !strings.Contains(string(content), "Concise Lite (Level 1)") {
-		t.Errorf("AGENTS.md missing Lite content: %s", string(content))
+		t.Errorf("Local.md missing Lite content: %s", string(content))
 	}
-	if _, err := os.Stat(filepath.Join(tmpDir, "AGENTS.local.md")); !os.IsNotExist(err) {
-		t.Errorf("Persist mode should not touch AGENTS.local.md")
+	if _, err := os.Stat(filepath.Join(tmpDir, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Errorf("Persist mode should not touch AGENTS.md")
 	}
 }

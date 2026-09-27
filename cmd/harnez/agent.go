@@ -575,7 +575,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			}
 			return nil
 		}}
-		policyCmd.Flags().BoolVar(&persist, "persist", false, "write the policy to AGENTS.md")
+		policyCmd.Flags().BoolVar(&persist, "persist", false, "accepted for compatibility; policy stays in .harnez/rules/Local.md")
 		root.AddCommand(policyCmd)
 	}
 	compact := &cobra.Command{Use: "compact", Short: "Compact an agent session", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {

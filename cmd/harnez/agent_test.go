@@ -786,9 +786,13 @@ func TestAgentRepoStatusAndPolicyCommands(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	content, err := os.ReadFile(filepath.Join(dir, "AGENTS.local.md"))
-	if err != nil || !bytes.Contains(content, []byte("subagent_mode: harnez")) || !bytes.Contains(content, []byte("local notes")) {
+	content, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Local.md"))
+	if err != nil || !bytes.Contains(content, []byte("subagent_mode: harnez")) {
 		t.Fatalf("enable did not update local overlay: %v\n%s", err, content)
+	}
+	legacy, err := os.ReadFile(filepath.Join(dir, "AGENTS.local.md"))
+	if err != nil || string(legacy) != "local notes\n" {
+		t.Fatalf("enable did not preserve legacy owner prose: %v\n%s", err, legacy)
 	}
 	out.Reset()
 	cmd = newAgentCmd()
@@ -797,7 +801,7 @@ func TestAgentRepoStatusAndPolicyCommands(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(out.Bytes(), []byte("Subagent Policy State: Enabled (./AGENTS.local.md)")) || !bytes.Contains(out.Bytes(), []byte("Repository Agent Sessions:")) {
+	if !bytes.Contains(out.Bytes(), []byte("Subagent Policy State: Enabled (./.harnez/rules/Local.md)")) || !bytes.Contains(out.Bytes(), []byte("Repository Agent Sessions:")) {
 		t.Fatalf("status output = %s", out.String())
 	}
 	out.Reset()
@@ -807,7 +811,7 @@ func TestAgentRepoStatusAndPolicyCommands(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	content, err = os.ReadFile(filepath.Join(dir, "AGENTS.local.md"))
+	content, err = os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Local.md"))
 	if err != nil || !bytes.Contains(content, []byte("subagent_mode: native")) {
 		t.Fatalf("disable did not update local overlay: %v\n%s", err, content)
 	}

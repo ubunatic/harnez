@@ -515,7 +515,7 @@ type managedBlock struct {
 }
 
 var migratableAgentBlocks = []string{
-	"Local Overlays", "Harnez Managed Conventions", "Repo Setup", quota1SectionName,
+	"Local Overlays", "Harnez Managed Conventions", quota1SectionName,
 }
 
 var migratableLocalBlocks = []string{"Concise Mode", "Subagent Policy"}
@@ -565,6 +565,10 @@ func parseManagedBlocks(content string, names []string) ([]managedBlock, bool) {
 }
 
 func migrateManagedBlocks(path string, names []string, destination func(string) string) (bool, error) {
+	return migrateManagedBlocksFormatted(path, names, destination, false)
+}
+
+func migrateManagedBlocksFormatted(path string, names []string, destination func(string) string, wrap bool) (bool, error) {
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return false, nil
@@ -601,7 +605,15 @@ func migrateManagedBlocks(path string, names []string, destination func(string) 
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return false, err
 			}
-			if err := os.WriteFile(target, []byte(prefix+block.body), 0o644); err != nil {
+			payload := block.body
+			if wrap {
+				payload = markdown.MDMarkers.Begin(block.name) + "\n" + payload
+				if !strings.HasSuffix(payload, "\n") {
+					payload += "\n"
+				}
+				payload += markdown.MDMarkers.End(block.name) + "\n"
+			}
+			if err := os.WriteFile(target, []byte(prefix+payload), 0o644); err != nil {
 				return false, err
 			}
 		}
@@ -621,8 +633,6 @@ func migrateInitRules(dir, agentsPath string) (int, error) {
 			return filepath.Join(rulesDir, "Tools.md")
 		case quota1SectionName:
 			return filepath.Join(rulesDir, "Quota.md")
-		case "Repo Setup":
-			return filepath.Join(rulesDir, "Local.md")
 		case "Local Overlays":
 			return "" // Superseded by the new AGENTS.md header.
 		default:
@@ -638,9 +648,9 @@ func migrateInitRules(dir, agentsPath string) (int, error) {
 		changes++
 	}
 	localPath := filepath.Join(dir, "AGENTS.local.md")
-	changed, err = migrateManagedBlocks(localPath, migratableLocalBlocks, func(string) string {
+	changed, err = migrateManagedBlocksFormatted(localPath, migratableLocalBlocks, func(string) string {
 		return filepath.Join(rulesDir, "Local.md")
-	})
+	}, true)
 	if err != nil {
 		return changes, fmt.Errorf("migrate managed blocks in %s: %w", localPath, err)
 	}
@@ -648,6 +658,16 @@ func migrateInitRules(dir, agentsPath string) (int, error) {
 		changes++
 	}
 	return changes, nil
+}
+
+// MigrateLegacyLocalRules moves known managed local sections from AGENTS.local.md
+// into .harnez/rules/Local.md, preserving all owner text in the legacy file.
+func MigrateLegacyLocalRules(dir string) (bool, error) {
+	legacyPath := filepath.Join(dir, "AGENTS.local.md")
+	targetPath := filepath.Join(dir, ".harnez", "rules", "Local.md")
+	return migrateManagedBlocksFormatted(legacyPath, migratableLocalBlocks, func(string) string {
+		return targetPath
+	}, true)
 }
 
 var projectManifestNames = map[string]struct{}{

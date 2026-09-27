@@ -119,7 +119,7 @@ func TestModeCmd_FlagsAndDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1. Default `mode std` writes to AGENTS.local.md and adds to git exclude
+	// 1. Default `mode std` writes to Local.md and adds to git exclude
 	cmd := newModeCmd()
 	var stdout, stderr bytes.Buffer
 	cmd.SetOut(&stdout)
@@ -129,21 +129,21 @@ func TestModeCmd_FlagsAndDefaults(t *testing.T) {
 		t.Fatalf("mode std failed: %v", err)
 	}
 
-	localFile := filepath.Join(tmpDir, "AGENTS.local.md")
+	localFile := filepath.Join(tmpDir, ".harnez", "rules", "Local.md")
 	content, err := os.ReadFile(localFile)
 	if err != nil {
-		t.Fatalf("Failed to read AGENTS.local.md: %v", err)
+		t.Fatalf("Failed to read Local.md: %v", err)
 	}
 	if !strings.Contains(string(content), "Concise Standard (Level 2)") {
-		t.Errorf("AGENTS.local.md missing Standard content: %s", string(content))
+		t.Errorf("Local.md missing Standard content: %s", string(content))
 	}
 
 	excludeContent, err := os.ReadFile(filepath.Join(gitDir, "info", "exclude"))
 	if err != nil {
 		t.Fatalf("Failed to read .git/info/exclude: %v", err)
 	}
-	if !strings.Contains(string(excludeContent), "AGENTS.local.md") {
-		t.Errorf("git exclude missing AGENTS.local.md: %s", string(excludeContent))
+	if !strings.Contains(string(excludeContent), ".harnez/rules/Local.md") {
+		t.Errorf("git exclude missing Local.md: %s", string(excludeContent))
 	}
 
 	// 2. Ephemeral flag `--ephemeral`
@@ -162,7 +162,7 @@ func TestModeCmd_FlagsAndDefaults(t *testing.T) {
 	// localFile should NOT have been updated to ultra
 	content, _ = os.ReadFile(localFile)
 	if strings.Contains(string(content), "Concise Ultra") {
-		t.Errorf("Ephemeral should not have modified AGENTS.local.md")
+		t.Errorf("Ephemeral should not have modified Local.md")
 	}
 
 	// 3. Persist flag `--persist`
@@ -175,16 +175,15 @@ func TestModeCmd_FlagsAndDefaults(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("mode --persist lite failed: %v", err)
 	}
-	mainFile := filepath.Join(tmpDir, "AGENTS.md")
-	content, err = os.ReadFile(mainFile)
+	content, err = os.ReadFile(localFile)
 	if err != nil {
-		t.Fatalf("Failed to read AGENTS.md: %v", err)
+		t.Fatalf("Failed to read Local.md after --persist: %v", err)
 	}
 	if !strings.Contains(string(content), "Concise Lite (Level 1)") {
-		t.Errorf("AGENTS.md missing Lite content: %s", string(content))
+		t.Errorf("Local.md missing Lite content: %s", string(content))
 	}
 
-	// 4. `mode off` deletes AGENTS.local.md when empty
+	// 4. `mode off` deletes Local.md when empty
 	stdout.Reset()
 	stderr.Reset()
 	cmd = newModeCmd()
@@ -195,7 +194,7 @@ func TestModeCmd_FlagsAndDefaults(t *testing.T) {
 		t.Fatalf("mode off failed: %v", err)
 	}
 	if _, err := os.Stat(localFile); !os.IsNotExist(err) {
-		t.Errorf("AGENTS.local.md should have been deleted on mode off")
+		t.Errorf("Local.md should have been deleted on mode off")
 	}
 }
 

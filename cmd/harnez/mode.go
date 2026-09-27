@@ -48,9 +48,9 @@ func newModeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "mode [tier]",
 		Aliases: []string{"concise"},
-		Short:   "Switch ConciseMode terseness level and synchronize AGENTS.local.md overlay",
+		Short:   "Switch ConciseMode terseness level and synchronize .harnez/rules/Local.md",
 		Long: `mode dynamically switches the operational terseness level for the active session
-and updates the managed 'Concise Mode' section in ./AGENTS.local.md (or ./AGENTS.md with --persist).
+and updates the managed 'Concise Mode' section in ./.harnez/rules/Local.md.
 
 Tiers:
   lite (1)        Level 1: Concise Lite (Professional Terse, no pleasantries)
@@ -61,8 +61,8 @@ Tiers:
 
 Flags:
   -e, --ephemeral, --no-file  Emit stdout directive only; do not write any file to disk
-      --persist, --main       Write to ./AGENTS.md instead of ./AGENTS.local.md
-  -f, --file                  Target instructions file (default: ./AGENTS.local.md)
+	      --persist, --main       Accepted for compatibility; Local.md remains the target
+	-f, --file                  Target instructions file (default: ./.harnez/rules/Local.md)
   -q, --quiet                 Suppress in-flight LLM directive on stdout (file update only)
       --dry-run               Show directive and changes without writing to disk`,
 		Args: cobra.MaximumNArgs(1),
@@ -74,10 +74,10 @@ Flags:
 		},
 	}
 
-	cmd.PersistentFlags().StringVarP(&filePath, "file", "f", "", "target instructions file (default: ./AGENTS.local.md, or ./AGENTS.md with --persist)")
+	cmd.PersistentFlags().StringVarP(&filePath, "file", "f", "", "target instructions file (default: ./.harnez/rules/Local.md)")
 	cmd.PersistentFlags().BoolVarP(&ephemeral, "ephemeral", "e", false, "emit stdout directive only; do not write any file to disk")
 	cmd.PersistentFlags().BoolVar(&noFile, "no-file", false, "alias for --ephemeral")
-	cmd.PersistentFlags().BoolVar(&persist, "persist", false, "write to ./AGENTS.md instead of ./AGENTS.local.md")
+	cmd.PersistentFlags().BoolVar(&persist, "persist", false, "accepted for compatibility; still write to ./.harnez/rules/Local.md")
 	cmd.PersistentFlags().BoolVar(&mainFlag, "main", false, "alias for --persist")
 	cmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "suppress stdout directive (file sync only)")
 	cmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "display directive and planned file changes without modifying disk")

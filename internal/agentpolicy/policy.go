@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"ubunatic.com/harnez/internal/claude"
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/markdown"
 	"ubunatic.com/harnez/internal/subagent"
@@ -45,7 +46,7 @@ type State struct {
 }
 
 // Configure writes the managed policy block, preserving every other section.
-func Configure(dir, mode string, persist bool) (string, bool, error) {
+func Configure(dir, mode string, _ bool) (string, bool, error) {
 	if mode != "harnez" && mode != "native" {
 		return "", false, fmt.Errorf("unsupported subagent mode %q", mode)
 	}
@@ -53,56 +54,38 @@ func Configure(dir, mode string, persist bool) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	if _, err := fsutil.EnsureGitExclude(abs, "AGENTS.local.md"); err != nil {
-		return "", false, fmt.Errorf("ensure AGENTS.local.md exclusion: %w", err)
+	if _, err := fsutil.EnsureGitExclude(abs, filepath.Join(".harnez", "rules", "Local.md")); err != nil {
+		return "", false, fmt.Errorf("ensure Local.md exclusion: %w", err)
 	}
-	name := "AGENTS.local.md"
-	if persist {
-		name = "AGENTS.md"
+	migrated, err := claude.MigrateLegacyLocalRules(abs)
+	if err != nil {
+		return "", false, fmt.Errorf("migrate legacy local rules: %w", err)
 	}
-	path := filepath.Join(abs, name)
-	changed := false
-	if persist {
-		localPath := filepath.Join(abs, "AGENTS.local.md")
-		_, readErr := policyMode(localPath)
-		if readErr != nil {
-			return path, false, readErr
-		}
-		removed, cleaned, cleanErr := markdown.Clean(localPath, Section)
-		if cleanErr != nil {
-			return path, false, fmt.Errorf("clean local policy: %w", cleanErr)
-		}
-		changed = removed || cleaned
-	}
+	path := filepath.Join(abs, ".harnez", "rules", "Local.md")
 	updated, _, err := markdown.Apply(path, Section, fmt.Sprintf(policyBody, mode))
 	if err != nil {
 		return path, false, fmt.Errorf("update %s: %w", path, err)
 	}
-	return path, changed || updated, nil
+	return path, migrated || updated, nil
 }
 
-// Resolve reads local policy first. A conflicting main policy is reported rather
-// than hidden, so init and status cannot silently suggest a different policy.
+// Resolve reads policy from Local.md, migrating recognized legacy local sections first.
 func Resolve(dir string) (State, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return State{}, err
 	}
-	local, err := policyMode(filepath.Join(abs, "AGENTS.local.md"))
+	if _, err := claude.MigrateLegacyLocalRules(abs); err != nil {
+		return State{}, fmt.Errorf("migrate legacy local rules: %w", err)
+	}
+	local, err := policyMode(filepath.Join(abs, ".harnez", "rules", "Local.md"))
 	if err != nil {
 		return State{}, err
 	}
-	main, err := policyMode(filepath.Join(abs, "AGENTS.md"))
-	if err != nil {
-		return State{}, err
-	}
-	state := State{Mode: "unset", MainMode: main, LocalMode: local}
+	state := State{Mode: "unset", LocalMode: local}
 	if local != "" {
-		state.Mode, state.Source = local, "./AGENTS.local.md"
-	} else if main != "" {
-		state.Mode, state.Source = main, "./AGENTS.md"
+		state.Mode, state.Source = local, "./.harnez/rules/Local.md"
 	}
-	state.Conflict = local != "" && main != "" && local != main
 	return state, nil
 }
 
@@ -118,14 +101,14 @@ func policyMode(path string) (string, error) {
 	begin := "<!-- harnez:begin " + Section + " -->"
 	end := "<!-- harnez:end " + Section + " -->"
 	start := strings.Index(content, begin)
-	if start < 0 {
-		return "", nil
+	block := content
+	if start >= 0 {
+		finish := strings.Index(content[start+len(begin):], end)
+		if finish < 0 {
+			return "", nil
+		}
+		block = content[start : start+len(begin)+finish]
 	}
-	finish := strings.Index(content[start+len(begin):], end)
-	if finish < 0 {
-		return "", nil
-	}
-	block := content[start : start+len(begin)+finish]
 	for _, mode := range []string{"harnez", "native"} {
 		if strings.Contains(block, "subagent_mode: "+mode) {
 			return mode, nil
