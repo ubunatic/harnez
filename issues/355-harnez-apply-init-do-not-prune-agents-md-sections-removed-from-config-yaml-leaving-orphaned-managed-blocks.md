@@ -48,3 +48,14 @@ covering preservation and second-run idempotency. Targeted tests and `make test-
 passed. The current `apply` path does not reconcile `agents_md.global.sections`;
 global instruction files are no longer managed by apply, so that portion of the
 original acceptance criteria remains unimplemented.
+
+### Pre-Work / Required Refinements (host canary 2026-09-27, blocks release)
+- Canary: plain `harnez init` on clones of loom, voxi, neus, lmcoder (025476c) removes **Quota-1 Guardrails**
+  in all four and **Repo Setup** in voxi. Both are opt-in blocks written by `init --quota-1` /
+  `init --repo-mode`; a plain run must keep them. The binary is installed, so fix before any peer runs init.
+- Fix: flag-managed sections (Quota-1 Guardrails, Repo Setup, and any other section written only under an
+  init flag) are sticky: keep them when present even if the flag is not passed. Prune only sections that come
+  from the `config.yaml` agents_md section list. Prefer an explicit list of prunable names derived from
+  config history over a keep-list, if simpler to make safe.
+- Test: fixture with Quota-1 Guardrails and Repo Setup present, plain init (no flags) keeps both; an orphan
+  config section is still pruned.
