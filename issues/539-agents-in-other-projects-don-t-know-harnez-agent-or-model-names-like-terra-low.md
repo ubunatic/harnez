@@ -1,6 +1,6 @@
 # 539 — Agents in other projects don't know harnez agent or model names like terra:low
 
-**Status**: Open
+**Status**: Closed — managed named-model dispatch rule
 **Priority**: P1
 **Severity**: Medium
 **Category**: Bug / Agents
@@ -40,3 +40,10 @@ named harnez models.
   <name>`; see `harnez agent models`." Also make the `native` overlay text say this explicitly.
 - Check whether `harnez agent --model terra:low` resolves without the `codex:` prefix (449 aliases).
 - Acceptance: re-ask the cati prompt in a fresh cati session; it dispatches through `harnez agent`.
+
+## Outcome
+
+- Added a managed rule in `config.yaml` and the generated root `AGENTS.md` stating that a requested name such as `terra:low` or `luna` is a Harnez agent model and is dispatched with `harnez agent start --model <name>`, regardless of `subagent_mode`.
+- Updated the native-mode overlay to clarify that native mode governs only the agent's own subagent choice.
+- Init always applies the configured Harnez Managed Conventions section when `agents_md.local.target` is set; there is no conditional that skips this block for cati. Its missing block indicates stale or removed managed content. Running init in cati should restore it; that repository was left untouched.
+- Added an assertion for the managed model rule. `make test-q1` passed.
