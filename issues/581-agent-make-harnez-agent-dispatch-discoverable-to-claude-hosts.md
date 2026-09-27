@@ -1,6 +1,6 @@
 # 581 — Make Harnez agent dispatch discoverable and host-visible
 
-**Status**: Open
+**Status**: Closed — Shipped via 602 and 585, confirmed by three repos (loom, neus, voxi); the Case 1 warning notice was never requested and is dropped
 **Priority**: P1
 **Severity**: Moderate
 **Category**: Agentic Ergonomics / CLI / Documentation
