@@ -367,6 +367,12 @@ func gitCreateTag(dir, tagName, tagMsg string) error {
 }
 
 func runBuildStep(opt Options, spec *VersionSpec) error {
+	if !opt.Continue && !opt.DryRun {
+		if err := os.RemoveAll(filepath.Join(opt.Dir, "dist")); err != nil {
+			return fmt.Errorf("clean dist directory: %w", err)
+		}
+	}
+
 	buildCmd := opt.BuildCmd
 	if buildCmd == "" && spec != nil {
 		buildCmd = spec.BuildCmd
@@ -467,6 +473,10 @@ func runSigningStep(opt Options, projectName, version, keyPath string) error {
 		fmt.Fprintf(opt.Out, "  [sign]      No dist/SHA256SUMS found to sign\n")
 		return nil
 	}
+	if !checksumMatchesVersion(checksumPath, version, "") {
+		fmt.Fprintf(opt.Out, "  [sign]      Skipping dist/SHA256SUMS without matching %s artifacts\n", version)
+		return nil
+	}
 
 	fmt.Fprintf(opt.Out, "  [sign]      Signing %s with minisign\n", checksumPath)
 	if !opt.DryRun {
@@ -501,6 +511,18 @@ func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) 
 			continue
 		}
 		name := e.Name()
+		if !artifactMatchesVersion(name, tagName) {
+			continue
+		}
+		if strings.HasSuffix(name, ".minisig") {
+			signedName := strings.TrimSuffix(name, ".minisig")
+			if signedName == "SHA256SUMS" && !checksumMatchesVersion(filepath.Join(distDir, signedName), "", tagName) {
+				continue
+			}
+		}
+		if name == "SHA256SUMS" && !checksumMatchesVersion(filepath.Join(distDir, name), "", tagName) {
+			continue
+		}
 		if strings.HasSuffix(name, ".tar.gz") ||
 			strings.HasSuffix(name, ".zip") ||
 			strings.HasSuffix(name, ".minisig") ||
@@ -534,6 +556,49 @@ func runPublishStep(opt Options, projectName, tagName string, forge *ForgeInfo) 
 		}
 	}
 	return nil
+}
+
+var artifactVersionPattern = regexp.MustCompile(`v?\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?`)
+
+func artifactMatchesVersion(name, target string) bool {
+	want := artifactVersionPattern.FindString(target)
+	if want == "" {
+		return true
+	}
+	want = strings.TrimPrefix(want, "v")
+	versions := artifactVersionPattern.FindAllString(name, -1)
+	for _, version := range versions {
+		if strings.TrimPrefix(version, "v") != want {
+			return false
+		}
+	}
+	return true
+}
+
+func checksumMatchesVersion(path, version, tagName string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	target := version
+	if target == "" {
+		target = tagName
+	}
+	matched := false
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		name := strings.TrimPrefix(fields[len(fields)-1], "*")
+		if !artifactMatchesVersion(name, target) {
+			return false
+		}
+		if artifactVersionPattern.MatchString(name) {
+			matched = true
+		}
+	}
+	return matched
 }
 
 func runCmd(dir, name string, args ...string) error {
