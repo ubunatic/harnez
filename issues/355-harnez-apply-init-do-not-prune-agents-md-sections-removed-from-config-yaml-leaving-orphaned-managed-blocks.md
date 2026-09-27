@@ -1,6 +1,6 @@
 # 355 — harnez apply/init do not prune agents_md sections removed from config.yaml, leaving orphaned managed blocks
 
-**Status**: Open
+**Status**: Closed — init orphan pruning implemented; apply no longer manages global instruction sections
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: CLI / Templates
@@ -38,3 +38,13 @@ addition to the existing add/update behavior.
 - [ ] Regression test: apply with section A+B, remove B from config, re-apply, assert B's
       marker block is gone and A's is untouched.
 - [ ] `scripts/smoke-test.sh` still passes.
+
+## Outcome
+
+Implemented orphan pruning for project-local sections during `harnez init`. Pruning
+removes only well-formed orphan `harnez` marker blocks, preserving configured,
+template-owned, backfilled, legacy, and unmarked content. Added a regression fixture
+covering preservation and second-run idempotency. Targeted tests and `make test-q1`
+passed. The current `apply` path does not reconcile `agents_md.global.sections`;
+global instruction files are no longer managed by apply, so that portion of the
+original acceptance criteria remains unimplemented.
