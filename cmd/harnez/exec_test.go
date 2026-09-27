@@ -436,6 +436,54 @@ func TestResolveExecTimeout_DefaultFlagAndExplicitPrefix(t *testing.T) {
 	}
 }
 
+func TestResolveExecTimeout_HarnezAgentWaitDefaultsUnlimited(t *testing.T) {
+	t.Setenv(execTimeoutEnv, "")
+	t.Setenv(execTimeoutShortEnv, "")
+	missing := filepath.Join(t.TempDir(), "missing.yaml")
+	cases := []struct {
+		name    string
+		args    []string
+		timeout time.Duration
+		getenv  func(string) string
+		want    time.Duration
+	}{
+		{name: "direct wait", args: []string{"harnez", "agent", "wait", "worker"}, want: 0},
+		{name: "absolute binary path", args: []string{"/usr/local/bin/harnez", "agent", "wait", "worker"}, want: 0},
+		{name: "bash wrapped wait", args: []string{"bash", "-c", "harnez agent wait worker"}, want: 0},
+		{name: "bash login wrapped wait", args: []string{"bash", "-lc", "HTO=0 harnez agent wait worker"}, want: 0},
+		{name: "explicit flag wins", args: []string{"harnez", "agent", "wait", "worker"}, timeout: 5 * time.Minute, want: 5 * time.Minute},
+		{name: "explicit HTO prefix wins", args: []string{"bash", "-c", "HTO=2m harnez agent wait worker"}, want: 2 * time.Minute},
+		{name: "explicit HARNEZ_TIMEOUT prefix wins", args: []string{"bash", "-c", "HARNEZ_TIMEOUT=3m harnez agent wait worker"}, want: 3 * time.Minute},
+		{name: "ambient HTO wins", args: []string{"harnez", "agent", "wait", "worker"}, getenv: func(key string) string {
+			if key == execTimeoutShortEnv {
+				return "4m"
+			}
+			return ""
+		}, want: 4 * time.Minute},
+		{name: "ambient HARNEZ_TIMEOUT wins", args: []string{"harnez", "agent", "wait", "worker"}, getenv: func(key string) string {
+			if key == execTimeoutEnv {
+				return "6m"
+			}
+			return ""
+		}, want: 6 * time.Minute},
+		{name: "regular command keeps default", args: []string{"sleep", "1"}, want: defaultExecTimeout},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resolveExecTimeout(execOptions{ConfigPath: missing, Timeout: tc.timeout, Getenv: tc.getenv}, tc.args); got != tc.want {
+				t.Errorf("timeout = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	configured := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configured, []byte("exec:\n  timeout: 5m\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := resolveExecTimeout(execOptions{ConfigPath: configured}, []string{"harnez", "agent", "wait", "worker"}); got != 0 {
+		t.Errorf("wait timeout with repo config = %v, want 0", got)
+	}
+}
+
 func TestRunExecHookPreservesInputAndForwardsNativeIntent(t *testing.T) {
 	t.Setenv(distillAutopipeEnv, "")
 	in := strings.NewReader(`{"tool_name":"Bash","tool_input":{"command":"sleep 5","timeout":2000,"run_in_background":false,"custom":"keep"}}`)

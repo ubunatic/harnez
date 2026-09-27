@@ -169,6 +169,26 @@ func unwrapShellCommand(args []string) []string {
 	return args
 }
 
+// isHarnezAgentWait reports whether args invoke `harnez agent wait`, either
+// directly or as a shell -c script. It intentionally recognizes command words
+// rather than searching for a substring, so references in unrelated text do
+// not disable the exec timeout.
+func isHarnezAgentWait(args []string) bool {
+	tokens := unwrapShellCommand(args)
+	if len(tokens) == 1 && tokens[0] != args[0] {
+		tokens = strings.Fields(tokens[0])
+	}
+	for i := 0; i+2 < len(tokens); i++ {
+		if strings.Contains(tokens[i], "=") && !strings.HasPrefix(tokens[i], "-") {
+			continue
+		}
+		if filepath.Base(tokens[i]) == "harnez" && tokens[i+1] == "agent" && tokens[i+2] == "wait" {
+			return true
+		}
+	}
+	return false
+}
+
 // quota1SandboxArgs builds bwrap argv for a Quota-1 child. Empty cache paths
 // are omitted; the filesystem remains read-only outside the explicit binds.
 func quota1SandboxArgs(args []string, cwd, goCache, goModCache, runtimeDir string) []string {
@@ -924,6 +944,9 @@ func resolveExecTimeout(opts execOptions, args []string) time.Duration {
 	}
 	if opts.Timeout > 0 {
 		return opts.Timeout
+	}
+	if isHarnezAgentWait(args) {
+		return 0
 	}
 	wd, _ := os.Getwd()
 	configPath := opts.ConfigPath
