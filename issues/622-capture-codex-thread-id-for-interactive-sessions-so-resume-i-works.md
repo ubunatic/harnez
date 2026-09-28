@@ -1,4 +1,4 @@
-# 622 — Capture codex thread ID for interactive sessions so resume -i works
+# 622 — Capture codex and agy session IDs for interactive sessions so resume -i works
 
 **Status**: Open
 **Priority**: P1 (High)
@@ -8,7 +8,7 @@
 
 ---
 
-/goal `harnez agent start -i` with codex stores the codex thread ID, and
+/goal `harnez agent start -i` with codex or agy stores the provider session ID, and
 `harnez agent resume -i --name <session>` reopens that thread; verify with a test and a manual
 start/exit/resume round trip; stop and report when blocked on a user decision or denied permission.
 
@@ -32,13 +32,20 @@ Codex knew the thread ID (it printed it) but Harnez never recorded it. `start -i
 passed as `--session-id`). Codex (and agy) interactive sessions are therefore never resumable,
 which defeats the main point of #620.
 
+Same for agy (user report, 2026-09-28):
+
+```text
+$ harnez agent resume -i --name swift-falcon
+Error: session "swift-falcon" cannot be resumed: agy did not expose a provider session ID
+```
+
 ## 2. Technical Specification / Findings
 
 - Codex has no `--session-id` input; the ID must be discovered after launch. Candidate sources
   (canary first, per `docs/Canary.md`): the codex session files under `~/.codex/sessions/`
   (match by cwd and start time), or the `Reconnect: codex resume <id>` line on exit. Pick the
   most robust; do not scrape the TUI stream if a file source exists.
-- Check agy the same way (`--conversation <id>` on resume); fix it too or record why not.
+- agy has the same gap (confirmed, see §1): find where agy exposes the conversation ID for an interactive run and record it; resume uses `--conversation <id>`.
 - Secondary: `resume -i` without `--name` should resume the latest resumable session in `-d`
   (same rule as plain `resume --continue`), instead of erroring.
 
