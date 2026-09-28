@@ -1,4 +1,4 @@
-# 625 — One command to read all .harnez rules in a single step
+# 625 — One call to read all .harnez rules in a single step
 
 **Status**: Open
 **Priority**: P2 (Medium)
@@ -8,8 +8,8 @@
 
 ---
 
-/goal Agents load all `.harnez/rules` docs (Index order, then `Local.md`) with one command, and the
-generated instructions tell them to; stop and report when blocked on a user decision or denied
+/goal Agents load all `.harnez/rules` docs in one `harnez read` call, and the generated
+instructions show that call; stop and report when blocked on a user decision or denied
 permission.
 
 ## 1. Problem & Motivation
@@ -24,17 +24,17 @@ pays this cost.
 - `harnez read` already accepts several files and prints a `=== <path> (N lines) ===` header before
   each, so the mechanics exist. What's missing is a single entry point that knows the file set and
   order, and an instruction that points agents to it.
-- Proposal: `harnez rules` (or `harnez read --rules`; choose one, check `docs/CLIDesign.md`) prints
-  the files listed in `Index.md`, in order, then `Local.md`, concatenated.
-- Separator: each rule file has exactly one `# ` title, so the title can serve as the separator;
-  prefix a one-line path marker (or a small front-matter/comment line) so agents can cite the
-  source file. Keep the output plain Markdown.
+- Decision (user, 2026-09-28): no new command. Reuse `harnez read` with several files. The generated
+  instruction gives the exact one-liner, e.g. `harnez read .harnez/rules/*.md` (Index order, then
+  `Local.md`), which also teaches agents batch reading of whole files in general.
+- Check the current `=== <path> ===` header and each file's single `# ` title are enough as
+  separators; only change the header format if agents mis-attribute rules.
 - Update the generated instruction line ("read `.harnez/rules/Index.md`, then `Local.md`") in the
-  managed AGENTS.md/CxxxE.md blocks to "run `harnez rules`", with the file-by-file path as fallback.
-- Open: should other on-demand docs (e.g. `See docs/X.md` links) get the same batch form?
+  managed AGENTS.md/CxxxE.md blocks to the single `harnez read` call.
+- Other `See docs/X.md` links: no special form; the same `harnez read a b c` instruction covers them.
 
 ## 3. Implementation & Verification Plan
 
-- Test: output contains every Index-listed file in order plus `Local.md`, each with its marker;
+- Test: the generated instruction lists a `harnez read` call that covers every Index-listed file and `Local.md`;
   missing `Local.md` is not an error.
 - Regenerate managed blocks via `harnez init -d .`; check one agent session loads rules in one call.
