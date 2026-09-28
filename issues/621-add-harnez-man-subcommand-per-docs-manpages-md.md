@@ -1,6 +1,6 @@
 # 621 — Add harnez man subcommand per docs/ManPages.md
 
-**Status**: Open
+**Status**: Closed — delivered in 591e4b85: harnez man, man --install, make man/install/install-system
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Usability / Documentation
