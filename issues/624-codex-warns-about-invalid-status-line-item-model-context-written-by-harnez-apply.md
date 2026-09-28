@@ -1,6 +1,6 @@
 # 624 — Codex warns about invalid status line item model-context written by harnez apply
 
-**Status**: Open
+**Status**: Closed — delivered in 5100c72e: model-context dropped and stripped from existing configs; verified in ~/.codex/config.toml
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
