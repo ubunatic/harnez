@@ -3,6 +3,7 @@
 /issues/inbox/
 /my-project
 /dist/
+/*.1
 /issues/README.md.lock
 *.lock
 .harnez/*

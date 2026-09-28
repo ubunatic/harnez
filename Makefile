@@ -25,13 +25,18 @@ build: ⚙️  # build the binary
 run: ⚙️ build  # run the application locally
 	./$(BINARY)
 
+man: ⚙️ build  # generate roff man pages
+	./$(BINARY) man --dir .
+
 install: ⚙️ build  # install binary to ~/go/bin (user)
 	go install ./cmd/harnez
+	./$(BINARY) man --install
 	@ln -sf harnez $$(go env GOPATH)/bin/⚙ 2>/dev/null || ln -sf harnez $(HOME)/go/bin/⚙
 
 
 install-system: ⚙️ build  # install binary to PREFIX/bin via sudo (system-wide)
 	sudo install -m 0755 $(BINARY) $(PREFIX)/bin/$(BINARY)
+	sudo ./$(BINARY) man --install --dir $(PREFIX)/share/man/man1
 	sudo ln -sf $(BINARY) $(PREFIX)/bin/⚙
 
 uninstall: ⚙️  # remove installed binary from system and user paths
