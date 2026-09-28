@@ -97,16 +97,16 @@ func TestIssueTrackerDiscoveryConfigEntry(t *testing.T) {
 		t.Fatalf("LoadConfigEmbedded failed: %v", err)
 	}
 
-	var found *MDSection
-	for i := range cfg.AgentsMD.Local.Sections {
-		s := &cfg.AgentsMD.Local.Sections[i]
+	var found *RuleFile
+	for i := range cfg.AgentsMD.Rules.Files {
+		s := &cfg.AgentsMD.Rules.Files[i]
 		if strings.Contains(s.Content, "harnez find -d <repo> issues -a status:open") {
 			found = s
 			break
 		}
 	}
 	if found == nil {
-		t.Fatalf("expected an agents_md.local.sections entry containing the harnez find command list in embedded config.yaml")
+		t.Fatalf("expected an agents_md.rules.files entry containing the harnez find command list in embedded config.yaml")
 	}
 	if !strings.Contains(found.Content, "harnez index -d <repo>") {
 		t.Errorf("expected Issue Tracker Discovery content to contain harnez index, got:\n%s", found.Content)

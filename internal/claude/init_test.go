@@ -502,7 +502,7 @@ func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(tools), "### Editing Discipline") || !strings.Contains(string(tools), "go install ubunatic.com/harnez/cmd/harnez@latest") {
+	if !strings.Contains(string(tools), "## Editing Discipline") || !strings.Contains(string(tools), "go install ubunatic.com/harnez/cmd/harnez@latest") {
 		t.Errorf("Tools.md missing migrated managed convention content:\n%s", tools)
 	}
 	if !strings.Contains(content, "# Custom Project Working Agreement") ||
@@ -510,8 +510,14 @@ func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
 		t.Errorf("expected hand-authored custom content to survive, got:\n%s", content)
 	}
 
-	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+	out, err := captureStdout(func() error {
+		return claude.RunInit(dir, cfg, nil, "", true, false, false, false)
+	})
+	if err != nil {
 		t.Fatalf("second RunInit failed: %v", err)
+	}
+	if !strings.Contains(out, "No changes.") {
+		t.Errorf("second RunInit should report no changes (issue 628), got:\n%s", out)
 	}
 	second, err := os.ReadFile(agentsPath)
 	if err != nil {

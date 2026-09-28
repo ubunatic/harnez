@@ -654,7 +654,7 @@ func migrateInitRules(dir, agentsPath string) (int, error) {
 	agentTarget := func(name string) string {
 		switch name {
 		case "Harnez Managed Conventions":
-			return filepath.Join(rulesDir, "Tools.md")
+			return "" // Tools.md carries this content since issue 628.
 		case quota1SectionName:
 			return filepath.Join(rulesDir, "Quota.md")
 		case "Local Overlays":

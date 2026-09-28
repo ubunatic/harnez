@@ -62,11 +62,11 @@ func TestManagedAgentExamplesParseAgainstCobra(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sectionStart := strings.Index(string(config), "### Harnez Agent")
+	sectionStart := strings.Index(string(config), "## Harnez Agent")
 	if sectionStart < 0 {
 		t.Fatal("managed Harnez Agent section not found")
 	}
-	sectionEnd := strings.Index(string(config[sectionStart:]), "### Code and Documentation Search")
+	sectionEnd := strings.Index(string(config[sectionStart:]), "## Code and Documentation Search")
 	if sectionEnd < 0 {
 		t.Fatal("end of managed Harnez Agent section not found")
 	}
