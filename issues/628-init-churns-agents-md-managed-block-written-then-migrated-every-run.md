@@ -1,6 +1,6 @@
 # 628 — init churns AGENTS.md: managed block written then migrated every run
 
-**Status**: Open
+**Status**: Closed — fixed; second init run prints No changes
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
