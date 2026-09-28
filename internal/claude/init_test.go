@@ -460,9 +460,9 @@ func TestCheckProjectDrift(t *testing.T) {
 	}
 }
 
-// TestRunInit_AppliesManagedConventionsSection verifies issue 311's core
-// contract: agents_md.local.sections are written into an existing AGENTS.md
-// alongside its custom content, without duplicating on a second run.
+// TestRunInit_AppliesManagedConventionsSection verifies that init keeps
+// custom AGENTS.md content, puts the managed conventions only in
+// .harnez/rules/Tools.md, and reports no changes on a second run (issue 628).
 func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/managedconv\n"), 0o644); err != nil {
@@ -472,6 +472,11 @@ func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
 	initialAgentsMD := `# Custom Project Working Agreement
 
 - Preamble: hand-authored, must survive init.
+
+<!-- harnez:begin Harnez Managed Conventions -->
+## Harnez Managed Conventions
+LEGACY-MANAGED-SENTINEL
+<!-- harnez:end Harnez Managed Conventions -->
 
 ## Custom Downstream Section
 - Project-specific rule that must survive init.
@@ -497,6 +502,9 @@ func TestRunInit_AppliesManagedConventionsSection(t *testing.T) {
 
 	if strings.Contains(content, "<!-- harnez:begin Harnez Managed Conventions -->") {
 		t.Errorf("Harnez Managed Conventions should migrate out of AGENTS.md:\n%s", content)
+	}
+	if strings.Contains(content, "LEGACY-MANAGED-SENTINEL") {
+		t.Errorf("legacy managed block body should be dropped from AGENTS.md:\n%s", content)
 	}
 	tools, err := os.ReadFile(filepath.Join(dir, ".harnez", "rules", "Tools.md"))
 	if err != nil {
