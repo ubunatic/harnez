@@ -8,12 +8,13 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+const invalidLegacyStatusLineItem = "model-context"
+
 var statusLineItems = []string{
 	"model-with-reasoning",
 	"current-dir",
 	"thread-name",
 	"context-remaining",
-	"model-context",
 	"five-hour-limit",
 	"weekly-limit",
 }
@@ -29,6 +30,13 @@ func ApplyStatusLine(path string) (bool, error) {
 		}
 	}
 	items := stringArray(tui["status_line"])
+	filtered := make([]string, 0, len(items))
+	for _, item := range items {
+		if item != invalidLegacyStatusLineItem {
+			filtered = append(filtered, item)
+		}
+	}
+	items = filtered
 	for _, required := range statusLineItems {
 		if !containsString(items, required) {
 			items = append(items, required)
