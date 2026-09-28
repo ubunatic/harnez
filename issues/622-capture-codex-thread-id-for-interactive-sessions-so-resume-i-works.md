@@ -49,6 +49,7 @@ Error: session "swift-falcon" cannot be resumed: agy did not expose a provider s
 - Claude `resume -i` is confirmed working by the user; use it as the reference path.
 - Candidate (user note): codex, agy and claude all have a `/rename` command. A session titled with the harnez name could be found by title in the provider store, or resumed by name if the provider accepts a name on resume (canary: does `codex resume <name>` / agy accept it?). Rename changes only the title, not the ID, and typing into the TUI is fragile, so prefer a file/ID source if one exists.
 - Likely agy ID source (from #612): presence locks `~/.gemini/antigravity-cli/presence/<conversation-id>.lock` and `conversations/<id>.db`.
+- Also fix (host finding 2026-09-28): interactive agy (`start -i`/`resume -i`) runs `agy` directly from `internal/subagent/interactive.go`, skipping what background agy gets in `internal/subagent/agy.go` `command()`: the metering proxy (`agymeter.RunWithEnvDir`), `AgyLaunchEnv`, the bash shim, and `HARNEZ_SESSION_ID` / `HARNEZ_AGY_METER_SESSION_ID`. Interactive agy usage is therefore unmetered. Route interactive agy through the same launch path (the meter must pass the TTY through).
 - Secondary: `resume -i` without `--name` should resume the latest resumable session in `-d`
   (same rule as plain `resume --continue`), instead of erroring.
 
