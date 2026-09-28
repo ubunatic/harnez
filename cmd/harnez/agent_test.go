@@ -30,7 +30,7 @@ func TestAgentCommandSurface(t *testing.T) {
 	if len(c.Commands()) == 0 {
 		t.Fatal("agent command has no children")
 	}
-	for _, name := range []string{"start", "models", "chat", "resume", "list", "status", "wait", "compact", "stop", "delete", "enable", "disable"} {
+	for _, name := range []string{"start", "models", "resume", "list", "status", "wait", "compact", "stop", "delete", "enable", "disable"} {
 		found := false
 		for _, child := range c.Commands() {
 			if child.Name() == name {
@@ -39,6 +39,20 @@ func TestAgentCommandSurface(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("missing agent subcommand %q", name)
+		}
+	}
+	for _, child := range c.Commands() {
+		if child.Name() == "chat" {
+			t.Fatal("obsolete agent chat command remains")
+		}
+	}
+	for _, name := range []string{"start", "resume"} {
+		child, _, err := c.Find([]string{name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if flag := child.Flags().Lookup("interactive"); flag == nil || flag.Shorthand != "i" {
+			t.Errorf("%s interactive flag missing or has wrong shorthand: %#v", name, flag)
 		}
 	}
 }
@@ -555,7 +569,7 @@ func TestAgentCompletionDescription(t *testing.T) {
 
 func TestAgentReferenceCommandCompletionCoverage(t *testing.T) {
 	root := newAgentCmd()
-	for _, path := range [][]string{{"resume"}, {"status"}, {"compact"}, {"stop"}, {"delete"}, {"chat", "attach"}} {
+	for _, path := range [][]string{{"resume"}, {"status"}, {"compact"}, {"stop"}, {"delete"}} {
 		cmd, _, err := root.Find(path)
 		if err != nil {
 			t.Fatalf("find %v: %v", path, err)
@@ -806,7 +820,7 @@ func (r *recordingInteractiveRunner) Chat(_ context.Context, opts subagent.Inter
 	return r.err
 }
 
-func TestAgentChatFailureTransition(t *testing.T) {
+func TestAgentInteractiveFailureTransition(t *testing.T) {
 	old := agentInteractiveRunner
 	storeDir := t.TempDir()
 	agentInteractiveRunner = &recordingInteractiveRunner{storeDir: storeDir, err: errors.New("provider exited")}
@@ -814,7 +828,7 @@ func TestAgentChatFailureTransition(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"chat", "--model", "claude:haiku", "--name", "bold-fox", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"start", "-i", "--model", "claude:haiku", "--name", "bold-fox", "--store-dir", storeDir})
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "provider exited") {
 		t.Fatalf("chat error = %v", err)
 	}
@@ -918,8 +932,8 @@ func TestAgentInteractiveMissingProviderIDLimitsPostExitOnly(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"chat", "attach", "--name", "codex-chat", "--store-dir", storeDir})
-	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "does not expose a provider session ID") {
+	cmd.SetArgs([]string{"resume", "-i", "--name", "codex-chat", "--store-dir", storeDir})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "did not expose a provider session ID") {
 		t.Fatalf("attach error = %v", err)
 	}
 }
@@ -930,7 +944,7 @@ func (r *recordingInteractiveRunner) Attach(_ context.Context, opts subagent.Int
 	return nil
 }
 
-func TestAgentChatRegistersBeforeLaunchAndTransitions(t *testing.T) {
+func TestAgentInteractiveRegistersBeforeLaunchAndTransitions(t *testing.T) {
 	old := agentInteractiveRunner
 	storeDir := t.TempDir()
 	runner := &recordingInteractiveRunner{storeDir: storeDir}
@@ -942,7 +956,7 @@ func TestAgentChatRegistersBeforeLaunchAndTransitions(t *testing.T) {
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
 	cmd.SetIn(bytes.NewBufferString("input"))
-	cmd.SetArgs([]string{"chat", "--model", "claude:haiku", "--name", "calm-otter", "-d", dir, "--store-dir", storeDir})
+	cmd.SetArgs([]string{"start", "-i", "--model", "claude:haiku", "--name", "calm-otter", "-d", dir, "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -964,16 +978,78 @@ func TestAgentChatRegistersBeforeLaunchAndTransitions(t *testing.T) {
 	cmd = newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"chat", "attach", "--name", "calm-otter", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"resume", "-i", "--name", "calm-otter", "--store-dir", storeDir, "--", "continue interactively"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
 	if runner.attachID != sess.ID {
 		t.Fatalf("attach provider ID = %q, want %q", runner.attachID, sess.ID)
 	}
+	if runner.opts.Prompt != "continue interactively" {
+		t.Fatalf("resume opening prompt = %q", runner.opts.Prompt)
+	}
 }
 
-func TestAgentChatGeneratesUniqueNameAndRejectsDuplicate(t *testing.T) {
+func TestAgentInteractivePromptAndFlagConflicts(t *testing.T) {
+	old := agentInteractiveRunner
+	storeDir := t.TempDir()
+	runner := &recordingInteractiveRunner{storeDir: storeDir}
+	agentInteractiveRunner = runner
+	defer func() { agentInteractiveRunner = old }()
+
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"start", "-i", "--model", "claude:haiku", "--store-dir", storeDir, "--", "opening line"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if runner.opts.Prompt != "opening line" {
+		t.Fatalf("opening prompt = %q", runner.opts.Prompt)
+	}
+
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"detach", []string{"start", "-i", "--detach"}, "--detach/--async"},
+		{"async", []string{"start", "-i", "--async"}, "--detach/--async"},
+		{"timeout", []string{"start", "-i", "--timeout", "0"}, "--timeout"},
+		{"json", []string{"start", "-i", "--json"}, "--json"},
+		{"stream", []string{"start", "-i", "--stream", "stats"}, "--stream"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newAgentCmd()
+			c.SetOut(new(bytes.Buffer))
+			c.SetErr(new(bytes.Buffer))
+			c.SetArgs(append(tc.args, "--store-dir", t.TempDir()))
+			if err := c.Execute(); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("conflict error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestAgentResumeInteractiveRejectsRunningBackgroundSession(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "busy-id", ProviderSessionID: "provider-id", Name: "busy-worker", Provider: "claude", Model: "haiku", WorkingDir: t.TempDir(), HarnessType: "harnez", Status: "running"}); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"resume", "-i", "--name", "busy-worker", "--store-dir", storeDir})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "harnez agent wait busy-worker") {
+		t.Fatalf("busy-session error = %v", err)
+	}
+}
+
+func TestAgentInteractiveGeneratesUniqueNameAndRejectsDuplicate(t *testing.T) {
 	old := agentInteractiveRunner
 	storeDir := t.TempDir()
 	agentInteractiveRunner = &recordingInteractiveRunner{storeDir: storeDir}
@@ -982,7 +1058,7 @@ func TestAgentChatGeneratesUniqueNameAndRejectsDuplicate(t *testing.T) {
 	cmd := newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"chat", "--model", "claude:haiku", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"start", "-i", "--model", "claude:haiku", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -994,7 +1070,7 @@ func TestAgentChatGeneratesUniqueNameAndRejectsDuplicate(t *testing.T) {
 	cmd = newAgentCmd()
 	cmd.SetOut(new(bytes.Buffer))
 	cmd.SetErr(new(bytes.Buffer))
-	cmd.SetArgs([]string{"chat", "--model", "claude:haiku", "--name", sessions[0].Name, "--store-dir", storeDir})
+	cmd.SetArgs([]string{"start", "-i", "--model", "claude:haiku", "--name", sessions[0].Name, "--store-dir", storeDir})
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("expected duplicate name error")
 	}
@@ -1897,7 +1973,7 @@ func TestStreamingResumeKeepsStderrQuiet(t *testing.T) {
 	defer func() { agentDriver = old }()
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", Status: "completed", TokensSinceCompact: 250000, ContextTokens: 250000}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "luna", WorkingDir: t.TempDir(), Status: "completed", TokensSinceCompact: 250000, ContextTokens: 250000}); err != nil {
 		t.Fatal(err)
 	}
 	var errOut bytes.Buffer
@@ -2894,7 +2970,7 @@ func TestLeafRolesCannotStartOrManageAgents(t *testing.T) {
 		t.Setenv(agentRoleEnv, role)
 		for _, args := range [][]string{
 			{"start", "task"}, {"resume", "--name", "a", "x"}, {"-p", "hello"}, {"--name", "a", "--", "hello"}, {"-p", "/stop", "--name", "a"},
-			{"compact", "--name", "a"}, {"stop", "--name", "a"}, {"delete", "--name", "a"}, {"chat"}, {"enable"},
+			{"compact", "--name", "a"}, {"stop", "--name", "a"}, {"delete", "--name", "a"}, {"enable"},
 		} {
 			d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
 			_, err := runWithStore(t, d, storeDir, args...)

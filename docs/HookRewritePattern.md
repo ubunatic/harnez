@@ -197,7 +197,7 @@ Claude and Codex are rewritten by their PreToolUse hooks. agy is the special cas
 - **Pitfall: env attribution.** agy launched from a Claude session inherits Claude's env markers, so exec rows
   from the shim are labelled `claude`/`Bash`. The stats join compensates (537 M7). The source-level fix
   (drop the markers in `agyLaunchEnv`) is still open.
-- Users start agy as `harnez agent chat --model agy:flash37:low`, or in a terminal as `harnez-agy`
+- Users start agy as `harnez agent start -i --model agy:flash37:low`, or in a terminal as `harnez-agy`
   (issue 550): `harnez apply` writes `~/.local/bin/harnez-agy`, which finds the real `agy` on the
   original PATH, then execs it with the shim dir first and `ANTIGRAVITY_AGENT=1`. A plain `agy` still
   works through the hook fallback, with the visible rewrite.

@@ -52,7 +52,7 @@ func TestAssemblePrompt(t *testing.T) {
 func TestAgentSessionVerbsRejectPositionalSessions(t *testing.T) {
 	for _, args := range [][]string{
 		{"stop", "worker"}, {"delete", "worker"}, {"status", "worker"},
-		{"compact", "worker"}, {"chat", "attach", "worker"},
+		{"compact", "worker"},
 	} {
 		t.Run(strings.Join(args, "-"), func(t *testing.T) {
 			cmd := newAgentCmd()
@@ -111,7 +111,7 @@ func TestAgentErrorsNameTheFixWithoutUsageDump(t *testing.T) {
 		{[]string{"delete", "foo"}, "session is now --name <session>"},
 		{[]string{"status", "foo"}, "session is now --name <session>"},
 		{[]string{"compact", "foo"}, "session is now --name <session>"},
-		{[]string{"chat", "codex:luna"}, "model is now --model <spec>"},
+		{[]string{"start", "codex:luna", "task"}, "model is now --model <spec>"},
 		{[]string{"start"}, "no prompt given"},
 	} {
 		var out, errOut bytes.Buffer

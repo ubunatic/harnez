@@ -12,7 +12,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/agentpolicy"
 	"ubunatic.com/harnez/internal/privacy"
@@ -59,7 +58,9 @@ Short forms:
   harnez agent --name docs -d ~/projects/x "update the changelog"
   harnez agent -c -p "continue"
   harnez agent start --name w --model luna -f task.md -- "extra instructions"
+  harnez agent start -i --model claude:haiku --name chat
   harnez agent resume --name w "next step"
+  harnez agent resume -i --name w
   harnez agent --name w -p "/compact"
   harnez agent --model luna:low --role advisor -p "how does X work?"
 
@@ -230,7 +231,8 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	}
 	var startFiles []string
 	var startPrompt string
-	start := &cobra.Command{Use: "start [prompt...]", Short: "Start a new agent session", Example: "  harnez agent start --name w --model luna -f task.md -- \"extra instructions\"", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+	var startInteractive bool
+	start := &cobra.Command{Use: "start [prompt...]", Short: "Start a new agent session", Example: "  harnez agent start --name w --model luna -f task.md -- \"extra instructions\"\n  harnez agent start -i --model claude:haiku --name chat", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(planSpec)
 		if err != nil {
 			return err
@@ -245,9 +247,18 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if modelSpec == "" && len(words) >= 2 && oldStyleModelWord(words[0]) {
 			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
 		}
-		prompt, err := assemblePrompt(startFiles, words, tail, cmd.InOrStdin())
-		if err != nil {
-			return err
+		prompt := ""
+		if !startInteractive || len(startFiles) > 0 || len(words) > 0 || len(tail) > 0 {
+			prompt, err = assemblePrompt(startFiles, words, tail, cmd.InOrStdin())
+			if err != nil {
+				return err
+			}
+		}
+		if startInteractive {
+			if err := validateInteractiveFlags(cmd, detach, jsonOut, streamMode, agentTimeout, workerID != ""); err != nil {
+				return err
+			}
+			return runInteractiveStart(cmd, interactiveDeps{store: store, parent: parent, storeDir: storeDir}, interactiveStartRequest{Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, Role: roleSpec})
 		}
 		req := startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, SessionID: workerID, AllowExhaustedQuota: allowExhaustedQuota}
 		if workerID != "" {
@@ -262,6 +273,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	}}
 	start.Flags().StringSliceVarP(&startFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	start.Flags().StringVarP(&startPrompt, "prompt", "p", "", "prompt text")
+	start.Flags().BoolVarP(&startInteractive, "interactive", "i", false, "launch the provider's interactive terminal")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 	start.Flags().BoolVar(&detach, "detach", false, "run the agent in the background")
 	start.Flags().BoolVar(&detach, "async", false, "alias for --detach")
@@ -320,157 +332,12 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	}}
 	models.Flags().BoolVar(&modelNamesOnly, "names", false, "print only the model specs, one per line")
 
-	var chatName string
-	chat := &cobra.Command{Use: "chat", Short: "Launch an interactive agent session", Args: noArgs("model is now --model <spec>"), RunE: func(cmd *cobra.Command, args []string) error {
-		spec := modelSpec
-		if spec == "" {
-			var defaultErr error
-			spec, defaultErr = subagent.DefaultModelSpec()
-			if defaultErr != nil {
-				return defaultErr
-			}
-		}
-		m, err := subagent.ResolveModel(spec)
-		if err != nil {
-			return fmt.Errorf("agent chat %q rejected: %w; ask for guidance rather than using a different model", spec, err)
-		}
-		s, err := store()
-		if err != nil {
-			return err
-		}
-		chatName = name
-		canonicalWorkDir, err := filepath.Abs(workDir)
-		if err != nil {
-			return fmt.Errorf("resolve working directory: %w", err)
-		}
-		sessions, err := s.List("", true)
-		if err != nil {
-			return err
-		}
-		taken := make(map[string]bool, len(sessions)*2)
-		for _, existing := range sessions {
-			taken[existing.Name] = true
-			taken[existing.ID] = true
-		}
-		if chatName != "" && taken[chatName] {
-			return fmt.Errorf("session name %q is already in use", chatName)
-		}
-		var sess *subagent.Session
-		for {
-			sessName := chatName
-			if sessName == "" {
-				sessName, err = subagent.GenerateSessionName(func(candidate string) bool { return taken[candidate] })
-				if err != nil {
-					return err
-				}
-			}
-			now := time.Now()
-			sess = &subagent.Session{
-				ID: uuid.NewString(), Name: sessName, Provider: m.Provider, Model: m.Name, Tier: m.Tier, StartPrompt: "",
-				WorkingDir: canonicalWorkDir, ParentSessionID: parent(), CallerPID: os.Getpid(),
-				HarnessType: "interactive", Status: "active", CreatedAt: now, LastActiveAt: now,
-			}
-			sess.ControlSocket = filepath.Join(storeDir, sess.ID+".sock")
-			if m.Provider == "claude" {
-				sess.ProviderSessionID = sess.ID
-			}
-			err = s.Create(sess)
-			if err == nil {
-				break
-			}
-			if chatName != "" || !errors.Is(err, subagent.ErrSessionNameInUse) {
-				return err
-			}
-			taken[sessName] = true
-		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Chat: %s (%s)\n", sess.Name, sess.ID)
-		opts := subagent.InteractiveOptions{Model: m, SessionID: sess.ID, Name: sess.Name, Dir: canonicalWorkDir, Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), ControlSocket: sess.ControlSocket, Started: func(pid int) error {
-			sess.ProcessPID = pid
-			return s.Save(sess)
-		}}
-		err = agentInteractiveRunner.Chat(cmd.Context(), opts)
-		current, getErr := s.Get(sess.ID)
-		if getErr != nil {
-			return err
-		}
-		sess = current
-		sess.LastActiveAt = time.Now()
-		sess.ControlSocket = ""
-		sess.ProcessPID = 0
-		if sess.Status != "stopped" {
-			if err != nil {
-				sess.Status = "failed"
-			} else {
-				sess.Status = "completed"
-			}
-		}
-		if saveErr := s.Save(sess); saveErr != nil {
-			if err != nil {
-				return fmt.Errorf("%v; save session state: %w", err, saveErr)
-			}
-			return saveErr
-		}
-		return err
-	}}
-
-	attach := &cobra.Command{Use: "attach", Short: "Attach to an interactive agent session", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := store()
-		if err != nil {
-			return err
-		}
-		if name == "" {
-			return fmt.Errorf("attach: --name <session> is required")
-		}
-		sess, err := find(cmd, s, name)
-		if err != nil {
-			return err
-		}
-		if !subagent.CanManage(parent(), sess) {
-			return fmt.Errorf("session %q is outside caller lineage", sess.ID)
-		}
-		if sess.ProviderSessionID == "" {
-			return fmt.Errorf("session %q cannot be attached: %s does not expose a provider session ID for foreground launches", sess.Name, sess.Provider)
-		}
-		sess.Status = "active"
-		sess.ControlSocket = filepath.Join(storeDir, sess.ID+".sock")
-		sess.LastActiveAt = time.Now()
-		if err := s.Save(sess); err != nil {
-			return err
-		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "Harnez Agent Attached: %s (%s)\n", sess.Name, sess.ID)
-		opts := subagent.InteractiveOptions{Model: subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, SessionID: sess.ID, Name: sess.Name, Dir: sess.WorkingDir, Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), ControlSocket: sess.ControlSocket, Started: func(pid int) error {
-			sess.ProcessPID = pid
-			return s.Save(sess)
-		}}
-		err = agentInteractiveRunner.Attach(cmd.Context(), opts, sess.ProviderID())
-		current, getErr := s.Get(sess.ID)
-		if getErr != nil {
-			return err
-		}
-		sess = current
-		sess.LastActiveAt = time.Now()
-		sess.ControlSocket = ""
-		sess.ProcessPID = 0
-		if sess.Status != "stopped" {
-			if err != nil {
-				sess.Status = "failed"
-			} else {
-				sess.Status = "completed"
-			}
-		}
-		if saveErr := s.Save(sess); saveErr != nil && err == nil {
-			return saveErr
-		}
-		return err
-	}}
-	attach.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
-	chat.AddCommand(attach)
-
 	var resumeFiles []string
 	var resumeWorkerID string
 	var continueResume bool
 	var resumePrompt string
-	resume := &cobra.Command{Use: "resume [prompt...]", Short: "Resume an existing agent session", Example: "  harnez agent resume --name w \"next step\"", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+	var resumeInteractive bool
+	resume := &cobra.Command{Use: "resume [prompt...]", Short: "Resume an existing agent session", Example: "  harnez agent resume --name w \"next step\"\n  harnez agent resume -i --name w", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(planSpec)
 		if err != nil {
 			return err
@@ -485,9 +352,21 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if len(words) >= 2 && oldStyleModelWord(words[0]) {
 			return fmt.Errorf("model is now --model <spec>; to send this text literally put it after --")
 		}
-		prompt, err := assemblePrompt(resumeFiles, words, tail, cmd.InOrStdin())
-		if err != nil {
-			return err
+		prompt := ""
+		if !resumeInteractive || len(resumeFiles) > 0 || len(words) > 0 || len(tail) > 0 {
+			prompt, err = assemblePrompt(resumeFiles, words, tail, cmd.InOrStdin())
+			if err != nil {
+				return err
+			}
+		}
+		if resumeInteractive {
+			if err := validateInteractiveFlags(cmd, false, jsonOut, streamMode, agentTimeout, resumeWorkerID != ""); err != nil {
+				return err
+			}
+			if continueResume || name == "" {
+				return fmt.Errorf("resume -i requires --name <session>")
+			}
+			return runInteractiveResume(cmd, interactiveDeps{store: store, parent: parent, find: find, storeDir: storeDir}, interactiveResumeRequest{Name: name, Prompt: prompt})
 		}
 		if resumeWorkerID != "" {
 			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: true, PlanFirst: planFirst}, storeDir)
@@ -505,6 +384,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	resume.Flags().StringVar(&streamMode, "stream", streamFull, "live output: full (all messages) or stats (heartbeats and final reply only)")
 	resume.Flags().StringSliceVarP(&resumeFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
 	resume.Flags().StringVarP(&resumePrompt, "prompt", "p", "", "prompt text")
+	resume.Flags().BoolVarP(&resumeInteractive, "interactive", "i", false, "resume in the provider's interactive terminal")
 	resume.Flags().BoolVarP(&continueResume, "continue", "c", false, "resume the most recently active attributable session")
 
 	list := &cobra.Command{Use: "list", Short: "List agent sessions", RunE: func(cmd *cobra.Command, _ []string) error {
@@ -822,7 +702,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		return nil
 	}}
 	rate.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
-	root.AddCommand(start, models, chat, resume, list, status, wait, compact, stop, remove, rate)
+	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate)
 	silenceUsage(root)
 	return root
 }

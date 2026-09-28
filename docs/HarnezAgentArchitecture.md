@@ -63,8 +63,8 @@ harnez agent start --name w --model luna -f task.md -- "extra instructions"
 harnez agent wait w                    # reattach; defaults to timeout=0 (unlimited)
 harnez agent wait w --timeout 5m       # explicit timeout override
 harnez agent resume --name w "next step"
-harnez agent chat
-harnez agent chat attach --name w
+harnez agent start -i --model claude:haiku --name chat
+harnez agent resume -i --name w
 harnez agent list [--children|--all-sessions]
 harnez agent status --name w
 harnez agent compact --name w
@@ -211,9 +211,11 @@ resume failures are retained as last-error diagnostics.
 
 ### 2.4 Interactive sessions
 
-`chat` launches an interactive session, and `chat attach --name` attaches to
+`start -i` launches an interactive session, and `resume -i --name` resumes
 one with a provider session ID. Interactive sessions may receive prompt,
-compact, and stop control messages through their control socket.
+compact, and stop control messages through their control socket. `-p`, `-f`,
+and positional prompt input are passed as the provider's initial prompt. The
+interactive mode rejects detached, timed, JSON, and stream-output options.
 
 ### 2.5 Lifecycle verbs
 

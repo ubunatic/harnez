@@ -28,6 +28,12 @@ func TestInteractiveCommand(t *testing.T) {
 		{"claude chat", withInteractiveModel(base, Model{Provider: "claude", Name: "haiku"}), "", "claude", []string{"--model", "haiku", "--name", "calm-otter", "--session-id", "registry-id"}},
 		{"claude attach", withInteractiveModel(base, Model{Provider: "claude", Name: "haiku"}), "registry-id", "claude", []string{"--resume", "registry-id", "--model", "haiku"}},
 		{"agy chat", withInteractiveModel(base, Model{Provider: "agy", Name: "gemini-3.7-flash", Tier: "low"}), "", "agy", []string{"--model", "gemini-3.7-flash", "--effort", "low"}},
+		{"codex chat prompt", withInteractivePrompt(withInteractiveModel(base, Model{Provider: "codex", Name: "gpt-5.6-luna"}), "opening prompt"), "", "codex", []string{"-m", "gpt-5.6-luna", "-C", "/work", "opening prompt"}},
+		{"claude chat prompt", withInteractivePrompt(withInteractiveModel(base, Model{Provider: "claude", Name: "haiku"}), "opening prompt"), "", "claude", []string{"--model", "haiku", "--name", "calm-otter", "--session-id", "registry-id", "--", "opening prompt"}},
+		{"agy chat prompt", withInteractivePrompt(withInteractiveModel(base, Model{Provider: "agy", Name: "gemini-3.7-flash", Tier: "low"}), "opening prompt"), "", "agy", []string{"--model", "gemini-3.7-flash", "--prompt-interactive", "opening prompt", "--effort", "low"}},
+		{"codex attach prompt", withInteractivePrompt(withInteractiveModel(base, Model{Provider: "codex", Name: "gpt-5.6-luna"}), "next prompt"), "thread-id", "codex", []string{"resume", "thread-id", "-m", "gpt-5.6-luna", "-C", "/work", "next prompt"}},
+		{"claude attach prompt", withInteractivePrompt(withInteractiveModel(base, Model{Provider: "claude", Name: "haiku"}), "next prompt"), "registry-id", "claude", []string{"--resume", "registry-id", "--model", "haiku", "--", "next prompt"}},
+		{"agy attach prompt", withInteractivePrompt(withInteractiveModel(base, Model{Provider: "agy", Name: "gemini-3.7-flash", Tier: "low"}), "next prompt"), "conversation-id", "agy", []string{"--conversation", "conversation-id", "--model", "gemini-3.7-flash", "--prompt-interactive", "next prompt", "--effort", "low"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			command, args, err := interactiveCommand(tc.opts, tc.providerID)
@@ -36,6 +42,11 @@ func TestInteractiveCommand(t *testing.T) {
 			}
 		})
 	}
+}
+
+func withInteractivePrompt(opts InteractiveOptions, prompt string) InteractiveOptions {
+	opts.Prompt = prompt
+	return opts
 }
 
 func withInteractiveModel(opts InteractiveOptions, model Model) InteractiveOptions {

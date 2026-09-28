@@ -21,6 +21,7 @@ import (
 // InteractiveOptions configures a provider's foreground terminal session.
 type InteractiveOptions struct {
 	Model         Model
+	Prompt        string
 	SessionID     string
 	Name          string
 	Dir           string
@@ -64,22 +65,40 @@ func interactiveCommand(opts InteractiveOptions, providerID string) (string, []s
 		command = "codex"
 		if providerID == "" {
 			args = []string{"-m", opts.Model.Name, "-C", opts.Dir}
+			if opts.Prompt != "" {
+				args = append(args, opts.Prompt)
+			}
 		} else {
 			args = []string{"resume", providerID, "-m", opts.Model.Name, "-C", opts.Dir}
+			if opts.Prompt != "" {
+				args = append(args, opts.Prompt)
+			}
 		}
 	case "claude":
 		command = "claude"
 		if providerID == "" {
 			args = []string{"--model", opts.Model.Name, "--name", opts.Name, "--session-id", opts.SessionID}
+			if opts.Prompt != "" {
+				args = append(args, "--", opts.Prompt)
+			}
 		} else {
 			args = []string{"--resume", providerID, "--model", opts.Model.Name}
+			if opts.Prompt != "" {
+				args = append(args, "--", opts.Prompt)
+			}
 		}
 	case "agy":
 		command = "agy"
 		if providerID == "" {
 			args = []string{"--model", opts.Model.Name}
+			if opts.Prompt != "" {
+				args = append(args, "--prompt-interactive", opts.Prompt)
+			}
 		} else {
 			args = []string{"--conversation", providerID, "--model", opts.Model.Name}
+			if opts.Prompt != "" {
+				args = append(args, "--prompt-interactive", opts.Prompt)
+			}
 		}
 		if opts.Model.SupportsEffort() && opts.Model.Tier != "" {
 			args = append(args, "--effort", agyEffort(opts.Model.Tier))
