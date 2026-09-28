@@ -37,3 +37,13 @@ pays this cost.
 - Test: the generated instruction lists a `harnez read` call that covers every Index-listed file and `Local.md`;
   missing `Local.md` is not an error.
 - Regenerate managed blocks via `harnez init -d .`; check one agent session loads rules in one call.
+
+## 4. Delivery
+
+M1 (batched rule-read instruction) delivered in 70cb5ec9.
+
+### M2 — Pre-Work / Required Refinements
+- Host check: `harnez read <existing> /nonexistent/Local.md` exits 1, prints no content and dumps usage.
+  `Local.md` is git-excluded, so fresh clones break the one-call instruction. With several files,
+  `harnez read` must print every readable file, note each missing one on stderr (one line, no usage
+  dump), and still exit 0 when at least one file was read. Add a test.
