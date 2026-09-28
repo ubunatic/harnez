@@ -88,6 +88,38 @@ func TestReadCompressionCLIAndExplicitText(t *testing.T) {
 	}
 }
 
+func TestReadMultipleFilesKeepsReadableFilesWhenOneIsMissing(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.txt")
+	last := filepath.Join(dir, "last.txt")
+	missing := filepath.Join(dir, "missing.txt")
+	for path, content := range map[string]string{first: "first content\n", last: "last content\n"} {
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := newReadCmd()
+	var out, stderr bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{first, missing, last})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("partial multi-file read failed: %v", err)
+	}
+	for _, want := range []string{"first content", "last content"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("stdout missing %q: %s", want, out.String())
+		}
+	}
+	lines := strings.Split(strings.TrimSpace(stderr.String()), "\n")
+	if len(lines) != 1 || !strings.Contains(lines[0], "missing.txt") {
+		t.Errorf("stderr should report the missing file on one line: %q", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "Usage:") || strings.Contains(out.String(), "Usage:") {
+		t.Errorf("partial success unexpectedly printed usage: stdout=%q stderr=%q", out.String(), stderr.String())
+	}
+}
+
 func TestReadHookNativeProtocolAndRepeat(t *testing.T) {
 	enforceRead := true
 	dir := t.TempDir()

@@ -74,7 +74,12 @@ Examples:
 					res, err = readcard.ReadFile(file, textOpts)
 				}
 				if err != nil {
-					return err
+					if len(paths) == 1 {
+						return err
+					}
+					message := strings.ReplaceAll(strings.ReplaceAll(err.Error(), "\n", " "), "\r", " ")
+					fmt.Fprintf(cmd.ErrOrStderr(), "harnez read: %s: %s\n", file, message)
+					continue
 				}
 				originalStats := res.TokenStats
 				if compression != "off" {
@@ -141,6 +146,9 @@ Examples:
 						}
 					}
 				}
+			}
+			if len(results) == 0 {
+				return fmt.Errorf("harnez read: no input files could be read")
 			}
 			if jsonOutput {
 				enc := json.NewEncoder(cmd.OutOrStdout())
