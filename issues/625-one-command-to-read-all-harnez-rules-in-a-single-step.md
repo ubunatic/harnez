@@ -22,11 +22,10 @@ pays this cost.
 ## 2. Technical Specification / Findings
 
 - `harnez read` already accepts several files and prints a `=== <path> (N lines) ===` header before
-  each, so the mechanics exist. What's missing is a single entry point that knows the file set and
-  order, and an instruction that points agents to it.
+  each, so the mechanics exist. What's missing is an instruction that points agents to it.
 - Decision (user, 2026-09-28): no new command. Reuse `harnez read` with several files. The generated
-  instruction gives the exact one-liner, e.g. `harnez read .harnez/rules/*.md` (Index order, then
-  `Local.md`), which also teaches agents batch reading of whole files in general.
+  instruction gives the exact one-liner, listing the files explicitly in Index order, then `Local.md` (a `*.md` glob would
+  sort alphabetically and include `Index.md`), which also teaches agents batch reading of whole files in general.
 - Check the current `=== <path> ===` header and each file's single `# ` title are enough as
   separators; only change the header format if agents mis-attribute rules.
 - Update the generated instruction line ("read `.harnez/rules/Index.md`, then `Local.md`") in the
