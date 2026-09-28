@@ -1,4 +1,4 @@
-**Before any work, read `.harnez/rules/Index.md` if it exists, then `.harnez/rules/Local.md`; they are part of this file. Local.md overrides both.**
+**Before any work, read all Harnez rules in one call: `harnez read .harnez/rules/Tools.md .harnez/rules/Issues.md .harnez/rules/Quota.md .harnez/rules/Subagents.md .harnez/rules/Output.md .harnez/rules/Local.md`. This follows Index.md order; Local.md overrides the other rules.**
 
 <!-- Keep this file token-efficient: use bullet lists, not tables; no redundant prose. -->
 <!-- AGENTS.md is the canonical source; CLAUDE.md is a symlink to it. Edit AGENTS.md only. -->

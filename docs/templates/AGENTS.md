@@ -1,5 +1,3 @@
-**Before any work, read `.harnez/rules/Index.md` if it exists, then `.harnez/rules/Local.md`; they are part of this file. Local.md overrides both.**
-
 Adhere to the following conventions.
 
 <!-- harnez:begin Project Summary -->

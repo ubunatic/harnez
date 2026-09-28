@@ -36,6 +36,10 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 	if !strings.HasPrefix(string(agents), cfg.AgentsMD.Rules.Header+"\n\n") {
 		t.Fatalf("AGENTS.md missing rules header:\n%s", agents)
 	}
+	wantRead := "harnez read .harnez/rules/Tools.md .harnez/rules/Issues.md .harnez/rules/Quota.md .harnez/rules/Subagents.md .harnez/rules/Output.md .harnez/rules/Local.md"
+	if !strings.Contains(cfg.AgentsMD.Rules.Header, wantRead) || !strings.Contains(string(agents), wantRead) {
+		t.Fatalf("generated instruction must read Index-listed rules then Local.md in one call; got header %q", cfg.AgentsMD.Rules.Header)
+	}
 	for _, name := range []string{"Index.md", "Tools.md", "Issues.md", "Subagents.md", "Output.md"} {
 		if _, err := os.Stat(filepath.Join(dir, ".harnez", "rules", name)); err != nil {
 			t.Errorf("missing generated rule %s: %v", name, err)
@@ -43,6 +47,10 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Quota.md")); !os.IsNotExist(err) {
 		t.Errorf("Quota.md exists without Quota-1 opt-in: %v", err)
+	}
+	// The instruction remains valid when the optional per-checkout rules file is absent.
+	if _, err := os.Stat(filepath.Join(dir, ".harnez", "rules", "Local.md")); !os.IsNotExist(err) {
+		t.Errorf("Local.md unexpectedly exists in a fresh init: %v", err)
 	}
 	exclude, err := os.ReadFile(filepath.Join(dir, ".git", "info", "exclude"))
 	if err != nil {
