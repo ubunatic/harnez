@@ -23,7 +23,9 @@ type interactiveStartRequest struct {
 	Prompt, Name, ModelSpec, Dir, Role string
 }
 
-type interactiveResumeRequest struct{ Name, Prompt string }
+type interactiveResumeRequest struct {
+	Name, Prompt, Dir string
+}
 
 func validateInteractiveFlags(cmd *cobra.Command, detached, jsonOut bool, stream string, timeout time.Duration, worker bool) error {
 	if detached {
@@ -114,9 +116,27 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 	if err != nil {
 		return err
 	}
-	sess, err := d.find(cmd, store, req.Name)
-	if err != nil {
-		return err
+	var sess *subagent.Session
+	if req.Name != "" {
+		sess, err = d.find(cmd, store, req.Name)
+		if err != nil {
+			return err
+		}
+	} else {
+		sessions, listErr := store.List("", true)
+		if listErr != nil {
+			return listErr
+		}
+		candidates := attributable(sessions, req.Dir, d.parent())
+		for _, candidate := range candidates {
+			if candidate.ProviderSessionID != "" {
+				sess = candidate
+				break
+			}
+		}
+		if sess == nil {
+			return fmt.Errorf("no resumable agent with a provider session ID in %s", req.Dir)
+		}
 	}
 	if !subagent.CanManage(d.parent(), sess) {
 		return fmt.Errorf("session %q is outside caller lineage", sess.ID)
@@ -128,9 +148,13 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 		return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)
 	}
 	if sess.HarnessType == "interactive" && sess.Status == "active" {
-		return fmt.Errorf("session %q is already active interactively", sess.Name)
+		if sess.ProcessPID > 0 && processExists(sess.ProcessPID) {
+			return fmt.Errorf("session %q is already active interactively", sess.Name)
+		}
+		sess.Status = "failed"
 	}
 	sess.Status = "active"
+	sess.ProcessPID = 0
 	sess.ControlSocket = filepath.Join(d.storeDir, sess.ID+".sock")
 	sess.LastActiveAt = time.Now()
 	if err := store.Save(sess); err != nil {
@@ -145,6 +169,16 @@ func interactiveOptions(cmd *cobra.Command, store *subagent.FileSessionStore, se
 	return subagent.InteractiveOptions{Model: subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, Prompt: prompt, SessionID: sess.ID, Name: sess.Name, Dir: sess.WorkingDir, Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), ControlSocket: filepath.Join(storeDir, sess.ID+".sock"), Started: func(pid int) error {
 		sess.ProcessPID = pid
 		return store.Save(sess)
+	}, ProviderIDFound: func(providerID string) error {
+		current, err := store.Get(sess.ID)
+		if err != nil {
+			return err
+		}
+		if current.ProviderSessionID == providerID {
+			return nil
+		}
+		current.ProviderSessionID = providerID
+		return store.Save(current)
 	}}
 }
 

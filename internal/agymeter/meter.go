@@ -78,30 +78,39 @@ func RunWithEnv(ctx context.Context, home, command string, args, environ []strin
 
 // RunWithEnvDir is RunWithEnv with an explicit child working directory.
 func RunWithEnvDir(ctx context.Context, home, command string, args, environ []string, dir string, stdin io.Reader, stdout, stderr io.Writer) error {
+	return RunWithEnvDirRunner(ctx, home, command, args, environ, dir, stderr, func(env []string) error {
+		return runChild(ctx, command, args, env, dir, stdin, stdout, stderr)
+	})
+}
+
+// RunWithEnvDirRunner prepares the metering environment and delegates child
+// startup to run. This lets callers that own a PTY preserve terminal
+// semantics while keeping the meter alive for the provider process lifetime.
+func RunWithEnvDirRunner(ctx context.Context, home, command string, args, environ []string, dir string, stderr io.Writer, run func([]string) error) error {
 	env := append([]string(nil), environ...)
 	sessionID := envValue(env, "HARNEZ_SESSION_ID")
 	promptID, idErr := newPromptID()
 	if idErr != nil {
 		fmt.Fprintln(stderr, "harnez-agy: metering ID unavailable; starting agy without metering")
-		return runChild(ctx, command, args, env, dir, stdin, stdout, stderr)
+		return run(env)
 	}
 	m, err := newMeter(home, sessionID, promptID)
 	if err != nil {
 		fmt.Fprintln(stderr, "harnez-agy: metering proxy unavailable; starting agy without metering")
-		return runChild(ctx, command, args, env, dir, stdin, stdout, stderr)
+		return run(env)
 	}
 	defer m.Close()
 	bundle, err := m.Bundle()
 	if err != nil {
 		_ = m.Close()
 		fmt.Fprintln(stderr, "harnez-agy: metering proxy unavailable; starting agy without metering")
-		return runChild(ctx, command, args, env, dir, stdin, stdout, stderr)
+		return run(env)
 	}
 	go m.Serve()
 	env = setEnv(env, "HTTPS_PROXY", m.URL())
 	env = setEnv(env, "https_proxy", m.URL())
 	env = setEnv(env, "SSL_CERT_FILE", bundle)
-	return runChild(ctx, command, args, env, dir, stdin, stdout, stderr)
+	return run(env)
 }
 func runChild(ctx context.Context, name string, args, env []string, dir string, in io.Reader, out, errout io.Writer) error {
 	c := exec.Command(name, args...)

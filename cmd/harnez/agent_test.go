@@ -990,6 +990,54 @@ func TestAgentInteractiveRegistersBeforeLaunchAndTransitions(t *testing.T) {
 	}
 }
 
+func TestAgentInteractiveResumeDefaultsToLatestInDirectory(t *testing.T) {
+	old := agentInteractiveRunner
+	storeDir := t.TempDir()
+	runner := &recordingInteractiveRunner{storeDir: storeDir}
+	agentInteractiveRunner = runner
+	defer func() { agentInteractiveRunner = old }()
+	dir := t.TempDir()
+	store, _ := subagent.NewSessionStore(storeDir)
+	for _, sess := range []*subagent.Session{
+		{ID: "old", Name: "old-session", ProviderSessionID: "old-provider", Provider: "agy", Model: "gemini-3.7-flash", WorkingDir: dir, HarnessType: "interactive", Status: "completed", LastActiveAt: time.Now().Add(-time.Minute)},
+		{ID: "new", Name: "new-session", ProviderSessionID: "new-provider", Provider: "agy", Model: "gemini-3.7-flash", WorkingDir: dir, HarnessType: "interactive", Status: "active", ProcessPID: 99999999, LastActiveAt: time.Now()},
+	} {
+		if err := store.Save(sess); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"resume", "-i", "-d", dir, "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if runner.attachID != "new-provider" {
+		t.Fatalf("attached provider ID = %q, want new-provider", runner.attachID)
+	}
+}
+
+func TestInteractiveProviderIDIsPersistedDuringRun(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &subagent.Session{ID: "session", Name: "session", Provider: "codex", Model: "gpt-5.6-luna", HarnessType: "interactive", Status: "active"}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	opts := interactiveOptions(newAgentCmd(), store, sess, storeDir, "")
+	if err := opts.ProviderIDFound("codex-thread"); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Get(sess.ID)
+	if err != nil || loaded.ProviderSessionID != "codex-thread" {
+		t.Fatalf("stored provider session ID = %#v, %v", loaded, err)
+	}
+}
+
 func TestAgentInteractivePromptAndFlagConflicts(t *testing.T) {
 	old := agentInteractiveRunner
 	storeDir := t.TempDir()

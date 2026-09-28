@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,38 @@ func TestAgyInteractiveLaunchEnvironmentInstallsShimAndSetsPath(t *testing.T) {
 	}
 	if string(shim) != claude.BashShimContent {
 		t.Fatalf("installed shim content does not match managed bash shim")
+	}
+}
+
+func TestInteractiveAgyUsesMeterEnvironmentThroughPTY(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	agy := filepath.Join(bin, "agy")
+	if err := os.WriteFile(agy, []byte("#!/bin/sh\nprintf '%s\\n' \"$HARNEZ_SESSION_ID\" \"$HARNEZ_AGY_METER_SESSION_ID\" \"$ANTIGRAVITY_AGENT\" \"$HTTPS_PROXY\" \"$SSL_CERT_FILE\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+"/usr/bin:/bin")
+	var stdout bytes.Buffer
+	opts := InteractiveOptions{
+		Model:         Model{Provider: "agy", Name: "gemini-3.7-flash"},
+		SessionID:     "harnez-session",
+		Dir:           home,
+		Stdin:         bytes.NewBuffer(nil),
+		Stdout:        &stdout,
+		Stderr:        &bytes.Buffer{},
+		ControlSocket: filepath.Join(home, "control.sock"),
+	}
+	if err := runInteractiveCommand(context.Background(), "agy", nil, opts); err != nil {
+		t.Fatalf("run interactive agy: %v", err)
+	}
+	for _, want := range []string{"harnez-session", "1", "http://127.0.0.1:", ".harnez/agymeter/roots.pem"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("PTY output %q does not contain %q", stdout.String(), want)
+		}
 	}
 }
 

@@ -363,10 +363,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			if err := validateInteractiveFlags(cmd, false, jsonOut, streamMode, agentTimeout, resumeWorkerID != ""); err != nil {
 				return err
 			}
-			if continueResume || name == "" {
-				return fmt.Errorf("resume -i requires --name <session>")
-			}
-			return runInteractiveResume(cmd, interactiveDeps{store: store, parent: parent, find: find, storeDir: storeDir}, interactiveResumeRequest{Name: name, Prompt: prompt})
+			return runInteractiveResume(cmd, interactiveDeps{store: store, parent: parent, find: find, storeDir: storeDir}, interactiveResumeRequest{Name: name, Prompt: prompt, Dir: workDir})
 		}
 		if resumeWorkerID != "" {
 			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: true, PlanFirst: planFirst}, storeDir)

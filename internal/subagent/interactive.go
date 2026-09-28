@@ -15,21 +15,23 @@ import (
 
 	"github.com/creack/pty"
 	"golang.org/x/term"
+	"ubunatic.com/harnez/internal/agymeter"
 	"ubunatic.com/harnez/internal/claude"
 )
 
 // InteractiveOptions configures a provider's foreground terminal session.
 type InteractiveOptions struct {
-	Model         Model
-	Prompt        string
-	SessionID     string
-	Name          string
-	Dir           string
-	Stdin         io.Reader
-	Stdout        io.Writer
-	Stderr        io.Writer
-	ControlSocket string
-	Started       func(int) error
+	Model           Model
+	Prompt          string
+	SessionID       string
+	Name            string
+	Dir             string
+	Stdin           io.Reader
+	Stdout          io.Writer
+	Stderr          io.Writer
+	ControlSocket   string
+	Started         func(int) error
+	ProviderIDFound func(string) error
 }
 
 // InteractiveRunner launches or attaches to provider terminal sessions.
@@ -110,17 +112,38 @@ func interactiveCommand(opts InteractiveOptions, providerID string) (string, []s
 }
 
 func runInteractiveCommand(ctx context.Context, command string, args []string, opts InteractiveOptions) error {
-	cmd := exec.CommandContext(ctx, command, args...)
-	cmd.Dir = opts.Dir
-	if command == "agy" {
-		home, err := os.UserHomeDir()
+	environ := os.Environ()
+	var home string
+	if command == "agy" || command == "codex" {
+		var err error
+		home, err = os.UserHomeDir()
 		if err != nil {
-			return fmt.Errorf("agy: resolve home directory: %w", err)
+			return fmt.Errorf("%s: resolve home directory: %w", command, err)
 		}
-		cmd.Env, err = agyInteractiveLaunchEnv(os.Environ(), home)
+	}
+	if command == "agy" {
+		var err error
+		environ, err = agyInteractiveLaunchEnv(environ, home)
 		if err != nil {
 			return err
 		}
+		environ = replaceEnvironmentValue(environ, "HARNEZ_SESSION_ID", opts.SessionID)
+		environ = replaceEnvironmentValue(environ, "HARNEZ_AGY_METER_SESSION_ID", opts.SessionID)
+	}
+	runPTY := func(env []string) error {
+		return runInteractivePTY(ctx, command, args, opts, env, home)
+	}
+	if command == "agy" {
+		return agymeter.RunWithEnvDirRunner(ctx, home, command, args, environ, opts.Dir, opts.Stderr, runPTY)
+	}
+	return runPTY(nil)
+}
+
+func runInteractivePTY(ctx context.Context, command string, args []string, opts InteractiveOptions, environ []string, home string) error {
+	cmd := exec.CommandContext(ctx, command, args...)
+	cmd.Dir = opts.Dir
+	if environ != nil {
+		cmd.Env = environ
 	}
 	listener, err := listenControl(opts.ControlSocket)
 	if err != nil {
@@ -142,6 +165,21 @@ func runInteractiveCommand(ctx context.Context, command string, args []string, o
 			return err
 		}
 	}
+	watchCtx, stopWatch := context.WithCancel(ctx)
+	watchDone := make(chan struct{})
+	if opts.ProviderIDFound != nil && (command == "codex" || command == "agy") {
+		started := time.Now()
+		go func() {
+			defer close(watchDone)
+			watchInteractiveProviderID(watchCtx, command, home, cmd.Process.Pid, opts.Dir, started, opts.ProviderIDFound)
+		}()
+	} else {
+		close(watchDone)
+	}
+	defer func() {
+		stopWatch()
+		<-watchDone
+	}()
 	var restore func()
 	if input, ok := opts.Stdin.(*os.File); ok && term.IsTerminal(int(input.Fd())) {
 		if state, rawErr := term.MakeRaw(int(input.Fd())); rawErr == nil {
@@ -164,6 +202,30 @@ func runInteractiveCommand(ctx context.Context, command string, args []string, o
 		return fmt.Errorf("%s interactive session: %w", command, err)
 	}
 	return nil
+}
+
+func watchInteractiveProviderID(ctx context.Context, command, home string, pid int, dir string, started time.Time, found func(string) error) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		var id string
+		switch command {
+		case "codex":
+			id = findCodexInteractiveSessionID(home, pid, dir, started)
+		case "agy":
+			id = findAgyInteractiveSessionID(home, "/proc", pid)
+		}
+		if id != "" {
+			if err := found(id); err == nil {
+				return
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 func agyInteractiveLaunchEnv(environ []string, home string) ([]string, error) {
