@@ -618,3 +618,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 617 | [617-create-respect-skill-for-spec-driven-implementation.md](617-create-respect-skill-for-spec-driven-implementation.md) | Create /respect skill for spec-driven implementation | Open |
 | 618 | [618-prevent-stale-embedded-specs-when-go-packages-are-separated-from-canonical-specs.md](618-prevent-stale-embedded-specs-when-go-packages-are-separated-from-canonical-specs.md) | Prevent stale embedded specs when Go packages are separated from canonical specs | Open |
 | 619 | [619-explore-phantom-looper-concepts-for-harnez.md](619-explore-phantom-looper-concepts-for-harnez.md) | Explore Phantom Looper concepts for Harnez | Open |
+| 620 | [620-replace-agent-chat-with-start-and-resume-interactive.md](620-replace-agent-chat-with-start-and-resume-interactive.md) | Replace agent chat with start and resume --interactive | Open |
