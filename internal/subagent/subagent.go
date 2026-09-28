@@ -188,7 +188,7 @@ Task:
 	return res, nil
 }
 
-const readGuidance = "For files over 100 lines or repeated slices, execute harnez read --auto <file> or harnez read -n -L START:END <file>. Open returned PNG paths with an image tool; a path alone is not an image attachment."
+const readGuidance = "For files over 100 lines or repeated slices, execute harnez read <file> or harnez read -n -L START:END <file>."
 
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)

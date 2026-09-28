@@ -36,6 +36,11 @@ To do:
 - Check installed global docs/rules (`~/.claude`, `~/.codex`, agy) for `--auto`/`-I` advice.
 - Relation to #546 (per-project `-I` recommendation toggle): this ticket is the global default-off.
 
+Finding: `internal/readcard` renderers do not add a `Reading` prefix. `harnez read`
+text mode prints the selected source content directly; explicit image mode prints
+`See @<png>` and the PNG card title is the source filename. The guard text's
+“Reading & Context Discipline” phrase is its policy name, not a read-output prefix.
+
 ## 3. Implementation & Verification Plan
 
 - Tests: `--auto` returns text for claude/codex/gemini profiles; hook and subagent guidance

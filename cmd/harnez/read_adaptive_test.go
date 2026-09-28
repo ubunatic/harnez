@@ -12,36 +12,41 @@ import (
 )
 
 func TestReadAdaptiveOverridesAndStdin(t *testing.T) {
-	t.Setenv("HARNEZ_AGENT_HARNESS", "claude")
-	for _, tc := range []struct {
-		args  []string
-		image bool
-	}{
-		{[]string{"--auto"}, false},
-		{[]string{"--auto", "-I"}, true},
-		{[]string{"--auto", "--text"}, false},
-		{[]string{"--auto", "--raw"}, false},
-		{[]string{"--auto", "-n"}, false},
-		{[]string{"--auto", "--image=false"}, false},
-	} {
-		cmd := newReadCmd()
-		var out bytes.Buffer
-		cmd.SetOut(&out)
-		cmd.SetErr(&out)
-		cmd.SetIn(strings.NewReader("123\n"))
-		args := append(append([]string{}, tc.args...), "--json", "-o", filepath.Join(t.TempDir(), "out.png"))
-		cmd.SetArgs(args)
-		if err := cmd.Execute(); err != nil {
-			t.Fatal(err)
-		}
-		var decoded map[string]any
-		if err := json.Unmarshal(out.Bytes(), &decoded); err != nil {
-			t.Fatal(err)
-		}
-		_, image := decoded["files"]
-		if image != tc.image {
-			t.Errorf("%v: %s", tc.args, out.String())
-		}
+	for _, profile := range []string{"claude", "codex", "gemini"} {
+		t.Run(profile, func(t *testing.T) {
+			t.Setenv("HARNEZ_AGENT_HARNESS", profile)
+			for _, tc := range []struct {
+				args  []string
+				image bool
+			}{
+				{[]string{"--auto"}, false},
+				{[]string{"--auto", "-I"}, true},
+				{[]string{"-I"}, true},
+				{[]string{"--auto", "--text"}, false},
+				{[]string{"--auto", "--raw"}, false},
+				{[]string{"--auto", "-n"}, false},
+				{[]string{"--auto", "--image=false"}, false},
+			} {
+				cmd := newReadCmd()
+				var out bytes.Buffer
+				cmd.SetOut(&out)
+				cmd.SetErr(&out)
+				cmd.SetIn(strings.NewReader("123\n"))
+				args := append(append([]string{}, tc.args...), "--json", "-o", filepath.Join(t.TempDir(), "out.png"))
+				cmd.SetArgs(args)
+				if err := cmd.Execute(); err != nil {
+					t.Fatal(err)
+				}
+				var decoded map[string]any
+				if err := json.Unmarshal(out.Bytes(), &decoded); err != nil {
+					t.Fatal(err)
+				}
+				_, image := decoded["files"]
+				if image != tc.image {
+					t.Errorf("%v: %s", tc.args, out.String())
+				}
+			}
+		})
 	}
 }
 
@@ -141,7 +146,7 @@ func TestSubagentCLIStagesAndLaunches(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "Check output") || !strings.Contains(out.String(), "Concise development rules") || !strings.Contains(out.String(), "harnez read --auto") {
+	if !strings.Contains(out.String(), "Check output") || !strings.Contains(out.String(), "Concise development rules") || !strings.Contains(out.String(), "harnez read <file>") || strings.Contains(out.String(), "--auto") || strings.Contains(out.String(), "PNG") {
 		t.Fatalf("launcher did not receive staged prompt: %s", out.String())
 	}
 }

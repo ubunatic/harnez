@@ -56,11 +56,10 @@ Commands designed for exploratory use in agentic loops or interactive terminals 
 ## Read output selection and compression
 
 `harnez read` reads files or stdin. Text selection (`-L`, `--head`, `--tail`) happens
-before display conversion. `-I` forces PNG output. `--auto` compares the selected
-text's estimated token count with the sum of actual page geometry costs from
-`internal/readcard/tokens.go`. `--text`, `--raw`, and `-n` force text under `--auto`;
-`-I` takes precedence over `-n`. Combining `-I` with `--text` or `--raw` is an error.
-Explicit `--image=false` also disables adaptive image output.
+before display conversion. `-I` forces PNG output. `--auto` is retained as a
+text-only compatibility flag and never selects images. Combining `-I` with
+`--text` or `--raw` is an error. `-n` forces line-numbered text unless `-I` is
+also supplied.
 
 - `--line-numbers=all|off|none|N|every:N` controls image and explicit text gutters.
   Cadences mark the first selected line and original source multiples of N;
@@ -79,11 +78,8 @@ Explicit `--image=false` also disables adaptive image output.
   columns. `--columns=N` changes the maximum. JSON `pages` reports each page's
   dimensions; aggregate token estimates sum those pages rather than assuming
   that the last page is full.
-- Auto mode selects text for micro-snippets (at most five lines and fewer than
-  100 estimated tokens), unknown providers, and local models. Provider detection
-  honors `HARNEZ_AGENT_HARNESS` first, then Claude/Codex/Gemini markers; ambiguous
-  markers choose text. These are approximate provider profiles, not model billing
-  guarantees. See [MultimodalContextDelivery.md](MultimodalContextDelivery.md).
+- Provider detection and token estimates remain available for explicit analysis
+  and benchmarks. They do not affect `harnez read` output selection.
 
 `harnez subagent --doc-mode=auto --task '...' --dir DIR` stages documentation and
 prints JSON. Optional `-- launcher args...` runs the explicit launcher with the

@@ -113,7 +113,7 @@ func TestAutoDocProfilesAndExplicitOverrides(t *testing.T) {
 		if tc.want == subagent.DocModeLite && !strings.Contains(res.Prompt, "Specific rule") {
 			t.Fatal("lite rules missing")
 		}
-		if !strings.Contains(res.Prompt, "harnez read --auto") {
+		if !strings.Contains(res.Prompt, "harnez read <file>") || strings.Contains(res.Prompt, "--auto") || strings.Contains(res.Prompt, "PNG") {
 			t.Fatal("read handoff missing")
 		}
 	}

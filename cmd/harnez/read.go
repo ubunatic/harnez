@@ -19,12 +19,11 @@ func newReadCmd() *cobra.Command {
 	var dot8 dot8State
 	cmd := &cobra.Command{
 		Use:   "read [flags] [files...]",
-		Short: "Read bounded text or dense visual PNG cards with provider-adaptive routing",
+		Short: "Read bounded text or explicitly requested visual PNG cards",
 		Long: `Read files or stdin as text, or PNG context cards with -I.
---auto compares actual page geometry against the active provider's estimated vision
-cost. Unknown/local providers and micro-snippets (<=5 lines, <100 tokens) use text.
-Set HARNEZ_AGENT_HARNESS to claude, codex, or gemini to select a profile.
-Explicit -I forces images; --text, --raw, and -n force text even with --auto.
+--auto is retained as a text-only compatibility flag; it never selects images.
+Use -I explicitly to render PNG context cards.
+Explicit -I forces images; --text and --raw cannot be combined with -I.
 Images pack up to three columns, pruning unused columns and cropping to content.
 
 --line-numbers=all|off|N controls the gutter cadence and preserves source anchors.
@@ -35,7 +34,7 @@ Compression requires complete valid Go/JSON input; source files are never change
 Examples:
   harnez read -n -L 10:50 internal/lint/lint.go
   harnez read -I --line-numbers=10 --compress=ws internal/lint/lint.go
-  harnez read --auto --head=100 internal/lint/lint.go
+  harnez read --head=100 internal/lint/lint.go
   harnez read -I --columns=2 --json source.go`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkDot8Hold(cmd); err != nil {
@@ -54,8 +53,6 @@ Examples:
 			if imageMode && (textMode || rawMode) {
 				return fmt.Errorf("--image cannot be combined with --text or --raw")
 			}
-			explicitText := textMode || rawMode || cmd.Flags().Changed("number")
-			adaptive := autoMode && !imageMode && !explicitText && !cmd.Flags().Changed("image")
 			textOpts := readcard.TextOptions{ShowLineNumbers: number, LineRange: lineRange, Head: head, Tail: tail}
 			var results []any
 			paths := args
@@ -97,16 +94,6 @@ Examples:
 				renderOpts := readcard.RenderOptions{Chrome: chrome, Gutter: gutter, Frame: frame, Meta: meta, Columns: columns, FontName: fontName, FontSize: fontSize, Theme: theme, Wrap: wrapMode, MaxDimension: maxDim, ShowLineNumbers: true, LineNumbers: lineNumbers, SourceLines: res.SourceLines, OutputPath: outputPath, Title: res.SourceFile, StartLine: res.StartLine, SourceTokens: res.TokenStats.TextTokens}
 				applyDot8RenderOptions(&renderOpts, &dot8, dot8Mode)
 				render := imageMode
-				var measured *readcard.RenderResult
-				if adaptive && !(len(res.Lines) <= readcard.MicroSnippetLineThreshold && res.TokenStats.TextTokens < readcard.MicroSnippetTokenThreshold) {
-					renderOpts.MeasureOnly = true
-					measured, err = readcard.RenderFileToCards(renderLines, file, renderOpts)
-					if err != nil {
-						return err
-					}
-					render = readcard.PreferImage(readcard.DetectProvider(os.Getenv), len(res.Lines), measured.TokenStats)
-					renderOpts.MeasureOnly = false
-				}
 				if render {
 					rendered, err := readcard.RenderFileToCards(renderLines, file, renderOpts)
 					if err != nil {
@@ -132,7 +119,7 @@ Examples:
 							fmt.Fprintf(cmd.OutOrStdout(), "=== %s (%d lines) ===\n", res.SourceFile, len(res.Lines))
 						}
 						mode := "off"
-						if number || adaptive {
+						if number {
 							mode = "all"
 						}
 						if cmd.Flags().Changed("line-numbers") {
@@ -167,7 +154,7 @@ Examples:
 		},
 	}
 	cmd.Flags().BoolVarP(&imageMode, "image", "I", false, "force styled PNG output")
-	cmd.Flags().BoolVar(&autoMode, "auto", false, "choose images or text by provider token estimates")
+	cmd.Flags().BoolVar(&autoMode, "auto", false, "compatibility flag; always use text")
 	cmd.Flags().BoolVar(&textMode, "text", false, "force text output")
 	cmd.Flags().BoolVar(&rawMode, "raw", false, "force text without line numbers")
 	cmd.Flags().StringVarP(&outputPath, "out", "o", "", "output PNG file or existing directory")

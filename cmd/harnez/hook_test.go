@@ -709,6 +709,12 @@ func TestRunClaudeReadHook_ReadingDiscipline(t *testing.T) {
 			if resp.HookSpecificOutput.PermissionDecision != tc.wantDecision {
 				t.Errorf("permissionDecision = %q, want %q", resp.HookSpecificOutput.PermissionDecision, tc.wantDecision)
 			}
+			if tc.name == "View large file unbounded deny" {
+				reason := resp.HookSpecificOutput.PermissionDecisionReason
+				if strings.Contains(reason, "--auto") || !strings.Contains(reason, "harnez read -- ") {
+					t.Errorf("redirect should recommend text-only harnez read, got %q", reason)
+				}
+			}
 			if tc.wantInSystem != "" {
 				if !strings.Contains(resp.SystemMessage, tc.wantInSystem) {
 					t.Errorf("systemMessage = %q, want containing %q", resp.SystemMessage, tc.wantInSystem)

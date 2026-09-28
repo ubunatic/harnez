@@ -785,7 +785,7 @@ func repeatedRead(stateDir, session, path string) bool {
 }
 
 func readRedirect(args map[string]any, baseDir string) string {
-	command := "harnez read --auto"
+	command := "harnez read --"
 	rng := extractReadRange(args)
 	if rng.hasRange {
 		start := max(1, rng.startLine)
@@ -793,9 +793,8 @@ func readRedirect(args map[string]any, baseDir string) string {
 		if rng.endLine >= start {
 			end = strconv.Itoa(rng.endLine)
 		}
-		command = "harnez read -n -L " + strconv.Itoa(start) + ":" + end
+		command = "harnez read -n -L " + strconv.Itoa(start) + ":" + end + " --"
 	}
-	command += " --"
 	for _, path := range extractFilePaths(args) {
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(baseDir, path)
