@@ -81,3 +81,5 @@ alternate-screen and redraw logic in Harnez.
 - Existing chat, attach, control-socket, and normal PTY behavior remains intact.
 - Tests or a deterministic PTY-level reproduction cover resize propagation and
   redraw/input-line recovery, including at least one height change.
+
+> **Note (620):** `agent chat` was replaced by `agent start -i` / `agent resume -i`; this bug applies to those paths now.

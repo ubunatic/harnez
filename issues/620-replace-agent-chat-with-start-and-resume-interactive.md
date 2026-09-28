@@ -1,6 +1,6 @@
 # 620 — Replace agent chat with start and resume --interactive
 
-**Status**: Open
+**Status**: Closed — delivered in c8d4f3a: chat removed, start/resume -i with flag conflicts, busy-session refusal, opening prompt (claude, codex, agy --prompt-interactive)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Usability / Agent Orchestration
@@ -47,3 +47,8 @@ Decision (user, 2026-09-28): drop `chat` outright (solo repo, no deprecation ali
   refusal, opening-prompt argument building per provider.
 - Update docs, man page, completion; note the replacement in #439 and #450.
 - `make install`; manual smoke: `start -i`, exit, `resume -i` of an agent-started session.
+
+## 4. Delivery
+
+M1 (single milestone) delivered in c8d4f3a: shared launch/teardown in `cmd/harnez/agent_interactive.go`,
+`chat` removed, `make test` green, `make install` done. The repo has no man-page generator, so no man page was updated.

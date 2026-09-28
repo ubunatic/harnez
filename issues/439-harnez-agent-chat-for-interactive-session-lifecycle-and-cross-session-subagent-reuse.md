@@ -37,3 +37,5 @@ Introduce `harnez agent chat` to launch interactive sessions with registered sho
    - Supports cleanly detaching from an interactive session and reattaching later (`harnez agent chat attach <name-or-id>`).
 5. **Unit & Integration Tests**:
    - Tests verify name generation, registration in session store, CLI argument parsing, and state transitions.
+
+> **Superseded (620):** `agent chat` / `chat attach` were replaced by `agent start -i` / `agent resume -i`.
