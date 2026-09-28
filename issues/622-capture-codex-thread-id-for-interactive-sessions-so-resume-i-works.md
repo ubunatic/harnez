@@ -59,3 +59,19 @@ Error: session "swift-falcon" cannot be resumed: agy did not expose a provider s
 - Record the ID on the session (during run or at teardown) and test it with a fake runner.
 - Manual: in a scratch dir, `harnez agent start -i --model codex…`, exit, then
   `harnez agent resume -i --name <session>` and `harnez agent resume -i` both reopen it.
+
+## 4. Delivery
+
+M1 delivered in 2e9896be: codex ID from `~/.codex/sessions` rollout `session_meta` (cwd + start
+time, narrowed by open fds of the launched PID); agy ID from the `presence/<id>.lock` held by the
+launched PID plus an existing conversation DB; IDs saved during the run; interactive agy runs
+through `agymeter`; `resume -i` without `--name` picks the latest resumable session in `-d`.
+`make test` green, installed.
+
+Open before close:
+- Live round trip not run (the developer role may not start agents). User check: `start -i` with
+  codex and agy, exit, `resume -i`; confirm agy usage appears in metering.
+- Host review note: the codex scan reads the first line of every rollout file ever written;
+  limit it to date dirs from the start day onward if it proves slow.
+- Unverified: whether the PID harnez records is the process holding the lock/rollout (wrappers or
+  the meter as parent). Fallback for codex is a unique cwd+time match; agy has no fallback.
