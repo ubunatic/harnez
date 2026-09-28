@@ -46,6 +46,7 @@ Error: session "swift-falcon" cannot be resumed: agy did not expose a provider s
   (match by cwd and start time), or the `Reconnect: codex resume <id>` line on exit. Pick the
   most robust; do not scrape the TUI stream if a file source exists.
 - agy has the same gap (confirmed, see §1): find where agy exposes the conversation ID for an interactive run and record it; resume uses `--conversation <id>`.
+- Claude `resume -i` is confirmed working by the user; use it as the reference path.
 - Secondary: `resume -i` without `--name` should resume the latest resumable session in `-d`
   (same rule as plain `resume --continue`), instead of erroring.
 

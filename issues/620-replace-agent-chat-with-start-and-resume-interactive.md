@@ -52,3 +52,7 @@ Decision (user, 2026-09-28): drop `chat` outright (solo repo, no deprecation ali
 
 M1 (single milestone) delivered in c8d4f3a: shared launch/teardown in `cmd/harnez/agent_interactive.go`,
 `chat` removed, `make test` green, `make install` done. The repo has no man-page generator, so no man page was updated.
+
+Manual verification (user, 2026-09-28): `start -i` works for agy, codex and claude — slash-command
+menu, a user-invocable skill, and Ctrl+G external editor (nvim on alt screen) all return the cursor
+to the right line. `resume -i` works for claude; codex and agy fail to resume → #622.
