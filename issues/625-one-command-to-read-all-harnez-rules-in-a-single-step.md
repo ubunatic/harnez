@@ -1,6 +1,6 @@
 # 625 — One call to read all .harnez rules in a single step
 
-**Status**: Open
+**Status**: Closed — 70cb5ec9 one-call rule read in generated AGENTS.md; 2f442f7e multi-file read skips missing files
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agent Efficiency / Usability
