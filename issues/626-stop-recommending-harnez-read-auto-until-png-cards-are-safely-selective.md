@@ -1,6 +1,6 @@
 # 626 — Stop recommending harnez read --auto until PNG cards are safely selective
 
-**Status**: Open
+**Status**: Closed — 223e749d: --auto is text-only, hook and subagent guidance recommend plain harnez read; explicit -I still renders PNG
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Agent Efficiency / Reliability
