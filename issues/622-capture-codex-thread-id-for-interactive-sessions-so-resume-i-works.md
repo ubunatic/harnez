@@ -1,0 +1,50 @@
+# 622 — Capture codex thread ID for interactive sessions so resume -i works
+
+**Status**: Open
+**Priority**: P1 (High)
+**Severity**: Major
+**Category**: Bug
+**Related**: #620, #450
+
+---
+
+/goal `harnez agent start -i` with codex stores the codex thread ID, and
+`harnez agent resume -i --name <session>` reopens that thread; verify with a test and a manual
+start/exit/resume round trip; stop and report when blocked on a user decision or denied permission.
+
+## 1. Problem & Motivation
+
+Observed in `~/projects/neus` after #620 (default model is codex):
+
+```text
+$ harnez agent start -i
+Harnez Agent Interactive: quiet-badger (97969b7d-6953-40b6-8f0d-6042ae49f729)
+...
+Reconnect: codex resume 01a0e7a1-07fd-7830-b8b8-b1f0110ca250
+$ harnez agent resume -i
+Error: resume -i requires --name <session>
+$ harnez agent resume -i --name quiet-badger
+Error: session "quiet-badger" cannot be resumed: codex did not expose a provider session ID
+```
+
+Codex knew the thread ID (it printed it) but Harnez never recorded it. `start -i` sets
+`ProviderSessionID` only for claude (`cmd/harnez/agent_interactive.go`, where the harnez ID is
+passed as `--session-id`). Codex (and agy) interactive sessions are therefore never resumable,
+which defeats the main point of #620.
+
+## 2. Technical Specification / Findings
+
+- Codex has no `--session-id` input; the ID must be discovered after launch. Candidate sources
+  (canary first, per `docs/Canary.md`): the codex session files under `~/.codex/sessions/`
+  (match by cwd and start time), or the `Reconnect: codex resume <id>` line on exit. Pick the
+  most robust; do not scrape the TUI stream if a file source exists.
+- Check agy the same way (`--conversation <id>` on resume); fix it too or record why not.
+- Secondary: `resume -i` without `--name` should resume the latest resumable session in `-d`
+  (same rule as plain `resume --continue`), instead of erroring.
+
+## 3. Implementation & Verification Plan
+
+- Canary: confirm where codex exposes the thread ID for an interactive run.
+- Record the ID on the session (during run or at teardown) and test it with a fake runner.
+- Manual: in a scratch dir, `harnez agent start -i --model codex…`, exit, then
+  `harnez agent resume -i --name <session>` and `harnez agent resume -i` both reopen it.
