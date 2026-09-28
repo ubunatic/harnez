@@ -48,6 +48,7 @@ Error: session "swift-falcon" cannot be resumed: agy did not expose a provider s
 - agy has the same gap (confirmed, see §1): find where agy exposes the conversation ID for an interactive run and record it; resume uses `--conversation <id>`.
 - Claude `resume -i` is confirmed working by the user; use it as the reference path.
 - Candidate (user note): codex, agy and claude all have a `/rename` command. A session titled with the harnez name could be found by title in the provider store, or resumed by name if the provider accepts a name on resume (canary: does `codex resume <name>` / agy accept it?). Rename changes only the title, not the ID, and typing into the TUI is fragile, so prefer a file/ID source if one exists.
+- Likely agy ID source (from #612): presence locks `~/.gemini/antigravity-cli/presence/<conversation-id>.lock` and `conversations/<id>.db`.
 - Secondary: `resume -i` without `--name` should resume the latest resumable session in `-d`
   (same rule as plain `resume --continue`), instead of erroring.
 
