@@ -39,3 +39,9 @@ Harnez today auto-generates names like `quiet-badger`, and only claude receives 
 - Canary per provider: how to set the title at launch or later.
 - Implement default name + propagation + rename, with tests using the fake runner.
 - Manual: two `start -i` sessions in different repos, ask one to message the other by name.
+
+## Decision (user, 2026-09-28)
+
+The repo folder name becomes the default session name. Several agents may be open in one folder, so
+when that name is already taken by another session, append `-2`, `-3`, ... (first free suffix).
+An explicit `--name` always wins.

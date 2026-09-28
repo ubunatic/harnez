@@ -1,6 +1,6 @@
 # 622 — Capture codex and agy session IDs for interactive sessions so resume -i works
 
-**Status**: Open
+**Status**: Closed — 2e9896be; user live check 2026-09-28: codex and agy resume -i work
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
