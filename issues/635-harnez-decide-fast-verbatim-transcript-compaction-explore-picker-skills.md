@@ -60,3 +60,8 @@ Directly integrates or adapts the `fast-jev-compaction` strategy:
 4. **Verification**:
    - Test compaction against realistic transcript sessions (verify zero loss of pinned items, valid JSON structure, expected truncation).
    - Test ranking accuracy against test fixtures with known relevant files.
+
+## 4. Note (2026-09-29): external skills are explicit-only
+Since issue 632, external skills run only when the user names them (`docs/ExternalSkills.md`).
+The skill picker must therefore suggest a skill and let the user confirm it, never activate one
+on its own.

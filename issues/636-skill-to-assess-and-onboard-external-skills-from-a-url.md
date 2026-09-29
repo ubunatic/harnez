@@ -34,3 +34,7 @@ Onboarding the Pocock skills (632) was done ad hoc.
 ## 3. Open points
 - Skill name (e.g. `skill-scout`), and whether it is explicit-only.
 - Whether `explore` needs more output (license, last commit date) to support the assessment.
+
+## 4. Note (2026-09-29): harnez decide
+The fit checks (scope, quality, fit for harnez and the repo) could later run as `harnez decide`
+questions (issue 633). The first version uses the normal agent and does not wait for 633.
