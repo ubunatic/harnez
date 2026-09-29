@@ -55,3 +55,16 @@ Pre-work:
   stage it with `git apply --cached <patch>` built from that hunk alone, and check
   `git diff --cached` shows no other hunk before committing. Never `git add config.yaml`.
 - Linux behaviour after `harnez apply` must match today (sound plays, hook returns at once).
+
+M2 delivered (5f8da1be, dev640c): `harnez hook sound` (detached by default, `--sync`), process-group
+kill test. Host check: the hook returns in 21 ms. The config.yaml Stop-hook line landed in parallel
+commit cb60b4fb.
+
+### M3 — fix the two tests broken by the new Stop hook
+Pre-work (host review of M2):
+- `TestAppliedHarnezCommandsResolveOnRoot` (cmd/harnez/statusline_command_test.go:55) fails on
+  `harnez hook sound || true`. The default mode always exits 0, so drop `|| true` from the
+  Stop hook in config.yaml (same one-hunk staging rule as M2) instead of changing the test.
+- `TestApply_FullThenDocsOnly` (internal/claude/components_test.go:224) used the old `ffplay`
+  Stop hook as its "non-harnez hook must survive" example. Keep that assertion; give the test
+  its own non-harnez Stop hook fixture instead of relying on config.yaml.
