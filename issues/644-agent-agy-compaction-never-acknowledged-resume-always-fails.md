@@ -32,3 +32,13 @@ agy compacts its own context automatically; harnez never needed to. Two harnez f
   (non-interactive), since agy auto-compacts.
 - Report agy context size from the last model call if agy's JSON exposes it; otherwise mark it
   unknown instead of the turn total. Check other users of `ContextTokens` (status, telemetry).
+
+## Quick fix (2026-09-30)
+`cmd/harnez/agent_run.go`: resume now skips harnez-driven compaction for agy (like codex), with a
+`TODO(644)` in place. Fault 2 (turn-total `ContextTokens`) is still open.
+
+## TODO: our own compaction for agy via jev
+harnez has a new jev-based compaction that could compact an agy session's data on disk. Canary
+first (docs/Canary.md): does agy accept a resumed session whose on-disk data was compacted, and
+does it save tokens compared with agy's own auto-compaction? Only if both hold, re-enable
+compaction for agy through jev instead of the `/compact` prompt.
