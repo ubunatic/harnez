@@ -41,4 +41,13 @@ external tool needs (node, ffmpeg, playwright, API keys) are invisible.
    copies the whole tree to all targets.
 
 ## 4. Canary Results
-(pending)
+2026-09-29, scroll-craft @ 0b81622, plain `cp -r` of `plugins/nateherk-design/skills/scroll-craft`:
+- Claude Code: listed immediately in the running session (hot reload, no restart).
+- Codex (`codex exec`): lists `scroll-craft` from `~/.codex/skills`.
+- `node scripts/doctor.mjs` works from the installed dir: node, full ffmpeg (545 filters, libwebp)
+  ok; playwright-core, Chrome, `KIE_AI_API_KEY` missing (optional).
+- Finding: the skill's workspace resolves from **cwd**, so running scripts from the install dir
+  creates `scrollcraft/` inside it. Registry (B) must keep install dirs read-only / run from the project.
+- Finding: plugin manifests are not needed for non-Claude agents; the skill dir alone is portable.
+- Gemini/Prime not tested. Canary copies left in place for use; remove with
+  `rm -r ~/.claude/skills/scroll-craft ~/.codex/skills/scroll-craft`.
