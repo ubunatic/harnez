@@ -22,6 +22,9 @@
 Before changing any command's flags or adding project-local behaviour to `apply`, read
 `docs/CLIDesign.md` — the separation is load-bearing and the footgun it prevents is real.
 
+New configurable values (endpoints, timeouts, model names, labels) go in `spec/` with a JSON
+schema, never as Go defaults; read `docs/Spec.md` first.
+
 ## Docs Layout
 
 `docs/*.md` — this project's evergreen docs (architecture, decisions, pitfalls). Not copyable.
