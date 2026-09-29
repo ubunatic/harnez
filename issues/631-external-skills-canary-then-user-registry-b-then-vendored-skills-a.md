@@ -60,3 +60,14 @@ URLs/refs; skips symlinks and `.git`. Reviewer findings 1-10 addressed. E2E veri
 scroll-craft in scratch targets.
 Deferred: "lazy" skills + `skill-finder` skill; remote marketplace search (search is local only).
 Next: step A (vendored skills) and [[632-re-home-mattpocock-derived-skills-as-external-skills-issue-631-registry]].
+
+## 6. Explicit-Only Mode (2026-09-29)
+User requirement: agents must never trigger an external skill on their own; when several could
+fit, the agent lists them and asks. Default install is now explicit-only (`--auto` opts out):
+- Claude copy: `disable-model-invocation: true`. Verified live: hidden from the model's skill
+  list, `/name` still runs it; without the flag it is listed and auto-triggers.
+- Codex copy: `agents/openai.yaml` `policy.allow_implicit_invocation: false`. Verified live:
+  not listed, not triggered; without it, triggered.
+- Gemini, Prime: no copy; `harnez skill show <name>`.
+- Rule "External Skills" in generated `.harnez/rules/Tools.md`: search, list matches, ask.
+Reviewer findings (CRLF/empty frontmatter, shared-dir labels, wording, tests) addressed.

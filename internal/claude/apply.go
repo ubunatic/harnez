@@ -1772,6 +1772,49 @@ func OpenConfig(configPath string) (*Config, string, error) {
 	return cfg, configPath, err
 }
 
-// SkillTargets returns every agent skill directory `apply` installs into.
-// The external skill registry (internal/skillreg) installs into the same set.
-func SkillTargets(cfg *Config) []string { return skillTargets(cfg) }
+// AgentSkillTarget is one agent's skill directory.
+type AgentSkillTarget struct {
+	Agent string // "gemini", "codex", "claude", "prime"
+	Dir   string
+}
+
+// SkillTargetsByAgent returns the same directories as skillTargets, labelled
+// by agent, for the external skill registry (internal/skillreg), which
+// installs differently per agent. When agents share a dir, the claude or
+// codex label wins, so the shared dir still receives an explicit-only copy.
+func SkillTargetsByAgent(cfg *Config) []AgentSkillTarget {
+	home, _ := os.UserHomeDir()
+	pick := func(configured, fallback string) string {
+		if root := fsutil.ExpandHome(configured); root != "" {
+			return root
+		}
+		if fallback != "" && home != "" {
+			return filepath.Join(home, fallback)
+		}
+		return ""
+	}
+	candidates := []AgentSkillTarget{
+		{"gemini", pick(cfg.SkillsTarget, ".gemini/skills")},
+		{"codex", pick(cfg.CodexSkillsTarget, "")},
+		{"claude", pick(cfg.ClaudeSkillsTarget, ".claude/skills")},
+	}
+	if root := primeAgentRoot(cfg); root != "" {
+		candidates = append(candidates, AgentSkillTarget{"prime", filepath.Join(root, "skills")})
+	}
+	var out []AgentSkillTarget
+	index := map[string]int{}
+	for _, c := range candidates {
+		if c.Dir == "" {
+			continue
+		}
+		if i, ok := index[c.Dir]; ok {
+			if c.Agent == "claude" || c.Agent == "codex" {
+				out[i].Agent = c.Agent
+			}
+			continue
+		}
+		index[c.Dir] = len(out)
+		out = append(out, c)
+	}
+	return out
+}

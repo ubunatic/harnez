@@ -6,6 +6,13 @@
 // Plugin extras (hooks, MCP servers, commands, agents) are never installed;
 // Explore reports them so the user sees what was left out.
 //
+// Skills are explicit-only by default: an agent uses one only when the user
+// names it. Claude Code gets `disable-model-invocation: true` in its copy,
+// Codex gets agents/openai.yaml with allow_implicit_invocation: false (both
+// verified 2026-09-29), and agents without such a switch get no copy; they
+// reach the skill through `harnez skill show`. InstallOptions.Auto installs a
+// plain copy everywhere instead.
+//
 // Installed copies carry a MarkerFile so Remove and Install never touch
 // harnez-managed or hand-installed skills of the same name. `harnez apply`
 // only writes its own configured skills and removes only names listed under
@@ -43,7 +50,8 @@ type Entry struct {
 	URL         string    `yaml:"url"`
 	Ref         string    `yaml:"ref,omitempty"` // requested ref; empty means default branch
 	Commit      string    `yaml:"commit"`
-	Path        string    `yaml:"path"` // skill dir relative to the repo root
+	Path        string    `yaml:"path"`           // skill dir relative to the repo root
+	Auto        bool      `yaml:"auto,omitempty"` // agents may trigger it on their own
 	Installed   time.Time `yaml:"installed"`
 }
 
@@ -54,7 +62,19 @@ type registryFile struct {
 // Registry is the on-disk state under Root: registry.yaml plus src/ clones.
 type Registry struct {
 	Root    string   // e.g. ~/.harnez/skills
-	Targets []string // agent skill directories
+	Targets []Target // agent skill directories
+}
+
+// Target is one agent's skill directory. Agent selects how an explicit-only
+// skill is installed there: "claude", "codex", or anything else (no copy).
+type Target struct {
+	Agent string
+	Dir   string
+}
+
+// receives reports whether t gets a copy of a skill in the given mode.
+func (t Target) receives(auto bool) bool {
+	return auto || t.Agent == "claude" || t.Agent == "codex"
 }
 
 // Skill is a SKILL.md found in a repository.
@@ -142,6 +162,7 @@ type InstallOptions struct {
 	Ref  string
 	Path string // skill dir inside the repo; needed when the repo has several
 	Name string // alternative selector: the skill's frontmatter name
+	Auto bool   // let agents trigger the skill on their own
 }
 
 // Install clones, pins, and copies one skill into every target.
@@ -167,9 +188,13 @@ func (r *Registry) Install(opts InstallOptions) (Entry, error) {
 	if !validName.MatchString(skill.Name) || strings.Contains(skill.Name, "..") {
 		return Entry{}, fmt.Errorf("skill name %q is not a safe directory name", skill.Name)
 	}
+	var targets []Target // targets that receive a copy
 	for _, t := range r.Targets {
-		if err := checkTarget(filepath.Join(t, skill.Name)); err != nil {
+		if err := checkTarget(filepath.Join(t.Dir, skill.Name)); err != nil {
 			return Entry{}, err
+		}
+		if t.receives(opts.Auto) {
+			targets = append(targets, t)
 		}
 	}
 
@@ -189,7 +214,7 @@ func (r *Registry) Install(opts InstallOptions) (Entry, error) {
 
 	entry := Entry{
 		Name: skill.Name, Description: skill.Description,
-		URL: opts.URL, Ref: opts.Ref, Commit: commit, Path: skill.Path,
+		URL: opts.URL, Ref: opts.Ref, Commit: commit, Path: skill.Path, Auto: opts.Auto,
 		Installed: time.Now().UTC().Truncate(time.Second),
 	}
 	// Stage every copy (with its marker) beside its target first, so a
@@ -201,8 +226,8 @@ func (r *Registry) Install(opts InstallOptions) (Entry, error) {
 			_ = os.RemoveAll(st)
 		}
 	}()
-	for _, t := range r.Targets {
-		st := filepath.Join(t, "."+skill.Name+".harnez-staging")
+	for _, t := range targets {
+		st := filepath.Join(t.Dir, "."+skill.Name+".harnez-staging")
 		staged = append(staged, st)
 		if err := os.RemoveAll(st); err != nil {
 			return Entry{}, err
@@ -216,6 +241,11 @@ func (r *Registry) Install(opts InstallOptions) (Entry, error) {
 		if err := copyTree(filepath.Join(clone, skill.Path), st); err != nil {
 			return Entry{}, err
 		}
+		if !opts.Auto {
+			if err := makeExplicit(t.Agent, st); err != nil {
+				return Entry{}, err
+			}
+		}
 	}
 	src := r.SrcDir(skill.Name, commit)
 	if err := os.RemoveAll(src); err != nil {
@@ -227,12 +257,14 @@ func (r *Registry) Install(opts InstallOptions) (Entry, error) {
 	if err := os.Rename(clone, src); err != nil {
 		return Entry{}, err
 	}
-	for i, t := range r.Targets {
-		dst := filepath.Join(t, skill.Name)
-		if err := os.RemoveAll(dst); err != nil {
+	for _, t := range r.Targets {
+		// checkTarget above guarantees any existing dir is ours.
+		if err := os.RemoveAll(filepath.Join(t.Dir, skill.Name)); err != nil {
 			return Entry{}, err
 		}
-		if err := os.Rename(staged[i], dst); err != nil {
+	}
+	for i, t := range targets {
+		if err := os.Rename(staged[i], filepath.Join(t.Dir, skill.Name)); err != nil {
 			return Entry{}, err
 		}
 	}
@@ -253,7 +285,7 @@ func (r *Registry) Update(name string) (before, after Entry, err error) {
 	if !ok {
 		return Entry{}, Entry{}, fmt.Errorf("skill %q is not an installed external skill", name)
 	}
-	after, err = r.Install(InstallOptions{URL: e.URL, Ref: e.Ref, Path: e.Path, Name: e.Name})
+	after, err = r.Install(InstallOptions{URL: e.URL, Ref: e.Ref, Path: e.Path, Name: e.Name, Auto: e.Auto})
 	return e, after, err
 }
 
@@ -268,7 +300,7 @@ func (r *Registry) Remove(name string) error {
 		return fmt.Errorf("skill %q is not an installed external skill", name)
 	}
 	for _, t := range r.Targets {
-		dst := filepath.Join(t, name)
+		dst := filepath.Join(t.Dir, name)
 		if _, err := os.Stat(filepath.Join(dst, MarkerFile)); err == nil {
 			if err := os.RemoveAll(dst); err != nil {
 				return err
@@ -526,13 +558,81 @@ func pickSkill(skills []Skill, path, name string) (Skill, error) {
 	return Skill{}, fmt.Errorf("repository has several skills, pick one with --skill or --path: %s", strings.Join(names, ", "))
 }
 
+// makeExplicit switches off implicit use in an agent's copy of a skill.
+func makeExplicit(agent, dir string) error {
+	switch agent {
+	case "claude":
+		path := filepath.Join(dir, "SKILL.md")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(path, disableModelInvocation(data), 0o644)
+	case "codex":
+		path := filepath.Join(dir, "agents", "openai.yaml")
+		doc := map[string]any{}
+		if data, err := os.ReadFile(path); err == nil {
+			if err := yaml.Unmarshal(data, &doc); err != nil {
+				return fmt.Errorf("%s: %w", path, err)
+			}
+			if doc == nil {
+				doc = map[string]any{}
+			}
+		}
+		policy, _ := doc["policy"].(map[string]any)
+		if policy == nil {
+			policy = map[string]any{}
+		}
+		policy["allow_implicit_invocation"] = false
+		doc["policy"] = policy
+		out, err := yaml.Marshal(doc)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(path, out, 0o644)
+	}
+	return nil
+}
+
+// disableModelInvocation sets `disable-model-invocation: true` in the
+// SKILL.md frontmatter, adding a frontmatter block if there is none. It
+// matches whole `---` lines and normalises CRLF to LF.
+func disableModelInvocation(data []byte) []byte {
+	const key = "disable-model-invocation:"
+	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+	end := -1
+	if len(lines) > 0 && lines[0] == "---" {
+		for i := 1; i < len(lines); i++ {
+			if strings.TrimRight(lines[i], " \t") == "---" {
+				end = i
+				break
+			}
+		}
+	}
+	if end < 0 {
+		return []byte("---\n" + key + " true\n---\n" + strings.Join(lines, "\n"))
+	}
+	out := []string{"---"}
+	for _, l := range lines[1:end] {
+		if !strings.HasPrefix(l, key) {
+			out = append(out, l)
+		}
+	}
+	out = append(out, key+" true")
+	out = append(out, lines[end:]...)
+	return []byte(strings.Join(out, "\n"))
+}
+
 // checkTarget refuses to overwrite a skill that the registry did not install.
 func checkTarget(dst string) error {
 	if _, err := os.Stat(dst); errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
 	if _, err := os.Stat(filepath.Join(dst, MarkerFile)); err != nil {
-		return fmt.Errorf("%s exists and is not an external skill; refusing to overwrite", dst)
+		return fmt.Errorf("%s exists and is not an external skill; refusing to install (remove or rename it first; install checks every agent dir, even ones that get no copy)", dst)
 	}
 	return nil
 }

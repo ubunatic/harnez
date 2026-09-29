@@ -53,8 +53,12 @@ func run(t *testing.T, dir string, args ...string) {
 func newReg(t *testing.T) *Registry {
 	root := t.TempDir()
 	return &Registry{
-		Root:    filepath.Join(root, "reg"),
-		Targets: []string{filepath.Join(root, "claude"), filepath.Join(root, "codex")},
+		Root: filepath.Join(root, "reg"),
+		Targets: []Target{
+			{Agent: "claude", Dir: filepath.Join(root, "claude")},
+			{Agent: "codex", Dir: filepath.Join(root, "codex")},
+			{Agent: "gemini", Dir: filepath.Join(root, "gemini")},
+		},
 	}
 }
 
@@ -90,8 +94,8 @@ func TestInstallCopiesOnlySkillDirToAllTargets(t *testing.T) {
 	if e.Path != "plugins/p/skills/alpha" || len(e.Commit) != 40 {
 		t.Fatalf("unexpected entry %+v", e)
 	}
-	for _, target := range reg.Targets {
-		dir := filepath.Join(target, "alpha")
+	for _, target := range reg.Targets[:2] {
+		dir := filepath.Join(target.Dir, "alpha")
 		for _, f := range []string{"SKILL.md", "scripts/doctor.mjs", MarkerFile} {
 			if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 				t.Errorf("%s missing: %v", f, err)
@@ -101,7 +105,7 @@ func TestInstallCopiesOnlySkillDirToAllTargets(t *testing.T) {
 		if err != nil || info.Mode().Perm()&0o100 == 0 {
 			t.Errorf("run.sh lost its exec bit: %v %v", info, err)
 		}
-		if _, err := os.Stat(filepath.Join(target, "beta")); err == nil {
+		if _, err := os.Stat(filepath.Join(target.Dir, "beta")); err == nil {
 			t.Error("sibling skill beta was installed")
 		}
 		if _, err := os.Stat(filepath.Join(dir, "hooks")); err == nil {
@@ -116,14 +120,14 @@ func TestInstallCopiesOnlySkillDirToAllTargets(t *testing.T) {
 
 func TestInstallRefusesForeignSkill(t *testing.T) {
 	reg := newReg(t)
-	foreign := filepath.Join(reg.Targets[1], "alpha")
+	foreign := filepath.Join(reg.Targets[1].Dir, "alpha")
 	if err := os.MkdirAll(foreign, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := reg.Install(InstallOptions{URL: fixtureRepo(t), Name: "alpha"}); err == nil {
 		t.Fatal("overwrote a skill without marker")
 	}
-	if _, err := os.Stat(filepath.Join(reg.Targets[0], "alpha")); err == nil {
+	if _, err := os.Stat(filepath.Join(reg.Targets[0].Dir, "alpha")); err == nil {
 		t.Error("partial install happened before the refusal")
 	}
 }
@@ -150,7 +154,7 @@ func TestUpdatePicksUpNewCommitAndDropsOldCache(t *testing.T) {
 	if _, err := os.Stat(reg.SrcDir("alpha", first.Commit)); err == nil {
 		t.Error("old cache kept")
 	}
-	data, _ := os.ReadFile(filepath.Join(reg.Targets[0], "alpha", "SKILL.md"))
+	data, _ := os.ReadFile(filepath.Join(reg.Targets[0].Dir, "alpha", "SKILL.md"))
 	if !strings.Contains(string(data), "v2") {
 		t.Error("installed copy not updated")
 	}
@@ -180,14 +184,14 @@ func TestRemoveKeepsForeignCopies(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Simulate a user replacing one copy by hand: no marker, must survive.
-	foreign := filepath.Join(reg.Targets[1], "alpha")
+	foreign := filepath.Join(reg.Targets[1].Dir, "alpha")
 	if err := os.Remove(filepath.Join(foreign, MarkerFile)); err != nil {
 		t.Fatal(err)
 	}
 	if err := reg.Remove("alpha"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(reg.Targets[0], "alpha")); err == nil {
+	if _, err := os.Stat(filepath.Join(reg.Targets[0].Dir, "alpha")); err == nil {
 		t.Error("marked copy not removed")
 	}
 	if _, err := os.Stat(foreign); err != nil {
@@ -262,7 +266,7 @@ func TestInstallRejectsUnsafeSkillName(t *testing.T) {
 		if _, err := os.Stat(filepath.Dir(reg.Root)); err == nil {
 			entries, _ := os.ReadDir(filepath.Dir(reg.Root))
 			for _, e := range entries {
-				if e.Name() != "reg" && e.Name() != "claude" && e.Name() != "codex" {
+				if e.Name() != "reg" && e.Name() != "claude" && e.Name() != "codex" && e.Name() != "gemini" {
 					t.Errorf("name %q: wrote %s outside the targets", name, e.Name())
 				}
 			}
@@ -285,8 +289,8 @@ func TestRootLevelSkillDoesNotCopyGitDir(t *testing.T) {
 	if _, err := reg.Install(InstallOptions{URL: repo}); err != nil {
 		t.Fatal(err)
 	}
-	for _, target := range reg.Targets {
-		if _, err := os.Stat(filepath.Join(target, "rooty", ".git")); err == nil {
+	for _, target := range reg.Targets[:2] {
+		if _, err := os.Stat(filepath.Join(target.Dir, "rooty", ".git")); err == nil {
 			t.Errorf("%s: .git copied into the skill", target)
 		}
 	}
@@ -298,11 +302,100 @@ func TestInstallLeavesNoStagingDirs(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, target := range reg.Targets {
-		entries, _ := os.ReadDir(target)
+		entries, _ := os.ReadDir(target.Dir)
 		for _, e := range entries {
 			if strings.Contains(e.Name(), "harnez-staging") {
 				t.Errorf("%s: staging dir %s left behind", target, e.Name())
 			}
 		}
+	}
+}
+
+func TestExplicitInstallDisablesImplicitUse(t *testing.T) {
+	reg := newReg(t)
+	if _, err := reg.Install(InstallOptions{URL: fixtureRepo(t), Name: "alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	claudeMD, err := os.ReadFile(filepath.Join(reg.Targets[0].Dir, "alpha", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := ReadSkill(filepath.Join(reg.Targets[0].Dir, "alpha", "SKILL.md"))
+	if err != nil || s.Name != "alpha" || s.Description != "Build scroll pages." {
+		t.Fatalf("frontmatter broken after edit: %+v %v\n%s", s, err, claudeMD)
+	}
+	if strings.Count(string(claudeMD), "disable-model-invocation: true") != 1 {
+		t.Errorf("claude copy lacks the switch:\n%s", claudeMD)
+	}
+	codex, err := os.ReadFile(filepath.Join(reg.Targets[1].Dir, "alpha", "agents", "openai.yaml"))
+	if err != nil || !strings.Contains(string(codex), "allow_implicit_invocation: false") {
+		t.Errorf("codex policy missing: %v\n%s", err, codex)
+	}
+	if _, err := os.Stat(filepath.Join(reg.Targets[2].Dir, "alpha")); err == nil {
+		t.Error("gemini got a copy of an explicit-only skill")
+	}
+}
+
+func TestAutoInstallThenExplicitDropsGeminiCopy(t *testing.T) {
+	reg := newReg(t)
+	repo := fixtureRepo(t)
+	if _, err := reg.Install(InstallOptions{URL: repo, Name: "alpha", Auto: true}); err != nil {
+		t.Fatal(err)
+	}
+	gem := filepath.Join(reg.Targets[2].Dir, "alpha")
+	if _, err := os.Stat(gem); err != nil {
+		t.Fatalf("auto install skipped gemini: %v", err)
+	}
+	data, _ := os.ReadFile(filepath.Join(reg.Targets[0].Dir, "alpha", "SKILL.md"))
+	if strings.Contains(string(data), "disable-model-invocation") {
+		t.Error("auto install disabled model invocation")
+	}
+	if _, _, err := reg.Update("alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if e, _, _ := reg.Get("alpha"); !e.Auto {
+		t.Error("update lost the auto mode")
+	}
+	if _, err := reg.Install(InstallOptions{URL: repo, Name: "alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(gem); err == nil {
+		t.Error("switch to explicit left the gemini copy")
+	}
+	data, _ = os.ReadFile(filepath.Join(reg.Targets[0].Dir, "alpha", "SKILL.md"))
+	if !strings.Contains(string(data), "disable-model-invocation: true") {
+		t.Error("switch to explicit did not disable model invocation in the claude copy")
+	}
+}
+
+func TestDisableModelInvocation(t *testing.T) {
+	for in, want := range map[string]string{
+		"---\nname: a\ndisable-model-invocation: false\n---\nbody\n": "---\nname: a\ndisable-model-invocation: true\n---\nbody\n",
+		"# no frontmatter\n": "---\ndisable-model-invocation: true\n---\n# no frontmatter\n",
+		"---\r\nname: a\r\ndescription: d\r\n---\r\nbody\r\n": "---\nname: a\ndescription: d\ndisable-model-invocation: true\n---\nbody\n",
+		"---\n---\nbody\n": "---\ndisable-model-invocation: true\n---\nbody\n",
+		"---\nname: a\ndescription: x ---- y\n----\n---\n": "---\nname: a\ndescription: x ---- y\n----\ndisable-model-invocation: true\n---\n",
+	} {
+		if got := string(disableModelInvocation([]byte(in))); got != want {
+			t.Errorf("disableModelInvocation(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestExplicitCodexKeepsExistingOpenAIYAML(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "agents", "openai.yaml")
+	if err := os.WriteFile(path, []byte("interface:\n  display_name: X\npolicy:\n  allow_implicit_invocation: true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := makeExplicit("codex", dir); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "display_name: X") || !strings.Contains(string(data), "allow_implicit_invocation: false") {
+		t.Errorf("openai.yaml after makeExplicit:\n%s", data)
 	}
 }

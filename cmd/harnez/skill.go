@@ -22,10 +22,16 @@ func newSkillCmd() *cobra.Command {
 		Long: `Manage external skills: SKILL.md directories from third-party git repositories.
 
 install clones the repository into ~/.harnez/skills/src (or $HARNEZ_SKILLS_HOME),
-pins the commit, and copies only the skill directory into every agent skill
-directory that 'harnez apply' uses. Plugin hooks, MCP servers, commands, and
+pins the commit, and copies only the skill directory into the agent skill
+directories that 'harnez apply' uses. Plugin hooks, MCP servers, commands, and
 agents are never installed; explore lists them. Nothing from the repository is
-executed.`,
+executed.
+
+Skills are explicit-only by default: agents use one only when you name it.
+Claude Code gets the skill as a /command that never triggers on its own,
+Codex gets it with implicit invocation disabled, and other agents get no copy
+(they load it via 'harnez skill show'). Pass --auto to install a plain copy
+that every agent may trigger on its own.`,
 	}
 	cmd.PersistentFlags().StringVarP(&configPath, "config", "c", "", "path to config YAML file (default: embedded)")
 	open := func() (*skillreg.Registry, error) {
@@ -37,10 +43,15 @@ executed.`,
 		if err != nil {
 			return nil, err
 		}
-		return &skillreg.Registry{Root: root, Targets: claude.SkillTargets(cfg)}, nil
+		reg := &skillreg.Registry{Root: root}
+		for _, t := range claude.SkillTargetsByAgent(cfg) {
+			reg.Targets = append(reg.Targets, skillreg.Target{Agent: t.Agent, Dir: t.Dir})
+		}
+		return reg, nil
 	}
 
 	var path, name string
+	var auto bool
 	install := &cobra.Command{
 		Use:   "install <git-url>[@ref]",
 		Short: "Install one skill from a git repository into all agent skill directories",
@@ -51,20 +62,25 @@ executed.`,
 				return err
 			}
 			url, ref := skillreg.ParseSource(args[0])
-			e, err := reg.Install(skillreg.InstallOptions{URL: url, Ref: ref, Path: path, Name: name})
+			e, err := reg.Install(skillreg.InstallOptions{URL: url, Ref: ref, Path: path, Name: name, Auto: auto})
 			if err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "installed %s @ %s from %s\n", e.Name, e.Commit[:min(12, len(e.Commit))], e.URL)
+			fmt.Fprintf(out, "installed %s @ %.12s from %s (%s)\n", e.Name, e.Commit, e.URL, skillMode(e))
 			for _, t := range reg.Targets {
-				fmt.Fprintf(out, "  %s\n", fsutil.ContractHome(filepath.Join(t, e.Name)))
+				if _, err := os.Stat(filepath.Join(t.Dir, e.Name)); err == nil {
+					fmt.Fprintf(out, "  %-7s %s\n", t.Agent, fsutil.ContractHome(filepath.Join(t.Dir, e.Name)))
+				} else {
+					fmt.Fprintf(out, "  %-7s no copy; use: harnez skill show %s\n", t.Agent, e.Name)
+				}
 			}
 			return nil
 		},
 	}
 	install.Flags().StringVar(&path, "path", "", "skill directory inside the repository")
 	install.Flags().StringVar(&name, "skill", "", "skill name, when the repository has several")
+	install.Flags().BoolVar(&auto, "auto", false, "let agents trigger the skill on their own (default: only when named)")
 
 	list := &cobra.Command{
 		Use:   "list",
@@ -84,7 +100,7 @@ executed.`,
 				fmt.Fprintln(out, "no external skills installed")
 			}
 			for _, e := range entries {
-				fmt.Fprintf(out, "%-24s %.12s  %s\n", e.Name, e.Commit, e.URL)
+				fmt.Fprintf(out, "%-24s %.12s  %-8s %s\n", e.Name, e.Commit, skillMode(e), e.URL)
 			}
 			return nil
 		},
@@ -232,6 +248,13 @@ executed.`,
 
 	cmd.AddCommand(install, list, update, remove, search, explore, show)
 	return cmd
+}
+
+func skillMode(e skillreg.Entry) string {
+	if e.Auto {
+		return "auto"
+	}
+	return "explicit"
 }
 
 func printReport(out io.Writer, rep skillreg.Report) {

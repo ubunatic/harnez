@@ -571,6 +571,15 @@ agents_md:
           - Stop: `harnez agent stop --name <session>`.
           - When a `/goal` without an exit clause is set (e.g. typed by the user), say so in the first reply and offer `/goal ... or stop and report when blocked on a user decision or denied permission`; once blocked on the user, suggest `/goal clear` instead of repeating the wait message.
 
+          ## External Skills
+          External skills (installed with `harnez skill install`) are explicit-only: never use one
+          unless the user names it (e.g. `/scroll-craft`, "use scroll-craft") or picks it after you ask.
+          - When a task could fit an external skill and the user named none, run
+            `harnez skill search <topic>`. If anything matches, list the matches with their one-line
+            descriptions and ask which to use, or none. Never pick one yourself.
+          - Agents without a native copy (Gemini, Prime) load the chosen skill with
+            `harnez skill show <name>`.
+
           ## Code and Documentation Search
           - Before broad shell searches, use `harnez find code|docs` or MCP `harnez_find`; see `@docs/Search.md`.
 
