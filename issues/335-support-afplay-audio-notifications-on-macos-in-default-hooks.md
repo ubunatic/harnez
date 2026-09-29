@@ -1,6 +1,6 @@
 # 335 — Support afplay audio notifications on macOS in default hooks
 
-**Status**: Open
+**Status**: Closed — merged into 640
 **Priority**: P2 (Medium)
 **Severity**: UX Polish (Platform Compatibility)
 **Category**: Config & Hooks / Multi-OS
