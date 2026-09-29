@@ -27,3 +27,24 @@ still depends on one player being installed, and the file path is Linux-only.
 - macOS (merged from issue 335): `ffplay` and the freedesktop sound are absent there; use
   `afplay` with a system sound such as `/System/Library/Sounds/Glass.aiff`. The sound file is
   chosen per OS. Linux configs must keep working unchanged after `apply`.
+
+## 3. Milestones (plan by dev640, agy:flash37:med, reviewed by host 2026-09-29)
+Plan: `harnez hook sound` in `cmd/harnez/hook_sound.go` (wired via `hook.go`, no `main.go`
+edit); logic in `internal/sound`; `spec/sound.yaml` + `spec/schemas/sound.schema.json` hold
+per-OS sound files, player chain (`{file}` placeholder) and timeout. Default mode re-execs
+itself detached (`Setsid`, stdio to /dev/null) and exits 0 at once.
+
+### M1 — spec + `internal/sound` with tests
+Host refinements (pre-work):
+- A player that times out means the sink is stuck: kill it and **stop**, do not try the next
+  player (that would stack timeouts and play late). Fall through only when a player is missing
+  (`LookPath` fails) or exits non-zero at once.
+- Kill the whole process group on timeout (`Setpgid` on the player), not just the pid.
+- Tests use fake players (temp scripts on a temp `PATH`), never real audio.
+
+### M2 — `harnez hook sound` command + Stop hook in `config.yaml`
+Pre-work:
+- `config.yaml` has uncommitted parallel edits (issue 642). Commit only the Stop-hook line:
+  stage it with `git apply --cached <patch>` built from that hunk alone, and check
+  `git diff --cached` shows no other hunk before committing. Never `git add config.yaml`.
+- Linux behaviour after `harnez apply` must match today (sound plays, hook returns at once).
