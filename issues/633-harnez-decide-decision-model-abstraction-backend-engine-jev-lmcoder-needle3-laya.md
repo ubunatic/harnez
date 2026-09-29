@@ -18,31 +18,85 @@ Specialized "System 1" non-autoregressive decision models like **Jev** (TypeSafe
 - `choice`: single pick from up to 255 defined options with per-choice probabilities and confidence
 - `score`: continuous position on a 2-10 level rubric with legend and confidence
 
+Crucially, **Jev is programmed through rich structured JSON**, not simple prompt strings. The wire contract accepts arbitrary structured `state` (objects, arrays, transcripts, code blocks) and detailed per-option `criteria` (instructions and descriptions for each choice and noul pole).
+
 Furthermore, harnez plans to support alternative decision backends including **lmcoder** (local/custom embedding or classification setup), **Needle3**, and **Laya**.
-We need a unified command `harnez decide` and internal Go engine `internal/decide` to run standalone decisions, filter inputs, and serve as the backbone for skills, hooks, and MCP tools.
+We need a unified command `harnez decide`, declarative spec support (JSON/YAML), and an internal Go engine `internal/decide` to run standalone decisions, filter inputs, and serve as the backbone for skills, hooks, and MCP tools.
 
 ## 2. Technical Specification / Findings
 
-### CLI Interface
-```bash
-# Direct single-question noul check
-harnez decide --model jev --noul "Is this command destructive?" "rm -rf build"
-
-# Choice selection from options
-harnez decide --model jev --choice "bug_report,feature_request,question,other" "$ISSUE_TEXT"
-
-# Score on a rubric
-harnez decide --model jev --score "1:Low,2:Medium,3:High,4:Critical" "$TEXT"
-
-# JSON input/output mode (compatible with Jev SystemOne schema)
-harnez decide --model jev --json < payload.json
+### Wire Protocol Contract (Jev SystemOne)
+```json
+{
+  "model": "jev-latest",
+  "state": {
+    "command": "git push origin main --force",
+    "cwd": "/home/uwe/projects/harnez",
+    "branch": "main"
+  },
+  "questions": {
+    "action_risk": {
+      "type": "choice",
+      "instructions": "Classify the operational risk of running `command` in `cwd`",
+      "criteria": {
+        "read_only": "Commands that only inspect state without mutating disk or git history (ls, git status, cat)",
+        "reversible": "Commands that create or modify files but can be cleanly undone or stashed (touch, go test, npm build)",
+        "destructive": "Commands that overwrite history, delete untracked files, or affect remote branches (git push -f, rm -rf, git reset --hard)"
+      }
+    },
+    "blocked": {
+      "type": "noul",
+      "instructions": "Does this require explicit human confirmation?",
+      "criteria": {
+        "true": "High risk of data loss, destructive action, or production credential mutation",
+        "false": "Safe standard developer command"
+      }
+    }
+  }
+}
 ```
 
-Flags:
-- `--model` (default from `~/.harnez/config.yaml` `decide.default_model` or env `HARNEZ_DECIDE_MODEL`, fallback `jev`)
-- `--backend`: `jev` (TypeSafe API / Vercel AI Gateway / OpenRouter), `lmcoder` (local embedding/classifier service), `needle3`, `laya`
-- `--threshold` (float, for exit code gating e.g. `--threshold 0.8` exits 0 if probability >= 0.8, else 1)
-- `--format`: `text`, `json`, `quiet` (for shell script conditionals: `if harnez decide --quiet --threshold 0.8 ...; then ...`)
+### CLI & Declarative Interface
+1. **Interactive / Pipeline Mode (JSON / YAML specs)**:
+   Supports both stdin and files (`.json` or `.yaml`):
+   ```bash
+   # Run against a declarative spec file
+   harnez decide -f review-gate.yaml --model jev
+
+   # Pipe state JSON with inline question spec
+   cat state.json | harnez decide -f spec.yaml
+
+   # Direct JSON stdin
+   harnez decide --json < decision_request.json
+   ```
+
+2. **Convenient CLI Shortcuts with Rich Criteria**:
+   For quick scripts and hooks without full JSON files, support rich criteria via key=value definitions:
+   ```bash
+   # Noul with explicit criteria
+   harnez decide --noul "Is this command destructive?" \
+     --criteria "true=Overwrites git history or deletes files,false=Normal read or build" \
+     --state '{"cmd": "rm -rf build"}'
+
+   # Choice with rich criteria per option
+   harnez decide --choice "risk" \
+     --option "safe: Read-only query or lint" \
+     --option "review: Modifies core files or schemas" \
+     --option "danger: Irreversible delete or remote force push" \
+     --state-file diff.patch
+
+   # Score with rubric levels
+   harnez decide --score "How severe is this issue?" \
+     --level "Cosmetic only" \
+     --level "Degraded with workaround" \
+     --level "Critical blocker with no workaround" \
+     "$ISSUE_TEXT"
+   ```
+
+3. **Output & Gating Flags**:
+   - `--threshold <float>`: for shell script conditionals. Exits 0 if probability/confidence >= threshold, else exits 1.
+   - `--pick <question_id>`: outputs only the raw answer (e.g. `danger` or `0.94`) for simple shell assignment `ACTION=$(harnez decide ... --pick risk)`.
+   - `--format`: `json` (full response), `table` (summary table with latencies & probabilities), `quiet` (exit code only).
 
 ### Backend Abstraction
 In `internal/decide/`:
@@ -59,21 +113,46 @@ const (
 )
 
 type DecisionRequest struct {
-    State     any                 `json:"state"`
-    Questions map[string]Question `json:"questions"`
+    Model     string               `json:"model,omitempty" yaml:"model,omitempty"`
+    State     any                  `json:"state" yaml:"state"`
+    Questions map[string]Question  `json:"questions" yaml:"questions"`
 }
 
 type Question struct {
-    Type     QuestionType      `json:"type"`
-    Question string            `json:"question"`
-    Criteria map[string]string `json:"criteria,omitempty"` // for noul true/false or choices
-    Levels   []string          `json:"levels,omitempty"`   // for score
+    Type         QuestionType `json:"type" yaml:"type"`
+    Instructions string       `json:"instructions" yaml:"instructions"`
+    // Criteria:
+    // For noul: {"true": "...", "false": "..."}
+    // For choice: {"option_a": "description...", "option_b": "description..."}
+    // For score: []string{"level 0 desc", "level 1 desc", ...}
+    Criteria any `json:"criteria,omitempty" yaml:"criteria,omitempty"`
+}
+
+type NoulAnswer struct {
+    Type NoulType `json:"type"`
+    Noul float64  `json:"noul"`
+}
+
+type ChoiceAnswer struct {
+    Type          string             `json:"type"`
+    Choice        string             `json:"choice"`
+    Probabilities map[string]float64 `json:"probabilities"`
+    Confidence    float64            `json:"confidence"`
+}
+
+type ScoreAnswer struct {
+    Type          string             `json:"type"`
+    Score         float64            `json:"score"`
+    Legend        map[string]string  `json:"legend"`
+    Probabilities map[string]float64 `json:"probabilities"`
+    Confidence    float64            `json:"confidence"`
 }
 
 type DecisionResponse struct {
-    Answers map[string]Answer `json:"answers"`
+    Model   string            `json:"model"`
+    Answers map[string]any    `json:"answers"` // unmarshals into NoulAnswer, ChoiceAnswer, ScoreAnswer
+    Usage   DecisionUsage     `json:"usage"`
     Latency time.Duration     `json:"latency"`
-    CostUSD float64           `json:"cost_usd,omitempty"`
 }
 ```
 
@@ -90,16 +169,16 @@ decide:
     lmcoder:
       endpoint: http://127.0.0.1:8088/decide
     laya:
-      endpoint: ...
+      endpoint: https://api.laya.ai/v1/decisions
     needle3:
-      endpoint: ...
+      endpoint: https://api.needle3.ai/v1/decisions
 ```
 
 ## 3. Implementation & Verification Plan
-1. **Model Adapter**: Implement `internal/decide/jev.go` handling the HTTP POST request/response for Jev via Vercel AI Gateway and OpenRouter, with offline deterministic mock for tests.
+1. **Model Adapter**: Implement `internal/decide/jev.go` handling the HTTP POST request/response for Jev via Vercel AI Gateway, OpenRouter, and TypeSafe, with offline deterministic mock for tests.
 2. **Local / Embedding Adapter**: Implement `internal/decide/lmcoder.go` stub / protocol adapter.
-3. **CLI Command**: Add `cmd/harnez/decide.go` exposing `harnez decide` with flags `--model`, `--noul`, `--choice`, `--score`, `--threshold`, `--json`.
+3. **CLI Command**: Add `cmd/harnez/decide.go` supporting structured file inputs (`-f`, `--state-file`, `--json`), multi-option `--option "name: desc"` flags, `--threshold`, and `--pick`.
 4. **Verification**:
    - Unit tests on request formatting, token budget packing, and response parsing.
    - Deterministic offline mock runner in `internal/decide/mock.go`.
-   - Integration smoke test with simulated inputs (destructive bash command check, issue triage routing).
+   - Integration smoke test with rich criteria (destructive bash command check, issue triage routing, code review risk rubric).
