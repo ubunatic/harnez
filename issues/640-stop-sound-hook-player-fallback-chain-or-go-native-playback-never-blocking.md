@@ -42,8 +42,15 @@ Host refinements (pre-work):
 - Kill the whole process group on timeout (`Setpgid` on the player), not just the pid.
 - Tests use fake players (temp scripts on a temp `PATH`), never real audio.
 
+M1 delivered (170018ff, dev640b): spec/sound.yaml, internal/sound (fallback chain, stop on
+timeout, process-group kill), 11 unit tests green. Schema file landed in parallel commit 5cbf3efd.
+Builds for linux and darwin; not windows (Setpgid), same as the rest of harnez today.
+
 ### M2 — `harnez hook sound` command + Stop hook in `config.yaml`
 Pre-work:
+- Add a test that the timeout kills the whole group: fake player starts a background
+  `sleep` child that writes its pid to a file, then hangs; after timeout assert that child pid
+  is gone.
 - `config.yaml` has uncommitted parallel edits (issue 642). Commit only the Stop-hook line:
   stage it with `git apply --cached <patch>` built from that hunk alone, and check
   `git diff --cached` shows no other hunk before committing. Never `git add config.yaml`.
