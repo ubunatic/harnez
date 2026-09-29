@@ -90,6 +90,15 @@ Pre-Work / Required Refinements:
   this function-hook runtime. The loader restriction observed for `node:fs` rules out importing
   `node:child_process` as a module.
 
+### M2 gate passed (host, 2026-09-30) — Pre-Work for the build
+- Bridge: `$.process.run([...])` only. No fetch, no Node modules, `$` must be spelled
+  `$.noun.event(...)` at every call site (no aliasing, no enumeration).
+- Unknown and to check first: whether `$.process.run` takes stdin and how large its args/output
+  may be. Prefer passing a small handle (session id / transcript path from the event or `$`) and
+  let `harnez compact` read the session JSONL itself; return compact JSON on stdout.
+- The hook module must stay trivially small and loader-conformant; all logic (thresholds from
+  `spec/`, jev calls, fallback decision) lives in Go.
+
 ## Other agents (moved from 644)
 - agy: harnez's jev compaction could rewrite agy session data on disk. Canary: does agy accept a
   resumed session whose data was compacted, and does it save tokens compared with agy's own
