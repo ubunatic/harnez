@@ -49,5 +49,4 @@ external tool needs (node, ffmpeg, playwright, API keys) are invisible.
 - Finding: the skill's workspace resolves from **cwd**, so running scripts from the install dir
   creates `scrollcraft/` inside it. Registry (B) must keep install dirs read-only / run from the project.
 - Finding: plugin manifests are not needed for non-Claude agents; the skill dir alone is portable.
-- Gemini/Prime not tested. Canary copies left in place for use; remove with
-  `rm -r ~/.claude/skills/scroll-craft ~/.codex/skills/scroll-craft`.
+- Gemini/Prime not tested. Canary copies removed afterwards.
