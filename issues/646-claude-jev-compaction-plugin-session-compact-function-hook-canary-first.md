@@ -38,3 +38,18 @@ report if the hook does not fire or cannot replace messages on the installed Cla
   auto-compaction? Only then enable it.
 - Codex/agy: research whether they offer a real compaction hook (replace messages), like Claude's
   `session.compact`. Findings go here.
+
+## Research: Codex and agy compaction hooks (res646, luna:med, 2026-09-30)
+Neither offers a live replacement hook like Claude's `session.compact`.
+- **Codex 0.159.1**: `PreCompact`/`PostCompact` hooks exist, notify-only (no replacement-message
+  field; codex-rs/hooks/src/schema.rs, events/compact.rs). High confidence.
+- **Codex prompt override**: `compact_prompt` / `experimental_compact_prompt_file` apply to local
+  compaction only; provider-side remote compaction may bypass them (openai/codex#34428). No
+  compaction-model setting.
+- **Codex disk rewrite**: `codex resume` loads JSONL rollouts (`~/.codex/sessions/`); resuming an
+  edited rollout is undocumented. Medium confidence.
+- **agy 1.2.13**: hooks cover tools, model invocation and stop, but no compaction event;
+  `PreInvocation` can inject messages, not rewrite history (antigravity.google/docs/hooks). No
+  compaction prompt/model setting. Resume picks stored threads; no import of a rewritten transcript.
+- **Consequence**: for Codex/agy only two routes remain, each needing its own canary: (a) Codex
+  `experimental_compact_prompt_file` for better summaries, (b) disk rewrite + resume.
