@@ -3,6 +3,8 @@ package decide
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -341,7 +343,7 @@ func TestCompactTranscript_ConversationContext(t *testing.T) {
 
 func TestWriteJSONLTranscript_RawMapUpdatedOnTruncation(t *testing.T) {
 	jsonl := `{"role":"user","content":"start"}
-{"role":"tool","tool_name":"cat","tool_output":"very long output line 1\nvery long output line 2\nvery long output line 3"}
+{"role":"tool","tool_name":"cat","tool_output":"` + strings.Repeat("very long output line ", 30) + `"}
 {"role":"assistant","content":"done"}
 `
 	entries, err := ParseJSONLTranscript(strings.NewReader(jsonl))
@@ -365,7 +367,7 @@ func TestWriteJSONLTranscript_RawMapUpdatedOnTruncation(t *testing.T) {
 	opts := CompactOptions{
 		PinRecent:      1,
 		Threshold:      0.5,
-		TruncateLength: 50,
+		TruncateLength: 200,
 	}
 
 	compacted, _, err := CompactTranscript(context.Background(), mock, entries, opts)
@@ -379,10 +381,172 @@ func TestWriteJSONLTranscript_RawMapUpdatedOnTruncation(t *testing.T) {
 	}
 
 	serialized := buf.String()
-	if strings.Contains(serialized, "very long output line 3") {
-		t.Errorf("expected serialized raw JSON to NOT contain truncated content, got:\n%s", serialized)
+	if strings.Contains(serialized, strings.Repeat("very long output line ", 30)) {
+		t.Errorf("expected serialized raw JSON to NOT contain full untruncated content, got:\n%s", serialized)
 	}
-	if !strings.Contains(serialized, "[truncated by harnez compact]") {
-		t.Errorf("expected serialized raw JSON to contain truncation marker, got:\n%s", serialized)
+	if !strings.Contains(serialized, "harnez compact truncated 548 chars") {
+		t.Errorf("expected serialized raw JSON to contain exact truncated count '548 chars', got:\n%s", serialized)
+	}
+}
+
+func TestCompactTranscript_ByteAndReductionMetrics(t *testing.T) {
+	jsonl := `{"role":"user","content":"start"}
+{"role":"tool","tool_name":"cat","tool_output":"` + strings.Repeat("a", 1000) + `"}
+{"role":"assistant","content":"done"}
+`
+	entries, err := ParseJSONLTranscript(strings.NewReader(jsonl))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	callTrue := 0.9
+	resultFalse := 0.1
+	mock := &mockBackend{
+		fn: func(ctx context.Context, req *Request) (*Response, error) {
+			return &Response{
+				Answers: map[string]Answer{
+					"cand_0_keep_call":   {Type: TypeNoul, Noul: &callTrue},
+					"cand_0_keep_result": {Type: TypeNoul, Noul: &resultFalse},
+				},
+			}, nil
+		},
+	}
+
+	opts := CompactOptions{
+		PinRecent:      1,
+		Threshold:      0.5,
+		TruncateLength: 50,
+	}
+
+	_, rep, err := CompactTranscript(context.Background(), mock, entries, opts)
+	if err != nil {
+		t.Fatalf("CompactTranscript failed: %v", err)
+	}
+
+	if rep.OriginalBytes <= 0 {
+		t.Errorf("expected positive OriginalBytes, got %d", rep.OriginalBytes)
+	}
+	if rep.CompactedBytes >= rep.OriginalBytes {
+		t.Errorf("expected CompactedBytes (%d) < OriginalBytes (%d)", rep.CompactedBytes, rep.OriginalBytes)
+	}
+	if rep.ReductionRatio <= 0.0 || rep.ReductionRatio > 1.0 {
+		t.Errorf("expected valid ReductionRatio (0.0 < r <= 1.0), got %f", rep.ReductionRatio)
+	}
+}
+
+func TestFitCompactionState_ProgressiveStages(t *testing.T) {
+	entries := []TranscriptEntry{
+		{Role: "user", Content: "First instruction"},
+		{Role: "assistant", Content: strings.Repeat("long explanation ", 50)},
+		{Role: "tool", ToolName: "build", ToolInput: strings.Repeat("args ", 100), ToolOutput: "build complete"},
+		{Role: "assistant", Content: "Done"},
+	}
+
+	candidates := []toolCandidate{
+		{
+			callIdx:   2,
+			resultIdx: 2,
+			toolName:  "build",
+			toolInput: strings.Repeat("args ", 100),
+			outputLen: 14,
+			callID:    "t0",
+		},
+	}
+
+	// Budget 500 bytes should trigger progressive fitting
+	state, questions := fitCompactionState(entries, candidates, 500)
+	if state == nil || questions == nil {
+		t.Fatalf("expected valid state and questions, got nil")
+	}
+
+	b, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	if len(b) > 500 {
+		t.Errorf("expected serialized state <= 500 bytes, got %d", len(b))
+	}
+}
+
+func TestFitCompactionState_StrictSizeBudget(t *testing.T) {
+	entries := []TranscriptEntry{
+		{Role: "user", Content: strings.Repeat("massive user goal prompt ", 200)},
+		{Role: "assistant", Content: strings.Repeat("massive assistant response ", 200)},
+	}
+
+	var candidates []toolCandidate
+	for i := 0; i < 20; i++ {
+		candidates = append(candidates, toolCandidate{
+			callIdx:   i + 2,
+			resultIdx: i + 2,
+			toolName:  fmt.Sprintf("tool_%d", i),
+			toolInput: strings.Repeat("huge args payload ", 50),
+			outputLen: 1000,
+			callID:    fmt.Sprintf("t%d", i),
+		})
+	}
+
+	for _, maxBudget := range []int{600, 100, 10, 2} {
+		state, _ := fitCompactionState(entries, candidates, maxBudget)
+		b, err := json.Marshal(state)
+		if err != nil {
+			t.Fatalf("json.Marshal failed: %v", err)
+		}
+		if len(b) > maxBudget {
+			t.Errorf("expected serialized state <= %d bytes, got %d", maxBudget, len(b))
+		}
+	}
+}
+
+func TestCompactTranscript_QuestionPrompts(t *testing.T) {
+	entries := []TranscriptEntry{
+		{Role: "user", Content: "Goal"},
+		{Role: "tool", ToolName: "grep", ToolInput: "pattern", ToolOutput: "result", ToolCallID: "call_abc"},
+		{Role: "assistant", Content: "Done"},
+	}
+
+	var capturedReq *Request
+	mock := &mockBackend{
+		fn: func(ctx context.Context, req *Request) (*Response, error) {
+			capturedReq = req
+			callTrue := 0.9
+			return &Response{
+				Answers: map[string]Answer{
+					"cand_0_keep_call":   {Type: TypeNoul, Noul: &callTrue},
+					"cand_0_keep_result": {Type: TypeNoul, Noul: &callTrue},
+				},
+			}, nil
+		},
+	}
+
+	opts := CompactOptions{
+		PinRecent: 1,
+	}
+
+	_, _, err := CompactTranscript(context.Background(), mock, entries, opts)
+	if err != nil {
+		t.Fatalf("CompactTranscript failed: %v", err)
+	}
+
+	if capturedReq == nil {
+		t.Fatalf("expected decide request, got nil")
+	}
+
+	qCall, ok := capturedReq.Questions["cand_0_keep_call"]
+	if !ok {
+		t.Fatalf("missing cand_0_keep_call question")
+	}
+	wantCall := "Tool call call_abc (grep) should stay in the history: knowing this call was made, with its input, still matters for what the assistant does next"
+	if qCall.Instructions != wantCall {
+		t.Errorf("want exact keep_call prompt %q, got %q", wantCall, qCall.Instructions)
+	}
+
+	qResult, ok := capturedReq.Questions["cand_0_keep_result"]
+	if !ok {
+		t.Fatalf("missing cand_0_keep_result question")
+	}
+	wantResult := "The full output of tool call call_abc (grep, 6 bytes) should stay in the history verbatim: the assistant still needs its contents and re-running the tool would not do"
+	if qResult.Instructions != wantResult {
+		t.Errorf("want exact keep_result prompt %q, got %q", wantResult, qResult.Instructions)
 	}
 }

@@ -23,6 +23,7 @@ type compactOpts struct {
 	pinRecent      int
 	truncateLength int
 	threshold      float64
+	maxStateBytes  int
 	format         string
 	inPlace        bool
 }
@@ -74,6 +75,7 @@ preserving conversation messages and recent context verbatim.`,
 	f.IntVar(&o.pinRecent, "pin-recent", 5, "number of recent entries to pin verbatim")
 	f.IntVar(&o.truncateLength, "truncate-length", 200, "maximum character length for truncated outputs")
 	f.Float64Var(&o.threshold, "threshold", 0.50, "decision confidence threshold (0.0 - 1.0)")
+	f.IntVar(&o.maxStateBytes, "max-state-bytes", 102400, "maximum byte size for decision request context state")
 	f.StringVar(&o.format, "format", "jsonl", "output format: jsonl, summary, or json")
 	f.BoolVarP(&o.inPlace, "in-place", "i", false, "overwrite the input transcript file in-place")
 	return cmd
@@ -115,6 +117,7 @@ func runCompact(ctx context.Context, out io.Writer, backend decide.Backend, o *c
 		PinRecent:      o.pinRecent,
 		Threshold:      o.threshold,
 		TruncateLength: o.truncateLength,
+		MaxStateBytes:  o.maxStateBytes,
 	}
 
 	compacted, report, err := decide.CompactTranscript(ctx, backend, entries, compactOpts)
@@ -142,6 +145,9 @@ func runCompact(ctx context.Context, out io.Writer, backend decide.Backend, o *c
 		fmt.Fprintln(dest, "==================")
 		fmt.Fprintf(dest, "Original entries:   %d\n", report.OriginalEntries)
 		fmt.Fprintf(dest, "Compacted entries:  %d\n", report.CompactedEntries)
+		fmt.Fprintf(dest, "Original bytes:     %d\n", report.OriginalBytes)
+		fmt.Fprintf(dest, "Compacted bytes:    %d\n", report.CompactedBytes)
+		fmt.Fprintf(dest, "Reduction ratio:    %.1f%%\n", report.ReductionRatio*100)
 		fmt.Fprintf(dest, "Kept verbatim:      %d\n", report.KeptVerbatim)
 		fmt.Fprintf(dest, "Truncated results:  %d\n", report.TruncatedResults)
 		fmt.Fprintf(dest, "Excised tools:      %d\n", report.ExcisedTools)

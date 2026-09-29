@@ -30,15 +30,26 @@ type CompactOptions struct {
 	PinRecent      int     `json:"pin_recent"`
 	Threshold      float64 `json:"threshold"`
 	TruncateLength int     `json:"truncate_length"`
+	MaxStateBytes  int     `json:"max_state_bytes,omitempty"`
 }
 
 // CompactReport summarizes the changes made during compaction.
 type CompactReport struct {
-	OriginalEntries  int `json:"original_entries"`
-	CompactedEntries int `json:"compacted_entries"`
-	ExcisedTools     int `json:"excised_tools"`
-	TruncatedResults int `json:"truncated_results"`
-	KeptVerbatim     int `json:"kept_verbatim"`
+	OriginalEntries  int     `json:"original_entries"`
+	CompactedEntries int     `json:"compacted_entries"`
+	OriginalBytes    int64   `json:"original_bytes"`
+	CompactedBytes   int64   `json:"compacted_bytes"`
+	ReductionRatio   float64 `json:"reduction_ratio"`
+	ExcisedTools     int     `json:"excised_tools"`
+	TruncatedResults int     `json:"truncated_results"`
+	KeptVerbatim     int     `json:"kept_verbatim"`
+}
+
+// historyEntry represents an abridged interaction line for decision model context.
+type historyEntry struct {
+	Role     string `json:"role,omitempty"`
+	Text     string `json:"text,omitempty"`
+	ToolCall string `json:"tool_call,omitempty"`
 }
 
 // DefaultCompactOptions returns the standard compaction options.
@@ -47,6 +58,7 @@ func DefaultCompactOptions() CompactOptions {
 		PinRecent:      5,
 		Threshold:      0.50,
 		TruncateLength: 200,
+		MaxStateBytes:  100 * 1024,
 	}
 }
 
@@ -175,6 +187,191 @@ type toolCandidate struct {
 	callID    string
 }
 
+func computeEntryBytes(e TranscriptEntry) int64 {
+	if len(e.Raw) > 0 {
+		if b, err := json.Marshal(e.Raw); err == nil {
+			return int64(len(b))
+		}
+	}
+	b, _ := json.Marshal(e)
+	return int64(len(b))
+}
+
+// fitCompactionState constructs a token/byte-bounded history representation
+// using multi-stage progressive fitting so large sessions do not exceed model limits.
+func fitCompactionState(entries []TranscriptEntry, candidates []toolCandidate, maxBytes int) (map[string]any, map[string]Question) {
+	if maxBytes <= 0 {
+		maxBytes = 100 * 1024
+	}
+
+	var goals []string
+	var firstGoal string
+	for _, e := range entries {
+		if e.Role == "user" && e.Content != "" {
+			if firstGoal == "" {
+				firstGoal = e.Content
+			}
+			goals = append(goals, e.Content)
+		}
+	}
+	if len(goals) > 3 {
+		goals = goals[len(goals)-3:]
+	}
+	if firstGoal == "" && len(entries) > 0 {
+		firstGoal = entries[0].Content
+	}
+
+	questions := make(map[string]Question)
+	for candIdx, cand := range candidates {
+		callID := cand.callID
+		if callID == "" {
+			callID = fmt.Sprintf("t%d", candIdx)
+		}
+		questions[fmt.Sprintf("cand_%d_keep_call", candIdx)] = Question{
+			Type:         TypeNoul,
+			Instructions: fmt.Sprintf("Tool call %s (%s) should stay in the history: knowing this call was made, with its input, still matters for what the assistant does next", callID, cand.toolName),
+			Criteria: map[string]string{
+				"true":  "The tool execution is an important milestone or state change needed for reference",
+				"false": "The tool call is intermediate or obsolete noise",
+			},
+		}
+		questions[fmt.Sprintf("cand_%d_keep_result", candIdx)] = Question{
+			Type:         TypeNoul,
+			Instructions: fmt.Sprintf("The full output of tool call %s (%s, %d bytes) should stay in the history verbatim: the assistant still needs its contents and re-running the tool would not do", callID, cand.toolName, cand.outputLen),
+			Criteria: map[string]string{
+				"true":  "Verbatim content contains critical errors, code snippets, or definitions",
+				"false": "Result is bulky listing, repetitive logs, or output that can be safely truncated",
+			},
+		}
+	}
+
+	for stage := 1; stage <= 6; stage++ {
+		curGoal := firstGoal
+		curGoals := goals
+		if stage >= 2 && len([]rune(curGoal)) > 400 {
+			curGoal = string([]rune(curGoal)[:400]) + "..."
+		}
+		if stage >= 3 && len([]rune(curGoal)) > 150 {
+			curGoal = string([]rune(curGoal)[:150]) + "..."
+			curGoals = []string{curGoal}
+		}
+
+		candidateStates := make(map[string]any)
+		for candIdx, cand := range candidates {
+			candKey := fmt.Sprintf("candidate_%d", candIdx)
+			inputVal := cand.toolInput
+			if stage >= 2 && inputVal != nil {
+				s := fmt.Sprintf("%v", inputVal)
+				limit := 200
+				if stage >= 3 {
+					limit = 60
+				}
+				if stage >= 5 {
+					limit = 20
+				}
+				if len([]rune(s)) > limit {
+					inputVal = string([]rune(s)[:limit]) + "..."
+				}
+			}
+			if stage >= 6 {
+				inputVal = nil
+			}
+			candidateStates[candKey] = map[string]any{
+				"tool_name":     cand.toolName,
+				"tool_input":    inputVal,
+				"output_length": cand.outputLen,
+				"call_id":       cand.callID,
+			}
+		}
+
+		var history []historyEntry
+		var conversationContext []map[string]string
+		if stage < 5 {
+			for _, e := range entries {
+				text := e.Content
+				if stage >= 3 && len([]rune(text)) > 400 {
+					runes := []rune(text)
+					text = string(runes[:250]) + " ... [abridged] ... " + string(runes[len(runes)-100:])
+				} else if stage >= 4 && len([]rune(text)) > 150 {
+					text = string([]rune(text)[:150]) + "..."
+				}
+
+				toolCallSummary := ""
+				if e.ToolName != "" || e.ToolCallID != "" {
+					outBytes := len(e.ToolOutput)
+					if outBytes == 0 {
+						outBytes = len(e.Content)
+					}
+					toolCallSummary = fmt.Sprintf("%s (%s) -> ok, %d chars (omitted)", e.ToolCallID, e.ToolName, outBytes)
+				}
+
+				history = append(history, historyEntry{
+					Role:     e.Role,
+					Text:     text,
+					ToolCall: toolCallSummary,
+				})
+				if (e.Role == "user" || e.Role == "assistant" || e.Role == "system") && stage < 4 {
+					conversationContext = append(conversationContext, map[string]string{
+						"role":    e.Role,
+						"content": text,
+					})
+				}
+			}
+		}
+
+		state := map[string]any{
+			"initial_instruction": curGoal,
+			"initial_goal":        curGoal,
+			"recent_goals":        curGoals,
+			"candidates":          candidateStates,
+			"total_candidates":    len(candidates),
+		}
+		if len(conversationContext) > 0 {
+			state["conversation_context"] = conversationContext
+		}
+		if len(history) > 0 {
+			state["history"] = history
+		}
+
+		if b, err := json.Marshal(state); err == nil && len(b) <= maxBytes {
+			return state, questions
+		}
+	}
+
+	// Strictly bounded minimal fallback
+	candidateStates := make(map[string]any)
+	for candIdx, cand := range candidates {
+		candidateStates[fmt.Sprintf("cand_%d", candIdx)] = map[string]any{
+			"tool": cand.toolName,
+			"len":  cand.outputLen,
+		}
+	}
+	minimalGoal := firstGoal
+	if len([]rune(minimalGoal)) > 100 {
+		minimalGoal = string([]rune(minimalGoal)[:100]) + "..."
+	}
+	state := map[string]any{
+		"initial_instruction": minimalGoal,
+		"candidates":          candidateStates,
+		"total_candidates":    len(candidates),
+	}
+	if b, err := json.Marshal(state); err == nil && len(b) > maxBytes {
+		state = map[string]any{
+			"initial_instruction": minimalGoal,
+			"total_candidates":    len(candidates),
+		}
+		if b, err := json.Marshal(state); err == nil && len(b) > maxBytes {
+			state = map[string]any{
+				"total_candidates": len(candidates),
+			}
+			if b, err := json.Marshal(state); err == nil && len(b) > maxBytes {
+				state = map[string]any{}
+			}
+		}
+	}
+	return state, questions
+}
+
 // CompactTranscript performs decision-model-driven verbatim transcript pruning.
 func CompactTranscript(ctx context.Context, backend Backend, entries []TranscriptEntry, opts CompactOptions) ([]TranscriptEntry, *CompactReport, error) {
 	if opts.PinRecent <= 0 {
@@ -186,9 +383,16 @@ func CompactTranscript(ctx context.Context, backend Backend, entries []Transcrip
 	if opts.TruncateLength <= 0 {
 		opts.TruncateLength = 200
 	}
+	if opts.MaxStateBytes <= 0 {
+		opts.MaxStateBytes = 100 * 1024
+	}
 
 	report := &CompactReport{
 		OriginalEntries: len(entries),
+	}
+
+	for _, e := range entries {
+		report.OriginalBytes += computeEntryBytes(e)
 	}
 
 	if len(entries) == 0 {
@@ -301,68 +505,10 @@ func CompactTranscript(ctx context.Context, backend Backend, entries []Transcrip
 	decisions := make(map[int]decisionResult)
 
 	if len(candidates) > 0 {
-		questions := make(map[string]Question)
-		candidateStates := make(map[string]any)
-
-		for candIdx, cand := range candidates {
-			candKey := fmt.Sprintf("candidate_%d", candIdx)
-			candidateStates[candKey] = map[string]any{
-				"tool_name":     cand.toolName,
-				"tool_input":    cand.toolInput,
-				"output_length": cand.outputLen,
-				"call_id":       cand.callID,
-			}
-
-			questions[fmt.Sprintf("cand_%d_keep_call", candIdx)] = Question{
-				Type:         TypeNoul,
-				Instructions: fmt.Sprintf("Does the agent's context need to know that tool %q was executed with these arguments?", cand.toolName),
-				Criteria: map[string]string{
-					"true":  "The tool execution is an important milestone or state change needed for reference",
-					"false": "The tool call is intermediate or obsolete noise",
-				},
-			}
-			questions[fmt.Sprintf("cand_%d_keep_result", candIdx)] = Question{
-				Type:         TypeNoul,
-				Instructions: fmt.Sprintf("Does the verbatim tool output (length %d bytes) still matter for subsequent reasoning?", cand.outputLen),
-				Criteria: map[string]string{
-					"true":  "Verbatim content contains critical errors, code snippets, or definitions",
-					"false": "Result is bulky listing, repetitive logs, or output that can be safely truncated",
-				},
-			}
-		}
-
-		// Extract initial user instructions and abridged conversation messages for decision context
-		var initialInstruction string
-		var conversationContext []map[string]string
-		for _, entry := range entries {
-			if entry.Role == "user" && initialInstruction == "" {
-				initialInstruction = entry.Content
-			}
-			if entry.Role == "user" || entry.Role == "assistant" || entry.Role == "system" {
-				c := entry.Content
-				if len([]rune(c)) > 500 {
-					c = string([]rune(c)[:500]) + "..."
-				}
-				if c != "" {
-					conversationContext = append(conversationContext, map[string]string{
-						"role":    entry.Role,
-						"content": c,
-					})
-				}
-			}
-		}
-		if initialInstruction == "" && len(entries) > 0 {
-			initialInstruction = entries[0].Content
-		}
-
+		state, questions := fitCompactionState(entries, candidates, opts.MaxStateBytes)
 		req := &Request{
-			Model: opts.Model,
-			State: map[string]any{
-				"initial_instruction":  initialInstruction,
-				"conversation_context": conversationContext,
-				"candidates":           candidateStates,
-				"total_candidates":     len(candidates),
-			},
+			Model:     opts.Model,
+			State:     state,
 			Questions: questions,
 		}
 
@@ -425,14 +571,26 @@ func CompactTranscript(ctx context.Context, backend Backend, entries []Transcrip
 
 			runes := []rune(outputContent)
 			if len(runes) > opts.TruncateLength {
-				marker := "\n... [truncated by harnez compact]"
-				markerRunes := []rune(marker)
+				markerTemplate := "\n... [harnez compact truncated %d chars of this tool result; re-run the tool if needed]"
+				sampleMarker := fmt.Sprintf(markerTemplate, len(runes))
+				markerLen := len([]rune(sampleMarker))
+
 				var truncatedText string
-				if opts.TruncateLength <= len(markerRunes) {
-					truncatedText = string(runes[:opts.TruncateLength])
+				if opts.TruncateLength <= markerLen {
+					shortMarkerTemplate := "\n... [truncated %d chars]"
+					sampleShort := fmt.Sprintf(shortMarkerTemplate, len(runes))
+					shortLen := len([]rune(sampleShort))
+					if opts.TruncateLength > shortLen {
+						availRunes := opts.TruncateLength - shortLen
+						omitted := len(runes) - availRunes
+						truncatedText = string(runes[:availRunes]) + fmt.Sprintf(shortMarkerTemplate, omitted)
+					} else {
+						truncatedText = string(runes[:opts.TruncateLength])
+					}
 				} else {
-					availRunes := opts.TruncateLength - len(markerRunes)
-					truncatedText = string(runes[:availRunes]) + marker
+					availRunes := opts.TruncateLength - markerLen
+					omitted := len(runes) - availRunes
+					truncatedText = string(runes[:availRunes]) + fmt.Sprintf(markerTemplate, omitted)
 				}
 				// Guarantee strictly bounded by TruncateLength
 				if len([]rune(truncatedText)) > opts.TruncateLength {
@@ -441,9 +599,21 @@ func CompactTranscript(ctx context.Context, backend Backend, entries []Transcrip
 
 				if entry.ToolOutput != "" {
 					entry.ToolOutput = truncatedText
+					if len(entry.Raw) > 0 {
+						if _, ok := entry.Raw["tool_output"]; ok {
+							entry.Raw["tool_output"] = truncatedText
+						} else if _, ok := entry.Raw["output"]; ok {
+							entry.Raw["output"] = truncatedText
+						}
+					}
 				}
 				if entry.Content != "" {
 					entry.Content = truncatedText
+					if len(entry.Raw) > 0 {
+						if _, ok := entry.Raw["content"]; ok {
+							entry.Raw["content"] = truncatedText
+						}
+					}
 				}
 				report.TruncatedResults++
 			} else {
@@ -458,5 +628,15 @@ func CompactTranscript(ctx context.Context, backend Backend, entries []Transcrip
 	}
 
 	report.CompactedEntries = len(compacted)
+	for _, e := range compacted {
+		report.CompactedBytes += computeEntryBytes(e)
+	}
+	if report.OriginalBytes > 0 {
+		report.ReductionRatio = float64(report.OriginalBytes-report.CompactedBytes) / float64(report.OriginalBytes)
+		if report.ReductionRatio < 0 {
+			report.ReductionRatio = 0
+		}
+	}
+
 	return compacted, report, nil
 }

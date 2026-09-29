@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,6 +56,9 @@ func TestCompactCmd_SummaryAndJSONL(t *testing.T) {
 	}
 	if !strings.Contains(out, "Original entries:   3") {
 		t.Errorf("expected original entries in summary, got: %s", out)
+	}
+	if !strings.Contains(out, "Original bytes:") || !strings.Contains(out, "Reduction ratio:") {
+		t.Errorf("expected byte metrics in summary output, got: %s", out)
 	}
 
 	// 2. Test JSONL mode with output file
@@ -190,5 +194,55 @@ func TestCompactCmd_FlagValidation(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), `"content":"ping"`) {
 		t.Errorf("expected jsonl output with default format, got: %s", buf.String())
+	}
+
+	// Verify --max-state-bytes flag parsing on command
+	cmd = newCompactCmd()
+	f := cmd.Flags().Lookup("max-state-bytes")
+	if f == nil {
+		t.Fatalf("expected max-state-bytes flag to be registered")
+	}
+	if f.DefValue != "102400" {
+		t.Errorf("expected default max-state-bytes 102400, got %s", f.DefValue)
+	}
+	if err := cmd.ParseFlags([]string{"--max-state-bytes", "50"}); err != nil {
+		t.Fatalf("failed to parse --max-state-bytes flag: %v", err)
+	}
+	val, err := cmd.Flags().GetInt("max-state-bytes")
+	if err != nil || val != 50 {
+		t.Errorf("expected parsed max-state-bytes 50, got %d (err: %v)", val, err)
+	}
+
+	// Verify maxStateBytes propagation in runCompact
+	var capturedState any
+	capturingMock := &testMockBackend{
+		fn: func(ctx context.Context, req *decide.Request) (*decide.Response, error) {
+			capturedState = req.State
+			callTrue := 0.9
+			return &decide.Response{
+				Answers: map[string]decide.Answer{
+					"cand_0_keep_call":   {Type: decide.TypeNoul, Noul: &callTrue},
+					"cand_0_keep_result": {Type: decide.TypeNoul, Noul: &callTrue},
+				},
+			}, nil
+		},
+	}
+	twoEntryTranscript := filepath.Join(dir, "two_entry.jsonl")
+	_ = os.WriteFile(twoEntryTranscript, []byte(`{"role":"user","content":"u"}`+"\n"+`{"role":"tool","tool_name":"t","tool_output":"out"}`+"\n"+`{"role":"assistant","content":"a"}`+"\n"), 0644)
+	buf.Reset()
+	opts = compactOpts{
+		transcript:    twoEntryTranscript,
+		maxStateBytes: val,
+		pinRecent:     1,
+	}
+	if err := runCompact(context.Background(), &buf, capturingMock, &opts); err != nil {
+		t.Fatalf("runCompact failed: %v", err)
+	}
+	if capturedState == nil {
+		t.Fatalf("expected backend to be called with state")
+	}
+	b, _ := json.Marshal(capturedState)
+	if len(b) > 50 {
+		t.Errorf("expected propagated state <= 50 bytes, got %d", len(b))
 	}
 }
