@@ -236,8 +236,7 @@ hooks:
   - event: SessionStart
     command: "harnez hook claude-instructions"
   - event: Stop
-    # timeout: ffplay blocks forever when the audio sink (e.g. Bluetooth) is asleep
-    command: "timeout 3 ffplay -nodisp -autoexit -loglevel quiet /usr/share/sounds/freedesktop/stereo/window-attention.oga </dev/null >/dev/null 2>&1 || true"
+    command: "harnez hook sound || true"
   # telemetry (always-on) + distill autopipe (opt-in via
   # HARNEZ_DISTILL_AUTOPIPE=true, see issue 069) in ONE PreToolUse/Bash
   # hook: `harnez exec hook` composes distill's own rewrite internally
