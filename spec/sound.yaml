@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=schemas/sound.schema.json
+#
+# Sound playback player fallback chain and notification sounds per OS (issue 640).
+# Players are tried in order. If a player binary is missing or exits non-zero immediately,
+# the next player is tried. If a player times out, the audio sink is assumed stuck
+# and playback stops immediately.
+timeout: 3s
+platforms:
+  linux:
+    sound_file: /usr/share/sounds/freedesktop/stereo/window-attention.oga
+    players:
+      - name: pw-play
+        command: ["pw-play", "{file}"]
+      - name: paplay
+        command: ["paplay", "{file}"]
+      - name: canberra-gtk-play
+        command: ["canberra-gtk-play", "-f", "{file}"]
+      - name: aplay
+        command: ["aplay", "-q", "{file}"]
+      - name: ffplay
+        command: ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", "{file}"]
+  darwin:
+    sound_file: /System/Library/Sounds/Glass.aiff
+    players:
+      - name: afplay
+        command: ["afplay", "{file}"]
