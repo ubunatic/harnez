@@ -48,6 +48,10 @@ report if the hook does not fire or cannot replace messages on the installed Cla
 - Auto compaction was not run: this CLI accepts `--autocompact` only at 100k tokens or higher,
   which was not reached in this deliberately small probe. No settings files were edited.
 - Evidence session JSONL: `~/.claude/projects/-tmp-harnez-646-HcppcJ/00965b49-9af2-46eb-a0e0-2d176a3c6828.jsonl`.
+- **PASS — interactive `/compact` (user, 2026-09-30).** Run via
+  `scripts/canary-646-claude-compact.sh`; after a typed `/compact`, Claude reported that the only
+  context left was `HARNEZ_646_REPLACEMENT_7f3a91c2` and that no built-in summary was visible.
+  `check` passed (compact boundary + marker in the session file).
 
 ## Other agents (moved from 644)
 - agy: harnez's jev compaction could rewrite agy session data on disk. Canary: does agy accept a
