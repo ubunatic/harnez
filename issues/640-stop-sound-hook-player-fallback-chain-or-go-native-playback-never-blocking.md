@@ -1,6 +1,6 @@
 # 640 — Stop sound hook: player fallback chain or Go-native playback, never blocking
 
-**Status**: Open
+**Status**: Closed — Delivered in 170018ff, 5f8da1be, 62049bf9; host review done; hook returns in 21 ms
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Config & Hooks
@@ -68,3 +68,7 @@ Pre-work (host review of M2):
 - `TestApply_FullThenDocsOnly` (internal/claude/components_test.go:224) used the old `ffplay`
   Stop hook as its "non-harnez hook must survive" example. Keep that assertion; give the test
   its own non-harnez Stop hook fixture instead of relying on config.yaml.
+
+M3 delivered (62049bf9, dev640d): Stop hook is `harnez hook sound`; docs-only test uses its own
+`user-notify` hook. `go test ./cmd/harnez/ ./internal/claude/ ./internal/sound/` green.
+Open: audible playback not yet confirmed by the user; issue 641 may replace the player chain.
