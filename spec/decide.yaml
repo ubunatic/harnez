@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=schemas/decide.schema.json
+#
+# Decision backends for `harnez decide` (issue 633). A backend is a named
+# endpoint plus the wire protocol it speaks. Add a local model (Laya,
+# lmcoder, ...) as another entry: same protocol, local base_url, no key.
+default_backend: jev
+backends:
+  jev:
+    description: TypeSafe Jev (System One), hosted
+    protocol: systemone
+    base_url: https://api.typesafe.ai
+    base_url_env: TYPESAFE_API_BASE
+    path: /v1/systemone
+    model: jev-latest
+    api_key_env: TYPESAFE_API_KEY
+    timeout: 30s

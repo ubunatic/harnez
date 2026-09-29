@@ -39,6 +39,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | [TUIDesign.md](TUIDesign.md) | Single-cell indicator semantics, panel visibility model invariants, and raw-mode hotkey contracts (consult when changing gauges, multi-panel layouts, or key dispatch) |
 | [Databases.md](Databases.md) | Every place harnez stores data: SQLite DBs, JSONL logs, state, caches, config, temp and leftovers | Read before touching or cleaning `~/.harnez` or adding a new store |
 | [ExternalSkills.md](ExternalSkills.md) | Third-party skills: registry installs, bundled (vendored) skills, explicit-only mode, updates with moved/gone detection | Read before touching `harnez skill`, `bundled_skills`, or onboarding a skills repo (issue 636) |
+| [Decide.md](Decide.md) | `harnez decide`: typed decisions (noul, choice, score) via Jev; backends from `spec/decide.yaml`; adding local models | Read before touching `internal/decide`, `spec/decide.yaml`, or hooks that call a decision model (issues 633-635) |
 | [Bench.md](Bench.md) | Optional `harnez bench` harness: specced agent tasks under lite/full docs and PNG cards, own DB | Read when benchmarking doc delivery across agents |
 | [Testing.md](Testing.md) | Test layers and verification entry points for package, integration, static, smoke, canary, and live checks |
 

@@ -174,7 +174,19 @@ decide:
       endpoint: https://api.needle3.ai/v1/decisions
 ```
 
-## 3. Implementation & Verification Plan
+## 3. Progress (2026-09-29)
+Built the first slice; see `docs/Decide.md`:
+- `internal/decide`: `Backend` interface, request/answer types, spec loader, `systemone` client.
+- `spec/decide.yaml` + schema: backend `jev` (TypeSafe direct, `$TYPESAFE_API_KEY`). A local
+  model plugs in as a spec entry (same protocol) or as a new protocol client.
+- `harnez decide`: `-f`, `--noul/--choice/--score`, `--option`, `--level`, state from flags,
+  args or stdin, `--pick`, `--threshold`, `--format table|json|quiet`. Verified live.
+
+Not done yet: user config overrides in `~/.harnez/config.yaml` (only the embedded spec and env
+vars today), batching several requests in parallel, a mock backend beyond the test server,
+lmcoder/Needle3/Laya entries (no endpoints known yet).
+
+## 4. Implementation & Verification Plan
 1. **Model Adapter**: Implement `internal/decide/jev.go` handling the HTTP POST request/response for Jev via Vercel AI Gateway, OpenRouter, and TypeSafe, with offline deterministic mock for tests.
 2. **Local / Embedding Adapter**: Implement `internal/decide/lmcoder.go` stub / protocol adapter.
 3. **CLI Command**: Add `cmd/harnez/decide.go` supporting structured file inputs (`-f`, `--state-file`, `--json`), multi-option `--option "name: desc"` flags, `--threshold`, and `--pick`.

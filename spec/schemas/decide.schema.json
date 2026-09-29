@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["default_backend", "backends"],
+  "additionalProperties": false,
+  "properties": {
+    "default_backend": { "type": "string", "minLength": 1 },
+    "backends": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["protocol", "base_url", "path", "timeout"],
+        "additionalProperties": false,
+        "properties": {
+          "description": { "type": "string" },
+          "protocol": { "type": "string", "enum": ["systemone"] },
+          "base_url": { "type": "string", "pattern": "^https?://" },
+          "base_url_env": { "type": "string" },
+          "path": { "type": "string", "pattern": "^/" },
+          "model": { "type": "string" },
+          "api_key_env": { "type": "string" },
+          "timeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m)$" }
+        }
+      }
+    }
+  }
+}
