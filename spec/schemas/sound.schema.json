@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ubunatic.com/harnez/spec/schemas/sound.schema.json",
+  "title": "harnez sound playback player fallback specification",
+  "type": "object",
+  "required": ["timeout", "platforms"],
+  "additionalProperties": false,
+  "properties": {
+    "timeout": {
+      "type": "string",
+      "pattern": "^[0-9]+(ms|s|m)$"
+    },
+    "platforms": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["sound_file", "players"],
+        "additionalProperties": false,
+        "properties": {
+          "sound_file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "players": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["name", "command"],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "command": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

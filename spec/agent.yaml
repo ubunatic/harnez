@@ -27,11 +27,11 @@ models:
     aliases: [sol, sol:low]
     preferred: true
     provider: codex
-    name: gpt-6-sol
+    name: gpt-6.1-sol
     tier: low
     roles: developer, advisor, reviewer
-    cost: 50
-    eff: "-"
+    cost: 20
+    eff: "~"
     skills: Go~ TUI~ SQL?
     use: capable coding and tool use; milestone reviewer; tends to over-refactor
   codex:astra:
