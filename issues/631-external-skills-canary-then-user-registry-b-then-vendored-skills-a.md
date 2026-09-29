@@ -58,7 +58,7 @@ external tool needs (node, ffmpeg, playwright, API keys) are invisible.
 marker, into all `claude.SkillTargets`; refuses foreign dirs, unsafe names, `-`-prefixed
 URLs/refs; skips symlinks and `.git`. Reviewer findings 1-10 addressed. E2E verified against
 scroll-craft in scratch targets.
-Deferred: "lazy" skills + `skill-finder` skill; remote marketplace search (search is local only).
+Deferred: "lazy" skills + `skill-finder` skill. Dropped (user, 2026-09-29): online marketplace search; search stays local only.
 Next: step A (vendored skills) and [[632-re-home-mattpocock-derived-skills-as-external-skills-issue-631-registry]].
 
 ## 6. Explicit-Only Mode (2026-09-29)
