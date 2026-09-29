@@ -29,7 +29,13 @@ tracked against upstream. Once 631's external registry exists, they fit its mode
   `~/.gemini/skills`, `~/.prime/agent/skills` hold only harnez-managed skills. `~/.claude/skills/synced`
   is Claude's own synced-skills bucket, not harnez; out of scope.
 
-## 3. Plan
+## 3. Decision (2026-09-29)
+Install upstream unmodified as external skills, pinned. The harnez deltas (tickets go to
+`issues/`) are already stated by repo rules (`docs/IssueTracking.md`, AGENTS.md), which override
+skill defaults, so no overlay is needed. `sync-mattpocock-skills.md` is replaced by
+`harnez skill update`.
+
+## 4. Plan
 1. Wait for 631 step B (`harnez skill install`).
 2. Per skill: install upstream pinned as external, or keep the harnez adaptation; record the choice.
 3. If external: delete the `docs/proposed/` copy and `sync-mattpocock-skills.md` (the registry's
