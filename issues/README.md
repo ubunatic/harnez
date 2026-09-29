@@ -637,3 +637,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 636 | [636-skill-to-assess-and-onboard-external-skills-from-a-url.md](636-skill-to-assess-and-onboard-external-skills-from-a-url.md) | Skill to assess and onboard external skills from a URL | Open |
 | 637 | [637-diff-and-status-report-drift-in-bundled-skill-copies.md](637-diff-and-status-report-drift-in-bundled-skill-copies.md) | diff and status report drift in bundled skill copies | Open |
 | 638 | [638-harnez-read-fails-on-missing-harnez-rules-local-md-from-agents-md-read-list.md](638-harnez-read-fails-on-missing-harnez-rules-local-md-from-agents-md-read-list.md) | harnez read reports optional .harnez/rules/Local.md as an error when missing | Open |
+| 639 | [639-recommend-loom-eval-for-ansi-asset-validation-in-agent-guidelines.md](639-recommend-loom-eval-for-ansi-asset-validation-in-agent-guidelines.md) | Recommend `loom eval` for .ansi Asset Validation in Agent Guidelines | Open |
