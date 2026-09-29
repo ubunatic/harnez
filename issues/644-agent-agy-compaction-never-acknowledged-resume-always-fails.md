@@ -1,6 +1,6 @@
 # 644 — agent: agy resume blocked by harnez's own compaction check
 
-**Status**: Open
+**Status**: Closed — agy resume skips harnez compaction (58bac9bf); agy context marked unknown (3b4b2f77, M1). jev TODO moved to 646.
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Bug
@@ -45,7 +45,7 @@ agy compacts its own context automatically; harnez never needed to. Two harnez f
 `TODO(644)` in place. M1 resolves the remaining turn-total `ContextTokens` fault by marking agy
 context unknown; the jev canary remains future work.
 
-## TODO: our own compaction for agy via jev
+## TODO: our own compaction for agy via jev (moved to 646)
 harnez has a new jev-based compaction that could compact an agy session's data on disk. Canary
 first (docs/Canary.md): does agy accept a resumed session whose on-disk data was compacted, and
 does it save tokens compared with agy's own auto-compaction? Only if both hold, re-enable
