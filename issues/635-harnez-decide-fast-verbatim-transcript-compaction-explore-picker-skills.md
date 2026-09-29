@@ -1,6 +1,6 @@
 # 635 — harnez decide: fast verbatim transcript compaction & explore/picker skills
 
-**Status**: Open
+**Status**: Closed — implemented verbatim transcript compaction engine and CLI
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Feature
