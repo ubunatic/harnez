@@ -1,6 +1,6 @@
 # 645 — decide: progressive state fitting and metric enhancements for verbatim compaction
 
-**Status**: Open
+**Status**: Closed — implemented progressive state fitting, reproducible question prompts, exact truncation notices, and byte reduction metrics
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Feature
