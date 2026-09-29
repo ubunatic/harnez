@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -317,6 +318,68 @@ func TestFallbackChainTimeoutStopsImmediately(t *testing.T) {
 
 	if _, err := os.Stat(unreachableMarker); !os.IsNotExist(err) {
 		t.Errorf("second player was called after first player timed out")
+	}
+}
+
+func TestFallbackChainTimeoutKillsProcessGroup(t *testing.T) {
+	tempDir := t.TempDir()
+	pidFile := filepath.Join(tempDir, "child.pid")
+	// fake-pg starts a background sleep child in the same process group,
+	// writes its PID to pidFile, and hangs in wait.
+	createFakePlayer(t, tempDir, "fake-pg", fmt.Sprintf("sleep 30 &\necho $! > %q\nwait\n", pidFile))
+
+	spec := &Spec{
+		Timeout: "50ms",
+		Platforms: map[string]PlatformSpec{
+			"linux": {
+				SoundFile: "/sound.oga",
+				Players: []PlayerSpec{
+					{Name: "fake-pg", Command: []string{"fake-pg", "{file}"}},
+				},
+			},
+		},
+	}
+
+	t.Setenv("PATH", tempDir+":"+os.Getenv("PATH"))
+
+	err := PlayWithOptions(context.Background(), Options{
+		Spec: spec,
+		OS:   "linux",
+	})
+	if err == nil {
+		t.Fatal("PlayWithOptions() succeeded; want timeout error")
+	}
+	if !errors.Is(err, ErrTimeout) {
+		t.Fatalf("err = %v, want ErrTimeout", err)
+	}
+
+	pidData, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatalf("failed to read child pid file: %v", err)
+	}
+	var childPid int
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(pidData)), "%d", &childPid); err != nil {
+		t.Fatalf("failed to parse child pid %q: %v", string(pidData), err)
+	}
+	if childPid <= 1 {
+		t.Fatalf("invalid child pid: %d", childPid)
+	}
+
+	// Verify child process is dead (kill(pid, 0) returns ESRCH)
+	dead := false
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		err := syscall.Kill(childPid, 0)
+		if errors.Is(err, syscall.ESRCH) {
+			dead = true
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if !dead {
+		_ = syscall.Kill(childPid, syscall.SIGKILL)
+		t.Errorf("child process %d was not killed on process group timeout", childPid)
 	}
 }
 

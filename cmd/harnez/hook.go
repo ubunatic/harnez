@@ -99,6 +99,7 @@ func newHookCmd() *cobra.Command {
 			return runClaudeInstructionsHook(cmd.OutOrStdout())
 		},
 	})
+	cmd.AddCommand(newHookSoundCmd())
 
 	return cmd
 }
@@ -1132,4 +1133,3 @@ func runPreExecHook(ctx context.Context, in io.Reader, out io.Writer, flagCmd, f
 	}
 	return nil
 }
-
