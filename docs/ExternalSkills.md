@@ -71,5 +71,10 @@ reported gone with `to-spec` as the top candidate.
 
 - Skill scripts may resolve their workspace from the cwd (scroll-craft does); run them from the
   project, never from the install dir.
+- `diff`/`status` do not report drift in bundled copies; `apply` repairs it silently (issue 637).
+- Temp clones in `/tmp` fail on rename when `/tmp` is tmpfs; always stage under the target root.
+- `vendor` deletes stale skill dirs, so its `dir` is pinned to `third_party/skills/<name>` and it
+  only removes dirs containing `SKILL.md` (a `dir: .` typo once could have wiped the repo).
+- Onboarding a new skills repo: assess first (scope, quality, fit), see issue 636.
 - Skills needing tools or keys ship their own check (e.g. `scripts/doctor.mjs`); `explore` names
   it but does not run it.
