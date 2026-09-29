@@ -83,9 +83,12 @@ func (s *Session) ProviderID() string {
 	return s.ID
 }
 
-// LastContextTokens reads the new full-context field or reconstructs it from
-// the most recent legacy turn record. Older records without either are unknown.
+// LastContextTokens reads the full-context field or reconstructs it from the
+// most recent legacy turn record. Negative values explicitly represent unknown.
 func (s *Session) LastContextTokens() int {
+	if s.ContextTokens < 0 {
+		return -1
+	}
 	if s.ContextTokens > 0 {
 		return s.ContextTokens
 	}
@@ -94,6 +97,25 @@ func (s *Session) LastContextTokens() int {
 		return max(r.NewInputTokens+r.CachedInputTokens-r.OutputTokens, 0)
 	}
 	return 0
+}
+
+// MarshalJSON omits unknown context sizes from status and list output.
+func (s Session) MarshalJSON() ([]byte, error) {
+	type sessionJSON Session
+	var contextTokens *int
+	if s.ContextTokens >= 0 {
+		contextTokens = &s.ContextTokens
+	}
+	return json.Marshal(struct {
+		*sessionJSON
+		ContextTokens *int `json:"context_tokens,omitempty"`
+	}{sessionJSON: (*sessionJSON)(&s), ContextTokens: contextTokens})
+}
+
+// marshalStoredSession retains the unknown sentinel in the private session registry.
+func marshalStoredSession(s *Session) ([]byte, error) {
+	type sessionJSON Session
+	return json.MarshalIndent((*sessionJSON)(s), "", "  ")
 }
 
 // Find resolves a session by registry ID or short name.
@@ -157,7 +179,7 @@ func (s *FileSessionStore) Save(sess *Session) error {
 		return fmt.Errorf("session must have an ID")
 	}
 	path := filepath.Join(s.dir, sess.ID+".json")
-	data, err := json.MarshalIndent(sess, "", "  ")
+	data, err := marshalStoredSession(sess)
 	if err != nil {
 		return fmt.Errorf("failed to marshal session: %w", err)
 	}
@@ -190,7 +212,7 @@ func (s *FileSessionStore) Create(sess *Session) error {
 			return fmt.Errorf("%w: %q", ErrSessionNameInUse, sess.Name)
 		}
 	}
-	data, err := json.MarshalIndent(sess, "", "  ")
+	data, err := marshalStoredSession(sess)
 	if err != nil {
 		return fmt.Errorf("failed to marshal session: %w", err)
 	}

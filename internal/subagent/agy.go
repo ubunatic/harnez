@@ -208,7 +208,7 @@ func parseAgy(data []byte) (*TurnResult, error) {
 		OutputTokens: v.Usage.Output + v.Usage.Think,
 		CachedTokens: v.Usage.Cache,
 	}
-	r.ContextTokens = r.InputTokens + r.CachedTokens
+	r.ContextTokens = -1 // agy's usage totals the whole turn, not the last-call context.
 	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens
 	r.TokensCumulative = r.TokensTurn
 	return r, nil

@@ -1,12 +1,45 @@
 package subagent
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestUnknownContextRemainsUnknownAndIsOmittedFromJSON(t *testing.T) {
+	s := Session{ID: "unknown", ContextTokens: -1, TurnRecords: []TurnRecord{{NewInputTokens: 4200000, CachedInputTokens: 900000}}}
+	if got := s.LastContextTokens(); got != -1 {
+		t.Fatalf("LastContextTokens() = %d, want -1", got)
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got["context_tokens"]; ok {
+		t.Fatalf("unknown context_tokens should be omitted, got %s", b)
+	}
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&s); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Get(s.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := loaded.LastContextTokens(); got != -1 {
+		t.Fatalf("stored LastContextTokens() = %d, want -1", got)
+	}
+}
 
 func TestFileSessionStore_Save(t *testing.T) {
 	dir := t.TempDir()

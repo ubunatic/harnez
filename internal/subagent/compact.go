@@ -73,10 +73,13 @@ func VerifyCompaction(before int, result *TurnResult) error {
 }
 
 // EnsureContextUnderThreshold compacts only when the provider-reported full
-// input size of the last turn exceeds the limit, and blocks dispatch unless
-// completion, acknowledgement and a lower full input size are verified.
+// input size of the last turn exceeds the limit. Negative sizes are unknown and
+// skip compaction; zero remains unavailable and blocks dispatch.
 func EnsureContextUnderThreshold(contextTokens, threshold int, compact func() (*TurnResult, error)) (bool, error) {
-	if contextTokens <= 0 {
+	if contextTokens < 0 {
+		return false, nil
+	}
+	if contextTokens == 0 {
 		return false, fmt.Errorf("current context token count is unavailable; refusing to dispatch prompt")
 	}
 	if contextTokens < threshold {

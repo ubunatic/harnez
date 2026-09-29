@@ -14,6 +14,16 @@ import (
 
 func boolPtr(b bool) *bool { return &b }
 
+func TestParseAgyContextTokensUnknownDespiteTurnUsageTotals(t *testing.T) {
+	r, err := parseAgy([]byte(`{"status":"SUCCESS","response":"done","usage":{"input_tokens":4200000,"output_tokens":1200,"thinking_tokens":300,"cache_read_tokens":900000,"total_tokens":5101500}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.ContextTokens != -1 {
+		t.Fatalf("ContextTokens = %d, want -1 (unknown; agy usage is turn-total)", r.ContextTokens)
+	}
+}
+
 func TestAgyRunArgOrderAndAddDir(t *testing.T) {
 	var args []string
 	d := AgyDriver{Dir: "/work/dir", Command: func(_ context.Context, _ string, gotArgs ...string) ([]byte, error) {

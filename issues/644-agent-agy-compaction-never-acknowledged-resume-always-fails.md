@@ -33,9 +33,17 @@ agy compacts its own context automatically; harnez never needed to. Two harnez f
 - Report agy context size from the last model call if agy's JSON exposes it; otherwise mark it
   unknown instead of the turn total. Check other users of `ContextTokens` (status, telemetry).
 
+## M1 delivered (2026-09-30)
+- Agy JSON exposes turn usage totals but no last-call context size; `ContextTokens` is now `-1`
+  (unknown). Resume skips compaction checks for unknown context, session access preserves unknown,
+  and status/list JSON omits the unknown field. Token usage telemetry remains based on usage fields.
+- Regression coverage reproduces the former turn-total context report and checks unknown session
+  context is not reconstructed or emitted.
+
 ## Quick fix (2026-09-30)
 `cmd/harnez/agent_run.go`: resume now skips harnez-driven compaction for agy (like codex), with a
-`TODO(644)` in place. Fault 2 (turn-total `ContextTokens`) is still open.
+`TODO(644)` in place. M1 resolves the remaining turn-total `ContextTokens` fault by marking agy
+context unknown; the jev canary remains future work.
 
 ## TODO: our own compaction for agy via jev
 harnez has a new jev-based compaction that could compact an agy session's data on disk. Canary

@@ -548,7 +548,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	// model call of a turn, so the threshold check misfires (issue 644).
 	// TODO(644): compact agy session data on disk via jev once a canary
 	// shows it works for agy and helps.
-	if (sess.Provider != "codex" && sess.Provider != "agy") || interactive {
+	if contextTokens >= 0 && ((sess.Provider != "codex" && sess.Provider != "agy") || interactive) {
 		compacted, err = subagent.EnsureContextUnderThreshold(contextTokens, threshold, compactFn)
 		if err != nil {
 			return fmt.Errorf("refusing to send resume prompt: %w", err)

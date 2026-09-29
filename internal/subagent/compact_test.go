@@ -62,7 +62,11 @@ func TestEnsureContextUnderThreshold(t *testing.T) {
 		called = true
 		return &TurnResult{Response: "Compaction complete", ContextTokens: 100}, nil
 	}
-	compacted, err := EnsureContextUnderThreshold(199, 200, compact)
+	compacted, err := EnsureContextUnderThreshold(-1, 200, compact)
+	if err != nil || compacted || called {
+		t.Fatalf("unknown context: compacted=%v called=%v err=%v", compacted, called, err)
+	}
+	compacted, err = EnsureContextUnderThreshold(199, 200, compact)
 	if err != nil || compacted || called {
 		t.Fatalf("under threshold: compacted=%v called=%v err=%v", compacted, called, err)
 	}
