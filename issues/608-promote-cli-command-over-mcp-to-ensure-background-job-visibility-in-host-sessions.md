@@ -1,6 +1,6 @@
 # 608 — Promote CLI command over MCP to ensure background job visibility in host sessions
 
-**Status**: Open
+**Status**: Closed — merged into 643
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Architecture
