@@ -163,9 +163,9 @@ decide:
   default_model: jev
   providers:
     jev:
-      provider: vercel_ai_gateway # or openrouter, typesafe
-      api_key_env: VERCEL_AI_GATEWAY_KEY # fallback OPENROUTER_API_KEY, TYPESAFE_API_KEY
-      endpoint: https://ai-gateway.vercel.com/v1/system-one
+      provider: typesafe # or vercel_ai_gateway, openrouter
+      api_key_env: TYPESAFE_API_KEY # user key, set in ~/.userrc; fallback VERCEL_AI_GATEWAY_KEY, OPENROUTER_API_KEY
+      endpoint: https://ai-gateway.vercel.com/v1/system-one # gateway only; verify the direct TypeSafe endpoint
     lmcoder:
       endpoint: http://127.0.0.1:8088/decide
     laya:
