@@ -186,14 +186,20 @@ func CheckCommand(ctx context.Context, backend decide.Backend, cwd, command stri
 
 // Enabled reports whether decide-based guardrails are active.
 func Enabled(explicit *bool) bool {
+	enabled, _ := EnabledWithSource(explicit)
+	return enabled
+}
+
+// EnabledWithSource reports whether decide-based guardrails are active and the resolved source.
+func EnabledWithSource(explicit *bool) (bool, string) {
 	if explicit != nil {
-		return *explicit
+		return *explicit, "explicit override"
 	}
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("HARNEZ_DECIDE_GUARD"))) {
 	case "0", "false", "off", "no":
-		return false
+		return false, "$HARNEZ_DECIDE_GUARD"
 	case "1", "true", "on", "yes":
-		return true
+		return true, "$HARNEZ_DECIDE_GUARD"
 	}
 
 	if home, err := os.UserHomeDir(); err == nil {
@@ -207,9 +213,9 @@ func Enabled(explicit *bool) bool {
 				} `yaml:"hooks"`
 			}
 			if yaml.Unmarshal(data, &cfg) == nil && cfg.Hooks.Decide.Guard != nil {
-				return *cfg.Hooks.Decide.Guard
+				return *cfg.Hooks.Decide.Guard, "~/.harnez/config.yaml"
 			}
 		}
 	}
-	return false
+	return false, "default (disabled)"
 }

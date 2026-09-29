@@ -260,6 +260,12 @@ hooks:
   - event: PreToolUse
     matcher: ReadMultipleFiles
     command: "harnez hook read"
+  - event: PreToolUse
+    matcher: Edit
+    command: "harnez hook pre-edit"
+  - event: PreToolUse
+    matcher: Write
+    command: "harnez hook pre-edit"
 
 # thinking verbs (get rid of annoying word creations)
 verbs:

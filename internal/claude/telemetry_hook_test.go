@@ -233,6 +233,12 @@ func TestApplyInstallsReadHooks(t *testing.T) {
 	if !settingsHasHook(t, settingsPath, "PreToolUse", "ReadMultipleFiles", "harnez hook read") {
 		t.Errorf("expected settings.json to contain PreToolUse/ReadMultipleFiles hook")
 	}
+	if !settingsHasHook(t, settingsPath, "PreToolUse", "Edit", "harnez hook pre-edit") {
+		t.Errorf("expected settings.json to contain PreToolUse/Edit hook")
+	}
+	if !settingsHasHook(t, settingsPath, "PreToolUse", "Write", "harnez hook pre-edit") {
+		t.Errorf("expected settings.json to contain PreToolUse/Write hook")
+	}
 
 	// Idempotency: second apply must preserve hooks without duplication
 	if err := ApplyAll(targetDir, cfg, nil, false, false); err != nil {
@@ -243,6 +249,12 @@ func TestApplyInstallsReadHooks(t *testing.T) {
 	}
 	if !settingsHasHook(t, settingsPath, "PreToolUse", "ReadMultipleFiles", "harnez hook read") {
 		t.Errorf("expected settings.json to retain PreToolUse/ReadMultipleFiles hook after second apply")
+	}
+	if !settingsHasHook(t, settingsPath, "PreToolUse", "Edit", "harnez hook pre-edit") {
+		t.Errorf("expected settings.json to retain PreToolUse/Edit hook after second apply")
+	}
+	if !settingsHasHook(t, settingsPath, "PreToolUse", "Write", "harnez hook pre-edit") {
+		t.Errorf("expected settings.json to retain PreToolUse/Write hook after second apply")
 	}
 }
 
