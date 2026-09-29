@@ -157,6 +157,9 @@ type DecisionResponse struct {
 ```
 
 ### Provider Configurations
+> Superseded 2026-09-29: backends live in `spec/decide.yaml` (see `docs/Decide.md`); the
+> user config below is not built. `--backend <name>` picks a backend, `--model` only sets the
+> model name sent to it. Read `--model jev` in this ticket as `--backend jev`.
 Configured in `~/.harnez/config.yaml`:
 ```yaml
 decide:

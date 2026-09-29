@@ -19,6 +19,8 @@ Currently, safety checks either rely on brittle regexes or heavy LLM invocations
 Using the `harnez decide` engine (issue 633), we can implement high-speed (~300ms), low-cost guardrails and lifecycle triggers across all supported agent hook environments.
 
 ## 2. Technical Specification / Findings
+> Note 2026-09-29: `harnez decide` exists (issue 633, `docs/Decide.md`). Backends are chosen
+> with `--backend`; read `--model jev` here as `--backend jev`. Gates must treat exit 2 as unknown.
 
 ### Cross-Agent Hook Surface Analysis
 Harnez supports multiple host agents, each with its own hook schema and lifecycle events:

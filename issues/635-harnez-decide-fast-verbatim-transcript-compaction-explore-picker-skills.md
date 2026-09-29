@@ -21,6 +21,8 @@ Inspired by `tamaratran/fast-jev-compaction` and `disler/ten-levels-of-jev` (Lev
   - **Browser & Action Picker**: Given interactive UI elements or workflow branches, selects the next targeted interaction.
 
 ## 2. Technical Specification / Findings
+> Note 2026-09-29: `harnez decide` exists (issue 633, `docs/Decide.md`). Backends are chosen
+> with `--backend`; read `--model jev` here as `--backend jev`. Gates must treat exit 2 as unknown.
 
 ### 1. Verbatim Transcript Compaction (`harnez compact`)
 Directly integrates or adapts the `fast-jev-compaction` strategy:
