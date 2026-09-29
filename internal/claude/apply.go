@@ -1771,3 +1771,7 @@ func OpenConfig(configPath string) (*Config, string, error) {
 	cfg, err := LoadConfig(configPath)
 	return cfg, configPath, err
 }
+
+// SkillTargets returns every agent skill directory `apply` installs into.
+// The external skill registry (internal/skillreg) installs into the same set.
+func SkillTargets(cfg *Config) []string { return skillTargets(cfg) }

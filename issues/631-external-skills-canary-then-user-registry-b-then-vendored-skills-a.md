@@ -50,3 +50,13 @@ external tool needs (node, ffmpeg, playwright, API keys) are invisible.
   creates `scrollcraft/` inside it. Registry (B) must keep install dirs read-only / run from the project.
 - Finding: plugin manifests are not needed for non-Claude agents; the skill dir alone is portable.
 - Gemini/Prime not tested. Canary copies removed afterwards.
+
+## 5. Step B Done (2026-09-29)
+`harnez skill install|list|update|remove|search|explore|show` (`internal/skillreg`,
+`cmd/harnez/skill.go`). Registry: `~/.harnez/skills/registry.yaml` + `src/<name>@<sha12>` clones
+(`$HARNEZ_SKILLS_HOME` overrides). Installs only the skill dir, staged with a `.harnez-external`
+marker, into all `claude.SkillTargets`; refuses foreign dirs, unsafe names, `-`-prefixed
+URLs/refs; skips symlinks and `.git`. Reviewer findings 1-10 addressed. E2E verified against
+scroll-craft in scratch targets.
+Deferred: "lazy" skills + `skill-finder` skill; remote marketplace search (search is local only).
+Next: step A (vendored skills) and [[632-re-home-mattpocock-derived-skills-as-external-skills-issue-631-registry]].
