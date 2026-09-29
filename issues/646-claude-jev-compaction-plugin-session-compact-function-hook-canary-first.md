@@ -69,6 +69,18 @@ Pre-Work / Required Refinements:
 - Tests: Go tests for embed + apply (write, idempotency, removal); a scripted canary run like M1
   that shows a real `harnez compact` result replacing the history.
 
+### M2 bridge probe result (2026-09-30)
+- Probe added to `canary/646-session-compact/hooks/probe.ts`. It reports `$` and nested API keys,
+  global `fetch`/`process`/`Bun`/`Deno`/`require` types, and attempts `$` exec/shell, loopback
+  fetch, and dynamic `node:child_process` import with `harnez --version`.
+- Run: `bash canary/646-session-compact/run.sh`, Claude Code 2.1.285, Haiku, `-p`, a `mktemp`
+  cwd, `--plugin-dir`, and `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`; the script started a Python
+  HTTP server bound to `127.0.0.1` and cleaned it up afterward. `/compact` ran, but the debug
+  log reports `Registered 0 hooks from 4 plugins` and `Hooks: Found 0 total hooks in registry`.
+- **Inconclusive: none of the bridge attempts ran.** The function hook did not register, so this
+  run does not establish whether the runtime permits execution or HTTP. Resolve the hook
+  registration discrepancy and rerun this probe before proceeding with M2 integration.
+
 ## Other agents (moved from 644)
 - agy: harnez's jev compaction could rewrite agy session data on disk. Canary: does agy accept a
   resumed session whose data was compacted, and does it save tokens compared with agy's own

@@ -3,7 +3,19 @@ set -euo pipefail
 
 plugin_dir=$(cd "$(dirname "$0")" && pwd)
 run_dir=$(mktemp -d "${TMPDIR:-/tmp}/harnez-646-XXXXXX")
-trap 'rm -rf "$run_dir"' EXIT
+server_pid=
+cleanup() {
+  if test -n "$server_pid"
+  then
+    kill "$server_pid" 2>/dev/null || true
+    wait "$server_pid" 2>/dev/null || true
+  fi
+  rm -rf "$run_dir"
+}
+trap cleanup EXIT
+
+python3 -m http.server 18764 --bind 127.0.0.1 --directory "$run_dir" >"$run_dir/http.log" 2>&1 &
+server_pid=$!
 
 cd "$run_dir"
 printf 'Scratch cwd: %s\n' "$run_dir"
@@ -19,24 +31,23 @@ CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --model haiku \
   '/compact' > compact.json
 cat compact.json
 
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --model haiku \
-  --plugin-dir "$plugin_dir" --output-format json --resume "$session_id" \
-  'What exact replacement marker is present in the compacted context? Reply with the marker only.' > recall.json
-
 python3 - <<'PY'
 import json
 import sys
 
-marker = "HARNEZ_646_REPLACEMENT_7f3a91c2"
 compact = json.load(open("compact.json", encoding="utf-8"))
-recall = json.load(open("recall.json", encoding="utf-8"))
-
 print(f"Compact command: {compact.get('local_command')}")
-print(f"Replacement marker response: {recall.get('result')}")
-if compact.get("local_command") != "compact" or recall.get("result", "").strip() != marker:
-    print("FAIL: manual compaction or replacement marker was not observed.", file=sys.stderr)
+if compact.get("local_command") != "compact":
+    print("FAIL: manual compaction was not observed.", file=sys.stderr)
     sys.exit(1)
-print("PASS: manual compaction returned the hook-only marker to the resumed model.")
+print("PASS: manual compaction ran.")
 PY
 
-printf '\nRun artifacts were removed with the scratch directory.\n'
+debug_file=$(ls -t "$HOME"/.claude/debug/*.txt | head -1)
+printf 'Claude Code debug log: %s\n' "$debug_file"
+if ! rg -Fq 'session.compact bridge probe' "$debug_file"
+then
+  printf 'FAIL: bridge probe did not log; inspect hook registration in the debug log.\n' >&2
+  exit 1
+fi
+printf 'PASS: bridge probe logged its route results.\n'
