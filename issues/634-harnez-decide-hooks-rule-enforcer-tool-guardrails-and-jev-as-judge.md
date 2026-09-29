@@ -1,6 +1,6 @@
 # 634 — harnez decide: hooks & rule enforcer, tool guardrails, and Jev-as-judge
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Feature

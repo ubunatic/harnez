@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -19,6 +20,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+	"ubunatic.com/harnez/internal/decide"
+	"ubunatic.com/harnez/internal/guard"
 	"ubunatic.com/harnez/internal/readcard"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/telemetry"
@@ -86,6 +89,8 @@ func newHookCmd() *cobra.Command {
 
 	readCmd := newReadHookCmd()
 	cmd.AddCommand(readCmd)
+	cmd.AddCommand(newPreEditHookCmd())
+	cmd.AddCommand(newPreExecHookCmd())
 	cmd.AddCommand(&cobra.Command{
 		Use:          "claude-instructions",
 		Short:        "Print Claude-only Harnez instruction reminders",
@@ -803,3 +808,328 @@ func readRedirect(args map[string]any, baseDir string) string {
 	}
 	return command
 }
+
+type preEditOptions struct {
+	Backend   decide.Backend
+	Threshold float64
+	RepoRoot  string
+	Enforce   *bool
+}
+
+func newPreEditHookCmd() *cobra.Command {
+	var file, content string
+	var threshold float64
+	cmd := &cobra.Command{
+		Use:          "pre-edit",
+		Short:        "PreToolUse file edit rule enforcer hook",
+		Hidden:       true,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runPreEditHook(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), file, content, preEditOptions{
+				Threshold: threshold,
+			})
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&file, "file", "", "explicit file path to check")
+	f.StringVar(&content, "content", "", "proposed edit content")
+	f.Float64Var(&threshold, "threshold", 0, "confidence threshold (default: 0.85)")
+	return cmd
+}
+
+func runPreEditHook(ctx context.Context, in io.Reader, out io.Writer, flagFile, flagContent string, opts preEditOptions) error {
+	targetFile := flagFile
+	proposedContent := flagContent
+	isAGY := false
+	isClaude := false
+
+	if targetFile == "" {
+		raw, err := io.ReadAll(in)
+		if err != nil {
+			fmt.Fprintln(out, `{}`)
+			return nil
+		}
+		trimmed := strings.TrimSpace(string(raw))
+		if len(trimmed) == 0 {
+			fmt.Fprintln(out, `{}`)
+			return nil
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(raw, &payload); err == nil {
+			if _, ok := payload["conversationId"]; ok {
+				isAGY = true
+				if tc, ok := payload["toolCall"].(map[string]any); ok {
+					if args, ok := tc["args"].(map[string]any); ok {
+						if tf, ok := args["TargetFile"].(string); ok {
+							targetFile = tf
+						}
+						if cc, ok := args["CodeContent"].(string); ok {
+							proposedContent = cc
+						} else if rc, ok := args["ReplacementContent"].(string); ok {
+							proposedContent = rc
+						}
+					}
+				}
+			} else if tn, ok := payload["tool_name"].(string); ok || payload["hookEventName"] == "PreToolUse" {
+				isClaude = true
+				_ = tn
+				if ti, ok := payload["tool_input"].(map[string]any); ok {
+					if fp, ok := ti["file_path"].(string); ok {
+						targetFile = fp
+					} else if p, ok := ti["path"].(string); ok {
+						targetFile = p
+					}
+					if ns, ok := ti["new_string"].(string); ok {
+						proposedContent = ns
+					} else if c, ok := ti["content"].(string); ok {
+						proposedContent = c
+					}
+				}
+			} else {
+				if f, ok := payload["file"].(string); ok {
+					targetFile = f
+				}
+				if c, ok := payload["content"].(string); ok {
+					proposedContent = c
+				}
+			}
+		}
+	}
+
+	if targetFile == "" {
+		if isAGY {
+			fmt.Fprintln(out, `{"decision":"allow"}`)
+		} else {
+			fmt.Fprintln(out, `{}`)
+		}
+		return nil
+	}
+
+	if !guard.Enabled(opts.Enforce) {
+		if isAGY {
+			fmt.Fprintln(out, `{"decision":"allow"}`)
+		} else {
+			fmt.Fprintln(out, `{}`)
+		}
+		return nil
+	}
+
+	backend := opts.Backend
+	if backend == nil {
+		spec, err := decide.LoadSpec()
+		if err == nil {
+			backend, _ = spec.Open("", nil)
+		}
+	}
+
+	if backend == nil {
+		if isAGY {
+			fmt.Fprintln(out, `{"decision":"allow"}`)
+		} else {
+			fmt.Fprintln(out, `{}`)
+		}
+		return nil
+	}
+
+	repoRoot := opts.RepoRoot
+	if repoRoot == "" {
+		repoRoot, _ = os.Getwd()
+	}
+
+	v, err := guard.CheckFileEdit(ctx, backend, repoRoot, targetFile, proposedContent, opts.Threshold)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez pre-edit hook: %v\n", err)
+		if isAGY {
+			fmt.Fprintln(out, `{"decision":"allow"}`)
+		} else {
+			fmt.Fprintln(out, `{}`)
+		}
+		return nil
+	}
+
+	if v != nil && v.Blocked {
+		if isAGY {
+			return json.NewEncoder(out).Encode(agyPreToolUseOutput{
+				Decision: "deny",
+				Reason:   v.Reason,
+			})
+		}
+		if isClaude {
+			return json.NewEncoder(out).Encode(claudeHookOutput{
+				HookSpecificOutput: claudeHookSpecificOutput{
+					HookEventName:            "PreToolUse",
+					PermissionDecision:       "deny",
+					PermissionDecisionReason: v.Reason,
+				},
+			})
+		}
+		fmt.Fprintln(os.Stderr, v.Reason)
+		return &exitCodeError{Code: 1}
+	}
+
+	if isAGY {
+		fmt.Fprintln(out, `{"decision":"allow"}`)
+	} else {
+		fmt.Fprintln(out, `{}`)
+	}
+	return nil
+}
+
+type preExecOptions struct {
+	Backend   decide.Backend
+	Threshold float64
+	Cwd       string
+	Enforce   *bool
+}
+
+func newPreExecHookCmd() *cobra.Command {
+	var command, cwd string
+	var threshold float64
+	cmd := &cobra.Command{
+		Use:          "pre-exec",
+		Short:        "PreToolUse terminal command guardrail hook",
+		Hidden:       true,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runPreExecHook(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), command, cwd, preExecOptions{
+				Threshold: threshold,
+			})
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&command, "command", "", "command to check")
+	f.StringVar(&cwd, "cwd", "", "working directory")
+	f.Float64Var(&threshold, "threshold", 0, "confidence threshold (default: 0.85)")
+	return cmd
+}
+
+func runPreExecHook(ctx context.Context, in io.Reader, out io.Writer, flagCmd, flagCwd string, opts preExecOptions) error {
+	targetCmd := flagCmd
+	workingDir := flagCwd
+	isAGY := false
+	isClaude := false
+
+	if targetCmd == "" {
+		raw, err := io.ReadAll(in)
+		if err != nil {
+			fmt.Fprintln(out, `{}`)
+			return nil
+		}
+		trimmed := strings.TrimSpace(string(raw))
+		if len(trimmed) == 0 {
+			fmt.Fprintln(out, `{}`)
+			return nil
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal(raw, &payload); err == nil {
+			if _, ok := payload["conversationId"]; ok {
+				isAGY = true
+				if tc, ok := payload["toolCall"].(map[string]any); ok {
+					if args, ok := tc["args"].(map[string]any); ok {
+						if c, ok := args["CommandLine"].(string); ok {
+							targetCmd = c
+						}
+					}
+				}
+			} else if tn, ok := payload["tool_name"].(string); ok || payload["hookEventName"] == "PreToolUse" {
+				isClaude = true
+				_ = tn
+				if ti, ok := payload["tool_input"].(map[string]any); ok {
+					if c, ok := ti["command"].(string); ok {
+						targetCmd = c
+					}
+				}
+				if cwd, ok := payload["cwd"].(string); ok && workingDir == "" {
+					workingDir = cwd
+				}
+			} else {
+				if c, ok := payload["command"].(string); ok {
+					targetCmd = c
+				}
+				if cwd, ok := payload["cwd"].(string); ok && workingDir == "" {
+					workingDir = cwd
+				}
+			}
+		}
+	}
+
+	if targetCmd == "" {
+		if isAGY {
+			fmt.Fprintln(out, `{"decision":"allow"}`)
+		} else {
+			fmt.Fprintln(out, `{}`)
+		}
+		return nil
+	}
+
+	if !guard.Enabled(opts.Enforce) {
+		if isAGY {
+			fmt.Fprintln(out, `{"decision":"allow"}`)
+		} else {
+			fmt.Fprintln(out, `{}`)
+		}
+		return nil
+	}
+
+	backend := opts.Backend
+	if backend == nil {
+		spec, err := decide.LoadSpec()
+		if err == nil {
+			backend, _ = spec.Open("", nil)
+		}
+	}
+
+	if backend == nil {
+		if isAGY {
+			fmt.Fprintln(out, `{"decision":"allow"}`)
+		} else {
+			fmt.Fprintln(out, `{}`)
+		}
+		return nil
+	}
+
+	if workingDir == "" {
+		workingDir, _ = os.Getwd()
+	}
+
+	v, err := guard.CheckCommand(ctx, backend, workingDir, targetCmd, opts.Threshold)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "harnez pre-exec hook: %v\n", err)
+		if isAGY {
+			fmt.Fprintln(out, `{"decision":"allow"}`)
+		} else {
+			fmt.Fprintln(out, `{}`)
+		}
+		return nil
+	}
+
+	if v != nil && v.Blocked {
+		if isAGY {
+			return json.NewEncoder(out).Encode(agyPreToolUseOutput{
+				Decision: "deny",
+				Reason:   v.Reason,
+			})
+		}
+		if isClaude {
+			return json.NewEncoder(out).Encode(claudeHookOutput{
+				HookSpecificOutput: claudeHookSpecificOutput{
+					HookEventName:            "PreToolUse",
+					PermissionDecision:       "deny",
+					PermissionDecisionReason: v.Reason,
+				},
+			})
+		}
+		fmt.Fprintln(os.Stderr, v.Reason)
+		return &exitCodeError{Code: 1}
+	}
+
+	if isAGY {
+		fmt.Fprintln(out, `{"decision":"allow"}`)
+	} else {
+		fmt.Fprintln(out, `{}`)
+	}
+	return nil
+}
+
