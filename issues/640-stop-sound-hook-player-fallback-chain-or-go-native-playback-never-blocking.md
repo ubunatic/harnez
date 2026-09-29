@@ -71,4 +71,4 @@ Pre-work (host review of M2):
 
 M3 delivered (62049bf9, dev640d): Stop hook is `harnez hook sound`; docs-only test uses its own
 `user-notify` hook. `go test ./cmd/harnez/ ./internal/claude/ ./internal/sound/` green.
-Open: audible playback not yet confirmed by the user; issue 641 may replace the player chain.
+User confirmed audible playback 2026-09-30. Issue 641 may replace the player chain.
