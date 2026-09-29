@@ -30,5 +30,8 @@ Full study and comparison matrix: See `@docs/studies/PureGoSound.md`.
 - **Decoding Economics**: Embedding uncompressed 22.05 kHz 16-bit mono WAV (~44 KB) is net smaller than Ogg Vorbis + pure-Go Vorbis decoder (~170–230 KB).
 - **Recommendation / Decision**: **Keep the Issue 640 external player fallback chain**. It provides zero binary bloat (0 KB), zero dependencies, clean headless/CI bypass via `LookPath`, and guaranteed crash/hang isolation via process-group `SIGKILL` on timeout.
 
-Host note: the study's claim that `oto` v3 needs no CGo on Linux (via purego and
-`jfreymuth/pulse`) was not checked against upstream; the decision does not depend on it.
+Host note: the source research (Gemini Deep Research) cites oto release notes and pkg.go.dev
+for `oto` v3 needing no CGo on Linux (purego + `jfreymuth/pulse`); treat that as sourced. Its
+hybrid recommendation (pure-Go pulse client before the player chain on Linux) was considered and
+declined by the user on 2026-09-30: the gap it closes (daemon present, no player CLI) is rare and
+does not justify ~400 KB and a new dependency.
