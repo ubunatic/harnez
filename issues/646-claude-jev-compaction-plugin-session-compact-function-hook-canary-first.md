@@ -32,6 +32,23 @@ report if the hook does not fire or cannot replace messages on the installed Cla
    too little reduction. Thresholds go in `spec/` with a schema.
 3. Install via `harnez apply` (flag + plugin), opt-in.
 
+## M1 canary result (2026-09-30)
+- **PASS — manual `/compact` hook and message replacement.** Claude Code 2.1.285 ran with
+  `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, the local `--plugin-dir`, Haiku, and a `mktemp` cwd.
+  `claude -p --output-format json` created session
+  `00965b49-9af2-46eb-a0e0-2d176a3c6828`; resuming it with `/compact` returned
+  `local_command: compact`. The saved transcript records a manual `compact_boundary`
+  (`preTokens: 16242`, `postTokens: 8`) and a synthetic assistant message containing
+  `HARNEZ_646_REPLACEMENT_7f3a91c2`. That marker existed only in the plugin's returned
+  `messages`; the next resumed prompt answered with exactly that marker. This proves both the
+  hook firing and its returned messages replacing the built-in summary for manual compaction.
+- Reproduce with `bash canary/646-session-compact/run.sh`; it validates the CLI result and marker.
+  Plugin validation passes. An initial validation caught a forbidden `node:fs` import in the hook
+  module; the canary was corrected to log with `$.ui.log` and return the marker directly.
+- Auto compaction was not run: this CLI accepts `--autocompact` only at 100k tokens or higher,
+  which was not reached in this deliberately small probe. No settings files were edited.
+- Evidence session JSONL: `~/.claude/projects/-tmp-harnez-646-HcppcJ/00965b49-9af2-46eb-a0e0-2d176a3c6828.jsonl`.
+
 ## Other agents (moved from 644)
 - agy: harnez's jev compaction could rewrite agy session data on disk. Canary: does agy accept a
   resumed session whose data was compacted, and does it save tokens compared with agy's own
