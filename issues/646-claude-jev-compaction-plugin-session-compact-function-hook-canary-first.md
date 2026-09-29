@@ -53,6 +53,22 @@ report if the hook does not fire or cannot replace messages on the installed Cla
   context left was `HARNEZ_646_REPLACEMENT_7f3a91c2` and that no built-in summary was visible.
   `check` passed (compact boundary + marker in the session file).
 
+## M2: jev compaction plugin (embedded)
+Pre-Work / Required Refinements:
+- **Sandbox check first**: the canary's validation forbade a `node:fs` import in the hook module.
+  Find out what the function-hook runtime allows for calling `harnez compact` (child_process?
+  a `$` API for exec or fetch? a local HTTP endpoint served by harnez?). If no route exists,
+  stop and report before building anything else.
+- **Embedded in the harnez binary**: all TS plugin files (manifest, hooks.json, hook module) live
+  in the Go tree and are shipped via `go:embed`; `harnez apply` writes them to the plugin
+  location and enables the plugin plus `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`. Opt-in (spec flag),
+  idempotent, removable. No hand-maintained copy outside the binary.
+- Thresholds (auto-trigger %, minimum reduction, pinned recent messages) go in `spec/` with a JSON
+  schema, never as Go or TS defaults; the hook receives them from harnez.
+- Fallback to the built-in summary on any error, timeout or too little reduction; log why.
+- Tests: Go tests for embed + apply (write, idempotency, removal); a scripted canary run like M1
+  that shows a real `harnez compact` result replacing the history.
+
 ## Other agents (moved from 644)
 - agy: harnez's jev compaction could rewrite agy session data on disk. Canary: does agy accept a
   resumed session whose data was compacted, and does it save tokens compared with agy's own
