@@ -1,4 +1,4 @@
-# 644 — agent: agy compaction never acknowledged, resume always fails
+# 644 — agent: agy resume blocked by harnez's own compaction check
 
 **Status**: Open
 **Priority**: P2 (Medium)
@@ -8,13 +8,27 @@
 
 ---
 
-/goal Make `harnez agent resume` work for agy sessions after compaction, as issue 594 did for
-codex; verify by resuming an agy session twice in a row; or stop and report if agy offers no
-acknowledgement signal.
+/goal Make `harnez agent resume` work for agy sessions: stop harnez from sending `/compact` to
+agy and from reading the turn total as context size; verify by resuming an agy session twice in a
+row after a long tool-using turn; or stop and report if agy exposes no per-call context size.
 
 ## Evidence (sprint 640, 2026-09-29)
 - `agy:flash37:med` sessions dev640 and dev640b both refused the next resume with
   `Error: refusing to send resume prompt: compaction completed without an acknowledgement`.
-- Every agy turn ran to millions of tokens (dev640b 4.2M, dev640c 5.4M, mostly cached), so each
-  one compacted; resume therefore never worked and every milestone needed a fresh session.
-- Relevant code: `internal/subagent/compact.go`; the codex fix is in 18d93b5 and b0a4a83.
+- Recorded "context" per turn: 0.7M (plan turn), 4.2M and 5.4M (coding turns). A real context
+  window is far smaller, so these are sums over the turn's model calls.
+
+## Root cause (host analysis 2026-09-30)
+agy compacts its own context automatically; harnez never needed to. Two harnez faults:
+1. `internal/subagent/agy.go:211` sets `ContextTokens = Input + Cache` from agy's usage, which
+   totals all model calls in the turn. Any tool-heavy turn exceeds the 200k threshold
+   (`DefaultCompactThresholdTokens`, `internal/subagent/compact.go:12`).
+2. Over the threshold, `cmd/harnez/agent_run.go:546` calls `EnsureContextUnderThreshold`, which
+   runs `AgyDriver.Compact` (`agy.go:149`): it sends `/compact` as a plain prompt. agy has no such
+   command, the reply lacks the word "compact", and `VerifyCompaction` (`compact.go:66`) refuses.
+
+## Direction
+- Skip harnez-driven compaction for agy, as `agent_run.go:546` already does for codex
+  (non-interactive), since agy auto-compacts.
+- Report agy context size from the last model call if agy's JSON exposes it; otherwise mark it
+  unknown instead of the turn total. Check other users of `ContextTokens` (status, telemetry).
