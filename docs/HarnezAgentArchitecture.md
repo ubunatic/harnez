@@ -120,22 +120,28 @@ recording a terminal state, wait marks the session failed with an error.
 Completed sessions stay in the registry until an authorized caller deletes
 them with `harnez agent delete --name <session>`.
 
-Use `harnez_spawn_agent` when the host should start the agent through MCP and
-receive a structured Harnez result. Its `async: true` option detaches the
-Harnez worker and returns its session record promptly, but the host sees an MCP
-tool call rather than a shell background task.
+Use `harnez_spawn_agent` when a noninteractive or scripted harness starts the
+agent through MCP and expects a structured Harnez result. Its `async: true`
+option detaches the Harnez worker and returns its session record promptly.
+However, calling `harnez_wait_agent` or synchronous `harnez_spawn_agent`
+directly over MCP executes synchronously on the host's main turn thread,
+blocking the interactive chat and risking client-side RPC timeouts.
 
-Use `harnez_command` when the agent should appear as a visible, non-blocking
-background task in the host chat UI, with the host harness providing automatic
-completion wakeups. It accepts `action` (`start`, `resume`, `wait`, or
-`status`), and the relevant prompt, session ID or name, model, role, working
-directory, and stream mode. It does not execute the command: the result has a
-shell-quoted `command` and an `instruction` to run it using the host agent's
-native Bash or `run_command` tool with backgrounding enabled. For example,
-format a new agent command with `action: "start"` and a `prompt`, then pass the
-returned command unchanged to that host tool. Use `wait` or `status` the same
-way when shell-level visibility is useful; use the direct lifecycle MCP tools
-when structured tool results are preferred.
+In interactive, user-driven host sessions (AGY, Claude Code, Cursor), host
+orchestrators must use `harnez_command` or direct CLI commands via their
+native background runner (`run_command` / `Bash` with backgrounding) for both
+starting (`harnez agent start`) and waiting (`harnez agent wait <session_id>`).
+This ensures:
+1. The background task is visible in the host UI task monitor (`manage_task`).
+2. The interactive chat session remains responsive without blocking the user.
+3. The host environment receives automatic reactive completion wakeups without
+   busy polling loops or chat freezes.
+
+Use `harnez_command` to format these safely shell-quoted commands (`action: "start"`,
+`"resume"`, `"wait"`, or `"status"`), then pass the returned command to the
+host's background runner. Direct lifecycle MCP tools (`harnez_spawn_agent`,
+`harnez_wait_agent`) remain intended for automated, programmatic, or noninteractive
+environments.
 
 For a noninteractive Codex integration check that must call an MCP tool, use
 Codex's `--approve-for-me` option; the `never` approval policy rejects MCP tool
