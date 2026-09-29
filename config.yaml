@@ -310,6 +310,18 @@ claude_skills_target: ~/.claude/skills
 prime_agent_target: ~/.prime/agent
 agy_target: ~/.gemini/antigravity-cli
 
+# Third-party skills that ship inside harnez (issue 631 step A). Source of
+# truth for which skills are bundled. `harnez skill vendor` copies them from
+# url at commit into dir (with LICENSE); rebuild to embed them; `harnez apply`
+# installs them explicit-only (Claude: /name only; Codex: implicit off;
+# Gemini/Prime: no copy). Never edit the vendored copies; to update, raise
+# commit and re-run vendor. Names must not clash with `skills:` below.
+bundled_skills:
+  - url: https://github.com/mattpocock/skills
+    commit: c55ee46073ed923f86ce59a5eb3b6d895095d1b7
+    dir: third_party/skills/mattpocock
+    skills: [grilling, grill-with-docs, domain-modeling, to-spec]
+
 skills:
   - name: docup
     description: "Review and update bounded repository documentation by category (testing, architecture)"

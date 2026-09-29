@@ -1245,6 +1245,16 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 			}
 			skillNames = append(skillNames, skill.Name)
 		}
+		if selection.HasComponent("skills") {
+			n, bundled, err := syncBundledSkills(cfg)
+			if err != nil {
+				return err
+			}
+			changes += n
+			for _, b := range bundled {
+				skillNames = append(skillNames, b+" (bundled)")
+			}
+		}
 		addStat("skills", strings.Join(skillNames, ", "))
 	}
 

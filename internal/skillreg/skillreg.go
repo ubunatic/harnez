@@ -701,6 +701,9 @@ func checkTarget(dst string) error {
 	if _, err := os.Stat(filepath.Join(dst, MarkerFile)); err != nil {
 		return fmt.Errorf("%s exists and is not an external skill; refusing to install; retry with --as <prefix>-%s (install checks every agent dir, even ones that get no copy)", dst, filepath.Base(dst))
 	}
+	if IsBundled(dst) {
+		return fmt.Errorf("%s ships with harnez (bundled_skills); retry with --as <prefix>-%s", dst, filepath.Base(dst))
+	}
 	return nil
 }
 

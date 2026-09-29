@@ -27,6 +27,7 @@ type Config struct {
 	StatusLine         bool                 `yaml:"status_line"`
 	Commands           []Command            `yaml:"commands"`
 	Skills             []Command            `yaml:"skills"`
+	BundledSkills      []BundledSkillSource `yaml:"bundled_skills"`
 	DistillAutopipe    DistillAutopipe      `yaml:"distill_autopipe"`
 	SkillsTarget       string               `yaml:"skills_target"`
 	CodexSkillsTarget  string               `yaml:"codex_skills_target"`
@@ -172,6 +173,18 @@ type Command struct {
 	// instruction (issue 142): `harnez apply` omits/removes it when
 	// RateFeedbackDisabled(cfg) is true.
 	RateFeedback bool `yaml:"rate_feedback,omitempty"`
+}
+
+// BundledSkillSource names third-party skills vendored into harnez (issue
+// 631 step A). `harnez skill vendor` copies them from URL at Commit into Dir
+// (relative to the config dir, embedded in the binary); `harnez apply`
+// installs them like registry skills, explicit-only unless Auto.
+type BundledSkillSource struct {
+	URL    string   `yaml:"url"`
+	Commit string   `yaml:"commit"`
+	Dir    string   `yaml:"dir"`
+	Skills []string `yaml:"skills"`
+	Auto   bool     `yaml:"auto,omitempty"`
 }
 
 // SkillResource is a supporting file copied beside an installed skill.

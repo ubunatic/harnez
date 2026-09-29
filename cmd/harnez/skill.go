@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -48,6 +49,9 @@ that every agent may trigger on its own.`,
 		reg := &skillreg.Registry{Root: root}
 		for _, sk := range cfg.Skills {
 			reg.Reserved = append(reg.Reserved, sk.Name)
+		}
+		for _, src := range cfg.BundledSkills {
+			reg.Reserved = append(reg.Reserved, src.Skills...)
 		}
 		// Decommissioned names stay free: apply never removes a marked
 		// external dir, and an old unmarked copy still blocks install.
@@ -275,7 +279,25 @@ A pinned ref (install url@ref) stays pinned unless --latest is given.`,
 				return err
 			}
 			if !ok {
-				return fmt.Errorf("skill %q is not an installed external skill", args[0])
+				cfg, _, err := claude.OpenConfig(configPath)
+				if err != nil {
+					return err
+				}
+				bundled, err := claude.BundledSkills(cfg)
+				if err != nil {
+					return err
+				}
+				for _, b := range bundled {
+					if b.Name == args[0] {
+						data, err := fs.ReadFile(b.FS, "SKILL.md")
+						if err != nil {
+							return err
+						}
+						fmt.Fprintf(cmd.OutOrStdout(), "<!-- bundled with harnez from %s @ %.12s -->\n%s", b.URL, b.Commit, data)
+						return nil
+					}
+				}
+				return fmt.Errorf("skill %q is neither installed nor bundled", args[0])
 			}
 			dir := filepath.Join(reg.SrcDir(e.Name, e.Commit), e.Path)
 			data, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
@@ -287,7 +309,67 @@ A pinned ref (install url@ref) stays pinned unless --latest is given.`,
 		},
 	}
 
-	cmd.AddCommand(install, list, update, remove, search, explore, show)
+	vendor := &cobra.Command{
+		Use:   "vendor",
+		Short: "Copy the config's bundled_skills from upstream into the harnez source tree",
+		Long: `Copy the skills listed under bundled_skills in config.yaml from their
+repository at the given commit into each entry's dir, with the repository's
+LICENSE. Run it in the harnez source tree (or pass -c path/to/config.yaml),
+then rebuild: the binary embeds the copies and 'harnez apply' installs them.
+
+To update, raise the commit in config.yaml and run vendor again; it reports
+changed skills, skills gone upstream (kept, with rename hints), and upstream
+skills that are not bundled.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := configPath
+			if path == "" {
+				path = "config.yaml"
+			}
+			cfg, err := claude.LoadConfig(path)
+			if err != nil {
+				return err
+			}
+			if len(cfg.BundledSkills) == 0 {
+				return fmt.Errorf("%s has no bundled_skills", path)
+			}
+			root := filepath.Dir(path)
+			out := cmd.OutOrStdout()
+			for _, src := range cfg.BundledSkills {
+				if rel, ok := strings.CutPrefix(filepath.ToSlash(filepath.Clean(src.Dir)), "third_party/skills/"); !ok || !skillreg.NameOK(rel) {
+					return fmt.Errorf("bundled_skills %s: dir %q must be third_party/skills/<name>", src.URL, src.Dir)
+				}
+				rep, err := skillreg.Vendor(skillreg.VendorSource{URL: src.URL, Commit: src.Commit, Dir: filepath.Join(root, src.Dir), Skills: src.Skills})
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(out, "%s @ %.12s -> %s\n", src.URL, rep.Commit, src.Dir)
+				for _, v := range rep.Skills {
+					fmt.Fprintf(out, "  %-22s %s\n", v.Name, v.Status)
+					if v.Status == skillreg.Changed {
+						for _, l := range strings.Split(strings.TrimRight(v.DiffStat, "\n"), "\n") {
+							fmt.Fprintf(out, "    %s\n", l)
+						}
+					}
+					if v.Status == skillreg.Gone {
+						fmt.Fprintf(out, "    kept the vendored copy; maybe renamed to: %s\n", strings.Join(v.Candidates, ", "))
+						for _, h := range v.Hints {
+							fmt.Fprintf(out, "    %s\n", h)
+						}
+					}
+				}
+				if len(rep.Removed) > 0 {
+					fmt.Fprintf(out, "  removed (no longer listed): %s\n", strings.Join(rep.Removed, ", "))
+				}
+				if len(rep.NotBundled) > 0 {
+					fmt.Fprintf(out, "  upstream, not bundled: %s\n", strings.Join(rep.NotBundled, ", "))
+				}
+			}
+			return nil
+		},
+	}
+
+	cmd.AddCommand(install, list, update, remove, search, explore, show, vendor)
 	return cmd
 }
 

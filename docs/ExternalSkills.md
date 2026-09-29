@@ -13,6 +13,25 @@ repositories. Code: `internal/skillreg`, `cmd/harnez/skill.go`. History: issue 6
 - Every installed copy carries `.harnez-external`. harnez never overwrites or removes a skill dir
   without it, and `apply`/`diff`/`status`/`revert` never touch a dir with it.
 
+## Bundled Skills
+
+Chosen third-party skills ship inside harnez. `config.yaml` `bundled_skills` lists url, pinned
+commit, vendor dir, and skill names; that list is the source of truth. `harnez skill vendor`
+(run in the harnez tree) copies them with the repo LICENSE into `third_party/skills/<dir>/`
+and prints the same change report as `update`. `dir` must be `third_party/skills/<name>`;
+vendor only ever deletes former skill dirs (with `SKILL.md`) inside it. `embed.go` embeds that tree; `harnez apply`
+installs the copies with a marker starting `bundled: true`, rewrites only changed ones, and
+removes bundled copies no longer listed. `harnez skill show` serves them to Gemini and Prime.
+
+| | Own skills (`skills:`) | Bundled (`bundled_skills:`) | Registry (`harnez skill install`) |
+|---|---|---|---|
+| Source | `docs/commands/`, edited here | `third_party/skills/`, never edited | `~/.harnez/skills/src` |
+| Installed by | apply | apply | install/update |
+| Names | win | must not clash with own skills (config error) | refused if own or bundled |
+
+Never edit vendored copies; raise `commit` and re-run `vendor`. Apply leaves a same-named
+registry install or foreign dir alone and prints a note.
+
 ## Explicit-Only by Default
 
 Agents use an external skill only when the user names it; when several could fit, they list

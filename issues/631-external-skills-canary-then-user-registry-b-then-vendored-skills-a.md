@@ -1,6 +1,6 @@
 # 631 — External skills: canary, then user registry (B), then vendored skills (A)
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -58,7 +58,7 @@ external tool needs (node, ffmpeg, playwright, API keys) are invisible.
 marker, into all `claude.SkillTargets`; refuses foreign dirs, unsafe names, `-`-prefixed
 URLs/refs; skips symlinks and `.git`. Reviewer findings 1-10 addressed. E2E verified against
 scroll-craft in scratch targets.
-Deferred: "lazy" skills + `skill-finder` skill. Dropped (user, 2026-09-29): online marketplace search; search stays local only.
+Lazy skills + finder: covered by explicit-only mode (hidden from model skill lists) and `harnez skill search` plus the ask rule. Dropped (user, 2026-09-29): online marketplace search; search stays local only.
 Next: step A (vendored skills) and [[632-re-home-mattpocock-derived-skills-as-external-skills-issue-631-registry]].
 
 ## 6. Explicit-Only Mode (2026-09-29)
@@ -81,3 +81,13 @@ Decision: keep upstream names (skills reference each other by name); rename only
 - `apply` never overwrites/removes a marked external dir under a managed name (prints `clash`);
   `diff`, `status`, `revert` skip it too.
 Known gap: the diff/status skip is covered by a helper-level test, not an end-to-end `DiffAll` test.
+
+## 8. Step A, Bundled Skills (2026-09-29)
+`config.yaml` `bundled_skills` (url, commit, dir, skills); `harnez skill vendor` copies them with
+LICENSE into `third_party/skills/`, refusing repos without a license, reporting changed/gone
+(rename hints)/not-bundled skills; `embed.go` embeds them; `apply` syncs them explicit-only
+(`skillreg.SyncBundled`), idempotent, removes delisted ones, never touches registry or foreign
+dirs. Clash with an own skill name is a config error; registry install refuses bundled names.
+First set: mattpocock grilling, grill-with-docs, domain-modeling, to-spec @ c55ee46; the
+registry installs of those four were removed and replaced live. Not done: `diff`/`status` do
+not report bundled-copy drift (apply repairs it).
