@@ -5,49 +5,77 @@ plugin_dir=$(cd "$(dirname "$0")" && pwd)
 run_dir=$(mktemp -d "${TMPDIR:-/tmp}/harnez-646-XXXXXX")
 server_pid=
 cleanup() {
+  status=$?
   if test -n "$server_pid"
   then
     kill "$server_pid" 2>/dev/null || true
     wait "$server_pid" 2>/dev/null || true
   fi
-  rm -rf "$run_dir"
+  if test "$status" -eq 0
+  then
+    rm -rf "$run_dir"
+  else
+    printf 'Probe artifacts retained: %s\n' "$run_dir" >&2
+  fi
+  return "$status"
 }
 trap cleanup EXIT
 
 python3 -m http.server 18764 --bind 127.0.0.1 --directory "$run_dir" >"$run_dir/http.log" 2>&1 &
 server_pid=$!
 
-cd "$run_dir"
-printf 'Scratch cwd: %s\n' "$run_dir"
+for route in a child
+do
+  probe_dir="$run_dir/probe-$route"
+  mkdir -p "$probe_dir/hooks" "$probe_dir/.claude-plugin"
+  cp "$plugin_dir/.claude-plugin/plugin.json" "$probe_dir/.claude-plugin/plugin.json"
+  cp "$plugin_dir/hooks/hooks.json" "$probe_dir/hooks/hooks.json"
+  cp "$plugin_dir/hooks/probe.ts" "$probe_dir/hooks/probe.ts"
+  if test "$route" = child
+  then
+    cp "$plugin_dir/hooks/probe-child.ts" "$probe_dir/hooks/probe.ts"
+  fi
+done
 
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --model haiku \
-  --plugin-dir "$plugin_dir" --output-format json \
-  'Reply with READY only.' > first.json
-session_id=$(python3 -c 'import json; print(json.load(open("first.json"))["session_id"])')
-printf 'Session id: %s\n' "$session_id"
+run_probe() {
+  label=$1
+  probe_dir=$2
+  report_name=$3
+  debug_file="$run_dir/$label-debug.log"
+  CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --model haiku \
+    --plugin-dir "$probe_dir" --output-format json --debug-file "$debug_file" \
+    'Reply with READY only.' > "$label-first.json"
+  session_id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["session_id"])' "$label-first.json")
+  CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --model haiku \
+    --plugin-dir "$probe_dir" --output-format json --debug-file "$debug_file" --resume "$session_id" \
+    '/compact' > "$label-compact.json"
 
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude -p --model haiku \
-  --plugin-dir "$plugin_dir" --output-format json --resume "$session_id" \
-  '/compact' > compact.json
-cat compact.json
-
-python3 - <<'PY'
+  python3 - "$label" <<'PY'
 import json
 import sys
 
-compact = json.load(open("compact.json", encoding="utf-8"))
-print(f"Compact command: {compact.get('local_command')}")
+label = sys.argv[1]
+compact = json.load(open(f"{label}-compact.json", encoding="utf-8"))
+print(f"{label} compact command: {compact.get('local_command')}")
 if compact.get("local_command") != "compact":
-    print("FAIL: manual compaction was not observed.", file=sys.stderr)
-    sys.exit(1)
-print("PASS: manual compaction ran.")
+    raise SystemExit(f"FAIL: {label} manual compaction was not observed")
 PY
 
-debug_file=$(ls -t "$HOME"/.claude/debug/*.txt | head -1)
-printf 'Claude Code debug log: %s\n' "$debug_file"
-if ! rg -Fq 'session.compact bridge probe' "$debug_file"
-then
-  printf 'FAIL: bridge probe did not log; inspect hook registration in the debug log.\n' >&2
-  exit 1
-fi
-printf 'PASS: bridge probe logged its route results.\n'
+  printf '%s debug log: %s\n' "$label" "$debug_file"
+  if ! rg -Fq 'session.compact settled' "$debug_file"
+  then
+    printf 'FAIL: %s debug log does not show the compact hook settling.\n' "$label" >&2
+    exit 1
+  fi
+  if ! rg -Fq "session.compact bridge $report_name" "$debug_file"
+  then
+    printf 'FAIL: %s route report is absent from the debug log.\n' "$label" >&2
+    exit 1
+  fi
+  rg -F "session.compact bridge $report_name" "$debug_file"
+}
+
+cd "$run_dir"
+printf 'Scratch cwd: %s\n' "$run_dir"
+run_probe a "$run_dir/probe-a" A
+run_probe child "$run_dir/probe-child" B

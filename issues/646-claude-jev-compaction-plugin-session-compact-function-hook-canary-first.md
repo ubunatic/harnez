@@ -70,16 +70,25 @@ Pre-Work / Required Refinements:
   that shows a real `harnez compact` result replacing the history.
 
 ### M2 bridge probe result (2026-09-30)
-- Probe added to `canary/646-session-compact/hooks/probe.ts`. It reports `$` and nested API keys,
-  global `fetch`/`process`/`Bun`/`Deno`/`require` types, and attempts `$` exec/shell, loopback
-  fetch, and dynamic `node:child_process` import with `harnez --version`.
-- Run: `bash canary/646-session-compact/run.sh`, Claude Code 2.1.285, Haiku, `-p`, a `mktemp`
-  cwd, `--plugin-dir`, and `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`; the script started a Python
-  HTTP server bound to `127.0.0.1` and cleaned it up afterward. `/compact` ran, but the debug
-  log reports `Registered 0 hooks from 4 plugins` and `Hooks: Found 0 total hooks in registry`.
-- **Inconclusive: none of the bridge attempts ran.** The function hook did not register, so this
-  run does not establish whether the runtime permits execution or HTTP. Resolve the hook
-  registration discrepancy and rerun this probe before proceeding with M2 integration.
+- The first split attempt still had zero hooks because the loader rejected aliasing `$` in the
+  probe. Debug evidence: `$.ui is used as a value (a noun of $ bound, passed or read); $ is
+  always spelled $.noun.event(...) at the call site`. An earlier `Object.keys($)` attempt was
+  rejected as `$ itself is used in a BinaryExpression ...`; the prior M1 `node:fs` probe was
+  rejected with `a hooks module imports its own files by relative path and "claude-code",
+  nothing else`.
+- Final run: `bash canary/646-session-compact/run.sh`, Claude Code 2.1.285, Haiku, `-p`, separate
+  temporary plugin dirs, `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, and a Python server bound to
+  `127.0.0.1`. Both runs' debug logs showed `hooks module ... session.compact settled` and their
+  `$.ui.log` report before results were accepted.
+- Route A — **works**: `$.process.run(['harnez', '--version'])` returned exit code 0 and
+  `harnez version 0.1.19`. **Not available**: `globalThis.fetch`, `process`, `Bun`, `Deno`, and
+  `require` all had type `undefined`; loopback fetch failed with `TypeError: globalThis.fetch is
+  not a function`. `$` key enumeration is **blocked** by the loader's noun grammar above; direct
+  `$.process.run(...)` works.
+- Route B — **not available**: `globalThis.process`, `process.getBuiltinModule`, and
+  `globalThis.require` all had type `undefined`; no process-based child-process route exists in
+  this function-hook runtime. The loader restriction observed for `node:fs` rules out importing
+  `node:child_process` as a module.
 
 ## Other agents (moved from 644)
 - agy: harnez's jev compaction could rewrite agy session data on disk. Canary: does agy accept a
