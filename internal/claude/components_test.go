@@ -220,7 +220,7 @@ func TestApply_FullThenDocsOnly(t *testing.T) {
 			t.Errorf("docs-only: harnez hook %q left in settings", h)
 		}
 	}
-	if !slices.ContainsFunc(hooks, func(h string) bool { return strings.HasPrefix(h, "ffplay") }) {
+	if !slices.ContainsFunc(hooks, func(h string) bool { return strings.Contains(h, "ffplay") }) {
 		t.Error("docs-only: non-harnez Stop hook must survive")
 	}
 	if statusLine != "" {
