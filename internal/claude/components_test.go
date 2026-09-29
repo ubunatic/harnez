@@ -212,6 +212,16 @@ func TestApply_FullThenDocsOnly(t *testing.T) {
 		}
 	}
 
+	// A user's own Claude hook must survive.
+	userSettings := filepath.Join(target, "settings.json")
+	settingsDoc := jsonc.Read(userSettings)
+	if hm, ok := settingsDoc["hooks"].(map[string]any); ok {
+		hm["Stop"] = append(hm["Stop"].([]any), map[string]any{
+			"hooks": []any{map[string]any{"type": "command", "command": "user-notify"}},
+		})
+		_ = os.WriteFile(userSettings, jsonc.MarshalPretty(settingsDoc), 0644)
+	}
+
 	mustApplyComponents(t, target, cfg, nil, "docs-only")
 
 	hooks, statusLine = settingsCommands(t, target)
@@ -220,7 +230,7 @@ func TestApply_FullThenDocsOnly(t *testing.T) {
 			t.Errorf("docs-only: harnez hook %q left in settings", h)
 		}
 	}
-	if !slices.ContainsFunc(hooks, func(h string) bool { return strings.Contains(h, "ffplay") }) {
+	if !slices.Contains(hooks, "user-notify") {
 		t.Error("docs-only: non-harnez Stop hook must survive")
 	}
 	if statusLine != "" {
