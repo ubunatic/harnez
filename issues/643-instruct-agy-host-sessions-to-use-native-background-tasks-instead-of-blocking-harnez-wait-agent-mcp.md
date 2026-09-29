@@ -28,7 +28,7 @@ Interactive AGY host sessions must be instructed to use standard AGY background 
 ## 2. Technical Specification / Findings
 
 1. **MCP Tool Description Guidance (`internal/mcp/server.go`)**:
-   - `harnez_wait_agent`: Explicitly state in the tool description that this tool blocks the caller synchronously and should not be used in interactive/user-driven chat sessions. Direct host sessions to format/run `harnez agent wait <session_id>` via their host background runner (`run_command` / bash background job).
+   - `harnez_wait_agent`: Update tool description so models reading the schema immediately see: `"Wait for an agent session and return its terminal result. Do NOT call from interactive chat sessions — blocks chat. Use harnez_command wait + host background runner."`
    - `harnez_command`: Reinforce that formatting `wait` (`harnez agent wait <session_id>`) or `start` commands for execution in the host's background runner is the canonical mechanism for non-blocking wait with UI visibility and reactive wakeups.
    - `harnez_spawn_agent`: Clarify that interactive host orchestrators should prefer host background commands over synchronous or detached unmonitored MCP spawns.
 
@@ -45,7 +45,8 @@ Interactive AGY host sessions must be instructed to use standard AGY background 
 ## 3. Implementation & Verification Plan
 
 1. **Update MCP Tool Definitions**:
-   - In `internal/mcp/server.go`, update descriptions for `harnez_wait_agent`, `harnez_command`, and `harnez_spawn_agent` with clear guidance against synchronous blocking in interactive chats.
+   - In `internal/mcp/server.go`, update `harnez_wait_agent` description to: `"Wait for an agent session and return its terminal result. Do NOT call from interactive chat sessions — blocks chat. Use harnez_command wait + host background runner."`
+   - Update descriptions for `harnez_command` and `harnez_spawn_agent` with clear guidance against synchronous blocking in interactive chats.
 2. **Update Rule Templates and Guidance**:
    - Update `internal/claude/init.go`, `.harnez/rules/Tools.md`, `.harnez/rules/Subagents.md`, and `docs/practices/AgenticLoop.md` to instruct AGY / interactive hosts to use native background tasks for waiting on agents.
 3. **Verify Documentation & Unit Tests**:
