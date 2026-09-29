@@ -1,6 +1,6 @@
 # 632 — Re-home mattpocock-derived skills as external skills (issue 631 registry)
 
-**Status**: Open
+**Status**: Closed
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Feature
@@ -40,3 +40,12 @@ skill defaults, so no overlay is needed. `sync-mattpocock-skills.md` is replaced
 2. Per skill: install upstream pinned as external, or keep the harnez adaptation; record the choice.
 3. If external: delete the `docs/proposed/` copy and `sync-mattpocock-skills.md` (the registry's
    pinned ref plus an update check replaces it). Verify the agents list the skills.
+
+## 5. Result (2026-09-29)
+Installed pinned at upstream 272f99b (2026-07-04, when we adapted them), then ran the update
+path to c55ee46 (2026-09-18): `grilling`, `grill-with-docs`, `domain-modeling` updated;
+`to-prd` (our `make-spec`) reported gone, candidates `to-spec, to-tickets, ...`; replaced with
+`to-spec`. All explicit-only. Deleted the `docs/proposed/` copies and `sync-mattpocock-skills.md`.
+`update` gained diff summaries, moved/gone detection, rename hints, new-skill listing,
+`--latest`, `--dry-run`, `--diff`. Fixed: install failed when `/tmp` is another filesystem;
+decommissioned skill names no longer reserved.

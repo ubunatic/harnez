@@ -144,9 +144,13 @@ func TestUpdatePicksUpNewCommitAndDropsOldCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	run(t, repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "v2")
-	before, after, err := reg.Update("alpha")
+	plan, after, err := reg.Update("alpha", false)
 	if err != nil {
 		t.Fatal(err)
+	}
+	before := plan.Entry
+	if plan.Status != Changed || !strings.Contains(plan.DiffStat, "SKILL.md") {
+		t.Errorf("plan: %+v", plan)
 	}
 	if before.Commit != first.Commit || after.Commit == first.Commit || after.Description != "v2" {
 		t.Fatalf("update: before %+v after %+v", before, after)
@@ -350,7 +354,7 @@ func TestAutoInstallThenExplicitDropsGeminiCopy(t *testing.T) {
 	if strings.Contains(string(data), "disable-model-invocation") {
 		t.Error("auto install disabled model invocation")
 	}
-	if _, _, err := reg.Update("alpha"); err != nil {
+	if _, _, err := reg.Update("alpha", false); err != nil {
 		t.Fatal(err)
 	}
 	if e, _, _ := reg.Get("alpha"); !e.Auto {
@@ -425,7 +429,7 @@ func TestInstallAsRenamesAndUpdateKeepsIt(t *testing.T) {
 			t.Errorf("%s: upstream-named copy installed", target.Agent)
 		}
 	}
-	if _, after, err := reg.Update("np-alpha"); err != nil || after.Name != "np-alpha" || after.Upstream != "alpha" {
+	if _, after, err := reg.Update("np-alpha", false); err != nil || after.Name != "np-alpha" || after.Upstream != "alpha" {
 		t.Fatalf("update lost the rename: %+v %v", after, err)
 	}
 	if hits, _ := reg.Search("d"); len(hits) == 0 || !hits[0].Installed {

@@ -171,7 +171,12 @@ type InstallOptions struct {
 
 // Install clones, pins, and copies one skill into every target.
 func (r *Registry) Install(opts InstallOptions) (Entry, error) {
-	tmp, err := os.MkdirTemp("", "harnez-skill-")
+	// Clone under Root so the final rename never crosses filesystems
+	// (/tmp is often tmpfs).
+	if err := os.MkdirAll(r.Root, 0o755); err != nil {
+		return Entry{}, err
+	}
+	tmp, err := os.MkdirTemp(r.Root, ".tmp-")
 	if err != nil {
 		return Entry{}, err
 	}
@@ -298,23 +303,6 @@ func (r *Registry) Install(opts InstallOptions) (Entry, error) {
 	entries = slices.DeleteFunc(entries, func(e Entry) bool { return e.Name == skill.Name })
 	entries = append(entries, entry)
 	return entry, r.save(entries)
-}
-
-// Update reinstalls an entry from its URL and requested ref.
-func (r *Registry) Update(name string) (before, after Entry, err error) {
-	e, ok, err := r.Get(name)
-	if err != nil {
-		return Entry{}, Entry{}, err
-	}
-	if !ok {
-		return Entry{}, Entry{}, fmt.Errorf("skill %q is not an installed external skill", name)
-	}
-	opts := InstallOptions{URL: e.URL, Ref: e.Ref, Path: e.Path, Name: e.Name, Auto: e.Auto}
-	if e.Upstream != "" {
-		opts.Name, opts.As = e.Upstream, e.Name
-	}
-	after, err = r.Install(opts)
-	return e, after, err
 }
 
 // Remove deletes the installed copies (only those with a marker), the cache,

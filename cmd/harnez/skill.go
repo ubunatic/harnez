@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -47,7 +49,8 @@ that every agent may trigger on its own.`,
 		for _, sk := range cfg.Skills {
 			reg.Reserved = append(reg.Reserved, sk.Name)
 		}
-		reg.Reserved = append(reg.Reserved, cfg.Decommissioned.Skills...)
+		// Decommissioned names stay free: apply never removes a marked
+		// external dir, and an old unmarked copy still blocks install.
 		for _, t := range claude.SkillTargetsByAgent(cfg) {
 			reg.Targets = append(reg.Targets, skillreg.Target{Agent: t.Agent, Dir: t.Dir})
 		}
@@ -119,37 +122,62 @@ that every agent may trigger on its own.`,
 		},
 	}
 
+	var latest, dryRun, showDiff bool
 	update := &cobra.Command{
 		Use:   "update [name...]",
-		Short: "Reinstall external skills from their source (all when no name is given)",
+		Short: "Update external skills from their source (all when no name is given)",
+		Long: `Update external skills from their source repository.
+
+Each skill is compared with its installed commit first: the report shows the
+diff summary, a skill that moved to another path (followed), a skill that
+is gone upstream (kept at its old commit, with rename hints from the repo's
+docs), and skills the repository added since. --dry-run only reports.
+A pinned ref (install url@ref) stays pinned unless --latest is given.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			reg, err := open()
 			if err != nil {
 				return err
 			}
+			entries, err := reg.Load()
+			if err != nil {
+				return err
+			}
 			if len(args) == 0 {
-				entries, err := reg.Load()
-				if err != nil {
-					return err
-				}
 				for _, e := range entries {
 					args = append(args, e.Name)
 				}
 			}
+			out := cmd.OutOrStdout()
+			added := map[string][]string{} // new upstream skills by repository url
 			for _, n := range args {
-				before, after, err := reg.Update(n)
+				var plan skillreg.UpdatePlan
+				var after skillreg.Entry
+				if dryRun {
+					plan, err = reg.PlanUpdate(n, latest)
+					after = plan.Entry
+				} else {
+					plan, after, err = reg.Update(n, latest)
+				}
 				if err != nil {
 					return err
 				}
-				state := "unchanged"
-				if before.Commit != after.Commit {
-					state = fmt.Sprintf("%.12s -> %.12s", before.Commit, after.Commit)
+				printPlan(out, plan, after, dryRun, showDiff)
+				for _, s := range plan.NewSkills {
+					if !installedFrom(entries, plan.Entry.URL, s.Name) && !slices.Contains(added[plan.Entry.URL], s.Name) {
+						added[plan.Entry.URL] = append(added[plan.Entry.URL], s.Name)
+					}
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%-24s %s\n", n, state)
+			}
+			for _, url := range slices.Sorted(maps.Keys(added)) {
+				names := added[url]
+				fmt.Fprintf(out, "\nnew in %s since the installed commit, not installed:\n  %s\n", url, strings.Join(names, ", "))
 			}
 			return nil
 		},
 	}
+	update.Flags().BoolVar(&latest, "latest", false, "drop a pinned ref and follow the default branch")
+	update.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "report what would change without installing")
+	update.Flags().BoolVar(&showDiff, "diff", false, "print the full diff, not only the summary")
 
 	remove := &cobra.Command{
 		Use:   "remove <name>",
@@ -261,6 +289,53 @@ that every agent may trigger on its own.`,
 
 	cmd.AddCommand(install, list, update, remove, search, explore, show)
 	return cmd
+}
+
+func printPlan(out io.Writer, p skillreg.UpdatePlan, after skillreg.Entry, dryRun, showDiff bool) {
+	e := p.Entry
+	switch p.Status {
+	case skillreg.Gone:
+		fmt.Fprintf(out, "%-24s gone upstream at %.12s; kept at %.12s\n", e.Name, p.Commit, e.Commit)
+		if len(p.Candidates) > 0 {
+			fmt.Fprintf(out, "  maybe renamed to: %s\n", strings.Join(p.Candidates, ", "))
+		}
+		for _, h := range p.Hints {
+			fmt.Fprintf(out, "  %s\n", h)
+		}
+		fmt.Fprintf(out, "  to switch: harnez skill remove %s, then harnez skill install %s --skill <new-name>\n", e.Name, e.URL)
+		return
+	case skillreg.Unchanged:
+		fmt.Fprintf(out, "%-24s unchanged (%.12s)\n", e.Name, after.Commit)
+		return
+	}
+	verb := "updated"
+	if dryRun {
+		verb = "would update"
+	}
+	to := p.Commit
+	if !dryRun {
+		to = after.Commit // upstream may have moved since the plan
+	}
+	fmt.Fprintf(out, "%-24s %s %.12s -> %.12s\n", e.Name, verb, e.Commit, to)
+	if p.Status == skillreg.Moved {
+		fmt.Fprintf(out, "  moved upstream: %s -> %s\n", e.Path, p.Path)
+	}
+	text := p.DiffStat
+	if showDiff {
+		text = p.Diff
+	}
+	for _, l := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+		fmt.Fprintf(out, "  %s\n", l)
+	}
+}
+
+func installedFrom(entries []skillreg.Entry, url, name string) bool {
+	for _, e := range entries {
+		if e.URL == url && (e.Name == name || e.Upstream == name) {
+			return true
+		}
+	}
+	return false
 }
 
 func skillMode(e skillreg.Entry) string {
