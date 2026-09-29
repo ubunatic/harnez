@@ -84,9 +84,9 @@ func TestResolveModelBareAliases(t *testing.T) {
 
 func TestCodexSolAndLunaResolveToGPT6(t *testing.T) {
 	for alias, want := range map[string]string{
-		"sol":            "gpt-6-sol",
-		"codex:sol":      "gpt-6-sol",
-		"codex:sol:low":  "gpt-6-sol",
+		"sol":            "gpt-6.1-sol",
+		"codex:sol":      "gpt-6.1-sol",
+		"codex:sol:low":  "gpt-6.1-sol",
 		"luna":           "gpt-6-luna",
 		"codex:luna":     "gpt-6-luna",
 		"codex:luna:med": "gpt-6-luna",
