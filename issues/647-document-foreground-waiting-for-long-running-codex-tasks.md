@@ -1,7 +1,7 @@
 # 647 — Document foreground waiting for long-running Codex tasks
 
 **Status**: Open
-**Priority**: P2 (Medium)
+**Priority**: P1 (High)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
 **Related**: [Agentic Loop Practices](../docs/practices/AgenticLoop.md)
@@ -24,3 +24,33 @@ Acceptance criteria:
 - It requires collecting a terminal result or explicitly cleaning up the task before ending the session.
 - The addition does not conflict with harness-specific background-task workflows or requested delegation.
 - Regenerate/sync the managed documentation copy and verify the docs index/status.
+
+## 4. Update 2026-09-30 — recurring failure, consider removing auto-detach
+
+**Observed**: two Codex (Luna) sessions both hit the harnez agent auto-detach, left the detached
+agents running and ended without reattaching. There was no synchronous wait to go back to.
+Claude hosts handle the same flow correctly; only Codex fails. About 10 earlier guidance fixes
+have not changed this.
+
+**What Codex is currently shown** (likely source of confusion):
+- `cmd/harnez/agent_async.go` `writeDetachGuidance`: "Agent turn exceeded 60s and has been cleanly
+  detached ... Do NOT poll ... Launch `harnez agent wait <name>` as a host background job; the
+  environment will automatically notify this session when it finishes." Codex has no such
+  notification. Its only wait mechanism is `functions.write_stdin` on a live exec session. So
+  the message tells Codex to use a facility it lacks, and "Do NOT poll" also rules out the one
+  that works.
+- The same wording appears in `cmd/harnez/agent_stream.go:138` and `cmd/harnez/agent.go:754`.
+- `.harnez/rules/Tools.md:50` says to start agents "in a background shell, e.g. Claude
+  `run_in_background`", which is Claude-only advice shown to every host.
+- The auto-detach triggers whenever the outer exec timeout is set (`foregroundDetachTimeout`, 60s cap).
+
+**Proposed direction** (to decide before implementing):
+1. Preferred: remove the foreground auto-detach entirely. `harnez agent start` stays synchronous
+   until the turn is done. Keep explicit `--detach/--async` only for callers that ask for it.
+2. Fallback: detect a Codex host and never auto-detach there, or emit Codex-specific guidance.
+   This is the approach that has failed repeatedly, so it's second choice.
+
+**Revised goal**: /goal Stop Codex hosts from orphaning harnez agents. Remove the foreground
+auto-detach (or disable it for Codex) and rewrite all detach/wait guidance so that each host is
+told only about mechanisms it actually has. Verify this with a Codex canary run over 60s that
+ends with the collected result. Stop and report if the user chooses to keep auto-detach.
