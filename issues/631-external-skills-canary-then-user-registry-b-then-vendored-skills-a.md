@@ -71,3 +71,13 @@ fit, the agent lists them and asks. Default install is now explicit-only (`--aut
 - Gemini, Prime: no copy; `harnez skill show <name>`.
 - Rule "External Skills" in generated `.harnez/rules/Tools.md`: search, list matches, ask.
 Reviewer findings (CRLF/empty frontmatter, shared-dir labels, wording, tests) addressed.
+
+## 7. Name Conflicts (2026-09-29)
+Decision: keep upstream names (skills reference each other by name); rename only on conflict.
+- `harnez skill install --as <name>` rewrites the frontmatter `name:`, stores `upstream:`,
+  survives `update`; warns which files still mention the upstream name.
+- harnez-managed skill names (config `skills:` + `decommissioned.skills`) are reserved; every
+  conflict error suggests `--as <prefix>-<name>`.
+- `apply` never overwrites/removes a marked external dir under a managed name (prints `clash`);
+  `diff`, `status`, `revert` skip it too.
+Known gap: the diff/status skip is covered by a helper-level test, not an end-to-end `DiffAll` test.

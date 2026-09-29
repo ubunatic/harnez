@@ -399,3 +399,74 @@ func TestExplicitCodexKeepsExistingOpenAIYAML(t *testing.T) {
 		t.Errorf("openai.yaml after makeExplicit:\n%s", data)
 	}
 }
+
+func TestInstallAsRenamesAndUpdateKeepsIt(t *testing.T) {
+	reg := newReg(t)
+	repo := fixtureRepo(t)
+	// Make alpha's body mention its own name, so the rename warns.
+	skill := filepath.Join(repo, "plugins/p/skills/alpha/SKILL.md")
+	if err := os.WriteFile(skill, []byte("---\nname: alpha\ndescription: d\n---\nSee alpha docs.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "mention")
+	e, err := reg.Install(InstallOptions{URL: repo, Name: "alpha", As: "np-alpha"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Name != "np-alpha" || e.Upstream != "alpha" || len(e.Warnings) != 1 || !strings.Contains(e.Warnings[0], "SKILL.md") {
+		t.Fatalf("entry: %+v", e)
+	}
+	for _, target := range reg.Targets[:2] {
+		s, err := ReadSkill(filepath.Join(target.Dir, "np-alpha", "SKILL.md"))
+		if err != nil || s.Name != "np-alpha" {
+			t.Errorf("%s: renamed frontmatter: %+v %v", target.Agent, s, err)
+		}
+		if _, err := os.Stat(filepath.Join(target.Dir, "alpha")); err == nil {
+			t.Errorf("%s: upstream-named copy installed", target.Agent)
+		}
+	}
+	if _, after, err := reg.Update("np-alpha"); err != nil || after.Name != "np-alpha" || after.Upstream != "alpha" {
+		t.Fatalf("update lost the rename: %+v %v", after, err)
+	}
+	if hits, _ := reg.Search("d"); len(hits) == 0 || !hits[0].Installed {
+		t.Errorf("search after rename: %+v", hits)
+	}
+	if err := reg.Remove("np-alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(reg.Targets[0].Dir, "np-alpha")); err == nil {
+		t.Error("renamed copy not removed")
+	}
+}
+
+func TestInstallRefusesReservedAndTakenNames(t *testing.T) {
+	reg := newReg(t)
+	reg.Reserved = []string{"alpha"}
+	repo := fixtureRepo(t)
+	if _, err := reg.Install(InstallOptions{URL: repo, Name: "alpha"}); err == nil || !strings.Contains(err.Error(), "--as") {
+		t.Fatalf("reserved name: want --as hint, got %v", err)
+	}
+	if _, err := reg.Install(InstallOptions{URL: repo, Name: "alpha", As: "x-alpha"}); err != nil {
+		t.Fatalf("--as around reserved name: %v", err)
+	}
+	other := singleSkillRepo(t, "---\nname: x-alpha\ndescription: other\n---\n")
+	if _, err := reg.Install(InstallOptions{URL: other}); err == nil || !strings.Contains(err.Error(), "already installed from") || !strings.Contains(err.Error(), "--as") {
+		t.Fatalf("taken name: want already-installed with --as hint, got %v", err)
+	}
+}
+
+func TestSetFrontmatterReplacesInPlace(t *testing.T) {
+	got := string(setFrontmatter([]byte("---\nname: a\ndescription: d\n---\n"), "name", "b"))
+	if want := "---\nname: b\ndescription: d\n---\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestMentionsUsesWordBoundaries(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: \"alpha\"\n---\nalphabet soup\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "ref.md"), []byte("run /alpha now\n"), 0o644)
+	if got := mentions(dir, "alpha"); len(got) != 1 || got[0] != "ref.md" {
+		t.Errorf("mentions: %v", got)
+	}
+}

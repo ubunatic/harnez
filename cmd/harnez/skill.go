@@ -44,6 +44,10 @@ that every agent may trigger on its own.`,
 			return nil, err
 		}
 		reg := &skillreg.Registry{Root: root}
+		for _, sk := range cfg.Skills {
+			reg.Reserved = append(reg.Reserved, sk.Name)
+		}
+		reg.Reserved = append(reg.Reserved, cfg.Decommissioned.Skills...)
 		for _, t := range claude.SkillTargetsByAgent(cfg) {
 			reg.Targets = append(reg.Targets, skillreg.Target{Agent: t.Agent, Dir: t.Dir})
 		}
@@ -52,6 +56,7 @@ that every agent may trigger on its own.`,
 
 	var path, name string
 	var auto bool
+	var as string
 	install := &cobra.Command{
 		Use:   "install <git-url>[@ref]",
 		Short: "Install one skill from a git repository into all agent skill directories",
@@ -62,12 +67,15 @@ that every agent may trigger on its own.`,
 				return err
 			}
 			url, ref := skillreg.ParseSource(args[0])
-			e, err := reg.Install(skillreg.InstallOptions{URL: url, Ref: ref, Path: path, Name: name, Auto: auto})
+			e, err := reg.Install(skillreg.InstallOptions{URL: url, Ref: ref, Path: path, Name: name, Auto: auto, As: as})
 			if err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "installed %s @ %.12s from %s (%s)\n", e.Name, e.Commit, e.URL, skillMode(e))
+			for _, w := range e.Warnings {
+				fmt.Fprintf(out, "  warning: %s\n", w)
+			}
 			for _, t := range reg.Targets {
 				if _, err := os.Stat(filepath.Join(t.Dir, e.Name)); err == nil {
 					fmt.Fprintf(out, "  %-7s %s\n", t.Agent, fsutil.ContractHome(filepath.Join(t.Dir, e.Name)))
@@ -80,6 +88,7 @@ that every agent may trigger on its own.`,
 	}
 	install.Flags().StringVar(&path, "path", "", "skill directory inside the repository")
 	install.Flags().StringVar(&name, "skill", "", "skill name, when the repository has several")
+	install.Flags().StringVar(&as, "as", "", "install under this name, e.g. mattp-grilling, when the upstream name is taken")
 	install.Flags().BoolVar(&auto, "auto", false, "let agents trigger the skill on their own (default: only when named)")
 
 	list := &cobra.Command{
@@ -100,7 +109,11 @@ that every agent may trigger on its own.`,
 				fmt.Fprintln(out, "no external skills installed")
 			}
 			for _, e := range entries {
-				fmt.Fprintf(out, "%-24s %.12s  %-8s %s\n", e.Name, e.Commit, skillMode(e), e.URL)
+				origin := e.URL
+				if e.Upstream != "" {
+					origin += " (upstream name " + e.Upstream + ")"
+				}
+				fmt.Fprintf(out, "%-24s %.12s  %-8s %s\n", e.Name, e.Commit, skillMode(e), origin)
 			}
 			return nil
 		},

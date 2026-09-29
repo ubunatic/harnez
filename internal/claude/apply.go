@@ -18,6 +18,7 @@ import (
 	"ubunatic.com/harnez/internal/fsutil"
 	"ubunatic.com/harnez/internal/jsonc"
 	"ubunatic.com/harnez/internal/markdown"
+	"ubunatic.com/harnez/internal/skillreg"
 )
 
 // applyResult is returned by every apply-level operation.
@@ -777,6 +778,9 @@ func removeDecommissionedArtifacts(target string, cfg *Config) (int, error) {
 		}
 		for _, root := range skillTargets(cfg) {
 			artifact := filepath.Join(root, name)
+			if externalSkillClash(artifact) {
+				continue
+			}
 			if _, err := os.Stat(artifact); os.IsNotExist(err) {
 				continue
 			} else if err != nil {
@@ -1150,6 +1154,9 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 			if skillDisabled(skill, selection, disableRateFeedback) {
 				for _, skillsRoot := range targets {
 					skillDir := filepath.Join(skillsRoot, skill.Name)
+					if externalSkillClash(skillDir) {
+						continue
+					}
 					path, err := safeSkillPath(skillDir, "SKILL.md")
 					if err != nil {
 						return err
@@ -1199,6 +1206,9 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 			}
 			for _, skillsRoot := range targets {
 				skillDir := filepath.Join(skillsRoot, skill.Name)
+				if externalSkillClash(skillDir) {
+					continue
+				}
 				path, err := safeSkillPath(skillDir, "SKILL.md")
 				if err != nil {
 					return err
@@ -1483,6 +1493,9 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 		for _, skill := range cfg.Skills {
 			if skillDisabled(skill, selection, disableRateFeedback) {
 				for _, skillsRoot := range skillTargets(cfg) {
+					if isExternalSkill(filepath.Join(skillsRoot, skill.Name)) {
+						continue
+					}
 					path := filepath.Join(skillsRoot, skill.Name, "SKILL.md")
 					if _, err := os.Stat(path); err == nil {
 						anyChanged = true
@@ -1505,6 +1518,9 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 			}
 			for _, skillsRoot := range skillTargets(cfg) {
 				skillDir := filepath.Join(skillsRoot, skill.Name)
+				if isExternalSkill(skillDir) {
+					continue
+				}
 				path, err := safeSkillPath(skillDir, "SKILL.md")
 				if err != nil {
 					return false, err
@@ -1679,6 +1695,9 @@ func CleanAll(target string, cfg *Config) error {
 		for _, skill := range cfg.Skills {
 			for _, skillsRoot := range skillTargets(cfg) {
 				skillDir := filepath.Join(skillsRoot, skill.Name)
+				if isExternalSkill(skillDir) {
+					continue
+				}
 				path, err := safeSkillPath(skillDir, "SKILL.md")
 				if err != nil {
 					return err
@@ -1770,6 +1789,25 @@ func OpenConfig(configPath string) (*Config, string, error) {
 	}
 	cfg, err := LoadConfig(configPath)
 	return cfg, configPath, err
+}
+
+// externalSkillClash reports (and prints) whether dir holds an external skill
+// installed by `harnez skill install`. apply never overwrites or removes
+// one; the user renames it instead (issue 631).
+func externalSkillClash(dir string) bool {
+	if !isExternalSkill(dir) {
+		return false
+	}
+	name := filepath.Base(dir)
+	fmt.Printf("  clash   %s is an external skill; kept it. Rename it: harnez skill remove %s && harnez skill install <url> --as <prefix>-%s\n", fsutil.ContractHome(dir), name, name)
+	return true
+}
+
+// isExternalSkill reports whether dir carries the external-skill marker.
+// diff, status, and revert skip such dirs silently, matching apply.
+func isExternalSkill(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, skillreg.MarkerFile))
+	return err == nil
 }
 
 // AgentSkillTarget is one agent's skill directory.

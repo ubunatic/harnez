@@ -50,8 +50,10 @@ type Entry struct {
 	URL         string    `yaml:"url"`
 	Ref         string    `yaml:"ref,omitempty"` // requested ref; empty means default branch
 	Commit      string    `yaml:"commit"`
-	Path        string    `yaml:"path"`           // skill dir relative to the repo root
-	Auto        bool      `yaml:"auto,omitempty"` // agents may trigger it on their own
+	Path        string    `yaml:"path"`               // skill dir relative to the repo root
+	Auto        bool      `yaml:"auto,omitempty"`     // agents may trigger it on their own
+	Upstream    string    `yaml:"upstream,omitempty"` // original name when installed with --as
+	Warnings    []string  `yaml:"-"`
 	Installed   time.Time `yaml:"installed"`
 }
 
@@ -61,8 +63,9 @@ type registryFile struct {
 
 // Registry is the on-disk state under Root: registry.yaml plus src/ clones.
 type Registry struct {
-	Root    string   // e.g. ~/.harnez/skills
-	Targets []Target // agent skill directories
+	Root     string   // e.g. ~/.harnez/skills
+	Targets  []Target // agent skill directories
+	Reserved []string // names harnez itself manages; never usable by external skills
 }
 
 // Target is one agent's skill directory. Agent selects how an explicit-only
@@ -163,6 +166,7 @@ type InstallOptions struct {
 	Path string // skill dir inside the repo; needed when the repo has several
 	Name string // alternative selector: the skill's frontmatter name
 	Auto bool   // let agents trigger the skill on their own
+	As   string // install under this name instead of the upstream name
 }
 
 // Install clones, pins, and copies one skill into every target.
@@ -185,8 +189,15 @@ func (r *Registry) Install(opts InstallOptions) (Entry, error) {
 	if err != nil {
 		return Entry{}, err
 	}
+	upstream := ""
+	if opts.As != "" && opts.As != skill.Name {
+		upstream, skill.Name = skill.Name, opts.As
+	}
 	if !validName.MatchString(skill.Name) || strings.Contains(skill.Name, "..") {
-		return Entry{}, fmt.Errorf("skill name %q is not a safe directory name", skill.Name)
+		return Entry{}, fmt.Errorf("skill name %q is not a safe directory name; pick one with --as", skill.Name)
+	}
+	if slices.Contains(r.Reserved, skill.Name) {
+		return Entry{}, fmt.Errorf("%q is reserved for a harnez skill; retry with --as <prefix>-%s", skill.Name, skill.Name)
 	}
 	var targets []Target // targets that receive a copy
 	for _, t := range r.Targets {
@@ -209,12 +220,13 @@ func (r *Registry) Install(opts InstallOptions) (Entry, error) {
 		}
 	}
 	if old != nil && old.URL != opts.URL {
-		return Entry{}, fmt.Errorf("skill %q is already installed from %s; remove it first", skill.Name, old.URL)
+		return Entry{}, fmt.Errorf("skill %q is already installed from %s; retry with --as <prefix>-%s", skill.Name, old.URL, skill.Name)
 	}
 
 	entry := Entry{
 		Name: skill.Name, Description: skill.Description,
 		URL: opts.URL, Ref: opts.Ref, Commit: commit, Path: skill.Path, Auto: opts.Auto,
+		Upstream:  upstream,
 		Installed: time.Now().UTC().Truncate(time.Second),
 	}
 	// Stage every copy (with its marker) beside its target first, so a
@@ -241,10 +253,22 @@ func (r *Registry) Install(opts InstallOptions) (Entry, error) {
 		if err := copyTree(filepath.Join(clone, skill.Path), st); err != nil {
 			return Entry{}, err
 		}
+		if upstream != "" {
+			if err := renameSkill(st, skill.Name); err != nil {
+				return Entry{}, err
+			}
+		}
 		if !opts.Auto {
 			if err := makeExplicit(t.Agent, st); err != nil {
 				return Entry{}, err
 			}
+		}
+	}
+	if upstream != "" {
+		if refs := mentions(filepath.Join(clone, skill.Path), upstream); len(refs) > 0 {
+			entry.Warnings = append(entry.Warnings, fmt.Sprintf(
+				"renamed %s -> %s, but these files still mention %q: %s",
+				upstream, skill.Name, upstream, strings.Join(refs, ", ")))
 		}
 	}
 	src := r.SrcDir(skill.Name, commit)
@@ -285,7 +309,11 @@ func (r *Registry) Update(name string) (before, after Entry, err error) {
 	if !ok {
 		return Entry{}, Entry{}, fmt.Errorf("skill %q is not an installed external skill", name)
 	}
-	after, err = r.Install(InstallOptions{URL: e.URL, Ref: e.Ref, Path: e.Path, Name: e.Name, Auto: e.Auto})
+	opts := InstallOptions{URL: e.URL, Ref: e.Ref, Path: e.Path, Name: e.Name, Auto: e.Auto}
+	if e.Upstream != "" {
+		opts.Name, opts.As = e.Upstream, e.Name
+	}
+	after, err = r.Install(opts)
 	return e, after, err
 }
 
@@ -598,10 +626,26 @@ func makeExplicit(agent, dir string) error {
 }
 
 // disableModelInvocation sets `disable-model-invocation: true` in the
-// SKILL.md frontmatter, adding a frontmatter block if there is none. It
-// matches whole `---` lines and normalises CRLF to LF.
+// SKILL.md frontmatter, adding a frontmatter block if there is none.
 func disableModelInvocation(data []byte) []byte {
-	const key = "disable-model-invocation:"
+	return setFrontmatter(data, "disable-model-invocation", "true")
+}
+
+// renameSkill sets the frontmatter name of the SKILL.md in dir.
+func renameSkill(dir, name string) error {
+	path := filepath.Join(dir, "SKILL.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, setFrontmatter(data, "name", name), 0o644)
+}
+
+// setFrontmatter replaces or appends `key: value` in the YAML frontmatter,
+// adding a block if there is none. It matches whole `---` lines and
+// normalises CRLF to LF. Only single-line values are replaced cleanly.
+func setFrontmatter(data []byte, key, value string) []byte {
+	prefix := key + ":"
 	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
 	end := -1
 	if len(lines) > 0 && lines[0] == "---" {
@@ -613,17 +657,52 @@ func disableModelInvocation(data []byte) []byte {
 		}
 	}
 	if end < 0 {
-		return []byte("---\n" + key + " true\n---\n" + strings.Join(lines, "\n"))
+		return []byte("---\n" + prefix + " " + value + "\n---\n" + strings.Join(lines, "\n"))
 	}
+	// Replace the first key line in place (smaller diffs vs upstream),
+	// drop duplicates, append when absent.
 	out := []string{"---"}
+	set := false
 	for _, l := range lines[1:end] {
-		if !strings.HasPrefix(l, key) {
+		if !strings.HasPrefix(l, prefix) {
 			out = append(out, l)
+		} else if !set {
+			out = append(out, prefix+" "+value)
+			set = true
 		}
 	}
-	out = append(out, key+" true")
+	if !set {
+		out = append(out, prefix+" "+value)
+	}
 	out = append(out, lines[end:]...)
 	return []byte(strings.Join(out, "\n"))
+}
+
+// mentions lists text files in dir that contain word, outside SKILL.md's
+// name line. Used to warn that a renamed skill still refers to itself.
+func mentions(dir, word string) []string {
+	re := regexp.MustCompile(`(^|[^a-z0-9_-])` + regexp.QuoteMeta(word) + `($|[^a-z0-9_-])`)
+	nameLine := regexp.MustCompile(`(?m)^name:.*$`)
+	var out []string
+	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		data, err := os.ReadFile(p)
+		if err != nil || bytes.IndexByte(data, 0) >= 0 {
+			return nil
+		}
+		text := string(data)
+		if d.Name() == "SKILL.md" {
+			text = nameLine.ReplaceAllString(text, "")
+		}
+		if re.MatchString(text) {
+			rel, _ := filepath.Rel(dir, p)
+			out = append(out, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	return out
 }
 
 // checkTarget refuses to overwrite a skill that the registry did not install.
@@ -632,7 +711,7 @@ func checkTarget(dst string) error {
 		return nil
 	}
 	if _, err := os.Stat(filepath.Join(dst, MarkerFile)); err != nil {
-		return fmt.Errorf("%s exists and is not an external skill; refusing to install (remove or rename it first; install checks every agent dir, even ones that get no copy)", dst)
+		return fmt.Errorf("%s exists and is not an external skill; refusing to install; retry with --as <prefix>-%s (install checks every agent dir, even ones that get no copy)", dst, filepath.Base(dst))
 	}
 	return nil
 }

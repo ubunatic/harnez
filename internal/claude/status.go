@@ -104,6 +104,9 @@ func RunStatus(configPath string, cfg *Config, target string, selection Set) err
 			}
 			for _, skillsRoot := range targets {
 				skillDir := filepath.Join(skillsRoot, skill.Name)
+				if isExternalSkill(skillDir) {
+					continue
+				}
 				path, err := safeSkillPath(skillDir, "SKILL.md")
 				if err != nil {
 					return err
