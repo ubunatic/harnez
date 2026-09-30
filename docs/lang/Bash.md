@@ -164,7 +164,7 @@ Avoid arbitrary fixed indentation for command blocks. Prefer **alignment continu
   that distinctly from the wrapped command's own failure exit codes if
   downstream logic branches on `$?`. This is about individual command
   invocations; for waiting on a long-running background job instead, see
-  `docs/practices/AgenticLoop.md`'s "Blocking sleep Waits" and "Buffered
+  `docs/AgenticLoop.md`'s "Blocking sleep Waits" and "Buffered
   Long-Running Output" anti-patterns.
 
 ## 8. Functions
