@@ -41,19 +41,22 @@ func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSumma
 	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, q string) error { return store.Exec(ctx, q) }); err != nil {
 		return summary, err
 	}
+	if err := store.MigrateStableWindowKeys(ctx); err != nil {
+		return summary, err
+	}
 	if err := importCompatibility(store, ctx, homeDir); err != nil {
 		return summary, err
 	}
-	now := time.Now()
+	now := summary.Timestamp
+	if now.IsZero() {
+		now = time.Now()
+	}
 	for _, agent := range summary.Agents {
-		at := agent.LastRefreshed
-		if at.IsZero() {
-			at = summary.Timestamp
+		at := now
+		if !agent.LastRefreshed.IsZero() {
+			at = agent.LastRefreshed
 		}
-		if at.IsZero() {
-			at = now
-		}
-		if err := importAgent(store, ctx, agent.AgentID, "registry", at, agent); err != nil {
+		if err := importAgent(store, ctx, agent.AgentID, "collect-all", at, agent); err != nil {
 			return summary, err
 		}
 	}
@@ -117,7 +120,7 @@ func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now tim
 			continue
 		}
 		name := strings.ToLower(r.Name)
-		if strings.Contains(name, "week") {
+		if r.Key == "weekly" || strings.Contains(name, "week") || strings.Contains(name, "7-day") {
 			agent.Weekly = &w
 		} else if agent.Session == nil {
 			agent.Session = &w
@@ -240,15 +243,13 @@ func importAgent(s *usagestore.Store, ctx context.Context, provider, source stri
 		}
 	}
 	add := func(pool string, w QuotaWindow) {
-		key := w.Name
-		if key == "" {
-			key = pool
-		}
+		key := stableWindowKey(provider, pool, w.Name)
 		windowSource := source
 		if w.Source != "" {
 			windowSource = w.Source
 		}
-		windows = append(windows, usagestore.Window{Provider: provider, Pool: pool, Key: key, Name: w.Name, Source: windowSource, Freshness: freshness, UsedFraction: w.UsedPercent / 100, ResetAt: w.ResetAt, ObservedAt: at})
+		name := cleanWindowName(w.Name)
+		windows = append(windows, usagestore.Window{Provider: provider, Pool: pool, Key: key, Name: name, Source: windowSource, Freshness: freshness, UsedFraction: w.UsedPercent / 100, ResetAt: w.ResetAt, ObservedAt: at})
 	}
 	if agent.Tokens != nil {
 		input, cached, output := agent.Tokens.InputTokens, agent.Tokens.CacheReadTokens, agent.Tokens.OutputTokens
@@ -269,4 +270,12 @@ func importAgent(s *usagestore.Store, ctx context.Context, provider, source stri
 		add("", w)
 	}
 	return s.WriteCurrent(ctx, at, windows)
+}
+
+func cleanWindowName(name string) string {
+	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(name, " (stale)", ""), " (STALE)", ""))
+}
+
+func stableWindowKey(provider, pool, name string) string {
+	return usagestore.NormalizeWindowKey(provider, pool, cleanWindowName(name))
 }

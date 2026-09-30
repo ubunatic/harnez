@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -57,6 +58,74 @@ func (s *Store) Exec(ctx context.Context, query string, args ...any) error {
 
 func (s *Store) QueryRow(ctx context.Context, query string, args ...any) *sql.Row {
 	return s.db.QueryRowContext(ctx, query, args...)
+}
+
+// MigrateStableWindowKeys rewrites legacy display-label keys once and keeps
+// stale state on the observation freshness column.
+func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS usage_store_migrations (name TEXT PRIMARY KEY, completed_at TEXT NOT NULL)`); err != nil {
+		return err
+	}
+	var completed int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name='stable-window-keys-v1'`).Scan(&completed); err != nil {
+		return err
+	}
+	if completed > 0 {
+		return tx.Commit()
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE usage_observations SET freshness='stale' WHERE id IN (SELECT observation_id FROM quota_windows WHERE lower(window_name) LIKE '%(stale)%')`); err != nil {
+		return err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT id,provider,pool,window_key,window_name,observation_id FROM quota_windows ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	type row struct {
+		id, observationID         int64
+		provider, pool, key, name string
+	}
+	var records []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.provider, &r.pool, &r.key, &r.name, &r.observationID); err != nil {
+			rows.Close()
+			return err
+		}
+		records = append(records, r)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, r := range records {
+		key := NormalizeWindowKey(r.provider, r.pool, r.name)
+		name := strings.TrimSpace(strings.ReplaceAll(r.name, " (stale)", ""))
+		if key == r.key && name == r.name {
+			continue
+		}
+		var duplicate int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM quota_windows WHERE observation_id=? AND pool=? AND window_key=? AND id<>?`, r.observationID, r.pool, key, r.id).Scan(&duplicate); err != nil {
+			return err
+		}
+		if duplicate > 0 {
+			key += fmt.Sprintf("_duplicate_%d", r.id)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE quota_windows SET window_key=?,window_name=? WHERE id=?`, key, name, r.id); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO usage_store_migrations(name,completed_at) VALUES('stable-window-keys-v1',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // WriteCurrent appends a normalized observation for each provider returned by
@@ -176,7 +245,7 @@ func (s *Store) CurrentFor(ctx context.Context, provider string) ([]Window, erro
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Window
+	bestByWindow := make(map[string]Window)
 	for rows.Next() {
 		var w Window
 		var reset, observed sql.NullString
@@ -211,9 +280,80 @@ func (s *Store) CurrentFor(ctx context.Context, provider string) ([]Window, erro
 			}
 			w.ResetAt = &t
 		}
+		w.Key = NormalizeWindowKey(w.Provider, w.Pool, w.Name)
+		group := w.Provider + "\x00" + w.Pool + "\x00" + w.Key
+		if previous, ok := bestByWindow[group]; !ok || windowRanksHigher(w, previous) {
+			bestByWindow[group] = w
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]Window, 0, len(bestByWindow))
+	for _, w := range bestByWindow {
 		out = append(out, w)
 	}
-	return out, rows.Err()
+	return out, nil
+}
+
+// NormalizeWindowKey maps display labels to stable machine-readable keys.
+func NormalizeWindowKey(provider, pool, name string) string {
+	name = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(name, " (stale)", "")))
+	if pool == "" {
+		switch {
+		case strings.Contains(name, "week"), strings.Contains(name, "7-day"), strings.Contains(name, "7 day"):
+			return "weekly"
+		case strings.Contains(name, "5-hour"), strings.Contains(name, "5 hour"), strings.Contains(name, "session"):
+			return "five_hour"
+		case strings.Contains(name, "spend"):
+			return "spend_limit"
+		}
+	}
+	var key strings.Builder
+	separator := false
+	for _, r := range name {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			if separator && key.Len() > 0 {
+				key.WriteByte('_')
+			}
+			key.WriteRune(r)
+			separator = false
+		} else {
+			separator = true
+		}
+	}
+	if key.Len() == 0 {
+		if pool != "" {
+			return "quota"
+		}
+		return strings.ToLower(provider) + "_quota"
+	}
+	return key.String()
+}
+
+func windowRanksHigher(candidate, previous Window) bool {
+	if (candidate.Freshness == "fresh") != (previous.Freshness == "fresh") {
+		return candidate.Freshness == "fresh"
+	}
+	if sourcePriority(candidate.Source) != sourcePriority(previous.Source) {
+		return sourcePriority(candidate.Source) > sourcePriority(previous.Source)
+	}
+	return candidate.ObservedAt.After(previous.ObservedAt)
+}
+
+func sourcePriority(source string) int {
+	switch source {
+	case "claude-api", "codex-api", "agy-api", "structured-event":
+		return 4
+	case "authenticated-cli", "collect-all", "registry":
+		return 3
+	case "statusline":
+		return 2
+	case "agy-meter", "proxy", "estimated":
+		return 1
+	default:
+		return 0
+	}
 }
 
 // EnsureSchema creates only the additive store tables and indexes. Telemetry
@@ -229,6 +369,15 @@ func EnsureSchema(ctx context.Context, exec func(context.Context, string) error)
 		`CREATE INDEX IF NOT EXISTS idx_usage_load_observations_provider_time ON usage_load_observations(provider,observed_at)`,
 	} {
 		if err := exec(ctx, statement); err != nil {
+			return err
+		}
+	}
+	// quota_windows predated the typed token columns. CREATE TABLE IF NOT
+	// EXISTS does not upgrade existing installations, so add these columns
+	// individually. SQLite reports duplicate-column when this schema is
+	// already current; tolerate only that idempotent case.
+	for _, column := range []string{"input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens"} {
+		if err := exec(ctx, `ALTER TABLE quota_windows ADD COLUMN `+column+` INTEGER`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
 			return err
 		}
 	}

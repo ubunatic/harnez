@@ -55,6 +55,26 @@ func TestPassiveWindowsAcceptPartialAndAGYQuota(t *testing.T) {
 	}
 }
 
+func TestStatuslineIngestionWritesClaudeQuotaObservation(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "claude-statusline.sqlite")
+	sample := []byte(`{"hook_event_name":"Status","session_id":"session-safe","workspace":{"current_dir":"/work"},"rate_limits":{"five_hour":{"used_percentage":29.125,"resets_at":"2026-10-01T00:00:00Z"},"seven_day":{"used_percentage":41.5}}}`)
+	ObserveStatuslineAt(context.Background(), "claude", sample, dbPath)
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	var source, key string
+	var fraction float64
+	err = store.QueryRow(context.Background(), `SELECT o.source,q.window_key,q.used_fraction FROM usage_observations o JOIN quota_windows q ON q.observation_id=o.id WHERE o.provider='claude' ORDER BY o.id DESC LIMIT 1`).Scan(&source, &key, &fraction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source != "statusline" || key != "five_hour" || fraction != .29125 {
+		t.Fatalf("stored Claude statusline row = source %q key %q fraction %.8f", source, key, fraction)
+	}
+}
+
 func TestPassiveWriteDeduplicatesAndBestReadingUsesPrecedence(t *testing.T) {
 	store, err := usagestore.Open(filepath.Join(t.TempDir(), "u.sqlite"))
 	if err != nil {

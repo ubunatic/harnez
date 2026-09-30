@@ -349,6 +349,9 @@ func publishAgentObservations(ctx context.Context, agents []AgentUsage) error {
 	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, q string) error { return store.Exec(ctx, q) }); err != nil {
 		return err
 	}
+	if err := store.MigrateStableWindowKeys(ctx); err != nil {
+		return err
+	}
 	for _, agent := range agents {
 		if err := importAgent(store, ctx, agent.AgentID, "registry", agent.LastRefreshed, agent); err != nil {
 			return err
