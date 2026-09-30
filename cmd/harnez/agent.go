@@ -880,6 +880,9 @@ func recordResumeFailure(store *subagent.FileSessionStore, sess *subagent.Sessio
 	if len([]rune(sess.LastError)) > 300 {
 		sess.LastError = string([]rune(sess.LastError)[:300])
 	}
+	sess.Status = "failed"
+	sess.ProcessPID = 0
+	sess.LastActiveAt = time.Now()
 	sess.ResumeFailures++
 	_ = store.Save(sess)
 }

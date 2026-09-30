@@ -1292,7 +1292,7 @@ func TestAgentResumeFailureRecordedAndCleared(t *testing.T) {
 			t.Fatal("resume unexpectedly succeeded")
 		}
 		sess, _ := store.Get("sid")
-		if sess.ResumeFailures != want || sess.LastError != "provider failed" {
+		if sess.ResumeFailures != want || sess.LastError != "provider failed" || sess.Status != "failed" || sess.ProcessPID != 0 {
 			t.Fatalf("session = %#v", sess)
 		}
 		if len([]rune(sess.LastError)) > 300 {
@@ -2306,6 +2306,124 @@ func TestNormalTurnHasNoPlanFirstText(t *testing.T) {
 	got := runScripted(t, d, "start", "--model", "codex:luna", "task", "--name", "w")
 	if strings.Contains(d.prompt, "plan-first") || strings.Contains(got, "[gate:") {
 		t.Fatalf("prompt=%q\nstdout:\n%s", d.prompt, got)
+	}
+}
+
+type blockingResumeDriver struct {
+	recordingAgentDriver
+	started chan struct{}
+	release chan struct{}
+}
+
+func (d *blockingResumeDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
+	close(d.started)
+	<-d.release
+	return &subagent.TurnResult{SessionID: "provider-session", Response: "done", ContextTokens: 100}, nil
+}
+
+func TestAgentResumeStatusIsRunningDuringTurn(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	driver := &blockingResumeDriver{started: make(chan struct{}), release: make(chan struct{})}
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "sid", Name: "worker", Provider: "claude", Model: "haiku", Tier: "low", Status: "completed", ContextTokens: 100}); err != nil {
+		t.Fatal(err)
+	}
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(driver.release) }) }
+	resumeDone := make(chan error, 1)
+	go func() {
+		_, err := runWithStore(t, driver, storeDir, "resume", "--name", "worker", "prompt")
+		resumeDone <- err
+	}()
+	select {
+	case <-driver.started:
+	case <-time.After(2 * time.Second):
+		release()
+		t.Fatal("provider turn did not start")
+	}
+	defer release()
+
+	var out bytes.Buffer
+	status := newAgentCmd()
+	status.SetOut(&out)
+	status.SetErr(new(bytes.Buffer))
+	status.SetArgs([]string{"status", "--name", "worker", "--json", "--store-dir", storeDir})
+	if err := status.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var got subagent.Session
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "running" {
+		t.Errorf("mid-turn status = %q, want running", got.Status)
+	}
+	activeRole, activeSession := os.Getenv(agentRoleEnv), os.Getenv(agentSessionEnv)
+	_ = os.Setenv(agentRoleEnv, "")
+	_ = os.Setenv(agentSessionEnv, "")
+	_, secondErr := runWithStore(t, driver, storeDir, "resume", "--name", "worker", "conflict")
+	_ = os.Setenv(agentRoleEnv, activeRole)
+	_ = os.Setenv(agentSessionEnv, activeSession)
+	if secondErr == nil || !strings.Contains(secondErr.Error(), "already has a resume turn running") {
+		t.Errorf("second resume error = %v, want active-turn refusal", secondErr)
+	}
+	release()
+	if err := <-resumeDone; err != nil {
+		t.Fatal(err)
+	}
+	finished, err := store.Get("sid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finished.Status != "completed" || finished.ProcessPID != 0 {
+		t.Fatalf("final session state = status %q pid %d, want completed/0", finished.Status, finished.ProcessPID)
+	}
+}
+
+func TestAgentResumeReclaimsStaleRunningSession(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	driver := &recordingAgentDriver{}
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+	defer func() { agentDriver = old }()
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadProcess := exec.Command("true")
+	if err := deadProcess.Start(); err != nil {
+		t.Fatal(err)
+	}
+	deadPID := deadProcess.Process.Pid
+	if err := deadProcess.Wait(); err != nil {
+		t.Fatalf("wait for dead PID fixture: %v", err)
+	}
+	if processExists(deadPID) {
+		t.Fatalf("test fixture PID %d unexpectedly exists", deadPID)
+	}
+	if err := store.Save(&subagent.Session{ID: "stale", Name: "worker", Provider: "claude", Model: "haiku", Tier: "low", Status: "running", ProcessPID: deadPID, ContextTokens: 100}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runWithStore(t, driver, storeDir, "resume", "--name", "worker", "prompt"); err != nil {
+		t.Fatalf("resume stale session: %v", err)
+	}
+	finished, err := store.Get("stale")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finished.Status != "completed" || finished.ProcessPID != 0 || finished.LastError != "" {
+		t.Fatalf("reclaimed session = status %q pid %d error %q", finished.Status, finished.ProcessPID, finished.LastError)
 	}
 }
 

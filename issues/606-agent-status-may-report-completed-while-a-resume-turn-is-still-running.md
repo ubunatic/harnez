@@ -1,9 +1,9 @@
 # 606 — agent status may report completed while a resume turn is still running
 
-**Status**: Closed — <outcome>
+**Status**: Closed — synchronous resumes persist running state before provider turns, refuse live duplicate writers, recover stale PIDs, and record final failure state
 **Priority**: P3 (Low)
 **Severity**: Minor
-**Category**: Bug (unconfirmed)
+**Category**: Bug (confirmed)
 **Related**: 603 (sprint where it was seen)
 
 ---
@@ -18,14 +18,18 @@ A second resume then failed with codex `thread-store conflict: ... already has a
 A host that trusts `status` would start a conflicting second writer.
 
 ## 2. Technical Specification / Findings
-- Unconfirmed: status may have been read before the resume registered its turn (race), or status may reflect only
-  the last finished turn. The `&` launch may have affected it.
+- Confirmed on HEAD: synchronous `runResume` called the provider without first saving `running`, so status continued
+  to show the prior `completed` state; a second resume could therefore start a conflicting writer.
+- Fixed by persisting `running` and the current PID before the provider starts. A live PID now blocks another resume;
+  a dead PID is treated as stale. Success, failure, and token-watchdog interruption persist a final state and clear
+  the PID.
 
 ## 3. Implementation & Verification Plan
-- Reproduce: start a long resume in a tracked background shell, query `agent status` during the turn.
-- If it shows `completed`: status must report `running` while a turn's process is alive, and `resume` should refuse
-  with a clear message (not the raw codex error) when a turn is active.
-- Test with a fake driver holding a turn open.
+- Reproduced and verified with a blocking fake driver: `agent status --json` reports `running` mid-turn; a second
+  resume is refused with a clear active-turn message; completion clears the PID. A reaped child PID verifies stale
+  session recovery. Resume failure coverage verifies `failed` state and PID cleanup.
+- `make test-q1`: expected configuration-related failures only (17 `cmd/harnez` tests and 1 `internal/claude` test)
+  from the pre-existing, uncommitted `jev_compaction_enabled: true` edit in `config.yaml`.
 
 ## 4. Peer Report (loom, 2026-09-27)
 - loom ran `harnez agent resume` in a foreground Bash call; `harnez exec` killed it after 1m

@@ -593,6 +593,18 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if err != nil {
 		return err
 	}
+	if sess.Status == "running" && req.SessionID == "" {
+		if sess.ProcessPID > 0 && processExists(sess.ProcessPID) {
+			return fmt.Errorf("session %q already has a resume turn running (PID %d); wait for it to finish before resuming", sess.Name, sess.ProcessPID)
+		}
+		sess.Status = "failed"
+		sess.ProcessPID = 0
+		sess.LastError = "previous resume process is no longer running; treating session as stale"
+		sess.LastActiveAt = time.Now()
+		if err := s.Save(sess); err != nil {
+			return fmt.Errorf("session %q has a stale running record, but could not update it: %w", sess.Name, err)
+		}
+	}
 	if sess.ResumeBlockedReason != "" {
 		return fmt.Errorf("session %q cannot be resumed: %s; start a fresh session with harnez agent start --name", sess.Name, sess.ResumeBlockedReason)
 	}
@@ -704,6 +716,14 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 			return err
 		}
 	}
+	if req.SessionID == "" {
+		sess.Status = "running"
+		sess.ProcessPID = os.Getpid()
+		sess.LastActiveAt = time.Now()
+		if err := s.Save(sess); err != nil {
+			return fmt.Errorf("could not persist running state for session %q: %w", sess.Name, err)
+		}
+	}
 	turnStarted := time.Now().UTC()
 	beforeCapture := make(chan usage.TurnQuotaReading, 1)
 	go func() {
@@ -734,6 +754,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 			ts.abort()
 			if watchdogCrossed {
 				sess.Status = "stopped"
+				sess.ProcessPID = 0
 				sess.LastError = fmt.Sprintf("runtime token watchdog interrupted the active turn at %d tokens (limit %d)", observedTokens, threshold)
 				sess.LastActiveAt = time.Now()
 				if saveErr := s.Save(sess); saveErr != nil {
@@ -771,12 +792,16 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		}
 		reason := fmt.Sprintf("Codex did not auto-compact session %s: context %s, limit %d; start a fresh session with harnez agent start", sess.ProviderID(), context, threshold)
 		sess.ResumeBlockedReason = reason
+		sess.Status = "completed"
+		sess.ProcessPID = 0
+		sess.LastActiveAt = time.Now()
 		if saveErr := s.Save(sess); saveErr != nil {
 			return fmt.Errorf("%s (also failed to save resume block: %w)", reason, saveErr)
 		}
 		return fmt.Errorf("%s", reason)
 	}
 	sess.LastError = ""
+	sess.ProcessPID = 0
 	sess.CodexQuotaResumePending = false
 	sess.ResumeFailures = 0
 	sess.TokensTurn = r.TokensTurn
