@@ -1,6 +1,6 @@
 # 649 — harnez usage --compact no longer shows agy/Gemini quota rows
 
-**Status**: Open
+**Status**: Closed — Refresh active AGY meter readings older than the spec-configured 1h age; preserve fallback on query failure.
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Usage
