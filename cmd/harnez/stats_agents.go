@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
+	"ubunatic.com/harnez/internal/usagestore"
 )
 
 type agentStatsOptions struct {
@@ -97,11 +99,6 @@ type agentModelTotals struct {
 	PointsPer100KNew           *float64 `json:"points_per_100k_new,omitempty"`
 }
 
-type quotaTurnPair struct {
-	Before *subagent.TurnQuotaEvent
-	After  *subagent.TurnQuotaEvent
-}
-
 func runAgentStats(w io.Writer, opts agentStatsOptions) error {
 	if opts.Days <= 0 {
 		return fmt.Errorf("stats --agents: --days must be positive")
@@ -142,6 +139,14 @@ func runAgentStats(w io.Writer, opts agentStatsOptions) error {
 			seen[s.ID] = true
 		}
 	}
+	legacyQuotaPath := filepath.Join(opts.StoreDir, "quota-readings.jsonl")
+	if _, err := usage.ImportTurnQuotaJSONL(context.Background(), opts.DBPath, legacyQuotaPath); err != nil {
+		return fmt.Errorf("stats --agents: import turn quota history: %w", err)
+	}
+	history, err := usage.QuotaHistoryFromStore(context.Background(), opts.HomeDir, opts.DBPath)
+	if err != nil {
+		return fmt.Errorf("stats --agents: query quota history: %w", err)
+	}
 	db, err := telemetry.OpenReadOnly(opts.DBPath)
 	if err != nil {
 		return fmt.Errorf("stats --agents: open telemetry database: %w", err)
@@ -151,8 +156,6 @@ func runAgentStats(w io.Writer, opts agentStatsOptions) error {
 	if err != nil {
 		return fmt.Errorf("stats --agents: query telemetry: %w", err)
 	}
-	history := readAgentQuotaHistory(opts.HomeDir)
-	quotaEvents := readTurnQuotaEvents(filepath.Join(opts.StoreDir, "quota-readings.jsonl"))
 	known := make(map[string]bool, len(sessions))
 	rows := make([]agentSessionRow, 0, len(sessions))
 	for _, s := range sessions {
@@ -186,8 +189,17 @@ func runAgentStats(w io.Writer, opts agentStatsOptions) error {
 				row.Rating = &avg
 			}
 		}
-		row.MeasuredDrainPoints, row.MeasuredTurns, row.MeasuredTurnsWithTokens, row.MeasuredNewInputTokens = measuredTurnMetrics(s, quotaEvents)
-		row.QuotaDrainPercent, row.Unreliable = measuredTurnDrain(s.ID, quotaEvents)
+		quotaDeltas, err := usage.TurnQuotaDeltasForSession(context.Background(), opts.DBPath, s.ID)
+		if err != nil {
+			return fmt.Errorf("stats --agents: query turn quota deltas: %w", err)
+		}
+		tokenUsages, err := usage.TurnTokenUsagesForSession(context.Background(), opts.DBPath, s.ID)
+		if err != nil {
+			return fmt.Errorf("stats --agents: query turn token usage: %w", err)
+		}
+		applyStoredTokenTotals(&row, tokenUsages)
+		row.MeasuredDrainPoints, row.MeasuredTurns, row.MeasuredTurnsWithTokens, row.MeasuredNewInputTokens = measuredTurnMetrics(s, quotaDeltas, tokenUsages)
+		row.QuotaDrainPercent, row.Unreliable = measuredTurnDrain(quotaDeltas)
 		if row.QuotaDrainPercent == nil {
 			row.QuotaSource = "unavailable"
 		}
@@ -353,38 +365,88 @@ func collectAgyCoverage(calls []telemetry.ToolCall) []agySessionCoverage {
 	return out
 }
 
-func measuredTurnMetrics(session *subagent.Session, events map[string]map[int]*quotaTurnPair) (float64, int, int, int64) {
-	turnTokens := make(map[int]int64, len(session.TurnRecords))
-	for _, turn := range session.TurnRecords {
-		turnTokens[turn.Turn] = int64(turn.NewInputTokens)
+func measuredTurnMetrics(_ *subagent.Session, deltas []usagestore.TurnQuotaDelta, tokens []usagestore.TurnTokenUsage) (float64, int, int, int64) {
+	turnPoints := map[int]float64{}
+	for _, delta := range deltas {
+		if delta.WindowKey != "five_hour" || !usableQuotaPair(delta) {
+			continue
+		}
+		turnPoints[delta.Turn] += delta.Delta * 100
+	}
+	turnTokens := map[int]usagestore.TurnTokenUsage{}
+	for _, token := range tokens {
+		if token.CounterKind == "delta" {
+			turnTokens[token.Turn] = token
+		}
 	}
 	var points float64
-	var measuredTurns int
 	var turnsWithTokens int
 	var newInput int64
-	for turn, pair := range events[session.ID] {
-		if pair.Before == nil || pair.After == nil {
-			continue
-		}
-		before, after := pair.Before.Reading, pair.After.Reading
-		if before.Error != "" || after.Error != "" || !before.HasCache || !after.HasCache || before.CacheAgeMS > 60000 || after.CacheAgeMS > 60000 {
-			continue
-		}
-		delta, invalid := quotaWindowDelta(before.Windows, after.Windows)
-		if invalid || delta == nil {
-			continue
-		}
-		points += *delta
-		measuredTurns++
-		if tokens, ok := turnTokens[turn]; ok {
-			newInput += tokens
-			turnsWithTokens++
-		} else if pair.After.Tokens != nil {
-			newInput += int64(pair.After.Tokens.NewInputTokens)
+	for turn, value := range turnPoints {
+		points += value
+		if token, ok := turnTokens[turn]; ok && token.InputTokens != nil && token.CachedInputTokens != nil && token.InputQuality != "unknown" && token.CachedInputQuality != "unknown" {
+			turnInput := *token.InputTokens - *token.CachedInputTokens
+			if turnInput < 0 {
+				turnInput = 0
+			}
+			newInput += turnInput
 			turnsWithTokens++
 		}
 	}
-	return points, measuredTurns, turnsWithTokens, newInput
+	return points, len(turnPoints), turnsWithTokens, newInput
+}
+
+func applyStoredTokenTotals(row *agentSessionRow, tokens []usagestore.TurnTokenUsage) {
+	var selected *usagestore.TurnTokenUsage
+	for i := range tokens {
+		token := &tokens[i]
+		if token.CounterKind == "cumulative" && (selected == nil || token.Turn > selected.Turn) {
+			selected = token
+		}
+	}
+	if selected != nil {
+		applyTokenDimensions(row, *selected)
+		return
+	}
+	var input, cached, output int64
+	found := false
+	complete := true
+	for _, token := range tokens {
+		if token.CounterKind != "delta" {
+			continue
+		}
+		found = true
+		if token.InputTokens == nil || token.CachedInputTokens == nil || token.OutputTokens == nil || token.InputQuality == "unknown" || token.CachedInputQuality == "unknown" || token.OutputQuality == "unknown" {
+			complete = false
+		}
+		if token.InputTokens != nil {
+			input += *token.InputTokens
+		}
+		if token.CachedInputTokens != nil {
+			cached += *token.CachedInputTokens
+		}
+		if token.OutputTokens != nil {
+			output += *token.OutputTokens
+		}
+	}
+	if found {
+		row.NewInputTokens = max(input-cached, 0)
+		row.CachedInputTokens = cached
+		row.OutputTokens = output
+		row.TokensComplete = complete
+	}
+}
+
+func applyTokenDimensions(row *agentSessionRow, token usagestore.TurnTokenUsage) {
+	complete := token.InputTokens != nil && token.CachedInputTokens != nil && token.OutputTokens != nil && token.InputQuality != "unknown" && token.CachedInputQuality != "unknown" && token.OutputQuality != "unknown"
+	if token.InputTokens != nil && token.CachedInputTokens != nil {
+		row.NewInputTokens = max(*token.InputTokens-*token.CachedInputTokens, 0)
+		row.CachedInputTokens = *token.CachedInputTokens
+	}
+	if token.OutputTokens != nil {
+		row.OutputTokens = *token.OutputTokens
+	}
+	row.TokensComplete = complete
 }
 
 // shareFittedDrain prevents the same quota-history interval being attributed
@@ -419,68 +481,32 @@ func shareFittedDrain(rows []agentSessionRow) {
 	}
 }
 
-func readTurnQuotaEvents(path string) map[string]map[int]*quotaTurnPair {
-	out := map[string]map[int]*quotaTurnPair{}
-	f, err := os.Open(path)
-	if err != nil {
-		return out
-	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
-	for scanner.Scan() {
-		var event subagent.TurnQuotaEvent
-		if json.Unmarshal(scanner.Bytes(), &event) != nil {
-			continue
-		}
-		byTurn := out[event.SessionID]
-		if byTurn == nil {
-			byTurn = map[int]*quotaTurnPair{}
-			out[event.SessionID] = byTurn
-		}
-		pair := byTurn[event.Turn]
-		if pair == nil {
-			pair = &quotaTurnPair{}
-			byTurn[event.Turn] = pair
-		}
-		copyEvent := event
-		if event.Boundary == "before" {
-			pair.Before = &copyEvent
-		}
-		if event.Boundary == "after" {
-			pair.After = &copyEvent
-		}
-	}
-	return out
+func usableQuotaPair(delta usagestore.TurnQuotaDelta) bool {
+	return delta.BeforeHasCache && delta.AfterHasCache && delta.BeforeError == "" && delta.AfterError == "" && delta.BeforeCacheAgeMS <= 60000 && delta.AfterCacheAgeMS <= 60000
 }
 
-func measuredTurnDrain(sessionID string, events map[string]map[int]*quotaTurnPair) (*float64, bool) {
-	byTurn := events[sessionID]
+func measuredTurnDrain(deltas []usagestore.TurnQuotaDelta) (*float64, bool) {
+	if len(deltas) == 0 {
+		return nil, true
+	}
+	byTurn := map[int]float64{}
+	unreliable := false
+	for _, delta := range deltas {
+		if delta.WindowKey != "five_hour" {
+			continue
+		}
+		if !usableQuotaPair(delta) {
+			unreliable = true
+			continue
+		}
+		byTurn[delta.Turn] += delta.Delta * 100
+	}
 	if len(byTurn) == 0 {
 		return nil, true
 	}
 	total := 0.0
-	measured, unreliable := false, false
-	for _, pair := range byTurn {
-		if pair.Before == nil || pair.After == nil {
-			unreliable = true
-			continue
-		}
-		before, after := pair.Before.Reading, pair.After.Reading
-		if before.Error != "" || after.Error != "" || before.CacheAgeMS > 60000 || after.CacheAgeMS > 60000 || !before.HasCache || !after.HasCache {
-			unreliable = true
-		}
-		changes, resetOrMissing := quotaWindowDelta(before.Windows, after.Windows)
-		if resetOrMissing {
-			unreliable = true
-		}
-		if changes != nil {
-			total += *changes
-			measured = true
-		}
-	}
-	if !measured {
-		return nil, unreliable
+	for _, points := range byTurn {
+		total += points
 	}
 	return &total, unreliable
 }
@@ -488,34 +514,6 @@ func measuredTurnDrain(sessionID string, events map[string]map[int]*quotaTurnPai
 func isFiveHourWindow(name string) bool {
 	x := strings.ToLower(name)
 	return strings.Contains(x, "5-hour") || strings.Contains(x, "5h") || strings.Contains(x, "five hour") || (strings.Contains(x, "session") && !strings.Contains(x, "weekly"))
-}
-
-func quotaWindowDelta(before, after []usage.QuotaHistoryEntry) (*float64, bool) {
-	type key struct{ agent, group, window string }
-	prev := map[key]usage.QuotaHistoryEntry{}
-	for _, entry := range before {
-		if isFiveHourWindow(entry.Window) {
-			prev[key{entry.Agent, entry.Group, entry.Window}] = entry
-		}
-	}
-	total, matched, reset := 0.0, 0, false
-	for _, entry := range after {
-		k := key{entry.Agent, entry.Group, entry.Window}
-		old, ok := prev[k]
-		if !ok {
-			continue
-		}
-		if entry.UsedPercent < old.UsedPercent {
-			reset = true
-			continue
-		}
-		total += float64(entry.UsedPercent - old.UsedPercent)
-		matched++
-	}
-	if matched == 0 {
-		return nil, true
-	}
-	return &total, reset
 }
 
 func hostSessionRows(calls []telemetry.ToolCall, known map[string]bool, history []usage.QuotaHistoryEntry, codexModels map[string]string) []agentSessionRow {
@@ -647,15 +645,6 @@ func fittedDrain(session agentSessionRow, history []usage.QuotaHistoryEntry) *fl
 		return nil
 	}
 	return &total
-}
-
-func readAgentQuotaHistory(home string) []usage.QuotaHistoryEntry {
-	var all []usage.QuotaHistoryEntry
-	entries, err := usage.ReadQuotaHistory(usage.HistoryDir(home))
-	if err == nil {
-		all = append(all, entries...)
-	}
-	return all
 }
 
 func modelTotals(rows []agentSessionRow) []agentModelTotals {

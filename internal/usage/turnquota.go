@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"ubunatic.com/harnez/internal/usagestore"
 )
 
 // TurnQuotaReading is a bounded, best-effort quota observation for one agent turn.
@@ -15,6 +17,8 @@ type TurnQuotaReading struct {
 	CacheAgeMS      int64               `json:"cache_age_ms"`
 	HasCache        bool                `json:"has_cache"`
 	ProbeDurationMS int64               `json:"probe_duration_ms,omitempty"`
+	Source          string              `json:"source,omitempty"`
+	StoreWindows    []usagestore.Window `json:"store_windows,omitempty"`
 	Windows         []QuotaHistoryEntry `json:"windows,omitempty"`
 	Error           string              `json:"error,omitempty"`
 }
@@ -86,7 +90,7 @@ func CaptureTurnQuotaSinceCache(ctx context.Context, provider string, force bool
 	}
 
 	now := time.Now().UTC()
-	reading := TurnQuotaReading{CapturedAt: now, Error: u.QuotaFetchError, ProbeDurationMS: u.QuotaFetchDurationMS}
+	reading := TurnQuotaReading{CapturedAt: now, Error: u.QuotaFetchError, ProbeDurationMS: u.QuotaFetchDurationMS, Source: "turn-capture", StoreWindows: AgentUsageToStoreWindows(u, now)}
 	if cache := readProviderQuotaCache(provider, cachePath); !cache.IsZero() {
 		reading.HasCache = true
 		reading.CacheAgeMS = max(now.Sub(cache).Milliseconds(), 0)

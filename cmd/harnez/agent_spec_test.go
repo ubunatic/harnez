@@ -11,6 +11,7 @@ import (
 
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
+	"ubunatic.com/harnez/internal/usagestore"
 )
 
 func TestAgentDefaultModelIsMarkedOnce(t *testing.T) {
@@ -28,7 +29,10 @@ func TestAgentDefaultModelIsMarkedOnce(t *testing.T) {
 
 func TestAgentModelsShowsCachedAvailabilityAndAge(t *testing.T) {
 	cacheHome := t.TempDir()
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dataHome := filepath.Join(home, ".local", "share")
+	t.Setenv("XDG_DATA_HOME", dataHome)
 	t.Setenv("XDG_CACHE_HOME", cacheHome)
 	now := time.Now()
 	reset := now.Add(time.Hour)
@@ -42,6 +46,21 @@ func TestAgentModelsShowsCachedAvailabilityAndAge(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(quotaCacheDir, "quota-cache-agy.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := usagestore.Open(filepath.Join(dataHome, "harnez", "telemetry.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteCurrent(ctx, cache.FetchedAt, []usagestore.Window{
+		{Provider: "agy", Pool: "Gemini Models", Key: "weekly", Name: "weekly", Source: "agy-meter", Freshness: "fresh", UsedFraction: 1, ResetAt: &reset, ObservedAt: cache.FetchedAt},
+		{Provider: "agy", Pool: "Gemini Models", Key: "five_hour", Name: "5h", Source: "agy-meter", Freshness: "fresh", UsedFraction: 1, ResetAt: &reset, ObservedAt: cache.FetchedAt},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	var out strings.Builder
@@ -116,7 +135,10 @@ func (testBatchAgentDriver) Delete(context.Context, string) error { return nil }
 
 func TestAgentModelsShowsStaleQuotaAge(t *testing.T) {
 	cacheHome := t.TempDir()
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dataHome := filepath.Join(home, ".local", "share")
+	t.Setenv("XDG_DATA_HOME", dataHome)
 	t.Setenv("XDG_CACHE_HOME", cacheHome)
 	now := time.Now()
 	reset := now.Add(time.Hour)
@@ -130,6 +152,20 @@ func TestAgentModelsShowsStaleQuotaAge(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(quotaCacheDir, "quota-cache-agy.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := usagestore.Open(filepath.Join(dataHome, "harnez", "telemetry.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteCurrent(ctx, cache.FetchedAt, []usagestore.Window{
+		{Provider: "agy", Pool: "Gemini Models", Key: "weekly", Name: "weekly", Source: "agy-meter", Freshness: "stale", UsedFraction: 1, ResetAt: &reset, ObservedAt: cache.FetchedAt},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	var out strings.Builder

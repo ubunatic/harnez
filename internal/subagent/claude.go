@@ -94,7 +94,7 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	}
 	r := &TurnResult{SessionID: v.SessionID, Response: v.Result, Messages: []string{v.Result}, InputTokens: v.Usage.Input, OutputTokens: v.Usage.Output, CachedTokens: v.Usage.CacheRead + v.Usage.CacheCreate}
 	r.ContextTokens = r.InputTokens + r.CachedTokens
-	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens
+	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens + r.ReasoningTokens
 	r.TokensCumulative = r.TokensTurn
 	return r, nil
 }

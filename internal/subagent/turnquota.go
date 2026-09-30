@@ -25,6 +25,7 @@ type TurnTokenUsage struct {
 	NewInputTokens    int `json:"new_input_tokens"`
 	CachedInputTokens int `json:"cached_input_tokens"`
 	OutputTokens      int `json:"output_tokens"`
+	ReasoningTokens   int `json:"reasoning_tokens,omitempty"`
 }
 
 // RecordTurnQuota appends one boundary observation in the session store.

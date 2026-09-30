@@ -15,25 +15,27 @@ var ErrSessionNameInUse = errors.New("session name or ID is already in use")
 
 // Session represents an active subagent session with metadata and telemetry.
 type Session struct {
-	ID                string `json:"id"`
-	ProviderSessionID string `json:"provider_session_id,omitempty"`
-	Name              string `json:"name"`
-	StartPrompt       string `json:"start_prompt,omitempty"`
-	Provider          string `json:"provider"`
-	Model             string `json:"model"`
-	Tier              string `json:"tier"`
-	WorkingDir        string `json:"working_dir"`
-	ParentSessionID   string `json:"parent_session_id,omitempty"`
-	CallerPID         int    `json:"caller_pid"`
-	ProcessPID        int    `json:"process_pid,omitempty"`
-	ControlSocket     string `json:"control_socket,omitempty"`
-	HarnessType       string `json:"harness_type"`
-	Status            string `json:"status"`
-	TokensCumulative  int    `json:"tokens_cumulative"`
-	InputTokensTotal  int    `json:"input_tokens_total,omitempty"`
-	CachedTokensTotal int    `json:"cached_tokens_total,omitempty"`
-	OutputTokensTotal int    `json:"output_tokens_total,omitempty"`
-	TokenTotalsKnown  bool   `json:"token_totals_known,omitempty"`
+	ID                   string `json:"id"`
+	ProviderSessionID    string `json:"provider_session_id,omitempty"`
+	Name                 string `json:"name"`
+	StartPrompt          string `json:"start_prompt,omitempty"`
+	Provider             string `json:"provider"`
+	Model                string `json:"model"`
+	Tier                 string `json:"tier"`
+	WorkingDir           string `json:"working_dir"`
+	ParentSessionID      string `json:"parent_session_id,omitempty"`
+	CallerPID            int    `json:"caller_pid"`
+	ProcessPID           int    `json:"process_pid,omitempty"`
+	ControlSocket        string `json:"control_socket,omitempty"`
+	HarnessType          string `json:"harness_type"`
+	Status               string `json:"status"`
+	TokensCumulative     int    `json:"tokens_cumulative"`
+	InputTokensTotal     int    `json:"input_tokens_total,omitempty"`
+	CachedTokensTotal    int    `json:"cached_tokens_total,omitempty"`
+	OutputTokensTotal    int    `json:"output_tokens_total,omitempty"`
+	ReasoningTokensTotal int    `json:"reasoning_tokens_total,omitempty"`
+	ReasoningTokensKnown bool   `json:"reasoning_tokens_known,omitempty"`
+	TokenTotalsKnown     bool   `json:"token_totals_known,omitempty"`
 	// TokensSinceCompact tracks accumulated new tokens for telemetry only.
 	TokensSinceCompact int `json:"tokens_since_compact,omitempty"`
 	// ContextTokens is the full input size of the last provider turn, including

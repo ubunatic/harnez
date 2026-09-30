@@ -60,6 +60,9 @@ type TurnQuotaDelta struct {
 	BeforeAt, AfterAt                    time.Time
 	BeforeSource, AfterSource            string
 	BeforeReset, AfterReset              *time.Time
+	BeforeCacheAgeMS, AfterCacheAgeMS    int64
+	BeforeHasCache, AfterHasCache        bool
+	BeforeError, AfterError              string
 }
 
 func Open(path string) (*Store, error) {
@@ -287,7 +290,7 @@ func (s *Store) WriteTurnQuotaBoundary(ctx context.Context, boundary TurnQuotaBo
 			w.Provider = boundary.Provider
 		}
 		if w.Key == "" {
-			w.Key = NormalizeWindowKey(w.Provider, w.Pool, w.Name)
+			w.Key = NormalizeWindowKey(w.Provider, "", w.Name)
 		}
 		if w.ObservedAt.IsZero() {
 			w.ObservedAt = boundary.CapturedAt
@@ -320,15 +323,15 @@ func (s *Store) WriteTurnQuotaBoundary(ctx context.Context, boundary TurnQuotaBo
 // Pairs with reversed timestamps, changed reset markers, or decreased usage
 // are omitted because they crossed or may have crossed a provider reset.
 func (s *Store) PairTurnQuotaDeltas(ctx context.Context, sessionID string, turn int, provider string) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO turn_quota_deltas(session_id,turn,provider,pool,window_key,before_boundary_id,after_boundary_id,before_observation_id,after_observation_id,before_used_fraction,after_used_fraction,delta_used_fraction,before_source,after_source,before_observed_at,after_observed_at,before_reset_at,after_reset_at)
-		SELECT b.session_id,b.turn,b.provider,qb.pool,qb.window_key,b.id,a.id,ob.id,oa.id,qb.used_fraction,qa.used_fraction,qa.used_fraction-qb.used_fraction,ob.source,oa.source,ob.observed_at,oa.observed_at,qb.reset_at,qa.reset_at
+	_, err := s.db.ExecContext(ctx, `INSERT INTO turn_quota_deltas(session_id,turn,provider,pool,window_key,before_boundary_id,after_boundary_id,before_observation_id,after_observation_id,before_used_fraction,after_used_fraction,delta_used_fraction,before_source,after_source,before_observed_at,after_observed_at,before_reset_at,after_reset_at,before_cache_age_ms,after_cache_age_ms,before_has_cache,after_has_cache,before_error,after_error)
+		SELECT b.session_id,b.turn,b.provider,qb.pool,qb.window_key,b.id,a.id,ob.id,oa.id,qb.used_fraction,qa.used_fraction,qa.used_fraction-qb.used_fraction,ob.source,oa.source,ob.observed_at,oa.observed_at,qb.reset_at,qa.reset_at,b.cache_age_ms,a.cache_age_ms,b.has_cache,a.has_cache,b.error,a.error
 		FROM turn_quota_boundaries b JOIN turn_quota_boundaries a ON a.session_id=b.session_id AND a.turn=b.turn AND a.provider=b.provider AND a.boundary='after'
 		JOIN quota_windows qb ON qb.observation_id IN (SELECT id FROM usage_observations WHERE turn_boundary_id=b.id)
 		JOIN usage_observations ob ON ob.id=qb.observation_id
 		JOIN quota_windows qa ON qa.provider=qb.provider AND qa.pool=qb.pool AND qa.window_key=qb.window_key AND qa.observation_id IN (SELECT id FROM usage_observations WHERE turn_boundary_id=a.id)
 		JOIN usage_observations oa ON oa.id=qa.observation_id
-		WHERE b.session_id=? AND b.turn=? AND b.provider=? AND b.boundary='before' AND b.captured_at<a.captured_at AND COALESCE(qb.reset_at,'')=COALESCE(qa.reset_at,'') AND qa.used_fraction>=qb.used_fraction
-		ON CONFLICT(session_id,turn,provider,pool,window_key) DO UPDATE SET before_boundary_id=excluded.before_boundary_id,after_boundary_id=excluded.after_boundary_id,before_observation_id=excluded.before_observation_id,after_observation_id=excluded.after_observation_id,before_used_fraction=excluded.before_used_fraction,after_used_fraction=excluded.after_used_fraction,delta_used_fraction=excluded.delta_used_fraction,before_source=excluded.before_source,after_source=excluded.after_source,before_observed_at=excluded.before_observed_at,after_observed_at=excluded.after_observed_at,before_reset_at=excluded.before_reset_at,after_reset_at=excluded.after_reset_at`, sessionID, turn, provider)
+		WHERE b.session_id=? AND b.turn=? AND b.provider=? AND b.boundary='before' AND b.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=b.session_id AND turn=b.turn AND provider=b.provider AND boundary='before') AND a.id=(SELECT MAX(id) FROM turn_quota_boundaries WHERE session_id=a.session_id AND turn=a.turn AND provider=a.provider AND boundary='after') AND b.captured_at<a.captured_at AND COALESCE(qb.reset_at,'')=COALESCE(qa.reset_at,'') AND qa.used_fraction>=qb.used_fraction
+		ON CONFLICT(session_id,turn,provider,pool,window_key) DO UPDATE SET before_boundary_id=excluded.before_boundary_id,after_boundary_id=excluded.after_boundary_id,before_observation_id=excluded.before_observation_id,after_observation_id=excluded.after_observation_id,before_used_fraction=excluded.before_used_fraction,after_used_fraction=excluded.after_used_fraction,delta_used_fraction=excluded.delta_used_fraction,before_source=excluded.before_source,after_source=excluded.after_source,before_observed_at=excluded.before_observed_at,after_observed_at=excluded.after_observed_at,before_reset_at=excluded.before_reset_at,after_reset_at=excluded.after_reset_at,before_cache_age_ms=excluded.before_cache_age_ms,after_cache_age_ms=excluded.after_cache_age_ms,before_has_cache=excluded.before_has_cache,after_has_cache=excluded.after_has_cache,before_error=excluded.before_error,after_error=excluded.after_error`, sessionID, turn, provider)
 	return err
 }
 
@@ -351,7 +354,7 @@ func (s *Store) WriteTurnTokenUsage(ctx context.Context, usage TurnTokenUsage) e
 
 // TurnQuotaDeltas returns the ordered paired deltas for one session turn.
 func (s *Store) TurnQuotaDeltas(ctx context.Context, sessionID string, turn int) ([]TurnQuotaDelta, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT session_id,turn,provider,pool,window_key,before_used_fraction,after_used_fraction,delta_used_fraction,before_observed_at,after_observed_at,before_source,after_source,before_reset_at,after_reset_at FROM turn_quota_deltas WHERE session_id=? AND turn=? ORDER BY provider,pool,window_key`, sessionID, turn)
+	rows, err := s.db.QueryContext(ctx, `SELECT session_id,turn,provider,pool,window_key,before_used_fraction,after_used_fraction,delta_used_fraction,before_observed_at,after_observed_at,before_source,after_source,before_reset_at,after_reset_at,before_cache_age_ms,after_cache_age_ms,before_has_cache,after_has_cache,before_error,after_error FROM turn_quota_deltas WHERE session_id=? AND turn=? ORDER BY provider,pool,window_key`, sessionID, turn)
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +364,7 @@ func (s *Store) TurnQuotaDeltas(ctx context.Context, sessionID string, turn int)
 		var d TurnQuotaDelta
 		var beforeAt, afterAt string
 		var beforeReset, afterReset sql.NullString
-		if err := rows.Scan(&d.SessionID, &d.Turn, &d.Provider, &d.Pool, &d.WindowKey, &d.BeforeUsed, &d.AfterUsed, &d.Delta, &beforeAt, &afterAt, &d.BeforeSource, &d.AfterSource, &beforeReset, &afterReset); err != nil {
+		if err := rows.Scan(&d.SessionID, &d.Turn, &d.Provider, &d.Pool, &d.WindowKey, &d.BeforeUsed, &d.AfterUsed, &d.Delta, &beforeAt, &afterAt, &d.BeforeSource, &d.AfterSource, &beforeReset, &afterReset, &d.BeforeCacheAgeMS, &d.AfterCacheAgeMS, &d.BeforeHasCache, &d.AfterHasCache, &d.BeforeError, &d.AfterError); err != nil {
 			return nil, err
 		}
 		if d.BeforeAt, err = time.Parse(time.RFC3339Nano, beforeAt); err != nil {
@@ -387,6 +390,156 @@ func (s *Store) TurnQuotaDeltas(ctx context.Context, sessionID string, turn int)
 		out = append(out, d)
 	}
 	return out, rows.Err()
+}
+
+// TurnQuotaDeltasForSession returns all valid quota pairs for one session.
+func (s *Store) TurnQuotaDeltasForSession(ctx context.Context, sessionID string) ([]TurnQuotaDelta, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT session_id,turn,provider,pool,window_key,before_used_fraction,after_used_fraction,delta_used_fraction,before_observed_at,after_observed_at,before_source,after_source,before_reset_at,after_reset_at,before_cache_age_ms,after_cache_age_ms,before_has_cache,after_has_cache,before_error,after_error FROM turn_quota_deltas WHERE session_id=? ORDER BY turn,provider,pool,window_key`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TurnQuotaDelta
+	for rows.Next() {
+		var d TurnQuotaDelta
+		var beforeAt, afterAt string
+		var beforeReset, afterReset sql.NullString
+		if err := rows.Scan(&d.SessionID, &d.Turn, &d.Provider, &d.Pool, &d.WindowKey, &d.BeforeUsed, &d.AfterUsed, &d.Delta, &beforeAt, &afterAt, &d.BeforeSource, &d.AfterSource, &beforeReset, &afterReset, &d.BeforeCacheAgeMS, &d.AfterCacheAgeMS, &d.BeforeHasCache, &d.AfterHasCache, &d.BeforeError, &d.AfterError); err != nil {
+			return nil, err
+		}
+		if d.BeforeAt, err = time.Parse(time.RFC3339Nano, beforeAt); err != nil {
+			return nil, err
+		}
+		if d.AfterAt, err = time.Parse(time.RFC3339Nano, afterAt); err != nil {
+			return nil, err
+		}
+		if beforeReset.Valid {
+			t, parseErr := time.Parse(time.RFC3339Nano, beforeReset.String)
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			d.BeforeReset = &t
+		}
+		if afterReset.Valid {
+			t, parseErr := time.Parse(time.RFC3339Nano, afterReset.String)
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			d.AfterReset = &t
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// TurnTokenUsages returns the stored delta and cumulative rows for a session.
+func (s *Store) TurnTokenUsages(ctx context.Context, sessionID string) ([]TurnTokenUsage, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT session_id,turn,provider,counter_kind,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,input_quality,cached_input_quality,output_quality,reasoning_quality,observed_at FROM turn_token_usage WHERE session_id=? ORDER BY turn,counter_kind`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TurnTokenUsage
+	for rows.Next() {
+		var token TurnTokenUsage
+		var input, cached, output, reasoning sql.NullInt64
+		var observed string
+		if err := rows.Scan(&token.SessionID, &token.Turn, &token.Provider, &token.CounterKind, &input, &cached, &output, &reasoning, &token.InputQuality, &token.CachedInputQuality, &token.OutputQuality, &token.ReasoningQuality, &observed); err != nil {
+			return nil, err
+		}
+		if input.Valid {
+			v := input.Int64
+			token.InputTokens = &v
+		}
+		if cached.Valid {
+			v := cached.Int64
+			token.CachedInputTokens = &v
+		}
+		if output.Valid {
+			v := output.Int64
+			token.OutputTokens = &v
+		}
+		if reasoning.Valid {
+			v := reasoning.Int64
+			token.ReasoningTokens = &v
+		}
+		if token.ObservedAt, err = time.Parse(time.RFC3339Nano, observed); err != nil {
+			return nil, err
+		}
+		out = append(out, token)
+	}
+	return out, rows.Err()
+}
+
+// RebuildTurnTokenCumulative derives cumulative compatibility rows from
+// imported delta rows while keeping unknown dimensions unknown.
+func (s *Store) RebuildTurnTokenCumulative(ctx context.Context, sessionID string) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT turn,provider,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,input_quality,cached_input_quality,output_quality,reasoning_quality,observed_at FROM turn_token_usage WHERE session_id=? AND counter_kind='delta' ORDER BY turn`, sessionID)
+	if err != nil {
+		return err
+	}
+	type deltaRow struct {
+		turn                             int
+		provider                         string
+		input, cached, output, reasoning sql.NullInt64
+		iq, cq, oq, rq, observed         string
+	}
+	var deltas []deltaRow
+	for rows.Next() {
+		var row deltaRow
+		if err := rows.Scan(&row.turn, &row.provider, &row.input, &row.cached, &row.output, &row.reasoning, &row.iq, &row.cq, &row.oq, &row.rq, &row.observed); err != nil {
+			rows.Close()
+			return err
+		}
+		deltas = append(deltas, row)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	type total struct {
+		value   int64
+		known   bool
+		quality string
+	}
+	inputs, cacheds, outputs, reasonings := total{known: true}, total{known: true}, total{known: true}, total{known: true}
+	for _, row := range deltas {
+		accumulate := func(total *total, value sql.NullInt64, quality string) {
+			if !value.Valid || quality == "unknown" {
+				total.known = false
+				total.quality = "unknown"
+				return
+			}
+			total.value += value.Int64
+			if total.quality == "" {
+				total.quality = quality
+			} else if total.quality != quality {
+				total.quality = "shared"
+			}
+		}
+		accumulate(&inputs, row.input, row.iq)
+		accumulate(&cacheds, row.cached, row.cq)
+		accumulate(&outputs, row.output, row.oq)
+		accumulate(&reasonings, row.reasoning, row.rq)
+		quality := func(total total) (any, string) {
+			if !total.known {
+				return nil, "unknown"
+			}
+			v := total.value
+			return &v, total.quality
+		}
+		iv, iqual := quality(inputs)
+		cv, cqual := quality(cacheds)
+		ov, oqual := quality(outputs)
+		rv, rqual := quality(reasonings)
+		if _, err := s.db.ExecContext(ctx, `INSERT INTO turn_token_usage(session_id,turn,provider,counter_kind,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,input_quality,cached_input_quality,output_quality,reasoning_quality,observed_at) VALUES(?,?,?,'cumulative',?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,turn,counter_kind) DO UPDATE SET provider=excluded.provider,input_tokens=excluded.input_tokens,cached_input_tokens=excluded.cached_input_tokens,output_tokens=excluded.output_tokens,reasoning_tokens=excluded.reasoning_tokens,input_quality=excluded.input_quality,cached_input_quality=excluded.cached_input_quality,output_quality=excluded.output_quality,reasoning_quality=excluded.reasoning_quality,observed_at=excluded.observed_at`, sessionID, row.turn, row.provider, iv, cv, ov, rv, iqual, cqual, oqual, rqual, row.observed); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Current returns the newest observation for each provider/pool/window.
@@ -416,6 +569,36 @@ func (s *Store) Current(ctx context.Context) ([]Window, error) {
 			w.ResetAt = &t
 		}
 		out = append(out, w)
+	}
+	return out, rows.Err()
+}
+
+// QuotaHistory returns every normalized quota observation with provenance.
+func (s *Store) QuotaHistory(ctx context.Context) ([]Window, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT q.provider,q.pool,q.window_key,q.window_name,o.source,o.freshness,q.used_fraction,q.reset_at,o.observed_at FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id ORDER BY o.observed_at,q.provider,q.pool,q.window_key,o.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Window
+	for rows.Next() {
+		var window Window
+		var reset sql.NullString
+		var observed string
+		if err := rows.Scan(&window.Provider, &window.Pool, &window.Key, &window.Name, &window.Source, &window.Freshness, &window.UsedFraction, &reset, &observed); err != nil {
+			return nil, err
+		}
+		if window.ObservedAt, err = time.Parse(time.RFC3339Nano, observed); err != nil {
+			return nil, err
+		}
+		if reset.Valid {
+			t, parseErr := time.Parse(time.RFC3339Nano, reset.String)
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			window.ResetAt = &t
+		}
+		out = append(out, window)
 	}
 	return out, rows.Err()
 }
@@ -549,7 +732,7 @@ func EnsureSchema(ctx context.Context, exec func(context.Context, string) error)
 		`CREATE TABLE IF NOT EXISTS turn_quota_boundaries (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, turn INTEGER NOT NULL, boundary TEXT NOT NULL, provider TEXT NOT NULL, captured_at TEXT NOT NULL, source TEXT NOT NULL, freshness TEXT NOT NULL, cache_age_ms INTEGER NOT NULL DEFAULT 0, has_cache INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '', import_key TEXT NOT NULL DEFAULT '')`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_turn_quota_boundaries_import_key ON turn_quota_boundaries(import_key) WHERE import_key<>''`,
 		`CREATE INDEX IF NOT EXISTS idx_turn_quota_boundaries_session_turn ON turn_quota_boundaries(session_id,turn,boundary)`,
-		`CREATE TABLE IF NOT EXISTS turn_quota_deltas (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, turn INTEGER NOT NULL, provider TEXT NOT NULL, pool TEXT NOT NULL DEFAULT '', window_key TEXT NOT NULL, before_boundary_id INTEGER NOT NULL REFERENCES turn_quota_boundaries(id), after_boundary_id INTEGER NOT NULL REFERENCES turn_quota_boundaries(id), before_observation_id INTEGER NOT NULL REFERENCES usage_observations(id), after_observation_id INTEGER NOT NULL REFERENCES usage_observations(id), before_used_fraction REAL NOT NULL, after_used_fraction REAL NOT NULL, delta_used_fraction REAL NOT NULL, before_source TEXT NOT NULL, after_source TEXT NOT NULL, before_observed_at TEXT NOT NULL, after_observed_at TEXT NOT NULL, before_reset_at TEXT, after_reset_at TEXT, UNIQUE(session_id,turn,provider,pool,window_key))`,
+		`CREATE TABLE IF NOT EXISTS turn_quota_deltas (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, turn INTEGER NOT NULL, provider TEXT NOT NULL, pool TEXT NOT NULL DEFAULT '', window_key TEXT NOT NULL, before_boundary_id INTEGER NOT NULL REFERENCES turn_quota_boundaries(id), after_boundary_id INTEGER NOT NULL REFERENCES turn_quota_boundaries(id), before_observation_id INTEGER NOT NULL REFERENCES usage_observations(id), after_observation_id INTEGER NOT NULL REFERENCES usage_observations(id), before_used_fraction REAL NOT NULL, after_used_fraction REAL NOT NULL, delta_used_fraction REAL NOT NULL, before_source TEXT NOT NULL, after_source TEXT NOT NULL, before_observed_at TEXT NOT NULL, after_observed_at TEXT NOT NULL, before_reset_at TEXT, after_reset_at TEXT, before_cache_age_ms INTEGER NOT NULL DEFAULT 0, after_cache_age_ms INTEGER NOT NULL DEFAULT 0, before_has_cache INTEGER NOT NULL DEFAULT 0, after_has_cache INTEGER NOT NULL DEFAULT 0, before_error TEXT NOT NULL DEFAULT '', after_error TEXT NOT NULL DEFAULT '', UNIQUE(session_id,turn,provider,pool,window_key))`,
 		`CREATE INDEX IF NOT EXISTS idx_turn_quota_deltas_session_turn ON turn_quota_deltas(session_id,turn)`,
 		`CREATE TABLE IF NOT EXISTS turn_token_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, turn INTEGER NOT NULL, provider TEXT NOT NULL, counter_kind TEXT NOT NULL, input_tokens INTEGER, cached_input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, input_quality TEXT NOT NULL DEFAULT 'unknown', cached_input_quality TEXT NOT NULL DEFAULT 'unknown', output_quality TEXT NOT NULL DEFAULT 'unknown', reasoning_quality TEXT NOT NULL DEFAULT 'unknown', observed_at TEXT NOT NULL, UNIQUE(session_id,turn,counter_kind))`,
 		`CREATE INDEX IF NOT EXISTS idx_turn_token_usage_session_turn ON turn_token_usage(session_id,turn)`,
@@ -573,6 +756,11 @@ func EnsureSchema(ctx context.Context, exec func(context.Context, string) error)
 	}
 	if err := exec(ctx, `ALTER TABLE usage_observations ADD COLUMN turn_boundary_id INTEGER REFERENCES turn_quota_boundaries(id)`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
 		return err
+	}
+	for _, column := range []struct{ name, definition string }{{"before_cache_age_ms", "INTEGER NOT NULL DEFAULT 0"}, {"after_cache_age_ms", "INTEGER NOT NULL DEFAULT 0"}, {"before_has_cache", "INTEGER NOT NULL DEFAULT 0"}, {"after_has_cache", "INTEGER NOT NULL DEFAULT 0"}, {"before_error", "TEXT NOT NULL DEFAULT ''"}, {"after_error", "TEXT NOT NULL DEFAULT ''"}} {
+		if err := exec(ctx, `ALTER TABLE turn_quota_deltas ADD COLUMN `+column.name+` `+column.definition); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+			return err
+		}
 	}
 	return nil
 }

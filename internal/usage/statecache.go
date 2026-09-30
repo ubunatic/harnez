@@ -1,12 +1,16 @@
 package usage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"ubunatic.com/harnez/internal/telemetry"
+	"ubunatic.com/harnez/internal/usagestore"
 )
 
 // stateCacheDirEnv is the XDG Base Directory env var that, when set,
@@ -57,79 +61,50 @@ type ProviderQuotaAvailability struct {
 // snapshot used by harnez usage; missing quota data stays unknown.
 func CachedProviderQuotaAvailability(provider, model string, now time.Time) ProviderQuotaAvailability {
 	state := ProviderQuotaAvailability{State: "unknown"}
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
+	dbPath, err := telemetry.DefaultDBPath()
+	if err != nil {
 		return state
 	}
-	var fetchedAt time.Time
-	var windows []*QuotaWindow
-	switch provider {
-	case "claude":
-		cache := readLiveFetchCache[claudeQuotaPayload](liveFetchCachePath(filepath.Join(home, ".claude")))
-		if cache == nil {
-			return state
-		}
-		fetchedAt = cache.FetchedAt
-		windows = []*QuotaWindow{cache.Payload.Session, cache.Payload.Weekly}
-	case "codex":
-		cache := readLiveFetchCache[codexQuotaPayload](liveFetchCachePath(filepath.Join(home, ".codex")))
-		if cache == nil {
-			return state
-		}
-		fetchedAt = cache.FetchedAt
-		windows = []*QuotaWindow{cache.Payload.Session, cache.Payload.Weekly}
-	case "agy":
-		meterUsage, ok := applyAGYMeterQuota(AgentUsage{AgentID: "agy"}, home, now, true)
-		if ok {
-			fetchedAt = meterUsage.LastRefreshed
-			want := "Gemini Models"
-			if !strings.Contains(strings.ToLower(model), "gemini") && !strings.Contains(strings.ToLower(model), "flash") && !strings.Contains(strings.ToLower(model), "pro") {
-				want = "Claude and GPT models"
-			}
-			for _, group := range meterUsage.ModelGroups {
-				if strings.EqualFold(group.Name, want) {
-					for i := range group.Windows {
-						windows = append(windows, &group.Windows[i])
-					}
-				}
-			}
-			break
-		}
-		cache := readLiveFetchCache[agyQuotaPayload](liveFetchCachePath(filepath.Join(home, ".gemini", "antigravity-cli")))
-		if cache == nil {
-			return state
-		}
-		fetchedAt = cache.FetchedAt
-		want := "gemini models"
-		if !strings.Contains(strings.ToLower(model), "gemini") && !strings.Contains(strings.ToLower(model), "flash") && !strings.Contains(strings.ToLower(model), "pro") {
-			want = "claude and gpt models"
-		}
-		for _, group := range cache.Payload.ModelGroups {
-			if strings.EqualFold(group.Name, want) {
-				for i := range group.Windows {
-					windows = append(windows, &group.Windows[i])
-				}
-			}
-		}
-	default:
+	return ProviderQuotaAvailabilityFromStore(context.Background(), dbPath, provider, model, now)
+}
+
+// ProviderQuotaAvailabilityFromStore reads normalized quota rows from the
+// shared store, keeping model/start checks independent of provider caches.
+func ProviderQuotaAvailabilityFromStore(ctx context.Context, dbPath, provider, model string, now time.Time) ProviderQuotaAvailability {
+	state := ProviderQuotaAvailability{State: "unknown"}
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
 		return state
+	}
+	defer store.Close()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		return state
+	}
+	windows, err := store.CurrentFor(ctx, provider)
+	if err != nil {
+		return state
+	}
+	wantPool := ""
+	if provider == "agy" {
+		wantPool = "Gemini Models"
+		lowerModel := strings.ToLower(model)
+		if !strings.Contains(lowerModel, "gemini") && !strings.Contains(lowerModel, "flash") && !strings.Contains(lowerModel, "pro") {
+			wantPool = "Claude and GPT models"
+		}
 	}
 	seen := false
+	freshSeen := false
+	var latestAt time.Time
 	for _, window := range windows {
-		if window != nil {
-			seen = true
-			break
+		if provider == "agy" && !strings.EqualFold(window.Pool, wantPool) {
+			continue
 		}
-	}
-	if !seen {
-		return state
-	}
-	state.Age = now.Sub(fetchedAt)
-	if state.Age < 0 {
-		state.Age = 0
-	}
-	for _, window := range windows {
-		if window != nil && window.RemainingPercent <= 0 && window.ResetAt != nil && window.ResetAt.After(now) {
+		if !seen || window.ObservedAt.After(latestAt) {
+			latestAt = window.ObservedAt
+		}
+		seen = true
+		freshSeen = freshSeen || window.Freshness == "fresh"
+		if window.UsedFraction >= 1 && window.ResetAt != nil && window.ResetAt.After(now) {
 			resetIn := window.ResetAt.Sub(now)
 			if !state.Exhausted || resetIn < state.ResetIn {
 				state.ResetIn = resetIn
@@ -137,11 +112,22 @@ func CachedProviderQuotaAvailability(provider, model string, now time.Time) Prov
 			state.Exhausted = true
 		}
 	}
+	if !seen {
+		return state
+	}
+	state.Age = now.Sub(latestAt)
+	if state.Age < 0 {
+		state.Age = 0
+	}
 	if state.Exhausted {
 		state.State = "exhausted"
 		return state
 	}
 	if state.Age > AgentQuotaAvailabilityMaxAge {
+		state.State = "stale"
+		return state
+	}
+	if !freshSeen {
 		state.State = "stale"
 		return state
 	}

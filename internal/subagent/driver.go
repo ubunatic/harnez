@@ -84,10 +84,12 @@ type TurnResult struct {
 	Response  string `json:"response"`
 	// Messages holds every agent message of the turn in arrival order;
 	// Response is the last one.
-	Messages     []string `json:"messages,omitempty"`
-	InputTokens  int      `json:"input_tokens"`
-	OutputTokens int      `json:"output_tokens"`
-	CachedTokens int      `json:"cached_tokens"`
+	Messages             []string `json:"messages,omitempty"`
+	InputTokens          int      `json:"input_tokens"`
+	OutputTokens         int      `json:"output_tokens"`
+	CachedTokens         int      `json:"cached_tokens"`
+	ReasoningTokens      int      `json:"reasoning_tokens,omitempty"`
+	ReasoningTokensKnown bool     `json:"reasoning_tokens_known,omitempty"`
 	// ContextTokens is the provider's input-token count for the last turn,
 	// including cached input. It measures the full context the model read.
 	ContextTokens int `json:"context_tokens"`

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
+	"ubunatic.com/harnez/internal/usagestore"
 )
 
 func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
@@ -46,7 +48,12 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 		for i, boundary := range []string{"before", "after"} {
 			used := bounds[i]
 			r := usage.TurnQuotaReading{CapturedAt: now.Add(time.Duration(turn*2+i) * time.Minute), HasCache: true, CacheAgeMS: 800, Windows: []usage.QuotaHistoryEntry{{Agent: "codex", Window: "5-hour", UsedPercent: int(used)}}}
-			if err := store.RecordTurnQuota(subagent.TurnQuotaEvent{SessionID: "agent-1", Turn: turn + 1, Boundary: boundary, Provider: "codex", Reading: r}); err != nil {
+			var tokens *subagent.TurnTokenUsage
+			if boundary == "after" {
+				turnRecord := []subagent.TurnRecord{{NewInputTokens: 40, CachedInputTokens: 15, OutputTokens: 8}, {NewInputTokens: 60, CachedInputTokens: 25, OutputTokens: 12}}[turn]
+				tokens = &subagent.TurnTokenUsage{NewInputTokens: turnRecord.NewInputTokens + turnRecord.CachedInputTokens, CachedInputTokens: turnRecord.CachedInputTokens, OutputTokens: turnRecord.OutputTokens}
+			}
+			if err := store.RecordTurnQuota(subagent.TurnQuotaEvent{SessionID: "agent-1", Turn: turn + 1, Boundary: boundary, Provider: "codex", Reading: r, Tokens: tokens}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -75,7 +82,7 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 		byID[row.SessionID] = row
 	}
 	agent := byID["agent-1"]
-	if agent.Turns != 2 || agent.NewInputTokens != 100 || agent.CachedInputTokens != 40 || agent.OutputTokens != 20 || agent.QuotaSource != "measured" || agent.QuotaDrainPercent == nil || *agent.QuotaDrainPercent != 5 {
+	if agent.Turns != 2 || agent.NewInputTokens != 100 || agent.CachedInputTokens != 40 || agent.OutputTokens != 20 || agent.QuotaSource != "measured" || agent.QuotaDrainPercent == nil || math.Abs(*agent.QuotaDrainPercent-5) > 1e-9 {
 		t.Fatalf("agent row=%+v", agent)
 	}
 	host := byID["host-1"]
@@ -85,7 +92,7 @@ func TestRunAgentStatsJoinsSessionsTokensQuotaAndHostFitted(t *testing.T) {
 	if len(report.Models) != 1 || report.Models[0].Model != "codex:gpt-5.6-luna:low" || report.Models[0].Turns != 2 || report.Models[0].NewInputTokens != 100 {
 		t.Fatalf("model totals=%+v", report.Models)
 	}
-	if report.Models[0].MeasuredTurns != 2 || report.Models[0].MeasuredTurnsWithTokens != 2 || report.Models[0].MeasuredDrainPoints != 5 || report.Models[0].MeasuredNewInputTokens != 100 || report.Models[0].PointsPer100KNew != nil {
+	if report.Models[0].MeasuredTurns != 2 || report.Models[0].MeasuredTurnsWithTokens != 2 || math.Abs(report.Models[0].MeasuredDrainPoints-5) > 1e-9 || report.Models[0].MeasuredNewInputTokens != 100 || report.Models[0].PointsPer100KNew != nil {
 		t.Fatalf("measured quota totals=%+v", report.Models[0])
 	}
 	if agent.Rating == nil || *agent.Rating != 3 || report.Models[0].RatingAverage == nil || *report.Models[0].RatingAverage != 3 || report.Models[0].Ratings != 2 {
@@ -214,12 +221,11 @@ func TestAgentStatsMeasuresDeletedAGYFiveHourPairs(t *testing.T) {
 	if err := store.Save(session); err != nil {
 		t.Fatal(err)
 	}
-	reading := func() usage.TurnQuotaReading {
-		return usage.TurnQuotaReading{CapturedAt: now, HasCache: true, CacheAgeMS: 100, Windows: []usage.QuotaHistoryEntry{{Agent: "agy", Group: "Gemini Models", Window: "Five Hour Limit Remaining", UsedPercent: 27}}}
-	}
 	for turn := 1; turn <= 2; turn++ {
-		for _, boundary := range []string{"before", "after"} {
-			event := subagent.TurnQuotaEvent{SessionID: session.ID, Turn: turn, Boundary: boundary, Provider: "agy", Reading: reading()}
+		for i, boundary := range []string{"before", "after"} {
+			capturedAt := now.Add(time.Duration((turn-1)*2+i) * time.Minute)
+			reading := usage.TurnQuotaReading{CapturedAt: capturedAt, HasCache: true, CacheAgeMS: 100, StoreWindows: []usagestore.Window{{Provider: "agy", Pool: "Gemini Models", Key: "five_hour", Name: "Five Hour Limit Remaining", Source: "turn-capture", Freshness: "fresh", UsedFraction: 0.27, ObservedAt: capturedAt}}}
+			event := subagent.TurnQuotaEvent{SessionID: session.ID, Turn: turn, Boundary: boundary, Provider: "agy", Reading: reading}
 			if boundary == "after" {
 				event.Tokens = &subagent.TurnTokenUsage{NewInputTokens: 10}
 			}
@@ -329,16 +335,18 @@ func TestRenderAgentStatsLabelsUnreliableDrainAndMissingModelDrain(t *testing.T)
 
 func TestMeasuredTurnMetricsSkipsStalePairsAndKeepsMatchingTurnTokens(t *testing.T) {
 	session := &subagent.Session{ID: "agent", TurnRecords: []subagent.TurnRecord{{Turn: 1, NewInputTokens: 10}, {Turn: 2, NewInputTokens: 20}}}
-	reading := func(age int64, used int) usage.TurnQuotaReading {
-		return usage.TurnQuotaReading{HasCache: true, CacheAgeMS: age, Windows: []usage.QuotaHistoryEntry{{Agent: "codex", Window: "5-hour", UsedPercent: used}}}
+	quota := func(turn int, delta float64, age int64) usagestore.TurnQuotaDelta {
+		return usagestore.TurnQuotaDelta{Turn: turn, WindowKey: "five_hour", Delta: delta, BeforeHasCache: true, AfterHasCache: true, BeforeCacheAgeMS: age, AfterCacheAgeMS: age}
 	}
-	events := map[string]map[int]*quotaTurnPair{"agent": {
-		1: {Before: &subagent.TurnQuotaEvent{Reading: reading(100, 10)}, After: &subagent.TurnQuotaEvent{Reading: reading(100, 11), Tokens: &subagent.TurnTokenUsage{NewInputTokens: 100}}},
-		2: {Before: &subagent.TurnQuotaEvent{Reading: reading(61_000, 11)}, After: &subagent.TurnQuotaEvent{Reading: reading(100, 18), Tokens: &subagent.TurnTokenUsage{NewInputTokens: 20}}},
-	}}
-	points, measuredTurns, turnsWithTokens, newInput := measuredTurnMetrics(session, events)
+	input, cached, output := int64(100), int64(90), int64(5)
+	tokens := []usagestore.TurnTokenUsage{{Turn: 1, CounterKind: "delta", InputTokens: &input, CachedInputTokens: &cached, OutputTokens: &output, InputQuality: "measured", CachedInputQuality: "measured", OutputQuality: "measured"}}
+	points, measuredTurns, turnsWithTokens, newInput := measuredTurnMetrics(session, []usagestore.TurnQuotaDelta{quota(1, .01, 100), quota(2, .07, 61_000)}, tokens)
 	if points != 1 || measuredTurns != 1 || turnsWithTokens != 1 || newInput != 10 {
 		t.Fatalf("measured metrics = points:%v turns:%d tokenTurns:%d new:%d", points, measuredTurns, turnsWithTokens, newInput)
+	}
+	drain, unreliable := measuredTurnDrain([]usagestore.TurnQuotaDelta{quota(1, .01, 100), quota(2, .07, 61_000)})
+	if drain == nil || *drain != 1 || !unreliable {
+		t.Fatalf("measured drain = %v, unreliable=%t; want 1 point with stale pair flagged", drain, unreliable)
 	}
 }
 

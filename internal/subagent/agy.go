@@ -165,11 +165,11 @@ type agyResult struct {
 	DurationSecs   float64 `json:"duration_seconds"`
 	NumTurns       int     `json:"num_turns"`
 	Usage          struct {
-		Input  int `json:"input_tokens"`
-		Output int `json:"output_tokens"`
-		Think  int `json:"thinking_tokens"`
-		Cache  int `json:"cache_read_tokens"`
-		Total  int `json:"total_tokens"`
+		Input  int  `json:"input_tokens"`
+		Output int  `json:"output_tokens"`
+		Think  *int `json:"thinking_tokens"`
+		Cache  int  `json:"cache_read_tokens"`
+		Total  int  `json:"total_tokens"`
 	} `json:"usage"`
 }
 
@@ -205,13 +205,24 @@ func parseAgy(data []byte) (*TurnResult, error) {
 		Response:     v.Response,
 		Messages:     []string{v.Response},
 		InputTokens:  v.Usage.Input,
-		OutputTokens: v.Usage.Output + v.Usage.Think,
+		OutputTokens: v.Usage.Output + valueOrZero(v.Usage.Think),
 		CachedTokens: v.Usage.Cache,
+	}
+	if v.Usage.Think != nil {
+		r.ReasoningTokens = *v.Usage.Think
+		r.ReasoningTokensKnown = true
 	}
 	r.ContextTokens = -1 // agy's usage totals the whole turn, not the last-call context.
 	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens
 	r.TokensCumulative = r.TokensTurn
 	return r, nil
+}
+
+func valueOrZero(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 var _ Driver = AgyDriver{}

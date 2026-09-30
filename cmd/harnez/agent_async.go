@@ -328,7 +328,7 @@ func runDetachedWorker(cmd *cobra.Command, req startRequest, storeDir string) er
 		return fmt.Errorf("detached worker session %q was not registered", req.SessionID)
 	}
 	req.StoredPrompt = sess.StartPrompt
-	err = runStart(cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return sess.ParentSessionID }, preflight: subagent.CheckCodexAuth}, req)
+	err = runStart(cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return sess.ParentSessionID }, preflight: subagent.CheckCodexAuth, dbPath: agentUsageDBPath()}, req)
 	current, getErr := store.Get(sess.ID)
 	if getErr != nil {
 		return getErr
@@ -372,6 +372,7 @@ func runDetachedResumeWorker(cmd *cobra.Command, sessionID string, req resumeReq
 	deps := agentDeps{
 		store:    func() (*subagent.FileSessionStore, error) { return store, nil },
 		storeDir: storeDir,
+		dbPath:   agentUsageDBPath(),
 		parent:   func() string { return sess.ParentSessionID },
 		find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
 			return s.Find(id)

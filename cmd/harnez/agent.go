@@ -16,6 +16,7 @@ import (
 	"ubunatic.com/harnez/internal/agentpolicy"
 	"ubunatic.com/harnez/internal/privacy"
 	"ubunatic.com/harnez/internal/subagent"
+	"ubunatic.com/harnez/internal/telemetry"
 )
 
 var agentDriver = func(m subagent.Model, dir string) subagent.Driver {
@@ -29,6 +30,11 @@ var agentDriver = func(m subagent.Model, dir string) subagent.Driver {
 	default:
 		return subagent.UnsupportedDriver{Provider: m.Provider}
 	}
+}
+
+func agentUsageDBPath() string {
+	path, _ := telemetry.DefaultDBPath()
+	return path
 }
 
 var agentInteractiveRunner subagent.InteractiveRunner = subagent.CLIInteractiveRunner{}
@@ -163,7 +169,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if err != nil {
 			return err
 		}
-		deps := agentDeps{store: store, parent: parent, find: find, storeDir: storeDir}
+		deps := agentDeps{store: store, parent: parent, find: find, storeDir: storeDir, dbPath: agentUsageDBPath()}
 		if rootContinue && name != "" {
 			return fmt.Errorf("agent: --continue cannot be combined with --name")
 		}
@@ -268,7 +274,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			return launchDetachedWithPreflight(cmd, req, storeDir, parent(), subagent.CheckCodexAuth)
 		}
 		return withAgentTimeout(cmd, agentTimeout, func() error {
-			return runStart(cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir}, req)
+			return runStart(cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir, dbPath: agentUsageDBPath()}, req)
 		})
 	}}
 	start.Flags().StringSliceVarP(&startFiles, "file", "f", nil, "prompt file (repeatable; - reads stdin)")
@@ -390,7 +396,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: true, PlanFirst: planFirst}, storeDir)
 		}
 		return withAgentTimeout(cmd, agentTimeout, func() error {
-			return runResume(cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir}, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, Selector: selector, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: continueResume, JSON: jsonOut, PlanFirst: planFirst})
+			return runResume(cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir, dbPath: agentUsageDBPath()}, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, Selector: selector, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: continueResume, JSON: jsonOut, PlanFirst: planFirst})
 		})
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(storeDir, parent)

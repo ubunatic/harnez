@@ -64,25 +64,29 @@ fresh value and exposes its provenance. Statusline observations must include the
 ID, received time, fractional value, and no secrets; they may update a window but never overwrite
 a more authoritative simultaneous API observation.
 
-The additive schema is: `usage_observations` (common provenance/payload), `quota_windows`
+The additive schema includes `usage_observations` (common provenance/payload), `quota_windows`
 (observation FK, provider, pool, window key, `used_fraction REAL`, reset, freshness),
-`token_usage` (scope/session/turn, counter kind and nullable dimensions), and `session_usage`
-(session/turn FK, before/after observation IDs and calculated deltas). Index provider/pool/window
-and observed time, plus session/turn. Keep `tool_calls`, existing provider token snapshots and
-exports compatible; backfill them into these tables where their provenance permits. SQLite is
-append-only for observations, with a compacted current-view query; retention/export jobs archive
-only after parity and recovery are tested.
+`turn_token_usage` (session/turn, delta or cumulative counter and nullable token dimensions with
+per-dimension quality), `turn_quota_boundaries` (before/after capture metadata), and
+`turn_quota_deltas` (paired observation IDs, fraction delta and both-side provenance). Index
+provider/pool/window and observed time, plus session/turn. Keep `tool_calls`, existing provider
+token snapshots and exports compatible; backfill them into these tables where their provenance
+permits. SQLite is append-only for observations, with a compacted current-view query;
+retention/export jobs archive only after parity and recovery are tested.
 
 ## Session and turn accounting
 
-At agent-turn start, query the store's best fresh quota view and insert a `session_usage` boundary.
-At completion, ingest provider token deltas when emitted by the agent/hook/rollout, then record a
-second quota observation and calculate a delta only for the same provider/pool/window and a
-non-reset, ordered pair. Preserve `measured`, `fitted`, `shared`, `unknown`, and `estimated`
-quality flags instead of manufacturing precision. Existing `quota-readings.jsonl` becomes an
-import-compatible spool until all agent paths transact directly through the store API. This extends
-issue 603's quota check with durable evidence and lets `stats --agents` use the same readings as
-`usage`.
+At agent-turn start, capture the store's best fresh quota view and insert a `turn_quota_boundaries`
+row with source, freshness, cache age, cache availability and error details. At completion, ingest
+provider token deltas and cumulative values into `turn_token_usage`, then record the second quota
+observation. Pair only the same provider/pool/normalized window key when timestamps are ordered,
+reset markers match, and used fraction did not decrease; preserve both observations' provenance
+in `turn_quota_deltas`.
+Preserve `measured`, `fitted`, `shared`, and `unknown` quality flags instead of manufacturing
+precision. Existing `quota-readings.jsonl` is imported idempotently and retained as a recoverable
+compatibility source; retire its writes only after row parity is checked and a backup is preserved.
+This extends issue 603's quota check with durable evidence and lets `stats --agents` use the same
+readings as `usage`.
 
 ## Migration milestones
 
@@ -96,8 +100,8 @@ issue 603's quota check with durable evidence and lets `stats --agents` use the 
    statusline quota parsing and the AGY meter's direct reader path; retain provider formats only as
    adapters.
 4. **Session attribution:** transact agent turn boundaries and token snapshots through the store;
-   make `stats --agents`, `agent models`, and `agent start` consume its API. Delete
-   `quota-readings.jsonl` writes after importer/backfill and export parity.
+   make `stats --agents`, `agent models`, and `agent start` consume its API. Stop
+   `quota-readings.jsonl` writes only after importer parity and recovery backup are verified.
 5. **Consolidation:** generate state snapshots and JSONL history from SQLite, migrate/export old
    data, then remove provider quota-cache and standalone history writers only after offline,
    recovery, and performance checks prove the store path. Archive legacy files rather than deleting

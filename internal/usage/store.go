@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,44 @@ func StoreCompactSummary(ctx context.Context, homeDir string, summary UsageSumma
 // explicit telemetry database path.
 func StoreCompactSummaryAt(ctx context.Context, homeDir string, summary UsageSummary, dbPath string) (UsageSummary, error) {
 	return storeCompactSummary(ctx, homeDir, summary, dbPath)
+}
+
+// ImportUsageCompatibility backfills the existing quota snapshots/history
+// once so consumers can read them through the shared store API.
+func ImportUsageCompatibility(ctx context.Context, homeDir, dbPath string) error {
+	if dbPath == "" {
+		var err error
+		dbPath, err = telemetry.DefaultDBPath()
+		if err != nil { return err }
+	}
+	store, err := usagestore.Open(dbPath)
+	if err != nil { return err }
+	defer store.Close()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil { return err }
+	return importCompatibility(store, ctx, homeDir)
+}
+
+// QuotaHistoryFromStore returns the store's historical window view in the
+// legacy report shape used by host-session fitted attribution.
+func QuotaHistoryFromStore(ctx context.Context, homeDir, dbPath string) ([]QuotaHistoryEntry, error) {
+	if err := ImportUsageCompatibility(ctx, homeDir, dbPath); err != nil { return nil, err }
+	if dbPath == "" {
+		var err error
+		dbPath, err = telemetry.DefaultDBPath()
+		if err != nil { return nil, err }
+	}
+	store, err := usagestore.Open(dbPath)
+	if err != nil { return nil, err }
+	defer store.Close()
+	windows, err := store.QuotaHistory(ctx)
+	if err != nil { return nil, err }
+	out := make([]QuotaHistoryEntry, 0, len(windows))
+	for _, window := range windows {
+		used := int(math.Round(window.UsedFraction * 100))
+		remaining := max(100-used, 0)
+		out = append(out, QuotaHistoryEntry{Timestamp: window.ObservedAt, Agent: window.Provider, Group: window.Pool, Window: window.Name, UsedPercent: used, RemainingPercent: remaining, ResetAt: window.ResetAt})
+	}
+	return out, nil
 }
 
 func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSummary, dbPath string) (UsageSummary, error) {
@@ -270,6 +309,53 @@ func importAgent(s *usagestore.Store, ctx context.Context, provider, source stri
 		add("", w)
 	}
 	return s.WriteCurrent(ctx, at, windows)
+}
+
+// AgentUsageToStoreWindows preserves fractional quota values and source
+// attribution for a boundary capture before compatibility projections round
+// percentages for display.
+func AgentUsageToStoreWindows(agent AgentUsage, observedAt time.Time) []usagestore.Window {
+	provider := agent.AgentID
+	freshness := "fresh"
+	if agent.IsValueStale() {
+		freshness = "stale"
+	}
+	var windows []usagestore.Window
+	add := func(pool string, quota QuotaWindow) {
+		name := cleanWindowName(quota.Name)
+		windowFreshness := freshness
+		if strings.Contains(strings.ToLower(quota.Name), "(stale)") {
+			windowFreshness = "stale"
+		}
+		source := quota.Source
+		if source == "" {
+			source = "turn-capture"
+		}
+		at := observedAt
+		if at.IsZero() {
+			at = time.Now().UTC()
+		}
+		windows = append(windows, usagestore.Window{
+			Provider: provider, Pool: pool, Key: usagestore.NormalizeWindowKey(provider, "", name), Name: name,
+			Source: source, Freshness: windowFreshness, UsedFraction: quota.UsedPercent / 100,
+			ResetAt: quota.ResetAt, ObservedAt: at,
+		})
+	}
+	if agent.Session != nil {
+		add("", *agent.Session)
+	}
+	if agent.Weekly != nil {
+		add("", *agent.Weekly)
+	}
+	for _, group := range agent.ModelGroups {
+		for _, quota := range group.Windows {
+			add(group.Name, quota)
+		}
+	}
+	for _, quota := range agent.ExtraWindows {
+		add("", quota)
+	}
+	return windows
 }
 
 func cleanWindowName(name string) string {

@@ -265,10 +265,11 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 		ThreadID string                               `json:"thread_id"`
 		Item     struct{ Type, Text, Command string } `json:"item"`
 		Usage    struct {
-			Input   int `json:"input_tokens"`
-			Output  int `json:"output_tokens"`
-			Cached  int `json:"cached_input_tokens"`
-			Details struct {
+			Input     int  `json:"input_tokens"`
+			Output    int  `json:"output_tokens"`
+			Cached    int  `json:"cached_input_tokens"`
+			Reasoning *int `json:"reasoning_output_tokens"`
+			Details   struct {
 				Cached int `json:"cached_input_tokens"`
 			} `json:"input_token_details"`
 		} `json:"usage"`
@@ -301,6 +302,10 @@ func (p *codexParser) feed(line []byte) (Event, bool) {
 		p.r.InputTokens += e.Usage.Input
 		p.r.OutputTokens += e.Usage.Output
 		p.r.CachedTokens += e.Usage.Cached
+		if e.Usage.Reasoning != nil {
+			p.r.ReasoningTokens += *e.Usage.Reasoning
+			p.r.ReasoningTokensKnown = true
+		}
 		if e.Usage.Details.Cached > p.r.CachedTokens {
 			p.r.CachedTokens = e.Usage.Details.Cached
 		}

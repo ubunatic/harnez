@@ -204,8 +204,8 @@ func TestAgyParseJSONWithTokens(t *testing.T) {
 	if r.InputTokens != 11810 {
 		t.Fatalf("InputTokens = %d, want 11810", r.InputTokens)
 	}
-	if r.OutputTokens != 23+21 {
-		t.Fatalf("OutputTokens = %d, want %d (output+thinking)", r.OutputTokens, 23+21)
+	if r.OutputTokens != 23+21 || r.ReasoningTokens != 21 {
+		t.Fatalf("output/reasoning = %d/%d, want 44/21", r.OutputTokens, r.ReasoningTokens)
 	}
 	if r.CachedTokens != 0 {
 		t.Fatalf("CachedTokens = %d, want 0", r.CachedTokens)

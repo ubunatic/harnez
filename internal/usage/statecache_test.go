@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"ubunatic.com/harnez/internal/agymeter"
+	"ubunatic.com/harnez/internal/usagestore"
 )
 
 func TestCachedAGYAvailabilityKeepsExhaustionUntilReset(t *testing.T) {
@@ -25,27 +25,22 @@ func TestCachedAGYAvailabilityKeepsExhaustionUntilReset(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
-			zero := 0.0
-			weekly := 0.8
-			rows := []agymeter.Record{
-				{Time: now.Add(-36 * time.Minute), Kind: "quota", Bucket: "gemini-weekly", Remaining: &weekly, Reset: tc.reset.Format(time.RFC3339)},
-				{Time: now.Add(-36 * time.Minute), Kind: "quota", Bucket: "gemini-5h", Remaining: &zero, Reset: tc.reset.Format(time.RFC3339)},
-			}
-			path := filepath.Join(home, ".harnez", "agymeter", "usage.jsonl")
-			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-				t.Fatal(err)
-			}
-			f, err := os.Create(path)
+			t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+			dbPath := filepath.Join(home, ".local", "share", "harnez", "telemetry.sqlite")
+			store, err := usagestore.Open(dbPath)
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, row := range rows {
-				if err := json.NewEncoder(f).Encode(row); err != nil {
-					_ = f.Close()
-					t.Fatal(err)
-				}
+			defer store.Close()
+			ctx := context.Background()
+			if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+				t.Fatal(err)
 			}
-			if err := f.Close(); err != nil {
+			reset := tc.reset
+			if err := store.WriteCurrent(ctx, now.Add(-36*time.Minute), []usagestore.Window{
+				{Provider: "agy", Pool: "Gemini Models", Key: "weekly", Name: "Weekly", Source: "agy-meter", Freshness: "stale", UsedFraction: .2, ResetAt: &reset, ObservedAt: now.Add(-36 * time.Minute)},
+				{Provider: "agy", Pool: "Gemini Models", Key: "five_hour", Name: "5-hour", Source: "agy-meter", Freshness: "stale", UsedFraction: 1, ResetAt: &reset, ObservedAt: now.Add(-36 * time.Minute)},
+			}); err != nil {
 				t.Fatal(err)
 			}
 
