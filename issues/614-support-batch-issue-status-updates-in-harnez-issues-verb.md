@@ -1,6 +1,6 @@
 # 614 — Support batch issue status updates in harnez issues verb
 
-**Status**: Open
+**Status**: Closed — batch status updates implemented
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
