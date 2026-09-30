@@ -187,6 +187,34 @@ func recordCodexResumeFailure(sess *subagent.Session, err error, quotaState stri
 	return true
 }
 
+func shortCause(err error) string {
+	if err == nil {
+		return "provider failed"
+	}
+	const maxCause = 180
+	for _, line := range strings.Split(err.Error(), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		runes := []rune(line)
+		if len(runes) > maxCause {
+			line = string(runes[:maxCause-3]) + "..."
+		}
+		return line
+	}
+	return "provider failed"
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func quotaAlternatives(selected subagent.Model, availability func(string, string) usage.ProviderQuotaAvailability) []string {
 	if availability == nil {
 		availability = providerAvailability
@@ -236,7 +264,7 @@ func quotaModelCost(model subagent.Model) int {
 type resumeRequest struct {
 	Role                                     string // must match the stored role when given
 	Prompt, Name, ModelSpec, Dir, StreamMode string
-	SessionID                                string
+	SessionID, Selector                      string
 	Continue, JSON, PlanFirst                bool
 }
 
@@ -249,6 +277,20 @@ func resolveResumeSession(cmd *cobra.Command, d agentDeps, s *subagent.FileSessi
 	xs, e := s.List("", true)
 	if e != nil {
 		return nil, "", e
+	}
+	if req.Selector != "" {
+		var matches []*subagent.Session
+		for _, candidate := range xs {
+			if candidate.ID == req.Selector || candidate.Name == req.Selector || candidate.ProviderSessionID == req.Selector || strings.HasPrefix(candidate.ID, req.Selector) || strings.HasPrefix(candidate.ProviderSessionID, req.Selector) {
+				matches = append(matches, candidate)
+			}
+		}
+		if len(matches) == 1 {
+			return matches[0], "id", nil
+		}
+		if len(matches) > 1 {
+			return nil, "", fmt.Errorf("session selector %q is ambiguous", req.Selector)
+		}
 	}
 	c := attributable(xs, req.Dir, d.parent())
 	if len(c) == 0 {
@@ -329,6 +371,14 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	opts := subagent.RunOptions{Prompt: req.Prompt, Model: m, Dir: canonicalWorkDir}
 	parentID := d.parent() // read before the child's environment replaces it
 	defer setAgentEnv(role, sessName)()
+	initialSession := func(status string) *subagent.Session {
+		now := time.Now()
+		sessionID := id
+		if req.SessionID == "" && sessionID == "" {
+			sessionID = uuid.NewString()
+		}
+		return &subagent.Session{ID: sessionID, Name: sessName, StartPrompt: req.StoredPrompt, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: status, Role: role, CreatedAt: now, LastActiveAt: now}
+	}
 	if req.SessionID == "" && d.storeDir != "" {
 		if timeout := foregroundDetachTimeout(cmd); timeout > 0 {
 			now := time.Now()
@@ -352,6 +402,13 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 			return err
 		}
 	}
+	if req.SessionID == "" {
+		reserved := initialSession("running")
+		if err := s.Create(reserved); err != nil {
+			return err
+		}
+		id = reserved.ID
+	}
 	driver := withAgyMeterSession(baseDriver, id)
 	sd, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
@@ -363,6 +420,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	}()
 	var ts *turnStream
 	var r *subagent.TurnResult
+	observedSessionID := ""
 	if streaming {
 		ts = newTurnStream(cmd, req.StreamMode, false)
 		ts.stopCmd, ts.name, ts.planFirst = "harnez agent stop "+sessName, sessName, req.PlanFirst
@@ -373,10 +431,20 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		threshold, thresholdErr := subagent.CompactThreshold(m)
 		watchdog := &subagent.TokenWatchdog{Threshold: threshold}
 		watchdogCrossed := false
-		observedTokens, observedSessionID := 0, ""
+		observedTokens := 0
 		r, err = sd.RunStream(watchCtx, opts, func(ev subagent.Event) {
 			if ev.Kind == "session" {
 				observedSessionID = ev.Text
+				if req.SessionID == "" {
+					sess, getErr := s.Get(id)
+					if getErr != nil {
+						sess = initialSession("running")
+						sess.ID = id
+					}
+					sess.ProviderSessionID = ev.Text
+					sess.LastActiveAt = time.Now()
+					_ = s.Save(sess)
+				}
 			}
 			if thresholdErr == nil {
 				if tokens, crossed := watchdog.Observe(ev); crossed {
@@ -403,7 +471,16 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 						id = req.SessionID
 					}
 					now := time.Now()
-					sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "stopped", LastError: "runtime token watchdog interrupted the active turn", CreatedAt: now, LastActiveAt: now, Turn: turn}
+					sess, getErr := s.Get(id)
+					if getErr != nil {
+						sess = initialSession("stopped")
+						id = sess.ID
+					}
+					sess.ProviderSessionID = providerSessionID
+					sess.Status = "stopped"
+					sess.LastError = "runtime token watchdog interrupted the active turn"
+					sess.LastActiveAt = now
+					sess.Turn = turn
 					if saveErr := s.Save(sess); saveErr != nil {
 						return fmt.Errorf("agent start %q crossed live token threshold at %d tokens (limit %d); session recovery record failed: %w", spec, observedTokens, threshold, saveErr)
 					}
@@ -420,9 +497,23 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 		baselineCacheAt := turnQuotaBaseline(turnStarted, before)
 		storeTurnQuota(s, id, m.Provider, turn, "before", before)
 		recordTurnQuota(s, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt, nil)
-		return fmt.Errorf("agent start %q failed: %w; verify the provider/model configuration or ask for guidance", spec, err)
+		if req.SessionID == "" {
+			sess, getErr := s.Get(id)
+			if getErr != nil {
+				sess = initialSession("failed")
+			}
+			sess.ProviderSessionID = firstNonEmpty(sess.ProviderSessionID, observedSessionID)
+			sess.Status = "failed"
+			sess.LastError = err.Error()
+			sess.LastActiveAt = time.Now()
+			if saveErr := s.Save(sess); saveErr != nil {
+				return fmt.Errorf("agent start %q failed: %s; session recovery record failed: %w", spec, shortCause(err), saveErr)
+			}
+		}
+		return fmt.Errorf("agent start %q failed: %s; verify the provider/model configuration or ask for guidance", spec, shortCause(err))
 	}
 	providerSessionID := r.SessionID
+	reservedID := id
 	if r.SessionID != "" && req.SessionID == "" {
 		id = r.SessionID
 	}
@@ -443,6 +534,9 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	}
 	if err := s.Save(sess); err != nil {
 		return err
+	}
+	if req.SessionID == "" && reservedID != id {
+		_ = s.Delete(reservedID)
 	}
 	out := agentOutput{Session: sess, Response: r.Response, Messages: r.Messages, ReconnectCmd: "harnez agent resume " + id + " \"<prompt>\""}
 	if streaming {

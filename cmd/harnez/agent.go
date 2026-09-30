@@ -337,12 +337,23 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	var continueResume bool
 	var resumePrompt string
 	var resumeInteractive bool
-	resume := &cobra.Command{Use: "resume [prompt...]", Short: "Resume an existing agent session", Example: "  harnez agent resume --name w \"next step\"\n  harnez agent resume -i --name w", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+	resume := &cobra.Command{Use: "resume [session] [prompt...]", Short: "Resume an existing agent session", Example: "  harnez agent resume --name w \"next step\"\n  harnez agent resume <id> \"next step\"\n  harnez agent resume -i --name w", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(planSpec)
 		if err != nil {
 			return err
 		}
 		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
+		selector := ""
+		if name == "" && len(words) > 0 {
+			if s, storeErr := store(); storeErr != nil {
+				return storeErr
+			} else if matches, matchErr := matchResumeSelector(s, words[0]); matchErr != nil {
+				return matchErr
+			} else if matches {
+				selector = words[0]
+				words = words[1:]
+			}
+		}
 		if resumePrompt != "" {
 			words = append([]string{resumePrompt}, words...)
 		}
@@ -369,7 +380,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			return runDetachedResumeWorker(cmd, resumeWorkerID, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: true, PlanFirst: planFirst}, storeDir)
 		}
 		return withAgentTimeout(cmd, agentTimeout, func() error {
-			return runResume(cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir}, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: continueResume, JSON: jsonOut, PlanFirst: planFirst})
+			return runResume(cmd, agentDeps{store: store, parent: parent, find: find, storeDir: storeDir}, resumeRequest{Role: roleSpec, Prompt: prompt, Name: name, Selector: selector, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, Continue: continueResume, JSON: jsonOut, PlanFirst: planFirst})
 		})
 	}}
 	resume.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
@@ -702,6 +713,23 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate)
 	silenceUsage(root)
 	return root
+}
+
+func matchResumeSelector(store *subagent.FileSessionStore, selector string) (bool, error) {
+	sessions, err := store.List("", true)
+	if err != nil {
+		return false, err
+	}
+	matches := 0
+	for _, sess := range sessions {
+		if sess.ID == selector || sess.Name == selector || sess.ProviderSessionID == selector || strings.HasPrefix(sess.ID, selector) || strings.HasPrefix(sess.ProviderSessionID, selector) {
+			matches++
+		}
+	}
+	if matches > 1 {
+		return false, fmt.Errorf("session selector %q is ambiguous", selector)
+	}
+	return matches == 1, nil
 }
 
 func rateLatestSessionTurn(store *subagent.FileSessionStore, sess *subagent.Session, score int, reason string) error {

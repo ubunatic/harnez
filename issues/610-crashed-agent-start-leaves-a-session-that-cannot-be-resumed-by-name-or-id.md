@@ -1,6 +1,6 @@
 # 610 — Crashed agent start leaves a session that cannot be resumed by name or ID
 
-**Status**: Open
+**Status**: Closed — failed foreground starts now retain named recovery records, positional selectors resume by ID/name/prefix, and errors show a concise cause while preserving the full error in the record.
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug
@@ -31,3 +31,9 @@ The worker's progress is lost; the host must start over in a fresh session.
 - On a failed turn, mark the session failed/interrupted (see 606), keep it resumable, and print a short cause
   (e.g. quota exhausted) instead of the raw last output; check `codex exec` stderr for the usage-limit signal.
 - Tests with a fake driver that exits 1 mid-turn: resume by name and by ID both work; status is not "completed".
+
+## 4. Outcome
+- Foreground starts reserve a named session record before running and persist the provider session ID as soon as it is emitted. Failed turns save the full error and failed status, while the CLI returns a trimmed first meaningful line capped at 180 characters.
+- `agent resume <selector> [prompt...]` recognizes exact session names/IDs/provider IDs and unambiguous ID prefixes. Text that does not identify a stored session remains prompt text.
+- Added a fake streaming-provider reproduction covering failure persistence, concise error output, recovery by name/ID/provider ID, and prompt compatibility.
+- Verification: the focused reproduction passed. The single `make test-q1` run failed with 17 known `internal/claude` failures caused by the pre-existing `jev_compaction_enabled` config change, plus `cmd/harnez/TestApplyDiffCLI_ComponentsDocsOnlyRoundTrip` because `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` is absent from that same dirty config. `make install` passed.

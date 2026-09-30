@@ -2396,6 +2396,92 @@ func TestAgentResumeWithoutNameResolution(t *testing.T) {
 	}
 }
 
+func TestAgentStartFailureKeepsSessionAndResumeSelector(t *testing.T) {
+	old := agentDriver
+	d := &failedStartStreamDriver{}
+	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
+	defer func() { agentDriver = old }()
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sess := range []*subagent.Session{
+		{ID: "other-1", Name: "other-one", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: ".", Status: "completed"},
+		{ID: "other-2", Name: "other-two", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: ".", Status: "completed"},
+	} {
+		if err := store.Save(sess); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := newAgentCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }}
+	err = runStart(cmd, deps, startRequest{Name: "crashed", Prompt: "do work", StoredPrompt: "do work", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull})
+	if err == nil || !strings.Contains(err.Error(), "temporary provider failure") {
+		t.Fatalf("start error = %v, want provider failure", err)
+	}
+	startErr := err
+	sessions, err := store.List("", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var recovered *subagent.Session
+	for _, sess := range sessions {
+		if sess.Name == "crashed" {
+			recovered = sess
+		}
+	}
+	if recovered == nil || recovered.ProviderSessionID != "provider-thread" || recovered.Status == "completed" || !strings.Contains(recovered.LastError, "temporary provider failure") {
+		t.Fatalf("failed session record = %#v", recovered)
+	}
+	if strings.Contains(startErr.Error(), "raw generated source") || strings.Contains(startErr.Error(), "traceback line 2") {
+		t.Fatalf("failure exposed raw tool output: %v", startErr)
+	}
+
+	for _, selector := range []string{"crashed", recovered.ID[:4], "provider-thread"} {
+		t.Run("resume-"+selector, func(t *testing.T) {
+			resume := newAgentCmd()
+			resume.SetOut(new(bytes.Buffer))
+			resume.SetErr(new(bytes.Buffer))
+			resume.SetArgs([]string{"--store-dir", storeDir, "resume", selector, "continue work"})
+			if err := resume.Execute(); err != nil {
+				t.Fatalf("resume by %q: %v", selector, err)
+			}
+		})
+	}
+	implicit := newAgentCmd()
+	implicit.SetOut(new(bytes.Buffer))
+	implicit.SetErr(new(bytes.Buffer))
+	implicit.SetArgs([]string{"--store-dir", storeDir, "resume", "ordinary prompt"})
+	if err := implicit.Execute(); err == nil || !strings.Contains(err.Error(), "multiple resumable agents") {
+		t.Fatalf("non-selector positional prompt error = %v, want ambiguity preserved", err)
+	}
+}
+
+type failedStartStreamDriver struct{ recordingAgentDriver }
+
+func (d *failedStartStreamDriver) Run(ctx context.Context, opts subagent.RunOptions) (*subagent.TurnResult, error) {
+	return nil, errors.New("Run path used")
+}
+
+func (d *failedStartStreamDriver) RunStream(_ context.Context, _ subagent.RunOptions, emit subagent.EventFunc) (*subagent.TurnResult, error) {
+	emit(subagent.Event{Kind: "session", Text: "provider-thread"})
+	return nil, errors.New("temporary provider failure\nraw generated source\ntraceback line 2")
+}
+
+func (d *failedStartStreamDriver) ResumeStream(ctx context.Context, id, prompt string, model subagent.Model, emit subagent.EventFunc) (*subagent.TurnResult, error) {
+	return d.Resume(ctx, id, prompt, model)
+}
+
+func (d *failedStartStreamDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
+	return &subagent.TurnResult{SessionID: "provider-thread", Response: "resumed", Messages: []string{"resumed"}, ContextTokens: 100}, nil
+}
+
 func TestAgentDestructiveVerbsRejectContinue(t *testing.T) {
 	for _, verb := range []string{"stop", "delete", "compact", "status"} {
 		for _, flag := range []string{"-c", "--continue"} {
