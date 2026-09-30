@@ -114,6 +114,50 @@ func TestCollectAGYPrefersRecentMeterQuotaToUsageCommand(t *testing.T) {
 	}
 }
 
+func TestCollectAGYPreservesExpiredGeminiMeterGroup(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	geminiDir := filepath.Join(home, ".gemini", "antigravity-cli")
+	if err := os.MkdirAll(geminiDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	rows := []agymeter.Record{
+		{Time: now.Add(-8 * 24 * time.Hour), Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.28), Reset: now.Add(-time.Hour).Format(time.RFC3339)},
+		{Time: now.Add(-8 * 24 * time.Hour), Kind: "quota", Bucket: "gemini-5h", Remaining: floatPtr(0.82), Reset: now.Add(-time.Hour).Format(time.RFC3339)},
+		{Time: now.Add(-time.Minute), Kind: "quota", Bucket: "3p-weekly", Remaining: floatPtr(0.76), Reset: now.Add(24 * time.Hour).Format(time.RFC3339)},
+	}
+	writeTestAGYMeterRows(t, home, rows)
+	calls, cleanup := agyStubUsageCmd(t, []byte(agyOKOutput), nil)
+	defer cleanup()
+
+	got := CollectAGY(context.Background(), geminiDir, http.DefaultClient)
+	if atomic.LoadInt32(calls) != 0 {
+		t.Fatalf("agy -p /usage called %d times despite recent meter data", atomic.LoadInt32(calls))
+	}
+	if len(got.ModelGroups) != 2 {
+		t.Fatalf("meter groups = %+v, want expired Gemini and active Claude/GPT", got.ModelGroups)
+	}
+	if got.ModelGroups[0].Name != "Gemini Models" || len(got.ModelGroups[0].Windows) != 2 {
+		t.Fatalf("Gemini group = %+v, want both expired windows retained", got.ModelGroups[0])
+	}
+	if !got.ModelGroups[0].Windows[0].ExpiredAt(now) {
+		t.Fatalf("Gemini reset = %v, want expired", got.ModelGroups[0].Windows[0].ResetAt)
+	}
+	if !got.IsValueStale() {
+		t.Error("usage with expired Gemini windows should be marked stale")
+	}
+	lines := allUsageLinesAt(UsageSummary{Agents: []AgentUsage{got}}, 100, false, now, time.Minute)
+	if len(lines) != 2 || !strings.HasPrefix(stripANSI(lines[0]), "Gemini") || !strings.HasPrefix(stripANSI(lines[1]), "Claude/GPT") {
+		t.Fatalf("compact rows = %v, want Gemini and Claude/GPT", lines)
+	}
+	for _, line := range lines {
+		if !strings.Contains(line, ansiDimGrey) {
+			t.Errorf("compact row is not stale-marked: %q", line)
+		}
+	}
+}
+
 func TestCollectAGYFallsBackWhenMeterQuotaIsStale(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

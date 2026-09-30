@@ -419,6 +419,38 @@ func TestBuildAllUsageBox_StaleAndHistoricalAgents(t *testing.T) {
 	}
 }
 
+func TestAllUsageLinesRetainOldAGYModelGroups(t *testing.T) {
+	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	expired := now.Add(-time.Hour)
+	summary := UsageSummary{Agents: []AgentUsage{{
+		AgentID: "agy", Name: "Antigravity (AGY)", Installed: true, Authenticated: true,
+		LastRefreshed: now.Add(-8 * 24 * time.Hour),
+		ModelGroups: []ModelGroup{
+			{Name: "Gemini Models", Windows: []QuotaWindow{
+				{Name: "Weekly Limit Remaining", UsedPercent: 72, ResetAt: &expired},
+				{Name: "Five Hour Limit Remaining", UsedPercent: 18},
+			}},
+			{Name: "Claude and GPT models", Windows: []QuotaWindow{
+				{Name: "Weekly Limit Remaining", UsedPercent: 24},
+			}},
+		},
+	}}}
+
+	lines := allUsageLinesAt(summary, 100, false, now, time.Minute)
+	if len(lines) != 2 {
+		t.Fatalf("allUsageLinesAt returned %d rows, want both model groups: %v", len(lines), lines)
+	}
+	for i, want := range []string{"Gemini", "Claude/GPT"} {
+		got := stripANSI(lines[i])
+		if !strings.HasPrefix(got, want) {
+			t.Errorf("row %d = %q, want %s group", i, got, want)
+		}
+		if !strings.Contains(lines[i], ansiDimGrey) {
+			t.Errorf("row %d is not marked stale: %q", i, lines[i])
+		}
+	}
+}
+
 func TestCollectorStatusMarkersAndDegradedAllUsageRow(t *testing.T) {
 	summary := UsageSummary{Agents: []AgentUsage{
 		{

@@ -20,9 +20,15 @@ User report (2026-09-30): the compact view lost the agy/Gemini data. Observed on
   only missing from the cache.
 - `harnez usage --json` lists `Antigravity (AGY)` with no quota windows.
 
-## 2. Suspects (unverified)
-- The agy collector stopped refreshing (`agy -p "/usage"` failing, reauth — see 112, 104).
-- A staleness or exhaustion rule from 603 / 515 / 560 hides old Gemini windows but keeps Claude/GPT.
+## 2. Root cause
+When recent AGY meter data contained at least one unexpired bucket, the collector replaced
+the cached model groups with meter groups after dropping every bucket whose reset time had
+passed. If Gemini buckets had expired while a Claude/GPT bucket remained active, the
+replacement omitted the Gemini group. The renderer's stale handling was working, and no `agy`
+probe was needed to identify the loss. The collector now retains expired meter windows as
+stale evidence whenever another bucket remains active; when every meter window has expired,
+it still falls back to its normal refresh path. A regression test checks both compact rows,
+stale marking, past-reset Gemini windows, and the single-window Claude/GPT case.
 
 ## 3. Acceptance
 - Root cause named in this ticket.

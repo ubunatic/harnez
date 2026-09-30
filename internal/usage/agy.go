@@ -530,11 +530,24 @@ var agyMeterQuotaBuckets = []struct {
 }
 
 func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (AgentUsage, bool) {
-	return applyAGYMeterQuota(usage, homeDir, now, false)
+	// Preserve expired windows as stale evidence for renderers. Availability
+	// checks separately interpret reset times and must not treat them as live.
+	meterUsage, ok := applyAGYMeterQuota(usage, homeDir, now, true)
+	if !ok {
+		return usage, false
+	}
+	for _, group := range meterUsage.ModelGroups {
+		for _, window := range group.Windows {
+			if !window.ExpiredAt(now) {
+				return meterUsage, true
+			}
+		}
+	}
+	return usage, false
 }
 
-// applyAGYMeterQuota optionally retains expired windows so availability
-// readers can distinguish stale evidence from a missing meter cache.
+// applyAGYMeterQuota optionally retains expired windows so callers can
+// distinguish stale evidence from a missing meter cache.
 func applyAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time, includeExpired bool) (AgentUsage, bool) {
 	if homeDir == "" {
 		return usage, false
