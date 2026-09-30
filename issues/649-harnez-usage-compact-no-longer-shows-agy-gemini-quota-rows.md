@@ -1,6 +1,6 @@
 # 649 — harnez usage --compact no longer shows agy/Gemini quota rows
 
-**Status**: Closed — Expired AGY meter windows skipped live usage refresh; query live data and reset expired fallback display to 0% used.
+**Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Usage
