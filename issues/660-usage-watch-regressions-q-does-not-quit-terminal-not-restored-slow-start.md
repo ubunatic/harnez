@@ -36,3 +36,13 @@ starve the key reader; see also 659 (statusline 0.7-7s).
 restored on every exit path; add tests for the quit path and restore, and verify on the
 installed binary. Bisect against the commits above if the cause is not obvious. Stop and
 report when blocked on a user decision.
+
+## Related: Codex sometimes missing from compact
+Seen once (1 of 3 installed runs, after 2d418fd4). Hypothesis (unverified): the compact store
+projection (`StoreCompactSummary`, internal/usage/store.go) fails and silently falls back to the
+live collect result, which lacked Codex; the error is not logged. If the store read blocks or
+fails (lock, slow open), that may also explain the slow start here and 659's latency.
+An untested, parked fallback patch that adds error rows:
+`~/.local/share/harnez/archive/patches/codex-compact-fallback-20260930.patch`.
+Include in this ticket: log projection errors to ~/.harnez/debug.log, and never drop a provider
+silently (show an error row), with a test.
