@@ -72,5 +72,5 @@ Background (Codex self-reports): Codex has no shell job that notifies it on comp
 exists only for `collaboration.spawn_agent` subagents (results arrive in the mailbox automatically).
 
 **Next**: observe Codex/agy sessions for a few days. If Codex still orphans agents, revisit
-removing auto-detach (§4 option 1). Still open: `.harnez/rules/Tools.md:50` gives the
-Claude-only hint `run_in_background` to all hosts.
+removing auto-detach (§4 option 1). The `.harnez/rules/Tools.md` start hint (source `config.yaml`) now names each host's
+wait tool; Codex wait tools are documented in `docs/CodexSettings.md`.

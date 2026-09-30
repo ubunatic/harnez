@@ -65,3 +65,24 @@ Use `harnez status --debloat` to inspect the live settings. For a write test,
 `--codex-target` redirects the Codex config only. `harnez apply` also syncs
 other global agent files and launcher links, so a disposable Codex target
 alone does not isolate an entire apply run; see [CLIDesign.md](CLIDesign.md).
+
+## Waiting on long-running work
+
+Codex has no shell job that notifies the agent when it finishes (unlike Claude's
+`run_in_background` or agy background tasks). Its own wait mechanisms are:
+
+- **Shell:** `exec_command` returns either a result or a `session_id` for a still-running
+  process. Wait with `write_stdin({session_id, chars: ""})` until an exit code arrives.
+  This blocks the agent while it waits.
+- **Orchestration cell:** if `functions.exec` yields "Script running with cell ID …", resume
+  it with `functions.wait` and that `cell_id`.
+- **Native subagents (truly async):** `collaboration.spawn_agent` returns an agent ID. Final
+  answers arrive in the parent's mailbox automatically. `collaboration.wait_agent` waits for
+  mailbox activity (a wake-up is not "all done"), and `collaboration.list_agents` shows status.
+- MCP tools do not resume the parent turn on completion. Resume-on-completion for shell jobs
+  would need a client bridge on Codex app-server (process events, then `turn/start` with tool
+  output); harnez does not have one.
+
+Guidance written for Codex must name these tools and must not say "do not poll":
+`write_stdin` is how Codex polls. See issue 647 and `docs/HarnezAgentArchitecture.md` §2.14.
+Source: Codex agents' self-reports, 2026-09-30.

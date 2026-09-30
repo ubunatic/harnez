@@ -47,7 +47,7 @@ instead of `ls issues/`, `find`, or raw grep:
 ## Harnez Agent
 - Prefer loaded `mcp__harnez__*` tools for lifecycle actions; otherwise use `harnez agent` via Bash (see the local Subagent Policy).
 - A requested model such as `terra:low` or `luna` is a Harnez agent model (see `harnez agent models`); dispatch it with `harnez agent start --model <name>`, regardless of `subagent_mode`.
-- Start (run it in a background shell, e.g. Claude `run_in_background`): `harnez agent start --name <name> --role <role> --model <model> -p <prompt>`.
+- Start: `harnez agent start --name <name> --role <role> --model <model> -p <prompt>`. Wait on it with your host's own tool: Claude Bash `run_in_background: true`; agy a background task; Codex `exec_command`, then `write_stdin` on the returned `session_id` until an exit code. After 60s it may detach and print the same host-specific reattach steps.
 - List: `harnez agent list`.
 - Status: `harnez agent status --name <session>`.
 - Wait: `harnez agent wait <session>` (session is positional).
