@@ -1,6 +1,6 @@
 # 650 — Usage Collection Architecture Umbrella
 
-**Status**: Open
+**Status**: Closed — Compact renders from the clean usage store: Claude Code, OpenAI Codex, and AGY (Gemini, Claude/GPT) with weekly and 5h percentages and reset times, verified in 3 live runs after 657 (178421fc).
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Architecture
