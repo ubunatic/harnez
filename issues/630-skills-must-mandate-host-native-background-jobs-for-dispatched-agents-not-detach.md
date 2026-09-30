@@ -87,3 +87,25 @@ Each host gets its own short block with the exact tool name, the exact parameter
 
 The two "to verify" rows must be filled from the hosts' real tool lists (canary probe, see `docs/Canary.md`)
 before closing; do not guess tool names.
+
+## 6. AGY observation 2026-09-30: start then wait is two steps too many
+
+The AGY host now does it right, but takes four tool calls:
+
+1. `call_mcp_tool` `harnez_command` action `start` (only formats the command)
+2. `run_command` with `WaitMsBeforeAsync: 500` (worker becomes AGY background task-127)
+3. `call_mcp_tool` `harnez_command` action `wait` (formats the wait command after the 60s detach)
+4. `run_command` with `WaitMsBeforeAsync: 500` (`harnez agent wait dev-issue-019` becomes task-133)
+
+This worked and did not poll. Steps 3-4 are needed only because the start turn detaches after 60s.
+Target: **one** background call that runs until the worker is done, so the host's background task
+is the worker itself:
+
+- Run `harnez agent start ...` (and `resume`) in the session background with `HTO=0` (or an
+  equivalent no-detach flag), so it never detaches and no `wait` job is needed.
+- The `[wait: ...]` hint printed by `start`/`resume` should not suggest a separate `wait` when
+  the command is already running as a session-background job; the per-host blocks in §5 should
+  show the one-call form (AGY: `run_command` with `HTO=0 harnez agent start ...` and a small
+  `WaitMsBeforeAsync`).
+- The MCP `harnez_command` formatting step is optional; the skill may give the literal command.
+- Keep `harnez agent wait` for recovery only (host restarted, or the start job was lost).
