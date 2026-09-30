@@ -132,6 +132,18 @@ Pre-Work / Required Refinements:
 - Numbers look plausible (bytes -41%, tokens 26,292 -> 10,632); keep recording both.
 - Auto-trigger (`turn.complete` at a threshold) is still untested; cover it or state why not.
 
+### M3 delivered
+- Disabling the embedded plugin now removes the reserved `harnez-local` marketplace registration,
+  while preserving other marketplace registrations and unrelated settings.
+- `make test-q1` ran in a detached worktree with this change. It reported the marketplace-removal
+  test failure against the first cleanup adjustment. Quota-1 allows one suite run this turn, so the
+  final unconditional removal adjustment is unverified; rerun the suite next turn.
+- `make install` completed successfully.
+- Auto-trigger remains unverified live. The event only triggers at 60% context usage; the M2 live
+  manual canary had 26,292 tokens and there is no supported way in this hook to inject synthetic
+  usage. A live threshold run would require a substantially larger real session. Existing manual
+  compaction evidence remains: 667,780 -> 393,146 JSON bytes and 26,292 -> 10,632 context tokens.
+
 ## Other agents (moved from 644)
 - agy: harnez's jev compaction could rewrite agy session data on disk. Canary: does agy accept a
   resumed session whose data was compacted, and does it save tokens compared with agy's own
