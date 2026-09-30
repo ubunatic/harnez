@@ -1,6 +1,6 @@
 # 655 — Consolidate Legacy Usage Stores Safely
 
-**Status**: Closed — Implemented four milestones: normalized store readers expose cumulative/five_hour/tokens/weekly with zero joined legacy aliases; copied 17 legacy files into /home/uwe/.local/share/harnez/archive/usage-legacy/20260930T173221.939970271Z with SHA-256 manifest; snapshot parity 3/3, provider-cache 3 store observations from 6 archived copies, history summary 2154 records, turn JSONL imports 1851. Live usage --compact and statusline rendered. make test-q1 was run once and failed: internal/usage cache/history tests assume disk-authoritative behavior; three archival tests hit host read-only path. Raw DB retains orphan rows; no legacy source files were removed.
+**Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Refactor
