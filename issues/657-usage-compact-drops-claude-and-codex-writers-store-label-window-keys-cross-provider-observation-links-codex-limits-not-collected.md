@@ -1,6 +1,6 @@
 # 657 — usage --compact drops claude and codex: writers store label window keys, cross-provider observation links, codex limits not collected
 
-**Status**: Open
+**Status**: Closed — Compact usage now projects normalized Claude, Codex, and AGY quota windows; migration repairs cross-provider/missing observation links, preserves compact errors, and Codex limits continue from the Wham usage endpoint.
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug / Regression
