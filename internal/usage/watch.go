@@ -741,6 +741,17 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		lastRefreshed time.Time
 		stale         bool
 	}
+	currentWindows := func(windows []QuotaWindow) []QuotaWindow {
+		current := append([]QuotaWindow(nil), windows...)
+		for i := range current {
+			if current[i].Source == "agy-meter" && current[i].ExpiredAt(now) {
+				current[i].UsedPercent = 0
+				current[i].RemainingPercent = 100
+				current[i].DurationLeft = 0
+			}
+		}
+		return current
+	}
 
 	var rows []allUsageRow
 	labelWidth := 0
@@ -765,7 +776,7 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 				if len(mg.Windows) > 0 {
 					hasWindow = true
 				}
-				rows = append(rows, allUsageRow{label: label, windows: mg.Windows, lastRefreshed: agent.LastRefreshed, stale: stale})
+				rows = append(rows, allUsageRow{label: label, windows: currentWindows(mg.Windows), lastRefreshed: agent.LastRefreshed, stale: stale})
 				if n := visLen(label); n > labelWidth {
 					labelWidth = n
 				}

@@ -299,7 +299,7 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 	}
 
 	if _, err := os.Stat(geminiDir); os.IsNotExist(err) {
-		if meterUsage, ok := applyRecentAGYMeterQuota(usage, homeDir, time.Now()); ok {
+		if meterUsage, ok := applyAGYMeterQuota(usage, homeDir, time.Now(), true); ok {
 			meterUsage.Installed = true
 			return meterUsage
 		}
@@ -405,6 +405,10 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 	// on-disk cache first so a warm reading from a sibling `harnez`
 	// process (or this process's own last tick) short-circuits the exec
 	// call entirely (issue 033, generalized to AGY in issue 087).
+	var meterFallback AgentUsage
+	if meterUsage, ok := applyAGYMeterQuota(usage, homeDir, time.Now(), true); ok {
+		meterFallback = meterUsage
+	}
 	if meterUsage, ok := applyRecentAGYMeterQuota(usage, homeDir, time.Now()); ok {
 		usage = meterUsage
 	} else if client != nil {
@@ -412,7 +416,8 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 		defer lockLiveFetchInProcess(cachePath)()
 		cache := readLiveFetchCache[agyQuotaPayload](cachePath)
 
-		if !quotaFetchForced(ctx) && cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval {
+		backoff := readAGYAuthBackoff(agyAuthBackoffPath(geminiDir))
+		if !quotaFetchForced(ctx) && cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval && (backoff == nil || !time.Now().Before(backoff.Until)) {
 			usage.ModelGroups = cache.Payload.ModelGroups
 			usage.Sources = append(usage.Sources, "~/.gemini/antigravity-cli/harnez-quota-cache.json")
 		} else {
@@ -490,7 +495,10 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 					usage.QuotaFetchError = `agy -p "/usage" returned no parseable quota lines`
 				}
 
-				if cache != nil {
+				if len(meterFallback.ModelGroups) > 0 {
+					usage.ModelGroups = meterFallback.ModelGroups
+					usage = addAGYMeterSource(usage, meterFallback)
+				} else if cache != nil {
 					staleGroups := make([]ModelGroup, len(cache.Payload.ModelGroups))
 					for i, g := range cache.Payload.ModelGroups {
 						ng := g
@@ -518,6 +526,16 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 	return usage
 }
 
+func addAGYMeterSource(usage, meter AgentUsage) AgentUsage {
+	for _, source := range meter.Sources {
+		if strings.HasSuffix(source, ".harnez/agymeter/usage.jsonl") && !strings.Contains(strings.Join(usage.Sources, " "), source) {
+			usage.Sources = append(usage.Sources, source)
+		}
+	}
+	usage.LastRefreshed = meter.LastRefreshed
+	return usage
+}
+
 var agyMeterQuotaBuckets = []struct {
 	bucket string
 	group  string
@@ -530,20 +548,20 @@ var agyMeterQuotaBuckets = []struct {
 }
 
 func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (AgentUsage, bool) {
-	// Preserve expired windows as stale evidence for renderers. Availability
-	// checks separately interpret reset times and must not treat them as live.
+	// Preserve expired windows as stale evidence for fallback renderers, but
+	// only treat the meter as sufficient when every window is still active.
 	meterUsage, ok := applyAGYMeterQuota(usage, homeDir, now, true)
 	if !ok {
 		return usage, false
 	}
 	for _, group := range meterUsage.ModelGroups {
 		for _, window := range group.Windows {
-			if !window.ExpiredAt(now) {
-				return meterUsage, true
+			if window.ExpiredAt(now) {
+				return usage, false
 			}
 		}
 	}
-	return usage, false
+	return meterUsage, true
 }
 
 // applyAGYMeterQuota optionally retains expired windows so callers can

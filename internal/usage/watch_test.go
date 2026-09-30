@@ -451,6 +451,27 @@ func TestAllUsageLinesRetainOldAGYModelGroups(t *testing.T) {
 	}
 }
 
+func TestAllUsageLinesResetExpiredAGYMeterFallback(t *testing.T) {
+	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	expired := now.Add(-time.Hour)
+	summary := UsageSummary{Agents: []AgentUsage{{
+		AgentID: "agy", Name: "Antigravity (AGY)", Installed: true, Authenticated: true,
+		LastRefreshed: now.Add(-8 * 24 * time.Hour),
+		ModelGroups: []ModelGroup{{Name: "Gemini Models", Windows: []QuotaWindow{
+			{Name: "Weekly Limit Remaining", Source: "agy-meter", UsedPercent: 100, RemainingPercent: 0, ResetAt: &expired},
+			{Name: "Five Hour Limit Remaining", Source: "agy-meter", UsedPercent: 80, RemainingPercent: 20, ResetAt: &expired},
+		}}},
+	}}}
+
+	lines := allUsageLinesAt(summary, 100, false, now, time.Minute)
+	if len(lines) != 1 || !strings.Contains(stripANSI(lines[0]), "0%") || !strings.Contains(lines[0], ansiDimGrey) {
+		t.Fatalf("expired meter line = %v, want stale-marked 0%% used", lines)
+	}
+	if summary.Agents[0].ModelGroups[0].Windows[0].UsedPercent != 100 {
+		t.Fatal("rendering mutated the original meter fallback")
+	}
+}
+
 func TestCollectorStatusMarkersAndDegradedAllUsageRow(t *testing.T) {
 	summary := UsageSummary{Agents: []AgentUsage{
 		{
