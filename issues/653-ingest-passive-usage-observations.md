@@ -1,6 +1,8 @@
 # 653 — Ingest Passive Usage Observations
 
-**Status**: Closed — Claude and AGY statusline quota observations now enter the shared store with fractional precision, dedupe, bounded writes, and fresh source precedence.
+**Status**: Closed — Fix compact and statusline writes against legacy telemetry DB schemas and verify fresh fractional observations.
+
+Follow-up: compact collection now publishes under the query-ranked `collect-all` source, and store schema setup adds missing typed token columns to pre-existing `quota_windows` tables. This resolved the silent write failure on the live DB (`input_tokens` was absent). Added tests for two changed compact readings, legacy-schema upgrade and Claude-shaped statusline ingestion.
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
