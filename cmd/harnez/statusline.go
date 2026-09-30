@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/statusline"
+	"ubunatic.com/harnez/internal/usage"
 )
 
 func newStatuslineCmd() *cobra.Command {
@@ -23,14 +26,19 @@ when the 'usage' component and 'status_line' config.yaml key are enabled.
 Codex uses its native TUI status items, configured separately by 'harnez apply'.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			data, err := io.ReadAll(cmd.InOrStdin())
+			if err != nil {
+				return err
+			}
 			if agent == "agy" {
-				line, err := statusline.RenderContextUsage(cmd.InOrStdin())
+				line, err := statusline.RenderContextUsage(bytes.NewReader(data))
 				if err != nil {
 					return err
 				}
 				if line != "" {
 					fmt.Fprintln(cmd.OutOrStdout(), line)
 				}
+				usage.ObserveStatusline(cmd.Context(), "agy", data)
 				return nil
 			}
 			if agent != "claude" {
@@ -40,11 +48,12 @@ Codex uses its native TUI status items, configured separately by 'harnez apply'.
 			if err != nil {
 				home = ""
 			}
-			line, err := statusline.Render(cmd.InOrStdin(), home)
+			line, err := statusline.Render(bytes.NewReader(data), home)
 			if err != nil {
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), line)
+			usage.ObserveStatusline(cmd.Context(), "claude", data)
 			return nil
 		},
 	}

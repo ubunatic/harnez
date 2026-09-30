@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez usage collection settings",
   "type": "object",
-  "required": ["agy_meter_max_age", "collector_cadence", "collector_timeout"],
+  "required": ["agy_meter_max_age", "collector_cadence", "collector_timeout", "passive_dedupe_interval", "statusline_busy_timeout"],
   "properties": {
     "agy_meter_max_age": {
       "type": "string",
@@ -13,6 +13,14 @@
       "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
     },
     "collector_timeout": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
+    },
+    "passive_dedupe_interval": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
+    },
+    "statusline_busy_timeout": {
       "type": "string",
       "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
     }

@@ -31,7 +31,7 @@ func TestUsageSpecSchemaDeclaresAgeSetting(t *testing.T) {
 	if err := json.Unmarshal(data, &schema); err != nil {
 		t.Fatal(err)
 	}
-	if len(schema.Required) != 3 || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil {
+	if len(schema.Required) != 5 || schema.Properties["agy_meter_max_age"] == nil || schema.Properties["collector_cadence"] == nil || schema.Properties["collector_timeout"] == nil || schema.Properties["passive_dedupe_interval"] == nil || schema.Properties["statusline_busy_timeout"] == nil {
 		t.Fatalf("usage schema does not define required agy_meter_max_age: %+v", schema)
 	}
 }
@@ -43,7 +43,7 @@ func TestParseUsageSpecRejectsInvalidAge(t *testing.T) {
 		[]byte("agy_meter_max_age: 1h\ncollector_cadence: 15m\ncollector_timeout: 2m\nunknown: true\n"),
 		[]byte("agy_meter_max_age: 1h\ncollector_cadence: 0s\ncollector_timeout: 2m\n"),
 	} {
-		if _, _, _, err := parseUsageSpec(data); err == nil {
+		if _, _, _, _, _, err := parseUsageSpec(data); err == nil {
 			t.Errorf("parseUsageSpec(%q) succeeded, want validation error", data)
 		}
 	}

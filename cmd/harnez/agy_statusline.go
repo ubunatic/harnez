@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/agy"
 	"ubunatic.com/harnez/internal/statusline"
+	"ubunatic.com/harnez/internal/usage"
 )
 
 func newAGYStatuslineCmd() *cobra.Command {
@@ -15,13 +18,18 @@ func newAGYStatuslineCmd() *cobra.Command {
 		Short: "Render or manage the Antigravity CLI context and quota status line",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			line, err := statusline.RenderContextUsage(cmd.InOrStdin())
+			data, err := io.ReadAll(cmd.InOrStdin())
+			if err != nil {
+				return err
+			}
+			line, err := statusline.RenderContextUsage(bytes.NewReader(data))
 			if err != nil {
 				return err
 			}
 			if line != "" {
 				fmt.Fprintln(cmd.OutOrStdout(), line)
 			}
+			usage.ObserveStatusline(cmd.Context(), "agy", data)
 			return nil
 		},
 	}

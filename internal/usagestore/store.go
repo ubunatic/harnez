@@ -24,12 +24,20 @@ type Window struct {
 }
 
 func Open(path string) (*Store, error) {
+	return OpenWithBusyTimeout(path, 5*time.Second)
+}
+
+// OpenWithBusyTimeout opens the store with an explicit SQLite lock wait.
+func OpenWithBusyTimeout(path string, busyTimeout time.Duration) (*Store, error) {
 	if dir := filepath.Dir(path); dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return nil, err
 		}
 	}
-	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	if busyTimeout < 0 {
+		busyTimeout = 0
+	}
+	db, err := sql.Open("sqlite", fmt.Sprintf("%s?_pragma=busy_timeout(%d)&_pragma=journal_mode(WAL)", path, busyTimeout.Milliseconds()))
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +96,33 @@ func (s *Store) WriteCurrent(ctx context.Context, observedAt time.Time, windows 
 	return tx.Commit()
 }
 
+// WritePassive appends passive observations after suppressing identical
+// readings seen within dedupeInterval.
+func (s *Store) WritePassive(ctx context.Context, dedupeInterval time.Duration, windows []Window) error {
+	filtered := make([]Window, 0, len(windows))
+	for _, w := range windows {
+		if w.ObservedAt.IsZero() {
+			w.ObservedAt = time.Now()
+		}
+		var count int
+		err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider=? AND q.pool=? AND q.window_key=? AND o.source=? AND q.used_fraction=? AND COALESCE(q.reset_at,'')=COALESCE(?, '') AND o.observed_at>=?`, w.Provider, w.Pool, w.Key, w.Source, w.UsedFraction, timeValue(w.ResetAt), w.ObservedAt.Add(-dedupeInterval).UTC().Format(time.RFC3339Nano)).Scan(&count)
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			filtered = append(filtered, w)
+		}
+	}
+	return s.WriteCurrent(ctx, time.Now(), filtered)
+}
+
+func timeValue(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return t.UTC().Format(time.RFC3339Nano)
+}
+
 // WriteLoadObservation appends a normalized CPU/GPU load sample as JSON while
 // preserving the existing typed snapshot wire format.
 func (s *Store) WriteLoadObservation(ctx context.Context, provider string, observedAt time.Time, payload any) error {
@@ -136,7 +171,7 @@ func (s *Store) Current(ctx context.Context) ([]Window, error) {
 // CurrentFor returns the newest observation per window for one provider,
 // pool, and key. Compatibility reads use source priority for tied timestamps.
 func (s *Store) CurrentFor(ctx context.Context, provider string) ([]Window, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT q.provider,q.pool,q.window_key,q.window_name,o.source,o.freshness,q.used_fraction,q.input_tokens,q.cached_input_tokens,q.output_tokens,q.reasoning_tokens,q.reset_at,o.observed_at FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider=? AND NOT EXISTS (SELECT 1 FROM quota_windows q2 JOIN usage_observations o2 ON o2.id=q2.observation_id WHERE q2.provider=q.provider AND q2.pool=q.pool AND q2.window_key=q.window_key AND (o2.observed_at>o.observed_at OR (o2.observed_at=o.observed_at AND CASE o2.source WHEN 'collect-all' THEN 3 WHEN 'state-snapshot' THEN 2 WHEN 'provider-cache' THEN 1 ELSE 0 END > CASE o.source WHEN 'collect-all' THEN 3 WHEN 'state-snapshot' THEN 2 WHEN 'provider-cache' THEN 1 ELSE 0 END))) ORDER BY q.provider,q.pool,q.window_key`, provider)
+	rows, err := s.db.QueryContext(ctx, `SELECT provider,pool,window_key,window_name,source,freshness,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at,observed_at FROM (SELECT q.provider AS provider,q.pool AS pool,q.window_key AS window_key,q.window_name AS window_name,o.source AS source,o.freshness AS freshness,q.used_fraction AS used_fraction,q.input_tokens AS input_tokens,q.cached_input_tokens AS cached_input_tokens,q.output_tokens AS output_tokens,q.reasoning_tokens AS reasoning_tokens,q.reset_at AS reset_at,o.observed_at AS observed_at,ROW_NUMBER() OVER (PARTITION BY q.provider,q.pool,q.window_key ORDER BY CASE o.freshness WHEN 'fresh' THEN 1 ELSE 0 END DESC,CASE o.source WHEN 'claude-api' THEN 4 WHEN 'codex-api' THEN 4 WHEN 'agy-api' THEN 4 WHEN 'structured-event' THEN 4 WHEN 'authenticated-cli' THEN 3 WHEN 'collect-all' THEN 3 WHEN 'registry' THEN 3 WHEN 'statusline' THEN 2 WHEN 'agy-meter' THEN 1 WHEN 'proxy' THEN 1 WHEN 'estimated' THEN 1 ELSE 0 END DESC,o.observed_at DESC,o.id DESC) AS best FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider=?) WHERE best=1 ORDER BY provider,pool,window_key`, provider)
 	if err != nil {
 		return nil, err
 	}
