@@ -267,7 +267,14 @@ func PersistAgentSnapshot(stateDir string, agent AgentUsage, offline bool) error
 // the caller has to unwrap.
 func ReadAgentSnapshot(stateDir, agentID string) (*AgentSnapshot, error) {
 	if filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
-		return readAgentSnapshotFromStore(context.Background(), "", agentID)
+		snapshot, err := readAgentSnapshotFromStore(context.Background(), "", agentID)
+		if err != nil || snapshot != nil {
+			return snapshot, err
+		}
+		// The store models quota windows, while the compatibility snapshot also
+		// carries non-quota agent metadata. Keep that mirror as a fallback when
+		// the store has no quota rows for this agent.
+		return readAgentSnapshotFile(stateDir, agentID)
 	}
 	return readAgentSnapshotFile(stateDir, agentID)
 }

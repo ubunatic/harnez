@@ -49,8 +49,10 @@ func TestStoreCompactSummaryUnavailableFallsBack(t *testing.T) {
 }
 
 func TestCompatibilityImporterBackfillsSnapshotOnce(t *testing.T) {
+	isolateUsageTestStorage(t)
 	home := t.TempDir()
-	stateDir := filepath.Join(home, ".local", "state", "harnez", "agents", "usage")
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local", "state"))
+	stateDir := StateDir(home)
 	if err := WriteAgentSnapshot(stateDir, "claude", AgentUsage{AgentID: "claude", Session: &QuotaWindow{Name: "5-hour", UsedPercent: 33.333, RemainingPercent: 66.667}}); err != nil {
 		t.Fatal(err)
 	}

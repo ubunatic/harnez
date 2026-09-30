@@ -35,6 +35,14 @@ func DefaultDBPath() (string, error) {
 		return "", fmt.Errorf("telemetry: resolve home dir: %w", err)
 	}
 	path := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.sqlite")
+	if realHome := os.Getenv("HARNEZ_TEST_REAL_HOME"); realHome != "" {
+		legacyRoot := filepath.Join(realHome, ".harnez")
+		dataRoot := filepath.Join(realHome, ".local", "share", "harnez")
+		cleanPath := filepath.Clean(path)
+		if filepath.Clean(home) == filepath.Clean(realHome) || cleanPath == filepath.Join(legacyRoot, "tool_catalog.sqlite") || strings.HasPrefix(cleanPath, dataRoot+string(filepath.Separator)) {
+			return "", fmt.Errorf("telemetry: refusing host storage during isolated usage tests: %q", cleanPath)
+		}
+	}
 	legacy := filepath.Join(home, ".harnez", "tool_catalog.sqlite")
 	decoy := filepath.Join(xdgpath.DataHome(), "harnez", "telemetry.db")
 	if info, err := os.Stat(decoy); err == nil && info.Size() == 0 {

@@ -87,7 +87,7 @@ func TestAppendAndReadHistory(t *testing.T) {
 	}
 }
 
-func TestHistoryDirUsesXDGAndMigratesLegacyFiles(t *testing.T) {
+func TestHistoryDirUsesXDGAndLegacyMigrationCopiesWithoutDeleting(t *testing.T) {
 	home, data := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_DATA_HOME", data)
@@ -104,7 +104,7 @@ func TestHistoryDirUsesXDGAndMigratesLegacyFiles(t *testing.T) {
 	if want := filepath.Join(data, "harnez", historyDirName); target != want {
 		t.Fatalf("HistoryDir = %s, want %s", target, want)
 	}
-	if _, err := ReadHistory(target); err != nil {
+	if _, err := readHistoryFiles(target); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(filepath.Join(target, "old.jsonl"))
@@ -114,7 +114,7 @@ func TestHistoryDirUsesXDGAndMigratesLegacyFiles(t *testing.T) {
 	if _, err := os.Stat(legacy); err != nil {
 		t.Fatalf("legacy source should remain: %v", err)
 	}
-	if _, err := ReadHistory(target); err != nil {
+	if _, err := readHistoryFiles(target); err != nil {
 		t.Fatalf("repeat migration: %v", err)
 	}
 	got, err = os.ReadFile(filepath.Join(target, "old.jsonl"))
@@ -124,7 +124,7 @@ func TestHistoryDirUsesXDGAndMigratesLegacyFiles(t *testing.T) {
 	const callers = 8
 	errs := make(chan error, callers)
 	for i := 0; i < callers; i++ {
-		go func() { _, err := ReadHistory(target); errs <- err }()
+		go func() { _, err := readHistoryFiles(target); errs <- err }()
 	}
 	for i := 0; i < callers; i++ {
 		if err := <-errs; err != nil {

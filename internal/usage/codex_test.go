@@ -112,6 +112,7 @@ func TestCollectCodex_RateLimitWindowAssignment(t *testing.T) {
 // the live-quota step, and returns the dir.
 func codexFixtureDir(t *testing.T) string {
 	t.Helper()
+	isolateUsageTestStorage(t)
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "auth.json"), []byte(`{
 		"auth_mode": "chatgpt",
@@ -136,10 +137,9 @@ func codexWhamOKHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// TestCollectCodexUsesWarmDiskCache checks the freshness gate short-circuits
-// the live HTTP call entirely when a recent-enough on-disk reading already
-// exists (issue 033, generalized to Codex in issue 087).
-func TestCollectCodexUsesWarmDiskCache(t *testing.T) {
+// TestCollectCodexUsesWarmStoreSnapshot checks that a fresh authoritative
+// store snapshot short-circuits the live HTTP call.
+func TestCollectCodexUsesWarmStoreSnapshot(t *testing.T) {
 	dir := codexFixtureDir(t)
 
 	called := false
@@ -149,21 +149,12 @@ func TestCollectCodexUsesWarmDiskCache(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	cache := liveFetchCache[codexQuotaPayload]{
-		FetchedAt: time.Now(),
-		Payload: codexQuotaPayload{
-			Session: &QuotaWindow{Name: "5-Hour", UsedPercent: 60},
-			Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 15},
-		},
-	}
-	if err := writeLiveFetchCache(liveFetchCachePath(dir), cache); err != nil {
-		t.Fatalf("seed cache: %v", err)
-	}
+	seedProviderSnapshot(t, "codex", time.Now(), AgentUsage{Session: &QuotaWindow{Name: "5-Hour", UsedPercent: 60}, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 15}})
 
 	usage := collectCodexAgainstURL(t, dir, mockServer)
 
 	if called {
-		t.Errorf("expected live endpoint not to be called when disk cache is warm")
+		t.Errorf("expected live endpoint not to be called when store snapshot is warm")
 	}
 	if usage.Session == nil || usage.Session.UsedPercent != 60 {
 		t.Errorf("Session = %+v, want UsedPercent 60 from cache", usage.Session)

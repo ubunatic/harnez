@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -215,6 +216,7 @@ func TestLockQuotaCacheSucceedsWhenFree(t *testing.T) {
 // CollectClaude needs to reach the live-quota step, and returns the dir.
 func claudeFixtureDir(t *testing.T) string {
 	t.Helper()
+	isolateUsageTestStorage(t)
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, ".credentials.json"), []byte(`{
 		"claudeAiOauth": {"accessToken": "mock-token", "subscriptionType": "max"}
@@ -224,11 +226,9 @@ func claudeFixtureDir(t *testing.T) string {
 	return dir
 }
 
-// TestCollectClaudeUsesWarmDiskCache checks the core mechanism of issue 033:
-// a fresh cache file (within MinWatchInterval) is used directly and the live
-// HTTP endpoint is never hit — this is what stops concurrent harnez
-// processes from double-polling.
-func TestCollectClaudeUsesWarmDiskCache(t *testing.T) {
+// TestCollectClaudeUsesWarmStoreSnapshot checks that a fresh store snapshot
+// is reused without another live HTTP request.
+func TestCollectClaudeUsesWarmStoreSnapshot(t *testing.T) {
 	dir := claudeFixtureDir(t)
 
 	called := false
@@ -238,26 +238,17 @@ func TestCollectClaudeUsesWarmDiskCache(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	cache := liveFetchCache[claudeQuotaPayload]{
-		FetchedAt: time.Now(),
-		Payload: claudeQuotaPayload{
-			Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 55},
-			Weekly:  &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 11},
-		},
-	}
-	if err := writeLiveFetchCache(liveFetchCachePath(dir), cache); err != nil {
-		t.Fatalf("seed cache: %v", err)
-	}
+	seedProviderSnapshot(t, "claude", time.Now(), AgentUsage{Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 55}, Weekly: &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 11}})
 
 	usage := CollectClaude(context.Background(), dir, mockServer.Client())
 
 	if called {
-		t.Errorf("expected live endpoint not to be called when disk cache is warm")
+		t.Errorf("expected live endpoint not to be called when store snapshot is warm")
 	}
-	if usage.Session == nil || usage.Session.UsedPercent != 55 {
+	if usage.Session == nil || math.Abs(usage.Session.UsedPercent-55) > 1e-6 {
 		t.Errorf("Session = %+v, want UsedPercent 55 from cache", usage.Session)
 	}
-	if usage.Weekly == nil || usage.Weekly.UsedPercent != 11 {
+	if usage.Weekly == nil || math.Abs(usage.Weekly.UsedPercent-11) > 1e-6 {
 		t.Errorf("Weekly = %+v, want UsedPercent 11 from cache", usage.Weekly)
 	}
 }
@@ -283,6 +274,7 @@ func TestCollectClaudeForcedRefreshBypassesWarmCache(t *testing.T) {
 }
 
 func TestCaptureTurnQuotaSinceReusesCacheRefreshedDuringTurn(t *testing.T) {
+	isolateUsageTestStorage(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	claudeDir := filepath.Join(home, ".claude")
@@ -295,9 +287,7 @@ func TestCaptureTurnQuotaSinceReusesCacheRefreshedDuringTurn(t *testing.T) {
 
 	turnStarted := time.Now().Add(-time.Second)
 	cache := liveFetchCache[claudeQuotaPayload]{FetchedAt: time.Now(), Payload: claudeQuotaPayload{Session: &QuotaWindow{Name: "5h", UsedPercent: 38}}}
-	if err := writeLiveFetchCache(liveFetchCachePath(claudeDir), cache); err != nil {
-		t.Fatal(err)
-	}
+	seedProviderSnapshot(t, "claude", cache.FetchedAt, AgentUsage{Session: cache.Payload.Session})
 	called := false
 	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		called = true
@@ -317,6 +307,7 @@ func TestCaptureTurnQuotaSinceReusesCacheRefreshedDuringTurn(t *testing.T) {
 }
 
 func TestCaptureTurnQuotaSinceForcesPreTurnCache(t *testing.T) {
+	isolateUsageTestStorage(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	claudeDir := filepath.Join(home, ".claude")
@@ -327,9 +318,7 @@ func TestCaptureTurnQuotaSinceForcesPreTurnCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	cache := liveFetchCache[claudeQuotaPayload]{FetchedAt: time.Now().Add(-time.Minute), Payload: claudeQuotaPayload{Session: &QuotaWindow{Name: "5h", UsedPercent: 38}}}
-	if err := writeLiveFetchCache(liveFetchCachePath(claudeDir), cache); err != nil {
-		t.Fatal(err)
-	}
+	seedProviderSnapshot(t, "claude", cache.FetchedAt, AgentUsage{Session: cache.Payload.Session})
 	called := false
 	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		called = true
@@ -349,10 +338,9 @@ func TestCaptureTurnQuotaSinceForcesPreTurnCache(t *testing.T) {
 	}
 }
 
-// TestCollectClaudeFallsBackToStaleCacheOnFetchFailure checks that a live
-// fetch failure falls back to the disk cache regardless of its age, with
-// windows labeled "(stale)" per issue 032's convention.
-func TestCollectClaudeFallsBackToStaleCacheOnFetchFailure(t *testing.T) {
+// TestCollectClaudeFallsBackToStaleStoreSnapshotOnFetchFailure checks that a
+// live fetch failure falls back to the older authoritative store reading.
+func TestCollectClaudeFallsBackToStaleStoreSnapshotOnFetchFailure(t *testing.T) {
 	dir := claudeFixtureDir(t)
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -360,16 +348,7 @@ func TestCollectClaudeFallsBackToStaleCacheOnFetchFailure(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	oldCache := liveFetchCache[claudeQuotaPayload]{
-		FetchedAt: time.Now().Add(-time.Hour), // well outside MinWatchInterval
-		Payload: claudeQuotaPayload{
-			Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 33},
-			Weekly:  &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 9},
-		},
-	}
-	if err := writeLiveFetchCache(liveFetchCachePath(dir), oldCache); err != nil {
-		t.Fatalf("seed cache: %v", err)
-	}
+	seedProviderSnapshot(t, "claude", time.Now().Add(-time.Hour), AgentUsage{Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 33}, Weekly: &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 9}})
 
 	usage := collectClaudeAgainstURL(t, dir, mockServer)
 
@@ -377,7 +356,7 @@ func TestCollectClaudeFallsBackToStaleCacheOnFetchFailure(t *testing.T) {
 		t.Errorf("expected QuotaFetchError to be set on HTTP 429")
 	}
 	if usage.Session == nil || usage.Session.UsedPercent != 33 {
-		t.Fatalf("Session = %+v, want stale UsedPercent 33 from cache", usage.Session)
+		t.Fatalf("Session = %+v, want stale UsedPercent 33 from store", usage.Session)
 	}
 	if usage.Session.Name != "Session (5-hour) (stale)" {
 		t.Errorf("Session.Name = %q, want stale-labeled", usage.Session.Name)

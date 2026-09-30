@@ -280,6 +280,7 @@ func floatPtr(value float64) *float64 { return &value }
 // times it was invoked. The stub is restored by the returned cleanup.
 func agyStubUsageCmd(t *testing.T, out []byte, err error) (calls *int32, cleanup func()) {
 	t.Helper()
+	isolateUsageTestStorage(t)
 	var n int32
 	prevFn := runAGYUsageCmdFn
 	runAGYUsageCmdFn = func(ctx context.Context) ([]byte, error) {
@@ -330,31 +331,22 @@ func TestParseAGYUsageOutputSkipsUnparseableLines(t *testing.T) {
 	}
 }
 
-// TestCollectAGYUsesWarmDiskCache checks the freshness gate short-circuits
-// the exec call entirely when a recent-enough on-disk reading already
-// exists (issue 087, generalizing issue 033's Claude-only mechanism).
-func TestCollectAGYUsesWarmDiskCache(t *testing.T) {
+// TestCollectAGYUsesWarmStoreSnapshot checks that a fresh authoritative
+// store snapshot short-circuits the exec call.
+func TestCollectAGYUsesWarmStoreSnapshot(t *testing.T) {
 	calls, cleanup := agyStubUsageCmd(t, []byte(agyOKOutput), nil)
 	defer cleanup()
 
 	dir := t.TempDir()
-	cache := liveFetchCache[agyQuotaPayload]{
-		FetchedAt: time.Now(),
-		Payload: agyQuotaPayload{
-			ModelGroups: []ModelGroup{{Name: "Cached Group", Windows: []QuotaWindow{{Name: "Daily", UsedPercent: 20}}}},
-		},
-	}
-	if err := writeLiveFetchCache(liveFetchCachePath(dir), cache); err != nil {
-		t.Fatalf("seed cache: %v", err)
-	}
+	seedProviderSnapshot(t, "agy", time.Now(), AgentUsage{ModelGroups: []ModelGroup{{Name: "Cached Group", Windows: []QuotaWindow{{Name: "Daily", UsedPercent: 20}}}}})
 
 	usage := CollectAGY(context.Background(), dir, http.DefaultClient)
 
 	if atomic.LoadInt32(calls) != 0 {
-		t.Errorf("expected agy exec not to be called when disk cache is warm, got %d calls", *calls)
+		t.Errorf("expected agy exec not to be called when store snapshot is warm, got %d calls", *calls)
 	}
 	if len(usage.ModelGroups) != 1 || usage.ModelGroups[0].Name != "Cached Group" {
-		t.Errorf("ModelGroups = %+v, want cached group", usage.ModelGroups)
+		t.Errorf("ModelGroups = %+v, want store snapshot", usage.ModelGroups)
 	}
 }
 
@@ -392,26 +384,15 @@ func TestCollectAGYExpiredCacheTriggersLiveFetch(t *testing.T) {
 	}
 }
 
-// TestCollectAGYFailedFetchPreservesDiskCache is the core regression test
-// for the "don't delete history data on a failed/empty fetch" requirement:
-// when `agy -p "/usage"` errors, the prior on-disk cache must survive
-// untouched (not overwritten with an empty payload) and CollectAGY must
-// still report the last known data, labeled stale, rather than going blank.
-func TestCollectAGYFailedFetchPreservesDiskCache(t *testing.T) {
+// TestCollectAGYFailedFetchPreservesStoreSnapshot ensures failed fetches
+// leave the authoritative reading intact and report it as stale.
+func TestCollectAGYFailedFetchPreservesStoreSnapshot(t *testing.T) {
 	_, cleanup := agyStubUsageCmd(t, nil, errors.New("exec: \"agy\": executable file not found in $PATH"))
 	defer cleanup()
 
 	dir := t.TempDir()
-	cachePath := liveFetchCachePath(dir)
-	seeded := liveFetchCache[agyQuotaPayload]{
-		FetchedAt: time.Now().Add(-time.Hour),
-		Payload: agyQuotaPayload{
-			ModelGroups: []ModelGroup{{Name: "Gemini Models", Windows: []QuotaWindow{{Name: "Weekly Limit Remaining", UsedPercent: 30, RemainingPercent: 70}}}},
-		},
-	}
-	if err := writeLiveFetchCache(cachePath, seeded); err != nil {
-		t.Fatalf("seed cache: %v", err)
-	}
+	at := time.Now().Add(-time.Hour)
+	seedProviderSnapshot(t, "agy", at, AgentUsage{ModelGroups: []ModelGroup{{Name: "Gemini Models", Windows: []QuotaWindow{{Name: "Weekly Limit Remaining", UsedPercent: 30, RemainingPercent: 70}}}}})
 
 	usage := CollectAGY(context.Background(), dir, http.DefaultClient)
 
@@ -425,18 +406,14 @@ func TestCollectAGYFailedFetchPreservesDiskCache(t *testing.T) {
 		t.Errorf("expected window label marked stale, got %q", usage.ModelGroups[0].Windows[0].Name)
 	}
 
-	// The on-disk cache itself must not have been clobbered with an empty
-	// payload — it should still hold exactly the seeded data.
-	onDisk := readLiveFetchCache[agyQuotaPayload](cachePath)
-	if onDisk == nil || len(onDisk.Payload.ModelGroups) != 1 || onDisk.Payload.ModelGroups[0].Name != "Gemini Models" {
-		t.Errorf("expected on-disk cache to remain untouched by the failed fetch, got %+v", onDisk)
-	}
-	if !onDisk.FetchedAt.Equal(seeded.FetchedAt) {
-		t.Errorf("expected on-disk FetchedAt to remain the original seed time, got %v want %v", onDisk.FetchedAt, seeded.FetchedAt)
+	storedAt, stored, err := ProviderSnapshotFromStore(context.Background(), "agy")
+	if err != nil || !storedAt.Equal(at) || len(stored.ModelGroups) != 1 || stored.ModelGroups[0].Name != "Gemini Models" {
+		t.Errorf("authoritative store snapshot changed after failed fetch: at=%s usage=%+v err=%v", storedAt, stored.ModelGroups, err)
 	}
 }
 
 func TestCollectAGYRecordsProbeDurationAndDoesNotBackoffOnTimeout(t *testing.T) {
+	isolateUsageTestStorage(t)
 	dir := t.TempDir()
 	prevFn := runAGYUsageCmdFn
 	runAGYUsageCmdFn = func(context.Context) ([]byte, error) {
@@ -463,16 +440,8 @@ func TestCollectAGYEmptyFetchPreservesDiskCache(t *testing.T) {
 	defer cleanup()
 
 	dir := t.TempDir()
-	cachePath := liveFetchCachePath(dir)
-	seeded := liveFetchCache[agyQuotaPayload]{
-		FetchedAt: time.Now().Add(-time.Hour),
-		Payload: agyQuotaPayload{
-			ModelGroups: []ModelGroup{{Name: "Gemini Models", Windows: []QuotaWindow{{Name: "Weekly Limit Remaining", UsedPercent: 30, RemainingPercent: 70}}}},
-		},
-	}
-	if err := writeLiveFetchCache(cachePath, seeded); err != nil {
-		t.Fatalf("seed cache: %v", err)
-	}
+	at := time.Now().Add(-time.Hour)
+	seedProviderSnapshot(t, "agy", at, AgentUsage{ModelGroups: []ModelGroup{{Name: "Gemini Models", Windows: []QuotaWindow{{Name: "Weekly Limit Remaining", UsedPercent: 30, RemainingPercent: 70}}}}})
 
 	usage := CollectAGY(context.Background(), dir, http.DefaultClient)
 
@@ -483,9 +452,9 @@ func TestCollectAGYEmptyFetchPreservesDiskCache(t *testing.T) {
 		t.Fatalf("expected prior cached ModelGroups to survive an empty fetch, got %+v", usage.ModelGroups)
 	}
 
-	onDisk := readLiveFetchCache[agyQuotaPayload](cachePath)
-	if onDisk == nil || len(onDisk.Payload.ModelGroups) != 1 {
-		t.Errorf("expected on-disk cache to remain untouched by the empty fetch, got %+v", onDisk)
+	storedAt, stored, err := ProviderSnapshotFromStore(context.Background(), "agy")
+	if err != nil || !storedAt.Equal(at) || len(stored.ModelGroups) != 1 || stored.ModelGroups[0].Name != "Gemini Models" {
+		t.Errorf("authoritative store snapshot changed after empty fetch: at=%s usage=%+v err=%v", storedAt, stored.ModelGroups, err)
 	}
 }
 
@@ -548,16 +517,8 @@ func TestCollectAGYDetectsAuthRequiredAndBacksOff(t *testing.T) {
 	defer cleanup()
 
 	dir := t.TempDir()
-	cachePath := liveFetchCachePath(dir)
-	seeded := liveFetchCache[agyQuotaPayload]{
-		FetchedAt: time.Now().Add(-time.Hour),
-		Payload: agyQuotaPayload{
-			ModelGroups: []ModelGroup{{Name: "Gemini Models", Windows: []QuotaWindow{{Name: "Weekly Limit Remaining", UsedPercent: 30, RemainingPercent: 70}}}},
-		},
-	}
-	if err := writeLiveFetchCache(cachePath, seeded); err != nil {
-		t.Fatalf("seed cache: %v", err)
-	}
+	at := time.Now().Add(-time.Hour)
+	seedProviderSnapshot(t, "agy", at, AgentUsage{ModelGroups: []ModelGroup{{Name: "Gemini Models", Windows: []QuotaWindow{{Name: "Weekly Limit Remaining", UsedPercent: 30, RemainingPercent: 70}}}}})
 
 	usage := CollectAGY(context.Background(), dir, http.DefaultClient)
 
@@ -571,10 +532,9 @@ func TestCollectAGYDetectsAuthRequiredAndBacksOff(t *testing.T) {
 		t.Fatalf("expected prior cached ModelGroups to survive, got %+v", usage.ModelGroups)
 	}
 
-	// The on-disk quota cache itself must not have been clobbered.
-	onDisk := readLiveFetchCache[agyQuotaPayload](cachePath)
-	if onDisk == nil || !onDisk.FetchedAt.Equal(seeded.FetchedAt) {
-		t.Errorf("expected quota cache to remain untouched, got %+v", onDisk)
+	storedAt, stored, err := ProviderSnapshotFromStore(context.Background(), "agy")
+	if err != nil || !storedAt.Equal(at) || len(stored.ModelGroups) != 1 {
+		t.Errorf("authoritative store snapshot changed after auth failure: at=%s usage=%+v err=%v", storedAt, stored.ModelGroups, err)
 	}
 
 	// A backoff marker should now be on disk.
