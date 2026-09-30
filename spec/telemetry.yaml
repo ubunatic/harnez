@@ -198,6 +198,36 @@ schema: |
   );
   CREATE INDEX IF NOT EXISTS idx_compaction_economics_session_id ON compaction_economics (session_id);
   CREATE INDEX IF NOT EXISTS idx_compaction_economics_created_at ON compaction_economics (created_at);
+
+  -- issue 651: normalized, append-only quota observations used by compact usage.
+  CREATE TABLE IF NOT EXISTS usage_observations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    source TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
+    freshness TEXT NOT NULL,
+    payload_version TEXT NOT NULL DEFAULT '',
+    UNIQUE(provider, source, observed_at)
+  );
+
+  CREATE TABLE IF NOT EXISTS quota_windows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    observation_id INTEGER NOT NULL REFERENCES usage_observations(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL,
+    pool TEXT NOT NULL DEFAULT '',
+    window_key TEXT NOT NULL,
+    window_name TEXT NOT NULL DEFAULT '',
+    used_fraction REAL NOT NULL,
+    input_tokens INTEGER,
+    cached_input_tokens INTEGER,
+    output_tokens INTEGER,
+    reasoning_tokens INTEGER,
+    reset_at TEXT,
+    UNIQUE(observation_id, pool, window_key)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_usage_observations_provider_time ON usage_observations (provider, observed_at);
+  CREATE INDEX IF NOT EXISTS idx_quota_windows_provider_pool_window ON quota_windows (provider, pool, window_key);
 statements:
   insert_compaction_economics: "INSERT INTO compaction_economics (created_at, session_id, compaction_event_id, model, pricing_revision, cached_input_micros_per_million, uncached_input_micros_per_million, output_micros_per_million, reasoning_micros_per_million, status, compaction_cost_micros, post_compaction_cost_micros, baseline_cost_micros, savings_micros, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   insert_compaction_event: "INSERT INTO compaction_events (created_at, session_id, event_type, turn_id, trigger, reason, input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, total_tokens, model) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"

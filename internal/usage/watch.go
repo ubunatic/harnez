@@ -2226,6 +2226,18 @@ func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out
 	}
 }
 
+// RenderSummaryWithUsage renders the normal one-shot dashboard from an
+// already-collected summary, allowing compact callers to query the store first.
+func RenderSummaryWithUsage(summary UsageSummary, out io.Writer, showProcesses bool, opts ...WatchOptions) {
+	opt := firstOpt(opts)
+	cols, rows := terminalSize(out)
+	opt.ShowProcesses = opt.ShowProcesses || showProcesses
+	frame := buildWatchFrame(summary, nil, 0, initialWatchSections(opt), cols, rows, false, "", "", opt)
+	for _, line := range frame.lines {
+		fmt.Fprintln(out, line+"\x1b[0m")
+	}
+}
+
 // RenderSummaryRemote prints one static frame of the compact grid using remote host collection.
 func RenderSummaryRemote(ctx context.Context, host string, out io.Writer, showProcesses bool, opts ...WatchOptions) {
 	opt := firstOpt(opts)

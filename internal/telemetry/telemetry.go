@@ -23,6 +23,7 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+	"ubunatic.com/harnez/internal/usagestore"
 	"ubunatic.com/harnez/internal/xdgpath"
 )
 
@@ -127,6 +128,9 @@ func Open(path string) (*DB, error) {
 				tableExisted, stepErr := tableExists(exec, "tool_calls")
 				if stepErr == nil {
 					_, stepErr = exec.Exec(schemaDDL)
+				}
+				if stepErr == nil {
+					stepErr = usagestore.EnsureSchema(context.Background(), func(_ context.Context, statement string) error { _, err := exec.Exec(statement); return err })
 				}
 				var migrations []string
 				if stepErr == nil {

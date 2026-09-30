@@ -403,7 +403,16 @@ func newRootCmd() *cobra.Command {
 				if sharedClient != nil {
 					loadOpt.SharedUsageCollector = sharedCollect
 				}
-				usage.RenderSummary(ctx, "", client, cmd.OutOrStdout(), usageProcesses, loadOpt)
+				if usageCompact && sharedClient == nil {
+					summary := usage.CollectAll(ctx, "", client)
+					stored, err := usage.StoreCompactSummary(ctx, "", summary)
+					if err != nil {
+						stored = summary
+					}
+					usage.RenderSummaryWithUsage(stored, cmd.OutOrStdout(), usageProcesses, loadOpt)
+				} else {
+					usage.RenderSummary(ctx, "", client, cmd.OutOrStdout(), usageProcesses, loadOpt)
+				}
 			}
 			return nil
 		},
