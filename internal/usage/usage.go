@@ -138,10 +138,10 @@ func collectAllWithDiagnostics(ctx context.Context, homeDir string, client *http
 		}
 	}
 	summary := CollectRegistered(ctx, homeDir, client, !useCache, diagnosticProgress, diag)
-	if useCache && homeDir != "" {
+	if useCache && homeDir != "" && ctx.Err() == nil {
 		historyDir := HistoryDir(homeDir)
 		for i := range summary.Agents {
-			summary.Agents[i] = fillFromHistoryIfNoQuotaWindows(historyDir, summary.Agents[i])
+			summary.Agents[i] = fillFromHistoryIfNoQuotaWindowsContext(ctx, historyDir, summary.Agents[i])
 		}
 	}
 	return summary

@@ -14,6 +14,7 @@ import (
 const usageSpecPath = "spec/usage.yaml"
 
 type usageSpec struct {
+	WatchLoadingLabel     string `yaml:"watch_loading_label"`
 	AGYMeterMaxAge        string `yaml:"agy_meter_max_age"`
 	CollectorCadence      string `yaml:"collector_cadence"`
 	CollectorTimeout      string `yaml:"collector_timeout"`
@@ -22,13 +23,14 @@ type usageSpec struct {
 }
 
 var (
-	usageSpecOnce        sync.Once
-	usageSpecAge         time.Duration
-	usageSpecCadence     time.Duration
-	usageSpecTimeout     time.Duration
-	usageSpecDedupe      time.Duration
-	usageSpecBusyTimeout time.Duration
-	usageSpecErr         error
+	usageSpecOnce         sync.Once
+	usageSpecAge          time.Duration
+	usageSpecCadence      time.Duration
+	usageSpecTimeout      time.Duration
+	usageSpecDedupe       time.Duration
+	usageSpecBusyTimeout  time.Duration
+	usageSpecErr          error
+	usageSpecLoadingLabel string
 )
 
 func agyMeterMaxAge() (time.Duration, error) {
@@ -56,6 +58,10 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 			return
 		}
 		usageSpecAge, usageSpecCadence, usageSpecTimeout, usageSpecDedupe, usageSpecBusyTimeout, usageSpecErr = parseUsageSpec(data)
+		var spec usageSpec
+		if err := yaml.Unmarshal(data, &spec); err == nil {
+			usageSpecLoadingLabel = spec.WatchLoadingLabel
+		}
 	})
 	return usageSpecAge, usageSpecCadence, usageSpecTimeout, usageSpecDedupe, usageSpecBusyTimeout, usageSpecErr
 }
@@ -66,6 +72,9 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	dec.KnownFields(true)
 	if err := dec.Decode(&spec); err != nil {
 		return 0, 0, 0, 0, 0, fmt.Errorf("parse embedded %s: %w", usageSpecPath, err)
+	}
+	if spec.WatchLoadingLabel == "" {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: watch_loading_label must not be empty", usageSpecPath)
 	}
 	age, err := time.ParseDuration(spec.AGYMeterMaxAge)
 	if err != nil || age <= 0 {

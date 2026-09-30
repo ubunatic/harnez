@@ -4,3 +4,4 @@ collector_cadence: 15m
 collector_timeout: 2m
 passive_dedupe_interval: 30s
 statusline_busy_timeout: 25ms
+watch_loading_label: Collecting usage…

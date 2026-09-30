@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ import (
 
 // StoreCompactSummary makes the existing compact collection result durable,
 // then projects the store's normalized quota readings back into that result.
-// Any database error leaves the collected summary untouched for safe fallback.
+// Database errors preserve collected values and add visible provider error rows.
 func StoreCompactSummary(ctx context.Context, homeDir string, summary UsageSummary) (UsageSummary, error) {
 	return storeCompactSummary(ctx, homeDir, summary, "")
 }
@@ -484,7 +485,12 @@ func writeUsageHistoryMirrors(ctx context.Context, store *usagestore.Store, dir 
 	return nil
 }
 
-func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSummary, dbPath string) (UsageSummary, error) {
+func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSummary, dbPath string) (result UsageSummary, resultErr error) {
+	defer func() {
+		if resultErr != nil && ctx.Err() == nil {
+			result = compactProjectionFailure(homeDir, summary, resultErr)
+		}
+	}()
 	if dbPath == "" {
 		var err error
 		dbPath, err = telemetry.DefaultDBPath()
@@ -557,6 +563,38 @@ func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSumma
 		applyStoredWindows(&summary.Agents[i], readings, now)
 	}
 	return summary, nil
+}
+
+// A failed projection cannot establish which providers exist in the store.
+// Keep all supported providers visible rather than treating that uncertainty
+// as evidence that a provider (notably Codex) is absent.
+func compactProjectionFailure(homeDir string, summary UsageSummary, err error) UsageSummary {
+	if homeDir == "" {
+		homeDir, _ = os.UserHomeDir()
+	}
+	dir := filepath.Join(homeDir, ".harnez")
+	if os.MkdirAll(dir, 0o700) == nil {
+		if file, openErr := os.OpenFile(filepath.Join(dir, "debug.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); openErr == nil {
+			fmt.Fprintf(file, "[%s] usage compact projection failed: %v\n", time.Now().UTC().Format(time.RFC3339Nano), err)
+			file.Close()
+		}
+	}
+	summary.Agents = append([]AgentUsage(nil), summary.Agents...)
+	for _, provider := range []struct{ id, name string }{
+		{"claude", "Claude Code"}, {"codex", "OpenAI Codex"}, {"agy", "Antigravity (AGY)"},
+	} {
+		i := slices.IndexFunc(summary.Agents, func(a AgentUsage) bool { return a.AgentID == provider.id })
+		if i < 0 {
+			i = len(summary.Agents)
+			summary.Agents = append(summary.Agents, AgentUsage{AgentID: provider.id, Name: provider.name})
+		}
+		summary.Agents[i].Installed = true
+		if summary.Agents[i].Name == "" {
+			summary.Agents[i].Name = provider.name
+		}
+		summary.Agents[i].QuotaFetchError = fmt.Sprintf("store projection failed: %v", err)
+	}
+	return summary
 }
 
 func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now time.Time) {
@@ -782,6 +820,19 @@ func importUsageSummaryHistory(s *usagestore.Store, ctx context.Context, homeDir
 				file.Close()
 				continue
 			}
+			// Unchanged legacy files have already been consumed. Replaying their
+			// INSERTs on every snapshot/history read caused thousands of fsyncs
+			// per watch redraw, even though the records themselves are deduplicated.
+			importedMarker := "imported-history:" + filepath.Clean(path) + ":" + hex.EncodeToString(sum[:])
+			var imported int
+			if err := s.QueryRow(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name=?`, importedMarker).Scan(&imported); err != nil {
+				file.Close()
+				return err
+			}
+			if imported > 0 {
+				file.Close()
+				continue
+			}
 			scanner := bufio.NewScanner(file)
 			scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
 			lineNumber := 0
@@ -814,6 +865,9 @@ func importUsageSummaryHistory(s *usagestore.Store, ctx context.Context, homeDir
 			}
 			if closeErr != nil {
 				return closeErr
+			}
+			if err := s.Exec(ctx, `INSERT OR IGNORE INTO usage_store_migrations(name,completed_at) VALUES(?,?)`, importedMarker, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+				return err
 			}
 		}
 	}

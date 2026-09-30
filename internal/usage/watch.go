@@ -13,12 +13,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 	"unicode/utf8"
 	"unsafe"
 
+	"golang.org/x/term"
 	"ubunatic.com/harnez/internal/rograph"
 	"ubunatic.com/harnez/internal/uix"
 )
@@ -352,7 +352,7 @@ type screenFrame struct {
 //
 // No newline is emitted after the final line, so even a frame exactly as tall
 // as the terminal cannot push the viewport down by one row.
-func (f screenFrame) paint(out io.Writer) {
+func (f screenFrame) paint(out io.Writer) error {
 	var buf bytes.Buffer
 	buf.WriteString("\x1b[H")
 	for i, line := range f.lines {
@@ -363,7 +363,8 @@ func (f screenFrame) paint(out io.Writer) {
 		buf.WriteString("\x1b[0m\x1b[K")
 	}
 	buf.WriteString("\x1b[J")
-	_, _ = out.Write(buf.Bytes())
+	_, err := out.Write(buf.Bytes())
+	return err
 }
 
 // fit truncates lines to cols and caps them at rows, so the frame provably fits.
@@ -1402,13 +1403,20 @@ func buildMicBoxLines(st MicStatus) []string {
 
 // buildHistoryBox renders a compact 4th panel showing recorded usage history stats.
 func buildHistoryBox(homeDir, historyDir string, width int) wbox {
-	title := watchBoxSymbol("history") + " History"
-	targetDir := historyDir
-	if targetDir == "" {
-		targetDir = HistoryDir(homeDir)
-	}
-
+	targetDir := watchHistoryDir(homeDir, historyDir)
 	stats, _ := HistorySummaryStats(targetDir)
+	return buildHistoryBoxWithStats(targetDir, width, stats)
+}
+
+func watchHistoryDir(homeDir, historyDir string) string {
+	if historyDir != "" {
+		return historyDir
+	}
+	return HistoryDir(homeDir)
+}
+
+func buildHistoryBoxWithStats(targetDir string, width int, stats HistorySummaryData) wbox {
+	title := watchBoxSymbol("history") + " History"
 
 	var lines []string
 	fileWord := "files"
@@ -1760,6 +1768,11 @@ func padQuotaWindowPercentWithDuration(w QuotaWindow, duration string, width int
 // WatchOptions bundles optional customization for watch frame rendering.
 type WatchOptions struct {
 	Host string
+	// HistoryStats supplies a precomputed snapshot, keeping database access
+	// out of the interactive redraw path. Nil retains one-shot behavior.
+	HistoryStats *HistorySummaryData
+	// Loading distinguishes the first interactive frame from an empty result.
+	Loading bool
 	// SharedUsageCollector optionally supplies usage from the public shared
 	// usage controller. Nil preserves the legacy collector path.
 	SharedUsageCollector func(context.Context) UsageSummary
@@ -1983,7 +1996,12 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	if targetHistoryDir == "" {
 		targetHistoryDir = HistoryDir(homeDir)
 	}
-	fileCount, totalBytes, _ := HistoryStats(targetHistoryDir)
+	stats := opt.HistoryStats
+	if stats == nil {
+		value, _ := HistorySummaryStats(targetHistoryDir)
+		stats = &value
+	}
+	fileCount, totalBytes := stats.FileCount, stats.TotalBytes
 	fileWord := "files"
 	if fileCount == 1 {
 		fileWord = "file"
@@ -2079,6 +2097,10 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	}
 
 	var body []string
+	if opt.Loading {
+		_, _, _, _, _, _ = usageDurations()
+		body = append(body, ansiDimGrey+usageSpecLoadingLabel+"\x1b[0m", "")
+	}
 	// No agent had any real recorded usage found on this machine — say so
 	// explicitly rather than silently rendering a screen with no agent
 	// boxes at all (issue 083).
@@ -2101,7 +2123,9 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		case summary.Load != nil:
 			loadSnapshot = summary.Load
 		case opt.Host == "":
-			snap := LoadSnapshot{CPU: CurrentCPULoad(), GPUs: CurrentGPUs()}
+			// Interactive timelines grow on each tick. Cold burst sampling
+			// deliberately sleeps ~2s and must not stall the UI's first frame.
+			snap := LoadSnapshot{CPU: currentCPULoad(!live), GPUs: currentGPUs(!live)}
 			loadSnapshot = &snap
 		}
 	}
@@ -2145,7 +2169,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		}})
 	}
 	if sec.History {
-		panels = append(panels, panel{"H", func(w int) wbox { return buildHistoryBox(homeDir, historyDir, w) }})
+		panels = append(panels, panel{"H", func(w int) wbox { return buildHistoryBoxWithStats(targetHistoryDir, w, *stats) }})
 	}
 	if sec.Processes {
 		panels = append(panels, panel{"P", func(w int) wbox { return buildProcessesBox(w, procCounts) }})
@@ -2780,11 +2804,26 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	sigCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	oldState, err := exec.Command("stty", "-F", "/dev/tty", "-g").Output()
-	if err == nil {
-		_ = exec.Command("stty", "-F", "/dev/tty", "cbreak", "-echo").Run()
+	// Open nonblocking so Go's poller can interrupt Read when Close runs.
+	// A blocking /dev/tty read can otherwise hold cleanup indefinitely.
+	var oldState *term.State
+	tty, ttyErr := os.OpenFile("/dev/tty", os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	restoreTerminal := func() {
+		if oldState != nil {
+			_ = term.Restore(int(tty.Fd()), oldState)
+			oldState = nil
+		}
+	}
+	if ttyErr == nil {
+		var err error
+		oldState, err = term.MakeRaw(int(tty.Fd()))
+		if err != nil {
+			tty.Close()
+			return fmt.Errorf("watch terminal: %w", err)
+		}
 		defer func() {
-			_ = exec.Command("stty", "-F", "/dev/tty", string(bytes.TrimSpace(oldState))).Run()
+			restoreTerminal()
+			tty.Close()
 		}()
 	}
 
@@ -2854,7 +2893,10 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			remoteLoadMu.Unlock()
 			requestRedraw()
 		}
+		remoteDone := make(chan struct{})
 		defer func() {
+			stop()
+			<-remoteDone
 			remoteLoadMu.Lock()
 			stopFn := remoteStreamStop
 			remoteLoadMu.Unlock()
@@ -2862,43 +2904,28 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				stopFn()
 			}
 		}()
-		go runRemoteLoadManager(sigCtx, remoteLoadHost, &remoteLoadMu, &lastRemoteLoad, requestRedraw, setRemoteStreamStop, setRemoteLoadStreaming)
+		go func() {
+			defer close(remoteDone)
+			runRemoteLoadManager(sigCtx, remoteLoadHost, &remoteLoadMu, &lastRemoteLoad, requestRedraw, setRemoteStreamStop, setRemoteLoadStreaming)
+		}()
 	}
 
-	// splashActive/splashSkip (issue 164) gate the tty-reader goroutine below
-	// while the startup splash is up: Esc must only abort the splash wait,
-	// not quit the app, which is a deliberate deviation from Esc's normal
-	// dispatchWatchKey meaning. splashActive starts true and flips false
-	// (RunWatchWithOptions, below) once the splash phase ends, permanently,
-	// for the rest of this run -- from then on every key goes through the
-	// unchanged dispatchWatchKey path exactly as before this ticket.
-	var splashActive atomic.Bool
-	splashActive.Store(true)
-	splashSkip := make(chan struct{}, 1)
-
-	tty, ttyErr := os.Open("/dev/tty")
 	if ttyErr == nil {
-		defer tty.Close()
+		readerDone := make(chan struct{})
+		defer func() {
+			stop()
+			restoreTerminal()
+			tty.Close()
+			<-readerDone
+		}()
 		go func() {
+			defer close(readerDone)
 			buf := make([]byte, 1)
 			for {
 				n, err := tty.Read(buf)
 				if err != nil || n == 0 {
+					stop()
 					return
-				}
-				if splashActive.Load() {
-					eff := dispatchSplashKey(buf[0])
-					if eff.quit {
-						stop()
-						return
-					}
-					if eff.skip {
-						select {
-						case splashSkip <- struct{}{}:
-						default:
-						}
-					}
-					continue
 				}
 				secLock.Lock()
 				st := watchKeyState{
@@ -2936,26 +2963,28 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	winch := make(chan os.Signal, 1)
 	signal.Notify(winch, syscall.SIGWINCH)
 	defer signal.Stop(winch)
+	winchDone := make(chan struct{})
+	defer func() { stop(); <-winchDone }()
 	go func() {
-		for range winch {
-			requestRedraw()
+		defer close(winchDone)
+		for {
+			select {
+			case <-sigCtx.Done():
+				return
+			case <-winch:
+				requestRedraw()
+			}
 		}
 	}()
 
 	tracker := newRateTracker()
 
-	// outMu (issue 164) serializes writes to out during the startup splash,
-	// the one window where two goroutines can legitimately want to paint at
-	// once: the splash animation loop (this goroutine) and the background
-	// renderFrame()'s own draw() call once the first fetch completes. Every
-	// other draw() call for the rest of the run happens on this goroutine
-	// alone, same as before this ticket, so the lock is uncontended there.
-	var outMu sync.Mutex
-
-	var lastSummary UsageSummary
+	lastSummary := UsageSummary{Timestamp: time.Now()}
+	historyStats := HistorySummaryData{}
+	loading := true
 	var lastRates map[string]agentRate
 	var lastProcs *AgentProcessCount
-	var currentHost string
+	currentHost := configuredHost
 	var diagnosticsMu sync.Mutex
 	var diagnostics []string
 	appendDiagnostic := func(source string, stage FetchStage) {
@@ -2971,8 +3000,19 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	// redraw loop a viewport with no scrollback of its own, so `\x1b[H` always
 	// means the top-left cell the user is looking at, and it restores the
 	// user's shell output untouched on exit.
-	fmt.Fprint(out, "\033[?1049h\033[?25l\033[2J\033[H")
-	defer fmt.Fprint(out, "\033[?25h\033[?1049l")
+	_, enterErr := fmt.Fprint(out, "\033[?1049h\033[?25l\033[2J\033[H")
+	screenRestored := false
+	restoreScreen := func() {
+		if !screenRestored {
+			fmt.Fprint(out, "\033[0m\033[?25h\033[?1049l")
+			screenRestored = true
+		}
+	}
+	defer restoreScreen()
+
+	if enterErr != nil {
+		return enterErr
+	}
 
 	// micLiveMgr (issue 245) owns the background capture subprocess for the
 	// Mic box's live peak/RMS reading. draw() is the only place buildWatchFrame
@@ -2992,7 +3032,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		}
 	}()
 
-	draw := func() {
+	draw := func() error {
 		secLock.Lock()
 		activeSec := sec
 		showControls := overlayOpen
@@ -3035,6 +3075,8 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		cols, rows := terminalSize(out)
 		frame := buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir, WatchOptions{
 			Host:                currentHost,
+			HistoryStats:        &historyStats,
+			Loading:             loading,
 			ProcCounts:          lastProcs,
 			ShowControls:        showControls,
 			ShowDiagnostics:     showDiagnostics,
@@ -3047,31 +3089,15 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			MicLiveLevel:        micLive.Level,
 			MicLiveAvailable:    micLive.Available,
 		})
-		outMu.Lock()
-		frame.paint(out)
-		outMu.Unlock()
+		err := frame.paint(out)
 		throttler.MarkDrawn(time.Now())
+		return err
 	}
 
-	// splashStatus (issue 169) queues FetchStage events reported by
-	// CollectAllProgress/CollectRemoteProgress below, so the splash loop's
-	// paintSplash (which runs on its own goroutine/timer, not renderFrame's)
-	// can pace them onto the splash's single status line via
-	// splashStatusAdvance/splashStatusMinDisplay. It is written from
-	// renderFrame's fetch goroutine and read/advanced from the splash loop,
-	// so it is guarded by its own mutex rather than reusing outMu/secLock,
-	// which guard unrelated state.
-	var splashStatusMu sync.Mutex
-	var splashStatus splashStatusState
-	reportFetchStage := func(source string, stage FetchStage) {
-		appendDiagnostic(source, stage)
-		splashStatusMu.Lock()
-		splashStatus = splashStatusRecord(splashStatus, source, stage)
-		splashStatusMu.Unlock()
-	}
+	reportFetchStage := appendDiagnostic
 	reportFetchDiagnostic := func(event FetchDiagnostic) {
 		if event.Stage == FetchStarted {
-			return // reportFetchStage already records the lifecycle start
+			return
 		}
 		diagnosticsMu.Lock()
 		defer diagnosticsMu.Unlock()
@@ -3081,175 +3107,73 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		}
 	}
 
-	// fetchAndUpdate does renderFrame's live fetch and lastSummary/lastRates
-	// update but stops short of draw(). Split out so the startup path below
-	// can run the fetch in the background while the splash is still showing,
-	// without the fetch's completion instantly overwriting the splash mid-
-	// status-queue-drain (see splashLoop's fetchDone/drained handling) --
-	// renderFrame (fetchAndUpdate+draw, used by every other call site) still
-	// paints immediately, since only the very first startup fetch has a
-	// splash to coordinate with.
-	fetchAndUpdate := func() {
+	// One collector runs at a time. Results cross a channel; only the UI
+	// goroutine owns frame state and writes to the terminal. Refreshes must
+	// never block keyboard handling or restoration (including the first one).
+	type fetchResult struct {
+		summary UsageSummary
+		procs   *AgentProcessCount
+		host    string
+		history HistorySummaryData
+	}
+	results := make(chan fetchResult, 1)
+	var fetchDone chan struct{}
+	startFetch := func() {
+		if fetchDone != nil {
+			return
+		}
 		secLock.Lock()
-		targetHost := activeHost
-		procRequested := sec.Processes
+		targetHost, procRequested := activeHost, sec.Processes
 		secLock.Unlock()
-
-		currentHost = targetHost
-		fetchStart := time.Now()
-		var fresh UsageSummary
-		if targetHost != "" {
-			var procRes *AgentProcessCount
-			fresh, procRes, _ = CollectRemoteProgress(sigCtx, targetHost, procRequested, reportFetchStage)
-			lastProcs = procRes
-		} else {
-			var micWg sync.WaitGroup
-			micWg.Add(1)
-			go func() {
-				defer micWg.Done()
-				reportFetchStage("mic", FetchStarted)
-				_ = CurrentMicStatus()
-				reportFetchStage("mic", FetchDone)
-			}()
-			if opts.SharedUsageCollector != nil {
-				fresh = opts.SharedUsageCollector(sigCtx)
+		fetchDone = make(chan struct{})
+		done := fetchDone
+		go func() {
+			defer close(done)
+			started := time.Now()
+			result := fetchResult{host: targetHost}
+			if targetHost != "" {
+				result.summary, result.procs, _ = CollectRemoteProgress(sigCtx, targetHost, procRequested, reportFetchStage)
 			} else {
-				fresh = CollectAllProgressDetailed(sigCtx, homeDir, client, reportFetchStage, reportFetchDiagnostic)
+				if opts.SharedUsageCollector != nil {
+					result.summary = opts.SharedUsageCollector(sigCtx)
+				} else {
+					result.summary = CollectAllProgressDetailed(sigCtx, homeDir, client, reportFetchStage, reportFetchDiagnostic)
+				}
+				if sigCtx.Err() == nil && opts.Compact {
+					result.summary, _ = StoreCompactSummary(sigCtx, homeDir, result.summary)
+				}
+				if sigCtx.Err() == nil && historyDir != "" {
+					_ = AppendHistory(historyDir, result.summary)
+				}
 			}
-			micWg.Wait()
-			lastProcs = nil
-			if historyDir != "" {
-				// Best-effort: a missed append shouldn't interrupt the dashboard.
-				_ = AppendHistory(historyDir, fresh)
+			if sigCtx.Err() != nil {
+				return
 			}
-		}
-		// Feed this fetch's wall-clock duration into the persisted
-		// fetch-duration estimate (issue 168) that drives the startup
-		// splash's determinate bar on the *next* --watch run for this fetch
-		// kind. Skipped on a canceled context (Ctrl-C mid-fetch) since that
-		// duration reflects an aborted fetch, not a real completion time,
-		// and would drag the rolling estimate down artificially.
-		if sigCtx.Err() == nil {
-			recordFetchDuration(homeDir, fetchDurationKindForHost(targetHost), time.Since(fetchStart))
-		}
-
-		lastSummary = applyStaleQuota(fresh, lastSummary)
-		lastRates = tracker.update(lastSummary)
-	}
-
-	renderFrame := func() {
-		fetchAndUpdate()
-		draw()
-	}
-
-	// Startup splash (issue 164): the first fetch (CollectAll/CollectRemote)
-	// used to leave the alt-screen blank for its whole duration. Run it in
-	// the background via fetchAndUpdate (renderFrame minus its draw() -- see
-	// above) and paint an animated splash in its place until it finishes, so
-	// the terminal never sits empty. draw() itself is deliberately deferred
-	// to the splash loop below (not called here) so a fetch that finishes
-	// before the status queue has been fully paced through (issue 169) can't
-	// have its draw() silently overwritten by a subsequent splash repaint --
-	// see the splashLoop comment below. Esc aborts only the wait (splashSkip,
-	// handled by the tty-reader goroutine above via dispatchSplashKey) -- it
-	// freezes the splash rather than quitting, and the fetch keeps running
-	// in its goroutine regardless. Only one of this goroutine and the splash
-	// loop below ever touches lastSummary/lastProcs/currentHost at a time:
-	// the goroutine owns them exclusively until firstFrameDone closes, then
-	// the splash loop (and, after it exits, the rest of this function)
-	// resumes exclusive ownership for the rest of the run.
-	firstFrameDone := make(chan struct{})
-	go func() {
-		defer close(firstFrameDone)
-		fetchAndUpdate()
-	}()
-
-	// splashEstimate/splashHaveEstimate (issue 168) are loaded once, before
-	// the splash loop starts, for the fetch kind this first renderFrame()
-	// call is about to target (configuredHost, same as activeHost at this
-	// point -- no key has been handled yet, so it cannot have changed).
-	// They stay fixed for the life of this one splash: the estimate only
-	// needs to be roughly right, and re-reading the cache on every tick
-	// would just be needless disk I/O for a value that won't have changed
-	// mid-fetch anyway.
-	splashEstimate, splashHaveEstimate := loadFetchDurationEstimate(homeDir, fetchDurationKindForHost(configuredHost))
-
-	// paintSplash advances the status queue on splashStatusMinDisplay pacing,
-	// paints the frame, and reports whether the queue is now drained (see
-	// splashStatusDrained) so the splash loop below knows when it's safe to
-	// stop waiting once the underlying fetch has finished.
-	paintSplash := func(elapsed time.Duration, animate bool) (drained bool) {
-		cols, rows := terminalSize(out)
-		now := time.Now()
-		splashStatusMu.Lock()
-		splashStatus = splashStatusAdvance(splashStatus, now, splashStatusMinDisplay)
-		statusText := splashStatusLine(splashStatus.current.source, splashStatus.current.stage, splashStatus.have)
-		badgesText := splashBadgesLine(splashStatus.badges)
-		drained = splashStatusDrained(splashStatus, now, splashStatusMinDisplay)
-		splashStatusMu.Unlock()
-		frame := buildSplashFrame(cols, rows, elapsed, animate, splashEstimate, splashHaveEstimate, statusText, badgesText)
-		outMu.Lock()
-		frame.paint(out)
-		outMu.Unlock()
-		return drained
-	}
-
-	splashStart := time.Now()
-	splashTicker := time.NewTicker(splashFrameInterval)
-	paintSplash(0, true)
-	// fetchDone latches true once firstFrameDone fires; firstFrameDoneCh is
-	// then nilled so the select below stops selecting an already-closed
-	// channel every iteration. The loop keeps ticking/painting after that
-	// until the status queue drains (splashStatusDrained), so a fetch that
-	// completes faster than its own events can be paced through still lets
-	// each one get its splashStatusMinDisplay turn instead of jumping
-	// straight to whichever event happened to be latest.
-	fetchDone := false
-	firstFrameDoneCh := firstFrameDone
-splashLoop:
-	for {
-		select {
-		case <-sigCtx.Done():
-			splashTicker.Stop()
-			return nil
-		case <-firstFrameDoneCh:
-			fetchDone = true
-			firstFrameDoneCh = nil
-			// No queued events yet (e.g. the whole fetch was served from
-			// cache with no live sub-fetch to report) -- exit immediately
-			// rather than waiting for the next splashTicker.C tick.
-			if paintSplash(time.Since(splashStart), true) {
-				splashTicker.Stop()
-				splashActive.Store(false)
-				draw()
-				break splashLoop
+			result.history, _ = historySummaryStatsContext(sigCtx, watchHistoryDir(homeDir, historyDir))
+			if sigCtx.Err() != nil {
+				return
 			}
-		case <-splashSkip:
-			splashTicker.Stop()
-			splashActive.Store(false)
-			paintSplash(time.Since(splashStart), false)
-			// The fetch is already running in the goroutine above; wait for
-			// it (or a quit) without repainting, since lastSummary et al.
-			// are its exclusively-owned state until it finishes. Esc means
-			// "stop waiting", so unlike the normal exit below, draw() fires
-			// the instant the fetch is ready -- no queue-drain grace period.
+			recordFetchDuration(homeDir, fetchDurationKindForHost(targetHost), time.Since(started))
 			select {
-			case <-firstFrameDone:
-				draw()
+			case results <- result:
 			case <-sigCtx.Done():
-				return nil
 			}
-			break splashLoop
-		case <-splashTicker.C:
-			drained := paintSplash(time.Since(splashStart), true)
-			if fetchDone && drained {
-				splashTicker.Stop()
-				splashActive.Store(false)
-				draw()
-				break splashLoop
-			}
-		}
+		}()
 	}
+	defer func() {
+		stop()
+		// Restore before draining canceled collectors, not after any final
+		// filesystem/database work they may still need to unwind.
+		restoreScreen()
+		restoreTerminal()
+		if fetchDone != nil {
+			<-fetchDone
+		}
+	}()
+	if err := draw(); err != nil {
+		return err
+	}
+	startFetch()
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -3267,14 +3191,34 @@ splashLoop:
 		select {
 		case <-sigCtx.Done():
 			return nil
+		case result := <-results:
+			<-fetchDone
+			fetchDone = nil
+			currentHost, lastProcs, historyStats = result.host, result.procs, result.history
+			lastSummary = applyStaleQuota(result.summary, lastSummary)
+			lastRates = tracker.update(lastSummary)
+			loading = false
+			if err := draw(); err != nil {
+				return err
+			}
+			secLock.Lock()
+			hostChanged := activeHost != currentHost
+			secLock.Unlock()
+			if hostChanged {
+				startFetch()
+			}
 		case <-fetchChan:
-			renderFrame()
+			startFetch()
 		case <-redrawChan:
-			draw()
+			if err := draw(); err != nil {
+				return err
+			}
 		case <-loadTicker.C:
-			draw()
+			if err := draw(); err != nil {
+				return err
+			}
 		case <-ticker.C:
-			renderFrame()
+			startFetch()
 		}
 	}
 }

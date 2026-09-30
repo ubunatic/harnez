@@ -87,10 +87,17 @@ type codexTokenUsage struct {
 }
 
 func collectCodexTokens(codexDir string) (*TokenBreakdown, int) {
+	return collectCodexTokensContext(context.Background(), codexDir)
+}
+
+func collectCodexTokensContext(ctx context.Context, codexDir string) (*TokenBreakdown, int) {
 	root := filepath.Join(codexDir, "sessions")
 	bySession := map[string]codexTokenUsage{}
 	rollouts := 0
 	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err != nil || info == nil || info.IsDir() || !strings.HasPrefix(info.Name(), "rollout-") || !strings.HasSuffix(info.Name(), ".jsonl") {
 			return nil
 		}
@@ -103,6 +110,9 @@ func collectCodexTokens(codexDir string) (*TokenBreakdown, int) {
 		var latest codexTokenUsage
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			var record struct {
 				Type    string `json:"type"`
 				Payload struct {
@@ -286,7 +296,7 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 			}
 		}
 	}
-	if tokens, rollouts := collectCodexTokens(codexDir); tokens != nil {
+	if tokens, rollouts := collectCodexTokensContext(ctx, codexDir); tokens != nil {
 		usage.Tokens = tokens
 		usage.Sources = append(usage.Sources, fmt.Sprintf("~/.codex/sessions (%s rollouts)", strconv.Itoa(rollouts)))
 	}

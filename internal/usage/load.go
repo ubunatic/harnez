@@ -65,6 +65,10 @@ type SystemMemory struct {
 // without procfs). CPU usage is delta-based off /proc/stat and has no
 // non-Linux fallback: CPUPercentOk is false where /proc/stat is missing.
 func CurrentCPULoad() CPULoad {
+	return currentCPULoad(true)
+}
+
+func currentCPULoad(seed bool) CPULoad {
 	load, err := readLoadavgFromProc("/proc/loadavg")
 	if err != nil {
 		load, err = readLoadavgFromUptime()
@@ -75,7 +79,7 @@ func CurrentCPULoad() CPULoad {
 		load.Ok = true
 	}
 	load.NumCPU = runtime.NumCPU()
-	load.CPUPercent, load.CPUPercentOk, load.PerCorePercent, load.PerCoreOk = currentCPUPercents()
+	load.CPUPercent, load.CPUPercentOk, load.PerCorePercent, load.PerCoreOk = currentCPUPercentsWithSeed(seed)
 	load.PercentHistory = cpuHistory.snapshot()
 	load.TempC, load.TempOk = readCPUTempFromSysfs()
 	load.Memory = CurrentSystemMemory()
@@ -202,6 +206,10 @@ const historyBurstInterval = 50 * time.Millisecond
 // redraw; every later call in the same `--watch` process reuses the
 // previous frame's sample instead.
 func currentCPUPercents() (float64, bool, []float64, bool) {
+	return currentCPUPercentsWithSeed(true)
+}
+
+func currentCPUPercentsWithSeed(seed bool) (float64, bool, []float64, bool) {
 	cur, err := readCPUStatFrame("/proc/stat")
 	if err != nil {
 		return 0, false, nil, false
@@ -215,6 +223,9 @@ func currentCPUPercents() (float64, bool, []float64, bool) {
 	cpuFrameMu.Unlock()
 
 	if !had {
+		if !seed {
+			return 0, false, nil, false
+		}
 		return burstSeedCPUHistory(cur)
 	}
 	aggPct, aggOk, perCore, perCoreOk := cpuFramePercents(prev, cur)
@@ -611,7 +622,11 @@ func burstSeedGPUHistory(key, busyPath string) []float64 {
 // everything fails (e.g. no GPU, an NVIDIA-only system, or an AMD system
 // whose driver doesn't populate the expected sysfs attributes).
 func CurrentGPUs() []GPU {
-	if gpus, err := readAMDSysfs(); err == nil {
+	return currentGPUs(true)
+}
+
+func currentGPUs(seed bool) []GPU {
+	if gpus, err := readAMDSysfsWithSeed(seed); err == nil {
 		return gpus
 	}
 	return nil
@@ -703,10 +718,18 @@ func readAMDCodenameFromLspci() (string, error) {
 // Card enumeration (cardN) and hwmon enumeration (hwmonN) are both
 // driver-assigned at runtime, so both are globbed rather than assumed.
 func readAMDSysfs() ([]GPU, error) {
-	return readAMDSysfsFromGlob("/sys/class/drm/card*/device/gpu_busy_percent")
+	return readAMDSysfsWithSeed(true)
+}
+
+func readAMDSysfsWithSeed(seed bool) ([]GPU, error) {
+	return readAMDSysfsFromGlobWithSeed("/sys/class/drm/card*/device/gpu_busy_percent", seed)
 }
 
 func readAMDSysfsFromGlob(pattern string) ([]GPU, error) {
+	return readAMDSysfsFromGlobWithSeed(pattern, true)
+}
+
+func readAMDSysfsFromGlobWithSeed(pattern string, seed bool) ([]GPU, error) {
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, err
@@ -721,7 +744,7 @@ func readAMDSysfsFromGlob(pattern string) ([]GPU, error) {
 		cardName := filepath.Base(filepath.Dir(deviceDir))
 		g := GPU{Name: amdGPUCodename(deviceDir)}
 
-		if gpuHistorySeeded(cardName) {
+		if !seed || gpuHistorySeeded(cardName) {
 			v, err := readSysfsUint(busyPath)
 			if err != nil {
 				continue // not a real GPU device (or unreadable): skip rather than report zeros

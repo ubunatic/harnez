@@ -263,7 +263,7 @@ func newUsageRegistry(homeDir string, client *http.Client, live bool) (*Registry
 			stateDir := StateDir(homeDir)
 			var cached *AgentSnapshot
 			if !live {
-				if snapshot, err := ReadAgentSnapshot(stateDir, provider); err == nil && snapshot != nil {
+				if snapshot, err := readAgentSnapshotContext(ctx, stateDir, provider); err == nil && snapshot != nil {
 					cached = snapshot
 					if snapshot.IsFresh(DefaultCacheStaleness) {
 						u := snapshot.Usage
@@ -272,6 +272,9 @@ func newUsageRegistry(homeDir string, client *http.Client, live bool) (*Registry
 						return u, nil
 					}
 				}
+			}
+			if err := ctx.Err(); err != nil {
+				return AgentUsage{AgentID: provider}, err
 			}
 			u := fn(ctx)
 			if cached != nil && cached.Usage.hasQuotaSignal() && !u.hasQuotaSignal() {

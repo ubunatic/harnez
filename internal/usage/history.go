@@ -136,6 +136,10 @@ type HistorySummaryData struct {
 // and computes overall file stats, total tokens consumed across the recorded timespan,
 // time duration, consumption rates, and an overall sparkline.
 func HistorySummaryStats(dir string) (HistorySummaryData, error) {
+	return historySummaryStatsContext(context.Background(), dir)
+}
+
+func historySummaryStatsContext(ctx context.Context, dir string) (HistorySummaryData, error) {
 	var data HistorySummaryData
 
 	matches, err := filepath.Glob(filepath.Join(dir, "*.jsonl"))
@@ -155,7 +159,7 @@ func HistorySummaryStats(dir string) (HistorySummaryData, error) {
 		data.TotalBytes += info.Size()
 	}
 
-	entries, err := ReadHistory(dir)
+	entries, err := readHistoryContext(ctx, dir)
 	if err != nil {
 		return data, err
 	}
@@ -368,8 +372,12 @@ func appendHistoryFile(dir string, summary UsageSummary) error {
 // Malformed lines are skipped rather than failing the whole read, since a
 // history file may have been copied in mid-write from another machine.
 func ReadHistory(dir string) ([]HistoryEntry, error) {
+	return readHistoryContext(context.Background(), dir)
+}
+
+func readHistoryContext(ctx context.Context, dir string) ([]HistoryEntry, error) {
 	if filepath.Clean(dir) == filepath.Clean(HistoryDir("")) {
-		return UsageHistoryFromStore(context.Background(), "", "")
+		return UsageHistoryFromStore(ctx, "", "")
 	}
 	return readHistoryFiles(dir)
 }
@@ -420,7 +428,11 @@ func readHistoryFiles(dir string) ([]HistoryEntry, error) {
 // ever had quota-window data. ReadHistory returns entries sorted oldest
 // first, so this walks backwards to find the most recent qualifying one.
 func latestHistoryQuotaWindow(dir, agentID string) (usage AgentUsage, at time.Time, ok bool) {
-	entries, err := ReadHistory(dir)
+	return latestHistoryQuotaWindowContext(context.Background(), dir, agentID)
+}
+
+func latestHistoryQuotaWindowContext(ctx context.Context, dir, agentID string) (usage AgentUsage, at time.Time, ok bool) {
+	entries, err := readHistoryContext(ctx, dir)
 	if err != nil {
 		return AgentUsage{}, time.Time{}, false
 	}
@@ -450,10 +462,14 @@ func latestHistoryQuotaWindow(dir, agentID string) (usage AgentUsage, at time.Ti
 // usage-history/*.jsonl is a separate store from the collector-daemon cache
 // and keeps real quota data from the last time AGY actually answered.
 func fillFromHistoryIfNoQuotaWindows(historyDir string, u AgentUsage) AgentUsage {
-	if u.hasQuotaWindowSignal() {
+	return fillFromHistoryIfNoQuotaWindowsContext(context.Background(), historyDir, u)
+}
+
+func fillFromHistoryIfNoQuotaWindowsContext(ctx context.Context, historyDir string, u AgentUsage) AgentUsage {
+	if u.hasQuotaWindowSignal() || ctx.Err() != nil {
 		return u
 	}
-	hist, at, ok := latestHistoryQuotaWindow(historyDir, u.AgentID)
+	hist, at, ok := latestHistoryQuotaWindowContext(ctx, historyDir, u.AgentID)
 	if !ok {
 		return u
 	}

@@ -408,7 +408,6 @@ func newRootCmd() *cobra.Command {
 					stored, err := usage.StoreCompactSummary(ctx, "", summary)
 					if err != nil {
 						debugLog("usage compact persistence failed: %v", err)
-						stored = summary
 					}
 					usage.RenderSummaryWithUsage(stored, cmd.OutOrStdout(), usageProcesses, loadOpt)
 				} else {

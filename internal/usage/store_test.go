@@ -3,7 +3,10 @@ package usage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,6 +49,104 @@ func TestStoreCompactSummaryUnavailableFallsBack(t *testing.T) {
 	}
 	if got.Agents[0].Session == nil || got.Agents[0].Session.UsedPercent != 37 {
 		t.Fatalf("fallback summary lost current value: %+v", got)
+	}
+}
+
+func TestCompactProjectionFailureShowsEveryProviderAndLogs(t *testing.T) {
+	for _, populated := range []bool{false, true} {
+		t.Run(fmt.Sprint(populated), func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("DEBUG", "") // projection failures are always diagnostic
+			summary := UsageSummary{Timestamp: time.Now()}
+			if populated {
+				summary.Agents = []AgentUsage{{AgentID: "claude", Name: "Claude Code", Installed: true, Session: &QuotaWindow{Name: "Session", UsedPercent: 37}}}
+			}
+			blocked := filepath.Join(home, "blocked")
+			if err := os.WriteFile(blocked, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := StoreCompactSummaryAt(context.Background(), home, summary, filepath.Join(blocked, "usage.sqlite"))
+			if err == nil {
+				t.Fatal("expected projection failure")
+			}
+			if len(got.Agents) != 3 {
+				t.Fatalf("providers missing or duplicated: %+v", got.Agents)
+			}
+			rows := strings.Join(allUsageLines(got, 240, false), "\n")
+			for _, name := range []string{"Claude Code", "OpenAI Codex", "Antigravity (AGY)"} {
+				if !strings.Contains(rows, name) {
+					t.Errorf("provider %q silently dropped from %s", name, rows)
+				}
+			}
+			for _, agent := range got.Agents {
+				if agent.QuotaFetchError == "" || !agent.HasUsageData() {
+					t.Errorf("provider has no visible error: %+v", agent)
+				}
+			}
+			if !strings.Contains(rows, "unavailable (store projection failed:") {
+				t.Errorf("no error row in %s", rows)
+			}
+			log, readErr := os.ReadFile(filepath.Join(home, ".harnez", "debug.log"))
+			if readErr != nil || !strings.Contains(string(log), err.Error()) || !strings.Contains(string(log), "usage compact projection failed") {
+				t.Fatalf("missing debug diagnostic: %s, %v", log, readErr)
+			}
+			if populated && (summary.Agents[0].QuotaFetchError != "" || got.Agents[0].Session.UsedPercent != 37) {
+				t.Fatal("fallback mutated input or lost collected quota")
+			}
+		})
+	}
+}
+
+func TestHistoryImportSkipsUnchangedFilesButConsumesChanges(t *testing.T) {
+	isolateUsageTestStorage(t)
+	ctx := context.Background()
+	home := t.TempDir()
+	dir := HistoryDir(home)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "fixture.jsonl")
+	entry := HistoryEntry{Hostname: "fixture", UsageSummary: UsageSummary{Timestamp: time.Now()}}
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := usagestore.Open(filepath.Join(t.TempDir(), "store.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := importUsageSummaryHistory(store, ctx, home); err != nil {
+		t.Fatal(err)
+	}
+	// Even idempotent INSERT/UPDATE statements previously rewrote every row.
+	// A rejecting trigger proves the second read performs no history writes.
+	if err := store.Exec(ctx, `CREATE TRIGGER reject_replay BEFORE INSERT ON usage_summary_observations BEGIN SELECT RAISE(ABORT,'unexpected replay'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if err := importUsageSummaryHistory(store, ctx, home); err != nil {
+		t.Fatalf("unchanged history was replayed: %v", err)
+	}
+	if err := store.Exec(ctx, `DROP TRIGGER reject_replay`); err != nil {
+		t.Fatal(err)
+	}
+	entry.Timestamp = entry.Timestamp.Add(time.Minute)
+	more, _ := json.Marshal(entry)
+	if err := os.WriteFile(path, append(append(data, '\n'), append(more, '\n')...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := importUsageSummaryHistory(store, ctx, home); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := store.UsageSummaries(ctx)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("changed file lost or duplicated records: %d, %v", len(rows), err)
 	}
 }
 

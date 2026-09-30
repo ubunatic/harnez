@@ -2,8 +2,12 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Harnez usage collection settings",
   "type": "object",
-  "required": ["agy_meter_max_age", "collector_cadence", "collector_timeout", "passive_dedupe_interval", "statusline_busy_timeout"],
+  "required": ["agy_meter_max_age", "collector_cadence", "collector_timeout", "passive_dedupe_interval", "statusline_busy_timeout", "watch_loading_label"],
   "properties": {
+    "watch_loading_label": {
+      "type": "string",
+      "minLength": 1
+    },
     "agy_meter_max_age": {
       "type": "string",
       "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"

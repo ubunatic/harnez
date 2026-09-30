@@ -266,8 +266,12 @@ func PersistAgentSnapshot(stateDir string, agent AgentUsage, offline bool) error
 // having run yet, or not having collected this agent yet, is not an error
 // the caller has to unwrap.
 func ReadAgentSnapshot(stateDir, agentID string) (*AgentSnapshot, error) {
+	return readAgentSnapshotContext(context.Background(), stateDir, agentID)
+}
+
+func readAgentSnapshotContext(ctx context.Context, stateDir, agentID string) (*AgentSnapshot, error) {
 	if filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
-		snapshot, err := readAgentSnapshotFromStore(context.Background(), "", agentID)
+		snapshot, err := readAgentSnapshotFromStore(ctx, "", agentID)
 		if err != nil || snapshot != nil {
 			return snapshot, err
 		}
