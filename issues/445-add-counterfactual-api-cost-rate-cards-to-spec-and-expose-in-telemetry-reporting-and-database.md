@@ -1,5 +1,7 @@
 # 445 — Add counterfactual API cost rate cards to spec and expose in telemetry reporting and database
 
+> 2026-09-30 architecture note: consume normalized token observations from the canonical store described in [UsageCollection.md](../docs/UsageCollection.md).
+
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Minor

@@ -1,5 +1,7 @@
 # 160 — Feasibility: Extract `usage --watch` Layout/UI/Keyboard Into a Renderer-Agnostic Module
 
+> 2026-09-30 architecture note: this stays a reader/rendering concern and consumes the store API, never provider collectors ([UsageCollection.md](../docs/UsageCollection.md)).
+
 **Status**: Open — feasibility assessment, no implementation decision yet
 **Priority**: P2 (Medium)
 **Severity**: Minor

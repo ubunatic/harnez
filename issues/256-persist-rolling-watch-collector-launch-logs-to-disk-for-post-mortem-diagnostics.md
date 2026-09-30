@@ -1,5 +1,7 @@
 # 256 — Persist Rolling Watch & Collector Launch Logs to Disk for Post-Mortem Diagnostics
 
+> 2026-09-30 architecture note: keep diagnostics as bounded operational logs; normalized readings belong in the store plan ([UsageCollection.md](../docs/UsageCollection.md)).
+
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate (lack of persisted launch logs prevents root-cause analysis of intermittent failures across sessions)
@@ -68,4 +70,3 @@ an authoritative event log of recent launches.
 
 - **Automated**: Unit tests covering log writing, reading, and rotation in `internal/usage`.
 - **Manual Verification**: Run `harnez usage --watch`, exit, and run `harnez usage logs` to verify that startup events from the session are accurately recorded and readable.
-

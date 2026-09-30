@@ -1,5 +1,7 @@
 # 255 — Collector Resilience & Diagnostics: Startup Retries, Error Hints, and TUI Logs Overlay (`l`)
 
+> 2026-09-30 architecture note: registry observations retain source timing/error evidence under 652 ([UsageCollection.md](../docs/UsageCollection.md)).
+
 **Status**: Open — partial; bounded retries and a basic `l` diagnostics overlay are implemented, richer diagnostics remain
 **Priority**: P2 (Medium)
 **Severity**: Moderate (transient collector failure during startup splash causes false-positive failure badges and opaque errors)

@@ -1,5 +1,7 @@
 # 446 — Collect reported cost fields in agent responses and persist to telemetry database
 
+> 2026-09-30 architecture note: reported costs/tokens are source-tagged passive observations in the canonical schema ([UsageCollection.md](../docs/UsageCollection.md)).
+
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Minor

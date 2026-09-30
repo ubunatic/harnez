@@ -1,5 +1,7 @@
 # 085 — Briefly Show Agent-Collector Daemon Status in `harnez usage --watch`
 
+> 2026-09-30 architecture note: query collector freshness/provenance through the store API after 651; do not inspect cache files directly ([UsageCollection.md](../docs/UsageCollection.md)).
+
 **Status**: Open
 **Priority**: P3 (Low)
 **Severity**: Minor

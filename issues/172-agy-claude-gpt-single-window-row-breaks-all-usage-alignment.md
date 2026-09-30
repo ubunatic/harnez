@@ -1,5 +1,7 @@
 # 172 — AGY "Claude/GPT" Row Drops Its Second Window at 100%, Breaking All Usage Grid Alignment
 
+> 2026-09-30 architecture note: preserve fractional normalized windows/provenance at the store boundary before rendering ([UsageCollection.md](../docs/UsageCollection.md)).
+
 **Status**: Blocked — rendering bug (§2/§3.2) fixed; upstream AGY-CLI question (§1/§3.1) and
 n/a-placeholder design question (§3.3) remain open pending live account verification
 **Priority**: P2 (Medium)

@@ -1,5 +1,7 @@
 # 111 — Per-agent collector pipelines: independent cadence, stricter timeout, and cancellation
 
+> 2026-09-30 architecture note: this becomes collector-registry work in 652, using [UsageCollection.md](../docs/UsageCollection.md).
+
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate

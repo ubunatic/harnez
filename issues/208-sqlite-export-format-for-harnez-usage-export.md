@@ -1,5 +1,7 @@
 # 208 — SQLite Export Format for `harnez usage export`
 
+> 2026-09-30 architecture note: export the additive canonical usage schema planned in [UsageCollection.md](../docs/UsageCollection.md), not a new usage database.
+
 **Status**: Open
 **Priority**: P3 (Low)
 **Severity**: Minor

@@ -1,5 +1,7 @@
 # 161 — Collector: Absorb Remote-Load Control Host + Opt-In Prometheus Exposition
 
+> 2026-09-30 architecture note: register remote load as an active source and expose store-backed data, sequenced with 652 ([UsageCollection.md](../docs/UsageCollection.md)).
+
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Minor

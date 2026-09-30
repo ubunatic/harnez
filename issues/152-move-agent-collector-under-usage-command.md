@@ -1,5 +1,7 @@
 # 152 — Move `agent-collector` under `usage` instead of top-level
 
+> 2026-09-30 architecture note: coordinate command placement with registry milestone 652; do not create another collection path ([UsageCollection.md](../docs/UsageCollection.md)).
+
 **Status**: Open
 **Priority**: P3 (Low)
 **Severity**: Cosmetic

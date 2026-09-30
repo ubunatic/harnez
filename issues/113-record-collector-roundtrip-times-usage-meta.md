@@ -1,5 +1,7 @@
 # 113 — Record per-collector roundtrip times; expose via `harnez usage --meta`
 
+> 2026-09-30 architecture note: persist source timing as observation provenance under 652 ([UsageCollection.md](../docs/UsageCollection.md)).
+
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Minor

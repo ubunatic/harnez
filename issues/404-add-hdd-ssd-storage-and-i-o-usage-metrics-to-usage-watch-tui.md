@@ -1,5 +1,7 @@
 # 404 — Add HDD/SSD storage and I/O usage metrics to usage watch TUI
 
+> 2026-09-30 architecture note: add any active system metric through the collector registry/store path, not a watch-only collector ([UsageCollection.md](../docs/UsageCollection.md)).
+
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Minor

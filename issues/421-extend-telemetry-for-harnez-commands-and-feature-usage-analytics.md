@@ -1,5 +1,7 @@
 # 421 — Extend telemetry for Harnez commands and feature usage analytics
 
+> 2026-09-30 architecture note: extend the same additive telemetry SQLite schema chosen by [UsageCollection.md](../docs/UsageCollection.md).
+
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate

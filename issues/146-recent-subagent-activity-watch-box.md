@@ -1,5 +1,7 @@
 # 146 — Assess recent subagent activity in compact usage watch
 
+> 2026-09-30 architecture note: keep display work downstream of the shared session-usage API in milestone 654 ([UsageCollection.md](../docs/UsageCollection.md)).
+
 **Status**: Open
 **Priority**: P2 (Medium)
 **Severity**: Moderate
