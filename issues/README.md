@@ -651,6 +651,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 650 | [650-usage-collection-architecture-umbrella.md](650-usage-collection-architecture-umbrella.md) | Usage Collection Architecture Umbrella | Open |
 | 651 | [651-usage-store-read-seam-for-compact-output.md](651-usage-store-read-seam-for-compact-output.md) | Usage Store Read Seam for Compact Output | Open |
 | 652 | [652-register-active-usage-collectors.md](652-register-active-usage-collectors.md) | Register Active Usage Collectors | Open |
-| 653 | [653-ingest-passive-usage-observations.md](653-ingest-passive-usage-observations.md) | Ingest Passive Usage Observations | Draft |
+| 653 | [653-ingest-passive-usage-observations.md](653-ingest-passive-usage-observations.md) | Ingest Passive Usage Observations | Open |
 | 654 | [654-attach-token-and-quota-deltas-to-agent-turns.md](654-attach-token-and-quota-deltas-to-agent-turns.md) | Attach Token and Quota Deltas to Agent Turns | Draft |
 | 655 | [655-consolidate-legacy-usage-stores-safely.md](655-consolidate-legacy-usage-stores-safely.md) | Consolidate Legacy Usage Stores Safely | Draft |
