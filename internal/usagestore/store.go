@@ -174,7 +174,7 @@ func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 		return err
 	}
 	var completed int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name='normalized-window-keys-v3'`).Scan(&completed); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name='normalized-window-keys-v4'`).Scan(&completed); err != nil {
 		return err
 	}
 	if completed > 0 {
@@ -244,7 +244,7 @@ func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 	if err := migrateTurnDeltaWindowKeys(ctx, tx); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO usage_store_migrations(name,completed_at) VALUES('normalized-window-keys-v3',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO usage_store_migrations(name,completed_at) VALUES('normalized-window-keys-v4',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -335,18 +335,14 @@ func (s *Store) WriteCurrent(ctx context.Context, observedAt time.Time, windows 
 		if at.IsZero() {
 			at = observedAt
 		}
-		result, err := tx.ExecContext(ctx, `INSERT INTO usage_observations(provider,source,observed_at,freshness) VALUES(?,?,?,?) ON CONFLICT(provider,source,observed_at) DO UPDATE SET freshness=excluded.freshness`, w.Provider, w.Source, at.UTC().Format(time.RFC3339Nano), w.Freshness)
+		observed := at.UTC().Format(time.RFC3339Nano)
+		_, err := tx.ExecContext(ctx, `INSERT INTO usage_observations(provider,source,observed_at,freshness) VALUES(?,?,?,?) ON CONFLICT(provider,source,observed_at) DO UPDATE SET freshness=excluded.freshness`, w.Provider, w.Source, observed, w.Freshness)
 		if err != nil {
 			return fmt.Errorf("insert usage observation: %w", err)
 		}
-		id, err := result.LastInsertId()
-		if err != nil {
+		var id int64
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM usage_observations WHERE provider=? AND source=? AND observed_at=?`, w.Provider, w.Source, observed).Scan(&id); err != nil {
 			return err
-		}
-		if id == 0 {
-			if err := tx.QueryRowContext(ctx, `SELECT id FROM usage_observations WHERE provider=? AND source=? AND observed_at=?`, w.Provider, w.Source, at.UTC().Format(time.RFC3339Nano)).Scan(&id); err != nil {
-				return err
-			}
 		}
 		var reset any
 		if w.ResetAt != nil {

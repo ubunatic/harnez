@@ -35,6 +35,37 @@ func TestWriteAndCurrentIdempotentAndFractional(t *testing.T) {
 	}
 }
 
+func TestWriteCurrentUpsertLooksUpExactObservationID(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "upsert-observation.sqlite")
+	s, err := Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, query string) error { return s.Exec(ctx, query) }); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	window := Window{Provider: "claude", Key: "five_hour", Name: "5-hour", Source: "registry", Freshness: "fresh", UsedFraction: .21, ObservedAt: at}
+	if err := s.WriteCurrent(ctx, at, []Window{window}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteCurrent(ctx, at, []Window{window}); err != nil {
+		t.Fatal(err)
+	}
+	var joined, orphaned int
+	if err := s.QueryRow(ctx, `SELECT count(*) FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id`).Scan(&joined); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.QueryRow(ctx, `SELECT count(*) FROM quota_windows q LEFT JOIN usage_observations o ON o.id=q.observation_id WHERE o.id IS NULL`).Scan(&orphaned); err != nil {
+		t.Fatal(err)
+	}
+	if joined != 1 || orphaned != 0 {
+		t.Fatalf("joined rows=%d orphaned rows=%d", joined, orphaned)
+	}
+}
+
 func TestEnsureSchemaAddsTypedWindowColumnsToLegacyDatabase(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "legacy.sqlite"))
 	if err != nil {
