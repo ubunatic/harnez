@@ -3,6 +3,7 @@ package usagestore
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"path/filepath"
 	"testing"
 	"time"
@@ -131,5 +132,105 @@ func TestMigrateStableWindowKeysSeparatesStalenessFromLabel(t *testing.T) {
 	}
 	if key != "five_hour" || name != "5-Hour" || freshness != "stale" {
 		t.Fatalf("migrated window=%q name=%q freshness=%q", key, name, freshness)
+	}
+}
+
+func TestTurnQuotaBoundaryPairsOnlyOrderedNonResetWindows(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "turns.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, q string) error { return s.Exec(ctx, q) }); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	reset := start.Add(5 * time.Hour)
+	for _, item := range []struct {
+		boundary string
+		at       time.Time
+		used     float64
+		reset    *time.Time
+	}{
+		{boundary: "before", at: start, used: .21, reset: &reset},
+		{boundary: "after", at: start.Add(time.Minute), used: .33, reset: &reset},
+	} {
+		_, err := s.WriteTurnQuotaBoundary(ctx, TurnQuotaBoundary{
+			SessionID: "session-1", Turn: 1, Boundary: item.boundary, Provider: "claude", CapturedAt: item.at,
+			Windows: []Window{{Provider: "claude", Source: "claude-api", Freshness: "fresh", Pool: "", Key: "five_hour", Name: "5-hour", UsedFraction: item.used, ResetAt: item.reset, ObservedAt: item.at}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.PairTurnQuotaDeltas(ctx, "session-1", 1, "claude"); err != nil {
+		t.Fatal(err)
+	}
+	deltas, err := s.TurnQuotaDeltas(ctx, "session-1", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(deltas) != 1 || deltas[0].WindowKey != "five_hour" || math.Abs(deltas[0].Delta-.12) > 1e-9 || deltas[0].BeforeSource != "claude-api" || deltas[0].AfterSource != "claude-api" {
+		t.Fatalf("paired deltas = %+v", deltas)
+	}
+
+	newReset := reset.Add(5 * time.Hour)
+	for _, item := range []struct {
+		boundary string
+		at       time.Time
+		used     float64
+		reset    *time.Time
+	}{
+		{boundary: "before", at: start.Add(2 * time.Minute), used: .9, reset: &reset},
+		{boundary: "after", at: start.Add(3 * time.Minute), used: .1, reset: &newReset},
+	} {
+		_, err := s.WriteTurnQuotaBoundary(ctx, TurnQuotaBoundary{
+			SessionID: "session-1", Turn: 2, Boundary: item.boundary, Provider: "claude", CapturedAt: item.at,
+			Windows: []Window{{Provider: "claude", Source: "claude-api", Freshness: "fresh", Key: "five_hour", Name: "5-hour", UsedFraction: item.used, ResetAt: item.reset, ObservedAt: item.at}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.PairTurnQuotaDeltas(ctx, "session-1", 2, "claude"); err != nil {
+		t.Fatal(err)
+	}
+	deltas, err = s.TurnQuotaDeltas(ctx, "session-1", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(deltas) != 0 {
+		t.Fatalf("reset-crossing deltas = %+v, want none", deltas)
+	}
+}
+
+func TestWriteTurnTokenUsageStoresDimensionsAndQuality(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "tokens.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, q string) error { return s.Exec(ctx, q) }); err != nil {
+		t.Fatal(err)
+	}
+	input, cached, output := int64(41), int64(12), int64(7)
+	err = s.WriteTurnTokenUsage(ctx, TurnTokenUsage{
+		SessionID: "session-1", Turn: 2, Provider: "codex", CounterKind: "delta",
+		InputTokens: &input, CachedInputTokens: &cached, OutputTokens: &output,
+		InputQuality: "measured", CachedInputQuality: "measured", OutputQuality: "measured", ReasoningQuality: "unknown",
+		ObservedAt: time.Date(2026, 9, 30, 12, 5, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotInput, gotCached, gotOutput int64
+	var inputQuality, reasoningQuality string
+	if err := s.QueryRow(ctx, `SELECT input_tokens,cached_input_tokens,output_tokens,input_quality,reasoning_quality FROM turn_token_usage WHERE session_id='session-1' AND turn=2 AND counter_kind='delta'`).Scan(&gotInput, &gotCached, &gotOutput, &inputQuality, &reasoningQuality); err != nil {
+		t.Fatal(err)
+	}
+	if gotInput != input || gotCached != cached || gotOutput != output || inputQuality != "measured" || reasoningQuality != "unknown" {
+		t.Fatalf("token row = input %d cached %d output %d qualities %q/%q", gotInput, gotCached, gotOutput, inputQuality, reasoningQuality)
 	}
 }
