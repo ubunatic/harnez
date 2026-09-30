@@ -530,21 +530,10 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 				if !subagent.CanManage(parent(), x) {
 					continue
 				}
-				if x.HarnessType == "interactive" {
-					if x.Status != "active" {
-						continue
-					}
-					if e = subagent.SendControl(cmd.Context(), x.ControlSocket, "stop", ""); e != nil {
-						return e
-					}
-					x.Status = "stopped"
-				} else {
-					if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Stop(cmd.Context(), x.ProviderID()); e != nil {
-						return e
-					}
-					x.Status = "stopped"
+				if x.HarnessType == "interactive" && x.Status != "active" {
+					continue
 				}
-				if e = s.Save(x); e != nil {
+				if e = stopSession(cmd, s, x); e != nil {
 					return e
 				}
 			}
@@ -553,22 +542,12 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if children && len(a) == 0 {
 			xs, _ := s.List(parent(), false)
 			for _, x := range xs {
-				if x.HarnessType == "interactive" {
-					if x.Status != "active" {
-						continue
-					}
-					if e = subagent.SendControl(cmd.Context(), x.ControlSocket, "stop", ""); e != nil {
-						return e
-					}
-					x.Status = "stopped"
-					_ = s.Save(x)
+				if x.HarnessType == "interactive" && x.Status != "active" {
 					continue
 				}
-				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Stop(cmd.Context(), x.ProviderID()); e != nil {
+				if e = stopSession(cmd, s, x); e != nil {
 					return e
 				}
-				x.Status = "stopped"
-				_ = s.Save(x)
 			}
 			return nil
 		}

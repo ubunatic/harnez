@@ -79,7 +79,7 @@ func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error
 		return d.Command(ctx, "codex", args...)
 	}
 	c := exec.CommandContext(ctx, "codex", args...)
-	return c.Output()
+	return providerOutput(ctx, c)
 }
 func (d CodexDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 	start := time.Now()
@@ -377,6 +377,11 @@ func startProcess(ctx context.Context, name string, args ...string) (io.Reader, 
 	var stderr bytes.Buffer
 	c.Stderr = &stderr
 	if err := c.Start(); err != nil {
+		return nil, nil, err
+	}
+	if err := observeProcess(ctx, c); err != nil {
+		_ = KillGroup(c.Process.Pid, syscall.SIGKILL)
+		_ = c.Wait()
 		return nil, nil, err
 	}
 	return out, func() error {

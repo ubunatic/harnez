@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -158,6 +159,7 @@ func launchForegroundWorker(cmd *cobra.Command, store *subagent.FileSessionStore
 	}
 	sess.Status = "running"
 	sess.ProcessPID = worker.Process.Pid
+	sess.ProcessStarttime = procs.ProcessStarttime(sess.ProcessPID)
 	if err := store.Save(sess); err != nil {
 		_ = worker.Process.Kill()
 		_ = worker.Wait()
@@ -296,6 +298,7 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	}
 	go func() { _ = worker.Wait() }()
 	sess.ProcessPID = worker.Process.Pid
+	sess.ProcessStarttime = procs.ProcessStarttime(sess.ProcessPID)
 	if err := store.Save(sess); err != nil {
 		_ = worker.Process.Kill()
 		_ = worker.Wait()
@@ -414,10 +417,26 @@ func waitForAgent(ctx context.Context, store *subagent.FileSessionStore, identif
 		if err != nil {
 			return nil, err
 		}
-		if sess.Status != "running" && (sess.ProcessPID <= 0 || !processExists(sess.ProcessPID)) {
+		writers, err := sessionWriters(sess)
+		if err != nil {
+			return nil, fmt.Errorf("check session writer: %w", err)
+		}
+		wrapperExists := sess.ProcessPID > 0 && processExists(sess.ProcessPID)
+		if len(writers) == 0 && !wrapperExists {
+			// The worker may publish its final result while /proc is scanned.
+			// Re-read before returning or replacing a running record as stale.
+			current, err := store.Get(sess.ID)
+			if err != nil {
+				return nil, err
+			}
+			if current.Status != sess.Status || current.ProcessPID != sess.ProcessPID || current.ProviderPID != sess.ProviderPID {
+				continue
+			}
+		}
+		if sess.Status != "running" && len(writers) == 0 && !wrapperExists {
 			return sess, nil
 		}
-		if sess.Status == "running" && sess.ProcessPID > 0 && !processExists(sess.ProcessPID) {
+		if sess.Status == "running" && sess.ProcessPID > 0 && len(writers) == 0 && !wrapperExists {
 			sess.Status = "failed"
 			sess.ProcessPID = 0
 			sess.LastActiveAt = time.Now()

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/creack/pty"
@@ -283,7 +284,7 @@ func serveControls(listener net.Listener, terminal io.Writer, process *os.Proces
 				}
 			case "stop":
 				if process != nil {
-					err = process.Signal(os.Interrupt)
+					err = process.Signal(syscall.SIGTERM)
 				}
 			default:
 				err = fmt.Errorf("unknown control action %q", request.Action)

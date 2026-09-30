@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 	"ubunatic.com/harnez"
@@ -19,6 +20,26 @@ type agentSpec struct {
 	ModelsLegend string                `yaml:"models_legend"`
 	Models       map[string]modelAlias `yaml:"models"`
 	Roles        map[string]RoleSpec   `yaml:"roles"`
+	Stop         StopSpec              `yaml:"stop"`
+}
+
+// StopSpec defines bounded agent shutdown in milliseconds.
+type StopSpec struct {
+	GraceMS    int `yaml:"grace_ms"`
+	KillWaitMS int `yaml:"kill_wait_ms"`
+	PollMS     int `yaml:"poll_ms"`
+}
+
+// StopBounds returns embedded shutdown timings.
+func StopBounds() (time.Duration, time.Duration, time.Duration, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	if spec.Stop.GraceMS <= 0 || spec.Stop.KillWaitMS <= 0 || spec.Stop.PollMS <= 0 {
+		return 0, 0, 0, fmt.Errorf("agent spec: positive stop bounds required")
+	}
+	return time.Duration(spec.Stop.GraceMS) * time.Millisecond, time.Duration(spec.Stop.KillWaitMS) * time.Millisecond, time.Duration(spec.Stop.PollMS) * time.Millisecond, nil
 }
 
 // RoleSpec is one entry of the roles table in spec/agent.yaml.

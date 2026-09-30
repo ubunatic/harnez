@@ -49,7 +49,7 @@ func TestLinuxProcReaderParsesStatAndUID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(processes) != 1 || processes[0] != (ProcInfo{PID: 321, PGID: 321, UID: 1001, UIDKnown: true, State: "T", Starttime: 987654}) {
+	if len(processes) != 1 || processes[0] != (ProcInfo{PID: 321, PPID: 1, PGID: 321, UID: 1001, UIDKnown: true, State: "T", Starttime: 987654}) {
 		t.Fatalf("processes = %+v; want parsed stopped process", processes)
 	}
 }

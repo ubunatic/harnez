@@ -26,6 +26,9 @@ type Session struct {
 	ParentSessionID      string `json:"parent_session_id,omitempty"`
 	CallerPID            int    `json:"caller_pid"`
 	ProcessPID           int    `json:"process_pid,omitempty"`
+	ProcessStarttime     uint64 `json:"process_starttime,omitempty"`
+	ProviderPID          int    `json:"provider_pid,omitempty"`
+	ProviderStarttime    uint64 `json:"provider_starttime,omitempty"`
 	ControlSocket        string `json:"control_socket,omitempty"`
 	HarnessType          string `json:"harness_type"`
 	Status               string `json:"status"`

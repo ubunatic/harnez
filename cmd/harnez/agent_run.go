@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
@@ -461,11 +462,14 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	}
 	if req.SessionID == "" {
 		reserved := initialSession("running")
+		reserved.ProcessPID = os.Getpid()
+		reserved.ProcessStarttime = procs.ProcessStarttime(reserved.ProcessPID)
 		if err := s.Create(reserved); err != nil {
 			return err
 		}
 		id = reserved.ID
 	}
+	defer observeSessionProcess(cmd, s, id, nil)()
 	driver := withAgyMeterSession(baseDriver, id)
 	sd, streaming := driver.(subagent.StreamingDriver)
 	streaming = streaming && !req.JSON
@@ -535,6 +539,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 					}
 					sess.ProviderSessionID = providerSessionID
 					sess.Status = "stopped"
+					sess.ProcessPID, sess.ProcessStarttime = 0, 0
 					sess.LastError = "runtime token watchdog interrupted the active turn"
 					sess.LastActiveAt = now
 					sess.Turn = turn
@@ -561,6 +566,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 			}
 			sess.ProviderSessionID = firstNonEmpty(sess.ProviderSessionID, observedSessionID)
 			sess.Status = "failed"
+			sess.ProcessPID, sess.ProcessStarttime = 0, 0
 			sess.LastError = err.Error()
 			sess.LastActiveAt = time.Now()
 			if saveErr := s.Save(sess); saveErr != nil {
@@ -581,9 +587,13 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	now := time.Now()
 	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}}}
 	persistAgentTurnTokens(d.dbPath, sess, r, now)
+	if current, getErr := s.Get(reservedID); getErr == nil {
+		sess.ProviderPID, sess.ProviderStarttime = current.ProviderPID, current.ProviderStarttime
+	}
 	if req.SessionID != "" {
 		if current, getErr := s.Get(req.SessionID); getErr == nil {
 			sess.ProcessPID = current.ProcessPID
+			sess.ProcessStarttime = current.ProcessStarttime
 			sess.StdoutLog = current.StdoutLog
 			sess.StderrLog = current.StderrLog
 			sess.CallerPID = current.CallerPID
@@ -634,10 +644,16 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if err != nil {
 		return err
 	}
-	if sess.Status == "running" && req.SessionID == "" {
-		if sess.ProcessPID > 0 && processExists(sess.ProcessPID) {
-			return fmt.Errorf("session %q already has a resume turn running (PID %d); wait for it to finish before resuming", sess.Name, sess.ProcessPID)
+	if req.SessionID == "" && (sess.HarnessType != "interactive" || sess.Status != "active") {
+		writers, err := sessionWriters(sess)
+		if err != nil {
+			return fmt.Errorf("check session writer: %w", err)
 		}
+		if len(writers) > 0 {
+			return fmt.Errorf("session %q already has a resume turn running (PID %d); writer is still alive; stop it or run `harnez agent wait --name %s` before resuming", sess.Name, writers[0].PID, sess.Name)
+		}
+	}
+	if sess.Status == "running" && req.SessionID == "" {
 		sess.Status = "failed"
 		sess.ProcessPID = 0
 		sess.LastError = "previous resume process is no longer running; treating session as stale"
@@ -652,6 +668,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if sess.CodexQuarantine != nil {
 		return fmt.Errorf("session %q is quarantined: %s; start a fresh session with harnez agent start --name", sess.Name, sess.CodexQuarantine.Reason)
 	}
+	defer observeSessionProcess(cmd, s, sess.ID, sess)()
 	if sess.Provider == "codex" && sess.CodexQuotaResumePending && d.availability != nil && d.availability(sess.Provider, sess.Model).State == "exhausted" {
 		return fmt.Errorf("session %q is waiting for Codex quota recovery; resume once quota is available", sess.Name)
 	}
@@ -760,6 +777,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if req.SessionID == "" {
 		sess.Status = "running"
 		sess.ProcessPID = os.Getpid()
+		sess.ProcessStarttime = procs.ProcessStarttime(sess.ProcessPID)
 		sess.LastActiveAt = time.Now()
 		if err := s.Save(sess); err != nil {
 			return fmt.Errorf("could not persist running state for session %q: %w", sess.Name, err)
@@ -926,26 +944,6 @@ func withAgyMeterSession(driver subagent.Driver, sessionID string) subagent.Driv
 	default:
 		return driver
 	}
-}
-
-func stopSession(cmd *cobra.Command, s *subagent.FileSessionStore, x *subagent.Session) error {
-	if x.HarnessType == "interactive" {
-		if x.Status != "active" {
-			return fmt.Errorf("session %q is not active", x.Name)
-		}
-		if err := subagent.SendControl(cmd.Context(), x.ControlSocket, "stop", ""); err != nil {
-			return err
-		}
-		x.Status = "stopped"
-		x.LastActiveAt = time.Now()
-		return s.Save(x)
-	}
-	err := agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Stop(cmd.Context(), x.ProviderID())
-	x.Status = "stopped"
-	if err == nil {
-		err = s.Save(x)
-	}
-	return err
 }
 
 func statusSession(cmd *cobra.Command, x *subagent.Session, jsonOut bool) error {

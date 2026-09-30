@@ -17,6 +17,7 @@ const defaultGracePeriod = time.Second
 // ProcInfo contains the fields needed to validate and classify a process.
 type ProcInfo struct {
 	PID       int
+	PPID      int
 	PGID      int
 	UID       uint32
 	UIDKnown  bool
@@ -85,11 +86,15 @@ func parseStat(pid int, stat string) (ProcInfo, bool) {
 	if err != nil {
 		return ProcInfo{}, false
 	}
+	ppid, err := strconv.Atoi(fields[1])
+	if err != nil {
+		return ProcInfo{}, false
+	}
 	starttime, err := strconv.ParseUint(fields[19], 10, 64)
 	if err != nil {
 		return ProcInfo{}, false
 	}
-	return ProcInfo{PID: pid, PGID: pgid, State: fields[0], Starttime: starttime}, true
+	return ProcInfo{PID: pid, PPID: ppid, PGID: pgid, State: fields[0], Starttime: starttime}, true
 }
 
 func parseUID(status string) (uint32, bool) {

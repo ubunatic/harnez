@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"ubunatic.com/harnez/internal/procs"
 	"ubunatic.com/harnez/internal/subagent"
 )
 
@@ -144,6 +145,13 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 	if sess.Status == "running" {
 		return fmt.Errorf("session %q has a background turn running; use harnez agent wait %s before resuming interactively", sess.Name, sess.Name)
 	}
+	writers, err := sessionWriters(sess)
+	if err != nil {
+		return fmt.Errorf("check session writer: %w", err)
+	}
+	if len(writers) > 0 {
+		return fmt.Errorf("session %q has a writer still alive (PID %d); stop it or run `harnez agent wait --name %s` before resuming interactively", sess.Name, writers[0].PID, sess.Name)
+	}
 	if sess.ProviderSessionID == "" {
 		return fmt.Errorf("session %q cannot be resumed: %s did not expose a provider session ID", sess.Name, sess.Provider)
 	}
@@ -168,6 +176,7 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 func interactiveOptions(cmd *cobra.Command, store *subagent.FileSessionStore, sess *subagent.Session, storeDir, prompt string) subagent.InteractiveOptions {
 	return subagent.InteractiveOptions{Model: subagent.Model{Provider: sess.Provider, Name: sess.Model, Tier: sess.Tier}, Prompt: prompt, SessionID: sess.ID, Name: sess.Name, Dir: sess.WorkingDir, Stdin: cmd.InOrStdin(), Stdout: cmd.OutOrStdout(), Stderr: cmd.ErrOrStderr(), ControlSocket: filepath.Join(storeDir, sess.ID+".sock"), Started: func(pid int) error {
 		sess.ProcessPID = pid
+		sess.ProcessStarttime = procs.ProcessStarttime(pid)
 		return store.Save(sess)
 	}, ProviderIDFound: func(providerID string) error {
 		current, err := store.Get(sess.ID)

@@ -21,7 +21,7 @@ func (d ClaudeDriver) command(ctx context.Context, args ...string) ([]byte, erro
 	}
 	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir = d.Dir
-	b, err := cmd.Output()
+	b, err := providerOutput(ctx, cmd)
 	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
 		return b, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
 	}

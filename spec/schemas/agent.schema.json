@@ -1,8 +1,18 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["default_model", "default_role", "models", "roles"],
+  "required": ["default_model", "default_role", "models", "roles", "stop"],
   "properties": {
+    "stop": {
+      "type": "object",
+      "required": ["grace_ms", "kill_wait_ms", "poll_ms"],
+      "properties": {
+        "grace_ms": { "type": "integer", "minimum": 1 },
+        "kill_wait_ms": { "type": "integer", "minimum": 1 },
+        "poll_ms": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
     "default_model": { "type": "string", "minLength": 1 },
     "default_role": { "type": "string", "minLength": 1 },
     "models_legend": { "type": "string" },

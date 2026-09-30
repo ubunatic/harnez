@@ -877,7 +877,13 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 			_ = conn.Close()
 		}
 	}()
-	sess := &subagent.Session{ID: "active-id", ProviderSessionID: "provider-id", Name: "active", Provider: "claude", Model: "haiku", HarnessType: "interactive", Status: "active", ControlSocket: socket, ProcessPID: 123, ContextTokens: 100, Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}}
+	// The socket is mocked; use an exited PID instead of a literal that could
+	// belong to an unrelated real process during stop's ownership checks.
+	exited := exec.Command("true")
+	if err := exited.Run(); err != nil {
+		t.Fatal(err)
+	}
+	sess := &subagent.Session{ID: "active-id", ProviderSessionID: "provider-id", Name: "active", Provider: "claude", Model: "haiku", HarnessType: "interactive", Status: "active", ControlSocket: socket, ProcessPID: exited.Process.Pid, ContextTokens: 100, Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}}
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}

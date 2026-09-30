@@ -1,6 +1,10 @@
 # yaml-language-server: $schema=schemas/agent.schema.json
 # Agent model and role defaults are part of the application artifact.
 default_model: codex:luna:low
+stop:
+  grace_ms: 1000
+  kill_wait_ms: 2000
+  poll_ms: 25
 
 # Listing guidance for `harnez agent models` (legend printed below the table):
 #   cost   plan-quota cost per typical turn, luna = 1, astra = 100 (share
