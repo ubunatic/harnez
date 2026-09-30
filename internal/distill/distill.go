@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -55,91 +56,143 @@ var (
 // keeping failure blocks, panics, build errors, and package summary lines.
 func FilterGoTest(r io.Reader) string {
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), 10*1024*1024)
+	scanner.Buffer(nil, 10*1024*1024)
 
-	var out []string
-	var pending []string
+	var out strings.Builder
+	if sr, ok := r.(*strings.Reader); ok {
+		out.Grow(sr.Len())
+	}
+
+	var pending [][]byte
+
+	writeLine := func(b []byte) {
+		if out.Len() > 0 {
+			out.WriteByte('\n')
+		}
+		out.Write(b)
+	}
+
+	addPending := func(b []byte) {
+		idx := len(pending)
+		if idx < cap(pending) {
+			pending = pending[:idx+1]
+			pending[idx] = append(pending[idx][:0], b...)
+		} else {
+			pending = append(pending, bytes.Clone(b))
+		}
+	}
+
 	for scanner.Scan() {
 		lineBytes := scanner.Bytes()
 		trimmedBytes := bytes.TrimSpace(lineBytes)
 
 		switch {
 		case bytes.HasPrefix(trimmedBytes, prefixRun):
-			pending = append(pending[:0], string(lineBytes))
+			pending = pending[:0]
+			addPending(lineBytes)
 		case bytes.HasPrefix(trimmedBytes, prefixPass) || bytes.HasPrefix(trimmedBytes, prefixSkip):
-			pending = nil
+			pending = pending[:0]
 		case bytes.HasPrefix(trimmedBytes, prefixFail):
-			lineStr := string(lineBytes)
-			pending = append(pending, lineStr)
-			out = append(out, pending...)
-			pending = nil
+			addPending(lineBytes)
+			for _, p := range pending {
+				writeLine(p)
+			}
+			pending = pending[:0]
 		case bytes.HasPrefix(lineBytes, prefixOk) || bytes.HasPrefix(lineBytes, prefixPkgFail) || bytes.HasPrefix(lineBytes, prefixPkgPass):
-			out = append(out, string(lineBytes))
+			writeLine(lineBytes)
 		default:
-			if pending != nil {
-				pending = append(pending, string(lineBytes))
+			if len(pending) > 0 {
+				addPending(lineBytes)
 			} else {
-				out = append(out, string(lineBytes))
+				writeLine(lineBytes)
 			}
 		}
 	}
-	out = append(out, pending...)
-	return strings.Join(out, "\n")
+	for _, p := range pending {
+		writeLine(p)
+	}
+	return out.String()
 }
+
+var (
+	prefixUntracked = []byte("Untracked files:")
+	prefixUse       = []byte("(use ")
+)
 
 // FilterGit condenses `git status` output, collapsing long untracked-file
 // listings into a single count line.
 func FilterGit(r io.Reader) string {
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), 10*1024*1024)
+	scanner.Buffer(nil, 10*1024*1024)
 
-	var out []string
-	var untracked []string
+	var out strings.Builder
+	if sr, ok := r.(*strings.Reader); ok {
+		out.Grow(sr.Len())
+	}
+
+	untrackedCount := 0
 	inUntracked := false
 
+	writeLine := func(b []byte) {
+		if out.Len() > 0 {
+			out.WriteByte('\n')
+		}
+		out.Write(b)
+	}
+
 	flushUntracked := func() {
-		if len(untracked) > 0 {
-			out = append(out, fmt.Sprintf("  [%d untracked files omitted]", len(untracked)))
-			untracked = nil
+		if untrackedCount > 0 {
+			if out.Len() > 0 {
+				out.WriteByte('\n')
+			}
+			out.WriteString("  [")
+			var numBuf [20]byte
+			out.Write(strconv.AppendInt(numBuf[:0], int64(untrackedCount), 10))
+			out.WriteString(" untracked files omitted]")
+			untrackedCount = 0
 		}
 	}
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
+		lineBytes := scanner.Bytes()
+		trimmedBytes := bytes.TrimSpace(lineBytes)
 
-		if strings.HasPrefix(trimmed, "Untracked files:") {
+		if bytes.HasPrefix(trimmedBytes, prefixUntracked) {
 			inUntracked = true
-			out = append(out, line)
+			writeLine(lineBytes)
 			continue
 		}
 		if inUntracked {
 			switch {
-			case trimmed == "":
+			case len(trimmedBytes) == 0:
 				flushUntracked()
 				inUntracked = false
-				out = append(out, line)
-			case strings.HasPrefix(trimmed, "(use "):
-				out = append(out, line)
+				writeLine(lineBytes)
+			case bytes.HasPrefix(trimmedBytes, prefixUse):
+				writeLine(lineBytes)
 			default:
-				untracked = append(untracked, line)
+				untrackedCount++
 			}
 			continue
 		}
-		out = append(out, line)
+		writeLine(lineBytes)
 	}
 	flushUntracked()
-	return strings.Join(out, "\n")
+	return out.String()
 }
 
 // FilterDeduplicate collapses runs of identical consecutive lines into a
 // single "[xN] <line>" entry.
 func FilterDeduplicate(r io.Reader) string {
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 64*1024), 10*1024*1024)
+	scanner.Buffer(nil, 10*1024*1024)
 
-	var out []string
-	var prev string
+	var out strings.Builder
+	if sr, ok := r.(*strings.Reader); ok {
+		out.Grow(sr.Len())
+	}
+
+	var prevBytes []byte
 	count := 0
 	seen := false
 
@@ -147,26 +200,31 @@ func FilterDeduplicate(r io.Reader) string {
 		if count == 0 {
 			return
 		}
-		if count == 1 {
-			out = append(out, prev)
-		} else {
-			out = append(out, fmt.Sprintf("[x%d] %s", count, prev))
+		if out.Len() > 0 {
+			out.WriteByte('\n')
 		}
+		if count > 1 {
+			out.WriteString("[x")
+			var numBuf [20]byte
+			out.Write(strconv.AppendInt(numBuf[:0], int64(count), 10))
+			out.WriteString("] ")
+		}
+		out.Write(prevBytes)
 	}
 
 	for scanner.Scan() {
-		line := scanner.Text()
-		if seen && line == prev {
+		lineBytes := scanner.Bytes()
+		if seen && bytes.Equal(lineBytes, prevBytes) {
 			count++
 			continue
 		}
 		flush()
-		prev = line
+		prevBytes = append(prevBytes[:0], lineBytes...)
 		count = 1
 		seen = true
 	}
 	flush()
-	return strings.Join(out, "\n")
+	return out.String()
 }
 
 // FilterHeadTail truncates lines beyond maxLines, keeping the first and last
@@ -284,7 +342,9 @@ func Distill(input string, opts Options) string {
 		s = FilterDeduplicate(strings.NewReader(s))
 	}
 	if opts.MaxLines > 0 {
-		s = FilterHeadTail(strings.Split(s, "\n"), opts.MaxLines)
+		if strings.Count(s, "\n")+1 > opts.MaxLines {
+			s = FilterHeadTail(strings.Split(s, "\n"), opts.MaxLines)
+		}
 	}
 	if opts.MaxBytes > 0 {
 		s = FilterHeadTailBytes(s, opts.MaxBytes)
