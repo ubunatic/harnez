@@ -63,3 +63,27 @@ wakes the host) and not in the **host/machine background** (`--detach`, shell `&
 to the session, so the host can only find out by polling). Use these two terms in the skills, the
 `AgenticLoop.md` source and `harnez agent start --help`, with the per-host mapping from §2.1.
 Polling a worker's status or log is only allowed for a host that has no session-background facility.
+
+## 5. User requirement 2026-09-30: no vague wording, name the tools
+
+The instructions must tell every agent plainly: **there is no external event system that will notify
+you. You, the host agent, are the system.** Completion only reaches you through your own native
+background facility. Forbidden: vague phrases such as "wait for the event", "you will be notified",
+"return control", "poll/query the subagent".
+
+Each host gets its own short block with the exact tool name, the exact parameter, and numbered steps:
+
+1. Start the worker with your native background tool (table below), foreground form of
+   `harnez agent start ...` / `harnez agent resume ...`, never `--detach`, `&` or `nohup`.
+2. Tell the user the job id and the `harnez agent list` name, then end your turn or do other work.
+3. When the tool re-invokes you on exit, read the job output once and review.
+4. Never check status or logs in a loop while the job runs.
+
+| Host | Tool and parameter | How completion reaches the host |
+|---|---|---|
+| Claude Code | `Bash` with `run_in_background: true` (optionally `Monitor` for progress lines) | task-notification on exit |
+| AGY | `run_command` run in the background (exact parameter to verify against AGY's tool list) | to verify |
+| Codex | background exec session (exact tool name to verify) | to verify |
+
+The two "to verify" rows must be filled from the hosts' real tool lists (canary probe, see `docs/Canary.md`)
+before closing; do not guess tool names.
