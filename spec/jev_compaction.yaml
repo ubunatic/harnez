@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=schemas/jev_compaction.schema.json
+auto_trigger_percent: 60
+minimum_reduction_percent: 25
+pinned_recent_messages: 5
+process_timeout_seconds: 180
+max_transcript_bytes: 1048576

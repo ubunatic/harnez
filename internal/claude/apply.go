@@ -1107,6 +1107,14 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 		addStat("settings", strings.Join(keys, ", "))
 	}
 	printResult("wrote", settingsPath, sr)
+	jevResult, err := applyJevCompactionPlugin(target, cfg.JevCompactionEnabled, cfg.Env["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] != "")
+	if err != nil {
+		return fmt.Errorf("jev compaction plugin: %w", err)
+	}
+	if jevResult.changed {
+		changes++
+	}
+	printResult("managed", filepath.Join(target, "plugins", "cache", jevMarketplaceName, jevPluginName), jevResult)
 
 	disableRateFeedback := RateFeedbackDisabled(cfg, nil)
 

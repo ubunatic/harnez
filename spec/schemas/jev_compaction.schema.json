@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Harnez Claude Jev Compaction",
+  "type": "object",
+  "required": [
+    "auto_trigger_percent",
+    "minimum_reduction_percent",
+    "pinned_recent_messages",
+    "process_timeout_seconds",
+    "max_transcript_bytes"
+  ],
+  "properties": {
+    "auto_trigger_percent": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "minimum_reduction_percent": { "type": "integer", "minimum": 1, "maximum": 100 },
+    "pinned_recent_messages": { "type": "integer", "minimum": 0 },
+    "process_timeout_seconds": { "type": "integer", "minimum": 1 },
+    "max_transcript_bytes": { "type": "integer", "minimum": 1024 }
+  },
+  "additionalProperties": false
+}

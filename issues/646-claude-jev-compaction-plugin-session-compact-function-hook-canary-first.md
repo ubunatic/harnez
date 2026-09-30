@@ -91,13 +91,38 @@ Pre-Work / Required Refinements:
   `node:child_process` as a module.
 
 ### M2 gate passed (host, 2026-09-30) — Pre-Work for the build
-- Bridge: `$.process.run([...])` only. No fetch, no Node modules, `$` must be spelled
-  `$.noun.event(...)` at every call site (no aliasing, no enumeration).
-- Unknown and to check first: whether `$.process.run` takes stdin and how large its args/output
-  may be. Prefer passing a small handle (session id / transcript path from the event or `$`) and
-  let `harnez compact` read the session JSONL itself; return compact JSON on stdout.
-- The hook module must stay trivially small and loader-conformant; all logic (thresholds from
-  `spec/`, jev calls, fallback decision) lives in Go.
+- Bridge: `$.process.run([...])` only. No fetch, Node modules, or shell globals; `$` must be
+  spelled `$.noun.event(...)` at each call site (no aliasing or enumeration).
+- The `session.compact` event has keys `trigger` and `messages`. Each message has `role`, `text`,
+  `toolUses`, and `handle`; `handle` is a string UUID. No session ID or transcript path is
+  available, so the hook sends the event messages to `harnez compact` over stdin.
+- Pre-work run round-tripped 1 MiB through `$.process.run(['harnez','read','-'], {stdin})` with
+  exit code 0, exact content after the CLI newline, and `isStdoutTruncated: false`. This confirms
+  1 MiB works; it does not establish the runtime's maximum size.
+- This clears the bridge gate. The live M2 run passed 667,780 JSON bytes through stdin and got
+  740,864 stdout characters from Harnez without truncation.
+
+### M2 delivered (2026-09-30)
+- Added embedded Claude plugin assets and an opt-in `jev_compaction_enabled` setting in
+  `config.yaml`. `harnez apply` writes marketplace and cache files, enables the plugin and
+  `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`, preserves unrelated settings, and removes its plugin files
+  and metadata when disabled. Repeated apply is idempotent.
+- Compaction thresholds, pinned recent messages, timeout, and transcript limit are embedded from
+  `spec/jev_compaction.yaml`, validated against `spec/schemas/jev_compaction.schema.json`, and
+  rendered into the embedded hook. The hook maps `text` to JSONL `content`, moves nested tool
+  outputs into Harnez tool records, then maps compacted outputs back by message and tool index.
+  It calls builtin `next(event)` and logs the reason on errors, output truncation, or insufficient
+  reduction.
+- **Live canary PASS**: `bash canary/646-session-compact/m2-run.sh`, Claude Code 2.1.285, Haiku,
+  isolated apply target and plugin directory. The hook ran `harnez compact` and returned its
+  replacement with a 41.1% JSON-byte reduction (667,780 → 393,146); no fallback was logged.
+  Claude's manual compact boundary recorded `preTokens: 26292`, `postTokens: 10632`, confirming
+  the real replacement affected session history. Session
+  `815458d8-1002-4304-ba5d-f0ab00cf9928`.
+- `make test-q1` was run once in a clean detached worktree and `grep` found a failure in the new
+  embed test because it checked Go-tree assets in the repository-wide FS. The assertion now uses
+  the plugin package's embedded FS. Per Quota-1, the suite was not rerun after that correction;
+  the committed test correction is therefore unverified by a second suite run.
 
 ## Other agents (moved from 644)
 - agy: harnez's jev compaction could rewrite agy session data on disk. Canary: does agy accept a

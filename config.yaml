@@ -283,6 +283,9 @@ distill_autopipe:
 # See issues/095.
 status_line: true
 
+# Opt in to the embedded Jev session compaction plugin on global `apply`.
+jev_compaction_enabled: false
+
 commands:
   - name: standup
     description: "Summarize today's git activity"

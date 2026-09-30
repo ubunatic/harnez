@@ -1,0 +1,6 @@
+{
+  "name": "jev-compaction",
+  "description": "Compacts Claude Code session messages with harnez compact.",
+  "version": "{{VERSION}}",
+  "author": { "name": "Harnez" }
+}

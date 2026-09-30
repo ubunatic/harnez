@@ -1,0 +1,7 @@
+{
+  "name": "harnez-local",
+  "owner": { "name": "Harnez" },
+  "plugins": [
+    { "name": "jev-compaction", "source": "./plugins/jev-compaction" }
+  ]
+}

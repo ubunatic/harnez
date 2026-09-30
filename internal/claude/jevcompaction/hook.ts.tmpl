@@ -1,0 +1,140 @@
+const AUTO_TRIGGER_PERCENT = {{AUTO_TRIGGER_PERCENT}};
+const MINIMUM_REDUCTION_PERCENT = {{MINIMUM_REDUCTION_PERCENT}};
+const PINNED_RECENT_MESSAGES = {{PINNED_RECENT_MESSAGES}};
+const PROCESS_TIMEOUT_MS = {{PROCESS_TIMEOUT_MS}};
+const MAX_TRANSCRIPT_BYTES = {{MAX_TRANSCRIPT_BYTES}};
+
+let compacting = false;
+
+const firstValue = (object: any, keys: string[]) => {
+  for (const key of keys) {
+    if (object?.[key] !== undefined && object?.[key] !== null) return [key, object[key]];
+  }
+  return ['', undefined];
+};
+
+const toolOutputText = (value: any) => typeof value === 'string' ? value : JSON.stringify(value);
+
+export const register = (on: any) => {
+  on('turn.complete', async ($: any, event: any, next: any) => {
+    if (compacting) return next(event);
+    try {
+      const usage = await $.session.usage();
+      const percent = usage?.context?.percent;
+      if (typeof percent !== 'number' || percent < AUTO_TRIGGER_PERCENT) return next(event);
+      compacting = true;
+      await $.session.compact();
+      return;
+    } catch (error) {
+      $.ui.log(`harnez compaction auto-trigger failed: ${String(error)}`);
+      return next(event);
+    } finally {
+      compacting = false;
+    }
+  });
+
+  on('session.compact', async ($: any, event: any, next: any) => {
+    const fallback = (reason: string) => {
+      $.ui.log(`harnez compaction fallback: ${reason}`);
+      return next(event);
+    };
+    try {
+      if (!Array.isArray(event?.messages) || event.messages.length === 0) return fallback('no session messages');
+      const before = JSON.stringify(event.messages);
+      const beforeBytes = new TextEncoder().encode(before).length;
+      if (beforeBytes > MAX_TRANSCRIPT_BYTES) return fallback(`transcript exceeds ${MAX_TRANSCRIPT_BYTES} byte limit (${beforeBytes})`);
+      const rows: any[] = [];
+      for (let messageIndex = 0; messageIndex < event.messages.length; messageIndex++) {
+        const message = event.messages[messageIndex];
+        rows.push({
+          ...message,
+          toolUses: [],
+          content: typeof message.text === 'string' ? message.text : '',
+          _jevKind: 'message',
+          _jevMessageIndex: messageIndex,
+        });
+        const toolUses = Array.isArray(message.toolUses) ? message.toolUses : [];
+        for (let toolIndex = 0; toolIndex < toolUses.length; toolIndex++) {
+          const tool = toolUses[toolIndex];
+          const [idKey, idValue] = firstValue(tool, ['id', 'toolUseId', 'tool_use_id', 'callId']);
+          const [nameKey, nameValue] = firstValue(tool, ['name', 'toolName', 'tool_name']);
+          const [inputKey, inputValue] = firstValue(tool, ['input', 'toolInput', 'tool_input', 'parameters']);
+          const [outputKey, outputValue] = firstValue(tool, ['output', 'result', 'content', 'text']);
+          const output = toolOutputText(outputValue);
+          if (!output) continue;
+          rows.push({
+            role: 'tool',
+            content: output,
+            tool_output: output,
+            tool_name: nameValue ?? String(nameKey || 'tool'),
+            tool_input: inputValue,
+            tool_call_id: idValue ?? `${messageIndex}:${toolIndex}`,
+            _jevKind: 'tool',
+            _jevMessageIndex: messageIndex,
+            _jevToolIndex: toolIndex,
+            _jevOutputKey: outputKey,
+            _jevIdKey: idKey,
+            _jevNameKey: nameKey,
+            _jevInputKey: inputKey,
+          });
+        }
+      }
+      const input = rows.map((message: any) => JSON.stringify(message)).join('\n') + '\n';
+      $.ui.log(`harnez compact bridge: ${event.messages.length} messages, ${rows.length - event.messages.length} tool-use results, ${beforeBytes} input JSON bytes`);
+      const command = await $.process.run([
+        'harnez', 'compact', '--transcript', '-', '--format', 'jsonl',
+        '--pin-recent', String(PINNED_RECENT_MESSAGES),
+      ], { stdin: input, timeout: PROCESS_TIMEOUT_MS });
+      if (command.exitCode !== 0) return fallback(`harnez compact exited ${command.exitCode}: ${(command.stderr ?? '').slice(0, 500)}`);
+      if (command.isStdoutTruncated) return fallback('harnez compact output was truncated');
+      const lines = (command.stdout ?? '').split(/\r?\n/).filter((line: string) => line.length > 0);
+      const parsed = lines.map((line: string) => {
+        const message = JSON.parse(line);
+        if (typeof message.content === 'string') {
+          if (message._jevKind === 'tool') message.tool_output = message.content;
+          else message.text = message.content;
+        }
+        return message;
+      });
+      if (parsed.length === 0) return fallback('harnez compact returned no messages');
+      const compacted: any[] = [];
+      const toolOutputUpdates = new Map<string, string>();
+      const mappedMessages = event.messages.map((message: any) => ({
+        ...message,
+        toolUses: Array.isArray(message.toolUses) ? message.toolUses.map((tool: any) => ({ ...tool })) : message.toolUses,
+      }));
+      for (const message of parsed) {
+        if (message._jevKind === 'tool') {
+          toolOutputUpdates.set(`${message._jevMessageIndex}:${message._jevToolIndex}`, message.tool_output ?? '');
+        }
+      }
+      for (const message of parsed) {
+        if (message._jevKind === 'tool') {
+          continue;
+        }
+        if (message._jevKind === 'message') {
+          const original = mappedMessages[message._jevMessageIndex];
+          if (Array.isArray(original.toolUses)) {
+            original.toolUses.forEach((tool: any, toolIndex: number) => {
+              const update = toolOutputUpdates.get(`${message._jevMessageIndex}:${toolIndex}`);
+              if (update === undefined) return;
+              const outputKey = firstValue(tool, ['output', 'result', 'content', 'text'])[0];
+              if (outputKey) tool[outputKey] = update;
+            });
+          }
+          const mapped = { ...original, text: message.text };
+          delete mapped.content;
+          compacted.push(mapped);
+        }
+      }
+      if (compacted.length === 0) return fallback('harnez compact returned no session messages');
+      const afterBytes = new TextEncoder().encode(JSON.stringify(compacted)).length;
+      const reduction = beforeBytes === 0 ? 0 : (beforeBytes - afterBytes) * 100 / beforeBytes;
+      if (reduction < MINIMUM_REDUCTION_PERCENT) return fallback(`reduction ${reduction.toFixed(1)}% below ${MINIMUM_REDUCTION_PERCENT}% minimum`);
+      $.ui.log(`harnez compaction applied: messages ${event.messages.length} → ${compacted.length}, JSON bytes ${beforeBytes} → ${afterBytes}, reduction ${reduction.toFixed(1)}%`);
+      return { messages: compacted };
+    } catch (error) {
+      return fallback(String(error));
+    }
+  });
+};
