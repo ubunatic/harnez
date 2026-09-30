@@ -1,6 +1,6 @@
 # 664 — Reintroduce optional --splash flag for harnez usage --watch
 
-**Status**: Open
+**Status**: Closed — Optional --splash flag added for harnez usage --watch with clean terminal restoration and test coverage
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
