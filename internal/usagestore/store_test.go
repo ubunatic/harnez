@@ -135,6 +135,89 @@ func TestMigrateStableWindowKeysSeparatesStalenessFromLabel(t *testing.T) {
 	}
 }
 
+func TestNormalizeWindowKeyHandlesLegacyProviderAliasesAndPools(t *testing.T) {
+	for _, item := range []struct {
+		provider, pool, name, want string
+	}{
+		{"claude", "", "5h", "five_hour"},
+		{"claude", "", "five_hour_limit_remaining", "five_hour"},
+		{"codex", "", "7-day limit remaining", "weekly"},
+		{"agy", "Gemini Models", "Weekly Limit Remaining", "weekly"},
+		{"agy", "Claude and GPT models", "5h", "five_hour"},
+		{"claude", "", "Spend Limit", "spend_limit"},
+		{"codex", "", "cumulative", "cumulative"},
+	} {
+		if got := NormalizeWindowKey(item.provider, item.pool, item.name); got != item.want {
+			t.Errorf("NormalizeWindowKey(%q, %q, %q) = %q, want %q", item.provider, item.pool, item.name, got, item.want)
+		}
+	}
+}
+
+func TestMigrateStableWindowKeysArchivesCollisionsAndPreservesOriginal(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "legacy-keys.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, q string) error { return s.Exec(ctx, q) }); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	if err := s.Exec(ctx, `INSERT INTO usage_observations(provider,source,observed_at,freshness) VALUES('agy','legacy','`+at+`','fresh')`); err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range []struct {
+		key, name string
+	}{
+		{"5h", "5h"},
+		{"five_hour_limit_remaining", "Five Hour Limit Remaining"},
+	} {
+		if err := s.Exec(ctx, `INSERT INTO quota_windows(observation_id,provider,pool,window_key,window_name,used_fraction) VALUES(1,'agy','Gemini Models',?,?,0.25)`, row.key, row.name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Exec(ctx, `INSERT INTO usage_observations(provider,source,observed_at,freshness) VALUES('codex','legacy','`+at+`','fresh')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Exec(ctx, `INSERT INTO quota_windows(observation_id,provider,pool,window_key,window_name,used_fraction) VALUES(2,'codex','', 'weekly_limit_remaining','7-day limit remaining',0.5)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MigrateStableWindowKeys(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := s.QueryRow(ctx, `SELECT count(*) FROM quota_windows WHERE window_key IN ('5h','five_hour_limit_remaining','weekly_limit_remaining') OR window_key LIKE '%_duplicate_%'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("legacy keys remain in reader table: %d", count)
+	}
+	var fiveKey, fiveLegacy string
+	if err := s.QueryRow(ctx, `SELECT window_key,legacy_window_key FROM quota_windows WHERE provider='agy'`).Scan(&fiveKey, &fiveLegacy); err != nil {
+		t.Fatal(err)
+	}
+	if fiveKey != "five_hour" || fiveLegacy != "5h" {
+		t.Fatalf("five-hour key provenance = %q / %q", fiveKey, fiveLegacy)
+	}
+	if err := s.QueryRow(ctx, `SELECT count(*) FROM usage_window_key_migration_archive WHERE original_window_key='five_hour_limit_remaining'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("archived collision count = %d, want 1", count)
+	}
+	var weeklyKey, weeklyName string
+	if err := s.QueryRow(ctx, `SELECT window_key,window_name FROM quota_windows WHERE provider='codex'`).Scan(&weeklyKey, &weeklyName); err != nil {
+		t.Fatal(err)
+	}
+	if weeklyKey != "weekly" || weeklyName != "7-day limit remaining" {
+		t.Fatalf("weekly key/name = %q / %q", weeklyKey, weeklyName)
+	}
+	if err := s.MigrateStableWindowKeys(ctx); err != nil {
+		t.Fatalf("second migration call: %v", err)
+	}
+}
+
 func TestTurnQuotaBoundaryPairsOnlyOrderedNonResetWindows(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "turns.sqlite"))
 	if err != nil {

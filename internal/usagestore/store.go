@@ -101,8 +101,10 @@ func (s *Store) QueryRow(ctx context.Context, query string, args ...any) *sql.Ro
 	return s.db.QueryRowContext(ctx, query, args...)
 }
 
-// MigrateStableWindowKeys rewrites legacy display-label keys once and keeps
-// stale state on the observation freshness column.
+// MigrateStableWindowKeys canonicalizes provider window aliases while
+// retaining each previous key. Rows that collapse onto the same observation,
+// pool, and canonical key are copied to an archive table before the duplicate
+// is removed from reader-facing tables.
 func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -113,27 +115,33 @@ func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 		return err
 	}
 	var completed int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name='stable-window-keys-v1'`).Scan(&completed); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name='normalized-window-keys-v2'`).Scan(&completed); err != nil {
 		return err
 	}
 	if completed > 0 {
 		return tx.Commit()
 	}
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS usage_window_key_migration_archive (id INTEGER PRIMARY KEY, observation_id INTEGER NOT NULL, provider TEXT NOT NULL, pool TEXT NOT NULL, original_window_key TEXT NOT NULL, window_name TEXT NOT NULL, used_fraction REAL NOT NULL, input_tokens INTEGER, cached_input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, reset_at TEXT)`); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `UPDATE usage_observations SET freshness='stale' WHERE id IN (SELECT observation_id FROM quota_windows WHERE lower(window_name) LIKE '%(stale)%')`); err != nil {
 		return err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id,provider,pool,window_key,window_name,observation_id FROM quota_windows ORDER BY id`)
+	rows, err := tx.QueryContext(ctx, `SELECT id,observation_id,provider,pool,window_key,window_name,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at FROM quota_windows ORDER BY id`)
 	if err != nil {
 		return err
 	}
 	type row struct {
-		id, observationID         int64
-		provider, pool, key, name string
+		id, observationID                int64
+		provider, pool, key, name        string
+		used                             float64
+		input, cached, output, reasoning sql.NullInt64
+		reset                            sql.NullString
 	}
 	var records []row
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.provider, &r.pool, &r.key, &r.name, &r.observationID); err != nil {
+		if err := rows.Scan(&r.id, &r.observationID, &r.provider, &r.pool, &r.key, &r.name, &r.used, &r.input, &r.cached, &r.output, &r.reasoning, &r.reset); err != nil {
 			rows.Close()
 			return err
 		}
@@ -147,26 +155,108 @@ func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 		return err
 	}
 	for _, r := range records {
-		key := NormalizeWindowKey(r.provider, r.pool, r.name)
-		name := strings.TrimSpace(strings.ReplaceAll(r.name, " (stale)", ""))
+		name := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(r.name, " (stale)", ""), " (STALE)", ""))
+		label := r.name
+		if strings.TrimSpace(label) == "" {
+			label = r.key
+		}
+		key := NormalizeWindowKey(r.provider, r.pool, label)
 		if key == r.key && name == r.name {
 			continue
 		}
-		var duplicate int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM quota_windows WHERE observation_id=? AND pool=? AND window_key=? AND id<>?`, r.observationID, r.pool, key, r.id).Scan(&duplicate); err != nil {
+		var duplicate int64
+		err := tx.QueryRowContext(ctx, `SELECT id FROM quota_windows WHERE observation_id=? AND pool=? AND window_key=? AND id<>?`, r.observationID, r.pool, key, r.id).Scan(&duplicate)
+		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
-		if duplicate > 0 {
-			key += fmt.Sprintf("_duplicate_%d", r.id)
+		if err == nil {
+			if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO usage_window_key_migration_archive(id,observation_id,provider,pool,original_window_key,window_name,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, r.id, r.observationID, r.provider, r.pool, r.key, r.name, r.used, nullIntArg(r.input), nullIntArg(r.cached), nullIntArg(r.output), nullIntArg(r.reasoning), nullStringArg(r.reset)); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM quota_windows WHERE id=?`, r.id); err != nil {
+				return err
+			}
+			continue
 		}
-		if _, err := tx.ExecContext(ctx, `UPDATE quota_windows SET window_key=?,window_name=? WHERE id=?`, key, name, r.id); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE quota_windows SET window_key=?,window_name=?,legacy_window_key=CASE WHEN window_key<>? AND legacy_window_key='' THEN window_key ELSE legacy_window_key END WHERE id=?`, key, name, key, r.id); err != nil {
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO usage_store_migrations(name,completed_at) VALUES('stable-window-keys-v1',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+	if err := migrateTurnDeltaWindowKeys(ctx, tx); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO usage_store_migrations(name,completed_at) VALUES('normalized-window-keys-v2',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+func migrateTurnDeltaWindowKeys(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS turn_quota_delta_key_migration_archive AS SELECT * FROM turn_quota_deltas WHERE 0`); err != nil {
+		return err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT id,provider,pool,window_key FROM turn_quota_deltas ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	type deltaKey struct {
+		id                  int64
+		provider, pool, key string
+	}
+	var records []deltaKey
+	for rows.Next() {
+		var row deltaKey
+		if err := rows.Scan(&row.id, &row.provider, &row.pool, &row.key); err != nil {
+			rows.Close()
+			return err
+		}
+		records = append(records, row)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, row := range records {
+		key := NormalizeWindowKey(row.provider, row.pool, row.key)
+		if key == row.key {
+			continue
+		}
+		var duplicate int64
+		err := tx.QueryRowContext(ctx, `SELECT id FROM turn_quota_deltas WHERE session_id=(SELECT session_id FROM turn_quota_deltas WHERE id=?) AND turn=(SELECT turn FROM turn_quota_deltas WHERE id=?) AND provider=? AND pool=? AND window_key=? AND id<>?`, row.id, row.id, row.provider, row.pool, key, row.id).Scan(&duplicate)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		if err == nil {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO turn_quota_delta_key_migration_archive SELECT * FROM turn_quota_deltas WHERE id=?`, row.id); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM turn_quota_deltas WHERE id=?`, row.id); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE turn_quota_deltas SET window_key=?,legacy_window_key=? WHERE id=?`, key, row.key, row.id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func nullIntArg(value sql.NullInt64) any {
+	if !value.Valid {
+		return nil
+	}
+	return value.Int64
+}
+
+func nullStringArg(value sql.NullString) any {
+	if !value.Valid {
+		return nil
+	}
+	return value.String
 }
 
 // WriteCurrent appends a normalized observation for each provider returned by
@@ -178,6 +268,10 @@ func (s *Store) WriteCurrent(ctx context.Context, observedAt time.Time, windows 
 	}
 	defer tx.Rollback()
 	for _, w := range windows {
+		if w.Name == "" {
+			w.Name = w.Key
+		}
+		w.Key = NormalizeWindowKey(w.Provider, w.Pool, w.Name)
 		at := w.ObservedAt
 		if at.IsZero() {
 			at = observedAt
@@ -289,9 +383,10 @@ func (s *Store) WriteTurnQuotaBoundary(ctx context.Context, boundary TurnQuotaBo
 		if w.Provider == "" {
 			w.Provider = boundary.Provider
 		}
-		if w.Key == "" {
-			w.Key = NormalizeWindowKey(w.Provider, "", w.Name)
+		if w.Name == "" {
+			w.Name = w.Key
 		}
+		w.Key = NormalizeWindowKey(w.Provider, w.Pool, w.Name)
 		if w.ObservedAt.IsZero() {
 			w.ObservedAt = boundary.CapturedAt
 		}
@@ -665,15 +760,17 @@ func (s *Store) CurrentFor(ctx context.Context, provider string) ([]Window, erro
 // NormalizeWindowKey maps display labels to stable machine-readable keys.
 func NormalizeWindowKey(provider, pool, name string) string {
 	name = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(name, " (stale)", "")))
-	if pool == "" {
-		switch {
-		case strings.Contains(name, "week"), strings.Contains(name, "7-day"), strings.Contains(name, "7 day"):
-			return "weekly"
-		case strings.Contains(name, "5-hour"), strings.Contains(name, "5 hour"), strings.Contains(name, "session"):
-			return "five_hour"
-		case strings.Contains(name, "spend"):
-			return "spend_limit"
-		}
+	name = strings.TrimSuffix(name, "_limit_remaining")
+	name = strings.TrimSuffix(name, " limit remaining")
+	name = strings.TrimSuffix(name, "-limit-remaining")
+	compact := strings.NewReplacer("_", "", "-", "", " ", "").Replace(name)
+	switch {
+	case strings.Contains(name, "week"), strings.Contains(name, "7-day"), strings.Contains(name, "7 day"), strings.Contains(compact, "7d"), strings.Contains(compact, "sevenday"):
+		return "weekly"
+	case strings.Contains(name, "5-hour"), strings.Contains(name, "5 hour"), strings.Contains(compact, "fivehour"), strings.Contains(compact, "5h"), strings.Contains(name, "session"):
+		return "five_hour"
+	case strings.Contains(name, "spend"):
+		return "spend_limit"
 	}
 	var key strings.Builder
 	separator := false
@@ -753,6 +850,12 @@ func EnsureSchema(ctx context.Context, exec func(context.Context, string) error)
 		if err := exec(ctx, `ALTER TABLE quota_windows ADD COLUMN `+column+` INTEGER`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
 			return err
 		}
+	}
+	if err := exec(ctx, `ALTER TABLE quota_windows ADD COLUMN legacy_window_key TEXT NOT NULL DEFAULT ''`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+		return err
+	}
+	if err := exec(ctx, `ALTER TABLE turn_quota_deltas ADD COLUMN legacy_window_key TEXT NOT NULL DEFAULT ''`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+		return err
 	}
 	if err := exec(ctx, `ALTER TABLE usage_observations ADD COLUMN turn_boundary_id INTEGER REFERENCES turn_quota_boundaries(id)`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
 		return err
