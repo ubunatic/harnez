@@ -547,7 +547,7 @@ func newRootCmd() *cobra.Command {
 	}
 
 	historyCmd.AddCommand(historyTimelineCmd, historyFetchCmd, historyRecordCmd, historyStatsCmd)
-	usageCmd.AddCommand(historyCmd, newUsageExportCmd())
+	usageCmd.AddCommand(historyCmd, newUsageExportCmd(), newUsageArchiveCmd())
 
 	var collectorInterval time.Duration
 	var collectorOnce bool
