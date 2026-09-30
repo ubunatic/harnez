@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -355,15 +357,69 @@ func TestBuildAllUsageBox(t *testing.T) {
 	// internal/rograph/options.go). Bar glyphs are Braille (issue 220's
 	// default style): ⣿ full, ⡇ half.
 	want := []string{
-		"Gemini        [⣿⣿⣿⡇] 93% 2d8h   [    ] 3% 4h58m",
-		"Claude/GPT    [⣿   ] 35% 6d2h   [    ] 0% 4h58m",
 		"Claude Code   [⣿⣿⣿ ] 85% 8h51m  [    ] 9% 4h51m",
 		"OpenAI Codex  [⣿⡇  ] 39% 5d9h   [    ] 0% 4h59m",
+		"Claude/GPT    [⣿   ] 35% 6d2h   [    ] 0% 4h58m",
+		"Gemini        [⣿⣿⣿⡇] 93% 2d8h   [    ] 3% 4h58m",
 	}
 	for i := range want {
 		if got := stripANSI(box.lines[i]); got != want[i] {
 			t.Errorf("line %d = %q, want %q", i, got, want[i])
 		}
+	}
+}
+
+func TestAllUsageLinesStableOrderFromShuffledInput(t *testing.T) {
+	now := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	windows := []QuotaWindow{{Name: "Weekly", UsedPercent: 25}}
+	for _, groupedProviders := range []bool{false, true} {
+		t.Run(fmt.Sprintf("groupedProviders=%t", groupedProviders), func(t *testing.T) {
+			agents := []AgentUsage{
+				{AgentID: "agy", Name: "Antigravity", Installed: true, Authenticated: true,
+					ModelGroups: []ModelGroup{
+						{Name: "Gemini Models", Windows: windows},
+						{Name: "Zeta", Windows: windows},
+						{Name: "Claude and GPT models", Windows: windows},
+					}},
+				{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true, Weekly: &windows[0]},
+				{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true, Weekly: &windows[0]},
+			}
+			if groupedProviders {
+				for i := 1; i < len(agents); i++ {
+					agents[i].Weekly = nil
+					agents[i].ModelGroups = []ModelGroup{{Name: agents[i].Name, Windows: windows}}
+				}
+			}
+			rng := rand.New(rand.NewSource(42))
+			var baseline []string
+			want := []string{"Claude Code", "OpenAI Codex", "Claude/GPT", "Gemini", "Zeta"}
+			for iteration := 0; iteration < 100; iteration++ {
+				rng.Shuffle(len(agents), func(i, j int) { agents[i], agents[j] = agents[j], agents[i] })
+				before := append([]AgentUsage(nil), agents...)
+				for i := range agents {
+					groups := agents[i].ModelGroups
+					rng.Shuffle(len(groups), func(i, j int) { groups[i], groups[j] = groups[j], groups[i] })
+					before[i].ModelGroups = append([]ModelGroup(nil), groups...)
+				}
+				lines := allUsageLinesAt(UsageSummary{Agents: agents}, 100, false, now, time.Minute)
+				if len(lines) != len(want) {
+					t.Fatalf("iteration %d: got %d rows, want %d", iteration, len(lines), len(want))
+				}
+				for i, label := range want {
+					if !strings.HasPrefix(stripANSI(lines[i]), label+" ") {
+						t.Fatalf("iteration %d: row %d = %q, want %s", iteration, i, stripANSI(lines[i]), label)
+					}
+				}
+				if baseline == nil {
+					baseline = lines
+				} else if !reflect.DeepEqual(lines, baseline) {
+					t.Fatalf("iteration %d: rendered output changed", iteration)
+				}
+				if !reflect.DeepEqual(agents, before) {
+					t.Fatalf("iteration %d: rendering mutated the input", iteration)
+				}
+			}
+		})
 	}
 }
 
@@ -408,8 +464,8 @@ func TestBuildAllUsageBox_StaleAndHistoricalAgents(t *testing.T) {
 		t.Fatalf("expected 2 all-usage rows including historical AGY, got %d: %v", len(box.lines), box.lines)
 	}
 
-	stripped0 := stripANSI(box.lines[0])
-	stripped1 := stripANSI(box.lines[1])
+	stripped0 := stripANSI(box.lines[1])
+	stripped1 := stripANSI(box.lines[0])
 
 	if !strings.HasPrefix(stripped0, "Gemini") || !strings.Contains(stripped0, "86%") || !strings.Contains(stripped0, "12%") {
 		t.Errorf("expected Gemini row for historical AGY data, got %q", stripped0)
@@ -440,7 +496,7 @@ func TestAllUsageLinesRetainOldAGYModelGroups(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("allUsageLinesAt returned %d rows, want both model groups: %v", len(lines), lines)
 	}
-	for i, want := range []string{"Gemini", "Claude/GPT"} {
+	for i, want := range []string{"Claude/GPT", "Gemini"} {
 		got := stripANSI(lines[i])
 		if !strings.HasPrefix(got, want) {
 			t.Errorf("row %d = %q, want %s group", i, got, want)
@@ -2643,9 +2699,9 @@ func TestAllUsageLinesAtDimsStaleAgentRow(t *testing.T) {
 		t.Fatalf("expected 2 rows, got %d: %v", len(lines), lines)
 	}
 
-	agyLine, claudeLine := lines[0], lines[1]
+	agyLine, claudeLine := lines[1], lines[0]
 	if !strings.HasPrefix(stripANSI(agyLine), "Antigravity") {
-		t.Fatalf("expected first row to be Antigravity, got %q", stripANSI(agyLine))
+		t.Fatalf("expected second row to be Antigravity, got %q", stripANSI(agyLine))
 	}
 	if !strings.Contains(agyLine, ansiOpen("dim-grey")) {
 		t.Errorf("expected the stale Antigravity row to be dim-grey wrapped, got %q", agyLine)

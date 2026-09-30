@@ -243,7 +243,7 @@ func TestCollectAGYFailedQueryFallsBackToResetMeterQuota(t *testing.T) {
 		t.Fatalf("meter fallback = %+v, want expired Gemini and active Claude/GPT", got.ModelGroups)
 	}
 	lines := allUsageLinesAt(UsageSummary{Agents: []AgentUsage{got}}, 100, false, now, time.Minute)
-	if len(lines) != 2 || !strings.Contains(stripANSI(lines[0]), "0%") {
+	if len(lines) != 2 || !strings.HasPrefix(stripANSI(lines[1]), "Gemini") || !strings.Contains(stripANSI(lines[1]), "0%") {
 		t.Fatalf("compact rows = %v, want expired Gemini rendered at 0%% used", lines)
 	}
 	for _, line := range lines {

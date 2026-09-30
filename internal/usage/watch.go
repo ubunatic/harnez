@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -758,7 +759,28 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 
 	var rows []allUsageRow
 	labelWidth := 0
-	for _, agent := range summary.Agents {
+	// Store projections may arrive in map order. Sort copies so rendering
+	// has a stable provider/pool order without mutating the shared summary.
+	providerOrder := func(id string) int {
+		switch id {
+		case "claude":
+			return 0
+		case "codex":
+			return 1
+		case "agy":
+			return 2
+		default:
+			return 3
+		}
+	}
+	agents := slices.Clone(summary.Agents)
+	slices.SortStableFunc(agents, func(a, b AgentUsage) int {
+		if order := providerOrder(a.AgentID) - providerOrder(b.AgentID); order != 0 {
+			return order
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	for _, agent := range agents {
 		if !agent.HasUsageData() {
 			continue
 		}
@@ -775,7 +797,11 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 			} else if agent.Error != "" {
 				labelSuffix = " unavailable (" + agent.Error + ")"
 			}
-			for _, mg := range agent.ModelGroups {
+			groups := slices.Clone(agent.ModelGroups)
+			slices.SortStableFunc(groups, func(a, b ModelGroup) int {
+				return strings.Compare(a.Name, b.Name)
+			})
+			for _, mg := range groups {
 				label := mg.Name
 				if strings.EqualFold(label, "Gemini Models") {
 					label = "Gemini"
