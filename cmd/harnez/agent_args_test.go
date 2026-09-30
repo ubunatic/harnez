@@ -138,9 +138,9 @@ func TestAgentDeleteAllCompletedContinuesOnFailure(t *testing.T) {
 
 	now := time.Now()
 	sessions := []*subagent.Session{
-		{ID: "s1", Name: "success", Provider: "codex", Model: "luna", Status: "completed", CreatedAt: now, LastActiveAt: now, WorkingDir: "."},
-		{ID: "s2", Name: "fail", Provider: "codex", Model: "luna", Status: "completed", CreatedAt: now, LastActiveAt: now, WorkingDir: ".", ProviderSessionID: "550e8400-e29b-41d4-a716-446655440000"},
-		{ID: "s3", Name: "also-success", Provider: "codex", Model: "luna", Status: "completed", CreatedAt: now, LastActiveAt: now, WorkingDir: "."},
+		{ID: "s1", Name: "success", Provider: "codex", Model: "luna", Status: "completed", CreatedAt: now, LastActiveAt: now, WorkingDir: ".", Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}},
+		{ID: "s2", Name: "fail", Provider: "codex", Model: "luna", Status: "completed", CreatedAt: now, LastActiveAt: now, WorkingDir: ".", ProviderSessionID: "550e8400-e29b-41d4-a716-446655440000", Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}},
+		{ID: "s3", Name: "also-success", Provider: "codex", Model: "luna", Status: "completed", CreatedAt: now, LastActiveAt: now, WorkingDir: ".", Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}},
 	}
 	for _, sess := range sessions {
 		if err := store.Create(sess); err != nil {

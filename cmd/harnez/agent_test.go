@@ -25,6 +25,8 @@ import (
 	"ubunatic.com/harnez/internal/usage"
 )
 
+func testRatingPtr(rating int) *int { return &rating }
+
 func TestAgentCommandSurface(t *testing.T) {
 	c := newAgentCmd()
 	if len(c.Commands()) == 0 {
@@ -874,7 +876,7 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 			_ = conn.Close()
 		}
 	}()
-	sess := &subagent.Session{ID: "active-id", ProviderSessionID: "provider-id", Name: "active", Provider: "claude", Model: "haiku", HarnessType: "interactive", Status: "active", ControlSocket: socket, ProcessPID: 123, ContextTokens: 100}
+	sess := &subagent.Session{ID: "active-id", ProviderSessionID: "provider-id", Name: "active", Provider: "claude", Model: "haiku", HarnessType: "interactive", Status: "active", ControlSocket: socket, ProcessPID: 123, ContextTokens: 100, Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}}
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
@@ -907,7 +909,7 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 	if _, err := store.Find("active"); err == nil {
 		t.Fatal("completed/stopped interactive registry metadata was not deleted")
 	}
-	completed := &subagent.Session{ID: "completed-id", Name: "completed", Provider: "agy", Model: "gemini-3.7-flash", HarnessType: "interactive", Status: "completed"}
+	completed := &subagent.Session{ID: "completed-id", Name: "completed", Provider: "agy", Model: "gemini-3.7-flash", HarnessType: "interactive", Status: "completed", Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}}
 	if err := store.Save(completed); err != nil {
 		t.Fatal(err)
 	}
@@ -1632,8 +1634,8 @@ func TestAgentDeleteAllCompleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, sess := range []*subagent.Session{
-		{ID: "completed1", Name: "done1", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller"},
-		{ID: "completed2", Name: "done2", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller"},
+		{ID: "completed1", Name: "done1", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller", Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}},
+		{ID: "completed2", Name: "done2", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller", Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}},
 		{ID: "running", Name: "active", Provider: "codex", Model: "model", Status: "active", HarnessType: "batch", ParentSessionID: "caller"},
 	} {
 		if err := store.Save(sess); err != nil {
@@ -3343,6 +3345,66 @@ func TestRateLatestSessionTurnCreatesRecordForPreM1Session(t *testing.T) {
 	}
 	if len(loaded.TurnRecords) != 1 || loaded.TurnRecords[0].Turn != 2 || loaded.TurnRecords[0].Rating == nil || *loaded.TurnRecords[0].Rating != 4 {
 		t.Fatalf("legacy session turn records = %+v", loaded.TurnRecords)
+	}
+}
+
+func TestAgentDeleteWarnsAndProtectsUnratedSessions(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		rated      bool
+		force      bool
+		wantDelete bool
+		wantWarn   bool
+	}{
+		{name: "rated", rated: true, wantDelete: true},
+		{name: "unrated", wantWarn: true},
+		{name: "forced", force: true, wantDelete: true, wantWarn: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			storeDir := t.TempDir()
+			store, err := subagent.NewSessionStore(storeDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sess := &subagent.Session{ID: "session-" + tc.name, Name: "worker", Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1}}, HarnessType: "interactive", Status: "completed"}
+			if tc.rated {
+				rating := 4
+				sess.TurnRecords[0].Rating = &rating
+			}
+			if err := store.Save(sess); err != nil {
+				t.Fatal(err)
+			}
+			out, stderr := new(bytes.Buffer), new(bytes.Buffer)
+			cmd := newAgentCmd()
+			cmd.SetOut(out)
+			cmd.SetErr(stderr)
+			args := []string{"delete", "--name", "worker", "--store-dir", storeDir}
+			if tc.force {
+				args = append(args, "--force")
+			}
+			cmd.SetArgs(args)
+			err = cmd.Execute()
+			if tc.wantDelete && err != nil {
+				t.Fatalf("delete error = %v", err)
+			}
+			if !tc.wantDelete && err == nil {
+				t.Fatal("unrated session deletion succeeded without --force")
+			}
+			if got := stderr.String(); tc.wantWarn {
+				if !strings.Contains(got, `session "worker" has an unrated latest turn`) || !strings.Contains(got, `harnez agent rate --name worker <1-5> "<reason>"`) {
+					t.Fatalf("warning = %q", got)
+				}
+			} else if got != "" {
+				t.Fatalf("rated deletion warning = %q", got)
+			}
+			_, findErr := store.Get(sess.ID)
+			if tc.wantDelete && findErr == nil {
+				t.Fatal("session remains after successful deletion")
+			}
+			if !tc.wantDelete && findErr != nil {
+				t.Fatalf("refused session was deleted: %v", findErr)
+			}
+		})
 	}
 }
 

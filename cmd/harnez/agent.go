@@ -581,7 +581,14 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	stop.Flags().BoolVar(&children, "children", false, "stop child sessions")
 	stop.Flags().BoolVar(&all, "all", false, "stop all manageable sessions")
 	stop.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
-	var allCompleted bool
+	var allCompleted, force bool
+	warnUnrated := func(cmd *cobra.Command, x *subagent.Session) bool {
+		if sessionLatestTurnRated(x) {
+			return false
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: session %q has an unrated latest turn; rate it with: harnez agent rate --name %s <1-5> \"<reason>\"\n", x.Name, x.Name)
+		return true
+	}
 	remove := &cobra.Command{Use: "delete", Short: "Delete an agent session", Aliases: []string{"rm"}, Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
 		if e != nil {
@@ -602,6 +609,10 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 					continue
 				}
 				if x.Status != "completed" {
+					continue
+				}
+				if warnUnrated(cmd, x) && !force {
+					failures = append(failures, fmt.Errorf("%s: refusing to delete unrated session without --force", x.Name))
 					continue
 				}
 				if x.HarnessType == "interactive" {
@@ -641,6 +652,10 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			var failures []error
 			for _, x := range xs {
 				if !subagent.CanManage(parent(), x) {
+					continue
+				}
+				if warnUnrated(cmd, x) && !force {
+					failures = append(failures, fmt.Errorf("%s: refusing to delete unrated session without --force", x.Name))
 					continue
 				}
 				if x.HarnessType == "interactive" {
@@ -683,6 +698,9 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if !subagent.CanManage(parent(), x) {
 			return fmt.Errorf("session %q is outside caller lineage", x.ID)
 		}
+		if warnUnrated(cmd, x) && !force {
+			return fmt.Errorf("delete: refusing to delete unrated session %q without --force", x.Name)
+		}
 		if x.HarnessType == "interactive" {
 			if x.Status == "active" {
 				return fmt.Errorf("session %q is active; stop it before deletion", x.Name)
@@ -696,6 +714,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	}}
 	remove.Flags().BoolVar(&all, "all", false, "delete all manageable sessions")
 	remove.Flags().BoolVar(&allCompleted, "all-completed", false, "delete all completed sessions")
+	remove.Flags().BoolVar(&force, "force", false, "delete unrated sessions after warning")
 	remove.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	rate := &cobra.Command{Use: "rate <1-5> <reason>", Short: "Rate the latest turn of an agent session", Args: cobra.MinimumNArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		if name == "" {
@@ -755,6 +774,18 @@ func rateLatestSessionTurn(store *subagent.FileSessionStore, sess *subagent.Sess
 	rating := score
 	latest.Rating, latest.RatingReason = &rating, reason
 	return store.Save(sess)
+}
+
+func sessionLatestTurnRated(sess *subagent.Session) bool {
+	if sess.Turn < 1 {
+		return false
+	}
+	for i := range sess.TurnRecords {
+		if sess.TurnRecords[i].Turn == sess.Turn {
+			return sess.TurnRecords[i].Rating != nil
+		}
+	}
+	return false
 }
 
 // agentSessionCompletion returns names visible to the current caller. Cobra
