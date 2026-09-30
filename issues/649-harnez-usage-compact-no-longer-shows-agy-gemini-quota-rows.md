@@ -1,6 +1,6 @@
 # 649 — harnez usage --compact no longer shows agy/Gemini quota rows
 
-**Status**: Open
+**Status**: Closed — AGY meter collection dropped reset Gemini buckets while Claude/GPT remained active, so it now preserves expired windows for stale-marked compact rows.
 **Priority**: P2 (Medium)
 **Severity**: Major
 **Category**: Usage
