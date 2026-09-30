@@ -53,3 +53,13 @@ Root causes in the instructions:
 Re-verify against live docs and recent commits before starting (611 and 581 may already cover part of this;
 merge rather than duplicate). Run a fresh Claude host through `/lean-sprint` on a trivial ticket and confirm the worker shows up in
 the terminal task list and its exit wakes the host. Repeat check for Codex and AGY if available.
+
+## 4. Incident 2026-09-30 (AGY host)
+
+An AGY host told the user it would "poll/query" its subagents, the same failure seen in 611.
+User requirement: every host's instructions must say in plain words how to run agents in the
+**session background** (a job owned by the chat session: visible in its task list, and its exit
+wakes the host) and not in the **host/machine background** (`--detach`, shell `&`, nohup: invisible
+to the session, so the host can only find out by polling). Use these two terms in the skills, the
+`AgenticLoop.md` source and `harnez agent start --help`, with the per-host mapping from §2.1.
+Polling a worker's status or log is only allowed for a host that has no session-background facility.
