@@ -109,3 +109,12 @@ is the worker itself:
   `WaitMsBeforeAsync`).
 - The MCP `harnez_command` formatting step is optional; the skill may give the literal command.
 - Keep `harnez agent wait` for recovery only (host restarted, or the start job was lost).
+
+## 7. Claude host incident 2026-09-30: background job limit killed the worker
+
+The host ran `HTO=0 harnez agent resume ...` as `Bash` with `run_in_background: true` but without
+`timeout`. Claude Code stops background jobs after 30 minutes by default; that killed the codex
+worker mid-milestone (agent state `failed`, uncommitted edits left in the tree). A later
+`harnez agent wait` returned at once with the old messages. The Claude block in §5 must say:
+pass `timeout: 7200000` (the 2h maximum) for worker jobs; for longer work split into milestones.
+Each host block needs the equivalent limit for its own background tool.
