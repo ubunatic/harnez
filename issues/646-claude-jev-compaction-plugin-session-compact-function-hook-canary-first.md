@@ -124,6 +124,14 @@ Pre-Work / Required Refinements:
   the plugin package's embedded FS. Per Quota-1, the suite was not rerun after that correction;
   the committed test correction is therefore unverified by a second suite run.
 
+### M3 Pre-Work / Required Refinements (host review of 58974a5a)
+- `go test ./internal/claude/...` FAILS on HEAD: `TestApplyJevCompactionPluginWriteIdempotencyAndRemoval`
+  (`jev_compaction_test.go:138`): disabling leaves the `harnez-local` marketplace entry. Fix the
+  removal (not the assertion); removal must restore settings/marketplace state exactly.
+- Rerun `make test-q1` after the fix (the M2 correction was never verified) and grep `--- FAIL`.
+- Numbers look plausible (bytes -41%, tokens 26,292 -> 10,632); keep recording both.
+- Auto-trigger (`turn.complete` at a threshold) is still untested; cover it or state why not.
+
 ## Other agents (moved from 644)
 - agy: harnez's jev compaction could rewrite agy session data on disk. Canary: does agy accept a
   resumed session whose data was compacted, and does it save tokens compared with agy's own
