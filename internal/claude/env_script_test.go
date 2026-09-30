@@ -27,10 +27,7 @@ func TestHarnezEnvScriptAndShellIntegration(t *testing.T) {
 		t.Fatalf("write zshrc: %v", err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	cfg.SkillsTarget = filepath.Join(tmpHome, ".gemini", "skills")
 	cfg.CodexSkillsTarget = filepath.Join(tmpHome, ".codex", "skills")
 	cfg.CodexHooksTarget = filepath.Join(tmpHome, ".codex", "config.toml")

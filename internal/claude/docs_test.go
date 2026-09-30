@@ -167,10 +167,7 @@ func TestRunInitEmojigShapeCopiesHardDependencyWithoutCapabilityBoilerplate(t *t
 }
 
 func TestEmbeddedCopyableDocGraph(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cfg := loadTestConfig(t)
 	all := docNamesInOrder(cfg)
 	closure, err := resolveDocDependencies(cfg, all)
 	if err != nil {
@@ -206,10 +203,7 @@ func TestEmbeddedCopyableDocGraph(t *testing.T) {
 }
 
 func TestRunInitEmbeddedEmojigShapeHasNoUnavailableProjectMaterial(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cfg := loadTestConfig(t)
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# emojig\n\nNo daemon or remote host.\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -359,10 +353,7 @@ func TestMergeDocs(t *testing.T) {
 }
 
 func TestAutoDetectDocs_PolyglotMatrix(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := loadTestConfig(t)
 
 	tests := []struct {
 		name      string
@@ -464,10 +455,7 @@ func filepathDir(p string) string {
 // exactly the set that actually gets installed — not a broader glob.
 // When a new copyable doc is added to config.yaml without the marker, this test fails.
 func TestAllConfigDeclaredCopyableDocsHaveBundledMarker(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := loadTestConfig(t)
 	const marker = "<!-- harnez:bundled -->"
 	for name, lang := range cfg.AgentsMD.Languages {
 		if lang.Source == "" {
@@ -485,10 +473,7 @@ func TestAllConfigDeclaredCopyableDocsHaveBundledMarker(t *testing.T) {
 }
 
 func TestCanaryDoesNotHardReferenceOptionalPrototypingDoc(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("load embedded config: %v", err)
-	}
+	cfg := loadTestConfig(t)
 	data, err := fs.ReadFile(cfg.FS, "docs/other/Canary.md")
 	if err != nil {
 		t.Fatalf("read bundled Canary.md: %v", err)
@@ -499,20 +484,14 @@ func TestCanaryDoesNotHardReferenceOptionalPrototypingDoc(t *testing.T) {
 }
 
 func TestConfigDefaultZeroDocs(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := loadTestConfig(t)
 	if len(cfg.Docs) != 0 {
 		t.Fatalf("expected default config.yaml docs to be empty [], got %v", cfg.Docs)
 	}
 }
 
 func TestExpandDocNames(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := loadTestConfig(t)
 	allDocs := docNamesInOrder(cfg)
 	if len(allDocs) == 0 {
 		t.Fatal("expected non-empty catalog of docs")
@@ -566,11 +545,8 @@ func TestExpandDocNames(t *testing.T) {
 }
 
 func TestApplyOptInDocsAndCleanUnmanaged(t *testing.T) {
+	cfg := loadTestConfig(t)
 	targetDir := t.TempDir()
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
 	cfg.PrimeAgentTarget = ""
 
 	// 1. Bare apply with default zero docs -> 0 docs written
@@ -630,11 +606,8 @@ func TestApplyOptInDocsAndCleanUnmanaged(t *testing.T) {
 }
 
 func TestApplyDocsProfileCore(t *testing.T) {
+	cfg := loadTestConfig(t)
 	targetDir := t.TempDir()
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
 	cfg.PrimeAgentTarget = ""
 
 	if err := ApplyAll(targetDir, cfg, []string{"core"}, false, false); err != nil {

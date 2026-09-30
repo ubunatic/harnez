@@ -15,12 +15,9 @@ import (
 // clean lifecycle for the new claude_skills_target, isolated from every
 // other target (Gemini/Codex/Prime) this apply run would also touch.
 func TestClaudeSkillsTargetRoundTrip(t *testing.T) {
+	cfg := loadTestConfig(t)
 	targetDir := t.TempDir()
 
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
 	claudeSkillsDir := filepath.Join(t.TempDir(), "claude-skills")
 	geminiSkillsDir := filepath.Join(t.TempDir(), "gemini-skills")
 	codexSkillsDir := filepath.Join(t.TempDir(), "codex-skills")
@@ -279,6 +276,7 @@ func TestSafeSkillPathRejectsSymlinkComponents(t *testing.T) {
 }
 
 func TestUnifiedCrossHarnessSkillTargets(t *testing.T) {
+	cfg := loadTestConfig(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -286,11 +284,6 @@ func TestUnifiedCrossHarnessSkillTargets(t *testing.T) {
 	geminiSkills := filepath.Join(home, ".gemini", "skills")
 	codexSkills := filepath.Join(home, ".codex", "skills")
 	primeSkills := filepath.Join(home, ".prime", "agent", "skills")
-
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
 
 	targets := skillTargets(cfg)
 	expectedTargets := []string{

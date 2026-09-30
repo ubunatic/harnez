@@ -56,10 +56,7 @@ func TestConfigComponentSelectionRoundTrip(t *testing.T) {
 }
 
 func TestEmbeddedConfigToolFeedbackRequiresTelemetry(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded: %v", err)
-	}
+	cfg := loadTestConfig(t)
 	for _, skill := range cfg.Skills {
 		if skill.Name == "tool-feedback-protocol" {
 			if !reflect.DeepEqual(skill.Requires, []string{"telemetry"}) {

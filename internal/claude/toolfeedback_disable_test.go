@@ -48,13 +48,10 @@ func TestRateFeedbackDisabled_ConfigAndEnv(t *testing.T) {
 // disabling it after a prior enabled apply actively removes what was
 // already installed (not just skips future writes).
 func TestApplyOmitsToolFeedbackProtocolWhenDisabled(t *testing.T) {
+	cfg := loadTestConfig(t)
 	targetDir := t.TempDir()
 	claudeMDPath := filepath.Join(t.TempDir(), "CLAUDE.md")
 
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
 	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
 	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
 	cfg.CodexHooksTarget = filepath.Join(t.TempDir(), "codex-config.toml")

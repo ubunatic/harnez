@@ -10,10 +10,7 @@ import (
 )
 
 func TestClaudeInstructionsHookIsClaudeOnly(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded: %v", err)
-	}
+	cfg := loadTestConfig(t)
 
 	found := false
 	for _, hook := range cfg.Hooks {

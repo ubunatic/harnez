@@ -22,10 +22,7 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 	if err := exec.Command("git", "-C", dir, "init", "-q").Run(); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
 		t.Fatal(err)
 	}
@@ -82,10 +79,7 @@ func TestRunInit_MigratesLocalOverlaysWithSingleHeaderGap(t *testing.T) {
 	if err := os.WriteFile(agentsPath, []byte(legacy), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	run := func() {
 		t.Helper()
 		if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
@@ -134,10 +128,7 @@ func TestRunInit_MigratesManagedBlocksLosslessly(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.local.md"), local, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	run := func() {
 		t.Helper()
 		if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
@@ -221,10 +212,7 @@ func TestRunInit_LeavesMalformedNestedMarkersUntouched(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(malformed), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
 		t.Fatal(err)
 	}
@@ -242,10 +230,7 @@ func TestRunInit_GeneratesRulesOutsideGit(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/nongit\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
 		t.Fatal(err)
 	}

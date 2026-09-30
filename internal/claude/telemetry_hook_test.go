@@ -47,10 +47,7 @@ func containsAll(s string, subs ...string) bool {
 // config.yaml entry consumed by the same hooks-merge apply.go already
 // uses for distill's hook (issue 069), not a new code path.
 func TestTelemetryHookConfigEntry(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := loadTestConfig(t)
 
 	var found *Hook
 	for i := range cfg.Hooks {
@@ -70,13 +67,10 @@ func TestTelemetryHookConfigEntry(t *testing.T) {
 // re-apply → clean lifecycle TestIntegrationWorkflow covers for the rest
 // of apply's managed keys, focused on the new telemetry hook entry.
 func TestApplyInstallsTelemetryHook(t *testing.T) {
+	cfg := loadTestConfig(t)
 	targetDir := t.TempDir()
 	settingsPath := filepath.Join(targetDir, "settings.json")
 
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
 	// Isolate every other target this apply run would touch so this test
 	// only exercises settings.json.
 	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
@@ -181,10 +175,7 @@ func settingsHasTelemetryHook(t *testing.T, settingsPath string) bool {
 // hooks (harnez hook read) for View and ReadMultipleFiles are declarative config.yaml
 // entries installed into settings.json under PreToolUse.
 func TestReadHookConfigEntry(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := loadTestConfig(t)
 
 	matchers := map[string]bool{"View": false, "ReadMultipleFiles": false}
 	for i := range cfg.Hooks {
@@ -204,13 +195,10 @@ func TestReadHookConfigEntry(t *testing.T) {
 }
 
 func TestApplyInstallsReadHooks(t *testing.T) {
+	cfg := loadTestConfig(t)
 	targetDir := t.TempDir()
 	settingsPath := filepath.Join(targetDir, "settings.json")
 
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
 	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
 	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
 	cfg.CodexHooksTarget = filepath.Join(t.TempDir(), "codex-config.toml")

@@ -34,10 +34,7 @@ func TestUnfilteredApplySettingsDoesNotWriteMCPServers(t *testing.T) {
 }
 
 func TestConfiguredHarnezMCPPermissionIsApplied(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded: %v", err)
-	}
+	cfg := loadTestConfig(t)
 	doc := buildSettingsDoc(cfg, Set{})
 	permissions := doc["permissions"].(map[string]any)
 	if got := jsonc.ToStrings(permissions["allow"]); !slices.Contains(got, "mcp__harnez__*") {

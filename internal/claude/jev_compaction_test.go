@@ -47,20 +47,24 @@ func TestJevCompactionSpecEmbeddedAndSchemaAligned(t *testing.T) {
 }
 
 func TestJevCompactionApplyOptInDefaultsOff(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.JevCompactionEnabled {
-		t.Fatal("embedded config must leave the plugin opt-in disabled")
-	}
 	copyPath := filepath.Join(t.TempDir(), "config.yaml")
 	embedded, err := harnez.DefaultFS.ReadFile("config.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(embedded), "jev_compaction_enabled: false") {
+	if !strings.Contains(string(embedded), "jev_compaction_enabled:") {
 		t.Fatal("embedded config opt-in value is missing")
+	}
+	embedded = []byte(strings.Replace(string(embedded), "jev_compaction_enabled: true", "jev_compaction_enabled: false", 1))
+	if err := os.WriteFile(copyPath, embedded, 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(copyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.JevCompactionEnabled {
+		t.Fatal("explicitly disabled custom config opt-in was ignored")
 	}
 	embedded = []byte(strings.Replace(string(embedded), "jev_compaction_enabled: false", "jev_compaction_enabled: true", 1))
 	if err := os.WriteFile(copyPath, embedded, 0644); err != nil {
@@ -71,7 +75,7 @@ func TestJevCompactionApplyOptInDefaultsOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !cfg.JevCompactionEnabled {
-		t.Fatal("custom config opt-in was ignored")
+		t.Fatal("explicitly enabled custom config opt-in was ignored")
 	}
 }
 

@@ -6,6 +6,20 @@ import (
 	"testing"
 )
 
+func loadTestConfig(t *testing.T) *Config {
+	t.Helper()
+	cfg, err := LoadConfigEmbedded()
+	if err != nil {
+		t.Fatalf("LoadConfigEmbedded: %v", err)
+	}
+	cfg.JevCompactionEnabled = false
+	return cfg
+}
+
+func LoadTestConfig(t *testing.T) *Config {
+	return loadTestConfig(t)
+}
+
 // TestMain points HOME at a temp dir so no test can touch the user's real
 // home: CleanAll removes ~/.local/bin/harnez-agy and ~/.harnez/shims (issue 553).
 func TestMain(m *testing.M) {

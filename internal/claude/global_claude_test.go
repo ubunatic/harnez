@@ -13,6 +13,7 @@ import (
 // of Issue 415: harnez apply does not install, overwrite, or manage global root instruction
 // files (e.g. ~/.claude/CLAUDE.md, ~/.prime/agent/AGENTS.md, ~/.codex/AGENTS.md, ~/AGENTS.md).
 func TestApplyAll_DoesNotManageGlobalRootInstructionDocs(t *testing.T) {
+	cfg := loadTestConfig(t)
 	targetDir := t.TempDir()
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
@@ -46,10 +47,6 @@ func TestApplyAll_DoesNotManageGlobalRootInstructionDocs(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
 	cfg.PrimeAgentTarget = primeDir
 	cfg.SkillsTarget = filepath.Join(homeDir, ".gemini", "skills")
 	cfg.CodexSkillsTarget = filepath.Join(homeDir, ".codex", "skills")
@@ -111,6 +108,7 @@ func TestApplyAll_DoesNotManageGlobalRootInstructionDocs(t *testing.T) {
 // TestInit_RefusesGlobalAgentRoots verifies that harnez init refuses to operate
 // on global agent roots like ~/.claude, ~/.prime, ~/.codex, ~/.gemini, and $HOME.
 func TestInit_RefusesGlobalAgentRoots(t *testing.T) {
+	cfg := loadTestConfig(t)
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 
@@ -121,11 +119,6 @@ func TestInit_RefusesGlobalAgentRoots(t *testing.T) {
 		filepath.Join(homeDir, ".prime", "agent"),
 		filepath.Join(homeDir, ".codex"),
 		filepath.Join(homeDir, ".gemini"),
-	}
-
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
 	}
 
 	for _, gDir := range globalDirs {

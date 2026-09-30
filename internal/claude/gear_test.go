@@ -12,10 +12,7 @@ func TestGearSymlinkProvisioning(t *testing.T) {
 	targetDir := t.TempDir()
 	gearLink := filepath.Join(targetDir, "bin", "⚙")
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
 	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
 	cfg.CodexHooksTarget = filepath.Join(t.TempDir(), "codex-config.toml")

@@ -19,10 +19,7 @@ func TestBashShimProvisioningAndLifecycle(t *testing.T) {
 	shimPath := filepath.Join(tmpHome, ".harnez", "shims", "bash")
 	launcherPath := claude.HarnezAgyLauncherPath(tmpHome)
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	cfg.SkillsTarget = filepath.Join(tmpHome, ".gemini", "skills")
 	cfg.CodexSkillsTarget = filepath.Join(tmpHome, ".codex", "skills")
 	cfg.CodexHooksTarget = filepath.Join(tmpHome, ".codex", "config.toml")
@@ -192,10 +189,7 @@ func TestApplyInstallsAgyObservationHooks(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	cfg.AgyHooksTarget = agyHooksPath
 	cfg.SkillsTarget = filepath.Join(tmpHome, ".gemini", "skills")
 	cfg.CodexSkillsTarget = filepath.Join(tmpHome, ".codex", "skills")

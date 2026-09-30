@@ -8,11 +8,8 @@ import (
 )
 
 func TestWrapSkillInstallToEveryConfiguredTarget(t *testing.T) {
+	cfg := loadTestConfig(t)
 	targetDir := t.TempDir()
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
 
 	var wrap *Command
 	for i := range cfg.Skills {

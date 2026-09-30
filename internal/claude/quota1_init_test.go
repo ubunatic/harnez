@@ -23,13 +23,10 @@ func TestRunInitWithVariant_Quota1_Scaffolding(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	// 2. Run RunInitWithVariant with quota-1 = true
-	err = claude.RunInitWithVariant(dir, cfg, []string{"golang"}, "", true, false, false, false, nil, false, false, "", true)
+	err := claude.RunInitWithVariant(dir, cfg, []string{"golang"}, "", true, false, false, false, nil, false, false, "", true)
 	if err != nil {
 		t.Fatalf("RunInitWithVariant failed: %v", err)
 	}
@@ -104,12 +101,9 @@ test:
 		t.Fatal(err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
-	err = claude.RunInitWithVariant(dir, cfg, nil, "", true, false, false, false, nil, false, false, "", true)
+	err := claude.RunInitWithVariant(dir, cfg, nil, "", true, false, false, false, nil, false, false, "", true)
 	if err != nil {
 		t.Fatalf("RunInitWithVariant failed: %v", err)
 	}
@@ -136,10 +130,7 @@ func TestRunInitWithVariant_LiteQuota1_ContentGuidance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	if err := claude.RunInitWithVariant(dir, cfg, []string{"agentic-loop", "issue-tracking", "spec"}, "", true, false, false, false, nil, false, false, "lite", true); err != nil {
 		t.Fatalf("RunInitWithVariant failed: %v", err)

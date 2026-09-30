@@ -8,10 +8,7 @@ import (
 )
 
 func TestToolFeedbackProtocolConfigEntry(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := loadTestConfig(t)
 
 	var found *Command
 	for i := range cfg.Skills {
@@ -33,12 +30,9 @@ func TestToolFeedbackProtocolConfigEntry(t *testing.T) {
 }
 
 func TestApplyInstallsToolFeedbackProtocol(t *testing.T) {
+	cfg := loadTestConfig(t)
 	targetDir := t.TempDir()
 
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
 	claudeMDPath := filepath.Join(t.TempDir(), "CLAUDE.md")
 	primeAgentDir := filepath.Join(t.TempDir(), "prime-agent")
 	skillsDir := filepath.Join(t.TempDir(), "claude-skills")
@@ -92,10 +86,7 @@ func TestApplyInstallsToolFeedbackProtocol(t *testing.T) {
 }
 
 func TestIssueTrackerDiscoveryConfigEntry(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := loadTestConfig(t)
 
 	var found *RuleFile
 	for i := range cfg.AgentsMD.Rules.Files {

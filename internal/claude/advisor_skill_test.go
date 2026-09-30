@@ -8,11 +8,8 @@ import (
 )
 
 func TestHarnezAdvisorSkillInstallsIdenticallyToEveryAgentTarget(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
 	root := t.TempDir()
+	cfg := loadTestConfig(t)
 	cfg.SkillsTarget = filepath.Join(root, "gemini-skills")
 	cfg.CodexSkillsTarget = filepath.Join(root, "codex-skills")
 	cfg.ClaudeSkillsTarget = filepath.Join(root, "claude-skills")

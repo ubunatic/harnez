@@ -38,10 +38,7 @@ func TestIntegrationWorkflow(t *testing.T) {
 	settingsPath := filepath.Join(targetDir, "settings.json")
 
 	// 2. Load the default embedded configuration
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	geminiSkillsDir := filepath.Join(t.TempDir(), "gemini-skills")
 	codexSkillsDir := filepath.Join(t.TempDir(), "codex-skills")
 	claudeSkillsDir := filepath.Join(t.TempDir(), "claude-skills")
@@ -303,15 +300,12 @@ func TestDiffAll_ExecError(t *testing.T) {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	// Set PATH to empty temp dir so 'diff' binary is not found
 	t.Setenv("PATH", t.TempDir())
 
-	_, err = claude.DiffAll(targetDir, cfg, nil)
+	_, err := claude.DiffAll(targetDir, cfg, nil)
 	if err == nil {
 		t.Fatalf("Expected DiffAll to return error when diff binary is missing, got nil")
 	}
@@ -320,10 +314,7 @@ func TestDiffAll_ExecError(t *testing.T) {
 func TestBatchProjectInitialization_HeterogeneousWorkspace(t *testing.T) {
 	workspaceDir := t.TempDir()
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	// Create 4 distinct mock projects modeling actual sibling repositories:
 	// 1. go-service (Go + Makefile)

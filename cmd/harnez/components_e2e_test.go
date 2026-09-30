@@ -34,6 +34,23 @@ func TestApplyDiffCLI_ComponentsDocsOnlyRoundTrip(t *testing.T) {
 	agyPath := filepath.Join(home, ".gemini", "config", "hooks.json")
 	rateSkillDir := filepath.Join(home, ".claude", "skills", "tool-feedback-protocol")
 	rateSkill := filepath.Join(rateSkillDir, "SKILL.md")
+	repoDir, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	configData, err := os.ReadFile(filepath.Join(repoDir, "config.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	configFile, err := os.CreateTemp(repoDir, ".config-test-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := configFile.Name()
+	t.Cleanup(func() { _ = os.Remove(configPath) })
+	if err := os.WriteFile(configPath, []byte(strings.Replace(string(configData), "jev_compaction_enabled: true", "jev_compaction_enabled: false", 1)), 0600); err != nil {
+		t.Fatal(err)
+	}
 
 	run := func(args ...string) {
 		t.Helper()
@@ -44,7 +61,7 @@ func TestApplyDiffCLI_ComponentsDocsOnlyRoundTrip(t *testing.T) {
 		}
 	}
 
-	run("apply", "--target", target)
+	run("apply", "--config", configPath, "--target", target)
 
 	if _, err := os.Stat(rateSkill); err != nil {
 		t.Fatalf("full apply: tool-feedback-protocol SKILL.md missing: %v", err)
@@ -56,7 +73,7 @@ func TestApplyDiffCLI_ComponentsDocsOnlyRoundTrip(t *testing.T) {
 		t.Fatal("full apply: agy hook not installed")
 	}
 
-	run("apply", "--components", "docs-only", "--target", target)
+	run("apply", "--config", configPath, "--components", "docs-only", "--target", target)
 
 	if _, err := os.Stat(rateSkill); !os.IsNotExist(err) {
 		t.Errorf("docs-only: tool-feedback-protocol SKILL.md left, stat err = %v", err)
@@ -89,12 +106,12 @@ func TestApplyDiffCLI_ComponentsDocsOnlyRoundTrip(t *testing.T) {
 	diffCmd := newRootCmd()
 	var diffOut strings.Builder
 	diffCmd.SetOut(&diffOut)
-	diffCmd.SetArgs([]string{"diff", "--components", "docs-only", "--target", target, "--exit-code"})
+	diffCmd.SetArgs([]string{"diff", "--config", configPath, "--components", "docs-only", "--target", target, "--exit-code"})
 	if err := diffCmd.Execute(); err != nil {
 		t.Fatalf("diff --components docs-only reports drift: %v\n%s", err, diffOut.String())
 	}
 
-	run("apply", "--target", target)
+	run("apply", "--config", configPath, "--target", target)
 
 	if _, err := os.Stat(rateSkill); err != nil {
 		t.Fatalf("full apply (2nd): tool-feedback-protocol SKILL.md not reinstalled: %v", err)

@@ -283,7 +283,7 @@ distill_autopipe:
 status_line: true
 
 # Opt in to the embedded Jev session compaction plugin on global `apply`.
-jev_compaction_enabled: false
+jev_compaction_enabled: true
 
 commands:
   - name: standup

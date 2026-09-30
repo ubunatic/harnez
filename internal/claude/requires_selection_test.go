@@ -26,10 +26,7 @@ func findSkill(t *testing.T, cfg *Config, name string) (Command, int) {
 // actively removed, not merely skipped, once its required component drops
 // out of the selection.
 func TestApplyRemovesResourceBearingSkillWithUnmetRequires(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded: %v", err)
-	}
+	cfg := loadTestConfig(t)
 	skillsDir := t.TempDir()
 	cfg.ClaudeSkillsTarget = skillsDir
 	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
@@ -92,10 +89,7 @@ func TestApplyRemovesResourceBearingSkillWithUnmetRequires(t *testing.T) {
 // (ownership-aware) when it is not, and DiffAll checks them under the
 // resolved selection instead of skipping them.
 func TestCodexAgyAppliedByTelemetrySelection(t *testing.T) {
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded: %v", err)
-	}
+	cfg := loadTestConfig(t)
 	cfg.Skills = nil
 	cfg.Commands = nil
 	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")

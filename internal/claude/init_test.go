@@ -42,10 +42,7 @@ func TestRunInit_LegacyMarkerMigrationAndProsePreservation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	// 2. Run RunInit
 	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
@@ -112,10 +109,7 @@ func TestRunInit_NonMakefileProjectSafety(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
 		t.Fatalf("RunInit failed: %v", err)
@@ -148,10 +142,7 @@ It is completely managed manually by the administrator.
 		t.Fatal(err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
 		t.Fatalf("RunInit failed: %v", err)
@@ -174,10 +165,7 @@ func TestRunInit_CustomTemplate(t *testing.T) {
 		t.Fatalf("git init: %v", err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
 		t.Fatalf("RunInit failed: %v", err)
@@ -366,10 +354,7 @@ func TestRunInitAll_InitializesOnlyEligibleChildren(t *testing.T) {
 	}
 	// bareDir has neither AGENTS.md nor CLAUDE.md and must be skipped.
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	if err := claude.RunInitAll(workspace, cfg, nil, "", false, false, false); err != nil {
 		t.Fatalf("RunInitAll failed: %v", err)
@@ -389,10 +374,7 @@ func TestRunInitAll_InitializesOnlyEligibleChildren(t *testing.T) {
 }
 
 func TestRunInitAll_RefusesHomeDirectory(t *testing.T) {
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skipf("cannot resolve home directory: %v", err)
@@ -411,10 +393,7 @@ func TestRunInitAll_NoEligibleChildrenIsNotAnError(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(workspace, "just-a-dir"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	if err := claude.RunInitAll(workspace, cfg, nil, "", false, false, false); err != nil {
 		t.Fatalf("expected no error scanning a workspace with no eligible children, got: %v", err)
 	}
@@ -486,10 +465,7 @@ LEGACY-MANAGED-SENTINEL
 		t.Fatal(err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
 		t.Fatalf("first RunInit failed: %v", err)
@@ -559,10 +535,7 @@ stale config
 	if err := os.WriteFile(agentsPath, []byte(fixture), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
 		t.Fatalf("RunInit failed: %v", err)
 	}
@@ -613,10 +586,7 @@ func TestRunInit_BackfillsLocalOverlaysSection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
 		t.Fatalf("first RunInit failed: %v", err)
 	}
@@ -654,10 +624,7 @@ func TestRunInit_PreservesOptInDocOnPlainReinit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	if err := claude.RunInit(dir, cfg, []string{"prototyping-features"}, "", true, false, false, false); err != nil {
 		t.Fatalf("first RunInit (explicit opt-in) failed: %v", err)
@@ -688,10 +655,7 @@ func TestRunInit_NewOptInDocsAreOrderedOnFirstWrite(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/catiorder\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	// Simulate a repo gaining optional docs in a different order from config.yaml.
 	docs := []string{"spec", "markdown", "make"}
 	if err := claude.RunInit(dir, cfg, docs, "", true, false, false, false); err != nil {
@@ -715,10 +679,7 @@ func TestRunInit_NewOptInDocsAreOrderedOnFirstWrite(t *testing.T) {
 }
 
 func TestRunInit_RefusesHomeDirectoryWithoutForce(t *testing.T) {
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Skipf("cannot resolve home directory: %v", err)
@@ -734,12 +695,9 @@ func TestRunInit_RefusesHomeDirectoryWithoutForce(t *testing.T) {
 
 func TestRunInit_RefusesNonCodingDirectoryWithoutForce(t *testing.T) {
 	dir := t.TempDir()
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
-	err = claude.RunInit(dir, cfg, nil, "", false, false, false, false)
+	err := claude.RunInit(dir, cfg, nil, "", false, false, false, false)
 	if err == nil {
 		t.Fatal("expected RunInit to refuse empty non-coding directory without force, got nil error")
 	}
@@ -750,12 +708,9 @@ func TestRunInit_RefusesNonCodingDirectoryWithoutForce(t *testing.T) {
 
 func TestRunInit_AllowsNonCodingDirectoryWithForce(t *testing.T) {
 	dir := t.TempDir()
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
-	err = claude.RunInitWithForce(dir, cfg, nil, "", true, false, false, false, nil, false, true)
+	err := claude.RunInitWithForce(dir, cfg, nil, "", true, false, false, false, nil, false, true)
 	if err != nil {
 		t.Fatalf("expected RunInitWithForce to succeed with force=true, got: %v", err)
 	}
@@ -766,10 +721,7 @@ func TestRunInit_AllowsNonCodingDirectoryWithForce(t *testing.T) {
 }
 
 func TestRunInit_AllowsCodingRepositories(t *testing.T) {
-	cfg, err := claude.LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded failed: %v", err)
-	}
+	cfg := claude.LoadTestConfig(t)
 
 	cases := []struct {
 		name  string

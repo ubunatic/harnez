@@ -18,10 +18,7 @@ import (
 // literal list.
 func testDebloatConfig(t *testing.T) DebloatConfig {
 	t.Helper()
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded: %v", err)
-	}
+	cfg := loadTestConfig(t)
 	return cfg.Debloat
 }
 

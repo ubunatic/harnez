@@ -111,16 +111,13 @@ func TestPresetNamesMatchPresets(t *testing.T) {
 // package and internal/components was deleted).
 func setupComponentsHome(t *testing.T) (target string, cfg *Config) {
 	t.Helper()
+	cfg = loadTestConfig(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("HARNEZ_DISABLE_RATE_FEEDBACK", "")
 	// agy hooks are only installed when ~/.gemini exists.
 	if err := os.MkdirAll(filepath.Join(home, ".gemini"), 0755); err != nil {
 		t.Fatal(err)
-	}
-	cfg, err := LoadConfigEmbedded()
-	if err != nil {
-		t.Fatalf("LoadConfigEmbedded: %v", err)
 	}
 	cfg.PrimeAgentTarget = filepath.Join(home, ".prime", "agent")
 	cfg.SkillsTarget = filepath.Join(home, ".gemini", "skills")
