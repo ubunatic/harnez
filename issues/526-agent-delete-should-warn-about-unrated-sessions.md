@@ -1,6 +1,6 @@
 # 526 — agent delete should warn about unrated sessions
 
-**Status**: Open
+**Status**: Closed — Implemented stderr warnings and refusal for unrated agent session deletes, with --force override and regression coverage.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: UX
