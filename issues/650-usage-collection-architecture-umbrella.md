@@ -1,6 +1,6 @@
 # 650 — Usage Collection Architecture Umbrella
 
-**Status**: Closed — Milestones 651-655 closed: one registered collector path plus passive statusline ingest write telemetry.sqlite; usage --compact, stats --agents, agent models/start read the store; agent turns carry token and quota deltas; legacy files archived with manifest, window keys normalized; make test-q1 green
+**Status**: Open
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Architecture
