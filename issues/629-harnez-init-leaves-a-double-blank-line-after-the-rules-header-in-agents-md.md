@@ -1,6 +1,6 @@
 # 629 — harnez init leaves a double blank line after the rules header in AGENTS.md
 
-**Status**: Open
+**Status**: Closed — Fixed rules header spacing after Local Overlays migration; regression test added. make test-q1 encountered 17 known internal/claude failures tied to unrelated config.yaml edits and one initial assertion issue corrected after the quota run; make install passed.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
