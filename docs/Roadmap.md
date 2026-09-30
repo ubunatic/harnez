@@ -45,6 +45,13 @@ Sequencing buckets:
 
 ## 0. Shipped Recently
 
+**2026-09-30 (usage store and agent lifecycle):** **650-655** (usage store read seam, collector
+registry, passive ingestion, session attribution, consolidation with archived legacy files),
+**657** (compact shows Claude/Codex/AGY again), **660** (`usage --watch` fast start, `q` quits,
+terminal restored), **661** (`agent stop` kills the process tree and reports truthfully). Invariants
+are in `docs/UsageCollection.md` → "Status and invariants". Next: **659** (statusline latency),
+**630** (session-background guides per host), **656** (opt-in `agent send`).
+
 **Closed since the f90faf4 pass (2026-09-24 → 2026-09-27), grouped:**
 
 - **Previously bucketed here:** **509** (tip leak in tests) and **511** (Quota-1 keeps full log)

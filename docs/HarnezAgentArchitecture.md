@@ -231,6 +231,13 @@ repository-wide view when no name is supplied. `stop --children` and
 `stop --all` retain their explicit bulk behavior; delete refuses active
 interactive sessions until they are stopped.
 
+`stop` terminates the whole process tree (provider CLI and children) with TERM, then a bounded
+KILL, and reports `stopped: <name>, no process left, safe to resume/delete` only after it has
+confirmed the exit; otherwise it exits non-zero with "still exiting". The host's native background
+task running the turn may report its exit a few seconds later; that is expected. Before 661, stop
+killed only the wrapper, and the next resume failed with Codex's "thread already has an active
+writer".
+
 ### 2.6 Slash commands
 
 A single-line root prompt beginning with `/` is intercepted unless it came from

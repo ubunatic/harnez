@@ -111,6 +111,28 @@ The first milestone is deliberately narrow: it proves the new reader boundary th
 `usage --compact` before changing live collection, protects existing schemas, and leaves a clean
 rollback to imported compatibility records.
 
+## Status and invariants (2026-09-30)
+
+Milestones 1-5 shipped with tickets 650-655; 657 and 660 fixed regressions found only on live
+output. Keep these invariants; each broke once:
+
+- **Normalize window keys at write time, in every writer**, through the one shared normalizer
+  (`five_hour`, `weekly`, ...). A one-shot migration is not enough: writers kept storing display
+  labels ("Weekly (7-day)"), and compact silently lost Claude/Codex (657).
+- **A quota window links only to an observation of its own provider.** The old
+  `LastInsertId` upsert path cross-linked providers; the migration repairs this additively.
+- **Compact projects the latest window per provider/pool/key**, excludes token counters
+  (`tokens`) from quota rows, and sorts rows stably (Claude Code, OpenAI Codex, then AGY pools).
+- **Never drop a provider silently.** A failed store projection or fetch renders an error row and
+  logs to `~/.harnez/debug.log`; a hidden row looks exactly like missing data.
+- **Views never block on collection or the store.** `usage --watch` draws a loading frame at once
+  and fills quotas asynchronously; before 660 a blocking read delayed the first frame 14-19s and
+  starved the `q` key. Statusline latency is open in 659.
+- **Tests must not touch the real data path.** Store tests use an isolated DB; a test that wrote
+  the live telemetry DB hung the suite for minutes (655).
+
+Legacy files are archived under `~/.local/share/harnez/archive/usage-legacy/`, never deleted.
+
 ## Related work
 
 This plan consolidates the architecture intent in issues 034, 085, 111, 113, 146, 152, 160, 161,
