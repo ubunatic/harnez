@@ -1,6 +1,6 @@
 # 606 — agent status may report completed while a resume turn is still running
 
-**Status**: Closed — synchronous resumes persist running state before provider turns, refuse live duplicate writers, recover stale PIDs, and record final failure state
+**Status**: Closed — resume persists running state before the provider turn; a second resume on a live running session is refused, a dead PID is treated as stale (db244209)
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug (confirmed)
