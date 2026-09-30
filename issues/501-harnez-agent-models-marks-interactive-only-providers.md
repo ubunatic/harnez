@@ -1,6 +1,6 @@
 # 501 — harnez agent models marks interactive-only providers
 
-**Status**: Open
+**Status**: Closed — Added driver-derived batch capability to agent model listings and JSON.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: UX
