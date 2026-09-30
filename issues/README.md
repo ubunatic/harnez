@@ -654,3 +654,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 653 | [653-ingest-passive-usage-observations.md](653-ingest-passive-usage-observations.md) | Ingest Passive Usage Observations | Closed — Fix compact and statusline writes against legacy telemetry DB schemas and verify fresh fractional observations. |
 | 654 | [654-attach-token-and-quota-deltas-to-agent-turns.md](654-attach-token-and-quota-deltas-to-agent-turns.md) | Attach Token and Quota Deltas to Agent Turns | Open |
 | 655 | [655-consolidate-legacy-usage-stores-safely.md](655-consolidate-legacy-usage-stores-safely.md) | Consolidate Legacy Usage Stores Safely | Open |
+| 656 | [656-harnez-agent-send-opt-in-messaging-to-detached-agents-after-host-session-agent-tracking.md](656-harnez-agent-send-opt-in-messaging-to-detached-agents-after-host-session-agent-tracking.md) | harnez agent send: opt-in messaging to detached agents, after host session agent tracking | Open |
