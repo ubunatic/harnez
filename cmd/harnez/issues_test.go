@@ -127,6 +127,81 @@ func TestRunIssuesVerb_CloseRewritesStatusAndPreservesRestOfFile(t *testing.T) {
 	}
 }
 
+func TestIssuesCmd_BatchUpdatesThreeTicketsInOneCommit(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+	for _, num := range []string{"043", "044"} {
+		content := strings.Replace(sampleTicket, "042", num, 1)
+		path := filepath.Join(dir, "issues", num+"-example-ticket.md")
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repoRunGit(t, dir, "add", "issues")
+	repoRunGit(t, dir, "commit", "-q", "-m", "add more tickets")
+	beforeHead := strings.TrimSpace(repoRunGitOutput(t, dir, "rev-parse", "HEAD"))
+
+	cmd := newIssuesCmd()
+	var out, errOut bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	if err := cmd.Flags().Set("dir", dir); err != nil {
+		t.Fatal(err)
+	}
+	cmd.SetArgs([]string{"close", "42", "043", "044", "resolved"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v (stderr: %s)", err, errOut.String())
+	}
+
+	for _, num := range []string{"042", "043", "044"} {
+		content, err := os.ReadFile(filepath.Join(dir, "issues", num+"-example-ticket.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(content), "**Status**: Closed — resolved") {
+			t.Errorf("ticket %s not updated: %s", num, content)
+		}
+	}
+	logOut := repoRunGitOutput(t, dir, "log", "-1", "--name-only", "--format=%s")
+	if !strings.Contains(logOut, "feat(issues): close 042, 043, 044") {
+		t.Errorf("unexpected batch commit: %s", logOut)
+	}
+	for _, path := range []string{"issues/042-example-ticket.md", "issues/043-example-ticket.md", "issues/044-example-ticket.md", "issues/README.md"} {
+		if !strings.Contains(logOut, path) {
+			t.Errorf("batch commit missing %s: %s", path, logOut)
+		}
+	}
+	parent := strings.TrimSpace(repoRunGitOutput(t, dir, "rev-parse", "HEAD^"))
+	if parent != beforeHead {
+		t.Errorf("batch should create exactly one commit: parent=%s, before=%s", parent, beforeHead)
+	}
+}
+
+func TestIssuesCmd_BatchMissingTicketChangesNothing(t *testing.T) {
+	dir, ticketPath := issuesFixtureRepo(t, sampleTicket)
+	beforeTicket, _ := os.ReadFile(ticketPath)
+	readmePath := filepath.Join(dir, "issues", "README.md")
+	beforeReadme, _ := os.ReadFile(readmePath)
+	beforeHead := strings.TrimSpace(repoRunGitOutput(t, dir, "rev-parse", "HEAD"))
+
+	cmd := newIssuesCmd()
+	var out, errOut bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	if err := cmd.Flags().Set("dir", dir); err != nil {
+		t.Fatal(err)
+	}
+	cmd.SetArgs([]string{"close", "42", "999", "resolved"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("Execute succeeded with a missing ticket")
+	}
+	afterTicket, _ := os.ReadFile(ticketPath)
+	afterReadme, _ := os.ReadFile(readmePath)
+	afterHead := strings.TrimSpace(repoRunGitOutput(t, dir, "rev-parse", "HEAD"))
+	if string(beforeTicket) != string(afterTicket) || string(beforeReadme) != string(afterReadme) || beforeHead != afterHead {
+		t.Fatal("missing target caused files or Git history to change")
+	}
+}
+
 func TestRunIssuesVerb_BareCloseDoesNotFabricateReason(t *testing.T) {
 	dir, ticketPath := issuesFixtureRepo(t, sampleTicket)
 

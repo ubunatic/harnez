@@ -78,7 +78,7 @@ func newIssuesCmd() *cobra.Command {
 	var listFlag bool
 
 	cmd := &cobra.Command{
-		Use:   "issues <verb> <ticket-number> [reason...]",
+		Use:   "issues <verb> <ticket-number...> [reason...]",
 		Short: "Change a ticket's Status line, resync issues/README.md, and commit -- in one call",
 		Long: `issues collapses today's four-step ticket-status-change dance (hand-edit the
 '**Status**:' line, run 'harnez index', 'git add' the changed files, 'git
@@ -94,6 +94,12 @@ Verbs (closed set, mirroring docs/IssueTracking.md's Allowed Values):
   close [reason]   Status: Closed (bare), or "Closed — <reason>"
   done [reason]    Status: Closed (bare), or "Closed — <reason>" (alias for close)
   draft [reason]   Status: Draft, or "Draft — <reason>"
+
+Status verbs accept one or more ticket numbers. Leading all-digit arguments
+are targets; the first non-number argument starts the reason. A numeric-only
+reason is therefore ambiguous: include text in the reason (for example,
+'"123 tickets"'). Batch targets are all validated before any file is changed,
+then the README is regenerated and the batch is committed once.
   new [title]      Atomically reserve the next free issue number and create
                     a Draft placeholder file (issues/<NNN>-<title-slug>.md,
                     or issues/<NNN>-reserved.md with no title), using
@@ -256,6 +262,28 @@ valid, exit-0 answer.`,
 				}
 				return nil
 			}
+			numberCount := leadingIssueNumberCount(args[1:])
+			if numberCount > 1 {
+				results, drift, err := runIssuesVerbBatch(args[0], args[1:1+numberCount], args[1+numberCount:], opts)
+				if err != nil {
+					return err
+				}
+				if opts.JSON {
+					data, err := json.Marshal(results)
+					if err != nil {
+						return err
+					}
+					fmt.Fprintln(cmd.OutOrStdout(), string(data))
+				} else {
+					for _, result := range results {
+						printIssuesResult(cmd.OutOrStdout(), result, opts)
+					}
+				}
+				if opts.Check && drift {
+					return silenceIfExitCode(cmd, &exitCodeError{Code: 1})
+				}
+				return nil
+			}
 			result, drift, err := runIssuesVerb(cmd.OutOrStdout(), args[0], args[1], args[2:], opts)
 			if err != nil {
 				return err
@@ -283,6 +311,27 @@ valid, exit-0 answer.`,
 	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list open issues (alias for the list verb)")
 
 	return cmd
+}
+
+func leadingIssueNumberCount(args []string) int {
+	count := 0
+	for _, arg := range args {
+		if arg == "" {
+			break
+		}
+		isNumber := true
+		for _, r := range arg {
+			if r < '0' || r > '9' {
+				isNumber = false
+				break
+			}
+		}
+		if !isNumber {
+			break
+		}
+		count++
+	}
+	return count
 }
 
 // issueShowJSON represents structured JSON output for `harnez issues show`.
@@ -370,6 +419,141 @@ func runIssuesList(w, errW io.Writer, dir string, filterArgs []string, jsonOutpu
 		Limit: limit,
 		All:   all,
 	})
+}
+
+// runIssuesVerbBatch validates every target before writing, then updates all
+// changed tickets, regenerates the README once, and makes at most one commit.
+func runIssuesVerbBatch(verb string, ticketArgs, reasonArgs []string, opts issuesRunOptions) ([]issuesResult, bool, error) {
+	reason := strings.TrimSpace(strings.Join(reasonArgs, " "))
+	newStatus, err := composeNewStatus(verb, reason)
+	if err != nil {
+		return nil, false, err
+	}
+	type target struct {
+		path    string
+		relPath string
+		old     []byte
+		updated []byte
+		result  issuesResult
+	}
+	targets := make([]target, 0, len(ticketArgs))
+	seen := make(map[string]bool, len(ticketArgs))
+	issuesDir := filepath.Join(opts.Dir, "issues")
+	for _, ticketArg := range ticketArgs {
+		f, err := findTicketFile(issuesDir, ticketArg)
+		if err != nil {
+			return nil, false, err
+		}
+		if seen[f.Number] {
+			continue
+		}
+		seen[f.Number] = true
+		filePath := filepath.Join(issuesDir, f.RelPath)
+		relPath := filepath.ToSlash(filepath.Join("issues", f.RelPath))
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, false, fmt.Errorf("issues: read %s: %w", filePath, err)
+		}
+		warnIssueHeaderMismatch(opts.Stderr, relPath, f.Number, issues.ParseHeaderNumber(string(content)))
+		_, oldStatus, hasStatus := issues.ParseIssueFile(string(content))
+		if !hasStatus {
+			return nil, false, fmt.Errorf("issues: %s has no '**Status**:' line to update", relPath)
+		}
+		updated, _, err := issues.RewriteStatus(string(content), newStatus)
+		if err != nil {
+			return nil, false, fmt.Errorf("issues: %w", err)
+		}
+		result := issuesResult{Number: f.Number, File: relPath, OldStatus: oldStatus, NewStatus: newStatus, Noop: oldStatus == newStatus}
+		targets = append(targets, target{path: filePath, relPath: relPath, old: content, updated: []byte(updated), result: result})
+	}
+
+	var changed []int
+	for i := range targets {
+		if !targets[i].result.Noop {
+			changed = append(changed, i)
+		}
+	}
+	results := func() []issuesResult {
+		out := make([]issuesResult, len(targets))
+		for i := range targets {
+			out[i] = targets[i].result
+		}
+		return out
+	}
+	if len(changed) == 0 {
+		return results(), false, nil
+	}
+
+	readmePath := filepath.Join(issuesDir, "README.md")
+	readmeRelPath := filepath.ToSlash(filepath.Join("issues", "README.md"))
+	origReadme, readErr := os.ReadFile(readmePath)
+	readmeExisted := readErr == nil
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return nil, false, fmt.Errorf("issues: read %s: %w", readmePath, readErr)
+	}
+	restore := func() {
+		for _, i := range changed {
+			_ = os.WriteFile(targets[i].path, targets[i].old, 0o644)
+		}
+		if readmeExisted {
+			_ = os.WriteFile(readmePath, origReadme, 0o644)
+		} else {
+			_ = os.Remove(readmePath)
+		}
+	}
+	for _, i := range changed {
+		if err := os.WriteFile(targets[i].path, targets[i].updated, 0o644); err != nil {
+			restore()
+			return nil, false, fmt.Errorf("issues: write %s: %w", targets[i].path, err)
+		}
+	}
+	readmeChanged, err := index.UpdateIssuesReadme(readmePath, issuesDir)
+	if err != nil {
+		restore()
+		return nil, false, fmt.Errorf("issues: update README: %w", err)
+	}
+	if opts.Check {
+		restore()
+		for _, i := range changed {
+			targets[i].result.ReadmeUpdated = readmeChanged
+			break
+		}
+		return results(), true, nil
+	}
+
+	for _, i := range changed {
+		targets[i].result.ReadmeUpdated = readmeChanged
+		break
+	}
+	if !opts.NoCommit {
+		paths := make([]string, 0, len(changed)+1)
+		numbers := make([]string, 0, len(changed))
+		for _, i := range changed {
+			paths = append(paths, targets[i].relPath)
+			numbers = append(numbers, targets[i].result.Number)
+		}
+		paths = append(paths, readmeRelPath)
+		msg := opts.CommitMsg
+		if msg == "" {
+			commitVerb := verb
+			if commitVerb == "done" {
+				commitVerb = "close"
+			}
+			msg = fmt.Sprintf("feat(issues): %s %s", commitVerb, strings.Join(numbers, ", "))
+			if reason != "" {
+				msg += ", " + reason
+			}
+		}
+		sha, err := gitAddAndCommit(opts.Dir, paths, msg)
+		if err != nil {
+			return nil, false, fmt.Errorf("issues: commit: %w", err)
+		}
+		for _, i := range changed {
+			targets[i].result.Committed = true
+			targets[i].result.CommitSHA = sha
+		}
+	}
+	return results(), false, nil
 }
 
 func issuesCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
