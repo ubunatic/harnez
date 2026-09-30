@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -76,6 +78,10 @@ Examples:
 				if err != nil {
 					if len(paths) == 1 {
 						return err
+					}
+					if filepath.Clean(file) == filepath.Join(".harnez", "rules", "Local.md") && errors.Is(err, os.ErrNotExist) {
+						fmt.Fprintf(cmd.OutOrStdout(), "=== %s (absent, optional) ===\n", file)
+						continue
 					}
 					message := strings.ReplaceAll(strings.ReplaceAll(err.Error(), "\n", " "), "\r", " ")
 					fmt.Fprintf(cmd.ErrOrStderr(), "harnez read: %s: %s\n", file, message)

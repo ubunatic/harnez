@@ -1,6 +1,6 @@
 # 638 — harnez read reports optional .harnez/rules/Local.md as an error when missing
 
-**Status**: Open
+**Status**: Closed — resolved in pending implementation commit
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
@@ -26,3 +26,9 @@ it as a discovery problem and created a placeholder Local.md to silence it.
 - Alternative: drop Local.md from the generated read line when the file does not exist at init time
   (weaker: goes stale when the file is created later).
 - Test: multi-file read with missing Local.md → exit 0, empty stderr; missing Tools.md → stderr error kept.
+
+## 4. Outcome
+- Implemented optional-missing notice on stdout for multi-file reads; other missing files still report on stderr.
+- Added regression test for missing Local.md and missing Tools.md.
+- `make test-q1` ran once; failed in 17 unrelated `internal/claude` apply/install tests. The `cmd/harnez` package passed, including this regression test.
+- `make install` succeeded.

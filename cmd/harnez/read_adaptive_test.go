@@ -120,6 +120,38 @@ func TestReadMultipleFilesKeepsReadableFilesWhenOneIsMissing(t *testing.T) {
 	}
 }
 
+func TestReadMultipleFilesTreatsMissingLocalRulesAsOptional(t *testing.T) {
+	dir := t.TempDir()
+	local := filepath.Join(".harnez", "rules", "Local.md")
+	tools := filepath.Join(".harnez", "rules", "Tools.md")
+	read := func(paths ...string) (string, string, error) {
+		t.Helper()
+		cmd := newReadCmd()
+		var out, stderr bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs(paths)
+		err := cmd.Execute()
+		return out.String(), stderr.String(), err
+	}
+
+	t.Chdir(dir)
+	if err := os.MkdirAll(filepath.Dir(tools), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "present.txt"), []byte("present\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, stderr, err := read("present.txt", local)
+	if err != nil || stderr != "" || !strings.Contains(out, "=== .harnez/rules/Local.md (absent, optional) ===") {
+		t.Fatalf("missing optional Local.md: err=%v stdout=%q stderr=%q", err, out, stderr)
+	}
+	out, stderr, err = read("present.txt", tools)
+	if err != nil || !strings.Contains(stderr, "Tools.md") || !strings.Contains(stderr, "no such file") {
+		t.Fatalf("missing Tools.md should remain an error: err=%v stdout=%q stderr=%q", err, out, stderr)
+	}
+}
+
 func TestReadHookNativeProtocolAndRepeat(t *testing.T) {
 	enforceRead := true
 	dir := t.TempDir()
