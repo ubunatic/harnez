@@ -85,6 +85,57 @@ func TestWriteLoadObservationPersistsNormalizedPayload(t *testing.T) {
 	}
 }
 
+func TestUsageSummaryHistoryIsIdempotentAndOrdered(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "usage-summary.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, q string) error { return s.Exec(ctx, q) }); err != nil {
+		t.Fatal(err)
+	}
+	first := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	second := first.Add(time.Minute)
+	for _, record := range []UsageSummaryRecord{{Hostname: "host", ObservedAt: second, Payload: []byte(`{"timestamp":"later"}`)}, {Hostname: "host", ObservedAt: first, Payload: []byte(`{"timestamp":"earlier"}`)}, {Hostname: "host", ObservedAt: first, Payload: []byte(`{"timestamp":"earlier"}`)}} {
+		if err := s.WriteUsageSummary(ctx, record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.UsageSummaries(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || !got[0].ObservedAt.Equal(first) || string(got[0].Payload) != `{"timestamp":"earlier"}` || !got[1].ObservedAt.Equal(second) {
+		t.Fatalf("usage summaries = %+v", got)
+	}
+}
+
+func TestEnsureSchemaUpgradesIntermediateUsageSummaryTable(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "intermediate.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if err := s.Exec(ctx, `CREATE TABLE usage_summary_observations (id INTEGER PRIMARY KEY AUTOINCREMENT, hostname TEXT NOT NULL, observed_at TEXT NOT NULL, summary_json TEXT NOT NULL, UNIQUE(hostname,observed_at))`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Exec(ctx, `INSERT INTO usage_summary_observations(hostname,observed_at,summary_json) VALUES('host','2026-09-30T12:00:00Z','{}')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureSchema(ctx, func(ctx context.Context, query string) error { return s.Exec(ctx, query) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteUsageSummary(ctx, UsageSummaryRecord{Hostname: "host", ObservedAt: time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC), Payload: []byte(`{"updated":true}`)}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.UsageSummaries(ctx)
+	if err != nil || len(rows) != 1 || string(rows[0].Payload) != `{"updated":true}` {
+		t.Fatalf("upgraded summary rows = %+v, err=%v", rows, err)
+	}
+}
+
 func TestCurrentKeepsLatestAndStaleMetadata(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "usage.sqlite"))
 	if err != nil {

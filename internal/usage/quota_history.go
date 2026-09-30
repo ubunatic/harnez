@@ -2,6 +2,7 @@ package usage
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -136,6 +137,13 @@ func AgentUsageToQuotaHistoryEntries(u AgentUsage, now time.Time) []QuotaHistory
 
 // ReadQuotaHistory loads all recorded entries from quota-history.jsonl in historyDir.
 func ReadQuotaHistory(historyDir string) ([]QuotaHistoryEntry, error) {
+	if historyDir == "" || filepath.Clean(historyDir) == filepath.Clean(HistoryDir("")) {
+		return QuotaHistoryFromStore(context.Background(), "", "")
+	}
+	return readQuotaHistoryFile(historyDir)
+}
+
+func readQuotaHistoryFile(historyDir string) ([]QuotaHistoryEntry, error) {
 	path := QuotaHistoryPath(historyDir)
 	f, err := os.Open(path)
 	if err != nil {
@@ -193,6 +201,9 @@ func AppendQuotaHistoryWithThrottle(historyDir string, entries []QuotaHistoryEnt
 	if historyDir == "" {
 		historyDir = HistoryDir("")
 	}
+	if filepath.Clean(historyDir) == filepath.Clean(HistoryDir("")) {
+		return appendQuotaHistoryToStore(entries, throttle, now)
+	}
 	if err := os.MkdirAll(historyDir, 0700); err != nil {
 		return fmt.Errorf("create quota history dir: %w", err)
 	}
@@ -204,7 +215,7 @@ func AppendQuotaHistoryWithThrottle(historyDir string, entries []QuotaHistoryEnt
 	}
 	defer unlockHistoryFile(lockFile)
 
-	existing, _ := ReadQuotaHistory(historyDir)
+	existing, _ := readQuotaHistoryFile(historyDir)
 	lastSeen := make(map[string]QuotaHistoryEntry, len(existing))
 	for _, e := range existing {
 		key := fmt.Sprintf("%s|%s|%s", e.Agent, e.Group, e.Window)

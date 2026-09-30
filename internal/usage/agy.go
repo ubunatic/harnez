@@ -414,7 +414,11 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 	} else if client != nil {
 		cachePath := liveFetchCachePath(geminiDir)
 		defer lockLiveFetchInProcess(cachePath)()
-		cache := readLiveFetchCache[agyQuotaPayload](cachePath)
+		cacheAt, cachedUsage, _ := ProviderSnapshotFromStore(ctx, "agy")
+		cache := (*liveFetchCache[agyQuotaPayload])(nil)
+		if !cacheAt.IsZero() {
+			cache = &liveFetchCache[agyQuotaPayload]{FetchedAt: cacheAt, Payload: agyQuotaPayload{ModelGroups: cachedUsage.ModelGroups}}
+		}
 
 		backoff := readAGYAuthBackoff(agyAuthBackoffPath(geminiDir))
 		if !quotaFetchForced(ctx) && cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval && (backoff == nil || !time.Now().Before(backoff.Until)) {
@@ -472,10 +476,8 @@ func collectAGYWithHome(ctx context.Context, geminiDir, homeDir string, client *
 				// lock.
 				if locked {
 					now := time.Now()
-					_ = writeLiveFetchCache(cachePath, liveFetchCache[agyQuotaPayload]{
-						FetchedAt: now,
-						Payload:   agyQuotaPayload{ModelGroups: groups},
-					})
+					_ = storeProviderSnapshot(ctx, "agy", now, usage)
+					_ = writeProviderSnapshotMirror(cachePath, now, "agy", usage)
 					_ = AppendQuotaHistoryForAgent(resolveQuotaHistoryDir(geminiDir), usage, now)
 				}
 			} else {

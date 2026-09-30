@@ -52,6 +52,15 @@ type TurnTokenUsage struct {
 	ObservedAt                       time.Time
 }
 
+// UsageSummaryRecord stores one complete legacy-compatible usage snapshot as
+// JSON so the old history format can be generated without a second authority.
+type UsageSummaryRecord struct {
+	Hostname   string
+	ObservedAt time.Time
+	Payload    []byte
+	RecordKey  string
+}
+
 // TurnQuotaDelta is a same-provider, same-pool, same-window comparison.
 type TurnQuotaDelta struct {
 	SessionID, Provider, Pool, WindowKey string
@@ -101,6 +110,56 @@ func (s *Store) QueryRow(ctx context.Context, query string, args ...any) *sql.Ro
 	return s.db.QueryRowContext(ctx, query, args...)
 }
 
+func (s *Store) WriteUsageSummary(ctx context.Context, record UsageSummaryRecord) error {
+	if record.Hostname == "" || record.ObservedAt.IsZero() || len(record.Payload) == 0 {
+		return fmt.Errorf("invalid usage summary record")
+	}
+	if record.RecordKey == "" {
+		record.RecordKey = record.Hostname + ":" + record.ObservedAt.UTC().Format(time.RFC3339Nano)
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO usage_summary_observations(hostname,observed_at,summary_json,record_key) VALUES(?,?,?,?) ON CONFLICT(record_key) DO UPDATE SET hostname=excluded.hostname,observed_at=excluded.observed_at,summary_json=excluded.summary_json`, record.Hostname, record.ObservedAt.UTC().Format(time.RFC3339Nano), string(record.Payload), record.RecordKey)
+	return err
+}
+
+// LatestProviderSnapshot returns normalized quota windows from the newest
+// provider observation, preferring fresh records and authoritative sources.
+func (s *Store) LatestProviderSnapshot(ctx context.Context, provider string) (time.Time, []Window, error) {
+	rows, err := s.CurrentFor(ctx, provider)
+	if err != nil {
+		return time.Time{}, nil, err
+	}
+	var observed time.Time
+	for _, row := range rows {
+		if row.ObservedAt.After(observed) {
+			observed = row.ObservedAt
+		}
+	}
+	return observed, rows, nil
+}
+
+func (s *Store) UsageSummaries(ctx context.Context) ([]UsageSummaryRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT hostname,observed_at,summary_json,record_key FROM usage_summary_observations ORDER BY observed_at,hostname,id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []UsageSummaryRecord
+	for rows.Next() {
+		var record UsageSummaryRecord
+		var observed string
+		var payload string
+		if err := rows.Scan(&record.Hostname, &observed, &payload, &record.RecordKey); err != nil {
+			return nil, err
+		}
+		if record.ObservedAt, err = time.Parse(time.RFC3339Nano, observed); err != nil {
+			return nil, err
+		}
+		record.Payload = []byte(payload)
+		out = append(out, record)
+	}
+	return out, rows.Err()
+}
+
 // MigrateStableWindowKeys canonicalizes provider window aliases while
 // retaining each previous key. Rows that collapse onto the same observation,
 // pool, and canonical key are copied to an archive table before the duplicate
@@ -115,7 +174,7 @@ func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 		return err
 	}
 	var completed int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name='normalized-window-keys-v2'`).Scan(&completed); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name='normalized-window-keys-v3'`).Scan(&completed); err != nil {
 		return err
 	}
 	if completed > 0 {
@@ -185,7 +244,7 @@ func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 	if err := migrateTurnDeltaWindowKeys(ctx, tx); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO usage_store_migrations(name,completed_at) VALUES('normalized-window-keys-v2',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO usage_store_migrations(name,completed_at) VALUES('normalized-window-keys-v3',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -837,6 +896,8 @@ func EnsureSchema(ctx context.Context, exec func(context.Context, string) error)
 		`CREATE INDEX IF NOT EXISTS idx_quota_windows_provider_pool_window ON quota_windows(provider,pool,window_key)`,
 		`CREATE TABLE IF NOT EXISTS usage_load_observations (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, observed_at TEXT NOT NULL, payload_json TEXT NOT NULL, UNIQUE(provider,observed_at))`,
 		`CREATE INDEX IF NOT EXISTS idx_usage_load_observations_provider_time ON usage_load_observations(provider,observed_at)`,
+		`CREATE TABLE IF NOT EXISTS usage_summary_observations (id INTEGER PRIMARY KEY AUTOINCREMENT, hostname TEXT NOT NULL, observed_at TEXT NOT NULL, summary_json TEXT NOT NULL, record_key TEXT NOT NULL UNIQUE)`,
+		`CREATE INDEX IF NOT EXISTS idx_usage_summary_observations_time ON usage_summary_observations(observed_at,hostname)`,
 	} {
 		if err := exec(ctx, statement); err != nil {
 			return err
@@ -850,6 +911,15 @@ func EnsureSchema(ctx context.Context, exec func(context.Context, string) error)
 		if err := exec(ctx, `ALTER TABLE quota_windows ADD COLUMN `+column+` INTEGER`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
 			return err
 		}
+	}
+	if err := exec(ctx, `ALTER TABLE usage_summary_observations ADD COLUMN record_key TEXT NOT NULL DEFAULT ''`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+		return err
+	}
+	if err := exec(ctx, `UPDATE usage_summary_observations SET record_key=hostname||':'||observed_at WHERE record_key=''`); err != nil {
+		return err
+	}
+	if err := exec(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS idx_usage_summary_record_key ON usage_summary_observations(record_key)`); err != nil {
+		return err
 	}
 	if err := exec(ctx, `ALTER TABLE quota_windows ADD COLUMN legacy_window_key TEXT NOT NULL DEFAULT ''`); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
 		return err

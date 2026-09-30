@@ -322,6 +322,13 @@ func unlockHistoryFile(f *os.File) {
 // AppendHistory appends one snapshot as a JSON line to this machine's history
 // file under dir (see HistoryDir), tagging it with the local hostname.
 func AppendHistory(dir string, summary UsageSummary) error {
+	if filepath.Clean(dir) == filepath.Clean(HistoryDir("")) {
+		return appendUsageSummaryToStore(dir, summary)
+	}
+	return appendHistoryFile(dir, summary)
+}
+
+func appendHistoryFile(dir string, summary UsageSummary) error {
 	if err := migrateLegacyHistory(dir); err != nil {
 		return fmt.Errorf("migrate usage history: %w", err)
 	}
@@ -361,6 +368,13 @@ func AppendHistory(dir string, summary UsageSummary) error {
 // Malformed lines are skipped rather than failing the whole read, since a
 // history file may have been copied in mid-write from another machine.
 func ReadHistory(dir string) ([]HistoryEntry, error) {
+	if filepath.Clean(dir) == filepath.Clean(HistoryDir("")) {
+		return UsageHistoryFromStore(context.Background(), "", "")
+	}
+	return readHistoryFiles(dir)
+}
+
+func readHistoryFiles(dir string) ([]HistoryEntry, error) {
 	if err := migrateLegacyHistory(dir); err != nil {
 		return nil, fmt.Errorf("migrate usage history: %w", err)
 	}

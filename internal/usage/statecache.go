@@ -196,6 +196,13 @@ func snapshotPath(stateDir, agentID string) string {
 // the sole writer for these files, so there is no cross-process write race
 // to close.
 func WriteAgentSnapshot(stateDir, agentID string, usage AgentUsage) error {
+	if filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
+		return writeAgentSnapshotToStore(stateDir, agentID, usage)
+	}
+	return writeAgentSnapshotFile(stateDir, agentID, usage)
+}
+
+func writeAgentSnapshotFile(stateDir, agentID string, usage AgentUsage) error {
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return fmt.Errorf("create state dir %s: %w", stateDir, err)
 	}
@@ -259,6 +266,13 @@ func PersistAgentSnapshot(stateDir string, agent AgentUsage, offline bool) error
 // having run yet, or not having collected this agent yet, is not an error
 // the caller has to unwrap.
 func ReadAgentSnapshot(stateDir, agentID string) (*AgentSnapshot, error) {
+	if filepath.Clean(stateDir) == filepath.Clean(StateDir("")) {
+		return readAgentSnapshotFromStore(context.Background(), "", agentID)
+	}
+	return readAgentSnapshotFile(stateDir, agentID)
+}
+
+func readAgentSnapshotFile(stateDir, agentID string) (*AgentSnapshot, error) {
 	data, err := os.ReadFile(snapshotPath(stateDir, agentID))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -271,6 +285,87 @@ func ReadAgentSnapshot(stateDir, agentID string) (*AgentSnapshot, error) {
 		return nil, fmt.Errorf("parse %s snapshot: %w", agentID, err)
 	}
 	return &snap, nil
+}
+
+func writeAgentSnapshotToStore(stateDir, agentID string, agent AgentUsage) error {
+	dbPath, err := telemetry.DefaultDBPath()
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
+	if err := ImportUsageCompatibility(ctx, "", dbPath); err != nil {
+		return err
+	}
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		return err
+	}
+	if err := store.MigrateStableWindowKeys(ctx); err != nil {
+		return err
+	}
+	if err := archiveBeforeMirrorOverwrite(ctx, store); err != nil {
+		return err
+	}
+	at := time.Now().UTC()
+	if err := importAgent(store, ctx, agentID, "state-snapshot", at, agent); err != nil {
+		return err
+	}
+	snapshot, err := agentSnapshotFromStore(ctx, store, agentID)
+	if err != nil {
+		return err
+	}
+	if snapshot == nil {
+		snapshot = &AgentSnapshot{FetchedAt: at, Usage: agent}
+	}
+	return writeAgentSnapshotFile(stateDir, agentID, snapshot.Usage)
+}
+
+func readAgentSnapshotFromStore(ctx context.Context, dbPath, agentID string) (*AgentSnapshot, error) {
+	if dbPath == "" {
+		var err error
+		dbPath, err = telemetry.DefaultDBPath()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := ImportUsageCompatibility(ctx, "", dbPath); err != nil {
+		return nil, err
+	}
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		return nil, err
+	}
+	defer store.Close()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		return nil, err
+	}
+	if err := store.MigrateStableWindowKeys(ctx); err != nil {
+		return nil, err
+	}
+	return agentSnapshotFromStore(ctx, store, agentID)
+}
+
+func agentSnapshotFromStore(ctx context.Context, store *usagestore.Store, agentID string) (*AgentSnapshot, error) {
+	windows, err := store.CurrentFor(ctx, agentID)
+	if err != nil {
+		return nil, err
+	}
+	if len(windows) == 0 {
+		return nil, nil
+	}
+	var latest time.Time
+	for _, window := range windows {
+		if window.ObservedAt.After(latest) {
+			latest = window.ObservedAt
+		}
+	}
+	agent := AgentUsage{AgentID: agentID, LastRefreshed: latest}
+	applyStoredWindows(&agent, windows, latest)
+	return &AgentSnapshot{FetchedAt: latest, Usage: agent}, nil
 }
 
 // cacheOrLive returns the agent's cached snapshot from stateDir if present,

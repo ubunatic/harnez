@@ -122,19 +122,10 @@ func providerQuotaCachePath(provider string) (string, error) {
 }
 
 func readProviderQuotaCache(provider, path string) time.Time {
-	switch provider {
-	case "claude":
-		if c := readLiveFetchCache[claudeQuotaPayload](path); c != nil {
-			return c.FetchedAt
-		}
-	case "codex":
-		if c := readLiveFetchCache[codexQuotaPayload](path); c != nil {
-			return c.FetchedAt
-		}
-	case "agy":
-		if c := readLiveFetchCache[agyQuotaPayload](path); c != nil {
-			return c.FetchedAt
-		}
+	_ = path // retained in the signature for callers using a custom provider directory
+	at, _, err := ProviderSnapshotFromStore(context.Background(), provider)
+	if err != nil {
+		return time.Time{}
 	}
-	return time.Time{}
+	return at
 }

@@ -299,7 +299,11 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 	if client != nil && accessToken != "" {
 		cachePath := liveFetchCachePath(codexDir)
 		defer lockLiveFetchInProcess(cachePath)()
-		cache := readLiveFetchCache[codexQuotaPayload](cachePath)
+		cacheAt, cachedUsage, _ := ProviderSnapshotFromStore(ctx, "codex")
+		cache := (*liveFetchCache[codexQuotaPayload])(nil)
+		if !cacheAt.IsZero() {
+			cache = &liveFetchCache[codexQuotaPayload]{FetchedAt: cacheAt, Payload: codexQuotaPayload{Session: cachedUsage.Session, Weekly: cachedUsage.Weekly}}
+		}
 
 		if !quotaFetchForced(ctx) && cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval && !codexQuotaCacheExpired(cache.Payload, time.Now()) {
 			usage.Session = cache.Payload.Session
@@ -376,10 +380,8 @@ func CollectCodex(ctx context.Context, codexDir string, client *http.Client) Age
 			// tick, but only if we actually hold the lock.
 			if locked {
 				now := time.Now()
-				_ = writeLiveFetchCache(cachePath, liveFetchCache[codexQuotaPayload]{
-					FetchedAt: now,
-					Payload:   codexQuotaPayload{Session: usage.Session, Weekly: usage.Weekly},
-				})
+				_ = storeProviderSnapshot(ctx, "codex", now, usage)
+				_ = writeProviderSnapshotMirror(cachePath, now, "codex", usage)
 				_ = AppendQuotaHistoryForAgent(resolveQuotaHistoryDir(codexDir), usage, now)
 			}
 		} else if cache != nil {

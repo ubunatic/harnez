@@ -310,7 +310,11 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 	if client != nil {
 		cachePath := liveFetchCachePath(claudeDir)
 		defer lockLiveFetchInProcess(cachePath)()
-		cache := readLiveFetchCache[claudeQuotaPayload](cachePath)
+		cacheAt, cachedUsage, _ := ProviderSnapshotFromStore(ctx, "claude")
+		cache := (*liveFetchCache[claudeQuotaPayload])(nil)
+		if !cacheAt.IsZero() {
+			cache = &liveFetchCache[claudeQuotaPayload]{FetchedAt: cacheAt, Payload: claudeQuotaPayload{Session: cachedUsage.Session, Weekly: cachedUsage.Weekly}}
+		}
 
 		if !quotaFetchForced(ctx) && cache != nil && time.Since(cache.FetchedAt) < MinWatchInterval {
 			usage.Session = cache.Payload.Session
@@ -378,14 +382,11 @@ func CollectClaude(ctx context.Context, claudeDir string, client *http.Client) A
 		}
 
 		if usage.QuotaFetchError == "" {
-			// Live fetch succeeded: persist it for sibling processes/next
-			// tick, but only if we actually hold the lock.
+			// SQLite is authoritative; keep the JSON snapshot as a compatibility mirror.
 			if locked {
 				now := time.Now()
-				_ = writeLiveFetchCache(cachePath, liveFetchCache[claudeQuotaPayload]{
-					FetchedAt: now,
-					Payload:   claudeQuotaPayload{Session: usage.Session, Weekly: usage.Weekly},
-				})
+				_ = storeProviderSnapshot(ctx, "claude", now, usage)
+				_ = writeProviderSnapshotMirror(cachePath, now, "claude", usage)
 				_ = AppendQuotaHistoryForAgent(resolveQuotaHistoryDir(claudeDir), usage, now)
 			}
 		} else if cache != nil {
