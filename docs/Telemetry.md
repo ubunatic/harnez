@@ -91,10 +91,11 @@ flowchart TD
 ### 2.3 Agent Turn Statistics (`harnez stats --agents`)
 
 `harnez stats --agents --days N [--json]` joins harnez agent session JSON in
-`~/.harnez/agents/`, the adjacent `quota-readings.jsonl` turn-boundary readings,
-the telemetry database's `tool_calls` rows, and provider quota history in
-`$XDG_DATA_HOME/harnez/usage-history/quota-history.jsonl`. Deleted harnez sessions
-remain in the session store's `deleted/` archive for reporting. Codex host model
+`~/.harnez/agents/`, turn token/quota rows in `telemetry.sqlite` (with an idempotent
+compatibility import from the retained `quota-readings.jsonl` spool), the database's
+`tool_calls` rows, and provider quota history in `$XDG_DATA_HOME/harnez/usage-history/
+quota-history.jsonl`. Deleted harnez sessions remain in the session store's `deleted/`
+archive for reporting. Codex host model
 names are recovered from `~/.codex/sessions/**/rollout-*.jsonl` where the rollout
 contains a `turn_context` model for that session.
 

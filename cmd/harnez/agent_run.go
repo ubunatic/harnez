@@ -52,7 +52,7 @@ func preflightCodex(ctx context.Context, provider string, driver subagent.Driver
 	return check(ctx)
 }
 
-func recordTurnQuota(s *subagent.FileSessionStore, dbPath string, capture func(context.Context, string, bool) usage.TurnQuotaReading, sessionID, provider string, turn int, boundary string, force bool, turnStarted, baselineCacheAt time.Time, tokens *subagent.TurnTokenUsage) {
+func recordTurnQuota(dbPath string, capture func(context.Context, string, bool) usage.TurnQuotaReading, sessionID, provider string, turn int, boundary string, force bool, turnStarted, baselineCacheAt time.Time) {
 	ctx, cancel := context.WithTimeout(context.Background(), usage.TurnQuotaTimeoutForProvider(provider))
 	defer cancel()
 	var reading usage.TurnQuotaReading
@@ -65,7 +65,6 @@ func recordTurnQuota(s *subagent.FileSessionStore, dbPath string, capture func(c
 	if dbPath != "" {
 		_ = usage.PersistTurnQuotaBoundary(context.Background(), dbPath, stored)
 	}
-	_ = s.RecordTurnQuota(subagent.TurnQuotaEvent{SessionID: sessionID, Turn: turn, Boundary: boundary, Provider: provider, Reading: reading, Tokens: tokens})
 }
 
 func captureTurnQuota(parent context.Context, capture func(context.Context, string, bool) usage.TurnQuotaReading, provider string, force bool, turnStarted time.Time) usage.TurnQuotaReading {
@@ -80,12 +79,11 @@ func captureTurnQuota(parent context.Context, capture func(context.Context, stri
 	return usage.CaptureTurnQuotaSince(ctx, provider, force, turnStarted)
 }
 
-func storeTurnQuota(s *subagent.FileSessionStore, dbPath, sessionID, provider string, turn int, boundary string, reading usage.TurnQuotaReading) {
+func storeTurnQuota(dbPath, sessionID, provider string, turn int, boundary string, reading usage.TurnQuotaReading) {
 	stored := usage.TurnQuotaBoundaryFromReading(sessionID, provider, turn, boundary, reading)
 	if dbPath != "" {
 		_ = usage.PersistTurnQuotaBoundary(context.Background(), dbPath, stored)
 	}
-	_ = s.RecordTurnQuota(subagent.TurnQuotaEvent{SessionID: sessionID, Turn: turn, Boundary: boundary, Provider: provider, Reading: reading})
 }
 
 func persistAgentTurnTokens(dbPath string, session *subagent.Session, result *subagent.TurnResult, observedAt time.Time) {
@@ -554,8 +552,8 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	if err != nil {
 		before := <-beforeCapture
 		baselineCacheAt := turnQuotaBaseline(turnStarted, before)
-		storeTurnQuota(s, d.dbPath, id, m.Provider, turn, "before", before)
-		recordTurnQuota(s, d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt, nil)
+		storeTurnQuota(d.dbPath, id, m.Provider, turn, "before", before)
+		recordTurnQuota(d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 		if req.SessionID == "" {
 			sess, getErr := s.Get(id)
 			if getErr != nil {
@@ -578,8 +576,8 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	}
 	before := <-beforeCapture
 	baselineCacheAt := turnQuotaBaseline(turnStarted, before)
-	storeTurnQuota(s, d.dbPath, id, m.Provider, turn, "before", before)
-	recordTurnQuota(s, d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt, &subagent.TurnTokenUsage{NewInputTokens: r.InputTokens, CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens, ReasoningTokens: r.ReasoningTokens})
+	storeTurnQuota(d.dbPath, id, m.Provider, turn, "before", before)
+	recordTurnQuota(d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 	now := time.Now()
 	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}}}
 	persistAgentTurnTokens(d.dbPath, sess, r, now)
@@ -816,8 +814,8 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if err != nil {
 		before := <-beforeCapture
 		baselineCacheAt := turnQuotaBaseline(turnStarted, before)
-		storeTurnQuota(s, d.dbPath, sess.ID, sess.Provider, turn, "before", before)
-		recordTurnQuota(s, d.dbPath, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt, nil)
+		storeTurnQuota(d.dbPath, sess.ID, sess.Provider, turn, "before", before)
+		recordTurnQuota(d.dbPath, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 		recordResumeFailure(s, sess, err)
 		quotaState := "unknown"
 		if d.availability != nil {
@@ -864,8 +862,8 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	sess.TurnRecords = append(sess.TurnRecords, subagent.TurnRecord{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens})
 	before := <-beforeCapture
 	baselineCacheAt := turnQuotaBaseline(turnStarted, before)
-	storeTurnQuota(s, d.dbPath, sess.ID, sess.Provider, turn, "before", before)
-	recordTurnQuota(s, d.dbPath, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt, &subagent.TurnTokenUsage{NewInputTokens: r.InputTokens, CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens, ReasoningTokens: r.ReasoningTokens})
+	storeTurnQuota(d.dbPath, sess.ID, sess.Provider, turn, "before", before)
+	recordTurnQuota(d.dbPath, d.quota, sess.ID, sess.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 	persistAgentTurnTokens(d.dbPath, sess, r, sess.LastActiveAt)
 	if err = s.Save(sess); err != nil {
 		return err

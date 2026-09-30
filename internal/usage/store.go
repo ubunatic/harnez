@@ -32,29 +32,43 @@ func ImportUsageCompatibility(ctx context.Context, homeDir, dbPath string) error
 	if dbPath == "" {
 		var err error
 		dbPath, err = telemetry.DefaultDBPath()
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 	}
 	store, err := usagestore.Open(dbPath)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer store.Close()
-	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil { return err }
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		return err
+	}
 	return importCompatibility(store, ctx, homeDir)
 }
 
 // QuotaHistoryFromStore returns the store's historical window view in the
 // legacy report shape used by host-session fitted attribution.
 func QuotaHistoryFromStore(ctx context.Context, homeDir, dbPath string) ([]QuotaHistoryEntry, error) {
-	if err := ImportUsageCompatibility(ctx, homeDir, dbPath); err != nil { return nil, err }
+	if err := ImportUsageCompatibility(ctx, homeDir, dbPath); err != nil {
+		return nil, err
+	}
 	if dbPath == "" {
 		var err error
 		dbPath, err = telemetry.DefaultDBPath()
-		if err != nil { return nil, err }
+		if err != nil {
+			return nil, err
+		}
 	}
 	store, err := usagestore.Open(dbPath)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer store.Close()
 	windows, err := store.QuotaHistory(ctx)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	out := make([]QuotaHistoryEntry, 0, len(windows))
 	for _, window := range windows {
 		used := int(math.Round(window.UsedFraction * 100))

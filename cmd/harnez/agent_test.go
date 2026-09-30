@@ -23,6 +23,7 @@ import (
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/subagent"
 	"ubunatic.com/harnez/internal/usage"
+	"ubunatic.com/harnez/internal/usagestore"
 )
 
 func testRatingPtr(rating int) *int { return &rating }
@@ -2725,6 +2726,7 @@ func TestRunStartWithoutCobraFlags(t *testing.T) {
 
 func TestRunStartRecordsQuotaBoundariesForTurn(t *testing.T) {
 	storeDir := t.TempDir()
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
 	store, err := subagent.NewSessionStore(storeDir)
 	if err != nil {
 		t.Fatal(err)
@@ -2753,30 +2755,35 @@ func TestRunStartRecordsQuotaBoundariesForTurn(t *testing.T) {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	err = runStart(cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, quota: capture}, startRequest{Prompt: "p", StoredPrompt: "p", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull, JSON: true})
+	err = runStart(cmd, agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, quota: capture, dbPath: dbPath}, startRequest{Prompt: "p", StoredPrompt: "p", ModelSpec: "codex:luna", Dir: ".", StreamMode: streamFull, JSON: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(calls, []bool{false, false}) {
 		t.Fatalf("quota capture force flags=%v, want [false false]", calls)
 	}
-	data, err := os.ReadFile(filepath.Join(storeDir, "quota-readings.jsonl"))
+	sessions, err := store.List("", true)
+	if err != nil || len(sessions) != 1 {
+		t.Fatalf("sessions=%+v err=%v", sessions, err)
+	}
+	usageStore, err := usagestore.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("quota event count=%d, want 2", len(lines))
-	}
-	var before, after subagent.TurnQuotaEvent
-	if err := json.Unmarshal([]byte(lines[0]), &before); err != nil {
+	defer usageStore.Close()
+	var boundaries int
+	if err := usageStore.QueryRow(context.Background(), `SELECT count(*) FROM turn_quota_boundaries WHERE session_id=? AND turn=1`, sessions[0].ID).Scan(&boundaries); err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal([]byte(lines[1]), &after); err != nil {
-		t.Fatal(err)
+	if boundaries != 2 {
+		t.Fatalf("stored boundary count=%d, want 2", boundaries)
 	}
-	if before.SessionID != after.SessionID || before.Turn != 1 || after.Turn != 1 || before.Boundary != "before" || after.Boundary != "after" || after.Reading.CacheAgeMS != 123 {
-		t.Fatalf("recorded quota events=%+v %+v", before, after)
+	tokens, err := usageStore.TurnTokenUsages(context.Background(), sessions[0].ID)
+	if err != nil || len(tokens) != 2 {
+		t.Fatalf("stored token rows=%+v err=%v, want delta and cumulative", tokens, err)
+	}
+	if _, err := os.Stat(filepath.Join(storeDir, "quota-readings.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("legacy quota spool exists after turn: stat err=%v", err)
 	}
 }
 
@@ -2899,6 +2906,7 @@ func TestAgentTurnsWarnAboutQuota1Changes(t *testing.T) {
 
 func TestRunResumeRecordsFreshQuotaPairAndAdvancesTurn(t *testing.T) {
 	storeDir := t.TempDir()
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
 	store, err := subagent.NewSessionStore(storeDir)
 	if err != nil {
 		t.Fatal(err)
@@ -2918,7 +2926,7 @@ func TestRunResumeRecordsFreshQuotaPairAndAdvancesTurn(t *testing.T) {
 	cmd := &cobra.Command{}
 	var out bytes.Buffer
 	cmd.SetOut(&out)
-	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, quota: capture, find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, quota: capture, dbPath: dbPath, find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
 		return s.Find(id)
 	}}
 	if err := runResume(cmd, deps, resumeRequest{Name: "worker", Prompt: "continue", JSON: true, StreamMode: streamFull}); err != nil {
@@ -2934,26 +2942,20 @@ func TestRunResumeRecordsFreshQuotaPairAndAdvancesTurn(t *testing.T) {
 	if sess.Turn != 5 {
 		t.Fatalf("persisted turn=%d, want 5", sess.Turn)
 	}
-	data, err := os.ReadFile(filepath.Join(storeDir, "quota-readings.jsonl"))
+	usageStore, err := usagestore.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("quota event count=%d, want 2", len(lines))
+	defer usageStore.Close()
+	var boundaries int
+	if err := usageStore.QueryRow(context.Background(), `SELECT count(*) FROM turn_quota_boundaries WHERE session_id=? AND turn=5`, "resume-1").Scan(&boundaries); err != nil {
+		t.Fatal(err)
 	}
-	for i, line := range lines {
-		var event subagent.TurnQuotaEvent
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			t.Fatal(err)
-		}
-		boundary := "before"
-		if i == 1 {
-			boundary = "after"
-		}
-		if event.SessionID != "resume-1" || event.Turn != 5 || event.Boundary != boundary {
-			t.Fatalf("event[%d]=%+v", i, event)
-		}
+	if boundaries != 2 {
+		t.Fatalf("stored boundary count=%d, want 2", boundaries)
+	}
+	if _, err := os.Stat(filepath.Join(storeDir, "quota-readings.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("legacy quota spool exists after resume: stat err=%v", err)
 	}
 }
 
