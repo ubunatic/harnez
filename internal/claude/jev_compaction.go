@@ -167,7 +167,11 @@ func applyJevCompactionPlugin(target string, enabled bool, preserveFunctionHookF
 		} else {
 			settings["enabledPlugins"] = plugins
 		}
-		removeMapKey(extraKnown, jevMarketplaceName)
+		if source, ok := extraKnown[jevMarketplaceName].(map[string]any); ok {
+			if sourceDetails, ok := source["source"].(map[string]any); ok && sourceDetails["path"] == marketplaceDir {
+				removeMapKey(extraKnown, jevMarketplaceName)
+			}
+		}
 		if len(extraKnown) == 0 {
 			delete(settings, "extraKnownMarketplaces")
 		} else {

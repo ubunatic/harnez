@@ -127,6 +127,7 @@ func TestApplyJevCompactionPluginWriteIdempotencyAndRemoval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	settings = nil
 	if err := json.Unmarshal(data, &settings); err != nil {
 		t.Fatal(err)
 	}

@@ -133,12 +133,11 @@ Pre-Work / Required Refinements:
 - Auto-trigger (`turn.complete` at a threshold) is still untested; cover it or state why not.
 
 ### M3 delivered
-- Disabling the embedded plugin now removes the reserved `harnez-local` marketplace registration,
-  while preserving other marketplace registrations and unrelated settings.
-- `make test-q1` ran in a detached worktree with this change. It reported the marketplace-removal
-  test failure against the first cleanup adjustment. Quota-1 allows one suite run this turn, so the
-  final unconditional removal adjustment is unverified; rerun the suite next turn.
-- `make install` completed successfully.
+- The cleanup code already removed `harnez-local` from `settings.json`. The test unmarshaled the
+  post-removal document into its pre-removal map, so Go retained the absent key and produced a
+  false failure. The test now decodes into a fresh map.
+- `go test ./internal/claude/ -run TestApplyJevCompaction` passed.
+- `go test ./internal/claude/... ./cmd/harnez/` passed.
 - Auto-trigger remains unverified live. The event only triggers at 60% context usage; the M2 live
   manual canary had 26,292 tokens and there is no supported way in this hook to inject synthetic
   usage. A live threshold run would require a substantially larger real session. Existing manual
