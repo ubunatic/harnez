@@ -480,16 +480,10 @@ func backfillRulesHeader(path, header string) (bool, error) {
 		return false, err
 	}
 	content := string(data)
-	prefix := header + "\n"
-	if !strings.HasPrefix(content, prefix) {
-		content = prefix + content
-	}
-	content = prefix + strings.TrimLeft(strings.TrimPrefix(content, prefix), "\n")
-	content = header + "\n\n" + strings.TrimPrefix(content, prefix)
-	if string(data) == content {
+	if strings.HasPrefix(content, header+"\n\n") {
 		return false, nil
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(header+"\n\n"+content), 0o644); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -1320,6 +1314,14 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		return err
 	}
 	changes += migrated
+	if cfg != nil {
+		if normalized, err := normalizeRulesHeaderGap(agentsPath, cfg.AgentsMD.Rules.Header); err != nil {
+			return fmt.Errorf("normalize rules header spacing %s: %w", agentsPath, err)
+		} else if normalized {
+			fmt.Printf("  normalized rules header spacing %s\n", agentsPath)
+			changes++
+		}
+	}
 
 	if changes == 0 {
 		fmt.Println("No changes.")
@@ -1327,6 +1329,30 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		fmt.Printf("%d change(s).\n", changes)
 	}
 	return nil
+}
+
+func normalizeRulesHeaderGap(path, header string) (bool, error) {
+	if header == "" {
+		return false, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	content := string(data)
+	prefix := header + "\n"
+	if !strings.HasPrefix(content, prefix) {
+		return false, nil
+	}
+	rest := strings.TrimLeft(strings.TrimPrefix(content, prefix), "\n")
+	normalized := header + "\n\n" + rest
+	if normalized == content {
+		return false, nil
+	}
+	if err := os.WriteFile(path, []byte(normalized), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func rulesAreGitIgnored(dir string) (bool, error) {
