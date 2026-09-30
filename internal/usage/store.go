@@ -244,7 +244,11 @@ func importAgent(s *usagestore.Store, ctx context.Context, provider, source stri
 		if key == "" {
 			key = pool
 		}
-		windows = append(windows, usagestore.Window{Provider: provider, Pool: pool, Key: key, Name: w.Name, Source: source, Freshness: freshness, UsedFraction: w.UsedPercent / 100, ResetAt: w.ResetAt, ObservedAt: at})
+		windowSource := source
+		if w.Source != "" {
+			windowSource = w.Source
+		}
+		windows = append(windows, usagestore.Window{Provider: provider, Pool: pool, Key: key, Name: w.Name, Source: windowSource, Freshness: freshness, UsedFraction: w.UsedPercent / 100, ResetAt: w.ResetAt, ObservedAt: at})
 	}
 	if agent.Tokens != nil {
 		input, cached, output := agent.Tokens.InputTokens, agent.Tokens.CacheReadTokens, agent.Tokens.OutputTokens

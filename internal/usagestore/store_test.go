@@ -2,6 +2,7 @@ package usagestore
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -30,6 +31,32 @@ func TestWriteAndCurrentIdempotentAndFractional(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].UsedFraction != .43125 || got[0].Freshness != "fresh" {
 		t.Fatalf("Current() = %+v", got)
+	}
+}
+
+func TestWriteLoadObservationPersistsNormalizedPayload(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "usage.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := EnsureSchema(context.Background(), func(ctx context.Context, q string) error { return s.Exec(ctx, q) }); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	if err := s.WriteLoadObservation(context.Background(), "remote-load", at, map[string]any{"cpu_percent": 12.5, "cores": 8}); err != nil {
+		t.Fatal(err)
+	}
+	var provider, observed, payload string
+	if err := s.QueryRow(context.Background(), `SELECT provider,observed_at,payload_json FROM usage_load_observations`).Scan(&provider, &observed, &payload); err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if provider != "remote-load" || observed != at.Format(time.RFC3339Nano) || decoded["cpu_percent"] != 12.5 {
+		t.Fatalf("load row provider=%q observed=%q payload=%s", provider, observed, payload)
 	}
 }
 

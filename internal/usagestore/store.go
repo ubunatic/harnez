@@ -4,6 +4,7 @@ package usagestore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -85,6 +86,20 @@ func (s *Store) WriteCurrent(ctx context.Context, observedAt time.Time, windows 
 		}
 	}
 	return tx.Commit()
+}
+
+// WriteLoadObservation appends a normalized CPU/GPU load sample as JSON while
+// preserving the existing typed snapshot wire format.
+func (s *Store) WriteLoadObservation(ctx context.Context, provider string, observedAt time.Time, payload any) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal load observation: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO usage_load_observations(provider,observed_at,payload_json) VALUES(?,?,?) ON CONFLICT(provider,observed_at) DO UPDATE SET payload_json=excluded.payload_json`, provider, observedAt.UTC().Format(time.RFC3339Nano), string(data))
+	if err != nil {
+		return fmt.Errorf("insert load observation: %w", err)
+	}
+	return nil
 }
 
 // Current returns the newest observation for each provider/pool/window.
@@ -175,6 +190,8 @@ func EnsureSchema(ctx context.Context, exec func(context.Context, string) error)
 		`CREATE TABLE IF NOT EXISTS quota_windows (id INTEGER PRIMARY KEY AUTOINCREMENT, observation_id INTEGER NOT NULL REFERENCES usage_observations(id) ON DELETE CASCADE, provider TEXT NOT NULL, pool TEXT NOT NULL DEFAULT '', window_key TEXT NOT NULL, window_name TEXT NOT NULL DEFAULT '', used_fraction REAL NOT NULL, input_tokens INTEGER, cached_input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, reset_at TEXT, UNIQUE(observation_id,pool,window_key))`,
 		`CREATE INDEX IF NOT EXISTS idx_usage_observations_provider_time ON usage_observations(provider,observed_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_quota_windows_provider_pool_window ON quota_windows(provider,pool,window_key)`,
+		`CREATE TABLE IF NOT EXISTS usage_load_observations (id INTEGER PRIMARY KEY AUTOINCREMENT, provider TEXT NOT NULL, observed_at TEXT NOT NULL, payload_json TEXT NOT NULL, UNIQUE(provider,observed_at))`,
+		`CREATE INDEX IF NOT EXISTS idx_usage_load_observations_provider_time ON usage_load_observations(provider,observed_at)`,
 	} {
 		if err := exec(ctx, statement); err != nil {
 			return err

@@ -21,6 +21,7 @@ type Collector struct {
 	Cadence      time.Duration
 	Timeout      time.Duration
 	Collect      func(context.Context) (AgentUsage, error)
+	CollectLoad  func(context.Context) (*LoadSnapshot, error)
 }
 
 // CollectorDiagnostic records one collector run, including failures and duration.
@@ -41,7 +42,7 @@ type Registry struct {
 func NewRegistry(collectors ...Collector) (*Registry, error) {
 	seen := map[string]bool{}
 	for _, c := range collectors {
-		if c.ID == "" || c.Provider == "" || c.Collect == nil || c.Cadence <= 0 || c.Timeout <= 0 {
+		if c.ID == "" || c.Provider == "" || (c.Collect == nil && c.CollectLoad == nil) || c.Cadence <= 0 || c.Timeout <= 0 {
 			return nil, fmt.Errorf("invalid usage collector %q", c.ID)
 		}
 		if seen[c.ID] {
@@ -50,6 +51,51 @@ func NewRegistry(collectors ...Collector) (*Registry, error) {
 		seen[c.ID] = true
 	}
 	return &Registry{collectors: append([]Collector(nil), collectors...), lastGood: map[string]AgentUsage{}}, nil
+}
+
+// CollectLoad runs one registered load collector with its declared timeout.
+func (r *Registry) CollectLoad(ctx context.Context, id string, diagnostics ...func(CollectorDiagnostic)) (*LoadSnapshot, error) {
+	for _, collector := range r.collectors {
+		if collector.ID != id || collector.CollectLoad == nil {
+			continue
+		}
+		started := time.Now()
+		cctx, cancel := context.WithTimeout(ctx, collector.Timeout)
+		snapshot, err := collector.CollectLoad(cctx)
+		cancel()
+		d := CollectorDiagnostic{ID: collector.ID, Started: started, Duration: time.Since(started)}
+		if err != nil {
+			d.Error = err.Error()
+		} else if snapshot != nil {
+			writeCtx, writeCancel := context.WithTimeout(ctx, 100*time.Millisecond)
+			writeErr := writeLoadObservation(writeCtx, collector.Provider, d.Started, snapshot)
+			writeCancel()
+			if writeErr != nil {
+				d.Error = writeErr.Error()
+			}
+		}
+		if len(diagnostics) > 0 && diagnostics[0] != nil {
+			diagnostics[0](d)
+		}
+		return snapshot, err
+	}
+	return nil, fmt.Errorf("load collector %q is not registered", id)
+}
+
+func writeLoadObservation(ctx context.Context, provider string, observedAt time.Time, snapshot *LoadSnapshot) error {
+	dbPath, err := telemetry.DefaultDBPath()
+	if err != nil {
+		return err
+	}
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, query string) error { return store.Exec(ctx, query) }); err != nil {
+		return err
+	}
+	return store.WriteLoadObservation(ctx, provider, observedAt, snapshot)
 }
 
 func (r *Registry) Collect(ctx context.Context, progress FetchProgressFunc, diagnostic func(CollectorDiagnostic)) []AgentUsage {
@@ -126,10 +172,55 @@ func (r *Registry) Collect(ctx context.Context, progress FetchProgressFunc, diag
 		byID[item.collector.ID] = u
 	}
 	out := make([]AgentUsage, 0, len(byID))
+	byProvider := map[string]int{}
 	for _, collector := range r.collectors {
-		out = append(out, byID[collector.ID])
+		if collector.Collect == nil {
+			continue
+		}
+		u := byID[collector.ID]
+		if idx, ok := byProvider[collector.Provider]; ok {
+			out[idx] = mergeCollectorUsage(out[idx], u)
+			continue
+		}
+		byProvider[collector.Provider] = len(out)
+		out = append(out, u)
 	}
 	return out
+}
+
+func mergeCollectorUsage(primary, additional AgentUsage) AgentUsage {
+	if primary.Name == "" {
+		primary = additional
+	}
+	primary.Sources = append(primary.Sources, additional.Sources...)
+	if !primary.hasQuotaSignal() {
+		primary.Tokens = additional.Tokens
+		primary.Session, primary.Weekly = additional.Session, additional.Weekly
+		primary.ModelGroups, primary.ExtraWindows = additional.ModelGroups, additional.ExtraWindows
+		return primary
+	}
+	for _, group := range additional.ModelGroups {
+		duplicate := false
+		for _, have := range primary.ModelGroups {
+			if have.Name != group.Name || len(have.Windows) != len(group.Windows) {
+				continue
+			}
+			duplicate = true
+			for i := range have.Windows {
+				if have.Windows[i].Name != group.Windows[i].Name || have.Windows[i].UsedPercent != group.Windows[i].UsedPercent {
+					duplicate = false
+					break
+				}
+			}
+			if duplicate {
+				break
+			}
+		}
+		if !duplicate {
+			primary.ModelGroups = append(primary.ModelGroups, group)
+		}
+	}
+	return primary
 }
 
 func mergeStaticWithLastQuota(current, previous AgentUsage) AgentUsage {
@@ -202,11 +293,28 @@ func newUsageRegistry(homeDir string, client *http.Client, live bool) (*Registry
 		Collector{ID: "agy", Provider: "agy", Capabilities: []string{"quota", "tokens", "metadata", "agy-meter"}, Cadence: cadence, Timeout: timeout, Collect: collect("agy", func(ctx context.Context) AgentUsage {
 			return collectAGYWithHome(ctx, filepath.Join(homeDir, ".gemini", "antigravity-cli"), homeDir, client)
 		})},
+		Collector{ID: "agy-meter", Provider: "agy", Capabilities: []string{"quota", "passive", "proxy"}, Cadence: cadence, Timeout: timeout, Collect: func(context.Context) (AgentUsage, error) {
+			u, ok := applyRecentAGYMeterQuota(AgentUsage{AgentID: "agy", Name: "Antigravity (AGY)"}, homeDir, time.Now())
+			if !ok {
+				return AgentUsage{AgentID: "agy", Name: "Antigravity (AGY)"}, nil
+			}
+			return u, nil
+		}},
 		Collector{ID: "codex", Provider: "codex", Capabilities: []string{"quota", "tokens", "metadata"}, Cadence: cadence, Timeout: timeout, Collect: collect("codex", func(ctx context.Context) AgentUsage {
 			return CollectCodex(ctx, filepath.Join(homeDir, ".codex"), client)
 		})},
 	)
 	return registry, err
+}
+
+func remoteLoadCollector(host string) (Collector, error) {
+	cadence, timeout, err := collectorPolicy()
+	if err != nil {
+		return Collector{}, err
+	}
+	return Collector{ID: "remote-load", Provider: "remote-load", Capabilities: []string{"load", "remote"}, Cadence: cadence, Timeout: timeout, CollectLoad: func(ctx context.Context) (*LoadSnapshot, error) {
+		return collectRemoteLoadSnapshotRaw(ctx, host)
+	}}, nil
 }
 
 // CollectRegistered runs the provider registry and persists normalized readings

@@ -102,6 +102,18 @@ func doCollectRemote(ctx context.Context, host string, includeProcs bool) (Usage
 // load unavailable" placeholder for a nil snapshot, matching how a stale/
 // failed --host fetch is already handled.
 func CollectRemoteLoadSnapshot(ctx context.Context, host string) (*LoadSnapshot, error) {
+	collector, err := remoteLoadCollector(host)
+	if err != nil {
+		return nil, err
+	}
+	registry, err := NewRegistry(collector)
+	if err != nil {
+		return nil, err
+	}
+	return registry.CollectLoad(ctx, collector.ID)
+}
+
+func collectRemoteLoadSnapshotRaw(ctx context.Context, host string) (*LoadSnapshot, error) {
 	summary, _, err := CollectRemote(ctx, host, false)
 	if err != nil {
 		return nil, err
