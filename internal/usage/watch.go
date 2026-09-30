@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -584,7 +585,7 @@ type splashKeyEffect struct {
 // to act on.
 func dispatchSplashKey(key byte) splashKeyEffect {
 	switch key {
-	case 3:
+	case 3, 'q', 'Q':
 		return splashKeyEffect{quit: true}
 	case 27:
 		return splashKeyEffect{skip: true}
@@ -1779,6 +1780,8 @@ type WatchOptions struct {
 	ProcCounts           *AgentProcessCount
 	Compact              bool
 	ShowProcesses        bool
+	// Splash enables the startup splash screen during initial collection in --watch (issue 664).
+	Splash bool
 	// ShowMic forces the Mic box on at startup (issue 244's `--mic` flag),
 	// the same "explicit request wins over the current preset" role
 	// ShowProcesses plays for Processes.
@@ -2910,6 +2913,10 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		}()
 	}
 
+	var splashActive atomic.Bool
+	splashActive.Store(opts.Splash)
+	splashSkip := make(chan struct{}, 1)
+
 	if ttyErr == nil {
 		readerDone := make(chan struct{})
 		defer func() {
@@ -2926,6 +2933,20 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				if err != nil || n == 0 {
 					stop()
 					return
+				}
+				if splashActive.Load() {
+					eff := dispatchSplashKey(buf[0])
+					if eff.quit {
+						stop()
+						return
+					}
+					if eff.skip {
+						select {
+						case splashSkip <- struct{}{}:
+						default:
+						}
+					}
+					continue
 				}
 				secLock.Lock()
 				st := watchKeyState{
@@ -3094,7 +3115,14 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		return err
 	}
 
-	reportFetchStage := appendDiagnostic
+	var splashStatusMu sync.Mutex
+	var splashStatus splashStatusState
+	reportFetchStage := func(source string, stage FetchStage) {
+		appendDiagnostic(source, stage)
+		splashStatusMu.Lock()
+		splashStatus = splashStatusRecord(splashStatus, source, stage)
+		splashStatusMu.Unlock()
+	}
 	reportFetchDiagnostic := func(event FetchDiagnostic) {
 		if event.Stage == FetchStarted {
 			return
@@ -3105,6 +3133,21 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		if len(diagnostics) > 24 {
 			diagnostics = diagnostics[len(diagnostics)-24:]
 		}
+	}
+
+	splashEstimate, splashHaveEstimate := loadFetchDurationEstimate(homeDir, fetchDurationKindForHost(configuredHost))
+	paintSplash := func(elapsed time.Duration, animate bool) (drained bool, err error) {
+		cols, rows := terminalSize(out)
+		now := time.Now()
+		splashStatusMu.Lock()
+		splashStatus = splashStatusAdvance(splashStatus, now, splashStatusMinDisplay)
+		statusText := splashStatusLine(splashStatus.current.source, splashStatus.current.stage, splashStatus.have)
+		badgesText := splashBadgesLine(splashStatus.badges)
+		drained = splashStatusDrained(splashStatus, now, splashStatusMinDisplay)
+		splashStatusMu.Unlock()
+		frame := buildSplashFrame(cols, rows, elapsed, animate, splashEstimate, splashHaveEstimate, statusText, badgesText)
+		err = frame.paint(out)
+		return drained, err
 	}
 
 	// One collector runs at a time. Results cross a channel; only the UI
@@ -3170,10 +3213,83 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			<-fetchDone
 		}
 	}()
-	if err := draw(); err != nil {
-		return err
-	}
 	startFetch()
+
+	if opts.Splash {
+		splashStart := time.Now()
+		splashTicker := time.NewTicker(splashFrameInterval)
+		defer splashTicker.Stop()
+		if _, err := paintSplash(0, true); err != nil {
+			return err
+		}
+		fetchDoneLatched := false
+	splashLoop:
+		for {
+			select {
+			case <-sigCtx.Done():
+				return nil
+			case result := <-results:
+				<-fetchDone
+				fetchDone = nil
+				currentHost, lastProcs, historyStats = result.host, result.procs, result.history
+				lastSummary = applyStaleQuota(result.summary, lastSummary)
+				lastRates = tracker.update(lastSummary)
+				loading = false
+				fetchDoneLatched = true
+				if drained, err := paintSplash(time.Since(splashStart), true); err != nil {
+					return err
+				} else if drained {
+					splashActive.Store(false)
+					if err := draw(); err != nil {
+						return err
+					}
+					break splashLoop
+				}
+			case <-splashSkip:
+				splashActive.Store(false)
+				if _, err := paintSplash(time.Since(splashStart), false); err != nil {
+					return err
+				}
+				if fetchDoneLatched {
+					if err := draw(); err != nil {
+						return err
+					}
+					break splashLoop
+				}
+				select {
+				case result := <-results:
+					<-fetchDone
+					fetchDone = nil
+					currentHost, lastProcs, historyStats = result.host, result.procs, result.history
+					lastSummary = applyStaleQuota(result.summary, lastSummary)
+					lastRates = tracker.update(lastSummary)
+					loading = false
+					if err := draw(); err != nil {
+						return err
+					}
+					break splashLoop
+				case <-sigCtx.Done():
+					return nil
+				}
+			case <-splashTicker.C:
+				drained, err := paintSplash(time.Since(splashStart), true)
+				if err != nil {
+					return err
+				}
+				if fetchDoneLatched && drained {
+					splashActive.Store(false)
+					if err := draw(); err != nil {
+						return err
+					}
+					break splashLoop
+				}
+			}
+		}
+	} else {
+		if err := draw(); err != nil {
+			return err
+		}
+	}
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

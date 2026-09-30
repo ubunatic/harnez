@@ -158,7 +158,7 @@ func resolveUsageHost(flagHost string, cfg *usage.LocalConfig) string {
 // targets, so --watch/--raw/--json pairwise conflicts are rejected here, and
 // --compact (a panel-selection toggle, not a render target) is rejected
 // alongside --raw since --raw has no panel concept to toggle.
-func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom bool) error {
+func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom, usageSplash bool) error {
 	if usageWatch && usageJSON {
 		return fmt.Errorf("--watch and --json cannot be combined")
 	}
@@ -176,6 +176,9 @@ func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom
 	}
 	if usageLoom && usageJSON {
 		return fmt.Errorf("--loom and --json cannot be combined")
+	}
+	if usageSplash && !usageWatch {
+		return fmt.Errorf("--splash requires --watch")
 	}
 	return nil
 }
@@ -210,6 +213,7 @@ func newRootCmd() *cobra.Command {
 	var usageAgent string
 	var usageOffline bool
 	var usageWatch bool
+	var usageSplash bool
 	var usageRaw bool
 	var usageProcesses bool
 	var usageMic bool
@@ -230,7 +234,7 @@ func newRootCmd() *cobra.Command {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 
-			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom); err != nil {
+			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom, usageSplash); err != nil {
 				return err
 			}
 			if usageShared && usageHost != "" {
@@ -306,6 +310,7 @@ func newRootCmd() *cobra.Command {
 					Compact:              usageCompact,
 					ShowProcesses:        usageProcesses,
 					ShowMic:              usageMic,
+					Splash:               usageSplash,
 					RemoteLoadHost:       loadWatchHost,
 				})
 			}
@@ -425,6 +430,7 @@ func newRootCmd() *cobra.Command {
 	usageCmd.Flags().StringVar(&usageHost, "host", "", "query usage from a remote host via SSH")
 	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
 	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the dashboard in place with a tokens/min trend")
+	usageCmd.Flags().BoolVar(&usageSplash, "splash", false, "render startup splash screen while initial collection is in flight (--watch only)")
 	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "show only the all-usage and load panels (default view and --watch)")
 	usageCmd.Flags().BoolVar(&usageLoom, "loom", false, "start usage monitor as loom app (compact view)")
 	usageCmd.Flags().BoolVarP(&usageRaw, "raw", "r", false, "print the detailed per-field usage report instead of the compact dashboard")

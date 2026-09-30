@@ -33,6 +33,10 @@ func TestWatchPTYLifecycle(t *testing.T) {
 		{"startup-Q", "startup", 'Q'},
 		{"startup-ctrl-c", "startup", 3},
 		{"startup-escape", "startup", 27},
+		{"splash-startup-q", "splash-startup", 'q'},
+		{"splash-startup-Q", "splash-startup", 'Q'},
+		{"splash-startup-ctrl-c", "splash-startup", 3},
+		{"splash-startup-escape", "splash-escape", 27},
 		{"refresh-q", "refresh", 'q'},
 		{"refresh-ctrl-c", "refresh", 3},
 		{"context-cancel", "cancel", 0},
@@ -79,7 +83,7 @@ func TestWatchPTYLifecycle(t *testing.T) {
 			}()
 			var transcript strings.Builder
 			var quitAt time.Time
-			frameSeen, refreshSent := false, false
+			frameSeen, refreshSent, escSent := false, false, false
 			deadline := time.NewTimer(8 * time.Second)
 			defer deadline.Stop()
 		loop:
@@ -91,17 +95,32 @@ func TestWatchPTYLifecycle(t *testing.T) {
 					}
 					transcript.WriteString(chunk)
 					s := transcript.String()
-					if !frameSeen && strings.Contains(s, "Collecting usage") {
-						frameSeen = true
-						if elapsed := time.Since(start); elapsed >= time.Second {
-							t.Errorf("first dashboard took %s, want <1s", elapsed)
+					if !frameSeen {
+						if strings.HasPrefix(tc.mode, "splash-") {
+							if strings.Contains(s, "Esc to skip") {
+								frameSeen = true
+							}
+						} else if strings.Contains(s, "Collecting usage") {
+							frameSeen = true
+							if elapsed := time.Since(start); elapsed >= time.Second {
+								t.Errorf("first dashboard took %s, want <1s", elapsed)
+							}
 						}
 					}
 					if tc.mode == "refresh" && !refreshSent && strings.Contains(s, "PTY-ready") {
 						_, _ = in.Write([]byte{'r'}) // remote -> local, starts blocked refresh
 						refreshSent = true
 					}
-					if tc.key != 0 && quitAt.IsZero() && strings.Contains(s, "FETCH_BLOCKED") {
+					if tc.mode == "splash-escape" {
+						if !escSent && strings.Contains(s, "FETCH_BLOCKED") {
+							_, _ = in.Write([]byte{27})
+							escSent = true
+						}
+						if escSent && quitAt.IsZero() && strings.Contains(s, "waiting for first update...") {
+							quitAt = time.Now()
+							_, _ = in.Write([]byte{'q'})
+						}
+					} else if tc.key != 0 && quitAt.IsZero() && strings.Contains(s, "FETCH_BLOCKED") {
 						quitAt = time.Now()
 						_, _ = in.Write([]byte{tc.key})
 					}
@@ -155,6 +174,9 @@ func TestWatchPTYHelper(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
 	opts := WatchOptions{Compact: true}
+	if strings.HasPrefix(mode, "splash-") {
+		opts.Splash = true
+	}
 	opts.SharedUsageCollector = func(ctx context.Context) UsageSummary {
 		fmt.Fprint(os.Stdout, "FETCH_BLOCKED")
 		switch mode {

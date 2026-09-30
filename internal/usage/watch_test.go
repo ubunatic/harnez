@@ -2120,23 +2120,25 @@ func TestDispatchSplashKeyEscSkipsNotQuits(t *testing.T) {
 	}
 }
 
-// TestDispatchSplashKeyCtrlCQuits: Ctrl-C is the universal interrupt and
-// must still quit even while the splash is showing.
-func TestDispatchSplashKeyCtrlCQuits(t *testing.T) {
-	eff := dispatchSplashKey(3)
-	if !eff.quit {
-		t.Fatalf("expected Ctrl-C during splash to quit, got %+v", eff)
-	}
-	if eff.skip {
-		t.Fatalf("expected Ctrl-C to report quit, not skip: got %+v", eff)
+// TestDispatchSplashKeyQuitKeys: Ctrl-C, q, and Q must all trigger prompt quit
+// even while the splash is showing (issue 664).
+func TestDispatchSplashKeyQuitKeys(t *testing.T) {
+	for _, key := range []byte{3, 'q', 'Q'} {
+		eff := dispatchSplashKey(key)
+		if !eff.quit {
+			t.Errorf("expected key %v during splash to quit, got %+v", key, eff)
+		}
+		if eff.skip {
+			t.Errorf("expected key %v to report quit, not skip: got %+v", key, eff)
+		}
 	}
 }
 
 // TestDispatchSplashKeyOtherKeysAreNoOps: the dashboard isn't initialized
-// yet during splash, so every key besides Esc/Ctrl-C is ignored rather than
+// yet during splash, so every key besides Esc/q/Q/Ctrl-C is ignored rather than
 // dispatched anywhere.
 func TestDispatchSplashKeyOtherKeysAreNoOps(t *testing.T) {
-	for _, key := range []byte{'q', 'Q', 'm', '?', ' ', '\r', 0} {
+	for _, key := range []byte{'m', '?', ' ', '\r', 0, 'a', '1'} {
 		if eff := dispatchSplashKey(key); eff.skip || eff.quit {
 			t.Errorf("expected key %v to be a no-op during splash, got %+v", key, eff)
 		}
