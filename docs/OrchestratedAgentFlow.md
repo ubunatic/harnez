@@ -35,7 +35,9 @@ root prompts for leaf callers. A new session without `--role` is a developer.
    `harnez agent resume --name dev-N --stream stats "go ahead"`.
 3. Review the commit against the ticket's acceptance points and against the current code.
 4. Follow-ups: at most two precise `resume` turns per ticket, then stop and escalate.
-5. `harnez issues done N "..."`, `harnez agent delete --name dev-N`.
+5. `harnez issues close N "<written outcome>"` (several tickets: `harnez issues close N M "..."`),
+   then `harnez agent rate --name dev-N <1-5> "reason"` and `harnez agent delete --name dev-N`.
+   Delete refuses unrated sessions without `--force`; `delete --all` skips them (ticket 526).
 
 Every call blocks until the helper's turn is done; wait, never poll, never repeat a call.
 Ask for replies of at most 10 lines with exact test results.
@@ -73,6 +75,10 @@ code and the environment in all three tickets. Check:
 | `agy` writes output files into `~/.gemini/antigravity-cli/scratch/` instead of the working dir | agy defaults to its own scratch dir unless told otherwise | pass both `cmd.Dir = <dir>` and `--add-dir <dir>` |
 | `agy --model claude-sonnet-4-6 --effort low` fails | agy rejects `--effort` for `claude-*` models, only for `gemini-*` | mark the model `effort: false` in `spec/agent.yaml` and omit the flag |
 | `agy` exits 1 with no useful error | it still prints a JSON `{"status":"ERROR","error":"…"}` object on stdout even on a non-zero exit | parse stdout on failure before falling back to stderr (see also `claude`'s opaque `exit status 1`, ticket 498) |
+| Commit message says `close 606, <outcome>` | the handoff prompt contained a literal placeholder and the worker copied it | write the real close reason into the prompt, or let the host close the ticket |
+| Closed ticket still listed as open in `issues/README.md` | worker edited the ticket status by hand | always close via `harnez issues close`; run `harnez index` if stale |
+| 18 tests fail in `internal/claude` and `cmd` without anyone touching them | another session's uncommitted `config.yaml` setting changes defaults the tests assume | name the foreign files and known failures in every handoff; never stage them |
+| Worker "fixes" leave ticket scope half done (323, 610) | handoff listed goals but not every file or edge case | list the files to touch and the negative cases (ambiguous input, hex-like words) as acceptance points |
 | Live-testing a batch of agy models felt slow and left stray state | one `--conversation` resume took 118s; leftover named sessions persist after the run | use empty scratch dirs with no `AGENTS.md`, one tiny prompt plus one resume per model, unique session names, `harnez agent delete` afterward (ticket 500) |
 
 ## 5. Finding out what agents ran
