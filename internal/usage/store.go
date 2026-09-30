@@ -233,7 +233,7 @@ func importCompatibility(s *usagestore.Store, ctx context.Context, homeDir strin
 func importAgent(s *usagestore.Store, ctx context.Context, provider, source string, at time.Time, agent AgentUsage) error {
 	windows := make([]usagestore.Window, 0)
 	freshness := "stale"
-	if source == "collect-all" {
+	if source == "collect-all" || source == "registry" {
 		freshness = "fresh"
 		if agent.IsValueStale() || time.Since(at) > DefaultCacheStaleness {
 			freshness = "stale"

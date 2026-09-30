@@ -1,2 +1,4 @@
 # yaml-language-server: $schema=schemas/usage.schema.json
 agy_meter_max_age: 1h
+collector_cadence: 15m
+collector_timeout: 2m
