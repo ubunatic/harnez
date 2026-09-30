@@ -659,3 +659,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 658 | [658-issues-new-slug-mangles-german-umlauts.md](658-issues-new-slug-mangles-german-umlauts.md) | issues new slug mangles German umlauts | Open |
 | 659 | [659-statusline-takes-0-7-7s-agy-kills-it.md](659-statusline-takes-0-7-7s-agy-kills-it.md) | statusline takes 0.7-7s, AGY kills it | Open |
 | 660 | [660-usage-watch-regressions-q-does-not-quit-terminal-not-restored-slow-start.md](660-usage-watch-regressions-q-does-not-quit-terminal-not-restored-slow-start.md) | usage --watch regressions: q does not quit, terminal not restored, slow start | Open |
+| 661 | [661-harnez-agent-stop-reports-success-but-the-agent-process-keeps-running.md](661-harnez-agent-stop-reports-success-but-the-agent-process-keeps-running.md) | harnez agent stop reports success but the agent process keeps running | Open |
