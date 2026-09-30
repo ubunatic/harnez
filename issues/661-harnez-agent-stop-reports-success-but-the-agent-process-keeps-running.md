@@ -1,6 +1,6 @@
 # 661 — harnez agent stop reports success but the agent process keeps running
 
-**Status**: Open
+**Status**: Closed — agent stop kills the process tree and reports only after confirmed exit (eb833213); host live check: Codex (luna) and Claude (haiku) agents stopped mid sleep 300, 0 processes left, Codex resume afterwards had no writer conflict.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
