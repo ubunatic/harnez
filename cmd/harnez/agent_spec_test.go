@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -54,6 +55,64 @@ func TestAgentModelsShowsCachedAvailabilityAndAge(t *testing.T) {
 		t.Fatalf("models output lacks quota marker/age or unknown markers: %q", out.String())
 	}
 }
+
+func TestAgentModelsShowsBatchCapability(t *testing.T) {
+	old := agentDriver
+	agentDriver = func(m subagent.Model, _ string) subagent.Driver {
+		if m.Provider == "fake" {
+			return subagent.UnsupportedDriver{Provider: m.Provider}
+		}
+		return testBatchAgentDriver{}
+	}
+	defer func() { agentDriver = old }()
+
+	entries := subagent.ModelEntriesWithDriver([]subagent.ModelEntry{
+		{Spec: "fake:chat:low", Model: subagent.Model{Provider: "fake", Name: "chat"}},
+		{Spec: "codex:luna:low", Model: subagent.Model{Provider: "codex", Name: "luna"}},
+	}, func(m subagent.Model) subagent.Driver { return agentDriver(m, ".") })
+	if entries[0].Batch || !entries[1].Batch {
+		t.Fatalf("batch capability entries = %#v", entries)
+	}
+	var out strings.Builder
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"models"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "(interactive only)") {
+		t.Fatalf("existing providers unexpectedly marked interactive-only: %q", out.String())
+	}
+
+	var jsonOut strings.Builder
+	cmd = newAgentCmd()
+	cmd.SetOut(&jsonOut)
+	cmd.SetArgs([]string{"models", "--json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var models []subagent.ModelEntry
+	if err := json.Unmarshal([]byte(jsonOut.String()), &models); err != nil {
+		t.Fatal(err)
+	}
+	if len(models) == 0 || !models[0].Batch {
+		t.Fatalf("JSON models lack batch capability: %q", jsonOut.String())
+	}
+}
+
+type testBatchAgentDriver struct{}
+
+func (testBatchAgentDriver) Run(context.Context, subagent.RunOptions) (*subagent.TurnResult, error) {
+	return nil, nil
+}
+func (testBatchAgentDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
+	return nil, nil
+}
+func (testBatchAgentDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
+	return nil, nil
+}
+func (testBatchAgentDriver) Stop(context.Context, string) error   { return nil }
+func (testBatchAgentDriver) Delete(context.Context, string) error { return nil }
 
 func TestAgentModelsShowsStaleQuotaAge(t *testing.T) {
 	cacheHome := t.TempDir()

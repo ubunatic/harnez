@@ -129,15 +129,28 @@ func KnownModelSpecs() []string {
 
 // ModelEntry is one selectable spec with its listing guidance.
 type ModelEntry struct {
-	Spec  string
-	Model Model
+	Spec  string `json:"spec"`
+	Model Model  `json:"model"`
+	// Batch reports whether the selected provider driver supports batch turns.
+	Batch bool `json:"batch"`
 	// Effort reports whether the batch driver passes a tier flag.
-	Effort bool
-	Cost   int
-	Eff    string
-	Skills string
-	Roles  string
-	Use    string
+	Effort bool   `json:"effort"`
+	Cost   int    `json:"cost"`
+	Eff    string `json:"eff"`
+	Skills string `json:"skills"`
+	Roles  string `json:"roles"`
+	Use    string `json:"use"`
+}
+
+// ModelEntriesWithDriver marks models according to their selected batch driver.
+func ModelEntriesWithDriver(entries []ModelEntry, driver func(Model) Driver) []ModelEntry {
+	marked := make([]ModelEntry, len(entries))
+	for i, entry := range entries {
+		_, unsupported := driver(entry.Model).(UnsupportedDriver)
+		entry.Batch = !unsupported
+		marked[i] = entry
+	}
+	return marked
 }
 
 // KnownModelEntries backs KnownModelSpecs and `harnez agent models`.

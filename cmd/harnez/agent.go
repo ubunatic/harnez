@@ -296,12 +296,21 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			}
 			return nil
 		}
+		entries := subagent.ModelEntriesWithDriver(subagent.KnownModelEntries(), func(m subagent.Model) subagent.Driver {
+			return agentDriver(m, workDir)
+		})
+		if jsonOut {
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(entries)
+		}
 		tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
 		fmt.Fprintln(tw, "SPEC\tMODEL\tAVAILABILITY\tEFFORT\tCOST\tEFF\tSKILLS\tROLES\tUSE")
-		for _, e := range subagent.KnownModelEntries() {
+		for _, e := range entries {
 			spec := e.Spec
 			if spec == defaultSpec {
 				spec += " (default)"
+			}
+			if !e.Batch {
+				spec += " (interactive only)"
 			}
 			effort := "yes"
 			if !e.Effort {
@@ -331,6 +340,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		return nil
 	}}
 	models.Flags().BoolVar(&modelNamesOnly, "names", false, "print only the model specs, one per line")
+	models.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 
 	var resumeFiles []string
 	var resumeWorkerID string

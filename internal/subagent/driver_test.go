@@ -292,6 +292,35 @@ func TestUnsupportedDriverCapabilityError(t *testing.T) {
 	}
 }
 
+func TestModelEntriesWithDriverMarksInteractiveOnly(t *testing.T) {
+	entries := []ModelEntry{
+		{Spec: "fake:chat:low", Model: Model{Provider: "fake", Name: "chat"}},
+		{Spec: "codex:luna:low", Model: Model{Provider: "codex", Name: "luna"}},
+	}
+	got := ModelEntriesWithDriver(entries, func(m Model) Driver {
+		if m.Provider == "fake" {
+			return UnsupportedDriver{Provider: m.Provider}
+		}
+		return testBatchDriver{}
+	})
+	if got[0].Batch {
+		t.Fatal("unsupported fake provider reported batch support")
+	}
+	if !got[1].Batch {
+		t.Fatal("supported provider reported interactive-only")
+	}
+}
+
+type testBatchDriver struct{}
+
+func (testBatchDriver) Run(context.Context, RunOptions) (*TurnResult, error) { return nil, nil }
+func (testBatchDriver) Resume(context.Context, string, string, Model) (*TurnResult, error) {
+	return nil, nil
+}
+func (testBatchDriver) Compact(context.Context, string) (*TurnResult, error) { return nil, nil }
+func (testBatchDriver) Stop(context.Context, string) error                   { return nil }
+func (testBatchDriver) Delete(context.Context, string) error                 { return nil }
+
 func TestCodexDriver(t *testing.T) {
 	d := CodexDriver{Command: func(context.Context, string, ...string) ([]byte, error) {
 		return []byte(`{"type":"thread.started","thread_id":"s1"}
