@@ -1571,7 +1571,7 @@ func TestAgentStopAndDeleteAllManageableSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, sess := range []*subagent.Session{
-		{ID: "one", Name: "one", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller"},
+		{ID: "one", Name: "one", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller", Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}},
 		{ID: "two", Name: "two", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "foreign"},
 	} {
 		if err := store.Save(sess); err != nil {
@@ -1607,6 +1607,37 @@ func TestAgentStopAndDeleteAllManageableSessions(t *testing.T) {
 	}
 	if _, err := store.Get("two"); err != nil {
 		t.Fatalf("foreign session was deleted: %v", err)
+	}
+}
+
+func TestAgentDeleteAllSkipsUnratedSessionWithWarning(t *testing.T) {
+	storeDir := t.TempDir()
+	oldSessionID := os.Getenv("HARNEZ_SESSION_ID")
+	if err := os.Setenv("HARNEZ_SESSION_ID", "caller"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Setenv("HARNEZ_SESSION_ID", oldSessionID) }()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &subagent.Session{ID: "unrated", Name: "needs-rating", Provider: "agy", Model: "gemini", Status: "completed", HarnessType: "interactive", ParentSessionID: "caller", Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1}}}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"delete", "--all", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("delete --all error = %v", err)
+	}
+	if got := stderr.String(); !strings.Contains(got, "warning: unrated latest turns:") || !strings.Contains(got, "needs-rating: harnez agent rate --name needs-rating <1-5> \"<reason>\"") {
+		t.Fatalf("warning = %q", got)
+	}
+	if _, err := store.Get(sess.ID); err != nil {
+		t.Fatalf("unrated session was deleted: %v", err)
 	}
 }
 
@@ -3391,11 +3422,11 @@ func TestAgentDeleteWarnsAndProtectsUnratedSessions(t *testing.T) {
 				t.Fatal("unrated session deletion succeeded without --force")
 			}
 			if got := stderr.String(); tc.wantWarn {
-				if !strings.Contains(got, `session "worker" has an unrated latest turn`) || !strings.Contains(got, `harnez agent rate --name worker <1-5> "<reason>"`) {
+				if !strings.Contains(got, "warning: unrated latest turns:") || !strings.Contains(got, `worker: harnez agent rate --name worker <1-5> "<reason>"`) {
 					t.Fatalf("warning = %q", got)
 				}
-			} else if got != "" {
-				t.Fatalf("rated deletion warning = %q", got)
+			} else if strings.Contains(stderr.String(), "warning: unrated latest turns:") {
+				t.Fatalf("rated deletion warning = %q", stderr.String())
 			}
 			_, findErr := store.Get(sess.ID)
 			if tc.wantDelete && findErr == nil {

@@ -583,11 +583,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	stop.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	var allCompleted, force bool
 	warnUnrated := func(cmd *cobra.Command, x *subagent.Session) bool {
-		if sessionLatestTurnRated(x) {
-			return false
-		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "warning: session %q has an unrated latest turn; rate it with: harnez agent rate --name %s <1-5> \"<reason>\"\n", x.Name, x.Name)
-		return true
+		return !sessionLatestTurnRated(x)
 	}
 	remove := &cobra.Command{Use: "delete", Short: "Delete an agent session", Aliases: []string{"rm"}, Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
@@ -611,9 +607,12 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 				if x.Status != "completed" {
 					continue
 				}
-				if warnUnrated(cmd, x) && !force {
-					failures = append(failures, fmt.Errorf("%s: refusing to delete unrated session without --force", x.Name))
-					continue
+				if warnUnrated(cmd, x) {
+					printUnratedDeleteWarning(cmd, []*subagent.Session{x})
+					if !force {
+						failures = append(failures, fmt.Errorf("%s: refusing to delete unrated session without --force", x.Name))
+						continue
+					}
 				}
 				if x.HarnessType == "interactive" {
 					if e = s.Delete(x.ID); e != nil {
@@ -650,13 +649,16 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 				return err
 			}
 			var failures []error
+			var unrated []*subagent.Session
 			for _, x := range xs {
 				if !subagent.CanManage(parent(), x) {
 					continue
 				}
-				if warnUnrated(cmd, x) && !force {
-					failures = append(failures, fmt.Errorf("%s: refusing to delete unrated session without --force", x.Name))
-					continue
+				if warnUnrated(cmd, x) {
+					unrated = append(unrated, x)
+					if !force {
+						continue
+					}
 				}
 				if x.HarnessType == "interactive" {
 					if x.Status == "active" {
@@ -680,6 +682,9 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), x.Name)
 			}
+			if len(unrated) > 0 {
+				printUnratedDeleteWarning(cmd, unrated)
+			}
 			for _, err := range failures {
 				fmt.Fprintln(cmd.ErrOrStderr(), "delete failed:", err)
 			}
@@ -698,8 +703,11 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if !subagent.CanManage(parent(), x) {
 			return fmt.Errorf("session %q is outside caller lineage", x.ID)
 		}
-		if warnUnrated(cmd, x) && !force {
-			return fmt.Errorf("delete: refusing to delete unrated session %q without --force", x.Name)
+		if warnUnrated(cmd, x) {
+			printUnratedDeleteWarning(cmd, []*subagent.Session{x})
+			if !force {
+				return fmt.Errorf("delete: refusing to delete unrated session %q without --force", x.Name)
+			}
 		}
 		if x.HarnessType == "interactive" {
 			if x.Status == "active" {
@@ -786,6 +794,16 @@ func sessionLatestTurnRated(sess *subagent.Session) bool {
 		}
 	}
 	return false
+}
+
+func printUnratedDeleteWarning(cmd *cobra.Command, sessions []*subagent.Session) {
+	if len(sessions) == 0 {
+		return
+	}
+	fmt.Fprintln(cmd.ErrOrStderr(), "warning: unrated latest turns:")
+	for _, sess := range sessions {
+		fmt.Fprintf(cmd.ErrOrStderr(), "  %s: harnez agent rate --name %s <1-5> \"<reason>\"\n", sess.Name, sess.Name)
+	}
 }
 
 // agentSessionCompletion returns names visible to the current caller. Cobra

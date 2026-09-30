@@ -25,3 +25,11 @@ terra). Nothing warned before deleting.
   without `--force` (or an equivalent flag); the choice is recorded here.
 - A test covers rated (deletes quietly), unrated (warns and refuses) and forced (deletes and warns).
 - Optional: `agent list` shows a RATED column.
+
+## Bulk Delete Decision
+
+`agent delete --all` skips unrated sessions, prints one stderr warning listing each session
+and its `harnez agent rate --name <s> <1-5> "<reason>"` command, and exits successfully when
+those are the only skipped sessions. `--force` warns and deletes them. The existing
+manageable-session test keeps its deletion assertion with a rated fixture; separate coverage
+verifies the unrated skip behavior.
