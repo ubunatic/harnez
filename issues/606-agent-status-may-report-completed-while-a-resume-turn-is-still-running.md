@@ -1,6 +1,6 @@
 # 606 — agent status may report completed while a resume turn is still running
 
-**Status**: Open
+**Status**: Closed — <outcome>
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug (unconfirmed)
