@@ -173,26 +173,20 @@ func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS usage_store_migrations (name TEXT PRIMARY KEY, completed_at TEXT NOT NULL)`); err != nil {
 		return err
 	}
-	var completed int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM usage_store_migrations WHERE name='normalized-window-keys-v4'`).Scan(&completed); err != nil {
-		return err
-	}
-	if completed > 0 {
-		return tx.Commit()
-	}
 	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS usage_window_key_migration_archive (id INTEGER PRIMARY KEY, observation_id INTEGER NOT NULL, provider TEXT NOT NULL, pool TEXT NOT NULL, original_window_key TEXT NOT NULL, window_name TEXT NOT NULL, used_fraction REAL NOT NULL, input_tokens INTEGER, cached_input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, reset_at TEXT)`); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE usage_observations SET freshness='stale' WHERE id IN (SELECT observation_id FROM quota_windows WHERE lower(window_name) LIKE '%(stale)%')`); err != nil {
 		return err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id,observation_id,provider,pool,window_key,window_name,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at FROM quota_windows ORDER BY id`)
+	rows, err := tx.QueryContext(ctx, `SELECT q.id,q.observation_id,q.provider,q.pool,q.window_key,q.window_name,q.used_fraction,q.input_tokens,q.cached_input_tokens,q.output_tokens,q.reasoning_tokens,q.reset_at,o.provider FROM quota_windows q LEFT JOIN usage_observations o ON o.id=q.observation_id ORDER BY q.id`)
 	if err != nil {
 		return err
 	}
 	type row struct {
 		id, observationID                int64
 		provider, pool, key, name        string
+		observationProvider              sql.NullString
 		used                             float64
 		input, cached, output, reasoning sql.NullInt64
 		reset                            sql.NullString
@@ -200,7 +194,7 @@ func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 	var records []row
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.observationID, &r.provider, &r.pool, &r.key, &r.name, &r.used, &r.input, &r.cached, &r.output, &r.reasoning, &r.reset); err != nil {
+		if err := rows.Scan(&r.id, &r.observationID, &r.provider, &r.pool, &r.key, &r.name, &r.used, &r.input, &r.cached, &r.output, &r.reasoning, &r.reset, &r.observationProvider); err != nil {
 			rows.Close()
 			return err
 		}
@@ -220,7 +214,39 @@ func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 			label = r.key
 		}
 		key := NormalizeWindowKey(r.provider, r.pool, label)
-		if key == r.key && name == r.name {
+		if key == r.key && name == r.name && r.observationProvider.Valid && r.observationProvider.String == r.provider {
+			continue
+		}
+		if !r.observationProvider.Valid || r.observationProvider.String != r.provider {
+			source, freshness := "unknown", "stale"
+			observed := time.Now().UTC().Format(time.RFC3339Nano)
+			if r.observationProvider.Valid {
+				if err := tx.QueryRowContext(ctx, `SELECT source,freshness,observed_at FROM usage_observations WHERE id=?`, r.observationID).Scan(&source, &freshness, &observed); err != nil {
+					return err
+				}
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO usage_observations(provider,source,observed_at,freshness) VALUES(?,?,?,?) ON CONFLICT(provider,source,observed_at) DO NOTHING`, r.provider, source, observed, freshness); err != nil {
+				return err
+			}
+			var observationID int64
+			if err := tx.QueryRowContext(ctx, `SELECT id FROM usage_observations WHERE provider=? AND source=? AND observed_at=?`, r.provider, source, observed).Scan(&observationID); err != nil {
+				return err
+			}
+			var duplicate int64
+			err := tx.QueryRowContext(ctx, `SELECT id FROM quota_windows WHERE observation_id=? AND pool=? AND window_key=? AND id<>?`, observationID, r.pool, key, r.id).Scan(&duplicate)
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			if err == nil {
+				if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO usage_window_key_migration_archive(id,observation_id,provider,pool,original_window_key,window_name,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, r.id, r.observationID, r.provider, r.pool, r.key, r.name, r.used, nullIntArg(r.input), nullIntArg(r.cached), nullIntArg(r.output), nullIntArg(r.reasoning), nullStringArg(r.reset)); err != nil {
+					return err
+				}
+				if _, err := tx.ExecContext(ctx, `DELETE FROM quota_windows WHERE id=?`, r.id); err != nil {
+					return err
+				}
+			} else if _, err := tx.ExecContext(ctx, `UPDATE quota_windows SET observation_id=?,window_key=?,window_name=?,legacy_window_key=CASE WHEN window_key<>? AND legacy_window_key='' THEN window_key ELSE legacy_window_key END WHERE id=?`, observationID, key, name, key, r.id); err != nil {
+				return err
+			}
 			continue
 		}
 		var duplicate int64
@@ -244,7 +270,7 @@ func (s *Store) MigrateStableWindowKeys(ctx context.Context) error {
 	if err := migrateTurnDeltaWindowKeys(ctx, tx); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO usage_store_migrations(name,completed_at) VALUES('normalized-window-keys-v4',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO usage_store_migrations(name,completed_at) VALUES('normalized-window-keys-v4',?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -331,6 +357,9 @@ func (s *Store) WriteCurrent(ctx context.Context, observedAt time.Time, windows 
 			w.Name = w.Key
 		}
 		w.Key = NormalizeWindowKey(w.Provider, w.Pool, w.Name)
+		if w.Source == "" {
+			w.Source = "unknown"
+		}
 		at := w.ObservedAt
 		if at.IsZero() {
 			at = observedAt
@@ -348,7 +377,7 @@ func (s *Store) WriteCurrent(ctx context.Context, observedAt time.Time, windows 
 		if w.ResetAt != nil {
 			reset = w.ResetAt.UTC().Format(time.RFC3339Nano)
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO quota_windows(observation_id,provider,pool,window_key,window_name,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(observation_id,pool,window_key) DO UPDATE SET window_name=excluded.window_name,used_fraction=excluded.used_fraction,input_tokens=excluded.input_tokens,cached_input_tokens=excluded.cached_input_tokens,output_tokens=excluded.output_tokens,reasoning_tokens=excluded.reasoning_tokens,reset_at=excluded.reset_at`, id, w.Provider, w.Pool, w.Key, w.Name, w.UsedFraction, w.InputTokens, w.CachedInputTokens, w.OutputTokens, w.ReasoningTokens, reset); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO quota_windows(observation_id,provider,pool,window_key,window_name,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(observation_id,pool,window_key) DO UPDATE SET provider=excluded.provider,window_name=excluded.window_name,used_fraction=excluded.used_fraction,input_tokens=excluded.input_tokens,cached_input_tokens=excluded.cached_input_tokens,output_tokens=excluded.output_tokens,reasoning_tokens=excluded.reasoning_tokens,reset_at=excluded.reset_at`, id, w.Provider, w.Pool, w.Key, w.Name, w.UsedFraction, w.InputTokens, w.CachedInputTokens, w.OutputTokens, w.ReasoningTokens, reset); err != nil {
 			return fmt.Errorf("insert quota window: %w", err)
 		}
 	}
@@ -462,7 +491,7 @@ func (s *Store) WriteTurnQuotaBoundary(ctx context.Context, boundary TurnQuotaBo
 		if err := tx.QueryRowContext(ctx, `SELECT id FROM usage_observations WHERE provider=? AND source=? AND observed_at=?`, w.Provider, w.Source, w.ObservedAt.UTC().Format(time.RFC3339Nano)).Scan(&observationID); err != nil {
 			return 0, err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO quota_windows(observation_id,provider,pool,window_key,window_name,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(observation_id,pool,window_key) DO UPDATE SET window_name=excluded.window_name,used_fraction=excluded.used_fraction,reset_at=excluded.reset_at`, observationID, w.Provider, w.Pool, w.Key, w.Name, w.UsedFraction, w.InputTokens, w.CachedInputTokens, w.OutputTokens, w.ReasoningTokens, reset); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO quota_windows(observation_id,provider,pool,window_key,window_name,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(observation_id,pool,window_key) DO UPDATE SET provider=excluded.provider,window_name=excluded.window_name,used_fraction=excluded.used_fraction,reset_at=excluded.reset_at`, observationID, w.Provider, w.Pool, w.Key, w.Name, w.UsedFraction, w.InputTokens, w.CachedInputTokens, w.OutputTokens, w.ReasoningTokens, reset); err != nil {
 			return 0, err
 		}
 	}
@@ -814,7 +843,7 @@ func (s *Store) CurrentFor(ctx context.Context, provider string) ([]Window, erro
 
 // NormalizeWindowKey maps display labels to stable machine-readable keys.
 func NormalizeWindowKey(provider, pool, name string) string {
-	name = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(name, " (stale)", "")))
+	name = strings.ToLower(strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(name, " (stale)", ""), " (STALE)", "")))
 	name = strings.TrimSuffix(name, "_limit_remaining")
 	name = strings.TrimSuffix(name, " limit remaining")
 	name = strings.TrimSuffix(name, "-limit-remaining")

@@ -300,6 +300,45 @@ func TestMigrateStableWindowKeysArchivesCollisionsAndPreservesOriginal(t *testin
 	}
 }
 
+func TestMigrateStableWindowKeysRepairsRowsAfterEarlierMigration(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "repaired-keys.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if err := EnsureSchema(ctx, func(ctx context.Context, q string) error { return s.Exec(ctx, q) }); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC).Format(time.RFC3339Nano)
+	if err := s.Exec(ctx, `CREATE TABLE usage_store_migrations (name TEXT PRIMARY KEY, completed_at TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Exec(ctx, `INSERT INTO usage_store_migrations(name,completed_at) VALUES('normalized-window-keys-v4',?)`, at); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Exec(ctx, `INSERT INTO usage_observations(provider,source,observed_at,freshness) VALUES('codex','registry',?,'fresh')`, at); err != nil {
+		t.Fatal(err)
+	}
+	var observationID int64
+	if err := s.QueryRow(ctx, `SELECT id FROM usage_observations WHERE provider='codex'`).Scan(&observationID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Exec(ctx, `INSERT INTO quota_windows(observation_id,provider,pool,window_key,window_name,used_fraction) VALUES(?,?,?,?,?,?)`, observationID, "claude", "", "Weekly (7-day)", "Weekly (7-day)", .66); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MigrateStableWindowKeys(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var provider, observationProvider, key, name string
+	if err := s.QueryRow(ctx, `SELECT q.provider,o.provider,q.window_key,q.window_name FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id`).Scan(&provider, &observationProvider, &key, &name); err != nil {
+		t.Fatal(err)
+	}
+	if provider != "claude" || observationProvider != provider || key != "weekly" || name != "Weekly (7-day)" {
+		t.Fatalf("repaired row = %q/%q %q %q", provider, observationProvider, key, name)
+	}
+}
+
 func TestTurnQuotaBoundaryPairsOnlyOrderedNonResetWindows(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "turns.sqlite"))
 	if err != nil {

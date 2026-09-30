@@ -727,6 +727,9 @@ func collectorStatusLabel(agent AgentUsage, label string) string {
 	if marker == "" {
 		return label
 	}
+	if agent.QuotaFetchError != "" {
+		return marker + " " + label + " unavailable (" + agent.QuotaFetchError + ")"
+	}
 	return marker + " " + label
 }
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+	"ubunatic.com/harnez/internal/usagestore"
 )
 
 func TestStoreCompactSummaryWritesAndReadsFreshReading(t *testing.T) {
@@ -108,5 +109,82 @@ func TestCompactCollectionPersistsChangedReadingsAndRendersLatest(t *testing.T) 
 	}
 	if key != "five_hour" || name != "Session (5-hour)" {
 		t.Fatalf("stored key/name = %q/%q", key, name)
+	}
+}
+
+func TestCompactRenderingIncludesClaudeCodexAndAGYFromLabeledWriters(t *testing.T) {
+	isolateUsageTestStorage(t)
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "all-providers.sqlite")
+	home := t.TempDir()
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := usagestore.EnsureSchema(ctx, func(ctx context.Context, q string) error { return store.Exec(ctx, q) }); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Now().UTC()
+	reset := at.Add(5 * time.Hour)
+	agents := []AgentUsage{
+		{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true, Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 8, ResetAt: &reset}, Weekly: &QuotaWindow{Name: "Weekly (7-day)", UsedPercent: 66, ResetAt: &reset}},
+		{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true, Session: &QuotaWindow{Name: "5-Hour", UsedPercent: 7, ResetAt: &reset}, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 65, ResetAt: &reset}},
+		{AgentID: "agy", Name: "Antigravity (AGY)", Installed: true, Authenticated: true, ModelGroups: []ModelGroup{{Name: "Gemini Models", Windows: []QuotaWindow{{Name: "Five Hour Limit Remaining", UsedPercent: 11, ResetAt: &reset}, {Name: "Weekly Limit Remaining", UsedPercent: 22, ResetAt: &reset}}}}},
+	}
+	for _, agent := range agents {
+		if err := importAgent(store, ctx, agent.AgentID, "registry", at, agent); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Simulate all providers arriving in one collect-all pass with an identical
+	// observation timestamp; uniqueness is provider-scoped, not global.
+	for _, agent := range agents {
+		if err := importAgent(store, ctx, agent.AgentID, "collect-all", at.Add(time.Second), agent); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, provider := range []string{"claude", "codex", "agy"} {
+		if err := importAgent(store, ctx, provider, "collect-all", at.Add(time.Second), AgentUsage{AgentID: provider, Name: provider, Installed: true, Authenticated: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var mismatch int
+	if err := store.QueryRow(ctx, `SELECT count(*) FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider<>o.provider`).Scan(&mismatch); err != nil {
+		t.Fatal(err)
+	}
+	if mismatch != 0 {
+		t.Fatalf("cross-provider observation links = %d", mismatch)
+	}
+	for _, provider := range []string{"claude", "codex", "agy"} {
+		windows, err := store.CurrentFor(ctx, provider)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(windows) == 0 {
+			t.Fatalf("no current windows for %s", provider)
+		}
+	}
+	summary := UsageSummary{Timestamp: at, Agents: agents}
+	projected, err := StoreCompactSummaryAt(ctx, home, summary, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var compact strings.Builder
+	for _, line := range allUsageLinesAt(projected, 100, false, at, time.Minute) {
+		compact.WriteString(stripANSI(line))
+		compact.WriteByte('\n')
+	}
+	for _, want := range []string{"Claude Code", "OpenAI Codex", "Gemini"} {
+		if !strings.Contains(compact.String(), want) {
+			t.Fatalf("compact output missed %q:\n%s", want, compact.String())
+		}
+	}
+}
+
+func TestCompactAllUsageDisplaysCodexFetchErrorWithoutWindows(t *testing.T) {
+	got := allUsageLinesAt(UsageSummary{Agents: []AgentUsage{{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true, QuotaFetchError: "HTTP 401"}}}, 100, false, time.Now(), time.Minute)
+	if len(got) != 1 || !strings.Contains(stripANSI(got[0]), "OpenAI Codex") || !strings.Contains(stripANSI(got[0]), "unavailable") {
+		t.Fatalf("compact error row = %q", got)
 	}
 }

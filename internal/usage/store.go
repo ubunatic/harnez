@@ -533,6 +533,9 @@ func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now tim
 	if len(readings) == 0 {
 		return
 	}
+	agentName, installed, authenticated := agent.Name, agent.Installed, agent.Authenticated
+	account, planTier, activeModel := agent.Account, agent.PlanTier, agent.ActiveModel
+	details, sources, fetchError := agent.Details, agent.Sources, agent.QuotaFetchError
 	agent.Session, agent.Weekly = nil, nil
 	agent.ModelGroups = nil
 	for _, r := range readings {
@@ -595,6 +598,9 @@ func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now tim
 			agent.ExtraWindows[r.Key] = w
 		}
 	}
+	agent.Name, agent.Installed, agent.Authenticated = agentName, installed, authenticated
+	agent.Account, agent.PlanTier, agent.ActiveModel = account, planTier, activeModel
+	agent.Details, agent.Sources, agent.QuotaFetchError = details, sources, fetchError
 }
 
 func staleName(name string) string {
