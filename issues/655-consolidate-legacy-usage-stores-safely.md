@@ -1,6 +1,6 @@
 # 655 — Consolidate Legacy Usage Stores Safely
 
-**Status**: Open
+**Status**: Closed — Isolated internal/usage tests with temporary HOME/XDG roots and a telemetry path guard that rejects host storage. Converted cache fixtures to seed the authoritative SQLite store; retained JSON mirrors only as compatibility fallback for non-quota snapshot metadata. Fixed host DB locking that made verbose package tests exceed five minutes: go test -timeout 120s -v ./internal/usage passed in 10.13s. Focused telemetry/usagestore tests and make install passed. The single final make test-q1 passed, including internal/usage in 6.465s. Changes committed as d35a1999.
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Refactor
