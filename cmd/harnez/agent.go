@@ -720,16 +720,8 @@ func matchResumeSelector(store *subagent.FileSessionStore, selector string) (boo
 	if err != nil {
 		return false, err
 	}
-	matches := 0
-	for _, sess := range sessions {
-		if sess.ID == selector || sess.Name == selector || sess.ProviderSessionID == selector || strings.HasPrefix(sess.ID, selector) || strings.HasPrefix(sess.ProviderSessionID, selector) {
-			matches++
-		}
-	}
-	if matches > 1 {
-		return false, fmt.Errorf("session selector %q is ambiguous", selector)
-	}
-	return matches == 1, nil
+	_, ok := findResumeSelector(sessions, selector)
+	return ok, nil
 }
 
 func rateLatestSessionTurn(store *subagent.FileSessionStore, sess *subagent.Session, score int, reason string) error {

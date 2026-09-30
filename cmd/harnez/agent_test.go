@@ -2443,7 +2443,7 @@ func TestAgentStartFailureKeepsSessionAndResumeSelector(t *testing.T) {
 		t.Fatalf("failure exposed raw tool output: %v", startErr)
 	}
 
-	for _, selector := range []string{"crashed", recovered.ID[:4], "provider-thread"} {
+	for _, selector := range []string{"crashed", recovered.ID[:8], "provider-thread"} {
 		t.Run("resume-"+selector, func(t *testing.T) {
 			resume := newAgentCmd()
 			resume.SetOut(new(bytes.Buffer))
@@ -2460,6 +2460,35 @@ func TestAgentStartFailureKeepsSessionAndResumeSelector(t *testing.T) {
 	implicit.SetArgs([]string{"--store-dir", storeDir, "resume", "ordinary prompt"})
 	if err := implicit.Execute(); err == nil || !strings.Contains(err.Error(), "multiple resumable agents") {
 		t.Fatalf("non-selector positional prompt error = %v, want ambiguity preserved", err)
+	}
+}
+
+func TestAgentResumeHexLikeWordsRemainPrompts(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT_ROLE", "")
+	t.Setenv("HARNEZ_SESSION_ID", "")
+	for _, tc := range []struct {
+		prompt string
+		ids    []string
+	}{
+		{prompt: "add", ids: []string{"add12345"}},
+		{prompt: "c", ids: []string{"cafe1234"}},
+		{prompt: "deface", ids: []string{"deface1234", "deface5678"}},
+	} {
+		t.Run(tc.prompt, func(t *testing.T) {
+			storeDir := t.TempDir()
+			sessions := make([]*subagent.Session, 0, len(tc.ids))
+			for i, id := range tc.ids {
+				sessions = append(sessions, &subagent.Session{ID: id, Name: "worker-" + id, Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: ".", Status: "completed", LastActiveAt: time.Now().Add(time.Duration(i) * time.Second)})
+			}
+			saveSessions(t, storeDir, sessions...)
+			d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+			if _, err := runWithStore(t, d, storeDir, "resume", "--continue", tc.prompt); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasSuffix(d.prompt, tc.prompt) {
+				t.Fatalf("resume prompt = %q, want original prompt suffix %q", d.prompt, tc.prompt)
+			}
+		})
 	}
 }
 

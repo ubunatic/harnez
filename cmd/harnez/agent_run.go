@@ -279,17 +279,8 @@ func resolveResumeSession(cmd *cobra.Command, d agentDeps, s *subagent.FileSessi
 		return nil, "", e
 	}
 	if req.Selector != "" {
-		var matches []*subagent.Session
-		for _, candidate := range xs {
-			if candidate.ID == req.Selector || candidate.Name == req.Selector || candidate.ProviderSessionID == req.Selector || strings.HasPrefix(candidate.ID, req.Selector) || strings.HasPrefix(candidate.ProviderSessionID, req.Selector) {
-				matches = append(matches, candidate)
-			}
-		}
-		if len(matches) == 1 {
-			return matches[0], "id", nil
-		}
-		if len(matches) > 1 {
-			return nil, "", fmt.Errorf("session selector %q is ambiguous", req.Selector)
+		if selected, ok := findResumeSelector(xs, req.Selector); ok {
+			return selected, "id", nil
 		}
 	}
 	c := attributable(xs, req.Dir, d.parent())
@@ -303,6 +294,32 @@ func resolveResumeSession(cmd *cobra.Command, d agentDeps, s *subagent.FileSessi
 		return c[0], "continue", nil
 	}
 	return c[0], "dir", nil
+}
+
+func findResumeSelector(sessions []*subagent.Session, selector string) (*subagent.Session, bool) {
+	var exact *subagent.Session
+	exactMatches := 0
+	for _, sess := range sessions {
+		if sess.ID == selector || sess.Name == selector || sess.ProviderSessionID == selector {
+			exact = sess
+			exactMatches++
+		}
+	}
+	if exactMatches == 1 {
+		return exact, true
+	}
+	if exactMatches > 1 || len(selector) < 8 {
+		return nil, false
+	}
+	var prefix *subagent.Session
+	prefixMatches := 0
+	for _, sess := range sessions {
+		if strings.HasPrefix(sess.ID, selector) || strings.HasPrefix(sess.ProviderSessionID, selector) {
+			prefix = sess
+			prefixMatches++
+		}
+	}
+	return prefix, prefixMatches == 1
 }
 
 // runStart starts a new session, streams or prints the turn and saves the session.
