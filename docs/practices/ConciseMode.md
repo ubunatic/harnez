@@ -43,10 +43,10 @@ preserved 100% verbatim. ConciseMode trims narration, never content.
 ## Enforcing a Default Tier
 
 Naming the tiers is not enough — an agent only *runs* under one when something pins it there.
-The doc reference alone (`@docs/practices/ConciseMode.md`) is descriptive, not a directive.
+The doc reference alone (`@docs/ConciseMode.md`) is descriptive, not a directive.
 
 - **CLAUDE.md directive (recommended default)**: add an explicit line naming the tier, e.g.
-  `Operate at Concise Lite (@docs/practices/ConciseMode.md) unless told otherwise.` This loads
+  `Operate at Concise Lite (@docs/ConciseMode.md) unless told otherwise.` This loads
   into every session's system context automatically and is scoped per project, but stays advisory
   — a long session can still drift from it.
 - **Output style** (`settings.json` `outputStyle`): bakes the tier into the harness-level system

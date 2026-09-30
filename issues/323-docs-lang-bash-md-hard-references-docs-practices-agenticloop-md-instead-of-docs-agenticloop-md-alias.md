@@ -1,6 +1,6 @@
 # 323 — docs/lang/Bash.md hard-references docs/practices/AgenticLoop.md instead of @docs/AgenticLoop.md alias
 
-**Status**: Closed — Fixed dangling copyable-doc references in Bash, AgenticLoop, and lite IssueTracking; ConciseMode paths are intentional because its installed target is docs/ConciseMode.md.
+**Status**: Closed — Fixed dangling copyable-doc references in Bash, AgenticLoop, lite IssueTracking, and ConciseMode. ConciseMode now references its installed docs/ConciseMode.md path.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Documentation
