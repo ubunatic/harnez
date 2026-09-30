@@ -1,6 +1,6 @@
 # 657 — usage --compact drops claude and codex: writers store label window keys, cross-provider observation links, codex limits not collected
 
-**Status**: Open
+**Status**: Closed — Compact now projects latest normalized provider quota windows deterministically, excludes token counters, preserves compact rows beyond terminal height, and displays Codex fetch failures; make test-q1 and three installed-binary live runs passed.
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Bug / Regression
