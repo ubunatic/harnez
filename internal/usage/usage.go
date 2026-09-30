@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -118,126 +116,35 @@ func collectAllWithDiagnostics(ctx context.Context, homeDir string, client *http
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
-
-	claudeDir := filepath.Join(homeDir, ".claude")
-	agyDir := filepath.Join(homeDir, ".gemini", "antigravity-cli")
-	codexDir := filepath.Join(homeDir, ".codex")
-
-	// reportDone reports FetchDone/FetchFailed based on whether the
-	// collected AgentUsage carries a quota fetch error -- the same signal
-	// RenderText already surfaces as "quota: unavailable (...)".
-	reportDone := func(source string, started time.Time, u AgentUsage) {
-		stage := FetchDone
-		if u.QuotaFetchError != "" {
-			stage = FetchFailed
-		}
-		if progress != nil {
-			progress(source, stage)
-		}
-		if diagnostic != nil {
-			diagnostic(FetchDiagnostic{Source: source, Stage: stage, Duration: time.Since(started), Error: u.QuotaFetchError})
+	var diagnosticProgress FetchProgressFunc
+	if progress != nil || diagnostic != nil {
+		diagnosticProgress = func(source string, stage FetchStage) {
+			if progress != nil {
+				progress(source, stage)
+			}
+			if diagnostic != nil && stage == FetchStarted {
+				diagnostic(FetchDiagnostic{Source: source, Stage: FetchStarted})
+			}
 		}
 	}
-	reportStarted := func(source string) {
-		if progress != nil {
-			progress(source, FetchStarted)
+	var diag func(CollectorDiagnostic)
+	if diagnostic != nil {
+		diag = func(d CollectorDiagnostic) {
+			stage := FetchDone
+			if d.Error != "" {
+				stage = FetchFailed
+			}
+			diagnostic(FetchDiagnostic{Source: d.ID, Stage: stage, Duration: d.Duration, Error: d.Error})
 		}
-		if diagnostic != nil {
-			diagnostic(FetchDiagnostic{Source: source, Stage: FetchStarted})
-		}
 	}
-
-	collectClaude := func() AgentUsage {
-		reportStarted("claude")
-		started := time.Now()
-		u, _ := collectWithRetryInfo(ctx, func() AgentUsage { return CollectClaude(ctx, claudeDir, client) })
-		reportDone("claude", started, u)
-		return u
-	}
-	collectAGY := func() AgentUsage {
-		reportStarted("agy")
-		started := time.Now()
-		u, _ := collectWithRetryInfo(ctx, func() AgentUsage { return collectAGYWithHome(ctx, agyDir, homeDir, client) })
-		reportDone("agy", started, u)
-		return u
-	}
-	collectCodex := func() AgentUsage {
-		reportStarted("codex")
-		started := time.Now()
-		u, _ := collectWithRetryInfo(ctx, func() AgentUsage { return CollectCodex(ctx, codexDir, client) })
-		reportDone("codex", started, u)
-		return u
-	}
-
-	var claudeUsage, agyUsage, codexUsage AgentUsage
-	if useCache {
-		stateDir := StateDir(homeDir)
-
-		var wg sync.WaitGroup
-		wg.Add(3)
-		go func() {
-			defer wg.Done()
-			claudeUsage = cacheOrLive(stateDir, "claude", DefaultCacheStaleness, collectClaude)
-		}()
-		go func() {
-			defer wg.Done()
-			agyUsage = cacheOrLive(stateDir, "agy", DefaultCacheStaleness, collectAGY)
-		}()
-		go func() {
-			defer wg.Done()
-			codexUsage = cacheOrLive(stateDir, "codex", DefaultCacheStaleness, collectCodex)
-		}()
-		wg.Wait()
-
-		// The daemon snapshot / live recollect above can still come back
-		// with no quota-window data at all (e.g. an intermittently-running
-		// agent like AGY hasn't answered in a while, so even its cached
-		// snapshot's quota fields were already empty) even though the
-		// separately-recorded usage-history log has more recent real
-		// quota data from the last time it did answer. Fall back to that
-		// as a last resort, purely for display — this never touches the
-		// collector-daemon cache itself (issue 086's live-repro follow-up).
+	summary := CollectRegistered(ctx, homeDir, client, !useCache, diagnosticProgress, diag)
+	if useCache && homeDir != "" {
 		historyDir := HistoryDir(homeDir)
-		claudeUsage = fillFromHistoryIfNoQuotaWindows(historyDir, claudeUsage)
-		agyUsage = fillFromHistoryIfNoQuotaWindows(historyDir, agyUsage)
-		codexUsage = fillFromHistoryIfNoQuotaWindows(historyDir, codexUsage)
-	} else {
-		var wg sync.WaitGroup
-		wg.Add(3)
-		go func() {
-			defer wg.Done()
-			claudeUsage = collectClaude()
-		}()
-		go func() {
-			defer wg.Done()
-			agyUsage = collectAGY()
-		}()
-		go func() {
-			defer wg.Done()
-			codexUsage = collectCodex()
-		}()
-		wg.Wait()
+		for i := range summary.Agents {
+			summary.Agents[i] = fillFromHistoryIfNoQuotaWindows(historyDir, summary.Agents[i])
+		}
 	}
-	now := time.Now()
-	agyUsage, _ = applyRecentAGYMeterQuota(agyUsage, homeDir, now)
-	if claudeUsage.LastRefreshed.IsZero() {
-		claudeUsage.LastRefreshed = now
-	}
-	if agyUsage.LastRefreshed.IsZero() {
-		agyUsage.LastRefreshed = now
-	}
-	if codexUsage.LastRefreshed.IsZero() {
-		codexUsage.LastRefreshed = now
-	}
-
-	return UsageSummary{
-		Timestamp: time.Now(),
-		Agents: []AgentUsage{
-			claudeUsage,
-			agyUsage,
-			codexUsage,
-		},
-	}
+	return summary
 }
 
 // RenderJSON serializes the UsageSummary to a formatted JSON string.

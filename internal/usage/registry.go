@@ -170,16 +170,25 @@ func newUsageRegistry(homeDir string, client *http.Client, live bool) (*Registry
 	collect := func(provider string, fn func(context.Context) AgentUsage) func(context.Context) (AgentUsage, error) {
 		return func(ctx context.Context) (AgentUsage, error) {
 			stateDir := StateDir(homeDir)
+			var cached *AgentSnapshot
 			if !live {
 				if snapshot, err := ReadAgentSnapshot(stateDir, provider); err == nil && snapshot != nil {
-					if snapshot.IsFresh(DefaultCacheStaleness) || !snapshot.Usage.hasQuotaSignal() {
+					cached = snapshot
+					if snapshot.IsFresh(DefaultCacheStaleness) {
 						u := snapshot.Usage
 						u.LastRefreshed = snapshot.FetchedAt
+						u.Sources = append(u.Sources, fmt.Sprintf("%s (cached)", snapshotPath(stateDir, provider)))
 						return u, nil
 					}
 				}
 			}
 			u := fn(ctx)
+			if cached != nil && cached.Usage.hasQuotaSignal() && !u.hasQuotaSignal() {
+				u = mergeStaticWithLastQuota(u, cached.Usage)
+				u.LastRefreshed = cached.FetchedAt
+				u.Sources = append(u.Sources, fmt.Sprintf("%s (cached, stale)", snapshotPath(stateDir, provider)))
+				forEachQuotaWindow(&u, func(w *QuotaWindow) { w.Name = staleName(w.Name) })
+			}
 			if u.LastRefreshed.IsZero() {
 				u.LastRefreshed = time.Now()
 			}

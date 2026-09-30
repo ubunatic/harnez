@@ -53,7 +53,7 @@ func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSumma
 		if at.IsZero() {
 			at = now
 		}
-		if err := importAgent(store, ctx, agent.AgentID, "collect-all", at, agent); err != nil {
+		if err := importAgent(store, ctx, agent.AgentID, "registry", at, agent); err != nil {
 			return summary, err
 		}
 	}
