@@ -139,6 +139,56 @@ func TestCollectAGYAllActiveMeterWindowsSkipUsageCommand(t *testing.T) {
 	}
 }
 
+func TestCollectAGYRefreshesOldActiveMeterQuota(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	geminiDir := filepath.Join(home, ".gemini", "antigravity-cli")
+	if err := os.MkdirAll(geminiDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	reset := now.Add(24 * time.Hour).Format(time.RFC3339)
+	writeTestAGYMeterRows(t, home, []agymeter.Record{
+		{Time: now.Add(-2 * time.Hour), Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.8), Reset: reset},
+		{Time: now.Add(-2 * time.Hour), Kind: "quota", Bucket: "3p-weekly", Remaining: floatPtr(0.6), Reset: reset},
+	})
+	calls, cleanup := agyStubUsageCmd(t, []byte(agyOKOutput), nil)
+	defer cleanup()
+
+	got := CollectAGY(context.Background(), geminiDir, http.DefaultClient)
+	if atomic.LoadInt32(calls) != 1 {
+		t.Fatalf("agy -p /usage calls = %d, want one refresh for 2h-old meter data", atomic.LoadInt32(calls))
+	}
+	if len(got.ModelGroups) == 0 || got.ModelGroups[0].Windows[0].Source == "agy-meter" {
+		t.Fatalf("groups = %+v, want live values", got.ModelGroups)
+	}
+}
+
+func TestCollectAGYUsesThirtyMinuteOldMeterQuota(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	geminiDir := filepath.Join(home, ".gemini", "antigravity-cli")
+	if err := os.MkdirAll(geminiDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	reset := now.Add(24 * time.Hour).Format(time.RFC3339)
+	writeTestAGYMeterRows(t, home, []agymeter.Record{
+		{Time: now.Add(-30 * time.Minute), Kind: "quota", Bucket: "gemini-weekly", Remaining: floatPtr(0.8), Reset: reset},
+		{Time: now.Add(-30 * time.Minute), Kind: "quota", Bucket: "3p-weekly", Remaining: floatPtr(0.6), Reset: reset},
+	})
+	calls, cleanup := agyStubUsageCmd(t, []byte(agyOKOutput), nil)
+	defer cleanup()
+
+	got := CollectAGY(context.Background(), geminiDir, http.DefaultClient)
+	if atomic.LoadInt32(calls) != 0 {
+		t.Fatalf("agy -p /usage calls = %d, want none for 30m-old meter data", atomic.LoadInt32(calls))
+	}
+	if len(got.ModelGroups) == 0 || got.ModelGroups[0].Windows[0].Source != "agy-meter" {
+		t.Fatalf("groups = %+v, want meter values", got.ModelGroups)
+	}
+}
+
 func TestCollectAGYRefreshesExpiredGeminiMeterGroupFromLiveQuery(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

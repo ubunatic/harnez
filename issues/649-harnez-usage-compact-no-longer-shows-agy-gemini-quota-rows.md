@@ -33,6 +33,9 @@ stale marking, past-reset Gemini windows, and the single-window Claude/GPT case.
 ### Follow-up cause and fix (2026-09-30)
 `applyRecentAGYMeterQuota` returned success when any meter window was unexpired, causing the collector to skip `agy -p "/usage"` even when Gemini's weekly window had expired. Meter data now short-circuits only when every window is active; expired meter values remain a stale fallback if the live query fails or auth backoff is active. Compact rendering shows expired meter windows as 0% used while retaining the stale marker.
 
+### Freshness follow-up (2026-09-30)
+Active meter readings older than the configurable `agy_meter_max_age` in embedded `spec/usage.yaml` now trigger a live `/usage` refresh, while remaining available as fallback if refresh fails or auth backoff is active.
+
 ## 3. Acceptance
 - Root cause named in this ticket.
 - Compact view shows a Gemini row (marked stale if the data is old, per 103) instead of dropping it.

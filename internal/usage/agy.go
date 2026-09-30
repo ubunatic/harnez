@@ -554,6 +554,10 @@ func applyRecentAGYMeterQuota(usage AgentUsage, homeDir string, now time.Time) (
 	if !ok {
 		return usage, false
 	}
+	maxAge, err := agyMeterMaxAge()
+	if err != nil || now.Sub(meterUsage.LastRefreshed) > maxAge {
+		return usage, false
+	}
 	for _, group := range meterUsage.ModelGroups {
 		for _, window := range group.Windows {
 			if window.ExpiredAt(now) {

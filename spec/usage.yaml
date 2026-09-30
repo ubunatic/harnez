@@ -1,0 +1,2 @@
+# yaml-language-server: $schema=schemas/usage.schema.json
+agy_meter_max_age: 1h
