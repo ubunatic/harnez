@@ -79,6 +79,10 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
     zeros for missing data, and no rows that vanish. Record implausible values as pre-work for the
     next milestone. (Sprint 519: green tests hid "new input" holding total input and a 43% drain on
     one session.)
+  - For user-visible output, the host runs the installed binary itself (several runs, a pty for
+    interactive views) and compares every expected row. A developer's pasted output or "closed" is
+    not evidence. (Sprint 657: a dev closed the ticket claiming all providers rendered; live compact
+    showed none of Claude/Codex, and rows varied between runs.)
 - **Strictly No Direct Fixes & No Micro-Task Rounds**:
   - The host does **NOT** modify code files.
   - The host updates the ticket: records milestone $N$ delivery summary, naming the milestone ("M2 delivered: flag and schema gating").
