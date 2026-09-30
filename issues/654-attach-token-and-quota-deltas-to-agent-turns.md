@@ -1,6 +1,6 @@
 # 654 — Attach Token and Quota Deltas to Agent Turns
 
-**Status**: Open
+**Status**: Closed — Turn token and quota-delta rows now land in telemetry.sqlite (turn_token_usage, turn_quota_deltas); stats --agents, agent models, agent start read the store; quota-readings.jsonl imported 1851/1851 with byte-identical backup and writes retired; live luna turn added 2 token and 2 quota-delta rows (host-verified)
 **Priority**: P1 (High)
 **Severity**: Major
 **Category**: Architecture
