@@ -13,6 +13,8 @@ Not needed for routine coding; reach for these during investigations or design w
 | [CodexSettings.md](CodexSettings.md) | Codex config ownership, spec-driven debloat, status/revert, and isolation limits (consult before changing Codex settings management) |
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent (consult when changing command pipelines) |
 | [HarnezComponents.md](HarnezComponents.md) | Component coupling analysis: subsystem map, package and runtime-contract coupling, use-case coverage, proposed separation boundaries, migration notes, and the component-selection design (§8: paths A–E, presets, removal semantics, dispatch modes, token capture; MVP in `internal/components`) (consult before splitting harnez or adding component selection) |
+| [ClaudeFunctionHooks.md](ClaudeFunctionHooks.md) | Claude Code function-hook plugins: loader rules that silently register zero hooks, available runtime (`$.process.run` only), probing practice (read before writing any hook plugin) |
+| [JevCompaction.md](JevCompaction.md) | Replacing agent compaction with `harnez compact`: per-harness hook support (Claude yes, Codex/agy no), embedded Claude plugin, function-hook runtime pitfalls, canaries (consult before touching compaction hooks) |
 | [HarnezAgentArchitecture.md](HarnezAgentArchitecture.md) | `harnez agent`: command forms, prompt assembly, session attribution, roles, stream output protocol, compaction, dispatch policy (consult before changing agent dispatch or its output) |
 | [OrchestratedAgentFlow.md](OrchestratedAgentFlow.md) | Orchestrator + leaf developer sprint flow: enforced roles, per-ticket loop, review checklist, pitfalls found, how to find out what agents ran (consult before an orchestrated run or when an agent misuses `harnez agent`) |
 | [CodexEvents.md](CodexEvents.md) | Codex event shapes used by the analytics adapter (consult when changing Codex telemetry parsing) |
@@ -162,6 +164,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-09-25-usage-system-advisor-handoff.md](studies/2026-09-25-usage-system-advisor-handoff.md) | Usage System: Advisor Handoff and Workflow Friction (2026-09-25) |
 | [studies/2026-09-26-neus-lean-sprint-and-agentic-loop-retrospective.md](studies/2026-09-26-neus-lean-sprint-and-agentic-loop-retrospective.md) | Neus Lean Sprint & Agentic Loop Retrospective (2026-09-26) |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
+| [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
 | [studies/MacOSContainerAMD.md](studies/MacOSContainerAMD.md) | macOS Containers on AMD KVM & Podman: Architecture, Quirks, and Diagnostic Guide |
 | [studies/PureGoSound.md](studies/PureGoSound.md) | Pure-Go Audio Playback Assessment for CLI Notifications |

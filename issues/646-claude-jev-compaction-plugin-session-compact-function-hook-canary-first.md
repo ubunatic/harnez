@@ -162,5 +162,11 @@ Neither offers a live replacement hook like Claude's `session.compact`.
 - **agy 1.2.13**: hooks cover tools, model invocation and stop, but no compaction event;
   `PreInvocation` can inject messages, not rewrite history (antigravity.google/docs/hooks). No
   compaction prompt/model setting. Resume picks stored threads; no import of a rewritten transcript.
+
+## Status (2026-09-30)
+- Learnings recorded in `docs/JevCompaction.md` (per-harness support, plugin design) and
+  `docs/ClaudeFunctionHooks.md` (hook-runtime pitfalls).
+- User set `jev_compaction_enabled: true` locally. Close 646 once a real session has auto-compacted
+  through the plugin (session file shows a `compact_boundary` with trigger `auto`).
 - **Consequence**: for Codex/agy only two routes remain, each needing its own canary: (a) Codex
   `experimental_compact_prompt_file` for better summaries, (b) disk rewrite + resume.

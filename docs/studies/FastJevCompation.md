@@ -1,3 +1,5 @@
+# Fast Jev Compaction (tamaratran/fast-jev-compaction) Study
+
 User: explain in detail how "claude" "agy" and "codex" compaction is triggered with Jev. Which hooks are used, which files are written, etc.
 https://github.com/tamaratran/fast-jev-compaction
 
