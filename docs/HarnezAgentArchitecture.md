@@ -294,15 +294,12 @@ To provide clean lifecycle continuity across all harnesses:
    - When running under `harnez exec` without an explicit timeout, reaching the deadline triggers clean detachment:
      - The worker process continues running uninterrupted in an independent session/process group (`Setsid`).
      - Session state persists in `~/.harnez/agents/` with status `running`, process PID, and stdout/stderr log paths.
-     - The foreground command exits cleanly (code 0) with a directive host instruction block:
-       ```text
-       [session info: id=<id> name=<name> status=running]
-       Agent turn exceeded 60s and has been cleanly detached to the background.
-       Do NOT poll. Do NOT schedule timers or cron jobs.
-       Reattach by launching a background job:
-         harnez agent wait <name>
-       When the background job finishes, your environment will automatically notify this session.
-       ```
+     - The foreground command exits cleanly (code 0) with a directive block: `[session info: ... status=running]`, a statement that the agent is STILL RUNNING and its result is not collected, then host-specific reattach steps from `reattachSteps` (`cmd/harnez/agent_async.go`). The same steps appear in the pre-turn `[wait: ...]` hint.
+     - The host comes from `detachHost`: `CODEX_THREAD_ID`/`CODEX_CLI` means Codex, otherwise `detectAgent` (claude, agy, unknown). Each host is told only about tools it has, in its own terms:
+       - Claude: Bash `run_in_background: true`, which notifies on exit; do not poll.
+       - agy: run it as a background *task*, which notifies on completion; do not poll or block.
+       - Codex: `exec_command`, then `write_stdin` on the returned `session_id` until an exit code arrives; do not end the turn before that. No "do not poll": this is Codex's only wait mechanism.
+       - Unknown: generic "host background job" wording.
      - When `--json` is passed, the detach block emits valid JSON containing `status: "running"`, `detached: true`, `wait_command`, and instructions, preventing caller JSON parse failures.
 2. **`harnez agent wait` Defaults to No Timeout (`timeout = 0`)**:
    - `resolveExecTimeout` recognizes `harnez agent wait` (direct argv, absolute binary path, or wrapped in `bash -c`/`-lc`) and defaults its timeout to `0` (`HTO=0`), bypassing the 60s kill limit.
@@ -310,10 +307,13 @@ To provide clean lifecycle continuity across all harnesses:
 3. **Zero-Polling & Zero-Scheduling Invariant**:
    - Host orchestrators must NOT loop on `manage_task status`, `harnez agent status`, or log files.
    - Host orchestrators must NOT create timers or cron schedules.
-   - The host launches `harnez agent wait <name>` as a native host background task and yields. The host harness (e.g. Antigravity, Claude Code) automatically wakes the orchestrator upon task completion.
+   - Claude and agy hosts launch `harnez agent wait <name>` as a native background job/task and yield; the harness wakes them on completion.
+   - Codex is the exception: it has no shell job that notifies on completion, so its wait is a blocking `write_stdin` session (native async exists only for `collaboration.spawn_agent` subagents).
 4. **Subprocess & Environment Isolation**:
    - Child worker invocations (`--worker-session`) strip `HARNEZ_AGENT_ROLE` from the worker environment to prevent colliding with leaf-role restrictions in `guardLeafRole`.
    - Detachment is automatically disabled in Go unit test environments (`flag.Lookup("test.v") != nil`) unless explicitly requested via `HARNEZ_TEST_FOREGROUND_DETACH=1`, safeguarding in-process mock drivers from unexpected subprocess execution.
+5. **Pitfall — abstract reattach wording (issue 647)**:
+   - The generic "launch as a host background job, the environment will notify you, do NOT poll" text made Codex orphan detached agents repeatedly. The detach exits 0, so Codex's exec session looks finished; it has no notifying job, and "do not poll" forbade its only wait tool. About ten generic wording fixes did not help; naming each host's own tools is the current approach. If Codex still orphans agents, the fallback is removing auto-detach. Never promote `--detach` in guidance.
 
 ## 3. Model Shorthand & Vendor Mapping
 
