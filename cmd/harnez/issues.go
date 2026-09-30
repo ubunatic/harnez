@@ -456,14 +456,20 @@ func composeNewStatus(verb, reason string) (string, error) {
 // the next free ticket number and create a Draft placeholder file, using
 // the exact internal/issues.Reserve call and output contract
 // `harnez find issues next --reserve` used before issue 233 moved the
-// mutation out of `find`. It intentionally does not require (or accept) a
-// ticket number -- there isn't one until this call allocates it -- and never
-// touches issues/README.md or git, unlike every other `issues` verb.
+// mutation out of `find`. It refreshes issues/README.md after the reserved
+// file has been created; the index initially shows the placeholder title
+// until the caller writes ticket content. It intentionally does not require
+// (or accept) a ticket number -- there isn't one until this call allocates it
+// -- and never commits.
 func runIssuesNew(w io.Writer, dir, title string, jsonOutput bool) error {
 	issuesDir := filepath.Join(dir, "issues")
 	num, filename, err := issues.Reserve(issuesDir, issues.ReserveOptions{Title: title})
 	if err != nil {
 		return fmt.Errorf("issues new: %w", err)
+	}
+	readmePath := filepath.Join(issuesDir, "README.md")
+	if _, err := index.UpdateIssuesReadme(readmePath, issuesDir); err != nil {
+		return fmt.Errorf("issues new: update README: %w", err)
 	}
 	relPath := filepath.ToSlash(filepath.Join("issues", filename))
 	if jsonOutput {
@@ -480,6 +486,7 @@ func runIssuesNew(w io.Writer, dir, title string, jsonOutput bool) error {
 		return nil
 	}
 	fmt.Fprintf(w, "%s\t%s\n", num, relPath)
+	fmt.Fprintln(os.Stderr, "issues new: README refreshed")
 	return nil
 }
 

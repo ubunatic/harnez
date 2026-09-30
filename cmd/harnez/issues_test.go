@@ -422,6 +422,13 @@ func TestRunIssuesNew_NoTitleCreatesReservedPlaceholder(t *testing.T) {
 	if !strings.Contains(string(content), "**Status**: Draft") {
 		t.Errorf("expected Draft placeholder status, got:\n%s", content)
 	}
+	readme, err := os.ReadFile(filepath.Join(dir, "issues", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(readme), "| 043 | [043-reserved.md](043-reserved.md) | Reserved | Draft |") {
+		t.Errorf("README missing reserved placeholder row:\n%s", readme)
+	}
 }
 
 // TestRunIssuesNew_WithTitleSlugifiesFilename covers the titled case and
