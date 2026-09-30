@@ -168,5 +168,13 @@ Neither offers a live replacement hook like Claude's `session.compact`.
   `docs/ClaudeFunctionHooks.md` (hook-runtime pitfalls).
 - User set `jev_compaction_enabled: true` locally. Close 646 once a real session has auto-compacted
   through the plugin (session file shows a `compact_boundary` with trigger `auto`).
+
+## M4 Pre-Work / Required Refinements (host, 2026-09-30)
+- **Apply not idempotent when enabled**: every `harnez apply` reports `env: changed` and `managed
+  .../jev-compaction` (2 changes) although settings.json is byte-identical afterwards (jq -S diff empty).
+- **Tests depend on the repo's `config.yaml`**: with `jev_compaction_enabled: true`,
+  `TestClaudeSkillsTargetRoundTrip`, `TestUnifiedCrossHarnessSkillTargets` (DiffAll drift right after
+  ApplyAll) and `TestApply_FullMatchesPlainApply` (selected vs plain apply differ in `enabledPlugins`)
+  fail; with `false` all pass. Likely the same drift bug; fix it and make the tests independent of the flag.
 - **Consequence**: for Codex/agy only two routes remain, each needing its own canary: (a) Codex
   `experimental_compact_prompt_file` for better summaries, (b) disk rewrite + resume.
