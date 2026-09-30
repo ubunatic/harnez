@@ -2,7 +2,7 @@
 
 Dynamically switch the operational terseness level for the active session and synchronize `./AGENTS.local.md` (or `./AGENTS.md` with `--persist`).
 
-Reference Practice: `@docs/practices/ConciseMode.md`
+Reference Practice: `@docs/ConciseMode.md`
 
 ---
 
@@ -25,4 +25,3 @@ Flags:
 1. Executes `harnez mode <tier>` to inject the high-priority steering directive into the immediate LLM context.
 2. Updates or cleans the `<!-- harnez:begin Concise Mode -->` block in `./AGENTS.local.md` (or `./AGENTS.md` with `--persist`) so descendant subagents and subsequent sessions inherit the tier automatically.
 3. Automatically ensures `AGENTS.local.md` is added to `.git/info/exclude` so switching modes never leaves a dirty git working tree.
-
