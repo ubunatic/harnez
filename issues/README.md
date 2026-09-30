@@ -649,3 +649,8 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 648 | [648-show-claude-5h-and-weekly-used-percent-in-the-default-usage-view.md](648-show-claude-5h-and-weekly-used-percent-in-the-default-usage-view.md) | Show Claude 5h and weekly used percent in the default usage view | Open |
 | 649 | [649-harnez-usage-compact-no-longer-shows-agy-gemini-quota-rows.md](649-harnez-usage-compact-no-longer-shows-agy-gemini-quota-rows.md) | harnez usage --compact no longer shows agy/Gemini quota rows | Closed — Refresh active AGY meter readings older than the spec-configured 1h age; preserve fallback on query failure. |
 | 650 | [650-usage-collection-architecture-umbrella.md](650-usage-collection-architecture-umbrella.md) | Usage Collection Architecture Umbrella | Open |
+| 651 | [651-usage-store-read-seam-for-compact-output.md](651-usage-store-read-seam-for-compact-output.md) | Usage Store Read Seam for Compact Output | Open |
+| 652 | [652-register-active-usage-collectors.md](652-register-active-usage-collectors.md) | Register Active Usage Collectors | Draft |
+| 653 | [653-ingest-passive-usage-observations.md](653-ingest-passive-usage-observations.md) | Ingest Passive Usage Observations | Draft |
+| 654 | [654-attach-token-and-quota-deltas-to-agent-turns.md](654-attach-token-and-quota-deltas-to-agent-turns.md) | Attach Token and Quota Deltas to Agent Turns | Draft |
+| 655 | [655-consolidate-legacy-usage-stores-safely.md](655-consolidate-legacy-usage-stores-safely.md) | Consolidate Legacy Usage Stores Safely | Draft |
