@@ -1744,7 +1744,7 @@ func TestAgentResumePrintsReplyNotStructDump(t *testing.T) {
 	if got := out.String(); strings.Contains(got, "{0x") || !strings.Contains(got, "[agent messages]\n[msg 1]\nthe reply text") {
 		t.Fatalf("stdout = %q, want plain reply without struct dump", got)
 	}
-	if e := errOut.String(); !strings.HasPrefix(e, "[session timeline]\n") || !strings.Contains(e, "host background job") || !strings.Contains(e, "do not poll") || !strings.Contains(e, " done] ") {
+	if e := errOut.String(); !strings.HasPrefix(e, "[session timeline]\n") || !strings.Contains(e, "host background job") || !strings.Contains(e, "Do NOT poll") || !strings.Contains(e, " done] ") {
 		t.Fatalf("stderr = %q, want timeline with wait notice", e)
 	}
 }
@@ -3110,5 +3110,32 @@ func TestRateLatestSessionTurnCreatesRecordForPreM1Session(t *testing.T) {
 	}
 	if len(loaded.TurnRecords) != 1 || loaded.TurnRecords[0].Turn != 2 || loaded.TurnRecords[0].Rating == nil || *loaded.TurnRecords[0].Rating != 4 {
 		t.Fatalf("legacy session turn records = %+v", loaded.TurnRecords)
+	}
+}
+
+func TestReattachStepsUseHostVocabulary(t *testing.T) {
+	for host, want := range map[string][]string{
+		"codex":  {"exec_command", "write_stdin", "session_id", "Do NOT end your turn"},
+		"claude": {"run_in_background: true", "Do NOT poll"},
+		"agy":    {"background task", "Do NOT poll"},
+		"":       {"host background job", "Do NOT poll"},
+	} {
+		got := strings.Join(reattachSteps(host, "calm-otter"), " ")
+		for _, w := range append(want, "harnez agent wait calm-otter") {
+			if !strings.Contains(got, w) {
+				t.Errorf("host %q: %q missing %q", host, got, w)
+			}
+		}
+	}
+	if got := strings.Join(reattachSteps("codex", "x"), " "); strings.Contains(got, "Do NOT poll") {
+		t.Errorf("codex steps forbid polling, its only wait mechanism: %q", got)
+	}
+}
+
+func TestDetachHostPrefersCodexThread(t *testing.T) {
+	t.Setenv("HARNEZ_AGENT", "claude")
+	t.Setenv("CODEX_THREAD_ID", "t1")
+	if got := detachHost(); got != "codex" {
+		t.Fatalf("detachHost = %q, want codex", got)
 	}
 }

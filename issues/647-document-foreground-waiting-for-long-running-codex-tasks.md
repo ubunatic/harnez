@@ -54,3 +54,23 @@ have not changed this.
 auto-detach (or disable it for Codex) and rewrite all detach/wait guidance so that each host is
 told only about mechanisms it actually has. Verify this with a Codex canary run over 60s that
 ends with the collected result. Stop and report if the user chooses to keep auto-detach.
+
+## 5. Decision 2026-09-30 — keep auto-detach, host-specific reattach wording
+
+The user chose to keep the 60s auto-detach (it works for Claude and agy) and never promote
+`--detach`. Instead, the detach message and pre-turn wait hint now use each host's own terms
+(`reattachSteps` in `cmd/harnez/agent_async.go`, host from `detachHost`):
+- Codex (`CODEX_THREAD_ID`/`CODEX_CLI`): run `harnez agent wait` with `exec_command`, then
+  `write_stdin` on the returned `session_id` until an exit code arrives. Do not end the turn before that.
+  No "Do NOT poll".
+- Claude: Bash `run_in_background: true`, which notifies on exit.
+- agy: run it as a background *task*, which notifies when complete.
+- Unknown hosts get the previous generic wording.
+The message also states that the agent is still running and its result has not been collected yet.
+
+Background (Codex self-reports): Codex has no shell job that notifies it on completion. Native async
+exists only for `collaboration.spawn_agent` subagents (results arrive in the mailbox automatically).
+
+**Next**: observe Codex/agy sessions for a few days. If Codex still orphans agents, revisit
+removing auto-detach (§4 option 1). Still open: `.harnez/rules/Tools.md:50` gives the
+Claude-only hint `run_in_background` to all hosts.

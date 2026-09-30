@@ -22,6 +22,10 @@ func TestMain(m *testing.M) {
 	for _, name := range resolve.SessionEnvVars {
 		os.Unsetenv(name)
 	}
+	// Host detection picks detach guidance wording (detachHost); keep it generic.
+	for _, name := range []string{"HARNEZ_AGENT", "CODEX_THREAD_ID", "CODEX_CLI", "CLAUDE_CODE_SESSION_ID", "ANTIGRAVITY_AGENT", "ANTIGRAVITY_AGENTAPI_EXE"} {
+		os.Unsetenv(name)
+	}
 
 	oldHome, hadHome := os.LookupEnv("HOME")
 	tmpHome, err := os.MkdirTemp("", "harnez-test-*")

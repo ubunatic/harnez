@@ -751,7 +751,7 @@ func (t *timeline) log(label, format string, args ...any) {
 // announceTurn tells the calling agent what is about to happen and that it must wait.
 func (t *timeline) announceTurn(verb, target, session string) {
 	t.log(verb, "one synchronous turn on %s (session %q) via the provider CLI", target, session)
-	t.log("wait", "wait for the turn output; if it detaches after 60s, launch `harnez agent wait %s` as a host background job; do not poll or schedule timers/crons", session)
+	t.log("wait", "wait for the turn output; %s", waitHint(session))
 }
 
 func (t *timeline) finishTurn(r *subagent.TurnResult, id, reconnect string) {

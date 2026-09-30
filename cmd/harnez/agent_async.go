@@ -64,7 +64,52 @@ func foregroundDetachTimeout(cmd *cobra.Command) time.Duration {
 	return deadline - foregroundDetachGrace
 }
 
+// detachHost names the calling agent host so reattach guidance can use that
+// host's own tool vocabulary; generic wording made Codex orphan detached
+// agents (issue 647).
+func detachHost() string {
+	if os.Getenv("CODEX_THREAD_ID") != "" || os.Getenv("CODEX_CLI") != "" {
+		return "codex"
+	}
+	return detectAgent("", nil)
+}
+
+// reattachSteps tells the host how to wait on `harnez agent wait <name>`
+// with the tools it actually has.
+func reattachSteps(host, name string) []string {
+	wait := "harnez agent wait " + name
+	switch host {
+	case "codex":
+		return []string{
+			"Run `" + wait + "` with exec_command.",
+			"It returns a session_id while the agent is still working: call write_stdin with that session_id and chars \"\" again and again until it reports an exit code.",
+			"Do NOT end your turn, report completion, or start other work that depends on this agent before that exit code arrives.",
+		}
+	case "agy":
+		return []string{
+			"Run `" + wait + "` as a background task; Antigravity will automatically notify you when the task completes.",
+			"Do NOT poll. Do NOT schedule timers or cron jobs. Do NOT block on the task; continue other work until notified.",
+		}
+	case "claude":
+		return []string{
+			"Run `" + wait + "` with the Bash tool and run_in_background: true (a host background job); Claude Code will automatically notify you when it exits.",
+			"Do NOT poll. Do NOT schedule timers or cron jobs.",
+		}
+	}
+	return []string{
+		"Launch `" + wait + "` as a host background job; the environment will automatically notify this session when it finishes.",
+		"Do NOT poll. Do NOT schedule timers or cron jobs.",
+	}
+}
+
+// waitHint is the one-line pre-turn reminder of the reattach steps.
+func waitHint(name string) string {
+	return "if this turn detaches after 60s: " + strings.Join(reattachSteps(detachHost(), name), " ")
+}
+
 func writeDetachGuidance(w io.Writer, sess *subagent.Session, jsonOut bool) {
+	steps := reattachSteps(detachHost(), sess.Name)
+	const msg = "Agent turn exceeded 60s and has been cleanly detached to the background. The agent is STILL RUNNING; its result is not collected yet."
 	if jsonOut {
 		_ = json.NewEncoder(w).Encode(struct {
 			Session      *subagent.Session `json:"session"`
@@ -75,18 +120,17 @@ func writeDetachGuidance(w io.Writer, sess *subagent.Session, jsonOut bool) {
 			WaitCommand  string            `json:"wait_command"`
 		}{
 			Session: sess, Status: "running", Detached: true,
-			Message:      "Agent turn exceeded 60s and has been cleanly detached to the background.",
-			Instructions: []string{"Do NOT poll.", "Do NOT schedule timers or cron jobs.", "Launch the wait command as a host background job; the environment will automatically notify this session when it finishes."},
+			Message:      msg,
+			Instructions: steps,
 			WaitCommand:  "harnez agent wait " + sess.Name,
 		})
 		return
 	}
 	fmt.Fprintf(w, "[session info: id=%s name=%s status=running]\n", sess.ID, sess.Name)
-	fmt.Fprintln(w, "Agent turn exceeded 60s and has been cleanly detached to the background.")
-	fmt.Fprintln(w, "Do NOT poll. Do NOT schedule timers or cron jobs.")
-	fmt.Fprintln(w, "Reattach by launching a background job:")
-	fmt.Fprintf(w, "  harnez agent wait %s\n", sess.Name)
-	fmt.Fprintln(w, "When the background job finishes, your environment will automatically notify this session.")
+	fmt.Fprintln(w, msg)
+	for _, s := range steps {
+		fmt.Fprintln(w, s)
+	}
 }
 
 func launchForegroundWorker(cmd *cobra.Command, store *subagent.FileSessionStore, sess *subagent.Session, args []string, timeout time.Duration, jsonOut bool) (bool, error) {

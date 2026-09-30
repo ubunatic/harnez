@@ -135,7 +135,7 @@ func (t *turnStream) info(id, agent, action, resolved string, extra ...string) {
 	for _, e := range extra {
 		t.printf("%s\n", e)
 	}
-	t.printf("[wait: wait for [done]; if this turn detaches after 60s, launch `harnez agent wait %s` as a host background job; do not poll or schedule timers/crons]\n", t.name)
+	t.printf("[wait: wait for [done]; %s]\n", waitHint(t.name))
 }
 
 func (t *turnStream) onEvent(ev subagent.Event) {
