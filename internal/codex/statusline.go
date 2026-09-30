@@ -10,8 +10,10 @@ import (
 
 const invalidLegacyStatusLineItem = "model-context"
 
+const replacedStatusLineItem = "model-with-reasoning"
+
 var statusLineItems = []string{
-	"model-with-reasoning",
+	"model",
 	"current-dir",
 	"thread-name",
 	"context-remaining",
@@ -32,7 +34,7 @@ func ApplyStatusLine(path string) (bool, error) {
 	items := stringArray(tui["status_line"])
 	filtered := make([]string, 0, len(items))
 	for _, item := range items {
-		if item != invalidLegacyStatusLineItem {
+		if item != invalidLegacyStatusLineItem && item != replacedStatusLineItem {
 			filtered = append(filtered, item)
 		}
 	}
@@ -75,7 +77,7 @@ func RemoveStatusLine(path string) (bool, error) {
 	filtered := make([]string, 0, len(items))
 	removed := false
 	for _, item := range items {
-		if containsString(statusLineItems, item) {
+		if containsString(statusLineItems, item) || item == replacedStatusLineItem {
 			removed = true
 			continue
 		}

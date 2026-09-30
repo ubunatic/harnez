@@ -10,7 +10,7 @@ import (
 func TestApplyStatusLineRemovesInvalidLegacyItemAndKeepsUserItems(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	before := `[tui]
-status_line = ["model-context", "user-item", "current-dir"]
+status_line = ["model-context", "model-with-reasoning", "user-item", "current-dir"]
 theme = "dark"
 `
 	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
@@ -28,10 +28,12 @@ theme = "dark"
 		t.Fatal(err)
 	}
 	got := string(data)
-	if strings.Contains(got, "model-context") {
-		t.Errorf("invalid status-line item remains: %s", got)
+	for _, removed := range []string{"model-context", "model-with-reasoning"} {
+		if strings.Contains(got, removed) {
+			t.Errorf("replaced status-line item %q remains: %s", removed, got)
+		}
 	}
-	for _, want := range []string{"user-item", "theme = \"dark\"", "model-with-reasoning", "weekly-limit"} {
+	for _, want := range []string{"user-item", "theme = \"dark\"", "\"model\"", "weekly-limit"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("config does not preserve/add %q: %s", want, got)
 		}
