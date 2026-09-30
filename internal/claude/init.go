@@ -480,10 +480,16 @@ func backfillRulesHeader(path, header string) (bool, error) {
 		return false, err
 	}
 	content := string(data)
-	if strings.HasPrefix(content, header+"\n\n") {
+	prefix := header + "\n"
+	if !strings.HasPrefix(content, prefix) {
+		content = prefix + content
+	}
+	content = prefix + strings.TrimLeft(strings.TrimPrefix(content, prefix), "\n")
+	content = header + "\n\n" + strings.TrimPrefix(content, prefix)
+	if string(data) == content {
 		return false, nil
 	}
-	if err := os.WriteFile(path, []byte(header+"\n\n"+content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return false, err
 	}
 	return true, nil

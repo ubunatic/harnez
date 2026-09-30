@@ -72,6 +72,45 @@ func TestRunInit_GeneratesHarnezRules(t *testing.T) {
 	}
 }
 
+func TestRunInit_MigratesLocalOverlaysWithSingleHeaderGap(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/headergap\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	legacy := "<!-- harnez:begin Local Overlays -->\nlegacy local rules\n<!-- harnez:end Local Overlays -->\n\nAdhere to the following conventions.\n"
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	if err := os.WriteFile(agentsPath, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := claude.LoadConfigEmbedded()
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func() {
+		t.Helper()
+		if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run()
+	first, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPrefix := cfg.AgentsMD.Rules.Header + "\n\n"
+	if !strings.HasPrefix(string(first), wantPrefix) || strings.HasPrefix(string(first), cfg.AgentsMD.Rules.Header+"\n\n\n") {
+		t.Fatalf("expected exactly one blank line after rules header; got:\n%s", first)
+	}
+	run()
+	second, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(second) != string(first) {
+		t.Fatalf("second init changed AGENTS.md:\nfirst:\n%s\nsecond:\n%s", first, second)
+	}
+}
+
 func TestRunInit_MigratesManagedBlocksLosslessly(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/migrate\n"), 0o644); err != nil {
