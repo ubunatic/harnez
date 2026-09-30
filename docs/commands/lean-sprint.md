@@ -48,10 +48,15 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
 ### 1. Goal Handoff to Low-Cost Developer
 - The Host Orchestrator dispatches a developer worker using `harnez agent start --role developer --name <worker> --model <model> -d <dir> "<milestone_prompt>"` (or the active subagent dispatch method). Prefer `luna` first; use `terra` when stronger judgment is needed; avoid `agy` models for developer work.
 - An explicitly named `provider:model:tier` must be dispatched exactly through `harnez agent start`; on failure, report it and ask for guidance rather than substituting the host model or a native subagent.
-- Provide:
-  - Scoped milestone objective, target files, and acceptance criteria from the ticket.
+- Provide these facts in every handoff (a required checklist, not a wording template; missing items caused most follow-up turns):
+  - Ticket number and goal, with its acceptance criteria.
+  - Files to change, all of them (including doc copies and sibling docs).
+  - Files not to touch (other sessions' uncommitted work) — never stage them.
+  - Tests already known to fail and why, so the worker neither fixes nor blames them.
+  - Edge and negative cases to test (ambiguous input, near-miss values).
   - Test requirements (reproduction test first for bugs, unit tests for features).
-- **Plan First (read-only)**: Recommended: start the worker's initial prompt with a read-only planning step ("read-only: plan ..."; no edits until the host has seen the plan), then `resume` to grant write authority. Give no prompt template: agents have their own best practices, and the stored first prompts (telemetry DB) are how we observe and compare them. In one-shot mode a plan request alone is not enforced, so a plan-only first prompt is the reliable form.
+  - The exact close command with a written reason: `harnez issues close N "<real outcome>"`; no placeholders.
+- **Plan First (read-only)**: Recommended: start the worker's initial prompt with a read-only planning step ("read-only: plan ..."; no edits until the host has seen the plan), then `resume` to grant write authority. Give no wording template for the prompt beyond the checklist above: agents have their own best practices, and the stored first prompts (telemetry DB) are how we observe and compare them. In one-shot mode a plan request alone is not enforced, so a plan-only first prompt is the reliable form.
 - **Trust the Base Framework**: Do not duplicate system prompts or micromanage formatting conventions.
 - **Reading Discipline**: Instruct the developer to use line-bounded reads (`harnez read -L <range>` / `-n`) for medium/large files (`harnez read -I` is paused until issue 543, a memory blow-up, is fixed).
 - **Stay Responsive**: Dispatching the worker must not block the chat; note the emitted Reconnect Banner and return control or proceed with review preparation.
