@@ -769,6 +769,12 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		stale := agent.IsValueStale()
 		if len(agent.ModelGroups) > 0 {
 			hasWindow := false
+			labelSuffix := ""
+			if agent.QuotaFetchError != "" {
+				labelSuffix = " unavailable (" + agent.QuotaFetchError + ")"
+			} else if agent.Error != "" {
+				labelSuffix = " unavailable (" + agent.Error + ")"
+			}
 			for _, mg := range agent.ModelGroups {
 				label := mg.Name
 				if strings.EqualFold(label, "Gemini Models") {
@@ -776,6 +782,7 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 				} else if strings.EqualFold(label, "Claude and GPT models") || strings.EqualFold(label, "Claude and GPT") {
 					label = "Claude/GPT"
 				}
+				label += labelSuffix
 				if len(mg.Windows) > 0 {
 					hasWindow = true
 				}
@@ -2235,6 +2242,19 @@ func RenderSummaryWithUsage(summary UsageSummary, out io.Writer, showProcesses b
 	opt := firstOpt(opts)
 	cols, rows := terminalSize(out)
 	opt.ShowProcesses = opt.ShowProcesses || showProcesses
+	if opt.Compact {
+		// A one-shot compact summary is report output, not a watch redraw:
+		// preserve every quota row even when the caller's terminal viewport is
+		// shorter than the dashboard. The live watch path keeps its strict cap.
+		sec := initialWatchSections(opt)
+		if sec.AllUsage {
+			box := buildAllUsageBoxAt(summary, cols-safetyMargin-4, opt.DebugOverlay, time.Now(), DefaultWatchInterval)
+			needed := len(box.lines) + 6 // title/borders plus header and load panel
+			if rows < needed {
+				rows = needed
+			}
+		}
+	}
 	frame := buildWatchFrame(summary, nil, 0, initialWatchSections(opt), cols, rows, false, "", "", opt)
 	for _, line := range frame.lines {
 		fmt.Fprintln(out, line+"\x1b[0m")

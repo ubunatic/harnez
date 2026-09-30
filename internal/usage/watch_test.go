@@ -2561,6 +2561,22 @@ func TestRenderSummary_CompactSelectsReducedSections(t *testing.T) {
 	}
 }
 
+func TestRenderSummaryWithUsageCompactPreservesProviderRowsBeyondViewport(t *testing.T) {
+	summary := UsageSummary{Timestamp: testTime, Agents: []AgentUsage{
+		{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true, ModelGroups: []ModelGroup{{Name: "Claude Code", Windows: []QuotaWindow{{Name: "5-hour", UsedPercent: 12}, {Name: "Weekly", UsedPercent: 34}}}}},
+		{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true, ModelGroups: []ModelGroup{{Name: "OpenAI Codex", Windows: []QuotaWindow{{Name: "5-hour", UsedPercent: 23}, {Name: "Weekly", UsedPercent: 45}}}}},
+		{AgentID: "agy", Name: "AGY", Installed: true, Authenticated: true, ModelGroups: []ModelGroup{{Name: "Gemini", Windows: []QuotaWindow{{Name: "5-hour", UsedPercent: 56}, {Name: "Weekly", UsedPercent: 67}}}}},
+	}}
+	var out bytes.Buffer
+	RenderSummaryWithUsage(summary, &out, false, WatchOptions{Compact: true})
+	got := stripANSI(out.String())
+	for _, label := range []string{"Claude Code", "OpenAI Codex", "Gemini", "12%", "23%", "56%"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("compact output missing %q:\n%s", label, got)
+		}
+	}
+}
+
 // TestStaleValueANSIPreservesResetsAndCostsNoWidth verifies issue 107's
 // dimming helper against the two constraints the ticket's own investigation
 // flagged: (a) an embedded "\x1b[0m" reset (e.g. from rograph.RenderBar's own

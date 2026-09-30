@@ -785,7 +785,23 @@ func (s *Store) QuotaHistory(ctx context.Context) ([]Window, error) {
 // CurrentFor returns the newest observation per window for one provider,
 // pool, and key. Compatibility reads use source priority for tied timestamps.
 func (s *Store) CurrentFor(ctx context.Context, provider string) ([]Window, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT provider,pool,window_key,window_name,source,freshness,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at,observed_at FROM (SELECT q.provider AS provider,q.pool AS pool,q.window_key AS window_key,q.window_name AS window_name,o.source AS source,o.freshness AS freshness,q.used_fraction AS used_fraction,q.input_tokens AS input_tokens,q.cached_input_tokens AS cached_input_tokens,q.output_tokens AS output_tokens,q.reasoning_tokens AS reasoning_tokens,q.reset_at AS reset_at,o.observed_at AS observed_at,ROW_NUMBER() OVER (PARTITION BY q.provider,q.pool,q.window_key ORDER BY CASE o.freshness WHEN 'fresh' THEN 1 ELSE 0 END DESC,CASE o.source WHEN 'claude-api' THEN 4 WHEN 'codex-api' THEN 4 WHEN 'agy-api' THEN 4 WHEN 'structured-event' THEN 4 WHEN 'authenticated-cli' THEN 3 WHEN 'collect-all' THEN 3 WHEN 'registry' THEN 3 WHEN 'statusline' THEN 2 WHEN 'agy-meter' THEN 1 WHEN 'proxy' THEN 1 WHEN 'estimated' THEN 1 ELSE 0 END DESC,o.observed_at DESC,o.id DESC) AS best FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider=?) WHERE best=1 ORDER BY provider,pool,window_key`, provider)
+	return s.currentFor(ctx, provider, false)
+}
+
+// LatestFor returns the newest observation per normalized window, regardless
+// of source priority. Compact output uses this so historical API/statusline
+// rows cannot outrank a newer provider reading.
+func (s *Store) LatestFor(ctx context.Context, provider string) ([]Window, error) {
+	return s.currentFor(ctx, provider, true)
+}
+
+func (s *Store) currentFor(ctx context.Context, provider string, latest bool) ([]Window, error) {
+	order := `CASE o.freshness WHEN 'fresh' THEN 1 ELSE 0 END DESC,CASE o.source WHEN 'claude-api' THEN 4 WHEN 'codex-api' THEN 4 WHEN 'agy-api' THEN 4 WHEN 'structured-event' THEN 4 WHEN 'authenticated-cli' THEN 3 WHEN 'collect-all' THEN 3 WHEN 'registry' THEN 3 WHEN 'statusline' THEN 2 WHEN 'agy-meter' THEN 1 WHEN 'proxy' THEN 1 WHEN 'estimated' THEN 1 ELSE 0 END DESC,o.observed_at DESC,o.id DESC`
+	if latest {
+		order = `o.observed_at DESC,o.id DESC`
+	}
+	query := `SELECT provider,pool,window_key,window_name,source,freshness,used_fraction,input_tokens,cached_input_tokens,output_tokens,reasoning_tokens,reset_at,observed_at FROM (SELECT q.provider AS provider,q.pool AS pool,q.window_key AS window_key,q.window_name AS window_name,o.source AS source,o.freshness AS freshness,q.used_fraction AS used_fraction,q.input_tokens AS input_tokens,q.cached_input_tokens AS cached_input_tokens,q.output_tokens AS output_tokens,q.reasoning_tokens AS reasoning_tokens,q.reset_at AS reset_at,o.observed_at AS observed_at,ROW_NUMBER() OVER (PARTITION BY q.provider,q.pool,q.window_key ORDER BY ` + order + `) AS best FROM quota_windows q JOIN usage_observations o ON o.id=q.observation_id WHERE q.provider=?) WHERE best=1 ORDER BY provider,pool,window_key`
+	rows, err := s.db.QueryContext(ctx, query, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -827,7 +843,7 @@ func (s *Store) CurrentFor(ctx context.Context, provider string) ([]Window, erro
 		}
 		w.Key = NormalizeWindowKey(w.Provider, w.Pool, w.Name)
 		group := w.Provider + "\x00" + w.Pool + "\x00" + w.Key
-		if previous, ok := bestByWindow[group]; !ok || windowRanksHigher(w, previous) {
+		if previous, ok := bestByWindow[group]; !ok || (latest && w.ObservedAt.After(previous.ObservedAt)) || (!latest && windowRanksHigher(w, previous)) {
 			bestByWindow[group] = w
 		}
 	}

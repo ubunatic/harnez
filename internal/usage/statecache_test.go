@@ -425,6 +425,8 @@ func TestCollectAllCacheFirst(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("no cache: falls back to live collection", func(t *testing.T) {
+		isolateUsageTestStorage(t)
+		t.Setenv("XDG_STATE_HOME", "")
 		// Assert CollectAll matches CollectAllLive's result for the same
 		// homeDir rather than asserting Installed==false directly: AGY's
 		// collector falls back to the real machine's ~/.gemini when its
@@ -443,6 +445,8 @@ func TestCollectAllCacheFirst(t *testing.T) {
 	})
 
 	t.Run("fresh cache: used instead of live collection", func(t *testing.T) {
+		isolateUsageTestStorage(t)
+		t.Setenv("XDG_STATE_HOME", "")
 		home := t.TempDir()
 		stateDir := StateDir(home)
 		cached := AgentUsage{
@@ -452,8 +456,8 @@ func TestCollectAllCacheFirst(t *testing.T) {
 			Authenticated: true,
 			PlanTier:      "Max (cached)",
 		}
-		if err := WriteAgentSnapshot(stateDir, "claude", cached); err != nil {
-			t.Fatalf("WriteAgentSnapshot: %v", err)
+		if err := writeAgentSnapshotFile(stateDir, "claude", cached); err != nil {
+			t.Fatalf("writeAgentSnapshotFile: %v", err)
 		}
 
 		summary := CollectAll(ctx, home, nil)
@@ -475,11 +479,13 @@ func TestCollectAllCacheFirst(t *testing.T) {
 	})
 
 	t.Run("stale cache: falls back to live collection", func(t *testing.T) {
+		isolateUsageTestStorage(t)
+		t.Setenv("XDG_STATE_HOME", "")
 		home := t.TempDir()
 		stateDir := StateDir(home)
 		cached := AgentUsage{AgentID: "claude", Installed: true, PlanTier: "should not be used"}
-		if err := WriteAgentSnapshot(stateDir, "claude", cached); err != nil {
-			t.Fatalf("WriteAgentSnapshot: %v", err)
+		if err := writeAgentSnapshotFile(stateDir, "claude", cached); err != nil {
+			t.Fatalf("writeAgentSnapshotFile: %v", err)
 		}
 		// Backdate the snapshot file's content past the staleness window by
 		// writing it directly (bypassing WriteAgentSnapshot's time.Now()).

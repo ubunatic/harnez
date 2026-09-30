@@ -519,10 +519,40 @@ func storeCompactSummary(ctx context.Context, homeDir string, summary UsageSumma
 			return summary, err
 		}
 	}
+	byProvider := make(map[string]int, len(summary.Agents))
 	for i := range summary.Agents {
-		readings, err := store.CurrentFor(ctx, summary.Agents[i].AgentID)
+		byProvider[summary.Agents[i].AgentID] = i
+	}
+	for _, provider := range []struct{ id, name string }{
+		{"claude", "Claude Code"}, {"codex", "OpenAI Codex"}, {"agy", "Antigravity (AGY)"},
+	} {
+		readings, err := store.LatestFor(ctx, provider.id)
 		if err != nil {
 			return summary, err
+		}
+		hasQuota := false
+		for _, reading := range readings {
+			if reading.Pool != "tokens" {
+				hasQuota = true
+				break
+			}
+		}
+		if !hasQuota {
+			if i, ok := byProvider[provider.id]; !ok || (summary.Agents[i].Error == "" && summary.Agents[i].QuotaFetchError == "") {
+				continue
+			}
+		}
+		i, ok := byProvider[provider.id]
+		if !ok {
+			i = len(summary.Agents)
+			byProvider[provider.id] = i
+			summary.Agents = append(summary.Agents, AgentUsage{AgentID: provider.id, Name: provider.name, Installed: true})
+		}
+		// A durable quota observation proves the provider was installed even
+		// when this cycle's collector reports it absent or unauthenticated.
+		summary.Agents[i].Installed = true
+		if summary.Agents[i].Name == "" {
+			summary.Agents[i].Name = provider.name
 		}
 		applyStoredWindows(&summary.Agents[i], readings, now)
 	}
@@ -559,6 +589,9 @@ func applyStoredWindows(agent *AgentUsage, readings []usagestore.Window, now tim
 	}
 	groups := map[string]int{}
 	for _, r := range readings {
+		if r.Pool == "tokens" {
+			continue
+		}
 		reset := r.ResetAt
 		w := QuotaWindow{Name: r.Name, Source: r.Source, UsedPercent: r.UsedFraction * 100, RemainingPercent: 100 - r.UsedFraction*100, ResetAt: reset}
 		if reset != nil {

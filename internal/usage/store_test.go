@@ -144,6 +144,20 @@ func TestCompactRenderingIncludesClaudeCodexAndAGYFromLabeledWriters(t *testing.
 			t.Fatal(err)
 		}
 	}
+	// A token counter is not a quota window and must never be projected into
+	// the compact quota rows, even though its used_fraction is zero.
+	if err := store.WriteCurrent(ctx, at.Add(2*time.Second), []usagestore.Window{
+		{Provider: "claude", Pool: "tokens", Key: "cumulative", Name: "tokens", Source: "turn-capture", Freshness: "fresh"},
+		{Provider: "codex", Pool: "tokens", Key: "cumulative", Name: "tokens", Source: "turn-capture", Freshness: "fresh"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A newer low-priority observation must beat an older registry snapshot in
+	// the compact-specific latest view.
+	newer := at.Add(3 * time.Second)
+	if err := importAgent(store, ctx, "claude", "statusline", newer, AgentUsage{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true, Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 9, ResetAt: &reset}}); err != nil {
+		t.Fatal(err)
+	}
 	for _, provider := range []string{"claude", "codex", "agy"} {
 		if err := importAgent(store, ctx, provider, "collect-all", at.Add(time.Second), AgentUsage{AgentID: provider, Name: provider, Installed: true, Authenticated: true}); err != nil {
 			t.Fatal(err)
@@ -165,7 +179,9 @@ func TestCompactRenderingIncludesClaudeCodexAndAGYFromLabeledWriters(t *testing.
 			t.Fatalf("no current windows for %s", provider)
 		}
 	}
-	summary := UsageSummary{Timestamp: at, Agents: agents}
+	// Simulate live collection returning only AGY this cycle; Claude and Codex
+	// must still be restored from their latest durable provider windows.
+	summary := UsageSummary{Timestamp: at, Agents: []AgentUsage{agents[2]}}
 	projected, err := StoreCompactSummaryAt(ctx, home, summary, dbPath)
 	if err != nil {
 		t.Fatal(err)
@@ -179,6 +195,18 @@ func TestCompactRenderingIncludesClaudeCodexAndAGYFromLabeledWriters(t *testing.
 		if !strings.Contains(compact.String(), want) {
 			t.Fatalf("compact output missed %q:\n%s", want, compact.String())
 		}
+	}
+	if strings.Contains(compact.String(), "tokens") || strings.Contains(compact.String(), "0%") {
+		t.Fatalf("compact output included a token pseudo-window:\n%s", compact.String())
+	}
+	var claudeSession *QuotaWindow
+	for _, agent := range projected.Agents {
+		if agent.AgentID == "claude" {
+			claudeSession = agent.Session
+		}
+	}
+	if claudeSession == nil || claudeSession.UsedPercent != 9 {
+		t.Fatalf("compact projection did not choose newest Claude session: %+v", claudeSession)
 	}
 }
 
