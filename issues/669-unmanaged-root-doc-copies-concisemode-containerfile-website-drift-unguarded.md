@@ -1,6 +1,6 @@
 # 669 — Unmanaged root doc copies (ConciseMode, Containerfile, Website) drift unguarded
 
-**Status**: Open
+**Status**: Closed — ConciseMode, Containerfile and Website root copies now installed by init and covered by the drift test
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Docs / Templates
