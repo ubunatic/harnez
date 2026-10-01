@@ -1,6 +1,6 @@
 # 667 — Lite IssueTracking doc points to itself in consumer repos
 
-**Status**: Open
+**Status**: Closed — lite doc points to 'harnez docs variant issue-tracking full'; init copy log prints the actual (lite) source
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
