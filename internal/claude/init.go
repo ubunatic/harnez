@@ -1033,14 +1033,16 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 		changes++
 	}
 	if fileExists(filepath.Join(dir, "issues")) {
-		const issuesReadmeLock = "/issues/README.md.lock"
-		ignored, err := fsutil.EnsureGitExclude(dir, issuesReadmeLock)
-		if err != nil {
-			return fmt.Errorf("ignore %s: %w", issuesReadmeLock, err)
-		}
-		if ignored {
-			fmt.Printf("  ignored %s in .git/info/exclude\n", issuesReadmeLock)
-			changes++
+		// Lock files left by the README sync and `harnez issues new` (issue 672).
+		for _, lock := range []string{"/issues/README.md.lock", "/issues/.reserve.lock"} {
+			ignored, err := fsutil.EnsureGitExclude(dir, lock)
+			if err != nil {
+				return fmt.Errorf("ignore %s: %w", lock, err)
+			}
+			if ignored {
+				fmt.Printf("  ignored %s in .git/info/exclude\n", lock)
+				changes++
+			}
 		}
 	}
 	if issuesGit != nil {

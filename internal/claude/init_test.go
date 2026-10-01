@@ -214,8 +214,13 @@ func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "issues", "README.md.lock"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command("git", "-C", dir, "check-ignore", "issues/README.md.lock").CombinedOutput(); err != nil {
-		t.Fatalf("issues lock is not ignored after init: %v (%s)", err, out)
+	if err := os.WriteFile(filepath.Join(dir, "issues", ".reserve.lock"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, lock := range []string{"issues/README.md.lock", "issues/.reserve.lock"} {
+		if out, err := exec.Command("git", "-C", dir, "check-ignore", lock).CombinedOutput(); err != nil {
+			t.Fatalf("%s is not ignored after init: %v (%s)", lock, err, out)
+		}
 	}
 	gotGitignore, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
 	if err != nil {
@@ -232,8 +237,10 @@ func TestRunInit_IgnoresIssuesReadmeLockWithoutChangingGitignore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(string(exclude), "/issues/README.md.lock") != 1 {
-		t.Errorf("lock ignore should appear exactly once after two init runs:\n%s", exclude)
+	for _, lock := range []string{"/issues/README.md.lock", "/issues/.reserve.lock"} {
+		if strings.Count(string(exclude), lock) != 1 {
+			t.Errorf("%s ignore should appear exactly once after two init runs:\n%s", lock, exclude)
+		}
 	}
 	if !strings.Contains(string(exclude), "*.local-cache") {
 		t.Errorf("existing local exclude content was lost:\n%s", exclude)
