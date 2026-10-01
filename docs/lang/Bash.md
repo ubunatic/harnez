@@ -233,6 +233,14 @@ tool call and silently changes the *human's* prompt too.
 See also: issue 095 (cwd-leaking incident, trust-boundary analysis) and issue 222
 (multi-repo wrong-repo failure from stray `cd`).
 
+## 10. Background Tasks, Jobs & `HTO=0`
+- **Set `HTO=0` for background tasks**: When launching commands or test suites as a host Task/Job in the background (e.g. `run_command` in background, Claude Code `run_in_background: true`), `harnez exec`'s ambient 60-second default execution timeout will kill long-running jobs unless `HTO=0` is explicitly set:
+  ```bash
+  HTO=0 make test-q1
+  HTO=0 harnez agent wait <session>
+  ```
+- **No polling, no sleep loops**: When dispatching background tasks/jobs, stop calling tools and let the host environment's reactive message notification wake you on task completion. Never run status polling loops or background `sleep` commands.
+
 ## Appendix — Awk Portability
 Optional, look up on demand — rarely needed in this codebase. Skip unless you're about to write awk directly.
 The default `awk` on Debian, Ubuntu, and Raspberry Pi OS is **mawk**, not gawk.

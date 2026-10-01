@@ -20,6 +20,7 @@ type selftestState struct {
 	HelloAt              *time.Time           `json:"hello_at,omitempty"`
 	BackgroundStartedAt  *time.Time           `json:"background_started_at,omitempty"`
 	BackgroundFinishedAt *time.Time           `json:"background_finished_at,omitempty"`
+	BackgroundHTO        string               `json:"background_hto,omitempty"`
 	ConfirmAt            *time.Time           `json:"confirm_at,omitempty"`
 	ConfirmRunningAt     *time.Time           `json:"confirm_running_at,omitempty"`
 	ConfirmDuration      string               `json:"confirm_duration,omitempty"`
@@ -169,7 +170,7 @@ func newAgentSelftestCmd() *cobra.Command {
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "Agent background self-test initialized (session: %s).\n", sessionID)
 				fmt.Fprintln(cmd.OutOrStdout(), "Next actions:")
-				fmt.Fprintln(cmd.OutOrStdout(), "1. FIRST: Run 'harnez agent selftest --step background' in your host's native background as a Task/Job.")
+				fmt.Fprintln(cmd.OutOrStdout(), "1. FIRST: Run 'HTO=0 harnez agent selftest --step background' in your host's native background as a Task/Job.")
 				fmt.Fprintln(cmd.OutOrStdout(), "2. SECOND: Run 'harnez agent selftest --step confirm' to confirm the task is running in the background.")
 				return nil
 
@@ -180,6 +181,7 @@ func newAgentSelftestCmd() *cobra.Command {
 				}
 				now := time.Now()
 				st.BackgroundStartedAt = &now
+				st.BackgroundHTO = os.Getenv("HTO")
 				st.Steps = append(st.Steps, "background_started")
 				st.StepTimes["background_started"] = now
 				if err := saveSelftestState(statePath, st); err != nil {
@@ -266,6 +268,9 @@ func newAgentSelftestCmd() *cobra.Command {
 				}
 				if st.BackgroundStartedAt == nil {
 					issues = append(issues, "--step background was never started")
+				}
+				if st.BackgroundHTO == "" {
+					issues = append(issues, "--step background was invoked without setting HTO (e.g., HTO=0 harnez agent selftest --step background); background tasks must explicitly set HTO=0 to avoid 60s timeout kills")
 				}
 				if st.ConfirmAt == nil {
 					issues = append(issues, "--step confirm was never executed")

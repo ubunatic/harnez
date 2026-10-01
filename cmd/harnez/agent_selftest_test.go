@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -96,6 +97,7 @@ func TestAgentSelftestNoArgsNonTTY(t *testing.T) {
 }
 
 func TestAgentSelftestFullSequenceSuccess(t *testing.T) {
+	t.Setenv("HTO", "0")
 	tempDir := t.TempDir()
 	sessionID := "test-session-123"
 
@@ -188,6 +190,71 @@ func TestAgentSelftestFullSequenceSuccess(t *testing.T) {
 		if !strings.Contains(out.String(), "PASS:") {
 			t.Errorf("unexpected verify output: %s", out.String())
 		}
+	}
+}
+
+func TestAgentSelftestVerifyMissingHTOFails(t *testing.T) {
+	// Ensure HTO is unset
+	t.Setenv("HTO", "")
+	_ = os.Unsetenv("HTO")
+
+	tempDir := t.TempDir()
+	sessionID := "test-missing-hto"
+
+	// 1. Hello
+	cmd := newAgentSelftestCmd()
+	cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "hello"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("hello failed: %v", err)
+	}
+
+	// 2. Background launched without HTO
+	bgDone := make(chan error, 1)
+	go func() {
+		cmd := newAgentSelftestCmd()
+		cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--duration", "200ms", "--step", "background"})
+		bgDone <- cmd.Execute()
+	}()
+
+	statePath := filepath.Join(tempDir, "harnez-selftest-"+sessionID+".json")
+	for i := 0; i < 50; i++ {
+		time.Sleep(10 * time.Millisecond)
+		st, err := loadSelftestState(statePath)
+		if err == nil && st.BackgroundStartedAt != nil {
+			break
+		}
+	}
+
+	// 3. Confirm
+	cmd = newAgentSelftestCmd()
+	cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "confirm"})
+	_ = cmd.Execute()
+
+	// 4. Confirm-running
+	cmd = newAgentSelftestCmd()
+	cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "confirm-running"})
+	_ = cmd.Execute()
+
+	_ = <-bgDone
+
+	// 5. Verify -> must fail because HTO was not set
+	cmd = newAgentSelftestCmd()
+	cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "verify"})
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "without setting HTO") {
+		t.Fatalf("expected verify failure due to missing HTO, got: %v", err)
+	}
+
+	// 6. Test with explicit empty HTO string
+	st, _ := loadSelftestState(statePath)
+	st.BackgroundHTO = ""
+	_ = saveSelftestState(statePath, st)
+
+	cmd = newAgentSelftestCmd()
+	cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "verify"})
+	err = cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "without setting HTO") {
+		t.Fatalf("expected verify failure due to empty HTO string, got: %v", err)
 	}
 }
 
@@ -353,6 +420,7 @@ func TestAgentSelftestVerifyBadOrderings(t *testing.T) {
 		HelloAt:              &t0,
 		BackgroundStartedAt:  &t1,
 		BackgroundFinishedAt: &t2,
+		BackgroundHTO:        "0",
 		ConfirmAt:            &t3,
 		ConfirmRunningAt:     &t4,
 	}

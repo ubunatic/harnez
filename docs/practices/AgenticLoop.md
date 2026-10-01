@@ -88,8 +88,10 @@ Agentic software engineering scales effectively when concurrency is structured a
    - Every task must be verified with real test executions (`go test ./...`, `make smoke`, canary probes) before declaring completion.
    - Never assume an edit succeeds without observing passing assertions.
 
-3. **Zero Zombie Guarantee**:
+3. **Zero Zombie Guarantee & Background Task Hygiene**:
    - Every spawned background process, schedule timer, or subagent must be tracked, accounted for, and explicitly terminated before concluding a session.
+   - **`HTO=0` for background tasks**: Always set `HTO=0` (e.g. `HTO=0 make test-q1`, `HTO=0 harnez ...`) when running commands or tests in the background as a Task/Job to prevent `harnez exec`'s ambient 60-second default execution timeout from terminating the job.
+   - **No polling, no sleep loops**: When launching background tasks/jobs, stop calling tools immediately and rely entirely on reactive completion notifications. Do NOT poll status or run `sleep` commands.
    - Orphaned processes, lingering watch commands, and abandoned poll loops degrade system resources and corrupt future test runs.
    - For hung or killed quota-1 test processes, run `harnez clean procs q1 --kill`; quota state is released only after its process group is verified gone.
 
