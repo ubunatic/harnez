@@ -12,7 +12,7 @@ How `--docs <name>` flows from `config.yaml` into a project via `apply` (global)
 | Field | Command | Destination | Behaviour |
 |-------|---------|-------------|-----------|
 | `source` | `apply` | `~/.claude/docs/<name>.md`, `~/.prime/agent/docs/<name>.md` | Installed globally unless an existing custom doc is preserved |
-| `lite_source` | `apply`/`init` | same as `source` | Optional tagline-only variant of `source`. `Language.SourceFor(variant)` resolves `lite_source` when `variant == "lite"` and it's set, else falls back to `source`. Schema-only as of issue 357 — no CLI flag selects `variant` yet (see issue 360). |
+| `lite_source` | `apply`/`init` | same as `source` | Optional tagline-only variant of `source`. `Language.SourceFor(variant)` resolves `lite_source` when `variant == "lite"` and it's set, else falls back to `source`. The installed copy's first-line `<!-- harnez:variant=lite -->` marker records the choice; `harnez docs variant <name> lite\|full` switches it (issue 360). |
 | `local` | `init` | `<project>/docs/<name>.md` | Written/updated on every init |
 | `template` | `init` | `<project>/Makefile` (basename of path) | Written **once** — skipped if file exists |
 | `targets` | `init` | `<project>/Makefile` (managed section) | Injected/updated — skipped if template was just scaffolded |
@@ -73,6 +73,25 @@ Functions: `Apply`/`Diff`/`Clean`/`ContainsSection` (MD) and
 
 Adding support for a new file type (e.g. TOML `# …`, YAML `# …`, JSON `// …`) requires
 only a new `Markers` value — no logic changes.
+
+## Lite variants and root copies
+
+A lite and a full variant install to the same `local` path, so in a consumer repo a lite doc
+cannot link to "the full doc" by path: that link points back at itself (issue 667). A lite doc
+names the switch instead, using the `config.yaml` key, not the file name:
+`harnez docs variant issue-tracking full`.
+
+This repo is also a consumer: `docs/*.md` holds init-written copies of the copyable sources in
+`docs/lang/`, `docs/practices/` and `docs/other/`. Edit the source, then run `harnez init -d .`
+(after `make install`) and `git checkout --` any unrelated rewrite. A root-only edit is silently
+lost on the next init; issue 666 added the `HTO=0` rule to `docs/AgenticLoop.md` and
+`docs/Bash.md` only, and the follow-up sync would have deleted it.
+
+`TestRootDocCopiesMatchSources` (`internal/claude/root_docs_sync_test.go`) guards this. For every
+root copy with a `harnez:stop` marker, it picks the source by the copy's variant marker and
+requires the copy to equal what init would write (`prepareManagedDoc`). Copies without a stop
+marker (`ConciseMode.md`, `Containerfile.md`, `Website.md`) are skipped: they are not in this
+repo's init doc set, so nothing keeps them current (issue 669).
 
 ## Lint check
 

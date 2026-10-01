@@ -38,6 +38,9 @@ boundary or depends on the real environment.
   an agent runs it. Clear every name in `resolve.SessionEnvVars` with
   `t.Setenv(name, "")` alongside the `HOME` override (see
   `cmd/harnez/agent_test.go` `TestAgentResumePrintsReplyNotStructDump`).
+- **Doc-copy drift** — `TestRootDocCopiesMatchSources` fails when a root
+  `docs/*.md` copy differs from its copyable source; see
+  [LanguagePipeline.md](LanguagePipeline.md#lite-variants-and-root-copies).
 - **Static checks** — `make check` runs `go vet ./...` and `go test ./...`
   with `GOWORK=off`; `make lint` checks registered command documentation.
 - **Smoke tests** — `make smoke` runs `scripts/smoke-test.sh`, which builds the
