@@ -1,6 +1,6 @@
 # 671 — harnez init keeps an outdated rules header below the new one in AGENTS.md
 
-**Status**: Draft
+**Status**: Closed — Fixed: init replaces an older generated rules header; regression tests added; cati re-init has one header and is idempotent
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
