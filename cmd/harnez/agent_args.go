@@ -6,10 +6,63 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
+	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/subagent"
 )
+
+// currentHostSession returns the caller's host session id. HARNEZ_SESSION_ID
+// (set for workers) and AGY_CONVERSATION_ID keep their historical priority so
+// stored ParentSessionID values stay valid; then agent-provided ids (Claude,
+// Codex). Only Codex, which exports a thread id but no session id, falls back
+// to the stable PPID lock, so plain terminals keep an empty id (unscoped list).
+func currentHostSession() string {
+	if v := os.Getenv("HARNEZ_SESSION_ID"); v != "" {
+		return v
+	}
+	if v := os.Getenv("AGY_CONVERSATION_ID"); v != "" {
+		return v
+	}
+	sess, err := resolve.Session(resolve.SessionOptions{DisableFallback: os.Getenv("CODEX_THREAD_ID") == ""})
+	if err != nil {
+		return ""
+	}
+	return sess
+}
+
+// hostSessionTrackingLine summarizes the agents a host session started or
+// resumed (issue 656 M1), derived from Session.ParentSessionID and
+// Session.LastHostSessionID. It returns "" without a host id or agents.
+func hostSessionTrackingLine(store *subagent.FileSessionStore, hostSessionID string) string {
+	if store == nil || hostSessionID == "" {
+		return ""
+	}
+	sessions, err := store.List(hostSessionID, false)
+	if err != nil || len(sessions) == 0 {
+		return ""
+	}
+	var names []string
+	runningCount := 0
+	for _, s := range sessions {
+		if s.Status == "running" || (s.Status == "active" && s.HarnessType == "interactive") {
+			runningCount++
+		}
+		if s.Name != "" {
+			names = append(names, s.Name)
+		} else if s.ID != "" {
+			names = append(names, s.ID)
+		}
+	}
+	sort.Strings(names)
+	total := len(sessions)
+	agentWord := "agents"
+	if total == 1 {
+		agentWord = "agent"
+	}
+	return fmt.Sprintf("harnez: this session started %d %s (%d running): %s", total, agentWord, runningCount, strings.Join(names, ", "))
+}
 
 // assemblePrompt joins prompt files, positional words, and the verbatim tail.
 func assemblePrompt(files []string, words []string, afterDash []string, stdin io.Reader) (string, error) {
@@ -116,5 +169,28 @@ func silenceUsage(cmd *cobra.Command) {
 	cmd.SilenceUsage = true
 	for _, c := range cmd.Commands() {
 		silenceUsage(c)
+	}
+}
+
+// withHostTrackingLine wraps c.RunE so that a successful start or resume
+// prints the host's tracking line to stderr. skip reports internal worker
+// runs, which must stay silent.
+func withHostTrackingLine(c *cobra.Command, store func() (*subagent.FileSessionStore, error), parent func() string, skip func() bool) {
+	run := c.RunE
+	c.RunE = func(cmd *cobra.Command, args []string) error {
+		if err := run(cmd, args); err != nil {
+			return err
+		}
+		if skip() {
+			return nil
+		}
+		s, err := store()
+		if err != nil {
+			return nil
+		}
+		if line := hostSessionTrackingLine(s, parent()); line != "" {
+			fmt.Fprintln(cmd.ErrOrStderr(), line)
+		}
+		return nil
 	}
 }

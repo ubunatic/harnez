@@ -165,6 +165,9 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 	sess.ProcessPID = 0
 	sess.ControlSocket = filepath.Join(d.storeDir, sess.ID+".sock")
 	sess.LastActiveAt = time.Now()
+	if d.parent() != "" {
+		sess.LastHostSessionID = d.parent()
+	}
 	if err := store.Save(sess); err != nil {
 		return err
 	}

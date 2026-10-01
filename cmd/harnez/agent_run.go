@@ -774,6 +774,10 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 			return err
 		}
 	}
+	parentID := d.parent()
+	if parentID != "" && sess.ParentSessionID != parentID {
+		sess.LastHostSessionID = parentID
+	}
 	if req.SessionID == "" {
 		sess.Status = "running"
 		sess.ProcessPID = os.Getpid()

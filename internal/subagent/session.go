@@ -24,6 +24,7 @@ type Session struct {
 	Tier                 string `json:"tier"`
 	WorkingDir           string `json:"working_dir"`
 	ParentSessionID      string `json:"parent_session_id,omitempty"`
+	LastHostSessionID    string `json:"last_host_session_id,omitempty"`
 	CallerPID            int    `json:"caller_pid"`
 	ProcessPID           int    `json:"process_pid,omitempty"`
 	ProcessStarttime     uint64 `json:"process_starttime,omitempty"`
@@ -289,7 +290,7 @@ func (s *FileSessionStore) listFrom(dir, parentID string, allSessions bool) ([]*
 				continue
 			}
 			sess := &decoded
-			if allSessions || parentID == "" || sess.ParentSessionID == parentID {
+			if allSessions || parentID == "" || sess.ParentSessionID == parentID || sess.LastHostSessionID == parentID {
 				sessions = append(sessions, sess)
 			}
 		}
@@ -335,7 +336,7 @@ func CanManage(callerParentID string, target *Session) bool {
 	if target.ID == callerParentID || target.Name == callerParentID {
 		return true
 	}
-	if target.ParentSessionID == callerParentID {
+	if target.ParentSessionID == callerParentID || target.LastHostSessionID == callerParentID {
 		return true
 	}
 	return false

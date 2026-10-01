@@ -158,6 +158,44 @@ func TestSession_PPIDFallbackStableAcrossCalls(t *testing.T) {
 	}
 }
 
+// TestSession_CodexPPIDStabilityAcrossInvocations verifies that Codex CLI
+// without CODEX_SESSION_ID consistently resolves to the same host session id
+// across multiple sequential harnez commands invoked by the same parent process.
+func TestSession_CodexPPIDStabilityAcrossInvocations(t *testing.T) {
+	tmp := t.TempDir()
+	getenv := func(k string) string {
+		if k == "CODEX_THREAD_ID" {
+			return "thread-xyz"
+		}
+		return ""
+	}
+	baseTime := time.Date(2026, 10, 1, 18, 0, 0, 0, time.UTC)
+	now := func() time.Time { return baseTime }
+
+	opts := resolve.SessionOptions{
+		Getenv:  getenv,
+		PPID:    5555,
+		LockDir: tmp,
+		Now:     now,
+	}
+
+	sess1, err := resolve.Session(opts)
+	if err != nil {
+		t.Fatalf("invocation 1 error = %v", err)
+	}
+
+	// Invocation 2: 5 minutes later from the same parent process
+	opts.Now = func() time.Time { return baseTime.Add(5 * time.Minute) }
+	sess2, err := resolve.Session(opts)
+	if err != nil {
+		t.Fatalf("invocation 2 error = %v", err)
+	}
+
+	if sess1 != sess2 {
+		t.Fatalf("Codex PPID fallback yielded different session IDs across invocations: %q vs %q", sess1, sess2)
+	}
+}
+
 func TestSession_SlidingWindowLockFile(t *testing.T) {
 	tmp := t.TempDir()
 	getenv := func(string) string { return "" }

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -101,12 +100,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	root.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 	root.Flags().StringVar(&planSpec, "plan", "no", "planning gate: yes or no")
 	store := func() (*subagent.FileSessionStore, error) { return subagent.NewSessionStore(storeDir) }
-	parent := func() string {
-		if v := os.Getenv("HARNEZ_SESSION_ID"); v != "" {
-			return v
-		}
-		return os.Getenv("AGY_CONVERSATION_ID")
-	}
+	parent := currentHostSession
 	_ = root.RegisterFlagCompletionFunc("name", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return agentSessionCompletion(storeDir, parent)(cmd, args, toComplete)
 	})
@@ -736,6 +730,8 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		return nil
 	}}
 	rate.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
+	withHostTrackingLine(start, store, parent, func() bool { return workerID != "" })
+	withHostTrackingLine(resume, store, parent, func() bool { return resumeWorkerID != "" })
 	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate, newAgentSelftestCmd())
 	silenceUsage(root)
 	return root

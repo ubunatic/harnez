@@ -183,8 +183,16 @@ func TestFileSessionStore_List(t *testing.T) {
 		ParentSessionID: "parent-2",
 		Status:          "running",
 	}
+	sess4 := &Session{
+		ID:                "sess-4",
+		Name:              "agent-4",
+		Provider:          "codex",
+		ParentSessionID:   "parent-2",
+		LastHostSessionID: "parent-1",
+		Status:            "completed",
+	}
 
-	for _, s := range []*Session{sess1, sess2, sess3} {
+	for _, s := range []*Session{sess1, sess2, sess3, sess4} {
 		if err := store.Save(s); err != nil {
 			t.Fatalf("Save failed: %v", err)
 		}
@@ -194,21 +202,24 @@ func TestFileSessionStore_List(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List all failed: %v", err)
 	}
-	if len(all) != 3 {
-		t.Errorf("List all returned %d sessions, want 3", len(all))
+	if len(all) != 4 {
+		t.Errorf("List all returned %d sessions, want 4", len(all))
 	}
 
 	filtered, err := store.List("parent-1", false)
 	if err != nil {
 		t.Fatalf("List filtered failed: %v", err)
 	}
-	if len(filtered) != 2 {
-		t.Errorf("List parent-1 returned %d sessions, want 2", len(filtered))
+	if len(filtered) != 3 {
+		t.Errorf("List parent-1 returned %d sessions, want 3 (2 started + 1 resumed)", len(filtered))
 	}
-	for _, s := range filtered {
-		if s.ParentSessionID != "parent-1" {
-			t.Errorf("Unexpected parent session ID: %q", s.ParentSessionID)
-		}
+
+	filteredParent2, err := store.List("parent-2", false)
+	if err != nil {
+		t.Fatalf("List filtered parent-2 failed: %v", err)
+	}
+	if len(filteredParent2) != 2 {
+		t.Errorf("List parent-2 returned %d sessions, want 2 (sess-3 and sess-4)", len(filteredParent2))
 	}
 }
 
@@ -344,6 +355,20 @@ func TestCanManage_DirectChild(t *testing.T) {
 	}
 	if !CanManage("parent-1", target) {
 		t.Fatal("Parent should be able to manage direct child")
+	}
+}
+
+func TestCanManage_LastHostSessionID(t *testing.T) {
+	target := &Session{
+		ID:                "sess-1",
+		ParentSessionID:   "parent-orig",
+		LastHostSessionID: "parent-resuming",
+	}
+	if !CanManage("parent-resuming", target) {
+		t.Fatal("Resuming host session should be able to manage session via LastHostSessionID")
+	}
+	if !CanManage("parent-orig", target) {
+		t.Fatal("Original parent host session should also be able to manage session")
 	}
 }
 
