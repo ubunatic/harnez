@@ -673,7 +673,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 		return fmt.Errorf("session %q is waiting for Codex quota recovery; resume once quota is available", sess.Name)
 	}
 
-	if !subagent.CanManage(d.parent(), sess) {
+	if !canManageTarget(d.parent(), sess) {
 		return fmt.Errorf("session %q is outside caller lineage", sess.ID)
 	}
 	if req.ModelSpec != "" {

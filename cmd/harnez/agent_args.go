@@ -32,6 +32,17 @@ func currentHostSession() string {
 	return sess
 }
 
+// canManageTarget gates an explicit --name/id target. Host sessions (no
+// HARNEZ_SESSION_ID) may address any agent, including legacy agents with an
+// empty parent and agents of other hosts (hand-off); harnez leaf workers stay
+// bound to their lineage. Bulk operations keep using subagent.CanManage.
+func canManageTarget(callerParentID string, target *subagent.Session) bool {
+	if os.Getenv(agentSessionEnv) == "" {
+		return true
+	}
+	return subagent.CanManage(callerParentID, target)
+}
+
 // hostSessionTrackingLine summarizes the agents a host session started or
 // resumed (issue 656 M1), derived from Session.ParentSessionID and
 // Session.LastHostSessionID. It returns "" without a host id or agents.

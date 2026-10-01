@@ -139,7 +139,7 @@ func runInteractiveResume(cmd *cobra.Command, d interactiveDeps, req interactive
 			return fmt.Errorf("no resumable agent with a provider session ID in %s", req.Dir)
 		}
 	}
-	if !subagent.CanManage(d.parent(), sess) {
+	if !canManageTarget(d.parent(), sess) {
 		return fmt.Errorf("session %q is outside caller lineage", sess.ID)
 	}
 	if sess.Status == "running" {

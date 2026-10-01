@@ -422,6 +422,11 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if err != nil {
 			return err
 		}
+		if !all && p != "" {
+			if every, err := s.List("", true); err == nil && len(every) > len(xs) {
+				fmt.Fprintf(cmd.ErrOrStderr(), "harnez: %d more agents in other sessions; use --all-sessions\n", len(every)-len(xs))
+			}
+		}
 		if children && !all { /* List already scopes to direct children. */
 		}
 		if jsonOut {
@@ -556,7 +561,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if e != nil {
 			return e
 		}
-		if !subagent.CanManage(parent(), x) {
+		if !canManageTarget(parent(), x) {
 			return fmt.Errorf("session %q is outside caller lineage", x.ID)
 		}
 		return stopSession(cmd, s, x)
@@ -683,7 +688,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if e != nil {
 			return e
 		}
-		if !subagent.CanManage(parent(), x) {
+		if !canManageTarget(parent(), x) {
 			return fmt.Errorf("session %q is outside caller lineage", x.ID)
 		}
 		if warnUnrated(cmd, x) {
@@ -863,7 +868,7 @@ func agentSessionCompletion(storeDir string, parent func() string) cobra.Complet
 		}
 		completions := make([]string, 0, len(sessions))
 		for _, session := range sessions {
-			if !subagent.CanManage(parent(), session) || !strings.HasPrefix(session.Name, toComplete) {
+			if !canManageTarget(parent(), session) || !strings.HasPrefix(session.Name, toComplete) {
 				continue
 			}
 			completions = append(completions, session.Name+"\t"+sessionPromptDescription(session.StartPrompt))
