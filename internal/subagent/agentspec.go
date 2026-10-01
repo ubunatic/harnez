@@ -21,6 +21,7 @@ type agentSpec struct {
 	Models       map[string]modelAlias `yaml:"models"`
 	Roles        map[string]RoleSpec   `yaml:"roles"`
 	Stop         StopSpec              `yaml:"stop"`
+	Selftest     SelftestSpec          `yaml:"selftest"`
 }
 
 // StopSpec defines bounded agent shutdown in milliseconds.
@@ -28,6 +29,23 @@ type StopSpec struct {
 	GraceMS    int `yaml:"grace_ms"`
 	KillWaitMS int `yaml:"kill_wait_ms"`
 	PollMS     int `yaml:"poll_ms"`
+}
+
+// SelftestSpec defines the agent background self-test duration in milliseconds.
+type SelftestSpec struct {
+	BackgroundDurationMS int `yaml:"background_duration_ms"`
+}
+
+// SelftestBackgroundDuration returns the embedded self-test background duration.
+func SelftestBackgroundDuration() (time.Duration, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return 0, err
+	}
+	if spec.Selftest.BackgroundDurationMS <= 0 {
+		return 0, fmt.Errorf("agent spec: positive selftest background duration required")
+	}
+	return time.Duration(spec.Selftest.BackgroundDurationMS) * time.Millisecond, nil
 }
 
 // StopBounds returns embedded shutdown timings.

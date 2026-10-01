@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	"ubunatic.com/harnez/internal/resolve"
+	"ubunatic.com/harnez/internal/subagent"
 )
 
 type selftestState struct {
@@ -113,7 +114,10 @@ func newAgentSelftestCmd() *cobra.Command {
 	var step string
 	var sessionOverride string
 	var stateDir string
-	var backgroundDuration time.Duration
+	backgroundDuration, err := subagent.SelftestBackgroundDuration()
+	if err != nil {
+		panic(err)
+	}
 
 	cmd := &cobra.Command{
 		Use:          "selftest",
@@ -334,7 +338,7 @@ func newAgentSelftestCmd() *cobra.Command {
 			fmt.Fprintln(c.OutOrStdout(), "Flags:")
 			fmt.Fprintln(c.OutOrStdout(), "      --step string       Step to execute")
 			fmt.Fprintln(c.OutOrStdout(), "      --session string    Session ID override")
-			fmt.Fprintln(c.OutOrStdout(), "      --duration duration Duration for background task (default 10s)")
+			fmt.Fprintf(c.OutOrStdout(), "      --duration duration Duration for background task (default %s)\n", backgroundDuration)
 			fmt.Fprintln(c.OutOrStdout(), "      --state-dir string  Directory for state tracking (default /tmp)")
 		} else {
 			fmt.Fprintln(c.OutOrStdout(), "Run agent background task execution self-test.")
@@ -345,7 +349,7 @@ func newAgentSelftestCmd() *cobra.Command {
 	cmd.Flags().StringVar(&step, "step", "", "step to execute (run with --step hello to begin)")
 	cmd.Flags().StringVar(&sessionOverride, "session", "", "session ID override")
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "state directory for step tracking")
-	cmd.Flags().DurationVar(&backgroundDuration, "duration", 10*time.Second, "background task duration")
+	cmd.Flags().DurationVar(&backgroundDuration, "duration", backgroundDuration, "background task duration")
 
 	return cmd
 }

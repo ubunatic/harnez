@@ -13,6 +13,14 @@
       },
       "additionalProperties": false
     },
+    "selftest": {
+      "type": "object",
+      "required": ["background_duration_ms"],
+      "properties": {
+        "background_duration_ms": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
     "default_model": { "type": "string", "minLength": 1 },
     "default_role": { "type": "string", "minLength": 1 },
     "models_legend": { "type": "string" },
