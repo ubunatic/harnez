@@ -48,10 +48,10 @@ func (w *UsageLoomWidget) Draw(c *loom.Canvas, r loom.Rect) {
 	}
 }
 
-// HandleKey processes keyboard shortcuts (q, Esc, Ctrl-C to exit).
+// ConsumeKey processes keyboard shortcuts (q, Esc, Ctrl-C to exit).
 func (w *UsageLoomWidget) ConsumeKey(e loom.KeyEvent) loom.EventResult {
 	if e.Is("q", "esc", "ctrl-c") || e.Text == "q" || e.Text == "Q" {
-		return loom.Handled()
+		return loom.Quit()
 	}
 	return loom.Ignored()
 }

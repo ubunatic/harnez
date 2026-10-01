@@ -11,6 +11,18 @@ import (
 	"ubunatic.com/loom"
 )
 
+func TestUsageLoomWidget_ConsumeKey(t *testing.T) {
+	widget := NewUsageLoomWidget(UsageSummary{}, WatchOptions{}, "")
+	for _, key := range []loom.KeyEvent{{Key: "q"}, {Key: "esc"}, {Key: "ctrl-c"}} {
+		if result := widget.ConsumeKey(key); !result.Quit || !result.Consumed {
+			t.Errorf("ConsumeKey(%+v) = %+v, want quit and consumed", key, result)
+		}
+	}
+	if result := widget.ConsumeKey(loom.KeyEvent{Key: "x"}); result.Quit || result.Consumed {
+		t.Errorf("ConsumeKey(x) = %+v, want ignored", result)
+	}
+}
+
 func TestUsageLoomWidget_RendersCorrectUI(t *testing.T) {
 	now := time.Date(2026, 4, 18, 22, 36, 48, 0, time.UTC)
 
