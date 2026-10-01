@@ -1,6 +1,6 @@
 # 673 — agent: claude resume blocked by compaction check reading turn total as context size
 
-**Status**: Open
+**Status**: Closed — Fixed: claude context size from last call/compact_boundary not turn total (1da8887f), zero-usage synthetic events skipped and compact ack read (033f0f95, 650a5022), Compact no longer sends --model empty which made every claude /compact fail with a 400 reported as success (783a2aa2); live: dev-656-fix (stored 441k) resumed twice, verified /compact to 20.9k then direct; study docs/studies/ClaudeResumeCompaction.md
 **Priority**: P1 (High) — breaks the lean-sprint resume loop for every Claude developer
 **Severity**: Major
 **Category**: Bug
