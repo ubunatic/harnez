@@ -130,6 +130,10 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   Use git -C/make -C, not cd
 - Canary-first development @docs/Canary.md,
   probe external mechanisms before building features on them
+- ConciseMode Practices @docs/ConciseMode.md,
+  3 graded terseness tiers (Lite, Standard, Ultra); code/diffs/commands always verbatim
+- Containerfile build efficiency @docs/Containerfile.md,
+  order layers static-first/dynamic-last; git+git-lfs mandatory in agent-facing images
 - Git @docs/Git.md,
   conventional commits, work on the default branch, don't push unless asked
 - Go/Golang @docs/Go.md,
@@ -150,4 +154,7 @@ Docs in `./docs/` are managed by harnez. <!-- harnez:bundled -->
   harnez find code/docs, finder configuration, partial results, and rg fallback
 - Spec system @docs/Spec.md,
   YAML spec files as single source of truth; Go code must not duplicate spec values
+- Website Building Rules @docs/Website.md,
+  no GitHub assumptions/octocats, match sibling website/ dirs or ask, honest/proven claims only,
+  Why section required, relative links (subpage-hosted), static/no-CDN, opt-in JS demos only
 <!-- harnez:end Language Conventions -->

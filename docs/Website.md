@@ -3,6 +3,7 @@ title: Website Building Rules
 weight: 25
 ---
 
+<!-- harnez:bundled -->
 # Website Building Rules
 
 Rules for any agent asked to build or update a project website (`website/` dir,
@@ -96,3 +97,5 @@ same effort and doesn't create an untracked external dependency.
 
 **An unrequested TUI simulation with imagined features.** Demos are opt-in
 and must reflect the real app, not an idealized version of it.
+
+<!-- harnez:stop -->

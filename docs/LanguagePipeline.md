@@ -89,9 +89,9 @@ lost on the next init; issue 666 added the `HTO=0` rule to `docs/AgenticLoop.md`
 
 `TestRootDocCopiesMatchSources` (`internal/claude/root_docs_sync_test.go`) guards this. For every
 root copy with a `harnez:stop` marker, it picks the source by the copy's variant marker and
-requires the copy to equal what init would write (`prepareManagedDoc`). Copies without a stop
-marker (`ConciseMode.md`, `Containerfile.md`, `Website.md`) are skipped: they are not in this
-repo's init doc set, so nothing keeps them current (issue 669).
+requires the copy to equal what init would write (`prepareManagedDoc`). All copyable root docs
+in this repo's init doc set, including `ConciseMode.md`, `Containerfile.md`, and `Website.md`,
+are checked; no root copy is currently skipped (issue 669).
 
 ## Lint check
 

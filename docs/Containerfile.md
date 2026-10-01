@@ -3,6 +3,7 @@ title: Containerfile Build Efficiency
 weight: 40
 ---
 
+<!-- harnez:bundled -->
 # Containerfile.md — Fast, Cached, and Incremental Container Builds
 
 Containerfiles (Dockerfiles) build efficiently only when each instruction is placed by how
@@ -164,3 +165,5 @@ runtime error instead of a build-time signal, which is harder to diagnose. See
       build-context noise.
 - [ ] Related independent package-install groups kept in separate `RUN` layers; only
       always-together steps (e.g. `apt-get update && install && cleanup`) are combined.
+
+<!-- harnez:stop -->
