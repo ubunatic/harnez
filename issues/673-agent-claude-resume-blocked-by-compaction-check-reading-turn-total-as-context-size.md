@@ -45,6 +45,25 @@ and takes the last main-thread assistant call (sub-agent calls with `parent_tool
 `system/compact_boundary` event carries `compact_metadata.pre_tokens=16885`, `post_tokens=2092`;
 that post value is the verified size after compaction. With neither, context is unknown (-1).
 
+## 4. Host Review of 1da8887f (2026-10-01): live check failed, one fix left
+
+Live: 4 resumes (dev-673 twice, dev-656-fix twice) all still failed with
+`compaction completed without a verified context drop (before 346607 / 441684, after 0 ...)`.
+
+Probe (host ran harnez's exact command, `claude -r <id> --model sonnet -p --output-format stream-json --verbose "/compact"`
+on dev-673): the events are `compact_boundary` with `pre_tokens=44835, post_tokens=4033`, then **two
+`assistant` events whose usage is all zeros**, then a `result` with zero usage. The parser sets `last` to
+the zero-usage assistant event after the boundary, so ContextTokens = 0.
+
+That also confirms the bug: the real context was 44,835, while harnez had stored 346,607 (the turn total).
+
+**Pre-Work / Required Refinements:**
+- Skip assistant events whose usage sums to 0 (input + cache_read + cache_creation == 0); they're synthetic.
+- Add a test from this real event sequence (boundary, then 2 zero-usage assistant events, then a zero result)
+  that expects ContextTokens == post_tokens.
+- Sessions stored by the old parser still hold the turn total. Their first resume compacts once, and that
+  must now verify via post_tokens. The host checks this on dev-656-fix.
+
 ## 3. Implementation & Verification Plan
 
 - Canary first: resume a Claude session with a long multi-step turn, record the raw usage of the
