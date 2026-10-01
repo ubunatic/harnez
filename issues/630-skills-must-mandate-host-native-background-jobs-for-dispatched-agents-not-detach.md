@@ -1,6 +1,6 @@
 # 630 — Skills must mandate host-native background jobs for dispatched agents, not --detach
 
-**Status**: Open
+**Status**: Closed — Fixed: --detach/--async hidden from help and MCP schema (still work internally); start/resume help, MCP, policy, rules, AgenticLoop and lean-sprint teach one HTO=0 session-background call per host (Claude Code run_in_background with the accepted 30-minute limit, AGY run_command + WaitMsBeforeAsync, Codex exec_command + write_stdin); host tool names taken from observed AGY/Codex runs and the passing selftest on all hosts; wait hint suppressed under HTO; tests added; reviewed by codex sol, findings fixed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
