@@ -71,3 +71,20 @@ That also confirms the bug: the real context was 44,835, while harnez had stored
 - Use the last call's input (input + cache read + cache creation) as the context size for Claude;
   mark it unknown (negative, which skips compaction) when it isn't available, as 644 did for agy.
 - Verify: resume a Claude worker twice after a 400k+ cumulative turn; both resumes are delivered.
+
+## 5. Host Live Check of 650a5022 (2026-10-01): one more root cause
+
+- **Passed:** `dev-673b` resumed after a 224k turn total with no compaction (context now from last call).
+- **Failed:** `dev-656-fix` (stored 441684 from the old parser) still refused, now `after -1`.
+- The parser is right: fed the real `/compact` stream (`--model sonnet`), it gives ContextTokens 4745 and
+  VerifyCompaction passes (host probe test, not committed).
+- **Root cause:** `ClaudeDriver.Compact` calls `Resume(ctx, id, "/compact", Model{})`, which runs
+  `claude ... --model "" ...`. With harnez's exact args, Claude returns `result` subtype `success` with
+  text `Error during compaction: API Error: 400 model: String should have at least 1 character`, and no
+  compact_boundary. No harnez compaction of a Claude session has ever worked.
+
+**Pre-Work / Required Refinements:**
+- Omit `--model` (and `--effort`) when the model name/tier is empty, or pass the session's model to Compact.
+- Treat a result text starting with `Error during compaction` as an error that carries that text, even
+  though subtype is `success`.
+- Test: Compact's args contain no empty `--model`; the error result maps to an error.
