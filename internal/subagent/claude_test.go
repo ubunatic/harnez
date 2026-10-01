@@ -90,6 +90,9 @@ func TestParseClaudeCompactIgnoresZeroUsageAssistantEvents(t *testing.T) {
 	if r.ContextTokens != 4033 {
 		t.Fatalf("ContextTokens = %d, want 4033", r.ContextTokens)
 	}
+	if err := VerifyCompaction(44835, r); err != nil {
+		t.Fatalf("real compact turn must verify: %v", err)
+	}
 }
 
 func TestParseClaudeErrorResult(t *testing.T) {

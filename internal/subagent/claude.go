@@ -93,7 +93,8 @@ type claudeEvent struct {
 	Usage     claudeUsage `json:"usage"`
 	Parent    *string     `json:"parent_tool_use_id"`
 	Message   struct {
-		Usage *claudeUsage `json:"usage"`
+		Usage   *claudeUsage    `json:"usage"`
+		Content json.RawMessage `json:"content"`
 	} `json:"message"`
 	Compact struct {
 		PostTokens int `json:"post_tokens"`
@@ -109,6 +110,7 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	var res *claudeEvent
 	var last *claudeUsage
 	postCompact := -1
+	var localOut []string
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -130,6 +132,15 @@ func parseClaude(data []byte) (*TurnResult, error) {
 		case e.Type == "system" && e.Subtype == "compact_boundary" && e.Compact.PostTokens > 0:
 			postCompact = e.Compact.PostTokens
 			last = nil
+		case e.Type == "user":
+			// A local command such as /compact reports only here, not in result.
+			var text string
+			if json.Unmarshal(e.Message.Content, &text) == nil {
+				if _, rest, ok := strings.Cut(text, "<local-command-stdout>"); ok {
+					out, _, _ := strings.Cut(rest, "</local-command-stdout>")
+					localOut = append(localOut, strings.TrimSpace(out))
+				}
+			}
 		case e.Type == "result" || e.Type == "":
 			res = &e
 		}
@@ -142,6 +153,7 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	}
 	v := res.Usage
 	r := &TurnResult{SessionID: res.SessionID, Response: res.Result, Messages: []string{res.Result}, InputTokens: v.Input, OutputTokens: v.Output, CachedTokens: v.CacheRead + v.CacheCreate}
+	r.Messages = append(r.Messages, localOut...)
 	r.ContextTokens = -1
 	if last != nil {
 		r.ContextTokens = last.Input + last.CacheRead + last.CacheCreate
