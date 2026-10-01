@@ -41,3 +41,11 @@ Preflight (host, 2026-10-01): delete is ruled out. All three root copies are lin
 - Update `docs/LanguagePipeline.md` § "Lite variants and root copies": drop the sentence about
   skipped copies (or say no root copy is currently skipped).
 - Close: `harnez issues close -d . 669 "ConciseMode, Containerfile and Website root copies now installed by init and covered by the drift test"`.
+
+#### M1 plan review (host)
+Rejected: flipping `default: true` in `config.yaml`. That file is the bundled config, so every
+consumer project's `harnez init` would then install Website, Containerfile and ConciseMode.
+Required: a selection that applies to this repo only, e.g. `harnez init -d . --docs <keys>` once,
+if a later plain `harnez init -d .` keeps those docs (verify: does init keep docs already listed in
+the AGENTS.md Language Conventions block, or already present with a stop marker?). If no existing
+per-project mechanism keeps them, stop and report; do not build a new one in this ticket.
