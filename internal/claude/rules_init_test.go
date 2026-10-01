@@ -105,6 +105,58 @@ func TestRunInit_MigratesLocalOverlaysWithSingleHeaderGap(t *testing.T) {
 	}
 }
 
+// An older generated rules header (issue 567 era) must be replaced, not kept
+// below the current one (issue 671).
+func TestRunInit_ReplacesOutdatedRulesHeader(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/oldheader\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := "**Before any work, read `.harnez/rules/Index.md` if it exists, then `.harnez/rules/Local.md`; they are part of this file. Local.md overrides both.**"
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	if err := os.WriteFile(agentsPath, []byte(old+"\n\nAdhere to the following conventions.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := claude.LoadTestConfig(t)
+	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(got), cfg.AgentsMD.Rules.Header+"\n\nAdhere to the following conventions.\n") {
+		t.Fatalf("outdated rules header not replaced; got:\n%s", got)
+	}
+	if strings.Contains(string(got), "if it exists, then") {
+		t.Fatalf("outdated rules header still present; got:\n%s", got)
+	}
+}
+
+// A user's own bold first line is not a harnez header and must stay.
+func TestRunInit_KeepsUserBoldFirstLine(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/userbold\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	user := "**Before any work, read docs/README.md.**"
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	if err := os.WriteFile(agentsPath, []byte(user+"\n\nAdhere to the following conventions.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := claude.LoadTestConfig(t)
+	if err := claude.RunInit(dir, cfg, nil, "", true, false, false, false); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(got), cfg.AgentsMD.Rules.Header+"\n\n"+user+"\n") {
+		t.Fatalf("user's first line must stay below the rules header; got:\n%s", got)
+	}
+}
+
 func TestRunInit_MigratesManagedBlocksLosslessly(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/migrate\n"), 0o644); err != nil {

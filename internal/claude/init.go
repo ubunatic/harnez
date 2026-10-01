@@ -483,10 +483,22 @@ func backfillRulesHeader(path, header string) (bool, error) {
 	if strings.HasPrefix(content, header+"\n\n") {
 		return false, nil
 	}
+	// Replace an older generated header (issue 671); a user's own first line stays.
+	if first, rest, ok := strings.Cut(content, "\n"); ok && isRulesHeaderLine(first) {
+		content = strings.TrimLeft(rest, "\n")
+	}
 	if err := os.WriteFile(path, []byte(header+"\n\n"+content), 0o644); err != nil {
 		return false, err
 	}
 	return true, nil
+}
+
+// isRulesHeaderLine reports whether line is a harnez-generated rules header,
+// current or older wording.
+func isRulesHeaderLine(line string) bool {
+	return strings.HasPrefix(line, "**Before any work, read") &&
+		strings.HasSuffix(line, "**") &&
+		strings.Contains(line, ".harnez/rules/")
 }
 
 func writeRules(dir string, rules RulesConfig, quota bool) (int, error) {
