@@ -29,10 +29,7 @@ func (d ClaudeDriver) command(ctx context.Context, args ...string) ([]byte, erro
 }
 func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error) {
 	start := time.Now()
-	args := []string{"-p", "--dangerously-skip-permissions", "--model", o.Model.Name}
-	if o.Model.Tier != "" {
-		args = append(args, "--effort", claudeEffort(o.Model.Tier))
-	}
+	args := append([]string{"-p", "--dangerously-skip-permissions"}, claudeModelArgs(o.Model)...)
 	args = append(args, "--output-format", "stream-json", "--verbose", o.Prompt)
 	b, err := d.command(ctx, args...)
 	if err != nil {
@@ -46,16 +43,26 @@ func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error
 	return r, nil
 }
 func (d ClaudeDriver) Resume(ctx context.Context, id, prompt string, model Model) (*TurnResult, error) {
-	args := []string{"-p", "--resume", id, "--dangerously-skip-permissions", "--model", model.Name}
-	if model.Tier != "" {
-		args = append(args, "--effort", claudeEffort(model.Tier))
-	}
+	args := append([]string{"-p", "--resume", id, "--dangerously-skip-permissions"}, claudeModelArgs(model)...)
 	args = append(args, "--output-format", "stream-json", "--verbose", prompt)
 	b, err := d.command(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("claude resume: %w", err)
 	}
 	return parseClaude(b)
+}
+
+// claudeModelArgs omits empty values: claude rejects `--model ""` with a 400
+// (issue 673, Compact passes an empty Model).
+func claudeModelArgs(m Model) []string {
+	var args []string
+	if m.Name != "" {
+		args = append(args, "--model", m.Name)
+	}
+	if m.Tier != "" {
+		args = append(args, "--effort", claudeEffort(m.Tier))
+	}
+	return args
 }
 
 func claudeEffort(tier string) string {
@@ -150,6 +157,10 @@ func parseClaude(data []byte) (*TurnResult, error) {
 	}
 	if res.IsError {
 		return nil, fmt.Errorf("claude reported an error: %s", res.Result)
+	}
+	// A failed /compact still reports subtype success, with the error as text.
+	if strings.HasPrefix(strings.TrimSpace(res.Result), "Error during compaction") {
+		return nil, fmt.Errorf("claude: %s", strings.TrimSpace(res.Result))
 	}
 	v := res.Usage
 	r := &TurnResult{SessionID: res.SessionID, Response: res.Result, Messages: []string{res.Result}, InputTokens: v.Input, OutputTokens: v.Output, CachedTokens: v.CacheRead + v.CacheCreate}

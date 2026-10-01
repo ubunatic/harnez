@@ -1,6 +1,10 @@
 package subagent
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+)
 
 // multiStepStream mimics a real stream-json turn: four model calls whose usage
 // sums to 66443 input tokens while the last call's context is only 16854.
@@ -98,5 +102,29 @@ func TestParseClaudeCompactIgnoresZeroUsageAssistantEvents(t *testing.T) {
 func TestParseClaudeErrorResult(t *testing.T) {
 	if _, err := parseClaude([]byte(`{"type":"result","is_error":true,"result":"boom"}`)); err == nil {
 		t.Fatal("want error")
+	}
+}
+
+func TestParseClaudeCompactionErrorResultIsError(t *testing.T) {
+	in := `{"type":"result","subtype":"success","is_error":false,"session_id":"s1","result":"Error during compaction: API Error: 400 model: String should have at least 1 character","usage":{"input_tokens":0}}`
+	_, err := parseClaude([]byte(in))
+	if err == nil || !strings.Contains(err.Error(), "String should have at least 1 character") {
+		t.Fatalf("want error carrying the compaction text, got %v", err)
+	}
+}
+
+func TestClaudeCompactOmitsEmptyModelArgs(t *testing.T) {
+	var got []string
+	d := ClaudeDriver{Command: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		got = args
+		return []byte(`{"type":"result","subtype":"success","result":"Compacted","usage":{}}`), nil
+	}}
+	if _, err := d.Compact(context.Background(), "s1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range got {
+		if a == "" || a == "--model" || a == "--effort" {
+			t.Fatalf("compact args must omit empty model/effort, got %q", got)
+		}
 	}
 }
