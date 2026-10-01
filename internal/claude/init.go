@@ -1176,7 +1176,7 @@ func RunInitWithVariant(dir string, cfg *Config, docs []string, repoMode string,
 			}
 			if cr.changed {
 				changes++
-				fmt.Printf("  copied %s → %s\n", lang.Source, localDoc)
+				fmt.Printf("  copied %s → %s\n", lang.SourceFor(docVariants[name]), localDoc)
 			}
 
 			justScaffolded := false
