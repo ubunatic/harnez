@@ -213,7 +213,7 @@ func TestClaudeResumeUsesProviderSessionID(t *testing.T) {
 	if r.SessionID != "provider-session" {
 		t.Fatalf("session ID = %q, want provider-session", r.SessionID)
 	}
-	want := []string{"-p", "--resume", "provider-id", "--dangerously-skip-permissions", "--model", "haiku", "--output-format", "json", "continue"}
+	want := []string{"-p", "--resume", "provider-id", "--dangerously-skip-permissions", "--model", "haiku", "--output-format", "stream-json", "--verbose", "continue"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args = %#v, want %#v", args, want)
 	}
@@ -245,8 +245,8 @@ func TestClaudeDriverEffortTiers(t *testing.T) {
 			if _, err := d.Resume(context.Background(), "s1", "continue", model); err != nil {
 				t.Fatal(err)
 			}
-			wantRun := []string{"-p", "--dangerously-skip-permissions", "--model", "sonnet", "--effort", tc.effort, "--output-format", "json", "go"}
-			wantResume := []string{"-p", "--resume", "s1", "--dangerously-skip-permissions", "--model", "sonnet", "--effort", tc.effort, "--output-format", "json", "continue"}
+			wantRun := []string{"-p", "--dangerously-skip-permissions", "--model", "sonnet", "--effort", tc.effort, "--output-format", "stream-json", "--verbose", "go"}
+			wantResume := []string{"-p", "--resume", "s1", "--dangerously-skip-permissions", "--model", "sonnet", "--effort", tc.effort, "--output-format", "stream-json", "--verbose", "continue"}
 			if !reflect.DeepEqual(runArgs, wantRun) {
 				t.Errorf("run args = %q, want %q", runArgs, wantRun)
 			}
@@ -275,8 +275,8 @@ func TestClaudeDriverOmitsEffortWithoutTier(t *testing.T) {
 	if _, err := d.Resume(context.Background(), "s1", "continue", model); err != nil {
 		t.Fatal(err)
 	}
-	wantRun := []string{"-p", "--dangerously-skip-permissions", "--model", "sonnet", "--output-format", "json", "go"}
-	wantResume := []string{"-p", "--resume", "s1", "--dangerously-skip-permissions", "--model", "sonnet", "--output-format", "json", "continue"}
+	wantRun := []string{"-p", "--dangerously-skip-permissions", "--model", "sonnet", "--output-format", "stream-json", "--verbose", "go"}
+	wantResume := []string{"-p", "--resume", "s1", "--dangerously-skip-permissions", "--model", "sonnet", "--output-format", "stream-json", "--verbose", "continue"}
 	if !reflect.DeepEqual(runArgs, wantRun) {
 		t.Errorf("run args = %q, want %q", runArgs, wantRun)
 	}

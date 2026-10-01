@@ -29,6 +29,22 @@ developer had to be started to finish each step.
 - After `/compact`, `VerifyCompaction` (`internal/subagent/compact.go`) gets `ContextTokens == 0`
   for Claude and refuses. Either Claude's compact turn reports no usage, or the parser drops it.
 
+### Canary (2026-10-01, `claude -p --model haiku --output-format stream-json --verbose`, 3 Bash steps)
+
+| Source | input + cache_read + cache_creation |
+|---|---|
+| call 1 | 16334 |
+| call 2 | 16548 |
+| call 3 | 16707 |
+| call 4 (last) | 16854 |
+| `result.usage` (turn total, what harnez used) | 66443 (4 calls summed) |
+
+`--output-format json` has only the turn total, so the driver now uses stream-json with `--verbose`
+and takes the last main-thread assistant call (sub-agent calls with `parent_tool_use_id` are skipped).
+`/compact` turn: `result.usage` is all zeros (this is the `after 0`), but a
+`system/compact_boundary` event carries `compact_metadata.pre_tokens=16885`, `post_tokens=2092`;
+that post value is the verified size after compaction. With neither, context is unknown (-1).
+
 ## 3. Implementation & Verification Plan
 
 - Canary first: resume a Claude session with a long multi-step turn, record the raw usage of the

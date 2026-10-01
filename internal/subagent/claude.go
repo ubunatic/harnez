@@ -33,7 +33,7 @@ func (d ClaudeDriver) Run(ctx context.Context, o RunOptions) (*TurnResult, error
 	if o.Model.Tier != "" {
 		args = append(args, "--effort", claudeEffort(o.Model.Tier))
 	}
-	args = append(args, "--output-format", "json", o.Prompt)
+	args = append(args, "--output-format", "stream-json", "--verbose", o.Prompt)
 	b, err := d.command(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("claude: %w", err)
@@ -50,7 +50,7 @@ func (d ClaudeDriver) Resume(ctx context.Context, id, prompt string, model Model
 	if model.Tier != "" {
 		args = append(args, "--effort", claudeEffort(model.Tier))
 	}
-	args = append(args, "--output-format", "json", prompt)
+	args = append(args, "--output-format", "stream-json", "--verbose", prompt)
 	b, err := d.command(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("claude resume: %w", err)
@@ -74,26 +74,77 @@ func (d ClaudeDriver) Stop(ctx context.Context, id string) error {
 func (d ClaudeDriver) Delete(ctx context.Context, id string) error {
 	return nil
 }
+
+// claudeUsage is the token usage block of a Claude message or result.
+type claudeUsage struct {
+	Input       int `json:"input_tokens"`
+	Output      int `json:"output_tokens"`
+	CacheRead   int `json:"cache_read_input_tokens"`
+	CacheCreate int `json:"cache_creation_input_tokens"`
+}
+
+// claudeEvent is one stream-json line, or the single object of --output-format json.
+type claudeEvent struct {
+	Type      string      `json:"type"`
+	Subtype   string      `json:"subtype"`
+	SessionID string      `json:"session_id"`
+	Result    string      `json:"result"`
+	IsError   bool        `json:"is_error"`
+	Usage     claudeUsage `json:"usage"`
+	Parent    *string     `json:"parent_tool_use_id"`
+	Message   struct {
+		Usage *claudeUsage `json:"usage"`
+	} `json:"message"`
+	Compact struct {
+		PostTokens int `json:"post_tokens"`
+	} `json:"compact_metadata"`
+}
+
+// parseClaude reads Claude's stream-json output (one event per line) or a
+// single --output-format json object. The result's usage totals every model
+// call of the turn, so the context size comes from the last main-thread
+// assistant call, or from a compact boundary's post_tokens; when neither is
+// present it is unknown (-1), as for agy (issues 644, 673).
 func parseClaude(data []byte) (*TurnResult, error) {
-	var v struct {
-		SessionID string `json:"session_id"`
-		Result    string `json:"result"`
-		IsError   bool   `json:"is_error"`
-		Usage     struct {
-			Input       int `json:"input_tokens"`
-			Output      int `json:"output_tokens"`
-			CacheRead   int `json:"cache_read_input_tokens"`
-			CacheCreate int `json:"cache_creation_input_tokens"`
-		} `json:"usage"`
+	var res *claudeEvent
+	var last *claudeUsage
+	postCompact := -1
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var e claudeEvent
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			if strings.HasPrefix(line, "{") && !strings.HasSuffix(line, "}") {
+				return nil, fmt.Errorf("parse claude json: %w", err)
+			}
+			continue
+		}
+		switch {
+		case e.Type == "assistant" && e.Message.Usage != nil && e.Parent == nil:
+			last = e.Message.Usage
+		case e.Type == "system" && e.Subtype == "compact_boundary" && e.Compact.PostTokens > 0:
+			postCompact = e.Compact.PostTokens
+			last = nil
+		case e.Type == "result" || e.Type == "":
+			res = &e
+		}
 	}
-	if err := json.Unmarshal(data, &v); err != nil {
-		return nil, fmt.Errorf("parse claude json: %w", err)
+	if res == nil {
+		return nil, fmt.Errorf("parse claude json: no result event")
 	}
-	if v.IsError {
-		return nil, fmt.Errorf("claude reported an error: %s", v.Result)
+	if res.IsError {
+		return nil, fmt.Errorf("claude reported an error: %s", res.Result)
 	}
-	r := &TurnResult{SessionID: v.SessionID, Response: v.Result, Messages: []string{v.Result}, InputTokens: v.Usage.Input, OutputTokens: v.Usage.Output, CachedTokens: v.Usage.CacheRead + v.Usage.CacheCreate}
-	r.ContextTokens = r.InputTokens + r.CachedTokens
+	v := res.Usage
+	r := &TurnResult{SessionID: res.SessionID, Response: res.Result, Messages: []string{res.Result}, InputTokens: v.Input, OutputTokens: v.Output, CachedTokens: v.CacheRead + v.CacheCreate}
+	r.ContextTokens = -1
+	if last != nil {
+		r.ContextTokens = last.Input + last.CacheRead + last.CacheCreate
+	} else if postCompact > 0 {
+		r.ContextTokens = postCompact
+	}
 	r.TokensTurn = r.InputTokens + r.OutputTokens + r.CachedTokens + r.ReasoningTokens
 	r.TokensCumulative = r.TokensTurn
 	return r, nil
