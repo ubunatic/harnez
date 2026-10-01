@@ -59,6 +59,28 @@ M1 plan by dev-656 (flash37:low) accepted with these required changes:
   separate harnez invocations from the same parent (two `exec_command` calls), or document why not.
 - Edge cases from the plan stay (no host id, same name twice, unknown host).
 
+## 5. M1 Review (host, 2026-10-01): delivered in 012aa22d, one regression to fix
+
+**M1 delivered (host session tracking):** `currentHostSession` (HARNEZ_SESSION_ID, AGY, Claude/Codex ids,
+Codex-only PPID fallback), `LastHostSessionID` on resume, one stderr line after start/resume.
+Host live run from Claude Code: `harnez: this session started 2 agents (0 running): m1-probe, m1-probe2`. OK.
+
+**Pre-Work / Required Refinements (before M2):**
+
+- **Regression: Claude Code hosts lost access to existing agents.** Before M1, Claude Code hosts had an
+  empty parent id and acted as root. Now `CLAUDE_CODE_SESSION_ID` scopes them, so on a live Claude host:
+  - `harnez agent list` shows only this session's agents (91 rows before, 0 now; `--all-sessions` works);
+  - `harnez agent stop --name dev-656` (ParentSessionID empty, started before M1) fails:
+    `session "..." is outside caller lineage`. The same applies to `resume`, which also blocks the
+    "resume from another session" case that section 4 requires, whatever the unit tests show.
+  Required: an explicit `--name`/id target on resume/stop/delete/status/wait/rate from a host session must
+  keep working for agents with empty ParentSessionID and for agents of other host sessions (hand-off).
+  Keep CanManage's lineage guard for leaf workers (callers whose HARNEZ_SESSION_ID is a harnez worker),
+  which is what it exists for. Add a test for each: host resumes a legacy agent, host resumes another
+  host's agent (then both views list it), worker is still refused outside its lineage.
+- **`list` scoping:** keep the scoped default, but when other sessions have agents, append one stderr line:
+  `harnez: N more agents in other sessions; use --all-sessions`.
+
 /goal Hosts always know which agents they started, statuslines show the detached count, and
 `harnez agent send` delivers a message to a named detached agent through a per-agent method
 proven by canary; stop and report when blocked on a user decision (opt-in form) or a denied
