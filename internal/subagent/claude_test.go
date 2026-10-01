@@ -74,6 +74,24 @@ func TestParseClaudeCompactTurnUsesBoundaryPostTokens(t *testing.T) {
 	}
 }
 
+// Trimmed from a real /compact stream (issue 673): after the boundary Claude
+// emits two synthetic assistant events whose usage is all zero.
+func TestParseClaudeCompactIgnoresZeroUsageAssistantEvents(t *testing.T) {
+	in := `{"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"manual","pre_tokens":44835,"post_tokens":4033}}
+{"type":"assistant","message":{"model":"<synthetic>","role":"assistant","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"parent_tool_use_id":null}
+{"type":"assistant","message":{"model":"<synthetic>","role":"assistant","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}},"parent_tool_use_id":null}
+{"type":"user","message":{"role":"user","content":"<local-command-stdout>Compacted </local-command-stdout>"}}
+{"type":"result","subtype":"success","session_id":"s1","result":"","usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}
+`
+	r, err := parseClaude([]byte(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.ContextTokens != 4033 {
+		t.Fatalf("ContextTokens = %d, want 4033", r.ContextTokens)
+	}
+}
+
 func TestParseClaudeErrorResult(t *testing.T) {
 	if _, err := parseClaude([]byte(`{"type":"result","is_error":true,"result":"boom"}`)); err == nil {
 		t.Fatal("want error")

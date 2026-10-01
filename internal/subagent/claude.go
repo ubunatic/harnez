@@ -123,7 +123,10 @@ func parseClaude(data []byte) (*TurnResult, error) {
 		}
 		switch {
 		case e.Type == "assistant" && e.Message.Usage != nil && e.Parent == nil:
-			last = e.Message.Usage
+			// Synthetic events after /compact carry all-zero usage; skip them.
+			if u := e.Message.Usage; u.Input+u.CacheRead+u.CacheCreate > 0 {
+				last = u
+			}
 		case e.Type == "system" && e.Subtype == "compact_boundary" && e.Compact.PostTokens > 0:
 			postCompact = e.Compact.PostTokens
 			last = nil
