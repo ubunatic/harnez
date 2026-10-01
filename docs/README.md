@@ -164,6 +164,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-09-25-search-capabilities.md](studies/2026-09-25-search-capabilities.md) | inventory of user-facing search, lookup, indexing, and read surfaces present in this checkout. “Search” here means locating content or records; generated indexes and file readers are included where they are commonly used for discovery. |
 | [studies/2026-09-25-usage-system-advisor-handoff.md](studies/2026-09-25-usage-system-advisor-handoff.md) | Usage System: Advisor Handoff and Workflow Friction (2026-09-25) |
 | [studies/2026-09-26-neus-lean-sprint-and-agentic-loop-retrospective.md](studies/2026-09-26-neus-lean-sprint-and-agentic-loop-retrospective.md) | Neus Lean Sprint & Agentic Loop Retrospective (2026-09-26) |
+| [studies/2026-10-01-claude-resume-compaction.md](studies/2026-10-01-claude-resume-compaction.md) | Claude Resume Compaction (Issue 673) |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |

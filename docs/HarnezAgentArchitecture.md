@@ -38,9 +38,9 @@ flowchart TD
     B -->|"Validate Ownership / Lineage"| H{"Owns Target?"}
     H -->|"Yes (Own / Child)"| I["Stop / Teardown Session"]
     H -->|"No (External Session)"| J["Reject / Protect Foreign Agent"]
-    B -->|"Auto-Compact Check (100-150k tokens)"| E{"Token Threshold?"}
-    E -->|"Tokens > 100k"| F["Execute Compaction"]
-    E -->|"Tokens <= 100k"| G["Preserve KV Cache"]
+    B -->|"Auto-Compact Check (last-call context)"| E{"Context > threshold (200k)?"}
+    E -->|"Yes"| F["Execute Compaction"]
+    E -->|"No"| G["Preserve KV Cache"]
     F --> D
     G --> D
 ```
@@ -80,14 +80,23 @@ Root prompt forms also provide `-p/--prompt`, repeatable `-f/--file`, `-c/--cont
 `--stream full|stats`, `--plan yes|no`, and `--json`. `--` sends following text
 literally. There are no legacy provider-first or positional-session forms.
 
-A dispatch compares the provider's full input count from its most recent turn,
-including cached input, with the configured threshold. Automatic compaction reads
+A dispatch compares the session's context size with the configured threshold. The
+context size is the full input (including cached input) of the **last model call**,
+never the turn total: a turn with many tool steps sums every call and can report
+several times the real context (issue 673, Claude 441k stored vs 45k real; 644 agy,
+594 Codex). Claude reads it from `--output-format stream-json --verbose` (last
+main-thread assistant event with non-zero usage, or `compact_boundary.post_tokens`);
+when no per-call figure exists the size is unknown (negative) and compaction is skipped. Automatic compaction reads
 `agent.compact_threshold_tokens` from the global
 `~/.harnez/config.yaml` (default `200000`). Optional
 `agent.compact_thresholds` entries override the value by provider,
 `provider:model`, or `provider:model:tier`. Harnez waits for compaction
 completion and requires an acknowledgement and a lower reported input-token
-count before sending a resume prompt. Active interactive sessions with no
+count before sending a resume prompt. Provider CLIs can report a failed compaction
+as success (Claude returns `result` subtype `success` with text `Error during
+compaction: ...`), so the driver maps such text to an error and the verified drop,
+not the status, is the proof. Compaction must never pass empty `--model`/`--effort`
+flags (issue 673: every Claude `/compact` failed with a 400 for that reason). Active interactive sessions with no
 completion and token signal are blocked from sending an over-threshold prompt.
 
 ### 2.11 MCP server for Codex
@@ -258,6 +267,19 @@ Every session records its parent session, caller PID, harness type, and working
 directory. Operations only manage sessions in the caller's lineage; foreign
 sessions are rejected or ignored according to the operation's scope.
 
+The host session id comes from `currentHostSession()`: `HARNEZ_SESSION_ID`, then
+`AGY_CONVERSATION_ID`, then the Claude/Codex session resolver; the PPID fallback
+applies only under `CODEX_THREAD_ID`. A plain terminal has no id. `ParentSessionID`
+is the single source of truth for "started by this host"; `resume` also sets
+`LastHostSessionID`, and lineage matches either field (issue 656 M1). The lineage
+guard (`subagent.CanManage`) applies to workers only (`HARNEZ_SESSION_ID` set): a
+host may stop, delete or complete any agent it names explicitly
+(`canManageTarget`), because host ids change between sessions and a strict guard
+locked hosts out of their own earlier agents. `list` stays scoped to the current
+host and prints how many agents other sessions hold (`--all-sessions` shows them).
+`start` and `resume` print `harnez: this session started N agents (M running): ...`
+on stderr for hosts.
+
 ### 2.9 Output protocol
 
 Streaming output is written to stdout using labeled blocks. A turn begins with
@@ -346,7 +368,7 @@ How a spec reaches the provider CLI (batch drivers):
 ## 4. Auto-Compaction & Cache-Affinity Management
 
 ### 4.1 Auto-Compaction Trigger Rules
-1. **Cumulative Token Threshold**: When a session reaches 100,000–150,000 cumulative tokens, `harnez agent` automatically triggers context compaction at the milestone boundary.
+1. **Context Threshold**: When the session's context size (last call's full input, see §2.10; not the cumulative turn total) exceeds the configured threshold (default 200,000), `harnez agent` compacts before the next resume prompt.
 2. **Turn-Boundary Compaction**: The agent persists its decisions and code pointers to disk/ticket, then compacts its history before accepting the next milestone prompt.
 3. **Manual Override**: Callers can disable auto-compaction per run using `--no-compact`.
 

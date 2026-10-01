@@ -296,6 +296,7 @@ For focused, day-to-day tickets and milestone iterations, running the full 5-pha
      - *Single-Ticket Medium (No Follow-Up Tickets)*: The single issue ticket is the sole communication medium. Never create separate refinement tickets (`#XXX-refinements`) for lean sprints.
    - **Trust the Base Framework**: Avoid micromanaging standard workspace rules, tool descriptions, or language conventions already provided by the base system prompt.
    - **Stay Responsive**: After dispatch, the Orchestrator returns control to the main chat or continues only with non-overlapping local work. Do not block on the dev subagent by default.
+   - **Fresh Tree Facts & Hands Off Foreign Files**: Any claim about the working tree in a handoff ("7 files uncommitted", "no other work") comes from a `git status` run right before the handoff, never from memory. Every handoff also says: never revert, discard or stage files outside the named set; report unexpected changes and leave them. (harnez 656: a stale "no other uncommitted work" led a replacement developer to `git checkout --` the user's own spec edits as presumed leftovers.)
 2. **Autonomous Milestone Execution & Self-Verification**:
    - The dev subagent implements changes, validates them using repo-native verification commands (`go test ./...`, `make check`, canary probes), and commits each milestone at the boundary.
 3. **Concise Inline Review & In-Ticket Pre-Work Embedding**:
@@ -399,6 +400,7 @@ the child/entry, message updates an existing child, and terminate ends it.
 - ❌ **Parallel Writing**: Spawning multiple subagents with write permissions on the same workspace simultaneously.
 - ❌ **Blocking Handoff Waits**: Treating "hand this to a subagent" as permission to block the main chat while waiting for the child. The host is always the responsive orchestrator.
 - ❌ **Silent Verification**: Assuming a fix works without running test commands or canary scripts.
+- ❌ **Fixing Without Retrying the Stuck Case**: Declaring a bug fixed because the new unit tests pass, without re-running the real failing artifact (the stuck session, file or request). In harnez 673 three stacked bugs hid behind one error message; each fix was green in tests and only a live resume of the stuck worker showed the next one. Re-run the real case after every fix, and when it still fails, capture the exact production input and feed it to the code under test.
 - ❌ **Unit-Test-Only Confidence for Hook/Environment Features**: Treating a green `go test ./...` as proof a
   hook-installing or environment-resolution-dependent feature actually works in production. Eight tickets shipped
   with passing, well-written unit tests on 2026-08-31 (`harnez-tool-observability`) while automatic capture was
