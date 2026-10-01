@@ -1,6 +1,6 @@
 # 665 — Add /harnez-selftest skill and agent selftest CLI command for background task execution verification
 
-**Status**: Open
+**Status**: Closed — Implemented /harnez-selftest skill and harnez agent selftest command with sequence tracking, atomic state persistence, hidden-step protection, and full test suite
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
