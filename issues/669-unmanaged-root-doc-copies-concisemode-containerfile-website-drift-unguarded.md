@@ -1,6 +1,6 @@
 # 669 — Unmanaged root doc copies (ConciseMode, Containerfile, Website) drift unguarded
 
-**Status**: Open — M1 review: ConciseMode.md still lacks its stop marker; plain init is not idempotent
+**Status**: Closed — ConciseMode, Containerfile and Website root copies now installed by init and covered by the drift test
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Docs / Templates
