@@ -1,6 +1,6 @@
 # 672 — harnez issues new leaves issues/.reserve.lock untracked in consumer repos
 
-**Status**: Draft
+**Status**: Closed — Fixed: init adds /issues/.reserve.lock to .git/info/exclude; psync, cati and voxi verified clean and idempotent
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
