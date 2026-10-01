@@ -1,6 +1,6 @@
 # 666 — Require HTO=0 in background execution instructions and verify explicit HTO setting in agent selftest
 
-**Status**: Open
+**Status**: Closed — Mandated HTO=0 in general background execution instructions and added HTO validation in agent selftest verify step
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
