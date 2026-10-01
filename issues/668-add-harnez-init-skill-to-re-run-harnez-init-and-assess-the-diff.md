@@ -1,6 +1,6 @@
 # 668 — Add /harnez-init skill to re-run harnez init and assess the diff
 
-**Status**: Open
+**Status**: Closed — Implemented /harnez-init skill with guard check on uninitialized repos, init re-run, regression diff assessment, local fallout rules, upstream issue reporting, and commit steps; verified in uninitialized and initialized repositories
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -19,9 +19,9 @@ A skill makes the routine one command.
 
 A bundled `/harnez-init` skill that:
 
-1. **Guard:** checks the repo was already initialized (e.g. `.harnez/rules/` exists).
+1. **Guard:** checks the repo was already initialized (e.g. `.harnez/` exists or `harnez:begin` markers in AGENTS.md/CLAUDE.md).
    If not, it stops without running anything and asks the user to choose the init
-   setup first: lite vs full docs, with or without quota1, and which docs to add.
+   setup first: lite vs full docs (`--variant lite` vs `--variant full`), with or without quota1 (`--quota-1`), doc set (`--docs <names>`), and repo mode (`-m solo|fork|team`).
    First-time init is a user decision, never the agent's.
 2. Runs `harnez init`.
 3. Assesses the diff (`git diff`): explains each change in one line, flags regressions
@@ -32,11 +32,17 @@ A bundled `/harnez-init` skill that:
    diff excerpt as evidence.
 6. Commits the init changes in the consumer repo (no push) and reports.
 
-## 3. Open questions
+## 3. Resolution & Open Questions
 
-- Most reliable "was initialized" marker (`.harnez/rules/`, `harnez:begin` markers in
-  AGENTS.md, or a recorded init config).
-- Whether init should record the chosen variant/options so re-runs need no flags.
+- **Initialization Marker**: The skill checks for `.harnez/` directory in the repository root or `<!-- harnez:begin` markers in `AGENTS.md` / `CLAUDE.md`.
+- **Option Persistence**: Handled via explicit flags when specified by user; re-runs preserve existing file structures and managed doc sets.
+- **Skill Registration**: Registered in `config.yaml` as `harnez-init` pointing to `docs/commands/HarnezInit.md` with `preset_skill_overrides` configured as `user-invocable-only`.
+
+## 4. Verification
+
+- **Uninitialized Repo Test**: Tested on clean git repository (`/tmp/harnez-test-uninit-*`). Guard correctly halts execution without running `harnez init` and prompts the user for setup options.
+- **Initialized Repo Test**: Tested on initialized git repository (`/tmp/harnez-test-init-*`). Re-run executed cleanly, diff assessed for broken links and regressions without errors.
+- **Automated Tests**: Unit test `internal/claude/harnez_init_skill_test.go` and full test suite (`make test`) pass cleanly.
 
 /goal Ship the `/harnez-init` skill with the guard and assess steps, verified by
 running it in one initialized and one uninitialized repo; stop and report if blocked

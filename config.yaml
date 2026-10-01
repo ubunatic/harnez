@@ -135,6 +135,8 @@ debloat:
     standup: user-invocable-only
     story: user-invocable-only
     harnez-status: user-invocable-only
+    harnez-selftest: user-invocable-only
+    harnez-init: user-invocable-only
   # These retain prose-triggering under the minimal preset and become
   # explicit-only under the deliberately stronger aggressive preset.
   aggressive_skill_overrides:
@@ -351,6 +353,10 @@ skills:
   - name: harnez-selftest
     description: "Test and verify native agent background task execution flow and self-test command progression"
     file: docs/commands/HarnezSelftest.md
+
+  - name: harnez-init
+    description: "Re-run harnez init in an initialized repository, assess the diff for regressions, fix local fallout, and commit changes"
+    file: docs/commands/HarnezInit.md
 
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
