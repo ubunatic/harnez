@@ -81,6 +81,21 @@ Host live run from Claude Code: `harnez: this session started 2 agents (0 runnin
 - **`list` scoping:** keep the scoped default, but when other sessions have agents, append one stderr line:
   `harnez: N more agents in other sessions; use --all-sessions`.
 
+## 6. M1 Delivered (host, 2026-10-01)
+
+**M1 (host session tracking) closed:** 012aa22d plus regression fix a7d010f4. Host live checks from
+Claude Code: start/resume print `harnez: this session started N agents (M running): ...`; `stop --name`
+of a pre-M1 agent works again; `list` is scoped and prints
+`harnez: 90 more agents in other sessions; use --all-sessions`; a fake worker
+(`HARNEZ_SESSION_ID` set) is still refused outside its lineage.
+
+**Pre-Work for M2 (statusline count):**
+- Claude workers can't be resumed after a long turn until 673 is fixed; plan M2 as one-turn
+  developer handoffs, or fix 673 first.
+- Developers must not discard or revert files outside the set named in the handoff. Report
+  unexpected changes to the host instead (a dev reverted the user's spec edits in M1).
+- Count = this host session's agents with status running (same source as the M1 line).
+
 /goal Hosts always know which agents they started, statuslines show the detached count, and
 `harnez agent send` delivers a message to a named detached agent through a per-agent method
 proven by canary; stop and report when blocked on a user decision (opt-in form) or a denied
