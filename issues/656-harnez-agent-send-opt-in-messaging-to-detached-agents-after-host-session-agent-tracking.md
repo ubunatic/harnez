@@ -39,6 +39,26 @@ session background. This ticket designs a real eventing layer on top: `harnez ag
   (see 630).
 - Re-check live code and 630's outcome before starting.
 
+## 4. M1 Plan Review (host, 2026-10-01)
+
+M1 plan by dev-656 (flash37:low) accepted with these required changes:
+
+- **One source of truth.** `subagent.Session.ParentSessionID` is already written on every start path
+  and `session.go` already filters by parent. Derive the per-host-session agent list from it. Do NOT
+  add a second `AgentRef` index to `sessionstate`.
+- **Resume from another session.** Keep `ParentSessionID` as provenance (unchanged). If the resuming
+  host must see the agent too, add one field (e.g. `LastHostSessionID`) set on resume; count an agent
+  for a host when either field matches. Test both sessions' views.
+- **Host informing = start/resume output only for M1.** One short line, e.g.
+  `harnez: this session started 3 agents (1 running): dev-a, rev-b, adv-c`. No sessionTipHook
+  reminder in M1 (noise; revisit in M2 with the statusline).
+- **No spec/schema change** unless a real configurable value appears.
+- **Docs:** update `harnez agent start --help` / `sessionBackgroundHelp` or `config.yaml` Tools line only
+  if the output line needs explaining; no AgenticLoop change for M1.
+- **Codex host id:** add a test that the PPID fallback yields the same host session id across two
+  separate harnez invocations from the same parent (two `exec_command` calls), or document why not.
+- Edge cases from the plan stay (no host id, same name twice, unknown host).
+
 /goal Hosts always know which agents they started, statuslines show the detached count, and
 `harnez agent send` delivers a message to a named detached agent through a per-agent method
 proven by canary; stop and report when blocked on a user decision (opt-in form) or a denied
