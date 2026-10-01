@@ -54,7 +54,8 @@ A category dir forms once 3+ docs share a theme.
   in `docs/*.md` (also in this repo), `~/.claude/docs/` and other projects only follow via
   `harnez init`/`apply`. Edit the source file, never the root copy alone: a root-only edit is
   silently overwritten by the next `harnez init`. After editing a source, sync the root copy
-  (`harnez init -d .`, then `git checkout --` any unrelated file it rewrites) and commit both.
+  (`harnez init -d .`, then `git checkout --` any unrelated file it rewrites) and commit both;
+  `TestRootDocCopiesMatchSources` fails when a root copy diverges from its source.
 
 ## Issue Tracking & Priority Standards
 
