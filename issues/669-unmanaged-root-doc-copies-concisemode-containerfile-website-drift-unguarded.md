@@ -49,3 +49,17 @@ Required: a selection that applies to this repo only, e.g. `harnez init -d . --d
 if a later plain `harnez init -d .` keeps those docs (verify: does init keep docs already listed in
 the AGENTS.md Language Conventions block, or already present with a stop marker?). If no existing
 per-project mechanism keeps them, stop and report; do not build a new one in this ticket.
+
+#### M1 delivered (3e4a8d9a), review findings
+Containerfile.md, Website.md and the AGENTS.md entries are fine. ConciseMode.md is not: it still has
+no `harnez:stop` marker (the revert of the drift-probe edit restored the pre-init file), so the drift
+test still skips it, a plain `harnez init -d .` reports "1 change(s)" (it re-adds the marker), and the
+LanguagePipeline sentence "no root copy is currently skipped" is false.
+
+### M2 (finish ConciseMode)
+- Pre-Work: run `harnez init -d .`, commit the ConciseMode.md marker change.
+- Prove: a second plain `harnez init -d .` prints no changes and `git status` is clean.
+- Prove drift coverage on Containerfile.md or Website.md this time; revert the probe with an
+  explicit inverse edit, not `git checkout --`, and confirm all three files still end with
+  `<!-- harnez:stop -->` before committing.
+- Only docs changed since the M1 q1 run, so a focused `go test ./internal/claude -run TestRootDocCopiesMatchSources` suffices.
