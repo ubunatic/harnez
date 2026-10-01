@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"codeberg.org/ubunatic/loom"
 	"golang.org/x/term"
+	"ubunatic.com/loom"
 )
 
 // UsageLoomWidget implements loom.Widget for the compact usage monitor loom app.
@@ -49,16 +49,16 @@ func (w *UsageLoomWidget) Draw(c *loom.Canvas, r loom.Rect) {
 }
 
 // HandleKey processes keyboard shortcuts (q, Esc, Ctrl-C to exit).
-func (w *UsageLoomWidget) HandleKey(e loom.KeyEvent) bool {
+func (w *UsageLoomWidget) ConsumeKey(e loom.KeyEvent) loom.EventResult {
 	if e.Is("q", "esc", "ctrl-c") || e.Text == "q" || e.Text == "Q" {
-		return true
+		return loom.Handled()
 	}
-	return false
+	return loom.Ignored()
 }
 
 // HandleMouse handles mouse events.
-func (w *UsageLoomWidget) HandleMouse(_ loom.MouseEvent) bool {
-	return false
+func (w *UsageLoomWidget) ConsumeMouse(_ loom.MouseEvent) loom.EventResult {
+	return loom.Ignored()
 }
 
 // ContentHeight reports the preferred height of the compact usage monitor frame.

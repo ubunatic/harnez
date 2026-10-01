@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"codeberg.org/ubunatic/loom"
+	"ubunatic.com/loom"
 )
 
 func TestUsageLoomWidget_RendersCorrectUI(t *testing.T) {

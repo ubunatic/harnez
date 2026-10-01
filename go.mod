@@ -3,7 +3,6 @@ module ubunatic.com/harnez
 go 1.26.5
 
 require (
-	codeberg.org/ubunatic/loom v0.2.5
 	github.com/BurntSushi/toml v1.6.0
 	github.com/creack/pty v1.1.24
 	github.com/google/uuid v1.6.0
@@ -12,6 +11,7 @@ require (
 	golang.org/x/term v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.57.0
+	ubunatic.com/loom v0.2.18
 	ubunatic.com/voxi v0.1.2
 )
 

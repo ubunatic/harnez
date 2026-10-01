@@ -1,5 +1,3 @@
-codeberg.org/ubunatic/loom v0.2.5 h1:KFMJC0y2qu+k8pXsg3jqSifRSHfQtT/cg7J5U7FOAhY=
-codeberg.org/ubunatic/loom v0.2.5/go.mod h1:Ek+Uvb4LL9Hgij3qx3P0AzxwplJIm/eZARgQxAgH3yo=
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/clipperhouse/uax29/v2 v2.2.0 h1:ChwIKnQN3kcZteTXMgb1wztSgaU+ZemkgWdohwgs8tY=
@@ -76,5 +74,7 @@ modernc.org/strutil v1.2.1 h1:UneZBkQA+DX2Rp35KcM69cSsNES9ly8mQWD71HKlOA0=
 modernc.org/strutil v1.2.1/go.mod h1:EHkiggD70koQxjVdSBM3JKM7k6L0FbGE5eymy9i3B9A=
 modernc.org/token v1.1.0 h1:Xl7Ap9dKaEs5kLoOQeQmPWevfnk/DM5qcLcYlA8ys6Y=
 modernc.org/token v1.1.0/go.mod h1:UGzOrNV1mAFSEB63lOFHIpNRUVMvYTc6yu1SMY/XTDM=
+ubunatic.com/loom v0.2.18 h1:7OM0ONBvOL/rfNdSLkRR+H60En6so/1fN0cp8rb44aU=
+ubunatic.com/loom v0.2.18/go.mod h1:yUDOCU6CfYjXV982wovuz/sizn5PuN7JVzimImQEIv8=
 ubunatic.com/voxi v0.1.2 h1:rSx31jesJSGQL8MSHAHcc5rfLPhYZxNnQ3Z1UeOCKIM=
 ubunatic.com/voxi v0.1.2/go.mod h1:drL5byHT4b1z1tanhphG5x+4Up80OAEKn3TiYrdhE2w=

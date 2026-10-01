@@ -9,7 +9,7 @@ Doc:
   Context: |
     Target Repositories & Tech Stack:
     - codeberg.org/ubunatic/cati: Terminal media renderer (Unicode blocks/quadrants/sextants; heavy pixel-to-glyph math, integrates with ffmpeg, rsvg-convert).
-    - codeberg.org/ubunatic/loom: Minimal, high-efficiency custom Go TUI engine built for agentic workflows.
+    - ubunatic.com/loom: Minimal, high-efficiency custom Go TUI engine built for agentic workflows.
     - codeberg.org/ubunatic/harnez: Agent-agnostic harness, hooks, and documentation engine (with bundled loom TUI interfaces).
     - codeberg.org/ubunatic/voxi: Low-latency local STT engine (eager transcription, dynamic modifier detection, dotool emission, systemd user service).
 
