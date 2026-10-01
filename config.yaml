@@ -348,6 +348,10 @@ skills:
     description: "Briefly self-check Harnez CLI, model tiers, sprint workflow, and documentation navigation"
     file: docs/commands/HarnezStatus.md
 
+  - name: harnez-selftest
+    description: "Test and verify native agent background task execution flow and self-test command progression"
+    file: docs/commands/HarnezSelftest.md
+
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
     file: docs/commands/evergreen.md

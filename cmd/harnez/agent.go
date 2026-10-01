@@ -732,7 +732,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		return nil
 	}}
 	rate.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
-	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate)
+	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate, newAgentSelftestCmd())
 	silenceUsage(root)
 	return root
 }
