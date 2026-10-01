@@ -87,3 +87,5 @@ ConciseMode governs what the agent *writes*; `harnez distill` (see issue 066) go
 agent *reads back* from tool output. The two compound: distillation keeps noisy command output out
 of context, ConciseMode keeps the agent's own narration short. Neither substitutes for the other —
 apply both on constrained hardware.
+
+<!-- harnez:stop -->
