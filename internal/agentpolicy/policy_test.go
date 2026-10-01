@@ -87,12 +87,17 @@ func TestConfigureDocumentsHarnezAgentRoutesForBothModes(t *testing.T) {
 				"harnez_stop_agent", "harnez agent --model <spec>",
 				"harnez agent list", "harnez agent status", "harnez agent wait <session>",
 				"harnez agent resume --name <session>", "harnez agent stop",
-				"`wait <session>` takes its session positionally", "resume has no `--detach` flag",
+				"`wait <session>` takes its session positionally",
+				"`HTO=0` in your session background", "`run_in_background: true`", "`run_command`",
+				"`WaitMsBeforeAsync`", "`exec_command`", "`write_stdin`",
 				"There is no `harnez advisor` command",
 			} {
 				if !strings.Contains(content, want) {
 					t.Errorf("policy for %s missing %q:\n%s", mode, want, content)
 				}
+			}
+			if strings.Contains(content, "--detach") || strings.Contains(content, "--async") {
+				t.Errorf("policy for %s still names the hidden --detach/--async flag:\n%s", mode, content)
 			}
 		})
 	}

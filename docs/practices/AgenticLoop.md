@@ -23,6 +23,25 @@ background-job facility. Keep those jobs visible and user-stoppable so users
 can inspect or stop them manually; do not hide lifecycle work behind opaque
 polling or detached processes.
 
+Run workers in the **session background**: a job owned by your chat session,
+shown in its task list, whose exit wakes you. Never use the **machine
+background** (shell `&`, `nohup`, `setsid`): it is invisible to the session, so
+the host could only find out by polling. No external event system will notify
+you; your own background tool is the only signal. One call per worker, with
+`HTO=0` so the turn never detaches after 60s:
+
+| Host | Tool and parameter | How completion reaches the host |
+|---|---|---|
+| Claude Code | `Bash` with `run_in_background: true`, command `HTO=0 harnez agent start ...` | task-notification on exit; jobs stop after 30 minutes, so size each worker turn to finish before that |
+| AGY | `run_command` with `HTO=0 harnez agent start ...` and a small `WaitMsBeforeAsync` (e.g. 500) | background-task completion notice |
+| Codex | `exec_command` with `HTO=0 harnez agent start ...` | call `write_stdin` on the returned `session_id` with chars `""` until it reports an exit code |
+
+Then tell the user the job id and the session name. Claude Code and AGY end
+the turn or do other work until notified; Codex keeps calling `write_stdin`
+until the exit code. Never check status or logs in a loop while the job runs; use
+`harnez agent wait <session>` only to recover a lost job. `harnez agent selftest
+--step hello` walks a host through this flow and verifies it.
+
 ### Roles and delegation depth
 
 Delegation is exactly one level deep. Every `harnez agent` session has a role

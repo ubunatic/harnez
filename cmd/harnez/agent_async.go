@@ -44,6 +44,12 @@ func foregroundWorkerEnv() []string {
 	return env
 }
 
+// timeoutSetByUser reports an explicit timeout (e.g. HTO=0), which disables
+// the 60s foreground detach.
+func timeoutSetByUser() bool {
+	return os.Getenv(execTimeoutExplicitEnv) == "1" || os.Getenv(execTimeoutShortEnv) != "" || os.Getenv(execTimeoutEnv) != ""
+}
+
 func foregroundDetachTimeout(cmd *cobra.Command) time.Duration {
 	if !foregroundDetachEnabled() {
 		return 0
@@ -51,7 +57,7 @@ func foregroundDetachTimeout(cmd *cobra.Command) time.Duration {
 	if cmd != nil && (cmd.Flags().Changed("timeout") || cmd.InheritedFlags().Changed("timeout")) {
 		return 0
 	}
-	if os.Getenv(execTimeoutExplicitEnv) == "1" || os.Getenv(execTimeoutShortEnv) != "" || os.Getenv(execTimeoutEnv) != "" {
+	if timeoutSetByUser() {
 		return 0
 	}
 	outerTimeout, err := time.ParseDuration(os.Getenv(execTimeoutEffectiveEnv))
@@ -64,6 +70,30 @@ func foregroundDetachTimeout(cmd *cobra.Command) time.Duration {
 	}
 	return deadline - foregroundDetachGrace
 }
+
+// sessionBackgroundHelp tells hosts how to run start/resume so the worker is
+// their own tracked job (issue 630). It mirrors what `harnez agent selftest` teaches.
+const sessionBackgroundHelp = `Run workers in your session background, not the machine background.
+Session background: a job owned by your chat session; it shows in your task
+list and its exit wakes you. Machine background (shell &, nohup, setsid):
+invisible to you, so you could only find out by polling. No external event
+system will notify you; your own background tool is the only signal.
+
+One call per worker, with HTO=0 so the turn never detaches after 60s:
+  Claude Code  Bash tool, run_in_background: true, command
+               "HTO=0 harnez agent start ...". Its exit sends you a
+               task-notification. Claude Code stops background jobs after
+               30 minutes: size each worker turn to finish before that.
+  AGY          run_command with "HTO=0 harnez agent start ..." and a small
+               WaitMsBeforeAsync (e.g. 500); you are notified on completion.
+  Codex        exec_command with "HTO=0 harnez agent start ..."; then call
+               write_stdin on the returned session_id with chars "" until
+               it reports an exit code.
+
+Then tell the user the job id and the session name. Claude Code and AGY: end
+your turn or do other work until notified. Codex: keep calling write_stdin
+until the exit code. Never check status or logs in a loop while the job runs.
+Use "harnez agent wait <session>" only to recover a lost job.`
 
 // detachHost names the calling agent host so reattach guidance can use that
 // host's own tool vocabulary; generic wording made Codex orphan detached
@@ -103,8 +133,13 @@ func reattachSteps(host, name string) []string {
 	}
 }
 
-// waitHint is the one-line pre-turn reminder of the reattach steps.
+// waitHint is the one-line pre-turn reminder of the reattach steps. When the
+// turn cannot detach (e.g. HTO=0 in a session-background job) no separate wait
+// job is needed, so the hint says that instead (issue 630).
 func waitHint(name string) string {
+	if timeoutSetByUser() {
+		return "this turn does not detach; no separate wait job is needed"
+	}
 	return "if this turn detaches after 60s: " + strings.Join(reattachSteps(detachHost(), name), " ")
 }
 

@@ -62,6 +62,7 @@ For a single focused ticket: **Clean Goal Handoff** (one objective; **Trust the 
 - **Baking Real Credentials In For A Fast Dev Loop** — no real hostnames/MACs/credentials "temporarily"; use RFC-1918/example values + a secret scanner from commit one.
 - **Orphaned Background Tasks** — leftover `tail -f`/watch loops/timers after work is done.
 - **Shell `&` Detaching** — never `&`/`nohup`/`disown` a command; use the harness's tracked background facility.
+- **Machine-Background Workers** — run `HTO=0 harnez agent start/resume` as one session-background job (Claude Code: Bash `run_in_background: true`, finish within 30 minutes; AGY: `run_command` with small `WaitMsBeforeAsync`; Codex: `exec_command` + `write_stdin` until exit). Your own background tool is the only completion signal; no polling. See `harnez agent start --help`.
 - **Lost Context / Ephemeral-Only Retrospectives** — friction/bugs discussed in chat but never written to a durable doc/ticket.
 - **Rubber-Stamp Reviews** — a review that doesn't actually inspect assertions or diffs.
 - **Unbounded Doc Ingestion** — whole-file-reading `AGENTS.md`/bundled docs already in the active prompt.

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"ubunatic.com/harnez/internal/quota1"
 	"ubunatic.com/harnez/internal/resolve"
 	"ubunatic.com/harnez/internal/subagent"
@@ -96,7 +97,7 @@ func TestManagedAgentExamplesParseAgainstCobra(t *testing.T) {
 			t.Errorf("%q: resolve Cobra command: %v", example[1], err)
 			continue
 		}
-		if err := cmd.ParseFlags(remaining); err != nil {
+		if err := cmd.ParseFlags(remaining); err != nil && !errors.Is(err, pflag.ErrHelp) {
 			t.Errorf("%q: parse Cobra flags: %v", example[1], err)
 			continue
 		}
@@ -1759,6 +1760,10 @@ func TestAgentHaikuAliases(t *testing.T) {
 }
 
 func TestAgentResumePrintsReplyNotStructDump(t *testing.T) {
+	// The reattach notice is asserted below; an inherited HTO=0 would suppress it.
+	t.Setenv(execTimeoutShortEnv, "")
+	t.Setenv(execTimeoutEnv, "")
+	t.Setenv(execTimeoutExplicitEnv, "")
 	// The agent command runs sessionTipHook; isolate HOME and the session
 	// env so the caller's own session tips cannot leak into stderr.
 	t.Setenv("HOME", t.TempDir())
@@ -3471,5 +3476,58 @@ func TestDetachHostPrefersCodexThread(t *testing.T) {
 	t.Setenv("CODEX_THREAD_ID", "t1")
 	if got := detachHost(); got != "codex" {
 		t.Fatalf("detachHost = %q, want codex", got)
+	}
+}
+
+// TestAgentHelpHidesDetachAndNamesSessionBackground guards issue 630: hosts that
+// read --detach in the help lost track of their workers.
+func TestAgentHelpHidesDetachAndNamesSessionBackground(t *testing.T) {
+	for _, sub := range []string{"start", "resume"} {
+		t.Run(sub, func(t *testing.T) {
+			c := newAgentCmd()
+			var out bytes.Buffer
+			c.SetOut(&out)
+			c.SetErr(new(bytes.Buffer))
+			c.SetArgs([]string{sub, "--help"})
+			if err := c.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			help := out.String()
+			for _, hidden := range []string{"--detach", "--async"} {
+				if strings.Contains(help, hidden) {
+					t.Errorf("%s help still lists %s:\n%s", sub, hidden, help)
+				}
+			}
+			for _, want := range []string{"session background", "HTO=0", "run_in_background: true", "run_command", "WaitMsBeforeAsync", "exec_command", "write_stdin", "30 minutes", "Never check status or logs in a loop"} {
+				if !strings.Contains(help, want) {
+					t.Errorf("%s help missing %q", sub, want)
+				}
+			}
+		})
+	}
+}
+
+// TestHTOZeroDisablesForegroundDetach guards the one-call session-background
+// form (issue 630): with HTO=0 the turn must never detach, and the wait hint
+// must not ask for a separate wait job.
+func TestHTOZeroDisablesForegroundDetach(t *testing.T) {
+	t.Setenv(foregroundDetachTestOverrideEnv, "1")
+	t.Setenv(execTimeoutEffectiveEnv, "60s")
+	t.Setenv(execTimeoutExplicitEnv, "")
+	t.Setenv(execTimeoutEnv, "")
+	t.Setenv(execTimeoutShortEnv, "")
+	if got := foregroundDetachTimeout(newAgentCmd()); got <= 0 {
+		t.Fatalf("baseline detach timeout = %s, want > 0 without HTO", got)
+	}
+	if hint := waitHint("w"); !strings.Contains(hint, "harnez agent wait w") {
+		t.Fatalf("baseline wait hint = %q, want reattach steps", hint)
+	}
+	t.Setenv(execTimeoutShortEnv, "0")
+	if got := foregroundDetachTimeout(newAgentCmd()); got != 0 {
+		t.Fatalf("detach timeout with HTO=0 = %s, want 0", got)
+	}
+	hint := waitHint("w")
+	if strings.Contains(hint, "harnez agent wait") || !strings.Contains(hint, "does not detach") {
+		t.Fatalf("wait hint with HTO=0 = %q, want no separate wait job", hint)
 	}
 }

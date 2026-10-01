@@ -59,9 +59,13 @@ type toolDefinition struct {
 	InputSchema inputSchema `json:"inputSchema"`
 }
 
+// sessionBackgroundInstruction names each host's own background tool, so the
+// worker is a job of the chat session and its exit wakes the host (issue 630).
+const sessionBackgroundInstruction = "Run it as one session-background job: Claude Code Bash with run_in_background: true; AGY run_command with a small WaitMsBeforeAsync; Codex exec_command, then write_stdin until an exit code. Never poll its status or logs."
+
 var tools = []toolDefinition{
-	{"harnez_spawn_agent", "Start a Harnez subagent through MCP and return its result and session record. Use async=true for a detached Harnez worker. For a host-visible background job with automatic reactive wakeups, use harnez_command and run its returned command with the host's Bash/run_command tool and backgrounding enabled.", schema(map[string]any{"prompt": stringProp("Task prompt"), "model": stringProp("Optional provider:model[:tier] or model alias"), "role": stringProp("Optional role"), "dir": stringProp("Optional working directory"), "name": stringProp("Optional unique session name"), "async": map[string]string{"type": "boolean", "description": "Return immediately while the MCP-started agent runs detached"}}, "prompt")},
-	{"harnez_command", "Format a safely shell-quoted harnez agent command without executing it. Run the returned command with the host agent's Bash/run_command tool and backgrounding enabled to create a visible UI background task with automatic reactive wakeups. Use harnez_spawn_agent to start and manage the agent directly through MCP.", schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"start", "resume", "wait", "status"}, "description": "Agent lifecycle action"}, "prompt": stringProp("Required for start and resume"), "model": stringProp("Optional provider:model[:tier] for start or resume"), "role": stringProp("Optional role for start or resume"), "dir": stringProp("Optional working directory"), "name": stringProp("Session name for start; may identify the session for resume, wait, or status"), "session_id": stringProp("Session ID or name for resume, wait, or status"), "stream": map[string]any{"type": "string", "enum": []string{"full", "stats"}, "description": "Output stream mode for start or resume (default: stats)"}}, "action")},
+	{"harnez_spawn_agent", "Start a Harnez subagent through MCP and wait for its result and session record. To keep working while it runs, use harnez_command instead and run the returned command with HTO=0 in your session background (Claude Code: Bash with run_in_background: true; AGY: run_command with a small WaitMsBeforeAsync; Codex: exec_command, then write_stdin until an exit code); see harnez agent start --help.", schema(map[string]any{"prompt": stringProp("Task prompt"), "model": stringProp("Optional provider:model[:tier] or model alias"), "role": stringProp("Optional role"), "dir": stringProp("Optional working directory"), "name": stringProp("Optional unique session name")}, "prompt")},
+	{"harnez_command", "Format a safely shell-quoted harnez agent command without executing it. The command starts with HTO=0 so the turn never detaches. " + sessionBackgroundInstruction + " Use harnez_spawn_agent to start and manage the agent directly through MCP.", schema(map[string]any{"action": map[string]any{"type": "string", "enum": []string{"start", "resume", "wait", "status"}, "description": "Agent lifecycle action"}, "prompt": stringProp("Required for start and resume"), "model": stringProp("Optional provider:model[:tier] for start or resume"), "role": stringProp("Optional role for start or resume"), "dir": stringProp("Optional working directory"), "name": stringProp("Session name for start; may identify the session for resume, wait, or status"), "session_id": stringProp("Session ID or name for resume, wait, or status"), "stream": map[string]any{"type": "string", "enum": []string{"full", "stats"}, "description": "Output stream mode for start or resume (default: stats)"}}, "action")},
 	{"harnez_wait_agent", "Wait for an agent session and return its terminal result.", schema(map[string]any{"session_id": stringProp("Session ID or name"), "timeout_seconds": map[string]string{"type": "integer", "description": "Maximum wait in seconds; omit to wait indefinitely"}}, "session_id")},
 	{"harnez_list_agents", "List agent sessions visible to the caller.", schema(map[string]any{"dir": stringProp("Optional working directory filter")})},
 	{"harnez_agent_status", "Get the status record for a session in the caller's lineage.", schema(map[string]any{"session_id": stringProp("Session ID or name")}, "session_id")},
@@ -233,6 +237,7 @@ func (s Server) call(ctx context.Context, c toolCall) (any, error) {
 			return nil, e
 		}
 		base = append(base, "start", "--json", "--stream", "stats")
+		// async is no longer advertised (issue 630) but still accepted from old callers.
 		if raw, exists := a["async"]; exists {
 			async, ok := raw.(bool)
 			if !ok {
@@ -325,7 +330,8 @@ func (s Server) call(ctx context.Context, c toolCall) (any, error) {
 		for i, word := range words {
 			quoted[i] = shellQuote(word)
 		}
-		return map[string]string{"command": strings.Join(quoted, " "), "instruction": "Run this command with the host agent's Bash/run_command tool and backgrounding enabled to create a visible UI background task with automatic reactive wakeups."}, nil
+		// HTO=0 keeps start/resume from detaching after 60s (issue 630).
+		return map[string]string{"command": "HTO=0 " + strings.Join(quoted, " "), "instruction": "Run this command unchanged. " + sessionBackgroundInstruction}, nil
 	case "harnez_wait_agent":
 		id, e := arg("session_id", true)
 		if e != nil {

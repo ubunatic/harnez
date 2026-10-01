@@ -238,7 +238,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	var startFiles []string
 	var startPrompt string
 	var startInteractive bool
-	start := &cobra.Command{Use: "start [prompt...]", Short: "Start a new agent session", Example: "  harnez agent start --name w --model luna -f task.md -- \"extra instructions\"\n  harnez agent start -i --model claude:haiku --name chat", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+	start := &cobra.Command{Use: "start [prompt...]", Short: "Start a new agent session", Long: "Start a new agent session.\n\n" + sessionBackgroundHelp, Example: "  harnez agent start --name w --model luna -f task.md -- \"extra instructions\"\n  harnez agent start -i --model claude:haiku --name chat", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(planSpec)
 		if err != nil {
 			return err
@@ -281,8 +281,12 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	start.Flags().StringVarP(&startPrompt, "prompt", "p", "", "prompt text")
 	start.Flags().BoolVarP(&startInteractive, "interactive", "i", false, "launch the provider's interactive terminal")
 	start.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
-	start.Flags().BoolVar(&detach, "detach", false, "run the agent in the background")
-	start.Flags().BoolVar(&detach, "async", false, "alias for --detach")
+	// --detach/--async stay for internal use but are hidden: hosts that used them lost
+	// track of their workers (issue 630); they must use their session background instead.
+	start.Flags().BoolVar(&detach, "detach", false, "internal: run the agent in the machine background")
+	start.Flags().BoolVar(&detach, "async", false, "internal: alias for --detach")
+	_ = start.Flags().MarkHidden("detach")
+	_ = start.Flags().MarkHidden("async")
 	start.Flags().BoolVar(&allowExhaustedQuota, "allow-exhausted-quota", false, "start even when cached provider quota is exhausted")
 	start.Flags().StringVar(&workerID, "worker-session", "", "internal detached worker session ID")
 	start.Flags().StringVar(&planSpec, "plan", "no", "planning gate: yes or no")
@@ -353,7 +357,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	var continueResume bool
 	var resumePrompt string
 	var resumeInteractive bool
-	resume := &cobra.Command{Use: "resume [session] [prompt...]", Short: "Resume an existing agent session", Example: "  harnez agent resume --name w \"next step\"\n  harnez agent resume <id> \"next step\"\n  harnez agent resume -i --name w", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+	resume := &cobra.Command{Use: "resume [session] [prompt...]", Short: "Resume an existing agent session", Long: "Resume an existing agent session.\n\n" + sessionBackgroundHelp, Example: "  harnez agent resume --name w \"next step\"\n  harnez agent resume <id> \"next step\"\n  harnez agent resume -i --name w", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(planSpec)
 		if err != nil {
 			return err

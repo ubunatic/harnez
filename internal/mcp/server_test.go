@@ -68,10 +68,10 @@ func TestHarnezCommandFormatsActionsAndQuotesShellArguments(t *testing.T) {
 		args map[string]any
 		want string
 	}{
-		{"start", map[string]any{"action": "start", "prompt": "inspect $(touch nope) 'quoted'", "model": "luna", "role": "advisor", "dir": "/tmp/work dir", "name": "worker"}, `'/path/harnez tool'\''s' 'agent' 'start' '--json' '--stream' 'stats' '--model' 'luna' '--role' 'advisor' '--dir' '/tmp/work dir' '--name' 'worker' '--' 'inspect $(touch nope) '\''quoted'\'''`},
-		{"resume", map[string]any{"action": "resume", "prompt": "continue", "session_id": "worker"}, `'/path/harnez tool'\''s' 'agent' 'resume' '--json' '--stream' 'stats' '--name' 'worker' '--' 'continue'`},
-		{"wait", map[string]any{"action": "wait", "session_id": "worker"}, `'/path/harnez tool'\''s' 'agent' 'wait' '--json' 'worker'`},
-		{"status", map[string]any{"action": "status", "session_id": "worker"}, `'/path/harnez tool'\''s' 'agent' 'status' '--json' '--name' 'worker'`},
+		{"start", map[string]any{"action": "start", "prompt": "inspect $(touch nope) 'quoted'", "model": "luna", "role": "advisor", "dir": "/tmp/work dir", "name": "worker"}, `HTO=0 '/path/harnez tool'\''s' 'agent' 'start' '--json' '--stream' 'stats' '--model' 'luna' '--role' 'advisor' '--dir' '/tmp/work dir' '--name' 'worker' '--' 'inspect $(touch nope) '\''quoted'\'''`},
+		{"resume", map[string]any{"action": "resume", "prompt": "continue", "session_id": "worker"}, `HTO=0 '/path/harnez tool'\''s' 'agent' 'resume' '--json' '--stream' 'stats' '--name' 'worker' '--' 'continue'`},
+		{"wait", map[string]any{"action": "wait", "session_id": "worker"}, `HTO=0 '/path/harnez tool'\''s' 'agent' 'wait' '--json' 'worker'`},
+		{"status", map[string]any{"action": "status", "session_id": "worker"}, `HTO=0 '/path/harnez tool'\''s' 'agent' 'status' '--json' '--name' 'worker'`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -83,8 +83,10 @@ func TestHarnezCommandFormatsActionsAndQuotesShellArguments(t *testing.T) {
 			if result["command"] != tt.want {
 				t.Errorf("command = %q, want %q", result["command"], tt.want)
 			}
-			if !strings.Contains(result["instruction"], "backgrounding enabled") || !strings.Contains(result["instruction"], "reactive wakeups") {
-				t.Errorf("instruction lacks host background guidance: %q", result["instruction"])
+			for _, want := range []string{"session-background job", "run_in_background: true", "run_command", "WaitMsBeforeAsync", "exec_command", "write_stdin", "Never poll"} {
+				if !strings.Contains(result["instruction"], want) {
+					t.Errorf("instruction lacks host background guidance %q: %q", want, result["instruction"])
+				}
 			}
 		})
 	}
@@ -194,4 +196,31 @@ func TestProtocolParseAndUnknownMethod(t *testing.T) {
 	if len(lines) != 2 || !strings.Contains(lines[0], `"code":-32700`) || !strings.Contains(lines[1], `"code":-32601`) {
 		t.Fatalf("responses = %s", out.String())
 	}
+}
+
+// TestSpawnToolHidesAsync guards issue 630: the advertised schema must not offer
+// a detached worker; hosts use harnez_command in their session background.
+func TestSpawnToolHidesAsync(t *testing.T) {
+	for _, tool := range tools {
+		if tool.Name != "harnez_spawn_agent" {
+			continue
+		}
+		data, err := json.Marshal(tool)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		for _, bad := range []string{`"async"`, "async=true", "detach"} {
+			if strings.Contains(text, bad) {
+				t.Errorf("harnez_spawn_agent still advertises %s: %s", bad, text)
+			}
+		}
+		for _, want := range []string{"harnez_command", "HTO=0", "session background", "run_in_background: true", "WaitMsBeforeAsync", "write_stdin"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("harnez_spawn_agent description missing %q", want)
+			}
+		}
+		return
+	}
+	t.Fatal("harnez_spawn_agent not found")
 }

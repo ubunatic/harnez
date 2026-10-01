@@ -31,7 +31,11 @@ const policyBody = `# subagent_mode: %s
   ` + "`harnez agent wait <session>`" + `, ` + "`harnez agent resume --name <session> <prompt>`" + `,
   and ` + "`harnez agent stop --name <session>`" + `.
   ` + "`wait <session>`" + ` takes its session positionally; resume requires ` + "`--name`" + ` because
-  a positional name is treated as the prompt, and resume has no ` + "`--detach`" + ` flag.
+  a positional name is treated as the prompt.
+- Run ` + "`start`" + ` and ` + "`resume`" + ` with ` + "`HTO=0`" + ` in your session background, one call per worker:
+  Claude Code Bash with ` + "`run_in_background: true`" + `; AGY ` + "`run_command`" + ` with a small
+  ` + "`WaitMsBeforeAsync`" + `; Codex ` + "`exec_command`" + `, then ` + "`write_stdin`" + ` until an exit code.
+  Never use shell ` + "`&`" + `, ` + "`nohup`" + ` or a status/log polling loop; see ` + "`harnez agent start --help`" + `.
 - There is no ` + "`harnez advisor`" + ` command.
 - Before broad shell searches, use ` + "`harnez find code|docs`" + ` or MCP ` + "`harnez_find`" + `; see ` + "`@docs/Search.md`" + `.
 - Preserve the repository's instructions and report the provider and session used.`
