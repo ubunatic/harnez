@@ -268,6 +268,74 @@ func TestAgentSelftestConfirmAfterBackgroundCompletedFails(t *testing.T) {
 	}
 }
 
+func TestAgentSelftestConfirmRunningArgs(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Test case 1: no extra duration argument
+	{
+		sessionID := "test-no-arg"
+		cmd := newAgentSelftestCmd()
+		cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "hello"})
+		_ = cmd.Execute()
+
+		st, _ := loadSelftestState(selftestStateFilePath(tempDir, sessionID))
+		now := time.Now()
+		st.BackgroundStartedAt = &now
+		_ = saveSelftestState(selftestStateFilePath(tempDir, sessionID), st)
+
+		cmd = newAgentSelftestCmd()
+		cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "confirm"})
+		_ = cmd.Execute()
+
+		cmd = newAgentSelftestCmd()
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "confirm-running"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("confirm-running with no arg failed: %v", err)
+		}
+		if !strings.Contains(out.String(), "Recorded background running confirmation.") {
+			t.Errorf("unexpected output: %s", out.String())
+		}
+		st, _ = loadSelftestState(selftestStateFilePath(tempDir, sessionID))
+		if st.ConfirmDuration != "" {
+			t.Errorf("expected empty ConfirmDuration, got: %q", st.ConfirmDuration)
+		}
+	}
+
+	// Test case 2: duration as separate argument
+	{
+		sessionID := "test-sep-arg"
+		cmd := newAgentSelftestCmd()
+		cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "hello"})
+		_ = cmd.Execute()
+
+		st, _ := loadSelftestState(selftestStateFilePath(tempDir, sessionID))
+		now := time.Now()
+		st.BackgroundStartedAt = &now
+		_ = saveSelftestState(selftestStateFilePath(tempDir, sessionID), st)
+
+		cmd = newAgentSelftestCmd()
+		cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "confirm"})
+		_ = cmd.Execute()
+
+		cmd = newAgentSelftestCmd()
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetArgs([]string{"--session", sessionID, "--state-dir", tempDir, "--step", "confirm-running", "150ms"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("confirm-running with separate arg failed: %v", err)
+		}
+		if !strings.Contains(out.String(), "Recorded background running confirmation (duration: 150ms)") {
+			t.Errorf("unexpected output: %s", out.String())
+		}
+		st, _ = loadSelftestState(selftestStateFilePath(tempDir, sessionID))
+		if st.ConfirmDuration != "150ms" {
+			t.Errorf("expected ConfirmDuration '150ms', got: %q", st.ConfirmDuration)
+		}
+	}
+}
+
 func TestAgentSelftestVerifyBadOrderings(t *testing.T) {
 	tempDir := t.TempDir()
 	sessionID := "test-bad-orderings"
