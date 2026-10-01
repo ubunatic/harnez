@@ -33,6 +33,38 @@ func BenchmarkDistill_GoTest(b *testing.B) {
 	b.ReportMetric(float64(len(raw))/float64(len(distilled)), "reduction-x")
 }
 
+func BenchmarkFilterDeduplicate(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 500; i++ {
+		sb.WriteString("warn: repetitive message log line\n")
+		sb.WriteString("warn: repetitive message log line\n")
+		sb.WriteString("info: unique log entry\n")
+	}
+	raw := sb.String()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = FilterDeduplicate(strings.NewReader(raw))
+	}
+}
+
+func BenchmarkFilterHeadTail(b *testing.B) {
+	lines := make([]string, 500)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line %d: log entry content for testing head tail filter", i)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = FilterHeadTail(lines, 100)
+	}
+}
+
+func BenchmarkDistill_HeadTailUnderLimit(b *testing.B) {
+	raw := syntheticGoTestOutput(50)
+	for i := 0; i < b.N; i++ {
+		_ = Distill(raw, Options{Mode: ModeRaw, MaxLines: 200, NoDedup: true})
+	}
+}
+
 func TestStripANSI(t *testing.T) {
 	in := "\x1b[32mPASS\x1b[0m: \x1b[1mok\x1b[0m"
 	want := "PASS: ok"
