@@ -38,6 +38,11 @@ boundary or depends on the real environment.
   an agent runs it. Clear every name in `resolve.SessionEnvVars` with
   `t.Setenv(name, "")` alongside the `HOME` override (see
   `cmd/harnez/agent_test.go` `TestAgentResumePrintsReplyNotStructDump`).
+- **Negative tests need a provably valid base fixture.** When invalid cases
+  are built by mutating one shared "valid" fixture, first assert that the
+  unmodified fixture passes. Otherwise a schema change that makes the base
+  invalid turns every negative subtest green for the wrong reason (seen in
+  `TestParseUsageSpecRejectsInvalidAge` when view modes changed, issue 689).
 - **Doc-copy drift** — `TestRootDocCopiesMatchSources` fails when a root
   `docs/*.md` copy differs from its copyable source; see
   [LanguagePipeline.md](LanguagePipeline.md#lite-variants-and-root-copies).

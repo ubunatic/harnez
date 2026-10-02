@@ -94,6 +94,15 @@ Example worker directive: “Implement the TUI layout to match
   on runtime context (e.g. `r` switching primary `--host` when configured vs. toggling the
   auxiliary `load.watch_host` panel in local sessions), the key dispatcher must fall back
   gracefully across all active configurations rather than silently dropping unhandled paths.
+- **Prefer a table over per-entity boxes for scan-and-compare data** (issue 689): the
+  `harnez usage` default view drew one box per agent plus a History box and was replaced
+  by a plain table, one row per quota window. Boxes suit heterogeneous panels (load,
+  processes); same-shaped records across entities read faster as aligned columns. Put
+  the columns a narrow terminal can lose last, since frame fitting truncates from the
+  right, and measure cell width in display columns, not bytes.
+- **Removing a panel frees its hotkey; do not renumber the rest.** When boxes 2-5 went,
+  keys 6/7/8 kept their numbers so muscle memory and docs stay valid. The hidden-panel
+  count only shows in modes whose spec sets `hidden_list: true`.
 
 ## References
 
