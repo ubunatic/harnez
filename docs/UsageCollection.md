@@ -133,6 +133,25 @@ output. Keep these invariants; each broke once:
 
 Legacy files are archived under `~/.local/share/harnez/archive/usage-legacy/`, never deleted.
 
+## Usage view modes (2026-10-02)
+
+`spec/usage.yaml` is the source of truth for the usage presentation modes. It defines the `normal`,
+`compact`, and `minimal` panel sets and display details, plus the default (`normal`). The JSON
+Schema and Go loader validate that contract; renderer code should consume the loaded mode instead
+of maintaining parallel hardcoded mode defaults.
+
+The view selector controls presentation. `--watch` controls the refresh loop and interaction only,
+so one-shot and watch frames for a selected mode retain the same panels and detail. Keep layout
+budgeting shared as well: title and status chrome, hidden-panel summaries, and overflow hints must
+follow the selected mode, including when a terminal is too short to show every line. In particular,
+reserve status-footer rows for static frames only when the live footer itself fits alongside the
+header and body; otherwise one-shot and watch can disagree about whether panel content or the
+overflow hint is visible.
+
+Parity tests should exercise the no-flag default and each explicit mode, comparing one-shot and
+watch output at ordinary and constrained terminal heights. Include the minimum heights where
+footer reservation changes, since roomy-terminal tests will not expose clipping differences.
+
 ## Related work
 
 This plan consolidates the architecture intent in issues 034, 085, 111, 113, 146, 152, 160, 161,

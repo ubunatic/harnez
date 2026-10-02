@@ -19,4 +19,12 @@ In a PTY, `harnez usage` changes its level of detail when `--watch` is added; fo
 ## 3. Implementation & Verification Plan
 Load the mode definitions from the validated usage spec and verify mode selection and one-shot/watch parity in tests.
 
+## 4. Outcome
+- Added spec and schema definitions for all three view modes, including the explicit `normal` default.
+- Added mutually exclusive `--normal`, `--compact`, and `--minimal` selectors; `--watch` now only enables the render loop and interaction.
+- Shared mode rendering across one-shot and watch, including footer row budgeting for short terminals. Recorded the reusable presentation contract in [[UsageCollection]].
+- Added CLI, spec-loader, and parity coverage for the default and all modes, including constrained terminal heights.
+- Verified with `HTO=0 make test-q1`, `make install`, and a `codex:gpt-6.1-sol` (`sol:med`) review with no actionable findings.
+- Commits: `a09b39fe` implementation; `5b97f7e9` ticket closure.
+
 **Goal**: Implement and verify spec-driven usage modes with watch independent of presentation, or stop and report if blocked on a user decision or denied permission.
