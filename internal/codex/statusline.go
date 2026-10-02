@@ -2,28 +2,53 @@ package codex
 
 import (
 	"bytes"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"github.com/BurntSushi/toml"
+	"gopkg.in/yaml.v3"
+	"ubunatic.com/harnez"
 )
 
-const invalidLegacyStatusLineItem = "model-context"
+const statusLineSpecPath = "spec/statusline.yaml"
 
-const replacedStatusLineItem = "model-with-reasoning"
-
-var statusLineItems = []string{
-	"model",
-	"current-dir",
-	"thread-name",
-	"context-remaining",
-	"five-hour-limit",
-	"weekly-limit",
+type codexStatusLineSpec struct {
+	Items             []string `yaml:"items"`
+	RemoveLegacyItems []string `yaml:"remove_legacy_items"`
 }
 
-// ApplyStatusLine enables Codex's native footer items while preserving any
-// unrelated TUI settings and user-selected status-line items.
+func loadCodexStatusLineSpec() (codexStatusLineSpec, error) {
+	data, err := fs.ReadFile(harnez.DefaultFS, statusLineSpecPath)
+	if err != nil {
+		return codexStatusLineSpec{}, fmt.Errorf("read embedded %s: %w", statusLineSpecPath, err)
+	}
+	var spec struct {
+		StatusLine struct {
+			Claude string              `yaml:"claude"`
+			AGY    string              `yaml:"agy"`
+			Codex  codexStatusLineSpec `yaml:"codex"`
+		} `yaml:"statusline"`
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&spec); err != nil {
+		return codexStatusLineSpec{}, fmt.Errorf("parse embedded %s: %w", statusLineSpecPath, err)
+	}
+	if len(spec.StatusLine.Codex.Items) == 0 {
+		return codexStatusLineSpec{}, fmt.Errorf("%s: statusline.codex.items must not be empty", statusLineSpecPath)
+	}
+	return spec.StatusLine.Codex, nil
+}
+
+// ApplyStatusLine writes exactly the Codex footer items selected in the embedded spec.
 func ApplyStatusLine(path string) (bool, error) {
+	statusSpec, err := loadCodexStatusLineSpec()
+	if err != nil {
+		return false, err
+	}
 	doc := readTOML(path)
 	tui := map[string]any{}
 	if existing, ok := doc["tui"].(map[string]any); ok {
@@ -31,43 +56,36 @@ func ApplyStatusLine(path string) (bool, error) {
 			tui[key] = value
 		}
 	}
-	items := stringArray(tui["status_line"])
-	filtered := make([]string, 0, len(items))
-	for _, item := range items {
-		if item != invalidLegacyStatusLineItem && item != replacedStatusLineItem {
-			filtered = append(filtered, item)
-		}
-	}
-	items = filtered
-	for _, required := range statusLineItems {
-		if !containsString(items, required) {
-			items = append(items, required)
-		}
-	}
-	tui["status_line"] = items
+	tui["status_line"] = append([]string(nil), statusSpec.Items...)
 	doc["tui"] = tui
 	return writeTOML(path, doc)
 }
 
-// StatusLineStatus reports whether all Harnez-selected native footer items
-// are present. Additional user-selected items are allowed.
+// StatusLineStatus reports whether the configured footer exactly matches the embedded spec.
 func StatusLineStatus(path string) (installed, drifted bool) {
+	statusSpec, err := loadCodexStatusLineSpec()
+	if err != nil {
+		return false, false
+	}
 	doc := readTOML(path)
 	tui, ok := doc["tui"].(map[string]any)
 	if !ok {
 		return false, false
 	}
 	items := stringArray(tui["status_line"])
-	for _, required := range statusLineItems {
-		if !containsString(items, required) {
-			return false, false
-		}
+	if _, ok := tui["status_line"]; !ok {
+		return false, false
 	}
-	return true, false
+	installed = reflect.DeepEqual(items, statusSpec.Items)
+	return installed, !installed
 }
 
-// RemoveStatusLine removes Harnez-selected footer items and keeps all others.
+// RemoveStatusLine removes current and retired Harnez footer items and keeps others.
 func RemoveStatusLine(path string) (bool, error) {
+	statusSpec, err := loadCodexStatusLineSpec()
+	if err != nil {
+		return false, err
+	}
 	doc := readTOML(path)
 	tui, ok := doc["tui"].(map[string]any)
 	if !ok {
@@ -77,7 +95,7 @@ func RemoveStatusLine(path string) (bool, error) {
 	filtered := make([]string, 0, len(items))
 	removed := false
 	for _, item := range items {
-		if containsString(statusLineItems, item) || item == replacedStatusLineItem {
+		if containsString(statusSpec.Items, item) || containsString(statusSpec.RemoveLegacyItems, item) {
 			removed = true
 			continue
 		}

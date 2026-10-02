@@ -6,10 +6,34 @@
   "properties": {
     "statusline": {
       "type": "object",
-      "required": ["claude", "agy"],
+      "required": ["claude", "agy", "codex"],
       "properties": {
         "claude": {"type": "string", "minLength": 1},
-        "agy": {"type": "string", "minLength": 1}
+        "agy": {"type": "string", "minLength": 1},
+        "codex": {
+          "type": "object",
+          "required": ["items", "remove_legacy_items"],
+          "properties": {
+            "items": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": ["current-dir", "thread-name", "model", "context-window-size", "context-used"]
+              }
+            },
+            "remove_legacy_items": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": ["model-context", "model-with-reasoning", "context-remaining", "five-hour-limit", "weekly-limit"]
+              }
+            }
+          },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     }

@@ -10,3 +10,16 @@ statusline:
     {{- if or .Context.Available .Context.WindowAvailable}} · {{if .Context.Available}}{{.Context.Size}}{{else}}?{{end}}{{if .Context.WindowAvailable}}/{{.Context.WindowSize}}{{end}}
     {{- if .Context.HasCache }} ({{ .Context.CachePercent }}% cached){{end}}{{end}}
     {{- range .Quotas }} · {{.Name}} {{ .RemainingPercent }}% left{{end}}
+  codex:
+    items:
+      - current-dir
+      - thread-name
+      - model
+      - context-window-size
+      - context-used
+    remove_legacy_items:
+      - model-context
+      - model-with-reasoning
+      - context-remaining
+      - five-hour-limit
+      - weekly-limit
