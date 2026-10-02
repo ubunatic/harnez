@@ -679,3 +679,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 678 | [678-make-usage-view-modes-spec-driven-and-independent-of-watch.md](678-make-usage-view-modes-spec-driven-and-independent-of-watch.md) | Make usage view modes spec-driven and independent of --watch | Closed — resolved |
 | 679 | [679-split-oversized-go-files-into-cohesive-packages-with-clean-interfaces.md](679-split-oversized-go-files-into-cohesive-packages-with-clean-interfaces.md) | Split oversized Go files into cohesive packages with clean interfaces | Open |
 | 680 | [680-probe-codex-cross-task-messaging-for-agent-send.md](680-probe-codex-cross-task-messaging-for-agent-send.md) | Probe Codex cross-task messaging for agent send | Open |
+| 681 | [681-copyable-agenticloop-doc-links-to-non-copyable-tuidesign.md](681-copyable-agenticloop-doc-links-to-non-copyable-tuidesign.md) | Copyable AgenticLoop doc links to non-copyable TUIDesign | Open |
