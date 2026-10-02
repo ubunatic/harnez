@@ -1779,7 +1779,10 @@ type WatchOptions struct {
 	SharedUsageCollector func(context.Context) UsageSummary
 	ProcCounts           *AgentProcessCount
 	Compact              bool
-	ShowProcesses        bool
+	// Minimal removes the dashboard title/status rows and hidden-panel hints
+	// while keeping the compact panel preset.
+	Minimal       bool
+	ShowProcesses bool
 	// Splash enables the startup splash screen during initial collection in --watch (issue 664).
 	Splash bool
 	// ShowMic forces the Mic box on at startup (issue 244's `--mic` flag),
@@ -1871,7 +1874,7 @@ func controlsOverlayLines() []string {
 
 func initialWatchSections(opts WatchOptions) watchSections {
 	var sec watchSections
-	if opts.Compact {
+	if opts.Compact || opts.Minimal {
 		sec = compactWatchSections()
 	} else {
 		sec = defaultWatchSections()
@@ -2068,7 +2071,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		hiddenCount++
 	}
 	hiddenHint := ""
-	if hiddenCount > 0 {
+	if hiddenCount > 0 && !opt.Minimal {
 		hiddenHint = fmt.Sprintf("   %s%d hidden (press ? for controls)\x1b[0m", ansiDimGrey, hiddenCount)
 	}
 
@@ -2077,13 +2080,16 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		titlePrefix = fmt.Sprintf("Agentic usage (@%s)", opt.Host)
 	}
 
-	header := []string{
-		fmt.Sprintf("%s%s\x1b[0m  %s%s%s",
-			ansiBold, titlePrefix, summary.Timestamp.Format("15:04:05 MST"), historyStatStr, hiddenHint),
-		"",
+	var header []string
+	if !opt.Minimal {
+		header = []string{
+			fmt.Sprintf("%s%s\x1b[0m  %s%s%s",
+				ansiBold, titlePrefix, summary.Timestamp.Format("15:04:05 MST"), historyStatStr, hiddenHint),
+			"",
+		}
 	}
 	var footer []string
-	if live {
+	if live && !opt.Minimal {
 		wa := mustWatchActions()
 		footer = []string{
 			"",
@@ -2193,7 +2199,11 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	}
 
 	if len(panels) == 0 {
-		body = append(body, ansiDimGrey+"(all panels hidden)\x1b[0m")
+		message := "(all panels hidden)"
+		if opt.Minimal {
+			message = "(no visible panels)"
+		}
+		body = append(body, ansiDimGrey+message+"\x1b[0m")
 		lines := append(append(header, body...), footer...)
 		return fit(lines, usable, rows)
 	}
@@ -2250,7 +2260,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		}
 	}
 
-	if dropped > 0 {
+	if dropped > 0 && !opt.Minimal {
 		note := fmt.Sprintf("%s… %s hidden — terminal too short\x1b[0m", ansiDimGrey, strings.Join(droppedKeys, " "))
 		if len(body) < budget {
 			body = append(body, note)

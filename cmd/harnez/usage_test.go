@@ -65,6 +65,32 @@ func TestValidateUsageFlags_CompactAllowedWithWatch(t *testing.T) {
 	}
 }
 
+func TestValidateUsageFlags_MinimalAllowedWithWatch(t *testing.T) {
+	if err := validateUsageMinimalFlags(true, false, false); err != nil {
+		t.Fatalf("--minimal --watch should be allowed, got error: %v", err)
+	}
+	if err := validateUsageFlags(true, false, false, true, false, false); err != nil {
+		t.Fatalf("--minimal's compact panel preset should be allowed with --watch, got error: %v", err)
+	}
+}
+
+func TestValidateUsageFlags_MinimalWithJSONOrLoomRejected(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		json bool
+		loom bool
+	}{
+		{name: "json", json: true},
+		{name: "loom", loom: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateUsageMinimalFlags(true, tc.json, tc.loom); err == nil {
+				t.Fatalf("--minimal with --%s should be rejected", tc.name)
+			}
+		})
+	}
+}
+
 func TestValidateUsageFlags_SplashAllowedWithWatch(t *testing.T) {
 	if err := validateUsageFlags(true, false, false, false, false, true); err != nil {
 		t.Fatalf("--watch --splash should be allowed, got error: %v", err)
@@ -142,6 +168,9 @@ func TestUsageProjectFlag_CobraRegistered(t *testing.T) {
 				if c.Flags().Lookup("splash") == nil {
 					t.Errorf("missing --splash flag on usage command")
 				}
+				if c.Flags().Lookup("minimal") == nil {
+					t.Errorf("missing --minimal flag on usage command")
+				}
 			}
 			if c.Name() == "assess" {
 				if c.Flags().Lookup("tokens") == nil {
@@ -171,5 +200,19 @@ func TestUsageCmd_LoomFlagExecution(t *testing.T) {
 	out := buf.String()
 	if !bytes.Contains(buf.Bytes(), []byte("Agentic usage")) {
 		t.Errorf("expected output to contain 'Agentic usage', got:\n%s", out)
+	}
+}
+
+func TestUsageCmd_MinimalFlagExecution(t *testing.T) {
+	root := newRootCmd()
+	buf := new(bytes.Buffer)
+	root.SetOut(buf)
+	root.SetArgs([]string{"usage", "--minimal", "--offline"})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("harnez usage --minimal failed: %v", err)
+	}
+	if bytes.Contains(buf.Bytes(), []byte("Agentic usage")) || bytes.Contains(buf.Bytes(), []byte("hidden")) {
+		t.Fatalf("minimal output should omit the title and hidden-panel summary:\n%s", buf.String())
 	}
 }

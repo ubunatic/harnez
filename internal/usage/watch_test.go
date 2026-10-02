@@ -1007,6 +1007,40 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 	}
 }
 
+func TestBuildWatchFrame_MinimalOmitsChromeAndUsesCompactPanels(t *testing.T) {
+	tempDir := t.TempDir()
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Load:      &LoadSnapshot{},
+		Agents: []AgentUsage{{
+			AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+			Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 85, DurationLeft: 8*time.Hour + 51*time.Minute},
+			Session: &QuotaWindow{Name: "Session (5-hour)", UsedPercent: 9, DurationLeft: 4*time.Hour + 51*time.Minute},
+		}},
+	}
+	opt := WatchOptions{Minimal: true}
+	sections := initialWatchSections(opt)
+	if !sections.AllUsage || !sections.Load || sections.Claude || sections.AGY || sections.Codex || sections.History {
+		t.Fatalf("minimal mode should use the compact panel preset: %+v", sections)
+	}
+
+	frame := buildWatchFrame(summary, nil, time.Minute, sections, 100, 30, true, tempDir, tempDir, opt)
+	frameText := stripANSI(strings.Join(frame.lines, "\n"))
+	for _, unwanted := range []string{"Agentic usage", "history:", "hidden", "refresh every", "controls"} {
+		if strings.Contains(strings.ToLower(frameText), strings.ToLower(unwanted)) {
+			t.Errorf("minimal frame contains %q:\n%s", unwanted, frameText)
+		}
+	}
+	for _, wanted := range []string{"All Usage", "Load", "Claude Code"} {
+		if !strings.Contains(frameText, wanted) {
+			t.Errorf("minimal frame is missing compact content %q:\n%s", wanted, frameText)
+		}
+	}
+	if !strings.HasPrefix(strings.TrimSpace(frameText), "┌─") {
+		t.Errorf("minimal frame should start with the compact panel row, got:\n%s", frameText)
+	}
+}
+
 func TestBuildWatchFrame_HistoryHeaderAnd4Boxes(t *testing.T) {
 	tempDir := t.TempDir()
 	_ = AppendHistory(tempDir, UsageSummary{

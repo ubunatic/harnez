@@ -183,6 +183,16 @@ func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom
 	return nil
 }
 
+func validateUsageMinimalFlags(usageMinimal, usageJSON, usageLoom bool) error {
+	if usageMinimal && usageJSON {
+		return fmt.Errorf("--minimal cannot be combined with --json")
+	}
+	if usageMinimal && usageLoom {
+		return fmt.Errorf("--minimal cannot be combined with --loom")
+	}
+	return nil
+}
+
 func main() {
 	if len(os.Args) > 0 && isGearInvocation(os.Args[0]) {
 		os.Args = append([]string{"harnez", "exec"}, os.Args[1:]...)
@@ -218,6 +228,7 @@ func newRootCmd() *cobra.Command {
 	var usageProcesses bool
 	var usageMic bool
 	var usageCompact bool
+	var usageMinimal bool
 	var usageLoom bool
 	var usageInterval time.Duration
 	var usageHost string
@@ -234,7 +245,11 @@ func newRootCmd() *cobra.Command {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 
-			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom, usageSplash); err != nil {
+			if err := validateUsageMinimalFlags(usageMinimal, usageJSON, usageLoom); err != nil {
+				return err
+			}
+			usageCompactMode := usageCompact || usageMinimal
+			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompactMode, usageLoom, usageSplash); err != nil {
 				return err
 			}
 			if usageShared && usageHost != "" {
@@ -307,7 +322,8 @@ func newRootCmd() *cobra.Command {
 				return usage.RunWatchWithOptions(ctx, "", client, cmd.OutOrStdout(), usageInterval, "", usage.WatchOptions{
 					Host:                 usageHost,
 					SharedUsageCollector: sharedWatchCollector,
-					Compact:              usageCompact,
+					Compact:              usageCompactMode,
+					Minimal:              usageMinimal,
 					ShowProcesses:        usageProcesses,
 					ShowMic:              usageMic,
 					Splash:               usageSplash,
@@ -401,14 +417,14 @@ func newRootCmd() *cobra.Command {
 				// a single plain batch SSH call, independent of usageHost.
 				remoteLoadSnap, _ = usage.CollectRemoteLoadSnapshot(ctx, loadWatchHost)
 			}
-			loadOpt := usage.WatchOptions{Compact: usageCompact, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}
+			loadOpt := usage.WatchOptions{Compact: usageCompactMode, Minimal: usageMinimal, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}
 			if usageHost != "" {
 				usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
 			} else {
 				if sharedClient != nil {
 					loadOpt.SharedUsageCollector = sharedCollect
 				}
-				if usageCompact && sharedClient == nil {
+				if usageCompactMode && sharedClient == nil {
 					summary := usage.CollectAll(ctx, "", client)
 					stored, err := usage.StoreCompactSummary(ctx, "", summary)
 					if err != nil {
@@ -432,6 +448,7 @@ func newRootCmd() *cobra.Command {
 	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the dashboard in place with a tokens/min trend")
 	usageCmd.Flags().BoolVar(&usageSplash, "splash", false, "render startup splash screen while initial collection is in flight (--watch only)")
 	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "show only the all-usage and load panels (default view and --watch)")
+	usageCmd.Flags().BoolVar(&usageMinimal, "minimal", false, "show the compact panels without title/status bars or hidden-panel hints")
 	usageCmd.Flags().BoolVar(&usageLoom, "loom", false, "start usage monitor as loom app (compact view)")
 	usageCmd.Flags().BoolVarP(&usageRaw, "raw", "r", false, "print the detailed per-field usage report instead of the compact dashboard")
 	usageCmd.Flags().BoolVarP(&usageProcesses, "proc", "p", false, "show running agent processes panel in the default view / --watch")
