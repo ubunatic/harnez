@@ -27,3 +27,16 @@ including provider failures, while unresolved failures remain explicitly
 recoverable and are not silently mistaken for confirmed provider deletion.
 Stop and report if a provider cannot distinguish a deleted session from an
 unresolved one.
+
+## 4. Decisions & Pre-Work (2026-10-02)
+- **Stop condition hit, resolved by user go:** `ClaudeDriver.Delete` and `AgyDriver.Delete`
+  are no-ops returning nil, so no provider-side deletion is confirmed for them. They are
+  reported as "removed from harnez only", never as provider-confirmed deletion.
+- **User requirement 1:** `harnez agent delete --all --force` prints no "unrated latest turns"
+  warning (today `printUnratedDeleteWarning` runs even with `--force`, `cmd/harnez/agent.go`).
+  Without `--force` the warning and refusal stay as they are.
+- **User requirement 2:** names deleted by one run never reappear in the next run or in the
+  default `agent list`, for every provider. A Codex provider-delete failure keeps a record
+  marked `delete-failed` (with the error) that is hidden from `delete --all` and the default
+  list, shown only via an explicit recovery path (`delete --retry-failed`, and a list flag
+  such as `--failed`); a successful retry removes it.
