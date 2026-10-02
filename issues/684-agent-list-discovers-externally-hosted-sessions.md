@@ -1,10 +1,10 @@
 # 684 — agents list discovers externally hosted sessions
 
-**Status**: In Progress
+**Status**: Closed — Codex rollout discovery implemented and verified
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
-**Related**: [Jev compaction](../docs/JevCompaction.md)
+**Related**: [Jev compaction](../docs/JevCompaction.md), [External agent session discovery](../docs/ExternalAgentSessions.md)
 
 ---
 
