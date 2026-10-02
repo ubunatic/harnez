@@ -1296,7 +1296,7 @@ func TestAgentListIncludesExternalSessionsOnlyInGlobalViews(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(&subagent.Session{ID: "managed-id", Name: "managed", Provider: "codex", ProviderSessionID: "managed-provider-id", ParentSessionID: "host-a", Status: "completed"}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "managed-id", Name: "managed", Provider: "codex", ProviderSessionID: "managed-provider-id", ParentSessionID: "host-a", Status: "running"}); err != nil {
 		t.Fatal(err)
 	}
 	rollout := filepath.Join(home, ".codex/sessions/2026/10/02/rollout-external.jsonl")
@@ -1322,7 +1322,7 @@ func TestAgentListIncludesExternalSessionsOnlyInGlobalViews(t *testing.T) {
 	var global bytes.Buffer
 	cmd = newAgentCmd()
 	cmd.SetOut(&global)
-	cmd.SetArgs([]string{"list", "--all-sessions", "--json", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"list", "--all-sessions", "--dead", "--json", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -1336,7 +1336,7 @@ func TestAgentListIncludesExternalSessionsOnlyInGlobalViews(t *testing.T) {
 	var table bytes.Buffer
 	cmd = newAgentCmd()
 	cmd.SetOut(&table)
-	cmd.SetArgs([]string{"list", "--all-sessions", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"list", "--all-sessions", "--dead", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -1352,6 +1352,49 @@ func TestAgentListIncludesExternalSessionsOnlyInGlobalViews(t *testing.T) {
 		}
 	}
 	t.Fatalf("external session missing from global list: %s", global.String())
+}
+
+func TestAgentListDefaultsToActiveAndHasDeadArchivedFilters(t *testing.T) {
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sess := range []*subagent.Session{
+		{ID: "live", Name: "live", Provider: "fake", Status: "running"},
+		{ID: "done", Name: "done", Provider: "fake", Status: "completed"},
+		{ID: "old", Name: "old", Provider: "fake", Status: "completed"},
+	} {
+		if err := store.Save(sess); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.Delete("old"); err != nil {
+		t.Fatal(err)
+	}
+	list := func(args ...string) string {
+		t.Helper()
+		var out bytes.Buffer
+		cmd := newAgentCmd()
+		cmd.SetOut(&out)
+		cmd.SetArgs(append(append([]string{"list", "--all-sessions"}, args...), "--store-dir", storeDir))
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()
+	}
+	if got := list(); !strings.Contains(got, "live") || strings.Contains(got, "done") || strings.Contains(got, "old") {
+		t.Fatalf("default list = %q, want active only", got)
+	}
+	if got := list("--dead"); !strings.Contains(got, "live") || !strings.Contains(got, "done") || strings.Contains(got, "old") {
+		t.Fatalf("--dead list = %q, want active and inactive non-archived", got)
+	}
+	if got := list("--archived"); !strings.Contains(got, "live") || strings.Contains(got, "done") || !strings.Contains(got, "old") {
+		t.Fatalf("--archived list = %q, want active and archived", got)
+	}
+	if got := list("--dead", "--archived"); !strings.Contains(got, "live") || !strings.Contains(got, "done") || !strings.Contains(got, "old") {
+		t.Fatalf("--dead --archived list = %q, want all statuses and archive", got)
+	}
 }
 
 func TestAgentListGlobalAndChildrenViews(t *testing.T) {
@@ -1375,7 +1418,7 @@ func TestAgentListGlobalAndChildrenViews(t *testing.T) {
 	}
 	storeDir := t.TempDir()
 
-	for _, args := range [][]string{{"list"}, {"list", "--children"}} {
+	for _, args := range [][]string{{"list", "--dead"}, {"list", "--children", "--dead"}} {
 		var out bytes.Buffer
 		cmd := newAgentCmd()
 		cmd.SetOut(&out)
@@ -1383,7 +1426,7 @@ func TestAgentListGlobalAndChildrenViews(t *testing.T) {
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute %v: %v", args, err)
 		}
-		wantExternal := len(args) == 1
+		wantExternal := len(args) == 2
 		if gotExternal := strings.Contains(out.String(), "external-session-id"); gotExternal != wantExternal {
 			t.Errorf("list %v includes external session = %v, want %v: %q", args[1:], gotExternal, wantExternal, out.String())
 		}
@@ -1408,7 +1451,7 @@ func TestAgentListThenResumeByDisplayedIDAndName(t *testing.T) {
 			var listed bytes.Buffer
 			cmd := newAgentCmd()
 			cmd.SetOut(&listed)
-			cmd.SetArgs([]string{"list", "--all-sessions", "--store-dir", storeDir})
+			cmd.SetArgs([]string{"list", "--all-sessions", "--dead", "--store-dir", storeDir})
 			if err := cmd.Execute(); err != nil {
 				t.Fatal(err)
 			}
@@ -1485,7 +1528,7 @@ func TestAgentListResumeColumnStates(t *testing.T) {
 	var out bytes.Buffer
 	cmd := newAgentCmd()
 	cmd.SetOut(&out)
-	cmd.SetArgs([]string{"list", "--all-sessions", "--store-dir", storeDir})
+	cmd.SetArgs([]string{"list", "--all-sessions", "--dead", "--store-dir", storeDir})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}

@@ -48,7 +48,7 @@ type agentOutput struct {
 
 func newAgentCmd() *cobra.Command {
 	var jsonOut, children, all, detach, allowExhaustedQuota bool
-	var failedOnly bool
+	var failedOnly, includeDead, includeArchived bool
 	var workerID string
 	var storeDir, workDir, name, modelSpec, streamMode, roleSpec string
 	var agentTimeout time.Duration
@@ -444,7 +444,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			}
 			xs = filtered
 		}
-		visibleManagedCount := len(xs)
+		visibleManagedCount := countVisibleAgentSessions(xs, includeDead)
 		managed := xs
 		if p != "" {
 			if every, err := s.List("", true); err == nil {
@@ -452,7 +452,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			}
 		}
 		var external []*subagent.Session
-		if !failedOnly && (all || (p == "" && !children)) {
+		if !failedOnly && includeDead && (all || (p == "" && !children)) {
 			home, err := os.UserHomeDir()
 			if err != nil {
 				return fmt.Errorf("resolve home directory for external sessions: %w", err)
@@ -462,14 +462,35 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 				return err
 			}
 		}
-		deleted, err := s.ListDeleted()
-		if err != nil {
-			return err
+		var deleted []*subagent.Session
+		archivedIDs := make(map[string]struct{})
+		if includeArchived {
+			deleted, err = s.ListDeleted()
+			if err != nil {
+				return err
+			}
+			for _, x := range deleted {
+				archivedIDs[x.ID] = struct{}{}
+			}
+			xs = append(xs, deleted...)
 		}
 		xs = appendExternalAgentSessions(xs, managed, external, deleted)
+		if !includeDead && !failedOnly {
+			filtered := xs[:0]
+			for _, x := range xs {
+				_, archived := archivedIDs[x.ID]
+				if x.Status == "running" || x.Status == "active" || archived {
+					filtered = append(filtered, x)
+				}
+			}
+			xs = filtered
+		}
 		if !all && p != "" {
-			if every, err := s.List("", true); err == nil && len(every) > visibleManagedCount {
-				fmt.Fprintf(cmd.ErrOrStderr(), "harnez: %d more agents in other sessions; use --all-sessions\n", len(every)-visibleManagedCount)
+			if every, err := s.List("", true); err == nil {
+				totalVisible := countVisibleAgentSessions(every, includeDead)
+				if totalVisible > visibleManagedCount {
+					fmt.Fprintf(cmd.ErrOrStderr(), "harnez: %d more agents in other sessions; use --all-sessions\n", totalVisible-visibleManagedCount)
+				}
 			}
 		}
 		if children && !all { /* List already scopes to direct children. */
@@ -490,6 +511,8 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	list.Flags().BoolVar(&children, "children", false, "list child sessions")
 	list.Flags().BoolVar(&all, "all-sessions", false, "list all sessions")
 	list.Flags().BoolVar(&failedOnly, "failed", false, "list unresolved provider deletions")
+	list.Flags().BoolVar(&includeDead, "dead", false, "include inactive and completed sessions")
+	list.Flags().BoolVar(&includeArchived, "archived", false, "include deleted archived sessions")
 	list.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 
 	status := &cobra.Command{Use: "status", Short: "Show agent session status", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
@@ -844,6 +867,19 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate, newAgentSelftestCmd())
 	silenceUsage(root)
 	return root
+}
+
+func countVisibleAgentSessions(sessions []*subagent.Session, includeDead bool) int {
+	if includeDead {
+		return len(sessions)
+	}
+	count := 0
+	for _, sess := range sessions {
+		if sess.Status == "running" || sess.Status == "active" {
+			count++
+		}
+	}
+	return count
 }
 
 func appendExternalAgentSessions(listed, managed, external, deleted []*subagent.Session) []*subagent.Session {

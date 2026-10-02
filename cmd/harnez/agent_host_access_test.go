@@ -86,9 +86,9 @@ func listWithHost(t *testing.T, host string, extra ...string) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saveTracked(t, st, "1", "mine", "host-a", "", "completed")
-	saveTracked(t, st, "2", "legacy", "", "", "completed")
-	saveTracked(t, st, "3", "theirs", "host-b", "", "completed")
+	saveTracked(t, st, "1", "mine", "host-a", "", "running")
+	saveTracked(t, st, "2", "legacy", "", "", "running")
+	saveTracked(t, st, "3", "theirs", "host-b", "", "running")
 	var out, errOut bytes.Buffer
 	cmd := newAgentCmd()
 	cmd.SetOut(&out)
