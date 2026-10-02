@@ -39,11 +39,11 @@ The rules, as learned on `goto`:
 
 Also considered and rejected: spawning a subshell in the target dir on a TTY (nested shells pile up).
 
-Open question: target doc. Options: extend the bundled `docs/Go.md` "CLI & Releases" section, or a
-new bundled language-neutral `docs/CLI.md` linked from `docs/Go.md`. The rules are not Go-specific.
+Decided (user, 2026-10-02): a new bundled, language-neutral `docs/CLI.md`, linked from `docs/Go.md`.
+The rules are not Go-specific.
 
 ## 3. Implementation & Verification Plan
 
-- Decide the target doc (ask the user if unclear), add the four rules concisely, keep `docs/Go.md`'s
-  token budget in mind.
+- Add `docs/CLI.md` with the four rules concisely, register it as a bundled doc, link it from
+  `docs/Go.md`.
 - Run `harnez init` in one sibling project to check the doc lands as a bundled doc.
