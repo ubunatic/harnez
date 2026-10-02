@@ -53,3 +53,20 @@ unresolved one.
   extra per-session notice was added, to keep `--all --force` quiet as the user asked.
 - Verified: host `make test-q1` green; live `agent delete --name dev688 --force` left no
   rediscovered row in two `agent list --all-sessions` runs.
+
+## 6. M2 (missing Codex sessions count as deleted) — Pre-Work
+- Live finding after M1: 6 Codex sessions stay `delete-failed` and every `delete --all` prints
+  "6 unresolved provider deletion(s) skipped". All have 0 tokens and v4 harnez IDs (e.g.
+  `5f789df2-99ea-4795-8fab-42d9ca1ccc58`); no Codex rollout exists for them, so they never
+  became Codex threads. `codex delete --force <unknown-uuid>` exits 1 with the same
+  "Error: failed to delete session" as a real failure, so the exit code cannot tell them apart.
+- Fix in `CodexDriver.Delete` (`internal/subagent/codex.go`): when no rollout file for the id
+  exists under the Codex sessions dir (`$CODEX_HOME/sessions`, default `~/.codex/sessions`,
+  files `rollout-*-<id>.jsonl`), return nil without calling codex (nothing to delete). Only a
+  failing delete of an existing rollout stays `delete-failed`. Reuse the existing rollout
+  discovery code if it already resolves that dir.
+- Existing records: `delete --retry-failed` must then clear the 6 records; also let
+  `delete --all` retry `delete-failed` records whose rollout is gone instead of skipping them,
+  so the user never needs a second flag for this case.
+- Tests: missing rollout -> nil and codex not started; existing rollout + codex error -> error;
+  existing rollout + success -> nil; CODEX_HOME override honored.
