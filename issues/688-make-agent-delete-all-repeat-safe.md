@@ -40,3 +40,16 @@ unresolved one.
   marked `delete-failed` (with the error) that is hidden from `delete --all` and the default
   list, shown only via an explicit recovery path (`delete --retry-failed`, and a list flag
   such as `--failed`); a successful retry removes it.
+
+## 5. Delivery (2c4d4ec6)
+- Root cause: `agent list` merged Codex rollout discovery without checking the deleted-session
+  archive, so deleted sessions came back as external rows. Archived provider identities are now
+  excluded from discovery.
+- `--force` suppresses the unrated warning on `--name`, `--all` and `--all-completed`.
+- Provider-delete failures persist as `delete-failed` (with the error), hidden from the default
+  list and skipped by `delete --all` (one summary line); `list --failed` and
+  `delete --retry-failed` are the recovery path.
+- Claude/Agy: output prints only the deleted name and never claims provider-side deletion; no
+  extra per-session notice was added, to keep `--all --force` quiet as the user asked.
+- Verified: host `make test-q1` green; live `agent delete --name dev688 --force` left no
+  rediscovered row in two `agent list --all-sessions` runs.
