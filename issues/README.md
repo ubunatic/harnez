@@ -686,6 +686,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 685 | [685-harnez-compact-auto-for-the-calling-session-and-dry-run-stats.md](685-harnez-compact-auto-for-the-calling-session-and-dry-run-stats.md) | harnez compact --auto for the calling session and --dry-run stats | Open |
 | 686 | [686-resolve-unknown-agent-roles-through-the-decider.md](686-resolve-unknown-agent-roles-through-the-decider.md) | Resolve unknown agent roles through the decider | Open |
 | 687 | [687-add-an-interactive-usage-dashboard-mode.md](687-add-an-interactive-usage-dashboard-mode.md) | Add an interactive usage dashboard mode | Done |
-| 688 | [688-make-agent-delete-all-repeat-safe.md](688-make-agent-delete-all-repeat-safe.md) | Make agent delete all repeat-safe | Open — M2: never-started Codex sessions stay delete-failed forever |
+| 688 | [688-make-agent-delete-all-repeat-safe.md](688-make-agent-delete-all-repeat-safe.md) | Make agent delete all repeat-safe | Closed — repeat-safe delete --all; never-started Codex sessions count as deleted (M2 e0ccbadf); live double run silent |
 | 689 | [689-replace-default-usage-boxes-with-a-plain-table.md](689-replace-default-usage-boxes-with-a-plain-table.md) | Replace default usage boxes with a plain table | Done |
 | 690 | [690-usage-table-display-width-and-empty-state.md](690-usage-table-display-width-and-empty-state.md) | Usage table display width and empty state | Open |

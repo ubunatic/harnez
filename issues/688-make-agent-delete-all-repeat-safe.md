@@ -1,6 +1,6 @@
 # 688 — Make agent delete all repeat-safe
 
-**Status**: Open — M2: never-started Codex sessions stay delete-failed forever
+**Status**: Closed — repeat-safe delete --all; never-started Codex sessions count as deleted (M2 e0ccbadf); live double run silent
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
