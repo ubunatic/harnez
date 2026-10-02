@@ -28,3 +28,15 @@ selects the added actions box, `--tui` enables mouse interaction with the live
 UI, configured commands launch correctly, and existing view modes behave
 consistently with and without `--watch`. Stop and report if a command action
 cannot be specified or safely dispatched.
+
+## 4. Decisions (2026-10-02)
+- Actions are spec-defined (`title`, `key`, `args`) and run the current harnez executable with
+  `args`, never a shell. Keys must be unused in `spec/actions.yaml`; the sketch's `[a]` collided
+  with "toggle All Usage", so Agent sessions uses `[s]`.
+- `--dashboard` alone renders once. Action keys work under both `--watch` and `--tui`, because the
+  Actions panel shows them; `--tui` adds mouse clicks and enables mouse reporting only when the
+  view has actions.
+- Ctrl-C while an action runs quits the whole dashboard, not just the action. Changing that needs
+  SIGINT handling around the child; open if it bothers in practice.
+- Known edge: input typed during an action without Enter can dismiss the
+  "[press any key to return]" prompt immediately.

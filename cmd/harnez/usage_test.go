@@ -129,20 +129,21 @@ func TestValidateUsageFlags_CompactWithRawRejected(t *testing.T) {
 
 func TestSelectUsageViewMode(t *testing.T) {
 	for _, tc := range []struct {
-		name                     string
-		normal, compact, minimal bool
-		want                     string
-		wantExplicit             bool
-		wantErr                  bool
+		name                                string
+		normal, compact, minimal, dashboard bool
+		want                                string
+		wantExplicit                        bool
+		wantErr                             bool
 	}{
 		{name: "default", wantExplicit: false},
 		{name: "normal", normal: true, want: "normal", wantExplicit: true},
 		{name: "compact", compact: true, want: "compact", wantExplicit: true},
 		{name: "minimal", minimal: true, want: "minimal", wantExplicit: true},
+		{name: "dashboard", dashboard: true, want: "dashboard", wantExplicit: true},
 		{name: "conflicting", normal: true, compact: true, wantExplicit: true, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, explicit, err := selectUsageViewMode(tc.normal, tc.compact, tc.minimal)
+			got, explicit, err := selectUsageViewMode(tc.normal, tc.compact, tc.minimal, tc.dashboard)
 			if (err != nil) != tc.wantErr || got != tc.want || explicit != tc.wantExplicit {
 				t.Fatalf("selectUsageViewMode() = (%q, %t, %v), want (%q, %t, err=%t)", got, explicit, err, tc.want, tc.wantExplicit, tc.wantErr)
 			}

@@ -136,7 +136,13 @@ Legacy files are archived under `~/.local/share/harnez/archive/usage-legacy/`, n
 ## Usage view modes (2026-10-02)
 
 `spec/usage.yaml` is the source of truth for the usage presentation modes. It defines the `normal`,
-`compact`, and `minimal` panel sets and display details, plus the default (`normal`). The JSON
+`compact`, `minimal`, and `dashboard` panel sets and display details, plus the default (`normal`).
+
+The `dashboard` mode (issue 687) adds an `actions` panel whose buttons the spec defines as `title`,
+`key`, and `args`. An action runs the current harnez executable with `args`, never a shell. Its key
+must be one printable ASCII character not already bound in `spec/actions.yaml`. Without `--watch`
+or `--tui` the dashboard renders once. Under `--watch` an action's key runs it; `--tui` is `--watch`
+plus mouse clicks, and only enables mouse reporting when the view has actions. The JSON
 Schema and Go loader validate that contract; renderer code should consume the loaded mode instead
 of maintaining parallel hardcoded mode defaults.
 

@@ -1058,6 +1058,7 @@ func TestUsageViewModesKeepOneShotAndWatchPanelDetailInSync(t *testing.T) {
 		{name: "normal", mode: "normal"},
 		{name: "compact", mode: "compact"},
 		{name: "minimal", mode: "minimal"},
+		{name: "dashboard", mode: "dashboard"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opt := WatchOptions{Mode: tc.mode, HistoryStats: &HistorySummaryData{}}
@@ -1105,7 +1106,7 @@ func TestUsageViewModesKeepOneShotAndWatchPanelDetailInSync(t *testing.T) {
 }
 
 func TestWatchRedrawInheritsUsageViewMode(t *testing.T) {
-	for _, mode := range []string{"", "normal", "compact", "minimal"} {
+	for _, mode := range []string{"", "normal", "compact", "minimal", "dashboard"} {
 		t.Run(mode, func(t *testing.T) {
 			base := WatchOptions{Mode: mode, Compact: mode == "compact", Minimal: mode == "minimal"}
 			redraw := inheritUsageView(base, WatchOptions{Loading: true})

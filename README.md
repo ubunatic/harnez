@@ -309,6 +309,8 @@ records the measured input-token effect.
 - `--agent <name>` — filter to a specific agent (`claude`, `agy`, `codex`)
 - `--offline` — disable live network queries and use local caches only
 - `-w, --watch` — live-refresh the dashboard in place with a tokens/min velocity trend
+- `--dashboard` — show the view with an Actions panel; under `--watch`/`--tui` its keys run the actions
+- `--tui` — like `--watch`, plus mouse clicks on dashboard actions
 - `-s, --summary` — print the compact dashboard once and exit
 - `--interval <duration>` — refresh interval for `--watch` (default `15s`, minimum `10s`)
 

@@ -187,7 +187,7 @@ func validateUsageModeFlags(explicitMode, usageRaw, usageJSON, usageLoom bool) e
 	return nil
 }
 
-func selectUsageViewMode(normal, compact, minimal bool) (string, bool, error) {
+func selectUsageViewMode(normal, compact, minimal, dashboard bool) (string, bool, error) {
 	selected := 0
 	mode := ""
 	if normal {
@@ -202,8 +202,12 @@ func selectUsageViewMode(normal, compact, minimal bool) (string, bool, error) {
 		selected++
 		mode = "minimal"
 	}
+	if dashboard {
+		selected++
+		mode = "dashboard"
+	}
 	if selected > 1 {
-		return "", true, fmt.Errorf("--normal, --compact, and --minimal are mutually exclusive")
+		return "", true, fmt.Errorf("--normal, --compact, --minimal, and --dashboard are mutually exclusive")
 	}
 	return mode, selected == 1, nil
 }
@@ -238,6 +242,8 @@ func newRootCmd() *cobra.Command {
 	var usageAgent string
 	var usageOffline bool
 	var usageWatch bool
+	var usageDashboard bool
+	var usageTUI bool
 	var usageSplash bool
 	var usageRaw bool
 	var usageProcesses bool
@@ -261,7 +267,7 @@ func newRootCmd() *cobra.Command {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 
-			selectedMode, explicitMode, err := selectUsageViewMode(usageNormal, usageCompact, usageMinimal)
+			selectedMode, explicitMode, err := selectUsageViewMode(usageNormal, usageCompact, usageMinimal, usageDashboard)
 			if err != nil {
 				return err
 			}
@@ -275,7 +281,7 @@ func newRootCmd() *cobra.Command {
 				}
 			}
 			usageCompactMode := selectedMode == "compact" || selectedMode == "minimal"
-			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, explicitMode && usageCompactMode, usageLoom, usageSplash); err != nil {
+			if err := validateUsageFlags(usageWatch || usageTUI, usageRaw, usageJSON, explicitMode && usageCompactMode, usageLoom, usageSplash); err != nil {
 				return err
 			}
 			if usageShared && usageHost != "" {
@@ -334,7 +340,7 @@ func newRootCmd() *cobra.Command {
 				return usage.RunLoom(ctx, "", client, cmd.OutOrStdout(), usageInterval, loadOpt)
 			}
 
-			if usageWatch {
+			if usageWatch || usageTUI {
 				// RemoteLoadSnapshot is intentionally left nil here:
 				// RunWatchWithOptions owns fetching it itself (streaming
 				// when possible, batch-polling fallback otherwise — issue
@@ -352,6 +358,7 @@ func newRootCmd() *cobra.Command {
 					ShowProcesses:        usageProcesses,
 					ShowMic:              usageMic,
 					Splash:               usageSplash,
+					Mouse:                usageTUI,
 					RemoteLoadHost:       loadWatchHost,
 				})
 			}
@@ -470,6 +477,8 @@ func newRootCmd() *cobra.Command {
 	usageCmd.Flags().StringVar(&usageHost, "host", "", "query usage from a remote host via SSH")
 	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
 	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the dashboard in place with a tokens/min trend")
+	usageCmd.Flags().BoolVar(&usageDashboard, "dashboard", false, "show the dashboard view with its Actions panel; actions run under --watch or --tui")
+	usageCmd.Flags().BoolVar(&usageTUI, "tui", false, "like --watch, plus mouse clicks on dashboard actions")
 	usageCmd.Flags().BoolVar(&usageSplash, "splash", false, "render startup splash screen while initial collection is in flight (--watch only)")
 	usageCmd.Flags().BoolVar(&usageNormal, "normal", false, "show the normal detail view")
 	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "show the compact all-usage and load panels")
