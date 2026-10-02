@@ -41,18 +41,16 @@ func TestResolveUsageHost_EmptyLocalDefault(t *testing.T) {
 	}
 }
 
-// TestValidateUsageFlags_NoFlagsOK: a bare `harnez usage` (the compact
-// one-shot dashboard, formerly gated behind a since-removed --summary flag)
-// must not be rejected.
+// TestValidateUsageFlags_NoFlagsOK: a bare `harnez usage` uses the spec's
+// declared default view and must not be rejected.
 func TestValidateUsageFlags_NoFlagsOK(t *testing.T) {
 	if err := validateUsageFlags(false, false, false, false, false, false); err != nil {
 		t.Fatalf("expected no flags to be valid, got error: %v", err)
 	}
 }
 
-// TestValidateUsageFlags_CompactAloneOK: `--compact` alone selects the
-// reduced panel set on the now-default compact dashboard; it is not an error
-// on its own the way it used to require --watch or --summary.
+// TestValidateUsageFlags_CompactAloneOK: `--compact` selects the reduced
+// panel set without requiring --watch.
 func TestValidateUsageFlags_CompactAloneOK(t *testing.T) {
 	if err := validateUsageFlags(false, false, false, true, false, false); err != nil {
 		t.Fatalf("--compact alone should be allowed, got error: %v", err)
@@ -66,7 +64,7 @@ func TestValidateUsageFlags_CompactAllowedWithWatch(t *testing.T) {
 }
 
 func TestValidateUsageFlags_MinimalAllowedWithWatch(t *testing.T) {
-	if err := validateUsageMinimalFlags(true, false, false); err != nil {
+	if err := validateUsageModeFlags(true, false, false, false); err != nil {
 		t.Fatalf("--minimal --watch should be allowed, got error: %v", err)
 	}
 	if err := validateUsageFlags(true, false, false, true, false, false); err != nil {
@@ -74,18 +72,20 @@ func TestValidateUsageFlags_MinimalAllowedWithWatch(t *testing.T) {
 	}
 }
 
-func TestValidateUsageFlags_MinimalWithJSONOrLoomRejected(t *testing.T) {
+func TestValidateUsageModeFlagsWithNonDashboardOutputRejected(t *testing.T) {
 	for _, tc := range []struct {
 		name string
+		raw  bool
 		json bool
 		loom bool
 	}{
+		{name: "raw", raw: true},
 		{name: "json", json: true},
 		{name: "loom", loom: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := validateUsageMinimalFlags(true, tc.json, tc.loom); err == nil {
-				t.Fatalf("--minimal with --%s should be rejected", tc.name)
+			if err := validateUsageModeFlags(true, tc.raw, tc.json, tc.loom); err == nil {
+				t.Fatalf("explicit usage mode with --%s should be rejected", tc.name)
 			}
 		})
 	}
@@ -124,6 +124,29 @@ func TestValidateUsageFlags_RawAndJSONRejected(t *testing.T) {
 func TestValidateUsageFlags_CompactWithRawRejected(t *testing.T) {
 	if err := validateUsageFlags(false, true, false, true, false, false); err == nil {
 		t.Fatalf("expected --compact and --raw together to be rejected (--raw has no panel concept)")
+	}
+}
+
+func TestSelectUsageViewMode(t *testing.T) {
+	for _, tc := range []struct {
+		name                     string
+		normal, compact, minimal bool
+		want                     string
+		wantExplicit             bool
+		wantErr                  bool
+	}{
+		{name: "default", wantExplicit: false},
+		{name: "normal", normal: true, want: "normal", wantExplicit: true},
+		{name: "compact", compact: true, want: "compact", wantExplicit: true},
+		{name: "minimal", minimal: true, want: "minimal", wantExplicit: true},
+		{name: "conflicting", normal: true, compact: true, wantExplicit: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, explicit, err := selectUsageViewMode(tc.normal, tc.compact, tc.minimal)
+			if (err != nil) != tc.wantErr || got != tc.want || explicit != tc.wantExplicit {
+				t.Fatalf("selectUsageViewMode() = (%q, %t, %v), want (%q, %t, err=%t)", got, explicit, err, tc.want, tc.wantExplicit, tc.wantErr)
+			}
+		})
 	}
 }
 
@@ -170,6 +193,12 @@ func TestUsageProjectFlag_CobraRegistered(t *testing.T) {
 				}
 				if c.Flags().Lookup("minimal") == nil {
 					t.Errorf("missing --minimal flag on usage command")
+				}
+				if c.Flags().Lookup("normal") == nil {
+					t.Errorf("missing --normal flag on usage command")
+				}
+				if c.Flags().Lookup("compact") == nil {
+					t.Errorf("missing --compact flag on usage command")
 				}
 			}
 			if c.Name() == "assess" {

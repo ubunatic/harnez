@@ -405,14 +405,11 @@ type watchSections struct {
 }
 
 func defaultWatchSections() watchSections {
-	// Mic starts off like Processes (issue 244): a small opt-in status box
-	// rather than a permanent panel, per issue 085's "keep it minimal by
-	// default" precedent for this kind of box.
-	return watchSections{Claude: true, AGY: true, Codex: true, History: true, Processes: false, Load: true, Mic: false, Tokens: true, RemoteLoad: true}
+	return initialWatchSections(WatchOptions{Mode: "normal"})
 }
 
 func compactWatchSections() watchSections {
-	return watchSections{AllUsage: true, Load: true, Tokens: true, RemoteLoad: true}
+	return initialWatchSections(WatchOptions{Mode: "compact"})
 }
 
 // agentsOnlyWatchSections shows only the discovered per-agent boxes plus
@@ -1519,13 +1516,13 @@ func staleLabel(name string) string {
 // sparkline (when showTokens is set). The panel's own toggle key is embedded
 // in its title, btop-style, instead of a separate legend. Deliberately terse
 // compared to the full `harnez usage` report.
-func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, live, debugOverlay bool) wbox {
-	return buildAgentBoxAt(agent, rate, width, showTokens, live, debugOverlay, time.Now(), DefaultWatchInterval)
+func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, debugOverlay bool) wbox {
+	return buildAgentBoxAt(agent, rate, width, showTokens, debugOverlay, time.Now(), DefaultWatchInterval)
 }
 
 // buildAgentBoxAt is buildAgentBox with the redraw timestamp supplied by the
 // caller, keeping all freshness gauges in a watch frame consistent.
-func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, live, debugOverlay bool, now time.Time, refreshInterval time.Duration) wbox {
+func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, debugOverlay bool, now time.Time, refreshInterval time.Duration) wbox {
 	title := fmt.Sprintf("%s %s", watchBoxSymbol(agent.AgentID), collectorStatusLabel(agent, agent.Name))
 
 	if !agent.Installed {
@@ -1624,17 +1621,12 @@ func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, li
 	}
 
 	if showTokens && agent.Tokens != nil {
-		if live {
-			spark := rate.Spark
-			if spark == "" {
-				spark = "warming up"
-			}
-			lines = append(lines, fmt.Sprintf("%s[T]\x1b[0m tok: %s total · %.0f/min [%s]",
-				ansiBold, FormatNumber(agent.Tokens.TotalTokens), rate.PerMinute, spark))
-		} else {
-			lines = append(lines, fmt.Sprintf("%s[T]\x1b[0m tok: %s total",
-				ansiBold, FormatNumber(agent.Tokens.TotalTokens)))
+		spark := rate.Spark
+		if spark == "" {
+			spark = "warming up"
 		}
+		lines = append(lines, fmt.Sprintf("%s[T]\x1b[0m tok: %s total · %.0f/min [%s]",
+			ansiBold, FormatNumber(agent.Tokens.TotalTokens), rate.PerMinute, spark))
 	}
 
 	if !agent.LastRefreshed.IsZero() {
@@ -1778,9 +1770,11 @@ type WatchOptions struct {
 	// usage controller. Nil preserves the legacy collector path.
 	SharedUsageCollector func(context.Context) UsageSummary
 	ProcCounts           *AgentProcessCount
-	Compact              bool
-	// Minimal removes the dashboard title/status rows and hidden-panel hints
-	// while keeping the compact panel preset.
+	// Mode selects one of the spec-defined usage views. Empty uses the spec default.
+	Mode    string
+	Compact bool
+	// Minimal is retained for compatibility with direct WatchOptions callers;
+	// CLI callers select the same mode through Mode.
 	Minimal       bool
 	ShowProcesses bool
 	// Splash enables the startup splash screen during initial collection in --watch (issue 664).
@@ -1831,6 +1825,18 @@ type WatchOptions struct {
 	DebugOverlay bool
 }
 
+func compactUsageView(opts WatchOptions) bool {
+	mode := usageViewModeName(opts.Mode, opts.Compact, opts.Minimal)
+	return mode == "compact" || mode == "minimal"
+}
+
+func inheritUsageView(base, frame WatchOptions) WatchOptions {
+	frame.Mode = base.Mode
+	frame.Compact = base.Compact
+	frame.Minimal = base.Minimal
+	return frame
+}
+
 // controlsOverlayLines renders the full in-TUI Controls reference for
 // `harnez usage --watch` (issue 094): every active keyboard command, grouped
 // by purpose, so users don't have to reverse-engineer hidden box-title
@@ -1873,11 +1879,30 @@ func controlsOverlayLines() []string {
 }
 
 func initialWatchSections(opts WatchOptions) watchSections {
+	mode := usageViewMode(opts.Mode, opts.Compact, opts.Minimal)
 	var sec watchSections
-	if opts.Compact || opts.Minimal {
-		sec = compactWatchSections()
-	} else {
-		sec = defaultWatchSections()
+	sec.Tokens = mode.tokenDetails()
+	for _, panel := range mode.Panels {
+		switch panel {
+		case "all_usage":
+			sec.AllUsage = true
+		case "claude":
+			sec.Claude = true
+		case "agy":
+			sec.AGY = true
+		case "codex":
+			sec.Codex = true
+		case "history":
+			sec.History = true
+		case "processes":
+			sec.Processes = true
+		case "load":
+			sec.Load = true
+		case "mic":
+			sec.Mic = true
+		case "remote_load":
+			sec.RemoteLoad = true
+		}
 	}
 	// --proc is an explicit request for the Processes panel and must win
 	// regardless of --compact: without this, "--watch --compact --proc"
@@ -1974,6 +1999,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	if len(opts) > 0 {
 		opt = opts[0]
 	}
+	mode := usageViewMode(opt.Mode, opt.Compact, opt.Minimal)
 	// A frame's freshness gauges all use this redraw time. draw() builds a new
 	// frame every second, so the values are recalculated without a usage fetch.
 
@@ -2071,7 +2097,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		hiddenCount++
 	}
 	hiddenHint := ""
-	if hiddenCount > 0 && !opt.Minimal {
+	if hiddenCount > 0 && mode.hiddenList() {
 		hiddenHint = fmt.Sprintf("   %s%d hidden (press ? for controls)\x1b[0m", ansiDimGrey, hiddenCount)
 	}
 
@@ -2081,7 +2107,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	}
 
 	var header []string
-	if !opt.Minimal {
+	if mode.titleBar() {
 		header = []string{
 			fmt.Sprintf("%s%s\x1b[0m  %s%s%s",
 				ansiBold, titlePrefix, summary.Timestamp.Format("15:04:05 MST"), historyStatStr, hiddenHint),
@@ -2089,7 +2115,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		}
 	}
 	var footer []string
-	if live && !opt.Minimal {
+	if live && usageStatusFooterFits(rows, opt) {
 		wa := mustWatchActions()
 		footer = []string{
 			"",
@@ -2174,7 +2200,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	for _, agent := range visible {
 		agent := agent
 		panels = append(panels, panel{agentKey(agent.AgentID), func(w int) wbox {
-			return buildAgentBoxAt(agent, rates[agent.AgentID], w, sec.Tokens, live, opt.DebugOverlay, now, interval)
+			return buildAgentBoxAt(agent, rates[agent.AgentID], w, sec.Tokens, opt.DebugOverlay, now, interval)
 		}})
 	}
 	if sec.History {
@@ -2200,7 +2226,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 
 	if len(panels) == 0 {
 		message := "(all panels hidden)"
-		if opt.Minimal {
+		if !mode.titleBar() && !mode.hiddenList() && !mode.overflowHint() {
 			message = "(no visible panels)"
 		}
 		body = append(body, ansiDimGrey+message+"\x1b[0m")
@@ -2260,7 +2286,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		}
 	}
 
-	if dropped > 0 && !opt.Minimal {
+	if dropped > 0 && mode.overflowHint() {
 		note := fmt.Sprintf("%s… %s hidden — terminal too short\x1b[0m", ansiDimGrey, strings.Join(droppedKeys, " "))
 		if len(body) < budget {
 			body = append(body, note)
@@ -2273,15 +2299,12 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	return fit(lines, usable, rows)
 }
 
-// RenderSummary prints one static frame of the same compact, btop-style grid
-// used by `--watch`, then returns — no alternate screen, no polling loop, no
-// keyboard handling. It exists for `harnez usage --summary`: same at-a-glance
-// layout as `--watch`, but a plain one-shot print for scripting or a quick
-// glance, versus the full `harnez usage` report's per-window detail.
+// RenderSummary prints one static frame of the spec-selected btop-style grid
+// used by `--watch`, then returns — no alternate screen, polling loop, or
+// keyboard handling.
 //
-// opts is optional; when given, its Compact field selects the same reduced
-// panel set --watch --compact uses (issue 102), and ShowProcesses forces the
-// Processes panel on regardless of Compact, matching initialWatchSections.
+// opts selects the same view as --watch. The static frame reserves the
+// watch status-bar rows so constrained terminals show the same panel detail.
 func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out io.Writer, showProcesses bool, opts ...WatchOptions) {
 	opt := firstOpt(opts)
 	var summary UsageSummary
@@ -2292,6 +2315,7 @@ func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out
 	}
 	cols, rows := terminalSize(out)
 	opt.ShowProcesses = opt.ShowProcesses || showProcesses
+	rows = staticUsageViewRows(rows, opt)
 	sec := initialWatchSections(opt)
 	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, homeDir, "", opt)
 	for _, l := range frame.lines {
@@ -2299,37 +2323,55 @@ func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out
 	}
 }
 
-// RenderSummaryWithUsage renders the normal one-shot dashboard from an
-// already-collected summary, allowing compact callers to query the store first.
+// RenderSummaryWithUsage renders one static frame from an already-collected
+// summary, allowing compact callers to query the store first.
 func RenderSummaryWithUsage(summary UsageSummary, out io.Writer, showProcesses bool, opts ...WatchOptions) {
 	opt := firstOpt(opts)
 	cols, rows := terminalSize(out)
+	renderSummaryWithUsageAt(summary, out, showProcesses, opt, cols, rows)
+}
+
+func renderSummaryWithUsageAt(summary UsageSummary, out io.Writer, showProcesses bool, opt WatchOptions, cols, rows int) {
 	opt.ShowProcesses = opt.ShowProcesses || showProcesses
-	if opt.Compact {
-		// A one-shot compact summary is report output, not a watch redraw:
-		// preserve every quota row even when the caller's terminal viewport is
-		// shorter than the dashboard. The live watch path keeps its strict cap.
-		sec := initialWatchSections(opt)
-		if sec.AllUsage {
-			box := buildAllUsageBoxAt(summary, cols-safetyMargin-4, opt.DebugOverlay, time.Now(), DefaultWatchInterval)
-			needed := len(box.lines) + 6 // title/borders plus header and load panel
-			if rows < needed {
-				rows = needed
-			}
-		}
-	}
+	rows = staticUsageViewRows(rows, opt)
 	frame := buildWatchFrame(summary, nil, 0, initialWatchSections(opt), cols, rows, false, "", "", opt)
 	for _, line := range frame.lines {
 		fmt.Fprintln(out, line+"\x1b[0m")
 	}
 }
 
-// RenderSummaryRemote prints one static frame of the compact grid using remote host collection.
+func staticUsageViewRows(rows int, opts WatchOptions) int {
+	if usageStatusFooterFits(rows, opts) {
+		rows -= 2 // the interactive footer is two rows: a blank and the controls line.
+	}
+	if rows < 1 {
+		return 1
+	}
+	return rows
+}
+
+// usageStatusFooterFits leaves room for the header, at least one body line,
+// and the two-line interactive footer. Static rendering reserves those same
+// rows so one-shot and watch retain identical panel and overflow detail.
+func usageStatusFooterFits(rows int, opts WatchOptions) bool {
+	mode := usageViewMode(opts.Mode, opts.Compact, opts.Minimal)
+	if !mode.statusBar() {
+		return false
+	}
+	headerRows := 0
+	if mode.titleBar() {
+		headerRows = 2
+	}
+	return rows >= headerRows+3
+}
+
+// RenderSummaryRemote prints one static frame of the spec-selected grid using remote host collection.
 func RenderSummaryRemote(ctx context.Context, host string, out io.Writer, showProcesses bool, opts ...WatchOptions) {
 	opt := firstOpt(opts)
 	opt.ShowProcesses = opt.ShowProcesses || showProcesses
 	summary, procs, _ := CollectRemote(ctx, host, opt.ShowProcesses)
 	cols, rows := terminalSize(out)
+	rows = staticUsageViewRows(rows, opt)
 	opt.Host = host
 	opt.ProcCounts = procs
 	sec := initialWatchSections(opt)
@@ -2847,7 +2889,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	diagnosticsOffset := 0
 	presetIdx := 0
 	debugOverlay := false
-	if opts.Compact {
+	if compactUsageView(opts) {
 		presetIdx = 1
 	}
 
@@ -3104,7 +3146,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		}
 
 		cols, rows := terminalSize(out)
-		frame := buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir, WatchOptions{
+		frameOpts := inheritUsageView(opts, WatchOptions{
 			Host:                currentHost,
 			HistoryStats:        &historyStats,
 			Loading:             loading,
@@ -3120,6 +3162,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			MicLiveLevel:        micLive.Level,
 			MicLiveAvailable:    micLive.Available,
 		})
+		frame := buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir, frameOpts)
 		err := frame.paint(out)
 		throttler.MarkDrawn(time.Now())
 		return err
@@ -3192,7 +3235,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				} else {
 					result.summary = CollectAllProgressDetailed(sigCtx, homeDir, client, reportFetchStage, reportFetchDiagnostic)
 				}
-				if sigCtx.Err() == nil && opts.Compact {
+				if sigCtx.Err() == nil && compactUsageView(opts) {
 					result.summary, _ = StoreCompactSummary(sigCtx, homeDir, result.summary)
 				}
 				if sigCtx.Err() == nil && historyDir != "" {

@@ -1,12 +1,30 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Harnez usage collection settings",
+  "title": "Harnez usage settings and view modes",
   "type": "object",
-  "required": ["agy_meter_max_age", "collector_cadence", "collector_timeout", "passive_dedupe_interval", "statusline_busy_timeout", "watch_loading_label"],
+  "required": ["agy_meter_max_age", "collector_cadence", "collector_timeout", "passive_dedupe_interval", "statusline_busy_timeout", "watch_loading_label", "view_modes"],
   "properties": {
     "watch_loading_label": {
       "type": "string",
       "minLength": 1
+    },
+    "view_modes": {
+      "type": "object",
+      "required": ["default", "modes"],
+      "properties": {
+        "default": { "type": "string", "enum": ["normal", "compact", "minimal"], "default": "normal" },
+        "modes": {
+          "type": "object",
+          "required": ["normal", "compact", "minimal"],
+          "properties": {
+            "normal": { "$ref": "#/definitions/viewMode" },
+            "compact": { "$ref": "#/definitions/viewMode" },
+            "minimal": { "$ref": "#/definitions/viewMode" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "agy_meter_max_age": {
       "type": "string",
@@ -27,6 +45,26 @@
     "statusline_busy_timeout": {
       "type": "string",
       "pattern": "^[1-9][0-9]*(ns|us|µs|ms|s|m|h)$"
+    }
+  },
+  "definitions": {
+    "viewMode": {
+      "type": "object",
+      "required": ["panels", "token_details", "title_bar", "status_bar", "hidden_list", "overflow_hint"],
+      "properties": {
+        "panels": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["all_usage", "claude", "agy", "codex", "history", "processes", "load", "mic", "remote_load"] }
+        },
+        "token_details": { "type": "boolean" },
+        "title_bar": { "type": "boolean" },
+        "status_bar": { "type": "boolean" },
+        "hidden_list": { "type": "boolean" },
+        "overflow_hint": { "type": "boolean" }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

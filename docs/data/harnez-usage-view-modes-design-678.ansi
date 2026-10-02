@@ -1,0 +1,20 @@
+NORMAL — default spec mode (one-shot and --watch)
+┌─ Claude Code ──────────┐ ┌─ Gemini ───────────────┐ ┌─ Load ───────────────┐
+│ Weekly     [[31m████░[0m] 85% │ │ Weekly     [[33m███░░[0m] 71% │ │ cpu (12 cores)  12%  │
+│ Session    [█░░░░]  9% │ │ Session    [█░░░░] 11% │ │ ram (23G)       47%  │
+└────────────────────────┘ └────────────────────────┘ └─────────────────────┘
+┌─ History ──────────────┐
+│ 12 files (18.4 KiB)    │
+└────────────────────────┘
+
+COMPACT — one-shot and --watch use the same two panels
+Agentic [1musage[0m  15:04:05 UTC   history: 12 files (18.4 KiB)   5 hidden
+┌─ ¹ All Usage ───────────────────────────┐ ┌─ ⁷ Load ───────────────────┐
+│ Claude Code  [████░] 85% 8h   [░░░░] 9% │ │ cpu (12 cores)  12%        │
+└─────────────────────────────────────────┘ └────────────────────────────┘
+refresh every 60s   [?]controls  [m]ode  [r]emote  [q]uit
+
+MINIMAL — one-shot and --watch keep the panels, with no title/status/hints
+┌─ ¹ All Usage ───────────────────────────┐ ┌─ ⁷ Load ───────────────────┐
+│ Claude Code  [████░] 85% 8h   [░░░░] 9% │ │ cpu (12 cores)  12%        │
+└─────────────────────────────────────────┘ └────────────────────────────┘

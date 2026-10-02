@@ -219,7 +219,7 @@ func TestBuildAgentBoxBarFitsContentW(t *testing.T) {
 	durationThreshold := 33
 
 	for boxWidth := minBoxWidth; boxWidth <= 80; boxWidth++ {
-		box := buildAgentBox(agent, agentRate{}, boxWidth, false, false, false)
+		box := buildAgentBox(agent, agentRate{}, boxWidth, false, false)
 		contentW := boxWidth - 4
 
 		for _, l := range box.lines {
@@ -570,7 +570,7 @@ func TestCollectorStatusMarkerFitsNarrowAgentBox(t *testing.T) {
 		AgentID: "codex", Name: "OpenAI Codex", Installed: true,
 		QuotaFetchError: "no session found",
 	}
-	box := buildAgentBox(agent, agentRate{}, minBoxWidth, false, false, false)
+	box := buildAgentBox(agent, agentRate{}, minBoxWidth, false, false)
 	for _, line := range box.lines {
 		if got := visLen(line); got > box.width-4 {
 			t.Fatalf("line width %d exceeds content width %d: %q", got, box.width-4, stripANSI(line))
@@ -1038,6 +1038,84 @@ func TestBuildWatchFrame_MinimalOmitsChromeAndUsesCompactPanels(t *testing.T) {
 	}
 	if !strings.HasPrefix(strings.TrimSpace(frameText), "┌─") {
 		t.Errorf("minimal frame should start with the compact panel row, got:\n%s", frameText)
+	}
+}
+
+func TestUsageViewModesKeepOneShotAndWatchPanelDetailInSync(t *testing.T) {
+	tempDir := t.TempDir()
+	summary := UsageSummary{
+		Timestamp: testTime,
+		Load:      &LoadSnapshot{},
+		Agents: []AgentUsage{{
+			AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
+			Weekly:  &QuotaWindow{Name: "Weekly", UsedPercent: 85, DurationLeft: 8 * time.Hour},
+			Session: &QuotaWindow{Name: "Session", UsedPercent: 9, DurationLeft: 4 * time.Hour},
+			Tokens:  &TokenBreakdown{TotalTokens: 1234},
+		}},
+	}
+	for _, tc := range []struct{ name, mode string }{
+		{name: "default"},
+		{name: "normal", mode: "normal"},
+		{name: "compact", mode: "compact"},
+		{name: "minimal", mode: "minimal"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opt := WatchOptions{Mode: tc.mode, HistoryStats: &HistorySummaryData{}}
+			sections := initialWatchSections(opt)
+			oneShot := buildWatchFrame(summary, nil, time.Minute, sections, 120, 50, false, tempDir, tempDir, opt)
+			watch := buildWatchFrame(summary, nil, time.Minute, sections, 120, 50, true, tempDir, tempDir, opt)
+			panelTitles := func(frame screenFrame) string {
+				var titles []string
+				for _, line := range frame.lines {
+					if stripped := stripANSI(line); strings.Contains(stripped, "┌─") {
+						titles = append(titles, stripped)
+					}
+				}
+				return strings.Join(titles, "\n")
+			}
+			if panelTitles(oneShot) != panelTitles(watch) {
+				t.Fatalf("one-shot and watch panel detail differs\none-shot:\n%s\nwatch:\n%s", panelTitles(oneShot), panelTitles(watch))
+			}
+			oneShotText := stripANSI(strings.Join(oneShot.lines, "\n"))
+			watchText := stripANSI(strings.Join(watch.lines, "\n"))
+			withoutStatus := func(text string) string {
+				var lines []string
+				for _, line := range strings.Split(text, "\n") {
+					if strings.HasPrefix(strings.TrimSpace(line), "refresh every") {
+						continue
+					}
+					lines = append(lines, line)
+				}
+				return strings.TrimSpace(strings.Join(lines, "\n"))
+			}
+			if withoutStatus(oneShotText) != withoutStatus(watchText) {
+				t.Fatalf("one-shot and watch view content differs\none-shot:\n%s\nwatch:\n%s", withoutStatus(oneShotText), withoutStatus(watchText))
+			}
+			if tc.name == "minimal" {
+				for _, text := range []string{oneShotText, watchText} {
+					if strings.Contains(text, "Agentic usage") || strings.Contains(text, "refresh every") || strings.Contains(text, "hidden") {
+						t.Fatalf("minimal mode contains chrome or hidden-panel text:\n%s", text)
+					}
+				}
+			} else if !strings.Contains(oneShotText, "Agentic usage") || !strings.Contains(watchText, "Agentic usage") || !strings.Contains(watchText, "refresh every") {
+				t.Fatalf("%s mode should keep its title in both paths and watch status in watch only", tc.name)
+			}
+		})
+	}
+}
+
+func TestWatchRedrawInheritsUsageViewMode(t *testing.T) {
+	for _, mode := range []string{"", "normal", "compact", "minimal"} {
+		t.Run(mode, func(t *testing.T) {
+			base := WatchOptions{Mode: mode, Compact: mode == "compact", Minimal: mode == "minimal"}
+			redraw := inheritUsageView(base, WatchOptions{Loading: true})
+			if redraw.Mode != base.Mode || redraw.Compact != base.Compact || redraw.Minimal != base.Minimal || !redraw.Loading {
+				t.Fatalf("redraw options lost the selected usage view: base=%+v redraw=%+v", base, redraw)
+			}
+			if initialWatchSections(base) != initialWatchSections(redraw) {
+				t.Fatalf("watch redraw changed panel selection: base=%+v redraw=%+v", initialWatchSections(base), initialWatchSections(redraw))
+			}
+		})
 	}
 }
 
@@ -2626,11 +2704,8 @@ func TestSplashStatusDrained(t *testing.T) {
 	}
 }
 
-// TestRenderSummary_CompactSelectsReducedSections is issue 102's acceptance
-// criterion: `harnez usage --summary --compact` must render the same reduced
-// panel set as `--watch --compact` (compactWatchSections), not just be
-// accepted by the flag guard. RenderSummary previously had no way to reach
-// compactWatchSections() at all, regardless of what the CLI guard allowed.
+// TestRenderSummary_CompactSelectsReducedSections ensures the one-shot CLI
+// renders the same reduced panel set as `--watch --compact`.
 func TestRenderSummary_CompactSelectsReducedSections(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
@@ -2639,32 +2714,51 @@ func TestRenderSummary_CompactSelectsReducedSections(t *testing.T) {
 	RenderSummary(ctx, home, nil, &full, false)
 	fullText := stripANSI(full.String())
 	if !strings.Contains(fullText, "⁵ History") {
-		t.Fatalf("expected default --summary output to include the History box (defaultWatchSections), got:\n%s", fullText)
+		t.Fatalf("expected default usage output to include the History box (spec normal mode), got:\n%s", fullText)
 	}
 
 	var compact bytes.Buffer
-	RenderSummary(ctx, home, nil, &compact, false, WatchOptions{Compact: true})
+	RenderSummary(ctx, home, nil, &compact, false, WatchOptions{Mode: "compact"})
 	compactText := stripANSI(compact.String())
 	if strings.Contains(compactText, "⁵ History") {
-		t.Fatalf("expected --summary --compact to drop the History box (compactWatchSections has no History), got:\n%s", compactText)
+		t.Fatalf("expected --compact to drop the History box, got:\n%s", compactText)
 	}
 	if !strings.Contains(compactText, "⁷ Load") {
-		t.Fatalf("expected --summary --compact to keep the Load box, got:\n%s", compactText)
+		t.Fatalf("expected --compact to keep the Load box, got:\n%s", compactText)
 	}
 }
 
-func TestRenderSummaryWithUsageCompactPreservesProviderRowsBeyondViewport(t *testing.T) {
-	summary := UsageSummary{Timestamp: testTime, Agents: []AgentUsage{
+func TestRenderSummaryWithUsageMatchesWatchAtConstrainedHeight(t *testing.T) {
+	summary := UsageSummary{Timestamp: testTime, Load: &LoadSnapshot{}, Agents: []AgentUsage{
 		{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true, ModelGroups: []ModelGroup{{Name: "Claude Code", Windows: []QuotaWindow{{Name: "5-hour", UsedPercent: 12}, {Name: "Weekly", UsedPercent: 34}}}}},
 		{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true, ModelGroups: []ModelGroup{{Name: "OpenAI Codex", Windows: []QuotaWindow{{Name: "5-hour", UsedPercent: 23}, {Name: "Weekly", UsedPercent: 45}}}}},
 		{AgentID: "agy", Name: "AGY", Installed: true, Authenticated: true, ModelGroups: []ModelGroup{{Name: "Gemini", Windows: []QuotaWindow{{Name: "5-hour", UsedPercent: 56}, {Name: "Weekly", UsedPercent: 67}}}}},
 	}}
-	var out bytes.Buffer
-	RenderSummaryWithUsage(summary, &out, false, WatchOptions{Compact: true})
-	got := stripANSI(out.String())
-	for _, label := range []string{"Claude Code", "OpenAI Codex", "Gemini", "12%", "23%", "56%"} {
-		if !strings.Contains(got, label) {
-			t.Errorf("compact output missing %q:\n%s", label, got)
+	opt := WatchOptions{Mode: "compact", HistoryStats: &HistorySummaryData{}}
+	normalize := func(text string) string {
+		var lines []string
+		for _, line := range strings.Split(stripANSI(text), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "refresh every") {
+				continue
+			}
+			lines = append(lines, line)
+		}
+		return strings.TrimSpace(strings.Join(lines, "\n"))
+	}
+	for _, rows := range []int{3, 4, 9} {
+		var out bytes.Buffer
+		renderSummaryWithUsageAt(summary, &out, false, opt, 100, rows)
+		watch := buildWatchFrame(summary, nil, time.Minute, initialWatchSections(opt), 100, rows, true, "", "", opt)
+		watchText := strings.Join(watch.lines, "\n")
+		if got, want := normalize(out.String()), normalize(watchText); got != want {
+			t.Errorf("compact one-shot and watch content differs at 100x%d\none-shot:\n%s\nwatch:\n%s", rows, got, want)
+		}
+		if rows == 9 {
+			for _, content := range []string{"All Usage", "Claude Code", "OpenAI Codex", "Gemini", "12%", "23%", "56%"} {
+				if !strings.Contains(normalize(out.String()), content) {
+					t.Errorf("constrained compact output lost selected content %q:\n%s", content, normalize(out.String()))
+				}
+			}
 		}
 	}
 }
@@ -2767,8 +2861,8 @@ func TestBuildAgentBoxDimsStaleQuotaAndAnnotatesUpdatedCaption(t *testing.T) {
 		LastRefreshed: time.Now(),
 	}
 
-	staleBox := buildAgentBox(stale, agentRate{}, 60, false, false, false)
-	freshBox := buildAgentBox(fresh, agentRate{}, 60, false, false, false)
+	staleBox := buildAgentBox(stale, agentRate{}, 60, false, false)
+	freshBox := buildAgentBox(fresh, agentRate{}, 60, false, false)
 
 	staleText := strings.Join(staleBox.lines, "\n")
 	freshText := strings.Join(freshBox.lines, "\n")

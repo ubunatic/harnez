@@ -5,3 +5,27 @@ collector_timeout: 2m
 passive_dedupe_interval: 30s
 statusline_busy_timeout: 25ms
 watch_loading_label: Collecting usage…
+view_modes:
+  default: normal
+  modes:
+    normal:
+      panels: [claude, agy, codex, history, load, remote_load]
+      token_details: true
+      title_bar: true
+      status_bar: true
+      hidden_list: true
+      overflow_hint: true
+    compact:
+      panels: [all_usage, load, remote_load]
+      token_details: true
+      title_bar: true
+      status_bar: true
+      hidden_list: true
+      overflow_hint: true
+    minimal:
+      panels: [all_usage, load, remote_load]
+      token_details: true
+      title_bar: false
+      status_bar: false
+      hidden_list: false
+      overflow_hint: false

@@ -151,13 +151,10 @@ func resolveUsageHost(flagHost string, cfg *usage.LocalConfig) string {
 // validateUsageFlags rejects `harnez usage` flag combinations that don't
 // make sense together, ahead of any collection or rendering work.
 //
-// The compact one-shot dashboard (formerly gated behind a now-removed
-// --summary flag) is the default rendering for a bare `harnez usage`; --raw
-// opts into the detailed per-field text report instead, and --json opts
-// into machine-readable output. All three are mutually exclusive render
-// targets, so --watch/--raw/--json pairwise conflicts are rejected here, and
-// --compact (a panel-selection toggle, not a render target) is rejected
-// alongside --raw since --raw has no panel concept to toggle.
+// The spec-declared usage view is the default rendering for a bare
+// `harnez usage`; --raw opts into the detailed per-field text report, and --json
+// opts into machine-readable output. --watch/--raw/--json conflicts and
+// --splash's watch requirement are rejected here.
 func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom, usageSplash bool) error {
 	if usageWatch && usageJSON {
 		return fmt.Errorf("--watch and --json cannot be combined")
@@ -183,14 +180,32 @@ func validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompact, usageLoom
 	return nil
 }
 
-func validateUsageMinimalFlags(usageMinimal, usageJSON, usageLoom bool) error {
-	if usageMinimal && usageJSON {
-		return fmt.Errorf("--minimal cannot be combined with --json")
-	}
-	if usageMinimal && usageLoom {
-		return fmt.Errorf("--minimal cannot be combined with --loom")
+func validateUsageModeFlags(explicitMode, usageRaw, usageJSON, usageLoom bool) error {
+	if explicitMode && (usageRaw || usageJSON || usageLoom) {
+		return fmt.Errorf("usage view mode flags cannot be combined with --raw, --json, or --loom")
 	}
 	return nil
+}
+
+func selectUsageViewMode(normal, compact, minimal bool) (string, bool, error) {
+	selected := 0
+	mode := ""
+	if normal {
+		selected++
+		mode = "normal"
+	}
+	if compact {
+		selected++
+		mode = "compact"
+	}
+	if minimal {
+		selected++
+		mode = "minimal"
+	}
+	if selected > 1 {
+		return "", true, fmt.Errorf("--normal, --compact, and --minimal are mutually exclusive")
+	}
+	return mode, selected == 1, nil
 }
 
 func main() {
@@ -227,6 +242,7 @@ func newRootCmd() *cobra.Command {
 	var usageRaw bool
 	var usageProcesses bool
 	var usageMic bool
+	var usageNormal bool
 	var usageCompact bool
 	var usageMinimal bool
 	var usageLoom bool
@@ -245,11 +261,21 @@ func newRootCmd() *cobra.Command {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 
-			if err := validateUsageMinimalFlags(usageMinimal, usageJSON, usageLoom); err != nil {
+			selectedMode, explicitMode, err := selectUsageViewMode(usageNormal, usageCompact, usageMinimal)
+			if err != nil {
 				return err
 			}
-			usageCompactMode := usageCompact || usageMinimal
-			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, usageCompactMode, usageLoom, usageSplash); err != nil {
+			if err := validateUsageModeFlags(explicitMode, usageRaw, usageJSON, usageLoom); err != nil {
+				return err
+			}
+			if !explicitMode {
+				selectedMode, err = usage.DefaultUsageViewMode()
+				if err != nil {
+					return err
+				}
+			}
+			usageCompactMode := selectedMode == "compact" || selectedMode == "minimal"
+			if err := validateUsageFlags(usageWatch, usageRaw, usageJSON, explicitMode && usageCompactMode, usageLoom, usageSplash); err != nil {
 				return err
 			}
 			if usageShared && usageHost != "" {
@@ -322,8 +348,7 @@ func newRootCmd() *cobra.Command {
 				return usage.RunWatchWithOptions(ctx, "", client, cmd.OutOrStdout(), usageInterval, "", usage.WatchOptions{
 					Host:                 usageHost,
 					SharedUsageCollector: sharedWatchCollector,
-					Compact:              usageCompactMode,
-					Minimal:              usageMinimal,
+					Mode:                 selectedMode,
 					ShowProcesses:        usageProcesses,
 					ShowMic:              usageMic,
 					Splash:               usageSplash,
@@ -408,16 +433,15 @@ func newRootCmd() *cobra.Command {
 				return nil
 			}
 
-			// Default: the compact one-shot dashboard, formerly gated
-			// behind --summary. --summary was removed (issue 171) once this
-			// became the unconditional default for a bare `harnez usage`.
+			// The selected spec-defined view is printed once. --watch enters
+			// this same view in the interactive redraw loop.
 			var remoteLoadSnap *usage.LoadSnapshot
 			if loadWatchHost != "" {
 				// This is a one-shot print (Decision §2 of issue 110): always
 				// a single plain batch SSH call, independent of usageHost.
 				remoteLoadSnap, _ = usage.CollectRemoteLoadSnapshot(ctx, loadWatchHost)
 			}
-			loadOpt := usage.WatchOptions{Compact: usageCompactMode, Minimal: usageMinimal, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}
+			loadOpt := usage.WatchOptions{Mode: selectedMode, RemoteLoadHost: loadWatchHost, RemoteLoadSnapshot: remoteLoadSnap}
 			if usageHost != "" {
 				usage.RenderSummaryRemote(ctx, usageHost, cmd.OutOrStdout(), usageProcesses, loadOpt)
 			} else {
@@ -447,10 +471,11 @@ func newRootCmd() *cobra.Command {
 	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
 	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the dashboard in place with a tokens/min trend")
 	usageCmd.Flags().BoolVar(&usageSplash, "splash", false, "render startup splash screen while initial collection is in flight (--watch only)")
-	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "show only the all-usage and load panels (default view and --watch)")
-	usageCmd.Flags().BoolVar(&usageMinimal, "minimal", false, "show the compact panels without title/status bars or hidden-panel hints")
+	usageCmd.Flags().BoolVar(&usageNormal, "normal", false, "show the normal detail view")
+	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "show the compact all-usage and load panels")
+	usageCmd.Flags().BoolVar(&usageMinimal, "minimal", false, "show compact panels without title/status bars or hidden-panel and overflow hints")
 	usageCmd.Flags().BoolVar(&usageLoom, "loom", false, "start usage monitor as loom app (compact view)")
-	usageCmd.Flags().BoolVarP(&usageRaw, "raw", "r", false, "print the detailed per-field usage report instead of the compact dashboard")
+	usageCmd.Flags().BoolVarP(&usageRaw, "raw", "r", false, "print the detailed per-field usage report instead of the selected dashboard view")
 	usageCmd.Flags().BoolVarP(&usageProcesses, "proc", "p", false, "show running agent processes panel in the default view / --watch")
 	usageCmd.Flags().BoolVar(&usageProcesses, "processes", false, "show running agent processes panel in the default view / --watch")
 	usageCmd.Flags().BoolVar(&usageMic, "mic", false, "show the microphone level/recording panel in --watch (hidden if no audio interface is found)")
