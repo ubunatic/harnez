@@ -23,7 +23,7 @@ the calling session for a provider or on a user decision about in-place writes t
 
 - `--auto`: find the calling session's transcript (Claude: `~/.claude/projects/<cwd-slug>/<id>.jsonl`;
   identify the session via env/parent process, or the newest transcript for the cwd as a fallback,
-  stating which was chosen on stderr). Other providers (Codex, agy) as follow-ups if not obvious.
+  stating which was chosen on stderr). Codex: follow-up. agy: out of scope (it has no `/compact`).
 - `--dry-run`: no output file or in-place write; print stats (entries, bytes/tokens before and
   after, pruned/truncated counts). May reuse `--format summary`.
 - Bare `harnez compact` on a TTY stdin without a transcript should error with a usage hint, not
