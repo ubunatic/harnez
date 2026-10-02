@@ -47,21 +47,32 @@ func codexRolloutContextTokens(providerID string) (int, error) {
 }
 
 func codexRolloutPath(providerID string) (string, error) {
+	path, found, err := findCodexRolloutPath(providerID)
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return "", fmt.Errorf("codex rollout for session %s not found", providerID)
+	}
+	return path, nil
+}
+
+func findCodexRolloutPath(providerID string) (string, bool, error) {
 	home := os.Getenv("CODEX_HOME")
 	if home == "" {
 		var err error
 		home, err = os.UserHomeDir()
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		home = filepath.Join(home, ".codex")
 	}
 	matches, err := filepath.Glob(filepath.Join(home, "sessions", "*", "*", "*", "rollout-*"+providerID+".jsonl"))
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	if len(matches) == 0 {
-		return "", fmt.Errorf("codex rollout for session %s not found", providerID)
+		return "", false, nil
 	}
 	latest := matches[0]
 	for _, candidate := range matches[1:] {
@@ -71,7 +82,7 @@ func codexRolloutPath(providerID string) (string, error) {
 			}
 		}
 	}
-	return latest, nil
+	return latest, true, nil
 }
 
 func (d CodexDriver) command(ctx context.Context, args ...string) ([]byte, error) {
@@ -218,6 +229,13 @@ func (d CodexDriver) Stop(context.Context, string) error {
 func (d CodexDriver) Delete(ctx context.Context, id string) error {
 	// Skip codex call for non-UUID IDs (e.g., thread-1); nothing to delete provider-side.
 	if _, err := uuid.Parse(id); err != nil {
+		return nil
+	}
+	// Codex cannot delete a session that never produced a rollout. Treat it as
+	// already absent so repeated cleanup can converge without invoking codex.
+	if _, found, err := findCodexRolloutPath(id); err != nil {
+		return fmt.Errorf("codex rollout for session %s: %w", id, err)
+	} else if !found {
 		return nil
 	}
 	start := d.Start

@@ -731,8 +731,10 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 					continue
 				}
 				if x.Status == "delete-failed" {
-					skippedFailed++
-					continue
+					if x.Provider != "codex" {
+						skippedFailed++
+						continue
+					}
 				}
 				if warnUnrated(cmd, x) {
 					if !force {

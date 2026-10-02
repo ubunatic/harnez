@@ -1798,7 +1798,7 @@ func TestAgentDeleteAllRepeatSafeAndRetryFailed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	failed := &subagent.Session{ID: "failed", Name: "failed-session", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller"}
+	failed := &subagent.Session{ID: "failed", Name: "failed-session", Provider: "agy", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller"}
 	if err := store.Save(failed); err != nil {
 		t.Fatal(err)
 	}
@@ -1854,6 +1854,31 @@ func TestAgentDeleteAllRepeatSafeAndRetryFailed(t *testing.T) {
 	}
 	if len(deleted) != 2 {
 		t.Fatalf("provider deletes = %#v", deleted)
+	}
+}
+
+func TestAgentDeleteAllRetriesCodexDeleteFailedRecordWithMissingRollout(t *testing.T) {
+	storeDir := t.TempDir()
+	codexHome := t.TempDir()
+	t.Setenv("CODEX_HOME", codexHome)
+	t.Setenv("HARNEZ_SESSION_ID", "caller")
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := &subagent.Session{ID: "missing-rollout", Name: "never-started", Provider: "codex", Model: "model", Status: "delete-failed", LastError: "unknown session", HarnessType: "batch", ParentSessionID: "caller"}
+	if err := store.Save(sess); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newAgentCmd()
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"delete", "--all", "--force", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("delete --all: %v", err)
+	}
+	if _, err := store.Get(sess.ID); err == nil {
+		t.Fatal("missing-rollout failed record was not cleared")
 	}
 }
 

@@ -2,6 +2,7 @@ package subagent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -169,7 +170,34 @@ func TestCodexDeleteSkipsNonUUIDIDs(t *testing.T) {
 	}
 }
 
+func TestCodexDeleteMissingRolloutSkipsCodex(t *testing.T) {
+	t.Setenv("CODEX_HOME", t.TempDir())
+	called := false
+	d := CodexDriver{Start: func(_ context.Context, _ string, _ ...string) (io.Reader, func() error, error) {
+		called = true
+		return strings.NewReader(""), func() error { return nil }, nil
+	}}
+	if err := d.Delete(context.Background(), "550e8400-e29b-41d4-a716-446655440000"); err != nil {
+		t.Fatal(err)
+	}
+	if called {
+		t.Fatal("codex was started for a missing rollout")
+	}
+}
+
+func TestCodexDeleteExistingRolloutWithProviderError(t *testing.T) {
+	setCodexDeleteRollout(t)
+	d := CodexDriver{Start: func(_ context.Context, _ string, _ ...string) (io.Reader, func() error, error) {
+		return strings.NewReader(""), func() error { return errors.New("provider delete failed") }, nil
+	}}
+	err := d.Delete(context.Background(), "550e8400-e29b-41d4-a716-446655440000")
+	if err == nil || !strings.Contains(err.Error(), "provider delete failed") {
+		t.Fatalf("error = %v, want provider failure", err)
+	}
+}
+
 func TestCodexDeleteIncludesStderr(t *testing.T) {
+	setCodexDeleteRollout(t)
 	d := CodexDriver{Start: func(_ context.Context, _ string, _ ...string) (io.Reader, func() error, error) {
 		return strings.NewReader(""), func() error {
 			return fmt.Errorf("exit status 1: --force requires a session UUID")
@@ -182,6 +210,7 @@ func TestCodexDeleteIncludesStderr(t *testing.T) {
 }
 
 func TestCodexDeleteUsesNonInteractiveCommand(t *testing.T) {
+	setCodexDeleteRollout(t)
 	var cmd string
 	var args []string
 	d := CodexDriver{Start: func(_ context.Context, gotCmd string, gotArgs ...string) (io.Reader, func() error, error) {
@@ -197,6 +226,34 @@ func TestCodexDeleteUsesNonInteractiveCommand(t *testing.T) {
 	}
 	if !reflect.DeepEqual(args, []string{"delete", "--force", "550e8400-e29b-41d4-a716-446655440000"}) {
 		t.Fatalf("args = %#v", args)
+	}
+}
+
+func TestCodexDeleteHonorsCodexHomeOverride(t *testing.T) {
+	setCodexDeleteRollout(t)
+	started := false
+	d := CodexDriver{Start: func(_ context.Context, _ string, _ ...string) (io.Reader, func() error, error) {
+		started = true
+		return strings.NewReader(""), func() error { return nil }, nil
+	}}
+	if err := d.Delete(context.Background(), "550e8400-e29b-41d4-a716-446655440000"); err != nil {
+		t.Fatal(err)
+	}
+	if !started {
+		t.Fatal("codex was not started for rollout under CODEX_HOME")
+	}
+}
+
+func setCodexDeleteRollout(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	path := filepath.Join(home, "sessions", "2026", "10", "02", "rollout-test-550e8400-e29b-41d4-a716-446655440000.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatal(err)
 	}
 }
 
