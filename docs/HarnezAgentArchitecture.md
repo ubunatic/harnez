@@ -65,11 +65,13 @@ harnez agent wait w --timeout 5m       # explicit timeout override
 harnez agent resume --name w "next step"
 harnez agent start -i --model claude:haiku --name chat
 harnez agent resume -i --name w
-harnez agent list [--children|--all-sessions]
+harnez agent list [--children|--all-sessions|--failed]
 harnez agent status --name w
 harnez agent compact --name w
 harnez agent stop --name w
 harnez agent delete --name w
+harnez agent delete --all [--force]
+harnez agent delete --retry-failed
 harnez agent models [--names]
 ```
 
@@ -239,6 +241,14 @@ by `--name` and the configured directory/lineage rules. `status` can report a
 repository-wide view when no name is supplied. `stop --children` and
 `stop --all` retain their explicit bulk behavior; delete refuses active
 interactive sessions until they are stopped.
+
+Bulk delete archives confirmed deletions, and archived provider identities are
+excluded from provider-session discovery so deleted sessions do not reappear in
+the default list. Provider deletion failures remain in the registry with status
+`delete-failed`; `list --failed` inspects them and `delete --retry-failed`
+retries them. Later `delete --all` runs skip these records and report how many
+unresolved deletions were skipped. `delete --force` allows deleting unrated
+sessions without printing the unrated-turn warning.
 
 `stop` terminates the whole process tree (provider CLI and children) with TERM, then a bounded
 KILL, and reports `stopped: <name>, no process left, safe to resume/delete` only after it has

@@ -1265,9 +1265,18 @@ func TestAppendExternalAgentSessionsDeduplicatesManagedProviderIdentity(t *testi
 		{ID: "provider-id", ProviderSessionID: "provider-id", Provider: "codex", HarnessType: "external"},
 		{ID: "other-id", ProviderSessionID: "other-id", Provider: "codex", HarnessType: "external"},
 	}
-	got := appendExternalAgentSessions(listed, []*subagent.Session{managed}, external)
+	got := appendExternalAgentSessions(listed, []*subagent.Session{managed}, external, nil)
 	if len(got) != 2 || got[1].ID != "other-id" {
 		t.Fatalf("merged sessions = %#v, want managed plus nonduplicate external", got)
+	}
+}
+
+func TestAppendExternalAgentSessionsDoesNotRediscoverDeletedProviderSession(t *testing.T) {
+	deleted := &subagent.Session{ID: "archived", ProviderSessionID: "provider-id", Provider: "codex"}
+	external := []*subagent.Session{{ID: "provider-id", ProviderSessionID: "provider-id", Provider: "codex", HarnessType: "external"}}
+	got := appendExternalAgentSessions(nil, nil, external, []*subagent.Session{deleted})
+	if len(got) != 0 {
+		t.Fatalf("rediscovered archived session: %#v", got)
 	}
 }
 
@@ -1777,6 +1786,135 @@ func TestAgentDeleteAllSkipsUnratedSessionWithWarning(t *testing.T) {
 		t.Fatalf("unrated session was deleted: %v", err)
 	}
 }
+
+func TestAgentDeleteAllRepeatSafeAndRetryFailed(t *testing.T) {
+	storeDir := t.TempDir()
+	oldSessionID := os.Getenv("HARNEZ_SESSION_ID")
+	if err := os.Setenv("HARNEZ_SESSION_ID", "caller"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Setenv("HARNEZ_SESSION_ID", oldSessionID) }()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed := &subagent.Session{ID: "failed", Name: "failed-session", Provider: "codex", Model: "model", Status: "completed", HarnessType: "batch", ParentSessionID: "caller"}
+	if err := store.Save(failed); err != nil {
+		t.Fatal(err)
+	}
+	old := agentDriver
+	shouldFail := true
+	var deleted []string
+	agentDriver = func(subagent.Model, string) subagent.Driver {
+		return mockAgentDeleteDriver{delete: func(id string) error {
+			deleted = append(deleted, id)
+			if id == "failed" && shouldFail {
+				return errors.New("provider delete failed")
+			}
+			return nil
+		}}
+	}
+	defer func() { agentDriver = old }()
+	run := func(args ...string) (string, string, error) {
+		var out, stderr bytes.Buffer
+		cmd := newAgentCmd()
+		cmd.SetOut(&out)
+		cmd.SetErr(&stderr)
+		cmd.SetArgs(append(args, "--store-dir", storeDir))
+		err := cmd.Execute()
+		return out.String(), stderr.String(), err
+	}
+	_, _, err = run("delete", "--all", "--force")
+	if err == nil {
+		t.Fatal("first delete-all should expose the provider failure")
+	}
+	got, err := store.Get("failed")
+	if err != nil || got.Status != "delete-failed" || !strings.Contains(got.LastError, "provider delete failed") {
+		t.Fatalf("failed record = %#v, %v", got, err)
+	}
+	listOut, _, err := run("list")
+	if err != nil || strings.Contains(listOut, "failed-session") {
+		t.Fatalf("default list = %q, err %v", listOut, err)
+	}
+	listOut, _, err = run("list", "--failed")
+	if err != nil || !strings.Contains(listOut, "failed-session") || !strings.Contains(listOut, "delete-failed") {
+		t.Fatalf("failed list = %q, err %v", listOut, err)
+	}
+	_, _, err = run("delete", "--all", "--force")
+	if err != nil {
+		t.Fatalf("second delete-all: %v", err)
+	}
+	shouldFail = false
+	_, _, err = run("delete", "--retry-failed")
+	if err != nil {
+		t.Fatalf("retry-failed: %v", err)
+	}
+	if _, err := store.Get("failed"); err == nil {
+		t.Fatal("successful retry retained failed record")
+	}
+	if len(deleted) != 2 {
+		t.Fatalf("provider deletes = %#v", deleted)
+	}
+}
+
+func TestAgentDeleteAllForceSuppressesWarningAndDiscoversNewSession(t *testing.T) {
+	storeDir := t.TempDir()
+	oldSessionID := os.Getenv("HARNEZ_SESSION_ID")
+	if err := os.Setenv("HARNEZ_SESSION_ID", "caller"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Setenv("HARNEZ_SESSION_ID", oldSessionID) }()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := &subagent.Session{ID: "first", Name: "first-session", Provider: "claude", Model: "model", Status: "completed", HarnessType: "interactive", ParentSessionID: "caller", Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1}}}
+	if err := store.Save(first); err != nil {
+		t.Fatal(err)
+	}
+	run := func(force bool) (string, string, error) {
+		var out, stderr bytes.Buffer
+		cmd := newAgentCmd()
+		cmd.SetOut(&out)
+		cmd.SetErr(&stderr)
+		args := []string{"delete", "--all"}
+		if force {
+			args = append(args, "--force")
+		}
+		cmd.SetArgs(append(args, "--store-dir", storeDir))
+		err := cmd.Execute()
+		return out.String(), stderr.String(), err
+	}
+	_, stderr, err := run(false)
+	if err != nil || !strings.Contains(stderr, "unrated latest turns") {
+		t.Fatalf("without force stderr=%q err=%v", stderr, err)
+	}
+	_, stderr, err = run(true)
+	if err != nil || strings.Contains(stderr, "unrated latest turns") {
+		t.Fatalf("with force stderr=%q err=%v", stderr, err)
+	}
+	if err := store.Save(&subagent.Session{ID: "new", Name: "new-session", Provider: "claude", Model: "model", Status: "completed", HarnessType: "interactive", ParentSessionID: "caller", Turn: 1, TurnRecords: []subagent.TurnRecord{{Turn: 1, Rating: testRatingPtr(4)}}}); err != nil {
+		t.Fatal(err)
+	}
+	out, _, err := run(true)
+	if err != nil || !strings.Contains(out, "new-session") {
+		t.Fatalf("new session output=%q err=%v", out, err)
+	}
+}
+
+type mockAgentDeleteDriver struct{ delete func(string) error }
+
+func (d mockAgentDeleteDriver) Run(context.Context, subagent.RunOptions) (*subagent.TurnResult, error) {
+	return nil, nil
+}
+func (d mockAgentDeleteDriver) Resume(context.Context, string, string, subagent.Model) (*subagent.TurnResult, error) {
+	return nil, nil
+}
+func (d mockAgentDeleteDriver) Compact(context.Context, string) (*subagent.TurnResult, error) {
+	return nil, nil
+}
+func (d mockAgentDeleteDriver) Stop(context.Context, string) error        { return nil }
+func (d mockAgentDeleteDriver) Delete(_ context.Context, id string) error { return d.delete(id) }
 
 func TestAgentStopAndDeleteAllWithNoSessions(t *testing.T) {
 	storeDir := t.TempDir()
@@ -3531,7 +3669,7 @@ func TestAgentDeleteWarnsAndProtectsUnratedSessions(t *testing.T) {
 	}{
 		{name: "rated", rated: true, wantDelete: true},
 		{name: "unrated", wantWarn: true},
-		{name: "forced", force: true, wantDelete: true, wantWarn: true},
+		{name: "forced", force: true, wantDelete: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			storeDir := t.TempDir()

@@ -48,6 +48,7 @@ type agentOutput struct {
 
 func newAgentCmd() *cobra.Command {
 	var jsonOut, children, all, detach, allowExhaustedQuota bool
+	var failedOnly bool
 	var workerID string
 	var storeDir, workDir, name, modelSpec, streamMode, roleSpec string
 	var agentTimeout time.Duration
@@ -426,6 +427,23 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if err != nil {
 			return err
 		}
+		if failedOnly {
+			filtered := xs[:0]
+			for _, x := range xs {
+				if x.Status == "delete-failed" {
+					filtered = append(filtered, x)
+				}
+			}
+			xs = filtered
+		} else {
+			filtered := xs[:0]
+			for _, x := range xs {
+				if x.Status != "delete-failed" {
+					filtered = append(filtered, x)
+				}
+			}
+			xs = filtered
+		}
 		visibleManagedCount := len(xs)
 		managed := xs
 		if p != "" {
@@ -434,7 +452,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			}
 		}
 		var external []*subagent.Session
-		if all || (p == "" && !children) {
+		if !failedOnly && (all || (p == "" && !children)) {
 			home, err := os.UserHomeDir()
 			if err != nil {
 				return fmt.Errorf("resolve home directory for external sessions: %w", err)
@@ -444,7 +462,11 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 				return err
 			}
 		}
-		xs = appendExternalAgentSessions(xs, managed, external)
+		deleted, err := s.ListDeleted()
+		if err != nil {
+			return err
+		}
+		xs = appendExternalAgentSessions(xs, managed, external, deleted)
 		if !all && p != "" {
 			if every, err := s.List("", true); err == nil && len(every) > visibleManagedCount {
 				fmt.Fprintf(cmd.ErrOrStderr(), "harnez: %d more agents in other sessions; use --all-sessions\n", len(every)-visibleManagedCount)
@@ -467,6 +489,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	}}
 	list.Flags().BoolVar(&children, "children", false, "list child sessions")
 	list.Flags().BoolVar(&all, "all-sessions", false, "list all sessions")
+	list.Flags().BoolVar(&failedOnly, "failed", false, "list unresolved provider deletions")
 	list.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
 
 	status := &cobra.Command{Use: "status", Short: "Show agent session status", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
@@ -596,7 +619,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	stop.Flags().BoolVar(&children, "children", false, "stop child sessions")
 	stop.Flags().BoolVar(&all, "all", false, "stop all manageable sessions")
 	stop.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
-	var allCompleted, force bool
+	var allCompleted, force, retryFailed bool
 	warnUnrated := func(cmd *cobra.Command, x *subagent.Session) bool {
 		return !sessionLatestTurnRated(x)
 	}
@@ -604,6 +627,41 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		s, e := store()
 		if e != nil {
 			return e
+		}
+		if retryFailed {
+			if all || allCompleted || name != "" {
+				return fmt.Errorf("delete --retry-failed cannot be combined with --all, --all-completed, or --name")
+			}
+			xs, err := s.List("", true)
+			if err != nil {
+				return err
+			}
+			var failures []error
+			for _, x := range xs {
+				if x.Status != "delete-failed" || !subagent.CanManage(parent(), x) {
+					continue
+				}
+				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Delete(cmd.Context(), x.ProviderID()); e != nil {
+					x.LastError = e.Error()
+					if saveErr := s.Save(x); saveErr != nil {
+						failures = append(failures, fmt.Errorf("%s: persist updated unresolved deletion: %w", x.Name, saveErr))
+					}
+					failures = append(failures, fmt.Errorf("%s: %w", x.Name, e))
+					continue
+				}
+				if e = s.Delete(x.ID); e != nil {
+					failures = append(failures, fmt.Errorf("%s: %w", x.Name, e))
+					continue
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), x.Name)
+			}
+			for _, err := range failures {
+				fmt.Fprintln(cmd.ErrOrStderr(), "delete failed:", err)
+			}
+			if len(failures) > 0 {
+				return errors.New("some sessions failed to delete")
+			}
+			return nil
 		}
 		if allCompleted {
 			if all || name != "" {
@@ -622,12 +680,10 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 				if x.Status != "completed" {
 					continue
 				}
-				if warnUnrated(cmd, x) {
+				if warnUnrated(cmd, x) && !force {
 					printUnratedDeleteWarning(cmd, []*subagent.Session{x})
-					if !force {
-						failures = append(failures, fmt.Errorf("%s: refusing to delete unrated session without --force", x.Name))
-						continue
-					}
+					failures = append(failures, fmt.Errorf("%s: refusing to delete unrated session without --force", x.Name))
+					continue
 				}
 				if x.HarnessType == "interactive" {
 					if e = s.Delete(x.ID); e != nil {
@@ -638,6 +694,10 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 					continue
 				}
 				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Delete(cmd.Context(), x.ProviderID()); e != nil {
+					x.Status, x.LastError = "delete-failed", e.Error()
+					if saveErr := s.Save(x); saveErr != nil {
+						failures = append(failures, fmt.Errorf("%s: persist unresolved deletion: %w", x.Name, saveErr))
+					}
 					failures = append(failures, fmt.Errorf("%s: %w", x.Name, e))
 					continue
 				}
@@ -665,13 +725,18 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			}
 			var failures []error
 			var unrated []*subagent.Session
+			skippedFailed := 0
 			for _, x := range xs {
 				if !subagent.CanManage(parent(), x) {
 					continue
 				}
+				if x.Status == "delete-failed" {
+					skippedFailed++
+					continue
+				}
 				if warnUnrated(cmd, x) {
-					unrated = append(unrated, x)
 					if !force {
+						unrated = append(unrated, x)
 						continue
 					}
 				}
@@ -688,6 +753,10 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 					continue
 				}
 				if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Delete(cmd.Context(), x.ProviderID()); e != nil {
+					x.Status, x.LastError = "delete-failed", e.Error()
+					if saveErr := s.Save(x); saveErr != nil {
+						failures = append(failures, fmt.Errorf("%s: persist unresolved deletion: %w", x.Name, saveErr))
+					}
 					failures = append(failures, fmt.Errorf("%s: %w", x.Name, e))
 					continue
 				}
@@ -697,8 +766,11 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), x.Name)
 			}
-			if len(unrated) > 0 {
+			if len(unrated) > 0 && !force {
 				printUnratedDeleteWarning(cmd, unrated)
+			}
+			if skippedFailed > 0 {
+				fmt.Fprintf(cmd.ErrOrStderr(), "%d unresolved provider deletion(s) skipped; retry with --retry-failed\n", skippedFailed)
 			}
 			for _, err := range failures {
 				fmt.Fprintln(cmd.ErrOrStderr(), "delete failed:", err)
@@ -718,11 +790,9 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if !canManageTarget(parent(), x) {
 			return fmt.Errorf("session %q is outside caller lineage", x.ID)
 		}
-		if warnUnrated(cmd, x) {
+		if warnUnrated(cmd, x) && !force {
 			printUnratedDeleteWarning(cmd, []*subagent.Session{x})
-			if !force {
-				return fmt.Errorf("delete: refusing to delete unrated session %q without --force", x.Name)
-			}
+			return fmt.Errorf("delete: refusing to delete unrated session %q without --force", x.Name)
 		}
 		if x.HarnessType == "interactive" {
 			if x.Status == "active" {
@@ -731,13 +801,18 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			return s.Delete(x.ID)
 		}
 		if e = agentDriver(subagent.Model{Provider: x.Provider, Name: x.Model}, x.WorkingDir).Delete(cmd.Context(), x.ProviderID()); e != nil {
+			x.Status, x.LastError = "delete-failed", e.Error()
+			if saveErr := s.Save(x); saveErr != nil {
+				return fmt.Errorf("%w; failed to persist unresolved deletion: %v", e, saveErr)
+			}
 			return e
 		}
 		return s.Delete(x.ID)
 	}}
 	remove.Flags().BoolVar(&all, "all", false, "delete all manageable sessions")
 	remove.Flags().BoolVar(&allCompleted, "all-completed", false, "delete all completed sessions")
-	remove.Flags().BoolVar(&force, "force", false, "delete unrated sessions after warning")
+	remove.Flags().BoolVar(&force, "force", false, "delete unrated sessions without warning")
+	remove.Flags().BoolVar(&retryFailed, "retry-failed", false, "retry unresolved provider deletions")
 	remove.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	rate := &cobra.Command{Use: "rate <1-5> <reason>", Short: "Rate the latest turn of an agent session", Args: cobra.MinimumNArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		if name == "" {
@@ -769,13 +844,18 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	return root
 }
 
-func appendExternalAgentSessions(listed, managed, external []*subagent.Session) []*subagent.Session {
-	seen := make(map[string]struct{}, len(managed)+len(external))
+func appendExternalAgentSessions(listed, managed, external, deleted []*subagent.Session) []*subagent.Session {
+	seen := make(map[string]struct{}, len(managed)+len(external)+len(deleted))
 	for _, sess := range managed {
 		if sess == nil {
 			continue
 		}
 		seen[sess.Provider+"\x00"+sess.ProviderID()] = struct{}{}
+	}
+	for _, sess := range deleted {
+		if sess != nil {
+			seen[sess.Provider+"\x00"+sess.ProviderID()] = struct{}{}
+		}
 	}
 	for _, sess := range listed {
 		if sess == nil {
