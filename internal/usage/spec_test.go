@@ -63,7 +63,7 @@ view_modes:
   default: normal
   modes:
     normal: &mode
-      panels: [claude]
+      panels: [table]
       token_details: true
       title_bar: true
       status_bar: true
@@ -71,14 +71,10 @@ view_modes:
       overflow_hint: true
     compact: *mode
     minimal: *mode
-    dashboard:
-      panels: [claude]
-      token_details: true
-      title_bar: true
-      status_bar: true
-      hidden_list: false
-      overflow_hint: true
 `
+	if _, _, _, _, _, err := parseUsageSpec([]byte(valid)); err != nil {
+		t.Fatalf("parseUsageSpec(valid) = %v, want the base fixture to parse", err)
+	}
 	invalid := []struct {
 		name string
 		data string

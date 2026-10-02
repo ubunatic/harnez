@@ -40,10 +40,6 @@
             "type": "string",
             "enum": [
               "all_usage",
-              "claude",
-              "agy",
-              "codex",
-              "history",
               "processes",
               "load",
               "mic"

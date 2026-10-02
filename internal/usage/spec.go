@@ -126,18 +126,17 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 }
 
 func (s usageViewModesSpec) validate() error {
-	if s.Default != "normal" && s.Default != "compact" && s.Default != "minimal" && s.Default != "dashboard" {
-		return fmt.Errorf("view_modes.default must be normal, compact, minimal, or dashboard")
+	if s.Default != "normal" && s.Default != "compact" && s.Default != "minimal" {
+		return fmt.Errorf("view_modes.default must be normal, compact, or minimal")
 	}
-	if len(s.Modes) != 4 {
-		return fmt.Errorf("view_modes.modes must define normal, compact, minimal, and dashboard")
+	if len(s.Modes) != 3 {
+		return fmt.Errorf("view_modes.modes must define normal, compact, and minimal")
 	}
 	validPanels := map[string]bool{
-		"all_usage": true, "claude": true, "agy": true, "codex": true,
-		"history": true, "processes": true, "load": true, "mic": true,
-		"remote_load": true,
+		"table": true, "all_usage": true, "processes": true, "load": true,
+		"mic": true, "remote_load": true,
 	}
-	for _, name := range []string{"normal", "compact", "minimal", "dashboard"} {
+	for _, name := range []string{"normal", "compact", "minimal"} {
 		mode, ok := s.Modes[name]
 		if !ok || len(mode.Panels) == 0 {
 			return fmt.Errorf("view_modes.modes.%s must define at least one panel", name)

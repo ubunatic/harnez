@@ -392,11 +392,8 @@ type namedWindow struct {
 // Toggled interactively via keypress; see RunWatch. The key for each panel
 // (shown in its own title bar, btop-style) is fixed here.
 type watchSections struct {
+	Table      bool
 	AllUsage   bool
-	Claude     bool
-	AGY        bool
-	Codex      bool
-	History    bool
 	Processes  bool
 	Load       bool
 	Mic        bool
@@ -412,25 +409,17 @@ func compactWatchSections() watchSections {
 	return initialWatchSections(WatchOptions{Mode: "compact"})
 }
 
-// agentsOnlyWatchSections shows only the discovered per-agent boxes plus
-// token detail, with History/Load/Processes/AllUsage all off — the
-// "Agents-only" preset from issue 094's proposal section 4.
-func agentsOnlyWatchSections() watchSections {
-	return watchSections{Claude: true, AGY: true, Codex: true, Tokens: true, RemoteLoad: false}
-}
-
 // watchPresetOrder and watchPresetNames define the fixed cycle order for the
-// [m] mode/preset shortcut (issue 094): default -> compact -> agents ->
-// default. Cycling is keyed off an explicit index rather than sniffing sec's
-// current field values, since sec can drift away from any named preset via
-// individual panel toggles ([C]/[a]/etc.) between presses.
+// [m] mode/preset shortcut (issue 094): table -> compact -> table. Cycling
+// is keyed off an explicit index rather than sniffing sec's current field
+// values, since sec can drift away from any named preset via individual
+// panel toggles ([1]/[a]/etc.) between presses.
 var watchPresetOrder = []watchSections{
 	defaultWatchSections(),
 	compactWatchSections(),
-	agentsOnlyWatchSections(),
 }
 
-var watchPresetNames = []string{"default", "compact", "agents"}
+var watchPresetNames = []string{"table", "compact"}
 
 // nextWatchPreset returns the section set, name, and new index for the
 // preset that follows idx in watchPresetOrder, wrapping around.
@@ -475,10 +464,10 @@ type watchKeyEffect struct {
 //  2. While the overlay is open, every key is swallowed except its
 //     documented dismiss keys (Esc, q/Q, Ctrl-C, Enter) — a stray
 //     panel-toggle press must not silently change state behind the overlay.
-//  3. [m]/[M] cycles the default -> compact -> agents-only -> default
-//     preset, re-applying showProcesses so an explicit --proc request keeps
-//     winning across preset changes the same way initialWatchSections
-//     already makes it win at startup.
+//  3. [m]/[M] cycles the table -> compact -> table preset, re-applying
+//     showProcesses so an explicit --proc request keeps winning across
+//     preset changes the same way initialWatchSections already makes it
+//     win at startup.
 //  4. [!] toggles the debug overlay (issue 131's per-agent freshness
 //     countdown gauge) — in-process only, never persisted.
 //  5. Existing single-key panel toggles (applyWatchSectionKey) keep working
@@ -598,14 +587,6 @@ func applyWatchSectionKey(sec *watchSections, key byte) bool {
 	switch mustWatchActions().actionForKey(key) {
 	case "toggle_all_usage":
 		sec.AllUsage = !sec.AllUsage
-	case "toggle_claude":
-		sec.Claude = !sec.Claude
-	case "toggle_agy":
-		sec.AGY = !sec.AGY
-	case "toggle_codex":
-		sec.Codex = !sec.Codex
-	case "toggle_history":
-		sec.History = !sec.History
 	case "toggle_processes":
 		sec.Processes = !sec.Processes
 	case "toggle_load":
@@ -620,47 +601,6 @@ func applyWatchSectionKey(sec *watchSections, key byte) bool {
 		return false
 	}
 	return true
-}
-
-// agentVisible reports whether the panel for agentID should currently be drawn.
-func (s watchSections) agentVisible(agentID string) bool {
-	switch agentID {
-	case "claude":
-		return s.Claude
-	case "agy":
-		return s.AGY
-	case "codex":
-		return s.Codex
-	case "history":
-		return s.History
-	case "processes":
-		return s.Processes
-	default:
-		return true
-	}
-}
-
-// agentKey returns a short internal box-ID abbreviation used only for the
-// "hidden — terminal too short" drop note (buildWatchFrame) and uix.Box
-// identity. It is not a keyboard hotkey and not spec-driven: the actual
-// toggle keys and their display symbols for these boxes live in
-// spec/actions.yaml and are looked up via watchBoxSymbol for title
-// rendering instead.
-func agentKey(agentID string) string {
-	switch agentID {
-	case "claude":
-		return "C"
-	case "agy":
-		return "G"
-	case "codex":
-		return "O"
-	case "history":
-		return "H"
-	case "processes":
-		return "P"
-	default:
-		return "?"
-	}
 }
 
 // watchBoxSymbol returns the bold display symbol (a superscript digit for
@@ -744,42 +684,9 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		lastRefreshed time.Time
 		stale         bool
 	}
-	currentWindows := func(windows []QuotaWindow) []QuotaWindow {
-		current := append([]QuotaWindow(nil), windows...)
-		for i := range current {
-			if current[i].Source == "agy-meter" && current[i].ExpiredAt(now) {
-				current[i].UsedPercent = 0
-				current[i].RemainingPercent = 100
-				current[i].DurationLeft = 0
-			}
-		}
-		return current
-	}
-
 	var rows []allUsageRow
 	labelWidth := 0
-	// Store projections may arrive in map order. Sort copies so rendering
-	// has a stable provider/pool order without mutating the shared summary.
-	providerOrder := func(id string) int {
-		switch id {
-		case "claude":
-			return 0
-		case "codex":
-			return 1
-		case "agy":
-			return 2
-		default:
-			return 3
-		}
-	}
-	agents := slices.Clone(summary.Agents)
-	slices.SortStableFunc(agents, func(a, b AgentUsage) int {
-		if order := providerOrder(a.AgentID) - providerOrder(b.AgentID); order != 0 {
-			return order
-		}
-		return strings.Compare(a.Name, b.Name)
-	})
-	for _, agent := range agents {
+	for _, agent := range sortedUsageAgents(summary.Agents) {
 		if !agent.HasUsageData() {
 			continue
 		}
@@ -801,17 +708,11 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 				return strings.Compare(a.Name, b.Name)
 			})
 			for _, mg := range groups {
-				label := mg.Name
-				if strings.EqualFold(label, "Gemini Models") {
-					label = "Gemini"
-				} else if strings.EqualFold(label, "Claude and GPT models") || strings.EqualFold(label, "Claude and GPT") {
-					label = "Claude/GPT"
-				}
-				label += labelSuffix
+				label := modelGroupLabel(mg.Name) + labelSuffix
 				if len(mg.Windows) > 0 {
 					hasWindow = true
 				}
-				rows = append(rows, allUsageRow{label: label, windows: currentWindows(mg.Windows), lastRefreshed: agent.LastRefreshed, stale: stale})
+				rows = append(rows, allUsageRow{label: label, windows: currentQuotaWindows(mg.Windows, now), lastRefreshed: agent.LastRefreshed, stale: stale})
 				if n := visLen(label); n > labelWidth {
 					labelWidth = n
 				}
@@ -884,6 +785,57 @@ func allUsageLinesAt(summary UsageSummary, contentW int, debugOverlay bool, now 
 		lines = append(lines, line)
 	}
 	return lines
+}
+
+// sortedUsageAgents returns a copy of agents in a stable provider order.
+// Store projections may arrive in map order; sorting a copy keeps rendering
+// stable without mutating the shared summary.
+func sortedUsageAgents(agents []AgentUsage) []AgentUsage {
+	providerOrder := func(id string) int {
+		switch id {
+		case "claude":
+			return 0
+		case "codex":
+			return 1
+		case "agy":
+			return 2
+		default:
+			return 3
+		}
+	}
+	agents = slices.Clone(agents)
+	slices.SortStableFunc(agents, func(a, b AgentUsage) int {
+		if order := providerOrder(a.AgentID) - providerOrder(b.AgentID); order != 0 {
+			return order
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	return agents
+}
+
+// currentQuotaWindows returns a copy of windows in which an expired AGY meter
+// window reads as reset (0% used) instead of its last stored value.
+func currentQuotaWindows(windows []QuotaWindow, now time.Time) []QuotaWindow {
+	current := append([]QuotaWindow(nil), windows...)
+	for i := range current {
+		if current[i].Source == "agy-meter" && current[i].ExpiredAt(now) {
+			current[i].UsedPercent = 0
+			current[i].RemainingPercent = 100
+			current[i].DurationLeft = 0
+		}
+	}
+	return current
+}
+
+// modelGroupLabel shortens AGY model-group names for display.
+func modelGroupLabel(name string) string {
+	switch {
+	case strings.EqualFold(name, "Gemini Models"):
+		return "Gemini"
+	case strings.EqualFold(name, "Claude and GPT models"), strings.EqualFold(name, "Claude and GPT"):
+		return "Claude/GPT"
+	}
+	return name
 }
 
 func formatAllUsageLine(label string, windows []QuotaWindow, contentW, labelWidth int) string {
@@ -1149,8 +1101,7 @@ const loadLabelWidth = 16
 
 // padLoadLabel truncates label to loadLabelWidth (with a trailing "…") if
 // it's too long, then pads it to exactly that width. Thin wrapper around
-// the shared rograph.PadLabel helper, which also backs buildAgentBox's
-// window-label formatting.
+// the shared rograph.PadLabel helper.
 func padLoadLabel(label string) string {
 	return rograph.PadLabel(label, loadLabelWidth)
 }
@@ -1399,54 +1350,6 @@ func buildMicBoxLines(st MicStatus) []string {
 	return []string{line, liveLine}
 }
 
-// buildHistoryBox renders a compact 4th panel showing recorded usage history stats.
-func buildHistoryBox(homeDir, historyDir string, width int) wbox {
-	targetDir := watchHistoryDir(homeDir, historyDir)
-	stats, _ := HistorySummaryStats(targetDir)
-	return buildHistoryBoxWithStats(targetDir, width, stats)
-}
-
-func watchHistoryDir(homeDir, historyDir string) string {
-	if historyDir != "" {
-		return historyDir
-	}
-	return HistoryDir(homeDir)
-}
-
-func buildHistoryBoxWithStats(targetDir string, width int, stats HistorySummaryData) wbox {
-	title := watchBoxSymbol("history") + " History"
-
-	var lines []string
-	fileWord := "files"
-	if stats.FileCount == 1 {
-		fileWord = "file"
-	}
-	lines = append(lines, fmt.Sprintf("%d %s · %s", stats.FileCount, fileWord, FormatBytes(stats.TotalBytes)))
-
-	// Display directory path shortened with ~ if in user home
-	displayDir := targetDir
-	if home, err := os.UserHomeDir(); err == nil && home != "" && strings.HasPrefix(displayDir, home) {
-		displayDir = "~" + strings.TrimPrefix(displayDir, home)
-	}
-	lines = append(lines, displayDir)
-
-	if stats.TotalEntries > 0 {
-		var metricParts []string
-		if stats.Sparkline != "" {
-			metricParts = append(metricParts, "["+stats.Sparkline+"]")
-		}
-		metricParts = append(metricParts, fmt.Sprintf("+%s used", FormatNumber(stats.TotalUsed)))
-		if stats.Duration >= time.Minute {
-			metricParts = append(metricParts, fmt.Sprintf("%s/hr", FormatNumber(stats.RatePerHour)))
-		}
-		lines = append(lines, strings.Join(metricParts, " · "))
-	} else {
-		lines = append(lines, ansiDimGrey+"no history recorded yet\x1b[0m")
-	}
-
-	return wbox{title: title, lines: lines, width: width}
-}
-
 // applyStaleQuota fills in a fresh collect result's missing quota windows
 // from the previous frame when the fresh fetch failed (issue 032): a single
 // transient failure would otherwise blank windows that are very likely still
@@ -1509,135 +1412,6 @@ func staleLabel(name string) string {
 		return name
 	}
 	return name + " (stale)"
-}
-
-// buildAgentBox renders one agent's status as a compact bordered panel: the
-// account/model, at most the two most urgent quota windows, and a token-rate
-// sparkline (when showTokens is set). The panel's own toggle key is embedded
-// in its title, btop-style, instead of a separate legend. Deliberately terse
-// compared to the full `harnez usage` report.
-func buildAgentBox(agent AgentUsage, rate agentRate, width int, showTokens, debugOverlay bool) wbox {
-	return buildAgentBoxAt(agent, rate, width, showTokens, debugOverlay, time.Now(), DefaultWatchInterval)
-}
-
-// buildAgentBoxAt is buildAgentBox with the redraw timestamp supplied by the
-// caller, keeping all freshness gauges in a watch frame consistent.
-func buildAgentBoxAt(agent AgentUsage, rate agentRate, width int, showTokens, debugOverlay bool, now time.Time, refreshInterval time.Duration) wbox {
-	title := fmt.Sprintf("%s %s", watchBoxSymbol(agent.AgentID), collectorStatusLabel(agent, agent.Name))
-
-	if !agent.Installed {
-		return wbox{title: title, lines: []string{ansiDimGrey + "not installed\x1b[0m"}, width: width}
-	}
-	if !agent.Authenticated {
-		return wbox{title: title, lines: []string{ansiDimGrey + "installed, not logged in\x1b[0m"}, width: width}
-	}
-
-	// stale drives issue 107's dimming of this panel's quota values, plus a
-	// plain-text "· stale" complement on the "updated" caption below --
-	// per-agent panels (unlike the compact All Usage table) have room to
-	// spare for it (see the ticket's width-budget assessment).
-	stale := agent.IsValueStale()
-
-	var lines []string
-
-	acct := agent.Account
-	if acct == "" {
-		acct = "active session"
-	}
-	if agent.PlanTier != "" {
-		acct += " · " + agent.PlanTier
-	}
-	lines = append(lines, acct)
-
-	if agent.ActiveModel != "" {
-		lines = append(lines, "model: "+agent.ActiveModel)
-	}
-
-	// contentW: usable characters inside the box borders and padding.
-	// renderWBox reserves 4 chars (│·space + space·│), so content = width - 4.
-	contentW := width - 4
-	if contentW < 10 {
-		contentW = 10
-	}
-
-	// overlayLabel applies issue 131's debug-overlay countdown gauge to a
-	// row label when debugOverlay is on, otherwise returns label unchanged.
-	// It's a no-op when debugOverlay is false so normal-mode rendering is
-	// byte-for-byte unaffected.
-	overlayLabel := func(label string) string {
-		if !debugOverlay {
-			return label
-		}
-		return freshnessOverlayLabelForInterval(label, agent.LastRefreshed, now, refreshInterval)
-	}
-
-	// Render quota lines. If the agent has ModelGroups (e.g. AGY), render each group
-	// as a compact twin-quota line: Label [Bar1] [Bar2] Pct1 Dt1 Pct2 Dt2.
-	// Otherwise, if the agent has Session and/or Weekly, render them compactly together or individually.
-	if len(agent.ModelGroups) > 0 {
-		for _, mg := range agent.ModelGroups {
-			label := mg.Name
-			if strings.EqualFold(label, "Gemini Models") {
-				label = "Gemini"
-			} else if strings.EqualFold(label, "Claude and GPT models") || strings.EqualFold(label, "Claude and GPT") {
-				label = "Claude/GPT"
-			}
-			line := formatCompactGroupLine(overlayLabel(label), mg.Windows, contentW)
-			if stale {
-				line = staleValueANSI(line)
-			}
-			lines = append(lines, line)
-		}
-	} else if agent.Session != nil || agent.Weekly != nil {
-		var wins []QuotaWindow
-		// Order: Weekly first, then Session (or vice-versa, matching weekly/5h)
-		if agent.Weekly != nil {
-			wins = append(wins, *agent.Weekly)
-		}
-		if agent.Session != nil {
-			wins = append(wins, *agent.Session)
-		}
-		if len(wins) == 2 {
-			label := "Wk / 5h"
-			line := formatCompactGroupLine(overlayLabel(label), wins, contentW)
-			if stale {
-				line = staleValueANSI(line)
-			}
-			lines = append(lines, line)
-		} else if len(wins) == 1 {
-			line := formatCompactGroupLine(overlayLabel(wins[0].Name), wins, contentW)
-			if stale {
-				line = staleValueANSI(line)
-			}
-			lines = append(lines, line)
-		}
-	}
-
-	// A fetch error is only worth a line when it actually explains missing
-	// quota windows — an agent with model-group windows already showing has
-	// nothing to apologize for.
-	if agent.QuotaFetchError != "" && len(agent.ModelGroups) == 0 && agent.Session == nil && agent.Weekly == nil {
-		lines = append(lines, fmt.Sprintf("%squota: unavailable (%s)\x1b[0m", ansiDimGrey, agent.QuotaFetchError))
-	}
-
-	if showTokens && agent.Tokens != nil {
-		spark := rate.Spark
-		if spark == "" {
-			spark = "warming up"
-		}
-		lines = append(lines, fmt.Sprintf("%s[T]\x1b[0m tok: %s total · %.0f/min [%s]",
-			ansiBold, FormatNumber(agent.Tokens.TotalTokens), rate.PerMinute, spark))
-	}
-
-	if !agent.LastRefreshed.IsZero() {
-		updated := "updated " + FormatAgo(agent.LastRefreshed)
-		if stale {
-			updated += " · stale"
-		}
-		lines = append(lines, ansiDimGrey+updated+"\x1b[0m")
-	}
-
-	return wbox{title: title, lines: lines, width: width}
 }
 
 // formatCompactGroupLine formats a model group (or weekly+5h pair) into a single compact line:
@@ -1761,9 +1535,6 @@ func padQuotaWindowPercentWithDuration(w QuotaWindow, duration string, width int
 // WatchOptions bundles optional customization for watch frame rendering.
 type WatchOptions struct {
 	Host string
-	// HistoryStats supplies a precomputed snapshot, keeping database access
-	// out of the interactive redraw path. Nil retains one-shot behavior.
-	HistoryStats *HistorySummaryData
 	// Loading distinguishes the first interactive frame from an empty result.
 	Loading bool
 	// SharedUsageCollector optionally supplies usage from the public shared
@@ -1819,9 +1590,10 @@ type WatchOptions struct {
 	RemoteLoadStreaming bool
 
 	// DebugOverlay is issue 131's `!`-toggled per-agent freshness countdown
-	// overlay: when true, each agent box's row label has its last 3
+	// overlay: when true, each All Usage row label has its last 3
 	// characters replaced with a countdown gauge instead of its normal
-	// text. Display-only, in-process, never persisted.
+	// text. The usage table ignores it. Display-only, in-process, never
+	// persisted.
 	DebugOverlay bool
 }
 
@@ -1853,28 +1625,25 @@ func controlsOverlayLines() []string {
 	l = append(l, bold("Controls")+"  "+dim("(press ?, Esc, q, or Enter to close)"))
 	l = append(l, "")
 	l = append(l, bold("View modes / presets"))
-	l = append(l, fmt.Sprintf("  [%s]  cycle mode: default -> compact -> agents-only -> default", sym("cycle_preset")))
+	l = append(l, fmt.Sprintf("  [%s]  cycle mode: table -> compact -> table", sym("cycle_preset")))
 	l = append(l, fmt.Sprintf("  [%s]  reset panels to the default set", sym("reset_default")))
 	l = append(l, "")
 	l = append(l, bold("Panels (numbered toggles, btop-style)"))
-	l = append(l, fmt.Sprintf("  [%s]  All Usage       [%s]  Claude", sym("toggle_all_usage"), sym("toggle_claude")))
-	l = append(l, fmt.Sprintf("  [%s]  AGY             [%s]  Codex", sym("toggle_agy"), sym("toggle_codex")))
-	l = append(l, fmt.Sprintf("  [%s]  History         [%s]  Processes", sym("toggle_history"), sym("toggle_processes")))
+	l = append(l, fmt.Sprintf("  [%s]  All Usage       [%s]  Processes", sym("toggle_all_usage"), sym("toggle_processes")))
 	l = append(l, fmt.Sprintf("  [%s]  Load            [%s]  Mic", sym("toggle_load"), sym("toggle_mic")))
 	l = append(l, "")
 	l = append(l, bold("Data rows"))
-	l = append(l, fmt.Sprintf("  [%s]  token velocity / details on agent panels", sym("toggle_tokens")))
+	l = append(l, fmt.Sprintf("  [%s]  Tokens and Tok/min columns of the usage table", sym("toggle_tokens")))
 	l = append(l, "")
 	l = append(l, bold("Session"))
 	l = append(l, fmt.Sprintf("  [%s]              toggle remote/local host (when a host is configured)", sym("toggle_remote")))
 	l = append(l, fmt.Sprintf("  [%s]              open/close fetch diagnostics", sym("toggle_diagnostics")))
-	l = append(l, fmt.Sprintf("  [%s]              toggle per-agent freshness countdown gauge (debug overlay)", sym("toggle_debug_overlay")))
+	l = append(l, fmt.Sprintf("  [%s]              toggle per-agent freshness countdown gauge (All Usage panel)", sym("toggle_debug_overlay")))
 	l = append(l, fmt.Sprintf("  [%s] / Ctrl-C / Esc   quit", sym("quit")))
 	l = append(l, "")
-	l = append(l, dim("Numbered box toggles replaced the old C/G/O/H/P/L letter keys (issue"))
-	l = append(l, dim("132); [a] keeps working as a compat alias for All Usage's [1]. The"))
-	l = append(l, dim("footer only shows the most common controls — this overlay is the"))
-	l = append(l, dim("full reference, sourced from spec/actions.yaml."))
+	l = append(l, dim("[a] is a compat alias for All Usage's [1]. The footer only shows the"))
+	l = append(l, dim("most common controls — this overlay is the full reference, sourced"))
+	l = append(l, dim("from spec/actions.yaml."))
 	return l
 }
 
@@ -1884,16 +1653,10 @@ func initialWatchSections(opts WatchOptions) watchSections {
 	sec.Tokens = mode.tokenDetails()
 	for _, panel := range mode.Panels {
 		switch panel {
+		case "table":
+			sec.Table = true
 		case "all_usage":
 			sec.AllUsage = true
-		case "claude":
-			sec.Claude = true
-		case "agy":
-			sec.AGY = true
-		case "codex":
-			sec.Codex = true
-		case "history":
-			sec.History = true
 		case "processes":
 			sec.Processes = true
 		case "load":
@@ -1987,14 +1750,14 @@ func diagnosticStageName(stage FetchStage) string {
 // ones that don't. Overflowing the viewport is what scrolls the terminal and
 // desynchronises every later `\x1b[H`, so the layout must never rely on the
 // terminal to clip for it.
-func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int, live bool, homeDir, historyDir string, opts ...WatchOptions) screenFrame {
-	return buildWatchFrameAt(summary, rates, interval, sec, cols, rows, live, homeDir, historyDir, time.Now(), opts...)
+func buildWatchFrame(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int, live bool, opts ...WatchOptions) screenFrame {
+	return buildWatchFrameAt(summary, rates, interval, sec, cols, rows, live, time.Now(), opts...)
 }
 
 // buildWatchFrameAt is buildWatchFrame with an explicit redraw timestamp. It
 // keeps production wall-clock behavior while allowing the real watch frame
 // path to be tested at exact points in its fetch countdown.
-func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int, live bool, homeDir, historyDir string, now time.Time, opts ...WatchOptions) screenFrame {
+func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interval time.Duration, sec watchSections, cols, rows int, live bool, now time.Time, opts ...WatchOptions) screenFrame {
 	var opt WatchOptions
 	if len(opts) > 0 {
 		opt = opts[0]
@@ -2024,22 +1787,6 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		return fit(diagnosticsOverlayLines(opt.Diagnostics, opt.DiagnosticsOffset), ocols, rows)
 	}
 
-	targetHistoryDir := historyDir
-	if targetHistoryDir == "" {
-		targetHistoryDir = HistoryDir(homeDir)
-	}
-	stats := opt.HistoryStats
-	if stats == nil {
-		value, _ := HistorySummaryStats(targetHistoryDir)
-		stats = &value
-	}
-	fileCount, totalBytes := stats.FileCount, stats.TotalBytes
-	fileWord := "files"
-	if fileCount == 1 {
-		fileWord = "file"
-	}
-	historyStatStr := fmt.Sprintf("   %shistory: %d %s (%s)\x1b[0m", ansiDimGrey, fileCount, fileWord, FormatBytes(totalBytes))
-
 	// discovered is every agent the collector actually found real local/
 	// remote state for (issue 083: self-hiding, auto-discovery display) — an
 	// agent that isn't installed or configured on this machine never enters
@@ -2052,13 +1799,6 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		// "just refreshed a while ago."
 		if agent.HasUsageData() && !agent.IsStale(DefaultDisplayStaleness) {
 			discovered = append(discovered, agent)
-		}
-	}
-
-	var visible []AgentUsage
-	for _, agent := range discovered {
-		if sec.agentVisible(agent.AgentID) {
-			visible = append(visible, agent)
 		}
 	}
 
@@ -2076,14 +1816,6 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	// (issue 094, opened via [?]) remains the place to see exactly which
 	// boxes are hidden and why.
 	hiddenCount := 0
-	for _, agent := range discovered {
-		if !sec.agentVisible(agent.AgentID) {
-			hiddenCount++
-		}
-	}
-	if !sec.History {
-		hiddenCount++
-	}
 	if !sec.Processes {
 		hiddenCount++
 	}
@@ -2109,8 +1841,8 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	var header []string
 	if mode.titleBar() {
 		header = []string{
-			fmt.Sprintf("%s%s\x1b[0m  %s%s%s",
-				ansiBold, titlePrefix, summary.Timestamp.Format("15:04:05 MST"), historyStatStr, hiddenHint),
+			fmt.Sprintf("%s%s\x1b[0m  %s%s",
+				ansiBold, titlePrefix, summary.Timestamp.Format("15:04:05 MST"), hiddenHint),
 			"",
 		}
 	}
@@ -2145,6 +1877,13 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 			ansiDimGrey+"or run `harnez agent-collector --once` to collect a fresh snapshot\x1b[0m",
 			"",
 		)
+	}
+	// The normal view mode's plain usage table sits above any boxes.
+	if sec.Table {
+		if table := usageTableLines(discovered, rates, sec.Tokens, now); len(table) > 0 {
+			body = append(body, table...)
+			body = append(body, "")
+		}
 	}
 
 	// Resolve data that a panel's build func needs but that must only be
@@ -2197,15 +1936,6 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	if sec.AllUsage {
 		panels = append(panels, panel{"a", func(w int) wbox { return buildAllUsageBoxAt(summary, w, opt.DebugOverlay, now, interval) }})
 	}
-	for _, agent := range visible {
-		agent := agent
-		panels = append(panels, panel{agentKey(agent.AgentID), func(w int) wbox {
-			return buildAgentBoxAt(agent, rates[agent.AgentID], w, sec.Tokens, opt.DebugOverlay, now, interval)
-		}})
-	}
-	if sec.History {
-		panels = append(panels, panel{"H", func(w int) wbox { return buildHistoryBoxWithStats(targetHistoryDir, w, *stats) }})
-	}
 	if sec.Processes {
 		panels = append(panels, panel{"P", func(w int) wbox { return buildProcessesBox(w, procCounts) }})
 	}
@@ -2224,6 +1954,13 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		panels = append(panels, panel{"R", func(w int) wbox { return buildRemoteLoadBox(w, remoteHost, remoteSnap, remoteStreaming) }})
 	}
 
+	if len(panels) == 0 && sec.Table {
+		if len(body) > 0 && body[len(body)-1] == "" {
+			body = body[:len(body)-1]
+		}
+		lines := append(append(header, body...), footer...)
+		return fit(lines, usable, rows)
+	}
 	if len(panels) == 0 {
 		message := "(all panels hidden)"
 		if !mode.titleBar() && !mode.hiddenList() && !mode.overflowHint() {
@@ -2317,7 +2054,7 @@ func RenderSummary(ctx context.Context, homeDir string, client *http.Client, out
 	opt.ShowProcesses = opt.ShowProcesses || showProcesses
 	rows = staticUsageViewRows(rows, opt)
 	sec := initialWatchSections(opt)
-	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, homeDir, "", opt)
+	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, opt)
 	for _, l := range frame.lines {
 		fmt.Fprintln(out, l+"\x1b[0m")
 	}
@@ -2334,7 +2071,7 @@ func RenderSummaryWithUsage(summary UsageSummary, out io.Writer, showProcesses b
 func renderSummaryWithUsageAt(summary UsageSummary, out io.Writer, showProcesses bool, opt WatchOptions, cols, rows int) {
 	opt.ShowProcesses = opt.ShowProcesses || showProcesses
 	rows = staticUsageViewRows(rows, opt)
-	frame := buildWatchFrame(summary, nil, 0, initialWatchSections(opt), cols, rows, false, "", "", opt)
+	frame := buildWatchFrame(summary, nil, 0, initialWatchSections(opt), cols, rows, false, opt)
 	for _, line := range frame.lines {
 		fmt.Fprintln(out, line+"\x1b[0m")
 	}
@@ -2375,7 +2112,7 @@ func RenderSummaryRemote(ctx context.Context, host string, out io.Writer, showPr
 	opt.Host = host
 	opt.ProcCounts = procs
 	sec := initialWatchSections(opt)
-	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, "", "", opt)
+	frame := buildWatchFrame(summary, nil, 0, sec, cols, rows, false, opt)
 	for _, l := range frame.lines {
 		fmt.Fprintln(out, l+"\x1b[0m")
 	}
@@ -3053,7 +2790,6 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	tracker := newRateTracker()
 
 	lastSummary := UsageSummary{Timestamp: time.Now()}
-	historyStats := HistorySummaryData{}
 	loading := true
 	var lastRates map[string]agentRate
 	var lastProcs *AgentProcessCount
@@ -3148,7 +2884,6 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		cols, rows := terminalSize(out)
 		frameOpts := inheritUsageView(opts, WatchOptions{
 			Host:                currentHost,
-			HistoryStats:        &historyStats,
 			Loading:             loading,
 			ProcCounts:          lastProcs,
 			ShowControls:        showControls,
@@ -3162,7 +2897,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			MicLiveLevel:        micLive.Level,
 			MicLiveAvailable:    micLive.Available,
 		})
-		frame := buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir, frameOpts)
+		frame := buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, frameOpts)
 		err := frame.paint(out)
 		throttler.MarkDrawn(time.Now())
 		return err
@@ -3210,7 +2945,6 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		summary UsageSummary
 		procs   *AgentProcessCount
 		host    string
-		history HistorySummaryData
 	}
 	results := make(chan fetchResult, 1)
 	var fetchDone chan struct{}
@@ -3235,17 +2969,13 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				} else {
 					result.summary = CollectAllProgressDetailed(sigCtx, homeDir, client, reportFetchStage, reportFetchDiagnostic)
 				}
-				if sigCtx.Err() == nil && compactUsageView(opts) {
+				if sigCtx.Err() == nil {
 					result.summary, _ = StoreCompactSummary(sigCtx, homeDir, result.summary)
 				}
 				if sigCtx.Err() == nil && historyDir != "" {
 					_ = AppendHistory(historyDir, result.summary)
 				}
 			}
-			if sigCtx.Err() != nil {
-				return
-			}
-			result.history, _ = historySummaryStatsContext(sigCtx, watchHistoryDir(homeDir, historyDir))
 			if sigCtx.Err() != nil {
 				return
 			}
@@ -3284,7 +3014,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			case result := <-results:
 				<-fetchDone
 				fetchDone = nil
-				currentHost, lastProcs, historyStats = result.host, result.procs, result.history
+				currentHost, lastProcs = result.host, result.procs
 				lastSummary = applyStaleQuota(result.summary, lastSummary)
 				lastRates = tracker.update(lastSummary)
 				loading = false
@@ -3313,7 +3043,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 				case result := <-results:
 					<-fetchDone
 					fetchDone = nil
-					currentHost, lastProcs, historyStats = result.host, result.procs, result.history
+					currentHost, lastProcs = result.host, result.procs
 					lastSummary = applyStaleQuota(result.summary, lastSummary)
 					lastRates = tracker.update(lastSummary)
 					loading = false
@@ -3363,7 +3093,7 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 		case result := <-results:
 			<-fetchDone
 			fetchDone = nil
-			currentHost, lastProcs, historyStats = result.host, result.procs, result.history
+			currentHost, lastProcs = result.host, result.procs
 			lastSummary = applyStaleQuota(result.summary, lastSummary)
 			lastRates = tracker.update(lastSummary)
 			loading = false

@@ -45,7 +45,7 @@ func TestBuildWatchFrameRowsFitWidth(t *testing.T) {
 	for _, size := range sizes {
 		cols, rows := size[0], size[1]
 		for _, sec := range sectionSets {
-			frame := buildWatchFrame(summary, nil, 60*time.Second, sec, cols, rows, false, "", "")
+			frame := buildWatchFrame(summary, nil, 60*time.Second, sec, cols, rows, false)
 			for i, l := range frame.lines {
 				if got := visLen(l); got > frame.cols {
 					t.Errorf("size=%dx%d: line %d visible width %d exceeds usable %d: %q",
@@ -192,108 +192,6 @@ func TestPaintClearsEachLine(t *testing.T) {
 
 // testTime is a fixed timestamp used by watch_test helpers.
 var testTime = time.Date(2026, 8, 17, 22, 0, 0, 0, time.UTC)
-
-// TestBuildAgentBoxBarFitsContentW verifies that the adaptive progress bar
-// never causes a quota line to exceed the box's content width (width-4),
-// and that the duration string is preserved when the box is wide enough.
-func TestBuildAgentBoxBarFitsContentW(t *testing.T) {
-	// 3 days + 5 hours → FormatDuration → "3d 5h"; resetStr = " · 3d 5h" (visLen=9)
-	dur := 3*24*time.Hour + 5*time.Hour
-	resetAt := testTime.Add(dur)
-	agent := AgentUsage{
-		AgentID:       "claude",
-		Name:          "Claude Code",
-		Installed:     true,
-		Authenticated: true,
-		Account:       "u***@example.com",
-		Session: &QuotaWindow{
-			Name:         "Session",
-			UsedPercent:  75.0,
-			ResetAt:      &resetAt,
-			DurationLeft: dur,
-		},
-	}
-
-	// In compact layout: 16(label) + 1(sp) + 6(bar) + 1(sp) + 4(percent) + 5(duration) = 33
-	// Duration fits when contentW >= 33.
-	durationThreshold := 33
-
-	for boxWidth := minBoxWidth; boxWidth <= 80; boxWidth++ {
-		box := buildAgentBox(agent, agentRate{}, boxWidth, false, false)
-		contentW := boxWidth - 4
-
-		for _, l := range box.lines {
-			lw := visLen(l)
-			if lw > contentW {
-				t.Errorf("boxWidth=%d: line visible width %d exceeds contentW %d: %q",
-					boxWidth, lw, contentW, stripANSI(l))
-			}
-		}
-
-		// When contentW >= durationThreshold, the compact duration string must appear.
-		if contentW >= durationThreshold {
-			found := false
-			for _, l := range box.lines {
-				if strings.Contains(l, "3d") {
-					found = true
-					break
-				}
-			}
-			if !found {
-				t.Errorf("boxWidth=%d (contentW=%d, threshold=%d): expected duration %q in quota line, lines=%v",
-					boxWidth, contentW, durationThreshold, "3d5h", box.lines)
-			}
-		}
-	}
-}
-
-func TestBuildHistoryBox(t *testing.T) {
-	tempDir := t.TempDir()
-	_ = AppendHistory(tempDir, UsageSummary{
-		Timestamp: testTime,
-		Agents: []AgentUsage{
-			{
-				AgentID:       "claude",
-				Name:          "Claude Code",
-				Installed:     true,
-				Authenticated: true,
-				Tokens: &TokenBreakdown{
-					TotalTokens: 1000,
-				},
-			},
-		},
-	})
-	_ = AppendHistory(tempDir, UsageSummary{
-		Timestamp: testTime.Add(10 * time.Minute),
-		Agents: []AgentUsage{
-			{
-				AgentID:       "claude",
-				Name:          "Claude Code",
-				Installed:     true,
-				Authenticated: true,
-				Tokens: &TokenBreakdown{
-					TotalTokens: 2500,
-				},
-			},
-		},
-	})
-
-	box := buildHistoryBox("", tempDir, 40)
-	if !strings.Contains(box.title, "⁵") || !strings.Contains(box.title, "History") {
-		t.Errorf("expected box title to contain superscript 5 and History, got %q", box.title)
-	}
-
-	rendered := strings.Join(box.lines, "\n")
-	if !strings.Contains(rendered, "1 file") {
-		t.Errorf("expected box to contain '1 file', got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "+1,500 used") {
-		t.Errorf("expected box to contain '+1,500 used', got:\n%s", rendered)
-	}
-	if !strings.Contains(rendered, "9,000/hr") {
-		t.Errorf("expected box to contain '9,000/hr', got:\n%s", rendered)
-	}
-}
 
 func TestBuildAllUsageBox(t *testing.T) {
 	summary := UsageSummary{
@@ -562,22 +460,6 @@ func TestCollectorStatusMarkersAndDegradedAllUsageRow(t *testing.T) {
 	}
 	if strings.Contains(text, "! OpenAI Codex [") {
 		t.Errorf("degraded row fabricated a quota bar: %q", text)
-	}
-}
-
-func TestCollectorStatusMarkerFitsNarrowAgentBox(t *testing.T) {
-	agent := AgentUsage{
-		AgentID: "codex", Name: "OpenAI Codex", Installed: true,
-		QuotaFetchError: "no session found",
-	}
-	box := buildAgentBox(agent, agentRate{}, minBoxWidth, false, false)
-	for _, line := range box.lines {
-		if got := visLen(line); got > box.width-4 {
-			t.Fatalf("line width %d exceeds content width %d: %q", got, box.width-4, stripANSI(line))
-		}
-	}
-	if !strings.Contains(stripANSI(box.title), "! OpenAI") {
-		t.Fatalf("agent title lacks collector marker: %q", stripANSI(box.title))
 	}
 }
 
@@ -931,7 +813,7 @@ func TestCompactWatchSectionsAndAllUsageToggle(t *testing.T) {
 	if !sec.Processes {
 		t.Fatalf("--proc must show the Processes panel even under --compact: %+v", sec)
 	}
-	if sec.Claude || sec.AGY || sec.Codex || sec.History {
+	if sec.Table {
 		t.Fatalf("compact initial sections should hide the other non-requested panels: %+v", sec)
 	}
 
@@ -970,7 +852,7 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 		},
 	}
 
-	frame := buildWatchFrame(summary, nil, 60*time.Second, compactWatchSections(), 100, 30, true, "", "")
+	frame := buildWatchFrame(summary, nil, 60*time.Second, compactWatchSections(), 100, 30, true)
 	frameText := strings.Join(frame.lines, "\n")
 
 	if !strings.Contains(frameText, "¹") || !strings.Contains(frameText, "All Usage") {
@@ -1008,7 +890,6 @@ func TestBuildWatchFrame_CompactShowsOnlyAllUsageAndLoad(t *testing.T) {
 }
 
 func TestBuildWatchFrame_MinimalOmitsChromeAndUsesCompactPanels(t *testing.T) {
-	tempDir := t.TempDir()
 	summary := UsageSummary{
 		Timestamp: testTime,
 		Load:      &LoadSnapshot{},
@@ -1020,11 +901,11 @@ func TestBuildWatchFrame_MinimalOmitsChromeAndUsesCompactPanels(t *testing.T) {
 	}
 	opt := WatchOptions{Minimal: true}
 	sections := initialWatchSections(opt)
-	if !sections.AllUsage || !sections.Load || sections.Claude || sections.AGY || sections.Codex || sections.History {
+	if !sections.AllUsage || !sections.Load || sections.Table {
 		t.Fatalf("minimal mode should use the compact panel preset: %+v", sections)
 	}
 
-	frame := buildWatchFrame(summary, nil, time.Minute, sections, 100, 30, true, tempDir, tempDir, opt)
+	frame := buildWatchFrame(summary, nil, time.Minute, sections, 100, 30, true, opt)
 	frameText := stripANSI(strings.Join(frame.lines, "\n"))
 	for _, unwanted := range []string{"Agentic usage", "history:", "hidden", "refresh every", "controls"} {
 		if strings.Contains(strings.ToLower(frameText), strings.ToLower(unwanted)) {
@@ -1042,7 +923,6 @@ func TestBuildWatchFrame_MinimalOmitsChromeAndUsesCompactPanels(t *testing.T) {
 }
 
 func TestUsageViewModesKeepOneShotAndWatchPanelDetailInSync(t *testing.T) {
-	tempDir := t.TempDir()
 	summary := UsageSummary{
 		Timestamp: testTime,
 		Load:      &LoadSnapshot{},
@@ -1058,13 +938,12 @@ func TestUsageViewModesKeepOneShotAndWatchPanelDetailInSync(t *testing.T) {
 		{name: "normal", mode: "normal"},
 		{name: "compact", mode: "compact"},
 		{name: "minimal", mode: "minimal"},
-		{name: "dashboard", mode: "dashboard"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			opt := WatchOptions{Mode: tc.mode, HistoryStats: &HistorySummaryData{}}
+			opt := WatchOptions{Mode: tc.mode}
 			sections := initialWatchSections(opt)
-			oneShot := buildWatchFrame(summary, nil, time.Minute, sections, 120, 50, false, tempDir, tempDir, opt)
-			watch := buildWatchFrame(summary, nil, time.Minute, sections, 120, 50, true, tempDir, tempDir, opt)
+			oneShot := buildWatchFrame(summary, nil, time.Minute, sections, 120, 50, false, opt)
+			watch := buildWatchFrame(summary, nil, time.Minute, sections, 120, 50, true, opt)
 			panelTitles := func(frame screenFrame) string {
 				var titles []string
 				for _, line := range frame.lines {
@@ -1106,7 +985,7 @@ func TestUsageViewModesKeepOneShotAndWatchPanelDetailInSync(t *testing.T) {
 }
 
 func TestWatchRedrawInheritsUsageViewMode(t *testing.T) {
-	for _, mode := range []string{"", "normal", "compact", "minimal", "dashboard"} {
+	for _, mode := range []string{"", "normal", "compact", "minimal"} {
 		t.Run(mode, func(t *testing.T) {
 			base := WatchOptions{Mode: mode, Compact: mode == "compact", Minimal: mode == "minimal"}
 			redraw := inheritUsageView(base, WatchOptions{Loading: true})
@@ -1117,62 +996,6 @@ func TestWatchRedrawInheritsUsageViewMode(t *testing.T) {
 				t.Fatalf("watch redraw changed panel selection: base=%+v redraw=%+v", initialWatchSections(base), initialWatchSections(redraw))
 			}
 		})
-	}
-}
-
-func TestBuildWatchFrame_HistoryHeaderAnd4Boxes(t *testing.T) {
-	tempDir := t.TempDir()
-	_ = AppendHistory(tempDir, UsageSummary{
-		Timestamp: testTime,
-		Agents: []AgentUsage{
-			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true},
-		},
-	})
-
-	summary := UsageSummary{
-		Timestamp: testTime,
-		Agents: []AgentUsage{
-			{AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true},
-			{AgentID: "agy", Name: "Antigravity", Installed: true, Authenticated: true},
-			{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true},
-		},
-	}
-
-	sec := defaultWatchSections()
-	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", tempDir)
-	frameText := strings.Join(frame.lines, "\n")
-
-	// Verify header contains history counter
-	if !strings.Contains(frameText, "history: 1 file") {
-		t.Errorf("expected header to contain 'history: 1 file', got:\n%s", frameText)
-	}
-
-	// Verify all 4 boxes exist: Claude, AGY, Codex, and History
-	if !strings.Contains(frameText, "²") || !strings.Contains(frameText, "Claude Code") {
-		t.Errorf("expected frame to contain Claude box")
-	}
-	if !strings.Contains(frameText, "³") || !strings.Contains(frameText, "Antigravity") {
-		t.Errorf("expected frame to contain AGY box")
-	}
-	if !strings.Contains(frameText, "⁴") || !strings.Contains(frameText, "OpenAI Codex") {
-		t.Errorf("expected frame to contain Codex box")
-	}
-	if !strings.Contains(frameText, "⁵") || !strings.Contains(frameText, "History") {
-		t.Errorf("expected frame to contain History box")
-	}
-
-	// Verify hiding history works
-	sec.History = false
-	frameHidden := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", tempDir)
-	frameHiddenText := strings.Join(frameHidden.lines, "\n")
-	if strings.Contains(frameHiddenText, "+0 used") || strings.Contains(frameHiddenText, "used ·") {
-		t.Errorf("expected history box content to be hidden when sec.History is false")
-	}
-	// AllUsage (default off) + Processes (default off) + History (just
-	// toggled off) = 3 hidden — issue 132's single hidden-count summary
-	// replaces the old per-box "[H] [P]" badge list.
-	if !strings.Contains(frameHiddenText, "3 hidden") {
-		t.Errorf("expected header to show a single '3 hidden' summary, got:\n%s", frameHiddenText)
 	}
 }
 
@@ -1191,7 +1014,7 @@ func TestBuildWatchFrame_SelfHidesAgentsWithoutUsageData(t *testing.T) {
 	}
 
 	sec := defaultWatchSections()
-	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false)
 	frameText := strings.Join(frame.lines, "\n")
 
 	if !strings.Contains(frameText, "Claude Code") {
@@ -1202,13 +1025,6 @@ func TestBuildWatchFrame_SelfHidesAgentsWithoutUsageData(t *testing.T) {
 	}
 	if strings.Contains(frameText, "OpenAI Codex") {
 		t.Errorf("expected frame to omit the Codex box (no usage data), got:\n%s", frameText)
-	}
-	// Undiscovered agents (agy/codex, Installed: false) never enter the
-	// hidden-count either — only AllUsage and Processes are toggled off by
-	// default here, so the single-count summary must read "2 hidden", not
-	// inflated by agents that were never discovered in the first place.
-	if !strings.Contains(frameText, "2 hidden") {
-		t.Errorf("expected hidden-count hint to read '2 hidden' (AllUsage+Processes only), got:\n%s", frameText)
 	}
 }
 
@@ -1227,7 +1043,7 @@ func TestBuildWatchFrame_AllAgentsAbsent(t *testing.T) {
 
 	sec := defaultWatchSections()
 	sec.Processes = false
-	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false)
 	frameText := strings.Join(frame.lines, "\n")
 
 	// Box titles render as "<symbol> <Name>"; check for that rather than the
@@ -1269,14 +1085,14 @@ func TestBuildWatchFrame_StaleWithinSevenDaysStillShown(t *testing.T) {
 	}
 
 	sec := defaultWatchSections()
-	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false)
 	frameText := strings.Join(frame.lines, "\n")
 
 	if !strings.Contains(frameText, "Antigravity") {
 		t.Errorf("expected frame to still show the stale-but-within-7d agent box, got:\n%s", frameText)
 	}
-	if !strings.Contains(frameText, "updated") || !strings.Contains(frameText, "3h") {
-		t.Errorf("expected frame to annotate the box with 'updated ~3h ago', got:\n%s", frameText)
+	if !strings.Contains(frameText, "3h ago") {
+		t.Errorf("expected the Updated column to read '3h ago', got:\n%s", frameText)
 	}
 }
 
@@ -1300,7 +1116,7 @@ func TestBuildWatchFrame_SevenDayStaleAgentHidden(t *testing.T) {
 
 	sec := defaultWatchSections()
 	sec.Processes = false
-	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false)
 	frameText := strings.Join(frame.lines, "\n")
 
 	if strings.Contains(frameText, "³ Antigravity") {
@@ -1350,24 +1166,16 @@ func TestBuildWatchFrame_ProcessesBox(t *testing.T) {
 	if sec.Processes {
 		t.Errorf("expected sec.Processes to be false by default")
 	}
-	frameDefault := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frameDefault := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false)
 	frameDefaultText := strings.Join(frameDefault.lines, "\n")
-	// AllUsage (default off) + Processes (default off) = 2 hidden.
-	if !strings.Contains(frameDefaultText, "2 hidden") {
-		t.Errorf("expected '2 hidden' in header, got:\n%s", frameDefaultText)
-	}
 	if strings.Contains(frameDefaultText, "Processes") {
 		t.Errorf("expected Processes box to be hidden by default")
 	}
 
 	// Toggled visible
 	sec.Processes = true
-	frameVisible := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false, "", "")
+	frameVisible := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, false)
 	frameVisibleText := strings.Join(frameVisible.lines, "\n")
-	// Only AllUsage remains hidden now.
-	if !strings.Contains(frameVisibleText, "1 hidden") {
-		t.Errorf("expected '1 hidden' once sec.Processes is true, got:\n%s", frameVisibleText)
-	}
 	if !strings.Contains(frameVisibleText, "⁶") || !strings.Contains(frameVisibleText, "Processes") {
 		t.Errorf("expected Processes box to be visible when sec.Processes is true, got:\n%s", frameVisibleText)
 	}
@@ -1388,12 +1196,12 @@ func TestBuildWatchFrame_HiddenCountAtZeroOneAndN(t *testing.T) {
 		},
 	}
 
-	// 0 hidden: everything defaultWatchSections tracks is on except
-	// AllUsage/Processes, so force those on too for a true zero-hidden case.
-	allOn := defaultWatchSections()
-	allOn.AllUsage = true
+	// Only compact mode lists hidden boxes; the normal table view has none.
+	// 0 hidden: compact turns everything on except Processes.
+	opt := WatchOptions{Mode: "compact"}
+	allOn := compactWatchSections()
 	allOn.Processes = true
-	frameZero := buildWatchFrame(summary, nil, 60*time.Second, allOn, 100, 30, false, "", "")
+	frameZero := buildWatchFrame(summary, nil, 60*time.Second, allOn, 100, 30, false, opt)
 	zeroText := strings.Join(frameZero.lines, "\n")
 	if strings.Contains(zeroText, "hidden") {
 		t.Errorf("expected no hidden-count hint at 0 hidden boxes, got:\n%s", zeroText)
@@ -1402,22 +1210,21 @@ func TestBuildWatchFrame_HiddenCountAtZeroOneAndN(t *testing.T) {
 	// 1 hidden: only Processes off.
 	oneHidden := allOn
 	oneHidden.Processes = false
-	frameOne := buildWatchFrame(summary, nil, 60*time.Second, oneHidden, 100, 30, false, "", "")
+	frameOne := buildWatchFrame(summary, nil, 60*time.Second, oneHidden, 100, 30, false, opt)
 	oneText := strings.Join(frameOne.lines, "\n")
 	if !strings.Contains(oneText, "1 hidden") {
 		t.Errorf("expected '1 hidden' with exactly one box toggled off, got:\n%s", oneText)
 	}
 
-	// N hidden: AllUsage, Processes, History, Load all off (4).
+	// N hidden: AllUsage, Processes, Load all off (3).
 	nHidden := allOn
 	nHidden.AllUsage = false
 	nHidden.Processes = false
-	nHidden.History = false
 	nHidden.Load = false
-	frameN := buildWatchFrame(summary, nil, 60*time.Second, nHidden, 100, 30, false, "", "")
+	frameN := buildWatchFrame(summary, nil, 60*time.Second, nHidden, 100, 30, false, opt)
 	nText := strings.Join(frameN.lines, "\n")
-	if !strings.Contains(nText, "4 hidden") {
-		t.Errorf("expected '4 hidden' with four boxes toggled off, got:\n%s", nText)
+	if !strings.Contains(nText, "3 hidden") {
+		t.Errorf("expected '3 hidden' with three boxes toggled off, got:\n%s", nText)
 	}
 	// Never a per-box badge list for the toggle-hidden hint (that mechanism
 	// is reserved for the separate "terminal too short" drop note).
@@ -1550,7 +1357,7 @@ func TestBuildWatchFrame_RemoteHost(t *testing.T) {
 	}
 
 	sec := defaultWatchSections()
-	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, true, "", "", WatchOptions{
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, true, WatchOptions{
 		Host: "remote-worker-1",
 	})
 	frameText := strings.Join(frame.lines, "\n")
@@ -1622,7 +1429,7 @@ func TestBuildWatchFrameLayoutMatrix(t *testing.T) {
 		cols, rows := sz[0], sz[1]
 		for _, m := range modes {
 			t.Run(fmt.Sprintf("%dx%d/%s", cols, rows, m.name), func(t *testing.T) {
-				frame := buildWatchFrame(summary, nil, 60*time.Second, m.sec, cols, rows, false, "", tempDir)
+				frame := buildWatchFrame(summary, nil, 60*time.Second, m.sec, cols, rows, false)
 
 				for i, l := range frame.lines {
 					if got := visLen(l); got > frame.cols {
@@ -1697,7 +1504,7 @@ func TestBuildWatchFrameLoadOnlyDoesNotStretch(t *testing.T) {
 	sec.AllUsage = false // only Load left visible, as in the issue's toggle repro
 
 	summary := UsageSummary{Timestamp: testTime}
-	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 24, false, "", "")
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 24, false)
 
 	found := false
 	for _, l := range frame.lines {
@@ -1747,7 +1554,7 @@ func TestBuildWatchFrameCompactAllUsageDoesNotStarveLoad(t *testing.T) {
 		},
 	}
 
-	frame := buildWatchFrame(summary, nil, 60*time.Second, compactWatchSections(), 100, 24, false, "", "")
+	frame := buildWatchFrame(summary, nil, 60*time.Second, compactWatchSections(), 100, 24, false)
 
 	for _, l := range frame.lines {
 		stripped := stripANSI(l)
@@ -1790,10 +1597,9 @@ func TestControlsOverlayListsAllActiveCommandsGroupedByPurpose(t *testing.T) {
 	// Every currently-live action's spec-sourced symbol must be documented
 	// somewhere in the overlay (issue 132: superscript digits for the
 	// numbered box toggles, literal keys for everything else) so it stays
-	// the single source of truth. The old C/G/O/H/P/L letter toggles were
-	// dropped in favor of the numbered scheme (see collision note below).
+	// the single source of truth.
 	for _, key := range []string{
-		"[¹]", "[²]", "[³]", "[⁴]", "[⁵]", "[⁶]", "[⁷]", "[A]",
+		"[¹]", "[⁶]", "[⁷]", "[A]",
 		"[T]", "[m]", "[r]", "[q]",
 	} {
 		if !strings.Contains(plain, key) {
@@ -1822,7 +1628,7 @@ func TestBuildWatchFrameShowControlsRendersOverlayInstead(t *testing.T) {
 		},
 	}
 
-	frame := buildWatchFrame(summary, nil, 60*time.Second, defaultWatchSections(), 100, 30, true, "", "",
+	frame := buildWatchFrame(summary, nil, 60*time.Second, defaultWatchSections(), 100, 30, true,
 		WatchOptions{ShowControls: true})
 	text := stripANSI(strings.Join(frame.lines, "\n"))
 
@@ -1842,36 +1648,17 @@ func TestBuildWatchFrameShowControlsRendersOverlayInstead(t *testing.T) {
 // TestNextWatchPresetCyclesThroughDefaultCompactAgents covers the [m] mode
 // shortcut's transition logic (issue 094 acceptance: at least one
 // preset/mode transition under test).
-func TestNextWatchPresetCyclesThroughDefaultCompactAgents(t *testing.T) {
+func TestNextWatchPresetCyclesTableAndCompact(t *testing.T) {
 	sec, name, idx := nextWatchPreset(0)
-	if name != "compact" || sec != compactWatchSections() {
-		t.Fatalf("preset after default (idx 0) = %q %+v, want compact %+v", name, sec, compactWatchSections())
+	if name != "compact" || sec != compactWatchSections() || idx != 1 {
+		t.Fatalf("preset after table (idx 0) = %q %+v idx %d, want compact %+v idx 1", name, sec, idx, compactWatchSections())
 	}
-	if idx != 1 {
-		t.Fatalf("expected idx 1 after first cycle, got %d", idx)
-	}
-
 	sec, name, idx = nextWatchPreset(idx)
-	if name != "agents" {
-		t.Fatalf("preset after compact = %q, want agents", name)
+	if name != "table" || sec != defaultWatchSections() || idx != 0 {
+		t.Fatalf("preset after compact should wrap to table, got %q %+v idx %d", name, sec, idx)
 	}
-	want := agentsOnlyWatchSections()
-	if sec != want {
-		t.Fatalf("agents preset = %+v, want %+v", sec, want)
-	}
-	if !sec.Claude || !sec.AGY || !sec.Codex || !sec.Tokens {
-		t.Fatalf("agents preset should show discovered agent boxes plus tokens: %+v", sec)
-	}
-	if sec.History || sec.Load || sec.Processes || sec.AllUsage {
-		t.Fatalf("agents preset should hide History/Load/Processes/AllUsage: %+v", sec)
-	}
-
-	sec, name, idx = nextWatchPreset(idx)
-	if name != "default" || sec != defaultWatchSections() {
-		t.Fatalf("preset after agents should wrap to default, got %q %+v", name, sec)
-	}
-	if idx != 0 {
-		t.Fatalf("expected idx to wrap to 0, got %d", idx)
+	if !sec.Table || sec.AllUsage || sec.Load {
+		t.Fatalf("table preset should show only the usage table: %+v", sec)
 	}
 }
 
@@ -1932,9 +1719,9 @@ func TestDispatchWatchKeyOverlayOpenClose(t *testing.T) {
 func TestDispatchWatchKeyToggleRemote(t *testing.T) {
 	// When configuredHost is empty (e.g. local mode with load.watch_host),
 	// pressing r toggles RemoteLoad section and requests a redraw.
-	stLocal := watchKeyState{sec: defaultWatchSections()}
+	stLocal := watchKeyState{sec: compactWatchSections()}
 	if !stLocal.sec.RemoteLoad {
-		t.Fatalf("expected RemoteLoad to default to true")
+		t.Fatalf("expected RemoteLoad to default to true in compact mode")
 	}
 	stLocal, eff := dispatchWatchKey(stLocal, 'r', false)
 	if stLocal.sec.RemoteLoad || !eff.redraw || eff.fetch {
@@ -1960,8 +1747,9 @@ func TestDispatchWatchKeyToggleRemote(t *testing.T) {
 
 func TestBuildWatchFrame_RemoteLoadToggle(t *testing.T) {
 	summary := UsageSummary{Timestamp: testTime}
-	sec := defaultWatchSections()
+	sec := compactWatchSections()
 	opts := WatchOptions{
+		Mode:           "compact",
 		RemoteLoadHost: "phoenix",
 		RemoteLoadSnapshot: &LoadSnapshot{
 			CPU: CPULoad{NumCPU: 8, CPUPercent: 10, CPUPercentOk: true},
@@ -1969,7 +1757,7 @@ func TestBuildWatchFrame_RemoteLoadToggle(t *testing.T) {
 	}
 
 	// Enabled by default
-	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, true, "", "", opts)
+	frame := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, true, opts)
 	frameText := strings.Join(frame.lines, "\n")
 	if !strings.Contains(frameText, "Remote Load") {
 		t.Fatalf("expected Remote Load box in frame, got:\n%s", frameText)
@@ -1977,7 +1765,7 @@ func TestBuildWatchFrame_RemoteLoadToggle(t *testing.T) {
 
 	// Toggled off
 	sec.RemoteLoad = false
-	frameDisabled := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, true, "", "", opts)
+	frameDisabled := buildWatchFrame(summary, nil, 60*time.Second, sec, 100, 30, true, opts)
 	disabledText := strings.Join(frameDisabled.lines, "\n")
 	if strings.Contains(disabledText, "Remote Load") {
 		t.Fatalf("expected Remote Load box to be hidden when sec.RemoteLoad is false, got:\n%s", disabledText)
@@ -2026,7 +1814,7 @@ func TestDiagnosticsOverlayFitsAndShowsRecentEvents(t *testing.T) {
 			t.Errorf("diagnostics overlay %q does not contain %q", text, want)
 		}
 	}
-	frame := buildWatchFrame(UsageSummary{}, nil, DefaultWatchInterval, defaultWatchSections(), 80, 18, true, "", "", WatchOptions{
+	frame := buildWatchFrame(UsageSummary{}, nil, DefaultWatchInterval, defaultWatchSections(), 80, 18, true, WatchOptions{
 		ShowDiagnostics: true,
 		Diagnostics:     []string{"12:00:01 started claude"},
 	})
@@ -2071,10 +1859,9 @@ func TestDispatchWatchKeyDebugOverlayRendersAndRestoresFrame(t *testing.T) {
 	}
 	sec := watchSections{AllUsage: true}
 	state := watchKeyState{sec: sec}
-	historyDir := t.TempDir()
 
 	render := func(debugOverlay bool) screenFrame {
-		return buildWatchFrame(summary, nil, time.Minute, sec, 90, 24, true, t.TempDir(), historyDir, WatchOptions{
+		return buildWatchFrame(summary, nil, time.Minute, sec, 90, 24, true, WatchOptions{
 			DebugOverlay: debugOverlay,
 		})
 	}
@@ -2169,8 +1956,7 @@ func TestBuildWatchFrameAtDebugOverlayUsesWatchFetchInterval(t *testing.T) {
 		LastRefreshed: refreshed, Weekly: &QuotaWindow{Name: "Weekly", UsedPercent: 25},
 	}}}
 
-	frame := buildWatchFrameAt(summary, nil, DefaultWatchInterval, compactWatchSections(), 90, 24, true,
-		t.TempDir(), t.TempDir(), refreshed.Add(DefaultWatchInterval/2), WatchOptions{Compact: true, DebugOverlay: true})
+	frame := buildWatchFrameAt(summary, nil, DefaultWatchInterval, compactWatchSections(), 90, 24, true, refreshed.Add(DefaultWatchInterval/2), WatchOptions{Compact: true, DebugOverlay: true})
 	text := stripANSI(strings.Join(frame.lines, "\n"))
 	halfGauge := timeoutSnakeGlyph(.5)
 	if !strings.Contains(text, halfGauge+" Claude C…") {
@@ -2212,8 +1998,8 @@ func TestDispatchWatchKeyModeCyclesAndKeepsShowProcesses(t *testing.T) {
 	}
 
 	st, _ = dispatchWatchKey(st, 'm', true)
-	if !st.sec.Claude || !st.sec.AGY || !st.sec.Codex || !st.sec.Processes {
-		t.Fatalf("expected agents preset with Processes forced on: %+v", st.sec)
+	if !st.sec.Table || !st.sec.Processes {
+		t.Fatalf("expected table preset with Processes forced on: %+v", st.sec)
 	}
 }
 
@@ -2706,7 +2492,7 @@ func TestSplashStatusDrained(t *testing.T) {
 }
 
 // TestRenderSummary_CompactSelectsReducedSections ensures the one-shot CLI
-// renders the same reduced panel set as `--watch --compact`.
+// renders the table by default and the compact panel set for `--compact`.
 func TestRenderSummary_CompactSelectsReducedSections(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
@@ -2714,16 +2500,13 @@ func TestRenderSummary_CompactSelectsReducedSections(t *testing.T) {
 	var full bytes.Buffer
 	RenderSummary(ctx, home, nil, &full, false)
 	fullText := stripANSI(full.String())
-	if !strings.Contains(fullText, "⁵ History") {
-		t.Fatalf("expected default usage output to include the History box (spec normal mode), got:\n%s", fullText)
+	if strings.Contains(fullText, "⁷ Load") {
+		t.Fatalf("expected the default usage table to show no Load box (spec normal mode), got:\n%s", fullText)
 	}
 
 	var compact bytes.Buffer
 	RenderSummary(ctx, home, nil, &compact, false, WatchOptions{Mode: "compact"})
 	compactText := stripANSI(compact.String())
-	if strings.Contains(compactText, "⁵ History") {
-		t.Fatalf("expected --compact to drop the History box, got:\n%s", compactText)
-	}
 	if !strings.Contains(compactText, "⁷ Load") {
 		t.Fatalf("expected --compact to keep the Load box, got:\n%s", compactText)
 	}
@@ -2735,7 +2518,7 @@ func TestRenderSummaryWithUsageMatchesWatchAtConstrainedHeight(t *testing.T) {
 		{AgentID: "codex", Name: "OpenAI Codex", Installed: true, Authenticated: true, ModelGroups: []ModelGroup{{Name: "OpenAI Codex", Windows: []QuotaWindow{{Name: "5-hour", UsedPercent: 23}, {Name: "Weekly", UsedPercent: 45}}}}},
 		{AgentID: "agy", Name: "AGY", Installed: true, Authenticated: true, ModelGroups: []ModelGroup{{Name: "Gemini", Windows: []QuotaWindow{{Name: "5-hour", UsedPercent: 56}, {Name: "Weekly", UsedPercent: 67}}}}},
 	}}
-	opt := WatchOptions{Mode: "compact", HistoryStats: &HistorySummaryData{}}
+	opt := WatchOptions{Mode: "compact"}
 	normalize := func(text string) string {
 		var lines []string
 		for _, line := range strings.Split(stripANSI(text), "\n") {
@@ -2749,7 +2532,7 @@ func TestRenderSummaryWithUsageMatchesWatchAtConstrainedHeight(t *testing.T) {
 	for _, rows := range []int{3, 4, 9} {
 		var out bytes.Buffer
 		renderSummaryWithUsageAt(summary, &out, false, opt, 100, rows)
-		watch := buildWatchFrame(summary, nil, time.Minute, initialWatchSections(opt), 100, rows, true, "", "", opt)
+		watch := buildWatchFrame(summary, nil, time.Minute, initialWatchSections(opt), 100, rows, true, opt)
 		watchText := strings.Join(watch.lines, "\n")
 		if got, want := normalize(out.String()), normalize(watchText); got != want {
 			t.Errorf("compact one-shot and watch content differs at 100x%d\none-shot:\n%s\nwatch:\n%s", rows, got, want)
@@ -2842,45 +2625,6 @@ func TestAllUsageLinesAtDimsStaleAgentRow(t *testing.T) {
 	}
 	if visLen(agyLine) > 70 || visLen(claudeLine) > 70 {
 		t.Errorf("dimming must cost zero layout width: agy=%d claude=%d (contentW=70)", visLen(agyLine), visLen(claudeLine))
-	}
-}
-
-// TestBuildAgentBoxDimsStaleQuotaAndAnnotatesUpdatedCaption verifies the
-// fuller per-agent --watch/--summary panel treatment (buildAgentBox): unlike
-// the compact All Usage aggregate, this view has room to spare, so a stale
-// agent's quota line is both dim-grey wrapped AND the "updated ... ago"
-// caption gets a terminal-independent "· stale" suffix (issue 107 AC #2).
-func TestBuildAgentBoxDimsStaleQuotaAndAnnotatesUpdatedCaption(t *testing.T) {
-	stale := AgentUsage{
-		AgentID: "agy", Name: "Antigravity", Installed: true, Authenticated: true,
-		Session:       &QuotaWindow{Name: "5h", UsedPercent: 42},
-		LastRefreshed: time.Now().Add(-3 * time.Hour),
-	}
-	fresh := AgentUsage{
-		AgentID: "claude", Name: "Claude Code", Installed: true, Authenticated: true,
-		Session:       &QuotaWindow{Name: "5h", UsedPercent: 42},
-		LastRefreshed: time.Now(),
-	}
-
-	staleBox := buildAgentBox(stale, agentRate{}, 60, false, false)
-	freshBox := buildAgentBox(fresh, agentRate{}, 60, false, false)
-
-	staleText := strings.Join(staleBox.lines, "\n")
-	freshText := strings.Join(freshBox.lines, "\n")
-
-	if !strings.Contains(staleText, "· stale") {
-		t.Errorf("expected the stale panel's updated caption to say '· stale', got:\n%s", stripANSI(staleText))
-	}
-	if strings.Contains(freshText, "· stale") {
-		t.Errorf("expected the fresh panel's updated caption to NOT say '· stale', got:\n%s", stripANSI(freshText))
-	}
-	if !strings.Contains(staleText, ansiOpen("dim-grey")+"5h") && !strings.Contains(stripANSI(staleText), "42%") {
-		t.Errorf("expected the stale panel's quota line to be present and dim-grey wrapped, got:\n%q", staleText)
-	}
-	for _, l := range staleBox.lines {
-		if lw := visLen(l); lw > staleBox.width-4 {
-			t.Errorf("stale line exceeds content width %d: %d %q", staleBox.width-4, lw, stripANSI(l))
-		}
 	}
 }
 

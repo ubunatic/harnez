@@ -187,7 +187,7 @@ func validateUsageModeFlags(explicitMode, usageRaw, usageJSON, usageLoom bool) e
 	return nil
 }
 
-func selectUsageViewMode(normal, compact, minimal, dashboard bool) (string, bool, error) {
+func selectUsageViewMode(normal, compact, minimal bool) (string, bool, error) {
 	selected := 0
 	mode := ""
 	if normal {
@@ -202,12 +202,8 @@ func selectUsageViewMode(normal, compact, minimal, dashboard bool) (string, bool
 		selected++
 		mode = "minimal"
 	}
-	if dashboard {
-		selected++
-		mode = "dashboard"
-	}
 	if selected > 1 {
-		return "", true, fmt.Errorf("--normal, --compact, --minimal, and --dashboard are mutually exclusive")
+		return "", true, fmt.Errorf("--normal, --compact, and --minimal are mutually exclusive")
 	}
 	return mode, selected == 1, nil
 }
@@ -242,7 +238,6 @@ func newRootCmd() *cobra.Command {
 	var usageAgent string
 	var usageOffline bool
 	var usageWatch bool
-	var usageDashboard bool
 	var usageSplash bool
 	var usageRaw bool
 	var usageProcesses bool
@@ -266,7 +261,7 @@ func newRootCmd() *cobra.Command {
 				client = &http.Client{Timeout: 5 * time.Second}
 			}
 
-			selectedMode, explicitMode, err := selectUsageViewMode(usageNormal, usageCompact, usageMinimal, usageDashboard)
+			selectedMode, explicitMode, err := selectUsageViewMode(usageNormal, usageCompact, usageMinimal)
 			if err != nil {
 				return err
 			}
@@ -453,11 +448,11 @@ func newRootCmd() *cobra.Command {
 				if sharedClient != nil {
 					loadOpt.SharedUsageCollector = sharedCollect
 				}
-				if usageCompactMode && sharedClient == nil {
+				if sharedClient == nil {
 					summary := usage.CollectAll(ctx, "", client)
 					stored, err := usage.StoreCompactSummary(ctx, "", summary)
 					if err != nil {
-						debugLog("usage compact persistence failed: %v", err)
+						debugLog("usage store persistence failed: %v", err)
 					}
 					usage.RenderSummaryWithUsage(stored, cmd.OutOrStdout(), usageProcesses, loadOpt)
 				} else {
@@ -474,14 +469,13 @@ func newRootCmd() *cobra.Command {
 	usageCmd.Flags().StringVar(&usageAgent, "agent", "", "filter to a specific agent (claude, agy, codex)")
 	usageCmd.Flags().StringVar(&usageHost, "host", "", "query usage from a remote host via SSH")
 	usageCmd.Flags().BoolVar(&usageOffline, "offline", false, "disable live network queries and use local caches only")
-	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the dashboard in place with a tokens/min trend")
-	usageCmd.Flags().BoolVar(&usageDashboard, "dashboard", false, "show the dashboard view")
+	usageCmd.Flags().BoolVarP(&usageWatch, "watch", "w", false, "live-refresh the selected view in place with a tokens/min trend")
 	usageCmd.Flags().BoolVar(&usageSplash, "splash", false, "render startup splash screen while initial collection is in flight (--watch only)")
-	usageCmd.Flags().BoolVar(&usageNormal, "normal", false, "show the normal detail view")
+	usageCmd.Flags().BoolVar(&usageNormal, "normal", false, "show the usage table (the default view)")
 	usageCmd.Flags().BoolVar(&usageCompact, "compact", false, "show the compact all-usage and load panels")
 	usageCmd.Flags().BoolVar(&usageMinimal, "minimal", false, "show compact panels without title/status bars or hidden-panel and overflow hints")
 	usageCmd.Flags().BoolVar(&usageLoom, "loom", false, "start usage monitor as loom app (compact view)")
-	usageCmd.Flags().BoolVarP(&usageRaw, "raw", "r", false, "print the detailed per-field usage report instead of the selected dashboard view")
+	usageCmd.Flags().BoolVarP(&usageRaw, "raw", "r", false, "print the detailed per-field usage report instead of the selected view")
 	usageCmd.Flags().BoolVarP(&usageProcesses, "proc", "p", false, "show running agent processes panel in the default view / --watch")
 	usageCmd.Flags().BoolVar(&usageProcesses, "processes", false, "show running agent processes panel in the default view / --watch")
 	usageCmd.Flags().BoolVar(&usageMic, "mic", false, "show the microphone level/recording panel in --watch (hidden if no audio interface is found)")

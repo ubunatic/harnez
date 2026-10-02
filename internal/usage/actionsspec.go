@@ -44,10 +44,6 @@ var validActionCategories = map[string]bool{
 // watchSections fields a category:box action is allowed to name.
 var validBoxIDs = map[string]bool{
 	"all_usage": true,
-	"claude":    true,
-	"agy":       true,
-	"codex":     true,
-	"history":   true,
 	"processes": true,
 	"load":      true,
 	"mic":       true,

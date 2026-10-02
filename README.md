@@ -55,7 +55,7 @@ harnez apply           # apply embedded config to Claude, Antigravity, Codex, an
 harnez status          # show what is and isn't applied
 harnez diff            # preview changes without writing
 harnez usage           # show unified token, session, and quota status across agents
-harnez usage --watch   # live TUI dashboard with real-time token velocity
+harnez usage --watch   # live usage table with real-time token velocity
 harnez revert --managed # remove all managed blocks/keys
 harnez clean procs q1  # inspect stale processes and quota state (dry-run)
 ```
@@ -308,9 +308,9 @@ records the measured input-token effect.
 - `--json` — output usage metrics in JSON format
 - `--agent <name>` — filter to a specific agent (`claude`, `agy`, `codex`)
 - `--offline` — disable live network queries and use local caches only
-- `-w, --watch` — live-refresh the dashboard in place with a tokens/min velocity trend
-- `--dashboard` — show the dashboard view (works with and without `--watch`)
-- `-s, --summary` — print the compact dashboard once and exit
+- `-w, --watch` — live-refresh the selected view in place with a tokens/min velocity trend
+- `--normal` — show the usage table, one row per quota window (the default view)
+- `--compact` / `--minimal` — show the compact All Usage and Load panels (`--minimal` drops the title and status bars)
 - `--interval <duration>` — refresh interval for `--watch` (default `15s`, minimum `10s`)
 
 `init` also accepts:

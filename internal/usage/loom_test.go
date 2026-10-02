@@ -12,7 +12,7 @@ import (
 )
 
 func TestUsageLoomWidget_ConsumeKey(t *testing.T) {
-	widget := NewUsageLoomWidget(UsageSummary{}, WatchOptions{}, "")
+	widget := NewUsageLoomWidget(UsageSummary{}, WatchOptions{})
 	for _, key := range []loom.KeyEvent{{Key: "q"}, {Key: "esc"}, {Key: "ctrl-c"}} {
 		if result := widget.ConsumeKey(key); !result.Quit || !result.Consumed {
 			t.Errorf("ConsumeKey(%+v) = %+v, want quit and consumed", key, result)
@@ -103,7 +103,7 @@ func TestUsageLoomWidget_RendersCorrectUI(t *testing.T) {
 		},
 	}
 
-	widget := NewUsageLoomWidget(summary, WatchOptions{Compact: true}, "")
+	widget := NewUsageLoomWidget(summary, WatchOptions{Compact: true})
 	widget.Now = now
 
 	// Render using loom engine

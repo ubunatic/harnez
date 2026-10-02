@@ -33,3 +33,5 @@ cannot be specified or safely dispatched.
 - Scope reduced by the user: the Actions panel and `--tui` were built (56b08bfc) and then removed.
   What remains is `--dashboard` as a fourth spec-defined view mode, usable with and without
   `--watch` like the other modes. The removed code is in 56b08bfc if actions return later.
+- Later the same day `--dashboard` was removed too, together with the box-based default view it
+  copied: `normal` is now a plain usage table (see issue 689).

@@ -27,34 +27,6 @@ actions:
     symbol: "¹"
     category: box
     box: all_usage
-  toggle_claude:
-    title: "Claude"
-    description: "Toggle the Claude Code agent box"
-    keys: ["2"]
-    symbol: "²"
-    category: box
-    box: claude
-  toggle_agy:
-    title: "AGY"
-    description: "Toggle the Antigravity (AGY) agent box"
-    keys: ["3"]
-    symbol: "³"
-    category: box
-    box: agy
-  toggle_codex:
-    title: "Codex"
-    description: "Toggle the OpenAI Codex agent box"
-    keys: ["4"]
-    symbol: "⁴"
-    category: box
-    box: codex
-  toggle_history:
-    title: "History"
-    description: "Toggle the recorded-usage History box"
-    keys: ["5"]
-    symbol: "⁵"
-    category: box
-    box: history
   toggle_processes:
     title: "Processes"
     description: "Toggle the running agent Processes box"
@@ -77,8 +49,8 @@ actions:
     category: box
     box: mic
   toggle_tokens:
-    title: "Token velocity / details"
-    description: "Toggle the token velocity/detail row on agent panels"
+    title: "Token columns"
+    description: "Toggle the Tokens and Tok/min columns of the usage table"
     keys: ["t", "T"]
     symbol: "T"
     category: data
@@ -90,7 +62,7 @@ actions:
     category: mode
   cycle_preset:
     title: "Cycle mode"
-    description: "Cycle view mode: default -> compact -> agents-only -> default"
+    description: "Cycle view mode: table -> compact -> table"
     keys: ["m", "M"]
     symbol: "m"
     category: mode

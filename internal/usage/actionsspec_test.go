@@ -1,7 +1,6 @@
 package usage
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -19,7 +18,7 @@ func TestEmbeddedActionsSpecIsValid(t *testing.T) {
 	}
 
 	// Every box id watch.go actually renders must have a symbol.
-	for _, box := range []string{"all_usage", "claude", "agy", "codex", "history", "processes", "load"} {
+	for _, box := range []string{"all_usage", "processes", "load", "mic"} {
 		if wa.boxTitleSymbol(box) == "" {
 			t.Errorf("expected embedded spec to define a symbol for box %q", box)
 		}
@@ -173,10 +172,6 @@ func TestSpecDrivenDispatchMatchesDocumentedKeys(t *testing.T) {
 
 	boxField := map[string]func(watchSections) bool{
 		"all_usage": func(s watchSections) bool { return s.AllUsage },
-		"claude":    func(s watchSections) bool { return s.Claude },
-		"agy":       func(s watchSections) bool { return s.AGY },
-		"codex":     func(s watchSections) bool { return s.Codex },
-		"history":   func(s watchSections) bool { return s.History },
 		"processes": func(s watchSections) bool { return s.Processes },
 		"load":      func(s watchSections) bool { return s.Load },
 		"mic":       func(s watchSections) bool { return s.Mic },
@@ -206,17 +201,5 @@ func TestSpecDrivenDispatchMatchesDocumentedKeys(t *testing.T) {
 		if getField(sec) == before {
 			t.Errorf("expected key %q (action %q) to flip box %q, got unchanged: %+v", a.Keys[0], name, a.Box, sec)
 		}
-	}
-}
-
-// TestControlsOverlayDocumentsCollisionNote guards issue 132's acceptance
-// criterion to document keys that changed to avoid collisions with the new
-// numbered scheme: the old C/G/O/H/P/L letter toggles were dropped in favor
-// of digits, and this must be visible in the overlay, not just a commit
-// message.
-func TestControlsOverlayDocumentsCollisionNote(t *testing.T) {
-	plain := stripANSI(strings.Join(controlsOverlayLines(), "\n"))
-	if !strings.Contains(plain, "132") {
-		t.Errorf("expected overlay to reference issue 132's key-scheme change, got:\n%s", plain)
 	}
 }

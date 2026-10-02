@@ -8,12 +8,13 @@ watch_loading_label: Collecting usage…
 view_modes:
   default: normal
   modes:
+    # normal is the plain usage table: one row per quota window, no boxes.
     normal:
-      panels: [claude, agy, codex, history, load, remote_load]
+      panels: [table]
       token_details: true
       title_bar: true
       status_bar: true
-      hidden_list: true
+      hidden_list: false
       overflow_hint: true
     compact:
       panels: [all_usage, load, remote_load]
@@ -29,10 +30,3 @@ view_modes:
       status_bar: false
       hidden_list: false
       overflow_hint: false
-    dashboard:
-      panels: [claude, agy, codex, history, load, remote_load]
-      token_details: true
-      title_bar: true
-      status_bar: true
-      hidden_list: false
-      overflow_hint: true

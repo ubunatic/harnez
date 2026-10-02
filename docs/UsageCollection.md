@@ -136,7 +136,10 @@ Legacy files are archived under `~/.local/share/harnez/archive/usage-legacy/`, n
 ## Usage view modes (2026-10-02)
 
 `spec/usage.yaml` is the source of truth for the usage presentation modes. It defines the `normal`,
-`compact`, `minimal`, and `dashboard` panel sets and display details, plus the default (`normal`).
+`compact`, and `minimal` panel sets and display details, plus the default (`normal`). `normal` is a
+plain table with one row per quota window (agent, quota, used, resets, tokens, tok/min, updated,
+model, account); the per-agent detail boxes and the history totals were removed. All modes read the
+usage store, so the table, `--compact` and `--minimal` show the same readings.
 The JSON Schema and Go loader validate that contract; renderer code should consume the loaded mode instead
 of maintaining parallel hardcoded mode defaults.
 

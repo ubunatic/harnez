@@ -17,17 +17,15 @@ type UsageLoomWidget struct {
 	Summary UsageSummary
 	Rates   map[string]agentRate
 	Opts    WatchOptions
-	HomeDir string
 	Now     time.Time
 }
 
 // NewUsageLoomWidget creates a loom.Widget for displaying the compact usage monitor.
-func NewUsageLoomWidget(summary UsageSummary, opts WatchOptions, homeDir string) *UsageLoomWidget {
+func NewUsageLoomWidget(summary UsageSummary, opts WatchOptions) *UsageLoomWidget {
 	opts.Compact = true
 	return &UsageLoomWidget{
 		Summary: summary,
 		Opts:    opts,
-		HomeDir: homeDir,
 		Now:     time.Now(),
 	}
 }
@@ -39,7 +37,7 @@ func (w *UsageLoomWidget) Draw(c *loom.Canvas, r loom.Rect) {
 	if now.IsZero() {
 		now = time.Now()
 	}
-	frame := buildWatchFrameAt(w.Summary, w.Rates, 0, sec, r.W, r.H, false, w.HomeDir, "", now, w.Opts)
+	frame := buildWatchFrameAt(w.Summary, w.Rates, 0, sec, r.W, r.H, false, now, w.Opts)
 	for i, line := range frame.lines {
 		if i >= r.H {
 			break
@@ -68,13 +66,13 @@ func (w *UsageLoomWidget) ContentHeight() int {
 	if now.IsZero() {
 		now = time.Now()
 	}
-	frame := buildWatchFrameAt(w.Summary, w.Rates, 0, sec, 90, 24, false, w.HomeDir, "", now, w.Opts)
+	frame := buildWatchFrameAt(w.Summary, w.Rates, 0, sec, 90, 24, false, now, w.Opts)
 	return len(frame.lines)
 }
 
 // RenderLoom renders the usage monitor as a loom app widget into ANSI row strings.
 func RenderLoom(summary UsageSummary, opts WatchOptions, cols, rows int) []string {
-	widget := NewUsageLoomWidget(summary, opts, "")
+	widget := NewUsageLoomWidget(summary, opts)
 	return loom.Render(widget, cols, rows)
 }
 
@@ -87,7 +85,7 @@ func RunLoom(ctx context.Context, homeDir string, client *http.Client, out io.Wr
 	} else {
 		summary = CollectAll(ctx, homeDir, client)
 	}
-	widget := NewUsageLoomWidget(summary, opts, homeDir)
+	widget := NewUsageLoomWidget(summary, opts)
 
 	f, isFile := out.(*os.File)
 	if !isFile || !term.IsTerminal(int(f.Fd())) {
