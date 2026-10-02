@@ -1258,6 +1258,135 @@ func saveResumeSession(t *testing.T, dir, id, name, provider string) *subagent.F
 	return store
 }
 
+func TestAppendExternalAgentSessionsDeduplicatesManagedProviderIdentity(t *testing.T) {
+	managed := &subagent.Session{ID: "managed", ProviderSessionID: "provider-id", Provider: "codex"}
+	listed := []*subagent.Session{managed}
+	external := []*subagent.Session{
+		{ID: "provider-id", ProviderSessionID: "provider-id", Provider: "codex", HarnessType: "external"},
+		{ID: "other-id", ProviderSessionID: "other-id", Provider: "codex", HarnessType: "external"},
+	}
+	got := appendExternalAgentSessions(listed, []*subagent.Session{managed}, external)
+	if len(got) != 2 || got[1].ID != "other-id" {
+		t.Fatalf("merged sessions = %#v, want managed plus nonduplicate external", got)
+	}
+}
+
+func TestAgentListIncludesExternalSessionsOnlyInGlobalViews(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(agentSessionEnv, "host-a")
+	t.Setenv("AGY_CONVERSATION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("CLAUDE_SESSION_ID", "")
+	t.Setenv("ANTIGRAVITY_CONVERSATION_ID", "")
+	t.Setenv("ANTIGRAVITY_SESSION_ID", "")
+
+	storeDir := t.TempDir()
+	store, err := subagent.NewSessionStore(storeDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "managed-id", Name: "managed", Provider: "codex", ProviderSessionID: "managed-provider-id", ParentSessionID: "host-a", Status: "completed"}); err != nil {
+		t.Fatal(err)
+	}
+	rollout := filepath.Join(home, ".codex/sessions/2026/10/02/rollout-external.jsonl")
+	if err := os.MkdirAll(filepath.Dir(rollout), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	metadata := `{"type":"session_meta","payload":{"id":"external-session-id","session_id":"external-session-id","cwd":"/work/external-project","model_provider":"openai","source":"cli","timestamp":"2026-10-02T10:00:00Z"}}` + "\n"
+	if err := os.WriteFile(rollout, []byte(metadata), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var scoped bytes.Buffer
+	cmd := newAgentCmd()
+	cmd.SetOut(&scoped)
+	cmd.SetArgs([]string{"list", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(scoped.String(), "managed") || strings.Contains(scoped.String(), "external-session-id") {
+		t.Fatalf("host-scoped list = %q, want only its managed agents", scoped.String())
+	}
+
+	var global bytes.Buffer
+	cmd = newAgentCmd()
+	cmd.SetOut(&global)
+	cmd.SetArgs([]string{"list", "--all-sessions", "--json", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var sessions []subagent.Session
+	if err := json.Unmarshal(global.Bytes(), &sessions); err != nil {
+		t.Fatalf("decode global list: %v; output=%s", err, global.String())
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("global list contains %d entries, want managed and external: %s", len(sessions), global.String())
+	}
+	var table bytes.Buffer
+	cmd = newAgentCmd()
+	cmd.SetOut(&table)
+	cmd.SetArgs([]string{"list", "--all-sessions", "--store-dir", storeDir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(table.String(), "SOURCE\tWORKING_DIR") || !strings.Contains(table.String(), "cli\t/work/external-project") {
+		t.Fatalf("global table does not expose external project metadata: %q", table.String())
+	}
+	for _, session := range sessions {
+		if session.ID == "external-session-id" {
+			if session.Provider != "codex" || session.Status != "available" || session.WorkingDir != "/work/external-project" || session.Source != "cli" {
+				t.Errorf("external metadata = %#v", session)
+			}
+			return
+		}
+	}
+	t.Fatalf("external session missing from global list: %s", global.String())
+}
+
+func TestAgentListGlobalAndChildrenViews(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(agentSessionEnv, "")
+	t.Setenv("AGY_CONVERSATION_ID", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	t.Setenv("CLAUDE_SESSION_ID", "")
+	t.Setenv("ANTIGRAVITY_CONVERSATION_ID", "")
+	t.Setenv("ANTIGRAVITY_SESSION_ID", "")
+
+	rollout := filepath.Join(home, ".codex/sessions/2026/10/02/rollout-external.jsonl")
+	if err := os.MkdirAll(filepath.Dir(rollout), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	metadata := `{"type":"session_meta","payload":{"id":"external-session-id","session_id":"external-session-id","cwd":"/work/external-project","model_provider":"openai","source":"cli","timestamp":"2026-10-02T10:00:00Z"}}` + "\n"
+	if err := os.WriteFile(rollout, []byte(metadata), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	storeDir := t.TempDir()
+
+	for _, args := range [][]string{{"list"}, {"list", "--children"}} {
+		var out bytes.Buffer
+		cmd := newAgentCmd()
+		cmd.SetOut(&out)
+		cmd.SetArgs(append(args, "--store-dir", storeDir))
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute %v: %v", args, err)
+		}
+		wantExternal := len(args) == 1
+		if gotExternal := strings.Contains(out.String(), "external-session-id"); gotExternal != wantExternal {
+			t.Errorf("list %v includes external session = %v, want %v: %q", args[1:], gotExternal, wantExternal, out.String())
+		}
+	}
+
+	cmd := newAgentCmd()
+	cmd.SetArgs([]string{"list", "--all-sessions", "--children", "--store-dir", storeDir})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "cannot be combined") {
+		t.Fatalf("conflicting list flags error = %v, want explicit incompatibility", err)
+	}
+}
+
 func TestAgentListThenResumeByDisplayedIDAndName(t *testing.T) {
 	for _, identifier := range []string{"sid", "worker"} {
 		t.Run(identifier, func(t *testing.T) {

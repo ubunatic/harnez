@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -410,6 +411,9 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	resume.Flags().BoolVarP(&continueResume, "continue", "c", false, "resume the most recently active attributable session")
 
 	list := &cobra.Command{Use: "list", Short: "List agent sessions", RunE: func(cmd *cobra.Command, _ []string) error {
+		if children && all {
+			return fmt.Errorf("--children cannot be combined with --all-sessions")
+		}
 		s, err := store()
 		if err != nil {
 			return err
@@ -422,9 +426,28 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if err != nil {
 			return err
 		}
+		visibleManagedCount := len(xs)
+		managed := xs
+		if p != "" {
+			if every, err := s.List("", true); err == nil {
+				managed = every
+			}
+		}
+		var external []*subagent.Session
+		if all || (p == "" && !children) {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return fmt.Errorf("resolve home directory for external sessions: %w", err)
+			}
+			external, err = subagent.DiscoverExternalSessions(home)
+			if err != nil {
+				return err
+			}
+		}
+		xs = appendExternalAgentSessions(xs, managed, external)
 		if !all && p != "" {
-			if every, err := s.List("", true); err == nil && len(every) > len(xs) {
-				fmt.Fprintf(cmd.ErrOrStderr(), "harnez: %d more agents in other sessions; use --all-sessions\n", len(every)-len(xs))
+			if every, err := s.List("", true); err == nil && len(every) > visibleManagedCount {
+				fmt.Fprintf(cmd.ErrOrStderr(), "harnez: %d more agents in other sessions; use --all-sessions\n", len(every)-visibleManagedCount)
 			}
 		}
 		if children && !all { /* List already scopes to direct children. */
@@ -432,9 +455,13 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(xs)
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), "ID\tNAME\tPROVIDER\tSTATUS\tRESUME\tTOKENS\tCACHED")
+		fmt.Fprintln(cmd.OutOrStdout(), "ID\tNAME\tPROVIDER\tSTATUS\tRESUME\tTOKENS\tCACHED\tSOURCE\tWORKING_DIR")
 		for _, x := range xs {
-			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%d\t%d\n", x.ID, x.Name, x.Provider, x.Status, resumeState(x), x.TokensCumulative, x.CachedTokens)
+			resume := resumeState(x)
+			if x.HarnessType == "external" {
+				resume = "external"
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s\n", x.ID, x.Name, x.Provider, x.Status, resume, x.TokensCumulative, x.CachedTokens, x.Source, x.WorkingDir)
 		}
 		return nil
 	}}
@@ -740,6 +767,34 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate, newAgentSelftestCmd())
 	silenceUsage(root)
 	return root
+}
+
+func appendExternalAgentSessions(listed, managed, external []*subagent.Session) []*subagent.Session {
+	seen := make(map[string]struct{}, len(managed)+len(external))
+	for _, sess := range managed {
+		if sess == nil {
+			continue
+		}
+		seen[sess.Provider+"\x00"+sess.ProviderID()] = struct{}{}
+	}
+	for _, sess := range listed {
+		if sess == nil {
+			continue
+		}
+		seen[sess.Provider+"\x00"+sess.ProviderID()] = struct{}{}
+	}
+	for _, sess := range external {
+		if sess == nil {
+			continue
+		}
+		key := sess.Provider + "\x00" + sess.ProviderID()
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		listed = append(listed, sess)
+	}
+	return listed
 }
 
 func matchResumeSelector(store *subagent.FileSessionStore, selector string) (bool, error) {

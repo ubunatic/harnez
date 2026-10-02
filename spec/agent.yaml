@@ -8,6 +8,26 @@ stop:
 selftest:
   background_duration_ms: 30000
 
+# External session discovery reads Codex CLI rollout metadata only. Rollout files
+# are JSONL; only the first session_meta record is needed for identity and cwd.
+external_sessions:
+  codex:
+    root: "{home}/.codex/sessions"
+    pattern: "*/*/*/rollout-*.jsonl"
+    format: jsonl
+    record_type_path: type
+    record_type: session_meta
+    max_record_bytes: 1048576
+    name_prefix: codex
+    available_status: available
+    fields:
+      id: payload.id
+      provider_session_id: payload.session_id
+      working_dir: payload.cwd
+      model_provider: payload.model_provider
+      source: payload.source
+      created_at: payload.timestamp
+
 # Listing guidance for `harnez agent models` (legend printed below the table):
 #   cost   plan-quota cost per typical turn, luna = 1, astra = 100 (share
 #          of the 5h window on ChatGPT Plus, Claude Pro, Google Pro)

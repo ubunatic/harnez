@@ -1,6 +1,7 @@
 package subagent
 
 import (
+	"encoding/json"
 	"io/fs"
 	"strings"
 	"testing"
@@ -61,6 +62,65 @@ func TestEmbeddedAgentSpecLoadsAndResolves(t *testing.T) {
 	if err != nil || model.Provider != "codex" {
 		t.Fatalf("model=%#v err=%v", model, err)
 	}
+	if spec.ExternalSessions["codex"].Format != "jsonl" {
+		t.Fatalf("Codex external session spec = %#v", spec.ExternalSessions["codex"])
+	}
+}
+
+func TestExternalSessionSchemaDeclaresRuntimeFields(t *testing.T) {
+	data, err := fs.ReadFile(harnez.DefaultFS, "spec/schemas/agent.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	type schemaNode struct {
+		MinProperties        int                    `json:"minProperties"`
+		Required             []string               `json:"required"`
+		Properties           map[string]*schemaNode `json:"properties"`
+		AdditionalProperties json.RawMessage        `json:"additionalProperties"`
+	}
+	var schema struct {
+		Required   []string               `json:"required"`
+		Properties map[string]*schemaNode `json:"properties"`
+	}
+	if err := json.Unmarshal(data, &schema); err != nil {
+		t.Fatal(err)
+	}
+	contains := func(values []string, target string) bool {
+		for _, value := range values {
+			if value == target {
+				return true
+			}
+		}
+		return false
+	}
+	if !contains(schema.Required, "external_sessions") {
+		t.Fatal("agent schema does not require external_sessions")
+	}
+	external := schema.Properties["external_sessions"]
+	if external == nil {
+		t.Fatal("agent schema is missing external_sessions")
+	}
+	if external.MinProperties < 1 {
+		t.Fatal("external_sessions schema must require at least one provider")
+	}
+	var provider schemaNode
+	if err := json.Unmarshal(external.AdditionalProperties, &provider); err != nil {
+		t.Fatal("external_sessions schema must define provider entries")
+	}
+	for _, field := range []string{"root", "pattern", "format", "record_type_path", "record_type", "max_record_bytes", "name_prefix", "available_status", "fields"} {
+		if _, ok := provider.Properties[field]; !ok {
+			t.Errorf("external provider schema is missing %q", field)
+		}
+	}
+	fields := provider.Properties["fields"]
+	if fields == nil {
+		t.Fatal("external provider schema is missing fields")
+	}
+	for _, field := range []string{"id", "working_dir", "model_provider", "source", "created_at"} {
+		if !contains(fields.Required, field) {
+			t.Errorf("external field mapping schema does not require %q", field)
+		}
+	}
 }
 
 func TestParseAgentSpecRejectsBadDefault(t *testing.T) {
@@ -68,6 +128,13 @@ func TestParseAgentSpecRejectsBadDefault(t *testing.T) {
 		if _, err := parseAgentSpec([]byte(data)); err == nil {
 			t.Fatalf("parse %q unexpectedly succeeded", data)
 		}
+	}
+}
+
+func TestParseAgentSpecRequiresExternalSessionDiscovery(t *testing.T) {
+	data := "default_model: codex:luna:low\ndefault_role: a\nroles:\n  a: {spawns: [], rules: fine}\n"
+	if _, err := parseAgentSpec([]byte(data)); err == nil || !strings.Contains(err.Error(), "external_sessions") {
+		t.Fatalf("parse without external_sessions = %v, want required provider error", err)
 	}
 }
 
@@ -156,7 +223,7 @@ func TestAgentSpecRolesAndCheckSpawn(t *testing.T) {
 }
 
 func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
-	base := "default_model: codex:luna:low\n"
+	base := "default_model: codex:luna:low\n" + testExternalSessionSpecYAML
 	for name, doc := range map[string]string{
 		"default role undefined": base + "default_role: nobody\nroles:\n  a: {spawns: [], rules: x}\n",
 		"spawns undefined role":  base + "default_role: a\nroles:\n  a: {spawns: [b], rules: x}\n",
@@ -174,7 +241,7 @@ func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
 
 func TestParseAgentSpecDoesNotMutateModelAliases(t *testing.T) {
 	before := KnownModels()
-	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\ndefault_role: a\nmodels:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {spawns: [], rules: fine}\n")); err != nil {
+	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\ndefault_role: a\n" + testExternalSessionSpecYAML + "models:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {spawns: [], rules: fine}\n")); err != nil {
 		t.Fatal(err)
 	}
 	after := KnownModels()
@@ -182,3 +249,16 @@ func TestParseAgentSpecDoesNotMutateModelAliases(t *testing.T) {
 		t.Fatalf("parse mutated aliases: before=%d after=%d", len(before), len(after))
 	}
 }
+
+const testExternalSessionSpecYAML = `external_sessions:
+  fixture:
+    root: "{home}/sessions"
+    pattern: "*.jsonl"
+    format: jsonl
+    record_type_path: type
+    record_type: session_meta
+    max_record_bytes: 1024
+    name_prefix: fixture
+    available_status: available
+    fields: {id: payload.id, working_dir: payload.cwd, model_provider: payload.model_provider, source: payload.source, created_at: payload.timestamp}
+`

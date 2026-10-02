@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["default_model", "default_role", "models", "roles", "stop"],
+  "required": ["default_model", "default_role", "models", "roles", "stop", "external_sessions"],
   "properties": {
     "stop": {
       "type": "object",
@@ -20,6 +20,38 @@
         "background_duration_ms": { "type": "integer", "minimum": 1 }
       },
       "additionalProperties": false
+    },
+    "external_sessions": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["root", "pattern", "format", "record_type_path", "record_type", "max_record_bytes", "name_prefix", "available_status", "fields"],
+        "properties": {
+          "root": { "type": "string", "minLength": 1 },
+          "pattern": { "type": "string", "minLength": 1 },
+          "format": { "type": "string", "enum": ["jsonl"] },
+          "record_type_path": { "type": "string", "minLength": 1 },
+          "record_type": { "type": "string", "minLength": 1 },
+          "max_record_bytes": { "type": "integer", "minimum": 1 },
+          "name_prefix": { "type": "string", "minLength": 1 },
+          "available_status": { "type": "string", "minLength": 1 },
+          "fields": {
+            "type": "object",
+            "required": ["id", "working_dir", "model_provider", "source", "created_at"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "provider_session_id": { "type": "string", "minLength": 1 },
+              "working_dir": { "type": "string", "minLength": 1 },
+              "model_provider": { "type": "string", "minLength": 1 },
+              "source": { "type": "string", "minLength": 1 },
+              "created_at": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
     },
     "default_model": { "type": "string", "minLength": 1 },
     "default_role": { "type": "string", "minLength": 1 },

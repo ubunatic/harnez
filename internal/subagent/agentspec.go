@@ -15,13 +15,37 @@ import (
 const agentSpecPath = "spec/agent.yaml"
 
 type agentSpec struct {
-	DefaultModel string                `yaml:"default_model"`
-	DefaultRole  string                `yaml:"default_role"`
-	ModelsLegend string                `yaml:"models_legend"`
-	Models       map[string]modelAlias `yaml:"models"`
-	Roles        map[string]RoleSpec   `yaml:"roles"`
-	Stop         StopSpec              `yaml:"stop"`
-	Selftest     SelftestSpec          `yaml:"selftest"`
+	DefaultModel     string                         `yaml:"default_model"`
+	DefaultRole      string                         `yaml:"default_role"`
+	ModelsLegend     string                         `yaml:"models_legend"`
+	Models           map[string]modelAlias          `yaml:"models"`
+	Roles            map[string]RoleSpec            `yaml:"roles"`
+	Stop             StopSpec                       `yaml:"stop"`
+	Selftest         SelftestSpec                   `yaml:"selftest"`
+	ExternalSessions map[string]ExternalSessionSpec `yaml:"external_sessions"`
+}
+
+// ExternalSessionSpec describes provider-owned local session metadata.
+type ExternalSessionSpec struct {
+	Root            string                `yaml:"root"`
+	Pattern         string                `yaml:"pattern"`
+	Format          string                `yaml:"format"`
+	RecordTypePath  string                `yaml:"record_type_path"`
+	RecordType      string                `yaml:"record_type"`
+	MaxRecordBytes  int                   `yaml:"max_record_bytes"`
+	NamePrefix      string                `yaml:"name_prefix"`
+	AvailableStatus string                `yaml:"available_status"`
+	Fields          ExternalSessionFields `yaml:"fields"`
+}
+
+// ExternalSessionFields maps normalized values to fields in a provider record.
+type ExternalSessionFields struct {
+	ID                string `yaml:"id"`
+	ProviderSessionID string `yaml:"provider_session_id"`
+	WorkingDir        string `yaml:"working_dir"`
+	ModelProvider     string `yaml:"model_provider"`
+	Source            string `yaml:"source"`
+	CreatedAt         string `yaml:"created_at"`
 }
 
 // StopSpec defines bounded agent shutdown in milliseconds.
@@ -91,7 +115,28 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	if err := validateRoles(spec); err != nil {
 		return agentSpec{}, err
 	}
+	if err := validateExternalSessions(spec.ExternalSessions); err != nil {
+		return agentSpec{}, err
+	}
 	return spec, nil
+}
+
+func validateExternalSessions(specs map[string]ExternalSessionSpec) error {
+	if len(specs) == 0 {
+		return fmt.Errorf("agent spec: at least one external_sessions provider is required")
+	}
+	for provider, spec := range specs {
+		if provider == "" || spec.Root == "" || spec.Pattern == "" || spec.RecordTypePath == "" || spec.RecordType == "" || spec.NamePrefix == "" || spec.AvailableStatus == "" {
+			return fmt.Errorf("agent spec: external_sessions.%s has an empty required value", provider)
+		}
+		if spec.Format != "jsonl" || spec.MaxRecordBytes <= 0 {
+			return fmt.Errorf("agent spec: external_sessions.%s requires jsonl and a positive max_record_bytes", provider)
+		}
+		if spec.Fields.ID == "" || spec.Fields.WorkingDir == "" || spec.Fields.ModelProvider == "" || spec.Fields.Source == "" || spec.Fields.CreatedAt == "" {
+			return fmt.Errorf("agent spec: external_sessions.%s has incomplete field mappings", provider)
+		}
+	}
+	return nil
 }
 
 func loadModelAliases() (map[string]modelAlias, error) {
