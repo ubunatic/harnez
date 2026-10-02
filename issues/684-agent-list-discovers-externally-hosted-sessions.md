@@ -24,6 +24,12 @@ report discovered sessions with enough identity and state to select them safely.
 Record provider-specific discovery limits and any ambiguity; do not assume every
 provider exposes live context through the same interface.
 
+Put provider inspection inputs in `spec/` with a companion JSON Schema. This
+includes session file locations or discovery patterns, file formats, commands
+and arguments, and any provider-specific context extraction details needed by
+future inspection commands. Runtime code must load these definitions rather than
+shadowing them with hardcoded paths, formats, or command defaults.
+
 ## 3. Implementation & Verification Plan
 **Goal**: Make `harnez agents list` discover and identify non-Harnez-hosted
 sessions alongside managed sessions, establishing a reliable selection path for
@@ -32,5 +38,7 @@ supported discovery mechanism or requires a user decision.
 
 Done when listing can surface an external session with provider, stable session
 identity, and available status/project metadata; managed-session listing remains
-usable; and provider coverage and limitations are documented. Verify discovery
-against a live external session and automated tests for parsing and deduplication.
+usable; and provider coverage and limitations are documented. Provider
+inspection definitions live in schema-validated specs and are consumed by the
+implementation. Verify discovery against a live external session and automated
+tests for parsing and deduplication.
