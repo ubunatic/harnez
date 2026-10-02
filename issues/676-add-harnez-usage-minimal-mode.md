@@ -1,6 +1,6 @@
 # 676 — Add harnez usage --minimal mode
 
-**Status**: Open
+**Status**: Closed — minimal usage mode implemented and verified
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
