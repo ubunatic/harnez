@@ -340,8 +340,6 @@ type screenFrame struct {
 	lines []string
 	cols  int
 	rows  int
-	// hits are the clickable dashboard actions on screen (issue 687).
-	hits []dashboardHit
 }
 
 // paint writes the frame at the top-left of the (alternate) screen.
@@ -1775,8 +1773,6 @@ type WatchOptions struct {
 	// Mode selects one of the spec-defined usage views. Empty uses the spec default.
 	Mode    string
 	Compact bool
-	// Mouse enables click input for dashboard actions (--tui, issue 687).
-	Mouse bool
 	// Minimal is retained for compatibility with direct WatchOptions callers;
 	// CLI callers select the same mode through Mode.
 	Minimal       bool
@@ -2227,10 +2223,6 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 		remoteHost, remoteSnap, remoteStreaming := opt.RemoteLoadHost, opt.RemoteLoadSnapshot, opt.RemoteLoadStreaming
 		panels = append(panels, panel{"R", func(w int) wbox { return buildRemoteLoadBox(w, remoteHost, remoteSnap, remoteStreaming) }})
 	}
-	actions := dashboardActions(mode)
-	if len(actions) > 0 {
-		panels = append(panels, panel{actionsPanelKey, func(w int) wbox { return buildDashboardActionsBox(actions, w) }})
-	}
 
 	if len(panels) == 0 {
 		message := "(all panels hidden)"
@@ -2277,25 +2269,16 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 
 	dropped := 0
 	var droppedKeys []string
-	var hits []dashboardHit
 	for _, row := range plan.Rows {
 		var cols [][]string
 		var keys []string
-		x, actionsX, actionsW := 0, -1, 0
 		for _, pb := range row.Boxes {
 			p := panels[pb.Order]
 			cols = append(cols, renderWBox(p.build(pb.Width)))
 			keys = append(keys, "["+pb.ID+"]")
-			if p.key == actionsPanelKey {
-				actionsX, actionsW = x, pb.Width
-			}
-			x += pb.Width + boxGap
 		}
 		lines := combineRow(cols)
 		if len(body)+len(lines) <= budget {
-			if actionsX >= 0 {
-				hits = dashboardHits(actions, len(header)+len(body), actionsX, actionsW)
-			}
 			body = append(body, lines...)
 		} else {
 			dropped += len(row.Boxes)
@@ -2313,9 +2296,7 @@ func buildWatchFrameAt(summary UsageSummary, rates map[string]agentRate, interva
 	}
 
 	lines := append(append(header, body...), footer...)
-	frame := fit(lines, usable, rows)
-	frame.hits = hits
-	return frame
+	return fit(lines, usable, rows)
 }
 
 // RenderSummary prints one static frame of the spec-selected btop-style grid
@@ -2988,21 +2969,6 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	splashActive.Store(opts.Splash)
 	splashSkip := make(chan struct{}, 1)
 
-	// Dashboard actions (issue 687): the reader requests one, the main loop
-	// runs it outside the alternate screen, then waits for any key.
-	actions := dashboardActions(usageViewMode(opts.Mode, opts.Compact, opts.Minimal))
-	actionChan := make(chan dashboardAction, 1)
-	requestAction := func(a dashboardAction) {
-		select {
-		case actionChan <- a:
-		default:
-		}
-	}
-	var actionRunning atomic.Bool
-	actionResume := make(chan struct{}, 1)
-	var hitsMu sync.Mutex
-	var screenHits []dashboardHit
-
 	if ttyErr == nil {
 		readerDone := make(chan struct{})
 		defer func() {
@@ -3011,98 +2977,55 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			tty.Close()
 			<-readerDone
 		}()
-		// handleKey applies one key byte and reports whether it quits.
-		handleKey := func(key byte) bool {
-			if actionRunning.Load() {
-				select {
-				case actionResume <- struct{}{}:
-				default:
-				}
-				return false
-			}
-			if splashActive.Load() {
-				eff := dispatchSplashKey(key)
-				if eff.skip {
-					select {
-					case splashSkip <- struct{}{}:
-					default:
-					}
-				}
-				return eff.quit
-			}
-			secLock.Lock()
-			defer secLock.Unlock()
-			if !overlayOpen && !diagnosticsOpen {
-				if a, ok := dashboardActionForKey(actions, key); ok {
-					requestAction(a)
-					return false
-				}
-			}
-			st := watchKeyState{
-				sec:               sec,
-				overlayOpen:       overlayOpen,
-				diagnosticsOpen:   diagnosticsOpen,
-				diagnosticsOffset: diagnosticsOffset,
-				presetIdx:         presetIdx,
-				configuredHost:    configuredHost,
-				activeHost:        activeHost,
-				debugOverlay:      debugOverlay,
-			}
-			newSt, eff := dispatchWatchKey(st, key, opts.ShowProcesses)
-			sec, overlayOpen, diagnosticsOpen, presetIdx, activeHost, debugOverlay, diagnosticsOffset = newSt.sec, newSt.overlayOpen, newSt.diagnosticsOpen, newSt.presetIdx, newSt.activeHost, newSt.debugOverlay, newSt.diagnosticsOffset
-			if eff.quit {
-				return true
-			}
-			if eff.redraw {
-				requestRedraw()
-			}
-			if eff.fetch {
-				requestFetch()
-			}
-			return false
-		}
-		// handleMouse runs an action when a left click is pressed and
-		// released on the same action. Hit areas are empty while an overlay
-		// replaces the panels, so clicks there do nothing.
-		var pressedKey byte
-		handleMouse := func(m mouseReport) {
-			if !m.leftClick() || actionRunning.Load() || splashActive.Load() {
-				return
-			}
-			hitsMu.Lock()
-			key := hitTest(screenHits, m.X, m.Y)
-			hitsMu.Unlock()
-			if !m.Release {
-				pressedKey = key
-				return
-			}
-			if key != 0 && key == pressedKey {
-				if a, ok := dashboardActionForKey(actions, key); ok {
-					requestAction(a)
-				}
-			}
-			pressedKey = 0
-		}
 		go func() {
 			defer close(readerDone)
-			var input ttyInput
-			buf := make([]byte, 64)
+			buf := make([]byte, 1)
 			for {
 				n, err := tty.Read(buf)
 				if err != nil || n == 0 {
 					stop()
 					return
 				}
-				for _, ev := range input.feed(buf[:n]) {
-					if ev.Mouse != nil {
-						handleMouse(*ev.Mouse)
-						continue
-					}
-					if handleKey(ev.Key) {
+				if splashActive.Load() {
+					eff := dispatchSplashKey(buf[0])
+					if eff.quit {
 						stop()
 						return
 					}
+					if eff.skip {
+						select {
+						case splashSkip <- struct{}{}:
+						default:
+						}
+					}
+					continue
 				}
+				secLock.Lock()
+				st := watchKeyState{
+					sec:               sec,
+					overlayOpen:       overlayOpen,
+					diagnosticsOpen:   diagnosticsOpen,
+					diagnosticsOffset: diagnosticsOffset,
+					presetIdx:         presetIdx,
+					configuredHost:    configuredHost,
+					activeHost:        activeHost,
+					debugOverlay:      debugOverlay,
+				}
+				newSt, eff := dispatchWatchKey(st, buf[0], opts.ShowProcesses)
+				sec, overlayOpen, diagnosticsOpen, presetIdx, activeHost, debugOverlay, diagnosticsOffset = newSt.sec, newSt.overlayOpen, newSt.diagnosticsOpen, newSt.presetIdx, newSt.activeHost, newSt.debugOverlay, newSt.diagnosticsOffset
+
+				if eff.quit {
+					secLock.Unlock()
+					stop()
+					return
+				}
+				if eff.redraw {
+					requestRedraw()
+				}
+				if eff.fetch {
+					requestFetch()
+				}
+				secLock.Unlock()
 			}
 		}()
 	}
@@ -3150,15 +3073,11 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	// redraw loop a viewport with no scrollback of its own, so `\x1b[H` always
 	// means the top-left cell the user is looking at, and it restores the
 	// user's shell output untouched on exit.
-	// With opts.Mouse, it also enables SGR mouse reports (modes 1000+1006).
-	// Mouse reports are only enabled when there is something to click, since
-	// they disable the terminal's own text selection.
-	enterSeq, leaveSeq := watchScreenSeqs(opts.Mouse && ttyErr == nil && len(actions) > 0)
-	_, enterErr := fmt.Fprint(out, enterSeq)
+	_, enterErr := fmt.Fprint(out, "\033[?1049h\033[?25l\033[2J\033[H")
 	screenRestored := false
 	restoreScreen := func() {
 		if !screenRestored {
-			fmt.Fprint(out, leaveSeq)
+			fmt.Fprint(out, "\033[0m\033[?25h\033[?1049l")
 			screenRestored = true
 		}
 	}
@@ -3244,9 +3163,6 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			MicLiveAvailable:    micLive.Available,
 		})
 		frame := buildWatchFrame(lastSummary, lastRates, interval, activeSec, cols, rows, true, homeDir, historyDir, frameOpts)
-		hitsMu.Lock()
-		screenHits = frame.hits
-		hitsMu.Unlock()
 		err := frame.paint(out)
 		throttler.MarkDrawn(time.Now())
 		return err
@@ -3440,49 +3356,10 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 	loadTicker := time.NewTicker(time.Second)
 	defer loadTicker.Stop()
 
-	// runAction leaves the alternate screen and raw mode, runs the action
-	// with its output on the normal screen, and returns after a keypress.
-	runAction := func(a dashboardAction) error {
-		actionRunning.Store(true)
-		defer actionRunning.Store(false)
-		restoreScreen()
-		if oldState != nil {
-			_ = term.Restore(int(tty.Fd()), oldState)
-		}
-		fmt.Fprintf(out, "$ %s\n", a.commandLine())
-		if err := runDashboardAction(sigCtx, out, a); err != nil {
-			fmt.Fprintf(out, "%s: %v\n", a.commandLine(), err)
-		}
-		if oldState != nil {
-			if _, err := term.MakeRaw(int(tty.Fd())); err != nil {
-				return fmt.Errorf("watch terminal: %w", err)
-			}
-		}
-		select {
-		case <-actionResume: // drop keys typed while the action ran
-		default:
-		}
-		fmt.Fprint(out, "\r\n[press any key to return]")
-		select {
-		case <-actionResume:
-		case <-sigCtx.Done():
-			return nil
-		}
-		if _, err := fmt.Fprint(out, enterSeq); err != nil {
-			return err
-		}
-		screenRestored = false
-		return draw()
-	}
-
 	for {
 		select {
 		case <-sigCtx.Done():
 			return nil
-		case a := <-actionChan:
-			if err := runAction(a); err != nil {
-				return err
-			}
 		case result := <-results:
 			<-fetchDone
 			fetchDone = nil
@@ -3513,18 +3390,6 @@ func RunWatchWithOptions(ctx context.Context, homeDir string, client *http.Clien
 			startFetch()
 		}
 	}
-}
-
-// watchScreenSeqs returns the escape sequences that enter and leave the
-// watch screen. With mouse, entering enables SGR mouse reports and leaving
-// always disables them again.
-func watchScreenSeqs(mouse bool) (enter, leave string) {
-	enter, leave = "\033[?1049h\033[?25l\033[2J\033[H", "\033[0m\033[?25h\033[?1049l"
-	if mouse {
-		enter += "\033[?1000h\033[?1006h"
-		leave = "\033[?1006l\033[?1000l" + leave
-	}
-	return enter, leave
 }
 
 // remoteLoadRetryInterval is both the fallback batch-polling cadence and

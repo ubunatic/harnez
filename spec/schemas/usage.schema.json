@@ -57,38 +57,13 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "type": "string", "enum": ["all_usage", "claude", "agy", "codex", "history", "processes", "load", "mic", "remote_load", "actions"] }
+          "items": { "type": "string", "enum": ["all_usage", "claude", "agy", "codex", "history", "processes", "load", "mic", "remote_load"] }
         },
         "token_details": { "type": "boolean" },
         "title_bar": { "type": "boolean" },
         "status_bar": { "type": "boolean" },
         "hidden_list": { "type": "boolean" },
-        "overflow_hint": { "type": "boolean" },
-        "actions": {
-          "description": "Buttons of the actions panel; required when panels lists actions. Each runs harnez with args, never a shell. Keys must not be bound in actions.yaml.",
-          "type": "array",
-          "minItems": 1,
-          "items": { "$ref": "#/definitions/dashboardAction" }
-        }
-      },
-      "if": { "properties": { "panels": { "contains": { "const": "actions" } } } },
-      "then": { "required": ["actions"] },
-      "else": { "not": { "required": ["actions"] } },
-      "additionalProperties": false
-    },
-    "dashboardAction": {
-      "type": "object",
-      "required": ["title", "key", "args"],
-      "properties": {
-        "title": { "type": "string", "minLength": 1 },
-        "key": { "type": "string", "pattern": "^[!-~]$" },
-        "args": {
-          "type": "array",
-          "minItems": 1,
-          "items": [{ "type": "string", "pattern": "^[^-]" }],
-          "additionalItems": { "type": "string" },
-          "description": "harnez arguments, starting with a subcommand"
-        }
+        "overflow_hint": { "type": "boolean" }
       },
       "additionalProperties": false
     }

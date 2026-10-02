@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
-	"slices"
 	"sync"
 	"time"
 
@@ -30,13 +29,12 @@ type usageViewModesSpec struct {
 }
 
 type usageViewModeSpec struct {
-	Panels       []string          `yaml:"panels"`
-	Actions      []dashboardAction `yaml:"actions,omitempty"`
-	TokenDetails *bool             `yaml:"token_details"`
-	TitleBar     *bool             `yaml:"title_bar"`
-	StatusBar    *bool             `yaml:"status_bar"`
-	HiddenList   *bool             `yaml:"hidden_list"`
-	OverflowHint *bool             `yaml:"overflow_hint"`
+	Panels       []string `yaml:"panels"`
+	TokenDetails *bool    `yaml:"token_details"`
+	TitleBar     *bool    `yaml:"title_bar"`
+	StatusBar    *bool    `yaml:"status_bar"`
+	HiddenList   *bool    `yaml:"hidden_list"`
+	OverflowHint *bool    `yaml:"overflow_hint"`
 }
 
 func (s usageViewModeSpec) tokenDetails() bool { return s.TokenDetails != nil && *s.TokenDetails }
@@ -44,8 +42,6 @@ func (s usageViewModeSpec) titleBar() bool     { return s.TitleBar != nil && *s.
 func (s usageViewModeSpec) statusBar() bool    { return s.StatusBar != nil && *s.StatusBar }
 func (s usageViewModeSpec) hiddenList() bool   { return s.HiddenList != nil && *s.HiddenList }
 func (s usageViewModeSpec) overflowHint() bool { return s.OverflowHint != nil && *s.OverflowHint }
-
-func (s usageViewModeSpec) hasPanel(panel string) bool { return slices.Contains(s.Panels, panel) }
 
 var (
 	usageSpecOnce         sync.Once
@@ -139,7 +135,7 @@ func (s usageViewModesSpec) validate() error {
 	validPanels := map[string]bool{
 		"all_usage": true, "claude": true, "agy": true, "codex": true,
 		"history": true, "processes": true, "load": true, "mic": true,
-		"remote_load": true, actionsPanelKey: true,
+		"remote_load": true,
 	}
 	for _, name := range []string{"normal", "compact", "minimal", "dashboard"} {
 		mode, ok := s.Modes[name]
@@ -148,13 +144,6 @@ func (s usageViewModesSpec) validate() error {
 		}
 		if mode.TokenDetails == nil || mode.TitleBar == nil || mode.StatusBar == nil || mode.HiddenList == nil || mode.OverflowHint == nil {
 			return fmt.Errorf("view_modes.modes.%s must define token_details, title_bar, status_bar, hidden_list, and overflow_hint", name)
-		}
-		if mode.hasPanel(actionsPanelKey) {
-			if err := validateDashboardActions(mode.Actions); err != nil {
-				return fmt.Errorf("view_modes.modes.%s: %w", name, err)
-			}
-		} else if len(mode.Actions) > 0 {
-			return fmt.Errorf("view_modes.modes.%s defines actions but has no actions panel", name)
 		}
 		seen := make(map[string]bool, len(mode.Panels))
 		for _, panel := range mode.Panels {

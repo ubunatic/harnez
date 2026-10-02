@@ -1,6 +1,6 @@
 # 687 — Add an interactive usage dashboard mode
 
-**Status**: In Progress
+**Status**: Done
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -30,13 +30,6 @@ consistently with and without `--watch`. Stop and report if a command action
 cannot be specified or safely dispatched.
 
 ## 4. Decisions (2026-10-02)
-- Actions are spec-defined (`title`, `key`, `args`) and run the current harnez executable with
-  `args`, never a shell. Keys must be unused in `spec/actions.yaml`; the sketch's `[a]` collided
-  with "toggle All Usage", so Agent sessions uses `[s]`.
-- `--dashboard` alone renders once. Action keys work under both `--watch` and `--tui`, because the
-  Actions panel shows them; `--tui` adds mouse clicks and enables mouse reporting only when the
-  view has actions.
-- Ctrl-C while an action runs quits the whole dashboard, not just the action. Changing that needs
-  SIGINT handling around the child; open if it bothers in practice.
-- Known edge: input typed during an action without Enter can dismiss the
-  "[press any key to return]" prompt immediately.
+- Scope reduced by the user: the Actions panel and `--tui` were built (56b08bfc) and then removed.
+  What remains is `--dashboard` as a fourth spec-defined view mode, usable with and without
+  `--watch` like the other modes. The removed code is in 56b08bfc if actions return later.

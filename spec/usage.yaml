@@ -29,23 +29,10 @@ view_modes:
       status_bar: false
       hidden_list: false
       overflow_hint: false
-    # Issue 687: --dashboard adds an Actions panel. Under --watch or --tui an
-    # action's key (or, with --tui, a click) runs `harnez <args>`. Keys must be
-    # unused in actions.yaml (e.g. "a" already toggles All Usage).
     dashboard:
-      panels: [claude, agy, codex, history, load, remote_load, actions]
+      panels: [claude, agy, codex, history, load, remote_load]
       token_details: true
       title_bar: true
       status_bar: true
       hidden_list: false
       overflow_hint: true
-      actions:
-        - title: Agent sessions
-          key: s
-          args: [agent, list]
-        - title: Usage history
-          key: h
-          args: [usage, history]
-        - title: Usage options
-          key: o
-          args: [usage, --help]

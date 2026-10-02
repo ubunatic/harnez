@@ -72,14 +72,12 @@ view_modes:
     compact: *mode
     minimal: *mode
     dashboard:
-      panels: [claude, actions]
+      panels: [claude]
       token_details: true
       title_bar: true
       status_bar: true
       hidden_list: false
       overflow_hint: true
-      actions:
-        - {title: History, key: h, args: [usage, history]}
 `
 	invalid := []struct {
 		name string
@@ -90,9 +88,6 @@ view_modes:
 		{name: "unknown field", data: valid + "unknown: true\n"},
 		{name: "zero cadence", data: strings.Replace(valid, "collector_cadence: 15m", "collector_cadence: 0s", 1)},
 		{name: "missing mode field", data: strings.Replace(valid, "      token_details: true\n", "", 1)},
-		{name: "actions panel without actions", data: strings.Replace(valid, "      actions:\n        - {title: History, key: h, args: [usage, history]}\n", "", 1)},
-		{name: "actions without actions panel", data: strings.Replace(valid, "panels: [claude, actions]", "panels: [claude]", 1)},
-		{name: "action key bound in actions.yaml", data: strings.Replace(valid, "key: h,", "key: q,", 1)},
 	}
 	for _, tc := range invalid {
 		t.Run(tc.name, func(t *testing.T) {
