@@ -1,0 +1,11 @@
+Agentic usage  [DASHBOARD]  15:04:05 UTC   refresh: 60s
+┌─ Claude Code ────────────┐ ┌─ Gemini ───────────────┐ ┌─ Codex ────────────────┐
+│ Weekly       █████░ 85%  │ │ Weekly       ████░ 71% │ │ Weekly       ███░░ 64% │
+│ Session      █░░░░   9%  │ │ Session      █░░░░ 11% │ │ Session      ██░░░ 18% │
+└──────────────────────────┘ └────────────────────────┘ └────────────────────────┘
+┌─ History ────────────────┐ ┌─ Load ──────────────────┐ ┌─ Actions ─────────────┐
+│ 12 files · 18.4 KiB      │ │ CPU  12%   RAM  47%     │ │ [a] Agent sessions    │
+│ Last entry  14:58 UTC    │ │ GPU  08%               │ │ [h] Usage history     │
+└──────────────────────────┘ └────────────────────────┘ │ [o] Usage options     │
+                                                         └───────────────────────┘
+refresh every 60s   [?]controls  [m]ode  [r]emote  [q]uit
