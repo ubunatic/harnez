@@ -677,4 +677,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 676 | [676-add-harnez-usage-minimal-mode.md](676-add-harnez-usage-minimal-mode.md) | Add harnez usage --minimal mode | Closed — minimal usage mode implemented and verified |
 | 677 | [677-show-rate-fetch-status-consistently-in-usage-watch-tui.md](677-show-rate-fetch-status-consistently-in-usage-watch-tui.md) | Show rate-fetch status consistently in usage watch TUI | Open |
 | 678 | [678-make-usage-view-modes-spec-driven-and-independent-of-watch.md](678-make-usage-view-modes-spec-driven-and-independent-of-watch.md) | Make usage view modes spec-driven and independent of --watch | Open |
-| 679 | [679-split-oversized-go-files-into-cohesive-packages-with-clean-interfaces.md](679-split-oversized-go-files-into-cohesive-packages-with-clean-interfaces.md) | Split oversized Go files into cohesive packages with clean interfaces | Draft |
+| 679 | [679-split-oversized-go-files-into-cohesive-packages-with-clean-interfaces.md](679-split-oversized-go-files-into-cohesive-packages-with-clean-interfaces.md) | Split oversized Go files into cohesive packages with clean interfaces | Open |
