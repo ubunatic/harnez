@@ -1,6 +1,6 @@
 # 687 — Add an interactive usage dashboard mode
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
