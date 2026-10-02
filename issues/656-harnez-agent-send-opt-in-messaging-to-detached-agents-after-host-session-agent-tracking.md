@@ -4,7 +4,7 @@
 **Priority**: P2 (Medium) — start only after 630 (start/resume/wait backgrounding guides) is closed
 **Severity**: Moderate
 **Category**: Agentic Ergonomics / Feature
-**Related**: 630 (session vs machine background), 611 (host polling), 439 (agent chat lifecycle), 477 (hook-driven completion), 483 (root agent form, slash interception)
+**Related**: 630 (session vs machine background), 611 (host polling), 439 (agent chat lifecycle), 477 (hook-driven completion), 483 (root agent form, slash interception), [680 (Codex cross-task messaging probe)](680-probe-codex-cross-task-messaging-for-agent-send.md)
 
 ---
 
@@ -28,6 +28,9 @@ session background. This ticket designs a real eventing layer on top: `harnez ag
   - just resume with another prompt (`harnez agent resume --name X "<msg>"`);
   - anything else found. Record the recommended way and the proven ways per agent in
     `docs/studies/`, with probe evidence (`docs/Canary.md`).
+  - **Codex route:** integrate with `codex_tui.send_message_to_thread(threadId, prompt)`;
+    determine how Harnez obtains and selects the target thread ID, and distinguish an accepted
+    send from confirmed recipient receipt. Issue 680 tracks the canary and interface probe.
 - **M4 `harnez agent send --name <name> -m <msg>`.** Implement with the M3 winners per agent,
   only after M1-M2 work. Delivery must be confirmed or reported as failed, never silent.
 
