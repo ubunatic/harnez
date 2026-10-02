@@ -1,6 +1,6 @@
 # 678 — Make usage view modes spec-driven and independent of --watch
 
-**Status**: Open
+**Status**: Closed — resolved
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
