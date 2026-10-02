@@ -1,6 +1,6 @@
 # 684 — agents list discovers externally hosted sessions
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Architecture
