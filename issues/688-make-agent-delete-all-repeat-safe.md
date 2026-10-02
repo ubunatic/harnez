@@ -70,3 +70,8 @@ unresolved one.
   so the user never needs a second flag for this case.
 - Tests: missing rollout -> nil and codex not started; existing rollout + codex error -> error;
   existing rollout + success -> nil; CODEX_HOME override honored.
+- M2 delivered (e0ccbadf): `CodexDriver.Delete` returns nil when no rollout exists; `delete --all`
+  retries Codex `delete-failed` records (deviation: all Codex ones, not only rollout-less ones, so a
+  real persistent Codex failure is retried and reported each run). Verified live: host
+  `make test-q1` green; `delete --retry-failed` cleared the 6 stuck records; `delete --all --force`
+  run twice from a plain terminal printed `dev688m2` then nothing, no warning, no reappearance.
