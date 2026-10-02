@@ -684,3 +684,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 683 | [683-learning-agent-friendly-cli-design-rules-tty-prompts-side-effects-shell-wrappers.md](683-learning-agent-friendly-cli-design-rules-tty-prompts-side-effects-shell-wrappers.md) | Learning: agent-friendly CLI design rules (TTY, prompts, side effects, shell wrappers) | Open |
 | 684 | [684-agent-list-discovers-externally-hosted-sessions.md](684-agent-list-discovers-externally-hosted-sessions.md) | agents list discovers externally hosted sessions | In Progress |
 | 685 | [685-harnez-compact-auto-for-the-calling-session-and-dry-run-stats.md](685-harnez-compact-auto-for-the-calling-session-and-dry-run-stats.md) | harnez compact --auto for the calling session and --dry-run stats | Open |
+| 686 | [686-resolve-unknown-agent-roles-through-the-decider.md](686-resolve-unknown-agent-roles-through-the-decider.md) | Resolve unknown agent roles through the decider | Open |
