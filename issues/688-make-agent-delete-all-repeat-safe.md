@@ -1,6 +1,6 @@
 # 688 — Make agent delete all repeat-safe
 
-**Status**: Open
+**Status**: Closed — delete --all is repeat-safe: deleted sessions no longer rediscovered in agent list, --force suppresses the unrated warning, Codex delete failures persist as delete-failed with list --failed and delete --retry-failed (2c4d4ec6)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Bug
