@@ -243,6 +243,7 @@ func TestWaitWorkerCrashHelper(t *testing.T) {
 }
 
 func TestAgentDetachedSpawnAndWait(t *testing.T) {
+	installUnclassifiedNeus(t)
 	storeDir := t.TempDir()
 	helperBinary, err := os.Executable()
 	if err != nil {
@@ -258,8 +259,9 @@ func TestAgentDetachedSpawnAndWait(t *testing.T) {
 	defer func() { agentExecutable = old }()
 	cmd := newAgentCmd()
 	var out bytes.Buffer
+	var errOut bytes.Buffer
 	cmd.SetOut(&out)
-	cmd.SetErr(&out)
+	cmd.SetErr(&errOut)
 	err = launchDetachedWithPreflight(cmd, startRequest{Name: "async-worker", Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna:low", Dir: t.TempDir(), JSON: true}, storeDir, "", func(context.Context) error { return nil })
 	if err != nil {
 		t.Fatal(err)
@@ -3613,6 +3615,7 @@ func TestAgentRoleStoredEnvAndPreamble(t *testing.T) {
 
 func TestAgentStartDefaultsToDeveloperRole(t *testing.T) {
 	t.Setenv(agentRoleEnv, "")
+	installUnclassifiedNeus(t)
 	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
 	if _, err := runWithStore(t, d, t.TempDir(), "start", "task"); err != nil {
 		t.Fatal(err)
@@ -3622,6 +3625,49 @@ func TestAgentStartDefaultsToDeveloperRole(t *testing.T) {
 	}
 	if _, err := runWithStore(t, d, t.TempDir(), "start", "--role", "wizard", "task"); err == nil || !strings.Contains(err.Error(), "unknown agent role") || !strings.Contains(err.Error(), "explorer") || !strings.Contains(err.Error(), "Research the code") {
 		t.Fatalf("unknown role err = %v; want full role catalog", err)
+	}
+}
+
+func installUnclassifiedNeus(t *testing.T) {
+	t.Helper()
+	binDir := t.TempDir()
+	neus := filepath.Join(binDir, "neus")
+	if err := os.WriteFile(neus, []byte("#!/bin/sh\nexit 4\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+}
+
+func TestStartRoleInfersFromPromptAndLogsNotice(t *testing.T) {
+	t.Setenv(agentRoleEnv, "")
+	binDir := t.TempDir()
+	neus := filepath.Join(binDir, "neus")
+	if err := os.WriteFile(neus, []byte("#!/bin/sh\nprintf '%s\\n' '{\"class\":\"reviewer\"}'\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+	var stderr bytes.Buffer
+	role, err := startRole("", "Audit the patch. Then summarize findings.", &stderr)
+	if err != nil || role != "reviewer" {
+		t.Fatalf("startRole() = %q, %v; want reviewer", role, err)
+	}
+	if got, want := stderr.String(), "harnez: inferred role \"reviewer\" from prompt\n"; got != want {
+		t.Fatalf("notice = %q, want %q", got, want)
+	}
+	stderr.Reset()
+	role, err = startRole("reviewer", "do the task", &stderr)
+	if err != nil || role != "reviewer" || stderr.Len() != 0 {
+		t.Fatalf("explicit canonical role = %q, %v, notice=%q", role, err, stderr.String())
+	}
+	if err := os.WriteFile(neus, []byte("#!/bin/sh\nexit 4\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	role, err = startRole("", "Unclear request.", &stderr)
+	if err != nil || role != "developer" {
+		t.Fatalf("ambiguous prompt fallback = %q, %v; want developer", role, err)
+	}
+	if _, err := startRole("wizard", "", &stderr); err == nil || !strings.Contains(err.Error(), "known roles:") {
+		t.Fatalf("unknown requested role error = %v; want role catalog", err)
 	}
 }
 

@@ -255,7 +255,7 @@ func launchDetachedWithPreflight(cmd *cobra.Command, req startRequest, storeDir,
 	if err := preflightCodex(cmd.Context(), model.Provider, nil, check); err != nil {
 		return fmt.Errorf("agent start preflight: %w", err)
 	}
-	role, err := startRole(req.Role)
+	role, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
 	if err != nil {
 		return err
 	}

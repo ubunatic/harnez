@@ -1,8 +1,12 @@
 package subagent
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
+	"os/exec"
 	"sort"
 	"strings"
 	"sync"
@@ -15,14 +19,15 @@ import (
 const agentSpecPath = "spec/agent.yaml"
 
 type agentSpec struct {
-	DefaultModel     string                         `yaml:"default_model"`
-	DefaultRole      string                         `yaml:"default_role"`
-	ModelsLegend     string                         `yaml:"models_legend"`
-	Models           map[string]modelAlias          `yaml:"models"`
-	Roles            map[string]RoleSpec            `yaml:"roles"`
-	Stop             StopSpec                       `yaml:"stop"`
-	Selftest         SelftestSpec                   `yaml:"selftest"`
-	ExternalSessions map[string]ExternalSessionSpec `yaml:"external_sessions"`
+	DefaultModel          string                         `yaml:"default_model"`
+	DefaultRole           string                         `yaml:"default_role"`
+	RoleClassifyTimeoutMS int                            `yaml:"role_classify_timeout_ms"`
+	ModelsLegend          string                         `yaml:"models_legend"`
+	Models                map[string]modelAlias          `yaml:"models"`
+	Roles                 map[string]RoleSpec            `yaml:"roles"`
+	Stop                  StopSpec                       `yaml:"stop"`
+	Selftest              SelftestSpec                   `yaml:"selftest"`
+	ExternalSessions      map[string]ExternalSessionSpec `yaml:"external_sessions"`
 }
 
 // ExternalSessionSpec describes provider-owned local session metadata.
@@ -100,6 +105,9 @@ func parseAgentSpec(data []byte) (agentSpec, error) {
 	}
 	if strings.TrimSpace(spec.DefaultModel) == "" {
 		return agentSpec{}, fmt.Errorf("agent spec: default_model is required")
+	}
+	if spec.RoleClassifyTimeoutMS <= 0 {
+		return agentSpec{}, fmt.Errorf("agent spec: positive role_classify_timeout_ms required")
 	}
 	models := make(map[string]modelAlias, len(spec.Models))
 	for key, entry := range spec.Models {
@@ -262,6 +270,63 @@ func ResolveRole(name string) (string, error) {
 		return "", err
 	}
 	return resolveRoleIn(spec, name)
+}
+
+// ResolveRoleDynamic resolves a canonical role or alias first, then asks neus
+// to classify unknown role wording. The bool is true when neus supplied the role.
+func ResolveRoleDynamic(name string) (string, bool, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return "", false, err
+	}
+	if role, err := resolveRoleIn(spec, name); err == nil {
+		return role, false, nil
+	}
+	role, err := classifyAgentRole(context.Background(), name, spec)
+	if err == nil {
+		return role, true, nil
+	}
+	return "", false, unknownRoleError(spec, name)
+}
+
+type roleClassification struct {
+	Class string `json:"class"`
+}
+
+var runRoleClassifier = runNeusRoleClassifier
+
+func runNeusRoleClassifier(ctx context.Context, input string, spec agentSpec) (string, error) {
+	classes := make([]string, 0, len(spec.Roles))
+	for role := range spec.Roles {
+		classes = append(classes, role)
+	}
+	sort.Strings(classes)
+	timeout := time.Duration(spec.RoleClassifyTimeoutMS) * time.Millisecond
+	if timeout <= 0 {
+		return "", errors.New("role classifier timeout is not configured")
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	args := []string{"classify", "--json", "--classes", strings.Join(classes, ","), "--timeout", timeout.String(), input}
+	output, err := exec.CommandContext(ctx, "neus", args...).Output()
+	if err != nil {
+		return "", err
+	}
+	var result roleClassification
+	if err := json.Unmarshal(output, &result); err != nil {
+		return "", err
+	}
+	if _, ok := spec.Roles[result.Class]; !ok {
+		return "", fmt.Errorf("neus returned unknown role %q", result.Class)
+	}
+	return result.Class, nil
+}
+
+func classifyAgentRole(ctx context.Context, input string, spec agentSpec) (string, error) {
+	if strings.TrimSpace(input) == "" {
+		return "", errors.New("empty role classification input")
+	}
+	return runRoleClassifier(ctx, input, spec)
 }
 
 // RoleHelp returns a sorted one-line catalog for agent command help.

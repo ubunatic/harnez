@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -384,7 +385,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	if err := rejectExhaustedQuota(spec, m, req.AllowExhaustedQuota, d.availability); err != nil {
 		return err
 	}
-	role, err := startRole(req.Role)
+	role, err := startRole(req.Role, req.Prompt, cmd.ErrOrStderr())
 	if err != nil {
 		return err
 	}
@@ -973,16 +974,26 @@ const (
 
 // startRole picks the role of a new session and checks that the caller's own
 // role (from the environment harnez gave it) may start it.
-func startRole(requested string) (string, error) {
+func startRole(requested, prompt string, errOut io.Writer) (string, error) {
 	role := requested
+	if role != "" {
+		resolved, classified, err := subagent.ResolveRoleDynamic(role)
+		if err != nil {
+			return "", err
+		}
+		if classified {
+			fmt.Fprintf(errOut, "harnez: resolved --role %q to %q\n", role, resolved)
+		}
+		role = resolved
+	} else if sentence := firstPromptSentence(prompt); sentence != "" {
+		if inferred, _, err := subagent.ResolveRoleDynamic(sentence); err == nil {
+			role = inferred
+			fmt.Fprintf(errOut, "harnez: inferred role %q from prompt\n", role)
+		}
+	}
 	if role == "" {
 		var err error
 		if role, err = subagent.DefaultRole(); err != nil {
-			return "", err
-		}
-	} else {
-		var err error
-		if role, err = subagent.ResolveRole(role); err != nil {
 			return "", err
 		}
 	}
@@ -990,6 +1001,20 @@ func startRole(requested string) (string, error) {
 		return "", err
 	}
 	return role, nil
+}
+
+func firstPromptSentence(prompt string) string {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return ""
+	}
+	if end := strings.IndexAny(prompt, "\r\n"); end >= 0 {
+		prompt = strings.TrimSpace(prompt[:end])
+	}
+	if end := strings.IndexAny(prompt, ".?!"); end >= 0 {
+		prompt = strings.TrimSpace(prompt[:end+1])
+	}
+	return prompt
 }
 
 // resumeRole returns the stored role of sess (default role for old records),

@@ -1,7 +1,9 @@
 package subagent
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"strings"
 	"testing"
@@ -171,7 +173,7 @@ func TestParseAgentSpecRejectsBadDefault(t *testing.T) {
 }
 
 func TestParseAgentSpecRequiresExternalSessionDiscovery(t *testing.T) {
-	data := "default_model: codex:luna:low\ndefault_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n"
+	data := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\ndefault_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n"
 	if _, err := parseAgentSpec([]byte(data)); err == nil || !strings.Contains(err.Error(), "external_sessions") {
 		t.Fatalf("parse without external_sessions = %v, want required provider error", err)
 	}
@@ -274,8 +276,39 @@ func TestAgentSpecRolesAndCheckSpawn(t *testing.T) {
 	}
 }
 
+func TestResolveRoleDynamicStaticBeforeClassifierAndGracefulFallback(t *testing.T) {
+	old := runRoleClassifier
+	t.Cleanup(func() { runRoleClassifier = old })
+	calls := 0
+	runRoleClassifier = func(_ context.Context, input string, _ agentSpec) (string, error) {
+		calls++
+		if input != "code author" {
+			t.Fatalf("classifier input = %q", input)
+		}
+		return "developer", nil
+	}
+	if got, classified, err := ResolveRoleDynamic("developer"); err != nil || classified || got != "developer" {
+		t.Fatalf("canonical role = %q, classified=%v, err=%v", got, classified, err)
+	}
+	if got, classified, err := ResolveRoleDynamic("explorer"); err != nil || classified || got != "advisor" {
+		t.Fatalf("alias role = %q, classified=%v, err=%v", got, classified, err)
+	}
+	if got, classified, err := ResolveRoleDynamic("code author"); err != nil || !classified || got != "developer" {
+		t.Fatalf("dynamic role = %q, classified=%v, err=%v", got, classified, err)
+	}
+	if calls != 1 {
+		t.Fatalf("classifier calls = %d, want 1", calls)
+	}
+	runRoleClassifier = func(context.Context, string, agentSpec) (string, error) {
+		return "", errors.New("neus unavailable")
+	}
+	if _, _, err := ResolveRoleDynamic("wizard"); err == nil || !strings.Contains(err.Error(), "known roles:") || !strings.Contains(err.Error(), "explorer") {
+		t.Fatalf("fallback error = %v, want role catalog", err)
+	}
+}
+
 func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
-	base := "default_model: codex:luna:low\n" + testExternalSessionSpecYAML
+	base := "default_model: codex:luna:low\nrole_classify_timeout_ms: 1500\n" + testExternalSessionSpecYAML
 	for name, doc := range map[string]string{
 		"default role undefined": base + "default_role: nobody\nroles:\n  a: {description: fine, spawns: [], rules: x}\n",
 		"spawns undefined role":  base + "default_role: a\nroles:\n  a: {description: fine, spawns: [b], rules: x}\n",
@@ -297,7 +330,7 @@ func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
 
 func TestParseAgentSpecDoesNotMutateModelAliases(t *testing.T) {
 	before := KnownModels()
-	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\ndefault_role: a\n" + testExternalSessionSpecYAML + "models:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
+	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\nrole_classify_timeout_ms: 1500\ndefault_role: a\n" + testExternalSessionSpecYAML + "models:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
 		t.Fatal(err)
 	}
 	after := KnownModels()
