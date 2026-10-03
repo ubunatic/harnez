@@ -1,6 +1,6 @@
 # 694 — Reject disallowed AGY tools via PreToolUse hook
 
-**Status**: Open
+**Status**: Closed — resolved in 226a71d7 (spec-driven PreToolUse rejection)
 **Priority**: P2
 **Severity**: Medium
 **Category**: Feature / AGY
