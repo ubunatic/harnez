@@ -691,3 +691,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 690 | [690-usage-table-display-width-and-empty-state.md](690-usage-table-display-width-and-empty-state.md) | Usage table display width and empty state | Open |
 | 691 | [691-track-claude-and-agy-sessions-in-agent-list.md](691-track-claude-and-agy-sessions-in-agent-list.md) | track Claude and Agy sessions in agent list | Open — provider discovery work remains |
 | 692 | [692-add-agent-roles-with-aliases-and-one-line-docs-so-role-guesses-work.md](692-add-agent-roles-with-aliases-and-one-line-docs-so-role-guesses-work.md) | Add agent roles with aliases and one-line docs so --role guesses work | Open |
+| 693 | [693-harnez-index-say-when-it-replaces-a-hand-edited-row-and-point-at-harnez-topic.md](693-harnez-index-say-when-it-replaces-a-hand-edited-row-and-point-at-harnez-topic.md) | harnez index: say when it replaces a hand-edited row and point at harnez:topic | Open |
