@@ -1,6 +1,6 @@
 # 686 — Resolve unknown agent roles and infer role from prompt via neus classify
 
-**Status**: Open
+**Status**: Closed — Implemented dynamic role resolution and prompt inference; quota tests pass; the live neus endpoint timed out during final verification.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
