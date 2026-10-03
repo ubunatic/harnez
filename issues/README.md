@@ -689,3 +689,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 688 | [688-make-agent-delete-all-repeat-safe.md](688-make-agent-delete-all-repeat-safe.md) | Make agent delete all repeat-safe | Closed — repeat-safe delete --all; never-started Codex sessions count as deleted (M2 e0ccbadf); live double run silent |
 | 689 | [689-replace-default-usage-boxes-with-a-plain-table.md](689-replace-default-usage-boxes-with-a-plain-table.md) | Replace default usage boxes with a plain table | Done |
 | 690 | [690-usage-table-display-width-and-empty-state.md](690-usage-table-display-width-and-empty-state.md) | Usage table display width and empty state | Open |
+| 691 | [691-track-claude-and-agy-sessions-in-agent-list.md](691-track-claude-and-agy-sessions-in-agent-list.md) | track Claude and Agy sessions in agent list | Open — provider discovery work remains |
