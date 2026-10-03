@@ -87,8 +87,10 @@ func StopBounds() (time.Duration, time.Duration, time.Duration, error) {
 
 // RoleSpec is one entry of the roles table in spec/agent.yaml.
 type RoleSpec struct {
-	Spawns []string `yaml:"spawns"`
-	Rules  string   `yaml:"rules"`
+	Description string   `yaml:"description"`
+	Aliases     []string `yaml:"aliases"`
+	Spawns      []string `yaml:"spawns"`
+	Rules       string   `yaml:"rules"`
 }
 
 func parseAgentSpec(data []byte) (agentSpec, error) {
@@ -217,7 +219,27 @@ func validateRoles(spec agentSpec) error {
 	if _, ok := spec.Roles[spec.DefaultRole]; !ok {
 		return fmt.Errorf("agent spec: default_role %q is not defined in roles", spec.DefaultRole)
 	}
+	roleNames := make(map[string]struct{}, len(spec.Roles))
+	for name := range spec.Roles {
+		roleNames[name] = struct{}{}
+	}
+	aliases := make(map[string]string)
 	for name, role := range spec.Roles {
+		if strings.TrimSpace(role.Description) == "" || strings.ContainsAny(role.Description, "\r\n") {
+			return fmt.Errorf("agent spec: role %q requires a one-line description", name)
+		}
+		for _, alias := range role.Aliases {
+			if alias == "" || strings.TrimSpace(alias) != alias {
+				return fmt.Errorf("agent spec: role %q has an empty alias", name)
+			}
+			if _, ok := roleNames[alias]; ok {
+				return fmt.Errorf("agent spec: role %q alias %q conflicts with a canonical role", name, alias)
+			}
+			if previous, ok := aliases[alias]; ok {
+				return fmt.Errorf("agent spec: role alias %q is shared by %q and %q", alias, previous, name)
+			}
+			aliases[alias] = name
+		}
 		if strings.TrimSpace(role.Rules) == "" {
 			return fmt.Errorf("agent spec: role %q has no rules", name)
 		}
@@ -231,6 +253,24 @@ func validateRoles(spec agentSpec) error {
 		}
 	}
 	return nil
+}
+
+// ResolveRole resolves a canonical role name or alias to its canonical name.
+func ResolveRole(name string) (string, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return "", err
+	}
+	return resolveRoleIn(spec, name)
+}
+
+// RoleHelp returns a sorted one-line catalog for agent command help.
+func RoleHelp() (string, error) {
+	spec, err := agentSpecOnce()
+	if err != nil {
+		return "", err
+	}
+	return roleCatalog(spec), nil
 }
 
 // DefaultRole is the role of a session started without --role.
@@ -262,10 +302,11 @@ func RoleRules(role string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	r, ok := spec.Roles[role]
-	if !ok {
-		return "", unknownRoleError(spec, role)
+	canonical, err := resolveRoleIn(spec, role)
+	if err != nil {
+		return "", err
 	}
+	r := spec.Roles[canonical]
 	return strings.TrimSpace(r.Rules), nil
 }
 
@@ -276,9 +317,11 @@ func CheckSpawn(callerRole, target string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := spec.Roles[target]; !ok {
-		return unknownRoleError(spec, target)
+	canonical, err := resolveRoleIn(spec, target)
+	if err != nil {
+		return err
 	}
+	target = canonical
 	if callerRole == "" {
 		return nil
 	}
@@ -308,10 +351,39 @@ func IsLeafRole(callerRole string) bool {
 }
 
 func unknownRoleError(spec agentSpec, role string) error {
+	return fmt.Errorf("unknown agent role %q; known roles:\n%s", role, roleCatalog(spec))
+}
+
+func resolveRoleIn(spec agentSpec, name string) (string, error) {
+	if _, ok := spec.Roles[name]; ok {
+		return name, nil
+	}
+	for canonical, role := range spec.Roles {
+		for _, alias := range role.Aliases {
+			if alias == name {
+				return canonical, nil
+			}
+		}
+	}
+	return "", unknownRoleError(spec, name)
+}
+
+func roleCatalog(spec agentSpec) string {
 	names := make([]string, 0, len(spec.Roles))
-	for n := range spec.Roles {
-		names = append(names, n)
+	for name := range spec.Roles {
+		names = append(names, name)
 	}
 	sort.Strings(names)
-	return fmt.Errorf("unknown agent role %q; known roles: %s", role, strings.Join(names, ", "))
+	lines := make([]string, 0, len(names))
+	for _, name := range names {
+		role := spec.Roles[name]
+		aliases := append([]string(nil), role.Aliases...)
+		sort.Strings(aliases)
+		line := name
+		if len(aliases) > 0 {
+			line += " (aliases: " + strings.Join(aliases, ", ") + ")"
+		}
+		lines = append(lines, "  "+line+": "+strings.TrimSpace(role.Description))
+	}
+	return strings.Join(lines, "\n")
 }

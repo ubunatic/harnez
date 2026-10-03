@@ -168,6 +168,8 @@ models:
 default_role: developer
 roles:
   orchestrator:
+    description: Coordinate work and delegate to leaf workers.
+    aliases: [lead, coordinator]
     spawns: [developer, reviewer, advisor]
     rules: >-
       You coordinate; you never write code or edit files yourself. Delegate each
@@ -183,6 +185,8 @@ roles:
       If resuming a helper fails, write the follow-up into the ticket and start a fresh helper instead of retrying.
       When codex has no quota, use agy:flash38 as the cross-vendor reviewer.
   developer:
+    description: Implement assigned work, run checks, and commit the result.
+    aliases: [coder, worker, implementer]
     spawns: []
     rules: >-
       You are a leaf worker. Do the assigned ticket or milestone yourself: read,
@@ -190,12 +194,16 @@ roles:
       subagents, background agents or delegating skills. Report in at most 10
       lines: files changed, tests run and their result, open problems.
   reviewer:
+    description: Inspect changes and report actionable findings without editing.
+    aliases: [critic, checker]
     spawns: []
     rules: >-
       You are a leaf, read-only reviewer. Inspect the diff and test output you
       are given; never edit files and never run `harnez agent`. Report findings
       by severity in at most 15 lines.
   advisor:
+    description: Research the code and return a concise read-only plan.
+    aliases: [explorer, scout, auditor, planner]
     spawns: []
     rules: >-
       You are a leaf, read-only advisor. Audit the ticket and code paths you are

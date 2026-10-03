@@ -3620,8 +3620,36 @@ func TestAgentStartDefaultsToDeveloperRole(t *testing.T) {
 	if d.envRole != "developer" || !strings.Contains(d.prompt, "You are a leaf worker") || strings.Contains(d.prompt, "Never run `harnez agent`") {
 		t.Fatalf("env=%q prompt:\n%s", d.envRole, d.prompt)
 	}
-	if _, err := runWithStore(t, d, t.TempDir(), "start", "--role", "wizard", "task"); err == nil || !strings.Contains(err.Error(), "unknown agent role") {
-		t.Fatalf("unknown role err = %v", err)
+	if _, err := runWithStore(t, d, t.TempDir(), "start", "--role", "wizard", "task"); err == nil || !strings.Contains(err.Error(), "unknown agent role") || !strings.Contains(err.Error(), "explorer") || !strings.Contains(err.Error(), "Research the code") {
+		t.Fatalf("unknown role err = %v; want full role catalog", err)
+	}
+}
+
+func TestAgentStartResolvesRoleAliasAndHelpListsRoles(t *testing.T) {
+	t.Setenv(agentRoleEnv, "")
+	d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+	storeDir := t.TempDir()
+	if _, err := runWithStore(t, d, storeDir, "start", "--role", "explorer", "task"); err != nil {
+		t.Fatal(err)
+	}
+	store, _ := subagent.NewSessionStore(storeDir)
+	sess, err := store.Get("thread-1")
+	if err != nil || sess.Role != "advisor" || d.envRole != "advisor" {
+		t.Fatalf("alias session role=%q env=%q err=%v; want advisor", sess.Role, d.envRole, err)
+	}
+
+	cmd := newAgentCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"start", "--help"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"explorer", "advisor", "developer"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("start help missing %q:\n%s", want, out.String())
+		}
 	}
 }
 

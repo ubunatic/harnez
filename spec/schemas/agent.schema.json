@@ -85,8 +85,10 @@
       "minProperties": 1,
       "additionalProperties": {
         "type": "object",
-        "required": ["spawns", "rules"],
+        "required": ["description", "spawns", "rules"],
         "properties": {
+          "description": { "type": "string", "minLength": 1 },
+          "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
           "spawns": { "type": "array", "items": { "type": "string" } },
           "rules": { "type": "string", "minLength": 1 }
         },

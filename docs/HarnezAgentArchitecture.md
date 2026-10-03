@@ -322,6 +322,15 @@ available. An orchestrator may start developer, reviewer and advisor sessions, n
 another orchestrator. A caller without a role (a human or an untracked host) is
 unrestricted. Tests must not depend on these variables (`TestMain` clears them). Operating
 guide and pitfalls: `docs/OrchestratedAgentFlow.md`.
+
+`--role` also accepts these aliases; sessions store the canonical role name:
+
+| Role | Aliases | Description |
+|------|---------|-------------|
+| `orchestrator` | `lead`, `coordinator` | Coordinate work and delegate to leaf workers. |
+| `developer` | `coder`, `worker`, `implementer` | Implement assigned work, run checks, and commit the result. |
+| `reviewer` | `critic`, `checker` | Inspect changes and report actionable findings without editing. |
+| `advisor` | `explorer`, `scout`, `auditor`, `planner` | Research the code and return a concise read-only plan. |
  
 ### 2.14 Foreground Turn Detachment and Wait Reattachment
 

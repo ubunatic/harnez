@@ -980,6 +980,11 @@ func startRole(requested string) (string, error) {
 		if role, err = subagent.DefaultRole(); err != nil {
 			return "", err
 		}
+	} else {
+		var err error
+		if role, err = subagent.ResolveRole(role); err != nil {
+			return "", err
+		}
 	}
 	if err := subagent.CheckSpawn(os.Getenv(agentRoleEnv), role); err != nil {
 		return "", err
@@ -997,8 +1002,14 @@ func resumeRole(requested string, sess *subagent.Session) (string, error) {
 			return "", err
 		}
 	}
-	if requested != "" && requested != role {
-		return "", fmt.Errorf("--role %q conflicts with session %q role %s", requested, sess.Name, role)
+	if requested != "" {
+		canonical, err := subagent.ResolveRole(requested)
+		if err != nil {
+			return "", err
+		}
+		if canonical != role {
+			return "", fmt.Errorf("--role %q conflicts with session %q role %s", requested, sess.Name, role)
+		}
 	}
 	if err := subagent.CheckSpawn(os.Getenv(agentRoleEnv), role); err != nil {
 		return "", err

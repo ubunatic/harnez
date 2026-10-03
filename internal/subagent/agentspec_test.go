@@ -123,6 +123,45 @@ func TestExternalSessionSchemaDeclaresRuntimeFields(t *testing.T) {
 	}
 }
 
+func TestRoleSchemaDeclaresDescriptionsAndAliases(t *testing.T) {
+	data, err := fs.ReadFile(harnez.DefaultFS, "spec/schemas/agent.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(data, &schema); err != nil {
+		t.Fatal(err)
+	}
+	var roles struct {
+		AdditionalProperties struct {
+			Required   []string                   `json:"required"`
+			Properties map[string]json.RawMessage `json:"properties"`
+		} `json:"additionalProperties"`
+	}
+	if err := json.Unmarshal(schema.Properties["roles"], &roles); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"description", "aliases", "spawns", "rules"} {
+		if _, ok := roles.AdditionalProperties.Properties[name]; !ok {
+			t.Errorf("role schema is missing %q", name)
+		}
+	}
+	if !containsString(roles.AdditionalProperties.Required, "description") {
+		t.Fatal("role schema does not require descriptions")
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestParseAgentSpecRejectsBadDefault(t *testing.T) {
 	for _, data := range []string{"{}", "default_model: codex:missing:low\n"} {
 		if _, err := parseAgentSpec([]byte(data)); err == nil {
@@ -132,7 +171,7 @@ func TestParseAgentSpecRejectsBadDefault(t *testing.T) {
 }
 
 func TestParseAgentSpecRequiresExternalSessionDiscovery(t *testing.T) {
-	data := "default_model: codex:luna:low\ndefault_role: a\nroles:\n  a: {spawns: [], rules: fine}\n"
+	data := "default_model: codex:luna:low\ndefault_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n"
 	if _, err := parseAgentSpec([]byte(data)); err == nil || !strings.Contains(err.Error(), "external_sessions") {
 		t.Fatalf("parse without external_sessions = %v, want required provider error", err)
 	}
@@ -220,28 +259,45 @@ func TestAgentSpecRolesAndCheckSpawn(t *testing.T) {
 			t.Fatalf("RoleRules(%q) = %q, %v", role, rules, err)
 		}
 	}
+	for alias, want := range map[string]string{
+		"explorer": "advisor", "scout": "advisor", "auditor": "advisor", "planner": "advisor",
+		"coder": "developer", "worker": "developer", "implementer": "developer",
+		"critic": "reviewer", "checker": "reviewer", "lead": "orchestrator", "coordinator": "orchestrator",
+		"developer": "developer",
+	} {
+		if got, err := ResolveRole(alias); err != nil || got != want {
+			t.Errorf("ResolveRole(%q) = %q, %v; want %q", alias, got, err, want)
+		}
+	}
+	if _, err := ResolveRole("wizard"); err == nil || !strings.Contains(err.Error(), "known roles:") || !strings.Contains(err.Error(), "explorer") {
+		t.Fatalf("unknown role error = %v, want role catalog", err)
+	}
 }
 
 func TestParseAgentSpecRejectsBrokenRoles(t *testing.T) {
 	base := "default_model: codex:luna:low\n" + testExternalSessionSpecYAML
 	for name, doc := range map[string]string{
-		"default role undefined": base + "default_role: nobody\nroles:\n  a: {spawns: [], rules: x}\n",
-		"spawns undefined role":  base + "default_role: a\nroles:\n  a: {spawns: [b], rules: x}\n",
-		"spawns itself":          base + "default_role: a\nroles:\n  a: {spawns: [a], rules: x}\n",
-		"empty rules":            base + "default_role: a\nroles:\n  a: {spawns: [], rules: ' '}\n",
+		"default role undefined": base + "default_role: nobody\nroles:\n  a: {description: fine, spawns: [], rules: x}\n",
+		"spawns undefined role":  base + "default_role: a\nroles:\n  a: {description: fine, spawns: [b], rules: x}\n",
+		"spawns itself":          base + "default_role: a\nroles:\n  a: {description: fine, spawns: [a], rules: x}\n",
+		"empty rules":            base + "default_role: a\nroles:\n  a: {description: fine, spawns: [], rules: ' '}\n",
+		"empty description":      base + "default_role: a\nroles:\n  a: {spawns: [], rules: x, description: ' '}\n",
+		"multiline description":  base + "default_role: a\nroles:\n  a:\n    description: |\n      first\n      second\n    spawns: []\n    rules: x\n",
+		"duplicate alias":        base + "default_role: a\nroles:\n  a: {spawns: [], rules: x, description: fine, aliases: [same]}\n  b: {spawns: [], rules: y, description: fine, aliases: [same]}\n",
+		"alias shadows role":     base + "default_role: a\nroles:\n  a: {spawns: [], rules: x, description: fine, aliases: [b]}\n  b: {spawns: [], rules: y, description: fine}\n",
 	} {
 		if _, err := parseAgentSpec([]byte(doc)); err == nil {
 			t.Fatalf("%s: want error", name)
 		}
 	}
-	if _, err := parseAgentSpec([]byte(base + "default_role: a\nroles:\n  a: {spawns: [], rules: fine}\n")); err != nil {
+	if _, err := parseAgentSpec([]byte(base + "default_role: a\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestParseAgentSpecDoesNotMutateModelAliases(t *testing.T) {
 	before := KnownModels()
-	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\ndefault_role: a\n" + testExternalSessionSpecYAML + "models:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {spawns: [], rules: fine}\n")); err != nil {
+	if _, err := parseAgentSpec([]byte("default_model: custom:x:low\ndefault_role: a\n" + testExternalSessionSpecYAML + "models:\n  custom:x: {provider: custom, name: x, tier: low}\nroles:\n  a: {description: fine, spawns: [], rules: fine}\n")); err != nil {
 		t.Fatal(err)
 	}
 	after := KnownModels()

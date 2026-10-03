@@ -59,6 +59,11 @@ func newAgentCmd() *cobra.Command {
 	var rootPrompt string
 	var rootFiles []string
 	var rootContinue bool
+	roleHelp, _ := subagent.RoleHelp()
+	roleUsage := "agent role for a new session (default from spec/agent.yaml)"
+	if roleHelp != "" {
+		roleUsage += "; roles:\n" + roleHelp
+	}
 	root := &cobra.Command{Use: "agent", Short: "Manage subagent sessions", Args: cobra.ArbitraryArgs,
 		Long: `Manage subagent sessions across supported providers.
 
@@ -86,7 +91,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	root.PersistentFlags().StringVar(&name, "name", "", "session name")
 	root.PersistentFlags().StringVar(&modelSpec, "model", "", "provider:model[:tier]")
 	root.PersistentFlags().BoolVar(&allowExhaustedQuota, "allow-exhausted-quota", false, "start even when cached provider quota is exhausted")
-	root.PersistentFlags().StringVar(&roleSpec, "role", "", "agent role for a new session: orchestrator, developer, reviewer or advisor (default from spec/agent.yaml)")
+	root.PersistentFlags().StringVar(&roleSpec, "role", "", roleUsage)
 	root.PersistentFlags().DurationVar(&agentTimeout, "timeout", 0, "maximum foreground turn duration (0 waits without a limit)")
 	_ = root.RegisterFlagCompletionFunc("role", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		names, _ := subagent.RoleNames()
