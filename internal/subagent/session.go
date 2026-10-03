@@ -36,6 +36,8 @@ type Session struct {
 	HarnessType          string `json:"harness_type"`
 	Status               string `json:"status"`
 	TokensCumulative     int    `json:"tokens_cumulative"`
+	SessionUsedTokens    int    `json:"session_used_tokens,omitempty"`
+	SessionUsedKnown     bool   `json:"session_used_known,omitempty"`
 	InputTokensTotal     int    `json:"input_tokens_total,omitempty"`
 	CachedTokensTotal    int    `json:"cached_tokens_total,omitempty"`
 	OutputTokensTotal    int    `json:"output_tokens_total,omitempty"`
@@ -47,6 +49,7 @@ type Session struct {
 	// ContextTokens is the full input size of the last provider turn, including
 	// cached input; it is the source for pre-prompt compaction decisions.
 	ContextTokens           int              `json:"context_tokens,omitempty"`
+	ContextWindowSize       int              `json:"context_window_size,omitempty"`
 	TokensTurn              int              `json:"tokens_turn"`
 	CachedTokens            int              `json:"cached_tokens"`
 	CreatedAt               time.Time        `json:"created_at"`
@@ -60,9 +63,10 @@ type Session struct {
 	Messages                []string         `json:"messages,omitempty"`
 	StdoutLog               string           `json:"stdout_log,omitempty"`
 	StderrLog               string           `json:"stderr_log,omitempty"`
-	ResumeFailures          int              `json:"resume_failures,omitempty"`
-	Turn                    int              `json:"turn,omitempty"`
-	TurnRecords             []TurnRecord     `json:"turn_records,omitempty"`
+	externalRolloutPath     string
+	ResumeFailures          int          `json:"resume_failures,omitempty"`
+	Turn                    int          `json:"turn,omitempty"`
+	TurnRecords             []TurnRecord `json:"turn_records,omitempty"`
 }
 
 // CodexQuarantine records the bounded failed probe after a quota interruption.

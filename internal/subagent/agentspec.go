@@ -27,15 +27,16 @@ type agentSpec struct {
 
 // ExternalSessionSpec describes provider-owned local session metadata.
 type ExternalSessionSpec struct {
-	Root            string                `yaml:"root"`
-	Pattern         string                `yaml:"pattern"`
-	Format          string                `yaml:"format"`
-	RecordTypePath  string                `yaml:"record_type_path"`
-	RecordType      string                `yaml:"record_type"`
-	MaxRecordBytes  int                   `yaml:"max_record_bytes"`
-	NamePrefix      string                `yaml:"name_prefix"`
-	AvailableStatus string                `yaml:"available_status"`
-	Fields          ExternalSessionFields `yaml:"fields"`
+	Root                     string                `yaml:"root"`
+	Pattern                  string                `yaml:"pattern"`
+	Format                   string                `yaml:"format"`
+	RecordTypePath           string                `yaml:"record_type_path"`
+	RecordType               string                `yaml:"record_type"`
+	MaxRecordBytes           int                   `yaml:"max_record_bytes"`
+	ActiveMatchWindowSeconds int                   `yaml:"active_match_window_seconds"`
+	NamePrefix               string                `yaml:"name_prefix"`
+	AvailableStatus          string                `yaml:"available_status"`
+	Fields                   ExternalSessionFields `yaml:"fields"`
 }
 
 // ExternalSessionFields maps normalized values to fields in a provider record.
@@ -129,8 +130,8 @@ func validateExternalSessions(specs map[string]ExternalSessionSpec) error {
 		if provider == "" || spec.Root == "" || spec.Pattern == "" || spec.RecordTypePath == "" || spec.RecordType == "" || spec.NamePrefix == "" || spec.AvailableStatus == "" {
 			return fmt.Errorf("agent spec: external_sessions.%s has an empty required value", provider)
 		}
-		if spec.Format != "jsonl" || spec.MaxRecordBytes <= 0 {
-			return fmt.Errorf("agent spec: external_sessions.%s requires jsonl and a positive max_record_bytes", provider)
+		if spec.Format != "jsonl" || spec.MaxRecordBytes <= 0 || spec.ActiveMatchWindowSeconds <= 0 {
+			return fmt.Errorf("agent spec: external_sessions.%s requires jsonl, a positive max_record_bytes, and a positive active_match_window_seconds", provider)
 		}
 		if spec.Fields.ID == "" || spec.Fields.WorkingDir == "" || spec.Fields.ModelProvider == "" || spec.Fields.Source == "" || spec.Fields.CreatedAt == "" {
 			return fmt.Errorf("agent spec: external_sessions.%s has incomplete field mappings", provider)

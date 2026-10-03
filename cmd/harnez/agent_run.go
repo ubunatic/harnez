@@ -586,6 +586,7 @@ func runStart(cmd *cobra.Command, d agentDeps, req startRequest) error {
 	recordTurnQuota(d.dbPath, d.quota, id, m.Provider, turn, "after", false, turnStarted, baselineCacheAt)
 	now := time.Now()
 	sess := &subagent.Session{ID: id, ProviderSessionID: providerSessionID, Name: sessName, StartPrompt: req.StoredPrompt, Role: role, Provider: m.Provider, Model: m.Name, Tier: m.Tier, WorkingDir: canonicalWorkDir, ParentSessionID: parentID, CallerPID: os.Getpid(), HarnessType: "harnez", Status: "completed", Response: r.Response, Messages: r.Messages, TokensCumulative: r.TokensCumulative, InputTokensTotal: r.InputTokens, CachedTokensTotal: r.CachedTokens, OutputTokensTotal: r.OutputTokens, ReasoningTokensTotal: r.ReasoningTokens, ReasoningTokensKnown: r.ReasoningTokensKnown, TokenTotalsKnown: true, TokensSinceCompact: subagent.CompactionTokens(r), ContextTokens: r.ContextTokens, TokensTurn: r.TokensTurn, CachedTokens: r.CachedTokens, CreatedAt: now, LastActiveAt: now, Turn: turn, TurnRecords: []subagent.TurnRecord{{Turn: turn, NewInputTokens: subagent.CompactionTokens(r), CachedInputTokens: r.CachedTokens, OutputTokens: r.OutputTokens}}}
+	sess.ContextWindowSize = r.ContextWindowSize
 	persistAgentTurnTokens(d.dbPath, sess, r, now)
 	if current, getErr := s.Get(reservedID); getErr == nil {
 		sess.ProviderPID, sess.ProviderStarttime = current.ProviderPID, current.ProviderStarttime
@@ -873,6 +874,7 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	sess.ReasoningTokensTotal += r.ReasoningTokens
 	sess.ReasoningTokensKnown = sess.ReasoningTokensKnown && r.ReasoningTokensKnown
 	sess.ContextTokens = r.ContextTokens
+	sess.ContextWindowSize = r.ContextWindowSize
 	sess.CachedTokens = r.CachedTokens
 	sess.InputTokensTotal += r.InputTokens
 	sess.CachedTokensTotal += r.CachedTokens

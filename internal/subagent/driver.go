@@ -92,7 +92,8 @@ type TurnResult struct {
 	ReasoningTokensKnown bool     `json:"reasoning_tokens_known,omitempty"`
 	// ContextTokens is the provider's input-token count for the last turn,
 	// including cached input. It measures the full context the model read.
-	ContextTokens int `json:"context_tokens"`
+	ContextTokens     int `json:"context_tokens"`
+	ContextWindowSize int `json:"context_window_size,omitempty"`
 	// CompactionObserved reports a new provider compaction record during this turn.
 	CompactionObserved bool  `json:"compaction_observed,omitempty"`
 	TokensTurn         int   `json:"tokens_turn"`

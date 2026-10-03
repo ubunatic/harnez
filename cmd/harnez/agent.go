@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	"ubunatic.com/harnez/internal/agentpolicy"
 	"ubunatic.com/harnez/internal/privacy"
 	"ubunatic.com/harnez/internal/subagent"
@@ -49,6 +51,7 @@ type agentOutput struct {
 func newAgentCmd() *cobra.Command {
 	var jsonOut, children, all, detach, allowExhaustedQuota bool
 	var failedOnly, includeDead, includeArchived bool
+	var listColorMode string
 	var workerID string
 	var storeDir, workDir, name, modelSpec, streamMode, roleSpec string
 	var agentTimeout time.Duration
@@ -452,15 +455,20 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			}
 		}
 		var external []*subagent.Session
-		if !failedOnly && includeDead && (all || (p == "" && !children)) {
+		if !failedOnly && (!includeDead || all || (p == "" && !children)) {
 			home, err := os.UserHomeDir()
 			if err != nil {
 				return fmt.Errorf("resolve home directory for external sessions: %w", err)
 			}
-			external, err = subagent.DiscoverExternalSessions(home)
+			if includeDead {
+				external, err = subagent.DiscoverExternalSessions(home)
+			} else {
+				external, err = subagent.DiscoverActiveCodexSessions(home)
+			}
 			if err != nil {
 				return err
 			}
+			enrichExternalAgentTokenCounts(external)
 		}
 		var deleted []*subagent.Session
 		archivedIDs := make(map[string]struct{})
@@ -498,13 +506,25 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 		if jsonOut {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(xs)
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), "ID\tNAME\tPROVIDER\tSTATUS\tRESUME\tTOKENS\tCACHED\tSOURCE\tWORKING_DIR")
+		colorEnabled, err := agentListColorEnabled(listColorMode, cmd.OutOrStdout())
+		if err != nil {
+			return err
+		}
+		if colorEnabled {
+			fmt.Fprintln(cmd.OutOrStdout(), agentListColor("\x1b[1m", "NAME\tPROVIDER\tSTATUS\tRESUME\tCONTEXT_USED\tCONTEXT_SIZE\tSESSION_USED\tWORKING_DIR", true))
+		} else {
+			fmt.Fprintln(cmd.OutOrStdout(), "ID\tNAME\tPROVIDER\tSTATUS\tRESUME\tCONTEXT_USED\tCONTEXT_SIZE\tSESSION_USED\tSOURCE\tWORKING_DIR")
+		}
 		for _, x := range xs {
 			resume := resumeState(x)
 			if x.HarnessType == "external" {
 				resume = "external"
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%s\n", x.ID, x.Name, x.Provider, x.Status, resume, x.TokensCumulative, x.CachedTokens, x.Source, x.WorkingDir)
+			if colorEnabled {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", x.Name, x.Provider, agentListStatusColor(x.Status, true), resume, formatAgentContextTokens(x.LastContextTokens()), formatAgentContextTokens(x.ContextWindowSize), formatAgentSessionUsedTokens(x.SessionUsedTokens, x.SessionUsedKnown), x.WorkingDir)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", x.ID, x.Name, x.Provider, x.Status, resume, formatAgentContextTokens(x.LastContextTokens()), formatAgentContextTokens(x.ContextWindowSize), formatAgentSessionUsedTokens(x.SessionUsedTokens, x.SessionUsedKnown), x.Source, x.WorkingDir)
+			}
 		}
 		return nil
 	}}
@@ -514,6 +534,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	list.Flags().BoolVar(&includeDead, "dead", false, "include inactive and completed sessions")
 	list.Flags().BoolVar(&includeArchived, "archived", false, "include deleted archived sessions")
 	list.Flags().BoolVar(&jsonOut, "json", false, "JSON output")
+	list.Flags().StringVar(&listColorMode, "color", "auto", "color output: auto, always, or never")
 
 	status := &cobra.Command{Use: "status", Short: "Show agent session status", Args: noArgs("session is now --name <session>"), RunE: func(cmd *cobra.Command, a []string) error {
 		s, e := store()
@@ -882,13 +903,85 @@ func countVisibleAgentSessions(sessions []*subagent.Session, includeDead bool) i
 	return count
 }
 
+func formatAgentContextTokens(tokens int) string {
+	if tokens <= 0 {
+		return "-"
+	}
+	return formatAgentTokenCount(tokens)
+}
+
+func formatAgentSessionUsedTokens(tokens int, known bool) string {
+	if !known || tokens <= 0 {
+		return "-"
+	}
+	return formatAgentTokenCount(tokens)
+}
+
+func formatAgentTokenCount(tokens int) string {
+	switch {
+	case tokens >= 10_000_000:
+		return fmt.Sprintf("%.0fM", float64(tokens)/1_000_000)
+	case tokens >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(tokens)/1_000_000)
+	case tokens >= 100_000:
+		return fmt.Sprintf("%.0fk", float64(tokens)/1_000)
+	case tokens >= 10_000:
+		return fmt.Sprintf("%.1fk", float64(tokens)/1_000)
+	default:
+		return strconv.Itoa(tokens)
+	}
+}
+
+func agentListColorEnabled(mode string, out io.Writer) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "always":
+		return true, nil
+	case "never":
+		return false, nil
+	case "", "auto":
+		if os.Getenv("NO_COLOR") != "" {
+			return false, nil
+		}
+		file, ok := out.(*os.File)
+		return ok && term.IsTerminal(int(file.Fd())), nil
+	default:
+		return false, fmt.Errorf("invalid --color %q: choose auto, always, or never", mode)
+	}
+}
+
+func agentListColor(code, text string, enabled bool) string {
+	if !enabled {
+		return text
+	}
+	return code + text + "\x1b[0m"
+}
+
+func agentListStatusColor(status string, enabled bool) string {
+	if !enabled {
+		return status
+	}
+	switch status {
+	case "active", "running":
+		return agentListColor("\x1b[32m", status, true)
+	case "completed", "available":
+		return agentListColor("\x1b[36m", status, true)
+	case "failed", "delete-failed":
+		return agentListColor("\x1b[31m", status, true)
+	default:
+		return status
+	}
+}
+
 func appendExternalAgentSessions(listed, managed, external, deleted []*subagent.Session) []*subagent.Session {
 	seen := make(map[string]struct{}, len(managed)+len(external)+len(deleted))
+	byKey := make(map[string]*subagent.Session, len(managed)+len(external)+len(deleted))
 	for _, sess := range managed {
 		if sess == nil {
 			continue
 		}
-		seen[sess.Provider+"\x00"+sess.ProviderID()] = struct{}{}
+		key := sess.Provider + "\x00" + sess.ProviderID()
+		seen[key] = struct{}{}
+		byKey[key] = sess
 	}
 	for _, sess := range deleted {
 		if sess != nil {
@@ -907,12 +1000,66 @@ func appendExternalAgentSessions(listed, managed, external, deleted []*subagent.
 		}
 		key := sess.Provider + "\x00" + sess.ProviderID()
 		if _, ok := seen[key]; ok {
+			if existing := byKey[key]; existing != nil {
+				if sess.ContextTokens != 0 {
+					existing.ContextTokens = sess.ContextTokens
+				}
+				if sess.ContextWindowSize > 0 {
+					existing.ContextWindowSize = sess.ContextWindowSize
+				}
+				if sess.SessionUsedKnown {
+					existing.SessionUsedTokens = sess.SessionUsedTokens
+					existing.SessionUsedKnown = true
+				}
+			}
 			continue
 		}
 		seen[key] = struct{}{}
+		byKey[key] = sess
 		listed = append(listed, sess)
 	}
 	return listed
+}
+
+func enrichExternalAgentTokenCounts(sessions []*subagent.Session) {
+	if len(sessions) == 0 {
+		return
+	}
+	db, err := telemetry.OpenReadOnly(agentUsageDBPath())
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	ids := make([]string, 0, len(sessions))
+	for _, session := range sessions {
+		if session != nil && session.Provider == "codex" {
+			ids = append(ids, session.ProviderID())
+		}
+	}
+	snapshots, err := db.LatestTokenSnapshots(ids)
+	if err != nil {
+		return
+	}
+	for _, session := range sessions {
+		if session == nil || session.Provider != "codex" {
+			continue
+		}
+		snapshot, ok := snapshots[session.ProviderID()]
+		if !ok {
+			continue
+		}
+		if snapshot.TotalTokens != nil {
+			session.TokensCumulative = int(*snapshot.TotalTokens)
+		} else if snapshot.LastTotalTokens != nil {
+			session.TokensCumulative = int(*snapshot.LastTotalTokens)
+		}
+		if snapshot.CachedInputTokens != nil {
+			session.CachedTokens = int(*snapshot.CachedInputTokens)
+		} else if snapshot.LastCachedInputTokens != nil {
+			session.CachedTokens = int(*snapshot.LastCachedInputTokens)
+		}
+	}
 }
 
 func matchResumeSelector(store *subagent.FileSessionStore, selector string) (bool, error) {

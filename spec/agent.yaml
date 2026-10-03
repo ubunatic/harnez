@@ -18,6 +18,7 @@ external_sessions:
     record_type_path: type
     record_type: session_meta
     max_record_bytes: 1048576
+    active_match_window_seconds: 120
     name_prefix: codex
     available_status: available
     fields:

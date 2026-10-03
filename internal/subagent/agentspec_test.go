@@ -258,6 +258,7 @@ const testExternalSessionSpecYAML = `external_sessions:
     record_type_path: type
     record_type: session_meta
     max_record_bytes: 1024
+    active_match_window_seconds: 120
     name_prefix: fixture
     available_status: available
     fields: {id: payload.id, working_dir: payload.cwd, model_provider: payload.model_provider, source: payload.source, created_at: payload.timestamp}

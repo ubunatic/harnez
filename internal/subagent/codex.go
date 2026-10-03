@@ -157,19 +157,21 @@ func (d CodexDriver) runResume(ctx context.Context, id, prompt string, model Mod
 }
 
 func setCodexResumeRolloutState(result *TurnResult, providerID string, beforeCompactions int, beforeErr error) {
-	tokens, afterCompactions, stateErr := codexRolloutState(providerID)
+	tokens, windowSize, afterCompactions, stateErr := codexRolloutMetrics(providerID)
 	if stateErr != nil {
 		result.ContextTokens = -1 // unknown is never treated as under the threshold
 		return
 	}
 	result.ContextTokens = tokens
+	result.ContextWindowSize = windowSize
 	result.CompactionObserved = beforeErr == nil && afterCompactions > beforeCompactions
 }
 
 func setCodexRolloutContext(result *TurnResult, providerID string) {
 	result.ContextTokens = -1 // a failed rollout read is unknown, not zero
-	if tokens, err := codexRolloutContextTokens(providerID); err == nil {
+	if tokens, windowSize, _, err := codexRolloutMetrics(providerID); err == nil {
 		result.ContextTokens = tokens
+		result.ContextWindowSize = windowSize
 	}
 }
 
@@ -179,16 +181,38 @@ func codexRolloutCompactions(providerID string) (int, error) {
 }
 
 func codexRolloutState(providerID string) (int, int, error) {
+	tokens, _, compactions, err := codexRolloutMetrics(providerID)
+	return tokens, compactions, err
+}
+
+func codexRolloutMetrics(providerID string) (int, int, int, error) {
 	path, err := codexRolloutPath(providerID)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
+	return codexRolloutMetricsAtPath(path, providerID)
+}
+
+func codexRolloutMetricsAtPath(path, providerID string) (int, int, int, error) {
+	usage, compactions, err := codexRolloutUsageAtPath(path, providerID)
+	return usage.ContextTokens, usage.ContextWindowSize, compactions, err
+}
+
+type codexRolloutUsage struct {
+	ContextTokens     int
+	ContextWindowSize int
+	SessionUsedTokens int
+	SessionUsedKnown  bool
+}
+
+func codexRolloutUsageAtPath(path, providerID string) (codexRolloutUsage, int, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return 0, 0, err
+		return codexRolloutUsage{}, 0, err
 	}
 	defer f.Close()
-	var tokens, compactions int
+	var usage codexRolloutUsage
+	var compactions int
 	s := bufio.NewScanner(f)
 	s.Buffer(make([]byte, 4096), 8<<20)
 	for s.Scan() {
@@ -197,9 +221,16 @@ func codexRolloutState(providerID string) (int, int, error) {
 			Payload struct {
 				Type string `json:"type"`
 				Info struct {
-					LastTokenUsage struct {
-						Input int `json:"input_tokens"`
+					ModelContextWindow int `json:"model_context_window"`
+					LastTokenUsage     struct {
+						Input  int `json:"input_tokens"`
+						Cached int `json:"cached_input_tokens"`
 					} `json:"last_token_usage"`
+					TotalTokenUsage struct {
+						Input  int `json:"input_tokens"`
+						Cached int `json:"cached_input_tokens"`
+						Output int `json:"output_tokens"`
+					} `json:"total_token_usage"`
 				} `json:"info"`
 			} `json:"payload"`
 		}
@@ -208,17 +239,25 @@ func codexRolloutState(providerID string) (int, int, error) {
 				compactions++
 			}
 			if event.Type == "event_msg" && event.Payload.Type == "token_count" {
-				tokens = event.Payload.Info.LastTokenUsage.Input
+				usage.ContextTokens = event.Payload.Info.LastTokenUsage.Input
+				usage.ContextWindowSize = event.Payload.Info.ModelContextWindow
+				totalInput := event.Payload.Info.TotalTokenUsage.Input
+				totalCached := event.Payload.Info.TotalTokenUsage.Cached
+				totalOutput := event.Payload.Info.TotalTokenUsage.Output
+				if totalInput > 0 || totalOutput > 0 {
+					usage.SessionUsedTokens = max(totalInput-totalCached, 0) + totalOutput
+					usage.SessionUsedKnown = true
+				}
 			}
 		}
 	}
 	if err := s.Err(); err != nil {
-		return 0, 0, err
+		return codexRolloutUsage{}, 0, err
 	}
-	if tokens <= 0 {
-		return 0, 0, fmt.Errorf("codex rollout for session %s has no last_token_usage input count", providerID)
+	if usage.ContextTokens <= 0 {
+		return usage, compactions, fmt.Errorf("codex rollout for session %s has no last_token_usage input count", providerID)
 	}
-	return tokens, compactions, nil
+	return usage, compactions, nil
 }
 func (d CodexDriver) Compact(ctx context.Context, id string) (*TurnResult, error) {
 	return nil, fmt.Errorf("codex manages context automatically during exec; manual /compact is unsupported")
