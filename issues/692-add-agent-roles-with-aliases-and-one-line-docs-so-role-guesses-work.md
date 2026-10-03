@@ -1,6 +1,6 @@
 # 692 — Add agent roles with aliases and one-line docs so --role guesses work
 
-**Status**: Open
+**Status**: Closed — M1 18a910fe: spec schema, role descriptions, aliases, ResolveRole, help and error catalog table
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
