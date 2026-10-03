@@ -1,0 +1,7 @@
+# yaml-language-server: $schema=schemas/agy_tools.schema.json
+#
+# Disallowed Antigravity (AGY) tools and rejection explanations (issue 694).
+# Evaluated by harnez hook agy (PreToolUse lifecycle hook).
+disallowed_tools:
+  schedule:
+    reason: "violates the harnez rule to not use schedules but run commands in the background and just wait until completion"

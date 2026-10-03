@@ -837,3 +837,55 @@ func TestReadEnforcementConfigAndDependencyInjection(t *testing.T) {
 		t.Fatal("explicit hook option should override config")
 	}
 }
+
+func TestRunAgyToolHook_DisallowedToolRejected(t *testing.T) {
+	for _, toolName := range []string{"schedule", "Schedule", "default_api:schedule", "cortex_step_type_schedule"} {
+		t.Run(toolName, func(t *testing.T) {
+			in := bytes.NewBufferString(fmt.Sprintf(`{
+				"conversationId": "test-disallow-123",
+				"toolCall": {
+					"name": %q,
+					"args": {"DurationSeconds": 60, "Prompt": "reminder"}
+				},
+				"stepIdx": 5
+			}`, toolName))
+			var out bytes.Buffer
+
+			var recorded telemetry.ToolCall
+			opts := agyHookOptions{
+				DBPath: "/tmp/dummy.db",
+				Insert: func(dbPath string, call telemetry.ToolCall) error {
+					recorded = call
+					return nil
+				},
+			}
+
+			if err := runAgyToolHook(in, &out, opts); err != nil {
+				t.Fatalf("runAgyToolHook failed: %v", err)
+			}
+
+			var response agyPreToolUseOutput
+			if err := json.Unmarshal(out.Bytes(), &response); err != nil {
+				t.Fatalf("decode response: %v (raw=%s)", err, out.String())
+			}
+
+			if response.Decision != "deny" {
+				t.Errorf("decision = %q, want deny", response.Decision)
+			}
+			wantReason := "violates the harnez rule to not use schedules but run commands in the background and just wait until completion"
+			if response.Reason != wantReason {
+				t.Errorf("reason = %q, want %q", response.Reason, wantReason)
+			}
+
+			if recorded.ToolName != toolName {
+				t.Errorf("recorded.ToolName = %q, want %q", recorded.ToolName, toolName)
+			}
+			if recorded.CallType != "hook:deny" {
+				t.Errorf("recorded.CallType = %q, want hook:deny", recorded.CallType)
+			}
+			if recorded.Note != "tool_policy:rejected" {
+				t.Errorf("recorded.Note = %q, want tool_policy:rejected", recorded.Note)
+			}
+		})
+	}
+}

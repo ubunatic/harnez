@@ -1,8 +1,8 @@
 // agyhook implements `harnez hook agy` / `harnez hook agy-tool` (and hidden legacy `harnez agy-hook`),
-// the native lifecycle observation hook for Google Antigravity (AGY).
-// It accepts Antigravity's PreToolUse JSON payload on stdin, parses the tool name
-// and conversationId, records the invocation into ~/.harnez/tool_catalog.sqlite,
-// and returns `{"decision":"allow"}` on stdout so tool execution continues unimpeded.
+// the native lifecycle observation and enforcement hook for Google Antigravity (AGY).
+// It accepts Antigravity's PreToolUse JSON payload on stdin, enforces tool and reading discipline
+// policies (rejecting disallowed tools or full-file reads), records telemetry into SQLite,
+// and routes shell commands through harnez exec.
 package main
 
 import (
@@ -20,6 +20,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+	"ubunatic.com/harnez/internal/agy"
 	"ubunatic.com/harnez/internal/decide"
 	"ubunatic.com/harnez/internal/guard"
 	"ubunatic.com/harnez/internal/readcard"
@@ -310,18 +311,29 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 		}
 	}
 
-	// Inspect once, then apply the configured mode to the result. This preserves
-	// ground-truth observer data without counting file lines twice.
-	opportunity, reason := evaluateReadToolViolation(toolName, payload.ToolCall.Args, wd)
-	deny := opportunity && readEnforcementEnabledFor(opts.EnforceRead)
-	if deny {
+	var deny bool
+	var reason string
+
+	if disallowed, rejectReason := agy.IsDisallowedTool(toolName); disallowed {
 		callType = "hook:deny"
-		note = "reading_discipline:intercepted"
-	} else if opportunity {
-		if note == "" {
-			note = "reading_discipline:opportunity"
-		} else {
-			note += " | reading_discipline:opportunity"
+		note = "tool_policy:rejected"
+		deny = true
+		reason = rejectReason
+	} else {
+		// Inspect once, then apply the configured mode to the result. This preserves
+		// ground-truth observer data without counting file lines twice.
+		opportunity, readReason := evaluateReadToolViolation(toolName, payload.ToolCall.Args, wd)
+		deny = opportunity && readEnforcementEnabledFor(opts.EnforceRead)
+		reason = readReason
+		if deny {
+			callType = "hook:deny"
+			note = "reading_discipline:intercepted"
+		} else if opportunity {
+			if note == "" {
+				note = "reading_discipline:opportunity"
+			} else {
+				note += " | reading_discipline:opportunity"
+			}
 		}
 	}
 
