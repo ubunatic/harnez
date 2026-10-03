@@ -1,6 +1,6 @@
 # 695 — Smart positional role and fuzzy target resolution for agent start and resume
 
-**Status**: Open
+**Status**: Closed — Implemented positional role and name parsing, unique fuzzy resume selectors, and latest contextual resume; make test-q1 and make install succeeded, and installed CLI fuzzy selection was verified
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
