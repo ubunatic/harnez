@@ -2865,7 +2865,10 @@ func TestAgentResumeWithoutNameResolution(t *testing.T) {
 		{"unique in dir", []*subagent.Session{older, other}, []string{"resume", "go"}, "id-old", "resolved=dir]", nil},
 		{"unique with -c", []*subagent.Session{older}, []string{"resume", "-c", "go"}, "id-old", "resolved=continue]", nil},
 		{"-c picks most recent", []*subagent.Session{older, newer, other}, []string{"resume", "-c", "go"}, "id-new", "resolved=continue]", nil},
-		{"several without -c", []*subagent.Session{older, newer}, []string{"resume", "go"}, "", "", []string{"multiple resumable agents", "old (", "new (", "pass --name"}},
+		{"latest in directory", []*subagent.Session{older, newer}, []string{"resume", "go"}, "id-new", "resolved=dir]", nil},
+		{"fuzzy name", []*subagent.Session{{ID: "id-classify", Name: "neus-classify-dev", LastActiveAt: now}}, []string{"resume", "classify", "again"}, "id-classify", "resolved=id]", nil},
+		{"id prefix", []*subagent.Session{{ID: "id-prefix-123456", Name: "prefixed", LastActiveAt: now}}, []string{"resume", "id-prefix", "again"}, "id-prefix-123456", "resolved=id]", nil},
+		{"ambiguous fuzzy words remain prompt", []*subagent.Session{{ID: "id-a", Name: "neus-classify-dev", LastActiveAt: now}, {ID: "id-b", Name: "classify-api", LastActiveAt: now}}, []string{"resume", "classify", "again"}, "id-b", "resolved=dir]", nil},
 		{"none", []*subagent.Session{other}, []string{"resume", "go"}, "", "", []string{"no resumable agent in .", "harnez agent start --name"}},
 		{"none with -c", nil, []string{"resume", "-c", "go"}, "", "", []string{"no resumable agent in ."}},
 		{"by name", []*subagent.Session{older, newer}, []string{"resume", "--name", "old", "go"}, "id-old", "resolved=name]", nil},
@@ -2958,8 +2961,8 @@ func TestAgentStartFailureKeepsSessionAndResumeSelector(t *testing.T) {
 	implicit.SetOut(new(bytes.Buffer))
 	implicit.SetErr(new(bytes.Buffer))
 	implicit.SetArgs([]string{"--store-dir", storeDir, "resume", "ordinary prompt"})
-	if err := implicit.Execute(); err == nil || !strings.Contains(err.Error(), "multiple resumable agents") {
-		t.Fatalf("non-selector positional prompt error = %v, want ambiguity preserved", err)
+	if err := implicit.Execute(); err != nil {
+		t.Fatalf("implicit latest-session resume: %v", err)
 	}
 }
 
@@ -3682,6 +3685,44 @@ func TestAgentStartResolvesRoleAliasAndHelpListsRoles(t *testing.T) {
 	sess, err := store.Get("thread-1")
 	if err != nil || sess.Role != "advisor" || d.envRole != "advisor" {
 		t.Fatalf("alias session role=%q env=%q err=%v; want advisor", sess.Role, d.envRole, err)
+	}
+
+	for _, tc := range []struct {
+		args []string
+		name string
+		role string
+		text string
+	}{
+		{[]string{"start", "explorer", "audit SQLite queries"}, "", "advisor", "audit SQLite queries"},
+		{[]string{"start", "coder", "my-worker", "implement ticket 041"}, "my-worker", "developer", "implement ticket 041"},
+	} {
+		t.Run(strings.Join(tc.args, "_"), func(t *testing.T) {
+			d := &scriptDriver{steps: []step{{0, msg("CONFIRM: ok")}, {0, msg("done")}}}
+			dir := t.TempDir()
+			if _, err := runWithStore(t, d, dir, tc.args...); err != nil {
+				t.Fatal(err)
+			}
+			store, err := subagent.NewSessionStore(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var started *subagent.Session
+			if tc.name != "" {
+				var sessions []*subagent.Session
+				sessions, err = store.List("", true)
+				for _, sess := range sessions {
+					if sess.Name == tc.name {
+						started = sess
+						break
+					}
+				}
+			} else {
+				started, err = store.Get("thread-1")
+			}
+			if err != nil || started == nil || started.Role != tc.role || d.envRole != tc.role || !strings.Contains(d.prompt, tc.text) {
+				t.Fatalf("session=%#v envRole=%q prompt=%q err=%v", started, d.envRole, d.prompt, err)
+			}
+		})
 	}
 
 	cmd := newAgentCmd()

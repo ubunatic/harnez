@@ -310,7 +310,7 @@ type resumeRequest struct {
 	Continue, JSON, PlanFirst                bool
 }
 
-// resolveResumeSession picks the session and reports how: name, dir or continue.
+// resolveResumeSession picks the session and reports how: name, id, dir or continue.
 func resolveResumeSession(cmd *cobra.Command, d agentDeps, s *subagent.FileSessionStore, req resumeRequest) (*subagent.Session, string, error) {
 	if req.Name != "" {
 		x, e := d.find(cmd, s, req.Name)
@@ -321,7 +321,9 @@ func resolveResumeSession(cmd *cobra.Command, d agentDeps, s *subagent.FileSessi
 		return nil, "", e
 	}
 	if req.Selector != "" {
-		if selected, ok := findResumeSelector(xs, req.Selector); ok {
+		if selected, ok, matchErr := findResumeSelector(xs, req.Selector); matchErr != nil {
+			return nil, "", matchErr
+		} else if ok {
 			return selected, "id", nil
 		}
 	}
@@ -329,16 +331,13 @@ func resolveResumeSession(cmd *cobra.Command, d agentDeps, s *subagent.FileSessi
 	if len(c) == 0 {
 		return nil, "", fmt.Errorf("no resumable agent in %s; start one with: harnez agent start --name <name> ...", req.Dir)
 	}
-	if !req.Continue && len(c) != 1 {
-		return nil, "", fmt.Errorf("multiple resumable agents in %s; pass --name (candidates: %s)", req.Dir, candidateSummary(c))
-	}
 	if req.Continue {
 		return c[0], "continue", nil
 	}
 	return c[0], "dir", nil
 }
 
-func findResumeSelector(sessions []*subagent.Session, selector string) (*subagent.Session, bool) {
+func findResumeSelector(sessions []*subagent.Session, selector string) (*subagent.Session, bool, error) {
 	var exact *subagent.Session
 	exactMatches := 0
 	for _, sess := range sessions {
@@ -348,20 +347,33 @@ func findResumeSelector(sessions []*subagent.Session, selector string) (*subagen
 		}
 	}
 	if exactMatches == 1 {
-		return exact, true
+		return exact, true, nil
 	}
-	if exactMatches > 1 || len(selector) < 8 {
-		return nil, false
+	if exactMatches > 1 {
+		return nil, false, fmt.Errorf("ambiguous agent session %q", selector)
 	}
-	var prefix *subagent.Session
-	prefixMatches := 0
-	for _, sess := range sessions {
-		if strings.HasPrefix(sess.ID, selector) || strings.HasPrefix(sess.ProviderSessionID, selector) {
-			prefix = sess
-			prefixMatches++
+	var matches []*subagent.Session
+	if len(selector) >= 8 {
+		for _, sess := range sessions {
+			if strings.HasPrefix(sess.ID, selector) || strings.HasPrefix(sess.ProviderSessionID, selector) {
+				matches = append(matches, sess)
+			}
 		}
 	}
-	return prefix, prefixMatches == 1
+	if len(matches) == 0 && len([]rune(selector)) >= 4 {
+		for _, sess := range sessions {
+			if strings.Contains(strings.ToLower(sess.Name), strings.ToLower(selector)) {
+				matches = append(matches, sess)
+			}
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0], true, nil
+	}
+	if len(matches) > 1 {
+		return nil, false, nil
+	}
+	return nil, false, nil
 }
 
 // runStart starts a new session, streams or prints the turn and saves the session.

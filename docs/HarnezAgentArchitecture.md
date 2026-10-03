@@ -60,9 +60,13 @@ The explicit verbs are:
 
 ```text
 harnez agent start --name w --model luna -f task.md -- "extra instructions"
+harnez agent start explorer "audit SQLite queries"
+harnez agent start coder my-worker "implement ticket 041"
 harnez agent wait w                    # reattach; defaults to timeout=0 (unlimited)
 harnez agent wait w --timeout 5m       # explicit timeout override
 harnez agent resume --name w "next step"
+harnez agent resume classify "run tests again" # unique session-name substring
+harnez agent resume "continue with M2"         # latest resumable session in this directory
 harnez agent start -i --model claude:haiku --name chat
 harnez agent resume -i --name w
 harnez agent list [--children|--all-sessions|--failed]
@@ -324,6 +328,13 @@ unrestricted. Tests must not depend on these variables (`TestMain` clears them).
 guide and pitfalls: `docs/OrchestratedAgentFlow.md`.
 
 `--role` also accepts these aliases; sessions store the canonical role name:
+
+`agent start` also accepts a role or alias as its first positional word. When at least two words
+remain after the role, the first is the session name and the rest form the prompt; otherwise,
+remaining words form the prompt. For example, `start explorer "audit the code"` selects the
+advisor role, while `start coder my-worker "implement ticket 041"` also names the session.
+`agent resume` accepts a unique session-name substring or an ID prefix. With no explicit target,
+it resumes the most recently active resumable session associated with the current directory.
 
 | Role | Aliases | Description |
 |------|---------|-------------|

@@ -242,12 +242,23 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	var startFiles []string
 	var startPrompt string
 	var startInteractive bool
-	start := &cobra.Command{Use: "start [prompt...]", Short: "Start a new agent session", Long: "Start a new agent session.\n\n" + sessionBackgroundHelp, Example: "  harnez agent start --name w --model luna -f task.md -- \"extra instructions\"\n  harnez agent start -i --model claude:haiku --name chat", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
+	start := &cobra.Command{Use: "start [role] [name] [prompt...]", Short: "Start a new agent session", Long: "Start a new agent session. A leading role or alias may be positional; add a session name before the prompt when needed.\n\n" + sessionBackgroundHelp, Example: "  harnez agent start --name w --model luna -f task.md -- \"extra instructions\"\n  harnez agent start explorer \"audit SQLite queries\"\n  harnez agent start coder my-worker \"implement ticket 041\"\n  harnez agent start -i --model claude:haiku --name chat", Args: func(*cobra.Command, []string) error { return nil }, RunE: func(cmd *cobra.Command, args []string) error {
 		planFirst, err := parsePlanSpec(planSpec)
 		if err != nil {
 			return err
 		}
 		words, tail := promptArgs(args, cmd.Flags().ArgsLenAtDash())
+		startRoleSpec := roleSpec
+		startName := name
+		if len(words) > 0 {
+			if positionalRole, roleErr := subagent.ResolveRole(words[0]); roleErr == nil {
+				startRoleSpec = positionalRole
+				words = words[1:]
+				if startName == "" && (len(words) >= 2 || len(tail) > 0 || startPrompt != "" || len(startFiles) > 0) && len(words) > 0 {
+					startName, words = words[0], words[1:]
+				}
+			}
+		}
 		if startPrompt != "" {
 			words = append([]string{startPrompt}, words...)
 		}
@@ -268,9 +279,9 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 			if err := validateInteractiveFlags(cmd, detach, jsonOut, streamMode, agentTimeout, workerID != ""); err != nil {
 				return err
 			}
-			return runInteractiveStart(cmd, interactiveDeps{store: store, parent: parent, storeDir: storeDir}, interactiveStartRequest{Prompt: prompt, Name: name, ModelSpec: modelSpec, Dir: workDir, Role: roleSpec})
+			return runInteractiveStart(cmd, interactiveDeps{store: store, parent: parent, storeDir: storeDir}, interactiveStartRequest{Prompt: prompt, Name: startName, ModelSpec: modelSpec, Dir: workDir, Role: startRoleSpec})
 		}
-		req := startRequest{Role: roleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: name, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, SessionID: workerID, AllowExhaustedQuota: allowExhaustedQuota}
+		req := startRequest{Role: startRoleSpec, Prompt: prompt, StoredPrompt: promptStorage(startFiles, words, tail, prompt), Name: startName, ModelSpec: modelSpec, Dir: workDir, StreamMode: streamMode, JSON: jsonOut, PlanFirst: planFirst, SessionID: workerID, AllowExhaustedQuota: allowExhaustedQuota}
 		if workerID != "" {
 			return runDetachedWorker(cmd, req, storeDir)
 		}
@@ -1072,8 +1083,8 @@ func matchResumeSelector(store *subagent.FileSessionStore, selector string) (boo
 	if err != nil {
 		return false, err
 	}
-	_, ok := findResumeSelector(sessions, selector)
-	return ok, nil
+	_, ok, err := findResumeSelector(sessions, selector)
+	return ok, err
 }
 
 func rateLatestSessionTurn(store *subagent.FileSessionStore, sess *subagent.Session, score int, reason string) error {
