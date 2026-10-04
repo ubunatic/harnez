@@ -1,23 +1,23 @@
 # 703 — Ignore issue tracker lock files in consumer repositories
 
 **Status**: Open
-**Priority**: P2 (Medium)
+**Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
-**Related**:
+**Related**: [Issue 672](672-harnez-issues-new-leaves-issues-reserve-lock-untracked-in-consumer-repos.md), [Issue 279](279-avoid-persistent-issues-readme-lock-sidecar-in-working-trees.md)
 
 ---
 
 ## 1. Problem & Motivation
 
-In a Tilix checkout using Harnez issues, ticket allocation and index updates left `issues/.reserve.lock` and `issues/README.md.lock` visible as untracked files. Harnez's own `.gitignore` ignores `*.lock`, but consumer repositories may not have that rule, so routine issue commands dirty their working tree.
+Tilix ran `harnez init` before it had an `issues/` directory. Later, the first `harnez issues new` created the tracker, but `issues/.reserve.lock` and `issues/README.md.lock` remained visible as untracked files. Issue 672 covers `harnez init` when `issues/` already exists; it does not cover this order of operations. This leaves projects that add a tracker after initialization with dirty working trees after routine issue commands.
 
-**Goal**: `/goal` Ensure Harnez issue commands do not leave tracker lock files as untracked consumer-repository changes; verify allocation and index updates in a clean repository, or document a safe setup requirement if the files must persist.
+**Goal**: `/goal` Ensure first-time tracker creation after `harnez init` also configures consumer repositories to ignore tracker lock files; verify ticket allocation and index updates leave only intended changes, or document the required follow-up if automatic setup is not appropriate.
 
 ## 2. Technical Specification / Findings
 
-The zero-byte lock files remained after the Tilix `harnez issues new` and `harnez issues open` commands completed and no Harnez process was using them. Adding `/issues/*.lock` to Tilix's local `.gitignore` hides them; the Harnez repository already has a broader `*.lock` ignore rule.
+The zero-byte lock files remained after the Tilix `harnez issues new` and `harnez issues open` commands completed and no Harnez process was using them. Adding `/issues/*.lock` to Tilix's local `.gitignore` hides them. Harnez's own repository has a broad `*.lock` ignore rule, and issue 279 tracks the README lock sidecar lifecycle separately.
 
 ## 3. Implementation & Verification Plan
 
-Review the issue tracker locking lifecycle and consumer setup. Either remove lock files safely after unlocking or make the ignore requirement part of Harnez's project initialization/docs. In a clean consumer repo, allocate a ticket and update the index, then confirm `git status` shows only the intended ticket and index changes.
+Extend the first-use path so projects initialized before their tracker existed receive the same lock exclusions as projects that already had `issues/` during init. In a clean consumer repo, run `harnez init`, create the first ticket, update the index, and confirm `git status` shows only the intended ticket and index changes.
