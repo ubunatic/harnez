@@ -701,3 +701,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 700 | [700-audit-and-refactor-the-skill-tree-using-current-skill-design-guidance.md](700-audit-and-refactor-the-skill-tree-using-current-skill-design-guidance.md) | Audit and refactor the skill tree using current skill-design guidance | Open |
 | 701 | [701-harnez-init-duplicates-the-quota-1-rules-section.md](701-harnez-init-duplicates-the-quota-1-rules-section.md) | harnez init duplicates the Quota-1 rules section | Open |
 | 702 | [702-handle-issue-discovery-when-the-issues-directory-is-missing.md](702-handle-issue-discovery-when-the-issues-directory-is-missing.md) | Handle issue discovery when the issues directory is missing | Open |
+| 703 | [703-ignore-issue-tracker-lock-files-in-consumer-repositories.md](703-ignore-issue-tracker-lock-files-in-consumer-repositories.md) | Ignore issue tracker lock files in consumer repositories | Open |
