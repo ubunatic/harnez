@@ -42,3 +42,13 @@ applies in every harnez-managed project.
   three sprint skill sources state the rule and the pty recipe; `harnez apply` installs them.
 - A pty run of `harnez agent models` via the recipe is shown to reproduce the TTY
   output (proves the recipe works).
+
+## Addendum (2026-10-04, loom 264): capture the raw byte stream for invisible output
+
+`tmux capture-pane` shows only the rendered screen. Output the screen never shows
+(cursor shape `ESC[n q`, OSC 8 links, alt-screen and bracketed-paste switches,
+title sets) needs the raw stream: `script -q -c '<cmd>' out.raw` inside tmux, then
+`grep -aoE $'\x1b\\[[0-9]* q' out.raw`. In loom 264 a green suite and a clean
+`capture-pane` hid that no cursor-shape sequence was ever written (the pane asked
+only the root widget); the raw capture showed zero sequences. Add this variant to
+the review gate wherever the feature's output is an escape sequence.

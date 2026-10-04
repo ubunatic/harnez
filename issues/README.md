@@ -703,3 +703,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 702 | [702-handle-issue-discovery-when-the-issues-directory-is-missing.md](702-handle-issue-discovery-when-the-issues-directory-is-missing.md) | Handle issue discovery when the issues directory is missing | Open |
 | 703 | [703-ignore-issue-tracker-lock-files-in-consumer-repositories.md](703-ignore-issue-tracker-lock-files-in-consumer-repositories.md) | Ignore issue tracker lock files in consumer repositories | Open |
 | 704 | [704-quota-1-host-verification-rerun-runs-make-test-not-test-q1.md](704-quota-1-host-verification-rerun-runs-make-test-not-test-q1.md) | Quota-1: host verification rerun runs make test, not test-q1 | Open |
+| 705 | [705-lean-sprint-mark-ticket-in-progress-at-dispatch.md](705-lean-sprint-mark-ticket-in-progress-at-dispatch.md) | lean-sprint: mark ticket In Progress at dispatch | Open |
