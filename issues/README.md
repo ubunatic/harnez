@@ -699,3 +699,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 698 | [698-teach-agents-when-and-how-to-release-repos-harnez-release-guidance-and-rules.md](698-teach-agents-when-and-how-to-release-repos-harnez-release-guidance-and-rules.md) | teach agents when and how to release repos (harnez release guidance and rules) | Open |
 | 699 | [699-rate-lean-sprint-sessions-before-teardown.md](699-rate-lean-sprint-sessions-before-teardown.md) | Rate lean-sprint sessions before teardown | Open |
 | 700 | [700-audit-and-refactor-the-skill-tree-using-current-skill-design-guidance.md](700-audit-and-refactor-the-skill-tree-using-current-skill-design-guidance.md) | Audit and refactor the skill tree using current skill-design guidance | Open |
+| 701 | [701-harnez-init-duplicates-the-quota-1-rules-section.md](701-harnez-init-duplicates-the-quota-1-rules-section.md) | harnez init duplicates the Quota-1 rules section | Open |
