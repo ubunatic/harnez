@@ -203,6 +203,21 @@ don't delete `~/.harnez/agents` records of research runs you may want to analyse
   separate-plan values remain unchanged.
 - Merge ledgers by `key | column`; a cell changes only on a `contradicted` verdict with
   med/high confidence, else it stays (or becomes `?` if nothing supports it).
+- **Reading cost charts (Artificial Analysis scatter plots).** The x-axis is log scale,
+  so read a point's value from its position between two gridlines, not linearly. Leader
+  lines between dots and labels cross, and one model's effort dots sit close together.
+  Before using a value, the host crops and zooms the area around it and checks it against
+  the effort order (low < med < high < xhigh). In the 2026-10-05 review a worker read
+  Sonnet-high's dot as Opus-low, and Astra's xhigh dot as Astra-high; both errors were
+  found only this way. Workers may skip unlabeled points ("no numeric labels"); say
+  explicitly that estimating from the axis is expected.
+- **Artificial Analysis Data API (free plan).** The key is in the env var
+  `ARTIFICAL_ANALYSIS_API_KEY` (spelled this way in `~/.zshenv`); send it only as a
+  request header and never print it or store raw responses in the repo. The useful fields
+  are `artificial_analysis_intelligence_index_cost.cost_per_task.total_cost` and
+  `evaluations.artificial_analysis_intelligence_index`. On 2026-10-05 the free plan
+  returned only pages 1–2 of 4, so the remaining models came from the public pages'
+  rounded values.
 - Spot-check the sources behind every value that changes a spec rating; send only disputed
   or consequential claims to a stronger reviewer (e.g. one `codex:sol` turn), not the
   whole ledger.

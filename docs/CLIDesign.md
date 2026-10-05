@@ -211,6 +211,20 @@ documented in [CodexSettings.md](CodexSettings.md). `config.yaml`'s
 `debloat.codex_features` lists every Codex feature that debloat manages; an
 unlisted feature is outside that set.
 
+### `settings.json` env is merged per key
+
+`apply` merges the `env` block key by key: it sets the keys harnez manages and keeps
+every other key that is already in the file. Before issue 717 (2026-10-06) the
+whole `env` map was replaced, and a later step (the jev plugin, which adds
+`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS`) put a removed key back. Every run therefore
+reported `env: changed` and rewrote a byte-identical file. A step that adds to a
+managed map after the base merge must see the merged result, or `apply` stops being
+idempotent. `scripts/smoke-test.sh` now checks the file's bytes and mtime across a
+second run, not only the reported change count.
+
+Trade-off: an env key that harnez stops managing is no longer removed by `apply`;
+delete it from `~/.claude/settings.json` by hand.
+
 ## Agent-specific instruction profiles (`agents_md.agents`)
 
 `agents_md.global` and `agents_md.local` are shared: every section they carry lands in

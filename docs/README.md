@@ -195,5 +195,6 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [feedback/2026-09-22-component-system-design-doc-first.md](feedback/2026-09-22-component-system-design-doc-first.md) | Component system retro (489/490): doc before code for design tickets, MVP in a new package, removal passes expose ownership bugs (Codex hooks), session-env-dependent tests |
 | [feedback/2026-09-22-lean-sprint-496-488-497.md](feedback/2026-09-22-lean-sprint-496-488-497.md) | Retro: luna:low lean sprint (496, 488, 497): assertion-hidden bug, interface change needs a higher tier, quota cost measured |
 | [feedback/2026-10-02-usage-view-mode-parity.md](feedback/2026-10-02-usage-view-mode-parity.md) | Usage view-mode contract, one-shot/watch parity, short-terminal footer budgeting, and review-driven boundary tests (issue 678) |
+| [feedback/2026-10-06-lean-sprints-cost-matrix-terra-apply-env.md](feedback/2026-10-06-lean-sprints-cost-matrix-terra-apply-env.md) | Lean sprints 711/715/717: host chart-zoom checks caught two misreads, Codex apply_patch crash, out-of-scope `harnez init`, apply env idempotency |
 
 **`docs/proposed/`** — staging area for docs that may become copyable (no install mechanics yet).
