@@ -33,15 +33,18 @@ Harnez-side static catalog. The driver parses completed assistant events and
 usage, requires the JSON run to settle, and resumes using Pi's provider session
 ID. `docs/PiAgent.md` documents use and lifecycle limitations.
 
-A live canary against the installed Pi 1.0.3 and a local lmcoder Qwen 0.5B
-backend succeeded: Harnez received `PONG`, then resumed the same session and
-received `RESUMED`. The temporary backend was stopped and the pre-existing
-lmcoder proxy service was restored.
+Live canaries against Pi 1.0.3 and a local lmcoder backend verified new turns,
+resume, and manual compaction: the session compacted through Pi's RPC command,
+then resumed and recalled the canary token `TOPAZ`. Pi's compact response gives
+an estimated post-compaction context size, not an exact token count. The
+port-8737 backend was stopped; the pre-existing lmcoder proxy remains running.
 
-The one `make test-q1` run failed on existing assertions that conflict with the
+The `make test-q1` run failed on existing assertions that conflict with the
 committed `spec/agent.yaml` state (Codex default model and flash38 guidance).
-No test assertions or those spec settings were changed for this issue. The Pi
-unit tests ran as part of that suite; the package suite was not wholly green.
+No test assertions or those spec settings were changed. The Pi tests ran in the
+suite. The final RPC stdin-lifecycle change in `internal/subagent/pi.go` was made
+after that quota run; it was build- and live-canary-verified but not covered by a
+subsequent test-suite run.
 
 ## 3. Implementation & Verification Plan
 /goal Add and document a Pi 1.0+ driver that supports the Harnez agent task and

@@ -29,6 +29,8 @@ var agentDriver = func(m subagent.Model, dir string) subagent.Driver {
 		return subagent.CodexDriver{}
 	case "agy":
 		return subagent.AgyDriver{Dir: dir}
+	case "pi":
+		return subagent.PiDriver{Dir: dir}
 	default:
 		return subagent.UnsupportedDriver{Provider: m.Provider}
 	}

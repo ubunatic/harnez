@@ -203,7 +203,11 @@ func ResolveModel(spec string) (Model, error) {
 }
 
 func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
-	clean := strings.ToLower(strings.TrimSpace(spec))
+	original := strings.TrimSpace(spec)
+	if m, ok := resolvePiModel(aliases, original); ok {
+		return m, nil
+	}
+	clean := strings.ToLower(original)
 	if strings.Contains(clean, ":") {
 		parts := strings.Split(clean, ":")
 		if len(parts) == 3 && isTier(parts[2]) {
@@ -299,6 +303,37 @@ func resolveModelIn(aliases map[string]modelAlias, spec string) (Model, error) {
 		m.Tier = parts[2]
 	}
 	return m, nil
+}
+
+// resolvePiModel permits Pi model IDs to be selected directly even when they
+// are not listed in Harnez's static model guide. Preserve ID case for Pi's
+// case-sensitive provider/model identifiers.
+func resolvePiModel(aliases map[string]modelAlias, spec string) (Model, bool) {
+	parts := strings.Split(spec, ":")
+	if len(parts) == 1 && strings.EqualFold(parts[0], "pi") {
+		return Model{Provider: "pi", Name: "default", Tier: "low"}, true
+	}
+	if len(parts) < 2 || len(parts) > 3 || !strings.EqualFold(parts[0], "pi") {
+		return Model{}, false
+	}
+	if len(parts) == 2 && strings.EqualFold(parts[1], "default") {
+		return Model{Provider: "pi", Name: "default", Tier: "low"}, true
+	}
+	if entry, ok := aliases["pi:"+strings.ToLower(parts[1])]; ok && len(parts) == 2 {
+		return entry.Model, true
+	}
+	name := strings.TrimSpace(parts[1])
+	if name == "" {
+		return Model{}, false
+	}
+	tier := "low"
+	if len(parts) == 3 {
+		if !isTier(strings.ToLower(parts[2])) {
+			return Model{}, false
+		}
+		tier = strings.ToLower(parts[2])
+	}
+	return Model{Provider: "pi", Name: name, Tier: tier}, true
 }
 
 func modelHasAlias(m modelAlias, alias string) bool {

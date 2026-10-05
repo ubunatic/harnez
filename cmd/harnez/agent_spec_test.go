@@ -75,6 +75,23 @@ func TestAgentModelsShowsCachedAvailabilityAndAge(t *testing.T) {
 	}
 }
 
+func TestPiProviderHasBatchDriver(t *testing.T) {
+	model, err := subagent.ResolveModel("pi:openai/gpt-4o:high")
+	if err != nil {
+		t.Fatal(err)
+	}
+	driver := agentDriver(model, t.TempDir())
+	if _, ok := driver.(subagent.PiDriver); !ok {
+		t.Fatalf("agentDriver(%#v) = %T, want PiDriver", model, driver)
+	}
+	entries := subagent.ModelEntriesWithDriver([]subagent.ModelEntry{{Spec: model.Spec(), Model: model}}, func(m subagent.Model) subagent.Driver {
+		return agentDriver(m, ".")
+	})
+	if len(entries) != 1 || !entries[0].Batch {
+		t.Fatalf("Pi model batch capability = %#v", entries)
+	}
+}
+
 func TestAgentModelsShowsBatchCapability(t *testing.T) {
 	old := agentDriver
 	agentDriver = func(m subagent.Model, _ string) subagent.Driver {
