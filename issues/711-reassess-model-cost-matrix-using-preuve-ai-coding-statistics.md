@@ -50,7 +50,7 @@ benchmarks or quota trials. Record source and date per value; close with
 # 711 — Reassess model cost matrix using Preuve AI coding statistics
 
 **Status**: Open
-**M3 blocker (2026-10-05)**: exact API precision requires an Artificial Analysis API key; none was available, and no key was requested or created. Public page values are display-rounded, so the chart estimates remain in force.
+**M3 review (2026-10-05)**: the supplied free-plan key exposed exact task costs on returned API rows; public rounded values filled remaining tiers.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -226,23 +226,46 @@ also remain unchanged.
 | `agy:opus` (no effort) | 32 | 32 | — | — |
 
 The listing emits low/med/high rows for all effort-capable providers and one low
-row for `agy:sonnet` and `agy:opus`. M2 is complete; exact data review remains in
-M3. No new benchmarks or measurements were run. Implementation is committed as
+row for `agy:sonnet` and `agy:opus`. M2 is complete; the matrix above records the
+M2 result and is superseded by the M3 source review below. No new benchmarks or
+measurements were run. Implementation is committed as
 `f8303d4c`, with research-doc updates in `92f63d1f`.
 
-### M3 exact-data canary (2026-10-05)
+### M3 exact-data review (2026-10-05)
 
-The live public Artificial Analysis pages expose per-effort cost-per-Intelligence-
-Index-task values at their displayed precision, but not the exact underlying
-values needed to replace the chart estimates reproducibly. The public release
-comparison table displays Luna low/medium/high as `$0.0045` / `$0.02` / `$0.03`,
-Sol low/medium/high as `$0.13` / `$0.21` / `$0.32`, and Astra low/medium/high
-as `$0.82` / `$1.54` / `$1.73`. These are rounded display values; in particular
-the Luna medium value is only shown to cents. I therefore retain the chart
-estimates and the M2 matrix below, rather than deriving new ratios from rounded
-figures.
+The supplied free-plan key returned `artificial_analysis_intelligence_index_cost.cost_per_task.total_cost` and `evaluations.artificial_analysis_intelligence_index` for matching rows. I made two documented requests to `/api/v2/language/models/free`, pages 1 and 2; page 2 reported 4 total pages. The returned exact per-task values for requested configurations were Luna medium `$0.0175` (Index 29.9), Luna high `$0.029` (Index 32.9), and GPT-6.1 Sol high `$0.3191` (Index 50.2). Luna low, Sol low/medium, and Astra low/medium/high were not in those two response pages. A returned `GPT-6 Sol` row is a different model label from the requested `GPT-6.1 Sol` and was excluded. For unreturned tiers, the public release comparison page and model pages expose more precise values than the chart estimates, so those rounded values are used.
 
-Canary performed: checked the [public release comparison table](https://artificialanalysis.ai/models/releases/comparisons), Luna low and medium model pages ([low](https://artificialanalysis.ai/models/gpt-6-luna-low), [medium](https://artificialanalysis.ai/models/gpt-6-luna-medium)), the [Luna-high/Astra-high comparison](https://artificialanalysis.ai/models/comparisons/gpt-6-luna-high-vs-gpt-6-astra-high), the [Sol-high/Sol-low comparison](https://artificialanalysis.ai/models/comparisons/gpt-6-1-sol-high-vs-gpt-6-1-sol-low), and the [Astra-high/Astra-xhigh comparison](https://artificialanalysis.ai/models/comparisons/gpt-6-astra-high-vs-gpt-6-astra-xhigh). Also checked the [Artificial Analysis Data API documentation](https://artificialanalysis.ai/data-api/docs): it documents `artificial_analysis_intelligence_index_cost.cost_per_task.total_cost` (including on the free tier), but requires an API key in the `x-api-key` header for every endpoint. Per the instruction, the API probe stopped there; no account or key was created. Exact unrounded values remain blocked on access to a key, so M3 is not complete and ticket 711 remains open.
+| Model / effort | USD per Index task | Index | Best available source (2026-10-05) |
+|---|---:|---:|---|
+| GPT-6 Luna low | `$0.0045` | 22 | Public Luna-low page |
+| GPT-6 Luna medium | `$0.0175` | 29.9 | API page 1 |
+| GPT-6 Luna high | `$0.029` | 32.9 | API page 2 |
+| GPT-6.1 Sol low | `$0.13` | 42 | Public release comparison |
+| GPT-6.1 Sol medium | `$0.21` | 48 | Public release comparison |
+| GPT-6.1 Sol high | `$0.3191` | 50.2 | API page 1 |
+| GPT-6 Astra low | `$0.82` | 45 | Public release comparison |
+| GPT-6 Astra medium | `$1.54` | 49 | Public release comparison |
+| GPT-6 Astra high | `$1.73` | 51 | Public release comparison |
+
+The public display values come from the [release comparison table](https://artificialanalysis.ai/models/releases/comparisons), [Luna low page](https://artificialanalysis.ai/models/gpt-6-luna-low), and tier comparisons for [Luna high / Astra high](https://artificialanalysis.ai/models/comparisons/gpt-6-luna-high-vs-gpt-6-astra-high), [Sol high / low](https://artificialanalysis.ai/models/comparisons/gpt-6-1-sol-high-vs-gpt-6-1-sol-low), and [Astra high / xhigh](https://artificialanalysis.ai/models/comparisons/gpt-6-astra-high-vs-gpt-6-astra-xhigh). The [API docs](https://artificialanalysis.ai/data-api/docs) specify those response fields; the two-page probe was kept within the requested call bound. No new measurements, benchmarks, or quota trials were run.
+
+Ratios use Luna-low's public `$0.0045` as the denominator and round to nearest integer: Luna low `$0.0045/$0.0045 = 1`; medium `$0.0175/$0.0045 = 3.89 → 4`; high `$0.029/$0.0045 = 6.44 → 6`. Sol low `$0.13/$0.0045 = 28.89 → 29`; medium `$0.21/$0.0045 = 46.67 → 47`; high `$0.3191/$0.0045 = 70.91 → 71`. Astra low `$0.82/$0.0045 = 182.22 → 182`; medium `$1.54/$0.0045 = 342.22 → 342`; high `$1.73/$0.0045 = 384.44 → 384`. API values take precedence where returned; rounded public values fill the gaps. This remains an API-cost proxy within the shared ChatGPT plan, not measured subscription quota use. Non-Codex costs are unchanged.
+
+| Spec | Stored `cost` fallback | Low | Med | High |
+|---|---:|---:|---:|---:|
+| `codex:luna` | 1 | 1 | 4 | 6 |
+| `codex:sol` | 29 | 29 | 47 | 71 |
+| `codex:astra` | 182 | 182 | 342 | 384 |
+| `codex:terra` | 26 | 26 | 26 | 26 |
+| `claude:haiku` | 12 | 12 | 12 | 12 |
+| `claude:sonnet` | 15 | 15 | 15 | 15 |
+| `claude:opus` | 20 | 20 | 20 | 20 |
+| `agy:flash37` | 4 | 4 | 4 | 4 |
+| `agy:flash38` | 4 | 4 | 4 | 4 |
+| `agy:sonnet` (no effort) | 16 | 16 | — | — |
+| `agy:opus` (no effort) | 32 | 32 | — | — |
+
+Exact API source: [Artificial Analysis Data API](https://artificialanalysis.ai/data-api/docs), called 2026-10-05 with the free-plan key supplied by the user; no credential is recorded here.
 
 Verification: `make install` passed. The pre-change `HTO=0 make test-q1` failed
 `TestAgentDefaultModelIsMarkedOnce`, `TestAgentStartDefaultModelLine`,

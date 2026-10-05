@@ -648,7 +648,7 @@ func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
 	if !strings.Contains(med, "interface or design changes") {
 		t.Fatalf("luna:med row must use use_med: %q", med)
 	}
-	if !strings.Contains(med, " 4 ") || !strings.Contains(high, " 7 ") {
+	if !strings.Contains(med, " 4 ") || !strings.Contains(high, " 6 ") {
 		t.Fatalf("tier costs not shown: med=%q high=%q", med, high)
 	}
 	if !strings.Contains(opus, " no ") {

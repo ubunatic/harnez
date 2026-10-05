@@ -46,7 +46,7 @@ models:
     tier: low
     roles: developer, mechanical
     cost: 1
-    cost_by_tier: {med: 4, high: 7}
+    cost_by_tier: {med: 4, high: 6}
     eff: "~"
     skills: Go~ TUI- SQL?
     use: clear bounded tickets; try first, weak on long terminal loops
@@ -58,8 +58,8 @@ models:
     name: gpt-6.1-sol
     tier: low
     roles: developer, advisor, reviewer
-    cost: 28
-    cost_by_tier: {med: 45, high: 70}
+    cost: 29
+    cost_by_tier: {med: 47, high: 71}
     eff: "~"
     skills: Go~ TUI~ SQL?
     use: capable coding and tool use; milestone reviewer; tends to over-refactor
@@ -70,8 +70,8 @@ models:
     name: gpt-6-astra
     tier: low
     roles: advisor, developer
-    cost: 180
-    cost_by_tier: {med: 337, high: 380}
+    cost: 182
+    cost_by_tier: {med: 342, high: 384}
     eff: "?"
     skills: Go+ TUI~ SQL~
     use: hardest multi-step coding and terminal automation; escalation only

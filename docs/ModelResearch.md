@@ -186,17 +186,21 @@ don't delete `~/.harnez/agents` records of research runs you may want to analyse
 - **COST unit = estimated relative effort cost, anchored at `codex:luna:low = 1`.**
   The spec can hold a `cost_by_tier` override for low/med/high; a single `cost` remains
   valid and supplies the fallback where no tier estimate exists. Measured plan quota
-  remains the preferred evidence. For the Oct 2026 Codex estimates, Artificial Analysis
-  API task costs are divided by Luna-low's $0.0046 and rounded; because Codex models share
-  ChatGPT quota, this is a plausible within-plan proxy only. Do not use API ratios to
-  compare Codex with Claude Pro or Google Pro, whose subscription quotas differ.
+  remains the preferred evidence. For the 2026-10-05 Codex data review, use exact
+  Artificial Analysis API task costs where available, otherwise public rounded values,
+  then chart estimates; divide by Luna-low's public $0.0045 and round to an integer.
+  Because Codex models share ChatGPT quota, this is a plausible within-plan proxy only.
+  Do not use API ratios to compare Codex with Claude Pro or Google Pro, whose subscription
+  quotas differ.
 - COST/EFF precedence: user-stated ratios > measured plan quota (step 2b,
-  [ModelTrials.md](ModelTrials.md)) > dated chart-derived within-plan proxy > list prices
-  (reference only). Record the plan, tier, source and date in the snapshot; a plan change
-  is a trigger. This M2 review is data-only and runs no new measurements or benchmarks.
+  [ModelTrials.md](ModelTrials.md)) > dated API exact / public rounded / chart-derived
+  within-plan proxy > list prices (reference only). Record the plan, tier, source and date
+  in the snapshot; a plan change is a trigger. This M3 review is data-only and runs no new
+  measurements or benchmarks.
 - The previous `luna = 1, astra = 100` policy scale is retired. Do not rescale the
   non-Codex values when changing to the Luna-low anchor unless comparable evidence
-  establishes a conversion; current M2 values retain their separate-plan scales.
+  establishes a conversion; the M3 Codex matrix uses same-plan task-cost ratios, while
+  separate-plan values remain unchanged.
 - Merge ledgers by `key | column`; a cell changes only on a `contradicted` verdict with
   med/high confidence, else it stays (or becomes `?` if nothing supports it).
 - Spot-check the sources behind every value that changes a spec rating; send only disputed

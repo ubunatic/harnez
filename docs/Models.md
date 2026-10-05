@@ -7,23 +7,26 @@ To refresh it, follow [ModelResearch.md](ModelResearch.md).
 
 ## 2026-10-05 effort-tier cost matrix (issue 711)
 
-The listing's COST column now gives estimated relative cost by effort tier, with
-`codex:luna:low = 1`. The Codex figures use Artificial Analysis API cost per Index
-task ratios to Luna-low, rounded to integers; this is a within-ChatGPT-plan proxy,
-not measured plan-quota use. Luna/Sol/Astra low, medium and high are respectively
-1/4/7, 28/45/70 and 180/337/380. High chart readings are approximately $0.030,
-$0.32 and $1.75 per task; the Astra high dot is the half-hidden point near $1.75 /
-Index 51.5, distinct from the xhigh dot near $2.3 and max near $3.26. Chart readings are
-approximate (about ±10% cost). Claude and Gemini retain their existing single
-values across listed effort tiers because their plan quotas differ and no matched
-quota data supports cross-vendor API ratios. Terra and the agy-routed Claude
-models also retain their existing values.
+The listing's COST column gives estimated relative cost by effort tier, with
+`codex:luna:low = 1`. The 2026-10-05 refresh uses exact Artificial Analysis free-API
+task costs where returned, then public page values at displayed precision, then
+chart estimates. Values are divided by Luna-low ($0.0045) and rounded to integers.
+This is a within-ChatGPT-plan proxy, not measured plan-quota use. Luna/Sol/Astra
+low, medium and high are respectively 1/4/6, 29/47/71 and 182/342/384. Exact API
+values were available in the first two result pages for Luna medium ($0.0175),
+Luna high ($0.029), and GPT-6.1 Sol high ($0.3191); the remaining tiers use public
+rounded values: Luna low $0.0045, Sol low/medium $0.13/$0.21, and Astra low/medium/high
+$0.82/$1.54/$1.73. The Astra-high chart reading was the half-hidden point near
+$1.75 / Index 51.5, distinct from xhigh near $2.3 and max near $3.26. Claude and
+Gemini retain their existing single values across listed effort tiers because
+their plan quotas differ and no matched quota data supports cross-vendor API
+ratios. Terra and the agy-routed Claude models also retain their existing values.
 
 | Spec | Low | Med | High |
 |---|---:|---:|---:|
-| `codex:luna` | 1 | 4 | 7 |
-| `codex:sol` | 28 | 45 | 70 |
-| `codex:astra` | 180 | 337 | 380 |
+| `codex:luna` | 1 | 4 | 6 |
+| `codex:sol` | 29 | 47 | 71 |
+| `codex:astra` | 182 | 342 | 384 |
 | `codex:terra` | 26 | 26 | 26 |
 | `claude:haiku` | 12 | 12 | 12 |
 | `claude:sonnet` | 15 | 15 | 15 |
@@ -95,7 +98,7 @@ Findings:
   Claude Pro, × luna, stretched × 1.6 so the measured astra ratio (62) lands on 100:
   luna 1, haiku 12, sonnet 15, opus 20, terra 26, sol 50 (gpt-5.6-sol data, gpt-6-sol
   unmeasured), astra 100. This historical single-value scale was superseded by the
-  effort-tier matrix above; in particular, the old Sol 50 is replaced by 28/45/70.
+  effort-tier matrix above; in particular, the old Sol 50 is replaced by 29/47/71.
   agy (Google Pro) unmeasured, kept at 4/16/32. Opus is only
   ~1.3× sonnet per token (user's 2× estimate likely includes turn counts, i.e. EFF).
   Details: [plan-quota study](studies/2026-09-24-model-research-plan-quota.md).
