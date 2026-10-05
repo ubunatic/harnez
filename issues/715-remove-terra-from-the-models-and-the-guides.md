@@ -1,6 +1,6 @@
 # 715 — Remove terra from the models and the guides
 
-**Status**: Open
+**Status**: Closed — removed Terra from model specs and current guidance; old Terra sessions fail clearly (issue 715)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Refactor
