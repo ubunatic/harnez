@@ -711,3 +711,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 710 | [710-agy-usage-quota-rows-remain-gray-while-agy-is-active.md](710-agy-usage-quota-rows-remain-gray-while-agy-is-active.md) | AGY usage quota rows remain gray while AGY is active | Open |
 | 711 | [711-reassess-model-cost-matrix-using-preuve-ai-coding-statistics.md](711-reassess-model-cost-matrix-using-preuve-ai-coding-statistics.md) | Reassess model cost matrix using Preuve AI coding statistics | Open |
 | 712 | [712-add-support-for-the-pi-coding-agent-cli-1-0.md](712-add-support-for-the-pi-coding-agent-cli-1-0.md) | Add support for the Pi coding agent CLI 1.0+ | Open |
+| 713 | [713-add-explicit-grading-guidance-to-issue-and-sprint-skills.md](713-add-explicit-grading-guidance-to-issue-and-sprint-skills.md) | Add explicit grading guidance to issue and sprint skills | Open |
