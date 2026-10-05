@@ -1,16 +1,136 @@
 package claude
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"ubunatic.com/harnez/internal/jsonc"
 )
+
+func captureApplyOutput(t *testing.T, apply func() error) (string, error) {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		return "", err
+	}
+	os.Stdout = w
+	applyErr := apply()
+	_ = w.Close()
+	os.Stdout = old
+	data, readErr := io.ReadAll(r)
+	_ = r.Close()
+	if readErr != nil {
+		return "", readErr
+	}
+	return string(data), applyErr
+}
+
+func TestApplyWithJevEnvironmentIsIdempotent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	target := filepath.Join(home, ".claude")
+	cfg := loadTestConfig(t)
+	cfg.JevCompactionEnabled = true
+	cfg.AgentsMD.Global.Target = filepath.Join(home, "CLAUDE.md")
+	cfg.AgentsMD.Global.Symlink = ""
+	cfg.AgentsMD.Agents = nil
+	cfg.SkillsTarget = filepath.Join(home, ".gemini", "skills")
+	cfg.CodexSkillsTarget = filepath.Join(home, ".codex", "skills")
+	cfg.CodexHooksTarget = filepath.Join(home, ".codex", "config.toml")
+	cfg.AgyHooksTarget = filepath.Join(home, ".gemini", "hooks.json")
+	cfg.ClaudeSkillsTarget = filepath.Join(target, "skills")
+	cfg.PrimeAgentTarget = filepath.Join(home, ".prime", "agent")
+	cfg.DistillAutopipe.PiExtensionTarget = filepath.Join(home, ".pi", "harnez-distill.ts")
+	cfg.DistillAutopipe.OpenCodePluginTarget = filepath.Join(home, ".config", "opencode", "harnez-distill.ts")
+	if err := ApplyAll(target, cfg, nil, false, false); err != nil {
+		t.Fatalf("first apply: %v", err)
+	}
+	settingsPath := filepath.Join(target, "settings.json")
+	before, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp := time.Unix(1_700_000_000, 0)
+	if err := os.Chtimes(settingsPath, stamp, stamp); err != nil {
+		t.Fatal(err)
+	}
+	beforeInfo, err := os.Stat(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := captureApplyOutput(t, func() error { return ApplyAll(target, cfg, nil, false, false) })
+	if err != nil {
+		t.Fatalf("second apply: %v", err)
+	}
+	t.Logf("second isolated apply output:\n%s", out)
+	if !strings.Contains(out, "No changes.") || strings.Contains(out, "env: changed") || strings.Contains(out, "2 changes.") {
+		t.Fatalf("second apply output reports changes:\n%s", out)
+	}
+	after, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterInfo, err := os.Stat(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("settings.json bytes changed on second apply")
+	}
+	if !beforeInfo.ModTime().Equal(afterInfo.ModTime()) {
+		t.Fatalf("settings.json mtime changed: %v -> %v", beforeInfo.ModTime(), afterInfo.ModTime())
+	}
+	env, ok := jsonc.Read(settingsPath)["env"].(map[string]any)
+	if !ok || env["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] != "1" {
+		t.Fatalf("jev function hook flag missing after second apply: %#v", env)
+	}
+}
+
+func TestApplyMergeEnvPreservesUnmanagedJSONTypesAndUpdatesManagedValue(t *testing.T) {
+	existing := map[string]any{"env": map[string]any{
+		"UNMANAGED_BOOL":   true,
+		"UNMANAGED_NUMBER": float64(7),
+		"UNMANAGED_NULL":   nil,
+		"DEBUG":            false,
+	}}
+	doc := map[string]any{"env": map[string]string{"DEBUG": "true"}}
+	merged := applyMerge(existing, doc)
+	env := merged["env"].(map[string]any)
+	if env["DEBUG"] != "true" || env["UNMANAGED_BOOL"] != true || env["UNMANAGED_NUMBER"] != float64(7) {
+		t.Fatalf("merged env = %#v", env)
+	}
+	if value, exists := env["UNMANAGED_NULL"]; !exists || value != nil {
+		t.Fatalf("unmanaged null entry lost: %#v", env)
+	}
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"env":{"DEBUG":"false","UNMANAGED_BOOL":true,"UNMANAGED_NUMBER":7,"UNMANAGED_NULL":null}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := applySettingsJSON(path, doc)
+	if err != nil || !result.changed {
+		t.Fatalf("changed managed value result = %+v, %v; want a write", result, err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(after), `"DEBUG": "true"`) || !strings.Contains(string(after), `"UNMANAGED_BOOL": true`) {
+		t.Fatalf("written settings did not preserve/update expected values: %s", after)
+	}
+	result, err = applySettingsJSON(path, doc)
+	if err != nil || result.changed {
+		t.Fatalf("stable managed value result = %+v, %v; want no write", result, err)
+	}
+}
 
 func TestUnfilteredApplySettingsDoesNotWriteMCPServers(t *testing.T) {
 	home := t.TempDir()

@@ -117,6 +117,21 @@ func applyMerge(existing, doc map[string]any) map[string]any {
 				}
 			}
 		}
+		if k == "env" {
+			if existingEnv, ok := out[k].(map[string]any); ok {
+				if configuredEnv, ok := v.(map[string]string); ok {
+					mergedEnv := make(map[string]any, len(existingEnv)+len(configuredEnv))
+					for envKey, envValue := range existingEnv {
+						mergedEnv[envKey] = envValue
+					}
+					for envKey, envValue := range configuredEnv {
+						mergedEnv[envKey] = envValue
+					}
+					out[k] = mergedEnv
+					continue
+				}
+			}
+		}
 		out[k] = v
 	}
 	return out

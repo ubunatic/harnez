@@ -27,12 +27,24 @@ echo "=== apply ==="
 
 echo ""
 echo "=== apply again: must be idempotent ==="
+settings_backup=$(mktemp)
+cp "$HOME/.claude/settings.json" "$settings_backup"
+settings_mtime=$(stat -c '%y' "$HOME/.claude/settings.json")
 out=$("$bin" apply 2>&1)
 printf '%s\n' "$out"
 if printf '%s\n' "$out" | grep -q "No changes\."
 then pass "idempotent"
 else fail "second apply made unexpected changes"
 fi
+if cmp -s "$settings_backup" "$HOME/.claude/settings.json"
+then pass "settings.json bytes unchanged"
+else fail "second apply changed settings.json bytes"
+fi
+if test "$settings_mtime" = "$(stat -c '%y' "$HOME/.claude/settings.json")"
+then pass "settings.json mtime unchanged"
+else fail "second apply changed settings.json mtime"
+fi
+rm -f "$settings_backup"
 
 echo ""
 echo "=== simulate drift: drop git permission ==="
