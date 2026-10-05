@@ -1,6 +1,6 @@
 # 717 — harnez apply reports env changed and rewrites settings.json on every run
 
-**Status**: Open
+**Status**: Closed — Fixed env merging to preserve unmanaged JSON values and avoid repeated settings rewrites; regression and type edge tests pass, quota suite has only the three known failures.
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Bug
