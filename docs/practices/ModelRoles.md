@@ -70,7 +70,7 @@ Example assignment (2026-09, Codex and Claude subscriptions):
 | Role | Model |
 |---|---|
 | Host | claude opus |
-| Advisors | codex terra:low + claude sonnet |
+| Advisors | codex sol:low + claude sonnet |
 | Developer, clear small ticket | codex luna:low |
 | Developer, interface or design change | codex luna:med |
 | Reviewer | claude sonnet |

@@ -20,14 +20,13 @@ $0.82/$1.54/$1.73. The Astra-high chart reading was the half-hidden point near
 $1.75 / Index 51.5, distinct from xhigh near $2.3 and max near $3.26. Claude and
 Gemini retain their existing single values across listed effort tiers because
 their plan quotas differ and no matched quota data supports cross-vendor API
-ratios. Terra and the agy-routed Claude models also retain their existing values.
+ratios. The retired Terra value is omitted from the current listing.
 
 | Spec | Low | Med | High |
 |---|---:|---:|---:|
 | `codex:luna` | 1 | 4 | 6 |
 | `codex:sol` | 29 | 47 | 71 |
 | `codex:astra` | 182 | 342 | 384 |
-| `codex:terra` | 26 | 26 | 26 |
 | `claude:haiku` | 12 | 12 | 12 |
 | `claude:sonnet` | 15 | 15 | 15 |
 | `claude:opus` | 20 | 20 | 20 |
@@ -60,7 +59,6 @@ COST (workload 100k in / 20k out / 50% cached, list price, × luna):
 | agy:flash37, flash38 | 0.75 / 0.075 / 3.75 (flash38 introductory to 2026-12-31) | 7.5 | 4 → 8 |
 | claude:haiku | 1 / 0.10 / 5 (low confidence) | 10 | 4 → 10 |
 | codex:sol | 2 / 0.20 / 10 | 20 | 20 |
-| codex:terra | 2 / 0.20 / 12 | 22.6 | 16 → 22 |
 | claude:sonnet, agy:sonnet | 3 / 0.30 / 15 | 30 | 16 → 30 |
 | claude:opus, agy:opus | 5 / 0.50 / 25 | 45 | 32 → 60 (user-stated opus ≈ 2× sonnet wins) |
 | codex:astra | 10 / 1 / 50 | 100 | 100 (list ratio lands exactly on the anchor) |
@@ -123,7 +121,6 @@ as agent-reported.
 | codex:luna (gpt-6-luna) | ok | weak | ok | weak (Terminal-Bench 13%) | cheapest |
 | codex:sol (gpt-6-sol) | ok | ok | strong | strong (TB2.1 83%) | mid |
 | codex:astra | strong? | ok | strong | strong (tops TB4.0) | flagship |
-| codex:terra | ok | ok | strong | strong (TB2.1 87%) | mid |
 | claude:haiku | ok | weak | ok if bounded | weak on long runs | low |
 | claude:sonnet | ok | ok | strong | strong | mid |
 | claude:opus | strong | thin | ok | strong (TB4.0 66%) | premium |
@@ -159,7 +156,6 @@ drifted into a repository this time. Python/pandas excluded.
 | claude:opus | ok | strong (Spider 2.0 70%, BIRD ~69–70%) | ok | SQL+ |
 | agy:opus (4.6) | thin | ok (BIRD ~69–70%, LiveSQLBench #2) | weak/thin | SQL~ |
 | codex:astra | thin | ok (BIRD subset 66%) | ok, indirect (asks when underspecified) | SQL~ |
-| codex:terra | thin | ok (Tinybird, many first-try exact) | thin | SQL~ |
 | claude:sonnet | thin | ok (Tinybird leader, exactness only ~56/100) | weak (literal-assumption errors) | SQL~ |
 | agy:sonnet (4.6) | thin | ok, agent-based scores only | thin | SQL~ |
 | claude:haiku | ok (Anthropic SQLite guide) | ok (BIRD 51%) | weak/thin | SQL~ |
@@ -181,7 +177,10 @@ Findings:
   a fan-out trap) is the cheapest way to get real evidence for luna, sol and flash.
 - Research cost: ~11 × 30–50k new tokens, 24–49s each.
 
-## Earlier assessment (pre-GPT-6 lineup, user notes)
+## Earlier assessment (pre-GPT-6 lineup, historical user notes)
+
+This copied assessment predates the current model lineup. Its Terra comparisons and preference
+are historical and do not describe current Harnez model availability or guidance.
 
   Comparing the latest generation—Claude Sonnet 5, Gemini 3.7 Flash, and OpenAI’s GPT-5.5 / 5.6 tier   
   family (Sol, Terra, Luna)—explains why Sol often exhibits unexpected behavior compared to the other  
@@ -233,5 +232,5 @@ Findings:
   • Default to Gemini 3.7 Flash: When you need rapid first-pass code generation, UI/web layout builds, 
   large-document digestion, or low-latency agent iterations.
   • Use GPT-5.5/5.6 Sol selectively: Reserved for isolated, difficult mathematical, cryptographic, or  
-  algorithmic problems where extensive exploratory reasoning is explicitly desired. For standard daily 
-  workflows, Terra provides a more stable experience than Sol.
+  algorithmic problems where extensive exploratory reasoning is explicitly desired. The original note
+  preferred Terra for standard workflows; that recommendation is obsolete because Terra is retired.

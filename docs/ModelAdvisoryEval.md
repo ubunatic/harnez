@@ -1,10 +1,15 @@
 # Model Advisory Eval
 
-What five cheap and mid-tier models got right and wrong when each one planned the same sprint.
-Use this to decide which model gets which role in a harnez sprint. For general model traits, see
+Historical record of what five cheap and mid-tier models got right and wrong when each planned
+the same sprint. For current role assignments, see `spec/agent.yaml` and
+[ModelRoles.md](practices/ModelRoles.md); for general model traits, see
 [Models.md](Models.md). For doc-delivery benchmarks, see [Bench.md](Bench.md).
 The repo-independent practice distilled from it is
 [practices/ModelRoles.md](practices/ModelRoles.md) (copy with `harnez init --docs model-roles`).
+
+**Historical evaluation:** Terra was available during this 2026-09 run but has since been
+removed from Harnez. Terra rows and observations below are retained as historical evidence;
+they are not current model recommendations. Current roles are in `spec/agent.yaml`.
 
 ## Setup (2026-09-22)
 
@@ -192,7 +197,7 @@ it or got it wrong, and ~ means partly.
 
 ## Takeaways
 
-1. **terra:low was the best Codex auditor for the cost.** It found the one trap nobody else saw
+1. **In this evaluation, terra:low was the strongest Codex auditor for the cost.** It found the one trap nobody else saw
    (telemetry schema ordering), had the most code-grounded traps and made the right 289 call.
    It was the slowest of the Codex runs.
 2. **luna:med beats luna:low on facts.** luna:med caught 289 and the `applyMerge` limit, at
@@ -204,9 +209,9 @@ it or got it wrong, and ~ means partly.
 4. **haiku is unreliable as an advisor.** It made a wrong citation, proposed the one fix the
    ticket explicitly forbids (279) and made the weakest cuts. Keep it for mechanical execution
    with explicit acceptance tests.
-5. **No single model caught everything.** Of the four highest-value findings (289 fixed,
+5. **No single model caught everything in this evaluation.** Of the four highest-value findings (289 fixed,
    schema ordering, skill fan-out, 492 dependency), the best single model got two. Merging
-   **terra:low and sonnet** covers all four. Two cheap, different-vendor advisors beat one
+   **terra:low and sonnet** covered all four. Two cheap, different-vendor advisors beat one
    expensive one for discovery.
 6. **Stale-ticket detection is a model-quality signal.** A ticket whose fix already landed is
    the cheapest waste to avoid. Only the models that read code before planning caught it

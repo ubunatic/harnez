@@ -104,7 +104,7 @@ the duplication the component design warns against.
 | Ticket | Scope | Bucket |
 |---|---|---|
 | 594 — Codex compaction never acknowledged; over-limit resume always fails | M — P1, In Progress. Plan: set `model_auto_compact_token_limit`, read context from the rollout's `last_token_usage`, verify after the turn. A stuck worker is the worst dispatch failure | **Now** (finish) |
-| 539 — agents in other projects don't know `harnez agent` or `terra:low` | S/M — P1. 585 and 578 put a `harnez agent` section into the managed block and 540 added short aliases, so most of the fix may already be out. **Verify in cati after `harnez init`**, then close or reduce to what is missing | **Now** (verify first) |
+| 539 — agents in other projects don't know `harnez agent` or short model aliases | S/M — P1. 585 and 578 put a `harnez agent` section into the managed block and 540 added short aliases, so most of the fix may already be out. **Verify in cati after `harnez init`**, then close or reduce to what is missing | **Now** (verify first) |
 | 557 — agent docs: descriptive names vs real commands (`agent run`/`loop` do not exist) | S — same discoverability fix as 539; land together | **Now** (with 539) |
 | 595 — Codex start failure hides the real 401 | S/M — 596's auth preflight catches the common case; the remainder is surfacing the rollout's `task_complete.error.message` when start still fails | **Next** (high) |
 | 477 — hook-driven background task completion instead of polling | M/L — **moved up**: last pass it waited on 476's async mode; 572 shipped async start + `harnez_wait_agent`, so the trigger now exists and can be verified | **Next** (high) |

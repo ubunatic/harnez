@@ -204,7 +204,7 @@ don't delete `~/.harnez/agents` records of research runs you may want to analyse
 - Merge ledgers by `key | column`; a cell changes only on a `contradicted` verdict with
   med/high confidence, else it stays (or becomes `?` if nothing supports it).
 - Spot-check the sources behind every value that changes a spec rating; send only disputed
-  or consequential claims to a stronger reviewer (e.g. one `codex:terra` turn), not the
+  or consequential claims to a stronger reviewer (e.g. one `codex:sol` turn), not the
   whole ledger.
 
 ### 3b. Each agent writes a short study
