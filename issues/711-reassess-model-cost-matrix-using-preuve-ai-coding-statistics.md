@@ -1,3 +1,40 @@
+### M1 result (approved 2026-10-05)
+M1 delivered: proposal table and chart estimates (section 5). The user decided
+that one cost per model is too coarse: cost varies with effort tier about as much
+as with model. Approved direction: a per-tier effort matrix anchored at
+`codex:luna:low = 1` (the old `astra = 100` anchor is dropped).
+
+### M2 — Effort matrix in spec and listing
+**Pre-Work / Required Refinements:**
+- Section 5 misreads Claude Opus 5.5 (low, with fallback) as $1.13 / 46; that
+  point is Sonnet 5.5 (high). Correct value from both charts: ~$0.55 / 42.
+  Mark Opus medium ($1.83 / 53) as uncertain (crossing leader lines).
+- `docs/Models.md` still carries the historical Sol estimate 50; align it.
+
+Implementation:
+- Allow a per-tier cost in `spec/agent.yaml`, following the existing `use_med`
+  override pattern or a cleaner per-tier form; keep the schema in sync and
+  keep a single `cost` valid for models without tier data (Spec.md: no Go
+  defaults duplicating spec values).
+- `harnez agent models` shows the tier's cost on each `:low` / `:med` row; the
+  legend states the new anchor (luna:low = 1) and that values are estimates.
+- Initial codex values (estimated from AA charts, 5 Oct 2026, API cost ratio to
+  luna:low within the ChatGPT plan): luna low 1 / med 4; sol low 28 / med 45;
+  astra low 180 / med 337. Terra, Claude and Gemini keep one value for both
+  tiers (separate plan quotas, no matched data); rescale nothing else unless
+  the new anchor requires it, and say so if it does.
+- Update `docs/Models.md` (and `docs/ModelResearch.md` for the method change).
+- Tests: unit tests for per-tier parsing and listing, including a model with
+  only a single `cost`, a tier override, and an unknown tier.
+
+### M3 — Exact per-tier data
+Replace chart estimates with exact numbers. Canary first: probe whether the
+Artificial Analysis model pages or data API expose exact cost per task by
+effort (an API key may be needed from the user; stop and ask). Prefer own
+measurements where harnez can produce them (`harnez bench`, usage telemetry
+per tier). Record source and date per value; close with
+`harnez issues close 711 "<real outcome>"`.
+
 # 711 — Reassess model cost matrix using Preuve AI coding statistics
 
 **Status**: Open
