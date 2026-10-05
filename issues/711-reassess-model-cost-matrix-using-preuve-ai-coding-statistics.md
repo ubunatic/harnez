@@ -49,7 +49,7 @@ benchmarks or quota trials. Record source and date per value; close with
 
 # 711 — Reassess model cost matrix using Preuve AI coding statistics
 
-**Status**: Closed — M3 matrix now uses Luna 1/4/6, Sol 29/47/71, Astra 182/342/384 relative to Luna-low bash.0045: exact free API costs where returned, public rounded values for remaining tiers; other model values unchanged.
+**Status**: Closed — M3 matrix now uses Luna 1/4/6, Sol 29/47/71, Astra 182/342/384 relative to Luna-low $0.0045: exact free API costs where returned, public rounded values for remaining tiers; other model values unchanged.
 **M3 review (2026-10-05)**: the supplied free-plan key exposed exact task costs on returned API rows; public rounded values filled remaining tiers.
 **Priority**: P2 (Medium)
 **Severity**: Minor
