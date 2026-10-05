@@ -1,6 +1,6 @@
 # Model Research
 
-How to refresh the model guidance in `spec/agent.yaml` (`cost`, `eff`, `skills`, `roles`,
+How to refresh the model guidance in `spec/agent.yaml` (`cost`, `cost_by_tier`, `eff`, `skills`, `roles`,
 `use`, `use_med`) by **web research** when something changes. No model is run on tasks
 here: cheap researchers read public benchmarks, vendor docs and practitioner reports. The
 result is an updated spec, a new dated snapshot in [Models.md](Models.md) and a checked
@@ -16,9 +16,11 @@ result is an updated spec, a new dated snapshot in [Models.md](Models.md) and a 
 
 ## Scope rule
 
-Research only the new or changed models, plus the two anchors `codex:luna` (COST 1) and
-`codex:astra` (COST 100) so the new values land on the same scale. Research every model
-only when an anchor itself changes.
+Research only the new or changed models, plus `codex:luna:low` (COST 1) when a relative
+effort-cost comparison needs an anchor. The Oct 2026 chart estimates use API task-cost
+ratios only within the shared ChatGPT plan as a proxy for relative quota use; never
+convert those ratios across ChatGPT, Claude Pro and Google Pro quota pools. Research
+every model only when the anchor itself changes.
 
 ## Steps
 
@@ -181,18 +183,20 @@ don't delete `~/.harnez/agents` records of research runs you may want to analyse
 - Reconcile conflicts by version, date, route, effort and harness; keep an unresolved
   disagreement in the snapshot instead of averaging it.
 - `?` means insufficient evidence, never "average": don't turn it into `~` or `-`.
-- **COST unit = plan quota, not dollars.** We pay through similar-priced subscriptions
-  (ChatGPT Plus → codex, Claude Pro → claude, Google Pro → agy; agy's Claude models may
-  draw on a separate Google pool), so COST is the share of the plan's 5h window one
-  typical turn uses, scaled to luna = 1, astra = 100. This makes vendors comparable.
-  List prices are reference only: the 2026-09-24 list-price scale put opus at 60% of
-  astra, while measured quota showed an astra turn costs several opus turns.
-- COST/EFF precedence: user-stated ratios (e.g. opus ≈ 2× sonnet) > measured plan quota
-  (step 2b, [ModelTrials.md](ModelTrials.md)) > list prices (step 2, reference only,
-  never across vendors). Record the plan names in the snapshot; a plan change is a trigger.
-- COST stays anchored at luna = 1 and astra = 100 as a policy scale. Ask the user about
-  re-anchoring only when a measured astra ratio falls outside 50–200 (2× off) on more than
-  one clean measurement; record every measurement in the snapshot either way.
+- **COST unit = estimated relative effort cost, anchored at `codex:luna:low = 1`.**
+  The spec can hold a `cost_by_tier` override for low/med/high; a single `cost` remains
+  valid and supplies the fallback where no tier estimate exists. Measured plan quota
+  remains the preferred evidence. For the Oct 2026 Codex estimates, Artificial Analysis
+  API task costs are divided by Luna-low's $0.0046 and rounded; because Codex models share
+  ChatGPT quota, this is a plausible within-plan proxy only. Do not use API ratios to
+  compare Codex with Claude Pro or Google Pro, whose subscription quotas differ.
+- COST/EFF precedence: user-stated ratios > measured plan quota (step 2b,
+  [ModelTrials.md](ModelTrials.md)) > dated chart-derived within-plan proxy > list prices
+  (reference only). Record the plan, tier, source and date in the snapshot; a plan change
+  is a trigger. This M2 review is data-only and runs no new measurements or benchmarks.
+- The previous `luna = 1, astra = 100` policy scale is retired. Do not rescale the
+  non-Codex values when changing to the Luna-low anchor unless comparable evidence
+  establishes a conversion; current M2 values retain their separate-plan scales.
 - Merge ledgers by `key | column`; a cell changes only on a `contradicted` verdict with
   med/high confidence, else it stays (or becomes `?` if nothing supports it).
 - Spot-check the sources behind every value that changes a spec rating; send only disputed
@@ -216,7 +220,7 @@ More important than the numbers: every researcher (step 2) and the analytics age
 
 ### 4. Update spec and snapshot
 
-- Edit `cost`, `eff`, `skills` (and `use`/`roles` if the evidence changes a role) in
+- Edit `cost`, `cost_by_tier`, `eff`, `skills` (and `use`/`roles` if the evidence changes a role) in
   `spec/agent.yaml`; keep the header comment and `models_legend` in sync if a scale changes.
 - Add a dated `## YYYY-MM-DD <topic> snapshot` section to [Models.md](Models.md): scope,
   table, findings, research cost, links to the step 3b studies. Never rewrite older
