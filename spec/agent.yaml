@@ -71,7 +71,7 @@ models:
     tier: low
     roles: advisor, developer
     cost: 180
-    cost_by_tier: {med: 337, high: 500}
+    cost_by_tier: {med: 337, high: 380}
     eff: "?"
     skills: Go+ TUI~ SQL~
     use: hardest multi-step coding and terminal automation; escalation only

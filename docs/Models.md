@@ -11,9 +11,9 @@ The listing's COST column now gives estimated relative cost by effort tier, with
 `codex:luna:low = 1`. The Codex figures use Artificial Analysis API cost per Index
 task ratios to Luna-low, rounded to integers; this is a within-ChatGPT-plan proxy,
 not measured plan-quota use. Luna/Sol/Astra low, medium and high are respectively
-1/4/7, 28/45/70 and 180/337/500. High chart readings are approximately $0.030,
-$0.32 and $2.3 per task; the Astra high dot is the black point near $2.3 / Index
-52, distinct from the xhigh dot near $1.5 and max near $3.3. Chart readings are
+1/4/7, 28/45/70 and 180/337/380. High chart readings are approximately $0.030,
+$0.32 and $1.75 per task; the Astra high dot is the half-hidden point near $1.75 /
+Index 51.5, distinct from the xhigh dot near $2.3 and max near $3.26. Chart readings are
 approximate (about ±10% cost). Claude and Gemini retain their existing single
 values across listed effort tiers because their plan quotas differ and no matched
 quota data supports cross-vendor API ratios. Terra and the agy-routed Claude
@@ -23,7 +23,7 @@ models also retain their existing values.
 |---|---:|---:|---:|
 | `codex:luna` | 1 | 4 | 7 |
 | `codex:sol` | 28 | 45 | 70 |
-| `codex:astra` | 180 | 337 | 500 |
+| `codex:astra` | 180 | 337 | 380 |
 | `codex:terra` | 26 | 26 | 26 |
 | `claude:haiku` | 12 | 12 | 12 |
 | `claude:sonnet` | 15 | 15 | 15 |

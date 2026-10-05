@@ -56,7 +56,7 @@ func TestKnownModelEntriesCostByTierAndEffortRows(t *testing.T) {
 	wantCosts := map[string]int{
 		"codex:luna:low": 1, "codex:luna:med": 4, "codex:luna:high": 7,
 		"codex:sol:low": 28, "codex:sol:med": 45, "codex:sol:high": 70,
-		"codex:astra:low": 180, "codex:astra:med": 337, "codex:astra:high": 500,
+		"codex:astra:low": 180, "codex:astra:med": 337, "codex:astra:high": 380,
 	}
 	for _, entry := range KnownModelEntries() {
 		if want, ok := wantCosts[entry.Spec]; ok {

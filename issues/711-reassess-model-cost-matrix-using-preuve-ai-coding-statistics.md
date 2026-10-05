@@ -134,7 +134,7 @@ so cross-vendor ratios are not used to propose their quota costs.
 | GPT-6 Astra (medium) | $1.54, 49 | $1.56, 49 | **Estimated from chart position:** $1.55, 49 |
 | GPT-6 Luna (high) | ~$0.030, 33 | ~$0.030, 33 | **Estimated from chart position:** ~$0.030, 33 |
 | GPT-6.1 Sol (high) | ~$0.32, 50 | ~$0.32, 50 | **Estimated from chart position:** ~$0.32, 50 |
-| GPT-6 Astra (high) | ~$2.3, 52 | ~$2.3, 52 | **Estimated from chart position:** ~$2.3, 52 |
+| GPT-6 Astra (high) | ~$1.75, 51.5 | ~$1.75, 51.5 | **Estimated from chart position:** ~$1.75, 51.5 |
 | Claude Sonnet 5.5 (low, with fallback) | $0.43, 35 | $0.44, 35 | **Estimated from chart position:** $0.44, 35 |
 | Claude Sonnet 5.5 (medium, with fallback) | $0.60, 40 | $0.59, 41 | **Estimated from chart position:** $0.60, 41 |
 | Claude Sonnet 5.5 (high, with fallback) | ~$0.55, 42 | ~$0.55, 42 | **Estimated from chart position:** ~$0.55, 42 |
@@ -194,16 +194,16 @@ $0.55 / 42. Opus medium is uncertain because its leader lines cross.
 
 The added high-tier readings are estimated from chart position and reconciled
 across both captures. On Chart A and B, Luna high is about $0.030 / Index 33,
-Sol high about $0.32 / 50, and Astra high about $2.3 / 52. Astra's label leaders
-cross in the $1.5–$2.5 cluster: the selected high point is the black dot near
-$2.3 / 52 that the `GPT-6 Astra (high)` leader targets in both images. The
-neighboring dot near $1.5 / 54 is xhigh; the distinct point around $3.3 / 52 is
-max. This label-to-dot match is more consistent across captures than reading the
-crossing leader paths alone.
+Sol high about $0.32 / 50, and Astra high about $1.75 / 51.5. Astra's label
+leaders cross in the $1.5–$2.5 cluster: the selected high point is the half-hidden
+black dot near $1.75 / 51.5 identified by the `GPT-6 Astra (high)` label. The dot
+near $2.3 / 52 is xhigh, while the distinct point around $3.26 / 52 is max. This
+matches the chart effort progression: low ~$0.82, medium ~$1.55, high ~$1.75,
+xhigh ~$2.3, max ~$3.26.
 
 The approved method divides each Codex API task cost by Luna-low ($0.0046) and
 rounds to the nearest integer. Arithmetic: Luna high `$0.030 / $0.0046 = 6.52 →
-7`; Sol high `$0.32 / $0.0046 = 69.57 → 70`; Astra high `$2.3 / $0.0046 = 500`.
+7`; Sol high `$0.32 / $0.0046 = 69.57 → 70`; Astra high `$1.75 / $0.0046 = 380.43 → 380`.
 The low/medium values were approved in M1: Luna 1/4, Sol 28/45, Astra 180/337.
 This API ratio is used only within the shared ChatGPT plan as a proxy for quota
 use. Claude Pro and Google Pro rows keep their existing single values across
@@ -214,7 +214,7 @@ also remain unchanged.
 |---|---:|---:|---:|---:|
 | `codex:luna` | 1 | 1 | 4 | 7 |
 | `codex:sol` | 28 | 28 | 45 | 70 |
-| `codex:astra` | 180 | 180 | 337 | 500 |
+| `codex:astra` | 180 | 180 | 337 | 380 |
 | `codex:terra` | 26 | 26 | 26 | 26 |
 | `claude:haiku` | 12 | 12 | 12 | 12 |
 | `claude:sonnet` | 15 | 15 | 15 | 15 |
@@ -238,3 +238,10 @@ still fails because its old assertion expects `codex:luna:low` while the spec
 default is `codex:luna:high`. The two flash38/default-spec mismatches remain.
 Those existing assertions were left unchanged. The new tier-cost, listing, and
 fallback tests pass. The ticket remains open for M3.
+
+### M3 pre-work correction (2026-10-05)
+
+Host review identifies the Astra high dot as the half-hidden ~$1.75 / Index 51.5
+point, not the ~$2.3 / 52 xhigh point. The high API ratio is
+`$1.75 / $0.0046 = 380.43`, rounded to 380. Updated `spec/agent.yaml` and the
+Models snapshot accordingly. Focused cost/listing tests and `make install` pass.
