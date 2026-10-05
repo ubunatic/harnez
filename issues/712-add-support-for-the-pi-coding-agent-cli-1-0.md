@@ -1,6 +1,6 @@
 # 712 — Add support for the Pi coding agent CLI 1.0+
 
-**Status**: Open
+**Status**: Closed — Pi 1.0+ driver, retry handling, RPC compaction and live session canary delivered; Q1 suite still fails on pre-existing spec expectation mismatches
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
