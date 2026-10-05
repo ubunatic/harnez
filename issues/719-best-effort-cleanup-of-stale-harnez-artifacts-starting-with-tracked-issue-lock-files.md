@@ -21,7 +21,9 @@ an owner decision.
 `~/projects`: goto, kernel, loom-games, neus, research, settings, termaid (loom-games' dated from
 issue 001, Sep 27). `harnez init` now adds both to `.git/info/exclude` (672), but exclusion does not
 untrack files that are already committed, so they stay and look like stale state. loom-games was
-cleaned by hand in 0e81cd4.
+cleaned by hand in 0e81cd4; the other 6 on 2026-10-06 (goto 23d8aba, kernel d9000b0, neus
+13f0871, research 38f58e3, settings 931409e, termaid f1fe7ab: `git rm --cached` plus missing
+`.git/info/exclude` entries). The automatic check is still open.
 
 ## 3. Scope & Constraints
 
@@ -40,4 +42,4 @@ cleaned by hand in 0e81cd4.
 - In a repo with tracked lock files, the next harnez command leaves them untracked (or prints the
   command); a second run is a no-op.
 - Concurrency test from 279 still passes.
-- The 6 remaining repos are clean afterwards (as a migration step, with the owner's go per repo).
+- The 6 remaining repos are clean afterwards (done by hand, see §2).
