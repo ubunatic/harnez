@@ -20,7 +20,7 @@ For TUI layout work, use a checked-in `.ansi` mockup under `docs/data/` as the v
 6. **Context Discipline & Range-Bounded Ingestion** — never whole-file-read `AGENTS.md`/active system rules; avoid native tool slices on >100 line files; use `harnez read -L`/`-n` via CLI (`harnez read -I` is paused until issue 543, a memory blow-up, is fixed).
 7. **Media & Demo Verification Gate** — **always ask the user for explicit confirmation** of recorded output before publishing/embedding.
 8. **Deployment Transparency — 3-State Grounding (when applicable)** — **Local State**, **Deployed Artifact State**, and **Active Daemon State** are independent; local build/test proves nothing about the other two (remote-deploying projects only).
-9. **One-Level Delegation** — `harnez agent --role orchestrator|developer|reviewer|advisor`: only an orchestrator starts helpers (one writer at a time); developers, reviewers and advisors are leaf workers that never run `harnez agent`, native subagents or delegating skills. harnez enforces it. Live checks that need an agent session are run by the orchestrator.
+9. **One-Level Delegation** — `harnez agent --role orchestrator|developer|reviewer|advisor`: only an orchestrator starts helpers (one writer at a time); developers, reviewers and advisors are leaf workers that never run `harnez agent`, native subagents or delegating skills. harnez enforces it. Live checks that need an agent session are run by the orchestrator. **Completion Evidence**: host verifies every worker's "done" report with `git show --stat <commit>` and the built output; ticket-closing workers cite the commit that changed non-issue files.
 
 ### Multi-session peer assistance
 `/peer-assistant` uses available native session messaging for explicit peer requests; it does not imply an always-on watcher. Persist handoffs and findings in tickets/docs, keep one writer per workspace, and track/clean up helpers.
@@ -74,5 +74,3 @@ For a single focused ticket: **Clean Goal Handoff** (one objective; **Trust the 
 - **Buffered Long-Running Output** — piping a long command through `tail`/`grep`/`sort`/`wc`/`head`, which shows nothing until it exits; run plain or `tee` to a log.
 - **`cd`-scoped commands** — bare `cd` leaking into later unrelated calls in a shared shell; use `-C`/`--prefix`/`--manifest-path` or a subshell `(cd dir && cmd)`.
 - **Chatty Watch Wrappers** — wrapping a poll-and-redraw CLI (`gh run watch`, `docker logs -f`) in a routine agent-called target without quieting it; poll the tool's own status query on a matched interval and print one summary line on completion instead.
-
-<!-- harnez:stop -->

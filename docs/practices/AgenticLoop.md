@@ -59,6 +59,12 @@ adds the role's rules to each turn and exports it to the agent as
   `list`, `status` and `models` stay available. Live checks that need an agent
   session (e.g. a start + resume canary) are run by the orchestrator.
 
+Before accepting a worker's "done" report, the host verifies the claimed
+changes with `git show --stat <commit>` and inspects the built output to confirm
+the reported artifact exists and contains the expected result. A worker that
+closes tickets cites the commit that changed non-issue files, so the host can
+trace each closure to implementation work.
+
 A human or a host agent without a role starts sessions unrestricted. The rules
 are defined once in harnez's embedded agent spec.
 
