@@ -126,10 +126,14 @@ so cross-vendor ratios are not used to propose their quota costs.
 | GPT-6.1 Sol (medium) | $0.204, 47 | $0.205, 47 | **Estimated from chart position:** $0.205, 47 |
 | GPT-6 Astra (low) | $0.83, 45 | $0.82, 45 | **Estimated from chart position:** $0.83, 45 |
 | GPT-6 Astra (medium) | $1.54, 49 | $1.56, 49 | **Estimated from chart position:** $1.55, 49 |
+| GPT-6 Luna (high) | ~$0.030, 33 | ~$0.030, 33 | **Estimated from chart position:** ~$0.030, 33 |
+| GPT-6.1 Sol (high) | ~$0.32, 50 | ~$0.32, 50 | **Estimated from chart position:** ~$0.32, 50 |
+| GPT-6 Astra (high) | ~$2.3, 52 | ~$2.3, 52 | **Estimated from chart position:** ~$2.3, 52 |
 | Claude Sonnet 5.5 (low, with fallback) | $0.43, 35 | $0.44, 35 | **Estimated from chart position:** $0.44, 35 |
 | Claude Sonnet 5.5 (medium, with fallback) | $0.60, 40 | $0.59, 41 | **Estimated from chart position:** $0.60, 41 |
-| Claude Opus 5.5 (low, with fallback) | $1.14, 46 | $1.13, 46 | **Estimated from chart position:** $1.13, 46 |
-| Claude Opus 5.5 (medium, with fallback) | $1.83, 53 | $1.83, 53 | **Estimated from chart position:** $1.83, 53 |
+| Claude Sonnet 5.5 (high, with fallback) | ~$0.55, 42 | ~$0.55, 42 | **Estimated from chart position:** ~$0.55, 42 |
+| Claude Opus 5.5 (low, with fallback) | ~$0.55, 42 | ~$0.55, 42 | **Estimated from chart position:** ~$0.55, 42 |
+| Claude Opus 5.5 (medium, with fallback) | $1.83, 53 | $1.83, 53 | **Estimated from chart position, uncertain:** $1.83, 53 (leader lines cross) |
 | Gemini 3.7 Flash (high) | $0.93, 39 | $0.93, 39 | **Estimated from chart position:** $0.93, 39 |
 | Gemini 3.8 Flash (medium) | ~$0.93, ~39 (overlaps 3.7 high) | ~$0.93, ~39 (overlaps 3.7 high) | **Estimated from chart position:** ~$0.93, ~39 |
 | Gemini 3.8 Flash (high) | $1.25, 40 | $1.24, 40 | **Estimated from chart position:** $1.24, 40 |
@@ -176,5 +180,55 @@ high, so the shared coordinate is especially uncertain. Claude points include
 fallback; the charts do not isolate provider-specific agy usage. The two Codex
 anchors cannot both be reproduced by the estimated task-cost ratios. No row is
 over 2× off current; Codex Sol/Astra are marked review for effort/anchor
-disagreement, not as confirmed corrections. M1 remains a proposal pending user
-approval; no spec or documentation values changed and the ticket remains open.
+disagreement, not as confirmed corrections. The cost point formerly assigned to
+Claude Opus 5.5 low ($1.13 / 46) is actually Sonnet 5.5 high; Opus low is about
+$0.55 / 42. Opus medium is uncertain because its leader lines cross.
+
+### M2 data review and applied matrix (2026-10-05)
+
+The added high-tier readings are estimated from chart position and reconciled
+across both captures. On Chart A and B, Luna high is about $0.030 / Index 33,
+Sol high about $0.32 / 50, and Astra high about $2.3 / 52. Astra's label leaders
+cross in the $1.5–$2.5 cluster: the selected high point is the black dot near
+$2.3 / 52 that the `GPT-6 Astra (high)` leader targets in both images. The
+neighboring dot near $1.5 / 54 is xhigh; the distinct point around $3.3 / 52 is
+max. This label-to-dot match is more consistent across captures than reading the
+crossing leader paths alone.
+
+The approved method divides each Codex API task cost by Luna-low ($0.0046) and
+rounds to the nearest integer. Arithmetic: Luna high `$0.030 / $0.0046 = 6.52 →
+7`; Sol high `$0.32 / $0.0046 = 69.57 → 70`; Astra high `$2.3 / $0.0046 = 500`.
+The low/medium values were approved in M1: Luna 1/4, Sol 28/45, Astra 180/337.
+This API ratio is used only within the shared ChatGPT plan as a proxy for quota
+use. Claude Pro and Google Pro rows keep their existing single values across
+effort tiers because their quota pools differ; Terra and agy-routed Claude rows
+also remain unchanged.
+
+| Spec | Stored `cost` fallback | Low | Med | High |
+|---|---:|---:|---:|---:|
+| `codex:luna` | 1 | 1 | 4 | 7 |
+| `codex:sol` | 28 | 28 | 45 | 70 |
+| `codex:astra` | 180 | 180 | 337 | 500 |
+| `codex:terra` | 26 | 26 | 26 | 26 |
+| `claude:haiku` | 12 | 12 | 12 | 12 |
+| `claude:sonnet` | 15 | 15 | 15 | 15 |
+| `claude:opus` | 20 | 20 | 20 | 20 |
+| `agy:flash37` | 4 | 4 | 4 | 4 |
+| `agy:flash38` | 4 | 4 | 4 | 4 |
+| `agy:sonnet` (no effort) | 16 | 16 | — | — |
+| `agy:opus` (no effort) | 32 | 32 | — | — |
+
+The listing emits low/med/high rows for all effort-capable providers and one low
+row for `agy:sonnet` and `agy:opus`. M2 is complete; exact data review remains in
+M3. No new benchmarks or measurements were run. Implementation is committed as
+`f8303d4c`, with research-doc updates in `92f63d1f`.
+
+Verification: `make install` passed. The pre-change `HTO=0 make test-q1` failed
+`TestAgentDefaultModelIsMarkedOnce`, `TestAgentStartDefaultModelLine`,
+`TestFlash38EscalationGuidanceAndLeanSprintDeveloperPreference`, and
+`TestEmbeddedAgentSpecLoadsAndResolves`. After adding high rows,
+`TestAgentDefaultModelIsMarkedOnce` passes; `TestAgentStartDefaultModelLine`
+still fails because its old assertion expects `codex:luna:low` while the spec
+default is `codex:luna:high`. The two flash38/default-spec mismatches remain.
+Those existing assertions were left unchanged. The new tier-cost, listing, and
+fallback tests pass. The ticket remains open for M3.
