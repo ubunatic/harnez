@@ -18,9 +18,15 @@ Implementation:
   defaults duplicating spec values).
 - `harnez agent models` shows the tier's cost on each `:low` / `:med` row; the
   legend states the new anchor (luna:low = 1) and that values are estimates.
+- Matrix tiers: **low, med and high** only (user decision 2026-10-05: models
+  support more levels, but harnez rarely uses them; xhigh/max/non-reasoning stay
+  out of the matrix). Add `:high` rows to the listing where the provider
+  supports that effort.
 - Initial codex values (estimated from AA charts, 5 Oct 2026, API cost ratio to
   luna:low within the ChatGPT plan): luna low 1 / med 4; sol low 28 / med 45;
-  astra low 180 / med 337. Terra, Claude and Gemini keep one value for both
+  astra low 180 / med 337. High: estimate luna, sol and astra (high) from the
+  chart the same way and record the reading in section 5; the Astra labels
+  near $1.5-$2.5 have crossing leader lines, so state which dot you used. Terra, Claude and Gemini keep one value for both
   tiers (separate plan quotas, no matched data); rescale nothing else unless
   the new anchor requires it, and say so if it does.
 - Update `docs/Models.md` (and `docs/ModelResearch.md` for the method change).
