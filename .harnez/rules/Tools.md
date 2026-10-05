@@ -18,6 +18,9 @@ subagents in a sprint skip it unless their skill requires it at the end; the hos
 ## Editing Discipline
 - Prefer structured patch tools (`apply_patch`) or whole-block replacements over
   narrow string substitution edits.
+- Codex `apply_patch`: patch one file per call, and re-read the exact lines
+  (`harnez read -L`) right before patching. Several operations on one file, or
+  stale context, fail the patch and can end the whole turn.
 - When making multi-line edits, ensure sufficient surrounding context lines to
   avoid ambiguous pattern matches.
 - **Reading & Context Discipline (Recommended for Large Files)**: Prefer
