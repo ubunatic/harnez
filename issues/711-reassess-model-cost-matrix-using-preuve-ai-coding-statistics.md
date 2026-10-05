@@ -36,9 +36,9 @@ Implementation:
 ### M3 — Exact per-tier data
 Replace chart estimates with exact numbers. Canary first: probe whether the
 Artificial Analysis model pages or data API expose exact cost per task by
-effort (an API key may be needed from the user; stop and ask). Prefer own
-measurements where harnez can produce them (`harnez bench`, usage telemetry
-per tier). Record source and date per value; close with
+effort (an API key may be needed from the user; stop and ask). Data review
+only (user decision 2026-10-05): use published data, run no new measurements,
+benchmarks or quota trials. Record source and date per value; close with
 `harnez issues close 711 "<real outcome>"`.
 
 # 711 — Reassess model cost matrix using Preuve AI coding statistics
