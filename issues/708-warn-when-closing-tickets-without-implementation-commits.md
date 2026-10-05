@@ -1,6 +1,6 @@
 # 708 — Warn when closing tickets without implementation commits
 
-**Status**: Open — warn when closing without implementation history
+**Status**: Closed — implemented and verified in a835e633
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
