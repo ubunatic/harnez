@@ -1,6 +1,6 @@
 # 707 — Host verifies worker completion evidence and commit references
 
-**Status**: Open — host verifies output and implementation commit evidence
+**Status**: Closed — implemented in f6a8502c; verification rule committed
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
