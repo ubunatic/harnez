@@ -101,7 +101,7 @@ func runIndex(w io.Writer, opts indexOptions) error {
 	docsDir := filepath.Join(dir, "docs")
 
 	hasIssues := dirExists(issuesDir) || pathExists(issuesReadme)
-	hasDocs := dirExists(filepath.Join(docsDir, "studies")) && pathExists(docsReadme)
+	hasDocs := pathExists(docsReadme)
 
 	if !hasIssues && !hasDocs {
 		return fmt.Errorf("index: no issues/ or docs/studies/ found in %s", dir)
@@ -213,6 +213,13 @@ func printIndexResult(w io.Writer, path string, changed bool) {
 // on them -- then exits 1, mirroring `harnez diff --exit-code` (037).
 func runIndexCheck(w io.Writer, issuesReadme, issuesDir, docsReadme, docsDir string, hasIssues, hasDocs bool) error {
 	drift := false
+	studiesDir := filepath.Join(docsDir, "studies")
+	studiesDirExisted := dirExists(studiesDir)
+	defer func() {
+		if !studiesDirExisted {
+			_ = os.Remove(studiesDir)
+		}
+	}()
 
 	type target struct {
 		path   string

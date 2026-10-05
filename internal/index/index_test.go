@@ -345,6 +345,44 @@ Some intro.
 	}
 }
 
+func TestUpdateDocsReadmeAppendsMissingStudiesSection(t *testing.T) {
+	dir := t.TempDir()
+	docsDir := filepath.Join(dir, "docs")
+	readme := filepath.Join(docsDir, "README.md")
+	writeFile(t, readme, "# Docs\n\nProject docs.\n")
+	writeFile(t, filepath.Join(docsDir, "studies", "example.md"), "# Study: Example\n\n**Scope**: A generated row\n")
+
+	changed, err := UpdateDocsReadme(readme, docsDir)
+	if err != nil {
+		t.Fatalf("UpdateDocsReadme: %v", err)
+	}
+	got, err := os.ReadFile(readme)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed || !strings.Contains(string(got), "**`docs/studies/`** — case studies") || !strings.Contains(string(got), "| [studies/example.md](studies/example.md) | A generated row |") {
+		t.Fatalf("missing appended studies section or index: changed=%v\n%s", changed, got)
+	}
+}
+
+func TestUpdateDocsReadmeCreatesMissingStudiesDirectory(t *testing.T) {
+	dir := t.TempDir()
+	docsDir := filepath.Join(dir, "docs")
+	readme := filepath.Join(docsDir, "README.md")
+	writeFile(t, readme, "# Docs\n\nProject docs.\n")
+
+	changed, err := UpdateDocsReadme(readme, docsDir)
+	if err != nil {
+		t.Fatalf("UpdateDocsReadme: %v", err)
+	}
+	if !changed {
+		t.Fatal("expected missing section to be appended")
+	}
+	if info, err := os.Stat(filepath.Join(docsDir, "studies")); err != nil || !info.IsDir() {
+		t.Fatalf("studies directory not created: info=%v err=%v", info, err)
+	}
+}
+
 // TestUpdateIssuesReadme_LockContentionFailsFastNotHang verifies the
 // non-blocking, bounded-retry flock issue 232 adds around
 // UpdateIssuesReadme's read-modify-write: when another holder already has

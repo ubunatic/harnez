@@ -260,7 +260,11 @@ func StudiesTable(docsDir string) (string, error) {
 	studiesDir := filepath.Join(docsDir, "studies")
 	entries, err := os.ReadDir(studiesDir)
 	if err != nil {
-		return "", fmt.Errorf("read %s: %w", studiesDir, err)
+		if os.IsNotExist(err) {
+			entries = nil
+		} else {
+			return "", fmt.Errorf("read %s: %w", studiesDir, err)
+		}
 	}
 
 	var rows []studyRow
@@ -299,6 +303,9 @@ const (
 // every other table (root docs, lang, practices/other, feedback, proposed)
 // untouched. Returns whether the file's content changed.
 func UpdateDocsReadme(readmePath, docsDir string) (bool, error) {
+	if err := os.MkdirAll(filepath.Join(docsDir, "studies"), 0o755); err != nil {
+		return false, fmt.Errorf("create %s: %w", filepath.Join(docsDir, "studies"), err)
+	}
 	table, err := StudiesTable(docsDir)
 	if err != nil {
 		return false, err
@@ -312,7 +319,15 @@ func UpdateDocsReadme(readmePath, docsDir string) (bool, error) {
 
 	anchorIdx := strings.Index(content, docsStudiesAnchor)
 	if anchorIdx == -1 {
-		return false, fmt.Errorf("%s: could not find %q section anchor", readmePath, docsStudiesAnchor)
+		section := "\n" + docsStudiesAnchor + " — case studies\n\n" + strings.TrimRight(table, "\n") + "\n"
+		newContent := strings.TrimRight(content, "\n") + "\n" + section
+		if newContent == content {
+			return false, nil
+		}
+		if err := os.WriteFile(readmePath, []byte(newContent), 0o644); err != nil {
+			return false, fmt.Errorf("write %s: %w", readmePath, err)
+		}
+		return true, nil
 	}
 	headerRel := strings.Index(content[anchorIdx:], docsStudiesTableHead)
 	if headerRel == -1 {
