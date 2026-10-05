@@ -55,60 +55,83 @@ commit, and close with `harnez issues close 711 "<real outcome>"`.
 
 ## 5. M1 Cost Proposal
 
-Reassessed 2026-10-05 with two Artificial Analysis Intelligence Index chart
-captures. **Proposal: keep all 11 costs.** Current values and tiers are from
-`spec/agent.yaml`. COST remains plan-quota share per typical turn (Luna = 1,
-Astra = 100), per [Models.md](../docs/Models.md) and
-[ModelResearch.md, step 3](../docs/ModelResearch.md#3-reconcile).
+Reassessed 2026-10-05 using both Artificial Analysis Intelligence Index chart
+captures. Current costs come from `spec/agent.yaml`; the scale is subscription
+quota per typical turn, Luna = 1 and Astra = 100, per [Models.md](../docs/Models.md)
+and [ModelResearch.md, step 3](../docs/ModelResearch.md#3-reconcile).
 
-Sources: **P** = [Preuve article](https://preuve.ai/blog/ai-coding-models-statistics-2026),
-fetched live; **AA** = [Artificial Analysis report](../docs/studies/2026-10-05-artificial-analysis-cost-report.md);
-**AA-chart** = two captures dated 2026-10-05: `/home/uwe/Downloads/Intelligence Index vs- Cost per Intelligence Index Task (5 Oct '26).png`
-and `/home/uwe/Downloads/Intelligence Index vs- Cost per Intelligence Index Task (5 Oct '26)(1).png`.
-Comparability is to Harnez subscription quota per turn: direct = same measure;
-indirect = model/effort benchmark signal but different API task-cost measure,
-route, or tier; none = no relevant model data.
+Sources: **P** = [Preuve article](https://preuve.ai/blog/ai-coding-models-statistics-2026);
+**AA** = [Artificial Analysis report](../docs/studies/2026-10-05-artificial-analysis-cost-report.md);
+**AA-chart A/B** = the two 2026-10-05 captures:
+`/home/uwe/Downloads/Intelligence Index vs- Cost per Intelligence Index Task (5 Oct '26).png`
+and the same name ending `(1).png`. All chart figures below are **estimates from
+chart position** (API USD per Index task; roughly ±10% cost and ±1 Index point),
+read against the log-cost and linear-Index axes, and reconciled across both
+images. Harnez tier is the spec's default low unless stated. Comparability:
+direct = same quota measure; indirect = API benchmark evidence; none = no relevant
+source data. Within Codex's shared plan only, same-tier API cost ratios are a
+plausible quota-use proxy; Claude Pro and Google Pro have separate quota pools,
+so cross-vendor ratios are not used to propose their quota costs.
+
+### Chart estimates
+
+| Model/configuration | Chart A: cost, Index | Chart B: cost, Index | Reconciled estimate |
+|---|---:|---:|---:|
+| GPT-6 Luna (low) | $0.0046, 21 | $0.0046, 21 | **Estimated from chart position:** $0.0046, 21 |
+| GPT-6 Luna (medium) | $0.0185, 29 | $0.018, 29 | **Estimated from chart position:** $0.018, 29 |
+| GPT-6.1 Sol (low) | $0.124, 42 | $0.129, 42 | **Estimated from chart position:** $0.13, 42 |
+| GPT-6.1 Sol (medium) | $0.204, 47 | $0.205, 47 | **Estimated from chart position:** $0.205, 47 |
+| GPT-6 Astra (low) | $0.83, 45 | $0.82, 45 | **Estimated from chart position:** $0.83, 45 |
+| GPT-6 Astra (medium) | $1.54, 49 | $1.56, 49 | **Estimated from chart position:** $1.55, 49 |
+| Claude Sonnet 5.5 (low, with fallback) | $0.43, 35 | $0.44, 35 | **Estimated from chart position:** $0.44, 35 |
+| Claude Sonnet 5.5 (medium, with fallback) | $0.60, 40 | $0.59, 41 | **Estimated from chart position:** $0.60, 41 |
+| Claude Opus 5.5 (low, with fallback) | $1.14, 46 | $1.13, 46 | **Estimated from chart position:** $1.13, 46 |
+| Claude Opus 5.5 (medium, with fallback) | $1.83, 53 | $1.83, 53 | **Estimated from chart position:** $1.83, 53 |
+| Gemini 3.7 Flash (high) | $0.93, 39 | $0.93, 39 | **Estimated from chart position:** $0.93, 39 |
+| Gemini 3.8 Flash (medium) | ~$0.93, ~39 (overlaps 3.7 high) | ~$0.93, ~39 (overlaps 3.7 high) | **Estimated from chart position:** ~$0.93, ~39 |
+| Gemini 3.8 Flash (high) | $1.25, 40 | $1.24, 40 | **Estimated from chart position:** $1.24, 40 |
+
+### Matched-tier Codex ratios
+
+These use the reconciled API costs above and Luna = 1 as the reference. Astra=100
+is shown separately; the chart-derived anchors do not agree with each other.
+
+- Low: Sol/Luna = $0.13/$0.0046 = **28.3**; Astra/Luna = $0.83/$0.0046 =
+  **180.4**. Against Astra=100 instead: Luna = 100×$0.0046/$0.83 = **0.55**;
+  Sol = 100×$0.13/$0.83 = **15.7**; Astra = **100**.
+- Medium: Sol/Luna = $0.205/$0.018 = **11.4**; Astra/Luna =
+  $1.55/$0.018 = **86.1**. Against Astra=100 instead: Luna =
+  100×$0.018/$1.55 = **1.16**; Sol = 100×$0.205/$1.55 = **13.2**;
+  Astra = **100**.
+
+The default-low ratio gives concrete provisional candidates Sol ≈28 and Astra
+≈180 (cost = same-tier API task cost ÷ Luna API task cost × Luna cost 1). The
+medium check instead gives Sol ≈11 and Astra ≈86. This effort sensitivity and
+the conflicting Luna-anchored versus Astra-anchored results prevent treating
+either as a confirmed quota value. No estimate differs from its current value
+by more than 2×; Astra's low-tier candidate is 1.8× current. Flag both rows for
+review pending approval and matched plan-quota measurements before M2.
+
+### Revised proposal
 
 | Spec | Current cost | Proposed cost | Source(s) | Comparability | Reason |
 |---|---:|---|---|---|---|
-| `codex:luna` | 1 | keep | P; AA; AA-chart | indirect | Chart labels low through max; API task cost is not low-tier quota. |
-| `codex:sol` | 20 | keep | P; AA; AA-chart | indirect | Low through max labeled; task cost and benchmark remain API-based. |
-| `codex:astra` | 100 | keep | P; AA; AA-chart | indirect | Low through max labeled; no quota measurement or numeric chart labels. |
-| `codex:terra` | 26 | keep | P; AA | indirect | Max Index API task cost does not measure configured quota. |
-| `claude:haiku` | 12 | keep | P | indirect | Haiku 4.5 Index API task cost; alias version/tier unverified. |
-| `claude:sonnet` | 15 | keep | P; AA; AA-chart | indirect | Low/medium through max labeled with fallback; quota unmeasured. |
-| `claude:opus` | 20 | keep | P; AA; AA-chart | indirect | Low/medium through max labeled with fallback; quota unmeasured. |
-| `agy:flash37` | 4 | keep | AA-chart | indirect | Gemini 3.7 Flash high appears; no numeric labels or quota data. |
-| `agy:flash38` | 4 | keep | P; AA-chart | indirect | Gemini 3.8 Flash high appears; no numeric labels or quota data. |
-| `agy:sonnet` | 16 | keep | P | indirect | Claude Sonnet evidence does not identify an agy route or quota. |
-| `agy:opus` | 32 | keep | P; AA | indirect | Claude Opus evidence does not identify an agy route or quota. |
+| `codex:luna` | 1 | keep (anchor) | AA-chart | indirect | Reference row; estimates on Astra=100 give 0.55 low / 1.16 medium. |
+| `codex:sol` | 20 | review: ~28 low-tier candidate | AA-chart | indirect | Low ratio .13/.0046×1=28.3; medium ratio .205/.018×1=11.4. |
+| `codex:astra` | 100 | review: ~180 low-tier candidate | AA-chart | indirect | Low ratio .83/.0046×1=180.4; medium gives 86.1; conflicts with Astra=100 anchor. |
+| `codex:terra` | 26 | keep | P; AA | indirect | No matched low/medium chart point; API Index cost does not measure quota. |
+| `claude:haiku` | 12 | keep | P | indirect | Haiku API evidence lacks a matched quota measure and alias/tier check. |
+| `claude:sonnet` | 15 | keep | P; AA; AA-chart | indirect | Claude Pro quota differs; chart's low/medium points include fallback. |
+| `claude:opus` | 20 | keep | P; AA; AA-chart | indirect | Claude Pro quota differs; chart's low/medium points include fallback. |
+| `agy:flash37` | 4 | keep | AA-chart | indirect | Gemini 3.7 high is charted; Google Pro quota differs from Codex. |
+| `agy:flash38` | 4 | keep | P; AA-chart | indirect | Gemini 3.8 medium/high is charted; Google Pro quota differs from Codex. |
+| `agy:sonnet` | 16 | keep | P | indirect | Claude route data cannot establish the agy route's quota consumption. |
+| `agy:opus` | 32 | keep | P; AA | indirect | Claude route data cannot establish the agy route's quota consumption. |
 
-Chart values explicitly readable:
-
-- Both images label GPT-6 Luna at low, medium, high, xhigh, max, and
-  non-reasoning; GPT-6.1 Sol and GPT-6 Astra at low, medium, high, xhigh, max.
-- Both label Claude Sonnet 5.5 and Opus 5.5 at low, medium, high, xhigh, max,
-  each “with fallback”; Gemini 3.7 Flash and Gemini 3.8 Flash at high.
-- Neither chart prints numeric Intelligence Index scores or USD task costs
-  alongside the points. Those values are unlabeled, so none are estimated from
-  plotted positions. The captures therefore add effort labels, not reproducible
-  numeric ratios. No proposed value changes; no ratio method applies.
-
-Unverified or non-comparable findings:
-
-- No source or chart measures subscription quota per typical turn; converting
-  API task costs to the Luna/Astra scale would require a new matched-task quota
-  method and is not reproducible from these captures.
-- Although low/medium chart configurations are closer to Harnez effort tiers,
-  the captured charts still use API cost per Index task, and Claude labels include
-  fallback. Claude routes do not establish agy-specific differences.
-- Charts show Gemini 3.7 Flash high, changing that row from none to indirect;
-  they do not expose a numeric point value. Gemini 4 Argon is a different model.
-- Claude model names in Harnez are floating aliases; their current resolution
-  remains unchecked. The charts label Claude 5.5, not agy Sonnet/Opus.
-- `docs/Models.md` retains the historical Sol quota estimate 50 for GPT-5.6
-  Sol; the current spec selects GPT-6.1 Sol at 20. Neither chart supplies quota
-  evidence to revise it.
-
-M1 verification: reviewed both images and the ticket-only diff; no tests run.
-Ticket stays open pending user approval, edits, or rejection.
+Unverified: chart points are approximate; Gemini 3.8 medium overlaps Gemini 3.7
+high, so the shared coordinate is especially uncertain. Claude points include
+fallback; the charts do not isolate provider-specific agy usage. The two Codex
+anchors cannot both be reproduced by the estimated task-cost ratios. No row is
+over 2× off current; Codex Sol/Astra are marked review for effort/anchor
+disagreement, not as confirmed corrections. M1 remains a proposal pending user
+approval; no spec or documentation values changed and the ticket remains open.
