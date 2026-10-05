@@ -31,13 +31,12 @@ external_sessions:
       created_at: payload.timestamp
 
 # Listing guidance for `harnez agent models` (legend printed below the table):
-#   cost   plan-quota cost per typical turn, luna = 1, astra = 100 (share
-#          of the 5h window on ChatGPT Plus, Claude Pro, Google Pro)
+#   cost   estimated relative cost by effort tier, anchored at codex:luna:low = 1
 #   eff    tokens needed to reach a goal: + few, ~ average, - many, ? unmeasured
 #   skills Go/TUI/SQL: + strong, ~ ok, - weak, ? no data
 #   use    when to pick it; use_med replaces use for the :med variant
 # Evidence: docs/Models.md.
-models_legend: "COST × luna (luna=1, astra=100) · EFF tokens per goal: + few ~ avg - many · skills: + strong ~ ok - weak · ? = no data"
+models_legend: "COST is estimated by effort tier; codex:luna:low = 1 · EFF tokens per goal: + few ~ avg - many · skills: + strong ~ ok - weak · ? = no data"
 models:
   codex:luna:
     aliases: [luna, luna:low]
@@ -47,6 +46,7 @@ models:
     tier: low
     roles: developer, mechanical
     cost: 1
+    cost_by_tier: {med: 4, high: 7}
     eff: "~"
     skills: Go~ TUI- SQL?
     use: clear bounded tickets; try first, weak on long terminal loops
@@ -58,7 +58,8 @@ models:
     name: gpt-6.1-sol
     tier: low
     roles: developer, advisor, reviewer
-    cost: 20
+    cost: 28
+    cost_by_tier: {med: 45, high: 70}
     eff: "~"
     skills: Go~ TUI~ SQL?
     use: capable coding and tool use; milestone reviewer; tends to over-refactor
@@ -69,7 +70,8 @@ models:
     name: gpt-6-astra
     tier: low
     roles: advisor, developer
-    cost: 100
+    cost: 180
+    cost_by_tier: {med: 337, high: 500}
     eff: "?"
     skills: Go+ TUI~ SQL~
     use: hardest multi-step coding and terminal automation; escalation only

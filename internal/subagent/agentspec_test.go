@@ -52,6 +52,25 @@ func TestFlash38EscalationGuidanceAndLeanSprintDeveloperPreference(t *testing.T)
 	}
 }
 
+func TestKnownModelEntriesCostByTierAndEffortRows(t *testing.T) {
+	wantCosts := map[string]int{
+		"codex:luna:low": 1, "codex:luna:med": 4, "codex:luna:high": 7,
+		"codex:sol:low": 28, "codex:sol:med": 45, "codex:sol:high": 70,
+		"codex:astra:low": 180, "codex:astra:med": 337, "codex:astra:high": 500,
+	}
+	for _, entry := range KnownModelEntries() {
+		if want, ok := wantCosts[entry.Spec]; ok {
+			if entry.Cost != want {
+				t.Errorf("%s cost = %d, want %d", entry.Spec, entry.Cost, want)
+			}
+			delete(wantCosts, entry.Spec)
+		}
+	}
+	for spec := range wantCosts {
+		t.Errorf("missing model entry %s", spec)
+	}
+}
+
 func TestEmbeddedAgentSpecLoadsAndResolves(t *testing.T) {
 	spec, err := loadAgentSpec()
 	if err != nil {

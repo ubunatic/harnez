@@ -627,7 +627,7 @@ func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
 	if !strings.HasPrefix(lines[0], "SPEC") || !strings.Contains(lines[0], "COST") || !strings.Contains(lines[0], "EFF") || !strings.Contains(lines[0], "SKILLS") || !strings.Contains(lines[0], "ROLES") || !strings.Contains(lines[0], "USE") {
 		t.Fatalf("header = %q", lines[0])
 	}
-	var low, med, opus, haiku string
+	var low, med, high, opus, haiku string
 	for _, line := range lines {
 		switch {
 		case strings.HasPrefix(line, "claude:haiku:low"):
@@ -636,6 +636,8 @@ func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
 			low = line
 		case strings.HasPrefix(line, "codex:luna:med"):
 			med = line
+		case strings.HasPrefix(line, "codex:luna:high"):
+			high = line
 		case strings.HasPrefix(line, "agy:opus:low"):
 			opus = line
 		}
@@ -646,13 +648,16 @@ func TestAgentModelsTableShowsRolesAndUse(t *testing.T) {
 	if !strings.Contains(med, "interface or design changes") {
 		t.Fatalf("luna:med row must use use_med: %q", med)
 	}
+	if !strings.Contains(med, " 4 ") || !strings.Contains(high, " 7 ") {
+		t.Fatalf("tier costs not shown: med=%q high=%q", med, high)
+	}
 	if !strings.Contains(opus, " no ") {
 		t.Fatalf("agy:opus row must report no effort support: %q", opus)
 	}
 	if !strings.Contains(haiku, " yes ") {
 		t.Fatalf("claude rows must report effort support: %q", haiku)
 	}
-	if !strings.Contains(out.String(), "\nCOST × luna") {
+	if !strings.Contains(out.String(), "\nCOST is estimated by effort tier; codex:luna:low = 1") {
 		t.Fatalf("legend line missing: %q", out.String())
 	}
 }

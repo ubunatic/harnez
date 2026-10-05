@@ -72,7 +72,16 @@
           "preferred": { "type": "boolean" },
           "effort": { "type": "boolean" },
           "roles": { "type": "string" },
-          "cost": { "type": "integer", "minimum": 1, "maximum": 100 },
+          "cost": { "type": "integer", "minimum": 1 },
+          "cost_by_tier": {
+            "type": "object",
+            "properties": {
+              "low": { "type": "integer", "minimum": 1 },
+              "med": { "type": "integer", "minimum": 1 },
+              "high": { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+          },
           "eff": { "type": "string", "enum": ["+", "~", "-", "?"] },
           "skills": { "type": "string", "pattern": "^(Go|TUI|SQL)[-+~?]( (Go|TUI|SQL)[-+~?])*$" },
           "use": { "type": "string" },

@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestCodexCheckResumable(t *testing.T) {
@@ -132,18 +134,20 @@ func TestKnownModelsAndExplicitSpecsFailClosed(t *testing.T) {
 		t.Fatal("known model registry is empty")
 	}
 	specs := strings.Join(KnownModelSpecs(), " ")
-	for _, want := range []string{"codex:luna:med", "agy:flash38:med"} {
+	for _, want := range []string{"codex:luna:med", "codex:luna:high", "agy:flash38:med", "agy:flash38:high"} {
 		if !strings.Contains(specs, want) {
 			t.Fatalf("known specs %q missing %q", specs, want)
 		}
 	}
-	for _, want := range []string{"claude:haiku:med", "claude:sonnet:med", "claude:opus:med"} {
+	for _, want := range []string{"claude:haiku:med", "claude:haiku:high", "claude:sonnet:med", "claude:sonnet:high", "claude:opus:med", "claude:opus:high"} {
 		if !strings.Contains(specs, want) {
 			t.Fatalf("known specs %q missing %q", specs, want)
 		}
 	}
-	if strings.Contains(specs, "agy:opus:med") {
-		t.Fatalf("known specs %q list :med for a model without effort support", specs)
+	for _, unwanted := range []string{"agy:opus:med", "agy:opus:high", "agy:sonnet:med", "agy:sonnet:high"} {
+		if strings.Contains(specs, unwanted) {
+			t.Fatalf("known specs %q list %s for a model without effort support", specs, unwanted)
+		}
 	}
 	for _, spec := range []string{"codex:luna:invalid", "codex:missing:low", "unknown:model:high"} {
 		_, err := ResolveModel(spec)
@@ -152,6 +156,27 @@ func TestKnownModelsAndExplicitSpecsFailClosed(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "codex:luna:low") {
 			t.Fatalf("spec %q error = %v, want known specs", spec, err)
+		}
+	}
+}
+
+func TestModelGuideCostByTier(t *testing.T) {
+	var spec struct {
+		Models map[string]ModelGuide `yaml:"models"`
+	}
+	if err := yaml.Unmarshal([]byte("models:\n  single: {cost: 9}\n  tiered: {cost: 1, cost_by_tier: {med: 4, high: 7}}\n"), &spec); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		model string
+		tier  string
+		want  int
+	}{
+		{"single", "low", 9}, {"single", "med", 9}, {"single", "unknown", 9},
+		{"tiered", "low", 1}, {"tiered", "med", 4}, {"tiered", "high", 7}, {"tiered", "unknown", 1},
+	} {
+		if got := spec.Models[tc.model].CostForTier(tc.tier); got != tc.want {
+			t.Errorf("%s cost for %s = %d, want %d", tc.model, tc.tier, got, tc.want)
 		}
 	}
 }

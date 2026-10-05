@@ -64,12 +64,21 @@ type modelAlias struct {
 // ModelGuide is the listing guidance of a spec/agent.yaml model entry; it
 // stays out of Model so session records do not carry it.
 type ModelGuide struct {
-	Cost   int    `yaml:"cost"`   // relative cost, luna = 1, astra = 100
-	Eff    string `yaml:"eff"`    // tokens per goal: + ~ - ?
-	Skills string `yaml:"skills"` // e.g. "Go+ TUI~ SQL?"
-	Roles  string `yaml:"roles"`
-	Use    string `yaml:"use"`
-	UseMed string `yaml:"use_med"` // replaces Use for the :med variant
+	Cost       int            `yaml:"cost"` // fallback relative cost when no tier override exists
+	CostByTier map[string]int `yaml:"cost_by_tier"`
+	Eff        string         `yaml:"eff"`    // tokens per goal: + ~ - ?
+	Skills     string         `yaml:"skills"` // e.g. "Go+ TUI~ SQL?"
+	Roles      string         `yaml:"roles"`
+	Use        string         `yaml:"use"`
+	UseMed     string         `yaml:"use_med"` // replaces Use for the :med variant
+}
+
+// CostForTier returns the tier override when present, falling back to Cost.
+func (g ModelGuide) CostForTier(tier string) int {
+	if cost, ok := g.CostByTier[tier]; ok {
+		return cost
+	}
+	return g.Cost
 }
 
 // SupportsEffort reports whether an effort/reasoning-tier flag should be
@@ -121,7 +130,7 @@ func KnownModels() []Model {
 }
 
 // KnownModelSpecs lists every selectable spec: each configured model at its
-// default tier, plus a :med variant for effort-aware models.
+// default tier, plus :med and :high variants for effort-aware models.
 func KnownModelSpecs() []string {
 	var specs []string
 	for _, e := range KnownModelEntries() {
@@ -166,13 +175,19 @@ func KnownModelEntries() []ModelEntry {
 	for _, m := range KnownModels() {
 		g := guides[m.Provider+":"+modelAliasName(m)]
 		effort := m.SupportsEffort()
-		entries = append(entries, ModelEntry{Spec: m.Spec(), Model: m, Effort: effort, Cost: g.Cost, Eff: g.Eff, Skills: g.Skills, Roles: g.Roles, Use: g.Use})
-		if m.Tier != "med" && effort {
+		alias := modelAliasName(m)
+		tiers := []string{m.Tier}
+		if effort {
+			tiers = []string{"low", "med", "high"}
+		}
+		for _, tier := range tiers {
+			model := m
+			model.Tier = tier
 			use := g.Use
-			if g.UseMed != "" {
+			if tier == "med" && g.UseMed != "" {
 				use = g.UseMed
 			}
-			entries = append(entries, ModelEntry{Spec: m.Provider + ":" + modelAliasName(m) + ":med", Model: m, Effort: effort, Cost: g.Cost, Eff: g.Eff, Skills: g.Skills, Roles: g.Roles, Use: use})
+			entries = append(entries, ModelEntry{Spec: m.Provider + ":" + alias + ":" + tier, Model: model, Effort: effort, Cost: g.CostForTier(tier), Eff: g.Eff, Skills: g.Skills, Roles: g.Roles, Use: use})
 		}
 	}
 	return entries
