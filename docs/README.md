@@ -166,6 +166,8 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-09-26-neus-lean-sprint-and-agentic-loop-retrospective.md](studies/2026-09-26-neus-lean-sprint-and-agentic-loop-retrospective.md) | Neus Lean Sprint & Agentic Loop Retrospective (2026-09-26) |
 | [studies/2026-10-01-claude-resume-compaction.md](studies/2026-10-01-claude-resume-compaction.md) | Claude Resume Compaction (Issue 673) |
 | [studies/2026-10-03-multi-repo-agentic-workflows-and-guardrails.md](studies/2026-10-03-multi-repo-agentic-workflows-and-guardrails.md) | Exploration, empirical benchmarking, cross-repo API contracts, and iterative milestone execution across `neus`, `lmcoder`, and `harnez`. |
+| [studies/2026-10-04-agent-harness-at-scale-story.md](studies/2026-10-04-agent-harness-at-scale-story.md) | A portfolio review of Harnez's product, recent development, and agent workflow evidence. |
+| [studies/2026-10-05-artificial-analysis-cost-report.md](studies/2026-10-05-artificial-analysis-cost-report.md) | Artificial Analysis Cost Report |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |

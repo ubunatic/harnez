@@ -14,11 +14,34 @@ Support the current Pi CLI, focusing on version 1.0 and later, so it can be
 selected alongside existing agent backends for coding tasks.
 
 ## 2. Technical Specification / Findings
-Verify the current 1.0+ CLI's documented invocation, model selection,
-non-interactive output, and session lifecycle before implementing the adapter.
-Treat older pre-1.0 behavior as out of scope unless compatibility proves
-necessary. Existing Pi canary and extension research do not provide agent-driver
-support.
+Pi 1.0.3 is installed. Its `pi --help` and CLI documentation confirm:
+
+- `--mode json` runs a non-interactive invocation and emits JSONL events,
+  including a session header, completed messages, usage, and `agent_settled`.
+- `--model <pattern>` selects a configured Pi model; `--thinking` accepts the
+  documented levels.
+- `--session <id>` resumes an existing project session. Sessions persist under
+  Pi's session store and are scoped by working directory.
+
+Older pre-1.0 behavior is out of scope. Existing Pi canary and extension
+research do not provide agent-driver support.
+
+Implementation added `PiDriver` in `internal/subagent/pi.go`, selected by the
+Harnez provider registry. `pi` uses Pi's configured default model;
+`pi:<provider/model-id>[:low|med|high]` selects another Pi model without a
+Harnez-side static catalog. The driver parses completed assistant events and
+usage, requires the JSON run to settle, and resumes using Pi's provider session
+ID. `docs/PiAgent.md` documents use and lifecycle limitations.
+
+A live canary against the installed Pi 1.0.3 and a local lmcoder Qwen 0.5B
+backend succeeded: Harnez received `PONG`, then resumed the same session and
+received `RESUMED`. The temporary backend was stopped and the pre-existing
+lmcoder proxy service was restored.
+
+The one `make test-q1` run failed on existing assertions that conflict with the
+committed `spec/agent.yaml` state (Codex default model and flash38 guidance).
+No test assertions or those spec settings were changed for this issue. The Pi
+unit tests ran as part of that suite; the package suite was not wholly green.
 
 ## 3. Implementation & Verification Plan
 /goal Add and document a Pi 1.0+ driver that supports the Harnez agent task and
