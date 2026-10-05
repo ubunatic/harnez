@@ -705,3 +705,6 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 704 | [704-quota-1-host-verification-rerun-runs-make-test-not-test-q1.md](704-quota-1-host-verification-rerun-runs-make-test-not-test-q1.md) | Quota-1: host verification rerun runs make test, not test-q1 | Open |
 | 705 | [705-lean-sprint-mark-ticket-in-progress-at-dispatch.md](705-lean-sprint-mark-ticket-in-progress-at-dispatch.md) | lean-sprint: mark ticket In Progress at dispatch | Open |
 | 706 | [706-propose-skill-for-the-claude-feature-loop.md](706-propose-skill-for-the-claude-feature-loop.md) | Propose skill for the Claude feature loop | Open |
+| 707 | [707-host-verifies-worker-completion-evidence-and-commit-references.md](707-host-verifies-worker-completion-evidence-and-commit-references.md) | Host verifies worker completion evidence and commit references | Open — host verifies output and implementation commit evidence |
+| 708 | [708-warn-when-closing-tickets-without-implementation-commits.md](708-warn-when-closing-tickets-without-implementation-commits.md) | Warn when closing tickets without implementation commits | Open |
+| 709 | [709-create-missing-docs-studies-index-section-during-indexing.md](709-create-missing-docs-studies-index-section-during-indexing.md) | Create missing docs studies index section during indexing | Open |
