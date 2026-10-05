@@ -219,6 +219,35 @@ func TestRunIssuesVerb_BareCloseDoesNotFabricateReason(t *testing.T) {
 	}
 }
 
+func TestRunIssuesVerb_CloseWarnsWithoutImplementationCommit(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+	var out, stderr bytes.Buffer
+	_, _, err := runIssuesVerb(&out, "close", "42", nil, issuesRunOptions{Dir: dir, Stderr: &stderr})
+	if err != nil {
+		t.Fatalf("runIssuesVerb: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "warning:") || !strings.Contains(stderr.String(), "42") || !strings.Contains(stderr.String(), "no commit") {
+		t.Fatalf("expected missing implementation commit warning, got %q", stderr.String())
+	}
+}
+
+func TestRunIssuesVerb_CloseDoesNotWarnWithImplementationCommit(t *testing.T) {
+	dir, _ := issuesFixtureRepo(t, sampleTicket)
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repoRunGit(t, dir, "add", "main.go")
+	repoRunGit(t, dir, "commit", "-q", "-m", "fix ticket 42")
+	var out, stderr bytes.Buffer
+	_, _, err := runIssuesVerb(&out, "close", "42", nil, issuesRunOptions{Dir: dir, Stderr: &stderr})
+	if err != nil {
+		t.Fatalf("runIssuesVerb: %v", err)
+	}
+	if strings.Contains(stderr.String(), "no commit") {
+		t.Fatalf("unexpected missing implementation commit warning: %q", stderr.String())
+	}
+}
+
 func TestRunIssuesVerb_DoneAliasForClose(t *testing.T) {
 	dir, ticketPath := issuesFixtureRepo(t, sampleTicket)
 

@@ -473,6 +473,11 @@ func runIssuesVerbBatch(verb string, ticketArgs, reasonArgs []string, opts issue
 			changed = append(changed, i)
 		}
 	}
+	if verb == "close" || verb == "done" {
+		for _, i := range changed {
+			warnMissingImplementationCommit(opts.Stderr, opts.Dir, targets[i].result.Number)
+		}
+	}
 	results := func() []issuesResult {
 		out := make([]issuesResult, len(targets))
 		for i := range targets {
@@ -900,6 +905,52 @@ func runIssuesMv(w io.Writer, oldArg, newArg string, opts issuesRunOptions) (iss
 	return result, false, nil
 }
 
+// warnMissingImplementationCommit reports a soft traceability warning when
+// no commit references this exact ticket number and changes a path outside
+// issues/. Ticket status and index commits alone therefore do not count.
+func warnMissingImplementationCommit(w io.Writer, dir, ticketNumber string) {
+	if w == nil {
+		w = os.Stderr
+	}
+	cmd := exec.Command("git", "log", "--all", "--format=%H%x09%B%x00")
+	cmd.Dir = dir
+	logData, err := cmd.Output()
+	if err != nil {
+		fmt.Fprintf(w, "warning: ticket %s has no commit with implementation changes outside issues/ (could not inspect git history: %v)\n", ticketNumber, err)
+		return
+	}
+	for _, commit := range strings.Split(string(logData), "\x00") {
+		fields := strings.SplitN(strings.TrimSpace(commit), "\t", 2)
+		if len(fields) < 2 || !messageReferencesTicket(fields[1], ticketNumber) {
+			continue
+		}
+		pathsCmd := exec.Command("git", "diff-tree", "--no-commit-id", "--name-only", "-r", fields[0])
+		pathsCmd.Dir = dir
+		paths, err := pathsCmd.Output()
+		if err != nil {
+			continue
+		}
+		for _, path := range strings.Split(string(paths), "\n") {
+			path = strings.TrimSpace(path)
+			if path != "" && !strings.HasPrefix(filepath.ToSlash(path), "issues/") {
+				return
+			}
+		}
+	}
+	fmt.Fprintf(w, "warning: ticket %s has no commit referencing it with changes outside issues/\n", ticketNumber)
+}
+
+func messageReferencesTicket(message, ticketNumber string) bool {
+	for _, field := range strings.FieldsFunc(message, func(r rune) bool {
+		return r < '0' || r > '9'
+	}) {
+		if strings.TrimLeft(field, "0") == strings.TrimLeft(ticketNumber, "0") {
+			return true
+		}
+	}
+	return false
+}
+
 // runIssuesVerb performs the full status-change: locate the ticket,
 // compose the new Status line, rewrite the file (or simulate the rewrite
 // under --check), resync issues/README.md, and commit (unless --no-commit
@@ -937,6 +988,9 @@ func runIssuesVerb(w io.Writer, verb, ticketArg string, reasonArgs []string, opt
 		File:      relPath,
 		OldStatus: oldStatus,
 		NewStatus: newStatus,
+	}
+	if verb == "close" || verb == "done" {
+		warnMissingImplementationCommit(opts.Stderr, opts.Dir, result.Number)
 	}
 
 	if oldStatus == newStatus {
