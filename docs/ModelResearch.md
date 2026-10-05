@@ -212,7 +212,7 @@ don't delete `~/.harnez/agents` records of research runs you may want to analyse
   found only this way. Workers may skip unlabeled points ("no numeric labels"); say
   explicitly that estimating from the axis is expected.
 - **Artificial Analysis Data API (free plan).** The key is in the env var
-  `ARTIFICAL_ANALYSIS_API_KEY` (spelled this way in `~/.zshenv`); send it only as a
+  `ARTIFICIAL_ANALYSIS_API_KEY` (set in `~/.zshenv`); send it only as a
   request header and never print it or store raw responses in the repo. The useful fields
   are `artificial_analysis_intelligence_index_cost.cost_per_task.total_cost` and
   `evaluations.artificial_analysis_intelligence_index`. On 2026-10-05 the free plan
