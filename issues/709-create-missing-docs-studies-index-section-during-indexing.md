@@ -1,6 +1,6 @@
 # 709 — Create missing docs studies index section during indexing
 
-**Status**: Open — append missing studies section during index
+**Status**: Closed — implemented and verified in 3df6666e
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
