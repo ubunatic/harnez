@@ -50,6 +50,7 @@ benchmarks or quota trials. Record source and date per value; close with
 # 711 — Reassess model cost matrix using Preuve AI coding statistics
 
 **Status**: Open
+**M3 blocker (2026-10-05)**: exact API precision requires an Artificial Analysis API key; none was available, and no key was requested or created. Public page values are display-rounded, so the chart estimates remain in force.
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
@@ -228,6 +229,20 @@ The listing emits low/med/high rows for all effort-capable providers and one low
 row for `agy:sonnet` and `agy:opus`. M2 is complete; exact data review remains in
 M3. No new benchmarks or measurements were run. Implementation is committed as
 `f8303d4c`, with research-doc updates in `92f63d1f`.
+
+### M3 exact-data canary (2026-10-05)
+
+The live public Artificial Analysis pages expose per-effort cost-per-Intelligence-
+Index-task values at their displayed precision, but not the exact underlying
+values needed to replace the chart estimates reproducibly. The public release
+comparison table displays Luna low/medium/high as `$0.0045` / `$0.02` / `$0.03`,
+Sol low/medium/high as `$0.13` / `$0.21` / `$0.32`, and Astra low/medium/high
+as `$0.82` / `$1.54` / `$1.73`. These are rounded display values; in particular
+the Luna medium value is only shown to cents. I therefore retain the chart
+estimates and the M2 matrix below, rather than deriving new ratios from rounded
+figures.
+
+Canary performed: checked the [public release comparison table](https://artificialanalysis.ai/models/releases/comparisons), Luna low and medium model pages ([low](https://artificialanalysis.ai/models/gpt-6-luna-low), [medium](https://artificialanalysis.ai/models/gpt-6-luna-medium)), the [Luna-high/Astra-high comparison](https://artificialanalysis.ai/models/comparisons/gpt-6-luna-high-vs-gpt-6-astra-high), the [Sol-high/Sol-low comparison](https://artificialanalysis.ai/models/comparisons/gpt-6-1-sol-high-vs-gpt-6-1-sol-low), and the [Astra-high/Astra-xhigh comparison](https://artificialanalysis.ai/models/comparisons/gpt-6-astra-high-vs-gpt-6-astra-xhigh). Also checked the [Artificial Analysis Data API documentation](https://artificialanalysis.ai/data-api/docs): it documents `artificial_analysis_intelligence_index_cost.cost_per_task.total_cost` (including on the free tier), but requires an API key in the `x-api-key` header for every endpoint. Per the instruction, the API probe stopped there; no account or key was created. Exact unrounded values remain blocked on access to a key, so M3 is not complete and ticket 711 remains open.
 
 Verification: `make install` passed. The pre-change `HTO=0 make test-q1` failed
 `TestAgentDefaultModelIsMarkedOnce`, `TestAgentStartDefaultModelLine`,
