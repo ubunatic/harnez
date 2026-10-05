@@ -1,6 +1,6 @@
 # 709 — Create missing docs studies index section during indexing
 
-**Status**: Open — reopened: second run fails in ubunatic.com and harnez.org: could not find end of studies table (expected a trailing blank line) when the studies table ends the file
+**Status**: Closed — EOF tables work with or without final newline; two stable index runs verified in ubunatic.com, harnez.org, and cati
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
