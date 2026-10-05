@@ -337,10 +337,14 @@ func UpdateDocsReadme(readmePath, docsDir string) (bool, error) {
 
 	rest := content[headerIdx:]
 	endRel := strings.Index(rest, "\n\n")
-	if endRel == -1 {
-		return false, fmt.Errorf("%s: could not find end of studies table (expected a trailing blank line)", readmePath)
+	blockEnd := len(content)
+	if endRel >= 0 {
+		blockEnd = headerIdx + endRel
+	} else if strings.HasSuffix(rest, "\n") {
+		// The studies table may be the final section. Keep an existing final
+		// newline while treating EOF as the end of the table.
+		blockEnd--
 	}
-	blockEnd := headerIdx + endRel
 
 	newContent := content[:headerIdx] + strings.TrimRight(table, "\n") + content[blockEnd:]
 	if newContent == content {

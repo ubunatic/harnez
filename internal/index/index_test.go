@@ -383,6 +383,39 @@ func TestUpdateDocsReadmeCreatesMissingStudiesDirectory(t *testing.T) {
 	}
 }
 
+func TestUpdateDocsReadmeStudiesTableAtEOF(t *testing.T) {
+	for _, finalNewline := range []bool{false, true} {
+		name := "without final newline"
+		ending := ""
+		if finalNewline {
+			name = "with final newline"
+			ending = "\n"
+		}
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			docsDir := filepath.Join(dir, "docs")
+			study := "# Study: Example\n\n**Scope**: Generated topic\n"
+			writeFile(t, filepath.Join(docsDir, "studies", "example.md"), study)
+			readme := filepath.Join(docsDir, "README.md")
+			content := "# Docs\n\n**`docs/studies/`** — case studies\n\n| File | Topic |\n|------|-------|\n| [studies/stale.md](studies/stale.md) | stale |" + ending
+			writeFile(t, readme, content)
+
+			changed, err := UpdateDocsReadme(readme, docsDir)
+			if err != nil {
+				t.Fatalf("UpdateDocsReadme: %v", err)
+			}
+			got, err := os.ReadFile(readme)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "# Docs\n\n**`docs/studies/`** — case studies\n\n| File | Topic |\n|------|-------|\n| [studies/example.md](studies/example.md) | Generated topic |" + ending
+			if !changed || string(got) != want {
+				t.Fatalf("UpdateDocsReadme() = changed %v, content %q; want changed true, content %q", changed, got, want)
+			}
+		})
+	}
+}
+
 // TestUpdateIssuesReadme_LockContentionFailsFastNotHang verifies the
 // non-blocking, bounded-retry flock issue 232 adds around
 // UpdateIssuesReadme's read-modify-write: when another holder already has
