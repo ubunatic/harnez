@@ -1,6 +1,6 @@
 # 709 — Create missing docs studies index section during indexing
 
-**Status**: Closed — implemented and verified in 3df6666e
+**Status**: Open — reopened: second run fails in ubunatic.com and harnez.org: could not find end of studies table (expected a trailing blank line) when the studies table ends the file
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
