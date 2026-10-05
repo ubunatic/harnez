@@ -204,6 +204,7 @@ Agentic software engineering scales effectively when concurrency is structured a
   - The Host Orchestrator spawns concurrent read-only advisor subagents (e.g. one per ticket or feature area).
   - Advisors perform focused repository searches and bounded reads, evaluate whether requirements are already partially or fully met, and identify exact line ranges for changes.
   - Advisors return concise findings and structured implementation plans to the Host.
+  - **Code over docs**: verify claims about the repo's behavior in the code and cite `file:line`; docs may be stale. The host puts known code facts that contradict a doc into the handoff.
 - **Kickoff & Commit Policy**:
   - Establish commit authority upfront. If operating under an ask-first harness, ask the user during kickoff for permission to commit local verified checkpoints proactively so the user can walk away without returning to uncommitted progress.
   - Clarify whether subagents will commit directly or return diffs for the orchestrator to commit on their behalf.
