@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=schemas/agent.schema.json
 # Agent model and role defaults are part of the application artifact.
-default_model: codex:luna:low
+default_model: codex:luna:high
 role_classify_timeout_ms: 1500
 stop:
   grace_ms: 1000
@@ -119,7 +119,6 @@ models:
     use: host seat for repo judgment, pre-work, diff review
   agy:flash37:
     aliases: [flash37, flash37:low]
-    preferred: true
     provider: agy
     name: gemini-3.7-flash
     tier: low
@@ -127,7 +126,7 @@ models:
     cost: 4
     eff: "?"
     skills: Go~ TUI~ SQL~
-    use: fast bounded reviewer or advisor with clear checks
+    use: legacy Gemini 3.7 Flash; being phased out in favor of flash38
   agy:flash38:
     aliases: [flash38, flash38:low]
     preferred: true
@@ -138,28 +137,28 @@ models:
     cost: 4
     eff: "~"
     skills: Go~ TUI~ SQL~
-    use: escalation-only; avoid for developer work; cross-vendor reviewer when needed
-    use_med: escalation-only advisor; avoid for developer work
+    use: current Gemini Flash; planned default as 3.7 is phased out
+    use_med: current Gemini Flash; planned default as 3.7 is phased out
   agy:sonnet:
     provider: agy
-    name: claude-sonnet-4-6
+    name: claude-sonnet-5-5
     tier: low
     effort: false
     roles: reviewer
     cost: 16
     eff: "?"
     skills: Go~ TUI~ SQL~
-    use: Sonnet 4.6; reviewer when Claude quota is out
+    use: Claude Sonnet 5.5; reviewer when Claude quota is out
   agy:opus:
     provider: agy
-    name: claude-opus-4-6-thinking
+    name: claude-opus-5-5
     tier: low
     effort: false
     roles: advisor, reviewer
     cost: 32
     eff: "?"
     skills: Go+ TUI~ SQL~
-    use: Opus 4.6; careful analysis of hard problems
+    use: Claude Opus 5.5; careful analysis of hard problems
 
 # Roles keep delegation one level deep. `spawns` lists the roles a session of
 # that role may start through `harnez agent`; an empty list makes it a leaf
