@@ -34,6 +34,12 @@ Implementation:
   only a single `cost`, a tier override, and an unknown tier.
 
 ### M3 — Exact per-tier data
+**Pre-Work / Required Refinements (host review of M2, 2026-10-05):**
+- Astra high is misread. In both charts the "GPT-6 Astra (xhigh)" leader line
+  points to the ~$2.3 / 52 dot; the "high" label belongs to the half-hidden dot
+  at ~$1.75 / 51.5 (chart order is then monotonic: low $0.82, med $1.55, high
+  $1.75, xhigh $2.3, max $3.26). Set `codex:astra` high to 380
+  ($1.75 / $0.0046) unless the user decides otherwise, and fix section 5.
 Replace chart estimates with exact numbers. Canary first: probe whether the
 Artificial Analysis model pages or data API expose exact cost per task by
 effort (an API key may be needed from the user; stop and ask). Data review
