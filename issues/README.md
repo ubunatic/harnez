@@ -714,3 +714,4 @@ Archived (resolved/closed) issues are in `issues/archive/`.
 | 713 | [713-add-explicit-grading-guidance-to-issue-and-sprint-skills.md](713-add-explicit-grading-guidance-to-issue-and-sprint-skills.md) | Add explicit grading guidance to issue and sprint skills | Open |
 | 714 | [714-harnez-usage-shows-claude-gpt-and-gemini-unavailable-after-collectors-are-killed.md](714-harnez-usage-shows-claude-gpt-and-gemini-unavailable-after-collectors-are-killed.md) | harnez usage shows Claude/GPT and Gemini unavailable after collectors are killed | Open |
 | 715 | [715-remove-terra-from-the-models-and-the-guides.md](715-remove-terra-from-the-models-and-the-guides.md) | Remove terra from the models and the guides | Open |
+| 716 | [716-install-harnez-skills-and-hooks-into-pi-instances.md](716-install-harnez-skills-and-hooks-into-pi-instances.md) | Install Harnez skills and hooks into Pi instances | Open |
