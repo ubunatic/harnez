@@ -37,6 +37,36 @@ func TestPiRunAndResumeArgs(t *testing.T) {
 	}
 }
 
+func TestPiCompactUsesRPC(t *testing.T) {
+	var gotCommand, gotInput string
+	var gotArgs []string
+	d := PiDriver{CommandInput: func(_ context.Context, command, input string, args ...string) ([]byte, error) {
+		gotCommand, gotInput, gotArgs = command, input, args
+		return []byte(`{"id":"harnez-compact","type":"response","command":"compact","success":true,"data":{"estimatedTokensAfter":1200,"usage":{"input":300,"output":40,"cacheRead":10,"cacheWrite":2}}}` + "\n"), nil
+	}}
+	r, err := d.Compact(context.Background(), "session-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotCommand != "pi" || gotInput != "{\"id\":\"harnez-compact\",\"type\":\"compact\"}\n" || !reflect.DeepEqual(gotArgs, piCompactArgs("session-123")) {
+		t.Fatalf("compact invocation = command %q input %q args %#v", gotCommand, gotInput, gotArgs)
+	}
+	if r.SessionID != "session-123" || r.ContextTokens != 1200 || !strings.Contains(r.Response, "compact") || r.TokensTurn != 352 {
+		t.Fatalf("compact result = %#v", r)
+	}
+}
+
+func TestParsePiCompactRejectsFailureOrMissingEstimate(t *testing.T) {
+	failed := `{"id":"harnez-compact","type":"response","command":"compact","success":false,"error":"compaction failed"}`
+	if _, err := parsePiCompact([]byte(failed)); err == nil || !strings.Contains(err.Error(), "compaction failed") {
+		t.Fatalf("parsePiCompact(failed) error = %v", err)
+	}
+	missing := `{"id":"harnez-compact","type":"response","command":"compact","success":true,"data":{}}`
+	if _, err := parsePiCompact([]byte(missing)); err == nil || !strings.Contains(err.Error(), "estimatedTokensAfter") {
+		t.Fatalf("parsePiCompact(missing estimate) error = %v", err)
+	}
+}
+
 func TestPiDriverRunAndResume(t *testing.T) {
 	var calls [][]string
 	d := PiDriver{Command: func(_ context.Context, command string, args ...string) ([]byte, error) {
@@ -75,8 +105,19 @@ func TestParsePiJSONEvents(t *testing.T) {
 	}
 }
 
+func TestParsePiAllowsRecoveryAfterFailedAssistantMessage(t *testing.T) {
+	failed := `{"type":"session","id":"s"}` + "\n" + `{"type":"message_end","message":{"role":"assistant","stopReason":"error","errorMessage":"transient failure"}}` + "\n"
+	got, err := parsePi([]byte(failed + piAssistantEvent("recovered") + `{"type":"agent_settled"}` + "\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Response != "recovered" {
+		t.Fatalf("response = %q, want recovered result", got.Response)
+	}
+}
+
 func TestParsePiRejectsFailedOrIncompleteOutput(t *testing.T) {
-	failed := `{"type":"session","id":"s"}` + "\n" + `{"type":"message_end","message":{"role":"assistant","stopReason":"error","errorMessage":"provider failed"}}` + "\n"
+	failed := `{"type":"session","id":"s"}` + "\n" + `{"type":"message_end","message":{"role":"assistant","stopReason":"error","errorMessage":"provider failed"}}` + "\n" + `{"type":"agent_settled"}` + "\n"
 	if _, err := parsePi([]byte(failed)); err == nil || !strings.Contains(err.Error(), "provider failed") {
 		t.Fatalf("parsePi(failed) error = %v", err)
 	}
