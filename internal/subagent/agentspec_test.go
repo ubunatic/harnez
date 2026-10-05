@@ -45,7 +45,7 @@ func TestFlash38EscalationGuidanceAndLeanSprintDeveloperPreference(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, phrase := range []string{"Prefer `luna` first", "use `terra` when stronger judgment is needed", "avoid `agy` models for developer work"} {
+	for _, phrase := range []string{"Prefer `luna` first", "use `sol` when stronger judgment is needed", "avoid `agy` models for developer work"} {
 		if !strings.Contains(string(skill), phrase) {
 			t.Errorf("lean-sprint skill missing %q", phrase)
 		}

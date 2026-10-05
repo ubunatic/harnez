@@ -658,6 +658,15 @@ func runResume(cmd *cobra.Command, d agentDeps, req resumeRequest) error {
 	if err != nil {
 		return err
 	}
+	if sess.Provider == "codex" && sess.HarnessType == "harnez" {
+		modelSpec := fmt.Sprintf("%s:%s", sess.Provider, sess.Model)
+		if sess.Tier != "" {
+			modelSpec += ":" + sess.Tier
+		}
+		if _, err := subagent.ResolveModel(modelSpec); err != nil {
+			return fmt.Errorf("session %q uses unavailable model %s; start a new session with harnez agent start: %w", sess.Name, modelSpec, err)
+		}
+	}
 	if req.SessionID == "" && (sess.HarnessType != "interactive" || sess.Status != "active") {
 		writers, err := sessionWriters(sess)
 		if err != nil {

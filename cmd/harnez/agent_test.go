@@ -76,7 +76,7 @@ func TestManagedAgentExamplesParseAgainstCobra(t *testing.T) {
 	}
 	section := string(config[sectionStart : sectionStart+sectionEnd])
 	for _, phrase := range []string{
-		"A requested model such as `terra:low` or `luna` is a Harnez agent model",
+		"A requested model such as `sol:low` or `luna` is a Harnez agent model",
 		"dispatch it with `harnez agent start --model <name>`, regardless of `subagent_mode`",
 		"When a `/goal` without an exit clause is set (e.g. typed by the user), say so in the first reply",
 		"/goal ... or stop and report when blocked on a user decision or denied permission",
@@ -337,7 +337,7 @@ func TestForegroundStartAndResumeDetachIntoWaitableWorkers(t *testing.T) {
 			if verb == "start" {
 				err = runStart(cmd, deps, startRequest{Name: name, Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna:low", Dir: t.TempDir(), StreamMode: streamFull})
 			} else {
-				if err := store.Save(&subagent.Session{ID: "resume-id", Name: name, Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: t.TempDir(), Status: "completed", ContextTokens: 10}); err != nil {
+				if err := store.Save(&subagent.Session{ID: "resume-id", Name: name, Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: t.TempDir(), Status: "completed", ContextTokens: 10}); err != nil {
 					t.Fatal(err)
 				}
 				err = runResume(cmd, deps, resumeRequest{Name: name, Prompt: "continue", StreamMode: streamFull})
@@ -943,7 +943,7 @@ func TestAgentInteractiveActiveControlAndDeletion(t *testing.T) {
 func TestAgentInteractiveMissingProviderIDLimitsPostExitOnly(t *testing.T) {
 	storeDir := t.TempDir()
 	store, _ := subagent.NewSessionStore(storeDir)
-	if err := store.Save(&subagent.Session{ID: "codex-id", Name: "codex-chat", Provider: "codex", Model: "gpt-5.6-luna", HarnessType: "interactive", Status: "completed"}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "codex-id", Name: "codex-chat", Provider: "codex", Model: "gpt-6-luna", HarnessType: "interactive", Status: "completed"}); err != nil {
 		t.Fatal(err)
 	}
 	cmd := newAgentCmd()
@@ -1041,7 +1041,7 @@ func TestInteractiveProviderIDIsPersistedDuringRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sess := &subagent.Session{ID: "session", Name: "session", Provider: "codex", Model: "gpt-5.6-luna", HarnessType: "interactive", Status: "active"}
+	sess := &subagent.Session{ID: "session", Name: "session", Provider: "codex", Model: "gpt-6-luna", HarnessType: "interactive", Status: "active"}
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
@@ -2837,7 +2837,7 @@ func saveSessions(t *testing.T, storeDir string, sessions ...*subagent.Session) 
 	}
 	for _, s := range sessions {
 		if s.Provider == "" {
-			s.Provider, s.Model = "codex", "gpt-5.6-luna"
+			s.Provider, s.Model = "codex", "gpt-6-luna"
 		}
 		if s.Status == "" {
 			s.Status = "completed"
@@ -3230,7 +3230,7 @@ func TestAgentTurnsWarnAboutQuota1Changes(t *testing.T) {
 			if mode == "start" {
 				err = runStart(cmd, deps, startRequest{Prompt: "task", StoredPrompt: "task", ModelSpec: "codex:luna", Dir: repoDir, StreamMode: streamFull, JSON: true})
 			} else {
-				if err := store.Save(&subagent.Session{ID: "resume-id", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: repoDir, Status: "completed", ContextTokens: 100}); err != nil {
+				if err := store.Save(&subagent.Session{ID: "resume-id", Name: "worker", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: repoDir, Status: "completed", ContextTokens: 100}); err != nil {
 					t.Fatal(err)
 				}
 				deps.find = func(_ *cobra.Command, s *subagent.FileSessionStore, name string) (*subagent.Session, error) {
@@ -3267,7 +3267,7 @@ func TestRunResumeRecordsFreshQuotaPairAndAdvancesTurn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(&subagent.Session{ID: "resume-1", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: ".", Status: "completed", Turn: 4, ContextTokens: 100}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "resume-1", Name: "worker", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: ".", HarnessType: "harnez", Status: "completed", Turn: 4, ContextTokens: 100}); err != nil {
 		t.Fatal(err)
 	}
 	driver := &recordingAgentDriver{}
@@ -3321,7 +3321,7 @@ func TestRunResumeWithoutCobraFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save(&subagent.Session{ID: "direct-resume", Name: "direct", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: ".", Status: "completed", ContextTokens: 100}); err != nil {
+	if err := store.Save(&subagent.Session{ID: "direct-resume", Name: "direct", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: ".", Status: "completed", ContextTokens: 100}); err != nil {
 		t.Fatal(err)
 	}
 	driver := &scriptDriver{steps: []step{{ev: msg("CONFIRM: resumed")}, {ev: msg("done")}}}
@@ -3343,6 +3343,60 @@ func TestRunResumeWithoutCobraFlags(t *testing.T) {
 	}
 	if len(driver.resumed) != 1 || driver.resumed[0] != "direct-resume" {
 		t.Fatalf("resumed = %v", driver.resumed)
+	}
+}
+
+func TestRunResumeRejectsSessionWithRemovedModel(t *testing.T) {
+	store, err := subagent.NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(&subagent.Session{ID: "retired-session", Name: "retired", Provider: "codex", Model: "gpt-5.6-terra", Tier: "low", WorkingDir: ".", HarnessType: "harnez", Status: "completed"}); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	old := agentDriver
+	agentDriver = func(subagent.Model, string) subagent.Driver {
+		called = true
+		return &recordingAgentDriver{}
+	}
+	defer func() { agentDriver = old }()
+	deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+		return s.Find(id)
+	}}
+	err = runResume(&cobra.Command{}, deps, resumeRequest{Name: "retired", Prompt: "continue", StreamMode: streamFull})
+	if err == nil || !strings.Contains(err.Error(), "uses unavailable model") || !strings.Contains(err.Error(), "known specs") {
+		t.Fatalf("resume error = %v, want clear unavailable-model error", err)
+	}
+	if called {
+		t.Fatal("resume constructed a provider driver for a removed model")
+	}
+}
+
+func TestRunResumeAcceptsCurrentCodexModels(t *testing.T) {
+	for _, tc := range []struct{ model, tier string }{{"gpt-6-luna", "med"}, {"gpt-6.1-sol", "low"}} {
+		t.Run(tc.model+":"+tc.tier, func(t *testing.T) {
+			store, err := subagent.NewSessionStore(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := store.Save(&subagent.Session{ID: "current-session", Name: "current", Provider: "codex", Model: tc.model, Tier: tc.tier, WorkingDir: ".", HarnessType: "harnez", Status: "completed", ContextTokens: 100}); err != nil {
+				t.Fatal(err)
+			}
+			driver := &resumeOutcomeDriver{}
+			old := agentDriver
+			agentDriver = func(subagent.Model, string) subagent.Driver { return driver }
+			defer func() { agentDriver = old }()
+			deps := agentDeps{store: func() (*subagent.FileSessionStore, error) { return store, nil }, parent: func() string { return "" }, dbPath: filepath.Join(t.TempDir(), "telemetry.sqlite"), find: func(_ *cobra.Command, s *subagent.FileSessionStore, id string) (*subagent.Session, error) {
+				return s.Find(id)
+			}}
+			if err := runResume(&cobra.Command{}, deps, resumeRequest{Name: "current", Prompt: "continue", StreamMode: streamFull}); err != nil {
+				t.Fatal(err)
+			}
+			if driver.resumes != 1 {
+				t.Fatalf("resume calls=%d, want 1", driver.resumes)
+			}
+		})
 	}
 }
 
@@ -3406,7 +3460,7 @@ func TestAgentRootNameUpsert(t *testing.T) {
 			d := &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "root"}}, {ev: msg("ok")}}}
 			dir := t.TempDir()
 			if exists {
-				saveSessions(t, dir, &subagent.Session{ID: "named", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: "."})
+				saveSessions(t, dir, &subagent.Session{ID: "named", Name: "worker", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: "."})
 			}
 			args := []string{"--name", "worker", "--", "words"}
 			out, err := runWithStore(t, d, dir, args...)
@@ -3435,7 +3489,7 @@ func TestAgentRootContinueStartOrResumeMostRecent(t *testing.T) {
 	t.Run("resume-most-recent", func(t *testing.T) {
 		dir := t.TempDir()
 		now := time.Now()
-		saveSessions(t, dir, &subagent.Session{ID: "old", Name: "old", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: ".", LastActiveAt: now.Add(-time.Hour)}, &subagent.Session{ID: "new", Name: "new", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: ".", LastActiveAt: now})
+		saveSessions(t, dir, &subagent.Session{ID: "old", Name: "old", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: ".", LastActiveAt: now.Add(-time.Hour)}, &subagent.Session{ID: "new", Name: "new", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: ".", LastActiveAt: now})
 		d := &scriptDriver{steps: []step{{ev: msg("ok")}}}
 		out, err := runWithStore(t, d, dir, "-c", "-p", "hello")
 		if err != nil || !strings.Contains(out, "resolved=continue") || len(d.resumed) != 1 || d.resumed[0] != "new" {
@@ -3497,7 +3551,7 @@ func (d *slashDriver) Delete(context.Context, string) error { return nil }
 
 func TestAgentRootSlashCompactIntercepts(t *testing.T) {
 	dir := t.TempDir()
-	saveSessions(t, dir, &subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: "."})
+	saveSessions(t, dir, &subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: "."})
 	d := &slashDriver{}
 	old := agentDriver
 	agentDriver = func(subagent.Model, string) subagent.Driver { return d }
@@ -3514,7 +3568,7 @@ func TestAgentRootSlashStatusAndStop(t *testing.T) {
 	for _, command := range []string{"/status", "/stop"} {
 		t.Run(command, func(t *testing.T) {
 			dir := t.TempDir()
-			saveSessions(t, dir, &subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: "."})
+			saveSessions(t, dir, &subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: "."})
 			d := &slashDriver{}
 			old := agentDriver
 			agentDriver = func(subagent.Model, string) subagent.Driver { return d }
@@ -3549,7 +3603,7 @@ func TestAgentRootSlashErrorsAndLiteral(t *testing.T) {
 		t.Fatalf("prompt = %q", d.prompt)
 	}
 	dir = t.TempDir()
-	saveSessions(t, dir, &subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "gpt-5.6-luna", Tier: "low", WorkingDir: "."})
+	saveSessions(t, dir, &subagent.Session{ID: "sid", Name: "worker", Provider: "codex", Model: "gpt-6-luna", Tier: "low", WorkingDir: "."})
 	_, err = runWithStore(t, &slashDriver{}, dir, "-p", "/x")
 	if err == nil || err.Error() != `unknown agent command "/x"; send it literally with: -- /x` {
 		t.Fatalf("err = %v", err)

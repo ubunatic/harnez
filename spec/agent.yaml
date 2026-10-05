@@ -75,17 +75,6 @@ models:
     eff: "?"
     skills: Go+ TUI~ SQL~
     use: hardest multi-step coding and terminal automation; escalation only
-  codex:terra:
-    aliases: [terra, terra:low]
-    preferred: true
-    provider: codex
-    name: gpt-5.6-terra
-    tier: low
-    roles: advisor, reviewer, developer
-    cost: 26
-    eff: "+"
-    skills: Go~ TUI~ SQL~
-    use: best-value auditor; finds code traps with file:line
   claude:haiku:
     aliases: [haiku, haiku:low]
     preferred: true
