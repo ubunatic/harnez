@@ -1,9 +1,9 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io/fs"
-	"os/exec"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -141,11 +141,9 @@ func newSkillsCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		revision := buildRevision()
-		if len(revision) != 40 {
-			if output, gitErr := exec.Command("git", "-C", cfg.Dir, "rev-parse", "HEAD").Output(); gitErr == nil {
-				revision = strings.TrimSpace(string(output))
-			}
+		revision, err := buildRevision()
+		if err != nil {
+			return err
 		}
 		data, count, err := encodeSitegenSkillExport(cfg, revision)
 		if err != nil {
@@ -162,16 +160,35 @@ func newSkillsCmd() *cobra.Command {
 	return root
 }
 
-// buildRevision is injected by Go's VCS build metadata in source checkouts.
-func buildRevision() string {
+// buildRevision requires Go's clean VCS metadata. Falling back to the checkout
+// HEAD can pin a different commit than the installed binary contains.
+func buildRevision() (string, error) {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		return ""
+		return "", fmt.Errorf("missing Harnez build metadata")
 	}
-	for _, setting := range info.Settings {
-		if setting.Key == "vcs.revision" {
-			return setting.Value
+	return sitegenRevisionFromSettings(info.Settings)
+}
+
+func sitegenRevisionFromSettings(settings []debug.BuildSetting) (string, error) {
+	revision, modified := "", ""
+	for _, setting := range settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.modified":
+			modified = setting.Value
 		}
 	}
-	return ""
+	if modified != "false" {
+		return "", fmt.Errorf("refusing skill export from modified or revision-less Harnez build (vcs.modified=%q)", modified)
+	}
+	if len(revision) != 40 {
+		return "", fmt.Errorf("refusing skill export from revision-less Harnez build")
+	}
+	decoded, err := hex.DecodeString(revision)
+	if err != nil || len(decoded) != 20 {
+		return "", fmt.Errorf("invalid Harnez build revision %q", revision)
+	}
+	return revision, nil
 }

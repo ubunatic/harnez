@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -31,6 +32,28 @@ func TestSitegenSkillsExportIsDeterministicAndComplete(t *testing.T) {
 		if !bytes.Contains(first, []byte(want)) {
 			t.Errorf("export missing %q", want)
 		}
+	}
+}
+
+func TestSitegenSkillsExportRejectsModifiedOrRevisionlessBuild(t *testing.T) {
+	revision := strings.Repeat("a", 40)
+	for name, test := range map[string]struct {
+		settings []debug.BuildSetting
+		message  string
+	}{
+		"modified":                {settings: []debug.BuildSetting{{Key: "vcs.revision", Value: revision}, {Key: "vcs.modified", Value: "true"}}, message: "modified"},
+		"revisionless":            {settings: []debug.BuildSetting{{Key: "vcs.modified", Value: "false"}}, message: "revision-less"},
+		"missing modified marker": {settings: []debug.BuildSetting{{Key: "vcs.revision", Value: revision}}, message: "modified"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := sitegenRevisionFromSettings(test.settings); err == nil || !strings.Contains(err.Error(), test.message) {
+				t.Fatal("export revision accepted unsafe build metadata")
+			}
+		})
+	}
+	got, err := sitegenRevisionFromSettings([]debug.BuildSetting{{Key: "vcs.revision", Value: revision}, {Key: "vcs.modified", Value: "false"}})
+	if err != nil || got != revision {
+		t.Fatalf("clean revision = %q, %v", got, err)
 	}
 }
 
