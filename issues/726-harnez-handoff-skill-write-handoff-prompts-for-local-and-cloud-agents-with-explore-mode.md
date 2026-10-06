@@ -1,6 +1,6 @@
 # 726 — harnez-handoff skill: write handoff prompts for local and cloud agents, with explore mode
 
-**Status**: Open
+**Status**: Closed — M1 spec/schema/loader bb3caf39, M2 skill 0727a302, M4 spec rendered into SKILL.md at apply 29253bf2, M5 missing-ticket and push-first rules 2478d640; dry run recorded; follow-ups 727, 728, 729
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
