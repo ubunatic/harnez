@@ -28,7 +28,7 @@ you like; user-managed keys and unmanaged sections are never touched.
 ## Installation
 
 ```sh
-go install ubunatic.com/harnez@latest
+go install ubunatic.com/harnez/cmd/harnez@latest
 ```
 
 Or from source:
