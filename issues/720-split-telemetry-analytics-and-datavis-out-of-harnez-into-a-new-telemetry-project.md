@@ -43,7 +43,7 @@ needs are met; the new project builds the reports and the dashboard from the exp
 dashboard renders in light and dark theme; ubunatic.com no longer carries `scripts/telemetry/`;
 the docs and skills that call moved commands are updated.
 
-## 4. Cut Plan (draft by host, 2026-10-06; waiting for the owner's OK)
+## 4. Cut Plan (host, 2026-10-06; split approved by the owner)
 
 Call-site map at `f5337904` (non-test code outside `cmd/harnez/stats*.go`):
 
@@ -72,14 +72,18 @@ Proposed cut:
   note classification (`usage export --classify`, `ClassifyNotes`), the dashboard aggregation and
   page. harnez `stats` without a mode then prints a pointer to `telemetry report`.
 
-Milestones:
+Owner decisions (2026-10-06): the split above is approved. The new project is
+`~/projects/telemetry` (Codeberg `ubunatic/telemetry`, GitHub mirror), stack Go + DuckDB + SQL;
+requirements in its `docs/Requirements.md`, plan in its issues 001-005 (import, reports, AI
+failure summaries, retention and daily update, dashboards).
 
-- M1 (harnez): add `schema_version` to the export, document it in `docs/Telemetry.md`, golden
-  test on a fixture export.
-- M2 (telemetry, new repo `ubunatic.com/telemetry`, Codeberg `origin` + GitHub `github` mirror
-  like voxi): scaffold with `harnez init`; `telemetry report` reading the export, with a parity
-  test against harnez `stats` output on the same fixture; `telemetry classify`.
-- M3 (telemetry): port `scripts/telemetry` as `telemetry build`, dashboard in `website/`, light
-  and dark theme, published with `uman website sync telemetry`.
-- M4 (harnez + ubunatic.com): remove the moved code and `--classify`; update docs and skills that
-  call moved commands; remove ubunatic.com `scripts/telemetry/` and `update-telemetry`.
+What remains in this ticket (harnez side only):
+
+- M1: add a version field to the export (`internal/telemetry/export.go`), document it in
+  `docs/Telemetry.md`, golden test on a fixture export. telemetry 001 depends on it.
+- M2 (after telemetry 002, 003 and 005 are done): remove the default `harnez stats` report,
+  compaction economics reporting and `usage export --classify`; plain `harnez stats` points to
+  `telemetry report`; update docs and skills that call moved commands; remove ubunatic.com
+  `scripts/telemetry/` and `update-telemetry`.
+- The once-a-day update reminder in harnez (telemetry 004) gets its own harnez ticket when 004
+  defines how the last run is recorded.
