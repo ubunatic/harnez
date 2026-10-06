@@ -39,3 +39,9 @@ and report when blocked on an owner decision or a denied permission.
 
 Check the live code and recent commits first. Items can be done separately; item 3 starts with
 an investigation.
+
+## Finding 4 (telemetry 001 import, 2026-10-06)
+
+Every usage point appears exactly three times in the export: 6,336 points, 2,112 distinct by
+`(timestamp, hostname, agent_id)`. The telemetry import collapses the copies, but harnez writes or
+exports each point three times. Find where (history writer, collector, or export).
