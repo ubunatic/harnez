@@ -336,6 +336,7 @@ bundled_skills:
 
 skills:
   - name: docup
+    license: AGPL-3.0-or-later
     description: "Review and update bounded repository documentation by category (testing, architecture)"
     file: docs/commands/Docup.md
     resources:
@@ -345,107 +346,133 @@ skills:
         target: references/DocupArch.md
 
   - name: harnez-advisor
+    license: AGPL-3.0-or-later
     description: "Reuse compatible advisor sessions across supported agent tools using prose requests"
     file: docs/commands/HarnezAdvisor.md
 
   - name: harnez-status
+    license: AGPL-3.0-or-later
     description: "Briefly self-check Harnez CLI, model tiers, sprint workflow, and documentation navigation"
     file: docs/commands/HarnezStatus.md
 
   - name: harnez-selftest
+    license: AGPL-3.0-or-later
     description: "Test and verify native agent background task execution flow and self-test command progression"
     file: docs/commands/HarnezSelftest.md
 
   - name: harnez-init
+    license: AGPL-3.0-or-later
     description: "Re-run harnez init in an initialized repository, assess the diff for regressions, fix local fallout, and commit changes"
     file: docs/commands/HarnezInit.md
 
   - name: harnez-handoff
+    license: AGPL-3.0-or-later
     description: "Write ready-to-paste handoff prompts for a local or cloud agent, optionally exploring for valuable work first"
     file: docs/commands/HarnezHandoff.md
 
   - name: evergreen
+    license: AGPL-3.0-or-later
     description: "Create/update evergreen docs and issue files for the current session"
     file: docs/commands/evergreen.md
 
   - name: wrap
+    license: AGPL-3.0-or-later
     description: "Close the current work session, preserve its state, and prepare a concise handoff"
     file: docs/commands/Wrap.md
 
   - name: peer-assistant
+    license: AGPL-3.0-or-later
     description: "Coordinate peer requests and ticket work across agent sessions"
     file: docs/commands/PeerAssistant.md
 
   - name: issue
+    license: AGPL-3.0-or-later
     description: "File a new repository issue or ticket when asked; do not trigger merely because work references an existing issue"
     file: docs/commands/issue.md
 
   - name: review
+    license: AGPL-3.0-or-later
     description: "Review current changes, verify issue completion if specified, check code quality, apply small fixes directly, and file follow-up issues for larger findings"
     file: docs/commands/review.md
 
   - name: story
+    license: AGPL-3.0-or-later
     description: "Write a candid engineering retrospective and case study in docs/studies/"
     file: docs/commands/story.md
 
   - name: sprint
+    license: AGPL-3.0-or-later
     description: "Orchestrate a 5-phase agentic sprint loop (Sequential Advisor -> Reusable Dev -> Review -> Hygiene -> Retro)"
     file: docs/commands/sprint.md
 
   - name: lean-sprint
+    license: AGPL-3.0-or-later
     description: "Execute a lean fresh-handoff sprint (Goal Handoff -> Autonomous Dev -> Inline Review -> Hygiene)"
     file: docs/commands/lean-sprint.md
 
   - name: next
+    license: AGPL-3.0-or-later
     description: "Continue the most recent workflow on its next actionable item"
     file: docs/commands/Next.md
 
   - name: respect
+    license: AGPL-3.0-or-later
     description: "Move hardcoded values that belong in a repository's embedded YAML spec into the spec"
     file: docs/commands/Respect.md
 
   - name: sprinter
+    license: AGPL-3.0-or-later
     description: "Delegate a full 5-phase sprint to a user-selected-model subagent that reads and executes the sprint skill"
     file: docs/commands/Sprinter.md
 
   - name: lean-sprinter
+    license: AGPL-3.0-or-later
     description: "Delegate a lean fresh-handoff sprint to a user-selected-model subagent that reads and executes the lean-sprint skill"
     file: docs/commands/LeanSprinter.md
 
   - name: reverse-sprint
+    license: AGPL-3.0-or-later
     description: "Execute a reverse sprint (Low-Cost Dev Lead -> Frequent Auto-Compact -> Milestone Reviews -> Bounded Advisor Escalation)"
     file: docs/commands/reverse-sprint.md
 
   - name: reverse-sprinter
+    license: AGPL-3.0-or-later
     description: "Delegate a reverse sprint to a low-cost developer agent that reads and executes the reverse-sprint skill"
     file: docs/commands/ReverseSprinter.md
 
   - name: mode
+    license: AGPL-3.0-or-later
     description: "Switch ConciseMode terseness level (lite, std, ultra, off) and sync AGENTS.md"
     file: docs/commands/mode.md
 
   - name: website
+    license: AGPL-3.0-or-later
     description: "Build or update a project website — reads docs/Website.md rules (hosting, branding, static/no-CDN, subpage links) before generating any content"
     file: docs/commands/website.md
 
   - name: roadmap
+    license: AGPL-3.0-or-later
     description: "Product-manager-style roadmap creation/update from the open issue backlog (check issues -> check existing roadmap -> synthesize/reconcile by product value axis)"
     file: docs/commands/roadmap.md
 
   - name: publish
+    license: AGPL-3.0-or-later
     description: "Multi-project release & publish pipeline: detects project shape (CLI, artifact app, website, hybrid), executes pre-flight checks, verifies media, requires explicit confirmation before external push, syncs website, and asserts live endpoint liveness"
     file: docs/commands/publish.md
 
   - name: lmcoder
+    license: AGPL-3.0-or-later
     description: "Local LLM server lifecycle management, fast interactive prompt streaming with session continuity, and sandboxed coding agent execution"
     file: docs/commands/lmcoder.md
 
   - name: release
+    license: AGPL-3.0-or-later
     description: "Lean CLI release: commit pending code, push, run harnez release, fix issues or ask on login"
     file: docs/commands/release.md
 
 
   - name: tool-feedback-protocol
+    license: AGPL-3.0-or-later
     description: "Use after an internal tool call (Read, Edit, Bash, etc.) in a harnez-tracked project (issues/ present) failed or didn't produce the expected outcome — record it via harnez rate before moving to the next step. Also use if a harnez tip nudges you after a long quiet stretch and nothing has failed — confirm with harnez rate --ok. Skip both for routine successful calls."
     requires: [telemetry]
     rate_feedback: true

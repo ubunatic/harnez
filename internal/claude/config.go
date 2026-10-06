@@ -167,6 +167,7 @@ type DistillAutopipe struct {
 type Command struct {
 	Name        string          `yaml:"name"`
 	Description string          `yaml:"description"`
+	License     string          `yaml:"license"`
 	Content     string          `yaml:"content"`
 	File        string          `yaml:"file"` // path relative to config dir; overrides content if set
 	Resources   []SkillResource `yaml:"resources,omitempty"`
