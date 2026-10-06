@@ -107,3 +107,22 @@ Pre-Work / Required Refinements for M1–M3:
   days), and the user's excluded repos.
 - "this work" means the host session's current work: the prompt must carry its context
   (files, commits, decisions) because the receiving agent has no memory of the session.
+
+### M1/M2 delivered; M3 cancelled — redirect (user, 2026-10-06)
+
+M1 (spec, schema, loader) `bb3caf39` and M2 (skill + registration) `0727a302` delivered. The M2
+design ships `spec/handoff.yaml` as a runtime resource the skill must read. The user rejected
+that: **the spec drives what is in the skill document; the skill must not require agents to look
+anything up in a spec.** M3 (dry run) was stopped before it started.
+
+M4 Pre-Work / Required Refinements (do before re-running the M3 dry run):
+
+- Generate the agent/profile facts section of the installed SKILL.md from `spec/handoff.yaml`
+  at build or apply time (template or generated block), so the installed skill is self-contained.
+  Reuse an existing harnez mechanism for spec-rendered docs if one exists; look before adding one.
+- Remove the runtime resource (`config.yaml` `resources:` entry for `handoff.yaml`) and the
+  `harnez read` fallback for agents without a native skill copy.
+- Tests: the rendered skill contains every agent and profile from the spec; a spec change changes
+  the rendered skill (no stale hand-copied facts in `docs/commands/HarnezHandoff.md`); the
+  installed skill dir has no `handoff.yaml`.
+- Then run M3 (dry run of the example invocations) against the installed skill.
