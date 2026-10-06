@@ -17,15 +17,15 @@ path fails or forces editing the variable per run.
 /goal `LMCODER_CACHE_DIR="a,b,c"` uses the first listed directory that is
 available and says which one it picked; when none is, the run falls back to
 the podman cache volume with a notice. A single path keeps working as today.
-Stop and ask if "available" needs more than the rule below.
+Keep it simple: no free-space check in the script.
 
 ## 2. Technical Specification / Findings
-- Proposed "available": the directory exists or `mkdir -p` succeeds, it is
-  writable, and its filesystem has room for the model. An unmounted
+- "Available": the directory exists or `mkdir -p` succeeds, and it is
+  writable. An unmounted
   `/mnt/kdev` leaves a root-owned empty mount point, so `mkdir -p` under it
   fails and the entry is skipped.
-- Open question: whether to require lmcoder's 10 GiB free-space minimum
-  (`internal/llamahost/diskspace.go` in lmcoder) per entry, or let lmcoder fail.
+- Decided: free space is not checked here. lmcoder's own 10 GiB minimum
+  (`internal/llamahost/diskspace.go` in lmcoder) fails the run, by design.
 - Workspace rule: experiment downloads go to `/mnt/kdev/scratch/` when mounted
   (`~/projects/AGENTS.md`, "Scratch disk for experiments").
 
