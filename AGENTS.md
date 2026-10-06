@@ -56,6 +56,8 @@ A category dir forms once 3+ docs share a theme.
   silently overwritten by the next `harnez init`. After editing a source, sync the root copy
   (`harnez init -d .`, then `git checkout --` any unrelated file it rewrites) and commit both;
   `TestRootDocCopiesMatchSources` fails when a root copy diverges from its source.
+  A root copy may come from a `*.lite.md` source (first line `<!-- harnez:variant=lite -->`);
+  edit both the full and the lite source.
 
 ## Issue Tracking & Priority Standards
 
