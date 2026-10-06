@@ -1,6 +1,6 @@
 # Codex Hooks — Reference Schema
 
-Reference material for Codex lifecycle hooks. Source: [OpenAI Docs — Hooks](https://developers.openai.com/docs/hooks).
+Reference material for Codex lifecycle hooks. Source: [OpenAI Docs — Hooks](https://learn.chatgpt.com/docs/hooks).
 
 ## PreToolUse rewrite
 
@@ -58,6 +58,8 @@ Codex also accepts the legacy blocking form:
 
 - Bash and `apply_patch` inputs use `tool_input.command`.
 - `updatedInput` is only valid with `permissionDecision: "allow"`.
+- A no-op exits with code 0 and no stdout. Do not return a bare
+  `permissionDecision: "allow"` without `updatedInput`.
 - Plain text on stdout is ignored; hook JSON must be written to stdout.
 - `permissionDecision: "ask"`, `decision: "approve"`, `continue: false`,
   `stopReason`, and `suppressOutput` are currently unsupported for
@@ -65,11 +67,19 @@ Codex also accepts the legacy blocking form:
 
 ## Harnez implementation note
 
-`harnez codex-hook` must emit the wrapped `hookSpecificOutput` form above. Its
+For a rewrite, `harnez codex-hook` emits the wrapped `hookSpecificOutput` form above. Its
 rewritten command is routed through `harnez exec`; the hook itself does not
 execute the command or write telemetry.
 
-**Ownership.** `~/.codex/hooks.json` is shared with the user. A matcher group
+For an empty or already-routed command (`⚙ ...` or `harnez exec ...`), it returns
+success with no output. Returning a bare allow caused the transcript warning
+`PreToolUse hook returned unsupported permissionDecision:allow` in the owner's
+Codex session (installed CLI 0.160.1). Commit `f5d895ed` corrected this branch.
+Regression tests cover no-op output and real rewrites; installed-binary payload
+probes confirmed zero-byte no-ops and allow-plus-updatedInput rewrites. These probes
+verify the handler contract, not a separate end-to-end Codex session.
+
+**Ownership.** `~/.codex/config.toml` is shared with the user. A matcher group
 is harnez-owned only when every handler command is `harnez` or starts with
 `harnez `. `codex.Apply` keeps user groups per event and replaces only the
 harnez groups; `codex.Remove` deletes only harnez groups (and the legacy

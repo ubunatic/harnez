@@ -145,14 +145,20 @@ source, so a source starting with `---` installs with two blocks and agents igno
 (issue 728). Control invocation with `config.yaml` `debloat:` (`user-invocable-only`), not
 source frontmatter.
 
-The `harnez-advisor` skill is a prose-first coordination contract. It delegates
-resume, continue, or fork operations to each harness's native interface and
-falls back to a fresh session when compatibility cannot be established. It
-does not provide portable flags or turn Harnez telemetry IDs into provider
-session IDs; the orchestrator decides when a stale but relevant advisor should
-compact before reuse. A future host CLI can add machine-readable lifecycle
-operations such as `harnez advisor status`, `harnez advisor compact <session>`,
-and `harnez advisor reuse --stale-after ...`.
+The `harnez-advisor` skill applies only when the user explicitly asks to reuse or
+resume an earlier advisor session (issue 736). Ordinary "ask for help", "get a
+review", "ask an agent", and second-opinion requests dispatch a fresh helper with
+a short scoped prompt through the active subagent method. Lean-sprint helper calls
+use that same path; they do not require the advisor skill or a full sprint workflow.
+
+Use `reviewer` for a diff or proposed change and `advisor` for a question or read-only
+investigation. A user-selected model goes through `harnez agent start --role <role>
+--model <requested-model>` with a tracked session-background job and `HTO=0`.
+For explicit reuse, continue the known compatible session through
+`harnez agent resume --name <name>` or the native tool's continuation mechanism.
+Compaction is optional when context pressure warrants it. Harnez telemetry IDs are
+not provider resume IDs. Keep the discovery description specific to reuse; ordinary
+help keywords can attract accidental skill selection even inside an exclusion.
 
 ### Source reuse
 
