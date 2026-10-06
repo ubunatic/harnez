@@ -1,0 +1,53 @@
+{
+  "format_version": 1,
+  "generated_at": "2026-10-06T12:00:00Z",
+  "telemetry": {
+    "generated_at": "2026-10-06T12:00:00Z",
+    "tool_calls": [
+      {
+        "created_at": "2026-10-01T10:05:00Z",
+        "session_id": "sess-1",
+        "agent_id": "claude",
+        "tool_name": "Bash",
+        "call_type": "shell",
+        "activity_category": "other",
+        "exit_code": 1,
+        "duration_ms": 340,
+        "raw_bytes": 200,
+        "distilled_bytes": 40
+      },
+      {
+        "created_at": "2026-10-01T10:00:00Z",
+        "session_id": "sess-1",
+        "ticket_id": "720",
+        "project_name": "fixture",
+        "project_dir": "fixture",
+        "agent_id": "claude",
+        "tool_name": "Read",
+        "call_type": "internal",
+        "score": 4,
+        "activity_category": "inspection",
+        "duration_ms": 12,
+        "raw_bytes": 100
+      }
+    ]
+  },
+  "usage": {
+    "generated_at": "2026-10-06T12:00:00Z",
+    "points": [
+      {
+        "timestamp": "2026-10-01T12:00:00Z",
+        "hostname": "host-1",
+        "agent_id": "claude",
+        "name": "Claude Code",
+        "account": "f***e@example.com",
+        "plan_tier": "max",
+        "installed": true,
+        "authenticated": true,
+        "total_tokens": 500,
+        "input_tokens": 300,
+        "output_tokens": 200
+      }
+    ]
+  }
+}

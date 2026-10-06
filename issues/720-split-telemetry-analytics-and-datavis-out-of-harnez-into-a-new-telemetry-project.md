@@ -81,6 +81,9 @@ What remains in this ticket (harnez side only):
 
 - M1: add a version field to the export (`internal/telemetry/export.go`), document it in
   `docs/Telemetry.md`, golden test on a fixture export. telemetry 001 depends on it.
+  **Done (2026-10-06):** top-level `format_version: 1` in the `usage export` envelope
+  (`cmd/harnez/usageexport.go`, code constant), format and bump rule in `docs/Telemetry.md` §4.1,
+  golden test `TestBuildUsageExport_Golden`.
 - M2 (after telemetry 002, 003 and 005 are done): remove the default `harnez stats` report,
   compaction economics reporting and `usage export --classify`; plain `harnez stats` points to
   `telemetry report`; update docs and skills that call moved commands; remove ubunatic.com

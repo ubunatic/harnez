@@ -30,13 +30,20 @@ import (
 	"ubunatic.com/harnez/internal/usage"
 )
 
+// usageExportFormatVersion is the format_version written to every export
+// file (issue 720). Bump it with any breaking change to the envelope,
+// telemetry.ExportToolCall or usage.ExportPoint; see docs/Telemetry.md
+// "Usage Export Format" for what counts as breaking.
+const usageExportFormatVersion = 1
+
 // usageExportEnvelope is the top-level JSON shape written to --out: both
 // exporters stay independently testable (see their own export_test.go
 // files); this envelope is only assembled here at the CLI layer.
 type usageExportEnvelope struct {
-	GeneratedAt time.Time         `json:"generated_at"`
-	Telemetry   telemetry.Export  `json:"telemetry"`
-	Usage       usage.UsageExport `json:"usage"`
+	FormatVersion int               `json:"format_version"`
+	GeneratedAt   time.Time         `json:"generated_at"`
+	Telemetry     telemetry.Export  `json:"telemetry"`
+	Usage         usage.UsageExport `json:"usage"`
 }
 
 func newUsageExportCmd() *cobra.Command {
@@ -125,19 +132,26 @@ func runUsageExportLevel(out, dbPath, historyDir string, level privacy.Level) er
 
 // runUsageExportFull supports both privacy levels and the --classify option.
 func runUsageExportFull(out, dbPath, historyDir string, level privacy.Level, classify bool) error {
-	now := time.Now()
-	ctx := context.Background()
+	envelope, err := buildUsageExport(context.Background(), dbPath, historyDir, level, classify, time.Now())
+	if err != nil {
+		return err
+	}
+	return writeUsageExport(out, envelope)
+}
 
+// buildUsageExport assembles the envelope at a given now, so tests can pin
+// its exact output (see the golden test).
+func buildUsageExport(ctx context.Context, dbPath, historyDir string, level privacy.Level, classify bool, now time.Time) (usageExportEnvelope, error) {
 	if dbPath == "" {
 		p, err := telemetry.DefaultDBPath()
 		if err != nil {
-			return fmt.Errorf("resolve telemetry db path: %w", err)
+			return usageExportEnvelope{}, fmt.Errorf("resolve telemetry db path: %w", err)
 		}
 		dbPath = p
 	}
 	db, err := telemetry.Open(dbPath)
 	if err != nil {
-		return fmt.Errorf("open telemetry db: %w", err)
+		return usageExportEnvelope{}, fmt.Errorf("open telemetry db: %w", err)
 	}
 	defer db.Close()
 
@@ -153,7 +167,7 @@ func runUsageExportFull(out, dbPath, historyDir string, level privacy.Level, cla
 
 	telExport, err := telemetry.ExportAllWithClassifier(ctx, db, now, level, sanitizer, classifier)
 	if err != nil {
-		return fmt.Errorf("export telemetry: %w", err)
+		return usageExportEnvelope{}, fmt.Errorf("export telemetry: %w", err)
 	}
 
 	if historyDir == "" {
@@ -161,14 +175,19 @@ func runUsageExportFull(out, dbPath, historyDir string, level privacy.Level, cla
 	}
 	usageExport, err := usage.ExportHistoryLevel(historyDir, now, level)
 	if err != nil {
-		return fmt.Errorf("export usage history: %w", err)
+		return usageExportEnvelope{}, fmt.Errorf("export usage history: %w", err)
 	}
 
-	envelope := usageExportEnvelope{
-		GeneratedAt: now,
-		Telemetry:   telExport,
-		Usage:       usageExport,
-	}
+	return usageExportEnvelope{
+		FormatVersion: usageExportFormatVersion,
+		GeneratedAt:   now,
+		Telemetry:     telExport,
+		Usage:         usageExport,
+	}, nil
+}
+
+// writeUsageExport writes envelope as indented JSON to out.
+func writeUsageExport(out string, envelope usageExportEnvelope) error {
 	data, err := json.MarshalIndent(envelope, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal export envelope: %w", err)

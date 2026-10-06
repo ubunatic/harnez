@@ -1,0 +1,1 @@
+{"hostname":"fixture-host.example","timestamp":"2026-10-01T12:00:00Z","agents":[{"agent_id":"claude","name":"Claude Code","installed":true,"authenticated":true,"account":"fixture@example.com","plan_tier":"max","tokens":{"input_tokens":300,"output_tokens":200,"cache_read_tokens":0,"cache_write_tokens":0,"total_tokens":500,"cost_usd":0}}]}

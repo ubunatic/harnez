@@ -156,6 +156,42 @@ Using Unicode Braille patterns (`\u2800`–`\u28FF`):
 | `harnez dochistory --tracks` | Repo (All Tracks) | Multi-track evolution card across Code, Tests, Docs, Skills, and Issues (`repo-history`). |
 | `harnez repo-history --diff` | Repo (Diff Breakdown) | Expanded multi-track view separating additions ($+$ in green) from removals ($-$ in red). |
 | `harnez log` | Invocations | Chronological record of all CLI tool executions and exit codes. |
+| `harnez usage export --out=<file>` | Export | Sanitized JSON of tool calls and usage points for external tools; format in §4.1. |
+
+### 4.1 Usage Export Format (issue 720)
+
+`harnez usage export` is the only interface for tools outside harnez that read its telemetry
+(e.g. `~/projects/telemetry`). The file it writes has this top-level shape:
+
+```json
+{
+  "format_version": 1,
+  "generated_at": "2026-10-06T12:00:00Z",
+  "telemetry": { "generated_at": "...", "tool_calls": [ ... ] },
+  "usage": { "generated_at": "...", "points": [ ... ] }
+}
+```
+
+`format_version` is written once per file and covers the whole file: the envelope,
+each `telemetry.tool_calls` row (`telemetry.ExportToolCall`) and each `usage.points` row
+(`usage.ExportPoint`). It is the constant `usageExportFormatVersion` in
+`cmd/harnez/usageexport.go`, not a spec value, because it describes the Go structs and must change
+in the same commit as they do (like `schemaVersion` for the database). Files written before
+version 1 have no `format_version`.
+
+Bump the version when a reader built for the old version would misread the new file:
+
+- removing or renaming a field;
+- changing a field's type or meaning (unit, enum values, what it counts);
+- making an optional field required, or moving data to another place in the file.
+
+Adding a new optional field does not need a bump: readers must ignore fields they do not know
+(Go's `encoding/json` does by default). Privacy levels (`--privacy`) decide which optional fields
+are present (e.g. `note`); they do not change the format.
+
+`TestBuildUsageExport_Golden` (`cmd/harnez/usageexport_test.go`) pins the format against
+`cmd/harnez/testdata/usage-export.golden.json`. When it fails, decide on a bump first, then
+rewrite the file with `go test -run TestBuildUsageExport_Golden ./cmd/harnez -update`.
 
 ---
 

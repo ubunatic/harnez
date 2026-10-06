@@ -1,16 +1,22 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"ubunatic.com/harnez/internal/privacy"
 	"ubunatic.com/harnez/internal/telemetry"
 	"ubunatic.com/harnez/internal/usage"
 )
+
+var updateGolden = flag.Bool("update", false, "rewrite testdata golden files")
 
 // TestRunUsageExport_EndToEndScrubsRawPII builds a temp "~/.harnez"-style
 // fixture (a telemetry sqlite db plus a usage-history jsonl file), each
@@ -86,6 +92,9 @@ func TestRunUsageExport_EndToEndScrubsRawPII(t *testing.T) {
 	if err := json.Unmarshal(data, &envelope); err != nil {
 		t.Fatalf("unmarshal export output: %v", err)
 	}
+	if envelope["format_version"] != float64(usageExportFormatVersion) {
+		t.Errorf("expected format_version %d, got %v", usageExportFormatVersion, envelope["format_version"])
+	}
 	tel, ok := envelope["telemetry"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected telemetry key in export output, got: %s", out)
@@ -135,5 +144,90 @@ func TestRunUsageExport_ToleratesMissingFixtureDirs(t *testing.T) {
 	var envelope map[string]any
 	if err := json.Unmarshal(data, &envelope); err != nil {
 		t.Fatalf("unmarshal export output: %v", err)
+	}
+	// An export without rows must still carry the version (issue 720).
+	if envelope["format_version"] != float64(usageExportFormatVersion) {
+		t.Errorf("expected format_version %d in empty export, got %v", usageExportFormatVersion, envelope["format_version"])
+	}
+}
+
+// TestBuildUsageExport_Golden pins the exported file's shape, including
+// format_version, against testdata/usage-export.golden.json (issue 720).
+// A diff here is a format change: decide whether it needs a version bump
+// (docs/Telemetry.md "Usage Export Format"), then run `go test -run
+// TestBuildUsageExport_Golden ./cmd/harnez -update` to rewrite the file.
+func TestBuildUsageExport_Golden(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "telemetry.sqlite")
+	outPath := filepath.Join(dir, "export.json")
+	score, exitCode := 4, 1
+	distilled := int64(40)
+
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open telemetry db: %v", err)
+	}
+	for _, tc := range []telemetry.ToolCall{
+		{
+			CreatedAt:   time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC),
+			SessionID:   "sess-1",
+			TicketID:    "720",
+			ProjectName: "fixture",
+			WorkingDir:  "/home/fixture/projects/fixture",
+			AgentID:     "claude",
+			ToolName:    "Read",
+			CallType:    "internal",
+			Score:       &score,
+			Note:        "dropped at the public level",
+			DurationMs:  12,
+			RawBytes:    100,
+		},
+		{
+			CreatedAt:      time.Date(2026, 10, 1, 10, 5, 0, 0, time.UTC),
+			SessionID:      "sess-1",
+			AgentID:        "claude",
+			ToolName:       "Bash",
+			CallType:       "shell",
+			ExitCode:       &exitCode,
+			DurationMs:     340,
+			RawBytes:       200,
+			DistilledBytes: &distilled,
+		},
+	} {
+		if err := db.Insert(tc); err != nil {
+			db.Close()
+			t.Fatalf("Insert: %v", err)
+		}
+	}
+	db.Close()
+
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	envelope, err := buildUsageExport(context.Background(), dbPath, filepath.Join("testdata", "usage-export", "history"), privacy.LevelPublic, false, now)
+	if err != nil {
+		t.Fatalf("buildUsageExport: %v", err)
+	}
+	if err := writeUsageExport(outPath, envelope); err != nil {
+		t.Fatalf("writeUsageExport: %v", err)
+	}
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read export output: %v", err)
+	}
+
+	golden := filepath.Join("testdata", "usage-export.golden.json")
+	if *updateGolden {
+		if err := os.WriteFile(golden, got, 0o644); err != nil {
+			t.Fatalf("write golden: %v", err)
+		}
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("read golden (run with -update to create it): %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("export differs from %s (run with -update after deciding on a version bump)\ngot:\n%s", golden, got)
+	}
+	if !bytes.HasPrefix(got, []byte("{\n  \"format_version\": 1,")) {
+		t.Errorf("format_version must be the first top-level field, got:\n%s", got)
 	}
 }
