@@ -71,6 +71,13 @@ func DefaultDBPath() (string, error) {
 	}
 	if _, err := os.Stat(path); err == nil {
 		if _, err := os.Stat(legacy); err == nil {
+			// The new database may already exist (another process created it
+			// first); copy the legacy rows before renaming, or they are only
+			// kept in the backup (issue 735). On failure keep the legacy file
+			// so `harnez stats merge-legacy` can retry.
+			if err := mergeLegacyToolCalls(path, legacy); err != nil {
+				return path, nil
+			}
 			backup := legacy + ".bak-" + time.Now().UTC().Format("20060102T150405.000000000Z")
 			if err := os.Rename(legacy, backup); err != nil {
 				return "", fmt.Errorf("telemetry: preserve legacy database as %s: %w", backup, err)
@@ -78,6 +85,16 @@ func DefaultDBPath() (string, error) {
 		}
 	}
 	return path, nil
+}
+
+func mergeLegacyToolCalls(path, legacy string) error {
+	db, err := Open(path)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	_, err = db.MergeLegacyToolCalls(context.Background(), []string{legacy})
+	return err
 }
 
 // openRetries and openRetryDelay bound the cold-start retry loop in Open.

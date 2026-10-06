@@ -256,6 +256,20 @@ statements:
     SELECT id, created_at, session_id, agent_id, command, args, project_name, working_dir, ticket_id, exit_code, duration_ms, harnez_version FROM cli_invocations{{where}} ORDER BY created_at DESC, id DESC
 # Count CLI invocations grouped by command.
   cli_invocation_counts: 'SELECT command, COUNT(*) FROM cli_invocations{{where}} GROUP BY command'
+# Issue 735: recover tool calls kept only in a legacy database. {{legacy}} is
+# the generated schema alias of one attached file (legacy_0, ...). {{columns}}
+# is the column list both tables share; a row counts as present when its
+# (created_at, session_id, agent_id, tool_name, call_type) already exists;
+# NOT EXISTS uses idx_tool_calls_created_at (a row-value NOT IN does not).
+  legacy_attach: 'ATTACH DATABASE ? AS {{legacy}}'
+  legacy_detach: 'DETACH DATABASE {{legacy}}'
+  legacy_tool_call_columns: "SELECT name FROM pragma_table_info('tool_calls', '{{legacy}}') WHERE name <> 'id' AND name IN (SELECT name FROM pragma_table_info('tool_calls', 'main'))"
+  legacy_tool_calls_missing: |
+    SELECT COUNT(*) FROM {{legacy}}.tool_calls l WHERE NOT EXISTS (SELECT 1 FROM main.tool_calls m WHERE m.created_at = l.created_at AND m.session_id = l.session_id AND m.agent_id = l.agent_id AND m.tool_name = l.tool_name AND m.call_type = l.call_type)
+  legacy_tool_calls_merge: |
+    INSERT INTO main.tool_calls ({{columns}}) SELECT {{columns}} FROM {{legacy}}.tool_calls l WHERE NOT EXISTS (SELECT 1 FROM main.tool_calls m WHERE m.created_at = l.created_at AND m.session_id = l.session_id AND m.agent_id = l.agent_id AND m.tool_name = l.tool_name AND m.call_type = l.call_type) ORDER BY l.created_at, l.id
+  tool_call_count: 'SELECT COUNT(*) FROM tool_calls'
+  backup_into: 'VACUUM INTO ?'
   prune_cli_invocations: 'DELETE FROM cli_invocations WHERE id <= (SELECT MAX(id) - ? FROM cli_invocations)'
 predicates:
   tool_name: {sql: 'tool_name = ?'}

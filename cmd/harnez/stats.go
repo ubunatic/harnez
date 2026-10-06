@@ -110,6 +110,7 @@ scripting (e.g. average score as a float, not a "2 decimal places" string).`,
 	cmd.Flags().BoolVar(&agentsFlag, "agents", false, "report recent agent sessions, tokens, quota drain, and per-model totals")
 	cmd.Flags().BoolVar(&agentsAll, "all", false, "with --agents, show every session instead of the newest 20")
 	cmd.Flags().IntVar(&daysFlag, "days", 7, "with --agents, include sessions active in the last N days")
+	cmd.AddCommand(newStatsMergeLegacyCmd())
 	return cmd
 }
 

@@ -123,6 +123,20 @@ func (s *Store) WriteUsageSummary(ctx context.Context, record UsageSummaryRecord
 	return err
 }
 
+// LatestUsageSummaryAt returns the newest snapshot time recorded for
+// hostname; ok is false when there is none.
+func (s *Store) LatestUsageSummaryAt(ctx context.Context, hostname string) (at time.Time, ok bool, err error) {
+	var observed sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT max(observed_at) FROM usage_summary_observations WHERE hostname=?`, hostname).Scan(&observed); err != nil {
+		return time.Time{}, false, err
+	}
+	if !observed.Valid {
+		return time.Time{}, false, nil
+	}
+	at, err = time.Parse(time.RFC3339Nano, observed.String)
+	return at, err == nil, err
+}
+
 // DedupeUsageSummaries removes snapshot copies that older importers stored
 // under source-specific record keys (issue 735: the same legacy history line
 // imported from two directories and the archive became three rows). It keeps

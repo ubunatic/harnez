@@ -58,3 +58,28 @@ Fix: importers use the canonical key `hostname:observed_at`; a one-time cleanup
 (hostname, observed_at). Live DB 2026-10-06: 2,154 rows before, 1,436 deleted, 718 after; a real
 export then had 2,112 points, 2,112 distinct by (timestamp, hostname, agent_id). An export with no
 usage points now writes `"points": []` instead of `null`.
+
+### M2 — short history (fixed where recoverable)
+
+Tool calls: not a retention limit. The XDG move (`telemetry.DefaultDBPath`) renamed
+`~/.harnez/tool_catalog.sqlite` to `.bak-<time>` without copying its rows whenever the new
+`telemetry.sqlite` already existed. The move now merges legacy `tool_calls` first, and
+`harnez stats merge-legacy` recovers older backups in one transaction after a `VACUUM INTO` backup.
+Live run 2026-10-06: 83,988 rows before; backup
+`~/.local/share/harnez/telemetry.sqlite.before-merge-20261006T183921Z`; 55,615 added from
+`bak-20260927T095508`, 0 from the six other timestamped backups; 139,603 after. No duplicate
+groups were created (the three same-second pairs left already exist inside the legacy file).
+A real export now has tool calls from 2026-08-31T09:34Z. `bak-issue331-20260914131025` is excluded
+from the default set: its 93 extra rows are the junk signatures issue 331 deleted on purpose.
+Not merged from the backups: `cli_invocations`, `compaction_events`, `session_boundaries`,
+`token_snapshots`, `compaction_economics` and caches.
+
+The larger history broke the export (`too many SQL variables` in the note-category cache lookup);
+the lookup now runs in batches of 500.
+
+Usage points: commit c2a6d7c7 dropped history recording from `usage --watch`, so nothing but
+`harnez usage history record` wrote snapshots (t14 stopped 2026-09-03, x600 2026-09-16, UM760
+2026-08-23). `harnez usage` and `usage --watch` now record one snapshot per host every
+`history_snapshot_interval` (15m, `spec/usage.yaml`); verified live (t14 snapshot at
+2026-10-06T18:40Z, a second run within 15m added none). Gap: snapshots between those dates and
+2026-10-06 were never stored and cannot be recovered.

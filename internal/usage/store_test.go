@@ -317,3 +317,29 @@ func TestCompactAllUsageDisplaysCodexFetchErrorWithoutWindows(t *testing.T) {
 		t.Fatalf("compact error row = %q", got)
 	}
 }
+
+// Issue 735: live collection records a usage-history snapshot again, at most
+// once per history_snapshot_interval (15m) per host.
+func TestStoreCompactSummaryRecordsThrottledHistorySnapshot(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "usage.sqlite")
+	home := t.TempDir()
+	start := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	for _, at := range []time.Time{start, start.Add(time.Minute), start.Add(16 * time.Minute)} {
+		summary := UsageSummary{Timestamp: at, Agents: []AgentUsage{{AgentID: "claude", Installed: true}}}
+		if _, err := StoreCompactSummaryAt(context.Background(), home, summary, dbPath); err != nil {
+			t.Fatal(err)
+		}
+	}
+	store, err := usagestore.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	got, err := store.UsageSummaries(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || !got[0].ObservedAt.Equal(start) || !got[1].ObservedAt.Equal(start.Add(16*time.Minute)) {
+		t.Fatalf("snapshots = %+v, want at start and start+16m", got)
+	}
+}

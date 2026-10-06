@@ -20,6 +20,7 @@ type usageSpec struct {
 	CollectorTimeout      string             `yaml:"collector_timeout"`
 	PassiveDedupeInterval string             `yaml:"passive_dedupe_interval"`
 	StatuslineBusyTimeout string             `yaml:"statusline_busy_timeout"`
+	HistorySnapshotEvery  string             `yaml:"history_snapshot_interval"`
 	ViewModes             usageViewModesSpec `yaml:"view_modes"`
 }
 
@@ -52,6 +53,7 @@ var (
 	usageSpecBusyTimeout  time.Duration
 	usageSpecErr          error
 	usageSpecLoadingLabel string
+	usageSpecHistoryEvery time.Duration
 	usageSpecViewModes    usageViewModesSpec
 )
 
@@ -63,6 +65,13 @@ func agyMeterMaxAge() (time.Duration, error) {
 func collectorPolicy() (time.Duration, time.Duration, error) {
 	_, cadence, timeout, _, _, err := usageDurations()
 	return cadence, timeout, err
+}
+
+// historySnapshotInterval is the minimum gap between two usage-history
+// snapshots that live collection records for one host (issue 735).
+func historySnapshotInterval() (time.Duration, error) {
+	_, _, _, _, _, err := usageDurations()
+	return usageSpecHistoryEvery, err
 }
 
 // PassivePolicy returns the duplicate suppression interval and SQLite lock
@@ -83,6 +92,7 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 		var spec usageSpec
 		if err := yaml.Unmarshal(data, &spec); err == nil {
 			usageSpecLoadingLabel = spec.WatchLoadingLabel
+			usageSpecHistoryEvery, _ = time.ParseDuration(spec.HistorySnapshotEvery)
 			usageSpecViewModes = spec.ViewModes
 		}
 	})
@@ -117,6 +127,9 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	dedupe, err := time.ParseDuration(spec.PassiveDedupeInterval)
 	if err != nil || dedupe <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: passive_dedupe_interval must be a positive duration", usageSpecPath)
+	}
+	if every, err := time.ParseDuration(spec.HistorySnapshotEvery); err != nil || every <= 0 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: history_snapshot_interval must be a positive duration", usageSpecPath)
 	}
 	busy, err := time.ParseDuration(spec.StatuslineBusyTimeout)
 	if err != nil || busy <= 0 || busy > time.Second {

@@ -259,6 +259,21 @@ to a timestamped `.bak-*` file so the old database remains recoverable. The
 zero-byte `$XDG_DATA_HOME/harnez/telemetry.db` decoy is removed on telemetry
 path resolution; a non-empty file is left intact and reported by `--where`.
 
+Before issue 735, the move to the XDG path only copied the legacy database when the new one did
+not exist yet; otherwise its rows stayed in the `.bak-*` file. The move now merges legacy
+`tool_calls` first, and `harnez stats merge-legacy [file...]` (default:
+`~/.harnez/tool_catalog.sqlite.bak-<time>`) recovers rows from older backups in one transaction. It
+saves a consistent copy of the live database (`telemetry.sqlite.before-merge-<time>`, via
+`VACUUM INTO`) before writing, skips rows whose `(created_at, session_id, agent_id, tool_name,
+call_type)` exists, and is safe to rerun. Named backups such as `bak-issue331-*` are not in the
+default set: they hold rows a cleanup deleted on purpose. Other tables in those backups
+(`cli_invocations`, compaction and token tables) are not merged.
+
+Usage-history snapshots (`usage.points` in the export) are recorded by live collection
+(`harnez usage`, `usage --watch`) at most every `history_snapshot_interval` (`spec/usage.yaml`)
+per host. From 2026-08-23 to issue 735 nothing recorded them except
+`harnez usage history record`, so stores of that period have a gap that cannot be refilled.
+
 Newest times come from `tool_calls.created_at` for the telemetry database and
 JSONL record timestamps when available. For other state files, the inventory
 uses modification time as the best available indication. Quota history is
