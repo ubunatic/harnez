@@ -145,17 +145,17 @@ re-fetched.
 
 | Invocation | Result per skill text |
 |---|---|
-| `024 cloud Jules` | Profile cloud, agent Jules, consistent. harnez has no ticket 024 (`harnez issues show` fails). **Gap:** the skill does not say what to do then; the expected behaviour is to ask once (the ticket probably lives in another repo, e.g. trafficsim 024, which is Blocked). |
-| `this work to Jules` | Cloud/Jules. The prompt carries this session's goal, commits (bb3caf39, 0727a302, 29253bf2), decisions and what is left. Reachability check: harnez's `github` remote is 13 commits behind local `main`, so the skill says to push or wait first. Result: branch + PR on `github`, fetch with `git -C <repo> fetch github`. |
+| `024 cloud Jules` | Profile cloud, agent Jules, consistent. harnez has no ticket 024 (`harnez issues show` fails), so the skill (M5) asks once: "harnez has no 024; trafficsim 024 is Blocked (depends on 019). Which work should Jules get?" It does not substitute a ticket. |
+| `this work to Jules` | Cloud/Jules. The prompt carries this session's goal, commits (bb3caf39, 0727a302, 29253bf2), decisions and what is left. Reachability check (M5, after `git fetch github`): `github/main` has not diverged (0 commits not in HEAD); local `main` is 17 commits ahead, all by `ubunatic@noreply.codeberg.org` (= `user.email`). The repo is kept: the skill tells the user to run `git -C ~/projects/harnez push github main` and marks the prompt "ready after the push". Result: branch + PR on `github`, fetch with `git -C <repo> fetch github`. |
 | `cloud` | No work given, so the skill asks once for the work (ticket, this work or explore). Writes for the cloud profile with no agent facts. |
 | `Jules` / `Copilot` | Agent implies cloud; no work given, so the skill asks once for the work. |
 | (no arguments) | Asks once for the work and the profile or agent. |
 | `local Jules` | Conflict (Jules is cloud), so the skill asks once. |
-| `explore for Jules` | Scope = the harnez repo (cwd is a git repo). harnez: `github` is 13 behind, 101 commits in 3 days, so it is dropped as stale and busy. Run from `~/projects` instead (workspace scope): has a GitHub remote, current, quiet (≤5 commits in 3 days): trafficsim, goto, spriteview. Dropped: emojig (172 behind), cati/loom/loom-games/lmcoder/ubunatic.com (very active), goha/homeserver (GitHub copy behind). Picks: trafficsim 028 (stat label, single file, `make check-fast` headless Node; low conflict risk) and goto 006 (resolvers, Go, `make check`; low risk, 4 commits/3d). |
+| `explore for Jules` | Scope = the harnez repo (cwd is a git repo). harnez: `github` is only behind by the user's own commits (M5: kept, push first), but it had 101 commits in 3 days, so it is dropped as busy. Run from `~/projects` instead (workspace scope): has a GitHub remote, current, quiet (≤5 commits in 3 days): trafficsim, goto, spriteview. Dropped: emojig (172 behind), cati/loom/loom-games/lmcoder/ubunatic.com (very active), goha/homeserver (GitHub copy behind). Picks: trafficsim 028 (stat label, single file, `make check-fast` headless Node; low conflict risk) and goto 006 (resolvers, Go, `make check`; low risk, 4 commits/3d). |
 | `explore cloud` | Same as `explore for Jules`, but without agent facts. Hosts come from the agents' `Reaches remotes on` lines (github.com only), so the result is the same. |
 | `explore local` / `explore for local Claude` | No reachability filter; the busy check still drops very active repos unless the task stays in a separate folder. Prompts may use absolute paths and `make install`. |
 
-Open points found by the dry run (not fixed; for host review):
+Open points found by the dry run (1 and 2 fixed in M5 `2478d640`; 3 is issues/728):
 
 1. Unknown or blocked ticket: the skill does not say to check that the ticket exists in scope
    and is not Blocked, or to ask once otherwise (see `024 cloud Jules`).
