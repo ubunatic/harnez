@@ -7,6 +7,21 @@ weight: 32
 
 Documents the multi-layered telemetry, usage tracking, and Git artifact evolution architecture in `harnez`.
 
+## Image-view attribution limits
+
+The [2026-10-06 screenshot study](studies/2026-10-06-webpage-screenshot-inspection-telemetry-study.md)
+found identifiable generic image-view events, but could not isolate webpage screenshots,
+capture frequency, image-view latency, or per-image token cost. Issue 737 remains open.
+Tool token columns in that sample repeated session/context snapshots; summing them across
+view events double-counts context. A recorded zero duration can mean missing measurement.
+
+Before making cost claims, establish whether a field is an event increment or a cumulative
+snapshot, check duplicate/replayed events, and separate capture from delivery to the model.
+Keyword matches in logs can be pasted instructions rather than executed captures. Document-card
+benchmarks do not establish the cost of repeated webpage inspection. Any further instrumentation
+should make attribution and unavailable measurements explicit; this research changed no schema
+or screenshot guidance.
+
 ---
 
 ## 1. System Overview & Sourcing Layers

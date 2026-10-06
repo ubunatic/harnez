@@ -35,6 +35,25 @@ Durable contracts now live in [CommandsPipeline](../CommandsPipeline.md),
   selection in a new model session. An installed-handler probe verifies its JSON contract,
   not the complete host runtime. Reports must keep these evidence limits explicit.
 
+## Screenshot research and background visibility follow-up
+
+- Filed issue 737 and dispatched the requested `luna:med` directly through Harnez.
+  Its [research report](../studies/2026-10-06-webpage-screenshot-inspection-telemetry-study.md)
+  was committed as `edbd0936`. The sample contains 705 Codex image-view rows across
+  120 sessions, but cannot establish webpage screenshot costs. Guidance stayed unchanged.
+- Background self-test passed all CLI progression steps. Research and self-test used
+  the same tracked execution mechanism; the difference was explicit active confirmation,
+  collection through exit, and visible execution identity. Research execution session
+  `77560` was eventually collected successfully; self-test session `6413` exited normally.
+- I ended the research dispatch reply before collecting completion and did not surface
+  its host execution ID. I also failed to consult the existing Codex-specific exception
+  in [HarnezAgentArchitecture](../HarnezAgentArchitecture.md) before relying on generic
+  reactive-completion advice. Next time, discover that doc first, report where the worker
+  is visible, and retain the execution handle through completion while remaining responsive.
+- Research findings were verified against the committed report and scoped commit stat.
+  This evergreen pass adds interpretation and lifecycle guidance, not independent database
+  replication or implementation changes. The telemetry attribution gap remains unresolved.
+
 ## Proposed harness improvements — not applied
 
 - Align AGENTS.md's default workflow with the owner's lean-sprint practice; reserve the full
@@ -43,3 +62,7 @@ Durable contracts now live in [CommandsPipeline](../CommandsPipeline.md),
   dispatch directly; load lifecycle guidance only for explicit reuse. Avoid another skill.
 - Before verification in a dirty shared checkout, inventory tracked and untracked task files
   and use a clean scoped source snapshot. Keep this as practical guidance, not a new approval gate.
+- Clarify the existing Harnez background rule's Codex exception: use `write_stdin` to
+  collect shell completion and disclose execution identity; generic reactive-notification
+  wording should not imply that Codex shell jobs behave like native subagents. No AGENTS.md,
+  rule source, or installed harness instructions were changed in this evergreen pass.
