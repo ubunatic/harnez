@@ -1,0 +1,7 @@
+<!-- SPDX-FileCopyrightText: 2026 Uwe Jugel -->
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+          <rect width="28" height="28" rx="6" fill="#1a1917"/>
+          <path d="M7 10l4 4-4 4" stroke="#e05c00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <line x1="14" y1="18" x2="21" y2="18" stroke="#6b6762" stroke-width="2" stroke-linecap="round"/>
+        </svg>
