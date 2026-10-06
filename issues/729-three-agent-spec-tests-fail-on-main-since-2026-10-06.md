@@ -1,6 +1,6 @@
 # 729 — Three agent-spec tests fail on main since 2026-10-06
 
-**Status**: Open
+**Status**: Closed — stale tests now read the default model from spec/agent.yaml (6e976d52); make test-q1 green
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Bug
@@ -29,3 +29,11 @@ them; bisect first.
 
 /goal `make test-q1` is green on main, with each test fixed to match the intended spec (not
 loosened). Stop and report when the intended spec value is unclear and needs a user decision.
+
+## 4. Results
+
+Cause: `6310ccae` (model cost research, 2026-10-05) deliberately changed
+`default_model` to `codex:luna:high` and rewrote the `agy:flash38` guidance;
+the tests still asserted the old values. Fixed in `6e976d52`: the default-model
+tests read `spec/agent.yaml` instead of a literal, and the agy test keeps its
+role checks but drops the flash38 wording check. `make test-q1` is green.
