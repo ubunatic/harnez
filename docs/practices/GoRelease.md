@@ -296,6 +296,9 @@ The publish step attaches everything in `dist/` matching `*.tar.gz`, `*.zip`, `*
 `SHA256SUMS`, or `<project>-*`. A scripted project therefore ends up with the same three
 assets as a Go one: the tarball, `SHA256SUMS`, and `SHA256SUMS.minisig`.
 
+Pitfall: the publish step still fails when `dist/` is missing or holds no matching
+file, so a repo without artifacts cannot be released yet (harnez issue 734).
+
 ## 6. Exit Criteria: Assert Link Liveness, Not Link Presence
 
 A pre-release legal/compliance check (Impressum, AGPL source link, privacy policy) that only
