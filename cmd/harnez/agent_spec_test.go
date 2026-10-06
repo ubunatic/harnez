@@ -256,8 +256,12 @@ func TestAgentStartOnlyRejectsActiveExhaustion(t *testing.T) {
 }
 
 func TestAgentDefaultLiteralIsNotShadowed(t *testing.T) {
+	def, err := subagent.DefaultModelSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
 	root := filepath.Join("..", "..")
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return err
 		}
@@ -265,7 +269,7 @@ func TestAgentDefaultLiteralIsNotShadowed(t *testing.T) {
 		if readErr != nil {
 			return readErr
 		}
-		if strings.Contains(string(data), "codex:luna:low") {
+		if strings.Contains(string(data), def) {
 			t.Errorf("default literal shadowed in %s", path)
 		}
 		return nil
@@ -276,9 +280,13 @@ func TestAgentDefaultLiteralIsNotShadowed(t *testing.T) {
 }
 
 func TestAgentStartDefaultModelLine(t *testing.T) {
+	def, err := subagent.DefaultModelSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
 	d := &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "thread"}}, {ev: msg("CONFIRM: ready")}, {ev: msg("done")}}}
 	out := runScripted(t, d, "start", "task")
-	if !strings.Contains(out, "model: codex:luna:low (default)") {
+	if !strings.Contains(out, "model: "+def+" (default)") {
 		t.Fatalf("output=%q", out)
 	}
 	d = &scriptDriver{steps: []step{{ev: subagent.Event{Kind: "session", Text: "thread"}}, {ev: msg("CONFIRM: ready")}, {ev: msg("done")}}}

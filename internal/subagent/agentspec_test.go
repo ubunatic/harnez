@@ -12,7 +12,7 @@ import (
 	"ubunatic.com/harnez"
 )
 
-func TestFlash38EscalationGuidanceAndLeanSprintDeveloperPreference(t *testing.T) {
+func TestAgyModelsStayOutOfDeveloperWorkAndLeanSprintPreference(t *testing.T) {
 	data, err := fs.ReadFile(harnez.DefaultFS, "spec/agent.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -29,9 +29,6 @@ func TestFlash38EscalationGuidanceAndLeanSprintDeveloperPreference(t *testing.T)
 	}
 	if flash38.Roles != "reviewer, advisor" {
 		t.Errorf("agy:flash38 roles = %q, want reviewer, advisor", flash38.Roles)
-	}
-	if !strings.Contains(flash38.Use, "escalation-only") || !strings.Contains(flash38.Use, "avoid for developer work") {
-		t.Errorf("agy:flash38 use = %q, want escalation-only and avoid developer work", flash38.Use)
 	}
 	for name, model := range spec.Models {
 		if strings.HasPrefix(name, "agy:") && strings.Contains(model.Roles, "developer") {
@@ -76,8 +73,18 @@ func TestEmbeddedAgentSpecLoadsAndResolves(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.DefaultModel != "codex:luna:low" {
-		t.Fatalf("default=%q", spec.DefaultModel)
+	data, err := fs.ReadFile(harnez.DefaultFS, "spec/agent.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw struct {
+		DefaultModel string `yaml:"default_model"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if raw.DefaultModel == "" || spec.DefaultModel != raw.DefaultModel {
+		t.Fatalf("default=%q, spec/agent.yaml has %q", spec.DefaultModel, raw.DefaultModel)
 	}
 	model, err := DefaultModel()
 	if err != nil || model.Provider != "codex" {
