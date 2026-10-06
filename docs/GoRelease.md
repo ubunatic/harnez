@@ -212,6 +212,8 @@ harnez release --build-cmd "make dist"
 - **Published assets**: publish attaches everything in `dist/` matching `*.tar.gz`, `*.zip`,
   `*.minisig`, `SHA256SUMS`, `<project>-*`. A scripted project ends up with the same three
   assets as a Go one: tarball, `SHA256SUMS`, `SHA256SUMS.minisig`.
+- **Pitfall**: publish still fails when `dist/` is missing or has no matching file, so a
+  repo without artifacts cannot be released yet (harnez issue 734).
 
 ## 6. Exit criteria — assert link liveness, not link presence
 
