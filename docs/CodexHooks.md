@@ -156,4 +156,13 @@ using a future first-class usage field if Codex adds one to the hook schema.
 Neither should replace lifecycle reconciliation: tailing risks partial
 records, while undocumented fields can disappear between CLI releases.
 
+## Pitfall: untrusted hooks never run
+
+Codex 0.160 runs a config hook only when `~/.codex/config.toml` has a matching
+`trusted_hash` under `[hooks.state."<config path>:<event>:0:0"]`. On a fresh
+machine `harnez apply` writes the hooks and `harnez status` reports them `ok`,
+yet Codex skips them until the user approves them in Codex (issue 724). Check
+`harnez log` for `codex-telemetry` calls before trusting hook-based data;
+throwaway automation can pass `codex exec --dangerously-bypass-hook-trust`.
+
 Reference: [OpenAI Codex Hooks](https://developers.openai.com/es-419/docs/hooks).

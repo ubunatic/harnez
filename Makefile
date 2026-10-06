@@ -70,12 +70,6 @@ status: ⚙️ build  # show config summary and applied state
 lint: ⚙️  # check docs/commands/*.md files are all registered in config.yaml
 	bash scripts/lint.sh
 
-agent-canary-build: ⚙️ build  # build the shared Pi/OpenCode canary container
-	bash scripts/agent-canary/run.sh build
-
-agent-canary-static: ⚙️ build  # run deterministic in-container canary checks
-	bash scripts/agent-canary/run.sh static
-
 install-canary: ⚙️  # verify the latest Codeberg release installs and reports its version
 	bash scripts/install-canary.sh
 

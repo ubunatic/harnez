@@ -131,7 +131,12 @@ output. Keep these invariants; each broke once:
 - **Tests must not touch the real data path.** Store tests use an isolated DB; a test that wrote
   the live telemetry DB hung the suite for minutes (655).
 
-Legacy files are archived under `~/.local/share/harnez/archive/usage-legacy/`, never deleted.
+- **Archive legacy files once, behind a guard.** A safety copy "before every mirror write" ran on
+  each usage refresh and wrote 7,642 snapshots (166 GiB) in a week; it now skips once any
+  archive has a `manifest.json` (`2f4f946e`). Any one-time migration step needs a marker check.
+
+Legacy files are archived once under `~/.local/share/harnez/archive/usage-legacy/`, never
+deleted automatically. The first archive holds the original files; later data lives in the store.
 
 ## Usage view modes (2026-10-02)
 

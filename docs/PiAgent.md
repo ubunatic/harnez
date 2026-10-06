@@ -56,3 +56,9 @@ it manages Claude, Codex, Antigravity, and Prime Agent.
 - **Status & Revert**: `harnez status` reports installed Pi skills and extension
   hooks; `harnez revert --managed` (or `CleanAll`) cleans up managed Harnez
   artifacts across all Pi targets.
+- **Verified live** with Pi 1.0.4 by `make smoke-container` (issue 723): every
+  Harnez skill appears in Pi's system prompt under `<available_skills>` in
+  `--mode json` output, and the Distill hook fires after a `bash` tool call.
+  The bundled third-party skills are explicit-only and not copied to Pi.
+- **No telemetry hook yet:** Pi sessions started outside `harnez agent` are
+  not recorded in harnez telemetry (issue 725).
