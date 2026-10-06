@@ -137,6 +137,7 @@ debloat:
     harnez-status: user-invocable-only
     harnez-selftest: user-invocable-only
     harnez-init: user-invocable-only
+    harnez-handoff: user-invocable-only
   # These retain prose-triggering under the minimal preset and become
   # explicit-only under the deliberately stronger aggressive preset.
   aggressive_skill_overrides:
@@ -358,6 +359,13 @@ skills:
   - name: harnez-init
     description: "Re-run harnez init in an initialized repository, assess the diff for regressions, fix local fallout, and commit changes"
     file: docs/commands/HarnezInit.md
+
+  - name: harnez-handoff
+    description: "Write ready-to-paste handoff prompts for a local or cloud agent, optionally exploring for valuable work first"
+    file: docs/commands/HarnezHandoff.md
+    resources:
+      - source: spec/handoff.yaml
+        target: handoff.yaml
 
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"
