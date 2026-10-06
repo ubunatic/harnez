@@ -90,7 +90,7 @@ func BuildUsageExport(entries []HistoryEntry, now time.Time) UsageExport {
 // LevelInternal's regex scrub here rather than being a no-op), and passed
 // through raw at LevelRaw.
 func BuildUsageExportLevel(entries []HistoryEntry, now time.Time, level privacy.Level) UsageExport {
-	out := UsageExport{GeneratedAt: now}
+	out := UsageExport{GeneratedAt: now, Points: []ExportPoint{}}
 	hostLabels := make(map[string]string)
 	for _, e := range entries {
 		host := anonymizeHostname(hostLabels, e.Hostname)

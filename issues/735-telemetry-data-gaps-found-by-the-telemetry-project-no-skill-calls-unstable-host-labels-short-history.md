@@ -45,3 +45,16 @@ an investigation.
 Every usage point appears exactly three times in the export: 6,336 points, 2,112 distinct by
 `(timestamp, hostname, agent_id)`. The telemetry import collapses the copies, but harnez writes or
 exports each point three times. Find where (history writer, collector, or export).
+
+## Progress
+
+### M1 — usage points stored three times (fixed)
+
+Cause: the store, not the export. Older importers keyed each legacy history line by its source
+(`~/.local/share/harnez/usage-history/<host>.jsonl:<line>`, `~/.claude/harnez/usage-history/...`,
+and a line hash), so the same snapshot became three rows in `usage_summary_observations`.
+Fix: importers use the canonical key `hostname:observed_at`; a one-time cleanup
+(`usage-summary-dedupe-v1`, `usagestore.DedupeUsageSummaries`) keeps the oldest row per
+(hostname, observed_at). Live DB 2026-10-06: 2,154 rows before, 1,436 deleted, 718 after; a real
+export then had 2,112 points, 2,112 distinct by (timestamp, hostname, agent_id). An export with no
+usage points now writes `"points": []` instead of `null`.

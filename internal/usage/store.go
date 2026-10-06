@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -782,6 +781,9 @@ func importUsageSummaryHistory(s *usagestore.Store, ctx context.Context, homeDir
 	if err := s.Exec(ctx, `CREATE TABLE IF NOT EXISTS usage_store_migrations (name TEXT PRIMARY KEY, completed_at TEXT NOT NULL)`); err != nil {
 		return err
 	}
+	if _, err := s.DedupeUsageSummaries(ctx); err != nil {
+		return err
+	}
 	if homeDir == "" {
 		homeDir, _ = os.UserHomeDir()
 	}
@@ -835,9 +837,7 @@ func importUsageSummaryHistory(s *usagestore.Store, ctx context.Context, homeDir
 			}
 			scanner := bufio.NewScanner(file)
 			scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
-			lineNumber := 0
 			for scanner.Scan() {
-				lineNumber++
 				line := append([]byte(nil), scanner.Bytes()...)
 				var entry HistoryEntry
 				if json.Unmarshal(line, &entry) != nil || entry.Timestamp.IsZero() {
@@ -851,9 +851,7 @@ func importUsageSummaryHistory(s *usagestore.Store, ctx context.Context, homeDir
 					file.Close()
 					return err
 				}
-				lineHash := sha256.Sum256(line)
-				source := "legacy-history:" + hex.EncodeToString(lineHash[:]) + ":" + strconv.Itoa(lineNumber)
-				if err := s.WriteUsageSummary(ctx, usagestore.UsageSummaryRecord{Hostname: entry.Hostname, ObservedAt: entry.Timestamp, Payload: payload, RecordKey: source}); err != nil {
+				if err := s.WriteUsageSummary(ctx, usagestore.UsageSummaryRecord{Hostname: entry.Hostname, ObservedAt: entry.Timestamp, Payload: payload}); err != nil {
 					file.Close()
 					return err
 				}

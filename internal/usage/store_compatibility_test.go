@@ -164,3 +164,36 @@ func TestProviderSnapshotAndQuotaHistoryMirrorUseStore(t *testing.T) {
 		t.Fatalf("quota history mirror = %+v", mirrorRows)
 	}
 }
+
+// Issue 735: the same history file in the XDG dir and the legacy
+// ~/.claude/harnez dir must export each usage point once.
+func TestUsageHistoryFromStoreImportsDuplicateDirectoriesOnce(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "home")
+	dataHome := filepath.Join(base, "data")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", dataHome)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(base, "cache"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(base, "state"))
+	at := time.Date(2026, 9, 16, 19, 3, 41, 0, time.UTC)
+	entry := HistoryEntry{Hostname: "x600", UsageSummary: UsageSummary{Timestamp: at, Agents: []AgentUsage{{AgentID: "claude"}, {AgentID: "codex"}}}}
+	writeJSONLine(t, filepath.Join(HistoryDir(home), "x600.jsonl"), entry)
+	writeJSONLine(t, filepath.Join(home, ".claude", "harnez", historyDirName, "x600.jsonl"), entry)
+	dbPath := filepath.Join(dataHome, "harnez", "telemetry.sqlite")
+	entries, err := UsageHistoryFromStore(context.Background(), home, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exp := BuildUsageExport(entries, at)
+	seen := map[string]bool{}
+	for _, p := range exp.Points {
+		key := p.Timestamp.String() + "|" + p.Hostname + "|" + p.AgentID
+		if seen[key] {
+			t.Fatalf("duplicate usage point %s in %+v", key, exp.Points)
+		}
+		seen[key] = true
+	}
+	if len(exp.Points) != 2 {
+		t.Fatalf("points = %d, want 2", len(exp.Points))
+	}
+}

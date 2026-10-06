@@ -167,3 +167,14 @@ func TestExportHistory(t *testing.T) {
 		t.Fatalf("raw hostname leaked into export JSON: %s", data)
 	}
 }
+
+// An export without usage points writes "points": [], not null (issue 735).
+func TestBuildUsageExport_NoPointsIsEmptyArray(t *testing.T) {
+	data, err := json.Marshal(BuildUsageExport(nil, time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"points":[]`) {
+		t.Fatalf("export = %s, want \"points\":[]", data)
+	}
+}

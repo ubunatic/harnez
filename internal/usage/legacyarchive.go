@@ -365,9 +365,7 @@ func importArchivedHistory(ctx context.Context, store *usagestore.Store, path st
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
-	lineNumber := 0
 	for scanner.Scan() {
-		lineNumber++
 		line := append([]byte(nil), scanner.Bytes()...)
 		if filepath.Base(path) == QuotaHistoryFilename {
 			var entry QuotaHistoryEntry
@@ -399,9 +397,7 @@ func importArchivedHistory(ctx context.Context, store *usagestore.Store, path st
 		if err != nil {
 			return err
 		}
-		lineHash := sha256.Sum256(line)
-		sourceKey := "legacy-history:" + hex.EncodeToString(lineHash[:]) + ":" + fmt.Sprint(lineNumber)
-		if err := store.WriteUsageSummary(ctx, usagestore.UsageSummaryRecord{Hostname: entry.Hostname, ObservedAt: entry.Timestamp, Payload: payload, RecordKey: sourceKey}); err != nil {
+		if err := store.WriteUsageSummary(ctx, usagestore.UsageSummaryRecord{Hostname: entry.Hostname, ObservedAt: entry.Timestamp, Payload: payload}); err != nil {
 			return err
 		}
 		for _, agent := range entry.Agents {
