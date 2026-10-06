@@ -5,6 +5,7 @@
 **Severity**: Minor
 **Category**: Infrastructure
 **Related**: [#716 Pi skills and hooks](716-install-harnez-skills-and-hooks-into-pi-instances.md), [#721 OpenCode native agent](721-support-opencode-as-a-native-harnez-agent.md), [#722 Claude Code on local model](722-run-claude-code-against-the-local-lmcoder-model-in-the-agent-container.md), [#071 canary architecture](071-agent-canary-container-for-hook-testing.md), [#072 Pi/OpenCode canary](072-agent-canary-local-llm-pi-opencode.md), [#073 credentialed canary](073-agent-canary-cloud-credentialed-claude-agy-codex.md)
+**Depends on**: [#716 Pi skills and hooks](716-install-harnez-skills-and-hooks-into-pi-instances.md)
 
 ---
 

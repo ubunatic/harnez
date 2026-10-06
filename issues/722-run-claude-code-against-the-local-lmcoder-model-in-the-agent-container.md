@@ -5,6 +5,7 @@
 **Severity**: Minor
 **Category**: Feature
 **Related**: [#723 agent container](723-consolidated-agent-container-with-in-container-lmcoder-smoke-test.md), [#073 credentialed agent canary](073-agent-canary-cloud-credentialed-claude-agy-codex.md)
+**Depends on**: [#723 agent container](723-consolidated-agent-container-with-in-container-lmcoder-smoke-test.md)
 
 ---
 

@@ -5,6 +5,7 @@
 **Severity**: Minor
 **Category**: Feature
 **Related**: [#712 Pi CLI driver](712-add-support-for-the-pi-coding-agent-cli-1-0.md), [#716 Pi skills and hooks](716-install-harnez-skills-and-hooks-into-pi-instances.md), [#723 agent container](723-consolidated-agent-container-with-in-container-lmcoder-smoke-test.md)
+**Depends on**: [#723 agent container](723-consolidated-agent-container-with-in-container-lmcoder-smoke-test.md) (only for the final container step)
 
 ---
 
