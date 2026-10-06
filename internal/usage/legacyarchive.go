@@ -171,6 +171,21 @@ func ArchiveLegacyUsageData(paths LegacyUsageArchivePaths) (LegacyUsageArchiveRe
 	return LegacyUsageArchiveResult{Path: root, Files: len(manifest.Files)}, nil
 }
 
+// ensureLegacyUsageArchive archives the legacy sources only when no complete
+// archive exists yet. Once one does, the sources are mirrors regenerated from
+// the telemetry store, so copying them again on every write only fills the disk.
+func ensureLegacyUsageArchive(paths LegacyUsageArchivePaths) error {
+	manifests, err := filepath.Glob(filepath.Join(paths.ArchiveBase, "*", legacyUsageArchiveManifest))
+	if err != nil {
+		return err
+	}
+	if len(manifests) > 0 {
+		return nil
+	}
+	_, err = ArchiveLegacyUsageData(paths)
+	return err
+}
+
 func copyAndHash(source, destination string) error {
 	if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
 		return err

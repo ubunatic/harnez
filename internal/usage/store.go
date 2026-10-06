@@ -425,7 +425,7 @@ func archiveBeforeMirrorOverwrite(ctx context.Context, store *usagestore.Store) 
 }
 
 func ensureLegacyArchiveBeforeMirror() error {
-	if _, err := ArchiveLegacyUsageData(DefaultLegacyUsageArchivePaths()); err != nil {
+	if err := ensureLegacyUsageArchive(DefaultLegacyUsageArchivePaths()); err != nil {
 		return fmt.Errorf("archive legacy usage sources before mirror generation: %w", err)
 	}
 	return nil

@@ -134,3 +134,27 @@ func writeJSONLine(t *testing.T, path string, value any) {
 		t.Fatal(err)
 	}
 }
+
+func TestEnsureLegacyUsageArchiveCopiesOnlyOnce(t *testing.T) {
+	base := t.TempDir()
+	paths := LegacyUsageArchivePaths{
+		Home: filepath.Join(base, "home"), DataHome: filepath.Join(base, "data"),
+		CacheHome: filepath.Join(base, "cache"), StateHome: filepath.Join(base, "state"),
+		ArchiveBase: filepath.Join(base, "archives"),
+	}
+	historyPath := filepath.Join(paths.DataHome, "harnez", "usage-history", "host.jsonl")
+	writeJSONLine(t, historyPath, HistoryEntry{Hostname: "host", UsageSummary: UsageSummary{Timestamp: time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)}})
+
+	for range 3 {
+		if err := ensureLegacyUsageArchive(paths); err != nil {
+			t.Fatal(err)
+		}
+	}
+	archives, err := os.ReadDir(paths.ArchiveBase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(archives) != 1 {
+		t.Fatalf("got %d archives after repeated mirror writes, want 1", len(archives))
+	}
+}
