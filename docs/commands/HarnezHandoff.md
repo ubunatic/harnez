@@ -23,7 +23,10 @@ Ask the user **once**, in one message, when:
 
 - nothing is given (ask for the work and the profile or agent);
 - the profile and agent conflict (e.g. `local Jules`: Jules is a cloud agent);
-- the agent is unknown (list the known agents with their profiles, or offer the bare profile).
+- the agent is unknown (list the known agents with their profiles, or offer the bare profile);
+- the ticket is not in the target repo, or is Blocked or Closed: name what you found (e.g.
+  "harnez has no 024; trafficsim 024 is Blocked") and ask which work to hand off. Never pick a
+  substitute ticket or repo silently.
 
 A missing agent is fine: write for the profile alone. A missing profile with no agent is not:
 ask.
@@ -43,9 +46,15 @@ request. Gather per repo: remotes, language, open tickets (`harnez find -d <repo
 status:open`), and the checks below. Keep only work that passes all of them:
 
 - **Reachable:** cloud agents need a remote whose URL matches a host the agent reaches, and
-  that copy must be current: `git -C <repo> fetch <remote>`, then
-  `git -C <repo> rev-list --count <remote>/<branch>..HEAD` must be 0 (or near 0 for work the
-  missing commits do not touch). Drop stale repos and say so.
+  that copy must be current. Run `git -C <repo> fetch <remote>`, then compare:
+  - `git -C <repo> rev-list --count HEAD..<remote>/<branch>` > 0: the remote has diverged.
+    Drop the repo and say so.
+  - `git -C <repo> rev-list --count <remote>/<branch>..HEAD` > 0: local commits are not yet
+    on the remote. If they are all the user's own
+    (`git -C <repo> log --format=%ae <remote>/<branch>..HEAD` shows only
+    `git -C <repo> config user.email`), keep the repo: tell the user to push first
+    (`git -C <repo> push <remote> <branch>`) and mark its prompt "ready after the push".
+    Otherwise drop the repo and say so.
 - **Not busy:** count local commits in the last 3 and 14 days
   (`git -C <repo> rev-list --count --since=3.days HEAD`, same with `14.days`). Drop very active
   repos, unless the task stays in a separate folder or new files (new docs, new tests, new
@@ -61,7 +70,9 @@ pick.
 ## 4. Write Each Prompt
 
 The receiving agent has no memory of this session. Brief it like a colleague who just walked in
-(see the Handoff Prompt section of the `issue` skill). Each prompt contains:
+(see the Handoff Prompt section of the `issue` skill). For cloud agents, run the
+**Reachable** check from section 3 on the target repo first, also outside explore mode.
+Each prompt contains:
 
 - the repo (local: absolute path; cloud: repo name on the agent's host) and the ticket, or for
   `this work` the session's context in full: goal, files and commits touched, decisions made,
