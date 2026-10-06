@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=schemas/handoff.schema.json
+#
+# Handoff profiles and known agents for the /harnez-handoff skill (issue 726).
+# `harnez apply` installs this file next to the skill as handoff.yaml; the
+# skill reads it to write prompts. A profile says what the receiving agent can
+# reach; an agent entry names one agent, its profile and the facts the prompt
+# must respect. Cloud agents also say which git hosts they reach (matched
+# against remote URLs) and how their result comes back.
+
+profiles:
+  local:
+    description: "Local agent on the user's machine: same filesystem, tools, sibling repos and installed binaries as the host session."
+    rules:
+      - "May reference absolute paths, sibling repos and host-only state."
+      - "May use local tools such as harnez, uman and make install."
+      - "Name the repo's verify command (e.g. make check-fast, make test)."
+  cloud:
+    description: "Cloud agent isolated in a single repository checkout on a hosted git service."
+    rules:
+      - "Self-contained: no local paths, no host-only state, no reference to this session."
+      - "Tools only via public downloads, e.g. go install ubunatic.com/harnez/cmd/harnez@latest."
+      - "Other git repos may be cloned but are not guaranteed to be reachable; do not depend on them."
+      - "Include the exact verify command that runs inside that sandbox (no containers, GPU, display or host-only tools)."
+      - "The agent sees only the hosted copy; check it is current before handing work off."
+
+agents:
+  claude:
+    name: Claude
+    profile: local
+    aliases: [claude, claude code]
+    facts:
+      - "Reads CLAUDE.md and the repo's AGENTS.md; has the harnez-installed skills."
+  codex:
+    name: Codex
+    profile: local
+    aliases: [codex]
+    facts:
+      - "Reads AGENTS.md; edits with apply_patch, one file per call."
+  gemini:
+    name: Gemini
+    profile: local
+    aliases: [gemini]
+    facts:
+      - "Reads GEMINI.md and AGENTS.md; has the harnez-installed skills."
+  jules:
+    name: Google Jules
+    profile: cloud
+    aliases: [jules, google jules]
+    hosts: [github.com]
+    facts:
+      - "Works on GitHub repositories connected to the user's account."
+      - "Runs on large Intel (non-AMD) machines."
+      - "Can build container images but cannot run containers."
+      - "Can install public packages."
+    result: "Pushes a branch and opens a pull request on the GitHub copy of the repo."
+  copilot:
+    name: GitHub Copilot coding agent
+    profile: cloud
+    aliases: [copilot, github copilot, copilot coding agent]
+    hosts: [github.com]
+    # Unconfirmed: GitHub-documented basics only, not yet checked by the user.
+    facts:
+      - "Takes work from a GitHub issue assigned to Copilot or from a task started in GitHub."
+      - "Runs in an ephemeral GitHub Actions environment; setup via .github/workflows/copilot-setup-steps.yml."
+      - "Internet access is limited by a firewall unless the repo allows more."
+    result: "Pushes a copilot/ branch and opens a draft pull request on GitHub."
