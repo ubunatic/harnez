@@ -92,3 +92,18 @@ Decisions (user, 2026-10-06):
 - Explore scope: if the working directory is a git repo, scan that repo. Otherwise scan the
   current repos, i.e. the git repos under the working directory (in `~/projects` that is
   the `uman` workspace; see `uman info`).
+
+## Sprint Notes (lean sprint, host review)
+
+Plan approved 2026-10-06 (M1 spec/schema/loader, M2 skill + registration, M3 dry run).
+
+Pre-Work / Required Refinements for M1–M3:
+
+- Copilot facts: add only GitHub-documented basics, marked unconfirmed in a YAML comment.
+- Prime/agy (no native skill copy): fall back to `harnez read` on the spec in the harnez repo;
+  record the `harnez skill show` resource gap here, do not fix it in this ticket.
+- Explore mode must name the concrete checks from the reference session: the agent-side remote's
+  freshness (`git rev-list --count <remote>/<branch>..HEAD`), local commit rate (last 3 and 14
+  days), and the user's excluded repos.
+- "this work" means the host session's current work: the prompt must carry its context
+  (files, commits, decisions) because the receiving agent has no memory of the session.
