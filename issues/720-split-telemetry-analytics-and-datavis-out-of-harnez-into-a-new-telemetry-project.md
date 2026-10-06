@@ -42,3 +42,44 @@ code, and get the owner's OK on it. Done means: harnez `make check` passes and i
 needs are met; the new project builds the reports and the dashboard from the export; the
 dashboard renders in light and dark theme; ubunatic.com no longer carries `scripts/telemetry/`;
 the docs and skills that call moved commands are updated.
+
+## 4. Cut Plan (draft by host, 2026-10-06; waiting for the owner's OK)
+
+Call-site map at `f5337904` (non-test code outside `cmd/harnez/stats*.go`):
+
+- Collection needs from the "analytics" files: `ScoreShell` (`exec`, `distill`),
+  `LoadPricingCatalog` + economics cost math (`codexhooks.go`), `ClassifyTier1` (insert path),
+  `InsertIssueSnapshot`/`QueryIssueSnapshots` (`index`, `find`), `LatestTokenSnapshots` (`agent`),
+  `CLIInvocationCounts`/`QueryCLIInvocations` (`attribution`, `log`), `UnratedFailureCount`
+  (`main.go` reminder). These stay in harnez.
+- `harnez stats` modes used in workflow docs and skills: `--agents` (ProcessHygiene, Models,
+  HookRewritePattern), plain `stats` and `--quality` (TokenMeasurementArchitecture,
+  OrchestratedAgentFlow, AgenticLoop). `--agents`, `--calls`, `--where`, `--overhead` and
+  `--quality` read data the export does not carry (agent sessions, token snapshots, store paths,
+  installed instructions, raw rows), so they cannot move without widening the export.
+- The export (`harnez usage export`, `internal/telemetry/export.go`) carries sanitized tool calls
+  and usage points. It has no version field.
+- Datavis today: ubunatic.com `scripts/telemetry/main.go` (503 lines, aggregates the export into
+  `data.json`), `make update-telemetry`, and the retired page `archive/v1/telemetry/index.html`.
+
+Proposed cut:
+
+- **Stays in harnez:** all collection; `harnez log`, `harnez rate`; `harnez stats` with its
+  operational modes (`--agents`, `--calls`/`--session`/`--auto`, `--where`, `--overhead`,
+  `--quality`); `harnez usage export` as the only interface.
+- **Moves to `~/projects/telemetry`:** the default aggregate report (per tool, agent, project and
+  ticket: frequency, score, failure rate, distill savings), compaction economics reporting, Tier-3
+  note classification (`usage export --classify`, `ClassifyNotes`), the dashboard aggregation and
+  page. harnez `stats` without a mode then prints a pointer to `telemetry report`.
+
+Milestones:
+
+- M1 (harnez): add `schema_version` to the export, document it in `docs/Telemetry.md`, golden
+  test on a fixture export.
+- M2 (telemetry, new repo `ubunatic.com/telemetry`, Codeberg `origin` + GitHub `github` mirror
+  like voxi): scaffold with `harnez init`; `telemetry report` reading the export, with a parity
+  test against harnez `stats` output on the same fixture; `telemetry classify`.
+- M3 (telemetry): port `scripts/telemetry` as `telemetry build`, dashboard in `website/`, light
+  and dark theme, published with `uman website sync telemetry`.
+- M4 (harnez + ubunatic.com): remove the moved code and `--classify`; update docs and skills that
+  call moved commands; remove ubunatic.com `scripts/telemetry/` and `update-telemetry`.
