@@ -23,3 +23,12 @@ suspected stdin handling instead.
 - On a failed Codex turn, surface the turn error message (JSON event or rollout `task_complete.error`) instead of the first stderr line.
 - Recognize 401 and say: "Codex login rejected; run `codex login`".
 - Test with a recorded failing event stream.
+
+## Second case (2026-10-06)
+
+`harnez agent start --role advisor --model luna:med` (codex:gpt-6-luna) failed after
+confirmation with the same "Reading additional input from stdin..." text. The real error was only
+in the Codex rollout JSONL (`~/.codex/sessions/.../rollout-*-<session>.jsonl`), on the turn's
+completion event: `"error":{"message":"Selected model is at capacity. Please try a different
+model.","codex_error_info":"server_overloaded"}`. That event is a likely source for the real
+message; a transient overload like this one should also say that a retry may work.
