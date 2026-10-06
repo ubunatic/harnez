@@ -1,0 +1,35 @@
+# Containerfile.lmcoder — lmcoder server and CPU llama-server container
+# Follows docs/Containerfile.md guidelines.
+
+FROM golang:1.24-bookworm AS lmcoder-build
+
+WORKDIR /src
+RUN git clone --depth 1 https://codeberg.org/ubunatic/lmcoder.git .
+RUN go build -trimpath -buildvcs=false -o /out/lmcoder ./cmd/lmcoder
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      jq \
+      libgomp1 \
+      procps \
+      tar \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fetch CPU build of llama-server from ggml-org/llama.cpp official release
+RUN curl -sSL -o /tmp/llama.tar.gz https://github.com/ggml-org/llama.cpp/releases/download/b4850/llama-b4850-bin-ubuntu-x64.tar.gz \
+    && tar -xzf /tmp/llama.tar.gz -C /usr/local/bin/ \
+    && rm -f /tmp/llama.tar.gz
+
+COPY --from=lmcoder-build /out/lmcoder /usr/local/bin/lmcoder
+
+ENV LMCODER_CACHE_DIR=/cache
+
+WORKDIR /work
+
+EXPOSE 8734 8735
+
+ENTRYPOINT ["/usr/local/bin/lmcoder"]
+CMD ["start"]

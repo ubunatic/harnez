@@ -318,6 +318,7 @@ codex_hooks_target: ~/.codex/config.toml
 agy_hooks_target: ~/.gemini/config/hooks.json
 claude_skills_target: ~/.claude/skills
 prime_agent_target: ~/.prime/agent
+pi_agent_target: ~/.pi/agent
 agy_target: ~/.gemini/antigravity-cli
 
 # Third-party skills that ship inside harnez (issue 631 step A). Source of

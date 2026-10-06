@@ -29,6 +29,9 @@ func RunStatus(configPath string, cfg *Config, target string, selection Set) err
 	if root := primeAgentRoot(cfg); root != "" {
 		fmt.Printf("  %-14s %s\n", "prime_agent:", root)
 	}
+	if root := piAgentRoot(cfg); root != "" {
+		fmt.Printf("  %-14s %s\n", "pi_agent:", root)
+	}
 	if cfg.Model != "" {
 		fmt.Printf("  %-14s %s → %s\n", "model:", cfg.Model, resolveModel(cfg.Model))
 	}

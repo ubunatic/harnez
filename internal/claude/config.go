@@ -36,6 +36,7 @@ type Config struct {
 	AgyHooksTarget       string               `yaml:"agy_hooks_target"`
 	ClaudeSkillsTarget   string               `yaml:"claude_skills_target"`
 	PrimeAgentTarget     string               `yaml:"prime_agent_target"`
+	PiAgentTarget        string               `yaml:"pi_agent_target"`
 	AgyTarget            string               `yaml:"agy_target"`
 	AgentsMD             AgentsMD             `yaml:"agents_md"`
 	Make                 MakeConfig           `yaml:"make"`

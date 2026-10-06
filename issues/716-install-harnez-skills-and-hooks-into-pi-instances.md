@@ -1,6 +1,6 @@
 # 716 — Install Harnez skills and hooks into Pi instances
 
-**Status**: Open
+**Status**: Closed — Implemented Pi skills and extension targets across apply, status, and revert
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature

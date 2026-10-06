@@ -1,6 +1,7 @@
 package claude
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -179,7 +180,11 @@ func distillAdapters(cfg *Config) []generatedAdapter {
 		return nil
 	}
 	var adapters []generatedAdapter
-	if target := fsutil.ExpandHome(cfg.DistillAutopipe.PiExtensionTarget); target != "" {
+	piExt := cfg.DistillAutopipe.PiExtensionTarget
+	if env := os.Getenv("PI_CODING_AGENT_DIR"); env != "" {
+		piExt = filepath.Join(env, "extensions", "harnez-distill.ts")
+	}
+	if target := fsutil.ExpandHome(piExt); target != "" {
 		adapters = append(adapters, generatedAdapter{
 			label:   "pi distill adapter",
 			path:    target,

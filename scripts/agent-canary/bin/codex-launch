@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+proxy_port="${HARNEZ_AGENT_CANARY_PROXY_PORT:-8735}"
+base_url="${HARNEZ_AGENT_CANARY_BASE_URL:-http://localhost:${proxy_port}/v1}"
+codex_dir="${HOME}/.codex"
+
+mkdir -p "${codex_dir}"
+sed "s#__BASE_URL__#${base_url}#g" /etc/harnez-agent-canary/codex.toml.template > "${codex_dir}/config.toml"
+
+exec codex "$@"

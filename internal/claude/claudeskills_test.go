@@ -284,6 +284,7 @@ func TestUnifiedCrossHarnessSkillTargets(t *testing.T) {
 	geminiSkills := filepath.Join(home, ".gemini", "skills")
 	codexSkills := filepath.Join(home, ".codex", "skills")
 	primeSkills := filepath.Join(home, ".prime", "agent", "skills")
+	piSkills := filepath.Join(home, ".pi", "agent", "skills")
 
 	targets := skillTargets(cfg)
 	expectedTargets := []string{
@@ -291,6 +292,7 @@ func TestUnifiedCrossHarnessSkillTargets(t *testing.T) {
 		codexSkills,
 		claudeSkills,
 		primeSkills,
+		piSkills,
 	}
 	if len(targets) != len(expectedTargets) {
 		t.Fatalf("skillTargets() returned %d targets, want %d: %v", len(targets), len(expectedTargets), targets)
@@ -314,7 +316,7 @@ func TestUnifiedCrossHarnessSkillTargets(t *testing.T) {
 		t.Fatalf("ApplyAll failed: %v", err)
 	}
 
-	// Verify all skills exist across all 4 targets
+	// Verify all skills exist across all 5 targets
 	for _, target := range expectedTargets {
 		for _, skill := range cfg.Skills {
 			skillMd := filepath.Join(target, skill.Name, "SKILL.md")
@@ -343,7 +345,7 @@ func TestUnifiedCrossHarnessSkillTargets(t *testing.T) {
 		t.Errorf("DiffAll reported changes immediately after ApplyAll")
 	}
 
-	// CleanAll removes all skills across all 4 targets
+	// CleanAll removes all skills across all 5 targets
 	if err := CleanAll(targetDir, cfg); err != nil {
 		t.Fatalf("CleanAll failed: %v", err)
 	}

@@ -41,3 +41,18 @@ sessions are not imported into Harnez's session list.
 JSON events provide per-turn input/output/cache usage when Pi reports it. Pi's
 JSON protocol does not provide Harnez with a validated context-window size, so
 context-window capacity and reasoning-token counts remain unknown.
+
+## Skills and Hooks Integration
+
+`harnez apply` manages skills and extension hooks for Pi instances, exactly like
+it manages Claude, Codex, Antigravity, and Prime Agent.
+
+- **Skills target**: Pi reads skills from `<pi home>/skills/<name>/SKILL.md`.
+  `harnez apply` copies Harnez skills to this path. Pi's home defaults to
+  `~/.pi/agent` (configured via `pi_agent_target` in `config.yaml`), or
+  `$PI_CODING_AGENT_DIR` when set in the environment.
+- **Hooks & Extensions**: Harnez installs its Distill extension hook to
+  `<pi home>/extensions/harnez-distill.ts`.
+- **Status & Revert**: `harnez status` reports installed Pi skills and extension
+  hooks; `harnez revert --managed` (or `CleanAll`) cleans up managed Harnez
+  artifacts across all Pi targets.
