@@ -83,6 +83,7 @@ code and the environment in all three tickets. Check:
 | Worker "fixes" leave ticket scope half done (323, 610) | handoff listed goals but not every file or edge case | list the files to touch and the negative cases (ambiguous input, hex-like words) as acceptance points |
 | User rejects the delivered design after M2 (726: skill read its spec as a runtime file) | the host approved a plan choice that changes how the deliverable works for the user | do not pause the sprint for the user: the host decides and lists such choices in the delivery summary for review; a user redirect becomes the next milestone's pre-work in the ticket (`harnez agent stop` the worker first if it is mid-turn on the rejected design) |
 | `harnez agent delete` refuses with "unrated session" | sessions must be rated before deletion | `harnez agent rate --name <s> <1-5> "<reason>"`, then delete |
+| Codex worker fails with "Reading additional input from stdin..." (595) | harnez shows Codex's first stderr line, not the turn error | grep the rollout `~/.codex/sessions/.../rollout-*<session>.jsonl` for `"error"`; `server_overloaded` ("model is at capacity") is transient: resume once |
 | Live-testing a batch of agy models felt slow and left stray state | one `--conversation` resume took 118s; leftover named sessions persist after the run | use empty scratch dirs with no `AGENTS.md`, one tiny prompt plus one resume per model, unique session names, `harnez agent delete` afterward (ticket 500) |
 
 ## 5. Finding out what agents ran
