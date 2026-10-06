@@ -347,7 +347,7 @@ skills:
 
   - name: harnez-advisor
     license: AGPL-3.0-or-later
-    description: "Reuse compatible advisor sessions across supported agent tools using prose requests"
+    description: "Continue a specific earlier advisor session, only when the user explicitly requests session reuse or resumption"
     file: docs/commands/HarnezAdvisor.md
 
   - name: harnez-status

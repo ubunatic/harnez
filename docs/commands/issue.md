@@ -63,8 +63,9 @@ from severity, and drafting the ticket body:
 
 On the delegated path, use a compatible, healthy named filer if explicitly selected
 or already assigned to this workflow; otherwise create a fresh filer. Freshness is
-not a requirement for every ticket. Follow the available harnez-advisor lifecycle
-guidance for reuse without changing an advisor's role or permissions. Closed/parked
+not a requirement for every ticket. Load harnez-advisor guidance only when the user
+explicitly requests advisor reuse; ordinary delegation needs no advisor skill.
+Reuse must preserve the session's role and permissions. Closed/parked
 sessions remain candidates for supported native reuse; closure alone proves no failure.
 For Codex usage-limit interruptions, suspend productive dispatch and use bounded
 health checks. Quarantine a confirmed dead session, close/retire it using supported
