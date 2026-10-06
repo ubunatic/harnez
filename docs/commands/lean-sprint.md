@@ -83,6 +83,10 @@ For focused, milestone-based tasks, execute this fast-path, token-efficient loop
     interactive views) and compares every expected row. A developer's pasted output or "closed" is
     not evidence. (Sprint 657: a dev closed the ticket claiming all providers rendered; live compact
     showed none of Claude/Codex, and rows varied between runs.)
+    The same holds for any output form: when the evidence is web screenshots, the host opens each
+    variant itself (dark scheme, phone width), and variants come from the real user setting (the
+    browser's color scheme), not one forced inside the page. (harnez.org 028 M2.4: a dev reported 32
+    screenshots fine; every "dark" one was light because only a forced `data-theme` was ever tested.)
 - **Strictly No Direct Fixes & No Micro-Task Rounds**:
   - The host does **NOT** modify code files.
   - The host updates the ticket: records milestone $N$ delivery summary, naming the milestone ("M2 delivered: flag and schema gating").
