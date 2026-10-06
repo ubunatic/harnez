@@ -65,3 +65,7 @@ Check the live skill, `harnez agent` help and recent commits first; this ticket 
 - Installed skill validation and scoped diff whitespace check passed; `make install` passed.
 - Full test suite not run: unrelated issue 735 code changes were present, and quota rules require
   a clean tree first. Ticket remains open pending that verification. No live provider call was made.
+- Later scoped-checkout verification for harnez.org issue 032 passed the CLI, configuration,
+  and skill-registry packages, including skill installation checks. This is relevant evidence,
+  but does not replace the pending full-suite run. Evergreen routing guidance is now updated in
+  `docs/CommandsPipeline.md`; no real model-selection session was exercised.
