@@ -1,6 +1,6 @@
 # 716 — Install Harnez skills and hooks into Pi instances
 
-**Status**: Closed — Implemented Pi skills and extension targets across apply, status, and revert
+**Status**: Closed — Pi skills and Distill hook managed by apply/status/revert; verified live with Pi 1.0.4 in the 723 smoke test; telemetry hook follows in 725
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Feature
@@ -39,3 +39,15 @@ other hooks are not.
 - Live check with the current Pi CLI: ask Pi to list its skills and name the
   one that files an issue; confirm installed hooks run. Update
   `docs/PiAgent.md`.
+
+## 4. Results
+- Code (commit ecce40fc): Pi is a fifth skill target via `pi_agent_target`
+  (default `~/.pi/agent`, `$PI_CODING_AGENT_DIR` wins); the Distill extension
+  follows the same override; `status` prints the Pi home.
+- Live check (#723 smoke test, Pi 1.0.4, 2026-10-06): after `harnez apply`,
+  Pi's system prompt lists all 26 Harnez skills from `~/.pi/agent/skills`,
+  including `issue`; `harnez status` reports them ok; a Pi bash tool call
+  fired the Distill extension (`distill hook` in `harnez log`).
+- Hooks: Distill is the only Harnez hook Pi has. Codex also gets telemetry
+  hooks; the Pi counterpart is #725. The bundled third-party skills are not
+  copied to Pi, as for Gemini and Prime (config.yaml `bundled_skills`).
