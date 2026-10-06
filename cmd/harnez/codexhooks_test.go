@@ -261,15 +261,8 @@ func TestRunCodexHooksHook_SkipsAlreadyRouted(t *testing.T) {
 		t.Fatalf("runCodexHooksHook: %v", err)
 	}
 
-	var got codexPreToolUseOutput
-	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
-		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
-	}
-	if got.HookSpecificOutput.PermissionDecision != "allow" {
-		t.Errorf("PermissionDecision = %q, want allow", got.HookSpecificOutput.PermissionDecision)
-	}
-	if len(got.HookSpecificOutput.UpdatedInput) != 0 {
-		t.Errorf("expected no rewrite for already-routed command, got %v", got.HookSpecificOutput.UpdatedInput)
+	if out.Len() != 0 {
+		t.Errorf("already-routed command must pass through without hook output, got %q", out.String())
 	}
 }
 
@@ -279,8 +272,8 @@ func TestRunCodexHooksHook_SkipsEmptyCommand(t *testing.T) {
 	if err := runCodexHooksHook(in, &out); err != nil {
 		t.Fatalf("runCodexHooksHook: %v", err)
 	}
-	if got := out.String(); got != "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\"}}\n" {
-		t.Errorf("output = %q, want allow no-op envelope", got)
+	if out.Len() != 0 {
+		t.Errorf("empty command must pass through without hook output, got %q", out.String())
 	}
 }
 
@@ -312,14 +305,7 @@ func TestRunCodexHooksHook_SkipsGearCommand(t *testing.T) {
 		t.Fatalf("runCodexHooksHook: %v", err)
 	}
 
-	var got codexPreToolUseOutput
-	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
-		t.Fatalf("decode output: %v (raw=%s)", err, out.String())
-	}
-	if got.HookSpecificOutput.PermissionDecision != "allow" {
-		t.Errorf("PermissionDecision = %q, want allow", got.HookSpecificOutput.PermissionDecision)
-	}
-	if len(got.HookSpecificOutput.UpdatedInput) != 0 {
-		t.Errorf("expected no rewrite for gear command, got %v", got.HookSpecificOutput.UpdatedInput)
+	if out.Len() != 0 {
+		t.Errorf("gear command must pass through without hook output, got %q", out.String())
 	}
 }
