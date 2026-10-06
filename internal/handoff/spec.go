@@ -1,7 +1,6 @@
 // Package handoff loads the agent profiles used by the /harnez-handoff skill
-// (issue 726). The skill itself reads spec/handoff.yaml as an installed skill
-// resource; this loader validates it so a broken spec fails the tests, not
-// the skill at runtime.
+// (issue 726). `harnez apply` renders the spec into the installed skill (see
+// RenderMarkdown), so the skill never reads the spec at runtime.
 package handoff
 
 import (
@@ -48,7 +47,12 @@ type Spec struct {
 
 // LoadSpec reads and validates the embedded spec.
 func LoadSpec() (*Spec, error) {
-	data, err := fs.ReadFile(harnez.DefaultFS, specPath)
+	return LoadSpecFS(harnez.DefaultFS)
+}
+
+// LoadSpecFS reads and validates spec/handoff.yaml from fsys.
+func LoadSpecFS(fsys fs.FS) (*Spec, error) {
+	data, err := fs.ReadFile(fsys, specPath)
 	if err != nil {
 		return nil, err
 	}

@@ -1,43 +1,45 @@
 package claude
 
 import (
-	"bytes"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"ubunatic.com/harnez"
+	"ubunatic.com/harnez/internal/handoff"
 )
 
 func TestHarnezHandoffSkillInstallToEveryConfiguredTarget(t *testing.T) {
 	cfg := loadTestConfig(t)
 	targetDir := t.TempDir()
 
-	var handoff *Command
+	var skill *Command
 	for i := range cfg.Skills {
 		if cfg.Skills[i].Name == "harnez-handoff" {
-			handoff = &cfg.Skills[i]
+			skill = &cfg.Skills[i]
 			break
 		}
 	}
-	if handoff == nil {
+	if skill == nil {
 		t.Fatal("harnez-handoff skill not registered in embedded config")
 	}
-	if handoff.File != "docs/commands/HarnezHandoff.md" {
-		t.Fatalf("harnez-handoff skill file = %q, want docs/commands/HarnezHandoff.md", handoff.File)
+	if skill.File != "docs/commands/HarnezHandoff.md" {
+		t.Fatalf("harnez-handoff skill file = %q, want docs/commands/HarnezHandoff.md", skill.File)
 	}
-	if len(handoff.Resources) != 1 || handoff.Resources[0].Source != "spec/handoff.yaml" || handoff.Resources[0].Target != "handoff.yaml" {
-		t.Fatalf("harnez-handoff resources = %#v, want spec/handoff.yaml -> handoff.yaml", handoff.Resources)
+	if len(skill.Resources) != 0 {
+		t.Fatalf("harnez-handoff resources = %#v, want none: the spec is rendered into SKILL.md", skill.Resources)
 	}
 	if override := cfg.Debloat.PresetSkillOverrides["harnez-handoff"]; override != "user-invocable-only" {
 		t.Errorf("PresetSkillOverrides[harnez-handoff] = %q, want user-invocable-only", override)
 	}
-	spec, err := fs.ReadFile(harnez.DefaultFS, "spec/handoff.yaml")
+	spec, err := handoff.LoadSpec()
 	if err != nil {
 		t.Fatal(err)
 	}
+	specLines := specStrings(spec)
 
 	cfg.SkillsTarget = filepath.Join(t.TempDir(), "gemini-skills")
 	cfg.CodexSkillsTarget = filepath.Join(t.TempDir(), "codex-skills")
@@ -72,9 +74,9 @@ func TestHarnezHandoffSkillInstallToEveryConfiguredTarget(t *testing.T) {
 			"`explore`",
 			"Ask the user **once**",
 			"`local Jules`",
-			"## 2. Load the Agent Facts",
-			"`handoff.yaml` next to this SKILL.md",
-			"harnez read spec/handoff.yaml",
+			"## 2. Profiles and Known Agents",
+			"### Profile `local`",
+			"### Profile `cloud`",
 			"## 3. Explore Mode",
 			"if the working directory is a git repo",
 			"rev-list --count <remote>/<branch>..HEAD",
@@ -93,12 +95,85 @@ func TestHarnezHandoffSkillInstallToEveryConfiguredTarget(t *testing.T) {
 				t.Errorf("expected %s/SKILL.md to contain %q", dir, want)
 			}
 		}
-		installed, err := os.ReadFile(filepath.Join(dir, "handoff.yaml"))
-		if err != nil {
-			t.Fatalf("expected handoff.yaml resource in %s: %v", dir, err)
+		for _, want := range specLines {
+			if !strings.Contains(content, want) {
+				t.Errorf("expected %s/SKILL.md to contain spec text %q", dir, want)
+			}
 		}
-		if !bytes.Equal(installed, spec) {
-			t.Errorf("%s/handoff.yaml differs from spec/handoff.yaml", dir)
+		for _, banned := range []string{"<!-- harnez:render", "handoff.yaml", "harnez read"} {
+			if strings.Contains(content, banned) {
+				t.Errorf("%s/SKILL.md still contains %q", dir, banned)
+			}
 		}
+		if _, err := os.Stat(filepath.Join(dir, "handoff.yaml")); !os.IsNotExist(err) {
+			t.Errorf("%s/handoff.yaml must not be installed (stat err = %v)", dir, err)
+		}
+	}
+}
+
+// specStrings lists every agent and profile value that must reach the skill.
+func specStrings(s *handoff.Spec) []string {
+	var out []string
+	for _, p := range s.Profiles {
+		out = append(out, p.Description)
+		out = append(out, p.Rules...)
+	}
+	for _, a := range s.Agents {
+		out = append(out, a.Name, a.Result)
+		out = append(out, a.Aliases...)
+		out = append(out, a.Facts...)
+		out = append(out, a.Hosts...)
+	}
+	return out
+}
+
+// The skill source holds no hand-copied spec facts; they come only from the
+// renderer, so a spec change changes the installed skill.
+func TestHarnezHandoffSkillFollowsSpec(t *testing.T) {
+	source, err := fs.ReadFile(harnez.DefaultFS, "docs/commands/HarnezHandoff.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := handoff.LoadSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range spec.Agents {
+		for _, fact := range append([]string{a.Result}, a.Facts...) {
+			if fact != "" && strings.Contains(string(source), fact) {
+				t.Errorf("docs/commands/HarnezHandoff.md hand-copies spec fact %q", fact)
+			}
+		}
+	}
+
+	specData, err := fs.ReadFile(harnez.DefaultFS, "spec/handoff.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const oldFact = "Runs on large Intel (non-AMD) machines."
+	const newFact = "Runs on a test-only machine type."
+	if !strings.Contains(string(specData), oldFact) {
+		t.Fatalf("spec/handoff.yaml lacks %q; update this test", oldFact)
+	}
+	fsys := fstest.MapFS{
+		"docs/commands/HarnezHandoff.md": {Data: source},
+		"spec/handoff.yaml":              {Data: []byte(strings.Replace(string(specData), oldFact, newFact, 1))},
+	}
+	cmd := Command{Name: "harnez-handoff", File: "docs/commands/HarnezHandoff.md"}
+	content, err := genSkillContent(cmd, fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(content, newFact) || strings.Contains(content, oldFact) {
+		t.Errorf("rendered skill does not follow the changed spec:\n%s", content)
+	}
+}
+
+func TestRenderSkillBodyRejectsUnknownRenderer(t *testing.T) {
+	if _, err := renderSkillBody("x", "a\n<!-- harnez:render nope -->\nb", fstest.MapFS{}); err == nil {
+		t.Fatal("unknown renderer accepted")
+	}
+	if got, err := renderSkillBody("x", "plain", nil); err != nil || got != "plain" {
+		t.Fatalf("plain body = %q, %v", got, err)
 	}
 }

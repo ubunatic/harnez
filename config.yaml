@@ -363,9 +363,6 @@ skills:
   - name: harnez-handoff
     description: "Write ready-to-paste handoff prompts for a local or cloud agent, optionally exploring for valuable work first"
     file: docs/commands/HarnezHandoff.md
-    resources:
-      - source: spec/handoff.yaml
-        target: handoff.yaml
 
   - name: evergreen
     description: "Create/update evergreen docs and issue files for the current session"

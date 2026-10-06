@@ -562,6 +562,10 @@ func genSkillContent(cmd Command, fsys fs.FS) (string, error) {
 		}
 		body = string(data)
 	}
+	body, err := renderSkillBody(cmd.Name, body, fsys)
+	if err != nil {
+		return "", err
+	}
 	var sb strings.Builder
 	sb.WriteString("---\n")
 	fmt.Fprintf(&sb, "name: %q\n", cmd.Name)
