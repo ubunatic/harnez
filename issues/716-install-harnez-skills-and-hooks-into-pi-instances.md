@@ -9,48 +9,33 @@
 ---
 
 ## 1. Problem & Motivation
-The Pi driver in #712 lets `harnez agent` launch Pi, but it does not make the
-user's Pi installation a Harnez-integrated agent. The intended Pi support is to
-make Harnez-owned skills and supported hooks available when the user runs Pi
-itself, including outside a Harnez-launched session.
+The Pi driver in #712 lets `harnez agent` launch Pi, but `harnez apply` does
+not set up the user's Pi installation the way it sets up Claude, Codex,
+Antigravity and Prime Agent. Today only the Distill extension
+(`~/.pi/agent/extensions/harnez-distill.ts`) is written for Pi; skills and the
+other hooks are not.
 
-Harnez currently has a partial Pi hook integration: a generated Distill
-extension can target `~/.pi/agent/extensions/harnez-distill.ts`. However, the
-general skill target list does not include Pi, and there is no complete,
-user-facing lifecycle for installing and updating Harnez's Pi-compatible
-skills and hooks. The Pi CLI driver and Pi-instance integration are separate
-features; closing #712 covered the former only.
-
-**Goal**: Install and maintain Harnez's Pi-compatible skills and hooks in the
-user's Pi instance, or stop and report if Pi's supported extension/skill
-surfaces cannot safely provide the required integration.
+**Goal**: Pi becomes one more agent managed by `harnez apply`, `status` and
+`revert`, exactly like the existing ones. No Pi-specific lifecycle or command.
 
 ## 2. Technical Specification / Findings
-- Pi 1.0+ supports user-level skills and extensions; confirm the exact current
-  discovery paths and hook APIs against Pi's primary documentation during
-  implementation.
-- Harnez generates a Pi Distill extension from
-  `internal/claude/distill_adapters.go`, with a configurable target in
-  `config.yaml`; this is one adapter, not the full Harnez hook set.
-- `internal/claude/apply.go:SkillTargetsByAgent` currently enumerates Gemini,
-  Codex, Claude, and Prime skill targets, but not Pi.
-- Preserve user-owned Pi files and support the user's configured Pi home
-  (`PI_CODING_AGENT_DIR`, or an explicit Harnez setting/target). Keep generated
-  and managed files identifiable and safe to update or remove.
-- This issue is Pi-instance provisioning, not another provider/model driver and
-  not a request to enumerate Pi model IDs in `harnez agent models`.
+- `internal/claude/apply.go:SkillTargetsByAgent` lists Gemini, Codex, Claude
+  and Prime skill targets, but not Pi. Add Pi there with a `config.yaml`
+  target, following the existing per-agent targets.
+- Pi's home is `~/.pi/agent`, or `$PI_CODING_AGENT_DIR` when set (Pi then reads
+  everything from there). Skills live at `<pi home>/skills/<name>/SKILL.md`.
+  lmcoder's agent image copies Harnez skills to that path and Pi 0.99.2 found
+  and used all of them (lmcoder issue 144); confirm on Pi 1.0+.
+- Hooks: install the ones Pi's extension API supports, as already done for the
+  Distill extension; report any that Pi cannot run.
+- Not in scope: another model driver, or listing Pi models in
+  `harnez agent models`.
 
 ## 3. Implementation & Verification Plan
-- Define the Pi integration surface for Harnez-owned skills and hooks. Include
-  every compatible Harnez skill; explicitly report any skill/hook that is not
-  compatible rather than silently omitting it.
-- Add an explicit, idempotent install/update/status/removal lifecycle for
-  Pi-managed files. Choose a CLI surface that respects the existing separation
-  between global `apply` and project-local `init`; read `docs/CLIDesign.md`
-  before changing `apply` flags or scope.
-- Add tests for target resolution (including `PI_CODING_AGENT_DIR`), complete
-  skill coverage, managed-file updates, idempotency, and preservation of
-  user-owned files.
-- Verify with the current Pi CLI that installed skills are discoverable and
-  usable, and that installed hooks/extensions actually run. Include an isolated
-  live canary and update Pi integration documentation.
+- Add the Pi skill target and supported hooks to `apply`, `status` and
+  `revert`, reusing the code paths of the other agents.
+- Tests as for the other agents, plus target resolution from
+  `PI_CODING_AGENT_DIR`.
+- Live check with the current Pi CLI: ask Pi to list its skills and name the
+  one that files an issue; confirm installed hooks run. Update
+  `docs/PiAgent.md`.
