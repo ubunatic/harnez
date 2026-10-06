@@ -93,7 +93,7 @@ check-fast: ⚙️  # fast local feedback loop
 smoke: ⚙️ build  # live smoke: apply/diff/repair + usage bar-alignment against real binary
 	bash scripts/smoke-test.sh
 
-smoke-container: ⚙️  # build both agent images and run the in-pod Pi/Codex smoke test (LMCODER_MODEL_DIR=reuse host models)
+smoke-container: ⚙️  # build both agent images and run the in-pod Pi/Codex smoke test (LMCODER_MODEL_DIR=reuse host models, LMCODER_CACHE_DIR=download to a host dir)
 	bash scripts/agent-canary/run.sh
 
 test: ⚙️ check  # alias for check

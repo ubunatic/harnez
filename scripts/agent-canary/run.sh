@@ -7,6 +7,8 @@
 #   LMCODER_MODEL      lmcoder model name or alias (default: canary, ~490 MB)
 #   LMCODER_MODEL_DIR  host directory with already downloaded models, mounted
 #                      read-only instead of downloading into the cache volume
+#   LMCODER_CACHE_DIR  host directory for downloaded models instead of the
+#                      cache volume, e.g. on a scratch disk
 
 set -euo pipefail
 
@@ -16,6 +18,7 @@ lmcoder_image=harnez-lmcoder
 cache_volume=harnez-lmcoder-cache
 model="${LMCODER_MODEL:-canary}"
 model_dir="${LMCODER_MODEL_DIR:-}"
+cache_dir="${LMCODER_CACHE_DIR:-}"
 
 if ! command -v podman >/dev/null 2>&1
 then printf '%s\n' "ERROR: podman is required" >&2
@@ -31,10 +34,15 @@ podman build -t "${lmcoder_image}" -f Containerfile.lmcoder .
 
 cleanup
 trap cleanup EXIT
-podman volume exists "${cache_volume}" || podman volume create "${cache_volume}" >/dev/null
 podman pod create --name "${pod}" >/dev/null
 
-lmcoder_args=(-d --pod "${pod}" --name "${pod}-lmcoder" -e "LMCODER_MODEL=${model}" -v "${cache_volume}:/cache")
+lmcoder_args=(-d --pod "${pod}" --name "${pod}-lmcoder" -e "LMCODER_MODEL=${model}")
+if test -n "${cache_dir}"
+then mkdir -p "${cache_dir}"
+     lmcoder_args+=(-v "${cache_dir}:/cache:z")
+else podman volume exists "${cache_volume}" || podman volume create "${cache_volume}" >/dev/null
+     lmcoder_args+=(-v "${cache_volume}:/cache")
+fi
 if test -n "${model_dir}"
 then lmcoder_args+=(-v "${model_dir}:/cache/models:ro,z")
 fi
