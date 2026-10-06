@@ -52,7 +52,9 @@ code and the environment in all three tickets. Check:
 - Copyable docs (`docs/practices`, `docs/lang`, `docs/other`) gain no project ticket links
   or project-specific names (ticket 156).
 - A direct passing `go test` of the touched packages is stated. A Quota-1 "blocked, no files
-  changed" is neither pass nor fail. "Pre-existing failure" needs proof.
+  changed" is neither pass nor fail. "Pre-existing failure" needs proof: run just those
+  tests in a detached worktree at the commit before the ticket (`git worktree add --detach`), as in
+  ticket 726, which surfaced 729.
 - Side effects on the running system: `make install` replaces the binary the other agents
   are executing (the `harnez exec` 60s default then killed the flow itself, ticket 268).
 - The reviewer's own acceptance is honest: do not close a ticket with a known gap.
@@ -79,6 +81,8 @@ code and the environment in all three tickets. Check:
 | Closed ticket still listed as open in `issues/README.md` | worker edited the ticket status by hand | always close via `harnez issues close`; run `harnez index` if stale |
 | 18 tests fail in `internal/claude` and `cmd` without anyone touching them | another session's uncommitted `config.yaml` setting changes defaults the tests assume | name the foreign files and known failures in every handoff; never stage them |
 | Worker "fixes" leave ticket scope half done (323, 610) | handoff listed goals but not every file or edge case | list the files to touch and the negative cases (ambiguous input, hex-like words) as acceptance points |
+| User rejects the delivered design after M2 (726: skill read its spec as a runtime file) | the host approved a plan choice that changes how the deliverable works for the user, treating it as an implementation detail | send such plan choices to the user; on a redirect, `harnez agent stop` the worker before the next milestone and write the redirect into the ticket as pre-work |
+| `harnez agent delete` refuses with "unrated session" | sessions must be rated before deletion | `harnez agent rate --name <s> <1-5> "<reason>"`, then delete |
 | Live-testing a batch of agy models felt slow and left stray state | one `--conversation` resume took 118s; leftover named sessions persist after the run | use empty scratch dirs with no `AGENTS.md`, one tiny prompt plus one resume per model, unique session names, `harnez agent delete` afterward (ticket 500) |
 
 ## 5. Finding out what agents ran

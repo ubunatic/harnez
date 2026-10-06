@@ -121,6 +121,30 @@ the installed skill directory and are included in apply, diff, status, revert --
 and idempotency checks. Keep resource targets relative to the skill directory;
 the installer rejects absolute paths and parent traversal.
 
+Pitfall: agents without a native skill copy (Gemini, Prime; see `docs/ExternalSkills.md`) load
+skills via `harnez skill show`, which prints only `SKILL.md`. They cannot reach resources
+(issue 727). Prefer a self-contained `SKILL.md`.
+
+### Spec-rendered skill bodies
+
+When a skill needs facts that live in a `spec/` YAML, render them into `SKILL.md` at apply time
+instead of shipping the YAML as a resource for the agent to read. Decided by the user in issue
+726: the spec drives what the document says; no agent looks anything up in a spec at runtime.
+
+- Put a line `<!-- harnez:render <name> -->` in the skill source.
+- `genSkillContent` calls `renderSkillBody` (`internal/claude/skillrender.go`), which replaces
+  the line with the output of the renderer registered under `<name>` in `skillRenderers`.
+  An unknown name fails apply.
+- Example: `/harnez-handoff` (`docs/commands/HarnezHandoff.md`) uses `handoff-agents`, rendered
+  by `internal/handoff.RenderMarkdown` from `spec/handoff.yaml` (profiles, agents, facts).
+- Test that the installed skill holds every spec value, that a spec change changes it, and that
+  the source holds no hand-copied facts (`internal/claude/harnez_handoff_skill_test.go`).
+
+Pitfall: `genSkillContent` always writes its own frontmatter and does not merge one from the
+source, so a source starting with `---` installs with two blocks and agents ignore the second
+(issue 728). Control invocation with `config.yaml` `debloat:` (`user-invocable-only`), not
+source frontmatter.
+
 The `harnez-advisor` skill is a prose-first coordination contract. It delegates
 resume, continue, or fork operations to each harness's native interface and
 falls back to a fresh session when compatibility cannot be established. It
