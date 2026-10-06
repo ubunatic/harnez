@@ -655,6 +655,16 @@ func primeAgentRoot(cfg *Config) string {
 	return fsutil.ExpandHome(cfg.PrimeAgentTarget)
 }
 
+func piAgentRoot(cfg *Config) string {
+	if env := os.Getenv("PI_CODING_AGENT_DIR"); env != "" {
+		return fsutil.ExpandHome(env)
+	}
+	if cfg != nil {
+		return fsutil.ExpandHome(cfg.PiAgentTarget)
+	}
+	return ""
+}
+
 // sortedAgentIDs returns the keys of an agents_md.agents map in stable
 // (alphabetical) order, so repeated applies iterate agent profiles in a
 // deterministic sequence despite Go's randomized map iteration.
@@ -712,6 +722,10 @@ func skillTargets(cfg *Config) []string {
 	}
 
 	if root := primeAgentRoot(cfg); root != "" {
+		targets = appendUniquePath(targets, filepath.Join(root, "skills"))
+	}
+
+	if root := piAgentRoot(cfg); root != "" {
 		targets = appendUniquePath(targets, filepath.Join(root, "skills"))
 	}
 
@@ -1871,6 +1885,9 @@ func SkillTargetsByAgent(cfg *Config) []AgentSkillTarget {
 	}
 	if root := primeAgentRoot(cfg); root != "" {
 		candidates = append(candidates, AgentSkillTarget{"prime", filepath.Join(root, "skills")})
+	}
+	if root := piAgentRoot(cfg); root != "" {
+		candidates = append(candidates, AgentSkillTarget{"pi", filepath.Join(root, "skills")})
 	}
 	var out []AgentSkillTarget
 	index := map[string]int{}

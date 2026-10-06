@@ -14,6 +14,7 @@ func TestHarnezAdvisorSkillInstallsIdenticallyToEveryAgentTarget(t *testing.T) {
 	cfg.CodexSkillsTarget = filepath.Join(root, "codex-skills")
 	cfg.ClaudeSkillsTarget = filepath.Join(root, "claude-skills")
 	cfg.PrimeAgentTarget = filepath.Join(root, "prime-agent")
+	cfg.PiAgentTarget = filepath.Join(root, "pi-agent")
 	cfg.CodexHooksTarget = filepath.Join(root, "codex-config.toml")
 	cfg.AgyHooksTarget = filepath.Join(root, "gemini", "config", "hooks.json")
 	cfg.AgentsMD.Global.Target = filepath.Join(root, "AGENTS.md")
@@ -29,10 +30,11 @@ func TestHarnezAdvisorSkillInstallsIdenticallyToEveryAgentTarget(t *testing.T) {
 		filepath.Join(root, "codex-skills"),
 		filepath.Join(root, "claude-skills"),
 		filepath.Join(root, "prime-agent", "skills"),
+		filepath.Join(root, "pi-agent", "skills"),
 	}
 	targets := skillTargets(cfg)
 	if len(targets) != len(expectedTargets) {
-		t.Fatalf("expected four agent skill targets, got %d: %v", len(targets), targets)
+		t.Fatalf("expected five agent skill targets, got %d: %v", len(targets), targets)
 	}
 	want := ""
 	for _, target := range expectedTargets {

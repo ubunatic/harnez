@@ -1,6 +1,6 @@
 # 723 — Consolidated agent container with in-container lmcoder smoke test
 
-**Status**: Open
+**Status**: In Progress — images build; smoke test not yet run
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Infrastructure
@@ -41,3 +41,18 @@ forks or credentials.
   `harnez status` reports skills and hooks installed; a hook visibly fires.
 - Other components: harnez version, git/git-lfs, lmcoder server health.
 - Record per-agent timings and versions in the ticket.
+
+### Maintainer Execution Command
+To run the smoke test locally on a host with container runtime access:
+
+```bash
+make smoke-container
+```
+
+Or manually:
+
+```bash
+docker build -t harnez-app -f Containerfile.app .
+docker build -t harnez-lmcoder -f Containerfile.lmcoder .
+docker run --rm harnez-app /usr/local/bin/smoke-test
+```
