@@ -166,3 +166,18 @@ Open points found by the dry run (not fixed; for host review):
    which now sits in the body). `disable-model-invocation: true` therefore lives in the body
    for every skill whose source has frontmatter (e.g. harnez-init too). This existed before
    726; invocation is controlled by the debloat `skillOverrides` setting.
+
+### M4 reviewed; M5 Pre-Work (host, 2026-10-06)
+
+M4 (spec rendered into SKILL.md at apply) `29253bf2` reviewed: diff clean; installed Claude and
+Codex skills contain all agents, no render marker, no `handoff.yaml`. The 3 failing tests also
+fail on `2f4f946e` (before 726); filed as issues/729. Double frontmatter filed as issues/728.
+
+M5 (skill text only, `docs/commands/HarnezHandoff.md`):
+
+- Ticket not found in the target repo, or Blocked/Closed: ask the user once (name what was found,
+  e.g. "harnez has no 024; trafficsim 024 is Blocked"), never pick a substitute silently.
+- Freshness: if the agent's remote is behind only by the user's own unpushed commits, do not drop
+  the repo; tell the user to push to that remote first (name the command) and mark the prompt as
+  ready after the push. Drop only when the remote has diverged or the gap is not the user's.
+- Re-run the two affected dry-run cases and update the ticket's dry-run section.
