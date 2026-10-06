@@ -81,6 +81,10 @@ decommissioned:
     - fresh-sprinter
     - harnez-sync
     - discovery
+    - grilling
+    - grill-with-docs
+    - domain-modeling
+    - to-spec
 
 # how `init` reconciles its own Makefile targets (e.g. `help`) into an
 # existing project Makefile — see docs/src/Make.md
@@ -328,11 +332,7 @@ agy_target: ~/.gemini/antigravity-cli
 # installs them explicit-only (Claude: /name only; Codex: implicit off;
 # Gemini/Prime: no copy). Never edit the vendored copies; to update, raise
 # commit and re-run vendor. Names must not clash with `skills:` below.
-bundled_skills:
-  - url: https://github.com/mattpocock/skills
-    commit: c55ee46073ed923f86ce59a5eb3b6d895095d1b7
-    dir: third_party/skills/mattpocock
-    skills: [grilling, grill-with-docs, domain-modeling, to-spec]
+bundled_skills: []
 
 skills:
   - name: docup

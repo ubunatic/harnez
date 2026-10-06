@@ -8,7 +8,7 @@ REEL main
   $ /skills
   P 3s desc="await skills list"
   V contains="evergreen"
-  V contains="domain-modeling"
+  V contains="docup"
   T <esc>
   P 1s
   X desc="exit codex"

@@ -5,6 +5,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"ubunatic.com/harnez/internal/claude"
 )
@@ -25,12 +26,41 @@ func TestSitegenSkillsExportIsDeterministicAndComplete(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Fatal("export is not deterministic")
 	}
-	if count != len(cfg.Skills)+4 {
-		t.Fatalf("count=%d, first-party=%d, bundled=4", count, len(cfg.Skills))
+	wantCount := len(cfg.Skills)
+	for _, bundle := range cfg.BundledSkills {
+		wantCount += len(bundle.Skills)
 	}
-	for _, want := range []string{"format_version: 1", "name: docup", "name: grilling", "kind: file-backed", "kind: inline", "kind: resource-backed", "license: AGPL-3.0-or-later", "license: MIT"} {
+	if count != wantCount {
+		t.Fatalf("count=%d, registered=%d", count, wantCount)
+	}
+	for _, want := range []string{"format_version: 1", "name: docup", "kind: file-backed", "kind: inline", "kind: resource-backed", "license: AGPL-3.0-or-later"} {
 		if !bytes.Contains(first, []byte(want)) {
 			t.Errorf("export missing %q", want)
+		}
+	}
+	for _, retired := range []string{"name: grilling\n", "name: grill-with-docs\n", "name: domain-modeling\n", "name: to-spec\n", "third_party/skills/mattpocock/"} {
+		if bytes.Contains(first, []byte(retired)) {
+			t.Errorf("export contains retired skill provenance %q", retired)
+		}
+	}
+}
+
+func TestSitegenSkillsExportPreservesConfiguredBundleProvenance(t *testing.T) {
+	revision := strings.Repeat("a", 40)
+	cfg := &claude.Config{
+		BundledSkills: []claude.BundledSkillSource{{URL: "https://example.com/skills", Commit: revision, Dir: "vendor", Skills: []string{"example"}}},
+		FS: fstest.MapFS{
+			"vendor/LICENSE":          {Data: []byte("MIT License\n")},
+			"vendor/example/SKILL.md": {Data: []byte("---\nname: example\ndescription: Example\n---\nExample body\n")},
+		},
+	}
+	data, count, err := encodeSitegenSkillExport(cfg, revision)
+	if err != nil || count != 1 {
+		t.Fatalf("export fixture: count=%d, err=%v", count, err)
+	}
+	for _, want := range []string{"name: example", "origin: bundled", "source_revision: " + revision, "license: MIT", "source_path: vendor/example/SKILL.md", "Example body"} {
+		if !bytes.Contains(data, []byte(want)) {
+			t.Errorf("bundle export missing %q", want)
 		}
 	}
 }
