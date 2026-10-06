@@ -126,3 +126,43 @@ M4 Pre-Work / Required Refinements (do before re-running the M3 dry run):
   the rendered skill (no stale hand-copied facts in `docs/commands/HarnezHandoff.md`); the
   installed skill dir has no `handoff.yaml`.
 - Then run M3 (dry run of the example invocations) against the installed skill.
+
+### M4 delivered; M3 dry run (2026-10-06)
+
+M4 `29253bf2`: the skill source holds a `<!-- harnez:render handoff-agents -->` line, which
+`genSkillContent` replaces at apply time with markdown rendered from `spec/handoff.yaml`
+(`internal/handoff/render.go`, `internal/claude/skillrender.go`). The `handoff.yaml` resource
+and the `harnez read` fallback are gone. Tests: the installed skill contains every spec value,
+a changed spec changes the rendered skill, the source has no hand-copied facts, and no
+`handoff.yaml` is installed. Full suite: only the 3 failures that were already there before
+this work (`TestAgentStartDefaultModelLine`,
+`TestFlash38EscalationGuidanceAndLeanSprintDeveloperPreference`,
+`TestEmbeddedAgentSpecLoadsAndResolves`).
+
+Dry run against the installed `~/.claude/skills/harnez-handoff/SKILL.md` (after `harnez apply`),
+working directory `~/projects/harnez` unless noted. Real repo data, remote-tracking refs not
+re-fetched.
+
+| Invocation | Result per skill text |
+|---|---|
+| `024 cloud Jules` | Profile cloud, agent Jules, consistent. harnez has no ticket 024 (`harnez issues show` fails). **Gap:** the skill does not say what to do then; the expected behaviour is to ask once (the ticket probably lives in another repo, e.g. trafficsim 024, which is Blocked). |
+| `this work to Jules` | Cloud/Jules. The prompt carries this session's goal, commits (bb3caf39, 0727a302, 29253bf2), decisions and what is left. Reachability check: harnez's `github` remote is 13 commits behind local `main`, so the skill says to push or wait first. Result: branch + PR on `github`, fetch with `git -C <repo> fetch github`. |
+| `cloud` | No work given, so the skill asks once for the work (ticket, this work or explore). Writes for the cloud profile with no agent facts. |
+| `Jules` / `Copilot` | Agent implies cloud; no work given, so the skill asks once for the work. |
+| (no arguments) | Asks once for the work and the profile or agent. |
+| `local Jules` | Conflict (Jules is cloud), so the skill asks once. |
+| `explore for Jules` | Scope = the harnez repo (cwd is a git repo). harnez: `github` is 13 behind, 101 commits in 3 days, so it is dropped as stale and busy. Run from `~/projects` instead (workspace scope): has a GitHub remote, current, quiet (≤5 commits in 3 days): trafficsim, goto, spriteview. Dropped: emojig (172 behind), cati/loom/loom-games/lmcoder/ubunatic.com (very active), goha/homeserver (GitHub copy behind). Picks: trafficsim 028 (stat label, single file, `make check-fast` headless Node; low conflict risk) and goto 006 (resolvers, Go, `make check`; low risk, 4 commits/3d). |
+| `explore cloud` | Same as `explore for Jules`, but without agent facts. Hosts come from the agents' `Reaches remotes on` lines (github.com only), so the result is the same. |
+| `explore local` / `explore for local Claude` | No reachability filter; the busy check still drops very active repos unless the task stays in a separate folder. Prompts may use absolute paths and `make install`. |
+
+Open points found by the dry run (not fixed; for host review):
+
+1. Unknown or blocked ticket: the skill does not say to check that the ticket exists in scope
+   and is not Blocked, or to ask once otherwise (see `024 cloud Jules`).
+2. "Behind" check direction: `rev-list --count <remote>/<branch>..HEAD` counts local commits
+   not yet pushed. That covers "the agent's copy is current" for local work. The skill could
+   also say to push first when the count is only the user's own unpushed commits.
+3. Installed harnez skills have two frontmatter blocks (the generated one plus the source's,
+   which now sits in the body). `disable-model-invocation: true` therefore lives in the body
+   for every skill whose source has frontmatter (e.g. harnez-init too). This existed before
+   726; invocation is controlled by the debloat `skillOverrides` setting.
