@@ -85,7 +85,10 @@ dry run, or stop and report when blocked on a user decision or denied permission
 Before starting, re-check the current skill packaging in `docs/commands/` and recent commits,
 since conventions may have changed since this ticket was filed.
 
-Open questions (record answers, don't guess):
+Decisions (user, 2026-10-06):
 
-- Where agent facts live (`spec/` YAML per `docs/Spec.md`, or a doc section).
-- Whether explore mode scans one repo or the whole `uman` workspace by default.
+- Agent facts (profiles, named agents and their capabilities) live in a `spec/` YAML with a
+  JSON schema, per `docs/Spec.md`.
+- Explore scope: if the working directory is a git repo, scan that repo. Otherwise scan the
+  current repos, i.e. the git repos under the working directory (in `~/projects` that is
+  the `uman` workspace; see `uman info`).
