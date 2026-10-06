@@ -34,14 +34,16 @@ Each `RUN`/`COPY` instruction creates a cache layer keyed on its own inputs plus
 before it. A change at step N invalidates steps N through 6, but never 1 through N-1 — so
 putting frequently-changed things last maximizes what stays cached.
 
-## Worked example: `scripts/agent-canary/Containerfile`
+## Worked example: harnez's `Containerfile.app`
 
-This repo's own `scripts/agent-canary/Containerfile` follows the rule and is a good template
-to copy from:
+This repo's own `Containerfile.app` (harnez plus the Pi and Codex agent CLIs) follows the rule
+and is a good template to copy from:
 
 ```dockerfile
-FROM golang:1.24-bookworm AS harnez-build
+FROM golang:1.26-bookworm AS harnez-build
 
+ENV GOTOOLCHAIN=auto \
+    GOWORK=off
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -50,46 +52,45 @@ RUN go build -trimpath -buildvcs=false -o /out/harnez ./cmd/harnez
 
 FROM node:22-slim
 
-# System tools required by harnez-managed workspaces and agent canary probes.
+# System tools for harnez-managed workspaces and the smoke test.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
       git \
       git-lfs \
-      ca-certificates \
+      jq \
+      procps \
     && git lfs install --system \
     && rm -rf /var/lib/apt/lists/*
 
-# Keep agent package installs in separate layers for targeted cache reuse.
-RUN npm install -g opencode-ai
-
+# Latest upstream agents, one layer each for targeted cache reuse.
+RUN npm install -g @openai/codex
 # Pi needs --ignore-scripts, matching the lmcoder canary image finding.
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 
 COPY --from=harnez-build /out/harnez /usr/local/bin/harnez
 
-# Runtime templates are expanded by launchers so tests can use a dedicated
-# local proxy port without rebuilding the image.
-COPY scripts/agent-canary/configs/opencode.json.template /etc/harnez-agent-canary/opencode.json.template
 COPY scripts/agent-canary/configs/pi-models.json.template /etc/harnez-agent-canary/pi-models.json.template
-COPY scripts/agent-canary/bin/opencode-launch /usr/local/bin/opencode-launch
 COPY scripts/agent-canary/bin/pi-launch /usr/local/bin/pi-launch
-COPY scripts/agent-canary/bin/harnez-agent-canary-check /usr/local/bin/harnez-agent-canary-check
-COPY scripts/agent-canary/bin/harnez-agent-canary-hook-check /usr/local/bin/harnez-agent-canary-hook-check
+COPY scripts/agent-canary/bin/codex-launch /usr/local/bin/codex-launch
+COPY scripts/agent-canary/smoke.sh /usr/local/bin/smoke-test
 
 RUN chmod 755 /usr/local/bin/harnez ... \
     && chmod 755 /etc/harnez-agent-canary \
     && chmod 644 /etc/harnez-agent-canary/*.template
 
-ENV HARNEZ_AGENT_CANARY_PROXY_PORT=8736 \
-    HARNEZ_AGENT_CANARY_CONTEXT_WINDOW=8192 \
-    HOME=/tmp/harnez-home \
+ENV HARNEZ_AGENT_CANARY_BASE_URL=http://127.0.0.1:8734/v1 \
+    HARNEZ_AGENT_CANARY_CONTEXT_WINDOW=32768 \
+    HOME=/home/agent \
     ...
 
+RUN mkdir -p /home/agent /work && git config --system init.defaultBranch main
 WORKDIR /work
 ```
 
 What it does right:
 
-- **Multi-stage build**: a `golang:1.24-bookworm` builder stage compiles `harnez`, and only the
+- **Multi-stage build**: a `golang:1.26-bookworm` builder stage compiles `harnez`, and only the
   resulting binary is `COPY --from=harnez-build` into the slim `node:22-slim` runtime stage. The
   Go toolchain, module cache, and full source tree never end up in the shipped image.
 - **`go.mod`/`go.sum` copied before the rest of the source**: `RUN go mod download` caches as
@@ -99,14 +100,14 @@ What it does right:
 - **`apt-get install` before any `npm install`**: system packages rarely change; the `npm`
   layers below them change more often (a new agent CLI, a version bump) but still less often
   than the harnez binary itself.
-- **One `RUN npm install -g` per package group, not combined**: `opencode-ai` and
+- **One `RUN npm install -g` per package group, not combined**: `@openai/codex` and
   `@earendil-works/pi-coding-agent` are separate `RUN` layers "for targeted cache reuse" (see
   the comment in the file). If one package needs a version bump or a different install flag
   (`--ignore-scripts` for Pi), only that layer rebuilds — not both.
 - **Configs and launch scripts copied after the binary**: editing
   `scripts/agent-canary/bin/pi-launch` never triggers a re-run of `npm install` or `go build`.
 - **`ENV` and `WORKDIR` last**: adjusting `HARNEZ_AGENT_CANARY_CONTEXT_WINDOW` invalidates only
-  the final layer.
+  the final layers.
 - **`apt-get update && ... && rm -rf /var/lib/apt/lists/*` in one `RUN`**: keeps the apt cache
   out of the image layer instead of leaving it as dead weight in an earlier, cached layer that a
   later `RUN rm` can't shrink (deleting in a later layer doesn't reduce the image size — the
@@ -119,11 +120,11 @@ Any container meant for interactive developer or coding-agent use must include `
 (step 1, base image & system tools). Coding agents routinely run `git status`, `git diff`, and
 `git log` to inspect workspace state — omitting these tools breaks that inspection with a
 runtime error instead of a build-time signal, which is harder to diagnose. See
-`scripts/agent-canary/Containerfile` above for the exact pattern.
+`Containerfile.app` above for the exact pattern.
 
 ## Other cache- and speed-relevant practices
 
-- **Pin base image tags.** `FROM node:22-slim` and `FROM golang:1.24-bookworm` pin a major
+- **Pin base image tags.** `FROM node:22-slim` and `FROM golang:1.26-bookworm` pin a major
   version, not `latest` — `latest` silently changes the base layer's contents between builds,
   which both breaks reproducibility and defeats caching (a new `latest` digest invalidates every
   layer after `FROM`).
@@ -134,7 +135,7 @@ runtime error instead of a build-time signal, which is harder to diagnose. See
 - **Order `RUN` steps by volatility, not by topic.** Grouping "all npm installs" into a single
   `RUN` with `&&` looks tidy but forces every package in that group to reinstall whenever any one
   of them changes. Split `RUN` per install group when the packages version-bump independently
-  (as `scripts/agent-canary/Containerfile` does for `opencode-ai` vs.
+  (as `Containerfile.app` does for `@openai/codex` vs.
   `@earendil-works/pi-coding-agent`); combine only steps that always change together (e.g.
   `apt-get update && apt-get install && rm -rf /var/lib/apt/lists/*`, which must stay one layer
   to avoid leaving apt's package lists in the image).
@@ -165,5 +166,3 @@ runtime error instead of a build-time signal, which is harder to diagnose. See
       build-context noise.
 - [ ] Related independent package-install groups kept in separate `RUN` layers; only
       always-together steps (e.g. `apt-get update && install && cleanup`) are combined.
-
-<!-- harnez:stop -->

@@ -93,10 +93,8 @@ check-fast: ⚙️  # fast local feedback loop
 smoke: ⚙️ build  # live smoke: apply/diff/repair + usage bar-alignment against real binary
 	bash scripts/smoke-test.sh
 
-smoke-container: ⚙️ build  # build Containerfile.app and Containerfile.lmcoder and run in-container smoke test
-	docker build -t harnez-app -f Containerfile.app .
-	docker build -t harnez-lmcoder -f Containerfile.lmcoder .
-	docker run --rm harnez-app /usr/local/bin/smoke-test
+smoke-container: ⚙️  # build both agent images and run the in-pod Pi/Codex smoke test (LMCODER_MODEL_DIR=reuse host models)
+	bash scripts/agent-canary/run.sh
 
 test: ⚙️ check  # alias for check
 

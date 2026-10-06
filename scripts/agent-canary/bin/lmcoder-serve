@@ -1,0 +1,15 @@
+#!/bin/sh
+# Serve the smoke-test model on CPU in the foreground. Weights are cached in
+# /cache/models so only the first run downloads them.
+set -eu
+
+exec lmcoder serve \
+  --model "${LMCODER_MODEL:-canary}" \
+  --model-dir /cache/models \
+  --server /opt/llama.cpp/llama-server \
+  --n-gpu-layers 0 \
+  --ctx-size "${LMCODER_CTX_SIZE:-32768}" \
+  --idle-timeout 0 \
+  --startup-timeout 10m \
+  --port 8734 \
+  --force

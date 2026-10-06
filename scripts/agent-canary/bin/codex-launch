@@ -1,11 +1,12 @@
 #!/bin/sh
+# Run Codex against the pod-local model server. The provider is passed as -c
+# overrides so ~/.codex/config.toml keeps exactly what harnez apply wrote.
 set -eu
 
-proxy_port="${HARNEZ_AGENT_CANARY_PROXY_PORT:-8735}"
-base_url="${HARNEZ_AGENT_CANARY_BASE_URL:-http://localhost:${proxy_port}/v1}"
-codex_dir="${HOME}/.codex"
+base_url="${HARNEZ_AGENT_CANARY_BASE_URL:-http://127.0.0.1:8734/v1}"
 
-mkdir -p "${codex_dir}"
-sed "s#__BASE_URL__#${base_url}#g" /etc/harnez-agent-canary/codex.toml.template > "${codex_dir}/config.toml"
-
-exec codex "$@"
+exec codex \
+  -c model_provider=lmcoder \
+  -c "model_providers.lmcoder={name=\"lmcoder\",base_url=\"${base_url}\",wire_api=\"responses\"}" \
+  -c model=local-model \
+  "$@"

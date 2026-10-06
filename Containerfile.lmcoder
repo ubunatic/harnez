@@ -1,35 +1,40 @@
-# Containerfile.lmcoder — lmcoder server and CPU llama-server container
-# Follows docs/Containerfile.md guidelines.
+# Containerfile.lmcoder — lmcoder serving a small model on CPU for the agent
+# smoke test (issue 723). Model weights are downloaded on first run into the
+# /cache volume, never baked into the image.
+#
+# Build context is the repository root; run via make smoke-container.
+FROM golang:1.26-bookworm AS lmcoder-build
 
-FROM golang:1.24-bookworm AS lmcoder-build
-
+ENV GOTOOLCHAIN=auto
+# Busts the clone cache when lmcoder's main branch moves.
+ADD https://codeberg.org/api/v1/repos/ubunatic/lmcoder/branches/main /tmp/lmcoder-main.json
+RUN git clone --depth 1 https://codeberg.org/ubunatic/lmcoder.git /src
 WORKDIR /src
-RUN git clone --depth 1 https://codeberg.org/ubunatic/lmcoder.git .
 RUN go build -trimpath -buildvcs=false -o /out/lmcoder ./cmd/lmcoder
 
-FROM debian:bookworm-slim
+FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \
-      jq \
       libgomp1 \
-      procps \
-      tar \
     && rm -rf /var/lib/apt/lists/*
 
-# Fetch CPU build of llama-server from ggml-org/llama.cpp official release
-RUN curl -sSL -o /tmp/llama.tar.gz https://github.com/ggml-org/llama.cpp/releases/download/b4850/llama-b4850-bin-ubuntu-x64.tar.gz \
-    && tar -xzf /tmp/llama.tar.gz -C /usr/local/bin/ \
-    && rm -f /tmp/llama.tar.gz
+# Official CPU build of llama.cpp, same release lmcoder pins for its models.
+ARG LLAMA_CPP_VERSION=b10590
+RUN mkdir -p /opt/llama.cpp \
+    && curl -fsSL "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMA_CPP_VERSION}/llama-${LLAMA_CPP_VERSION}-bin-ubuntu-x64.tar.gz" \
+       | tar -xz -C /opt/llama.cpp --strip-components=1 \
+    && /opt/llama.cpp/llama-server --version
 
 COPY --from=lmcoder-build /out/lmcoder /usr/local/bin/lmcoder
+COPY scripts/agent-canary/bin/lmcoder-serve /usr/local/bin/lmcoder-serve
+RUN chmod 755 /usr/local/bin/lmcoder /usr/local/bin/lmcoder-serve
 
-ENV LMCODER_CACHE_DIR=/cache
+ENV LMCODER_MODEL=canary \
+    LMCODER_CTX_SIZE=32768
 
-WORKDIR /work
+VOLUME /cache
+EXPOSE 8734
 
-EXPOSE 8734 8735
-
-ENTRYPOINT ["/usr/local/bin/lmcoder"]
-CMD ["start"]
+ENTRYPOINT ["/usr/local/bin/lmcoder-serve"]

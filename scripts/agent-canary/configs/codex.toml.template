@@ -1,7 +1,0 @@
-[model_providers.lmcoder]
-type = "openai"
-base_url = "__BASE_URL__"
-api_key = "canary"
-
-[models.local-model]
-provider = "lmcoder"
