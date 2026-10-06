@@ -124,9 +124,9 @@ commands:
     content: |
       Review the diff vs main. Check for: correctness, security, tests, docs.
 
-  - name: domain-modeling
-    description: "Actively build and sharpen the project's domain model, glossary, and ADRs"
-    file: commands/domain-modeling.md   # body read from this file
+  - name: docup
+    description: "Review and update bounded repository documentation"
+    file: docs/commands/Docup.md   # body read from this file
 
 # Skills written to ~/.gemini/skills/, ~/.codex/skills/, and ~/.prime/agent/skills/
 skills:
