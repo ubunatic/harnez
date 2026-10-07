@@ -136,6 +136,7 @@ Setup note: the project `.mcp.json` server stays "Pending approval" until the us
 | Claude backgrounded `sleep 60` | 13:51:44 | at once | at once (session free) | yes |
 | User `!` shell command running | 13:52:46 | at once | after user ended the command (Esc) | yes |
 | Claude mid-turn, foreground 60 s tool | 13:59:05 | after the tool finished | **not acted on**: model flagged it as an external message and asked the user | pending user |
+| Idle again, after the flagged message | 14:02:17 | at once | at once, own turn | yes |
 
 Findings:
 - Delivery is reliable: every message was shown; none was lost. Messages wait until the
