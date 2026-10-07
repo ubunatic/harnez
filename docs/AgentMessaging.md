@@ -46,6 +46,24 @@ From a user-started Claude session in the Harnez checkout:
 
 Then start a fresh recipient session using the command printed by `harnez channel setup`:
 `claude --channels plugin:harnez-channel@harnez-local --append-system-prompt <printed instructions>`.
+Keep the startup prompt current with this shell alias:
+
+```sh
+alias claude-channels='claude --channels plugin:harnez-channel@harnez-local --append-system-prompt "$(harnez compose claude-channels-prompt)"'
+```
+
+Both setup and compose read the instructions from `spec/channel.yaml`. For the full
+shell-quoted launch arguments, use the function shown in `harnez compose --help`:
+
+```sh
+claude_channels() {
+   eval "command claude $(harnez compose claude-channels-args) \"\$@\""
+}
+```
+
+The args snippet requires shell evaluation to preserve the prompt as one argument;
+plain unquoted command substitution splits it into words.
+
 For unattended receipts, allow `mcp__plugin_harnez-channel_harnez-channel__reply` in the
 recipient project's `.claude/settings.json` permissions. The standalone server's reply rule
 does not cover the plugin's namespaced tool.
