@@ -2,7 +2,7 @@
 
 How sessions talk to each other. Evidence: `docs/studies/2026-10-07-claude-cross-session-sendmessage.md`.
 Tickets: 656 (parent), 740 (Claude channel + `agent send`, closed), 742 (recipient setup),
-743/747 (plugin route, closed), 680 (Codex), 748 (plural aliases), 749 (registry pruning).
+743/747 (plugin route, closed), 680 (Codex); 748 (plural aliases) and 749 (registry pruning) closed.
 
 ## Rule: tickets carry the work, messages nudge
 
