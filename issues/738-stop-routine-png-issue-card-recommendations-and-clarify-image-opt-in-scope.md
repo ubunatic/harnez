@@ -1,6 +1,6 @@
 # 738 — Stop routine PNG issue-card recommendations and clarify image opt-in scope
 
-**Status**: Blocked — Full test verification awaits permission to include unrelated #735 edits or a clean working tree
+**Status**: Closed — Text-default guidance installed and reviewed; live checks and full make test-q1 passed
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
@@ -51,6 +51,8 @@ images by default, or stop and report when blocked on a user decision or denied 
 - Added regression assertions for generated rules and installed issue/review/roadmap skills.
   Independent native reviewer found no blockers; scoped whitespace check passed.
 - Live checks: plain issue search/show and `read --auto` return text; explicit `show --image`
-  still renders a PNG. Full test suite has not run: unrelated #735 changes remain in the
-  working tree and Quota.md requires a clean tree. Awaiting permission to test the combined
-  tree or completion of that work before running `make test-q1` and closing this ticket.
+  still renders a PNG.
+- The user's combined-tree test run exposed stale v9 telemetry expectations after #735's
+  v10 bump. Apply tests now compare against a freshly created DB's schema version.
+  `make test-q1` passed on the combined tree (formatting, vet, full Go suite), including
+  the generated-rule and installed-skill assertions. `make install` completed again.
