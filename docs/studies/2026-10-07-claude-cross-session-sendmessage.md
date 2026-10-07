@@ -123,3 +123,25 @@ never evidence of Claude receipt by itself.
   `cmd/harnez` passed. No Go source was changed after this run.
 - Live idle/busy/approval delivery and actual subprocess session-ID matching
   remain unverified until the user performs the manual procedure above.
+
+### Live result (host + user, 2026-10-07, Claude Code 2.1.292, haiku)
+
+Setup note: the project `.mcp.json` server stays "Pending approval" until the user accepts
+"New MCP server found in this project" at startup; without it the channel notice ends with
+"no MCP server configured with that name" and nothing registers.
+
+| Case | Sent | Shown | Acted on | Receipt |
+|------|------|-------|----------|---------|
+| Idle session | 13:4x | at once | at once, own turn | yes |
+| Claude backgrounded `sleep 60` | 13:51:44 | at once | at once (session free) | yes |
+| User `!` shell command running | 13:52:46 | at once | after user ended the command (Esc) | yes |
+| Claude mid-turn, foreground 60 s tool | 13:59:05 | after the tool finished | **not acted on**: model flagged it as an external message and asked the user | pending user |
+
+Findings:
+- Delivery is reliable: every message was shown; none was lost. Messages wait until the
+  session is free (no mid-tool interruption).
+- A message arriving during an active turn is treated as untrusted external input: the model
+  asks its user before acting. Messages arriving at an idle session were acted on directly.
+  `harnez agent send` must therefore not assume action on delivery; receipt needs a recipient-side
+  confirmation (reply tool) and the sender text should state who sent it and why.
+- `accepted` stays transport-only, as designed.
