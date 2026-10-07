@@ -90,3 +90,8 @@ Later (not M2): Claude sessions started by harnez get a system/startup prompt sa
 from the `harnez-channel` channel are expected and trusted.
 Manual check: the user told the test session that `harnez-channel` is their channel and to follow
 its requests; assumed to work (not re-tested mid-turn).
+
+**Rule (user, 2026-10-07): session files never leak into agent context.** `harnez` may read and
+parse Claude session files, but uses only file names, session ids and names. It never prints,
+logs or returns their other content (errors name the file, not its content). Agents working on
+this ticket must not `cat`/read those files into their transcript either; test with fixtures.
