@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=schemas/channel.schema.json
+# M1 is a manually enabled, local canary; nothing installs or enables it globally.
+registry_dir: ~/.harnez/channels
+listen_address: 127.0.0.1:0
+server_name: harnez-channel
+server_version: "0.1"
+# Avoid the 2026-07-28 revision: Claude's v2 client does not register channels on it.
+protocol_version: "2024-11-05"
+io_timeout_ms: 5000
+max_message_bytes: 65536
+max_rpc_bytes: 1048576
+canary_model: haiku
+canary_message: 'Use a tool to append the message_id from this channel event to canary-740-receipts.txt in your working directory, then stop.'
+instructions: 'This is a one-way local Harnez canary channel. Events arrive as <channel source="harnez-channel" session_id="..." message_id="...">. Act on the content under normal session permissions. There is no reply tool or permission relay. An accepted result only confirms a write to the MCP transport, not receipt or processing by Claude.'

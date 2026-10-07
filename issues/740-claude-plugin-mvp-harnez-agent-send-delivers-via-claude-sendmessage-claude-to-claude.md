@@ -38,8 +38,9 @@ it, so `harnez agent send` should route Claude → Claude through it first, as t
 
 Research (web-740, codex:luna:med): the documented push route into a running Claude session is a
 **channel** (https://code.claude.com/docs/en/channels, https://code.claude.com/docs/en/mcp#push-messages-with-channels).
-The target session opts in at launch: `claude --channels server:<name>` (manually configured MCP
-server) or `plugin:<name>@<marketplace>` (allowlisted). Hooks only inject on prompt/tool events
+The target session opts in at launch: `claude --dangerously-load-development-channels server:<name>`
+for a custom MCP canary, or `claude --channels plugin:<name>@<marketplace>` (allowlisted).
+Hooks only inject on prompt/tool events
 (no idle wake-up); plain MCP cannot push; SDK `--resume` targets stopped sessions; `cc-socks`
 sockets are undocumented — do not use.
 
@@ -51,3 +52,17 @@ sockets are undocumented — do not use.
 - **M2 `harnez agent send --name <session> -m <msg>`** for Claude targets via the M1 channel;
   accepted vs receipt reported separately; unsupported providers fail explicitly. Unit tests plus
   live check by the host.
+
+### M1 implementation handoff
+
+- `harnez channel` serves the one-way stdio MCP channel, with `setup`, `list` and
+  `send <session-id>` helpers. Defaults and registry path live in `spec/channel.yaml`.
+- `scripts/canary-740-channel.sh` only prints setup, lists live endpoints and sends
+  probes. The user starts every Claude session manually. No private socket writes.
+- Registry entries are private, keyed by provider session ID and removed on clean
+  exit. Discovery checks PID and authenticated loopback endpoint identity; stale
+  entries and unknown IDs cannot receive a probe.
+- Implementation and manual idle/busy/approval verification steps are recorded in
+  `docs/studies/2026-10-07-claude-cross-session-sendmessage.md`.
+- **Live verification pending:** no Claude session was launched by the developer.
+  M1's external mechanism is not yet proved; keep M2 behind the user-run canary.
