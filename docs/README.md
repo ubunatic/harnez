@@ -170,6 +170,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-04-agent-harness-at-scale-story.md](studies/2026-10-04-agent-harness-at-scale-story.md) | A portfolio review of Harnez's product, recent development, and agent workflow evidence. |
 | [studies/2026-10-05-artificial-analysis-cost-report.md](studies/2026-10-05-artificial-analysis-cost-report.md) | Artificial Analysis Cost Report |
 | [studies/2026-10-06-webpage-screenshot-inspection-telemetry-study.md](studies/2026-10-06-webpage-screenshot-inspection-telemetry-study.md) | Local telemetry evidence and attribution gaps for webpage screenshot inspection |
+| [studies/2026-10-07-claude-cross-session-sendmessage.md](studies/2026-10-07-claude-cross-session-sendmessage.md) | Claude Code cross-session SendMessage canary (656 M3) |
 | [studies/CrossHarnessSubagentReport.md](studies/CrossHarnessSubagentReport.md) | Cross-Harness Subagent Dispatch Benchmark: Codex (Luna) vs. Claude Code (Haiku) |
 | [studies/FastJevCompation.md](studies/FastJevCompation.md) | Fast Jev Compaction (tamaratran/fast-jev-compaction) Study |
 | [studies/GoRelease.md](studies/GoRelease.md) | Go Release Pipeline Proposal |
