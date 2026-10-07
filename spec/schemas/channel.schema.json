@@ -7,6 +7,9 @@
     "registry_dir",
     "listen_address",
     "server_name",
+    "plugin_name",
+    "marketplace_name",
+    "marketplace_path",
     "server_version",
     "protocol_version",
     "io_timeout_ms",
@@ -28,6 +31,18 @@
     "max_metadata_bytes"
   ],
   "properties": {
+    "plugin_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "marketplace_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "marketplace_path": {
+      "type": "string",
+      "minLength": 1
+    },
     "registry_dir": {
       "type": "string",
       "minLength": 1

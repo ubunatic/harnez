@@ -62,3 +62,27 @@ then `claude --channels plugin:harnez-channel@harnez-local` with no plugin insta
 `plugin:harnez-channel@harnez-local · plugin not installed` (not "not on approved list"). So the
 local managed allowlist is honored on a personal account. Next: step 1, package and install the
 plugin from a local `harnez-local` marketplace, then rerun the same launch.
+
+## 6. Developer handoff (2026-10-07)
+
+- Added `plugins/harnez-local/.claude-plugin/marketplace.json`, naming `harnez-local`,
+  with the relative source `./plugins/harnez-channel`. The plugin manifest names
+  `harnez-channel`; its root `.mcp.json` runs `harnez channel` over stdio via PATH.
+- `harnez channel setup` now prints the local marketplace add/install commands,
+  `claude --channels plugin:harnez-channel@harnez-local --append-system-prompt ...`,
+  and `mcp__plugin_harnez-channel_harnez-channel__reply` for unattended receipts.
+  Existing standalone development setup remains available. Plugin identity/path live
+  in `spec/channel.yaml` with schema coverage. Updated `docs/AgentMessaging.md`.
+- Tests cover printed setup, JSON parsing, marketplace/manifest identity agreement,
+  wrong marketplace/entry/manifest names, and the MCP command/args.
+- `harnez exec --quota-1 -- go test ./internal/channel/ ./cmd/harnez/` passed both packages.
+- `make install` passed; installed `harnez channel setup` output inspected.
+- User action: from a Claude session in the Harnez checkout, run
+  `/plugin marketplace add ./plugins/harnez-local`, then
+  `/plugin install harnez-channel@harnez-local`. Start a fresh recipient with the
+  launch command printed by `harnez channel setup`; merge the plugin reply allow rule
+  into recipient permissions, preserving existing rules.
+- Live acceptance: no development warning, `harnez channel list` contains the recipient,
+  and `harnez agent send --name <name> -m <message> --wait` returns `received`.
+  No Claude launch or plugin installation was performed by the worker; managed settings
+  were untouched. Ticket stays open for the host to close after the user's live test.

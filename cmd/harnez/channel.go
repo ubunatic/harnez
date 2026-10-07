@@ -37,7 +37,7 @@ func newChannelCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&listenAddress, "listen", "", "numeric loopback bind address (default from spec/channel.yaml)")
 	cmd.AddCommand(&cobra.Command{
-		Use: "setup", Short: "Print MCP JSON and the command for a manually started Claude session",
+		Use: "setup", Short: "Print local plugin installation, MCP JSON and manual Claude launch commands",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := channel.LoadConfig()
@@ -124,5 +124,26 @@ Send: harnez channel send <session-id>
 Default canary message: %s
 Verify the returned message_id in the requested file in the target directory.
 `, mcpData, settingsData, cfg.CanaryModel, cfg.ServerName, cfg.Instructions, cfg.RegistryDir, cfg.CanaryMessage)
+	if err != nil {
+		return err
+	}
+	pluginID := cfg.PluginName + "@" + cfg.MarketplaceName
+	_, err = fmt.Fprintf(out, `
+Local plugin route (requires the user-configured managed channel allowlist):
+Install harnez on PATH first (make install from the Harnez checkout).
+In a user-started Claude session, with the Harnez checkout as working directory:
+/plugin marketplace add ./%s
+/plugin install %s
+
+For unattended plugin receipts, add this permission to .claude/settings.json:
+{"permissions":{"allow":["mcp__plugin_%s_%s__%s"]}}
+
+Then start a fresh session in the recipient directory:
+claude --channels plugin:%s --append-system-prompt %q
+
+Verify: harnez channel list
+Send and wait: harnez channel send <session-id> (or harnez agent send --name <name> -m <message> --wait)
+The plugin route avoids the development prompt only when this plugin is allowlisted.
+`, cfg.MarketplacePath, pluginID, cfg.PluginName, cfg.ServerName, cfg.ReplyToolName, pluginID, cfg.Instructions)
 	return err
 }

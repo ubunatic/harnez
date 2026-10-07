@@ -32,6 +32,35 @@ SDK `--resume` (stopped sessions), Claude's private `cc-socks` sockets (undocume
   the sender, and reports `accepted` (transport write) then, with `--wait`, `received` when the
   recipient calls the `reply` tool, else `unconfirmed`.
 
+## Local plugin route (743)
+
+The repository packages the server in `plugins/harnez-local`, a directory marketplace named
+`harnez-local`. Its plugin `harnez-channel` runs `harnez channel` over stdio; install Harnez
+first (`make install`) and ensure `harnez` is on the PATH inherited by Claude.
+From a user-started Claude session in the Harnez checkout:
+
+```text
+/plugin marketplace add ./plugins/harnez-local
+/plugin install harnez-channel@harnez-local
+```
+
+Then start a fresh recipient session using the command printed by `harnez channel setup`:
+`claude --channels plugin:harnez-channel@harnez-local --append-system-prompt <printed instructions>`.
+For unattended receipts, allow `mcp__plugin_harnez-channel_harnez-channel__reply` in the
+recipient project's `.claude/settings.json` permissions. The standalone server's reply rule
+does not cover the plugin's namespaced tool.
+
+The user has already proven the managed allowlist accepts this identity (743 section 5).
+Packaging alone does not grant approval: the no-development-warning route requires that
+allowlist. Live registration and receipt verification remain pending the user's test:
+`harnez channel list`, then `harnez agent send --name <name> -m <message> --wait` should
+report `received`. Restart the recipient after binary updates.
+
+Layout and install commands follow the [plugin docs](https://code.claude.com/docs/en/plugins)
+and [marketplace docs](https://code.claude.com/docs/en/plugin-marketplaces); tool naming follows
+[plugin components](https://code.claude.com/docs/en/plugins/components), and opt-in follows the
+[channels reference](https://code.claude.com/docs/en/channels-reference).
+
 ## Pitfalls
 
 - Project `.mcp.json` servers stay "Pending approval" until accepted at startup; the channel notice

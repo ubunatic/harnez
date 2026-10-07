@@ -3,6 +3,9 @@
 registry_dir: ~/.harnez/channels
 listen_address: 127.0.0.1:0
 server_name: harnez-channel
+plugin_name: harnez-channel
+marketplace_name: harnez-local
+marketplace_path: plugins/harnez-local
 server_version: "0.2"
 # Avoid the 2026-07-28 revision: Claude's v2 client does not register channels on it.
 protocol_version: "2024-11-05"

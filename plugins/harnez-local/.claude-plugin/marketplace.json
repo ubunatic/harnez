@@ -1,0 +1,11 @@
+{
+  "name": "harnez-local",
+  "owner": { "name": "Harnez" },
+  "plugins": [
+    {
+      "name": "harnez-channel",
+      "source": "./plugins/harnez-channel",
+      "description": "Opt-in local Harnez messaging channel"
+    }
+  ]
+}

@@ -21,6 +21,9 @@ type Config struct {
 	RegistryDir           string `yaml:"registry_dir"`
 	ListenAddress         string `yaml:"listen_address"`
 	ServerName            string `yaml:"server_name"`
+	PluginName            string `yaml:"plugin_name"`
+	MarketplaceName       string `yaml:"marketplace_name"`
+	MarketplacePath       string `yaml:"marketplace_path"`
 	ServerVersion         string `yaml:"server_version"`
 	ProtocolVersion       string `yaml:"protocol_version"`
 	IOTimeoutMS           int    `yaml:"io_timeout_ms"`
@@ -67,11 +70,14 @@ func LoadConfig() (Config, error) {
 }
 
 func (c Config) validate() error {
+	if c.MarketplacePath == "" {
+		return fmt.Errorf("channel spec: empty marketplace path")
+	}
 	if c.RegistryDir == "" || c.ServerVersion == "" || c.ProtocolVersion == "" || c.CanaryMessage == "" || c.Instructions == "" || c.ClaudeMetadataDir == "" || c.ClaudeMetadataPattern == "" || c.ReplyToolDescription == "" || c.SenderFormat == "" || c.TerminalSender == "" {
 		return fmt.Errorf("channel spec: empty required string")
 	}
 	identifier := regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
-	if !identifier.MatchString(c.ServerName) || !identifier.MatchString(c.CanaryModel) || !identifier.MatchString(c.ReplyToolName) {
+	if !identifier.MatchString(c.ServerName) || !identifier.MatchString(c.CanaryModel) || !identifier.MatchString(c.ReplyToolName) || !identifier.MatchString(c.PluginName) || !identifier.MatchString(c.MarketplaceName) {
 		return fmt.Errorf("channel spec: invalid server name or canary model")
 	}
 	if c.IOTimeoutMS <= 0 || c.MaxMessageBytes <= 0 || c.MaxRPCBytes <= 0 || c.WaitTimeoutMS <= 0 || c.ReceiptPollMS <= 0 || c.ReceiptRetentionMS <= 0 || c.MaxReceipts <= 0 || c.MaxMetadataBytes <= 0 {
