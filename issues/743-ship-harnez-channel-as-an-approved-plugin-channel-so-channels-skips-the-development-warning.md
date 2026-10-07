@@ -1,6 +1,6 @@
 # 743 — Ship harnez-channel as an approved plugin channel so --channels skips the development warning
 
-**Status**: Open
+**Status**: Closed — Fixed: local plugin harnez-channel@harnez-local (48307bf9) plus user-set managed allowlist; live in repo session harnez3: clean start without development warning, registered, send --wait accepted -> received
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Agentic Ergonomics
