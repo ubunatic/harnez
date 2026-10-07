@@ -1,6 +1,6 @@
 # 740 — Claude plugin MVP: harnez agent send delivers via Claude SendMessage (Claude to Claude)
 
-**Status**: Open
+**Status**: Closed — Fixed: harnez channel MCP server (c8d96b4e) and harnez agent send with --name resolution, sender prefix and optional reply receipt (65a38717); live: idle/busy delivery, name resolution and accepted->received round trip proven with user-started Claude sessions (study 2026-10-07-claude-cross-session-sendmessage.md)
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics / Feature
