@@ -53,3 +53,12 @@ Canary (docs/Canary.md), undocumented route, expected to fail; record the result
    development-channel warning, channel registers (`harnez channel list`), `send --wait` → `received`.
 4. On fail: record the observed warning/error, tell the user to remove the managed-settings entry,
    and fall back to (a) (development flag, one confirmation per launch); close as won't-fix.
+
+## 5. Allowlist probe (user, 2026-10-07): passed
+
+`/etc/claude-code/managed-settings.json` =
+`{"channelsEnabled":true,"allowedChannelPlugins":[{"marketplace":"harnez-local","plugin":"harnez-channel"}]}`,
+then `claude --channels plugin:harnez-channel@harnez-local` with no plugin installed. Startup notice:
+`plugin:harnez-channel@harnez-local · plugin not installed` (not "not on approved list"). So the
+local managed allowlist is honored on a personal account. Next: step 1, package and install the
+plugin from a local `harnez-local` marketplace, then rerun the same launch.
