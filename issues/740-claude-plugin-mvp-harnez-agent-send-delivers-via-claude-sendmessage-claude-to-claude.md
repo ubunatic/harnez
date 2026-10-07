@@ -33,3 +33,21 @@ it, so `harnez agent send` should route Claude → Claude through it first, as t
   the 656 study.
 - Implement `harnez agent send` for Claude targets; report unsupported providers explicitly.
 - Verify live: send between two interactive Claude sessions, show accepted, idle notice and reply.
+
+## 4. Research Outcome & Milestones (host, 2026-10-07)
+
+Research (web-740, codex:luna:med): the documented push route into a running Claude session is a
+**channel** (https://code.claude.com/docs/en/channels, https://code.claude.com/docs/en/mcp#push-messages-with-channels).
+The target session opts in at launch: `claude --channels server:<name>` (manually configured MCP
+server) or `plugin:<name>@<marketplace>` (allowlisted). Hooks only inject on prompt/tool events
+(no idle wake-up); plain MCP cannot push; SDK `--resume` targets stopped sessions; `cc-socks`
+sockets are undocumented — do not use.
+
+- **M1 Channel canary.** Minimal `harnez-channel` MCP channel server (stdio, launched by Claude as a
+  `server:` entry) that listens on a per-session local endpoint and pushes received text into its
+  session. Script `scripts/canary-740-channel.sh` plus setup notes. Prove: idle delivery, busy
+  delivery, approval prompts, how the endpoint is found per target session. Record in
+  `docs/studies/2026-10-07-claude-cross-session-sendmessage.md`.
+- **M2 `harnez agent send --name <session> -m <msg>`** for Claude targets via the M1 channel;
+  accepted vs receipt reported separately; unsupported providers fail explicitly. Unit tests plus
+  live check by the host.
