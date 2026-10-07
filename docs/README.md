@@ -9,6 +9,7 @@ Not needed for routine coding; reach for these during investigations or design w
 | File | Topic & Consultation Trigger |
 |------|------------------------------|
 | [CLIDesign.md](CLIDesign.md) | apply vs init separation: scope, rationale, footgun avoided, design evolution (consult before modifying CLI command flags) |
+| [AgentMessaging.md](AgentMessaging.md) | How sessions message each other: tickets-first rule, routes per provider, Claude channel design and pitfalls |
 | [AgentStatusLines.md](AgentStatusLines.md) | Claude Code and Antigravity CLI status-line payload fields and the subset Harnez renders |
 | [CodexSettings.md](CodexSettings.md) | Codex config ownership, spec-driven debloat, status/revert, and isolation limits (consult before changing Codex settings management) |
 | [CommandsPipeline.md](CommandsPipeline.md) | Claude commands and Prime prompts plus shared skills for Gemini, Codex, and Prime Agent; skill resources and spec-rendered skill bodies (consult when changing command pipelines or adding a skill) |
