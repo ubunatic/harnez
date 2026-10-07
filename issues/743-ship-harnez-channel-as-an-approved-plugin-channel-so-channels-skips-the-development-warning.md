@@ -39,3 +39,17 @@ The docs tie it to Team/Enterprise admins, and "skip these checks" suggests it i
 Blocked: the user decides between (a) keep the development flag (status quo, one confirmation per
 launch), (b) a canary of the undocumented local managed-settings route (docs/Canary.md, with root write
 to `/etc`), (c) ask Anthropic for an official listing. Nothing is built before that decision.
+
+## 4. Decision (user, 2026-10-07): try (b), local managed-settings allowlist
+
+Canary (docs/Canary.md), undocumented route, expected to fail; record the result either way.
+1. Package `harnez channel` as a plugin in a local directory marketplace (plugin.json, the
+   plugin's `.mcp.json` with the `harnez-channel` server, marketplace.json); install it with
+   `claude plugin marketplace add` / `claude plugin install` as the docs describe.
+2. The **user** writes the managed settings file (root needed; agents print the exact content and
+   `sudo` command, never run it): `allowedChannelPlugins` naming `harnez-channel@<marketplace>`
+   in `/etc/claude-code/managed-settings.json` (check the documented Linux path and key schema first).
+3. The **user** launches `claude --channels plugin:harnez-channel@<marketplace>`. Pass = no
+   development-channel warning, channel registers (`harnez channel list`), `send --wait` → `received`.
+4. On fail: record the observed warning/error, tell the user to remove the managed-settings entry,
+   and fall back to (a) (development flag, one confirmation per launch); close as won't-fix.
