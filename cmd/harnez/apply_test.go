@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"database/sql"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -48,6 +49,10 @@ func TestEnsureTelemetrySchemaNoOpBeforeApply(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create telemetry DB: %v", err)
 	}
+	wantVersion, err := db.SchemaVersion()
+	if err != nil {
+		t.Fatalf("read current schema version: %v", err)
+	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("close telemetry DB: %v", err)
 	}
@@ -70,8 +75,8 @@ func TestEnsureTelemetrySchemaNoOpBeforeApply(t *testing.T) {
 	if err := check.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 9 {
-		t.Fatalf("schema version = %d, want 9", version)
+	if version != wantVersion {
+		t.Fatalf("schema version = %d, want %d", version, wantVersion)
 	}
 	for _, column := range []string{"input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "total_tokens"} {
 		var count int
@@ -118,6 +123,10 @@ func TestApplyCmdMigratesLegacyCompactionSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create telemetry DB: %v", err)
 	}
+	wantVersion, err := db.SchemaVersion()
+	if err != nil {
+		t.Fatalf("read current schema version: %v", err)
+	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("close telemetry DB: %v", err)
 	}
@@ -163,7 +172,7 @@ func TestApplyCmdMigratesLegacyCompactionSchema(t *testing.T) {
 			t.Fatalf("apply failed: %v", err)
 		}
 	})
-	if !bytes.Contains([]byte(output), []byte("telemetry schema: v9 (migrations:")) {
+	if !strings.Contains(output, fmt.Sprintf("telemetry schema: v%d (migrations:", wantVersion)) {
 		t.Fatalf("migration output missing telemetry report: %q", output)
 	}
 
@@ -176,8 +185,8 @@ func TestApplyCmdMigratesLegacyCompactionSchema(t *testing.T) {
 	if err := check.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 9 {
-		t.Fatalf("schema version = %d, want 9", version)
+	if version != wantVersion {
+		t.Fatalf("schema version = %d, want %d", version, wantVersion)
 	}
 	var modelPresent int
 	if err := check.QueryRow("SELECT count(*) FROM pragma_table_info('compaction_events') WHERE name = 'model'").Scan(&modelPresent); err != nil {
