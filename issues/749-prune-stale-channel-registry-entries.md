@@ -1,6 +1,6 @@
 # 749 — Prune stale channel registry entries
 
-**Status**: Open
+**Status**: Closed — Fixed (bf57556d): channel.List removes entries whose PID is dead via token-checked unregister; live PIDs failing health stay; test covers both; live: 10 files pruned to the 1 live session
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: Hygiene
