@@ -34,8 +34,18 @@ session works. Findings for the send route:
 - The recipient sees no sender. loom2 answered its last Codex correspondent (loom1) instead of the
   Claude sender, and loom1 bounced "received" back once. Each message must name the sender and the
   reply command (e.g. `harnez agent send --name <sender> …`).
-Still open: a non-interactive thread listing for name → UUID (candidate: the app-server protocol via
-`codex app-server proxy`; check `generate-json-schema` for a thread list method).
+**2026-10-08, name → UUID lookup:** `codex app-server` (a one-off stdio JSON-RPC server) answers
+`initialize`, then `thread/list` with `{"searchTerm":"loom2","useStateDbOnly":true}` and returns each
+thread's `id`, `name`, `cwd` and `status`, without harnez reading Codex's session files.
+`searchTerm` is a substring match ("loom" also matches loom1, loom2 and older titles), so harnez must
+keep exact `name` matches only and fail on zero or several. `status` is `notLoaded` even for running
+TUIs, because the one-off server is not the process that hosts them; liveness is unknown from here
+(`thread/loaded/list` exists but answers only for the queried server). `codex app-server proxy` (the
+shared daemon's control socket) returned no output to plain JSON lines; not pursued.
+
+**Proposed Codex route for `harnez agent send`:** resolve `--name` through `thread/list` (exact name,
+unique), or take `--id` as is; deliver with `codex queue --thread <UUID> --message <text>`; prefix the
+text with the sender and the reply command. Report "queued", not "delivered".
 
 ## 3. Implementation & Verification Plan
 Canary-test a harmless message to a separate Codex task, confirm its receipt or response, and record targeting, active/idle behavior, failure cases, and confirmation semantics in `docs/studies/` for issue 656. Recommend how `harnez agent send` should use the verified interface.
