@@ -31,3 +31,12 @@ send, acts on it and replies with `--wait` reporting `received`, without user pr
 Second send to the same haiku session: `reply` found without coaxing and `received` reported,
 but the `reply` call again needed manual approval. So the startup prompt fixes tool discovery
 only; the `mcp__harnez-channel__reply` permission is required for unattended receipts.
+
+## 5. Live check of a62a8963 (host + user, 2026-10-07, haiku, fresh sessions, project allow rule set)
+- Without `--append-system-prompt`: message shown with sender label `From harnez1 (...) via harnez
+  agent send`; haiku answered in chat ("Confirmed, I got your message"), never called `reply` →
+  `--wait` ended `unconfirmed`. Channel instructions alone are not enough.
+- With the startup prompt: `received` with text "Message received.", no approval prompt.
+
+**Pre-Work / Required Refinements:** make the startup-prompt launch the default line printed by
+`harnez channel setup` (drop "optional"), and update the canary script and AgentMessaging.md.
