@@ -166,3 +166,5 @@ runtime error instead of a build-time signal, which is harder to diagnose. See
       build-context noise.
 - [ ] Related independent package-install groups kept in separate `RUN` layers; only
       always-together steps (e.g. `apt-get update && install && cleanup`) are combined.
+
+<!-- harnez:stop -->
