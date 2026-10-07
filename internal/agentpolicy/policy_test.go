@@ -91,6 +91,8 @@ func TestConfigureDocumentsHarnezAgentRoutesForBothModes(t *testing.T) {
 				"`HTO=0` in your session background", "`run_in_background: true`", "`run_command`",
 				"`WaitMsBeforeAsync`", "`exec_command`", "`write_stdin`",
 				"There is no `harnez advisor` command",
+				"dispatch it directly with `harnez agent start --model <name>`",
+				"Do not run `harnez agent models` first",
 			} {
 				if !strings.Contains(content, want) {
 					t.Errorf("policy for %s missing %q:\n%s", mode, want, content)
