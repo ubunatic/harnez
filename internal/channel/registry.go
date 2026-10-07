@@ -123,7 +123,8 @@ func lookup(ctx context.Context, cfg Config, sessionID string) (registration, er
 }
 
 // List returns only live endpoints whose authenticated identity matches the registry.
-// Stale entries are ignored, not deleted by discovery; a restart can replace them.
+// Entries whose process is dead are pruned; a live PID that fails the health check is
+// only skipped, because an unanswered request can be transient.
 func List(ctx context.Context, cfg Config) ([]Endpoint, error) {
 	endpoints := make([]Endpoint, 0)
 	entries, err := os.ReadDir(cfg.RegistryDir)
@@ -138,6 +139,13 @@ func List(ctx context.Context, cfg Config) ([]Endpoint, error) {
 			continue
 		}
 		reg, err := readRegistration(cfg, filepath.Join(cfg.RegistryDir, entry.Name()))
+		if err == nil && !processAlive(reg.PID) {
+			// unregister re-reads the file and keeps a replacement with another token.
+			if err := unregister(cfg, reg); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if err == nil && checkRegistration(ctx, cfg, reg) == nil {
 			endpoints = append(endpoints, reg.Endpoint)
 		}

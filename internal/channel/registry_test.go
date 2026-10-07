@@ -52,6 +52,11 @@ func TestStaleDeadPIDAndPort(t *testing.T) {
 			if err != nil || len(endpoints) != 0 {
 				t.Fatalf("stale endpoint was advertised: %#v, %v", endpoints, err)
 			}
+			// Only a dead process is proof; an unanswered live PID keeps its entry.
+			_, statErr := os.Stat(registryPath(cfg, reg.SessionID))
+			if pruned := errors.Is(statErr, os.ErrNotExist); pruned != (cause == "dead pid") {
+				t.Fatalf("pruned=%v for %s (stat %v)", pruned, cause, statErr)
+			}
 		})
 	}
 }
