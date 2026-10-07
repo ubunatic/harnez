@@ -1,6 +1,6 @@
 # 735 — Telemetry data gaps found by the telemetry project: no Skill calls, unstable host labels, short history
 
-**Status**: Open
+**Status**: Closed — Fixed: M1 usage points stored once (4d850285), M2 history restored and 55,615 pre-XDG tool calls recovered (f2ea0c1e), M3 skill calls with skill_name, typed /name and skill-inferred rows for Codex/AGY (9ac06397, ac838d0e), M4 stable HMAC host labels and export format_version 2 (8d2d685b). Host verified on two real exports: v2, calls from 2026-08-31, 2181 points all distinct, identical host labels in both, key file 0600; a live Skill call was recorded as Skill/hook:post/harnez-status. Minor: a successful Skill row has no exit_code (failure rule unaffected).
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Telemetry
