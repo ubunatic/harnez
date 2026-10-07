@@ -25,5 +25,17 @@ existing session"); `codex agents` and `codex app-server daemon|proxy` suggest a
 app-server daemon behind it. Unproven: whether `codex queue` reaches a running TUI live or only on
 its next resume, and how to list threads non-interactively.
 
+**2026-10-08, harnez-side canary:** from a Claude session, `codex queue --thread loom2 …` failed:
+"Cannot verify a unique session label across server pages; matching session UUID: 01a11828-…".
+`codex queue --thread 01a11828-… --message …` returned "Queued message … for thread …", and the idle
+TUI session loom2 showed the message live and acted on it within seconds. Delivery to a running
+session works. Findings for the send route:
+- Address by UUID; name lookup is not reliable, so harnez must resolve name → UUID itself.
+- The recipient sees no sender. loom2 answered its last Codex correspondent (loom1) instead of the
+  Claude sender, and loom1 bounced "received" back once. Each message must name the sender and the
+  reply command (e.g. `harnez agent send --name <sender> …`).
+Still open: a non-interactive thread listing for name → UUID (candidate: the app-server protocol via
+`codex app-server proxy`; check `generate-json-schema` for a thread list method).
+
 ## 3. Implementation & Verification Plan
 Canary-test a harmless message to a separate Codex task, confirm its receipt or response, and record targeting, active/idle behavior, failure cases, and confirmation semantics in `docs/studies/` for issue 656. Recommend how `harnez agent send` should use the verified interface.
