@@ -168,7 +168,7 @@ func TestManagedMarketplaceChannelRepair(t *testing.T) {
 			if err != nil || !result.changed {
 				t.Fatalf("apply: %+v, %v", result, err)
 			}
-			market := readJSONMap(filepath.Join(marketplaceDir, "marketplace.json"))
+			market := readJSONMap(filepath.Join(marketplaceDir, ".claude-plugin", "marketplace.json"))
 			entries := market["plugins"].([]any)
 			if len(entries) != 2 {
 				t.Fatalf("plugins: %#v", entries)

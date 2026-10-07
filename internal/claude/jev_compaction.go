@@ -178,11 +178,19 @@ func applyManagedLocalPlugins(target string, enabled bool, channelEnabled bool, 
 		}
 	}
 	if enabled || channelEnabled {
-		result, err := writeFileIfChanged(filepath.Join(marketplaceDir, "marketplace.json"), mustAsset("jevcompaction/marketplace.json"))
+		// Claude reads directory marketplaces only from .claude-plugin/marketplace.json.
+		result, err := writeFileIfChanged(filepath.Join(marketplaceDir, ".claude-plugin", "marketplace.json"), mustAsset("jevcompaction/marketplace.json"))
 		if err != nil {
 			return applyResult{}, err
 		}
 		changed = changed || result.changed
+		staleManifest := filepath.Join(marketplaceDir, "marketplace.json")
+		if fileExists(staleManifest) {
+			if err := os.Remove(staleManifest); err != nil {
+				return applyResult{}, err
+			}
+			changed = true
+		}
 		setMapKey(extraKnown, jevMarketplaceName, map[string]any{
 			"source": map[string]any{"source": "directory", "path": marketplaceDir},
 		})

@@ -68,7 +68,10 @@ func TestChannelPluginMarketplace(t *testing.T) {
 			Source string `json:"source"`
 		} `json:"plugins"`
 	}
-	readJSON(filepath.Join(root, "marketplace.json"), &marketplace)
+	readJSON(filepath.Join(root, ".claude-plugin", "marketplace.json"), &marketplace)
+	if _, err := os.Stat(filepath.Join(root, "marketplace.json")); !os.IsNotExist(err) {
+		t.Fatalf("stale root marketplace.json: %v", err)
+	}
 	if len(marketplace.Plugins) != 2 || marketplace.Owner.Name == "" {
 		t.Fatalf("invalid marketplace: %#v", marketplace)
 	}
