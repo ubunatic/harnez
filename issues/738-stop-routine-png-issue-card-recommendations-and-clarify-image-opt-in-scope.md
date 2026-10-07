@@ -1,6 +1,6 @@
 # 738 — Stop routine PNG issue-card recommendations and clarify image opt-in scope
 
-**Status**: In Progress
+**Status**: Blocked — Full test verification awaits permission to include unrelated #735 edits or a clean working tree
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
