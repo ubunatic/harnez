@@ -115,3 +115,10 @@ of a pre-M1 agent works again; `list` is scoped and prints
 providers, including Claude Code → Codex sessions outside the sender's child-agent tree,
 through methods proven by canary with confirmed recipient receipt; stop and report when
 blocked on unavailable session access, a user decision (opt-in form), or a denied permission.
+
+## 7. Rule: tickets carry the work, messages only nudge (user, 2026-10-07)
+
+Agents communicate main decisions and work requests through tickets (in any repository), not
+through messages alone; `harnez agent send` is the nudge ("look at ticket N in repo X"). This
+keeps a track record between agents without transcribing everything. Not M2 scope for 740; record
+it in the agent-send docs/skill (e.g. peer-assistant, AgenticLoop) when `send` ships.
