@@ -1,6 +1,6 @@
 # 741 — Host runs harnez agent models before starting an explicitly named model like luna:med
 
-**Status**: Open
+**Status**: Closed — fixed: policy says start named models directly
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics / Bug
