@@ -131,9 +131,7 @@ Verify the returned message_id in the requested file in the target directory.
 	_, err = fmt.Fprintf(out, `
 Local plugin route (requires the user-configured managed channel allowlist):
 Install harnez on PATH first (make install from the Harnez checkout).
-In a user-started Claude session, with the Harnez checkout as working directory:
-/plugin marketplace add ./%s
-/plugin install %s
+Run harnez apply to install and enable the managed harnez-local plugins.
 
 For unattended plugin receipts, add this permission to .claude/settings.json:
 {"permissions":{"allow":["mcp__plugin_%s_%s__%s"]}}
@@ -144,6 +142,6 @@ claude --channels plugin:%s --append-system-prompt %q
 Verify: harnez channel list
 Send and wait: harnez channel send <session-id> (or harnez agent send --name <name> -m <message> --wait)
 The plugin route avoids the development prompt only when this plugin is allowlisted.
-`, cfg.MarketplacePath, pluginID, cfg.PluginName, cfg.ServerName, cfg.ReplyToolName, pluginID, cfg.Instructions)
+`, cfg.PluginName, cfg.ServerName, cfg.ReplyToolName, pluginID, cfg.Instructions)
 	return err
 }

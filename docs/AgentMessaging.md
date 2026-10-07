@@ -34,15 +34,10 @@ SDK `--resume` (stopped sessions), Claude's private `cc-socks` sockets (undocume
 
 ## Local plugin route (743)
 
-The repository packages the server in `plugins/harnez-local`, a directory marketplace named
-`harnez-local`. Its plugin `harnez-channel` runs `harnez channel` over stdio; install Harnez
-first (`make install`) and ensure `harnez` is on the PATH inherited by Claude.
-From a user-started Claude session in the Harnez checkout:
-
-```text
-/plugin marketplace add ./plugins/harnez-local
-/plugin install harnez-channel@harnez-local
-```
+`harnez apply` installs and enables `harnez-channel` beside `jev-compaction` in its
+managed `harnez-local` marketplace. The embedded plugin runs `harnez channel` over
+stdio. Install Harnez first (`make install`), ensure it is on the PATH inherited by
+Claude, then run `harnez apply`. No checkout-relative marketplace registration is needed.
 
 Then start a fresh recipient session using the command printed by `harnez channel setup`:
 `claude --channels plugin:harnez-channel@harnez-local --append-system-prompt <printed instructions>`.

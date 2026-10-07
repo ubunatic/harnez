@@ -2,6 +2,7 @@ package claude
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,7 +87,7 @@ func TestApplyJevCompactionPluginWriteIdempotencyAndRemoval(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := applyJevCompactionPlugin(target, true)
+	result, err := applyManagedLocalPlugins(target, true, true)
 	if err != nil || !result.changed {
 		t.Fatalf("first apply = %+v, %v", result, err)
 	}
@@ -96,7 +97,7 @@ func TestApplyJevCompactionPluginWriteIdempotencyAndRemoval(t *testing.T) {
 			t.Errorf("plugin file %s: %v", name, err)
 		}
 	}
-	result, err = applyJevCompactionPlugin(target, true)
+	result, err = applyManagedLocalPlugins(target, true, true)
 	if err != nil || result.changed {
 		t.Fatalf("second apply = %+v, %v; want unchanged", result, err)
 	}
@@ -120,7 +121,7 @@ func TestApplyJevCompactionPluginWriteIdempotencyAndRemoval(t *testing.T) {
 		t.Fatalf("function hook runtime not enabled: %#v", settings["env"])
 	}
 
-	result, err = applyJevCompactionPlugin(target, false)
+	result, err = applyManagedLocalPlugins(target, false, true)
 	if err != nil || !result.changed {
 		t.Fatalf("remove = %+v, %v", result, err)
 	}
@@ -139,10 +140,83 @@ func TestApplyJevCompactionPluginWriteIdempotencyAndRemoval(t *testing.T) {
 		t.Errorf("removal dropped unrelated plugin: %#v", settings["enabledPlugins"])
 	}
 	marketplaces, _ = settings["extraKnownMarketplaces"].(map[string]any)
-	if _, ok := marketplaces[jevMarketplaceName]; ok {
-		t.Errorf("local plugin marketplace remains after removal: %#v", settings["extraKnownMarketplaces"])
+	if _, ok := marketplaces[jevMarketplaceName]; !ok {
+		t.Errorf("channel marketplace removed with compaction: %#v", settings["extraKnownMarketplaces"])
 	}
 	if _, ok := settings["env"].(map[string]any)["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"]; ok {
 		t.Errorf("function hook flag remains after removal: %#v", settings["env"])
+	}
+}
+
+// All plugin state is written under temporary targets, including migration repairs.
+func TestManagedMarketplaceChannelRepair(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		t.Run(fmt.Sprint(enabled), func(t *testing.T) {
+			target := t.TempDir()
+			marketplaceDir := filepath.Join(target, "plugins", "marketplaces", jevMarketplaceName)
+			knownPath := filepath.Join(target, "plugins", "known_marketplaces.json")
+			oldDir := t.TempDir()
+			if err := os.MkdirAll(filepath.Dir(knownPath), 0755); err != nil {
+				t.Fatal(err)
+			}
+			seed := map[string]any{jevMarketplaceName: map[string]any{"installLocation": oldDir, "source": map[string]any{"source": "directory", "path": oldDir}}, "other": map[string]any{"installLocation": oldDir}}
+			data, _ := json.Marshal(seed)
+			if err := os.WriteFile(knownPath, data, 0644); err != nil {
+				t.Fatal(err)
+			}
+			result, err := applyManagedLocalPlugins(target, enabled, true)
+			if err != nil || !result.changed {
+				t.Fatalf("apply: %+v, %v", result, err)
+			}
+			market := readJSONMap(filepath.Join(marketplaceDir, "marketplace.json"))
+			entries := market["plugins"].([]any)
+			if len(entries) != 2 {
+				t.Fatalf("plugins: %#v", entries)
+			}
+			names := map[string]bool{}
+			for _, entry := range entries {
+				names[entry.(map[string]any)["name"].(string)] = true
+			}
+			if !names[jevPluginName] || !names["harnez-channel"] {
+				t.Fatalf("plugins: %#v", names)
+			}
+			cache := filepath.Join(target, "plugins", "cache", jevMarketplaceName, "harnez-channel", harnez.Version)
+			for _, rel := range []string{".claude-plugin/plugin.json", ".mcp.json"} {
+				cached, err := os.ReadFile(filepath.Join(cache, rel))
+				if err != nil {
+					t.Fatal(err)
+				}
+				source, err := os.ReadFile(filepath.Join(marketplaceDir, "plugins", "harnez-channel", rel))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(cached) != string(source) {
+					t.Fatalf("cache differs: %s", rel)
+				}
+			}
+			manifest := readJSONMap(filepath.Join(cache, ".claude-plugin", "plugin.json"))
+			if manifest["name"] != "harnez-channel" || manifest["version"] != harnez.Version {
+				t.Fatalf("manifest: %#v", manifest)
+			}
+			settings := readJSONMap(filepath.Join(target, "settings.json"))
+			id := "harnez-channel@" + jevMarketplaceName
+			if settings["enabledPlugins"].(map[string]any)[id] != true {
+				t.Fatal("channel not enabled")
+			}
+			installed := readJSONMap(filepath.Join(target, "plugins", "installed_plugins.json"))
+			entry := installed["plugins"].(map[string]any)[id].([]any)[0].(map[string]any)
+			if entry["installPath"] != cache || entry["version"] != harnez.Version || entry["scope"] != "user" {
+				t.Fatalf("installed: %#v", entry)
+			}
+			known := readJSONMap(knownPath)
+			repaired := known[jevMarketplaceName].(map[string]any)
+			if repaired["installLocation"] != marketplaceDir || repaired["source"].(map[string]any)["path"] != marketplaceDir || known["other"] == nil {
+				t.Fatalf("known: %#v", known)
+			}
+			result, err = applyManagedLocalPlugins(target, enabled, true)
+			if err != nil || result.changed {
+				t.Fatalf("second apply: %+v, %v", result, err)
+			}
+		})
 	}
 }

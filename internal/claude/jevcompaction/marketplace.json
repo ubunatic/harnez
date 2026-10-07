@@ -1,7 +1,16 @@
 {
   "name": "harnez-local",
-  "owner": { "name": "Harnez" },
+  "owner": {
+    "name": "Harnez"
+  },
   "plugins": [
-    { "name": "jev-compaction", "source": "./plugins/jev-compaction" }
+    {
+      "name": "jev-compaction",
+      "source": "./plugins/jev-compaction"
+    },
+    {
+      "name": "harnez-channel",
+      "source": "./plugins/harnez-channel"
+    }
   ]
 }

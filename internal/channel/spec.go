@@ -23,7 +23,6 @@ type Config struct {
 	ServerName            string `yaml:"server_name"`
 	PluginName            string `yaml:"plugin_name"`
 	MarketplaceName       string `yaml:"marketplace_name"`
-	MarketplacePath       string `yaml:"marketplace_path"`
 	ServerVersion         string `yaml:"server_version"`
 	ProtocolVersion       string `yaml:"protocol_version"`
 	IOTimeoutMS           int    `yaml:"io_timeout_ms"`
@@ -70,9 +69,6 @@ func LoadConfig() (Config, error) {
 }
 
 func (c Config) validate() error {
-	if c.MarketplacePath == "" {
-		return fmt.Errorf("channel spec: empty marketplace path")
-	}
 	if c.RegistryDir == "" || c.ServerVersion == "" || c.ProtocolVersion == "" || c.CanaryMessage == "" || c.Instructions == "" || c.ClaudeMetadataDir == "" || c.ClaudeMetadataPattern == "" || c.ReplyToolDescription == "" || c.SenderFormat == "" || c.TerminalSender == "" {
 		return fmt.Errorf("channel spec: empty required string")
 	}

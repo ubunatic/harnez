@@ -12,6 +12,7 @@ func newComposeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use: "compose [what]", Short: "Print a ready-to-use snippet from the embedded spec",
 		Long: `Print a snippet without a banner. With no name, list available snippets.
+Run harnez apply first to install and enable the managed channel plugin.
 Channel snippets use the same spec/channel.yaml instructions as channel setup.
 The args snippet is shell-quoted; evaluate it to preserve the prompt as one argument.`,
 		Example: `  claude --channels plugin:harnez-channel@harnez-local --append-system-prompt "$(harnez compose claude-channels-prompt)"

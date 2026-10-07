@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"ubunatic.com/harnez/internal/channel"
+	"ubunatic.com/harnez/internal/claude"
 )
 
 func TestChannelSetupPluginRoute(t *testing.T) {
@@ -22,8 +23,7 @@ func TestChannelSetupPluginRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"/plugin marketplace add ./plugins/harnez-local",
-		"/plugin install harnez-channel@harnez-local",
+		"Run harnez apply",
 		fmt.Sprintf("claude --channels plugin:harnez-channel@harnez-local --append-system-prompt %q", cfg.Instructions),
 		`{"permissions":{"allow":["mcp__plugin_harnez-channel_harnez-channel__reply"]}}`,
 		"harnez on PATH", "fresh session", "allowlisted",
@@ -32,6 +32,9 @@ func TestChannelSetupPluginRoute(t *testing.T) {
 			t.Errorf("setup missing %q", want)
 		}
 	}
+	if strings.Contains(out.String(), "/plugin marketplace add") || strings.Contains(out.String(), "/plugin install") {
+		t.Fatal("setup still requires manual plugin installation")
+	}
 }
 
 func TestChannelPluginMarketplace(t *testing.T) {
@@ -39,7 +42,12 @@ func TestChannelPluginMarketplace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := filepath.Join("../..", cfg.MarketplacePath)
+	target := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	if err := claude.ApplyAll(target, &claude.Config{}, nil, false, false, false); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(target, "plugins", "marketplaces", cfg.MarketplaceName)
 	readJSON := func(path string, value any) {
 		t.Helper()
 		data, err := os.ReadFile(path)
@@ -60,11 +68,11 @@ func TestChannelPluginMarketplace(t *testing.T) {
 			Source string `json:"source"`
 		} `json:"plugins"`
 	}
-	readJSON(filepath.Join(root, ".claude-plugin/marketplace.json"), &marketplace)
-	if len(marketplace.Plugins) != 1 || marketplace.Owner.Name == "" {
+	readJSON(filepath.Join(root, "marketplace.json"), &marketplace)
+	if len(marketplace.Plugins) != 2 || marketplace.Owner.Name == "" {
 		t.Fatalf("invalid marketplace: %#v", marketplace)
 	}
-	entry := marketplace.Plugins[0]
+	entry := marketplace.Plugins[1]
 	if !strings.HasPrefix(entry.Source, "./") || strings.Contains(entry.Source, "..") {
 		t.Fatalf("source must stay inside marketplace: %q", entry.Source)
 	}

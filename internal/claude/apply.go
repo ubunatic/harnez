@@ -1140,14 +1140,14 @@ func ApplyAllVariant(target string, cfg *Config, selection Set, docs []string, f
 		addStat("settings", strings.Join(keys, ", "))
 	}
 	printResult("wrote", settingsPath, sr)
-	jevResult, err := applyJevCompactionPlugin(target, cfg.JevCompactionEnabled, cfg.Env["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] != "")
+	jevResult, err := applyManagedLocalPlugins(target, cfg.JevCompactionEnabled, true, cfg.Env["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] != "")
 	if err != nil {
-		return fmt.Errorf("jev compaction plugin: %w", err)
+		return fmt.Errorf("managed local plugins: %w", err)
 	}
 	if jevResult.changed {
 		changes++
 	}
-	printResult("managed", filepath.Join(target, "plugins", "cache", jevMarketplaceName, jevPluginName), jevResult)
+	printResult("managed", filepath.Join(target, "plugins", "marketplaces", jevMarketplaceName), jevResult)
 
 	disableRateFeedback := RateFeedbackDisabled(cfg, nil)
 
@@ -1722,6 +1722,9 @@ func DiffAll(target string, cfg *Config, selection Set) (bool, error) {
 
 // CleanAll cleans the config.
 func CleanAll(target string, cfg *Config) error {
+	if _, err := applyManagedLocalPlugins(target, false, false); err != nil {
+		return fmt.Errorf("managed local plugins: %w", err)
+	}
 	if err := cleanSettingsJSON(filepath.Join(target, "settings.json")); err != nil {
 		return fmt.Errorf("settings: %w", err)
 	}
