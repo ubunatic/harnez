@@ -21,8 +21,11 @@ into the alias; any wording change in harnez leaves the alias stale.
 - First `<what>`: `claude-channels-prompt` — the trust/reply startup prompt currently printed by
   `harnez channel setup`. Single source: both commands read it from `spec/channel.yaml`, no Go copy.
 - Unknown `<what>` fails and lists the available names; `harnez compose` alone lists them.
-- Open: whether a second entry should print the full launch args (`claude-channels-args`), and
-  whether `compose` collides with any planned command name. Decide before building.
+- Second `<what>` (user decision 2026-10-07): `claude-channels-args` prints the full launch args,
+  `--channels plugin:harnez-channel@harnez-local --append-system-prompt <prompt>`, shell-quoted so
+  `eval "command claude $(harnez compose claude-channels-args) \"\$@\""` keeps the prompt as one
+  argument (plain `$(...)` would word-split it). Test the quoting with a real `sh -c` round trip.
+- Still check that `compose` collides with no existing or planned command name.
 
 ## 3. Verification
 - Unit tests: exact output equals the spec text; unknown name lists candidates; setup and compose
