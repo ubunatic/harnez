@@ -34,3 +34,14 @@ shows, `/mcp` lists no `harnez-channel`, nothing registers. Enabled flag and cac
   another dir is repaired.
 - `make install && harnez apply`; host checks `~/.claude/plugins` state; user restarts a session
   in a non-harnez directory and the channel registers.
+
+## Live check finding (host, 2026-10-07)
+
+`claude plugin list` showed both harnez-local plugins "failed to load: cache-miss". Cause:
+apply writes the marketplace manifest to `<marketplace>/marketplace.json`; Claude reads
+`<marketplace>/.claude-plugin/marketplace.json`. This predates 747 (jev-compaction never loaded
+either). Probe: copying the file to `.claude-plugin/` made both plugins "enabled".
+
+**Pre-Work / Required Refinements:** write the manifest to `.claude-plugin/marketplace.json`
+(remove the stale root copy), test the path, `make install`, `harnez apply`, then
+`claude plugin list` shows both enabled.
