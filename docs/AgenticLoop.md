@@ -24,6 +24,7 @@ For TUI layout work, use a checked-in `.ansi` mockup under `docs/data/` as the v
 
 ### Multi-session peer assistance
 `/peer-assistant` uses available native session messaging for explicit peer requests; it does not imply an always-on watcher. Persist handoffs and findings in tickets/docs, keep one writer per workspace, and track/clean up helpers.
+Tickets carry the work; messages (`harnez agent send`) only nudge: "see ticket N in repo X".
 
 ## 2. The 5-Phase Sprint Loop
 Each phase's **Mechanics** and **Constraints** are summarized inline below; see the full doc for step-by-step detail.

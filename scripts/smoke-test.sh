@@ -90,6 +90,24 @@ else fail "apply after repair made unexpected changes"
 fi
 
 echo ""
+echo "=== plugins: Claude Code must load what apply ships ==="
+# Files on disk are not proof: a wrong manifest path still reads as installed (issue 747).
+if ! command -v claude >/dev/null 2>&1
+then echo "  SKIP: claude not found on PATH"
+else plugins=$(claude plugin list 2>&1)
+    for plugin in harnez-channel@harnez-local jev-compaction@harnez-local
+    do
+        # The plugin's block runs from its name line to the next blank line.
+        block=$(printf '%s\n' "$plugins" | awk -v p="$plugin" 'index($0, p) { on = 1 } on && /^$/ { exit } on')
+        if printf '%s\n' "$block" | grep -q "Status:.*enabled"
+        then pass "$plugin enabled"
+        else printf '%s\n' "$plugins" >&2
+            fail "$plugin not enabled in 'claude plugin list'"
+        fi
+    done
+fi
+
+echo ""
 echo "All apply/diff/repair smoke tests passed."
 
 echo ""

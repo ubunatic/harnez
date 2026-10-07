@@ -96,6 +96,12 @@ dispatch rules as any other orchestration, track helper sessions you start,
 and clean them up when finished. A peer assistant coordinates and reports back;
 it does not create a second concurrent writer for shared files.
 
+Tickets carry the work; messages only nudge. Agents put decisions and work
+requests in a ticket (in whichever repository owns the work) and use a message
+such as `harnez agent send --name <session> "see ticket N in repo X"` only to
+point the recipient at it. The ticket keeps the track record between agents;
+the message transcript does not need to.
+
 ---
 
 ## 1. Core Philosophy & Invariants

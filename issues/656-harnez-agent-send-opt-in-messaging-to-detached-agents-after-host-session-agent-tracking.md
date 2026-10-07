@@ -128,4 +128,5 @@ it in the agent-send docs/skill (e.g. peer-assistant, AgenticLoop) when `send` s
 Claude recipients are done: channel server and `send` (740), allowlisted plugin route without the
 development warning (743), `harnez apply` ships the plugin (747), default session names and the
 `send --name|--id <message>` form, registry pruning (749), plural command words (748). Open: Codex
-route (680), and §7's tickets-first rule into the shared agent docs/skills (user to decide where).
+route (680). §7's tickets-first rule is now in `docs/practices/AgenticLoop.md` (multi-session peer
+assistance, full and lite).
