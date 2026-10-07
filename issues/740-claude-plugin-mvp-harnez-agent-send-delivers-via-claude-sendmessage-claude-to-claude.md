@@ -66,3 +66,19 @@ sockets are undocumented — do not use.
   `docs/studies/2026-10-07-claude-cross-session-sendmessage.md`.
 - **Live verification pending:** no Claude session was launched by the developer.
   M1's external mechanism is not yet proved; keep M2 behind the user-run canary.
+
+## 5. M1 Delivered (host, 2026-10-07)
+
+M1 delivered: channel server canary (c8d96b4e), live results 7c31a6d5 (study). Idle, backgrounded
+and user-shell cases delivered and acted on; mid-turn messages wait until the tool ends and the
+model then asks its user before acting (untrusted external input).
+
+**Pre-Work / Required Refinements (M2):**
+- Message framing: the pushed text names the sender (host session name/id, `harnez agent send`)
+  and that the user opted in via the channel, so the recipient can judge it. No wording that tries
+  to bypass the recipient's caution.
+- Receipt: add a channel `reply`/ack tool so the recipient confirms a `message_id`; `send` reports
+  accepted, then receipt when the ack arrives (`--wait` with timeout from spec). No ack = unconfirmed.
+- Name resolution: `--name` resolves a harnez/Claude session name to the registered session id;
+  ambiguous or unknown names fail with a list of candidates.
+- Setup note: document the project MCP approval prompt in `harnez channel --help`.
