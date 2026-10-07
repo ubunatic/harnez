@@ -16,6 +16,7 @@ func newChannelCmd() *cobra.Command {
 	var listenAddress string
 	cmd := &cobra.Command{
 		Use: "channel", Short: "Serve the opt-in local Claude MCP channel canary",
+		Long: "Serve the opt-in local Claude MCP channel. The user starts Claude manually. At first project startup, accept 'New MCP server found in this project' with 'Use this MCP server'; until approval the server stays pending and no endpoint registers. After installing an updated binary, restart the MCP server (or the Claude session) to load the reply tool.",
 		Args: cobra.NoArgs, SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := channel.LoadConfig()
@@ -104,7 +105,8 @@ func printChannelSetup(out io.Writer, cfg channel.Config, executable string) err
 In that directory, manually run:
 claude --model %s --dangerously-load-development-channels server:%s
 
-Accept the development-channel and MCP consent prompts.
+Accept the development-channel prompt, then "New MCP server found in this project"
+with "Use this MCP server"; pending approval prevents endpoint registration.
 Registry: %s
 In another terminal: harnez channel list
 Send: harnez channel send <session-id>

@@ -903,7 +903,7 @@ agent.compact_thresholds may override provider:model[:tier] thresholds.`}
 	rate.ValidArgsFunction = agentSessionCompletion(storeDir, parent)
 	withHostTrackingLine(start, store, parent, func() bool { return workerID != "" })
 	withHostTrackingLine(resume, store, parent, func() bool { return resumeWorkerID != "" })
-	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate, newAgentSelftestCmd())
+	root.AddCommand(start, models, resume, list, status, wait, compact, stop, remove, rate, newAgentSelftestCmd(), newAgentSendCmd(&storeDir, &name, &workDir))
 	silenceUsage(root)
 	return root
 }

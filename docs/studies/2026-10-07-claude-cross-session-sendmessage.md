@@ -146,3 +146,74 @@ Findings:
   `harnez agent send` must therefore not assume action on delivery; receipt needs a recipient-side
   confirmation (reply tool) and the sender text should state who sent it and why.
 - `accepted` stays transport-only, as designed.
+
+### M2: agent send and optional acknowledgement (2026-10-07)
+
+Implementation adds `harnez agent send` with exact name resolution against healthy channel
+endpoints. Harnez registry names join via the provider session ID; manual Claude names join
+via `name` and `sessionId` in `~/.claude/sessions/*.json`. **This Claude metadata is
+undocumented and fragile**: filenames, fields and availability can change. Missing, unreadable,
+unparsable and oversized files are silently skipped; explicit channel session IDs still work.
+Only session IDs/names are retained from these files; their other contents are never printed,
+logged or returned. Test fixtures cover malformed/future metadata without exposing real files.
+
+Messages identify the sender name/ID and the sending command. The latest user direction
+supersedes the earlier framing proposal: no extra trust or opt-in text, and acknowledgement
+is optional. `accepted` still means an MCP transport write. `--wait` is off by default;
+when enabled it waits up to the spec's 30 seconds (or positive `--timeout`) for the recipient
+to call `reply` with the matching `message_id` and optional `text`. The second JSON line
+is `received` on acknowledgement, otherwise `unconfirmed`. Timeout exits successfully
+with unconfirmed receipt; other receipt transport failures return an error after printing it.
+Received never proves successful task completion.
+
+Receipt state is private to the server process, bounded by spec capacity and retention.
+It is reserved before emitting the notification to preserve early acknowledgements.
+Duplicate acknowledgements keep the original reply. Unknown/expired IDs are tool errors.
+Restart discards this state; waits do not follow a replacement endpoint or resend messages.
+
+#### Host live check (pending; developer never launches Claude)
+
+The running session `3f04e66b-36ef-4027-a0d1-a301b60f32dd` still has the M1 MCP process.
+Installing the new binary does **not** update that running process. Ordinary sends work
+before restart; receipt waiting needs the new server. In Claude, use `/mcp` to reconnect
+the `harnez-channel` server if available, then verify it exposes `reply`. Otherwise the
+user must exit and manually resume the same session from its original project directory:
+
+```bash
+claude --resume 3f04e66b-36ef-4027-a0d1-a301b60f32dd --model haiku --dangerously-load-development-channels server:harnez-channel
+```
+
+Accept development-channel consent and, if prompted, "New MCP server found in this project"
+with "Use this MCP server". Pending approval means there is no registered endpoint.
+
+From a separate terminal (or another host session for sender-name verification):
+
+```bash
+harnez channel list
+harnez agent send 3f04e66b-36ef-4027-a0d1-a301b60f32dd -m 'M2 immediate delivery check: report the sender shown in this message.'
+harnez agent send 3f04e66b-36ef-4027-a0d1-a301b60f32dd -m 'M2 receipt check: call the harnez-channel reply tool with this event message_id and text M2-received.' --wait --timeout 30s
+harnez agent send --name __740_missing__ -m probe
+```
+
+The immediate send prints one accepted JSON line. The receipt probe prints accepted first,
+then received with `M2-received`. The deliberately unknown name must fail without sending
+and list live candidates; copy the target's current name to check `--name` resolution:
+
+```bash
+harnez agent send --name '<name from candidates>' -m 'M2 named receipt check: call reply with this event message_id and text M2-named.' --wait
+```
+
+Repeat from two opted-in sessions and while the recipient is busy; retain the M1 findings
+above as historical observations. Host records actual M2 outcomes and keeps the ticket open
+until live verification. The canary script also accepts `agent-send` followed by these same
+CLI arguments; it never starts Claude or writes config/native sockets.
+
+#### M2 developer validation
+
+- `make test-q1` ran once and passed (format check, `go vet`, `go test ./...`).
+  Log: `/tmp/harnez-740-m2-test-q1.log`; grepping `--- FAIL` found no matches.
+  `cmd/harnez` passed in 47.165 s; `internal/channel` passed in 0.075 s.
+- `bash -n scripts/canary-740-channel.sh` passed.
+- `make install` passed; installed command help exposes optional waiting and the project MCP approval/restart note.
+- No Go source was changed after the test run. Live probes above remain pending
+  with the host; the developer did not start or restart Claude.

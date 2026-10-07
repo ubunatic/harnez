@@ -1088,14 +1088,14 @@ func setAgentEnv(role, name string) func() {
 }
 
 // guardLeafRole refuses mutating agent verbs when the caller is a leaf worker.
-// list, status and models stay available for diagnosis.
+// Diagnostic verbs and channel send do not spawn or control workers.
 func guardLeafRole(verb string) error {
 	role := os.Getenv(agentRoleEnv)
 	if !subagent.IsLeafRole(role) {
 		return nil
 	}
 	switch verb {
-	case "list", "status", "models", "help", "agent":
+	case "list", "status", "models", "help", "agent", "send":
 		return nil // the root form checks each start/resume/slash itself
 	}
 	return subagent.CheckSpawn(role, "developer")

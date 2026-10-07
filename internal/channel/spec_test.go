@@ -76,3 +76,25 @@ func TestEmbeddedChannelSpecAndSchema(t *testing.T) {
 		}
 	}
 }
+
+func TestM2ConfigValidation(t *testing.T) {
+	cfg := testConfig(t)
+	for _, field := range []string{"WaitTimeoutMS", "ReceiptPollMS", "ReceiptRetentionMS", "MaxReceipts", "MaxMetadataBytes"} {
+		t.Run(field, func(t *testing.T) {
+			invalid := cfg
+			reflect.ValueOf(&invalid).Elem().FieldByName(field).SetInt(0)
+			if err := invalid.validate(); err == nil {
+				t.Fatal("zero bound accepted")
+			}
+		})
+	}
+	for _, field := range []string{"ClaudeMetadataDir", "ClaudeMetadataPattern", "ReplyToolName", "ReplyToolDescription", "SenderFormat", "TerminalSender"} {
+		t.Run(field, func(t *testing.T) {
+			invalid := cfg
+			reflect.ValueOf(&invalid).Elem().FieldByName(field).SetString("")
+			if err := invalid.validate(); err == nil {
+				t.Fatal("empty required value accepted")
+			}
+		})
+	}
+}

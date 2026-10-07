@@ -34,7 +34,7 @@ func TestAgentCommandSurface(t *testing.T) {
 	if len(c.Commands()) == 0 {
 		t.Fatal("agent command has no children")
 	}
-	for _, name := range []string{"start", "models", "resume", "list", "status", "wait", "compact", "stop", "delete", "enable", "disable"} {
+	for _, name := range []string{"start", "models", "resume", "list", "status", "wait", "compact", "stop", "delete", "enable", "disable", "send"} {
 		found := false
 		for _, child := range c.Commands() {
 			if child.Name() == name {

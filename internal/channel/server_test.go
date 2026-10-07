@@ -240,7 +240,7 @@ func TestInboundGatingAndLimits(t *testing.T) {
 	reg := registration{Endpoint: Endpoint{SessionID: "target"}, Token: "test-token"}
 	output := &rpcCapture{messages: make(chan map[string]any, 1)}
 	var ready atomic.Bool
-	handler := channelHandler(cfg, reg, &ready, &transport{encoder: json.NewEncoder(output)}, func() {})
+	handler := channelHandler(cfg, reg, &ready, &transport{encoder: json.NewEncoder(output)}, func() {}, newReceipts(cfg))
 	for _, tc := range []struct {
 		name, token, body string
 		ready             bool

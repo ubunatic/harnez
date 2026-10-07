@@ -95,3 +95,24 @@ its requests; assumed to work (not re-tested mid-turn).
 parse Claude session files, but uses only file names, session ids and names. It never prints,
 logs or returns their other content (errors name the file, not its content). Agents working on
 this ticket must not `cat`/read those files into their transcript either; test with fixtures.
+
+## 6. M2 Implemented (developer, 2026-10-07; host live verification pending)
+
+- `harnez agent send --name <session> -m <text>` or `send <Claude-session-id> -m <text>`
+  targets only authenticated, healthy registered channel endpoints; explicit `--dir` scopes
+  resolution. Unknown and ambiguous names list sorted name/ID/directory candidates.
+- Harnez names map through `Session.ProviderID()`; Claude names use best-effort live
+  `~/.claude/sessions/*.json` metadata. Missing, malformed and oversized metadata is skipped;
+  only IDs and names are retained, never raw content. This undocumented source is fragile.
+- Pushed text identifies the sender name/ID and `harnez agent send`, following the latest
+  user direction above. No additional opt-in/trust framing or startup prompt was added.
+- Sending defaults to immediate `accepted` / `receipt: unconfirmed`. Optional `--wait`
+  uses a 30-second spec timeout (positive `--timeout` override). A matching optional
+  MCP `reply(message_id, text?)` produces `received`; timeout remains `unconfirmed`.
+  Receipt does not certify task completion. A receipt transport error prints unconfirmed
+  before returning an error; it does not retry the accepted message.
+- Reply tracking is per server, authenticated over loopback, bounded to 1024 messages
+  with five-minute retention; restart loses outstanding receipt state.
+- The user must restart the old MCP server to load the reply tool, keeping the same
+  Claude session if possible. The canary remains manual; live verification and ticket
+  closure belong to the host. See the study for exact commands.

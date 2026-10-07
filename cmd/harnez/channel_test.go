@@ -57,3 +57,18 @@ func TestChannelServeRequiresHostSessionID(t *testing.T) {
 		t.Fatalf("server accepted missing host identity: %v", err)
 	}
 }
+
+func TestChannelHelpExplainsProjectApprovalAndRestart(t *testing.T) {
+	cmd := newChannelCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"--help"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"New MCP server found in this project", "Use this MCP server", "restart", "reply tool"} {
+		if !strings.Contains(out.String(), text) {
+			t.Fatalf("missing help %q: %s", text, out.String())
+		}
+	}
+}

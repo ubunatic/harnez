@@ -29,6 +29,7 @@ type rpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id"`
 	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params"`
 }
 
 type transport struct {
@@ -84,7 +85,8 @@ func (s Server) Run(ctx context.Context) (runErr error) {
 	defer stopClose()
 	output := &transport{encoder: json.NewEncoder(s.Out)}
 	var ready atomic.Bool
-	handler := channelHandler(s.Config, reg, &ready, output, cancel)
+	receipts := newReceipts(s.Config)
+	handler := channelHandler(s.Config, reg, &ready, output, cancel, receipts)
 	httpServer := &http.Server{
 		Handler: handler, ReadHeaderTimeout: s.Config.timeout(),
 		ReadTimeout: s.Config.timeout(), WriteTimeout: s.Config.timeout(),
@@ -144,10 +146,18 @@ func (s Server) Run(ctx context.Context) (runErr error) {
 			response = map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": map[string]any{
 				"protocolVersion": s.Config.ProtocolVersion,
 				"serverInfo":      map[string]string{"name": s.Config.ServerName, "version": s.Config.ServerVersion},
-				"capabilities":    map[string]any{"experimental": map[string]any{"claude/channel": map[string]any{}}},
+				"capabilities":    map[string]any{"tools": map[string]any{}, "experimental": map[string]any{"claude/channel": map[string]any{}}},
 				"instructions":    s.Config.Instructions,
 			}}
 			initialized = true
+		case "tools/list":
+			response = map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": map[string]any{"tools": []any{replyTool(s.Config)}}}
+		case "tools/call":
+			if !ready.Load() {
+				response = rpcFailure(req.ID, -32600, "MCP initialization not complete")
+			} else {
+				response = map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": receipts.toolResult(s.Config, req.Params)}
+			}
 		case "ping":
 			response = map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": map[string]any{}}
 		default:
@@ -167,7 +177,7 @@ func rpcFailure(id json.RawMessage, code int, message string) any {
 	return map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": code, "message": message}}
 }
 
-func channelHandler(cfg Config, reg registration, ready *atomic.Bool, output *transport, cancel context.CancelFunc) http.Handler {
+func channelHandler(cfg Config, reg registration, ready *atomic.Bool, output *transport, cancel context.CancelFunc, receipts *receipts) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+reg.Token)) != 1 {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -176,6 +186,16 @@ func channelHandler(cfg Config, reg registration, ready *atomic.Bool, output *tr
 		if r.URL.Path == "/health" && r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(reg.Endpoint)
+			return
+		}
+		if r.URL.Path == "/receipt" && r.Method == http.MethodGet {
+			receipt, ok := receipts.get(r.URL.Query().Get("message_id"))
+			if !ok {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(receipt)
 			return
 		}
 		if r.URL.Path != "/message" {
@@ -204,6 +224,10 @@ func channelHandler(cfg Config, reg registration, ready *atomic.Bool, output *tr
 			return
 		}
 		id := rand.Text()
+		if err := receipts.reserve(reg.SessionID, id); err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
 		if err := output.write(map[string]any{
 			"jsonrpc": "2.0", "method": "notifications/claude/channel",
 			"params": map[string]any{"content": message.Content, "meta": map[string]string{"session_id": reg.SessionID, "message_id": id}},
