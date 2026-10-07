@@ -28,6 +28,10 @@ SDK `--resume` (stopped sessions), Claude's private `cc-socks` sockets (undocume
   `claude --dangerously-load-development-channels server:harnez-channel` (research preview).
 - Each server listens on a loopback ephemeral port with a random bearer token and registers itself
   in `~/.harnez/channels` (path in `spec/channel.yaml`), keyed by `CLAUDE_CODE_SESSION_ID`.
+  A clean exit removes the entry; `harnez channel list` prunes entries whose PID is dead (749)
+  and only skips a live PID whose endpoint fails the health check.
+- Sessions started with `harnez compose claude-channels-args` are named
+  `<working-dir-basename>-<4 random chars>`, so `--name` works without `/rename`.
 - `harnez agent send --name <name> | --id <id> <msg> [--wait]` (`-m`/`-p` also take the message; without a target it lists live session names) resolves names from harnez records and
   Claude session metadata (names and ids only; session file content never leaves harnez), prefixes
   the sender, and reports `accepted` (transport write) then, with `--wait`, `received` when the

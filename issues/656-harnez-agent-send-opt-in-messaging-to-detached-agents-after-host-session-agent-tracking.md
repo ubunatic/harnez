@@ -122,3 +122,10 @@ Agents communicate main decisions and work requests through tickets (in any repo
 through messages alone; `harnez agent send` is the nudge ("look at ticket N in repo X"). This
 keeps a track record between agents without transcribing everything. Not M2 scope for 740; record
 it in the agent-send docs/skill (e.g. peer-assistant, AgenticLoop) when `send` ships.
+
+## 8. Progress (host, 2026-10-07)
+
+Claude recipients are done: channel server and `send` (740), allowlisted plugin route without the
+development warning (743), `harnez apply` ships the plugin (747), default session names and the
+`send --name|--id <message>` form, registry pruning (749), plural command words (748). Open: Codex
+route (680), and §7's tickets-first rule into the shared agent docs/skills (user to decide where).
