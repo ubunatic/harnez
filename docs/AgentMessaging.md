@@ -71,4 +71,6 @@ and [marketplace docs](https://code.claude.com/docs/en/plugin-marketplaces); too
 - A session resumed across a channel-server upgrade keeps its old view of the tools; start fresh.
 - Models load tools on demand; each `reply` call asks for approval until `mcp__harnez-channel__reply`
   is allowed in `.claude/settings.json` (printed by `harnez channel setup`).
+- Allow rules for MCP tools take the full tool name (plugin route:
+  `mcp__plugin_harnez-channel_harnez-channel__reply`); Claude rejects a wildcard there as a settings error.
 - `/rename x` may be stored with a suffix (`x-1f`); `send` lists candidates on a miss.
