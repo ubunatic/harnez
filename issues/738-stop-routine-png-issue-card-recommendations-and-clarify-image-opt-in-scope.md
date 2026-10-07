@@ -40,3 +40,17 @@ images by default, or stop and report when blocked on a user decision or denied 
   benefit; do not assume the user requested removal of the renderer itself.
 - Verify plain issue search returns text and generated guidance uses that path.
   Cover guidance regressions and verify any retained explicit image path separately.
+
+## Implementation & Verification (2026-10-07)
+
+- Canonical rules and issue/review/roadmap/discovery workflows now use text. New PNG
+  rendering requires an explicit user request; existing PNG documentation remains readable.
+- Regenerated this checkout's Tools.md, ran `make install`, and applied updated skills
+  to all configured agent targets. Other existing checkouts need `harnez init` to refresh
+  their project rules; already-running agents may retain old instructions in context.
+- Added regression assertions for generated rules and installed issue/review/roadmap skills.
+  Independent native reviewer found no blockers; scoped whitespace check passed.
+- Live checks: plain issue search/show and `read --auto` return text; explicit `show --image`
+  still renders a PNG. Full test suite has not run: unrelated #735 changes remain in the
+  working tree and Quota.md requires a clean tree. Awaiting permission to test the combined
+  tree or completion of that work before running `make test-q1` and closing this ticket.

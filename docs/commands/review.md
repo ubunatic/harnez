@@ -11,7 +11,8 @@ Triggered by `/review [issue-number|issue-path]`.
 
 2. **Verify Issue Completion (if issue provided)**:
    - If a ticket number or path is specified (or in active context):
-     - Read the ticket (`issues/<n>-*.md` or `harnez issues show -d <repo> <n> -I`).
+     - Read the ticket as text (`issues/<n>-*.md` or `harnez issues show -d <repo> <n>`).
+       Add `-I/--image` only when the user explicitly requests image output.
      - Check all acceptance criteria, milestones, and requirements against the implementation.
      - Confirm test coverage verifies the expected behavior.
      - Check documentation updates (evergreen docs, `docs/README.md`) and tracker synchronization (`issues/*.md` status, `issues/README.md` index).
@@ -30,7 +31,7 @@ Triggered by `/review [issue-number|issue-path]`.
 5. **File Bigger Issues as New Issues (see `/issue` skill)**:
    - Do not bloat or stall the current review with out-of-scope refactorings, large architectural gaps, or new feature requests.
    - File follow-up issues using the `/issue` skill conventions:
-     - Search existing issues for duplicates: `harnez find -d <repo> issues "<search terms>" -I`.
+     - Search existing issues for duplicates as text: `harnez find -d <repo> issues "<search terms>"`.
      - Reserve and draft the ticket: `harnez issues new -d <repo> "<title>"`.
      - Fill in problem, scope, acceptance criteria, and verification targets.
      - Open and commit: `harnez issues open -d <repo> <n> --commit "docs(issues): file <n>, <summary>"`.

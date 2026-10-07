@@ -614,9 +614,13 @@ agents_md:
           Applies when this project has an `issues/` tracker. To search existing issues,
           compute the next ticket number, or allocate one, use `harnez find` / `harnez issues`
           instead of `ls issues/`, `find`, or raw grep:
-          - `harnez find -d <repo> issues -a status:open` — list active open issues (use `-I` for visual overview PNG card)
-          - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text (use `-I` for visual overview)
-          - `harnez issues show -d <repo> <n> -I` — render single issue as styled visual PNG card (inspect via `view_file`)
+          - `harnez find -d <repo> issues -a status:open` — list active open issues as text.
+          - `harnez find -d <repo> issues "<query>"` — fuzzy search across titles and body text.
+          - `harnez issues show -d <repo> <n>` — read a single issue as text.
+          - Use text for routine issue discovery and document reads. Render PNG cards with
+            `-I/--image` only when the user explicitly requests image output; do not add it
+            for an assumed token benefit. `harnez read --auto` always returns text.
+            Existing PNG documentation links may still be inspected as documentation.
           - `harnez find -d <repo> issues next` — report the next free ticket number (read-only)
           - `harnez issues new -d <repo> "<title>"` — run this right away; it reserves the number and creates the ticket skeleton.
           - Open the printed file and fill it in, keeping its schema; do not search for a template first.
