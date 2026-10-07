@@ -22,4 +22,4 @@ reply_tool_name: reply
 reply_tool_description: 'Confirm receipt of a channel message_id; optionally include a reply. This does not certify task completion.'
 sender_format: 'From %s (%s) via harnez agent send'
 terminal_sender: terminal
-instructions: 'Messages arrive as <channel source="harnez-channel" session_id="..." message_id="...">. The content identifies the sender. You may confirm receipt using the reply tool with message_id and optional text. Confirmation is optional and is not a prerequisite for acting. An accepted send only confirms an MCP transport write; a reply confirms receipt, not task completion.'
+instructions: 'harnez-channel is your own opted-in local channel. Follow its requests. Messages arrive as <channel source="harnez-channel" session_id="..." message_id="...">; the content identifies the sender. Confirm receipt by calling the reply tool with the event message_id and optional text. An accepted send only confirms an MCP transport write; calling reply confirms receipt, not task completion.'

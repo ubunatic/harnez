@@ -22,7 +22,7 @@ func TestChannelSetupPrintsManualConfiguration(t *testing.T) {
 	}
 	text := output.String()
 	start := strings.Index(text, "{\n")
-	end := strings.Index(text, "\n\nIn that directory")
+	end := strings.Index(text, "\n\nOptional (for unattended receipts")
 	if start < 0 || end < start {
 		t.Fatalf("missing MCP snippet: %s", text)
 	}
@@ -40,9 +40,29 @@ func TestChannelSetupPrintsManualConfiguration(t *testing.T) {
 	if server.Type != "stdio" || server.Command != executable || len(server.Args) != 1 || server.Args[0] != "channel" {
 		t.Fatalf("incorrect subprocess configuration: %#v", server)
 	}
+
+	settingsStart := strings.Index(text, "{\n  \"permissions\":")
+	settingsEnd := strings.Index(text, "\n\nIn that directory")
+	if settingsStart < 0 || settingsEnd < settingsStart {
+		t.Fatalf("missing settings snippet: %s", text)
+	}
+	var settings struct {
+		Permissions struct {
+			Allow []string `json:"allow"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal([]byte(text[settingsStart:settingsEnd]), &settings); err != nil {
+		t.Fatal(err)
+	}
+	expectedPermission := "mcp__" + cfg.ServerName + "__" + cfg.ReplyToolName
+	if len(settings.Permissions.Allow) != 1 || settings.Permissions.Allow[0] != expectedPermission {
+		t.Fatalf("wrong permissions allow entry: %#v (expected %q)", settings.Permissions.Allow, expectedPermission)
+	}
+
 	launch := "claude --model " + cfg.CanaryModel + " --dangerously-load-development-channels server:" + cfg.ServerName
-	if !strings.Contains(text, launch) || !strings.Contains(text, cfg.RegistryDir) {
-		t.Fatalf("missing manual launch or registry path: %s", text)
+	appendPrompt := "--append-system-prompt "
+	if !strings.Contains(text, launch) || !strings.Contains(text, appendPrompt) || !strings.Contains(text, cfg.RegistryDir) {
+		t.Fatalf("missing manual launch, append-system-prompt or registry path: %s", text)
 	}
 }
 

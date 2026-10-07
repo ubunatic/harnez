@@ -92,18 +92,32 @@ func newChannelCmd() *cobra.Command {
 }
 
 func printChannelSetup(out io.Writer, cfg channel.Config, executable string) error {
-	snippet := map[string]any{"mcpServers": map[string]any{
+	mcpSnippet := map[string]any{"mcpServers": map[string]any{
 		cfg.ServerName: map[string]any{"type": "stdio", "command": executable, "args": []string{"channel"}},
 	}}
-	data, err := json.MarshalIndent(snippet, "", "  ")
+	mcpData, err := json.MarshalIndent(mcpSnippet, "", "  ")
+	if err != nil {
+		return err
+	}
+	settingsSnippet := map[string]any{"permissions": map[string]any{
+		"allow": []string{fmt.Sprintf("mcp__%s__%s", cfg.ServerName, cfg.ReplyToolName)},
+	}}
+	settingsData, err := json.MarshalIndent(settingsSnippet, "", "  ")
 	if err != nil {
 		return err
 	}
 	_, err = fmt.Fprintf(out, `Merge this entry into .mcp.json in a scratch directory (preserve existing servers):
 %s
 
+Optional (for unattended receipts without per-call approval dialogs):
+merge this entry into .claude/settings.json in that directory:
+%s
+
 In that directory, manually run:
 claude --model %s --dangerously-load-development-channels server:%s
+
+Optional launch line with explicit startup trust prompt:
+claude --model %s --dangerously-load-development-channels server:%s --append-system-prompt %q
 
 Accept the development-channel prompt, then "New MCP server found in this project"
 with "Use this MCP server"; pending approval prevents endpoint registration.
@@ -112,6 +126,6 @@ In another terminal: harnez channel list
 Send: harnez channel send <session-id>
 Default canary message: %s
 Verify the returned message_id in the requested file in the target directory.
-`, data, cfg.CanaryModel, cfg.ServerName, cfg.RegistryDir, cfg.CanaryMessage)
+`, mcpData, settingsData, cfg.CanaryModel, cfg.ServerName, cfg.CanaryModel, cfg.ServerName, cfg.Instructions, cfg.RegistryDir, cfg.CanaryMessage)
 	return err
 }

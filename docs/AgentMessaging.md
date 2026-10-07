@@ -37,8 +37,9 @@ SDK `--resume` (stopped sessions), Claude's private `cc-socks` sockets (undocume
 - Project `.mcp.json` servers stay "Pending approval" until accepted at startup; the channel notice
   then ends with "no MCP server configured with that name" and nothing registers.
 - Messages never interrupt a running tool; they show when the session is free. Mid-turn arrivals
-  may be treated as untrusted until the user says the channel is theirs (742: startup prompt).
+  may be treated as untrusted without recipient trust instructions (channel instructions or
+  `--append-system-prompt` via `harnez channel setup`).
 - A session resumed across a channel-server upgrade keeps its old view of the tools; start fresh.
-- Haiku needs telling that `reply` exists (tools load on demand), and each `reply` call asks for
-  approval until `mcp__harnez-channel__reply` is allowed (742).
+- Models load tools on demand; each `reply` call asks for approval until `mcp__harnez-channel__reply`
+  is allowed in `.claude/settings.json` (printed by `harnez channel setup`).
 - `/rename x` may be stored with a suffix (`x-1f`); `send` lists candidates on a miss.
