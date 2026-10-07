@@ -1,6 +1,6 @@
 # 746 — harnez compose <what>: print composed snippets, first claude-channels-prompt
 
-**Status**: Open
+**Status**: Closed — Fixed: harnez compose claude-channels-prompt and claude-channels-args from spec/channel.yaml, quoting round-trip tested
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Agentic Ergonomics / Feature
