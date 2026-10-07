@@ -1,6 +1,6 @@
 # 738 — Stop routine PNG issue-card recommendations and clarify image opt-in scope
 
-**Status**: Open
+**Status**: In Progress
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics
