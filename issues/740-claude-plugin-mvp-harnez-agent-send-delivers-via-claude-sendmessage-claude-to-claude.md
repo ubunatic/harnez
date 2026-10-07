@@ -82,3 +82,9 @@ model then asks its user before acting (untrusted external input).
 - Name resolution: `--name` resolves a harnez/Claude session name to the registered session id;
   ambiguous or unknown names fail with a list of candidates.
 - Setup note: document the project MCP approval prompt in `harnez channel --help`.
+
+**User direction (2026-10-07):** assume recipients respond. The mid-turn flag came from an unusual
+flow (user coaxing a long `sleep`, model in a defensive mode), not regular work. So: keep the ack
+tool as an optional confirmation, not a gate; no extra framing beyond naming the sender.
+Later (not M2): Claude sessions started by harnez get a system/startup prompt saying messages
+from the `harnez-channel` channel are expected and trusted.
