@@ -309,3 +309,33 @@ func TestRunCodexHooksHook_SkipsGearCommand(t *testing.T) {
 		t.Errorf("gear command must pass through without hook output, got %q", out.String())
 	}
 }
+
+func TestRunCodexTelemetry_SkillInferred(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "telemetry.sqlite")
+	payload := `{"hook_event_name":"PostToolUse","session_id":"codex-session","tool_use_id":"call-1","tool_name":"Bash","tool_input":{"command":"cat ~/.codex/skills/issue/SKILL.md"},"tool_output":"ok","success":true,"exit_code":0,"duration_ms":10}`
+	if err := runCodexTelemetryAt(bytes.NewBufferString(payload), dbPath); err != nil {
+		t.Fatalf("runCodexTelemetryAt: %v", err)
+	}
+	db, err := telemetry.Open(dbPath)
+	if err != nil {
+		t.Fatalf("telemetry.Open: %v", err)
+	}
+	defer db.Close()
+	rows, err := db.Query(telemetry.Filter{SessionID: "codex-session"})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2 (Bash + inferred skill)", len(rows))
+	}
+	var skillRow *telemetry.ToolCall
+	for i := range rows {
+		if rows[i].ToolName == "Skill" {
+			skillRow = &rows[i]
+			break
+		}
+	}
+	if skillRow == nil || skillRow.SkillName != "issue" || skillRow.CallType != "skill-inferred" || skillRow.AgentID != "codex" {
+		t.Fatalf("unexpected skill row: %+v", skillRow)
+	}
+}

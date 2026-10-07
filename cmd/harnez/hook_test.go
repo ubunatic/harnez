@@ -889,3 +889,34 @@ func TestRunAgyToolHook_DisallowedToolRejected(t *testing.T) {
 		})
 	}
 }
+
+func TestRunAgyToolHook_SkillInferred(t *testing.T) {
+	t.Setenv("HARNEZ_AGY_METER_SESSION_ID", "")
+	in := bytes.NewBufferString(`{
+		"conversationId": "test-conv-123",
+		"toolCall": {
+			"name": "view_file",
+			"args": {"AbsolutePath": "/home/u/.gemini/skills/evergreen/SKILL.md"}
+		},
+		"stepIdx": 1
+	}`)
+	var out bytes.Buffer
+	var recorded []telemetry.ToolCall
+	opts := agyHookOptions{
+		DBPath: "/tmp/dummy.db",
+		Insert: func(_ string, call telemetry.ToolCall) error {
+			recorded = append(recorded, call)
+			return nil
+		},
+	}
+	if err := runAgyToolHook(in, &out, opts); err != nil {
+		t.Fatalf("runAgyToolHook: %v", err)
+	}
+	if len(recorded) != 2 {
+		t.Fatalf("recorded %d calls, want 2 (view_file + inferred skill)", len(recorded))
+	}
+	skillRow := recorded[1]
+	if skillRow.ToolName != "Skill" || skillRow.SkillName != "evergreen" || skillRow.CallType != "skill-inferred" || skillRow.AgentID != "agy" {
+		t.Fatalf("unexpected skill row: %+v", skillRow)
+	}
+}

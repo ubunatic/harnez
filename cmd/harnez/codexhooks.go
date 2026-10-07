@@ -207,7 +207,24 @@ func runCodexTelemetryAt(in io.Reader, dbPath string) error {
 		callType = "hook:failure"
 	}
 	call := telemetry.ToolCall{CreatedAt: time.Now().UTC(), SessionID: e.SessionID, TicketID: ticket, ProjectName: filepath.Base(wd), WorkingDir: wd, AgentID: "codex", ToolName: e.ToolName, CallType: callType, Note: note, DurationMs: e.DurationMs, ExitCode: e.ExitCode, OutputBytes: e.OutputBytes, ActualTokens: e.LastTotalTokens, InputTokens: e.LastInputTokens, CachedInputTokens: e.LastCachedInputTokens, OutputTokens: e.LastOutputTokens, ReasoningTokens: e.LastReasoningTokens, TotalTokens: e.TotalTokens}
-	return db.Insert(call)
+	if err := db.Insert(call); err != nil {
+		return err
+	}
+	if skill := telemetry.SkillFromFileRef(e.Command); skill != "" {
+		skillCall := telemetry.ToolCall{
+			CreatedAt:   time.Now().UTC(),
+			SessionID:   e.SessionID,
+			TicketID:    ticket,
+			ProjectName: filepath.Base(wd),
+			WorkingDir:  wd,
+			AgentID:     "codex",
+			ToolName:    telemetry.SkillToolName,
+			CallType:    telemetry.CallTypeSkillInferred,
+			SkillName:   skill,
+		}
+		_ = db.Insert(skillCall)
+	}
+	return nil
 }
 
 func insertTokenSnapshot(db *telemetry.DB, sessionID, source string, boundaryID *int64, event, transcript codex.Event) error {

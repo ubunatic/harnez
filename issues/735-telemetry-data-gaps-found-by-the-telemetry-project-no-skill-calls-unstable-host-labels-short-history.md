@@ -84,12 +84,21 @@ Usage points: commit c2a6d7c7 dropped history recording from `usage --watch`, so
 2026-10-06T18:40Z, a second run within 15m added none). Gap: snapshots between those dates and
 2026-10-06 were never stored and cannot be recovered.
 
+### M3 — skill calls and typed /commands recorded (fixed)
+
+Claude `Skill` tool calls recorded with the skill name (new `skill_name` column, export `skill` field);
+failed calls recorded as failed. Plugin names (`plugin:skill`) kept intact.
+Typed `/name` prompts recorded when matching installed skills/commands; paths (`/tmp/a.md`, `/home/x`)
+and built-ins (`/clear`, `/compact`, `/model`) excluded. Probe (`scripts/canary-735-skill-hooks.sh`) confirmed
+that Claude built-ins do not reach `UserPromptSubmit`.
+The prompt hook runs on every prompt via stat checks only without DB scans (benchmark: ~9.3 µs/op).
+Codex and AGY heuristic skill calls recorded with `tool_name = "Skill"`, `call_type = "skill-inferred"`,
+and `skill_name = <name>`.
+Old rows keep no skill name (empty string `""`).
+
 ## Handoff (host, 2026-10-07)
 
 M1 (4d850285, usage points stored once) and M2 (f2ea0c1e, history restored, pre-XDG tool calls
-recovered) are committed, not yet reviewed by the host. M3 (skill calls) was cut off by the
-developer's Claude session limit; its work in progress is committed as "wip ... (issue 735 M3)":
-it builds and `internal/telemetry` + `cmd/harnez` tests pass, but it is unfinished (probe results,
-Codex/AGY inferred rows, `harnez apply` not confirmed). Resume: `harnez agent resume --name
-dev-735 "finish M3 from the wip commit, then M4"`, then host reviews M1-M4. Telemetry 002 M2
-waits for M4 (format_version 2).
+recovered) are committed, not yet reviewed by the host. M3 (skill calls) is finished on top of wip.
+Next: M4 (format_version 2, stable HMAC host labels).
+

@@ -363,6 +363,32 @@ func runAgyToolHook(in io.Reader, out io.Writer, opts agyHookOptions) error {
 			insertFn = defaultInsertExecRow
 		}
 		_ = insertFn(dbPath, tc) // best-effort insert
+
+		var refText string
+		if toolName == "run_command" {
+			refText = command
+		} else {
+			for _, p := range extractFilePaths(payload.ToolCall.Args) {
+				if s := telemetry.SkillFromFileRef(p); s != "" {
+					refText = p
+					break
+				}
+			}
+		}
+		if skill := telemetry.SkillFromFileRef(refText); skill != "" {
+			skillCall := telemetry.ToolCall{
+				CreatedAt:   time.Now().UTC(),
+				SessionID:   sessionID,
+				TicketID:    ticketID,
+				ProjectName: filepath.Base(wd),
+				WorkingDir:  wd,
+				AgentID:     "agy",
+				ToolName:    telemetry.SkillToolName,
+				CallType:    telemetry.CallTypeSkillInferred,
+				SkillName:   skill,
+			}
+			_ = insertFn(dbPath, skillCall)
+		}
 	}
 
 	if deny {

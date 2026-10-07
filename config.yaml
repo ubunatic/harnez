@@ -271,6 +271,15 @@ hooks:
   - event: PreToolUse
     matcher: Write
     command: "harnez hook pre-edit"
+  # skill telemetry (issue 735)
+  - event: PostToolUse
+    matcher: Skill
+    command: "harnez hook skill"
+  - event: PostToolUseFailure
+    matcher: Skill
+    command: "harnez hook skill"
+  - event: UserPromptSubmit
+    command: "harnez hook skill"
 
 # thinking verbs (get rid of annoying word creations)
 verbs:

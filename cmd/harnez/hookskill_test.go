@@ -61,12 +61,34 @@ func TestClaudeSkillHookRecordsSkillCalls(t *testing.T) {
 	}
 }
 
-func writeSkillFile(t *testing.T, path string) {
-	t.Helper()
+func writeSkillFile(tb testing.TB, path string) {
+	if tb != nil {
+		tb.Helper()
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
+		if tb != nil {
+			tb.Fatal(err)
+		}
+		panic(err)
 	}
 	if err := os.WriteFile(path, []byte("---\nname: x\n---\n"), 0o644); err != nil {
-		t.Fatal(err)
+		if tb != nil {
+			tb.Fatal(err)
+		}
+		panic(err)
+	}
+}
+
+func BenchmarkUserPromptSubmitHook(b *testing.B) {
+	home, cwd := b.TempDir(), b.TempDir()
+	writeSkillFile(b, filepath.Join(home, ".claude", "skills", "issue", "SKILL.md"))
+	payload := `{"session_id":"s1","cwd":"` + cwd + `","hook_event_name":"UserPromptSubmit","prompt":"/issue some args\n"}`
+	opts := skillHookOptions{
+		DBPath: "db", Home: home,
+		Insert: func(_ string, _ telemetry.ToolCall) error { return nil },
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		runClaudeSkillHook(strings.NewReader(payload), opts)
 	}
 }
