@@ -1,6 +1,6 @@
 # 747 — harnez apply ships harnez-channel in its harnez-local marketplace
 
-**Status**: Open
+**Status**: Closed — Fixed: apply ships harnez-channel in the managed harnez-local marketplace (e19de5c9) and writes the manifest to .claude-plugin/marketplace.json (d0f34072); live: plugin enabled, session in cati registered, agent send --wait returned received
 **Priority**: P1 (High)
 **Severity**: Moderate
 **Category**: Bug
