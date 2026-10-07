@@ -217,3 +217,15 @@ CLI arguments; it never starts Claude or writes config/native sockets.
 - `make install` passed; installed command help exposes optional waiting and the project MCP approval/restart note.
 - No Go source was changed after the test run. Live probes above remain pending
   with the host; the developer did not start or restart Claude.
+
+### M2 live result (host + user, 2026-10-07)
+
+- `harnez agent send <id> -m ...` → `accepted`; the session showed the sender prefix.
+- `--name ch-a` → failed with one candidate `"ch-a-1f"` (Claude stored the `/rename` with a
+  suffix); `--name ch-a-1f` resolved to the session id.
+- `--wait --timeout 60s` on a resumed session whose context predated the reply tool →
+  `unconfirmed` after timeout (model believed the channel one-way).
+- Fresh session, `--wait --timeout 90s` → `accepted`, then
+  `{"status":"received",...,"text":"M2-received"}`. Full round trip proven.
+- Restart note: a session resumed across a channel-server upgrade keeps its old belief about the
+  tools; start fresh after upgrading.
