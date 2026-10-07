@@ -56,6 +56,8 @@ claude_channels() {
 }
 ```
 
+The args snippet also names the session `<working-dir-basename>-<4 random chars>`
+(`claude -n`), so `harnez agent send --name` can reach it; a later `-n` overrides it.
 The args snippet requires shell evaluation to preserve the prompt as one argument;
 plain unquoted command substitution splits it into words.
 

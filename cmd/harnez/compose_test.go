@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -24,7 +27,6 @@ func TestComposeOutputFromSpec(t *testing.T) {
 	}
 	for _, tc := range []struct{ name, want string }{
 		{"claude-channels-prompt", spec.Instructions + "\n"},
-		{"claude-channels-args", "--channels " + shellQuote("plugin:"+spec.PluginName+"@"+spec.MarketplaceName) + " --append-system-prompt " + shellQuote(spec.Instructions) + "\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := newComposeCmd()
@@ -38,6 +40,39 @@ func TestComposeOutputFromSpec(t *testing.T) {
 				t.Fatalf("output = %q, want %q", out.String(), tc.want)
 			}
 		})
+	}
+}
+
+func TestComposeArgsDefaultName(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "my repo")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	cfg, err := channel.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for range 3 {
+		cmd := newComposeCmd()
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetArgs([]string{"claude-channels-args"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		m := regexp.MustCompile(`^-n '(my repo-[a-z0-9]{4})' (.*)\n$`).FindStringSubmatch(out.String())
+		if m == nil {
+			t.Fatalf("output = %q", out.String())
+		}
+		if want := "--channels " + shellQuote("plugin:"+cfg.PluginName+"@"+cfg.MarketplaceName) + " --append-system-prompt " + shellQuote(cfg.Instructions); m[2] != want {
+			t.Fatalf("args = %q, want %q", m[2], want)
+		}
+		names[m[1]] = true
+	}
+	if len(names) < 2 {
+		t.Fatalf("names not random: %v", names)
 	}
 }
 
@@ -103,13 +138,13 @@ func TestComposeArgsShellRoundTrip(t *testing.T) {
 	for _, prompt := range []string{cfg.Instructions, cfg.Instructions + "\nIt's \"quoted\"; $HOME `exit 91` $(exit 92) \\ end"} {
 		cfg.Instructions = prompt
 		// A shell builtin captures arguments; no Claude process is launched.
-		script := "set -- " + composeChannelArgs(cfg) + "\nprintf '%s\\000' \"$@\""
+		script := "set -- " + composeChannelArgs(cfg, "it's a repo-ab12") + "\nprintf '%s\\000' \"$@\""
 		out, err := exec.Command("sh", "-c", script).Output()
 		if err != nil {
 			t.Fatal(err)
 		}
 		got := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
-		want := []string{"--channels", "plugin:" + cfg.PluginName + "@" + cfg.MarketplaceName, "--append-system-prompt", prompt}
+		want := []string{"-n", "it's a repo-ab12", "--channels", "plugin:" + cfg.PluginName + "@" + cfg.MarketplaceName, "--append-system-prompt", prompt}
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("shell arguments = %q, want %q", got, want)
 		}
