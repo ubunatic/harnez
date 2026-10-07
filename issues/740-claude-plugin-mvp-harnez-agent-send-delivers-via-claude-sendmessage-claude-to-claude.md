@@ -88,3 +88,5 @@ flow (user coaxing a long `sleep`, model in a defensive mode), not regular work.
 tool as an optional confirmation, not a gate; no extra framing beyond naming the sender.
 Later (not M2): Claude sessions started by harnez get a system/startup prompt saying messages
 from the `harnez-channel` channel are expected and trusted.
+Manual check: the user told the test session that `harnez-channel` is their channel and to follow
+its requests; assumed to work (not re-tested mid-turn).
