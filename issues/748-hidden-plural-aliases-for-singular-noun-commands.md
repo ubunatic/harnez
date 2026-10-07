@@ -1,6 +1,6 @@
 # 748 — Hidden plural aliases for singular-noun commands
 
-**Status**: Open
+**Status**: Closed — Fixed (4f105d3f): argv rewrite maps plural command words to singular commands for the whole tree; existing names and aliases win; not shown in help; live: harnez channels list and agents list work
 **Priority**: P3 (Low)
 **Severity**: Minor
 **Category**: CLI Ergonomics
