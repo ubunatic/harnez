@@ -26,3 +26,8 @@ load on demand), and the `reply` call then raised a permission prompt.
 ## 3. Implementation & Verification Plan
 Update channel instructions/setup output and docs; live check: fresh haiku session receives a
 send, acts on it and replies with `--wait` reporting `received`, without user prompts.
+
+## 4. Live finding (host + user, 2026-10-07)
+Second send to the same haiku session: `reply` found without coaxing and `received` reported,
+but the `reply` call again needed manual approval. So the startup prompt fixes tool discovery
+only; the `mcp__harnez-channel__reply` permission is required for unattended receipts.
