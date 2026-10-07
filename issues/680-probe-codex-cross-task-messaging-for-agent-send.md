@@ -60,3 +60,8 @@ send tool plus `codex queue`, and revisit when #45976 lands.
 
 ## 3. Implementation & Verification Plan
 Canary-test a harmless message to a separate Codex task, confirm its receipt or response, and record targeting, active/idle behavior, failure cases, and confirmation semantics in `docs/studies/` for issue 656. Recommend how `harnez agent send` should use the verified interface.
+
+**Resume point (2026-10-08):** probing is done; the route above is the recommendation. Next is a
+build sprint, waiting on the user's "sprint": the Codex route in `harnez agent send` (exact-name
+resolution via `thread/list`, `codex queue` by UUID, sender and reply header, "queued" report),
+plus an MCP send tool so Codex sessions see it without being told the shell command.
