@@ -59,10 +59,9 @@ func TestChannelSetupPrintsManualConfiguration(t *testing.T) {
 		t.Fatalf("wrong permissions allow entry: %#v (expected %q)", settings.Permissions.Allow, expectedPermission)
 	}
 
-	launch := "claude --model " + cfg.CanaryModel + " --dangerously-load-development-channels server:" + cfg.ServerName
-	appendPrompt := "--append-system-prompt "
-	if !strings.Contains(text, launch) || !strings.Contains(text, appendPrompt) || !strings.Contains(text, cfg.RegistryDir) {
-		t.Fatalf("missing manual launch, append-system-prompt or registry path: %s", text)
+	expectedLaunch := `claude --model ` + cfg.CanaryModel + ` --dangerously-load-development-channels server:` + cfg.ServerName + ` --append-system-prompt "`
+	if !strings.Contains(text, expectedLaunch) || !strings.Contains(text, cfg.RegistryDir) {
+		t.Fatalf("missing manual launch with append-system-prompt or registry path: %s", text)
 	}
 }
 

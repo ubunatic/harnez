@@ -114,9 +114,6 @@ merge this entry into .claude/settings.json in that directory:
 %s
 
 In that directory, manually run:
-claude --model %s --dangerously-load-development-channels server:%s
-
-Optional launch line with explicit startup trust prompt:
 claude --model %s --dangerously-load-development-channels server:%s --append-system-prompt %q
 
 Accept the development-channel prompt, then "New MCP server found in this project"
@@ -126,6 +123,6 @@ In another terminal: harnez channel list
 Send: harnez channel send <session-id>
 Default canary message: %s
 Verify the returned message_id in the requested file in the target directory.
-`, mcpData, settingsData, cfg.CanaryModel, cfg.ServerName, cfg.CanaryModel, cfg.ServerName, cfg.Instructions, cfg.RegistryDir, cfg.CanaryMessage)
+`, mcpData, settingsData, cfg.CanaryModel, cfg.ServerName, cfg.Instructions, cfg.RegistryDir, cfg.CanaryMessage)
 	return err
 }
