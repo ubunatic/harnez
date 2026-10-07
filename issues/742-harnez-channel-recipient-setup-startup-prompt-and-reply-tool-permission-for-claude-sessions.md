@@ -1,6 +1,6 @@
 # 742 — harnez-channel recipient setup: startup prompt and reply-tool permission for Claude sessions
 
-**Status**: Open
+**Status**: Closed — Fixed: channel instructions plus default --append-system-prompt launch and opt-in project allow rule for mcp__harnez-channel__reply printed by harnez channel setup (a62a8963, 8d1b6c8e); live with fresh haiku: without prompt it answered in chat (unconfirmed), with prompt received and no approval prompt
 **Priority**: P2 (Medium)
 **Severity**: Moderate
 **Category**: Agentic Ergonomics / Feature
