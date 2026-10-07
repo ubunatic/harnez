@@ -30,6 +30,10 @@ type ToolCall struct {
 	TotalTokens            *int64 `json:"total_tokens,omitempty"`
 	PotentialSavingsTokens *int64 `json:"potential_savings_tokens,omitempty"`
 	PotentialSavingsBytes  *int64 `json:"potential_savings_bytes,omitempty"`
+	// SkillName is the skill a Skill row ran (issue 735): from Claude's
+	// Skill tool or a typed /name, or inferred from a SKILL.md read
+	// (CallType "skill-inferred"). Empty for every other row.
+	SkillName string `json:"skill_name,omitempty"`
 }
 
 // CLIInvocation is one row of the cli_invocations table (issue 326): a

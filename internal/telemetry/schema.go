@@ -21,7 +21,8 @@ package telemetry
 // 7: versioned pricing inputs and immutable compaction economics results.
 // 8: compaction_events model column (initially omitted from the migration).
 // 9: current schema marker after the compaction_events model migration.
-const schemaVersion = 9
+// 10: additive tool_calls.skill_name column (issue 735).
+const schemaVersion = 10
 
 // schemaDDL is the single source of truth for the tool_calls table shape
 // (per docs/other/Spec.md's "spec files are the single source of truth"

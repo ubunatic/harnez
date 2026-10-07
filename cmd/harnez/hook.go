@@ -101,6 +101,7 @@ func newHookCmd() *cobra.Command {
 		},
 	})
 	cmd.AddCommand(newHookSoundCmd())
+	cmd.AddCommand(newSkillHookCmd())
 
 	return cmd
 }

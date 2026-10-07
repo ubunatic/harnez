@@ -83,3 +83,13 @@ Usage points: commit c2a6d7c7 dropped history recording from `usage --watch`, so
 `history_snapshot_interval` (15m, `spec/usage.yaml`); verified live (t14 snapshot at
 2026-10-06T18:40Z, a second run within 15m added none). Gap: snapshots between those dates and
 2026-10-06 were never stored and cannot be recovered.
+
+## Handoff (host, 2026-10-07)
+
+M1 (4d850285, usage points stored once) and M2 (f2ea0c1e, history restored, pre-XDG tool calls
+recovered) are committed, not yet reviewed by the host. M3 (skill calls) was cut off by the
+developer's Claude session limit; its work in progress is committed as "wip ... (issue 735 M3)":
+it builds and `internal/telemetry` + `cmd/harnez` tests pass, but it is unfinished (probe results,
+Codex/AGY inferred rows, `harnez apply` not confirmed). Resume: `harnez agent resume --name
+dev-735 "finish M3 from the wip commit, then M4"`, then host reviews M1-M4. Telemetry 002 M2
+waits for M4 (format_version 2).

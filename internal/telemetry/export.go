@@ -70,6 +70,7 @@ type ExportToolCall struct {
 	ActualTokens           *int64           `json:"actual_tokens,omitempty"`
 	PotentialSavingsTokens *int64           `json:"potential_savings_tokens,omitempty"`
 	PotentialSavingsBytes  *int64           `json:"potential_savings_bytes,omitempty"`
+	Skill                  string           `json:"skill,omitempty"`
 }
 
 // Export is the top-level JSON payload for `harnez usage export`'s
@@ -141,6 +142,7 @@ func BuildExportWithCategories(rows []ToolCall, now time.Time, level privacy.Lev
 			ActualTokens:           r.ActualTokens,
 			PotentialSavingsTokens: r.PotentialSavingsTokens,
 			PotentialSavingsBytes:  r.PotentialSavingsBytes,
+			Skill:                  r.SkillName,
 		}
 		switch level {
 		case privacy.LevelPublic:

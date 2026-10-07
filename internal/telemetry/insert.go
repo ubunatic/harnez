@@ -92,7 +92,7 @@ func (d *DB) Insert(tc ToolCall) error {
 		tc.AgentID, tc.ToolName, tc.CallType, tc.Score, tc.Note, tc.ExitCode,
 		tc.DurationMs, tc.RawBytes, tc.DistilledBytes, tc.OutputBytes, tc.ActualTokens,
 		tc.InputTokens, tc.CachedInputTokens, tc.OutputTokens, tc.ReasoningTokens, tc.TotalTokens,
-		tc.PotentialSavingsTokens, tc.PotentialSavingsBytes,
+		tc.PotentialSavingsTokens, tc.PotentialSavingsBytes, tc.SkillName,
 	)
 	if err != nil {
 		if isConstraintErr(err) {

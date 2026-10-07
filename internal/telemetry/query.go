@@ -208,7 +208,7 @@ func (d *DB) Query(f Filter) ([]ToolCall, error) {
 			&tc.Note, &tc.ExitCode, &tc.DurationMs, &tc.RawBytes, &tc.DistilledBytes,
 			&tc.OutputBytes, &tc.ActualTokens, &tc.InputTokens, &tc.CachedInputTokens,
 			&tc.OutputTokens, &tc.ReasoningTokens, &tc.TotalTokens, &tc.PotentialSavingsTokens,
-			&tc.PotentialSavingsBytes,
+			&tc.PotentialSavingsBytes, &tc.SkillName,
 		); err != nil {
 			return nil, fmt.Errorf("telemetry: scan row: %w", err)
 		}
