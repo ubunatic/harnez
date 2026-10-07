@@ -140,7 +140,7 @@ Then start a fresh session in the recipient directory:
 claude --channels plugin:%s --append-system-prompt %q
 
 Verify: harnez channel list
-Send and wait: harnez channel send <session-id> (or harnez agent send --name <name> -m <message> --wait)
+Send and wait: harnez channel send <session-id> (or harnez agent send --name <name> --wait <message>)
 The plugin route avoids the development prompt only when this plugin is allowlisted.
 `, cfg.PluginName, cfg.ServerName, cfg.ReplyToolName, pluginID, cfg.Instructions)
 	return err

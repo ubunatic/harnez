@@ -86,7 +86,7 @@ func TestAgentSendLeafAndValidation(t *testing.T) {
 	if err := guardLeafRole("start"); err == nil {
 		t.Fatal("leaf can spawn")
 	}
-	for _, args := range [][]string{{"send"}, {"send", "id"}, {"send", "id", "--name", "also", "-m", "msg"}, {"send", "id", "-m", "msg", "--timeout", "1s"}, {"send", "id", "-m", "msg", "--wait", "--timeout", "0s"}} {
+	for _, args := range [][]string{{"send"}, {"send", "--id", "id"}, {"send", "--id", "id", "msg", "-m", "also"}, {"send", "--id", "id", "-m", "a", "-p", "b"}, {"send", "--id", "id", "--name", "also", "msg"}, {"send", "--id", "id", "msg", "--timeout", "1s"}, {"send", "--id", "id", "msg", "--wait", "--timeout", "0s"}} {
 		cmd := newAgentCmd()
 		cmd.PersistentPreRunE = func(c *cobra.Command, _ []string) error { return guardLeafRole(c.Name()) }
 		cmd.SetOut(new(bytes.Buffer))
@@ -99,7 +99,7 @@ func TestAgentSendLeafAndValidation(t *testing.T) {
 }
 
 func TestAgentSendAcceptedAndOptionalWait(t *testing.T) {
-	for _, mode := range []string{"default", "received", "timeout", "old-server"} {
+	for _, mode := range []string{"default", "received", "timeout", "old-server", "flag-m", "flag-p", "by-id", "no-target"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
 			t.Setenv("HARNEZ_SESSION_ID", "host")
@@ -167,12 +167,25 @@ func TestAgentSendAcceptedAndOptionalWait(t *testing.T) {
 			var out bytes.Buffer
 			cmd.SetOut(&out)
 			cmd.SetErr(new(bytes.Buffer))
-			args := []string{"send", "--name", "target-name", "-m", "message body"}
-			if mode != "default" {
+			args := []string{"send", "--name", "target-name", "message", "body"}
+			switch mode {
+			case "flag-m", "flag-p":
+				args = []string{"send", "--name", "target-name", "-" + mode[5:], "message body"}
+			case "by-id":
+				args = []string{"send", "--id", "target", "message body"}
+			case "no-target":
+				args = []string{"send", "message body"}
+			case "received", "timeout", "old-server":
 				args = append(args, "--wait", "--timeout", "25ms")
 			}
 			cmd.SetArgs(args)
 			err = cmd.ExecuteContext(context.Background())
+			if mode == "no-target" {
+				if err == nil || !strings.Contains(err.Error(), "live sessions:\n  target-name\n") || strings.Contains(err.Error(), "  target\n") || delivered != "" {
+					t.Fatalf("no-target error: %v (delivered %q)", err, delivered)
+				}
+				return
+			}
 			if mode == "old-server" {
 				if err == nil || !strings.Contains(err.Error(), "restart") {
 					t.Fatalf("old-server error: %v", err)
@@ -186,7 +199,7 @@ func TestAgentSendAcceptedAndOptionalWait(t *testing.T) {
 			if !strings.Contains(out.String(), `"status":"accepted"`) {
 				t.Fatal(out.String())
 			}
-			if mode == "default" && (receiptRequests != 0 || strings.Count(out.String(), "\n") != 1) {
+			if mode != "received" && mode != "timeout" && mode != "old-server" && (receiptRequests != 0 || strings.Count(out.String(), "\n") != 1) {
 				t.Fatal("default send waited")
 			}
 			if mode == "received" && !strings.Contains(out.String(), `"status":"received"`) {

@@ -63,6 +63,26 @@ func channelIdentities(cfg channel.Config, storeDir string) []channelIdentity {
 	return identities
 }
 
+// liveChannelNames lists the sorted names of live endpoints; unnamed sessions are left out.
+func liveChannelNames(endpoints []channel.Endpoint, identities []channelIdentity, dir string) []string {
+	wantDir, _ := filepath.Abs(dir)
+	seen := map[string]bool{}
+	var names []string
+	for _, endpoint := range endpoints {
+		if haveDir, _ := filepath.Abs(endpoint.WorkingDir); dir != "" && haveDir != wantDir {
+			continue
+		}
+		for _, identity := range identities {
+			if (identity.ID == endpoint.SessionID || identity.ProviderID == endpoint.SessionID) && identity.Name != "" && !seen[identity.Name] {
+				seen[identity.Name] = true
+				names = append(names, identity.Name)
+			}
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
 func resolveChannelTarget(endpoints []channel.Endpoint, identities []channelIdentity, name, id, dir string) (channel.Endpoint, error) {
 	wantDir := ""
 	if dir != "" {
@@ -140,23 +160,25 @@ func channelSender(cfg channel.Config, identities []channelIdentity, id string) 
 }
 
 func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
-	var message string
+	var message, prompt, id string
 	var wait bool
 	var timeout time.Duration
 	cmd := &cobra.Command{
-		Use: "send [session-id]", Short: "Send to an opted-in Claude channel; optionally wait for receipt",
-		Long: "Send to a live Claude channel by --name or explicit session ID. Accepted means an MCP transport write. Received means the recipient called the optional reply tool, not task completion. --wait is off by default; its positive timeout defaults to spec/channel.yaml. Claude sessions are started manually by the user.",
-		Args: cobra.MaximumNArgs(1), SilenceUsage: true,
+		Use: "send (--name <session> | --id <session-id>) <message>", Short: "Send to an opted-in Claude channel; optionally wait for receipt",
+		Long: "Send to a live Claude channel by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. Accepted means an MCP transport write. Received means the recipient called the optional reply tool, not task completion. --wait is off by default; its positive timeout defaults to spec/channel.yaml. Claude sessions are started manually by the user.",
+		Example: `  harnez agent send --name harnez-53ih "look at ticket 748 in harnez"
+  harnez agent send --id 86443124-b692-49e4-ae92-942b0177664f --wait "please confirm"`,
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id := ""
-			if len(args) == 1 {
-				id = args[0]
+			sources := 0
+			for _, text := range []string{strings.Join(args, " "), message, prompt} {
+				if strings.TrimSpace(text) != "" {
+					sources++
+					message = text
+				}
 			}
-			if (*name == "") == (id == "") {
-				return fmt.Errorf("send requires exactly one of --name <session> or a session ID")
-			}
-			if !cmd.Flags().Changed("message") || strings.TrimSpace(message) == "" {
-				return fmt.Errorf("send requires --message/-m <text>")
+			if sources != 1 {
+				return fmt.Errorf("send requires exactly one message: positional text (recommended), -m or -p")
 			}
 			if cmd.Flags().Changed("timeout") && (!wait || timeout <= 0) {
 				return fmt.Errorf("send --timeout requires --wait and a positive duration")
@@ -173,6 +195,16 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 			dir := ""
 			if cmd.Flags().Changed("dir") {
 				dir = *workDir
+			}
+			if *name == "" && id == "" {
+				names := liveChannelNames(endpoints, identities, dir)
+				if len(names) == 0 {
+					return fmt.Errorf("send requires --name <session> or --id <session-id>; no named live sessions (harnez channel list shows IDs)")
+				}
+				return fmt.Errorf("send requires --name <session> or --id <session-id>; live sessions:\n  %s\nuse: harnez agent send --name %s \"<message>\"", strings.Join(names, "\n  "), names[0])
+			}
+			if *name != "" && id != "" {
+				return fmt.Errorf("send takes --name or --id, not both")
 			}
 			target, err := resolveChannelTarget(endpoints, identities, *name, id, dir)
 			if err != nil {
@@ -205,7 +237,9 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 			return waitErr
 		},
 	}
-	cmd.Flags().StringVarP(&message, "message", "m", "", "message text (required)")
+	cmd.Flags().StringVar(&id, "id", "", "Claude or harnez session ID")
+	cmd.Flags().StringVarP(&message, "message", "m", "", "message text (alternative to the positional message)")
+	cmd.Flags().StringVarP(&prompt, "prompt", "p", "", "message text (alternative to the positional message)")
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for optional recipient acknowledgement")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0, "positive receipt wait timeout (default from spec/channel.yaml)")
 	return cmd

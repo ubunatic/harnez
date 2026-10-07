@@ -29,7 +29,7 @@ case "$action" in
       fi
       ;;
    agent-send)
-      # Pass --name NAME or SESSION_ID, -m TEXT, and optional --wait/--timeout.
+      # Pass --name NAME or --id SESSION_ID, the message, and optional --wait/--timeout.
       shift
       exec "$harnez_bin" agent send "$@"
       ;;

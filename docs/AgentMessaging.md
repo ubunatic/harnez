@@ -27,7 +27,7 @@ SDK `--resume` (stopped sessions), Claude's private `cc-socks` sockets (undocume
   `claude --dangerously-load-development-channels server:harnez-channel` (research preview).
 - Each server listens on a loopback ephemeral port with a random bearer token and registers itself
   in `~/.harnez/channels` (path in `spec/channel.yaml`), keyed by `CLAUDE_CODE_SESSION_ID`.
-- `harnez agent send --name <name> | <id> -m <msg> [--wait]` resolves names from harnez records and
+- `harnez agent send --name <name> | --id <id> <msg> [--wait]` (`-m`/`-p` also take the message; without a target it lists live session names) resolves names from harnez records and
   Claude session metadata (names and ids only; session file content never leaves harnez), prefixes
   the sender, and reports `accepted` (transport write) then, with `--wait`, `received` when the
   recipient calls the `reply` tool, else `unconfirmed`.
@@ -68,7 +68,7 @@ does not cover the plugin's namespaced tool.
 The user has already proven the managed allowlist accepts this identity (743 section 5).
 Packaging alone does not grant approval: the no-development-warning route requires that
 allowlist. Live registration and receipt verification remain pending the user's test:
-`harnez channel list`, then `harnez agent send --name <name> -m <message> --wait` should
+`harnez channel list`, then `harnez agent send --name <name> --wait <message>` should
 report `received`. Restart the recipient after binary updates.
 
 Layout and install commands follow the [plugin docs](https://code.claude.com/docs/en/plugins)
