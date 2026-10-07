@@ -47,5 +47,16 @@ shared daemon's control socket) returned no output to plain JSON lines; not purs
 unique), or take `--id` as is; deliver with `codex queue --thread <UUID> --message <text>`; prefix the
 text with the sender and the reply command. Report "queued", not "delivered".
 
+**2026-10-08, web research (luna advisor, sources not re-checked by the host):** a Codex plugin
+(`.codex-plugin/plugin.json`) is a bundle of skills, MCP server config, hooks, assets and app
+mappings; it loads no code into Codex ([developers.openai.com/plugins/build/plugins]). Hook events:
+SessionStart, SubagentStart, PreToolUse, PermissionRequest, PostToolUse, PreCompact, PostCompact,
+UserPromptSubmit, SubagentStop, Stop, Interrupt, SessionEnd; some add developer context, Stop can
+keep a turn going, none creates an attributed message ([developers.openai.com/codex/hooks]).
+`codex queue` sends `UserInput::Text` (codex-rs/tui/src/session_queue_commands.rs); missing sender
+identity is open upstream as openai/codex#45976. No public plugin, hook or MCP interface produces the
+native "Sent by Codex from task …" message. Conclusion: no "true" plugin route today; build the MCP
+send tool plus `codex queue`, and revisit when #45976 lands.
+
 ## 3. Implementation & Verification Plan
 Canary-test a harmless message to a separate Codex task, confirm its receipt or response, and record targeting, active/idle behavior, failure cases, and confirmation semantics in `docs/studies/` for issue 656. Recommend how `harnez agent send` should use the verified interface.
