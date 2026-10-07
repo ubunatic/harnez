@@ -1,7 +1,8 @@
 # Agent Messaging
 
 How sessions talk to each other. Evidence: `docs/studies/2026-10-07-claude-cross-session-sendmessage.md`.
-Tickets: 656 (parent), 740 (Claude channel + `agent send`, closed), 742 (recipient setup), 680 (Codex).
+Tickets: 656 (parent), 740 (Claude channel + `agent send`, closed), 742 (recipient setup),
+743/747 (plugin route, closed), 680 (Codex), 748 (plural aliases), 749 (registry pruning).
 
 ## Rule: tickets carry the work, messages nudge
 
@@ -14,7 +15,7 @@ without transcribing their work.
 | Sender → recipient | Route | Status |
 |---|---|---|
 | Claude → Claude | native `ListAgents` + `SendMessage` | proven; accepted / idle notice / reply |
-| CLI, Codex, AGY → Claude | `harnez agent send` → `harnez channel` MCP channel | proven (740) |
+| CLI, Codex, AGY → Claude | `harnez agent send` → `harnez channel` MCP channel | proven (740, plugin route 747) |
 | any → Codex | Codex thread messaging | open (680) |
 
 Not used: hooks (inject only on prompt/tool events, no idle wake-up), plain MCP (cannot push),
@@ -65,11 +66,10 @@ For unattended receipts, allow `mcp__plugin_harnez-channel_harnez-channel__reply
 recipient project's `.claude/settings.json` permissions. The standalone server's reply rule
 does not cover the plugin's namespaced tool.
 
-The user has already proven the managed allowlist accepts this identity (743 section 5).
-Packaging alone does not grant approval: the no-development-warning route requires that
-allowlist. Live registration and receipt verification remain pending the user's test:
-`harnez channel list`, then `harnez agent send --name <name> --wait <message>` should
-report `received`. Restart the recipient after binary updates.
+The managed allowlist accepts this identity (743 section 5); packaging alone does not grant
+approval. Proven live (747): a session started with the args snippet registers, and
+`harnez agent send --name <name> --wait <message>` reports `received`. Restart the recipient
+after binary updates.
 
 Layout and install commands follow the [plugin docs](https://code.claude.com/docs/en/plugins)
 and [marketplace docs](https://code.claude.com/docs/en/plugin-marketplaces); tool naming follows
@@ -88,4 +88,6 @@ and [marketplace docs](https://code.claude.com/docs/en/plugin-marketplaces); too
   is allowed in `.claude/settings.json` (printed by `harnez channel setup`).
 - Allow rules for MCP tools take the full tool name (plugin route:
   `mcp__plugin_harnez-channel_harnez-channel__reply`); Claude rejects a wildcard there as a settings error.
+- A directory marketplace is read only from `<dir>/.claude-plugin/marketplace.json`; a manifest
+  elsewhere makes every plugin in it "failed to load: cache-miss" (`claude plugin list`).
 - `/rename x` may be stored with a suffix (`x-1f`); `send` lists candidates on a miss.
