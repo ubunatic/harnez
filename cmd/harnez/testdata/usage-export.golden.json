@@ -1,5 +1,5 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "generated_at": "2026-10-06T12:00:00Z",
   "telemetry": {
     "generated_at": "2026-10-06T12:00:00Z",
@@ -37,7 +37,7 @@
     "points": [
       {
         "timestamp": "2026-10-01T12:00:00Z",
-        "hostname": "host-1",
+        "hostname": "host-85faf5fb",
         "agent_id": "claude",
         "name": "Claude Code",
         "account": "f***e@example.com",

@@ -96,9 +96,17 @@ Codex and AGY heuristic skill calls recorded with `tool_name = "Skill"`, `call_t
 and `skill_name = <name>`.
 Old rows keep no skill name (empty string `""`).
 
+### M4 — stable HMAC host labels and format_version 2 (fixed)
+
+`usage.points[].hostname` uses stable pseudonyms (`host-` + first 8 hex chars of HMAC-SHA256(canonical hostname, key)).
+32-byte secret key stored with `0600` permissions at `$XDG_DATA_HOME/harnez/export-host-key` (configurable via `export_host_key` in `spec/usage.yaml`).
+Export `format_version` bumped to 2; `docs/Telemetry.md` §4.1 updated with key location and format version 2 semantics.
+Golden test fixtures updated for format version 2.
+
 ## Handoff (host, 2026-10-07)
 
-M1 (4d850285, usage points stored once) and M2 (f2ea0c1e, history restored, pre-XDG tool calls
-recovered) are committed, not yet reviewed by the host. M3 (skill calls) is finished on top of wip.
-Next: M4 (format_version 2, stable HMAC host labels).
+M1 (4d850285, usage points stored once), M2 (f2ea0c1e, history restored, pre-XDG tool calls
+recovered), M3 (skill calls), and M4 (format_version 2, stable HMAC host labels) are complete.
+Ready for host review of M1–M4.
+
 

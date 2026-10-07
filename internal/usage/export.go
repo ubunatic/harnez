@@ -9,10 +9,17 @@
 package usage
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"ubunatic.com/harnez/internal/privacy"
+	"ubunatic.com/harnez/internal/xdgpath"
 )
 
 // ExportPoint is one scrubbed (timestamp, agent) sample, safe for external
@@ -22,13 +29,13 @@ import (
 //     only makes a value filesystem-safe (lowercases it and swaps
 //     disallowed characters for '-'); it does not anonymize it, and a real
 //     machine name routinely embeds a username (e.g.
-//     "uwes-workstation.local"). Hostname here is instead an opaque,
-//     per-export-run label ("host-1", "host-2", ...) assigned in first-seen
-//     order via anonymizeHostnames, so per-machine trends in the exported
-//     timeseries stay distinguishable without the real name leaking.
-//     sanitizeHostname is still used as the map key so that
-//     case/formatting differences in how a hostname was recorded don't
-//     accidentally split one real machine into two anonymous labels.
+//     "uwes-workstation.local"). Hostname here is instead a stable, opaque
+//     pseudonym ("host-" + first 8 hex characters of HMAC-SHA256(canonical hostname, key)),
+//     so per-machine trends in exported timeseries stay stable across exports
+//     without the real machine name leaking (issue 735).
+//     sanitizeHostname is used to canonicalize hostnames before hashing so that
+//     case/formatting differences don't split one real machine into distinct labels.
+
 //   - Account is re-run through MaskAccount. In practice every producer
 //     (internal/usage/agy.go, codex.go) already masks Account before it
 //     is ever set, but MaskAccount is idempotent on an already-masked
@@ -138,18 +145,65 @@ func BuildUsageExportLevel(entries []HistoryEntry, now time.Time, level privacy.
 	return out
 }
 
-// anonymizeHostname maps a raw hostname to a stable, opaque per-export-run
-// label ("host-1", "host-2", ...), assigned in first-seen order and cached
-// in labels (keyed by sanitizeHostname's canonicalized form) so the same
-// real machine gets the same label across every entry in one export call.
-// See ExportPoint's Hostname doc for why sanitizeHostname alone is not
-// sufficient here.
+// ExportHostKeyPath returns the absolute path to the export host HMAC key,
+// defaulting to $XDG_DATA_HOME/harnez/export-host-key (issue 735).
+func ExportHostKeyPath() (string, error) {
+	rel, err := ExportHostKeyRelativePath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(xdgpath.DataHome(), "harnez", rel), nil
+}
+
+// loadOrCreateHostKey returns the 32-byte secret HMAC key used to hash host
+// labels in usage exports. If the key file doesn't exist, it is created with 0600
+// permissions.
+func loadOrCreateHostKey() ([]byte, error) {
+	path, err := ExportHostKeyPath()
+	if err != nil {
+		return nil, err
+	}
+	if data, err := os.ReadFile(path); err == nil && len(data) == 32 {
+		return data, nil
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, fmt.Errorf("generate export host key: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return nil, fmt.Errorf("create export host key dir: %w", err)
+	}
+	if err := os.WriteFile(path, key, 0600); err != nil {
+		return nil, fmt.Errorf("write export host key: %w", err)
+	}
+	return key, nil
+}
+
+// HashHostLabel generates the stable "host-" + first 8 hex characters of
+// HMAC-SHA256(canonical hostname, key) for a given hostname and key.
+func HashHostLabel(rawHost string, key []byte) string {
+	canonical := sanitizeHostname(rawHost)
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(canonical))
+	sum := hex.EncodeToString(mac.Sum(nil))
+	return "host-" + sum[:8]
+}
+
+// anonymizeHostname maps a raw hostname to a stable, opaque pseudonym:
+// "host-" + first 8 hex chars of HMAC-SHA256(sanitizeHostname(raw), key).
 func anonymizeHostname(labels map[string]string, raw string) string {
 	key := sanitizeHostname(raw)
 	if label, ok := labels[key]; ok {
 		return label
 	}
-	label := fmt.Sprintf("host-%d", len(labels)+1)
+	hostKey, err := loadOrCreateHostKey()
+	if err != nil {
+		// Fallback if key cannot be loaded
+		label := fmt.Sprintf("host-%d", len(labels)+1)
+		labels[key] = label
+		return label
+	}
+	label := HashHostLabel(raw, hostKey)
 	labels[key] = label
 	return label
 }

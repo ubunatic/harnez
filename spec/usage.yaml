@@ -6,7 +6,10 @@ passive_dedupe_interval: 30s
 # Live collection (usage, usage --watch) records a usage-history snapshot per
 # host at most this often; `harnez usage export` reads these (issue 735).
 history_snapshot_interval: 15m
+# Path relative to $XDG_DATA_HOME/harnez for HMAC key used to hash host labels in usage export (issue 735).
+export_host_key: export-host-key
 statusline_busy_timeout: 25ms
+
 watch_loading_label: Collecting usage…
 view_modes:
   default: normal

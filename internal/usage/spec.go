@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +22,7 @@ type usageSpec struct {
 	PassiveDedupeInterval string             `yaml:"passive_dedupe_interval"`
 	StatuslineBusyTimeout string             `yaml:"statusline_busy_timeout"`
 	HistorySnapshotEvery  string             `yaml:"history_snapshot_interval"`
+	ExportHostKey         string             `yaml:"export_host_key"`
 	ViewModes             usageViewModesSpec `yaml:"view_modes"`
 }
 
@@ -54,6 +56,7 @@ var (
 	usageSpecErr          error
 	usageSpecLoadingLabel string
 	usageSpecHistoryEvery time.Duration
+	usageSpecHostKey      string
 	usageSpecViewModes    usageViewModesSpec
 )
 
@@ -72,6 +75,19 @@ func collectorPolicy() (time.Duration, time.Duration, error) {
 func historySnapshotInterval() (time.Duration, error) {
 	_, _, _, _, _, err := usageDurations()
 	return usageSpecHistoryEvery, err
+}
+
+// ExportHostKeyRelativePath returns the relative path from spec/usage.yaml
+// where the export host HMAC key is stored (issue 735).
+func ExportHostKeyRelativePath() (string, error) {
+	_, _, _, _, _, err := usageDurations()
+	if err != nil {
+		return "", err
+	}
+	if usageSpecHostKey == "" {
+		return "export-host-key", nil
+	}
+	return usageSpecHostKey, nil
 }
 
 // PassivePolicy returns the duplicate suppression interval and SQLite lock
@@ -93,6 +109,7 @@ func usageDurations() (time.Duration, time.Duration, time.Duration, time.Duratio
 		if err := yaml.Unmarshal(data, &spec); err == nil {
 			usageSpecLoadingLabel = spec.WatchLoadingLabel
 			usageSpecHistoryEvery, _ = time.ParseDuration(spec.HistorySnapshotEvery)
+			usageSpecHostKey = spec.ExportHostKey
 			usageSpecViewModes = spec.ViewModes
 		}
 	})
@@ -130,6 +147,9 @@ func parseUsageSpec(data []byte) (time.Duration, time.Duration, time.Duration, t
 	}
 	if every, err := time.ParseDuration(spec.HistorySnapshotEvery); err != nil || every <= 0 {
 		return 0, 0, 0, 0, 0, fmt.Errorf("%s: history_snapshot_interval must be a positive duration", usageSpecPath)
+	}
+	if strings.TrimSpace(spec.ExportHostKey) == "" {
+		return 0, 0, 0, 0, 0, fmt.Errorf("%s: export_host_key must not be empty", usageSpecPath)
 	}
 	busy, err := time.ParseDuration(spec.StatuslineBusyTimeout)
 	if err != nil || busy <= 0 || busy > time.Second {

@@ -180,7 +180,7 @@ Using Unicode Braille patterns (`\u2800`–`\u28FF`):
 
 ```json
 {
-  "format_version": 1,
+  "format_version": 2,
   "generated_at": "2026-10-06T12:00:00Z",
   "telemetry": { "generated_at": "...", "tool_calls": [ ... ] },
   "usage": { "generated_at": "...", "points": [ ... ] }
@@ -193,6 +193,12 @@ each `telemetry.tool_calls` row (`telemetry.ExportToolCall`) and each `usage.poi
 `cmd/harnez/usageexport.go`, not a spec value, because it describes the Go structs and must change
 in the same commit as they do (like `schemaVersion` for the database). Files written before
 version 1 have no `format_version`.
+
+Format version 2 (issue 735) changes the semantics of `usage.points[].hostname` from transient
+sequential labels (`host-1`, `host-2`, ...) to stable HMAC pseudonyms (`host-` + first 8 hex characters
+of HMAC-SHA256(canonical hostname, key)). The 32-byte secret key is stored with `0600` permissions at
+`$XDG_DATA_HOME/harnez/export-host-key` (`~/.local/share/harnez/export-host-key` by default, configured via
+`export_host_key` in `spec/usage.yaml`). Losing or deleting this key will change generated host labels once.
 
 Bump the version when a reader built for the old version would misread the new file:
 
@@ -207,6 +213,7 @@ are present (e.g. `note`); they do not change the format.
 `TestBuildUsageExport_Golden` (`cmd/harnez/usageexport_test.go`) pins the format against
 `cmd/harnez/testdata/usage-export.golden.json`. When it fails, decide on a bump first, then
 rewrite the file with `go test -run TestBuildUsageExport_Golden ./cmd/harnez -update`.
+
 
 ---
 

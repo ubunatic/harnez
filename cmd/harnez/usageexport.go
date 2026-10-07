@@ -34,7 +34,7 @@ import (
 // file (issue 720). Bump it with any breaking change to the envelope,
 // telemetry.ExportToolCall or usage.ExportPoint; see docs/Telemetry.md
 // "Usage Export Format" for what counts as breaking.
-const usageExportFormatVersion = 1
+const usageExportFormatVersion = 2
 
 // usageExportEnvelope is the top-level JSON shape written to --out: both
 // exporters stay independently testable (see their own export_test.go
