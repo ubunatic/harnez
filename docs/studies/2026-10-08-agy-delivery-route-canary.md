@@ -6,6 +6,25 @@ Issue 758 · 2026-10-08
 
 **Recommendation: no live route; resume-only.** `agy --conversation <id> -p <message>` appends a turn to the same conversation history, but it runs a separate print-mode process. This probe could not establish delivery into an already-open interactive TUI or interruption of a running turn. Do not treat resume as live session messaging.
 
+## Phase 2 — M0 PTY delivery canary
+
+The live AGY checks P1–P5 were not run in this execution: stdin is not a TTY (`test -t 0`
+returned false), although `/home/uwe/.local/bin/agy` is installed. The M0 request's prerequisite
+`harnez agent start -i` session could therefore not be created here. This leaves live idle
+submission, mid-turn behavior, AGY bracketed-paste handling, meter `functionCall` observations,
+and idle TUI output noise unproven.
+
+An in-process PTY canary checked the existing Harnez control transport instead. The Unix-socket
+`prompt` action reaches the PTY master as `prompt + "\n"`. A multiline message is written with its
+embedded newlines unchanged and a final newline; it is therefore split into terminal lines and
+can submit the first line early. The action does not add bracketed-paste markers. These results
+confirm the implementation path but do not establish how AGY's TUI handles those bytes.
+
+**M0 recommendation:** a delivery queue must not use the current immediate `prompt` action for
+multiline or mid-turn messages. Keep the proposed idle-gated delivery policy and validate a real
+AGY TUI before choosing bracketed paste versus newline flattening. The M0 live acceptance criteria
+remain open for a TTY-enabled host run.
+
 ## Environment and method
 
 - AGY CLI: `/home/uwe/.local/bin/agy`; model: `gemini-3.6-flash-low`.

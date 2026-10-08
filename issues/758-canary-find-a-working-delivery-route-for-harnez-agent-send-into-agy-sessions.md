@@ -175,6 +175,14 @@ Phase 2 (Current Focus): **Supervised queue injection.** Milestones in order; ea
   be used as the idle signal.
 Stop and report if P1 fails: then no supervised route exists and the ticket closes as resume-only.
 
+**M0 progress (2026-10-08):** This worker had no TTY (`test -t 0` was false), so the real AGY
+interactive checks P1–P5 remain open. The in-process PTY canary verified that the control-socket
+`prompt` action writes bytes into terminal input, appends `\n`, preserves embedded newlines as
+separate terminal lines, and does not add bracketed-paste framing. This confirms the existing
+transport but cannot establish AGY TUI behavior. The immediate, ungated action is unsuitable for
+safe multiline/mid-turn delivery; retain idle-gated queueing and finish P1–P5 on a TTY-enabled host.
+Details: [AGY delivery route canary](../docs/studies/2026-10-08-agy-delivery-route-canary.md).
+
 **M1 — Turn signal in the meter.** `internal/agymeter/meter.go`: `Observer` interface,
 `RunWithEnvDirRunnerObserved`, `forward` → `RequestStarted`, `parseResponse` → `ResponseFinished`
 with a `functionCall` scan (field names from P4). `internal/subagent/agyturn.go` + tests for

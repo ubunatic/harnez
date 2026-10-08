@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creack/pty"
 	"ubunatic.com/harnez/internal/claude"
 )
 
@@ -153,6 +154,66 @@ func TestControlBrokerPromptCompactAndStop(t *testing.T) {
 	case <-time.After(time.Second):
 		_ = cmd.Process.Kill()
 		t.Fatal("stop control did not terminate owned process")
+	}
+}
+
+func TestControlPromptWritesToPTYAndSplitsMultilineInput(t *testing.T) {
+	master, slave, err := pty.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer master.Close()
+	defer slave.Close()
+	path := filepath.Join(t.TempDir(), "control.sock")
+	listener, err := listenControl(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go serveControls(listener, master, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	const prompt = "first line\nsecond line\nthird line"
+	if err := SendControl(ctx, path, "prompt", prompt); err != nil {
+		t.Fatal(err)
+	}
+	got := make([]byte, len(prompt)+1)
+	if _, err := io.ReadFull(slave, got); err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != prompt+"\n" {
+		t.Fatalf("PTY input = %q, want prompt bytes followed by Enter", got)
+	}
+}
+
+func TestControlPromptDoesNotUseBracketedPasteFraming(t *testing.T) {
+	master, slave, err := pty.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer master.Close()
+	defer slave.Close()
+	path := filepath.Join(t.TempDir(), "control.sock")
+	listener, err := listenControl(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go serveControls(listener, master, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	const prompt = "one\ntwo"
+	if err := SendControl(ctx, path, "prompt", prompt); err != nil {
+		t.Fatal(err)
+	}
+	got := make([]byte, len(prompt)+1)
+	if _, err := io.ReadFull(slave, got); err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != prompt+"\n" {
+		t.Fatalf("PTY input = %q, want raw newline-delimited input without bracketed-paste markers", got)
 	}
 }
 
