@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/channel"
+	"ubunatic.com/harnez/internal/subagent"
 )
 
 func TestChannelSetupPrintsManualConfiguration(t *testing.T) {
@@ -105,7 +106,7 @@ func TestMergeChannelSessionsAndCodexFailureFallback(t *testing.T) {
 			{ID: "thread-2", Name: "cati1", CWD: "/work/codex"},
 			{ID: "thread-1", Name: "", CWD: "/work/other"},
 		}, nil
-	}, "thread-2")
+	}, nil, "thread-2")
 	if len(listed) != 4 || listed[0].Provider != "claude" || listed[0].SessionID != "claude-1" || listed[1].SessionID != "claude-2" || listed[2].Provider != "codex" || listed[2].SessionID != "thread-1" || listed[3].Name != "cati1" {
 		t.Fatalf("merged sessions = %#v", listed)
 	}
@@ -114,7 +115,7 @@ func TestMergeChannelSessionsAndCodexFailureFallback(t *testing.T) {
 	}
 	listed = mergeChannelSessions(endpoints[:1], func() ([]channel.CodexThread, error) {
 		return nil, errors.New("codex app-server unavailable")
-	}, "thread-2")
+	}, nil, "thread-2")
 	if len(listed) != 1 || listed[0].Provider != "claude" || listed[0].SessionID != "claude-2" {
 		t.Fatalf("Codex failure lost Claude sessions: %#v", listed)
 	}
@@ -208,7 +209,7 @@ func TestChannelListCommandFlags(t *testing.T) {
 					},
 					func(context.Context, channel.Config) ([]channel.CodexThread, error) {
 						return []channel.CodexThread{{ID: "codex-current", Name: "current-worker", CWD: "/work/codex"}, {ID: "codex-old", CWD: "/work/codex"}, {ID: "codex-named", Name: "worker", CWD: "/work/other"}}, nil
-					})
+					}, noActiveCodexProcesses)
 			}
 			if err := cmd.Execute(); err != nil {
 				t.Fatal(err)
@@ -224,6 +225,140 @@ func TestChannelListCommandFlags(t *testing.T) {
 				t.Fatalf("--all output omitted inactive session: %s", out.String())
 			}
 		})
+	}
+}
+
+func noActiveCodexProcesses() ([]*subagent.Session, error) { return nil, nil }
+
+func TestMergeChannelSessionsMarksActiveProcessSessionsLive(t *testing.T) {
+	threads := func() ([]channel.CodexThread, error) {
+		return []channel.CodexThread{
+			{ID: "thread-listed", Name: "listed", CWD: "/work/a"},
+			{ID: "thread-idle", Name: "idle", CWD: "/work/b"},
+		}, nil
+	}
+	active := []*subagent.Session{
+		{ProviderSessionID: "thread-listed", Provider: "codex", Name: "process-name", WorkingDir: "/work/a"},
+		{ProviderSessionID: "thread-unlisted", Provider: "codex", Name: "proc-worker", WorkingDir: "/work/c"},
+	}
+	listed := mergeChannelSessions(nil, threads, active, "")
+	wantLive := map[string]bool{"thread-listed": true, "thread-idle": false, "thread-unlisted": true}
+	if len(listed) != len(wantLive) {
+		t.Fatalf("merged sessions (duplicates or missing?) = %#v", listed)
+	}
+	for _, session := range listed {
+		want, ok := wantLive[session.SessionID]
+		if !ok || session.Live != want {
+			t.Fatalf("session %q live = %v, want %v (known=%v)", session.SessionID, session.Live, want, ok)
+		}
+		if session.SessionID == "thread-listed" && session.Name != "listed" {
+			t.Fatalf("app-server name lost for matched thread: %#v", session)
+		}
+		if session.SessionID == "thread-unlisted" && (session.Name != "proc-worker" || session.WorkingDir != "/work/c") {
+			t.Fatalf("process-only session lost its details: %#v", session)
+		}
+	}
+}
+
+func TestMergeChannelSessionsEnvOverrideWithProcessDiscovery(t *testing.T) {
+	threads := func() ([]channel.CodexThread, error) {
+		return []channel.CodexThread{{ID: "thread-env"}, {ID: "thread-proc"}, {ID: "thread-none"}}, nil
+	}
+	active := []*subagent.Session{
+		{ProviderSessionID: "thread-proc", Provider: "codex"},
+		{Provider: "codex"}, // no ID: must be skipped, not listed as an empty session
+	}
+	listed := mergeChannelSessions(nil, threads, active, "thread-env")
+	if len(listed) != 3 {
+		t.Fatalf("merged sessions = %#v", listed)
+	}
+	wantLive := map[string]bool{"thread-env": true, "thread-proc": true, "thread-none": false}
+	for _, session := range listed {
+		if session.Live != wantLive[session.SessionID] {
+			t.Fatalf("session %q live = %v, want %v", session.SessionID, session.Live, wantLive[session.SessionID])
+		}
+	}
+}
+
+func TestMergeChannelSessionsKeepsProcessSessionsWhenAppServerFails(t *testing.T) {
+	active := []*subagent.Session{{ProviderSessionID: "thread-proc", Provider: "codex", Name: "proc"}}
+	listed := mergeChannelSessions(nil, func() ([]channel.CodexThread, error) {
+		return nil, errors.New("codex app-server unavailable")
+	}, active, "")
+	if len(listed) != 1 || listed[0].SessionID != "thread-proc" || !listed[0].Live {
+		t.Fatalf("app-server failure dropped process-matched session: %#v", listed)
+	}
+}
+
+func runChannelListForTest(t *testing.T, args []string, currentThreadID string, threads func(context.Context, channel.Config) ([]channel.CodexThread, error), active func() ([]*subagent.Session, error)) (string, error) {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CODEX_THREAD_ID", currentThreadID)
+	t.Setenv("CODEX_SESSION_ID", "")
+	cmd := newChannelCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs(args)
+	listCmd, _, err := cmd.Find([]string{"list"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		return runChannelList(cmd, args,
+			func(context.Context, channel.Config) ([]channel.Endpoint, error) { return nil, nil },
+			threads, active)
+	}
+	err = cmd.Execute()
+	return out.String(), err
+}
+
+func TestChannelListShowsActiveProcessSessionsByDefault(t *testing.T) {
+	threads := func(context.Context, channel.Config) ([]channel.CodexThread, error) {
+		return []channel.CodexThread{{ID: "codex-listed", Name: "listed", CWD: "/work/a"}, {ID: "codex-old", CWD: "/work/a"}}, nil
+	}
+	active := func() ([]*subagent.Session, error) {
+		return []*subagent.Session{{ProviderSessionID: "codex-proc", Provider: "codex", Name: "proc-worker", WorkingDir: "/work/proc"}}, nil
+	}
+	out, err := runChannelListForTest(t, []string{"list"}, "", threads, active)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "codex\tproc-worker\tcodex-proc\tlive") {
+		t.Fatalf("active process session missing from default list: %s", out)
+	}
+	if strings.Contains(out, "codex-listed") || strings.Contains(out, "codex-old") {
+		t.Fatalf("default list included inactive threads: %s", out)
+	}
+}
+
+func TestChannelListProcessErrorKeepsAppServerEnvOverride(t *testing.T) {
+	threads := func(context.Context, channel.Config) ([]channel.CodexThread, error) {
+		return []channel.CodexThread{{ID: "codex-env", Name: "env-worker"}, {ID: "codex-other"}}, nil
+	}
+	failing := func() ([]*subagent.Session, error) { return nil, errors.New("read process table") }
+	out, err := runChannelListForTest(t, []string{"list"}, "codex-env", threads, failing)
+	if err != nil {
+		t.Fatalf("process discovery error must not fail channel list: %v", err)
+	}
+	if !strings.Contains(out, "codex\tenv-worker\tcodex-env\tlive") || strings.Contains(out, "codex-other") {
+		t.Fatalf("env override lost when process discovery failed: %s", out)
+	}
+}
+
+func TestChannelListAppServerErrorKeepsActiveProcessSessions(t *testing.T) {
+	threads := func(context.Context, channel.Config) ([]channel.CodexThread, error) {
+		return nil, errors.New("codex app-server unavailable")
+	}
+	active := func() ([]*subagent.Session, error) {
+		return []*subagent.Session{{ProviderSessionID: "codex-proc", Provider: "codex", Name: "proc-worker"}}, nil
+	}
+	out, err := runChannelListForTest(t, []string{"list"}, "", threads, active)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "codex\tproc-worker\tcodex-proc\tlive") {
+		t.Fatalf("process session dropped when app-server failed: %s", out)
 	}
 }
 
@@ -247,7 +382,8 @@ func TestChannelListRejectsConflictingProjectionFlags(t *testing.T) {
 		listCmd.RunE = func(cmd *cobra.Command, args []string) error {
 			return runChannelList(cmd, args,
 				func(context.Context, channel.Config) ([]channel.Endpoint, error) { return nil, nil },
-				func(context.Context, channel.Config) ([]channel.CodexThread, error) { return nil, nil })
+				func(context.Context, channel.Config) ([]channel.CodexThread, error) { return nil, nil },
+				noActiveCodexProcesses)
 		}
 		err = cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), tc.want) {

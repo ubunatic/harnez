@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/channel"
+	"ubunatic.com/harnez/internal/subagent"
 )
 
 func newChannelCmd() *cobra.Command {
@@ -60,6 +61,12 @@ func newChannelCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runChannelList(cmd, args, channel.List, func(ctx context.Context, cfg channel.Config) ([]channel.CodexThread, error) {
 				return channel.DiscoverCodexThreads(ctx, "codex", time.Duration(cfg.IOTimeoutMS)*time.Millisecond, cfg.MaxRPCBytes)
+			}, func() ([]*subagent.Session, error) {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return nil, err
+				}
+				return subagent.DiscoverActiveCodexSessions(home)
 			})
 		},
 	}
@@ -93,7 +100,7 @@ func newChannelCmd() *cobra.Command {
 	return cmd
 }
 
-func runChannelList(cmd *cobra.Command, _ []string, listEndpoints func(context.Context, channel.Config) ([]channel.Endpoint, error), discover func(context.Context, channel.Config) ([]channel.CodexThread, error)) error {
+func runChannelList(cmd *cobra.Command, _ []string, listEndpoints func(context.Context, channel.Config) ([]channel.Endpoint, error), discover func(context.Context, channel.Config) ([]channel.CodexThread, error), activeCodex func() ([]*subagent.Session, error)) error {
 	allSessions, _ := cmd.Flags().GetBool("all")
 	namesOnly, _ := cmd.Flags().GetBool("names")
 	idsOnly, _ := cmd.Flags().GetBool("ids")
@@ -113,11 +120,13 @@ func runChannelList(cmd *cobra.Command, _ []string, listEndpoints func(context.C
 		return err
 	}
 	threads, discoverErr := discover(cmd.Context(), cfg)
+	// Process discovery is best effort: the Codex CLI does not export its thread ID, so a failure here only drops the process-matched sessions.
+	active, _ := activeCodex()
 	currentThreadID := os.Getenv("CODEX_THREAD_ID")
 	if currentThreadID == "" {
 		currentThreadID = os.Getenv("CODEX_SESSION_ID")
 	}
-	listed := mergeChannelSessions(endpoints, func() ([]channel.CodexThread, error) { return threads, discoverErr }, currentThreadID)
+	listed := mergeChannelSessions(endpoints, func() ([]channel.CodexThread, error) { return threads, discoverErr }, active, currentThreadID)
 	if !allSessions {
 		listed = filterLiveChannelSessions(listed)
 	}
@@ -198,7 +207,7 @@ func printChannelOverview(out io.Writer, listed []listedChannel) error {
 	return err
 }
 
-func mergeChannelSessions(endpoints []channel.Endpoint, discover func() ([]channel.CodexThread, error), currentThreadID string) []listedChannel {
+func mergeChannelSessions(endpoints []channel.Endpoint, discover func() ([]channel.CodexThread, error), active []*subagent.Session, currentThreadID string) []listedChannel {
 	listed := make([]listedChannel, 0, len(endpoints))
 	for _, endpoint := range endpoints {
 		listed = append(listed, listedChannel{
@@ -206,14 +215,31 @@ func mergeChannelSessions(endpoints []channel.Endpoint, discover func() ([]chann
 			URL: endpoint.URL, WorkingDir: endpoint.WorkingDir,
 		})
 	}
+	activeIDs := make(map[string]bool, len(active))
+	for _, session := range active {
+		activeIDs[session.ProviderID()] = true
+	}
+	seen := make(map[string]bool)
 	threads, err := discover()
 	if err == nil {
 		for _, thread := range threads {
+			seen[thread.ID] = true
 			listed = append(listed, listedChannel{
 				Provider: "codex", SessionID: thread.ID, Name: thread.Name, WorkingDir: thread.CWD,
-				Live: thread.ID == currentThreadID && currentThreadID != "",
+				Live: (thread.ID == currentThreadID && currentThreadID != "") || activeIDs[thread.ID],
 			})
 		}
+	}
+	// Active processes whose thread the app-server did not list (or that is missing because discovery failed) are still live.
+	for _, session := range active {
+		id := session.ProviderID()
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		listed = append(listed, listedChannel{
+			Provider: "codex", SessionID: id, Name: session.Name, WorkingDir: session.WorkingDir, Live: true,
+		})
 	}
 	sort.Slice(listed, func(i, j int) bool {
 		if listed[i].Provider == listed[j].Provider {
