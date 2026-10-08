@@ -1,6 +1,6 @@
 # 760 — Add /harnez-selftest as a bench task
 
-**Status**: Open
+**Status**: Closed — resolved (task added in `7746ae3d`, results recorded in `6888aa1e` and `c4daec2d`)
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
