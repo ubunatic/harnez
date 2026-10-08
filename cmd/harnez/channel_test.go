@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -89,5 +90,27 @@ func TestChannelHelpExplainsProjectApprovalAndRestart(t *testing.T) {
 		if !strings.Contains(out.String(), text) {
 			t.Fatalf("missing help %q: %s", text, out.String())
 		}
+	}
+}
+
+func TestMergeChannelSessionsAndCodexFailureFallback(t *testing.T) {
+	endpoints := []channel.Endpoint{
+		{SessionID: "claude-2", PID: 22, URL: "http://127.0.0.1:2", WorkingDir: "/work/claude"},
+		{SessionID: "claude-1", PID: 11, URL: "http://127.0.0.1:1", WorkingDir: "/work/claude"},
+	}
+	listed := mergeChannelSessions(endpoints, func() ([]channel.CodexThread, error) {
+		return []channel.CodexThread{
+			{ID: "thread-2", Name: "cati1", CWD: "/work/codex"},
+			{ID: "thread-1", Name: "", CWD: "/work/other"},
+		}, nil
+	})
+	if len(listed) != 4 || listed[0].Provider != "claude" || listed[0].SessionID != "claude-1" || listed[1].SessionID != "claude-2" || listed[2].Provider != "codex" || listed[2].SessionID != "thread-1" || listed[3].Name != "cati1" {
+		t.Fatalf("merged sessions = %#v", listed)
+	}
+	listed = mergeChannelSessions(endpoints[:1], func() ([]channel.CodexThread, error) {
+		return nil, errors.New("codex app-server unavailable")
+	})
+	if len(listed) != 1 || listed[0].Provider != "claude" || listed[0].SessionID != "claude-2" {
+		t.Fatalf("Codex failure lost Claude sessions: %#v", listed)
 	}
 }

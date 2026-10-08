@@ -6,7 +6,9 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sort"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/channel"
@@ -52,7 +54,7 @@ func newChannelCmd() *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use: "list", Short: "List live channel endpoints by Claude session ID as JSON",
+		Use: "list", Short: "List live Claude channel endpoints and Codex sessions as JSON",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := channel.LoadConfig()
@@ -63,7 +65,10 @@ func newChannelCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return json.NewEncoder(cmd.OutOrStdout()).Encode(endpoints)
+			listed := mergeChannelSessions(endpoints, func() ([]channel.CodexThread, error) {
+				return channel.DiscoverCodexThreads(cmd.Context(), "codex", time.Duration(cfg.IOTimeoutMS)*time.Millisecond, cfg.MaxRPCBytes)
+			})
+			return json.NewEncoder(cmd.OutOrStdout()).Encode(listed)
 		},
 	})
 	var message string
@@ -89,6 +94,40 @@ func newChannelCmd() *cobra.Command {
 	send.Flags().StringVarP(&message, "message", "m", "", "message text (default: spec canary asks Claude to record its message ID)")
 	cmd.AddCommand(send)
 	return cmd
+}
+
+type listedChannel struct {
+	Provider   string `json:"provider"`
+	SessionID  string `json:"session_id"`
+	Name       string `json:"name,omitempty"`
+	PID        int    `json:"pid,omitempty"`
+	URL        string `json:"url,omitempty"`
+	WorkingDir string `json:"working_dir"`
+}
+
+func mergeChannelSessions(endpoints []channel.Endpoint, discover func() ([]channel.CodexThread, error)) []listedChannel {
+	listed := make([]listedChannel, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		listed = append(listed, listedChannel{
+			Provider: "claude", SessionID: endpoint.SessionID, PID: endpoint.PID,
+			URL: endpoint.URL, WorkingDir: endpoint.WorkingDir,
+		})
+	}
+	threads, err := discover()
+	if err == nil {
+		for _, thread := range threads {
+			listed = append(listed, listedChannel{
+				Provider: "codex", SessionID: thread.ID, Name: thread.Name, WorkingDir: thread.CWD,
+			})
+		}
+	}
+	sort.Slice(listed, func(i, j int) bool {
+		if listed[i].Provider == listed[j].Provider {
+			return listed[i].SessionID < listed[j].SessionID
+		}
+		return listed[i].Provider < listed[j].Provider
+	})
+	return listed
 }
 
 func printChannelSetup(out io.Writer, cfg channel.Config, executable string) error {
