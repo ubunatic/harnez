@@ -1,6 +1,6 @@
 # 757 — Show the current Codex session in harnez channel list
 
-**Status**: Draft
+**Status**: Closed — Recognized current Codex thread (CODEX_THREAD_ID / CODEX_SESSION_ID fallback) as live in harnez channel list
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
