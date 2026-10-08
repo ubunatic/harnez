@@ -73,8 +73,8 @@ Findings:
   explicit model tier for Claude turns; `:med` maps to `medium`, and the default no-tier
   invocation remains unchanged.
 - **Claude aliases move:** `sonnet`/`opus`/`haiku` resolve to the newest model (Sonnet 5,
-  Opus 5.x, Haiku 4.5 today); the web evidence is partly for 4.6. Transcripts show
-  `claude-opus-5`, `claude-opus-5-5`, `claude-sonnet-5`, `claude-haiku-4-5`.
+  Opus 5.x, Haiku 5.5 today); the web evidence is partly for 4.6. Transcripts show
+  `claude-opus-5`, `claude-opus-5-5`, `claude-sonnet-5`, `claude-haiku-5-5`.
 - **Short aliases (2026-09-25, issue 540):** `--model` accepts `provider:name[:tier]`, a bare
   alias (`luna`, `opus`, `flash38`) or `alias:tier` (`luna:low`, `opus:med`). In a two-part
   spec, only `low`/`med`/`high` count as a tier; anything else is a model name

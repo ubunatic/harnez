@@ -203,7 +203,7 @@ var managedSettingsKeys = []string{
 var modelAliases = map[string]string{
 	"sonnet": "claude-sonnet-4-6",
 	"opus":   "claude-opus-4-7",
-	"haiku":  "claude-haiku-4-5-20251001",
+	"haiku":  "claude-haiku-5-5",
 }
 
 func resolveModel(s string) string {

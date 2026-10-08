@@ -91,7 +91,7 @@ Typed structs would marshal in field declaration order, creating a permanent dif
 
 **Claude Code overwrites settings.json** — Claude Code monitors `~/.claude/settings.json` and may restore a cached version immediately after a write during an active session. Apply from outside a running Claude Code session for settings changes to persist, or restart Claude Code after applying.
 
-**Model alias resolution** — `model: sonnet` in config resolves to `claude-sonnet-4-6` before writing. Unrecognised values pass through unchanged. Current aliases: `sonnet→claude-sonnet-4-6`, `opus→claude-opus-4-7`, `haiku→claude-haiku-4-5-20251001`.
+**Model alias resolution** — `model: sonnet` in config resolves to `claude-sonnet-4-6` before writing. Unrecognised values pass through unchanged. Current aliases: `sonnet→claude-sonnet-4-6`, `opus→claude-opus-4-7`, `haiku→claude-haiku-5-5`.
 
 **`cfg.Dir` for relative paths** — `loadConfig` sets `cfg.Dir = filepath.Dir(configPath)`. Language `source:` paths and command `file:` paths are resolved relative to this, not to cwd. Running `harnez apply` from a different directory works as long as `-c` points to the config file.
 
