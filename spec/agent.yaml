@@ -82,7 +82,8 @@ models:
     name: claude-haiku-5-5
     tier: low
     roles: developer, reviewer, mechanical
-    cost: 19
+    cost: 4
+    cost_by_tier: {med: 4, high: 7}
     eff: "-"
     skills: Go~ TUI~ SQL~
     use: Claude Haiku 5.5; default go-to for cheap, fast work; strong computer use and agent tasks; weaker than sol on terminal coding

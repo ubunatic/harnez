@@ -28,6 +28,25 @@ Check the list price on Anthropic's pricing page before any spec cost value is s
 - Context window: 1M tokens input, 128K tokens max output.
 - Anthropic reports no SWE-bench Verified score for this model.
 
+## Leaderboard data (second screenshot, source page not recorded)
+
+Score and per-task cost. The table's other columns are unlabelled and not used here.
+
+| Model | Score | Cost per task |
+|---|---|---|
+| Opus 5.5 (Low) | 60.57 | $0.37 |
+| Sonnet 5.5 (Medium) | 60.54 | $0.20 |
+| GPT-6 Sol (High) | 59.92 | $0.31 |
+| GPT-6 Luna (Max) | 59.07 | $0.03 |
+| Haiku 5.5 (High) | 58.63 | $0.05 |
+| Haiku 5.5 (Medium) | 58.20 | $0.03 |
+| GPT-6 Luna (Xhigh) | 56.40 | $0.03 |
+| GPT-6 Sol (Medium) | 56.32 | $0.21 |
+
+Haiku medium scores above Sol medium on this board at about one seventh of the cost. Haiku uses the Claude Code harness and Sol uses Codex CLI, so this is not a like-for-like comparison.
+
+The spec's cost for Haiku was set from these figures: medium 4, high 7 (Sol medium is 29 on the same scale).
+
 ## Benchmarks (vendor or third-party, mostly at max effort)
 
 | Benchmark | Haiku 5.5 | Notes |
