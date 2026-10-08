@@ -172,6 +172,7 @@ table — don't hand-edit the row here, it will be overwritten on the next run.
 | [studies/2026-10-05-artificial-analysis-cost-report.md](studies/2026-10-05-artificial-analysis-cost-report.md) | Artificial Analysis Cost Report |
 | [studies/2026-10-06-webpage-screenshot-inspection-telemetry-study.md](studies/2026-10-06-webpage-screenshot-inspection-telemetry-study.md) | Local telemetry evidence and attribution gaps for webpage screenshot inspection |
 | [studies/2026-10-07-claude-cross-session-sendmessage.md](studies/2026-10-07-claude-cross-session-sendmessage.md) | Claude Code cross-session SendMessage canary (656 M3) |
+| [studies/2026-10-08-agy-delivery-route-canary.md](studies/2026-10-08-agy-delivery-route-canary.md) | AGY Delivery Route Canary |
 | [studies/2026-10-08-bash-heredoc-appends-vs-native-edit-tools.md](studies/2026-10-08-bash-heredoc-appends-vs-native-edit-tools.md) | Decision framework, token economics, and ergonomics of bash here-doc (`cat << 'EOF' >> ...`) vs. native structured edit tools (`replace_file_content` / `write_to_file`). |
 | [studies/2026-10-08-claude-haiku-5-5-first-insights.md](studies/2026-10-08-claude-haiku-5-5-first-insights.md) | Claude Haiku 5.5: first insights |
 | [studies/2026-10-08-two-agent-lean-sprint-codex-send.md](studies/2026-10-08-two-agent-lean-sprint-codex-send.md) | Running Study: Two-Agent Lean Sprint (Luna:low Searcher & Luna:high Dev) |
