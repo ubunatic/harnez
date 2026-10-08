@@ -1,6 +1,6 @@
 # 754 — Add filtering and projection flags to harnez channel list (live, names, ids) with overview-first design
 
-**Status**: Open
+**Status**: Closed — Implemented filtering (--live, --names, --ids, --json) and overview-first formatting for harnez channel list
 **Priority**: P2 (Medium)
 **Severity**: Normal
 **Category**: Feature
