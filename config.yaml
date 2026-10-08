@@ -127,6 +127,7 @@ debloat:
     commit: user-invocable-only
     docup: user-invocable-only
     lean-sprint: user-invocable-only
+    lean-sprint-v1: user-invocable-only
     lean-sprinter: user-invocable-only
     mode: user-invocable-only
     pull: user-invocable-only
@@ -416,8 +417,13 @@ skills:
 
   - name: lean-sprint
     license: AGPL-3.0-or-later
-    description: "Execute a lean fresh-handoff sprint (Goal Handoff -> Autonomous Dev -> Inline Review -> Hygiene)"
+    description: "Execute a two-agent lean sprint (Cheap Searcher -> Focused Developer -> Diff-First Review -> Study Report)"
     file: docs/commands/lean-sprint.md
+
+  - name: lean-sprint-v1
+    license: AGPL-3.0-or-later
+    description: "Execute the legacy single-developer lean fresh-handoff sprint"
+    file: docs/commands/lean-sprint-v1.md
 
   - name: next
     license: AGPL-3.0-or-later

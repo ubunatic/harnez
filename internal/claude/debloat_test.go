@@ -119,7 +119,7 @@ func TestApplyDebloat_MinimalSkillOverrides(t *testing.T) {
 
 	settings := readSettings(t, dir)
 	overrides, _ := settings["skillOverrides"].(map[string]any)
-	if got, want := len(overrides), 18; got != want {
+	if got, want := len(overrides), 19; got != want {
 		t.Fatalf("minimal skill override count = %d, want %d: %v", got, want, overrides)
 	}
 	if got := overrides["commit"]; got != "user-invocable-only" {
@@ -133,6 +133,9 @@ func TestApplyDebloat_MinimalSkillOverrides(t *testing.T) {
 	}
 	if got := overrides["harnez-handoff"]; got != "user-invocable-only" {
 		t.Fatalf("harnez-handoff override = %v, want user-invocable-only", got)
+	}
+	if got := overrides["lean-sprint-v1"]; got != "user-invocable-only" {
+		t.Fatalf("lean-sprint-v1 override = %v, want user-invocable-only", got)
 	}
 	for _, name := range []string{"evergreen", "lmcoder"} {
 		if got, present := overrides[name]; present {
@@ -150,7 +153,7 @@ func TestApplyDebloat_AggressiveSkillOverrides(t *testing.T) {
 
 	settings := readSettings(t, dir)
 	overrides, _ := settings["skillOverrides"].(map[string]any)
-	if got, want := len(overrides), 20; got != want {
+	if got, want := len(overrides), 21; got != want {
 		t.Fatalf("aggressive skill override count = %d, want %d: %v", got, want, overrides)
 	}
 	for _, name := range []string{"evergreen", "lmcoder"} {
