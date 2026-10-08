@@ -10,16 +10,16 @@ Rule for this study: do not compare Haiku 5.5 with Haiku 4.5 figures. Different 
 
 ## Price
 
-Source figures, per million tokens, prompts up to 100K tokens:
+Pricing table (per million tokens), as shown on the web page the user provided. The page URL is not recorded here, so verify it against Anthropic's pricing page:
 
-| Meter | Price |
-|---|---|
-| Input | $0.10 |
-| Output | $0.50 |
-| Cache read | $0.01 |
-| Cache write | $0.125 |
+| Meter | Haiku 5.5, up to 100K | Haiku 5.5, over 100K | Haiku 4.5 (reference only) | Sonnet 5.5 (reference only) |
+|---|---|---|---|---|
+| Input | $0.10 | $0.50 | $1.00 | $2.00 |
+| Output | $0.50 | $2.50 | $5.00 | $10.00 |
+| Cache read | $0.01 | $0.05 | $0.10 | $0.10 |
+| Cache write | $0.125 | $0.625 | $1.25 | $2.50 |
 
-Above 100K tokens, the whole request is billed at $0.50 input and $2.50 output. Batch pricing is discounted; sources disagree on the exact batch rate. A reseller lists $0.08 / $0.40, which is not the list price.
+The 100K threshold changes the rate for the whole request, not just the tokens above it. Batch pricing is not in the table; sources disagree on the batch rate. A reseller lists $0.08 / $0.40, which is not the list price.
 
 Check the list price on Anthropic's pricing page before any spec cost value is set.
 
