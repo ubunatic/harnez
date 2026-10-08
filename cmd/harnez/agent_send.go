@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -138,6 +140,132 @@ func resolveChannelTarget(endpoints []channel.Endpoint, identities []channelIden
 	return channel.Endpoint{}, fmt.Errorf("%s channel target %q; candidates:\n  %s", reason, name+id, strings.Join(candidates, "\n  "))
 }
 
+type agentSendTarget struct {
+	Provider string
+	Endpoint channel.Endpoint
+}
+
+func resolveAgentSendTarget(endpoints []channel.Endpoint, identities []channelIdentity, threads []channel.CodexThread, name, id, dir string) (agentSendTarget, error) {
+	wantDir := ""
+	if dir != "" {
+		var err error
+		wantDir, err = filepath.Abs(dir)
+		if err != nil {
+			return agentSendTarget{}, err
+		}
+	}
+	inDir := func(candidate string) bool {
+		if wantDir == "" {
+			return true
+		}
+		haveDir, err := filepath.Abs(candidate)
+		return err == nil && haveDir == wantDir
+	}
+	var matches []agentSendTarget
+	var candidates []string
+	for _, endpoint := range endpoints {
+		if !inDir(endpoint.WorkingDir) {
+			continue
+		}
+		var labels []string
+		matched := id != "" && id == endpoint.SessionID
+		for _, identity := range identities {
+			if identity.ProviderID != endpoint.SessionID {
+				continue
+			}
+			if identity.Name != "" {
+				labels = append(labels, identity.Name)
+			}
+			if name != "" && identity.Name == name {
+				matched = true
+			}
+		}
+		sort.Strings(labels)
+		candidates = append(candidates, fmt.Sprintf("%q id=%s provider=claude dir=%q", strings.Join(labels, ", "), endpoint.SessionID, endpoint.WorkingDir))
+		if matched {
+			matches = append(matches, agentSendTarget{Provider: "claude", Endpoint: endpoint})
+		}
+	}
+	for _, thread := range threads {
+		if !inDir(thread.CWD) {
+			continue
+		}
+		matched := (id != "" && id == thread.ID) || (name != "" && name == thread.Name)
+		candidates = append(candidates, fmt.Sprintf("%q id=%s provider=codex dir=%q", thread.Name, thread.ID, thread.CWD))
+		if matched {
+			matches = append(matches, agentSendTarget{Provider: "codex", Endpoint: channel.Endpoint{SessionID: thread.ID, WorkingDir: thread.CWD}})
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+	sort.Strings(candidates)
+	if len(candidates) == 0 {
+		candidates = append(candidates, "(no live Claude or Codex sessions)")
+	}
+	reason := "unknown"
+	if len(matches) > 1 {
+		reason = "ambiguous"
+	}
+	return agentSendTarget{}, fmt.Errorf("%s agent send target %q; live candidates:\n  %s", reason, name+id, strings.Join(candidates, "\n  "))
+}
+
+func liveAgentNames(endpoints []channel.Endpoint, identities []channelIdentity, threads []channel.CodexThread, dir string) []string {
+	seen := make(map[string]bool)
+	names := liveChannelNames(endpoints, identities, dir)
+	for _, name := range names {
+		seen[name] = true
+	}
+	wantDir, _ := filepath.Abs(dir)
+	for _, thread := range threads {
+		haveDir, _ := filepath.Abs(thread.CWD)
+		if thread.Name != "" && (dir == "" || haveDir == wantDir) && !seen[thread.Name] {
+			seen[thread.Name] = true
+			names = append(names, thread.Name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func codexMessageFrame(cfg channel.Config, identities []channelIdentity, threads []channel.CodexThread, senderID, message string) string {
+	for _, thread := range threads {
+		if thread.ID == senderID && thread.Name != "" {
+			identities = append(identities, channelIdentity{ID: senderID, ProviderID: senderID, Name: thread.Name})
+			break
+		}
+	}
+	frame := channelSender(cfg, identities, senderID) + "\n\n" + message
+	if senderID == "" {
+		return frame + "\n\nTo reply, run `harnez agent send --name <sender-session> \"<message>\"`."
+	}
+	return frame + "\n\nTo reply, run `harnez agent send --id " + senderID + " \"<message>\"`."
+}
+
+func queueCodexMessage(ctx context.Context, executable, threadID, message string) error {
+	cmd := exec.CommandContext(ctx, executable, "queue", "--thread", threadID, "--message", message)
+	var output bytes.Buffer
+	cmd.Stderr = &output
+	if err := cmd.Run(); err != nil {
+		if detail := strings.TrimSpace(output.String()); detail != "" {
+			return fmt.Errorf("codex queue: %w: %s", err, detail)
+		}
+		return fmt.Errorf("codex queue: %w", err)
+	}
+	return nil
+}
+
+func sendCodexMessage(ctx context.Context, executable, threadID, message string, out io.Writer) error {
+	if err := queueCodexMessage(ctx, executable, threadID, message); err != nil {
+		return err
+	}
+	return json.NewEncoder(out).Encode(struct {
+		Status    string `json:"status"`
+		Provider  string `json:"provider"`
+		SessionID string `json:"session_id"`
+	}{Status: "queued", Provider: "codex", SessionID: threadID})
+}
+
 func channelSender(cfg channel.Config, identities []channelIdentity, id string) string {
 	var names []string
 	for _, identity := range identities {
@@ -164,8 +292,8 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 	var wait bool
 	var timeout time.Duration
 	cmd := &cobra.Command{
-		Use: "send (--name <session> | --id <session-id>) <message>", Short: "Send to an opted-in Claude channel; optionally wait for receipt",
-		Long: "Send to a live Claude channel by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. Accepted means an MCP transport write. Received means the recipient called the optional reply tool, not task completion. --wait is off by default; its positive timeout defaults to spec/channel.yaml. Claude sessions are started manually by the user.",
+		Use: "send (--name <session> | --id <session-id>) <message>", Short: "Send to a Claude channel or Codex session; optionally wait for a Claude receipt",
+		Long: "Send to a live Claude channel or Codex session by --name or --id. The message is the positional argument; -m/--message and -p/--prompt are accepted alternatives. Without a target, send lists the names of live sessions. Claude accepted means an MCP transport write; Codex queued means its local queue command accepted the message. Only Claude supports optional receipt confirmation, and it does not confirm task completion. Claude sessions are started manually by the user.",
 		Example: `  harnez agent send --name harnez-53ih "look at ticket 748 in harnez"
   harnez agent send --id 86443124-b692-49e4-ae92-942b0177664f --wait "please confirm"`,
 		SilenceUsage: true,
@@ -191,13 +319,14 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			threads, _ := channel.DiscoverCodexThreads(cmd.Context(), "codex", time.Duration(cfg.IOTimeoutMS)*time.Millisecond, cfg.MaxRPCBytes)
 			identities := channelIdentities(cfg, *storeDir)
 			dir := ""
 			if cmd.Flags().Changed("dir") {
 				dir = *workDir
 			}
 			if *name == "" && id == "" {
-				names := liveChannelNames(endpoints, identities, dir)
+				names := liveAgentNames(endpoints, identities, threads, dir)
 				if len(names) == 0 {
 					return fmt.Errorf("send requires --name <session> or --id <session-id>; no named live sessions (harnez channel list shows IDs)")
 				}
@@ -206,16 +335,20 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 			if *name != "" && id != "" {
 				return fmt.Errorf("send takes --name or --id, not both")
 			}
-			target, err := resolveChannelTarget(endpoints, identities, *name, id, dir)
-			if err != nil {
-				return err
-			}
-			content := channelSender(cfg, identities, currentHostSession()) + "\n\n" + message
-			accepted, err := channel.Send(cmd.Context(), cfg, target.SessionID, content)
+			target, err := resolveAgentSendTarget(endpoints, identities, threads, *name, id, dir)
 			if err != nil {
 				return err
 			}
 			encoder := json.NewEncoder(cmd.OutOrStdout())
+			if target.Provider == "codex" {
+				content := codexMessageFrame(cfg, identities, threads, currentHostSession(), message)
+				return sendCodexMessage(cmd.Context(), "codex", target.Endpoint.SessionID, content, cmd.OutOrStdout())
+			}
+			content := channelSender(cfg, identities, currentHostSession()) + "\n\n" + message
+			accepted, err := channel.Send(cmd.Context(), cfg, target.Endpoint.SessionID, content)
+			if err != nil {
+				return err
+			}
 			if err := encoder.Encode(accepted); err != nil {
 				return err
 			}
@@ -237,7 +370,7 @@ func newAgentSendCmd(storeDir, name, workDir *string) *cobra.Command {
 			return waitErr
 		},
 	}
-	cmd.Flags().StringVar(&id, "id", "", "Claude or harnez session ID")
+	cmd.Flags().StringVar(&id, "id", "", "Claude or Codex session ID")
 	cmd.Flags().StringVarP(&message, "message", "m", "", "message text (alternative to the positional message)")
 	cmd.Flags().StringVarP(&prompt, "prompt", "p", "", "message text (alternative to the positional message)")
 	cmd.Flags().BoolVar(&wait, "wait", false, "wait for optional recipient acknowledgement")

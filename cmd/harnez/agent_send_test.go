@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -102,6 +103,7 @@ func TestAgentSendAcceptedAndOptionalWait(t *testing.T) {
 	for _, mode := range []string{"default", "received", "timeout", "old-server", "flag-m", "flag-p", "by-id", "no-target"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
+			t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex"))
 			t.Setenv("HARNEZ_SESSION_ID", "host")
 			t.Setenv(agentRoleEnv, "developer")
 			cfg, err := channel.LoadConfig()
@@ -209,5 +211,84 @@ func TestAgentSendAcceptedAndOptionalWait(t *testing.T) {
 				t.Fatal(out.String())
 			}
 		})
+	}
+}
+
+func TestCodexAgentSendTargetResolution(t *testing.T) {
+	endpoints := []channel.Endpoint{{SessionID: "claude-id", WorkingDir: "/work/claude"}}
+	identities := []channelIdentity{{ID: "claude-id", ProviderID: "claude-id", Name: "cati2"}}
+	threads := []channel.CodexThread{{ID: "thread-uuid", Name: "cati1", CWD: "/work/codex"}}
+	for _, tc := range []struct {
+		name, id string
+	}{
+		{name: "cati1"},
+		{id: "thread-uuid"},
+	} {
+		target, err := resolveAgentSendTarget(endpoints, identities, threads, tc.name, tc.id, "")
+		if err != nil || target.Provider != "codex" || target.Endpoint.SessionID != "thread-uuid" {
+			t.Fatalf("target for name=%q id=%q = %#v, %v", tc.name, tc.id, target, err)
+		}
+	}
+	if names := liveAgentNames(endpoints, identities, threads, ""); strings.Join(names, ",") != "cati1,cati2" {
+		t.Fatalf("live names = %#v", names)
+	}
+	_, err := resolveAgentSendTarget(endpoints, identities, threads, "missing", "", "")
+	if err == nil || !strings.Contains(err.Error(), `"cati1" id=thread-uuid provider=codex`) || !strings.Contains(err.Error(), `"cati2" id=claude-id provider=claude`) {
+		t.Fatalf("candidate error omitted a provider: %v", err)
+	}
+}
+
+func TestCodexAgentSendFramesAndQueuesMessage(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake queue executable uses a POSIX shell")
+	}
+	cfg, err := channel.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	threads := []channel.CodexThread{
+		{ID: "sender-uuid", Name: "host-session"},
+		{ID: "thread-uuid", Name: "cati1"},
+	}
+	frame := codexMessageFrame(cfg, nil, threads, "sender-uuid", "Please review this change.")
+	for _, want := range []string{
+		"From host-session (sender-uuid) via harnez agent send",
+		"Please review this change.",
+		"harnez agent send --id sender-uuid \"<message>\"",
+	} {
+		if !strings.Contains(frame, want) {
+			t.Fatalf("framed message missing %q: %s", want, frame)
+		}
+	}
+	tempDir := t.TempDir()
+	executable := filepath.Join(tempDir, "codex")
+	argsPath := filepath.Join(tempDir, "args")
+	t.Setenv("CODEX_QUEUE_ARGS", argsPath)
+	script := "#!/bin/sh\nif test \"$1\" != queue\nthen exit 10\nfi\nprintf '%s\\0' \"$@\" > \"$CODEX_QUEUE_ARGS\"\n"
+	if err := os.WriteFile(executable, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := sendCodexMessage(context.Background(), executable, "thread-uuid", frame, &output); err != nil {
+		t.Fatal(err)
+	}
+	gotArgs, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs := []string{"queue", "--thread", "thread-uuid", "--message", frame, ""}
+	if strings.Join(strings.Split(string(gotArgs), "\x00"), "\n") != strings.Join(wantArgs, "\n") {
+		t.Fatalf("queue argv = %#v", strings.Split(string(gotArgs), "\x00"))
+	}
+	var result struct {
+		Status    string `json:"status"`
+		Provider  string `json:"provider"`
+		SessionID string `json:"session_id"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "queued" || result.Provider != "codex" || result.SessionID != "thread-uuid" {
+		t.Fatalf("queue result = %#v", result)
 	}
 }
