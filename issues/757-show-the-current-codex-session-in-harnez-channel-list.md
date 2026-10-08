@@ -1,6 +1,6 @@
 # 757 — Show the current Codex session in harnez channel list
 
-**Status**: Open — CODEX_THREAD_ID is not exported to child shells by the Codex CLI; must use process-level discovery via internal/subagent.DiscoverActiveCodexSessions
+**Status**: Closed — Wired process-level discovery (subagent.DiscoverActiveCodexSessions) into channel list to recognize active Codex processes without relying on env vars
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
