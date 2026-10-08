@@ -199,6 +199,13 @@ control-socket `enqueue`, `inbox`, and `turn` actions. The interactive PTY now t
 and runs an idle-gated bracketed-paste delivery loop. Unit coverage includes inbox restart/FIFO,
 message limits and marking, control actions, busy suppression, and bracketed-paste delivery.
 
+**M3 progress (2026-10-09):** Interactive AGY sessions now initialize an inbox and typing guard.
+TTY `harnez-agy --meter` sessions create a registered `harnez-agy` session, pass its session IDs
+into the child, and run through the shared PTY supervisor with meter turn observations; non-TTY
+launches retain the direct child runner. AGY PreToolUse/PostToolUse hooks report best-effort tool
+start/end events to the control socket with a 100 ms deadline and preserve their JSON output.
+Focused tests cover hook event delivery/output, interactive inbox setup, and AGY session naming.
+
 **M2 — Inbox and deliver loop.** `internal/subagent/agyinbox.go` + tests (enqueue, restart reload,
 atomic files, `max_message_bytes`). `internal/subagent/interactive.go`: `serveControls` takes the
 inbox and turn state; add `enqueue`, `inbox`, `turn` actions; wrap the stdin copy to call

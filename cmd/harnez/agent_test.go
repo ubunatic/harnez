@@ -1045,7 +1045,10 @@ func TestInteractiveProviderIDIsPersistedDuringRun(t *testing.T) {
 	if err := store.Save(sess); err != nil {
 		t.Fatal(err)
 	}
-	opts := interactiveOptions(newAgentCmd(), store, sess, storeDir, "")
+	opts, err := interactiveOptions(newAgentCmd(), store, sess, storeDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := opts.ProviderIDFound("codex-thread"); err != nil {
 		t.Fatal(err)
 	}

@@ -139,9 +139,24 @@ func runInteractiveCommand(ctx context.Context, command string, args []string, o
 		return runInteractivePTY(ctx, command, args, opts, env, home)
 	}
 	if command == "agy" {
-		return agymeter.RunWithEnvDirRunner(ctx, home, command, args, environ, opts.Dir, opts.Stderr, runPTY)
+		return runSupervisedAgy(ctx, command, args, opts, environ, home, nil)
 	}
 	return runPTY(nil)
+}
+
+// RunSupervisedAgy runs an AGY process in the interactive PTY supervisor while
+// retaining the metering proxy and notifying observer about model boundaries.
+func RunSupervisedAgy(ctx context.Context, command string, args []string, opts InteractiveOptions, environ []string, home string, meterObserver agymeter.Observer) error {
+	if command == "" {
+		command = "agy"
+	}
+	return runSupervisedAgy(ctx, command, args, opts, environ, home, meterObserver)
+}
+
+func runSupervisedAgy(ctx context.Context, command string, args []string, opts InteractiveOptions, environ []string, home string, meterObserver agymeter.Observer) error {
+	return agymeter.RunWithEnvDirRunnerObserved(ctx, home, command, args, environ, opts.Dir, opts.Stderr, meterObserver, func(env []string) error {
+		return runInteractivePTY(ctx, command, args, opts, env, home)
+	})
 }
 
 func runInteractivePTY(ctx context.Context, command string, args []string, opts InteractiveOptions, environ []string, home string) error {
