@@ -117,7 +117,7 @@ func TestMergeChannelSessionsAndCodexFailureFallback(t *testing.T) {
 	}
 }
 
-func TestChannelListOverviewProjectionsJSONAndLiveFiltering(t *testing.T) {
+func TestChannelListOverviewAndLiveFiltering(t *testing.T) {
 	listed := []listedChannel{
 		{Provider: "claude", SessionID: "claude-live", PID: 11, URL: "http://127.0.0.1:1", WorkingDir: "/work/claude"},
 		{Provider: "codex", SessionID: "codex-old", Name: "", WorkingDir: "/work/codex"},
@@ -128,7 +128,7 @@ func TestChannelListOverviewProjectionsJSONAndLiveFiltering(t *testing.T) {
 	if err := printChannelOverview(&overview, listed); err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"PROVIDER\tNAME\tID\tSTATUS\tWORKING_DIR", "claude\t-\tclaude-live\tlive\t/work/claude", "codex\tworker\tcodex-named\tinactive\t/work/other", `Use "harnez channel list --json" or "harnez channel inspect <id>" for full details`} {
+	for _, expected := range []string{"PROVIDER\tNAME\tID\tSTATUS", "claude\t-\tclaude-live\tlive", "codex\tworker\tcodex-named\tinactive", `Use "harnez channel list --json" or "harnez channel inspect <id>" for full details`} {
 		if !strings.Contains(overview.String(), expected) {
 			t.Fatalf("overview missing %q: %s", expected, overview.String())
 		}
@@ -170,11 +170,14 @@ func TestChannelListCommandFlags(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"overview", []string{"list"}, "PROVIDER\tNAME\tID\tSTATUS\tWORKING_DIR"},
-		{"names", []string{"list", "--names"}, "codex-old"},
-		{"ids", []string{"list", "--ids"}, "codex-named"},
-		{"json", []string{"list", "--json"}, `"session_id":"codex-old"`},
-		{"live", []string{"list", "--live", "--ids"}, "claude-live\n"},
+		{"overview_default_active_only", []string{"list"}, "claude\t-\tclaude-live\tlive\n"},
+		{"names_default_active_only", []string{"list", "--names"}, "claude-live\n"},
+		{"ids_default_active_only", []string{"list", "--ids"}, "claude-live\n"},
+		{"json_default_active_only", []string{"list", "--json"}, `"session_id":"claude-live"`},
+		{"all_overview", []string{"list", "--all"}, "codex\tworker\tcodex-named\tinactive"},
+		{"all_names", []string{"list", "--all", "--names"}, "worker\n"},
+		{"all_ids", []string{"list", "--all", "--ids"}, "codex-named\n"},
+		{"all_json", []string{"list", "--all", "--json"}, `"session_id":"codex-old"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("HOME", t.TempDir())
@@ -201,6 +204,9 @@ func TestChannelListCommandFlags(t *testing.T) {
 			}
 			if !strings.Contains(out.String(), tc.want) {
 				t.Fatalf("output missing %q: %s", tc.want, out.String())
+			}
+			if !strings.Contains(strings.Join(tc.args, " "), "--all") && strings.Contains(out.String(), "codex-old") {
+				t.Fatalf("default output included inactive session: %s", out.String())
 			}
 		})
 	}

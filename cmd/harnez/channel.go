@@ -63,7 +63,7 @@ func newChannelCmd() *cobra.Command {
 			})
 		},
 	}
-	list.Flags().Bool("live", false, "show only sessions known to be live")
+	list.Flags().Bool("all", false, "show inactive and stale sessions too")
 	list.Flags().Bool("names", false, "print session names only (falls back to IDs)")
 	list.Flags().Bool("ids", false, "print session IDs only")
 	list.Flags().Bool("json", false, "print full session details as JSON")
@@ -94,7 +94,7 @@ func newChannelCmd() *cobra.Command {
 }
 
 func runChannelList(cmd *cobra.Command, _ []string, listEndpoints func(context.Context, channel.Config) ([]channel.Endpoint, error), discover func(context.Context, channel.Config) ([]channel.CodexThread, error)) error {
-	liveOnly, _ := cmd.Flags().GetBool("live")
+	allSessions, _ := cmd.Flags().GetBool("all")
 	namesOnly, _ := cmd.Flags().GetBool("names")
 	idsOnly, _ := cmd.Flags().GetBool("ids")
 	jsonOutput, _ := cmd.Flags().GetBool("json")
@@ -114,7 +114,7 @@ func runChannelList(cmd *cobra.Command, _ []string, listEndpoints func(context.C
 	}
 	threads, discoverErr := discover(cmd.Context(), cfg)
 	listed := mergeChannelSessions(endpoints, func() ([]channel.CodexThread, error) { return threads, discoverErr })
-	if liveOnly {
+	if !allSessions {
 		listed = filterLiveChannelSessions(listed)
 	}
 	if jsonOutput {
@@ -168,7 +168,7 @@ func printChannelProjection(out io.Writer, listed []listedChannel, names bool) e
 }
 
 func printChannelOverview(out io.Writer, listed []listedChannel) error {
-	if _, err := fmt.Fprintln(out, "PROVIDER\tNAME\tID\tSTATUS\tWORKING_DIR"); err != nil {
+	if _, err := fmt.Fprintln(out, "PROVIDER\tNAME\tID\tSTATUS"); err != nil {
 		return err
 	}
 	for _, session := range listed {
@@ -180,7 +180,7 @@ func printChannelOverview(out io.Writer, listed []listedChannel) error {
 		if session.Provider == "claude" && session.PID > 0 && session.URL != "" {
 			status = "live"
 		}
-		if _, err := fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\n", session.Provider, name, session.SessionID, status, session.WorkingDir); err != nil {
+		if _, err := fmt.Fprintf(out, "%s\t%s\t%s\t%s\n", session.Provider, name, session.SessionID, status); err != nil {
 			return err
 		}
 	}
