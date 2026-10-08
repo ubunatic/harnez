@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"ubunatic.com/harnez/internal/channel"
 )
 
@@ -112,5 +114,123 @@ func TestMergeChannelSessionsAndCodexFailureFallback(t *testing.T) {
 	})
 	if len(listed) != 1 || listed[0].Provider != "claude" || listed[0].SessionID != "claude-2" {
 		t.Fatalf("Codex failure lost Claude sessions: %#v", listed)
+	}
+}
+
+func TestChannelListOverviewProjectionsJSONAndLiveFiltering(t *testing.T) {
+	listed := []listedChannel{
+		{Provider: "claude", SessionID: "claude-live", PID: 11, URL: "http://127.0.0.1:1", WorkingDir: "/work/claude"},
+		{Provider: "codex", SessionID: "codex-old", Name: "", WorkingDir: "/work/codex"},
+		{Provider: "codex", SessionID: "codex-named", Name: "worker", WorkingDir: "/work/other"},
+	}
+
+	var overview bytes.Buffer
+	if err := printChannelOverview(&overview, listed); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"PROVIDER\tNAME\tID\tSTATUS\tWORKING_DIR", "claude\t-\tclaude-live\tlive\t/work/claude", "codex\tworker\tcodex-named\tinactive\t/work/other", `Use "harnez channel list --json" or "harnez channel inspect <id>" for full details`} {
+		if !strings.Contains(overview.String(), expected) {
+			t.Fatalf("overview missing %q: %s", expected, overview.String())
+		}
+	}
+
+	var names bytes.Buffer
+	if err := printChannelProjection(&names, listed, true); err != nil {
+		t.Fatal(err)
+	}
+	if names.String() != "claude-live\ncodex-old\nworker\n" {
+		t.Fatalf("names projection = %q", names.String())
+	}
+	var ids bytes.Buffer
+	if err := printChannelProjection(&ids, listed, false); err != nil {
+		t.Fatal(err)
+	}
+	if ids.String() != "claude-live\ncodex-old\ncodex-named\n" {
+		t.Fatalf("IDs projection = %q", ids.String())
+	}
+
+	live := filterLiveChannelSessions(listed)
+	if len(live) != 1 || live[0].SessionID != "claude-live" {
+		t.Fatalf("live sessions = %#v", live)
+	}
+
+	var raw bytes.Buffer
+	if err := json.NewEncoder(&raw).Encode(listed); err != nil {
+		t.Fatal(err)
+	}
+	var decoded []listedChannel
+	if err := json.Unmarshal(raw.Bytes(), &decoded); err != nil || len(decoded) != len(listed) || decoded[1].SessionID != "codex-old" {
+		t.Fatalf("JSON output did not preserve full sessions: %#v, err=%v", decoded, err)
+	}
+}
+
+func TestChannelListCommandFlags(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"overview", []string{"list"}, "PROVIDER\tNAME\tID\tSTATUS\tWORKING_DIR"},
+		{"names", []string{"list", "--names"}, "codex-old"},
+		{"ids", []string{"list", "--ids"}, "codex-named"},
+		{"json", []string{"list", "--json"}, `"session_id":"codex-old"`},
+		{"live", []string{"list", "--live", "--ids"}, "claude-live\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			cmd := newChannelCmd()
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(io.Discard)
+			cmd.SetArgs(tc.args)
+			listCmd, _, err := cmd.Find([]string{"list"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			listCmd.RunE = func(cmd *cobra.Command, args []string) error {
+				return runChannelList(cmd, args,
+					func(context.Context, channel.Config) ([]channel.Endpoint, error) {
+						return []channel.Endpoint{{SessionID: "claude-live", PID: 11, URL: "http://127.0.0.1:1", WorkingDir: "/work/claude"}}, nil
+					},
+					func(context.Context, channel.Config) ([]channel.CodexThread, error) {
+						return []channel.CodexThread{{ID: "codex-old", CWD: "/work/codex"}, {ID: "codex-named", Name: "worker", CWD: "/work/other"}}, nil
+					})
+			}
+			if err := cmd.Execute(); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out.String(), tc.want) {
+				t.Fatalf("output missing %q: %s", tc.want, out.String())
+			}
+		})
+	}
+}
+
+func TestChannelListRejectsConflictingProjectionFlags(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"list", "--names", "--ids"}, "--names and --ids are mutually exclusive"},
+		{[]string{"list", "--json", "--names"}, "--json cannot be combined with --names or --ids"},
+		{[]string{"list", "--json", "--ids"}, "--json cannot be combined with --names or --ids"},
+	} {
+		cmd := newChannelCmd()
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs(tc.args)
+		listCmd, _, err := cmd.Find([]string{"list"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		listCmd.RunE = func(cmd *cobra.Command, args []string) error {
+			return runChannelList(cmd, args,
+				func(context.Context, channel.Config) ([]channel.Endpoint, error) { return nil, nil },
+				func(context.Context, channel.Config) ([]channel.CodexThread, error) { return nil, nil })
+		}
+		err = cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("args %v error = %v, want %q", tc.args, err, tc.want)
+		}
 	}
 }

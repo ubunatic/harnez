@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -53,24 +54,20 @@ func newChannelCmd() *cobra.Command {
 			return printChannelSetup(cmd.OutOrStdout(), cfg, executable)
 		},
 	})
-	cmd.AddCommand(&cobra.Command{
-		Use: "list", Short: "List live Claude channel endpoints and Codex sessions as JSON",
+	list := &cobra.Command{
+		Use: "list", Short: "List Claude channel endpoints and Codex sessions",
 		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := channel.LoadConfig()
-			if err != nil {
-				return err
-			}
-			endpoints, err := channel.List(cmd.Context(), cfg)
-			if err != nil {
-				return err
-			}
-			listed := mergeChannelSessions(endpoints, func() ([]channel.CodexThread, error) {
-				return channel.DiscoverCodexThreads(cmd.Context(), "codex", time.Duration(cfg.IOTimeoutMS)*time.Millisecond, cfg.MaxRPCBytes)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runChannelList(cmd, args, channel.List, func(ctx context.Context, cfg channel.Config) ([]channel.CodexThread, error) {
+				return channel.DiscoverCodexThreads(ctx, "codex", time.Duration(cfg.IOTimeoutMS)*time.Millisecond, cfg.MaxRPCBytes)
 			})
-			return json.NewEncoder(cmd.OutOrStdout()).Encode(listed)
 		},
-	})
+	}
+	list.Flags().Bool("live", false, "show only sessions known to be live")
+	list.Flags().Bool("names", false, "print session names only (falls back to IDs)")
+	list.Flags().Bool("ids", false, "print session IDs only")
+	list.Flags().Bool("json", false, "print full session details as JSON")
+	cmd.AddCommand(list)
 	var message string
 	send := &cobra.Command{
 		Use: "send <session-id>", Short: "Send a canary message; accepted does not confirm Claude receipt",
@@ -96,6 +93,42 @@ func newChannelCmd() *cobra.Command {
 	return cmd
 }
 
+func runChannelList(cmd *cobra.Command, _ []string, listEndpoints func(context.Context, channel.Config) ([]channel.Endpoint, error), discover func(context.Context, channel.Config) ([]channel.CodexThread, error)) error {
+	liveOnly, _ := cmd.Flags().GetBool("live")
+	namesOnly, _ := cmd.Flags().GetBool("names")
+	idsOnly, _ := cmd.Flags().GetBool("ids")
+	jsonOutput, _ := cmd.Flags().GetBool("json")
+	if namesOnly && idsOnly {
+		return fmt.Errorf("--names and --ids are mutually exclusive")
+	}
+	if jsonOutput && (namesOnly || idsOnly) {
+		return fmt.Errorf("--json cannot be combined with --names or --ids")
+	}
+	cfg, err := channel.LoadConfig()
+	if err != nil {
+		return err
+	}
+	endpoints, err := listEndpoints(cmd.Context(), cfg)
+	if err != nil {
+		return err
+	}
+	threads, discoverErr := discover(cmd.Context(), cfg)
+	listed := mergeChannelSessions(endpoints, func() ([]channel.CodexThread, error) { return threads, discoverErr })
+	if liveOnly {
+		listed = filterLiveChannelSessions(listed)
+	}
+	if jsonOutput {
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(listed)
+	}
+	if namesOnly {
+		return printChannelProjection(cmd.OutOrStdout(), listed, true)
+	}
+	if idsOnly {
+		return printChannelProjection(cmd.OutOrStdout(), listed, false)
+	}
+	return printChannelOverview(cmd.OutOrStdout(), listed)
+}
+
 type listedChannel struct {
 	Provider   string `json:"provider"`
 	SessionID  string `json:"session_id"`
@@ -103,6 +136,56 @@ type listedChannel struct {
 	PID        int    `json:"pid,omitempty"`
 	URL        string `json:"url,omitempty"`
 	WorkingDir string `json:"working_dir"`
+}
+
+func filterLiveChannelSessions(listed []listedChannel) []listedChannel {
+	live := make([]listedChannel, 0, len(listed))
+	for _, session := range listed {
+		if session.Provider == "claude" && session.PID > 0 && session.URL != "" {
+			live = append(live, session)
+		}
+	}
+	return live
+}
+
+func printChannelProjection(out io.Writer, listed []listedChannel, names bool) error {
+	for _, session := range listed {
+		value := session.SessionID
+		if names {
+			value = session.Name
+			if value == "" {
+				value = session.SessionID
+			}
+		}
+		if value == "" {
+			continue
+		}
+		if _, err := fmt.Fprintln(out, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func printChannelOverview(out io.Writer, listed []listedChannel) error {
+	if _, err := fmt.Fprintln(out, "PROVIDER\tNAME\tID\tSTATUS\tWORKING_DIR"); err != nil {
+		return err
+	}
+	for _, session := range listed {
+		name := session.Name
+		if name == "" {
+			name = "-"
+		}
+		status := "inactive"
+		if session.Provider == "claude" && session.PID > 0 && session.URL != "" {
+			status = "live"
+		}
+		if _, err := fmt.Fprintf(out, "%s\t%s\t%s\t%s\t%s\n", session.Provider, name, session.SessionID, status, session.WorkingDir); err != nil {
+			return err
+		}
+	}
+	_, err := fmt.Fprintln(out, `Use "harnez channel list --json" or "harnez channel inspect <id>" for full details`)
+	return err
 }
 
 func mergeChannelSessions(endpoints []channel.Endpoint, discover func() ([]channel.CodexThread, error)) []listedChannel {
