@@ -1,6 +1,6 @@
 # 756 — harnez channel list should list only active agents by default, with more brevity
 
-**Status**: Draft
+**Status**: Closed — Defaulted harnez channel list to active sessions only, added --all flag, and trimmed table columns
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Bug
