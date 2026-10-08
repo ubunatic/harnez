@@ -1,6 +1,6 @@
 # 758 — Canary: find a working delivery route for harnez agent send into AGY sessions
 
-**Status**: Open — Reopened: explore harnez-agy / agy-meter-run supervisory queueing mechanism for prompt injection like codex queue
+**Status**: Closed — Implemented supervised AGY prompt queueing via harnez-agy/metering PTY harness, turn-boundary observer, idle and typing guards, and harnez agent send / channel list integration
 **Priority**: P2 (Medium)
 **Severity**: Minor
 **Category**: Feature
