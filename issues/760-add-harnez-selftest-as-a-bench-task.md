@@ -26,3 +26,17 @@ The bench today has documentation fact-finding and read tasks, but no task that 
 2. Add a task entry to `internal/bench/tasks.yaml` with a prompt, mechanical pass checks and a clear reason column.
 3. Run `harnez bench tasks` to confirm the task is listed, and run it once against one model to confirm it passes or fails on the right checks.
 4. Run `make install` and the bench tests.
+
+## 4. Results (2026-10-09)
+
+Task run alone (`--task harnez-selftest --repeat 1`), one run per model, `HTO=0`:
+
+| Model | Pass | Turns | Input tokens | Duration |
+|---|---|---|---|---|
+| claude:haiku-5-5:med | PASS | 2 | 45387 | 39.0s |
+| codex:luna:high | PASS | 7 | 156813 | 39.7s |
+| codex:sol:med | PASS | 9 | 210229 | 50.4s |
+
+PASS means `harnez agent selftest --step verify` printed `PASS: Background execution self-test passed`. That line is printed only when the saved state records hello, background, confirm and confirm-running in order.
+
+Open: the `harnez-selftest` entry in `internal/bench/tasks.yaml` is no longer in the working tree or in `HEAD`. The task was added and used for these runs, then the file was reverted, probably by another session. Not re-added yet. Decide whether to re-add it, then commit the task with this ticket.
